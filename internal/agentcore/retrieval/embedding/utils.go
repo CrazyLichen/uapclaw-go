@@ -6,14 +6,20 @@ import (
 	"math"
 )
 
-// errInvalidBase64Length base64 解码后长度不是 4 的倍数
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var errInvalidBase64Length = errors.New("base64 解码后长度不是 float32 对齐的（必须为 4 的倍数）")
+var (
+	// errInvalidBase64Length base64 解码后长度不是 float32 对齐的（必须为 4 的倍数）
+	errInvalidBase64Length = errors.New("base64 解码后长度不是 float32 对齐的（必须为 4 的倍数）")
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseBase64Embedding 将 base64 编码的嵌入向量解码为 []float64。
 //
@@ -21,8 +27,6 @@ var errInvalidBase64Length = errors.New("base64 解码后长度不是 float32 �
 // Go 用 encoding/base64 解码 + float32 字节序解析为 float64。
 //
 // 对应 Python: parse_base64_embedding()
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 func ParseBase64Embedding(b64Str string) ([]float64, error) {
 	decoded, err := base64.StdEncoding.DecodeString(b64Str)
 	if err != nil {
@@ -44,3 +48,5 @@ func ParseBase64Embedding(b64Str string) ([]float64, error) {
 
 	return result, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

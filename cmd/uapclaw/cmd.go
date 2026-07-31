@@ -132,7 +132,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// CLI flags 覆写环境变量（优先于配置文件）
+	// CLI 参数覆写环境变量（优先于配置文件）
 	// 注意：此时 logger 尚未初始化，使用 fmt.Fprintf(os.Stderr) 输出错误。
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")

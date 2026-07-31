@@ -70,7 +70,7 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 			Str("model_name", modelName).
 			Err(err).
 			Msg("JSON 解析失败")
-		return nil, fmt.Errorf("failed to decode JSON from LLM output: %w", err)
+		return nil, fmt.Errorf("从 LLM 输出解码 JSON 失败: %w", err)
 	}
 
 	return parsed, nil

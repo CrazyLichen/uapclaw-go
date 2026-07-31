@@ -104,7 +104,7 @@ type ActionSpec struct {
 	Params map[string]string `json:"params"`
 }
 
-// browserWorkerActionKey 浏览器 worker 动作上下文键
+// browserWorkerActionKey 浏览器 worker 动作上下文键类型
 type browserWorkerActionKey struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────

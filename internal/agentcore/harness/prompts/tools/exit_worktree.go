@@ -106,6 +106,4 @@ func (p *ExitWorktreeMetadataProvider) GetInputParams(language string) map[strin
 	return GetExitWorktreeMetadataProviderInputParams(language)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() { RegisterToolProvider(&ExitWorktreeMetadataProvider{}) }

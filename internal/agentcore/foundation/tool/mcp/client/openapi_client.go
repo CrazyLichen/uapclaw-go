@@ -325,7 +325,7 @@ func (c *OpenApiClient) GetToolInfo(_ context.Context, toolName string) (*types.
 			return card, nil
 		}
 	}
-	return nil, fmt.Errorf("tool %q not found in openapi server %q", toolName, c.serverName)
+	return nil, fmt.Errorf("工具 %q 在 OpenAPI 服务器 %q 中未找到", toolName, c.serverName)
 }
 
 // ListResources OpenAPI 客户端不支持 MCP 资源。

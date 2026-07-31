@@ -8,8 +8,8 @@
 //
 //	hierarchical_msgbus/
 //	├── doc.go                      # 包文档
-//	├── hierarchical_config.go      # HierarchicalTeamConfig 配置定义
-//	├── hierarchical_team.go        # HierarchicalTeam 实现 BaseTeam 接口
+//	├── hierarchical_config.go      # HierarchicalTeamConfig（层级团队配置） 配置定义
+//	├── hierarchical_team.go        # HierarchicalTeam（层级团队） 实现 BaseTeam 接口
 //	├── p2p_ability_manager.go      # P2PAbilityManager P2P 能力管理器
 //	└── supervisor_agent.go         # SupervisorAgent 监督者 Agent
 //

@@ -220,7 +220,7 @@ func (s *AgentTeamSession) GetEnvs() map[string]any {
 // Interact 团队会话不支持交互，始终返回错误。
 // 对应 Python: raise ValueError("team session does not support interact")
 func (s *AgentTeamSession) Interact(ctx context.Context, value any) error {
-	return fmt.Errorf("team session does not support interact")
+	return fmt.Errorf("团队会话不支持交互")
 }
 
 // PreRun 会话预运行：检查点 PreAgentTeamExecute。

@@ -8,7 +8,7 @@
 //
 //	factory/
 //	├── doc.go                      # 包文档
-//	└── agent_creator_factory.go    # DefaultAgentCreator 实现
+//	└── agent_creator_factory.go    # DefaultAgentCreator（默认Agent创建者） 实现
 //
 // 对应 Python 代码：无独立对应（Python 用 importlib 内建能力）
 package factory

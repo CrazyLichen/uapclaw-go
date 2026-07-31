@@ -24,9 +24,9 @@
 //
 //	message_queue/
 //	├── doc.go        # 包文档
-//	├── base.go       # MessageQueueBase / SubscriptionBase 接口 + QueueMessage / InvokeQueueMessage / StreamQueueMessage
-//	├── local.go      # LocalMessageQueue / LocalSubscription（no-op 实现）
-//	└── queue.go      # MessageQueueInMemory / Subscription 核心实现
+//	├── base.go       # MessageQueueBase（消息队列基类）/SubscriptionBase（订阅基类） 接口 + QueueMessage（火忘消息）/InvokeQueueMessage（同步消息）/StreamQueueMessage（流式消息）
+//	├── local.go      # LocalMessageQueue（本地消息队列）/LocalSubscription（本地订阅）（no-op 实现）
+//	└── queue.go      # MessageQueueInMemory（内存消息队列）/Subscription（订阅） 核心实现
 //
 // 对应 Python 代码：
 //

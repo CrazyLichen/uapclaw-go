@@ -113,5 +113,5 @@ func ParseToolArguments(arguments string) (map[string]any, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("invalid tool arguments JSON: raw arguments: %q", arguments)
+	return nil, fmt.Errorf("无效的工具调用参数 JSON: 原始参数: %q", arguments)
 }

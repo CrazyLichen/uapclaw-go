@@ -65,13 +65,13 @@ type AgentResult struct {
 	Metadata map[string]any `json:"metadata"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // RawBytes 自定义 []byte 类型，JSON 序列化时做 UTF-8 decode 对齐 Python Pydantic v2 行为。
 //
 // Python Pydantic v2 对 bytes 字段默认使用 UTF-8 decode 转字符串，
 // 而非 Go 标准库的 base64 编码。此类型确保 Go 侧序列化输出与 Python 一致。
 type RawBytes []byte
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

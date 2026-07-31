@@ -125,7 +125,7 @@ func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir str
 // 当前为占位实现，⤵️ 9.38-49 完整实现 ReActAgent 配置
 func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config is required")
+		return nil, fmt.Errorf("配置是必填项")
 	}
 
 	_ = BuildBrowserWorkerSystemPrompt(

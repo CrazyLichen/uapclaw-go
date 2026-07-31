@@ -140,6 +140,4 @@ func (p *BashMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetBashInputParams(language)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() { RegisterToolProvider(&BashMetadataProvider{}) }

@@ -16,9 +16,9 @@
 //
 //	config/
 //	├── doc.go        # 包文档
-//	├── enums.go      # MessageQueueType 枚举
-//	├── models.go     # PulsarConfig / MessageQueueConfig / DistributedConfig / RunnerConfig
-//	└── global.go     # DEFAULT_RUNNER_CONFIG / SetRunnerConfig / GetRunnerConfig
+//	├── enums.go      # MessageQueueType（消息队列类型） 枚举
+//	├── models.go     # PulsarConfig（Pulsar配置）/MessageQueueConfig（消息队列配置）/DistributedConfig（分布式配置）/RunnerConfig（Runner配置）
+//	└── global.go     # DEFAULT_RUNNER_CONFIG（默认Runner配置）/SetRunnerConfig（设置Runner配置）/GetRunnerConfig（获取Runner配置）
 //
 // 对应 Python 代码：openjiuwen/core/runner/runner_config.py
 package config

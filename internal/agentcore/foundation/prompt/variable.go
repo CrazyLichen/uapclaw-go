@@ -207,7 +207,7 @@ func accessField(current any, field string) (any, error) {
 	if m, ok := current.(map[string]any); ok {
 		val, exists := m[field]
 		if !exists {
-			return nil, fmt.Errorf("key %q not found in map", field)
+			return nil, fmt.Errorf("键 %q 在 map 中未找到", field)
 		}
 		return val, nil
 	}

@@ -7,7 +7,7 @@
 //
 //	tool_call/          # 工具调用操作器
 //	├── doc.go                 # 子包文档
-//	└── tool_call_operator.go  # ToolCallOperator
+//	└── tool_call_operator.go  # ToolCallOperator（工具调用操作器）
 //
 // 对应 Python 代码：openjiuwen/core/operator/tool_call/
 package tool_call

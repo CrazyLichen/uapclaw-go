@@ -169,6 +169,8 @@ Never drop higher-priority information to preserve lower-priority details.
 - Do not emit undeclared block_ids.
 `
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDialogueCompressor 创建对话压缩器实例。

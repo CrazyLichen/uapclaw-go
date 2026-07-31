@@ -7,7 +7,7 @@
 //
 //	llm_call/           # LLM 调用操作器
 //	├── doc.go                # 子包文档
-//	└── llm_call_operator.go  # LLMCallOperator
+//	└── llm_call_operator.go  # LLMCallOperator（LLM调用操作器）
 //
 // 对应 Python 代码：openjiuwen/core/operator/llm_call/
 package llm_call

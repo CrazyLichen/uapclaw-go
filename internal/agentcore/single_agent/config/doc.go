@@ -15,7 +15,7 @@
 //
 //	config/
 //	├── doc.go              # 包文档
-//	└── agent_config.go     # ReActAgentConfig 结构体 + Option + AgentConfig 接口实现 + Validate
+//	└── agent_config.go     # ReActAgentConfig（ReActAgent配置） 结构体 + Option + AgentConfig 接口实现 + Validate
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
 //

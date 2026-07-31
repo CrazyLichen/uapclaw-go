@@ -6,6 +6,8 @@
 // 对齐 Python 的模式：Python 通过函数内延迟 import 绕过循环依赖，
 // Go 则需要通过独立包解耦。
 //
+// 对应 Python 代码：无直接对应（Python 通过函数内延迟 import 绕过循环依赖）
+//
 // 文件目录：
 //
 //	types/

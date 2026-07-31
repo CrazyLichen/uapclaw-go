@@ -256,7 +256,7 @@ func ResolveModelSettings() (provider, apiKey, apiBase string) {
 		if apiBase == "" {
 			apiBase = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 		}
-	default: // openai
+	default: // OpenAI 默认
 		apiKey = FirstNonEmptyEnv("API_KEY", "MODEL_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY")
 		apiBase = FirstNonEmptyEnv("API_BASE", "MODEL_API_BASE", "OPENAI_BASE_URL", "OPENAI_API_BASE")
 		if apiBase == "" {

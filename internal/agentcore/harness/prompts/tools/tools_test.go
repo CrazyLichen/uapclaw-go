@@ -379,8 +379,8 @@ func TestBuildToolCard_未注册工具报错(t *testing.T) {
 	if err == nil {
 		t.Error("未注册工具应返回错误")
 	}
-	if !strings.Contains(err.Error(), "not registered") {
-		t.Errorf("错误信息应包含 'not registered'，实际: %v", err)
+	if !strings.Contains(err.Error(), "注册表中注册") {
+		t.Errorf("错误信息应包含 '注册表中注册'，实际: %v", err)
 	}
 }
 

@@ -11,11 +11,11 @@
 //
 //	schema/
 //	├── doc.go              # 包文档
-//	├── agent_card.go       # AgentCard 结构体 + 构造函数 + Ability 接口实现
-//	├── agent_result.go     # Part/Artifact/AgentResult 结果模型 + RawBytes 自定义 JSON marshal
-//	├── execute_result.go   # ExecuteResult 执行结果类型
-//	├── exception.go        # ToolInterruptException（实现 error 接口）
-//	├── response.go         # InterruptRequest + ToolCallInterruptRequest
+//	├── agent_card.go       # AgentCard（Agent卡片） 结构体 + 构造函数 + Ability 接口实现
+//	├── agent_result.go     # Part（部分）/Artifact（产物）/AgentResult（Agent结果） 结果模型 + RawBytes 自定义 JSON marshal
+//	├── execute_result.go   # ExecuteResult（执行结果） 执行结果类型
+//	├── exception.go        # ToolInterruptException（工具中断异常）（实现 error 接口）
+//	├── response.go         # InterruptRequest（中断请求） + ToolCallInterruptRequest（工具调用中断请求）
 //	└── state.go            # 常量 + 中断状态类型（BaseInterruptionState/ToolInterruptionState 等）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/schema/ + openjiuwen/core/single_agent/interrupt/

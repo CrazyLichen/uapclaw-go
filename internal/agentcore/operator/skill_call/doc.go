@@ -8,7 +8,7 @@
 //
 //	skill_call/         # 技能调用操作器
 //	├── doc.go                          # 子包文档
-//	└── skill_experience_operator.go    # SkillExperienceOperator
+//	└── skill_experience_operator.go    # SkillExperienceOperator（技能经验操作器）
 //
 // 对应 Python 代码：openjiuwen/core/operator/skill_call/
 package skill_call

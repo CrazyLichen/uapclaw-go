@@ -99,10 +99,14 @@ type BaseClientEmbed struct {
 // BaseClientEmbedOption BaseClientEmbed 构造选项函数。
 type BaseClientEmbedOption func(*BaseClientEmbed)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent model_clients 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

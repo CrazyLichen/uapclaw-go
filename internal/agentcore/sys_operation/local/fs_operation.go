@@ -134,7 +134,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 			}
 			textContent = strings.Join(tailLines, "\n")
 		} else if o.LineRange[0] > 0 && o.LineRange[1] > 0 {
-			start := o.LineRange[0] - 1 // 1-indexed to 0-indexed
+			start := o.LineRange[0] - 1 // 从 1 基索引转为 0 基索引
 			end := o.LineRange[1]
 			if start < 0 {
 				start = 0
@@ -369,7 +369,7 @@ func (f *LocalFsOperation) UploadFile(ctx context.Context, localPath string, tar
 	// 简单拷贝
 	content, err := os.ReadFile(resolvedLocal)
 	if err != nil {
-		return nil, fmt.Errorf("source not found: %s", resolvedLocal)
+		return nil, fmt.Errorf("源文件未找到: %s", resolvedLocal)
 	}
 
 	if err := os.WriteFile(resolvedTarget, content, 0644); err != nil {
@@ -494,7 +494,7 @@ func (f *LocalFsOperation) DownloadFile(ctx context.Context, sourcePath string, 
 
 	content, err := os.ReadFile(resolvedSource)
 	if err != nil {
-		return nil, fmt.Errorf("source not found: %s", resolvedSource)
+		return nil, fmt.Errorf("源文件未找到: %s", resolvedSource)
 	}
 
 	if err := os.WriteFile(localPath, content, 0644); err != nil {

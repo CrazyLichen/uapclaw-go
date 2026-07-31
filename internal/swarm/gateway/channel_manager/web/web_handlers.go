@@ -77,7 +77,8 @@ type WebHandlersBindParams struct {
 	UpdaterService any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
+type EventSender func(event string, payload map[string]any)
 
 // OnConfigSavedFunc 配置保存回调函数类型。
 // 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
@@ -100,8 +101,7 @@ type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, con
 //   - error：处理错误
 type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
 
-// EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
-type EventSender func(event string, payload map[string]any)
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -716,12 +716,12 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cry
 func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
-			return map[string]any{"ok": false, "error": "params must be object", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
 		}
 
 		envUpdates := make(map[string]string)
 		yamlUpdated := make([]string, 0)
-		var modelsCount any // nil by default, 对齐 Python: null
+		var modelsCount any // 默认 nil，对齐 Python: null
 
 		// models 子载荷
 		var newModels []map[string]any
@@ -742,7 +742,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 		if rawConfig, ok := params["config"]; ok && rawConfig != nil {
 			configMap, ok := rawConfig.(map[string]any)
 			if !ok {
-				return map[string]any{"ok": false, "error": "config must be object", "code": WsErrBadRequest}, nil
+				return map[string]any{"ok": false, "error": "config 必须是对象", "code": WsErrBadRequest}, nil
 			}
 			for k, v := range configMap {
 				configParams[k] = v
@@ -1005,7 +1005,7 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 	// 要求 session_id（对齐 Python: 必填参数）
 	sessionID, _ := params["session_id"].(string)
 	if sessionID == "" {
-		return map[string]any{"ok": false, "error": "session_id is required", "code": WsErrBadRequest}, nil
+		return map[string]any{"ok": false, "error": "session_id 是必填项", "code": WsErrBadRequest}, nil
 	}
 
 	sessionsDir := workspace.AgentSessionsDir()
@@ -1013,7 +1013,7 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 
 	// 检查是否已存在（对齐 Python: ALREADY_EXISTS）
 	if _, err := os.Stat(sessionDir); err == nil {
-		return map[string]any{"ok": false, "error": "session already exists", "code": WsErrAlreadyExists}, nil
+		return map[string]any{"ok": false, "error": "会话已存在", "code": WsErrAlreadyExists}, nil
 	}
 
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
@@ -1057,7 +1057,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		sessionID, _ := params["session_id"].(string)
 		if sessionID == "" {
-			return map[string]any{"ok": false, "error": "session_id is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "session_id 是必填项", "code": WsErrBadRequest}, nil
 		}
 
 		// 优先转发到 AgentServer（对齐 Python L1313-1336）
@@ -1079,7 +1079,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 					if payload == nil {
 						payload = map[string]any{}
 					}
-					errMsg := "session.delete failed"
+					errMsg := "session.delete 失败"
 					if v, ok := payload["error"].(string); ok && v != "" {
 						errMsg = v
 					}
@@ -1101,9 +1101,9 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
 			// 判断是否 team 模式 → AGENT_UNAVAILABLE（对齐 Python L1341-1348）
 			if agentClient == nil || !agentClient.ServerReady() {
-				return map[string]any{"ok": false, "error": "team session delete requires agent server", "code": WsErrAgentUnavailable}, nil
+				return map[string]any{"ok": false, "error": "团队会话删除需要 AgentServer", "code": WsErrAgentUnavailable}, nil
 			}
-			return map[string]any{"ok": false, "error": "session not found", "code": WsErrNotFound}, nil
+			return map[string]any{"ok": false, "error": "会话未找到", "code": WsErrNotFound}, nil
 		}
 
 		// 读 metadata.json 判断 mode（对齐 Python: 从 metadata 读 mode 而非 params）
@@ -1113,7 +1113,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 			if json.Unmarshal(data, &meta) == nil {
 				if m, ok := meta["mode"].(string); ok && strings.EqualFold(m, "team") {
 					if agentClient == nil || !agentClient.ServerReady() {
-						return map[string]any{"ok": false, "error": "team session delete requires agent server", "code": WsErrAgentUnavailable}, nil
+						return map[string]any{"ok": false, "error": "团队会话删除需要 AgentServer", "code": WsErrAgentUnavailable}, nil
 					}
 				}
 			}
@@ -1138,7 +1138,7 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoPr
 
 		modelsVal, ok := params["models"]
 		if !ok || modelsVal == nil {
-			return map[string]any{"ok": false, "error": "models is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "models 是必填项", "code": WsErrBadRequest}, nil
 		}
 
 		// 调用 buildModelsDefaultsFromFrontend（内部会调 merge + infer）
@@ -1170,7 +1170,7 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoPr
 func handleModelsValidate() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
-			return map[string]any{"ok": false, "error": "params is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "params 是必填项", "code": WsErrBadRequest}, nil
 		}
 
 		apiBase, _ := params["api_base"].(string)
@@ -1180,21 +1180,21 @@ func handleModelsValidate() RPCHandlerFunc {
 
 		// 校验必填字段
 		if apiBase == "" {
-			return map[string]any{"ok": false, "error": "api_base is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "api_base 是必填项", "code": WsErrBadRequest}, nil
 		}
 		if apiKey == "" {
-			return map[string]any{"ok": false, "error": "api_key is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "api_key 是必填项", "code": WsErrBadRequest}, nil
 		}
 		if model == "" {
-			return map[string]any{"ok": false, "error": "model is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "model 是必填项", "code": WsErrBadRequest}, nil
 		}
 		if modelProvider == "" {
-			return map[string]any{"ok": false, "error": "model_provider is required", "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": "model_provider 是必填项", "code": WsErrBadRequest}, nil
 		}
 
 		// 校验 model_provider 在可用列表中
 		if modelProvider != "" && !isAvailableProvider(modelProvider) {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("model_provider must be one of: %v", availableModelProviders), "code": WsErrBadRequest}, nil
+			return map[string]any{"ok": false, "error": fmt.Sprintf("model_provider 必须是以下之一: %v", availableModelProviders), "code": WsErrBadRequest}, nil
 		}
 
 		// 清理 api_base（去掉末尾 /chat/completions 和 /）
@@ -1252,7 +1252,7 @@ func handleModelsValidate() RPCHandlerFunc {
 
 		// 检查响应内容非空
 		if resp == nil || resp.Content.Text() == "" {
-			return map[string]any{"ok": false, "error": "empty response from model", "code": WsErrLLMError}, nil
+			return map[string]any{"ok": false, "error": "模型返回空响应", "code": WsErrLLMError}, nil
 		}
 
 		return map[string]any{"ok": true, "model_provider": modelProvider}, nil

@@ -16,11 +16,11 @@
 //	├── handle_history.go      # History handler（history_get 非流式/流式、过滤、分页）
 //	├── handle_permissions.go  # Permissions handler（tools/rules/approval_overrides 二次分发）
 //	├── handle_agents.go       # Agents handler（list/get/create/update/delete/enable/disable/tools_list）
-//	├── handle_extensions.go   # Extensions + Hooks handler（list/import/delete/toggle/hooks_list）
-//	├── handle_harness.go      # Harness + Schedule handler（packages/schedule 系列）
-//	├── handle_browser.go      # Browser handler（start/runtime_restart）
-//	├── handle_config.go       # Config handler（cache_clear/reload_config）
-//	├── handle_initialize.go   # Initialize + ACP handler（initialize/acp_tool_response）
+//	├── handle_extensions.go   # Extensions（扩展）+ Hooks（钩子） handler（list/import/delete/toggle/hooks_list）
+//	├── handle_harness.go      # Harness（Harness包）+ Schedule（调度） handler（packages/schedule 系列）
+//	├── handle_browser.go      # Browser（浏览器） handler（start/runtime_restart）
+//	├── handle_config.go       # Config（配置） handler（cache_clear/reload_config）
+//	├── handle_initialize.go   # Initialize（初始化）+ ACP handler（initialize/acp_tool_response）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
 //	└── runtime/               # Agent 运行时（AgentManager/UapClaw/SessionManager）
 //

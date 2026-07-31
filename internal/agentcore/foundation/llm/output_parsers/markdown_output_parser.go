@@ -30,9 +30,6 @@ const mdLogComponent = logger.ComponentAgentCore
 var (
 	// headerRegexp 匹配 Markdown 标题。
 	// 对齐 Python: r'^(#{1,6})\s+(.+)$' (MULTILINE)
-
-	// ──────────────────────────── 导出函数 ────────────────────────────
-
 	headerRegexp = regexp.MustCompile(`(?m)^(#{1,6})\s+(.+)$`)
 
 	// codeBlockRegexp 匹配 Markdown 代码块。
@@ -58,6 +55,8 @@ var (
 	// orderedListRegexp 匹配有序列表项。
 	orderedListRegexp = regexp.MustCompile(`^\s*\d+\.\s+`)
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMarkdownOutputParser 创建 Markdown 输出解析器。
 func NewMarkdownOutputParser() *MarkdownOutputParser {
@@ -85,7 +84,7 @@ func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 				Any("panic", r).
 				Msg("Markdown 解析过程中发生异常")
 			result = nil
-			err = fmt.Errorf("unexpected error during markdown parsing: %v", r)
+			err = fmt.Errorf("Markdown 解析过程中发生意外错误: %v", r)
 		}
 	}()
 

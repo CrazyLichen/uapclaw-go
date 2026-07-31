@@ -94,7 +94,7 @@ type DeepAdapter struct {
 	// 对齐 Python: AgentConfigService
 	configLister AgentConfigLister
 
-	// ─── ⤵️ 10.6.3-10: Rails ───
+	// ─── ⤵️ 10.6.3-10: 轨道（Rails）───
 
 	// filesystemRail 文件系统护栏
 	filesystemRail *rails.SysOperationRail
@@ -195,7 +195,7 @@ type DeepAdapter struct {
 	// ⤵️ 11.10
 	cronRuntime interface{}
 	// evolutionWatchers evolution 观察任务集合
-	// ⤵️ 10.3.7-11 EvolutionHelpers
+	// ⤵️ 10.3.7-11 EvolutionHelpers（进化助手）
 	evolutionWatchers interface{}
 	// dreamingMode dreaming 模式
 	dreamingMode string
@@ -1043,7 +1043,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 步骤 10: 清理 evolution watchers
-	// ⤵️ 10.3.7-11 EvolutionHelpers: cancel evolution watcher tasks
+	// ⤵️ 10.3.7-11 EvolutionHelpers（进化助手）: 取消进化监听任务
 
 	// 步骤 11: 构造响应
 	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})

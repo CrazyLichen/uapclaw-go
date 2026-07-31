@@ -176,8 +176,6 @@ func SanitizeJSONSchema(schema any) any {
 	return cleaned
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // strVal 将 any 转换为字符串
 func strVal(v any) string {
 	if v == nil {

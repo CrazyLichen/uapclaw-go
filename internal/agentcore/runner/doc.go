@@ -7,8 +7,8 @@
 //
 //	runner/
 //	├── doc.go                # 包文档
-//	├── child_runner.go      # ChildRunner 子运行器
-//	├── ref.go                # AgentRef/WorkflowRef 引用类型
+//	├── child_runner.go      # ChildRunner（子运行器）
+//	├── ref.go                # AgentRef（Agent引用）/WorkflowRef（工作流引用） 引用类型
 //	├── runner.go             # Runner 结构体 + 全局实例 + 全部包级函数
 //	├── callback/             # 回调框架子包
 //	├── config/               # Runner 全局配置子包（RunnerConfig/DistributedConfig/PulsarConfig 等）

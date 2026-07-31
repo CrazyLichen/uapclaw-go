@@ -20,9 +20,9 @@
 //
 //	schema/
 //	├── doc.go              # 包文档
-//	├── team_card.go        # TeamCardInterface + TeamCard + EventDrivenTeamCard
+//	├── team_card.go        # TeamCardInterface（团队卡片接口） + TeamCard（团队卡片） + EventDrivenTeamCard（事件驱动团队卡片）
 //	                       # + 构造函数 + TeamCardOption/EventDrivenTeamCardOption + With* + String
-//	└── team_interface.go   # BaseTeam + AgentTeamProvider + TeamAgentProvider
+//	└── team_interface.go   # BaseTeam（基础团队） + AgentTeamProvider（Agent团队提供者） + TeamAgentProvider（团队Agent提供者）
 //	                       # + TeamOption/TeamOptions/TeamConfig + 构造函数 + With* + 链式配置方法
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/schema/

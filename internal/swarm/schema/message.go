@@ -91,6 +91,7 @@ var messageTypeLookup map[string]MessageType
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// AllMessageTypes 返回所有消息类型列表。
 func AllMessageTypes() []MessageType {
 	return []MessageType{
 		MessageTypeReq,
@@ -99,6 +100,7 @@ func AllMessageTypes() []MessageType {
 	}
 }
 
+// ParseMessageType 解析字符串为 MessageType。
 func ParseMessageType(s string) (MessageType, error) {
 	if mt, ok := messageTypeLookup[s]; ok {
 		return mt, nil
@@ -106,6 +108,7 @@ func ParseMessageType(s string) (MessageType, error) {
 	return MessageType(""), fmt.Errorf("不合法的 MessageType 值: %q", s)
 }
 
+// IsValidMessageType 判断字符串是否为有效的 MessageType。
 func IsValidMessageType(s string) bool {
 	_, ok := messageTypeLookup[s]
 	return ok

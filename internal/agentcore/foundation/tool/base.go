@@ -82,7 +82,7 @@ type ToolOption func(*ToolCallOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 ToolCard 满足 schema.CardInterface。
+// 编译时验证 ToolCard 满足 schema.CardInterface 接口
 var _ schema.CardInterface = (*ToolCard)(nil)
 
 // 对应 Python: TOOL_STREAM_NOT_SUPPORTED (182010)

@@ -63,10 +63,10 @@ type dashscopeResponse struct {
 	} `json:"output"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // DashscopeEmbeddingOption DashscopeEmbedding 可选配置。
 type DashscopeEmbeddingOption func(*DashscopeEmbedding)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // dashscopeInputMode DashScope API 输入模式
 type dashscopeInputMode int

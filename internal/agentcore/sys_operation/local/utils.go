@@ -416,7 +416,7 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 						Int("pid", pid).
 						Int("exit_code", exitErr.ExitCode()).
 						Msg("后台进程在 grace 内以非零退出码退出")
-					return pid, fmt.Errorf("process exited early with code %d", exitErr.ExitCode())
+					return pid, fmt.Errorf("进程提前退出，退出码 %d", exitErr.ExitCode())
 				}
 				// 退出码 0 也视为成功
 				logger.Info(logComponent).

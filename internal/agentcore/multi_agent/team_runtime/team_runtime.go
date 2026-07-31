@@ -48,9 +48,10 @@ type TeamRuntime struct {
 	startMu sync.Mutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
+// RuntimeConfigOption RuntimeConfig 选项函数类型
 type RuntimeConfigOption func(*RuntimeConfig)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -60,6 +61,8 @@ const (
 	// defaultRuntimeTeamID 默认团队标识，对齐 Python: RuntimeConfig.team_id = "default"
 	defaultRuntimeTeamID = "default"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

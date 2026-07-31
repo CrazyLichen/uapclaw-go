@@ -103,6 +103,8 @@ type HumanAgentInboundEvent struct {
 // 对齐 Python: isinstance(payload, GodViewMessage/OperatorMessage/HumanAgentMessage)
 type PayloadKind int
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// PayloadKindGodView God View 载荷——直连 Leader
 	PayloadKindGodView PayloadKind = iota
@@ -111,8 +113,6 @@ const (
 	// PayloadKindHumanAgent Human-Agent 载荷
 	PayloadKindHumanAgent
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

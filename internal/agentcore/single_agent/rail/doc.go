@@ -11,7 +11,7 @@
 //
 //	rail/
 //	├── doc.go       # 包文档
-//	└── executor.go  # RailExecutor 结构体（@rail 装饰器等价）+ ModelCallRail/ToolCallRail
+//	└── executor.go  # RailExecutor（Rail执行器） 结构体（@rail 装饰器等价）+ ModelCallRail（模型调用Rail）/ToolCallRail（工具调用Rail）
 //
 // 核心类型索引：
 //

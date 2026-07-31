@@ -10,15 +10,13 @@ import (
 	"sync"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // resettable 重置时可清理的接口。
 // 如果单例持有类型实现了该接口，Reset 时会自动调用其 Cleanup。
 type resettable interface {
 	Cleanup() error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // Singleton 提供泛型单例持有器，线程安全。
 //
@@ -31,9 +29,17 @@ type resettable interface {
 //	var poolManager = Singleton[ConnectorPoolManager]{}
 //	mgr := poolManager.Get(NewConnectorPoolManager)
 type Singleton[T any] struct {
-	once     sync.Once
+	// once 单次执行器
+	once sync.Once
+	// instance 单例实例
 	instance *T
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

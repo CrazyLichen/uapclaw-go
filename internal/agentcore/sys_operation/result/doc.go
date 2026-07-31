@@ -7,7 +7,7 @@
 //
 //	result/
 //	├── doc.go                        # 包文档
-//	├── base_result.go                # BaseResult + BuildOperationErrorResult
+//	├── base_result.go                # BaseResult（基础结果） + BuildOperationErrorResult（构建操作错误结果）
 //	├── shell_operation_result.go     # Shell 操作结果类型
 //	├── fs_operation_result.go        # 文件系统操作结果类型
 //	└── code_operation_result.go      # 代码执行结果类型

@@ -30,6 +30,7 @@ var _ json.Marshaler = nil // 确保 encoding/json 可用（编译期检查）
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewPermissionContext 创建权限上下文实例。
 func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
 	pc := &PermissionContext{}
 	for _, opt := range opts {
@@ -38,6 +39,7 @@ func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
 	return pc
 }
 
+// NewPermissionContextFromDict 从字典创建权限上下文实例。
 func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 	pc := &PermissionContext{}
 	if v, ok := data["principal_user_id"]; ok {
@@ -68,26 +70,32 @@ func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 	return pc
 }
 
+// WithPermissionPrincipalUserID 设置主体用户 ID 的选项。
 func WithPermissionPrincipalUserID(id string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.PrincipalUserID = id }
 }
 
+// WithPermissionTriggeringUserID 设置触发用户 ID 的选项。
 func WithPermissionTriggeringUserID(id string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.TriggeringUserID = id }
 }
 
+// WithPermissionChannelID 设置通道 ID 的选项。
 func WithPermissionChannelID(id string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.ChannelID = id }
 }
 
+// WithPermissionGroupDigitalAvatar 设置群组数字化身标志的选项。
 func WithPermissionGroupDigitalAvatar(v bool) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.GroupDigitalAvatar = v }
 }
 
+// WithPermissionWebUserID 设置 Web 用户 ID 的选项。
 func WithPermissionWebUserID(id string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.WebUserID = id }
 }
 
+// Scene 返回权限场景类型（web/group_digital_avatar/normal_im）。
 func (p *PermissionContext) Scene() string {
 	if p.ChannelID == "web" {
 		return "web"
@@ -98,10 +106,12 @@ func (p *PermissionContext) Scene() string {
 	return "normal_im"
 }
 
+// OwnerScopeKey 返回权限所有者范围键（channelID + principalUserID）。
 func (p *PermissionContext) OwnerScopeKey() [2]string {
 	return [2]string{p.ChannelID, p.PrincipalUserID}
 }
 
+// ToDict 将权限上下文转换为字典。
 func (p *PermissionContext) ToDict() map[string]any {
 	return map[string]any{
 		"principal_user_id":    p.PrincipalUserID,
@@ -112,6 +122,7 @@ func (p *PermissionContext) ToDict() map[string]any {
 	}
 }
 
+// Validate 校验权限上下文必填字段。
 func (p *PermissionContext) Validate() error {
 	if p.PrincipalUserID == "" {
 		return fmt.Errorf("principal_user_id 不能为空")

@@ -30,7 +30,7 @@
 //	├── tool_manager.go           # Tool 管理器+MCP Server 全套
 //	├── workflow_manager.go       # Workflow 管理器+trace 装饰
 //	├── sys_operation_manager.go  # SysOperation 管理器（⤵️预留）
-//	└── resource_manager.go       # ResourceMgr 门面类
+//	├── resource_manager.go       # ResourceMgr（资源管理器） 门面类
 //
 // 对应 Python 代码：openjiuwen/core/runner/resources_manager/
 package resources_manager

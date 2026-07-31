@@ -50,15 +50,15 @@
 //
 //	callback/
 //	├── doc.go                # 包文档
-//	├── framework.go          # CallbackFramework 核心（注册/触发/注销/钩子/指标/熔断器/历史）
-//	├── enums.go              # FilterAction / ChainAction / HookType 枚举
-//	├── models.go             # CallbackMetrics / FilterResult / ChainContext / ChainResult / CallbackInfo[F]
+//	├── framework.go          # CallbackFramework（回调框架） 核心（注册/触发/注销/钩子/指标/熔断器/历史）
+//	├── enums.go              # FilterAction（过滤动作）/ChainAction（链动作）/HookType（钩子类型） 枚举
+//	├── models.go             # CallbackMetrics（回调指标）/FilterResult（过滤结果）/ChainContext（链上下文）/ChainResult（链结果）/CallbackInfo[F]（回调信息泛型）
 //	├── events.go             # 事件类型定义（scope + 所有域枚举 + EventData + 函数类型）
-//	├── filters.go            # EventFilter 接口 + 7 种过滤器
-//	├── chain.go              # CallbackChain（顺序执行+回滚+重试）
-//	├── errors.go             # AbortError
+//	├── filters.go            # EventFilter（事件过滤器） 接口 + 7 种过滤器
+//	├── chain.go              # CallbackChain（回调链）（顺序执行+回滚+重试）
+//	├── errors.go             # AbortError（中止错误）
 //	├── utils.go              # 全局单例 + Trigger 便捷函数
-//	└── options.go            # CallbackOption（Functional Options 模式）
+//	└── options.go            # CallbackOption（回调选项）（Functional Options 模式）
 //
 // 核心类型/接口索引：
 //

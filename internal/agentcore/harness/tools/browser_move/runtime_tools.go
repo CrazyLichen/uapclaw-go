@@ -428,7 +428,7 @@ func parseInt(v any) (int, error) {
 		i, err := n.Int64()
 		return int(i), err
 	default:
-		return 0, fmt.Errorf("cannot parse int from %T", v)
+		return 0, fmt.Errorf("无法从 %T 解析整数", v)
 	}
 }
 

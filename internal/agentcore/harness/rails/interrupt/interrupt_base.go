@@ -16,6 +16,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// InterruptDecision 中断决策接口，由 ApproveResult/RejectResult/InterruptResult 实现。
 type InterruptDecision interface {
 	isInterruptDecision()
 }
@@ -28,6 +29,7 @@ type ApproveResult struct {
 	NewArgs string
 }
 
+// RejectResult 拒绝执行决策。
 type RejectResult struct {
 	// ToolResult 预设的工具返回结果。
 	//
@@ -38,11 +40,13 @@ type RejectResult struct {
 	ToolMessage *llmschema.ToolMessage
 }
 
+// InterruptResult 中断决策，挂起执行等待用户输入。
 type InterruptResult struct {
 	// Request 中断请求接口，可存 InterruptRequest 或其子类（如 AskUserRequest）
 	Request saschema.InterruptRequester
 }
 
+// BaseInterruptRail 中断拦截基础 Rail，提供工具调用的审批/拒绝/中断机制。
 type BaseInterruptRail struct {
 	agentinterfaces.BaseRail
 	// toolNames 需拦截的工具名集合
@@ -51,8 +55,7 @@ type BaseInterruptRail struct {
 	resolveInterruptFn resolveInterruptFn
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
+// resolveInterruptFn 中断解析函数类型，子类设置。默认：无输入→中断，有输入→允许。
 type resolveInterruptFn func(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -60,6 +63,8 @@ type resolveInterruptFn func(
 	userInput any,
 	autoConfirmConfig map[string]any,
 ) InterruptDecision
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -71,12 +76,15 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 编译时验证 BaseInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*BaseInterruptRail)(nil)
 
+// interruptLogComponent 中断拦截日志组件标识
 var interruptLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewBaseInterruptRail 创建中断拦截基础 Rail 实例。
 func NewBaseInterruptRail(toolNames ...string) *BaseInterruptRail {
 	r := &BaseInterruptRail{
 		BaseRail:  *agentinterfaces.NewBaseRail(),
@@ -91,10 +99,12 @@ func NewBaseInterruptRail(toolNames ...string) *BaseInterruptRail {
 	return r
 }
 
+// Approve 返回允许继续执行的决策。
 func (r *BaseInterruptRail) Approve(newArgs string) *ApproveResult {
 	return &ApproveResult{NewArgs: newArgs}
 }
 
+// Reject 返回拒绝执行的决策。
 func (r *BaseInterruptRail) Reject(toolResult any) *RejectResult {
 	return &RejectResult{ToolResult: toolResult}
 }
@@ -106,16 +116,19 @@ func (r *BaseInterruptRail) Interrupt(request saschema.InterruptRequester) *Inte
 	return &InterruptResult{Request: request}
 }
 
+// AddTool 添加需要拦截的工具名。
 func (r *BaseInterruptRail) AddTool(toolName string) {
 	r.toolNames[toolName] = struct{}{}
 }
 
+// AddTools 批量添加需要拦截的工具名。
 func (r *BaseInterruptRail) AddTools(toolNames []string) {
 	for _, name := range toolNames {
 		r.toolNames[name] = struct{}{}
 	}
 }
 
+// GetTools 返回所有已注册的拦截工具名列表。
 func (r *BaseInterruptRail) GetTools() []string {
 	names := make([]string, 0, len(r.toolNames))
 	for name := range r.toolNames {
@@ -124,6 +137,7 @@ func (r *BaseInterruptRail) GetTools() []string {
 	return names
 }
 
+// BeforeToolCall 工具调用前拦截，根据 resolveInterruptFn 决策放行、拒绝或中断。
 func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 获取 ToolCallInputs
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -161,6 +175,7 @@ func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterf
 	return nil
 }
 
+// GetCallbacks 覆盖基类回调映射，增加 BeforeToolCall 回调。
 func (r *BaseInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.BaseRail.GetCallbacks()
 	callbacks[agentinterfaces.CallbackBeforeToolCall] = func(ctx context.Context, railCtx any) error {
@@ -171,12 +186,16 @@ func (r *BaseInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEven
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// isInterruptDecision 实现 InterruptDecision 接口标记。
 func (a *ApproveResult) isInterruptDecision() {}
 
+// isInterruptDecision 实现 InterruptDecision 接口标记。
 func (r *RejectResult) isInterruptDecision() {}
 
+// isInterruptDecision 实现 InterruptDecision 接口标记。
 func (i *InterruptResult) isInterruptDecision() {}
 
+// defaultResolveInterrupt 默认中断解析逻辑：无用户输入→中断，有输入→允许。
 func (r *BaseInterruptRail) defaultResolveInterrupt(
 	_ context.Context,
 	_ *agentinterfaces.AgentCallbackContext,
@@ -192,6 +211,7 @@ func (r *BaseInterruptRail) defaultResolveInterrupt(
 	return r.Approve("")
 }
 
+// applyDecision 根据中断决策类型执行对应的处理逻辑。
 func (r *BaseInterruptRail) applyDecision(
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolInputs *agentinterfaces.ToolCallInputs,
@@ -212,6 +232,7 @@ func (r *BaseInterruptRail) applyDecision(
 	}
 }
 
+// raiseInterrupt 抛出工具中断异常，中止当前执行流程。
 func (r *BaseInterruptRail) raiseInterrupt(
 	toolName string,
 	toolCall *llmschema.ToolCall,
@@ -227,6 +248,7 @@ func (r *BaseInterruptRail) raiseInterrupt(
 	))
 }
 
+// skipTool 跳过工具执行，设置拒绝结果和错误消息。
 func (r *BaseInterruptRail) skipTool(
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolInputs *agentinterfaces.ToolCallInputs,
@@ -242,6 +264,7 @@ func (r *BaseInterruptRail) skipTool(
 	}
 }
 
+// resolveToolCallID 从 ToolCall 中提取 ID，为空返回空字符串。
 func (r *BaseInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
 		return ""
@@ -249,6 +272,7 @@ func (r *BaseInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall) stri
 	return toolCall.ID
 }
 
+// getUserInput 从回调上下文中提取用户输入。
 func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
 	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
 	if !exists || rawInput == nil {

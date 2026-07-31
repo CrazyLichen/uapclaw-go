@@ -49,6 +49,8 @@ type MultimodalOption struct {
 // EmbeddingTask 嵌入任务函数类型。
 type EmbeddingTask func() ([][]float64, error)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// envEmbeddingSSLVerify SSL 验证开关环境变量
@@ -68,6 +70,8 @@ const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

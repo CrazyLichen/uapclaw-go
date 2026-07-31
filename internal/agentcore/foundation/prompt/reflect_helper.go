@@ -28,13 +28,13 @@ func accessStructField(current any, field string) (any, error) {
 	// 解引用指针
 	for rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface {
 		if rv.IsNil() {
-			return nil, fmt.Errorf("nil pointer when accessing field %q", field)
+			return nil, fmt.Errorf("访问字段 %q 时遇到 nil 指针", field)
 		}
 		rv = rv.Elem()
 	}
 
 	if rv.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("cannot access field %q on type %T (not a struct)", field, current)
+		return nil, fmt.Errorf("无法访问类型 %T 上的字段 %q（不是结构体）", field, current)
 	}
 
 	// 精确匹配
@@ -52,7 +52,7 @@ func accessStructField(current any, field string) (any, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("field %q not found in type %T", field, current)
+	return nil, fmt.Errorf("字段 %q 在类型 %T 中未找到", field, current)
 }
 
 // canExport 检查 reflect.Value 对应的字段是否可导出。

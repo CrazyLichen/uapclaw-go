@@ -72,6 +72,8 @@ const (
 	pdfAtMentionInlineThreshold = 100
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, enableImageMultimodal bool) tool.Tool {
@@ -228,7 +230,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	// 调用 Fs().ReadFile 读取文件
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsLineRange(start, end))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("读取文件失败: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -285,7 +287,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath string) (map[string]any, error) {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read notebook: %w", err)
+		return nil, fmt.Errorf("读取笔记本失败: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -320,7 +322,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	// 对齐 Python L519-545
 	var notebook map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawText), &notebook); err != nil {
-		return nil, fmt.Errorf("failed to parse notebook JSON: %w", err)
+		return nil, fmt.Errorf("解析笔记本 JSON 失败: %w", err)
 	}
 
 	cellsRaw, hasCells := notebook["cells"]
@@ -330,7 +332,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 
 	var cells []map[string]json.RawMessage
 	if err := json.Unmarshal(cellsRaw, &cells); err != nil {
-		return nil, fmt.Errorf("failed to parse notebook cells: %w", err)
+		return nil, fmt.Errorf("解析笔记本单元格失败: %w", err)
 	}
 
 	var blocks []string
@@ -374,7 +376,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read PDF: %w", err)
+		return nil, fmt.Errorf("读取 PDF 失败: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -394,7 +396,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 打开 PDF
 	reader, err := pdf.NewReader(bytes.NewReader(rawBytes), int64(len(rawBytes)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse PDF: %w", err)
+		return nil, fmt.Errorf("解析 PDF 失败: %w", err)
 	}
 
 	totalPages := reader.NumPage()
@@ -414,7 +416,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 对齐 Python L566-569
 	parsed := parsePDFPageRange(pages, totalPages)
 	if parsed == nil {
-		return nil, fmt.Errorf("invalid or empty PDF page range: '%s'", pages)
+		return nil, fmt.Errorf("无效或空的 PDF 页范围: '%s'", pages)
 	}
 	startPg, endPg := parsed[0], parsed[1]
 
@@ -480,7 +482,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read image: %w", err)
+		return nil, fmt.Errorf("读取图片失败: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -498,7 +500,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("image file is empty: %s", filePath)
+		return nil, fmt.Errorf("图片文件为空: %s", filePath)
 	}
 
 	ext := strings.ToLower(filepath.Ext(filePath))

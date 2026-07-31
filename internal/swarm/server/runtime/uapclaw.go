@@ -145,7 +145,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	// 构建 inputs
 	inputs, _, _ := uc.BuildInputs(request)
 
-	// ⤵️ 10.3.2: cloud memory before-chat hook（ExtensionRegistry）
+	// ⤵️ 10.3.2: 云端记忆对话前钩子（ExtensionRegistry）
 
 	// 提交到 session 队列并等待结果
 	result, err := uc.sessionManager.SubmitAndWait(ctx, sessionID, func(taskCtx context.Context) (any, error) {
@@ -180,7 +180,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 			"chat.final", nil, nil, assistantMode)
 	}
 
-	// ⤵️ 10.3.2: cloud memory after-chat hook
+	// ⤵️ 10.3.2: 云端记忆对话后钩子
 
 	return resp, nil
 }
@@ -236,7 +236,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	// 5. 构建 inputs
 	inputs, _, _ := uc.BuildInputs(request)
 
-	// ⤵️ 10.3.2: cloud memory before-chat hook
+	// ⤵️ 10.3.2: 云端记忆对话前钩子
 
 	// 6. 创建中转 channel
 	outCh := make(chan *schema.AgentResponseChunk, 64)
@@ -353,7 +353,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		}
 
 	streamComplete:
-		// ⤵️ 10.3.2: cloud memory after-chat hook
+		// ⤵️ 10.3.2: 云端记忆对话后钩子
 		_ = finalAnswerContent
 		_ = finalAnswerChunks
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)

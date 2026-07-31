@@ -82,7 +82,7 @@ func (s *InMemoryCommitState) SetState(state map[string]any) {
 // Update 禁止直接调用，必须使用 UpdateByID
 // 对应 Python: raise build_error(StatusCode.ERROR, msg="commit state update must support node_id")
 func (s *InMemoryCommitState) Update(data map[string]any) error {
-	return fmt.Errorf("commit state update must support node_id")
+	return fmt.Errorf("提交状态更新必须支持 node_id")
 }
 
 // UpdateByID 按节点 ID 暂存更新（深拷贝 data）

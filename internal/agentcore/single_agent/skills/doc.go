@@ -8,10 +8,10 @@
 //
 //	skills/
 //	├── doc.go                # 包文档
-//	├── skill.go              # Skill 模型 — 技能元数据结构体
-//	├── skill_manager.go      # SkillManager — 技能注册/注销/查询管理 + YAML front-matter 加载
-//	├── skill_util.go         # SkillUtil — 高层门面，组合 SkillManager + RemoteSkillUtil
-//	└── remote_skill_util.go  # GitHubTree/GitHubError/RemoteSkillUtil — GitHub 远程技能下载
+//	├── skill.go              # Skill（技能） 模型 — 技能元数据结构体
+//	├── skill_manager.go      # SkillManager（技能管理器） — 技能注册/注销/查询管理 + YAML front-matter 加载
+//	├── skill_util.go         # SkillUtil（技能工具） — 高层门面，组合 SkillManager + RemoteSkillUtil
+//	└── remote_skill_util.go  # GitHubTree/GitHubError/RemoteSkillUtil（远程技能工具） — GitHub 远程技能下载
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/skills/
 package skills

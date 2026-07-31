@@ -27,9 +27,9 @@ type ExecuteResult struct {
 	//      agent invoke 返回 map[string]any{"output": ..., "result_type": ...}
 	//
 	// 异常路径（不走 Result 字段，而是作为 error 返回）：
-	//   - *ToolInterruptException
-	//   - *workflow.WorkflowOutput (state=INPUT_REQUIRED)
-	//   - *AbilityExecutionError
+	//   - *ToolInterruptException（工具中断异常）
+	//   - *workflow.WorkflowOutput（工作流状态=INPUT_REQUIRED）
+	//   - *AbilityExecutionError（能力执行错误）
 	Result any
 	// ToolMsg 返回给 LLM 的 ToolMessage
 	ToolMsg *llmschema.ToolMessage

@@ -28,6 +28,8 @@ type RerankerBase struct {
 	retryWait time.Duration
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultMaxRetries 默认最大重试次数

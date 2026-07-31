@@ -7,7 +7,7 @@
 //
 //	memory_call/        # 记忆调用操作器
 //	├── doc.go                   # 子包文档
-//	└── memory_call_operator.go  # MemoryCallOperator
+//	└── memory_call_operator.go  # MemoryCallOperator（记忆调用操作器）
 //
 // 对应 Python 代码：openjiuwen/core/operator/memory_call/
 package memory_call

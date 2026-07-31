@@ -46,7 +46,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 	fn := func(ctx context.Context, input TaskToolInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 对齐 Python L87-91: 校验必填参数
 		if input.SubagentType == "" || input.TaskDescription == "" {
-			return nil, fmt.Errorf("both 'subagent_type' and 'task_description' are required")
+			return nil, fmt.Errorf("'subagent_type' 和 'task_description' 都是必填项")
 		}
 
 		// 提取 session
@@ -73,7 +73,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("subagent_type", input.SubagentType).
 				Err(err).
 				Msg("TaskTool 子代理创建失败")
-			return nil, fmt.Errorf("subagent %s creation failed: %w", input.SubagentType, err)
+			return nil, fmt.Errorf("子代理 %s 创建失败: %w", input.SubagentType, err)
 		}
 
 		// 对齐 Python L111-115: 调用子代理
@@ -87,7 +87,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("subagent_type", input.SubagentType).
 				Err(err).
 				Msg("TaskTool 子代理执行失败")
-			return nil, fmt.Errorf("subagent %s execution failed: %w", input.SubagentType, err)
+			return nil, fmt.Errorf("子代理 %s 执行失败: %w", input.SubagentType, err)
 		}
 
 		output := ""

@@ -40,14 +40,14 @@ type OpenAIEmbedding struct {
 	limiter chan struct{}
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
-	// dimOnce 保证维度探测只执行一次，消除 TOCTOU 竞态，对齐 T-04 修复。
+	// dimOnce 保证维度探测只执行一次，消除 TOCTOU 竞态，对齐 T-04 修复
 	dimOnce sync.Once
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
 	// extraHeaders 额外请求头，透传给 OpenAI SDK
 	extraHeaders map[string]string
-	// extraParams 额外请求参数，通过 option.WithJSONSet 透传给 SDK。
-	// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数。
+	// extraParams 额外请求参数，通过 option.WithJSONSet 透传给 SDK
+	// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数
 	extraParams map[string]any
 	// httpClient 自定义 HTTP 客户端（可选）
 	httpClient *http.Client

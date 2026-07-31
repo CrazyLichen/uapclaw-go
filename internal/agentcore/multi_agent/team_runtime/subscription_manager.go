@@ -41,11 +41,15 @@ type SubscriptionManager struct {
 	mu sync.RWMutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

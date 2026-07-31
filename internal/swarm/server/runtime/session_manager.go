@@ -43,10 +43,10 @@ type taskResult struct {
 	err error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // priorityHeap 基于 container/heap 的优先级队列（数值越小越先出队）。
 type priorityHeap []*priorityItem
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -56,6 +56,7 @@ var logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewSessionManager 创建会话任务队列管理器。
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
 		sessionTasks:      make(map[string]context.CancelFunc),
@@ -66,6 +67,7 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
+// GetSessionID 获取会话标识，空值时返回 "default"。
 func GetSessionID(sessionID string) string {
 	if sessionID == "" {
 		return "default"

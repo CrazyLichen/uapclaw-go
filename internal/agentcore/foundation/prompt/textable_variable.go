@@ -30,6 +30,8 @@ type TextableVariable struct {
 // TextableOption TextableVariable 构造选项函数。
 type TextableOption func(*TextableVariable)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultPrefix 默认占位符前缀。
@@ -41,6 +43,8 @@ const (
 	// defaultVarName 默认变量名，对应 Python: "default"。
 	defaultVarName = "default"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -83,7 +87,7 @@ func NewTextableVariable(text, name string, opts ...TextableOption) (*TextableVa
 	if err != nil {
 		return nil, exception.NewBaseError(
 			exception.StatusPromptAssemblerVariableInitFailed,
-			exception.WithMsg(fmt.Sprintf("invalid placeholder pattern: %s", err.Error())),
+			exception.WithMsg(fmt.Sprintf("无效的占位符模式: %s", err.Error())),
 		)
 	}
 

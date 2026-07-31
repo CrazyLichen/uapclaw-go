@@ -24,8 +24,6 @@ type RouteBinding struct {
 	Install InstallFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // InterceptorFunc 入站/出站拦截器函数类型。
 type InterceptorFunc func(channel any, data []byte) ([]byte, error)
 
@@ -34,6 +32,8 @@ type DisconnectFunc func(channel any, sessionKeys []string)
 
 // InstallFunc 在 GatewayServer 上注册本地 handler 的钩子类型。
 type InstallFunc func(server any)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -17,7 +17,7 @@
 //
 //	session/
 //	├── doc.go              # 包文档
-//	├── session.go          # InnerSession/SessionFacade 类型别名 + ProxySession 实现
+//	├── session.go          # InnerSession（会话基类）/SessionFacade（门面会话） 类型别名 + ProxySession（代理会话） 实现
 //	├── agent.go            # Session 公开会话（Agent 场景）+ CreateAgentSession
 //	├── agent_team.go       # AgentTeamSession 公开会话（Agent 团队场景）+ CreateAgentTeamSession
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
@@ -32,7 +32,7 @@
 //	│   └── serializer.go                    # 检查点序列化
 //	├── config/             # 会话配置
 //	│   ├── doc.go                           # config 包文档
-//	│   ├── config.go                        # MetadataLike/BuiltinConfigLoader/defaultSessionConfig
+//	│   ├── config.go                        # MetadataLike（元数据接口）/BuiltinConfigLoader（内置配置加载器）/defaultSessionConfig（默认会话配置）
 //	│   ├── env_loader.go                    # trySetEnv/loadEnvConfigs 环境加载
 //	│   └── context.go                       # WithEnvs context 注入
 //	├── constants/          # 会话常量
@@ -50,18 +50,18 @@
 //	│   └── session_controller.go            # SessionController 核心控制器
 //	├── interaction/        # 交互管理
 //	│   ├── doc.go                           # interaction 包文档
-//	│   ├── base.go                          # ExecutableIDProvider 类型别名 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量
-//	│   ├── interaction.go                   # WorkflowInteraction + SimpleAgentInteraction + AgentInteraction + InteractionOutput
+//	│   ├── base.go                          # ExecutableIDProvider（可执行ID提供者） 类型别名 + BaseInteraction（基础交互） + GraphInterrupt/Interrupt（图级中断） + AgentInterrupt（Agent中断） + 常量
+//	│   ├── interaction.go                   # WorkflowInteraction（工作流交互） + SimpleAgentInteraction（简单Agent交互） + AgentInteraction（完整Agent交互） + InteractionOutput（交互输出）
 //	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── interfaces/         # 统一接口定义
 //	│   ├── doc.go                           # interfaces 包文档
 //	│   ├── facade.go                        # SessionFacade 门面会话共有接口
-//	│   └── interfaces.go                    # InnerSession/Checkpointer/Storage/*Provider 接口
+//	│   └── interfaces.go                    # InnerSession（会话基类）/Checkpointer（检查点）/Storage（存储）/*Provider（提供者） 接口
 //	├── internal/           # 内部会话实现
 //	│   ├── doc.go                # internal 包文档
-//	│   ├── agent_session.go      # AgentSession
-//	│   ├── agent_team_session.go # AgentTeamSession
-//	│   └── workflow_session.go   # WorkflowSession/NodeSession/SubWorkflowSession
+//	│   ├── agent_session.go      # AgentSession（Agent内部会话）
+//	│   ├── agent_team_session.go # AgentTeamSession（Agent团队内部会话）
+//	│   └── workflow_session.go   # WorkflowSession（工作流内部会话）/NodeSession（节点会话）/SubWorkflowSession（子工作流会话）
 //	├── state/              # 状态接口与内存实现
 //	│   ├── doc.go                           # state 包文档
 //	│   ├── state.go                         # 双层接口 + 常量 + 兼容别名
@@ -69,35 +69,35 @@
 //	│   ├── agent_state_collection.go        # Agent 状态集合
 //	│   ├── workflow_state_collection.go     # Workflow 四区状态集合
 //	│   ├── workflow_commit_state.go         # Workflow 可提交状态
-//	│   ├── workflow_inmemory_state.go       # InMemoryWorkflowState 构造器
-//	│   ├── inmemory_state.go                # InMemoryStateLike
-//	│   ├── inmemory_commit_state.go         # InMemoryCommitState
+//	│   ├── workflow_inmemory_state.go       # InMemoryWorkflowState（内存工作流状态） 构造器
+//	│   ├── inmemory_state.go                # InMemoryStateLike（内存状态实现）
+//	│   ├── inmemory_commit_state.go         # InMemoryCommitState（内存可提交状态）
 //	│   └── utils.go                         # getBySchema 等 StateKey 依赖函数
 //	├── stream/             # 流写入管理
 //	│   ├── doc.go                           # stream 包文档
 //	│   ├── base.go                          # 流写入基础接口
 //	│   ├── emitter.go                       # 流发射器
-//	│   ├── manager.go                       # StreamWriterManager 管理器
+//	│   ├── manager.go                       # StreamWriterManager（流写入管理器） 管理器
 //	│   ├── queue.go                         # 流队列
 //	│   └── writer.go                        # StreamWriter 写入器
 //	├── tracer/             # 会话追踪
 //	│   ├── doc.go                           # tracer 包文档
-//	│   ├── data.go                          # InvokeType/NodeStatus/TraceEvent 枚举
-//	│   ├── span.go                          # Span/TraceAgentSpan/TraceWorkflowSpan/SpanManager
-//	│   ├── tracer.go                        # Tracer 核心 + TriggerParams
-//	│   ├── handler.go                       # TraceAgentHandler/TraceWorkflowHandler
-//	│   ├── workflow.go                      # TracerWorkflowUtils + WorkflowNodeSession
+//	│   ├── data.go                          # InvokeType（调用类型）/NodeStatus（节点状态）/TraceEvent（追踪事件） 枚举
+//	│   ├── span.go                          # Span（追踪段）/TraceAgentSpan（Agent追踪段）/TraceWorkflowSpan（工作流追踪段）/SpanManager（段管理器）
+//	│   ├── tracer.go                        # Tracer（追踪器） 核心 + TriggerParams（触发参数）
+//	│   ├── handler.go                       # TraceAgentHandler（Agent追踪处理器）/TraceWorkflowHandler（工作流追踪处理器）
+//	│   ├── workflow.go                      # TracerWorkflowUtils（工作流追踪工具） + WorkflowNodeSession（工作流节点会话）
 //	│   └── decorator/                       # 追踪装饰器子包
 //	│       ├── doc.go                       # decorator 子包文档
-//	│       └── decorator.go                # TracedModelClient/TracedTool/TracedWorkflow 装饰器 + Decorate*WithTrace + TracerSession 接口
+//	│       └── decorator.go                # TracedModelClient（追踪模型客户端）/TracedTool（追踪工具）/TracedWorkflow（追踪工作流） 装饰器 + Decorate*WithTrace + TracerSession（追踪会话） 接口
 //	└── utils/              # 通用工具函数（嵌套路径/引用路径/字典/容器操作）
 //	    ├── doc.go                           # utils 包文档
-//	    ├── path.go                          # SplitNestedPath/GetValueByNestedPath/RootToPath/RootToIndex
-//	    ├── ref.go                           # IsRefPath/ExtractOriginKey
-//	    ├── dict.go                          # UpdateDict/UpdateByKey/DeleteByKey/ExpandNestedStructure
-//	    ├── container.go                     # SafeExtendContainer/DeepCopyMap/Slice/Value/Updates/ConvertUpdatesFromJSON
-//	    ├── string.go                        # ContainsChar/ContainsSubstring/SplitString/ParseListIndexes
-//	    └── constants.go                     # RegexMaxLength/NestedPathSplit/NestedPathListSplit
+//	    ├── path.go                          # SplitNestedPath（拆分嵌套路径）/GetValueByNestedPath（按嵌套路径取值）/RootToPath（根到路径）/RootToIndex（根到索引）
+//	    ├── ref.go                           # IsRefPath（是否引用路径）/ExtractOriginKey（提取原始键）
+//	    ├── dict.go                          # UpdateDict（更新字典）/UpdateByKey（按键更新）/DeleteByKey（按键删除）/ExpandNestedStructure（展开嵌套结构）
+//	    ├── container.go                     # SafeExtendContainer（安全扩展容器）/DeepCopyMap（深拷贝Map）/Slice（切片工具）/Value（取值）/Updates（更新集合）/ConvertUpdatesFromJSON（从JSON转换更新）
+//	    ├── string.go                        # ContainsChar（包含字符）/ContainsSubstring（包含子串）/SplitString（拆分字符串）/ParseListIndexes（解析列表索引）
+//	    └── constants.go                     # RegexMaxLength（正则最大长度）/NestedPathSplit（嵌套路径分隔）/NestedPathListSplit（嵌套路径列表分隔）
 //
 // 对应 Python 代码：openjiuwen/core/session/agent.py + openjiuwen/core/session/session.py + openjiuwen/core/session/workflow.py + openjiuwen/core/session/node.py + openjiuwen/core/session/internal/wrapper.py
 //

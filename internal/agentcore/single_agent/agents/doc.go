@@ -10,7 +10,7 @@
 //
 //	agents/
 //	├── doc.go               # 包文档
-//	├── react_agent.go       # ReActAgent 结构体定义 + 构造函数
+//	├── react_agent.go       # ReActAgent（ReAct循环Agent） 结构体定义 + 构造函数
 //	├── react_invoke.go      # Invoke/Stream 入口（含回调骨架）+ invokeImpl/streamImpl + ReAct 循环
 //	├── react_model_call.go  # LLM 模型调用（callModel/railedModelCall/callLLMInvoke/callLLMStream）
 //	├── react_prompt.go      # 系统提示词构建（AddPromptBuilderSection/Configure/updateSkillPromptBuilderSection）

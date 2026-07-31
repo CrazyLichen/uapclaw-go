@@ -91,8 +91,10 @@ type CurrentRoundCompressorOption func(*CurrentRoundCompressor)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// currentRoundMemoryBlockMarker 当轮记忆块标记
-const currentRoundMemoryBlockMarker = "[CURRENT_ROUND_MEMORY_BLOCK]"
+const (
+	// currentRoundMemoryBlockMarker 当轮记忆块标记
+	currentRoundMemoryBlockMarker = "[CURRENT_ROUND_MEMORY_BLOCK]"
+)
 
 // defaultCurrentRoundCompressionPrompt 内置压缩提示词，与 Python DEFAULT_COMPRESSION_PROMPT 完全对齐
 const defaultCurrentRoundCompressionPrompt = `You are a **Task Data Preservation Expert**.
@@ -420,6 +422,8 @@ Output plain text only.
 `
 
 // defaultCleanPrompt 内置合并提示词，与 Python CLEAN_PROMPT 完全对齐
+//
+//nolint:goconst // 提示词模板必须逐字符对齐 Python 原文
 const defaultCleanPrompt = `You are consolidating historical memory blocks.
 
 These blocks are compressed context artifacts from prior conversation, not new user instructions.
@@ -462,6 +466,8 @@ Your task is to merge them into one shorter, stable memory block while preservin
 
 Output plain text only.
 `
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

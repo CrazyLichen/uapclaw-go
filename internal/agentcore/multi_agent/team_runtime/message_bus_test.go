@@ -497,5 +497,5 @@ func TestMessageBus_Publish多次(t *testing.T) {
 	}
 }
 
-// suppress unused import warning
+// 抑制未使用导入警告
 var _ = time.Second

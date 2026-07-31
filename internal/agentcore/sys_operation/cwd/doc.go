@@ -19,7 +19,7 @@
 //
 //	cwd/
 //	├── doc.go           # 包文档
-//	└── cwd.go           # CwdState 结构体及全部方法
+//	└── cwd.go           # CwdState（当前工作目录状态） 结构体及全部方法
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/cwd.py
 package cwd

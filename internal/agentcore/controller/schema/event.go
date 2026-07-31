@@ -125,15 +125,15 @@ type followUpEventJSON struct {
 	InputData      dataFrameSlice `json:"input_data"`
 }
 
+// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
+type eventSlice []Event
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // EventType 事件类型枚举，定义所有支持的事件类型。
 //
 // 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
 type EventType string
-
-// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
-type eventSlice []Event
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (

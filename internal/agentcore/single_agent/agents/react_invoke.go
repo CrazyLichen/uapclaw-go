@@ -363,7 +363,8 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			a.hitlHandler.Clear(sess)
 			interruptionState = *hitlState
 		}
-		// ⤵️ Workflow: interruptionState = a.loadInterruptionState(sess)
+		// ⤵️ Workflow: 中断状态加载（暂未实现）
+		// interruptionState = a.loadInterruptionState(sess)
 
 		// 如果存在中断状态，恢复原始 query
 		if hitlState != nil {

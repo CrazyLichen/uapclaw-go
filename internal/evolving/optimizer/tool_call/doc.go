@@ -12,20 +12,20 @@
 //
 //	tool_call/
 //	├── doc.go                # 包文档
-//	├── base.go               # ToolOptimizerBase 核心
-//	├── format.go             # ParseJSON / FormatPromptLlama
-//	├── schema_extractor.go   # ExtractSchema
-//	├── default_configs.go    # DefaultConfigEg / DefaultConfigDesc
-//	├── rits.go               # InvokeWithVerify 薄包装
-//	├── beam_search.go        # BeamSearch + TreeNode
-//	├── api_wrapper.go        # SimpleAPIWrapperFromCallable
-//	├── api_wrapper_mcp.go    # MakeSyncMCPCaller（integration build tag）
-//	├── base_method.go        # BaseMethod + ProduceAnswerFromAPICall
-//	├── eval.go               # SimpleEval
-//	├── example_method.go     # APICallToExampleMethod
-//	├── description_method.go # ToolDescriptionMethod
-//	├── reviewer.go           # ToolDescriptionReviewer
-//	└── pipeline.go           # CustomizedPipeline
+//	├── base.go               # ToolOptimizerBase（工具优化器基类） 核心
+//	├── format.go             # ParseJSON（解析JSON）/FormatPromptLlama（格式化Llama提示词）
+//	├── schema_extractor.go   # ExtractSchema（提取Schema）
+//	├── default_configs.go    # DefaultConfigEg（默认示例配置）/DefaultConfigDesc（默认描述配置）
+//	├── rits.go               # InvokeWithVerify（调用并验证） 薄包装
+//	├── beam_search.go        # BeamSearch（束搜索） + TreeNode（树节点）
+//	├── api_wrapper.go        # SimpleAPIWrapperFromCallable（简单API包装器）
+//	├── api_wrapper_mcp.go    # MakeSyncMCPCaller（创建同步MCP调用者）（integration build tag）
+//	├── base_method.go        # BaseMethod（基础方法） + ProduceAnswerFromAPICall（从API调用生成答案）
+//	├── eval.go               # SimpleEval（简单评估器）
+//	├── example_method.go     # APICallToExampleMethod（API调用转示例方法）
+//	├── description_method.go # ToolDescriptionMethod（工具描述方法）
+//	├── reviewer.go           # ToolDescriptionReviewer（工具描述审查器）
+//	└── pipeline.go           # CustomizedPipeline（自定义流水线）
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/optimizer/tool_call/
 package tool_call

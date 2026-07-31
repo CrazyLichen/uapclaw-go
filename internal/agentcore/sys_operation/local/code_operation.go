@@ -289,7 +289,7 @@ func (c *LocalCodeOperation) buildSubprocessCmd(code string, language string, fo
 		}
 		return []string{"node", tmpFile}, tmpFile, nil
 	default:
-		return nil, "", fmt.Errorf("unsupported language: %s (supported: python, javascript)", language)
+		return nil, "", fmt.Errorf("不支持的语言: %s（支持: python, javascript）", language)
 	}
 }
 

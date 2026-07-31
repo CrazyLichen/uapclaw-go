@@ -16,19 +16,19 @@
 //
 //	operator/           # 操作器实现
 //	├── doc.go            # 包文档
-//	├── base.go           # Operator/PreviewableOperator 接口 + TunableSpec + DefaultApplyUpdate
+//	├── base.go           # Operator（操作器）/PreviewableOperator（可预览操作器） 接口 + TunableSpec（可调参数规格） + DefaultApplyUpdate（默认应用更新）
 //	├── llm_call/
 //	│   ├── doc.go        # 子包文档
-//	│   └── llm_call_operator.go  # LLMCallOperator
+//	│   └── llm_call_operator.go  # LLMCallOperator（LLM调用操作器）
 //	├── tool_call/
 //	│   ├── doc.go        # 子包文档
-//	│   └── tool_call_operator.go # ToolCallOperator
+//	│   └── tool_call_operator.go # ToolCallOperator（工具调用操作器）
 //	├── memory_call/
 //	│   ├── doc.go        # 子包文档
-//	│   └── memory_call_operator.go # MemoryCallOperator
+//	│   └── memory_call_operator.go # MemoryCallOperator（记忆调用操作器）
 //	└── skill_call/
 //	    ├── doc.go        # 子包文档
-//	    └── skill_experience_operator.go # SkillExperienceOperator
+//	    └── skill_experience_operator.go # SkillExperienceOperator（技能经验操作器）
 //
 // 对应 Python 代码：openjiuwen/core/operator/
 package operator

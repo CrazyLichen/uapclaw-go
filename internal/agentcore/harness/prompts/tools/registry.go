@@ -63,7 +63,7 @@ func BuildToolCard(
 	// 1. 从 registry 查找 provider
 	provider, ok := GetToolProvider(name)
 	if !ok {
-		return nil, fmt.Errorf("tool %q not registered in prompts/tools registry", name)
+		return nil, fmt.Errorf("工具 %q 未在 prompts/tools 注册表中注册", name)
 	}
 
 	// 2. 获取 description
@@ -78,7 +78,7 @@ func BuildToolCard(
 	inputParamsMap := provider.GetInputParams(language)
 	inputParams, err := cschema.ParseJSONSchemaMap(inputParamsMap)
 	if err != nil {
-		return nil, fmt.Errorf("tool %q: parse input params failed: %w", name, err)
+		return nil, fmt.Errorf("工具 %q: 解析输入参数失败: %w", name, err)
 	}
 
 	// 5. 生成 tool_id

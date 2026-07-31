@@ -239,7 +239,7 @@ func (s *BrowserProfileStore) SelectProfile(name string) (*BrowserProfile, error
 	key := strings.TrimSpace(name)
 	profile, exists := s.profiles[key]
 	if !exists {
-		return nil, fmt.Errorf("profile not found: %s", key)
+		return nil, fmt.Errorf("配置未找到: %s", key)
 	}
 	s.selected = key
 	_ = s.Save()
