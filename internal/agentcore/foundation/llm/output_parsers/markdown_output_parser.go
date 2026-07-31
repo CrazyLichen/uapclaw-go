@@ -84,7 +84,7 @@ func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 				Any("panic", r).
 				Msg("Markdown 解析过程中发生异常")
 			result = nil
-			err = fmt.Errorf("Markdown 解析过程中发生意外错误: %v", r)
+			err = fmt.Errorf("markdown 解析过程中发生意外错误: %v", r)
 		}
 	}()
 
