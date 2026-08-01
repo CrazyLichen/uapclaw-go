@@ -2,6 +2,7 @@ package interrupt
 
 import (
 	"context"
+	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -163,9 +164,10 @@ func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload
 	}
 }
 
-// isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 true。
-//
+// isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
 // 对齐 Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
+// Python 的 config.get(key, False) 使用宽松真值判断：
+// True/1/"yes"/"true"/非空字符串都视为 truthy。
 func isAutoConfirmed(config map[string]any, key string) bool {
 	if config == nil {
 		return false
@@ -174,8 +176,25 @@ func isAutoConfirmed(config map[string]any, key string) bool {
 	if !ok {
 		return false
 	}
-	b, ok := val.(bool)
-	return ok && b
+	// 先尝试 bool 类型断言
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	// 尝试数字类型：非零视为 truthy
+	switch n := val.(type) {
+	case int:
+		return n != 0
+	case int64:
+		return n != 0
+	case float64:
+		return n != 0
+	}
+	// 尝试字符串类型："yes"/"true"/非空字符串视为 truthy（"false"/"no"/"0"/空字符串为 falsy）
+	if s, ok := val.(string); ok {
+		s = strings.TrimSpace(strings.ToLower(s))
+		return s != "" && s != "false" && s != "no" && s != "0"
+	}
+	return false
 }
 
 // confirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。
