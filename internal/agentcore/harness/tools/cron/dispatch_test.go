@@ -389,3 +389,67 @@ func TestDispatchCronAction_update_用flatKwargs(t *testing.T) {
 		t.Errorf("updatedJob patch = %v, want enabled=false", backend.updatedJobs["job1"])
 	}
 }
+
+// TestStrVal 测试 strVal 辅助函数
+func TestStrVal(t *testing.T) {
+	m := map[string]any{
+		"key1": "hello",
+		"key2": 42,
+		"key3": true,
+	}
+	if strVal(m, "key1") != "hello" {
+		t.Errorf("strVal(key1) = %q, want 'hello'", strVal(m, "key1"))
+	}
+	if strVal(m, "key2") != "42" {
+		t.Errorf("strVal(key2) = %q, want '42'", strVal(m, "key2"))
+	}
+	if strVal(m, "missing") != "" {
+		t.Errorf("strVal(missing) = %q, want ''", strVal(m, "missing"))
+	}
+}
+
+// TestBoolVal 测试 boolVal 辅助函数（含非 bool 类型路径）
+func TestBoolVal(t *testing.T) {
+	m := map[string]any{
+		"key1": true,
+		"key2": false,
+		"key3": "not_bool",
+		"key4": 42,
+	}
+	if boolVal(m, "key1") != true {
+		t.Errorf("boolVal(key1) = %v, want true", boolVal(m, "key1"))
+	}
+	if boolVal(m, "key2") != false {
+		t.Errorf("boolVal(key2) = %v, want false", boolVal(m, "key2"))
+	}
+	// 非 bool 类型应返回 false
+	if boolVal(m, "key3") != false {
+		t.Errorf("boolVal(key3) = %v, want false (string not bool)", boolVal(m, "key3"))
+	}
+	if boolVal(m, "key4") != false {
+		t.Errorf("boolVal(key4) = %v, want false (int not bool)", boolVal(m, "key4"))
+	}
+	if boolVal(m, "missing") != false {
+		t.Errorf("boolVal(missing) = %v, want false", boolVal(m, "missing"))
+	}
+}
+
+// TestMapVal 测试 mapVal 辅助函数（含非 map 类型路径）
+func TestMapVal(t *testing.T) {
+	m := map[string]any{
+		"key1": map[string]any{"nested": "value"},
+		"key2": "not_map",
+	}
+	result := mapVal(m, "key1")
+	if result["nested"] != "value" {
+		t.Errorf("mapVal(key1) = %v, want nested=value", result)
+	}
+	result = mapVal(m, "key2")
+	if len(result) != 0 {
+		t.Errorf("mapVal(key2) = %v, want empty map (string not map)", result)
+	}
+	result = mapVal(m, "missing")
+	if len(result) != 0 {
+		t.Errorf("mapVal(missing) = %v, want empty map", result)
+	}
+}
