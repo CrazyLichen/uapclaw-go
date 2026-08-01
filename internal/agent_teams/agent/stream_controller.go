@@ -9,6 +9,7 @@ import (
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -587,7 +588,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 
 // executeRound 执行状态机。
 // 对齐 Python: StreamController._execute_round(message)
-// 状态转换：STARTING → RUNNING → (COMPLETING→COMPLETED | CANCELLED | FAILED) → IDLE
+// 状态转换：STARTING → RUNNING → (COMPLETING→COMPLETED | CANCELLED | TIMED_OUT | FAILED) → IDLE
 func (sc *StreamController) executeRound(ctx context.Context, message any) {
 	_ = sc.updateExecution(ctx, atschema.ExecutionStatusStarting)
 	_ = sc.updateExecution(ctx, atschema.ExecutionStatusRunning)
@@ -598,13 +599,26 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 		return
 	}
 
-	err := sc.runRetryingStream(ctx, message)
+	// 对齐 Python: asyncio.wait_for(coro, timeout=completion_timeout)
+	// ⤵️ TODO: completion_timeout 应从 DeepAgentConfig.CompletionTimeout 读取，暂用默认 3600s
+	completionTimeout := 3600 * time.Second
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, completionTimeout)
+	defer cancelTimeout()
+
+	err := sc.runRetryingStream(timeoutCtx, message)
+
+	// 检查是否超时
+	isTimedOut := timeoutCtx.Err() != nil && ctx.Err() == nil // timeoutCtx 超时但原始 ctx 未取消
 
 	sc.mu.Lock()
 	isCancelRequested := sc.cancelRequested
 	sc.mu.Unlock()
 
-	if err != nil {
+	if isTimedOut {
+		logger.Warn(scLogComponent).Str("member_name", sc.memberName()).
+			Msg("DeepAgent 循环超时，设 TIMED_OUT 状态")
+		_ = sc.updateExecution(ctx, atschema.ExecutionStatusTimedOut)
+	} else if err != nil {
 		if isCancelRequested {
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCancelled)
 		} else {
@@ -642,10 +656,12 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) error
 		return nil
 	}
 
-	// ⤵️ 待 9.55 TeamAgent 完善后回填 sessionID 和 teamSession
-	// 已实现 Interaction 层（9.59b），sessionID 可从 SessionState 读取
+	// 对齐 Python: stream_kwargs = {"session_id": get_session_id() or None}
+	// 对齐 Python: if self._state.team_session is not None: stream_kwargs["team_session"] = self._state.team_session
+	sessionID := agentteams.GetSessionID(ctx) // 对齐 Python get_session_id()
+	teamSession := sc.state.TeamSession       // 对齐 Python self._state.team_session
 	inputMap := map[string]any{"query": query}
-	chunkCh, err := harness.RunStreaming(ctx, inputMap, "", nil)
+	chunkCh, err := harness.RunStreaming(ctx, inputMap, sessionID, teamSession)
 	if err != nil {
 		return nil
 	}

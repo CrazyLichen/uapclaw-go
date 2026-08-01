@@ -272,6 +272,8 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 		MaxIterations:  maxIter,
 		EnableTaskLoop: true,
 		FactoryName:    "custom_" + agentDef.Name,
+		// 对齐 Python: custom_spec.factory_kwargs = {"auto_create_workspace": False}
+		FactoryKwargs:  map[string]any{"auto_create_workspace": false},
 	}
 }
 

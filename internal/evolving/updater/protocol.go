@@ -30,9 +30,13 @@ type Updater interface {
 	RequiresForwardData() bool
 
 	// Update 离线兼容入口，将 evaluated_cases 转换为 signals 后调用 Process。
+	// ⤵️ 差异标注：Python 返回 Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]，
+	// 支持多候选集返回；Go 当前只返回 map[UpdateKey]any（单映射）。
+	// 当前无实际使用多候选集的场景，后续有需求时再扩展返回类型。
 	Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error)
 
 	// Process 信号优先入口，直接消费 EvolutionSignal 列表。
+	// ⤵️ 差异标注：同 Update，Python 支持返回 List[Dict]（多候选集），Go 只返回单映射。
 	Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error)
 
 	// GetState 获取 Updater 可序列化状态（用于检查点保存）。

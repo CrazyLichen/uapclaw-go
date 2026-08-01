@@ -36,6 +36,8 @@ type SpawnManager struct {
 	spawnedHandles map[string]spawn.SpawnHandle
 	// recoveryCancel 恢复任务取消函数，key=memberName
 	recoveryCancel map[string]context.CancelFunc
+	// recoveryWg 恢复任务 WaitGroup，对齐 Python await task 等待退出
+	recoveryWg sync.WaitGroup
 	// mu 保护并发访问
 	mu sync.Mutex
 }
@@ -175,8 +177,13 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		inproc.SetChunkForward(nil)
 	}
 
-	// 强制终止
-	_ = handle.ForceKill()
+	// 对齐 Python: try: await handle.stop_health_check(); if handle.is_alive: await handle.force_kill()
+	// 1. 停止健康检查（InProcessSpawnHandle 为 no-op，对齐 Python）
+	_ = handle.StopHealthCheck()
+	// 2. 仅在 alive 时才 force_kill（对齐 Python: if handle.is_alive: await handle.force_kill()）
+	if handle.IsAlive() {
+		_ = handle.ForceKill()
+	}
 
 	logger.Info(spawnLogComponent).
 		Str("member_name", memberName).
@@ -259,6 +266,8 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 	m.mu.Unlock()
 
 	go func() {
+		m.recoveryWg.Add(1)
+		defer m.recoveryWg.Done()
 		defer cancel()
 		if err := m.RestartTeammate(recoverCtx, memberName, defaultMaxRetries); err != nil {
 			logger.Error(spawnLogComponent).
@@ -324,6 +333,8 @@ func (m *SpawnManager) CancelRecoveryTasks() {
 	for _, cancel := range cancels {
 		cancel()
 	}
+	// 对齐 Python: await task — 等待所有恢复 goroutine 退出
+	m.recoveryWg.Wait()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -427,15 +438,24 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 		return
 	}
 	// 对齐 Python: 创建转发回调 teammate chunk → leader streamQueue
+	// Python 的 put_nowait 满时抛 QueueFull 异常（被上层捕获），Go 的 select default 静默丢弃
 	forwardCb := func(ctx context.Context, chunk streambase.Schema) error {
 		if leaderSC.streamQueue != nil {
 			select {
 			case leaderSC.streamQueue <- chunk:
 			default:
+				// G20: 对齐 Python QueueFull 异常的可观测性，记录丢弃日志
+				logger.Warn(spawnLogComponent).
+					Str("member_name", m.getTeamAgent().MemberName()).
+					Msg("chunk 转发队列已满，丢弃 chunk")
 			}
 		}
 		return nil
 	}
 	teammateSC.AddChunkObserver(forwardCb)
 	handle.SetChunkForward(forwardCb)
+	// T11: 对齐 Python observer 注册日志，记录 Info 级别（对齐 Python logger.info）
+	logger.Info(spawnLogComponent).
+		Str("member_name", m.getTeamAgent().MemberName()).
+		Msg("已注册 chunk forward observer")
 }

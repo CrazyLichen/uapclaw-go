@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -296,6 +297,15 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		resolvedLanguage = spec.Language
 	}
 
+	// 对齐 Python: mcps=spec.mcps
+	// 对齐 Python: backend=spec.backend if spec.backend is not None else parent_config.backend
+	// 对齐 Python: prompt_mode=spec.prompt_mode if spec.prompt_mode is not None else parent_config.prompt_mode
+	resolvedBackend := spec.Backend
+	var resolvedPromptMode hschema.PromptMode
+	if spec.PromptMode != hschema.PromptModeFull { // PromptModeFull 是零值，表示未设置
+		resolvedPromptMode = spec.PromptMode
+	}
+
 	maxIter := 15
 	if spec.MaxIterations > 0 {
 		maxIter = spec.MaxIterations
@@ -308,10 +318,12 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		Card:                   spec.AgentCard,
 		SystemPrompt:           spec.SystemPrompt,
 		ToolCards:              parentToolCards,
+		Mcps:                   spec.Mcps,
 		EnableTaskLoop:         spec.EnableTaskLoop,
 		MaxIterations:          maxIter,
 		Workspace:              ws,
 		Skills:                 spec.Skills,
+		Backend:                resolvedBackend,
 		SysOperation:           nil, // 子 Agent 不继承 sys_operation
 		RestrictToWorkDir:      &restrictToWorkDir,
 		AutoCreateWorkspace:    false,
@@ -319,6 +331,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		Subagents:              nil,
 		EnableAsyncSubagent:    false,
 		Language:               resolvedLanguage,
+		PromptMode:             resolvedPromptMode,
 	}
 
 	// 步骤 6: 创建子 Agent

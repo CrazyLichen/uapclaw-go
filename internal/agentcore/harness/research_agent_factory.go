@@ -70,6 +70,12 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		restrictToWorkDir = *params.RestrictToWorkDir
 	}
 
+	// 对齐 Python: subagents=subagents — 将 []SubAgentConfig 转为 []SubagentSpec 接口
+	var subagentSpecs []hschema.SubagentSpec
+	for i := range params.Subagents {
+		subagentSpecs = append(subagentSpecs, &params.Subagents[i])
+	}
+
 	// 转换为 CreateDeepAgentParams 并调用工厂
 	// 对齐 Python: return create_deep_agent(model=model, card=final_card, ...)
 	return CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
@@ -90,5 +96,6 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		PromptMode:         params.PromptMode,
 		EnableTaskPlanning: params.EnablePlanMode,
 		RestrictToWorkDir:  &restrictToWorkDir,
+		Subagents:          subagentSpecs,
 	})
 }

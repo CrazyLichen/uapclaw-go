@@ -485,7 +485,8 @@ func defaultCachePath() string {
 	raw := strings.TrimSpace(os.Getenv("OPENJIUWEN_BROWSER_SELECTOR_CACHE"))
 	if raw != "" {
 		expanded := os.ExpandEnv(raw)
-		return expanded
+		// 对齐 Python: Path(raw).expanduser() — os.ExpandEnv 不展开 ~，需要 expandHome 补充
+		return expandHome(expanded)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
