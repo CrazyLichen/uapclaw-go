@@ -593,11 +593,16 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.58 | ✅ | SpawnManager | 子进程管理（InProcessSpawnHandle+InProcessSpawn+SharedResources+SpawnManager+回调类型+BuildSpawnConfig） | `openjiuwen/agent_teams/spawn/` |
 | 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；⤵️ 9.55 回填 TeamAgent 类型依赖；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
 | 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ 9.55 回填 pendingInterruptResumes 类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
-| 9.61 | ☐ | RecoveryManager | 恢复管理 | `openjiuwen/agent_teams/` |
+| 9.61 | ☐ | RecoveryManager | 恢复管理（⤴️ 依赖 9.65a-1/9.65a-4 的 RecoveryBackend 接口；⤴️ 依赖 9.65a-1 的 SessionPersistence 接口） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
 | 9.62 | ☐ | CoordinationKernel | 协调内核 | `openjiuwen/agent_teams/` |
 | 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
 | 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
-| 9.65a | ☐ | Team Tools | TeamDatabase + TaskManager + MessageManager + InMemoryDB | `openjiuwen/agent_teams/tools/` |
+| **9.x TeamBackend 子系统** | — | | | |
+| 9.65a-1 | ☐ | TeamDB 基础层 | 数据模型+TeamDatabase接口+InMemoryDAO（TeamDao/MemberDao含FSM校验）+会话表生命周期 | `openjiuwen/agent_teams/tools/database/` · `tools/models.py` |
+| 9.65a-2 | ☐ | TaskDao + TaskManager | InMemoryTaskDao（依赖图变更管线）+TeamTaskManager（任务生命周期+计划模式审批） | `openjiuwen/agent_teams/tools/database/task_dao.py` · `tools/task_manager.py` |
+| 9.65a-3 | ☐ | MessageDao + MessageManager | InMemoryMessageDao（read_status watermark）+TeamMessageManager（7方法薄门面） | `openjiuwen/agent_teams/tools/database/message_dao.py` · `tools/message_manager.py` |
+| 9.65a-4 | ☐ | TeamBackend 门面 | TeamBackend结构体+30+方法（spawn_member/startup/build_team/shutdown_member/clean_team/force_clean/HITT名册/inbound回调） | `openjiuwen/agent_teams/tools/team.py` |
+| 9.65a-5 | ☐ | SQL 实现 | SQLite/PostgreSQL后端（Go SQL引擎+动态表命名+4个SQL DAO） | `openjiuwen/agent_teams/tools/database/engine.py` · `database/*.py` |
 | 9.65 | ☐ | Team Messager | 团队消息（inprocess/ZMQ） | `openjiuwen/agent_teams/messager/` |
 | 9.66 | ☐ | Team Workspace | 团队工作空间 | `openjiuwen/agent_teams/team_workspace/` |
 | 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |
@@ -678,7 +683,16 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.4.4 | 🔄 | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 10.4.5 | ☐ | ACP Subprocess Env | 子进程环境设置 | `jiuwenswarm/acp/subprocess_env.py` |
 | **10.5 扩展系统** | — | | | |
-| 10.5.1-10 | ☐ | 扩展框架 | BaseExtension/Registry/Manager/Hooks/Loader/Types | `jiuwenswarm/extensions/` |
+| 10.5.1 | ✅ | 数据类型 | ExtensionMetadata + ExtensionConfig | `jiuwenswarm/extensions/types.py` |
+| 10.5.2 | ✅ | 钩子事件常量 | GatewayHookEvents + AgentServerHookEvents | `jiuwenswarm/extensions/hook_event.py` |
+| 10.5.3 | ✅ | 钩子上下文结构 | 4 种 HookContext（Memory/GatewayChat/AgentServerChat/SystemPrompt） | `jiuwenswarm/extensions/hooks_context.py` |
+| 10.5.4 | ✅ | BaseExtension 基类 | BaseExtension 接口 + BaseExtensionImpl 默认实现 | `jiuwenswarm/extensions/sdk/base.py` |
+| 10.5.5 | ✅ | AgentServerClientExtension | GetClient() 返回 AgentTransport | `jiuwenswarm/extensions/sdk/agent_server_client.py` |
+| 10.5.6 | ✅ | ExtensionRegistry | 单例 + 回调触发（复用 CallbackFramework；本地接口打破 sdk→extensions 循环依赖） | `jiuwenswarm/extensions/registry.py` |
+| 10.5.7 | ☐ ⤵️ | ExtensionLoader | 延后，Go 插件加载机制待定 | `jiuwenswarm/extensions/loader.py` |
+| 10.5.8 | ☐ ⤵️ | ExtensionManager | 延后，依赖 loader | `jiuwenswarm/extensions/manager.py` |
+| 10.5.9 | ⤴️ | CallbackCompat | Go 已有 CallbackFramework，无需额外实现 | `jiuwenswarm/extensions/callback_compat.py` |
+| 10.5.10 | ☐ ⤵️ | CryptoUtility | 延后，CryptoProvider 接口待定义 | `jiuwenswarm/extensions/sdk/crypto_utility.py` |
 | **10.6 Swarm 侧 Harness 集成** | — | | | |
 | 10.6.1-2 | ☐ | Prompt Builder | Agent/Code 模式提示词 | `jiuwenswarm/agents/harness/common/prompt/` · `code/prompt/` |
 | 10.6.3-10 | ☐ | Swarm Rails | AskUser/Avatar/Permissions/Interrupt/ProjectMemory/ResponsePrompt/RuntimePrompt/StreamEvent | `jiuwenswarm/agents/harness/common/rails/` |
