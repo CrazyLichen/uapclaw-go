@@ -27,6 +27,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -451,6 +452,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 		AutoCreateWorkspace:    false,                                             // 对齐 Python: 硬编码 false
 		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // 对齐 Python: config.get("completion_timeout", 3600.0)
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),               // 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -1317,6 +1319,32 @@ func EnsurePersistentCheckpointer() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// deepAgentContextEngineConfig 从 react 配置构建上下文引擎配置。
+// 对齐 Python: _deep_agent_context_engine_config(react_cfg)
+// 仅根据 react.context_engine_config.enable_kv_cache_release 切换亲和开关；
+// 其余字段与 ReActAgentConfig 默认 context_engine_config 一致。
+func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *ceschema.ContextEngineConfig {
+	if config == nil {
+		return nil
+	}
+	cecRaw, ok := config["context_engine_config"]
+	if !ok {
+		return nil
+	}
+	cecMap, ok := cecRaw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	// 对齐 Python: 仅根据 enable_kv_cache_release 切换
+	result := ceschema.NewContextEngineConfig()
+	if v, ok := cecMap["enable_kv_cache_release"]; ok {
+		if b, ok := v.(bool); ok {
+			result.EnableKVCacheRelease = b
+		}
+	}
+	return &result
+}
 
 // seedRuntimeCwd 从请求/运行时 CWD 种子 CwdState。
 // 对齐 Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)

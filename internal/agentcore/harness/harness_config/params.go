@@ -1,6 +1,7 @@
 package harness_config
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
@@ -77,4 +78,7 @@ type CreateDeepAgentParams struct {
 	AutoCreateWorkspace bool
 	// CompletionTimeout 完成超时时间（秒）
 	CompletionTimeout float64
+	// ContextEngineConfig 上下文引擎配置
+	// 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
+	ContextEngineConfig *schema.ContextEngineConfig
 }
