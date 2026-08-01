@@ -330,7 +330,8 @@ func (m *TaskManager) CreateTask(ctx context.Context, fn func(ctx context.Contex
 }
 
 // Cancel 取消指定任务。
-func (m *TaskManager) Cancel(taskID string, reason string) bool {
+// cancelledBy 指定发起取消的操作者 ID，对齐 Python Task.cancel(cancelled_by=)。
+func (m *TaskManager) Cancel(taskID string, reason string, cancelledBy string) bool {
 	m.mu.RLock()
 	task, ok := m.registry[taskID]
 	m.mu.RUnlock()
@@ -345,7 +346,9 @@ func (m *TaskManager) Cancel(taskID string, reason string) bool {
 		return false
 	}
 	task.CancelReason = reason
-	task.CancelledBy = taskID
+	if cancelledBy != "" {
+		task.CancelledBy = cancelledBy
+	}
 	task.mu.Unlock()
 
 	if task.cancel != nil {
@@ -367,7 +370,7 @@ func (m *TaskManager) CancelGroup(group string, reason string) int {
 
 	count := 0
 	for _, task := range tasks {
-		if m.Cancel(task.ID, reason) {
+		if m.Cancel(task.ID, reason, "") {
 			count++
 		}
 	}
@@ -387,7 +390,7 @@ func (m *TaskManager) CancelAll(reason string) int {
 
 	count := 0
 	for _, id := range taskIDs {
-		if m.Cancel(id, reason) {
+		if m.Cancel(id, reason, "") {
 			count++
 		}
 	}
@@ -474,7 +477,8 @@ func (m *TaskManager) RemoveCompleted() int {
 }
 
 // CascadeCancel 级联取消目标任务及其所有子任务。
-func (m *TaskManager) CascadeCancel(taskID string, reason string) int {
+// 对齐 Python: TaskManager._cascade_cancel(parent_id)，子任务 cancelledBy 为父任务 ID。
+func (m *TaskManager) CascadeCancel(taskID string, reason string, cancelledBy string) int {
 	m.mu.RLock()
 	var children []*Task
 	for _, task := range m.registry {
@@ -486,13 +490,13 @@ func (m *TaskManager) CascadeCancel(taskID string, reason string) int {
 
 	// 先取消目标任务
 	count := 0
-	if m.Cancel(taskID, reason) {
+	if m.Cancel(taskID, reason, cancelledBy) {
 		count++
 	}
 
-	// 递归取消子任务
+	// 递归取消子任务，cancelledBy 为父任务 ID，对齐 Python: child.cancelled_by = parent_id
 	for _, child := range children {
-		count += m.CascadeCancel(child.ID, "parent_cancelled")
+		count += m.CascadeCancel(child.ID, "parent_cancelled", taskID)
 	}
 
 	return count

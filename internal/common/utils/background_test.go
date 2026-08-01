@@ -195,7 +195,7 @@ func TestTaskManager_CancelTask(t *testing.T) {
 
 	<-started // 等待任务启动
 
-	cancelled := mgr.Cancel(task.ID, "test_cancel")
+	cancelled := mgr.Cancel(task.ID, "test_cancel", "")
 	if !cancelled {
 		t.Fatal("Cancel() should return true")
 	}
@@ -337,7 +337,7 @@ func TestTaskManager_CascadeCancel(t *testing.T) {
 	<-childStarted
 
 	// 级联取消
-	count := mgr.CascadeCancel(parent.ID, "test_cascade")
+	count := mgr.CascadeCancel(parent.ID, "test_cascade", "")
 	if count < 1 {
 		t.Fatalf("CascadeCancel() = %d, want at least 1", count)
 	}
@@ -389,7 +389,7 @@ func TestTask_DisplayName(t *testing.T) {
 
 func TestTaskManager_CancelNonExistentTask(t *testing.T) {
 	mgr := newTestManager()
-	result := mgr.Cancel("nonexistent", "test")
+	result := mgr.Cancel("nonexistent", "test", "")
 	if result {
 		t.Fatal("Cancel() should return false for non-existent task")
 	}
@@ -404,7 +404,7 @@ func TestTaskManager_CancelAlreadyCompletedTask(t *testing.T) {
 	_, _ = task.Wait()
 
 	// 尝试取消已完成的任务
-	result := mgr.Cancel(task.ID, "too_late")
+	result := mgr.Cancel(task.ID, "too_late", "")
 	if result {
 		t.Fatal("Cancel() should return false for completed task")
 	}
