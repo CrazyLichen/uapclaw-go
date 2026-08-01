@@ -1,6 +1,7 @@
 package checkpointing
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,13 +34,13 @@ type StoreProjectionHelper struct {
 
 // RenderEvolutionMarkdown 渲染演进 Markdown。
 // 对应 Python: StoreProjectionHelper.render_evolution_markdown(name)
-func (h *StoreProjectionHelper) RenderEvolutionMarkdown(name string) {
-	skillDir := h.store.ResolveSkillDir(name)
+func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, name string) error {
+	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return
+		return nil
 	}
 
-	evoLog := h.store.LoadFullEvolutionLog(name)
+	evoLog := h.store.LoadFullEvolutionLog(ctx, name)
 	// 对齐 Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
 	activeEntries := make([]EvolutionRecord, 0)
 	for _, r := range evoLog.Entries {
@@ -48,8 +49,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(name string) {
 		}
 	}
 	if len(activeEntries) == 0 {
-		h.ClearRenderedOutputs(skillDir)
-		return
+		return h.ClearRenderedOutputs(ctx, skillDir)
 	}
 
 	evoDir := filepath.Join(skillDir, "evolution")
@@ -67,46 +67,56 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(name string) {
 	}
 
 	for section, records := range sectionGroups {
-		h.RenderSectionFile(evoDir, section, records)
+		if err := h.RenderSectionFile(ctx, evoDir, section, records); err != nil {
+			return err
+		}
 	}
 
 	if len(scriptEntries) > 0 {
 		scriptsDir := filepath.Join(evoDir, "scripts")
 		os.MkdirAll(scriptsDir, 0755)
-		h.RenderScriptIndex(scriptsDir, scriptEntries)
+		if err := h.RenderScriptIndex(ctx, scriptsDir, scriptEntries); err != nil {
+			return err
+		}
 	}
 
-	h.UpdateSkillMDIndex(skillDir, activeEntries)
+	if err := h.UpdateSkillMDIndex(ctx, skillDir, activeEntries); err != nil {
+		return err
+	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("skill", name).
 		Int("entries", len(activeEntries)).
 		Msg("[EvolutionStore] 渲染 markdown")
+	return nil
 }
 
 // ClearRenderedOutputs 清除生成的投影文件和 SKILL.md index 块。
 // 对应 Python: StoreProjectionHelper.clear_rendered_outputs(skill_dir)
-func (h *StoreProjectionHelper) ClearRenderedOutputs(skillDir string) {
+func (h *StoreProjectionHelper) ClearRenderedOutputs(ctx context.Context, skillDir string) error {
 	evoDir := filepath.Join(skillDir, "evolution")
 	if isDir(evoDir) {
 		clearDirRecursive(evoDir)
 	}
 
-	skillMDPath := h.store.FindSkillMD(skillDir)
+	skillMDPath := h.store.FindSkillMD(ctx, skillDir)
 	if skillMDPath == "" {
-		return
+		return nil
 	}
-	content := h.store.ReadFileText(skillMDPath)
+	content, err := h.store.ReadFileText(ctx, skillMDPath)
+	if err != nil {
+		return err
+	}
 	if content == "" || !evolutionIndexPattern.MatchString(content) {
-		return
+		return nil
 	}
 	cleaned := evolutionIndexPattern.ReplaceAllString(content, "")
 	cleaned = strings.TrimSpace(cleaned) + "\n"
-	h.store.WriteFileText(skillMDPath, cleaned)
+	return h.store.WriteFileText(ctx, skillMDPath, cleaned)
 }
 
 // RenderSectionFile 渲染单个 section 的 Markdown 文件。
 // 对应 Python: StoreProjectionHelper.render_section_file(evo_dir, section, records)
-func (h *StoreProjectionHelper) RenderSectionFile(evoDir string, section string, records []EvolutionRecord) {
+func (h *StoreProjectionHelper) RenderSectionFile(ctx context.Context, evoDir string, section string, records []EvolutionRecord) error {
 	lines := []string{
 		fmt.Sprintf("# %s", section),
 		"",
@@ -135,12 +145,12 @@ func (h *StoreProjectionHelper) RenderSectionFile(evoDir string, section string,
 		)
 	}
 	filename := sectionFilename(section)
-	h.store.WriteFileText(filepath.Join(evoDir, filename), strings.Join(lines, "\n"))
+	return h.store.WriteFileText(ctx, filepath.Join(evoDir, filename), strings.Join(lines, "\n"))
 }
 
 // RenderScriptIndex 渲染脚本索引文件。
 // 对应 Python: StoreProjectionHelper.render_script_index(scripts_dir, entries)
-func (h *StoreProjectionHelper) RenderScriptIndex(scriptsDir string, entries []EvolutionRecord) {
+func (h *StoreProjectionHelper) RenderScriptIndex(ctx context.Context, scriptsDir string, entries []EvolutionRecord) error {
 	lines := []string{
 		"# Script Index",
 		"",
@@ -169,15 +179,15 @@ func (h *StoreProjectionHelper) RenderScriptIndex(scriptsDir string, entries []E
 		lines = append(lines, fmt.Sprintf("| [%s](%s) | %s | %s | %s |", fname, fname, lang, purpose, date))
 	}
 	lines = append(lines, "")
-	h.store.WriteFileText(filepath.Join(scriptsDir, "_index.md"), strings.Join(lines, "\n"))
+	return h.store.WriteFileText(ctx, filepath.Join(scriptsDir, "_index.md"), strings.Join(lines, "\n"))
 }
 
 // UpdateSkillMDIndex 更新 SKILL.md 的 evolution-index 块。
 // 对应 Python: StoreProjectionHelper.update_skill_md_index(skill_dir, entries)
-func (h *StoreProjectionHelper) UpdateSkillMDIndex(skillDir string, entries []EvolutionRecord) {
-	skillMDPath := h.store.FindSkillMD(skillDir)
+func (h *StoreProjectionHelper) UpdateSkillMDIndex(ctx context.Context, skillDir string, entries []EvolutionRecord) error {
+	skillMDPath := h.store.FindSkillMD(ctx, skillDir)
 	if skillMDPath == "" {
-		return
+		return nil
 	}
 
 	bodyCount := 0
@@ -242,19 +252,22 @@ func (h *StoreProjectionHelper) UpdateSkillMDIndex(skillDir string, entries []Ev
 	indexBlock += "\n" + strings.Join(experienceIndexLines, "\n") + "\n" + strings.Join(scriptTableLines, "\n") +
 		"\n*" + fmt.Sprintf("Last updated: %s", now) + "*\n<!-- evolution-index-end -->"
 
-	content := h.store.ReadFileText(skillMDPath)
+	content, err := h.store.ReadFileText(ctx, skillMDPath)
+	if err != nil {
+		return err
+	}
 	if evolutionIndexPattern.MatchString(content) {
 		content = evolutionIndexPattern.ReplaceAllString(content, indexBlock)
 	} else {
 		content = strings.TrimRight(content, "\n") + "\n\n" + indexBlock + "\n"
 	}
-	h.store.WriteFileText(skillMDPath, content)
+	return h.store.WriteFileText(ctx, skillMDPath, content)
 }
 
 // FormatDescExperienceText 格式化描述层经验文本。
 // 对应 Python: StoreProjectionHelper.format_desc_experience_text(name, max_items)
-func (h *StoreProjectionHelper) FormatDescExperienceText(name string, maxItems int) string {
-	pending := h.store.GetPendingRecords(name, func() *signal.EvolutionTarget {
+func (h *StoreProjectionHelper) FormatDescExperienceText(ctx context.Context, name string, maxItems int) string {
+	pending := h.store.GetPendingRecords(ctx, name, func() *signal.EvolutionTarget {
 		t := signal.EvolutionTargetDescription
 		return &t
 	}())
@@ -278,10 +291,10 @@ func (h *StoreProjectionHelper) FormatDescExperienceText(name string, maxItems i
 }
 
 // FormatAllDescExperiences 格式化所有技能的描述经验。
-func (h *StoreProjectionHelper) FormatAllDescExperiences(names []string) map[string]string {
+func (h *StoreProjectionHelper) FormatAllDescExperiences(ctx context.Context, names []string) map[string]string {
 	result := map[string]string{}
 	for _, name := range names {
-		text := h.FormatDescExperienceText(name, maxInjectDesc)
+		text := h.FormatDescExperienceText(ctx, name, maxInjectDesc)
 		if text != "" {
 			result[name] = text
 		}
@@ -290,8 +303,8 @@ func (h *StoreProjectionHelper) FormatAllDescExperiences(names []string) map[str
 }
 
 // FormatBodyExperienceText 格式化主体层经验文本。
-func (h *StoreProjectionHelper) FormatBodyExperienceText(name string) string {
-	pending := h.store.GetPendingRecords(name, func() *signal.EvolutionTarget {
+func (h *StoreProjectionHelper) FormatBodyExperienceText(ctx context.Context, name string) string {
+	pending := h.store.GetPendingRecords(ctx, name, func() *signal.EvolutionTarget {
 		t := signal.EvolutionTargetBody
 		return &t
 	}())
@@ -306,15 +319,15 @@ func (h *StoreProjectionHelper) FormatBodyExperienceText(name string) string {
 }
 
 // ListPendingSummary 列出待定经验摘要。
-func (h *StoreProjectionHelper) ListPendingSummary(names []string) string {
+func (h *StoreProjectionHelper) ListPendingSummary(ctx context.Context, names []string) string {
 	var lines []string
 	count := 0
 	for _, name := range names {
-		descPending := h.store.GetPendingRecords(name, func() *signal.EvolutionTarget {
+		descPending := h.store.GetPendingRecords(ctx, name, func() *signal.EvolutionTarget {
 			t := signal.EvolutionTargetDescription
 			return &t
 		}())
-		bodyPending := h.store.GetPendingRecords(name, func() *signal.EvolutionTarget {
+		bodyPending := h.store.GetPendingRecords(ctx, name, func() *signal.EvolutionTarget {
 			t := signal.EvolutionTargetBody
 			return &t
 		}())

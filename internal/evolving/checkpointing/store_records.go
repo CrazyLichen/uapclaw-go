@@ -1,6 +1,7 @@
 package checkpointing
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,7 +41,7 @@ var langToExt = map[string]string{
 
 // PersistScript 将脚本源代码写入独立文件，替换 content 为引用。
 // 对应 Python: StoreRecordsHelper.persist_script(skill_dir, record)
-func (h *StoreRecordsHelper) PersistScript(skillDir string, record *EvolutionRecord) {
+func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string, record *EvolutionRecord) error {
 	scriptsDir := filepath.Join(skillDir, "evolution", "scripts")
 	os.MkdirAll(scriptsDir, 0755)
 
@@ -59,7 +60,14 @@ func (h *StoreRecordsHelper) PersistScript(skillDir string, record *EvolutionRec
 	}
 	scriptPath := filepath.Join(scriptsDir, filename)
 
-	h.store.WriteFileText(scriptPath, record.Change.Content)
+	if err := h.store.WriteFileText(ctx, scriptPath, record.Change.Content); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("filename", filename).
+			Str("record_id", record.ID).
+			Err(err).
+			Msg("[EvolutionStore] 持久化脚本写入失败")
+		return err
+	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("filename", filename).
 		Str("record_id", record.ID).
@@ -75,12 +83,13 @@ func (h *StoreRecordsHelper) PersistScript(skillDir string, record *EvolutionRec
 		scriptPurpose = *record.Change.ScriptPurpose
 	}
 	record.Change.Content = fmt.Sprintf("Script: %s\nLanguage: %s\nPurpose: %s", filename, scriptLang, scriptPurpose)
+	return nil
 }
 
 // LoadFullEvolutionLog 加载完整演进日志。
 // 对应 Python: StoreRecordsHelper.load_full_evolution_log(name)
-func (h *StoreRecordsHelper) LoadFullEvolutionLog(name string) *EvolutionLog {
-	skillDir := h.store.ResolveSkillDir(name)
+func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name string) *EvolutionLog {
+	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
 		return EmptyEvolutionLog(name)
 	}
@@ -88,8 +97,8 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(name string) *EvolutionLog {
 	if !isFile(evoPath) {
 		return EmptyEvolutionLog(name)
 	}
-	fileContent := h.store.ReadFileText(evoPath)
-	if fileContent == "" {
+	fileContent, err := h.store.ReadFileText(ctx, evoPath)
+	if err != nil || fileContent == "" {
 		return EmptyEvolutionLog(name)
 	}
 	var data map[string]any
@@ -113,31 +122,31 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(name string) *EvolutionLog {
 
 // SaveEvolutionLog 持久化演进日志。
 // 对应 Python: StoreRecordsHelper.save_evolution_log(name, evo_log, skill_dir)
-func (h *StoreRecordsHelper) SaveEvolutionLog(name string, evoLog *EvolutionLog, skillDir string) {
+func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, evoLog *EvolutionLog, skillDir string) error {
 	targetDir := skillDir
 	if targetDir == "" {
-		targetDir = h.store.ResolveSkillDir(name, true)
+		targetDir = h.store.ResolveSkillDir(ctx, name, true)
 	}
 	if targetDir == "" {
-		return
+		return nil
 	}
 	os.MkdirAll(targetDir, 0755)
 	evoPath := filepath.Join(targetDir, evolutionFilename)
 	data, err := json.Marshal(evoLog.ToDict())
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).Msg("[EvolutionStore] 序列化演进日志失败")
-		return
+		return err
 	}
-	h.store.WriteFileText(evoPath, string(data))
+	return h.store.WriteFileText(ctx, evoPath, string(data))
 }
 
 // UpdateRecordScores 更新记录分数。
 // 对应 Python: StoreRecordsHelper.update_record_scores(name, updates)
-func (h *StoreRecordsHelper) UpdateRecordScores(name string, updates map[string]map[string]any) int {
+func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string, updates map[string]map[string]any) (int, error) {
 	if len(updates) == 0 {
-		return 0
+		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(name)
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	updatedCount := 0
 
 	for _, record := range evoLog.Entries {
@@ -156,19 +165,21 @@ func (h *StoreRecordsHelper) UpdateRecordScores(name string, updates map[string]
 
 	if updatedCount > 0 {
 		evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		h.SaveEvolutionLog(name, evoLog, "")
+		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
+			return updatedCount, err
+		}
 		logger.Info(logger.ComponentAgentCore).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 更新记录分数")
 	}
-	return updatedCount
+	return updatedCount, nil
 }
 
 // GetRecordsByScore 按分数获取记录。
 // 对应 Python: StoreRecordsHelper.get_records_by_score(name, min_score)
-func (h *StoreRecordsHelper) GetRecordsByScore(name string, minScore *float64) []EvolutionRecord {
-	evoLog := h.LoadFullEvolutionLog(name)
+func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	records := evoLog.Entries
 	if minScore != nil {
 		filtered := make([]EvolutionRecord, 0)
@@ -186,11 +197,11 @@ func (h *StoreRecordsHelper) GetRecordsByScore(name string, minScore *float64) [
 
 // DeleteRecords 删除记录。
 // 对应 Python: StoreRecordsHelper.delete_records(name, record_ids)
-func (h *StoreRecordsHelper) DeleteRecords(name string, recordIDs []string) int {
+func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
 	if len(recordIDs) == 0 {
-		return 0
+		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(name)
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	idsSet := make(map[string]bool, len(recordIDs))
 	for _, id := range recordIDs {
 		idsSet[id] = true
@@ -207,23 +218,25 @@ func (h *StoreRecordsHelper) DeleteRecords(name string, recordIDs []string) int 
 
 	if deletedCount > 0 {
 		evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		h.SaveEvolutionLog(name, evoLog, "")
-		h.store.RenderEvolutionMarkdown(name)
+		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
+			return deletedCount, err
+		}
+		h.store.RenderEvolutionMarkdown(ctx, name)
 		logger.Info(logger.ComponentAgentCore).
 			Int("deleted_count", deletedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 删除记录")
 	}
-	return deletedCount
+	return deletedCount, nil
 }
 
 // MarkRecordsApplied 标记记录已应用。
 // 对应 Python: StoreRecordsHelper.mark_records_applied(name, record_ids)
-func (h *StoreRecordsHelper) MarkRecordsApplied(name string, recordIDs []string) int {
+func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string) (int, error) {
 	if len(recordIDs) == 0 {
-		return 0
+		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(name)
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	idsSet := make(map[string]bool, len(recordIDs))
 	for _, id := range recordIDs {
 		idsSet[id] = true
@@ -237,20 +250,22 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(name string, recordIDs []string)
 	}
 	if updatedCount > 0 {
 		evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		h.SaveEvolutionLog(name, evoLog, "")
-		h.store.RenderEvolutionMarkdown(name)
+		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
+			return updatedCount, err
+		}
+		h.store.RenderEvolutionMarkdown(ctx, name)
 		logger.Info(logger.ComponentAgentCore).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 标记记录已应用")
 	}
-	return updatedCount
+	return updatedCount, nil
 }
 
 // MergeRecords 合并记录。
 // 对应 Python: StoreRecordsHelper.merge_records(name, primary_id, remove_ids, new_content, new_score)
-func (h *StoreRecordsHelper) MergeRecords(name string, primaryID string, removeIDs []string, newContent string, newScore *float64) *EvolutionRecord {
-	evoLog := h.LoadFullEvolutionLog(name)
+func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	var primaryRecord *EvolutionRecord
 	var recordsToRemove []*EvolutionRecord
 	var allScores []float64
@@ -276,7 +291,7 @@ func (h *StoreRecordsHelper) MergeRecords(name string, primaryID string, removeI
 		logger.Warn(logger.ComponentAgentCore).
 			Str("primary_id", primaryID).
 			Msg("[EvolutionStore] merge_records: 主记录未找到")
-		return nil
+		return nil, nil
 	}
 
 	allScores = append(allScores, primaryRecord.Score)
@@ -302,21 +317,23 @@ func (h *StoreRecordsHelper) MergeRecords(name string, primaryID string, removeI
 	evoLog.Entries = filtered
 
 	evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	h.SaveEvolutionLog(name, evoLog, "")
-	h.store.RenderEvolutionMarkdown(name)
+	if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
+		return primaryRecord, err
+	}
+	h.store.RenderEvolutionMarkdown(ctx, name)
 
 	logger.Info(logger.ComponentAgentCore).
 		Int("removed_count", len(recordsToRemove)).
 		Str("primary_id", primaryID).
 		Str("skill", name).
 		Msg("[EvolutionStore] 合并记录")
-	return primaryRecord
+	return primaryRecord, nil
 }
 
 // UpdateRecordContent 更新记录内容。
 // 对应 Python: StoreRecordsHelper.update_record_content(name, record_id, new_content, new_score)
-func (h *StoreRecordsHelper) UpdateRecordContent(name string, recordID string, newContent string, newScore *float64) *EvolutionRecord {
-	evoLog := h.LoadFullEvolutionLog(name)
+func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name string, recordID string, newContent string, newScore *float64) (*EvolutionRecord, error) {
+	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	var targetRecord *EvolutionRecord
 
 	for i := range evoLog.Entries {
@@ -330,7 +347,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(name string, recordID string, n
 		logger.Warn(logger.ComponentAgentCore).
 			Str("record_id", recordID).
 			Msg("[EvolutionStore] update_record_content: 记录未找到")
-		return nil
+		return nil, nil
 	}
 
 	targetRecord.Change.Content = newContent
@@ -341,14 +358,16 @@ func (h *StoreRecordsHelper) UpdateRecordContent(name string, recordID string, n
 	targetRecord.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 
 	evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	h.SaveEvolutionLog(name, evoLog, "")
-	h.store.RenderEvolutionMarkdown(name)
+	if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
+		return targetRecord, err
+	}
+	h.store.RenderEvolutionMarkdown(ctx, name)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("record_id", recordID).
 		Str("skill", name).
 		Msg("[EvolutionStore] 更新记录内容")
-	return targetRecord
+	return targetRecord, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

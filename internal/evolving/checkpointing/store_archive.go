@@ -1,6 +1,7 @@
 package checkpointing
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,28 +33,28 @@ type StoreArchiveHelper struct {
 
 // CreateSkill 创建新技能。
 // 对应 Python: StoreArchiveHelper.create_skill(name, description, body, frontmatter)
-func (h *StoreArchiveHelper) CreateSkill(name string, description string, body string, frontmatter string) string {
+func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, description string, body string, frontmatter string) (string, error) {
 	// 对齐 Python: 校验名称
 	validNameRe := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 	if name == "" || !validNameRe.MatchString(name) {
 		logger.Error(logger.ComponentAgentCore).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 无效名称")
-		return ""
+		return "", nil
 	}
 	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		logger.Error(logger.ComponentAgentCore).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 路径遍历尝试")
-		return ""
+		return "", nil
 	}
 
-	skillDir := h.store.ResolveSkillDir(name, true)
+	skillDir := h.store.ResolveSkillDir(ctx, name, true)
 	if skillDir == "" {
 		logger.Error(logger.ComponentAgentCore).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 无法解析技能目录")
-		return ""
+		return "", nil
 	}
 
 	if isDir(skillDir) && hasFiles(skillDir) {
@@ -61,7 +62,7 @@ func (h *StoreArchiveHelper) CreateSkill(name string, description string, body s
 			Str("name", name).
 			Str("skill_dir", skillDir).
 			Msg("[EvolutionStore] create_skill: 技能已存在")
-		return ""
+		return "", nil
 	}
 
 	os.MkdirAll(skillDir, 0755)
@@ -75,11 +76,15 @@ func (h *StoreArchiveHelper) CreateSkill(name string, description string, body s
 			name, description, name, body)
 	}
 	skillMDPath := filepath.Join(skillDir, "SKILL.md")
-	h.store.WriteFileText(skillMDPath, skillMDContent)
+	if err := h.store.WriteFileText(ctx, skillMDPath, skillMDContent); err != nil {
+		return "", err
+	}
 
 	// 对齐 Python: 创建空 EvolutionLog
 	emptyLog := EmptyEvolutionLog(name)
-	h.store.SaveEvolutionLog(name, emptyLog, skillDir)
+	if err := h.store.SaveEvolutionLog(ctx, name, emptyLog, skillDir); err != nil {
+		return "", err
+	}
 
 	// 对齐 Python: 创建 evolution 目录
 	evoDir := filepath.Join(skillDir, "evolution")
@@ -89,69 +94,84 @@ func (h *StoreArchiveHelper) CreateSkill(name string, description string, body s
 		Str("name", name).
 		Str("skill_dir", skillDir).
 		Msg("[EvolutionStore] 创建新技能")
-	return skillDir
+	return skillDir, nil
 }
 
 // ArchiveSkillBody 归档 SKILL.md。
 // 对应 Python: StoreArchiveHelper.archive_skill_body(name)
-func (h *StoreArchiveHelper) ArchiveSkillBody(name string) string {
-	skillDir := h.store.ResolveSkillDir(name)
+func (h *StoreArchiveHelper) ArchiveSkillBody(ctx context.Context, name string) (string, error) {
+	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return ""
+		return "", nil
 	}
-	mdPath := h.store.FindSkillMD(skillDir)
+	mdPath := h.store.FindSkillMD(ctx, skillDir)
 	if mdPath == "" {
-		return ""
+		return "", nil
 	}
 	archive := ArchiveDir(skillDir)
 	suffix := tsSuffix()
 	dest := filepath.Join(archive, fmt.Sprintf("SKILL.v%s.md", suffix))
-	content := h.store.ReadFileText(mdPath)
-	h.store.WriteFileText(dest, content)
+	content, err := h.store.ReadFileText(ctx, mdPath)
+	if err != nil {
+		return "", err
+	}
+	if err := h.store.WriteFileText(ctx, dest, content); err != nil {
+		return "", err
+	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("src", filepath.Base(mdPath)).
 		Str("dest", filepath.Base(dest)).
 		Msg("[EvolutionStore] 归档 SKILL.md")
-	return filepath.Base(dest)
+	return filepath.Base(dest), nil
 }
 
 // ArchiveEvolutions 归档演进数据。
 // 对应 Python: StoreArchiveHelper.archive_evolutions(name)
-func (h *StoreArchiveHelper) ArchiveEvolutions(name string) string {
-	skillDir := h.store.ResolveSkillDir(name)
+func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string) (string, error) {
+	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return ""
+		return "", nil
 	}
 	evoPath := filepath.Join(skillDir, evolutionFilename)
 	if !isFile(evoPath) {
-		return ""
+		return "", nil
 	}
 	archive := ArchiveDir(skillDir)
 	suffix := tsSuffix()
 	dest := filepath.Join(archive, fmt.Sprintf("evolutions.v%s.json", suffix))
-	content := h.store.ReadFileText(evoPath)
-	h.store.WriteFileText(dest, content)
+	content, err := h.store.ReadFileText(ctx, evoPath)
+	if err != nil {
+		return "", err
+	}
+	if err := h.store.WriteFileText(ctx, dest, content); err != nil {
+		return "", err
+	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("dest", filepath.Base(dest)).
 		Msg("[EvolutionStore] 归档演进数据")
-	return filepath.Base(dest)
+	return filepath.Base(dest), nil
 }
 
 // ClearEvolutions 清空演进数据。
 // 对应 Python: StoreArchiveHelper.clear_evolutions(name)
-func (h *StoreArchiveHelper) ClearEvolutions(name string) {
+func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) error {
 	emptyLog := EmptyEvolutionLog(name)
-	h.store.SaveEvolutionLog(name, emptyLog, "")
-	h.store.RenderEvolutionMarkdown(name)
+	if err := h.store.SaveEvolutionLog(ctx, name, emptyLog, ""); err != nil {
+		return err
+	}
+	if err := h.store.RenderEvolutionMarkdown(ctx, name); err != nil {
+		return err
+	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("skill", name).
 		Msg("[EvolutionStore] 清空演进数据")
+	return nil
 }
 
 // ListArchives 列出归档文件。
 // 对应 Python: StoreArchiveHelper.list_archives(name)
-func (h *StoreArchiveHelper) ListArchives(name string) []string {
-	skillDir := h.store.ResolveSkillDir(name)
+func (h *StoreArchiveHelper) ListArchives(ctx context.Context, name string) []string {
+	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
 		return nil
 	}

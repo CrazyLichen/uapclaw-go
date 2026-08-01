@@ -581,7 +581,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.36 | ☐ | JiuwenBoxProvider | JiuwenBox 沙箱 Provider | `openjiuwen/extensions/sys_operation/` |
 | 9.37 | ☐ | AioProvider | Aio 沙箱 Provider | `openjiuwen/extensions/sys_operation/` |
 | **9.x 内置工具集** | — | | | |
-| 9.38-49 | 🔄 | Harness 工具集 | Shell/文件系统/代码/MCP/Worktree/浏览器/✅Cron/✅Skills(SkillTool+ListSkillTool)/TODO/✅AskUser/Memory/AgentMode/多模态 | `openjiuwen/harness/tools/` |
+| 9.38-49 | 🔄 | Harness 工具集 | ✅Shell(BashTool+PowerShellTool)/✅文件系统(Read/Write/Edit/Grep/Glob/ListDir)/✅代码(CodeTool)/✅MCP(MCPTool+ListMcpResources+ReadMcpResource)/✅Cron/✅Skills(SkillTool+ListSkillTool)/✅TODO(todo_create+todo_list+todo_get+todo_modify)/✅AskUser/✅AgentMode(SwitchMode+EnterPlanMode+ExitPlanMode+TaskToolFactory)/✅BrowserMove(runtime+service+6runtime_tools+rail)/✅SubAgent(TaskTool+3Sessions工具)/✅ToolDiscovery(Search+Load)/Worktree(仅models)/Memory/多模态 | `openjiuwen/harness/tools/` |
 | 9.50 | 🔄 | Workspace 管理 | ✅ WorkspaceNode 枚举（15 值）；✅ DirectoryNode 类型；✅ Workspace 结构体 + NewWorkspace/GetDirectory/SetDirectory/GetNodePath/GetDefaultDirectory 方法；✅ validateDirectoryNode 校验；✅ CN/EN 双语默认模式；✅ 默认目录自动补全；✅ 深拷贝隔离；✅ 27 个单元测试全部通过 | `openjiuwen/harness/workspace/` |
 | 9.51-53 | ✅ | Harness 资源/Schema/Prompts | 资源管理/Schema 定义/提示词模板 | `openjiuwen/harness/resources/` · `schema/` · `prompts/` |
 | **9.x CLI** | — | | | |
@@ -622,7 +622,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.74-76 | ☐ | RL 子系统 | OfflineRL/OnlineRL/RewardRegistry | `openjiuwen/agent_evolving/agent_rl/` |
 | 9.77 | ✅ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator） | `openjiuwen/agent_evolving/trajectory/` |
 | 9.78 | ✅ | EvolveCheckpoint | CheckpointManager 协议 + DefaultCheckpointManager + EvolveCheckpoint 状态 + FileCheckpointStore + EvolutionStore（技能文件系统IO）+ StoreArchive/StoreProjection/StoreRecords/SkillPackage | `openjiuwen/agent_evolving/checkpointing/` |
-| 9.79 | ☐ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
+| 9.79 | ✅ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
 | 9.80 | ✅ | UpdateExecution + Types | UpdateValue/ApplyResult/normalize_updates + execute_updates/apply_updates/summarize_apply_results + protocols 常量 | `openjiuwen/agent_evolving/update_execution.py` · `types.py` · `protocols.py` |
 | **9.x 扩展系统** | — | | | |
 | 9.81 | ☐ | A2A 扩展 | A2AServer/A2AClient/A2ARemoteClient/A2AServerAdapter | `openjiuwen/extensions/a2a/` |

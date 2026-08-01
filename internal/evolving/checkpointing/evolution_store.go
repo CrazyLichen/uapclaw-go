@@ -101,7 +101,7 @@ func (s *EvolutionStore) BaseDir() string {
 
 // ListSkillNames 列出所有技能名称。
 // 对应 Python: EvolutionStore.list_skill_names()
-func (s *EvolutionStore) ListSkillNames() []string {
+func (s *EvolutionStore) ListSkillNames(ctx context.Context) []string {
 	var names []string
 	seen := map[string]bool{}
 	for _, root := range s.baseDirs {
@@ -125,13 +125,13 @@ func (s *EvolutionStore) ListSkillNames() []string {
 }
 
 // SkillExists 判断技能是否存在。
-func (s *EvolutionStore) SkillExists(name string) bool {
-	return s.ResolveSkillDir(name) != ""
+func (s *EvolutionStore) SkillExists(ctx context.Context, name string) bool {
+	return s.ResolveSkillDir(ctx, name) != ""
 }
 
 // ResolveSkillDir 查找技能目录路径，create=true 时返回第一个 baseDir/name。
 // 对应 Python: EvolutionStore.resolve_skill_dir(name, create)
-func (s *EvolutionStore) ResolveSkillDir(name string, create ...bool) string {
+func (s *EvolutionStore) ResolveSkillDir(ctx context.Context, name string, create ...bool) string {
 	doCreate := len(create) > 0 && create[0]
 	for _, base := range s.baseDirs {
 		candidate := filepath.Join(base, name)
@@ -147,7 +147,7 @@ func (s *EvolutionStore) ResolveSkillDir(name string, create ...bool) string {
 
 // FindSkillMD 查找技能的 Markdown 入口文件。
 // 对应 Python: EvolutionStore._find_skill_md(skill_dir)
-func (s *EvolutionStore) FindSkillMD(skillDir string) string {
+func (s *EvolutionStore) FindSkillMD(ctx context.Context, skillDir string) string {
 	skillMD := filepath.Join(skillDir, "SKILL.md")
 	if isFile(skillMD) {
 		return skillMD
@@ -167,20 +167,20 @@ func (s *EvolutionStore) FindSkillMD(skillDir string) string {
 
 // ReadFileText 读取文本文件，路由通过 sysOperation。
 // 对应 Python: EvolutionStore.read_file_text(path)
-func (s *EvolutionStore) ReadFileText(path string) string {
-	localRead := func() string {
+func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string, error) {
+	localRead := func() (string, error) {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return ""
+			return "", err
 		}
-		return string(data)
+		return string(data), nil
 	}
 
 	if s.sysOperation != nil {
 		fsOp := s.sysOperation.Fs()
 		if fsOp != nil {
 			// 对齐 Python: result = await self.sys_operation.fs().read_file(...)
-			result, err := fsOp.ReadFile(context.Background(), path)
+			result, err := fsOp.ReadFile(ctx, path)
 			if err != nil || result == nil || result.Code != 0 {
 				logger.Warn(logger.ComponentAgentCore).
 					Str("path", path).
@@ -189,7 +189,7 @@ func (s *EvolutionStore) ReadFileText(path string) string {
 				return localRead()
 			}
 			if result.Data != nil && result.Data.Content != "" {
-				return result.Data.Content
+				return result.Data.Content, nil
 			}
 			return localRead()
 		}
@@ -199,7 +199,7 @@ func (s *EvolutionStore) ReadFileText(path string) string {
 
 // WriteFileText 写入文本文件，路由通过 sysOperation。
 // 对应 Python: EvolutionStore.write_file_text(path, content)
-func (s *EvolutionStore) WriteFileText(path string, content string) error {
+func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content string) error {
 	localWrite := func() error {
 		// 确保父目录存在
 		dir := filepath.Dir(path)
@@ -210,7 +210,7 @@ func (s *EvolutionStore) WriteFileText(path string, content string) error {
 	if s.sysOperation != nil {
 		fsOp := s.sysOperation.Fs()
 		if fsOp != nil {
-			result, err := fsOp.WriteFile(context.Background(), path, content)
+			result, err := fsOp.WriteFile(ctx, path, content)
 			if err != nil {
 				logger.Warn(logger.ComponentAgentCore).
 					Str("path", path).
@@ -233,74 +233,88 @@ func (s *EvolutionStore) WriteFileText(path string, content string) error {
 
 // ReadSkillContent 读取技能 SKILL.md 内容。
 // 对应 Python: EvolutionStore.read_skill_content(name)
-func (s *EvolutionStore) ReadSkillContent(name string) string {
-	skillDir := s.ResolveSkillDir(name)
+func (s *EvolutionStore) ReadSkillContent(ctx context.Context, name string) (string, error) {
+	skillDir := s.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return ""
+		return "", nil
 	}
-	mdPath := s.FindSkillMD(skillDir)
+	mdPath := s.FindSkillMD(ctx, skillDir)
 	if mdPath == "" {
-		return ""
+		return "", nil
 	}
-	return s.ReadFileText(mdPath)
+	return s.ReadFileText(ctx, mdPath)
 }
 
 // ReadPristineSkillContent 读取不含 evolution-index 块的 SKILL.md 内容。
 // 对应 Python: EvolutionStore.read_pristine_skill_content(name)
-func (s *EvolutionStore) ReadPristineSkillContent(name string) string {
-	content := s.ReadSkillContent(name)
+func (s *EvolutionStore) ReadPristineSkillContent(ctx context.Context, name string) (string, error) {
+	content, err := s.ReadSkillContent(ctx, name)
+	if err != nil {
+		return "", err
+	}
 	if content == "" {
-		return ""
+		return "", nil
 	}
 	stripped := evolutionIndexPattern.ReplaceAllString(content, "")
-	return strings.TrimSpace(stripped) + "\n"
+	return strings.TrimSpace(stripped) + "\n", nil
 }
 
 // ReadSkillID 从 SKILL.md frontmatter 读取 skill_id。
-func (s *EvolutionStore) ReadSkillID(name string) string {
-	content := s.ReadSkillContent(name)
-	if content == "" {
-		return ""
+func (s *EvolutionStore) ReadSkillID(ctx context.Context, name string) (string, error) {
+	content, err := s.ReadSkillContent(ctx, name)
+	if err != nil {
+		return "", err
 	}
-	return ReadSkillIDFromContent(content)
+	if content == "" {
+		return "", nil
+	}
+	return ReadSkillIDFromContent(content), nil
 }
 
 // EnsureSkillID 确保 SKILL.md 包含 skill_id。
-func (s *EvolutionStore) EnsureSkillID(name string) string {
-	skillDir := s.ResolveSkillDir(name)
+func (s *EvolutionStore) EnsureSkillID(ctx context.Context, name string) (string, error) {
+	skillDir := s.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return ""
+		return "", nil
 	}
-	mdPath := s.FindSkillMD(skillDir)
+	mdPath := s.FindSkillMD(ctx, skillDir)
 	if mdPath == "" {
-		return ""
+		return "", nil
 	}
-	content := s.ReadFileText(mdPath)
+	content, err := s.ReadFileText(ctx, mdPath)
+	if err != nil {
+		return "", err
+	}
 	if content == "" {
-		return ""
+		return "", nil
 	}
 	updated, skillID := EnsureSkillIDInContent(content)
 	if updated != content {
-		s.WriteFileText(mdPath, updated)
+		if err := s.WriteFileText(ctx, mdPath, updated); err != nil {
+			return "", err
+		}
 		logger.Info(logger.ComponentAgentCore).
 			Str("skill_id", skillID).
 			Str("skill", name).
 			Msg("[EvolutionStore] 分配 skill_id")
 	}
-	return skillID
+	return skillID, nil
 }
 
 // PackSkillForSharing 构建技能目录的 tarball 用于 hub 上传。
-func (s *EvolutionStore) PackSkillForSharing(name string) ([]byte, error) {
-	skillDir := s.ResolveSkillDir(name)
+func (s *EvolutionStore) PackSkillForSharing(ctx context.Context, name string) ([]byte, error) {
+	skillDir := s.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
 		return nil, nil
 	}
-	mdPath := s.FindSkillMD(skillDir)
+	mdPath := s.FindSkillMD(ctx, skillDir)
 	if mdPath == "" {
 		return PackSkillDirectory(skillDir, "", "")
 	}
-	pristine := s.ReadPristineSkillContent(name)
+	pristine, err := s.ReadPristineSkillContent(ctx, name)
+	if err != nil {
+		return nil, err
+	}
 	if pristine == "" {
 		return PackSkillDirectory(skillDir, "", "")
 	}
@@ -313,7 +327,7 @@ func (s *EvolutionStore) PackSkillForSharing(name string) ([]byte, error) {
 }
 
 // InstallSkillPackage 从 hub 技能包解压到本地目录。
-func (s *EvolutionStore) InstallSkillPackage(packageBytes []byte, skillName string) (string, error) {
+func (s *EvolutionStore) InstallSkillPackage(ctx context.Context, packageBytes []byte, skillName string) (string, error) {
 	if len(packageBytes) == 0 {
 		return "", nil
 	}
@@ -328,7 +342,7 @@ func (s *EvolutionStore) InstallSkillPackage(packageBytes []byte, skillName stri
 		return "", nil
 	}
 
-	destDir := s.ResolveSkillDir(resolvedName, true)
+	destDir := s.ResolveSkillDir(ctx, resolvedName, true)
 	if destDir == "" {
 		return "", nil
 	}
@@ -349,34 +363,34 @@ func (s *EvolutionStore) InstallSkillPackage(packageBytes []byte, skillName stri
 }
 
 // WriteSkillContent 写入技能 SKILL.md 内容。
-func (s *EvolutionStore) WriteSkillContent(name string, content string) bool {
-	skillDir := s.ResolveSkillDir(name)
+func (s *EvolutionStore) WriteSkillContent(ctx context.Context, name string, content string) (bool, error) {
+	skillDir := s.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("skill", name).
 			Msg("[EvolutionStore] write_skill_content: 技能未找到")
-		return false
+		return false, nil
 	}
-	mdPath := s.FindSkillMD(skillDir)
+	mdPath := s.FindSkillMD(ctx, skillDir)
 	if mdPath == "" {
 		mdPath = filepath.Join(skillDir, "SKILL.md")
 	}
-	if err := s.WriteFileText(mdPath, content); err != nil {
+	if err := s.WriteFileText(ctx, mdPath, content); err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("skill", name).
 			Err(err).
 			Msg("[EvolutionStore] write_skill_content 失败")
-		return false
+		return false, err
 	}
 	logger.Info(logger.ComponentAgentCore).
 		Str("skill", name).
 		Msg("[EvolutionStore] 写入 SKILL.md")
-	return true
+	return true, nil
 }
 
 // LoadEvolutionLog 加载演进日志（可按 target 过滤）。
-func (s *EvolutionStore) LoadEvolutionLog(name string, target *signal.EvolutionTarget) *EvolutionLog {
-	evoLog := s.LoadFullEvolutionLog(name)
+func (s *EvolutionStore) LoadEvolutionLog(ctx context.Context, name string, target *signal.EvolutionTarget) *EvolutionLog {
+	evoLog := s.LoadFullEvolutionLog(ctx, name)
 	if target != nil {
 		filtered := make([]EvolutionRecord, 0)
 		for _, record := range evoLog.Entries {
@@ -396,21 +410,21 @@ func (s *EvolutionStore) LoadEvolutionLog(name string, target *signal.EvolutionT
 
 // AppendRecord 追加或合并一条演进记录。
 // 对应 Python: EvolutionStore.append_record(name, record)
-func (s *EvolutionStore) AppendRecord(name string, record EvolutionRecord) {
+func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record EvolutionRecord) error {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
 
-	skillDir := s.ResolveSkillDir(name, true)
+	skillDir := s.ResolveSkillDir(ctx, name, true)
 	if skillDir == "" {
-		return
+		return nil
 	}
 
 	if record.Change.Target == signal.EvolutionTargetScript {
-		s.records.PersistScript(skillDir, &record)
+		s.records.PersistScript(ctx, skillDir, &record)
 	}
 
-	evoLog := s.LoadFullEvolutionLog(name)
+	evoLog := s.LoadFullEvolutionLog(ctx, name)
 	mergeTarget := record.Change.MergeTarget
 	if mergeTarget != nil && *mergeTarget != "" {
 		replaced := false
@@ -433,7 +447,7 @@ func (s *EvolutionStore) AppendRecord(name string, record EvolutionRecord) {
 	}
 
 	evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	s.records.SaveEvolutionLog(name, evoLog, skillDir)
+	s.records.SaveEvolutionLog(ctx, name, evoLog, skillDir)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("skill", name).
@@ -450,104 +464,105 @@ func (s *EvolutionStore) AppendRecord(name string, record EvolutionRecord) {
 			Msg("[EvolutionStore] 演进经验过多，建议 /evolve_simplify")
 	}
 
-	s.RenderEvolutionMarkdown(name)
+	s.RenderEvolutionMarkdown(ctx, name)
+	return nil
 }
 
 // LoadFullEvolutionLog 加载完整演进日志。
-func (s *EvolutionStore) LoadFullEvolutionLog(name string) *EvolutionLog {
-	return s.records.LoadFullEvolutionLog(name)
+func (s *EvolutionStore) LoadFullEvolutionLog(ctx context.Context, name string) *EvolutionLog {
+	return s.records.LoadFullEvolutionLog(ctx, name)
 }
 
 // SaveEvolutionLog 持久化演进日志。
-func (s *EvolutionStore) SaveEvolutionLog(name string, evoLog *EvolutionLog, skillDir string) {
-	s.records.SaveEvolutionLog(name, evoLog, skillDir)
+func (s *EvolutionStore) SaveEvolutionLog(ctx context.Context, name string, evoLog *EvolutionLog, skillDir string) error {
+	return s.records.SaveEvolutionLog(ctx, name, evoLog, skillDir)
 }
 
 // GetPendingRecords 获取待定记录列表。
-func (s *EvolutionStore) GetPendingRecords(name string, target *signal.EvolutionTarget) []EvolutionRecord {
-	return s.LoadEvolutionLog(name, target).PendingEntries()
+func (s *EvolutionStore) GetPendingRecords(ctx context.Context, name string, target *signal.EvolutionTarget) []EvolutionRecord {
+	return s.LoadEvolutionLog(ctx, name, target).PendingEntries()
 }
 
 // RenderEvolutionMarkdown 渲染演进 Markdown。
-func (s *EvolutionStore) RenderEvolutionMarkdown(name string) {
-	s.projection.RenderEvolutionMarkdown(name)
+func (s *EvolutionStore) RenderEvolutionMarkdown(ctx context.Context, name string) error {
+	return s.projection.RenderEvolutionMarkdown(ctx, name)
 }
 
 // FormatDescExperienceText 格式化描述层经验文本。
-func (s *EvolutionStore) FormatDescExperienceText(name string, maxItems int) string {
-	return s.projection.FormatDescExperienceText(name, maxItems)
+func (s *EvolutionStore) FormatDescExperienceText(ctx context.Context, name string, maxItems int) string {
+	return s.projection.FormatDescExperienceText(ctx, name, maxItems)
 }
 
 // FormatAllDescExperiences 格式化所有技能的描述经验。
-func (s *EvolutionStore) FormatAllDescExperiences(names []string) map[string]string {
-	return s.projection.FormatAllDescExperiences(names)
+func (s *EvolutionStore) FormatAllDescExperiences(ctx context.Context, names []string) map[string]string {
+	return s.projection.FormatAllDescExperiences(ctx, names)
 }
 
 // FormatBodyExperienceText 格式化主体层经验文本。
-func (s *EvolutionStore) FormatBodyExperienceText(name string) string {
-	return s.projection.FormatBodyExperienceText(name)
+func (s *EvolutionStore) FormatBodyExperienceText(ctx context.Context, name string) string {
+	return s.projection.FormatBodyExperienceText(ctx, name)
 }
 
 // ListPendingSummary 列出待定经验摘要。
-func (s *EvolutionStore) ListPendingSummary(names []string) string {
-	return s.projection.ListPendingSummary(names)
+func (s *EvolutionStore) ListPendingSummary(ctx context.Context, names []string) string {
+	return s.projection.ListPendingSummary(ctx, names)
 }
 
 // UpdateRecordScores 更新记录分数（RMW 操作，加写锁）。
-func (s *EvolutionStore) UpdateRecordScores(name string, updates map[string]map[string]any) int {
+func (s *EvolutionStore) UpdateRecordScores(ctx context.Context, name string, updates map[string]map[string]any) (int, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.UpdateRecordScores(name, updates)
+	return s.records.UpdateRecordScores(ctx, name, updates)
 }
 
 // GetRecordsByScore 按分数获取记录（只读操作，加读锁）。
-func (s *EvolutionStore) GetRecordsByScore(name string, minScore *float64) []EvolutionRecord {
+func (s *EvolutionStore) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
 	lock := s.getSkillLock(name)
 	lock.RLock()
 	defer lock.RUnlock()
-	return s.records.GetRecordsByScore(name, minScore)
+	return s.records.GetRecordsByScore(ctx, name, minScore)
 }
 
 // DeleteRecords 删除记录（RMW 操作，加写锁）。
-func (s *EvolutionStore) DeleteRecords(name string, recordIDs []string) int {
+func (s *EvolutionStore) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.DeleteRecords(name, recordIDs)
+	return s.records.DeleteRecords(ctx, name, recordIDs)
 }
 
 // MarkRecordsApplied 标记记录已应用（RMW 操作，加写锁）。
-func (s *EvolutionStore) MarkRecordsApplied(name string, recordIDs []string) int {
+func (s *EvolutionStore) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string) (int, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.MarkRecordsApplied(name, recordIDs)
+	return s.records.MarkRecordsApplied(ctx, name, recordIDs)
 }
 
 // MergeRecords 合并记录（RMW 操作，加写锁）。
-func (s *EvolutionStore) MergeRecords(name string, primaryID string, removeIDs []string, newContent string, newScore *float64) *EvolutionRecord {
+func (s *EvolutionStore) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.MergeRecords(name, primaryID, removeIDs, newContent, newScore)
+	return s.records.MergeRecords(ctx, name, primaryID, removeIDs, newContent, newScore)
 }
 
 // UpdateRecordContent 更新记录内容（RMW 操作，加写锁）。
-func (s *EvolutionStore) UpdateRecordContent(name string, recordID string, newContent string, newScore *float64) *EvolutionRecord {
+func (s *EvolutionStore) UpdateRecordContent(ctx context.Context, name string, recordID string, newContent string, newScore *float64) (*EvolutionRecord, error) {
 	lock := s.getSkillLock(name)
 	lock.Lock()
 	defer lock.Unlock()
-	return s.records.UpdateRecordContent(name, recordID, newContent, newScore)
+	return s.records.UpdateRecordContent(ctx, name, recordID, newContent, newScore)
 }
 
 // CreateSkill 创建新技能。
-func (s *EvolutionStore) CreateSkill(name string, description string, body string, frontmatter string) string {
-	return s.archive.CreateSkill(name, description, body, frontmatter)
+func (s *EvolutionStore) CreateSkill(ctx context.Context, name string, description string, body string, frontmatter string) (string, error) {
+	return s.archive.CreateSkill(ctx, name, description, body, frontmatter)
 }
 
 // ListSkillNamesWithDescriptions 列出所有技能及描述。
-func (s *EvolutionStore) ListSkillNamesWithDescriptions() []struct {
+func (s *EvolutionStore) ListSkillNamesWithDescriptions(ctx context.Context) []struct {
 	Name        string
 	Description string
 } {
@@ -555,8 +570,8 @@ func (s *EvolutionStore) ListSkillNamesWithDescriptions() []struct {
 		Name        string
 		Description string
 	}
-	for _, name := range s.ListSkillNames() {
-		content := s.ReadSkillContent(name)
+	for _, name := range s.ListSkillNames(ctx) {
+		content, _ := s.ReadSkillContent(ctx, name)
 		description := ExtractDescriptionFromSkillMD(content)
 		result = append(result, struct {
 			Name        string
@@ -572,23 +587,23 @@ func ExtractDescriptionFromSkillMD(content string) string {
 }
 
 // ArchiveSkillBody 归档 SKILL.md。
-func (s *EvolutionStore) ArchiveSkillBody(name string) string {
-	return s.archive.ArchiveSkillBody(name)
+func (s *EvolutionStore) ArchiveSkillBody(ctx context.Context, name string) (string, error) {
+	return s.archive.ArchiveSkillBody(ctx, name)
 }
 
 // ArchiveEvolutions 归档演进数据。
-func (s *EvolutionStore) ArchiveEvolutions(name string) string {
-	return s.archive.ArchiveEvolutions(name)
+func (s *EvolutionStore) ArchiveEvolutions(ctx context.Context, name string) (string, error) {
+	return s.archive.ArchiveEvolutions(ctx, name)
 }
 
 // ClearEvolutions 清空演进数据。
-func (s *EvolutionStore) ClearEvolutions(name string) {
-	s.archive.ClearEvolutions(name)
+func (s *EvolutionStore) ClearEvolutions(ctx context.Context, name string) error {
+	return s.archive.ClearEvolutions(ctx, name)
 }
 
 // ListArchives 列出归档文件。
-func (s *EvolutionStore) ListArchives(name string) []string {
-	return s.archive.ListArchives(name)
+func (s *EvolutionStore) ListArchives(ctx context.Context, name string) []string {
+	return s.archive.ListArchives(ctx, name)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
