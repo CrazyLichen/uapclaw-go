@@ -1,5 +1,10 @@
 package memory
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamMemoryConfig 团队记忆配置，对齐 Python TeamMemoryConfig
@@ -8,8 +13,8 @@ type TeamMemoryConfig struct {
 	Enabled bool `json:"enabled"`
 	// Scenario 记忆场景，"general" | "coding"
 	Scenario string `json:"scenario"`
-	// EmbeddingConfig 嵌入配置，⤵️ 回填: 9.64
-	EmbeddingConfig any `json:"-"`
+	// EmbeddingConfig 嵌入配置。⤴️ 9.64 回填完成
+	EmbeddingConfig *embedding.EmbeddingConfig `json:"-"`
 	// AutoExtract 是否自动提取记忆
 	AutoExtract bool `json:"auto_extract"`
 	// SharedMemory 是否启用共享记忆
@@ -23,12 +28,6 @@ type TeamMemoryConfig struct {
 	// TeamMemoryDir 团队记忆目录，不序列化
 	TeamMemoryDir string `json:"-"`
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -46,10 +45,11 @@ func NewTeamMemoryConfig() TeamMemoryConfig {
 	}
 }
 
-// ResolveEmbeddingConfig 解析嵌入配置。
-// ⤵️ 回填: 9.64 — 当前返回 nil
-func ResolveEmbeddingConfig(_ *TeamMemoryConfig) any {
-	return nil
+// ResolveEmbeddingConfig 解析嵌入配置。⤴️ 9.64 回填完成
+// 优先级：config 内嵌配置 → 环境变量 → nil
+func ResolveEmbeddingConfig(cfg *TeamMemoryConfig) *embedding.EmbeddingConfig {
+	if cfg != nil && cfg.EmbeddingConfig != nil {
+		return cfg.EmbeddingConfig
+	}
+	return lite.ResolveEmbeddingConfigFromEnv("", "", "")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

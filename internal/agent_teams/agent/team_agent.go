@@ -43,6 +43,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -761,7 +762,10 @@ func (a *TeamAgent) PersistSessionManifest(session any) {
 // 对齐 Python: TeamAgent.update_model_pool(new_pool)
 func (a *TeamAgent) UpdateModelPool(newPool any) {
 	if a.configurator != nil {
-		a.configurator.UpdateModelPool(newPool)
+		// 类型断言：从 any 转为 []models.ModelPoolEntry
+		if poolSlice, ok := newPool.([]models.ModelPoolEntry); ok {
+			a.configurator.UpdateModelPool(poolSlice)
+		}
 	}
 	// TODO(#9.61): 持久化领导者配置 recoveryManager.persist_leader_config
 }
@@ -770,7 +774,16 @@ func (a *TeamAgent) UpdateModelPool(newPool any) {
 // 对齐 Python: TeamAgent.attach_model_allocator(allocator, leader_allocation)
 func (a *TeamAgent) AttachModelAllocator(allocator any, leaderAllocation any) {
 	if a.configurator != nil {
-		a.configurator.AttachModelAllocator(allocator, leaderAllocation)
+		// 类型断言
+		var alloc models.ModelAllocator
+		if a, ok := allocator.(models.ModelAllocator); ok {
+			alloc = a
+		}
+		var la *models.Allocation
+		if v, ok := leaderAllocation.(*models.Allocation); ok {
+			la = v
+		}
+		a.configurator.AttachModelAllocator(alloc, la)
 	}
 }
 

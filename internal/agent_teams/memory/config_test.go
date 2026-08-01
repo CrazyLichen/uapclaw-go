@@ -3,6 +3,8 @@ package memory
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
 // TestNewTeamMemoryConfig 验证默认配置值
@@ -34,7 +36,7 @@ func TestTeamMemoryConfig_JSON序列化(t *testing.T) {
 	cfg := NewTeamMemoryConfig()
 	cfg.ParentWorkspacePath = "/some/path"
 	cfg.TeamMemoryDir = "/some/dir"
-	cfg.EmbeddingConfig = "should_not_appear"
+	cfg.EmbeddingConfig = &embedding.EmbeddingConfig{ModelName: "test"}
 
 	data, err := json.Marshal(cfg)
 	if err != nil {
@@ -61,11 +63,24 @@ func TestTeamMemoryConfig_JSON序列化(t *testing.T) {
 	}
 }
 
-// TestResolveEmbeddingConfig 验证回填占位返回 nil
+// TestResolveEmbeddingConfig 验证回填实现
 func TestResolveEmbeddingConfig(t *testing.T) {
+	// 无内嵌配置 → 调 env（当前返回 nil）
 	cfg := NewTeamMemoryConfig()
 	result := ResolveEmbeddingConfig(&cfg)
 	if result != nil {
-		t.Errorf("ResolveEmbeddingConfig 当前应返回 nil, 实际 %v", result)
+		t.Errorf("Expected nil when no env vars, got %v", result)
+	}
+	// 有内嵌配置 → 直接返回
+	embCfg := &embedding.EmbeddingConfig{ModelName: "test"}
+	cfg.EmbeddingConfig = embCfg
+	result = ResolveEmbeddingConfig(&cfg)
+	if result != embCfg {
+		t.Errorf("Expected embCfg, got %v", result)
+	}
+	// nil config → 返回 nil
+	result = ResolveEmbeddingConfig(nil)
+	if result != nil {
+		t.Errorf("Expected nil for nil config, got %v", result)
 	}
 }

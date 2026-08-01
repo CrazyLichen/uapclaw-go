@@ -596,7 +596,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.61 | ☐ | RecoveryManager | 恢复管理 | `openjiuwen/agent_teams/` |
 | 9.62 | ☐ | CoordinationKernel | 协调内核 | `openjiuwen/agent_teams/` |
 | 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
-| 9.64 | ☐ | Team Memory | 共享记忆 | `openjiuwen/agent_teams/memory/` |
+| 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
+| 9.65a | ☐ | Team Tools | TeamDatabase + TaskManager + MessageManager + InMemoryDB | `openjiuwen/agent_teams/tools/` |
 | 9.65 | ☐ | Team Messager | 团队消息（inprocess/ZMQ） | `openjiuwen/agent_teams/messager/` |
 | 9.66 | ☐ | Team Workspace | 团队工作空间 | `openjiuwen/agent_teams/team_workspace/` |
 | 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |

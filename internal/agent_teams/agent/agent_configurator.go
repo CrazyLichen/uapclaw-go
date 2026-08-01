@@ -3,6 +3,8 @@ package agent
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -29,9 +31,8 @@ type AgentConfigurator struct {
 	infra *TeamInfra
 	// resources 每实例运行时资源
 	resources *PrivateAgentResources
-	// leaderAllocation Leader 分配结果
-	// TODO(#9.64): Allocation 类型
-	leaderAllocation any
+	// leaderAllocation Leader 分配结果。⤴️ 9.64 回填完成
+	leaderAllocation *models.Allocation
 	// onTeammateCreated 队友创建回调
 	onTeammateCreated func(memberName string)
 }
@@ -277,33 +278,61 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) a
 
 // BuildMemoryManager 构建团队共享记忆管理器。
 // 对齐 Python: AgentConfigurator._build_memory_manager(spec, ctx, ...)
-//
-// TODO(#9.64): TeamMemoryManager 实现后替换
-func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, agentSpec atschema.DeepAgentSpec, language string, memberName string) any {
-	// TODO(#9.64): TeamMemoryManager 构造
-	return nil
+// ⤴️ 9.64 回填完成
+func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, agentSpec atschema.DeepAgentSpec, language string, memberName string) *memory.TeamMemoryManager {
+	// 记忆配置从 spec 中获取，当前为默认配置
+	memCfg := memory.NewTeamMemoryConfig()
+
+	params := memory.TeamMemoryManagerParams{
+		MemberName:          memberName,
+		TeamName:            c.TeamName(),
+		Role:                memory.TeamRole(c.Role()),
+		Lifecycle:           memory.TeamLifecycle(c.Lifecycle()),
+		Scenario:            memory.TeamScenario(memCfg.Scenario),
+		EmbeddingConfig:     memory.ResolveEmbeddingConfig(&memCfg),
+		Language:            memory.TeamLanguage(language),
+		PromptMode:          memory.PromptMode(memCfg.MemberMemoryPromptMode),
+		EnableAutoExtract:   memCfg.AutoExtract,
+		SharedMemory:        memCfg.SharedMemory,
+		TimezoneOffsetHours: memCfg.TimezoneOffsetHours,
+	}
+	return memory.NewTeamMemoryManager(params)
 }
 
 // UpdateModelPool 更新模型池。
 // 对齐 Python: AgentConfigurator.update_model_pool(new_pool)
-func (c *AgentConfigurator) UpdateModelPool(newPool any) {
-	// TODO(#9.64): 继承模型池ID + 构建模型分配器
+// ⤴️ 9.64 回填完成
+func (c *AgentConfigurator) UpdateModelPool(newPool []models.ModelPoolEntry) {
+	if c.resources == nil {
+		return
+	}
+	// 继承池 ID：从当前池继承到新池
+	teamName := c.TeamName()
+	strategy := "" // 从 TeamSpec 中获取 strategy
+	if c.blueprint != nil && c.blueprint.Ctx.TeamSpec != nil && c.blueprint.Ctx.TeamSpec.ModelPoolStrategy != "" {
+		strategy = c.blueprint.Ctx.TeamSpec.ModelPoolStrategy
+	}
+	allocator := models.BuildModelAllocatorForPool(newPool, strategy, teamName)
+	if allocator != nil {
+		c.SetModelAllocator(allocator)
+	}
 }
 
 // AttachModelAllocator 附加模型分配器。
 // 对齐 Python: AgentConfigurator.attach_model_allocator(allocator, leader_allocation)
-func (c *AgentConfigurator) AttachModelAllocator(allocator any, leaderAllocation any) {
+func (c *AgentConfigurator) AttachModelAllocator(allocator models.ModelAllocator, leaderAllocation *models.Allocation) {
 	c.SetModelAllocator(allocator)
 	c.leaderAllocation = leaderAllocation
 }
 
 // RestoreAllocatorState 恢复分配器状态。
 // 对齐 Python: AgentConfigurator.restore_allocator_state(state)
+// ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) RestoreAllocatorState(state map[string]any) {
-	if c.ModelAllocator() == nil {
+	if c.resources == nil || c.resources.ModelAllocator == nil {
 		return
 	}
-	// TODO(#9.64): 加载模型分配器状态 c.ModelAllocator().LoadStateDict(state)
+	c.resources.ModelAllocator.LoadStateDict(state)
 }
 
 // BuildSpawnPayload 构建生成载荷（代理到 SpawnPayloadBuilder）。
@@ -411,12 +440,12 @@ func (c *AgentConfigurator) WorktreeManager() any { return c.resources.WorktreeM
 // SetWorktreeManager 设置工作树管理器。
 func (c *AgentConfigurator) SetWorktreeManager(v any) { c.resources.WorktreeManager = v }
 
-// MemoryManager 返回团队记忆管理器。
+// MemoryManager 返回团队记忆管理器。⤴️ 9.64 回填完成
 // 对齐 Python: AgentConfigurator.memory_manager property
-func (c *AgentConfigurator) MemoryManager() any { return c.resources.MemoryManager }
+func (c *AgentConfigurator) MemoryManager() *memory.TeamMemoryManager { return c.resources.MemoryManager }
 
 // SetMemoryManager 设置团队记忆管理器。
-func (c *AgentConfigurator) SetMemoryManager(v any) { c.resources.MemoryManager = v }
+func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) { c.resources.MemoryManager = v }
 
 // FirstIterGate 返回首轮迭代门控。
 // 对齐 Python: AgentConfigurator.first_iter_gate property
@@ -425,12 +454,12 @@ func (c *AgentConfigurator) FirstIterGate() any { return c.resources.FirstIterGa
 // SetFirstIterGate 设置首轮迭代门控。
 func (c *AgentConfigurator) SetFirstIterGate(v any) { c.resources.FirstIterGate = v }
 
-// ModelAllocator 返回模型分配器。
+// ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成
 // 对齐 Python: AgentConfigurator.model_allocator property
-func (c *AgentConfigurator) ModelAllocator() any { return c.resources.ModelAllocator }
+func (c *AgentConfigurator) ModelAllocator() models.ModelAllocator { return c.resources.ModelAllocator }
 
 // SetModelAllocator 设置模型分配器。
-func (c *AgentConfigurator) SetModelAllocator(v any) { c.resources.ModelAllocator = v }
+func (c *AgentConfigurator) SetModelAllocator(v models.ModelAllocator) { c.resources.ModelAllocator = v }
 
 // Spec 返回 TeamAgentSpec。
 // 对齐 Python: AgentConfigurator.spec property

@@ -2,6 +2,8 @@ package agent
 
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -16,23 +18,11 @@ type PrivateAgentResources struct {
 	// WorktreeManager Worktree 管理器
 	// TODO(#9.66): WorktreeManager 类型
 	WorktreeManager any
-	// MemoryManager 团队记忆管理器
-	// TODO(#9.64): TeamMemoryManager 类型
-	MemoryManager any
+	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成
+	MemoryManager *memory.TeamMemoryManager
 	// FirstIterGate 首轮迭代门控
 	// TODO(#9.68): FirstIterationGate 类型
 	FirstIterGate any
-	// ModelAllocator 模型分配器（仅 Leader）
-	// TODO(#9.64): ModelAllocator 类型
-	ModelAllocator any
+	// ModelAllocator 模型分配器（仅 Leader）。⤴️ 9.64 回填完成
+	ModelAllocator models.ModelAllocator
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

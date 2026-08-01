@@ -3,6 +3,7 @@ package agent_teams
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -283,14 +284,22 @@ func (h *TeamHarness) UnregisterRail(ctx context.Context, rail any) error { retu
 
 // RegisterMemberTools 在底层 Agent 上注册团队记忆工具集。
 // 对齐 Python: TeamHarness.register_member_tools(memory_manager)
-// TODO(#9.64): memory_manager 类型定义后实现
-func (h *TeamHarness) RegisterMemberTools(memoryManager any) {}
+// ⤴️ 9.64 回填完成
+func (h *TeamHarness) RegisterMemberTools(memoryManager *memory.TeamMemoryManager) {
+	if memoryManager == nil {
+		return
+	}
+	memoryManager.RegisterTools(h.deepAgent)
+}
 
 // InjectMemberMemory 向 Agent 的系统提示注入加载的记忆。
 // 对齐 Python: TeamHarness.inject_member_memory(memory_manager, query)
-// TODO(#9.64): memory_manager 类型定义后实现
-func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager any, query string) error {
-	return nil
+// ⤴️ 9.64 回填完成
+func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *memory.TeamMemoryManager, query string) error {
+	if memoryManager == nil {
+		return nil
+	}
+	return memoryManager.LoadAndInject(ctx, h.deepAgent, query)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
