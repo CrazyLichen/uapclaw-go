@@ -529,7 +529,14 @@ func (uc *UapClaw) CancelInflightWork() error {
 	if a == nil {
 		return nil
 	}
-	// ⤵️ 10.3.2: adapter.AbortOnGatewayDisconnect()
+	// 对齐 Python: abort_fn = getattr(adapter, "abort_on_gateway_disconnect", None)
+	if aborter, ok := a.(interface{ AbortOnGatewayDisconnect(ctx context.Context) error }); ok {
+		if err := aborter.AbortOnGatewayDisconnect(context.Background()); err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "GATEWAY_DISCONNECT_ABORT_FAILED").
+				Msg("adapter.AbortOnGatewayDisconnect 失败")
+		}
+	}
 	return nil
 }
 
