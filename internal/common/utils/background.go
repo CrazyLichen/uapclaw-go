@@ -87,6 +87,9 @@ type TaskManager struct {
 	registry map[string]*Task
 	// mu 读写锁
 	mu sync.RWMutex
+	// cancelWaitTimeout 取消任务后等待函数完成的超时时间，默认 1s
+	// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
+	cancelWaitTimeout time.Duration
 }
 
 // TaskResult 任务执行结果。
@@ -137,6 +140,10 @@ const (
 	// TaskTimeout 超时。
 	TaskTimeout
 )
+
+// defaultCancelWaitTimeout 取消任务后等待函数完成的默认超时时间。
+// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
+const defaultCancelWaitTimeout = 1 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -284,7 +291,8 @@ func (t *Task) Wait() (any, error) {
 func GetTaskManager() *TaskManager {
 	return taskManagerSingleton.Get(func() *TaskManager {
 		return &TaskManager{
-			registry: make(map[string]*Task),
+			registry:          make(map[string]*Task),
+			cancelWaitTimeout: defaultCancelWaitTimeout,
 		}
 	})
 }
@@ -476,6 +484,12 @@ func (m *TaskManager) RemoveCompleted() int {
 	return count
 }
 
+// SetCancelWaitTimeout 设置取消任务后等待函数完成的超时时间。
+// 对齐 Python: BackgroundTask.cancel(timeout=...) 的可配置超时参数。
+func (m *TaskManager) SetCancelWaitTimeout(timeout time.Duration) {
+	m.cancelWaitTimeout = timeout
+}
+
 // CascadeCancel 级联取消目标任务及其所有子任务。
 // 对齐 Python: TaskManager._cascade_cancel(parent_id)，子任务 cancelledBy 为父任务 ID。
 func (m *TaskManager) CascadeCancel(taskID string, reason string, cancelledBy string) int {
@@ -557,7 +571,7 @@ func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx c
 		select {
 		case fnRes = <-resultCh:
 			// 任务函数在取消后也返回了
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(m.cancelWaitTimeout):
 			// 任务函数未及时返回，视为被取消/超时
 		}
 	}
