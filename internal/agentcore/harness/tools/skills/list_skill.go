@@ -66,7 +66,7 @@ func NewListSkillTool(
 //  1. query 为空 → 返回所有技能（mode="all"）
 //  2. query 非空 + listSkillModel 为 nil → 返回全部技能（mode="all", fallback 消息）
 //  3. query 非空 + listSkillModel 可用 → routeSkills 路由筛选（mode="filtered"）
-//  4. 异常 → success=false, error=err.Error()
+//  4. routeSkills 失败 → success=false, error=err.Error()
 //
 // 对应 Python: ListSkillTool.invoke(inputs, **kwargs)
 func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
@@ -76,40 +76,6 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	}
 	query = trimSpace(query)
 
-	// 一比一复刻 Python: try-except 整体异常捕获
-	tryResult, tryErr := t.invokeCore(ctx, query)
-	if tryErr != nil {
-		logger.Error(logComponent).
-			Str("query", query).
-			Err(tryErr).
-			Msg("ListSkillTool 执行异常")
-		return map[string]any{
-			"success": false,
-			"error":   tryErr.Error(),
-		}, nil
-	}
-	return tryResult, nil
-}
-
-// Stream ListSkillTool 不支持流式调用。
-//
-// 对应 Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
-func (t *ListSkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
-	return nil, tool.NewErrStreamNotSupported(t.card.ID)
-}
-
-// Card 返回工具配置卡片。
-func (t *ListSkillTool) Card() *tool.ToolCard { return t.card }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// invokeCore Invoke 的核心逻辑，将 Python 的 try-except 拆分为独立函数便于测试。
-//
-// 一比一复刻 Python ListSkillTool.invoke() 三路分支：
-//  1. 无 query → all
-//  2. 有 query + 无 model → fallback all
-//  3. 有 query + 有 model → filtered
-func (t *ListSkillTool) invokeCore(ctx context.Context, query string) (map[string]any, error) {
 	if query == "" {
 		// 一比一复刻 Python: if not query → ToolOutput(success=True, data={"skills": ..., "mode": "all"})
 		logger.Info(logComponent).
@@ -147,7 +113,10 @@ func (t *ListSkillTool) invokeCore(ctx context.Context, query string) (map[strin
 			Str("query", query).
 			Err(routeErr).
 			Msg("ListSkillTool 路由技能失败")
-		return nil, routeErr
+		return map[string]any{
+			"success": false,
+			"error":   routeErr.Error(),
+		}, nil
 	}
 
 	selectedSkills := t.selectSkillsByNames(selectedNames)
@@ -173,6 +142,18 @@ func (t *ListSkillTool) invokeCore(ctx context.Context, query string) (map[strin
 		},
 	}, nil
 }
+
+// Stream ListSkillTool 不支持流式调用。
+//
+// 对应 Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
+func (t *ListSkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.NewErrStreamNotSupported(t.card.ID)
+}
+
+// Card 返回工具配置卡片。
+func (t *ListSkillTool) Card() *tool.ToolCard { return t.card }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // dumpAllSkills 转换所有当前已启用技能为可序列化字典列表。
 //
