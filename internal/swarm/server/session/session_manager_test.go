@@ -261,3 +261,29 @@ func TestSessionManager_GetCurrentTask(t *testing.T) {
 		t.Error("不存在的 session 应返回 nil cancel 函数")
 	}
 }
+
+// TestSubmitTask_异步提交 验证异步提交后处理器运行
+func TestSubmitTask_异步提交(t *testing.T) {
+	sm := NewSessionManager()
+	ctx := context.Background()
+
+	done := make(chan string, 1)
+
+	err := sm.SubmitTask(ctx, "default", func(_ context.Context) (any, error) {
+		done <- "task_done"
+		return "result", nil
+	})
+	if err != nil {
+		t.Fatalf("SubmitTask 返回错误: %v", err)
+	}
+
+	// 等待任务完成
+	select {
+	case result := <-done:
+		if result != "task_done" {
+			t.Errorf("任务结果 = %q, want task_done", result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SubmitTask 任务超时")
+	}
+}

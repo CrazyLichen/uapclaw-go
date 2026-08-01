@@ -212,3 +212,203 @@ func TestUpdateSessionMetadata_自动标题回填(t *testing.T) {
 		t.Errorf("自动标题应已回填, 实际: %q", title)
 	}
 }
+
+// TestSetSessionDeliveryContext_基本设置 验证 delivery context 写入和返回
+func TestSetSessionDeliveryContext_基本设置(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetWorkspaceCache()
+	ClearAllSessionMetadataCache()
+
+	// 先初始化 metadata
+	sessionsDir := filepath.Join(tmpDir, "agent", "sessions")
+	meta := map[string]any{
+		"session_id":      "sess_dc",
+		"channel_id":      "web",
+		"created_at":      CurrentTimestamp(),
+		"last_message_at": CurrentTimestamp(),
+		"title":           "",
+		"message_count":   0,
+		"mode":            "unknown",
+	}
+	WriteSessionMetadata(sessionsDir, "sess_dc", meta)
+
+	// 设置 delivery context
+	dc := SetSessionDeliveryContext("sess_dc", PtrStr("web"), PtrStr("req-1"), map[string]any{"key": "val"})
+
+	if dc["channel_id"] != "web" {
+		t.Errorf("channel_id = %v, want web", dc["channel_id"])
+	}
+	if dc["source_request_id"] != "req-1" {
+		t.Errorf("source_request_id = %v, want req-1", dc["source_request_id"])
+	}
+	if dc["delivery_kind"] != "server_push" {
+		t.Errorf("delivery_kind = %v, want server_push", dc["delivery_kind"])
+	}
+	rm, ok := dc["route_metadata"].(map[string]any)
+	if !ok || rm["key"] != "val" {
+		t.Errorf("route_metadata = %v, want {key: val}", dc["route_metadata"])
+	}
+
+	FlushMetadataQueue()
+}
+
+// TestSetSessionDeliveryContext_空metadata创建 验证空 metadata 时创建新的
+func TestSetSessionDeliveryContext_空metadata创建(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetWorkspaceCache()
+	ClearAllSessionMetadataCache()
+
+	dc := SetSessionDeliveryContext("sess_new_dc", PtrStr("api"), PtrStr("req-2"), nil)
+	if dc["channel_id"] != "api" {
+		t.Errorf("channel_id = %v, want api", dc["channel_id"])
+	}
+	if dc["delivery_kind"] != "server_push" {
+		t.Errorf("delivery_kind = %v, want server_push", dc["delivery_kind"])
+	}
+
+	FlushMetadataQueue()
+}
+
+// TestGetSessionDeliveryContext_从缓存读取 验证缓存优先
+func TestGetSessionDeliveryContext_从缓存读取(t *testing.T) {
+	// 通过 Set 写入缓存
+	SetSessionDeliveryContext("sess_cache_dc", PtrStr("ch1"), PtrStr("rid1"), nil)
+
+	result := GetSessionDeliveryContext("sess_cache_dc")
+	if result == nil {
+		t.Fatal("GetSessionDeliveryContext 返回 nil")
+	}
+	if result["channel_id"] != "ch1" {
+		t.Errorf("channel_id = %v, want ch1", result["channel_id"])
+	}
+	FlushMetadataQueue()
+}
+
+// TestGetSessionDeliveryContext_不存在 验证无 delivery context 时返回 nil
+func TestGetSessionDeliveryContext_不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetWorkspaceCache()
+	ClearAllSessionMetadataCache()
+
+	result := GetSessionDeliveryContext("nonexistent")
+	if result != nil {
+		t.Errorf("期望 nil, 实际 %v", result)
+	}
+}
+
+// TestBuildServerPushMessage_基本构造 验证基本 message 构造
+func TestBuildServerPushMessage_基本构造(t *testing.T) {
+	// 先设置 delivery context
+	SetSessionDeliveryContext("sess_push", PtrStr("ch1"), PtrStr("rid1"), map[string]any{"model": "qwen"})
+
+	msg := BuildServerPushMessage("sess_push", "req-push", map[string]any{"event": "done"})
+	if msg["request_id"] != "req-push" {
+		t.Errorf("request_id = %v, want req-push", msg["request_id"])
+	}
+	if msg["channel_id"] != "ch1" {
+		t.Errorf("channel_id = %v, want ch1", msg["channel_id"])
+	}
+	if msg["session_id"] != "sess_push" {
+		t.Errorf("session_id = %v, want sess_push", msg["session_id"])
+	}
+	rm, ok := msg["metadata"].(map[string]any)
+	if !ok || rm["model"] != "qwen" {
+		t.Errorf("metadata = %v, want {model: qwen}", msg["metadata"])
+	}
+	FlushMetadataQueue()
+}
+
+// TestBuildServerPushMessage_fallbackChannelID 验证 fallback 逻辑
+func TestBuildServerPushMessage_fallbackChannelID(t *testing.T) {
+	msg := BuildServerPushMessage("no_dc_session", "req-push", map[string]any{"event": "done"}, "fallback_ch")
+	if msg["channel_id"] != "fallback_ch" {
+		t.Errorf("channel_id = %v, want fallback_ch", msg["channel_id"])
+	}
+}
+
+// TestInitSessionMetadata_同步写入 验证 InitSessionMetadata 直接调用
+func TestInitSessionMetadata_同步写入(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetWorkspaceCache()
+	ClearAllSessionMetadataCache()
+
+	InitSessionMetadata("sess_init2", "web2", "user1", "初始标题", "agent", "team1")
+
+	sessionsDir := filepath.Join(tmpDir, "agent", "sessions")
+	result := ReadSessionMetadata(sessionsDir, "sess_init2")
+	if result == nil {
+		t.Fatal("InitSessionMetadata 同步写入后应立即可读")
+	}
+	if result["session_id"] != "sess_init2" {
+		t.Errorf("session_id = %q, want sess_init2", result["session_id"])
+	}
+	if result["channel_id"] != "web2" {
+		t.Errorf("channel_id = %q, want web2", result["channel_id"])
+	}
+	if result["title"] != "初始标题" {
+		t.Errorf("title = %q, want 初始标题", result["title"])
+	}
+	if result["mode"] != "agent" {
+		t.Errorf("mode = %q, want agent", result["mode"])
+	}
+}
+
+// TestIncrementSessionRoundCount_递增 验证 round_id 递增
+func TestIncrementSessionRoundCount_递增(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetWorkspaceCache()
+	ClearAllSessionMetadataCache()
+
+	InitSessionMetadata("sess_round", "web", "", "", "agent", "")
+	// round_id 应为 0
+
+	newRound, err := IncrementSessionRoundCount("sess_round")
+	if err != nil {
+		t.Fatalf("IncrementSessionRoundCount 返回错误: %v", err)
+	}
+	if newRound != 1 {
+		t.Errorf("newRound = %d, want 1", newRound)
+	}
+
+	FlushMetadataQueue()
+
+	// 再次递增
+	newRound2, err := IncrementSessionRoundCount("sess_round")
+	if err != nil {
+		t.Fatalf("第二次递增返回错误: %v", err)
+	}
+	if newRound2 != 2 {
+		t.Errorf("newRound2 = %d, want 2", newRound2)
+	}
+}
+
+// TestClearAllSessionMetadataCache 验证全量缓存清除
+func TestClearAllSessionMetadataCache(t *testing.T) {
+	// 设置一些缓存
+	deliveryContextMu.Lock()
+	deliveryContextCache["sess1"] = map[string]any{"session_id": "sess1"}
+	deliveryContextCache["sess2"] = map[string]any{"session_id": "sess2"}
+	deliveryContextMu.Unlock()
+
+	ClearAllSessionMetadataCache()
+
+	deliveryContextMu.RLock()
+	lenCache := len(deliveryContextCache)
+	deliveryContextMu.RUnlock()
+
+	if lenCache != 0 {
+		t.Errorf("缓存应完全清除, 实际剩余 %d 条", lenCache)
+	}
+}
+
+// TestFlushMetadataQueue 验证刷盘哨兵项被消费
+func TestFlushMetadataQueue(t *testing.T) {
+	// 确保初始化 worker
+	FlushMetadataQueue()
+	// 无 panic 或 error 即通过
+}

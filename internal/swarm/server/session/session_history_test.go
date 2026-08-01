@@ -206,3 +206,52 @@ func TestReadTeamHistoryRecords_过滤team记录(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, "team.message", records[0]["event_type"])
 }
+
+// TestAppendCompactHistoryRecords_基本写入 验证 boundary + summary 记录
+func TestAppendCompactHistoryRecords_基本写入(t *testing.T) {
+	resetHistoryWorkspaceCache()
+	ClearAllSessionMetadataCache()
+	FlushMetadataQueue()
+
+	sessionsDir := GetSessionsDir()
+	sid := MakeSessionID()
+	os.MkdirAll(filepath.Join(sessionsDir, sid), 0o755)
+
+	AppendCompactHistoryRecords(sid, "r1", "web", "压缩摘要", float64(time.Now().UnixMilli())/1000, "manual", map[string]any{"original_count": 5, "compressed_count": 2}, "agent")
+	time.Sleep(300 * time.Millisecond)
+
+	records, err := ReadHistoryRecords(sid)
+	require.NoError(t, err)
+	// 应写入 2 条: boundary + summary
+	require.Len(t, records, 2)
+	assert.Equal(t, "context.compact_boundary", records[0]["event_type"])
+	assert.Equal(t, "context.compact_summary", records[1]["event_type"])
+}
+
+// TestAppendCompactHistoryFromPayload_从payload写入 验证从 payload 提取写入
+func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
+	resetHistoryWorkspaceCache()
+	ClearAllSessionMetadataCache()
+	FlushMetadataQueue()
+
+	sessionsDir := GetSessionsDir()
+	os.MkdirAll(filepath.Join(sessionsDir, "sess-compact-test2"), 0o755)
+
+	// 对齐 Python payload 结构：需要 compact_summary 和 status=success
+	payload := map[string]any{
+		"event_type":      "context_compression_state",
+		"compact_summary": "自动压缩结果",
+		"status":          "success",
+		"stats": map[string]any{
+			"original_count": 10,
+			"compressed_count": 3,
+		},
+	}
+	AppendCompactHistoryFromPayload(payload, "sess-compact-test2", "r2", "web", "agent")
+	time.Sleep(300 * time.Millisecond)
+
+	records, err := ReadHistoryRecords("sess-compact-test2")
+	require.NoError(t, err)
+	// 应写入 compact 记录
+	assert.GreaterOrEqual(t, len(records), 1)
+}
