@@ -38,6 +38,8 @@ type BackgroundTask struct {
 	err error
 	// mu 互斥锁
 	mu sync.Mutex
+	// managerTask 关联的 TaskManager Task（如果通过 TaskManager 创建）
+	managerTask *Task
 }
 
 // Task 任务数据模型，包含状态机和完整生命周期信息。
@@ -209,6 +211,36 @@ func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *
 		fn:    fn,
 		done:  make(chan struct{}),
 	}
+}
+
+// CreateBackgroundTask 创建后台任务，优先通过 TaskManager 注册，fallback 到直接 goroutine。
+// 对齐 Python: create_background_task(coro, name, group, fallback_to_asyncio=True)
+func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) error, name string, group string) (*BackgroundTask, error) {
+	manager := GetTaskManager()
+	if manager != nil {
+		// 优先通过 TaskManager 创建
+		task, err := manager.CreateTask(ctx, func(ctx context.Context) (any, error) { return nil, fn(ctx) },
+			WithTaskName(name), WithTaskGroup(group))
+		if err == nil {
+			handle := NewBackgroundTask(name, group, fn)
+			handle.managerTask = task
+			return handle, nil
+		}
+	}
+	// Fallback: 直接 goroutine
+	handle := NewBackgroundTask(name, group, fn)
+	handle.Start(ctx)
+	return handle, nil
+}
+
+// StartBackgroundTask 从同步生命周期方法中创建后台任务。
+// 对齐 Python: start_background_task(coro, name, group, fallback_to_asyncio=True)
+// 同步版本：不等待 TaskManager 注册完成，直接 fallback 到 goroutine。
+func StartBackgroundTask(fn func(ctx context.Context) error, name string, group string) *BackgroundTask {
+	// 同步方法无法等待 async 的 TaskManager.CreateTask，直接 goroutine
+	handle := NewBackgroundTask(name, group, fn)
+	handle.Start(context.Background())
+	return handle
 }
 
 // Start 启动后台任务 goroutine。
