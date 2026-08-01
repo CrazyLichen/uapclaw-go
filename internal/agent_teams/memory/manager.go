@@ -6,6 +6,7 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -57,8 +58,8 @@ type TeamMemoryManager struct {
 	extractionModel any
 	// tzOffset 时区偏移
 	tzOffset float64
-	// sysOperation 系统操作接口。⤵️ 回填: 7.2 — SysOperation 类型
-	sysOperation any
+	// sysOperation 系统操作接口。⤴️ 9.64 具体类型回填
+	sysOperation sysop.SysOperation
 	// workspace 工作空间
 	workspace *workspace.Workspace
 	// teamMemoryDir 团队记忆目录路径

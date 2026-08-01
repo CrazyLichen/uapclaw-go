@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -30,14 +31,14 @@ const sharedLogComponent = logger.ComponentCommon
 type SharedMemoryManager struct {
 	// dir 团队记忆目录路径
 	dir string
-	// sysOperation 系统操作接口（可选，nil 时用本地文件系统）。⤵️ 回填: 7.2
-	sysOperation any
+	// sysOperation 系统操作接口（可选，nil 时用本地文件系统）。⤴️ 9.64 具体类型回填
+	sysOperation sysop.SysOperation
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSharedMemoryManager 创建共享记忆管理器
-func NewSharedMemoryManager(teamMemoryDir string, sysOperation any) *SharedMemoryManager {
+func NewSharedMemoryManager(teamMemoryDir string, sysOperation sysop.SysOperation) *SharedMemoryManager {
 	return &SharedMemoryManager{dir: teamMemoryDir, sysOperation: sysOperation}
 }
 

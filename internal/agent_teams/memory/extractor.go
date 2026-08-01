@@ -4,6 +4,7 @@ import (
 	"context"
 
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
@@ -71,4 +72,4 @@ func BuildExtractionContext(tasks []any, messages []any, tzOffsetHours float64) 
 func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamName string) []any { return nil }
 
 // ExtractTeamMemories 提取团队记忆。⤵️ 回填: 7.2+9.65a
-func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr any, teamMemoryDir string, sysOp sysop.SysOperation, model any, tzOffsetHours float64) error { return nil }
+func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model any, tzOffsetHours float64) error { return nil }
