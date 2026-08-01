@@ -180,6 +180,46 @@ func TestExtensionRegistry_Unregister(t *testing.T) {
 	}
 }
 
+// TestExtensionRegistry_RegisterCryptoUtility 测试注册 CryptoUtility 扩展
+func TestExtensionRegistry_RegisterCryptoUtility(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	ext := &testCryptoUtilityExt{}
+	reg.RegisterCryptoUtility(ext)
+
+	gotExt := reg.GetCryptoUtilityExtension()
+	if gotExt != ext {
+		t.Error("GetCryptoUtilityExtension() != registered extension")
+	}
+
+	// GetCryptoProvider 调用 GetCrypto
+	provider := reg.GetCryptoProvider()
+	if provider != nil {
+		t.Error("GetCryptoProvider() should return nil for stub (GetCrypto returns nil)")
+	}
+}
+
+// TestExtensionRegistry_RegisterCryptoUtility_无注册 测试未注册时返回 nil
+func TestExtensionRegistry_RegisterCryptoUtility_无注册(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	ext := reg.GetCryptoUtilityExtension()
+	if ext != nil {
+		t.Error("GetCryptoUtilityExtension() should be nil when no extension registered")
+	}
+
+	provider := reg.GetCryptoProvider()
+	if provider != nil {
+		t.Error("GetCryptoProvider() should be nil when no extension registered")
+	}
+}
+
 // testAgentServerClientExt 测试用的 AgentServerClientExtension 实现
 // 实现 extensions.AgentServerClientExtension 本地接口（与 sdk.AgentServerClientExtension 方法签名一致）
 type testAgentServerClientExt struct {
@@ -191,3 +231,12 @@ func (e *testAgentServerClientExt) Shutdown(ctx context.Context) error          
 func (e *testAgentServerClientExt) Metadata() *ExtensionMetadata                                { return nil }
 func (e *testAgentServerClientExt) SetExtensionDir(path string)                                  {}
 func (e *testAgentServerClientExt) GetClient() transport.AgentTransport                          { return e.client }
+
+// testCryptoUtilityExt 测试用的 CryptoUtilityExtension 实现
+type testCryptoUtilityExt struct{}
+
+func (e *testCryptoUtilityExt) Initialize(ctx context.Context, config *ExtensionConfig) error { return nil }
+func (e *testCryptoUtilityExt) Shutdown(ctx context.Context) error                          { return nil }
+func (e *testCryptoUtilityExt) Metadata() *ExtensionMetadata                                { return nil }
+func (e *testCryptoUtilityExt) SetExtensionDir(path string)                                  {}
+func (e *testCryptoUtilityExt) GetCrypto() any                                              { return nil }
