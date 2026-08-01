@@ -533,3 +533,74 @@ func TestWithTaskMetadata(t *testing.T) {
 		t.Errorf("Metadata['env'] 期望 test，实际 %v", task.Metadata["env"])
 	}
 }
+
+// ──────────────────────────── G03 ready Event 测试 ────────────────────────────
+
+// TestCreateBackgroundTask_ManagerTaskWait 测试 CreateBackgroundTask 走 TaskManager 路径时 Wait 不阻塞
+func TestCreateBackgroundTask_ManagerTaskWait(t *testing.T) {
+	_ = GetTaskManager() // 确保单例初始化
+
+	handle, err := CreateBackgroundTask(context.Background(), func(ctx context.Context) error {
+		time.Sleep(100 * time.Millisecond)
+		return nil
+	}, "test-mgr-wait", "test-group")
+	if err != nil {
+		t.Fatalf("CreateBackgroundTask() error = %v", err)
+	}
+
+	waitErr := handle.Wait()
+	if waitErr != nil {
+		t.Fatalf("Wait() = %v, want nil", waitErr)
+	}
+
+	// 验证 managerTask 已设置
+	handle.mu.Lock()
+	mgrTask := handle.managerTask
+	handle.mu.Unlock()
+	if mgrTask == nil {
+		t.Fatal("managerTask 应不为 nil（TaskManager 路径）")
+	}
+}
+
+// TestStartBackgroundTask_GoroutineWait 测试 StartBackgroundTask  goroutine 路径时 Wait 不阻塞
+func TestStartBackgroundTask_GoroutineWait(t *testing.T) {
+	handle := StartBackgroundTask(func(ctx context.Context) error {
+		return nil
+	}, "test-sync-wait", "test-group")
+
+	waitErr := handle.Wait()
+	if waitErr != nil {
+		t.Fatalf("Wait() = %v, want nil", waitErr)
+	}
+
+	// 验证 goroutine 路径无 managerTask
+	handle.mu.Lock()
+	mgrTask := handle.managerTask
+	handle.mu.Unlock()
+	if mgrTask != nil {
+		t.Fatal("managerTask 应为 nil（goroutine 路径）")
+	}
+}
+
+// TestCreateBackgroundTask_ManagerTaskStop 测试 CreateBackgroundTask 走 TaskManager 路径时 Stop 委托取消
+func TestCreateBackgroundTask_ManagerTaskStop(t *testing.T) {
+	_ = GetTaskManager() // 确保单例初始化
+
+	started := make(chan struct{})
+	handle, err := CreateBackgroundTask(context.Background(), func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	}, "test-mgr-stop", "test-group")
+	if err != nil {
+		t.Fatalf("CreateBackgroundTask() error = %v", err)
+	}
+
+	<-started
+
+	stopErr := handle.Stop(2 * time.Second)
+	// context.Canceled 是预期行为
+	if stopErr != nil && !errors.Is(stopErr, context.Canceled) {
+		t.Fatalf("Stop() = %v, want context.Canceled or nil", stopErr)
+	}
+}

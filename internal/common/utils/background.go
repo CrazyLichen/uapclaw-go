@@ -23,6 +23,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BackgroundTask 轻量后台任务句柄，管理 goroutine 生命周期。
+// 对齐 Python: BackgroundTask — 优先走 TaskManager（_manager_task），fallback 到 goroutine（_asyncio_task）
 type BackgroundTask struct {
 	// name 任务名称
 	name string
@@ -39,7 +40,11 @@ type BackgroundTask struct {
 	// mu 互斥锁
 	mu sync.Mutex
 	// managerTask 关联的 TaskManager Task（如果通过 TaskManager 创建）
+	// 对齐 Python: self._manager_task
 	managerTask *Task
+	// ready 就绪信号通道，对齐 Python: self._ready = asyncio.Event()
+	// close(t.ready) 等价于 _ready.set()，表示任务已就绪（managerTask 已设置或 goroutine 已启动）
+	ready chan struct{}
 }
 
 // Task 任务数据模型，包含状态机和完整生命周期信息。
@@ -204,12 +209,14 @@ func WithTaskParentID(id string) TaskOption {
 }
 
 // NewBackgroundTask 创建轻量后台任务句柄。
+// 对齐 Python: BackgroundTask(group=group) — _ready 初始未设置
 func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *BackgroundTask {
 	return &BackgroundTask{
 		name:  name,
 		group: group,
 		fn:    fn,
 		done:  make(chan struct{}),
+		ready: make(chan struct{}),
 	}
 }
 
@@ -218,16 +225,19 @@ func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *
 func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) error, name string, group string) (*BackgroundTask, error) {
 	manager := GetTaskManager()
 	if manager != nil {
-		// 优先通过 TaskManager 创建
+		// 优先通过 TaskManager 创建，对齐 Python: task = await create_task(...)
 		task, err := manager.CreateTask(ctx, func(ctx context.Context) (any, error) { return nil, fn(ctx) },
 			WithTaskName(name), WithTaskGroup(group))
 		if err == nil {
 			handle := NewBackgroundTask(name, group, fn)
 			handle.managerTask = task
+			// 对齐 Python: handle.set_manager_task(task) → _ready.set()
+			// TaskManager 路径下 managerTask 已同步设置，立即就绪
+			close(handle.ready)
 			return handle, nil
 		}
 	}
-	// Fallback: 直接 goroutine
+	// Fallback: 直接 goroutine，对齐 Python: BackgroundTask.from_asyncio_task(...)
 	handle := NewBackgroundTask(name, group, fn)
 	handle.Start(ctx)
 	return handle, nil
@@ -244,6 +254,7 @@ func StartBackgroundTask(fn func(ctx context.Context) error, name string, group 
 }
 
 // Start 启动后台任务 goroutine。
+// 对齐 Python: BackgroundTask.from_asyncio_task → _ready.set() 立即就绪
 func (t *BackgroundTask) Start(ctx context.Context) {
 	ctx, t.cancel = context.WithCancel(ctx)
 
@@ -255,10 +266,45 @@ func (t *BackgroundTask) Start(ctx context.Context) {
 			t.mu.Unlock()
 		}
 	}()
+
+	// goroutine 已启动，立即就绪，对齐 Python: _ready.set()
+	close(t.ready)
 }
 
 // Stop 停止后台任务，等待完成或超时。
+// 对齐 Python: BackgroundTask.cancel(reason, timeout) — 先等 _ready，再委托 _manager_task.cancel 或 asyncio_task.cancel
 func (t *BackgroundTask) Stop(timeout time.Duration) error {
+	// 先等就绪信号，对齐 Python: await self._ready.wait()
+	select {
+	case <-t.ready:
+		// 就绪，继续操作
+	case <-time.After(timeout):
+		return fmt.Errorf("后台任务 %q 等待就绪超时，超时时间: %v", t.name, timeout)
+	}
+
+	// 检查是否有 managerTask，对齐 Python: if self._manager_task is not None
+	t.mu.Lock()
+	mgrTask := t.managerTask
+	t.mu.Unlock()
+
+	if mgrTask != nil {
+		// 对齐 Python: await self._manager_task.cancel(reason=reason)
+		GetTaskManager().Cancel(mgrTask.ID, "background_task_stop", "")
+		// 对齐 Python: with anyio.move_on_after(timeout): await self._manager_task.wait()
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		select {
+		case <-mgrTask.done:
+			mgrTask.mu.RLock()
+			err := mgrTask.Err
+			mgrTask.mu.RUnlock()
+			return err
+		case <-timer.C:
+			return fmt.Errorf("后台任务 %q 停止超时，超时时间: %v", t.name, timeout)
+		}
+	}
+
+	// 无 managerTask，用自身 cancel + done，对齐 Python: asyncio_task.cancel() + await asyncio_task
 	if t.cancel != nil {
 		t.cancel()
 	}
@@ -275,7 +321,23 @@ func (t *BackgroundTask) Stop(timeout time.Duration) error {
 }
 
 // Wait 等待后台任务完成，返回执行错误。
+// 对齐 Python: BackgroundTask.wait() — 先等 _ready，再委托 _manager_task 或等 asyncio_task
 func (t *BackgroundTask) Wait() error {
+	// 先等就绪信号，对齐 Python: await self._ready.wait()
+	<-t.ready
+
+	// 检查是否有 managerTask，对齐 Python: if self._manager_task is not None
+	t.mu.Lock()
+	mgrTask := t.managerTask
+	t.mu.Unlock()
+
+	if mgrTask != nil {
+		// 对齐 Python: return await self._manager_task.wait()
+		_, err := mgrTask.Wait()
+		return err
+	}
+
+	// 无 managerTask，等自身 done（goroutine 路径），对齐 Python: return await self._asyncio_task
 	<-t.done
 	t.mu.Lock()
 	defer t.mu.Unlock()
