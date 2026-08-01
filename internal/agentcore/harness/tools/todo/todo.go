@@ -482,6 +482,12 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 				)
 			}
+			// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+			for _, item := range input.TodoData.Items {
+				if err := validateSingleTodoItem(item); err != nil {
+					return nil, err
+				}
+			}
 			updatedTodos, msg, err = insertAfterTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
 		case "insert_before":
 			if input.TodoData == nil {
@@ -489,6 +495,12 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 					exception.StatusToolTodosValidationInvalid,
 					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 				)
+			}
+			// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+			for _, item := range input.TodoData.Items {
+				if err := validateSingleTodoItem(item); err != nil {
+					return nil, err
+				}
 			}
 			updatedTodos, msg, err = insertBeforeTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
 		default:
