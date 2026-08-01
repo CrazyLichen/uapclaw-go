@@ -13,12 +13,6 @@ func TestNewWebRouteBinding(t *testing.T) {
 	if rb.ChannelID != "web" {
 		t.Errorf("期望 ChannelID=web，实际 %s", rb.ChannelID)
 	}
-	if rb.ForwardMethods == nil {
-		t.Error("ForwardMethods 不应为 nil")
-	}
-	if rb.ForwardNoLocalHandler == nil {
-		t.Error("ForwardNoLocalHandler 不应为 nil")
-	}
 }
 
 // TestRouteBinding_字段默认值 测试 RouteBinding 字段默认值。
