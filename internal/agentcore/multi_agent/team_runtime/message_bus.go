@@ -181,12 +181,16 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 // Stop 停止消息总线。
 //
 // 对应 Python: MessageBus.stop()
+// 对齐 Python：先标记 running=False 阻止新请求进入，再清理订阅和停止队列。
 func (mb *MessageBus) Stop(ctx context.Context) error {
 	if !mb.running.Load() {
 		return nil
 	}
 
-	// 停用所有活跃订阅
+	// 对齐 Python: self._running = False — 先标记停止，阻止新请求进入
+	mb.running.Store(false)
+
+	// 然后停用所有活跃订阅
 	mb.subscriptionLock.Lock()
 	for topic, sub := range mb.activeSubscriptions {
 		sub.Deactivate()
@@ -207,8 +211,6 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 			exception.WithParam("reason", fmt.Sprintf("[shutdown phase] %s", err.Error())),
 		)
 	}
-
-	mb.running.Store(false)
 
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_STOPPED").

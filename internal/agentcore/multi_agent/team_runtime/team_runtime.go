@@ -159,7 +159,10 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	// 先停 messageBus 再设 running=false，避免 running=false 后仍有请求进入
+	// 对齐 Python: self._running = False — 先标记停止，阻止新请求进入
+	tr.running.Store(false)
+
+	// 然后停 messageBus
 	if tr.messageBus != nil {
 		if err := tr.messageBus.Stop(ctx); err != nil {
 			logger.Error(logComponent).Err(err).
@@ -169,8 +172,6 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 			return err
 		}
 	}
-
-	tr.running.Store(false)
 
 	logger.Info(logComponent).
 		Str("event_type", "TEAM_RUNTIME_STOPPED").
