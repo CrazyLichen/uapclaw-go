@@ -338,35 +338,27 @@ func TestFormatTodoItems_空列表(t *testing.T) {
 
 // TestValidateSingleInProgress 测试单 in_progress 校验
 func TestValidateSingleInProgress(t *testing.T) {
-	// 无 in_progress，新增一个：通过
-	err := validateSingleInProgress(nil, []string{"task1"}, nil)
+	// 无 in_progress：通过
+	err := validateSingleInProgress(nil)
 	if err != nil {
 		t.Fatalf("期望通过，实际错误: %v", err)
 	}
 
-	// 已有一个 in_progress，再新增一个：失败
+	// 只有一个 in_progress：通过
 	existing := []hschema.TodoItem{{ID: "existing", Status: hschema.TodoStatusInProgress}}
-	err = validateSingleInProgress(existing, []string{"task1"}, nil)
+	err = validateSingleInProgress(existing)
+	if err != nil {
+		t.Fatalf("期望通过（只有一个 in_progress），实际错误: %v", err)
+	}
+
+	// 两个 in_progress：失败
+	multiple := []hschema.TodoItem{
+		{ID: "a", Status: hschema.TodoStatusInProgress},
+		{ID: "b", Status: hschema.TodoStatusInProgress},
+	}
+	err = validateSingleInProgress(multiple)
 	if err == nil {
-		t.Fatal("期望返回错误，实际为 nil")
-	}
-
-	// 已有一个 in_progress，更新同一个：通过
-	err = validateSingleInProgress(existing, []string{"existing"}, nil)
-	if err != nil {
-		t.Fatalf("期望通过，实际错误: %v", err)
-	}
-
-	// 没有新的 in_progress：通过
-	err = validateSingleInProgress(existing, nil, nil)
-	if err != nil {
-		t.Fatalf("期望通过，实际错误: %v", err)
-	}
-
-	// 已有一个 in_progress，但正在移除它，新增一个：通过
-	err = validateSingleInProgress(existing, []string{"task1"}, map[string]struct{}{"existing": {}})
-	if err != nil {
-		t.Fatalf("期望通过（移除旧 in_progress 后新增），实际错误: %v", err)
+		t.Fatal("期望返回错误（多个 in_progress），实际为 nil")
 	}
 }
 
@@ -378,25 +370,31 @@ func TestValidateTargetTaskStatus(t *testing.T) {
 	}
 
 	// in_progress + 允许 [in_progress, pending]：通过
-	err := validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending})
+	idx, err := validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending})
 	if err != nil {
 		t.Fatalf("期望通过，实际错误: %v", err)
+	}
+	if idx != 0 {
+		t.Fatalf("索引 = %d, want 0", idx)
 	}
 
 	// pending + 只允许 [pending]：通过
-	err = validateTargetTaskStatus(todos, "t2", []hschema.TodoStatus{hschema.TodoStatusPending})
+	idx, err = validateTargetTaskStatus(todos, "t2", []hschema.TodoStatus{hschema.TodoStatusPending})
 	if err != nil {
 		t.Fatalf("期望通过，实际错误: %v", err)
 	}
+	if idx != 1 {
+		t.Fatalf("索引 = %d, want 1", idx)
+	}
 
 	// in_progress + 只允许 [pending]：失败
-	err = validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusPending})
+	_, err = validateTargetTaskStatus(todos, "t1", []hschema.TodoStatus{hschema.TodoStatusPending})
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
 
 	// 不存在的 ID：失败
-	err = validateTargetTaskStatus(todos, "nonexistent", []hschema.TodoStatus{hschema.TodoStatusPending})
+	_, err = validateTargetTaskStatus(todos, "nonexistent", []hschema.TodoStatus{hschema.TodoStatusPending})
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -422,12 +420,12 @@ func TestTodoModifyUpdate(t *testing.T) {
 		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusPending},
 	}
 
-	result, _, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := updateTodos(todos, []map[string]any{
 		{"id": "t1", "status": "completed"},
 		{"id": "t2", "status": "in_progress"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyUpdate 返回错误: %v", err)
+		t.Fatalf("updateTodos 返回错误: %v", err)
 	}
 	if result[0].Status != hschema.TodoStatusCompleted {
 		t.Fatalf("t1 状态应为 completed")
@@ -444,7 +442,7 @@ func TestTodoModifyUpdate_重复InProgress(t *testing.T) {
 		{ID: "t2", Status: hschema.TodoStatusPending},
 	}
 
-	_, _, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := updateTodos(todos, []map[string]any{
 		{"id": "t2", "status": "in_progress"},
 	})
 	if err == nil {
@@ -456,7 +454,7 @@ func TestTodoModifyUpdate_重复InProgress(t *testing.T) {
 func TestTodoModifyUpdate_不存在的ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
 
-	_, _, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := updateTodos(todos, []map[string]any{
 		{"id": "nonexistent", "status": "completed"},
 	})
 	if err == nil {
@@ -472,9 +470,9 @@ func TestTodoModifyDelete(t *testing.T) {
 		{ID: "t3", Content: "任务3"},
 	}
 
-	result, _, err := todoModifyDelete(todos, []string{"t2"})
+	result, _, err := deleteTodos(todos, []string{"t2"})
 	if err != nil {
-		t.Fatalf("todoModifyDelete 返回错误: %v", err)
+		t.Fatalf("deleteTodos 返回错误: %v", err)
 	}
 	if len(result) != 2 {
 		t.Fatalf("期望 2 项，实际 %d", len(result))
@@ -487,7 +485,7 @@ func TestTodoModifyDelete(t *testing.T) {
 // TestTodoModifyDelete_空IDs 测试 delete 操作空 IDs
 func TestTodoModifyDelete_空IDs(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, _, err := todoModifyDelete(todos, nil)
+	_, _, err := deleteTodos(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -500,9 +498,9 @@ func TestTodoModifyCancel(t *testing.T) {
 		{ID: "t2", Status: hschema.TodoStatusInProgress},
 	}
 
-	result, _, err := todoModifyCancel(todos, []string{"t1"})
+	result, _, err := cancelTodos(todos, []string{"t1"})
 	if err != nil {
-		t.Fatalf("todoModifyCancel 返回错误: %v", err)
+		t.Fatalf("cancelTodos 返回错误: %v", err)
 	}
 	if result[0].Status != hschema.TodoStatusCancelled {
 		t.Fatal("t1 应为 cancelled")
@@ -516,7 +514,7 @@ func TestTodoModifyCancel(t *testing.T) {
 // 对齐 Python: 不存在的 ID 静默跳过，返回提示消息而非错误
 func TestTodoModifyCancel_不存在的ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	result, msg, err := todoModifyCancel(todos, []string{"nonexistent"})
+	result, msg, err := cancelTodos(todos, []string{"nonexistent"})
 	if err != nil {
 		t.Fatalf("期望无错误（静默跳过），实际错误: %v", err)
 	}
@@ -534,11 +532,11 @@ func TestTodoModifyAppend(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
 	}
 
-	result, _, err := todoModifyAppend(todos, []map[string]any{
+	result, _, err := appendTodos(todos, []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyAppend 返回错误: %v", err)
+		t.Fatalf("appendTodos 返回错误: %v", err)
 	}
 	if len(result) != 2 {
 		t.Fatalf("期望 2 项，实际 %d", len(result))
@@ -552,7 +550,7 @@ func TestTodoModifyAppend(t *testing.T) {
 func TestTodoModifyAppend_重复ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
 
-	_, _, err := todoModifyAppend(todos, []map[string]any{
+	_, _, err := appendTodos(todos, []map[string]any{
 		{"id": "t1", "content": "重复", "status": "pending"},
 	})
 	if err == nil {
@@ -567,11 +565,11 @@ func TestTodoModifyInsertAfter(t *testing.T) {
 		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
 	}
 
-	result, _, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
+	result, _, err := insertAfterTodos(todos, "t1", []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyInsertAfter 返回错误: %v", err)
+		t.Fatalf("insertAfterTodos 返回错误: %v", err)
 	}
 	if len(result) != 3 {
 		t.Fatalf("期望 3 项，实际 %d", len(result))
@@ -587,7 +585,7 @@ func TestTodoModifyInsertAfter_无效目标状态(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusCompleted},
 	}
 
-	_, _, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
+	_, _, err := insertAfterTodos(todos, "t1", []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err == nil {
@@ -602,11 +600,11 @@ func TestTodoModifyInsertBefore(t *testing.T) {
 		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
 	}
 
-	result, _, err := todoModifyInsertBefore(todos, "t3", []map[string]any{
+	result, _, err := insertBeforeTodos(todos, "t3", []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyInsertBefore 返回错误: %v", err)
+		t.Fatalf("insertBeforeTodos 返回错误: %v", err)
 	}
 	if len(result) != 3 {
 		t.Fatalf("期望 3 项，实际 %d", len(result))
@@ -622,7 +620,7 @@ func TestTodoModifyInsertBefore_无效目标状态(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
 	}
 
-	_, _, err := todoModifyInsertBefore(todos, "t1", []map[string]any{
+	_, _, err := insertBeforeTodos(todos, "t1", []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err == nil {
@@ -680,11 +678,11 @@ func TestTodoModifyUpdate_部分字段更新(t *testing.T) {
 		{ID: "t1", Content: "旧内容", ActiveForm: "旧进行中", Description: "旧描述", Status: hschema.TodoStatusPending},
 	}
 
-	result, _, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := updateTodos(todos, []map[string]any{
 		{"id": "t1", "content": "新内容"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyUpdate 返回错误: %v", err)
+		t.Fatalf("updateTodos 返回错误: %v", err)
 	}
 	if result[0].Content != "新内容" {
 		t.Fatalf("Content = %q, want %q", result[0].Content, "新内容")
@@ -703,11 +701,11 @@ func TestTodoModifyUpdate_selectedModelID(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusPending, SelectedModelID: "fast"},
 	}
 
-	result, _, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := updateTodos(todos, []map[string]any{
 		{"id": "t1", "selected_model_id": "smart"},
 	})
 	if err != nil {
-		t.Fatalf("todoModifyUpdate 返回错误: %v", err)
+		t.Fatalf("updateTodos 返回错误: %v", err)
 	}
 	if result[0].SelectedModelID != "smart" {
 		t.Fatalf("SelectedModelID = %q, want %q", result[0].SelectedModelID, "smart")
@@ -717,7 +715,7 @@ func TestTodoModifyUpdate_selectedModelID(t *testing.T) {
 // TestTodoModifyUpdate_空更新列表 测试 update 操作空更新列表
 func TestTodoModifyUpdate_空更新列表(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, _, err := todoModifyUpdate(todos, nil)
+	_, _, err := updateTodos(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -732,7 +730,7 @@ func TestTodoModifyUpdate_空更新列表(t *testing.T) {
 // TestTodoModifyCancel_空IDs 测试 cancel 操作空 IDs
 func TestTodoModifyCancel_空IDs(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, _, err := todoModifyCancel(todos, nil)
+	_, _, err := cancelTodos(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -741,7 +739,7 @@ func TestTodoModifyCancel_空IDs(t *testing.T) {
 // TestTodoModifyAppend_空列表 测试 append 操作空列表
 func TestTodoModifyAppend_空列表(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, _, err := todoModifyAppend(todos, nil)
+	_, _, err := appendTodos(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -750,7 +748,7 @@ func TestTodoModifyAppend_空列表(t *testing.T) {
 // TestTodoModifyInsertAfter_空Items 测试 insert_after 操作空 items
 func TestTodoModifyInsertAfter_空Items(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
-	_, _, err := todoModifyInsertAfter(todos, "t1", nil)
+	_, _, err := insertAfterTodos(todos, "t1", nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -759,7 +757,7 @@ func TestTodoModifyInsertAfter_空Items(t *testing.T) {
 // TestTodoModifyInsertBefore_空Items 测试 insert_before 操作空 items
 func TestTodoModifyInsertBefore_空Items(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, _, err := todoModifyInsertBefore(todos, "t1", nil)
+	_, _, err := insertBeforeTodos(todos, "t1", nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -768,7 +766,7 @@ func TestTodoModifyInsertBefore_空Items(t *testing.T) {
 // TestTodoModifyInsertAfter_不存在的目标 测试 insert_after 操作不存在的目标
 func TestTodoModifyInsertAfter_不存在的目标(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
-	_, _, err := todoModifyInsertAfter(todos, "nonexistent", []map[string]any{
+	_, _, err := insertAfterTodos(todos, "nonexistent", []map[string]any{
 		{"id": "t2", "content": "任务2", "status": "pending"},
 	})
 	if err == nil {
@@ -779,7 +777,7 @@ func TestTodoModifyInsertAfter_不存在的目标(t *testing.T) {
 // TestTodoModifyInsertBefore_不存在的目标 测试 insert_before 操作不存在的目标
 func TestTodoModifyInsertBefore_不存在的目标(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, _, err := todoModifyInsertBefore(todos, "nonexistent", []map[string]any{
+	_, _, err := insertBeforeTodos(todos, "nonexistent", []map[string]any{
 		{"id": "t2", "content": "任务2", "status": "pending"},
 	})
 	if err == nil {
@@ -790,7 +788,7 @@ func TestTodoModifyInsertBefore_不存在的目标(t *testing.T) {
 // TestTodoModifyUpdate_无效状态 测试 update 操作无效状态
 func TestTodoModifyUpdate_无效状态(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, _, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := updateTodos(todos, []map[string]any{
 		{"id": "t1", "status": "invalid_status"},
 	})
 	if err == nil {
@@ -801,7 +799,7 @@ func TestTodoModifyUpdate_无效状态(t *testing.T) {
 // TestTodoModifyUpdate_缺少ID 测试 update 操作缺少 ID
 func TestTodoModifyUpdate_缺少ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, _, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := updateTodos(todos, []map[string]any{
 		{"status": "completed"},
 	})
 	if err == nil {

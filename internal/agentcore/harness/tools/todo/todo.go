@@ -468,13 +468,13 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 		var msg string
 		switch input.Action {
 		case "update":
-			updatedTodos, msg, err = todoModifyUpdate(todos, input.Todos)
+			updatedTodos, msg, err = updateTodos(todos, input.Todos)
 		case "delete":
-			updatedTodos, msg, err = todoModifyDelete(todos, input.IDs)
+			updatedTodos, msg, err = deleteTodos(todos, input.IDs)
 		case "cancel":
-			updatedTodos, msg, err = todoModifyCancel(todos, input.IDs)
+			updatedTodos, msg, err = cancelTodos(todos, input.IDs)
 		case "append":
-			updatedTodos, msg, err = todoModifyAppend(todos, input.Todos)
+			updatedTodos, msg, err = appendTodos(todos, input.Todos)
 		case "insert_after":
 			if input.TodoData == nil {
 				return nil, exception.BuildError(
@@ -482,7 +482,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 				)
 			}
-			updatedTodos, msg, err = todoModifyInsertAfter(todos, input.TodoData.TargetID, input.TodoData.Items)
+			updatedTodos, msg, err = insertAfterTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
 		case "insert_before":
 			if input.TodoData == nil {
 				return nil, exception.BuildError(
@@ -490,7 +490,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 				)
 			}
-			updatedTodos, msg, err = todoModifyInsertBefore(todos, input.TodoData.TargetID, input.TodoData.Items)
+			updatedTodos, msg, err = insertBeforeTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
 		default:
 			return nil, exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
@@ -568,6 +568,30 @@ func extractSessionID(opts []tool.ToolOption) (string, error) {
 	return sessionID, nil
 }
 
+// strVal 从 map 中提取字符串值，不存在或非字符串类型时返回空字符串
+func strVal(data map[string]any, key string) string {
+	val, _ := data[key].(string)
+	return val
+}
+
+// strValDefault 从 map 中提取字符串值，不存在或非字符串类型时返回默认值
+func strValDefault(data map[string]any, key string, defaultVal string) string {
+	if val, ok := data[key].(string); ok {
+		return val
+	}
+	return defaultVal
+}
+
+// uniqueIDs 对 ID 列表做去重，返回 map[string]struct{}
+// 对齐 Python: delete_ids = set(ids)
+func uniqueIDs(ids []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		result[id] = struct{}{}
+	}
+	return result
+}
+
 // formatCreateResult 将创建的待办事项格式化为可读结果字符串。
 // 对齐 Python: TodoCreateTool._format_create_result L250-266
 // 包含 "Successfully created N task(s):" 前缀、状态图标、model 信息、"Next step" 引导提示。
@@ -589,7 +613,7 @@ func formatCreateResult(items []hschema.TodoItem) string {
 	}
 	firstTask := items[0].Content
 	result += fmt.Sprintf("\n下一步: 立即执行任务 '%s'", firstTask)
-	return result
+	return strings.TrimSpace(result)
 }
 
 // formatTodoItems 将待办事项列表格式化为可读字符串
@@ -611,9 +635,10 @@ func formatTodoItems(items []hschema.TodoItem) string {
 	return result
 }
 
-// todoModifyUpdate 执行 update 操作
+// updateTodos 执行 update 操作
 // 对齐 Python: TodoModifyTool._update_todos L662-691
-func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error) {
+// 先就地修改 todos，修改完后调用 validateSingleInProgress 校验最终状态
+func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error) {
 	if len(updates) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
@@ -621,112 +646,99 @@ func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hsc
 		)
 	}
 
-	// 收集所有要设为 in_progress 的 ID，以及将被从 in_progress 移除的 ID
-	var inProgressIDs []string
-	removingFromInProgress := make(map[string]struct{})
-	for _, update := range updates {
-		id, _ := update["id"].(string)
-		if status, ok := update["status"].(string); ok {
-			if status == "in_progress" {
-				inProgressIDs = append(inProgressIDs, id)
-			}
-			// 如果现有任务是 in_progress 且被更新为非 in_progress 状态，则将其从现有计数中移除
-			if status != "in_progress" {
-				for _, item := range todos {
-					if item.ID == id && item.Status == hschema.TodoStatusInProgress {
-						removingFromInProgress[id] = struct{}{}
-					}
-				}
-			}
-		}
-	}
-	if err := validateSingleInProgress(todos, inProgressIDs, removingFromInProgress); err != nil {
-		return nil, "", err
+	// 对齐 Python L663: 构建 todo_map 用于查找
+	todoMap := make(map[string]*hschema.TodoItem, len(todos))
+	for i := range todos {
+		todoMap[todos[i].ID] = &todos[i]
 	}
 
-	// 逐个更新
+	// 对齐 Python L664-688: 逐个就地修改
 	updatedCount := 0
-	for _, update := range updates {
-		id, _ := update["id"].(string)
-		if id == "" {
+	for _, todoData := range updates {
+		todoID := strVal(todoData, "id")
+		if todoID == "" {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
 				exception.WithParam("reason", "批量更新失败: 缺少必填字段 'id'"),
 			)
 		}
-		found := false
-		for i := range todos {
-			if todos[i].ID == id {
-				found = true
-				if content, ok := update["content"].(string); ok {
-					todos[i].Content = content
-				}
-				if activeForm, ok := update["activeForm"].(string); ok {
-					todos[i].ActiveForm = activeForm
-				}
-				if description, ok := update["description"].(string); ok {
-					todos[i].Description = description
-				}
-				if status, ok := update["status"].(string); ok {
-					parsed, err := hschema.ParseTodoStatus(status)
-					if err != nil {
-						return nil, "", exception.BuildError(
-							exception.StatusToolTodosValidationInvalid,
-							exception.WithParam("reason", fmt.Sprintf("无效的状态 '%s'（任务 '%s'）", status, id)),
-						)
-					}
-					todos[i].Status = parsed
-				}
-				if selectedModelID, ok := update["selected_model_id"].(string); ok {
-					todos[i].SelectedModelID = selectedModelID
-				}
-				break
-			}
-		}
-		if !found {
+		currentTodo, ok := todoMap[todoID]
+		if !ok {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("批量更新失败: 未找到 ID 为 '%s' 的任务", id)),
+				exception.WithParam("reason", fmt.Sprintf("批量更新失败: 未找到 ID 为 '%s' 的任务", todoID)),
 			)
+		}
+		if _, exists := todoData["content"]; exists {
+			currentTodo.Content = strVal(todoData, "content")
+		}
+		if _, exists := todoData["activeForm"]; exists {
+			currentTodo.ActiveForm = strVal(todoData, "activeForm")
+		}
+		if _, exists := todoData["description"]; exists {
+			currentTodo.Description = strVal(todoData, "description")
+		}
+		if _, exists := todoData["status"]; exists {
+			parsed, err := hschema.ParseTodoStatus(strVal(todoData, "status"))
+			if err != nil {
+				return nil, "", exception.BuildError(
+					exception.StatusToolTodosValidationInvalid,
+					exception.WithParam("reason", fmt.Sprintf("无效的状态 '%s'（任务 '%s'）", strVal(todoData, "status"), todoID)),
+				)
+			}
+			currentTodo.Status = parsed
+		}
+		if _, exists := todoData["selected_model_id"]; exists {
+			currentTodo.SelectedModelID = strVal(todoData, "selected_model_id")
 		}
 		updatedCount++
 	}
+
+	// 对齐 Python L689: 先修改后校验
+	if err := validateSingleInProgress(todos); err != nil {
+		return nil, "", err
+	}
+
 	return todos, fmt.Sprintf("已成功更新 %d 个任务", updatedCount), nil
 }
 
-// todoModifyDelete 执行 delete 操作
+// deleteTodos 执行 delete 操作
 // 对齐 Python: TodoModifyTool._delete_todos L635-647
-func todoModifyDelete(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
+// 入口对 ids 做去重，对齐 Python delete_ids = set(ids)
+func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
 	if len(ids) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
 			exception.WithParam("reason", "delete 操作的 'ids' 必须为非空的任务 ID 列表"),
 		)
 	}
-	deleteSet := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		deleteSet[id] = struct{}{}
-	}
+	// 对齐 Python L638: 入口去重
+	deleteIDs := uniqueIDs(ids)
 	deletedCount := 0
-	result := make([]hschema.TodoItem, 0, len(todos))
+	remainingTodos := make([]hschema.TodoItem, 0, len(todos))
 	for _, item := range todos {
-		if _, exists := deleteSet[item.ID]; exists {
+		if _, exists := deleteIDs[item.ID]; exists {
 			deletedCount++
 		} else {
-			result = append(result, item)
+			remainingTodos = append(remainingTodos, item)
 		}
 	}
 	// 对齐 Python L644-645: 全部 ID 都不存在时的提示
 	if deletedCount == 0 {
-		return result, fmt.Sprintf("未删除任何任务: 提供的 ID (%s) 均未找到", strings.Join(ids, ", ")), nil
+		return remainingTodos, fmt.Sprintf("未删除任何任务: 提供的 ID (%s) 均未找到", strings.Join(ids, ", ")), nil
 	}
-	return result, fmt.Sprintf("已成功删除 %d 个任务 (ID: %s)", deletedCount, strings.Join(ids, ", ")), nil
+	// 对齐 Python L647: 用 delete_ids(set) 格式化
+	idStrs := make([]string, 0, len(deleteIDs))
+	for id := range deleteIDs {
+		idStrs = append(idStrs, id)
+	}
+	return remainingTodos, fmt.Sprintf("已成功删除 %d 个任务 (ID: %s)", deletedCount, strings.Join(idStrs, ", ")), nil
 }
 
-// todoModifyCancel 执行 cancel 操作
+// cancelTodos 执行 cancel 操作
 // 对齐 Python: TodoModifyTool._cancel_todos L649-660
 // 不存在的 ID 静默跳过，全部不存在时返回提示消息。
-func todoModifyCancel(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
+func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
 	if len(ids) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
@@ -752,57 +764,48 @@ func todoModifyCancel(todos []hschema.TodoItem, ids []string) ([]hschema.TodoIte
 	return todos, fmt.Sprintf("已成功取消 %d 个任务 (ID: %s)", cancelledCount, strings.Join(cancelledIDs, ", ")), nil
 }
 
-// todoModifyAppend 执行 append 操作
+// appendTodos 执行 append 操作
 // 对齐 Python: TodoModifyTool._append_todos L693-707
-func todoModifyAppend(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema.TodoItem, string, error) {
+// 先校验单项+检查ID唯一性+追加到 todos，追加完后调用 validateSingleInProgress 校验
+func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema.TodoItem, string, error) {
 	if len(newItems) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
 			exception.WithParam("reason", "append 操作需要 'todos' 参数"),
 		)
 	}
-	// 校验新任务
-	var inProgressIDs []string
-	for _, item := range newItems {
-		if err := validateSingleTodoItem(item); err != nil {
+	// 对齐 Python L694: 检查 ID 唯一性
+	todoIDs := make(map[string]struct{}, len(todos))
+	for _, item := range todos {
+		todoIDs[item.ID] = struct{}{}
+	}
+	// 对齐 Python L695-704: 校验单项+检查ID唯一+追加
+	for _, todoData := range newItems {
+		if err := validateSingleTodoItem(todoData); err != nil {
 			return nil, "", err
 		}
-		if status, ok := item["status"].(string); ok && status == "in_progress" {
-			id, _ := item["id"].(string)
-			inProgressIDs = append(inProgressIDs, id)
-		}
-	}
-	if err := validateSingleInProgress(todos, inProgressIDs, nil); err != nil {
-		return nil, "", err
-	}
-
-	// 检查 ID 唯一性
-	existingIDs := make(map[string]struct{}, len(todos))
-	for _, item := range todos {
-		existingIDs[item.ID] = struct{}{}
-	}
-	for _, item := range newItems {
-		id, _ := item["id"].(string)
-		if _, exists := existingIDs[id]; exists {
+		todoID := strVal(todoData, "id")
+		if _, exists := todoIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("批量追加失败: 任务 ID '%s' 已存在", id)),
+				exception.WithParam("reason", fmt.Sprintf("批量追加失败: 任务 ID '%s' 已存在", todoID)),
 			)
 		}
-		existingIDs[id] = struct{}{}
-	}
-
-	// 追加
-	for _, raw := range newItems {
-		todoItem := todoItemFromMap(raw)
+		todoItem := todoItemFromMap(todoData)
 		todos = append(todos, todoItem)
+		todoIDs[todoID] = struct{}{}
+	}
+	// 对齐 Python L705: 先追加后校验
+	if err := validateSingleInProgress(todos); err != nil {
+		return nil, "", err
 	}
 	return todos, fmt.Sprintf("已成功追加 %d 个任务", len(newItems)), nil
 }
 
-// todoModifyInsertAfter 执行 insert_after 操作
+// insertAfterTodos 执行 insert_after 操作
 // 对齐 Python: TodoModifyTool._insert_after_todos L709-730
-func todoModifyInsertAfter(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
+// 先校验目标任务状态+校验新任务+检查ID唯一性+构造结果列表，构造完后调用 validateSingleInProgress 校验
+func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
 	if targetID == "" {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
@@ -816,72 +819,48 @@ func todoModifyInsertAfter(todos []hschema.TodoItem, targetID string, items []ma
 		)
 	}
 
-	// 校验目标任务状态
-	if err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending}); err != nil {
+	// 对齐 Python L711-713: 校验目标任务状态
+	targetIndex, err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending})
+	if err != nil {
 		return nil, "", err
 	}
 
-	// 校验新任务
-	var inProgressIDs []string
-	for _, item := range items {
-		if err := validateSingleTodoItem(item); err != nil {
-			return nil, "", err
-		}
-		if status, ok := item["status"].(string); ok && status == "in_progress" {
-			id, _ := item["id"].(string)
-			inProgressIDs = append(inProgressIDs, id)
-		}
-	}
-	if err := validateSingleInProgress(todos, inProgressIDs, nil); err != nil {
-		return nil, "", err
-	}
-
-	// 校验 ID 唯一性
+	// 对齐 Python L714-724: 校验 ID 唯一性+构造插入列表
 	existingIDs := make(map[string]struct{}, len(todos))
 	for _, item := range todos {
 		existingIDs[item.ID] = struct{}{}
 	}
-	for _, item := range items {
-		id, _ := item["id"].(string)
-		if _, exists := existingIDs[id]; exists {
+	insertTodos := make([]hschema.TodoItem, 0, len(items))
+	for _, todoData := range items {
+		todoID := strVal(todoData, "id")
+		if _, exists := existingIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", id)),
+				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", todoID)),
 			)
 		}
-		existingIDs[id] = struct{}{}
+		insertTodos = append(insertTodos, todoItemFromMap(todoData))
+		existingIDs[todoID] = struct{}{}
 	}
 
-	// 插入
-	targetIdx := -1
-	for i, item := range todos {
-		if item.ID == targetID {
-			targetIdx = i
-			break
-		}
-	}
-	if targetIdx == -1 {
-		return nil, "", exception.BuildError(
-			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", fmt.Sprintf("当前待办列表中未找到 ID 为 '%s' 的目标任务", targetID)),
-		)
-	}
-
-	newItems := make([]hschema.TodoItem, len(items))
-	for i, raw := range items {
-		newItems[i] = todoItemFromMap(raw)
-	}
-
+	// 对齐 Python L725-727: 构造结果列表
 	result := make([]hschema.TodoItem, 0, len(todos)+len(items))
-	result = append(result, todos[:targetIdx+1]...)
-	result = append(result, newItems...)
-	result = append(result, todos[targetIdx+1:]...)
-	return result, fmt.Sprintf("已成功在目标任务 (ID: '%s') 之后插入 %d 个任务", targetID, len(newItems)), nil
+	result = append(result, todos[:targetIndex+1]...)
+	result = append(result, insertTodos...)
+	result = append(result, todos[targetIndex+1:]...)
+
+	// 对齐 Python L728: 先构造后校验
+	if err := validateSingleInProgress(result); err != nil {
+		return nil, "", err
+	}
+
+	return result, fmt.Sprintf("已成功在目标任务 (ID: '%s') 之后插入 %d 个任务", targetID, len(insertTodos)), nil
 }
 
-// todoModifyInsertBefore 执行 insert_before 操作
+// insertBeforeTodos 执行 insert_before 操作
 // 对齐 Python: TodoModifyTool._insert_before_todos L732-753
-func todoModifyInsertBefore(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
+// 先校验目标任务状态+校验新任务+检查ID唯一性+构造结果列表，构造完后调用 validateSingleInProgress 校验
+func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
 	if targetID == "" {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
@@ -895,101 +874,55 @@ func todoModifyInsertBefore(todos []hschema.TodoItem, targetID string, items []m
 		)
 	}
 
-	// 校验目标任务状态（insert_before 只允许 pending）
-	if err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusPending}); err != nil {
+	// 对齐 Python L734-736: 校验目标任务状态（insert_before 只允许 pending）
+	targetIndex, err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusPending})
+	if err != nil {
 		return nil, "", err
 	}
 
-	// 校验新任务
-	var inProgressIDs []string
-	for _, item := range items {
-		if err := validateSingleTodoItem(item); err != nil {
-			return nil, "", err
-		}
-		if status, ok := item["status"].(string); ok && status == "in_progress" {
-			id, _ := item["id"].(string)
-			inProgressIDs = append(inProgressIDs, id)
-		}
-	}
-	if err := validateSingleInProgress(todos, inProgressIDs, nil); err != nil {
-		return nil, "", err
-	}
-
-	// 校验 ID 唯一性
+	// 对齐 Python L737-747: 校验 ID 唯一性+构造插入列表
 	existingIDs := make(map[string]struct{}, len(todos))
 	for _, item := range todos {
 		existingIDs[item.ID] = struct{}{}
 	}
-	for _, item := range items {
-		id, _ := item["id"].(string)
-		if _, exists := existingIDs[id]; exists {
+	insertTodos := make([]hschema.TodoItem, 0, len(items))
+	for _, todoData := range items {
+		todoID := strVal(todoData, "id")
+		if _, exists := existingIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", id)),
+				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", todoID)),
 			)
 		}
-		existingIDs[id] = struct{}{}
+		insertTodos = append(insertTodos, todoItemFromMap(todoData))
+		existingIDs[todoID] = struct{}{}
 	}
 
-	// 插入
-	targetIdx := -1
-	for i, item := range todos {
-		if item.ID == targetID {
-			targetIdx = i
-			break
-		}
-	}
-	if targetIdx == -1 {
-		return nil, "", exception.BuildError(
-			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", fmt.Sprintf("当前待办列表中未找到 ID 为 '%s' 的目标任务", targetID)),
-		)
-	}
-
-	newItems := make([]hschema.TodoItem, len(items))
-	for i, raw := range items {
-		newItems[i] = todoItemFromMap(raw)
-	}
-
+	// 对齐 Python L748-750: 构造结果列表
 	result := make([]hschema.TodoItem, 0, len(todos)+len(items))
-	result = append(result, todos[:targetIdx]...)
-	result = append(result, newItems...)
-	result = append(result, todos[targetIdx:]...)
-	return result, fmt.Sprintf("已成功在目标任务 (ID: '%s') 之前插入 %d 个任务", targetID, len(newItems)), nil
+	result = append(result, todos[:targetIndex]...)
+	result = append(result, insertTodos...)
+	result = append(result, todos[targetIndex:]...)
+
+	// 对齐 Python L751: 先构造后校验
+	if err := validateSingleInProgress(result); err != nil {
+		return nil, "", err
+	}
+
+	return result, fmt.Sprintf("已成功在目标任务 (ID: '%s') 之前插入 %d 个任务", targetID, len(insertTodos)), nil
 }
 
 // validateSingleInProgress 校验同一时间只能有一个 in_progress 任务
-// removingFromInProgress: 即将从 in_progress 状态移除的任务 ID 集合（用于 update 场景）
-func validateSingleInProgress(existingTodos []hschema.TodoItem, newInProgressIDs []string, removingFromInProgress map[string]struct{}) error {
-	// 统计现有 in_progress 数量（排除即将被移除的）
-	if removingFromInProgress == nil {
-		removingFromInProgress = make(map[string]struct{})
-	}
-	var currentInProgress []string
-	for _, item := range existingTodos {
+// 对齐 Python: TodoModifyTool._validate_single_in_progress L600-606
+// 简化版：只做 sum 计数，不再需要 newInProgressIDs 和 removingFromInProgress 参数
+func validateSingleInProgress(todos []hschema.TodoItem) error {
+	inProgressCount := 0
+	for _, item := range todos {
 		if item.Status == hschema.TodoStatusInProgress {
-			if _, removing := removingFromInProgress[item.ID]; !removing {
-				currentInProgress = append(currentInProgress, item.ID)
-			}
+			inProgressCount++
 		}
 	}
-	// 如果当前有 in_progress 且新操作也要设 in_progress，检查是否冲突
-	total := len(currentInProgress) + len(newInProgressIDs)
-	// 如果新操作中的 in_progress 与现有的重叠（update 场景），不重复计算
-	if len(currentInProgress) > 0 && len(newInProgressIDs) > 0 {
-		existingSet := make(map[string]struct{}, len(currentInProgress))
-		for _, id := range currentInProgress {
-			existingSet[id] = struct{}{}
-		}
-		overlap := 0
-		for _, id := range newInProgressIDs {
-			if _, ok := existingSet[id]; ok {
-				overlap++
-			}
-		}
-		total = len(currentInProgress) + len(newInProgressIDs) - overlap
-	}
-	if total > 1 {
+	if inProgressCount > 1 {
 		return exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
 			exception.WithParam("reason", "超过一个任务被标记为 'in_progress'（仅允许一个）"),
@@ -998,22 +931,24 @@ func validateSingleInProgress(existingTodos []hschema.TodoItem, newInProgressIDs
 	return nil
 }
 
-// validateTargetTaskStatus 校验目标任务状态是否在允许列表中
-func validateTargetTaskStatus(todos []hschema.TodoItem, targetID string, allowedStatuses []hschema.TodoStatus) error {
-	for _, item := range todos {
+// validateTargetTaskStatus 校验目标任务状态是否在允许列表中，并返回目标索引
+// 对齐 Python: TodoModifyTool._validate_target_task_status L579-598
+// 返回目标在列表中的索引，未找到或状态不允许时返回错误
+func validateTargetTaskStatus(todos []hschema.TodoItem, targetID string, allowedStatuses []hschema.TodoStatus) (int, error) {
+	for idx, item := range todos {
 		if item.ID == targetID {
 			for _, allowed := range allowedStatuses {
 				if item.Status == allowed {
-					return nil
+					return idx, nil
 				}
 			}
-			return exception.BuildError(
+			return -1, exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
 				exception.WithParam("reason", fmt.Sprintf("目标任务状态 '%s' 不允许插入操作", item.Status.String())),
 			)
 		}
 	}
-	return exception.BuildError(
+	return -1, exception.BuildError(
 		exception.StatusToolTodosValidationInvalid,
 		exception.WithParam("reason", fmt.Sprintf("当前待办列表中未找到 ID 为 '%s' 的目标任务", targetID)),
 	)
@@ -1048,15 +983,17 @@ func validateSingleTodoItem(item map[string]any) error {
 }
 
 // todoItemFromMap 从 map 构造 TodoItem
+// 对齐 Python: TodoModifyTool._convert_to_todo_item L625-633
+// 所有字符串字段 TrimSpace，id 为空时自动生成 uuid
 func todoItemFromMap(data map[string]any) hschema.TodoItem {
-	id, _ := data["id"].(string)
+	id := strings.TrimSpace(strVal(data, "id"))
 	if id == "" {
 		id = uuid.New().String()
 	}
-	content, _ := data["content"].(string)
-	activeForm, _ := data["activeForm"].(string)
-	description, _ := data["description"].(string)
-	selectedModelID, _ := data["selected_model_id"].(string)
+	content := strings.TrimSpace(strVal(data, "content"))
+	activeForm := strings.TrimSpace(strValDefault(data, "activeForm", ""))
+	description := strings.TrimSpace(strValDefault(data, "description", ""))
+	selectedModelID := strings.TrimSpace(strValDefault(data, "selected_model_id", ""))
 
 	item := hschema.TodoItem{
 		ID:              id,
@@ -1067,7 +1004,7 @@ func todoItemFromMap(data map[string]any) hschema.TodoItem {
 		SelectedModelID: selectedModelID,
 	}
 
-	if statusStr, ok := data["status"].(string); ok {
+	if statusStr := strVal(data, "status"); statusStr != "" {
 		if parsed, err := hschema.ParseTodoStatus(statusStr); err == nil {
 			item.Status = parsed
 		}
