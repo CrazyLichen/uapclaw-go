@@ -1,6 +1,10 @@
 package trainer
 
-import "iter"
+import (
+	"iter"
+
+	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -32,23 +36,54 @@ type Progress struct {
 // Callbacks 训练生命周期回调钩子。
 //
 // 子类可覆盖各方法，集成日志记录、早停判断、指标上报等功能。
-// 当前为纯接口桩，各回调字段暂用 any 占位，待后续章节填充具体函数签名。
+// 回调字段使用具体函数类型，对齐 Python Callbacks 的方法签名。
 //
 // 对应 Python: openjiuwen/agent_evolving/trainer/progress.py Callbacks
 type Callbacks struct {
 	// OnTrainBegin 训练开始回调（验证基线评估完成后）。
-	// 签名: func(agent any, progress *Progress, evalInfo any)
-	OnTrainBegin any
+	//
+	// 对齐 Python:
+	//
+	//	def on_train_begin(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
+	//	    pass
+	OnTrainBegin TrainCallbackFunc
 	// OnTrainEnd 训练结束回调。
-	// 签名: func(agent any, progress *Progress, evalInfo any)
-	OnTrainEnd any
+	//
+	// 对齐 Python:
+	//
+	//	def on_train_end(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
+	//	    pass
+	OnTrainEnd TrainCallbackFunc
 	// OnTrainEpochBegin 单 epoch 训练开始回调。
-	// 签名: func(agent any, progress *Progress)
-	OnTrainEpochBegin any
+	//
+	// 对齐 Python:
+	//
+	//	def on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None:
+	//	    pass
+	OnTrainEpochBegin TrainEpochBeginFunc
 	// OnTrainEpochEnd 单 epoch 训练结束回调（best_score 更新/参数写回后）。
-	// 签名: func(agent any, progress *Progress, evalInfo any)
-	OnTrainEpochEnd any
+	//
+	// 对齐 Python:
+	//
+	//	def on_train_epoch_end(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
+	//	    pass
+	OnTrainEpochEnd TrainCallbackFunc
 }
+
+// TrainCallbackFunc 训练回调函数类型（含评估信息）。
+//
+// 对齐 Python:
+//
+//	on_train_begin / on_train_end / on_train_epoch_end
+//	(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None
+type TrainCallbackFunc func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase)
+
+// TrainEpochBeginFunc epoch 开始回调函数类型（无评估信息）。
+//
+// 对齐 Python:
+//
+//	on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None
+type TrainEpochBeginFunc func(agent TrainableAgent, progress *Progress)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

@@ -390,6 +390,70 @@ func TestNewCallbacks(t *testing.T) {
 	if cb == nil {
 		t.Error("期望 NewCallbacks 返回非 nil")
 	}
+	// 确认所有回调字段为 nil（类型安全：具体函数类型而非 any）
+	if cb.OnTrainBegin != nil {
+		t.Error("期望 OnTrainBegin 为 nil")
+	}
+	if cb.OnTrainEnd != nil {
+		t.Error("期望 OnTrainEnd 为 nil")
+	}
+	if cb.OnTrainEpochBegin != nil {
+		t.Error("期望 OnTrainEpochBegin 为 nil")
+	}
+	if cb.OnTrainEpochEnd != nil {
+		t.Error("期望 OnTrainEpochEnd 为 nil")
+	}
+}
+
+// TestCallbacks_具体函数类型 测试回调函数类型赋值和调用。
+func TestCallbacks_具体函数类型(t *testing.T) {
+	var beginCalled bool
+	var endCalled bool
+	var epochBeginCalled bool
+	var epochEndCalled bool
+
+	cb := &Callbacks{
+		OnTrainBegin: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+			beginCalled = true
+		},
+		OnTrainEnd: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+			endCalled = true
+		},
+		OnTrainEpochBegin: func(agent TrainableAgent, progress *Progress) {
+			epochBeginCalled = true
+		},
+		OnTrainEpochEnd: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+			epochEndCalled = true
+		},
+	}
+
+	// 测试 fireCallback 和 fireEpochBeginCallback
+	p := NewProgress()
+	fireCallback(cb.OnTrainBegin, nil, p, nil)
+	fireCallback(cb.OnTrainEnd, nil, p, nil)
+	fireEpochBeginCallback(cb.OnTrainEpochBegin, nil, p)
+	fireCallback(cb.OnTrainEpochEnd, nil, p, nil)
+
+	if !beginCalled {
+		t.Error("期望 OnTrainBegin 被调用")
+	}
+	if !endCalled {
+		t.Error("期望 OnTrainEnd 被调用")
+	}
+	if !epochBeginCalled {
+		t.Error("期望 OnTrainEpochBegin 被调用")
+	}
+	if !epochEndCalled {
+		t.Error("期望 OnTrainEpochEnd 被调用")
+	}
+}
+
+// TestFireCallback_nil 测试 nil 回调安全跳过。
+func TestFireCallback_nil(t *testing.T) {
+	p := NewProgress()
+	fireCallback(nil, nil, p, nil)
+	fireEpochBeginCallback(nil, nil, p)
+	// 无 panic 即通过
 }
 
 // TestProgress_RunEpoch 测试 RunEpoch 迭代

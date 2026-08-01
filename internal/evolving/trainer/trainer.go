@@ -174,15 +174,15 @@ func (t *Trainer) Train(
 	}
 
 	// 触发 OnTrainBegin 回调
-	invokeCallback(t.callbacks.OnTrainBegin, agent, progress, curEpochEvaluated)
+	fireCallback(t.callbacks.OnTrainBegin, agent, progress, curEpochEvaluated)
 
 	if progress.BestScore >= t.earlyStopScore {
-		invokeCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
+		fireCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
 		return agent, nil
 	}
 
 	for range progress.RunEpoch() {
-		invokeCallback(t.callbacks.OnTrainEpochBegin, agent, progress, nil)
+		fireEpochBeginCallback(t.callbacks.OnTrainEpochBegin, agent, progress)
 
 		var evaluated []*dataset.EvaluatedCase
 
@@ -229,7 +229,7 @@ func (t *Trainer) Train(
 			progress.BestScore = valScore
 		}
 
-		invokeCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
+		fireCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
 
 		// ⤵️ 待 9.78 EvolveCheckpoint 回填：检查点保存逻辑
 		// 对齐 Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
@@ -240,7 +240,7 @@ func (t *Trainer) Train(
 		}
 	}
 
-	invokeCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
+	fireCallback(t.callbacks.OnTrainEnd, agent, progress, curEpochEvaluated)
 
 	return agent, nil
 }
@@ -688,14 +688,18 @@ func normalizeUpdates(updated map[schema.UpdateKey]any) map[schema.UpdateKey]sch
 	return result
 }
 
-// invokeCallback 安全调用回调函数。
-// 回调字段类型为 any，支持多种函数签名。
-func invokeCallback(cb any, args ...any) {
-	if cb == nil {
-		return
+// fireCallback 安全调用 TrainCallbackFunc（含评估信息）。
+// 回调为 nil 时跳过。
+func fireCallback(cb TrainCallbackFunc, agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+	if cb != nil {
+		cb(agent, progress, evalInfo)
 	}
-	if fn, ok := cb.(func(...any)); ok {
-		fn(args...)
+}
+
+// fireEpochBeginCallback 安全调用 TrainEpochBeginFunc（无评估信息）。
+// 回调为 nil 时跳过。
+func fireEpochBeginCallback(cb TrainEpochBeginFunc, agent TrainableAgent, progress *Progress) {
+	if cb != nil {
+		cb(agent, progress)
 	}
-	// 其他函数签名类型可在此扩展
 }
