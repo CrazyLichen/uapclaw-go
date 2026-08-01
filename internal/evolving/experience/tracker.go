@@ -94,12 +94,12 @@ func (t *ExperienceTracker) RecordPresented(
 			existingStats = &checkpointing.UsageStats{}
 		}
 		newStats := checkpointing.UsageStats{
-			TimesPresented:   existingStats.TimesPresented + 1,
-			TimesUsed:        existingStats.TimesUsed,
-			TimesPositive:    existingStats.TimesPositive,
-			TimesNegative:    existingStats.TimesNegative,
-			LastPresentedAt:  &now,
-			LastEvaluatedAt:  existingStats.LastEvaluatedAt,
+			TimesPresented:  existingStats.TimesPresented + 1,
+			TimesUsed:       existingStats.TimesUsed,
+			TimesPositive:   existingStats.TimesPositive,
+			TimesNegative:   existingStats.TimesNegative,
+			LastPresentedAt: &now,
+			LastEvaluatedAt: existingStats.LastEvaluatedAt,
 		}
 		updates[record.ID] = map[string]any{
 			"score":       record.Score,
@@ -179,12 +179,12 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 			existingStats = &checkpointing.UsageStats{}
 		}
 		newStats := checkpointing.UsageStats{
-			TimesPresented:   existingStats.TimesPresented + 1,
-			TimesUsed:        existingStats.TimesUsed,
-			TimesPositive:    existingStats.TimesPositive,
-			TimesNegative:    existingStats.TimesNegative,
-			LastPresentedAt:  &now,
-			LastEvaluatedAt:  existingStats.LastEvaluatedAt,
+			TimesPresented:  existingStats.TimesPresented + 1,
+			TimesUsed:       existingStats.TimesUsed,
+			TimesPositive:   existingStats.TimesPositive,
+			TimesNegative:   existingStats.TimesNegative,
+			LastPresentedAt: &now,
+			LastEvaluatedAt: existingStats.LastEvaluatedAt,
 		}
 		updates[record.ID] = map[string]any{
 			"score":       record.Score,

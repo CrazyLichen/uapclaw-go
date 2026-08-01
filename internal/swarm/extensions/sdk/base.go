@@ -9,11 +9,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ManifestFilename 扩展清单文件名，对齐 Python MANIFEST_FILENAME
-const ManifestFilename = "extension.yaml"
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseExtension 扩展抽象基类接口，对齐 Python BaseExtension ABC
@@ -34,6 +29,11 @@ type BaseExtensionImpl struct {
 	extensionDir  *string
 	configCache   map[string]any
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ManifestFilename 扩展清单文件名，对齐 Python MANIFEST_FILENAME
+const ManifestFilename = "extension.yaml"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

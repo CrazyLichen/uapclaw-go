@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	ptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	ptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -136,8 +136,8 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	return map[string]any{
 		"success": true,
 		"data": map[string]any{
-			"skills":            t.dumpSkills(selectedSkills),
-			"mode":              "filtered",
+			"skills":               t.dumpSkills(selectedSkills),
+			"mode":                 "filtered",
 			"selected_skill_names": selectedNamesResult,
 		},
 	}, nil
@@ -169,8 +169,9 @@ func (t *ListSkillTool) dumpAllSkills() []map[string]any {
 // dumpSkills 将技能对象列表转为可序列化字典列表。
 //
 // 一比一复刻 Python: ListSkillTool._dump_skills(skills):
-//   skill_dict = skill.asdict(include_directory=True)
-//   skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
+//
+//	skill_dict = skill.asdict(include_directory=True)
+//	skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
 func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 	results := make([]map[string]any, 0, len(skills))
 	for _, s := range skills {
@@ -185,10 +186,11 @@ func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 // routeSkills 通过 LLM 路由筛选与查询相关的技能名称。
 //
 // 一比一复刻 Python: ListSkillTool._route_skills(query):
-//   payload = self._dump_all_skills()
-//   response = await self.list_skill_model.invoke(messages=[...])
-//   content = getattr(response, "content", "") or ""
-//   return self._parse_selected_skill_names(content)
+//
+//	payload = self._dump_all_skills()
+//	response = await self.list_skill_model.invoke(messages=[...])
+//	content = getattr(response, "content", "") or ""
+//	return self._parse_selected_skill_names(content)
 func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string, error) {
 	payload := t.dumpAllSkills()
 	payloadJSON, jsonErr := json.Marshal(payload)
@@ -235,9 +237,9 @@ func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string
 // parseSelectedSkillNames 解析 LLM 输出中的技能名称列表。
 //
 // 一比一复刻 Python: ListSkillTool._parse_selected_skill_names(content):
-//   1. strip → 空 → []
-//   2. 去除 ``` 代码块包裹
-//   3. json.loads → data.get("skills", []) → filter empty strings
+//  1. strip → 空 → []
+//  2. 去除 ``` 代码块包裹
+//  3. json.loads → data.get("skills", []) → filter empty strings
 func parseSelectedSkillNames(content string) []string {
 	text := trimSpace(content)
 	if text == "" {
@@ -289,9 +291,10 @@ func parseSelectedSkillNames(content string) []string {
 // selectSkillsByNames 按名称列表选择技能对象。
 //
 // 一比一复刻 Python: ListSkillTool._select_skills_by_names(names):
-//   if not names → []
-//   skill_map = {skill.name: skill for skill in self.get_skills() or []}
-//   selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
+//
+//	if not names → []
+//	skill_map = {skill.name: skill for skill in self.get_skills() or []}
+//	selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
 func (t *ListSkillTool) selectSkillsByNames(names []string) []*skillpkg.Skill {
 	if len(names) == 0 {
 		return []*skillpkg.Skill{}

@@ -35,24 +35,6 @@ type EvolutionContext struct {
 	Metadata map[string]any
 }
 
-// OnlineEvolutionContext 类型别名，对齐 Python。
-// 对应 Python: OnlineEvolutionContext = EvolutionContext
-type OnlineEvolutionContext = EvolutionContext
-
-// OnlineEvolutionStatus 在线演进结果状态（string 常量而非 iota 枚举）。
-// 对应 Python: Literal["staged", "auto_approved", ...]
-type OnlineEvolutionStatus = string
-
-// PendingChange 等待审批的暂存演进记录快照。
-//
-// 类型别名，指向 checkpointing.PendingChange。
-// Go 不允许 checkpointing ↔ experience 循环引用，
-// 因此 PendingChange 的实际定义在 checkpointing 包中，
-// experience 包通过类型别名提供等效访问。
-//
-// 对应 Python: openjiuwen/agent_evolving/experience/types.py PendingChange
-type PendingChange = checkpointing.PendingChange
-
 // ExperienceProposal 经验提案（审批前）。
 //
 // 对应 Python: ExperienceProposal
@@ -122,6 +104,24 @@ type ExperienceApplyResult struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// OnlineEvolutionContext 类型别名，对齐 Python。
+// 对应 Python: OnlineEvolutionContext = EvolutionContext
+type OnlineEvolutionContext = EvolutionContext
+
+// OnlineEvolutionStatus 在线演进结果状态（string 常量而非 iota 枚举）。
+// 对应 Python: Literal["staged", "auto_approved", ...]
+type OnlineEvolutionStatus = string
+
+// PendingChange 等待审批的暂存演进记录快照。
+//
+// 类型别名，指向 checkpointing.PendingChange。
+// Go 不允许 checkpointing ↔ experience 循环引用，
+// 因此 PendingChange 的实际定义在 checkpointing 包中，
+// experience 包通过类型别名提供等效访问。
+//
+// 对应 Python: openjiuwen/agent_evolving/experience/types.py PendingChange
+type PendingChange = checkpointing.PendingChange
 
 // ──────────────────────────── 常量 ────────────────────────────
 

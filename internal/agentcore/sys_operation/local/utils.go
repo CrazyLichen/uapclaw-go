@@ -91,6 +91,7 @@ var safePathPattern = regexp.MustCompile(`[^\w.-]`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// String 返回流式事件类型的字符串表示。
 func (t StreamEventType) String() string {
 	switch t {
 	case StreamEventTypeStdout:
@@ -106,6 +107,7 @@ func (t StreamEventType) String() string {
 	}
 }
 
+// NewAsyncProcessHandler 创建异步进程处理器实例。
 func NewAsyncProcessHandler(cmd *exec.Cmd, chunkSize int, encoding string, timeout int) *AsyncProcessHandler {
 	if chunkSize <= 0 {
 		chunkSize = defaultChunkSize
@@ -121,6 +123,7 @@ func NewAsyncProcessHandler(cmd *exec.Cmd, chunkSize int, encoding string, timeo
 	}
 }
 
+// Invoke 同步执行子进程，等待完成后返回输出数据。
 func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -377,6 +380,7 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 	return ch, nil
 }
 
+// Background 启动后台进程并等待 grace 秒检测是否提前退出。
 func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -440,12 +444,14 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	return pid, nil
 }
 
+// KillProcessTree 终止进程树（导出版本）。
 func (h *AsyncProcessHandler) KillProcessTree() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.killProcessTree()
 }
 
+// PrepareEnvironment 合并系统环境变量和自定义环境变量。
 func (OperationUtils) PrepareEnvironment(customEnv map[string]string) map[string]string {
 	env := make(map[string]string)
 	for _, e := range os.Environ() {
@@ -459,6 +465,7 @@ func (OperationUtils) PrepareEnvironment(customEnv map[string]string) map[string
 	return env
 }
 
+// CreateTmpFile 创建临时文件并写入内容。
 func (OperationUtils) CreateTmpFile(content string, suffix string) (string, error) {
 	tmpFile, err := os.CreateTemp("", "sys_op_*"+suffix)
 	if err != nil {
@@ -473,10 +480,12 @@ func (OperationUtils) CreateTmpFile(content string, suffix string) (string, erro
 	return tmpFile.Name(), nil
 }
 
+// DeleteTmpFile 删除临时文件。
 func (OperationUtils) DeleteTmpFile(path string) error {
 	return os.Remove(path)
 }
 
+// ResolveCwd 解析当前工作目录路径。
 func ResolveCwd(cwdPath string) string {
 	if cwdPath != "" {
 		if !filepath.IsAbs(cwdPath) {

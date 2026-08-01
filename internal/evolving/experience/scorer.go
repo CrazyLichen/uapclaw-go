@@ -270,7 +270,7 @@ func CalcEffectiveness(stats *checkpointing.UsageStats) float64 {
 	if total == 0 {
 		return 0.5
 	}
-	return float64(stats.TimesPositive + 1) / float64(total + 2)
+	return float64(stats.TimesPositive+1) / float64(total+2)
 }
 
 // CalcUtilization 计算 U（Utilization）评分。

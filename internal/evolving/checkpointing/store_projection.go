@@ -359,11 +359,11 @@ func (h *StoreProjectionHelper) ListPendingSummary(ctx context.Context, names []
 				if len(bodyLines) > 0 {
 					var summaryParts []string
 					for _, line := range bodyLines {
-					 trimmed := strings.TrimSpace(line)
-					 trimmed = strings.TrimPrefix(trimmed, "- ")
-					 if trimmed != "" {
-						 summaryParts = append(summaryParts, trimmed)
-					 }
+						trimmed := strings.TrimSpace(line)
+						trimmed = strings.TrimPrefix(trimmed, "- ")
+						if trimmed != "" {
+							summaryParts = append(summaryParts, trimmed)
+						}
 					}
 					summary := strings.Join(summaryParts, " ")
 					if len(summary) > 100 {

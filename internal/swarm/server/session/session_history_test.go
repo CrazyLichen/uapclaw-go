@@ -243,7 +243,7 @@ func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
 		"compact_summary": "自动压缩结果",
 		"status":          "success",
 		"stats": map[string]any{
-			"original_count": 10,
+			"original_count":   10,
 			"compressed_count": 3,
 		},
 	}

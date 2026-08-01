@@ -855,9 +855,9 @@ func TestBuildLocalApplyPreview(t *testing.T) {
 		stage := schema.LocalApplyCompleted
 		applyResults := []schema.ApplyResult{
 			{
-				Applied:    true,
-				Records:    []any{checkpointing.EvolutionRecord{ID: "ev_001"}},
-				ChangeType: &ct,
+				Applied:        true,
+				Records:        []any{checkpointing.EvolutionRecord{ID: "ev_001"}},
+				ChangeType:     &ct,
 				LifecycleStage: &stage,
 			},
 		}

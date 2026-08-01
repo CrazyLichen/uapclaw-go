@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -27,7 +28,6 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -452,7 +452,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 		AutoCreateWorkspace:    false,                                             // 对齐 Python: 硬编码 false
 		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // 对齐 Python: config.get("completion_timeout", 3600.0)
-		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),               // 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),            // 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance

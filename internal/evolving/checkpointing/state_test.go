@@ -8,15 +8,15 @@ import "testing"
 func TestEvolveCheckpoint_基本字段(t *testing.T) {
 	seed := 42
 	ckpt := &EvolveCheckpoint{
-		Version:         "v1",
-		RunID:           "run_abc123",
-		Step:            map[string]int{"epoch": 5, "batch": 3},
-		Best:            map[string]any{"best_score": 0.85},
-		Seed:            &seed,
-		OperatorsState:  map[string]map[string]any{"op_1": {"param": "val"}},
-		UpdaterState:    map[string]any{"key": "value"},
-		SearcherState:   map[string]any{"search_key": "search_val"},
-		LastMetrics:     map[string]any{"current_epoch_score": 0.78},
+		Version:        "v1",
+		RunID:          "run_abc123",
+		Step:           map[string]int{"epoch": 5, "batch": 3},
+		Best:           map[string]any{"best_score": 0.85},
+		Seed:           &seed,
+		OperatorsState: map[string]map[string]any{"op_1": {"param": "val"}},
+		UpdaterState:   map[string]any{"key": "value"},
+		SearcherState:  map[string]any{"search_key": "search_val"},
+		LastMetrics:    map[string]any{"current_epoch_score": 0.78},
 	}
 
 	if ckpt.Version != "v1" {

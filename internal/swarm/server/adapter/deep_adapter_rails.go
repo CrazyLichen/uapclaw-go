@@ -5,8 +5,8 @@ import (
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
-	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

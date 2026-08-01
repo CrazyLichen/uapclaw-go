@@ -71,11 +71,11 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 			_ = json.Unmarshal(request.Params, &params) // 延迟解析 params
 		}
 		hookCtx := &extensions.AgentServerChatHookContext{
-			RequestID:  request.RequestID,
-			ChannelID:  request.ChannelID,
-			SessionID:  request.SessionID,
-			ReqMethod:  &reqMethodStr,
-			Params:     params,
+			RequestID: request.RequestID,
+			ChannelID: request.ChannelID,
+			SessionID: request.SessionID,
+			ReqMethod: &reqMethodStr,
+			Params:    params,
 		}
 		extReg.Trigger(ctx, extensions.AgentServerBeforeChatRequest, hookCtx.ToMap())
 	}

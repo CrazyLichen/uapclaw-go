@@ -1,12 +1,12 @@
 package schema
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// PermissionContext 权限上下文，描述一次权限判断所需的环境信息。
 type PermissionContext struct {
 	// PrincipalUserID 权限 owner（channel config 的 my_user_id）
 	PrincipalUserID string `json:"principal_user_id"`
@@ -22,11 +22,12 @@ type PermissionContext struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// PermissionContextOption 权限上下文构造选项函数。
 type PermissionContextOption func(*PermissionContext)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
-var _ json.Marshaler = nil // 确保 encoding/json 可用（编译期检查）
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

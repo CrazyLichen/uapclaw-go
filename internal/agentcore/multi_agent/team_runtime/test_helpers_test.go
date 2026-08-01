@@ -2,6 +2,7 @@ package team_runtime
 
 import (
 	"context"
+	"fmt"
 )
 
 // mockMessageBusForRuntime 测试用 mock 消息总线
@@ -74,3 +75,25 @@ func (m *mockRuntimeBindable) BindRuntime(runtime *TeamRuntime, agentID string) 
 	m.agentID = agentID
 	m.bound = true
 }
+
+// startFailMockBus 测试用 mock 消息总线，Start 返回错误（模拟 ensureStarted 失败）
+type startFailMockBus struct{}
+
+func (m *startFailMockBus) Start(_ context.Context) error {
+	return fmt.Errorf("模拟消息总线启动失败")
+}
+func (m *startFailMockBus) Stop(_ context.Context) error  { return nil }
+func (m *startFailMockBus) CleanupSession(_ context.Context, _ string) error {
+	return nil
+}
+func (m *startFailMockBus) Send(_ context.Context, _ any, _ string, _ string, _ string, _ float64) (any, error) {
+	return nil, nil
+}
+func (m *startFailMockBus) Publish(_ context.Context, _ any, _ string, _ string, _ string) error {
+	return nil
+}
+func (m *startFailMockBus) AddSubscription(_, _ string)     {}
+func (m *startFailMockBus) RemoveSubscription(_, _ string)  {}
+func (m *startFailMockBus) RemoveAllSubscriptions(_ string) {}
+func (m *startFailMockBus) ListSubscriptions(_ string) any  { return nil }
+func (m *startFailMockBus) GetSubscriptionCount() int       { return 0 }

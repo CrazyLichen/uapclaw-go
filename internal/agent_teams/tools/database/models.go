@@ -86,27 +86,6 @@ type TeamTaskDependencyBase struct {
 	Resolved bool `json:"resolved"`
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// TeamDynamicTablePrefixes 动态表名前缀（用于识别和清理）。
-	// 对齐 Python: TEAM_DYNAMIC_TABLE_PREFIXES
-	TeamDynamicTablePrefixes = [...]string{
-		"team_task_dependency_",
-		"team_task_",
-		"team_message_",
-		"message_read_status_",
-	}
-	// TeamStaticTablesToClear 需要清空的静态表名。
-	// 对齐 Python: TEAM_STATIC_TABLES_TO_CLEAR
-	TeamStaticTablesToClear = [...]string{
-		"team_info",
-		"team_member",
-	}
-)
-
-// ──────────────────────────── 辅助类型 ────────────────────────────
-
 // NewTaskSpec 图变更管线中待插入的新任务规范。
 // 对齐 Python: NewTaskSpec (openjiuwen/agent_teams/tools/database/task_dao.py)
 type NewTaskSpec struct {
@@ -140,3 +119,26 @@ type GraphMutationResult struct {
 	// RefreshedTasks 状态刷新产出的任务ID列表
 	RefreshedTasks []string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// TeamDynamicTablePrefixes 动态表名前缀（用于识别和清理）。
+	// 对齐 Python: TEAM_DYNAMIC_TABLE_PREFIXES
+	TeamDynamicTablePrefixes = [...]string{
+		"team_task_dependency_",
+		"team_task_",
+		"team_message_",
+		"message_read_status_",
+	}
+	// TeamStaticTablesToClear 需要清空的静态表名。
+	// 对齐 Python: TEAM_STATIC_TABLES_TO_CLEAR
+	TeamStaticTablesToClear = [...]string{
+		"team_info",
+		"team_member",
+	}
+)

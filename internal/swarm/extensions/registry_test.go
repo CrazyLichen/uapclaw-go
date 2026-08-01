@@ -226,17 +226,21 @@ type testAgentServerClientExt struct {
 	client transport.AgentTransport
 }
 
-func (e *testAgentServerClientExt) Initialize(ctx context.Context, config *ExtensionConfig) error { return nil }
-func (e *testAgentServerClientExt) Shutdown(ctx context.Context) error                          { return nil }
-func (e *testAgentServerClientExt) Metadata() *ExtensionMetadata                                { return nil }
-func (e *testAgentServerClientExt) SetExtensionDir(path string)                                  {}
-func (e *testAgentServerClientExt) GetClient() transport.AgentTransport                          { return e.client }
+func (e *testAgentServerClientExt) Initialize(ctx context.Context, config *ExtensionConfig) error {
+	return nil
+}
+func (e *testAgentServerClientExt) Shutdown(ctx context.Context) error  { return nil }
+func (e *testAgentServerClientExt) Metadata() *ExtensionMetadata        { return nil }
+func (e *testAgentServerClientExt) SetExtensionDir(path string)         {}
+func (e *testAgentServerClientExt) GetClient() transport.AgentTransport { return e.client }
 
 // testCryptoUtilityExt 测试用的 CryptoUtilityExtension 实现
 type testCryptoUtilityExt struct{}
 
-func (e *testCryptoUtilityExt) Initialize(ctx context.Context, config *ExtensionConfig) error { return nil }
-func (e *testCryptoUtilityExt) Shutdown(ctx context.Context) error                          { return nil }
-func (e *testCryptoUtilityExt) Metadata() *ExtensionMetadata                                { return nil }
-func (e *testCryptoUtilityExt) SetExtensionDir(path string)                                  {}
-func (e *testCryptoUtilityExt) GetCrypto() any                                              { return nil }
+func (e *testCryptoUtilityExt) Initialize(ctx context.Context, config *ExtensionConfig) error {
+	return nil
+}
+func (e *testCryptoUtilityExt) Shutdown(ctx context.Context) error { return nil }
+func (e *testCryptoUtilityExt) Metadata() *ExtensionMetadata       { return nil }
+func (e *testCryptoUtilityExt) SetExtensionDir(path string)        {}
+func (e *testCryptoUtilityExt) GetCrypto() any                     { return nil }

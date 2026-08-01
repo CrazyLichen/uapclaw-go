@@ -50,6 +50,10 @@ type taskResult struct {
 // priorityHeap 基于 container/heap 的优先级队列（数值越小越先出队）。
 type priorityHeap []*priorityItem
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionManager 创建新的 SessionManager 实例。
@@ -234,16 +238,21 @@ func (sm *SessionManager) HasActiveTasks() bool {
 	return false
 }
 
+// Len 实现 heap.Interface。
 func (h priorityHeap) Len() int { return len(h) }
 
+// Less 实现 heap.Interface，数值越小优先级越高。
 func (h priorityHeap) Less(i, j int) bool { return h[i].priority < h[j].priority }
 
+// Swap 实现 heap.Interface。
 func (h priorityHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
+// Push 实现 heap.Interface。
 func (h *priorityHeap) Push(x any) {
 	*h = append(*h, x.(*priorityItem))
 }
 
+// Pop 实现 heap.Interface。
 func (h *priorityHeap) Pop() any {
 	old := *h
 	n := len(old)

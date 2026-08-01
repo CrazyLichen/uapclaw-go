@@ -149,13 +149,13 @@ func TestTeamMember_JSON序列化_roundtrip(t *testing.T) {
 // TestTeamMember_omitempty零值 omitempty 字段零值不应出现在 JSON 中。
 func TestTeamMember_omitempty零值(t *testing.T) {
 	member := &TeamMember{
-		MemberName: "agent2",
-		TeamName:   "alpha",
+		MemberName:  "agent2",
+		TeamName:    "alpha",
 		DisplayName: "Agent Two",
-		AgentCard:  `{"name":"agent2"}`,
-		Status:     "unstarted",
-		Mode:       "build_mode",
-		Role:       "teammate",
+		AgentCard:   `{"name":"agent2"}`,
+		Status:      "unstarted",
+		Mode:        "build_mode",
+		Role:        "teammate",
 	}
 
 	data, err := json.Marshal(member)

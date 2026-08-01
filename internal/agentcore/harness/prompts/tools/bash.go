@@ -129,15 +129,22 @@ func GetBashInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "bash"。
 func (p *BashMetadataProvider) GetName() string { return "bash" }
+
+// GetDescription 返回 bash 工具的描述文本。
 func (p *BashMetadataProvider) GetDescription(language string) string {
 	if desc, ok := bashDescription[language]; ok {
 		return desc
 	}
 	return bashDescription["cn"]
 }
+
+// GetInputParams 返回 bash 工具的参数 Schema。
 func (p *BashMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetBashInputParams(language)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() { RegisterToolProvider(&BashMetadataProvider{}) }

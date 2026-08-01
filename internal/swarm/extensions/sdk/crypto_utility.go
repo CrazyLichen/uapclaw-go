@@ -28,7 +28,9 @@ type CryptoUtilityStub struct {
 func (c *CryptoUtilityStub) GetCrypto() any { return nil }
 
 // Initialize 空实现，⤵️ 10.5.10 延后
-func (c *CryptoUtilityStub) Initialize(ctx context.Context, config *extensions.ExtensionConfig) error { return nil }
+func (c *CryptoUtilityStub) Initialize(ctx context.Context, config *extensions.ExtensionConfig) error {
+	return nil
+}
 
 // Shutdown 空实现，对齐 Python CryptoUtility.shutdown()
 func (c *CryptoUtilityStub) Shutdown(ctx context.Context) error { return nil }

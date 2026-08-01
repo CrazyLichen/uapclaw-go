@@ -2,7 +2,7 @@ package database
 
 import "context"
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamDatabase 团队数据库门面接口。
 // 对齐 Python: TeamDatabase (openjiuwen/agent_teams/tools/database/__init__.py)

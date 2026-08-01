@@ -18,6 +18,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// RuntimeConfig 团队运行时配置。
 type RuntimeConfig struct {
 	// TeamID 团队标识
 	TeamID string
@@ -27,6 +28,9 @@ type RuntimeConfig struct {
 	P2PTimeout float64
 }
 
+// TeamRuntime 团队运行时，管理 Agent 注册、消息总线、会话绑定等。
+//
+// 对应 Python: TeamRuntime (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
 type TeamRuntime struct {
 	// config 运行时配置
 	config RuntimeConfig
@@ -48,7 +52,7 @@ type TeamRuntime struct {
 	startMu sync.Mutex
 }
 
-// RuntimeConfigOption RuntimeConfig 选项函数类型
+// RuntimeConfigOption RuntimeConfig 选项函数类型。
 type RuntimeConfigOption func(*RuntimeConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -66,6 +70,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewRuntimeConfig 创建运行时配置，设置默认值。
 func NewRuntimeConfig(opts ...RuntimeConfigOption) *RuntimeConfig {
 	cfg := &RuntimeConfig{
 		TeamID:     defaultRuntimeTeamID,
@@ -86,14 +91,17 @@ func NewRuntimeConfig(opts ...RuntimeConfigOption) *RuntimeConfig {
 	return cfg
 }
 
+// WithRuntimeTeamID 设置团队标识选项。
 func WithRuntimeTeamID(teamID string) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.TeamID = teamID }
 }
 
+// WithRuntimeMessageBus 设置消息总线配置选项。
 func WithRuntimeMessageBus(busConfig *MessageBusConfig) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.MessageBus = busConfig }
 }
 
+// WithRuntimeP2PTimeout 设置 P2P 超时秒数选项。
 func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.P2PTimeout = timeout }
 }
@@ -129,6 +137,7 @@ func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 	return tr
 }
 
+// Start 启动团队运行时。
 func (tr *TeamRuntime) Start(ctx context.Context) error {
 	if tr.running.Load() {
 		return nil
@@ -153,6 +162,7 @@ func (tr *TeamRuntime) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop 停止团队运行时。
 func (tr *TeamRuntime) Stop(ctx context.Context) error {
 	// 幂等检查，对齐 Python L127-128: if not self._running: return
 	if !tr.running.Load() {
@@ -181,6 +191,7 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 	return nil
 }
 
+// CleanupSession 清理团队运行时会话。
 func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) error {
 	if tr.messageBus != nil {
 		return tr.messageBus.CleanupSession(ctx, sessionID)
@@ -188,6 +199,9 @@ func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) err
 	return nil
 }
 
+// RegisterAgent 注册 Agent 到团队运行时。
+//
+// 对应 Python: TeamRuntime.register_agent(card, provider)
 func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.AgentCard, provider resources_manager.AgentProvider) error {
 	agentID := card.ID
 
@@ -232,6 +246,7 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 	return nil
 }
 
+// UnregisterAgent 从团队运行时注销 Agent。
 func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*agentschema.AgentCard, error) {
 	tr.mu.Lock()
 	card, ok := tr.agentCards[agentID]
@@ -256,6 +271,7 @@ func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*ag
 	return card, nil
 }
 
+// HasAgent 检查 Agent 是否已注册。
 func (tr *TeamRuntime) HasAgent(agentID string) bool {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -263,6 +279,7 @@ func (tr *TeamRuntime) HasAgent(agentID string) bool {
 	return ok
 }
 
+// GetAgentCard 获取指定 Agent 的卡片信息。
 func (tr *TeamRuntime) GetAgentCard(agentID string) (*agentschema.AgentCard, error) {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -274,6 +291,7 @@ func (tr *TeamRuntime) GetAgentCard(agentID string) (*agentschema.AgentCard, err
 	return card, nil
 }
 
+// ListAgents 列出所有已注册的 Agent ID。
 func (tr *TeamRuntime) ListAgents() []string {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -285,12 +303,16 @@ func (tr *TeamRuntime) ListAgents() []string {
 	return agents
 }
 
+// GetAgentCount 获取已注册的 Agent 数量。
 func (tr *TeamRuntime) GetAgentCount() int {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 	return len(tr.agentCards)
 }
 
+// Send P2P 发送消息到指定接收者，等待响应。
+//
+// 对应 Python: TeamRuntime.send(message, recipient, sender, **kwargs)
 func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	// 对齐 Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
@@ -326,6 +348,9 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 	return tr.messageBus.Send(ctx, message, recipient, sender, sessionID, timeout)
 }
 
+// Publish Pub-Sub 发布消息到指定主题。
+//
+// 对应 Python: TeamRuntime.publish(message, topic_id, sender, **kwargs)
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	// 对齐 Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
@@ -351,6 +376,7 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 	return tr.messageBus.Publish(ctx, message, topicID, sender, sessionID)
 }
 
+// Subscribe 将 Agent 订阅到主题。
 func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic string) error {
 	// 对齐 Python: if not agent_id: raise ...
 	if agentID == "" {
@@ -370,6 +396,7 @@ func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic stri
 	return nil
 }
 
+// Unsubscribe 将 Agent 从主题取消订阅。
 func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic string) error {
 	// 对齐 Python: if not agent_id: raise ...
 	if agentID == "" {
@@ -389,6 +416,7 @@ func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic st
 	return nil
 }
 
+// BindTeamSession 绑定团队会话到运行时。
 func (tr *TeamRuntime) BindTeamSession(sess *session.AgentTeamSession) {
 	if sess == nil {
 		return
@@ -398,18 +426,21 @@ func (tr *TeamRuntime) BindTeamSession(sess *session.AgentTeamSession) {
 	tr.activeTeamSessions[sess.GetSessionID()] = sess
 }
 
+// UnbindTeamSession 解绑团队会话。
 func (tr *TeamRuntime) UnbindTeamSession(sessionID string) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	delete(tr.activeTeamSessions, sessionID)
 }
 
+// GetTeamSession 获取指定会话 ID 的团队会话。
 func (tr *TeamRuntime) GetTeamSession(sessionID string) *session.AgentTeamSession {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 	return tr.activeTeamSessions[sessionID]
 }
 
+// ListSubscriptions 列出指定 Agent 的订阅信息。
 func (tr *TeamRuntime) ListSubscriptions(agentID string) any {
 	if tr.messageBus != nil {
 		return tr.messageBus.ListSubscriptions(agentID)
@@ -417,6 +448,7 @@ func (tr *TeamRuntime) ListSubscriptions(agentID string) any {
 	return nil
 }
 
+// GetSubscriptionCount 获取总订阅数。
 func (tr *TeamRuntime) GetSubscriptionCount() int {
 	if tr.messageBus != nil {
 		return tr.messageBus.GetSubscriptionCount()
@@ -424,24 +456,27 @@ func (tr *TeamRuntime) GetSubscriptionCount() int {
 	return 0
 }
 
+// P2PTimeout 返回 P2P 通信超时秒数。
 func (tr *TeamRuntime) P2PTimeout() float64 {
 	return tr.p2pTimeout
 }
 
+// SetP2PTimeout 设置 P2P 通信超时秒数。
 func (tr *TeamRuntime) SetP2PTimeout(timeout float64) {
 	tr.p2pTimeout = timeout
 }
 
+// GetP2PTimeout 获取 P2P 通信超时秒数。
 func (tr *TeamRuntime) GetP2PTimeout() float64 {
 	return tr.p2pTimeout
 }
 
+// IsRunning 检查运行时是否已启动。
 func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
 }
 
-// setMessageBus 设置消息总线（仅测试使用）。
-// 生产代码中 MessageBus 由 NewTeamRuntime 自动创建，无需手动设置。
+// SetMessageBus 设置消息总线（仅测试使用）。
 func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
 	tr.messageBus = bus
 }

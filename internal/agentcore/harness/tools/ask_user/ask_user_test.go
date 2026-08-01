@@ -48,9 +48,9 @@ func TestNewAskUserTool_Invoke空壳(t *testing.T) {
 	result, err := askUserTool.Invoke(context.TODO(), map[string]any{
 		"questions": []any{
 			map[string]any{
-				"header":    "选择",
-				"question":  "你喜欢什么语言？",
-				"options":   []any{},
+				"header":   "选择",
+				"question": "你喜欢什么语言？",
+				"options":  []any{},
 			},
 		},
 	})

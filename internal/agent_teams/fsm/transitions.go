@@ -1,5 +1,9 @@
 package fsm
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MemberStatus 常量 — 对齐 Python: MemberStatus (openjiuwen/agent_teams/schema/status.py)
@@ -33,12 +37,12 @@ const (
 
 // TaskStatus 常量 — 对齐 Python: TaskStatus
 const (
-	TaskStatusPending       = "pending"
-	TaskStatusClaimed       = "claimed"
-	TaskStatusPlanApproved  = "plan_approved"
-	TaskStatusCompleted     = "completed"
-	TaskStatusCancelled     = "cancelled"
-	TaskStatusBlocked       = "blocked"
+	TaskStatusPending      = "pending"
+	TaskStatusClaimed      = "claimed"
+	TaskStatusPlanApproved = "plan_approved"
+	TaskStatusCompleted    = "completed"
+	TaskStatusCancelled    = "cancelled"
+	TaskStatusBlocked      = "blocked"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -2,6 +2,7 @@ package hierarchical_tools
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
@@ -596,7 +597,23 @@ func TestHierarchicalToolsTeam_Send_运行时未启动(t *testing.T) {
 
 // TestHierarchicalToolsTeam_Publish_运行时未启动 验证 Publish 在运行时未启动时报错。
 func TestHierarchicalToolsTeam_Publish_运行时未启动(t *testing.T) {
-	team := newTestTeam("team_1", "")
+	teamCard := maschema.NewTeamCard(
+		maschema.WithTeamCardID("team_1"),
+	)
+	rootCard := agentschema.NewAgentCard(
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
+	// 创建自定义 runtime，注入 Start 失败的 mock bus，确保 ensureStarted 报错
+	rtCfg := team_runtime.NewRuntimeConfig(
+		team_runtime.WithRuntimeTeamID("team_1"),
+	)
+	rt := team_runtime.NewTeamRuntime(*rtCfg)
+	rt.SetMessageBus(&toolsStartFailBus{})
+	team := NewHierarchicalToolsTeam(teamCard, config, rt)
 
 	err := team.Publish(context.Background(), map[string]any{"msg": "hello"}, "topic_1", "sender")
 	if err == nil {
@@ -804,3 +821,25 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent_多个子Agent(t *testing.T) 
 		t.Fatalf("期望 2 个子 Agent, 实际 = %d", len(children))
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// toolsStartFailBus 测试用 mock 消息总线，Start 返回错误（模拟 ensureStarted 失败）
+type toolsStartFailBus struct{}
+
+func (m *toolsStartFailBus) Start(_ context.Context) error { return fmt.Errorf("模拟启动失败") }
+func (m *toolsStartFailBus) Stop(_ context.Context) error  { return nil }
+func (m *toolsStartFailBus) CleanupSession(_ context.Context, _ string) error {
+	return nil
+}
+func (m *toolsStartFailBus) Send(_ context.Context, _ any, _ string, _ string, _ string, _ float64) (any, error) {
+	return nil, nil
+}
+func (m *toolsStartFailBus) Publish(_ context.Context, _ any, _ string, _ string, _ string) error {
+	return nil
+}
+func (m *toolsStartFailBus) AddSubscription(_, _ string)     {}
+func (m *toolsStartFailBus) RemoveSubscription(_, _ string)  {}
+func (m *toolsStartFailBus) RemoveAllSubscriptions(_ string) {}
+func (m *toolsStartFailBus) ListSubscriptions(_ string) any  { return nil }
+func (m *toolsStartFailBus) GetSubscriptionCount() int       { return 0 }

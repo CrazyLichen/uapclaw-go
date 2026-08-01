@@ -42,7 +42,7 @@ type HostFacingExperienceResult struct {
 	// RequestID 请求标识
 	RequestID *string
 	// Effect 效果类型
- Effect string
+	Effect string
 	// ChangeType 变更类型
 	ChangeType string
 	// AppliedCount 已应用数量
@@ -128,12 +128,12 @@ func HostFacingExperienceResultRejected(
 	skillName string, requestID *string, changeType string, rejectedCount int,
 ) HostFacingExperienceResult {
 	return HostFacingExperienceResult{
-		SkillName:      skillName,
-		RequestID:      requestID,
-		Effect:         schema.StateEffect,
-		ChangeType:     changeType,
-		RejectedCount:  rejectedCount,
-		Status:         "rejected",
+		SkillName:     skillName,
+		RequestID:     requestID,
+		Effect:        schema.StateEffect,
+		ChangeType:    changeType,
+		RejectedCount: rejectedCount,
+		Status:        "rejected",
 	}
 }
 

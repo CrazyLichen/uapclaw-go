@@ -68,11 +68,11 @@ func TestGatewayChatHookContext_字段完整性(t *testing.T) {
 	sessionID := "sess-001"
 	reqMethod := "chat.send"
 	ctx := GatewayChatHookContext{
-		RequestID:  "req-001",
-		ChannelID:  "ch-001",
-		SessionID:  &sessionID,
-		ReqMethod:  &reqMethod,
-		Params:     map[string]any{"mode": "agent"},
+		RequestID: "req-001",
+		ChannelID: "ch-001",
+		SessionID: &sessionID,
+		ReqMethod: &reqMethod,
+		Params:    map[string]any{"mode": "agent"},
 	}
 	if ctx.RequestID != "req-001" {
 		t.Errorf("RequestID = %q, want %q", ctx.RequestID, "req-001")
@@ -103,11 +103,11 @@ func TestAgentServerChatHookContext_字段完整性(t *testing.T) {
 	sessionID := "sess-001"
 	reqMethod := "chat.send"
 	ctx := AgentServerChatHookContext{
-		RequestID:  "req-001",
-		ChannelID:  "ch-001",
-		SessionID:  &sessionID,
-		ReqMethod:  &reqMethod,
-		Params:     map[string]any{"mode": "agent"},
+		RequestID: "req-001",
+		ChannelID: "ch-001",
+		SessionID: &sessionID,
+		ReqMethod: &reqMethod,
+		Params:    map[string]any{"mode": "agent"},
 	}
 	if ctx.ChannelID != "ch-001" {
 		t.Errorf("ChannelID = %q, want %q", ctx.ChannelID, "ch-001")

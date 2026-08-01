@@ -3,8 +3,8 @@ package memory
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -38,6 +38,12 @@ type MemberMemoryToolkit struct {
 	// initialized 是否已初始化
 	initialized bool
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

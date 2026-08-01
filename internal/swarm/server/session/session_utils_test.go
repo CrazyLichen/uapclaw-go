@@ -103,7 +103,7 @@ func TestSerializeValue_普通值不变(t *testing.T) {
 
 func TestDeepCopyMap(t *testing.T) {
 	src := map[string]any{
-		"key":  "value",
+		"key": "value",
 		"nested": map[string]any{
 			"inner": "data",
 		},

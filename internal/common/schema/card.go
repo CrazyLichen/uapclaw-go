@@ -49,10 +49,10 @@ type WorkflowCard struct {
 	InputParams map[string]any `json:"input_params,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // CardOption BaseCard 构造选项函数。
 type CardOption func(*BaseCard)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // AbilityKind 能力类型枚举。
 type AbilityKind int

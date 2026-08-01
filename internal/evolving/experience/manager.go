@@ -122,7 +122,17 @@ var defaultRebuildIntents = map[string]map[string]string{
 	},
 }
 
+// applyUpdatesFn 包级注入函数，由 orchestrator 设置以桥接 evolving.ExecuteUpdates
+var applyUpdatesFn func(map[string]operator.Operator, map[schema.UpdateKey]any) []schema.ApplyResult
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetApplyUpdatesFn 设置包级注入函数。
+// 由 orchestrator 调用，桥接 evolving 包的 ExecuteUpdates，
+// 避免 experience ↔ evolving 循环依赖。
+func SetApplyUpdatesFn(fn func(map[string]operator.Operator, map[schema.UpdateKey]any) []schema.ApplyResult) {
+	applyUpdatesFn = fn
+}
 
 // NewExperienceManager 创建 ExperienceManager 实例。
 //
@@ -208,13 +218,13 @@ func (m *ExperienceManager) StageRecords(
 	isSharedRecords bool,
 ) ExperienceApprovalRequest {
 	proposal := ExperienceProposal{
-		SkillName:       skillName,
-		Records:         records,
+		SkillName:        skillName,
+		Records:          records,
 		RequiresApproval: requiresApproval,
-		Source:          source,
-		UserQuery:       userQuery,
-		SignalType:      signalType,
-		SignalSource:    signalSource,
+		Source:           source,
+		UserQuery:        userQuery,
+		SignalType:       signalType,
+		SignalSource:     signalSource,
 	}
 	return m.stageRecordsInternal(
 		ctx,
@@ -246,13 +256,13 @@ func (m *ExperienceManager) StageApplyResults(
 	preview := BuildLocalApplyPreview(skillName, applyResults)
 
 	proposal := ExperienceProposal{
-		SkillName:       skillName,
-		Records:         preview.Records,
+		SkillName:        skillName,
+		Records:          preview.Records,
 		RequiresApproval: requiresApproval,
-		Source:          source,
-		UserQuery:       userQuery,
-		SignalType:      signalType,
-		SignalSource:    signalSource,
+		Source:           source,
+		UserQuery:        userQuery,
+		SignalType:       signalType,
+		SignalSource:     signalSource,
 	}
 	return m.stagePendingRequest(
 		proposal,
@@ -479,10 +489,10 @@ func BuildLocalApplyPreview(
 	}
 
 	return LocalApplyPreview{
-		SkillName:     skillName,
-		Records:       records,
-		ApplyResults:  applyResults,
-		ChangeType:    changeType,
+		SkillName:    skillName,
+		Records:      records,
+		ApplyResults: applyResults,
+		ChangeType:   changeType,
 	}
 }
 
@@ -532,6 +542,16 @@ func FormatEvolutionRecords(records []checkpointing.EvolutionRecord, language st
 		result += line
 	}
 	return result
+}
+
+// ApplyUpdatesFromManager 兼容钩子，执行在线预览更新。
+//
+// 对应 Python: ExperienceManager.apply_updates() (staticmethod)
+func ApplyUpdatesFromManager(
+	operators map[string]operator.Operator,
+	updates map[schema.UpdateKey]any,
+) []schema.ApplyResult {
+	return evolvingExecuteUpdates(operators, updates)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -684,16 +704,6 @@ func (m *ExperienceManager) previewApplyResults(
 	)
 }
 
-// ApplyUpdatesFromManager 兼容钩子，执行在线预览更新。
-//
-// 对应 Python: ExperienceManager.apply_updates() (staticmethod)
-func ApplyUpdatesFromManager(
-	operators map[string]operator.Operator,
-	updates map[schema.UpdateKey]any,
-) []schema.ApplyResult {
-	return evolvingExecuteUpdates(operators, updates)
-}
-
 // evolvingExecuteUpdates 引用 evolving 包的 ExecuteUpdates。
 // 由于 experience 包是 evolving 包的子包，不能直接导入 evolving 包（循环依赖），
 // 此函数将在 orchestrator.go 中通过包级变量注入实现。
@@ -800,9 +810,9 @@ func (m *ExperienceManager) getDefaultRebuildIntent() string {
 // 静态方法，对应 Python: ExperienceManager._to_apply_result()
 func toApplyResult(skillName string, result PendingCommitResult) ExperienceApplyResult {
 	return ExperienceApplyResult{
-		SkillName:     skillName,
-		AppliedCount:  result.AppliedCount,
-		PendingCount:  result.PendingCount,
+		SkillName:    skillName,
+		AppliedCount: result.AppliedCount,
+		PendingCount: result.PendingCount,
 	}
 }
 
@@ -863,14 +873,4 @@ func defaultExecuteUpdates(
 	}
 
 	return results
-}
-
-// applyUpdatesFn 包级注入函数，由 orchestrator 设置以桥接 evolving.ExecuteUpdates
-var applyUpdatesFn func(map[string]operator.Operator, map[schema.UpdateKey]any) []schema.ApplyResult
-
-// SetApplyUpdatesFn 设置包级注入函数。
-// 由 orchestrator 调用，桥接 evolving 包的 ExecuteUpdates，
-// 避免 experience ↔ evolving 循环依赖。
-func SetApplyUpdatesFn(fn func(map[string]operator.Operator, map[schema.UpdateKey]any) []schema.ApplyResult) {
-	applyUpdatesFn = fn
 }

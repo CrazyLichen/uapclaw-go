@@ -57,8 +57,10 @@ type AgentServer struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent 日志组件
-const logComponent = logger.ComponentAgentServer
+const (
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentServer
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

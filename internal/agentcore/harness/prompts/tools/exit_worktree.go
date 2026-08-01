@@ -95,15 +95,22 @@ func GetExitWorktreeMetadataProviderInputParams(language string) map[string]any 
 	}
 }
 
+// GetName 返回工具名称 "exit_worktree"。
 func (p *ExitWorktreeMetadataProvider) GetName() string { return "exit_worktree" }
+
+// GetDescription 返回 exit_worktree 工具的描述文本。
 func (p *ExitWorktreeMetadataProvider) GetDescription(language string) string {
 	if d, ok := exitWorktreeDescription[language]; ok {
 		return d
 	}
 	return exitWorktreeDescription["cn"]
 }
+
+// GetInputParams 返回 exit_worktree 工具的参数 Schema。
 func (p *ExitWorktreeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetExitWorktreeMetadataProviderInputParams(language)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() { RegisterToolProvider(&ExitWorktreeMetadataProvider{}) }

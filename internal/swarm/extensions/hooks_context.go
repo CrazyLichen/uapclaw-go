@@ -68,15 +68,15 @@ type SystemPromptHookContext struct {
 // ToMap 将 MemoryHookContext 转为字典，对齐 Python MemoryHookContext.to_dict()
 func (c *MemoryHookContext) ToMap() map[string]any {
 	result := map[string]any{
-		"session_id":         c.SessionID,
-		"request_id":         c.RequestID,
-		"channel_id":         c.ChannelID,
-		"agent_name":         c.AgentName,
-		"workspace_dir":      c.WorkspaceDir,
-		"assistant_message":  c.AssistantMessage,
-		"extra":              c.Extra,
-		"memory_blocks":      c.MemoryBlocks,
-		"metadata":           c.Metadata,
+		"session_id":        c.SessionID,
+		"request_id":        c.RequestID,
+		"channel_id":        c.ChannelID,
+		"agent_name":        c.AgentName,
+		"workspace_dir":     c.WorkspaceDir,
+		"assistant_message": c.AssistantMessage,
+		"extra":             c.Extra,
+		"memory_blocks":     c.MemoryBlocks,
+		"metadata":          c.Metadata,
 	}
 	return result
 }
@@ -84,11 +84,11 @@ func (c *MemoryHookContext) ToMap() map[string]any {
 // ToMap 将 GatewayChatHookContext 转为字典，对齐 Python GatewayChatHookContext.to_dict()
 func (c *GatewayChatHookContext) ToMap() map[string]any {
 	result := map[string]any{
-		"request_id":  c.RequestID,
-		"channel_id":  c.ChannelID,
-		"session_id":  c.SessionID,
-		"req_method":  c.ReqMethod,
-		"params":      c.Params,
+		"request_id": c.RequestID,
+		"channel_id": c.ChannelID,
+		"session_id": c.SessionID,
+		"req_method": c.ReqMethod,
+		"params":     c.Params,
 	}
 	return result
 }
@@ -96,11 +96,11 @@ func (c *GatewayChatHookContext) ToMap() map[string]any {
 // ToMap 将 AgentServerChatHookContext 转为字典，对齐 Python AgentServerChatHookContext.to_dict()
 func (c *AgentServerChatHookContext) ToMap() map[string]any {
 	result := map[string]any{
-		"request_id":  c.RequestID,
-		"channel_id":  c.ChannelID,
-		"session_id":  c.SessionID,
-		"req_method":  c.ReqMethod,
-		"params":      c.Params,
+		"request_id": c.RequestID,
+		"channel_id": c.ChannelID,
+		"session_id": c.SessionID,
+		"req_method": c.ReqMethod,
+		"params":     c.Params,
 	}
 	return result
 }

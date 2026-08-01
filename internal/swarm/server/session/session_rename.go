@@ -2,12 +2,18 @@ package session
 
 import "strings"
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// renameTitleMaxLen rename 允许的最大标题长度，对齐 Python _RENAME_TITLE_MAX_LEN
 	renameTitleMaxLen = 200
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -71,8 +77,8 @@ func ApplySessionRename(
 		})
 	} else {
 		UpdateSessionMetadata(SessionMetadataUpdate{
-			SessionID:   target,
-			ClearTitle:  true,
+			SessionID:  target,
+			ClearTitle: true,
 		})
 	}
 

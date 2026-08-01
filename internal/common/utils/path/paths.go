@@ -102,6 +102,11 @@ func SetUserHome(p string) {
 }
 
 // ResetCache 重置所有路径缓存（供测试使用）。
+//
+// 注意：此函数不是并发安全的。调用前必须确保没有后台 goroutine
+// 在并发读取 path 包的全局缓存变量（如 WorkspaceDir() 等）。
+// 在测试 cleanup 中，应先 FlushMetadataQueue/FlushHistoryQueue
+// 等待后台 goroutine 完成后再调用 ResetCache。
 func ResetCache() {
 	userHomeOnce = sync.Once{}
 	userHomeVal = ""

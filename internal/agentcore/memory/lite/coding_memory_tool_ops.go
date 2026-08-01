@@ -12,10 +12,16 @@ import (
 func ValidateCodingMemoryPath(path string, ws *workspace.Workspace) (bool, string) { return false, "" }
 
 // CodingMemoryReadWithContext 读取 coding_memory 文件。⤵️ 回填: 7.2
-func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) map[string]any { return nil }
+func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) map[string]any {
+	return nil
+}
 
 // CodingMemoryWriteWithContext 写入 coding_memory 文件。⤵️ 回填: 7.2
-func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) map[string]any { return nil }
+func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) map[string]any {
+	return nil
+}
 
 // CodingMemoryEditWithContext 编辑 coding_memory 文件。⤵️ 回填: 7.2
-func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) map[string]any { return nil }
+func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) map[string]any {
+	return nil
+}

@@ -111,15 +111,15 @@ func (m *DefaultCheckpointManager) BuildCheckpoint(
 	seed := progress.GetSeed()
 
 	return &EvolveCheckpoint{
-		Version:         m.ckptVersion,
-		RunID:           m.runID,
-		Step:            map[string]int{"epoch": epoch, "batch": batch},
-		Best:            map[string]any{"best_score": bestScore},
-		Seed:            seed,
-		OperatorsState:  operatorsState,
-		UpdaterState:    updaterState,
-		SearcherState:   map[string]any{},
-		LastMetrics:     map[string]any{"current_epoch_score": currentScore},
+		Version:        m.ckptVersion,
+		RunID:          m.runID,
+		Step:           map[string]int{"epoch": epoch, "batch": batch},
+		Best:           map[string]any{"best_score": bestScore},
+		Seed:           seed,
+		OperatorsState: operatorsState,
+		UpdaterState:   updaterState,
+		SearcherState:  map[string]any{},
+		LastMetrics:    map[string]any{"current_epoch_score": currentScore},
 	}
 }
 

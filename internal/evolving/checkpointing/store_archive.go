@@ -193,8 +193,6 @@ func (h *StoreArchiveHelper) ListArchives(ctx context.Context, name string) []st
 	return names
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ArchiveDir 创建/返回 archive 子目录。
 // 对应 Python: StoreArchiveHelper.archive_dir(skill_dir)
 func ArchiveDir(skillDir string) string {
@@ -202,6 +200,8 @@ func ArchiveDir(skillDir string) string {
 	os.MkdirAll(archive, 0755)
 	return archive
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // tsSuffix 生成 UTC 时间戳后缀。
 // 对应 Python: StoreArchiveHelper.ts_suffix() → "%Y%m%dT%H%M%S"

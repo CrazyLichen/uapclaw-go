@@ -10,17 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// teamMemoryFilename 团队记忆文件名
-	teamMemoryFilename = "TEAM_MEMORY.md"
-	// teamMemoryMaxReadLines 读取最大行数
-	teamMemoryMaxReadLines = 200
-)
-
-const sharedLogComponent = logger.ComponentCommon
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SharedMemoryManager 管理 {team_home}/team-memory/ 目录下的团队摘要文件。
@@ -34,6 +23,24 @@ type SharedMemoryManager struct {
 	// sysOperation 系统操作接口（可选，nil 时用本地文件系统）。⤴️ 9.64 具体类型回填
 	sysOperation sysop.SysOperation
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// teamMemoryFilename 团队记忆文件名
+	teamMemoryFilename = "TEAM_MEMORY.md"
+	// teamMemoryMaxReadLines 读取最大行数
+	teamMemoryMaxReadLines = 200
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// sharedLogComponent 日志组件
+	sharedLogComponent = logger.ComponentCommon
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

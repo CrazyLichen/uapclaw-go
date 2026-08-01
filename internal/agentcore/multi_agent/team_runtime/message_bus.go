@@ -81,12 +81,13 @@ type MessageBus struct {
 	running atomic.Bool
 }
 
-// MessageBusConfigOption 消息总线配置选项函数类型
+// MessageBusConfigOption 消息总线配置选项函数类型。
 type MessageBusConfigOption func(*MessageBusConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// p2pTopicSuffix P2P topic 后缀
 	p2pTopicSuffix = "__p2p__"

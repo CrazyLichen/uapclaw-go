@@ -20,6 +20,8 @@ type historyWriteItem struct {
 	sessionID string
 	// record 待写入记录
 	record map[string]any
+	// flushDone 哨兵项专用：FlushHistoryQueue 发送后 worker 确认的通道
+	flushDone chan struct{}
 }
 
 // TruncateResult 截断结果，对齐 Python truncate_history_records 返回 dict
@@ -61,6 +63,39 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// FlushHistoryQueue 等待 history 异步写入队列刷盘（供测试使用）。
+//
+// 发送哨兵项到队列，等待 worker 确认所有之前的写入已完成。
+func FlushHistoryQueue() {
+	// 如果 worker 还没启动，无需等待
+	if historyWriteQueue == nil {
+		return
+	}
+	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
+	flushDone := make(chan struct{})
+	historyWriteQueue <- historyWriteItem{sessionID: "", record: nil, flushDone: flushDone}
+	// 等待 worker 确认，确保所有之前的写入已完成
+	select {
+	case <-flushDone:
+	case <-time.After(5 * time.Second):
+		logger.Warn(logComponent).Msg("FlushHistoryQueue 超时")
+	}
+}
+
+// ResetHistoryWorker 关闭并重置 history worker（供测试使用）。
+//
+// 调用前应先调用 FlushHistoryQueue 确保所有写入已完成。
+// 重置后下一个 AppendHistoryRecord 调用会重新启动 worker。
+func ResetHistoryWorker() {
+	// 关闭队列，worker goroutine 会退出 range 循环
+	if historyWriteQueue != nil {
+		close(historyWriteQueue)
+	}
+	// 重置 Once，使下次 ensureHistoryWorker 重新创建队列和 worker
+	historyWorkerOnce = sync.Once{}
+	historyWriteQueue = nil
+}
 
 // AppendHistoryRecord 向指定 session 的 history.json 异步追加一条记录。
 //
@@ -327,6 +362,13 @@ func ensureHistoryWorker() {
 // historyWorker 写入队列消费者。
 func historyWorker() {
 	for item := range historyWriteQueue {
+		// 嗨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
+		if item.sessionID == "" && item.record == nil {
+			if item.flushDone != nil {
+				item.flushDone <- struct{}{}
+			}
+			continue
+		}
 		writeHistoryItem(item.sessionID, item.record)
 	}
 }

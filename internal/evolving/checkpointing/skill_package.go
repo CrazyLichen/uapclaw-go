@@ -25,10 +25,10 @@ import (
 // 打包技能是为了"分享"，分享时只携带技能本身，
 // 不携带演进历史和本地治理数据。
 var excludeDirNames = map[string]bool{
-	"evolution":    true,
-	"archive":      true,
-	"__pycache__":  true,
-	".git":         true,
+	"evolution":   true,
+	"archive":     true,
+	"__pycache__": true,
+	".git":        true,
 }
 
 var excludeFileNames = map[string]bool{
@@ -322,7 +322,7 @@ func parseTopLevelFrontmatter(content string) map[string]string {
 	if end == -1 {
 		return map[string]string{}
 	}
-	fmText := strings.TrimSpace(text[3:3+end])
+	fmText := strings.TrimSpace(text[3 : 3+end])
 	result := map[string]string{}
 	keyRe := regexp.MustCompile(`^([a-zA-Z_-]+):\s*(.*)`)
 	for _, line := range strings.Split(fmText, "\n") {

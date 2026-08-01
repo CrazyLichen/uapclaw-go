@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -43,8 +44,12 @@ type SessionMetadataUpdate struct {
 
 // metadataWriteItem 异步写入队列条目
 type metadataWriteItem struct {
+	// sessionID 会话标识
 	sessionID string
-	metadata  map[string]any
+	// metadata 元数据映射
+	metadata map[string]any
+	// flushDone 刷盘确认通道（非 nil 时，worker 处理完此条目后发送信号）
+	flushDone chan struct{}
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -389,11 +394,18 @@ func ClearAllSessionMetadataCache() {
 
 // FlushMetadataQueue 等待 metadata 异步写入队列刷盘（供测试使用）。
 //
-// 向队列发送一个空哨兵项，等待它被消费即代表之前所有写入已完成。
+// 发送一个哨兵项并等待其被消费，确保之前所有写入已完成且 worker 不再活跃。
 func FlushMetadataQueue() {
 	ensureMetadataWorker()
-	// 发送一个 nil 哨兵项，worker 检测到后跳过写入但仍然消费了队列
-	metadataQueue <- metadataWriteItem{sessionID: "", metadata: nil}
+	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
+	flushDone := make(chan struct{})
+	metadataQueue <- metadataWriteItem{sessionID: "", metadata: nil, flushDone: flushDone}
+	// 等待 worker 确认，确保所有之前的写入已完成
+	select {
+	case <-flushDone:
+	case <-time.After(5 * time.Second):
+		logger.Warn(logComponent).Msg("FlushMetadataQueue 超时")
+	}
 }
 
 // ReadSessionMetadata 读取会话元数据文件。
@@ -444,8 +456,6 @@ func ReadSessionMetadataWithCache(sessionID string) map[string]any {
 	return ReadSessionMetadata(GetSessionsDir(), sessionID)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // IncrementSessionRoundCountWithDir 递增并持久化 session 的 round_id，返回递增后的值（指定 sessionsDir）。
 func IncrementSessionRoundCountWithDir(sessionsDir, sessionID string) (int, error) {
 	meta := ReadSessionMetadataWithCache(sessionID)
@@ -480,32 +490,6 @@ func IncrementSessionRoundCountWithDir(sessionsDir, sessionID string) (int, erro
 	return newRound, nil
 }
 
-// ensureMetadataWorker 确保 metadata 异步写入 worker 已启动。
-// 对齐 Python: _ensure_worker_started()，懒启动后台 goroutine
-func ensureMetadataWorker() {
-	metadataQueueOnce.Do(func() {
-		metadataQueue = make(chan metadataWriteItem, metadataQueueSize)
-		go metadataWriteWorker()
-	})
-}
-
-// metadataWriteWorker 异步写入 worker，消费队列并写入磁盘。
-// 对齐 Python: _worker() 后台线程
-func metadataWriteWorker() {
-	for item := range metadataQueue {
-		// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置
-		if item.sessionID == "" || item.metadata == nil {
-			continue
-		}
-		if err := WriteSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
-			logger.Warn(logComponent).
-				Str("session_id", item.sessionID).
-				Err(err).
-				Msg("metadata 异步写入失败")
-		}
-	}
-}
-
 // EnqueueMetadataWrite 将写入操作放入异步队列，队列满时退化为同步写。
 // 对齐 Python: _enqueue_write()
 func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
@@ -523,5 +507,36 @@ func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 			Str("session_id", sessionID).
 			Msg("metadata 写入队列已满，退化为同步写入")
 		_ = WriteSessionMetadata(GetSessionsDir(), sessionID, metadata)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ensureMetadataWorker 确保 metadata 异步写入 worker 已启动。
+// 对齐 Python: _ensure_worker_started()，懒启动后台 goroutine
+func ensureMetadataWorker() {
+	metadataQueueOnce.Do(func() {
+		metadataQueue = make(chan metadataWriteItem, metadataQueueSize)
+		go metadataWriteWorker()
+	})
+}
+
+// metadataWriteWorker 异步写入 worker，消费队列并写入磁盘。
+// 对齐 Python: _worker() 后台线程
+func metadataWriteWorker() {
+	for item := range metadataQueue {
+		// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置
+		if item.sessionID == "" || item.metadata == nil {
+			if item.flushDone != nil {
+				item.flushDone <- struct{}{}
+			}
+			continue
+		}
+		if err := WriteSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
+			logger.Warn(logComponent).
+				Str("session_id", item.sessionID).
+				Err(err).
+				Msg("metadata 异步写入失败")
+		}
 	}
 }

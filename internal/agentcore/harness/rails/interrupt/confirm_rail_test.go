@@ -122,8 +122,8 @@ func TestIsAutoConfirmed(t *testing.T) {
 	// key 不存在
 	assert.False(t, isAutoConfirmed(map[string]any{}, "write_file"))
 
-	// key 存在但值非 bool
-	assert.False(t, isAutoConfirmed(map[string]any{"write_file": "yes"}, "write_file"))
+	// key 存在且值为 falsy 字符串 "no"（对齐 Python truthy/falsy 语义："no"/"false"/"0"/"" 为 falsy）
+	assert.False(t, isAutoConfirmed(map[string]any{"write_file": "no"}, "write_file"))
 
 	// key 存在且为 true
 	assert.True(t, isAutoConfirmed(map[string]any{"write_file": true}, "write_file"))

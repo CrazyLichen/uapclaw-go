@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )

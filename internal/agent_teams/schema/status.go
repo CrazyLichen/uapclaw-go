@@ -23,6 +23,8 @@ type MemberMode string
 // 对齐 Python: TaskStatus
 type TaskStatus string
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// MemberStatusUnstarted 成员已创建但尚未启动
 	MemberStatusUnstarted MemberStatus = fsm.MemberStatusUnstarted

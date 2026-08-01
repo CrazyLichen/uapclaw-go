@@ -66,7 +66,9 @@ type agentConfigListerBridge struct {
 var (
 	// logComponent 日志组件，对齐项目规范 runtime 层使用 ComponentAgentServer
 	logComponent = logger.ComponentAgentServer
-)// ──────────────────────────── 导出函数 ────────────────────────────
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewUapClaw 创建 UapClaw 实例。
 //
@@ -131,7 +133,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	}
 
 	// 8. 常规对话
-	sessionID := 	session.NormalizeSessionID(uc.extractSessionID(request))
+	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
 	// 记录 user 历史，对齐 Python：补传 mode 和 channel_metadata
 	userMode := ""
@@ -143,7 +145,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	if userMode == "" {
 		userMode = "unknown"
 	}
-		session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+	session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
 		"", nil, request.Metadata, userMode)
 
@@ -198,7 +200,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 		if assistantMode == "" {
 			assistantMode = "unknown"
 		}
-			session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+		session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 			"assistant", content, float64(time.Now().UnixMilli())/1000,
 			"chat.final", nil, nil, assistantMode)
 	}
@@ -237,7 +239,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	}
 
 	// 3. 提取 sessionID
-	sessionID := 	session.NormalizeSessionID(uc.extractSessionID(request))
+	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
 	// ⤵️ 10.3.2: Team 模式判断（isTeamMode / isAutoHarnessResume）
 	// ⤵️ 10.3.2: Team 模式使用原始 query（不经过 BuildUserPrompt 包装）
@@ -252,7 +254,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	if userMode == "" {
 		userMode = "unknown"
 	}
-		session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+	session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
 		"", nil, nil, userMode)
 
@@ -284,7 +286,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 			if errMode == "" {
 				errMode = "unknown"
 			}
-				session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+			session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 				"assistant", streamErr.Error(), float64(time.Now().UnixMilli())/1000,
 				"chat.error", nil, nil, errMode)
 			outCh <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
@@ -337,7 +339,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 									}
 								}
 							}
-								session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+							session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
 								eventType, extraFields, nil, streamMode)
 						}
@@ -352,7 +354,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 							if compMode == "" {
 								compMode = "unknown"
 							}
-								session.AppendCompactHistoryFromPayload(payload, sessionID, request.RequestID, request.ChannelID, compMode)
+							session.AppendCompactHistoryFromPayload(payload, sessionID, request.RequestID, request.ChannelID, compMode)
 						}
 						switch eventType {
 						case "chat.final":
@@ -394,7 +396,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 // 对齐 Python: JiuWenClaw._process_interrupt(request)
 func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	intent := uc.extractIntent(request)
-	sessionID := 	session.NormalizeSessionID(uc.extractSessionID(request))
+	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
 	// ⤵️ 10.3.2: Team 模式分流（_processTeamInterrupt）
 
@@ -530,7 +532,9 @@ func (uc *UapClaw) CancelInflightWork() error {
 		return nil
 	}
 	// 对齐 Python: abort_fn = getattr(adapter, "abort_on_gateway_disconnect", None)
-	if aborter, ok := a.(interface{ AbortOnGatewayDisconnect(ctx context.Context) error }); ok {
+	if aborter, ok := a.(interface {
+		AbortOnGatewayDisconnect(ctx context.Context) error
+	}); ok {
 		if err := aborter.AbortOnGatewayDisconnect(context.Background()); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "GATEWAY_DISCONNECT_ABORT_FAILED").

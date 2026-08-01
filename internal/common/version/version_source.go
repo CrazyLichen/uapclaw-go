@@ -38,6 +38,8 @@ type GitHubReleasesSource struct {
 	client *http.Client
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // GitHubSourceOption GitHub 版本源的可选配置
 type GitHubSourceOption func(*GitHubReleasesSource)
 

@@ -1,53 +1,11 @@
 package memory
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-)
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// TeamRole 团队角色类型别名
-type TeamRole string
-
-// TeamLifecycle 团队生命周期类型别名
-type TeamLifecycle string
-
-// TeamScenario 团队场景类型别名
-type TeamScenario string
-
-// TeamLanguage 团队语言类型别名
-type TeamLanguage string
-
-// PromptMode 提示模式类型别名
-type PromptMode string
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// TeamRoleLeader Leader 角色
-	TeamRoleLeader TeamRole = "leader"
-	// TeamRoleTeammate Teammate 角色
-	TeamRoleTeammate TeamRole = "teammate"
-	// TeamLifecycleTemporary 临时生命周期
-	TeamLifecycleTemporary TeamLifecycle = "temporary"
-	// TeamLifecyclePersistent 持久生命周期
-	TeamLifecyclePersistent TeamLifecycle = "persistent"
-	// TeamScenarioGeneral 通用场景
-	TeamScenarioGeneral TeamScenario = "general"
-	// TeamScenarioCoding 编程场景
-	TeamScenarioCoding TeamScenario = "coding"
-	// TeamLanguageCN 中文
-	TeamLanguageCN TeamLanguage = "cn"
-	// TeamLanguageEN 英文
-	TeamLanguageEN TeamLanguage = "en"
-	// PromptModeProactive 主动模式
-	PromptModeProactive PromptMode = "proactive"
-	// PromptModePassive 被动模式
-	PromptModePassive PromptMode = "passive"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -92,3 +50,45 @@ type TeamMemoryManagerParams struct {
 	// TimezoneOffsetHours 时区偏移小时数
 	TimezoneOffsetHours float64
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TeamRole 团队角色类型别名
+type TeamRole string
+
+// TeamLifecycle 团队生命周期类型别名
+type TeamLifecycle string
+
+// TeamScenario 团队场景类型别名
+type TeamScenario string
+
+// TeamLanguage 团队语言类型别名
+type TeamLanguage string
+
+// PromptMode 提示模式类型别名
+type PromptMode string
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// TeamRoleLeader Leader 角色
+	TeamRoleLeader TeamRole = "leader"
+	// TeamRoleTeammate Teammate 角色
+	TeamRoleTeammate TeamRole = "teammate"
+	// TeamLifecycleTemporary 临时生命周期
+	TeamLifecycleTemporary TeamLifecycle = "temporary"
+	// TeamLifecyclePersistent 持久生命周期
+	TeamLifecyclePersistent TeamLifecycle = "persistent"
+	// TeamScenarioGeneral 通用场景
+	TeamScenarioGeneral TeamScenario = "general"
+	// TeamScenarioCoding 编程场景
+	TeamScenarioCoding TeamScenario = "coding"
+	// TeamLanguageCN 中文
+	TeamLanguageCN TeamLanguage = "cn"
+	// TeamLanguageEN 英文
+	TeamLanguageEN TeamLanguage = "en"
+	// PromptModeProactive 主动模式
+	PromptModeProactive PromptMode = "proactive"
+	// PromptModePassive 被动模式
+	PromptModePassive PromptMode = "passive"
+)

@@ -123,10 +123,10 @@ type taskConfig struct {
 	parentID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // TaskOption 任务选项函数类型。
 type TaskOption func(*taskConfig)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskStatus 任务状态枚举。
 type TaskStatus int
@@ -146,11 +146,10 @@ const (
 	TaskCancelled
 	// TaskTimeout 超时。
 	TaskTimeout
+	// defaultCancelWaitTimeout 取消任务后等待函数完成的默认超时时间。
+	// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
+	defaultCancelWaitTimeout = 1 * time.Second
 )
-
-// defaultCancelWaitTimeout 取消任务后等待函数完成的默认超时时间。
-// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
-const defaultCancelWaitTimeout = 1 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

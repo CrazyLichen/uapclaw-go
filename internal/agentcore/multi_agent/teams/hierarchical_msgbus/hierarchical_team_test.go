@@ -2,6 +2,7 @@ package hierarchical_msgbus
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
@@ -269,9 +270,15 @@ func TestHierarchicalTeam_Publish(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalTeam(teamCard, nil, nil)
+	// 创建自定义 runtime，注入 Start 失败的 mock bus，确保 ensureStarted 报错
+	rtCfg := team_runtime.NewRuntimeConfig(
+		team_runtime.WithRuntimeTeamID("team_1"),
+	)
+	rt := team_runtime.NewTeamRuntime(*rtCfg)
+	rt.SetMessageBus(&startFailBus{})
+	team := NewHierarchicalTeam(teamCard, nil, rt)
 
-	// 运行时未启动，Publish 应返回错误
+	// 运行时未启动（ensureStarted → Start 失败），Publish 应返回错误
 	err := team.Publish(context.Background(), map[string]any{"query": "hello"}, "topic_1", "sender")
 	if err == nil {
 		t.Error("期望错误（运行时未启动），实际为 nil")
@@ -489,3 +496,25 @@ func TestHierarchicalTeam_assertReady_Supervisor未注册(t *testing.T) {
 		t.Errorf("期望状态码 = %v, 实际 = %v", exception.StatusAgentTeamExecutionError, baseErr.Status())
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// startFailBus 测试用 mock 消息总线，Start 返回错误（模拟 ensureStarted 失败）
+type startFailBus struct{}
+
+func (m *startFailBus) Start(_ context.Context) error { return fmt.Errorf("模拟启动失败") }
+func (m *startFailBus) Stop(_ context.Context) error  { return nil }
+func (m *startFailBus) CleanupSession(_ context.Context, _ string) error {
+	return nil
+}
+func (m *startFailBus) Send(_ context.Context, _ any, _ string, _ string, _ string, _ float64) (any, error) {
+	return nil, nil
+}
+func (m *startFailBus) Publish(_ context.Context, _ any, _ string, _ string, _ string) error {
+	return nil
+}
+func (m *startFailBus) AddSubscription(_, _ string)     {}
+func (m *startFailBus) RemoveSubscription(_, _ string)  {}
+func (m *startFailBus) RemoveAllSubscriptions(_ string) {}
+func (m *startFailBus) ListSubscriptions(_ string) any  { return nil }
+func (m *startFailBus) GetSubscriptionCount() int       { return 0 }

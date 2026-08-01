@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 )
 
 // TestNewUserHookRail 测试构造

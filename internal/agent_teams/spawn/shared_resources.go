@@ -83,3 +83,5 @@ func CleanupSharedResources() {
 
 	logger.Debug(sharedLogComponent).Msg("已清理共享资源")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

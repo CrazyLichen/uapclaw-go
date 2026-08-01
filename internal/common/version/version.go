@@ -36,15 +36,15 @@ var (
 	ProjectName = "uapclaw"
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // BuildInfo 返回完整构建信息字符串。
 //
 // 格式示例：
 //
-//	uapclaw 0.1.0-dev (commit: abc1234, built: 2025-07-12, go1.23, linux/amd64) 版本输出示例
+//	uapclaw 0.1.0-dev (commit: abc1234, built: 2025-07-12, go1.23, linux/amd64)
 //
 // 如果 GitCommit 或 BuildDate 未通过 ldflags 注入，则显示 "unknown"。
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 func BuildInfo() string {
 	commit := GitCommit
 	if commit == "" {

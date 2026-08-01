@@ -82,14 +82,14 @@ func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, er
 	}
 
 	ckpt := &EvolveCheckpoint{
-		Version:         getStrFromAny(raw["version"], "v1"),
-		RunID:           getStrFromAny(raw["run_id"], ""),
-		Step:            getIntMapFromAny(raw["step"]),
-		Best:            getAnyMapFromAny(raw["best"]),
-		OperatorsState:  getNestedMapFromAny(raw["operators_state"]),
-		UpdaterState:    getAnyMapFromAny(raw["updater_state"]),
-		SearcherState:   getAnyMapFromAny(raw["searcher_state"]),
-		LastMetrics:     getAnyMapFromAny(raw["last_metrics"]),
+		Version:        getStrFromAny(raw["version"], "v1"),
+		RunID:          getStrFromAny(raw["run_id"], ""),
+		Step:           getIntMapFromAny(raw["step"]),
+		Best:           getAnyMapFromAny(raw["best"]),
+		OperatorsState: getNestedMapFromAny(raw["operators_state"]),
+		UpdaterState:   getAnyMapFromAny(raw["updater_state"]),
+		SearcherState:  getAnyMapFromAny(raw["searcher_state"]),
+		LastMetrics:    getAnyMapFromAny(raw["last_metrics"]),
 	}
 	if raw["seed"] != nil {
 		seed := getIntFromAny(raw["seed"], 0)

@@ -31,6 +31,8 @@ type Config struct {
 	mu        sync.RWMutex   // 读写锁
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // NormalizeFunc 配置后处理函数签名，用于 custom_headers 等字段的结构化。
 type NormalizeFunc func(map[string]any)
 

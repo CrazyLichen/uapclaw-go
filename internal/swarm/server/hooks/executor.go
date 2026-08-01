@@ -11,27 +11,12 @@ import (
 	"sync"
 	"time"
 
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// HookOutcome hook 执行结果类型，对齐 Python HookOutcome
-const (
-	// HookOutcomeSuccess 执行成功，对齐 Python HookOutcome.SUCCESS
-	HookOutcomeSuccess = "success"
-	// HookOutcomeBlocking 阻塞执行，对齐 Python HookOutcome.BLOCKING
-	HookOutcomeBlocking = "blocking"
-	// HookOutcomeNonBlockingError 非阻塞错误，对齐 Python HookOutcome.NON_BLOCKING_ERROR
-	HookOutcomeNonBlockingError = "non_blocking_error"
-)
-
-// logComponent 日志组件标识
-const logComponent = logger.ComponentCommon
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -68,6 +53,21 @@ type HookExecutor struct {
 	// llmConfig prompt hook 使用的 LLM 配置，内部创建 ModelClient，对齐 Python _query_llm
 	llmConfig LLMConfig
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// HookOutcome hook 执行结果类型，对齐 Python HookOutcome
+const (
+	// HookOutcomeSuccess 执行成功，对齐 Python HookOutcome.SUCCESS
+	HookOutcomeSuccess = "success"
+	// HookOutcomeBlocking 阻塞执行，对齐 Python HookOutcome.BLOCKING
+	HookOutcomeBlocking = "blocking"
+	// HookOutcomeNonBlockingError 非阻塞错误，对齐 Python HookOutcome.NON_BLOCKING_ERROR
+	HookOutcomeNonBlockingError = "non_blocking_error"
+)
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentCommon
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -240,8 +240,13 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	env = append(env, fmt.Sprintf("ARGUMENTS=%s", string(hookInputJSON)))
 	env = append(env, fmt.Sprintf("TOOL_NAME=%s", toolName))
 
+	// 使用带超时的 context 控制子进程生命周期，避免手动 goroutine + select 的竞态
+	// 对齐 Python: asyncio.wait_for(proc.communicate(...), timeout=timeout)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer timeoutCancel()
+
 	// 对齐 Python: proc = await asyncio.create_subprocess_exec(shell, "-c", command, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
-	cmd := exec.Command(shell, "-c", command)
+	cmd := exec.CommandContext(timeoutCtx, shell, "-c", command)
 	cmd.Env = env
 	// 对齐 Python: proc.communicate(input=hook_input_json.encode()) — stdin 传入 JSON
 	cmd.Stdin = strings.NewReader(string(hookInputJSON))
@@ -250,32 +255,25 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
-	// 带超时执行，对齐 Python: asyncio.wait_for(proc.communicate(...), timeout=timeout)
-	doneCh := make(chan error, 1)
-	go func() { doneCh <- cmd.Run() }()
-
-	select {
-	case <-time.After(time.Duration(timeout) * time.Second):
-		// 超时 → kill 进程，对齐 Python: proc.kill(); await proc.wait()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-		}
-		logger.Debug(logComponent).Int("timeout", timeout).Str("command", command).Msg("hook 子进程超时，已 kill")
-		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("hook timeout after %ds", timeout)}
-	case runErr := <-doneCh:
-		if runErr != nil {
-			// 对齐 Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
-			if cmd.ProcessState == nil {
-				return HookResult{Outcome: HookOutcomeNonBlockingError, Error: runErr.Error()}
-			}
-		}
-	}
+	runErr := cmd.Run()
 
 	// 获取退出码，对齐 Python: returncode = proc.returncode
 	returnCode := -1
 	if cmd.ProcessState != nil {
 		returnCode = cmd.ProcessState.ExitCode()
+	}
+
+	// 判断是否超时：context 超时且进程被 kill
+	if timeoutCtx.Err() == context.DeadlineExceeded {
+		logger.Debug(logComponent).Int("timeout", timeout).Str("command", command).Msg("hook 子进程超时，已 kill")
+		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("hook timeout after %ds", timeout)}
+	}
+
+	if runErr != nil {
+		// 对齐 Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
+		if cmd.ProcessState == nil {
+			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: runErr.Error()}
+		}
 	}
 
 	stdout := stdoutBuf.String()

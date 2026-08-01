@@ -263,12 +263,12 @@ func RequestRebuildContext(
 	}
 
 	return map[string]any{
-		"skill_name":        request.SkillName,
-		"records_log":       recordsLog,
-		"filtered_records":  filteredRecords,
-		"prompt":            prompt,
-		"archive_path":      evoArchive,
-		"archive_error":     archiveError,
+		"skill_name":       request.SkillName,
+		"records_log":      recordsLog,
+		"filtered_records": filteredRecords,
+		"prompt":           prompt,
+		"archive_path":     evoArchive,
+		"archive_error":    archiveError,
 	}, nil
 }
 

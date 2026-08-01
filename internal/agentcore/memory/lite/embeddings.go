@@ -6,7 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // EmbeddingProvider 嵌入向量提供者接口。⤵️ 回填: 7.4
 type EmbeddingProvider interface {
@@ -16,16 +16,30 @@ type EmbeddingProvider interface {
 	EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // MockEmbeddingProvider 模拟嵌入提供者。真实实现，返回零向量
 type MockEmbeddingProvider struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMockEmbeddingProvider 创建模拟嵌入提供者
 func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 	return &MockEmbeddingProvider{}
+}
+
+// EmbedQuery 真实实现，返回空向量
+func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, _ string) ([]float64, error) {
+	return make([]float64, 0), nil
+}
+
+// EmbedDocuments 真实实现，返回空切片
+func (m *MockEmbeddingProvider) EmbedDocuments(_ context.Context, _ []string) ([][]float64, error) {
+	return nil, nil
 }
 
 // ResolveEmbeddingConfigFromEnv 从环境变量构建 EmbeddingConfig。
@@ -41,13 +55,3 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// EmbedQuery 真实实现，返回空向量
-func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, _ string) ([]float64, error) {
-	return make([]float64, 0), nil
-}
-
-// EmbedDocuments 真实实现，返回空切片
-func (m *MockEmbeddingProvider) EmbedDocuments(_ context.Context, _ []string) ([][]float64, error) {
-	return nil, nil
-}

@@ -2,9 +2,9 @@ package agent
 
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -443,10 +443,14 @@ func (c *AgentConfigurator) SetWorktreeManager(v any) { c.resources.WorktreeMana
 
 // MemoryManager 返回团队记忆管理器。⤴️ 9.64 回填完成
 // 对齐 Python: AgentConfigurator.memory_manager property
-func (c *AgentConfigurator) MemoryManager() *memory.TeamMemoryManager { return c.resources.MemoryManager }
+func (c *AgentConfigurator) MemoryManager() *memory.TeamMemoryManager {
+	return c.resources.MemoryManager
+}
 
 // SetMemoryManager 设置团队记忆管理器。
-func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) { c.resources.MemoryManager = v }
+func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
+	c.resources.MemoryManager = v
+}
 
 // FirstIterGate 返回首轮迭代门控。
 // 对齐 Python: AgentConfigurator.first_iter_gate property
@@ -460,7 +464,9 @@ func (c *AgentConfigurator) SetFirstIterGate(v any) { c.resources.FirstIterGate 
 func (c *AgentConfigurator) ModelAllocator() models.ModelAllocator { return c.resources.ModelAllocator }
 
 // SetModelAllocator 设置模型分配器。
-func (c *AgentConfigurator) SetModelAllocator(v models.ModelAllocator) { c.resources.ModelAllocator = v }
+func (c *AgentConfigurator) SetModelAllocator(v models.ModelAllocator) {
+	c.resources.ModelAllocator = v
+}
 
 // Spec 返回 TeamAgentSpec。
 // 对齐 Python: AgentConfigurator.spec property

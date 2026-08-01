@@ -43,6 +43,8 @@ func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cle
 	server, _ := newTestServer()
 	cleanup = func() {
 		session.FlushMetadataQueue()
+		session.FlushHistoryQueue()
+		session.ResetHistoryWorker()
 		session.ClearAllSessionMetadataCache()
 		path.ResetCache()
 	}

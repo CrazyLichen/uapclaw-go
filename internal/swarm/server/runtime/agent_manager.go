@@ -15,10 +15,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClaw, error)。
-// 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
-type AgentFactory func(config map[string]any, mode, subMode string) (*UapClaw, error)
-
 // AgentManager Agent 实例管理器（10.3.12）。
 //
 // 管理 UapClaw 实例的创建、获取和配置重载。
@@ -79,6 +75,10 @@ type agentCreateParamsEntry struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClaw, error)。
+// 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
+type AgentFactory func(config map[string]any, mode, subMode string) (*UapClaw, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

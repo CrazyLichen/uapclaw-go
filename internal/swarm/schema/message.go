@@ -11,6 +11,10 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Message 消息结构体，描述一次请求/响应/事件的完整信息。
+//
+// 对齐 Python: Message dataclass (message.py)，
+// 核心字段与 Python 一一对应，可选字段按类别分组。
 type Message struct {
 	// ─── 必填字段 ───
 
@@ -72,6 +76,7 @@ type MessageOption func(*Message)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// MessageType 消息类型枚举（req/res/event）。
 type MessageType string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -87,6 +92,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// messageTypeLookup 消息类型字符串→枚举值查找表。
 var messageTypeLookup map[string]MessageType
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -114,6 +120,7 @@ func IsValidMessageType(s string) bool {
 	return ok
 }
 
+// Validate 校验消息必填字段。
 func (m *Message) Validate() error {
 	if m.ID == "" {
 		return fmt.Errorf("消息 id 不能为空")
@@ -133,70 +140,87 @@ func (m *Message) Validate() error {
 	return nil
 }
 
+// NewMessageID 生成消息唯一标识（UUID v4，32 hex 无连字符）。
 func NewMessageID() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")
 }
 
+// NowTimestamp 返回当前 Unix 秒时间戳（含小数精度）。
 func NowTimestamp() float64 {
 	return float64(time.Now().UnixNano()) / 1e9
 }
 
+// WithMode 设置运行模式的选项。
 func WithMode(m Mode) MessageOption {
 	return func(msg *Message) { msg.Mode = m }
 }
 
+// WithIsStream 设置是否流式请求的选项。
 func WithIsStream(v bool) MessageOption {
 	return func(msg *Message) { msg.IsStream = v }
 }
 
+// WithProvider 设置 IM 平台名称的选项。
 func WithProvider(p string) MessageOption {
 	return func(msg *Message) { msg.Provider = p }
 }
 
+// WithChatID 设置 IM 聊天标识的选项。
 func WithChatID(id string) MessageOption {
 	return func(msg *Message) { msg.ChatID = id }
 }
 
+// WithUserID 设置发送者标识的选项。
 func WithUserID(id string) MessageOption {
 	return func(msg *Message) { msg.UserID = id }
 }
 
+// WithBotID 设置机器人标识的选项。
 func WithBotID(id string) MessageOption {
 	return func(msg *Message) { msg.BotID = id }
 }
 
+// WithMetadata 设置扩展元数据的选项。
 func WithMetadata(m map[string]any) MessageOption {
 	return func(msg *Message) { msg.Metadata = m }
 }
 
+// WithGroupDigitalAvatar 设置数字分身群聊模式的选项。
 func WithGroupDigitalAvatar(v bool) MessageOption {
 	return func(msg *Message) { msg.GroupDigitalAvatar = v }
 }
 
+// WithEnableMemory 设置是否启用记忆的选项。
 func WithEnableMemory(v bool) MessageOption {
 	return func(msg *Message) { msg.EnableMemory = v }
 }
 
+// WithEnableStreaming 设置是否启用流式输出的选项。
 func WithEnableStreaming(v bool) MessageOption {
 	return func(msg *Message) { msg.EnableStreaming = v }
 }
 
+// WithSessionID 设置会话标识的选项。
 func WithSessionID(id string) MessageOption {
 	return func(msg *Message) { msg.SessionID = id }
 }
 
+// WithStreamSeq 设置流式序号的选项。
 func WithStreamSeq(seq int) MessageOption {
 	return func(msg *Message) { msg.StreamSeq = seq }
 }
 
+// WithStreamID 设置流式标识的选项。
 func WithStreamID(id string) MessageOption {
 	return func(msg *Message) { msg.StreamID = id }
 }
 
+// WithEventType 设置事件类型的选项。
 func WithEventType(et EventType) MessageOption {
 	return func(msg *Message) { msg.EventType = et }
 }
 
+// NewReqMessage 创建请求消息。
 func NewReqMessage(channelID, sessionID string, reqMethod ReqMethod, params json.RawMessage, opts ...MessageOption) *Message {
 	msg := &Message{
 		ID:              NewMessageID(),
@@ -215,6 +239,7 @@ func NewReqMessage(channelID, sessionID string, reqMethod ReqMethod, params json
 	return msg
 }
 
+// NewResMessage 创建响应消息。
 func NewResMessage(channelID, sessionID string, ok bool, payload map[string]any, opts ...MessageOption) *Message {
 	msg := &Message{
 		ID:              NewMessageID(),
@@ -232,6 +257,7 @@ func NewResMessage(channelID, sessionID string, ok bool, payload map[string]any,
 	return msg
 }
 
+// NewEventMessage 创建事件消息。
 func NewEventMessage(channelID, sessionID string, eventType EventType, payload map[string]any, opts ...MessageOption) *Message {
 	msg := &Message{
 		ID:              NewMessageID(),
@@ -250,10 +276,12 @@ func NewEventMessage(channelID, sessionID string, eventType EventType, payload m
 	return msg
 }
 
+// String 返回 MessageType 的字符串表示。
 func (mt MessageType) String() string {
 	return string(mt)
 }
 
+// GoString 返回 MessageType 的 Go 语法表示。
 func (mt MessageType) GoString() string {
 	return fmt.Sprintf("schema.MessageType(%q)", string(mt))
 }

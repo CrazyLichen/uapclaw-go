@@ -288,10 +288,13 @@ func TestTeamRuntime_Send未启动(t *testing.T) {
 	}
 }
 
-// TestTeamRuntime_Publish未启动 测试未启动时发布消息
+// TestTeamRuntime_Publish未启动 测试未启动时发布消息（ensureStarted 因 MessageBus.Start 失败而报错）
 func TestTeamRuntime_Publish未启动(t *testing.T) {
 	config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 	runtime := NewTeamRuntime(*config)
+	// 注入 mockBus 使 Start 失败，确保 ensureStarted → Start 报错
+	mockBus := &startFailMockBus{}
+	runtime.SetMessageBus(mockBus)
 
 	err := runtime.Publish(context.Background(), "hello", "topic-1", "sender")
 	if err == nil {

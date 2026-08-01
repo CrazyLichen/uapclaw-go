@@ -82,3 +82,5 @@ func ParseJSON(output string, header ...string) map[string]any {
 func FormatPromptLlama(systemPrompt, userPrompt string) string {
 	return systemPrompt + userPrompt
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

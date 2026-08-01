@@ -1,0 +1,12 @@
+[
+  {
+    "channel_id": "web",
+    "content": "",
+    "event_type": "chat.error",
+    "id": "test-req-1:assistant",
+    "mode": "agent.plan",
+    "request_id": "test-req-1",
+    "role": "assistant",
+    "timestamp": 1785608352.963
+  }
+]

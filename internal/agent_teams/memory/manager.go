@@ -3,24 +3,13 @@ package memory
 import (
 	"context"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-)
-
-const mgrLogComponent = logger.ComponentCommon
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// SectionName 系统提示词段名称
-	SectionName = "team_memory"
-	// maxPersonalMemoryBytes 个人记忆注入最大字节数
-	maxPersonalMemoryBytes = 10 * 1024
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -78,30 +67,48 @@ type TeamMemoryManager struct {
 	cachedBaseSection *saprompt.PromptSection
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// SectionName 系统提示词段名称
+	SectionName = "team_memory"
+	// maxPersonalMemoryBytes 个人记忆注入最大字节数
+	maxPersonalMemoryBytes = 10 * 1024
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// mgrLogComponent 日志组件
+	mgrLogComponent = logger.ComponentCommon
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamMemoryManager 创建团队记忆管理器
 func NewTeamMemoryManager(params TeamMemoryManagerParams) *TeamMemoryManager {
 	mgr := &TeamMemoryManager{
-		memberName:       params.MemberName,
-		teamName:         params.TeamName,
-		role:             params.Role,
-		lifecycle:        params.Lifecycle,
-		scenario:         params.Scenario,
-		embeddingConfig:  params.EmbeddingConfig,
-		language:         params.Language,
-		promptMode:       params.PromptMode,
+		memberName:        params.MemberName,
+		teamName:          params.TeamName,
+		role:              params.Role,
+		lifecycle:         params.Lifecycle,
+		scenario:          params.Scenario,
+		embeddingConfig:   params.EmbeddingConfig,
+		language:          params.Language,
+		promptMode:        params.PromptMode,
 		enableAutoExtract: params.EnableAutoExtract,
-		readOnlySource:   params.ReadOnlySourceWorkspace,
-		db:               params.DB,
-		taskManager:      params.TaskManager,
-		extractionModel:  params.ExtractionModel,
-		tzOffset:         params.TimezoneOffsetHours,
-		sysOperation:     params.SysOperation,
-		workspace:        params.Workspace,
-		teamMemoryDir:    params.TeamMemoryDir,
-		ownedToolNames:   make(map[string]struct{}),
-		ownedToolIDs:     make(map[string]struct{}),
+		readOnlySource:    params.ReadOnlySourceWorkspace,
+		db:                params.DB,
+		taskManager:       params.TaskManager,
+		extractionModel:   params.ExtractionModel,
+		tzOffset:          params.TimezoneOffsetHours,
+		sysOperation:      params.SysOperation,
+		workspace:         params.Workspace,
+		teamMemoryDir:     params.TeamMemoryDir,
+		ownedToolNames:    make(map[string]struct{}),
+		ownedToolIDs:      make(map[string]struct{}),
 	}
 	if params.TeamMemoryDir != nil && params.SharedMemory {
 		mgr.sharedManager = NewSharedMemoryManager(*params.TeamMemoryDir, params.SysOperation)

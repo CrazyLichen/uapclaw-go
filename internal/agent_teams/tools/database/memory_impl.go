@@ -30,6 +30,37 @@ type InMemoryTeamDatabase struct {
 	mu sync.Mutex
 }
 
+// mutationContext 依赖图变更管线共享上下文。
+// 替代 Python _MutationFailure 异常信号，使用 failReason flag 模式。
+type mutationContext struct {
+	db       *InMemoryTeamDatabase
+	teamName string
+	newTasks []NewTaskSpec
+	addEdges []EdgeSpec
+
+	// 步骤间共享数据（闭包操作）
+	stagedTasks   map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
+	endpointTasks map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
+	newEdgeRows   []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
+	refreshedIDs  []string                 // 步骤5产出：状态刷新的 task IDs
+
+	// 失败标记（替代 Python _MutationFailure）
+	failReason string
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	_ TeamDatabase = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TeamDatabase 接口
+	_ TeamDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TeamDao 接口
+	_ MemberDao    = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 MemberDao 接口
+	_ TaskDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TaskDao 接口
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryTeamDatabase 创建内存数据库实例。
@@ -41,20 +72,6 @@ func NewInMemoryTeamDatabase() *InMemoryTeamDatabase {
 		deps:    make(map[string]*TeamTaskDependencyBase),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// memberKey 构造复合主键 key。
-func memberKey(memberName, teamName string) string {
-	return memberName + "\x00" + teamName
-}
-
-// depKey 构造依赖边复合主键 key。
-func depKey(taskID, dependsOnID string) string {
-	return taskID + "\x00" + dependsOnID
-}
-
-// ──────────────────────────── TeamDatabase 接口实现 ────────────────────────────
 
 // Initialize 初始化（InMemory 无需操作，直接标记已初始化）。
 func (db *InMemoryTeamDatabase) Initialize(_ context.Context) error {
@@ -138,8 +155,6 @@ func (db *InMemoryTeamDatabase) Task() TaskDao { return db }
 // Message 返回 MessageDao（⤵️ 9.65a-3 回填后返回 db）。
 func (db *InMemoryTeamDatabase) Message() MessageDao { return db }
 
-// ──────────────────────────── TeamDao 接口实现 ────────────────────────────
-
 // CreateTeam 创建团队。对齐 Python: TeamDao.create_team()
 // 成功返回 true，团队已存在返回 false（对齐 Python IntegrityError → False）
 func (db *InMemoryTeamDatabase) CreateTeam(_ context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool {
@@ -208,8 +223,6 @@ func (db *InMemoryTeamDatabase) GetTeamUpdatedAt(_ context.Context, teamName str
 	}
 	return team.UpdatedAt
 }
-
-// ──────────────────────────── MemberDao 接口实现 ────────────────────────────
 
 // CreateMember 创建成员。对齐 Python: MemberDao.create_member()
 // 成功返回 true，成员已存在返回 false（对齐 Python IntegrityError → False）
@@ -342,8 +355,6 @@ func (db *InMemoryTeamDatabase) UpdateMemberExecutionStatus(_ context.Context, m
 	member.ExecutionStatus = executionStatus
 	return true
 }
-
-// ──────────────────────────── TaskDao 接口实现 ────────────────────────────
 
 // CreateTask 创建单条任务。对齐 Python: TaskDao.create_task()
 // 成功返回 true，task_id 冲突返回 false（对齐 Python IntegrityError → False）
@@ -669,24 +680,16 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 	return db.MutateDependencyGraph(context.Background(), teamName, []NewTaskSpec{newTaskSpec}, edges)
 }
 
-// ──────────────────────────── 依赖图管线 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
-// mutationContext 依赖图变更管线共享上下文。
-// 替代 Python _MutationFailure 异常信号，使用 failReason flag 模式。
-type mutationContext struct {
-	db       *InMemoryTeamDatabase
-	teamName string
-	newTasks []NewTaskSpec
-	addEdges []EdgeSpec
+// memberKey 构造复合主键 key。
+func memberKey(memberName, teamName string) string {
+	return memberName + "\x00" + teamName
+}
 
-	// 步骤间共享数据（闭包操作）
-	stagedTasks   map[string]*TeamTaskBase   // 步骤1产出：已插入的新任务
-	endpointTasks map[string]*TeamTaskBase   // 步骤2产出：边端点对应的任务
-	newEdgeRows   []TeamTaskDependencyBase   // 步骤4产出：待插入的依赖边行
-	refreshedIDs  []string                   // 步骤5产出：状态刷新的 task IDs
-
-	// 失败标记（替代 Python _MutationFailure）
-	failReason string
+// depKey 构造依赖边复合主键 key。
+func depKey(taskID, dependsOnID string) string {
+	return taskID + "\x00" + dependsOnID
 }
 
 // stageNewTasks 步骤1：插入新任务行，检测 task_id 重复。
@@ -832,8 +835,6 @@ func (mc *mutationContext) rollbackStagedTasks() {
 	}
 }
 
-// ──────────────────────────── TaskDao 内部方法 ────────────────────────────
-
 // terminateTaskInSession 原子终止传播：终止任务 + 标记下游 resolved + 刷新状态。
 // 对齐 Python: _terminate_task_in_session()
 // 一次 Lock 内完成所有操作（由调用方持锁，此方法不加锁）。
@@ -923,12 +924,3 @@ func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []string {
 	}
 	return refreshed
 }
-
-// ──────────────────────────── 编译期接口断言 ────────────────────────────
-
-var (
-	_ TeamDatabase = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TeamDatabase 接口
-	_ TeamDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TeamDao 接口
-	_ MemberDao    = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 MemberDao 接口
-	_ TaskDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TaskDao 接口
-)
