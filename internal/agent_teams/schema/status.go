@@ -1,11 +1,14 @@
 package schema
 
+import "github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MemberStatus 成员状态枚举。
 // 对齐 Python: MemberStatus (openjiuwen/agent_teams/schema/status.py)
+// 类型底层为 string，值来自 fsm 包常量，提供类型安全的 API。
 type MemberStatus string
 
 // ExecutionStatus 任务执行状态枚举。
@@ -22,48 +25,48 @@ type TaskStatus string
 
 const (
 	// MemberStatusUnstarted 成员已创建但尚未启动
-	MemberStatusUnstarted MemberStatus = "unstarted"
+	MemberStatusUnstarted MemberStatus = fsm.MemberStatusUnstarted
 	// MemberStatusStarting 成员进程正在启动（过渡态，CAS 防重复 spawn）
-	MemberStatusStarting MemberStatus = "starting"
+	MemberStatusStarting MemberStatus = fsm.MemberStatusStarting
 	// MemberStatusReady 成员已就绪，可接收任务
-	MemberStatusReady MemberStatus = "ready"
+	MemberStatusReady MemberStatus = fsm.MemberStatusReady
 	// MemberStatusBusy 成员正在处理任务
-	MemberStatusBusy MemberStatus = "busy"
+	MemberStatusBusy MemberStatus = fsm.MemberStatusBusy
 	// MemberStatusPaused 成员协程已在轮次结束时退出（持久团队空闲态）
-	MemberStatusPaused MemberStatus = "paused"
+	MemberStatusPaused MemberStatus = fsm.MemberStatusPaused
 	// MemberStatusStopped 成员运行时已被外部 stop_coordination 拆卸（非解散性拆卸）
-	MemberStatusStopped MemberStatus = "stopped"
+	MemberStatusStopped MemberStatus = fsm.MemberStatusStopped
 	// MemberStatusRestarting 成员进程正在故障后重启
-	MemberStatusRestarting MemberStatus = "restarting"
+	MemberStatusRestarting MemberStatus = fsm.MemberStatusRestarting
 	// MemberStatusShutdownRequested 成员已收到关闭请求
-	MemberStatusShutdownRequested MemberStatus = "shutdown_requested"
+	MemberStatusShutdownRequested MemberStatus = fsm.MemberStatusShutdownRequested
 	// MemberStatusShutdown 成员已关闭
-	MemberStatusShutdown MemberStatus = "shut_down"
+	MemberStatusShutdown MemberStatus = fsm.MemberStatusShutdown
 	// MemberStatusError 成员处于错误状态
-	MemberStatusError MemberStatus = "error"
+	MemberStatusError MemberStatus = fsm.MemberStatusError
 )
 
 const (
 	// ExecutionStatusIdle 未执行任何任务
-	ExecutionStatusIdle ExecutionStatus = "idle"
+	ExecutionStatusIdle ExecutionStatus = fsm.ExecutionStatusIdle
 	// ExecutionStatusStarting 任务执行正在启动
-	ExecutionStatusStarting ExecutionStatus = "starting"
+	ExecutionStatusStarting ExecutionStatus = fsm.ExecutionStatusStarting
 	// ExecutionStatusRunning 任务正在运行
-	ExecutionStatusRunning ExecutionStatus = "running"
+	ExecutionStatusRunning ExecutionStatus = fsm.ExecutionStatusRunning
 	// ExecutionStatusCancelRequested 已请求取消
-	ExecutionStatusCancelRequested ExecutionStatus = "cancel_requested"
+	ExecutionStatusCancelRequested ExecutionStatus = fsm.ExecutionStatusCancelRequested
 	// ExecutionStatusCancelling 正在取消
-	ExecutionStatusCancelling ExecutionStatus = "cancelling"
+	ExecutionStatusCancelling ExecutionStatus = fsm.ExecutionStatusCancelling
 	// ExecutionStatusCancelled 已取消
-	ExecutionStatusCancelled ExecutionStatus = "cancelled"
+	ExecutionStatusCancelled ExecutionStatus = fsm.ExecutionStatusCancelled
 	// ExecutionStatusCompleting 正在完成
-	ExecutionStatusCompleting ExecutionStatus = "completing"
+	ExecutionStatusCompleting ExecutionStatus = fsm.ExecutionStatusCompleting
 	// ExecutionStatusCompleted 已完成
-	ExecutionStatusCompleted ExecutionStatus = "completed"
+	ExecutionStatusCompleted ExecutionStatus = fsm.ExecutionStatusCompleted
 	// ExecutionStatusFailed 已失败
-	ExecutionStatusFailed ExecutionStatus = "failed"
+	ExecutionStatusFailed ExecutionStatus = fsm.ExecutionStatusFailed
 	// ExecutionStatusTimedOut 已超时
-	ExecutionStatusTimedOut ExecutionStatus = "timed_out"
+	ExecutionStatusTimedOut ExecutionStatus = fsm.ExecutionStatusTimedOut
 )
 
 const (
@@ -75,25 +78,24 @@ const (
 
 const (
 	// TaskStatusPending 任务等待被认领
-	TaskStatusPending TaskStatus = "pending"
+	TaskStatusPending TaskStatus = fsm.TaskStatusPending
 	// TaskStatusClaimed 任务已被成员认领
-	TaskStatusClaimed TaskStatus = "claimed"
+	TaskStatusClaimed TaskStatus = fsm.TaskStatusClaimed
 	// TaskStatusPlanApproved 任务计划已批准（仅 PLAN_MODE 成员）
-	TaskStatusPlanApproved TaskStatus = "plan_approved"
+	TaskStatusPlanApproved TaskStatus = fsm.TaskStatusPlanApproved
 	// TaskStatusCompleted 任务已完成
-	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusCompleted TaskStatus = fsm.TaskStatusCompleted
 	// TaskStatusCancelled 任务已取消
-	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusCancelled TaskStatus = fsm.TaskStatusCancelled
 	// TaskStatusBlocked 任务因依赖被阻塞
-	TaskStatusBlocked TaskStatus = "blocked"
+	TaskStatusBlocked TaskStatus = fsm.TaskStatusBlocked
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // MemberTransitions MemberStatus 状态转换表。
 // 对齐 Python: MEMBER_TRANSITIONS
+// 底层数据来自 fsm 包，通过类型化 wrapper 提供类型安全的 API。
 var MemberTransitions = map[MemberStatus][]MemberStatus{
 	MemberStatusUnstarted: {
 		MemberStatusStarting, MemberStatusReady, MemberStatusShutdown, MemberStatusError,
@@ -182,43 +184,19 @@ var TaskTransitions = map[TaskStatus][]TaskStatus{
 
 // IsValidMemberTransition 检查 MemberStatus 状态转换是否合法。
 // 对齐 Python: is_valid_transition(current_status, new_status, MEMBER_TRANSITIONS)
+// 委托 fsm 包实现，提供类型化 wrapper。
 func IsValidMemberTransition(current, target MemberStatus) bool {
-	allowed, ok := MemberTransitions[current]
-	if !ok {
-		return false
-	}
-	for _, s := range allowed {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return fsm.IsValidMemberTransition(string(current), string(target))
 }
 
 // IsValidExecutionTransition 检查 ExecutionStatus 状态转换是否合法。
+// 委托 fsm 包实现，提供类型化 wrapper。
 func IsValidExecutionTransition(current, target ExecutionStatus) bool {
-	allowed, ok := ExecutionTransitions[current]
-	if !ok {
-		return false
-	}
-	for _, s := range allowed {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return fsm.IsValidExecutionTransition(string(current), string(target))
 }
 
 // IsValidTaskTransition 检查 TaskStatus 状态转换是否合法。
+// 委托 fsm 包实现，提供类型化 wrapper。
 func IsValidTaskTransition(current, target TaskStatus) bool {
-	allowed, ok := TaskTransitions[current]
-	if !ok {
-		return false
-	}
-	for _, s := range allowed {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return fsm.IsValidTaskTransition(string(current), string(target))
 }

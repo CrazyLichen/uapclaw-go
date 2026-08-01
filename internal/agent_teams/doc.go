@@ -24,6 +24,10 @@
 //	│   ├── router.go       # 输入解析器（ParseInteractStr/ParseMention/ResolveTargets/DeliverDirect）
 //	│   ├── user_inbox.go   # 用户侧收件箱（UserInbox）
 //	│   └── human_agent_inbox.go # Human-Agent 收件箱（HumanAgentInbox + 错误类型）
+//	├── fsm/                # FSM 状态转换表和校验函数（9.65a-1 提取）
+//	│   ├── doc.go           # 包文档
+//	│   ├── transitions.go   # 状态常量 + 转换表 + 校验函数
+//	│   └── transitions_test.go # 转换表和校验函数测试
 //	├── memory/             # ⤵️ 回填: 9.64 团队记忆
 //	├── messager/           # ⤵️ 回填: 9.65 团队消息总线
 //	├── models/             # ⤵️ 回填: 9.64 模型池/分配器
