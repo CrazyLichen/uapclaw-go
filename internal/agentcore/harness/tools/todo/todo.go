@@ -250,92 +250,105 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_create", "TodoCreateTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoCreateInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 获取 sessionID
-		sessionID, err := extractSessionID(opts)
-		if err != nil {
-			return nil, err
-		}
+		// 对齐 Python: TodoCreateTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			sessionID, err := extractSessionID(opts)
+			if err != nil {
+				return nil, err
+			}
 
-		// 校验输入
-		if len(input.Tasks) == 0 {
-			return nil, exception.BuildError(
-				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", "'tasks' 参数为必填项，且必须为 JSON 数组"),
+			// 校验输入
+			if len(input.Tasks) == 0 {
+				return nil, exception.BuildError(
+					exception.StatusToolTodosValidationInvalid,
+					exception.WithParam("reason", "'tasks' 参数为必填项，且必须为 JSON 数组"),
+				)
+			}
+
+			// 校验每个 task 的必填字段和 ID 唯一性
+			// 对齐 Python L296-299: 优先使用 model 提供的 id，为空时自动生成 uuid
+			idSet := make(map[string]struct{})
+			for i := range input.Tasks {
+				task := &input.Tasks[i]
+				if task.ID == "" {
+					task.ID = uuid.New().String()
+				}
+				if task.Content == "" {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'content' 字段", i)),
+					)
+				}
+				if task.ActiveForm == "" {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'activeForm' 字段", i)),
+					)
+				}
+				if task.Description == "" {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'description' 字段", i)),
+					)
+				}
+				if _, exists := idSet[task.ID]; exists {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务 ID '%s' 重复", i, task.ID)),
+					)
+				}
+				idSet[task.ID] = struct{}{}
+			}
+
+			// 构造 TodoItem 列表
+			todoItems := make([]hschema.TodoItem, len(input.Tasks))
+			for i, task := range input.Tasks {
+				status := hschema.TodoStatusPending
+				if i == 0 {
+					status = hschema.TodoStatusInProgress
+				}
+				todoItems[i] = hschema.TodoItem{
+					ID:              task.ID,
+					Content:         task.Content,
+					ActiveForm:      task.ActiveForm,
+					Description:     task.Description,
+					Status:          status,
+					SelectedModelID: task.SelectedModelID,
+				}
+			}
+
+			// 加锁、保存
+			lock := todoTool.lockManager.Operation(sessionID)
+			lock.Lock()
+			defer lock.Unlock()
+
+			if err := todoTool.SaveTodos(ctx, sessionID, todoItems); err != nil {
+				return nil, err
+			}
+
+			logger.Info(logComponent).
+				Str("session_id", sessionID).
+				Int("task_count", len(todoItems)).
+				Msg("TodoCreateTool 创建待办事项成功")
+
+			// 格式化结果字符串
+			// 对齐 Python: TodoCreateTool._format_create_result L250-266
+			resultStr := formatCreateResult(todoItems)
+			return map[string]any{
+				"message": resultStr,
+			}, nil
+		}()
+		if err != nil {
+			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").
+				Str("tool_name", "todo_create").
+				Msg("Todo create tool invocation failed")
+			return nil, exception.BuildError(exception.StatusToolTodosInvokeFailed,
+				exception.WithParam("reason", err.Error()),
 			)
 		}
-
-		// 校验每个 task 的必填字段和 ID 唯一性
-		// 对齐 Python L296-299: 优先使用 model 提供的 id，为空时自动生成 uuid
-		idSet := make(map[string]struct{})
-		for i := range input.Tasks {
-			task := &input.Tasks[i]
-			if task.ID == "" {
-				task.ID = uuid.New().String()
-			}
-			if task.Content == "" {
-				return nil, exception.BuildError(
-					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'content' 字段", i)),
-				)
-			}
-			if task.ActiveForm == "" {
-				return nil, exception.BuildError(
-					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'activeForm' 字段", i)),
-				)
-			}
-			if task.Description == "" {
-				return nil, exception.BuildError(
-					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务缺少 'description' 字段", i)),
-				)
-			}
-			if _, exists := idSet[task.ID]; exists {
-				return nil, exception.BuildError(
-					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("索引 %d 处的任务 ID '%s' 重复", i, task.ID)),
-				)
-			}
-			idSet[task.ID] = struct{}{}
-		}
-
-		// 构造 TodoItem 列表
-		todoItems := make([]hschema.TodoItem, len(input.Tasks))
-		for i, task := range input.Tasks {
-			status := hschema.TodoStatusPending
-			if i == 0 {
-				status = hschema.TodoStatusInProgress
-			}
-			todoItems[i] = hschema.TodoItem{
-				ID:              task.ID,
-				Content:         task.Content,
-				ActiveForm:      task.ActiveForm,
-				Description:     task.Description,
-				Status:          status,
-				SelectedModelID: task.SelectedModelID,
-			}
-		}
-
-		// 加锁、保存
-		lock := todoTool.lockManager.Operation(sessionID)
-		lock.Lock()
-		defer lock.Unlock()
-
-		if err := todoTool.SaveTodos(ctx, sessionID, todoItems); err != nil {
-			return nil, err
-		}
-
-		logger.Info(logComponent).
-			Str("session_id", sessionID).
-			Int("task_count", len(todoItems)).
-			Msg("TodoCreateTool 创建待办事项成功")
-
-		// 格式化结果字符串
-		// 对齐 Python: TodoCreateTool._format_create_result L250-266
-		resultStr := formatCreateResult(todoItems)
-		return map[string]any{
-			"message": resultStr,
-		}, nil
+		return result, nil
 	}
 
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
@@ -348,45 +361,58 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_list", "TodoListTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, _ TodoListInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 获取 sessionID
-		sessionID, err := extractSessionID(opts)
-		if err != nil {
-			return nil, err
-		}
-
-		// 加锁、加载
-		lock := todoTool.lockManager.Operation(sessionID)
-		lock.Lock()
-		defer lock.Unlock()
-
-		todos, err := todoTool.LoadTodos(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-
-		// 过滤掉已完成和已取消的任务，返回简化视图
-		// 对齐 Python L362-377: 只包含 id/content/status/depends_on
-		type simplifiedTask struct {
-			ID        string   `json:"id"`
-			Content   string   `json:"content"`
-			Status    string   `json:"status"`
-			DependsOn []string `json:"depends_on"`
-		}
-		var simplified []simplifiedTask
-		for _, item := range todos {
-			if item.Status != hschema.TodoStatusCompleted && item.Status != hschema.TodoStatusCancelled {
-				simplified = append(simplified, simplifiedTask{
-					ID:        item.ID,
-					Content:   item.Content,
-					Status:    item.Status.String(),
-					DependsOn: item.DependsOn,
-				})
+		// 对齐 Python: TodoListTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			sessionID, err := extractSessionID(opts)
+			if err != nil {
+				return nil, err
 			}
-		}
 
-		return map[string]any{
-			"tasks": simplified,
-		}, nil
+			// 加锁、加载
+			lock := todoTool.lockManager.Operation(sessionID)
+			lock.Lock()
+			defer lock.Unlock()
+
+			todos, err := todoTool.LoadTodos(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
+
+			// 过滤掉已完成和已取消的任务，返回简化视图
+			// 对齐 Python L362-377: 只包含 id/content/status/depends_on
+			type simplifiedTask struct {
+				ID        string   `json:"id"`
+				Content   string   `json:"content"`
+				Status    string   `json:"status"`
+				DependsOn []string `json:"depends_on"`
+			}
+			var simplified []simplifiedTask
+			for _, item := range todos {
+				if item.Status != hschema.TodoStatusCompleted && item.Status != hschema.TodoStatusCancelled {
+					simplified = append(simplified, simplifiedTask{
+						ID:        item.ID,
+						Content:   item.Content,
+						Status:    item.Status.String(),
+						DependsOn: item.DependsOn,
+					})
+				}
+			}
+
+			return map[string]any{
+				"tasks": simplified,
+			}, nil
+		}()
+		if err != nil {
+			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").
+				Str("tool_name", "todo_list").
+				Msg("Todo list tool invocation failed")
+			return nil, exception.BuildError(exception.StatusToolTodosInvokeFailed,
+				exception.WithParam("reason", err.Error()),
+			)
+		}
+		return result, nil
 	}
 
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
@@ -399,42 +425,55 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_get", "TodoGetTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoGetInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 获取 sessionID
-		sessionID, err := extractSessionID(opts)
-		if err != nil {
-			return nil, err
-		}
+		// 对齐 Python: TodoGetTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			sessionID, err := extractSessionID(opts)
+			if err != nil {
+				return nil, err
+			}
 
-		if input.ID == "" {
+			if input.ID == "" {
+				return nil, exception.BuildError(
+					exception.StatusToolTodosValidationInvalid,
+					exception.WithParam("reason", "任务 ID 为必填项"),
+				)
+			}
+
+			// 加锁、加载
+			lock := todoTool.lockManager.Operation(sessionID)
+			lock.Lock()
+			defer lock.Unlock()
+
+			todos, err := todoTool.LoadTodos(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
+
+			// 按 ID 查找
+			for _, item := range todos {
+				if item.ID == input.ID {
+					return map[string]any{
+						"todo": item.ToDict(),
+					}, nil
+				}
+			}
+
 			return nil, exception.BuildError(
-				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", "任务 ID 为必填项"),
+				exception.StatusToolTodosInvokeFailed,
+				exception.WithParam("reason", fmt.Sprintf("未找到 ID 为 '%s' 的任务", input.ID)),
+			)
+		}()
+		if err != nil {
+			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").
+				Str("tool_name", "todo_get").
+				Msg("Todo get tool invocation failed")
+			return nil, exception.BuildError(exception.StatusToolTodosInvokeFailed,
+				exception.WithParam("reason", err.Error()),
 			)
 		}
-
-		// 加锁、加载
-		lock := todoTool.lockManager.Operation(sessionID)
-		lock.Lock()
-		defer lock.Unlock()
-
-		todos, err := todoTool.LoadTodos(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-
-		// 按 ID 查找
-		for _, item := range todos {
-			if item.ID == input.ID {
-				return map[string]any{
-					"todo": item.ToDict(),
-				}, nil
-			}
-		}
-
-		return nil, exception.BuildError(
-			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", fmt.Sprintf("未找到 ID 为 '%s' 的任务", input.ID)),
-		)
+		return result, nil
 	}
 
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
@@ -447,87 +486,100 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_modify", "TodoModifyTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoModifyInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 获取 sessionID
-		sessionID, err := extractSessionID(opts)
-		if err != nil {
-			return nil, err
-		}
+		// 对齐 Python: TodoModifyTool.invoke 的 try/except 异常包装
+		result, err := func() (map[string]any, error) {
+			sessionID, err := extractSessionID(opts)
+			if err != nil {
+				return nil, err
+			}
 
-		// 加锁、加载
-		lock := todoTool.lockManager.Operation(sessionID)
-		lock.Lock()
-		defer lock.Unlock()
+			// 加锁、加载
+			lock := todoTool.lockManager.Operation(sessionID)
+			lock.Lock()
+			defer lock.Unlock()
 
-		todos, err := todoTool.LoadTodos(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
+			todos, err := todoTool.LoadTodos(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
 
-		// 根据 action 分派
-		var updatedTodos []hschema.TodoItem
-		var msg string
-		switch input.Action {
-		case "update":
-			updatedTodos, msg, err = updateTodos(todos, input.Todos)
-		case "delete":
-			updatedTodos, msg, err = deleteTodos(todos, input.IDs)
-		case "cancel":
-			updatedTodos, msg, err = cancelTodos(todos, input.IDs)
-		case "append":
-			updatedTodos, msg, err = appendTodos(todos, input.Todos)
-		case "insert_after":
-			if input.TodoData == nil {
+			// 根据 action 分派
+			var updatedTodos []hschema.TodoItem
+			var msg string
+			switch input.Action {
+			case "update":
+				updatedTodos, msg, err = updateTodos(todos, input.Todos)
+			case "delete":
+				updatedTodos, msg, err = deleteTodos(todos, input.IDs)
+			case "cancel":
+				updatedTodos, msg, err = cancelTodos(todos, input.IDs)
+			case "append":
+				updatedTodos, msg, err = appendTodos(todos, input.Todos)
+			case "insert_after":
+				if input.TodoData == nil {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
+					)
+				}
+				// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+				for _, item := range input.TodoData.Items {
+					if err := validateSingleTodoItem(item); err != nil {
+						return nil, err
+					}
+				}
+				updatedTodos, msg, err = insertAfterTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
+			case "insert_before":
+				if input.TodoData == nil {
+					return nil, exception.BuildError(
+						exception.StatusToolTodosValidationInvalid,
+						exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
+					)
+				}
+				// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+				for _, item := range input.TodoData.Items {
+					if err := validateSingleTodoItem(item); err != nil {
+						return nil, err
+					}
+				}
+				updatedTodos, msg, err = insertBeforeTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
+			default:
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
+					exception.WithParam("reason", fmt.Sprintf("无效操作: %s", input.Action)),
 				)
 			}
-			// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
-			for _, item := range input.TodoData.Items {
-				if err := validateSingleTodoItem(item); err != nil {
-					return nil, err
-				}
+
+			if err != nil {
+				return nil, err
 			}
-			updatedTodos, msg, err = insertAfterTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
-		case "insert_before":
-			if input.TodoData == nil {
-				return nil, exception.BuildError(
-					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
-				)
+
+			// 保存
+			if err := todoTool.SaveTodos(ctx, sessionID, updatedTodos); err != nil {
+				return nil, err
 			}
-			// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
-			for _, item := range input.TodoData.Items {
-				if err := validateSingleTodoItem(item); err != nil {
-					return nil, err
-				}
-			}
-			updatedTodos, msg, err = insertBeforeTodos(todos, input.TodoData.TargetID, input.TodoData.Items)
-		default:
-			return nil, exception.BuildError(
-				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("无效操作: %s", input.Action)),
+
+			logger.Info(logComponent).
+				Str("session_id", sessionID).
+				Str("action", input.Action).
+				Int("task_count", len(updatedTodos)).
+				Msg("TodoModifyTool 修改待办事项成功")
+
+			return map[string]any{
+				"message": msg,
+			}, nil
+		}()
+		if err != nil {
+			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TOOL_CALL_ERROR").
+				Str("tool_name", "todo_modify").
+				Msg("Todo modify tool invocation failed")
+			return nil, exception.BuildError(exception.StatusToolTodosInvokeFailed,
+				exception.WithParam("reason", err.Error()),
 			)
 		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		// 保存
-		if err := todoTool.SaveTodos(ctx, sessionID, updatedTodos); err != nil {
-			return nil, err
-		}
-
-		logger.Info(logComponent).
-			Str("session_id", sessionID).
-			Str("action", input.Action).
-			Int("task_count", len(updatedTodos)).
-			Msg("TodoModifyTool 修改待办事项成功")
-
-		return map[string]any{
-			"message": msg,
-		}, nil
+		return result, nil
 	}
 
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
