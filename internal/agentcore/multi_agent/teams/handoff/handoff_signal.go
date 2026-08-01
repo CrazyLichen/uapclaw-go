@@ -2,6 +2,7 @@ package handoff
 
 import (
 	"encoding/json"
+	"strings"
 
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -191,10 +192,16 @@ func findHandoffFromSession(agentSession sessioninterfaces.SessionFacade) map[st
 
 		// 尝试 JSON 解析
 		var parsed map[string]any
-		if err := json.Unmarshal([]byte(contentStr), &parsed); err == nil {
-			if _, ok := parsed[HandoffTargetKey]; ok {
-				return parsed
+		if err := json.Unmarshal([]byte(contentStr), &parsed); err != nil {
+			// 对齐 Python: ast.literal_eval fallback — LLM 输出可能使用 Python 单引号 dict 如 {'__handoff_to__': 'agent1'}
+			// 尝试将 Python 单引号替换为双引号后再解析
+			fixed := strings.ReplaceAll(contentStr, "'", "\"")
+			if err2 := json.Unmarshal([]byte(fixed), &parsed); err2 != nil {
+				continue // JSON 和单引号 fallback 都失败，跳过此消息
 			}
+		}
+		if _, ok := parsed[HandoffTargetKey]; ok {
+			return parsed
 		}
 	}
 
