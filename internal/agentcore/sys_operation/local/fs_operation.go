@@ -91,7 +91,12 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	}
 
 	startTime := time.Now()
-	logger.Info(fsLogComponent).Str("method_name", methodName).Str("path", path).Msg("开始读取文件")
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_START").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("path=%s, mode=%s", path, o.Mode)).
+		Msg("开始读取文件")
 
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
@@ -163,7 +168,11 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 		},
 	}
 
-	logger.Info(fsLogComponent).Str("method_name", methodName).
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_END").
+		Str("method_name", methodName).
+		Str("method_result", fmt.Sprintf("path=%s, content_length=%d, mode=%s", resolvedPath, len(textContent), o.Mode)).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
 		Msg("读取文件完成")
 
@@ -230,7 +239,11 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 	methodName := "write_file"
 
 	startTime := time.Now()
-	logger.Info(fsLogComponent).Str("method_name", methodName).Str("path", path).Msg("开始写入文件")
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_START").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("path=%s", path)).
+		Msg("开始写入文件")
 
 	resolvedPath, err := f.resolvePath(path, true)
 	if err != nil {
@@ -345,7 +358,10 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 		},
 	}
 
-	logger.Info(fsLogComponent).Str("method_name", methodName).
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_END").
+		Str("method_name", methodName).
+		Str("method_result", fmt.Sprintf("path=%s, size=%d, mode=%s", resolvedPath, len(dataBytes), o.Mode)).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
 		Msg("写入文件完成")
 
@@ -648,6 +664,15 @@ func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opt
 // SearchFiles 搜索文件。
 // 对齐 Python FsOperation.search_files — 使用 rglob 支持递归 glob 模式。
 func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern string, opts ...sysop.FsOption) (*result.SearchFilesResult, error) {
+	methodName := "search_files"
+	startTime := time.Now()
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_START").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("path=%s, pattern=%s", path, pattern)).
+		Msg("开始搜索文件")
+
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
 		return nil, err
@@ -707,6 +732,14 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		}
 		matched = filtered
 	}
+
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_END").
+		Str("method_name", methodName).
+		Str("method_result", fmt.Sprintf("path=%s, pattern=%s, total_matches=%d", resolvedPath, pattern, len(matched))).
+		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
+		Msg("搜索文件完成")
 
 	return &result.SearchFilesResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -1019,12 +1052,32 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 
 // listItems 列出文件/目录项
 func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly bool, o *sysop.FsOptions) (*result.ListFilesResult, error) {
+	methodName := "list_files"
+	if dirsOnly {
+		methodName = "list_directories"
+	}
+	startTime := time.Now()
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_START").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("path=%s", path)).
+		Msg("开始列出文件/目录")
+
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
 		return nil, err
 	}
 
 	items := f.walkDir(resolvedPath, dirsOnly, o, 1)
+
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	logger.Info(fsLogComponent).
+		Str("event_type", "SYS_OP_END").
+		Str("method_name", methodName).
+		Str("method_result", fmt.Sprintf("path=%s, total_count=%d", resolvedPath, len(items))).
+		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
+		Msg("列出文件/目录完成")
 
 	return &result.ListFilesResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -1135,7 +1188,13 @@ func (f *LocalFsOperation) sortItems(items []result.FileSystemItem, sortBy strin
 
 // createErrorResult 创建错误结果
 func (f *LocalFsOperation) createErrorResult(methodName string, errMsg string, startTime time.Time) *result.ReadFileResult {
-	logger.Error(fsLogComponent).Str("method_name", methodName).Str("error_msg", errMsg).Msg("文件操作失败")
+	// 对齐 Python: sys_operation_logger.error(event_type=SYS_OP_ERROR, method_name, method_params, method_exec_time_ms)
+	logger.Error(fsLogComponent).
+		Str("event_type", "SYS_OP_ERROR").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("error_msg=%s", errMsg)).
+		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
+		Msg("文件操作失败")
 	return &result.ReadFileResult{
 		BaseResult: result.BuildOperationErrorResult(
 			exception.StatusSysOperationFsExecutionError.Code(),

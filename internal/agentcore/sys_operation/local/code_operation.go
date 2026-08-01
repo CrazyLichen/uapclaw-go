@@ -56,7 +56,12 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 	methodName := "execute_code"
 
 	startTime := time.Now()
-	logger.Info(codeLogComponent).Str("method_name", methodName).Str("language", o.Language).Msg("开始执行代码")
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	logger.Info(codeLogComponent).
+		Str("event_type", "SYS_OP_START").
+		Str("method_name", methodName).
+		Str("method_params", fmt.Sprintf("language=%s", o.Language)).
+		Msg("开始执行代码")
 
 	if code == "" {
 		return &result.ExecuteCodeResult{
@@ -140,7 +145,11 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 		},
 	}
 
-	logger.Info(codeLogComponent).Str("method_name", methodName).
+	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	logger.Info(codeLogComponent).
+		Str("event_type", "SYS_OP_END").
+		Str("method_name", methodName).
+		Str("method_result", fmt.Sprintf("exit_code=%d, stdout_length=%d", successResult.Data.ExitCode, len(successResult.Data.Stdout))).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
 		Msg("代码执行完成")
 
