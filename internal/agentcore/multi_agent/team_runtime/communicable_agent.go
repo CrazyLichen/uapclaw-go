@@ -2,9 +2,9 @@ package team_runtime
 
 import (
 	"context"
-	"fmt"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -29,8 +29,10 @@ type CommunicableAgent struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// errRuntimeNotBound 运行时未绑定错误
-var errRuntimeNotBound = fmt.Errorf("运行时未绑定，请先调用 BindRuntime")
+// errRuntimeNotBound 运行时未绑定错误，使用结构化异常对齐 Python build_error(StatusCode.AGENT_TEAM_EXECUTION_ERROR)
+var errRuntimeNotBound = exception.BuildError(exception.StatusAgentTeamExecutionError,
+	exception.WithParam("error_msg", "Agent not bound to a TeamRuntime. Register the agent with a TeamRuntime first."),
+)
 
 // 编译时验证 CommunicableAgent 满足 Communicable 接口
 var _ Communicable = (*CommunicableAgent)(nil)
