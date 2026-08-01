@@ -14,6 +14,7 @@ import (
 	"golang.org/x/text/encoding"
 	textencoding "golang.org/x/text/encoding/ianaindex"
 
+	"github.com/bmatcuk/doublestar/v4"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
@@ -645,11 +646,18 @@ func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opt
 }
 
 // SearchFiles 搜索文件。
-// 对齐 Python FsOperation.search_files。
+// 对齐 Python FsOperation.search_files — 使用 rglob 支持递归 glob 模式。
 func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern string, opts ...sysop.FsOption) (*result.SearchFilesResult, error) {
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
 		return nil, err
+	}
+
+	// 对齐 Python: rglob(pattern) — 不含 "/" 的 pattern 自动加 "**/" 前缀以递归匹配
+	// Python pathlib.Path.rglob("*.py") 等价于 glob("**/*.py")
+	globPattern := pattern
+	if !strings.Contains(pattern, "/") {
+		globPattern = "**/" + pattern
 	}
 
 	var matched []result.FileSystemItem
@@ -658,8 +666,14 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 			return nil
 		}
 		if !info.IsDir() {
-			matchedPattern, _ := filepath.Match(pattern, info.Name())
-			if matchedPattern {
+			// 计算相对路径用于 glob 匹配
+			relPath, relErr := filepath.Rel(resolvedPath, walkPath)
+			if relErr != nil {
+				return nil
+			}
+			// 使用 doublestar 匹配（支持 ** 递归 glob），对齐 Python base.rglob(pattern)
+			matchedPattern, matchErr := doublestar.Match(globPattern, relPath)
+			if matchedPattern && matchErr == nil {
 				matched = append(matched, f.createFSItem(walkPath, info))
 			}
 		}
@@ -676,7 +690,13 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		for _, p := range matched {
 			excluded := false
 			for _, ep := range o.ExcludePatterns {
-				if matchedEp, _ := filepath.Match(ep, filepath.Base(p.Path)); matchedEp {
+				// exclude pattern 也需要递归 glob 支持，对齐 Python base.rglob(pat)
+				globEp := ep
+				if !strings.Contains(ep, "/") {
+					globEp = "**/" + ep
+				}
+				relPath, _ := filepath.Rel(resolvedPath, p.Path)
+				if matchedEp, matchErr := doublestar.Match(globEp, relPath); matchedEp && matchErr == nil {
 					excluded = true
 					break
 				}

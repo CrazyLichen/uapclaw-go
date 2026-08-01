@@ -490,3 +490,52 @@ func TestGetDefaultCmdLimit(t *testing.T) {
 	limit := getDefaultCmdLimit()
 	assert.True(t, limit > 0)
 }
+
+// ──────────────────────────── G12 递归 glob 测试 ────────────────────────────
+
+// TestSearchFiles_递归Glob 测试 *.py 递归匹配所有子目录
+// 对齐 Python: pathlib.Path.rglob("*.py")
+func TestSearchFiles_递归Glob(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	// 创建多层级目录结构
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "sub", "deep"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "a.py"), []byte("hello"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "sub", "b.py"), []byte("world"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "sub", "deep", "c.py"), []byte("deep"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("text"), 0644))
+
+	// *.py 应匹配所有层级（对齐 Python rglob），自动加 **/ 前缀
+	res, err := fsOp.SearchFiles(ctx, tmpDir, "*.py")
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.Code)
+	assert.Equal(t, 3, res.Data.TotalMatches)
+
+	// **/*.py 与 *.py 行为一致（对齐 Python rglob）
+	res2, err := fsOp.SearchFiles(ctx, tmpDir, "**/*.py")
+	require.NoError(t, err)
+	assert.Equal(t, 0, res2.Code)
+	assert.Equal(t, 3, res2.Data.TotalMatches)
+}
+
+// TestSearchFiles_排除模式 测试 exclude 递归 glob
+// 对齐 Python: base.rglob(pat) 用于 exclude_patterns
+func TestSearchFiles_排除模式(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "sub"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "a.py"), []byte("hello"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "b.go"), []byte("world"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "sub", "c.py"), []byte("deep"), 0644))
+
+	// 搜索所有文件但排除 *.py（对齐 Python exclude 的 rglob 行为）
+	res, err := fsOp.SearchFiles(ctx, tmpDir, "*", sys_operation.WithFsExcludePatterns([]string{"*.py"}))
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.Code)
+	// 只剩 b.go（a.py 和 sub/c.py 都被排除）
+	assert.Equal(t, 1, res.Data.TotalMatches)
+}
