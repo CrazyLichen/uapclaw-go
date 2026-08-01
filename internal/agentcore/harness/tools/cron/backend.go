@@ -9,21 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// CronToolContext 运行时上下文，绑定到 cron 工具注册。
-// 对齐 Python: CronToolContext (cron.py L14-26)
-type CronToolContext struct {
-	// ChannelID 频道标识
-	ChannelID string
-	// SessionID 会话标识
-	SessionID string
-	// Metadata 扩展元数据
-	Metadata map[string]any
-	// Mode 触发模式
-	Mode string
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // CronToolBackend 宿主提供的 cron 后端接口，由工具层的通用工厂调用。
 // 对齐 Python: CronToolBackend (cron.py L29-88)
 type CronToolBackend interface {
@@ -71,6 +56,19 @@ type CronToolBackend interface {
 	// Wake 唤醒，注入提示文本。
 	// 对齐 Python: wake(text, *, context=None, mode=None)
 	Wake(ctx context.Context, text string, cronCtx *CronToolContext, mode string) (map[string]any, error)
+}
+
+// CronToolContext 运行时上下文，绑定到 cron 工具注册。
+// 对齐 Python: CronToolContext (cron.py L14-26)
+type CronToolContext struct {
+	// ChannelID 频道标识
+	ChannelID string
+	// SessionID 会话标识
+	SessionID string
+	// Metadata 扩展元数据
+	Metadata map[string]any
+	// Mode 触发模式
+	Mode string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
