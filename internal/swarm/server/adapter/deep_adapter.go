@@ -423,6 +423,9 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 对齐 Python: _build_configured_subagents(model, config, configBase)
 	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, configBase)
 
+	// 对齐 Python L2575-2577: should_enable_general_agent = should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
+	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
+
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
 	// 对齐 Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
