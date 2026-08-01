@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -195,7 +193,7 @@ func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestI
 		return
 	}
 	AppendCompactHistoryRecords(sessionID, requestID, channelID,
-		summaryText, schema.NowTimestamp(), "auto",
+		summaryText, CurrentTimestamp(), "auto",
 		compactStatsFromPayload(payload), mode)
 }
 
@@ -349,8 +347,9 @@ func writeHistoryItem(sessionID string, record map[string]any) {
 }
 
 // historyFilePath 返回 history.json 的完整路径。
+// 对齐 Python: _history_file(session_id) 使用 get_agent_sessions_dir()
 func historyFilePath(sessionID string) string {
-	dir := filepath.Join(workspace.AgentSessionsDir(), sessionID)
+	dir := filepath.Join(GetSessionsDir(), sessionID)
 	_ = os.MkdirAll(dir, 0o755)
 	return filepath.Join(dir, "history.json")
 }

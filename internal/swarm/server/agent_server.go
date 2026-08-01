@@ -39,8 +39,6 @@ type AgentServer struct {
 	sessionStreamTasks map[string]context.CancelFunc
 	// sessionStreamTasksMu 保护 sessionStreamTasks 的读写锁
 	sessionStreamTasksMu sync.RWMutex
-	// sessionsDir Agent 会话目录路径（默认从 workspace 获取，测试时可注入）
-	sessionsDir string
 	// running 是否正在运行
 	running bool
 	// runningMu 保护 running 的读写锁
@@ -83,25 +81,14 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 		transport:          transport,
 		agentConfigService: agentConfigService,
 		sessionStreamTasks: make(map[string]context.CancelFunc),
-		sessionsDir:        workspace.AgentSessionsDir(),
 		stopCh:             make(chan struct{}),
 	}
-}
-
-// SetSessionsDir 设置会话目录路径（供测试注入）。
-func (s *AgentServer) SetSessionsDir(dir string) {
-	s.sessionsDir = dir
 }
 
 // SetAgentFactoryForTest 设置 Agent 创建工厂覆盖（仅测试用）。
 // 必须在 Start() 之前调用，run() 初始化 AgentManager 后会应用此覆盖。
 func (s *AgentServer) SetAgentFactoryForTest(factory runtime.AgentFactory) {
 	s.agentFactoryOverride = factory
-}
-
-// SessionsDir 返回会话目录路径。
-func (s *AgentServer) SessionsDir() string {
-	return s.sessionsDir
 }
 
 // Start 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）。

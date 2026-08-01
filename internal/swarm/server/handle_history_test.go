@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -143,9 +143,9 @@ func setupHistoryTest(t *testing.T, sessionID string, history []any) string {
 		t.Fatalf("写入 history.json 失败: %v", err)
 	}
 
-	// 设置 UAPCLAW_DATA_DIR 并重置路径缓存
-	t.Setenv(pathutil.EnvDataDir, tmpDir)
-	pathutil.ResetCache()
+	// 设置 UAPCLAW_DATA_DIR 并重置路径缓存（对齐 Python: set_user_workspace_dir）
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	path.ResetCache()
 
 	return tmpDir
 }

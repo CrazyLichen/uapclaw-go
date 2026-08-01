@@ -24,10 +24,10 @@ import (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// setupTestSessionsDir 设置测试用的 sessions 目录，返回（sessionsDir, 设置好 sessionsDir 的 AgentServer, cleanup）。
+// setupTestSessionsDir 设置测试用的 sessions 目录，返回（sessionsDir, AgentServer, cleanup）。
 //
-// 同时设置 UAPCLAW_DATA_DIR 环境变量并重置 workspace 缓存，
-// 确保 session 子包和 server 包指向同一个目录。
+// 对齐 Python 测试隔离模式：设置 UAPCLAW_DATA_DIR 环境变量 + ResetCache，
+// 确保全局函数 GetSessionsDir() 指向测试临时目录（Python 用 set_user_workspace_dir()）。
 func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cleanup func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
@@ -35,13 +35,12 @@ func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cle
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("创建 sessions 目录失败: %v", err)
 	}
-	// 设置环境变量，使 session 子包的 GetSessionsDir 也指向此目录
+	// 对齐 Python: set_user_workspace_dir(tmpDir) — 通过环境变量覆盖全局路径
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
 	path.ResetCache()
 	session.ClearAllSessionMetadataCache()
 
 	server, _ := newTestServer()
-	server.SetSessionsDir(sessionsDir)
 	cleanup = func() {
 		session.FlushMetadataQueue()
 		session.ClearAllSessionMetadataCache()

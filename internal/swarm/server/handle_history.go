@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -85,8 +85,8 @@ func getConversationHistory(sessionID string, pageIdx int) map[string]any {
 		return nil
 	}
 
-	// 3. 读取 history.json
-	sessionsDir := pathutil.AgentSessionsDir()
+	// 3. 读取 history.json（对齐 Python: get_agent_sessions_dir() 全局函数）
+	sessionsDir := session.GetSessionsDir()
 	historyPath := sessionsDir + "/" + strings.TrimSpace(sessionID) + "/history.json"
 
 	data, err := os.ReadFile(historyPath)

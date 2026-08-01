@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -40,17 +39,6 @@ type sessionCreateParams struct {
 type sessionSwitchParams struct {
 	// SessionID 目标会话标识
 	SessionID string `json:"session_id"`
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// GetSessionsDir 返回全局会话目录路径。
-// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
-func GetSessionsDir() string {
-	if inst := GetInstance(); inst != nil {
-		return inst.sessionsDir
-	}
-	return workspace.AgentSessionsDir()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -146,7 +134,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		), nil
 	}
 
-	sessionsDir := s.sessionsDir
+	sessionsDir := session.GetSessionsDir()
 	sessionDir := filepath.Join(sessionsDir, params.SessionID)
 
 	if err := os.RemoveAll(sessionDir); err != nil {
