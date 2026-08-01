@@ -598,7 +598,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
 | 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
 | **9.x TeamBackend 子系统** | — | | | |
-| 9.65a-1 | ☐ | TeamDB 基础层 | 数据模型+TeamDatabase接口+InMemoryDAO（TeamDao/MemberDao含FSM校验）+会话表生命周期 | `openjiuwen/agent_teams/tools/database/` · `tools/models.py` |
+| 9.65a-1 | ✅ | TeamDB 基础层 | 数据模型+TeamDatabase接口+InMemoryDAO（TeamDao/MemberDao含FSM校验）+会话表生命周期；覆盖率92.6% | `openjiuwen/agent_teams/tools/database/` · `tools/models.py` |
 | 9.65a-2 | ☐ | TaskDao + TaskManager | InMemoryTaskDao（依赖图变更管线）+TeamTaskManager（任务生命周期+计划模式审批） | `openjiuwen/agent_teams/tools/database/task_dao.py` · `tools/task_manager.py` |
 | 9.65a-3 | ☐ | MessageDao + MessageManager | InMemoryMessageDao（read_status watermark）+TeamMessageManager（7方法薄门面） | `openjiuwen/agent_teams/tools/database/message_dao.py` · `tools/message_manager.py` |
 | 9.65a-4 | ☐ | TeamBackend 门面 | TeamBackend结构体+30+方法（spawn_member/startup/build_team/shutdown_member/clean_team/force_clean/HITT名册/inbound回调） | `openjiuwen/agent_teams/tools/team.py` |

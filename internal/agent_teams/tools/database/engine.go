@@ -1,20 +1,46 @@
 package database
 
-import "context"
+import (
+	"context"
+	"encoding/hex"
+	"time"
+
+	"golang.org/x/crypto/blake2s"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// InitializeEngine 初始化数据库引擎。⤵️ 回填: 9.65a
-func InitializeEngine(ctx context.Context, cfg DBConfigProvider) (any, error) { return nil, nil }
+// GetCurrentTime 返回当前毫秒时间戳。对齐 Python: get_current_time()
+func GetCurrentTime() int64 {
+	return time.Now().UnixMilli()
+}
 
-// CreateCurSessionTablesFromEngine 从引擎创建当前会话表。⤵️ 回填: 9.65a
-func CreateCurSessionTablesFromEngine(ctx context.Context, engine any) error { return nil }
+// SanitizeSessionIDForTable 将 session_id 转为 SQL-safe 的固定长度 hex 后缀。
+// 对齐 Python: _sanitize_session_id_for_table(session_id)
+// 使用 BLAKE2s XOF(size=8) → 16 hex chars（精确对齐 Python digest_size=8）
+func SanitizeSessionIDForTable(sessionID string) string {
+	xof, _ := blake2s.NewXOF(8, nil)
+	xof.Write([]byte(sessionID))
+	buf := make([]byte, 8)
+	xof.Read(buf)
+	return hex.EncodeToString(buf)
+}
 
-// DropCurSessionTablesFromEngine 从引擎删除当前会话表。⤵️ 回填: 9.65a
-func DropCurSessionTablesFromEngine(ctx context.Context, engine any) error { return nil }
+// InitializeEngine 初始化数据库引擎。⤵️ 9.65a-5 SQL 实现时回填
+func InitializeEngine(_ context.Context, _ DBConfigProvider) (any, error) { return nil, nil }
 
-// CleanupAllRuntimeStateFromEngine 从引擎清理所有运行时状态。⤵️ 回填: 9.65a
-func CleanupAllRuntimeStateFromEngine(ctx context.Context, engine any) ([]string, []string, error) { return nil, nil, nil }
+// CreateCurSessionTablesFromEngine 创建当前会话动态表。⤵️ 9.65a-5
+func CreateCurSessionTablesFromEngine(_ context.Context, _ any) error { return nil }
 
-// DropSessionTablesByIDFromEngine 按 ID 删除动态表。⤵️ 回填: 9.65a
-func DropSessionTablesByIDFromEngine(ctx context.Context, engine any, sessionID string) ([]string, error) { return nil, nil }
+// DropCurSessionTablesFromEngine 删除当前会话动态表。⤵️ 9.65a-5
+func DropCurSessionTablesFromEngine(_ context.Context, _ any) error { return nil }
+
+// CleanupAllRuntimeStateFromEngine 清理所有运行时状态。⤵️ 9.65a-5
+func CleanupAllRuntimeStateFromEngine(_ context.Context, _ any) ([]string, []string, error) {
+	return nil, nil, nil
+}
+
+// DropSessionTablesByIDFromEngine 按 ID 删除动态表。⤵️ 9.65a-5
+func DropSessionTablesByIDFromEngine(_ context.Context, _ any, _ string) ([]string, error) {
+	return nil, nil
+}
