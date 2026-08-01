@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 )
 
 // ──────────────────────────── TeamDao 测试 ────────────────────────────
@@ -597,5 +599,507 @@ func TestInMemoryTeamDatabase_Member_自引用(t *testing.T) {
 	dao := db.Member()
 	if dao != db {
 		t.Error("Member() 应返回 db 自身（对齐 Python self.member = self）")
+	}
+}
+
+// ──────────────────────────── TaskDao 测试 ────────────────────────────
+
+func TestCreateTask_成功(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	task := &TeamTaskBase{TaskID: "task1", TeamName: "alpha", Title: "任务1", Content: "内容1", Status: fsm.TaskStatusPending}
+	ok, err := db.CreateTask(ctx, task)
+	if err != nil {
+		t.Fatalf("CreateTask 返回错误: %v", err)
+	}
+	if !ok {
+		t.Error("CreateTask 应返回 true")
+	}
+
+	got, _ := db.GetTask(ctx, "task1")
+	if got == nil {
+		t.Fatal("GetTask 应返回任务数据")
+	}
+	if got.TaskID != "task1" {
+		t.Errorf("TaskID: got %q, want %q", got.TaskID, "task1")
+	}
+	if got.UpdatedAt == 0 {
+		t.Error("UpdatedAt 应非零")
+	}
+}
+
+func TestCreateTask_已存在(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	task := &TeamTaskBase{TaskID: "task1", TeamName: "alpha", Title: "任务1", Status: fsm.TaskStatusPending}
+	db.CreateTask(ctx, task)
+	ok, _ := db.CreateTask(ctx, &TeamTaskBase{TaskID: "task1", TeamName: "alpha", Title: "其他", Status: fsm.TaskStatusPending})
+	if ok {
+		t.Error("重复创建任务应返回 false")
+	}
+}
+
+func TestGetTask_不存在(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	got, err := db.GetTask(ctx, "nonexist")
+	if err != nil {
+		t.Fatalf("GetTask 返回错误: %v", err)
+	}
+	if got != nil {
+		t.Error("不存在任务应返回 nil")
+	}
+}
+
+func TestGetTeamTasks_按状态过滤(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "P1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "C1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t3", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "P2"})
+
+	pending, _ := db.GetTeamTasks(ctx, "alpha", fsm.TaskStatusPending)
+	if len(pending) != 2 {
+		t.Errorf("pending 任务数量: got %d, want 2", len(pending))
+	}
+
+	all, _ := db.GetTeamTasks(ctx, "alpha", "")
+	if len(all) != 3 {
+		t.Errorf("全部任务数量: got %d, want 3", len(all))
+	}
+}
+
+func TestGetTasksByAssignee(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: "agent1", Status: fsm.TaskStatusClaimed, Title: "A1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: "agent2", Status: fsm.TaskStatusClaimed, Title: "A2"})
+
+	result, _ := db.GetTasksByAssignee(ctx, "alpha", "agent1", "")
+	if len(result) != 1 {
+		t.Errorf("agent1 的任务数量: got %d, want 1", len(result))
+	}
+}
+
+func TestDeleteTask_级联删依赖(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
+
+	db.DeleteTask(ctx, "t1")
+	deps, _ := db.GetTaskDependencies(ctx, "t2")
+	if len(deps) != 0 {
+		t.Errorf("上游删除后，下游依赖应为0: got %d", len(deps))
+	}
+}
+
+func TestClaimTask_成功(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务"})
+
+	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
+	if !ok {
+		t.Error("ClaimTask PENDING→CLAIMED 应返回 true")
+	}
+	task, _ := db.GetTask(ctx, "t1")
+	if task.Assignee != "agent1" {
+		t.Errorf("Assignee: got %q, want %q", task.Assignee, "agent1")
+	}
+}
+
+func TestClaimTask_非法转换(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
+
+	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
+	if ok {
+		t.Error("ClaimTask COMPLETED→CLAIMED 应返回 false")
+	}
+}
+
+func TestResetTask_成功(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务"})
+
+	ok, _ := db.ResetTask(ctx, "t1")
+	if !ok {
+		t.Error("ResetTask CLAIMED→PENDING 应返回 true")
+	}
+	task, _ := db.GetTask(ctx, "t1")
+	if task.Assignee != "" {
+		t.Errorf("ResetTask 后 Assignee 应为空: got %q", task.Assignee)
+	}
+}
+
+func TestApprovePlanTask_成功(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "任务"})
+
+	ok, _ := db.ApprovePlanTask(ctx, "t1")
+	if !ok {
+		t.Error("ApprovePlanTask CLAIMED→PLAN_APPROVED 应返回 true")
+	}
+	task, _ := db.GetTask(ctx, "t1")
+	if task.Status != fsm.TaskStatusPlanApproved {
+		t.Errorf("Status: got %q, want %q", task.Status, fsm.TaskStatusPlanApproved)
+	}
+}
+
+func TestMutateDependencyGraph_简单成功(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	newTasks := []NewTaskSpec{{TaskID: "t2", Title: "下游", InitialStatus: fsm.TaskStatusPending}}
+	edges := []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}}
+
+	result := db.MutateDependencyGraph(ctx, "alpha", newTasks, edges)
+	if !result.Ok {
+		t.Errorf("管线应成功: reason=%s", result.Reason)
+	}
+
+	task2, _ := db.GetTask(ctx, "t2")
+	if task2 == nil {
+		t.Fatal("t2 应已创建")
+	}
+	if task2.Status != fsm.TaskStatusBlocked {
+		t.Errorf("t2 有未解决依赖应变为 blocked: got %q", task2.Status)
+	}
+}
+
+func TestMutateDependencyGraph_环路检测(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "A"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
+
+	edges := []EdgeSpec{
+		{TaskID: "t1", DependsOnID: "t2"},
+		{TaskID: "t2", DependsOnID: "t1"},
+	}
+	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
+	if result.Ok {
+		t.Error("环路应导致管线失败")
+	}
+}
+
+func TestMutateDependencyGraph_taskID冲突(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "已有"})
+
+	newTasks := []NewTaskSpec{{TaskID: "t1", Title: "冲突"}}
+	result := db.MutateDependencyGraph(ctx, "alpha", newTasks, nil)
+	if result.Ok {
+		t.Error("task_id 冲突应导致管线失败")
+	}
+}
+
+func TestCompleteTask_终止传播(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
+
+	down, _ := db.GetTask(ctx, "downstream")
+	if down.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("下游应被阻塞: got %q", down.Status)
+	}
+
+	// 先认领上游，然后完成（对齐 Python FSM：pending→claimed→completed）
+	db.ClaimTask(ctx, "upstream", "leader1")
+	refreshed, _ := db.CompleteTask(ctx, "upstream")
+	if len(refreshed) == 0 {
+		t.Error("完成上游应刷新下游任务")
+	}
+
+	down, _ = db.GetTask(ctx, "downstream")
+	if down.Status != fsm.TaskStatusPending {
+		t.Errorf("上游完成后下游应解除阻塞: got %q", down.Status)
+	}
+}
+
+func TestCancelTask_终止传播(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
+
+	refreshed, _ := db.CancelTask(ctx, "upstream")
+	if len(refreshed) == 0 {
+		t.Error("取消上游应刷新下游任务")
+	}
+
+	down, _ := db.GetTask(ctx, "downstream")
+	if down.Status != fsm.TaskStatusPending {
+		t.Errorf("取消上游后下游应解除阻塞: got %q", down.Status)
+	}
+}
+
+func TestCancelAllTasks(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
+
+	cancelled, _ := db.CancelAllTasks(ctx, "alpha", nil)
+	if len(cancelled) != 2 {
+		t.Errorf("应取消2个任务: got %d", len(cancelled))
+	}
+}
+
+func TestCancelAllTasks_skipAssignees(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
+
+	cancelled, _ := db.CancelAllTasks(ctx, "alpha", []string{"agent1"})
+	if len(cancelled) != 1 {
+		t.Errorf("skipAssignees 后应只取消1个任务: got %d", len(cancelled))
+	}
+}
+
+func TestVerifyAndFixTaskConsistency(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "A"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
+
+	// 通过管线添加依赖，t2→t1
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
+	// t2 应变为 blocked
+	t2, _ := db.GetTask(ctx, "t2")
+	if t2.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("t2 应被阻塞: got %q", t2.Status)
+	}
+
+	// 完成上游 t1 → 下游依赖被解决
+	db.ClaimTask(ctx, "t1", "leader1")
+	db.CompleteTask(ctx, "t1")
+
+	// 此时 t2 应从 blocked→pending（已被 terminateTaskInSession 刷新）
+	t2, _ = db.GetTask(ctx, "t2")
+	if t2.Status != fsm.TaskStatusPending {
+		t.Errorf("上游完成后 t2 应解除阻塞: got %q", t2.Status)
+	}
+}
+
+func TestUpdateTask_禁止编辑CLAIMED(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "已认领"})
+
+	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
+	if ok {
+		t.Error("CLAIMED 状态下应禁止编辑")
+	}
+}
+
+func TestUpdateTask_允许编辑PENDING(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "待定"})
+
+	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
+	if !ok {
+		t.Error("PENDING 状态下应允许编辑")
+	}
+	task, _ := db.GetTask(ctx, "t1")
+	if task.Title != "新标题" {
+		t.Errorf("Title: got %q, want %q", task.Title, "新标题")
+	}
+}
+
+func TestGetUnresolvedDependenciesCount(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
+
+	count, _ := db.GetUnresolvedDependenciesCount(ctx, "t2")
+	if count != 1 {
+		t.Errorf("t2 未解决依赖应为1: got %d", count)
+	}
+
+	// 完成上游后 t2 的依赖变为已解决
+	db.ClaimTask(ctx, "t1", "leader1")
+	db.CompleteTask(ctx, "t1")
+	count, _ = db.GetUnresolvedDependenciesCount(ctx, "t2")
+	if count != 0 {
+		t.Errorf("上游完成后 t2 未解决依赖应为0: got %d", count)
+	}
+}
+
+func TestGetTasksDependingOn(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
+
+	result, _ := db.GetTasksDependingOn(ctx, "t1")
+	if len(result) != 1 {
+		t.Errorf("t1 阻塞的任务应为1: got %d", len(result))
+	}
+	if result[0].TaskID != "t2" {
+		t.Errorf("阻塞任务ID: got %q, want %q", result[0].TaskID, "t2")
+	}
+}
+
+func TestUpdateTaskStatus_终态传播(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
+
+	// 通过 UpdateTaskStatus 完成上游（对齐 Python: update_task_status → complete 传播）
+	refreshed, _ := db.UpdateTaskStatus(ctx, "upstream", fsm.TaskStatusCompleted)
+	if len(refreshed) == 0 {
+		t.Error("UpdateTaskStatus 终态应触发传播")
+	}
+
+	down, _ := db.GetTask(ctx, "downstream")
+	if down.Status != fsm.TaskStatusPending {
+		t.Errorf("上游完成后下游应解除阻塞: got %q", down.Status)
+	}
+}
+
+func TestAddTaskWithBidirectionalDependencies(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "已有任务"})
+
+	newTask := &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Title: "新任务", Status: fsm.TaskStatusPending}
+	result := db.AddTaskWithBidirectionalDependencies(ctx, "alpha", newTask, []string{"t1"})
+	if !result.Ok {
+		t.Errorf("应成功: reason=%s", result.Reason)
+	}
+
+	t2, _ := db.GetTask(ctx, "t2")
+	if t2.Status != fsm.TaskStatusBlocked {
+		t.Errorf("t2 依赖 t1 应被阻塞: got %q", t2.Status)
+	}
+}
+
+func TestTask_自引用(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	dao := db.Task()
+	if dao != db {
+		t.Error("Task() 应返回 db 自身（对齐 Python self.task = self）")
+	}
+}
+
+func TestApprovePlanTask_非法转换(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "未认领"})
+
+	ok, _ := db.ApprovePlanTask(ctx, "t1")
+	if ok {
+		t.Error("PENDING→PLAN_APPROVED 应返回 false（需先 CLAIMED）")
+	}
+}
+
+func TestUpdateTask_禁止编辑PLAN_APPROVED(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Title: "已审批"})
+
+	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
+	if ok {
+		t.Error("PLAN_APPROVED 状态下应禁止编辑")
+	}
+}
+
+func TestResetTask_非法转换(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
+
+	ok, _ := db.ResetTask(ctx, "t1")
+	if ok {
+		t.Error("COMPLETED→PENDING 应返回 false")
+	}
+}
+
+func TestMutateDependencyGraph_端点缺失(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	// 只有 t1，但 edge 引用不存在的 t3
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "A"})
+	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t3"}}
+	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
+	if result.Ok {
+		t.Error("端点缺失应导致管线失败")
+	}
+}
+
+func TestMutateDependencyGraph_终态目标(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	edges := []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}}
+	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
+	if result.Ok {
+		t.Error("终态目标应导致管线失败")
 	}
 }

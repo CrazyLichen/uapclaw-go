@@ -17,3 +17,10 @@ func IsValidMemberTransition(current, target string) bool {
 func IsValidExecutionTransition(current, target string) bool {
 	return fsm.IsValidExecutionTransition(current, target)
 }
+
+// IsValidTaskTransition 检查 TaskStatus 状态转换是否合法。
+// 对齐 Python: is_valid_transition(current, new, TASK_TRANSITIONS)
+// 委托 fsm 包实现，本包仅提供 string 版 wrapper。
+func IsValidTaskTransition(current, target string) bool {
+	return fsm.IsValidTaskTransition(current, target)
+}

@@ -52,6 +52,40 @@ type TeamMember struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
+// TeamTaskBase 任务行模型。
+// 对齐 Python: TeamTaskBase (openjiuwen/agent_teams/tools/database/task_dao.py)
+// 动态表 team_task_<session_suffix> 的行模型。
+type TeamTaskBase struct {
+	// TaskID 任务唯一标识
+	TaskID string `json:"task_id"`
+	// TeamName 团队名称
+	TeamName string `json:"team_name"`
+	// Title 任务标题
+	Title string `json:"title"`
+	// Content 任务内容
+	Content string `json:"content"`
+	// Status 任务状态（TaskStatus 枚举值）
+	Status string `json:"status"`
+	// Assignee 认领人/分配人
+	Assignee string `json:"assignee,omitempty"`
+	// UpdatedAt 更新时间（毫秒时间戳）
+	UpdatedAt int64 `json:"updated_at,omitempty"`
+}
+
+// TeamTaskDependencyBase 依赖边模型。
+// 对齐 Python: TeamTaskDependencyBase (openjiuwen/agent_teams/tools/database/task_dao.py)
+// 动态表 team_task_dependency_<session_suffix> 的行模型。
+type TeamTaskDependencyBase struct {
+	// TaskID 下游任务ID（被阻塞的任务）
+	TaskID string `json:"task_id"`
+	// DependsOnID 上游任务ID（阻塞源）
+	DependsOnID string `json:"depends_on_task_id"`
+	// TeamName 团队名称
+	TeamName string `json:"team_name"`
+	// Resolved 依赖是否已解决（上游完成/取消时标记为 true）
+	Resolved bool `json:"resolved"`
+}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -70,3 +104,39 @@ var (
 		"team_member",
 	}
 )
+
+// ──────────────────────────── 辅助类型 ────────────────────────────
+
+// NewTaskSpec 图变更管线中待插入的新任务规范。
+// 对齐 Python: NewTaskSpec (openjiuwen/agent_teams/tools/database/task_dao.py)
+type NewTaskSpec struct {
+	// TaskID 任务唯一标识
+	TaskID string
+	// Title 任务标题
+	Title string
+	// Content 任务内容
+	Content string
+	// InitialStatus 初始状态
+	InitialStatus string
+}
+
+// EdgeSpec 依赖边规范（管线输入）。
+// 方向语义：TaskID 依赖 DependsOnID（TaskID 被 DependsOnID 阻塞）。
+// 对齐 Python 的 (task_id, depends_on_task_id) 边方向。
+type EdgeSpec struct {
+	// TaskID 下游任务ID（被阻塞的任务）
+	TaskID string
+	// DependsOnID 上游任务ID（阻塞源）
+	DependsOnID string
+}
+
+// GraphMutationResult 图变更操作结果。
+// 对齐 Python: GraphMutationResult (openjiuwen/agent_teams/tools/database/task_dao.py)
+type GraphMutationResult struct {
+	// Ok 操作是否成功
+	Ok bool
+	// Reason 失败原因（Ok=false 时）
+	Reason string
+	// RefreshedTasks 状态刷新产出的任务ID列表
+	RefreshedTasks []string
+}

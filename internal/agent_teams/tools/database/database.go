@@ -81,8 +81,55 @@ type MemberDao interface {
 	UpdateMemberExecutionStatus(ctx context.Context, memberName, teamName, executionStatus string) bool
 }
 
-// TaskDao 任务 DAO 接口。⤵️ 9.65a-2 回填具体方法签名
-type TaskDao interface{}
+// TaskDao 任务 DAO 接口。
+// 对齐 Python: TaskDao (openjiuwen/agent_teams/tools/database/task_dao.py)
+type TaskDao interface {
+	// CreateTask 创建单条任务。返回 true 表示成功，false 表示 task_id 冲突（对齐 Python IntegrityError → False）。
+	CreateTask(ctx context.Context, task *TeamTaskBase) (bool, error)
+	// GetTask 按 ID 查询任务。返回 nil 表示不存在（对齐 Python Optional[TeamTaskBase]）。
+	GetTask(ctx context.Context, taskID string) (*TeamTaskBase, error)
+	// GetTeamTasks 查询团队全部任务。status 为空字符串表示不过滤。
+	GetTeamTasks(ctx context.Context, teamName, status string) ([]*TeamTaskBase, error)
+	// GetTasksByAssignee 查询成员的任务。status 为空字符串表示不过滤。
+	GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error)
+	// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
+	// 对齐 Python: claim_task() → bool
+	ClaimTask(ctx context.Context, taskID, assignee string) (bool, error)
+	// ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
+	// 对齐 Python: reset_task() → bool
+	ResetTask(ctx context.Context, taskID string) (bool, error)
+	// ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。
+	// 对齐 Python: approve_plan_task() → bool
+	ApprovePlanTask(ctx context.Context, taskID string) (bool, error)
+	// UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 BLOCKED→PENDING。
+	// 返回刷新的 task ID 列表。
+	UpdateTaskStatus(ctx context.Context, taskID, newStatus string) ([]string, error)
+	// UpdateTask 更新标题/内容。CLAIMED/PLAN_APPROVED 状态下禁止编辑。
+	// 对齐 Python: update_task() → bool
+	UpdateTask(ctx context.Context, taskID, title, content string) (bool, error)
+	// MutateDependencyGraph 原子图变更：5 步管线。
+	// 对齐 Python: mutate_dependency_graph()
+	MutateDependencyGraph(ctx context.Context, teamName string, newTasks []NewTaskSpec, addEdges []EdgeSpec) GraphMutationResult
+	// AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
+	// 对齐 Python: add_task_with_bidirectional_dependencies()
+	AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependsOnIDs []string) GraphMutationResult
+	// GetTaskDependencies 查询任务依赖。
+	GetTaskDependencies(ctx context.Context, taskID string) ([]*TeamTaskDependencyBase, error)
+	// GetUnresolvedDependenciesCount 未解决依赖计数。
+	GetUnresolvedDependenciesCount(ctx context.Context, taskID string) (int, error)
+	// GetTasksDependingOn 查询下游依赖任务（即被 taskID 阻塞的任务）。
+	GetTasksDependingOn(ctx context.Context, taskID string) ([]*TeamTaskBase, error)
+	// DeleteTask 删除任务。
+	DeleteTask(ctx context.Context, taskID string) error
+	// CancelTask 取消任务（原子终止传播），返回 unblocked task IDs。
+	CancelTask(ctx context.Context, taskID string) ([]string, error)
+	// CancelAllTasks 批量取消（原子终止传播），支持 skipAssignees 过滤。
+	CancelAllTasks(ctx context.Context, teamName string, skipAssignees []string) ([]*TeamTaskBase, error)
+	// CompleteTask 完成任务（原子终止传播），返回 unblocked task IDs。
+	CompleteTask(ctx context.Context, taskID string) ([]string, error)
+	// VerifyAndFixTaskConsistency 一致性修复：扫描 BLOCKED 任务并刷新状态。
+	VerifyAndFixTaskConsistency(ctx context.Context, teamName string) ([]string, error)
+}
 
 // MessageDao 消息 DAO 接口。⤵️ 9.65a-3 回填具体方法签名
 type MessageDao interface{}

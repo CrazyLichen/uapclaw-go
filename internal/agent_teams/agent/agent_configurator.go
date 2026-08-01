@@ -5,6 +5,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -412,10 +413,10 @@ func (c *AgentConfigurator) SetWorkspaceInitialized(v bool) { c.infra.WorkspaceI
 
 // TaskManager 返回任务管理器。
 // 对齐 Python: AgentConfigurator.task_manager property
-func (c *AgentConfigurator) TaskManager() any { return c.infra.TaskManager }
+func (c *AgentConfigurator) TaskManager() *tools.TeamTaskManager { return c.infra.TaskManager }
 
 // SetTaskManager 设置任务管理器。
-func (c *AgentConfigurator) SetTaskManager(v any) { c.infra.TaskManager = v }
+func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.TaskManager = v }
 
 // MessageManager 返回消息管理器。
 // 对齐 Python: AgentConfigurator.message_manager property

@@ -1,5 +1,9 @@
 package agent
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamInfra 每进程团队基础设施。
@@ -19,7 +23,7 @@ type TeamInfra struct {
 	// WorkspaceInitialized 工作空间是否已初始化
 	WorkspaceInitialized bool
 	// TaskManager 任务管理器（概念上从 TeamBackend 派生，显式保留以便测试注入）
-	TaskManager any
+	TaskManager *tools.TeamTaskManager
 	// MessageManager 消息管理器（概念上从 TeamBackend 派生，显式保留以便测试注入）
 	MessageManager any
 }

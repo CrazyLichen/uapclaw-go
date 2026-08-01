@@ -44,6 +44,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -253,7 +254,7 @@ func (a *TeamAgent) MessageManager() any {
 
 // TaskManager 返回任务管理器。
 // 对齐 Python: TeamAgent.task_manager property
-func (a *TeamAgent) TaskManager() any {
+func (a *TeamAgent) TaskManager() *tools.TeamTaskManager {
 	if a.configurator != nil {
 		return a.configurator.TaskManager()
 	}
