@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -12,6 +14,13 @@ import (
 const (
 	// titleMaxLen 自动标题截取长度，对齐 Python _TITLE_MAX_LEN = 50
 	titleMaxLen = 50
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// logComponent 日志组件，对齐项目规范 server 层使用 ComponentAgentServer
+	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
