@@ -1,7 +1,6 @@
 package hooks
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -225,6 +224,3 @@ func toBool(v any) bool {
 	}
 	return false
 }
-
-// 确保 fmt import 不被移除（调试用）
-var _ = fmt.Sprintf
