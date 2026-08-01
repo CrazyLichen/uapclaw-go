@@ -4,6 +4,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -160,6 +162,17 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	if perm != nil {
 		d.permissionRail = perm
 		railsList = append(railsList, perm)
+	}
+
+	// 步骤 21: userHookRail — 用户配置的 hooks，对齐 Python interface_deep.py L2200-2211
+	hooksCfg := hookscfg.LoadHooksConfig(configBase)
+	if len(hooksCfg.Events) > 0 {
+		// 从 configBase 提取 LLM 配置，对齐 Python _query_llm 中 config 提取
+		llmCfg := extractLLMConfig(configBase)
+		hookExec := serverhooks.NewHookExecutor(llmCfg)
+		userHookRail := serverhooks.NewUserHookRail(*hooksCfg, hookExec)
+		railsList = append(railsList, userHookRail)
+		logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
 	}
 
 	logger.Info(logComponent).
@@ -341,4 +354,33 @@ func (d *DeepAdapter) updateRailsForMode(mode string) {
 func (d *DeepAdapter) updatePromptForMode(mode string) {
 	// ⤵️ 10.6.3-10: 同步 system_prompt_builder 语言
 	logger.Info(logComponent).Str("mode", mode).Msg("updatePromptForMode 等待 10.6.3-10 回填")
+}
+
+// extractLLMConfig 从 configBase 提取 LLM 配置，对齐 Python _query_llm 中的 config 提取
+func extractLLMConfig(configBase map[string]any) serverhooks.LLMConfig {
+	modelsCfg, _ := configBase["models"].(map[string]any)
+	defaultCfg, _ := modelsCfg["default"].(map[string]any)
+	clientCfg, _ := defaultCfg["model_client_config"].(map[string]any)
+	return serverhooks.LLMConfig{
+		APIKey:         strFromMap(clientCfg, "api_key"),
+		APIBase:        strFromMap(clientCfg, "api_base"),
+		ClientProvider: strFromMap(clientCfg, "client_provider"),
+		DefaultModel:   strFromMap(clientCfg, "model_name"),
+	}
+}
+
+// strFromMap 从 map[string]any 中安全提取字符串值
+func strFromMap(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok {
+		return ""
+	}
+	s, ok := v.(string)
+	if ok {
+		return s
+	}
+	return ""
 }

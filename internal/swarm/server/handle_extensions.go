@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -54,11 +55,15 @@ func (s *AgentServer) handleExtensionsToggle(_ context.Context, request *schema.
 	), nil
 }
 
-// handleHooksList 处理 hooks.list 请求。stub：返回空列表。
+// handleHooksList 处理 hooks.list 请求。返回 hooks 配置摘要。
+// 对齐 Python: 通过 LoadHooksConfig + GetEventSummary 返回 hooks 信息
 func (s *AgentServer) handleHooksList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	configBase, _ := s.config.Load()
+	hooksCfg := hookscfg.LoadHooksConfig(configBase)
+	summary := hooksCfg.GetEventSummary()
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"hooks": []any{},
+			"hooks": summary,
 		}),
 	), nil
 }

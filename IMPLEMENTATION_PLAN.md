@@ -675,7 +675,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.15-18 | ✅ | 会话管理 | SessionManager(LIFO)✅ / SessionHistory(JSONL)✅ / SessionMetadata✅ / SessionRename✅；✅ 子包提取(server/session/)消除跨包依赖；✅ AppendHistoryRecord 元数据联动(UpdateSessionMetadata+SetSessionDeliveryContext)；✅ ReadTeamHistoryRecords+IsTeamRelevant(team过滤+重试)；✅ TruncateHistoryRecords cutIndex对齐Python；✅ SerializeValue递归序列化；✅ AutoTitle回填⤵️11.x自动标题；✅ RemoveTeamModeSessionDirsAtStartup；✅ GetAllSessionsMetadata分页 | `jiuwenswarm/server/runtime/session/` |
 | 10.3.19-20 | ✅ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
 | 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
-| 10.3.23-26 | ☐ | 服务端辅助 | Hooks/Sandbox/Utils/入口 | `jiuwenswarm/server/hooks/` · `sandbox/` · `utils/` · `app_agentserver.py` |
+| 10.3.23.1 | ✅ | HookType/HookEvent 常量 | AgentRailEvents/GatewayEvents | `hooks_config.py` HookType/HookEvent |
+| 10.3.23.2 | ✅ | 配置模型 | CommandHookConfig/PromptHookConfig/HookMatcher/HooksConfig/LoadHooksConfig | `hooks_config.py` 配置模型 |
+| 10.3.23.3 | ✅ | HookExecutor | command/prompt 两类 hook + ParseCommandOutput + ExtractJSONFromResponse | `executor.py` |
+| 10.3.23.4 | ✅ | UserHookRail | embed DeepAgentRail + BeforeToolCall/AfterToolCall/OnToolException/AfterInvoke | `user_hook_rail.py` |
+| 10.3.23.5 | ✅ | 回填注册 | DeepAdapter 注册 UserHookRail + handleHooksList 真实实现 | `interface_deep.py` 注册 |
+| 10.3.24 | ☐ | Sandbox | 延后 | `sandbox/` |
+| 10.3.25 | ☐ | Utils | 延后 | `utils/` |
+| 10.3.26 | ☐ | 入口 | 延后 | `app_agentserver.py` |
 | **10.4 独立交互入口** | — | | | |
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |
 | 10.4.2 | ☐ | 🔥 HTTP API | RESTful + SSE 流式 | 新实现 |
