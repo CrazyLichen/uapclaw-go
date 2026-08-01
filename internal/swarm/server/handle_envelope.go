@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
@@ -60,11 +61,24 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		s.injectACPCapabilities(request, envelope)
 	}
 
-	// 3. before_chat_request 钩子
-	// ⤵️ 11.13 Extension 章节：实现 _trigger_before_chat_request_hook
-	// 对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook()
+	// 3. before_chat_request 钩子（对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook()）
 	// 当 req_method 为 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 时触发
-	// 实现：构建 AgentServerChatHookContext，调用 ExtensionRegistry.trigger(BEFORE_CHAT_REQUEST, ctx)
+	extReg, extErr := extensions.GetInstanceErr()
+	if extErr == nil && extReg != nil {
+		reqMethodStr := string(request.ReqMethod)
+		var params map[string]any
+		if len(request.Params) > 0 {
+			_ = json.Unmarshal(request.Params, &params) // 延迟解析 params
+		}
+		hookCtx := &extensions.AgentServerChatHookContext{
+			RequestID:  request.RequestID,
+			ChannelID:  request.ChannelID,
+			SessionID:  request.SessionID,
+			ReqMethod:  &reqMethodStr,
+			Params:     params,
+		}
+		extReg.Trigger(ctx, extensions.AgentServerBeforeChatRequest, hookCtx.ToMap())
+	}
 
 	// 4. 按 request.ReqMethod switch 分发
 	var resp *schema.AgentResponse

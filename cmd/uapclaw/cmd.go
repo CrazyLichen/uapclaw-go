@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn/factory"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
@@ -194,9 +196,16 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
 	harness.ResetFreeSearchRuntimeFlags()
 
-	// TODO(⤵️ 扩展系统): 初始化 ExtensionRegistry + ExtensionManager + load_all_extensions
-	// 对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141
-	// 单体架构中只需初始化一次，等扩展系统实现后回填
+	// 6. 初始化扩展系统（对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141）
+	// 最小子集已实现：ExtensionRegistry.CreateInstance + 回调触发机制
+	// ⤵️ 10.5.8: ExtensionManager.LoadAllExtensions 待 loader 实现后回填
+	fw := callback.GetCallbackFramework()
+	extRegistry := extensions.CreateInstance(fw, map[string]any{}, nil)
+	if extRegistry == nil {
+		logger.Error(logger.ComponentGateway).Msg("ExtensionRegistry 初始化失败（可能已存在实例）")
+	}
+	// ⤵️ 10.5.8: extManager := extensions.NewExtensionManager(extRegistry)
+	// ⤵️ 10.5.8: err := extManager.LoadAllExtensions(ctx)
 
 	// 创建 ChannelTransport（进程内传输）
 	chTransport := transport.NewChannelTransport()

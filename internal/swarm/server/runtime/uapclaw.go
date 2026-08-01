@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -149,7 +150,25 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	// 构建 inputs
 	inputs, _, _ := uc.BuildInputs(request)
 
-	// ⤵️ 10.3.2: 云端记忆对话前钩子（ExtensionRegistry）
+	// 云端记忆对话前钩子（对齐 Python: interface.py MEMORY_BEFORE_CHAT trigger）
+	extReg, extErr := extensions.GetInstanceErr()
+	if extErr == nil && extReg != nil {
+		channelID := request.ChannelID
+		sessionID := ""
+		if request.SessionID != nil {
+			sessionID = *request.SessionID
+		}
+		memCtx := &extensions.MemoryHookContext{
+			SessionID:    sessionID,
+			RequestID:    request.RequestID,
+			ChannelID:    &channelID,
+			AgentName:    "",
+			WorkspaceDir: workspace.AgentWorkspaceDir(),
+			Extra:        nil, // ⤵️ request.Params 是 json.RawMessage，需延迟解析
+		}
+		extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
+		// ⤵️ 10.3.2: 从 memCtx.MemoryBlocks 拼接记忆注入 system prompt
+	}
 
 	// 提交到 session 队列并等待结果
 	result, err := uc.sessionManager.SubmitAndWait(ctx, sessionID, func(taskCtx context.Context) (any, error) {
