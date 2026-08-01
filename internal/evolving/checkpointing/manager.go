@@ -2,7 +2,6 @@ package checkpointing
 
 import (
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/evolving"
@@ -20,9 +19,9 @@ type CheckpointManager interface {
 	// ShouldSave 判断是否应保存检查点。
 	ShouldSave(epoch int, improved bool) bool
 	// BuildCheckpoint 从 agent 和 progress 构建检查点数据。
-	// progress 参数为 any 类型（避免与 trainer 包循环依赖），
-	// Trainer 调用时传入 *Progress。
-	BuildCheckpoint(agent evolving.TrainableAgent, progress any, updaterState map[string]any) *EvolveCheckpoint
+	// progress 参数使用 evolving.CheckpointProgress 接口，
+	// 避免与 trainer 包循环依赖（Progress 实现此接口）。
+	BuildCheckpoint(agent evolving.TrainableAgent, progress evolving.CheckpointProgress, updaterState map[string]any) *EvolveCheckpoint
 	// Restore 从检查点恢复 agent 状态，返回 progress 恢复信息。
 	Restore(agent evolving.TrainableAgent, checkpoint *EvolveCheckpoint) map[string]any
 }
@@ -93,22 +92,23 @@ func (m *DefaultCheckpointManager) ShouldSave(epoch int, improved bool) bool {
 
 // BuildCheckpoint 从 agent 和 progress 构建检查点数据。
 //
-// progress 参数为 any，通过反射提取 epoch/batch/bestScore/seed/currentEpochScore。
+// progress 参数使用 evolving.CheckpointProgress 接口方法提取字段，
+// 避免了 any + reflect 方案，获得编译时类型安全。
 // 对应 Python: DefaultCheckpointManager.build_checkpoint(agent, progress, updater_state)
 func (m *DefaultCheckpointManager) BuildCheckpoint(
 	agent evolving.TrainableAgent,
-	progress any,
+	progress evolving.CheckpointProgress,
 	updaterState map[string]any,
 ) *EvolveCheckpoint {
 	operatorsState := snapshotOperatorsState(agent)
 
-	// 从 progress 提取字段（any 类型，使用反射）
+	// 从 progress 接口提取字段
 	// 对齐 Python: step = {"epoch": int(getattr(progress, "current_epoch", 0)), ...}
-	epoch := extractIntField(progress, "CurrentEpoch", 0)
-	batch := extractIntField(progress, "CurrentBatchIter", 0)
-	bestScore := extractFloatField(progress, "BestScore", 0.0)
-	currentScore := extractFloatField(progress, "CurrentEpochScore", 0.0)
-	seed := extractIntPtrField(progress, "Seed")
+	epoch := progress.GetEpoch()
+	batch := progress.GetBatchIter()
+	bestScore := progress.GetBestScore()
+	currentScore := progress.GetCurrentEpochScore()
+	seed := progress.GetSeed()
 
 	return &EvolveCheckpoint{
 		Version:         m.ckptVersion,
@@ -207,78 +207,6 @@ func restoreOperatorsState(agent evolving.TrainableAgent, operatorsState map[str
 			op.LoadState(state)
 		}
 	}
-}
-
-// extractIntField 使用反射从 any 提取 int 字段。
-// 对齐 Python: int(getattr(progress, field_name, default_val))
-func extractIntField(obj any, fieldName string, defaultVal int) int {
-	if obj == nil {
-		return defaultVal
-	}
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	f := v.FieldByName(fieldName)
-	if !f.IsValid() {
-		return defaultVal
-	}
-	switch f.Kind() {
-	case reflect.Int, reflect.Int64:
-		return int(f.Int())
-	default:
-		return defaultVal
-	}
-}
-
-// extractFloatField 使用反射从 any 提取 float64 字段。
-func extractFloatField(obj any, fieldName string, defaultVal float64) float64 {
-	if obj == nil {
-		return defaultVal
-	}
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	f := v.FieldByName(fieldName)
-	if !f.IsValid() {
-		return defaultVal
-	}
-	switch f.Kind() {
-	case reflect.Float64, reflect.Float32:
-		return f.Float()
-	case reflect.Int, reflect.Int64:
-		return float64(f.Int())
-	default:
-		return defaultVal
-	}
-}
-
-// extractIntPtrField 使用反射从 any 提取 *int 字段。
-func extractIntPtrField(obj any, fieldName string) *int {
-	if obj == nil {
-		return nil
-	}
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	f := v.FieldByName(fieldName)
-	if !f.IsValid() {
-		return nil
-	}
-	if f.Kind() == reflect.Ptr {
-		if f.IsNil() {
-			return nil
-		}
-		val := int(f.Elem().Int())
-		return &val
-	}
-	if f.Kind() == reflect.Int || f.Kind() == reflect.Int64 {
-		val := int(f.Int())
-		return &val
-	}
-	return nil
 }
 
 // getIntFromMap 从 map[string]int 提取 int 值。

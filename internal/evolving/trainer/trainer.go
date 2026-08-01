@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	updaterpkg "github.com/uapclaw/uapclaw-go/internal/evolving/updater"
 	"golang.org/x/sync/errgroup"
 )
@@ -34,8 +35,8 @@ type Trainer struct {
 	// 对应 Python: evolving/evaluator.BaseEvaluator
 	evaluator evaluator.BaseEvaluator
 	// extractor 轨迹提取器。
-	// ⤵️ 待 9.77 Trajectory Extractor 回填：暂用 any 占位，填充后替换为 trajectory.Extractor
-	extractor any
+	// 对应 Python: evolving/trajectory/extractor.py TrajectoryExtractor
+	extractor trajectory.TrajectoryExtractor
 	// callbacks 训练生命周期回调
 	callbacks *Callbacks
 	// numParallel 并发推理数。
@@ -168,8 +169,9 @@ func (t *Trainer) Train(
 
 		var evaluated []*dataset.EvaluatedCase
 
+		var trajectories []*trajectory.Trajectory
 		if t.UpdaterRequiresForward() {
-			forwardScore, forwardEvaluated, _, _, err := t.Forward(ctx, agent, trainCases)
+			forwardScore, forwardEvaluated, forwardTrajectories, _, err := t.Forward(ctx, agent, trainCases)
 			if err != nil {
 				logger.Warn(logComponent).
 					Int("epoch", progress.CurrentEpoch).
@@ -178,14 +180,14 @@ func (t *Trainer) Train(
 			}
 			progress.CurrentEpochScore = forwardScore
 			evaluated = forwardEvaluated
+			trajectories = forwardTrajectories
 		} else {
 			// 黑盒优化器：跳过 forward，传递空数据（优化器内部生成）
 			progress.CurrentEpochScore = 0.0
 		}
 
 		// 对齐 Python: updated = asyncio.run(self._updater.update(trajectories, evaluated, config=kwargs))
-		// ⤵️ 待 9.77 Trajectory Extractor 回填：传递 trajectories
-		updated, updateErr := t.updater.Update(ctx, nil, evaluated, config)
+		updated, updateErr := t.updater.Update(ctx, trajectories, evaluated, config)
 		if updateErr != nil {
 			logger.Warn(logComponent).
 				Int("epoch", progress.CurrentEpoch).
@@ -230,14 +232,13 @@ func (t *Trainer) Train(
 // Forward 单次前向推理 + 评估 + 轨迹提取。
 //
 // 返回 (平均分数, 评估结果列表, 轨迹列表, Session列表, error)。
-// 轨迹提取部分 ⤵️ 待 9.77 Trajectory Extractor 回填。
 //
 // 对应 Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
 func (t *Trainer) Forward(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
 	cases *dataset.CaseLoader,
-) (float64, []*dataset.EvaluatedCase, any, []*session.Session, error) {
+) (float64, []*dataset.EvaluatedCase, []*trajectory.Trajectory, []*session.Session, error) {
 	if cases == nil || cases.Len() == 0 {
 		return 0, nil, nil, nil, nil
 	}
@@ -255,12 +256,16 @@ func (t *Trainer) Forward(
 
 	score := meanScore(evaluated)
 
-	// ⤵️ 待 9.77 Trajectory Extractor 回填：从每个 Session 提取 Trajectory
 	// 对齐 Python:
 	//   trajectories = []
 	//   for case, sess in zip(cases.get_cases(), sessions):
 	//       trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
-	var trajectories any = nil
+	trajectories := make([]*trajectory.Trajectory, len(caseList))
+	if t.extractor != nil {
+		for i, c := range caseList {
+			trajectories[i] = t.extractor.Extract(sessions[i], c.CaseID)
+		}
+	}
 	_ = predicts
 
 	logger.Info(logComponent).
@@ -602,8 +607,8 @@ func WithEvaluator(e evaluator.BaseEvaluator) TrainerOption {
 }
 
 // WithExtractor 设置轨迹提取器。
-// ⤵️ 待 9.77 Trajectory Extractor 回填：暂用 any 占位
-func WithExtractor(extractor any) TrainerOption {
+// 对应 Python: extractor 参数，默认 TracerTrajectoryExtractor()
+func WithExtractor(extractor trajectory.TrajectoryExtractor) TrainerOption {
 	return func(t *Trainer) { t.extractor = extractor }
 }
 

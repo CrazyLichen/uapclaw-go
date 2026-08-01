@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -138,7 +139,7 @@ type PendingChange struct {
 	// IsSharedRecords 是否为共享记录
 	IsSharedRecords bool
 	// Trajectory 关联轨迹（可选）
-	Trajectory any
+	Trajectory *trajectory.Trajectory
 	// Messages 关联消息列表（可选）
 	Messages []map[string]any
 }
@@ -230,7 +231,7 @@ func EmptyEvolutionLog(skillID string) *EvolutionLog {
 func NewPendingChange(
 	skillName string,
 	records []EvolutionRecord,
-	trajectory any,
+	traj *trajectory.Trajectory,
 	messages []map[string]any,
 ) *PendingChange {
 	// 对齐 Python: messages=list(messages) if messages is not None else None
@@ -248,7 +249,7 @@ func NewPendingChange(
 		Payload:    records,
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
 		ChangeID:   fmt.Sprintf("skill_evolve_%s", generateUUID8()),
-		Trajectory: trajectory,
+		Trajectory: traj,
 		Messages:   msgCopy,
 	}
 }
@@ -259,10 +260,10 @@ func NewPendingChange(
 func NewPendingChangeForSharedRecords(
 	skillName string,
 	records []EvolutionRecord,
-	trajectory any,
+	traj *trajectory.Trajectory,
 	messages []map[string]any,
 ) *PendingChange {
-	pc := NewPendingChange(skillName, records, trajectory, messages)
+	pc := NewPendingChange(skillName, records, traj, messages)
 	pc.IsSharedRecords = true
 	return pc
 }

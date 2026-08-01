@@ -9,6 +9,7 @@
 //	evolving/
 //	├── doc.go                # 包文档
 //	├── constant.go           # 进化流程全局常量
+//	├── checkpoint_progress.go # CheckpointProgress 接口（解决 checkpointing↔trainer 循环依赖）
 //	├── trainable_agent.go    # TrainableAgent 接口（从 trainer 包迁移，解决循环依赖）
 //	├── utils.go              # 辅助函数（GetContentStringFromTemplate）
 //	└── update_execution.go   # 更新执行函数（ExecuteUpdates/ApplyUpdates/SummarizeApplyResults）

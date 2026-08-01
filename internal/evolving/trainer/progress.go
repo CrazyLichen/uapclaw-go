@@ -123,6 +123,23 @@ func NewCallbacks() *Callbacks {
 	return &Callbacks{}
 }
 
+// GetEpoch 返回当前 epoch 编号，实现 evolving.CheckpointProgress 接口。
+func (p *Progress) GetEpoch() int { return p.CurrentEpoch }
+
+// GetBatchIter 返回当前 batch 迭代步，实现 evolving.CheckpointProgress 接口。
+func (p *Progress) GetBatchIter() int { return p.CurrentBatchIter }
+
+// GetBestScore 返回历史最佳分数，实现 evolving.CheckpointProgress 接口。
+func (p *Progress) GetBestScore() float64 { return p.BestScore }
+
+// GetCurrentEpochScore 返回当前 epoch 分数，实现 evolving.CheckpointProgress 接口。
+func (p *Progress) GetCurrentEpochScore() float64 { return p.CurrentEpochScore }
+
+// GetSeed 返回种子值（nil，Progress 不含 Seed 字段），
+// 实现 evolving.CheckpointProgress 接口。
+// 对齐 Python: getattr(progress, "seed", None) → None。
+func (p *Progress) GetSeed() *int { return nil }
+
 // RunEpoch 迭代 epoch 编号，从 StartEpoch+1 到 MaxEpoch。
 //
 // 每步更新 CurrentEpoch 并 yield 当前 epoch 编号。

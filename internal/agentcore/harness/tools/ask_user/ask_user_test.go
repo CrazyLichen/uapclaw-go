@@ -93,12 +93,11 @@ func TestAskUserTool_结构体存在(t *testing.T) {
 	_ = AskUserTool{}
 }
 
-// TestNewAskUserTool_ToolCard构建失败 验证防御性错误路径
+// TestNewAskUserTool_正常创建 验证 cn 语言正常路径创建成功
 // 覆盖率 70%：未覆盖的 30% 是 BuildToolCard/NewMapFunction 失败的防御性分支
 // 这些分支在单元测试中无法触发（注册表保证有 provider，ToolCard 校验也保证通过）
 // 属于理论防御性代码，不影响核心功能
-func TestNewAskUserTool_ToolCard构建失败(t *testing.T) {
-	// 正常路径验证
+func TestNewAskUserTool_正常创建(t *testing.T) {
 	_, err := NewAskUserTool("cn", "test_agent")
 	require.NoError(t, err)
 }
