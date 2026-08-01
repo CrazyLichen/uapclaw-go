@@ -296,26 +296,22 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 	if err := tr.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
-	// 对齐 Python: if not sender: raise ...
+	// 对齐 Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
 	if sender == "" {
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
-	// 对齐 Python: if not recipient: raise ...
+	// 对齐 Python: if not recipient: raise AGENT_TEAM_EXECUTION_ERROR
 	if recipient == "" {
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "recipient 不能为空"),
 		)
 	}
-	// 对齐 Python: if not self.has_agent(sender): raise ...
-	if !tr.HasAgent(sender) {
-		return nil, exception.BuildError(exception.StatusAgentTeamAgentNotFound,
-			exception.WithParam("error_msg", fmt.Sprintf("发送者 Agent %s 不存在", sender)),
-		)
-	}
+	// 对齐 Python: if recipient not in self._agent_cards: raise AGENT_TEAM_EXECUTION_ERROR
+	// 注意：Python 不检查 sender 是否已注册，去掉 Go 新增的 HasAgent(sender) 检查
 	if !tr.HasAgent(recipient) {
-		return nil, exception.BuildError(exception.StatusAgentTeamAgentNotFound,
+		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("接收者 Agent %s 不存在", recipient)),
 		)
 	}
@@ -335,24 +331,19 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 	if err := tr.ensureStarted(ctx); err != nil {
 		return err
 	}
-	// 对齐 Python: if not sender: raise ...
+	// 对齐 Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
 	if sender == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
-	// 对齐 Python: if not topic_id: raise ...
+	// 对齐 Python: if not topic_id: raise AGENT_TEAM_EXECUTION_ERROR
 	if topicID == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "topic_id 不能为空"),
 		)
 	}
-	// 对齐 Python: if not self.has_agent(sender): raise ...
-	if !tr.HasAgent(sender) {
-		return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
-			exception.WithParam("error_msg", fmt.Sprintf("发送者 Agent %s 不存在", sender)),
-		)
-	}
+	// 注意：Python 的 publish 不检查 sender 是否已注册，去掉 Go 新增的 HasAgent(sender) 检查
 
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sessionID := teamOpts.SessionID
