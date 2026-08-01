@@ -7,7 +7,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	askuser "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/ask_user"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -91,25 +91,13 @@ func (r *AskUserRail) Init(agent agentinterfaces.BaseAgent) error {
 		agentID = card.ID
 	}
 
-	// 构建 AskUserTool 的 ToolCard
-	toolCard, err := hprompts.BuildToolCard("ask_user", "ask_user", language, nil, agentID)
+	// 从 ask_user 子包创建空壳工具（对齐 Python AskUserTool.__init__）
+	askUserTool, err := askuser.NewAskUserTool(language, agentID)
 	if err != nil {
 		logger.Warn(askUserRailLogComponent).
 			Str("event_type", "ask_user_rail_init").
 			Err(err).
-			Msg("构建 ask_user ToolCard 失败")
-		return fmt.Errorf("构建 ask_user ToolCard 失败: %w", err)
-	}
-
-	// 创建 MapFunction 空壳工具（逻辑在 Rail 中，工具本身不执行）
-	askUserTool, err := tool.NewMapFunction(
-		toolCard,
-		func(_ context.Context, _ map[string]any) (map[string]any, error) {
-			return map[string]any{}, nil
-		},
-		nil,
-	)
-	if err != nil {
+			Msg("创建 AskUserTool 失败")
 		return fmt.Errorf("创建 AskUserTool 失败: %w", err)
 	}
 	r.tools = []tool.Tool{askUserTool}
