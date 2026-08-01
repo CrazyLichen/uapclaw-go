@@ -115,7 +115,7 @@ type UpdateAgentParams struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// （logComponent 已在 session_manager.go 中声明）
+// （logComponent 已在 uapclaw.go 中声明）
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

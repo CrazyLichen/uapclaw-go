@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -23,16 +25,28 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setupTestSessionsDir 设置测试用的 sessions 目录，返回（sessionsDir, 设置好 sessionsDir 的 AgentServer, cleanup）。
+//
+// 同时设置 UAPCLAW_DATA_DIR 环境变量并重置 workspace 缓存，
+// 确保 session 子包和 server 包指向同一个目录。
 func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cleanup func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	sessionsDir = filepath.Join(tmpDir, "sessions")
+	sessionsDir = filepath.Join(tmpDir, "agent", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("创建 sessions 目录失败: %v", err)
 	}
+	// 设置环境变量，使 session 子包的 GetSessionsDir 也指向此目录
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	path.ResetCache()
+	session.ClearAllSessionMetadataCache()
+
 	server, _ := newTestServer()
 	server.SetSessionsDir(sessionsDir)
-	cleanup = func() {}
+	cleanup = func() {
+		session.FlushMetadataQueue()
+		session.ClearAllSessionMetadataCache()
+		path.ResetCache()
+	}
 	return sessionsDir, server, cleanup
 }
 
@@ -395,7 +409,7 @@ func TestHandleSessionFork(t *testing.T) {
 
 // TestMakeSessionID 验证会话 ID 生成格式。
 func TestMakeSessionID(t *testing.T) {
-	id := makeSessionID()
+	id := session.MakeSessionID()
 	if len(id) < 10 {
 		t.Errorf("session ID 太短: %q", id)
 	}
@@ -422,9 +436,9 @@ func TestReadSessionMetadata(t *testing.T) {
 		t.Fatalf("写入失败: %v", err)
 	}
 
-	result := readSessionMetadata(tmpDir, "sess_1")
+	result := session.ReadSessionMetadata(tmpDir, "sess_1")
 	if result == nil {
-		t.Fatal("readSessionMetadata 返回 nil")
+		t.Fatal("ReadSessionMetadata 返回 nil")
 	}
 	if result["title"] != "测试标题" {
 		t.Errorf("title = %q, 期望 %q", result["title"], "测试标题")
@@ -434,7 +448,7 @@ func TestReadSessionMetadata(t *testing.T) {
 // TestReadSessionMetadata_不存在 验证文件不存在时返回 nil。
 func TestReadSessionMetadata_不存在(t *testing.T) {
 	tmpDir := t.TempDir()
-	result := readSessionMetadata(tmpDir, "nonexistent")
+	result := session.ReadSessionMetadata(tmpDir, "nonexistent")
 	if result != nil {
 		t.Errorf("期望 nil, 实际 %v", result)
 	}
@@ -452,12 +466,12 @@ func TestWriteSessionMetadata(t *testing.T) {
 		"session_id": "sess_1",
 		"title":      "写入测试",
 	}
-	if err := writeSessionMetadata(tmpDir, "sess_1", meta); err != nil {
-		t.Fatalf("writeSessionMetadata 返回错误: %v", err)
+	if err := session.WriteSessionMetadata(tmpDir, "sess_1", meta); err != nil {
+		t.Fatalf("WriteSessionMetadata 返回错误: %v", err)
 	}
 
 	// 读回验证
-	result := readSessionMetadata(tmpDir, "sess_1")
+	result := session.ReadSessionMetadata(tmpDir, "sess_1")
 	if result["title"] != "写入测试" {
 		t.Errorf("title = %q, 期望 %q", result["title"], "写入测试")
 	}

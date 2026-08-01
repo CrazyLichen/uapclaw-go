@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -310,8 +311,8 @@ func TestUapClaw_GetInstance(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func TestNormalizeSessionID(t *testing.T) {
-	assert.Equal(t, "default", normalizeSessionID(""))
-	assert.Equal(t, "my-session", normalizeSessionID("my-session"))
+	assert.Equal(t, "default", session.NormalizeSessionID(""))
+	assert.Equal(t, "my-session", session.NormalizeSessionID("my-session"))
 }
 
 func TestShouldRecordHistory(t *testing.T) {

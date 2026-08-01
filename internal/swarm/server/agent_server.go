@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -240,6 +241,9 @@ func (s *AgentServer) run(ctx context.Context) error {
 	agentServerOnce.Do(func() {
 		agentServerInstance = s
 	})
+
+	// 0. 清理 team 模式会话目录（对齐 Python remove_team_mode_session_dirs_at_startup）
+	session.RemoveTeamModeSessionDirsAtStartup()
 
 	// 1. 重置 harness 包状态到 native（对齐 Python agent_ws_server.py L440）
 	s.resetHarnessPackagesState()

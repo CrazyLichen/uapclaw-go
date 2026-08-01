@@ -380,6 +380,22 @@ func RemoveSessionMetadataCache(sessionID string) {
 	deliveryContextMu.Unlock()
 }
 
+// ClearAllSessionMetadataCache 清除所有会话的内存缓存（供测试使用）。
+func ClearAllSessionMetadataCache() {
+	deliveryContextMu.Lock()
+	deliveryContextCache = make(map[string]map[string]any)
+	deliveryContextMu.Unlock()
+}
+
+// FlushMetadataQueue 等待 metadata 异步写入队列刷盘（供测试使用）。
+//
+// 向队列发送一个空哨兵项，等待它被消费即代表之前所有写入已完成。
+func FlushMetadataQueue() {
+	ensureMetadataWorker()
+	// 发送一个 nil 哨兵项，worker 检测到后跳过写入但仍然消费了队列
+	metadataQueue <- metadataWriteItem{sessionID: "", metadata: nil}
+}
+
 // ReadSessionMetadata 读取会话元数据文件。
 //
 // 不产生副作用：session 目录不存在时返回 nil 而非创建目录，
@@ -477,6 +493,10 @@ func ensureMetadataWorker() {
 // 对齐 Python: _worker() 后台线程
 func metadataWriteWorker() {
 	for item := range metadataQueue {
+		// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置
+		if item.sessionID == "" || item.metadata == nil {
+			continue
+		}
 		if err := WriteSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
 			logger.Warn(logComponent).
 				Str("session_id", item.sessionID).

@@ -22,7 +22,8 @@
 //	├── handle_config.go       # Config（配置） handler（cache_clear/reload_config）
 //	├── handle_initialize.go   # Initialize（初始化）+ ACP handler（initialize/acp_tool_response）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
-//	└── runtime/               # Agent 运行时（AgentManager/UapClaw/SessionManager）
+//	├── runtime/               # Agent 运行时（AgentManager/UapClaw）
+//	└── session/               # 会话管理子包（history/metadata/manager/rename/startup）
 //
 // 对应 Python 代码：jiuwenswarm/server/agent_server.py
 package server
