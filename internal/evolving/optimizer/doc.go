@@ -30,6 +30,10 @@
 //	│   ├── description_method.go # ToolDescriptionMethod（工具描述方法）
 //	│   ├── reviewer.go       # ToolDescriptionReviewer（工具描述审查器）
 //	│   └── pipeline.go       # CustomizedPipeline（自定义流水线）
+//	├── memory_call/          # 记忆维度优化器
+//	│   ├── doc.go            # 包文档
+//	│   ├── base.go           # MemoryOptimizerBase（记忆优化器基类） 声明式骨架
+//	│   └── base_test.go      # 单元测试
 //	└── llm_resilience/       # LLM 弹性重试策略
 //	    ├── doc.go            # 包文档
 //	    └── llm_resilience.go # LLMInvokePolicy（LLM调用策略） + InvokeTextWithRetry（带重试的文本调用）

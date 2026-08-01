@@ -609,7 +609,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.71 | ✅ | BaseEvaluator | 评估器 + MetricEvaluator + DefaultEvaluator + metrics（ExactMatch/LLMAsJudge）+ evaluator_pipeline（⤵️ 仅占位） | `openjiuwen/agent_evolving/evaluator/` |
 | 9.72a | ✅ | InstructionOptimizer | 指令优化器（LLM prompt 文本梯度优化） | `openjiuwen/agent_evolving/optimizer/llm_call/` |
 | 9.72b | ✅ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
-| 9.72c | ☐ | MemoryOptimizer | 记忆参数优化器 | `openjiuwen/agent_evolving/optimizer/memory_call/` |
+| 9.72c | ✅ | MemoryOptimizer | 记忆参数优化器（domain=memory + default_targets=[enabled,max_retries] + _backward=pass 声明式骨架）；✅ 回填 ToolOptimizerBase.Bind()（⤵️ 9.70 → 委托 BaseOptimizerMixin.Bind + DefaultTargets 回退） | `openjiuwen/agent_evolving/optimizer/memory_call/` |
 | 9.72d | ☐ | SkillExperienceOptimizer | 技能经验优化器（LLM 生成经验草稿→EvolutionRecord）+ TeamSkillExperienceOptimizer | `openjiuwen/agent_evolving/optimizer/skill_call/` |
 | 9.72e | ✅ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
 | 9.73 | ✅ | SignalDetector | 信号检测（ConversationSignalDetector/from_evaluated_case/团队信号） | `openjiuwen/agent_evolving/signal/` |

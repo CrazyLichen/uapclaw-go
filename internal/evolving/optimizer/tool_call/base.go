@@ -259,10 +259,21 @@ func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
 	return map[cschema.UpdateKey]any{}
 }
 
-// Bind 过滤并绑定可优化的 Operator，返回匹配数量。
+// Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
+//
+// ✅ 9.70 已回填：Operator 接口已实现，委托 BaseOptimizerMixin.Bind()。
+//
+// 对齐 Python:
+//
+//	self._targets = list(targets or self.default_targets())
+//
+// 对应 Python: ToolOptimizerBase.bind() → BaseOptimizer.bind()
 func (b *ToolOptimizerBase) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	// ⤵️ 9.70: 等待 Trainer 实现后回填 Operator 类型转换
-	return 0
+	// 对齐 Python: targets or self.default_targets()
+	if len(targets) == 0 {
+		targets = b.DefaultTargets()
+	}
+	return b.BaseOptimizerMixin.Bind(operators, targets, config)
 }
 
 // AddTrajectory 缓存 Trajectory 供 backward 阶段查询。
