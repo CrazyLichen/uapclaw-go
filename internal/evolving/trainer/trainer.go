@@ -8,8 +8,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
@@ -18,24 +18,6 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// TrainableAgent 可训练 Agent 接口。
-//
-// Trainer 需要通过 Agent 获取 Operator 注册表和执行推理，
-// 这是 BaseAgent 的最小扩展接口。
-//
-// 对应 Python: BaseAgent + get_operators() 方法
-type TrainableAgent interface {
-	// Invoke 非流式调用 Agent。
-	// 对应 Python: BaseAgent.invoke(inputs, session)
-	Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
-	// Card 返回 Agent 身份卡片。
-	// 对应 Python: BaseAgent.card 属性
-	Card() *agentschema.AgentCard
-	// GetOperators 获取 Operator 注册表。
-	// 对应 Python: BaseAgent.get_operators()
-	GetOperators() map[string]operator.Operator
-}
 
 // Trainer 离线自演化训练编排器。
 //
@@ -126,7 +108,7 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 //
 // 参数:
 //   - ctx: 上下文
-//   - agent: 待优化的 Agent（必须实现 TrainableAgent 接口）
+//   - agent: 待优化的 Agent（必须实现 evolving.TrainableAgent 接口）
 //   - trainCases: 训练用例加载器
 //   - valCases: 验证用例加载器（若为 nil 则使用 trainCases）
 //   - numIterations: 最大训练 epoch 数
@@ -137,12 +119,12 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 // 对应 Python: Trainer.train(agent, train_cases, val_cases, num_iterations)
 func (t *Trainer) Train(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	trainCases *dataset.CaseLoader,
 	valCases *dataset.CaseLoader,
 	numIterations int,
 	config map[string]any,
-) (TrainableAgent, error) {
+) (evolving.TrainableAgent, error) {
 	progress := NewProgressWithMaxEpoch(numIterations)
 	if valCases == nil {
 		valCases = trainCases
@@ -253,7 +235,7 @@ func (t *Trainer) Train(
 // 对应 Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
 func (t *Trainer) Forward(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	cases *dataset.CaseLoader,
 ) (float64, []*dataset.EvaluatedCase, any, []*session.Session, error) {
 	if cases == nil || cases.Len() == 0 {
@@ -296,7 +278,7 @@ func (t *Trainer) Forward(
 // 对应 Python: Trainer.evaluate(agent, cases) -> (score, evaluated)
 func (t *Trainer) Evaluate(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	cases *dataset.CaseLoader,
 ) (float64, []*dataset.EvaluatedCase, error) {
 	if cases == nil || cases.Len() == 0 {
@@ -323,7 +305,7 @@ func (t *Trainer) Evaluate(
 // 对应 Python: Trainer.predict_only(agent, cases) -> predicts
 func (t *Trainer) PredictOnly(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	cases *dataset.CaseLoader,
 ) ([]map[string]any, error) {
 	if cases == nil {
@@ -341,7 +323,7 @@ func (t *Trainer) PredictOnly(
 // 对应 Python: Trainer.predict(agent, cases) -> (predicts, sessions)
 func (t *Trainer) Predict(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	cases *dataset.CaseLoader,
 ) ([]map[string]any, []*session.Session, error) {
 	if cases == nil {
@@ -427,7 +409,7 @@ func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.Upd
 // 对应 Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
 func (t *Trainer) SelectBestCandidateOnVal(
 	ctx context.Context,
-	agent TrainableAgent,
+	agent evolving.TrainableAgent,
 	operators map[string]operator.Operator,
 	candidates []map[schema.UpdateKey]schema.UpdateValue,
 	valCases *dataset.CaseLoader,
@@ -512,7 +494,7 @@ func RestoreOperatorsState(operators map[string]operator.Operator, state map[str
 // 调用 Agent 的 GetOperators() 方法获取其关联的 Operator 映射。
 //
 // 对应 Python: Trainer._get_operator_registry(agent) — 静态方法
-func GetOperatorRegistry(agent TrainableAgent) map[string]operator.Operator {
+func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Operator {
 	if agent == nil {
 		return nil
 	}
@@ -690,7 +672,7 @@ func normalizeUpdates(updated map[schema.UpdateKey]any) map[schema.UpdateKey]sch
 
 // fireCallback 安全调用 TrainCallbackFunc（含评估信息）。
 // 回调为 nil 时跳过。
-func fireCallback(cb TrainCallbackFunc, agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+func fireCallback(cb TrainCallbackFunc, agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
 	if cb != nil {
 		cb(agent, progress, evalInfo)
 	}
@@ -698,7 +680,7 @@ func fireCallback(cb TrainCallbackFunc, agent TrainableAgent, progress *Progress
 
 // fireEpochBeginCallback 安全调用 TrainEpochBeginFunc（无评估信息）。
 // 回调为 nil 时跳过。
-func fireEpochBeginCallback(cb TrainEpochBeginFunc, agent TrainableAgent, progress *Progress) {
+func fireEpochBeginCallback(cb TrainEpochBeginFunc, agent evolving.TrainableAgent, progress *Progress) {
 	if cb != nil {
 		cb(agent, progress)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
@@ -413,16 +414,16 @@ func TestCallbacks_具体函数类型(t *testing.T) {
 	var epochEndCalled bool
 
 	cb := &Callbacks{
-		OnTrainBegin: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+		OnTrainBegin: func(agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
 			beginCalled = true
 		},
-		OnTrainEnd: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+		OnTrainEnd: func(agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
 			endCalled = true
 		},
-		OnTrainEpochBegin: func(agent TrainableAgent, progress *Progress) {
+		OnTrainEpochBegin: func(agent evolving.TrainableAgent, progress *Progress) {
 			epochBeginCalled = true
 		},
-		OnTrainEpochEnd: func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
+		OnTrainEpochEnd: func(agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase) {
 			epochEndCalled = true
 		},
 	}

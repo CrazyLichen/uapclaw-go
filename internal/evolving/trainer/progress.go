@@ -3,6 +3,7 @@ package trainer
 import (
 	"iter"
 
+	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 )
 
@@ -76,14 +77,14 @@ type Callbacks struct {
 //
 //	on_train_begin / on_train_end / on_train_epoch_end
 //	(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None
-type TrainCallbackFunc func(agent TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase)
+type TrainCallbackFunc func(agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase)
 
 // TrainEpochBeginFunc epoch 开始回调函数类型（无评估信息）。
 //
 // 对齐 Python:
 //
 //	on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None
-type TrainEpochBeginFunc func(agent TrainableAgent, progress *Progress)
+type TrainEpochBeginFunc func(agent evolving.TrainableAgent, progress *Progress)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
