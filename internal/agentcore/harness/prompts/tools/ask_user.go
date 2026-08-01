@@ -13,16 +13,12 @@ var askUserDescription = map[string]string{
 
 何时主动使用：需求模糊、多种方案可选、涉及用户偏好时，应主动询问而非假设。
 
-【禁止】选项中添加'其他'、'自定义'等兜底选项，系统已自动提供。
-【推荐】将推荐选项放第一位，label末尾加'（推荐）'。
-preview字段仅用于单选问题的视觉比较场景。`,
+【禁止】选项中添加'其他'、'自定义'等兜底选项，系统已自动提供。【推荐】将推荐选项放第一位，label末尾加'（推荐）'。preview字段仅用于单选问题的视觉比较场景。`,
 	"en": `Ask user questions to gather info, clarify ambiguity, or make decisions. Supports 1-4 questions, each with 2-4 options.
 
 When to use proactively: Ask when requirements are vague, multiple approaches exist, or user preferences matter. Don't assume.
 
-FORBIDDEN: Adding 'Other', 'Custom' etc. as options — system provides this automatically.
-RECOMMENDED: Place recommended option first, append '(Recommended)' to its label.
-Preview field is only for single-select questions with visual comparison needs.`,
+FORBIDDEN: Adding 'Other', 'Custom' etc. as options — system provides this automatically. RECOMMENDED: Place recommended option first, append '(Recommended)' to its label. Preview field is only for single-select questions with visual comparison needs.`,
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
