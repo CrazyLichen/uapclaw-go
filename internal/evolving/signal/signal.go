@@ -68,6 +68,18 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ParseEvolutionTarget 从字符串解析 EvolutionTarget 枚举值。
+//
+// 对应 Python: EvolutionTarget(value)
+func ParseEvolutionTarget(value string) (EvolutionTarget, error) {
+	switch EvolutionTarget(value) {
+	case EvolutionTargetDescription, EvolutionTargetBody, EvolutionTargetScript:
+		return EvolutionTarget(value), nil
+	default:
+		return "", fmt.Errorf("无效的演进目标: %s", value)
+	}
+}
+
 // WithSource 设置信号来源。
 func WithSource(source string) SignalOption {
 	return func(cfg *evolutionSignalConfig) { cfg.source = &source }

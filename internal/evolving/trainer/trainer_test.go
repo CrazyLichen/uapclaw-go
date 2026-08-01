@@ -613,7 +613,7 @@ func TestUpdaterRequiresForward_无Updater(t *testing.T) {
 // TestSaveCheckpointIfNeeded_无Manager 测试无 CheckpointManager 时不执行保存
 func TestSaveCheckpointIfNeeded_无Manager(t *testing.T) {
 	trainer := NewTrainer()
-	err := trainer.SaveCheckpointIfNeeded(0, 0.5, nil, false)
+	err := trainer.SaveCheckpointIfNeeded(nil, nil, false)
 	if err != nil {
 		t.Errorf("期望 nil 错误, 实际=%v", err)
 	}

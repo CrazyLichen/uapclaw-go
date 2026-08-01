@@ -10,6 +10,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
@@ -44,7 +45,6 @@ type Trainer struct {
 	// 对应 Python: _early_stop_score, 默认 TuneConstant.default_early_stop_score=1.0
 	earlyStopScore float64
 	// checkpointDir 检查点目录。非空启用检查点保存。
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：由此字段创建 FileCheckpointStore(checkpointDir) 赋给 checkpointStore
 	// 对应 Python: checkpoint_dir
 	checkpointDir string
 	// checkpointEveryNEpochs 每 N 个 epoch 保存一次检查点。
@@ -54,13 +54,13 @@ type Trainer struct {
 	// 对应 Python: checkpoint_on_improve, 默认 true
 	checkpointOnImprove bool
 	// checkpointStore 检查点存储。
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：填充后替换为 evolving/checkpointing.FileStore
-	checkpointStore any
+	// 对应 Python: _checkpoint_store, FileCheckpointStore
+	checkpointStore *checkpointing.FileCheckpointStore
 	// resumeFrom 恢复检查点路径
 	resumeFrom string
 	// checkpointManager 检查点管理器。
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：填充后替换为 evolving/checkpointing.Manager
-	checkpointManager any
+	// 对应 Python: _checkpoint_manager, DefaultCheckpointManager
+	checkpointManager checkpointing.CheckpointManager
 }
 
 // TrainerOption Trainer 构造选项函数。
@@ -136,7 +136,7 @@ func (t *Trainer) Train(
 		return agent, nil
 	}
 
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：恢复检查点逻辑
+	// ⤴️ 9.78 EvolveCheckpoint 已回填：恢复检查点逻辑
 	// 对齐 Python: self._resume_if_needed(agent, progress)
 	_ = t.ResumeIfNeeded(ctx, agent)
 
@@ -213,9 +213,9 @@ func (t *Trainer) Train(
 
 		fireCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
 
-		// ⤵️ 待 9.78 EvolveCheckpoint 回填：检查点保存逻辑
+		// ⤴️ 9.78 EvolveCheckpoint 已回填：检查点保存逻辑
 		// 对齐 Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
-		_ = t.SaveCheckpointIfNeeded(progress.CurrentEpoch, valScore, operators, improved)
+		_ = t.SaveCheckpointIfNeeded(agent, progress, improved)
 
 		if progress.BestScore >= t.earlyStopScore {
 			break
@@ -531,36 +531,56 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 // ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
 //
 // 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态等。
-// ⤵️ 待 9.78 EvolveCheckpoint 回填
 //
-// 对应 Python: Trainer._resume_if_needed(agent)
-func (t *Trainer) ResumeIfNeeded(_ context.Context, _ any) error {
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：检查点恢复逻辑
-	// 对齐 Python:
-	//   if self._checkpoint_store is None or self._checkpoint_manager is None or not self._resume_from:
-	//       return
-	//   ckpt = self._checkpoint_store.load_checkpoint(self._resume_from)
-	//   restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
-	//   progress.start_epoch = int(restored.get("start_epoch", 0))
-	//   progress.best_score = float(restored.get("best_score", 0.0))
+// 对应 Python: Trainer._resume_if_needed(agent, progress)
+func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent) error {
+	if t.checkpointStore == nil || t.checkpointManager == nil || t.resumeFrom == "" {
+		return nil
+	}
+	ckpt, err := t.checkpointStore.LoadCheckpoint(t.resumeFrom)
+	if err != nil {
+		return fmt.Errorf("加载检查点失败: %w", err)
+	}
+	if ckpt == nil {
+		return nil
+	}
+	// 对齐 Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
+	restored := t.checkpointManager.Restore(agent, ckpt)
+	// 对齐 Python: progress.start_epoch / progress.best_score 从 restored 恢复
+	logger.Info(logComponent).
+		Str("run_id", fmt.Sprintf("%v", restored["run_id"])).
+		Msg("[Trainer] 恢复检查点")
 	return nil
 }
 
 // SaveCheckpointIfNeeded 根据条件判断是否保存检查点。
 //
 // 当达到 checkpointEveryNEpochs 间隔或验证分数提升（checkpointOnImprove）时保存。
-// ⤵️ 待 9.78 EvolveCheckpoint 回填
 //
 // 对应 Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
-func (t *Trainer) SaveCheckpointIfNeeded(_ int, _ float64, _ map[string]operator.Operator, _ bool) error {
-	// ⤵️ 待 9.78 EvolveCheckpoint 回填：检查点保存逻辑
-	// 对齐 Python:
-	//   if self._checkpoint_store is None or self._checkpoint_manager is None:
-	//       return
-	//   if not self._checkpoint_manager.should_save(epoch=progress.current_epoch, improved=improved):
-	//       return
-	//   ckpt = self._checkpoint_manager.build_checkpoint(agent=agent, progress=progress, updater_state=self._updater.get_state())
-	//   path = self._checkpoint_store.save_checkpoint(ckpt, filename="latest.json")
+func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress *Progress, improved bool) error {
+	if t.checkpointStore == nil || t.checkpointManager == nil {
+		return nil
+	}
+	// 对齐 Python: if not self._checkpoint_manager.should_save(epoch=progress.current_epoch, improved=improved)
+	if !t.checkpointManager.ShouldSave(progress.CurrentEpoch, improved) {
+		return nil
+	}
+	// 对齐 Python: ckpt = self._checkpoint_manager.build_checkpoint(agent=agent, progress=progress, updater_state=self._updater.get_state())
+	var updaterState map[string]any
+	if t.updater != nil {
+		updaterState = t.updater.GetState()
+	}
+	ckpt := t.checkpointManager.BuildCheckpoint(agent, progress, updaterState)
+	// 对齐 Python: path = self._checkpoint_store.save_checkpoint(ckpt, filename="latest.json")
+	_, err := t.checkpointStore.SaveCheckpoint(ckpt, "latest.json")
+	if err != nil {
+		return fmt.Errorf("保存检查点失败: %w", err)
+	}
+	logger.Info(logComponent).
+		Int("epoch", progress.CurrentEpoch).
+		Bool("improved", improved).
+		Msg("[Trainer] 保存检查点")
 	return nil
 }
 
@@ -605,7 +625,6 @@ func WithEarlyStopScore(score float64) TrainerOption {
 }
 
 // WithCheckpointDir 设置检查点目录（非空启用检查点保存）。
-// ⤵️ 待 9.78 EvolveCheckpoint 回填：延迟初始化策略，当前仅存储路径
 // 对应 Python: checkpoint_dir, None 表示禁用。
 func WithCheckpointDir(dir string) TrainerOption {
 	return func(t *Trainer) { t.checkpointDir = dir }
@@ -630,8 +649,8 @@ func WithResumeFrom(path string) TrainerOption {
 }
 
 // WithCheckpointManager 设置检查点管理器。
-// ⤵️ 待 9.78 EvolveCheckpoint 回填：暂用 any 占位
-func WithCheckpointManager(manager any) TrainerOption {
+// 对应 Python: checkpoint_manager
+func WithCheckpointManager(manager checkpointing.CheckpointManager) TrainerOption {
 	return func(t *Trainer) { t.checkpointManager = manager }
 }
 
