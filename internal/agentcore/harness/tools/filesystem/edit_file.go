@@ -134,6 +134,10 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 				})
 			}
 
+			// 追加文件操作历史（创建新文件）
+			// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+			_ = appendHistoryFromOpts(opts, agentID, filePath, "write", nil, &newStr)
+
 			return map[string]any{
 				"success": true,
 				"data": map[string]any{
@@ -325,6 +329,10 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 			Int("replacements", replaced).
 			Bool("replace_all", replaceAll).
 			Msg("EditFileTool 编辑成功")
+
+		// 追加文件操作历史（编辑已有文件）
+		// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+		_ = appendHistoryFromOpts(opts, agentID, filePath, "edit", &contentLF, &newContentLF)
 
 		// 构建返回值
 		// 对齐 Python L1390-1393

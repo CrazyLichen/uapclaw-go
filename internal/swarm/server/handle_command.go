@@ -9,6 +9,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -192,11 +193,51 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 	), nil
 }
 
-// handleCommandDiff 处理 command.diff 请求。stub：返回空差异列表。
+// handleCommandDiff 处理 command.diff 请求。
+// 对齐 Python: /diff 命令，调用 DiffService.GetTurnDiffs 获取 turn diff 列表。
 func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 解析参数：session_id（必填），project_dir（可选）
+	var params struct {
+		SessionID  string `json:"session_id"`
+		ProjectDir string `json:"project_dir"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("request_id", request.RequestID).
+				Msg("command.diff 参数解析失败")
+			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+				schema.WithPayload(map[string]any{
+					"diffs": []any{},
+					"error": fmt.Sprintf("参数解析失败: %v", err),
+				}),
+			), nil
+		}
+	}
+
+	if params.SessionID == "" {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(map[string]any{
+				"diffs": []any{},
+				"error": "session_id is required",
+			}),
+		), nil
+	}
+
+	// 调用 DiffService 获取 turn diffs
+	ds := utils.GetDiffService()
+	turnDiffs := ds.GetTurnDiffs(params.SessionID, params.ProjectDir)
+
+	// 转换为前端可用的格式
+	diffs := make([]any, len(turnDiffs))
+	for i, td := range turnDiffs {
+		diffs[i] = td
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"diffs": []any{},
+			"diffs": diffs,
 		}),
 	), nil
 }

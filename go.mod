@@ -50,6 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.24
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.27
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.3
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
@@ -95,7 +96,6 @@ require (
 	github.com/aws/smithy-go v1.27.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect

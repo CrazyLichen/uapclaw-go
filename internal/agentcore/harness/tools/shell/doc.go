@@ -8,13 +8,13 @@
 //
 //	shell/
 //	├── doc.go           # 包文档
-//	├── bash.go          # BashTool：bash 命令执行工具
+//	├── bash.go          # BashTool：bash 命令执行工具（含 rm 目标记录 + deletion 检测）
 //	├── powershell.go    # PowerShellTool：PowerShell 命令执行工具
 //	├── permission.go    # 权限配置、5层检查管道、管道拆分、命令提取
 //	├── security.go      # 注入检测（bash/PowerShell）和破坏性命令警告
 //	├── semantics.go     # 退出码语义解释、命令分类
 //	├── output.go        # 输出渲染、截断、大输出持久化
-//	└── rm_tracker.go    # rm 目标记录（bash/PowerShell）
+//	└── rm_tracker.go    # rm 目标记录 + RecordRmTargetsBeforeDeletion + buildHistoryPathFromOpts
 //
 // 对应 Python 代码：openjiuwen/harness/tools/shell/bash/ 和 openjiuwen/harness/tools/shell/powershell/
 package shell

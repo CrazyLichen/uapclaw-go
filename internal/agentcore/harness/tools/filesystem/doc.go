@@ -17,7 +17,8 @@
 //	├── read_registry.go  # 文件读取状态注册表（sync.Map 并发安全）
 //	├── path_resolve.go   # 路径解析（UNC/绝对/相对路径）
 //	├── desanitize.go     # XML 去消毒 + 引号容错
-//	└── helpers.go        # 辅助函数（花括号展开、行号格式化、设备检测等）
+//	├── helpers.go        # 辅助函数（花括号展开、行号格式化、设备检测等）
+//	└── history.go        # 文件操作历史（BuildHistoryPath + AppendOpHistory + DetectAndRecordDeletions）
 //
 // 对应 Python 代码：openjiuwen/harness/tools/filesystem.py
 package filesystem

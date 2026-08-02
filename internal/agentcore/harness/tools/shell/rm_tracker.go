@@ -1,10 +1,17 @@
 package shell
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/dlclark/regexp2"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -191,4 +198,64 @@ func stripValuelessFlags(rest string) string {
 // stripErrorAction 去除 -ErrorAction <value>
 func stripErrorAction(rest string) string {
 	return strings.TrimSpace(errorActionRe.ReplaceAllString(rest, ""))
+}
+
+// buildHistoryPathFromOpts 从 ToolOption 列表中提取 session 信息，构建 history path。
+// 对齐 Python: _build_history_path(session)
+func buildHistoryPathFromOpts(opts []tool.ToolOption, agentID string) string {
+	callOpts := &tool.ToolCallOptions{}
+	for _, opt := range opts {
+		opt(callOpts)
+	}
+
+	if callOpts.Session == nil {
+		return ""
+	}
+
+	sessionFacade, ok := callOpts.Session.(sessioninterfaces.SessionFacade)
+	if !ok || sessionFacade == nil {
+		return ""
+	}
+
+	sessionID := sessionFacade.GetSessionID()
+	if sessionID == "" {
+		return ""
+	}
+
+	baseDir := workspace.WorkspaceDir()
+	return filesystem.BuildHistoryPath(baseDir, agentID, sessionID)
+}
+
+// recordRmTargetsBeforeDeletion 在执行 rm 前记录被删除文件的内容到历史。
+// 对齐 Python: _record_rm_targets_before_deletion(history_path, file_paths, operation)
+// (filesystem.py line 180-202)
+func recordRmTargetsBeforeDeletion(historyPath string, targets []string, cwdPath string) {
+	if len(targets) == 0 {
+		return
+	}
+
+	for _, rawPath := range targets {
+		absPath := rawPath
+		if !filepath.IsAbs(rawPath) {
+			absPath = filepath.Join(cwdPath, rawPath)
+		}
+
+		// 检查文件是否存在且是普通文件
+		if st, err := os.Stat(absPath); err != nil || st.IsDir() {
+			continue
+		}
+
+		// 读取文件内容
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("abs_path", absPath).
+				Err(err).
+				Msg("读取 rm 目标文件失败")
+			continue
+		}
+		content := string(data)
+
+		filesystem.AppendOpHistory(historyPath, absPath, "delete", &content, nil)
+	}
 }

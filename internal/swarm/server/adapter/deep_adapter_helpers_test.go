@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -473,7 +474,6 @@ func TestExtractReasoningContent(t *testing.T) {
 
 // TestParseStreamChunk_各种类型 测试流式 chunk 解析各类型。
 func TestParseStreamChunk_各种类型(t *testing.T) {
-	d := NewDeepAdapter()
 	emittedIDs := make(map[string]bool)
 
 	tests := []struct {
@@ -513,7 +513,7 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 			if tt.payload == nil {
 				output = nil
 			}
-			result := d.parseStreamChunk(output, &usageAccumulator{}, emittedIDs)
+			result := utils.ParseStreamChunk(output, &utils.UsageAccumulator{}, emittedIDs, nil)
 			if tt.wantNil {
 				if result != nil {
 					t.Errorf("parseStreamChunk() 应返回 nil，got %v", result)
@@ -532,16 +532,15 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 
 // TestParseStreamChunk_askUser去重 测试 ask_user_question 去重。
 func TestParseStreamChunk_askUser去重(t *testing.T) {
-	d := NewDeepAdapter()
 	emittedIDs := make(map[string]bool)
-	usage := &usageAccumulator{}
+	usage := &utils.UsageAccumulator{}
 
 	output1 := &stream.OutputSchema{
 		Type:    "ask_user_question",
 		Payload: map[string]any{"request_id": "ask1"},
 	}
 	// 第一次应返回
-	result1 := d.parseStreamChunk(output1, usage, emittedIDs)
+	result1 := utils.ParseStreamChunk(output1, usage, emittedIDs, nil)
 	if result1 == nil {
 		t.Error("首次 ask_user_question 不应被去重")
 	}
@@ -551,7 +550,7 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 		Type:    "ask_user_question",
 		Payload: map[string]any{"request_id": "ask1"},
 	}
-	result2 := d.parseStreamChunk(output2, usage, emittedIDs)
+	result2 := utils.ParseStreamChunk(output2, usage, emittedIDs, nil)
 	if result2 != nil {
 		t.Error("重复 request_id 应被去重")
 	}
@@ -559,17 +558,16 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 
 // TestAccumulateUsage 测试 usage 累加。
 func TestAccumulateUsage(t *testing.T) {
-	d := NewDeepAdapter()
-	usage := &usageAccumulator{}
+	usage := &utils.UsageAccumulator{}
 
 	// nil payload
-	d.accumulateUsage(usage, nil)
+	utils.AccumulateUsage(usage, nil)
 	if usage.TotalTokens != 0 {
 		t.Error("nil payload 不应累加")
 	}
 
 	// 正常累加
-	d.accumulateUsage(usage, map[string]any{
+	utils.AccumulateUsage(usage, map[string]any{
 		"input_tokens":  100,
 		"output_tokens": 50,
 		"total_tokens":  150,
@@ -584,11 +582,10 @@ func TestAccumulateUsage(t *testing.T) {
 
 // TestAccumulateUsage_多次累加 测试多次累加。
 func TestAccumulateUsage_多次累加(t *testing.T) {
-	d := NewDeepAdapter()
-	usage := &usageAccumulator{}
+	usage := &utils.UsageAccumulator{}
 
-	d.accumulateUsage(usage, map[string]any{"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
-	d.accumulateUsage(usage, map[string]any{"input_tokens": 200, "output_tokens": 100, "total_tokens": 300})
+	utils.AccumulateUsage(usage, map[string]any{"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
+	utils.AccumulateUsage(usage, map[string]any{"input_tokens": 200, "output_tokens": 100, "total_tokens": 300})
 
 	if usage.InputTokens != 300 {
 		t.Errorf("InputTokens = %d, want 300", usage.InputTokens)
@@ -601,13 +598,13 @@ func TestAccumulateUsage_多次累加(t *testing.T) {
 // TestExtractStringFromPayload 测试字符串提取。
 func TestExtractStringFromPayload(t *testing.T) {
 	payload := map[string]any{"key": "value", "num": 123}
-	if got := extractStringFromPayload(payload, "key"); got != "value" {
+	if got := utils.ExtractStringFromPayload(payload, "key"); got != "value" {
 		t.Errorf("got %q, want %q", got, "value")
 	}
-	if got := extractStringFromPayload(payload, "num"); got != "" {
+	if got := utils.ExtractStringFromPayload(payload, "num"); got != "" {
 		t.Errorf("非字符串应返回空，got %q", got)
 	}
-	if got := extractStringFromPayload(payload, "missing"); got != "" {
+	if got := utils.ExtractStringFromPayload(payload, "missing"); got != "" {
 		t.Errorf("不存在的键应返回空，got %q", got)
 	}
 }
@@ -615,16 +612,16 @@ func TestExtractStringFromPayload(t *testing.T) {
 // TestExtractIntFromPayload 测试整数提取。
 func TestExtractIntFromPayload(t *testing.T) {
 	payload := map[string]any{"float": float64(42), "int": 10, "str": "not_int"}
-	if got := extractIntFromPayload(payload, "float"); got != 42 {
+	if got := utils.ExtractIntFromPayload(payload, "float"); got != 42 {
 		t.Errorf("got %d, want 42", got)
 	}
-	if got := extractIntFromPayload(payload, "int"); got != 10 {
+	if got := utils.ExtractIntFromPayload(payload, "int"); got != 10 {
 		t.Errorf("got %d, want 10", got)
 	}
-	if got := extractIntFromPayload(payload, "str"); got != 0 {
+	if got := utils.ExtractIntFromPayload(payload, "str"); got != 0 {
 		t.Errorf("非数字应返回 0，got %d", got)
 	}
-	if got := extractIntFromPayload(payload, "missing"); got != 0 {
+	if got := utils.ExtractIntFromPayload(payload, "missing"); got != 0 {
 		t.Errorf("不存在的键应返回 0，got %d", got)
 	}
 }
@@ -632,13 +629,13 @@ func TestExtractIntFromPayload(t *testing.T) {
 // TestExtractFloatFromPayload 测试浮点数提取。
 func TestExtractFloatFromPayload(t *testing.T) {
 	payload := map[string]any{"float": 3.14, "int": 10, "str": "not_float"}
-	if got := extractFloatFromPayload(payload, "float"); got != 3.14 {
+	if got := utils.ExtractFloatFromPayload(payload, "float"); got != 3.14 {
 		t.Errorf("got %f, want 3.14", got)
 	}
-	if got := extractFloatFromPayload(payload, "int"); got != 10.0 {
+	if got := utils.ExtractFloatFromPayload(payload, "int"); got != 10.0 {
 		t.Errorf("got %f, want 10.0", got)
 	}
-	if got := extractFloatFromPayload(payload, "str"); got != 0 {
+	if got := utils.ExtractFloatFromPayload(payload, "str"); got != 0 {
 		t.Errorf("非数字应返回 0，got %f", got)
 	}
 }

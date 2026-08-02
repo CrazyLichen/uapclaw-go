@@ -681,7 +681,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.23.4 | ✅ | UserHookRail | embed DeepAgentRail + BeforeToolCall/AfterToolCall/OnToolException/AfterInvoke | `user_hook_rail.py` |
 | 10.3.23.5 | ✅ | 回填注册 | DeepAdapter 注册 UserHookRail + handleHooksList 真实实现 | `interface_deep.py` 注册 |
 | 10.3.24 | ☐ | Sandbox | 延后 | `sandbox/` |
-| 10.3.25 | ☐ | Utils | 延后 | `utils/` |
+| 10.3.25 | ✅ | Utils | 完成 | `utils/` + `interrupt/helpers` + `filesystem/history` + `shell/rm_tracker` + `server/utils/diff_service` |
 | 10.3.26 | ☐ | 入口 | 延后 | `app_agentserver.py` |
 | **10.4 独立交互入口** | — | | | |
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |

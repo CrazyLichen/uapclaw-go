@@ -192,6 +192,10 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 			Int("content_bytes", contentBytes).
 			Msg("WriteFileTool 写入成功")
 
+		// 追加文件操作历史
+		// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+		_ = appendHistoryFromOpts(opts, agentID, path, "write", oldContent, &content)
+
 		// 构建返回值
 		// 对齐 Python L972-981
 		data := map[string]any{

@@ -15,7 +15,8 @@
 //	├── doc.go              # 包文档
 //	├── interrupt_base.go   # BaseInterruptRail + 决策类型
 //	├── ask_user_rail.go    # AskUserRail + AskUserPayload/AskUserRequest
-//	└── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
+//	├── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
+//	├── helpers.go          # ConvertInteractionsToAskUserQuestion + 6 helper 函数
 //
-// 对应 Python 代码：openjiuwen/harness/rails/interrupt/
+// 对应 Python 代码：openjiuwen/harness/rails/interrupt/ + jiuwenswarm/agents/harness/common/rails/interrupt/interrupt_helpers.py
 package interrupt

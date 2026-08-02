@@ -32,6 +32,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -266,6 +267,7 @@ func NewDeepAdapter() *DeepAdapter {
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),
 		registeredMCPServers:   make(map[string]any),
+		interactionConverter:   interrupt.ConvertInteractionsToAskUserQuestion,
 	}
 }
 
@@ -902,7 +904,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			switch chunkType {
 			case "llm_usage":
 				// 累加 usage → yield chat.usage_metadata
-				d.accumulateUsage(usage, payload)
+				utils.AccumulateUsage(usage, payload)
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 					"event_type":    "chat.usage_metadata",
 					"input_tokens":  usage.InputTokens,

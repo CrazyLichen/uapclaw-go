@@ -10,6 +10,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -179,6 +180,16 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 
 		// ── 前台执行 ──
 		// 对齐 Python L202-248
+
+		// 执行前：解析 rm 目标并记录被删除文件的历史
+		// 对齐 Python: rm_targets = _parse_rm_targets(command)
+		//              _record_rm_targets_before_deletion(history_path, rm_targets, operation)
+		historyPath := buildHistoryPathFromOpts(opts, agentID)
+		if historyPath != "" {
+			rmTargets := ParseRmTargets(command)
+			recordRmTargetsBeforeDeletion(historyPath, rmTargets, resolvedCwd)
+		}
+
 		res, err := op.Shell().ExecuteCmd(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -258,6 +269,13 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 				"error":   content,
 			}, nil
 		}
+
+		// 执行后：检测并记录文件删除
+		// 对齐 Python: _detect_and_record_deletions(history_path)
+		if historyPath != "" {
+			filesystem.DetectAndRecordDeletions(historyPath)
+		}
+
 		return map[string]any{
 			"success": true,
 			"data":    map[string]any{"content": content},
