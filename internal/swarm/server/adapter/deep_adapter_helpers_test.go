@@ -831,16 +831,44 @@ func TestBuildVideoModelConfig(t *testing.T) {
 
 	t.Run("无环境变量", func(t *testing.T) {
 		os.Unsetenv("VIDEO_API_KEY")
-		if d.buildVideoModelConfig(nil) != false {
-			t.Error("无 VIDEO_API_KEY 应返回 false")
+		if d.buildVideoModelConfig(nil) != nil {
+			t.Error("无 VIDEO_API_KEY 应返回 nil")
 		}
 	})
 
-	t.Run("有环境变量", func(t *testing.T) {
+	t.Run("有环境变量无独立api_key", func(t *testing.T) {
 		os.Setenv("VIDEO_API_KEY", "test_key")
 		defer os.Unsetenv("VIDEO_API_KEY")
-		if d.buildVideoModelConfig(nil) != true {
-			t.Error("有 VIDEO_API_KEY 应返回 true")
+		// nil configBase → DedicatedMultimodalModelConfigured 返回 false → nil
+		if d.buildVideoModelConfig(nil) != nil {
+			t.Error("nil configBase 无独立 api_key 应返回 nil")
+		}
+	})
+
+	t.Run("有YAML配置独立api_key", func(t *testing.T) {
+		configBase := map[string]any{
+			"models": map[string]any{
+				"video": map[string]any{
+					"model_config": map[string]any{
+						"api_key":    "yaml-video-key",
+						"api_base":   "https://yaml.example.com/v1",
+						"model_name": "yaml-video-model",
+					},
+				},
+			},
+		}
+		cfg := d.buildVideoModelConfig(configBase)
+		if cfg == nil {
+			t.Fatal("有 YAML 独立 api_key 应返回非 nil VideoModelConfig")
+		}
+		if cfg.APIKey != "yaml-video-key" {
+			t.Errorf("APIKey = %q，期望 yaml-video-key", cfg.APIKey)
+		}
+		if cfg.BaseURL != "https://yaml.example.com/v1" {
+			t.Errorf("BaseURL = %q，期望 https://yaml.example.com/v1", cfg.BaseURL)
+		}
+		if cfg.Model != "yaml-video-model" {
+			t.Errorf("Model = %q，期望 yaml-video-model", cfg.Model)
 		}
 	})
 }
