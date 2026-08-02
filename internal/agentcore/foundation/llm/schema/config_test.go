@@ -226,9 +226,12 @@ func (v *testProviderValidator) ValidateProvider(provider string) string {
 
 // ──────────────────────────── ModelClientConfig 测试 ────────────────────────────
 
-// TestNewModelClientConfig 验证构造函数默认值。
+// TestNewModelClientConfig 验证构造函数默认值和 Validate 自动调用。
 func TestNewModelClientConfig(t *testing.T) {
-	cfg := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com")
+	cfg, err := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com")
+	if err != nil {
+		t.Fatalf("NewModelClientConfig 失败: %v", err)
+	}
 	if cfg.ClientID == "" {
 		t.Error("ClientID 应自动生成 UUID")
 	}
@@ -263,7 +266,7 @@ func TestNewModelClientConfig(t *testing.T) {
 
 // TestNewModelClientConfig_WithOptions 验证选项函数生效。
 func TestNewModelClientConfig_WithOptions(t *testing.T) {
-	cfg := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
+	cfg, err := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
 		WithClientID("custom-id"),
 		WithTimeout(30.0),
 		WithMaxRetries(5),
@@ -272,6 +275,9 @@ func TestNewModelClientConfig_WithOptions(t *testing.T) {
 		WithCustomHeaders(map[string]string{"X-Custom": "value"}),
 		WithConfigExtra(map[string]any{"extra_field": "extra_value"}),
 	)
+	if err != nil {
+		t.Fatalf("NewModelClientConfig 失败: %v", err)
+	}
 	if cfg.ClientID != "custom-id" {
 		t.Errorf("ClientID = %q, want %q", cfg.ClientID, "custom-id")
 	}
@@ -304,40 +310,55 @@ func TestModelClientConfig_Validate_MissingRequired(t *testing.T) {
 	}{
 		{
 			name:    "空 provider",
-			cfg:     NewModelClientConfig("", "sk-xxx", "https://api.openai.com"),
-			wantErr: true,
+			cfg:     &ModelClientConfig{ClientProvider: "", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 60},
 		},
 		{
 			name:    "空 api_key",
-			cfg:     NewModelClientConfig("OpenAI", "", "https://api.openai.com"),
-			wantErr: true,
+			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "", APIBase: "https://api.openai.com", Timeout: 60},
 		},
 		{
 			name:    "空 api_base",
-			cfg:     NewModelClientConfig("OpenAI", "sk-xxx", ""),
-			wantErr: true,
+			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "", Timeout: 60},
 		},
 		{
 			name:    "timeout 为 0",
-			cfg:     NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com", WithTimeout(0)),
-			wantErr: true,
+			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 0},
 		},
 		{
 			name:    "timeout 为负数",
-			cfg:     NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com", WithTimeout(-1)),
-			wantErr: true,
-		},
-		{
-			name:    "全部有效",
-			cfg:     NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com"),
-			wantErr: false,
+			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: -1},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.cfg.Validate()
+			if err == nil {
+				t.Errorf("Validate() 期望报错，但未报错")
+			}
+		})
+	}
+}
+
+// TestNewModelClientConfig_ValidateError 验证构造函数自动 Validate 时返回错误。
+func TestNewModelClientConfig_ValidateError(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string // provider, apiKey, apiBase
+		wantErr bool
+	}{
+		{name: "空 provider", args: []string{"", "sk-xxx", "https://api.openai.com"}, wantErr: true},
+		{name: "空 api_key", args: []string{"OpenAI", "", "https://api.openai.com"}, wantErr: true},
+		{name: "空 api_base", args: []string{"OpenAI", "sk-xxx", ""}, wantErr: true},
+		{name: "全部有效", args: []string{"OpenAI", "sk-xxx", "https://api.openai.com"}, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := NewModelClientConfig(tt.args[0], tt.args[1], tt.args[2])
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewModelClientConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && cfg == nil {
+				t.Error("成功时 cfg 不应为 nil")
 			}
 		})
 	}
@@ -345,9 +366,9 @@ func TestModelClientConfig_Validate_MissingRequired(t *testing.T) {
 
 // TestModelClientConfig_Validate_ProviderNormalization 验证 Validate 规范化 provider。
 func TestModelClientConfig_Validate_ProviderNormalization(t *testing.T) {
-	cfg := NewModelClientConfig("openai", "sk-xxx", "https://api.openai.com")
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate 失败: %v", err)
+	cfg, err := NewModelClientConfig("openai", "sk-xxx", "https://api.openai.com")
+	if err != nil {
+		t.Fatalf("NewModelClientConfig 失败: %v", err)
 	}
 	if cfg.ClientProvider != "OpenAI" {
 		t.Errorf("规范化后 ClientProvider = %q, want %q", cfg.ClientProvider, "OpenAI")
@@ -356,12 +377,15 @@ func TestModelClientConfig_Validate_ProviderNormalization(t *testing.T) {
 
 // TestModelClientConfig_MarshalJSON_WithExtra 验证 Extra 字段合并输出。
 func TestModelClientConfig_MarshalJSON_WithExtra(t *testing.T) {
-	cfg := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
+	cfg, err := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
 		WithConfigExtra(map[string]any{
 			"custom_field":  "custom_value",
 			"another_field": 42,
 		}),
 	)
+	if err != nil {
+		t.Fatalf("NewModelClientConfig 失败: %v", err)
+	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("序列化失败: %v", err)
@@ -416,13 +440,16 @@ func TestModelClientConfig_UnmarshalJSON_WithExtra(t *testing.T) {
 
 // TestModelClientConfig_RoundTrip 验证序列化→反序列化一致性。
 func TestModelClientConfig_RoundTrip(t *testing.T) {
-	original := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
+	original, err := NewModelClientConfig("OpenAI", "sk-xxx", "https://api.openai.com",
 		WithTimeout(30.0),
 		WithMaxRetries(5),
 		WithVerifySSL(false),
 		WithSSLCert("/path/to/cert.pem"),
 		WithConfigExtra(map[string]any{"extra_key": "extra_val"}),
 	)
+	if err != nil {
+		t.Fatalf("NewModelClientConfig 失败: %v", err)
+	}
 
 	data, err := json.Marshal(original)
 	if err != nil {
@@ -471,8 +498,8 @@ func TestNewModelRequestConfig(t *testing.T) {
 	if cfg.Temperature != 0.95 {
 		t.Errorf("Temperature = %f, want 0.95", cfg.Temperature)
 	}
-	if cfg.TopP != nil {
-		t.Errorf("TopP = %v, want nil（未设置）", cfg.TopP)
+	if cfg.TopP == nil || *cfg.TopP != 0.1 {
+		t.Errorf("TopP = %v, want 0.1（默认）", cfg.TopP)
 	}
 	if cfg.MaxTokens != nil {
 		t.Error("MaxTokens 默认应为 nil")

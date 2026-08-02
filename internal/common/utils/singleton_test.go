@@ -1,9 +1,37 @@
 package utils
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 )
+
+// ──────────────────────────── 测试辅助类型 ────────────────────────────
+
+// testCleanableResource 实现 resettable 接口的测试类型。
+// 用于验证 Singleton.Reset 时自动调用 Cleanup。
+type testCleanableResource struct {
+	cleaned bool
+}
+
+// Cleanup 实现 resettable 接口，标记已清理。
+func (c *testCleanableResource) Cleanup() error {
+	c.cleaned = true
+	return nil
+}
+
+// testFailingResource Cleanup 返回错误的测试类型。
+// 用于验证 Reset 在 Cleanup 失败时仍不阻断流程。
+type testFailingResource struct {
+	cleanupErr error
+}
+
+// Cleanup 实现 resettable 接口，返回预设错误。
+func (f *testFailingResource) Cleanup() error {
+	return f.cleanupErr
+}
+
+// ──────────────────────────── 导出函数（测试） ────────────────────────────
 
 func TestSingleton_Get(t *testing.T) {
 	var s Singleton[string]
@@ -160,64 +188,63 @@ func TestSingleton_Reset(t *testing.T) {
 }
 
 func TestSingleton_ResetWithCleanup(t *testing.T) {
-	// 带有 Cleanup 方法的类型
-	type resource struct {
-		cleaned bool
-	}
-
-	// 使用包装类型实现 resettable
-	type cleanableResource struct {
-		resource
-		cleanupErr error
-	}
-
-	var s Singleton[cleanableResource]
+	// 使用实现了 resettable 接口的测试类型 testCleanableResource
+	var s Singleton[testCleanableResource]
 
 	// 创建实例
-	inst := s.Get(func() *cleanableResource {
-		return &cleanableResource{}
+	inst := s.Get(func() *testCleanableResource {
+		return &testCleanableResource{cleaned: false}
 	})
 	if inst == nil {
 		t.Fatal("Get() returned nil")
 	}
-
-	// 实现 Cleanup 的类型应在 Reset 时被调用
-	// 注意：由于 cleanableResource 没有指针接收者的 Cleanup 方法，
-	// 我们用一个实现了 resettable 的类型来测试
-	type cleanable struct {
-		cleaned bool
+	if inst.cleaned {
+		t.Fatal("实例不应已被清理")
 	}
 
-	// 直接测试 resettable 接口断言逻辑
-	var s2 Singleton[cleanable]
-	s2.Get(func() *cleanable {
-		return &cleanable{cleaned: false}
-	})
-	// cleanable 未实现 resettable，Reset 不应 panic
-	s2.Reset()
+	// Reset 时应自动调用 Cleanup
+	s.Reset()
+
+	// 注意：Reset 后 inst 已被清理，验证 cleaned 标记
+	if !inst.cleaned {
+		t.Fatal("Reset 应通过 resettable 接口调用 Cleanup，cleaned 应为 true")
+	}
 }
 
-func TestSingleton_ResetWithResettable(t *testing.T) {
-	// 定义实现了 resettable 接口的类型
-	type pool struct {
-		cleaned bool
-	}
+func TestSingleton_ResetWithCleanupError(t *testing.T) {
+	// 使用 Cleanup 返回错误的测试类型 testFailingResource
+	// 验证 Reset 在 Cleanup 失败时仍不阻断流程
+	var s Singleton[testFailingResource]
 
-	var s Singleton[pool]
-
-	s.Get(func() *pool {
-		return &pool{cleaned: false}
+	s.Get(func() *testFailingResource {
+		return &testFailingResource{cleanupErr: fmt.Errorf("cleanup failed")}
 	})
 
-	// Reset 前实例存在
+	// Cleanup 返回错误，但 Reset 不应 panic，仅记日志
+	s.Reset()
+}
+
+func TestSingleton_ResetWithNonResettable(t *testing.T) {
+	// 未实现 resettable 接口的类型，Reset 不应 panic
+	type simpleStruct struct {
+		value int
+	}
+
+	var s Singleton[simpleStruct]
+
+	s.Get(func() *simpleStruct {
+		return &simpleStruct{value: 42}
+	})
+
+	// simpleStruct 未实现 resettable，Reset 不应 panic
 	s.Reset()
 
 	// Reset 后再 Get 应创建新实例
-	newInst := s.Get(func() *pool {
-		return &pool{cleaned: true}
+	newInst := s.Get(func() *simpleStruct {
+		return &simpleStruct{value: 99}
 	})
-	if newInst.cleaned != true {
-		t.Fatal("Get() after Reset should return new instance")
+	if newInst.value != 99 {
+		t.Fatalf("Get() after Reset = %d, want 99", newInst.value)
 	}
 }
 

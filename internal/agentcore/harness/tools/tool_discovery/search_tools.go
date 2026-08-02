@@ -95,13 +95,14 @@ func NewSearchToolsTool(
 			})
 		}
 
-		// 日志
+		// 日志，对齐 Python: matched 字段列出名称列表
 		logger.Info(searchLogComponent).
 			Str("tool_name", "search_tools").
 			Str("query", input.Query).
 			Int("limit", limit).
 			Int("detail_level", input.DetailLevel).
 			Int("match_count", len(matches)).
+			Str("matched", formatMatches(matches)).
 			Msg("SearchToolsTool 搜索完成")
 
 		// 返回结果

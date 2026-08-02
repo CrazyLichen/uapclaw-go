@@ -412,7 +412,10 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 // queryLLM 调用 LLM 执行 hook 审查，对齐 Python _query_llm
 // 内部用 LLMConfig 创建 Model 实例（对齐 Python: 动态 import config + 创建 Model）
 func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (string, error) {
-	clientConfig := llmschema.NewModelClientConfig(e.llmConfig.ClientProvider, e.llmConfig.APIKey, e.llmConfig.APIBase)
+	clientConfig, cfgErr := llmschema.NewModelClientConfig(e.llmConfig.ClientProvider, e.llmConfig.APIKey, e.llmConfig.APIBase)
+	if cfgErr != nil {
+		return "", fmt.Errorf("创建 ModelClientConfig 失败: %w", cfgErr)
+	}
 	model, err := llm.NewModel(clientConfig, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建 Model 失败: %w", err)

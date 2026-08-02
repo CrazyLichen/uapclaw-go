@@ -29,7 +29,7 @@ type TeamModelConfig struct {
 // 对齐 Python: TeamModelConfig()
 func NewTeamModelConfig() TeamModelConfig {
 	return TeamModelConfig{
-		ModelClientConfig:  *llmschema.NewModelClientConfig("", "", ""),
+		ModelClientConfig:  llmschema.ModelClientConfig{Timeout: 60, MaxRetries: 3, VerifySSL: true},
 		ModelRequestConfig: llmschema.NewModelRequestConfig(),
 	}
 }

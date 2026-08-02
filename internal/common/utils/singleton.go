@@ -24,6 +24,11 @@ type resettable interface {
 // 泛型参数 T 避免全局 map 的类型断言问题，每个需要单例的类型
 // 只需声明一个包级 Singleton[T] 变量即可。
 //
+// 注意：Go 没有弱引用（weakref.WeakValueDictionary）机制，Python 单例的
+// _instances 字典存储弱引用，当外部不再持有实例时自动清理；Go 的普通 map
+// 不会自动回收。Go 通过 ResetWithCleanup（resettable 接口）显式清理替代
+// Python 的自动弱引用回收，测试时调用 Reset 即可触发 Cleanup。
+//
 // 用法：
 //
 //	var poolManager = Singleton[ConnectorPoolManager]{}

@@ -57,11 +57,12 @@ func NewLoadToolsTool(
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
-		// 日志
+		// 日志，对齐 Python: result 字段
 		logger.Info(loadLogComponent).
 			Str("tool_name", "load_tools").
 			Strs("tool_names", input.ToolNames).
 			Bool("replace", input.Replace).
+			Any("result", result).
 			Msg("LoadToolsTool 加载完成")
 
 		return result, nil

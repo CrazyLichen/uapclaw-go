@@ -168,22 +168,23 @@ func (s TaskStatus) IsTerminal() bool {
 }
 
 // String 返回任务状态的字符串表示。
+// 对齐 Python: 小写值（pending/running/completed/failed/cancelled/timeout）
 func (s TaskStatus) String() string {
 	switch s {
 	case TaskPending:
-		return "PENDING"
+		return "pending"
 	case TaskRunning:
-		return "RUNNING"
+		return "running"
 	case TaskCompleted:
-		return "COMPLETED"
+		return "completed"
 	case TaskFailed:
-		return "FAILED"
+		return "failed"
 	case TaskCancelled:
-		return "CANCELLED"
+		return "cancelled"
 	case TaskTimeout:
-		return "TIMEOUT"
+		return "timeout"
 	default:
-		return "UNKNOWN"
+		return "unknown"
 	}
 }
 

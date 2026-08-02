@@ -48,7 +48,7 @@ type ModelRequestConfig struct {
 	ModelName string `json:"model"`
 	// Temperature 温度参数，控制输出随机性，默认 0.95
 	Temperature float64 `json:"temperature"`
-	// TopP Top-p 采样参数（可选），对齐 Python: 不设置时为 nil，不传给模型
+	// TopP Top-p 采样参数，默认 0.1，对齐 Python: top_p=0.1
 	TopP *float64 `json:"top_p,omitempty"`
 	// MaxTokens 最大生成 token 数（可选）
 	MaxTokens *int `json:"max_tokens,omitempty"`
@@ -221,7 +221,8 @@ func WithConfigExtra(extra map[string]any) ModelClientConfigOption {
 }
 
 // NewModelClientConfig 创建模型客户端配置，默认超时 60s、重试 3 次、验证 SSL。
-func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientConfigOption) *ModelClientConfig {
+// 构造完成后自动调用 Validate，校验必填字段并规范化 provider。
+func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientConfigOption) (*ModelClientConfig, error) {
 	cfg := &ModelClientConfig{
 		ClientID:       uuid.New().String(),
 		ClientProvider: provider,
@@ -234,7 +235,10 @@ func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientC
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return cfg
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // Validate 校验模型客户端配置必填字段并规范化 provider。
@@ -355,10 +359,12 @@ func WithRequestExtra(extra map[string]any) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Extra = extra }
 }
 
-// NewModelRequestConfig 创建模型请求配置，默认温度 0.95。
+// NewModelRequestConfig 创建模型请求配置，默认温度 0.95、TopP 0.1（对齐 Python）。
 func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig {
+	defaultTopP := 0.1
 	cfg := &ModelRequestConfig{
 		Temperature: 0.95,
+		TopP:        &defaultTopP,
 	}
 	for _, opt := range opts {
 		opt(cfg)

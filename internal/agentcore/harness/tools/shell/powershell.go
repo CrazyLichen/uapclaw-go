@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -155,10 +156,10 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
 		if session != nil {
-			historyPath = BuildHistoryPath(session.GetSessionID(), agentID, ctx)
+			historyPath = buildHistoryPathFromOpts(opts, agentID)
 			rmTargets := ParsePSRemoveTargets(command)
 			if len(rmTargets) > 0 {
-				RecordRmTargetsBeforeDeletion(historyPath, rmTargets, "powershell")
+				recordRmTargetsBeforeDeletion(historyPath, rmTargets, resolvedCwd)
 			}
 		}
 
@@ -230,7 +231,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		// ── rm 目标记录（执行后）──
 		// 对齐 Python L201-203: 执行后检测并记录删除
 		if historyPath != "" && !meaning.IsError {
-			DetectAndRecordDeletions(historyPath)
+			filesystem.DetectAndRecordDeletions(historyPath)
 		}
 
 		content, isError := RenderToolContent(

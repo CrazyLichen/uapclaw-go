@@ -1489,7 +1489,10 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithConfigExtra(extra))
 	}
 
-	clientConfig := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
+	clientConfig, cfgErr := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
+	if cfgErr != nil {
+		return nil, fmt.Errorf("创建 ModelClientConfig 失败: %w", cfgErr)
+	}
 
 	return llm.NewModel(clientConfig, mConfig)
 }

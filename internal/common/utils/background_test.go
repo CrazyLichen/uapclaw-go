@@ -99,12 +99,12 @@ func TestTaskStatus_String(t *testing.T) {
 		status TaskStatus
 		want   string
 	}{
-		{TaskPending, "PENDING"},
-		{TaskRunning, "RUNNING"},
-		{TaskCompleted, "COMPLETED"},
-		{TaskFailed, "FAILED"},
-		{TaskCancelled, "CANCELLED"},
-		{TaskTimeout, "TIMEOUT"},
+		{TaskPending, "pending"},
+		{TaskRunning, "running"},
+		{TaskCompleted, "completed"},
+		{TaskFailed, "failed"},
+		{TaskCancelled, "cancelled"},
+		{TaskTimeout, "timeout"},
 	}
 	for _, tt := range tests {
 		if got := tt.status.String(); got != tt.want {
@@ -176,7 +176,7 @@ func TestTaskManager_TaskFailure(t *testing.T) {
 	status := task.Status
 	task.mu.RUnlock()
 	if status != TaskFailed {
-		t.Fatalf("task.Status = %s, want FAILED", status)
+		t.Fatalf("task.Status = %s, want failed", status)
 	}
 }
 
@@ -209,7 +209,7 @@ func TestTaskManager_CancelTask(t *testing.T) {
 	task.mu.RUnlock()
 
 	if status != TaskCancelled {
-		t.Fatalf("task.Status = %s, want CANCELLED", status)
+		t.Fatalf("task.Status = %s, want cancelled", status)
 	}
 	if reason != "test_cancel" {
 		t.Fatalf("task.CancelReason = %q, want %q", reason, "test_cancel")
@@ -266,7 +266,7 @@ func TestTaskManager_TaskTimeout(t *testing.T) {
 	task.mu.RUnlock()
 
 	if status != TaskTimeout {
-		t.Fatalf("task.Status = %s, want TIMEOUT", status)
+		t.Fatalf("task.Status = %s, want timeout", status)
 	}
 }
 

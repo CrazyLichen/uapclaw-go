@@ -290,7 +290,11 @@ func entrySignature(entry ModelPoolEntry) string {
 // buildModelClientConfig 从 metadata.client 子字典构建 ModelClientConfig，
 // 池条目显式字段覆盖同名键。
 func buildModelClientConfig(clientExtra map[string]any, modelID, apiProvider, apiKey, apiBaseURL string) *llmschema.ModelClientConfig {
-	cfg := llmschema.NewModelClientConfig(apiProvider, apiKey, apiBaseURL)
+	cfg, err := llmschema.NewModelClientConfig(apiProvider, apiKey, apiBaseURL)
+	if err != nil {
+		// 池条目的 provider/key/base 应始终有效；校验失败视为配置错误
+		return nil
+	}
 	cfg.ClientID = modelID
 
 	// 合并 metadata.client 中的字段

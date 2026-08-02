@@ -248,7 +248,7 @@ func recordRmTargetsBeforeDeletion(historyPath string, targets []string, cwdPath
 		// 读取文件内容
 		data, err := os.ReadFile(absPath)
 		if err != nil {
-			logger.Warn(logComponent).
+			logger.Warn(logger.ComponentAgentCore).
 				Str("abs_path", absPath).
 				Err(err).
 				Msg("读取 rm 目标文件失败")

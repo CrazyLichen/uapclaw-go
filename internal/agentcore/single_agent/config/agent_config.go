@@ -212,11 +212,17 @@ func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelC
 			opt(extra)
 		}
 
-		// 创建 ModelClientConfig
-		c.ModelClientConfig = llmschema.NewModelClientConfig(
+		// 创建 ModelClientConfig（构造函数自动调用 Validate）
+		clientCfg, cfgErr := llmschema.NewModelClientConfig(
 			provider, apiKey, apiBase,
 			llmschema.WithVerifySSL(extra.verifySSL),
 		)
+		if cfgErr != nil {
+			// 配置无效时不设置 ModelClientConfig，后续使用时应检查 nil
+			c.ModelClientConfig = nil
+			return
+		}
+		c.ModelClientConfig = clientCfg
 		// 优先 extra.customHeaders，回退 c.CustomHeaders（对齐 Python configure_model_client 传递 self.custom_headers）
 		if len(extra.customHeaders) > 0 {
 			c.ModelClientConfig.CustomHeaders = extra.customHeaders

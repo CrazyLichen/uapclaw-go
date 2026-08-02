@@ -184,25 +184,15 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
 		if session != nil {
-			historyPath = BuildHistoryPath(session.GetSessionID(), agentID, ctx)
+			historyPath = buildHistoryPathFromOpts(opts, agentID)
 			rmTargets := ParseRmTargets(command)
 			if len(rmTargets) > 0 {
-				RecordRmTargetsBeforeDeletion(historyPath, rmTargets, "bash")
+				recordRmTargetsBeforeDeletion(historyPath, rmTargets, resolvedCwd)
 			}
 		}
 
 		// ── 前台执行 ──
 		// 对齐 Python L202-248
-
-		// 执行前：解析 rm 目标并记录被删除文件的历史
-		// 对齐 Python: rm_targets = _parse_rm_targets(command)
-		//              _record_rm_targets_before_deletion(history_path, rm_targets, operation)
-		historyPath := buildHistoryPathFromOpts(opts, agentID)
-		if historyPath != "" {
-			rmTargets := ParseRmTargets(command)
-			recordRmTargetsBeforeDeletion(historyPath, rmTargets, resolvedCwd)
-		}
-
 		res, err := op.Shell().ExecuteCmd(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -267,7 +257,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		// ── rm 目标记录（执行后）──
 		// 对齐 Python L230-232: 执行后检测并记录删除
 		if historyPath != "" && !meaning.IsError {
-			DetectAndRecordDeletions(historyPath)
+			filesystem.DetectAndRecordDeletions(historyPath)
 		}
 
 		content, isError := RenderToolContent(

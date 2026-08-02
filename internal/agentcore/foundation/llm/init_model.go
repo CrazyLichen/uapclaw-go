@@ -1,6 +1,8 @@
 package llm
 
 import (
+	"fmt"
+
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -83,12 +85,15 @@ func InitModel(
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(cfg.sslCert))
 	}
 
-	clientConfig := llmschema.NewModelClientConfig(
+	clientConfig, err := llmschema.NewModelClientConfig(
 		provider,
 		apiKey,
 		apiBase,
 		clientConfigOpts...,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("创建 ModelClientConfig 失败: %w", err)
+	}
 
 	// 构建 ModelRequestConfig
 	requestConfigOpts := []llmschema.ModelRequestConfigOption{
