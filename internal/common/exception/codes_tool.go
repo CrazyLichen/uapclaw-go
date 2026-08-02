@@ -88,6 +88,35 @@ var (
 
 	// 工具 — 沙箱 182500–182699
 
+	// 工具 — 多模态 182040–182045
+
+	// StatusToolMultimodalVisionConfigInvalid 视觉模型配置无效
+	StatusToolMultimodalVisionConfigInvalid = NewStatusCode(
+		"TOOL_MULTIMODAL_VISION_CONFIG_INVALID", 182040,
+		"vision model config invalid, reason='{reason}'")
+	// StatusToolMultimodalVisionInvokeFailed 视觉模型调用失败
+	StatusToolMultimodalVisionInvokeFailed = NewStatusCode(
+		"TOOL_MULTIMODAL_VISION_INVOKE_FAILED", 182041,
+		"vision model invoke failed, error='{reason}'")
+	// StatusToolMultimodalAudioConfigInvalid 音频模型配置无效
+	StatusToolMultimodalAudioConfigInvalid = NewStatusCode(
+		"TOOL_MULTIMODAL_AUDIO_CONFIG_INVALID", 182042,
+		"audio model config invalid, reason='{reason}'")
+	// StatusToolMultimodalAudioInvokeFailed 音频模型调用失败
+	StatusToolMultimodalAudioInvokeFailed = NewStatusCode(
+		"TOOL_MULTIMODAL_AUDIO_INVOKE_FAILED", 182043,
+		"audio model invoke failed, error='{reason}'")
+	// StatusToolMultimodalVideoConfigInvalid 视频模型配置无效
+	StatusToolMultimodalVideoConfigInvalid = NewStatusCode(
+		"TOOL_MULTIMODAL_VIDEO_CONFIG_INVALID", 182044,
+		"video model config invalid, reason='{reason}'")
+	// StatusToolMultimodalVideoInvokeFailed 视频模型调用失败
+	StatusToolMultimodalVideoInvokeFailed = NewStatusCode(
+		"TOOL_MULTIMODAL_VIDEO_INVOKE_FAILED", 182045,
+		"video model invoke failed, error='{reason}'")
+
+	// 工具 — 沙箱 182500–182699（接续）
+
 	// StatusToolTodosLoadFailed todo 工具加载失败
 	StatusToolTodosLoadFailed = NewStatusCode(
 		"TOOL_TODOS_LOAD_FAILED", 182500,
