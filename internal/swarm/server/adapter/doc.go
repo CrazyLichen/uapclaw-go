@@ -21,6 +21,7 @@
 //	├── deep_adapter_mcp.go       # MCP 管理 6 方法
 //	├── deep_adapter_a2x.go       # A2X 客户端 5 方法 + Cron 上下文 2 方法（⤵️）
 //	├── deep_adapter_tools.go     # Tool 同步 5 方法 + 多模态配置 + ToolCards 构建 + 工具名常量
+//	├── multimodal_config.go      # YAML 配置映射（ApplyVideo/Vision/AudioModelConfigFromYAML + DedicatedMultimodalModelConfigured）
 //	├── deep_adapter_slash.go     # Slash 命令 5 个 + governance approval（⤵️）
 //	├── deep_adapter_evolution.go # EvolutionWatcher + ContextCompressor + Recap（⤵️）
 //	├── deep_adapter_team.go      # TeamSkillApproval + team 分流（⤵️）
