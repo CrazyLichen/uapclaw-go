@@ -2,7 +2,13 @@ package multimodal
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
 	"encoding/base64"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -414,4 +420,387 @@ func TestIsRetryableError_无状态码(t *testing.T) {
 	if isRetryableError("connection refused") {
 		t.Error("无状态码不应为可重试错误")
 	}
+}
+
+// ──────────────────────────── Audio mock 客户端 ────────────────────────────
+
+// mockAudioClient 用于测试的 mock 音频客户端
+type mockAudioClient struct {
+	transcriptionText string
+	transcriptionErr  error
+	invokeResponses   []mockVisionResponse
+	invokeCallCount   int
+}
+
+func (m *mockAudioClient) Invoke(_ context.Context, _ modelclients.MessagesParam, _ ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	idx := m.invokeCallCount
+	m.invokeCallCount++
+	if idx >= len(m.invokeResponses) {
+		idx = len(m.invokeResponses) - 1
+	}
+	resp := m.invokeResponses[idx]
+	if resp.err != nil {
+		return nil, resp.err
+	}
+	return llmschema.NewAssistantMessage(resp.text), nil
+}
+
+func (m *mockAudioClient) Stream(_ context.Context, _ modelclients.MessagesParam, _ ...modelclients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, exception.NewBaseError(exception.StatusModelCallFailed, exception.WithMsg("mock does not support stream"))
+}
+
+func (m *mockAudioClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, exception.NewBaseError(exception.StatusModelCallFailed, exception.WithMsg("mock does not support image generation"))
+}
+
+func (m *mockAudioClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, exception.NewBaseError(exception.StatusModelCallFailed, exception.WithMsg("mock does not support speech generation"))
+}
+
+func (m *mockAudioClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...modelclients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, exception.NewBaseError(exception.StatusModelCallFailed, exception.WithMsg("mock does not support video generation"))
+}
+
+func (m *mockAudioClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	if m.transcriptionErr != nil {
+		return nil, m.transcriptionErr
+	}
+	return &llmschema.TranscriptionResponse{Text: m.transcriptionText}, nil
+}
+
+func (m *mockAudioClient) Release(_ context.Context, _ ...modelclients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+
+func (m *mockAudioClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
+// newTestAudioConfig 创建测试用的音频模型配置
+func newTestAudioConfig() *hschema.AudioModelConfig {
+	return &hschema.AudioModelConfig{
+		APIKey:            "test-api-key",
+		BaseURL:           "https://api.openai.com/v1",
+		TranscriptionModel: "whisper-1",
+		QAModel:           "gpt-4o-audio-preview",
+		MaxRetries:        3,
+		HTTPTimeout:       20,
+		MaxAudioBytes:     25 * 1024 * 1024,
+		ACRBaseURL:        "https://identify-ap-southeast-1.acrcloud.com/v1/identify",
+	}
+}
+
+// ──────────────────────────── ResolveAudioPath 测试 ────────────────────────────
+
+func TestResolveAudioPath_HTTPURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.ReadAll(r.Body) // drain
+		_, _ = fmt.Fprint(w, "fake audio content")
+	}))
+	defer server.Close()
+
+	config := newTestAudioConfig()
+	path, shouldDelete, err := ResolveAudioPath(context.Background(), server.URL+"/audio.mp3", config)
+	if err != nil {
+		t.Fatalf("ResolveAudioPath HTTP URL 返回错误: %v", err)
+	}
+	if !shouldDelete {
+		t.Error("HTTP URL 下载的文件 shouldDelete 应为 true")
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Errorf("临时文件应存在: %v", statErr)
+	}
+	// 清理
+	_ = os.Remove(path)
+}
+
+func TestResolveAudioPath_本地文件(t *testing.T) {
+	tmpDir := t.TempDir()
+	audioFile := filepath.Join(tmpDir, "test.mp3")
+	_ = os.WriteFile(audioFile, []byte("fake audio"), 0644)
+
+	config := newTestAudioConfig()
+	path, shouldDelete, err := ResolveAudioPath(context.Background(), audioFile, config)
+	if err != nil {
+		t.Fatalf("ResolveAudioPath 本地文件返回错误: %v", err)
+	}
+	if shouldDelete {
+		t.Error("本地文件 shouldDelete 应为 false")
+	}
+	if path != audioFile {
+		t.Errorf("path = %q, 期望 %q", path, audioFile)
+	}
+}
+
+func TestResolveAudioPath_Sandbox路径(t *testing.T) {
+	config := newTestAudioConfig()
+	_, _, err := ResolveAudioPath(context.Background(), "/home/user/sandbox/audio.mp3", config)
+	if err == nil {
+		t.Error("sandbox 路径应返回错误")
+	}
+}
+
+func TestResolveAudioPath_文件不存在(t *testing.T) {
+	config := newTestAudioConfig()
+	_, _, err := ResolveAudioPath(context.Background(), "/nonexistent/audio.mp3", config)
+	if err == nil {
+		t.Error("文件不存在应返回错误")
+	}
+}
+
+func TestResolveAudioPath_大小超限(t *testing.T) {
+	// httptest 返回超大响应
+	bigData := make([]byte, 26*1024*1024) // 26MB > 25MB limit
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bigData)
+	}))
+	defer server.Close()
+
+	config := newTestAudioConfig()
+	_, _, err := ResolveAudioPath(context.Background(), server.URL+"/audio.mp3", config)
+	if err == nil {
+		t.Error("超过大小限制应返回错误")
+	}
+	baseErr, ok := err.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("错误应为 BaseError 类型, got %T", err)
+	}
+	if !strings.Contains(baseErr.Error(), "size limit") {
+		t.Errorf("错误消息应包含 'size limit', got %q", baseErr.Error())
+	}
+}
+
+// ──────────────────────────── EncodeAudioFile 测试 ────────────────────────────
+
+func TestEncodeAudioFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	audioFile := filepath.Join(tmpDir, "test.mp3")
+	_ = os.WriteFile(audioFile, []byte("fake audio data"), 0644)
+
+	encoded, format, err := EncodeAudioFile(audioFile)
+	if err != nil {
+		t.Fatalf("EncodeAudioFile 返回错误: %v", err)
+	}
+	if format != "mp3" {
+		t.Errorf("format = %q, 期望 %q", format, "mp3")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("base64 解码失败: %v", err)
+	}
+	if string(decoded) != "fake audio data" {
+		t.Errorf("解码内容不匹配")
+	}
+}
+
+func TestEncodeAudioFile_WAV(t *testing.T) {
+	tmpDir := t.TempDir()
+	audioFile := filepath.Join(tmpDir, "test.wav")
+	_ = os.WriteFile(audioFile, []byte("fake wav data"), 0644)
+
+	_, format, err := EncodeAudioFile(audioFile)
+	if err != nil {
+		t.Fatalf("EncodeAudioFile WAV 返回错误: %v", err)
+	}
+	if format != "wav" {
+		t.Errorf("format = %q, 期望 %q", format, "wav")
+	}
+}
+
+// ──────────────────────────── GetAudioDuration 测试 ────────────────────────────
+
+func TestGetAudioDuration_WAV文件(t *testing.T) {
+	// 构造一个简单的 WAV 文件
+	tmpDir := t.TempDir()
+	wavFile := filepath.Join(tmpDir, "test.wav")
+	// WAV header + fmt chunk + data chunk
+	wavData := constructSimpleWAV(44100, 16, 1, 44100) // 1 second of audio at 44100Hz
+	_ = os.WriteFile(wavFile, wavData, 0644)
+
+	duration, err := GetAudioDuration(wavFile)
+	if err != nil {
+		t.Fatalf("GetAudioDuration WAV 返回错误: %v", err)
+	}
+	// WAV 时长应为约 1 秒
+	if duration < 0.9 || duration > 1.1 {
+		t.Errorf("duration = %.2f, 期望约 1.0", duration)
+	}
+}
+
+func TestGetAudioDuration_非WAV文件(t *testing.T) {
+	tmpDir := t.TempDir()
+	mp3File := filepath.Join(tmpDir, "test.mp3")
+	_ = os.WriteFile(mp3File, []byte("fake mp3"), 0644)
+
+	duration, err := GetAudioDuration(mp3File)
+	if err != nil {
+		t.Fatalf("GetAudioDuration 非 WAV 返回错误: %v", err)
+	}
+	// ffprobe 不可用 → 降级为 0
+	if duration != 0 {
+		t.Errorf("duration = %.2f, 期望 0（ffprobe 不可用降级）", duration)
+	}
+}
+
+// ──────────────────────────── guessAudioFormat 测试 ────────────────────────────
+
+func TestGuessAudioFormat_MP3(t *testing.T) {
+	result := guessAudioFormat("test.mp3", nil)
+	if result != "mp3" {
+		t.Errorf("result = %q, 期望 %q", result, "mp3")
+	}
+}
+
+func TestGuessAudioFormat_WAV(t *testing.T) {
+	result := guessAudioFormat("test.wav", nil)
+	if result != "wav" {
+		t.Errorf("result = %q, 期望 %q", result, "wav")
+	}
+}
+
+func TestGuessAudioFormat_未知扩展名(t *testing.T) {
+	result := guessAudioFormat("test.xyz", nil)
+	if result != "mp3" {
+		t.Errorf("result = %q, 期望 %q (降级)", result, "mp3")
+	}
+}
+
+// ──────────────────────────── getAudioExtension 测试 ────────────────────────────
+
+func TestGetAudioExtension_URL含扩展名(t *testing.T) {
+	result := getAudioExtension("https://example.com/audio.mp3", "")
+	if result != ".mp3" {
+		t.Errorf("result = %q, 期望 %q", result, ".mp3")
+	}
+}
+
+func TestGetAudioExtension_ContentType推断(t *testing.T) {
+	result := getAudioExtension("https://example.com/download", "audio/wav")
+	if result != ".wav" {
+		t.Errorf("result = %q, 期望 %q", result, ".wav")
+	}
+}
+
+func TestGetAudioExtension_无线索默认MP3(t *testing.T) {
+	result := getAudioExtension("https://example.com/download", "text/html")
+	if result != ".mp3" {
+		t.Errorf("result = %q, 期望 %q (降级)", result, ".mp3")
+	}
+}
+
+// ──────────────────────────── audioMIMEToFormat 测试 ────────────────────────────
+
+func TestAudioMIMEToFormat_MPEG(t *testing.T) {
+	result := audioMIMEToFormat("audio/mpeg")
+	if result != "mp3" {
+		t.Errorf("result = %q, 期望 %q", result, "mp3")
+	}
+}
+
+func TestAudioMIMEToFormat_WAV(t *testing.T) {
+	result := audioMIMEToFormat("audio/wav")
+	if result != "wav" {
+		t.Errorf("result = %q, 期望 %q", result, "wav")
+	}
+}
+
+// ──────────────────────────── extractFirstArtistName 测试 ────────────────────────────
+
+func TestExtractFirstArtistName_有Artist(t *testing.T) {
+	item := map[string]any{
+		"artists": []any{
+			map[string]any{"name": "Artist One"},
+			map[string]any{"name": "Artist Two"},
+		},
+	}
+	result := extractFirstArtistName(item)
+	if result != "Artist One" {
+		t.Errorf("result = %q, 期望 %q", result, "Artist One")
+	}
+}
+
+func TestExtractFirstArtistName_空Artist(t *testing.T) {
+	item := map[string]any{}
+	result := extractFirstArtistName(item)
+	if result != "" {
+		t.Errorf("result = %q, 期望空字符串", result)
+	}
+}
+
+// ──────────────────────────── ACR HMAC 签名测试 ────────────────────────────
+
+func TestACRHMACSignature(t *testing.T) {
+	// 验证 HMAC-SHA1 签名构造逻辑
+	accessKey := "test_access_key"
+	accessSecret := "test_secret"
+	timestamp := "1234567890"
+	stringToSign := "POST\n/v1/identify\n" + accessKey + "\naudio\n1\n" + timestamp
+
+	mac := hmac.New(sha1.New, []byte(accessSecret))
+	mac.Write([]byte(stringToSign))
+	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	if signature == "" {
+		t.Error("signature 不应为空")
+	}
+	// 验证可解码
+	decoded, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		t.Fatalf("signature base64 解码失败: %v", err)
+	}
+	if len(decoded) != sha1.Size {
+		t.Errorf("signature 长度 = %d, 期望 %d (SHA1)", len(decoded), sha1.Size)
+	}
+}
+
+// ──────────────────────────── 构造 WAV 辅助 ────────────────────────────
+
+// constructSimpleWAV 构造一个简单的 WAV 文件（用于测试）
+func constructSimpleWAV(sampleRate, bitsPerSample, numChannels, numSamples uint32) []byte {
+	byteRate := sampleRate * uint32(numChannels) * uint32(bitsPerSample/8)
+	blockAlign := uint32(numChannels) * uint32(bitsPerSample/8)
+	dataSize := numSamples * blockAlign
+
+	// RIFF header
+	riff := []byte("RIFF")
+	wave := []byte("WAVE")
+	fileSize := uint32(36 + dataSize)
+
+	// fmt chunk
+	fmtChunk := []byte("fmt ")
+	fmtSize := uint32(16)
+	audioFormat := uint16(1) // PCM
+
+	// data chunk
+	dataChunk := []byte("data")
+
+	result := make([]byte, 0, 44+dataSize)
+	result = append(result, riff...)
+	result = append(result, uint32ToBytes(fileSize)...)
+	result = append(result, wave...)
+	result = append(result, fmtChunk...)
+	result = append(result, uint32ToBytes(fmtSize)...)
+	result = append(result, uint16ToBytes(audioFormat)...)
+	result = append(result, uint16ToBytes(uint16(numChannels))...)
+	result = append(result, uint32ToBytes(sampleRate)...)
+	result = append(result, uint32ToBytes(byteRate)...)
+	result = append(result, uint16ToBytes(uint16(blockAlign))...)
+	result = append(result, uint16ToBytes(uint16(bitsPerSample))...)
+	result = append(result, dataChunk...)
+	result = append(result, uint32ToBytes(dataSize)...)
+	// 填充零数据
+	for i := uint32(0); i < dataSize; i++ {
+		result = append(result, 0)
+	}
+	return result
+}
+
+func uint32ToBytes(v uint32) []byte {
+	return []byte{byte(v), byte(v >> 8), byte(v >> 16), byte(v >> 24)}
+}
+
+func uint16ToBytes(v uint16) []byte {
+	return []byte{byte(v), byte(v >> 8)}
 }
