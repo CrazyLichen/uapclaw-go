@@ -188,9 +188,9 @@ func (o *InstructionOptimizer) backward(ctx context.Context, selectedSignals []*
 
 		// 对齐 Python: param.set_gradient("system_prompt_optimized", None)
 		//             param.set_gradient("user_prompt_optimized", None)
-		// 空字符串 "" 等同于 Python 的 None 语义
-		param.SetGradient("system_prompt_optimized", "")
-		param.SetGradient("user_prompt_optimized", "")
+		// nil 等同于 Python 的 None 语义
+		param.SetGradient("system_prompt_optimized", nil)
+		param.SetGradient("user_prompt_optimized", nil)
 
 		// 对齐 Python: if not self._selected_signals: continue
 		if len(selectedSignals) == 0 {
@@ -293,10 +293,14 @@ func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 	params := o.Parameters()
 
 	for opID, param := range params {
-		if sysVal := param.GetGradient("system_prompt_optimized"); sysVal != "" {
+		sysValAny := param.GetGradient("system_prompt_optimized")
+		sysVal, _ := sysValAny.(string)
+		if sysVal != "" {
 			updates[schema.UpdateKey{opID, "system_prompt"}] = sysVal
 		}
-		if usrVal := param.GetGradient("user_prompt_optimized"); usrVal != "" {
+		usrValAny := param.GetGradient("user_prompt_optimized")
+		usrVal, _ := usrValAny.(string)
+		if usrVal != "" {
 			updates[schema.UpdateKey{opID, "user_prompt"}] = usrVal
 		}
 	}
@@ -370,7 +374,8 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 	usrTpl := o.getPromptTemplate(op, "user_prompt")
 
 	// 对齐 Python: gradient = param.get_gradient("system_prompt") or ""
-	gradient := param.GetGradient("system_prompt")
+	gradientAny := param.GetGradient("system_prompt")
+	gradient, _ := gradientAny.(string)
 
 	keywords := map[string]any{
 		"system_prompt":            evolving.GetContentStringFromTemplate(sysTpl),
@@ -444,7 +449,8 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 	targetTpl := o.getPromptTemplate(op, promptType)
 
 	// 对齐 Python: gradient = param.get_gradient(prompt_type) or ""
-	gradient := param.GetGradient(promptType)
+	gradientAny := param.GetGradient(promptType)
+	gradient, _ := gradientAny.(string)
 
 	keywords := map[string]any{
 		"prompt_instruction":       evolving.GetContentStringFromTemplate(targetTpl),

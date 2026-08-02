@@ -67,9 +67,9 @@ type BaseOptimizer interface {
 type TextualParameter struct {
 	// OperatorID 所属 Operator 标识
 	OperatorID string
-	// Gradients 梯度映射 target → 梯度值（字符串）
-	// 空字符串 "" 表示 nil（未设置/已清除），对齐 Python 的 None 语义
-	Gradients map[string]string
+	// Gradients 梯度映射 target → 梯度值（any 类型，对齐 Python Dict[str, Any]）
+	// nil 表示未设置/已清除，对齐 Python 的 None 语义
+	Gradients map[string]any
 	// Description 可选描述
 	Description string
 }
@@ -116,21 +116,21 @@ const logComponent = logger.ComponentAgentCore
 func NewTextualParameter(operatorID string) *TextualParameter {
 	return &TextualParameter{
 		OperatorID: operatorID,
-		Gradients:  map[string]string{},
+		Gradients:  map[string]any{},
 	}
 }
 
-// SetGradient 设置目标梯度值。空字符串表示 nil（未设置/已清除）。
+// SetGradient 设置目标梯度值。nil 表示未设置/已清除（对齐 Python None）。
 //
 // 对应 Python: TextualParameter.set_gradient(name, gradient)
-func (p *TextualParameter) SetGradient(name string, gradient string) {
+func (p *TextualParameter) SetGradient(name string, gradient any) {
 	p.Gradients[name] = gradient
 }
 
-// GetGradient 获取目标梯度值。返回空字符串表示未设置。
+// GetGradient 获取目标梯度值。返回 nil 表示未设置。
 //
 // 对应 Python: TextualParameter.get_gradient(name)
-func (p *TextualParameter) GetGradient(name string) string {
+func (p *TextualParameter) GetGradient(name string) any {
 	return p.Gradients[name]
 }
 

@@ -34,6 +34,13 @@
 //	│   ├── doc.go            # 包文档
 //	│   ├── base.go           # MemoryOptimizerBase（记忆优化器基类） 声明式骨架
 //	│   └── base_test.go      # 单元测试
+//	├── skill_call/          # 技能经验优化器
+//	│   ├── doc.go            # 包文档
+//	│   ├── base.go           # SkillExperienceOptimizerBase（技能经验优化器基类） 共享字段/方法/常量
+//	│   ├── draft_parser.go   # ParsedExperienceDraft + JSON 提取/解析辅助函数
+//	│   ├── experience_optimizer.go # SkillExperienceOptimizer（个体技能经验优化器） Backward/Step/GenerateRecords/RetryParse + 辅助函数
+//	│   ├── team_optimizer.go  # TeamSkillExperienceOptimizer（团队技能经验优化器） 双路径 GenerateRecords/UserPatch/TrajectoryPatch/RegenerateBody/callLLM + 辅助函数
+//	│   └── templates.go      # 提示词模板（CN+EN 双语，一比一复刻 Python 原文）
 //	└── llm_resilience/       # LLM 弹性重试策略
 //	    ├── doc.go            # 包文档
 //	    └── llm_resilience.go # LLMInvokePolicy（LLM调用策略） + InvokeTextWithRetry（带重试的文本调用）

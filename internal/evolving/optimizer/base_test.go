@@ -37,11 +37,12 @@ var _ operator.Operator = (*mockOperator)(nil)
 func TestTextualParameter_梯度操作(t *testing.T) {
 	p := NewTextualParameter("op1")
 	p.SetGradient("system_prompt", "improved prompt")
-	if p.GetGradient("system_prompt") != "improved prompt" {
-		t.Error("gradient mismatch")
+	val := p.GetGradient("system_prompt")
+	if val != "improved prompt" {
+		t.Errorf("gradient mismatch: got %v, want 'improved prompt'", val)
 	}
-	if p.GetGradient("nonexistent") != "" {
-		t.Error("nonexistent gradient should be empty string")
+	if p.GetGradient("nonexistent") != nil {
+		t.Error("nonexistent gradient should be nil")
 	}
 }
 
