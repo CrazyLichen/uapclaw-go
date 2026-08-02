@@ -66,7 +66,7 @@ type ExperienceApprovalRequest struct {
 	// PendingChange 暂存变更
 	PendingChange *checkpointing.PendingChange
 	// RequestID 请求标识
-	RequestID *string
+	RequestID string
 	// ApplyResults 应用结果列表
 	ApplyResults []schema.ApplyResult
 }
@@ -163,18 +163,14 @@ func (r *ExperienceApprovalRequest) ToHostResult() HostFacingExperienceResult {
 		pendingCount = len(r.PendingChange.Payload)
 		changeType = r.PendingChange.ChangeType
 	}
-	requestID := ""
-	if r.RequestID != nil {
-		requestID = *r.RequestID
-	}
 	return HostFacingExperienceResultPendingApproval(
-		r.SkillName, requestID, changeType, pendingCount,
+		r.SkillName, r.RequestID, changeType, pendingCount,
 	)
 }
 
 // ToHostResult 返回 host-facing 稳定形态。
 // 对应 Python: ExperienceApplyResult.to_host_result()
-func (r *ExperienceApplyResult) ToHostResult(requestID *string, changeType string) HostFacingExperienceResult {
+func (r *ExperienceApplyResult) ToHostResult(requestID string, changeType string) HostFacingExperienceResult {
 	if r.RejectedCount > 0 {
 		return HostFacingExperienceResultRejected(r.SkillName, requestID, changeType, r.RejectedCount)
 	}

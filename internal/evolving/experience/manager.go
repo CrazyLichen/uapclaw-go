@@ -15,6 +15,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// PendingGovernance 暂存治理操作条目。
+//
+// 对应 Python: ExperienceManager._pending_governance 内层的 dict
+type PendingGovernance struct {
+	// Kind 操作类型（当前仅 "simplify"）
+	Kind string
+	// SkillName 技能名称
+	SkillName string
+	// Actions 整理操作列表（来自 LLM 输出，保持 []map[string]any）
+	Actions []map[string]any
+}
+
 // ExperienceManager 编排技能/团队技能的在线演进生命周期。
 //
 // 对应 Python: openjiuwen/agent_evolving/experience/skill_experience_manager.py ExperienceManager
@@ -32,7 +44,7 @@ type ExperienceManager struct {
 	// pendingApprovalSnapshots 暂存审批快照映射（调用方拥有）
 	pendingApprovalSnapshots map[string]*PendingChange
 	// pendingGovernance 暂存治理操作映射
-	pendingGovernance map[string]map[string]any
+	pendingGovernance map[string]*PendingGovernance
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -144,7 +156,7 @@ func NewExperienceManager(
 	language string,
 	skillOps map[string]*skill_call.SkillExperienceOperator,
 	pendingApprovalSnapshots map[string]*PendingChange,
-	pendingGovernance map[string]map[string]any,
+	pendingGovernance map[string]*PendingGovernance,
 ) (*ExperienceManager, error) {
 	if !supportedKinds[kind] {
 		return nil, fmt.Errorf("unsupported experience manager kind: %s", kind)
@@ -163,7 +175,7 @@ func NewExperienceManager(
 		em.skillOps = map[string]*skill_call.SkillExperienceOperator{}
 	}
 	if em.pendingGovernance == nil {
-		em.pendingGovernance = map[string]map[string]any{}
+		em.pendingGovernance = map[string]*PendingGovernance{}
 	}
 
 	em.BindPendingApprovalSnapshots(pendingApprovalSnapshots)
@@ -178,7 +190,7 @@ func (m *ExperienceManager) PendingApprovalSnapshots() map[string]*PendingChange
 
 // PendingGovernance 返回暂存治理操作映射。
 // 对应 Python: ExperienceManager.pending_governance (property)
-func (m *ExperienceManager) PendingGovernance() map[string]map[string]any {
+func (m *ExperienceManager) PendingGovernance() map[string]*PendingGovernance {
 	return m.pendingGovernance
 }
 
@@ -212,11 +224,11 @@ func (m *ExperienceManager) StageRecords(
 	signalType *string,
 	signalSource *string,
 	changeType string,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	trajectory *trajectory.Trajectory,
 	messages []map[string]any,
 	isSharedRecords bool,
-) ExperienceApprovalRequest {
+) (*ExperienceApprovalRequest, error) {
 	proposal := ExperienceProposal{
 		SkillName:        skillName,
 		Records:          records,
@@ -247,12 +259,12 @@ func (m *ExperienceManager) StageApplyResults(
 	applyResults []schema.ApplyResult,
 	requiresApproval bool,
 	source string,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	userQuery string,
 	signalType *string,
 	signalSource *string,
 	messages []map[string]any,
-) ExperienceApprovalRequest {
+) (*ExperienceApprovalRequest, error) {
 	preview := BuildLocalApplyPreview(skillName, applyResults)
 
 	proposal := ExperienceProposal{
@@ -302,7 +314,7 @@ func (m *ExperienceManager) CommitProposal(
 	ctx context.Context,
 	proposal ExperienceProposal,
 ) (ExperienceApplyResult, error) {
-	request := m.StageRecords(
+	request, err := m.StageRecords(
 		ctx,
 		proposal.SkillName,
 		proposal.Records,
@@ -312,12 +324,15 @@ func (m *ExperienceManager) CommitProposal(
 		proposal.SignalType,
 		proposal.SignalSource,
 		schema.SkillExperienceEntry,
-		nil,
+		"",
 		nil,
 		nil,
 		false,
 	)
-	return m.commitStagedRequest(ctx, request)
+	if err != nil {
+		return ExperienceApplyResult{}, err
+	}
+	return m.commitStagedRequest(ctx, *request)
 }
 
 // RequestSimplify 为技能暂存整理治理操作。
@@ -379,10 +394,10 @@ func (m *ExperienceManager) RequestSimplify(
 	}
 
 	requestID := fmt.Sprintf("evolve_simplify_%08x", time.Now().UTC().UnixNano()&0xFFFFFFFF)
-	m.pendingGovernance[requestID] = map[string]any{
-		"kind":       "simplify",
-		"skill_name": skillName,
-		"actions":    actions,
+	m.pendingGovernance[requestID] = &PendingGovernance{
+		Kind:      "simplify",
+		SkillName: skillName,
+		Actions:   actions,
 	}
 
 	elapsed := time.Since(startedAt).Seconds()
@@ -407,13 +422,7 @@ func (m *ExperienceManager) ApproveSimplify(ctx context.Context, requestID strin
 	}
 	delete(m.pendingGovernance, requestID)
 
-	skillName, _ := gov["skill_name"].(string)
-	actions := []map[string]any{}
-	if actionsAny, ok := gov["actions"].([]map[string]any); ok {
-		actions = actionsAny
-	}
-
-	return ExecuteSimplifyActions(ctx, m.store, skillName, actions), nil
+	return ExecuteSimplifyActions(ctx, m.store, gov.SkillName, gov.Actions), nil
 }
 
 // RejectSimplify 丢弃暂存的整理治理操作。
@@ -549,12 +558,21 @@ func FormatEvolutionRecords(records []checkpointing.EvolutionRecord, language st
 // 对应 Python: ExperienceManager.apply_updates() (staticmethod)
 func ApplyUpdatesFromManager(
 	operators map[string]operator.Operator,
-	updates map[schema.UpdateKey]any,
+	updates map[schema.UpdateKey]schema.UpdateValue,
 ) []schema.ApplyResult {
 	return evolvingExecuteUpdates(operators, updates)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// updatesToAnyMap 将 UpdateValue map 转换为桥接函数所需的 map[schema.UpdateKey]any 格式。
+func updatesToAnyMap(updates map[schema.UpdateKey]schema.UpdateValue) map[schema.UpdateKey]any {
+	result := make(map[schema.UpdateKey]any, len(updates))
+	for key, value := range updates {
+		result[key] = value
+	}
+	return result
+}
 
 // stageRecordsInternal 共享暂存流程（技能/团队技能审批批次）。
 //
@@ -564,11 +582,11 @@ func (m *ExperienceManager) stageRecordsInternal(
 	proposal ExperienceProposal,
 	records []checkpointing.EvolutionRecord,
 	changeType string,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	trajectory *trajectory.Trajectory,
 	messages []map[string]any,
 	isSharedRecords bool,
-) ExperienceApprovalRequest {
+) (*ExperienceApprovalRequest, error) {
 	operator, ok := m.skillOps[proposal.SkillName]
 	if !ok {
 		operator = skill_call.NewSkillExperienceOperator(proposal.SkillName)
@@ -600,11 +618,11 @@ func (m *ExperienceManager) stageRecordsInternal(
 func (m *ExperienceManager) stagePendingRequest(
 	proposal ExperienceProposal,
 	preview LocalApplyPreview,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	trajectory *trajectory.Trajectory,
 	messages []map[string]any,
 	isSharedRecords bool,
-) ExperienceApprovalRequest {
+) (*ExperienceApprovalRequest, error) {
 	pending := makePendingChangeFromPreview(
 		preview,
 		requestIDPrefix,
@@ -621,13 +639,13 @@ func (m *ExperienceManager) stagePendingRequest(
 		Msg("[ExperienceManager] staged approval request")
 
 	requestID := stagedPending.ChangeID
-	return ExperienceApprovalRequest{
+	return &ExperienceApprovalRequest{
 		SkillName:     proposal.SkillName,
 		Proposal:      proposal,
 		PendingChange: stagedPending,
-		RequestID:     &requestID,
+		RequestID:     requestID,
 		ApplyResults:  preview.ApplyResults,
-	}
+	}, nil
 }
 
 // applyRequest 共享请求生命周期（approve/reject/retry）。
@@ -669,18 +687,18 @@ func (m *ExperienceManager) commitStagedRequest(
 	ctx context.Context,
 	request ExperienceApprovalRequest,
 ) (ExperienceApplyResult, error) {
-	if request.RequestID == nil || *request.RequestID == "" {
+	if request.RequestID == "" {
 		return ExperienceApplyResult{}, fmt.Errorf("staged request missing request_id")
 	}
 
-	result, err := m.ApproveRequest(ctx, *request.RequestID)
+	result, err := m.ApproveRequest(ctx, request.RequestID)
 	if err != nil {
 		return result, err
 	}
 	if !result.Ok() {
 		return result, fmt.Errorf(
 			"auto-commit failed for skill=%s, request_id=%s, applied=%d, pending=%d, errors=%v",
-			request.SkillName, *request.RequestID,
+			request.SkillName, request.RequestID,
 			result.AppliedCount, result.PendingCount, result.Errors,
 		)
 	}
@@ -698,7 +716,7 @@ func (m *ExperienceManager) previewApplyResults(
 ) []schema.ApplyResult {
 	return ApplyUpdatesFromManager(
 		map[string]operator.Operator{op.OperatorID(): op},
-		map[schema.UpdateKey]any{
+		map[schema.UpdateKey]schema.UpdateValue{
 			schema.UpdateKey{op.OperatorID(), schema.ExperiencesTarget}: update,
 		},
 	)
@@ -710,13 +728,13 @@ func (m *ExperienceManager) previewApplyResults(
 // 当前实现直接调用，由 orchestrator 负责桥接。
 func evolvingExecuteUpdates(
 	operators map[string]operator.Operator,
-	updates map[schema.UpdateKey]any,
+	updates map[schema.UpdateKey]schema.UpdateValue,
 ) []schema.ApplyResult {
 	// 对齐 Python: execute_updates(operators, updates)
 	// 实际实现由外层 evolving 包的 ExecuteUpdates 提供，
 	// 此处通过包级变量注入避免循环依赖
 	if applyUpdatesFn != nil {
-		return applyUpdatesFn(operators, updates)
+		return applyUpdatesFn(operators, updatesToAnyMap(updates))
 	}
 	// 无注入时的默认行为：逐个应用
 	return defaultExecuteUpdates(operators, updates)
@@ -727,7 +745,7 @@ func evolvingExecuteUpdates(
 // 静态导出方法，对应 Python: ExperienceManager._make_pending_change_from_preview()
 func makePendingChangeFromPreview(
 	preview LocalApplyPreview,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	trajectory *trajectory.Trajectory,
 	messages []map[string]any,
 	isSharedRecords bool,
@@ -817,26 +835,15 @@ func toApplyResult(skillName string, result PendingCommitResult) ExperienceApply
 }
 
 // defaultExecuteUpdates 无注入时的默认更新执行逻辑。
-// 对齐 evolving.ExecuteUpdates 的核心流程：
-// 1. 过滤 nil 值
-// 2. 归一化后逐一应用到 operator
-// 3. 为 nil 值生成错误结果
+// 对齐 evolving.ExecuteUpdates 的核心流程：归一化后逐一应用到 operator。
 func defaultExecuteUpdates(
 	operators map[string]operator.Operator,
-	updates map[schema.UpdateKey]any,
+	updates map[schema.UpdateKey]schema.UpdateValue,
 ) []schema.ApplyResult {
 	var results []schema.ApplyResult
 
-	// 1. 过滤 nil 值更新
-	nonNilUpdates := make(map[schema.UpdateKey]any)
-	for key, value := range updates {
-		if value != nil {
-			nonNilUpdates[key] = value
-		}
-	}
-
-	// 2. 归一化后逐一应用
-	normalized := schema.NormalizeUpdates(nonNilUpdates)
+	// 归一化后逐一应用
+	normalized := schema.NormalizeUpdates(updatesToAnyMap(updates))
 	for key, update := range normalized {
 		op, ok := operators[key.OperatorID()]
 		if !ok {
@@ -855,21 +862,6 @@ func defaultExecuteUpdates(
 			continue
 		}
 		results = append(results, op.ApplyUpdate(key.Target(), update))
-	}
-
-	// 3. 为 nil 值更新生成错误结果
-	for key, value := range updates {
-		if value == nil {
-			results = append(results, schema.ApplyResult{
-				OperatorID: key.OperatorID(),
-				Target:     key.Target(),
-				Applied:    false,
-				Mode:       schema.UpdateModeReplace,
-				Effect:     schema.UpdateEffectState,
-				Records:    []any{},
-				Errors:     []string{"update value is nil"},
-			})
-		}
 	}
 
 	return results

@@ -26,15 +26,15 @@ import (
 func MakePendingChange(
 	skillName string,
 	records []checkpointing.EvolutionRecord,
-	requestIDPrefix *string,
+	requestIDPrefix string,
 	trajectory *trajectory.Trajectory,
 	messages []map[string]any,
 	isSharedRecords bool,
 ) *PendingChange {
 	pending := checkpointing.NewPendingChange(skillName, records, trajectory, messages)
 	pending.IsSharedRecords = isSharedRecords
-	if requestIDPrefix != nil && *requestIDPrefix != "" {
-		pending.ChangeID = fmt.Sprintf("%s_%s", *requestIDPrefix, generateShortID())
+	if requestIDPrefix != "" {
+		pending.ChangeID = fmt.Sprintf("%s_%s", requestIDPrefix, generateShortID())
 	}
 	return pending
 }

@@ -232,6 +232,8 @@ var SimplifyPrompt = map[string]string{"cn": SimplifyPromptCN, "en": SimplifyPro
 
 // NewExperienceScorer 创建 ExperienceScorer。
 //
+// llmModel 不能为 nil（对应 Python 中 Model 为必填参数，非 Optional），
+// 若传入 nil 则返回错误。
 // 对应 Python: ExperienceScorer.__init__()
 func NewExperienceScorer(
 	llmModel *llm.Model,
@@ -239,7 +241,10 @@ func NewExperienceScorer(
 	language string,
 	evaluatePolicy *llm_resilience.LLMInvokePolicy,
 	simplifyPolicy *llm_resilience.LLMInvokePolicy,
-) *ExperienceScorer {
+) (*ExperienceScorer, error) {
+	if llmModel == nil {
+		return nil, fmt.Errorf("ExperienceScorer: llmModel 不能为 nil")
+	}
 	ep := EvaluateLLMPolicy
 	if evaluatePolicy != nil {
 		ep = *evaluatePolicy
@@ -254,7 +259,7 @@ func NewExperienceScorer(
 		language:       language,
 		evaluatePolicy: ep,
 		simplifyPolicy: sp,
-	}
+	}, nil
 }
 
 // CalcEffectiveness 计算 E（Effectiveness）评分，使用贝叶斯平滑 Beta(1,1)。
@@ -529,8 +534,13 @@ func (s *ExperienceScorer) Simplify(
 
 // UpdateLLM 热更新 LLM/model。
 //
+// llmModel 不能为 nil（与 NewExperienceScorer 一致），若传入 nil 则直接返回不更新，
+// 避免 scorer 进入不可用状态。
 // 对应 Python: ExperienceScorer.update_llm()
 func (s *ExperienceScorer) UpdateLLM(llmModel *llm.Model, model string) {
+	if llmModel == nil {
+		return
+	}
 	s.llm = llmModel
 	s.model = model
 }

@@ -33,6 +33,16 @@ type ExperienceTracker struct {
 	evalInterval int
 }
 
+// RecordScoreUpdate 单条记录的评分更新数据。
+//
+// 对应 Python: update_record_scores 中内层 dict {"score": ..., "usage_stats": ...}
+type RecordScoreUpdate struct {
+	// Score 新评分
+	Score float64
+	// UsageStats 使用统计字典（传给 EvolutionStore.UpdateRecordScores）
+	UsageStats map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -80,7 +90,7 @@ func (t *ExperienceTracker) RecordPresented(
 		return nil
 	}
 
-	updates := map[string]map[string]any{}
+	updates := map[string]*RecordScoreUpdate{}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	limit := 5
@@ -101,13 +111,13 @@ func (t *ExperienceTracker) RecordPresented(
 			LastPresentedAt: &now,
 			LastEvaluatedAt: existingStats.LastEvaluatedAt,
 		}
-		updates[record.ID] = map[string]any{
-			"score":       record.Score,
-			"usage_stats": newStats.ToDict(),
+		updates[record.ID] = &RecordScoreUpdate{
+			Score:      record.Score,
+			UsageStats: newStats.ToDict(),
 		}
 	}
 
-	if _, err := t.store.UpdateRecordScores(ctx, skillName, updates); err != nil {
+	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("skill", skillName).
 			Err(err).
@@ -118,11 +128,8 @@ func (t *ExperienceTracker) RecordPresented(
 	presentedEntries := []PresentedRecordEntry{}
 	for i := 0; i < limit; i++ {
 		record := bodyRecords[i]
-		if _, ok := updates[record.ID]; ok {
-			statsData := updates[record.ID]["usage_stats"]
-			if statsMap, ok := statsData.(map[string]any); ok {
-				record.UsageStats = checkpointing.FromDictUsageStats(statsMap)
-			}
+		if update, ok := updates[record.ID]; ok {
+			record.UsageStats = checkpointing.FromDictUsageStats(update.UsageStats)
 			presentedEntries = append(presentedEntries, PresentedRecordEntry{
 				SkillName: skillName,
 				Record:    record,
@@ -171,7 +178,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		return nil
 	}
 
-	updates := map[string]map[string]any{}
+	updates := map[string]*RecordScoreUpdate{}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	for _, record := range bodyRecords {
 		existingStats := record.UsageStats
@@ -186,13 +193,13 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 			LastPresentedAt: &now,
 			LastEvaluatedAt: existingStats.LastEvaluatedAt,
 		}
-		updates[record.ID] = map[string]any{
-			"score":       record.Score,
-			"usage_stats": newStats.ToDict(),
+		updates[record.ID] = &RecordScoreUpdate{
+			Score:      record.Score,
+			UsageStats: newStats.ToDict(),
 		}
 	}
 
-	if _, err := t.store.UpdateRecordScores(ctx, skillName, updates); err != nil {
+	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("skill", skillName).
 			Err(err).
@@ -202,11 +209,8 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 
 	presentedEntries := []PresentedRecordEntry{}
 	for _, record := range bodyRecords {
-		if _, ok := updates[record.ID]; ok {
-			statsData := updates[record.ID]["usage_stats"]
-			if statsMap, ok := statsData.(map[string]any); ok {
-				record.UsageStats = checkpointing.FromDictUsageStats(statsMap)
-			}
+		if update, ok := updates[record.ID]; ok {
+			record.UsageStats = checkpointing.FromDictUsageStats(update.UsageStats)
 			presentedEntries = append(presentedEntries, PresentedRecordEntry{
 				SkillName: skillName,
 				Record:    record,
@@ -266,7 +270,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 				continue
 			}
 
-			updates := map[string]map[string]any{}
+			updates := map[string]*RecordScoreUpdate{}
 			for _, result := range evalResults {
 				recordID, ok := result["record_id"].(string)
 				if !ok || recordID == "" {
@@ -278,9 +282,9 @@ func (t *ExperienceTracker) EvaluatePresented(
 						if record.UsageStats == nil {
 							record.UsageStats = &checkpointing.UsageStats{}
 						}
-						updates[recordID] = map[string]any{
-							"score":       newScore,
-							"usage_stats": record.UsageStats.ToDict(),
+						updates[recordID] = &RecordScoreUpdate{
+							Score:      newScore,
+							UsageStats: record.UsageStats.ToDict(),
 						}
 						break
 					}
@@ -288,7 +292,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 			}
 
 			if len(updates) > 0 {
-				if _, err := t.store.UpdateRecordScores(ctx, skillName, updates); err != nil {
+				if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
 					logger.Warn(logger.ComponentAgentCore).
 						Str("skill", skillName).
 						Err(err).
@@ -312,6 +316,23 @@ func (t *ExperienceTracker) ClearSession(sessionID string) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ToMap 转换为 map[string]any，用于调用 EvolutionStore.UpdateRecordScores。
+func (u *RecordScoreUpdate) ToMap() map[string]any {
+	return map[string]any{
+		"score":       u.Score,
+		"usage_stats": u.UsageStats,
+	}
+}
+
+// updatesToMap 将 RecordScoreUpdate map 转换为 UpdateRecordScores 所需的 map[string]map[string]any 格式。
+func updatesToMap(updates map[string]*RecordScoreUpdate) map[string]map[string]any {
+	result := make(map[string]map[string]any, len(updates))
+	for id, update := range updates {
+		result[id] = update.ToMap()
+	}
+	return result
+}
 
 // filterBodyRecords 从记录列表中筛选 BODY 类型记录。
 func filterBodyRecords(records []checkpointing.EvolutionRecord) []checkpointing.EvolutionRecord {

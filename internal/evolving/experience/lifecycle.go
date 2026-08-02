@@ -40,7 +40,7 @@ type HostFacingExperienceResult struct {
 	// SkillName 技能名称
 	SkillName string
 	// RequestID 请求标识
-	RequestID *string
+	RequestID string
 	// Effect 效果类型
 	Effect string
 	// ChangeType 变更类型
@@ -88,7 +88,7 @@ func HostFacingExperienceResultPendingApproval(
 ) HostFacingExperienceResult {
 	return HostFacingExperienceResult{
 		SkillName:    skillName,
-		RequestID:    strPtr(requestID),
+		RequestID:    requestID,
 		Effect:       schema.PendingChangeEffect,
 		ChangeType:   changeType,
 		PendingCount: pendingCount,
@@ -99,7 +99,7 @@ func HostFacingExperienceResultPendingApproval(
 // HostFacingExperienceResultPersisted 创建 persisted/partial 状态的 HostFacingExperienceResult。
 // 对应 Python: HostFacingExperienceResult.persisted()
 func HostFacingExperienceResultPersisted(
-	skillName string, requestID *string, changeType string,
+	skillName string, requestID string, changeType string,
 	appliedCount int, pendingCount int, errors []string,
 ) HostFacingExperienceResult {
 	status := "persisted"
@@ -125,7 +125,7 @@ func HostFacingExperienceResultPersisted(
 // HostFacingExperienceResultRejected 创建 rejected 状态的 HostFacingExperienceResult。
 // 对应 Python: HostFacingExperienceResult.rejected()
 func HostFacingExperienceResultRejected(
-	skillName string, requestID *string, changeType string, rejectedCount int,
+	skillName string, requestID string, changeType string, rejectedCount int,
 ) HostFacingExperienceResult {
 	return HostFacingExperienceResult{
 		SkillName:     skillName,
@@ -138,8 +138,3 @@ func HostFacingExperienceResultRejected(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// strPtr 将字符串转为 *string。
-func strPtr(s string) *string {
-	return &s
-}

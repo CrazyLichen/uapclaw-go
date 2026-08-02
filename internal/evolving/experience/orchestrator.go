@@ -142,27 +142,27 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 		}
 	}
 
-	request := o.manager.StageApplyResults(
+	request, err := o.manager.StageApplyResults(
 		ctx, skillName, preview.ApplyResults,
-		requiresApproval, stageSource, &o.requestIDPrefix,
+		requiresApproval, stageSource, o.requestIDPrefix,
 		onlineContext.UserQuery, &signalType, &signalSource,
 		messagesCopy,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	if requiresApproval {
 		return &OnlineEvolutionResult{
 			SkillName: skillName,
 			Status:    OnlineEvolutionStatusStaged,
-			Request:   &request,
+			Request:   request,
 			Message:   fmt.Sprintf("evolution request staged for skill=%s", skillName),
 		}, nil
 	}
 
 	// 对齐 Python: auto-approve
-	requestID := ""
-	if request.RequestID != nil {
-		requestID = *request.RequestID
-	}
+	requestID := request.RequestID
 	result, err := o.manager.ApproveRequest(ctx, requestID)
 	if err != nil {
 		logger.Warn(logger.ComponentAgentCore).
@@ -183,7 +183,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 	return &OnlineEvolutionResult{
 		SkillName: skillName,
 		Status:    OnlineEvolutionStatusAutoApproved,
-		Request:   &request,
+		Request:   request,
 		Message:   fmt.Sprintf("evolution request auto-approved for skill=%s", skillName),
 	}, nil
 }
@@ -285,9 +285,16 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	}
 
 	// 对齐 Python: execute_updates → BuildLocalApplyPreview
+	// 将 updater.Process 返回的 map[UpdateKey]any 转为 map[UpdateKey]UpdateValue
+	updateValues := make(map[schema.UpdateKey]schema.UpdateValue, len(updates))
+	for key, value := range updates {
+		if uv, ok := value.(schema.UpdateValue); ok {
+			updateValues[key] = uv
+		}
+	}
 	applyResults := ApplyUpdatesFromManager(
 		map[string]operator.Operator{op.OperatorID(): op},
-		updates,
+		updateValues,
 	)
 
 	preview := BuildLocalApplyPreview(onlineContext.SkillName, applyResults)
