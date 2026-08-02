@@ -302,7 +302,8 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 	d.visionModelConfig = d.buildVisionModelConfig(configBase)
 	d.audioModelConfig = d.buildAudioModelConfig(configBase)
-	d.videoToolRegistered = d.buildVideoModelConfig(configBase)
+	d.videoModelConfig = d.buildVideoModelConfig(configBase)
+	d.videoToolRegistered = d.videoModelConfig != nil
 	d.imageGenToolRegistered = d.buildImageGenModelConfig(configBase)
 }
 
@@ -386,23 +387,27 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 
 // buildVideoModelConfig 构建视频模型配置。
 // 对齐 Python: _build_video_model_config(config_base) (line 1244-1260)
-// 返回 bool 表示视频工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
-// ⤵️ 9.38-49 Harness 工具集: apply_video_model_config_from_yaml + dedicated_multimodal_model_configured
-func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) bool {
-	// ⤵️ 9.38-49: apply_video_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
-	// 待实现：应用视频模型配置 applyVideoModelConfigFromYAML(configBase)
+//
+// 先通过 ApplyVideoModelConfigFromYAML 将 YAML 配置映射到环境变量，
+// 再检查 DedicatedMultimodalModelConfigured 门控，
+// 最后从环境变量构建 VideoModelConfig。
+func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.VideoModelConfig {
+	// 1. YAML 配置映射到环境变量
+	ApplyVideoModelConfigFromYAML(configBase)
 
-	// ⤵️ 9.38-49: dedicated_multimodal_model_configured(config_base, "video") — 检查 models.video 是否有独立 api_key
-	// 待实现：检查视频模型是否已配置 if !dedicatedMultimodalModelConfigured(configBase, "video") {
-	// 	logger.Info(logComponent).Msg("跳过video_understanding: config.yaml中models.video无独立api_key")
-	// 	return false
-	// }
-
-	if os.Getenv("VIDEO_API_KEY") == "" {
-		logger.Info(logComponent).Msg("视频工具跳过: 配置不完整 (VIDEO_API_KEY 未设置)")
-		return false
+	// 2. 检查 models.video 是否有独立 api_key
+	if !DedicatedMultimodalModelConfigured(configBase, "video") {
+		logger.Info(logComponent).Msg("跳过 video_understanding: config.yaml 中 models.video 无独立 api_key")
+		return nil
 	}
-	return true
+
+	// 3. 从环境变量构建 VideoModelConfig
+	cfg := schema.VideoModelConfig{}.FromEnv()
+	if cfg.APIKey == "" {
+		logger.Info(logComponent).Msg("视频工具跳过: 配置不完整 (VIDEO_API_KEY 未设置)")
+		return nil
+	}
+	return &cfg
 }
 
 // buildImageGenModelConfig 构建图片生成模型配置。

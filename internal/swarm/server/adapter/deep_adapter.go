@@ -12,6 +12,7 @@ import (
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -177,6 +178,8 @@ type DeepAdapter struct {
 	// audioToolsRegistered 音频工具是否已注册
 	// ⤵️ 10.6.24 多模态工具
 	audioToolsRegistered bool
+	// videoModelConfig 视频模型配置
+	videoModelConfig *hschema.VideoModelConfig
 	// videoToolRegistered 视频工具是否已注册
 	// ⤵️ 10.6.24 多模态工具
 	videoToolRegistered bool
@@ -1325,6 +1328,35 @@ func EnsurePersistentCheckpointer() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveVisionModelClient 基于 visionModelConfig 构建 BaseModelClient。
+func (d *DeepAdapter) resolveVisionModelClient() modelclients.BaseModelClient {
+	return d.resolveModelClientFromConfig(d.visionModelConfig.APIKey, d.visionModelConfig.BaseURL, d.visionModelConfig.Model, d.visionModelConfig.MaxRetries)
+}
+
+// resolveAudioModelClient 基于 audioModelConfig 构建 BaseModelClient。
+func (d *DeepAdapter) resolveAudioModelClient() modelclients.BaseModelClient {
+	return d.resolveModelClientFromConfig(d.audioModelConfig.APIKey, d.audioModelConfig.BaseURL, d.audioModelConfig.QAModel, d.audioModelConfig.MaxRetries)
+}
+
+// resolveVideoModelClient 基于 videoModelConfig 构建 BaseModelClient。
+func (d *DeepAdapter) resolveVideoModelClient() modelclients.BaseModelClient {
+	return d.resolveModelClientFromConfig(d.videoModelConfig.APIKey, d.videoModelConfig.BaseURL, d.videoModelConfig.Model, d.videoModelConfig.MaxRetries)
+}
+
+// resolveModelClientFromConfig 统一的模型客户端构建逻辑。
+// 对齐 Python: init_model(provider="OpenAI", ...)
+func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string, maxRetries int) modelclients.BaseModelClient {
+	m, err := llm.InitModel("OpenAI", model, apiKey, apiBase,
+		llm.WithInitMaxRetries(maxRetries),
+		llm.WithInitVerifySSL(false),
+	)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("model", model).Msg("构建模型客户端失败")
+		return nil
+	}
+	return m.GetClient()
+}
 
 // deepAgentContextEngineConfig 从 react 配置构建上下文引擎配置。
 // 对齐 Python: _deep_agent_context_engine_config(react_cfg)
