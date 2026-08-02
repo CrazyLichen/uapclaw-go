@@ -409,6 +409,18 @@ func (c *IntelliRouterModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
 
+// TranscribeAudio 音频转写（当前不支持）。
+func (c *IntelliRouterModelClient) TranscribeAudio(
+	_ context.Context,
+	_ string,
+	_ ...llmschema.TranscribeAudioOption,
+) (*llmschema.TranscriptionResponse, error) {
+	return nil, exception.NewBaseError(
+		exception.StatusModelCallFailed,
+		exception.WithMsg("IntelliRouter client does not support audio transcription"),
+	)
+}
+
 // GetRouterStats 获取路由器统计信息。
 //
 // 便捷方法，暴露内部路由器的统计信息供监控和调试使用。

@@ -54,6 +54,9 @@ type BaseModelClient interface {
 	// GenerateVideo 生成视频。
 	GenerateVideo(ctx context.Context, messages []*llmschema.UserMessage, opts ...GenerateVideoOption) (*llmschema.VideoGenerationResponse, error)
 
+	// TranscribeAudio 音频转写，将音频文件转换为文本。
+	TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error)
+
 	// Release 释放模型缓存或资源（如 vLLM KV Cache）。
 	//
 	// 对应 Python: InferenceAffinityModelClient.release()

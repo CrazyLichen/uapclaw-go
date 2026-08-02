@@ -167,6 +167,18 @@ func (c *DeepSeekModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
 
+// TranscribeAudio 音频转写（当前不支持）。
+func (c *DeepSeekModelClient) TranscribeAudio(
+	_ context.Context,
+	_ string,
+	_ ...llmschema.TranscribeAudioOption,
+) (*llmschema.TranscriptionResponse, error) {
+	return nil, exception.NewBaseError(
+		exception.StatusModelCallFailed,
+		exception.WithMsg("DeepSeek client does not support audio transcription"),
+	)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 DeepSeek 客户端到全局注册表（2.6 回填点）。

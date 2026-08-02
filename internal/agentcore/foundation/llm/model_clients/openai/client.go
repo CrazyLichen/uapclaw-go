@@ -474,6 +474,20 @@ func (c *OpenAIModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
 
+// TranscribeAudio 音频转写（当前不支持）。
+//
+// 后续由 Task 4 添加 OpenAI Whisper API 的真实实现。
+func (c *OpenAIModelClient) TranscribeAudio(
+	_ context.Context,
+	_ string,
+	_ ...llmschema.TranscribeAudioOption,
+) (*llmschema.TranscriptionResponse, error) {
+	return nil, exception.NewBaseError(
+		exception.StatusModelCallFailed,
+		exception.WithMsg("OpenAI client does not support audio transcription"),
+	)
+}
+
 // BuildEffectiveHeaders 合并配置级和请求级 headers。
 //
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。

@@ -79,6 +79,10 @@ func (m *mockModelClient) SupportsKVCacheRelease() bool {
 	return m.supportsKVCache
 }
 
+func (m *mockModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return &llmschema.TranscriptionResponse{Text: "mock transcription"}, nil
+}
+
 // mockSession 模拟 SessionLike 接口
 type mockSession struct {
 	id string

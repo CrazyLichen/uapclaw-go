@@ -33,6 +33,10 @@ func (m *mockModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
 
+func (m *mockModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return &llmschema.TranscriptionResponse{Text: "mock transcription"}, nil
+}
+
 // mockFactory 创建 mockModelClient 的工厂函数。
 func mockFactory(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient {
 	return &mockModelClient{}
