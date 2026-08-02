@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -690,137 +691,142 @@ func TestDeepAdapter_HandleHeartbeat_空Params(t *testing.T) {
 }
 
 // TestBuildVisionModelConfig 测试视觉模型配置构建。
+// 对齐 Python: _build_vision_model_config 走 dedicated→apply→env 链路
 func TestBuildVisionModelConfig(t *testing.T) {
 	d := NewDeepAdapter()
 
-	t.Run("无models段", func(t *testing.T) {
+	// 清理环境变量
+	visionEnvVars := []string{
+		"VISION_API_KEY", "VISION_API_BASE", "VISION_BASE_URL",
+		"VISION_MODEL", "VISION_MODEL_NAME", "VISION_MAX_RETRIES",
+		"VISION_PROVIDER", "API_KEY", "API_BASE", "MODEL_NAME", "MODEL_PROVIDER",
+	}
+
+	t.Run("nil configBase无独立api_key", func(t *testing.T) {
+		for _, v := range visionEnvVars {
+			os.Unsetenv(v)
+		}
 		if got := d.buildVisionModelConfig(nil); got != nil {
-			t.Error("无 models 段应返回 nil")
+			t.Error("nil configBase 应返回 nil（无独立 api_key）")
 		}
 	})
 
-	t.Run("无vision段", func(t *testing.T) {
+	t.Run("无models段无独立api_key", func(t *testing.T) {
+		for _, v := range visionEnvVars {
+			os.Unsetenv(v)
+		}
 		configBase := map[string]any{"models": map[string]any{}}
 		if got := d.buildVisionModelConfig(configBase); got != nil {
-			t.Error("无 vision 段应返回 nil")
+			t.Error("无 vision model_config 应返回 nil（无独立 api_key）")
 		}
 	})
 
-	t.Run("完整配置", func(t *testing.T) {
+	t.Run("有YAML独立api_key完整配置", func(t *testing.T) {
+		for _, v := range visionEnvVars {
+			os.Unsetenv(v)
+		}
 		configBase := map[string]any{
 			"models": map[string]any{
 				"vision": map[string]any{
-					"api_key":  "test_key",
-					"base_url": "https://api.test.com",
-					"model":    "vision-model",
+					"model_config": map[string]any{
+						"api_key":    "yaml-vision-key",
+						"api_base":   "https://yaml-vision.example.com/v1",
+						"model_name": "yaml-vision-model",
+					},
 				},
 			},
 		}
 		got := d.buildVisionModelConfig(configBase)
 		if got == nil {
-			t.Fatal("应返回配置")
+			t.Fatal("有独立 api_key 应返回配置")
 		}
-		if got.APIKey != "test_key" {
-			t.Errorf("APIKey = %q, want %q", got.APIKey, "test_key")
+		if got.APIKey != "yaml-vision-key" {
+			t.Errorf("APIKey = %q，期望 yaml-vision-key", got.APIKey)
 		}
-		if got.Model != "vision-model" {
-			t.Errorf("Model = %q, want %q", got.Model, "vision-model")
+		if got.BaseURL != "https://yaml-vision.example.com/v1" {
+			t.Errorf("BaseURL = %q，期望 https://yaml-vision.example.com/v1", got.BaseURL)
+		}
+		if got.Model != "yaml-vision-model" {
+			t.Errorf("Model = %q，期望 yaml-vision-model", got.Model)
 		}
 	})
 
-	t.Run("空apiKey和model", func(t *testing.T) {
+	t.Run("配置不完整无api_key", func(t *testing.T) {
+		for _, v := range visionEnvVars {
+			os.Unsetenv(v)
+		}
 		configBase := map[string]any{
 			"models": map[string]any{
-				"vision": map[string]any{},
+				"vision": map[string]any{
+					"model_config": map[string]any{
+						"model_name": "some-model",
+					},
+				},
 			},
 		}
 		if got := d.buildVisionModelConfig(configBase); got != nil {
-			t.Error("空 apiKey 和 model 应返回 nil")
-		}
-	})
-
-	t.Run("maxRetries自定义", func(t *testing.T) {
-		configBase := map[string]any{
-			"models": map[string]any{
-				"vision": map[string]any{
-					"api_key":     "key",
-					"model":       "model",
-					"max_retries": float64(5),
-				},
-			},
-		}
-		got := d.buildVisionModelConfig(configBase)
-		if got == nil {
-			t.Fatal("应返回配置")
-		}
-		if got.MaxRetries != 5 {
-			t.Errorf("MaxRetries = %d, want 5", got.MaxRetries)
+			t.Error("有独立 model_config 但无 api_key 仍应返回 nil（Dedicated 门控）")
 		}
 	})
 }
 
 // TestBuildAudioModelConfig 测试音频模型配置构建。
+// 对齐 Python: _build_audio_model_config 走 dedicated→apply→env 链路
 func TestBuildAudioModelConfig(t *testing.T) {
 	d := NewDeepAdapter()
 
-	t.Run("无models段", func(t *testing.T) {
+	// 清理环境变量
+	audioEnvVars := []string{
+		"AUDIO_API_KEY", "AUDIO_API_BASE", "AUDIO_BASE_URL",
+		"AUDIO_TRANSCRIPTION_MODEL", "AUDIO_QUESTION_ANSWERING_MODEL", "AUDIO_MODEL_NAME",
+		"AUDIO_MAX_RETRIES", "AUDIO_HTTP_TIMEOUT", "AUDIO_MAX_AUDIO_BYTES", "AUDIO_PROVIDER",
+		"API_KEY", "API_BASE", "MODEL_NAME", "MODEL_PROVIDER",
+		"ACR_ACCESS_KEY", "ACR_ACCESS_SECRET", "ACR_BASE_URL",
+	}
+
+	t.Run("nil configBase无独立api_key", func(t *testing.T) {
+		for _, v := range audioEnvVars {
+			os.Unsetenv(v)
+		}
 		if got := d.buildAudioModelConfig(nil); got != nil {
-			t.Error("无 models 段应返回 nil")
+			t.Error("nil configBase 应返回 nil（无独立 api_key）")
 		}
 	})
 
-	t.Run("无audio段", func(t *testing.T) {
+	t.Run("无audio model_config", func(t *testing.T) {
+		for _, v := range audioEnvVars {
+			os.Unsetenv(v)
+		}
 		configBase := map[string]any{"models": map[string]any{}}
 		if got := d.buildAudioModelConfig(configBase); got != nil {
-			t.Error("无 audio 段应返回 nil")
+			t.Error("无 audio model_config 应返回 nil（无独立 api_key）")
 		}
 	})
 
-	t.Run("空apiKey", func(t *testing.T) {
+	t.Run("有YAML独立api_key完整配置", func(t *testing.T) {
+		for _, v := range audioEnvVars {
+			os.Unsetenv(v)
+		}
 		configBase := map[string]any{
 			"models": map[string]any{
 				"audio": map[string]any{
-					"base_url": "https://api.test.com",
-				},
-			},
-		}
-		if got := d.buildAudioModelConfig(configBase); got != nil {
-			t.Error("空 apiKey 应返回 nil")
-		}
-	})
-
-	t.Run("完整配置", func(t *testing.T) {
-		configBase := map[string]any{
-			"models": map[string]any{
-				"audio": map[string]any{
-					"api_key":             "audio_key",
-					"base_url":            "https://api.test.com",
-					"transcription_model": "whisper",
-					"qa_model":            "qwen",
-					"max_retries":         float64(5),
-					"http_timeout":        float64(60),
-					"max_audio_bytes":     float64(50000000),
+					"model_config": map[string]any{
+						"api_key":    "yaml-audio-key",
+						"api_base":   "https://yaml-audio.example.com/v1",
+						"model_name": "yaml-audio-model",
+					},
 				},
 			},
 		}
 		got := d.buildAudioModelConfig(configBase)
 		if got == nil {
-			t.Fatal("应返回配置")
+			t.Fatal("有独立 api_key 应返回配置")
 		}
-		if got.APIKey != "audio_key" {
-			t.Errorf("APIKey = %q, want %q", got.APIKey, "audio_key")
+		if got.APIKey != "yaml-audio-key" {
+			t.Errorf("APIKey = %q，期望 yaml-audio-key", got.APIKey)
 		}
-		if got.TranscriptionModel != "whisper" {
-			t.Errorf("TranscriptionModel = %q, want %q", got.TranscriptionModel, "whisper")
-		}
-		if got.MaxRetries != 5 {
-			t.Errorf("MaxRetries = %d, want 5", got.MaxRetries)
-		}
-		if got.HTTPTimeout != 60 {
-			t.Errorf("HTTPTimeout = %d, want 60", got.HTTPTimeout)
-		}
-		if got.MaxAudioBytes != 50000000 {
-			t.Errorf("MaxAudioBytes = %d, want 50000000", got.MaxAudioBytes)
+		if got.BaseURL != "https://yaml-audio.example.com/v1" {
+			t.Errorf("BaseURL = %q，期望 https://yaml-audio.example.com/v1", got.BaseURL)
 		}
 	})
 }
@@ -902,8 +908,11 @@ func TestRefreshMultimodalConfigs(t *testing.T) {
 	configBase := map[string]any{
 		"models": map[string]any{
 			"vision": map[string]any{
-				"api_key": "vision_key",
-				"model":   "vision_model",
+				"model_config": map[string]any{
+					"api_key":    "vision_key",
+					"api_base":   "https://api.example.com/v1",
+					"model_name": "vision_model",
+				},
 			},
 		},
 	}
@@ -917,12 +926,12 @@ func TestRefreshMultimodalConfigs(t *testing.T) {
 func TestSyncMultimodalToolsForRuntime(t *testing.T) {
 	d := NewDeepAdapter()
 	// 不应 panic
-	d.syncMultimodalToolsForRuntime()
+	d.syncMultimodalToolsForRuntime(context.Background())
 
 	// 有配置但未注册
 	d.visionModelConfig = &hschema.VisionModelConfig{APIKey: "key"}
 	d.audioModelConfig = &hschema.AudioModelConfig{APIKey: "key"}
-	d.syncMultimodalToolsForRuntime()
+	d.syncMultimodalToolsForRuntime(context.Background())
 }
 
 // TestSyncPaidSearchToolForRuntime 测试付费搜索工具同步。

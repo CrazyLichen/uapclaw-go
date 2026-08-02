@@ -239,7 +239,7 @@ func (d *DeepAdapter) pruneToolCards(cards []*tool.ToolCard, namesToRemove map[s
 // syncMultimodalToolsForRuntime 热同步多模态工具。
 // 对齐 Python: _sync_multimodal_tools_for_runtime() (line 1170-1238)
 // Vision/Audio/Video 注册/注销已回填，image_gen 待后续回填
-func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
+func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	if d.instance == nil {
 		return
 	}
@@ -256,7 +256,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 		for i, t := range visionTools {
 			cards[i] = t.Card()
 		}
-		d.syncToolsToManager(context.Background(), cards, visionTools, nil, "vision")
+		d.syncToolsToManager(ctx, cards, visionTools, nil, "vision")
 		d.visionToolsRegistered = true
 	}
 	if d.visionModelConfig == nil && d.visionToolsRegistered {
@@ -272,7 +272,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 		for i, t := range audioTools {
 			cards[i] = t.Card()
 		}
-		d.syncToolsToManager(context.Background(), cards, audioTools, nil, "audio")
+		d.syncToolsToManager(ctx, cards, audioTools, nil, "audio")
 		d.audioToolsRegistered = true
 	}
 	if d.audioModelConfig == nil && d.audioToolsRegistered {
@@ -284,7 +284,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 	if d.videoModelConfig != nil && !d.videoToolRegistered {
 		client := d.resolveVideoModelClient()
 		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), "")
-		d.syncToolsToManager(context.Background(), []*tool.ToolCard{videoTool.Card()}, []tool.Tool{videoTool}, nil, "video")
+		d.syncToolsToManager(ctx, []*tool.ToolCard{videoTool.Card()}, []tool.Tool{videoTool}, nil, "video")
 		d.videoToolRegistered = true
 	}
 	if d.videoModelConfig == nil && d.videoToolRegistered {
@@ -327,81 +327,49 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 }
 
 // buildVisionModelConfig 从配置构建视觉模型配置。
-// 对齐 Python: _build_vision_model_config(config_base) (line 1170-1238)
+// 对齐 Python: _build_vision_model_config(config_base) (line 1171-1193)
+//
+// 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_vision_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.VisionModelConfig {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
+	// 1. 先检查 models.vision 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
+	if !DedicatedMultimodalModelConfigured(configBase, "vision") {
+		logger.Info(logComponent).Msg("跳过 vision tools: config.yaml 中 models.vision 无独立 api_key")
 		return nil
 	}
-	visionSection, _ := modelsSection["vision"].(map[string]any)
-	if visionSection == nil {
+
+	// 2. YAML 配置映射到环境变量
+	ApplyVisionModelConfigFromYAML(configBase)
+
+	// 3. 从环境变量构建 VisionModelConfig
+	cfg := schema.VisionModelConfig{}.FromEnv()
+	if cfg.APIKey == "" || cfg.BaseURL == "" || cfg.Model == "" {
+		logger.Info(logComponent).Msg("vision tools 跳过: 配置不完整")
 		return nil
 	}
-	apiKey, _ := visionSection["api_key"].(string)
-	baseURL, _ := visionSection["base_url"].(string)
-	model, _ := visionSection["model"].(string)
-	if apiKey == "" && model == "" {
-		return nil
-	}
-	maxRetries := 3
-	if v, ok := visionSection["max_retries"]; ok {
-		if f, ok := v.(float64); ok {
-			maxRetries = int(f)
-		}
-	}
-	return &schema.VisionModelConfig{
-		APIKey:     apiKey,
-		BaseURL:    baseURL,
-		Model:      model,
-		MaxRetries: maxRetries,
-	}
+	return &cfg
 }
 
 // buildAudioModelConfig 从配置构建音频模型配置。
-// 对齐 Python: _build_audio_model_config(config_base) (line 1240-1318)
+// 对齐 Python: _build_audio_model_config(config_base) (line 1196-1241)
+//
+// 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_audio_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.AudioModelConfig {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
+	// 1. 先检查 models.audio 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
+	if !DedicatedMultimodalModelConfigured(configBase, "audio") {
+		logger.Info(logComponent).Msg("跳过 audio tools: config.yaml 中 models.audio 无独立 api_key")
 		return nil
 	}
-	audioSection, _ := modelsSection["audio"].(map[string]any)
-	if audioSection == nil {
+
+	// 2. YAML 配置映射到环境变量
+	ApplyAudioModelConfigFromYAML(configBase)
+
+	// 3. 从环境变量构建 AudioModelConfig
+	cfg := schema.AudioModelConfig{}.FromEnv()
+	if cfg.APIKey == "" || cfg.BaseURL == "" {
+		logger.Info(logComponent).Msg("audio tools 跳过: 配置不完整")
 		return nil
 	}
-	apiKey, _ := audioSection["api_key"].(string)
-	baseURL, _ := audioSection["base_url"].(string)
-	if apiKey == "" {
-		return nil
-	}
-	transcriptionModel, _ := audioSection["transcription_model"].(string)
-	qaModel, _ := audioSection["qa_model"].(string)
-	maxRetries := 3
-	if v, ok := audioSection["max_retries"]; ok {
-		if f, ok := v.(float64); ok {
-			maxRetries = int(f)
-		}
-	}
-	httpTimeout := 30
-	if v, ok := audioSection["http_timeout"]; ok {
-		if f, ok := v.(float64); ok {
-			httpTimeout = int(f)
-		}
-	}
-	maxAudioBytes := 25000000
-	if v, ok := audioSection["max_audio_bytes"]; ok {
-		if f, ok := v.(float64); ok {
-			maxAudioBytes = int(f)
-		}
-	}
-	return &schema.AudioModelConfig{
-		APIKey:             apiKey,
-		BaseURL:            baseURL,
-		TranscriptionModel: transcriptionModel,
-		QAModel:            qaModel,
-		MaxRetries:         maxRetries,
-		HTTPTimeout:        httpTimeout,
-		MaxAudioBytes:      maxAudioBytes,
-	}
+	return &cfg
 }
 
 // buildVideoModelConfig 构建视频模型配置。
