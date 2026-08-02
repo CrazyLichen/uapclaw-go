@@ -304,26 +304,26 @@ func TestCallVisionModel_不可重试错误(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExtractResponseText 测试 ────────────────────────────
+// ──────────────────────────── extractResponseText 测试 ────────────────────────────
 
-func TestExtractResponseText_纯文本(t *testing.T) {
+func TestExtractResponseTextInternal_纯文本(t *testing.T) {
 	msg := llmschema.NewAssistantMessage("Hello World")
-	text := ExtractResponseText(msg)
+	text := extractResponseText(msg)
 	if text != "Hello World" {
 		t.Errorf("text = %q, 期望 %q", text, "Hello World")
 	}
 }
 
-func TestExtractResponseText_空消息(t *testing.T) {
-	text := ExtractResponseText(nil)
+func TestExtractResponseTextInternal_空消息(t *testing.T) {
+	text := extractResponseText(nil)
 	if text != "" {
 		t.Errorf("text = %q, 期望空字符串", text)
 	}
 }
 
-func TestExtractResponseText_带前后空白(t *testing.T) {
+func TestExtractResponseTextInternal_带前后空白(t *testing.T) {
 	msg := llmschema.NewAssistantMessage("  padded text  ")
-	text := ExtractResponseText(msg)
+	text := extractResponseText(msg)
 	if text != "padded text" {
 		t.Errorf("text = %q, 期望 %q", text, "padded text")
 	}
@@ -981,10 +981,10 @@ func TestFindBestHumming_无duration(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExtractResponseText 多模态测试 ────────────────────────────
+// ──────────────────────────── extractResponseText 多模态测试 ────────────────────────────
 
-// TestExtractResponseText_多模态ContentPart 测试多模态内容 part 提取文本
-func TestExtractResponseText_MultiModalContentPart(t *testing.T) {
+// TestExtractResponseTextInternal_MultiModalContentPart 测试多模态内容 part 提取文本
+func TestExtractResponseTextInternal_MultiModalContentPart(t *testing.T) {
 	// 构造带 text part 的 AssistantMessage
 	msg := llmschema.NewAssistantMessage("")
 	msg.Content = llmschema.NewMultiModalContent(llmschema.ContentPart{
@@ -992,19 +992,19 @@ func TestExtractResponseText_MultiModalContentPart(t *testing.T) {
 	}, llmschema.ContentPart{
 		Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://example.com/img.png"},
 	})
-	result := ExtractResponseText(msg)
+	result := extractResponseText(msg)
 	if result != "OCR 结果: Hello World" {
 		t.Errorf("期望 'OCR 结果: Hello World'，实际: '%s'", result)
 	}
 }
 
-// TestExtractResponseText_多模态无TextPart 测试多模态无 text 类型 part
-func TestExtractResponseText_MultiModalNoTextPart(t *testing.T) {
+// TestExtractResponseTextInternal_MultiModalNoTextPart 测试多模态无 text 类型 part
+func TestExtractResponseTextInternal_MultiModalNoTextPart(t *testing.T) {
 	msg := llmschema.NewAssistantMessage("")
 	msg.Content = llmschema.NewMultiModalContent(llmschema.ContentPart{
 		Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://example.com/img.png"},
 	})
-	result := ExtractResponseText(msg)
+	result := extractResponseText(msg)
 	// 没有 text part，应返回 content.String() trim 后的结果
 	if result == "" {
 		// 空 string 可以接受 — content 只有 image_url part

@@ -177,7 +177,7 @@ func CallVisionModel(
 			)
 		}
 
-		text := ExtractResponseText(resp)
+		text := extractResponseText(resp)
 		if text == "" {
 			return "", "", exception.NewBaseError(
 				exception.StatusToolMultimodalVisionInvokeFailed,
@@ -200,11 +200,11 @@ func CallVisionModel(
 	)
 }
 
-// ExtractResponseText 从 AssistantMessage 提取文本内容。
+// extractResponseText 从 AssistantMessage 提取文本内容。
 //
 // 对齐 Python: _extract_response_text(response)
 // 支持纯文本和多模态 content parts
-func ExtractResponseText(msg *llmschema.AssistantMessage) string {
+func extractResponseText(msg *llmschema.AssistantMessage) string {
 	if msg == nil {
 		return ""
 	}

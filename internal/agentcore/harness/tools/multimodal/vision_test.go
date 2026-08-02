@@ -175,6 +175,35 @@ func TestNewVisualQuestionAnsweringTool_Invoke失败(t *testing.T) {
 	}
 }
 
+// TestNewVisualQuestionAnsweringTool_默认含OCR 测试 include_ocr 缺省时默认为 true（对齐 Python）
+func TestNewVisualQuestionAnsweringTool_默认含OCR(t *testing.T) {
+	// 两次调用：OCR + VQA（因为 include_ocr 缺省 = true）
+	mockClient := &mockVisionClient{
+		responses: []mockVisionResponse{
+			{text: "OCR result"},          // OCR
+			{text: "VQA answer with OCR"}, // VQA
+		},
+	}
+	config := newTestVisionConfig()
+
+	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
+
+	// 不传 include_ocr 字段 → 应默认为 true → 触发 OCR 步骤
+	result, err := vqaTool.Invoke(context.Background(), map[string]any{
+		"image_path_or_url": "https://example.com/image.png",
+		"question":          "What does this image show?",
+	})
+	if err != nil {
+		t.Fatalf("VQATool 默认OCR返回错误: %v", err)
+	}
+	if result["ocr_text"] != "OCR result" {
+		t.Errorf("ocr_text = %v, 期望 'OCR result'（include_ocr缺省应为true）", result["ocr_text"])
+	}
+	if mockClient.callCount != 2 {
+		t.Errorf("callCount = %d, 期望 2（缺省 include_ocr=true → OCR + VQA）", mockClient.callCount)
+	}
+}
+
 // ──────────────────────────── CreateVisionTools 测试 ────────────────────────────
 
 func TestCreateVisionTools(t *testing.T) {

@@ -135,7 +135,7 @@ func NewVideoUnderstandingTool(
 				return nil, err
 			}
 
-			answer := ExtractResponseText(resp)
+			answer := extractResponseText(resp)
 			if answer == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalVideoInvokeFailed,
