@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/multimodal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -249,8 +250,14 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 
 	// 视觉工具同步
 	if d.visionModelConfig != nil && !d.visionToolsRegistered {
-		// ⤵️ 9.38-49: 注册视觉工具到 AbilityManager + ResourceMgr
-		logger.Info(logComponent).Msg("视觉模型配置已就绪，等待工具注册回填")
+		client := d.resolveVisionModelClient()
+		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), "")
+		cards := make([]*tool.ToolCard, len(visionTools))
+		for i, t := range visionTools {
+			cards[i] = t.Card()
+		}
+		d.syncToolsToManager(context.Background(), cards, visionTools, nil, "vision")
+		d.visionToolsRegistered = true
 	}
 	if d.visionModelConfig == nil && d.visionToolsRegistered {
 		d.removeRegisteredTools([]string{ToolNameVision})
@@ -259,8 +266,14 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 
 	// 音频工具同步
 	if d.audioModelConfig != nil && !d.audioToolsRegistered {
-		// ⤵️ 9.38-49: 注册音频工具到 AbilityManager + ResourceMgr
-		logger.Info(logComponent).Msg("音频模型配置已就绪，等待工具注册回填")
+		client := d.resolveAudioModelClient()
+		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), "")
+		cards := make([]*tool.ToolCard, len(audioTools))
+		for i, t := range audioTools {
+			cards[i] = t.Card()
+		}
+		d.syncToolsToManager(context.Background(), cards, audioTools, nil, "audio")
+		d.audioToolsRegistered = true
 	}
 	if d.audioModelConfig == nil && d.audioToolsRegistered {
 		d.removeRegisteredTools([]string{ToolNameAudioTranscription})
@@ -268,9 +281,15 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 	}
 
 	// 视频工具同步
-	if d.videoToolRegistered {
-		// TODO(#9.38-49): ⤵️ 确保视频工具已注册
-		_ = d.videoToolRegistered
+	if d.videoModelConfig != nil && !d.videoToolRegistered {
+		client := d.resolveVideoModelClient()
+		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), "")
+		d.syncToolsToManager(context.Background(), []*tool.ToolCard{videoTool.Card()}, []tool.Tool{videoTool}, nil, "video")
+		d.videoToolRegistered = true
+	}
+	if d.videoModelConfig == nil && d.videoToolRegistered {
+		d.removeRegisteredTools([]string{ToolNameVideoUnderstanding})
+		d.videoToolRegistered = false
 	}
 
 	// 图片生成工具同步
@@ -498,15 +517,15 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           self._vision_tools.append(tool)
 	//       self._vision_tools_registered = bool(self._vision_tools)
 	if d.visionModelConfig != nil {
-		// ⤵️ 9.38-49: create_vision_tools() 尚未实现
-		// 待实现：创建视觉工具 visionTools := createVisionTools(d.resolveRuntimeLanguage(), d.visionModelConfig, agentID)
-		// 待实现：注册视觉工具到ResourceMgr for _, t := range visionTools {
-		//     _ = rm.AddTool(t)
-		//     toolCards = append(toolCards, t.Card())
-		// }
-		// d.visionTools = visionTools
-		// d.visionToolsRegistered = len(visionTools) > 0
-		logger.Info(logComponent).Msg("getToolCards: 视觉模型配置已就绪，等待 9.38-49 回填 create_vision_tools")
+		client := d.resolveVisionModelClient()
+		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), agentID)
+		for _, t := range visionTools {
+			if err := runner.GetResourceMgr().AddTool(t); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("注册 vision 工具到 ResourceMgr 失败")
+			}
+			toolCards = append(toolCards, t.Card())
+		}
+		d.visionToolsRegistered = len(visionTools) > 0
 	}
 
 	// ── 步骤 5: 音频工具 ──
@@ -517,15 +536,15 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_cards.append(tool.card)
 	//   self._audio_tools_registered = bool(self._audio_tools)
 	if d.audioModelConfig != nil {
-		// ⤵️ 9.38-49: _iter_runtime_audio_tools() 尚未实现
-		// 待实现：迭代音频工具 audioTools := d.iterRuntimeAudioTools(agentID)
-		// 待实现：注册音频工具到ResourceMgr for _, t := range audioTools {
-		//     _ = rm.AddTool(t)
-		//     toolCards = append(toolCards, t.Card())
-		// }
-		// d.audioTools = audioTools
-		// d.audioToolsRegistered = len(audioTools) > 0
-		logger.Info(logComponent).Msg("getToolCards: 音频模型配置已就绪，等待 9.38-49 回填 _iter_runtime_audio_tools")
+		client := d.resolveAudioModelClient()
+		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), agentID)
+		for _, t := range audioTools {
+			if err := runner.GetResourceMgr().AddTool(t); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("注册 audio 工具到 ResourceMgr 失败")
+			}
+			toolCards = append(toolCards, t.Card())
+		}
+		d.audioToolsRegistered = len(audioTools) > 0
 	}
 
 	// ── 步骤 6: 视频工具 ──
@@ -534,11 +553,14 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Runner.resource_mgr.add_tool(video_understanding)
 	//       tool_cards.append(video_understanding.card)
 	//       self._video_tool_registered = True
-	if d.videoToolRegistered {
-		// ⤵️ 9.38-49: video_understanding 工具实例尚未实现
-		// 待实现：注册视频理解工具 _ = rm.AddTool(videoUnderstanding)
-		// toolCards = append(toolCards, videoUnderstanding.Card())
-		logger.Info(logComponent).Msg("getToolCards: 视频工具配置已就绪，等待 9.38-49 回填 video_understanding")
+	if d.videoModelConfig != nil {
+		client := d.resolveVideoModelClient()
+		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), agentID)
+		if err := runner.GetResourceMgr().AddTool(videoTool); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("注册 video_understanding 到 ResourceMgr 失败")
+		}
+		toolCards = append(toolCards, videoTool.Card())
+		d.videoToolRegistered = true
 	}
 
 	// ── 步骤 7: 图片生成工具 ──
