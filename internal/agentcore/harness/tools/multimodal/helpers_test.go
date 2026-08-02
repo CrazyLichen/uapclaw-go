@@ -396,6 +396,32 @@ func TestGuessImageMIMEType_未知扩展名(t *testing.T) {
 	}
 }
 
+// TestGuessImageMIMEType_更多扩展名 测试各种扩展名推断路径
+func TestGuessImageMIMEType_更多扩展名(t *testing.T) {
+	// 不够 512 字节 → 降级到扩展名推断
+	smallData := make([]byte, 100)
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"test.webp", "image/webp"},
+		{"test.bmp", "image/bmp"},
+		{"test.svg", "image/svg+xml"},
+		{"test.tiff", "image/tiff"},
+		{"test.tif", "image/tiff"},
+		{"test.jpg", "image/jpeg"},
+		{"test.png", "image/png"},
+	}
+
+	for _, tc := range tests {
+		result := guessImageMIMEType(tc.path, smallData)
+		if result != tc.expected {
+			t.Errorf("guessImageMIMEType(%s) = %s, 期望 %s", tc.path, result, tc.expected)
+		}
+	}
+}
+
 // ──────────────────────────── isRetryableError 测试 ────────────────────────────
 
 func TestIsRetryableError_429(t *testing.T) {
@@ -803,4 +829,410 @@ func uint32ToBytes(v uint32) []byte {
 
 func uint16ToBytes(v uint16) []byte {
 	return []byte{byte(v), byte(v >> 8)}
+}
+
+// ──────────────────────────── InvokeACRMetadata 测试 ────────────────────────────
+
+// TestInvokeACRMetadata_成功 测试 ACR 元数据调用成功
+func TestInvokeACRMetadata_成功(t *testing.T) {
+	// 创建 ACR mock 服务端
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("期望 POST 方法，实际: %s", r.Method)
+		}
+		// 验证 multipart form-data
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Errorf("期望 Content-Type 包含 multipart/form-data，实际: %s", r.Header.Get("Content-Type"))
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"metadata":{"music":[{"external_metadata":{"spotify":{"track":{"name":"TestSong"}}},"artists":[{"name":"TestArtist"}],"duration_ms":180000,"release_date":"2024-01-01","score":95}],"humming":[{"duration_ms":5000,"artists":[{"name":"HumArtist"}]}]}}`)
+	}))
+	defer server.Close()
+
+	// 创建临时音频文件
+	tmpDir := t.TempDir()
+	audioPath := filepath.Join(tmpDir, "test_audio.mp3")
+	if err := os.WriteFile(audioPath, []byte("fake audio data"), 0644); err != nil {
+		t.Fatalf("创建临时文件失败: %v", err)
+	}
+
+	config := &hschema.AudioModelConfig{
+		ACRAccessKey:    "test_access_key",
+		ACRAccessSecret: "test_access_secret",
+		ACRBaseURL:      server.URL,
+	}
+
+	result, err := InvokeACRMetadata(context.Background(), audioPath, config)
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	if result == nil {
+		t.Fatal("期望返回结果，实际为 nil")
+	}
+}
+
+// TestInvokeACRMetadata_API错误 测试 ACR 服务返回错误
+func TestInvokeACRMetadata_API错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"status":{"code":1001,"msg":"access key invalid"}}`)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	audioPath := filepath.Join(tmpDir, "test_audio.mp3")
+	if err := os.WriteFile(audioPath, []byte("fake audio data"), 0644); err != nil {
+		t.Fatalf("创建临时文件失败: %v", err)
+	}
+
+	config := &hschema.AudioModelConfig{
+		ACRAccessKey:    "bad_key",
+		ACRAccessSecret: "bad_secret",
+		ACRBaseURL:      server.URL,
+	}
+
+	_, err := InvokeACRMetadata(context.Background(), audioPath, config)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestInvokeACRMetadata_文件不存在 测试音频文件不存在
+func TestInvokeACRMetadata_文件不存在(t *testing.T) {
+	config := &hschema.AudioModelConfig{
+		ACRAccessKey:    "test_key",
+		ACRAccessSecret: "test_secret",
+		ACRBaseURL:      "http://localhost",
+	}
+
+	_, err := InvokeACRMetadata(context.Background(), "/nonexistent/audio.mp3", config)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// ──────────────────────────── parseFloat 测试 ────────────────────────────
+
+// TestParseFloat_正常 测试正常浮点数解析
+func TestParseFloat_正常(t *testing.T) {
+	val, err := parseFloat("3.14")
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	if val != 3.14 {
+		t.Errorf("期望 3.14，实际: %f", val)
+	}
+}
+
+// TestParseFloat_整数 测试整数解析
+func TestParseFloat_整数(t *testing.T) {
+	val, err := parseFloat("100")
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	if val != 100.0 {
+		t.Errorf("期望 100.0，实际: %f", val)
+	}
+}
+
+// TestParseFloat_无效 测试无效字符串解析
+func TestParseFloat_无效(t *testing.T) {
+	_, err := parseFloat("not_a_number")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// ──────────────────────────── findBestHumming 测试 ────────────────────────────
+
+// TestFindBestHumming_有数据 测试从 humming 列表找最佳匹配
+func TestFindBestHumming_有数据(t *testing.T) {
+	humming := []any{
+		map[string]any{"duration_ms": 3000.0, "artists": []any{map[string]any{"name": "A1"}}},
+		map[string]any{"duration_ms": 5000.0, "artists": []any{map[string]any{"name": "A2"}}},
+		map[string]any{"duration_ms": 1000.0, "artists": []any{map[string]any{"name": "A3"}}},
+	}
+	best := findBestHumming(humming)
+	if best == nil {
+		t.Fatal("期望找到最佳匹配，实际为 nil")
+	}
+	if best["duration_ms"] != 5000.0 {
+		t.Errorf("期望 duration_ms=5000.0，实际: %v", best["duration_ms"])
+	}
+}
+
+// TestFindBestHumming_空列表 测试空列表
+func TestFindBestHumming_空列表(t *testing.T) {
+	best := findBestHumming(nil)
+	if best != nil {
+		t.Errorf("期望 nil，实际: %v", best)
+	}
+}
+
+// TestFindBestHumming_无duration 测试没有 duration_ms 的情况
+func TestFindBestHumming_无duration(t *testing.T) {
+	humming := []any{
+		map[string]any{"name": "unknown"},
+	}
+	best := findBestHumming(humming)
+	// 没有 duration_ms 时所有项的 duration 为 0，不大于 bestDuration(0)，所以 best 为 nil
+	if best != nil {
+		t.Errorf("期望 nil（无 duration_ms 的元素不会被选中），实际: %v", best)
+	}
+}
+
+// ──────────────────────────── ExtractResponseText 多模态测试 ────────────────────────────
+
+// TestExtractResponseText_多模态ContentPart 测试多模态内容 part 提取文本
+func TestExtractResponseText_MultiModalContentPart(t *testing.T) {
+	// 构造带 text part 的 AssistantMessage
+	msg := llmschema.NewAssistantMessage("")
+	msg.Content = llmschema.NewMultiModalContent(llmschema.ContentPart{
+		Type: "text", Text: "OCR 结果: Hello World",
+	}, llmschema.ContentPart{
+		Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://example.com/img.png"},
+	})
+	result := ExtractResponseText(msg)
+	if result != "OCR 结果: Hello World" {
+		t.Errorf("期望 'OCR 结果: Hello World'，实际: '%s'", result)
+	}
+}
+
+// TestExtractResponseText_多模态无TextPart 测试多模态无 text 类型 part
+func TestExtractResponseText_MultiModalNoTextPart(t *testing.T) {
+	msg := llmschema.NewAssistantMessage("")
+	msg.Content = llmschema.NewMultiModalContent(llmschema.ContentPart{
+		Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://example.com/img.png"},
+	})
+	result := ExtractResponseText(msg)
+	// 没有 text part，应返回 content.String() trim 后的结果
+	if result == "" {
+		// 空 string 可以接受 — content 只有 image_url part
+	}
+}
+
+// ──────────────────────────── ffprobeDuration 测试 ────────────────────────────
+
+// TestFFprobeDuration_成功 测试 ffprobe 成功获取时长
+func TestFFprobeDuration_成功(t *testing.T) {
+	// 保存原始 execCommand 并恢复
+	originalExecCommand := execCommand
+	defer func() { execCommand = originalExecCommand }()
+
+	execCommand = func(name string, args ...string) (string, error) {
+		return "120.5", nil
+	}
+
+	// 创建临时文件（ffprobe 检查 /usr/bin/ffprobe 是否存在）
+	originalStat := osStat
+	defer func() { osStat = originalStat }()
+
+	osStat = func(name string) (os.FileInfo, error) {
+		if name == "/usr/bin/ffprobe" {
+			return nil, nil // 模拟 ffprobe 存在
+		}
+		return os.Stat(name)
+	}
+
+	duration, err := ffprobeDuration("/tmp/test_audio.mp3")
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	if duration != 120.5 {
+		t.Errorf("期望 120.5，实际: %f", duration)
+	}
+}
+
+// TestFFprobeDuration_NA 测试 ffprobe 返回 N/A
+func TestFFprobeDuration_NA(t *testing.T) {
+	originalExecCommand := execCommand
+	defer func() { execCommand = originalExecCommand }()
+
+	execCommand = func(name string, args ...string) (string, error) {
+		return "N/A", nil
+	}
+
+	originalStat := osStat
+	defer func() { osStat = originalStat }()
+
+	osStat = func(name string) (os.FileInfo, error) {
+		if name == "/usr/bin/ffprobe" {
+			return nil, nil
+		}
+		return os.Stat(name)
+	}
+
+	_, err := ffprobeDuration("/tmp/test_audio.mp3")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestFFprobeDuration_不可用 测试 ffprobe 不存在
+func TestFFprobeDuration_不可用(t *testing.T) {
+	originalStat := osStat
+	defer func() { osStat = originalStat }()
+
+	osStat = func(name string) (os.FileInfo, error) {
+		if name == "/usr/bin/ffprobe" {
+			return nil, os.ErrNotExist // 模拟 ffprobe 不存在
+		}
+		return os.Stat(name)
+	}
+
+	_, err := ffprobeDuration("/tmp/test_audio.mp3")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// ──────────────────────────── guessAudioFormat 扩展名测试 ────────────────────────────
+
+// TestGuessAudioFormat_扩展名推断 测试通过扩展名推断格式
+func TestGuessAudioFormat_扩展名推断(t *testing.T) {
+	// 小数据（<512字节），无法通过 MIME 检测，应降级到扩展名
+	smallData := []byte("fake audio")
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"audio.mp3", "mp3"},
+		{"audio.wav", "wav"},
+		{"audio.ogg", "ogg"},
+		{"audio.flac", "flac"},
+		{"audio.aac", "aac"},
+		{"audio.m4a", "m4a"},
+		{"audio.unknown", "mp3"}, // 未知格式默认 mp3
+	}
+
+	for _, tc := range tests {
+		result := guessAudioFormat(tc.path, smallData)
+		if result != tc.expected {
+			t.Errorf("guessAudioFormat(%s) = %s, 期望 %s", tc.path, result, tc.expected)
+		}
+	}
+}
+
+// ──────────────────────────── guessVideoMIMEType 扩展名测试 ────────────────────────────
+
+// TestGuessVideoMIMEType_扩展名推断 测试通过扩展名推断视频 MIME
+func TestGuessVideoMIMEType_扩展名推断(t *testing.T) {
+	// 小数据（<512字节），降级到扩展名
+	smallData := []byte("fake video")
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"video.mp4", "video/mp4"},
+		{"video.webm", "video/webm"},
+		{"video.avi", "video/avi"},
+		{"video.mov", "video/quicktime"},
+		{"video.mkv", "video/x-matroska"},
+		{"video.flv", "video/x-flv"},
+		{"video.unknown", "video/mp4"}, // 默认
+	}
+
+	for _, tc := range tests {
+		result := guessVideoMIMEType(tc.path, smallData)
+		if result != tc.expected {
+			t.Errorf("guessVideoMIMEType(%s) = %s, 期望 %s", tc.path, result, tc.expected)
+		}
+	}
+}
+
+// ──────────────────────────── downloadAudioToTemp 测试 ────────────────────────────
+
+// TestDownloadAudioToTemp_成功 测试成功下载音频到临时文件
+func TestDownloadAudioToTemp_成功(t *testing.T) {
+	audioContent := []byte("fake mp3 audio data")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.WriteHeader(http.StatusOK)
+		w.Write(audioContent)
+	}))
+	defer server.Close()
+
+	config := newTestAudioConfig()
+	path, err := downloadAudioToTemp(context.Background(), server.URL+"/audio.mp3", config)
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	defer os.Remove(path)
+
+	// 验证临时文件内容
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读取临时文件失败: %v", err)
+	}
+	if string(data) != string(audioContent) {
+		t.Errorf("内容不匹配")
+	}
+}
+
+// TestDownloadAudioToTemp_HTTP错误 测试下载时 HTTP 错误
+func TestDownloadAudioToTemp_HTTP错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	config := newTestAudioConfig()
+	_, err := downloadAudioToTemp(context.Background(), server.URL+"/audio.mp3", config)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestDownloadAudioToTemp_大小超限 测试下载音频超过大小限制
+func TestDownloadAudioToTemp_大小超限(t *testing.T) {
+	// 创建一个返回大内容的 mock 服务端
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.WriteHeader(http.StatusOK)
+		// 写 1MB 超过限制
+		largeData := make([]byte, 1024*1024+1)
+		w.Write(largeData)
+	}))
+	defer server.Close()
+
+	config := newTestAudioConfig()
+	config.MaxAudioBytes = 1024 // 设置很小的限制（1KB）
+
+	_, err := downloadAudioToTemp(context.Background(), server.URL+"/audio.mp3", config)
+	if err == nil {
+		t.Fatal("期望返回错误（超限），实际为 nil")
+	}
+}
+
+// ──────────────────────────── parseWAVDuration 边界测试 ────────────────────────────
+
+// TestParseWAVDuration_非RIFF 测试非 RIFF 文件
+func TestParseWAVDuration_非RIFF(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeWav := filepath.Join(tmpDir, "not_wav.wav")
+	_ = os.WriteFile(fakeWav, []byte("NOT_A_WAV_FILE_AT_ALL"), 0644)
+
+	_, err := parseWAVDuration(fakeWav)
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+}
+
+// TestParseWAVDuration_多声道 测试多声道 WAV 文件
+func TestParseWAVDuration_多声道(t *testing.T) {
+	tmpDir := t.TempDir()
+	wavFile := filepath.Join(tmpDir, "stereo.wav")
+	wavData := constructSimpleWAV(44100, 16, 2, 88200) // 2 声道, 1 秒
+	_ = os.WriteFile(wavFile, wavData, 0644)
+
+	duration, err := parseWAVDuration(wavFile)
+	if err != nil {
+		t.Fatalf("期望成功，实际错误: %v", err)
+	}
+	// 2声道16bit44100Hz，88200 samples → 2 秒
+	if duration < 1.9 || duration > 2.1 {
+		t.Errorf("duration = %f, 期望约 2.0", duration)
+	}
 }

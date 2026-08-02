@@ -112,6 +112,10 @@ func (s *stubBaseModelClient) GenerateVideo(_ context.Context, _ []*llmschema.Us
 	return nil, nil
 }
 
+func (s *stubBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, nil
+}
+
 func (s *stubBaseModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

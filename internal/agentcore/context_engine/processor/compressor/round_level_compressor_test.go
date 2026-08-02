@@ -38,6 +38,10 @@ func (f *rlcFakeBaseModelClient) GenerateSpeech(_ context.Context, _ []*llm_sche
 func (f *rlcFakeBaseModelClient) GenerateVideo(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llm_schema.VideoGenerationResponse, error) {
 	return nil, nil
 }
+func (f *rlcFakeBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llm_schema.TranscribeAudioOption) (*llm_schema.TranscriptionResponse, error) {
+	return nil, nil
+}
+
 func (f *rlcFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

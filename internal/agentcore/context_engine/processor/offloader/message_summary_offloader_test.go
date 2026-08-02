@@ -397,6 +397,9 @@ func (f *msoFakeBaseModelClient) GenerateSpeech(_ context.Context, _ []*llm_sche
 func (f *msoFakeBaseModelClient) GenerateVideo(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llm_schema.VideoGenerationResponse, error) {
 	return nil, nil
 }
+func (f *msoFakeBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llm_schema.TranscribeAudioOption) (*llm_schema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
 func (f *msoFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }
@@ -995,6 +998,9 @@ func (f *msoRetryFakeClient) GenerateSpeech(_ context.Context, _ []*llm_schema.U
 }
 func (f *msoRetryFakeClient) GenerateVideo(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llm_schema.VideoGenerationResponse, error) {
 	return nil, nil
+}
+func (f *msoRetryFakeClient) TranscribeAudio(_ context.Context, _ string, _ ...llm_schema.TranscribeAudioOption) (*llm_schema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 func (f *msoRetryFakeClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil

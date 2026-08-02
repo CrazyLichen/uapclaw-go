@@ -463,7 +463,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 // 对齐 Python: 使用 mutagen 降级（Go 用 ffprobe 替代 mutagen）
 func ffprobeDuration(audioPath string) (float64, error) {
 	// 检查 ffprobe 是否可用
-	_, err := os.Stat("/usr/bin/ffprobe")
+	_, err := osStat("/usr/bin/ffprobe")
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe not available")
 	}
@@ -596,6 +596,9 @@ var execCommand = func(name string, args ...string) (string, error) {
 	}
 	return strings.TrimSpace(string(output)), nil
 }
+
+// osStat 检查文件信息（可被测试替换）
+var osStat = os.Stat
 
 // parseFloat 安全的 float64 解析
 func parseFloat(s string) (float64, error) {

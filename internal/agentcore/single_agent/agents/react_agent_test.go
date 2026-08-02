@@ -1178,6 +1178,10 @@ func (f *fakeModelClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMe
 	return nil, fmt.Errorf("不支持")
 }
 
+func (f *fakeModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+
 func (f *fakeModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

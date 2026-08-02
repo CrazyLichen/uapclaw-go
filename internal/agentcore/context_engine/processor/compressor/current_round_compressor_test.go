@@ -52,6 +52,10 @@ func (f *crcFakeBaseModelClient) GenerateSpeech(_ context.Context, _ []*llm_sche
 func (f *crcFakeBaseModelClient) GenerateVideo(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llm_schema.VideoGenerationResponse, error) {
 	return nil, nil
 }
+func (f *crcFakeBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llm_schema.TranscribeAudioOption) (*llm_schema.TranscriptionResponse, error) {
+	return nil, nil
+}
+
 func (f *crcFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

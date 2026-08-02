@@ -190,6 +190,11 @@ func (c *TracedModelClient) GenerateVideo(ctx context.Context, messages []*llmsc
 	return c.inner.GenerateVideo(ctx, messages, opts...)
 }
 
+// TranscribeAudio 音频转写，直接委托 inner。
+func (c *TracedModelClient) TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return c.inner.TranscribeAudio(ctx, audioPath, opts...)
+}
+
 // Release 释放模型缓存或资源，直接委托 inner。
 func (c *TracedModelClient) Release(ctx context.Context, opts ...model_clients.ReleaseOption) (bool, error) {
 	return c.inner.Release(ctx, opts...)

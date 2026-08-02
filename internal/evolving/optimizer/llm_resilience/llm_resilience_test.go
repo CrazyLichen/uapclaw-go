@@ -40,6 +40,9 @@ func (m *mockBaseModelClient) GenerateSpeech(ctx context.Context, messages []*ll
 func (m *mockBaseModelClient) GenerateVideo(ctx context.Context, messages []*llmschema.UserMessage, opts ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
+func (m *mockBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
 func (m *mockBaseModelClient) Release(ctx context.Context, opts ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

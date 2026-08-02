@@ -1367,6 +1367,9 @@ func (f *fcpFakeBaseModelClient) GenerateSpeech(_ context.Context, _ []*llm_sche
 func (f *fcpFakeBaseModelClient) GenerateVideo(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llm_schema.VideoGenerationResponse, error) {
 	return nil, nil
 }
+func (f *fcpFakeBaseModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llm_schema.TranscribeAudioOption) (*llm_schema.TranscriptionResponse, error) {
+	return nil, nil
+}
 func (f *fcpFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
 }

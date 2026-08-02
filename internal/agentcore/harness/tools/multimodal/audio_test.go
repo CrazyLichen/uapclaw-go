@@ -2,6 +2,9 @@ package multimodal
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -284,6 +287,95 @@ func TestAudioQASystemPrompt(t *testing.T) {
 	}
 	if !strings.Contains(audioQASystemPrompt, "audio") {
 		t.Error("audioQASystemPrompt 应包含 'audio'")
+	}
+}
+
+// ──────────────────────────── AudioMetadataTool ACR 集成测试 ────────────────────────────
+
+// TestNewAudioMetadataTool_ACR成功 测试 ACR 元数据成功返回
+func TestNewAudioMetadataTool_ACR成功(t *testing.T) {
+	// 创建 ACR mock 服务端
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"metadata":{"music":[{"artists":[{"name":"SongArtist"}],"duration_ms":5000,"release_date":"2024-01-15","score":90}],"humming":[{"duration_ms":3000,"artists":[{"name":"HumArtist"}]}]}}`)
+	}))
+	defer server.Close()
+
+	mockClient := &mockAudioClient{}
+	config := newTestAudioConfig()
+	config.ACRAccessKey = "test-key"
+	config.ACRAccessSecret = "test-secret"
+	config.ACRBaseURL = server.URL
+
+	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+
+	tmpDir := t.TempDir()
+	audioFile := filepath.Join(tmpDir, "short.wav")
+	_ = os.WriteFile(audioFile, constructSimpleWAV(44100, 16, 1, 44100), 0644)
+
+	result, err := metadataTool.Invoke(context.Background(), map[string]any{
+		"audio_path_or_url": audioFile,
+	})
+	if err != nil {
+		t.Fatalf("AudioMetadataTool 返回错误: %v", err)
+	}
+	if result["identified"] != true {
+		t.Errorf("identified = %v, 期望 true", result["identified"])
+	}
+}
+
+// TestNewAudioMetadataTool_ACR失败 测试 ACR 服务返回错误时仍返回时长
+func TestNewAudioMetadataTool_ACR失败(t *testing.T) {
+	// 创建返回 500 的 ACR mock 服务端
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	mockClient := &mockAudioClient{}
+	config := newTestAudioConfig()
+	config.ACRAccessKey = "test-key"
+	config.ACRAccessSecret = "test-secret"
+	config.ACRBaseURL = server.URL
+
+	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+
+	tmpDir := t.TempDir()
+	audioFile := filepath.Join(tmpDir, "short.wav")
+	_ = os.WriteFile(audioFile, constructSimpleWAV(44100, 16, 1, 44100), 0644)
+
+	result, err := metadataTool.Invoke(context.Background(), map[string]any{
+		"audio_path_or_url": audioFile,
+	})
+	if err != nil {
+		t.Fatalf("AudioMetadataTool 返回错误: %v", err)
+	}
+	// ACR 失败但仍应返回时长
+	if result["duration_seconds"] == nil {
+		t.Error("duration_seconds 不应为 nil")
+	}
+	if result["identified"] != false {
+		t.Errorf("identified = %v, 期望 false (ACR 失败)", result["identified"])
+	}
+	note, ok := result["note"].(string)
+	if !ok || !strings.Contains(note, "ACR identification failed") {
+		t.Errorf("note = %v, 期望包含 'ACR identification failed'", result["note"])
+	}
+}
+
+// TestNewAudioMetadataTool_配置无效 测试配置校验
+func TestNewAudioMetadataTool_配置无效(t *testing.T) {
+	mockClient := &mockAudioClient{}
+	// 空 base_url
+	config := &hschema.AudioModelConfig{APIKey: "test"}
+
+	metadataTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
+
+	_, err := metadataTool.Invoke(context.Background(), map[string]any{
+		"audio_path_or_url": "/path/audio.mp3",
+	})
+	if err == nil {
+		t.Error("空 base_url 应返回错误")
 	}
 }
 

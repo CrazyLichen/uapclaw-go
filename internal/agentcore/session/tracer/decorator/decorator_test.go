@@ -84,6 +84,11 @@ func (f *fakeModelClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMe
 	return nil, nil
 }
 
+// TranscribeAudio 实现 model_clients.BaseModelClient 接口
+func (f *fakeModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, nil
+}
+
 // Release 实现 model_clients.BaseModelClient 接口
 func (f *fakeModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
@@ -672,6 +677,11 @@ func (c *tracerRecordDataCapturingClient) GenerateSpeech(_ context.Context, _ []
 
 // GenerateVideo 实现 model_clients.BaseModelClient 接口
 func (c *tracerRecordDataCapturingClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, nil
+}
+
+// TranscribeAudio 实现 model_clients.BaseModelClient 接口
+func (c *tracerRecordDataCapturingClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
 	return nil, nil
 }
 
