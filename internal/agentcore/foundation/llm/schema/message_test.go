@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -498,5 +499,114 @@ func TestBaseMessage_EmptyContent(t *testing.T) {
 	}
 	if content, ok := result["content"].(string); !ok || content != "" {
 		t.Errorf("content = %v, want empty string", result["content"])
+	}
+}
+
+// ────────────────────── InputAudio / VideoURL 测试 ──────────────────────
+
+// TestContentPart_InputAudio序列化 验证 input_audio 内容块序列化。
+func TestContentPart_InputAudio序列化(t *testing.T) {
+	part := ContentPart{
+		Type:       "input_audio",
+		InputAudio: &InputAudio{Data: "base64data", Format: "mp3"},
+	}
+	data, err := json.Marshal(part)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	if !strings.Contains(string(data), `"input_audio"`) {
+		t.Errorf("序列化结果应包含 input_audio 字段, got %s", data)
+	}
+	if !strings.Contains(string(data), `"data":"base64data"`) {
+		t.Errorf("序列化结果应包含 data 字段, got %s", data)
+	}
+	if !strings.Contains(string(data), `"format":"mp3"`) {
+		t.Errorf("序列化结果应包含 format 字段, got %s", data)
+	}
+
+	// 反序列化验证
+	var restored ContentPart
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if restored.Type != "input_audio" {
+		t.Errorf("Type = %q, want %q", restored.Type, "input_audio")
+	}
+	if restored.InputAudio == nil {
+		t.Fatal("InputAudio 应不为 nil")
+	}
+	if restored.InputAudio.Data != "base64data" {
+		t.Errorf("Data = %q, want %q", restored.InputAudio.Data, "base64data")
+	}
+	if restored.InputAudio.Format != "mp3" {
+		t.Errorf("Format = %q, want %q", restored.InputAudio.Format, "mp3")
+	}
+}
+
+// TestContentPart_VideoURL序列化 验证 video_url 内容块序列化。
+func TestContentPart_VideoURL序列化(t *testing.T) {
+	part := ContentPart{
+		Type:     "video_url",
+		VideoURL: &VideoURL{URL: "https://example.com/video.mp4"},
+	}
+	data, err := json.Marshal(part)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	if !strings.Contains(string(data), `"video_url"`) {
+		t.Errorf("序列化结果应包含 video_url 字段, got %s", data)
+	}
+	if !strings.Contains(string(data), `"url":"https://example.com/video.mp4"`) {
+		t.Errorf("序列化结果应包含 url 字段, got %s", data)
+	}
+
+	// 反序列化验证
+	var restored ContentPart
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if restored.Type != "video_url" {
+		t.Errorf("Type = %q, want %q", restored.Type, "video_url")
+	}
+	if restored.VideoURL == nil {
+		t.Fatal("VideoURL 应不为 nil")
+	}
+	if restored.VideoURL.URL != "https://example.com/video.mp4" {
+		t.Errorf("URL = %q, want %q", restored.VideoURL.URL, "https://example.com/video.mp4")
+	}
+}
+
+// TestContentPart_混合多模态 验证四种内容类型混合序列化。
+func TestContentPart_混合多模态(t *testing.T) {
+	parts := []ContentPart{
+		{Type: "text", Text: "描述文字"},
+		{Type: "image_url", ImageURL: &ImageURL{URL: "https://img.png"}},
+		{Type: "input_audio", InputAudio: &InputAudio{Data: "abc", Format: "wav"}},
+		{Type: "video_url", VideoURL: &VideoURL{URL: "data:video/mp4;base64,xxx"}},
+	}
+	content := NewMultiModalContent(parts...)
+	data, err := json.Marshal(content)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+
+	var restored MessageContent
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	if len(restored.Parts()) != 4 {
+		t.Fatalf("Parts() 长度 = %d, want 4", len(restored.Parts()))
+	}
+	if restored.Parts()[0].Type != "text" {
+		t.Errorf("Parts()[0].Type = %q, want text", restored.Parts()[0].Type)
+	}
+	if restored.Parts()[1].Type != "image_url" || restored.Parts()[1].ImageURL == nil {
+		t.Errorf("Parts()[1] image_url 不正确")
+	}
+	if restored.Parts()[2].Type != "input_audio" || restored.Parts()[2].InputAudio == nil {
+		t.Errorf("Parts()[2] input_audio 不正确")
+	}
+	if restored.Parts()[3].Type != "video_url" || restored.Parts()[3].VideoURL == nil {
+		t.Errorf("Parts()[3] video_url 不正确")
 	}
 }

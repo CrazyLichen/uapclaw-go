@@ -27,6 +27,7 @@ type BaseMessage interface {
 	SetMetadata(metadata map[string]any)
 }
 
+// ImageURL 图片 URL 信息
 type ImageURL struct {
 	// URL 图片地址
 	URL string `json:"url"`
@@ -34,13 +35,32 @@ type ImageURL struct {
 	Detail string `json:"detail,omitempty"`
 }
 
+// InputAudio 音频输入内容块数据（对应 OpenAI input_audio content block）
+type InputAudio struct {
+	// Data base64 编码音频数据
+	Data string `json:"data"`
+	// Format 音频格式（mp3/wav/m4a 等）
+	Format string `json:"format"`
+}
+
+// VideoURL 视频内容块 URL（对应 OpenAI video_url content block）
+type VideoURL struct {
+	// URL 视频 URL（http URL 或 data:URI）
+	URL string `json:"url"`
+}
+
+// ContentPart 多模态消息内容分片
 type ContentPart struct {
-	// Type 内容类型，"text" 或 "image_url" 等
+	// Type 内容类型，"text"、"image_url"、"input_audio"、"video_url" 等
 	Type string `json:"type"`
 	// Text 文本内容（Type=="text" 时使用）
 	Text string `json:"text,omitempty"`
 	// ImageURL 图片 URL 信息（Type=="image_url" 时使用）
 	ImageURL *ImageURL `json:"image_url,omitempty"`
+	// InputAudio 音频输入信息（Type=="input_audio" 时使用）
+	InputAudio *InputAudio `json:"input_audio,omitempty"`
+	// VideoURL 视频 URL 信息（Type=="video_url" 时使用）
+	VideoURL *VideoURL `json:"video_url,omitempty"`
 }
 
 type MessageContent struct {
