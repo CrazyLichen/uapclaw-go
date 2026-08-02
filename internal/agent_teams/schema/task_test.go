@@ -1,6 +1,10 @@
 package schema
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+)
 
 // ──────────────────────────── TaskOpResult 测试 ────────────────────────────
 
@@ -41,7 +45,7 @@ func TestTaskOpResult_Fail_空原因(t *testing.T) {
 
 // TestTaskCreateResult_OK_成功 验证 OK 方法在 Task 不为 nil 时返回 true
 func TestTaskCreateResult_OK_成功(t *testing.T) {
-	r := TaskCreateResult{Task: "fake_task"}
+	r := TaskCreateResult{Task: &database.TeamTaskBase{TaskID: "t1"}}
 	if !r.OK() {
 		t.Error("OK() 期望 true, 实际 false")
 	}
@@ -57,10 +61,13 @@ func TestTaskCreateResult_OK_失败(t *testing.T) {
 
 // TestTaskCreateResult_CreateSuccess 验证 CreateSuccess 创建成功的 TaskCreateResult
 func TestTaskCreateResult_CreateSuccess(t *testing.T) {
-	task := map[string]string{"id": "t1"}
+	task := &database.TeamTaskBase{TaskID: "t1", Title: "任务1"}
 	r := TaskCreateResult{}.CreateSuccess(task)
 	if r.Task == nil {
 		t.Error("CreateSuccess() 期望 Task 不为 nil")
+	}
+	if r.Task.TaskID != "t1" {
+		t.Errorf("CreateSuccess() 期望 TaskID=%q, 实际 %q", "t1", r.Task.TaskID)
 	}
 	if r.Reason != "" {
 		t.Errorf("CreateSuccess() 期望 Reason 为空, 实际 %q", r.Reason)
@@ -82,7 +89,9 @@ func TestTaskCreateResult_CreateFail(t *testing.T) {
 
 // TestGraphMutationResult_GraphSuccess 验证 GraphSuccess 创建成功的 GraphMutationResult
 func TestGraphMutationResult_GraphSuccess(t *testing.T) {
-	r := GraphMutationResult{}.GraphSuccess("task_a", "task_b")
+	taskA := &database.TeamTaskBase{TaskID: "task_a"}
+	taskB := &database.TeamTaskBase{TaskID: "task_b"}
+	r := GraphMutationResult{}.GraphSuccess(taskA, taskB)
 	if !r.OK {
 		t.Error("GraphSuccess() 期望 OK=true, 实际 false")
 	}

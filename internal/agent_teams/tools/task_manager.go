@@ -200,10 +200,8 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	// 区分"任务不存在/FSM不合法"和"成功但无下游"
-	// terminateTaskInSession 返回 nil,nil 表示失败，返回 []string{} 或非空表示成功
-	task, _ := tm.db.Task().GetTask(ctx, taskID)
-	if task == nil || task.Status != fsm.TaskStatusCompleted {
+	// terminateTaskInSession: nil=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
+	if refreshed == nil {
 		return nil, fmt.Errorf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)
 	}
 	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCompletedEvent{...})
@@ -218,8 +216,8 @@ func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	task, _ := tm.db.Task().GetTask(ctx, taskID)
-	if task == nil || task.Status != fsm.TaskStatusCancelled {
+	// terminateTaskInSession: nil=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
+	if refreshed == nil {
 		return nil, fmt.Errorf("取消任务失败: 任务不存在或状态不允许取消 %s", taskID)
 	}
 	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCancelledEvent{...})

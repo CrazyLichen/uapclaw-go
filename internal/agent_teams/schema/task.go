@@ -1,5 +1,9 @@
 package schema
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskOpResult 任务变更操作结果，保留失败原因。
@@ -15,10 +19,10 @@ type TaskOpResult struct {
 // TaskCreateResult 任务创建操作结果。
 // 对齐 Python: TaskCreateResult (openjiuwen/agent_teams/schema/task.py)
 // 成功时携带创建的 task，失败时携带可读的 reason。
-// Task 字段类型为 any 以避免跨包循环导入（models → schema）。
+// Task 字段原为 any 以避免跨包循环导入，但 schema 已依赖 database 包，可直接使用具体类型。
 type TaskCreateResult struct {
 	// Task 创建的任务对象，nil 表示创建失败
-	Task any
+	Task *database.TeamTaskBase
 	// Reason 失败原因
 	Reason string
 }
@@ -96,10 +100,10 @@ type GraphMutationResult struct {
 	// Reason 失败原因
 	Reason string
 	// RefreshedTasks 变更后刷新过程中状态被翻转的任务列表
-	RefreshedTasks []any
+	RefreshedTasks []*database.TeamTaskBase
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -127,7 +131,7 @@ func (r TaskCreateResult) OK() bool {
 
 // CreateSuccess 创建一个成功的 TaskCreateResult。
 // 对齐 Python: TaskCreateResult.success(task)
-func (TaskCreateResult) CreateSuccess(task any) TaskCreateResult {
+func (TaskCreateResult) CreateSuccess(task *database.TeamTaskBase) TaskCreateResult {
 	return TaskCreateResult{Task: task}
 }
 
@@ -139,7 +143,7 @@ func (TaskCreateResult) CreateFail(reason string) TaskCreateResult {
 
 // GraphSuccess 创建一个成功的 GraphMutationResult。
 // 对齐 Python: GraphMutationResult.success(refreshed_tasks)
-func (GraphMutationResult) GraphSuccess(refreshedTasks ...any) GraphMutationResult {
+func (GraphMutationResult) GraphSuccess(refreshedTasks ...*database.TeamTaskBase) GraphMutationResult {
 	return GraphMutationResult{OK: true, RefreshedTasks: refreshedTasks}
 }
 

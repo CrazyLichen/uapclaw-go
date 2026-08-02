@@ -7,7 +7,7 @@
 //
 //	utils/
 //	├── doc.go              # 包文档
-//	├── stream_utils.go     # ParseStreamChunk + 10 helper 纯函数
+//	├── stream_utils.go     # ParseStreamChunk + UsageAccumulator + InteractionConverterFunc + 10 helper 纯函数
 //	├── utils.go            # GetChatID + IsTeamParams
 //	├── diff_service.go     # DiffService + GetTurnDiffs/GetFilesToRestore + 12 helper
 //

@@ -838,10 +838,16 @@ func (mc *mutationContext) rollbackStagedTasks() {
 // terminateTaskInSession 原子终止传播：终止任务 + 标记下游 resolved + 刷新状态。
 // 对齐 Python: _terminate_task_in_session()
 // 一次 Lock 内完成所有操作（由调用方持锁，此方法不加锁）。
+// 返回值语义对齐 Python：(nil, nil)=任务不存在/FSM不合法，([]string{}, nil)=幂等成功（已终态），
+// (非空切片, nil)=成功且有下游刷新。
 func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus string) ([]string, error) {
 	task, exists := db.tasks[taskID]
 	if !exists {
 		return nil, nil
+	}
+	// 幂等：任务已处于目标终态，视为成功（对齐 Python _terminate_task_in_session idempotent branch）
+	if task.Status == terminalStatus {
+		return []string{}, nil
 	}
 	if !IsValidTaskTransition(task.Status, terminalStatus) {
 		return nil, nil
@@ -869,7 +875,8 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 	}
 
 	// 刷新每个下游任务的状态
-	var refreshed []string
+	// 初始化为非 nil 空切片，确保"成功无下游"时 refreshed != nil（对齐 Python 返回 [] 而非 None）
+	refreshed := []string{}
 	for _, downID := range downstreamIDs {
 		downTask, downExists := db.tasks[downID]
 		if !downExists {

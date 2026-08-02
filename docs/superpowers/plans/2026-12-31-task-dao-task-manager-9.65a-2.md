@@ -715,8 +715,10 @@ func (mc *mutationContext) hasCycleDFS(node string, adj map[string][]string, vis
 }
 
 // applyNewEdges 步骤4：插入依赖边行。
+// 注意：使用 for i := range + 单独变量拷贝，避免 Go loop variable address sharing bug
 func (mc *mutationContext) applyNewEdges() {
-	for _, edgeRow := range mc.newEdgeRows {
+	for i := range mc.newEdgeRows {
+		edgeRow := mc.newEdgeRows[i] // 复制到新变量，避免循环变量地址共享
 		mc.db.deps[depKey(edgeRow.TaskID, edgeRow.DependsOnID)] = &edgeRow
 	}
 }
@@ -860,10 +862,17 @@ git commit -m "feat(9.65a-2): 实现依赖图5步管线 mutationContext 闭包�
 // terminateTaskInSession 原子终止传播：终止任务 + 标记下游 resolved + 刷新状态。
 // 对齐 Python: _terminate_task_in_session()
 // 一次 Lock 内完成所有操作（由调用方持锁，此方法不加锁）。
+// 返回值语义对齐 Python：(nil, nil)=任务不存在/FSM不合法，([]string{}, nil)=幂等成功（已终态），
+// (非空切片, nil)=成功且有下游刷新。
+// 注意：refreshed 必须初始化为 []string{} 而非 var refreshed []string（Go nil切片 vs 空切片陷阱）
 func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus string) ([]string, error) {
 	task, exists := db.tasks[taskID]
 	if !exists {
 		return nil, nil
+	}
+	// 幂等：任务已处于目标终态，视为成功（对齐 Python idempotent branch）
+	if task.Status == terminalStatus {
+		return []string{}, nil
 	}
 	if !IsValidTaskTransition(task.Status, terminalStatus) {
 		return nil, nil
@@ -1522,7 +1531,7 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 
 // Add 创建单条任务。对齐 Python: TeamTaskManager.add()
 func (tm *TeamTaskManager) Add(ctx context.Context, title, content string) (*database.TeamTaskBase, error) {
-	taskID := fmt.Sprintf("task_%s_%d", tm.teamName, time.Now().UnixMilli())
+	taskID := fmt.Sprintf("task_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
@@ -1697,7 +1706,7 @@ func (tm *TeamTaskManager) AddWithPriority(ctx context.Context, taskID, title, c
 
 // AddAsTopPriority 最高优先级插入。对齐 Python: TeamTaskManager.add_as_top_priority()
 func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content string) (*database.TeamTaskBase, error) {
-	taskID := fmt.Sprintf("task_%s_%d_priority", tm.teamName, time.Now().UnixMilli())
+	taskID := fmt.Sprintf("task_%s_%d_%d_priority", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
@@ -2056,7 +2065,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	}
 
 	// 4. 生成 plan_id
-	planID := fmt.Sprintf("plan_%s_%d", taskID, time.Now().UnixMilli())
+	planID := fmt.Sprintf("plan_%s_%d_%d", taskID, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
 
 	// 5. 拷贝 plan 文件到 plansDir
 	planDir := filepath.Join(tm.plansDir, tm.teamPlanID, "tasks", taskID, "plans")

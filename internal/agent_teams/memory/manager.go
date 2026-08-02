@@ -42,7 +42,7 @@ type TeamMemoryManager struct {
 	// db 团队数据库。⤵️ 回填: 9.65a
 	db database.TeamDatabase
 	// taskManager 任务管理器。⤵️ 回填: 9.65a
-	taskManager tools.TeamTaskManager
+	taskManager *tools.TeamTaskManager
 	// extractionModel 提取模型。⤵️ 回填: 9.65a
 	extractionModel any
 	// tzOffset 时区偏移

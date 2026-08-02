@@ -34,6 +34,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -73,6 +74,9 @@ type DeepAdapter struct {
 	configCache map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
+	// interactionConverter 交互 payload 转换函数，注入到 utils.ParseStreamChunk。
+	// 对齐 Python: lazy import convert_interactions_to_ask_user_question
+	interactionConverter utils.InteractionConverterFunc
 
 	// ─── 模型与配置 ───
 
@@ -878,7 +882,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		defer d.unmarkSessionActive(sessionID)
 
 		// usage 累加器
-		usage := &usageAccumulator{}
+		usage := &utils.UsageAccumulator{}
 		// askUser 去重集合
 		emittedAskUserIDs := make(map[string]bool)
 		// 累积文本/reasoning
@@ -938,8 +942,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				if accumulatedReasoning != "" {
 					accumulatedReasoning = ""
 				}
-				// parseStreamChunk 处理其他类型
-				parsed := d.parseStreamChunk(output, usage, emittedAskUserIDs)
+				// ParseStreamChunk 处理其他类型
+				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter)
 				if parsed != nil {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
 				}
