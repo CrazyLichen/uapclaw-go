@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -222,7 +223,8 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		}
 
 		// 步骤 3：生成 task_id 和 sub_session_id
-		taskID := uuid.New().String()
+		// 对齐 Python: uuid.uuid4().hex — 32 位纯十六进制，不带连字符
+		taskID := strings.ReplaceAll(uuid.New().String(), "-", "")
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
 		if session == nil {

@@ -149,6 +149,19 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 			}, nil
 		}
 
+		// ── rm 目标记录（执行前）──
+		// 对齐 Python L161-168: 执行前记录 PowerShell Remove-Item 目标
+		var historyPath string
+		callOpts := tool.NewToolCallOptions(opts...)
+		session := callOpts.Session
+		if session != nil {
+			historyPath = BuildHistoryPath(session.GetSessionID(), agentID, ctx)
+			rmTargets := ParsePSRemoveTargets(command)
+			if len(rmTargets) > 0 {
+				RecordRmTargetsBeforeDeletion(historyPath, rmTargets, "powershell")
+			}
+		}
+
 		// ── 前台执行 ──
 		// 对齐 Python L170-219
 		res, err := op.Shell().ExecuteCmd(
@@ -213,6 +226,12 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 
 		// PowerShell 退出码解释
 		meaning := InterpretPowerShellExitCode(command, exitCode, stdout, stderr)
+
+		// ── rm 目标记录（执行后）──
+		// 对齐 Python L201-203: 执行后检测并记录删除
+		if historyPath != "" && !meaning.IsError {
+			DetectAndRecordDeletions(historyPath)
+		}
 
 		content, isError := RenderToolContent(
 			CommandOutput{

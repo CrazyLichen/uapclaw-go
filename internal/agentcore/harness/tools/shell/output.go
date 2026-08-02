@@ -107,7 +107,9 @@ func PersistLargeOutput(stdout, stderr string, isPowerShell bool) (string, int) 
 		combined += "\n--- stderr ---\n" + stderr
 	}
 
-	contentBytes := []byte(combined)
+	// 对齐 Python: combined.encode("utf-8", errors="replace")
+	// 将无效 UTF-8 字符替换为 U+FFFD，与 Python errors="replace" 行为一致
+	contentBytes := []byte(strings.ToValidUTF8(combined, "\ufffd"))
 	digest := fmt.Sprintf("%x", sha256.Sum256(contentBytes))[:12]
 
 	// 根据 shell 类型选择目录和前缀

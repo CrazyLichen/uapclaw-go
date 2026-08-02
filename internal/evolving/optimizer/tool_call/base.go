@@ -34,6 +34,8 @@ type ToolOptimizerBase struct {
 	configDesc map[string]any
 	// pathSaveDir 结果保存目录
 	pathSaveDir string
+	// toolName 工具名称
+	toolName string
 	// model LLM 模型客户端
 	model *llm.Model
 }
@@ -73,6 +75,7 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 		configEg:    configEg,
 		configDesc:  configDesc,
 		pathSaveDir: "./tool_optimizer_results",
+		toolName:    "tool",
 		model:       model,
 	}
 
@@ -85,8 +88,8 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 	o.configDesc["save_dir"] = filepath.Join(o.pathSaveDir, "descriptions")
 	o.configDesc["examples_dir"] = o.configEg["save_dir"]
 
-	toolName := "tool"
-	o.configDesc["neg_ex_input_path"] = filepath.Join(o.pathSaveDir, toolName+".json")
+	// 对齐 Python: kwargs.get('tool_name','tool')
+	o.configDesc["neg_ex_input_path"] = filepath.Join(o.pathSaveDir, o.toolName+".json")
 
 	// 对齐 Python: llm_api_key 传递给 config
 	o.configEg["llm_api_key"] = o.llmAPIKey
@@ -148,7 +151,8 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			if len(lastDescBatch) > 0 {
 				lastNode := lastDescBatch[len(lastDescBatch)-1]
 				if len(lastNode) > 0 {
-					lastStep := lastNode[len(lastNode)-1]
+					// 对齐 Python: result_descs[-1][-1][0]，取索引 [0] 而非 [len-1]
+					lastStep := lastNode[0]
 					if desc, ok := lastStep["description"].(string); ok {
 						tool["description"] = desc
 					}
@@ -170,15 +174,15 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Str("stage", "example").
 				Err(err).
 				Msg("示例阶段失败")
-			// 对齐 Python: 不中断，继续
-		} else {
-			resultExamples = append(resultExamples, resultExample...)
-			_ = resultExamples // 对齐 Python：结果记录用于调试，暂不消费
-			logger.Info(logComponent).
-				Str("method", "OptimizeTool").
-				Int("iteration", i).
-				Msg("=== 示例阶段完成 ===")
+			// 对齐 Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
+			return nil, err
 		}
+		resultExamples = append(resultExamples, resultExample...)
+		_ = resultExamples // 对齐 Python：结果记录用于调试，暂不消费
+		logger.Info(logComponent).
+			Str("method", "OptimizeTool").
+			Int("iteration", i).
+			Msg("=== 示例阶段完成 ===")
 
 		// 对齐 Python: Stage 2 - Description
 		resultDesc, err := CustomizedPipeline(ctx, "description", tool, b.configDesc, toolCallable, b.model)
@@ -189,9 +193,10 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Str("stage", "description").
 				Err(err).
 				Msg("描述阶段失败")
-		} else {
-			resultDescs = append(resultDescs, resultDesc)
+			// 对齐 Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
+			return nil, err
 		}
+		resultDescs = append(resultDescs, resultDesc)
 	}
 
 	// 对齐 Python: description final reviewer
@@ -324,6 +329,11 @@ func WithConfigDesc(config map[string]any) ToolOptimizerBaseOption {
 // WithPathSaveDir 设置结果保存目录。
 func WithPathSaveDir(dir string) ToolOptimizerBaseOption {
 	return func(o *ToolOptimizerBase) { o.pathSaveDir = dir }
+}
+
+// WithToolName 设置工具名称。
+func WithToolName(name string) ToolOptimizerBaseOption {
+	return func(o *ToolOptimizerBase) { o.toolName = name }
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

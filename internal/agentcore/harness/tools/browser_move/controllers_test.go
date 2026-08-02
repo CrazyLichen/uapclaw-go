@@ -311,11 +311,52 @@ func TestBuildRunCodeTask(t *testing.T) {
 	}
 }
 
+// TestNormalizeOffset 测试 offset 规范化
+func TestNormalizeOffset(t *testing.T) {
+	// map[string]any 输入，int 值
+	result := normalizeOffset(map[string]any{"x": 10, "y": 20})
+	if result["x"] != 10 || result["y"] != 20 {
+		t.Errorf("int 输入: got %v, want {x:10, y:20}", result)
+	}
+
+	// map[string]any 输入，float64 值（JSON 反序列化常见）
+	result = normalizeOffset(map[string]any{"x": 10.5, "y": 20.7})
+	if result["x"] != 10 || result["y"] != 20 {
+		t.Errorf("float64 输入: got %v, want {x:10, y:20}", result)
+	}
+
+	// 缺少 x/y 时默认为 0
+	result = normalizeOffset(map[string]any{"x": 5})
+	if result["x"] != 5 || result["y"] != 0 {
+		t.Errorf("缺少 y: got %v, want {x:5, y:0}", result)
+	}
+
+	// 空字典
+	result = normalizeOffset(map[string]any{})
+	if result["x"] != 0 || result["y"] != 0 {
+		t.Errorf("空字典: got %v, want {x:0, y:0}", result)
+	}
+
+	// nil 输入
+	result = normalizeOffset(nil)
+	if result["x"] != 0 || result["y"] != 0 {
+		t.Errorf("nil 输入: got %v, want {x:0, y:0}", result)
+	}
+
+	// 非 map 输入
+	result = normalizeOffset("invalid")
+	if result["x"] != 0 || result["y"] != 0 {
+		t.Errorf("字符串输入: got %v, want {x:0, y:0}", result)
+	}
+}
+
 // TestBuildDragPayload 测试拖拽载荷构建
 func TestBuildDragPayload(t *testing.T) {
 	kwargs := map[string]any{
 		"element_source": "  #source  ",
 		"element_target": "#target",
+		"element_source_offset": map[string]any{"x": 5, "y": 10},
+		"element_target_offset": map[string]any{"x": 15.0, "y": 25.0},
 		"coord_source_x": 100,
 		"coord_source_y": 200,
 		"steps":          5,
@@ -327,6 +368,40 @@ func TestBuildDragPayload(t *testing.T) {
 	}
 	if payload["element_target"] != "#target" {
 		t.Errorf("element_target = %v, want #target", payload["element_target"])
+	}
+
+	// 验证 element_source_offset
+	srcOffset, ok := payload["element_source_offset"].(map[string]int)
+	if !ok {
+		t.Errorf("element_source_offset 类型错误: %T", payload["element_source_offset"])
+	} else if srcOffset["x"] != 5 || srcOffset["y"] != 10 {
+		t.Errorf("element_source_offset = %v, want {x:5, y:10}", srcOffset)
+	}
+
+	// 验证 element_target_offset（float64 转 int）
+	tgtOffset, ok := payload["element_target_offset"].(map[string]int)
+	if !ok {
+		t.Errorf("element_target_offset 类型错误: %T", payload["element_target_offset"])
+	} else if tgtOffset["x"] != 15 || tgtOffset["y"] != 25 {
+		t.Errorf("element_target_offset = %v, want {x:15, y:25}", tgtOffset)
+	}
+}
+
+// TestBuildDragPayload_缺少offset时默认为零 测试缺少 offset 时默认为零
+func TestBuildDragPayload_缺少offset时默认为零(t *testing.T) {
+	kwargs := map[string]any{
+		"element_source": "#src",
+		"element_target": "#tgt",
+	}
+
+	payload := buildDragPayload(kwargs)
+	srcOffset := payload["element_source_offset"].(map[string]int)
+	if srcOffset["x"] != 0 || srcOffset["y"] != 0 {
+		t.Errorf("缺少 source offset 时应默认为 {x:0, y:0}, got %v", srcOffset)
+	}
+	tgtOffset := payload["element_target_offset"].(map[string]int)
+	if tgtOffset["x"] != 0 || tgtOffset["y"] != 0 {
+		t.Errorf("缺少 target offset 时应默认为 {x:0, y:0}, got %v", tgtOffset)
 	}
 }
 

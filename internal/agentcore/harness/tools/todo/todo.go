@@ -978,7 +978,7 @@ func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[st
 
 // validateSingleInProgress 校验同一时间只能有一个 in_progress 任务
 // 对齐 Python: TodoModifyTool._validate_single_in_progress L600-606
-// 简化版：只做 sum 计数，不再需要 newInProgressIDs 和 removingFromInProgress 参数
+// Python 实现也是简单 sum 计数，Go 与 Python 完全对齐
 func validateSingleInProgress(todos []hschema.TodoItem) error {
 	inProgressCount := 0
 	for _, item := range todos {

@@ -7,11 +7,15 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SecurityCheckResult 安全检查结果
+// 对齐 Python: SecurityCheck (bash/_security.py / powershell/_security.py)
 type SecurityCheckResult struct {
 	// Blocked 是否被拦截
 	Blocked bool
 	// Reason 拦截原因
 	Reason string
+	// Warning 警告信息（破坏性命令警告，不阻止执行）
+	// 对齐 Python: SecurityCheck.warning: str | None = None
+	Warning string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

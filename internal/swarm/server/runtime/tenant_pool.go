@@ -60,6 +60,8 @@ func GetInstance() *TenantAgentPool {
 // ResetInstance 重置单例（仅用于测试）。
 // 对齐 Python: TenantAgentPool.reset_instance()
 func ResetInstance() {
+	logger.Info(tapLogComponent).
+		Msg("[TenantAgentPool] 正在重置单例实例")
 	tenantAgentPoolSingleton.Reset()
 }
 

@@ -315,9 +315,9 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 
 	c.mu.Lock()
 	handler, exists := c.actions[actionName]
-	c.mu.Unlock()
 
 	if !exists {
+		c.mu.Unlock()
 		logger.Warn(logComponentBR).
 			Str("event_type", "CONTROLLER_ACTION_UNKNOWN").
 			Str("action", actionName).
@@ -333,7 +333,20 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		}
 	}
 
-	result := handler(ctx, sid, rid, kwargs)
+	// S11: defer recover 捕获 handler panic；S12: handler 执行在锁保护下
+	var result ActionResult
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				result = ActionResult{
+					"ok":    false,
+					"error": fmt.Sprintf("handler panic: %v", r),
+				}
+			}
+		}()
+		result = handler(ctx, sid, rid, kwargs)
+	}()
+	c.mu.Unlock()
 
 	// 确保 result 中包含默认字段
 	if result == nil {
@@ -1014,15 +1027,17 @@ func buildDragPayload(kwargs map[string]any) map[string]any {
 	}
 
 	return map[string]any{
-		"url":            getStr(kwargs, "url"),
-		"element_source": sourceSelector,
-		"element_target": targetSelector,
-		"coord_source_x": sx,
-		"coord_source_y": sy,
-		"coord_target_x": tx,
-		"coord_target_y": ty,
-		"steps":          toIntPtrOrNone(kwargs, "steps"),
-		"delay_ms":       toIntPtrOrNone(kwargs, "delay_ms"),
+		"url":                     getStr(kwargs, "url"),
+		"element_source":          sourceSelector,
+		"element_target":          targetSelector,
+		"element_source_offset":   normalizeOffset(kwargs["element_source_offset"]),
+		"element_target_offset":   normalizeOffset(kwargs["element_target_offset"]),
+		"coord_source_x":          sx,
+		"coord_source_y":          sy,
+		"coord_target_x":          tx,
+		"coord_target_y":          ty,
+		"steps":                   toIntPtrOrNone(kwargs, "steps"),
+		"delay_ms":                toIntPtrOrNone(kwargs, "delay_ms"),
 	}
 }
 
@@ -1302,6 +1317,33 @@ func getStr(m map[string]any, key string) string {
 		return strings.TrimSpace(fmt.Sprintf("%v", v))
 	}
 	return ""
+}
+
+// normalizeOffset 将 offset 值规范化为 {x: int, y: int} 格式。
+// 对齐 Python: _normalize_offset (controllers/action.py L283-294)
+func normalizeOffset(value any) map[string]int {
+	if m, ok := value.(map[string]any); ok {
+		x := 0
+		y := 0
+		if v, ok := m["x"]; ok {
+			if n, ok := v.(int); ok {
+				x = n
+			}
+			if n, ok := v.(float64); ok {
+				x = int(n)
+			}
+		}
+		if v, ok := m["y"]; ok {
+			if n, ok := v.(int); ok {
+				y = n
+			}
+			if n, ok := v.(float64); ok {
+				y = int(n)
+			}
+		}
+		return map[string]int{"x": x, "y": y}
+	}
+	return map[string]int{"x": 0, "y": 0}
 }
 
 // resolveUploadRoot 解析上传根目录。

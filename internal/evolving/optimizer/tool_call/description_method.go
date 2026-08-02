@@ -14,6 +14,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ExamplesObtained 包含正例和负例的完整传递结构。
+// 对齐 Python: examples_obtained = {"neg_examples": ..., "examples": ...}
+type ExamplesObtained struct {
+	// Examples 正例列表
+	Examples []ExampleTuple
+	// NegExamples 负例列表
+	NegExamples []ExampleTuple
+}
+
 // ToolDescriptionMethod 基于正负例对比的工具描述优化方法。
 // 通过批判描述、对比正负例、生成增强描述来迭代优化工具描述。
 //
@@ -77,7 +86,14 @@ func (m *ToolDescriptionMethod) Step(
 			Msg("当前描述——原始描述")
 	} else {
 		// 对齐 Python: improve with neg ex
-		outputMap = m.Generate(ctx, tool, examples, prevOutputs, it)
+		// 对齐 Python: neg_examples = self.get_negative_examples(function_name)
+		// 对齐 Python: examples_obtained = {"neg_examples": neg_examples, "examples": examples}
+		negExamples := m.GetNegativeExamples(getToolName(tool))
+		examplesObtained := ExamplesObtained{
+			Examples:    examples,
+			NegExamples: negExamples,
+		}
+		outputMap = m.Generate(ctx, tool, examplesObtained, prevOutputs, it)
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
 			Msg("当前描述——生成的描述")
@@ -102,12 +118,12 @@ func (m *ToolDescriptionMethod) Step(
 func (m *ToolDescriptionMethod) Generate(
 	ctx context.Context,
 	tool map[string]any,
-	examples []ExampleTuple,
+	examplesObtained ExamplesObtained,
 	prevOutputs []map[string]any,
 	it int,
 ) map[string]any {
 	logger.Info(logComponent).Msg("正在生成描述")
-	output := m.GenerateDescriptionFromDocumentation(ctx, tool, examples, prevOutputs)
+	output := m.GenerateDescriptionFromDocumentation(ctx, tool, examplesObtained, prevOutputs)
 	logger.Info(logComponent).Msg("描述生成完成")
 	output["iteration"] = it
 	return output
@@ -276,7 +292,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	ctx context.Context,
 	tool map[string]any,
-	examples []ExampleTuple,
+	examplesObtained ExamplesObtained,
 	prevOutputs []map[string]any,
 ) (map[string]any, error) {
 	functionName := getToolName(tool)
@@ -289,8 +305,9 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
         Documentation:
         %s`, functionName, docStr)
 
-	// 对齐 Python: examples 是正例
-	if len(examples) == 0 {
+	// 对齐 Python: 守卫条件——正例和 prevOutputs 都非空
+	// S06: 增加 prevOutputs 检查，对齐 Python 的完整守卫条件
+	if len(examplesObtained.Examples) == 0 || prevOutputs == nil || len(prevOutputs) == 0 {
 		prompt := FormatPromptLlama("", userPrompt)
 		verifyFn := func(output string) (any, error) {
 			return map[string]any{"analysis": strings.TrimSpace(output)}, nil
@@ -299,8 +316,9 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 		return descInvokeWithVerifyToMap(ctx, m.model, getConfigString(m.config, "eval_model_id"), prompt, policy, verifyFn)
 	}
 
-	positiveExamples := examples
-	negExamples := m.GetNegativeExamples(functionName)
+	positiveExamples := examplesObtained.Examples
+	// 对齐 Python: 直接使用传递的 neg_examples，而非重新获取
+	negExamples := examplesObtained.NegExamples
 
 	// 对齐 Python: 添加正例部分
 	if len(positiveExamples) > 0 {
@@ -433,15 +451,15 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	ctx context.Context,
 	tool map[string]any,
-	examples []ExampleTuple,
+	examplesObtained ExamplesObtained,
 	prevOutputs []map[string]any,
 ) map[string]any {
 	// 对齐 Python: td - 修改提示词以分析负例
-	pos := examples
+	pos := examplesObtained.Examples
 
 	typedPrevOutputs := prevOutputs
 	tmp, _ := m.CritiqueDescriptions(ctx, tool, pos, typedPrevOutputs)
-	tmpContrast, _ := m.CritiqueAllDescriptions(ctx, tool, pos, typedPrevOutputs)
+	tmpContrast, _ := m.CritiqueAllDescriptions(ctx, tool, examplesObtained, typedPrevOutputs)
 
 	analysis := toString(tmp["analysis"])
 	analysisContrast := toString(tmpContrast["analysis"])

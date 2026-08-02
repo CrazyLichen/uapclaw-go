@@ -197,6 +197,11 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 		maxRetries = defaultMaxRetries
 	}
 
+	// 对齐 Python: team_backend nil 检查，提前返回错误
+	if m.configurator == nil || m.configurator.TeamBackend() == nil {
+		return fmt.Errorf("TeamBackend 未配置，无法重启 %s", memberName)
+	}
+
 	// 清理旧句柄
 	m.CleanupTeammate(ctx, memberName)
 
@@ -274,14 +279,14 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 				Str("member_name", memberName).
 				Err(err).
 				Msg("重启 teammate 最终失败")
-			// TODO(#9.64): 更新 DB 状态为 ERROR
+			// TODO(#9.65a-4): TeamBackend 门面实现后，更新 DB 状态为 ERROR
 		}
 	}()
 }
 
 // BuildContextFromDB 从 DB 恢复 TeamRuntimeContext。
 // 对齐 Python: SpawnManager.build_context_from_db(member_name)
-// ⤵️ 预留：TeamDatabase（9.64）实现后回填
+// ⤵️ 预留：TeamDatabase（9.65a-4）实现后回填
 func (m *SpawnManager) BuildContextFromDB(memberName string) (atschema.TeamRuntimeContext, error) {
 	// TODO(#9.64): 从 TeamDatabase 读取 teammate 行
 	// 解析 model_ref_json → resolve_member_model

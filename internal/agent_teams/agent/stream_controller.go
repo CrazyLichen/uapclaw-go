@@ -497,6 +497,15 @@ func (sc *StreamController) logRoundPanic() {
 // runOneRound 执行一个完整轮次。
 // 对齐 Python: StreamController._run_one_round(message)
 func (sc *StreamController) runOneRound(ctx context.Context, message any) {
+	// 对齐 Python: except BaseException → MemberStatus.ERROR
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(scLogComponent).Str("member_name", sc.memberName()).
+				Any("panic", r).Msg("runOneRound panic; 设 ERROR 状态")
+			_ = sc.updateStatus(context.Background(), atschema.MemberStatusError)
+		}
+	}()
+
 	// 重置取消标记（对齐 Python: self._cancel_requested = False）
 	sc.mu.Lock()
 	sc.cancelRequested = false

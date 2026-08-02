@@ -82,7 +82,7 @@ type startFailMockBus struct{}
 func (m *startFailMockBus) Start(_ context.Context) error {
 	return fmt.Errorf("模拟消息总线启动失败")
 }
-func (m *startFailMockBus) Stop(_ context.Context) error  { return nil }
+func (m *startFailMockBus) Stop(_ context.Context) error { return nil }
 func (m *startFailMockBus) CleanupSession(_ context.Context, _ string) error {
 	return nil
 }

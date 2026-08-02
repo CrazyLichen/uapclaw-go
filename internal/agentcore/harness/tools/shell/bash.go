@@ -178,6 +178,19 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 			}, nil
 		}
 
+		// ── rm 目标记录（执行前）──
+		// 对齐 Python L192-199: 执行前记录 rm 目标
+		var historyPath string
+		callOpts := tool.NewToolCallOptions(opts...)
+		session := callOpts.Session
+		if session != nil {
+			historyPath = BuildHistoryPath(session.GetSessionID(), agentID, ctx)
+			rmTargets := ParseRmTargets(command)
+			if len(rmTargets) > 0 {
+				RecordRmTargetsBeforeDeletion(historyPath, rmTargets, "bash")
+			}
+		}
+
 		// ── 前台执行 ──
 		// 对齐 Python L202-248
 
@@ -250,6 +263,12 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		meaning := InterpretBashExitCode(command, exitCode, stdout, stderr)
+
+		// ── rm 目标记录（执行后）──
+		// 对齐 Python L230-232: 执行后检测并记录删除
+		if historyPath != "" && !meaning.IsError {
+			DetectAndRecordDeletions(historyPath)
+		}
 
 		content, isError := RenderToolContent(
 			CommandOutput{

@@ -487,8 +487,13 @@ func init() {
 func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, errorMsg string) {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
-		// 即使 inputs 不是 ToolCallInputs，也要设置 skip 标记
+		// 对齐 Python: Python 不检查 inputs 类型，直接设置所有字段
+		// Go 类型系统中 inputs 可能不是 ToolCallInputs，设置 skip 标记并记录警告
 		cbc.Extra()[extraSkipToolKey] = true
+		logger.Warn(agentModeLogComponent).
+			Str("event_type", "agent_mode_reject_tool_type_mismatch").
+			Str("error_msg", errorMsg).
+			Msg("inputs 类型不匹配，无法完整拒绝工具（仅设置 skip 标记）")
 		return
 	}
 
@@ -714,29 +719,21 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 //
 // 对齐 Python: AgentModeRail._is_task_tool_registered() L346-356
 func (r *AgentModeRail) isTaskToolRegistered() bool {
-	// 对齐 Python L348-356: 在已注册工具中搜索 "task_tool" 名称
+	// 对齐 Python L348-356: Runner.resource_mgr.get_tool() → 查找 "task_tool"
 	if r.ownsTaskTool {
 		return true
 	}
-	if r.agent == nil {
+	// 对齐 Python: Runner.resource_mgr.get_tool()
+	// 通过 ResourceMgr 查找，与 Python 的查找路径一致
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr == nil {
 		return false
 	}
-	// 对齐 Python: Runner.resource_mgr.get_tool() → 遍历已注册工具
-	// Go 等价: 通过 ReactAgent 获取 AbilityManager
-	reactAgent := r.agent.ReactAgent()
-	if reactAgent == nil {
+	tools, err := resourceMgr.GetTool([]string{"task_tool"})
+	if err != nil {
 		return false
 	}
-	am := reactAgent.AbilityManager()
-	if am == nil {
-		return false
-	}
-	for _, ability := range am.List() {
-		if ability.AbilityName() == "task_tool" {
-			return true
-		}
-	}
-	return false
+	return len(tools) > 0
 }
 
 // syncTaskToolForModelToolInputs 同步 task_tool 在 model 可见工具列表中的可见性。

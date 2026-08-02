@@ -223,9 +223,11 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	var modelCache map[string]*llm.Model
 	var language string
 	var ws *hworkspace.Workspace
+	var deepCfg *hschema.DeepAgentConfig
 	if t.parentAgent != nil {
 		if deepAgent, ok := t.parentAgent.(hinterfaces.DeepAgentInterface); ok {
-			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil {
+			deepCfg = deepAgent.DeepConfig()
+			if deepCfg != nil {
 				model = deepCfg.Model
 				language = deepCfg.Language
 				if deepCfg.Workspace != nil {
@@ -278,13 +280,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 	parentToolCards := filterToolCards(allToolCards, allowedTools, nil)
 
-	// 步骤 4: 构建 Workspace
-	// 对齐 Python: workspace = Workspace(root_path=str(parent_config.workspace.root_path), language=parent_config.language)
-	if ws == nil {
-		ws = hworkspace.NewWorkspace(subSessionID, "en")
-	}
-
-	// 步骤 5: 构建 CreateDeepAgentParams
+	// 步骤 4: 构建 CreateDeepAgentParams 前置字段（language/model/backend/prompt_mode/max_iterations）
 	// 对齐 Python: create_kwargs = {"model": spec.model or parent_config.model, ...} (code_agent_rail.py L234-252)
 	resolvedModel := spec.Model
 	if resolvedModel == nil {
@@ -306,9 +302,24 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		resolvedPromptMode = spec.PromptMode
 	}
 
-	maxIter := 15
+	// 对齐 Python: max_iterations=spec.max_iterations if spec.max_iterations is not None else parent_config.max_iterations
+	// 三级 fallback：spec.MaxIterations → parent MaxIterations → 默认 15
+	maxIter := 15 // 全局默认值
 	if spec.MaxIterations > 0 {
 		maxIter = spec.MaxIterations
+	} else if deepCfg != nil && deepCfg.MaxIterations > 0 {
+		maxIter = deepCfg.MaxIterations
+	}
+
+	// 步骤 5: 构建 Workspace
+	// 对齐 Python: workspace 两分支逻辑 (code_agent_rail.py L219-231)
+	// 分支1: parent_config.workspace 是 Workspace 对象 → 复用 root_path + language
+	// 分支2: parent_config.workspace 是字符串 → parentWorkspacePath + "/" + subSessionID
+	// 分支3: 无 workspace 信息 → "./" + subSessionID
+	// Go 中 DeepConfig.Workspace 为 *workspace.Workspace，不存在字符串形式，
+	// 因此合并分支2/3：无 Workspace 对象时 fallback 为 "./" + subSessionID
+	if ws == nil {
+		ws = hworkspace.NewWorkspace("./"+subSessionID, resolvedLanguage)
 	}
 
 	restrictToWorkDir := true
