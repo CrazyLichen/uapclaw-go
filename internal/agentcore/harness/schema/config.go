@@ -39,6 +39,20 @@ type VisionModelConfig struct {
 	MaxRetries int `json:"max_retries"`
 }
 
+// VideoModelConfig 视频模型运行时配置
+type VideoModelConfig struct {
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础地址
+	BaseURL string `json:"base_url"`
+	// Model 模型名称（默认 glm-4.6v）
+	Model string `json:"model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
+	// ThinkingEnabled 是否启用思维模式（对齐 jiuwenswarm: thinking_enabled）
+	ThinkingEnabled bool `json:"thinking_enabled"`
+}
+
 // AudioModelConfig 音频模型运行时配置
 type AudioModelConfig struct {
 	// APIKey API 密钥
@@ -264,6 +278,8 @@ const (
 	DefaultAudioHTTPTimeout = 20
 	// DefaultMaxAudioBytes 默认最大音频字节数
 	DefaultMaxAudioBytes = 25 * 1024 * 1024
+	// DefaultVideoModel 默认视频理解模型（对齐 jiuwenswarm: glm-4.6v）
+	DefaultVideoModel = "glm-4.6v"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -337,6 +353,35 @@ func NewAudioModelConfig() *AudioModelConfig {
 		HTTPTimeout:        DefaultAudioHTTPTimeout,
 		MaxAudioBytes:      DefaultMaxAudioBytes,
 		ACRBaseURL:         DefaultACRBaseURL,
+	}
+}
+
+// NewVideoModelConfig 创建带默认值的视频模型配置
+func NewVideoModelConfig() *VideoModelConfig {
+	return &VideoModelConfig{
+		Model:      DefaultVideoModel,
+		MaxRetries: 3,
+	}
+}
+
+// FromEnv 从环境变量构建视频模型配置
+func (VideoModelConfig) FromEnv() VideoModelConfig {
+	apiKey := os.Getenv("VIDEO_API_KEY")
+	baseURL := envOr("VIDEO_API_BASE", "ZHIPU_API_URL", "API_BASE")
+	if baseURL == "" {
+		baseURL = DefaultOpenAIBaseURL
+	}
+	model := envOr("VIDEO_MODEL_NAME", "MODEL_NAME")
+	if model == "" {
+		model = DefaultVideoModel
+	}
+	thinkingEnabled := os.Getenv("VIDEO_THINKING_ENABLED") == "true"
+	return VideoModelConfig{
+		APIKey:          apiKey,
+		BaseURL:         baseURL,
+		Model:           model,
+		MaxRetries:      parseIntEnv("VIDEO_MAX_RETRIES", 3),
+		ThinkingEnabled: thinkingEnabled,
 	}
 }
 

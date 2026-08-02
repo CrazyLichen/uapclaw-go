@@ -531,3 +531,144 @@ func TestSubAgentConfig_SpecName_有Name(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestNewVideoModelConfig 测试 NewVideoModelConfig 默认值
+func TestNewVideoModelConfig(t *testing.T) {
+	cfg := NewVideoModelConfig()
+	if cfg.APIKey != "" {
+		t.Error("APIKey 应为空")
+	}
+	if cfg.BaseURL != "" {
+		t.Error("BaseURL 应为空（不像 VisionModelConfig 默认填充）")
+	}
+	if cfg.Model != DefaultVideoModel {
+		t.Errorf("Model = %q，期望 %q", cfg.Model, DefaultVideoModel)
+	}
+	if cfg.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d，期望 3", cfg.MaxRetries)
+	}
+	if cfg.ThinkingEnabled {
+		t.Error("ThinkingEnabled 默认应为 false")
+	}
+}
+
+// TestVideoModelConfig_FromEnv 测试 VideoModelConfig.FromEnv
+func TestVideoModelConfig_FromEnv(t *testing.T) {
+	// 清理视频相关环境变量
+	videoEnvVars := []string{
+		"VIDEO_API_KEY", "VIDEO_API_BASE", "ZHIPU_API_URL", "API_BASE",
+		"VIDEO_MODEL_NAME", "MODEL_NAME", "VIDEO_THINKING_ENABLED", "VIDEO_MAX_RETRIES",
+	}
+	for _, v := range videoEnvVars {
+		_ = os.Unsetenv(v)
+	}
+
+	// 无环境变量时应返回默认值
+	cfg := VideoModelConfig{}.FromEnv()
+	if cfg.APIKey != "" {
+		t.Errorf("APIKey = %q，期望空", cfg.APIKey)
+	}
+	if cfg.BaseURL != DefaultOpenAIBaseURL {
+		t.Errorf("BaseURL = %q，期望 %q", cfg.BaseURL, DefaultOpenAIBaseURL)
+	}
+	if cfg.Model != DefaultVideoModel {
+		t.Errorf("Model = %q，期望 %q", cfg.Model, DefaultVideoModel)
+	}
+	if cfg.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d，期望 3", cfg.MaxRetries)
+	}
+	if cfg.ThinkingEnabled {
+		t.Error("ThinkingEnabled 应为 false")
+	}
+
+	// 设置环境变量
+	_ = os.Setenv("VIDEO_API_KEY", "test-video-key")
+	defer func() { _ = os.Unsetenv("VIDEO_API_KEY") }()
+	_ = os.Setenv("VIDEO_API_BASE", "https://video-api.example.com/v1")
+	defer func() { _ = os.Unsetenv("VIDEO_API_BASE") }()
+	_ = os.Setenv("VIDEO_MODEL_NAME", "custom-video-model")
+	defer func() { _ = os.Unsetenv("VIDEO_MODEL_NAME") }()
+	_ = os.Setenv("VIDEO_THINKING_ENABLED", "true")
+	defer func() { _ = os.Unsetenv("VIDEO_THINKING_ENABLED") }()
+	_ = os.Setenv("VIDEO_MAX_RETRIES", "5")
+	defer func() { _ = os.Unsetenv("VIDEO_MAX_RETRIES") }()
+
+	cfg = VideoModelConfig{}.FromEnv()
+	if cfg.APIKey != "test-video-key" {
+		t.Errorf("APIKey = %q，期望 %q", cfg.APIKey, "test-video-key")
+	}
+	if cfg.BaseURL != "https://video-api.example.com/v1" {
+		t.Errorf("BaseURL = %q，期望 %q", cfg.BaseURL, "https://video-api.example.com/v1")
+	}
+	if cfg.Model != "custom-video-model" {
+		t.Errorf("Model = %q，期望 %q", cfg.Model, "custom-video-model")
+	}
+	if cfg.MaxRetries != 5 {
+		t.Errorf("MaxRetries = %d，期望 5", cfg.MaxRetries)
+	}
+	if !cfg.ThinkingEnabled {
+		t.Error("ThinkingEnabled 应为 true")
+	}
+
+	// 测试 ZHIPU_API_URL 回退
+	_ = os.Unsetenv("VIDEO_API_BASE")
+	_ = os.Setenv("ZHIPU_API_URL", "https://zhipu.example.com/v1")
+	defer func() { _ = os.Unsetenv("ZHIPU_API_URL") }()
+	cfg = VideoModelConfig{}.FromEnv()
+	if cfg.BaseURL != "https://zhipu.example.com/v1" {
+		t.Errorf("BaseURL = %q，期望 ZHIPU_API_URL 回退", cfg.BaseURL)
+	}
+
+	// 测试 MODEL_NAME 回退
+	_ = os.Unsetenv("VIDEO_MODEL_NAME")
+	_ = os.Setenv("MODEL_NAME", "fallback-model")
+	defer func() { _ = os.Unsetenv("MODEL_NAME") }()
+	cfg = VideoModelConfig{}.FromEnv()
+	if cfg.Model != "fallback-model" {
+		t.Errorf("Model = %q，期望 MODEL_NAME 回退", cfg.Model)
+	}
+
+	// 无效 MaxRetries 应回退默认值
+	_ = os.Setenv("VIDEO_MAX_RETRIES", "invalid")
+	cfg = VideoModelConfig{}.FromEnv()
+	if cfg.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d，期望 3（无效值回退）", cfg.MaxRetries)
+	}
+}
+
+// TestVideoModelConfig_DefaultConstants 测试 VideoModelConfig 相关常量
+func TestVideoModelConfig_DefaultConstants(t *testing.T) {
+	if DefaultVideoModel != "glm-4.6v" {
+		t.Errorf("DefaultVideoModel = %q，期望 glm-4.6v", DefaultVideoModel)
+	}
+}
+
+// TestVideoModelConfigJSON 测试 VideoModelConfig JSON 序列化
+func TestVideoModelConfigJSON(t *testing.T) {
+	cfg := NewVideoModelConfig()
+	cfg.APIKey = "test-video-key"
+	cfg.ThinkingEnabled = true
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("JSON 序列化失败: %v", err)
+	}
+
+	var decoded VideoModelConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("JSON 反序列化失败: %v", err)
+	}
+
+	if decoded.APIKey != "test-video-key" {
+		t.Errorf("APIKey = %q，期望 %q", decoded.APIKey, "test-video-key")
+	}
+	if decoded.Model != DefaultVideoModel {
+		t.Errorf("Model = %q，期望 %q", decoded.Model, DefaultVideoModel)
+	}
+	if decoded.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d，期望 3", decoded.MaxRetries)
+	}
+	if !decoded.ThinkingEnabled {
+		t.Error("ThinkingEnabled 应为 true")
+	}
+}
