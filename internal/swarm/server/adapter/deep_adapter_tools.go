@@ -238,7 +238,7 @@ func (d *DeepAdapter) pruneToolCards(cards []*tool.ToolCard, namesToRemove map[s
 
 // syncMultimodalToolsForRuntime 热同步多模态工具。
 // 对齐 Python: _sync_multimodal_tools_for_runtime() (line 1170-1238)
-// ⤵️ 9.38-49 Harness 工具集: 多模态工具注册/注销
+// Vision/Audio/Video 注册/注销已回填，image_gen 待后续回填
 func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 	if d.instance == nil {
 		return
