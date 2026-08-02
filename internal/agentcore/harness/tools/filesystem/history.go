@@ -16,6 +16,20 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// OpHistoryEntry 文件操作历史条目。
+// 对齐 Python: _append_op_history / _detect_and_record_deletions 中每条记录的字段。
+// 此类型同时被 swarm/server/utils/diff_service.go 复用（readAgentHistory 解析后转为 OpHistoryEntry）。
+type OpHistoryEntry struct {
+	// Action 操作类型："write"、"edit"、"delete"
+	Action string `json:"action"`
+	// Timestamp 操作时间戳（ISO 8601）
+	Timestamp string `json:"timestamp"`
+	// OldContent 操作前的文件内容（nil 表示文件不存在或为空）
+	OldContent *string `json:"old_content"`
+	// NewContent 操作后的文件内容（nil 表示文件被删除）
+	NewContent *string `json:"new_content"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -62,26 +76,22 @@ func BuildHistoryPath(baseDir, agentID, sessionID string) string {
 // 并发安全：通过 historyMu 互斥锁保护文件读写（Python 用 asyncio.Lock）。
 // JSON 文件是唯一数据源，没有内存缓存。
 func AppendOpHistory(historyPath, filePath, action string, oldContent, newContent *string) {
-	entry := map[string]any{
-		"action":      action,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
-		"old_content": oldContent,
-		"new_content": newContent,
+	entry := OpHistoryEntry{
+		Action:      action,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339Nano),
+		OldContent:  oldContent,
+		NewContent:  newContent,
 	}
 
 	historyMu.Lock()
 	defer historyMu.Unlock()
 
-	history := make(map[string]any)
+	history := make(map[string][]OpHistoryEntry)
 	if data, err := os.ReadFile(historyPath); err == nil {
 		_ = json.Unmarshal(data, &history)
 	}
 
-	entriesRaw, _ := history[filePath]
-	entries, ok := entriesRaw.([]any)
-	if !ok {
-		entries = make([]any, 0)
-	}
+	entries := history[filePath]
 	entries = append(entries, entry)
 
 	// 截断超过上限的条目
@@ -139,7 +149,7 @@ func DetectAndRecordDeletions(historyPath string) {
 		return // 文件不存在，无需处理
 	}
 
-	history := make(map[string]any)
+	history := make(map[string][]OpHistoryEntry)
 	if err := json.Unmarshal(data, &history); err != nil {
 		return
 	}
@@ -147,31 +157,26 @@ func DetectAndRecordDeletions(historyPath string) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	deletionsAdded := false
 
-	for filePath, entriesRaw := range history {
-		entries, ok := entriesRaw.([]any)
-		if !ok || len(entries) == 0 {
+	for filePath, entries := range history {
+		if len(entries) == 0 {
 			continue
 		}
 
 		// 取最后一条记录
-		lastEntry, ok := entries[len(entries)-1].(map[string]any)
-		if !ok {
-			continue
-		}
+		lastEntry := entries[len(entries)-1]
 
 		// 如果最后操作已经是 delete，跳过
-		if lastAction, ok := lastEntry["action"].(string); ok && lastAction == "delete" {
+		if lastEntry.Action == "delete" {
 			continue
 		}
 
 		// 检查文件是否还存在
 		if _, err := os.Stat(filePath); err != nil && os.IsNotExist(err) {
-			oldContent := lastEntry["new_content"]
-			entries = append(entries, map[string]any{
-				"action":      "delete",
-				"timestamp":   now,
-				"old_content": oldContent,
-				"new_content": nil,
+			entries = append(entries, OpHistoryEntry{
+				Action:      "delete",
+				Timestamp:   now,
+				OldContent:  lastEntry.NewContent,
+				NewContent:  nil,
 			})
 			if len(entries) > MaxHistoryPerFile {
 				entries = entries[len(entries)-MaxHistoryPerFile:]

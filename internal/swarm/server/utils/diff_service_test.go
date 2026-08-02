@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -252,21 +253,21 @@ func TestNormalizePath(t *testing.T) {
 }
 
 func TestIsDuplicateEntry(t *testing.T) {
-	existing := []opEntry{
+	existing := []filesystem.OpHistoryEntry{
 		{Action: "write", Timestamp: "2025-01-15T10:30:00Z"},
 	}
-	newEntry := &opEntry{Action: "write", Timestamp: "2025-01-15T10:30:01Z"} // 1秒差
+	newEntry := &filesystem.OpHistoryEntry{Action: "write", Timestamp: "2025-01-15T10:30:01Z"} // 1秒差
 	if !isDuplicateEntry(existing, newEntry) {
 		t.Error("相近时间戳（1秒）应判定为重复")
 	}
 
-	farEntry := &opEntry{Action: "write", Timestamp: "2025-01-15T11:30:00Z"} // 1小时差
+	farEntry := &filesystem.OpHistoryEntry{Action: "write", Timestamp: "2025-01-15T11:30:00Z"} // 1小时差
 	if isDuplicateEntry(existing, farEntry) {
 		t.Error("远时间戳不应判定为重复")
 	}
 
 	// 不同 action 不应判定为重复
-	diffActionEntry := &opEntry{Action: "edit", Timestamp: "2025-01-15T10:30:01Z"}
+	diffActionEntry := &filesystem.OpHistoryEntry{Action: "edit", Timestamp: "2025-01-15T10:30:01Z"}
 	if isDuplicateEntry(existing, diffActionEntry) {
 		t.Error("不同 action 不应判定为重复")
 	}
@@ -898,7 +899,7 @@ func TestGetFilesToRestore_turnIndex超出范围(t *testing.T) {
 
 func TestFindFileEditsByTimeRange(t *testing.T) {
 	ds := GetDiffService()
-	agentHistory := map[string][]opEntry{
+	agentHistory := map[string][]filesystem.OpHistoryEntry{
 		"file.txt": {
 			{Action: "write", Timestamp: timestampToISO(100.0), OldContent: nil, NewContent: ptrStr("a")},
 			{Action: "edit", Timestamp: timestampToISO(150.0), OldContent: ptrStr("a"), NewContent: ptrStr("b")},

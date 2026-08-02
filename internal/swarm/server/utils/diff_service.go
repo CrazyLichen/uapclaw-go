@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -196,14 +197,6 @@ type historyRecord struct {
 	Timestamp float64 `json:"timestamp"`
 }
 
-// opEntry 操作历史条目
-type opEntry struct {
-	Action      string  `json:"action"`
-	Timestamp   string  `json:"timestamp"`
-	OldContent  *string `json:"old_content"`
-	NewContent  *string `json:"new_content"`
-}
-
 // computeTurnDiffs 计算 turn-based diffs。
 // 对齐 Python: _compute_turn_diffs (line 39-125)
 func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []TurnDiff {
@@ -316,8 +309,8 @@ func (ds *DiffService) readHistory(sessionID string) []historyRecord {
 
 // readAgentHistory 读取 .agent_history 目录下多个文件并合并。
 // 对齐 Python: _read_agent_history (line 195-281)
-func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map[string][]opEntry {
-	result := make(map[string][]opEntry)
+func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map[string][]filesystem.OpHistoryEntry {
+	result := make(map[string][]filesystem.OpHistoryEntry)
 
 	// 收集所有 history 文件路径
 	var paths []string
@@ -422,10 +415,10 @@ func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map
 // findFileEditsByTimeRange 根据时间范围查找文件编辑记录。
 // 对齐 Python: _find_file_edits_by_time_range (line 283-313)
 func (ds *DiffService) findFileEditsByTimeRange(
-	agentHistory map[string][]opEntry,
+	agentHistory map[string][]filesystem.OpHistoryEntry,
 	startTime, endTime float64,
-) map[string][]opEntry {
-	fileEdits := make(map[string][]opEntry)
+) map[string][]filesystem.OpHistoryEntry {
+	fileEdits := make(map[string][]filesystem.OpHistoryEntry)
 
 	for filePath, entries := range agentHistory {
 		for _, entry := range entries {
@@ -645,7 +638,7 @@ func normalizePath(p string) string {
 }
 
 // parseOpEntry 从 map[string]any 解析操作历史条目
-func parseOpEntry(m map[string]any) *opEntry {
+func parseOpEntry(m map[string]any) *filesystem.OpHistoryEntry {
 	action, _ := m["action"].(string)
 	timestamp, _ := m["timestamp"].(string)
 	if action == "" || timestamp == "" {
@@ -666,7 +659,7 @@ func parseOpEntry(m map[string]any) *opEntry {
 		}
 	}
 
-	return &opEntry{
+	return &filesystem.OpHistoryEntry{
 		Action:      action,
 		Timestamp:   timestamp,
 		OldContent:  oldContent,
@@ -675,7 +668,7 @@ func parseOpEntry(m map[string]any) *opEntry {
 }
 
 // isDuplicateEntry 检查是否是重复条目（时间戳相近 ±2秒，相同操作）
-func isDuplicateEntry(existing []opEntry, newEntry *opEntry) bool {
+func isDuplicateEntry(existing []filesystem.OpHistoryEntry, newEntry *filesystem.OpHistoryEntry) bool {
 	for _, e := range existing {
 		if e.Action == newEntry.Action {
 			t1 := isoToTimestamp(e.Timestamp)
