@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -68,7 +69,7 @@ func TestNewVideoUnderstandingTool_Invoke成功(t *testing.T) {
 	mockClient := &mockVisionClient{
 		responses: []mockVisionResponse{{text: "The video shows a cat playing"}},
 	}
-	config := newTestVisionConfig()
+	config := newTestVideoConfig()
 
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 
@@ -85,8 +86,8 @@ func TestNewVideoUnderstandingTool_Invoke成功(t *testing.T) {
 	if result["query"] != "What is in this video?" {
 		t.Errorf("query = %v, 期望 'What is in this video?'", result["query"])
 	}
-	if result["model"] != "gpt-4o" {
-		t.Errorf("model = %v, 期望 'gpt-4o'", result["model"])
+	if result["model"] != "glm-4.6v" {
+		t.Errorf("model = %v, 期望 'glm-4.6v'", result["model"])
 	}
 }
 
@@ -96,7 +97,7 @@ func TestNewVideoUnderstandingTool_Invoke失败(t *testing.T) {
 			{err: exception.NewBaseError(exception.StatusModelCallFailed, exception.WithMsg("model error"))},
 		},
 	}
-	config := newTestVisionConfig()
+	config := newTestVideoConfig()
 
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 
@@ -125,7 +126,7 @@ func TestNewVideoUnderstandingTool_配置无效(t *testing.T) {
 
 func TestNewVideoUnderstandingTool_空Query(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
-	config := newTestVisionConfig()
+	config := newTestVideoConfig()
 
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 
@@ -140,7 +141,7 @@ func TestNewVideoUnderstandingTool_空Query(t *testing.T) {
 
 func TestNewVideoUnderstandingTool_空VideoPath(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
-	config := newTestVisionConfig()
+	config := newTestVideoConfig()
 
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 
@@ -215,7 +216,7 @@ func TestClampFloat_正常值(t *testing.T) {
 
 func TestVideoUnderstandingTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
-	config := newTestVisionConfig()
+	config := newTestVideoConfig()
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 	var _ tool.Tool = videoTool
 }
@@ -263,5 +264,76 @@ func TestVideoConstants(t *testing.T) {
 	}
 	if minVideoTimeout != 10 || maxVideoTimeout != 600 {
 		t.Errorf("timeout 范围应为 [10, 600]")
+	}
+	if defaultVideoModel != "glm-4.6v" {
+		t.Errorf("defaultVideoModel = %v, 期望 glm-4.6v", defaultVideoModel)
+	}
+}
+
+// ──────────────────────────── ThinkingEnabled 测试 ────────────────────────────
+
+func TestNewVideoUnderstandingTool_ThinkingEnabled(t *testing.T) {
+	mockClient := &mockVisionClient{
+		responses: []mockVisionResponse{{text: "视频内容分析结果"}},
+	}
+	config := newTestVideoConfig()
+	config.ThinkingEnabled = true
+
+	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
+
+	result, err := videoTool.Invoke(context.Background(), map[string]any{
+		"query":           "视频中发生了什么？",
+		"video_path":      "https://example.com/video.mp4",
+		"thinking_enabled": true,
+	})
+	if err != nil {
+		t.Fatalf("ThinkingEnabled Invoke 返回错误: %v", err)
+	}
+	if result["answer"] != "视频内容分析结果" {
+		t.Errorf("answer = %v, 期望 '视频内容分析结果'", result["answer"])
+	}
+}
+
+func TestNewVideoUnderstandingTool_ThinkingEnabledFalse(t *testing.T) {
+	mockClient := &mockVisionClient{
+		responses: []mockVisionResponse{{text: "结果"}},
+	}
+	config := newTestVideoConfig()
+	// config.ThinkingEnabled 默认 false
+
+	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
+
+	result, err := videoTool.Invoke(context.Background(), map[string]any{
+		"query":      "视频中有什么？",
+		"video_path": "https://example.com/video.mp4",
+	})
+	if err != nil {
+		t.Fatalf("ThinkingEnabled=False Invoke 返回错误: %v", err)
+	}
+	if result["answer"] != "结果" {
+		t.Errorf("answer = %v, 期望 '结果'", result["answer"])
+	}
+}
+
+func TestNewVideoUnderstandingTool_默认模型GLM4v(t *testing.T) {
+	mockClient := &mockVisionClient{
+		responses: []mockVisionResponse{{text: "结果"}},
+	}
+	config := &hschema.VideoModelConfig{
+		APIKey: "test-api-key",
+		// Model 字段为空，应使用 defaultVideoModel = "glm-4.6v"
+	}
+
+	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
+
+	result, err := videoTool.Invoke(context.Background(), map[string]any{
+		"query":      "视频描述",
+		"video_path": "https://example.com/video.mp4",
+	})
+	if err != nil {
+		t.Fatalf("默认模型 Invoke 返回错误: %v", err)
+	}
+	if result["model"] != "glm-4.6v" {
+		t.Errorf("model = %v, 期望 glm-4.6v", result["model"])
 	}
 }

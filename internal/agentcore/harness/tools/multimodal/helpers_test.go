@@ -87,6 +87,16 @@ func newTestVisionConfig() *hschema.VisionModelConfig {
 	}
 }
 
+// newTestVideoConfig 创建测试用的视频模型配置
+func newTestVideoConfig() *hschema.VideoModelConfig {
+	return &hschema.VideoModelConfig{
+		APIKey:     "test-api-key",
+		BaseURL:    "https://api.openai.com/v1",
+		Model:      "glm-4.6v",
+		MaxRetries: 3,
+	}
+}
+
 // ──────────────────────────── BuildImageContent 测试 ────────────────────────────
 
 func TestBuildImageContent_HTTPURL(t *testing.T) {
