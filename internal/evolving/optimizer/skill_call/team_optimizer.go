@@ -31,17 +31,17 @@ type TeamSkillExperienceOptimizer struct {
 	debugDir string
 	// recordLLMPolicy 团队记录生成 LLM 调用策略
 	recordLLMPolicy llm_resilience.LLMInvokePolicy
-	// evolutionStore 演进存储（可选，用于加载技能内容和已有演进）
-	evolutionStore checkpointing.EvolutionStore
+	// evolutionStore 演进存储接口（可选，用于加载技能内容和已有演进）
+	evolutionStore EvolutionStore
 }
 
 // EvolutionStore 接口 — 用于 loadSkillContent / loadExistingEvolutionsSummary。
-// 对齐 Python: EvolutionStore
+// 对齐 Python: EvolutionStore；签名对齐 checkpointing.EvolutionStore 结构体方法。
 type EvolutionStore interface {
 	// ReadSkillContent 读取技能内容
 	ReadSkillContent(ctx context.Context, skillName string) (string, error)
 	// LoadFullEvolutionLog 加载完整演进日志
-	LoadFullEvolutionLog(ctx context.Context, skillName string) (*checkpointing.EvolutionLog, error)
+	LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -60,7 +60,7 @@ type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 // 对齐 Python:
 //
 //	TeamSkillExperienceOptimizer(llm, model, language, debug_dir, record_llm_policy, evolution_store)
-func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, debugDir string, recordLLMPolicy llm_resilience.LLMInvokePolicy) *TeamSkillExperienceOptimizer {
+func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, debugDir string, recordLLMPolicy llm_resilience.LLMInvokePolicy, evolutionStore EvolutionStore) *TeamSkillExperienceOptimizer {
 	return &TeamSkillExperienceOptimizer{
 		SkillExperienceOptimizerBase: SkillExperienceOptimizerBase{
 			llm:            llmModel,
@@ -70,41 +70,12 @@ func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language
 		},
 		debugDir:        debugDir,
 		recordLLMPolicy: recordLLMPolicy,
+		evolutionStore:  evolutionStore,
 	}
 }
 
-// Bind 过滤并绑定可优化的 Operator。
-//
-// 对齐 Python: TeamSkillExperienceOptimizer.bind()
-func (o *TeamSkillExperienceOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	if len(targets) == 0 {
-		targets = o.DefaultTargets()
-	}
-	if config != nil {
-		if oc, ok := config["online_contexts"]; ok && oc != nil {
-			o.onlineContexts = make(map[string]*experience.EvolutionContext)
-			switch v := oc.(type) {
-			case map[string]*experience.EvolutionContext:
-				for k, val := range v {
-					o.onlineContexts[k] = val
-				}
-			case map[string]any:
-				for k, val := range v {
-					if ectx, ok2 := val.(*experience.EvolutionContext); ok2 {
-						o.onlineContexts[k] = ectx
-					}
-				}
-			default:
-				o.onlineContexts = map[string]*experience.EvolutionContext{}
-			}
-		} else {
-			o.onlineContexts = map[string]*experience.EvolutionContext{}
-		}
-	} else {
-		o.onlineContexts = map[string]*experience.EvolutionContext{}
-	}
-	return o.BaseOptimizerMixin.Bind(operators, targets, config)
-}
+// Bind 由 SkillExperienceOptimizerBase.Bind 继承，无需重复定义。
+// 基类已实现 online_contexts 提取 + BaseOptimizerMixin.Bind 调用。
 
 // Backward 反向传播：使用 Trajectory 和信号。
 //

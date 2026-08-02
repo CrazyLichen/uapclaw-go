@@ -557,7 +557,7 @@ func TestSkillExperienceOptimizer_generateDraftsWithRetries_全部失败(t *test
 // TestTeamSkillExperienceOptimizer_Bind 绑定 operators
 func TestTeamSkillExperienceOptimizer_Bind(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "/tmp", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "/tmp", TeamSkillRecordLLMPolicy, nil)
 
 	skillName := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -579,7 +579,7 @@ func TestTeamSkillExperienceOptimizer_Bind(t *testing.T) {
 
 // TestTeamSkillExperienceOptimizer_SelectSignals 默认保留所有信号
 func TestTeamSkillExperienceOptimizer_SelectSignals(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	sigs := []*signal.EvolutionSignal{{SignalType: "trajectory_issue"}}
 	selected := opt.SelectSignals(sigs)
 	assert.Equal(t, len(sigs), len(selected))
@@ -590,7 +590,7 @@ func TestTeamSkillExperienceOptimizer_Backward_正常(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"团队协作改进"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillName := "team_skill"
 	skillNamePtr := skillName
@@ -634,7 +634,7 @@ func TestTeamSkillExperienceOptimizer_Backward_逐信号Patch(t *testing.T) {
 		// 返回 JSON dict（不是数组），因为 patch 期望单个对象
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Instructions", "content": "改进指令"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillName := "team_skill"
 	skillNamePtr := skillName
@@ -670,7 +670,7 @@ func TestTeamSkillExperienceOptimizer_Step(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"改进"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillName := "team_skill"
 	skillNamePtr := skillName
@@ -701,7 +701,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_聚合路径(t *testing.T)
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"改进协作"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -721,7 +721,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_聚合路径(t *testing.T)
 // TestTeamSkillExperienceOptimizer_GenerateRecords_空信号 空信号返回 nil
 func TestTeamSkillExperienceOptimizer_GenerateRecords_空信号(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	evoCtx := &experience.EvolutionContext{
 		SkillName: "team_skill",
@@ -738,7 +738,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号patch(t *testing.
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Workflow", "content": "改进工作流"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -760,7 +760,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Instructions", "content": "根据用户意图新增说明", "summary": "用户需求改进"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{
 		ExecutionID: "exec-1",
@@ -781,7 +781,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_不需要(t *testing.T) 
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": false, "reason": "skill already covers this"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{
 		ExecutionID: "exec-1",
@@ -800,7 +800,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Workflow", "content": "改进工作流步骤", "summary": "轨迹改进"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{
 		ExecutionID: "exec-1",
@@ -822,7 +822,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_不需要(t *testi
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": false, "reason": "trajectory is healthy"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{
 		ExecutionID: "exec-1",
@@ -842,7 +842,7 @@ func TestTeamSkillExperienceOptimizer_RegenerateBody(t *testing.T) {
 		// 返回足够长的重写内容
 		return llmschema.NewAssistantMessage(strings.Repeat("这是重写的 skill body 内容。", 20)), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	records := []checkpointing.EvolutionRecord{
 		{ID: "ev_001", Change: checkpointing.EvolutionPatch{Section: "Instructions", Content: "新增指令"}},
@@ -858,7 +858,7 @@ func TestTeamSkillExperienceOptimizer_RegenerateBody_返回过短(t *testing.T) 
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage("短"), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	body, err := opt.RegenerateBody(context.Background(), "team_skill", "当前 body", nil, "")
 	assert.NoError(t, err)
@@ -870,7 +870,7 @@ func TestTeamSkillExperienceOptimizer_callLLM_有policy(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage("LLM response"), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	policy := TeamSkillRecordLLMPolicy
 	result, err := opt.callLLM(context.Background(), "prompt", "retry", &policy, nil)
@@ -883,7 +883,7 @@ func TestTeamSkillExperienceOptimizer_callLLM_无policy(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage("single attempt response"), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	result, err := opt.callLLM(context.Background(), "prompt", "", nil, nil)
 	assert.NoError(t, err)
@@ -896,7 +896,7 @@ func TestTeamSkillExperienceOptimizer_callLLM_失败(t *testing.T) {
 		return nil, fmt.Errorf("service down")
 	})
 	singlePolicy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1, AttemptTimeoutSecs: 5, TotalBudgetSecs: 5}
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", singlePolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", singlePolicy, nil)
 
 	result, err := opt.callLLM(context.Background(), "prompt", "", nil, nil)
 	assert.Error(t, err)
@@ -908,7 +908,7 @@ func TestTeamSkillExperienceOptimizer_RetryParseDrafts_截断(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"fix"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	drafts, _, err := opt.RetryParseDrafts(
 		context.Background(),
@@ -926,7 +926,7 @@ func TestTeamSkillExperienceOptimizer_RetryParseDrafts_严格修复(t *testing.T
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"strict"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	drafts, _, err := opt.RetryParseDrafts(
 		context.Background(),
@@ -944,7 +944,7 @@ func TestTeamSkillExperienceOptimizer_RetryParseDrafts_失败(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage("not json"), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	drafts, _, err := opt.RetryParseDrafts(
 		context.Background(),
@@ -960,7 +960,7 @@ func TestTeamSkillExperienceOptimizer_RetryParseDrafts_失败(t *testing.T) {
 // TestTeamSkillExperienceOptimizer_buildEvolutionContext_有上下文 有 trajectory
 func TestTeamSkillExperienceOptimizer_buildEvolutionContext_有上下文(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
 	evoCtx := &experience.EvolutionContext{
@@ -980,7 +980,7 @@ func TestTeamSkillExperienceOptimizer_buildEvolutionContext_有上下文(t *test
 // TestTeamSkillExperienceOptimizer_buildEvolutionContext_填充trajectory trajectory nil 时填充 default_trajectory
 func TestTeamSkillExperienceOptimizer_buildEvolutionContext_填充trajectory(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	evoCtx := &experience.EvolutionContext{
 		SkillName:    "team_skill",
@@ -999,7 +999,7 @@ func TestTeamSkillExperienceOptimizer_buildEvolutionContext_填充trajectory(t *
 // TestTeamSkillExperienceOptimizer_buildEvolutionContext_缺少 缺少 skill 时报错
 func TestTeamSkillExperienceOptimizer_buildEvolutionContext_缺少(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	opt.onlineContexts = map[string]*experience.EvolutionContext{}
 
 	result, err := opt.buildEvolutionContext("missing", nil, nil, nil)
@@ -1012,7 +1012,7 @@ func TestTeamSkillExperienceOptimizer_generateDraftsWithRetries_正常(t *testin
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"draft"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	drafts, err := opt.generateDraftsWithRetries(context.Background(), "prompt", "retry")
 	assert.NoError(t, err)
@@ -1158,14 +1158,14 @@ func TestSummarizeSkillContentTeamFallback(t *testing.T) {
 
 // TestDumpRaw 调试输出
 func TestDumpRaw(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	opt.dumpRaw("tag", "raw") // 空 debugDir → 不做任何事
 	assert.True(t, true) // 不 panic 即通过
 }
 
 // TestDumpRaw_有目录 有 debugDir
 func TestDumpRaw_有目录(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "/tmp", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "/tmp", TeamSkillRecordLLMPolicy, nil)
 	opt.dumpRaw("test", "some raw content")
 }
 
@@ -1184,7 +1184,7 @@ func TestTeamSkillExperienceOptimizer_generateDraftsWithRetries_需重试(t *tes
 		TotalBudgetSecs:    60,
 		MaxAttempts:        3,
 	}
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
 	drafts, err := opt.generateDraftsWithRetries(context.Background(), "prompt", "retry")
 	assert.NoError(t, err)
@@ -1288,7 +1288,7 @@ func TestSkillExperienceOptimizer_Bind_default类型(t *testing.T) {
 // TestTeamSkillExperienceOptimizer_Bind_mapStringContext map[string]*EvolutionContext 类型
 func TestTeamSkillExperienceOptimizer_Bind_mapStringContext(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillName := "team_skill"
 	evoCtx := &experience.EvolutionContext{SkillName: skillName}
@@ -1307,7 +1307,7 @@ func TestTeamSkillExperienceOptimizer_Bind_mapStringContext(t *testing.T) {
 // TestTeamSkillExperienceOptimizer_Bind_default类型 online_contexts 为未知类型
 func TestTeamSkillExperienceOptimizer_Bind_default类型(t *testing.T) {
 	model := newMockSkillModel(t, nil)
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	operators := map[string]operator.Operator{}
 	config := map[string]any{
@@ -1381,7 +1381,7 @@ func TestTeamSkillExperienceOptimizer_Backward_LLM失败(t *testing.T) {
 		TotalBudgetSecs:    2,
 		MaxAttempts:        1,
 	}
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
 	skillName := "team_fail"
 	skillNamePtr := skillName
@@ -1454,7 +1454,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_英文(t *testing.T) {
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"improve collaboration"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "en", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "en", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -1477,7 +1477,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_已有记录(t *testing.T)
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`[{"action":"append","section":"Workflow","target":"body","content":"improve"}]`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -1502,7 +1502,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_逐信号用户意图(t *t
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Instructions", "content": "新增用户意图说明"}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	skillNamePtr := "team_skill"
 	evoCtx := &experience.EvolutionContext{
@@ -1529,7 +1529,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_LLM失败(t *testing.T) 
 		TotalBudgetSecs:    2,
 		MaxAttempts:        1,
 	}
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
 	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "用户意图")
@@ -1542,7 +1542,7 @@ func TestTeamSkillExperienceOptimizer_GenerateUserPatch_空内容(t *testing.T) 
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Instructions", "content": ""}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
 	record, err := opt.GenerateUserPatch(context.Background(), traj, "team_skill", "意图")
@@ -1555,7 +1555,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_空内容(t *testi
 	model := newMockSkillModel(t, func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 		return llmschema.NewAssistantMessage(`{"need_patch": true, "action": "append", "section": "Workflow", "content": "  "}`), nil
 	})
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, nil)
 
 	traj := &trajectory.Trajectory{ExecutionID: "exec-1", SessionID: "sess-1"}
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "content", nil)
@@ -1573,7 +1573,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_LLM失败(t *testi
 		TotalBudgetSecs:    2,
 		MaxAttempts:        1,
 	}
-	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy)
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", policy, nil)
 
 	traj := &trajectory.Trajectory{ExecutionID: "exec-1"}
 	record, err := opt.GenerateTrajectoryPatch(context.Background(), traj, "team_skill", "content", nil)
@@ -1597,6 +1597,44 @@ func TestBaseOptimizer_Bind_default类型(t *testing.T) {
 	}
 	_ = base.Bind(operators, []string{"experiences"}, config)
 	assert.Empty(t, base.onlineContexts)
+}
+
+// TestNewTeamSkillExperienceOptimizer_有EvolutionStore 构造函数传入 mockEvolutionStore
+func TestNewTeamSkillExperienceOptimizer_有EvolutionStore(t *testing.T) {
+	model := newMockSkillModel(t, nil)
+	store := &mockEvolutionStore{
+		readSkillContentFn: func(ctx context.Context, skillName string) (string, error) {
+			return "mock skill content for " + skillName, nil
+		},
+		loadFullEvolutionLogFn: func(ctx context.Context, skillName string) *checkpointing.EvolutionLog {
+			return &checkpointing.EvolutionLog{SkillID: skillName}
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, store)
+	assert.NotNil(t, opt)
+	assert.NotNil(t, opt.evolutionStore)
+
+	// 验证接口方法调用
+	content, err := opt.evolutionStore.ReadSkillContent(context.Background(), "test_skill")
+	assert.NoError(t, err)
+	assert.Equal(t, "mock skill content for test_skill", content)
+
+	log := opt.evolutionStore.LoadFullEvolutionLog(context.Background(), "test_skill")
+	assert.NotNil(t, log)
+	assert.Equal(t, "test_skill", log.SkillID)
+}
+
+// TestEvolutionStore_接口对齐 验证 mockEvolutionStore 满足 EvolutionStore 接口
+func TestEvolutionStore_接口对齐(t *testing.T) {
+	store := &mockEvolutionStore{}
+	// 编译时已通过 var _ EvolutionStore = (*mockEvolutionStore)(nil) 验证
+	// 运行时验证默认行为
+	content, err := store.ReadSkillContent(context.Background(), "any")
+	assert.NoError(t, err)
+	assert.Equal(t, "", content)
+
+	log := store.LoadFullEvolutionLog(context.Background(), "any")
+	assert.Nil(t, log)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1625,6 +1663,28 @@ func newMockSkillModel(t *testing.T, invokeFn func(ctx context.Context, messages
 	}
 	return model
 }
+
+// mockEvolutionStore 用于测试的模拟 EvolutionStore 接口实现
+type mockEvolutionStore struct {
+	readSkillContentFn  func(ctx context.Context, skillName string) (string, error)
+	loadFullEvolutionLogFn func(ctx context.Context, skillName string) *checkpointing.EvolutionLog
+}
+
+func (m *mockEvolutionStore) ReadSkillContent(ctx context.Context, skillName string) (string, error) {
+	if m.readSkillContentFn != nil {
+		return m.readSkillContentFn(ctx, skillName)
+	}
+	return "", nil
+}
+
+func (m *mockEvolutionStore) LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog {
+	if m.loadFullEvolutionLogFn != nil {
+		return m.loadFullEvolutionLogFn(ctx, skillName)
+	}
+	return nil
+}
+
+var _ EvolutionStore = (*mockEvolutionStore)(nil)
 
 // dummyOperator 用于测试的最简 Operator 实现
 type dummyOperator struct {

@@ -57,42 +57,8 @@ func NewSkillExperienceOptimizer(llmModel *llm.Model, model string, language str
 	}
 }
 
-// Bind 过滤并绑定可优化的 Operator，从 config 提取 online_contexts。
-//
-// 对齐 Python:
-//
-//	self._online_contexts = dict(config.get("online_contexts") or {})
-//	return super().bind(operators=operators, targets=targets, **config)
-func (o *SkillExperienceOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	if len(targets) == 0 {
-		targets = o.DefaultTargets()
-	}
-	// 对齐 Python: self._online_contexts = dict(config.get("online_contexts") or {})
-	if config != nil {
-		if oc, ok := config["online_contexts"]; ok && oc != nil {
-			o.onlineContexts = make(map[string]*experience.EvolutionContext)
-			switch v := oc.(type) {
-			case map[string]*experience.EvolutionContext:
-				for k, val := range v {
-					o.onlineContexts[k] = val
-				}
-			case map[string]any:
-				for k, val := range v {
-					if ectx, ok2 := val.(*experience.EvolutionContext); ok2 {
-						o.onlineContexts[k] = ectx
-					}
-				}
-			default:
-				o.onlineContexts = map[string]*experience.EvolutionContext{}
-			}
-		} else {
-			o.onlineContexts = map[string]*experience.EvolutionContext{}
-		}
-	} else {
-		o.onlineContexts = map[string]*experience.EvolutionContext{}
-	}
-	return o.BaseOptimizerMixin.Bind(operators, targets, config)
-}
+// Bind 由 SkillExperienceOptimizerBase.Bind 继承，无需重复定义。
+// 基类已实现 online_contexts 提取 + BaseOptimizerMixin.Bind 调用。
 
 // AddTrajectory 缓存 Trajectory 供 backward 阶段查询。
 func (o *SkillExperienceOptimizer) AddTrajectory(traj *signal.EvolutionSignal) {

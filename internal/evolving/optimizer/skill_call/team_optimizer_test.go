@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestNewTeamSkillExperienceOptimizer(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "/tmp/debug", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "/tmp/debug", TeamSkillRecordLLMPolicy, nil)
 	assert.NotNil(t, opt)
 	assert.Equal(t, "qwen-max", opt.ModelName())
 	assert.Equal(t, "cn", opt.Language())
@@ -20,17 +20,17 @@ func TestNewTeamSkillExperienceOptimizer(t *testing.T) {
 }
 
 func TestTeamSkillExperienceOptimizer_Domain(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	assert.Equal(t, "skill_experience", opt.Domain())
 }
 
 func TestTeamSkillExperienceOptimizer_DefaultTargets(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	assert.Equal(t, []string{"experiences"}, opt.DefaultTargets())
 }
 
 func TestTeamSkillExperienceOptimizer_RequiresForwardData(t *testing.T) {
-	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy)
+	opt := NewTeamSkillExperienceOptimizer(nil, "qwen-max", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	assert.True(t, opt.RequiresForwardData())
 }
 
