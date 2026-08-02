@@ -29,6 +29,8 @@ type VideoUnderstandingInput struct {
 	Temperature float64 `json:"temperature,omitempty"`
 	// TimeoutSeconds 可选，请求超时时间（秒）（对齐 Python: timeout_seconds, 默认 120）
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	// ThinkingEnabled 可选，是否启用思维模式（对齐 jiuwenswarm: thinking_enabled, 默认 false）
+	ThinkingEnabled bool `json:"thinking_enabled,omitempty"`
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -52,6 +54,8 @@ const (
 	minVideoTimeout = 10
 	// maxVideoTimeout 最大超时（对齐 Python: min(..., 600)）
 	maxVideoTimeout = 600
+	// defaultVideoModel 默认视频理解模型（对齐 jiuwenswarm: glm-4.6v）
+	defaultVideoModel = "glm-4.6v"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -59,10 +63,11 @@ const (
 // NewVideoUnderstandingTool 创建视频理解工具。
 //
 // 对齐 Python: VideoUnderstandingTool.__init__ + VideoUnderstandingTool.invoke
-// 使用 VisionModelConfig 配置，通过 BaseModelClient.Invoke 调用 video_url 消息
+// 使用 VideoModelConfig 配置（独立于 VisionModelConfig），通过 BaseModelClient.Invoke 调用 video_url 消息
+// 支持 ThinkingEnabled 参数，通过 WithInvokeExtra 传递 thinking payload
 func NewVideoUnderstandingTool(
 	client modelclients.BaseModelClient,
-	config *hschema.VisionModelConfig,
+	config *hschema.VideoModelConfig,
 	language, agentID string,
 ) tool.Tool {
 	card, _ := tools.BuildToolCard("video_understanding", "VideoUnderstandingTool", language, nil, agentID)
@@ -73,7 +78,7 @@ func NewVideoUnderstandingTool(
 			if config == nil || config.APIKey == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalVideoConfigInvalid,
-					exception.WithMsg("vision_model_config is not configured: api_key is required"),
+					exception.WithMsg("video_model_config is not configured: api_key is required"),
 				)
 			}
 
@@ -93,14 +98,11 @@ func NewVideoUnderstandingTool(
 
 			// 参数裁剪（对齐 Python: max(128, min(max_tokens, 8192)) 等）
 			modelName := input.Model
-			if modelName == "" {
+			if modelName == "" && config != nil {
 				modelName = config.Model
 			}
 			if modelName == "" {
-				return nil, exception.NewBaseError(
-					exception.StatusToolMultimodalVideoConfigInvalid,
-					exception.WithMsg("video understanding model name is empty"),
-				)
+				modelName = defaultVideoModel // 对齐 jiuwenswarm: glm-4.6v
 			}
 
 			maxTokens := clampInt(input.MaxTokens, minVideoMaxTokens, maxVideoMaxTokens, defaultVideoMaxTokens)
@@ -125,12 +127,21 @@ func NewVideoUnderstandingTool(
 
 			// 调用模型（对齐 Python: self.model.invoke(messages, model, max_tokens, temperature, timeout)）
 			timeoutFloat := float64(timeoutSeconds)
-			resp, err := client.Invoke(ctx, messages,
+			opts := []modelclients.InvokeOption{
 				modelclients.WithInvokeModel(modelName),
 				modelclients.WithInvokeMaxTokens(maxTokens),
 				modelclients.WithInvokeTemperature(temperature),
 				modelclients.WithInvokeTimeout(timeoutFloat),
-			)
+			}
+
+			// thinking_enabled → WithInvokeExtra（对齐 jiuwenswarm: payload["thinking"] = {"type": "enabled"}）
+			if input.ThinkingEnabled || (config != nil && config.ThinkingEnabled) {
+				opts = append(opts, modelclients.WithInvokeExtra(map[string]any{
+					"thinking": map[string]any{"type": "enabled"},
+				}))
+			}
+
+			resp, err := client.Invoke(ctx, messages, opts...)
 			if err != nil {
 				return nil, err
 			}

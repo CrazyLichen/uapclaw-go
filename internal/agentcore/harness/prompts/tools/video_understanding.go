@@ -28,6 +28,7 @@ func GetVideoUnderstandingMetadataProviderInputParams(language string) map[strin
 		"max_tokens":      {"cn": "可选，最大输出 token 数", "en": "Optional maximum output tokens"},
 		"temperature":     {"cn": "可选，采样温度", "en": "Optional sampling temperature"},
 		"timeout_seconds": {"cn": "可选，请求超时时间（秒）", "en": "Optional timeout in seconds"},
+		"thinking_enabled": {"cn": "可选，是否启用思维模式", "en": "Optional, enable thinking mode"},
 	}
 	d := func(key string) string {
 		if v, ok := p[key][lang]; ok {
@@ -44,6 +45,7 @@ func GetVideoUnderstandingMetadataProviderInputParams(language string) map[strin
 			"max_tokens":      map[string]any{"type": "integer", "description": d("max_tokens")},
 			"temperature":     map[string]any{"type": "number", "description": d("temperature")},
 			"timeout_seconds": map[string]any{"type": "integer", "description": d("timeout_seconds")},
+			"thinking_enabled": map[string]any{"type": "boolean", "description": d("thinking_enabled")},
 		},
 		"required": []any{"query", "video_path"},
 	}
