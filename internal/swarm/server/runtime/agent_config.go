@@ -403,7 +403,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	}
 
 	// 步骤 2: 构建分组列表
-	// ⤴️ 10.3.7-11: 对齐 Python: groups = list(TOOL_GROUPS.keys())
+	// 对齐 Python: groups = list(TOOL_GROUPS.keys())
 	// 从 types.ToolGroups 共享常量获取
 	groups := make([]string, 0, len(types.ToolGroups))
 	for group := range types.ToolGroups {
@@ -412,7 +412,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	sort.Strings(groups)
 
 	// 步骤 3: 子 agent 禁用工具列表
-	// ⤴️ 10.3.7-11: 对齐 Python: DISALLOWED_FOR_SUBAGENTS
+	// 对齐 Python: DISALLOWED_FOR_SUBAGENTS
 	// 从 types.DisallowedForSubagents 共享常量获取
 	disallowedForSubagents := types.DisallowedForSubagents
 

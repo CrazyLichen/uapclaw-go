@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 )
@@ -264,5 +265,62 @@ func TestPermissionContext_JSON往返(t *testing.T) {
 	}
 	if decoded.WebUserID != original.WebUserID {
 		t.Errorf("WebUserID: got %q, want %q", decoded.WebUserID, original.WebUserID)
+	}
+}
+
+// ──────────────────────────── Context 工具函数测试 ────────────────────────────
+
+// TestWithToolPermissionChannelID 验证 channelID 注入和读取
+func TestWithToolPermissionChannelID(t *testing.T) {
+	ctx := context.Background()
+	ctx = WithToolPermissionChannelID(ctx, "web")
+	if got := ToolPermissionChannelIDFromCtx(ctx); got != "web" {
+		t.Errorf("ToolPermissionChannelIDFromCtx = %q, want %q", got, "web")
+	}
+}
+
+// TestToolPermissionChannelIDFromCtx_空值 验证空 context 返回空字符串
+func TestToolPermissionChannelIDFromCtx_空值(t *testing.T) {
+	ctx := context.Background()
+	if got := ToolPermissionChannelIDFromCtx(ctx); got != "" {
+		t.Errorf("空 context 应返回空字符串，got %q", got)
+	}
+}
+
+// TestWithToolPermissionChannelID_覆盖 验证后设置的值覆盖前值
+func TestWithToolPermissionChannelID_覆盖(t *testing.T) {
+	ctx := context.Background()
+	ctx = WithToolPermissionChannelID(ctx, "web")
+	ctx = WithToolPermissionChannelID(ctx, "feishu")
+	if got := ToolPermissionChannelIDFromCtx(ctx); got != "feishu" {
+		t.Errorf("覆盖后应返回新值，got %q", got)
+	}
+}
+
+// TestWithPermissionContextValue 验证 PermissionContext 注入和读取
+func TestWithPermissionContextValue(t *testing.T) {
+	pc := NewPermissionContext(
+		WithPermissionChannelID("web"),
+		WithPermissionPrincipalUserID("user1"),
+	)
+	ctx := context.Background()
+	ctx = WithPermissionContextValue(ctx, pc)
+	got := PermissionContextFromCtx(ctx)
+	if got == nil {
+		t.Fatal("PermissionContextFromCtx 返回 nil")
+	}
+	if got.ChannelID != "web" {
+		t.Errorf("ChannelID = %q, want %q", got.ChannelID, "web")
+	}
+	if got.PrincipalUserID != "user1" {
+		t.Errorf("PrincipalUserID = %q, want %q", got.PrincipalUserID, "user1")
+	}
+}
+
+// TestPermissionContextFromCtx_空值 验证空 context 返回 nil
+func TestPermissionContextFromCtx_空值(t *testing.T) {
+	ctx := context.Background()
+	if got := PermissionContextFromCtx(ctx); got != nil {
+		t.Errorf("空 context 应返回 nil，got %v", got)
 	}
 }

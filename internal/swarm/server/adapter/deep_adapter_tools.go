@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 工具名称常量，对齐 Python tool_cards 中的工具名。
-// ⤵️ 9.38-49 Harness 工具集: 具体工具名称待回填
+// 工具名称常量
 const (
 	// ToolNamePaidSearch 付费搜索工具
 	ToolNamePaidSearch = "paid_search"
@@ -84,13 +84,13 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 	}
 
 	// 步骤 1: 从配置解析该工具组应启用的工具
-	// ⤵️ 9.38-49: 根据 toolGroup 解析 configBase 中的工具配置
+	// ⤵️ 10.6.24: 根据 toolGroup 解析 configBase 中的工具配置
 	var toolInstancesToAdd []tool.Tool  // ResourceMgr.AddTool 需要 tool.Tool
 	var toolCardsToAdd []*tool.ToolCard // AbilityManager.Add 需要 schema.Ability（*ToolCard 实现）
 	var toolIDsToRemove []string
-	_ = toolInstancesToAdd // ⤵️ 9.38-49: 从 configBase 解析待添加的工具实例
-	_ = toolCardsToAdd     // ⤵️ 9.38-49: 从 configBase 解析待添加的工具卡片
-	_ = toolIDsToRemove    // ⤵️ 9.38-49: 从 AbilityManager 查询当前已注册的同组工具
+	_ = toolInstancesToAdd // ⤵️ 10.6.24: 从 configBase 解析待添加的工具实例
+	_ = toolCardsToAdd     // ⤵️ 10.6.24: 从 configBase 解析待添加的工具卡片
+	_ = toolIDsToRemove    // ⤵️ 10.6.24: 从 AbilityManager 查询当前已注册的同组工具
 
 	// 步骤 2: 双重操作 — Add
 	am := reactAgent.AbilityManager()
@@ -294,26 +294,26 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 
 	// 图片生成工具同步
 	if d.imageGenToolRegistered {
-		// TODO(#9.38-49): ⤵️ 确保图片生成工具已注册
+		// TODO(#10.6.24): ⤵️ 确保图片生成工具已注册
 		_ = d.imageGenToolRegistered
 	}
 }
 
 // syncPaidSearchToolForRuntime 热同步付费搜索工具。
 // 对齐 Python: _sync_paid_search_tool_for_runtime() (line 1240-1270)
-// ⤵️ 9.38-49 Harness 工具集: 付费搜索工具热同步
+// ⤵️ 10.6.24 Swarm 内置工具集: 付费搜索工具热同步
 func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 	if d.instance == nil {
 		return
 	}
 
-	// ⤵️ 9.38-49: 根据 paidSearchRegistered 状态注册/注销付费搜索工具
+	// ⤵️ 10.6.24: 根据 paidSearchRegistered 状态注册/注销付费搜索工具
 	// 待实现：付费搜索注册检测 if d.paidSearchRegistered {
 	//     // 注册 paid_search 工具
 	// } else {
 	//     // 移除 paid_search 工具
 	// }
-	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime 等待回填")
+	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime 等待 10.6.24 回填")
 }
 
 // refreshMultimodalConfigs 刷新多模态配置。
@@ -400,9 +400,9 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.V
 // buildImageGenModelConfig 构建图片生成模型配置。
 // 对齐 Python: _build_image_gen_model_config(config_base) (line 1261-1270)
 // 返回 bool 表示图片生成工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
-// ⤵️ 9.38-49 Harness 工具集: apply_image_gen_model_config_from_yaml
+// ⤵️ 10.6.24 Swarm 内置工具集: apply_image_gen_model_config_from_yaml
 func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
-	// ⤵️ 9.38-49: apply_image_gen_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
+	// ⤵️ 10.6.24: apply_image_gen_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
 	// 待实现：应用图像生成模型配置 applyImageGenModelConfigFromYAML(configBase)
 
 	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
@@ -439,7 +439,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       if not Runner.resource_mgr.get_tool(wtool.card.id):
 	//           Runner.resource_mgr.add_tool(wtool)
 	//       tool_cards.append(wtool.card)
-	// ⤵️ 9.38-49: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
+	// ⤵️ 10.6.24: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
 	// 待实现：注册Wiki工具 for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
 	//     if rm.GetTool([]string{wtool.Card().ID}) == nil {
 	//         _ = rm.AddTool(wtool)
@@ -454,7 +454,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Runner.resource_mgr.add_tool(self._paid_search_tool)
 	//       tool_cards.append(self._paid_search_tool.card)
 	//       self._paid_search_registered = True
-	// ⤵️ 9.38-49: WebPaidSearchTool + is_paid_search_enabled() 尚未实现
+	// ⤵️ 10.6.24: WebPaidSearchTool + is_paid_search_enabled() 尚未实现
 	// 待实现：付费搜索启用检测 if isPaidSearchEnabled() {
 	//     paidSearchTool := NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
 	//     _ = rm.AddTool(paidSearchTool)
@@ -469,7 +469,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_instance = tool_cls(agent_id=agent_id)
 	//       Runner.resource_mgr.add_tool(tool_instance)
 	//       tool_cards.append(tool_instance.card)
-	// ⤵️ 9.38-49: WebFreeSearchTool / WebFetchWebpageTool 尚未实现
+	// ⤵️ 10.6.24: WebFreeSearchTool / WebFetchWebpageTool 尚未实现
 	// 待实现：注册免费搜索和网页抓取工具 for _, toolCls := range []func(string) tool.Tool{NewWebFreeSearchTool, NewWebFetchWebpageTool} {
 	//     toolInst := toolCls(agentID)
 	//     _ = rm.AddTool(toolInst)
@@ -538,10 +538,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_cards.append(generate_image.card)
 	//       self._image_gen_tool_registered = True
 	if d.imageGenToolRegistered {
-		// ⤵️ 9.38-49: generate_image 工具实例尚未实现
+		// ⤵️ 10.6.24: generate_image 工具实例尚未实现
 		// 待实现：注册图像生成工具 _ = rm.AddTool(generateImage)
 		// toolCards = append(toolCards, generateImage.Card())
-		logger.Info(logComponent).Msg("getToolCards: 图片生成工具配置已就绪，等待 9.38-49 回填 generate_image")
+		logger.Info(logComponent).Msg("getToolCards: 图片生成工具配置已就绪，等待 10.6.24 回填 generate_image")
 	}
 
 	// ── 步骤 8: 小艺手机端工具 ──
@@ -553,7 +553,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           Runner.resource_mgr.add_tool(xt)
 	//           tool_cards.append(xt.card)
 	//       self._xiaoyi_phone_tools_registered = True
-	// ⤵️ 9.38-49: 小艺手机端工具类 (28个) 尚未实现
+	// ⤵️ 10.6.24: 小艺手机端工具类 (28个) 尚未实现
 	// 待实现：检查小艺手机端工具是否启用 xiaoyiEnabled := false
 	// if channels, ok := configBase["channels"].(map[string]any); ok {
 	//     if xiaoyi, ok := channels["xiaoyi"].(map[string]any); ok {
@@ -579,7 +579,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           Runner.resource_mgr.add_tool(tool)
 	//       tool_cards.append(tool.card)
 	if d.skillManager != nil {
-		// ⤵️ 9.38-49: SkillToolkit 工具尚未实现
+		// ⤵️ 10.6.24: SkillToolkit 工具尚未实现
 		// 待实现：创建技能工具包 skillToolkit := NewSkillToolkit(d.skillManager)
 		// 待实现：注册技能工具 for _, t := range skillToolkit.GetTools() {
 		//     if rm.GetTool([]string{t.Card().ID}) == nil {
@@ -587,7 +587,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		//     }
 		//     toolCards = append(toolCards, t.Card())
 		// }
-		logger.Info(logComponent).Msg("getToolCards: SkillManager 已就绪，等待 9.38-49 回填 SkillToolkit")
+		logger.Info(logComponent).Msg("getToolCards: SkillManager 已就绪，等待 10.6.24 回填 SkillToolkit")
 	}
 
 	// ── 步骤 10: acp_chat ──
@@ -597,7 +597,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       if not Runner.resource_mgr.get_tool(acp_chat.card.id):
 	//           Runner.resource_mgr.add_tool(acp_chat)
 	//       tool_cards.append(acp_chat.card)
-	// ⤵️ 9.38-49: acp_chat 工具尚未实现
+	// ⤵️ 10.6.24: acp_chat 工具尚未实现
 	// 待实现：ACP配置检查 acpCfg, _ := configBase["acp_agents"].(map[string]any)
 	// 如果存在 ACP 配置
 	//     if rm.GetTool([]string{acpChat.Card().ID}) == nil {

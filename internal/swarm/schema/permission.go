@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -28,6 +29,12 @@ type PermissionContextOption func(*PermissionContext)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// toolPermChannelIDKey 权限上下文 channelID 的 context key
+type toolPermChannelIDKey struct{}
+
+// toolPermContextKey 权限上下文的 context key
+type toolPermContextKey struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -129,6 +136,38 @@ func (p *PermissionContext) ToDict() map[string]any {
 func (p *PermissionContext) Validate() error {
 	if p.PrincipalUserID == "" {
 		return fmt.Errorf("principal_user_id 不能为空")
+	}
+	return nil
+}
+
+// WithToolPermissionChannelID 将 channelID 注入 context。
+// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id)
+// Go 使用 context.WithValue 不可变值模式，无需 reset/cleanup。
+func WithToolPermissionChannelID(ctx context.Context, channelID string) context.Context {
+	return context.WithValue(ctx, toolPermChannelIDKey{}, channelID)
+}
+
+// ToolPermissionChannelIDFromCtx 从 context 中获取 channelID。
+// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.get()
+func ToolPermissionChannelIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(toolPermChannelIDKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// WithPermissionContextValue 将 PermissionContext 注入 context。
+// 对齐 Python: TOOL_PERMISSION_CONTEXT.set(permission_context)
+// Go 使用 context.WithValue 不可变值模式，无需 reset/cleanup。
+func WithPermissionContextValue(ctx context.Context, pc *PermissionContext) context.Context {
+	return context.WithValue(ctx, toolPermContextKey{}, pc)
+}
+
+// PermissionContextFromCtx 从 context 中获取 PermissionContext。
+// 对齐 Python: TOOL_PERMISSION_CONTEXT.get()
+func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
+	if v, ok := ctx.Value(toolPermContextKey{}).(*PermissionContext); ok {
+		return v
 	}
 	return nil
 }

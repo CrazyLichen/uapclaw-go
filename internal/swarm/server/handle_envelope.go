@@ -805,7 +805,7 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 // 使用 setdefault 语义：不覆盖已有 client_capabilities 值。
 //
 // 对应 Python: jiuwenswarm/server/agent_ws_server.py:803-810
-// ⤵️ 10.3.12: 补充 agent_manager.get_client_capabilities("acp") fallback
+// agent_manager.get_client_capabilities("acp") fallback 已实现
 func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelope *e2a.E2AEnvelope) {
 	if request.Metadata == nil {
 		request.Metadata = make(map[string]any)

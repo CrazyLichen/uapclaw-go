@@ -89,7 +89,7 @@ type DeepAdapter struct {
 	// modelRequestConfig 模型请求配置
 	modelRequestConfig *llmschema.ModelRequestConfig
 	// instanceOverrides 实例覆盖配置
-	// ⤵️ 10.3.5 CreateInstance: create_instance 传入的 config 字典
+	// instanceOverrides CreateInstance 传入的 config 字典
 	instanceOverrides map[string]any
 	// modelCache 模型缓存（按模型名缓存已创建的 Model 实例）
 	modelCache map[string]*llm.Model
@@ -114,13 +114,13 @@ type DeepAdapter struct {
 	// taskPlanningRail 任务规划护栏
 	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
-	// ⤵️ 10.6.3-10: ContextAssembleRail
+	// contextAssembleRail 上下文组装轨道
 	contextAssembleRail sainterfaces.AgentRail
 	// contextAssembleMode 当前上下文组装模式（"agent.plan" / "agent.fast"）
 	// ⤵️ 10.6.3-10: 按模式切换
 	contextAssembleMode string
 	// contextProcessorRail 上下文处理护栏
-	// ⤵️ 10.6.3-10: ContextProcessorRail
+	// contextProcessorRail 上下文处理轨道
 	contextProcessorRail sainterfaces.AgentRail
 	// runtimePromptRail 运行时提示词护栏
 	// ⤵️ 10.6.3-10: RuntimePromptRail
@@ -141,7 +141,7 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: 防止重复注册
 	externalMemoryRailRegistered bool
 	// heartbeatRail 心跳护栏
-	// ⤴️ 9.15 回填：HeartbeatRail
+	// heartbeatRail 心跳轨道
 	heartbeatRail *rails.HeartbeatRail
 	// skillEvolutionRail 技能演进护栏
 	// ⤵️ 10.6.3-10: SkillEvolutionRail
@@ -170,18 +170,15 @@ type DeepAdapter struct {
 	sysOperationCard *sysop.SysOperationCard
 	// visionModelConfig 视觉模型配置
 	visionModelConfig *hschema.VisionModelConfig
-	// visionToolsRegistered 视觉工具是否已注册
-	// ⤵️ 10.6.24 多模态工具
+	// visionToolsRegistered 视觉工具注册状态
 	visionToolsRegistered bool
 	// audioModelConfig 音频模型配置
 	audioModelConfig *hschema.AudioModelConfig
-	// audioToolsRegistered 音频工具是否已注册
-	// ⤵️ 10.6.24 多模态工具
+	// audioToolsRegistered 音频工具注册状态
 	audioToolsRegistered bool
 	// videoModelConfig 视频模型配置
 	videoModelConfig *hschema.VideoModelConfig
-	// videoToolRegistered 视频工具是否已注册
-	// ⤵️ 10.6.24 多模态工具
+	// videoToolRegistered 视频工具注册状态
 	videoToolRegistered bool
 	// imageGenToolRegistered 图片生成工具是否已注册
 	// ⤵️ 10.6.24 多模态工具
@@ -696,7 +693,11 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
 
 	// 步骤 10-11: 权限上下文设置
-	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
+	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
+	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
+	if req.PermissionContext != nil {
+		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
+	}
 
 	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
 	resolvedModel := d.resolveModelForRequest(req)
@@ -736,7 +737,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	func() {
 		defer func() {
 			// 步骤 20: finally 清理
-			// ⤵️ 10.1.8: TOOL_PERMISSION_CHANNEL_ID.reset(token_cid); cleanup_permission_context(token_perm)
+			// Go context 不可变值模式，无需 reset/cleanup（Python 需要 reset(token)）
 			// ⤵️ 11.10: _reset_runtime_cron_context(cron_context_tokens)
 			d.unmarkSessionActive(sessionID)
 		}()
@@ -839,7 +840,11 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
 
 	// 步骤 11-12: 权限上下文设置
-	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
+	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
+	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
+	if req.PermissionContext != nil {
+		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
+	}
 
 	// 步骤 13-14: 模型选择 + 应用到 ReActAgent
 	resolvedModelStream := d.resolveModelForRequest(req)

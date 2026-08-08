@@ -45,8 +45,7 @@ type CodeAdapter struct {
 	// worktreeRail 工作树护栏
 	// ⤵️ 10.6.3-10: WorktreeRail
 	worktreeRail sainterfaces.AgentRail
-	// codeAgentRail 编码 Agent 护栏（管理 /agents 创建的自定义 agent）
-	// ⤵️ 10.3.7-11 CodeAgentRail
+	// codeAgentRail Code 模式专有护栏
 	codeAgentRail sainterfaces.AgentRail
 
 	// ─── Code 模式配置 ───
