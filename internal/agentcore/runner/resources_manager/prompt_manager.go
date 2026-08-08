@@ -82,6 +82,7 @@ func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 }
 
 // RemovePrompt 移除 Prompt 模板，返回被移除的模板。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 remove_prompt 返回 None 行为。
 //
 // 对应 Python: PromptMgr.remove_prompt(template_id)
 func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, error) {
@@ -94,11 +95,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 
 	template := m.repo.Pop(templateID)
 	if template == nil {
-		return nil, exception.BuildError(exception.StatusResourceGetError,
-			exception.WithParam("resource_id", templateID),
-			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", fmt.Sprintf("未找到 Prompt 模板 %s", templateID)),
-		)
+		return nil, nil
 	}
 
 	logger.Info(logger.ComponentAgentCore).
@@ -110,6 +107,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 
 // GetPrompt 获取 Prompt 模板。
 // 验证 templateID 非空后从 repo 读取。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_prompt 返回 None 行为。
 //
 // 对应 Python: PromptMgr.get_prompt(template_id)
 func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error) {
@@ -122,11 +120,7 @@ func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error)
 
 	template := m.repo.Get(templateID)
 	if template == nil {
-		return nil, exception.BuildError(exception.StatusResourceGetError,
-			exception.WithParam("resource_id", templateID),
-			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", fmt.Sprintf("未找到 Prompt 模板 %s", templateID)),
-		)
+		return nil, nil
 	}
 
 	return template, nil
