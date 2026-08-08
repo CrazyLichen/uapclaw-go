@@ -622,7 +622,7 @@ func TestSaveCheckpointIfNeeded_无Manager(t *testing.T) {
 // TestResumeIfNeeded_无ResumeFrom 测试无 resumeFrom 时不执行恢复
 func TestResumeIfNeeded_无ResumeFrom(t *testing.T) {
 	trainer := NewTrainer()
-	err := trainer.ResumeIfNeeded(context.Background(), nil)
+	err := trainer.ResumeIfNeeded(context.Background(), nil, nil)
 	if err != nil {
 		t.Errorf("期望 nil 错误, 实际=%v", err)
 	}

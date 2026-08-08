@@ -95,6 +95,8 @@ type SpanManager struct {
 	mu           sync.RWMutex
 	order        []string
 	sessionSpans map[string]*Span
+	// agentSpans 保存原始 TraceAgentSpan，用于轨迹提取等场景
+	agentSpans map[string]*TraceAgentSpan
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -115,6 +117,7 @@ func NewSpanManager(traceID string, parentID ...string) *SpanManager {
 		parentID:     pid,
 		order:        make([]string, 0),
 		sessionSpans: make(map[string]*Span),
+		agentSpans:   make(map[string]*TraceAgentSpan),
 	}
 }
 
@@ -200,6 +203,35 @@ func (m *SpanManager) UpdateSpan(span *Span, data map[string]any) {
 	m.mu.Unlock()
 }
 
+// GetAllSpans 获取所有 Span，按插入顺序返回。
+// 对应 Python: SpanManager.get_all_spans()
+func (m *SpanManager) GetAllSpans() []*Span {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*Span, 0, len(m.order))
+	for _, id := range m.order {
+		if s, ok := m.sessionSpans[id]; ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// GetAllAgentSpans 获取所有 TraceAgentSpan，按插入顺序返回。
+// 对应 Python: tracer.tracer_agent_span_manager.get_all_spans()
+// 与 GetAllSpans 不同，此方法保留 InvokeType/Name/MetaData 等扩展字段。
+func (m *SpanManager) GetAllAgentSpans() []*TraceAgentSpan {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*TraceAgentSpan, 0, len(m.order))
+	for _, id := range m.order {
+		if s, ok := m.agentSpans[id]; ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
 // LastSpan 获取最后一个 Span
 func (m *SpanManager) LastSpan() *Span {
 	m.mu.RLock()
@@ -268,6 +300,10 @@ func (m *SpanManager) refreshSpanRecordLocked(invokeID string, baseSpan interfac
 		m.order = append(m.order, invokeID)
 	}
 	m.sessionSpans[invokeID] = span
+	// 保存原始 TraceAgentSpan
+	if agentSpan, ok := baseSpan.(*TraceAgentSpan); ok {
+		m.agentSpans[invokeID] = agentSpan
+	}
 }
 
 // extractBaseSpan 从 TraceAgentSpan/TraceWorkflowSpan 提取 *Span 指针

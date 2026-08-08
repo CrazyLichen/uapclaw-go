@@ -103,11 +103,11 @@ func (u *MultiDimUpdater) RequiresForwardData() bool {
 }
 
 // Process 信号优先入口，按 domain 分发 signals 到对应优化器，合并更新映射。
-// 当前默认实现返回空 map，后续具体子类重写。
+// 当前默认实现返回空切片，后续具体子类重写。
 //
 // 对应 Python: MultiDimUpdater.process(trajectories, signals, config) — @abstractmethod
-func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
-	return map[schema.UpdateKey]any{}, nil
+func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error) {
+	return nil, nil
 }
 
 // Update 离线兼容入口，将 EvaluatedCase 转换为 EvolutionSignal 后调用 Process。
@@ -123,7 +123,7 @@ func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajector
 //		return await self.process(trajectories, signals, config)
 //
 // 对应 Python: MultiDimUpdater.update(trajectories, evaluated_cases, config)
-func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	// 从 config 中提取 score_threshold
 	// 对齐 Python: score_threshold = config.get("score_threshold")
 	var scoreThreshold *float64

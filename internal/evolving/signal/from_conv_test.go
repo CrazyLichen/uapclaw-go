@@ -1413,14 +1413,14 @@ func TestDetectUserIntent_有LLM但无纠正(t *testing.T) {
 
 // ──────────────────────────── 辅助函数测试 ────────────────────────────
 
-func TestMatchFailureKeyword_ErrorEqualsNone不匹配(t *testing.T) {
-	if matchFailureKeyword("error = None") {
+func TestFindFailureKeywordIndex_ErrorEqualsNone不匹配(t *testing.T) {
+	if findFailureKeywordIndex("error = None") != nil {
 		t.Error("error = None should not match as failure")
 	}
 }
 
-func TestMatchFailureKeyword_正常错误匹配(t *testing.T) {
-	if !matchFailureKeyword("error: something went wrong") {
+func TestFindFailureKeywordIndex_正常错误匹配(t *testing.T) {
+	if findFailureKeywordIndex("error: something went wrong") == nil {
 		t.Error("error message should match as failure")
 	}
 }

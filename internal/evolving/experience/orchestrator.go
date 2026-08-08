@@ -285,11 +285,14 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	}
 
 	// 对齐 Python: execute_updates → BuildLocalApplyPreview
-	// 将 updater.Process 返回的 map[UpdateKey]any 转为 map[UpdateKey]UpdateValue
-	updateValues := make(map[schema.UpdateKey]schema.UpdateValue, len(updates))
-	for key, value := range updates {
-		if uv, ok := value.(schema.UpdateValue); ok {
-			updateValues[key] = uv
+	// 将 updater.Process 返回的 []map[UpdateKey]any 第一个元素转为 map[UpdateKey]UpdateValue
+	var updateValues map[schema.UpdateKey]schema.UpdateValue
+	if len(updates) > 0 {
+		updateValues = make(map[schema.UpdateKey]schema.UpdateValue, len(updates[0]))
+		for key, value := range updates[0] {
+			if uv, ok := value.(schema.UpdateValue); ok {
+				updateValues[key] = uv
+			}
 		}
 	}
 	applyResults := ApplyUpdatesFromManager(

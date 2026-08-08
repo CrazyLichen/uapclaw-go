@@ -10,10 +10,11 @@
 // 核心方法实现状态：
 //   - ✅ SnapshotOperatorsState / RestoreOperatorsState（Operator 状态快照/恢复）
 //   - ✅ Predict / PredictOnly / Evaluate（推理与评估）
-//   - ✅ Forward（前向推理+评估+轨迹提取，轨迹提取 ⤵️ 待 9.77 回填）
-//   - ✅ Train（训练主循环，检查点 ⤵️ 待 9.78 回填）
+//   - ✅ Forward（前向推理+评估+轨迹提取）
+//   - ✅ Train（训练主循环，含候选列表多方案评估）
 //   - ✅ GetOperatorRegistry / BindUpdater / UpdaterRequiresForward
-//   - ⤵️ ResumeIfNeeded / SaveCheckpointIfNeeded（待 9.78 EvolveCheckpoint 回填）
+//   - ✅ ResumeIfNeeded / SaveCheckpointIfNeeded（检查点恢复含 progress + updater.LoadState）
+//   - ✅ SelectBestCandidateOnVal（候选列表多方案评估）
 //
 // 文件目录：
 //

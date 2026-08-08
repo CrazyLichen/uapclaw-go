@@ -436,13 +436,6 @@ func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajector
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// matchFailureKeyword 判断内容是否包含失败关键词。
-// 对齐 Python _FAILURE_KEYWORDS 中 error(?!\s*=\s*None) 的负向前瞻语义：
-// 匹配 "error" 但排除 "error = None" 的情况。
-func matchFailureKeyword(content string) bool {
-	return failureKeywords.MatchString(content) && !errorEqualsNonePattern.MatchString(content)
-}
-
 // findFailureKeywordIndex 返回内容中失败关键词的位置。
 // 对齐 Python _FAILURE_KEYWORDS 中 error(?!\s*=\s*None) 的负向前瞻语义：
 // 如果唯一匹配是 "error = None" 中的 "error"，返回 nil。
@@ -612,7 +605,7 @@ func (d *ConversationSignalDetector) detectFromMessages(messages []map[string]an
 			// 脚本产物检测
 			if toolCallID != "" {
 				if script, exists := pendingScripts[toolCallID]; exists {
-					hasFailure := content != "" && matchFailureKeyword(content)
+					hasFailure := content != "" && findFailureKeywordIndex(content) != nil
 					if !hasFailure {
 						signals = append(signals, MakeEvolutionSignal(
 							"script_artifact", "Scripts", truncateString(script, 600),

@@ -18,17 +18,17 @@ type StepDetail interface {
 // 对应 Python: LLMCallDetail dataclass
 type LLMCallDetail struct {
 	// Model 模型名称
-	Model string
+	Model string `json:"model"`
 	// Messages 消息列表（字典形式，外部存入时通过 MessageToDict 转换）
-	Messages []map[string]any
+	Messages []map[string]any `json:"messages"`
 	// Response 模型响应（字典形式，nil 表示无响应）
-	Response map[string]any
+	Response map[string]any `json:"response"`
 	// Tools 工具定义列表（可选）
-	Tools []map[string]any
+	Tools []map[string]any `json:"tools"`
 	// Usage 使用量信息（可选）
-	Usage map[string]any
+	Usage map[string]any `json:"usage"`
 	// Meta 扩展元数据
-	Meta map[string]any
+	Meta map[string]any `json:"meta"`
 }
 
 // ToolCallDetail 工具调用完整执行数据。
@@ -36,17 +36,17 @@ type LLMCallDetail struct {
 // 对应 Python: ToolCallDetail dataclass
 type ToolCallDetail struct {
 	// ToolName 工具名称
-	ToolName string
+	ToolName string `json:"tool_name"`
 	// CallArgs 调用参数（JSON dict 形式，可选）
-	CallArgs map[string]any
+	CallArgs map[string]any `json:"call_args"`
 	// CallResult 调用结果（JSON dict 形式，可选）
-	CallResult map[string]any
+	CallResult map[string]any `json:"call_result"`
 	// ToolDescription 工具描述（可选）
-	ToolDescription string
+	ToolDescription string `json:"tool_description"`
 	// ToolSchema 工具 JSON Schema（可选）
-	ToolSchema map[string]any
+	ToolSchema map[string]any `json:"tool_schema"`
 	// ToolCallID 工具调用 ID，用于脚本产物跟踪（可选）
-	ToolCallID string
+	ToolCallID string `json:"tool_call_id"`
 }
 
 // TrajectoryStep 执行轨迹中的单个步骤。
@@ -60,25 +60,25 @@ type ToolCallDetail struct {
 // 对应 Python: TrajectoryStep dataclass
 type TrajectoryStep struct {
 	// Kind 步骤类型（llm/tool）
-	Kind StepKind
+	Kind StepKind `json:"kind"`
 	// Error 错误信息（可选）
-	Error map[string]any
+	Error map[string]any `json:"error"`
 	// StartTimeMs 步骤开始时间（毫秒时间戳，可选）
-	StartTimeMs int
+	StartTimeMs int `json:"start_time_ms"`
 	// EndTimeMs 步骤结束时间（毫秒时间戳，可选）
-	EndTimeMs int
+	EndTimeMs int `json:"end_time_ms"`
 	// Detail 结构化步骤数据（LLMCallDetail 或 ToolCallDetail，可选）
-	Detail StepDetail
+	Detail StepDetail `json:"detail"`
 	// Reward 标量奖励，来自 PRM 或 SignalDetector（可选）
-	Reward float64
+	Reward float64 `json:"reward"`
 	// PromptTokenIDs 提示词 token ID 列表，仅 kind=llm（可选）
-	PromptTokenIDs []int
+	PromptTokenIDs []int `json:"prompt_token_ids"`
 	// CompletionTokenIDs 补全 token ID 列表，仅 kind=llm（可选）
-	CompletionTokenIDs []int
+	CompletionTokenIDs []int `json:"completion_token_ids"`
 	// Logprobs token 对数概率，仅 kind=llm（可选）
-	Logprobs any
+	Logprobs any `json:"logprobs"`
 	// Meta 扩展元数据，包含 operator_id、agent_id、invoke 关系等
-	Meta map[string]any
+	Meta map[string]any `json:"meta"`
 }
 
 // Trajectory 完整执行轨迹。
@@ -86,19 +86,19 @@ type TrajectoryStep struct {
 // 对应 Python: Trajectory dataclass
 type Trajectory struct {
 	// ExecutionID 唯一执行标识符
-	ExecutionID string
+	ExecutionID string `json:"execution_id"`
 	// Steps 有序执行步骤列表
-	Steps []*TrajectoryStep
+	Steps []*TrajectoryStep `json:"steps"`
 	// Source 执行来源："online"（deepagents）或 "offline"（trainer）
-	Source string
+	Source string `json:"source"`
 	// CaseID 离线模式下的数据集用例标识（可选）
-	CaseID string
+	CaseID string `json:"case_id"`
 	// SessionID 在线模式下的会话 ID（可选）
-	SessionID string
+	SessionID string `json:"session_id"`
 	// Cost 聚合成本指标（可选）
-	Cost CostInfo
+	Cost CostInfo `json:"cost"`
 	// Meta 扩展元数据，包含 member_id、member_count 等
-	Meta map[string]any
+	Meta map[string]any `json:"meta"`
 }
 
 // CostInfo 聚合成本指标。
@@ -110,7 +110,7 @@ type CostInfo map[string]int
 
 // StepKind 执行步骤类型。
 //
-// 对应 Python: StepKind = Literal["llm", "tool"]
+// 对应 Python: StepKind = Literal["llm", "tool", "workflow", "memory", "agent"]
 type StepKind string
 
 const (
@@ -118,6 +118,12 @@ const (
 	StepKindLLM StepKind = "llm"
 	// StepKindTool 工具调用步骤
 	StepKindTool StepKind = "tool"
+	// StepKindWorkflow 工作流步骤
+	StepKindWorkflow StepKind = "workflow"
+	// StepKindMemory 记忆步骤
+	StepKindMemory StepKind = "memory"
+	// StepKindAgent Agent 步骤
+	StepKindAgent StepKind = "agent"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

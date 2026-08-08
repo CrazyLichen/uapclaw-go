@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -227,6 +228,14 @@ func (s *Session) GetAgentDescription() string {
 		return s.card.Description
 	}
 	return ""
+}
+
+// Tracer 获取会话追踪器，委托到 inner.Tracer()。
+func (s *Session) Tracer() *tracer.Tracer {
+	if s.inner == nil {
+		return nil
+	}
+	return s.inner.Tracer()
 }
 
 // UpdateState 更新全局状态，委托到 inner.State() 的 SessionState

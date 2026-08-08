@@ -541,7 +541,7 @@ func TestMakeTeamTrajectorySignal(t *testing.T) {
 	if sig.Section != "" {
 		t.Errorf("Section = %q, want empty", sig.Section)
 	}
-	if sig.Excerpt != "检测到团队技能轨迹问题，需要进行进化。" {
+	if sig.Excerpt != "Detected team skill trajectory issues requiring evolution." {
 		t.Errorf("Excerpt = %q, want 团队轨迹问题摘要", sig.Excerpt)
 	}
 	if sig.Context["source"] != "passive_trajectory" {

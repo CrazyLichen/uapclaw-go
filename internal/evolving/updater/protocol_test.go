@@ -33,16 +33,16 @@ func (m *mockUpdater) RequiresForwardData() bool {
 	return m.requireForward
 }
 
-func (m *mockUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (m *mockUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	m.updateCalled = true
-	return map[schema.UpdateKey]any{}, nil
+	return []map[schema.UpdateKey]any{{}}, nil
 }
 
-func (m *mockUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (m *mockUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	m.processCalled = true
 	m.lastSignals = signals
 	m.lastConfig = config
-	return map[schema.UpdateKey]any{}, nil
+	return []map[schema.UpdateKey]any{{}}, nil
 }
 
 func (m *mockUpdater) GetState() map[string]any {

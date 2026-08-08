@@ -212,7 +212,7 @@ func TestSingleDimUpdater_Update返回更新(t *testing.T) {
 		t.Fatalf("Update returned error: %v", err)
 	}
 
-	val, ok := result[schema.UpdateKey{"op1", "prompt"}]
+	val, ok := result[0][schema.UpdateKey{"op1", "prompt"}]
 	if !ok {
 		t.Error("result missing (op1, prompt) key")
 	} else if val != "new prompt" {
@@ -251,7 +251,7 @@ func TestSingleDimUpdater_Process使用信号优先流程(t *testing.T) {
 	if !opt.stepCalled {
 		t.Error("step was not called")
 	}
-	val, ok := result[schema.UpdateKey{"op1", "prompt"}]
+	val, ok := result[0][schema.UpdateKey{"op1", "prompt"}]
 	if !ok {
 		t.Error("result missing (op1, prompt) key")
 	} else if val != "new prompt" {
@@ -285,7 +285,7 @@ func TestSingleDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	if len(opt.backwardSignals) != 1 {
 		t.Errorf("backward received %d signals, want 1", len(opt.backwardSignals))
 	}
-	val, ok := result[schema.UpdateKey{"op1", "prompt"}]
+	val, ok := result[0][schema.UpdateKey{"op1", "prompt"}]
 	if !ok {
 		t.Error("result missing (op1, prompt) key")
 	} else if val != "new prompt" {

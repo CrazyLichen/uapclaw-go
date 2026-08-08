@@ -69,7 +69,7 @@ func (u *SingleDimUpdater) RequiresForwardData() bool {
 // Process 信号优先入口：写入轨迹 → 执行 backward → 返回 step 结果。
 //
 // 对应 Python: SingleDimUpdater.process(trajectories, signals, config)
-func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	// 写入轨迹
 	// 对齐 Python: for traj in trajectories: self._opt.add_trajectory(traj)
 	for _, traj := range trajectories {
@@ -84,7 +84,9 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajecto
 
 	// 执行 step
 	// 对齐 Python: return self._opt.step()
-	return u.opt.Step(), nil
+	// 单映射包装为切片，对齐 Python: isinstance(updated, list) 分支
+	result := u.opt.Step()
+	return []map[schema.UpdateKey]any{result}, nil
 }
 
 // Update 离线兼容入口，将 EvaluatedCase 转换为 EvolutionSignal 后调用 Process。
@@ -99,7 +101,7 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajecto
 //		return await self.process(trajectories, signals, config)
 //
 // 对应 Python: SingleDimUpdater.update(trajectories, evaluated_cases, config)
-func (u *SingleDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (u *SingleDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	// 从 config 中提取 score_threshold
 	// 对齐 Python: score_threshold = config.get("score_threshold")
 	var scoreThreshold *float64

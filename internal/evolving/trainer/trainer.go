@@ -139,7 +139,7 @@ func (t *Trainer) Train(
 
 	// ⤴️ 9.78 EvolveCheckpoint 已回填：恢复检查点逻辑
 	// 对齐 Python: self._resume_if_needed(agent, progress)
-	_ = t.ResumeIfNeeded(ctx, agent)
+	_ = t.ResumeIfNeeded(ctx, agent, progress)
 
 	var curEpochEvaluated []*dataset.EvaluatedCase
 	if t.UpdaterRequiresForward() {
@@ -199,13 +199,24 @@ func (t *Trainer) Train(
 		var valEvaluated []*dataset.EvaluatedCase
 
 		if updateErr == nil {
-			// 对齐 Python: isinstance(updated, list) — 候选方案A
-			// Go 中 Updater.Update 返回 map[schema.UpdateKey]any，
-			// 候选列表模式通过检查 value 是否为 []map[schema.UpdateKey]schema.UpdateValue 实现
-			// ⤵️ 待 9.72 Optimizer 回填：候选列表多方案评估，当前仅处理单方案
-			updates := normalizeUpdates(updated)
-			ApplyUpdates(operators, updates)
-			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+			// 对齐 Python: isinstance(updated, list) — 候选列表多方案评估
+			if len(updated) > 1 {
+				// 多候选集：对每个候选方案在验证集上评估，选择最优
+				// 对齐 Python: self._select_best_candidate_on_val(...)
+				candidates := make([]map[schema.UpdateKey]schema.UpdateValue, 0, len(updated))
+				for _, cand := range updated {
+					candidates = append(candidates, normalizeUpdates(cand))
+				}
+				valScore, valEvaluated, _ = t.SelectBestCandidateOnVal(
+					ctx, agent, operators, candidates, valCases,
+				)
+			} else if len(updated) == 1 {
+				// 单映射：直接应用更新
+				// 对齐 Python: self.apply_updates(operators, updates)
+				updates := normalizeUpdates(updated[0])
+				ApplyUpdates(operators, updates)
+				valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+			}
 		}
 
 		improved := valScore > progress.BestScore
@@ -535,10 +546,20 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 
 // ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
 //
-// 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态等。
+// 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态和 Updater 状态。
+//
+// 对齐 Python:
+//
+//	ckpt = self._checkpoint_store.load_checkpoint(self._resume_from)
+//	restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
+//	progress.start_epoch = int(restored.get("start_epoch", 0))
+//	progress.best_score = float(restored.get("best_score", 0.0))
+//	load_state = getattr(self._updater, "load_state", None)
+//	if callable(load_state):
+//	    load_state(getattr(ckpt, "updater_state", {}) or {})
 //
 // 对应 Python: Trainer._resume_if_needed(agent, progress)
-func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent) error {
+func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent, progress *Progress) error {
 	if t.checkpointStore == nil || t.checkpointManager == nil || t.resumeFrom == "" {
 		return nil
 	}
@@ -551,9 +572,47 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 	}
 	// 对齐 Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
 	restored := t.checkpointManager.Restore(agent, ckpt)
+
 	// 对齐 Python: progress.start_epoch / progress.best_score 从 restored 恢复
+	if progress != nil {
+		if v, ok := restored["start_epoch"]; ok {
+			if f, ok := v.(float64); ok {
+				progress.StartEpoch = int(f)
+			} else if i, ok := v.(int); ok {
+				progress.StartEpoch = i
+			}
+		}
+		if v, ok := restored["best_score"]; ok {
+			if f, ok := v.(float64); ok {
+				progress.BestScore = f
+			}
+		}
+	}
+
+	// 对齐 Python: load_state = getattr(self._updater, "load_state", None)
+	//             if callable(load_state): load_state(getattr(ckpt, "updater_state", {}) or {})
+	if t.updater != nil {
+		updaterState := ckpt.UpdaterState
+		if updaterState == nil {
+			updaterState = map[string]any{}
+		}
+		t.updater.LoadState(updaterState)
+	}
+
 	logger.Info(logComponent).
 		Str("run_id", fmt.Sprintf("%v", restored["run_id"])).
+		Int("start_epoch", func() int {
+			if progress != nil {
+				return progress.StartEpoch
+			}
+			return 0
+		}()).
+		Float64("best_score", func() float64 {
+			if progress != nil {
+				return progress.BestScore
+			}
+			return 0
+		}()).
 		Msg("[Trainer] 恢复检查点")
 	return nil
 }

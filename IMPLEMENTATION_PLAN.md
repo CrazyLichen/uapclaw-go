@@ -610,17 +610,17 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **9.x 自演化系统** | — | | | |
 | 9.70a | ✅ | Operator 基础接口 | Operator 抽象接口（operator_id/get_tunables/get_state/load_state/set_parameter/apply_update）+ LLMCallOperator + ToolCallOperator + MemoryCallOperator + SkillExperienceOperator + evolving/schema 共享契约层（protocol.go/update.go） | `openjiuwen/core/operator/` |
 | 9.70b | ✅ | Dataset + Constant | Case/EvaluatedCase/CaseLoader + TuneConstant 默认超参 | `openjiuwen/agent_evolving/dataset/` · `constant.py` |
-| 9.70 | ✅ | Trainer | 训练器（离线演化编排：evaluate→update→writeback 循环 + 断点续训 + 早停）纯接口桩骨架，依赖 any 占位 | `openjiuwen/agent_evolving/trainer/` |
-| 9.70c | ✅ | Updater Protocol | Updater 协议接口（bind/requires_forward_data/update/process/get_state/load_state）+ SingleDimUpdater + MultiDimUpdater | `openjiuwen/agent_evolving/updater/` |
+| 9.70 | ✅ | Trainer | 训练器（离线演化编排：evaluate→update→writeback 循环 + 断点续训 + 早停 + 候选列表多方案评估）；✅ ResumeIfNeeded 已回填 progress + updater.LoadState；✅ Updater.Update 返回 []map[UpdateKey]any 切片 | `openjiuwen/agent_evolving/trainer/` |
+| 9.70c | ✅ | Updater Protocol | Updater 协议接口（bind/requires_forward_data/update/process/get_state/load_state）+ SingleDimUpdater + MultiDimUpdater；✅ Update/Process 返回 []map[UpdateKey]any 切片对齐 Python Union[Dict, List[Dict]] | `openjiuwen/agent_evolving/updater/` |
 | 9.71 | ✅ | BaseEvaluator | 评估器 + MetricEvaluator + DefaultEvaluator + metrics（ExactMatch/LLMAsJudge）+ evaluator_pipeline（⤵️ 仅占位） | `openjiuwen/agent_evolving/evaluator/` |
 | 9.72a | ✅ | InstructionOptimizer | 指令优化器（LLM prompt 文本梯度优化） | `openjiuwen/agent_evolving/optimizer/llm_call/` |
 | 9.72b | ✅ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
-| 9.72c | ✅ | MemoryOptimizer | 记忆参数优化器（domain=memory + default_targets=[enabled,max_retries] + _backward=pass 声明式骨架）；✅ 回填 ToolOptimizerBase.Bind()（⤵️ 9.70 → 委托 BaseOptimizerMixin.Bind + DefaultTargets 回退） | `openjiuwen/agent_evolving/optimizer/memory_call/` |
+| 9.72c | ✅ | MemoryOptimizer | 记忆参数优化器（domain=memory + default_targets=[enabled,max_retries] + _backward=pass 声明式骨架）；✅ 回填 ToolOptimizerBase.Bind()（✅ 委托 BaseOptimizerMixin.Bind + DefaultTargets 回退） | `openjiuwen/agent_evolving/optimizer/memory_call/` |
 | 9.72d | ✅ | SkillExperienceOptimizer | 技能经验优化器（LLM 生成经验草稿→EvolutionRecord）+ TeamSkillExperienceOptimizer；✅ TextualParameter.Gradients string→any 前置变更 | `openjiuwen/agent_evolving/optimizer/skill_call/` |
 | 9.72e | ✅ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
-| 9.73 | ✅ | SignalDetector | 信号检测（ConversationSignalDetector/from_evaluated_case/团队信号） | `openjiuwen/agent_evolving/signal/` |
+| 9.73 | ✅ | SignalDetector | 信号检测（ConversationSignalDetector/from_evaluated_case/团队信号）；✅ matchFailureKeyword 改为 findFailureKeywordIndex；✅ MakeTeamTrajectorySignal excerpt 英文对齐 Python | `openjiuwen/agent_evolving/signal/` |
 | 9.74-76 | ☐ | RL 子系统 | OfflineRL/OnlineRL/RewardRegistry | `openjiuwen/agent_evolving/agent_rl/` |
-| 9.77 | ✅ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator） | `openjiuwen/agent_evolving/trajectory/` |
+| 9.77 | ✅ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator + InMemoryTrajectoryStore + FileTrajectoryStore + MemberTrajectorySnapshot + StepKind 扩展） | `openjiuwen/agent_evolving/trajectory/` |
 | 9.78 | ✅ | EvolveCheckpoint | CheckpointManager 协议 + DefaultCheckpointManager + EvolveCheckpoint 状态 + FileCheckpointStore + EvolutionStore（技能文件系统IO）+ StoreArchive/StoreProjection/StoreRecords/SkillPackage | `openjiuwen/agent_evolving/checkpointing/` |
 | 9.79 | ✅ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
 | 9.80 | ✅ | UpdateExecution + Types | UpdateValue/ApplyResult/normalize_updates + execute_updates/apply_updates/summarize_apply_results + protocols 常量 | `openjiuwen/agent_evolving/update_execution.py` · `types.py` · `protocols.py` |

@@ -328,7 +328,7 @@ func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues [
 	return MakeEvolutionSignal(
 		string(TeamSignalTypeTrajectoryIssue),
 		"",
-		"检测到团队技能轨迹问题，需要进行进化。",
+		"Detected team skill trajectory issues requiring evolution.",
 		WithSkillName(skillName),
 		WithSource("passive_trajectory"),
 		WithContext(map[string]any{
