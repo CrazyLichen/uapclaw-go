@@ -152,7 +152,7 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 func clearMemoryManagerCache() {
 	indexCache.Range(func(key, value any) bool {
 		if mgr, ok := value.(*memoryIndexManager); ok {
-			mgr.Close()
+			_ = mgr.Close()
 		}
 		indexCache.Delete(key)
 		return true
@@ -896,7 +896,7 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 	if err != nil {
 		return m.searchVectorFallback(ctx, queryVec, limit)
 	}
-	defer vecRows.Close()
+	defer func() { _ = vecRows.Close() }()
 
 	var results []map[string]any
 	for vecRows.Next() {
@@ -925,7 +925,7 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []map[string]any
 	for rows.Next() {
@@ -1000,7 +1000,7 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 		logger.Debug(logger.ComponentCommon).Err(err).Msg("FTS5 查询失败")
 		return nil, nil
 	}
-	defer ftsRows.Close()
+	defer func() { _ = ftsRows.Close() }()
 
 	var results []map[string]any
 	for ftsRows.Next() {
