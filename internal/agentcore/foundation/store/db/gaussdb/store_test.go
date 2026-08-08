@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	gormsqlite "gorm.io/driver/sqlite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
+	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

@@ -648,11 +648,11 @@ func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (map[string
 		relPath = absPath
 	}
 	return map[string]any{
-		"path":     relPath,
-		"absPath":  absPath,
-		"hash":     HashText(string(content)),
-		"mtimeMs":  stat.ModTime().UnixMilli(),
-		"size":     stat.Size(),
+		"path":    relPath,
+		"absPath": absPath,
+		"hash":    HashText(string(content)),
+		"mtimeMs": stat.ModTime().UnixMilli(),
+		"size":    stat.Size(),
 	}, nil
 }
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	baseEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────

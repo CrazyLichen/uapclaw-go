@@ -58,9 +58,9 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 			"max_results": 10,
 			"min_score":   0.3,
 			"hybrid": map[string]any{
-				"enabled":            true,
-				"vectorWeight":       0.7,
-				"textWeight":         0.3,
+				"enabled":             true,
+				"vectorWeight":        0.7,
+				"textWeight":          0.3,
 				"candidateMultiplier": 2.0,
 			},
 		},
