@@ -109,6 +109,44 @@ type EdgeSpec struct {
 	DependsOnID string
 }
 
+// TeamMessageBase 消息行模型。
+// 对齐 Python: TeamMessageBase (openjiuwen/agent_teams/tools/models.py)
+// 动态表 team_message_<session_suffix> 的行模型。
+type TeamMessageBase struct {
+	// MessageID 消息唯一标识（主键）
+	MessageID string `json:"message_id"`
+	// TeamName 团队名称
+	TeamName string `json:"team_name"`
+	// FromMemberName 发送者
+	FromMemberName string `json:"from_member_name"`
+	// ToMemberName 接收者（广播消息为空）
+	ToMemberName string `json:"to_member_name,omitempty"`
+	// Content 消息内容
+	Content string `json:"content"`
+	// Timestamp 毫秒时间戳
+	Timestamp int64 `json:"timestamp"`
+	// Broadcast 是否广播消息
+	Broadcast bool `json:"broadcast"`
+	// IsRead 直发消息的已读标记。广播消息为 nil（广播已读状态由 MessageReadStatusBase 管理）。
+	// 对齐 Python: is_read = None if broadcast else is_read
+	// nil = 广播消息（不参与直发已读判定）
+	// *false = 直发未读, *true = 直发已读
+	IsRead *bool `json:"is_read"`
+}
+
+// MessageReadStatusBase 广播已读水位模型。
+// 对齐 Python: MessageReadStatusBase (openjiuwen/agent_teams/tools/models.py)
+// 动态表 message_read_status_<session_suffix> 的行模型。
+// 每个 member 每个团队一条记录，存储已读的最新广播消息的 timestamp。
+type MessageReadStatusBase struct {
+	// MemberName 成员名（主键）
+	MemberName string `json:"member_name"`
+	// TeamName 团队名（主键）
+	TeamName string `json:"team_name"`
+	// ReadAt 已读水位时间戳（该成员已读的最新广播消息的 timestamp）
+	ReadAt *int64 `json:"read_at"`
+}
+
 // GraphMutationResult 图变更操作结果。
 // 对齐 Python: GraphMutationResult (openjiuwen/agent_teams/tools/database/task_dao.py)
 type GraphMutationResult struct {
@@ -125,6 +163,16 @@ type GraphMutationResult struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// BoolPtr 返回 bool 的指针。
+func BoolPtr(v bool) *bool { return &v }
+
+// Int64Ptr 返回 int64 的指针。
+func Int64Ptr(v int64) *int64 { return &v }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 var (
 	// TeamDynamicTablePrefixes 动态表名前缀（用于识别和清理）。

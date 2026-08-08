@@ -78,10 +78,15 @@ func (c MessagerTransportConfig) BroadcastTopic() string {
 }
 
 // CreateMessager 根据 config 构建 Messager 实例。
-// ⤵️ 回填: 9.65 — 当前返回 nil, nil
-func CreateMessager(_ MessagerTransportConfig) (any, error) {
-	// ⤵️ 回填: 9.65 — 根据 backend 选择 InProcessMessager 或 PyZmqMessager
-	return nil, nil
+// 对齐 Python: create_messager(config) (openjiuwen/agent_teams/messager/base.py)
+func CreateMessager(config MessagerTransportConfig) (Messager, error) {
+	switch config.Backend {
+	case "inprocess":
+		return NewInProcessMessager(config), nil
+	// ⤵️ 9.65-2: pyzmq 后端
+	default:
+		return nil, fmt.Errorf("unsupported messager backend: %s", config.Backend)
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -17,7 +17,7 @@ func setupTestTaskManager() (*TeamTaskManager, *database.InMemoryTeamDatabase) {
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, "", "", "leader1", "")
 	db.Initialize(ctx)
 	return tm, db
 }
@@ -263,7 +263,7 @@ func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemor
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "plan_mode", "", "")
 
 	plansDir := t.TempDir()
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, plansDir, "plan_session_1", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, plansDir, "plan_session_1", "leader1", "")
 	db.Initialize(ctx)
 	return tm, db
 }

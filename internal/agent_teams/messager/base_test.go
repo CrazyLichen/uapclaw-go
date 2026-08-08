@@ -79,14 +79,29 @@ func TestSubscriptionHandle(t *testing.T) {
 	}
 }
 
-// TestCreateMessager 验证回填占位返回 nil
+// TestCreateMessager 验证 CreateMessager 工厂函数
 func TestCreateMessager(t *testing.T) {
+	CleanupInProcessBus()
+	// inprocess 后端
 	cfg := NewMessagerTransportConfig()
 	m, err := CreateMessager(cfg)
-	if m != nil {
-		t.Errorf("CreateMessager 当前应返回 nil, 实际 %v", m)
-	}
 	if err != nil {
-		t.Errorf("CreateMessager 当前应返回 nil error, 实际 %v", err)
+		t.Fatalf("CreateMessager 失败: %v", err)
+	}
+	if m == nil {
+		t.Fatal("CreateMessager 返回 nil")
+	}
+	if _, ok := m.(*InProcessMessager); !ok {
+		t.Errorf("CreateMessager 返回类型 %T, want *InProcessMessager", m)
+	}
+
+	// 不支持的 backend
+	cfg.Backend = "unsupported"
+	m, err = CreateMessager(cfg)
+	if err == nil {
+		t.Error("不支持的 backend 应返回错误")
+	}
+	if m != nil {
+		t.Error("不支持的 backend 应返回 nil")
 	}
 }

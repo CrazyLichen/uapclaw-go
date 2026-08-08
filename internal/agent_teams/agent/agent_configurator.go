@@ -3,6 +3,7 @@ package agent
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -242,7 +243,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 // 对齐 Python: AgentConfigurator.setup_team_backend(spec, ctx, messager, ...)
 //
 // TODO(#9.58): TeamBackend 实现后替换
-func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, messager any, opts ...SetupTeamBackendOption) any {
+func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, messager messager.Messager, opts ...SetupTeamBackendOption) any {
 	cfg := &setupTeamBackendConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -386,10 +387,10 @@ func (c *AgentConfigurator) Blueprint() *TeamAgentBlueprint { return c.blueprint
 
 // Messager 返回消息总线。
 // 对齐 Python: AgentConfigurator.messager property
-func (c *AgentConfigurator) Messager() any { return c.infra.Messager }
+func (c *AgentConfigurator) Messager() messager.Messager { return c.infra.Messager }
 
 // SetMessager 设置消息总线。
-func (c *AgentConfigurator) SetMessager(v any) { c.infra.Messager = v }
+func (c *AgentConfigurator) SetMessager(v messager.Messager) { c.infra.Messager = v }
 
 // TeamBackend 返回团队后端。
 // 对齐 Python: AgentConfigurator.team_backend property

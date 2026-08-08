@@ -12,9 +12,8 @@ import (
 // InMemoryTeamDatabase 内存数据库替代实现。
 // 对齐 Python: InMemoryTeamDatabase (openjiuwen/agent_teams/tools/memory_database.py)
 //
-// 单体结构体同时实现 TeamDatabase + TeamDao + MemberDao + TaskDao 接口，
-// 对齐 Python 的 self.team = self / self.member = self / self.task = self 自引用设计。
-// MessageDao 接口方法由 ⤵️ 9.65a-3 回填。
+// 单体结构体同时实现 TeamDatabase + TeamDao + MemberDao + TaskDao + MessageDao 接口，
+// 对齐 Python 的 self.team = self / self.member = self / self.task = self / self.message = self 自引用设计。
 type InMemoryTeamDatabase struct {
 	// teams 团队数据，key=teamName
 	teams map[string]*Team
@@ -24,6 +23,10 @@ type InMemoryTeamDatabase struct {
 	tasks map[string]*TeamTaskBase
 	// deps 依赖边数据，key=taskID+"\x00"+dependsOnID（复合主键编码）
 	deps map[string]*TeamTaskDependencyBase
+	// messages 消息数据，key=messageID
+	messages map[string]*TeamMessageBase
+	// readStatus 已读水位数据，key=memberName+"\x00"+teamName
+	readStatus map[string]*MessageReadStatusBase
 	// initialized 是否已初始化
 	initialized bool
 	// mu 保护并发访问
@@ -59,6 +62,7 @@ var (
 	_ TeamDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TeamDao 接口
 	_ MemberDao    = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 MemberDao 接口
 	_ TaskDao      = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 TaskDao 接口
+	_ MessageDao   = (*InMemoryTeamDatabase)(nil) // InMemoryTeamDatabase 必须满足 MessageDao 接口
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -66,10 +70,12 @@ var (
 // NewInMemoryTeamDatabase 创建内存数据库实例。
 func NewInMemoryTeamDatabase() *InMemoryTeamDatabase {
 	return &InMemoryTeamDatabase{
-		teams:   make(map[string]*Team),
-		members: make(map[string]*TeamMember),
-		tasks:   make(map[string]*TeamTaskBase),
-		deps:    make(map[string]*TeamTaskDependencyBase),
+		teams:      make(map[string]*Team),
+		members:    make(map[string]*TeamMember),
+		tasks:      make(map[string]*TeamTaskBase),
+		deps:       make(map[string]*TeamTaskDependencyBase),
+		messages:   make(map[string]*TeamMessageBase),
+		readStatus: make(map[string]*MessageReadStatusBase),
 	}
 }
 
@@ -94,6 +100,8 @@ func (db *InMemoryTeamDatabase) CleanupAllRuntimeState(_ context.Context) ([]str
 	db.members = make(map[string]*TeamMember)
 	db.tasks = make(map[string]*TeamTaskBase)
 	db.deps = make(map[string]*TeamTaskDependencyBase)
+	db.messages = make(map[string]*TeamMessageBase)
+	db.readStatus = make(map[string]*MessageReadStatusBase)
 	db.mu.Unlock()
 	return nil, nil, nil
 }
@@ -127,6 +135,18 @@ func (db *InMemoryTeamDatabase) ForceDeleteTeamSession(_ context.Context, teamNa
 			delete(db.deps, key)
 		}
 	}
+	// 删除该 team 下所有消息
+	for id, msg := range db.messages {
+		if msg.TeamName == teamName {
+			delete(db.messages, id)
+		}
+	}
+	// 删除该 team 下所有已读水位
+	for key, rs := range db.readStatus {
+		if rs.TeamName == teamName {
+			delete(db.readStatus, key)
+		}
+	}
 	db.mu.Unlock()
 	return exists
 }
@@ -138,6 +158,8 @@ func (db *InMemoryTeamDatabase) Close() error {
 	db.members = nil
 	db.tasks = nil
 	db.deps = nil
+	db.messages = nil
+	db.readStatus = nil
 	db.initialized = false
 	db.mu.Unlock()
 	return nil
@@ -152,7 +174,7 @@ func (db *InMemoryTeamDatabase) Member() MemberDao { return db }
 // Task 返回 TaskDao（自引用：self.task = self）。
 func (db *InMemoryTeamDatabase) Task() TaskDao { return db }
 
-// Message 返回 MessageDao（⤵️ 9.65a-3 回填后返回 db）。
+// Message 返回 MessageDao（自引用：self.message = self）。
 func (db *InMemoryTeamDatabase) Message() MessageDao { return db }
 
 // CreateTeam 创建团队。对齐 Python: TeamDao.create_team()
@@ -681,6 +703,183 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// GetMessage 按 ID 查消息。对齐 Python: MessageDao.get_message()
+func (db *InMemoryTeamDatabase) GetMessage(_ context.Context, messageID string) (*TeamMessageBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	msg, exists := db.messages[messageID]
+	if !exists {
+		return nil, nil
+	}
+	return msg, nil
+}
+
+// CreateMessage 创建消息。对齐 Python: MessageDao.create_message()
+// 成功返回 true，messageID 冲突返回 false。
+func (db *InMemoryTeamDatabase) CreateMessage(_ context.Context, msg *TeamMessageBase) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if _, exists := db.messages[msg.MessageID]; exists {
+		return false
+	}
+	msg.Timestamp = GetCurrentTime()
+	db.messages[msg.MessageID] = msg
+	return true
+}
+
+// GetMessages 获取直发消息（非广播）。对齐 Python: MessageDao.get_messages()
+func (db *InMemoryTeamDatabase) GetMessages(_ context.Context, teamName, toMemberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var result []*TeamMessageBase
+	for _, msg := range db.messages {
+		if msg.TeamName != teamName || msg.ToMemberName != toMemberName || msg.Broadcast {
+			continue
+		}
+		if fromMemberName != "" && msg.FromMemberName != fromMemberName {
+			continue
+		}
+		if unreadOnly && (msg.IsRead == nil || *msg.IsRead) {
+			continue
+		}
+		result = append(result, msg)
+	}
+	return result, nil
+}
+
+// GetBroadcastMessages 获取广播消息。对齐 Python: MessageDao.get_broadcast_messages()
+// unreadOnly=true 时通过 read_status watermark 过滤。
+func (db *InMemoryTeamDatabase) GetBroadcastMessages(_ context.Context, teamName, memberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var result []*TeamMessageBase
+	for _, msg := range db.messages {
+		if msg.TeamName != teamName || !msg.Broadcast || msg.FromMemberName == memberName {
+			continue
+		}
+		if fromMemberName != "" && msg.FromMemberName != fromMemberName {
+			continue
+		}
+		result = append(result, msg)
+	}
+	if !unreadOnly {
+		return result, nil
+	}
+	// 按 watermark 过滤未读
+	rs, exists := db.readStatus[memberKey(memberName, teamName)]
+	if !exists || rs.ReadAt == nil {
+		return result, nil
+	}
+	var filtered []*TeamMessageBase
+	for _, msg := range result {
+		if msg.Timestamp > *rs.ReadAt {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered, nil
+}
+
+// GetTeamMessages 获取团队所有消息。对齐 Python: MessageDao.get_team_messages()
+// broadcast 为空字符串表示不过滤。
+func (db *InMemoryTeamDatabase) GetTeamMessages(_ context.Context, teamName string, broadcast string) ([]*TeamMessageBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var result []*TeamMessageBase
+	for _, msg := range db.messages {
+		if msg.TeamName != teamName {
+			continue
+		}
+		if broadcast != "" {
+			isBroadcast := broadcast == "true"
+			if msg.Broadcast != isBroadcast {
+				continue
+			}
+		}
+		result = append(result, msg)
+	}
+	return result, nil
+}
+
+// HasUnreadMessages 是否有未读消息。对齐 Python: MessageDao.has_unread_messages()
+func (db *InMemoryTeamDatabase) HasUnreadMessages(_ context.Context, teamName string, includeBroadcast bool) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	// 直发消息：检查 is_read=false
+	for _, msg := range db.messages {
+		if msg.TeamName != teamName || msg.Broadcast {
+			continue
+		}
+		if msg.IsRead != nil && !*msg.IsRead {
+			return true
+		}
+	}
+	if !includeBroadcast {
+		return false
+	}
+	// 广播消息：per-member watermark 比较
+	var broadcasts []*TeamMessageBase
+	for _, msg := range db.messages {
+		if msg.TeamName == teamName && msg.Broadcast {
+			broadcasts = append(broadcasts, msg)
+		}
+	}
+	if len(broadcasts) == 0 {
+		return false
+	}
+	// 遍历成员列表
+	for _, member := range db.members {
+		if member.TeamName != teamName {
+			continue
+		}
+		rs := db.readStatus[memberKey(member.MemberName, teamName)]
+		watermark := int64(0)
+		if rs != nil && rs.ReadAt != nil {
+			watermark = *rs.ReadAt
+		}
+		for _, msg := range broadcasts {
+			if msg.FromMemberName == member.MemberName {
+				continue
+			}
+			if msg.Timestamp > watermark {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MarkMessageRead 标记已读。对齐 Python: MessageDao.mark_message_read()
+func (db *InMemoryTeamDatabase) MarkMessageRead(_ context.Context, messageID, memberName string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	msg, exists := db.messages[messageID]
+	if !exists {
+		return false
+	}
+	// 成员存在性检查
+	if _, ok := db.members[memberKey(memberName, msg.TeamName)]; !ok {
+		return false
+	}
+	if msg.Broadcast {
+		// 广播消息：更新 read_status watermark
+		key := memberKey(memberName, msg.TeamName)
+		rs, exists := db.readStatus[key]
+		if !exists {
+			db.readStatus[key] = &MessageReadStatusBase{
+				MemberName: memberName,
+				TeamName:   msg.TeamName,
+				ReadAt:     Int64Ptr(msg.Timestamp),
+			}
+		} else if rs.ReadAt == nil || msg.Timestamp > *rs.ReadAt {
+			rs.ReadAt = Int64Ptr(msg.Timestamp)
+		}
+	} else {
+		// 直发消息：设 is_read=true
+		msg.IsRead = BoolPtr(true)
+	}
+	return true
+}
 
 // memberKey 构造复合主键 key。
 func memberKey(memberName, teamName string) string {

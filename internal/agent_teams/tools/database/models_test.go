@@ -215,3 +215,106 @@ func TestTeamStaticTablesToClear_完整性(t *testing.T) {
 		}
 	}
 }
+
+// TestTeamMessageBase_JSON 直发消息序列化测试
+func TestTeamMessageBase_JSON(t *testing.T) {
+	dm := TeamMessageBase{
+		MessageID:      "msg_1",
+		TeamName:       "team1",
+		FromMemberName: "alice",
+		ToMemberName:   "bob",
+		Content:        "hello",
+		Timestamp:      1000,
+		Broadcast:      false,
+		IsRead:         BoolPtr(false),
+	}
+	data, err := json.Marshal(dm)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	var got TeamMessageBase
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+	if got.MessageID != "msg_1" {
+		t.Errorf("MessageID = %q, want msg_1", got.MessageID)
+	}
+	if got.IsRead == nil || *got.IsRead != false {
+		t.Errorf("IsRead = %v, want *false", got.IsRead)
+	}
+
+	// 广播消息
+	bm := TeamMessageBase{
+		MessageID:      "msg_2",
+		TeamName:       "team1",
+		FromMemberName: "alice",
+		Content:        "broadcast",
+		Timestamp:      2000,
+		Broadcast:      true,
+		IsRead:         nil,
+	}
+	data, err = json.Marshal(bm)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	var got2 TeamMessageBase
+	if err := json.Unmarshal(data, &got2); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+	if got2.IsRead != nil {
+		t.Errorf("IsRead = %v, want nil (广播)", got2.IsRead)
+	}
+}
+
+// TestMessageReadStatusBase_JSON 测试已读水位模型序列化
+func TestMessageReadStatusBase_JSON(t *testing.T) {
+	rs := MessageReadStatusBase{
+		MemberName: "alice",
+		TeamName:   "team1",
+		ReadAt:     Int64Ptr(5000),
+	}
+	data, err := json.Marshal(rs)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	var got MessageReadStatusBase
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+	if got.ReadAt == nil || *got.ReadAt != 5000 {
+		t.Errorf("ReadAt = %v, want *5000", got.ReadAt)
+	}
+
+	// nil ReadAt
+	rs2 := MessageReadStatusBase{MemberName: "bob", TeamName: "team1"}
+	data2, _ := json.Marshal(rs2)
+	var got2 MessageReadStatusBase
+	_ = json.Unmarshal(data2, &got2)
+	if got2.ReadAt != nil {
+		t.Errorf("ReadAt = %v, want nil", got2.ReadAt)
+	}
+}
+
+// TestBoolPtr 测试 BoolPtr 辅助函数
+func TestBoolPtr(t *testing.T) {
+	p := BoolPtr(true)
+	if p == nil || *p != true {
+		t.Errorf("BoolPtr(true) = %v, want *true", p)
+	}
+	p2 := BoolPtr(false)
+	if p2 == nil || *p2 != false {
+		t.Errorf("BoolPtr(false) = %v, want *false", p2)
+	}
+}
+
+// TestInt64Ptr 测试 Int64Ptr 辅助函数
+func TestInt64Ptr(t *testing.T) {
+	p := Int64Ptr(42)
+	if p == nil || *p != 42 {
+		t.Errorf("Int64Ptr(42) = %v, want *42", p)
+	}
+	p2 := Int64Ptr(0)
+	if p2 == nil || *p2 != 0 {
+		t.Errorf("Int64Ptr(0) = %v, want *0", p2)
+	}
+}

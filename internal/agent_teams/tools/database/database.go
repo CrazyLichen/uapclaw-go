@@ -27,9 +27,9 @@ type TeamDatabase interface {
 	Team() TeamDao
 	// Member 返回 MemberDao（对齐 Python self.member = MemberDao(...)）
 	Member() MemberDao
-	// Task 返回 TaskDao。⤵️ 9.65a-2 回填具体方法
+	// Task 返回 TaskDao。
 	Task() TaskDao
-	// Message 返回 MessageDao。⤵️ 9.65a-3 回填具体方法
+	// Message 返回 MessageDao。
 	Message() MessageDao
 }
 
@@ -131,5 +131,25 @@ type TaskDao interface {
 	VerifyAndFixTaskConsistency(ctx context.Context, teamName string) ([]string, error)
 }
 
-// MessageDao 消息 DAO 接口。⤵️ 9.65a-3 回填具体方法签名
-type MessageDao interface{}
+// MessageDao 消息 DAO 接口。
+// 对齐 Python: MessageDao (openjiuwen/agent_teams/tools/database/message_dao.py)
+type MessageDao interface {
+	// GetMessage 按 ID 查消息。返回 nil 表示不存在。
+	GetMessage(ctx context.Context, messageID string) (*TeamMessageBase, error)
+	// CreateMessage 创建消息。返回 true 表示成功，false 表示 messageID 冲突。
+	// 广播消息时 IsRead 必须为 nil；直发消息时 IsRead 为 BoolPtr(false/true)。
+	CreateMessage(ctx context.Context, msg *TeamMessageBase) bool
+	// GetMessages 获取直发消息（非广播）。
+	// fromMemberName 为空字符串表示不过滤。unreadOnly=true 时仅返回未读。
+	GetMessages(ctx context.Context, teamName, toMemberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error)
+	// GetBroadcastMessages 获取广播消息（排除自己发送的）。
+	// unreadOnly=true 时通过 read_status watermark 过滤。
+	GetBroadcastMessages(ctx context.Context, teamName, memberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error)
+	// GetTeamMessages 获取团队所有消息。broadcast 为空字符串表示不过滤。
+	GetTeamMessages(ctx context.Context, teamName string, broadcast string) ([]*TeamMessageBase, error)
+	// HasUnreadMessages 是否有未读消息。
+	// 直发：检查 is_read=false；广播：检查 per-member watermark。
+	HasUnreadMessages(ctx context.Context, teamName string, includeBroadcast bool) bool
+	// MarkMessageRead 标记已读。直发设 is_read=true；广播更新 read_status watermark。
+	MarkMessageRead(ctx context.Context, messageID, memberName string) bool
+}

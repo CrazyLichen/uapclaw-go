@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -70,9 +72,10 @@ type TeamTaskManager struct {
 	teamName string
 	// memberName 当前成员标识
 	memberName string
-	// messager 事件发布器。⤵️ 9.65 回填：需实现以下方法
-	//   Publish(topic schema.TeamTopic, event any) error
-	messager any
+	// messager 事件发布器
+	messager messager.Messager
+	// sessionID 会话标识（用于构建 topic）
+	sessionID string
 	// plansDir 计划文件存储目录
 	plansDir string
 	// teamPlanID 团队级计划标识
@@ -90,7 +93,7 @@ type TeamTaskManager struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamTaskManager 创建任务管理器。
-func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, messager any, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
+func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, messager messager.Messager, plansDir, teamPlanID, leaderMemberName string, sessionID string) *TeamTaskManager {
 	return &TeamTaskManager{
 		db:               db,
 		teamName:         teamName,
@@ -99,6 +102,7 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 		plansDir:         plansDir,
 		teamPlanID:       teamPlanID,
 		leaderMemberName: leaderMemberName,
+		sessionID:        sessionID,
 	}
 }
 
@@ -119,7 +123,9 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string) (*dat
 	if !ok {
 		return nil, fmt.Errorf("创建任务失败: task_id 冲突 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCreatedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
+		"team_name": tm.teamName, "task_id": task.TaskID, "status": task.Status,
+	})
 	return task, nil
 }
 
@@ -177,7 +183,9 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
 	if !ok {
 		return fmt.Errorf("认领任务失败: 任务不存在或状态不允许认领 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskClaimedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID,
+	})
 	return nil
 }
 
@@ -190,7 +198,9 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 	if !ok {
 		return fmt.Errorf("分配任务失败: 任务不存在或状态不允许分配 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskClaimedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID,
+	})
 	return nil
 }
 
@@ -204,9 +214,11 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	if refreshed == nil {
 		return nil, fmt.Errorf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCompletedEvent{...})
-	// ⤵️ 9.65 回填：逐条发布 TaskUnblockedEvent
-	// ⤵️ 9.65 回填：检查 TaskListDrainedEvent
+	tm.publishTaskEvent(ctx, eventTaskCompleted, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID,
+	})
+	tm.publishUnblockedEvents(ctx, refreshed)
+	tm.maybePublishTaskListDrained(ctx)
 	return refreshed, nil
 }
 
@@ -220,9 +232,11 @@ func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string,
 	if refreshed == nil {
 		return nil, fmt.Errorf("取消任务失败: 任务不存在或状态不允许取消 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCancelledEvent{...})
-	// ⤵️ 9.65 回填：逐条发布 TaskUnblockedEvent
-	// ⤵️ 9.65 回填：检查 TaskListDrainedEvent
+	tm.publishTaskEvent(ctx, eventTaskCancelled, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID,
+	})
+	tm.publishUnblockedEvents(ctx, refreshed)
+	tm.maybePublishTaskListDrained(ctx)
 	return refreshed, nil
 }
 
@@ -232,8 +246,12 @@ func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []s
 	if err != nil {
 		return nil, err
 	}
-	// ⤵️ 9.65 回填：逐条发布 TaskCancelledEvent
-	// ⤵️ 9.65 回填：检查 TaskListDrainedEvent
+	for _, task := range cancelled {
+		tm.publishTaskEvent(ctx, eventTaskCancelled, map[string]any{
+			"team_name": tm.teamName, "task_id": task.TaskID,
+		})
+	}
+	tm.maybePublishTaskListDrained(ctx)
 	return cancelled, nil
 }
 
@@ -258,7 +276,9 @@ func (tm *TeamTaskManager) UpdateTask(ctx context.Context, taskID, title, conten
 	if !ok {
 		return fmt.Errorf("更新任务失败: 任务不存在或状态不允许编辑 %s", taskID)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskUpdatedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskUpdated, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID,
+	})
 	return nil
 }
 
@@ -275,7 +295,9 @@ func (tm *TeamTaskManager) AddWithPriority(ctx context.Context, taskID, title, c
 	if !result.Ok {
 		return result, fmt.Errorf("带依赖创建任务失败: %s", result.Reason)
 	}
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCreatedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID, "status": fsm.TaskStatusPending,
+	})
 	return result, nil
 }
 
@@ -314,7 +336,9 @@ func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content 
 		}
 	}
 
-	// ⤵️ 9.65 回填：tm.messager.Publish(schema.TeamTopicTask, schema.TaskCreatedEvent{...})
+	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
+		"team_name": tm.teamName, "task_id": taskID, "status": fsm.TaskStatusPending,
+	})
 	return task, nil
 }
 
@@ -386,7 +410,6 @@ func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context) ([]*TaskSummar
 }
 
 // SubmitPlan PLAN_MODE 提交计划。对齐 Python: TeamTaskManager.submit_plan()
-// ⤵️ 9.65 回填 messager 通知逻辑
 func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath, toolCallID string) (*PlanRecord, error) {
 	// 1. 校验成员是否为 PLAN_MODE
 	member, _ := tm.db.Member().GetMember(ctx, tm.memberName, tm.teamName)
@@ -449,17 +472,21 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		return nil, fmt.Errorf("写入计划索引失败: %v", err)
 	}
 
-	// 7. 发布事件（⤵️ 9.65 回填）
-	// tm.messager.Publish(schema.TeamTopicTask, schema.TaskPlanRequestEvent{
-	//    TeamName/TaskID/PlanID 等字段初始化
-	//   MemberPlanMD: destPath, ToolCallID: toolCallID,
-	// })
+	// 7. 发布事件
+	tm.publishTaskEvent(ctx, eventTaskPlanRequest, map[string]any{
+		"team_name":      tm.teamName,
+		"member_name":    tm.memberName,
+		"task_id":        taskID,
+		"status":         fsm.TaskStatusClaimed,
+		"plan_id":        planID,
+		"member_plan_md": destPath,
+		"tool_call_id":   toolCallID,
+	})
 
 	return record, nil
 }
 
 // ApprovePlan PLAN_MODE 审批/拒绝计划。对齐 Python: TeamTaskManager.approve_plan()
-// ⤵️ 9.65 回填 messager 通知逻辑
 func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, approved bool, feedback string) error {
 	// 1. 加载 index.json
 	index, err := tm.loadPlanIndex()
@@ -520,16 +547,71 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 		return fmt.Errorf("更新计划索引失败: %v", err)
 	}
 
-	// 发布事件（⤵️ 9.65 回填）
-	// tm.messager.Publish(schema.TeamTopicTask, schema.TaskPlanResponseEvent{
-	//    TeamName/TaskID 等字段初始化
-	//   Approved: approved, PlanID: planID, Feedback: feedback,
-	// })
+	// 发布事件
+	tm.publishTaskEvent(ctx, eventTaskPlanResponse, map[string]any{
+		"team_name":   tm.teamName,
+		"member_name": tm.memberName,
+		"task_id":     planRecord.TaskID,
+		"approved":    approved,
+		"status":      planRecord.Status,
+		"plan_id":     planID,
+		"feedback":    feedback,
+	})
 
 	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// publishTaskEvent 发布任务事件到 TeamTopic。
+// 对齐 Python: TeamTaskManager._publish_task_event()
+func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, eventType string, payload map[string]any) {
+	if tm.messager == nil {
+		return
+	}
+	topicID := buildTaskTopic(tm.sessionID, tm.teamName)
+	msg := map[string]any{
+		"event_type": eventType,
+		"payload":    payload,
+	}
+	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
+		logger.Error(logger.ComponentAgentCore).Err(err).
+			Str("event_type", eventType).
+			Msg("发布任务事件失败")
+	}
+}
+
+// publishUnblockedEvents 逐条发布 TaskUnblockedEvent。
+// 对齐 Python: TeamTaskManager._publish_unblocked_events()
+func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblockedIDs []string) {
+	for _, id := range unblockedIDs {
+		tm.publishTaskEvent(ctx, eventTaskUnblocked, map[string]any{
+			"team_name": tm.teamName, "task_id": id,
+		})
+	}
+}
+
+// maybePublishTaskListDrained 检查是否所有任务已终态，如果是则发布 TaskListDrainedEvent。
+// 对齐 Python: TeamTaskManager._maybe_publish_task_list_drained()
+func (tm *TeamTaskManager) maybePublishTaskListDrained(ctx context.Context) {
+	tasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, "")
+	if err != nil || len(tasks) == 0 {
+		return
+	}
+	allTerminal := true
+	for _, task := range tasks {
+		if task.Status != fsm.TaskStatusCompleted && task.Status != fsm.TaskStatusCancelled {
+			allTerminal = false
+			break
+		}
+	}
+	if allTerminal {
+		tm.publishTaskEvent(ctx, eventTaskListDrained, map[string]any{
+			"team_name":  tm.teamName,
+			"task_count": len(tasks),
+		})
+	}
+}
 
 // checkTaskListDrained 检查所有任务是否均处于终态。
 // 对齐 Python: TeamTaskManager._check_task_list_drained()

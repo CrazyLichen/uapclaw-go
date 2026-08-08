@@ -299,6 +299,15 @@ type WorkspaceLockResponseEvent struct {
 	Holder map[string]any
 }
 
+// TypedEvent 带类型标识的团队事件接口。
+// 对齐 Python: BaseEventMessage + EventMessage.from_event() 的自动映射
+type TypedEvent interface {
+	// EventTypeName 返回 TeamEvent 常量
+	EventTypeName() string
+	// ToPayload 转换为 map[string]any 载荷
+	ToPayload() map[string]any
+}
+
 // EventMessage 事件消息包装，将事件类型与载荷配对。
 // 对齐 Python: EventMessage
 type EventMessage struct {
@@ -394,4 +403,178 @@ func NewEventMessage(eventType string, payload map[string]any, senderID string) 
 	}
 }
 
+// EventMessageFromEvent 从具体事件创建 EventMessage。
+// 对齐 Python: EventMessage.from_event(event)
+func EventMessageFromEvent(e TypedEvent) EventMessage {
+	return EventMessage{
+		EventType: e.EventTypeName(),
+		Payload:   e.ToPayload(),
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// GetSenderID 返回 SenderID 字段（实现 messager.SenderIDStamper 接口）。
+func (m *EventMessage) GetSenderID() string { return m.SenderID }
+
+// SetSenderID 设置 SenderID 字段（实现 messager.SenderIDStamper 接口）。
+func (m *EventMessage) SetSenderID(id string) { m.SenderID = id }
+
+// ── 团队生命周期事件 ──
+
+func (e TeamCreatedEvent) EventTypeName() string { return TeamEventCreated }
+func (e TeamCreatedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "display_name": e.DisplayName, "leader_member_name": e.LeaderMemberName, "created": e.Created}
+}
+
+func (e TeamCleanedEvent) EventTypeName() string { return TeamEventCleaned }
+func (e TeamCleanedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName}
+}
+
+func (e TeamStandbyEvent) EventTypeName() string { return TeamEventStandby }
+func (e TeamStandbyEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName}
+}
+
+func (e TeamCompletedEvent) EventTypeName() string { return TeamEventTeamCompleted }
+func (e TeamCompletedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_count": e.MemberCount, "task_count": e.TaskCount}
+}
+
+// ── 成员生命周期事件 ──
+
+func (e MemberSpawnedEvent) EventTypeName() string { return TeamEventMemberSpawned }
+func (e MemberSpawnedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
+}
+
+func (e MemberRestartedEvent) EventTypeName() string { return TeamEventMemberRestarted }
+func (e MemberRestartedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "reason": e.Reason, "restart_count": e.RestartCount}
+}
+
+func (e MemberStatusChangedEvent) EventTypeName() string { return TeamEventMemberStatusChanged }
+func (e MemberStatusChangedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "old_status": e.OldStatus, "new_status": e.NewStatus}
+}
+
+func (e MemberExecutionChangedEvent) EventTypeName() string { return TeamEventMemberExecutionChanged }
+func (e MemberExecutionChangedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "old_status": e.OldStatus, "new_status": e.NewStatus}
+}
+
+func (e MemberShutdownEvent) EventTypeName() string { return TeamEventMemberShutdown }
+func (e MemberShutdownEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "force": e.Force}
+}
+
+func (e MemberCanceledEvent) EventTypeName() string { return TeamEventMemberCanceled }
+func (e MemberCanceledEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
+}
+
+// ── 协作事件 ──
+
+func (e PlanApprovalEvent) EventTypeName() string { return TeamEventPlanApproval }
+func (e PlanApprovalEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "approved": e.Approved}
+}
+
+func (e ToolApprovalResultEvent) EventTypeName() string { return TeamEventToolApprovalResult }
+func (e ToolApprovalResultEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "tool_call_id": e.ToolCallID, "approved": e.Approved, "feedback": e.Feedback, "auto_confirm": e.AutoConfirm}
+}
+
+// ── 消息事件 ──
+
+func (e MessageEvent) EventTypeName() string { return TeamEventMessage }
+func (e MessageEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "message_id": e.MessageID, "from_member_name": e.FromMemberName, "to_member_name": e.ToMemberName}
+}
+
+func (e BroadcastEvent) EventTypeName() string { return TeamEventBroadcast }
+func (e BroadcastEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "message_id": e.MessageID, "from_member_name": e.FromMemberName}
+}
+
+// ── 任务事件 ──
+
+func (e TaskCreatedEvent) EventTypeName() string { return TeamEventTaskCreated }
+func (e TaskCreatedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "status": e.Status}
+}
+
+func (e TaskPlanRequestEvent) EventTypeName() string { return TeamEventTaskPlanRequest }
+func (e TaskPlanRequestEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "status": e.Status, "plan_id": e.PlanID, "member_plan_md": e.MemberPlanMD, "tool_call_id": e.ToolCallID}
+}
+
+func (e TaskPlanResponseEvent) EventTypeName() string { return TeamEventTaskPlanResponse }
+func (e TaskPlanResponseEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "approved": e.Approved, "status": e.Status, "plan_id": e.PlanID, "feedback": e.Feedback, "tool_call_id": e.ToolCallID}
+}
+
+func (e TaskUpdatedEvent) EventTypeName() string { return TeamEventTaskUpdated }
+func (e TaskUpdatedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
+func (e TaskClaimedEvent) EventTypeName() string { return TeamEventTaskClaimed }
+func (e TaskClaimedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
+func (e TaskCompletedEvent) EventTypeName() string { return TeamEventTaskCompleted }
+func (e TaskCompletedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
+func (e TaskCancelledEvent) EventTypeName() string { return TeamEventTaskCancelled }
+func (e TaskCancelledEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
+func (e TaskUnblockedEvent) EventTypeName() string { return TeamEventTaskUnblocked }
+func (e TaskUnblockedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
+}
+
+func (e TaskListDrainedEvent) EventTypeName() string { return TeamEventTaskListDrained }
+func (e TaskListDrainedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "task_count": e.TaskCount}
+}
+
+// ── Worktree 事件 ──
+
+func (e WorktreeCreatedEvent) EventTypeName() string { return TeamEventWorktreeCreated }
+func (e WorktreeCreatedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath, "existed": e.Existed}
+}
+
+func (e WorktreeRemovedEvent) EventTypeName() string { return TeamEventWorktreeRemoved }
+func (e WorktreeRemovedEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath}
+}
+
+// ── Workspace 事件 ──
+
+func (e WorkspaceArtifactEvent) EventTypeName() string { return TeamEventWorkspaceArtifactUpdated }
+func (e WorkspaceArtifactEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "artifact_path": e.ArtifactPath, "commit_sha": e.CommitSHA}
+}
+
+func (e WorkspaceConflictEvent) EventTypeName() string { return TeamEventWorkspaceConflict }
+func (e WorkspaceConflictEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "file_path": e.FilePath, "conflicting_commit": e.ConflictingCommit}
+}
+
+func (e WorkspaceLockRequestEvent) EventTypeName() string { return TeamEventWorkspaceLockRequest }
+func (e WorkspaceLockRequestEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "action": e.Action, "file_path": e.FilePath, "holder_name": e.HolderName, "timeout_seconds": e.TimeoutSeconds}
+}
+
+func (e WorkspaceLockResponseEvent) EventTypeName() string { return TeamEventWorkspaceLockResponse }
+func (e WorkspaceLockResponseEvent) ToPayload() map[string]any {
+	return map[string]any{"team_name": e.TeamName, "file_path": e.FilePath, "granted": e.Granted, "holder": e.Holder}
+}

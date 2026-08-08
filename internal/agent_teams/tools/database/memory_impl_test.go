@@ -1103,3 +1103,398 @@ func TestMutateDependencyGraph_终态目标(t *testing.T) {
 		t.Error("终态目标应导致管线失败")
 	}
 }
+
+// ──────────────────────────── MessageDao 测试 ────────────────────────────
+
+// newTestMessageDB 创建测试用消息数据库
+func newTestMessageDB() *InMemoryTeamDatabase {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	_ = db.Initialize(ctx)
+	_ = db.CreateTeam(ctx, "team1", "Team1", "leader", "", "")
+	_ = db.CreateMember(ctx, "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
+	_ = db.CreateMember(ctx, "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
+	_ = db.CreateMember(ctx, "leader", "team1", "Leader", "", "active", "leader", "", "idle", "build_mode", "", "")
+	return db
+}
+
+// TestCreateMessage_直发 测试创建直发消息
+func TestCreateMessage_直发(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	msg := &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	}
+	if !db.CreateMessage(ctx, msg) {
+		t.Error("CreateMessage 应返回 true")
+	}
+	if msg.Timestamp == 0 {
+		t.Error("Timestamp 应被设置")
+	}
+}
+
+// TestCreateMessage_广播 测试创建广播消息
+func TestCreateMessage_广播(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	msg := &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "alice", Content: "announcement",
+		Broadcast: true, IsRead: nil,
+	}
+	if !db.CreateMessage(ctx, msg) {
+		t.Error("CreateMessage 应返回 true")
+	}
+}
+
+// TestCreateMessage_冲突 测试 messageID 冲突
+func TestCreateMessage_冲突(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	msg := &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	}
+	db.CreateMessage(ctx, msg)
+	if db.CreateMessage(ctx, msg) {
+		t.Error("重复 messageID 应返回 false")
+	}
+}
+
+// TestGetMessage 按 ID 查找消息
+func TestGetMessage(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	msg, err := db.GetMessage(ctx, "msg_1")
+	if err != nil {
+		t.Fatalf("GetMessage 失败: %v", err)
+	}
+	if msg == nil {
+		t.Fatal("GetMessage 应返回消息")
+	}
+	if msg.Content != "hello" {
+		t.Errorf("Content = %q, want hello", msg.Content)
+	}
+}
+
+// TestGetMessage_不存在 测试查找不存在的消息
+func TestGetMessage_不存在(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	msg, err := db.GetMessage(ctx, "nonexistent")
+	if err != nil {
+		t.Fatalf("GetMessage 失败: %v", err)
+	}
+	if msg != nil {
+		t.Error("不存在的消息应返回 nil")
+	}
+}
+
+// TestGetMessages_直发 测试获取直发消息
+func TestGetMessages_直发(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	msgs, err := db.GetMessages(ctx, "team1", "bob", false, "")
+	if err != nil {
+		t.Fatalf("GetMessages 失败: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("GetMessages 返回 %d 条, want 1", len(msgs))
+	}
+	if msgs[0].Content != "hello" {
+		t.Errorf("Content = %q, want hello", msgs[0].Content)
+	}
+}
+
+// TestGetMessages_未读 测试获取未读消息
+func TestGetMessages_未读(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "unread", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "read", Broadcast: false, IsRead: BoolPtr(true),
+	})
+	msgs, _ := db.GetMessages(ctx, "team1", "bob", true, "")
+	if len(msgs) != 1 {
+		t.Errorf("未读消息数 = %d, want 1", len(msgs))
+	}
+	if msgs[0].Content != "unread" {
+		t.Errorf("Content = %q, want unread", msgs[0].Content)
+	}
+}
+
+// TestGetMessages_按发送者 测试按发送者过滤
+func TestGetMessages_按发送者(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "from alice", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "leader", ToMemberName: "bob",
+		Content: "from leader", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	msgs, _ := db.GetMessages(ctx, "team1", "bob", false, "alice")
+	if len(msgs) != 1 {
+		t.Errorf("alice 的消息数 = %d, want 1", len(msgs))
+	}
+}
+
+// TestGetBroadcastMessages 测试获取广播消息
+func TestGetBroadcastMessages(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "announcement",
+		Broadcast: true, IsRead: nil,
+	})
+	msgs, err := db.GetBroadcastMessages(ctx, "team1", "bob", false, "")
+	if err != nil {
+		t.Fatalf("GetBroadcastMessages 失败: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("GetBroadcastMessages 返回 %d 条, want 1", len(msgs))
+	}
+	// alice 不应收到自己的广播
+	msgs2, _ := db.GetBroadcastMessages(ctx, "team1", "alice", false, "")
+	if len(msgs2) != 0 {
+		t.Errorf("alice 不应收到自己的广播, 返回 %d 条", len(msgs2))
+	}
+}
+
+// TestGetBroadcastMessages_未读 测试 watermark 过滤
+func TestGetBroadcastMessages_未读(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	// 创建广播消息
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "old broadcast",
+		Broadcast: true, IsRead: nil,
+	})
+	// 标记已读
+	db.MarkMessageRead(ctx, "msg_1", "bob")
+
+	// 手动设置一条更新的广播消息（timestamp 更大）
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "alice", Content: "new broadcast",
+		Broadcast: true, IsRead: nil,
+	})
+	// 确保 msg_2 的 timestamp 大于 watermark
+	msg, _ := db.GetMessage(ctx, "msg_2")
+	rs := db.readStatus[memberKey("bob", "team1")]
+	if rs != nil && rs.ReadAt != nil && msg.Timestamp <= *rs.ReadAt {
+		msg.Timestamp = *rs.ReadAt + 1000
+	}
+	msgs, _ := db.GetBroadcastMessages(ctx, "team1", "bob", true, "")
+	if len(msgs) != 1 {
+		t.Errorf("未读广播数 = %d, want 1", len(msgs))
+	}
+	if len(msgs) > 0 && msgs[0].Content != "new broadcast" {
+		t.Errorf("Content = %q, want new broadcast", msgs[0].Content)
+	}
+}
+
+// TestGetTeamMessages 测试获取团队所有消息
+func TestGetTeamMessages(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "direct", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "alice", Content: "broadcast",
+		Broadcast: true, IsRead: nil,
+	})
+	msgs, err := db.GetTeamMessages(ctx, "team1", "")
+	if err != nil {
+		t.Fatalf("GetTeamMessages 失败: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Errorf("GetTeamMessages 返回 %d 条, want 2", len(msgs))
+	}
+}
+
+// TestGetTeamMessages_按类型 测试按 broadcast 过滤
+func TestGetTeamMessages_按类型(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "direct", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_2", TeamName: "team1",
+		FromMemberName: "alice", Content: "broadcast",
+		Broadcast: true, IsRead: nil,
+	})
+	msgs, _ := db.GetTeamMessages(ctx, "team1", "true")
+	if len(msgs) != 1 {
+		t.Errorf("广播消息数 = %d, want 1", len(msgs))
+	}
+	if msgs[0].MessageID != "msg_2" {
+		t.Errorf("MessageID = %q, want msg_2", msgs[0].MessageID)
+	}
+}
+
+// TestHasUnreadMessages_直发未读 测试直发未读消息
+func TestHasUnreadMessages_直发未读(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	if !db.HasUnreadMessages(ctx, "team1", true) {
+		t.Error("有未读直发消息时 HasUnreadMessages 应返回 true")
+	}
+}
+
+// TestHasUnreadMessages_全部已读 测试全部已读
+func TestHasUnreadMessages_全部已读(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(true),
+	})
+	if db.HasUnreadMessages(ctx, "team1", true) {
+		t.Error("全部已读时 HasUnreadMessages 应返回 false")
+	}
+}
+
+// TestHasUnreadMessages_不含广播 测试不含广播
+func TestHasUnreadMessages_不含广播(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "broadcast",
+		Broadcast: true, IsRead: nil,
+	})
+	if db.HasUnreadMessages(ctx, "team1", false) {
+		t.Error("不含广播时 HasUnreadMessages 应返回 false（无直发未读）")
+	}
+}
+
+// TestMarkMessageRead_直发 测试标记直发已读
+func TestMarkMessageRead_直发(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	if !db.MarkMessageRead(ctx, "msg_1", "bob") {
+		t.Error("MarkMessageRead 应返回 true")
+	}
+	msg, _ := db.GetMessage(ctx, "msg_1")
+	if msg.IsRead == nil || !*msg.IsRead {
+		t.Error("标记已读后 IsRead 应为 true")
+	}
+}
+
+// TestMarkMessageRead_广播 测试标记广播已读
+func TestMarkMessageRead_广播(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "announcement",
+		Broadcast: true, IsRead: nil,
+	})
+	if !db.MarkMessageRead(ctx, "msg_1", "bob") {
+		t.Error("MarkMessageRead 应返回 true")
+	}
+	// 验证 watermark 已设置
+	rs := db.readStatus[memberKey("bob", "team1")]
+	if rs == nil || rs.ReadAt == nil {
+		t.Error("标记已读后应设置 read_status watermark")
+	}
+}
+
+// TestMarkMessageRead_消息不存在 测试标记不存在的消息
+func TestMarkMessageRead_消息不存在(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	if db.MarkMessageRead(ctx, "nonexistent", "bob") {
+		t.Error("不存在的消息应返回 false")
+	}
+}
+
+// TestMarkMessageRead_成员不存在 测试标记不存在的成员
+func TestMarkMessageRead_成员不存在(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", ToMemberName: "bob",
+		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
+	})
+	if db.MarkMessageRead(ctx, "msg_1", "nonexistent") {
+		t.Error("不存在的成员应返回 false")
+	}
+}
+
+// TestForceDeleteTeamSession_消息级联 测试删除 team 时消息级联删除
+func TestForceDeleteTeamSession_消息级联(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "test",
+		Broadcast: true, IsRead: nil,
+	})
+	db.ForceDeleteTeamSession(ctx, "team1")
+	msgs, _ := db.GetTeamMessages(ctx, "team1", "")
+	if len(msgs) != 0 {
+		t.Errorf("删除 team 后消息数 = %d, want 0", len(msgs))
+	}
+}
+
+// TestCleanupAllRuntimeState_消息 测试清理所有消息
+func TestCleanupAllRuntimeState_消息(t *testing.T) {
+	db := newTestMessageDB()
+	ctx := context.Background()
+	db.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "msg_1", TeamName: "team1",
+		FromMemberName: "alice", Content: "test",
+		Broadcast: true, IsRead: nil,
+	})
+	db.CleanupAllRuntimeState(ctx)
+	msgs, _ := db.GetTeamMessages(ctx, "team1", "")
+	if len(msgs) != 0 {
+		t.Errorf("清理后消息数 = %d, want 0", len(msgs))
+	}
+}

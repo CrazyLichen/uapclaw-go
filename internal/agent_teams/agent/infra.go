@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 )
 
@@ -12,8 +13,7 @@ import (
 // 对齐 Python: TeamInfra (openjiuwen/agent_teams/agent/infra.py)
 type TeamInfra struct {
 	// Messager 消息总线
-	// TODO(#9.65): Messager 类型
-	Messager any
+	Messager messager.Messager
 	// TeamBackend 团队后端（DB + task/message managers）
 	// TODO(#9.58): TeamBackend 类型
 	TeamBackend any

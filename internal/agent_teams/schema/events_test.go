@@ -129,3 +129,102 @@ func TestNewEventMessage_各事件类型(t *testing.T) {
 		}
 	}
 }
+
+// ──────────────────────────── TypedEvent 测试 ────────────────────────────
+
+// TestTypedEvent_EventTypeName 测试各事件的 EventTypeName 方法
+func TestTypedEvent_EventTypeName(t *testing.T) {
+	tests := []struct {
+		event TypedEvent
+		want  string
+	}{
+		{TaskCreatedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskCreated},
+		{TaskClaimedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskClaimed},
+		{TaskCompletedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskCompleted},
+		{TaskCancelledEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskCancelled},
+		{TaskUpdatedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskUpdated},
+		{TaskUnblockedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskUnblocked},
+		{TaskListDrainedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskListDrained},
+		{TaskPlanRequestEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskPlanRequest},
+		{TaskPlanResponseEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTaskPlanResponse},
+		{MessageEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMessage},
+		{BroadcastEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventBroadcast},
+		{TeamCreatedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventCreated},
+		{TeamCleanedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventCleaned},
+		{TeamStandbyEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventStandby},
+		{TeamCompletedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventTeamCompleted},
+		{MemberSpawnedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberSpawned},
+		{MemberRestartedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberRestarted},
+		{MemberStatusChangedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberStatusChanged},
+		{MemberExecutionChangedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberExecutionChanged},
+		{MemberShutdownEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberShutdown},
+		{MemberCanceledEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventMemberCanceled},
+		{PlanApprovalEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventPlanApproval},
+		{ToolApprovalResultEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventToolApprovalResult},
+		{WorktreeCreatedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorktreeCreated},
+		{WorktreeRemovedEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorktreeRemoved},
+		{WorkspaceArtifactEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorkspaceArtifactUpdated},
+		{WorkspaceConflictEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorkspaceConflict},
+		{WorkspaceLockRequestEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorkspaceLockRequest},
+		{WorkspaceLockResponseEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}}, TeamEventWorkspaceLockResponse},
+	}
+	for _, tt := range tests {
+		if got := tt.event.EventTypeName(); got != tt.want {
+			t.Errorf("%T.EventTypeName() = %q, want %q", tt.event, got, tt.want)
+		}
+	}
+}
+
+// TestEventMessageFromEvent 测试从具体事件创建 EventMessage
+func TestEventMessageFromEvent(t *testing.T) {
+	e := TaskCreatedEvent{BaseEventMessage: BaseEventMessage{TeamName: "team1"}, TaskID: "task_1", Status: "pending"}
+	msg := EventMessageFromEvent(e)
+	if msg.EventType != TeamEventTaskCreated {
+		t.Errorf("EventType = %q, want %q", msg.EventType, TeamEventTaskCreated)
+	}
+	if msg.Payload["task_id"] != "task_1" {
+		t.Errorf("Payload[task_id] = %v, want task_1", msg.Payload["task_id"])
+	}
+	if msg.Payload["team_name"] != "team1" {
+		t.Errorf("Payload[team_name] = %v, want team1", msg.Payload["team_name"])
+	}
+}
+
+// TestEventMessageFromEvent_消息事件 测试 MessageEvent 转换
+func TestEventMessageFromEvent_消息事件(t *testing.T) {
+	e := MessageEvent{
+		BaseEventMessage: BaseEventMessage{TeamName: "team1", MemberName: "alice"},
+		MessageID:        "msg_1",
+		FromMemberName:   "alice",
+		ToMemberName:     "bob",
+	}
+	msg := EventMessageFromEvent(e)
+	if msg.EventType != TeamEventMessage {
+		t.Errorf("EventType = %q, want %q", msg.EventType, TeamEventMessage)
+	}
+	if msg.Payload["message_id"] != "msg_1" {
+		t.Errorf("Payload[message_id] = %v, want msg_1", msg.Payload["message_id"])
+	}
+	if msg.Payload["from_member_name"] != "alice" {
+		t.Errorf("Payload[from_member_name] = %v, want alice", msg.Payload["from_member_name"])
+	}
+	if msg.Payload["to_member_name"] != "bob" {
+		t.Errorf("Payload[to_member_name] = %v, want bob", msg.Payload["to_member_name"])
+	}
+}
+
+// TestEventMessageFromEvent_广播事件 测试 BroadcastEvent 转换
+func TestEventMessageFromEvent_广播事件(t *testing.T) {
+	e := BroadcastEvent{
+		BaseEventMessage: BaseEventMessage{TeamName: "team1", MemberName: "leader"},
+		MessageID:        "msg_2",
+		FromMemberName:   "leader",
+	}
+	msg := EventMessageFromEvent(e)
+	if msg.EventType != TeamEventBroadcast {
+		t.Errorf("EventType = %q, want %q", msg.EventType, TeamEventBroadcast)
+	}
+	if msg.Payload["from_member_name"] != "leader" {
+		t.Errorf("Payload[from_member_name] = %v, want leader", msg.Payload["from_member_name"])
+	}
+}
