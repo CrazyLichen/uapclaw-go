@@ -51,11 +51,12 @@ func (m *AbstractManager[T]) registerProvider(resourceID string, provider func(c
 // 对应 Python: AbstractManager._get_resource(resource_id)
 // Python 中通过 inspect.iscoroutinefunction 区分同步/异步 provider，
 // Go 中统一调用 provider(ctx)。
+// Python 中资源不存在时返回 None，Go 对齐 Python 返回 (zero, nil)。
 func (m *AbstractManager[T]) getResource(ctx context.Context, resourceID string) (T, error) {
 	var zero T
 	provider := m.providers.Get(resourceID)
 	if provider == nil {
-		return zero, fmt.Errorf("资源 %s 未找到", resourceID)
+		return zero, nil
 	}
 	return provider(ctx)
 }

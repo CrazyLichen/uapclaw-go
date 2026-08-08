@@ -39,16 +39,19 @@ func TestAbstractManager_重复注册返回错误(t *testing.T) {
 	}
 }
 
-// TestAbstractManager_获取不存在返回错误 测试未注册 ID 报错
-func TestAbstractManager_获取不存在返回错误(t *testing.T) {
+// TestAbstractManager_获取不存在返回零值 测试未注册 ID 返回零值，对齐 Python 的 None 返回
+func TestAbstractManager_获取不存在返回零值(t *testing.T) {
 	mgr := NewAbstractManager[int]()
-	_, err := mgr.getResource(context.Background(), "notexist")
-	if err == nil {
-		t.Error("获取不存在的资源应返回错误")
+	val, err := mgr.getResource(context.Background(), "notexist")
+	if err != nil {
+		t.Errorf("获取不存在的资源不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if val != 0 {
+		t.Errorf("获取不存在的资源应返回零值，got %d, want 0", val)
 	}
 }
 
-// TestAbstractManager_注销 测试 unregister 后 get 报错
+// TestAbstractManager_注销 测试 unregister 后 get 返回零值
 func TestAbstractManager_注销(t *testing.T) {
 	mgr := NewAbstractManager[int]()
 	_ = mgr.registerProvider("res1", func(_ context.Context) (int, error) { return 42, nil })
@@ -61,9 +64,12 @@ func TestAbstractManager_注销(t *testing.T) {
 		t.Error("unregisterProvider 应返回被注销的 provider")
 	}
 
-	_, err = mgr.getResource(context.Background(), "res1")
-	if err == nil {
-		t.Error("注销后获取应返回错误")
+	val, err := mgr.getResource(context.Background(), "res1")
+	if err != nil {
+		t.Errorf("注销后获取不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if val != 0 {
+		t.Errorf("注销后获取应返回零值，got %d, want 0", val)
 	}
 }
 

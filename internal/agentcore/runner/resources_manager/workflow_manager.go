@@ -131,6 +131,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 
 // GetWorkflow 获取工作流实例。
 // 先调用 GetResource 获取工作流，如果 session 非 nil 则调用 decorator.DecorateWorkflowWithTrace 进行追踪装饰。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_workflow 返回 None 行为。
 //
 // 对应 Python: WorkflowMgr.get_workflow(workflow_id, session)
 func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, session decorator.TracerSession) (interfaces.Workflow, error) {
@@ -146,6 +147,11 @@ func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, sessio
 			exception.WithParam("resource_type", "workflow"),
 			exception.WithParam("reason", err.Error()),
 		)
+	}
+
+	// 资源不存在时返回 nil，对齐 Python 的 None 返回
+	if w == nil {
+		return nil, nil
 	}
 
 	// 如果 session 非 nil，进行追踪装饰

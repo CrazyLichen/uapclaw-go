@@ -108,6 +108,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 }
 
 // GetAgentTeam 获取 Agent 团队实例。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_agent_team 返回 None 行为。
 //
 // 对应 Python: AgentTeamMgr.get_agent_team(agent_team_id) → await self._get_resource(...)
 func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (maschema.BaseTeam, error) {

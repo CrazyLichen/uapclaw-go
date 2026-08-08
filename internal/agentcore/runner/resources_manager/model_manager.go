@@ -108,6 +108,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 
 // GetModel 获取模型实例。
 // 先调用 GetResource 获取模型客户端，如果 session 非 nil 则调用 decorator.DecorateModelWithTrace 进行追踪装饰。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_model 返回 None 行为。
 //
 // 对应 Python: ModelMgr.get_model(model_id, session)
 func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorator.TracerSession) (model_clients.BaseModelClient, error) {
@@ -123,6 +124,11 @@ func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorat
 			exception.WithParam("resource_type", "model"),
 			exception.WithParam("reason", err.Error()),
 		)
+	}
+
+	// 资源不存在时返回 nil，对齐 Python 的 None 返回
+	if model == nil {
+		return nil, nil
 	}
 
 	// 如果 session 非 nil，进行追踪装饰

@@ -121,6 +121,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 
 // GetAgent 获取 Agent 实例。
 // 调用 AbstractManager.GetResource 获取 provider 并执行。
+// 资源不存在时返回 (nil, nil)，对齐 Python 的 get_agent 返回 None 行为。
 //
 // 对应 Python: AgentMgr.get_agent(agent_id)
 //
