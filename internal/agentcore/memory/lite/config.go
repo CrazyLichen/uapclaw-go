@@ -1,8 +1,13 @@
 package lite
 
+import (
+	"os"
+	"strings"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// MemorySettings 记忆配置。⤵️ 回填: 7.4
+// MemorySettings 记忆配置。对齐 Python MemorySettings
 type MemorySettings struct {
 	// Provider 嵌入提供者类型，默认 "openai_compatible"
 	Provider string
@@ -28,12 +33,75 @@ type MemorySettings struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// IsMemoryEnabled 判断记忆系统是否启用。
-// ⤵️ 回填: 7.4 — 当前始终返回 false
-func IsMemoryEnabled() bool { return false }
+// IsMemoryEnabled 判断记忆系统是否启用。对齐 Python is_memory_enabled
+func IsMemoryEnabled() bool {
+	envEnabled := strings.ToLower(strings.TrimSpace(os.Getenv("MEMORY_ENABLED")))
+	if envEnabled == "" {
+		return true
+	}
+	return envEnabled == "true" || envEnabled == "1" || envEnabled == "yes"
+}
 
-// CreateMemorySettings 创建默认记忆配置。
-// ⤵️ 回填: 7.4 — 当前返回零值 MemorySettings
+// CreateMemorySettings 创建默认记忆配置。对齐 Python create_memory_settings
 func CreateMemorySettings(workspaceDir string, overrides map[string]any) *MemorySettings {
-	return &MemorySettings{}
+	s := &MemorySettings{
+		Provider:   "openai_compatible",
+		Model:      "text-embedding-v3",
+		Fallback:   "mock",
+		Sources:    []string{"memory", "sessions"},
+		ExtraPaths: nil,
+		Chunking: map[string]any{
+			"tokens":  256,
+			"overlap": 32,
+		},
+		Query: map[string]any{
+			"max_results": 10,
+			"min_score":   0.3,
+			"hybrid": map[string]any{
+				"enabled":            true,
+				"vectorWeight":       0.7,
+				"textWeight":         0.3,
+				"candidateMultiplier": 2.0,
+			},
+		},
+		Store: map[string]any{
+			"path": "memory.db",
+			"vector": map[string]any{
+				"enabled": true,
+			},
+			"fts": map[string]any{
+				"enabled": true,
+			},
+		},
+		Sync: map[string]any{
+			"watch":           true,
+			"watchDebounceMs": 2000,
+			"onSearch":        true,
+			"onSessionStart":  true,
+			"intervalMinutes": 0,
+		},
+		Cache: map[string]any{
+			"enabled":    true,
+			"maxEntries": 10000,
+		},
+	}
+
+	for key, value := range overrides {
+		switch key {
+		case "provider":
+			if v, ok := value.(string); ok {
+				s.Provider = v
+			}
+		case "model":
+			if v, ok := value.(string); ok {
+				s.Model = v
+			}
+		case "fallback":
+			if v, ok := value.(string); ok {
+				s.Fallback = v
+			}
+		}
+	}
+
+	return s
 }
