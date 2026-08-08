@@ -606,11 +606,11 @@ func parseLLMJSON(raw string) []map[string]any {
 	raw = reCodeBlockClose.ReplaceAllString(raw, "")
 
 	// 去掉 // 行注释
-	reLineComment := regexp.MustCompile("//[^\n]*")
+	reLineComment := regexp.MustCompile(`//[^\n]*`)
 	raw = reLineComment.ReplaceAllString(raw, "")
 
 	// 去掉尾逗号（,\s*([}\]]) → \1）
-	reTrailingComma := regexp.MustCompile(",\\s*([}\\]])")
+	reTrailingComma := regexp.MustCompile(`,\s*([}\]])`)
 	raw = reTrailingComma.ReplaceAllString(raw, "$1")
 
 	raw = strings.TrimSpace(raw)
@@ -629,7 +629,7 @@ func parseLLMJSON(raw string) []map[string]any {
 	}
 
 	// 失败时尝试 regexp 提取 [\s\S]* → 再次 json.Unmarshal
-	reArray := regexp.MustCompile("\\[[\\s\\S]*\\]")
+	reArray := regexp.MustCompile(`\[[\s\S]*\]`)
 	match := reArray.FindString(raw)
 	if match != "" {
 		var extracted any

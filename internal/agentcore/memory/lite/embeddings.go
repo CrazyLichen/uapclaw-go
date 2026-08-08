@@ -58,9 +58,12 @@ func (a *baseEmbeddingAdapter) EmbedDocuments(ctx context.Context, texts []strin
 
 // ResolveEmbeddingConfigFromEnv 从环境变量构建 EmbeddingConfig。对齐 Python resolve_embedding_config_from_env
 func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey string) *apiEmbedding.EmbeddingConfig {
-	modelName = os.Getenv("EMBEDDING_MODEL_NAME")
-	if modelName == "" {
-		modelName = os.Getenv("EMBED_MODEL")
+	envModelName := os.Getenv("EMBEDDING_MODEL_NAME")
+	if envModelName == "" {
+		envModelName = os.Getenv("EMBED_MODEL")
+	}
+	if envModelName == "" {
+		envModelName = modelName
 	}
 	baseURL := os.Getenv("EMBEDDING_BASE_URL")
 	if baseURL == "" {
@@ -76,14 +79,14 @@ func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey st
 	if apiKey == "" {
 		apiKey = fallbackAPIKey
 	}
-	if modelName == "" {
-		modelName = "default"
+	if envModelName == "" {
+		envModelName = "default"
 	}
 	if baseURL == "" || apiKey == "" {
 		return nil
 	}
 	return &apiEmbedding.EmbeddingConfig{
-		ModelName: modelName,
+		ModelName: envModelName,
 		BaseURL:   baseURL,
 		APIKey:    apiKey,
 	}

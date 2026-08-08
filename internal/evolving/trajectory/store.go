@@ -145,7 +145,7 @@ func (s *FileTrajectoryStore) Save(trajectory *Trajectory, version string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, _ = f.Write(b)
 	_, _ = f.Write([]byte("\n"))
 }
@@ -322,7 +322,7 @@ func jsonSafeRecursive(v any) any {
 func dictToTrajectory(data map[string]any) *Trajectory {
 	defer func() {
 		// 对齐 Python: except (KeyError, TypeError, ValueError): return None
-		recover()
+		_ = recover()
 	}()
 
 	// 转换 steps

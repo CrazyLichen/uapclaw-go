@@ -43,7 +43,7 @@ var langToExt = map[string]string{
 // 对应 Python: StoreRecordsHelper.persist_script(skill_dir, record)
 func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string, record *EvolutionRecord) error {
 	scriptsDir := filepath.Join(skillDir, "evolution", "scripts")
-	os.MkdirAll(scriptsDir, 0755)
+	_ = os.MkdirAll(scriptsDir, 0755)
 
 	lang := "py"
 	if record.Change.ScriptLanguage != nil {
@@ -130,7 +130,7 @@ func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, 
 	if targetDir == "" {
 		return nil
 	}
-	os.MkdirAll(targetDir, 0755)
+	_ = os.MkdirAll(targetDir, 0755)
 	evoPath := filepath.Join(targetDir, evolutionFilename)
 	data, err := json.Marshal(evoLog.ToDict())
 	if err != nil {
@@ -149,14 +149,14 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 	evoLog := h.LoadFullEvolutionLog(ctx, name)
 	updatedCount := 0
 
-	for _, record := range evoLog.Entries {
-		if updateData, ok := updates[record.ID]; ok {
+	for i := range evoLog.Entries {
+		if updateData, ok := updates[evoLog.Entries[i].ID]; ok {
 			if v, ok := updateData["score"]; ok {
-				record.Score = getFloatFromAny(v, record.Score)
+				evoLog.Entries[i].Score = getFloatFromAny(v, evoLog.Entries[i].Score)
 			}
 			if v, ok := updateData["usage_stats"]; ok {
 				if statsMap, ok := v.(map[string]any); ok {
-					record.UsageStats = FromDictUsageStats(statsMap)
+					evoLog.Entries[i].UsageStats = FromDictUsageStats(statsMap)
 				}
 			}
 			updatedCount++
@@ -221,7 +221,7 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
 			return deletedCount, err
 		}
-		h.store.RenderEvolutionMarkdown(ctx, name)
+		_ = h.store.RenderEvolutionMarkdown(ctx, name)
 		logger.Info(logger.ComponentAgentCore).
 			Int("deleted_count", deletedCount).
 			Str("skill", name).
@@ -253,7 +253,7 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
 			return updatedCount, err
 		}
-		h.store.RenderEvolutionMarkdown(ctx, name)
+		_ = h.store.RenderEvolutionMarkdown(ctx, name)
 		logger.Info(logger.ComponentAgentCore).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
@@ -320,7 +320,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
 		return primaryRecord, err
 	}
-	h.store.RenderEvolutionMarkdown(ctx, name)
+	_ = h.store.RenderEvolutionMarkdown(ctx, name)
 
 	logger.Info(logger.ComponentAgentCore).
 		Int("removed_count", len(recordsToRemove)).
@@ -361,7 +361,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name strin
 	if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
 		return targetRecord, err
 	}
-	h.store.RenderEvolutionMarkdown(ctx, name)
+	_ = h.store.RenderEvolutionMarkdown(ctx, name)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("record_id", recordID).

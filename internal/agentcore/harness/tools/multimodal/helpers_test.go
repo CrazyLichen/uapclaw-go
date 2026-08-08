@@ -1016,9 +1016,8 @@ func TestExtractResponseTextInternal_MultiModalNoTextPart(t *testing.T) {
 	})
 	result := extractResponseText(msg)
 	// 没有 text part，应返回 content.String() trim 后的结果
-	if result == "" {
-		// 空 string 可以接受 — content 只有 image_url part
-	}
+	// 没有 text part，应返回 content.String() trim 后的结果，空 string 可以接受
+	_ = result
 }
 
 // ──────────────────────────── ffprobeDuration 测试 ────────────────────────────

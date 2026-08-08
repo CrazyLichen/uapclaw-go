@@ -25,7 +25,7 @@ func TestNewDefaultEvaluator_空配置(t *testing.T) {
 
 // TestNewDefaultEvaluator_有效配置 测试有效配置构造
 func TestNewDefaultEvaluator_有效配置(t *testing.T) {
-	cfg, err := schema.NewModelClientConfig("llm_OpenAI", "test-key", "http://localhost:11434/v1")
+	cfg, err := schema.NewModelClientConfig("OpenAI", "test-key", "http://localhost:11434/v1", schema.WithVerifySSL(false))
 	if err != nil {
 		t.Fatalf("NewModelClientConfig 失败: %v", err)
 	}

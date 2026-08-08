@@ -93,7 +93,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 	}
 
 	// cron_create_job (index 3)
-	result, err = tools[3].Invoke(context.Background(), map[string]any{
+	_, err = tools[3].Invoke(context.Background(), map[string]any{
 		"name": "测试任务", "cron_expr": "0 0 9 * * ? *", "timezone": "Asia/Shanghai",
 		"description": "每天9点提醒",
 	})
@@ -105,7 +105,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 	}
 
 	// cron_update_job (index 4)
-	result, err = tools[4].Invoke(context.Background(), map[string]any{
+	_, err = tools[4].Invoke(context.Background(), map[string]any{
 		"job_id": "job1", "patch": map[string]any{"enabled": false},
 	})
 	if err != nil {

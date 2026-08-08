@@ -140,7 +140,7 @@ func TestExtensionRegistry_Trigger_无上下文(t *testing.T) {
 	}, 100)
 
 	// nil context 不触发
-	reg.Trigger(nil, GatewayStarted, nil)
+	reg.Trigger(nil, GatewayStarted, nil) //nolint:staticcheck // SA1012: 故意传入 nil context 测试不触发行为
 	if triggered {
 		t.Error("callback should not trigger with nil context")
 	}

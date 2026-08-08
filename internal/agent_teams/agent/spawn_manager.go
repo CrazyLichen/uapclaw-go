@@ -270,8 +270,8 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 	m.recoveryCancel[memberName] = cancel
 	m.mu.Unlock()
 
+	m.recoveryWg.Add(1)
 	go func() {
-		m.recoveryWg.Add(1)
 		defer m.recoveryWg.Done()
 		defer cancel()
 		if err := m.RestartTeammate(recoverCtx, memberName, defaultMaxRetries); err != nil {

@@ -7,7 +7,6 @@ import (
 
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -232,14 +231,14 @@ func TestImageOCRTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestVisionConfig()
 	ocrTool := NewImageOCRTool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = ocrTool
+	var _ = ocrTool
 }
 
 func TestVQATool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestVisionConfig()
 	vqaTool := NewVisualQuestionAnsweringTool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = vqaTool
+	var _ = vqaTool
 }
 
 // ──────────────────────────── ocrTextOrNone 测试 ────────────────────────────

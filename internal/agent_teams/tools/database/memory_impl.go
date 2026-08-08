@@ -630,7 +630,7 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		if skipSet[task.Assignee] {
 			continue
 		}
-		db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
+		_, _ = db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
 		cancelled = append(cancelled, task)
 	}
 	return cancelled, nil

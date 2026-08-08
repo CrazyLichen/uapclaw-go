@@ -227,7 +227,8 @@ func splitLines(s string) []string {
 		c := s[i]
 		var lineEnd int
 		var nextStart int
-		if c == '\r' {
+	switch c {
+		case '\r':
 			if i+1 < len(s) && s[i+1] == '\n' {
 				lineEnd = i // 不含 \r\n
 				nextStart = i + 2
@@ -235,10 +236,10 @@ func splitLines(s string) []string {
 				lineEnd = i // 不含 \r
 				nextStart = i + 1
 			}
-		} else if c == '\n' {
+		case '\n':
 			lineEnd = i // 不含 \n
 			nextStart = i + 1
-		} else {
+		default:
 			i++
 			continue
 		}
@@ -265,7 +266,8 @@ func splitLinesKeepEnds(s string) []string {
 		c := s[i]
 		var lineEnd int
 		var nextStart int
-		if c == '\r' {
+	switch c {
+		case '\r':
 			if i+1 < len(s) && s[i+1] == '\n' {
 				lineEnd = i + 2 // 含 \r\n
 				nextStart = i + 2
@@ -273,10 +275,10 @@ func splitLinesKeepEnds(s string) []string {
 				lineEnd = i + 1 // 含 \r
 				nextStart = i + 1
 			}
-		} else if c == '\n' {
+		case '\n':
 			lineEnd = i + 1 // 含 \n
 			nextStart = i + 1
-		} else {
+		default:
 			i++
 			continue
 		}

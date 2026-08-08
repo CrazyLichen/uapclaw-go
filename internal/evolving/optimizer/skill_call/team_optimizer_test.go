@@ -36,7 +36,7 @@ func TestTeamSkillExperienceOptimizer_RequiresForwardData(t *testing.T) {
 
 func TestTeamSkillOptimizer_类型别名(t *testing.T) {
 	// TeamSkillOptimizer 是 TeamSkillExperienceOptimizer 的类型别名
-	var opt TeamSkillOptimizer = TeamSkillExperienceOptimizer{}
+	var opt = TeamSkillExperienceOptimizer{}
 	assert.IsType(t, TeamSkillExperienceOptimizer{}, opt)
 }
 

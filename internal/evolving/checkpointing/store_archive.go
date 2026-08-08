@@ -65,7 +65,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 		return "", nil
 	}
 
-	os.MkdirAll(skillDir, 0755)
+	_ = os.MkdirAll(skillDir, 0755)
 
 	// 对齐 Python: 构建 SKILL.md 内容
 	skillMDContent := ""
@@ -88,7 +88,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 
 	// 对齐 Python: 创建 evolution 目录
 	evoDir := filepath.Join(skillDir, "evolution")
-	os.MkdirAll(evoDir, 0755)
+	_ = os.MkdirAll(evoDir, 0755)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("name", name).
@@ -197,7 +197,7 @@ func (h *StoreArchiveHelper) ListArchives(ctx context.Context, name string) []st
 // 对应 Python: StoreArchiveHelper.archive_dir(skill_dir)
 func ArchiveDir(skillDir string) string {
 	archive := filepath.Join(skillDir, "archive")
-	os.MkdirAll(archive, 0755)
+	_ = os.MkdirAll(archive, 0755)
 	return archive
 }
 

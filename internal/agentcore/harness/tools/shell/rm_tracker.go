@@ -9,7 +9,6 @@ import (
 	"github.com/dlclark/regexp2"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -212,8 +211,8 @@ func buildHistoryPathFromOpts(opts []tool.ToolOption, agentID string) string {
 		return ""
 	}
 
-	sessionFacade, ok := callOpts.Session.(sessioninterfaces.SessionFacade)
-	if !ok || sessionFacade == nil {
+	sessionFacade := callOpts.Session
+	if sessionFacade == nil {
 		return ""
 	}
 

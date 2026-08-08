@@ -145,24 +145,24 @@ func PackSkillDirectory(skillDir string, skillMDRelpath string, skillMDContent s
 		}
 		info, err := f.Stat()
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			continue
 		}
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			continue
 		}
 		header.Name = arcname
 		if err := tw.WriteHeader(header); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, fmt.Errorf("写入 tar header 失败: %w", err)
 		}
 		if _, err := io.Copy(tw, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, fmt.Errorf("写入 tar 内容失败: %w", err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	if err := tw.Close(); err != nil {
@@ -188,7 +188,7 @@ func UnpackSkillPackage(packageBytes []byte, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("打开 gzip 失败: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() { _ = gzReader.Close() }()
 
 	tr := tar.NewReader(gzReader)
 	for {
@@ -220,10 +220,10 @@ func UnpackSkillPackage(packageBytes []byte, destDir string) error {
 				return fmt.Errorf("创建文件失败: %w", err)
 			}
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
+				_ = f.Close()
 				return fmt.Errorf("写入文件失败: %w", err)
 			}
-			f.Close()
+			_ = f.Close()
 		}
 	}
 	return nil
@@ -268,7 +268,7 @@ func shouldPackRelative(relPath string) bool {
 // listPackableFilePaths 列出可打包文件的绝对路径。
 func listPackableFilePaths(root string) []string {
 	var result []string
-	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || !d.IsDir() {
 			return nil
 		}
@@ -281,7 +281,7 @@ func listPackableFilePaths(root string) []string {
 		}
 		return nil
 	})
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

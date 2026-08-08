@@ -211,7 +211,7 @@ func withBody(body string) RequestOption {
 
 // newHTTPResponse 从 http.Response 构造 httpResponse
 func newHTTPResponse(resp *http.Response) *httpResponse {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		// 读取失败时记录日志，返回空 body 和原始状态码

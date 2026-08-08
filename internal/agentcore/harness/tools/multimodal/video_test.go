@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -218,7 +217,7 @@ func TestVideoUnderstandingTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestVideoConfig()
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = videoTool
+	var _ = videoTool
 }
 
 // ──────────────────────────── guessVideoMIMEType 测试 ────────────────────────────

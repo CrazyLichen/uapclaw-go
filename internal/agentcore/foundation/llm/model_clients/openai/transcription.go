@@ -61,7 +61,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 			exception.WithMsg(fmt.Sprintf("打开音频文件失败: %s", audioPath)),
 		)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// 3. 构造 multipart/form-data 请求体
 	var requestBody bytes.Buffer

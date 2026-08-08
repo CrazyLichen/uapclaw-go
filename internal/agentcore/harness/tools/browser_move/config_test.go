@@ -293,7 +293,7 @@ func TestResolveRuntimeSettings_从Model推导(t *testing.T) {
 	// 注意：NewModelClientConfig.Validate() 会将 provider 标准化为枚举形式
 	// "openrouter" → "OpenRouter"，所以断言时用标准化后的值
 	// 使用已注册的 provider 名称 "OpenRouter"（首字母大写）
-	clientCfg, err := llmschema.NewModelClientConfig("OpenRouter", "or-key", "https://openrouter.ai/api/v1")
+	clientCfg, err := llmschema.NewModelClientConfig("OpenRouter", "or-key", "https://openrouter.ai/api/v1", llmschema.WithVerifySSL(false))
 	if err != nil {
 		t.Fatalf("NewModelClientConfig 失败: %v", err)
 	}

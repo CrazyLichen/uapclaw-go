@@ -203,7 +203,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 	localWrite := func() error {
 		// 确保父目录存在
 		dir := filepath.Dir(path)
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 		return os.WriteFile(path, []byte(content), 0644)
 	}
 
@@ -421,7 +421,10 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 	}
 
 	if record.Change.Target == signal.EvolutionTargetScript {
-		s.records.PersistScript(ctx, skillDir, &record)
+		if err := s.records.PersistScript(ctx, skillDir, &record); err != nil {
+			logger.Warn(logger.ComponentAgentCore).Err(err).Str("record_id", record.ID).
+				Msg("[EvolutionStore] 持久化脚本失败")
+		}
 	}
 
 	evoLog := s.LoadFullEvolutionLog(ctx, name)
@@ -447,7 +450,9 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 	}
 
 	evoLog.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	s.records.SaveEvolutionLog(ctx, name, evoLog, skillDir)
+	if err := s.records.SaveEvolutionLog(ctx, name, evoLog, skillDir); err != nil {
+		return err
+	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("skill", name).
@@ -464,7 +469,7 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 			Msg("[EvolutionStore] 演进经验过多，建议 /evolve_simplify")
 	}
 
-	s.RenderEvolutionMarkdown(ctx, name)
+	_ = s.RenderEvolutionMarkdown(ctx, name)
 	return nil
 }
 
@@ -666,7 +671,7 @@ func inferSkillNameFromPackage(packageBytes []byte) string {
 	if err != nil {
 		return ""
 	}
-	defer gzReader.Close()
+	defer func() { _ = gzReader.Close() }()
 
 	tr := tar.NewReader(gzReader)
 	for {

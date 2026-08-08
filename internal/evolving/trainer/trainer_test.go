@@ -389,7 +389,7 @@ func TestSetCallbacks(t *testing.T) {
 func TestNewCallbacks(t *testing.T) {
 	cb := NewCallbacks()
 	if cb == nil {
-		t.Error("期望 NewCallbacks 返回非 nil")
+		t.Fatal("期望 NewCallbacks 返回非 nil")
 	}
 	// 确认所有回调字段为 nil（类型安全：具体函数类型而非 any）
 	if cb.OnTrainBegin != nil {

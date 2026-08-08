@@ -9,7 +9,7 @@ import (
 func TestResolveEmbeddingConfigFromEnv_全部设置(t *testing.T) {
 	result := ResolveEmbeddingConfigFromEnv("default-model", "https://default.example.com", "default-key")
 	if result == nil {
-		t.Error("当所有参数都有值时应返回非 nil")
+		t.Fatal("当所有参数都有值时应返回非 nil")
 	}
 	// 注意：当 EMBEDDING_MODEL_NAME 环境变量未设置时，函数会覆盖 modelName 为空再设为 "default"
 	// 这是预期行为，对齐 Python 的 env 优先逻辑

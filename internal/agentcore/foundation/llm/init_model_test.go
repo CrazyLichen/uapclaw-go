@@ -100,7 +100,7 @@ func TestInitModel_VerifySSLDefault(t *testing.T) {
 	}
 
 	// 而 ModelClientConfig 的 VerifySSL 默认为 True
-	config, err := llmschema.NewModelClientConfig("test", "key", "http://localhost")
+	config, err := llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost")
 	if err != nil {
 		t.Fatal(err)
 	}

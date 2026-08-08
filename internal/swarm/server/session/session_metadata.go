@@ -268,7 +268,7 @@ func InitSessionMetadata(sessionID, channelID, userID, title, mode, teamName str
 		"team_name":       teamName,
 		"round_id":        0,
 	}
-	WriteSessionMetadata(GetSessionsDir(), sessionID, metadata)
+	_ = WriteSessionMetadata(GetSessionsDir(), sessionID, metadata)
 }
 
 // GetSessionMetadata 获取会话元数据（优先缓存）。

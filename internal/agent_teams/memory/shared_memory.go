@@ -90,15 +90,15 @@ func (m *SharedMemoryManager) WriteTeamSummary(_ context.Context, content string
 	}
 	tmpPath := tmpFile.Name()
 	if _, err := tmpFile.WriteString(content); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	if err := os.Rename(tmpPath, target); err != nil {
 		logger.Error(sharedLogComponent).Err(err).Str("tmp", tmpPath).Str("target", target).
 			Msg("WriteTeamSummary 原子替换失败")
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return err
 	}
 	return nil

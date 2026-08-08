@@ -19,10 +19,18 @@ func GetCurrentTime() int64 {
 // 对齐 Python: _sanitize_session_id_for_table(session_id)
 // 使用 BLAKE2s XOF(size=8) → 16 hex chars（精确对齐 Python digest_size=8）
 func SanitizeSessionIDForTable(sessionID string) string {
-	xof, _ := blake2s.NewXOF(8, nil)
-	xof.Write([]byte(sessionID))
+	xof, err := blake2s.NewXOF(8, nil)
+	if err != nil {
+		// 降级为简单 hex 截断
+		return hex.EncodeToString([]byte(sessionID))[:16]
+	}
+	if _, err := xof.Write([]byte(sessionID)); err != nil {
+		return hex.EncodeToString([]byte(sessionID))[:16]
+	}
 	buf := make([]byte, 8)
-	xof.Read(buf)
+	if _, err := xof.Read(buf); err != nil {
+		return hex.EncodeToString([]byte(sessionID))[:16]
+	}
 	return hex.EncodeToString(buf)
 }
 

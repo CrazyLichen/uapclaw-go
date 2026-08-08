@@ -33,7 +33,7 @@ type ParsedExperienceDraft struct {
 
 // headingRE Markdown 章节标题正则
 // 对齐 Python: _HEADING_RE = re.compile(r"^#{1,4}\s+")
-var headingRE = regexp.MustCompile("^#{1,4}\\s+")
+var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -294,9 +294,9 @@ func FixJSONText(text string) string {
 	// 对齐 Python: re.sub(r"```\s*$", "", text, flags=re.MULTILINE)
 	text = regexp.MustCompile("```\\s*$").ReplaceAllString(text, "")
 	// 对齐 Python: re.sub(r"//[^\n]*", "", text)
-	text = regexp.MustCompile("//[^\\n]*").ReplaceAllString(text, "")
+	text = regexp.MustCompile(`//[^\n]*`).ReplaceAllString(text, "")
 	// 对齐 Python: re.sub(r",\s*([}\]])", r"\1", text)
-	text = regexp.MustCompile(",\\s*([}\\]])").ReplaceAllString(text, "$1")
+	text = regexp.MustCompile(`,\s*([}\]])`).ReplaceAllString(text, "$1")
 	return strings.TrimSpace(text)
 }
 

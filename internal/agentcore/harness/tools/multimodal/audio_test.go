@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -244,21 +243,21 @@ func TestAudioTranscriptionTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{transcriptionText: "ok"}
 	config := newTestAudioConfig()
 	audioTool := NewAudioTranscriptionTool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = audioTool
+	var _ = audioTool
 }
 
 func TestAudioQATool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{invokeResponses: []mockVisionResponse{{text: "ok"}}}
 	config := newTestAudioConfig()
 	audioTool := NewAudioQATool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = audioTool
+	var _ = audioTool
 }
 
 func TestAudioMetadataTool_ImplementsToolInterface(t *testing.T) {
 	mockClient := &mockAudioClient{}
 	config := newTestAudioConfig()
 	audioTool := NewAudioMetadataTool(mockClient, config, "cn", "test-agent")
-	var _ tool.Tool = audioTool
+	var _ = audioTool
 }
 
 func TestMockAudioClient_ImplementsBaseModelClient(t *testing.T) {

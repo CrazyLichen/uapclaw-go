@@ -66,7 +66,7 @@ func TestNewLLMAsJudgeMetric_构造测试(t *testing.T) {
 
 // TestNewLLMAsJudgeMetric_有效配置 测试有效配置创建
 func TestNewLLMAsJudgeMetric_有效配置(t *testing.T) {
-	cfg, err := schema.NewModelClientConfig("llm_OpenAI", "test-key", "http://localhost:11434/v1")
+	cfg, err := schema.NewModelClientConfig("OpenAI", "test-key", "http://localhost:11434/v1", schema.WithVerifySSL(false))
 	if err != nil {
 		t.Fatalf("NewModelClientConfig 失败: %v", err)
 	}

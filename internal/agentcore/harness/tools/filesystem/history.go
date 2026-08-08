@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -240,8 +239,8 @@ func appendHistoryFromOpts(opts []tool.ToolOption, agentID, filePath, action str
 		return nil // 无 session，不记录历史（对齐 Python: if _session is None: skip）
 	}
 
-	sessionFacade, ok := callOpts.Session.(sessioninterfaces.SessionFacade)
-	if !ok || sessionFacade == nil {
+	sessionFacade := callOpts.Session
+	if sessionFacade == nil {
 		return nil
 	}
 

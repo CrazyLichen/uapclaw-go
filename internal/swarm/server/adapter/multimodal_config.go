@@ -215,22 +215,20 @@ func getModelConfig(configBase map[string]any, modelType string) map[string]any 
 	}
 	// models 可能是列表格式
 	rawModelsList, _ := configBase["models"].([]any)
-	if rawModelsList != nil {
-		for _, block := range rawModelsList {
-			b, _ := block.(map[string]any)
-			if b == nil {
-				continue
+	for _, block := range rawModelsList {
+		b, _ := block.(map[string]any)
+		if b == nil {
+			continue
+		}
+		inner, _ := b[modelType].(map[string]any)
+		if inner != nil {
+			mc, _ := inner["model_config"].(map[string]any)
+			if mc != nil {
+				return mc
 			}
-			inner, _ := b[modelType].(map[string]any)
-			if inner != nil {
-				mc, _ := inner["model_config"].(map[string]any)
-				if mc != nil {
-					return mc
-				}
-				mc2, _ := inner["model_client_config"].(map[string]any)
-				if mc2 != nil {
-					return mc2
-				}
+			mc2, _ := inner["model_client_config"].(map[string]any)
+			if mc2 != nil {
+				return mc2
 			}
 		}
 	}

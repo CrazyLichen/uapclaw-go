@@ -137,9 +137,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 	var messagesCopy []map[string]any
 	if onlineContext.Messages != nil {
 		messagesCopy = make([]map[string]any, len(onlineContext.Messages))
-		for i, m := range onlineContext.Messages {
-			messagesCopy[i] = m
-		}
+		copy(messagesCopy, onlineContext.Messages)
 	}
 
 	request, err := o.manager.StageApplyResults(
@@ -217,9 +215,7 @@ func (o *OnlineEvolutionOrchestrator) buildContext(
 	var messagesCopy []map[string]any
 	if messages != nil {
 		messagesCopy = make([]map[string]any, len(messages))
-		for i, m := range messages {
-			messagesCopy[i] = m
-		}
+		copy(messagesCopy, messages)
 	}
 
 	var metadataCopy map[string]any

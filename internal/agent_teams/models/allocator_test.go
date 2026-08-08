@@ -344,7 +344,7 @@ func TestResolveMemberModelFromPool_正常(t *testing.T) {
 	}
 	result := ResolveMemberModelFromPool(pool, "model-a", 1)
 	if result == nil {
-		t.Error("Expected non-nil result")
+		t.Fatal("Expected non-nil result")
 	}
 	if result.ModelClientConfig.APIBase != "http://a2" {
 		t.Errorf("Expected http://a2, got %s", result.ModelClientConfig.APIBase)
@@ -359,7 +359,7 @@ func TestResolveMemberModelFromPool_索引越界(t *testing.T) {
 	}
 	result := ResolveMemberModelFromPool(pool, "model-a", 99)
 	if result == nil {
-		t.Error("Expected non-nil result (fallback to index 0)")
+		t.Fatal("Expected non-nil result (fallback to index 0)")
 	}
 	if result.ModelClientConfig.APIBase != "http://a" {
 		t.Errorf("Expected fallback to index 0, got %s", result.ModelClientConfig.APIBase)

@@ -201,7 +201,7 @@ func TestHooksConfig_GetEventSummary(t *testing.T) {
 func TestLoadHooksConfig_空配置(t *testing.T) {
 	cfg := LoadHooksConfig(nil)
 	if cfg == nil {
-		t.Error("LoadHooksConfig(nil) should return non-nil")
+		t.Fatal("LoadHooksConfig(nil) should return non-nil")
 	}
 	if len(cfg.Events) != 0 {
 		t.Errorf("Events = %d, want 0 for nil config", len(cfg.Events))

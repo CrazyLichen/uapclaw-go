@@ -136,7 +136,7 @@ func (s *FileCheckpointStore) LoadStateDict(path string) (map[string]map[string]
 // ensureDir 确保目录存在。
 func ensureDir(dir string) {
 	if dir != "" {
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 	}
 }
 

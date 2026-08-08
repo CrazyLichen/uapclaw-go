@@ -53,7 +53,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 	}
 
 	evoDir := filepath.Join(skillDir, "evolution")
-	os.MkdirAll(evoDir, 0755)
+	_ = os.MkdirAll(evoDir, 0755)
 
 	// 对齐 Python: section_groups / script_entries 分组
 	sectionGroups := map[string][]EvolutionRecord{}
@@ -74,7 +74,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 
 	if len(scriptEntries) > 0 {
 		scriptsDir := filepath.Join(evoDir, "scripts")
-		os.MkdirAll(scriptsDir, 0755)
+		_ = os.MkdirAll(scriptsDir, 0755)
 		if err := h.RenderScriptIndex(ctx, scriptsDir, scriptEntries); err != nil {
 			return err
 		}
@@ -532,24 +532,24 @@ func formatScriptAssetsTable(records []EvolutionRecord) []string {
 
 // clearDirRecursive 递归清空目录中的文件（从叶子开始删除）。
 func clearDirRecursive(dir string) {
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if !d.IsDir() {
-			os.Remove(path)
+			_ = os.Remove(path)
 		}
 		return nil
 	})
 	// 重新遍历删除空子目录
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || path == dir {
 			return nil
 		}
 		if d.IsDir() {
 			entries, _ := os.ReadDir(path)
 			if len(entries) == 0 {
-				os.Remove(path)
+				_ = os.Remove(path)
 			}
 		}
 		return nil

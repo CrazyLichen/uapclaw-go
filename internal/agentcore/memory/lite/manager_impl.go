@@ -118,6 +118,7 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		if !mgr.closed {
 			return mgr, nil
 		}
+		_ = mgr.Close()
 	}
 
 	settings := params.Settings
@@ -164,7 +165,9 @@ func clearMemoryManagerCache() {
 func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	m.dbPath = m.resolveDBPath()
 
-	EnsureDir(filepath.Dir(m.dbPath))
+	if err := EnsureDir(filepath.Dir(m.dbPath)); err != nil {
+		return fmt.Errorf("确保数据库目录失败: %w", err)
+	}
 
 	var err error
 	m.db, err = sql.Open("sqlite3", m.dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
@@ -306,7 +309,7 @@ func (m *memoryIndexManager) loadVectorExtension() error {
 	if err != nil {
 		return fmt.Errorf("获取连接失败: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	err = conn.Raw(func(driverConn interface{}) error {
 		dc, ok := driverConn.(*sqlite3.SQLiteConn)
@@ -413,7 +416,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 	// ListMemoryFiles 当前为占位，使用 workspace 方法直接遍历
 	var files []string
 	if m.memoryDir != "" {
-		filepath.Walk(m.memoryDir, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(m.memoryDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return nil
 			}
@@ -450,7 +453,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var path string
 		if err := rows.Scan(&path); err != nil {
@@ -471,7 +474,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 	}
 
 	var sessionFiles []string
-	filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
 			return nil
 		}
@@ -504,7 +507,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var path string
 		if err := rows.Scan(&path); err != nil {
@@ -543,9 +546,9 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry map[string]any
 	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
 
 	// 清除旧索引
-	m.db.Exec("DELETE FROM chunks WHERE path = ?", entry["path"])
+	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", entry["path"])
 	if m.ftsAvailable {
-		m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry["path"])
+		_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry["path"])
 	}
 
 	for _, chunk := range chunks {
@@ -611,10 +614,10 @@ func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath s
 			for rows.Next() {
 				var rowid int64
 				if rows.Scan(&rowid) == nil {
-					m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", vectorTable), rowid)
+					_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", vectorTable), rowid)
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
 	if m.ftsAvailable {
@@ -623,14 +626,14 @@ func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath s
 			for rows.Next() {
 				var rowid int64
 				if rows.Scan(&rowid) == nil {
-					m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", ftsTable), rowid)
+					_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", ftsTable), rowid)
 				}
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
-	m.db.Exec("DELETE FROM chunks WHERE path = ?", filePath)
-	m.db.Exec("DELETE FROM files WHERE path = ?", filePath)
+	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", filePath)
+	_, _ = m.db.Exec("DELETE FROM files WHERE path = ?", filePath)
 }
 
 // buildFileEntry 构建文件索引条目。对齐 Python build_file_entry
@@ -686,7 +689,7 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 
 	// 写缓存
 	if cacheEnabled && emb != nil {
-		m.db.Exec(
+		_, _ = m.db.Exec(
 			fmt.Sprintf("INSERT OR REPLACE INTO %s (provider, model, provider_key, hash, embedding, dims, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", embeddingCacheTable),
 			"provider", m.settings.Model, m.providerKey, textHash, vectorToBlob(emb), len(emb), time.Now().Unix(),
 		)
@@ -704,7 +707,7 @@ func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
 		return true
 	}
 	if m.vectorDims != nil && *m.vectorDims != dims {
-		m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
+		_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
 	}
 	_, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims))
 	if err != nil {
@@ -869,7 +872,7 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 			"snippet": truncateString(text, snippetMaxChars),
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	if len(chunkMap) == 0 {
 		return nil, nil
@@ -986,7 +989,7 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 			"snippet": truncateString(text, snippetMaxChars),
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	if len(chunkMap) == 0 {
 		return nil, nil
@@ -1150,8 +1153,8 @@ func (m *memoryIndexManager) Status() map[string]any {
 	}
 
 	var fileCount, chunkCount int
-	m.db.QueryRow("SELECT COUNT(*) FROM files").Scan(&fileCount)
-	m.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunkCount)
+	_ = m.db.QueryRow("SELECT COUNT(*) FROM files").Scan(&fileCount)
+	_ = m.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunkCount)
 
 	// 按来源统计
 	sourceCounts := make([]map[string]any, 0)
@@ -1167,12 +1170,12 @@ func (m *memoryIndexManager) Status() map[string]any {
 				})
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	// 缓存条目数
 	var cacheEntries int
-	m.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", embeddingCacheTable)).Scan(&cacheEntries)
+	_ = m.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", embeddingCacheTable)).Scan(&cacheEntries)
 
 	ftsEnabled := true
 	if v, ok := m.settings.Store["fts"].(map[string]any); ok {
@@ -1234,12 +1237,12 @@ func (m *memoryIndexManager) Close() error {
 
 	// 停止文件监听
 	if m.watcher != nil {
-		m.watcher.Close()
+		_ = m.watcher.Close()
 	}
 
 	// 关闭数据库
 	if m.db != nil {
-		m.db.Close()
+		_ = m.db.Close()
 	}
 
 	// 从缓存中移除

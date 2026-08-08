@@ -18,7 +18,7 @@ func TestNewUserHookRail(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 	if rail == nil {
-		t.Error("NewUserHookRail() = nil, want non-nil")
+		t.Fatal("NewUserHookRail() = nil, want non-nil")
 	}
 	// 验证 priority=60
 	if rail.Priority() != 60 {

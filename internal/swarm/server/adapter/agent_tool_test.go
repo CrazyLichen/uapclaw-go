@@ -6,10 +6,29 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// mockSessionFacade 测试用的模拟 SessionFacade
+type mockSessionFacade struct{}
+
+func (m *mockSessionFacade) GetSessionID() string                       { return "test-session" }
+func (m *mockSessionFacade) UpdateState(_ map[string]any)               {}
+func (m *mockSessionFacade) GetState(_ state.StateKey) (any, error)     { return nil, nil }
+func (m *mockSessionFacade) DumpState() map[string]any                  { return nil }
+func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error { return nil }
+func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error {
+	return nil
+}
+func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any      { return nil }
+func (m *mockSessionFacade) Interact(_ context.Context, _ any) error { return nil }
+
+// 确保 mockSessionFacade 实现了 SessionFacade 接口
+var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -59,7 +78,7 @@ func TestAgentTool_Invoke_未找到Agent(t *testing.T) {
 		"subagent_type": "nonexistent",
 		"prompt":        "hello",
 		"description":   "test",
-	})
+	}, tool.WithToolSession(&mockSessionFacade{}))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -74,7 +93,7 @@ func TestAgentTool_Invoke_自定义Agent列表(t *testing.T) {
 		"subagent_type": "nonexistent",
 		"prompt":        "hello",
 		"description":   "test",
-	})
+	}, tool.WithToolSession(&mockSessionFacade{}))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "reviewer")
 }

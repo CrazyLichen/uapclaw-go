@@ -238,9 +238,7 @@ func NewPendingChange(
 	var msgCopy []map[string]any
 	if messages != nil {
 		msgCopy = make([]map[string]any, len(messages))
-		for i, m := range messages {
-			msgCopy[i] = m
-		}
+		copy(msgCopy, messages)
 	}
 	return &PendingChange{
 		OperatorID: fmt.Sprintf("skill_experience_%s", skillName),

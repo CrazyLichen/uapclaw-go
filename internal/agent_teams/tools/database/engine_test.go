@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"testing"
 )
 
@@ -49,7 +50,7 @@ func TestSanitizeSessionIDForTable_长度(t *testing.T) {
 func TestSanitizeSessionIDForTable_hex字符(t *testing.T) {
 	suffix := SanitizeSessionIDForTable("session-test")
 	for _, c := range suffix {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if c < '0' || (c > '9' && c < 'a') || c > 'f' {
 			t.Errorf("后缀应只包含 hex 字符 [0-9a-f]，发现 %q", c)
 		}
 	}
@@ -69,7 +70,7 @@ func TestSanitizeSessionIDForTable_对齐Python(t *testing.T) {
 
 // TestInitializeEngine 占位函数应返回 nil, nil。
 func TestInitializeEngine(t *testing.T) {
-	result, err := InitializeEngine(nil, nil)
+	result, err := InitializeEngine(context.TODO(), nil)
 	if err != nil {
 		t.Errorf("InitializeEngine 占位应返回 nil error: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestInitializeEngine(t *testing.T) {
 
 // TestCreateCurSessionTablesFromEngine 占位函数应返回 nil error。
 func TestCreateCurSessionTablesFromEngine(t *testing.T) {
-	if err := CreateCurSessionTablesFromEngine(nil, nil); err != nil {
+	if err := CreateCurSessionTablesFromEngine(context.TODO(), nil); err != nil {
 		t.Errorf("CreateCurSessionTablesFromEngine 占位应返回 nil error: %v", err)
 	}
 }
