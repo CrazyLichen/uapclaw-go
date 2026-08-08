@@ -641,14 +641,6 @@ func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.M
 
 	compressedContext, modifiedIndices, compactSummary, err := crc.MultiCompress(ctx, mc, contextMessages, lastUserIdx, endIdx)
 	if err != nil {
-		// MODEL_CALL_FAILED 时降级跳过
-		if isModelCallFailedError(err) {
-			logger.Warn(logger.ComponentAgentCore).
-				Str("processor_type", crc.ProcessorType()).
-				Err(err).
-				Msg("压缩模型调用失败，跳过当前处理器")
-			return nil, messagesToAdd, nil
-		}
 		return nil, messagesToAdd, exception.NewBaseError(
 			exception.StatusContextExecutionError,
 			exception.WithMsg("压缩消息失败"),
