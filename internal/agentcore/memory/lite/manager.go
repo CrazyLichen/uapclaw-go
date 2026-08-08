@@ -10,7 +10,7 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
-// MemoryIndexManager 记忆索引管理器接口。⤵️ 回填: 7.1
+// MemoryIndexManager 记忆索引管理器接口。对齐 Python MemoryIndexManager
 type MemoryIndexManager interface {
 	// Initialize 初始化管理器（打开数据库、建 schema、初始化 provider）
 	Initialize(ctx context.Context) error
@@ -44,22 +44,14 @@ type MemoryManagerParams struct {
 	NodeName string
 }
 
-// SessionDeltaState 会话增量状态。⤵️ 回填: 7.1
-type SessionDeltaState struct {
-	// LastSize 上次文件大小
-	LastSize int
-	// PendingBytes 待处理字节
-	PendingBytes int
-	// PendingMessages 待处理消息
-	PendingMessages []any
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GetMemoryIndexManager 幂等获取管理器实例。⤵️ 回填: 7.1
+// GetMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
 func GetMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
-	return nil, nil
+	return getMemoryIndexManager(params)
 }
 
-// ClearMemoryManagerCache 清除缓存。⤵️ 回填: 7.1
-func ClearMemoryManagerCache() {}
+// ClearMemoryManagerCache 清除缓存。对齐 Python clear_memory_manager_cache
+func ClearMemoryManagerCache() {
+	clearMemoryManagerCache()
+}
