@@ -40,6 +40,8 @@ type VisionModelConfig struct {
 }
 
 // VideoModelConfig 视频模型运行时配置
+// Go 扩展设计决策：Python 中视频工具使用 VisionModelConfig 和 VISION_ 前缀环境变量，
+// Go 独立定义 VideoModelConfig 和 VIDEO_ 前缀，支持视频/视觉使用不同模型。
 type VideoModelConfig struct {
 	// APIKey API 密钥
 	APIKey string `json:"api_key"`

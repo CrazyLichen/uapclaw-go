@@ -971,7 +971,7 @@ func TestAppendToolCard(t *testing.T) {
 // TestRemoveRegisteredTools 测试工具移除。
 func TestRemoveRegisteredTools(t *testing.T) {
 	d := NewDeepAdapter()
-	d.removeRegisteredTools([]string{"tool1", "tool2"})
+	d.removeRegisteredTools(nil) // 对齐 Python: 传工具实例列表，nil 时直接返回
 }
 
 // TestSyncToolGroup 测试工具组同步。

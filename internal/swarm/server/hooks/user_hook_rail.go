@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -78,12 +79,9 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 			return nil
 		}
 		if result.ModifiedInput != nil {
-			// 对齐 Python: ctx.inputs.tool_args = r.modified_input
-			if modifiedArgs, ok := result.ModifiedInput["tool_args"]; ok {
-				if s, ok := modifiedArgs.(string); ok {
-					toolInputs.ToolArgs = s
-				}
-			}
+			// 对齐 Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
+			jsonBytes, _ := json.Marshal(result.ModifiedInput)
+			toolInputs.ToolArgs = string(jsonBytes)
 			// 对齐 Python: new_name = r.modified_input.get("_tool_name")
 			if newName, ok := result.ModifiedInput["_tool_name"]; ok {
 				if s, ok := newName.(string); ok && s != "" {
@@ -139,12 +137,18 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 		}
 		if result.AdditionalContext != "" {
 			// 对齐 Python: current = ctx.inputs.tool_result or ""; ctx.inputs.tool_result = current + "\n[Hook 发现]: " + r.additional_context
-			current := fmt.Sprintf("%v", toolInputs.ToolResult)
-			if current != "" {
-				toolInputs.ToolResult = current + "\n[Hook 发现]: " + result.AdditionalContext
-			} else {
-				toolInputs.ToolResult = "[Hook 发现]: " + result.AdditionalContext
+			var current string
+			if toolInputs.ToolResult != nil {
+				if s, ok := toolInputs.ToolResult.(string); ok {
+					current = s
+				} else {
+					// 非 string 类型，JSON 序列化保底
+					jsonBytes, _ := json.Marshal(toolInputs.ToolResult)
+					current = string(jsonBytes)
+				}
 			}
+			// 对齐 Python: current + "\n[Hook 发现]: " + r.additional_context（统一拼接，不区分空/非空）
+			toolInputs.ToolResult = current + "\n[Hook 发现]: " + result.AdditionalContext
 		}
 	}
 	return nil

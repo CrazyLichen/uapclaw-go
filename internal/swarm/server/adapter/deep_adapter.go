@@ -170,14 +170,20 @@ type DeepAdapter struct {
 	sysOperationCard *sysop.SysOperationCard
 	// visionModelConfig 视觉模型配置
 	visionModelConfig *hschema.VisionModelConfig
+	// visionTools 视觉工具实例列表（对齐 Python: self._vision_tools）
+	visionTools []tool.Tool
 	// visionToolsRegistered 视觉工具注册状态
 	visionToolsRegistered bool
 	// audioModelConfig 音频模型配置
 	audioModelConfig *hschema.AudioModelConfig
+	// audioTools 音频工具实例列表（对齐 Python: self._audio_tools）
+	audioTools []tool.Tool
 	// audioToolsRegistered 音频工具注册状态
 	audioToolsRegistered bool
 	// videoModelConfig 视频模型配置
 	videoModelConfig *hschema.VideoModelConfig
+	// videoTool 视频工具实例（对齐 Python: self._video_tools）
+	videoTool tool.Tool
 	// videoToolRegistered 视频工具注册状态
 	videoToolRegistered bool
 	// imageGenToolRegistered 图片生成工具是否已注册
@@ -596,8 +602,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	railsList := d.getCurrentAgentRails(config, configBase)
 
 	// 步骤 8.5: 工具同步
-	// ⤵️ agentcore: _sync_multimodal_tools_for_runtime()
-	// 对齐 Python: _sync_paid_search_tool_for_runtime()
+	// 对齐 Python: self._sync_multimodal_tools_for_runtime() + self._sync_paid_search_tool_for_runtime()
+	d.syncMultimodalToolsForRuntime(ctx)
 	d.syncPaidSearchToolForRuntime()
 
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")

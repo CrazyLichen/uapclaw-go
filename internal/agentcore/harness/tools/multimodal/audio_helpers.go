@@ -141,7 +141,7 @@ func InvokeACRMetadata(
 	config *hschema.AudioModelConfig,
 ) (map[string]any, error) {
 	// 1. 计算 HMAC-SHA1 签名（对齐 Python: hmac.new + base64.b64encode）
-	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	timestamp := fmt.Sprintf("%.6f", float64(time.Now().UnixNano())/1e9) // 对齐 Python: str(time.time())
 	stringToSign := "POST\n/v1/identify\n" + config.ACRAccessKey + "\naudio\n1\n" + timestamp
 	mac := hmac.New(sha1.New, []byte(config.ACRAccessSecret))
 	mac.Write([]byte(stringToSign))

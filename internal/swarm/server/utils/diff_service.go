@@ -214,6 +214,83 @@ func (ds *DiffService) GetFilesToRestore(sessionID string, turnIndex int, projec
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// splitLines 对齐 Python str.splitlines()（不带 keepends）。
+// 按行分割，不保留行尾符，末尾空行不产生额外元素。
+// 正确处理 \r\n 和 \r 行尾符。
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); {
+		c := s[i]
+		var lineEnd int
+		var nextStart int
+		if c == '\r' {
+			if i+1 < len(s) && s[i+1] == '\n' {
+				lineEnd = i      // 不含 \r\n
+				nextStart = i + 2
+			} else {
+				lineEnd = i      // 不含 \r
+				nextStart = i + 1
+			}
+		} else if c == '\n' {
+			lineEnd = i          // 不含 \n
+			nextStart = i + 1
+		} else {
+			i++
+			continue
+		}
+		lines = append(lines, s[start:lineEnd])
+		start = nextStart
+		i = nextStart
+	}
+	// 末尾无换行符时，剩余内容作为最后一行
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+// splitLinesKeepEnds 对齐 Python str.splitlines(keepends=True)。
+// 按行分割，保留行尾符（\n、\r\n、\r），末尾空行不产生额外元素。
+func splitLinesKeepEnds(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); {
+		c := s[i]
+		var lineEnd int
+		var nextStart int
+		if c == '\r' {
+			if i+1 < len(s) && s[i+1] == '\n' {
+				lineEnd = i + 2  // 含 \r\n
+				nextStart = i + 2
+			} else {
+				lineEnd = i + 1  // 含 \r
+				nextStart = i + 1
+			}
+		} else if c == '\n' {
+			lineEnd = i + 1      // 含 \n
+			nextStart = i + 1
+		} else {
+			i++
+			continue
+		}
+		lines = append(lines, s[start:lineEnd])
+		start = nextStart
+		i = nextStart
+	}
+	// 末尾无换行符时，剩余内容作为最后一行
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
 // computeTurnDiffs 计算 turn-based diffs。
 // 对齐 Python: _compute_turn_diffs (line 39-125)
 func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []TurnDiff {
@@ -514,7 +591,7 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 		if oldContent == nil {
 			return nil
 		}
-		lines := strings.Split(*oldContent, "\n")
+		lines := splitLines(*oldContent)
 		hunkLines := make([]string, len(lines))
 		for i, line := range lines {
 			hunkLines[i] = "-" + line
@@ -532,7 +609,7 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 
 	// 处理新建文件的情况：oldContent 为 nil
 	if oldContent == nil {
-		lines := strings.Split(*newContent, "\n")
+		lines := splitLines(*newContent)
 		hunkLines := make([]string, len(lines))
 		for i, line := range lines {
 			hunkLines[i] = "+" + line
@@ -549,8 +626,8 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 	}
 
 	// 行级 diff：对齐 Python difflib.SequenceMatcher(None, old_lines, new_lines)
-	oldLines := strings.Split(*oldContent, "\n")
-	newLines := strings.Split(*newContent, "\n")
+	oldLines := splitLinesKeepEnds(*oldContent)
+	newLines := splitLinesKeepEnds(*newContent)
 
 	if len(oldLines) == 0 && len(newLines) == 0 {
 		return nil
@@ -578,7 +655,8 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.i1; k < op.i2; k++ {
-				currentHunk.Lines = append(currentHunk.Lines, "-"+oldLines[k])
+				// 对齐 Python: line.rstrip() 去除行尾符
+				currentHunk.Lines = append(currentHunk.Lines, "-"+strings.TrimRight(oldLines[k], "\r\n"))
 			}
 			currentHunk.OldLines += op.i2 - op.i1
 
@@ -590,7 +668,8 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.j1; k < op.j2; k++ {
-				currentHunk.Lines = append(currentHunk.Lines, "+"+newLines[k])
+				// 对齐 Python: line.rstrip() 去除行尾符
+				currentHunk.Lines = append(currentHunk.Lines, "+"+strings.TrimRight(newLines[k], "\r\n"))
 			}
 			currentHunk.NewLines += op.j2 - op.j1
 
@@ -602,11 +681,13 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.i1; k < op.i2; k++ {
-				currentHunk.Lines = append(currentHunk.Lines, "-"+oldLines[k])
+				// 对齐 Python: line.rstrip() 去除行尾符
+				currentHunk.Lines = append(currentHunk.Lines, "-"+strings.TrimRight(oldLines[k], "\r\n"))
 			}
 			currentHunk.OldLines += op.i2 - op.i1
 			for k := op.j1; k < op.j2; k++ {
-				currentHunk.Lines = append(currentHunk.Lines, "+"+newLines[k])
+				// 对齐 Python: line.rstrip() 去除行尾符
+				currentHunk.Lines = append(currentHunk.Lines, "+"+strings.TrimRight(newLines[k], "\r\n"))
 			}
 			currentHunk.NewLines += op.j2 - op.j1
 		}

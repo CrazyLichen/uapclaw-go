@@ -66,6 +66,7 @@ func TestUserHookRail_BeforeToolCall_无匹配(t *testing.T) {
 }
 
 // TestUserHookRail_BeforeToolCall_修改输入 测试 modifiedInput 修改 ToolArgs
+// 对齐 Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
 func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {
@@ -84,8 +85,10 @@ func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
 	inputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
-	if inputs.ToolArgs != `{"path": "/safe"}` {
-		t.Errorf("ToolArgs = %q, want modified args", inputs.ToolArgs)
+	// 对齐 Python: ctx.inputs.tool_args = r.modified_input — 整个 dict 序列化为 JSON
+	expected := `{"tool_args":"{\"path\": \"/safe\"}"}`
+	if inputs.ToolArgs != expected {
+		t.Errorf("ToolArgs = %q, want %q", inputs.ToolArgs, expected)
 	}
 }
 

@@ -226,12 +226,21 @@ func extractResponseText(msg *llmschema.AssistantMessage) string {
 	if content.IsText() {
 		return strings.TrimSpace(content.Text())
 	}
-	// 多模态 parts: 查找 text 类型 part（对齐 Python: isinstance(content, list) → 查找 type=="text"）
+	// 多模态 parts: 收集所有 text part 用换行符拼接（对齐 Python: isinstance(content, list) → 收集所有 type=="text" 用 "\n".join）
 	parts := content.Parts()
+	chunks := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if part.Type == "text" && part.Text != "" {
-			return strings.TrimSpace(part.Text)
+			chunks = append(chunks, strings.TrimSpace(part.Text))
+		} else {
+			// 对齐 Python: getattr(item, "text", None)
+			if part.Text != "" {
+				chunks = append(chunks, strings.TrimSpace(part.Text))
+			}
 		}
+	}
+	if len(chunks) > 0 {
+		return strings.Join(chunks, "\n")
 	}
 	return strings.TrimSpace(content.String())
 }

@@ -80,7 +80,13 @@ func dispatchCronAction(
 
 	case "list":
 		// 对齐 Python L174: return {"jobs": await backend.list_jobs(include_disabled=bool(includeDisabled))}
-		includeDisabled := boolVal(inputs, "includeDisabled")
+		// 对齐 Python: CronToolBackend.list_jobs 默认 include_disabled=True
+		includeDisabled := true
+		if v, ok := inputs["includeDisabled"]; ok {
+			if b, ok := v.(bool); ok {
+				includeDisabled = b
+			}
+		}
 		jobs, err := backend.ListJobs(ctx, includeDisabled)
 		if err != nil {
 			return nil, err

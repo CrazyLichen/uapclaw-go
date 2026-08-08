@@ -122,25 +122,31 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 // removeRegisteredTools 移除已注册的工具。
 // 对齐 Python: _remove_registered_tools() (line 1351-1380)
 //
-// 双重操作：调用 AbilityManager.Remove + ResourceMgr.RemoveTool。
-func (d *DeepAdapter) removeRegisteredTools(toolIDs []string) {
-	if len(toolIDs) == 0 {
+// 接收工具实例列表，从实例上分别取 card.id 和 card.name，
+// 传给 ResourceMgr.remove_tool(card.id) 和 AbilityManager.remove(card.name)。
+func (d *DeepAdapter) removeRegisteredTools(tools []tool.Tool) {
+	if len(tools) == 0 {
 		return
 	}
 
-	if d.instance != nil {
-		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
-			if am := reactAgent.AbilityManager(); am != nil {
-				am.RemoveMany(toolIDs)
+	am := d.getAbilityManager()
+	rm := runner.GetResourceMgr()
+
+	for _, t := range tools {
+		card := t.Card()
+		// 对齐 Python: Runner.resource_mgr.remove_tool(tool.card.id)
+		if rm != nil {
+			if _, err := rm.RemoveTool([]string{card.ID}); err != nil {
+				logger.Warn(logComponent).Err(err).Str("card_id", card.ID).Msg("RemoveTool 从 ResourceMgr 失败")
 			}
+		}
+		// 对齐 Python: self._instance.ability_manager.remove(tool.card.name)
+		if am != nil {
+			am.Remove(card.Name)
 		}
 	}
 
-	if _, err := runner.GetResourceMgr().RemoveTool(toolIDs); err != nil {
-		logger.Warn(logComponent).Err(err).Int("count", len(toolIDs)).Msg("RemoveTool 从 ResourceMgr 失败")
-	}
-
-	logger.Info(logComponent).Int("count", len(toolIDs)).Msg("removeRegisteredTools 完成")
+	logger.Info(logComponent).Int("count", len(tools)).Msg("removeRegisteredTools 完成")
 }
 
 // appendToolCard 追加工具卡片。
@@ -249,7 +255,10 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 		return
 	}
 
-	// 视觉工具同步
+	// ── 视觉工具同步 ──
+	// 对齐 Python: self._vision_tools, self._vision_tools_registered = self._sync_tool_group(
+	//   current_tools=self._vision_tools, registered=self._vision_tools_registered,
+	//   enabled=self._vision_model_config is not None, create_fn=..., warn_label="vision tools")
 	if d.visionModelConfig != nil && !d.visionToolsRegistered {
 		client := d.resolveVisionModelClient()
 		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), "")
@@ -258,38 +267,80 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 			cards[i] = t.Card()
 		}
 		d.syncToolsToManager(ctx, cards, visionTools, nil, "vision")
+		d.visionTools = visionTools // 对齐 Python: self._vision_tools = tools
 		d.visionToolsRegistered = true
 	}
 	if d.visionModelConfig == nil && d.visionToolsRegistered {
-		d.removeRegisteredTools([]string{ToolNameVision})
+		d.removeRegisteredTools(d.visionTools) // 对齐 Python: 传完整工具实例列表
+		// 对齐 Python: self._prune_tool_cards({t.card.name for t in current_tools})
+		namesToRemove := make(map[string]bool, len(d.visionTools))
+		for _, t := range d.visionTools {
+			namesToRemove[t.Card().Name] = true
+		}
+		d.toolCards = d.pruneToolCards(d.toolCards, namesToRemove)
+		d.visionTools = nil
 		d.visionToolsRegistered = false
 	}
 
-	// 音频工具同步
-	if d.audioModelConfig != nil && !d.audioToolsRegistered {
-		client := d.resolveAudioModelClient()
-		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), "")
-		cards := make([]*tool.ToolCard, len(audioTools))
-		for i, t := range audioTools {
-			cards[i] = t.Card()
+	// ── 音频工具同步 ──
+	// 对齐 Python: _iter_runtime_audio_tools 三种情况:
+	//   1. 无 api_key → 不注册任何音频工具
+	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
+	//   3. 有完整配置 → 全部音频工具
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configCache, "audio")
+	if !audioDedicated {
+		// 情况1: 无独立音频 key → 不注册任何音频工具
+		if d.audioToolsRegistered {
+			d.removeRegisteredTools(d.audioTools)
+			namesToRemove := make(map[string]bool, len(d.audioTools))
+			for _, t := range d.audioTools {
+				namesToRemove[t.Card().Name] = true
+			}
+			d.toolCards = d.pruneToolCards(d.toolCards, namesToRemove)
+			d.audioTools = nil
+			d.audioToolsRegistered = false
 		}
-		d.syncToolsToManager(ctx, cards, audioTools, nil, "audio")
-		d.audioToolsRegistered = true
-	}
-	if d.audioModelConfig == nil && d.audioToolsRegistered {
-		d.removeRegisteredTools([]string{ToolNameAudioTranscription})
-		d.audioToolsRegistered = false
+	} else if d.audioModelConfig == nil {
+		// 情况2: 有独立 key 但无 model config → 仅注册 audio_metadata（metadata-only）
+		// 对齐 Python: _iter_runtime_audio_tools 在 audio_model_config=None 时
+		// 调用 create_audio_tools(audio_model_config=None) 然后过滤出 audio_metadata
+		if !d.audioToolsRegistered {
+			// 对齐 Python: create_audio_tools(audio_model_config=None) → 过滤 audio_metadata
+			// 注意：Python 此模式下 audio_metadata 调用时 config=None 会报错，
+			// Go 保持一致行为：创建工具但 config 不完整时调用会返回错误
+			metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), "")
+			d.syncToolsToManager(ctx, []*tool.ToolCard{metadataTool.Card()}, []tool.Tool{metadataTool}, nil, "audio")
+			d.audioTools = []tool.Tool{metadataTool}
+			d.audioToolsRegistered = true
+			logger.Info(logComponent).Msg("音频工具: metadata-only 模式（跳过 audio_transcription & audio_question_answering: incomplete audio LLM config）")
+		}
+	} else {
+		// 情况3: 完整配置 → 全部音频工具
+		if !d.audioToolsRegistered {
+			client := d.resolveAudioModelClient()
+			audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), "")
+			cards := make([]*tool.ToolCard, len(audioTools))
+			for i, t := range audioTools {
+				cards[i] = t.Card()
+			}
+			d.syncToolsToManager(ctx, cards, audioTools, nil, "audio")
+			d.audioTools = audioTools // 对齐 Python: self._audio_tools = tools
+			d.audioToolsRegistered = true
+		}
 	}
 
-	// 视频工具同步
+	// ── 视频工具同步 ──
 	if d.videoModelConfig != nil && !d.videoToolRegistered {
 		client := d.resolveVideoModelClient()
 		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), "")
 		d.syncToolsToManager(ctx, []*tool.ToolCard{videoTool.Card()}, []tool.Tool{videoTool}, nil, "video")
+		d.videoTool = videoTool // 对齐 Python: self._video_tools = [video_understanding]
 		d.videoToolRegistered = true
 	}
 	if d.videoModelConfig == nil && d.videoToolRegistered {
-		d.removeRegisteredTools([]string{ToolNameVideoUnderstanding})
+		d.removeRegisteredTools([]tool.Tool{d.videoTool}) // 对齐 Python: 传完整工具实例列表
+		d.toolCards = d.pruneToolCards(d.toolCards, map[string]bool{d.videoTool.Card().Name: true})
+		d.videoTool = nil
 		d.videoToolRegistered = false
 	}
 
@@ -332,13 +383,25 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 }
 
 // refreshMultimodalConfigs 刷新多模态配置。
-// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1170-1318)
+// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1304-1317)
+// 注意：Python 不在此方法中设置 _video_tool_registered / _vision_tools_registered / _audio_tools_registered，
+// 注册状态由 _sync_multimodal_tools_for_runtime 管理。
 func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 	d.visionModelConfig = d.buildVisionModelConfig(configBase)
 	d.audioModelConfig = d.buildAudioModelConfig(configBase)
 	d.videoModelConfig = d.buildVideoModelConfig(configBase)
-	d.videoToolRegistered = d.videoModelConfig != nil
-	d.imageGenToolRegistered = d.buildImageGenModelConfig(configBase)
+	// 对齐 Python: 不在此处设置 registered 标志，由 syncMultimodalToolsForRuntime 管理
+	// 对齐 Python: 将 config 同步到已有工具实例
+	for _, t := range d.visionTools {
+		if setter, ok := t.(interface{ SetVisionModelConfig(*schema.VisionModelConfig) }); ok {
+			setter.SetVisionModelConfig(d.visionModelConfig)
+		}
+	}
+	for _, t := range d.audioTools {
+		if setter, ok := t.(interface{ SetAudioModelConfig(*schema.AudioModelConfig) }); ok {
+			setter.SetAudioModelConfig(d.audioModelConfig)
+		}
+	}
 }
 
 // buildVisionModelConfig 从配置构建视觉模型配置。
@@ -513,6 +576,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			}
 			toolCards = append(toolCards, t.Card())
 		}
+		d.visionTools = visionTools // 对齐 Python: self._vision_tools = tools
 		d.visionToolsRegistered = len(visionTools) > 0
 	}
 
@@ -532,6 +596,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			}
 			toolCards = append(toolCards, t.Card())
 		}
+		d.audioTools = audioTools // 对齐 Python: self._audio_tools = tools
 		d.audioToolsRegistered = len(audioTools) > 0
 	}
 
@@ -548,6 +613,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			logger.Warn(logComponent).Err(err).Msg("注册 video_understanding 到 ResourceMgr 失败")
 		}
 		toolCards = append(toolCards, videoTool.Card())
+		d.videoTool = videoTool // 对齐 Python: self._video_tools = [video_understanding]
 		d.videoToolRegistered = true
 	}
 

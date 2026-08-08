@@ -255,7 +255,7 @@ func TestTaskManager_AddBatch(t *testing.T) {
 	}
 }
 
-func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemoryTeamDatabase) {
+func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemoryTeamDatabase, string) {
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
@@ -265,11 +265,11 @@ func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemor
 	plansDir := t.TempDir()
 	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, plansDir, "plan_session_1", "leader1", "")
 	db.Initialize(ctx)
-	return tm, db
+	return tm, db, plansDir
 }
 
 func TestTaskManager_SubmitPlan(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -295,7 +295,7 @@ func TestTaskManager_SubmitPlan(t *testing.T) {
 }
 
 func TestTaskManager_ApprovePlan_通过(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -316,7 +316,7 @@ func TestTaskManager_ApprovePlan_通过(t *testing.T) {
 }
 
 func TestTaskManager_ApprovePlan_拒绝(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -378,10 +378,10 @@ func TestTaskManager_Claim_失败(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	tm.Claim(ctx, task.TaskID)
-	// 再次认领同一任务应失败（已经是 claimed）
+	// 同一成员再次认领同一任务应幂等返回成功（对齐 Python: idempotent re-claim）
 	err := tm.Claim(ctx, task.TaskID)
-	if err == nil {
-		t.Error("重复认领应返回错误")
+	if err != nil {
+		t.Errorf("同一成员重复认领应幂等返回成功, got: %v", err)
 	}
 }
 
@@ -530,7 +530,7 @@ func TestTaskManager_SubmitPlan_不是PlanMode(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_不合法状态(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -544,21 +544,41 @@ func TestTaskManager_SubmitPlan_不合法状态(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_已完成任务(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, db, plansDir := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "已完成任务", "")
 	tm.Assign(ctx, task.TaskID, "agent1")
-	tm.Complete(ctx, task.TaskID)
 
-	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_123")
+	// PLAN_MODE 成员只能完成 plan_approved 任务，需先提交计划并审批
+	planFile := filepath.Join(t.TempDir(), "plan.md")
+	os.WriteFile(planFile, []byte("# 计划"), 0o644)
+	planRecord, err := tm.SubmitPlan(ctx, task.TaskID, planFile, "call_1")
+	if err != nil {
+		t.Fatalf("SubmitPlan 返回错误: %v", err)
+	}
+
+	// leader 审批计划
+	leaderTM := NewTeamTaskManager(db, "alpha", "leader1", nil, plansDir, "plan_session_1", "leader1", "")
+	if err := leaderTM.ApprovePlan(ctx, planRecord.PlanID, true, ""); err != nil {
+		t.Fatalf("ApprovePlan 返回错误: %v", err)
+	}
+
+	// 现在可以完成
+	_, err = tm.Complete(ctx, task.TaskID)
+	if err != nil {
+		t.Fatalf("Complete 返回错误: %v", err)
+	}
+
+	// 已完成任务提交计划应返回错误
+	_, err = tm.SubmitPlan(ctx, task.TaskID, "", "call_123")
 	if err == nil {
 		t.Error("已完成任务提交计划应返回错误")
 	}
 }
 
 func TestTaskManager_ApprovePlan_过期计划(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -689,7 +709,7 @@ func TestTaskManager_AddBatch_中途失败(t *testing.T) {
 }
 
 func TestTaskManager_SubmitPlan_已认领非当前成员(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
@@ -703,7 +723,7 @@ func TestTaskManager_SubmitPlan_已认领非当前成员(t *testing.T) {
 }
 
 func TestTaskManager_ApprovePlan_已审批(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -726,7 +746,7 @@ func TestTaskManager_ApprovePlan_已审批(t *testing.T) {
 }
 
 func TestTaskManager_ApprovePlan_不存在计划(t *testing.T) {
-	tm, _ := setupPlanModeTaskManager(t)
+	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
 	err := tm.ApprovePlan(ctx, "nonexist_plan", true, "")

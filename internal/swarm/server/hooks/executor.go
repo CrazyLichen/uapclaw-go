@@ -160,11 +160,9 @@ func ParseCommandOutput(stdout string) HookResult {
 			result.AdditionalContext = s
 		}
 	}
-	// 对齐 Python: "reason" in data and decision != "block" → additionalContext
+	// 对齐 Python: "reason" in data and decision != "block" → additional_context = data["reason"]（无条件覆盖）
 	if v, ok := data["reason"].(string); ok && decision != "block" {
-		if result.AdditionalContext == "" {
-			result.AdditionalContext = v
-		}
+		result.AdditionalContext = v
 	}
 	return result
 }

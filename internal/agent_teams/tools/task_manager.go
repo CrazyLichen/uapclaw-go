@@ -176,36 +176,133 @@ func (tm *TeamTaskManager) GetTasksByAssignee(ctx context.Context, memberName, s
 
 // Claim 成员自认领。对齐 Python: TeamTaskManager.claim()
 func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
+	// 1. 检查任务是否存在（对齐 Python: task = await self.get(task_id)）
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("查询任务失败: %w", err)
+	}
+	if task == nil {
+		return fmt.Errorf("任务 %s 不存在", taskID)
+	}
+
+	// 2. 检查成员是否存在（对齐 Python: member = await self.db.member.get_member(...)）
+	member, err := tm.db.Member().GetMember(ctx, tm.memberName, tm.teamName)
+	if err != nil {
+		return fmt.Errorf("查询成员失败: %w", err)
+	}
+	if member == nil {
+		return fmt.Errorf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)
+	}
+
+	// 3. PLAN_MODE 检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
+	if member.Mode == "plan_mode" {
+		return fmt.Errorf("PLAN_MODE 成员必须先调用 submit_plan，leader 审批后任务从 claimed 变为 plan_approved")
+	}
+
+	// 4. 幂等性检查（对齐 Python: if task.assignee == member_name and task.status == CLAIMED）
+	if task.Assignee == tm.memberName && task.Status == fsm.TaskStatusClaimed {
+		return nil // 已认领，幂等返回成功
+	}
+
+	// 5. 已被他人认领检查（对齐 Python: if task.assignee）
+	if task.Assignee != "" {
+		return fmt.Errorf("任务 %s 已被 %s 认领，%s 无法认领", taskID, task.Assignee, tm.memberName)
+	}
+
+	// 6. FSM 状态转换合法性检查（对齐 Python: is_valid_transition(task.status, CLAIMED, TASK_TRANSITIONS)）
+	if !database.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
+		return fmt.Errorf("任务 %s 无法从状态 '%s' 认领（只有 pending 任务可认领）", taskID, task.Status)
+	}
+
+	// 7. 执行认领（对齐 Python: success = await self.db.task.claim_task(task_id, member_name)）
 	ok, err := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("认领任务失败: 任务不存在或状态不允许认领 %s", taskID)
+		return fmt.Errorf("认领任务失败: 数据库拒绝认领 %s（可能存在并发认领竞争）", taskID)
 	}
+
+	// 8. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
 	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID,
+		"team_name": tm.teamName, "task_id": taskID, "member_name": tm.memberName,
 	})
 	return nil
 }
 
 // Assign Leader 分配。对齐 Python: TeamTaskManager.assign()
 func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) error {
+	// 1. 检查任务是否存在（对齐 Python: task = await self.get(task_id)）
+	task, err := tm.db.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("查询任务失败: %w", err)
+	}
+	if task == nil {
+		return fmt.Errorf("任务 %s 不存在", taskID)
+	}
+
+	// 2. 检查被分配者是否是团队成员（对齐 Python: member = await self.db.member.get_member(assignee, ...)）
+	member, err := tm.db.Member().GetMember(ctx, assignee, tm.teamName)
+	if err != nil {
+		return fmt.Errorf("查询成员失败: %w", err)
+	}
+	if member == nil {
+		return fmt.Errorf("成员 %s 在团队 %s 中不存在", assignee, tm.teamName)
+	}
+
+	// 3. 幂等性检查（对齐 Python: if task.assignee == assignee and task.status == CLAIMED）
+	if task.Assignee == assignee && task.Status == fsm.TaskStatusClaimed {
+		return nil // 已分配给同一成员，幂等返回成功
+	}
+
+	// 4. 已被他人认领检查（对齐 Python: if task.assignee and task.assignee != assignee）
+	if task.Assignee != "" && task.Assignee != assignee {
+		return fmt.Errorf("任务 %s 已被 %s 认领，需先 reset 再分配给 %s", taskID, task.Assignee, assignee)
+	}
+
+	// 5. 执行分配（对齐 Python: success = await self.db.task.claim_task(task_id, assignee)）
 	ok, err := tm.db.Task().ClaimTask(ctx, taskID, assignee)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("分配任务失败: 任务不存在或状态不允许分配 %s", taskID)
+		return fmt.Errorf("分配任务失败: 数据库拒绝分配 %s（状态转换无效: %s）", taskID, task.Status)
 	}
+
+	// 6. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
 	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID,
+		"team_name": tm.teamName, "task_id": taskID, "member_name": assignee,
 	})
 	return nil
 }
 
 // Complete 完成任务。对齐 Python: TeamTaskManager.complete()
 func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]string, error) {
+	// 1. 检查成员是否存在（对齐 Python: member = await self.db.member.get_member(...)）
+	member, err := tm.db.Member().GetMember(ctx, tm.memberName, tm.teamName)
+	if err != nil {
+		return nil, fmt.Errorf("查询成员失败: %w", err)
+	}
+	if member == nil {
+		return nil, fmt.Errorf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)
+	}
+
+	// 2. PLAN_MODE 检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
+	if member.Mode == "plan_mode" {
+		task, err := tm.db.Task().GetTask(ctx, taskID)
+		if err != nil {
+			return nil, fmt.Errorf("查询任务失败: %w", err)
+		}
+		if task == nil {
+			return nil, fmt.Errorf("任务 %s 不存在", taskID)
+		}
+		// PLAN_MODE 成员只能完成 PLAN_APPROVED 状态的任务
+		if task.Status != fsm.TaskStatusPlanApproved {
+			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
+		}
+	}
+
+	// 3. 执行完成（对齐 Python: result = await self.db.task.complete_task(task_id)）
 	refreshed, err := tm.db.Task().CompleteTask(ctx, taskID)
 	if err != nil {
 		return nil, err
@@ -214,6 +311,8 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	if refreshed == nil {
 		return nil, fmt.Errorf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)
 	}
+
+	// 4. 事件发布（对齐 Python: await self._publish_task_event + _publish_unblocked_events + _maybe_publish_task_list_drained）
 	tm.publishTaskEvent(ctx, eventTaskCompleted, map[string]any{
 		"team_name": tm.teamName, "task_id": taskID,
 	})

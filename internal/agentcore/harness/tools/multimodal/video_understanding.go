@@ -78,7 +78,7 @@ func NewVideoUnderstandingTool(
 
 	fn := func(ctx context.Context, input VideoUnderstandingInput, opts ...tool.ToolOption) (map[string]any, error) {
 		result, err := func() (map[string]any, error) {
-			// 校验配置（对齐 Python: if self.vision_model_config is None）
+			// 校验配置（Go 扩展设计决策：使用独立的 VideoModelConfig，Python 中 VideoUnderstandingTool 使用 VisionModelConfig）
 			if config == nil || config.APIKey == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalVideoConfigInvalid,
