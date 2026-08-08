@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"math"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -91,19 +93,58 @@ func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
 
-// ──────────────────────────── 薄接口函数 ────────────────────────────
+// BuildFTSQuery 构建 FTS5 查询。对齐 Python build_fts_query — 真实实现
+// 将查询文本分词后用 OR 连接，每个词用双引号包裹
+func BuildFTSQuery(query string) string {
+	cleaned := strings.TrimSpace(query)
+	if cleaned == "" {
+		return ""
+	}
+	tokens := regexp.MustCompile(`\w+`).FindAllString(cleaned, 10)
+	if len(tokens) == 0 {
+		return ""
+	}
+	parts := make([]string, len(tokens))
+	for i, t := range tokens {
+		parts[i] = `"` + t + `"`
+	}
+	return strings.Join(parts, " OR ")
+}
 
-// BuildFTSQuery 构建 FTS5 查询。⤵️ 回填: 7.4
-func BuildFTSQuery(query string) string { return "" }
+// BM25RankToScore BM25 排名转相似度分数。对齐 Python bm25_rank_to_score — 真实实现
+// BM25 rank 是负数（越小越好），转换为 0-1 的分数
+func BM25RankToScore(rank float64) float64 {
+	if rank >= 0 {
+		return 1.0 / (1.0 + rank)
+	}
+	return 1.0 / (1.0 - rank)
+}
 
-// BM25RankToScore BM25 排名转相似度分数。⤵️ 回填: 7.4
-func BM25RankToScore(rank int) float64 { return 0 }
+// IsMemoryPath 判断是否为记忆文件路径。对齐 Python is_memory_path — 真实实现
+func IsMemoryPath(relPath string) bool {
+	normalized := strings.ReplaceAll(relPath, `\`, "/")
+	return strings.HasSuffix(normalized, ".md")
+}
 
-// IsMemoryPath 判断是否为记忆文件路径。⤵️ 回填: 7.4
-func IsMemoryPath(relPath string) bool { return false }
+// ListMemoryFiles 列出 workspace 下所有 .md 记忆文件。对齐 Python list_memory_files — 真实实现
+// 注意：完整实现依赖 workspace.Workspace 类型，此处为占位
+// 真实实现在 manager_impl.go 中通过 workspace 方法调用
+func ListMemoryFiles(workspace any, extraPaths []string, nodeName string) []string {
+	return nil
+}
 
-// ListMemoryFiles 列出 workspace 下所有 .md 记忆文件。⤵️ 回填: 7.4
-func ListMemoryFiles(workspace any, extraPaths []string, nodeName string) []string { return nil }
-
-// NormalizeExtraMemoryPaths 归一化额外记忆路径。⤵️ 回填: 7.4
-func NormalizeExtraMemoryPaths(paths []string, workspaceDir string) []string { return nil }
+// NormalizeExtraMemoryPaths 归一化额外记忆路径。对齐 Python normalize_extra_memory_paths — 真实实现
+func NormalizeExtraMemoryPaths(paths []string, workspaceDir string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	normalized := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if filepath.IsAbs(p) {
+			normalized = append(normalized, p)
+		} else {
+			normalized = append(normalized, filepath.Join(workspaceDir, p))
+		}
+	}
+	return normalized
+}
