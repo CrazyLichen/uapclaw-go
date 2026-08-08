@@ -12,8 +12,8 @@ import (
 // bus 进程内消息总线。
 // 对齐 Python: _Bus (openjiuwen/agent_teams/messager/inprocess.py)
 // 两个数据结构，均以 agentID 为 key 做 O(1) 查找：
-//   - topicSubs: topic → {agentID → handler}  (pub-sub fan-out)
-//   - p2p:       agentID → handler             (point-to-point)
+//   - topicSubs: topic → {agentID → handler}（发布订阅扇出）
+//   - p2p:       agentID → handler（点对点）
 type bus struct {
 	// mu 保护并发访问
 	mu sync.Mutex
@@ -33,6 +33,14 @@ type InProcessMessager struct {
 	subscribedTopics []string
 }
 
+// SenderIDStamper 可设置 SenderID 的消息接口。
+// schema.EventMessage 隐式实现此接口（通过 GetSenderID/SetSenderID 方法）。
+// 对齐 Python: message.model_copy(update={"sender_id": self._agent_id})
+type SenderIDStamper interface {
+	GetSenderID() string
+	SetSenderID(id string)
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -47,6 +55,9 @@ var (
 	// busMu 保护 globalBus 的访问
 	busMu sync.Mutex
 )
+
+// 编译时接口合规检查
+var _ Messager = (*InProcessMessager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -196,14 +207,6 @@ func (b *bus) clear() {
 	b.p2p = nil
 }
 
-// SenderIDStamper 可设置 SenderID 的消息接口。
-// schema.EventMessage 隐式实现此接口（通过 GetSenderID/SetSenderID 方法）。
-// 对齐 Python: message.model_copy(update={"sender_id": self._agent_id})
-type SenderIDStamper interface {
-	GetSenderID() string
-	SetSenderID(id string)
-}
-
 // stampSenderID 通过 SenderIDStamper 接口设置消息的 SenderID。
 // 仅当消息实现了 SenderIDStamper 接口且 SenderID 为空时才设置。
 func stampSenderID(message any, agentID string) {
@@ -211,6 +214,3 @@ func stampSenderID(message any, agentID string) {
 		s.SetSenderID(agentID)
 	}
 }
-
-// Compile-time check
-var _ Messager = (*InProcessMessager)(nil)

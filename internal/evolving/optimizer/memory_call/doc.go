@@ -8,8 +8,7 @@
 //
 //	memory_call/
 //	├── doc.go           # 包文档
-//	├── base.go          # MemoryOptimizerBase（记忆优化器基类） 结构体 + Domain/DefaultTargets/Backward/Step + Mixin 委托方法
-//	└── base_test.go     # 单元测试
+//	└── base.go          # MemoryOptimizerBase（记忆优化器基类） 结构体 + Domain/DefaultTargets/Backward/Step + Mixin 委托方法
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/optimizer/memory_call/
 package memory_call

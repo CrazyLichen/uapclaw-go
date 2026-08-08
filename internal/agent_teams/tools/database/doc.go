@@ -11,7 +11,6 @@
 //	database/
 //	├── doc.go               # 包文档
 //	├── config.go            # DatabaseConfig 配置结构体与构造函数
-//	├── config_test.go       # 配置测试
 //	├── models.go            # Team + TeamMember + TeamTaskBase + TeamMessageBase + MessageReadStatusBase 数据模型 + 辅助类型 + 动态表常量
 //	├── database.go          # TeamDatabase 门面接口 + TeamDao/MemberDao/TaskDao/MessageDao DAO 接口
 //	├── fsm.go               # FSM 状态转换表（MemberTransitions/ExecutionTransitions/TaskTransitions）+ 校验函数
@@ -20,11 +19,7 @@
 //	├── team_dao.go          # TeamDao 占位文件（实现已在 memory_impl.go）
 //	├── member_dao.go        # MemberDao 占位文件（实现已在 memory_impl.go）
 //	├── task_dao.go          # TaskDao 注释说明文件（实现已在 memory_impl.go）
-//	├── message_dao.go       # MessageDao 注释说明文件（实现已在 memory_impl.go）
-//	├── models_test.go       # 模型序列化测试
-//	├── database_test.go     # 接口满足性测试
-//	├── memory_impl_test.go  # InMemory DAO 全面测试（含 TaskDao + MessageDao）
-//	└── engine_test.go       # engine 工具函数测试
+//	└── message_dao.go       # MessageDao 注释说明文件（实现已在 memory_impl.go）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/tools/database/ + openjiuwen/agent_teams/tools/memory_database.py
 package database

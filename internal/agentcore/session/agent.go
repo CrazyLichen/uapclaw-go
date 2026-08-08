@@ -624,7 +624,7 @@ func normalizeOutputStream(data any) stream.OutputSchema {
 //
 // 转换逻辑对齐 Python:
 //   - CustomSchema → 直接返回
-//   - dict → CustomSchema{Type:"custom", Data:dict}
+//   - dict（字典） → CustomSchema{Type:"custom", Data:dict}
 //   - 其他 → CustomSchema{Type:"custom", Data:{"value": data}}
 func normalizeCustomStream(data any) stream.CustomSchema {
 	switch v := data.(type) {

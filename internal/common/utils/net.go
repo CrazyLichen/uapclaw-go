@@ -57,7 +57,7 @@ func GetLocalIP() string {
 // 将 URL 中的密码替换为 "***"，不包含密码的 URL 原样返回。
 // 解析失败时返回原始字符串。
 //
-// 示例：
+// 示例（密码脱敏效果）：
 //
 //	RedactURLPassword("redis://:secret@host:6379/0") → "redis://:***@host:6379/0"
 //	RedactURLPassword("redis://user:secret@host:6379/0") → "redis://user:***@host:6379/0"

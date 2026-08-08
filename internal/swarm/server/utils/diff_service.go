@@ -229,14 +229,14 @@ func splitLines(s string) []string {
 		var nextStart int
 		if c == '\r' {
 			if i+1 < len(s) && s[i+1] == '\n' {
-				lineEnd = i      // 不含 \r\n
+				lineEnd = i // 不含 \r\n
 				nextStart = i + 2
 			} else {
-				lineEnd = i      // 不含 \r
+				lineEnd = i // 不含 \r
 				nextStart = i + 1
 			}
 		} else if c == '\n' {
-			lineEnd = i          // 不含 \n
+			lineEnd = i // 不含 \n
 			nextStart = i + 1
 		} else {
 			i++
@@ -267,14 +267,14 @@ func splitLinesKeepEnds(s string) []string {
 		var nextStart int
 		if c == '\r' {
 			if i+1 < len(s) && s[i+1] == '\n' {
-				lineEnd = i + 2  // 含 \r\n
+				lineEnd = i + 2 // 含 \r\n
 				nextStart = i + 2
 			} else {
-				lineEnd = i + 1  // 含 \r
+				lineEnd = i + 1 // 含 \r
 				nextStart = i + 1
 			}
 		} else if c == '\n' {
-			lineEnd = i + 1      // 含 \n
+			lineEnd = i + 1 // 含 \n
 			nextStart = i + 1
 		} else {
 			i++
@@ -758,10 +758,10 @@ func parseOpEntry(m map[string]any) *filesystem.OpHistoryEntry {
 	}
 
 	return &filesystem.OpHistoryEntry{
-		Action:      action,
-		Timestamp:   timestamp,
-		OldContent:  oldContent,
-		NewContent:  newContent,
+		Action:     action,
+		Timestamp:  timestamp,
+		OldContent: oldContent,
+		NewContent: newContent,
 	}
 }
 

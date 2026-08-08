@@ -146,7 +146,7 @@ func TestFileTrajectoryStore_SaveAndLoad(t *testing.T) {
 		SessionID:   "sess-1",
 		Steps: []*TrajectoryStep{
 			{
-				Kind:      StepKindLLM,
+				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
 					Model:    "qwen-max",
 					Messages: []map[string]any{{"role": "user", "content": "hello"}},
@@ -422,10 +422,10 @@ func TestRoundTrip(t *testing.T) {
 					Usage:    map[string]any{"prompt_tokens": float64(10), "completion_tokens": float64(5)},
 					Meta:     map[string]any{"key": "value"},
 				},
-				PromptTokenIDs:    []int{1, 2, 3},
+				PromptTokenIDs:     []int{1, 2, 3},
 				CompletionTokenIDs: []int{4, 5},
-				Reward:            0.95,
-				Meta:              map[string]any{"operator_id": "op-1"},
+				Reward:             0.95,
+				Meta:               map[string]any{"operator_id": "op-1"},
 			},
 			{
 				Kind: StepKindTool,

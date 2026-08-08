@@ -393,12 +393,16 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 	// 对齐 Python: 不在此处设置 registered 标志，由 syncMultimodalToolsForRuntime 管理
 	// 对齐 Python: 将 config 同步到已有工具实例
 	for _, t := range d.visionTools {
-		if setter, ok := t.(interface{ SetVisionModelConfig(*schema.VisionModelConfig) }); ok {
+		if setter, ok := t.(interface {
+			SetVisionModelConfig(*schema.VisionModelConfig)
+		}); ok {
 			setter.SetVisionModelConfig(d.visionModelConfig)
 		}
 	}
 	for _, t := range d.audioTools {
-		if setter, ok := t.(interface{ SetAudioModelConfig(*schema.AudioModelConfig) }); ok {
+		if setter, ok := t.(interface {
+			SetAudioModelConfig(*schema.AudioModelConfig)
+		}); ok {
 			setter.SetAudioModelConfig(d.audioModelConfig)
 		}
 	}

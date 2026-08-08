@@ -288,7 +288,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 
 	// 对齐 Python 退出码语义：
 	if returnCode == 0 {
-		// exit 0 → ParseCommandOutput(stdout)
+		// 退出码 0 → 解析命令输出
 		return ParseCommandOutput(stdout)
 	}
 

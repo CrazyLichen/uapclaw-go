@@ -385,16 +385,16 @@ func mapToToolCallDetail(data map[string]any) *ToolCallDetail {
 func mapToTrajectoryStep(data map[string]any) *TrajectoryStep {
 	detail, _ := data["detail"].(StepDetail)
 	return &TrajectoryStep{
-		Kind:              StepKind(toString(data["kind"])),
-		Error:             toMapAny(data["error"]),
-		StartTimeMs:       toInt(data["start_time_ms"]),
-		EndTimeMs:         toInt(data["end_time_ms"]),
-		Detail:            detail,
-		Reward:            toFloat64(data["reward"]),
-		PromptTokenIDs:    toIntSlice(data["prompt_token_ids"]),
+		Kind:               StepKind(toString(data["kind"])),
+		Error:              toMapAny(data["error"]),
+		StartTimeMs:        toInt(data["start_time_ms"]),
+		EndTimeMs:          toInt(data["end_time_ms"]),
+		Detail:             detail,
+		Reward:             toFloat64(data["reward"]),
+		PromptTokenIDs:     toIntSlice(data["prompt_token_ids"]),
 		CompletionTokenIDs: toIntSlice(data["completion_token_ids"]),
-		Logprobs:          data["logprobs"],
-		Meta:              toMapAny(data["meta"]),
+		Logprobs:           data["logprobs"],
+		Meta:               toMapAny(data["meta"]),
 	}
 }
 

@@ -8,10 +8,10 @@ import (
 // TestEnvFlag 空值返回默认值
 func TestEnvFlag(t *testing.T) {
 	tests := []struct {
-		name      string
-		envVal    string
+		name       string
+		envVal     string
 		defaultVal bool
-		want      bool
+		want       bool
 	}{
 		{"空值_默认true", "", true, true},
 		{"空值_默认false", "", false, false},

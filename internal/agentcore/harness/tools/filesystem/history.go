@@ -77,10 +77,10 @@ func BuildHistoryPath(baseDir, agentID, sessionID string) string {
 // JSON 文件是唯一数据源，没有内存缓存。
 func AppendOpHistory(historyPath, filePath, action string, oldContent, newContent *string) {
 	entry := OpHistoryEntry{
-		Action:      action,
-		Timestamp:   time.Now().UTC().Format(time.RFC3339Nano),
-		OldContent:  oldContent,
-		NewContent:  newContent,
+		Action:     action,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
+		OldContent: oldContent,
+		NewContent: newContent,
 	}
 
 	historyMu.Lock()
@@ -173,10 +173,10 @@ func DetectAndRecordDeletions(historyPath string) {
 		// 检查文件是否还存在
 		if _, err := os.Stat(filePath); err != nil && os.IsNotExist(err) {
 			entries = append(entries, OpHistoryEntry{
-				Action:      "delete",
-				Timestamp:   now,
-				OldContent:  lastEntry.NewContent,
-				NewContent:  nil,
+				Action:     "delete",
+				Timestamp:  now,
+				OldContent: lastEntry.NewContent,
+				NewContent: nil,
 			})
 			if len(entries) > MaxHistoryPerFile {
 				entries = entries[len(entries)-MaxHistoryPerFile:]

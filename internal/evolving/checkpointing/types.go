@@ -148,14 +148,14 @@ type PendingChange struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // evolutionPatchOptionalFields EvolutionPatch 可选字段名称列表。
 // 对应 Python: EvolutionPatch._OPTIONAL_FIELDS
 var evolutionPatchOptionalFields = []string{
 	"skip_reason", "merge_target", "script_filename",
 	"script_language", "script_purpose",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

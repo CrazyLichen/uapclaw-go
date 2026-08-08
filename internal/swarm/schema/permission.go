@@ -21,6 +21,12 @@ type PermissionContext struct {
 	WebUserID string `json:"web_user_id"`
 }
 
+// toolPermChannelIDKey 权限上下文 channelID 的 context key
+type toolPermChannelIDKey struct{}
+
+// toolPermContextKey 权限上下文的 context key
+type toolPermContextKey struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // PermissionContextOption 权限上下文构造选项函数。
@@ -29,12 +35,6 @@ type PermissionContextOption func(*PermissionContext)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// toolPermChannelIDKey 权限上下文 channelID 的 context key
-type toolPermChannelIDKey struct{}
-
-// toolPermContextKey 权限上下文的 context key
-type toolPermContextKey struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -193,7 +193,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 16: ⤵️ 10.6.3-10: _build_agent_rails(config, configBase, mode="code")
 	//              编码专有护栏：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
-	//              ConfirmInterruptRail, FileSystemRail
+	//              ConfirmInterruptRail, FileSystemRail（编码模式护栏列表）
 	// ⤴️ 10.3.7-11 CodeAgentRail: Code 模式专有护栏，管理 /agents 创建的自定义 Agent
 	codeAgentRail := c.buildCodeAgentRail()
 	if codeAgentRail != nil {

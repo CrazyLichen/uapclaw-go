@@ -96,7 +96,7 @@ func NormalizeSummary(raw any) *string {
 //	if action == "skip": return ParsedExperienceDraft(patch=EvolutionPatch(action="skip", ...))
 //	section 校验: section not in VALID_SECTIONS → fallback "Troubleshooting"
 //	target 解析: EvolutionTarget(raw_target)，失败 → fallback BODY
-//	merge_target: "null"/None → nil
+//	merge_target: "null"/None → nil（空值映射）
 func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 	if data == nil {
 		return nil

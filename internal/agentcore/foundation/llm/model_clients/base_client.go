@@ -213,9 +213,9 @@ func (e *BaseClientEmbed) GetModelName() string {
 // 对应 Python: BaseModelClient._convert_messages_to_dict()
 //
 // 转换规则：
-//   - IsText     → [{"role":"user","content":text}]
-//   - IsDicts    → 直接返回（零转换开销）
-//   - IsMessages → 遍历消息列表，通过类型断言处理：
+//   - IsText（纯文本） → [{"role":"user","content":text}]
+//   - IsDicts（字典列表） → 直接返回（零转换开销）
+//   - IsMessages（消息列表） → 遍历消息列表，通过类型断言处理：
 //     *AssistantMessage → 追加 tool_calls（OpenAI 嵌套格式）+ reasoning_content
 //     *ToolMessage      → 追加 tool_call_id
 //     其他              → 仅 role + content

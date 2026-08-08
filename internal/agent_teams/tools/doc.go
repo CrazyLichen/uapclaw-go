@@ -11,13 +11,10 @@
 //	├── doc.go               # 包文档
 //	├── events.go            # 事件常量 + topic 构建辅助函数
 //	├── task_manager.go      # TeamTaskManager 具体实现（20+ 方法 + 事件发布） ✅ 9.65a-2 + 9.65-1
-//	├── task_manager_test.go # TeamTaskManager 测试 ✅ 9.65a-2
 //	├── message_manager.go   # TeamMessageManager 具体实现（7 方法薄门面） ✅ 9.65a-3
-//	├── message_manager_test.go # TeamMessageManager 测试 ✅ 9.65a-3
 //	└── database/
 //	    ├── doc.go           # 数据库子包文档
 //	    ├── config.go        # DatabaseConfig 配置
-//	    ├── config_test.go   # 配置测试
 //	    ├── models.go        # Team + TeamMember + TeamTask + TeamMessageBase 数据模型 + 辅助类型 + 动态表常量
 //	    ├── database.go      # TeamDatabase 门面接口 + TeamDao/MemberDao/TaskDao/MessageDao DAO 接口
 //	    ├── fsm.go           # FSM 状态转换表 + 校验函数
@@ -26,11 +23,7 @@
 //	    ├── team_dao.go      # TeamDao 占位文件
 //	    ├── member_dao.go    # MemberDao 占位文件
 //	    ├── task_dao.go      # TaskDao 注释说明文件
-//	    ├── message_dao.go   # MessageDao 注释说明文件
-//	    ├── models_test.go   # 模型序列化测试
-//	    ├── database_test.go # 接口满足性测试
-//	    ├── memory_impl_test.go # InMemory DAO 全面测试
-//	    └── engine_test.go   # engine 工具函数测试
+//	    └── message_dao.go   # MessageDao 注释说明文件
 //
 // 对应 Python 代码：openjiuwen/agent_teams/tools/
 package tools

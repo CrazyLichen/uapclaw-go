@@ -45,7 +45,7 @@ type TrajectorySource interface {
 //
 // 对应 Python: InMemoryTrajectoryRegistry
 type InMemoryTrajectoryRegistry struct {
-	// snapshots (teamID, sessionID) → memberID → snapshotEntry
+	// snapshots 快照表，(teamID, sessionID) → memberID → snapshotEntry
 	snapshots map[registryKey]map[string]*snapshotEntry
 	// sequence 全局递增序列号
 	sequence int
@@ -244,7 +244,11 @@ func shouldKeepCurrent(current, incoming *snapshotEntry) bool {
 	return current.sequence >= incoming.sequence
 }
 
-// Verify interface compliance at compile time.
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口合规检查
 var (
 	_ TrajectorySink   = (*InMemoryTrajectoryRegistry)(nil)
 	_ TrajectorySource = (*InMemoryTrajectoryRegistry)(nil)

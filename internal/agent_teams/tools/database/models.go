@@ -164,16 +164,6 @@ type GraphMutationResult struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// BoolPtr 返回 bool 的指针。
-func BoolPtr(v bool) *bool { return &v }
-
-// Int64Ptr 返回 int64 的指针。
-func Int64Ptr(v int64) *int64 { return &v }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 var (
 	// TeamDynamicTablePrefixes 动态表名前缀（用于识别和清理）。
 	// 对齐 Python: TEAM_DYNAMIC_TABLE_PREFIXES
@@ -190,3 +180,13 @@ var (
 		"team_member",
 	}
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// BoolPtr 返回 bool 的指针。
+func BoolPtr(v bool) *bool { return &v }
+
+// Int64Ptr 返回 int64 的指针。
+func Int64Ptr(v int64) *int64 { return &v }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

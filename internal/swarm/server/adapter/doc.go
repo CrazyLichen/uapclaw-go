@@ -25,7 +25,6 @@
 //	├── deep_adapter_slash.go     # Slash 命令 5 个 + governance approval（⤵️）
 //	├── deep_adapter_evolution.go # EvolutionWatcher + ContextCompressor + Recap（⤵️）
 //	├── deep_adapter_team.go      # TeamSkillApproval + team 分流（⤵️）
-//	├── deep_adapter_stream.go    # parseStreamChunk 15+ 种 chunk + usage 累加器
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
 //	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）

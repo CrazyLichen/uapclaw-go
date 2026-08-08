@@ -13,7 +13,7 @@ type testEventMessage struct {
 	payload   map[string]any
 }
 
-func (m *testEventMessage) GetSenderID() string  { return m.senderID }
+func (m *testEventMessage) GetSenderID() string   { return m.senderID }
 func (m *testEventMessage) SetSenderID(id string) { m.senderID = id }
 
 // TestInProcessMessager_Publish_Subscribe 测试发布订阅基本功能

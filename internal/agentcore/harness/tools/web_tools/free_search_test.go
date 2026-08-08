@@ -114,7 +114,7 @@ func TestFilterRankedRows(t *testing.T) {
 	rows := []searchRow{
 		{Title: "Result 1", URL: "https://example.com/1", Source: "test"},
 		{Title: "Result 2", URL: "https://mp.weixin.qq.com/1", Source: "test"},
-		{Title: "", URL: "https://example.com/3", Source: "test"}, // 无标题
+		{Title: "", URL: "https://example.com/3", Source: "test"},         // 无标题
 		{Title: "Result 1", URL: "https://example.com/1", Source: "test"}, // 重复
 	}
 	filtered := filterRankedRows("test", rows)

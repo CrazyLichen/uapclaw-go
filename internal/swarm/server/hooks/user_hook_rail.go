@@ -45,8 +45,8 @@ func NewUserHookRail(config hookscfg.HooksConfig, executor *HookExecutor) *UserH
 }
 
 // BeforeToolCall 对齐 Python before_tool_call → HookEvent.PRE_TOOL_USE
-// blocking → cbc.Extra()["_skip_tool"]=true, cbc.Extra()["_hook_feedback"]=error
-// modifiedInput → 修改 cbc.Inputs.ToolArgs/ToolName
+// 阻塞时 → cbc.Extra()["_skip_tool"]=true, cbc.Extra()["_hook_feedback"]=error
+// 修改输入时 → 修改 cbc.Inputs.ToolArgs/ToolName
 // additionalContext → cbc.Extra()["_hook_additional_context"] 追加
 func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -105,7 +105,7 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 }
 
 // AfterToolCall 对齐 Python after_tool_call → HookEvent.POST_TOOL_USE
-// blocking → cbc.Extra()["_post_tool_hook_feedback"]=error
+// 阻塞时 → cbc.Extra()["_post_tool_hook_feedback"]=error
 // additionalContext → 拼接到 cbc.Inputs.ToolResult
 func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -182,7 +182,7 @@ func (r *UserHookRail) OnToolException(ctx context.Context, cbc *agentinterfaces
 }
 
 // AfterInvoke 对齐 Python after_invoke → HookEvent.STOP
-// blocking → cbc.Extra()["_stop_hook_feedback"]=error
+// 阻塞时 → cbc.Extra()["_stop_hook_feedback"]=error
 func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python: hook_configs = self._config.match(HookEvent.STOP.value)
 	hookConfigs := r.config.Match(hookscfg.HookEventStop, "")
