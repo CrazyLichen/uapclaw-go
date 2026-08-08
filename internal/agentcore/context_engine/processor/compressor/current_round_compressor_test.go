@@ -77,8 +77,8 @@ func crcNewFakeLLMModel(fakeClient *crcFakeBaseModelClient) *llm.Model {
 	crcCurrentFakeClient = fakeClient
 	crcFakeRegistryOnce.Do(func() {
 		model_clients.GetClientRegistry().Register(crcTestProvider, "llm",
-			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) model_clients.BaseModelClient {
-				return crcCurrentFakeClient
+			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return crcCurrentFakeClient, nil
 			},
 		)
 	})

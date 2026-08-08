@@ -476,13 +476,13 @@ func init() {
 	// 注册 DashScope 客户端到全局注册表（2.6 回填点）
 	registry := model_clients.GetClientRegistry()
 
-	dashScopeFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	dashScopeFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewDashScopeModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 DashScope 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("DashScope", "llm", dashScopeFactory)

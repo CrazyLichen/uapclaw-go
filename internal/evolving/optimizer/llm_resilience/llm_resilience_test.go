@@ -699,8 +699,8 @@ func newMockModel(t *testing.T, invokeFn func(ctx context.Context, messages mode
 	// 注册 mock client 到全局 registry
 	mockClient := &mockBaseModelClient{invokeFn: invokeFn}
 	providerName := fmt.Sprintf("mock_llm_resilience_%d", time.Now().UnixNano())
-	model_clients.GetClientRegistry().Register(providerName, "llm", func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) model_clients.BaseModelClient {
-		return mockClient
+	model_clients.GetClientRegistry().Register(providerName, "llm", func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return mockClient, nil
 	})
 
 	clientConfig := &llmschema.ModelClientConfig{

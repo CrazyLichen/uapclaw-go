@@ -29,7 +29,8 @@ type registryProviderValidator struct{}
 // ClientFactory 客户端工厂函数类型。
 //
 // 工厂函数接收 ModelRequestConfig 和 ModelClientConfig，返回 BaseModelClient 实例。
-type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient
+// 对齐 Python：factory 可以抛异常，Go 通过 error 返回值表达创建失败。
+type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -114,7 +115,7 @@ func (r *ClientRegistry) GetClient(name, clientType string, modelConfig *llmsche
 		}
 	}
 
-	return factory(modelConfig, clientConfig), nil
+	return factory(modelConfig, clientConfig)
 }
 
 // Unregister 注销客户端。

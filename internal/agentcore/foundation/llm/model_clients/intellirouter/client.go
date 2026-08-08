@@ -459,13 +459,13 @@ func (c *IntelliRouterModelClient) convertChunk(
 func init() {
 	registry := model_clients.GetClientRegistry()
 
-	intelliRouterFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	intelliRouterFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewIntelliRouterModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 IntelliRouter 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("intelli_router", "llm", intelliRouterFactory)

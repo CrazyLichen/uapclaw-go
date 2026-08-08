@@ -99,13 +99,16 @@ func TestWorkflowMgr_批量添加(t *testing.T) {
 	}
 }
 
-// TestWorkflowMgr_获取不存在返回错误 测试不存在的 workflowID 返回错误
-func TestWorkflowMgr_获取不存在返回错误(t *testing.T) {
+// TestWorkflowMgr_获取不存在返回nil 测试不存在的 workflowID 返回 nil，对齐 Python
+func TestWorkflowMgr_获取不存在返回nil(t *testing.T) {
 	mgr := NewWorkflowMgr()
 
-	_, err := mgr.GetWorkflow(context.Background(), "not-exist", nil)
-	if err == nil {
-		t.Error("获取不存在的工作流应返回错误")
+	result, err := mgr.GetWorkflow(context.Background(), "not-exist", nil)
+	if err != nil {
+		t.Errorf("获取不存在的工作流不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("获取不存在的工作流应返回 nil，对齐 Python 返回 None")
 	}
 }
 

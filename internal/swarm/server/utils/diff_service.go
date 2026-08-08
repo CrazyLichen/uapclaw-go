@@ -214,13 +214,6 @@ func (ds *DiffService) GetFilesToRestore(sessionID string, turnIndex int, projec
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// historyRecord session history 记录
-type historyRecord struct {
-	Role      string  `json:"role"`
-	Content   string  `json:"content"`
-	Timestamp float64 `json:"timestamp"`
-}
-
 // computeTurnDiffs 计算 turn-based diffs。
 // 对齐 Python: _compute_turn_diffs (line 39-125)
 func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []TurnDiff {

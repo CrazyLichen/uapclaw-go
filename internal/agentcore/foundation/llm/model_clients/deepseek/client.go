@@ -189,13 +189,13 @@ func (c *DeepSeekModelClient) TranscribeAudio(
 func init() {
 	registry := model_clients.GetClientRegistry()
 
-	deepSeekFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	deepSeekFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewDeepSeekModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 DeepSeek 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("DeepSeek", "llm", deepSeekFactory)

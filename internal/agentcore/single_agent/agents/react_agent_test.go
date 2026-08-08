@@ -1065,10 +1065,10 @@ var (
 func initFakeModelClient() {
 	fakeClientOnce.Do(func() {
 		model_clients.GetClientRegistry().Register(fakeClientProvider, "llm",
-			func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+			func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 				return &fakeModelClient{
 					invokeResult: llmschema.NewAssistantMessage("测试回复"),
-				}
+				}, nil
 			},
 		)
 	})

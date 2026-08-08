@@ -117,8 +117,8 @@ func TestInitModel_Success(t *testing.T) {
 
 	// 注册 mock 工厂
 	registry := model_clients.GetClientRegistry()
-	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
-		return &mockModelClient{}
+	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return &mockModelClient{}, nil
 	})
 	defer func() { _ = registry.Unregister(testProvider, "llm") }()
 
@@ -142,8 +142,8 @@ func TestInitModel_WithOptions(t *testing.T) {
 	const testProvider = "TestInitModelOptsProvider"
 
 	registry := model_clients.GetClientRegistry()
-	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
-		return &mockModelClient{}
+	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return &mockModelClient{}, nil
 	})
 	defer func() { _ = registry.Unregister(testProvider, "llm") }()
 

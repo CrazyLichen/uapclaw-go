@@ -58,13 +58,16 @@ func TestModelMgr_Session为nil不装饰(t *testing.T) {
 	}
 }
 
-// TestModelMgr_获取不存在返回错误 测试不存在的 modelID 返回错误
-func TestModelMgr_获取不存在返回错误(t *testing.T) {
+// TestModelMgr_获取不存在返回nil 测试不存在的 modelID 返回 nil，对齐 Python
+func TestModelMgr_获取不存在返回nil(t *testing.T) {
 	mgr := NewModelMgr()
 
-	_, err := mgr.GetModel(context.Background(), "not-exist", nil)
-	if err == nil {
-		t.Error("获取不存在的模型应返回错误")
+	result, err := mgr.GetModel(context.Background(), "not-exist", nil)
+	if err != nil {
+		t.Errorf("获取不存在的模型不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("获取不存在的模型应返回 nil，对齐 Python 返回 None")
 	}
 }
 

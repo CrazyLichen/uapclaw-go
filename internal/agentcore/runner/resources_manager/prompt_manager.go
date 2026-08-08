@@ -1,8 +1,6 @@
 package resources_manager
 
 import (
-	"fmt"
-
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

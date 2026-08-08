@@ -1387,8 +1387,8 @@ var fcpFakeRegistryOnce sync.Once
 func newFakeLLMModel(fakeClient *fcpFakeBaseModelClient) *llm.Model {
 	fcpFakeRegistryOnce.Do(func() {
 		model_clients.GetClientRegistry().Register(fcpTestProvider, "llm",
-			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) model_clients.BaseModelClient {
-				return fakeClient
+			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return fakeClient, nil
 			},
 		)
 	})
@@ -1812,8 +1812,8 @@ func TestNewFullCompactProcessor_有Model配置(t *testing.T) {
 	// 注册 fake provider
 	fcpFakeRegistryOnce.Do(func() {
 		model_clients.GetClientRegistry().Register(fcpTestProvider, "llm",
-			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) model_clients.BaseModelClient {
-				return fakeClient
+			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return fakeClient, nil
 			},
 		)
 	})

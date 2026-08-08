@@ -74,8 +74,8 @@ func TestPromptMgr_空模板报错(t *testing.T) {
 	}
 }
 
-// TestPromptMgr_移除后获取返回错误 测试 RemovePrompt 后 GetPrompt 返回错误
-func TestPromptMgr_移除后获取返回错误(t *testing.T) {
+// TestPromptMgr_移除后获取返回nil 测试 RemovePrompt 后 GetPrompt 返回 nil，对齐 Python
+func TestPromptMgr_移除后获取返回nil(t *testing.T) {
 	mgr := NewPromptMgr()
 
 	tmpl := prompt.NewPromptTemplate("test-template", "hello")
@@ -92,19 +92,25 @@ func TestPromptMgr_移除后获取返回错误(t *testing.T) {
 		t.Error("RemovePrompt 应返回被移除的模板")
 	}
 
-	_, err = mgr.GetPrompt("tmpl-1")
-	if err == nil {
-		t.Error("移除后 GetPrompt 应返回错误")
+	result, err := mgr.GetPrompt("tmpl-1")
+	if err != nil {
+		t.Errorf("移除后 GetPrompt 不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("移除后 GetPrompt 应返回 nil，对齐 Python 返回 None")
 	}
 }
 
-// TestPromptMgr_获取不存在返回错误 测试不存在的 templateID 返回错误
-func TestPromptMgr_获取不存在返回错误(t *testing.T) {
+// TestPromptMgr_获取不存在返回nil 测试不存在的 templateID 返回 nil，对齐 Python
+func TestPromptMgr_获取不存在返回nil(t *testing.T) {
 	mgr := NewPromptMgr()
 
-	_, err := mgr.GetPrompt("not-exist")
-	if err == nil {
-		t.Error("获取不存在的模板应返回错误")
+	result, err := mgr.GetPrompt("not-exist")
+	if err != nil {
+		t.Errorf("获取不存在的模板不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("获取不存在的模板应返回 nil，对齐 Python 返回 None")
 	}
 }
 

@@ -38,8 +38,8 @@ func (m *mockModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llms
 }
 
 // mockFactory 创建 mockModelClient 的工厂函数。
-func mockFactory(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient {
-	return &mockModelClient{}
+func mockFactory(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error) {
+	return &mockModelClient{}, nil
 }
 
 // TestClientRegistry_RegisterAndGet 测试注册和获取客户端。
@@ -48,11 +48,11 @@ func TestClientRegistry_RegisterAndGet(t *testing.T) {
 	r.Register("TestProvider", "llm", mockFactory)
 
 	mc := llmschema.NewModelRequestConfig()
-	cc, err := llmschema.NewModelClientConfig("TestProvider", "key", "https://api.test.com",
-		llmschema.WithVerifySSL(false),
-	)
-	if err != nil {
-		t.Fatal(err)
+	// 直接构造 ModelClientConfig，绕过 ValidateAndNormalizeProvider（该验证使用全局注册表）
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "TestProvider",
+		APIKey:         "key",
+		APIBase:        "https://api.test.com",
 	}
 
 	client, err := r.GetClient("TestProvider", "llm", mc, cc)
@@ -80,14 +80,14 @@ func TestClientRegistry_DuplicateRegister(t *testing.T) {
 func TestClientRegistry_GetClient_NotFound(t *testing.T) {
 	r := NewClientRegistry()
 	mc := llmschema.NewModelRequestConfig()
-	cc, err := llmschema.NewModelClientConfig("Unknown", "key", "https://api.test.com",
-		llmschema.WithVerifySSL(false),
-	)
-	if err != nil {
-		t.Fatal(err)
+	// 直接构造 ModelClientConfig，绕过 ValidateAndNormalizeProvider
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "Unknown",
+		APIKey:         "key",
+		APIBase:        "https://api.test.com",
 	}
 
-	_, err = r.GetClient("Unknown", "llm", mc, cc)
+	_, err := r.GetClient("Unknown", "llm", mc, cc)
 	if err == nil {
 		t.Error("获取未注册客户端应报错")
 	}

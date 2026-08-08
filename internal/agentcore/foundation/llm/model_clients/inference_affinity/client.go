@@ -471,13 +471,13 @@ func (c *InferenceAffinityModelClient) TranscribeAudio(
 func init() {
 	registry := model_clients.GetClientRegistry()
 
-	inferenceAffinityFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	inferenceAffinityFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewInferenceAffinityModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 InferenceAffinity 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("InferenceAffinity", "llm", inferenceAffinityFactory)

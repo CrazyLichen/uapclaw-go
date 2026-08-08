@@ -430,8 +430,8 @@ func msoNewFakeLLMModelFromClient(fakeClient model_clients.BaseModelClient) *llm
 	msoCurrentFakeClientAny = fakeClient
 	msoFakeRegistryOnce.Do(func() {
 		model_clients.GetClientRegistry().Register(msoTestProvider, "llm",
-			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) model_clients.BaseModelClient {
-				return msoCurrentFakeClientAny
+			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return msoCurrentFakeClientAny, nil
 			},
 		)
 	})

@@ -53,8 +53,8 @@ func TestAgentMgr_重复注册报错(t *testing.T) {
 	}
 }
 
-// TestAgentMgr_移除后获取报错 测试 RemoveAgent 后 GetAgent 报错
-func TestAgentMgr_移除后获取报错(t *testing.T) {
+// TestAgentMgr_移除后获取返回nil 测试 RemoveAgent 后 GetAgent 返回 nil，对齐 Python
+func TestAgentMgr_移除后获取返回nil(t *testing.T) {
 	mgr := NewAgentMgr()
 
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (interfaces.BaseAgent, error) {
@@ -74,19 +74,25 @@ func TestAgentMgr_移除后获取报错(t *testing.T) {
 		t.Error("RemoveAgent 应返回被注销的 provider")
 	}
 
-	_, err = mgr.GetAgent(context.Background(), "agent-1")
-	if err == nil {
-		t.Error("移除后 GetAgent 应返回错误")
+	result, err := mgr.GetAgent(context.Background(), "agent-1")
+	if err != nil {
+		t.Errorf("移除后 GetAgent 不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("移除后 GetAgent 应返回 nil，对齐 Python 返回 None")
 	}
 }
 
-// TestAgentMgr_获取不存在返回错误 测试不存在的 agentID 返回错误
-func TestAgentMgr_获取不存在返回错误(t *testing.T) {
+// TestAgentMgr_获取不存在返回nil 测试不存在的 agentID 返回 nil，对齐 Python
+func TestAgentMgr_获取不存在返回nil(t *testing.T) {
 	mgr := NewAgentMgr()
 
-	_, err := mgr.GetAgent(context.Background(), "not-exist")
-	if err == nil {
-		t.Error("获取不存在的 Agent 应返回错误")
+	result, err := mgr.GetAgent(context.Background(), "not-exist")
+	if err != nil {
+		t.Errorf("获取不存在的 Agent 不应返回错误，对齐 Python 返回 None: %v", err)
+	}
+	if result != nil {
+		t.Error("获取不存在的 Agent 应返回 nil，对齐 Python 返回 None")
 	}
 }
 

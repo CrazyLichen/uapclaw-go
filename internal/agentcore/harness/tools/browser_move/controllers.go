@@ -385,6 +385,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 
 // Snapshot 返回控制器快照。
 // 对齐 Python: ActionController.snapshot
+// actionSpecs 进行深拷贝，保护内部状态不被外部修改，对齐 Python 的 copy.deepcopy。
 func (c *ActionController) Snapshot() map[string]any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -392,9 +393,19 @@ func (c *ActionController) Snapshot() map[string]any {
 	for k, v := range c.actions {
 		actions[k] = v
 	}
+	// 深拷贝 actionSpecs，对齐 Python 的 copy.deepcopy
+	actionSpecs := make(map[string]ActionSpec, len(c.actionSpecs))
+	for k, spec := range c.actionSpecs {
+		paramsCopy := make(map[string]string, len(spec.Params))
+		for pk, pv := range spec.Params {
+			paramsCopy[pk] = pv
+		}
+		spec.Params = paramsCopy
+		actionSpecs[k] = spec
+	}
 	return map[string]any{
 		"actions":        actions,
-		"action_specs":   c.actionSpecs,
+		"action_specs":   actionSpecs,
 		"runtime_runner": c.runtimeRunner,
 		"code_executor":  c.codeExecutor,
 	}
@@ -1063,8 +1074,8 @@ func buildDragPayload(kwargs map[string]any) map[string]any {
 		"url":                   getStr(kwargs, "url"),
 		"element_source":        sourceSelector,
 		"element_target":        targetSelector,
-		"element_source_offset": normalizeOffset(kwargs["element_source_offset"]),
-		"element_target_offset": normalizeOffset(kwargs["element_target_offset"]),
+		"element_source_offset": offsetToAny(normalizeOffset(kwargs["element_source_offset"])),
+		"element_target_offset": offsetToAny(normalizeOffset(kwargs["element_target_offset"])),
 		"coord_source_x":        sx,
 		"coord_source_y":        sy,
 		"coord_target_x":        tx,
@@ -1354,29 +1365,30 @@ func getStr(m map[string]any, key string) string {
 
 // normalizeOffset 将 offset 值规范化为 {x: int, y: int} 格式。
 // 对齐 Python: _normalize_offset (controllers/action.py L283-294)
-func normalizeOffset(value any) map[string]int {
-	if m, ok := value.(map[string]any); ok {
-		x := 0
-		y := 0
-		if v, ok := m["x"]; ok {
-			if n, ok := v.(int); ok {
-				x = n
-			}
-			if n, ok := v.(float64); ok {
-				x = int(n)
-			}
-		}
-		if v, ok := m["y"]; ok {
-			if n, ok := v.(int); ok {
-				y = n
-			}
-			if n, ok := v.(float64); ok {
-				y = int(n)
-			}
-		}
-		return map[string]int{"x": x, "y": y}
+// 输入为 nil/非 map/x 或 y 无法解析时返回 nil，对齐 Python 的 None 返回。
+func normalizeOffset(value any) *map[string]int {
+	if value == nil {
+		return nil
 	}
-	return map[string]int{"x": 0, "y": 0}
+	m, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	xVal, xErr := toIntOrNone(m["x"])
+	yVal, yErr := toIntOrNone(m["y"])
+	if xErr != nil || yErr != nil || xVal == nil || yVal == nil {
+		return nil
+	}
+	result := map[string]int{"x": *xVal, "y": *yVal}
+	return &result
+}
+
+// offsetToAny 将 *map[string]int 转为 any，避免 nil 指针转为非 nil interface。
+func offsetToAny(offset *map[string]int) any {
+	if offset == nil {
+		return nil
+	}
+	return offset
 }
 
 // resolveUploadRoot 解析上传根目录。

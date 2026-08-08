@@ -63,8 +63,8 @@ func rlcNewFakeLLMModel(fakeClient *rlcFakeBaseModelClient) *llm.Model {
 	rlcCurrentFakeClient = fakeClient
 	if !rlcFakeRegistryOnce {
 		model_clients.GetClientRegistry().Register(rlcTestProvider, "llm",
-			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) model_clients.BaseModelClient {
-				return rlcCurrentFakeClient
+			func(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return rlcCurrentFakeClient, nil
 			},
 		)
 		rlcFakeRegistryOnce = true

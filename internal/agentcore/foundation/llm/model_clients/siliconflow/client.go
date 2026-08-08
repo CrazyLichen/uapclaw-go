@@ -377,13 +377,13 @@ func (c *SiliconFlowModelClient) TranscribeAudio(
 func init() {
 	registry := model_clients.GetClientRegistry()
 
-	siliconFlowFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	siliconFlowFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewSiliconFlowModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 SiliconFlow 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("SiliconFlow", "llm", siliconFlowFactory)

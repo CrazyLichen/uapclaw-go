@@ -546,15 +546,13 @@ func init() {
 	registry := model_clients.GetClientRegistry()
 
 	// OpenAI 客户端工厂
-	openAIFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+	openAIFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewOpenAIModelClient(mc, cc)
 		if err != nil {
-			// 注册阶段无法返回 error，记录日志并返回 nil
-			// 实际使用时 CreateModelClient 会正常创建
 			logger.Error(logComponent).Err(err).Msg("创建 OpenAI 客户端失败")
-			return nil
+			return nil, err
 		}
-		return client
+		return client, nil
 	}
 
 	registry.Register("OpenAI", "llm", openAIFactory)
