@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/glebarez/sqlite"
+	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +19,7 @@ func TestDefaultDbStore_接口满足(t *testing.T) {
 
 // TestNewDefaultDbStore 验证构造函数返回非 nil 实例。
 func TestNewDefaultDbStore(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestNewDefaultDbStore_NilDB(t *testing.T) {
 
 // TestDefaultDbStore_GetDB 验证 GetDB 返回正确的 *gorm.DB 实例。
 func TestDefaultDbStore_GetDB(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestDefaultDbStore_GetDB(t *testing.T) {
 // TestDefaultDbStore_GetDB_忽略Context 验证 GetDB 忽略 context 参数，
 // 多次调用使用不同 context 返回相同的 *gorm.DB 实例。
 func TestDefaultDbStore_GetDB_忽略Context(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}

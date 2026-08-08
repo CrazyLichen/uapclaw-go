@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/glebarez/sqlite"
+	gormsqlite "gorm.io/driver/sqlite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"gorm.io/gorm"
 )
@@ -18,7 +18,7 @@ func TestGaussDbStore_接口满足(t *testing.T) {
 
 // TestNewGaussDbStoreWithDB 验证从已有 *gorm.DB 构造 GaussDbStore。
 func TestNewGaussDbStoreWithDB(t *testing.T) {
-	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestNewGaussDbStoreWithDB(t *testing.T) {
 
 // TestGaussDbStore_GetDB 验证 GetDB 返回正确的 *gorm.DB 实例。
 func TestGaussDbStore_GetDB(t *testing.T) {
-	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestGaussDbStore_GetDB_NilDB(t *testing.T) {
 
 // TestGaussDbStore_GetDB_忽略Context 验证 GetDB 忽略 context 参数。
 func TestGaussDbStore_GetDB_忽略Context(t *testing.T) {
-	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestGaussDbStore_GetDB_忽略Context(t *testing.T) {
 
 // TestGaussDbStore_Close 验证 Close 正常关闭底层连接。
 func TestGaussDbStore_Close(t *testing.T) {
-	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestGaussDbStore_Close_NilDB(t *testing.T) {
 // TestGaussDbStore_Close_已关闭后再次关闭 验证 Close 关闭后
 // 再次调用时 s.db.DB() 返回错误。
 func TestGaussDbStore_Close_已关闭后再次关闭(t *testing.T) {
-	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("创建测试数据库失败: %v", err)
 	}

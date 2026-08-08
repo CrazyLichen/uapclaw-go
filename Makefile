@@ -34,11 +34,11 @@ build-cli:
 
 # 运行测试
 test:
-	$(GOTEST) -v -tags test ./...
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test" ./...
 
 # 运行测试（带覆盖率）
 test-cover:
-	$(GOTEST) -v -tags test -coverprofile=coverage.out ./...
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test" -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 # 代码格式化

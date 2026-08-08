@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glebarez/sqlite"
+	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 // newTestDbBasedKVStore 创建用于测试的 DbBasedKVStore 实例，使用 SQLite :memory: 数据库。
 func newTestDbBasedKVStore(t *testing.T) *DbBasedKVStore {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("打开 SQLite 内存数据库失败: %v", err)
 	}
@@ -867,7 +867,7 @@ func TestDbBasedKVStore_GetByPrefix_含Exclusive值(t *testing.T) {
 
 // TestDbBasedKVStore_Exists_错误路径 验证 Exists 数据库错误时返回 error。
 func TestDbBasedKVStore_Exists_错误路径(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(gormsqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("打开数据库失败: %v", err)
 	}
