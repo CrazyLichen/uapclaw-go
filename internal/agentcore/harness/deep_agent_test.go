@@ -1304,7 +1304,7 @@ func TestDeepAgent_CombineRailsByType(t *testing.T) {
 	fr1 := &fakeAgentRailWithType{}
 	fr2 := &fakeAgentRailWithType{}
 
-	// fr1 pending, fr2 registered
+	// fr1 待注册，fr2 已注册
 	d.AddRail(fr1)
 	if err := d.RegisterRail(context.Background(), fr2); err != nil {
 		t.Fatalf("RegisterRail 返回错误: %v", err)

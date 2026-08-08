@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -35,6 +35,12 @@ type AudioMetadataInput struct {
 	// AudioPathOrURL 本地音频路径或公网 http(s) 音频 URL
 	AudioPathOrURL string `json:"audio_path_or_url"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -140,8 +146,8 @@ func NewAudioQATool(
 			duration, _ := GetAudioDuration(audioPath)
 
 			// 构造 input_audio 消息（对齐 Python: _invoke_audio_question_answering）
-			// system 消息: "You are a helpful assistant specializing in audio analysis."
-			// user 消息: text part + input_audio part
+			// 系统消息: "You are a helpful assistant specializing in audio analysis."
+			// 用户消息: 文本部分 + 音频输入部分
 			audioPart := llmschema.ContentPart{
 				Type:       "input_audio",
 				InputAudio: &llmschema.InputAudio{Data: encoded, Format: format},
@@ -170,9 +176,9 @@ func NewAudioQATool(
 			}
 
 			return map[string]any{
-				"answer":            answer,
-				"duration_seconds":  duration,
-				"model":             config.QAModel,
+				"answer":           answer,
+				"duration_seconds": duration,
+				"model":            config.QAModel,
 			}, nil
 		}()
 		if err != nil {

@@ -112,9 +112,8 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 			APIKey:         a.config.APIKey,
 			APIBase:        a.config.APIBase,
 		}
-		modelCfg := &llmschema.ModelRequestConfig{
-			ModelName: a.config.ModelNameVal,
-		}
+		modelCfg := llmschema.NewModelRequestConfig()
+		modelCfg.ModelName = a.config.ModelNameVal
 		model, err := llm.NewModel(clientCfg, modelCfg)
 		if err != nil {
 			initErr = err

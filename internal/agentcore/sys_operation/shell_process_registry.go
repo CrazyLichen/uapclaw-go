@@ -336,10 +336,10 @@ func ClearShellSessionID(ctx context.Context) context.Context {
 // 会从 logging.utils.get_session_id() 获取 trace_id 并排除 "default_trace_id" 哨兵值。
 // Go 侧等 logger 包实现 GetTraceID(context.Context) 后，在此处补充等价 fallback：
 //
-//	traceID := logger.GetTraceID(ctx)
-//	if traceID != "" && traceID != "default_trace_id" {
-//	    return traceID
-//	}
+//		traceID := logger.GetTraceID(ctx)
+//	   如果 traceID 非空且非默认值
+//		    return traceID
+//		}
 func ResolveShellSessionID(ctx context.Context) string {
 	sid := strings.TrimSpace(GetShellSessionID(ctx))
 	if sid != "" {

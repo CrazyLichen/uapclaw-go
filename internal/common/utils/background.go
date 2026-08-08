@@ -123,10 +123,10 @@ type taskConfig struct {
 	parentID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // TaskOption 任务选项函数类型。
 type TaskOption func(*taskConfig)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskStatus 任务状态枚举。
 type TaskStatus int

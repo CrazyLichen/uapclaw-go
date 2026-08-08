@@ -92,6 +92,15 @@ func (s *mockSession) GetSessionID() string { return s.id }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// mustNewClientConfig 创建 ModelClientConfig，出错时 panic（测试专用）
+func mustNewClientConfig(provider, apiKey, apiBase string, opts ...llmschema.ModelClientConfigOption) *llmschema.ModelClientConfig {
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return cc
+}
+
 // TestNewModel_空配置 测试 nil 配置返回错误
 func TestNewModel_空配置(t *testing.T) {
 	_, err := NewModel(nil, nil)
@@ -110,7 +119,7 @@ func TestNewModel_带回调框架(t *testing.T) {
 	// 由于无法轻易注册 mock client，这里只测试 WithCallbackFramework 选项
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{},
 		callbackFramework: customFW,
 	}
@@ -150,7 +159,7 @@ func TestModel_Invoke_回调事件(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{invokeResult: llmschema.NewAssistantMessage("hello")},
 		callbackFramework: fw,
 	}
@@ -184,7 +193,7 @@ func TestModel_Invoke_错误回调(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{invokeErr: context.Canceled},
 		callbackFramework: fw,
 	}
@@ -223,7 +232,7 @@ func TestModel_Stream_回调事件(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{streamChan: chunkChan},
 		callbackFramework: fw,
 	}
@@ -248,7 +257,7 @@ func TestModel_BuildKVCacheInvokeKwargs_参数构建(t *testing.T) {
 	t.Run("不支持KV Cache的客户端返回空map", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
-			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{supportsKVCache: false},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
@@ -261,7 +270,7 @@ func TestModel_BuildKVCacheInvokeKwargs_参数构建(t *testing.T) {
 	t.Run("支持KV Cache的客户端正常构建参数", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
-			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{supportsKVCache: true},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
@@ -298,7 +307,7 @@ func TestModel_GetClient_获取底层客户端(t *testing.T) {
 	mockClient := &mockModelClient{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            mockClient,
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -313,7 +322,7 @@ func TestModel_GetClient_获取底层客户端(t *testing.T) {
 func TestModel_resolveModelName_模型名称解析(t *testing.T) {
 	model := &Model{
 		ModelConfig:  llmschema.NewModelRequestConfig(llmschema.WithModelName("default-model")),
-		ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig: mustNewClientConfig("test", "key", "http://localhost"),
 		client:       &mockModelClient{},
 	}
 
@@ -378,7 +387,7 @@ func TestModel_Release_委托测试(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			model := &Model{
 				ModelConfig:       llmschema.NewModelRequestConfig(),
-				ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+				ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 				client:            &mockModelClient{releaseResult: tt.result, releaseErr: tt.err},
 				callbackFramework: callback.NewCallbackFramework(),
 			}
@@ -399,7 +408,7 @@ func TestModel_SupportsKVCacheRelease_KV缓存释放支持(t *testing.T) {
 	t.Run("支持KV Cache Release", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
-			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{supportsKVCache: true},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
@@ -411,7 +420,7 @@ func TestModel_SupportsKVCacheRelease_KV缓存释放支持(t *testing.T) {
 	t.Run("不支持KV Cache Release", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
-			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{supportsKVCache: false},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
@@ -426,7 +435,7 @@ func TestModel_GenerateImage_图片生成委托(t *testing.T) {
 	expectedResp := &llmschema.ImageGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genImageResult: expectedResp},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -445,7 +454,7 @@ func TestModel_GenerateSpeech_语音生成委托(t *testing.T) {
 	expectedResp := &llmschema.AudioGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genSpeechResult: expectedResp},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -464,7 +473,7 @@ func TestModel_GenerateVideo_视频生成委托(t *testing.T) {
 	expectedResp := &llmschema.VideoGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genVideoResult: expectedResp},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -482,7 +491,7 @@ func TestModel_GenerateVideo_视频生成委托(t *testing.T) {
 func TestModel_Format_格式化输出(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -498,7 +507,7 @@ func TestModel_Format_格式化输出(t *testing.T) {
 func TestModel_Format_模型配置为空(t *testing.T) {
 	model := &Model{
 		ModelConfig:       nil,
-		ClientConfig:      llmschema.NewModelClientConfig("TestProvider", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("TestProvider", "key", "http://localhost"),
 		client:            &mockModelClient{},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
@@ -526,7 +535,7 @@ func TestModel_Invoke_带用量元数据(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{invokeResult: result},
 		callbackFramework: fw,
 	}
@@ -560,7 +569,7 @@ func TestModel_Invoke_无用量元数据(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{invokeResult: result},
 		callbackFramework: fw,
 	}
@@ -594,7 +603,7 @@ func TestModel_Stream_错误(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{streamErr: fmt.Errorf("connection refused")},
 		callbackFramework: fw,
 	}
@@ -643,7 +652,7 @@ func TestModel_Stream_输出回调(t *testing.T) {
 
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
-		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{streamChan: chunkChan},
 		callbackFramework: fw,
 	}
@@ -679,7 +688,7 @@ func TestModel_Stream_输出回调(t *testing.T) {
 func TestModel_resolveModelName_模型配置为空(t *testing.T) {
 	model := &Model{
 		ModelConfig:  nil,
-		ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig: mustNewClientConfig("test", "key", "http://localhost"),
 		client:       &mockModelClient{},
 	}
 
@@ -693,7 +702,7 @@ func TestModel_resolveStreamModelName_流式模型名称解析(t *testing.T) {
 	t.Run("参数优先", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:  llmschema.NewModelRequestConfig(llmschema.WithModelName("default-model")),
-			ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig: mustNewClientConfig("test", "key", "http://localhost"),
 			client:       &mockModelClient{},
 		}
 		if name := model.resolveStreamModelName("stream-override"); name != "stream-override" {
@@ -704,7 +713,7 @@ func TestModel_resolveStreamModelName_流式模型名称解析(t *testing.T) {
 	t.Run("使用 ModelConfig 默认值", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:  llmschema.NewModelRequestConfig(llmschema.WithModelName("default-model")),
-			ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig: mustNewClientConfig("test", "key", "http://localhost"),
 			client:       &mockModelClient{},
 		}
 		if name := model.resolveStreamModelName(""); name != "default-model" {
@@ -715,7 +724,7 @@ func TestModel_resolveStreamModelName_流式模型名称解析(t *testing.T) {
 	t.Run("ModelConfig 为 nil", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:  nil,
-			ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			ClientConfig: mustNewClientConfig("test", "key", "http://localhost"),
 			client:       &mockModelClient{},
 		}
 		if name := model.resolveStreamModelName(""); name != "" {
@@ -735,7 +744,7 @@ func TestModel_Invoke_额外数据(t *testing.T) {
 	})
 
 	modelCfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
-	clientCfg := llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost")
+	clientCfg := mustNewClientConfig("OpenAI", "key", "http://localhost")
 	model := &Model{
 		ModelConfig:       modelCfg,
 		ClientConfig:      clientCfg,
@@ -764,7 +773,7 @@ func TestModel_Invoke_额外数据(t *testing.T) {
 func TestModel_BuildKVCacheInvokeKwargs_仅Session(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+		ClientConfig:      mustNewClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{supportsKVCache: true},
 		callbackFramework: callback.NewCallbackFramework(),
 	}

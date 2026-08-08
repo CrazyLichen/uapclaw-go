@@ -1259,7 +1259,7 @@ func TestBuildChromaWhereFilter_不支持的类型(t *testing.T) {
 
 // TestChromaWhereFilter 测试 chromaWhereFilter 适配器
 func TestChromaWhereFilter(t *testing.T) {
-	// nil clause
+	// nil 条件
 	f := &chromaWhereFilter{clause: nil}
 	if f.String() != "" {
 		t.Errorf("String() with nil clause = %v, want empty", f.String())
@@ -1441,7 +1441,7 @@ func newChromaTestStore() *ChromaVectorStore {
 
 // TestChromaWhereFilter_UnmarshalJSON 验证 UnmarshalJSON 实现
 func TestChromaWhereFilter_UnmarshalJSON(t *testing.T) {
-	// nil clause 时 UnmarshalJSON 直接返回 nil
+	// nil 条件 时 UnmarshalJSON 直接返回 nil
 	f := &chromaWhereFilter{clause: nil}
 	err := f.UnmarshalJSON([]byte(`{"key":"value"}`))
 	if err != nil {

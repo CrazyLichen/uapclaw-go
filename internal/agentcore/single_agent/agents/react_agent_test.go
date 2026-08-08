@@ -36,7 +36,7 @@ type fakeContextEngine struct {
 	modelCtx         ceinterface.ModelContext
 }
 
-// fakeModelContext mock ModelContext
+// fakeModelContext 模拟 ModelContext
 type fakeModelContext struct {
 	messages []llmschema.BaseMessage
 }
@@ -1041,7 +1041,7 @@ func TestReActAgent_StreamImpl_有LLM(t *testing.T) {
 
 // ──────────────────────────── mock 实现 ────────────────────────────
 
-// fakeModelClient mock BaseModelClient
+// fakeModelClient 模拟 BaseModelClient
 type fakeModelClient struct {
 	// invokeResult 非流式调用返回结果
 	invokeResult *llmschema.AssistantMessage

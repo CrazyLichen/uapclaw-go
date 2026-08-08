@@ -87,7 +87,7 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 // 对齐 Python: UserInbox.deliver_to_leader(deliver_input, body) (staticmethod)
 //
 // Python 执行步骤：
-//  1. team_logger.debug("UserInbox: delivering input to leader DeepAgent")
+//  1. team_logger.debug: UserInbox 向 Leader DeepAgent 交付输入
 //  2. try: await deliver_input(body)
 //  3. except Exception as e: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
 //  4. return DeliverResult.success(message_id=None)

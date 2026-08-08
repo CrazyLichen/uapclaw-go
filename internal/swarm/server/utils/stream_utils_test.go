@@ -209,7 +209,7 @@ func TestAccumulateUsage(t *testing.T) {
 		"total_tokens":  150,
 		"input_cost":    0.01,
 		"output_cost":   0.02,
-		"total_cost":     0.03,
+		"total_cost":    0.03,
 	})
 	if usage.InputTokens != 100 {
 		t.Errorf("InputTokens 期望 100, 实际 %d", usage.InputTokens)
@@ -233,7 +233,7 @@ func TestAccumulateUsage_累加(t *testing.T) {
 
 func TestAccumulateUsage_nil(t *testing.T) {
 	AccumulateUsage(nil, map[string]any{"input_tokens": 100}) // 不 panic
-	AccumulateUsage(&UsageAccumulator{}, nil)                  // 不 panic
+	AccumulateUsage(&UsageAccumulator{}, nil)                 // 不 panic
 }
 
 func TestExtractStringFromPayload(t *testing.T) {

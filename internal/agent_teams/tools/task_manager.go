@@ -451,7 +451,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 
 	// 7. 发布事件（⤵️ 9.65 回填）
 	// tm.messager.Publish(schema.TeamTopicTask, schema.TaskPlanRequestEvent{
-	//   TeamName: tm.teamName, TaskID: taskID, PlanID: planID,
+	//    TeamName/TaskID/PlanID 等字段初始化
 	//   MemberPlanMD: destPath, ToolCallID: toolCallID,
 	// })
 
@@ -522,7 +522,7 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 
 	// 发布事件（⤵️ 9.65 回填）
 	// tm.messager.Publish(schema.TeamTopicTask, schema.TaskPlanResponseEvent{
-	//   TeamName: tm.teamName, TaskID: planRecord.TaskID,
+	//    TeamName/TaskID 等字段初始化
 	//   Approved: approved, PlanID: planID, Feedback: feedback,
 	// })
 

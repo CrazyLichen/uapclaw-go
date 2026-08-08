@@ -17,15 +17,15 @@ import "encoding/json"
 //
 // 对齐 Python: extract_schema(schema_dict)
 //
-//	if not isinstance(schema_dict, dict):
-//	    try: schema_dict = json.loads(schema_dict)
-//	    except: return {}
-//	result = {}
-//	for key, value in schema_dict.items():
-//	    if isinstance(value, dict):      result[key] = extract_schema(value)
-//	    elif isinstance(value, list):    result[key] = value
-//	    else:                            result[key] = ""
-//	return result
+//		if not isinstance(schema_dict, dict):
+//		    try: schema_dict = json.loads(schema_dict)
+//		    except: return {}
+//		初始化结果为空字典
+//		for key, value in schema_dict.items():
+//		    if isinstance(value, dict):      result[key] = extract_schema(value)
+//		    elif isinstance(value, list):    result[key] = value
+//	   否则: result[key] = ""
+//		return result
 func ExtractSchema(schemaDict map[string]any) map[string]any {
 	result := make(map[string]any, len(schemaDict))
 	for key, value := range schemaDict {

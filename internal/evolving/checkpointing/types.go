@@ -36,7 +36,7 @@ type UsageStats struct {
 //
 // 由优化器（Optimizer）生成，描述对 SKILL.md 的一个具体变更，
 // 包括目标 section、动作类型和变更内容。
-// action ∈ VALID_PATCH_ACTIONS (append/merge/replace/skip)
+// action 属于合法补丁动作集合（append/merge/replace/skip）
 // section ∈ VALID_SECTIONS (Instructions/Examples/Troubleshooting/Scripts 等)
 //
 // 对应 Python: openjiuwen/agent_evolving/checkpointing/types.py EvolutionPatch

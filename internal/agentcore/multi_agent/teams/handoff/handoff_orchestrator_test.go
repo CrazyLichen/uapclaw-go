@@ -166,11 +166,11 @@ func TestRequestHandoff_连续交接(t *testing.T) {
 	agents := []string{"a", "b", "c"}
 	coord := NewHandoffOrchestrator("a", agents, nil)
 
-	// a → b
+	// a 交接给 b
 	if !coord.RequestHandoff("b", "") {
 		t.Errorf("期望 a→b 交接被批准")
 	}
-	// b → c
+	// b 交接给 c
 	if !coord.RequestHandoff("c", "") {
 		t.Errorf("期望 b→c 交接被批准")
 	}

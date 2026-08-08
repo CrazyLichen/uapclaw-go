@@ -93,6 +93,9 @@ type BaseOptimizerMixin struct {
 	parameters map[string]*TextualParameter
 	// targets 优化目标列表
 	targets []string
+	// defaultTargets 默认目标列表，对齐 Python: self.default_targets()
+	// 由具体优化器在初始化时设置
+	defaultTargets []string
 	// trajectories 缓存的执行轨迹列表
 	trajectories []*trajectory.Trajectory
 	// selectedSignals 选中的演化信号列表
@@ -164,6 +167,11 @@ func (p *TextualParameter) GetDescription() string {
 //
 // 对应 Python: BaseOptimizer.bind()
 func (m *BaseOptimizerMixin) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
+	// 对齐 Python: self._targets = list(targets or self.default_targets())
+	// 注意：具体优化器在调用此方法前通常已处理默认 targets，此处为防御性回退
+	if len(targets) == 0 {
+		targets = m.defaultTargets
+	}
 	m.targets = targets
 	m.operators = FilterOperators(operators, m.targets)
 	m.parameters = make(map[string]*TextualParameter, len(m.operators))

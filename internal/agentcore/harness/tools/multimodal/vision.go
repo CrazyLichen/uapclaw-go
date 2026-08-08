@@ -36,6 +36,12 @@ type VQAInput struct {
 	OCRPrompt string `json:"ocr_prompt,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewImageOCRTool 创建图片 OCR 工具。
@@ -145,9 +151,9 @@ func NewVisualQuestionAnsweringTool(
 			}
 
 			return map[string]any{
-				"answer":    answer,
-				"ocr_text":  ocrText,
-				"model":     model,
+				"answer":   answer,
+				"ocr_text": ocrText,
+				"model":    model,
 			}, nil
 		}()
 		if err != nil {

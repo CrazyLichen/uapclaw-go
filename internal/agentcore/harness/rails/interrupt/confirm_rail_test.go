@@ -116,7 +116,7 @@ func TestConfirmInterruptRail_resolveInterrupt_Dict拒绝(t *testing.T) {
 
 // TestIsAutoConfirmed 验证 auto_confirm 查找逻辑
 func TestIsAutoConfirmed(t *testing.T) {
-	// nil config
+	// nil 配置
 	assert.False(t, isAutoConfirmed(nil, "write_file"))
 
 	// key 不存在

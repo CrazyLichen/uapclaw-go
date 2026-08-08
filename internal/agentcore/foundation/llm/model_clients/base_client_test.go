@@ -5,16 +5,18 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // newTestClientEmbed 创建测试用 BaseClientEmbed。
 func newTestClientEmbed() *BaseClientEmbed {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		panic(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc, WithClientName("TestClient"))
 	if err != nil {
 		panic(err)
@@ -34,39 +36,38 @@ func TestValidateConfig_成功(t *testing.T) {
 
 // TestValidateConfig_APIKey缺失 测试缺少 API Key。
 func TestValidateConfig_APIKey缺失(t *testing.T) {
-	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("OpenAI", "", "https://api.openai.com/v1",
+	// NewModelClientConfig 本身就应拒绝缺少 api_key 的配置
+	_, err := llmschema.NewModelClientConfig("OpenAI", "", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
-	_, err := NewBaseClientEmbed(mc, cc)
 	if err == nil {
-		t.Error("缺少 api_key 应报错")
-	}
-	// 验证错误类型
-	if _, ok := err.(*exception.BaseError); !ok {
-		t.Error("错误应为 BaseError 类型")
+		t.Error("缺少 api_key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
+// TestValidateConfig_APIBase缺失 测试缺少 API Base。}
+
 // TestValidateConfig_APIBase缺失 测试缺少 API Base。
 func TestValidateConfig_APIBase缺失(t *testing.T) {
-	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "",
+	// NewModelClientConfig 本身就应拒绝缺少 api_base 的配置
+	_, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "",
 		llmschema.WithVerifySSL(false),
 	)
-	_, err := NewBaseClientEmbed(mc, cc)
 	if err == nil {
-		t.Error("缺少 api_base 应报错")
+		t.Error("缺少 api_base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 // TestValidateConfig_验证SSL无证书 测试 verify_ssl=true 但无 ssl_cert。
 func TestValidateConfig_验证SSL无证书(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(true),
 	)
-	_, err := NewBaseClientEmbed(mc, cc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewBaseClientEmbed(mc, cc)
 	if err == nil {
 		t.Error("verify_ssl=true 但无 ssl_cert 应报错")
 	}
@@ -323,9 +324,12 @@ func TestBuildRequestParams_覆盖模型(t *testing.T) {
 // TestBuildRequestParams_无模型 测试无模型名称报错。
 func TestBuildRequestParams_无模型(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig() // ModelName 为空
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc)
 	if err != nil {
 		t.Fatal(err)
@@ -346,9 +350,12 @@ func TestBuildRequestParams_额外参数合并(t *testing.T) {
 		llmschema.WithModelName("gpt-4"),
 		llmschema.WithRequestExtra(map[string]any{"top_k": 50}),
 	)
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc)
 	if err != nil {
 		t.Fatal(err)
@@ -440,10 +447,13 @@ func TestExtractCostInfo_无费用(t *testing.T) {
 // TestWithSkipValidate_跳过校验 测试 WithSkipValidate 跳过校验。
 func TestWithSkipValidate_跳过校验(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
-	// api_key 和 api_base 均为空，正常情况应报错
-	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
-		llmschema.WithVerifySSL(false),
-	)
+	// api_key 和 api_base 均为空，直接构造 ModelClientConfig 绕过构造函数校验
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "intelli_router",
+		APIKey:         "",
+		APIBase:        "",
+		VerifySSL:      false,
+	}
 
 	// 不使用 WithSkipValidate 应报错
 	_, err := NewBaseClientEmbed(mc, cc)
@@ -464,9 +474,13 @@ func TestWithSkipValidate_跳过校验(t *testing.T) {
 // TestWithSkipValidate_直接校验配置 测试 ValidateConfig 在 skipValidate 下的行为。
 func TestWithSkipValidate_直接校验配置(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
-		llmschema.WithVerifySSL(false),
-	)
+	// api_key 和 api_base 均为空，直接构造 ModelClientConfig 绕过构造函数校验
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "intelli_router",
+		APIKey:         "",
+		APIBase:        "",
+		VerifySSL:      false,
+	}
 
 	e := &BaseClientEmbed{
 		ModelConfig:  mc,
@@ -499,9 +513,12 @@ func TestGetModelName_有ModelConfig(t *testing.T) {
 // TestGetModelName_无ModelConfig 验证 GetModelName 降级返回 clientName。
 func TestGetModelName_无ModelConfig(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig() // 无 ModelName
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, _ := NewBaseClientEmbed(mc, cc, WithClientName("MyClient"))
 	got := e.GetModelName()
 	if got != "MyClient" {

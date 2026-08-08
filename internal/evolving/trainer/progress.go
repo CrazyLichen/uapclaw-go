@@ -75,8 +75,8 @@ type Callbacks struct {
 //
 // 对齐 Python:
 //
-//	on_train_begin / on_train_end / on_train_epoch_end
-//	(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None
+//	   训练开始/结束/每轮结束时回调
+//		(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None
 type TrainCallbackFunc func(agent evolving.TrainableAgent, progress *Progress, evalInfo []*dataset.EvaluatedCase)
 
 // TrainEpochBeginFunc epoch 开始回调函数类型（无评估信息）。

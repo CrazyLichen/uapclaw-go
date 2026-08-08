@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -129,7 +129,7 @@ func TestNewVisualQuestionAnsweringTool_Invoke成功_含OCR(t *testing.T) {
 	// 第一次 OCR 调用，第二次 VQA 调用
 	mockClient := &mockVisionClient{
 		responses: []mockVisionResponse{
-			{text: "Hello World"}, // OCR
+			{text: "Hello World"},               // OCR
 			{text: "The text says Hello World"}, // VQA
 		},
 	}

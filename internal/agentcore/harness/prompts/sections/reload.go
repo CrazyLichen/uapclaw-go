@@ -31,7 +31,8 @@ const (
 	reloadSectionName = "offload"
 )
 
-// BuildReloadSection 构建上下文压缩节（Priority 90）
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildReloadSection(lang string) saprompt.PromptSection {
@@ -48,3 +49,5 @@ func BuildReloadSection(lang string) saprompt.PromptSection {
 		Priority: 90,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

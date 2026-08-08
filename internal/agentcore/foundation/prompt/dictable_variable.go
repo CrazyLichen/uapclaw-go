@@ -123,9 +123,14 @@ func (dv *DictableVariable) Eval(kwargs map[string]any) any {
 //  1. 深拷贝 data
 //  2. 递归替换所有字符串值中的占位符
 //  3. 赋值 value
-func (dv *DictableVariable) Update(kwargs map[string]any) {
+func (dv *DictableVariable) Update(kwargs map[string]any) error {
 	dataCopy := deepCopyAny(dv.data)
-	dv.value = dv.recursiveFormat(dataCopy, kwargs)
+	result, err := dv.recursiveFormat(dataCopy, kwargs)
+	if err != nil {
+		return err
+	}
+	dv.value = result
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -161,30 +166,38 @@ func scanPlaceholders(obj any, pattern *regexp.Regexp, seen map[string]struct{},
 
 // recursiveFormat 递归替换 obj 中的占位符。
 // 对应 Python: DictableVariable._recursive_format()
-func (dv *DictableVariable) recursiveFormat(obj any, kwargs map[string]any) any {
+func (dv *DictableVariable) recursiveFormat(obj any, kwargs map[string]any) (any, error) {
 	switch val := obj.(type) {
 	case []any:
 		result := make([]any, len(val))
 		for i, item := range val {
-			result[i] = dv.recursiveFormat(item, kwargs)
+			formatted, err := dv.recursiveFormat(item, kwargs)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = formatted
 		}
-		return result
+		return result, nil
 	case map[string]any:
 		result := make(map[string]any, len(val))
 		for k, mapVal := range val {
-			result[k] = dv.recursiveFormat(mapVal, kwargs)
+			formatted, err := dv.recursiveFormat(mapVal, kwargs)
+			if err != nil {
+				return nil, err
+			}
+			result[k] = formatted
 		}
-		return result
+		return result, nil
 	case string:
 		return dv.formatString(val, kwargs)
 	default:
 		// 非字符串、非 dict、非 list 的值原样返回
-		return val
+		return val, nil
 	}
 }
 
 // formatString 替换字符串中的占位符。
-func (dv *DictableVariable) formatString(s string, kwargs map[string]any) string {
+func (dv *DictableVariable) formatString(s string, kwargs map[string]any) (string, error) {
 	formattedText := s
 	for _, placeholder := range dv.placeholders {
 		placeholderStr := dv.prefix + placeholder + dv.suffix
@@ -194,14 +207,18 @@ func (dv *DictableVariable) formatString(s string, kwargs map[string]any) string
 
 		value, err := resolveNestedValue(placeholder, kwargs)
 		if err != nil {
-			// 解析失败，保留原占位符
-			continue
+			// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
+			return "", exception.NewBaseError(
+				exception.StatusPromptAssemblerVariableInitFailed,
+				exception.WithMsg(fmt.Sprintf("error parsing the placeholder `%s`: %s", placeholder, err.Error())),
+				exception.WithCause(err),
+			)
 		}
 
-		valueStr := formatValue(value)
+		valueStr := formatValue(placeholder, value, kwargs)
 		formattedText = strings.ReplaceAll(formattedText, placeholderStr, valueStr)
 	}
-	return formattedText
+	return formattedText, nil
 }
 
 // deepCopyAny 深拷贝 any 类型的值。

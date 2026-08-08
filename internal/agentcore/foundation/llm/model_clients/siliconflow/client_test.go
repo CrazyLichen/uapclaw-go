@@ -21,7 +21,11 @@ import (
 
 // newTestClientConfig 创建测试用的客户端配置
 func newTestClientConfig(provider, apiKey, apiBase string) *llmschema.ModelClientConfig {
-	return llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	if err != nil {
+		return nil
+	}
+	return cc
 }
 
 // newTestModelConfig 创建测试用的模型请求配置
@@ -73,30 +77,18 @@ func TestNewSiliconFlowModelClient_ValidConfig(t *testing.T) {
 }
 
 func TestNewSiliconFlowModelClient_NoAPIKey(t *testing.T) {
-	// 缺少 API Key 应失败
-	client, err := NewSiliconFlowModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("SiliconFlow", "", "https://api.siliconflow.cn/v1"),
-	)
+	// 缺少 API Key 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("SiliconFlow", "", "https://api.siliconflow.cn/v1", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Key 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Key 时 client 应为 nil")
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 func TestNewSiliconFlowModelClient_NoAPIBase(t *testing.T) {
-	// 缺少 API Base 应失败
-	client, err := NewSiliconFlowModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("SiliconFlow", "test-key", ""),
-	)
+	// 缺少 API Base 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("SiliconFlow", "test-key", "", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Base 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Base 时 client 应为 nil")
+		t.Error("缺少 API Base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
@@ -748,9 +740,12 @@ func TestInit_注册SiliconFlow(t *testing.T) {
 
 	// 通过 GetClient 验证 SiliconFlow 工厂能正常创建客户端
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("Qwen/Qwen2.5-7B-Instruct"))
-	cc := llmschema.NewModelClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1",
+	cc, err := llmschema.NewModelClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := registry.GetClient("SiliconFlow", "llm", mc, cc)
 	if err != nil {
 		t.Fatalf("GetClient(SiliconFlow) 报错: %v", err)

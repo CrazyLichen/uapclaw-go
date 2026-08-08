@@ -1,19 +1,5 @@
 package lite
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// WriteMode 写入模式枚举
-type WriteMode int
-
-const (
-	// WriteModeCreate 创建
-	WriteModeCreate WriteMode = iota
-	// WriteModeAppend 追加
-	WriteModeAppend
-	// WriteModeSkip 跳过
-	WriteModeSkip
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WriteResult 写入结果。对齐 Python WriteResult (conflict_types.py)
@@ -35,6 +21,20 @@ type WriteResult struct {
 	// Type 类型
 	Type string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// WriteMode 写入模式枚举
+type WriteMode int
+
+const (
+	// WriteModeCreate 创建
+	WriteModeCreate WriteMode = iota
+	// WriteModeAppend 追加
+	WriteModeAppend
+	// WriteModeSkip 跳过
+	WriteModeSkip
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

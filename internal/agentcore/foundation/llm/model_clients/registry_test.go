@@ -48,9 +48,12 @@ func TestClientRegistry_RegisterAndGet(t *testing.T) {
 	r.Register("TestProvider", "llm", mockFactory)
 
 	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("TestProvider", "key", "https://api.test.com",
+	cc, err := llmschema.NewModelClientConfig("TestProvider", "key", "https://api.test.com",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	client, err := r.GetClient("TestProvider", "llm", mc, cc)
 	if err != nil {
@@ -77,11 +80,14 @@ func TestClientRegistry_DuplicateRegister(t *testing.T) {
 func TestClientRegistry_GetClient_NotFound(t *testing.T) {
 	r := NewClientRegistry()
 	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("Unknown", "key", "https://api.test.com",
+	cc, err := llmschema.NewModelClientConfig("Unknown", "key", "https://api.test.com",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := r.GetClient("Unknown", "llm", mc, cc)
+	_, err = r.GetClient("Unknown", "llm", mc, cc)
 	if err == nil {
 		t.Error("获取未注册客户端应报错")
 	}
@@ -128,22 +134,50 @@ func TestClientRegistry_ListClients(t *testing.T) {
 func TestClientRegistry_GetClient_EmptyName(t *testing.T) {
 	r := NewClientRegistry()
 	mc := llmschema.NewModelRequestConfig()
-	cc := llmschema.NewModelClientConfig("", "key", "https://api.test.com",
+	// 空 provider 的 NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("", "key", "https://api.test.com",
 		llmschema.WithVerifySSL(false),
 	)
-
-	_, err := r.GetClient("", "llm", mc, cc)
+	if err == nil {
+		t.Error("空 provider 时 NewModelClientConfig 应返回错误")
+	}
+	// 即使绕过 NewModelClientConfig，GetClient 也应拒绝空名称
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "",
+		APIKey:         "key",
+		APIBase:        "https://api.test.com",
+	}
+	_, err = r.GetClient("", "llm", mc, cc)
 	if err == nil {
 		t.Error("空名称应报错")
 	}
 }
 
+// TestClientRegistry_GetClient_NilConfig 测试 nil 客户端配置获取。
+func TestClientRegistry_GetClient_NilConfig(t *testing.T) {
+	r := NewClientRegistry()
+	mc := llmschema.NewModelRequestConfig()
+	_, err := r.GetClient("SomeProvider", "llm", mc, nil)
+	if err == nil {
+		t.Error("nil 客户端配置时 GetClient 应返回错误")
+	}
+}
+
 // TestCreateModelClient_MissingProvider 测试缺少 provider。
 func TestCreateModelClient_MissingProvider(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("", "key", "https://api.test.com")
+	// NewModelClientConfig 本身就应拒绝空 provider
+	_, err := llmschema.NewModelClientConfig("", "key", "https://api.test.com")
+	if err == nil {
+		t.Error("缺少 provider 时 NewModelClientConfig 应返回错误")
+	}
+	// 即使绕过构造函数，CreateModelClient 也应拒绝
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "",
+		APIKey:         "key",
+		APIBase:        "https://api.test.com",
+	}
 	mc := llmschema.NewModelRequestConfig()
-
-	_, err := CreateModelClient(cc, mc)
+	_, err = CreateModelClient(cc, mc)
 	if err == nil {
 		t.Error("缺少 provider 应报错")
 	}

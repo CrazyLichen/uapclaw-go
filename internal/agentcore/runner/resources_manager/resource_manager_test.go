@@ -1418,7 +1418,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("dr-agent-1"), agentschema.WithAgentName("移除Agent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider())
 
-	// dispatchRemove agent
+	// 移除 agent
 	_, err := mgr.dispatchRemove("agent", "dr-agent-1")
 	if err != nil {
 		t.Fatalf("dispatchRemove agent 失败: %v", err)
@@ -1428,7 +1428,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	wfCard := schema.NewWorkflowCard(schema.WithID("dr-wf-1"), schema.WithName("移除Workflow"))
 	_ = mgr.AddWorkflow(wfCard, stubWorkflowProvider())
 
-	// dispatchRemove workflow
+	// 移除 workflow
 	_, err = mgr.dispatchRemove("workflow", "dr-wf-1")
 	if err != nil {
 		t.Fatalf("dispatchRemove workflow 失败: %v", err)
@@ -1437,7 +1437,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	// 先添加 model
 	_ = mgr.AddModel("dr-model-1", stubModelProvider())
 
-	// dispatchRemove model
+	// 移除 model
 	_, err = mgr.dispatchRemove("model", "dr-model-1")
 	if err != nil {
 		t.Fatalf("dispatchRemove model 失败: %v", err)
@@ -1447,7 +1447,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	tmpl := prompt.NewPromptTemplate("移除模板", "hello")
 	_ = mgr.AddPrompt("dr-prompt-1", tmpl)
 
-	// dispatchRemove prompt
+	// 移除 prompt
 	_, err = mgr.dispatchRemove("prompt", "dr-prompt-1")
 	if err != nil {
 		t.Fatalf("dispatchRemove prompt 失败: %v", err)
@@ -1458,7 +1458,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	stubTool := &rmStubTool{card: toolCard}
 	_ = mgr.AddTool(stubTool)
 
-	// dispatchRemove tool
+	// 移除 tool
 	_, err = mgr.dispatchRemove("tool", toolCard.ID)
 	if err != nil {
 		t.Fatalf("dispatchRemove tool 失败: %v", err)
@@ -1920,31 +1920,31 @@ func TestGetCardType_各种Card类型(t *testing.T) {
 		t.Fatalf("getCardType(nil) 期望空字符串，实际 %s", got)
 	}
 
-	// WorkflowCard → "workflow"
+	// WorkflowCard → "workflow" 类型
 	wfCard := schema.NewWorkflowCard(schema.WithID("wf-1"))
 	if got := getCardType(wfCard); got != "workflow" {
 		t.Fatalf("getCardType(WorkflowCard) 期望 workflow，实际 %s", got)
 	}
 
-	// AgentCard → "agent"
+	// AgentCard → "agent" 类型
 	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"))
 	if got := getCardType(agentCard); got != "agent" {
 		t.Fatalf("getCardType(AgentCard) 期望 agent，实际 %s", got)
 	}
 
-	// ToolCard → "function"
+	// ToolCard → "function" 类型
 	toolCard := tool.NewToolCard("tool-1", "测试工具", nil, nil)
 	if got := getCardType(toolCard); got != "function" {
 		t.Fatalf("getCardType(ToolCard) 期望 function，实际 %s", got)
 	}
 
-	// TeamCard → "team"
+	// TeamCard → "team" 类型
 	teamCard := maschema.NewTeamCard(maschema.WithTeamCardID("team-1"))
 	if got := getCardType(teamCard); got != "team" {
 		t.Fatalf("getCardType(TeamCard) 期望 team，实际 %s", got)
 	}
 
-	// EventDrivenTeamCard → "team"
+	// EventDrivenTeamCard → "team" 类型
 	edTeamCard := maschema.NewEventDrivenTeamCard(maschema.WithEventDrivenID("ed-team-1"))
 	if got := getCardType(edTeamCard); got != "team" {
 		t.Fatalf("getCardType(EventDrivenTeamCard) 期望 team，实际 %s", got)

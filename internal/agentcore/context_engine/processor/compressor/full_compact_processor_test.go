@@ -418,7 +418,7 @@ func TestFullCompactProcessor_SerializeMessage(t *testing.T) {
 		t.Error("应包含 content=你好世界")
 	}
 
-	// AssistantMessage with ToolCalls
+	// 带工具调用的 AssistantMessage
 	assistantMsg := llm_schema.NewAssistantMessage("查询中",
 		llm_schema.WithToolCalls([]*llm_schema.ToolCall{
 			{ID: "call_1", Name: "get_weather", Arguments: `{"city":"北京"}`, Type: "function"},

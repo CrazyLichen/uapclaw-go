@@ -165,7 +165,7 @@ func (m *SessionManager) ReleaseSession() {
 // Python 执行步骤：
 //  1. recoverable_members = await recovery_manager.collect_live_teammates_for_session_switch()
 //  2. await self.bind_session(session)
-//  3. if role != LEADER or not team_backend: return
+//  3. 如果角色不是 LEADER 或没有 team_backend 则返回
 //  4. await recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=True)
 //
 // Go 对应步骤：
@@ -206,7 +206,7 @@ func (m *SessionManager) ResumeForNewSession(
 // Python 执行步骤（与 resume_for_new_session 相同，但 cleanup_first=False）：
 //  1. recoverable_members = await recovery_manager.collect_live_teammates_for_session_switch()
 //  2. await self.bind_session(session)
-//  3. if role != LEADER or not team_backend: return
+//  3. 如果角色不是 LEADER 或没有 team_backend 则返回
 //  4. await recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=False)
 //
 // 调用方必须已经拆卸协调（清除了活跃句柄）并验证了检查点。

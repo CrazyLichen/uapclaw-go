@@ -79,7 +79,7 @@ func TestNewAudioTranscriptionTool_Sandbox路径(t *testing.T) {
 
 func TestNewAudioTranscriptionTool_配置无效(t *testing.T) {
 	mockClient := &mockAudioClient{transcriptionText: "test"}
-	// nil config
+	// nil 配置
 	transcriptionTool := NewAudioTranscriptionTool(mockClient, nil, "cn", "test-agent")
 
 	_, err := transcriptionTool.Invoke(context.Background(), map[string]any{

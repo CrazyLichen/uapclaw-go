@@ -92,3 +92,5 @@ func CreateBootstrapEnvForName(name string, workspace string) (string, error) {
 
 	return CreateBootstrapEnv(config)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

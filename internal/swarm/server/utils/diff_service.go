@@ -91,6 +91,30 @@ type FileRestoreInfo struct {
 	Action string `json:"action"`
 }
 
+// historyRecord session history 记录
+type historyRecord struct {
+	Role      string  `json:"role"`
+	Content   string  `json:"content"`
+	Timestamp float64 `json:"timestamp"`
+}
+
+// opEntry 操作历史条目
+type opEntry struct {
+	Action     string  `json:"action"`
+	Timestamp  string  `json:"timestamp"`
+	OldContent *string `json:"old_content"`
+	NewContent *string `json:"new_content"`
+}
+
+// opCode diff 操作码，对齐 Python difflib.SequenceMatcher.get_opcodes() 输出
+type opCode struct {
+	tag string // "equal", "delete", "insert", "replace"
+	i1  int    // old 起始索引
+	i2  int    // old 结束索引（exclusive）
+	j1  int    // new 起始索引
+	j2  int    // new 结束索引（exclusive）
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -218,8 +242,8 @@ func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []T
 				TurnIndex:         len(turns) + 1,
 				UserPromptPreview: truncate(record.Content, 30),
 				Timestamp:         timestampToISO(record.Timestamp),
-				StartTimestamp:     turnStart,
-				EndTimestamp:       turnEnd,
+				StartTimestamp:    turnStart,
+				EndTimestamp:      turnEnd,
 				Files:             make(map[string]*FileDiff),
 				Stats:             TurnStats{},
 			}
@@ -713,17 +737,6 @@ func sumLinesRemoved(files map[string]*FileDiff) int {
 		total += f.LinesRemoved
 	}
 	return total
-}
-
-// ──────────────────────────── 行级 diff 算法 ────────────────────────────
-
-// opCode diff 操作码，对齐 Python difflib.SequenceMatcher.get_opcodes() 输出
-type opCode struct {
-	tag string // "equal", "delete", "insert", "replace"
-	i1  int    // old 起始索引
-	i2  int    // old 结束索引（exclusive）
-	j1  int    // new 起始索引
-	j2  int    // new 结束索引（exclusive）
 }
 
 // computeLineOpCodes 使用 LCS 算法计算行级 diff 操作码。

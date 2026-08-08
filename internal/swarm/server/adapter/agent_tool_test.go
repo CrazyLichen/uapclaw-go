@@ -38,7 +38,7 @@ func TestAgentTool_Invoke_缺少subagentType(t *testing.T) {
 	_, err := at.Invoke(context.Background(), map[string]any{"prompt": "hello"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "subagent_type")
-	assert.Contains(t, err.Error(), "required")
+	assert.Contains(t, err.Error(), "必填")
 }
 
 // TestAgentTool_Invoke_缺少prompt 测试缺少 prompt 参数
@@ -48,7 +48,7 @@ func TestAgentTool_Invoke_缺少prompt(t *testing.T) {
 	_, err := at.Invoke(context.Background(), map[string]any{"subagent_type": "reviewer"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "prompt")
-	assert.Contains(t, err.Error(), "required")
+	assert.Contains(t, err.Error(), "必填")
 }
 
 // TestAgentTool_Invoke_未找到Agent 测试找不到指定的自定义 Agent

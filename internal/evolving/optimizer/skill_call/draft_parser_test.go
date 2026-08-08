@@ -66,12 +66,12 @@ func TestNormalizeSummary_nil输入(t *testing.T) {
 
 func TestParseExperienceDraft_append(t *testing.T) {
 	data := map[string]any{
-		"action":  "append",
-		"section": "Troubleshooting",
-		"target":  "body",
-		"content": "增加错误排查步骤",
+		"action":   "append",
+		"section":  "Troubleshooting",
+		"target":   "body",
+		"content":  "增加错误排查步骤",
 		"keywords": []any{"error", "debug"},
-		"summary": "排查步骤",
+		"summary":  "排查步骤",
 	}
 	draft := ParseExperienceDraft(data)
 	assert.NotNil(t, draft)

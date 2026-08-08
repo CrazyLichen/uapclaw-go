@@ -68,10 +68,12 @@ func (s *Singleton[T]) Reset() {
 	if s.instance != nil {
 		if c, ok := any(s.instance).(resettable); ok {
 			if err := c.Cleanup(); err != nil {
-				log.Printf("[Singleton] Cleanup failed during Reset: %v", err)
+				log.Printf("[Singleton] Reset 时 Cleanup 失败: %v", err)
 			}
 		}
 	}
 	s.once = sync.Once{}
 	s.instance = nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

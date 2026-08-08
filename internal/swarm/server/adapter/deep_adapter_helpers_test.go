@@ -561,7 +561,7 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 func TestAccumulateUsage(t *testing.T) {
 	usage := &utils.UsageAccumulator{}
 
-	// nil payload
+	// nil 载荷
 	utils.AccumulateUsage(usage, nil)
 	if usage.TotalTokens != 0 {
 		t.Error("nil payload 不应累加")

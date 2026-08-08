@@ -19,6 +19,8 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // BuildIdentitySection 构建身份节。
 // 对齐 Python: _identity_prompt(language) (prompt_builder.py L111-242)
 // 内部调用 workspace 函数获取目录变量，与 Python 在函数内调用 get_agent_workspace_dir() 等价。

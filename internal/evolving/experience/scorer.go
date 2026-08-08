@@ -33,11 +33,11 @@ type ExperienceScorer struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// WE Effectiveness 权重
+	// WE 效果权重
 	WE = 0.5
-	// WU Utilization 权重
+	// WU 利用权重
 	WU = 0.3
-	// WF Freshness 权重
+	// WF 新鲜度权重
 	WF = 0.2
 	// FreshnessHalfLifeDays 新鲜度衰减半衰期（天）
 	FreshnessHalfLifeDays = 90
@@ -589,7 +589,7 @@ func formatScoredExperiences(records []checkpointing.EvolutionRecord) string {
 // 2. re.sub 去掉 markdown code blocks：^```(?:json)?\s* 和 ```\s*$
 // 3. re.sub 去掉 // 行注释：//[^\n]*
 // 4. re.sub 去掉尾逗号：,\s*([}\]]) → \1
-// 5. strip
+// 步骤 5: strip（去除前后空白）
 // 6. json.Unmarshal → []map → 返回；单个 map → 包装为 slice；否则 nil
 // 7. 失败 → regexp 提取 [\s\S]* → 再次 json.Unmarshal → list 返回
 // 对应 Python: ExperienceScorer._parse_llm_json()

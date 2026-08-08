@@ -114,13 +114,13 @@ func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajector
 //
 // 对齐 Python:
 //
-//	score_threshold = config.get("score_threshold")
-//	signals = []
-//	for case in evaluated_cases:
-//	    signal = from_evaluated_case(case, score_threshold=score_threshold)
-//	    if signal is not None:
-//	        signals.append(signal)
-//	return await self.process(trajectories, signals, config)
+//		score_threshold = config.get("score_threshold")
+//	   初始化信号列表为空
+//		for case in evaluated_cases:
+//		    signal = from_evaluated_case(case, score_threshold=score_threshold)
+//		    if signal is not None:
+//		        signals.append(signal)
+//		return await self.process(trajectories, signals, config)
 //
 // 对应 Python: MultiDimUpdater.update(trajectories, evaluated_cases, config)
 func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {

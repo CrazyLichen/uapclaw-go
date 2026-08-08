@@ -500,19 +500,19 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 //
 // 对齐 Python: InstructionOptimizer._format_bad_cases()
 //
-//	parts = []
-//	for signal in self._selected_signals:
-//	    ctx = signal.context or {}
-//	    formatted = CREATE_BAD_CASE_TEMPLATE.format({
-//	        "question": ctx.get("question", ""),
-//	        "label": ctx.get("label", ""),
-//	        "answer": ctx.get("answer", ""),
-//	        "reason": ctx.get("reason", ""),
-//	    })
-//	    content = formatted.content
-//	    if isinstance(content, str): parts.append(content)
-//	    elif content: parts.append(str(content))
-//	return "".join(parts)
+//	   初始化 parts 为空列表
+//		for signal in self._selected_signals:
+//		    ctx = signal.context or {}
+//		    formatted = CREATE_BAD_CASE_TEMPLATE.format({
+//		        "question": ctx.get("question", ""),
+//		        "label": ctx.get("label", ""),
+//		        "answer": ctx.get("answer", ""),
+//		        "reason": ctx.get("reason", ""),
+//		    })
+//		    content = formatted.content
+//		    if isinstance(content, str): parts.append(content)
+//		    elif content: parts.append(str(content))
+//		return "".join(parts)
 func (o *InstructionOptimizer) formatBadCases() string {
 	selectedSignals := o.BaseOptimizerMixin.SelectedSignals()
 	var parts []string

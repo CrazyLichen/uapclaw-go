@@ -66,10 +66,13 @@ No skill was selected for this task. When skill information is available, read t
 `
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // BuildSkillsSection 构建技能节
 //
 // mode 支持 "all"、"auto_list"、"no_skill"；skillLines 仅在 all 模式下使用。
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildSkillsSection(mode string, skillPaths []string, lang string) saprompt.PromptSection {
 	var content string

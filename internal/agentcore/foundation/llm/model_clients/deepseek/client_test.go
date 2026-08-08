@@ -19,7 +19,11 @@ import (
 
 // newTestClientConfig 创建测试用的客户端配置
 func newTestClientConfig(provider, apiKey, apiBase string) *llmschema.ModelClientConfig {
-	return llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	if err != nil {
+		return nil
+	}
+	return cc
 }
 
 // newTestModelConfig 创建测试用的模型请求配置
@@ -71,30 +75,18 @@ func TestNewDeepSeekModelClient_ValidConfig(t *testing.T) {
 }
 
 func TestNewDeepSeekModelClient_NoAPIKey(t *testing.T) {
-	// 缺少 API Key 应失败
-	client, err := NewDeepSeekModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("DeepSeek", "", "https://api.deepseek.com/v1"),
-	)
+	// 缺少 API Key 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("DeepSeek", "", "https://api.deepseek.com/v1", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Key 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Key 时 client 应为 nil")
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 func TestNewDeepSeekModelClient_NoAPIBase(t *testing.T) {
-	// 缺少 API Base 应失败
-	client, err := NewDeepSeekModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("DeepSeek", "test-key", ""),
-	)
+	// 缺少 API Base 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("DeepSeek", "test-key", "", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Base 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Base 时 client 应为 nil")
+		t.Error("缺少 API Base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
@@ -806,9 +798,12 @@ func TestInit_注册DeepSeek(t *testing.T) {
 
 	// 通过 GetClient 验证 DeepSeek 工厂能正常创建客户端
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("deepseek-chat"))
-	cc := llmschema.NewModelClientConfig("DeepSeek", "test-key", "https://api.deepseek.com/v1",
+	cc, err := llmschema.NewModelClientConfig("DeepSeek", "test-key", "https://api.deepseek.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := registry.GetClient("DeepSeek", "llm", mc, cc)
 	if err != nil {
 		t.Fatalf("GetClient(DeepSeek) 报错: %v", err)
@@ -830,7 +825,10 @@ func TestInit_注册DeepSeek(t *testing.T) {
 // TestDeepSeekModelClient_SupportsKVCacheRelease 验证 DeepSeek 客户端不支持 KV Cache 释放。
 func TestDeepSeekModelClient_SupportsKVCacheRelease(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("deepseek-chat"))
-	cc := llmschema.NewModelClientConfig("DeepSeek", "test-key", "https://api.deepseek.com/v1", llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig("DeepSeek", "test-key", "https://api.deepseek.com/v1", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewDeepSeekModelClient(mc, cc)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)

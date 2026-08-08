@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -31,8 +31,8 @@ type mockVisionClient struct {
 }
 
 type mockVisionResponse struct {
-	text  string
-	err   error
+	text string
+	err  error
 }
 
 func (m *mockVisionClient) Invoke(_ context.Context, _ modelclients.MessagesParam, _ ...modelclients.InvokeOption) (*llmschema.AssistantMessage, error) {
@@ -227,7 +227,7 @@ func TestCallVisionModel_配置无效(t *testing.T) {
 	imageContent := llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://img.png"}}
 	mockClient := &mockVisionClient{}
 
-	// nil config
+	// nil 配置
 	_, _, err := CallVisionModel(context.Background(), mockClient, imageContent, "prompt", nil)
 	if err == nil {
 		t.Error("nil config 应返回错误")
@@ -515,14 +515,14 @@ func (m *mockAudioClient) SupportsKVCacheRelease() bool {
 // newTestAudioConfig 创建测试用的音频模型配置
 func newTestAudioConfig() *hschema.AudioModelConfig {
 	return &hschema.AudioModelConfig{
-		APIKey:            "test-api-key",
-		BaseURL:           "https://api.openai.com/v1",
+		APIKey:             "test-api-key",
+		BaseURL:            "https://api.openai.com/v1",
 		TranscriptionModel: "whisper-1",
-		QAModel:           "gpt-4o-audio-preview",
-		MaxRetries:        3,
-		HTTPTimeout:       20,
-		MaxAudioBytes:     25 * 1024 * 1024,
-		ACRBaseURL:        "https://identify-ap-southeast-1.acrcloud.com/v1/identify",
+		QAModel:            "gpt-4o-audio-preview",
+		MaxRetries:         3,
+		HTTPTimeout:        20,
+		MaxAudioBytes:      25 * 1024 * 1024,
+		ACRBaseURL:         "https://identify-ap-southeast-1.acrcloud.com/v1/identify",
 	}
 }
 
@@ -799,17 +799,17 @@ func constructSimpleWAV(sampleRate, bitsPerSample, numChannels, numSamples uint3
 	blockAlign := uint32(numChannels) * uint32(bitsPerSample/8)
 	dataSize := numSamples * blockAlign
 
-	// RIFF header
+	// RIFF 文件头
 	riff := []byte("RIFF")
 	wave := []byte("WAVE")
 	fileSize := uint32(36 + dataSize)
 
-	// fmt chunk
+	// fmt 块
 	fmtChunk := []byte("fmt ")
 	fmtSize := uint32(16)
-	audioFormat := uint16(1) // PCM
+	audioFormat := uint16(1) // PCM 格式
 
-	// data chunk
+	// data 数据块
 	dataChunk := []byte("data")
 
 	result := make([]byte, 0, 44+dataSize)

@@ -342,7 +342,7 @@ func TestParseBool(t *testing.T) {
 
 // TestGetModelConfig 测试 getModelConfig 辅助函数
 func TestGetModelConfig(t *testing.T) {
-	// nil configBase
+	// nil 配置基础
 	if getModelConfig(nil, "video") != nil {
 		t.Error("nil configBase 应返回 nil")
 	}
@@ -404,7 +404,7 @@ func TestGetModelConfig(t *testing.T) {
 // TestGetEmbedModelName 测试 getEmbedModelName 辅助函数
 func TestGetEmbedModelName(t *testing.T) {
 	embedCfg := map[string]any{
-		"video_model": "embed-video-model",
+		"video_model":  "embed-video-model",
 		"vision_model": "embed-vision-model",
 		"audio_model":  "embed-audio-model",
 	}

@@ -11,14 +11,15 @@ import (
 
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -33,7 +34,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -994,7 +994,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 //  2. new_input = request.params.get("new_input")
 //  3. _normalized_sid = request.session_id or "default"
 //  4. _session_is_active = self._is_session_active(_normalized_sid)
-//  5. if not _session_is_active: log & skip abort operations
+//  5. 如果会话不活跃则记录日志并跳过中断操作
 //  6. if intent == "pause": streamEventRail.pause(session_id)
 //  7. elif intent == "resume": streamEventRail.resume(session_id)
 //  8. elif intent == "supplement": abort + optional instance.abort()
@@ -1177,13 +1177,6 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 	return nil, nil
 }
 
-// Cleanup 清理适配器资源。
-//
-// 对应 Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
-//
-// Python 执行步骤：
-//  1. await self._close_a2x_client()
-//
 // SwitchMode 切换运行模式，执行完整的 session 生命周期。
 // 流程：preRun → switchMode → loadState → updateState → postRun
 //
@@ -1217,6 +1210,12 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 	return nil
 }
 
+// Cleanup 清理适配器资源。
+//
+// 对应 Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
+//
+// Python 执行步骤：
+//  1. await self._close_a2x_client()
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	_ = d.closeA2xClient()

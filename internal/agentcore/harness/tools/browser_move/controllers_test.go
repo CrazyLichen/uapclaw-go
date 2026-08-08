@@ -353,13 +353,13 @@ func TestNormalizeOffset(t *testing.T) {
 // TestBuildDragPayload 测试拖拽载荷构建
 func TestBuildDragPayload(t *testing.T) {
 	kwargs := map[string]any{
-		"element_source": "  #source  ",
-		"element_target": "#target",
+		"element_source":        "  #source  ",
+		"element_target":        "#target",
 		"element_source_offset": map[string]any{"x": 5, "y": 10},
 		"element_target_offset": map[string]any{"x": 15.0, "y": 25.0},
-		"coord_source_x": 100,
-		"coord_source_y": 200,
-		"steps":          5,
+		"coord_source_x":        100,
+		"coord_source_y":        200,
+		"steps":                 5,
 	}
 
 	payload := buildDragPayload(kwargs)

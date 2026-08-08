@@ -269,8 +269,8 @@ func TestSkillExperienceOptimizer_GenerateRecords_空信号(t *testing.T) {
 	opt := NewSkillExperienceOptimizer(model, "test-model", "cn", GenerateRecordsLLMPolicy)
 
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "my_skill",
-		Signals:      []signal.EvolutionSignal{},
+		SkillName: "my_skill",
+		Signals:   []signal.EvolutionSignal{},
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -287,8 +287,8 @@ func TestSkillExperienceOptimizer_GenerateRecords_skip(t *testing.T) {
 
 	skillNamePtr := "my_skill"
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "my_skill",
-		Signals:      []signal.EvolutionSignal{{SignalType: "user_correction", SkillName: &skillNamePtr, Excerpt: "wrong answer"}},
+		SkillName: "my_skill",
+		Signals:   []signal.EvolutionSignal{{SignalType: "user_correction", SkillName: &skillNamePtr, Excerpt: "wrong answer"}},
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -305,8 +305,8 @@ func TestSkillExperienceOptimizer_GenerateRecords_脚本(t *testing.T) {
 
 	skillNamePtr := "my_skill"
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "my_skill",
-		Signals:      []signal.EvolutionSignal{{SignalType: "script_artifact", SkillName: &skillNamePtr, Excerpt: "script failure"}},
+		SkillName: "my_skill",
+		Signals:   []signal.EvolutionSignal{{SignalType: "script_artifact", SkillName: &skillNamePtr, Excerpt: "script failure"}},
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -331,8 +331,8 @@ func TestSkillExperienceOptimizer_GenerateRecords_空内容(t *testing.T) {
 
 	skillNamePtr := "my_skill"
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "my_skill",
-		Signals:      []signal.EvolutionSignal{{SignalType: "execution_failure", SkillName: &skillNamePtr, Excerpt: "error"}},
+		SkillName: "my_skill",
+		Signals:   []signal.EvolutionSignal{{SignalType: "execution_failure", SkillName: &skillNamePtr, Excerpt: "error"}},
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -355,8 +355,8 @@ func TestSkillExperienceOptimizer_GenerateRecords_LLM失败(t *testing.T) {
 
 	skillNamePtr := "my_skill"
 	evoCtx := &experience.EvolutionContext{
-		SkillName:    "my_skill",
-		Signals:      []signal.EvolutionSignal{{SignalType: "execution_failure", SkillName: &skillNamePtr, Excerpt: "error"}},
+		SkillName: "my_skill",
+		Signals:   []signal.EvolutionSignal{{SignalType: "execution_failure", SkillName: &skillNamePtr, Excerpt: "error"}},
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -406,9 +406,9 @@ func TestSkillExperienceOptimizer_RetryParseDrafts_截断(t *testing.T) {
 	// truncated raw → 走 regeneration 路径
 	drafts, _, err := opt.RetryParseDrafts(
 		context.Background(),
-		`[{"action":"append","section":"Tr`,  // truncated raw
+		`[{"action":"append","section":"Tr`, // truncated raw
 		"original prompt",
-		2,  // attemptNumber
+		2, // attemptNumber
 		"truncated output",
 	)
 	assert.NoError(t, err)
@@ -428,7 +428,7 @@ func TestSkillExperienceOptimizer_RetryParseDrafts_截断第三次(t *testing.T)
 		context.Background(),
 		`[{"section":"Tr`, // truncated
 		"original prompt",
-		3,  // attemptNumber >= 3 → 放弃
+		3, // attemptNumber >= 3 → 放弃
 		"truncated",
 	)
 	assert.Error(t, err)
@@ -1132,10 +1132,10 @@ func TestTryParseWithError(t *testing.T) {
 // TestGetStrFromMap_完整 各种类型取值
 func TestGetStrFromMap_完整(t *testing.T) {
 	data := map[string]any{
-		"str_key":   "hello",
-		"int_key":   42,
-		"nil_key":   nil,
-		"missing":   "exists",
+		"str_key": "hello",
+		"int_key": 42,
+		"nil_key": nil,
+		"missing": "exists",
 	}
 	assert.Equal(t, "hello", getStrFromMap(data, "str_key", "default"))
 	assert.Equal(t, "42", getStrFromMap(data, "int_key", "default"))
@@ -1160,7 +1160,7 @@ func TestSummarizeSkillContentTeamFallback(t *testing.T) {
 func TestDumpRaw(t *testing.T) {
 	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, nil)
 	opt.dumpRaw("tag", "raw") // 空 debugDir → 不做任何事
-	assert.True(t, true) // 不 panic 即通过
+	assert.True(t, true)      // 不 panic 即通过
 }
 
 // TestDumpRaw_有目录 有 debugDir
@@ -1464,7 +1464,7 @@ func TestTeamSkillExperienceOptimizer_GenerateRecords_英文(t *testing.T) {
 		Trajectory: &trajectory.Trajectory{
 			Steps: []*trajectory.TrajectoryStep{{Kind: trajectory.StepKindTool}},
 		},
-		UserQuery:    "How to collaborate better",
+		UserQuery: "How to collaborate better",
 	}
 
 	records, err := opt.GenerateRecords(context.Background(), evoCtx)
@@ -1666,7 +1666,7 @@ func newMockSkillModel(t *testing.T, invokeFn func(ctx context.Context, messages
 
 // mockEvolutionStore 用于测试的模拟 EvolutionStore 接口实现
 type mockEvolutionStore struct {
-	readSkillContentFn  func(ctx context.Context, skillName string) (string, error)
+	readSkillContentFn     func(ctx context.Context, skillName string) (string, error)
 	loadFullEvolutionLogFn func(ctx context.Context, skillName string) *checkpointing.EvolutionLog
 }
 
@@ -1691,16 +1691,16 @@ type dummyOperator struct {
 	id string
 }
 
-func (d *dummyOperator) OperatorID() string                            { return d.id }
+func (d *dummyOperator) OperatorID() string { return d.id }
 func (d *dummyOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
 		"experiences": {Kind: operator.TunableKindText},
 	}
 }
-func (d *dummyOperator) GetState() map[string]any                      { return nil }
-func (d *dummyOperator) SetParameter(target string, value any)         {}
+func (d *dummyOperator) GetState() map[string]any              { return nil }
+func (d *dummyOperator) SetParameter(target string, value any) {}
 func (d *dummyOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return schema.ApplyResult{Applied: true}
 }
-func (d *dummyOperator) LoadState(state map[string]any)               {}
+func (d *dummyOperator) LoadState(state map[string]any)                      {}
 func (d *dummyOperator) Execute(ctx context.Context, input any) (any, error) { return nil, nil }

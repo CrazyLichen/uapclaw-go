@@ -130,3 +130,5 @@ func GetAllSessionsMetadata(limit int, offset int) ([]map[string]any, int) {
 	}
 	return sessions[offset:end], total
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

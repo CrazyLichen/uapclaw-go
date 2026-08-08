@@ -46,12 +46,12 @@ type EvolutionStore interface {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// TeamSkillOptimizer 团队技能优化器类型别名，对齐 Python: TeamSkillOptimizer = TeamSkillExperienceOptimizer
+type TeamSkillOptimizer = TeamSkillExperienceOptimizer
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// TeamSkillOptimizer 团队技能优化器类型别名，对齐 Python: TeamSkillOptimizer = TeamSkillExperienceOptimizer
-type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -59,7 +59,7 @@ type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 //
 // 对齐 Python:
 //
-//	TeamSkillExperienceOptimizer(llm, model, language, debug_dir, record_llm_policy, evolution_store)
+//	创建 TeamSkillExperienceOptimizer（参数: llm, model, language, debug_dir, record_llm_policy, evolution_store）
 func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, debugDir string, recordLLMPolicy llm_resilience.LLMInvokePolicy, evolutionStore EvolutionStore) *TeamSkillExperienceOptimizer {
 	return &TeamSkillExperienceOptimizer{
 		SkillExperienceOptimizerBase: SkillExperienceOptimizerBase{
@@ -830,13 +830,13 @@ func teamExtractJSONWithError(raw string) (any, string) {
 		return nil, "empty response"
 	}
 
-	// Step 1: 直接解析
+	// 步骤 1: 直接解析
 	result := tryParse(raw)
 	if result != nil {
 		return result, ""
 	}
 
-	// Step 2: 正则提取 [ ... ] 或 { ... }
+	// 步骤 2: 正则提取 [ ... ] 或 { ... }
 	lastError := "unknown"
 	for _, pattern := range []string{"\\[[\\s\\S]*\\]", "\\{[\\s\\S]*\\}"} {
 		re := regexp.MustCompile(pattern)

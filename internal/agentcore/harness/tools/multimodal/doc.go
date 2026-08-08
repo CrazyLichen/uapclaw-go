@@ -17,5 +17,14 @@
 //	├── video_understanding.go # VideoUnderstandingTool + NewVideoUnderstandingTool
 //	├── video_helpers.go     # 视频辅助函数（normalizeVideoURL + 参数裁剪）
 //
+// 核心类型索引：
+//
+//	AudioTranscriptionInput — 音频转写工具输入参数
+//	AudioQAInput            — 音频问答工具输入参数
+//	AudioMetadataInput      — 音频元数据工具输入参数
+//	ImageOCRInput           — 图片 OCR 工具输入参数
+//	VQAInput                — 图片问答工具输入参数
+//	VideoUnderstandingInput — 视频理解工具输入参数
+//
 // 对应 Python 代码：openjiuwen/harness/tools/multimodal/
 package multimodal

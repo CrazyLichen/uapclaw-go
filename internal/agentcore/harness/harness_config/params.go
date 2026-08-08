@@ -76,6 +76,10 @@ type CreateDeepAgentParams struct {
 	EnableSkillDiscovery bool
 	// AutoCreateWorkspace 是否自动创建工作空间
 	AutoCreateWorkspace bool
+	// FactoryKwargs 工厂额外参数，对齐 Python: **factory_kwargs 展开合并。
+	// Python 中 factory_kwargs 会展开合并到 create_kwargs，Go 中暂存为 map，
+	// 由 CreateDeepAgent 内部按需展开到对应字段。
+	FactoryKwargs map[string]any
 	// CompletionTimeout 完成超时时间（秒）
 	CompletionTimeout float64
 	// ContextEngineConfig 上下文引擎配置

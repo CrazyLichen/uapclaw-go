@@ -521,6 +521,7 @@ func (e *BaseClientEmbed) convertOneMessage(msg llmschema.BaseMessage) (map[stri
 	}
 
 	// AssistantMessage 特有字段
+	// 对齐 Python: reasoning_content 检查在 tool_calls 条件内部
 	if am, ok := msg.(*llmschema.AssistantMessage); ok {
 		if len(am.ToolCalls) > 0 {
 			calls := make([]map[string]any, 0, len(am.ToolCalls))
@@ -528,9 +529,9 @@ func (e *BaseClientEmbed) convertOneMessage(msg llmschema.BaseMessage) (map[stri
 				calls = append(calls, tc.ToOpenAIFormat())
 			}
 			msgDict["tool_calls"] = calls
-		}
-		if am.ReasoningContent != "" {
-			msgDict["reasoning_content"] = am.ReasoningContent
+			if am.ReasoningContent != "" {
+				msgDict["reasoning_content"] = am.ReasoningContent
+			}
 		}
 	}
 

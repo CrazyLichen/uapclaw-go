@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -156,28 +157,36 @@ func ParseProviderType(s string) (ProviderType, bool) {
 }
 
 // ValidateAndNormalizeProvider 验证并规范化服务商名称，依次尝试枚举匹配、大小写不敏感匹配和全局验证器。
-func ValidateAndNormalizeProvider(provider string) string {
+// 对齐 Python: validate_client_provider — 未知 provider 返回 MODEL_PROVIDER_INVALID 错误。
+func ValidateAndNormalizeProvider(provider string) (string, error) {
 	provider = strings.TrimSpace(provider)
 
 	// 1. 精确匹配枚举
 	if pt, ok := providerTypeMap[provider]; ok {
-		return pt.String()
+		return pt.String(), nil
 	}
 
 	// 2. 大小写不敏感匹配
 	if pt, ok := providerTypeMap[strings.ToLower(provider)]; ok {
-		return pt.String()
+		return pt.String(), nil
 	}
 
 	// 3. 查询 ProviderValidator
 	if globalProviderValidator != nil {
 		if normalized := globalProviderValidator.ValidateProvider(provider); normalized != "" {
-			return normalized
+			return normalized, nil
 		}
 	}
 
-	// 4. 宽松策略：保留原字符串
-	return provider
+	// 4. 对齐 Python: raise build_error(MODEL_PROVIDER_INVALID) — 严格拒绝未知 provider
+	supportedTypes := make([]string, 0, len(providerTypeMap))
+	for k := range providerTypeMap {
+		supportedTypes = append(supportedTypes, k)
+	}
+	return "", exception.NewBaseError(
+		exception.StatusModelProviderInvalid,
+		exception.WithMsg(fmt.Sprintf("unavailable model provider: %s, and available providers are: %v", provider, supportedTypes)),
+	)
 }
 
 // SetProviderValidator 设置全局服务商验证器。
@@ -243,8 +252,12 @@ func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientC
 
 // Validate 校验模型客户端配置必填字段并规范化 provider。
 func (c *ModelClientConfig) Validate() error {
-	// 规范化 provider
-	c.ClientProvider = ValidateAndNormalizeProvider(c.ClientProvider)
+	// 规范化 provider（对齐 Python: 严格拒绝未知 provider）
+	normalized, err := ValidateAndNormalizeProvider(c.ClientProvider)
+	if err != nil {
+		return err
+	}
+	c.ClientProvider = normalized
 
 	if c.ClientProvider == "" {
 		return fmt.Errorf("client_provider 不能为空")

@@ -104,7 +104,15 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	if subagentType == "" || prompt == "" {
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", "Both 'subagent_type' and 'prompt' are required"),
+			exception.WithParam("error_msg", "'subagent_type' 和 'prompt' 为必填参数"),
+		)
+	}
+
+	// 对齐 Python: if not isinstance(parent_session, Session): raise build_error(TOOL_TASK_TOOL_INVOKED)
+	if callOpts.Session == nil {
+		return nil, exception.BuildError(
+			exception.StatusToolTaskToolInvoked,
+			exception.WithParam("error_msg", "Agent tool requires a valid session"),
 		)
 	}
 
@@ -215,7 +223,7 @@ func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...t
 //  3. filterToolCards() 按定义的 tools/disallowed_tools 再过滤
 //  4. 构建 Workspace（复用父 workspace root_path）
 //  5. 构建 CreateDeepAgentParams（对齐 Python create_kwargs 字段映射）
-//  6. CreateDeepAgent(ctx, params)
+//  6. 调用 CreateDeepAgent(ctx, params)
 func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	// 步骤 1: 将 AgentDefinition 转换为 SubAgentConfig
 	// 对齐 Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
@@ -343,6 +351,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		EnableAsyncSubagent:    false,
 		Language:               resolvedLanguage,
 		PromptMode:             resolvedPromptMode,
+		FactoryKwargs:          spec.FactoryKwargs,
 	}
 
 	// 步骤 6: 创建子 Agent

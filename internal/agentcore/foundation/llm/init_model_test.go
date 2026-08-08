@@ -100,7 +100,10 @@ func TestInitModel_VerifySSLDefault(t *testing.T) {
 	}
 
 	// 而 ModelClientConfig 的 VerifySSL 默认为 True
-	config := llmschema.NewModelClientConfig("test", "key", "http://localhost")
+	config, err := llmschema.NewModelClientConfig("test", "key", "http://localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if config.VerifySSL != true {
 		t.Errorf("ModelClientConfig 的 VerifySSL 默认值应为 true，实际 %v", config.VerifySSL)
 	}

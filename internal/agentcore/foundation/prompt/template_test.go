@@ -114,7 +114,7 @@ func TestPromptTemplate_Format_MessageTemplate(t *testing.T) {
 func TestPromptTemplate_Format_EmptyKeywords(t *testing.T) {
 	tmpl := NewPromptTemplate("", "Hello {{name}}")
 
-	// nil keywords
+	// nil 关键词
 	copy1, err := tmpl.Format(nil)
 	if err != nil {
 		t.Fatalf("Format 失败: %v", err)

@@ -657,12 +657,12 @@ func (a *ReActAgent) reactLoop(
 		if oq, ok := cbc.Extra()["_original_query"].(string); ok {
 			originalQuery = oq
 		}
-		hitlInterrupt, _ := a.AfterExecuteToolCallForHITL(
+		hitlInterrupt, subAgentOutputs := a.AfterExecuteToolCallForHITL(
 			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
 		)
 		if hitlInterrupt != nil {
 			if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
-				_, _ = a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, invokeInputs, nil)
+				_, _ = a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, invokeInputs, subAgentOutputs)
 			}
 			break
 		}

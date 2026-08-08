@@ -142,33 +142,41 @@ func (v *TextableVariable) Eval(kwargs map[string]any) any {
 //
 // 逻辑：
 //  1. 遍历 placeholders，对每个占位符逐层解析嵌套路径
-//  2. 非 str/int/float/bool 类型调用 fmt.Sprintf("%v", value) 转换，并记录日志
-//  3. strings.ReplaceAll 替换到 formattedText
-func (v *TextableVariable) Update(kwargs map[string]any) {
+//  2. 解析失败时返回错误（对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)）
+//  3. 非 str/int/float/bool 类型调用 fmt.Sprintf("%v", value) 转换，并记录日志
+//  4. strings.ReplaceAll 替换到 formattedText
+func (v *TextableVariable) Update(kwargs map[string]any) error {
 	formattedText := v.text
 
 	for _, placeholder := range v.placeholders {
 		value, err := resolveNestedValue(placeholder, kwargs)
 		if err != nil {
-			// 解析失败时，保留原始占位符不替换（与 Python 端行为一致：部分填充场景）
-			continue
+			// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED, error_msg=f"error parsing the placeholder `{placeholder}`")
+			return exception.NewBaseError(
+				exception.StatusPromptAssemblerVariableInitFailed,
+				exception.WithMsg(fmt.Sprintf("error parsing the placeholder `%s`: %s", placeholder, err.Error())),
+				exception.WithCause(err),
+			)
 		}
 
 		// 类型检查：非 str/int/float/bool 记录日志并转为字符串
-		valueStr := formatValue(value)
+		valueStr := formatValue(placeholder, value, kwargs)
 
 		placeholderStr := v.prefix + placeholder + v.suffix
 		formattedText = strings.ReplaceAll(formattedText, placeholderStr, valueStr)
 	}
 
 	v.value = formattedText
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatValue 将值转换为字符串，非 str/int/float/bool 类型记录日志。
 // 对应 Python: isinstance(value, (str, int, float, bool)) 检查 + str() 转换 + prompt_logger.info
-func formatValue(value any) string {
+// placeholderName: 占位符名称（如 "user.name"），对齐 Python 日志中的占位符名称
+// kwargs: 原始输入数据，对齐 Python 日志中的 input_data 字段
+func formatValue(placeholderName string, value any, kwargs map[string]any) string {
 	switch val := value.(type) {
 	case string:
 		return val
@@ -184,10 +192,13 @@ func formatValue(value any) string {
 		return fmt.Sprintf("%t", val)
 	default:
 		// 非 str/int/float/bool 类型，记录日志并转为字符串
-		// 对应 Python: prompt_logger.info("Converting non-string value using str()...")
+		// 对齐 Python: prompt_logger.info("Converting non-string value using str()...", placeholder=..., input_data=..., output_data=...)
+		outputData := fmt.Sprintf("%v", val)
 		logger.Info(logger.ComponentAgentCore).
-			Str("placeholder", fmt.Sprintf("%v", value)).
+			Str("placeholder", placeholderName).
+			Str("input_data", fmt.Sprintf("%v", value)).
+			Str("output_data", outputData).
 			Msg("使用 str() 转换非字符串值，请检查格式是否正确。")
-		return fmt.Sprintf("%v", val)
+		return outputData
 	}
 }

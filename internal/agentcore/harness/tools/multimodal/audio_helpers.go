@@ -24,6 +24,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // defaultUserAgent 默认 User-Agent（对齐 Python: DEFAULT_USER_AGENT）
@@ -31,6 +35,21 @@ const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 // audioQASystemPrompt 音频问答系统提示词（对齐 Python: _invoke_audio_question_answering 中的 system prompt）
 const audioQASystemPrompt = "You are a helpful assistant specializing in audio analysis."
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// execCommand 执行外部命令（可被测试替换）
+var execCommand = func(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// osStat 检查文件信息（可被测试替换）
+var osStat = os.Stat
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -405,8 +424,8 @@ func parseWAVDuration(audioPath string) (float64, error) {
 	}
 
 	// WAV 文件结构:
-	// RIFF header (12 bytes): "RIFF" + size + "WAVE"
-	// fmt chunk (24+ bytes): "fmt " + size + audioFormat + numChannels + sampleRate + byteRate + blockAlign + bitsPerSample
+	// RIFF 头（12 字节）: "RIFF" + size + "WAVE"
+	// fmt 块（24+ 字节）: "fmt " + size + audioFormat + numChannels + sampleRate + byteRate + blockAlign + bitsPerSample
 	if len(data) < 44 {
 		return 0, fmt.Errorf("WAV file too short")
 	}
@@ -418,7 +437,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 	// 找 fmt chunk
 	offset := 12
 	for offset < len(data)-8 {
-		chunkID := string(data[offset:offset+4])
+		chunkID := string(data[offset : offset+4])
 		chunkSize := uint32(data[offset+4]) | uint32(data[offset+5])<<8 | uint32(data[offset+6])<<16 | uint32(data[offset+7])<<24
 		if chunkID == "fmt " {
 			if offset+24 > len(data) {
@@ -431,7 +450,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 			// 找 data chunk
 			dataOffset := offset + 8 + int(chunkSize)
 			for dataOffset < len(data)-8 {
-				dataChunkID := string(data[dataOffset:dataOffset+4])
+				dataChunkID := string(data[dataOffset : dataOffset+4])
 				dataChunkSize := uint32(data[dataOffset+4]) | uint32(data[dataOffset+5])<<8 | uint32(data[dataOffset+6])<<16 | uint32(data[dataOffset+7])<<24
 				if dataChunkID == "data" {
 					if byteRate > 0 && blockAlign > 0 {
@@ -586,19 +605,6 @@ func urlParse(rawURL string) (string, error) {
 	}
 	return u.Path, nil
 }
-
-// execCommand 执行外部命令（可被测试替换）
-var execCommand = func(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-// osStat 检查文件信息（可被测试替换）
-var osStat = os.Stat
 
 // parseFloat 安全的 float64 解析
 func parseFloat(s string) (float64, error) {

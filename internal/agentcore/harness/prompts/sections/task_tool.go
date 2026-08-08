@@ -55,7 +55,8 @@ Principles:
 `
 )
 
-// BuildTaskToolSection 构建任务工具节（Priority 85）
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildTaskToolSection(lang string) saprompt.PromptSection {
@@ -72,3 +73,5 @@ func BuildTaskToolSection(lang string) saprompt.PromptSection {
 		Priority: 85,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

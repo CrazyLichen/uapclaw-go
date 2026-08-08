@@ -330,12 +330,12 @@ func TestExtractChunkContent(t *testing.T) {
 }
 
 func TestParseRequestParams(t *testing.T) {
-	// nil params
+	// nil 参数
 	req := schema.NewAgentRequest("r1", "web", schema.ReqMethodChatSend, nil)
 	params := parseRequestParams(req)
 	assert.Empty(t, params)
 
-	// valid JSON params
+	// 有效 JSON 参数
 	req = schema.NewAgentRequest("r2", "web", schema.ReqMethodChatSend, json.RawMessage(`{"query":"hi","mode":"code"}`))
 	params = parseRequestParams(req)
 	assert.Equal(t, "hi", params["query"])

@@ -810,7 +810,7 @@ func TestFromConfigToRouter(t *testing.T) {
 	routerCache = make(map[string]*ReliableRouter)
 	routerCacheLock.Unlock()
 
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{

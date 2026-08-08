@@ -52,6 +52,10 @@ type ModelConfig struct {
 // BaseModelInfoOption BaseModelInfo 构造选项函数。
 type BaseModelInfoOption func(*BaseModelInfo)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // baseModelInfoKnownKeys BaseModelInfo 已知的 JSON 键名集合，用于 Extra 字段拆分。
@@ -102,12 +106,12 @@ func WithInfoExtra(extra map[string]any) BaseModelInfoOption {
 // NewBaseModelInfo 创建 BaseModelInfo 实例，apiBase 为必填参数。
 //
 // 默认值：
-//   - APIKey: ""
-//   - ModelName: ""
-//   - Temperature: 0.95
-//   - TopP: 0.1
-//   - Streaming: false
-//   - Timeout: 60
+//   - APIKey 默认为空字符串
+//   - ModelName 默认为空字符串
+//   - Temperature 默认 0.95
+//   - TopP 默认 0.1
+//   - Streaming 默认 false
+//   - Timeout 默认 60秒
 //
 // 对应 Python: BaseModelInfo(api_base=..., model=..., temperature=..., ...)
 func NewBaseModelInfo(apiBase string, opts ...BaseModelInfoOption) *BaseModelInfo {

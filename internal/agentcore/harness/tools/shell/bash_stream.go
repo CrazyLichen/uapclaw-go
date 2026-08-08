@@ -198,11 +198,11 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 					// 发送流式输出块
 					// 对齐 Python L309-318: yield ToolOutput(success=True, data={...})
 					ch <- map[string]any{
-						"success":             true,
-						"text":                text,
-						"type":                streamType,
-						"chunk_index":         data.ChunkIndex,
-						"exit_code":           data.ExitCode,
+						"success":              true,
+						"text":                 text,
+						"type":                 streamType,
+						"chunk_index":          data.ChunkIndex,
+						"exit_code":            data.ExitCode,
 						"elapsed_time_seconds": elapsed,
 					}
 				}

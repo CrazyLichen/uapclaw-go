@@ -400,6 +400,39 @@ func (c *ActionController) Snapshot() map[string]any {
 	}
 }
 
+// Restore 从快照恢复控制器状态。
+// 对齐 Python: ActionController.restore
+func (c *ActionController) Restore(snapshot map[string]any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// 恢复 actions
+	c.actions = make(map[string]ActionHandler)
+	if actions, ok := snapshot["actions"].(map[string]ActionHandler); ok {
+		for k, v := range actions {
+			c.actions[k] = v
+		}
+	}
+
+	// 恢复 action_specs（深拷贝，对齐 Python: copy.deepcopy）
+	c.actionSpecs = make(map[string]ActionSpec)
+	if specs, ok := snapshot["action_specs"].(map[string]ActionSpec); ok {
+		for k, v := range specs {
+			c.actionSpecs[k] = v
+		}
+	}
+
+	// 恢复 runtime_runner
+	if rr, ok := snapshot["runtime_runner"].(RuntimeRunner); ok {
+		c.runtimeRunner = rr
+	}
+
+	// 恢复 code_executor
+	if ce, ok := snapshot["code_executor"].(CodeExecutorFunc); ok {
+		c.codeExecutor = ce
+	}
+}
+
 // RegisterBuiltinActions 注册所有内置动作。
 //
 // 对齐 Python: register_builtin_actions (controllers/action.py L691-1237)
@@ -1027,17 +1060,17 @@ func buildDragPayload(kwargs map[string]any) map[string]any {
 	}
 
 	return map[string]any{
-		"url":                     getStr(kwargs, "url"),
-		"element_source":          sourceSelector,
-		"element_target":          targetSelector,
-		"element_source_offset":   normalizeOffset(kwargs["element_source_offset"]),
-		"element_target_offset":   normalizeOffset(kwargs["element_target_offset"]),
-		"coord_source_x":          sx,
-		"coord_source_y":          sy,
-		"coord_target_x":          tx,
-		"coord_target_y":          ty,
-		"steps":                   toIntPtrOrNone(kwargs, "steps"),
-		"delay_ms":                toIntPtrOrNone(kwargs, "delay_ms"),
+		"url":                   getStr(kwargs, "url"),
+		"element_source":        sourceSelector,
+		"element_target":        targetSelector,
+		"element_source_offset": normalizeOffset(kwargs["element_source_offset"]),
+		"element_target_offset": normalizeOffset(kwargs["element_target_offset"]),
+		"coord_source_x":        sx,
+		"coord_source_y":        sy,
+		"coord_target_x":        tx,
+		"coord_target_y":        ty,
+		"steps":                 toIntPtrOrNone(kwargs, "steps"),
+		"delay_ms":              toIntPtrOrNone(kwargs, "delay_ms"),
 	}
 }
 

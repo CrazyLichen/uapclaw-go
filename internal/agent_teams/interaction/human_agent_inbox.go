@@ -83,7 +83,7 @@ func NewHumanAgentInbox(team any, messageManager any, agentLookup AgentLookup, o
 //
 // Python 执行步骤：
 //  1. resolved_sender = self._resolve_sender(sender)
-//  2. team_logger.debug("HumanAgentInbox: sender=%s, to=%s, body_len=%d", ...)
+//  2. team_logger.debug: HumanAgentInbox 发送者、目标、消息体长度
 //  3. if to is None: return await self._drive_agent(body, sender=resolved_sender)
 //  4. if to in BROADCAST_TARGETS: broadcast_message → DeliverResult
 //  5. return await deliver_direct(body, sender=resolved_sender, target=to, ...)

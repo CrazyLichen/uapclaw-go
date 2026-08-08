@@ -44,7 +44,7 @@ type SkillExperienceOptimizer struct {
 //
 // 对齐 Python:
 //
-//	SkillExperienceOptimizer(llm, model, language, generate_records_llm_policy)
+//	创建 SkillExperienceOptimizer（参数: llm, model, language, generate_records_llm_policy）
 func NewSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, policy llm_resilience.LLMInvokePolicy) *SkillExperienceOptimizer {
 	return &SkillExperienceOptimizer{
 		SkillExperienceOptimizerBase: SkillExperienceOptimizerBase{
@@ -69,17 +69,17 @@ func (o *SkillExperienceOptimizer) AddTrajectory(traj *signal.EvolutionSignal) {
 //
 // 对齐 Python: SkillExperienceOptimizer._backward(signals)
 //
-//	for op_id, op in self._operators.items():
-//	    skill_name = op_id.removeprefix("skill_experience_")
-//	    skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
-//	    if not skill_signals: continue
-//	    ctx = self._build_evolution_context(skill_name, op, skill_signals)
-//	    records = await self.generate_records(ctx)
-//	    if not records:
-//	        logger.info("[SkillExperienceOptimizer] no records generated for skill=%s", skill_name)
-//	        continue
-//	    existing = param.get_gradient(EXPERIENCES_TARGET) or []
-//	    param.set_gradient(EXPERIENCES_TARGET, existing + records)
+//		for op_id, op in self._operators.items():
+//		    skill_name = op_id.removeprefix("skill_experience_")
+//		    skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
+//	   如果没有 skill_signals 则跳过
+//		    ctx = self._build_evolution_context(skill_name, op, skill_signals)
+//		    records = await self.generate_records(ctx)
+//		    if not records:
+//	       logger.info: 无记录生成（skill=%s）
+//		        continue
+//		    existing = param.get_gradient(EXPERIENCES_TARGET) or []
+//		    param.set_gradient(EXPERIENCES_TARGET, existing + records)
 func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	o.ValidateParameters()
 	selected := o.SelectSignals(signals)
@@ -483,7 +483,7 @@ func buildConversationSnippet(messages []map[string]any, maxMessages int, conten
 				}
 			}
 			prefix := fmt.Sprintf("[assistant] (tool_calls: %s)\n  ", strings.Join(names, ", "))
-			lines = append(lines, prefix + text)
+			lines = append(lines, prefix+text)
 		} else {
 			lines = append(lines, fmt.Sprintf("[%s] %s", role, text))
 		}

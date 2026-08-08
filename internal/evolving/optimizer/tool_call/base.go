@@ -125,9 +125,9 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 //  1. 保存原始描述 original_desc = tool["description"]
 //  2. for i in range(self.max_turns):
 //     if i > 0: tool["description"] = 最新描述
-//     # Stage 1 - Example
+//     阶段 1 — 示例
 //     result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
-//     # Stage 2 - Description
+//     阶段 2 — 描述
 //     result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
 //  3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
 //  4. 格式化：ToolDescriptionReviewer.Format(schema, processed)

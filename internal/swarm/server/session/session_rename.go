@@ -17,6 +17,8 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // ApplySessionRename 实现会话重命名三种语义：查询(title=nil) / 清除(空串) / 设置(非空)。
 //
 // 对齐 Python apply_session_rename(params, connection_session_id, init_channel_id)
@@ -96,3 +98,5 @@ func ApplySessionRename(
 		"previous_title": previousTitle,
 	}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

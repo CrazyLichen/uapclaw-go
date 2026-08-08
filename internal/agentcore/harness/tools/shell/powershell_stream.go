@@ -184,11 +184,11 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 					// 发送流式输出块
 					// 对齐 Python L281-290: yield ToolOutput(success=True, data={...})
 					ch <- map[string]any{
-						"success":             true,
-						"text":                text,
-						"type":                streamType,
-						"chunk_index":         data.ChunkIndex,
-						"exit_code":           data.ExitCode,
+						"success":              true,
+						"text":                 text,
+						"type":                 streamType,
+						"chunk_index":          data.ChunkIndex,
+						"exit_code":            data.ExitCode,
 						"elapsed_time_seconds": elapsed,
 					}
 				}

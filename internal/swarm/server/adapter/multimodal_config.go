@@ -6,6 +6,23 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// embedModelKeyMap embed 配置中的模型名称键映射。
+// 对齐 Python: _EMBED_MODEL_KEY_MAP
+var embedModelKeyMap = map[string]string{
+	"audio":     "audio_model",
+	"vision":    "vision_model",
+	"video":     "video_model",
+	"image_gen": "image_gen_model",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ApplyVideoModelConfigFromYAML 从 config.yaml 读取视频模型配置并设置环境变量。
@@ -174,15 +191,6 @@ func DedicatedMultimodalModelConfigured(configBase map[string]any, modelType str
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// embedModelKeyMap embed 配置中的模型名称键映射。
-// 对齐 Python: _EMBED_MODEL_KEY_MAP
-var embedModelKeyMap = map[string]string{
-	"audio":     "audio_model",
-	"vision":    "vision_model",
-	"video":     "video_model",
-	"image_gen": "image_gen_model",
-}
 
 // getModelConfig 从 config.yaml 解析 models.{modelType}.model_config。
 // 对齐 Python: _get_model_config(config_base, model_type)

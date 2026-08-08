@@ -136,7 +136,10 @@ func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 	})
 
 	t.Run("WithModelClientConfig", func(t *testing.T) {
-		mcCfg := llmschema.NewModelClientConfig("openai", "sk-test", "https://api.openai.com")
+		mcCfg, err := llmschema.NewModelClientConfig("openai", "sk-test", "https://api.openai.com")
+		if err != nil {
+			t.Fatal(err)
+		}
 		cfg := NewReActAgentConfig(WithModelClientConfig(mcCfg))
 		assert.Equal(t, mcCfg, cfg.ModelClientConfig)
 	})
@@ -154,15 +157,15 @@ func TestNewReActAgentConfig_WithModelClient(t *testing.T) {
 		"dashscope", "sk-test", "https://dashscope.api", "qwen-max",
 	))
 
-	// 验证顶层字段被设置
+	// 验证顶层字段被设置（ModelProvider 保留原始传入值）
 	assert.Equal(t, "dashscope", cfg.ModelProvider)
 	assert.Equal(t, "sk-test", cfg.APIKey)
 	assert.Equal(t, "https://dashscope.api", cfg.APIBase)
 	assert.Equal(t, "qwen-max", cfg.ModelNameVal)
 
-	// 验证 ModelClientConfig 被创建
+	// 验证 ModelClientConfig 被创建（ClientProvider 被 Validate 规范化为首字母大写）
 	assert.NotNil(t, cfg.ModelClientConfig)
-	assert.Equal(t, "dashscope", cfg.ModelClientConfig.ClientProvider)
+	assert.Equal(t, "DashScope", cfg.ModelClientConfig.ClientProvider)
 	assert.Equal(t, "sk-test", cfg.ModelClientConfig.APIKey)
 	assert.Equal(t, "https://dashscope.api", cfg.ModelClientConfig.APIBase)
 	assert.False(t, cfg.ModelClientConfig.VerifySSL, "VerifySSL 默认应为 false（对齐 Python verify_ssl=False）")
@@ -309,9 +312,15 @@ func TestReActAgentConfig_Validate(t *testing.T) {
 
 	t.Run("ModelClientConfig非nil时递归校验_空APIKey返回错误", func(t *testing.T) {
 		cfg := NewReActAgentConfig(WithModelName("test-model"))
-		// 构造一个 APIKey 为空的 ModelClientConfig
-		cfg.ModelClientConfig = llmschema.NewModelClientConfig("openai", "", "https://api.openai.com")
-		assert.Error(t, cfg.Validate())
+		// 空 APIKey 的 ModelClientConfig 构造本身应返回错误
+		mcCfg, err := llmschema.NewModelClientConfig("openai", "", "https://api.openai.com")
+		if err == nil {
+			// 如果构造成功（可能 SkipValidate），则 Validate 应报错
+			cfg.ModelClientConfig = mcCfg
+			assert.Error(t, cfg.Validate())
+		}
+		// 空 APIKey 构造应直接返回错误
+		assert.Error(t, err)
 	})
 
 	t.Run("ModelClientConfig非nil时递归校验_有效配置通过", func(t *testing.T) {
@@ -358,7 +367,7 @@ func TestReActAgentConfig_AgentConfig接口(t *testing.T) {
 	// GetModelClientConfig() 接口方法
 	mcCfg := cfg.GetModelClientConfig()
 	assert.NotNil(t, mcCfg, "GetModelClientConfig() 应返回 ModelClientConfig 指针")
-	assert.Equal(t, "openai", mcCfg.ClientProvider)
+	assert.Equal(t, "OpenAI", mcCfg.ClientProvider)
 }
 
 // ──────────────────────────── JSON 序列化测试 ────────────────────────────

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -33,6 +33,8 @@ type VideoUnderstandingInput struct {
 	ThinkingEnabled bool `json:"thinking_enabled,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -57,6 +59,8 @@ const (
 	// defaultVideoModel 默认视频理解模型（对齐 jiuwenswarm: glm-4.6v）
 	defaultVideoModel = "glm-4.6v"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -176,3 +180,5 @@ func NewVideoUnderstandingTool(
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

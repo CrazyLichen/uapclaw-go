@@ -6,11 +6,22 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
+// ──── 辅助函数 ────
+
+// mustNewClientConfig 创建客户端配置，出错时 panic（测试专用）
+func mustNewClientConfig(provider, apiKey, apiBase string, opts ...llmschema.ModelClientConfigOption) *llmschema.ModelClientConfig {
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return cc
+}
+
 // ──── FromModelClientConfig 测试 ────
 
 // TestFromModelClientConfig_DefaultValues 测试默认值。
 func TestFromModelClientConfig_DefaultValues(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 	)
 
@@ -37,7 +48,7 @@ func TestFromModelClientConfig_DefaultValues(t *testing.T) {
 
 // TestFromModelClientConfig_WithDeployments 测试带 deployments 的配置提取。
 func TestFromModelClientConfig_WithDeployments(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{
@@ -122,7 +133,7 @@ func TestFromModelClientConfig_WithDeployments(t *testing.T) {
 
 // TestFromModelClientConfig_DeploymentDefaults 测试 deployment 字段的默认值。
 func TestFromModelClientConfig_DeploymentDefaults(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{
@@ -155,7 +166,7 @@ func TestFromModelClientConfig_DeploymentDefaults(t *testing.T) {
 
 // TestFromModelClientConfig_NilExtra 测试 Extra 为 nil 的情况。
 func TestFromModelClientConfig_NilExtra(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(true),
 	)
 	// Extra 为 nil
@@ -171,7 +182,7 @@ func TestFromModelClientConfig_NilExtra(t *testing.T) {
 
 // TestFromModelClientConfig_DeploymentsAsAnySlice 测试 deployments 为 []any 格式。
 func TestFromModelClientConfig_DeploymentsAsAnySlice(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []any{
@@ -196,7 +207,7 @@ func TestFromModelClientConfig_DeploymentsAsAnySlice(t *testing.T) {
 
 // TestFromModelClientConfig_DeploymentVerifySSL 测试 deployment 级别的 verify_ssl。
 func TestFromModelClientConfig_DeploymentVerifySSL(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(true),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{

@@ -35,11 +35,11 @@ type mockTrainableAgent struct {
 
 // mockCheckpointProgress 测试用的模拟 CheckpointProgress
 type mockCheckpointProgress struct {
-	epoch            int
-	batchIter        int
-	bestScore        float64
+	epoch             int
+	batchIter         int
+	bestScore         float64
 	currentEpochScore float64
-	seed             *int
+	seed              *int
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -59,23 +59,23 @@ func (m *mockOperator) SetParameter(target string, value any)        {}
 func (m *mockOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return schema.ApplyResult{}
 }
-func (m *mockOperator) LoadState(state map[string]any)               { m.state = state }
+func (m *mockOperator) LoadState(state map[string]any) { m.state = state }
 
 // mockTrainableAgent 方法实现
 
 func (m *mockTrainableAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
-func (m *mockTrainableAgent) Card() *agentschema.AgentCard { return nil }
+func (m *mockTrainableAgent) Card() *agentschema.AgentCard               { return nil }
 func (m *mockTrainableAgent) GetOperators() map[string]operator.Operator { return m.operators }
 
 // mockCheckpointProgress 方法实现
 
-func (m *mockCheckpointProgress) GetEpoch() int              { return m.epoch }
-func (m *mockCheckpointProgress) GetBatchIter() int          { return m.batchIter }
-func (m *mockCheckpointProgress) GetBestScore() float64      { return m.bestScore }
+func (m *mockCheckpointProgress) GetEpoch() int                 { return m.epoch }
+func (m *mockCheckpointProgress) GetBatchIter() int             { return m.batchIter }
+func (m *mockCheckpointProgress) GetBestScore() float64         { return m.bestScore }
 func (m *mockCheckpointProgress) GetCurrentEpochScore() float64 { return m.currentEpochScore }
-func (m *mockCheckpointProgress) GetSeed() *int              { return m.seed }
+func (m *mockCheckpointProgress) GetSeed() *int                 { return m.seed }
 
 // ──────────────────────────── DefaultCheckpointManager 测试 ────────────────────────────
 
@@ -242,7 +242,7 @@ func TestRestore_缺失Operator跳过(t *testing.T) {
 
 	ckpt := &EvolveCheckpoint{
 		OperatorsState: map[string]map[string]any{
-			"op_1":   {"param": "val1"},
+			"op_1":       {"param": "val1"},
 			"op_missing": {"param": "val2"}, // 不存在的 Operator
 		},
 	}
@@ -546,10 +546,10 @@ func TestUsageStats_ToDict_空可选字段(t *testing.T) {
 // TestFromDictUsageStats 测试从字典创建 UsageStats
 func TestFromDictUsageStats(t *testing.T) {
 	data := map[string]any{
-		"times_presented":  10,
-		"times_used":       5,
-		"times_positive":   3,
-		"times_negative":   1,
+		"times_presented":   10,
+		"times_used":        5,
+		"times_positive":    3,
+		"times_negative":    1,
 		"last_presented_at": "2024-01-01",
 	}
 	stats := FromDictUsageStats(data)
@@ -599,10 +599,10 @@ func TestEvolutionPatch_ToDict(t *testing.T) {
 // TestFromDictEvolutionPatch 测试从字典创建 EvolutionPatch
 func TestFromDictEvolutionPatch(t *testing.T) {
 	data := map[string]any{
-		"section":       "Instructions",
-		"action":        "append",
-		"content":       "新增内容",
-		"target":        "body",
+		"section":         "Instructions",
+		"action":          "append",
+		"content":         "新增内容",
+		"target":          "body",
 		"script_filename": "helper.py",
 	}
 	patch, err := FromDictEvolutionPatch(data)
@@ -1152,7 +1152,7 @@ func TestFileCheckpointStore_LoadStateDict(t *testing.T) {
 
 	// 手动创建格式正确的 JSON 文件
 	loadData := map[string]any{
-		"version":         "v1",
+		"version": "v1",
 		"operators_state": map[string]any{
 			"op_1": map[string]any{"param": "val1"},
 			"op_2": map[string]any{"param": "val2"},
@@ -1201,7 +1201,7 @@ func TestToJSONCompatible_各种类型(t *testing.T) {
 		t.Errorf("字符串应直接返回")
 	}
 
-	// map[string]int → map[string]any
+	// map[string]int → map[string]any 类型转换
 	result := toJSONCompatible(map[string]int{"epoch": 5})
 	m, ok := result.(map[string]any)
 	if !ok {
@@ -1868,16 +1868,16 @@ func TestEvolutionLog_序列化循环(t *testing.T) {
 		UpdatedAt: "2024-01-01",
 		Entries: []EvolutionRecord{
 			{
-				ID:         "ev1",
-				Source:     "optimizer",
-				Timestamp:  "2024-01-01T00:00:00Z",
-				Context:    "上下文",
-				Change:     EvolutionPatch{Section: "Instructions", Action: "append", Content: "内容", Target: signal.EvolutionTargetBody, SkipReason: &skipReason, ScriptFilename: &scriptFilename},
-				Applied:    false,
-				Score:      0.8,
-				UsageStats: &UsageStats{TimesPresented: 5, TimesUsed: 3},
+				ID:           "ev1",
+				Source:       "optimizer",
+				Timestamp:    "2024-01-01T00:00:00Z",
+				Context:      "上下文",
+				Change:       EvolutionPatch{Section: "Instructions", Action: "append", Content: "内容", Target: signal.EvolutionTargetBody, SkipReason: &skipReason, ScriptFilename: &scriptFilename},
+				Applied:      false,
+				Score:        0.8,
+				UsageStats:   &UsageStats{TimesPresented: 5, TimesUsed: 3},
 				SkillVersion: &sv,
-				Summary:    &summary,
+				Summary:      &summary,
 			},
 		},
 	}

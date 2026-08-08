@@ -150,3 +150,5 @@ func RedactURLInValue(value any) any {
 		return value
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

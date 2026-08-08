@@ -31,7 +31,7 @@ type Variable interface {
 
 	// Update 根据传入的键值对更新变量值。
 	// 对应 Python: Variable.update()
-	Update(kwargs map[string]any)
+	Update(kwargs map[string]any) error
 }
 
 // baseVariable 提供 Variable 接口的公共字段和 Eval 模板方法实现。
@@ -92,7 +92,7 @@ func PrepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
 // 参数 v 是 Variable 接口，确保调用的是子类型的 Update 方法。
 func evalBase(b *baseVariable, v Variable, kwargs map[string]any) any {
 	filtered := prepareInputs(b.inputKeys, kwargs)
-	v.Update(filtered)
+	_ = v.Update(filtered)
 	return b.Value()
 }
 

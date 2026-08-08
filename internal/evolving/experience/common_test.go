@@ -390,4 +390,3 @@ func TestGetSignalSource(t *testing.T) {
 		}
 	})
 }
-

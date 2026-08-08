@@ -17,10 +17,16 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // audioTranscriptionsPath 音频转写 API 路径
 const audioTranscriptionsPath = "/audio/transcriptions"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -75,7 +81,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 			return nil, exception.NewBaseError(
 				exception.StatusModelCallFailed,
 				exception.WithMsg(fmt.Sprintf("写入 language 字段失败: %s", err.Error())),
-		)
+			)
 		}
 	}
 
@@ -191,3 +197,5 @@ func (c *OpenAIModelClient) TranscribeAudio(
 
 	return &transcriptionResp, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -53,7 +53,8 @@ and ask them to wait for subsequent system notifications or the next round of in
 `
 )
 
-// BuildSessionToolsSection 构建会话工具节（Priority 85）
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildSessionToolsSection(lang string) saprompt.PromptSection {
@@ -70,3 +71,5 @@ func BuildSessionToolsSection(lang string) saprompt.PromptSection {
 		Priority: 85,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

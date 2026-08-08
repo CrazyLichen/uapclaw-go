@@ -54,7 +54,7 @@ func createTestClientWithServer(t *testing.T, server *httptest.Server, numDeps i
 	}
 
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": deployments,
@@ -91,7 +91,7 @@ func createTestClientWithRetry(t *testing.T, servers ...*httptest.Server) *Intel
 	}
 
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": deployments,
@@ -206,7 +206,7 @@ func TestInvoke_NoAvailableEndpoints(t *testing.T) {
 
 	// 创建只有 1 个端点的客户端，然后标记端点为不健康
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{
@@ -687,7 +687,7 @@ func TestHealthCheckResult(t *testing.T) {
 
 // TestConfigParseDeployments_EmptyList 测试空部署列表解析。
 func TestConfigParseDeployments_EmptyList(t *testing.T) {
-	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{},
@@ -770,7 +770,7 @@ func TestInvoke_UpdatesAPIConfig(t *testing.T) {
 	routerCacheLock.Unlock()
 
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
-	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
+	cc := mustNewClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
 			"intelli_router_deployments": []map[string]any{

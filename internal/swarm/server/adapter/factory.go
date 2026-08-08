@@ -28,6 +28,8 @@ var logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // ResolveSDKChoice 从环境变量解析 SDK 选择。
 //
 // 对应 Python: resolve_sdk_choice()

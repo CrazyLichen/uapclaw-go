@@ -32,7 +32,8 @@ const (
 `
 )
 
-// BuildSafetySection 构建安全节
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildSafetySection() saprompt.PromptSection {
@@ -42,3 +43,5 @@ func BuildSafetySection() saprompt.PromptSection {
 		Priority: 20,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

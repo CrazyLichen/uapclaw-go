@@ -119,7 +119,7 @@ func (g *InteractGate) Admit() *AdmissionTicket {
 // 对齐 Python: InteractGate.consume_done(ticket)
 //
 // Python 执行步骤：
-//  1. if ticket.gate is not self: return
+//  1. 如果 ticket.gate 不是当前实例则返回
 //  2. async with self._lock:
 //  3. if self._inflight <= 0: return
 //  4. self._inflight -= 1

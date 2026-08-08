@@ -342,7 +342,7 @@ func TestCallbackFramework_TriggerSession_Nil上下文(t *testing.T) {
 		t.Errorf("nil context 期望 nil，实际 %v", results)
 	}
 
-	// nil data
+	// nil 数据
 	results = fw.TriggerSession(context.Background(), nil)
 	if results != nil {
 		t.Errorf("nil data 期望 nil，实际 %v", results)

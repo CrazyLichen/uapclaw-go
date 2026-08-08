@@ -60,12 +60,12 @@ func TestBuildConversationSnippet_截断(t *testing.T) {
 	// 需要 6+ 条消息，使得前几条的 budget=300（非最近5条）被截断
 	longContent := strings.Repeat("a", 500)
 	messages := []map[string]any{
-		{"role": "user", "content": longContent},  // 第1条，非最近5条
-		{"role": "assistant", "content": "ok"},     // 第2条
-		{"role": "user", "content": "ok"},          // 第3条
-		{"role": "assistant", "content": "ok"},     // 第4条
-		{"role": "user", "content": "ok"},          // 第5条
-		{"role": "assistant", "content": "ok"},     // 第6条
+		{"role": "user", "content": longContent}, // 第1条，非最近5条
+		{"role": "assistant", "content": "ok"},   // 第2条
+		{"role": "user", "content": "ok"},        // 第3条
+		{"role": "assistant", "content": "ok"},   // 第4条
+		{"role": "user", "content": "ok"},        // 第5条
+		{"role": "assistant", "content": "ok"},   // 第6条
 	}
 	snippet := buildConversationSnippet(messages, 30, 300, "cn")
 	assert.Contains(t, snippet, "已截断")

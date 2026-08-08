@@ -780,7 +780,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	modelName := crc.getModelName()
 	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
 	if inputTokens < crc.minSelectedTokens {
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "compress_skipped").
 			Int("input_tokens", inputTokens).
 			Int("min_selected_tokens", crc.minSelectedTokens).
@@ -829,7 +829,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	if summary != "" {
 		compressedTokens := processor.CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summary)}, modelName, crc.ProcessorType())
 		if compressedTokens >= inputTokens {
-			logger.Debug(logger.ComponentAgentCore).
+			logger.Info(logger.ComponentAgentCore).
 				Str("event_type", "compress_no_benefit").
 				Int("compressed_tokens", compressedTokens).
 				Int("input_tokens", inputTokens).
@@ -871,12 +871,13 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 	}
 	mergedBlocks := strings.Join(blockParts, "\n\n")
 
-	filledPrompt := strings.ReplaceAll(crc.cleanPrompt, "{compress_len}", fmt.Sprintf("%d", crc.summaryMergeTargetTokens))
-	filledPrompt = strings.ReplaceAll(filledPrompt, "{compressed_blocks}", mergedBlocks)
-	if mergedBlocks == "" {
-		filledPrompt = strings.ReplaceAll(crc.cleanPrompt, "{compressed_blocks}", "(none)")
-		filledPrompt = strings.ReplaceAll(filledPrompt, "{compress_len}", fmt.Sprintf("%d", crc.summaryMergeTargetTokens))
+	// 对齐 Python: merged_blocks if merged_blocks else "(none)"
+	blocksValue := mergedBlocks
+	if blocksValue == "" {
+		blocksValue = "(none)"
 	}
+	filledPrompt := strings.ReplaceAll(crc.cleanPrompt, "{compress_len}", fmt.Sprintf("%d", crc.summaryMergeTargetTokens))
+	filledPrompt = strings.ReplaceAll(filledPrompt, "{compressed_blocks}", blocksValue)
 
 	modelMessages := []llm_schema.BaseMessage{llm_schema.NewUserMessage(filledPrompt)}
 	response, err := crc.model.Invoke(ctx, model_clients.NewMessagesParam(modelMessages...))
@@ -901,7 +902,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 		return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summaryText)), nil
 	}
 
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "merge_failed").
 		Int("block_count", len(oldCompressMessages)).
 		Int("original_tokens", totalTokens).

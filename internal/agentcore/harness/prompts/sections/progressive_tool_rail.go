@@ -81,8 +81,9 @@ var (
 	progressiveToolRulesContentEN = progressiveToolRulesHeaderEN + progressiveToolRulesBodyEN
 )
 
-// BuildNavigationSection 构建工具导航节（Priority 70）
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// BuildNavigationSection 构建工具导航节（Priority 70）
 
 func BuildNavigationSection(entries []string, lang string) saprompt.PromptSection {
 	var header string
@@ -143,3 +144,5 @@ func BuildNavigationEntry(name string, group string, status string, summary stri
 	}
 	return fmt.Sprintf("- %s [%s, %s]：%s", name, group, status, summary)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

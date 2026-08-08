@@ -57,10 +57,12 @@ func TestDictableVariable_Update_Map(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{
+	if err := v.Update(map[string]any{
 		"user": "Alice",
 		"tag":  "VIP",
-	})
+	}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 
 	result, ok := v.Value().(map[string]any)
 	if !ok {
@@ -92,10 +94,12 @@ func TestDictableVariable_Update_Slice(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{
+	if err := v.Update(map[string]any{
 		"query": "What is this?",
 		"url":   "http://example.com/1.jpg",
-	})
+	}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 
 	result, ok := v.Value().([]any)
 	if !ok {
@@ -127,9 +131,11 @@ func TestDictableVariable_Update_NestedObj(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{
+	if err := v.Update(map[string]any{
 		"author": map[string]any{"name": "Bob"},
-	})
+	}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 
 	result, _ := v.Value().(map[string]any)
 	if result["info"] != "Author is Bob" {
@@ -147,13 +153,17 @@ func TestDictableVariable_Update_NonStringLog(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{"num": 100})
+	if err := v.Update(map[string]any{"num": 100}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	result, _ := v.Value().(map[string]any)
 	if result["count"] != "Total: 100" {
 		t.Errorf("count = %v, want 'Total: 100'", result["count"])
 	}
 
-	v.Update(map[string]any{"num": true})
+	if err := v.Update(map[string]any{"num": true}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	result2, _ := v.Value().(map[string]any)
 	if result2["count"] != "Total: true" {
 		t.Errorf("count = %v, want 'Total: true'", result2["count"])
@@ -194,7 +204,9 @@ func TestDictableVariable_DeepCopy(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{"name": "World"})
+	if err := v.Update(map[string]any{"name": "World"}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 
 	// 原始 data 不应被修改
 	if data["text"] != "Hello {{name}}" {
@@ -226,7 +238,9 @@ func TestDictableVariable_Update_NonStringValues(t *testing.T) {
 		t.Fatalf("NewDictableVariable 失败: %v", err)
 	}
 
-	v.Update(map[string]any{"user": "Alice"})
+	if err := v.Update(map[string]any{"user": "Alice"}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 
 	result, _ := v.Value().(map[string]any)
 	if result["id"] != 42 {

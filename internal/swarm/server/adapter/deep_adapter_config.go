@@ -490,7 +490,7 @@ func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configB
 
 	// 对齐 Python: max_iterations=parse_int(
 	//   research_agent_cfg.get("max_iterations"),
-	//   react_cfg.get("max_iterations", 15),
+	//    获取 max_iterations 配置（默认 15）
 	// )
 	maxIterations := 0
 	subagentsCfg, _ := config["subagents"].(map[string]any)

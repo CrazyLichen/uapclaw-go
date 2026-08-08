@@ -45,13 +45,13 @@ func TestRefCountedResource_Closed(t *testing.T) {
 		t.Fatal("IsClosed() should be true after MarkClosed()")
 	}
 
-	// IncRef on closed resource should return 0
+	// 已关闭资源上调用 IncRef 应返回 0
 	count := r.IncRef()
 	if count != 0 {
 		t.Fatalf("IncRef() on closed = %d, want 0", count)
 	}
 
-	// DecRef on closed resource should return false
+	// 已关闭资源上调用 DecRef 应返回 false
 	if r.DecRef() {
 		t.Fatal("DecRef() on closed should return false")
 	}
@@ -71,7 +71,7 @@ func TestRefCountedResource_Timestamps(t *testing.T) {
 		t.Fatal("LastUsed() should not be zero")
 	}
 
-	// IncRef should update lastUsed
+	// IncRef 应更新 lastUsed 时间
 	time.Sleep(10 * time.Millisecond)
 	r.IncRef()
 	newLastUsed := r.LastUsed()

@@ -29,6 +29,8 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // AutoTitle 从首条用户消息自动生成会话标题。
 //
 // 对齐 Python _auto_title(content): 截取前 50 字符，换行替换为空格
@@ -117,3 +119,5 @@ func NormalizeSessionID(sessionID string) string {
 func CurrentTimestamp() float64 {
 	return float64(time.Now().UnixMilli()) / 1000.0
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

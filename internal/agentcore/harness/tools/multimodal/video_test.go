@@ -112,7 +112,7 @@ func TestNewVideoUnderstandingTool_Invoke失败(t *testing.T) {
 
 func TestNewVideoUnderstandingTool_配置无效(t *testing.T) {
 	mockClient := &mockVisionClient{responses: []mockVisionResponse{{text: "ok"}}}
-	// nil config
+	// nil 配置
 	videoTool := NewVideoUnderstandingTool(mockClient, nil, "cn", "test-agent")
 
 	_, err := videoTool.Invoke(context.Background(), map[string]any{
@@ -282,8 +282,8 @@ func TestNewVideoUnderstandingTool_ThinkingEnabled(t *testing.T) {
 	videoTool := NewVideoUnderstandingTool(mockClient, config, "cn", "test-agent")
 
 	result, err := videoTool.Invoke(context.Background(), map[string]any{
-		"query":           "视频中发生了什么？",
-		"video_path":      "https://example.com/video.mp4",
+		"query":            "视频中发生了什么？",
+		"video_path":       "https://example.com/video.mp4",
 		"thinking_enabled": true,
 	})
 	if err != nil {

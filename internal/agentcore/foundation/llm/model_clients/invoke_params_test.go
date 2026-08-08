@@ -490,9 +490,12 @@ func TestBuildRequestParams_模型配置默认参数(t *testing.T) {
 		llmschema.WithTemperature(0.5),
 		llmschema.WithTopP(0.9),
 	)
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc)
 	if err != nil {
 		t.Fatal(err)
@@ -519,9 +522,12 @@ func TestBuildRequestParams_参数覆盖模型配置(t *testing.T) {
 		llmschema.WithModelName("gpt-4"),
 		llmschema.WithTemperature(0.5),
 	)
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc)
 	if err != nil {
 		t.Fatal(err)
@@ -545,9 +551,12 @@ func TestBuildRequestParams_模型配置Stop参数(t *testing.T) {
 		llmschema.WithModelName("gpt-4"),
 		llmschema.WithStop("[END]"),
 	)
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(mc, cc)
 	if err != nil {
 		t.Fatal(err)
@@ -598,9 +607,12 @@ func TestBuildRequestParams_额外内部参数过滤(t *testing.T) {
 
 func TestBuildRequestParams_模型配置为空(t *testing.T) {
 	// 测试 ModelConfig 为 nil 时从 params 获取 model
-	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	e, err := NewBaseClientEmbed(llmschema.NewModelRequestConfig(), cc)
 	if err != nil {
 		t.Fatal(err)

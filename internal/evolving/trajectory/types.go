@@ -154,13 +154,13 @@ func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 //
 // 对齐 Python:
 //
-//	for step in self.steps:
-//	    if step.kind != "llm" or not isinstance(step.detail, LLMCallDetail):
-//	        continue
-//	    messages.extend(self._message_to_dict(message) for message in step.detail.messages)
-//	    response_message = self._message_to_dict(response) if response is not None else None
-//	    if response_message and ("role" in response_message or "content" in response_message):
-//	        messages.append(response_message)
+//		for step in self.steps:
+//		    if step.kind != "llm" or not isinstance(step.detail, LLMCallDetail):
+//		        continue
+//		    messages.extend(self._message_to_dict(message) for message in step.detail.messages)
+//		    response_message = self._message_to_dict(response) if response is not None else None
+//	   如果 response_message 包含 role 或 content 字段
+//		        messages.append(response_message)
 //
 // 对应 Python: Trajectory.to_messages()
 func (t *Trajectory) ToMessages() []map[string]any {

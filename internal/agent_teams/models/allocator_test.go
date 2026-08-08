@@ -155,13 +155,13 @@ func TestByModelNameAllocator_Allocate(t *testing.T) {
 		t.Errorf("Expected second model-a endpoint, got %s", a2.Entry.APIBaseURL)
 	}
 
-	// unknown name → nil
+	// 未知名称 → nil
 	a3 := alloc.Allocate("model-c")
 	if a3 != nil {
 		t.Errorf("Expected nil for unknown name")
 	}
 
-	// empty name → nil
+	// 空名称 → nil
 	a4 := alloc.Allocate("")
 	if a4 != nil {
 		t.Errorf("Expected nil for empty name")

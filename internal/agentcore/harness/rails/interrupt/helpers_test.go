@@ -27,7 +27,7 @@ func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt(t *testing.T) {
 	// 对齐 Python: AskUserRail 中断，value 有 questions 字段
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "req_001",
+			"id": "req_001",
 			"value": map[string]any{
 				"questions": []any{
 					map[string]any{
@@ -67,13 +67,13 @@ func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt(t *testing.T) {
 func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt带选项(t *testing.T) {
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "req_002",
+			"id": "req_002",
 			"value": map[string]any{
 				"questions": []any{
 					map[string]any{
-						"question":     "选择分支",
-						"header":       "分支选择",
-						"options":      []any{
+						"question": "选择分支",
+						"header":   "分支选择",
+						"options": []any{
 							map[string]any{"label": "Option A", "description": "方案A"},
 							map[string]any{"label": "Option B", "description": "方案B"},
 						},
@@ -109,7 +109,7 @@ func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt(t *testing.T) 
 	// 对齐 Python: PermissionRail 中断，value 无 questions 字段
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "perm_001",
+			"id": "perm_001",
 			"value": map[string]any{
 				"message":   "需要授权",
 				"tool_name": "bash",
@@ -145,7 +145,7 @@ func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt默认选项(t 
 	// 无 ui_options → 使用默认权限审批选项
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "perm_002",
+			"id": "perm_002",
 			"value": map[string]any{
 				"message":   "",
 				"tool_name": "write_file",
@@ -173,7 +173,7 @@ func TestConvertInteractionsToAskUserQuestion_toolArgs中的questions(t *testing
 	// 对齐 Python: StructuredAskUserRail 路径，questions 嵌入 tool_args
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "req_003",
+			"id": "req_003",
 			"value": map[string]any{
 				"tool_args": map[string]any{
 					"questions": []any{
@@ -202,7 +202,7 @@ func TestConvertInteractionsToAskUserQuestion_toolArgs为JSON字符串(t *testin
 	// tool_args 是 JSON string 格式
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "req_004",
+			"id": "req_004",
 			"value": map[string]any{
 				"tool_args": `{"questions":[{"question":"选择语言","header":"语言","options":[],"multi_select":false}]}`,
 			},
@@ -223,7 +223,7 @@ func TestConvertInteractionsToAskUserQuestion_嵌套列表(t *testing.T) {
 	stateOutputs := []any{
 		[]any{
 			map[string]any{
-				"id":    "nested_001",
+				"id": "nested_001",
 				"value": map[string]any{
 					"questions": []any{
 						map[string]any{"question": "嵌套问题", "header": "H", "options": []any{}},
@@ -245,7 +245,7 @@ func TestConvertInteractionsToAskUserQuestion_嵌套列表(t *testing.T) {
 func TestConvertInteractionsToAskUserQuestion_空requestID跳过(t *testing.T) {
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "",
+			"id": "",
 			"value": map[string]any{
 				"questions": []any{
 					map[string]any{"question": "Q", "header": "H", "options": []any{}},
@@ -265,14 +265,14 @@ func TestConvertInteractionsToAskUserQuestion_优先AskUserInterrupt(t *testing.
 	// 应优先返回 AskUser
 	stateOutputs := []any{
 		map[string]any{
-			"id":    "perm_only",
+			"id": "perm_only",
 			"value": map[string]any{
 				"message":   "需要权限",
 				"tool_name": "bash",
 			},
 		},
 		map[string]any{
-			"id":    "ask_user",
+			"id": "ask_user",
 			"value": map[string]any{
 				"questions": []any{
 					map[string]any{"question": "选择", "header": "H", "options": []any{}},

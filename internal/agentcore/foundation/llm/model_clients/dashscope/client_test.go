@@ -18,7 +18,20 @@ import (
 
 // newTestClientConfig 创建测试用的客户端配置
 func newTestClientConfig(provider, apiKey, apiBase string) *llmschema.ModelClientConfig {
-	return llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	if err != nil {
+		return nil
+	}
+	return cc
+}
+
+// mustNewClientConfig 创建客户端配置，出错时 panic（测试专用）
+func mustNewClientConfig(provider, apiKey, apiBase string, opts ...llmschema.ModelClientConfigOption) *llmschema.ModelClientConfig {
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return cc
 }
 
 // newTestModelConfig 创建测试用的模型请求配置
@@ -60,30 +73,18 @@ func TestNewDashScopeModelClient_ValidConfig(t *testing.T) {
 }
 
 func TestNewDashScopeModelClient_NoAPIKey(t *testing.T) {
-	// 缺少 API Key 应失败
-	client, err := NewDashScopeModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("DashScope", "", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-	)
+	// 缺少 API Key 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("DashScope", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Key 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Key 时 client 应为 nil")
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 func TestNewDashScopeModelClient_NoAPIBase(t *testing.T) {
-	// 缺少 API Base 应失败
-	client, err := NewDashScopeModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("DashScope", "test-key", ""),
-	)
+	// 缺少 API Base 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("DashScope", "test-key", "", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Base 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Base 时 client 应为 nil")
+		t.Error("缺少 API Base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
@@ -593,7 +594,7 @@ func TestGenerateImage_RequestBodyFields(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wanx-v1")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("一只猫")}
@@ -680,7 +681,7 @@ func TestGenerateSpeech_RequestBodyFields(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("cosyvoice-v1")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("你好世界")}
@@ -731,7 +732,7 @@ func TestGenerateVideo_RequestBodyFields_T2V(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-t2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("奔跑的猫")}
@@ -777,7 +778,7 @@ func TestGenerateVideo_RequestBodyFields_I2V(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-i2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("让它动起来")}
@@ -823,7 +824,7 @@ func TestGenerateVideo_RequestBodyFields_WithSeed(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-t2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("测试视频")}
@@ -859,7 +860,7 @@ func TestGenerateVideo_WithUsageInResponse(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-t2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("测试")}
@@ -899,7 +900,7 @@ func TestGenerateImage_MultiModalRequestBody(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-image-max")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{
@@ -947,7 +948,7 @@ func TestGenerateImage_APIError(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -983,7 +984,7 @@ func TestGenerateImage_NoImagesInResponse(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1007,7 +1008,7 @@ func TestGenerateSpeech_NoAudioInResponse(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1031,7 +1032,7 @@ func TestGenerateVideo_NoVideoInResponse(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1075,7 +1076,7 @@ func TestGenerateVideo_I2V_WithSizeFallback(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-i2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1109,7 +1110,7 @@ func TestGenerateVideo_T2V_WithResolutionFallback(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-t2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1142,7 +1143,7 @@ func TestGenerateVideo_WithAudioURL(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wan2.6-t2v")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1175,7 +1176,7 @@ func TestGenerateSpeech_WithExtraParams(t *testing.T) {
 
 	client, _ := NewDashScopeModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("cosyvoice-v1")),
-		llmschema.NewModelClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
+		mustNewClientConfig("DashScope", "test-key", server.URL, llmschema.WithVerifySSL(false)),
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
@@ -1195,7 +1196,10 @@ func TestGenerateSpeech_WithExtraParams(t *testing.T) {
 // TestDashScopeModelClient_SupportsKVCacheRelease 验证 DashScope 客户端不支持 KV Cache 释放。
 func TestDashScopeModelClient_SupportsKVCacheRelease(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-max"))
-	cc := llmschema.NewModelClientConfig("DashScope", "test-key", "https://dashscope.aliyuncs.com/compatible-mode/v1", llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig("DashScope", "test-key", "https://dashscope.aliyuncs.com/compatible-mode/v1", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewDashScopeModelClient(mc, cc)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)

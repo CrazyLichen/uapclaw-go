@@ -22,7 +22,20 @@ import (
 
 // newTestClientConfig 创建测试用的客户端配置
 func newTestClientConfig(provider, apiKey, apiBase string) *llmschema.ModelClientConfig {
-	return llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	if err != nil {
+		return nil
+	}
+	return cc
+}
+
+// mustNewClientConfig 创建客户端配置，出错时 panic（测试专用）
+func mustNewClientConfig(provider, apiKey, apiBase string, opts ...llmschema.ModelClientConfigOption) *llmschema.ModelClientConfig {
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return cc
 }
 
 // newTestModelConfig 创建测试用的模型请求配置
@@ -69,30 +82,18 @@ func TestNewInferenceAffinityModelClient_有效配置(t *testing.T) {
 }
 
 func TestNewInferenceAffinityModelClient_无APIKey(t *testing.T) {
-	// 缺少 API Key 应失败
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("InferenceAffinity", "", "https://vllm.example.com/v1"),
-	)
+	// 缺少 API Key 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("InferenceAffinity", "", "https://vllm.example.com/v1", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Key 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Key 时 client 应为 nil")
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 func TestNewInferenceAffinityModelClient_无APIBase(t *testing.T) {
-	// 缺少 API Base 应失败
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("InferenceAffinity", "test-key", ""),
-	)
+	// 缺少 API Base 应失败 — NewModelClientConfig 本身就应拒绝
+	_, err := llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Base 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Base 时 client 应为 nil")
+		t.Error("缺少 API Base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
@@ -1101,7 +1102,7 @@ func TestBuildReleaseHTTPClient_VerifySSL无效证书(t *testing.T) {
 	// VerifySSL=true 且 SSLCert 指向不存在的文件，应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
 			llmschema.WithVerifySSL(true),
 			llmschema.WithSSLCert("/nonexistent/cert.pem"),
 		),
@@ -1132,7 +1133,7 @@ func TestBuildReleaseHTTPClient_VerifySSL无效证书内容(t *testing.T) {
 
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
 			llmschema.WithVerifySSL(true),
 			llmschema.WithSSLCert(tmpFile.Name()),
 		),
@@ -1154,7 +1155,7 @@ func TestBuildReleaseHTTPClient_配置超时(t *testing.T) {
 	// ClientConfig.Timeout > 0 时应使用配置的超时时间
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
 			llmschema.WithVerifySSL(false),
 			llmschema.WithTimeout(30.0),
 		),
@@ -1178,7 +1179,7 @@ func TestBuildReleaseHTTPClient_自定义超时(t *testing.T) {
 	// 传入自定义 timeout 时应覆盖配置的超时时间
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
 			llmschema.WithVerifySSL(false),
 			llmschema.WithTimeout(30.0),
 		),
@@ -1271,7 +1272,7 @@ func TestRelease_SSL证书错误(t *testing.T) {
 	// buildReleaseHTTPClient 返回错误时，Release 应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
 			llmschema.WithVerifySSL(true),
 			llmschema.WithSSLCert("/nonexistent/cert.pem"),
 		),
@@ -1296,20 +1297,24 @@ func TestRelease_SSL证书错误(t *testing.T) {
 // ──────────────────────────── init 注册工厂错误路径测试 ────────────────────────────
 
 func TestInit_工厂无效配置(t *testing.T) {
-	// 验证 init 注册的工厂在配置无效时返回 nil
+	// 验证 NewModelClientConfig 在配置无效时返回错误
 	registry := model_clients.GetClientRegistry()
 
-	// 使用缺少 API Key 的配置，工厂应返回 nil
+	// 使用缺少 API Key 的配置，NewModelClientConfig 本身就应拒绝
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-72b"))
-	cc := llmschema.NewModelClientConfig("InferenceAffinity", "", "https://vllm.example.com/v1",
+	_, err := llmschema.NewModelClientConfig("InferenceAffinity", "", "https://vllm.example.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
-	client, err := registry.GetClient("InferenceAffinity", "llm", mc, cc)
-	// GetClient 调用工厂，工厂内部 NewInferenceAffinityModelClient 失败时返回 nil
-	// 但 GetClient 自身可能返回不同错误形式
-	_ = err // 工厂返回 nil 后 GetClient 的具体行为取决于注册表实现
+	if err == nil {
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
+	}
+	// cc 为 nil 时，GetClient 也应返回错误（拒绝 nil 配置）
+	client, getClientErr := registry.GetClient("InferenceAffinity", "llm", mc, nil)
 	if client != nil {
-		t.Error("无效配置时工厂应返回 nil 客户端")
+		t.Error("nil 配置时客户端应为 nil")
+	}
+	if getClientErr == nil {
+		t.Error("nil 配置时 GetClient 应返回错误")
 	}
 }
 

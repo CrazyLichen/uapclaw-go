@@ -80,4 +80,6 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 }
 
 // ExtractTeamMemories 提取团队记忆。⤵️ 回填: 7.2+9.65a
-func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr *tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model any, tzOffsetHours float64) error { return nil }
+func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr *tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model any, tzOffsetHours float64) error {
+	return nil
+}

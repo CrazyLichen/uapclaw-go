@@ -50,7 +50,7 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 // CreateSandboxSysOpCard 创建沙箱模式 SysOperationCard。
 // 对齐 Python: create_sandbox_sysop_card(sandbox_url, sandbox_type, *, files_runtime,
 //
-//	excluded_commands, idle_ttl_seconds, idle_check_interval, project_dir, is_code_agent)
+//	excluded_commands/idle_ttl_seconds 等参数列表
 //
 // 失败时返回 nil（Python 返回 None），异常被捕获记 warning。
 // Python 实现中 work_config 同样使用 LocalWorkConfig(shell_allowlist=None)，

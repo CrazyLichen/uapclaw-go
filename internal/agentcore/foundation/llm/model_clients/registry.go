@@ -89,6 +89,13 @@ func (r *ClientRegistry) GetClient(name, clientType string, modelConfig *llmsche
 		)
 	}
 
+	if clientConfig == nil {
+		return nil, exception.NewBaseError(
+			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
+			exception.WithMsg("客户端配置不能为空"),
+		)
+	}
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

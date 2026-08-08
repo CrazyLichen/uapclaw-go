@@ -53,6 +53,8 @@ const (
 	logComponent = logger.ComponentCommon
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGitHubReleasesSource 创建 GitHub 版本源实例

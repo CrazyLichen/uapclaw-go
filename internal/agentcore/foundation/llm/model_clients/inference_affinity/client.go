@@ -42,6 +42,8 @@ type InferenceAffinityModelClient struct {
 	openai.OpenAIModelClient
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。

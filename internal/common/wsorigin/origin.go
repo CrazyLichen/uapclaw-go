@@ -17,10 +17,10 @@ import (
 //
 // 使用方式：
 //
-//	checker := wsorigin.NewOriginChecker()
-//	if checker.IsEnabled() && !checker.IsAllowed(origin) {
-//	    // 拒绝连接
-//	}
+//		checker := wsorigin.NewOriginChecker()
+//	   如果 checker 已启用且 origin 不在允许列表
+//		    // 拒绝连接
+//		}
 type OriginChecker struct {
 	// enableCheckEnv 控制是否启用校验的环境变量名
 	enableCheckEnv string

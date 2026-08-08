@@ -73,48 +73,62 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				continue
 			}
 
-			// 步骤1: 处理 slash 命令（仅受控渠道）
-			if mh.handleChannelControl(msg) {
-				continue
-			}
+			// 对齐 Python: try/except 包裹所有步骤，异常时构建错误消息发送给用户
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error(logComponent).
+							Any("panic", r).
+							Str("msg_id", msg.ID).
+							Msg("forwardLoop panic recovered")
+						errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("internal error: %v", r))
+						mh.PublishRobotMessages(errMsg)
+					}
+				}()
 
-			// 步骤2: 注入渠道状态（session_id / mode）
-			mh.ApplyChannelState(msg)
+				// 步骤1: 处理 slash 命令（仅受控渠道）
+				if mh.handleChannelControl(msg) {
+					return
+				}
 
-			// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
-			// 对齐 Python: 网关钩子处理器检测
-			//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
+				// 步骤2: 注入渠道状态（session_id / mode）
+				mh.ApplyChannelState(msg)
 
-			// 步骤4: CHAT_ANSWER 分支
-			if msg.ReqMethod == schema.ReqMethodChatAnswer {
-				mh.handleChatUserAnswer(ctx, msg)
-				continue
-			}
+				// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
+				// 对齐 Python: 网关钩子处理器检测
+				//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
 
-			// 步骤5: CHAT_CANCEL 分支
-			if msg.ReqMethod == schema.ReqMethodChatCancel {
-				mh.handleChatCancel(ctx, msg)
-				continue
-			}
+				// 步骤4: CHAT_ANSWER 分支
+				if msg.ReqMethod == schema.ReqMethodChatAnswer {
+					mh.handleChatUserAnswer(ctx, msg)
+					return
+				}
 
-			// TODO(#11.12): 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
-			// 对齐 Python: 入站管道处理
-			//     should_forward = await self._inbound_pipeline.apply(msg)
-			//     if not should_forward: continue
+				// 步骤5: CHAT_CANCEL 分支
+				if msg.ReqMethod == schema.ReqMethodChatCancel {
+					mh.handleChatCancel(ctx, msg)
+					return
+				}
 
-			// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
-			if msg.ReqMethod == schema.ReqMethodChatSend {
-				mh.resolveInboundReferences(msg)
-			}
+				// TODO(#11.12): 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
+				// 对齐 Python: 入站管道处理
+				//     should_forward = await self._inbound_pipeline.apply(msg)
+				//     如果不应转发则跳过
 
-			// 步骤8: 准备 Agent 派发消息
-			agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
+				// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
+				if msg.ReqMethod == schema.ReqMethodChatSend {
+					mh.resolveInboundReferences(msg)
+				}
 
-			// TODO(#11.13): 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
-			// 对齐 Python: 触发聊天前钩子
+				// 步骤8: 准备 Agent 派发消息
+				agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
-			// 步骤10: chat.send 分发
-			mh.handleChatSend(ctx, msg, agentMsg)
+				// TODO(#11.13): 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
+				// 对齐 Python: 触发聊天前钩子
+
+				// 步骤10: chat.send 分发
+				mh.handleChatSend(ctx, msg, agentMsg)
+			}()
 		}
 	}
 }
@@ -149,7 +163,20 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, nil)
 		mh.streamEmitsProcessingStatus[streamRid] = emitProcessingStatus
 		mh.streamModes[streamRid] = mh.extractModeFromParams(msg)
-		go mh.processStream(ctx, msg, env, emitProcessingStatus)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error(logComponent).
+						Any("panic", r).
+						Str("msg_id", msg.ID).
+						Str("request_id", streamRid).
+						Msg("processStream goroutine panic recovered")
+					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("internal error: %v", r))
+					mh.PublishRobotMessages(errMsg)
+				}
+			}()
+			mh.processStream(ctx, msg, env, emitProcessingStatus)
+		}()
 		logger.Info(logComponent).
 			Str("event_type", "stream_task_started").
 			Str("request_id", streamRid).
@@ -158,7 +185,20 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 			Msg("Stream 任务已启动（后台运行）")
 	} else if mh.nonStreamRPCMayRunParallel(env) {
 		// 非流式并行
-		go func() { _, _ = mh.processNonStreamRequest(ctx, msg, env) }()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error(logComponent).
+						Any("panic", r).
+						Str("msg_id", msg.ID).
+						Str("request_id", streamRid).
+						Msg("nonStream goroutine panic recovered")
+					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("internal error: %v", r))
+					mh.PublishRobotMessages(errMsg)
+				}
+			}()
+			_, _ = mh.processNonStreamRequest(ctx, msg, env)
+		}()
 		logger.Info(logComponent).
 			Str("event_type", "non_stream_parallel").
 			Str("request_id", streamRid).

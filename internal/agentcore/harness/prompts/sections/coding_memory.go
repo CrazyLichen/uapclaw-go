@@ -147,10 +147,13 @@ The system automatically detects semantic conflicts with existing memories:
 `
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // BuildCodingMemorySection 构建编码记忆节（Priority 85）
 //
 // memoryDir 为记忆目录路径；readOnly 为是否只读模式。
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildCodingMemorySection(memoryDir string, readOnly bool, lang string) saprompt.PromptSection {
 	var template string
@@ -177,3 +180,5 @@ func BuildCodingMemorySection(memoryDir string, readOnly bool, lang string) sapr
 		Priority: 85,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

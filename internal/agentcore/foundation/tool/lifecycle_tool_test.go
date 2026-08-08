@@ -420,7 +420,7 @@ func TestLifecycleTool_Stream_事件顺序对齐Python(t *testing.T) {
 	//   TransformIO_input → STREAM_INPUT → STARTED
 	//   → RESULT_RECEIVED(val=1) → TransformIO_output → STREAM_OUTPUT(val=1)
 	//   → RESULT_RECEIVED(val=2) → TransformIO_output → STREAM_OUTPUT(val=2)
-	//   → FINISHED
+	//   → FINISHED（完成）
 	expected := []string{
 		"TransformIO_input", "STREAM_INPUT(emit_before)", "STARTED",
 		"RESULT_RECEIVED(val=1)", "TransformIO_output", "STREAM_OUTPUT(val=1)",

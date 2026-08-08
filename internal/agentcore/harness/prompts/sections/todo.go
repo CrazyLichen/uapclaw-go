@@ -169,13 +169,14 @@ All tasks will be executed using the Agent's default model.
 `
 )
 
-// BuildTodoSection 构建待办节（Priority 90）。
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 //
 // 返回 *PromptSection，对齐 Python build_todo_section 返回 Optional[PromptSection]。
 // 当无内容可注入时返回 nil，调用方应判断 nil 并调用 RemoveSection。
 // modelSelection 为预构建的模型列表字符串（可为空）。
 // 若非空则追加模型选择提示词，否则追加"无模型选择"提示词。
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildTodoSection(modelSelection string, lang string) *saprompt.PromptSection {
 	var content string
@@ -231,3 +232,5 @@ func BuildModelSelectionPrompt(modelSelection string, lang string) string {
 	}
 	return strings.ReplaceAll(template, "{model_list}", modelSelection)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -70,7 +70,7 @@ func TestPart_RawBytes_反序列化(t *testing.T) {
 }
 
 func TestPart_RawBytes_null(t *testing.T) {
-	// null → nil RawBytes
+	// JSON null → nil RawBytes
 	data := []byte("null")
 	var raw RawBytes
 	if err := json.Unmarshal(data, &raw); err != nil {

@@ -9,7 +9,7 @@ import (
 	"image"
 	_ "image/gif" // GIF 解码器注册
 	"image/jpeg"
-	_ "image/png" // PNG 解码器注册
+	"image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -892,7 +892,7 @@ func encodeImage(img image.Image, format string) ([]byte, error) {
 		}
 	default:
 		// PNG 作为默认格式
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+		if err := png.Encode(&buf, img); err != nil {
 			return nil, err
 		}
 	}

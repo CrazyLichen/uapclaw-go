@@ -90,7 +90,9 @@ func TestTextableVariable_Update_Normal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTextableVariable 失败: %v", err)
 	}
-	v.Update(map[string]any{"domain": "science"})
+	if err := v.Update(map[string]any{"domain": "science"}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	if v.Value() != "You're an expert in the domain of science." {
 		t.Errorf("Value() = %q, want替换后文本", v.Value())
 	}
@@ -102,7 +104,9 @@ func TestTextableVariable_Update_Numeric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTextableVariable 失败: %v", err)
 	}
-	v.Update(map[string]any{"value": 42})
+	if err := v.Update(map[string]any{"value": 42}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	if v.Value() != "This value is 42." {
 		t.Errorf("Value() = %q, want 'This value is 42.'", v.Value())
 	}
@@ -114,7 +118,9 @@ func TestTextableVariable_Update_Nested(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTextableVariable 失败: %v", err)
 	}
-	v.Update(map[string]any{"user": map[string]any{"name": "Alice"}})
+	if err := v.Update(map[string]any{"user": map[string]any{"name": "Alice"}}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	if v.Value() != "Hello, Alice!" {
 		t.Errorf("Value() = %q, want 'Hello, Alice!'", v.Value())
 	}
@@ -126,7 +132,9 @@ func TestTextableVariable_Update_Bool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTextableVariable 失败: %v", err)
 	}
-	v.Update(map[string]any{"flag": true})
+	if err := v.Update(map[string]any{"flag": true}); err != nil {
+		t.Fatalf("Update 失败: %v", err)
+	}
 	if v.Value() != "Flag: true" {
 		t.Errorf("Value() = %q, want 'Flag: true'", v.Value())
 	}
@@ -264,16 +272,17 @@ func TestTextableVariable_Eval_NonPrimitiveType(t *testing.T) {
 	}
 }
 
-// TestTextableVariable_Update_MissingNestedKey 验证 Update 中嵌套键缺失时保留占位符。
+// TestTextableVariable_Update_MissingNestedKey 验证 Update 中嵌套键缺失时返回错误。
+// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
 func TestTextableVariable_Update_MissingNestedKey(t *testing.T) {
 	v, err := NewTextableVariable("Hello {{user.name}}!", "default")
 	if err != nil {
 		t.Fatalf("NewTextableVariable 失败: %v", err)
 	}
-	// 传入不包含 name 的 user，解析失败，保留占位符
-	v.Update(map[string]any{"user": map[string]any{"age": 30}})
-	if v.Value() != "Hello {{user.name}}!" {
-		t.Errorf("Value() = %q, want保留占位符", v.Value())
+	// 传入不包含 name 的 user，解析失败应返回错误
+	err = v.Update(map[string]any{"user": map[string]any{"age": 30}})
+	if err == nil {
+		t.Errorf("期望返回错误，但 Update 成功，Value() = %q", v.Value())
 	}
 }
 

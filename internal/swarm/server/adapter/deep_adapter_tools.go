@@ -548,7 +548,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// 对齐 Python:
 	//   xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
 	//   if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
-	//       _xiaoyi_tools = [get_user_location, create_note, search_notes, ...]
+	//    _xiaoyi_tools 工具列表（get_user_location, create_note, search_notes 等）
 	//       for xt in _xiaoyi_tools:
 	//           Runner.resource_mgr.add_tool(xt)
 	//           tool_cards.append(xt.card)
@@ -562,7 +562,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//         }
 	//     }
 	// }
-	// if xiaoyiEnabled && !d.xiaoyiPhoneToolsRegistered {
+	// 如果 xiaoyi 已启用但尚未注册 xiaoyi 手机工具
 	//     xiaoyiTools := []tool.Tool{getUserLocation, createNote, searchNotes, ...}
 	//     for _, xt := range xiaoyiTools {
 	//         _ = rm.AddTool(xt)
@@ -599,7 +599,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_cards.append(acp_chat.card)
 	// ⤵️ 9.38-49: acp_chat 工具尚未实现
 	// 待实现：ACP配置检查 acpCfg, _ := configBase["acp_agents"].(map[string]any)
-	// if len(acpCfg) > 0 {
+	// 如果存在 ACP 配置
 	//     if rm.GetTool([]string{acpChat.Card().ID}) == nil {
 	//         _ = rm.AddTool(acpChat)
 	//     }

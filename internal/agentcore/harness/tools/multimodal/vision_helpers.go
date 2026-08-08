@@ -12,12 +12,16 @@ import (
 	"strings"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -48,6 +52,8 @@ const maxImageFileSize = 20 * 1024 * 1024
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -200,6 +206,14 @@ func CallVisionModel(
 	)
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isHTTPURL 判断是否为 HTTP URL（对齐 Python: _is_http_url）
+func isHTTPURL(value string) bool {
+	u, err := url.Parse(value)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
 // extractResponseText 从 AssistantMessage 提取文本内容。
 //
 // 对齐 Python: _extract_response_text(response)
@@ -220,14 +234,6 @@ func extractResponseText(msg *llmschema.AssistantMessage) string {
 		}
 	}
 	return strings.TrimSpace(content.String())
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// isHTTPURL 判断是否为 HTTP URL（对齐 Python: _is_http_url）
-func isHTTPURL(value string) bool {
-	u, err := url.Parse(value)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // guessImageMIMEType 推断图片 MIME 类型（对齐 Python: _guess_mime_type）

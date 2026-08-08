@@ -31,6 +31,8 @@ type PermissionContextOption func(*PermissionContext)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // NewPermissionContext 创建权限上下文实例。
 func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
 	pc := &PermissionContext{}

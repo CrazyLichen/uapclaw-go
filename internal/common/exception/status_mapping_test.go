@@ -18,7 +18,7 @@ func TestResolveCategory_ManualOverrides(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Invalid(t *testing.T) {
-	// INVALID → Validation
+	// INVALID 关键字 → Validation
 	category := ResolveCategory(NewStatusCode("WORKFLOW_INPUT_INVALID", 100000, ""))
 	if category != ErrorCategoryValidation {
 		t.Errorf("含 INVALID 关键字应映射到 Validation，实际 %v", category)
@@ -26,7 +26,7 @@ func TestResolveCategory_KeywordRules_Invalid(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Param(t *testing.T) {
-	// PARAM → Validation
+	// PARAM 关键字 → Validation
 	category := ResolveCategory(NewStatusCode("AGENT_PROMPT_PARAM_ERROR", 120004, ""))
 	if category != ErrorCategoryValidation {
 		t.Errorf("含 PARAM 关键字应映射到 Validation，实际 %v", category)
@@ -34,7 +34,7 @@ func TestResolveCategory_KeywordRules_Param(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Init(t *testing.T) {
-	// INIT → Framework
+	// INIT 关键字 → Framework
 	category := ResolveCategory(NewStatusCode("SERVICE_INIT_FAILED", 100000, ""))
 	if category != ErrorCategoryFramework {
 		t.Errorf("含 INIT 关键字应映射到 Framework，实际 %v", category)
@@ -42,7 +42,7 @@ func TestResolveCategory_KeywordRules_Init(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Execution(t *testing.T) {
-	// EXECUTION → Execution
+	// EXECUTION 关键字 → Execution
 	category := ResolveCategory(NewStatusCode("WORKFLOW_EXECUTION_ERROR", 100102, ""))
 	if category != ErrorCategoryExecution {
 		t.Errorf("含 EXECUTION 关键字应映射到 Execution，实际 %v", category)
@@ -50,7 +50,7 @@ func TestResolveCategory_KeywordRules_Execution(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Config(t *testing.T) {
-	// CONFIG → Validation
+	// CONFIG 关键字 → Validation
 	category := ResolveCategory(NewStatusCode("MODEL_CONFIG_ERROR", 181003, ""))
 	if category != ErrorCategoryValidation {
 		t.Errorf("含 CONFIG 关键字应映射到 Validation，实际 %v", category)
@@ -58,7 +58,7 @@ func TestResolveCategory_KeywordRules_Config(t *testing.T) {
 }
 
 func TestResolveCategory_KeywordRules_Schema(t *testing.T) {
-	// SCHEMA → Validation
+	// SCHEMA 关键字 → Validation
 	category := ResolveCategory(NewStatusCode("SCHEMA_VALIDATE_INVALID", 189001, ""))
 	if category != ErrorCategoryValidation {
 		t.Errorf("含 SCHEMA 关键字应映射到 Validation，实际 %v", category)

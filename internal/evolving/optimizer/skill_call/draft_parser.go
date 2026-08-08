@@ -111,9 +111,9 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 		}
 		return &ParsedExperienceDraft{
 			Patch: checkpointing.EvolutionPatch{
-				Section:   "",
-				Action:    "skip",
-				Content:   "",
+				Section:    "",
+				Action:     "skip",
+				Content:    "",
 				SkipReason: &skipReason,
 			},
 			Summary:  nil,
@@ -155,16 +155,16 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 	content := getStr(data, "content", "")
 
 	patch := checkpointing.EvolutionPatch{
-		Section:         section,
-		Action:          "append",
-		Content:         content,
-		Target:          target,
-		MergeTarget:     mergeTarget,
-		ScriptFilename:  strPtrFromAny(data["script_filename"]),
-		ScriptLanguage:  strPtrFromAny(data["script_language"]),
-		ScriptPurpose:   strPtrFromAny(data["script_purpose"]),
-		Keywords:        keywords,
-		Summary:         summary,
+		Section:        section,
+		Action:         "append",
+		Content:        content,
+		Target:         target,
+		MergeTarget:    mergeTarget,
+		ScriptFilename: strPtrFromAny(data["script_filename"]),
+		ScriptLanguage: strPtrFromAny(data["script_language"]),
+		ScriptPurpose:  strPtrFromAny(data["script_purpose"]),
+		Keywords:       keywords,
+		Summary:        summary,
 	}
 
 	return &ParsedExperienceDraft{
@@ -230,20 +230,20 @@ func ExtractJSONWithError(raw string) (any, string) {
 
 	lastError := "unknown"
 
-	// Step 1: 直接解析
+	// 步骤 1: 直接解析
 	result := tryParse(raw)
 	if result != nil {
 		return result, ""
 	}
 
-	// Step 2: FixJSONText 后解析
+	// 步骤 2: FixJSONText 后解析
 	fixed := FixJSONText(raw)
 	result = tryParse(fixed)
 	if result != nil {
 		return result, ""
 	}
 
-	// Step 3: 正则提取 [ ... ] 或 { ... }
+	// 步骤 3: 正则提取 [ ... ] 或 { ... }
 	for _, pattern := range []string{"\\[[\\s\\S]*\\]", "\\{[\\s\\S]*\\}"} {
 		re := regexp.MustCompile(pattern)
 		matched := re.FindString(fixed)
@@ -277,7 +277,7 @@ func ExtractJSONWithError(raw string) (any, string) {
 func LooksTruncated(text string) bool {
 	opens := strings.Count(text, "{") + strings.Count(text, "[")
 	closes := strings.Count(text, "}") + strings.Count(text, "]")
-	return opens > closes + 1
+	return opens > closes+1
 }
 
 // FixJSONText 修复 LLM 输出中常见的 JSON 格式错误。

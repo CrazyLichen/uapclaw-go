@@ -1219,11 +1219,10 @@ func handleModelsValidate() RPCHandlerFunc {
 
 		// 尝试 max_tokens=1 验证
 		maxTokens1 := 1
-		modelConfig := &llmSchema.ModelRequestConfig{
-			ModelName:   model,
-			MaxTokens:   &maxTokens1,
-			Temperature: 0,
-		}
+		modelConfig := llmSchema.NewModelRequestConfig()
+		modelConfig.ModelName = model
+		modelConfig.MaxTokens = &maxTokens1
+		modelConfig.Temperature = 0
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

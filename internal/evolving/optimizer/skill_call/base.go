@@ -37,6 +37,9 @@ type SkillExperienceOptimizerBase struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent skill_call 包日志组件常量
+const logComponent = logger.ComponentAgentCore
+
 const (
 	// SkillContentMaxChars 个体优化器技能内容截断上限
 	// 对齐 Python: _SKILL_CONTENT_MAX_CHARS = 6000
@@ -208,9 +211,6 @@ func (b *SkillExperienceOptimizerBase) OnlineContexts() map[string]*experience.E
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// logComponent skill_call 包日志组件常量
-const logComponent = logger.ComponentAgentCore
 
 // removeSkillPrefix 从 operator ID 中移除 "skill_experience_" 前缀。
 // 对齐 Python: op_id.removeprefix("skill_experience_")

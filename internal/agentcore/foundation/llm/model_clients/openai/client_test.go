@@ -19,7 +19,11 @@ import (
 
 // newTestClientConfig 创建测试用的客户端配置（关闭 SSL 验证以避免证书要求）
 func newTestClientConfig(provider, apiKey, apiBase string) *llmschema.ModelClientConfig {
-	return llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, llmschema.WithVerifySSL(false))
+	if err != nil {
+		return nil
+	}
+	return cc
 }
 
 // newTestModelConfig 创建测试用的模型请求配置
@@ -40,22 +44,18 @@ func TestNewOpenAIModelClient_ValidConfig(t *testing.T) {
 }
 
 func TestNewOpenAIModelClient_NoAPIKey(t *testing.T) {
-	client, err := NewOpenAIModelClient(newTestModelConfig(), newTestClientConfig("OpenAI", "", "https://api.openai.com/v1"))
+	// NewModelClientConfig 本身就应拒绝缺少 API Key 的配置
+	_, err := llmschema.NewModelClientConfig("OpenAI", "", "https://api.openai.com/v1", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Key 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Key 时 client 应为 nil")
+		t.Error("缺少 API Key 时 NewModelClientConfig 应返回错误")
 	}
 }
 
 func TestNewOpenAIModelClient_NoAPIBase(t *testing.T) {
-	client, err := NewOpenAIModelClient(newTestModelConfig(), newTestClientConfig("OpenAI", "test-key", ""))
+	// NewModelClientConfig 本身就应拒绝缺少 API Base 的配置
+	_, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "", llmschema.WithVerifySSL(false))
 	if err == nil {
-		t.Error("缺少 API Base 时应返回错误")
-	}
-	if client != nil {
-		t.Error("缺少 API Base 时 client 应为 nil")
+		t.Error("缺少 API Base 时 NewModelClientConfig 应返回错误")
 	}
 }
 
@@ -365,12 +365,16 @@ func TestOpenAIModelClient_Stream_HTTP错误(t *testing.T) {
 // ──────────────────────────── BuildEffectiveHeaders 测试 ────────────────────────────
 
 func TestBuildEffectiveHeaders(t *testing.T) {
+	clientCfg, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+		llmschema.WithVerifySSL(false),
+		llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewOpenAIModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
-			llmschema.WithVerifySSL(false),
-			llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
-		),
+		clientCfg,
 	)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)
@@ -386,12 +390,16 @@ func TestBuildEffectiveHeaders(t *testing.T) {
 }
 
 func TestBuildEffectiveHeaders_空请求头(t *testing.T) {
+	clientCfg, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+		llmschema.WithVerifySSL(false),
+		llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewOpenAIModelClient(
 		newTestModelConfig(),
-		llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
-			llmschema.WithVerifySSL(false),
-			llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
-		),
+		clientCfg,
 	)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)
@@ -601,9 +609,12 @@ func TestInit_注册OpenAI和OpenRouter(t *testing.T) {
 	}
 
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := registry.GetClient("OpenAI", "llm", mc, cc)
 	if err != nil {
 		t.Fatalf("GetClient(OpenAI) 报错: %v", err)
@@ -612,9 +623,12 @@ func TestInit_注册OpenAI和OpenRouter(t *testing.T) {
 		t.Error("GetClient(OpenAI) 应返回非 nil 客户端")
 	}
 
-	cc2 := llmschema.NewModelClientConfig("OpenRouter", "test-key", "https://openrouter.ai/api/v1",
+	cc2, err := llmschema.NewModelClientConfig("OpenRouter", "test-key", "https://openrouter.ai/api/v1",
 		llmschema.WithVerifySSL(false),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client2, err := registry.GetClient("OpenRouter", "llm", mc, cc2)
 	if err != nil {
 		t.Fatalf("GetClient(OpenRouter) 报错: %v", err)
@@ -958,7 +972,10 @@ func TestOpenAIModelClient_Stream_Context取消(t *testing.T) {
 // TestOpenAIModelClient_SupportsKVCacheRelease 验证 OpenAI 客户端不支持 KV Cache 释放。
 func TestOpenAIModelClient_SupportsKVCacheRelease(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1", llmschema.WithVerifySSL(false))
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := NewOpenAIModelClient(mc, cc)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)

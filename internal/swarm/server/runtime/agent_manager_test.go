@@ -470,7 +470,7 @@ func TestCopyMap(t *testing.T) {
 	copied["key"] = "changed"
 	assert.Equal(t, "value", original["key"])
 
-	// nil map
+	// nil 映射
 	assert.Nil(t, copyMap(nil))
 }
 

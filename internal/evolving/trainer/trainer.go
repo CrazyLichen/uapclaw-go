@@ -257,7 +257,7 @@ func (t *Trainer) Forward(
 	score := meanScore(evaluated)
 
 	// 对齐 Python:
-	//   trajectories = []
+	//    初始化轨迹列表为空
 	//   for case, sess in zip(cases.get_cases(), sessions):
 	//       trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
 	trajectories := make([]*trajectory.Trajectory, len(caseList))

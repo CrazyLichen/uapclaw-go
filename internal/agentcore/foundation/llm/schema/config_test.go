@@ -137,7 +137,10 @@ func TestParseProviderType_Unknown(t *testing.T) {
 
 // TestValidateAndNormalizeProvider_ExactMatch 验证精确匹配返回规范值。
 func TestValidateAndNormalizeProvider_ExactMatch(t *testing.T) {
-	got := ValidateAndNormalizeProvider("OpenAI")
+	got, err := ValidateAndNormalizeProvider("OpenAI")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if got != "OpenAI" {
 		t.Errorf("got %q, want %q", got, "OpenAI")
 	}
@@ -145,17 +148,20 @@ func TestValidateAndNormalizeProvider_ExactMatch(t *testing.T) {
 
 // TestValidateAndNormalizeProvider_CaseInsensitive 验证大小写不敏感匹配返回规范值。
 func TestValidateAndNormalizeProvider_CaseInsensitive(t *testing.T) {
-	got := ValidateAndNormalizeProvider("dashscope")
+	got, err := ValidateAndNormalizeProvider("dashscope")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if got != "DashScope" {
 		t.Errorf("got %q, want %q", got, "DashScope")
 	}
 }
 
-// TestValidateAndNormalizeProvider_UnknownPreserved 验证未知 provider 保留原值（宽松策略）。
-func TestValidateAndNormalizeProvider_UnknownPreserved(t *testing.T) {
-	got := ValidateAndNormalizeProvider("MyCustomProvider")
-	if got != "MyCustomProvider" {
-		t.Errorf("got %q, want %q", got, "MyCustomProvider")
+// TestValidateAndNormalizeProvider_UnknownRejected 验证未知 provider 被拒绝（对齐 Python: MODEL_PROVIDER_INVALID）。
+func TestValidateAndNormalizeProvider_UnknownRejected(t *testing.T) {
+	_, err := ValidateAndNormalizeProvider("MyCustomProvider")
+	if err == nil {
+		t.Errorf("期望返回错误，但 ValidateAndNormalizeProvider 成功")
 	}
 }
 
@@ -173,21 +179,27 @@ func TestValidateAndNormalizeProvider_WithValidator(t *testing.T) {
 	})
 
 	// 已注册的自定义 provider 应返回规范化名称
-	got := ValidateAndNormalizeProvider("llm_custom")
+	got, err := ValidateAndNormalizeProvider("llm_custom")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if got != "Custom" {
 		t.Errorf("got %q, want %q", got, "Custom")
 	}
 
-	// 未注册的 provider 仍保留原值
-	got = ValidateAndNormalizeProvider("NotRegistered")
-	if got != "NotRegistered" {
-		t.Errorf("got %q, want %q", got, "NotRegistered")
+	// 未注册的 provider 应返回错误（对齐 Python: 严格拒绝）
+	_, err = ValidateAndNormalizeProvider("NotRegistered")
+	if err == nil {
+		t.Errorf("期望返回错误，但 ValidateAndNormalizeProvider 成功")
 	}
 }
 
 // TestValidateAndNormalizeProvider_TrimSpace 验证前后空格被裁剪。
 func TestValidateAndNormalizeProvider_TrimSpace(t *testing.T) {
-	got := ValidateAndNormalizeProvider("  OpenAI  ")
+	got, err := ValidateAndNormalizeProvider("  OpenAI  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if got != "OpenAI" {
 		t.Errorf("got %q, want %q", got, "OpenAI")
 	}
@@ -309,24 +321,24 @@ func TestModelClientConfig_Validate_MissingRequired(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "空 provider",
-			cfg:     &ModelClientConfig{ClientProvider: "", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 60},
+			name: "空 provider",
+			cfg:  &ModelClientConfig{ClientProvider: "", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 60},
 		},
 		{
-			name:    "空 api_key",
-			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "", APIBase: "https://api.openai.com", Timeout: 60},
+			name: "空 api_key",
+			cfg:  &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "", APIBase: "https://api.openai.com", Timeout: 60},
 		},
 		{
-			name:    "空 api_base",
-			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "", Timeout: 60},
+			name: "空 api_base",
+			cfg:  &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "", Timeout: 60},
 		},
 		{
-			name:    "timeout 为 0",
-			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 0},
+			name: "timeout 为 0",
+			cfg:  &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: 0},
 		},
 		{
-			name:    "timeout 为负数",
-			cfg:     &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: -1},
+			name: "timeout 为负数",
+			cfg:  &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "sk-xxx", APIBase: "https://api.openai.com", Timeout: -1},
 		},
 	}
 	for _, tt := range tests {

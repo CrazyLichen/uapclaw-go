@@ -99,9 +99,9 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 //
 // 对齐 Python:
 //
-//	async def _backward(self, signals: List["EvolutionSignal"]) -> None:
-//	    """Subclasses implement memory-specific backward logic."""
-//	    pass
+//		async def _backward(self, signals: List["EvolutionSignal"]) -> None:
+//	   子类实现记忆特定反向逻辑
+//		    pass
 //
 // 对应 Python: MemoryOptimizerBase._backward(signals) → pass
 func (b *MemoryOptimizerBase) Backward(_ context.Context, _ []*signal.EvolutionSignal) error {
