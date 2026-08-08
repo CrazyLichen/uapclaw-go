@@ -53,6 +53,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12
+          args: --modules-download-mode=mod
 
   # ──────────────────────────── Test ────────────────────────────
 
@@ -80,7 +81,7 @@ jobs:
         continue-on-error: true
 
       - name: 运行单元测试（带覆盖率）
-        run: go test -tags=test -race -coverprofile=coverage.out ./...
+        run: go test -mod=mod -tags=test -race -coverprofile=coverage.out ./...
 
       - name: 检查覆盖率阈值（≥ 77%）
         run: |
@@ -285,7 +286,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: |
           mkdir -p bin
-          go build \
+          go build -mod=mod \
             -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
               -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
               -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
@@ -299,7 +300,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: |
           mkdir -p bin
-          go build \
+          go build -mod=mod \
             -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
               -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
               -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
