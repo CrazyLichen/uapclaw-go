@@ -443,10 +443,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **7.x 记忆系统** | — | | | |
-| 7.1 | ☐ | CodingMemoryManager | 轻量编程记忆，frontmatter 存储，冲突检测 | `openjiuwen/core/memory/lite/manager.py` |
+| 7.1 | ✅ | CodingMemoryManager | 轻量编程记忆，frontmatter 存储，冲突检测 | `openjiuwen/core/memory/lite/manager.py` |
 | 7.2 | ☐ | CodingMemoryTools | 编程记忆工具（读写搜索） | `openjiuwen/core/memory/lite/coding_memory_tools.py` |
 | 7.3 | ☐ | CodingMemoryToolContext | 编程记忆工具上下文 | `openjiuwen/core/memory/lite/coding_memory_tool_context.py` |
-| 7.4 | ☐ | MemoryConfig | 记忆配置 | `openjiuwen/core/memory/lite/config.py` |
+| 7.4 | ✅ | MemoryConfig | 记忆配置 | `openjiuwen/core/memory/lite/config.py` |
 | 7.5 | ☐ | Frontmatter 解析 | YAML frontmatter 读写 | `openjiuwen/core/memory/lite/frontmatter.py` |
 | 7.6 | ☐ | FragmentMemoryManager | 片段记忆管理 | `openjiuwen/core/memory/manage/` |
 | 7.7 | ☐ | SummaryManager / VariableManager | 摘要与变量管理 | `openjiuwen/core/memory/manage/` |
