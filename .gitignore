@@ -17,6 +17,8 @@ Thumbs.db
 
 # Go 工具链
 vendor/
+# 但保留 sqlite-vec 预编译二进制
+!vendor/sqlite-vec/
 
 # 工具本地配置
 .codebuddy/
