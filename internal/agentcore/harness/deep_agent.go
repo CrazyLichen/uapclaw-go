@@ -30,6 +30,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -2616,13 +2617,19 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 		return
 	}
 
-	// ⤵️ 9.1 回填：WebFreeSearchTool / WebPaidSearchTool Go 实现后补全
 	// 对齐 Python: tool_cls = WebPaidSearchTool if card.name == "paid_search" else WebFreeSearchTool
-	// 对齐 Python: 创建工具实例
-	// tool = tool_cls(language=resolve_language(config.language), card=card)
-	// 对齐 Python: 注册工具到资源管理器
-	// result = Runner.resource_mgr.add_tool(tool, tag=self.card.id)
-	logger.Debug(logComponent).Str("tool_name", card.Name).Msg("WebSearchTool Go 实现尚未完成，跳过工具注册")
+	// 对齐 Python: tool = tool_cls(language=resolve_language(config.language), card=card)
+	// 对齐 Python: Runner.resource_mgr.add_tool(tool, tag=self.card.id)
+	language := hprompts.ResolveLanguage(config.Language)
+	var webTool tool.Tool
+	if card.Name == "paid_search" {
+		webTool = web_tools.NewWebPaidSearchTool(language, d.card.ID)
+	} else {
+		webTool = web_tools.NewWebFreeSearchTool(language, d.card.ID)
+	}
+	if addErr := resourceMgr.AddTool(webTool, resources_manager.WithTag(resources_manager.Tag(d.card.ID))); addErr != nil {
+		logger.Warn(logComponent).Err(addErr).Str("tool_id", card.ID).Msg("注册搜索工具失败")
+	}
 }
 
 // logLoop 记录外层循环日志。

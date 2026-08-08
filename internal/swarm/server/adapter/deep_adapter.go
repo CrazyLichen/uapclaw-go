@@ -221,9 +221,8 @@ type DeepAdapter struct {
 	// isProactiveMemory 是否主动记忆
 	isProactiveMemory *bool
 	// paidSearchRegistered 付费搜索是否已注册
-	// ⤵️ 10.6.24 PaidSearchTool
 	paidSearchRegistered bool
-	// paidSearchTool 付费搜索工具实例（类型已回填，具体实现 ⤵️ 10.6.24）
+	// paidSearchTool 付费搜索工具实例
 	paidSearchTool tool.Tool
 }
 
@@ -598,7 +597,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 
 	// 步骤 8.5: 工具同步
 	// ⤵️ agentcore: _sync_multimodal_tools_for_runtime()
-	// ⤵️ agentcore: _sync_paid_search_tool_for_runtime()
+	// 对齐 Python: _sync_paid_search_tool_for_runtime()
+	d.syncPaidSearchToolForRuntime()
 
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// 对齐 Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")

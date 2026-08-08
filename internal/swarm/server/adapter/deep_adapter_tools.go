@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/multimodal"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -301,19 +302,33 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 
 // syncPaidSearchToolForRuntime 热同步付费搜索工具。
 // 对齐 Python: _sync_paid_search_tool_for_runtime() (line 1240-1270)
-// ⤵️ 10.6.24 Swarm 内置工具集: 付费搜索工具热同步
 func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 	if d.instance == nil {
 		return
 	}
 
-	// ⤵️ 10.6.24: 根据 paidSearchRegistered 状态注册/注销付费搜索工具
-	// 待实现：付费搜索注册检测 if d.paidSearchRegistered {
-	//     // 注册 paid_search 工具
-	// } else {
-	//     // 移除 paid_search 工具
-	// }
-	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime 等待 10.6.24 回填")
+	rm := runner.GetResourceMgr()
+	if d.paidSearchRegistered {
+		// 注册 paid_search 工具
+		if d.paidSearchTool == nil {
+			d.paidSearchTool = web_tools.NewWebPaidSearchTool(d.resolveRuntimeLanguage(), d.agentName)
+		}
+		if rm != nil {
+			if err := rm.AddTool(d.paidSearchTool); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("注册付费搜索工具到 ResourceMgr 失败")
+			}
+		}
+	} else {
+		// 移除 paid_search 工具
+		if d.paidSearchTool != nil {
+			if rm != nil {
+				if _, err := rm.RemoveTool([]string{d.paidSearchTool.Card().ID}); err != nil {
+					logger.Warn(logComponent).Err(err).Msg("移除付费搜索工具从 ResourceMgr 失败")
+				}
+			}
+		}
+	}
+	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime 完成")
 }
 
 // refreshMultimodalConfigs 刷新多模态配置。
@@ -454,14 +469,15 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Runner.resource_mgr.add_tool(self._paid_search_tool)
 	//       tool_cards.append(self._paid_search_tool.card)
 	//       self._paid_search_registered = True
-	// ⤵️ 10.6.24: WebPaidSearchTool + is_paid_search_enabled() 尚未实现
-	// 待实现：付费搜索启用检测 if isPaidSearchEnabled() {
-	//     paidSearchTool := NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
-	//     _ = rm.AddTool(paidSearchTool)
-	//     toolCards = append(toolCards, paidSearchTool.Card())
-	//     d.paidSearchTool = paidSearchTool
-	//     d.paidSearchRegistered = true
-	// }
+	if web_tools.IsPaidSearchEnabled() {
+		paidSearchTool := web_tools.NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
+		if err := runner.GetResourceMgr().AddTool(paidSearchTool); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("注册付费搜索工具到 ResourceMgr 失败")
+		}
+		toolCards = append(toolCards, paidSearchTool.Card())
+		d.paidSearchTool = paidSearchTool
+		d.paidSearchRegistered = true
+	}
 
 	// ── 步骤 3: 免费搜索工具 ──
 	// 对齐 Python:
@@ -469,12 +485,16 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_instance = tool_cls(agent_id=agent_id)
 	//       Runner.resource_mgr.add_tool(tool_instance)
 	//       tool_cards.append(tool_instance.card)
-	// ⤵️ 10.6.24: WebFreeSearchTool / WebFetchWebpageTool 尚未实现
-	// 待实现：注册免费搜索和网页抓取工具 for _, toolCls := range []func(string) tool.Tool{NewWebFreeSearchTool, NewWebFetchWebpageTool} {
-	//     toolInst := toolCls(agentID)
-	//     _ = rm.AddTool(toolInst)
-	//     toolCards = append(toolCards, toolInst.Card())
-	// }
+	for _, toolCls := range []func(string, string) tool.Tool{
+		web_tools.NewWebFreeSearchTool,
+		web_tools.NewWebFetchWebpageTool,
+	} {
+		toolInst := toolCls(d.resolveRuntimeLanguage(), agentID)
+		if err := runner.GetResourceMgr().AddTool(toolInst); err != nil {
+			logger.Warn(logComponent).Err(err).Str("tool_name", toolInst.Card().Name).Msg("注册搜索工具到 ResourceMgr 失败")
+		}
+		toolCards = append(toolCards, toolInst.Card())
+	}
 
 	// ── 步骤 4: 视觉工具 ──
 	// 对齐 Python:
