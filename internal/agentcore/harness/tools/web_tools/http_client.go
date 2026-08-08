@@ -23,10 +23,6 @@ type requestConfig struct {
 	sslVerify bool
 	// body 请求体
 	body string
-	// contentType Content-Type
-	contentType string
-	// ctx 上下文
-	ctx context.Context
 }
 
 // RequestOption 请求选项函数
@@ -89,11 +85,7 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 		bodyReader = strings.NewReader(cfg.body)
 	}
 
-	ctx := cfg.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	req, err := http.NewRequestWithContext(ctx, strings.ToUpper(method), reqURL, bodyReader)
+	req, err := http.NewRequestWithContext(context.Background(), strings.ToUpper(method), reqURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -108,7 +100,8 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// 对齐 Python: ProxyError 时重试（L195-200）
+		// 对齐 Python: L195-200 — 当代理出错且未显式指定代理时（即使用环境变量代理），
+		// 回退到直连重试；如果用户显式配置了代理则不回退，直接报错
 		if isProxyError(err) && !explicitProxy {
 			transport2 := http.DefaultTransport.(*http.Transport).Clone()
 			transport2.Proxy = nil
@@ -119,7 +112,7 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 				Transport: transport2,
 				Timeout:   time.Duration(cfg.timeoutSeconds) * time.Second,
 			}
-			req2, err2 := http.NewRequestWithContext(ctx, strings.ToUpper(method), reqURL, bodyReader)
+			req2, err2 := http.NewRequestWithContext(context.Background(), strings.ToUpper(method), reqURL, bodyReader)
 			if err2 != nil {
 				return nil, fmt.Errorf("创建重试请求失败: %w", err2)
 			}
@@ -216,20 +209,20 @@ func withBody(body string) RequestOption {
 	return func(c *requestConfig) { c.body = body }
 }
 
-// withContentType 设置 Content-Type
-func withContentType(ct string) RequestOption {
-	return func(c *requestConfig) { c.contentType = ct }
-}
-
-// withContext 设置上下文
-func withContext(ctx context.Context) RequestOption {
-	return func(c *requestConfig) { c.ctx = ctx }
-}
-
 // newHTTPResponse 从 http.Response 构造 httpResponse
 func newHTTPResponse(resp *http.Response) *httpResponse {
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		// 读取失败时记录日志，返回空 body 和原始状态码
+		return &httpResponse{
+			statusCode: resp.StatusCode,
+			status:     resp.Status,
+			headers:    resp.Header,
+			body:       nil,
+			text:       "",
+		}
+	}
 	return &httpResponse{
 		statusCode: resp.StatusCode,
 		status:     resp.Status,

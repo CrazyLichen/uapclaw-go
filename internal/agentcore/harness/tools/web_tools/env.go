@@ -3,6 +3,8 @@ package web_tools
 import (
 	"os"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -12,6 +14,9 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+
 	// userAgent 模拟浏览器 User-Agent
 	// 对齐 Python: _USER_AGENT (web_tools.py L27-31)
 	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -141,10 +146,6 @@ var (
 	// mojibakeMarkers 乱码标记
 	// 对齐 Python: _MOJIBAKE_MARKERS (web_tools.py L115)
 	mojibakeMarkers = []string{"mojibake", "Ã", "Â", "â", "ï¿½"}
-
-	// requestHeaders 默认请求头
-	// 对齐 Python: _REQUEST_HEADERS (web_tools.py L32)
-	requestHeaders = map[string]string{"User-Agent": userAgent}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

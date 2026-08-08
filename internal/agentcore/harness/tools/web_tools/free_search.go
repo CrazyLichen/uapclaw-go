@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	xhtml "golang.org/x/net/html"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -29,11 +30,6 @@ type FreeSearchInput struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
-)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -116,9 +112,6 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 	}
 	if resp.statusCode != 200 {
 		return nil, fmt.Errorf("duckduckgo: non-200 status: %d", resp.statusCode)
-	}
-	if err := raiseForStatusWithBody(resp); err != nil {
-		return nil, err
 	}
 
 	html := resp.text
@@ -265,7 +258,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 			return
 		}
 		hrefRaw, _ := anchor.Attr("href")
-		href := decodeBingRedirect(htmlUnescape(hrefRaw))
+		href := decodeBingRedirect(xhtml.UnescapeString(hrefRaw))
 		title := strings.TrimSpace(anchor.Text())
 		if href == "" || seen[href] {
 			return
@@ -503,7 +496,7 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 		var href string
 		if anchor.Length() > 0 {
 			hrefRaw, _ := anchor.Attr("href")
-			href = decodeBingRedirect(htmlUnescape(hrefRaw))
+			href = decodeBingRedirect(xhtml.UnescapeString(hrefRaw))
 			parsed, err := url.Parse(href)
 			if err != nil || !strings.HasPrefix(parsed.Scheme, "http") || strings.Contains(strings.ToLower(parsed.Host), "bing.com") {
 				href = ""
@@ -569,20 +562,4 @@ func scoredRows(query string, rows []searchRow) []map[string]any {
 		})
 	}
 	return result
-}
-
-// max 返回两个整数中的较大值
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// min 返回两个整数中的较小值
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

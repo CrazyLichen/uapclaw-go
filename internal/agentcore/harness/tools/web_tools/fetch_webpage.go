@@ -320,14 +320,20 @@ func scoreDecodedText(value string) float64 {
 func decodeBytes(data []byte, encoding string) (string, error) {
 	enc := getEncoder(encoding)
 	if enc == nil {
-		// 未知编码，降级为 UTF-8
-		return string(data), nil
+		// 未知编码或 UTF-8，降级为 UTF-8
+		text := string(data)
+		// 去除 UTF-8 BOM（\xEF\xBB\xBF），对齐 Python utf-8-sig 行为
+		text = strings.TrimPrefix(text, "\xEF\xBB\xBF")
+		return text, nil
 	}
 	decoded, err := enc.NewDecoder().Bytes(data)
 	if err != nil {
 		return string(data), nil
 	}
-	return string(decoded), nil
+	text := string(decoded)
+	// 去除 UTF-8 BOM（\xEF\xBB\xBF），对齐 Python utf-8-sig 行为
+	text = strings.TrimPrefix(text, "\xEF\xBB\xBF")
+	return text, nil
 }
 
 // getEncoder 根据编码名称获取编码器
@@ -336,7 +342,7 @@ func getEncoder(name string) encoding.Encoding {
 	case "utf-8", "utf8":
 		return nil // UTF-8 无需转换
 	case "utf-8-sig":
-		return nil // BOM 处理在外层
+		return nil // UTF-8 无需编码转换，BOM 在 decodeBytes 中去除
 	case "gbk":
 		return simplifiedchinese.GBK
 	case "gb18030":

@@ -372,26 +372,6 @@ func isDigitOnly(s string) bool {
 	return true
 }
 
-// htmlUnescape HTML 反转义
-func htmlUnescape(s string) string {
-	s = strings.ReplaceAll(s, "&amp;", "&")
-	s = strings.ReplaceAll(s, "&lt;", "<")
-	s = strings.ReplaceAll(s, "&gt;", ">")
-	s = strings.ReplaceAll(s, "&quot;", "\"")
-	s = strings.ReplaceAll(s, "&#39;", "'")
-	s = strings.ReplaceAll(s, "&#x27;", "'")
-	s = strings.ReplaceAll(s, "&#x2F;", "/")
-	return s
-}
-
-// min 返回两个整数中的较小值
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // getNestedValue 从嵌套 map 中获取值（支持点号路径如 "data.webPages.value"）
 func getNestedValue(data map[string]any, path string) any {
 	keys := strings.Split(path, ".")
