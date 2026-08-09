@@ -670,7 +670,7 @@ func callWithRetries(maxRetries int, fn func() error) error {
 		time.Sleep(time.Duration(1<<(attempt-1)) * time.Second)
 	}
 	if lastErr == nil {
-		return fmt.Errorf("Audio model call failed without a captured exception")
+		return fmt.Errorf("audio model call failed without a captured exception")
 	}
 	return lastErr
 }

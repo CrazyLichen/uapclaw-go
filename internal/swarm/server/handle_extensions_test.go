@@ -34,7 +34,7 @@ func TestHandleExtensionsList(t *testing.T) {
 	}
 }
 
-// TestHandleHooksList 验证 hooks.list 返回空列表。
+// TestHandleHooksList 验证 hooks.list 返回 events、disable_all_hooks、source。
 func TestHandleHooksList(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodHooksList, json.RawMessage(`{}`))
@@ -43,8 +43,14 @@ func TestHandleHooksList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleHooksList 返回错误: %v", err)
 	}
-	if _, ok := resp.Payload["hooks"]; !ok {
-		t.Error("payload 应包含 hooks")
+	if _, ok := resp.Payload["events"]; !ok {
+		t.Error("payload 应包含 events")
+	}
+	if _, ok := resp.Payload["disable_all_hooks"]; !ok {
+		t.Error("payload 应包含 disable_all_hooks")
+	}
+	if _, ok := resp.Payload["source"]; !ok {
+		t.Error("payload 应包含 source")
 	}
 }
 
