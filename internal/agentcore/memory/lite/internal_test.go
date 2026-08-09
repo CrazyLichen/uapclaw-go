@@ -2,7 +2,10 @@ package lite
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 )
 
 // TestBuildFTSQuery 测试 FTS5 查询构建
@@ -177,5 +180,99 @@ func TestEnsureDir(t *testing.T) {
 	}
 	if _, err := os.Stat(testDir); os.IsNotExist(err) {
 		t.Error("EnsureDir 后目录应存在")
+	}
+}
+
+// TestListMemoryFiles 测试列出记忆文件。对齐 Python list_memory_files
+func TestListMemoryFiles(t *testing.T) {
+	// 准备测试目录结构
+	tmpDir := t.TempDir()
+	memoryDir := filepath.Join(tmpDir, "memory")
+	dailyDir := filepath.Join(memoryDir, "daily_memory")
+	os.MkdirAll(dailyDir, 0o755)
+
+	// 创建测试文件
+	os.WriteFile(filepath.Join(memoryDir, "notes.md"), []byte("notes"), 0o644)
+	os.WriteFile(filepath.Join(memoryDir, "data.json"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(memoryDir, "plan.md"), []byte("plan"), 0o644)
+	os.WriteFile(filepath.Join(dailyDir, "2024-01.md"), []byte("daily"), 0o644)
+
+	// 创建 USER.md
+	userMD := filepath.Join(tmpDir, "USER.md")
+	os.WriteFile(userMD, []byte("user"), 0o644)
+
+	// 创建 workspace
+	ws := &workspace.Workspace{
+		RootPath: tmpDir,
+		Directories: []workspace.DirectoryNode{
+			{"name": "memory", "path": "memory"},
+			{"name": "USER.md", "path": "USER.md"},
+			{"name": "daily_memory", "path": "daily_memory"},
+		},
+	}
+
+	// 测试基本调用
+	files := ListMemoryFiles(ws, nil, "memory")
+	if len(files) < 3 {
+		t.Errorf("期望至少 3 个 .md 文件，实际为 %d: %v", len(files), files)
+	}
+
+	// 验证不含 .json 文件
+	for _, f := range files {
+		if filepath.Ext(f) != ".md" {
+			t.Errorf("不应包含非 .md 文件: %s", f)
+		}
+	}
+
+	// 测试 nil workspace
+	nilFiles := ListMemoryFiles(nil, nil, "memory")
+	if len(nilFiles) != 0 {
+		t.Errorf("nil workspace 应返回空切片，实际为 %d", len(nilFiles))
+	}
+}
+
+// TestListMemoryFiles_去重测试 验证文件去重排序
+func TestListMemoryFiles_去重测试(t *testing.T) {
+	tmpDir := t.TempDir()
+	memoryDir := filepath.Join(tmpDir, "memory")
+	os.MkdirAll(memoryDir, 0o755)
+	os.WriteFile(filepath.Join(memoryDir, "notes.md"), []byte("notes"), 0o644)
+
+	ws := &workspace.Workspace{
+		RootPath: tmpDir,
+		Directories: []workspace.DirectoryNode{
+			{"name": "memory", "path": "memory"},
+		},
+	}
+
+	// 多次调用应返回一致结果（去重后）
+	files1 := ListMemoryFiles(ws, nil, "memory")
+	files2 := ListMemoryFiles(ws, nil, "memory")
+	if len(files1) != len(files2) {
+		t.Errorf("多次调用结果不一致: %v vs %v", files1, files2)
+	}
+}
+
+// TestDedupStrings 测试字符串去重
+func TestDedupStrings(t *testing.T) {
+	// 空切片
+	result := dedupStrings(nil)
+	if result != nil {
+		t.Errorf("nil 应返回 nil，实际为 %v", result)
+	}
+	// 单元素
+	result = dedupStrings([]string{"a"})
+	if len(result) != 1 || result[0] != "a" {
+		t.Errorf("单元素应原样返回，实际为 %v", result)
+	}
+	// 有重复
+	result = dedupStrings([]string{"a", "a", "b", "c", "c"})
+	if len(result) != 3 {
+		t.Errorf("去重后应 3 个元素，实际为 %d: %v", len(result), result)
+	}
+	// 无重复
+	result = dedupStrings([]string{"a", "b", "c"})
+	if len(result) != 3 {
+		t.Errorf("无重复应保持 3 个，实际为 %d", len(result))
 	}
 }

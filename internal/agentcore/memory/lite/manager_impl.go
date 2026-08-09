@@ -44,8 +44,8 @@ type SessionDeltaState struct {
 	LastSize int
 	// PendingBytes 待处理字节
 	PendingBytes int
-	// PendingMessages 待处理消息
-	PendingMessages []any
+	// PendingMessages 待处理消息计数。对齐 Python pending_messages: int = 0
+	PendingMessages int
 }
 
 // memoryIndexManager 记忆索引管理器实现。对齐 Python MemoryIndexManager
@@ -91,7 +91,8 @@ type memoryIndexManager struct {
 	// 外部依赖
 	embeddingConfig *apiEmbedding.EmbeddingConfig
 	sysOperation    sysop.SysOperation
-	llm             any // 7.2 冲突检测用，后续 MemUpdateChecker 回填
+	// TODO: 7.2 实现时替换为具体接口（如 MemUpdateChecker），当前用 any 规避循环依赖
+	llm any
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -413,19 +414,8 @@ func (m *memoryIndexManager) runReindex(ctx context.Context) error {
 
 // syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
 func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
-	// ListMemoryFiles 当前为占位，使用 workspace 方法直接遍历
-	var files []string
-	if m.memoryDir != "" {
-		_ = filepath.Walk(m.memoryDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
-			}
-			if IsMemoryPath(path) {
-				files = append(files, path)
-			}
-			return nil
-		})
-	}
+	// 对齐 Python: files = list_memory_files(self.workspace, node_name=self.node_name)
+	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
 
 	logger.Debug(logger.ComponentCommon).Int("file_count", len(files)).Msg("同步记忆文件")
 

@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -127,10 +130,71 @@ func IsMemoryPath(relPath string) bool {
 }
 
 // ListMemoryFiles 列出 workspace 下所有 .md 记忆文件。对齐 Python list_memory_files — 真实实现
-// 注意：完整实现依赖 workspace.Workspace 类型，此处为占位
-// 真实实现在 manager_impl.go 中通过 workspace 方法调用
-func ListMemoryFiles(workspace any, extraPaths []string, nodeName string) []string {
-	return nil
+func ListMemoryFiles(ws *workspace.Workspace, extraPaths []string, nodeName string) []string {
+	files := make([]string, 0)
+	if ws == nil {
+		return files
+	}
+
+	// 1. 扫描 memory_dir 根目录下的 .md 文件
+	memoryDir := ""
+	if nodePath := ws.GetNodePath(nodeName); nodePath != nil {
+		memoryDir = *nodePath
+	}
+	if memoryDir != "" {
+		if entries, err := os.ReadDir(memoryDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+					files = append(files, filepath.Join(memoryDir, e.Name()))
+				}
+			}
+		}
+
+		// 2. 扫描 daily_memory 子目录
+		dailyRel := ws.GetDirectory("daily_memory")
+		if dailyRel != "" {
+			dailyDir := filepath.Join(memoryDir, dailyRel)
+			if entries, err := os.ReadDir(dailyDir); err == nil {
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+						files = append(files, filepath.Join(dailyDir, e.Name()))
+					}
+				}
+			}
+		}
+	}
+
+	// 3. USER.md
+	if userPath := ws.GetNodePath("USER.md"); userPath != nil {
+		if _, err := os.Stat(*userPath); err == nil {
+			files = append(files, *userPath)
+		}
+	}
+
+	// 4. extra_paths
+	for _, extra := range extraPaths {
+		fullPath := extra
+		if memoryDir != "" && !filepath.IsAbs(extra) {
+			fullPath = filepath.Join(memoryDir, extra)
+		}
+		if info, err := os.Stat(fullPath); err == nil {
+			if info.IsDir() {
+				if entries, err2 := os.ReadDir(fullPath); err2 == nil {
+					for _, e := range entries {
+						if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+							files = append(files, filepath.Join(fullPath, e.Name()))
+						}
+					}
+				}
+			} else if strings.HasSuffix(fullPath, ".md") {
+				files = append(files, fullPath)
+			}
+		}
+	}
+
+	// 去重排序，对齐 Python: sorted(set(files))
+	sort.Strings(files)
+	return dedupStrings(files)
 }
 
 // NormalizeExtraMemoryPaths 归一化额外记忆路径。对齐 Python normalize_extra_memory_paths — 真实实现
@@ -147,4 +211,21 @@ func NormalizeExtraMemoryPaths(paths []string, workspaceDir string) []string {
 		}
 	}
 	return normalized
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// dedupStrings 对已排序的字符串切片去重
+func dedupStrings(sorted []string) []string {
+	if len(sorted) <= 1 {
+		return sorted
+	}
+	result := make([]string, 0, len(sorted))
+	result = append(result, sorted[0])
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i] != sorted[i-1] {
+			result = append(result, sorted[i])
+		}
+	}
+	return result
 }
