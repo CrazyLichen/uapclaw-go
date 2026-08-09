@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -80,11 +81,34 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 
 	// 6. 构建 finalQuery
 	var finalQuery any
-	// ⤵️ 10.3.2: InteractiveInput 类型判断（当前 query 为 string，直接走 BuildUserPrompt）
-	// ⤵️ 10.3.2: answers 分支 → 构建 InteractiveInput（当前 stub，fallback 到 BuildUserPrompt）
 
-	files, _ := params["files"].(map[string]any)
-	finalQuery = BuildUserPrompt(query, files, channel, language, trustedDirs, metadata)
+	// PATH A: InteractiveInput 类型守卫。
+	// 从 JSON 反序列化后 params["query"] 只能是 string，此分支在 WebSocket 路径中不可达。
+	// 但保留防御性守卫，与 Python isinstance(query, InteractiveInput) 对齐。
+	// 若未来有内部代码直接构造 inputs["query"] 为 *InteractiveInput，此守卫会生效。
+	// 当前始终走 PATH B/C。
+	if ii, ok := params["query"].(*interaction.InteractiveInput); ok {
+		finalQuery = ii
+	} else {
+		// PATH B: answers 分支 → 构建 InteractiveInput
+		answers, _ := params["answers"].([]any)
+		if len(answers) > 0 {
+			requestID, _ := params["request_id"].(string)
+			source, _ := params["source"].(string)
+			interactiveInput := buildInteractiveInputFromAnswers(requestID, answers, source)
+			if interactiveInput != nil {
+				finalQuery = interactiveInput
+			} else {
+				// answers 无法构建 InteractiveInput，fallback 到 BuildUserPrompt
+				files, _ := params["files"].(map[string]any)
+				finalQuery = BuildUserPrompt(query, files, channel, language, trustedDirs, metadata)
+			}
+		} else {
+			// PATH C: 普通对话 → BuildUserPrompt 包装
+			files, _ := params["files"].(map[string]any)
+			finalQuery = BuildUserPrompt(query, files, channel, language, trustedDirs, metadata)
+		}
+	}
 
 	// 对齐 Python：interaction_context 存在时记录 debug 日志
 	if metadata != nil {
@@ -153,6 +177,78 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildInteractiveInputFromAnswers 从用户答案构建 InteractiveInput。
+// 对齐 Python: JiuWenClaw._build_interactive_input_from_answers()
+func buildInteractiveInputFromAnswers(requestID string, answers []any, source string) *interaction.InteractiveInput {
+	ii, err := interaction.NewInteractiveInput()
+	if err != nil {
+		return nil
+	}
+
+	// AskUserRail 路径：source == "ask_user_interrupt"
+	if source == "ask_user_interrupt" {
+		answersDict := make(map[string]any)
+		for _, a := range answers {
+			if answer, ok := a.(map[string]any); ok {
+				questionText, _ := answer["question"].(string)
+				selectedOptions, _ := answer["selected_options"].([]any)
+				var answerValue string
+				if len(selectedOptions) > 0 {
+					answerValue, _ = selectedOptions[0].(string)
+				}
+				if questionText != "" && answerValue != "" {
+					answersDict[questionText] = answerValue
+				}
+			}
+		}
+		_ = ii.Update(requestID, map[string]any{"answers": answersDict})
+		return ii
+	}
+
+	// 未知 source（非 permission_interrupt）返回 nil
+	if source != "" && source != "permission_interrupt" {
+		return nil
+	}
+
+	// PermissionRail 路径：approve/reject/always_allow
+	var answer map[string]any
+	if len(answers) > 0 {
+		answer, _ = answers[0].(map[string]any)
+	}
+	if answer == nil {
+		answer = make(map[string]any)
+	}
+
+	var selectedOptions []any
+	if so, ok := answer["selected_options"].([]any); ok {
+		selectedOptions = so
+	}
+	var value string
+	if len(selectedOptions) > 0 {
+		value, _ = selectedOptions[0].(string)
+	}
+	customInput, _ := answer["custom_input"].(string)
+
+	var confirmPayload map[string]any
+	switch value {
+	case "approve", "本次允许", "Approve":
+		confirmPayload = map[string]any{"approved": true, "auto_confirm": false, "feedback": ""}
+	case "always_allow", "总是允许", "Always Allow":
+		confirmPayload = map[string]any{"approved": true, "auto_confirm": true, "persist_allow": true, "feedback": ""}
+	case "reject", "拒绝", "Reject":
+		feedback := customInput
+		if feedback == "" {
+			feedback = "用户拒绝"
+		}
+		confirmPayload = map[string]any{"approved": false, "auto_confirm": false, "feedback": feedback}
+	default:
+		confirmPayload = map[string]any{"approved": false, "auto_confirm": false, "feedback": "未知选项: " + value}
+	}
+
+	_ = ii.Update(requestID, confirmPayload)
+	return ii
+}
 
 // parseRequestParams 解析 AgentRequest.Params（json.RawMessage）为 map。
 func parseRequestParams(request *schema.AgentRequest) map[string]any {

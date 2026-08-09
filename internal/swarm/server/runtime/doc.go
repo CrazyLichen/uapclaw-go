@@ -16,7 +16,7 @@
 //
 //	runtime/
 //	├── doc.go                # 包文档
-//	├── uapclaw.go            # UapClaw Agent 门面（层级 0+1 已实现，层级 2-4 ⤵️）
+//	├── uapclaw.go            # UapClaw Agent 门面（10.3.2 回填已完成，⤵️ Team后续请求/TeamManager 10.6.19-23）
 //	├── build_user_prompt.go  # BuildUserPrompt 用户 prompt 包装
 //	├── build_inputs.go       # BuildInputs adapter 输入构建
 //	├── agent_manager.go      # AgentManager Agent 实例管理器（10.3.12 已实现）

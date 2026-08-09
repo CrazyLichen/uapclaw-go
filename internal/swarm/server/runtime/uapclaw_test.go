@@ -267,7 +267,10 @@ func TestUapClaw_CreateInstance(t *testing.T) {
 	fa := newFakeAdapter()
 	uc.adapter = fa
 
-	err := uc.CreateInstance(map[string]any{}, "agent", "")
+	err := uc.CreateInstance(
+		WithCreateInstanceConfig(map[string]any{}),
+		WithCreateInstanceMode("agent"),
+	)
 	require.NoError(t, err)
 
 	fa.mu.Lock()
@@ -282,7 +285,10 @@ func TestUapClaw_CreateInstance_错误(t *testing.T) {
 	fa.createErr = fmt.Errorf("mock error")
 	uc.adapter = fa
 
-	err := uc.CreateInstance(map[string]any{}, "agent", "")
+	err := uc.CreateInstance(
+		WithCreateInstanceConfig(map[string]any{}),
+		WithCreateInstanceMode("agent"),
+	)
 	assert.Error(t, err)
 }
 

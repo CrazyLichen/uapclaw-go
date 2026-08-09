@@ -495,7 +495,11 @@ func (am *AgentManager) Cleanup() error {
 // defaultAgentFactory 默认 Agent 工厂：NewUapClaw + CreateInstance。
 func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw, error) {
 	agent := NewUapClaw()
-	if err := agent.CreateInstance(config, mode, subMode); err != nil {
+	if err := agent.CreateInstance(
+		WithCreateInstanceConfig(config),
+		WithCreateInstanceMode(mode),
+		WithCreateInstanceSubMode(subMode),
+	); err != nil {
 		return nil, fmt.Errorf("[AgentManager] 创建 Agent 实例失败: %w", err)
 	}
 	return agent, nil

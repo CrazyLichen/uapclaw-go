@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
@@ -57,6 +58,16 @@ type agentConfigListerBridge struct {
 	svc *AgentConfigService
 }
 
+// createInstanceConfig CreateInstance 的内部配置。
+type createInstanceConfig struct {
+	config  map[string]any
+	mode    string
+	subMode string
+}
+
+// CreateInstanceOption CreateInstance 的可选参数。
+type CreateInstanceOption func(*createInstanceConfig)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -67,6 +78,26 @@ var (
 	// logComponent 日志组件，对齐项目规范 runtime 层使用 ComponentAgentServer
 	logComponent = logger.ComponentAgentServer
 )
+
+// defaultCreateInstanceConfig 返回 CreateInstance 默认配置。
+func defaultCreateInstanceConfig() createInstanceConfig {
+	return createInstanceConfig{mode: "agent"}
+}
+
+// WithCreateInstanceConfig 设置 CreateInstance 配置。
+func WithCreateInstanceConfig(config map[string]any) CreateInstanceOption {
+	return func(c *createInstanceConfig) { c.config = config }
+}
+
+// WithCreateInstanceMode 设置 CreateInstance 模式。
+func WithCreateInstanceMode(mode string) CreateInstanceOption {
+	return func(c *createInstanceConfig) { c.mode = mode }
+}
+
+// WithCreateInstanceSubMode 设置 CreateInstance 子模式。
+func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
+	return func(c *createInstanceConfig) { c.subMode = subMode }
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -150,26 +181,32 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 		"", nil, request.Metadata, userMode)
 
 	// 构建 inputs
-	inputs, _, _ := uc.BuildInputs(request)
+	inputs, memoryMode, _ := uc.BuildInputs(request)
 
-	// 云端记忆对话前钩子（对齐 Python: interface.py MEMORY_BEFORE_CHAT trigger）
-	extReg, extErr := extensions.GetInstanceErr()
-	if extErr == nil && extReg != nil {
-		channelID := request.ChannelID
-		sessionID := ""
-		if request.SessionID != nil {
-			sessionID = *request.SessionID
+	// 云端记忆对话前钩子（对齐 Python: interface.py:834-845 MEMORY_BEFORE_CHAT trigger）
+	if memoryMode == "cloud" {
+		extReg, extErr := extensions.GetInstanceErr()
+		if extErr == nil && extReg != nil {
+			channelID := request.ChannelID
+			sid := ""
+			if request.SessionID != nil {
+				sid = *request.SessionID
+			}
+			memCtx := &extensions.MemoryHookContext{
+				SessionID:    sid,
+				RequestID:    request.RequestID,
+				ChannelID:    &channelID,
+				AgentName:    "",
+				WorkspaceDir: workspace.AgentWorkspaceDir(),
+				Extra:        parseRequestParams(request),
+			}
+			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
+			// 从 memCtx.MemoryBlocks 拼接记忆注入 inputs
+			memoryBlock := strings.Join(memCtx.MemoryBlocks, "\n\n")
+			if memoryBlock != "" {
+				inputs["memory_block"] = memoryBlock
+			}
 		}
-		memCtx := &extensions.MemoryHookContext{
-			SessionID:    sessionID,
-			RequestID:    request.RequestID,
-			ChannelID:    &channelID,
-			AgentName:    "",
-			WorkspaceDir: workspace.AgentWorkspaceDir(),
-			Extra:        nil, // ⤵️ request.Params 是 json.RawMessage，需延迟解析
-		}
-		extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
-		// ⤵️ 10.3.2: 从 memCtx.MemoryBlocks 拼接记忆注入 system prompt
 	}
 
 	// 提交到 session 队列并等待结果
@@ -205,7 +242,28 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 			"chat.final", nil, nil, assistantMode)
 	}
 
-	// ⤵️ 10.3.2: 云端记忆对话后钩子
+	// 云端记忆对话后钩子（对齐 Python: interface.py:866-877 MEMORY_AFTER_CHAT trigger）
+	if memoryMode == "cloud" && resp.OK {
+		extReg, extErr := extensions.GetInstanceErr()
+		if extErr == nil && extReg != nil {
+			content := uc.extractResponseContent(resp)
+			channelID := request.ChannelID
+			sid := ""
+			if request.SessionID != nil {
+				sid = *request.SessionID
+			}
+			afterCtx := &extensions.MemoryHookContext{
+				SessionID:        sid,
+				RequestID:        request.RequestID,
+				ChannelID:        &channelID,
+				AgentName:        "",
+				WorkspaceDir:     workspace.AgentWorkspaceDir(),
+				AssistantMessage: &content,
+				Extra:            parseRequestParams(request),
+			}
+			extReg.Trigger(ctx, extensions.AgentServerMemoryAfterChat, afterCtx.ToMap())
+		}
+	}
 
 	return resp, nil
 }
@@ -241,8 +299,9 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	// 3. 提取 sessionID
 	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
-	// ⤵️ 10.3.2: Team 模式判断（isTeamMode / isAutoHarnessResume）
-	// ⤵️ 10.3.2: Team 模式使用原始 query（不经过 BuildUserPrompt 包装）
+	// Team 模式判断（对齐 Python: interface.py:909-918）
+	isTeam := isTeamMode(request)
+	isAutoResume := isAutoHarnessResume(request)
 
 	// 4. 记录 user 历史，对齐 Python：mode 取 request.params["mode"]，空时设为 "unknown"
 	userMode := ""
@@ -259,9 +318,44 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		"", nil, nil, userMode)
 
 	// 5. 构建 inputs
-	inputs, _, _ := uc.BuildInputs(request)
+	inputs, memoryMode, rawQuery := uc.BuildInputs(request)
 
-	// ⤵️ 10.3.2: 云端记忆对话前钩子
+	// Team 模式：使用原始 query，不经过 BuildUserPrompt 包装（对齐 Python: interface.py:940-949）
+	if isTeam {
+		if _, ok := inputs["query"].(*interaction.InteractiveInput); !ok {
+			inputs["query"] = rawQuery
+			logger.Info(logComponent).
+				Str("event_type", "team_raw_query").
+				Str("raw_query", truncateStr(rawQuery, 100)).
+				Msg("Team 模式使用原始 query")
+		}
+	}
+
+	// 云端记忆对话前钩子（对齐 Python: interface.py:951-963 MEMORY_BEFORE_CHAT trigger）
+	if memoryMode == "cloud" {
+		extReg, extErr := extensions.GetInstanceErr()
+		if extErr == nil && extReg != nil {
+			channelID := request.ChannelID
+			sid := ""
+			if request.SessionID != nil {
+				sid = *request.SessionID
+			}
+			memCtx := &extensions.MemoryHookContext{
+				SessionID:    sid,
+				RequestID:    request.RequestID,
+				ChannelID:    &channelID,
+				AgentName:    "",
+				WorkspaceDir: workspace.AgentWorkspaceDir(),
+				Extra:        parseRequestParams(request),
+			}
+			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
+			// 从 memCtx.MemoryBlocks 拼接记忆注入 inputs
+			memoryBlock := strings.Join(memCtx.MemoryBlocks, "\n\n")
+			if memoryBlock != "" {
+				inputs["memory_block"] = memoryBlock
+			}
+		}
+	}
 
 	// 6. 创建中转 channel
 	outCh := make(chan *schema.AgentResponseChunk, 64)
@@ -378,15 +472,47 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		}
 
 	streamComplete:
-		// ⤵️ 10.3.2: 云端记忆对话后钩子
-		_ = finalAnswerContent
-		_ = finalAnswerChunks
+		// 云端记忆对话后钩子（对齐 Python: interface.py:1134-1146 MEMORY_AFTER_CHAT trigger）
+		if memoryMode == "cloud" {
+			extReg, extErr := extensions.GetInstanceErr()
+			if extErr == nil && extReg != nil {
+				assistantMessage := finalAnswerContent
+				if assistantMessage == "" {
+					assistantMessage = strings.Join(finalAnswerChunks, "")
+				}
+				channelID := request.ChannelID
+				sid := ""
+				if request.SessionID != nil {
+					sid = *request.SessionID
+				}
+				afterCtx := &extensions.MemoryHookContext{
+					SessionID:        sid,
+					RequestID:        request.RequestID,
+					ChannelID:        &channelID,
+					AgentName:        "",
+					WorkspaceDir:     workspace.AgentWorkspaceDir(),
+					AssistantMessage: &assistantMessage,
+					Extra:            parseRequestParams(request),
+				}
+				extReg.Trigger(ctx, extensions.AgentServerMemoryAfterChat, afterCtx.ToMap())
+			}
+		}
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 	}()
 
 	// 9. 提交流式任务
-	// ⤵️ 10.3.2: Team 后续请求 / Auto-Harness resume 绕过 Session 队列
-	_ = uc.sessionManager.EnsureSessionProcessor(ctx, sessionID)
+	// Auto-Harness resume 绕过 Session 队列（对齐 Python: interface.py:1007-1012）
+	// 注意：Go 中流式请求已直接通过 goroutine 执行，不经过 SubmitAndWait 串行化，
+	// EnsureSessionProcessor 仅确保 session 有追踪/取消能力。
+	if isAutoResume {
+		logger.Info(logComponent).
+			Str("request_id", request.RequestID).
+			Str("session_id", sessionID).
+			Msg("Auto-Harness resume 请求")
+	} else {
+		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
+		_ = uc.sessionManager.EnsureSessionProcessor(ctx, sessionID)
+	}
 
 	return resultCh, nil
 }
@@ -398,7 +524,10 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 	intent := uc.extractIntent(request)
 	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
-	// ⤵️ 10.3.2: Team 模式分流（_processTeamInterrupt）
+	// Team 模式分流（对齐 Python: interface.py:702-763）
+	if isTeamMode(request) {
+		return uc.processTeamInterrupt(ctx, request, intent, sessionID)
+	}
 
 	mode := uc.adapterModeForRequest(request)
 	a, err := uc.ensureAdapter(mode)
@@ -420,7 +549,7 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 
 	// cancel（默认）
 	resp, err := a.ProcessInterrupt(ctx, request)
-	// ⤵️ 10.3.2: cancelTeamWorkForSession(sessionID, channelID)
+	uc.cancelTeamWorkForSession(sessionID, request.ChannelID, "interrupt(intent="+intent+"): ")
 	waitTimeout := 5 * time.Second
 	_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", &waitTimeout)
 	return resp, err
@@ -483,22 +612,33 @@ func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) er
 
 // CreateInstance 创建 Agent 实例。
 //
-// 对齐 Python: JiuWenClaw.create_instance(config, mode, sub_mode)
-func (uc *UapClaw) CreateInstance(config map[string]any, mode string, subMode string) error {
-	a, err := uc.ensureAdapter(mode)
+// 对齐 Python: JiuWenClaw.create_instance(config=None, *, mode="agent", sub_mode=None)
+func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
+	cfg := defaultCreateInstanceConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+	a, err := uc.ensureAdapter(cfg.mode)
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
-	if err := a.CreateInstance(ctx, config, mode, subMode); err != nil {
+	if err := a.CreateInstance(ctx, cfg.config, cfg.mode, cfg.subMode); err != nil {
 		return err
 	}
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
-		Str("mode", mode).
-		Str("sub_mode", subMode).
+		Str("mode", cfg.mode).
+		Str("sub_mode", cfg.subMode).
 		Msg("UapClaw Agent 实例已创建")
-	// ⤵️ 10.3.2: 启动 dreaming 后台任务（adapter.TryStartDreaming）
+	// 启动 dreaming 后台任务（对齐 Python: interface.py:319-322）
+	if dreamer, ok := a.(adapter.DreamingController); ok {
+		go func() {
+			_ = dreamer.TryStartDreaming(context.Background(), func() bool {
+				return uc.sessionManager.HasActiveTasks()
+			})
+		}()
+	}
 	return nil
 }
 
@@ -512,11 +652,21 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 	if a == nil {
 		return nil
 	}
-	// ⤵️ 10.3.2: adapter.TryStopDreaming()
+	// 停止 dreaming（对齐 Python: interface.py:336-337）
+	if dreamer, ok := a.(adapter.DreamingController); ok {
+		_ = dreamer.TryStopDreaming(context.Background())
+	}
 	if err := a.ReloadAgentConfig(context.Background(), configBase, envOverrides); err != nil {
 		return err
 	}
-	// ⤵️ 10.3.2: adapter.TryStartDreaming()
+	// 重启 dreaming（对齐 Python: interface.py:340-343）
+	if dreamer, ok := a.(adapter.DreamingController); ok {
+		go func() {
+			_ = dreamer.TryStartDreaming(context.Background(), func() bool {
+				return uc.sessionManager.HasActiveTasks()
+			})
+		}()
+	}
 	return nil
 }
 
@@ -570,6 +720,119 @@ func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// isTeamMode 判断请求是否为 Team 模式。
+// 对齐 Python: is_team_mode = team_flag or (mode in {"team", "team.plan", "code.team"})
+func isTeamMode(request *schema.AgentRequest) bool {
+	params := parseRequestParams(request)
+	if teamFlag, ok := params["team"].(bool); ok && teamFlag {
+		return true
+	}
+	if mode, ok := params["mode"].(string); ok {
+		modeLower := strings.TrimSpace(strings.ToLower(mode))
+		return modeLower == "team" || modeLower == "team.plan" || modeLower == "code.team"
+	}
+	return false
+}
+
+// isAutoHarnessResume 判断请求是否为 Auto-Harness resume。
+// 对齐 Python: is_auto_harness_resume = mode == "auto_harness" and isinstance(activate_response, dict)
+func isAutoHarnessResume(request *schema.AgentRequest) bool {
+	params := parseRequestParams(request)
+	if mode, ok := params["mode"].(string); ok {
+		if strings.TrimSpace(strings.ToLower(mode)) == "auto_harness" {
+			if _, ok2 := params["activate_response"].(map[string]any); ok2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// processTeamInterrupt 处理 Team 模式中断请求。
+// 对齐 Python: JiuWenClaw._process_team_interrupt()
+func (uc *UapClaw) processTeamInterrupt(
+	ctx context.Context,
+	request *schema.AgentRequest,
+	intent string,
+	sessionID string,
+) (*schema.AgentResponse, error) {
+	switch intent {
+	case "resume":
+		// 对齐 Python: resume 直接返回提示信息
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(true),
+			schema.WithResponsePayload(map[string]any{
+				"event_type": "chat.interrupt_result",
+				"intent":     intent,
+				"success":    true,
+				"message":    "团队暂停后，直接发送下一条消息即可继续。",
+			}),
+		), nil
+
+	case "pause":
+		// ⤵️ 10.6.19-23: team_manager.pause_session_runtime(sessionID, reason)
+		paused := false
+		// paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
+		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(pause)", nil)
+		message := "团队已暂停"
+		if !paused {
+			message = "当前没有可暂停的团队任务"
+		}
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(true),
+			schema.WithResponsePayload(map[string]any{
+				"event_type": "chat.interrupt_result",
+				"intent":     intent,
+				"success":    paused,
+				"message":    message,
+			}),
+		), nil
+
+	case "cancel":
+		// ⤵️ 10.6.19-23: team_manager.cancel_session_runtime(sessionID, reason)
+		cancelled := false
+		// cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
+		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", nil)
+		message := "团队当前执行已结束"
+		if !cancelled {
+			message = "当前没有可取消的团队任务"
+		}
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(true),
+			schema.WithResponsePayload(map[string]any{
+				"event_type": "chat.interrupt_result",
+				"intent":     intent,
+				"success":    cancelled,
+				"message":    message,
+			}),
+		), nil
+
+	default:
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(true),
+			schema.WithResponsePayload(map[string]any{
+				"event_type": "chat.interrupt_result",
+				"intent":     intent,
+				"success":    false,
+				"message":    "团队模式暂不支持中断意图: " + intent,
+			}),
+		), nil
+	}
+}
+
+// cancelTeamWorkForSession 终止当前 session 的 Team runtime（若存在）。
+// 对齐 Python: JiuWenClaw._cancel_team_work_for_session()
+func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
+	// ⤵️ 10.6.19-23: get_team_manager + terminate_session_runtime
+	// teamManager := getTeamManager(channelID)
+	// return teamManager.TerminateSessionRuntime(ctx, sessionID, logPrefix)
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("channel_id", channelID).
+		Msg("cancelTeamWorkForSession 等待 TeamManager 回填（10.6.19-23）")
+	return false
+}
+
 // ensureAdapter 确保 SDK adapter 已初始化，幂等。
 func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	uc.adapterMu.Lock()
@@ -591,8 +854,10 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	}); ok {
 		setter.SetConfigLister(&agentConfigListerBridge{svc: uc.agentConfigService})
 	}
-	// ⤵️ G33: 调用 uc.skillManager.SetSkillnetInstallCompleteHook(uc.CreateInstance) 注入 hook
-	// ⤵️ G34: 启动 dreaming 后台任务（adapter.TryStartDreaming）
+	// 注册 SkillNet 安装完成后的回调（对齐 Python: interface.py:288-289）
+	uc.skillManager.SetSkillnetInstallCompleteHook(func(ctx context.Context) error {
+		return uc.CreateInstance(WithCreateInstanceConfig(nil))
+	})
 	uc.adapter = a
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
@@ -732,7 +997,7 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 	}
 	// 若方法需要重建 Agent 实例
 	if skill.NeedsRebuild(request.ReqMethod) {
-		_ = uc.CreateInstance(nil, "", "")
+		_ = uc.CreateInstance()
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(true),
@@ -788,7 +1053,7 @@ func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.Age
 		return nil, err
 	}
 	if skill.NeedsRebuild(request.ReqMethod) {
-		_ = uc.CreateInstance(nil, "", "")
+		_ = uc.CreateInstance()
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(true),
@@ -831,4 +1096,12 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 	}()
 	return resultCh, nil
+}
+
+// truncateStr 截断字符串到指定长度，超过时追加 "..."。
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
