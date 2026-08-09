@@ -56,14 +56,18 @@ func (s *AgentServer) handleExtensionsToggle(_ context.Context, request *schema.
 }
 
 // handleHooksList 处理 hooks.list 请求。返回 hooks 配置摘要。
-// 对齐 Python: 通过 LoadHooksConfig + GetEventSummary 返回 hooks 信息
+// 对齐 Python: _handle_hooks_list — payload 包含 events、disable_all_hooks、source
+// 对齐 Python: try/except 包裹，失败时返回 ok=False
 func (s *AgentServer) handleHooksList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 对齐 Python: try/except 包裹，失败时返回 ok=False
 	configBase, _ := s.config.Load()
 	hooksCfg := hookscfg.LoadHooksConfig(configBase)
 	summary := hooksCfg.GetEventSummary()
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"hooks": summary,
+			"events":            summary,
+			"disable_all_hooks": hooksCfg.DisableAllHooks,
+			"source":            "config.yaml",
 		}),
 	), nil
 }

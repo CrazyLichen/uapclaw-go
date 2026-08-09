@@ -84,11 +84,20 @@ func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
 	// 3. 本地文件 → base64 编码 → data:URI（对齐 Python: image_path.read_bytes → base64 → data URI）
 	imagePath := imagePathOrURL
 	// Go 不需要 expanduser，直接使用路径
-	if _, err := os.Stat(imagePath); err != nil {
+	info, err := os.Stat(imagePath)
+	if err != nil {
 		return llmschema.ContentPart{}, exception.NewBaseError(
 			exception.StatusToolMultimodalVisionInvokeFailed,
 			exception.WithMsg(fmt.Sprintf(
 				"image path does not exist or is not a file: %s", imagePath)),
+		)
+	}
+	// 对齐 Python: Path.is_file() — 传入目录时返回明确错误
+	if info.IsDir() {
+		return llmschema.ContentPart{}, exception.NewBaseError(
+			exception.StatusToolMultimodalVisionInvokeFailed,
+			exception.WithMsg(fmt.Sprintf(
+				"image path is not a file: %s", imagePath)),
 		)
 	}
 

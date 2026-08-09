@@ -85,6 +85,12 @@ func NewVideoUnderstandingTool(
 					exception.WithMsg("video_model_config is not configured: api_key is required"),
 				)
 			}
+			if config.BaseURL == "" {
+				return nil, exception.NewBaseError(
+					exception.StatusToolMultimodalVideoConfigInvalid,
+					exception.WithMsg("video_model_config is not configured: base_url is required"),
+				)
+			}
 
 			// 校验输入（对齐 Python: if not query / if not video_path）
 			if input.Query == "" {

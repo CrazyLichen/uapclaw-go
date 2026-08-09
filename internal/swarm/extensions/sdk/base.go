@@ -37,9 +37,15 @@ const ManifestFilename = "extension.yaml"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Metadata 返回扩展元数据（有缓存则返回缓存，无缓存则返回 nil），
-// 对齐 Python BaseExtension.metadata @property
+// Metadata 返回扩展元数据，对齐 Python BaseExtension.metadata @property
+// 懒加载：缓存为 nil 时自动调用 LoadMetadataFromYAML，对齐 Python 的 property 行为
 func (b *BaseExtensionImpl) Metadata() *extensions.ExtensionMetadata {
+	if b.metadataCache == nil {
+		m, _ := b.LoadMetadataFromYAML()
+		if m != nil {
+			b.metadataCache = m
+		}
+	}
 	return b.metadataCache
 }
 

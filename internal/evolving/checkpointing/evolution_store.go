@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -72,14 +73,23 @@ var evolutionIndexPattern = regexp.MustCompile(
 
 // NewEvolutionStore 创建 EvolutionStore 实例。
 //
-// 对应 Python: EvolutionStore.__init__(skills_base_dir)
-func NewEvolutionStore(skillsBaseDir string, sysOp sys_operation.SysOperation) *EvolutionStore {
-	baseDirs := normalizeBaseDirs(skillsBaseDir)
-	if len(baseDirs) == 0 {
+// 对应 Python: EvolutionStore.__init__(skills_base_dir: Union[str, List[str]])
+// skillsBaseDirs 支持 string 和 []string 两种输入，对齐 Python Union[str, List[str]]
+func NewEvolutionStore(skillsBaseDirs any, sysOp sys_operation.SysOperation) *EvolutionStore {
+	var dirs []string
+	switch v := skillsBaseDirs.(type) {
+	case string:
+		dirs = normalizeBaseDirs(v)
+	case []string:
+		dirs = normalizeBaseDirsFromList(v)
+	default:
+		panic(fmt.Sprintf("skillsBaseDirs 必须为 string 或 []string，实际类型: %T", skillsBaseDirs))
+	}
+	if len(dirs) == 0 {
 		panic("skills_base_dir 为空")
 	}
 	s := &EvolutionStore{
-		baseDirs:     baseDirs,
+		baseDirs:     dirs,
 		sysOperation: sysOp,
 		skillLocks:   map[string]*sync.RWMutex{},
 	}
@@ -645,6 +655,28 @@ func normalizeBaseDirs(skillsBaseDir string) []string {
 	return result
 }
 
+// normalizeBaseDirsFromList 从 []string 规范化基础目录列表。
+// 对应 Python: EvolutionStore._normalize_base_dirs(skills_base_dir: List[str])
+func normalizeBaseDirsFromList(baseDirs []string) []string {
+	var result []string
+	seen := map[string]bool{}
+	for _, rawDir := range baseDirs {
+		parsed := parseBaseDirs(rawDir)
+		for _, d := range parsed {
+			resolved, err := filepath.Abs(d)
+			if err != nil {
+				continue
+			}
+			if seen[resolved] {
+				continue
+			}
+			seen[resolved] = true
+			result = append(result, resolved)
+		}
+	}
+	return result
+}
+
 // parseBaseDirs 解析分号/逗号分隔的多路径。
 // 对应 Python: EvolutionStore._parse_base_dirs(raw)
 func parseBaseDirs(raw string) []string {
@@ -665,6 +697,8 @@ func parseBaseDirs(raw string) []string {
 }
 
 // inferSkillNameFromPackage 从 tarball 推断技能名。
+// 对齐 Python: install_skill_package 中的 top_level_names 逻辑
+// 先检查是否只有一个顶级目录（Python: len(top_level_names) == 1），再回退到 SKILL.md 搜索
 func inferSkillNameFromPackage(packageBytes []byte) string {
 	buf := bytes.NewReader(packageBytes)
 	gzReader, err := gzip.NewReader(buf)
@@ -672,6 +706,14 @@ func inferSkillNameFromPackage(packageBytes []byte) string {
 		return ""
 	}
 	defer func() { _ = gzReader.Close() }()
+
+	// 第一遍：收集所有顶级目录名（对齐 Python: top_level_names）
+	topLevelNames := map[string]struct{}{}
+	// 第二遍数据需重新读取，先保存所有 header
+	type tarEntry struct {
+		name string
+	}
+	var entries []tarEntry
 
 	tr := tar.NewReader(gzReader)
 	for {
@@ -682,8 +724,27 @@ func inferSkillNameFromPackage(packageBytes []byte) string {
 		if err != nil {
 			return ""
 		}
-		if strings.HasSuffix(header.Name, "SKILL.md") {
+		// 对齐 Python: member.name and not member.name.startswith("/")
+		if header.Name != "" && !strings.HasPrefix(header.Name, "/") {
 			parts := strings.Split(filepath.ToSlash(header.Name), "/")
+			if len(parts) > 0 && parts[0] != "" {
+				topLevelNames[parts[0]] = struct{}{}
+			}
+			entries = append(entries, tarEntry{name: header.Name})
+		}
+	}
+
+	// 对齐 Python: if len(top_level_names) == 1 → resolved_name = next(iter(top_level_names))
+	if len(topLevelNames) == 1 {
+		for name := range topLevelNames {
+			return name
+		}
+	}
+
+	// 回退：搜索 SKILL.md（对齐 Python: for member in members if member.name.endswith("SKILL.md")）
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.name, "SKILL.md") {
+			parts := strings.Split(filepath.ToSlash(entry.name), "/")
 			if len(parts) > 0 {
 				return parts[0]
 			}

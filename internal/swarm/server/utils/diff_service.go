@@ -376,6 +376,7 @@ func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []T
 
 // findNextUserTime 查找下一次 user 消息的时间戳。
 // 对齐 Python: _find_next_user_time (line 138-145)
+// 返回 0 表示"无下一个用户消息"（对齐 Python 返回 None，Go 用 0 表示语义等价，下游以 endTime == 0 判断）
 func (ds *DiffService) findNextUserTime(history []historyRecord, userIndex int) float64 {
 	for j := userIndex + 1; j < len(history); j++ {
 		if history[j].Role == "user" {
@@ -728,13 +729,18 @@ func timestampToISO(timestamp float64) string {
 	return t.Format(time.RFC3339Nano)
 }
 
-// normalizePath 规范化路径：统一大小写和斜杠方向
+// normalizePath 规范化路径：解析符号链接 + 绝对路径，对齐 Python Path.resolve()
 func normalizePath(p string) string {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return strings.ToLower(strings.ReplaceAll(p, "\\", "/"))
 	}
-	return abs
+	// 对齐 Python: Path.resolve() 解析符号链接
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return abs
+	}
+	return resolved
 }
 
 // parseOpEntry 从 map[string]any 解析操作历史条目

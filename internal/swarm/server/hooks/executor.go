@@ -101,16 +101,16 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 			} else if hookType == string(hookscfg.HookTypePrompt) {
 				results[idx] = e.runPromptHook(ctx, c, hookInput)
 			}
-			// 未知类型：不设置 results[idx]，保持零值 HookResult{Outcome:""}
+			// 未知类型：对齐 Python 静默跳过，不设置 results[idx]，保持零值 HookResult{Outcome:""}
 		}(i, cfg)
 	}
 	wg.Wait()
 
-	// 将异常结果（outcome 为空）替换为 NON_BLOCKING_ERROR
-	// 对齐 Python: r if isinstance(r, HookResult) else HookResult(outcome=NON_BLOCKING_ERROR, error=str(r))
+	// 将异常结果（outcome 为空）替换为 SUCCESS
+	// 对齐 Python: 未知 hook 类型静默跳过，视为 SUCCESS
 	for i, r := range results {
 		if r.Outcome == "" {
-			results[i] = HookResult{Outcome: HookOutcomeNonBlockingError, Error: "unknown hook type"}
+			results[i] = HookResult{Outcome: HookOutcomeSuccess}
 		}
 	}
 	return results
@@ -451,6 +451,11 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 	}
 
 	// 多模态 → 拼接文本部分，对齐 Python: parts = [block["text"] for block in content if isinstance(block, dict) and "text" in block]
-	parts := content.String()
-	return parts, nil
+	var textParts []string
+	for _, part := range content.Parts() {
+		if part.Type == "text" && part.Text != "" {
+			textParts = append(textParts, part.Text)
+		}
+	}
+	return strings.Join(textParts, "\n"), nil
 }

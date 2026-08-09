@@ -13,7 +13,10 @@ import (
 func TestExtensionRegistry_CreateInstance(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, err := CreateInstance(fw, map[string]any{}, nil)
+	if err != nil {
+		t.Fatalf("CreateInstance() returned error: %v", err)
+	}
 	if reg == nil {
 		t.Error("CreateInstance() = nil, want non-nil")
 	}
@@ -29,10 +32,13 @@ func TestExtensionRegistry_CreateInstance(t *testing.T) {
 func TestExtensionRegistry_CreateInstance_重复调用(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	_ = CreateInstance(fw, map[string]any{}, nil)
+	_, _ = CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
-	second := CreateInstance(fw, map[string]any{}, nil)
+	second, err := CreateInstance(fw, map[string]any{}, nil)
+	if err == nil {
+		t.Error("second CreateInstance() should return error when instance already exists")
+	}
 	if second != nil {
 		t.Error("second CreateInstance() should return nil when instance already exists")
 	}
@@ -51,7 +57,7 @@ func TestExtensionRegistry_GetInstance_未初始化(t *testing.T) {
 func TestExtensionRegistry_ResetInstance(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	_ = CreateInstance(fw, map[string]any{}, nil)
+	_, _ = CreateInstance(fw, map[string]any{}, nil)
 
 	ResetInstance()
 	_, err := GetInstanceErr()
@@ -64,7 +70,7 @@ func TestExtensionRegistry_ResetInstance(t *testing.T) {
 func TestExtensionRegistry_RegisterAgentServerClient(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	chTransport := transport.NewChannelTransport()
@@ -86,7 +92,7 @@ func TestExtensionRegistry_RegisterAgentServerClient(t *testing.T) {
 func TestExtensionRegistry_RegisterAgentServerClient_无注册(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	ext := reg.GetAgentServerClientExtension()
@@ -104,7 +110,7 @@ func TestExtensionRegistry_RegisterAgentServerClient_无注册(t *testing.T) {
 func TestExtensionRegistry_RegisterAndTrigger(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	var triggered bool
@@ -130,7 +136,7 @@ func TestExtensionRegistry_RegisterAndTrigger(t *testing.T) {
 func TestExtensionRegistry_Trigger_无上下文(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	var triggered bool
@@ -150,7 +156,7 @@ func TestExtensionRegistry_Trigger_无上下文(t *testing.T) {
 func TestExtensionRegistry_Config(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{"key": "value"}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{"key": "value"}, nil)
 	defer ResetInstance()
 
 	cfg := reg.Config()
@@ -163,7 +169,7 @@ func TestExtensionRegistry_Config(t *testing.T) {
 func TestExtensionRegistry_Unregister(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	var callCount int
@@ -184,7 +190,7 @@ func TestExtensionRegistry_Unregister(t *testing.T) {
 func TestExtensionRegistry_RegisterCryptoUtility(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	ext := &testCryptoUtilityExt{}
@@ -206,7 +212,7 @@ func TestExtensionRegistry_RegisterCryptoUtility(t *testing.T) {
 func TestExtensionRegistry_RegisterCryptoUtility_无注册(t *testing.T) {
 	ResetInstance()
 	fw := callback.NewCallbackFramework()
-	reg := CreateInstance(fw, map[string]any{}, nil)
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
 	defer ResetInstance()
 
 	ext := reg.GetCryptoUtilityExtension()

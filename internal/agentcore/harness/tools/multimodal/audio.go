@@ -58,11 +58,17 @@ func NewAudioTranscriptionTool(
 	fn := func(ctx context.Context, input AudioTranscriptionInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 对齐 Python: AudioTranscriptionTool.invoke 的 try/except + finally 清理
 		result, err := func() (map[string]any, error) {
-			// 校验配置（对齐 Python: _require_audio_model_config）
+			// 校验配置（对齐 Python: _require_audio_model_config + _build_openai_client）
 			if config == nil || config.BaseURL == "" {
 				return nil, exception.NewBaseError(
 					exception.StatusToolMultimodalAudioConfigInvalid,
 					exception.WithMsg("audio model config invalid: base_url is required"),
+				)
+			}
+			if config.APIKey == "" {
+				return nil, exception.NewBaseError(
+					exception.StatusToolMultimodalAudioConfigInvalid,
+					exception.WithMsg("audio model config invalid: api_key is required"),
 				)
 			}
 
@@ -77,12 +83,17 @@ func NewAudioTranscriptionTool(
 				}
 			}()
 
-			// 调用转写（对齐 Python: _invoke_audio_transcription(config, audio_path)）
-			resp, err := client.TranscribeAudio(ctx, audioPath,
-				llmschema.WithTranscriptionModel(config.TranscriptionModel),
-			)
-			if err != nil {
-				return nil, err
+			// 调用转写（对齐 Python: _call_with_retries(config, _invoke_audio_transcription, audio_path)）
+			var resp *llmschema.TranscriptionResponse
+			retryErr := callWithRetries(config.MaxRetries, func() error {
+				var invokeErr error
+				resp, invokeErr = client.TranscribeAudio(ctx, audioPath,
+					llmschema.WithTranscriptionModel(config.TranscriptionModel),
+				)
+				return invokeErr
+			})
+			if retryErr != nil {
+				return nil, retryErr
 			}
 
 			return map[string]any{
@@ -159,12 +170,17 @@ func NewAudioQATool(
 
 			messages := modelclients.NewMessagesParam(systemMsg, userMsg)
 
-			// 调用 chat.completions（对齐 Python: client.chat.completions.create）
-			resp, err := client.Invoke(ctx, messages,
-				modelclients.WithInvokeModel(config.QAModel),
-			)
-			if err != nil {
-				return nil, err
+			// 调用 chat.completions（对齐 Python: _call_with_retries(config, _invoke_audio_question_answering, audio_path, question)）
+			var resp *llmschema.AssistantMessage
+			retryErr := callWithRetries(config.MaxRetries, func() error {
+				var invokeErr error
+				resp, invokeErr = client.Invoke(ctx, messages,
+					modelclients.WithInvokeModel(config.QAModel),
+				)
+				return invokeErr
+			})
+			if retryErr != nil {
+				return nil, retryErr
 			}
 
 			answer := extractResponseText(resp)
@@ -256,9 +272,14 @@ func NewAudioMetadataTool(
 				return metadata, nil
 			}
 
-			// 调用 ACR（对齐 Python: _invoke_audio_metadata）
-			acrResult, err := InvokeACRMetadata(ctx, audioPath, config)
-			if err == nil && acrResult != nil {
+			// 调用 ACR（对齐 Python: _call_with_retries(config, _invoke_audio_metadata, audio_path)）
+			var acrResult map[string]any
+			retryErr := callWithRetries(config.MaxRetries, func() error {
+				var invokeErr error
+				acrResult, invokeErr = InvokeACRMetadata(ctx, audioPath, config)
+				return invokeErr
+			})
+			if retryErr == nil && acrResult != nil {
 				// 合并 ACR 结果
 				for k, v := range acrResult {
 					if k == "duration_seconds" {
@@ -268,8 +289,8 @@ func NewAudioMetadataTool(
 				}
 				metadata["duration_seconds"] = roundDuration(duration)
 				metadata["identified"] = true
-			} else {
-				metadata["note"] = fmt.Sprintf("ACR identification failed: %s", err.Error())
+			} else if retryErr != nil {
+				metadata["note"] = fmt.Sprintf("ACR identification failed: %s", retryErr.Error())
 			}
 
 			return metadata, nil

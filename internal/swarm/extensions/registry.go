@@ -78,18 +78,18 @@ func GetInstanceErr() (*ExtensionRegistry, error) {
 }
 
 // CreateInstance 创建 ExtensionRegistry 单例，对齐 Python ExtensionRegistry.create_instance()
-// 已存在时返回 nil（对齐 Python: 已存在时 raise RuntimeError）
-func CreateInstance(framework *callback.CallbackFramework, config map[string]any, logger any) *ExtensionRegistry {
+// 已存在时返回 error（对齐 Python: 已存在时 raise RuntimeError）
+func CreateInstance(framework *callback.CallbackFramework, config map[string]any, logger any) (*ExtensionRegistry, error) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if registryInstance != nil {
-		return nil
+		return nil, fmt.Errorf("ExtensionRegistry 已初始化，请勿重复调用 create_instance()")
 	}
 	registryInstance = &ExtensionRegistry{
 		callbackFramework: framework,
 		config:            &ExtensionConfig{Config: config, Logger: logger},
 	}
-	return registryInstance
+	return registryInstance, nil
 }
 
 // ResetInstance 重置 ExtensionRegistry 单例为 nil，对齐 Python ExtensionRegistry.reset_instance()

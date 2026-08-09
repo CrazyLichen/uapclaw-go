@@ -40,10 +40,18 @@ func NormalizeVideoURL(videoPath string) (string, error) {
 	}
 
 	// 本地文件 → base64 编码 → data:URI（对齐 Python: base64.b64encode → data URI）
-	if _, err := os.Stat(value); err != nil {
+	info, err := os.Stat(value)
+	if err != nil {
 		return "", exception.NewBaseError(
 			exception.StatusToolMultimodalVideoInvokeFailed,
 			exception.WithMsg(fmt.Sprintf("video file does not exist: %s", value)),
+		)
+	}
+	// 对齐 Python: Path.is_file() — 传入目录时返回明确错误
+	if info.IsDir() {
+		return "", exception.NewBaseError(
+			exception.StatusToolMultimodalVideoInvokeFailed,
+			exception.WithMsg(fmt.Sprintf("video_path is not a file: %s", value)),
 		)
 	}
 

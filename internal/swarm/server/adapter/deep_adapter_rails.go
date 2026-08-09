@@ -173,15 +173,24 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 21: userHookRail — 用户配置的 hooks，对齐 Python interface_deep.py L2200-2211
-	hooksCfg := hookscfg.LoadHooksConfig(configBase)
-	if len(hooksCfg.Events) > 0 {
-		// 从 configBase 提取 LLM 配置，对齐 Python _query_llm 中 config 提取
-		llmCfg := extractLLMConfig(configBase)
-		hookExec := serverhooks.NewHookExecutor(llmCfg)
-		userHookRail := serverhooks.NewUserHookRail(*hooksCfg, hookExec)
-		railsList = append(railsList, userHookRail)
-		logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
-	}
+	// 对齐 Python: try/except 包裹注册流程，失败时 warning 并继续
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn(logComponent).Any("panic", r).
+					Msg("UserHookRail 加载失败，跳过")
+			}
+		}()
+		hooksCfg := hookscfg.LoadHooksConfig(configBase)
+		if len(hooksCfg.Events) > 0 {
+			// 从 configBase 提取 LLM 配置，对齐 Python _query_llm 中 config 提取
+			llmCfg := extractLLMConfig(configBase)
+			hookExec := serverhooks.NewHookExecutor(llmCfg)
+			userHookRail := serverhooks.NewUserHookRail(*hooksCfg, hookExec)
+			railsList = append(railsList, userHookRail)
+			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
+		}
+	}()
 
 	logger.Info(logComponent).
 		Str("mode", mode).

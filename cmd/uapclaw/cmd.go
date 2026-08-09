@@ -210,10 +210,11 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 最小子集已实现：ExtensionRegistry.CreateInstance + 回调触发机制
 	// ⤵️ 10.5.8: ExtensionManager.LoadAllExtensions 待 loader 实现后回填
 	fw := callback.GetCallbackFramework()
-	extRegistry := extensions.CreateInstance(fw, map[string]any{}, nil)
-	if extRegistry == nil {
-		logger.Error(logger.ComponentGateway).Msg("ExtensionRegistry 初始化失败（可能已存在实例）")
+	extRegistry, err := extensions.CreateInstance(fw, map[string]any{}, nil)
+	if err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Msg("ExtensionRegistry 初始化失败")
 	}
+	_ = extRegistry
 	// ⤵️ 10.5.8: extManager := extensions.NewExtensionManager(extRegistry)
 	// ⤵️ 10.5.8: err := extManager.LoadAllExtensions(ctx)
 

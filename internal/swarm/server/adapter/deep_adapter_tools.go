@@ -457,9 +457,9 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 // buildVideoModelConfig 构建视频模型配置。
 // 对齐 Python: _build_video_model_config(config_base) (line 1244-1260)
 //
-// 先通过 ApplyVideoModelConfigFromYAML 将 YAML 配置映射到环境变量，
-// 再检查 DedicatedMultimodalModelConfigured 门控，
-// 最后从环境变量构建 VideoModelConfig。
+// 注意：此处 Apply 先于 Dedicated 检查，与 vision/audio 的 Dedicated 先于 Apply 不同。
+// 这是 Python 本身的设计差异（Go 忠实复刻），Apply 先执行意味着即使 Dedicated 检查失败，
+// 环境变量也已被设置。vision/audio 的 Apply 在 Dedicated 检查失败时不会执行。
 func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.VideoModelConfig {
 	// 1. YAML 配置映射到环境变量
 	ApplyVideoModelConfigFromYAML(configBase)

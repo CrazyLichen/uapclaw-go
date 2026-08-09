@@ -22,6 +22,29 @@ type TaskCreateSpec struct {
 	Content string
 }
 
+// TaskAddOption 添加任务的可选参数，对齐 Python: add(task_id, dependencies) 可选参数
+type TaskAddOption func(*taskAddConfig)
+
+// taskAddConfig Add 方法的可选配置
+type taskAddConfig struct {
+	taskID       string
+	dependencies []string
+}
+
+// WithTaskID 设置自定义任务 ID，对齐 Python: add(task_id=...)
+func WithTaskID(taskID string) TaskAddOption {
+	return func(c *taskAddConfig) {
+		c.taskID = taskID
+	}
+}
+
+// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
+func WithDependencies(deps []string) TaskAddOption {
+	return func(c *taskAddConfig) {
+		c.dependencies = deps
+	}
+}
+
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
 	Task      *database.TeamTaskBase
@@ -107,8 +130,16 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 }
 
 // Add 创建单条任务。对齐 Python: TeamTaskManager.add()
-func (tm *TeamTaskManager) Add(ctx context.Context, title, content string) (*database.TeamTaskBase, error) {
-	taskID := fmt.Sprintf("task_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+// 支持可选参数 WithTaskID、WithDependencies，对齐 Python: add(task_id, dependencies)
+func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts ...TaskAddOption) (*database.TeamTaskBase, error) {
+	cfg := &taskAddConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	taskID := cfg.taskID
+	if taskID == "" {
+		taskID = fmt.Sprintf("task_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+	}
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
@@ -122,6 +153,10 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string) (*dat
 	}
 	if !ok {
 		return nil, fmt.Errorf("创建任务失败: task_id 冲突 %s", taskID)
+	}
+	// 对齐 Python: dependencies — 创建依赖关系（委托 AddTaskWithBidirectionalDependencies 的图变更）
+	if len(cfg.dependencies) > 0 {
+		tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, cfg.dependencies)
 	}
 	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
 		"team_name": tm.teamName, "task_id": task.TaskID, "status": task.Status,

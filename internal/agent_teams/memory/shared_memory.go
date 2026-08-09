@@ -55,12 +55,28 @@ func (m *SharedMemoryManager) EnsureDir() error {
 }
 
 // ReadTeamSummary 读取团队记忆摘要文件。
-// 对齐 Python read_team_summary — 真实实现
+// 对齐 Python read_team_summary — sysOperation 分支优先，本地文件系统回退
 // 最多前 teamMemoryMaxReadLines 行，不存在或错误时返回空字符串
-func (m *SharedMemoryManager) ReadTeamSummary(_ context.Context) string {
+func (m *SharedMemoryManager) ReadTeamSummary(ctx context.Context) string {
 	filePath := filepath.Join(m.dir, teamMemoryFilename)
 
-	// ⤵️ 回填: 7.2 — sysOperation 分支，当前仅本地文件系统
+	// 对齐 Python: if self._sys_operation → sysOperation 分支优先
+	if m.sysOperation != nil {
+		fsOp := m.sysOperation.Fs()
+		if fsOp != nil {
+			result, err := fsOp.ReadFile(ctx, filePath)
+			if err == nil && result != nil && result.Data != nil && result.Data.Content != "" {
+				lines := strings.Split(result.Data.Content, "\n")
+				if len(lines) > teamMemoryMaxReadLines {
+					lines = lines[:teamMemoryMaxReadLines]
+				}
+				return strings.TrimSpace(strings.Join(lines, "\n"))
+			}
+			return ""
+		}
+	}
+
+	// 本地文件系统回退
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return ""
@@ -73,15 +89,30 @@ func (m *SharedMemoryManager) ReadTeamSummary(_ context.Context) string {
 }
 
 // WriteTeamSummary 写入团队记忆摘要（覆盖）。
-// 对齐 Python write_team_summary — 真实实现（本地原子写入）
-// ⤵️ 回填: 7.2 — sysOperation 分支优先，当前仅本地原子写入
-func (m *SharedMemoryManager) WriteTeamSummary(_ context.Context, content string) error {
+// 对齐 Python write_team_summary — sysOperation 分支优先，本地原子写入回退
+func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content string) error {
 	if err := m.EnsureDir(); err != nil {
 		return err
 	}
 	target := filepath.Join(m.dir, teamMemoryFilename)
 
-	// 原子写入：先写临时文件，再 os.Rename 替换
+	// 对齐 Python: if self._sys_operation → sysOperation 分支优先
+	if m.sysOperation != nil {
+		fsOp := m.sysOperation.Fs()
+		if fsOp != nil {
+			_, err := fsOp.WriteFile(ctx, target, content,
+				sysop.WithFsCreateIfNotExist(true),
+			)
+			if err == nil {
+				return nil
+			}
+			// 对齐 Python: sys_operation 写入失败时 warning 并回退到本地写入
+			logger.Warn(sharedLogComponent).Err(err).Str("path", target).
+				Msg("sysOperation 写入失败，回退到本地原子写入")
+		}
+	}
+
+	// 本地原子写入回退
 	tmpFile, err := os.CreateTemp(m.dir, "team_memory_*.tmp")
 	if err != nil {
 		logger.Error(sharedLogComponent).Err(err).Str("path", target).

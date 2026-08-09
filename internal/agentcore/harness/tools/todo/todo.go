@@ -663,7 +663,7 @@ func formatCreateResult(items []hschema.TodoItem) string {
 	if len(items) == 0 {
 		return ""
 	}
-	result := fmt.Sprintf("已成功创建 %d 个任务:\n", len(items))
+	result := fmt.Sprintf("Successfully created %d task(s):\n", len(items))
 	for _, item := range items {
 		icon, ok := hschema.StatusIcons[item.Status]
 		if !ok {
@@ -676,7 +676,7 @@ func formatCreateResult(items []hschema.TodoItem) string {
 		result += fmt.Sprintf("  %s task_id: %s , content: %s%s\n", icon, item.ID, item.Content, modelInfo)
 	}
 	firstTask := items[0].Content
-	result += fmt.Sprintf("\n下一步: 立即执行任务 '%s'", firstTask)
+	result += fmt.Sprintf("\nNext step: Immediately execute task '%s'", firstTask)
 	return strings.TrimSpace(result)
 }
 
@@ -789,14 +789,14 @@ func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 	}
 	// 对齐 Python L644-645: 全部 ID 都不存在时的提示
 	if deletedCount == 0 {
-		return remainingTodos, fmt.Sprintf("未删除任何任务: 提供的 ID (%s) 均未找到", strings.Join(ids, ", ")), nil
+		return remainingTodos, fmt.Sprintf("No tasks deleted: None of the provided IDs (%s) were found", strings.Join(ids, ", ")), nil
 	}
 	// 对齐 Python L647: 用 delete_ids(set) 格式化
 	idStrs := make([]string, 0, len(deleteIDs))
 	for id := range deleteIDs {
 		idStrs = append(idStrs, id)
 	}
-	return remainingTodos, fmt.Sprintf("已成功删除 %d 个任务 (ID: %s)", deletedCount, strings.Join(idStrs, ", ")), nil
+	return remainingTodos, fmt.Sprintf("Successfully deleted %d task(s) (IDs: %s)", deletedCount, strings.Join(idStrs, ", ")), nil
 }
 
 // cancelTodos 执行 cancel 操作
@@ -811,21 +811,23 @@ func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 	}
 	cancelledCount := 0
 	var cancelledIDs []string
+	// 对齐 Python: 遍历 todos 检查 id 是否在 ids 集合中，避免 ids 重复导致 cancelledIDs 重复
+	idSet := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
-		for i := range todos {
-			if todos[i].ID == id {
-				todos[i].Status = hschema.TodoStatusCancelled
-				cancelledCount++
-				cancelledIDs = append(cancelledIDs, id)
-				break
-			}
+		idSet[id] = struct{}{}
+	}
+	for i := range todos {
+		if _, ok := idSet[todos[i].ID]; ok {
+			todos[i].Status = hschema.TodoStatusCancelled
+			cancelledCount++
+			cancelledIDs = append(cancelledIDs, todos[i].ID)
 		}
 	}
 	// 对齐 Python L657-658: 全部 ID 都不存在时的提示
 	if cancelledCount == 0 {
-		return todos, fmt.Sprintf("未取消任何任务: 提供的 ID (%s) 均未找到", strings.Join(ids, ", ")), nil
+		return todos, fmt.Sprintf("No tasks cancelled: None of the provided IDs (%s) were found", strings.Join(ids, ", ")), nil
 	}
-	return todos, fmt.Sprintf("已成功取消 %d 个任务 (ID: %s)", cancelledCount, strings.Join(cancelledIDs, ", ")), nil
+	return todos, fmt.Sprintf("Successfully cancelled %d task(s) (IDs: %s)", cancelledCount, strings.Join(cancelledIDs, ", ")), nil
 }
 
 // appendTodos 执行 append 操作

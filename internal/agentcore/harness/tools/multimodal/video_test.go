@@ -319,7 +319,8 @@ func TestNewVideoUnderstandingTool_默认模型GLM4v(t *testing.T) {
 		responses: []mockVisionResponse{{text: "结果"}},
 	}
 	config := &hschema.VideoModelConfig{
-		APIKey: "test-api-key",
+		APIKey:  "test-api-key",
+		BaseURL: "https://api.example.com",
 		// Model 字段为空，应使用 defaultVideoModel = "glm-4.6v"
 	}
 

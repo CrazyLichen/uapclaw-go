@@ -563,7 +563,7 @@ func audioMIMEToFormat(mimeType string) string {
 // getAudioExtension 推断音频文件扩展名（对齐 Python: _get_audio_extension）
 func getAudioExtension(urlStr, contentType string) string {
 	// 先从 URL 路径推断
-	parsedURL, err := urlParse(urlStr)
+	parsedURL, err := extractURLPath(urlStr)
 	if err == nil {
 		path := strings.ToLower(parsedURL)
 		audioExts := []string{".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".wma"}
@@ -597,8 +597,8 @@ func getAudioExtension(urlStr, contentType string) string {
 	return ".mp3"
 }
 
-// urlParse 从 URL 解析路径
-func urlParse(rawURL string) (string, error) {
+// extractURLPath 从 URL 中提取路径部分
+func extractURLPath(rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "", err
@@ -642,4 +642,35 @@ func extractFirstArtistName(item map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// callWithRetries 带重试的函数调用，对齐 Python: _call_with_retries
+// 指数退避重试，仅对可重试错误码（429/500/502/503/504）重试
+func callWithRetries(maxRetries int, fn func() error) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		// 对齐 Python: is_retryable = any(code in error_text for code in ("429", "500", "502", "503", "504"))
+		errText := err.Error()
+		retryable := false
+		for _, code := range []string{"429", "500", "502", "503", "504"} {
+			if strings.Contains(errText, code) {
+				retryable = true
+				break
+			}
+		}
+		if attempt == maxRetries || !retryable {
+			break
+		}
+		// 对齐 Python: await asyncio.sleep(2 ** (attempt - 1))
+		time.Sleep(time.Duration(1<<(attempt-1)) * time.Second)
+	}
+	if lastErr == nil {
+		return fmt.Errorf("Audio model call failed without a captured exception")
+	}
+	return lastErr
 }
