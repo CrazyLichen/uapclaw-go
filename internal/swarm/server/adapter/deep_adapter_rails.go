@@ -402,3 +402,38 @@ func strFromMap(m map[string]any, key string) string {
 	}
 	return ""
 }
+
+// buildDynamicRail 根据方法名调用对应的 Rail builder。
+// 对齐 Python: method = getattr(self, method_name, None)
+func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]any) sainterfaces.AgentRail {
+	switch methodName {
+	case "buildFilesystemRail":
+		return d.buildFilesystemRail(false)
+	case "buildSkillRail":
+		return d.buildSkillRail()
+	case "buildHeartbeatRail":
+		return d.buildHeartbeatRail()
+	case "buildAvatarRail":
+		return d.buildAvatarRail()
+	case "buildTaskPlanningRail":
+		return d.buildTaskPlanningRail(d.configCache, d.resolveRuntimeLanguage())
+	case "buildSubagentRail":
+		return d.buildSubagentRail()
+	case "buildContextAssembleRail":
+		return d.buildContextAssembleRail(d.mode)
+	case "buildContextProcessorRail":
+		return d.buildContextProcessorRail()
+	case "buildSkillEvolutionRail":
+		return d.buildSkillEvolutionRail()
+	case "buildWorktreeRail":
+		// CodeAdapter 专有，DeepAdapter 不实现
+		return nil
+	case "buildCodeAgentRail":
+		// CodeAdapter 专有，DeepAdapter 不实现
+		return nil
+	default:
+		logger.Warn(logComponent).Str("method", methodName).
+			Msg("未知的动态 Rail builder 方法名")
+		return nil
+	}
+}
