@@ -117,7 +117,7 @@ type DeepAdapter struct {
 	// contextAssembleRail 上下文组装轨道
 	contextAssembleRail sainterfaces.AgentRail
 	// contextAssembleMode 当前上下文组装模式（"agent.plan" / "agent.fast"）
-	// ⤵️ 10.6.3-10: 按模式切换
+	// 值已赋，按模式切换逻辑待 10.6.3-10
 	contextAssembleMode string
 	// contextProcessorRail 上下文处理护栏
 	// contextProcessorRail 上下文处理轨道
@@ -162,7 +162,7 @@ type DeepAdapter struct {
 	// ─── 运行时 ───
 
 	// toolCards 工具卡片列表
-	// ⤵️ agentcore.DeepAgent（工具卡片依赖 agent 实例）
+	// 工具卡片列表
 	toolCards []*tool.ToolCard
 	// sysOperation 系统操作实例（已回填 10.3.7-11 SysOpBuilder）
 	sysOperation sysop.SysOperation
@@ -207,7 +207,7 @@ type DeepAdapter struct {
 	// ⤵️ 11.10
 	cronRuntime interface{}
 	// evolutionWatchers evolution 观察任务集合
-	// ⤵️ 10.3.7-11 EvolutionHelpers（进化助手）
+	// EvolutionHelpers 已实现，watcher 字段类型待具体化（当前 interface{}）
 	evolutionWatchers interface{}
 	// dreamingMode dreaming 模式
 	dreamingMode string
@@ -216,7 +216,7 @@ type DeepAdapter struct {
 	// registeredMCPServerIDs 已注册 MCP 服务 ID 集合
 	registeredMCPServerIDs map[string]bool
 	// registeredMCPServers 已注册 MCP 服务配置
-	// ⤵️ agentcore MCP（McpServerConfig 已定义，适配器层管理未实现）
+	// 适配器层 MCP 管理待实现
 	registeredMCPServers map[string]any
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11-12
@@ -1452,7 +1452,7 @@ func isDir(path string) bool {
 //	    await ensure_persistent_checkpointer()
 //
 // Go 中 ensurePersistentCheckpointer 已同步化（SQLite 打开无需异步），
-// 后续将检查点器绑定到 DeepAgent 实例的步骤需等 DeepAgent 实现后回填。
+// 检查点器通过 EnsurePersistentCheckpointer 全局绑定，DeepAgent 实例自动使用。
 func (d *DeepAdapter) setCheckpoint() error {
 	return EnsurePersistentCheckpointer()
 }
