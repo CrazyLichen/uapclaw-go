@@ -235,7 +235,8 @@ func (d *DeepAdapter) buildMcpRail() *rails.McpRail {
 // buildProgressiveToolRail 构建渐进式工具护栏。
 // 对齐 Python: _build_progressive_tool_rail() (line 1869-1915)
 func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
-	// ⤵️ agentcore: 需要 DeepAgentConfig，实例化后回填
+	// ProgressiveToolRail 由 CreateDeepAgent 内部自动创建（当 ProgressiveToolEnabled=true），
+	// adapter 层不需要构建，此方法保留仅为接口兼容。
 	return nil
 }
 
