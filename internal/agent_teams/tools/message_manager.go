@@ -25,8 +25,6 @@ type TeamMessageManager struct {
 	memberName string
 	// messager 事件发布器
 	messager messager.Messager
-	// sessionID 会话标识（用于构建 topic）
-	sessionID string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -39,13 +37,13 @@ type TeamMessageManager struct {
 
 // NewTeamMessageManager 创建团队消息管理器。
 // 对齐 Python: TeamMessageManager.__init__(team_name, member_name, db, messager)
-func NewTeamMessageManager(db database.TeamDatabase, teamName, memberName string, msg messager.Messager, sessionID string) *TeamMessageManager {
+// sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
+func NewTeamMessageManager(db database.TeamDatabase, teamName, memberName string, msg messager.Messager) *TeamMessageManager {
 	return &TeamMessageManager{
 		db:         db,
 		teamName:   teamName,
 		memberName: memberName,
 		messager:   msg,
-		sessionID:  sessionID,
 	}
 }
 
@@ -158,12 +156,13 @@ func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, me
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // publishMessageEvent 发布消息事件到 TeamTopic。
+// sessionID 从 context 中获取（schema.GetSessionID(ctx)），对齐 Python: get_session_id()。
 func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event schema.TypedEvent) {
 	if tm.messager == nil {
 		return
 	}
 	msg := schema.EventMessageFromEvent(event)
-	topicID := schema.TeamTopicMessage.Build(tm.sessionID, tm.teamName)
+	topicID := schema.TeamTopicMessage.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).
 			Str("event_type", event.EventTypeName()).

@@ -98,8 +98,6 @@ type TeamTaskManager struct {
 	memberName string
 	// messager 事件发布器
 	messager messager.Messager
-	// sessionID 会话标识（用于构建 topic）
-	sessionID string
 	// plansDir 计划文件存储目录
 	plansDir string
 	// teamPlanID 团队级计划标识
@@ -117,7 +115,8 @@ type TeamTaskManager struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamTaskManager 创建任务管理器。
-func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, messager messager.Messager, plansDir, teamPlanID, leaderMemberName string, sessionID string) *TeamTaskManager {
+// sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
+func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, messager messager.Messager, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
 	return &TeamTaskManager{
 		db:               db,
 		teamName:         teamName,
@@ -126,7 +125,6 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 		plansDir:         plansDir,
 		teamPlanID:       teamPlanID,
 		leaderMemberName: leaderMemberName,
-		sessionID:        sessionID,
 	}
 }
 
@@ -710,12 +708,13 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 
 // publishTaskEvent 发布任务事件到 TeamTopic。
 // 对齐 Python: TeamTaskManager._publish_task_event()
+// sessionID 从 context 中获取（schema.GetSessionID(ctx)），对齐 Python: get_session_id()。
 func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.TypedEvent) {
 	if tm.messager == nil {
 		return
 	}
 	msg := schema.EventMessageFromEvent(event)
-	topicID := schema.TeamTopicTask.Build(tm.sessionID, tm.teamName)
+	topicID := schema.TeamTopicTask.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).
 			Str("event_type", event.EventTypeName()).

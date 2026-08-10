@@ -14,7 +14,7 @@ func newTestMessageManager() *TeamMessageManager {
 	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "")
 	_ = db.CreateMember(context.Background(), "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	_ = db.CreateMember(context.Background(), "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
-	return NewTeamMessageManager(db, "team1", "alice", nil, "")
+	return NewTeamMessageManager(db, "team1", "alice", nil)
 }
 
 // TestTeamMessageManager_SendMessage 测试发送直发消息
