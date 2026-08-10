@@ -208,10 +208,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("Write failed")
 		return map[string]any{"success": false, "path": path, "error": err.Error()}
 	}
-	fileExisted := false
-	if writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0 {
-		fileExisted = true
-	}
+	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
 	action := "Wrote"
 	if appendMode {
 		action = "Appended to"

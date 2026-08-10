@@ -146,7 +146,7 @@ func TestViewLines(t *testing.T) {
 	// offset + limit
 	offset := 2
 	limit := 2
-	text, total, start, end, truncated = viewLines(lines, &offset, &limit)
+	text, _, start, end, truncated = viewLines(lines, &offset, &limit)
 	if text != "b\nc" || start != 1 || end != 3 || !truncated {
 		t.Errorf("Unexpected: text=%q start=%d end=%d truncated=%v", text, start, end, truncated)
 	}
