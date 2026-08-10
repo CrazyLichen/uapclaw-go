@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
 // testEventMessage 测试用消息结构体，实现 SenderIDStamper 接口
@@ -19,7 +21,7 @@ func (m *testEventMessage) SetSenderID(id string) { m.senderID = id }
 // TestInProcessMessager_Publish_Subscribe 测试发布订阅基本功能
 func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 
@@ -47,11 +49,11 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 // TestInProcessMessager_Publish_SenderID 测试 Publish 自动 stamp SenderID
 func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-sender"
 	sender := NewInProcessMessager(cfg)
 
-	cfg2 := NewMessagerTransportConfig()
+	cfg2 := schema.NewMessagerTransportConfig()
 	cfg2.NodeID = "agent-receiver"
 	receiver := NewInProcessMessager(cfg2)
 
@@ -77,7 +79,7 @@ func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 // TestInProcessMessager_Unsubscribe 测试取消订阅
 func TestInProcessMessager_Unsubscribe(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 
@@ -104,11 +106,11 @@ func TestInProcessMessager_Unsubscribe(t *testing.T) {
 // TestInProcessMessager_Send 测试点对点发送
 func TestInProcessMessager_Send(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	sender := NewInProcessMessager(cfg)
 
-	cfg2 := NewMessagerTransportConfig()
+	cfg2 := schema.NewMessagerTransportConfig()
 	cfg2.NodeID = "agent-2"
 	receiver := NewInProcessMessager(cfg2)
 
@@ -130,7 +132,7 @@ func TestInProcessMessager_Send(t *testing.T) {
 // TestInProcessMessager_UnregisterDirectMessageHandler 测试取消注册 P2P handler
 func TestInProcessMessager_UnregisterDirectMessageHandler(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 
@@ -157,7 +159,7 @@ func TestInProcessMessager_UnregisterDirectMessageHandler(t *testing.T) {
 // TestCleanupInProcessBus 测试 Bus 清理
 func TestCleanupInProcessBus(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 
@@ -184,7 +186,7 @@ func TestCleanupInProcessBus(t *testing.T) {
 // TestInProcessMessager_StartStop 测试 Start/Stop
 func TestInProcessMessager_StartStop(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	m := NewInProcessMessager(cfg)
 	ctx := context.Background()
 
@@ -199,7 +201,7 @@ func TestInProcessMessager_StartStop(t *testing.T) {
 // TestInProcessMessager_Publish_SenderIDStamper 测试 SenderIDStamper 接口
 func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-sender"
 	m := NewInProcessMessager(cfg)
 
@@ -214,7 +216,7 @@ func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 // TestInProcessMessager_Publish_NoSenderIDStamper 测试不实现 SenderIDStamper 的消息
 func TestInProcessMessager_Publish_NoSenderIDStamper(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 
@@ -236,7 +238,7 @@ func TestInProcessMessager_Publish_NoSenderIDStamper(t *testing.T) {
 // TestInProcessMessager_Send_NoHandler 测试向不存在的 agent 发送
 func TestInProcessMessager_Send_NoHandler(t *testing.T) {
 	CleanupInProcessBus()
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	cfg.NodeID = "agent-1"
 	m := NewInProcessMessager(cfg)
 

@@ -1,6 +1,4 @@
-package agent_teams
-
-import "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+package schema
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -9,22 +7,32 @@ import "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 // ──────────────────────────── 常量 ────────────────────────────
 
 // HumanAgentMemberName 保留的 Human-in-the-Team 成员名。
-// 已迁移到 schema 包，此处保留常量以兼容现有调用方。
-const HumanAgentMemberName = schema.HumanAgentMemberName
+// 对齐 Python: HUMAN_AGENT_MEMBER_NAME
+// 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
+const HumanAgentMemberName string = "human_agent"
 
 // UserPseudoMemberName 伪成员名，代表外部调用者（非团队成员）。
-// 已迁移到 schema 包，此处保留常量以兼容现有调用方。
-const UserPseudoMemberName = schema.UserPseudoMemberName
+// 对齐 Python: USER_PSEUDO_MEMBER_NAME
+// 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
+const UserPseudoMemberName string = "user"
 
 // DefaultLeaderMemberName 默认 Leader 成员名。
-// 已迁移到 schema 包，此处保留常量以兼容现有调用方。
-const DefaultLeaderMemberName = schema.DefaultLeaderMemberName
+// 对齐 Python: DEFAULT_LEADER_MEMBER_NAME
+// 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
+const DefaultLeaderMemberName string = "team_leader"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ReservedMemberNames 保留的成员名集合，用户声明成员不得使用。
-// 已迁移到 schema 包，此处保留引用以兼容现有调用方。
-var ReservedMemberNames = schema.ReservedMemberNames
+// 对齐 Python: RESERVED_MEMBER_NAMES
+// 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
+//
+// human_agent 仅在 enable_hitt=True 时由运行时注入，手动声明保留名会被拒绝。
+var ReservedMemberNames = map[string]bool{
+	HumanAgentMemberName:    true,
+	UserPseudoMemberName:    true,
+	DefaultLeaderMemberName: true,
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

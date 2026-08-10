@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
 // TestNewTeamMemoryConfig 验证默认配置值
 func TestNewTeamMemoryConfig(t *testing.T) {
-	cfg := NewTeamMemoryConfig()
+	cfg := schema.NewTeamMemoryConfig()
 
 	if cfg.Enabled != false {
 		t.Errorf("Enabled 期望 false, 实际 %v", cfg.Enabled)
@@ -33,7 +34,7 @@ func TestNewTeamMemoryConfig(t *testing.T) {
 
 // TestTeamMemoryConfig_JSON序列化 验证不序列化字段被排除
 func TestTeamMemoryConfig_JSON序列化(t *testing.T) {
-	cfg := NewTeamMemoryConfig()
+	cfg := schema.NewTeamMemoryConfig()
 	cfg.ParentWorkspacePath = "/some/path"
 	cfg.TeamMemoryDir = "/some/dir"
 	cfg.EmbeddingConfig = &embedding.EmbeddingConfig{ModelName: "test"}
@@ -66,7 +67,7 @@ func TestTeamMemoryConfig_JSON序列化(t *testing.T) {
 // TestResolveEmbeddingConfig 验证回填实现
 func TestResolveEmbeddingConfig(t *testing.T) {
 	// 无内嵌配置 → 调 env（当前返回 nil）
-	cfg := NewTeamMemoryConfig()
+	cfg := schema.NewTeamMemoryConfig()
 	result := ResolveEmbeddingConfig(&cfg)
 	if result != nil {
 		t.Errorf("Expected nil when no env vars, got %v", result)

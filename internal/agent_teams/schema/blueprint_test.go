@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -36,7 +34,7 @@ func TestTeamModelConfig_Build_留桩(t *testing.T) {
 
 // TestNewLeaderSpec 测试默认 LeaderSpec
 func TestNewLeaderSpec(t *testing.T) {
-	_ = agentteams.SetLanguage(agentteams.LanguageCN)
+	_ = SetLanguage(LanguageCN)
 	s := NewLeaderSpec()
 	if s.MemberName != "team_leader" {
 		t.Errorf("期望 'team_leader', 实际=%q", s.MemberName)
@@ -48,8 +46,8 @@ func TestNewLeaderSpec(t *testing.T) {
 
 // TestNewLeaderSpec_英文 测试英文 LeaderSpec
 func TestNewLeaderSpec_英文(t *testing.T) {
-	_ = agentteams.SetLanguage(agentteams.LanguageEN)
-	defer func() { _ = agentteams.SetLanguage(agentteams.LanguageCN) }()
+	_ = SetLanguage(LanguageEN)
+	defer func() { _ = SetLanguage(LanguageCN) }()
 	if NewLeaderSpec().Persona != "Genius project management expert" {
 		t.Error("期望英文 persona")
 	}
@@ -373,8 +371,8 @@ func TestDeepAgentSpec_JSON序列化(t *testing.T) {
 // TestRegisterTransport 测试自定义传输注册
 func TestRegisterTransport(t *testing.T) {
 	nt := "custom_transport_test"
-	RegisterTransport(nt, func(_ map[string]any) (messager.MessagerTransportConfig, error) {
-		cfg := messager.NewMessagerTransportConfig()
+	RegisterTransport(nt, func(_ map[string]any) (MessagerTransportConfig, error) {
+		cfg := NewMessagerTransportConfig()
 		cfg.Backend = nt
 		return cfg, nil
 	})

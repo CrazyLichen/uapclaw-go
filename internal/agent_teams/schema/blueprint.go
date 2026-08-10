@@ -6,9 +6,6 @@ import (
 	"sort"
 	"sync"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -91,11 +88,11 @@ type TeamAgentSpec struct {
 	// AgentCustomizer 用户自定义配置钩子
 	AgentCustomizer any `json:"-"`
 	// Memory 团队记忆配置
-	Memory *memory.TeamMemoryConfig `json:"memory,omitempty"`
+	Memory *TeamMemoryConfig `json:"memory,omitempty"`
 }
 
 // TransportBuilder 传输层构建器函数类型。
-type TransportBuilder func(params map[string]any) (messager.MessagerTransportConfig, error)
+type TransportBuilder func(params map[string]any) (MessagerTransportConfig, error)
 
 // StorageBuilder 存储层构建器函数类型。
 type StorageBuilder func(params map[string]any) (any, error)
@@ -117,18 +114,18 @@ var (
 // NewLeaderSpec 创建默认 LeaderSpec。
 func NewLeaderSpec() LeaderSpec {
 	return LeaderSpec{
-		MemberName:  agentteams.DefaultLeaderMemberName,
+		MemberName:  DefaultLeaderMemberName,
 		DisplayName: "Team Leader",
-		Persona:     agentteams.T("blueprint.default_persona"),
+		Persona:     T("blueprint.default_persona"),
 	}
 }
 
 // Build 构建传输层配置。
-func (t TransportSpec) Build() (messager.MessagerTransportConfig, error) {
+func (t TransportSpec) Build() (MessagerTransportConfig, error) {
 	ensureBuiltinInfraRegistered()
 	b, ok := transportRegistry[t.Type]
 	if !ok {
-		return messager.MessagerTransportConfig{}, fmt.Errorf("未注册的传输类型: %q", t.Type)
+		return MessagerTransportConfig{}, fmt.Errorf("未注册的传输类型: %q", t.Type)
 	}
 	return b(t.Params)
 }
@@ -295,15 +292,15 @@ func (s *TeamAgentSpec) defaultTransportForSpawnMode() {
 
 // validateReservedNames 校验成员名是否使用了保留名。
 func (s *TeamAgentSpec) validateReservedNames() error {
-	if s.Leader.MemberName == agentteams.HumanAgentMemberName ||
-		s.Leader.MemberName == agentteams.UserPseudoMemberName {
+	if s.Leader.MemberName == HumanAgentMemberName ||
+		s.Leader.MemberName == UserPseudoMemberName {
 		return fmt.Errorf("leader 不能使用保留名 %q", s.Leader.MemberName)
 	}
 	for _, m := range s.PredefinedMembers {
-		if !agentteams.ReservedMemberNames[m.MemberName] {
+		if !ReservedMemberNames[m.MemberName] {
 			continue
 		}
-		if m.MemberName == agentteams.HumanAgentMemberName && s.EnableHITT {
+		if m.MemberName == HumanAgentMemberName && s.EnableHITT {
 			continue
 		}
 		return fmt.Errorf("预定义成员 %q 使用了保留名", m.MemberName)
@@ -329,13 +326,13 @@ func ensureBuiltinInfraRegistered() {
 	registryOnce.Do(func() {
 		transportRegistry = make(map[string]TransportBuilder)
 		storageRegistry = make(map[string]StorageBuilder)
-		transportRegistry["inprocess"] = func(_ map[string]any) (messager.MessagerTransportConfig, error) {
-			cfg := messager.NewMessagerTransportConfig()
+		transportRegistry["inprocess"] = func(_ map[string]any) (MessagerTransportConfig, error) {
+			cfg := NewMessagerTransportConfig()
 			cfg.Backend = "inprocess"
 			return cfg, nil
 		}
-		transportRegistry["pyzmq"] = func(_ map[string]any) (messager.MessagerTransportConfig, error) {
-			cfg := messager.NewMessagerTransportConfig()
+		transportRegistry["pyzmq"] = func(_ map[string]any) (MessagerTransportConfig, error) {
+			cfg := NewMessagerTransportConfig()
 			cfg.Backend = "pyzmq"
 			return cfg, nil
 		}

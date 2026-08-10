@@ -283,7 +283,7 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) a
 // ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, agentSpec atschema.DeepAgentSpec, language string, memberName string) *memory.TeamMemoryManager {
 	// 记忆配置从 spec 中获取，当前为默认配置
-	memCfg := memory.NewTeamMemoryConfig()
+	memCfg := atschema.NewTeamMemoryConfig()
 
 	params := memory.TeamMemoryManagerParams{
 		MemberName:          memberName,

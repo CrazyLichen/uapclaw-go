@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
@@ -69,7 +68,7 @@ type TeamRuntimeContext struct {
 	// TeamSpec 团队规格（可选）
 	TeamSpec *TeamSpec `json:"team_spec,omitempty"`
 	// MessagerConfig 消息传输配置（可选）
-	MessagerConfig *messager.MessagerTransportConfig `json:"messager_config,omitempty"`
+	MessagerConfig *MessagerTransportConfig `json:"messager_config,omitempty"`
 	// DBConfig 数据库配置
 	DBConfig database.DBConfigProvider `json:"db_config,omitempty"`
 	// MemberModel 成员模型配置（可选）

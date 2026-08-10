@@ -1,10 +1,14 @@
 package messager
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+)
 
 // TestNewMessagerTransportConfig 验证默认配置值
 func TestNewMessagerTransportConfig(t *testing.T) {
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 
 	if cfg.Backend != "inprocess" {
 		t.Errorf("Backend 期望 inprocess, 实际 %s", cfg.Backend)
@@ -25,7 +29,7 @@ func TestNewMessagerTransportConfig(t *testing.T) {
 
 // TestMessagerTransportConfig_BroadcastTopic 验证广播主题名称
 func TestMessagerTransportConfig_BroadcastTopic(t *testing.T) {
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	expected := "team:default:broadcast"
 	if got := cfg.BroadcastTopic(); got != expected {
 		t.Errorf("BroadcastTopic() 期望 %s, 实际 %s", expected, got)
@@ -41,7 +45,7 @@ func TestMessagerTransportConfig_BroadcastTopic(t *testing.T) {
 
 // TestMessagerPeerConfig 验证字段赋值
 func TestMessagerPeerConfig(t *testing.T) {
-	peer := MessagerPeerConfig{
+	peer := schema.MessagerPeerConfig{
 		AgentID:  "agent-1",
 		PeerID:   "peer-1",
 		Addrs:    []string{"addr1", "addr2"},
@@ -64,7 +68,7 @@ func TestMessagerPeerConfig(t *testing.T) {
 
 // TestSubscriptionHandle 验证订阅句柄字段赋值
 func TestSubscriptionHandle(t *testing.T) {
-	handle := SubscriptionHandle{
+	handle := schema.SubscriptionHandle{
 		SubscriptionID:  "sub-1",
 		Topic:           "team:default:broadcast",
 		AgentID:         "agent-1",
@@ -83,7 +87,7 @@ func TestSubscriptionHandle(t *testing.T) {
 func TestCreateMessager(t *testing.T) {
 	CleanupInProcessBus()
 	// inprocess 后端
-	cfg := NewMessagerTransportConfig()
+	cfg := schema.NewMessagerTransportConfig()
 	m, err := CreateMessager(cfg)
 	if err != nil {
 		t.Fatalf("CreateMessager 失败: %v", err)

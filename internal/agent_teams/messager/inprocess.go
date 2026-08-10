@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -28,7 +29,7 @@ type bus struct {
 // 所有实例共享进程全局 Bus，消息直接传递，无序列化。
 type InProcessMessager struct {
 	// config 传输配置
-	config MessagerTransportConfig
+	config schema.MessagerTransportConfig
 	// subscribedTopics 已订阅的主题列表（用于 stop 时清理）
 	subscribedTopics []string
 }
@@ -62,7 +63,7 @@ var _ Messager = (*InProcessMessager)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInProcessMessager 创建进程内消息通信实例。
-func NewInProcessMessager(config MessagerTransportConfig) *InProcessMessager {
+func NewInProcessMessager(config schema.MessagerTransportConfig) *InProcessMessager {
 	return &InProcessMessager{config: config}
 }
 

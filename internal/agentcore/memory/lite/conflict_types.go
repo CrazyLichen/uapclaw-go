@@ -24,7 +24,7 @@ type WriteResult struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// WriteMode 写入模式枚举
+// WriteMode 写入模式枚举。对齐 Python WriteMode
 type WriteMode int
 
 const (
@@ -36,18 +36,41 @@ const (
 	WriteModeSkip
 )
 
+// String 返回写入模式的字符串表示。对齐 Python WriteMode.value
+func (m WriteMode) String() string {
+	switch m {
+	case WriteModeCreate:
+		return "create"
+	case WriteModeAppend:
+		return "append"
+	case WriteModeSkip:
+		return "skip"
+	default:
+		return "unknown"
+	}
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ToDict 转为字典。对齐 Python WriteResult.to_dict()
 func (w *WriteResult) ToDict() map[string]any {
-	return map[string]any{
-		"success":           w.Success,
-		"path":              w.Path,
-		"mode":              int(w.Mode),
-		"conflict_detected": w.ConflictDetected,
-		"conflicting_files": w.ConflictingFiles,
-		"note":              w.Note,
-		"error":             w.Error,
-		"type":              w.Type,
+	result := map[string]any{
+		"success": w.Success,
+		"path":    w.Path,
+		"mode":    w.Mode.String(),
 	}
+	if w.Type != "" {
+		result["type"] = w.Type
+	}
+	if w.ConflictDetected {
+		result["conflict_detected"] = true
+		result["conflicting_files"] = w.ConflictingFiles
+	}
+	if w.Note != "" {
+		result["note"] = w.Note
+	}
+	if w.Error != "" {
+		result["error"] = w.Error
+	}
+	return result
 }

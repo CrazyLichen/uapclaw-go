@@ -1210,6 +1210,13 @@ func (m *memoryIndexManager) Status() map[string]any {
 	}
 }
 
+// IsClosed 检查管理器是否已关闭
+func (m *memoryIndexManager) IsClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closed
+}
+
 // Close 关闭管理器。对齐 Python MemoryIndexManager.close
 func (m *memoryIndexManager) Close() error {
 	m.mu.Lock()
