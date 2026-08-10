@@ -7,15 +7,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
-	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -145,9 +145,9 @@ func NewCodeAdapter() *CodeAdapter {
 //  19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
 //  20. await self._instance.ensure_initialized()
 //  21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
-//  21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-//  21.2 coding_memory workspace set_directory
-//  21.3 agent_history 写入路径修正
+//     21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
+//     21.2 coding_memory workspace set_directory
+//     21.3 agent_history 写入路径修正
 //  22. self._registered_mcp_server_ids.clear()
 //  23. await self._register_mcp_servers_from_config(config_base, tag="code")
 //  24. await self.load_user_rails()
@@ -271,19 +271,19 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	resolvedLanguage := c.deep.resolveRuntimeLanguage()
 
 	params := harness_config.CreateDeepAgentParams{
-		Model:              c.deep.model,
-		Card:               agentCard,
-		SystemPrompt:       systemPrompt,
-		ToolCards:          toolCards,
-		Subagents:          subagentSpecs,
-		Rails:              railsList,
-		EnableTaskLoop:     c.deep.resolveEnableTaskLoop(c.deep.configCache, configBase),
-		MaxIterations:      paramsInt(c.deep.configCache, "max_iterations", 15),
-		Workspace:          hworkspace.NewWorkspace(c.deep.workspaceDir, resolvedLanguage),
-		Language:           resolvedLanguage,
-		EnableTaskPlanning: true, // 对齐 Python: 硬编码 true
+		Model:               c.deep.model,
+		Card:                agentCard,
+		SystemPrompt:        systemPrompt,
+		ToolCards:           toolCards,
+		Subagents:           subagentSpecs,
+		Rails:               railsList,
+		EnableTaskLoop:      c.deep.resolveEnableTaskLoop(c.deep.configCache, configBase),
+		MaxIterations:       paramsInt(c.deep.configCache, "max_iterations", 15),
+		Workspace:           hworkspace.NewWorkspace(c.deep.workspaceDir, resolvedLanguage),
+		Language:            resolvedLanguage,
+		EnableTaskPlanning:  true, // 对齐 Python: 硬编码 true
 		AutoCreateWorkspace: false,
-		SysOperation:       sysOpInstance,
+		SysOperation:        sysOpInstance,
 	}
 
 	agent, createErr := harness.CreateDeepAgent(ctx, params)
