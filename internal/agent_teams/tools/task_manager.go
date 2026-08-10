@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -158,8 +159,10 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 	if len(cfg.dependencies) > 0 {
 		tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, cfg.dependencies)
 	}
-	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
-		"team_name": tm.teamName, "task_id": task.TaskID, "status": task.Status,
+	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           task.TaskID,
+		Status:           task.Status,
 	})
 	return task, nil
 }
@@ -259,8 +262,9 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
 	}
 
 	// 8. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
-	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID, "member_name": tm.memberName,
+	tm.publishTaskEvent(ctx, schema.TaskClaimedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
+		TaskID:           taskID,
 	})
 	return nil
 }
@@ -305,8 +309,9 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 	}
 
 	// 6. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
-	tm.publishTaskEvent(ctx, eventTaskClaimed, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID, "member_name": assignee,
+	tm.publishTaskEvent(ctx, schema.TaskClaimedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName, MemberName: assignee},
+		TaskID:           taskID,
 	})
 	return nil
 }
@@ -348,8 +353,9 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	}
 
 	// 4. 事件发布（对齐 Python: await self._publish_task_event + _publish_unblocked_events + _maybe_publish_task_list_drained）
-	tm.publishTaskEvent(ctx, eventTaskCompleted, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID,
+	tm.publishTaskEvent(ctx, schema.TaskCompletedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
 	})
 	tm.publishUnblockedEvents(ctx, refreshed)
 	tm.maybePublishTaskListDrained(ctx)
@@ -366,8 +372,9 @@ func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string,
 	if refreshed == nil {
 		return nil, fmt.Errorf("取消任务失败: 任务不存在或状态不允许取消 %s", taskID)
 	}
-	tm.publishTaskEvent(ctx, eventTaskCancelled, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID,
+	tm.publishTaskEvent(ctx, schema.TaskCancelledEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
 	})
 	tm.publishUnblockedEvents(ctx, refreshed)
 	tm.maybePublishTaskListDrained(ctx)
@@ -381,8 +388,9 @@ func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []s
 		return nil, err
 	}
 	for _, task := range cancelled {
-		tm.publishTaskEvent(ctx, eventTaskCancelled, map[string]any{
-			"team_name": tm.teamName, "task_id": task.TaskID,
+		tm.publishTaskEvent(ctx, schema.TaskCancelledEvent{
+			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+			TaskID:           task.TaskID,
 		})
 	}
 	tm.maybePublishTaskListDrained(ctx)
@@ -410,8 +418,9 @@ func (tm *TeamTaskManager) UpdateTask(ctx context.Context, taskID, title, conten
 	if !ok {
 		return fmt.Errorf("更新任务失败: 任务不存在或状态不允许编辑 %s", taskID)
 	}
-	tm.publishTaskEvent(ctx, eventTaskUpdated, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID,
+	tm.publishTaskEvent(ctx, schema.TaskUpdatedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
 	})
 	return nil
 }
@@ -429,8 +438,10 @@ func (tm *TeamTaskManager) AddWithPriority(ctx context.Context, taskID, title, c
 	if !result.Ok {
 		return result, fmt.Errorf("带依赖创建任务失败: %s", result.Reason)
 	}
-	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID, "status": fsm.TaskStatusPending,
+	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
+		Status:           fsm.TaskStatusPending,
 	})
 	return result, nil
 }
@@ -470,8 +481,10 @@ func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content 
 		}
 	}
 
-	tm.publishTaskEvent(ctx, eventTaskCreated, map[string]any{
-		"team_name": tm.teamName, "task_id": taskID, "status": fsm.TaskStatusPending,
+	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		TaskID:           taskID,
+		Status:           fsm.TaskStatusPending,
 	})
 	return task, nil
 }
@@ -607,14 +620,13 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	}
 
 	// 7. 发布事件
-	tm.publishTaskEvent(ctx, eventTaskPlanRequest, map[string]any{
-		"team_name":      tm.teamName,
-		"member_name":    tm.memberName,
-		"task_id":        taskID,
-		"status":         fsm.TaskStatusClaimed,
-		"plan_id":        planID,
-		"member_plan_md": destPath,
-		"tool_call_id":   toolCallID,
+	tm.publishTaskEvent(ctx, schema.TaskPlanRequestEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
+		TaskID:           taskID,
+		Status:           fsm.TaskStatusClaimed,
+		PlanID:           planID,
+		MemberPlanMD:     destPath,
+		ToolCallID:       toolCallID,
 	})
 
 	return record, nil
@@ -682,14 +694,13 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	}
 
 	// 发布事件
-	tm.publishTaskEvent(ctx, eventTaskPlanResponse, map[string]any{
-		"team_name":   tm.teamName,
-		"member_name": tm.memberName,
-		"task_id":     planRecord.TaskID,
-		"approved":    approved,
-		"status":      planRecord.Status,
-		"plan_id":     planID,
-		"feedback":    feedback,
+	tm.publishTaskEvent(ctx, schema.TaskPlanResponseEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
+		TaskID:           planRecord.TaskID,
+		Approved:         approved,
+		Status:           planRecord.Status,
+		PlanID:           planID,
+		Feedback:         feedback,
 	})
 
 	return nil
@@ -699,18 +710,15 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 
 // publishTaskEvent 发布任务事件到 TeamTopic。
 // 对齐 Python: TeamTaskManager._publish_task_event()
-func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, eventType string, payload map[string]any) {
+func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.TypedEvent) {
 	if tm.messager == nil {
 		return
 	}
-	topicID := buildTaskTopic(tm.sessionID, tm.teamName)
-	msg := map[string]any{
-		"event_type": eventType,
-		"payload":    payload,
-	}
+	msg := schema.EventMessageFromEvent(event)
+	topicID := schema.TeamTopicTask.Build(tm.sessionID, tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).
-			Str("event_type", eventType).
+			Str("event_type", event.EventTypeName()).
 			Msg("发布任务事件失败")
 	}
 }
@@ -719,8 +727,9 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, eventType strin
 // 对齐 Python: TeamTaskManager._publish_unblocked_events()
 func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblockedIDs []string) {
 	for _, id := range unblockedIDs {
-		tm.publishTaskEvent(ctx, eventTaskUnblocked, map[string]any{
-			"team_name": tm.teamName, "task_id": id,
+		tm.publishTaskEvent(ctx, schema.TaskUnblockedEvent{
+			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+			TaskID:           id,
 		})
 	}
 }
@@ -740,9 +749,9 @@ func (tm *TeamTaskManager) maybePublishTaskListDrained(ctx context.Context) {
 		}
 	}
 	if allTerminal {
-		tm.publishTaskEvent(ctx, eventTaskListDrained, map[string]any{
-			"team_name":  tm.teamName,
-			"task_count": len(tasks),
+		tm.publishTaskEvent(ctx, schema.TaskListDrainedEvent{
+			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+			TaskCount:        len(tasks),
 		})
 	}
 }

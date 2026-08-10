@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -73,11 +74,11 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 	}
 
 	// 发布 MessageEvent
-	tm.publishMessageEvent(ctx, eventMessage, map[string]any{
-		"team_name":        tm.teamName,
-		"message_id":       messageID,
-		"from_member_name": sender,
-		"to_member_name":   toMemberName,
+	tm.publishMessageEvent(ctx, schema.MessageEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		MessageID:        messageID,
+		FromMemberName:   sender,
+		ToMemberName:     toMemberName,
 	})
 
 	return messageID, nil
@@ -107,10 +108,10 @@ func (tm *TeamMessageManager) BroadcastMessage(ctx context.Context, content stri
 	}
 
 	// 发布 BroadcastEvent
-	tm.publishMessageEvent(ctx, eventBroadcast, map[string]any{
-		"team_name":        tm.teamName,
-		"message_id":       messageID,
-		"from_member_name": sender,
+	tm.publishMessageEvent(ctx, schema.BroadcastEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		MessageID:        messageID,
+		FromMemberName:   sender,
 	})
 
 	return messageID, nil
@@ -157,18 +158,15 @@ func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, me
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // publishMessageEvent 发布消息事件到 TeamTopic。
-func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, eventType string, payload map[string]any) {
+func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event schema.TypedEvent) {
 	if tm.messager == nil {
 		return
 	}
-	topicID := buildMessageTopic(tm.sessionID, tm.teamName)
-	msg := map[string]any{
-		"event_type": eventType,
-		"payload":    payload,
-	}
+	msg := schema.EventMessageFromEvent(event)
+	topicID := schema.TeamTopicMessage.Build(tm.sessionID, tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).
-			Str("event_type", eventType).
+			Str("event_type", event.EventTypeName()).
 			Msg("发布消息事件失败")
 	}
 }

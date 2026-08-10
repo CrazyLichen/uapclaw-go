@@ -393,20 +393,21 @@ func (t TeamTopic) Build(sessionID, teamName string) string {
 	return "session:" + sessionID + ":team:" + teamName + ":" + string(t)
 }
 
-// NewEventMessage 从具体事件创建 EventMessage。
+// NewEventMessage 从具体事件创建 EventMessage 指针。
 // 对齐 Python: EventMessage.from_event(event)
-func NewEventMessage(eventType string, payload map[string]any, senderID string) EventMessage {
-	return EventMessage{
+func NewEventMessage(eventType string, payload map[string]any, senderID string) *EventMessage {
+	return &EventMessage{
 		EventType: eventType,
 		Payload:   payload,
 		SenderID:  senderID,
 	}
 }
 
-// EventMessageFromEvent 从具体事件创建 EventMessage。
+// EventMessageFromEvent 从具体事件创建 EventMessage 指针。
 // 对齐 Python: EventMessage.from_event(event)
-func EventMessageFromEvent(e TypedEvent) EventMessage {
-	return EventMessage{
+// 返回指针以适配 Messager.Publish(ctx, topicID, *EventMessage) 签名。
+func EventMessageFromEvent(e TypedEvent) *EventMessage {
+	return &EventMessage{
 		EventType: e.EventTypeName(),
 		Payload:   e.ToPayload(),
 	}

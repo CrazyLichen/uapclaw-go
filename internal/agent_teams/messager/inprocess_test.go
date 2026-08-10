@@ -10,8 +10,7 @@ import (
 
 // newMsg 创建测试用 EventMessage 指针。
 func newMsg() *schema.EventMessage {
-	m := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
-	return &m
+	return schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
 }
 
 // TestInProcessMessager_Publish_Subscribe 测试发布订阅基本功能
@@ -33,7 +32,7 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 	}
 
 	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{"team_name": "t1"}, "")
-	if err := m.Publish(ctx, "topic1", &msg); err != nil {
+	if err := m.Publish(ctx, "topic1", msg); err != nil {
 		t.Fatalf("Publish 失败: %v", err)
 	}
 
@@ -63,7 +62,7 @@ func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	_ = receiver.Subscribe(ctx, "topic1", handler)
 
 	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{}, "")
-	_ = sender.Publish(ctx, "topic1", &msg)
+	_ = sender.Publish(ctx, "topic1", msg)
 
 	if gotSenderID != "agent-sender" {
 		t.Errorf("SenderID = %q, want %q", gotSenderID, "agent-sender")
@@ -201,7 +200,7 @@ func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 
 	ctx := context.Background()
 	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
-	_ = m.Publish(ctx, "topic1", &msg)
+	_ = m.Publish(ctx, "topic1", msg)
 	if msg.SenderID != "agent-sender" {
 		t.Errorf("SenderID = %q, want %q", msg.SenderID, "agent-sender")
 	}
