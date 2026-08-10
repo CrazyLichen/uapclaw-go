@@ -1,24 +1,98 @@
 package lite
 
+import (
+	"strings"
+	"time"
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ValidTypes 合法的记忆类型
+// ValidTypes 合法的记忆类型。对齐 Python VALID_TYPES
 var ValidTypes = []string{"user", "feedback", "project", "reference"}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ParseFrontmatter 解析 --- frontmatter。
-// ⤵️ 回填: 7.5 — 当前返回 nil
-func ParseFrontmatter(content string) map[string]string { return nil }
+// ParseFrontmatter 解析 --- frontmatter。对齐 Python parse_frontmatter
+func ParseFrontmatter(content string) map[string]string {
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "---") {
+		return nil
+	}
+	end := strings.Index(content[3:], "---")
+	if end == -1 {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(content[3:3+end]), "\n") {
+		if idx := strings.Index(line, ":"); idx != -1 {
+			key := strings.TrimSpace(line[:idx])
+			value := strings.TrimSpace(line[idx+1:])
+			result[key] = value
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
 
-// ValidateFrontmatter 验证 name/description/type 字段。
-// ⤵️ 回填: 7.5 — 当前返回 false
-func ValidateFrontmatter(fm map[string]string) (bool, string) { return false, "" }
+// ValidateFrontmatter 验证 name/description/type 字段。对齐 Python validate_frontmatter
+func ValidateFrontmatter(fm map[string]string) (bool, string) {
+	for _, field := range []string{"name", "description", "type"} {
+		if fm[field] == "" {
+			return false, "缺少必填字段: " + field
+		}
+	}
+	valid := false
+	for _, t := range ValidTypes {
+		if fm["type"] == t {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return false, "type 必须是以下之一: user, feedback, project, reference"
+	}
+	return true, ""
+}
 
-// EnrichFrontmatter 自动填充 created_at/updated_at。
-// ⤵️ 回填: 7.5 — 当前返回 nil
-func EnrichFrontmatter(fm map[string]string, isEdit bool) map[string]string { return nil }
+// EnrichFrontmatter 自动填充 created_at/updated_at。对齐 Python enrich_frontmatter
+func EnrichFrontmatter(fm map[string]string, isEdit bool) map[string]string {
+	today := time.Now().Format("2006-01-02")
+	if !isEdit {
+		if _, ok := fm["created_at"]; !ok {
+			fm["created_at"] = today
+		}
+	}
+	fm["updated_at"] = today
+	return fm
+}
 
-// RebuildContentWithFrontmatter 用更新后的 frontmatter 重建文件内容。
-// ⤵️ 回填: 7.5 — 当前返回空字符串
-func RebuildContentWithFrontmatter(content string, fm map[string]string) string { return "" }
+// RebuildContentWithFrontmatter 用更新后的 frontmatter 重建文件内容。对齐 Python rebuild_content_with_frontmatter
+func RebuildContentWithFrontmatter(content string, fm map[string]string) string {
+	body := ExtractBody(content)
+	var fmLines []string
+	fmLines = append(fmLines, "---")
+	for key, value := range fm {
+		fmLines = append(fmLines, key+": "+value)
+	}
+	fmLines = append(fmLines, "---")
+	parts := []string{strings.Join(fmLines, "\n")}
+	if body != "" {
+		parts = append(parts, body)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// ExtractBody 提取 frontmatter 后的 body 内容。对齐 Python _extract_body
+func ExtractBody(content string) string {
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "---") {
+		return content
+	}
+	end := strings.Index(content[3:], "---")
+	if end == -1 {
+		return ""
+	}
+	return strings.TrimSpace(content[3+end+3:])
+}
