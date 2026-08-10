@@ -414,12 +414,6 @@ func EventMessageFromEvent(e TypedEvent) EventMessage {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// GetSenderID 返回 SenderID 字段（实现 messager.SenderIDStamper 接口）。
-func (m *EventMessage) GetSenderID() string { return m.SenderID }
-
-// SetSenderID 设置 SenderID 字段（实现 messager.SenderIDStamper 接口）。
-func (m *EventMessage) SetSenderID(id string) { m.SenderID = id }
-
 // ── 团队生命周期事件 ──
 
 func (e TeamCreatedEvent) EventTypeName() string { return TeamEventCreated }

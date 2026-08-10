@@ -34,14 +34,6 @@ type InProcessMessager struct {
 	subscribedTopics []string
 }
 
-// SenderIDStamper 可设置 SenderID 的消息接口。
-// schema.EventMessage 隐式实现此接口（通过 GetSenderID/SetSenderID 方法）。
-// 对齐 Python: message.model_copy(update={"sender_id": self._agent_id})
-type SenderIDStamper interface {
-	GetSenderID() string
-	SetSenderID(id string)
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -90,11 +82,13 @@ func (m *InProcessMessager) Stop(_ context.Context) error {
 }
 
 // Publish 向主题发布事件消息。
-// 自动 stamp SenderID 过滤自发布（对齐 Python message.model_copy(update={"sender_id": self._agent_id})）。
-func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message any) error {
+// 自动设置 SenderID 过滤自发布（对齐 Python message.model_copy(update={"sender_id": self._agent_id})）。
+func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message *schema.EventMessage) error {
 	agentID := m.agentID()
-	// Stamp SenderID：通过 SenderIDStamper 接口设置消息的 SenderID
-	stampSenderID(message, agentID)
+	// Stamp SenderID：直接设置消息的 SenderID
+	if message.SenderID == "" {
+		message.SenderID = agentID
+	}
 	b := getBus()
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -151,7 +145,7 @@ func (m *InProcessMessager) Unsubscribe(_ context.Context, topicID string) error
 }
 
 // Send 点对点发送消息给指定 agent。
-func (m *InProcessMessager) Send(ctx context.Context, agentID string, message any) error {
+func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *schema.EventMessage) error {
 	b := getBus()
 	b.mu.Lock()
 	handler, ok := b.p2p[agentID]
@@ -206,12 +200,4 @@ func (b *bus) clear() {
 	defer b.mu.Unlock()
 	b.topicSubs = nil
 	b.p2p = nil
-}
-
-// stampSenderID 通过 SenderIDStamper 接口设置消息的 SenderID。
-// 仅当消息实现了 SenderIDStamper 接口且 SenderID 为空时才设置。
-func stampSenderID(message any, agentID string) {
-	if s, ok := message.(SenderIDStamper); ok && s.GetSenderID() == "" {
-		s.SetSenderID(agentID)
-	}
 }

@@ -8,15 +8,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
-// testEventMessage 测试用消息结构体，实现 SenderIDStamper 接口
-type testEventMessage struct {
-	eventType string
-	senderID  string
-	payload   map[string]any
+// newMsg 创建测试用 EventMessage 指针。
+func newMsg() *schema.EventMessage {
+	m := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
+	return &m
 }
-
-func (m *testEventMessage) GetSenderID() string   { return m.senderID }
-func (m *testEventMessage) SetSenderID(id string) { m.senderID = id }
 
 // TestInProcessMessager_Publish_Subscribe 测试发布订阅基本功能
 func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
@@ -26,7 +22,7 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -36,8 +32,8 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 		t.Fatalf("Subscribe 失败: %v", err)
 	}
 
-	msg := &testEventMessage{eventType: "task_created", payload: map[string]any{"team_name": "t1"}}
-	if err := m.Publish(ctx, "topic1", msg); err != nil {
+	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{"team_name": "t1"}, "")
+	if err := m.Publish(ctx, "topic1", &msg); err != nil {
 		t.Fatalf("Publish 失败: %v", err)
 	}
 
@@ -46,7 +42,7 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 	}
 }
 
-// TestInProcessMessager_Publish_SenderID 测试 Publish 自动 stamp SenderID
+// TestInProcessMessager_Publish_SenderID 测试 Publish 自动设置 SenderID
 func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	CleanupInProcessBus()
 	cfg := schema.NewMessagerTransportConfig()
@@ -58,18 +54,16 @@ func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	receiver := NewInProcessMessager(cfg2)
 
 	var gotSenderID string
-	handler := func(ctx context.Context, msg any) error {
-		if em, ok := msg.(*testEventMessage); ok {
-			gotSenderID = em.senderID
-		}
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+		gotSenderID = msg.SenderID
 		return nil
 	}
 
 	ctx := context.Background()
 	_ = receiver.Subscribe(ctx, "topic1", handler)
 
-	msg := &testEventMessage{eventType: "test", payload: map[string]any{}}
-	_ = sender.Publish(ctx, "topic1", msg)
+	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{}, "")
+	_ = sender.Publish(ctx, "topic1", &msg)
 
 	if gotSenderID != "agent-sender" {
 		t.Errorf("SenderID = %q, want %q", gotSenderID, "agent-sender")
@@ -84,20 +78,20 @@ func TestInProcessMessager_Unsubscribe(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
 
 	ctx := context.Background()
 	_ = m.Subscribe(ctx, "topic1", handler)
-	_ = m.Publish(ctx, "topic1", &testEventMessage{})
+	_ = m.Publish(ctx, "topic1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("subscribe 后 received = %d, want 1", received.Load())
 	}
 
 	_ = m.Unsubscribe(ctx, "topic1")
-	_ = m.Publish(ctx, "topic1", &testEventMessage{})
+	_ = m.Publish(ctx, "topic1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("unsubscribe 后 received = %d, want 1", received.Load())
 	}
@@ -115,14 +109,14 @@ func TestInProcessMessager_Send(t *testing.T) {
 	receiver := NewInProcessMessager(cfg2)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
 
 	ctx := context.Background()
 	_ = receiver.RegisterDirectMessageHandler(ctx, handler)
-	_ = sender.Send(ctx, "agent-2", &testEventMessage{})
+	_ = sender.Send(ctx, "agent-2", newMsg())
 
 	if received.Load() != 1 {
 		t.Errorf("received = %d, want 1", received.Load())
@@ -137,20 +131,20 @@ func TestInProcessMessager_UnregisterDirectMessageHandler(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
 
 	ctx := context.Background()
 	_ = m.RegisterDirectMessageHandler(ctx, handler)
-	_ = m.Send(ctx, "agent-1", &testEventMessage{})
+	_ = m.Send(ctx, "agent-1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("register 后 received = %d, want 1", received.Load())
 	}
 
 	_ = m.UnregisterDirectMessageHandler(ctx)
-	_ = m.Send(ctx, "agent-1", &testEventMessage{})
+	_ = m.Send(ctx, "agent-1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("unregister 后 received = %d, want 1", received.Load())
 	}
@@ -164,20 +158,20 @@ func TestCleanupInProcessBus(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
+	handler := func(ctx context.Context, msg *schema.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
 
 	ctx := context.Background()
 	_ = m.Subscribe(ctx, "topic1", handler)
-	_ = m.Publish(ctx, "topic1", &testEventMessage{})
+	_ = m.Publish(ctx, "topic1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("cleanup 前 received = %d, want 1", received.Load())
 	}
 
 	CleanupInProcessBus()
-	_ = m.Publish(ctx, "topic1", &testEventMessage{})
+	_ = m.Publish(ctx, "topic1", newMsg())
 	if received.Load() != 1 {
 		t.Errorf("cleanup 后 received = %d, want 1 (Bus 已重置)", received.Load())
 	}
@@ -198,7 +192,7 @@ func TestInProcessMessager_StartStop(t *testing.T) {
 	}
 }
 
-// TestInProcessMessager_Publish_SenderIDStamper 测试 SenderIDStamper 接口
+// TestInProcessMessager_Publish_SenderIDStamper 测试 SenderID 自动设置
 func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 	CleanupInProcessBus()
 	cfg := schema.NewMessagerTransportConfig()
@@ -206,32 +200,10 @@ func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	ctx := context.Background()
-	msg := &testEventMessage{eventType: "test", payload: map[string]any{}}
-	_ = m.Publish(ctx, "topic1", msg)
-	if msg.senderID != "agent-sender" {
-		t.Errorf("SenderID = %q, want %q", msg.senderID, "agent-sender")
-	}
-}
-
-// TestInProcessMessager_Publish_NoSenderIDStamper 测试不实现 SenderIDStamper 的消息
-func TestInProcessMessager_Publish_NoSenderIDStamper(t *testing.T) {
-	CleanupInProcessBus()
-	cfg := schema.NewMessagerTransportConfig()
-	cfg.NodeID = "agent-1"
-	m := NewInProcessMessager(cfg)
-
-	var received atomic.Int32
-	handler := func(ctx context.Context, msg any) error {
-		received.Add(1)
-		return nil
-	}
-
-	ctx := context.Background()
-	_ = m.Subscribe(ctx, "topic1", handler)
-	// 使用 string 作为消息（不实现 SenderIDStamper）
-	_ = m.Publish(ctx, "topic1", "plain_string")
-	if received.Load() != 1 {
-		t.Errorf("非 SenderIDStamper 消息 received = %d, want 1", received.Load())
+	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
+	_ = m.Publish(ctx, "topic1", &msg)
+	if msg.SenderID != "agent-sender" {
+		t.Errorf("SenderID = %q, want %q", msg.SenderID, "agent-sender")
 	}
 }
 
@@ -244,7 +216,7 @@ func TestInProcessMessager_Send_NoHandler(t *testing.T) {
 
 	ctx := context.Background()
 	// 不应 panic，仅 warn
-	err := m.Send(ctx, "nonexistent", &testEventMessage{})
+	err := m.Send(ctx, "nonexistent", newMsg())
 	if err != nil {
 		t.Errorf("Send 不存在的 agent 应返回 nil, 实际: %v", err)
 	}
