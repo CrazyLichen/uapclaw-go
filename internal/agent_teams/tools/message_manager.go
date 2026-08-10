@@ -3,8 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -54,7 +54,8 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 	if sender == "" {
 		sender = tm.memberName
 	}
-	messageID := fmt.Sprintf("msg_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+	// 对齐 Python: message_id = uuid.uuid4().hex
+	messageID := uuid.New().String()
 
 	msg := &database.TeamMessageBase{
 		MessageID:      messageID,
@@ -89,7 +90,8 @@ func (tm *TeamMessageManager) BroadcastMessage(ctx context.Context, content stri
 	if sender == "" {
 		sender = tm.memberName
 	}
-	messageID := fmt.Sprintf("msg_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+	// 对齐 Python: message_id = uuid.uuid4().hex
+	messageID := uuid.New().String()
 
 	msg := &database.TeamMessageBase{
 		MessageID:      messageID,
