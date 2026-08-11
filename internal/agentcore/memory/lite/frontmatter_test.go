@@ -117,28 +117,28 @@ func TestRebuildContentWithFrontmatter(t *testing.T) {
 	}
 }
 
-// TestExtractBody 测试提取 body
-func TestExtractBody(t *testing.T) {
+// Test_ExtractBody 测试提取 body
+func Test_ExtractBody(t *testing.T) {
 	content := "---\nname: test\n---\n正文内容"
-	body := ExtractBody(content)
+	body := extractBody(content)
 	if body != "正文内容" {
 		t.Errorf("Expected '正文内容', got '%s'", body)
 	}
 }
 
-// TestExtractBody_无Frontmatter 测试无 frontmatter 时提取 body
-func TestExtractBody_无Frontmatter(t *testing.T) {
+// Test_ExtractBody_无Frontmatter 测试无 frontmatter 时提取 body
+func Test_ExtractBody_无Frontmatter(t *testing.T) {
 	content := "纯正文内容"
-	body := ExtractBody(content)
+	body := extractBody(content)
 	if body != "纯正文内容" {
 		t.Errorf("Expected '纯正文内容', got '%s'", body)
 	}
 }
 
-// TestExtractBody_空Body 测试空 body
-func TestExtractBody_空Body(t *testing.T) {
+// Test_ExtractBody_空Body 测试空 body
+func Test_ExtractBody_空Body(t *testing.T) {
 	content := "---\nname: test\n---\n"
-	body := ExtractBody(content)
+	body := extractBody(content)
 	if body != "" {
 		t.Errorf("Expected empty body, got '%s'", body)
 	}

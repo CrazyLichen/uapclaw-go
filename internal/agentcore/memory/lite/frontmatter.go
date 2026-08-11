@@ -70,7 +70,7 @@ func EnrichFrontmatter(fm map[string]string, isEdit bool) map[string]string {
 
 // RebuildContentWithFrontmatter 用更新后的 frontmatter 重建文件内容。对齐 Python rebuild_content_with_frontmatter
 func RebuildContentWithFrontmatter(content string, fm map[string]string) string {
-	body := ExtractBody(content)
+	body := extractBody(content)
 	var fmLines []string
 	fmLines = append(fmLines, "---")
 	for key, value := range fm {
@@ -84,8 +84,8 @@ func RebuildContentWithFrontmatter(content string, fm map[string]string) string 
 	return strings.Join(parts, "\n\n")
 }
 
-// ExtractBody 提取 frontmatter 后的 body 内容。对齐 Python _extract_body
-func ExtractBody(content string) string {
+// extractBody 提取 frontmatter 后的 body 内容。对齐 Python _extract_body
+func extractBody(content string) string {
 	content = strings.TrimSpace(content)
 	if !strings.HasPrefix(content, "---") {
 		return content

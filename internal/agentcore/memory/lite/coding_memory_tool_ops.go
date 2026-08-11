@@ -3,7 +3,6 @@ package lite
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -125,7 +124,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 //  2. 解析 frontmatter → ParseFrontmatter + ValidateFrontmatter
 //  3. 丰富 frontmatter → EnrichFrontmatter (时间戳)
 //  4. 重建内容 → RebuildContentWithFrontmatter
-//  5. 提取 body → ExtractBody
+//  5. 提取 body → extractBody
 //  6. 快照目录文件列表 → snapshotMemoryFiles
 //  7. 冲突检测（分创建/追加两种模式）
 //  8. 获取文件级锁 → getFileLock
@@ -157,7 +156,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	fm = EnrichFrontmatter(fm, false)
 	content = RebuildContentWithFrontmatter(content, fm)
 	// 对齐 Python step 5: 提取 body
-	body := ExtractBody(content)
+	body := extractBody(content)
 	if body == "" {
 		return map[string]any{"success": false, "path": path, "error": "no content body"}
 	}
@@ -411,7 +410,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 		if err != nil || readResult == nil || readResult.Data == nil {
 			continue
 		}
-		oldBody := ExtractBody(readResult.Data.Content)
+		oldBody := extractBody(readResult.Data.Content)
 		if oldBody != "" {
 			oldMemories[path] = oldBody
 		}
@@ -438,7 +437,7 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 	if sysOp != nil {
 		readResult, err := sysOp.Fs().ReadFile(context.Background(), resolved)
 		if err == nil && readResult != nil && readResult.Data != nil {
-			existingBody := ExtractBody(readResult.Data.Content)
+			existingBody := extractBody(readResult.Data.Content)
 			if existingBody != "" {
 				oldMemories["__self__"] = existingBody
 			}
@@ -470,24 +469,25 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 }
 
 // snapshotMemoryFiles 快照目录下的 .md 文件列表（排除 MEMORY.md）。对齐 Python _snapshot_memory_files
+// 使用 sys_operation.Fs().ListFiles() 读取目录，对齐 Python ctx.sys_operation.fs().list_files()
 func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) []string {
 	if memoryDir == "" {
 		return nil
 	}
-	// 对齐 Python: 使用 sys_op.fs().list_files() 读取目录
-	// Go 中优先使用 os.ReadDir，如果 sysOp 可用则用 sysOp.Fs().ListFiles
-	// 但 snapshotMemoryFiles 在 Python 中使用 sys_op.fs().list_files()，
-	// 这里简化为 os.ReadDir，因为 coding_memory 目录在本地文件系统上
-	entries, err := os.ReadDir(memoryDir)
-	if err != nil {
+	sysOp := toolCtx.SysOperation
+	if sysOp == nil {
+		return nil
+	}
+	listResult, err := sysOp.Fs().ListFiles(context.Background(), memoryDir)
+	if err != nil || listResult == nil || listResult.Data == nil {
 		return nil
 	}
 	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
+	for _, item := range listResult.Data.ListItems {
+		if item.IsDirectory {
 			continue
 		}
-		name := e.Name()
+		name := item.Name
 		if !strings.HasSuffix(strings.ToLower(name), ".md") {
 			continue
 		}
