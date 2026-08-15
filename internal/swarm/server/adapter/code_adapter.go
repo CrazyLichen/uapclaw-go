@@ -18,6 +18,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
@@ -269,8 +270,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 19: create_deep_agent(...)
 	// 对齐 Python: self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
 	// code 模式不传: vision_model_config, audio_model_config, context_engine_config, completion_timeout
-	// ⤵️ 10.6.1-2: system_prompt 等待 build_code_system_prompt 实现，当前先用 buildAgentIdentityPrompt("en")
-	systemPrompt := c.deep.buildAgentIdentityPrompt("en")
+	systemPrompt := codeprompt.BuildCodeSystemPrompt()
 	resolvedLanguage := c.deep.resolveRuntimeLanguage()
 
 	params := harness_config.CreateDeepAgentParams{
