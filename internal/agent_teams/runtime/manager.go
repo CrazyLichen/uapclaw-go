@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -178,11 +179,30 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 }
 
 // RegisterHumanAgentInbound 注册团队→用户通知回调。
-// ⤵️ 待 9.55 TeamBackend 回填
+// 对齐 Python: team_backend.register_human_agent_inbound(member_name, callback)
 func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, teamName string, sessionID string, memberName string, callback any) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Str("member_name", memberName).Msg("注册 HumanAgent 入站（桩实现）")
-	return false, nil
+		Str("member_name", memberName).Msg("注册 HumanAgent 入站")
+	entry := m.resolveEntry(teamName, sessionID)
+	if entry == nil {
+		return false, nil
+	}
+	// 获取 TeamBackend（Agent 当前为 any，待 9.55 回填为 *TeamAgent；通过 TeamBackendProvider 接口断言）
+	backend := getTeamBackend(entry.Agent)
+	if backend == nil {
+		return false, nil
+	}
+	// 将 callback 转换为 OnInbound 类型
+	onInbound, ok := callback.(tools.OnInbound)
+	if !ok {
+		logger.Warn(mgrLogComponent).Str("member_name", memberName).Msg("callback 类型不匹配 tools.OnInbound")
+		return false, nil
+	}
+	if err := backend.RegisterHumanAgentInbound(ctx, memberName, onInbound); err != nil {
+		logger.Warn(mgrLogComponent).Str("member_name", memberName).Err(err).Msg("注册 HumanAgent 入站失败")
+		return false, err
+	}
+	return true, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -224,9 +244,18 @@ func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *se
 //  3. async def _member_exists(name): return await backend.get_member(name) is not None
 //  4. return await resolve_targets(payloads, member_exists=_member_exists)
 func (m *TeamRuntimeManager) resolveRecipients(entry *ActiveTeam, payloads []interaction.InteractPayload) ([]interaction.InteractPayload, error) {
-	// ⤵️ 待 9.55 回填: 从 agent.team_backend 获取 MemberExistsCheck
-	// 当前 stub: 所有成员视为存在
-	memberExists := func(name string) (bool, error) { return true, nil }
+	// 对齐 Python 步骤 1-2: backend = agent.team_backend; if backend is None: return payloads
+	backend := getTeamBackend(entry.Agent)
+	if backend == nil {
+		return payloads, nil
+	}
+	// 对齐 Python 步骤 3: async def _member_exists(name): return await backend.get_member(name) is not None
+	ctx := context.Background()
+	memberExists := func(name string) (bool, error) {
+		member, _ := backend.GetMember(ctx, name)
+		return member != nil, nil
+	}
+	// 对齐 Python 步骤 4: return await resolve_targets(payloads, member_exists=_member_exists)
 	return interaction.ResolveTargets(payloads, memberExists)
 }
 
@@ -301,6 +330,19 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		// 对齐 Python 步骤 6: return failure(f"unknown_payload:{type(payload).__name__}")
 		return interaction.NewDeliverResultFailure("unknown_payload:" + payload.Kind().String()), nil
 	}
+}
+
+// getTeamBackend 从 Agent（any 类型）中提取 TeamBackend。
+// 待 9.55 回填 ActiveTeam.Agent 为 *TeamAgent 后，此函数可简化为直接调用。
+func getTeamBackend(agent any) *tools.TeamBackend {
+	if agent == nil {
+		return nil
+	}
+	provider, ok := agent.(TeamBackendProvider)
+	if !ok {
+		return nil
+	}
+	return provider.TeamBackend()
 }
 
 // strPtr 返回字符串指针。

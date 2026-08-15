@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -21,8 +22,7 @@ import (
 // 所有路径通过 TeamMessageManager，消息最终存储在队友间流量的同一数据源。
 type UserInbox struct {
 	// messageManager 消息管理器
-	// ⤵️ 待 9.55 回填: TeamMessageManager — 提供 SendMessage/BroadcastMessage 方法
-	messageManager any
+	messageManager *tools.TeamMessageManager
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -40,7 +40,7 @@ const (
 
 // NewUserInbox 创建用户收件箱。
 // 对齐 Python: UserInbox.__init__(message_manager)
-func NewUserInbox(messageManager any) *UserInbox {
+func NewUserInbox(messageManager *tools.TeamMessageManager) *UserInbox {
 	return &UserInbox{messageManager: messageManager}
 }
 
@@ -51,16 +51,18 @@ func NewUserInbox(messageManager any) *UserInbox {
 //  1. msg_id = await self._mm.send_message(content=body, to_member_name=target, from_member_name=USER_PSEUDO_MEMBER_NAME)
 //  2. if msg_id is None: return DeliverResult.failure(f"send_failed:{target}")
 //  3. return DeliverResult.success(msg_id)
-//
-// ⤵️ 待 9.55 回填: 调用 messageManager.SendMessage(content=body, to=target, from="user")
 func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 	logger.Debug(inboxLogComponent).Str("target", target).
 		Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox.Direct (stub)")
-	// 对齐 Python 步骤 1-3（当前 stub 实现）
-	// ⤵️ 待 9.55 回填: msgID := u.messageManager.SendMessage(body, target, agentteams.UserPseudoMemberName)
-	msgID := "stub-direct-msg-id"
+		Msg("UserInbox.Direct")
+	// 对齐 Python 步骤 1-3
+	ctx := context.Background()
+	msgID, err := u.messageManager.SendMessage(ctx, body, target, agentteams.UserPseudoMemberName)
+	if err != nil {
+		reason := "send_failed:" + target + ":" + err.Error()
+		return NewDeliverResultFailure(reason), nil
+	}
 	return NewDeliverResultSuccess(&msgID), nil
 }
 
@@ -71,15 +73,16 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 //  1. msg_id = await self._mm.broadcast_message(content=body, from_member_name=USER_PSEUDO_MEMBER_NAME)
 //  2. if msg_id is None: return DeliverResult.failure("broadcast_failed")
 //  3. return DeliverResult.success(msg_id)
-//
-// ⤵️ 待 9.55 回填: 调用 messageManager.BroadcastMessage(content=body, from="user")
 func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 	logger.Debug(inboxLogComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox.Broadcast (stub)")
-	// 对齐 Python 步骤 1-3（当前 stub 实现）
-	// ⤵️ 待 9.55 回填: msgID := u.messageManager.BroadcastMessage(body, agentteams.UserPseudoMemberName)
-	msgID := "stub-broadcast-msg-id"
+		Msg("UserInbox.Broadcast")
+	// 对齐 Python 步骤 1-3
+	ctx := context.Background()
+	msgID, err := u.messageManager.BroadcastMessage(ctx, body, agentteams.UserPseudoMemberName)
+	if err != nil {
+		return NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
+	}
 	return NewDeliverResultSuccess(&msgID), nil
 }
 

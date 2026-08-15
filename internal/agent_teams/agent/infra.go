@@ -15,8 +15,7 @@ type TeamInfra struct {
 	// Messager 消息总线
 	Messager messager.Messager
 	// TeamBackend 团队后端（DB + task/message managers）
-	// TODO(#9.58): TeamBackend 类型
-	TeamBackend any
+	TeamBackend *tools.TeamBackend
 	// WorkspaceManager 团队工作空间管理器
 	// TODO(#9.66): TeamWorkspaceManager 类型
 	WorkspaceManager any
@@ -25,7 +24,7 @@ type TeamInfra struct {
 	// TaskManager 任务管理器（概念上从 TeamBackend 派生，显式保留以便测试注入）
 	TaskManager *tools.TeamTaskManager
 	// MessageManager 消息管理器（概念上从 TeamBackend 派生，显式保留以便测试注入）
-	MessageManager any
+	MessageManager *tools.TeamMessageManager
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

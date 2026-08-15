@@ -2,9 +2,20 @@ package runtime
 
 import (
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// TeamBackendProvider 提供 TeamBackend 访问的最小接口。
+// 当 ActiveTeam.Agent 为 any（待 9.55 回填为 *TeamAgent）时，
+// 通过此接口解耦 runtime 包对 agent 包的直接依赖。
+// *agent.TeamAgent 隐式满足此接口。
+type TeamBackendProvider interface {
+	// TeamBackend 返回 TeamBackend 实例（可能为 nil）
+	TeamBackend() *tools.TeamBackend
+}
 
 // ActiveTeam 活跃团队条目。
 // 对齐 Python: ActiveTeam (openjiuwen/agent_teams/runtime/pool.py)

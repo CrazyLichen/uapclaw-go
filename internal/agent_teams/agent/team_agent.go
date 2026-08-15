@@ -263,7 +263,7 @@ func (a *TeamAgent) TaskManager() *tools.TeamTaskManager {
 
 // TeamBackend 返回 TeamBackend。
 // 对齐 Python: TeamAgent.team_backend property
-func (a *TeamAgent) TeamBackend() any {
+func (a *TeamAgent) TeamBackend() *tools.TeamBackend {
 	if a.configurator != nil {
 		return a.configurator.TeamBackend()
 	}

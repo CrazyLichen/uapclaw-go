@@ -394,10 +394,10 @@ func (c *AgentConfigurator) SetMessager(v messager.Messager) { c.infra.Messager 
 
 // TeamBackend 返回团队后端。
 // 对齐 Python: AgentConfigurator.team_backend property
-func (c *AgentConfigurator) TeamBackend() any { return c.infra.TeamBackend }
+func (c *AgentConfigurator) TeamBackend() *tools.TeamBackend { return c.infra.TeamBackend }
 
 // SetTeamBackend 设置团队后端。
-func (c *AgentConfigurator) SetTeamBackend(v any) { c.infra.TeamBackend = v }
+func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.TeamBackend = v }
 
 // WorkspaceManager 返回工作空间管理器。
 // 对齐 Python: AgentConfigurator.workspace_manager property
@@ -424,7 +424,7 @@ func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.T
 func (c *AgentConfigurator) MessageManager() any { return c.infra.MessageManager }
 
 // SetMessageManager 设置消息管理器。
-func (c *AgentConfigurator) SetMessageManager(v any) { c.infra.MessageManager = v }
+func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) { c.infra.MessageManager = v }
 
 // Harness 返回 TeamHarness。
 // 对齐 Python: AgentConfigurator.harness property

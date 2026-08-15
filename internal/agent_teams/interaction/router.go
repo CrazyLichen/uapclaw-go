@@ -1,10 +1,12 @@
 package interaction
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -228,11 +230,7 @@ func ResolveTargets(payloads []InteractPayload, memberExists MemberExistsCheck) 
 
 // DeliverDirect 验证 target 并发送点对点消息。
 // 对齐 Python: deliver_direct(body, *, sender, target, message_manager, member_exists)
-//
-// messageManager 为 any 占位：
-//
-//	⤵️ 待 9.55 回填: TeamMessageManager — 调用 send_message(content, to_member_name, from_member_name)
-func DeliverDirect(body string, sender string, target string, messageManager any, memberExists MemberExistsCheck) (*DeliverResult, error) {
+func DeliverDirect(body string, sender string, target string, messageManager *tools.TeamMessageManager, memberExists MemberExistsCheck) (*DeliverResult, error) {
 	// 对齐 Python: if not await member_exists(target): return DeliverResult.failure(f"unknown_member:{target}")
 	exists, err := memberExists(target)
 	if err != nil {
@@ -242,13 +240,16 @@ func DeliverDirect(body string, sender string, target string, messageManager any
 		reason := "unknown_member:" + target
 		return NewDeliverResultFailure(reason), nil
 	}
-	// ⤵️ 待 9.55 回填: messageManager.SendMessage(content=body, to_member_name=target, from_member_name=sender)
 	// 对齐 Python: msg_id = await message_manager.send_message(content=body, to_member_name=target, from_member_name=sender)
-	// 当前 stub: 模拟成功
+	ctx := context.Background()
+	msgID, err := messageManager.SendMessage(ctx, body, target, sender)
+	if err != nil {
+		reason := "send_failed:" + target + ":" + err.Error()
+		return NewDeliverResultFailure(reason), nil
+	}
 	logger.Debug(routerLogComponent).Str("sender", sender).Str("target", target).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("DeliverDirect (stub)")
-	msgID := "stub-msg-id"
+		Msg("DeliverDirect")
 	return NewDeliverResultSuccess(&msgID), nil
 }
 

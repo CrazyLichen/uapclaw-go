@@ -1,11 +1,13 @@
 package interaction
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -45,11 +47,9 @@ type UnknownHumanAgentError = schema.UnknownHumanAgentError
 //   - onInbound(HumanAgentInboundEvent) → 团队→用户通知回调
 type HumanAgentInbox struct {
 	// team 团队后端
-	// ⤵️ 待 9.55 回填: TeamBackend — 提供 HumanAgentNames/GetMember 方法
-	team any
+	team *tools.TeamBackend
 	// messageManager 消息管理器
-	// ⤵️ 待 9.55 回填: TeamMessageManager — 提供 SendMessage/BroadcastMessage 方法
-	messageManager any
+	messageManager *tools.TeamMessageManager
 	// agentLookup 解析 human-agent 成员名到活跃 TeamAgent
 	agentLookup AgentLookup
 	// onInbound 团队→用户通知回调
@@ -66,7 +66,7 @@ type HumanAgentInbox struct {
 
 // NewHumanAgentInbox 创建 Human-Agent 收件箱。
 // 对齐 Python: HumanAgentInbox.__init__(team, message_manager, *, agent_lookup, on_inbound)
-func NewHumanAgentInbox(team any, messageManager any, agentLookup AgentLookup, onInbound OnInbound) *HumanAgentInbox {
+func NewHumanAgentInbox(team *tools.TeamBackend, messageManager *tools.TeamMessageManager, agentLookup AgentLookup, onInbound OnInbound) *HumanAgentInbox {
 	return &HumanAgentInbox{
 		team:           team,
 		messageManager: messageManager,
@@ -108,9 +108,12 @@ func (h *HumanAgentInbox) Send(body string, to *string, sender *string) (*Delive
 
 	// 对齐 Python 步骤 4: if to in BROADCAST_TARGETS: broadcast
 	if BroadcastTargets[*to] {
-		// ⤵️ 待 9.55 回填: msgID := h.messageManager.BroadcastMessage(body, resolvedSender)
 		// 对齐 Python: msg_id = await self._mm.broadcast_message(content=body, from_member_name=resolved_sender)
-		msgID := "stub-ha-broadcast-msg-id"
+		ctx := context.Background()
+		msgID, err := h.messageManager.BroadcastMessage(ctx, body, resolvedSender)
+		if err != nil {
+			return NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
+		}
 		return NewDeliverResultSuccess(&msgID), nil
 	}
 
@@ -148,9 +151,8 @@ func (e *HumanAgentNotEnabledError) Error() string {
 //
 // ⤵️ 待 9.55 回填: 调用 team.HumanAgentNames() 获取已注册成员列表
 func (h *HumanAgentInbox) resolveSender(sender *string) (string, error) {
-	// 对齐 Python 步骤 1
-	// ⤵️ 待 9.55 回填: names := h.team.HumanAgentNames()
-	names := []string{agentteams.HumanAgentMemberName}
+	// 对齐 Python 步骤 1: names = self._team.human_agent_names()
+	names := h.team.HumanAgentNames()
 
 	// 对齐 Python 步骤 2: if not names: raise HumanAgentNotEnabledError
 	if len(names) == 0 {
@@ -215,8 +217,8 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 
 // memberExists 成员存在性检查。
 // 对齐 Python: HumanAgentInbox._member_exists(name)
-// ⤵️ 待 9.55 回填: 调用 team.GetMember(name)
 func (h *HumanAgentInbox) memberExists(name string) (bool, error) {
-	// ⤵️ 待 9.55 回填: member, err := h.team.GetMember(name); return member != nil, err
-	return true, nil
+	ctx := context.Background()
+	member, _ := h.team.GetMember(ctx, name)
+	return member != nil, nil
 }
