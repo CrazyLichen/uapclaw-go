@@ -14,7 +14,6 @@
 //	├── skills.go                # 技能节
 //	├── memory.go                # 记忆节（主动/被动/只读）
 //	├── external_memory.go       # 外部记忆节
-//	├── response.go              # 响应节（消息格式说明）— 由 swarm/agents/harness/common/prompt/ 调用
 //	├── workspace.go             # 工作空间节
 //	├── progressive_tool_rail.go # 渐进式工具导航与规则节
 //	├── heartbeat.go             # 心跳节
