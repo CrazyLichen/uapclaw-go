@@ -245,7 +245,7 @@ func (a *TeamAgent) MemberName() string {
 
 // MessageManager 返回消息管理器。
 // 对齐 Python: TeamAgent.message_manager property
-func (a *TeamAgent) MessageManager() any {
+func (a *TeamAgent) MessageManager() *tools.TeamMessageManager {
 	if a.configurator != nil {
 		return a.configurator.MessageManager()
 	}
@@ -331,15 +331,38 @@ func (a *TeamAgent) TeamName() string {
 // 对齐 Python: TeamAgent.is_shutdown_requested()
 //
 // Leader 从不持有 TeamMember 句柄，因此对 Leader 总返回 False。
+// 包括 SHUTDOWN 本身，因为 shutdown_self 在拆卸流之前直接写入终态，
+// finalize 路径必须将其视为"已在退出"而不是通过暂停决策将状态翻转回 READY。
 func (a *TeamAgent) IsShutdownRequested(ctx context.Context) (bool, error) {
-	// ⤵️ 待 TeamMember 状态管理回填：检查 team_member.status() 是否为 SHUTDOWN_REQUESTED 或 SHUTDOWN
-	return false, nil
+	// 对齐 Python: member = self._state.team_member; if member is None: return False
+	member := a.state.TeamMember
+	if member == nil {
+		return false, nil
+	}
+	// 对齐 Python: status = await member.status()
+	// 通过 TeamBackend 查询 DB 状态
+	backend := a.TeamBackend()
+	if backend == nil {
+		return false, nil
+	}
+	dbMember, err := backend.GetMember(ctx, a.MemberName())
+	if err != nil || dbMember == nil {
+		return false, nil
+	}
+	status := atschema.MemberStatus(dbMember.Status)
+	return status == atschema.MemberStatusShutdownRequested || status == atschema.MemberStatusShutdown, nil
 }
 
 // UpdateStatus 更新成员状态到数据库。
 // 对齐 Python: TeamAgent.update_status(status)
 func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStatus) error {
-	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
+	backend := a.TeamBackend()
+	if backend == nil {
+		logger.Debug(logComponent).Str("member_name", a.MemberName()).
+			Str("member_status", string(status)).Msg("更新状态（无 TeamBackend，跳过）")
+		return nil
+	}
+	backend.DB().Member().UpdateMemberStatus(ctx, a.MemberName(), backend.TeamName(), string(status))
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
 		Str("member_status", string(status)).Msg("更新状态")
 	return nil
@@ -610,7 +633,7 @@ func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 		_ = a.streamController.CooperativeCancel(ctx)
 	}
 	// 对齐 Python: team_member.update_status(SHUTDOWN)
-	// ⤵️ 待 TeamMember 状态管理回填
+	_ = a.UpdateStatus(ctx, atschema.MemberStatusShutdown)
 	return nil
 }
 

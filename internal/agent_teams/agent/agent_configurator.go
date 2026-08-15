@@ -1,14 +1,19 @@
 package agent
 
 import (
+	"context"
+
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -54,10 +59,16 @@ type SetupInfraOption func(*setupInfraConfig)
 
 // setupTeamBackendConfig SetupTeamBackend 可选参数配置
 type setupTeamBackendConfig struct {
+	// db 数据库实例（可选，默认使用 getSharedDB）
+	db database.TeamDatabase
+	// modelConfigAllocator 模型分配回调
+	modelConfigAllocator func(modelName string) *models.Allocation
+	// leaderAllocation Leader 模型分配结果
+	leaderAllocation *models.Allocation
 	// onTeamCleaned 团队清理回调
-	onTeamCleaned func(memberName string)
+	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
-	onTeamBuilt func(memberName string)
+	onTeamBuilt func(ctx context.Context) error
 }
 
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
@@ -116,13 +127,28 @@ func WithOnTeamBuilt(cb func(memberName string)) SetupInfraOption {
 }
 
 // WithBackendOnTeamCleaned 设置团队清理回调。
-func WithBackendOnTeamCleaned(cb func(memberName string)) SetupTeamBackendOption {
+func WithBackendOnTeamCleaned(cb func(ctx context.Context) error) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamCleaned = cb }
 }
 
 // WithBackendOnTeamBuilt 设置团队构建回调。
-func WithBackendOnTeamBuilt(cb func(memberName string)) SetupTeamBackendOption {
+func WithBackendOnTeamBuilt(cb func(ctx context.Context) error) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamBuilt = cb }
+}
+
+// WithBackendDB 设置数据库实例。
+func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
+	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
+}
+
+// WithBackendModelAllocator 设置模型分配回调。
+func WithBackendModelAllocator(fn func(modelName string) *models.Allocation) SetupTeamBackendOption {
+	return func(cfg *setupTeamBackendConfig) { cfg.modelConfigAllocator = fn }
+}
+
+// WithBackendLeaderAllocation 设置 Leader 模型分配结果。
+func WithBackendLeaderAllocation(a *models.Allocation) SetupTeamBackendOption {
+	return func(cfg *setupTeamBackendConfig) { cfg.leaderAllocation = a }
 }
 
 // Configure 主入口：配置基础设施并构建 Harness。
@@ -242,22 +268,97 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 // SetupTeamBackend 构造 TeamBackend 并注册 cleanup 路径。
 // 对齐 Python: AgentConfigurator.setup_team_backend(spec, ctx, messager, ...)
 //
-// TODO(#9.58): TeamBackend 实现后替换
-func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, messager messager.Messager, opts ...SetupTeamBackendOption) any {
+// Python 步骤：
+//  1. team_name = (ctx.team_spec.team_name if ctx.team_spec else None) or "default"
+//  2. db = get_shared_db(ctx.db_config)
+//  3. is_leader = ctx.role == TeamRole.LEADER
+//  4. current_member_name = ctx.member_name or ctx.team_spec.leader_member_name
+//  5. agent_team = TeamBackend(team_name=..., member_name=..., is_leader=..., db=..., messager=...,
+//     teammate_mode=..., predefined_members=..., model_config_allocator=..., leader_allocation=...,
+//     enable_hitt=..., on_team_cleaned=..., on_team_built=..., leader_member_name=...)
+//  6. self.team_backend = agent_team
+//  7. self.task_manager = agent_team.task_manager
+//  8. self.message_manager = agent_team.message_manager
+//  9. if self.workspace_manager: agent_team.register_cleanup_path(ws.workspace_path)
+//  10. agent_team.register_cleanup_path(str(team_home(team_name)))
+func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, msg messager.Messager, opts ...SetupTeamBackendOption) *tools.TeamBackend {
 	cfg := &setupTeamBackendConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	// 待实现：TeamBackend 构造和注册
-	// teamName := (ctx.TeamSpec.TeamName 如果 ctx.TeamSpec 不为 nil) 或 "default"
-	// db = getSharedDB(ctx.DBConfig)
-	// teamBackend = TeamBackend{...}
-	// c.SetTeamBackend(teamBackend)
-	// c.SetTaskManager(teamBackend.TaskManager)
-	// c.SetMessageManager(teamBackend.MessageManager)
-	// if c.WorkspaceManager() != nil { teamBackend.RegisterCleanupPath(...) }
-	// teamBackend.RegisterCleanupPath(teamHome(teamName))
-	return nil
+
+	// 对齐 Python 步骤 1: team_name
+	teamName := "default"
+	if ctx.TeamSpec != nil && ctx.TeamSpec.TeamName != "" {
+		teamName = ctx.TeamSpec.TeamName
+	}
+
+	// 对齐 Python 步骤 2: db = get_shared_db(ctx.db_config)
+	db := cfg.db
+	if db == nil {
+		// 尝试从 spawn.GetSharedDB 获取，若为 nil 则降级为内存数据库
+		if sharedDB := spawn.GetSharedDB(ctx.DBConfig); sharedDB != nil {
+			if typedDB, ok := sharedDB.(database.TeamDatabase); ok {
+				db = typedDB
+			}
+		}
+		if db == nil {
+			logger.Info(logComponent).Str("team_name", teamName).
+				Msg("SetupTeamBackend: 使用内存数据库（sharedDB 不可用）")
+			db = database.NewInMemoryTeamDatabase()
+		}
+	}
+
+	// 对齐 Python 步骤 3-4: is_leader + current_member_name
+	isLeader := ctx.Role == atschema.TeamRoleLeader
+	currentMemberName := ctx.MemberName
+	if currentMemberName == "" && ctx.TeamSpec != nil {
+		currentMemberName = ctx.TeamSpec.LeaderMemberName
+	}
+
+	// 对齐 Python 步骤 5: 构造 TeamBackend
+	tbOpts := []tools.TeamBackendOption{
+		tools.WithTeammateMode(string(spec.TeammateMode)),
+	}
+	if len(spec.PredefinedMembers) > 0 {
+		tbOpts = append(tbOpts, tools.WithPredefinedMembers(spec.PredefinedMembers))
+	}
+	if cfg.modelConfigAllocator != nil {
+		tbOpts = append(tbOpts, tools.WithModelConfigAllocator(cfg.modelConfigAllocator))
+	}
+	if cfg.leaderAllocation != nil && isLeader {
+		tbOpts = append(tbOpts, tools.WithLeaderAllocation(cfg.leaderAllocation))
+	}
+	if spec.EnableHITT {
+		tbOpts = append(tbOpts, tools.WithEnableHITT(spec.EnableHITT))
+	}
+	if cfg.onTeamCleaned != nil {
+		tbOpts = append(tbOpts, tools.WithOnTeamCleaned(cfg.onTeamCleaned))
+	}
+	if cfg.onTeamBuilt != nil {
+		tbOpts = append(tbOpts, tools.WithOnTeamBuilt(cfg.onTeamBuilt))
+	}
+	if ctx.TeamSpec != nil && ctx.TeamSpec.LeaderMemberName != "" {
+		tbOpts = append(tbOpts, tools.WithLeaderMemberName(ctx.TeamSpec.LeaderMemberName))
+	}
+
+	tb := tools.NewTeamBackend(teamName, currentMemberName, isLeader, db, msg, tbOpts...)
+
+	// 对齐 Python 步骤 6-8: 设置到 infra
+	c.SetTeamBackend(tb)
+	c.SetTaskManager(tb.TaskManager())
+	c.SetMessageManager(tb.MessageManager())
+
+	// 对齐 Python 步骤 9: workspace_manager cleanup path
+	// TODO(#9.66): WorkspaceManager 类型回填后调用 tb.RegisterCleanupPath(ws.workspace_path)
+
+	// 对齐 Python 步骤 10: team_home cleanup path
+	tb.RegisterCleanupPath(agentteams.TeamHome(teamName))
+
+	logger.Info(logComponent).Str("team_name", teamName).Str("member_name", currentMemberName).
+		Bool("is_leader", isLeader).Msg("SetupTeamBackend: 团队后端已创建")
+
+	return tb
 }
 
 // CreateWorkspaceManager 创建团队工作空间管理器。
@@ -421,7 +522,7 @@ func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.T
 
 // MessageManager 返回消息管理器。
 // 对齐 Python: AgentConfigurator.message_manager property
-func (c *AgentConfigurator) MessageManager() any { return c.infra.MessageManager }
+func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager }
 
 // SetMessageManager 设置消息管理器。
 func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) { c.infra.MessageManager = v }

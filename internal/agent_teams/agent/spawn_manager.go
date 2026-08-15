@@ -279,7 +279,12 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 				Str("member_name", memberName).
 				Err(err).
 				Msg("重启 teammate 最终失败")
-			// TODO(#9.65a-4): TeamBackend 门面实现后，更新 DB 状态为 ERROR
+			// 更新 DB 状态为 ERROR
+			backend := m.configurator.TeamBackend()
+			if backend != nil {
+				backend.DB().Member().UpdateMemberStatus(recoverCtx, memberName, backend.TeamName(),
+					string(atschema.MemberStatusError))
+			}
 		}
 	}()
 }
