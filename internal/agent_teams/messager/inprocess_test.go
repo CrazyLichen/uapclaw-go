@@ -200,9 +200,12 @@ func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 
 	ctx := context.Background()
 	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
+	// 对齐 Python: model_copy 创建副本，原始消息不受影响
 	_ = m.Publish(ctx, "topic1", msg)
-	if msg.SenderID != "agent-sender" {
-		t.Errorf("SenderID = %q, want %q", msg.SenderID, "agent-sender")
+	if msg.SenderID != "" {
+		// G19 修复后，原始消息的 SenderID 不再被原地修改
+		// Python 使用 model_copy，Go 也创建副本
+		t.Errorf("SenderID = %q, want %q (original message should not be modified)", msg.SenderID, "")
 	}
 }
 

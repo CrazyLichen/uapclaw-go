@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -77,8 +78,14 @@ type memoryIndexManager struct {
 	// 定时同步
 	intervalCancel context.CancelFunc
 
-	// 会话增量
-	sessionDeltas map[string]*SessionDeltaState
+	// 会话增量。对齐 Python sessions_dirty / sessions_dirty_files / session_warm / _session_pending_files / _session_deltas
+	// 注：Python 中这些字段也是声明但未实现操作逻辑的脚手架，Go 同步对齐
+	sessionsDirty      bool
+	sessionsDirtyFiles map[string]struct{}
+	sessionWarm        map[string]struct{}
+	sessionPendingFiles map[string]struct{}
+	sessionDeltas      map[string]*SessionDeltaState
+	sessionTimer       *time.Timer
 
 	// 外部依赖
 	embeddingConfig *apiEmbedding.EmbeddingConfig
@@ -102,6 +109,8 @@ const (
 	ftsTable = "chunks_fts"
 	// embeddingCacheTable embedding 缓存表名
 	embeddingCacheTable = "embedding_cache"
+	// sessionDirtyDebounceMs session 文件脏标记防抖间隔。对齐 Python SESSION_DIRTY_DEBOUNCE_MS
+	sessionDirtyDebounceMs = 5000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -110,6 +119,42 @@ const (
 var indexCache sync.Map
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getBaseDirForFile 获取文件相对路径计算的基础目录。对齐 Python _get_base_dir_for_file
+// USER.md 位于 workspace 根目录，其他文件使用 memoryDir
+func (m *memoryIndexManager) getBaseDirForFile(fp string) string {
+	if m.workspace != nil {
+		if userMDPath := m.workspace.GetNodePath("USER.md"); userMDPath != nil {
+			if filepath.Clean(fp) == filepath.Clean(*userMDPath) {
+				if m.workspace.RootPath != "" {
+					return m.workspace.RootPath
+				}
+			}
+		}
+	}
+	return m.memoryDir
+}
+
+// isRecentSessionFile 判断 session 文件是否为最近两天（今天/昨天）的记录。
+// 对齐 Python _is_recent_session_file
+func isRecentSessionFile(filename string) bool {
+	// 匹配 YYYY-MM-DD.md 格式
+	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})\.md$`)
+	matches := re.FindStringSubmatch(filename)
+	if len(matches) < 2 {
+		return false
+	}
+	fileDateStr := matches[1]
+	fileDate, err := time.Parse("2006-01-02", fileDateStr)
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterday := today.AddDate(0, 0, -1)
+	fileDay := time.Date(fileDate.Year(), fileDate.Month(), fileDate.Day(), 0, 0, 0, 0, fileDate.Location())
+	return fileDay.Equal(today) || fileDay.Equal(yesterday)
+}
 
 // getMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
 func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
@@ -142,9 +187,12 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		nodeName:        params.NodeName,
 		memoryDir:       memoryDir,
 		settings:        settings,
-		dirty:           true,
-		watchDebounce:   2 * time.Second,
-		sessionDeltas:   make(map[string]*SessionDeltaState),
+		dirty:              true,
+		watchDebounce:      2 * time.Second,
+		sessionsDirtyFiles: make(map[string]struct{}),
+		sessionWarm:        make(map[string]struct{}),
+		sessionPendingFiles: make(map[string]struct{}),
+		sessionDeltas:      make(map[string]*SessionDeltaState),
 		embeddingConfig: params.EmbeddingConfig,
 		sysOperation:    params.SysOperation,
 	}
@@ -429,16 +477,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 	activePaths := make(map[string]bool)
 	for _, fp := range files {
 		// 对齐 Python: _get_base_dir_for_file — USER.md 用 workspace root
-		baseDir := m.memoryDir
-		if m.workspace != nil {
-			if userMDPath := m.workspace.GetNodePath("USER.md"); userMDPath != nil {
-				if filepath.Clean(fp) == filepath.Clean(*userMDPath) {
-					if m.workspace.RootPath != "" {
-						baseDir = m.workspace.RootPath
-					}
-				}
-			}
-		}
+		baseDir := m.getBaseDirForFile(fp)
 		entry, err := m.buildFileEntry(fp, baseDir)
 		if err != nil {
 			continue
@@ -483,6 +522,10 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 	var sessionFiles []string
 	_ = filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return nil
+		}
+		// 对齐 Python: _is_recent_session_file — 只索引今天/昨天的 session
+		if !isRecentSessionFile(filepath.Base(path)) {
 			return nil
 		}
 		sessionFiles = append(sessionFiles, path)
@@ -832,8 +875,16 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	// 向量搜索
 	// 对齐 Python: _embed_query_with_timeout 60s 超时保护
 	embedCtx, embedCancel := context.WithTimeout(ctx, 60*time.Second)
-	queryVec, _ := m.provider.EmbedQuery(embedCtx, cleaned)
+	queryVec, embedErr := m.provider.EmbedQuery(embedCtx, cleaned)
 	embedCancel()
+	if embedErr != nil {
+		if embedCtx.Err() == context.DeadlineExceeded {
+			logger.Warn(logger.ComponentCommon).Err(embedErr).Msg("Embedding query timed out")
+		} else {
+			logger.Error(logger.ComponentCommon).Err(embedErr).Msg("Embedding query failed")
+		}
+		queryVec = nil
+	}
 	// 对齐 Python: has_vector = any(v != 0 for v in query_vec)
 	hasVector := false
 	for _, v := range queryVec {
@@ -1270,6 +1321,11 @@ func (m *memoryIndexManager) IsClosed() bool {
 	return m.closed
 }
 
+// HasLLM 判断是否有 LLM 实例可用。对齐 Python ctx.manager.llm
+func (m *memoryIndexManager) HasLLM() bool {
+	return m.llm != nil
+}
+
 // Close 关闭管理器。对齐 Python MemoryIndexManager.close
 func (m *memoryIndexManager) Close() error {
 	m.mu.Lock()
@@ -1288,6 +1344,12 @@ func (m *memoryIndexManager) Close() error {
 	// 停止文件监听
 	if m.watcher != nil {
 		_ = m.watcher.Close()
+	}
+
+	// 停止 session 防抖定时器。对齐 Python: if self._session_timer: self._session_timer.cancel()
+	if m.sessionTimer != nil {
+		m.sessionTimer.Stop()
+		m.sessionTimer = nil
 	}
 
 	// 关闭数据库

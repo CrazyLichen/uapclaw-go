@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -246,9 +251,9 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		agentschema.WithAgentID("uapclaw"),
 	)
 
-	// 步骤 15: tool_cards = d.deep.getToolCards(agent_card.id)
+	// 步骤 15: tool_cards = c.getToolCards(agent_card.id)
 	// 对齐 Python: tool_cards = await self._get_tool_cards(agent_card.id)
-	toolCards := c.deep.getToolCards(agentCard.ID)
+	toolCards := c.getToolCards(agentCard.ID)
 	c.deep.toolCards = toolCards
 
 	// 步骤 16: rails_list = _build_agent_rails(config, configBase, mode="code")
@@ -265,13 +270,13 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 18: configured_subagents = _build_configured_subagents(model, config, config_base)
 	// 对齐 Python: configured_subagents, _should_add_general = self._build_configured_subagents(model, config, config_base)
-	subagentSpecs, _ := c.deep.buildConfiguredSubagents(c.deep.configCache, configBase)
+	subagentSpecs, _ := c.buildConfiguredSubagents(c.deep.configCache, configBase)
 
 	// 步骤 19: create_deep_agent(...)
 	// 对齐 Python: self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
 	// code 模式不传: vision_model_config, audio_model_config, context_engine_config, completion_timeout
 	systemPrompt := codeprompt.BuildCodeSystemPrompt()
-	resolvedLanguage := c.deep.resolveRuntimeLanguage()
+	resolvedLanguage := c.resolveRuntimeLanguage()
 
 	params := harness_config.CreateDeepAgentParams{
 		Model:               c.deep.model,
@@ -340,7 +345,8 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 21.3: agent_history 写入路径修正
 	// 对齐 Python: 修正 .agent_history 写入路径到 agent 系统 workspace
-	// ⤵️ 10.6.3-10: 待 DeepAgent 实例属性扩展后回填
+	// Python: for rail in registered_rails: for tool in rail.tools: setattr(tool, '_workspace_path', agent_workspace_dir)
+	// ⤵️ 10.6.3-10: Go 中工具没有 _workspace_path 属性，需要等 DeepAgent 实例属性扩展后回填
 
 	// 步骤 22: c.deep.registeredMCPServerIDs = make(map[string]bool)
 	c.deep.registeredMCPServerIDs = make(map[string]bool)
@@ -438,6 +444,206 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolvePromptLanguage 覆写 DeepAdapter，code 模式强制英文。
+// 对齐 Python: JiuwenClawCodeAdapter._resolve_prompt_language() → "en"
+func (c *CodeAdapter) resolvePromptLanguage() string {
+	return "en"
+}
+
+// resolveRuntimeLanguage 覆写 DeepAdapter，code 模式运行时语言。
+// 对齐 Python: JiuwenClawCodeAdapter._resolve_runtime_language() → self._runtime_language_override or "en"
+func (c *CodeAdapter) resolveRuntimeLanguage() string {
+	if c.runtimeLanguageOverride != "" {
+		return c.runtimeLanguageOverride
+	}
+	return "en"
+}
+
+// buildConfiguredSubagents 覆写 DeepAdapter，code 模式固定挂载 explore/plan/code 子代理。
+// 对齐 Python: JiuwenClawCodeAdapter._build_configured_subagents()
+func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
+	var specs []hschema.SubagentSpec
+	resolvedLanguage := c.resolveRuntimeLanguage()
+	workspaceDir := c.deep.workspaceDir
+	if workspaceDir == "" {
+		workspaceDir = "./"
+	}
+	subagentsCfg, _ := config["subagents"].(map[string]any)
+
+	// ── 固定挂载：explore_agent ──
+	// 对齐 Python: explore_agent 始终启用
+	exploreParams := &hschema.SubagentCreateParams{
+		Model:      c.deep.model,
+		Language:   resolvedLanguage,
+		Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+		MaxIterations: 15,
+	}
+	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
+	if exploreCfg != nil {
+		// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+		// 注：Go 的 SubAgentConfig 没有 AutoCreateWorkspace 字段，
+		// 通过 FactoryKwargs 传递
+		if exploreCfg.FactoryKwargs == nil {
+			exploreCfg.FactoryKwargs = make(map[string]any)
+		}
+		exploreCfg.FactoryKwargs["auto_create_workspace"] = false
+		specs = append(specs, exploreCfg)
+	}
+
+	// ── 固定挂载：plan_agent ──
+	// 对齐 Python: plan_agent 始终启用
+	planParams := &hschema.SubagentCreateParams{
+		Model:      c.deep.model,
+		Language:   resolvedLanguage,
+		Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+		MaxIterations: 25,
+	}
+	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
+	if planCfg != nil {
+		// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+		if planCfg.FactoryKwargs == nil {
+			planCfg.FactoryKwargs = make(map[string]any)
+		}
+		planCfg.FactoryKwargs["auto_create_workspace"] = false
+		specs = append(specs, planCfg)
+	}
+
+	// ── 按配置启用：code_agent ──
+	// 对齐 Python: code_agent 按配置启用
+	if c.isSubagentExplicitlyEnabled(subagentsCfg, "code_agent") {
+		codeParams := &hschema.SubagentCreateParams{
+			Model:      c.deep.model,
+			Language:   resolvedLanguage,
+			Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+			MaxIterations: 15,
+		}
+		codeCfg := subagents.BuildCodeAgentConfig(c.deep.model, codeParams)
+		if codeCfg != nil {
+			// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+			if codeCfg.FactoryKwargs == nil {
+				codeCfg.FactoryKwargs = make(map[string]any)
+			}
+			codeCfg.FactoryKwargs["auto_create_workspace"] = false
+			// ⤵️ 7.8: CodingMemoryRail 条件注入（当前 nil 占位）
+			// Python: if coding_memory_rail is not None: code_agent_rails = [SysOperationRail(), coding_memory_rail]
+			specs = append(specs, codeCfg)
+		}
+	}
+
+	// ── 按配置启用：browser_agent ──
+	// 对齐 Python: browser_agent 按配置启用
+	if c.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") {
+		// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
+		// 暂时跳过，等 browser 功能实现时回填
+	}
+
+	// ── 按配置启用：research_agent ──
+	// 对齐 Python: research_agent 继承自 DeepAdapter
+	if c.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
+		params := c.deep.buildResearchSubagentParams(config, configBase)
+		cfg := subagents.BuildResearchAgentConfig(c.deep.model, params)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	// ── 自定义 agent ──
+	customSpecs := c.deep.loadCustomSubagents(subagentsCfg)
+	specs = append(specs, customSpecs...)
+
+	logger.Info(logComponent).
+		Int("subagent_count", len(specs)).
+		Msg("CodeAdapter buildConfiguredSubagents 完成")
+
+	// 对齐 Python: return subagents, False (should_add_general = False)
+	return specs, false
+}
+
+// isSubagentExplicitlyEnabled 检查子代理是否通过配置显式启用。委托 DeepAdapter。
+func (c *CodeAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, name string) bool {
+	return c.deep.isSubagentExplicitlyEnabled(subagentsCfg, name)
+}
+
+// getToolCards 覆写 DeepAdapter，code 模式从 config.yaml::modes.code.tools 读取工具列表。
+// 对齐 Python: JiuwenClawCodeAdapter._get_tool_cards() → build_code_tool_cards()
+func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
+	var toolCards []*tool.ToolCard
+	resolvedLanguage := c.resolveRuntimeLanguage()
+
+	// 从 configBase 中读取 modes.code.tools 配置
+	configuredTools := c.getCodeModeTools()
+
+	// 对齐 Python: _TOOL_BUILD_NAMES 映射
+	for _, toolName := range configuredTools {
+		switch toolName {
+		case "web_free_search":
+			freeSearchTool := web_tools.NewWebFreeSearchTool(resolvedLanguage, agentID)
+			if err := runner.GetResourceMgr().AddTool(freeSearchTool); err != nil {
+				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+			}
+			toolCards = append(toolCards, freeSearchTool.Card())
+		case "web_fetch_webpage":
+			fetchTool := web_tools.NewWebFetchWebpageTool(resolvedLanguage, agentID)
+			if err := runner.GetResourceMgr().AddTool(fetchTool); err != nil {
+				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+			}
+			toolCards = append(toolCards, fetchTool.Card())
+		case "web_paid_search":
+			if web_tools.IsPaidSearchEnabled() {
+				paidSearchTool := web_tools.NewWebPaidSearchTool(resolvedLanguage, agentID)
+				if err := runner.GetResourceMgr().AddTool(paidSearchTool); err != nil {
+					logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+				}
+				toolCards = append(toolCards, paidSearchTool.Card())
+			}
+		case "user_todos":
+			// ⤵️ 10.6.3-10: user_todos 工具尚未实现
+			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos 工具尚未实现，跳过")
+		case "skill_toolkit":
+			// ⤵️ 10.6.3-10: skill_toolkit 工具尚未实现
+			logger.Debug(logComponent).Str("tool", toolName).Msg("skill_toolkit 工具尚未实现，跳过")
+		default:
+			logger.Warn(logComponent).Str("tool", toolName).Msg("未知的 code 模式工具名，跳过")
+		}
+	}
+
+	// 如果配置为空，使用默认工具集（对齐 DeepAdapter 的 web search 工具）
+	if len(configuredTools) == 0 {
+		toolCards = c.deep.getToolCards(agentID)
+	}
+
+	logger.Info(logComponent).
+		Int("tool_count", len(toolCards)).
+		Msg("CodeAdapter getToolCards 完成")
+	return toolCards
+}
+
+// getCodeModeTools 从 configBase 中读取 modes.code.tools 配置
+func (c *CodeAdapter) getCodeModeTools() []string {
+	if c.deep.configCache == nil {
+		return nil
+	}
+	modes, ok := c.deep.configCache["modes"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	codeMode, ok := modes["code"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	toolsRaw, ok := codeMode["tools"].([]any)
+	if !ok {
+		return nil
+	}
+	var tools []string
+	for _, t := range toolsRaw {
+		if s, ok := t.(string); ok {
+			tools = append(tools, s)
+		}
+	}
+	return tools
+}
 
 // resolveEmbeddingConfig 解析嵌入配置。
 // 从 configCache 中获取 embedding 配置，暂不可用则返回 nil。
@@ -662,17 +868,14 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 
 	// 获取 codingMemoryDir
 	codingMemoryDir := ""
-	if c.deep.instance != nil && c.deep.instance.Config().Workspace != nil {
-		if nodePath := c.deep.instance.Config().Workspace.GetNodePath("coding_memory"); nodePath != nil {
+	if c.deep.instance != nil && c.deep.instance.DeepConfig() != nil && c.deep.instance.DeepConfig().Workspace != nil {
+		if nodePath := c.deep.instance.DeepConfig().Workspace.GetNodePath("coding_memory"); nodePath != nil {
 			codingMemoryDir = *nodePath
 		}
 	}
 
 	// 获取语言
-	language := "en"
-	if c.deep.instance != nil && c.deep.instance.Config().Language != "" {
-		language = c.deep.instance.Config().Language
-	}
+	language := c.resolveRuntimeLanguage()
 
 	return memoryrail.NewCodingMemoryRail(codingMemoryDir, embCfg, language)
 }

@@ -197,13 +197,13 @@ func TestSnapshotEqual(t *testing.T) {
 	if !snapshotEqual(nil, nil) {
 		t.Error("Expected nil snapshots to be equal")
 	}
-	if !snapshotEqual([]string{"a.md", "b.md"}, []string{"b.md", "a.md"}) {
+	if !snapshotEqual(map[string]bool{"a.md": true, "b.md": true}, map[string]bool{"b.md": true, "a.md": true}) {
 		t.Error("Expected same-content snapshots to be equal")
 	}
-	if snapshotEqual([]string{"a.md"}, []string{"a.md", "b.md"}) {
+	if snapshotEqual(map[string]bool{"a.md": true}, map[string]bool{"a.md": true, "b.md": true}) {
 		t.Error("Expected different-length snapshots to be not equal")
 	}
-	if snapshotEqual([]string{"a.md"}, []string{"b.md"}) {
+	if snapshotEqual(map[string]bool{"a.md": true}, map[string]bool{"b.md": true}) {
 		t.Error("Expected different-content snapshots to be not equal")
 	}
 }

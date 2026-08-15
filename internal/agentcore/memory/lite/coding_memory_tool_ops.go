@@ -58,16 +58,24 @@ func ValidateCodingMemoryPath(path string, ws *workspace.Workspace) (bool, strin
 }
 
 // CodingMemoryReadWithContext 读取 coding_memory 文件。对齐 Python coding_memory_read_with_context
-func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) *CodingReadResult {
+func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) (result *CodingReadResult) {
+	// 对齐 Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logger.ComponentAgentCore).Any("panic", r).Str("path", path).Msg("CodingMemoryReadWithContext panic")
+			result = &CodingReadResult{Success: false, Path: path, Error: fmt.Sprintf("internal error: %v", r)}
+		}
+	}()
+
 	ws := toolCtx.Workspace
 	if ws == nil {
 		return &CodingReadResult{Success: false, Path: path, Error: "Workspace not initialized"}
 	}
-	isValid, result := ValidateCodingMemoryPath(path, ws)
+	isValid, resolvedPath := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		return &CodingReadResult{Success: false, Path: path, Error: result}
+		return &CodingReadResult{Success: false, Path: path, Error: resolvedPath}
 	}
-	fullPath := result
+	fullPath := resolvedPath
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
 		logger.Error(logger.ComponentAgentCore).Msg("Read memory failed, no available sys_operation")
@@ -132,7 +140,15 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 //  10. 实际写入（创建/追加）
 //  11. 更新 MEMORY.md 索引 → upsertMemoryIndex
 //  12. 返回 WriteResult
-func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) map[string]any {
+func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) (result map[string]any) {
+	// 对齐 Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logger.ComponentAgentCore).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext panic")
+			result = map[string]any{"success": false, "path": path, "error": fmt.Sprintf("internal error: %v", r)}
+		}
+	}()
+
 	if toolCtx == nil {
 		return map[string]any{"success": false, "path": path, "error": "Workspace not initialized"}
 	}
@@ -169,13 +185,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	for attempt := 0; attempt < maxConflictRetries; attempt++ {
 		// 对齐 Python step 6: 快照目录文件列表
 		snapshot := snapshotMemoryFiles(toolCtx, memoryDir)
-		fileExists := false
-		for _, name := range snapshot {
-			if name == basename {
-				fileExists = true
-				break
-			}
-		}
+		fileExists := snapshot[basename]
 
 		if !fileExists {
 			// 对齐 Python step 7a: 创建模式 — 搜索相似文件
@@ -261,22 +271,22 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	// 对齐 Python: 超过重试次数，降级为无快照验证写入
 	logger.Warn(logger.ComponentAgentCore).
 		Int("max_retries", maxConflictRetries).
+		Bool("conflict_detected", conflict.ConflictDetected).
+		Interface("conflicting_files", conflict.ConflictingFiles).
 		Msg("超过最大冲突重试次数，跳过快照验证直接写入")
 
 	fileLock := getFileLock(resolved)
 	fileLock.Lock()
 	currentSnapshot := snapshotMemoryFiles(toolCtx, memoryDir)
-	fileExistsNow := false
-	for _, name := range currentSnapshot {
-		if name == basename {
-			fileExistsNow = true
-			break
-		}
-	}
+	fileExistsNow := currentSnapshot[basename]
 	sysOp := toolCtx.SysOperation
 	if sysOp != nil {
 		if !fileExistsNow {
-			_, _ = sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
+			// T07: 对齐 Python — 降级写入时也检查错误
+			if _, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true)); err != nil {
+				logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolved).Msg("降级写入失败")
+				return map[string]any{"success": false, "path": path, "error": err.Error()}
+			}
 		} else {
 			appendToExistingFile(ctx, toolCtx, resolved, body, fm)
 		}
@@ -301,7 +311,15 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 }
 
 // CodingMemoryEditWithContext 编辑 coding_memory 文件。对齐 Python coding_memory_edit_with_context
-func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) *CodingEditResult {
+func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) (result *CodingEditResult) {
+	// 对齐 Python: try/except 顶层异常保护
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logger.ComponentAgentCore).Any("panic", r).Str("path", path).Msg("CodingMemoryEditWithContext panic")
+			result = &CodingEditResult{Error: fmt.Sprintf("internal error: %v", r)}
+		}
+	}()
+
 	if oldText == "" {
 		return &CodingEditResult{Error: "old_text cannot be empty"}
 	}
@@ -455,7 +473,8 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 
 // snapshotMemoryFiles 快照目录下的 .md 文件列表（排除 MEMORY.md）。对齐 Python _snapshot_memory_files
 // 使用 sys_operation.Fs().ListFiles() 读取目录，对齐 Python ctx.sys_operation.fs().list_files()
-func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) []string {
+// 返回 map[string]bool 对齐 Python frozenset 语义（无序、去重、O(1) 查找）
+func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) map[string]bool {
 	if memoryDir == "" {
 		return nil
 	}
@@ -467,7 +486,7 @@ func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) []s
 	if err != nil || listResult == nil || listResult.Data == nil {
 		return nil
 	}
-	var names []string
+	names := make(map[string]bool)
 	for _, item := range listResult.Data.ListItems {
 		if item.IsDirectory {
 			continue
@@ -479,22 +498,18 @@ func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) []s
 		if strings.EqualFold(name, "memory.md") {
 			continue
 		}
-		names = append(names, name)
+		names[name] = true
 	}
 	return names
 }
 
-// snapshotEqual 比较两个快照是否相等
-func snapshotEqual(a, b []string) bool {
+// snapshotEqual 比较两个快照是否相等。对齐 Python frozenset != frozenset
+func snapshotEqual(a, b map[string]bool) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	aMap := make(map[string]bool, len(a))
-	for _, s := range a {
-		aMap[s] = true
-	}
-	for _, s := range b {
-		if !aMap[s] {
+	for k := range a {
+		if !b[k] {
 			return false
 		}
 	}
@@ -525,6 +540,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 		return
 	}
 	if fm["name"] == "" || fm["description"] == "" {
+		logger.Debug(logger.ComponentAgentCore).Str("path", filename).Msg("upsertMemoryIndex: name or description empty, skipping index update")
 		return
 	}
 

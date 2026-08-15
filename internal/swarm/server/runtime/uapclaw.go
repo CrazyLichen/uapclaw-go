@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -196,8 +197,8 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 				SessionID:    sid,
 				RequestID:    request.RequestID,
 				ChannelID:    &channelID,
-				AgentName:    "",
-				WorkspaceDir: workspace.AgentWorkspaceDir(),
+				AgentName:    "main_agent",
+				WorkspaceDir: filepath.Join(workspace.AgentRootDir(), "home"),
 				Extra:        parseRequestParams(request),
 			}
 			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
@@ -344,8 +345,8 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 				SessionID:    sid,
 				RequestID:    request.RequestID,
 				ChannelID:    &channelID,
-				AgentName:    "",
-				WorkspaceDir: workspace.AgentWorkspaceDir(),
+				AgentName:    "main_agent",
+				WorkspaceDir: filepath.Join(workspace.AgentRootDir(), "home"),
 				Extra:        parseRequestParams(request),
 			}
 			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
@@ -511,6 +512,8 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 			Msg("Auto-Harness resume 请求")
 	} else {
 		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
+		// S09: 缺少 is_team_first_request 判断逻辑，Team 模式下后续请求会错误排队
+		// Python 通过 team_manager.active_session_id / pending_session_id / has_stream_task 判断首次/后续
 		_ = uc.sessionManager.EnsureSessionProcessor(ctx, sessionID)
 	}
 
@@ -771,6 +774,7 @@ func (uc *UapClaw) processTeamInterrupt(
 
 	case "pause":
 		// ⤵️ 10.6.19-23: team_manager.pause_session_runtime(sessionID, reason)
+		// S10: paused 硬编码为 false，Team pause 功能完全无效，依赖 TeamManager
 		paused := false
 		// paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
 		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(pause)", nil)
@@ -790,6 +794,7 @@ func (uc *UapClaw) processTeamInterrupt(
 
 	case "cancel":
 		// ⤵️ 10.6.19-23: team_manager.cancel_session_runtime(sessionID, reason)
+		// S10: cancelled 硬编码为 false，Team cancel 功能完全无效，依赖 TeamManager
 		cancelled := false
 		// cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
 		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", nil)
@@ -824,6 +829,7 @@ func (uc *UapClaw) processTeamInterrupt(
 // 对齐 Python: JiuWenClaw._cancel_team_work_for_session()
 func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
 	// ⤵️ 10.6.19-23: get_team_manager + terminate_session_runtime
+	// T09: CodeAdapter 缺少 configure_team_member_agent，Team 模式下 code 成员 Agent 无法正确配置
 	// teamManager := getTeamManager(channelID)
 	// return teamManager.TerminateSessionRuntime(ctx, sessionID, logPrefix)
 	logger.Info(logComponent).

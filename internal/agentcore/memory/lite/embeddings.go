@@ -22,6 +22,8 @@ type EmbeddingProvider interface {
 	ID() string
 	// Model 返回提供者模型名。对齐 Python: self.provider.model
 	Model() string
+	// Dims 返回嵌入向量维度。对齐 Python: self.provider.dims
+	Dims() int
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,6 +34,8 @@ type MockEmbeddingProvider struct {
 	id string
 	// model 提供者模型名
 	model string
+	// dims 嵌入向量维度。对齐 Python MockEmbeddingProvider.dims = 128
+	dims int
 }
 
 // baseEmbeddingAdapter 将 foundation/store/embedding.BaseEmbedding 适配为 lite.EmbeddingProvider
@@ -39,13 +43,14 @@ type baseEmbeddingAdapter struct {
 	base  baseEmbedding.BaseEmbedding
 	prov  string // 提供者标识
 	model string // 提供者模型名
+	dims  int    // 嵌入向量维度
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMockEmbeddingProvider 创建模拟嵌入提供者
 func NewMockEmbeddingProvider() *MockEmbeddingProvider {
-	return &MockEmbeddingProvider{id: "mock", model: "mock"}
+	return &MockEmbeddingProvider{id: "mock", model: "mock", dims: 128}
 }
 
 // EmbedQuery MockEmbeddingProvider 的 EmbedQuery 实现，返回空向量
@@ -64,6 +69,9 @@ func (m *MockEmbeddingProvider) ID() string { return m.id }
 // Model 返回提供者模型名
 func (m *MockEmbeddingProvider) Model() string { return m.model }
 
+// Dims 返回嵌入向量维度
+func (m *MockEmbeddingProvider) Dims() int { return m.dims }
+
 // EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base
 func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
 	return a.base.EmbedQuery(ctx, text)
@@ -79,6 +87,9 @@ func (a *baseEmbeddingAdapter) ID() string { return a.prov }
 
 // Model 返回提供者模型名
 func (a *baseEmbeddingAdapter) Model() string { return a.model }
+
+// Dims 返回嵌入向量维度
+func (a *baseEmbeddingAdapter) Dims() int { return a.dims }
 
 // ResolveEmbeddingConfigFromEnv 从环境变量构建 EmbeddingConfig。对齐 Python resolve_embedding_config_from_env
 func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey string) *apiEmbedding.EmbeddingConfig {

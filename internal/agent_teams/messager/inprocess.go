@@ -30,7 +30,7 @@ type bus struct {
 type InProcessMessager struct {
 	// config 传输配置
 	config schema.MessagerTransportConfig
-	// subscribedTopics 已订阅的主题列表（用于 stop 时清理）
+	// subscribedTopics 已订阅的主题列表（用于 Unsubscribe 时移除条目）
 	subscribedTopics []string
 }
 
@@ -85,9 +85,11 @@ func (m *InProcessMessager) Stop(_ context.Context) error {
 // 自动设置 SenderID 过滤自发布（对齐 Python message.model_copy(update={"sender_id": self._agent_id})）。
 func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message *schema.EventMessage) error {
 	agentID := m.agentID()
-	// Stamp SenderID：直接设置消息的 SenderID
+	// 对齐 Python: message.model_copy(update={"sender_id": self._agent_id}) — 创建副本再修改
 	if message.SenderID == "" {
-		message.SenderID = agentID
+		msgCopy := *message
+		msgCopy.SenderID = agentID
+		message = &msgCopy
 	}
 	b := getBus()
 	b.mu.Lock()

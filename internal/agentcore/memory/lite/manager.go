@@ -22,6 +22,8 @@ type MemoryIndexManager interface {
 	ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error)
 	// Status 返回系统状态报告
 	Status() *StatusResult
+	// HasLLM 判断是否有 LLM 实例可用。对齐 Python ctx.manager.llm
+	HasLLM() bool
 	// Close 关闭管理器
 	Close() error
 }

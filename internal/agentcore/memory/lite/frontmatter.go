@@ -1,6 +1,7 @@
 package lite
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -40,7 +41,7 @@ func ParseFrontmatter(content string) map[string]string {
 func ValidateFrontmatter(fm map[string]string) (bool, string) {
 	for _, field := range []string{"name", "description", "type"} {
 		if fm[field] == "" {
-			return false, "缺少必填字段: " + field
+			return false, fmt.Sprintf("Missing required field: %s", field)
 		}
 	}
 	valid := false
@@ -51,7 +52,7 @@ func ValidateFrontmatter(fm map[string]string) (bool, string) {
 		}
 	}
 	if !valid {
-		return false, "type 必须是以下之一: user, feedback, project, reference"
+		return false, "type must be one of: user, feedback, project, reference"
 	}
 	return true, ""
 }
