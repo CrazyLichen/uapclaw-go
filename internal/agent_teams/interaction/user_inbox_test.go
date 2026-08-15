@@ -7,14 +7,16 @@ import (
 )
 
 func TestNewUserInbox(t *testing.T) {
-	u := NewUserInbox(nil)
+	tb := newTestTeamBackendForInteraction()
+	u := NewUserInbox(tb.MessageManager())
 	if u == nil {
 		t.Error("NewUserInbox 应返回非 nil")
 	}
 }
 
 func TestUserInbox_Direct_成功(t *testing.T) {
-	u := NewUserInbox(nil)
+	tb := newTestTeamBackendForInteraction()
+	u := NewUserInbox(tb.MessageManager())
 	result, err := u.Direct("alice", "hello")
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +30,8 @@ func TestUserInbox_Direct_成功(t *testing.T) {
 }
 
 func TestUserInbox_Broadcast_成功(t *testing.T) {
-	u := NewUserInbox(nil)
+	tb := newTestTeamBackendForInteraction()
+	u := NewUserInbox(tb.MessageManager())
 	result, err := u.Broadcast("hello all")
 	if err != nil {
 		t.Fatal(err)

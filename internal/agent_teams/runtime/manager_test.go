@@ -5,8 +5,31 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
+
+// mockAgent 实现 TeamBackendProvider 接口的测试 Agent。
+type mockAgent struct {
+	backend *tools.TeamBackend
+}
+
+func (m *mockAgent) TeamBackend() *tools.TeamBackend {
+	return m.backend
+}
+
+// newTestTeamBackendForRuntime 创建测试用的 TeamBackend。
+func newTestTeamBackendForRuntime() *tools.TeamBackend {
+	db := database.NewInMemoryTeamDatabase()
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	tb := tools.NewTeamBackend("team-1", "leader", true, db, msg)
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	return tb
+}
 
 func TestNewTeamRuntimeManager(t *testing.T) {
 	m := NewTeamRuntimeManager()
@@ -72,12 +95,14 @@ func TestTeamRuntimeManager_Interact_GodView载荷(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_Operator载荷(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        &mockAgent{backend: tb},
 	}
 	m.Pool().Add(entry)
 
@@ -93,12 +118,14 @@ func TestTeamRuntimeManager_Interact_Operator载荷(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_Operator广播载荷(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        &mockAgent{backend: tb},
 	}
 	m.Pool().Add(entry)
 

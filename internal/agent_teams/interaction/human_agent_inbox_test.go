@@ -1,8 +1,25 @@
 package interaction
 
 import (
+	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
+
+// newTestTeamBackendForInteraction 创建测试用的 TeamBackend。
+func newTestTeamBackendForInteraction() *tools.TeamBackend {
+	db := database.NewInMemoryTeamDatabase()
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	tb := tools.NewTeamBackend("test-team", "leader", true, db, msg, tools.WithEnableHITT(true))
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnHumanAgent(ctx, "human_agent", "Human Agent", "", "")
+	return tb
+}
 
 func TestHumanAgentNotEnabledError(t *testing.T) {
 	err := &HumanAgentNotEnabledError{}
@@ -27,19 +44,21 @@ func TestUnknownHumanAgentError(t *testing.T) {
 }
 
 func TestNewHumanAgentInbox(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	if h == nil {
 		t.Error("NewHumanAgentInbox 应返回非 nil")
 	}
 }
 
 func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
+	tb := newTestTeamBackendForInteraction()
 	var lookedUp string
 	lookup := func(sender string) any {
 		lookedUp = sender
 		return "mock-agent" // 非 nil 表示有活跃运行时
 	}
-	h := NewHumanAgentInbox(nil, nil, lookup, nil)
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send("hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +76,8 @@ func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_广播(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	target := "all"
 	result, err := h.Send("hello all", &target, nil)
 	if err != nil {
@@ -69,7 +89,8 @@ func TestHumanAgentInbox_Send_广播(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_无lookup时驱动失败(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	result, err := h.Send("hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -83,8 +104,9 @@ func TestHumanAgentInbox_Send_无lookup时驱动失败(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_lookup返回nil(t *testing.T) {
+	tb := newTestTeamBackendForInteraction()
 	lookup := func(sender string) any { return nil }
-	h := NewHumanAgentInbox(nil, nil, lookup, nil)
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send("hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +120,8 @@ func TestHumanAgentInbox_Send_lookup返回nil(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_未知发送者(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	sender := "ghost"
 	_, err := h.Send("hello", nil, &sender)
 	if err == nil {
@@ -110,8 +133,9 @@ func TestHumanAgentInbox_Send_未知发送者(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
+	tb := newTestTeamBackendForInteraction()
 	lookup := func(sender string) any { return "mock-agent" }
-	h := NewHumanAgentInbox(nil, nil, lookup, nil)
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	sender := "human_agent"
 	result, err := h.Send("hello", nil, &sender)
 	if err != nil {
@@ -123,28 +147,32 @@ func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
 }
 
 func TestHumanAgentInbox_Send_点对点(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	// 创建 alice 成员
+	tb.SpawnMember(context.Background(), "alice", "Alice", "", string(atschema.TeamRoleTeammate), "", "", "")
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	target := "alice"
 	result, err := h.Send("hello", &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// stub 模式下 memberExists 返回 true，DeliverDirect 返回成功
 	if !result.IsOK() {
 		t.Errorf("IsOK = %v, want true", result.IsOK())
 	}
 }
 
 func TestHumanAgentInbox_GetOnInbound(t *testing.T) {
+	tb := newTestTeamBackendForInteraction()
 	cb := func(event HumanAgentInboundEvent) error { return nil }
-	h := NewHumanAgentInbox(nil, nil, nil, cb)
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, cb)
 	if h.GetOnInbound() == nil {
 		t.Error("GetOnInbound 不应为 nil")
 	}
 }
 
 func TestHumanAgentInbox_GetOnInbound_nil(t *testing.T) {
-	h := NewHumanAgentInbox(nil, nil, nil, nil)
+	tb := newTestTeamBackendForInteraction()
+	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	if h.GetOnInbound() != nil {
 		t.Error("GetOnInbound 应为 nil")
 	}

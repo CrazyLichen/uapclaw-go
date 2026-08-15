@@ -456,8 +456,9 @@ func TestDeliverDirect_未知成员(t *testing.T) {
 }
 
 func TestDeliverDirect_成功(t *testing.T) {
+	tb := newTestTeamBackendForInteraction()
 	check := func(name string) (bool, error) { return true, nil }
-	result, err := DeliverDirect("hi", "user", "alice", nil, check)
+	result, err := DeliverDirect("hi", "user", "alice", tb.MessageManager(), check)
 	if err != nil {
 		t.Fatal(err)
 	}

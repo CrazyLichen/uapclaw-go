@@ -295,7 +295,15 @@ func (m *TeamRuntimeManager) dispatchPayload(
 
 	case *interaction.OperatorMessage:
 		// 对齐 Python 步骤 4: inbox = UserInbox(backend.message_manager)
-		inbox := interaction.NewUserInbox(nil) // ⤵️ 待 9.55 回填: messageManager
+		backend := getTeamBackend(entry.Agent)
+		var msgManager *tools.TeamMessageManager
+		if backend != nil {
+			msgManager = backend.MessageManager()
+		}
+		if msgManager == nil {
+			return interaction.NewDeliverResultFailure("no_team_backend"), nil
+		}
+		inbox := interaction.NewUserInbox(msgManager)
 		if p.Target() == nil {
 			// 对齐 Python 步骤 4b: 广播前先自动启动所有未启动成员
 			// ⤵️ 待 9.55 回填: agent.AutoStartAll()
@@ -307,9 +315,13 @@ func (m *TeamRuntimeManager) dispatchPayload(
 
 	case *interaction.HumanAgentMessage:
 		// 对齐 Python 步骤 5: inbox = HumanAgentInbox(...)
+		backend := getTeamBackend(entry.Agent)
+		if backend == nil {
+			return interaction.NewDeliverResultFailure("no_team_backend"), nil
+		}
 		hInbox := interaction.NewHumanAgentInbox(
-			nil, // ⤵️ 待 9.55 回填: team backend
-			nil, // ⤵️ 待 9.55 回填: messageManager
+			backend,
+			backend.MessageManager(),
 			nil, // ⤵️ 待 9.55 回填: agentLookup
 			nil, // ⤵️ 待 9.55 回填: onInbound
 		)
