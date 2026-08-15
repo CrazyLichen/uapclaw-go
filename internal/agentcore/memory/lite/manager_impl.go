@@ -528,13 +528,21 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 }
 
 // indexFile 索引单个文件。对齐 Python _index_file
+<<<<<<< Updated upstream
 func (m *memoryIndexManager) indexFile(ctx context.Context, entry map[string]any, source string) error {
+=======
+func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, source string) error {
+>>>>>>> Stashed changes
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
+<<<<<<< Updated upstream
 	absPath := entry["absPath"].(string)
+=======
+	absPath := entry.AbsPath
+>>>>>>> Stashed changes
 	var content string
 	if m.sysOperation != nil {
 		// 对齐 Python: 使用 sys_operation 读取文件
@@ -560,6 +568,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry map[string]any
 	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
 
 	// 清除旧索引
+<<<<<<< Updated upstream
 	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry["path"])
 	if m.ftsAvailable {
 		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry["path"])
@@ -568,11 +577,25 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry map[string]any
 	for _, chunk := range chunks {
 		if err := m.indexChunkWithTx(ctx, tx, entry["path"].(string), source, chunk); err != nil {
 			logger.Warn(logger.ComponentCommon).Err(err).Str("path", entry["path"].(string)).Msg("索引 chunk 失败")
+=======
+	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
+	if m.ftsAvailable {
+		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
+	}
+
+	for _, chunk := range chunks {
+		if err := m.indexChunkWithTx(ctx, tx, entry.Path, source, chunk); err != nil {
+			logger.Warn(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引 chunk 失败")
+>>>>>>> Stashed changes
 		}
 	}
 
 	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
+<<<<<<< Updated upstream
 		entry["path"], source, entry["hash"], entry["mtimeMs"], entry["size"])
+=======
+		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
+>>>>>>> Stashed changes
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -999,11 +1022,19 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 			continue
 		}
 		similarity := CosineSimilarity(queryVec, vec)
+<<<<<<< Updated upstream
 		results = append(results, map[string]any{
 			"id": id, "path": path, "source": source,
 			"start_line": startLine, "end_line": endLine,
 			"snippet": truncateString(text, snippetMaxChars),
 			"score":   math.Max(0, similarity), // 对齐 Python: max(0, similarity)
+=======
+		results = append(results, SearchResult{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+			Score:   math.Max(0, similarity), // 对齐 Python: max(0, similarity)
+>>>>>>> Stashed changes
 		})
 	}
 	// 按分数排序
