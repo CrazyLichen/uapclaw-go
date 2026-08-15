@@ -257,8 +257,8 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 				SessionID:        sid,
 				RequestID:        request.RequestID,
 				ChannelID:        &channelID,
-				AgentName:        "",
-				WorkspaceDir:     workspace.AgentWorkspaceDir(),
+				AgentName:        "main_agent",
+				WorkspaceDir:     filepath.Join(workspace.AgentRootDir(), "home"),
 				AssistantMessage: &content,
 				Extra:            parseRequestParams(request),
 			}
@@ -490,8 +490,8 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 					SessionID:        sid,
 					RequestID:        request.RequestID,
 					ChannelID:        &channelID,
-					AgentName:        "",
-					WorkspaceDir:     workspace.AgentWorkspaceDir(),
+					AgentName:        "main_agent",
+					WorkspaceDir:     filepath.Join(workspace.AgentRootDir(), "home"),
 					AssistantMessage: &assistantMessage,
 					Extra:            parseRequestParams(request),
 				}
