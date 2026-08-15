@@ -16,8 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
@@ -36,6 +34,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -443,7 +442,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
 	// 对齐 Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
-	systemPrompt := d.buildAgentIdentityPrompt(d.resolvePromptLanguage())
+	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
 
 	params := harness_config.CreateDeepAgentParams{
 		Model:                  d.model,
@@ -1928,37 +1927,13 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 	return hschema.PromptModeFull
 }
 
-// buildAgentIdentityPrompt 构建 Agent 身份提示词。
-// 对齐 Python: build_agent_identity_prompt(language=self._resolve_prompt_language()) (prompt_builder.py L248-259)
-//
-// Python 执行步骤：
-//
-//  1. resolved_language = resolve_language(language)
-//  2. builder = SystemPromptBuilder(language=resolved_language)
-//  3. builder.add_section(_identity_prompt(resolved_language))
-//  4. return builder.build()
-func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
-	// 步骤 1: 对齐 Python: resolved_language = resolve_language(language)
-	resolvedLanguage := prompts.ResolveLanguage(language)
-
-	// 步骤 2: 对齐 Python: builder = SystemPromptBuilder(language=resolved_language)
-	// 使用 PromptModeNone，因为 build_agent_identity_prompt 只包含 identity 节
-	builder := prompts.NewSystemPromptBuilder(resolvedLanguage, hschema.PromptModeNone)
-
-	// 步骤 3: 对齐 Python: builder.add_section(_identity_prompt(resolved_language))
-	builder.AddSection(sections.BuildIdentitySection())
-
-	// 步骤 4: 对齐 Python: return builder.build()
-	return builder.Build()
-}
-
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
 // 对齐 Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
 func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards []*tool.ToolCard, railsList []sainterfaces.AgentRail) *hschema.DeepAgentConfig {
 	return &hschema.DeepAgentConfig{
 		Model:          model,
 		Card:           card,
-		SystemPrompt:   d.buildAgentIdentityPrompt(d.resolvePromptLanguage()),
+		SystemPrompt:   commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
 		EnableTaskLoop: d.resolveEnableTaskLoop(config, nil),
 		MaxIterations:  paramsInt(config, "max_iterations", 15),
 		Language:       d.resolveRuntimeLanguage(),
