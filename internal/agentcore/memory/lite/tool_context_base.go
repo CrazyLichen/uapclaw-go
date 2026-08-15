@@ -29,6 +29,48 @@ type LiteMemoryToolContextBase struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithWorkspace 设置工作空间
+func (b *LiteMemoryToolContextBase) WithWorkspace(ws *workspace.Workspace) *LiteMemoryToolContextBase {
+	b.Workspace = ws
+	return b
+}
+
+// WithSettings 设置记忆配置
+func (b *LiteMemoryToolContextBase) WithSettings(s *MemorySettings) *LiteMemoryToolContextBase {
+	b.Settings = s
+	return b
+}
+
+// WithAgentID 设置 Agent 标识
+func (b *LiteMemoryToolContextBase) WithAgentID(id string) *LiteMemoryToolContextBase {
+	b.AgentID = id
+	return b
+}
+
+// WithEmbeddingConfig 设置嵌入配置
+func (b *LiteMemoryToolContextBase) WithEmbeddingConfig(cfg *embedding.EmbeddingConfig) *LiteMemoryToolContextBase {
+	b.EmbeddingConfig = cfg
+	return b
+}
+
+// WithSysOperation 设置系统操作接口
+func (b *LiteMemoryToolContextBase) WithSysOperation(op sysop.SysOperation) *LiteMemoryToolContextBase {
+	b.SysOperation = op
+	return b
+}
+
+// WithManager 设置记忆索引管理器
+func (b *LiteMemoryToolContextBase) WithManager(mgr MemoryIndexManager) *LiteMemoryToolContextBase {
+	b.Manager = mgr
+	return b
+}
+
+// WithNodeName 设置节点名称
+func (b *LiteMemoryToolContextBase) WithNodeName(name string) *LiteMemoryToolContextBase {
+	b.NodeName = name
+	return b
+}
+
 // EnsureManager 懒加载 manager。对齐 Python LiteMemoryToolContextBase.ensure_manager
 func (b *LiteMemoryToolContextBase) EnsureManager() bool {
 	if b.Manager != nil {
