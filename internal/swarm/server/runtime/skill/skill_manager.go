@@ -1019,7 +1019,7 @@ func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params ma
 	if err != nil {
 		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error()}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode)}, nil
@@ -1095,7 +1095,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	if err != nil {
 		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error()}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode)}, nil
@@ -1112,7 +1112,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	if err != nil {
 		return map[string]any{"success": false, "detail": "创建临时目录失败: " + err.Error()}, nil
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := safeExtractZIPBytesToDir(zipBytes, tmpDir); err != nil {
 		return map[string]any{"success": false, "detail": "ZIP 解压失败: " + err.Error()}, nil
@@ -1137,7 +1137,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	finalDest := filepath.Join(sm.skillsDir, skillName)
 	if dirExists(finalDest) {
 		if force {
-			os.RemoveAll(finalDest)
+			_ = os.RemoveAll(finalDest)
 		} else {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
 		}
@@ -1290,7 +1290,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPack(ctx context.Context, param
 	if err != nil {
 		return map[string]any{"success": false, "detail": "创建 ZIP 文件失败: " + err.Error()}, nil
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	zipWriter := zip.NewWriter(outFile)
 	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -1325,8 +1325,8 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPack(ctx context.Context, param
 		_, err = w.Write(data)
 		return err
 	})
-	zipWriter.Close()
-	outFile.Close()
+	_ = zipWriter.Close()
+	_ = outFile.Close()
 
 	if err != nil {
 		return map[string]any{"success": false, "detail": "打包失败: " + err.Error()}, nil
@@ -1481,7 +1481,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	if err != nil {
 		return map[string]any{"success": false, "detail": "创建临时目录失败: " + err.Error()}, nil
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := safeExtractZIPBytesToDir(zipBytes, tmpDir); err != nil {
 		return map[string]any{"success": false, "detail": "ZIP 解压失败: " + err.Error()}, nil
@@ -1513,7 +1513,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
 	}
 	if dirExists(finalDest) {
-		os.RemoveAll(finalDest)
+		_ = os.RemoveAll(finalDest)
 	}
 	skillSrcDir := skillDir
 	if err := copyDir(skillSrcDir, finalDest); err != nil {
@@ -1578,7 +1578,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 	if _, err := part.Write(zipData); err != nil {
 		return map[string]any{"success": false, "detail": "写入上传数据失败: " + err.Error()}, nil
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/artifacts", body)
 	if err != nil {
@@ -1591,7 +1591,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 	if err != nil {
 		return map[string]any{"success": false, "detail": "上传失败: " + err.Error()}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("API 返回状态码: %d", resp.StatusCode)}, nil
@@ -1631,7 +1631,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, par
 	if err != nil {
 		return map[string]any{"success": false, "detail": "删除失败: " + err.Error()}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("API 返回状态码: %d", resp.StatusCode)}, nil
@@ -2448,7 +2448,7 @@ func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, p
 	if err != nil {
 		return nil, fmt.Errorf("网络请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API 返回状态码: %d", resp.StatusCode)
@@ -2539,7 +2539,7 @@ func (sm *SkillManager) downloadZipAndVerify(ctx context.Context, downloadURL, c
 	if err != nil {
 		return nil, fmt.Errorf("下载失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("下载返回状态码: %d", resp.StatusCode)
