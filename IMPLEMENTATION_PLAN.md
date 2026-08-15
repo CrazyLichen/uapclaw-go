@@ -703,7 +703,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.5.9 | ⤴️ | CallbackCompat | Go 已有 CallbackFramework，无需额外实现 | `jiuwenswarm/extensions/callback_compat.py` |
 | 10.5.10 | ☐ ⤵️ | CryptoUtility | 延后，CryptoProvider 接口待定义 | `jiuwenswarm/extensions/sdk/crypto_utility.py` |
 | **10.6 Swarm 侧 Harness 集成** | — | | | |
-| 10.6.1-2 | ☐ | Prompt Builder | Agent/Code 模式提示词 | `jiuwenswarm/agents/harness/common/prompt/` · `code/prompt/` |
+| 10.6.1-2 | ✅ | Prompt Builder | Agent/Code 模式提示词 | `jiuwenswarm/agents/harness/common/prompt/` · `code/prompt/` |
 | 10.6.3-10 | ☐ | Swarm Rails | AskUser/Avatar/Permissions/Interrupt/ProjectMemory/ResponsePrompt/RuntimePrompt/StreamEvent | `jiuwenswarm/agents/harness/common/rails/` |
 | 10.6.11-12 | ☐ | AutoHarness + SessionOps | 自动化调度/会话操作 | `jiuwenswarm/agents/harness/common/auto_harness/` · `session_ops_service.py` |
 | 10.6.13-18 | ☐ | Swarm Memory | Config/Dreaming/Embeddings/External/Forbidden/RPC | `jiuwenswarm/agents/harness/common/memory/` |
