@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -139,10 +139,10 @@ func TestResolveAgentSpec(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		role              atschema.TeamRole
-		memberName        string
-		wantSystemPrompt  string
+		name             string
+		role             atschema.TeamRole
+		memberName       string
+		wantSystemPrompt string
 	}{
 		{"memberName精确匹配", atschema.TeamRoleTeammate, "member_1", "member1-prompt"},
 		{"role匹配", atschema.TeamRole("analyst"), "", "analyst-prompt"},

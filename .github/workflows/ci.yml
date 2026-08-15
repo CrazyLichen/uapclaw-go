@@ -41,10 +41,18 @@ jobs:
 
       - name: 验证代码格式 (gofmt)
         run: |
-          output=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))
+          output=$(gofmt -l .)
+          # 过滤掉 vendor 目录
+          output=$(echo "$output" | grep -v '^vendor/' || true)
           if [ -n "$output" ]; then
             echo "::error::以下文件格式不符合 gofmt："
             echo "$output"
+            # 输出差异详情
+            for f in $output; do
+              echo "::group::差异: $f"
+              gofmt -d "$f"
+              echo "::endgroup::"
+            done
             exit 1
           fi
           echo "✅ 所有文件格式符合 gofmt"
