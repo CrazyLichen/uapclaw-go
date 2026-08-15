@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -645,12 +646,37 @@ func (c *CodeAdapter) getCodeModeTools() []string {
 	return tools
 }
 
-// resolveEmbeddingConfig 解析嵌入配置。
-// 从 configCache 中获取 embedding 配置，暂不可用则返回 nil。
-// TODO: 补充从 config 解析 EmbeddingConfig 的逻辑
+// resolveEmbeddingConfig 从 configCache["embed"] 解析嵌入配置。
+// 对齐 Python create_coding_memory_rail() (interface_code.py)
+//
+// 从 config 解析 embed_api_key/embed_base_url/embed_model，
+// 配置不完整时返回 EmbeddingConfig（api_key 为空），让 Rail 降级到 fallback provider。
 func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
-	// 暂时返回 nil，等 embedding 配置解析链路完善后补充
-	return nil
+	embedRaw, ok := c.deep.configCache["embed"]
+	if !ok {
+		return nil
+	}
+	embedConfig, ok := embedRaw.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	apiKey, _ := embedConfig["embed_api_key"].(string)
+	baseURL, _ := embedConfig["embed_base_url"].(string)
+	if baseURL == "" {
+		baseURL, _ = embedConfig["embed_api_base"].(string)
+	}
+	modelName, _ := embedConfig["embed_model"].(string)
+	if modelName == "" {
+		modelName = "text-embedding-v3"
+	}
+
+	// 对齐 Python: 即使配置不完整也返回 EmbeddingConfig（api_key 为空时降级）
+	return &embedding.EmbeddingConfig{
+		ModelName: modelName,
+		BaseURL:   baseURL,
+		APIKey:    apiKey,
+	}
 }
 
 // buildCodeAgentRails 构建 Code 模式 Agent Rails 列表。
@@ -858,26 +884,36 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildCodingMemoryRail 构建编码记忆护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_coding_memory_rail() (interface_code.py)
+// 对齐 Python: JiuwenClawCodeAdapter._build_coding_memory_rail() → create_coding_memory_rail() (interface_code.py)
+//
+// 始终创建 CodingMemoryRail（即使 embedding 不完整也创建，降级到 fallback provider）。
+// codingMemoryDir = agentWorkspaceDir/coding_memory/projectName
 func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
-	// 获取 embeddingConfig（从 config 中获取，暂不可用则返回 nil）
+	// 对齐 Python create_coding_memory_rail: 获取 embedding 配置
 	embCfg := c.resolveEmbeddingConfig()
+
+	// 对齐 Python: coding_memory_dir = agent_workspace_dir/coding_memory/project_name
+	agentWorkspaceDir := workspace.AgentRootDir()
+	projectName := "default"
+	if c.deep.projectDir != "" {
+		projectName = filepath.Base(c.deep.projectDir)
+	}
+	codingMemoryDir := filepath.Join(agentWorkspaceDir, "coding_memory", projectName)
+
+	// 对齐 Python: os.makedirs(coding_memory_dir, exist_ok=True)
+	if err := os.MkdirAll(codingMemoryDir, 0o755); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "build_coding_memory_rail").
+			Str("dir", codingMemoryDir).
+			Err(err).
+			Msg("创建 coding_memory 目录失败")
+	}
+
+	// 对齐 Python: 始终创建 Rail（embedding 不完整时降级到 fallback provider）
 	if embCfg == nil {
-		return nil
+		embCfg = &embedding.EmbeddingConfig{}
 	}
-
-	// 获取 codingMemoryDir
-	codingMemoryDir := ""
-	if c.deep.instance != nil && c.deep.instance.DeepConfig() != nil && c.deep.instance.DeepConfig().Workspace != nil {
-		if nodePath := c.deep.instance.DeepConfig().Workspace.GetNodePath("coding_memory"); nodePath != nil {
-			codingMemoryDir = *nodePath
-		}
-	}
-
-	// 获取语言
-	language := c.resolveRuntimeLanguage()
-
-	return memoryrail.NewCodingMemoryRail(codingMemoryDir, embCfg, language)
+	return memoryrail.NewCodingMemoryRail(codingMemoryDir, embCfg, "en")
 }
 
 // buildStructuredAskUserRail 构建结构化询问护栏。
