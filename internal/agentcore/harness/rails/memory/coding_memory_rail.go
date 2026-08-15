@@ -369,7 +369,7 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 	// 创建 CodingMemoryToolContext
 	memoryDir := ""
 	if r.Workspace() != nil {
-		if nodePath := r.Workspace().GetNodePath("memory"); nodePath != nil {
+		if nodePath := r.Workspace().GetNodePath("coding_memory"); nodePath != nil {
 			memoryDir = *nodePath
 		}
 	}
