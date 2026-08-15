@@ -74,7 +74,7 @@ func (s *StateStore) LoadState(taskID string) (*SkillDevState, error) {
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Warn(logComponent).Str("task_id", taskID).Msg("[StateStore] state not found")
+			logger.Warn(logComponent).Str("task_id", taskID).Msg("[StateStore] 状态未找到")
 			return nil, nil
 		}
 		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 读取状态文件失败")

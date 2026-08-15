@@ -40,6 +40,8 @@ type httpResponse struct {
 	body []byte
 	// text 响应体文本
 	text string
+	// finalURL 最终 URL（经过重定向后的实际 URL）
+	finalURL string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -215,13 +217,14 @@ func newHTTPResponse(resp *http.Response) *httpResponse {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		// 读取失败时记录日志，返回空 body 和原始状态码
-		return &httpResponse{
-			statusCode: resp.StatusCode,
-			status:     resp.Status,
-			headers:    resp.Header,
-			body:       nil,
-			text:       "",
-		}
+	return &httpResponse{
+		statusCode: resp.StatusCode,
+		status:     resp.Status,
+		headers:    resp.Header,
+		body:       nil,
+		text:       "",
+		finalURL:   resp.Request.URL.String(),
+	}
 	}
 	return &httpResponse{
 		statusCode: resp.StatusCode,
@@ -229,6 +232,7 @@ func newHTTPResponse(resp *http.Response) *httpResponse {
 		headers:    resp.Header,
 		body:       body,
 		text:       string(body),
+		finalURL:   resp.Request.URL.String(),
 	}
 }
 

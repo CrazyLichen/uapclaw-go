@@ -16,8 +16,6 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // TryStartDreaming 尝试启动 dreaming 进程。
 //
 // 对应 Python: JiuWenClawDeepAdapter.try_start_dreaming() (line 5935-5954)
@@ -83,3 +81,5 @@ func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

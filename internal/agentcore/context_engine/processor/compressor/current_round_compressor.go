@@ -620,7 +620,7 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 // 1. 合并上下文和新消息
 // 2. 查找可压缩索引
 // 3. 执行两阶段压缩
-// 4. MODEL_CALL_FAILED 时降级透传，其他错误抛出 CONTEXT_EXECUTION_ERROR
+// 4. 压缩失败时抛出 CONTEXT_EXECUTION_ERROR
 //
 // 对应 Python: CurrentRoundCompressor.on_add_messages()
 func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {

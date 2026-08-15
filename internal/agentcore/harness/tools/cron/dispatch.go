@@ -84,8 +84,8 @@ func dispatchCronAction(
 
 	case "list":
 		// 对齐 Python L174: return {"jobs": await backend.list_jobs(include_disabled=bool(includeDisabled))}
-		// 对齐 Python: CronToolBackend.list_jobs 默认 include_disabled=True
-		includeDisabled := true
+		// 对齐 Python: CronToolBackend.list_jobs 默认 include_disabled=False
+		includeDisabled := false
 		if v, ok := inputs["includeDisabled"]; ok {
 			if b, ok := v.(bool); ok {
 				includeDisabled = b

@@ -72,7 +72,7 @@ func (w *WorkspaceProvider) EnsureLocal(taskID string) (string, error) {
 			return "", err
 		}
 	}
-	logger.Debug(logComponent).Str("workspace", workspace).Msg("[WorkspaceProvider] workspace ready")
+	logger.Debug(logComponent).Str("workspace", workspace).Msg("[WorkspaceProvider] workspace 已就绪")
 	return workspace, nil
 }
 

@@ -70,7 +70,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("Read memory failed, no available sys_operation")
+		logger.Error(logger.ComponentAgentCore).Msg("读取记忆失败，无可用 sys_operation")
 		return map[string]any{"success": false, "path": path, "error": "Read failed, no available sys_operation."}
 	}
 	// 对齐 Python: 使用 line_range 读取
@@ -211,7 +211,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			// 对齐 Python: 快照过期，并发写入产生了新文件，重试冲突检测
 			logger.Info(logger.ComponentAgentCore).
 				Int("attempt", attempt+1).
-				Msg("Snapshot stale, retrying conflict detection")
+				Msg("快照过期，重试冲突检测")
 			snapshotStale = true
 		} else {
 			// 对齐 Python step 10: 实际写入
@@ -268,7 +268,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	// 对齐 Python: 超过重试次数，降级为无快照验证写入
 	logger.Warn(logger.ComponentAgentCore).
 		Int("max_retries", maxConflictRetries).
-		Msg("Exceeded max conflict retries, writing without snapshot validation")
+		Msg("超过最大冲突重试次数，跳过快照验证直接写入")
 
 	fileLock := getFileLock(resolved)
 	fileLock.Lock()
@@ -357,7 +357,7 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	_, err = sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
 	fileLock.Unlock()
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("coding_memory_edit failed")
+		logger.Error(logger.ComponentAgentCore).Err(err).Msg("coding_memory_edit 写入失败")
 		return map[string]any{"success": false, "error": err.Error()}
 	}
 
@@ -577,7 +577,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext, resolved string, body string, fm map[string]string) {
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("appendToExistingFile: sys_operation is nil")
+		logger.Error(logger.ComponentAgentCore).Msg("appendToExistingFile: sys_operation 为 nil")
 		return
 	}
 

@@ -100,6 +100,50 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 			if v, ok := value.(string); ok {
 				s.Fallback = v
 			}
+		case "sources":
+			if v, ok := value.([]string); ok {
+				s.Sources = v
+			} else if v, ok := value.([]any); ok {
+				strs := make([]string, 0, len(v))
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						strs = append(strs, s)
+					}
+				}
+				s.Sources = strs
+			}
+		case "extra_paths":
+			if v, ok := value.([]string); ok {
+				s.ExtraPaths = v
+			} else if v, ok := value.([]any); ok {
+				strs := make([]string, 0, len(v))
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						strs = append(strs, s)
+					}
+				}
+				s.ExtraPaths = strs
+			}
+		case "chunking":
+			if v, ok := value.(map[string]any); ok {
+				s.Chunking = v
+			}
+		case "query":
+			if v, ok := value.(map[string]any); ok {
+				s.Query = v
+			}
+		case "store":
+			if v, ok := value.(map[string]any); ok {
+				s.Store = v
+			}
+		case "sync":
+			if v, ok := value.(map[string]any); ok {
+				s.Sync = v
+			}
+		case "cache":
+			if v, ok := value.(map[string]any); ok {
+				s.Cache = v
+			}
 		}
 	}
 

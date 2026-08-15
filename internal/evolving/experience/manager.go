@@ -265,7 +265,10 @@ func (m *ExperienceManager) StageApplyResults(
 	signalSource *string,
 	messages []map[string]any,
 ) (*ExperienceApprovalRequest, error) {
-	preview := BuildLocalApplyPreview(skillName, applyResults)
+	preview, err := BuildLocalApplyPreview(skillName, applyResults)
+	if err != nil {
+		return nil, fmt.Errorf("构建本地应用预览失败: %w", err)
+	}
 
 	proposal := ExperienceProposal{
 		SkillName:        skillName,
@@ -475,7 +478,7 @@ func (m *ExperienceManager) RequestRebuild(
 func BuildLocalApplyPreview(
 	skillName string,
 	applyResults []schema.ApplyResult,
-) LocalApplyPreview {
+) (LocalApplyPreview, error) {
 	records := []checkpointing.EvolutionRecord{}
 	changeType := schema.SkillExperienceEntry
 
@@ -484,7 +487,7 @@ func BuildLocalApplyPreview(
 			continue
 		}
 		if result.LifecycleStage != nil && *result.LifecycleStage != schema.LocalApplyCompleted {
-			panic(fmt.Sprintf("unsupported apply lifecycle stage for %s: %s", skillName, *result.LifecycleStage))
+			return LocalApplyPreview{}, fmt.Errorf("unsupported apply lifecycle stage for %s: %s", skillName, *result.LifecycleStage)
 		}
 		// 对齐 Python: records.extend(result.records) — 需将 []any 转为 []EvolutionRecord
 		for _, item := range result.Records {
@@ -502,7 +505,7 @@ func BuildLocalApplyPreview(
 		Records:      records,
 		ApplyResults: applyResults,
 		ChangeType:   changeType,
-	}
+	}, nil
 }
 
 // FormatEvolutionRecords 格式化演进记录列表为文本。
@@ -600,7 +603,10 @@ func (m *ExperienceManager) stageRecordsInternal(
 	}
 
 	applyResults := m.previewApplyResults(ctx, proposal.SkillName, operator, updateValue)
-	preview := BuildLocalApplyPreview(proposal.SkillName, applyResults)
+	preview, err := BuildLocalApplyPreview(proposal.SkillName, applyResults)
+	if err != nil {
+		return nil, fmt.Errorf("构建本地应用预览失败: %w", err)
+	}
 
 	return m.stagePendingRequest(
 		proposal,

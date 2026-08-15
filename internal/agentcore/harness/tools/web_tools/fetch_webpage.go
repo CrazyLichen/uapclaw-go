@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/japanese"
@@ -101,7 +102,7 @@ func NewWebFetchWebpageTool(language, agentID string) tool.Tool {
 		// 对齐 Python: L1614-1617 — 抓取网页
 		data, err := fetchWebpage(rawURL, timeoutSeconds)
 		if err != nil {
-			logger.Error(logComponent).Str("url", rawURL).Err(err).Msg("fetch webpage failed")
+			logger.Error(logComponent).Str("url", rawURL).Err(err).Msg("获取网页失败")
 			return map[string]any{"result": fmt.Sprintf("[ERROR]: failed to fetch webpage: %s", err)}, nil
 		}
 
@@ -166,7 +167,7 @@ func fetchWebpage(rawURL string, timeoutSeconds int) (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"url":         rawURL,
+		"url":         resp.finalURL,
 		"status_code": resp.statusCode,
 		"title":       title,
 		"content":     text,
@@ -211,6 +212,13 @@ func decodeResponseText(resp *httpResponse) string {
 	// 对齐 Python: L1433-1434 — 声明编码优先（排除 iso-8859-1 等）
 	if declared != "" && declared != "iso-8859-1" && declared != "latin-1" && declared != "latin1" {
 		candidates = append(candidates, declared)
+	}
+	// 对齐 Python: apparent_encoding 自动检测
+	if _, detectedName, ok := charset.DetermineEncoding(raw, ""); ok {
+		detectedName = strings.ToLower(detectedName)
+		if detectedName != "" && detectedName != declared && detectedName != "utf-8" {
+			candidates = append(candidates, detectedName)
+		}
 	}
 	// 对齐 Python: L1435-1448
 	candidates = append(candidates,
@@ -328,7 +336,7 @@ func decodeBytes(data []byte, encoding string) (string, error) {
 	}
 	decoded, err := enc.NewDecoder().Bytes(data)
 	if err != nil {
-		return string(data), nil
+		return "", err // 对齐 Python: strict 模式，解码失败时抛出异常
 	}
 	text := string(decoded)
 	// 去除 UTF-8 BOM（\xEF\xBB\xBF），对齐 Python utf-8-sig 行为

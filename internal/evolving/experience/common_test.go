@@ -298,7 +298,10 @@ func TestFormatEvolutionRecords(t *testing.T) {
 // TestBuildLocalApplyPreview 测试构建本地应用预览
 func TestBuildLocalApplyPreview(t *testing.T) {
 	t.Run("空结果", func(t *testing.T) {
-		preview := BuildLocalApplyPreview("test_skill", nil)
+		preview, err := BuildLocalApplyPreview("test_skill", nil)
+		if err != nil {
+			t.Fatalf("BuildLocalApplyPreview 返回错误: %v", err)
+		}
 		if preview.SkillName != "test_skill" {
 			t.Errorf("SkillName = %s, 期望 test_skill", preview.SkillName)
 		}
@@ -317,7 +320,10 @@ func TestBuildLocalApplyPreview(t *testing.T) {
 				LifecycleStage: &stage,
 			},
 		}
-		preview := BuildLocalApplyPreview("test_skill", applyResults)
+		preview, err := BuildLocalApplyPreview("test_skill", applyResults)
+		if err != nil {
+			t.Fatalf("BuildLocalApplyPreview 返回错误: %v", err)
+		}
 		if preview.SkillName != "test_skill" {
 			t.Errorf("SkillName = %s, 期望 test_skill", preview.SkillName)
 		}

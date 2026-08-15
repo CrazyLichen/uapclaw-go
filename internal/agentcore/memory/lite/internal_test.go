@@ -19,7 +19,7 @@ func TestBuildFTSQuery(t *testing.T) {
 		{"空格", "   ", true},
 		{"简单词", "hello", false},
 		{"多个词", "hello world", false},
-		{"中文", "你好世界", true}, // Go 的 \w+ 不匹配中文字符，与 Python 不同
+		{"中文", "你好世界", false}, // 对齐 Python: \w+ Unicode 模式匹配中文字符
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

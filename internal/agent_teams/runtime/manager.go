@@ -181,7 +181,7 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 // ⤵️ 待 9.55 TeamBackend 回填
 func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, teamName string, sessionID string, memberName string, callback any) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Str("member_name", memberName).Msg("RegisterHumanAgentInbound (stub)")
+		Str("member_name", memberName).Msg("注册 HumanAgent 入站（桩实现）")
 	return false, nil
 }
 
@@ -211,7 +211,7 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
 	// ⤵️ 待 9.55 回填: 完整实现
 	// 当前 stub: 模拟成功
-	logger.Debug(mgrLogComponent).Msg("handleInteractiveInput (stub)")
+	logger.Debug(mgrLogComponent).Msg("处理交互输入（桩实现）")
 	return interaction.NewDeliverResultSuccess(nil), nil
 }
 

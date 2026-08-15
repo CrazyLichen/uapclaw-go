@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ValidTypes 合法的记忆类型。对齐 Python VALID_TYPES
 var ValidTypes = []string{"user", "feedback", "project", "reference"}
@@ -83,6 +83,8 @@ func RebuildContentWithFrontmatter(content string, fm map[string]string) string 
 	}
 	return strings.Join(parts, "\n\n")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractBody 提取 frontmatter 后的 body 内容。对齐 Python _extract_body
 func extractBody(content string) string {

@@ -75,7 +75,7 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 			// 对齐 Python: ctx.extra["_skip_tool"] = True; ctx.extra["_hook_feedback"] = r.error
 			cbc.Extra()["_skip_tool"] = true
 			cbc.Extra()["_hook_feedback"] = result.Error
-			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PreToolUse BLOCKED")
+			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PreToolUse 已阻止")
 			return nil
 		}
 		if result.ModifiedInput != nil {
@@ -86,10 +86,10 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 			if newName, ok := result.ModifiedInput["_tool_name"]; ok {
 				if s, ok := newName.(string); ok && s != "" {
 					toolInputs.ToolName = s
-					logger.Info(logComponent).Str("tool_name", toolName).Str("new_name", s).Msg("UserHookRail: PreToolUse modified tool name")
+					logger.Info(logComponent).Str("tool_name", toolName).Str("new_name", s).Msg("UserHookRail: PreToolUse 修改了工具名")
 				}
 			}
-			logger.Info(logComponent).Str("tool_name", toolName).Msg("UserHookRail: PreToolUse modified input")
+			logger.Info(logComponent).Str("tool_name", toolName).Msg("UserHookRail: PreToolUse 修改了输入")
 		}
 		if result.AdditionalContext != "" {
 			// 对齐 Python: existing = ctx.extra.get("_hook_additional_context", "")
@@ -133,7 +133,7 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 		if result.Outcome == HookOutcomeBlocking {
 			// 对齐 Python: ctx.extra["_post_tool_hook_feedback"] = r.error
 			cbc.Extra()["_post_tool_hook_feedback"] = result.Error
-			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PostToolUse BLOCKED")
+			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PostToolUse 已阻止")
 		}
 		if result.AdditionalContext != "" {
 			// 对齐 Python: current = ctx.inputs.tool_result or ""; ctx.inputs.tool_result = current + "\n[Hook 发现]: " + r.additional_context
@@ -213,7 +213,7 @@ func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Age
 			if len(reason) > 200 {
 				reason = reason[:200]
 			}
-			logger.Info(logComponent).Str("reason", reason).Msg("UserHookRail: Stop hook feedback")
+			logger.Info(logComponent).Str("reason", reason).Msg("UserHookRail: Stop hook 反馈")
 		}
 	}
 	return nil

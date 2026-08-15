@@ -15,7 +15,7 @@ import (
 // InitMemoryManagerAsync 初始化通用记忆管理器。对齐 Python memory_tools.init_memory_manager_async
 func InitMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, agentID string, embeddingConfig *embedding.EmbeddingConfig, sysOp sysop.SysOperation) (MemoryIndexManager, error) {
 	if !IsMemoryEnabled() {
-		logger.Info(logger.ComponentAgentCore).Msg("Memory system is disabled")
+		logger.Info(logger.ComponentAgentCore).Msg("记忆系统已禁用")
 		return nil, nil
 	}
 	memoryDir := ""
@@ -33,17 +33,17 @@ func InitMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, agentI
 	}
 	mgr, err := GetMemoryIndexManager(params)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Failed to initialize memory manager")
+		logger.Error(logger.ComponentAgentCore).Err(err).Msg("初始化记忆管理器失败")
 		return nil, err
 	}
-	logger.Info(logger.ComponentAgentCore).Str("memory_dir", memoryDir).Msg("Memory manager initialized")
+	logger.Info(logger.ComponentAgentCore).Str("memory_dir", memoryDir).Msg("记忆管理器已初始化")
 	return mgr, nil
 }
 
 // InitCodingMemoryManagerAsync 初始化编程记忆管理器。对齐 Python coding_memory_tools.init_memory_manager_async
 func InitCodingMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, agentID string, embeddingConfig *embedding.EmbeddingConfig, sysOp sysop.SysOperation) (MemoryIndexManager, error) {
 	if !IsMemoryEnabled() {
-		logger.Info(logger.ComponentAgentCore).Msg("Memory system is disabled")
+		logger.Info(logger.ComponentAgentCore).Msg("记忆系统已禁用")
 		return nil, nil
 	}
 	cmDir := ""
@@ -61,9 +61,9 @@ func InitCodingMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, 
 	}
 	mgr, err := GetMemoryIndexManager(params)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Failed to initialize Coding Memory manager")
+		logger.Error(logger.ComponentAgentCore).Err(err).Msg("初始化编程记忆管理器失败")
 		return nil, fmt.Errorf("初始化 Coding Memory 管理器失败: %w", err)
 	}
-	logger.Info(logger.ComponentAgentCore).Str("cm_dir", cmDir).Msg("Coding Memory manager initialized")
+	logger.Info(logger.ComponentAgentCore).Str("cm_dir", cmDir).Msg("编程记忆管理器已初始化")
 	return mgr, nil
 }

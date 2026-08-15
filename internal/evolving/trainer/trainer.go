@@ -193,6 +193,7 @@ func (t *Trainer) Train(
 				Int("epoch", progress.CurrentEpoch).
 				Err(updateErr).
 				Msg("Train Updater.Update 失败")
+			continue
 		}
 
 		var valScore float64

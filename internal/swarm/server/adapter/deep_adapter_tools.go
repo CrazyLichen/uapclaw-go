@@ -585,13 +585,25 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 5: 音频工具 ──
-	// 对齐 Python:
-	//   self._audio_tools = self._iter_runtime_audio_tools(agent_id)
-	//   for tool in self._audio_tools:
-	//       Runner.resource_mgr.add_tool(tool)
-	//       tool_cards.append(tool.card)
-	//   self._audio_tools_registered = bool(self._audio_tools)
-	if d.audioModelConfig != nil {
+	// 对齐 Python: _iter_runtime_audio_tools 三种情况:
+	//   1. 无 api_key → 不注册任何音频工具
+	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
+	//   3. 有完整配置 → 全部音频工具
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configCache, "audio")
+	if !audioDedicated {
+		// 情况1: 无独立音频 key → 不注册任何音频工具
+	} else if d.audioModelConfig == nil {
+		// 情况2: 有独立 key 但无 model config → 仅注册 audio_metadata（metadata-only）
+		metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), agentID)
+		if err := runner.GetResourceMgr().AddTool(metadataTool); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("注册 audio_metadata 工具到 ResourceMgr 失败")
+		}
+		toolCards = append(toolCards, metadataTool.Card())
+		d.audioTools = []tool.Tool{metadataTool}
+		d.audioToolsRegistered = true
+		logger.Info(logComponent).Msg("getToolCards: 音频工具 metadata-only 模式")
+	} else {
+		// 情况3: 完整配置 → 全部音频工具
 		client := d.resolveAudioModelClient()
 		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), agentID)
 		for _, t := range audioTools {

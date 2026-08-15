@@ -283,12 +283,17 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	// 对齐 Python: execute_updates → BuildLocalApplyPreview
 	// 将 updater.Process 返回的 []map[UpdateKey]any 第一个元素转为 map[UpdateKey]UpdateValue
 	var updateValues map[schema.UpdateKey]schema.UpdateValue
-	if len(updates) > 0 {
-		updateValues = make(map[schema.UpdateKey]schema.UpdateValue, len(updates[0]))
-		for key, value := range updates[0] {
-			if uv, ok := value.(schema.UpdateValue); ok {
-				updateValues[key] = uv
-			}
+	if len(updates) == 0 {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("skill", onlineContext.SkillName).
+			Msg("[OnlineEvolutionOrchestrator] updater.Process 返回空更新，跳过 apply")
+		preview, _ := BuildLocalApplyPreview(onlineContext.SkillName, nil)
+		return &preview, nil
+	}
+	updateValues = make(map[schema.UpdateKey]schema.UpdateValue, len(updates[0]))
+	for key, value := range updates[0] {
+		if uv, ok := value.(schema.UpdateValue); ok {
+			updateValues[key] = uv
 		}
 	}
 	applyResults := ApplyUpdatesFromManager(
@@ -296,7 +301,10 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 		updateValues,
 	)
 
-	preview := BuildLocalApplyPreview(onlineContext.SkillName, applyResults)
+	preview, err := BuildLocalApplyPreview(onlineContext.SkillName, applyResults)
+	if err != nil {
+		return nil, err
+	}
 	return &preview, nil
 }
 

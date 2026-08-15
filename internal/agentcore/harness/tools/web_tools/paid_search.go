@@ -156,7 +156,7 @@ func runPaidSearchProvider(name, query string, maxResults, timeoutSeconds int) (
 	case "perplexity":
 		return perplexitySearch(query, maxResults, timeoutSeconds)
 	default:
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "runPaidSearchProvider").Str("provider", name).Msg("runner not found for provider")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "runPaidSearchProvider").Str("provider", name).Msg("未找到对应的搜索提供商运行器")
 		return nil, fmt.Errorf("runner not found for provider: %s", name)
 	}
 }
@@ -166,7 +166,7 @@ func runPaidSearchProvider(name, query string, maxResults, timeoutSeconds int) (
 func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 	jinaKey := strings.TrimSpace(os.Getenv("JINA_API_KEY"))
 	if jinaKey == "" {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Msg("JINA_API_KEY not set")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Msg("JINA_API_KEY 未设置")
 		return nil, fmt.Errorf("JINA_API_KEY not set")
 	}
 
@@ -189,17 +189,17 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 		withBody(string(payloadBytes)),
 	)
 	if err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina search request failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina 搜索请求失败")
 		return nil, fmt.Errorf("jina search request failed: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Int("status_code", resp.statusCode).Err(err).Msg("jina search HTTP error")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Int("status_code", resp.statusCode).Err(err).Msg("jina 搜索 HTTP 错误")
 		return nil, err
 	}
 
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina search parse response failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina 搜索解析响应失败")
 		return nil, fmt.Errorf("jina search parse response failed: %w", err)
 	}
 
@@ -225,7 +225,7 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	bochaKey := strings.TrimSpace(os.Getenv("BOCHA_API_KEY"))
 	if bochaKey == "" {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Msg("BOCHA_API_KEY not set")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Msg("BOCHA_API_KEY 未设置")
 		return nil, fmt.Errorf("BOCHA_API_KEY not set")
 	}
 
@@ -247,17 +247,17 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 		withBody(string(payloadBytes)),
 	)
 	if err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha search request failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha 搜索请求失败")
 		return nil, fmt.Errorf("bocha search request failed: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Int("status_code", resp.statusCode).Err(err).Msg("bocha search HTTP error")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Int("status_code", resp.statusCode).Err(err).Msg("bocha 搜索 HTTP 错误")
 		return nil, err
 	}
 
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha search parse response failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha 搜索解析响应失败")
 		return nil, fmt.Errorf("bocha search parse response failed: %w", err)
 	}
 
@@ -273,7 +273,7 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	serperKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
 	if serperKey == "" {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Msg("SERPER_API_KEY not set")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Msg("SERPER_API_KEY 未设置")
 		return nil, fmt.Errorf("SERPER_API_KEY not set")
 	}
 
@@ -291,7 +291,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 		withBody(string(payloadBytes)),
 	)
 	if err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper search request failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索请求失败")
 		return nil, fmt.Errorf("serper search request failed: %w", err)
 	}
 
@@ -305,19 +305,19 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 			withBody(string(payloadBytes2)),
 		)
 		if err != nil {
-			logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper search retry request failed")
+			logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索重试请求失败")
 			return nil, fmt.Errorf("serper search retry request failed: %w", err)
 		}
 	}
 
 	if err := raiseForStatusWithBody(resp); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Int("status_code", resp.statusCode).Err(err).Msg("serper search HTTP error")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Int("status_code", resp.statusCode).Err(err).Msg("serper 搜索 HTTP 错误")
 		return nil, err
 	}
 
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper search parse response failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索解析响应失败")
 		return nil, fmt.Errorf("serper search parse response failed: %w", err)
 	}
 
@@ -344,7 +344,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	perplexityKey := strings.TrimSpace(os.Getenv("PERPLEXITY_API_KEY"))
 	if perplexityKey == "" {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Msg("PERPLEXITY_API_KEY not set")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Msg("PERPLEXITY_API_KEY 未设置")
 		return nil, fmt.Errorf("PERPLEXITY_API_KEY not set")
 	}
 
@@ -377,17 +377,17 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 		withBody(string(payloadBytes)),
 	)
 	if err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity search request failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity 搜索请求失败")
 		return nil, fmt.Errorf("perplexity search request failed: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Int("status_code", resp.statusCode).Err(err).Msg("perplexity search HTTP error")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Int("status_code", resp.statusCode).Err(err).Msg("perplexity 搜索 HTTP 错误")
 		return nil, err
 	}
 
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
-		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity search parse response failed")
+		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity 搜索解析响应失败")
 		return nil, fmt.Errorf("perplexity search parse response failed: %w", err)
 	}
 

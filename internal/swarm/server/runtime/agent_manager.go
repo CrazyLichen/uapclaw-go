@@ -486,7 +486,7 @@ func (am *AgentManager) Cleanup() error {
 	am.agentCreateParams = make(map[string]map[string]*agentCreateParamsEntry)
 	am.clientCapabilitiesByChannel = make(map[string]map[string]any)
 
-	logger.Info(amLogComponent).Msg("[AgentManager] All agents cleaned up")
+	logger.Info(amLogComponent).Msg("[AgentManager] 所有 Agent 已清理")
 	return nil
 }
 

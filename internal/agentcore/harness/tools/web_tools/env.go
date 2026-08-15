@@ -222,6 +222,11 @@ func safeEnvChoice(name, defaultVal string, allowed map[string]bool) string {
 	if allowed[normalized] {
 		return normalized
 	}
+	logger.Warn(logger.ComponentAgentCore).
+		Str("env", name).
+		Str("value", raw).
+		Str("default", defaultVal).
+		Msg("环境变量值不在允许列表中，使用默认值")
 	return defaultVal
 }
 

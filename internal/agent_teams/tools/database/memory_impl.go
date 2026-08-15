@@ -702,7 +702,7 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 	return db.MutateDependencyGraph(context.Background(), teamName, []NewTaskSpec{newTaskSpec}, edges)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetMessage 按 ID 查消息。对齐 Python: MessageDao.get_message()
 func (db *InMemoryTeamDatabase) GetMessage(_ context.Context, messageID string) (*TeamMessageBase, error) {
@@ -857,6 +857,15 @@ func (db *InMemoryTeamDatabase) MarkMessageRead(_ context.Context, messageID, me
 	if !exists {
 		return false
 	}
+	// 对齐 Python: "user" 伪成员特殊处理 — 跳过成员存在性检查
+	if memberName == "user" {
+		if msg.Broadcast {
+			return false
+		}
+		// 直发消息：设 is_read=true
+		msg.IsRead = BoolPtr(true)
+		return true
+	}
 	// 成员存在性检查
 	if _, ok := db.members[memberKey(memberName, msg.TeamName)]; !ok {
 		return false
@@ -880,6 +889,8 @@ func (db *InMemoryTeamDatabase) MarkMessageRead(_ context.Context, messageID, me
 	}
 	return true
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // memberKey 构造复合主键 key。
 func memberKey(memberName, teamName string) string {

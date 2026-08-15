@@ -341,7 +341,7 @@ func (a *TeamAgent) IsShutdownRequested(ctx context.Context) (bool, error) {
 func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStatus) error {
 	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("member_status", string(status)).Msg("UpdateStatus")
+		Str("member_status", string(status)).Msg("更新状态")
 	return nil
 }
 
@@ -449,7 +449,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	// TODO(#9.55): 注册团队完成回调 a.registerTeamCompletionCallbacks()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
-		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent.Configure")
+		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent 配置")
 	return a
 }
 
@@ -463,7 +463,7 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
-		Str("role", string(a.Role())).Msg("TeamAgent.Invoke start")
+		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
 	// TODO(#9.62): 从 streamQueue 读取直到 nil sentinel → coordination.finalize_round()
 	return nil, nil
 }
@@ -478,7 +478,7 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
-		Str("role", string(a.Role())).Msg("TeamAgent.Stream start")
+		Str("role", string(a.Role())).Msg("TeamAgent Stream 开始")
 	// TODO(#9.62): 从 streamQueue 持续读取直到 nil sentinel
 	return nil, nil
 }

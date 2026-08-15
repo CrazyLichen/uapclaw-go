@@ -66,7 +66,7 @@ func (m *TeamMember) ExecutionStatus(ctx context.Context) (atschema.ExecutionSta
 func (m *TeamMember) UpdateStatus(ctx context.Context, newStatus atschema.MemberStatus) (bool, error) {
 	// TODO(#9.65): 读取旧状态 → 短路等值 → 写 DB → 发 MemberStatusChangedEvent
 	logger.Info(logComponent).Str("member_name", m.MemberName).
-		Str("new_status", string(newStatus)).Msg("TeamMember.UpdateStatus")
+		Str("new_status", string(newStatus)).Msg("TeamMember 状态更新")
 	return true, nil
 }
 
@@ -77,7 +77,7 @@ func (m *TeamMember) UpdateStatus(ctx context.Context, newStatus atschema.Member
 func (m *TeamMember) UpdateExecutionStatus(ctx context.Context, newStatus atschema.ExecutionStatus) (bool, error) {
 	// TODO(#9.65): 读取旧状态 → 写 DB → 发 MemberExecutionChangedEvent
 	logger.Info(logComponent).Str("member_name", m.MemberName).
-		Str("new_status", string(newStatus)).Msg("TeamMember.UpdateExecutionStatus")
+		Str("new_status", string(newStatus)).Msg("TeamMember 执行状态更新")
 	return true, nil
 }
 

@@ -32,20 +32,6 @@ type taskAddConfig struct {
 	dependencies []string
 }
 
-// WithTaskID 设置自定义任务 ID，对齐 Python: add(task_id=...)
-func WithTaskID(taskID string) TaskAddOption {
-	return func(c *taskAddConfig) {
-		c.taskID = taskID
-	}
-}
-
-// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
-func WithDependencies(deps []string) TaskAddOption {
-	return func(c *taskAddConfig) {
-		c.dependencies = deps
-	}
-}
-
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
 	Task      *database.TeamTaskBase
@@ -113,6 +99,20 @@ type TeamTaskManager struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithTaskID 设置自定义任务 ID，对齐 Python: add(task_id=...)
+func WithTaskID(taskID string) TaskAddOption {
+	return func(c *taskAddConfig) {
+		c.taskID = taskID
+	}
+}
+
+// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
+func WithDependencies(deps []string) TaskAddOption {
+	return func(c *taskAddConfig) {
+		c.dependencies = deps
+	}
+}
 
 // NewTeamTaskManager 创建任务管理器。
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
@@ -337,6 +337,29 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 		// PLAN_MODE 成员只能完成 PLAN_APPROVED 状态的任务
 		if task.Status != fsm.TaskStatusPlanApproved {
 			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
+		}
+
+		// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
+		planIndex, err := tm.loadPlanIndex()
+		if err == nil && planIndex != nil {
+			taskIdx, ok := planIndex.Tasks[taskID]
+			if ok && taskIdx != nil {
+				latestPlanID := ""
+				if len(taskIdx.PlanIDs) > 0 {
+					latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
+				}
+				planRecord := &PlanRecord{
+					PlanID:     latestPlanID,
+					TaskID:     taskID,
+					MemberName: task.Assignee,
+					Status:     string(fsm.TaskStatusCompleted),
+					Decision:   "completed",
+					CreatedAt:  time.Now().UnixMilli(),
+				}
+				if err := tm.updatePlanIndex(latestPlanID, planRecord); err != nil {
+					logger.Warn(logger.ComponentAgentCore).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
+				}
+			}
 		}
 	}
 

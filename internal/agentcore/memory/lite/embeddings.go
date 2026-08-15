@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	baseEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
@@ -17,23 +18,34 @@ type EmbeddingProvider interface {
 	EmbedQuery(ctx context.Context, text string) ([]float64, error)
 	// EmbedDocuments 嵌入多个文档文本
 	EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error)
+	// ID 返回提供者标识。对齐 Python: self.provider.id
+	ID() string
+	// Model 返回提供者模型名。对齐 Python: self.provider.model
+	Model() string
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MockEmbeddingProvider 模拟嵌入提供者。对齐 Python MockEmbeddingProvider
-type MockEmbeddingProvider struct{}
+type MockEmbeddingProvider struct {
+	// id 提供者标识
+	id string
+	// model 提供者模型名
+	model string
+}
 
 // baseEmbeddingAdapter 将 foundation/store/embedding.BaseEmbedding 适配为 lite.EmbeddingProvider
 type baseEmbeddingAdapter struct {
-	base baseEmbedding.BaseEmbedding
+	base  baseEmbedding.BaseEmbedding
+	prov  string // 提供者标识
+	model string // 提供者模型名
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMockEmbeddingProvider 创建模拟嵌入提供者
 func NewMockEmbeddingProvider() *MockEmbeddingProvider {
-	return &MockEmbeddingProvider{}
+	return &MockEmbeddingProvider{id: "mock", model: "mock"}
 }
 
 // EmbedQuery MockEmbeddingProvider 的 EmbedQuery 实现，返回空向量
@@ -46,6 +58,12 @@ func (m *MockEmbeddingProvider) EmbedDocuments(_ context.Context, _ []string) ([
 	return nil, nil
 }
 
+// ID 返回提供者标识
+func (m *MockEmbeddingProvider) ID() string { return m.id }
+
+// Model 返回提供者模型名
+func (m *MockEmbeddingProvider) Model() string { return m.model }
+
 // EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base
 func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
 	return a.base.EmbedQuery(ctx, text)
@@ -55,6 +73,12 @@ func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]f
 func (a *baseEmbeddingAdapter) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
 	return a.base.EmbedDocuments(ctx, texts)
 }
+
+// ID 返回提供者标识
+func (a *baseEmbeddingAdapter) ID() string { return a.prov }
+
+// Model 返回提供者模型名
+func (a *baseEmbeddingAdapter) Model() string { return a.model }
 
 // ResolveEmbeddingConfigFromEnv 从环境变量构建 EmbeddingConfig。对齐 Python resolve_embedding_config_from_env
 func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey string) *apiEmbedding.EmbeddingConfig {
@@ -100,8 +124,12 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 
 	// 优先使用 embeddingConfig
 	if embeddingConfig != nil && embeddingConfig.APIKey != "" {
+		// 对齐 Python: base_url 以 /embeddings 结尾时裁剪
+		if strings.HasSuffix(embeddingConfig.BaseURL, "/embeddings") {
+			embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
+		}
 		base := apiEmbedding.NewAPIEmbedding(*embeddingConfig)
-		return &baseEmbeddingAdapter{base: base}, nil
+		return &baseEmbeddingAdapter{base: base, prov: provider, model: model}, nil
 	}
 
 	// fallback 到 mock

@@ -91,12 +91,19 @@ func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message
 	}
 	b := getBus()
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	subs, ok := b.topicSubs[topicID]
 	if !ok {
+		b.mu.Unlock()
 		return nil
 	}
+	// 对齐 Send 方法：锁内复制 handler 列表，锁外调用
+	handlers := make(map[string]MessagerHandler, len(subs))
 	for aid, handler := range subs {
+		handlers[aid] = handler
+	}
+	b.mu.Unlock()
+
+	for aid, handler := range handlers {
 		if err := handler(ctx, message); err != nil {
 			logger.Error(logger.ComponentAgentCore).Err(err).
 				Str("agent_id", aid).Str("topic", topicID).

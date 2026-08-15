@@ -625,6 +625,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.78 | ✅ | EvolveCheckpoint | CheckpointManager 协议 + DefaultCheckpointManager + EvolveCheckpoint 状态 + FileCheckpointStore + EvolutionStore（技能文件系统IO）+ StoreArchive/StoreProjection/StoreRecords/SkillPackage | `openjiuwen/agent_evolving/checkpointing/` |
 | 9.79 | ✅ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
 | 9.80 | ✅ | UpdateExecution + Types | UpdateValue/ApplyResult/normalize_updates + execute_updates/apply_updates/summarize_apply_results + protocols 常量 | `openjiuwen/agent_evolving/update_execution.py` · `types.py` · `protocols.py` |
+| 9.80a | ☐ | ExperienceSharing | 跨 Agent 经验共享（ExperienceSharer + HubClient + KeywordExtractor + ShareStager + LocalFileBackend） | `openjiuwen/agent_evolving/sharing/` |
 | **9.x 扩展系统** | — | | | |
 | 9.81 | ☐ | A2A 扩展 | A2AServer/A2AClient/A2ARemoteClient/A2AServerAdapter | `openjiuwen/extensions/a2a/` |
 | 9.82 | ☐ | Context Evolver | 自演化上下文（轨迹分析） | `openjiuwen/extensions/context_evolver/` |

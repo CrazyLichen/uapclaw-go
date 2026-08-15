@@ -52,7 +52,7 @@ var tenantAgentPoolSingleton utils.Singleton[TenantAgentPool]
 // 对齐 Python: TenantAgentPool.get_instance()
 func GetInstance() *TenantAgentPool {
 	return tenantAgentPoolSingleton.Get(func() *TenantAgentPool {
-		logger.Info(tapLogComponent).Msg("[TenantAgentPool] Created singleton instance")
+		logger.Info(tapLogComponent).Msg("[TenantAgentPool] 已创建单例实例")
 		return &TenantAgentPool{
 			agentManager: NewAgentManager(),
 		}
@@ -111,12 +111,12 @@ func (p *TenantAgentPool) ProcessMessageStream(ctx context.Context, request *sch
 // 对齐 Python: TenantAgentPool.cleanup()
 // 同时实现 utils.resettable 接口，供 Singleton.Reset 时自动调用。
 func (p *TenantAgentPool) Cleanup() error {
-	logger.Info(tapLogComponent).Msg("[TenantAgentPool] Cleaning up...")
+	logger.Info(tapLogComponent).Msg("[TenantAgentPool] 正在清理...")
 	err := p.agentManager.Cleanup()
 	if err != nil {
-		logger.Error(tapLogComponent).Err(err).Msg("[TenantAgentPool] Cleanup failed")
+		logger.Error(tapLogComponent).Err(err).Msg("[TenantAgentPool] 清理失败")
 		return err
 	}
-	logger.Info(tapLogComponent).Msg("[TenantAgentPool] Cleanup complete")
+	logger.Info(tapLogComponent).Msg("[TenantAgentPool] 清理完成")
 	return nil
 }

@@ -38,7 +38,7 @@ func CosineSimilarity(vec1, vec2 []float64) float64 {
 		norm1 += vec1[i] * vec1[i]
 		norm2 += vec2[i] * vec2[i]
 	}
-	if norm1 == 0 || norm2 == 0 {
+	if math.Sqrt(norm1) < 1e-10 || math.Sqrt(norm2) < 1e-10 {
 		return 0
 	}
 	return dot / (math.Sqrt(norm1) * math.Sqrt(norm2))
@@ -57,15 +57,16 @@ func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 	var chunks []MemoryChunk
 	var currentLines []string
 	var currentTokens int
-	startLine := 0
+	startLine := 1
 
 	for i, line := range lines {
+		lineNum := i + 1 // 对齐 Python: 1-based 行号
 		lineTokens := EstimateTokens(line)
 		if currentTokens+lineTokens > maxTokens && len(currentLines) > 0 {
 			chunks = append(chunks, MemoryChunk{
 				Text:      strings.Join(currentLines, "\n"),
 				StartLine: startLine,
-				EndLine:   i - 1,
+				EndLine:   lineNum - 1,
 			})
 			// overlap: 回退 overlap tokens 的行数
 			overlapLines := 0
@@ -76,7 +77,7 @@ func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 			}
 			currentLines = currentLines[len(currentLines)-overlapLines:]
 			currentTokens = overlapTokens
-			startLine = i - overlapLines
+			startLine = lineNum - overlapLines
 		}
 		currentLines = append(currentLines, line)
 		currentTokens += lineTokens
@@ -85,7 +86,7 @@ func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 		chunks = append(chunks, MemoryChunk{
 			Text:      strings.Join(currentLines, "\n"),
 			StartLine: startLine,
-			EndLine:   len(lines) - 1,
+			EndLine:   len(lines), // 对齐 Python: 1-based 最后一行
 		})
 	}
 	return chunks
@@ -103,7 +104,7 @@ func BuildFTSQuery(query string) string {
 	if cleaned == "" {
 		return ""
 	}
-	tokens := regexp.MustCompile(`\w+`).FindAllString(cleaned, 10)
+	tokens := regexp.MustCompile(`[\p{L}\p{N}_]+`).FindAllString(cleaned, 10)
 	if len(tokens) == 0 {
 		return ""
 	}

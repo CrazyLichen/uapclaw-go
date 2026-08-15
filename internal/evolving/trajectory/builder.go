@@ -2,6 +2,8 @@ package trajectory
 
 import (
 	"github.com/google/uuid"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -107,6 +109,8 @@ func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
 		if maxSteps >= 1 {
 			b.maxSteps = &maxSteps
+		} else {
+			logger.Warn(logComponent).Int("max_steps", maxSteps).Msg("WithMaxSteps: maxSteps < 1 被忽略，对齐 Python ValueError")
 		}
 	}
 }
@@ -156,8 +160,11 @@ func (b *TrajectoryBuilder) Build() *Trajectory {
 	for k, v := range b.meta {
 		meta[k] = v
 	}
+	// 对齐 Python: setdefault 语义，仅在 member_id 不存在时才设置
 	if b.memberID != "" {
-		meta["member_id"] = b.memberID
+		if _, exists := meta["member_id"]; !exists {
+			meta["member_id"] = b.memberID
+		}
 	}
 
 	// 对齐 Python: cost=self.cost if self.cost["input_tokens"] > 0 else None

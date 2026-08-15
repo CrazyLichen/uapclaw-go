@@ -1264,7 +1264,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Warn(logComponent).Any("panic", r).Msg("AbortOnGatewayDisconnect instance.Abort panic")
+					logger.Warn(logComponent).Any("panic", r).Msg("AbortOnGatewayDisconnect instance.Abort 发生 panic")
 				}
 			}()
 			d.instance.Abort(ctx)

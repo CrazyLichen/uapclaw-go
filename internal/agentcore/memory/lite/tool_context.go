@@ -7,6 +7,8 @@ type MemoryToolContext struct {
 	LiteMemoryToolContextBase
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // NewMemoryToolContext 创建通用记忆工具上下文
 func NewMemoryToolContext() *MemoryToolContext {
 	return &MemoryToolContext{

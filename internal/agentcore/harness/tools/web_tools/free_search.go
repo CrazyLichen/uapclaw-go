@@ -75,7 +75,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 		// 对齐 Python: L1048-1053 — search_free
 		engineUsed, rows, err := searchFree(query, maxResults, timeoutSeconds)
 		if err != nil {
-			logger.Error(logComponent).Str("query", query).Err(err).Msg("free search failed")
+			logger.Error(logComponent).Str("query", query).Err(err).Msg("免费搜索失败")
 			return map[string]any{"result": fmt.Sprintf("[ERROR]: free search failed: %s", err)}, nil
 		}
 
@@ -507,13 +507,14 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 		var titleParts []string
 		titleSelectors := []string{".b_focusLabel", ".b_focusTextLarge", ".b_focusTextMedium", ".b_focusTextSmall", "h2", "h3"}
 		for _, sel := range titleSelectors {
-			titleNode := s.Find(sel)
-			if titleNode.Length() > 0 {
-				text := strings.TrimSpace(titleNode.Text())
+			s.Find(sel).Each(func(_ int, selNode *goquery.Selection) {
+				text := strings.TrimSpace(selNode.Text())
 				if text != "" {
 					titleParts = append(titleParts, text)
-					break
 				}
+			})
+			if len(titleParts) > 0 {
+				break
 			}
 		}
 		title := strings.Join(titleParts, " ")

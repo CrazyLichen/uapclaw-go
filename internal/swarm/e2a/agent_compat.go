@@ -47,6 +47,12 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		metadata = ctx
 	}
 
+	// 对齐 Python: setup_permission_context — 从 metadata 构建 PermissionContext
+	var permCtx *schema.PermissionContext
+	if len(metadata) > 0 {
+		permCtx = schema.NewPermissionContextFromDict(metadata)
+	}
+
 	methodStr := env.Method
 	var reqMethod schema.ReqMethod
 	if methodStr != "" {
@@ -89,15 +95,16 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 	}
 
 	return &schema.AgentRequest{
-		RequestID: env.RequestID,
-		ChannelID: channelID,
-		SessionID: sessionID,
-		ChatID:    chatID,
-		ReqMethod: reqMethod,
-		Params:    params,
-		IsStream:  env.IsStream,
-		Timestamp: e2aTimestampToFloat(env.Timestamp),
-		Metadata:  metadata,
+		RequestID:         env.RequestID,
+		ChannelID:         channelID,
+		SessionID:         sessionID,
+		ChatID:            chatID,
+		ReqMethod:         reqMethod,
+		Params:            params,
+		IsStream:          env.IsStream,
+		Timestamp:         e2aTimestampToFloat(env.Timestamp),
+		Metadata:          metadata,
+		PermissionContext: permCtx,
 	}, nil
 }
 

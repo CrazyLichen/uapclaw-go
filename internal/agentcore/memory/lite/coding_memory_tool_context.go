@@ -9,6 +9,8 @@ type CodingMemoryToolContext struct {
 	CodingMemoryDir string
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // NewCodingMemoryToolContext 创建编程记忆工具上下文
 func NewCodingMemoryToolContext() *CodingMemoryToolContext {
 	return &CodingMemoryToolContext{
