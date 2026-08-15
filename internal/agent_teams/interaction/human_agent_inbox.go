@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -28,12 +29,8 @@ type HumanAgentNotEnabledError struct {
 
 // UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
 // 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
-type UnknownHumanAgentError struct {
-	// Sender 尝试使用的发送者名
-	Sender string
-	// Registered 已注册的 human-agent 成员名列表
-	Registered []string
-}
+// 类型已提升到 schema 包，此处保留别名以兼容现有调用方。
+type UnknownHumanAgentError = schema.UnknownHumanAgentError
 
 // HumanAgentInbox Human-Agent 收件箱，路由 human-agent 输入。
 // 对齐 Python: HumanAgentInbox (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
@@ -127,21 +124,12 @@ func (h *HumanAgentInbox) GetOnInbound() OnInbound {
 	return h.onInbound
 }
 
-// Error 实现 error 接口
+// Error 实现 error 接口（HumanAgentNotEnabledError）
 func (e *HumanAgentNotEnabledError) Error() string {
 	if e.Message != "" {
 		return e.Message
 	}
 	return "no human-agent member is registered on this team"
-}
-
-// Error 实现 error 接口
-func (e *UnknownHumanAgentError) Error() string {
-	sorted := make([]string, len(e.Registered))
-	copy(sorted, e.Registered)
-	sort.Strings(sorted)
-	return fmt.Sprintf("'%s' is not a registered human-agent member; registered members: %v",
-		e.Sender, sorted)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

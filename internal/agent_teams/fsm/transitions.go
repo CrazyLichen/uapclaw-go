@@ -179,3 +179,9 @@ func IsValidTaskTransition(current, target string) bool {
 	}
 	return false
 }
+
+// IsTaskTerminal 判断任务状态是否为终态。
+// 对齐 Python: TASK_TERMINAL_STATUSES = {COMPLETED, CANCELLED}
+func IsTaskTerminal(status string) bool {
+	return status == TaskStatusCompleted || status == TaskStatusCancelled
+}

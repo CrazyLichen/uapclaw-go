@@ -1,6 +1,9 @@
 package schema
 
 import (
+	"fmt"
+	"sort"
+
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
@@ -103,6 +106,16 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
+// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
+// 从 interaction 包提升到 schema 包，避免 tools → interaction 循环依赖。
+type UnknownHumanAgentError struct {
+	// Sender 尝试使用的发送者名
+	Sender string
+	// Registered 已注册的 human-agent 成员名列表
+	Registered []string
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemberOpResultSuccess 创建成功结果。
@@ -111,6 +124,15 @@ func NewMemberOpResultSuccess() MemberOpResult { return MemberOpResult{OK: true}
 // NewMemberOpResultFail 创建失败结果。
 func NewMemberOpResultFail(reason string) MemberOpResult {
 	return MemberOpResult{OK: false, Reason: reason}
+}
+
+// Error 实现 error 接口
+func (e *UnknownHumanAgentError) Error() string {
+	sorted := make([]string, len(e.Registered))
+	copy(sorted, e.Registered)
+	sort.Strings(sorted)
+	return fmt.Sprintf("'%s' is not a registered human-agent member; registered members: %v",
+		e.Sender, sorted)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
