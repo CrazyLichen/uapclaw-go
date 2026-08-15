@@ -1,10 +1,18 @@
 package skill
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -1292,52 +1300,59 @@ func TestHandleSkillsInstallBuiltin_无效名称(t *testing.T) {
 	}
 }
 
-// TestHandleSkillsClawhubSearch 验证 ClawHub 搜索（未实现）
-func TestHandleSkillsClawhubSearch(t *testing.T) {
+// TestHandleSkillsClawhubSearch_缺参数 验证 ClawHub 搜索缺参数时返回失败
+func TestHandleSkillsClawhubSearch_缺参数(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 	result, err := sm.HandleSkillsClawhubSearch(context.Background(), nil)
-	if err == nil {
-		t.Error("未实现应返回错误")
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
 	}
 	if toBool(result["success"]) != false {
-		t.Error("应返回 success=false")
+		t.Error("缺参数应返回 success=false")
 	}
 }
 
-// TestHandleSkillsClawhubDownload 验证 ClawHub 下载（未实现）
-func TestHandleSkillsClawhubDownload(t *testing.T) {
+// TestHandleSkillsClawhubDownload_缺参数 验证缺参数时返回失败
+func TestHandleSkillsClawhubDownload_缺参数(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	_, err := sm.HandleSkillsClawhubDownload(context.Background(), nil)
-	if err == nil {
-		t.Error("未实现应返回错误")
+	result, err := sm.HandleSkillsClawhubDownload(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("缺参数应返回 success=false")
 	}
 }
 
-// TestHandleSkillsTeamSkillsHub系列 验证所有 TeamSkillsHub 方法（未实现）
-func TestHandleSkillsTeamSkillsHub系列(t *testing.T) {
+// TestHandleSkillsTeamSkillsHub_缺参数 验证 TeamSkillsHub 方法缺参数时返回失败
+// Search 无强制参数，因此不在此测试中验证
+func TestHandleSkillsTeamSkillsHub_缺参数(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 	ctx := context.Background()
 
-	methods := []func(context.Context, map[string]any) (map[string]any, error){
-		sm.HandleSkillsTeamSkillsHubInfo,
-		sm.HandleSkillsTeamSkillsHubInit,
-		sm.HandleSkillsTeamSkillsHubValidate,
-		sm.HandleSkillsTeamSkillsHubPack,
-		sm.HandleSkillsTeamSkillsHubSearch,
-		sm.HandleSkillsTeamSkillsHubInstall,
-		sm.HandleSkillsTeamSkillsHubPublish,
-		sm.HandleSkillsTeamSkillsHubDelete,
+	// 每个方法缺参数时应返回 success=false 而非 error
+	methods := []struct {
+		name   string
+		method func(context.Context, map[string]any) (map[string]any, error)
+	}{
+		{"Info", sm.HandleSkillsTeamSkillsHubInfo},
+		{"Init", sm.HandleSkillsTeamSkillsHubInit},
+		{"Validate", sm.HandleSkillsTeamSkillsHubValidate},
+		{"Pack", sm.HandleSkillsTeamSkillsHubPack},
+		{"Install", sm.HandleSkillsTeamSkillsHubInstall},
+		{"Publish", sm.HandleSkillsTeamSkillsHubPublish},
+		{"Delete", sm.HandleSkillsTeamSkillsHubDelete},
 	}
-	for i, method := range methods {
-		result, err := method(ctx, nil)
-		if err == nil {
-			t.Errorf("方法 %d 未实现应返回错误", i)
+	for _, m := range methods {
+		result, err := m.method(ctx, nil)
+		if err != nil {
+			t.Errorf("%s 不应返回 error: %v", m.name, err)
 		}
 		if toBool(result["success"]) != false {
-			t.Errorf("方法 %d 应返回 success=false", i)
+			t.Errorf("%s 缺参数应返回 success=false", m.name)
 		}
 	}
 }
@@ -2576,5 +2591,933 @@ func TestIsBuiltinSkill_内置技能(t *testing.T) {
 
 	if !sm.isBuiltinSkill("my-skill") {
 		t.Error("内置技能应返回 true")
+	}
+}
+
+// ──────────────────────────── ClawHub 测试 ────────────────────────────
+
+// TestHandleSkillsClawhubSearch_正常 验证正常搜索
+func TestHandleSkillsClawhubSearch_正常(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			t.Error("应包含 Authorization header")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"results":[{"slug":"test-skill","displayName":"Test Skill","summary":"A test skill","version":"1.0.0","updatedAt":1234567890}]}`)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	sm.setClawhubToken("test-token")
+
+	// 通过环境变量覆盖 ClawHub 基础 URL
+	t.Setenv("CLAWHUB_BASE_URL", server.URL)
+
+	result, err := sm.HandleSkillsClawhubSearch(context.Background(), map[string]any{
+		"q":     "test",
+		"limit": float64(10),
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	skills, ok := result["skills"].([]map[string]any)
+	if !ok || len(skills) != 1 {
+		t.Fatalf("应返回 1 个技能, got %v", result["skills"])
+	}
+	if toString(skills[0]["slug"]) != "test-skill" {
+		t.Errorf("slug = %q, want %q", toString(skills[0]["slug"]), "test-skill")
+	}
+}
+
+// TestHandleSkillsClawhubSearch_无Token 验证无 token 返回错误
+func TestHandleSkillsClawhubSearch_无Token(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsClawhubSearch(context.Background(), map[string]any{
+		"q": "test",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("无 token 应返回 success=false")
+	}
+}
+
+// TestHandleSkillsClawhubSearch_缺关键词 验证缺少搜索关键词
+func TestHandleSkillsClawhubSearch_缺关键词(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	sm.setClawhubToken("test-token")
+
+	result, err := sm.HandleSkillsClawhubSearch(context.Background(), map[string]any{})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("缺少关键词应返回 success=false")
+	}
+}
+
+// TestHandleSkillsClawhubDownload_正常 验证正常下载安装
+func TestHandleSkillsClawhubDownload_正常(t *testing.T) {
+	// 创建一个合法的 ZIP 响应（含 SKILL.md）
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test-skill/SKILL.md")
+	fmt.Fprint(w, "---\nname: test-skill\ndescription: 测试技能\n---\n技能正文")
+	zipWriter.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipBuf.Bytes())
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	sm.setClawhubToken("test-token")
+
+	// 通过环境变量覆盖 ClawHub 基础 URL
+	t.Setenv("CLAWHUB_BASE_URL", server.URL)
+
+	result, err := sm.HandleSkillsClawhubDownload(context.Background(), map[string]any{
+		"slug": "test-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsClawhubDownload_无Token 验证无 token 返回错误
+func TestHandleSkillsClawhubDownload_无Token(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsClawhubDownload(context.Background(), map[string]any{
+		"slug": "test-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("无 token 应返回 success=false")
+	}
+}
+
+// TestSafeExtractZIPBytesToDir_ZipSlip 验证 Zip Slip 防护
+func TestSafeExtractZIPBytesToDir_ZipSlip(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("../../../etc/passwd")
+	fmt.Fprint(w, "malicious")
+	zipWriter.Close()
+
+	tmpDir := t.TempDir()
+	err := safeExtractZIPBytesToDir(zipBuf.Bytes(), tmpDir)
+	if err == nil {
+		t.Error("应检测到 Zip Slip 并返回错误")
+	}
+}
+
+// TestSafeExtractZIPBytesToDir_正常 验证正常解压
+func TestSafeExtractZIPBytesToDir_正常(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test.txt")
+	fmt.Fprint(w, "hello")
+	zipWriter.Close()
+
+	tmpDir := t.TempDir()
+	err := safeExtractZIPBytesToDir(zipBuf.Bytes(), tmpDir)
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if !fileExists(filepath.Join(tmpDir, "test.txt")) {
+		t.Error("解压后应存在 test.txt")
+	}
+}
+
+// ──────────────────────────── TeamSkillsHub 辅助方法测试 ────────────────────────────
+
+// TestMatchHost 验证主机名匹配
+func TestMatchHost(t *testing.T) {
+	tests := []struct {
+		host    string
+		pattern string
+		want    bool
+	}{
+		{"example.com", "example.com", true},
+		{"foo.example.com", "*.example.com", true},
+		{"example.com", "*.example.com", true},
+		{"evil.com", "example.com", false},
+		{"evil.com", "*.example.com", false},
+		{"127.0.0.1", "127.0.0.1", true},
+		{"*", "*", true},
+		// 多段通配符（对齐 Python _team_skills_hub_host_matches_rule）
+		{"openjiuwen-market.obs.cn-north-4.myhuaweicloud.com", "openjiuwen-market.obs.*.myhuaweicloud.com", true},
+		{"openjiuwen-market.obs.cn-north-4.myhuaweicloud.com", "*.obs.*.myhuaweicloud.com", true},
+		// 段数不匹配
+		{"obs.myhuaweicloud.com", "openjiuwen-market.obs.*.myhuaweicloud.com", false},
+		// 非通配段不匹配
+		{"other.obs.cn-north-4.myhuaweicloud.com", "openjiuwen-market.obs.*.myhuaweicloud.com", false},
+	}
+	for _, tt := range tests {
+		got := matchHost(tt.host, tt.pattern)
+		if got != tt.want {
+			t.Errorf("matchHost(%q, %q) = %v, want %v", tt.host, tt.pattern, got, tt.want)
+		}
+	}
+}
+
+// TestAssertTeamSkillsHubDownloadURLAllowed_白名单 验证白名单校验
+func TestAssertTeamSkillsHubDownloadURLAllowed_白名单(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 测试 localhost 和 127.0.0.1（默认白名单中的精确匹配）
+	if err := sm.assertTeamSkillsHubDownloadURLAllowed("http://127.0.0.1:8080/file.zip"); err != nil {
+		t.Errorf("白名单内 URL 不应返回错误: %v", err)
+	}
+	if err := sm.assertTeamSkillsHubDownloadURLAllowed("http://localhost/file.zip"); err != nil {
+		t.Errorf("白名单内 URL 不应返回错误: %v", err)
+	}
+	if err := sm.assertTeamSkillsHubDownloadURLAllowed("https://evil.com/file.zip"); err == nil {
+		t.Error("白名单外 URL 应返回错误")
+	}
+	// 测试多段通配符：openjiuwen-market.obs.*.myhuaweicloud.com 匹配 openjiuwen-market.obs.cn-north-4.myhuaweicloud.com
+	if err := sm.assertTeamSkillsHubDownloadURLAllowed("https://openjiuwen-market.obs.cn-north-4.myhuaweicloud.com/file.zip"); err != nil {
+		t.Errorf("白名单内 URL 不应返回错误: %v", err)
+	}
+}
+
+// TestDownloadZipAndVerify_正常 验证正常下载校验
+func TestDownloadZipAndVerify_正常(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test.txt")
+	fmt.Fprint(w, "hello")
+	zipWriter.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(zipBuf.Bytes())
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	data, err := sm.downloadZipAndVerify(context.Background(), server.URL, "")
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("应返回非空数据")
+	}
+}
+
+// ──────────────────────────── TeamSkillsHub Handle 方法测试 ────────────────────────────
+
+// TestHandleSkillsTeamSkillsHubSearch_正常 验证正常搜索
+func TestHandleSkillsTeamSkillsHubSearch_正常(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"code":200,"data":{"items":[{"asset_id":"test-asset","name":"test-skill","display_name":"Test Skill","short_desc":"A test skill","latest_version":"1.0.0","update_time":1234567890}],"total":1}}`)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubSearch(context.Background(), map[string]any{
+		"q":          "test",
+		"market_url": server.URL,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInfo_正常 验证正常获取元数据
+func TestHandleSkillsTeamSkillsHubInfo_正常(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"code":200,"data":{"asset_id":"test-asset","latest_version":"1.0.0"}}`)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubInfo(context.Background(), map[string]any{
+		"asset_id":   "test-asset",
+		"market_url": server.URL,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_正常 验证正常初始化
+func TestHandleSkillsTeamSkillsHubInit_正常(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
+		"name": "my-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	// 验证目录和文件已创建
+	dirPath := toString(result["path"])
+	if !dirExists(dirPath) {
+		t.Error("目录应已创建")
+	}
+	if !fileExists(filepath.Join(dirPath, "SKILL.md")) {
+		t.Error("SKILL.md 应已创建")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubValidate_有效 验证有效目录
+func TestHandleSkillsTeamSkillsHubValidate_有效(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 创建有效目录
+	skillDir := filepath.Join(tmpDir, "test-skill")
+	os.MkdirAll(skillDir, 0o755)
+	skillContent := "---\nname: test-skill\ndescription: 测试技能\n---\n技能正文"
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o644)
+
+	result, err := sm.HandleSkillsTeamSkillsHubValidate(context.Background(), map[string]any{
+		"path": skillDir,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["valid"]) != true {
+		t.Errorf("应返回 valid=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubValidate_无效 验证无效目录
+func TestHandleSkillsTeamSkillsHubValidate_无效(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 创建无效目录（缺少 description）
+	skillDir := filepath.Join(tmpDir, "test-skill")
+	os.MkdirAll(skillDir, 0o755)
+	skillContent := "---\nname: test-skill\n---\n技能正文"
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o644)
+
+	result, err := sm.HandleSkillsTeamSkillsHubValidate(context.Background(), map[string]any{
+		"path": skillDir,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["valid"]) != false {
+		t.Errorf("应返回 valid=false, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubPack_正常 验证正常打包
+func TestHandleSkillsTeamSkillsHubPack_正常(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 创建技能目录
+	skillDir := filepath.Join(tmpDir, "test-skill")
+	os.MkdirAll(skillDir, 0o755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: test\n---\nbody"), 0o644)
+
+	outputZip := filepath.Join(tmpDir, "test-skill.zip")
+
+	result, err := sm.HandleSkillsTeamSkillsHubPack(context.Background(), map[string]any{
+		"path":   skillDir,
+		"output": outputZip,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	if !fileExists(outputZip) {
+		t.Error("ZIP 文件应已创建")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubDelete_正常 验证正常删除
+func TestHandleSkillsTeamSkillsHubDelete_正常(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("应使用 DELETE 方法, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubDelete(context.Background(), map[string]any{
+		"asset_id":   "test-asset",
+		"market_url": server.URL,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInstall_缺assetId 验证缺少 asset_id
+func TestHandleSkillsTeamSkillsHubInstall_缺assetId(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubInstall(context.Background(), map[string]any{})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("缺少 asset_id 应返回 success=false")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubPublish_缺path 验证缺少 path
+func TestHandleSkillsTeamSkillsHubPublish_缺path(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("缺少 path 应返回 success=false")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInstall_正常 验证正常安装
+func TestHandleSkillsTeamSkillsHubInstall_正常(t *testing.T) {
+	// 创建一个合法的 ZIP（含 SKILL.md）
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test-skill/SKILL.md")
+	fmt.Fprint(w, "---\nname: test-skill\ndescription: 测试技能\n---\n技能正文")
+	zipWriter.Close()
+	zipBytes := zipBuf.Bytes()
+
+	// 下载服务器
+	downloadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipBytes)
+	}))
+	defer downloadServer.Close()
+
+	// 元数据服务器
+	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"code":    200,
+			"success": true,
+			"data": map[string]any{
+				"asset_id":        "test-asset",
+				"download_url":    downloadServer.URL + "/file.zip",
+				"checksum_sha256": "",
+			},
+		})
+	}))
+	defer metadataServer.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 设置白名单允许下载
+	t.Setenv(teamSkillsHubAllowedHostsEnv, "127.0.0.1,localhost")
+
+	result, err := sm.HandleSkillsTeamSkillsHubInstall(context.Background(), map[string]any{
+		"asset_id":   "test-asset",
+		"market_url": metadataServer.URL,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubPublish_正常 验证正常发布
+func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
+	// 创建一个临时 ZIP 文件
+	tmpDir := t.TempDir()
+	zipPath := filepath.Join(tmpDir, "test-skill.zip")
+	zipFile, _ := os.Create(zipPath)
+	zipWriter := zip.NewWriter(zipFile)
+	w, _ := zipWriter.Create("test.txt")
+	fmt.Fprint(w, "hello")
+	zipWriter.Close()
+	zipFile.Close()
+
+	// 上传服务器
+	uploadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("请求方法应为 POST, got %s", r.Method)
+		}
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Errorf("Content-Type 应为 multipart/form-data")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data":    map[string]any{"asset_id": "new-asset-123"},
+		})
+	}))
+	defer uploadServer.Close()
+
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{
+		"path":       zipPath,
+		"market_url": uploadServer.URL,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	if result["asset_id"] != "new-asset-123" {
+		t.Errorf("asset_id = %v, want new-asset-123", result["asset_id"])
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubPublish_文件不存在 验证文件不存在
+func TestHandleSkillsTeamSkillsHubPublish_文件不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{
+		"path": filepath.Join(tmpDir, "nonexistent.zip"),
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("文件不存在应返回 success=false")
+	}
+}
+
+// TestDownloadZipAndVerify_带校验和 验证带 SHA256 校验和的下载
+func TestDownloadZipAndVerify_带校验和(t *testing.T) {
+	// 创建合法 ZIP
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test.txt")
+	fmt.Fprint(w, "hello")
+	zipWriter.Close()
+	zipBytes := zipBuf.Bytes()
+
+	// 计算 SHA256
+	hash := sha256.Sum256(zipBytes)
+	checksum := hex.EncodeToString(hash[:])
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipBytes)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 设置白名单
+	t.Setenv(teamSkillsHubAllowedHostsEnv, "127.0.0.1,localhost")
+
+	result, err := sm.downloadZipAndVerify(context.Background(), server.URL+"/file.zip", checksum)
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if len(result) == 0 {
+		t.Error("应返回非空 ZIP 数据")
+	}
+}
+
+// TestDownloadZipAndVerify_校验和不匹配 验证 SHA256 不匹配时返回错误
+func TestDownloadZipAndVerify_校验和不匹配(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	w, _ := zipWriter.Create("test.txt")
+	fmt.Fprint(w, "hello")
+	zipWriter.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipBuf.Bytes())
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	t.Setenv(teamSkillsHubAllowedHostsEnv, "127.0.0.1,localhost")
+
+	_, err := sm.downloadZipAndVerify(context.Background(), server.URL+"/file.zip", "0000000000000000000000000000000000000000000000000000000000000000")
+	if err == nil {
+		t.Error("校验和不匹配应返回错误")
+	}
+}
+
+// TestDownloadZipAndVerify_非ZIP 验证非 ZIP 响应返回错误
+func TestDownloadZipAndVerify_非ZIP(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("not a zip file"))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	t.Setenv(teamSkillsHubAllowedHostsEnv, "127.0.0.1,localhost")
+
+	_, err := sm.downloadZipAndVerify(context.Background(), server.URL+"/file.zip", "")
+	if err == nil {
+		t.Error("非 ZIP 响应应返回错误")
+	}
+}
+
+// TestScanBuiltinSkills_有技能 验证扫描内置技能
+func TestScanBuiltinSkills_有技能(t *testing.T) {
+	tmpDir := t.TempDir()
+	builtinDir := filepath.Join(tmpDir, "builtin_skills")
+	os.MkdirAll(builtinDir, 0o755)
+
+	// 创建一个内置技能
+	skillDir := filepath.Join(builtinDir, "builtin-test")
+	os.MkdirAll(skillDir, 0o755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: builtin-test\ndescription: 内置测试\n---\n# Test\n"), 0o644)
+
+	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
+
+	sm := NewSkillManager(t.TempDir())
+	skills := sm.scanBuiltinSkills()
+	if len(skills) == 0 {
+		t.Error("应扫描到内置技能")
+	}
+}
+
+// TestSaveState_持久化 验证状态持久化
+func TestSaveState_持久化(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	sm.mu.Lock()
+	sm.addLocalSkill(map[string]any{
+		"name":   "test-skill",
+		"source": "local",
+	})
+	sm.addInstalledPlugin(map[string]any{
+		"name":        "test-skill",
+		"marketplace": "local",
+		"source":      "local",
+	})
+	sm.saveState()
+	sm.mu.Unlock()
+
+	// 验证状态文件存在
+	if !fileExists(sm.stateFile) {
+		t.Fatal("状态文件应存在")
+	}
+
+	// 读取并验证
+	data, err := os.ReadFile(sm.stateFile)
+	if err != nil {
+		t.Fatalf("读取状态文件失败: %v", err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("解析状态文件失败: %v", err)
+	}
+	installedPlugins, ok := state["installed_plugins"].([]any)
+	if !ok || len(installedPlugins) == 0 {
+		t.Error("状态文件应包含 installed_plugins")
+	}
+	localSkills, ok := state["local_skills"].([]any)
+	if !ok || len(localSkills) == 0 {
+		t.Error("状态文件应包含 local_skills")
+	}
+}
+
+// TestHandleSkillsInstallBuiltin_正常 验证安装内置技能
+func TestHandleSkillsInstallBuiltin_正常(t *testing.T) {
+	tmpDir := t.TempDir()
+	builtinDir := filepath.Join(tmpDir, "builtin_skills")
+	os.MkdirAll(builtinDir, 0o755)
+
+	// 创建一个内置技能
+	skillDir := filepath.Join(builtinDir, "builtin-test")
+	os.MkdirAll(skillDir, 0o755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: builtin-test\ndescription: 内置测试\n---\n# Test\n"), 0o644)
+
+	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
+
+	sm := NewSkillManager(t.TempDir())
+	result, err := sm.HandleSkillsInstallBuiltin(context.Background(), map[string]any{
+		"name": "builtin-test",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestLocateSkillDir_子目录 验证递归查找 SKILL.md
+func TestLocateSkillDir_子目录(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 创建子目录结构
+	subDir := filepath.Join(tmpDir, "nested", "deep")
+	os.MkdirAll(subDir, 0o755)
+	os.WriteFile(filepath.Join(subDir, "SKILL.md"), []byte("---\nname: test\n---\nbody"), 0o644)
+
+	result := sm.locateSkillDir(tmpDir)
+	if result == "" {
+		t.Error("应递归找到 SKILL.md")
+	}
+	if result != subDir {
+		t.Errorf("locateSkillDir = %q, want %q", result, subDir)
+	}
+}
+
+// TestLocateSkillDir_根目录 验证根目录直接查找
+func TestLocateSkillDir_根目录(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	os.WriteFile(filepath.Join(tmpDir, "SKILL.md"), []byte("---\nname: test\n---\nbody"), 0o644)
+
+	result := sm.locateSkillDir(tmpDir)
+	if result != tmpDir {
+		t.Errorf("locateSkillDir = %q, want %q", result, tmpDir)
+	}
+}
+
+// TestLocateSkillDir_不存在 验证未找到时返回空
+func TestLocateSkillDir_不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result := sm.locateSkillDir(tmpDir)
+	if result != "" {
+		t.Errorf("未找到时应返回空字符串, got %q", result)
+	}
+}
+
+// TestHasPendingSkillnetInstall 验证 SkillNet 安装状态检查
+func TestHasPendingSkillnetInstall(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 无任务时应返回 false
+	if sm.HasPendingSkillnetInstall() {
+		t.Error("无任务时应返回 false")
+	}
+
+	// 添加一个 pending 任务
+	sm.mu.Lock()
+	sm.skillnetInstallJobs["test-job"] = map[string]any{"status": "pending"}
+	sm.mu.Unlock()
+
+	if !sm.HasPendingSkillnetInstall() {
+		t.Error("有 pending 任务时应返回 true")
+	}
+
+	// 更新为 completed
+	sm.mu.Lock()
+	sm.skillnetInstallJobs["test-job"] = map[string]any{"status": "completed"}
+	sm.mu.Unlock()
+
+	if sm.HasPendingSkillnetInstall() {
+		t.Error("completed 任务应返回 false")
+	}
+}
+
+// TestSafeExtractZIPBytesToDir_含目录 验证含目录的 ZIP 解压
+func TestSafeExtractZIPBytesToDir_含目录(t *testing.T) {
+	var zipBuf bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuf)
+	// 添加目录中的文件
+	w, _ := zipWriter.Create("subdir/test.txt")
+	fmt.Fprint(w, "hello in subdir")
+	// 添加根级文件
+	w, _ = zipWriter.Create("root.txt")
+	fmt.Fprint(w, "hello at root")
+	zipWriter.Close()
+
+	tmpDir := t.TempDir()
+	err := safeExtractZIPBytesToDir(zipBuf.Bytes(), tmpDir)
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if !fileExists(filepath.Join(tmpDir, "subdir", "test.txt")) {
+		t.Error("解压后应存在 subdir/test.txt")
+	}
+	if !fileExists(filepath.Join(tmpDir, "root.txt")) {
+		t.Error("解压后应存在 root.txt")
+	}
+}
+
+// TestEnvString 验证环境变量读取
+func TestEnvString(t *testing.T) {
+	// 测试默认值
+	if got := envString("NONEXISTENT_ENV_VAR_12345", "default"); got != "default" {
+		t.Errorf("envString 默认值 = %q, want %q", got, "default")
+	}
+	// 测试环境变量覆盖
+	t.Setenv("TEST_ENV_STRING_VAR", "overridden")
+	if got := envString("TEST_ENV_STRING_VAR", "default"); got != "overridden" {
+		t.Errorf("envString 环境变量 = %q, want %q", got, "overridden")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubSearch_带参数 验证带完整参数的搜索
+func TestHandleSkillsTeamSkillsHubSearch_带参数(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"code": 200,
+			"data": map[string]any{
+				"items": []any{},
+				"total": 0,
+			},
+		})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result, err := sm.HandleSkillsTeamSkillsHubSearch(context.Background(), map[string]any{
+		"q":               "test",
+		"market_url":      server.URL,
+		"search_asset_id": "asset-123",
+		"limit":           10,
+		"offset":          0,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+}
+
+// TestHandleSkillsClawhubDownload_已存在 验证技能已存在时返回失败
+func TestHandleSkillsClawhubDownload_已存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	sm.setClawhubToken("test-token")
+
+	// 创建已存在的技能目录
+	os.MkdirAll(filepath.Join(sm.skillsDir, "test-skill"), 0o755)
+
+	result, err := sm.HandleSkillsClawhubDownload(context.Background(), map[string]any{
+		"slug": "test-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("技能已存在应返回 success=false")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_自定义输出 验证自定义输出目录
+func TestHandleSkillsTeamSkillsHubInit_自定义输出(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	outputDir := filepath.Join(tmpDir, "custom_output")
+
+	result, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
+		"name":   "custom-skill",
+		"output": outputDir,
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	expectedPath := filepath.Join(outputDir, "custom-skill")
+	if result["path"] != expectedPath {
+		t.Errorf("path = %v, want %v", result["path"], expectedPath)
+	}
+	if !fileExists(filepath.Join(expectedPath, "SKILL.md")) {
+		t.Error("应创建 SKILL.md")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_已存在 验证目录已存在时返回失败
+func TestHandleSkillsTeamSkillsHubInit_已存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 先创建同名目录
+	os.MkdirAll(filepath.Join(sm.skillsDir, "existing-skill"), 0o755)
+
+	result, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
+		"name": "existing-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("目录已存在应返回 success=false")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubSearch_失败 验证搜索 API 失败
+func TestHandleSkillsTeamSkillsHubSearch_失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 使用不存在的 URL
+	result, err := sm.HandleSkillsTeamSkillsHubSearch(context.Background(), map[string]any{
+		"market_url": "http://127.0.0.1:1",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) != false {
+		t.Error("搜索失败应返回 success=false")
 	}
 }

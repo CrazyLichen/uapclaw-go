@@ -1,13 +1,22 @@
 package skill
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +61,16 @@ const (
 	skillnetMaxRetriesEnv = "SKILLNET_MAX_RETRIES"
 	// clawhubTokenKey ClawHub token 在 state 中的键
 	clawhubTokenKey = "clawhub_token"
+	// teamSkillsHubBaseURLEnv TeamSkillsHub 基础 URL 环境变量
+	teamSkillsHubBaseURLEnv = "TEAM_SKILLS_HUB_BASE_URL"
+	// teamSkillsHubTimeoutEnv TeamSkillsHub 超时环境变量
+	teamSkillsHubTimeoutEnv = "TEAM_SKILLS_HUB_TIMEOUT"
+	// teamSkillsHubAllowedHostsEnv TeamSkillsHub 下载白名单环境变量
+	teamSkillsHubAllowedHostsEnv = "TEAM_SKILLS_HUB_ALLOWED_DOWNLOAD_HOSTS"
+	// teamSkillsHubDefaultBaseURL TeamSkillsHub 默认基础 URL
+	teamSkillsHubDefaultBaseURL = "https://teamskills.openjiuwen.com"
+	// teamSkillsHubDefaultTimeout TeamSkillsHub 默认超时秒数
+	teamSkillsHubDefaultTimeout = 60
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -63,6 +82,12 @@ var (
 	skillnetDownloadTimeout = envInt(skillnetDownloadTimeoutEnv, 60)
 	// skillnetMaxRetries SkillNet 最大重试次数
 	skillnetMaxRetries = envInt(skillnetMaxRetriesEnv, 3)
+	// teamSkillsHubAllowedHostDefaults TeamSkillsHub 下载白名单默认值
+	teamSkillsHubAllowedHostDefaults = []string{
+		"openjiuwen-market.obs.*.myhuaweicloud.com",
+		"127.0.0.1",
+		"localhost",
+	}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -953,61 +978,661 @@ func (sm *SkillManager) HandleSkillsClawhubSetToken(ctx context.Context, params 
 // HandleSkillsClawhubSearch 从 ClawHub 搜索技能
 // 对应 Python: SkillManager.handle_skills_clawhub_search(params)
 func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	query := trimSpace(toString(params["q"]))
+	if query == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: q"}, nil
+	}
+
+	token := sm.getClawhubToken()
+	if token == "" {
+		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.noToken"}, nil
+	}
+
+	limit := 10
+	if v, ok := params["limit"]; ok {
+		if n, err := strconv.Atoi(toString(v)); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	// 构建请求 URL（支持环境变量覆盖）
+	clawhubBaseURL := envString("CLAWHUB_BASE_URL", "https://clawhub.ai")
+	reqURL, _ := url.Parse(clawhubBaseURL + "/api/v1/search")
+	q := reqURL.Query()
+	q.Set("q", query)
+	q.Set("limit", strconv.Itoa(limit))
+	reqURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error()}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode)}, nil
+	}
+
+	var data map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return map[string]any{"success": false, "detail": "JSON 解析失败: " + err.Error()}, nil
+	}
+
+	// 映射结果字段
+	rawResults, ok := toSliceOfAny(data["results"])
+	if !ok {
+		return map[string]any{"success": true, "query": query, "count": 0, "skills": []map[string]any{}}, nil
+	}
+
+	var skills []map[string]any
+	for _, item := range rawResults {
+		if m, ok := item.(map[string]any); ok {
+			skills = append(skills, map[string]any{
+				"slug":         toString(m["slug"]),
+				"display_name": toString(m["displayName"]),
+				"summary":      toString(m["summary"]),
+				"version":      toString(m["version"]),
+				"updated_at":   m["updatedAt"],
+			})
+		}
+	}
+
+	return map[string]any{"success": true, "query": query, "count": len(skills), "skills": skills}, nil
 }
 
-// HandleSkillsClawhubDownload 从 ClawHub 下载技能
+// HandleSkillsClawhubDownload 从 ClawHub 下载并安装技能
 // 对应 Python: SkillManager.handle_skills_clawhub_download(params)
 func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	slug, err := safePathName(params["slug"], "skill")
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+
+	token := sm.getClawhubToken()
+	if token == "" {
+		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.noToken"}, nil
+	}
+
+	force := toBoolWithDefault(params["force"], false)
+	destDir := filepath.Join(sm.skillsDir, slug)
+	if dirExists(destDir) && !force {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在，使用 force=true 覆盖", slug)}, nil
+	}
+
+	// 构建请求 URL（支持环境变量覆盖）
+	clawhubBaseURL := envString("CLAWHUB_BASE_URL", "https://clawhub.ai")
+	reqURL, _ := url.Parse(clawhubBaseURL + "/api/v1/download")
+	q := reqURL.Query()
+	q.Set("slug", slug)
+	if v := toString(params["version"]); v != "" {
+		q.Set("version", v)
+	}
+	if v := toString(params["tag"]); v != "" {
+		q.Set("tag", v)
+	}
+	reqURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error()}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode)}, nil
+	}
+
+	// 读取 ZIP 内容
+	zipBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "读取响应失败: " + err.Error()}, nil
+	}
+
+	// 解压到临时目录
+	tmpDir, err := os.MkdirTemp("", "jiuwenswarm_clawhub_")
+	if err != nil {
+		return map[string]any{"success": false, "detail": "创建临时目录失败: " + err.Error()}, nil
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := safeExtractZIPBytesToDir(zipBytes, tmpDir); err != nil {
+		return map[string]any{"success": false, "detail": "ZIP 解压失败: " + err.Error()}, nil
+	}
+
+	// 定位 SKILL.md（递归搜索，对齐 Python _locate_skill_dir）
+	skillDir := sm.locateSkillDir(tmpDir)
+	if skillDir == "" {
+		return map[string]any{"success": false, "detail": "ZIP 中未找到 SKILL.md"}, nil
+	}
+	skillFile := sm.tryFindSkillFile(skillDir)
+	meta := sm.parseSkillMD(skillFile)
+	if meta == nil {
+		return map[string]any{"success": false, "detail": "SKILL.md 解析失败"}, nil
+	}
+	skillName := toString(meta["name"])
+	if skillName == "" {
+		skillName = slug
+	}
+
+	// 安装到 skillsDir
+	finalDest := filepath.Join(sm.skillsDir, skillName)
+	if dirExists(finalDest) {
+		if force {
+			os.RemoveAll(finalDest)
+		} else {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
+		}
+	}
+	// 定位 SKILL.md 所在的目录（可能是子目录）
+	skillSrcDir := skillDir
+	if err := copyDir(skillSrcDir, finalDest); err != nil {
+		return map[string]any{"success": false, "detail": "安装失败: " + err.Error()}, nil
+	}
+
+	// 记录安装信息
+	sm.mu.Lock()
+	sm.addLocalSkill(map[string]any{
+		"name":        skillName,
+		"origin":      "clawhub:" + slug,
+		"source":      "clawhub",
+		"installed_at": time.Now().Format(time.RFC3339),
+	})
+	sm.addInstalledPlugin(map[string]any{
+		"name":        skillName,
+		"marketplace": "clawhub",
+		"source":      "clawhub",
+		"installed_at": time.Now().Format(time.RFC3339),
+	})
+	sm.saveState()
+	sm.mu.Unlock()
+
+	sm.refreshAgentDataIndexes()
+
+	return map[string]any{
+		"success": true,
+		"skill":   map[string]any{"name": skillName, "source": "clawhub"},
+	}, nil
 }
 
 // HandleSkillsTeamSkillsHubInfo 查询 Team Skills Hub 技能版本详情
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_info(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	assetID := trimSpace(toString(params["asset_id"]))
+	if assetID == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: asset_id"}, nil
+	}
+	baseURL := trimSpace(toString(params["market_url"]))
+	version := trimSpace(toString(params["version"]))
+
+	queryParams := url.Values{}
+	if version != "" {
+		queryParams.Set("version", version)
+	}
+
+	data, err := sm.teamSkillsHubHTTPGet(ctx, "/api/v1/artifacts/"+assetID, queryParams, 0, baseURL)
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+	return map[string]any{"success": true, "data": data}, nil
 }
 
 // HandleSkillsTeamSkillsHubInit 初始化 TeamSkills 模板目录
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_init(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInit(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	name := trimSpace(toString(params["name"]))
+	if name == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
+	}
+	output := trimSpace(toString(params["output"]))
+	var dirPath string
+	if output != "" {
+		dirPath = filepath.Join(output, name)
+	} else {
+		dirPath = filepath.Join(sm.skillsDir, name)
+	}
+
+	if dirExists(dirPath) {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("目录 %s 已存在", dirPath)}, nil
+	}
+
+	// 创建目录结构
+	if err := os.MkdirAll(filepath.Join(dirPath, "tools"), 0o755); err != nil {
+		return map[string]any{"success": false, "detail": "创建目录失败: " + err.Error()}, nil
+	}
+	if err := os.MkdirAll(filepath.Join(dirPath, "data"), 0o755); err != nil {
+		return map[string]any{"success": false, "detail": "创建目录失败: " + err.Error()}, nil
+	}
+
+	// 写入 SKILL.md 骨架
+	skillContent := fmt.Sprintf("---\nname: %s\ndescription: \"\"\nversion: \"1.0.0\"\n---\n", name)
+	if err := os.WriteFile(filepath.Join(dirPath, "SKILL.md"), []byte(skillContent), 0o644); err != nil {
+		return map[string]any{"success": false, "detail": "写入 SKILL.md 失败: " + err.Error()}, nil
+	}
+
+	return map[string]any{"success": true, "path": dirPath}, nil
 }
 
 // HandleSkillsTeamSkillsHubValidate 校验 TeamSkills 目录结构与 SKILL.md 内容
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_validate(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubValidate(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	dirPath := trimSpace(toString(params["path"]))
+	if dirPath == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: path"}, nil
+	}
+
+	var errs []string
+	if !dirExists(dirPath) {
+		return map[string]any{"success": false, "detail": "目录不存在"}, nil
+	}
+
+	skillFile := sm.tryFindSkillFile(dirPath)
+	if skillFile == "" {
+		return map[string]any{"success": true, "valid": false, "errors": []string{"缺少 SKILL.md 文件"}}, nil
+	}
+
+	meta := sm.parseSkillMD(skillFile)
+	if meta == nil {
+		return map[string]any{"success": true, "valid": false, "errors": []string{"SKILL.md 解析失败"}}, nil
+	}
+
+	if toString(meta["name"]) == "" {
+		errs = append(errs, "SKILL.md 缺少 name 字段")
+	}
+	if toString(meta["description"]) == "" {
+		errs = append(errs, "SKILL.md 缺少 description 字段")
+	}
+
+	if len(errs) > 0 {
+		return map[string]any{"success": true, "valid": false, "errors": errs}, nil
+	}
+	return map[string]any{"success": true, "valid": true, "errors": []string{}}, nil
 }
 
 // HandleSkillsTeamSkillsHubPack 将 TeamSkills 目录打包为 zip
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_pack(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubPack(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	dirPath := trimSpace(toString(params["path"]))
+	if dirPath == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: path"}, nil
+	}
+	if !dirExists(dirPath) {
+		return map[string]any{"success": false, "detail": "目录不存在"}, nil
+	}
+
+	output := trimSpace(toString(params["output"]))
+	if output == "" {
+		output = dirPath + ".zip"
+	}
+
+	// 排除的目录
+	excludeDirs := map[string]bool{".git": true, "__pycache__": true, "node_modules": true}
+
+	outFile, err := os.Create(output)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "创建 ZIP 文件失败: " + err.Error()}, nil
+	}
+	defer outFile.Close()
+
+	zipWriter := zip.NewWriter(outFile)
+	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dirPath, path)
+		if rel == "." {
+			return nil
+		}
+		// 检查排除目录
+		parts := strings.Split(rel, string(filepath.Separator))
+		for _, p := range parts {
+			if excludeDirs[p] {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+		if info.IsDir() {
+			return nil
+		}
+		w, err := zipWriter.Create(rel)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(data)
+		return err
+	})
+	zipWriter.Close()
+	outFile.Close()
+
+	if err != nil {
+		return map[string]any{"success": false, "detail": "打包失败: " + err.Error()}, nil
+	}
+
+	fi, _ := os.Stat(output)
+	var size int64
+	if fi != nil {
+		size = fi.Size()
+	}
+	return map[string]any{"success": true, "zip_path": output, "size": size}, nil
 }
 
 // HandleSkillsTeamSkillsHubSearch 从 Team Skills Hub 搜索技能
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_search(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	query := trimSpace(toString(params["q"]))
+	baseURL := trimSpace(toString(params["market_url"]))
+
+	// 构建查询参数
+	queryParams := url.Values{}
+	if query != "" {
+		queryParams.Set("search_keyword", query)
+	}
+	if v := trimSpace(toString(params["search_asset_id"])); v != "" {
+		queryParams.Set("asset_id", v)
+	}
+	if v := trimSpace(toString(params["search_asset_type"])); v != "" {
+		queryParams.Set("asset_type", v)
+	}
+	if v := trimSpace(toString(params["search_publisher_id"])); v != "" {
+		queryParams.Set("publisher_id", v)
+	}
+	if v := trimSpace(toString(params["skill_type"])); v != "" {
+		queryParams.Set("plugin_type", v)
+	} else if v := trimSpace(toString(params["plugin_type"])); v != "" {
+		queryParams.Set("plugin_type", v)
+	}
+	if v := trimSpace(toString(params["author"])); v != "" {
+		queryParams.Set("publisher_name", v)
+	}
+	if v := trimSpace(toString(params["order_by"])); v != "" {
+		queryParams.Set("order_by", v)
+	} else {
+		queryParams.Set("order_by", "install_count")
+	}
+	if v, ok := params["desc"]; ok {
+		queryParams.Set("desc", toString(v))
+	} else {
+		queryParams.Set("desc", "true")
+	}
+
+	// 分页参数
+	pageSize := 20
+	if v, ok := params["limit"]; ok {
+		if n, err := strconv.Atoi(toString(v)); err == nil && n > 0 && n <= 100 {
+			pageSize = n
+		}
+	} else if v, ok := params["page_size"]; ok {
+		if n, err := strconv.Atoi(toString(v)); err == nil && n > 0 && n <= 100 {
+			pageSize = n
+		}
+	}
+	queryParams.Set("page_size", strconv.Itoa(pageSize))
+
+	if v := trimSpace(toString(params["page"])); v != "" {
+		queryParams.Set("page", v)
+	} else {
+		queryParams.Set("page", "1")
+	}
+
+	data, err := sm.teamSkillsHubHTTPGet(ctx, "/api/v1/plugins", queryParams, 0, baseURL)
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+
+	// 映射结果字段
+	rawItems, ok := toSliceOfAny(data["items"])
+	if !ok {
+		return map[string]any{"success": true, "query": query, "count": 0, "skills": []map[string]any{}}, nil
+	}
+
+	var skills []map[string]any
+	for _, item := range rawItems {
+		if m, ok := item.(map[string]any); ok {
+			assetID := toString(m["asset_id"])
+			name := toString(m["name"])
+			if name == "" {
+				name = assetID
+			}
+			displayName := toString(m["display_name"])
+			if displayName == "" {
+				displayName = name
+			}
+			skills = append(skills, map[string]any{
+				"asset_id":     assetID,
+				"name":         name,
+				"display_name": displayName,
+				"summary":      toString(m["short_desc"]),
+				"version":      toString(m["latest_version"]),
+				"updated_at":   m["update_time"],
+			})
+		}
+	}
+
+	return map[string]any{"success": true, "query": query, "count": len(skills), "skills": skills}, nil
 }
 
 // HandleSkillsTeamSkillsHubInstall 从 Team Skills Hub 安装技能
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_install(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	assetID := trimSpace(toString(params["asset_id"]))
+	if assetID == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: asset_id"}, nil
+	}
+
+	baseURL := trimSpace(toString(params["market_url"]))
+	force := toBoolWithDefault(params["force"], false)
+	version := trimSpace(toString(params["version"]))
+	output := trimSpace(toString(params["output"]))
+
+	// 获取 artifact 元数据
+	queryParams := url.Values{}
+	if version != "" {
+		queryParams.Set("version", version)
+	}
+	data, err := sm.teamSkillsHubHTTPGet(ctx, "/api/v1/artifacts/"+assetID, queryParams, 0, baseURL)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "获取 artifact 元数据失败: " + err.Error()}, nil
+	}
+
+	downloadURL := toString(data["download_url"])
+	checksumSHA256 := toString(data["checksum_sha256"])
+
+	if downloadURL == "" {
+		return map[string]any{"success": false, "detail": "artifact 元数据中缺少 download_url"}, nil
+	}
+
+	// 白名单校验
+	if err := sm.assertTeamSkillsHubDownloadURLAllowed(downloadURL); err != nil {
+		return map[string]any{"success": false, "detail": "下载 URL 校验失败: " + err.Error()}, nil
+	}
+
+	// 下载并校验
+	zipBytes, err := sm.downloadZipAndVerify(ctx, downloadURL, checksumSHA256)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "下载校验失败: " + err.Error()}, nil
+	}
+
+	// 解压到临时目录
+	tmpDir, err := os.MkdirTemp("", "jiuwenswarm_team_skills_hub_")
+	if err != nil {
+		return map[string]any{"success": false, "detail": "创建临时目录失败: " + err.Error()}, nil
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := safeExtractZIPBytesToDir(zipBytes, tmpDir); err != nil {
+		return map[string]any{"success": false, "detail": "ZIP 解压失败: " + err.Error()}, nil
+	}
+
+	// 定位 SKILL.md（递归搜索，对齐 Python _locate_skill_dir）
+	skillDir := sm.locateSkillDir(tmpDir)
+	if skillDir == "" {
+		return map[string]any{"success": false, "detail": "ZIP 中未找到 SKILL.md"}, nil
+	}
+	skillFile := sm.tryFindSkillFile(skillDir)
+	meta := sm.parseSkillMD(skillFile)
+	if meta == nil {
+		return map[string]any{"success": false, "detail": "SKILL.md 解析失败"}, nil
+	}
+	skillName := toString(meta["name"])
+	if skillName == "" {
+		skillName = assetID
+	}
+
+	// 安装到目标目录
+	var finalDest string
+	if output != "" {
+		finalDest = filepath.Join(output, skillName)
+	} else {
+		finalDest = filepath.Join(sm.skillsDir, skillName)
+	}
+	if dirExists(finalDest) && !force {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
+	}
+	if dirExists(finalDest) {
+		os.RemoveAll(finalDest)
+	}
+	skillSrcDir := skillDir
+	if err := copyDir(skillSrcDir, finalDest); err != nil {
+		return map[string]any{"success": false, "detail": "安装失败: " + err.Error()}, nil
+	}
+
+	// 记录安装信息（非自定义 output 时）
+	if output == "" {
+		sm.mu.Lock()
+		sm.addLocalSkill(map[string]any{
+			"name":        skillName,
+			"origin":      "teamskillshub:" + assetID,
+			"source":      "teamskillshub",
+			"installed_at": time.Now().Format(time.RFC3339),
+		})
+		sm.addInstalledPlugin(map[string]any{
+			"name":        skillName,
+			"marketplace": "teamskillshub",
+			"source":      "teamskillshub",
+			"installed_at": time.Now().Format(time.RFC3339),
+		})
+		sm.saveState()
+		sm.mu.Unlock()
+		sm.refreshAgentDataIndexes()
+	}
+
+	return map[string]any{
+		"success": true,
+		"skill":   map[string]any{"name": skillName, "source": "teamskillshub", "asset_id": assetID, "path": finalDest},
+	}, nil
 }
 
 // HandleSkillsTeamSkillsHubPublish 发布 TeamSkills
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_publish(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	zipPath := trimSpace(toString(params["path"]))
+	if zipPath == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: path"}, nil
+	}
+	if !fileExists(zipPath) {
+		return map[string]any{"success": false, "detail": "ZIP 文件不存在"}, nil
+	}
+
+	baseURL := trimSpace(toString(params["market_url"]))
+	if baseURL == "" {
+		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
+	}
+
+	// 读取 ZIP 文件
+	zipData, err := os.ReadFile(zipPath)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "读取 ZIP 文件失败: " + err.Error()}, nil
+	}
+
+	// 构建 multipart/form-data 上传
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filepath.Base(zipPath))
+	if err != nil {
+		return map[string]any{"success": false, "detail": "构建上传请求失败: " + err.Error()}, nil
+	}
+	if _, err := part.Write(zipData); err != nil {
+		return map[string]any{"success": false, "detail": "写入上传数据失败: " + err.Error()}, nil
+	}
+	writer.Close()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/artifacts", body)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "构建请求失败: " + err.Error()}, nil
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "上传失败: " + err.Error()}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("API 返回状态码: %d", resp.StatusCode)}, nil
+	}
+
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return map[string]any{"success": false, "detail": "JSON 解析失败: " + err.Error()}, nil
+	}
+
+	assetID := ""
+	if data, ok := result["data"].(map[string]any); ok {
+		assetID = toString(data["asset_id"])
+	}
+	return map[string]any{"success": true, "asset_id": assetID}, nil
 }
 
 // HandleSkillsTeamSkillsHubDelete 删除 TeamSkills
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_delete(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, params map[string]any) (map[string]any, error) {
-	return map[string]any{"success": false, "detail": errNotImplemented.Error()}, errNotImplemented
+	assetID := trimSpace(toString(params["asset_id"]))
+	if assetID == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: asset_id"}, nil
+	}
+	baseURL := trimSpace(toString(params["market_url"]))
+	if baseURL == "" {
+		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, baseURL+"/api/v1/artifacts/"+assetID, nil)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "构建请求失败: " + err.Error()}, nil
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "删除失败: " + err.Error()}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("API 返回状态码: %d", resp.StatusCode)}, nil
+	}
+
+	return map[string]any{"success": true}, nil
 }
 
 // HandlePluginsList 列出已安装的插件
@@ -1406,6 +2031,32 @@ func (sm *SkillManager) tryFindSkillFile(dir string) string {
 	return ""
 }
 
+// locateSkillDir 定位包含 SKILL.md 的目录（优先当前目录，再向下递归）
+// 对应 Python: SkillManager._locate_skill_dir(path)
+func (sm *SkillManager) locateSkillDir(dir string) string {
+	// 优先在当前目录直接查找
+	if f := sm.tryFindSkillFile(dir); f != "" {
+		return filepath.Dir(f)
+	}
+	// 递归搜索子目录（匹配 Python 的 rglob("SKILL.md")）
+	var found string
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		lower := strings.ToLower(d.Name())
+		if lower == "skill.md" {
+			found = filepath.Dir(path)
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
 // parseSkillMD 解析 SKILL.md 文件的 frontmatter 和 body
 // 对应 Python: SkillManager._parse_skill_md(path)
 func (sm *SkillManager) parseSkillMD(path string) map[string]any {
@@ -1654,6 +2305,14 @@ func envInt(key string, defaultVal int) int {
 	return defaultVal
 }
 
+// envString 从环境变量读取字符串，带默认值
+func envString(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
+}
+
 // parseYAMLFrontmatter 解析 YAML frontmatter（最小实现）
 func parseYAMLFrontmatter(text string) map[string]any {
 	result := make(map[string]any)
@@ -1709,4 +2368,206 @@ func mapSliceToAny(items []map[string]any) []any {
 		result[i] = m
 	}
 	return result
+}
+
+// ──────────────────────────── TeamSkillsHub 辅助方法 ────────────────────────────
+
+// safeExtractZIPBytesToDir 安全解压 ZIP 字节到目标目录（防 Zip Slip）
+// 对应 Python: SkillManager._safe_extract_zip_bytes_to_dir(zip_bytes, dest_dir)
+func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {
+	reader, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return fmt.Errorf("ZIP 读取失败: %w", err)
+	}
+
+	for _, f := range reader.File {
+		// Zip Slip 防护：检查解压路径不超出目标目录
+		targetPath := filepath.Join(destDir, f.Name)
+		relPath, err := filepath.Rel(destDir, targetPath)
+		if err != nil {
+			return fmt.Errorf("路径解析失败: %w", err)
+		}
+		if strings.HasPrefix(relPath, "..") {
+			return fmt.Errorf("Zip Slip 检测：路径 %q 超出目标目录", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, f.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		data, readErr := io.ReadAll(rc)
+		rc.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if err := os.WriteFile(targetPath, data, f.Mode()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// teamSkillsHubHTTPGet 向 TeamSkillsHub 发送 GET 请求
+// 对应 Python: SkillManager._team_skills_hub_http_get_data(path, params, timeout, base_url)
+func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, params url.Values, timeout int, baseURL string) (map[string]any, error) {
+	if baseURL == "" {
+		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
+	}
+	if timeout <= 0 {
+		timeout = envInt(teamSkillsHubTimeoutEnv, teamSkillsHubDefaultTimeout)
+	}
+
+	reqURL, _ := url.Parse(baseURL + path)
+	if params != nil {
+		reqURL.RawQuery = params.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("构建请求失败: %w", err)
+	}
+
+	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("网络请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API 返回状态码: %d", resp.StatusCode)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("JSON 解析失败: %w", err)
+	}
+
+	// 检查业务状态码
+	code, _ := payload["code"].(float64)
+	if int(code) != 200 {
+		return nil, fmt.Errorf("API 业务错误，code=%v, detail=%v", code, payload["detail"])
+	}
+
+	data, _ := payload["data"].(map[string]any)
+	return data, nil
+}
+
+// assertTeamSkillsHubDownloadURLAllowed 校验下载 URL 主机名是否在白名单中
+// 对应 Python: SkillManager._assert_team_skills_hub_download_url_allowed(download_url)
+func (sm *SkillManager) assertTeamSkillsHubDownloadURLAllowed(downloadURL string) error {
+	parsed, err := url.Parse(downloadURL)
+	if err != nil {
+		return fmt.Errorf("URL 解析失败: %w", err)
+	}
+	host := parsed.Hostname()
+
+	// 获取白名单
+	allowedHosts := teamSkillsHubAllowedHostDefaults
+	if envHosts := os.Getenv(teamSkillsHubAllowedHostsEnv); envHosts != "" {
+		allowedHosts = strings.Split(envHosts, ",")
+	}
+
+	for _, pattern := range allowedHosts {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		if matchHost(host, pattern) {
+			return nil
+		}
+	}
+	return fmt.Errorf("下载 URL 主机名 %q 不在白名单中", host)
+}
+
+// matchHost 检查主机名是否匹配模式（支持 * 单段通配，对齐 Python _team_skills_hub_host_matches_rule）
+// 例如 "openjiuwen-market.obs.*.myhuaweicloud.com" 匹配 "openjiuwen-market.obs.cn-north-4.myhuaweicloud.com"
+func matchHost(host, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	// 前缀通配 *.example.com → 匹配 foo.example.com 和 example.com
+	if strings.HasPrefix(pattern, "*.") {
+		suffix := pattern[2:]
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	// 按段逐段匹配（对齐 Python：段数必须相同，* 匹配任意单段）
+	hostParts := strings.Split(host, ".")
+	patternParts := strings.Split(pattern, ".")
+	if len(hostParts) != len(patternParts) {
+		return false
+	}
+	for i := range hostParts {
+		if patternParts[i] == "*" {
+			continue
+		}
+		if hostParts[i] != patternParts[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// downloadZipAndVerify 下载 ZIP 并校验完整性
+// 对应 Python: SkillManager._download_zip_and_verify(download_url, checksum_sha256)
+func (sm *SkillManager) downloadZipAndVerify(ctx context.Context, downloadURL, checksumSHA256 string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("构建请求失败: %w", err)
+	}
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("下载失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("下载返回状态码: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	// 校验：非空
+	if len(data) == 0 {
+		return nil, fmt.Errorf("下载内容为空")
+	}
+
+	// 校验：ZIP 魔数（PK）
+	if len(data) < 2 || data[0] != 'P' || data[1] != 'K' {
+		return nil, fmt.Errorf("下载内容不是有效的 ZIP 文件")
+	}
+
+	// 校验：SHA256（如果提供了 checksum）
+	if checksumSHA256 != "" {
+		hash := sha256.Sum256(data)
+		actual := hex.EncodeToString(hash[:])
+		if !strings.EqualFold(actual, checksumSHA256) {
+			return nil, fmt.Errorf("SHA256 校验失败: 期望 %s, 实际 %s", checksumSHA256, actual)
+		}
+	}
+
+	// 校验：ZIP 完整性
+	if _, err := zip.NewReader(bytes.NewReader(data), int64(len(data))); err != nil {
+		return nil, fmt.Errorf("ZIP 完整性校验失败: %w", err)
+	}
+
+	return data, nil
 }
