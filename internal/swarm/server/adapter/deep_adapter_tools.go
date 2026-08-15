@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -681,15 +682,15 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           Runner.resource_mgr.add_tool(tool)
 	//       tool_cards.append(tool.card)
 	if d.skillManager != nil {
-		// ⤵️ 10.6.24: SkillToolkit 工具尚未实现
-		// 待实现：创建技能工具包 skillToolkit := NewSkillToolkit(d.skillManager)
-		// 待实现：注册技能工具 for _, t := range skillToolkit.GetTools() {
-		//     if rm.GetTool([]string{t.Card().ID}) == nil {
-		//         _ = rm.AddTool(t)
-		//     }
-		//     toolCards = append(toolCards, t.Card())
-		// }
-		logger.Info(logComponent).Msg("getToolCards: SkillManager 已就绪，等待 10.6.24 回填 SkillToolkit")
+		skillToolkit := skilltools.NewSkillToolkit(d.skillManager)
+		for _, t := range skillToolkit.GetTools() {
+			existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})
+			if len(existing) == 0 {
+				_ = runner.GetResourceMgr().AddTool(t)
+			}
+			toolCards = append(toolCards, t.Card())
+		}
+		logger.Info(logComponent).Msg("getToolCards: SkillToolkit 已注册")
 	}
 
 	// ── 步骤 10: acp_chat ──

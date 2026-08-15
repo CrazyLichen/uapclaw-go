@@ -516,7 +516,7 @@ func TestHandleSkillsInstalled_有插件(t *testing.T) {
 
 	// 添加插件到状态
 	sm.mu.Lock()
-	sm.addInstalledPlugin(map[string]any{
+	sm.AddInstalledPlugin(map[string]any{
 		"name":         "test-plugin",
 		"marketplace":  "test-market",
 		"version":      "1.0.0",
@@ -990,7 +990,7 @@ func TestHandleSkillsUninstall_技能存在(t *testing.T) {
 
 	// 添加到状态
 	sm.mu.Lock()
-	sm.addInstalledPlugin(map[string]any{"name": "test-skill", "marketplace": "test"})
+	sm.AddInstalledPlugin(map[string]any{"name": "test-skill", "marketplace": "test"})
 	sm.saveState()
 	sm.mu.Unlock()
 
@@ -1422,7 +1422,7 @@ func TestResolveSkillSource(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.addInstalledPlugin(map[string]any{"name": "market-skill", "marketplace": "test-market"})
+	sm.AddInstalledPlugin(map[string]any{"name": "market-skill", "marketplace": "test-market"})
 	sm.mu.Unlock()
 
 	if sm.resolveSkillSource("market-skill") != "test-market" {
@@ -1589,7 +1589,7 @@ func TestGetClawhubToken(t *testing.T) {
 	if sm.getClawhubToken() != "" {
 		t.Error("初始 token 应为空")
 	}
-	sm.setClawhubToken("test-token")
+	sm.SetClawhubToken("test-token")
 	if sm.getClawhubToken() != "test-token" {
 		t.Error("设置后应能读取")
 	}
@@ -1601,7 +1601,7 @@ func TestHandleSkillsClawhubGetToken_有token(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.setClawhubToken("sk-test-token-1234")
+	sm.SetClawhubToken("sk-test-token-1234")
 	sm.saveState()
 	sm.mu.Unlock()
 
@@ -1620,7 +1620,7 @@ func TestAddLocalSkill(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.addLocalSkill(map[string]any{"name": "local1", "source": "local"})
+	sm.AddLocalSkill(map[string]any{"name": "local1", "source": "local"})
 	sm.saveState()
 	sm.mu.Unlock()
 
@@ -1943,12 +1943,12 @@ func TestAddInstalledPlugin_替换(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.addInstalledPlugin(map[string]any{"name": "p1", "version": "1.0"})
-	sm.addInstalledPlugin(map[string]any{"name": "p1", "version": "2.0"}) // 替换
+	sm.AddInstalledPlugin(map[string]any{"name": "p1", "version": "1.0"})
+	sm.AddInstalledPlugin(map[string]any{"name": "p1", "version": "2.0"}) // 替换
 	sm.saveState()
 	sm.mu.Unlock()
 
-	plugins := sm.getInstalledPlugins()
+	plugins := sm.GetInstalledPlugins()
 	if len(plugins) != 1 {
 		t.Fatalf("期望 1 个插件，实际 %d", len(plugins))
 	}
@@ -2485,7 +2485,7 @@ func TestGetLocalSkills_空状态(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	result := sm.getLocalSkills()
+	result := sm.GetLocalSkills()
 	if result == nil {
 		t.Error("应返回空切片，而非 nil")
 	}
@@ -2499,8 +2499,8 @@ func TestGetLocalSkills_有数据(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	sm.addLocalSkill(map[string]any{"name": "test-skill", "source": "local"})
-	result := sm.getLocalSkills()
+	sm.AddLocalSkill(map[string]any{"name": "test-skill", "source": "local"})
+	result := sm.GetLocalSkills()
 	if len(result) != 1 {
 		t.Fatalf("期望 1 个，实际 %d 个", len(result))
 	}
@@ -2524,7 +2524,7 @@ func TestGetSkillMeta_正常解析(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	meta := sm.getSkillMeta("test-skill")
+	meta := sm.GetSkillMeta("test-skill")
 	if meta == nil {
 		t.Fatal("meta 不应为 nil")
 	}
@@ -2544,7 +2544,7 @@ func TestGetSkillMeta_不存在(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	meta := sm.getSkillMeta("nonexistent")
+	meta := sm.GetSkillMeta("nonexistent")
 	if meta != nil {
 		t.Error("不存在的技能应返回 nil")
 	}
@@ -2555,7 +2555,7 @@ func TestIsBuiltinSkill_非内置(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	if sm.isBuiltinSkill("some-skill") {
+	if sm.IsBuiltinSkill("some-skill") {
 		t.Error("非内置技能应返回 false")
 	}
 }
@@ -2565,7 +2565,7 @@ func TestIsBuiltinSkill_空名(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	if sm.isBuiltinSkill("") {
+	if sm.IsBuiltinSkill("") {
 		t.Error("空名应返回 false")
 	}
 }
@@ -2589,7 +2589,7 @@ func TestIsBuiltinSkill_内置技能(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !sm.isBuiltinSkill("my-skill") {
+	if !sm.IsBuiltinSkill("my-skill") {
 		t.Error("内置技能应返回 true")
 	}
 }
@@ -2610,7 +2610,7 @@ func TestHandleSkillsClawhubSearch_正常(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	sm.setClawhubToken("test-token")
+	sm.SetClawhubToken("test-token")
 
 	// 通过环境变量覆盖 ClawHub 基础 URL
 	t.Setenv("CLAWHUB_BASE_URL", server.URL)
@@ -2654,7 +2654,7 @@ func TestHandleSkillsClawhubSearch_无Token(t *testing.T) {
 func TestHandleSkillsClawhubSearch_缺关键词(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	sm.setClawhubToken("test-token")
+	sm.SetClawhubToken("test-token")
 
 	result, err := sm.HandleSkillsClawhubSearch(context.Background(), map[string]any{})
 	if err != nil {
@@ -2683,7 +2683,7 @@ func TestHandleSkillsClawhubDownload_正常(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	sm.setClawhubToken("test-token")
+	sm.SetClawhubToken("test-token")
 
 	// 通过环境变量覆盖 ClawHub 基础 URL
 	t.Setenv("CLAWHUB_BASE_URL", server.URL)
@@ -3238,11 +3238,11 @@ func TestSaveState_持久化(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.addLocalSkill(map[string]any{
+	sm.AddLocalSkill(map[string]any{
 		"name":   "test-skill",
 		"source": "local",
 	})
-	sm.addInstalledPlugin(map[string]any{
+	sm.AddInstalledPlugin(map[string]any{
 		"name":        "test-skill",
 		"marketplace": "local",
 		"source":      "local",
@@ -3445,7 +3445,7 @@ func TestHandleSkillsTeamSkillsHubSearch_带参数(t *testing.T) {
 func TestHandleSkillsClawhubDownload_已存在(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	sm.setClawhubToken("test-token")
+	sm.SetClawhubToken("test-token")
 
 	// 创建已存在的技能目录
 	os.MkdirAll(filepath.Join(sm.skillsDir, "test-skill"), 0o755)

@@ -675,7 +675,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.13 | ✅ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |
 | 10.3.14 | ✅ | TenantAgentPool | 多租户 Agent 池化；✅ Singleton[T] 扩展 Reset（自动 Cleanup）；✅ GetInstance/ResetInstance/ProcessMessage/ProcessMessageStream/Cleanup 透传；对齐 Python tenant_agent_pool.py | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
 | 10.3.15-18 | ✅ | 会话管理 | SessionManager(LIFO)✅ / SessionHistory(JSONL)✅ / SessionMetadata✅ / SessionRename✅；✅ 子包提取(server/session/)消除跨包依赖；✅ AppendHistoryRecord 元数据联动(UpdateSessionMetadata+SetSessionDeliveryContext)；✅ ReadTeamHistoryRecords+IsTeamRelevant(team过滤+重试)；✅ TruncateHistoryRecords cutIndex对齐Python；✅ SerializeValue递归序列化；✅ AutoTitle回填⤵️11.x自动标题；✅ RemoveTeamModeSessionDirsAtStartup；✅ GetAllSessionsMetadata分页 | `jiuwenswarm/server/runtime/session/` |
-| 10.3.19-20 | ✅ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
+| 10.3.19-20 | ✅ | 技能管理 | SkillManager(Server)/SkillDev 管道/SkillToolkit(search_skill+install_skill+uninstall_skill)/DeepAdapter步骤9回填 | `jiuwenswarm/server/runtime/skill/` · `swarm/agents/harness/tools/` |
 | 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
 | 10.3.23.1 | ✅ | HookType/HookEvent 常量 | AgentRailEvents/GatewayEvents | `hooks_config.py` HookType/HookEvent |
 | 10.3.23.2 | ✅ | 配置模型 | CommandHookConfig/PromptHookConfig/HookMatcher/HooksConfig/LoadHooksConfig | `hooks_config.py` 配置模型 |

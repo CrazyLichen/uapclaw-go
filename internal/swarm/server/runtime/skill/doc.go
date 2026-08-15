@@ -17,7 +17,7 @@
 //	skill/
 //	├── doc.go              # 包文档
 //	├── state_utils.go      # 纯函数式状态查询（GetStateFile/NormalizeSkillConfigs 等）
-//	├── skill_manager.go    # SkillManager 核心结构体与 handler 方法
+//	├── skill_manager.go    # SkillManager 核心结构体与 handler 方法（含 ClawHub/TeamSkillsHub 全套）
 //	└── skill_routes.go     # ReqMethod → handler 路由映射 + NeedsRebuild
 //
 // 对应 Python 代码：

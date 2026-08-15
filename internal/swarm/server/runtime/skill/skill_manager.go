@@ -175,7 +175,7 @@ func (sm *SkillManager) HandleSkillsInstalled(ctx context.Context, params map[st
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
-	rawPlugins := sm.getInstalledPlugins()
+	rawPlugins := sm.GetInstalledPlugins()
 	plugins := make([]map[string]any, 0, len(rawPlugins))
 	for _, p := range rawPlugins {
 		p = sm.normalizePlugin(p)
@@ -233,6 +233,11 @@ func (sm *SkillManager) HandleSkillsGet(ctx context.Context, params map[string]a
 	}
 
 	return nil, fmt.Errorf("未找到 skill: %s", name)
+}
+
+// SkillsDir 返回技能目录路径
+func (sm *SkillManager) SkillsDir() string {
+	return sm.skillsDir
 }
 
 // HandleSkillsToggle 切换已安装本地 skill 的 enabled 状态
@@ -588,7 +593,7 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 	// 解析元数据并记录
 	meta := sm.parseSkillMD(sm.tryFindSkillFile(dest))
 	commitHash := sm.gitGetCommit(repoDir)
-	sm.addInstalledPlugin(map[string]any{
+	sm.AddInstalledPlugin(map[string]any{
 		"name":         safePlugin,
 		"marketplace":  safeMarket,
 		"version":      toString(meta["version"]),
@@ -637,7 +642,7 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 
 	meta := sm.parseSkillMD(sm.tryFindSkillFile(dest))
 	sm.mu.Lock()
-	sm.addInstalledPlugin(map[string]any{
+	sm.AddInstalledPlugin(map[string]any{
 		"name":         safeName,
 		"marketplace":  "builtin",
 		"version":      toString(meta["version"]),
@@ -739,7 +744,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		return map[string]any{"success": false, "detail": fmt.Sprintf("导入失败: %s", err)}, nil
 	}
 
-	sm.addLocalSkill(map[string]any{
+	sm.AddLocalSkill(map[string]any{
 		"name":         safeSkillName,
 		"origin":       absPath,
 		"source":       "local",
@@ -966,7 +971,7 @@ func (sm *SkillManager) HandleSkillsClawhubSetToken(ctx context.Context, params 
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	sm.setClawhubToken(token)
+	sm.SetClawhubToken(token)
 	sm.saveState()
 
 	return map[string]any{
@@ -1145,13 +1150,13 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 
 	// 记录安装信息
 	sm.mu.Lock()
-	sm.addLocalSkill(map[string]any{
+	sm.AddLocalSkill(map[string]any{
 		"name":        skillName,
 		"origin":      "clawhub:" + slug,
 		"source":      "clawhub",
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
-	sm.addInstalledPlugin(map[string]any{
+	sm.AddInstalledPlugin(map[string]any{
 		"name":        skillName,
 		"marketplace": "clawhub",
 		"source":      "clawhub",
@@ -1518,13 +1523,13 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	// 记录安装信息（非自定义 output 时）
 	if output == "" {
 		sm.mu.Lock()
-		sm.addLocalSkill(map[string]any{
+		sm.AddLocalSkill(map[string]any{
 			"name":        skillName,
 			"origin":      "teamskillshub:" + assetID,
 			"source":      "teamskillshub",
 			"installed_at": time.Now().Format(time.RFC3339),
 		})
-		sm.addInstalledPlugin(map[string]any{
+		sm.AddInstalledPlugin(map[string]any{
 			"name":        skillName,
 			"marketplace": "teamskillshub",
 			"source":      "teamskillshub",
@@ -1738,7 +1743,7 @@ func (sm *SkillManager) getMarketplaces() []map[string]any {
 
 // getInstalledPlugins 获取已安装插件列表
 // 对应 Python: SkillManager._get_installed_plugins()
-func (sm *SkillManager) getInstalledPlugins() []map[string]any {
+func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
 	raw, ok := sm.state["installed_plugins"]
 	if !ok {
 		return nil
@@ -1758,8 +1763,8 @@ func (sm *SkillManager) getInstalledPlugins() []map[string]any {
 
 // addInstalledPlugin 添加已安装插件记录
 // 对应 Python: SkillManager._add_installed_plugin(plugin)
-func (sm *SkillManager) addInstalledPlugin(plugin map[string]any) {
-	plugins := sm.getInstalledPlugins()
+func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
+	plugins := sm.GetInstalledPlugins()
 	// 如果已存在同名插件，替换
 	name := toString(plugin["name"])
 	for i, p := range plugins {
@@ -1775,7 +1780,7 @@ func (sm *SkillManager) addInstalledPlugin(plugin map[string]any) {
 
 // removeInstalledPlugin 移除已安装插件记录
 func (sm *SkillManager) removeInstalledPlugin(name string) {
-	plugins := sm.getInstalledPlugins()
+	plugins := sm.GetInstalledPlugins()
 	var filtered []map[string]any
 	for _, p := range plugins {
 		if toString(p["name"]) != name {
@@ -1787,7 +1792,7 @@ func (sm *SkillManager) removeInstalledPlugin(name string) {
 
 // addLocalSkill 添加本地技能记录
 // 对应 Python: SkillManager._add_local_skill(skill)
-func (sm *SkillManager) addLocalSkill(skill map[string]any) {
+func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
 	raw, ok := sm.state["local_skills"]
 	if !ok {
 		raw = []any{}
@@ -1802,7 +1807,7 @@ func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 
 // getLocalSkills 返回本地技能列表
 // 对应 Python: SkillManager.get_local_skills()
-func (sm *SkillManager) getLocalSkills() []map[string]any {
+func (sm *SkillManager) GetLocalSkills() []map[string]any {
 	raw, ok := sm.state["local_skills"]
 	if !ok {
 		return []map[string]any{}
@@ -1838,7 +1843,7 @@ func (sm *SkillManager) getClawhubToken() string {
 
 // setClawhubToken 设置 ClawHub token
 // 对应 Python: SkillManager._set_clawhub_token(token)
-func (sm *SkillManager) setClawhubToken(token string) {
+func (sm *SkillManager) SetClawhubToken(token string) {
 	sm.state[clawhubTokenKey] = token
 }
 
@@ -1876,7 +1881,7 @@ func (sm *SkillManager) resolveLocalSkillDir(skillName string) string {
 
 // getSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
 // 对应 Python: SkillManager.get_skill_meta(skill_name)
-func (sm *SkillManager) getSkillMeta(name string) map[string]any {
+func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
 	skillDir := sm.resolveLocalSkillDir(name)
 	if skillDir == "" {
 		return nil
@@ -1897,7 +1902,7 @@ func (sm *SkillManager) getSkillMeta(name string) map[string]any {
 // resolveSkillSource 确定技能来源
 // 对应 Python: SkillManager._resolve_skill_source(skill_name)
 func (sm *SkillManager) resolveSkillSource(skillName string) string {
-	plugins := sm.getInstalledPlugins()
+	plugins := sm.GetInstalledPlugins()
 	for _, p := range plugins {
 		if toString(p["name"]) == skillName {
 			return toString(p["marketplace"])
@@ -2220,7 +2225,7 @@ func getBuiltinSkillsDir() string {
 // isBuiltinSkill 判断技能是否为内置技能
 // 对应 Python: SkillManager.is_builtin_skill(skill_name)
 // 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
-func (sm *SkillManager) isBuiltinSkill(name string) bool {
+func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 	if name == "" {
 		return false
 	}
