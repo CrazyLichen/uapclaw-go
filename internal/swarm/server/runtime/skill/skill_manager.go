@@ -1175,6 +1175,26 @@ func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 	sm.state["local_skills"] = list
 }
 
+// getLocalSkills 返回本地技能列表
+// 对应 Python: SkillManager.get_local_skills()
+func (sm *SkillManager) getLocalSkills() []map[string]any {
+	raw, ok := sm.state["local_skills"]
+	if !ok {
+		return []map[string]any{}
+	}
+	list, ok := toSliceOfAny(raw)
+	if !ok {
+		return []map[string]any{}
+	}
+	var result []map[string]any
+	for _, item := range list {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
 // normalizePlugin 规范化插件记录
 // 对应 Python: SkillManager._normalize_plugin(p)
 func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
@@ -1227,6 +1247,26 @@ func (sm *SkillManager) resolveLocalSkillDir(skillName string) string {
 		return candidate
 	}
 	return ""
+}
+
+// getSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
+// 对应 Python: SkillManager.get_skill_meta(skill_name)
+func (sm *SkillManager) getSkillMeta(name string) map[string]any {
+	skillDir := sm.resolveLocalSkillDir(name)
+	if skillDir == "" {
+		return nil
+	}
+	skillFile := sm.tryFindSkillFile(skillDir)
+	if skillFile == "" {
+		return nil
+	}
+	meta := sm.parseSkillMD(skillFile)
+	if meta == nil {
+		return nil
+	}
+	meta["skill_dir"] = skillDir
+	meta["skill_file"] = skillFile
+	return meta
 }
 
 // resolveSkillSource 确定技能来源
@@ -1519,8 +1559,41 @@ func logRejectedName(operation, label string, value any, exc error) {
 // getBuiltinSkillsDir 获取内置技能目录
 // 对应 Python: get_builtin_skills_dir()
 func getBuiltinSkillsDir() string {
+	if dir := os.Getenv("BUILTIN_SKILLS_DIR"); dir != "" {
+		return dir
+	}
 	// 后续补充：从 package root 解析 resources/agent/workspace/skills
 	return ""
+}
+
+// isBuiltinSkill 判断技能是否为内置技能
+// 对应 Python: SkillManager.is_builtin_skill(skill_name)
+// 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
+func (sm *SkillManager) isBuiltinSkill(name string) bool {
+	if name == "" {
+		return false
+	}
+	builtinDir := getBuiltinSkillsDir()
+	if builtinDir == "" {
+		return false
+	}
+	// 安全校验路径名称
+	if _, err := safePathName(name, "skill"); err != nil {
+		return false
+	}
+	// 用户 skills 目录下的技能路径
+	userSkillPath := filepath.Join(sm.skillsDir, name)
+	userInfo, err := os.Stat(userSkillPath)
+	if err != nil {
+		return false
+	}
+	// 内置目录下的技能路径
+	builtinSkillPath := filepath.Join(builtinDir, name)
+	builtinInfo, err := os.Stat(builtinSkillPath)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(userInfo, builtinInfo)
 }
 
 // dirExists 检查目录是否存在

@@ -2462,3 +2462,119 @@ func TestHandleSkillsUninstall_技能不存在(t *testing.T) {
 		t.Error("不存在的技能应返回 success=false")
 	}
 }
+
+// ──────────────────────────── 本地辅助方法测试 ────────────────────────────
+
+// TestGetLocalSkills_空状态 验证空状态返回空切片
+func TestGetLocalSkills_空状态(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	result := sm.getLocalSkills()
+	if result == nil {
+		t.Error("应返回空切片，而非 nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("期望 0 个，实际 %d 个", len(result))
+	}
+}
+
+// TestGetLocalSkills_有数据 验证读取已添加的本地技能
+func TestGetLocalSkills_有数据(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	sm.addLocalSkill(map[string]any{"name": "test-skill", "source": "local"})
+	result := sm.getLocalSkills()
+	if len(result) != 1 {
+		t.Fatalf("期望 1 个，实际 %d 个", len(result))
+	}
+	if toString(result[0]["name"]) != "test-skill" {
+		t.Errorf("name = %q, want %q", toString(result[0]["name"]), "test-skill")
+	}
+}
+
+// TestGetSkillMeta_正常解析 验证正常解析 SKILL.md
+func TestGetSkillMeta_正常解析(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 创建技能目录和 SKILL.md
+	skillDir := filepath.Join(tmpDir, "skills", "test-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillContent := "---\nname: test-skill\ndescription: 测试技能\n---\n技能正文"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	meta := sm.getSkillMeta("test-skill")
+	if meta == nil {
+		t.Fatal("meta 不应为 nil")
+	}
+	if toString(meta["name"]) != "test-skill" {
+		t.Errorf("name = %q, want %q", toString(meta["name"]), "test-skill")
+	}
+	if toString(meta["skill_dir"]) != skillDir {
+		t.Errorf("skill_dir = %q, want %q", toString(meta["skill_dir"]), skillDir)
+	}
+	if toString(meta["skill_file"]) == "" {
+		t.Error("skill_file 不应为空")
+	}
+}
+
+// TestGetSkillMeta_不存在 验证不存在的技能返回 nil
+func TestGetSkillMeta_不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	meta := sm.getSkillMeta("nonexistent")
+	if meta != nil {
+		t.Error("不存在的技能应返回 nil")
+	}
+}
+
+// TestIsBuiltinSkill_非内置 验证非内置技能返回 false
+func TestIsBuiltinSkill_非内置(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	if sm.isBuiltinSkill("some-skill") {
+		t.Error("非内置技能应返回 false")
+	}
+}
+
+// TestIsBuiltinSkill_空名 验证空名称返回 false
+func TestIsBuiltinSkill_空名(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	if sm.isBuiltinSkill("") {
+		t.Error("空名应返回 false")
+	}
+}
+
+// TestIsBuiltinSkill_内置技能 验证内置技能返回 true
+func TestIsBuiltinSkill_内置技能(t *testing.T) {
+	tmpDir := t.TempDir()
+	builtinDir := filepath.Join(tmpDir, "builtin_skills")
+	skillDir := filepath.Join(builtinDir, "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 设置环境变量指向内置目录
+	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
+
+	// 在 skillsDir 下创建同名的符号链接
+	sm := NewSkillManager(tmpDir)
+	linkPath := filepath.Join(sm.skillsDir, "my-skill")
+	if err := os.Symlink(skillDir, linkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if !sm.isBuiltinSkill("my-skill") {
+		t.Error("内置技能应返回 true")
+	}
+}
