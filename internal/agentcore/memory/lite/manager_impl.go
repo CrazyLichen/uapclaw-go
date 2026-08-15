@@ -583,7 +583,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 		// 对齐 Python: 使用 sys_operation 读取文件
 		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("读取文件失败: %w", err)
 		}
 		if readResult.Data != nil {
@@ -592,7 +592,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	} else {
 		data, err := os.ReadFile(absPath)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("读取文件失败: %w", err)
 		}
 		content = string(data)
@@ -617,7 +617,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
 		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 	return tx.Commit()
@@ -759,14 +759,14 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 		)
 		var blob []byte
 		if err := row.Scan(&blob); err == nil && blob != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return blobToVector(blob), nil
 		}
 	}
 
 	emb, err := m.provider.EmbedQuery(ctx, text)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, err
 	}
 
@@ -1511,12 +1511,12 @@ func (m *memoryIndexManager) writeMeta(meta map[string]any) error {
 	}
 	data, err := json.Marshal(meta)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 	_, err = tx.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", metaKey, string(data))
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 	return tx.Commit()

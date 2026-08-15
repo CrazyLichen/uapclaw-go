@@ -402,7 +402,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
 	}
 	// 步骤 4: 取消该成员的任务
-	tb.taskManager.CancelAllTasks(ctx, []string{memberName})
+	_, _ = tb.taskManager.CancelAllTasks(ctx, []string{memberName})
 	// 步骤 5: 发布事件
 	tb.publishEvent(ctx, atschema.MemberShutdownEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
@@ -443,7 +443,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	// 步骤 4: 重置该成员的 CLAIMED 任务
 	tasks, _ := tb.db.Task().GetTasksByAssignee(ctx, tb.teamName, memberName, string(atschema.TaskStatusClaimed))
 	for _, t := range tasks {
-		tb.db.Task().ResetTask(ctx, t.TaskID)
+		tb.db.Task().ResetTask(ctx, t.TaskID) //nolint:errcheck // 清理路径，忽略错误
 	}
 	// 步骤 5: 发布事件
 	tb.publishEvent(ctx, atschema.MemberCanceledEvent{
@@ -568,7 +568,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 	// 步骤 2: 删除团队行
 	tb.db.Team().DeleteTeam(ctx, tb.teamName)
 	// 步骤 3: 删动态表
-	tb.db.DropCurSessionTables(ctx)
+	_ = tb.db.DropCurSessionTables(ctx)
 	// 步骤 4: 回调触发
 	if tb.onTeamCleaned != nil {
 		if err := tb.onTeamCleaned(ctx); err != nil {
