@@ -64,7 +64,7 @@ func TestMemorySearchWithContext_无Manager(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["disabled"] != true {
+	if !result.Disabled {
 		t.Error("Expected disabled=true")
 	}
 }
@@ -77,7 +77,7 @@ func TestReadMemoryWithContext_无Workspace(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false")
 	}
 }
@@ -90,7 +90,7 @@ func TestEditMemoryWithContext_无Workspace(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false")
 	}
 }
@@ -103,7 +103,7 @@ func TestWriteMemoryWithContext_无Workspace(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false")
 	}
 }

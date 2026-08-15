@@ -60,7 +60,7 @@ func TestCodingMemoryReadWithContext_无Workspace(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false")
 	}
 }
@@ -139,7 +139,7 @@ func TestCodingMemoryEditWithContext_无Workspace(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false")
 	}
 }
@@ -156,7 +156,7 @@ func TestCodingMemoryEditWithContext_空OldText(t *testing.T) {
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if result["success"] != false {
+	if result.Success {
 		t.Error("Expected success=false for empty old_text")
 	}
 }

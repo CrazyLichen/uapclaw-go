@@ -58,20 +58,20 @@ func ValidateCodingMemoryPath(path string, ws *workspace.Workspace) (bool, strin
 }
 
 // CodingMemoryReadWithContext 读取 coding_memory 文件。对齐 Python coding_memory_read_with_context
-func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) map[string]any {
+func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) *CodingReadResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"success": false, "path": path, "content": "", "error": "Workspace not initialized"}
+		return &CodingReadResult{Success: false, Path: path, Error: "Workspace not initialized"}
 	}
 	isValid, result := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"success": false, "path": path, "content": "", "error": result}
+		return &CodingReadResult{Success: false, Path: path, Error: result}
 	}
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
 		logger.Error(logger.ComponentAgentCore).Msg("Read memory failed, no available sys_operation")
-		return map[string]any{"success": false, "path": path, "error": "Read failed, no available sys_operation."}
+		return &CodingReadResult{Success: false, Path: path, Error: "Read failed, no available sys_operation."}
 	}
 	// 对齐 Python: 使用 line_range 读取
 	fsOpts := []sysop.FsOption{}
@@ -84,7 +84,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
 	if err != nil {
-		return map[string]any{"success": false, "path": path, "content": "", "error": err.Error()}
+		return &CodingReadResult{Success: false, Path: path, Error: err.Error()}
 	}
 	var content string
 	if readResult != nil && readResult.Data != nil {
@@ -106,14 +106,14 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 			toIdx = n
 		}
 	}
-	return map[string]any{
-		"success":    true,
-		"path":       fullPath,
-		"content":    strings.Join(rows[fromIdx:toIdx], "\n"),
-		"totalLines": n,
-		"start_line": fromIdx + 1,
-		"end_line":   toIdx,
-		"truncated":  limit != nil && toIdx < n,
+	return &CodingReadResult{
+		Success:    true,
+		Path:       fullPath,
+		Content:    strings.Join(rows[fromIdx:toIdx], "\n"),
+		TotalLines: n,
+		StartLine:  fromIdx + 1,
+		EndLine:    toIdx,
+		Truncated:  limit != nil && toIdx < n,
 	}
 }
 
@@ -165,7 +165,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	memoryDir := resolveMemoryDir(toolCtx, resolved)
 
 	// 对齐 Python step 6-9: 乐观并发 — 冲突检测在锁外运行，快照验证在锁内
-	var conflictResult map[string]any
+	var conflict ConflictResult
 	for attempt := 0; attempt < maxConflictRetries; attempt++ {
 		// 对齐 Python step 6: 快照目录文件列表
 		snapshot := snapshotMemoryFiles(toolCtx, memoryDir)
@@ -179,16 +179,16 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 
 		if !fileExists {
 			// 对齐 Python step 7a: 创建模式 — 搜索相似文件
-			conflictResult = map[string]any{"conflict_detected": false, "conflicting_files": []string{}}
+			conflict = ConflictResult{}
 			similarFiles := searchSimilar(toolCtx, body, basename, 5, 0.75)
 			if len(similarFiles) > 0 {
 				conflicting := make([]string, 0, len(similarFiles))
 				for name := range similarFiles {
 					conflicting = append(conflicting, name)
 				}
-				conflictResult["conflict_detected"] = true
-				conflictResult["conflicting_files"] = conflicting
-				conflictResult["note"] = fmt.Sprintf(
+				conflict.ConflictDetected = true
+				conflict.ConflictingFiles = conflicting
+				conflict.Note = fmt.Sprintf(
 					"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
 					strings.Join(conflicting, ", "),
 				)
@@ -198,7 +198,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			// 直接返回 WriteResult(mode=SKIP)。当前缺少 LLM 判断，无法判断冗余，故不做 SKIP。
 		} else {
 			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件
-			conflictResult = prepareAppendMode(toolCtx, resolved, basename, body, fm)
+			conflict = *prepareAppendMode(toolCtx, resolved, basename, body, fm)
 			// 检查是否 SKIP（当前 searchSimilar 不做 SKIP，仅 conflict 检测）
 		}
 
@@ -247,20 +247,13 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			writeMode = WriteModeAppend
 		}
 		wr := &WriteResult{
-			Success: true,
-			Path:    resolved,
-			Mode:    writeMode,
-			Type:    fm["type"],
-		}
-		// 合并冲突检测结果
-		if cd, ok := conflictResult["conflict_detected"].(bool); ok && cd {
-			wr.ConflictDetected = true
-		}
-		if cf, ok := conflictResult["conflicting_files"].([]string); ok {
-			wr.ConflictingFiles = cf
-		}
-		if note, ok := conflictResult["note"].(string); ok {
-			wr.Note = note
+			Success:          true,
+			Path:             resolved,
+			Mode:             writeMode,
+			Type:             fm["type"],
+			ConflictDetected: conflict.ConflictDetected,
+			ConflictingFiles: conflict.ConflictingFiles,
+			Note:             conflict.Note,
 		}
 		return wr.ToDict()
 	}
@@ -297,42 +290,36 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		writeMode = WriteModeAppend
 	}
 	wr := &WriteResult{
-		Success: true,
-		Path:    resolved,
-		Mode:    writeMode,
-		Type:    fm["type"],
-	}
-	if conflictResult != nil {
-		if cd, ok := conflictResult["conflict_detected"].(bool); ok && cd {
-			wr.ConflictDetected = true
-		}
-		if cf, ok := conflictResult["conflicting_files"].([]string); ok {
-			wr.ConflictingFiles = cf
-		}
+		Success:          true,
+		Path:             resolved,
+		Mode:             writeMode,
+		Type:             fm["type"],
+		ConflictDetected: conflict.ConflictDetected,
+		ConflictingFiles: conflict.ConflictingFiles,
 	}
 	return wr.ToDict()
 }
 
 // CodingMemoryEditWithContext 编辑 coding_memory 文件。对齐 Python coding_memory_edit_with_context
-func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) map[string]any {
+func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) *CodingEditResult {
 	if oldText == "" {
-		return map[string]any{"success": false, "error": "old_text cannot be empty"}
+		return &CodingEditResult{Error: "old_text cannot be empty"}
 	}
 	if toolCtx == nil {
-		return map[string]any{"success": false, "error": "Workspace not initialized"}
+		return &CodingEditResult{Error: "Workspace not initialized"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"success": false, "error": "Workspace not initialized"}
+		return &CodingEditResult{Error: "Workspace not initialized"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"success": false, "error": resolved}
+		return &CodingEditResult{Error: resolved}
 	}
 	memoryDir := resolveMemoryDir(toolCtx, resolved)
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		return map[string]any{"success": false, "error": "no available sys_operation"}
+		return &CodingEditResult{Error: "no available sys_operation"}
 	}
 
 	// 对齐 Python: 文件级锁保护 read-then-write，防止与其他 write/edit 协程竞争
@@ -341,24 +328,24 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
 	if err != nil || readResult == nil || readResult.Data == nil {
 		fileLock.Unlock()
-		return map[string]any{"success": false, "error": fmt.Sprintf("failed to read file: %s", path)}
+		return &CodingEditResult{Error: fmt.Sprintf("failed to read file: %s", path)}
 	}
 	content := readResult.Data.Content
 	occurrences := strings.Count(content, oldText)
 	if occurrences == 0 {
 		fileLock.Unlock()
-		return map[string]any{"success": false, "error": "old_text not found in file"}
+		return &CodingEditResult{Error: "old_text not found in file"}
 	}
 	if occurrences > 1 {
 		fileLock.Unlock()
-		return map[string]any{"success": false, "error": fmt.Sprintf("old_text appears %d times, please be more specific", occurrences)}
+		return &CodingEditResult{Error: fmt.Sprintf("old_text appears %d times, please be more specific", occurrences)}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
 	_, err = sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
 	fileLock.Unlock()
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).Msg("coding_memory_edit failed")
-		return map[string]any{"success": false, "error": err.Error()}
+		return &CodingEditResult{Error: err.Error()}
 	}
 
 	// 对齐 Python: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
@@ -369,7 +356,7 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		}
 	}
 
-	return map[string]any{"success": true, "path": resolved, "new_content": newContent}
+	return &CodingEditResult{Success: true, Path: resolved, NewContent: newContent}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -395,9 +382,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 	}
 	memoryDir := toolCtx.CodingMemoryDir
 	for _, r := range results {
-		score, _ := r["score"].(float64)
-		path, _ := r["path"].(string)
-		if score <= threshold || path == "MEMORY.md" || path == excludePath {
+		if r.Score <= threshold || r.Path == "MEMORY.md" || r.Path == excludePath {
 			continue
 		}
 		// 读取文件内容
@@ -405,14 +390,14 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 		if sysOp == nil {
 			continue
 		}
-		fullPath := filepath.Join(memoryDir, path)
+		fullPath := filepath.Join(memoryDir, r.Path)
 		readResult, err := sysOp.Fs().ReadFile(context.Background(), fullPath)
 		if err != nil || readResult == nil || readResult.Data == nil {
 			continue
 		}
 		oldBody := extractBody(readResult.Data.Content)
 		if oldBody != "" {
-			oldMemories[path] = oldBody
+			oldMemories[r.Path] = oldBody
 		}
 	}
 	return oldMemories
@@ -426,8 +411,8 @@ func runChecker(manager MemoryIndexManager, newID string, newBody string, oldMem
 }
 
 // prepareAppendMode 准备追加模式并返回冲突检测结果。对齐 Python _prepare_append_mode
-func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) map[string]any {
-	result := map[string]any{"conflict_detected": false, "conflicting_files": []string{}}
+func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) *ConflictResult {
+	result := &ConflictResult{}
 
 	// 构建旧记忆：自身文件 + 其他相似文件
 	oldMemories := make(map[string]string)
@@ -457,9 +442,9 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 		for name := range other {
 			conflicting = append(conflicting, name)
 		}
-		result["conflict_detected"] = true
-		result["conflicting_files"] = conflicting
-		result["note"] = fmt.Sprintf(
+		result.ConflictDetected = true
+		result.ConflictingFiles = conflicting
+		result.Note = fmt.Sprintf(
 			"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
 			strings.Join(conflicting, ", "),
 		)
