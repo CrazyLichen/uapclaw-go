@@ -203,7 +203,7 @@ func TestSetToSortedSlice(t *testing.T) {
 		"coding_memory_write": {},
 		"coding_memory_edit":  {},
 	}
-	result := setToSortedSlice(s)
+	result := memorySetToSortedSlice(s)
 	if len(result) != 3 {
 		t.Fatalf("len = %d, want 3", len(result))
 	}

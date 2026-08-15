@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -453,7 +452,7 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 
 	logger.Info(codingMemoryLogComponent).
 		Str("event_type", "coding_memory_rail_register_tools").
-		Strs("tool_names", setToSortedSlice(r.ownedToolNames)).
+		Strs("tool_names", memorySetToSortedSlice(r.ownedToolNames)).
 		Msg("CodingMemoryRail 工具注册完成")
 }
 
@@ -747,14 +746,4 @@ func (r *CodingMemoryRail) isReadOnly(cbc *agentinterfaces.AgentCallbackContext)
 		return false
 	}
 	return invokeInputs.IsCron() || invokeInputs.IsHeartbeat()
-}
-
-// setToSortedSlice 将 set 转为排序后的切片（用于日志）
-func setToSortedSlice(s map[string]struct{}) []string {
-	result := make([]string, 0, len(s))
-	for k := range s {
-		result = append(result, k)
-	}
-	sort.Strings(result)
-	return result
 }
