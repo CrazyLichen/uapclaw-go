@@ -3,9 +3,11 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -308,11 +310,32 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 21.1: _jiuwenswarm_adapter_mode = "code"
 	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-	// ⤵️ 10.6.3-10: 待 DeepAgent 实例属性扩展后回填
+	// ⤵️ 10.6.3-10: 待 DeepAgent 实例属性扩展后回填（Python 猴子补丁，Go 需等 TeamManager 设计）
 
 	// 步骤 21.2: coding_memory workspace set_directory
-	// 对齐 Python: self._instance.deep_config.workspace.set_directory(...)
-	// ⤵️ 10.6.3-10: 待 Workspace.set_directory 方法实现后回填
+	// ✅ 已回填：Workspace.SetDirectory（对齐 Python: self._instance.deep_config.workspace.set_directory(...)）
+	projectName := "default"
+	if c.deep.projectDir != "" {
+		projectName = filepath.Base(c.deep.projectDir)
+	}
+	codingMemoryPath := filepath.Join("coding_memory", projectName)
+	if ws := c.deep.instance.DeepConfig().Workspace; ws != nil {
+		_ = ws.SetDirectory(map[string]any{
+			"name":        "coding_memory",
+			"description": "Coding Agent 记忆模块",
+			"path":        codingMemoryPath,
+			"children": []any{
+				map[string]any{
+					"name":            "MEMORY.md",
+					"description":     "Coding 记忆索引",
+					"path":            "MEMORY.md",
+					"children":        []any{},
+					"is_file":         true,
+					"default_content": "",
+				},
+			},
+		})
+	}
 
 	// 步骤 21.3: agent_history 写入路径修正
 	// 对齐 Python: 修正 .agent_history 写入路径到 agent 系统 workspace
@@ -637,11 +660,11 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 }
 
 // buildConfirmInterruptRail 构建确认中断护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_confirm_interrupt_rail() (interface_code.py)
-// ⤵️ 10.6.3-10: ConfirmInterruptRail 尚未实现
+// ✅ 已回填：ConfirmInterruptRail（对齐 Python: _build_confirm_interrupt_rail() — ConfirmInterruptRail(tool_names=["switch_mode"])）
 func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ConfirmInterruptRail
-	return nil
+	rail := interrupt.NewConfirmInterruptRail("switch_mode")
+	logger.Info(logComponent).Msg("ConfirmInterruptRail 创建成功")
+	return rail
 }
 
 // buildPermissionRail 构建权限护栏。

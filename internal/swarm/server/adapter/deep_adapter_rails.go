@@ -3,6 +3,7 @@ package adapter
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -106,7 +107,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// 步骤 11: subagentRail
 	sa := d.buildSubagentRail()
 	if sa != nil {
-		d.subagentRail = sa
+		d.subagentRail = sa.(*subagent.SubagentRail)
 		railsList = append(railsList, sa)
 	}
 
@@ -275,11 +276,11 @@ func (d *DeepAdapter) buildStreamEventRail() sainterfaces.AgentRail {
 }
 
 // buildSubagentRail 构建子代理护栏。
-// ⤵️ 10.6.3-10: SubagentRail
-// 对齐 Python: _build_subagent_rail() (line 2081-2100)
+// ✅ 已回填：SubagentRail（对齐 Python: _build_subagent_rail() — SubagentRail()）
 func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 SubagentRail
-	return nil
+	rail := subagent.NewSubagentRail()
+	logger.Info(logComponent).Msg("SubagentRail 创建成功")
+	return rail
 }
 
 // buildSecurityRail 构建安全护栏。

@@ -20,8 +20,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
@@ -150,8 +152,8 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: SkillCreateRail
 	skillCreateRail sainterfaces.AgentRail
 	// subagentRail 子代理护栏
-	// ⤵️ 10.6.3-10: SubagentRail
-	subagentRail sainterfaces.AgentRail
+	// ✅ 已回填：SubagentRail（对齐 Python: _subagent_rail: SubagentRail | None）
+	subagentRail *subagent.SubagentRail
 	// permissionRail 权限护栏
 	// ⤵️ 10.6.3-10: PermissionInterruptRail
 	permissionRail sainterfaces.AgentRail
@@ -539,7 +541,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 
 	// 对齐 Python: clear_config_cache() + clear_memory_manager_cache()
 	// Go 无全局 config 缓存（Config.Load 每次从磁盘读取），无需 clear_config_cache
-	// ⤵️ G9 回填: MemoryIndexManager 实现后需在此处调用 clearMemoryManagerCache()
+	// ✅ 已回填：ClearMemoryManagerCache（对齐 Python: clear_memory_manager_cache()）
+	lite.ClearMemoryManagerCache()
 
 	// 步骤 1: configBase 或 get_config()
 	// 对齐 Python: if config_base is None: config_base = get_config()
