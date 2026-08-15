@@ -883,3 +883,58 @@ func TestListTeamLinks_多个链接(t *testing.T) {
 		t.Errorf("ListTeamLinks should return 2 links, got %d: %v", len(links), links)
 	}
 }
+
+// TestResolveCodingMemoryDir 测试从 workspace 解析 coding_memory 目录路径。
+// 对齐 Python _resolve_coding_memory_dir(workspace) (code_agent.py)
+func TestResolveCodingMemoryDir(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil workspace", func(t *testing.T) {
+		result := ResolveCodingMemoryDir(nil)
+		if result != filepath.Join(".", "coding_memory") {
+			t.Errorf("ResolveCodingMemoryDir(nil) = %q, want %q", result, filepath.Join(".", "coding_memory"))
+		}
+	})
+
+	t.Run("workspace with coding_memory node", func(t *testing.T) {
+		ws := NewWorkspace(t.TempDir(), "cn")
+		// 添加 coding_memory 目录节点
+		ws.Directories = append(ws.Directories, DirectoryNode{
+			"name": "coding_memory",
+			"path": "coding_memory",
+		})
+		result := ResolveCodingMemoryDir(ws)
+		expected := filepath.Join(ws.RootPath, "coding_memory")
+		if result != expected {
+			t.Errorf("ResolveCodingMemoryDir = %q, want %q", result, expected)
+		}
+	})
+
+	t.Run("workspace without coding_memory node", func(t *testing.T) {
+		ws := NewWorkspace(t.TempDir(), "cn")
+		result := ResolveCodingMemoryDir(ws)
+		expected := filepath.Join(ws.RootPath, "coding_memory")
+		if result != expected {
+			t.Errorf("ResolveCodingMemoryDir = %q, want %q", result, expected)
+		}
+	})
+
+	t.Run("workspace with custom path", func(t *testing.T) {
+		ws := NewWorkspace(t.TempDir(), "cn")
+		// 替换默认的 coding_memory 节点（NewWorkspace 会自动添加默认节点）
+		for i, dir := range ws.Directories {
+			if name, ok := dir["name"].(string); ok && name == "coding_memory" {
+				ws.Directories[i] = DirectoryNode{
+					"name": "coding_memory",
+					"path": "custom_mem_path",
+				}
+				break
+			}
+		}
+		result := ResolveCodingMemoryDir(ws)
+		expected := filepath.Join(ws.RootPath, "custom_mem_path")
+		if result != expected {
+			t.Errorf("ResolveCodingMemoryDir = %q, want %q", result, expected)
+		}
+	})
+}

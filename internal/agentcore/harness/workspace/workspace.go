@@ -457,6 +457,23 @@ func (w *Workspace) ListWorktreeLinks() []string {
 	return w.listLinks(WorktreeLinksDir)
 }
 
+// ResolveCodingMemoryDir 从 workspace 解析 coding_memory 目录路径。
+// 对齐 Python _resolve_coding_memory_dir(workspace) (code_agent.py)
+//
+// 优先从 workspace.GetNodePath(WorkspaceNodeCodingMemory) 获取，
+// 如果没有则 fallback 到 {RootPath}/coding_memory。
+// workspace 为 nil 时返回 ./coding_memory。
+func ResolveCodingMemoryDir(ws *Workspace) string {
+	if ws != nil {
+		nodePath := ws.GetNodePath(WorkspaceNodeCodingMemory)
+		if nodePath != nil {
+			return *nodePath
+		}
+		return filepath.Join(ws.RootPath, "coding_memory")
+	}
+	return filepath.Join(".", "coding_memory")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateDirectoryNode 校验目录节点
