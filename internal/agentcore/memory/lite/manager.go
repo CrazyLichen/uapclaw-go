@@ -17,11 +17,11 @@ type MemoryIndexManager interface {
 	// Sync 同步索引（增量或全量 reindex）
 	Sync(ctx context.Context, reason string, force bool) error
 	// Search 混合搜索（向量 + FTS5 关键词）
-	Search(ctx context.Context, query string, opts map[string]any) ([]map[string]any, error)
+	Search(ctx context.Context, query string, opts map[string]any) ([]SearchResult, error)
 	// ReadFile 读取记忆文件内容
-	ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (map[string]any, error)
+	ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error)
 	// Status 返回系统状态报告
-	Status() map[string]any
+	Status() *StatusResult
 	// Close 关闭管理器
 	Close() error
 }

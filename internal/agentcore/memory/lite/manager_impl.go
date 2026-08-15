@@ -443,15 +443,15 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		activePaths[entry["path"].(string)] = true
+		activePaths[entry.Path] = true
 
 		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry["path"], "memory")
-		if err := row.Scan(&hash); err == nil && hash == entry["hash"].(string) {
+		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
+		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "memory"); err != nil {
-			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry["path"].(string)).Msg("索引文件失败")
+			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引文件失败")
 		}
 	}
 
@@ -497,15 +497,15 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		activePaths[entry["path"].(string)] = true
+		activePaths[entry.Path] = true
 
 		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry["path"], "sessions")
-		if err := row.Scan(&hash); err == nil && hash == entry["hash"].(string) {
+		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
+		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
-			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry["path"].(string)).Msg("索引 session 文件失败")
+			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引 session 文件失败")
 		}
 	}
 
@@ -528,21 +528,13 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 }
 
 // indexFile 索引单个文件。对齐 Python _index_file
-<<<<<<< Updated upstream
-func (m *memoryIndexManager) indexFile(ctx context.Context, entry map[string]any, source string) error {
-=======
 func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, source string) error {
->>>>>>> Stashed changes
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-<<<<<<< Updated upstream
-	absPath := entry["absPath"].(string)
-=======
 	absPath := entry.AbsPath
->>>>>>> Stashed changes
 	var content string
 	if m.sysOperation != nil {
 		// 对齐 Python: 使用 sys_operation 读取文件
@@ -568,34 +560,19 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
 
 	// 清除旧索引
-<<<<<<< Updated upstream
-	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry["path"])
+	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
 	if m.ftsAvailable {
-		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry["path"])
+		_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
 	}
 
 	for _, chunk := range chunks {
-		if err := m.indexChunkWithTx(ctx, tx, entry["path"].(string), source, chunk); err != nil {
-			logger.Warn(logger.ComponentCommon).Err(err).Str("path", entry["path"].(string)).Msg("索引 chunk 失败")
-=======
-	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
-	if m.ftsAvailable {
-		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
-	}
-
-	for _, chunk := range chunks {
-		if err := m.indexChunkWithTx(ctx, tx, entry.Path, source, chunk); err != nil {
+		if err := m.indexChunk(ctx, entry.Path, source, chunk); err != nil {
 			logger.Warn(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引 chunk 失败")
->>>>>>> Stashed changes
 		}
 	}
 
 	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
-<<<<<<< Updated upstream
-		entry["path"], source, entry["hash"], entry["mtimeMs"], entry["size"])
-=======
 		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
->>>>>>> Stashed changes
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -693,7 +670,7 @@ func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath s
 }
 
 // buildFileEntry 构建文件索引条目。对齐 Python build_file_entry
-func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (map[string]any, error) {
+func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (*FileEntry, error) {
 	stat, err := os.Stat(absPath)
 	if err != nil {
 		return nil, err
@@ -706,12 +683,12 @@ func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (map[string
 	if err != nil {
 		relPath = absPath
 	}
-	return map[string]any{
-		"path":    relPath,
-		"absPath": absPath,
-		"hash":    HashText(string(content)),
-		"mtimeMs": stat.ModTime().UnixMilli(),
-		"size":    stat.Size(),
+	return &FileEntry{
+		Path:    relPath,
+		AbsPath: absPath,
+		Hash:    HashText(string(content)),
+		MtimeMs: stat.ModTime().UnixMilli(),
+		Size:    stat.Size(),
 	}, nil
 }
 
@@ -787,7 +764,7 @@ func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
 }
 
 // Search 混合搜索。对齐 Python MemoryIndexManager.search
-func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[string]any) ([]map[string]any, error) {
+func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[string]any) ([]SearchResult, error) {
 	if opts == nil {
 		opts = make(map[string]any)
 	}
@@ -839,7 +816,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 
 	// FTS5 关键词搜索
-	var keywordResults []map[string]any
+	var keywordResults []SearchResult
 	hybridEnabled := true
 	if v, ok := hybrid["enabled"].(bool); ok {
 		hybridEnabled = v
@@ -866,7 +843,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		}
 	}
 
-	var vectorResults []map[string]any
+	var vectorResults []SearchResult
 	if hasVector {
 		var err error
 		vectorResults, err = m.searchVector(ctx, queryVec, candidates)
@@ -878,9 +855,9 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	// 非混合模式
 	if !hybridEnabled {
 		results := vectorResults
-		var filtered []map[string]any
+		var filtered []SearchResult
 		for _, r := range results {
-			if score, ok := r["score"].(float64); ok && score >= minScore {
+			if r.Score >= minScore {
 				filtered = append(filtered, r)
 			}
 		}
@@ -901,9 +878,9 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 	merged := mergeHybridResults(vectorResults, keywordResults, vectorWeight, textWeight)
 
-	var filtered []map[string]any
+	var filtered []SearchResult
 	for _, r := range merged {
-		if score, ok := r["score"].(float64); ok && score >= minScore {
+		if r.Score >= minScore {
 			filtered = append(filtered, r)
 		}
 	}
@@ -914,7 +891,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 }
 
 // searchVector vec0 向量搜索。对齐 Python _search_vector
-func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) ([]map[string]any, error) {
+func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
 	if !m.vectorAvailable {
 		return m.searchVectorFallback(ctx, queryVec, limit)
 	}
@@ -936,7 +913,7 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 	sourceFilter, sourceParams := m.buildSourceFilter()
 
 	// 获取 chunk 映射
-	chunkMap := make(map[int64]map[string]any)
+	chunkMap := make(map[int64]ChunkData)
 	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
 	if err != nil {
 		return nil, err
@@ -948,10 +925,10 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
 			continue
 		}
-		chunkMap[rowid] = map[string]any{
-			"id": id, "path": path, "source": source,
-			"start_line": startLine, "end_line": endLine,
-			"snippet": truncateString(text, snippetMaxChars),
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
 		}
 	}
 	_ = rows.Close()
@@ -980,7 +957,7 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 	}
 	defer func() { _ = vecRows.Close() }()
 
-	var results []map[string]any
+	var results []SearchResult
 	for vecRows.Next() {
 		var rowid int64
 		var distance float64
@@ -989,19 +966,18 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 		}
 		if chunk, ok := chunkMap[rowid]; ok {
 			score := math.Max(0, 1-distance/2)
-			result := make(map[string]any)
-			for k, v := range chunk {
-				result[k] = v
-			}
-			result["score"] = score
-			results = append(results, result)
+			results = append(results, SearchResult{
+				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+				Snippet: chunk.Snippet, Score: score,
+			})
 		}
 	}
 	return results, nil
 }
 
 // searchVectorFallback 内存余弦相似度 fallback。对齐 Python _search_vector_fallback
-func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec []float64, limit int) ([]map[string]any, error) {
+func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
 	sourceFilter, sourceParams := m.buildSourceFilter()
 	rows, err := m.db.Query(fmt.Sprintf("SELECT id, path, source, start_line, end_line, text, embedding FROM chunks WHERE %s AND embedding IS NOT NULL", sourceFilter), sourceParams...)
 	if err != nil {
@@ -1009,7 +985,7 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 	}
 	defer func() { _ = rows.Close() }()
 
-	var results []map[string]any
+	var results []SearchResult
 	for rows.Next() {
 		var id, path, source, text string
 		var startLine, endLine int
@@ -1022,26 +998,16 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 			continue
 		}
 		similarity := CosineSimilarity(queryVec, vec)
-<<<<<<< Updated upstream
-		results = append(results, map[string]any{
-			"id": id, "path": path, "source": source,
-			"start_line": startLine, "end_line": endLine,
-			"snippet": truncateString(text, snippetMaxChars),
-			"score":   math.Max(0, similarity), // 对齐 Python: max(0, similarity)
-=======
 		results = append(results, SearchResult{
 			ID: id, Path: path, Source: source,
 			StartLine: startLine, EndLine: endLine,
 			Snippet: truncateString(text, snippetMaxChars),
-			Score:   math.Max(0, similarity), // 对齐 Python: max(0, similarity)
->>>>>>> Stashed changes
+			Score:   similarity,
 		})
 	}
 	// 按分数排序
 	sort.Slice(results, func(i, j int) bool {
-		si, _ := results[i]["score"].(float64)
-		sj, _ := results[j]["score"].(float64)
-		return si > sj
+		return results[i].Score > results[j].Score
 	})
 	if len(results) > limit {
 		results = results[:limit]
@@ -1050,7 +1016,7 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 }
 
 // searchKeyword FTS5 关键词搜索。对齐 Python _search_keyword
-func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]map[string]any, error) {
+func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	if !m.ftsAvailable {
 		return nil, nil
 	}
@@ -1061,7 +1027,7 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 
 	sourceFilter, sourceParams := m.buildSourceFilter()
 	// 获取 chunk 映射
-	chunkMap := make(map[int64]map[string]any)
+	chunkMap := make(map[int64]ChunkData)
 	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
 	if err != nil {
 		return nil, err
@@ -1073,10 +1039,10 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
 			continue
 		}
-		chunkMap[rowid] = map[string]any{
-			"id": id, "path": path, "source": source,
-			"start_line": startLine, "end_line": endLine,
-			"snippet": truncateString(text, snippetMaxChars),
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
 		}
 	}
 	_ = rows.Close()
@@ -1092,7 +1058,7 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 	}
 	defer func() { _ = ftsRows.Close() }()
 
-	var results []map[string]any
+	var results []SearchResult
 	for ftsRows.Next() {
 		var rowid int64
 		var rank float64
@@ -1101,12 +1067,11 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 		}
 		if chunk, ok := chunkMap[rowid]; ok {
 			score := BM25RankToScore(rank)
-			result := make(map[string]any)
-			for k, v := range chunk {
-				result[k] = v
-			}
-			result["score"] = score
-			results = append(results, result)
+			results = append(results, SearchResult{
+				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+				Snippet: chunk.Snippet, Score: score,
+			})
 		}
 	}
 	return results, nil
@@ -1131,51 +1096,42 @@ func (m *memoryIndexManager) buildSourceFilter() (string, []any) {
 }
 
 // mergeHybridResults 混合搜索结果合并。对齐 Python _merge_hybrid_results
-func mergeHybridResults(vectorResults, keywordResults []map[string]any, vectorWeight, textWeight float64) []map[string]any {
-	byID := make(map[string]map[string]any)
+func mergeHybridResults(vectorResults, keywordResults []SearchResult, vectorWeight, textWeight float64) []SearchResult {
+	// 用 id 做合并键
+	type mergeEntry struct {
+		result      SearchResult
+		vectorScore float64
+		textScore   float64
+	}
+	byID := make(map[string]*mergeEntry)
 
 	for _, r := range vectorResults {
-		r["_vector_score"] = r["score"]
-		r["_text_score"] = 0.0
-		if id, ok := r["id"].(string); ok {
-			byID[id] = r
-		}
+		e := &mergeEntry{result: r, vectorScore: r.Score, textScore: 0.0}
+		byID[r.ID] = e
 	}
 
 	for _, r := range keywordResults {
-		if id, ok := r["id"].(string); ok {
-			if existing, exists := byID[id]; exists {
-				existing["_text_score"] = r["score"]
-			} else {
-				r["_vector_score"] = 0.0
-				r["_text_score"] = r["score"]
-				byID[id] = r
-			}
+		if existing, exists := byID[r.ID]; exists {
+			existing.textScore = r.Score
+		} else {
+			e := &mergeEntry{result: r, vectorScore: 0.0, textScore: r.Score}
+			byID[r.ID] = e
 		}
 	}
 
-	for _, r := range byID {
-		vs, _ := r["_vector_score"].(float64)
-		ts, _ := r["_text_score"].(float64)
-		r["score"] = vectorWeight*vs + textWeight*ts
-		delete(r, "_vector_score")
-		delete(r, "_text_score")
-	}
-
-	results := make([]map[string]any, 0, len(byID))
-	for _, r := range byID {
-		results = append(results, r)
+	results := make([]SearchResult, 0, len(byID))
+	for _, e := range byID {
+		e.result.Score = vectorWeight*e.vectorScore + textWeight*e.textScore
+		results = append(results, e.result)
 	}
 	sort.Slice(results, func(i, j int) bool {
-		si, _ := results[i]["score"].(float64)
-		sj, _ := results[j]["score"].(float64)
-		return si > sj
+		return results[i].Score > results[j].Score
 	})
 	return results
 }
 
 // ReadFile 读取记忆文件内容。对齐 Python MemoryIndexManager.read_file
-func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (map[string]any, error) {
+func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error) {
 	var fullPath string
 	if filepath.IsAbs(relPath) {
 		fullPath = relPath
@@ -1227,19 +1183,19 @@ func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromL
 		fromLineVal = *fromLine
 	}
 
-	return map[string]any{
-		"path":       relPath,
-		"text":       strings.Join(contentLines, "\n"),
-		"totalLines": totalLines,
-		"fromLine":   fromLineVal,
-		"toLine":     fromLineVal + len(contentLines) - 1,
+	return &ReadFileResult{
+		Path:       relPath,
+		Text:       strings.Join(contentLines, "\n"),
+		TotalLines: totalLines,
+		FromLine:   fromLineVal,
+		ToLine:     fromLineVal + len(contentLines) - 1,
 	}, nil
 }
 
 // Status 返回系统状态报告。对齐 Python MemoryIndexManager.status
-func (m *memoryIndexManager) Status() map[string]any {
+func (m *memoryIndexManager) Status() *StatusResult {
 	if m.db == nil {
-		return map[string]any{"available": false}
+		return &StatusResult{Available: false}
 	}
 
 	var fileCount, chunkCount int
@@ -1247,17 +1203,14 @@ func (m *memoryIndexManager) Status() map[string]any {
 	_ = m.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunkCount)
 
 	// 按来源统计
-	sourceCounts := make([]map[string]any, 0)
+	sourceCounts := make([]SourceCount, 0)
 	rows, err := m.db.Query("SELECT source, COUNT(*) as files FROM files GROUP BY source")
 	if err == nil {
 		for rows.Next() {
 			var source string
 			var files int
 			if rows.Scan(&source, &files) == nil {
-				sourceCounts = append(sourceCounts, map[string]any{
-					"source": source,
-					"files":  files,
-				})
+				sourceCounts = append(sourceCounts, SourceCount{Source: source, Files: files})
 			}
 		}
 		_ = rows.Close()
@@ -1284,28 +1237,28 @@ func (m *memoryIndexManager) Status() map[string]any {
 		cacheEnabled = v
 	}
 
-	return map[string]any{
-		"available":    true,
-		"provider":     m.settings.Provider,
-		"model":        m.settings.Model,
-		"files":        fileCount,
-		"chunks":       chunkCount,
-		"sourceCounts": sourceCounts,
-		"dirty":        m.dirty,
-		"fts": map[string]any{
-			"enabled":   ftsEnabled,
-			"available": m.ftsAvailable,
-			"error":     m.ftsError,
+	return &StatusResult{
+		Available:    true,
+		Provider:     m.settings.Provider,
+		Model:        m.settings.Model,
+		Files:        fileCount,
+		Chunks:       chunkCount,
+		SourceCounts: sourceCounts,
+		Dirty:        m.dirty,
+		FTS: FTSStatus{
+			Enabled:   ftsEnabled,
+			Available: m.ftsAvailable,
+			Error:     m.ftsError,
 		},
-		"vector": map[string]any{
-			"enabled":   vecEnabled,
-			"available": m.vectorAvailable,
-			"error":     m.vectorError,
-			"dims":      m.vectorDims,
+		Vector: VectorStatus{
+			Enabled:   vecEnabled,
+			Available: m.vectorAvailable,
+			Error:     m.vectorError,
+			Dims:      m.vectorDims,
 		},
-		"cache": map[string]any{
-			"enabled": cacheEnabled,
-			"entries": cacheEntries,
+		Cache: CacheStatus{
+			Enabled: cacheEnabled,
+			Entries: cacheEntries,
 		},
 	}
 }

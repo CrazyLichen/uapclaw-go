@@ -60,15 +60,15 @@ func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
 }
 
 // MemorySearchWithContext 语义搜索记忆。对齐 Python memory_search_with_context
-func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, query string, maxResults *int, minScore *float64, sessionKey string) map[string]any {
+func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, query string, maxResults *int, minScore *float64, sessionKey string) *MemorySearchResult {
 	if toolCtx == nil {
-		return map[string]any{"results": []map[string]any{}, "disabled": true, "error": "Memory manager not available"}
+		return &MemorySearchResult{Disabled: true, Error: "Memory manager not available"}
 	}
 	if !toolCtx.EnsureManager() {
-		return map[string]any{"results": []map[string]any{}, "disabled": true, "error": "Memory manager not available"}
+		return &MemorySearchResult{Disabled: true, Error: "Memory manager not available"}
 	}
 	if toolCtx.Manager == nil {
-		return map[string]any{"results": []map[string]any{}, "disabled": true, "error": "Memory manager not initialized"}
+		return &MemorySearchResult{Disabled: true, Error: "Memory manager not initialized"}
 	}
 	opts := make(map[string]any)
 	if maxResults != nil {
@@ -82,72 +82,73 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	}
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("记忆搜索失败")
-		return map[string]any{"results": []map[string]any{}, "disabled": true, "error": err.Error()}
+		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Memory search failed")
+		return &MemorySearchResult{Disabled: true, Error: err.Error()}
 	}
 	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
-	for _, r := range results {
-		startLine, _ := r["start_line"].(int)
-		endLine, _ := r["end_line"].(int)
-		path, _ := r["path"].(string)
-		if path != "" {
-			if startLine == endLine {
-				r["citation"] = fmt.Sprintf("%s#L%d", path, startLine)
+	for i := range results {
+		r := &results[i]
+		if r.Path != "" {
+			if r.StartLine == r.EndLine {
+				r.Citation = fmt.Sprintf("%s#L%d", r.Path, r.StartLine)
 			} else {
-				r["citation"] = fmt.Sprintf("%s#L%d-L%d", path, startLine, endLine)
+				r.Citation = fmt.Sprintf("%s#L%d-L%d", r.Path, r.StartLine, r.EndLine)
 			}
 		}
 	}
 	status := toolCtx.Manager.Status()
-	return map[string]any{
-		"results":  results,
-		"provider": status["provider"],
-		"model":    status["model"],
-		"disabled": false,
+	return &MemorySearchResult{
+		Results:  results,
+		Disabled: false,
+		Provider: status.Provider,
+		Model:    status.Model,
 	}
 }
 
 // MemoryGetWithContext 获取记忆文件内容。对齐 Python memory_get_with_context
-func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, fromLine *int, lines *int) map[string]any {
+func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, fromLine *int, lines *int) *MemoryGetResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"path": path, "text": "", "disabled": true, "error": "Workspace not initialized"}
+		return &MemoryGetResult{Path: path, Disabled: true, Error: "Workspace not initialized"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"path": path, "text": "", "disabled": true, "error": result}
+		return &MemoryGetResult{Path: path, Disabled: true, Error: result}
 	}
 	resolvedPath := result
 	if !toolCtx.EnsureManager() {
-		return map[string]any{"path": resolvedPath, "text": "", "disabled": true, "error": "Memory manager not available"}
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "Memory manager not available"}
 	}
 	if toolCtx.Manager == nil {
-		return map[string]any{"path": resolvedPath, "text": "", "disabled": true, "error": "Memory manager not initialized"}
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "Memory manager not initialized"}
 	}
 	rf, err := toolCtx.Manager.ReadFile(ctx, resolvedPath, fromLine, lines)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("记忆获取失败")
-		return map[string]any{"path": resolvedPath, "text": "", "disabled": true, "error": err.Error()}
+		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Memory get failed")
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: err.Error()}
 	}
-	rf["disabled"] = false
-	return rf
+	return &MemoryGetResult{
+		Path:     rf.Path,
+		Text:     rf.Text,
+		Disabled: false,
+	}
 }
 
 // ReadMemoryWithContext 读取记忆文件。对齐 Python read_memory_with_context
-func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, offset *int, limit *int) map[string]any {
+func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, offset *int, limit *int) *ReadMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"success": false, "path": path, "content": "", "error": "Workspace not initialized"}
+		return &ReadMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"success": false, "path": path, "content": "", "error": result}
+		return &ReadMemoryResult{Success: false, Path: path, Error: result}
 	}
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("读取记忆失败，无可用 sys_operation")
-		return map[string]any{"success": false, "path": path, "error": "Read failed, no available sys_operation."}
+		logger.Error(logger.ComponentAgentCore).Msg("Read memory failed, no available sys_operation")
+		return &ReadMemoryResult{Success: false, Path: path, Error: "Read failed, no available sys_operation."}
 	}
 	// 对齐 Python: 使用 line_range 读取
 	fsOpts := []sysop.FsOption{}
@@ -160,7 +161,7 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
 	if err != nil {
-		return map[string]any{"success": false, "path": path, "content": "", "error": err.Error()}
+		return &ReadMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
 	var content string
 	if readResult != nil && readResult.Data != nil {
@@ -168,32 +169,32 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	}
 	lineList := strings.Split(content, "\n")
 	body, nTotal, startIdx, endIdx, truncated := viewLines(lineList, offset, limit)
-	return map[string]any{
-		"success":    true,
-		"path":       fullPath,
-		"content":    body,
-		"totalLines": nTotal,
-		"start_line": startIdx + 1,
-		"end_line":   endIdx,
-		"truncated":  truncated,
+	return &ReadMemoryResult{
+		Success:    true,
+		Path:       fullPath,
+		Content:    body,
+		TotalLines: nTotal,
+		StartLine:  startIdx + 1,
+		EndLine:    endIdx,
+		Truncated:  truncated,
 	}
 }
 
 // WriteMemoryWithContext 写入/追加记忆文件。对齐 Python write_memory_with_context
-func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, content string, appendMode bool) map[string]any {
+func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, content string, appendMode bool) *WriteMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"success": false, "path": path, "error": "Workspace not initialized"}
+		return &WriteMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"success": false, "path": path, "error": result}
+		return &WriteMemoryResult{Success: false, Path: path, Error: result}
 	}
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("记忆写入失败，无可用 sys_operation")
-		return map[string]any{"success": false, "path": path, "error": "Memory write failed, no available sys_operation."}
+		logger.Error(logger.ComponentAgentCore).Msg("Memory write failed, no available sys_operation")
+		return &WriteMemoryResult{Success: false, Path: path, Error: "Memory write failed, no available sys_operation."}
 	}
 	fsOpts := []sysop.FsOption{
 		sysop.WithFsCreateIfNotExist(true),
@@ -205,58 +206,58 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	}
 	writeResult, err := sysOp.Fs().WriteFile(ctx, resolvedPath, content, fsOpts...)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("写入失败")
-		return map[string]any{"success": false, "path": path, "error": err.Error()}
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("Write failed")
+		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
 	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
 	action := "Wrote"
 	if appendMode {
 		action = "Appended to"
 	}
-	logger.Info(logger.ComponentAgentCore).Str("action", action).Str("path", resolvedPath).Msg("记忆文件已写入")
-	return map[string]any{
-		"success":     true,
-		"path":        resolvedPath,
-		"fullPath":    resolvedPath,
-		"appended":    appendMode,
-		"fileExisted": fileExisted,
+	logger.Info(logger.ComponentAgentCore).Str("action", action).Str("path", resolvedPath).Msg("Memory file written")
+	return &WriteMemoryResult{
+		Success:     true,
+		Path:        resolvedPath,
+		FullPath:    resolvedPath,
+		Appended:    appendMode,
+		FileExisted: fileExisted,
 	}
 }
 
 // EditMemoryWithContext 编辑记忆文件。对齐 Python edit_memory_with_context
-func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, oldText string, newText string) map[string]any {
+func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, oldText string, newText string) *EditMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return map[string]any{"success": false, "path": path, "error": "Workspace not initialized"}
+		return &EditMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
-		return map[string]any{"success": false, "path": path, "error": result}
+		return &EditMemoryResult{Success: false, Path: path, Error: result}
 	}
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("编辑失败，无可用 sys_operation")
-		return map[string]any{"success": false, "path": path, "error": "Edit failed, no available sys_operation."}
+		logger.Error(logger.ComponentAgentCore).Msg("Edit failed, no available sys_operation")
+		return &EditMemoryResult{Success: false, Path: path, Error: "Edit failed, no available sys_operation."}
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolvedPath)
 	if err != nil || readResult == nil || readResult.Data == nil {
-		return map[string]any{"success": false, "path": path, "error": fmt.Sprintf("failed to read file: %s", path)}
+		return &EditMemoryResult{Success: false, Path: path, Error: fmt.Sprintf("failed to read file: %s", path)}
 	}
 	content := readResult.Data.Content
 	if !strings.Contains(content, oldText) {
-		return map[string]any{
-			"success": false,
-			"path":    path,
-			"error":   "old_text not found in file. Use read_memory tool to check exact content.",
+		return &EditMemoryResult{
+			Success: false,
+			Path:    path,
+			Error:   "old_text not found in file. Use read_memory tool to check exact content.",
 		}
 	}
 	occurrences := strings.Count(content, oldText)
 	if occurrences > 1 {
-		return map[string]any{
-			"success": false,
-			"path":    path,
-			"error":   fmt.Sprintf("old_text appears %d times in file. Be more specific.", occurrences),
+		return &EditMemoryResult{
+			Success: false,
+			Path:    path,
+			Error:   fmt.Sprintf("old_text appears %d times in file. Be more specific.", occurrences),
 		}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
@@ -266,15 +267,15 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		sysop.WithFsAppendNewline(false),
 	)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("编辑写入失败")
-		return map[string]any{"success": false, "path": path, "error": err.Error()}
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("Edit write failed")
+		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
-	logger.Info(logger.ComponentAgentCore).Str("path", resolvedPath).Msg("文件已编辑")
-	return map[string]any{
-		"success":  true,
-		"path":     resolvedPath,
-		"replaced": oldText,
-		"new_text": newText,
+	logger.Info(logger.ComponentAgentCore).Str("path", resolvedPath).Msg("Edited file")
+	return &EditMemoryResult{
+		Success:  true,
+		Path:     resolvedPath,
+		Replaced: oldText,
+		NewText:  newText,
 	}
 }
 
