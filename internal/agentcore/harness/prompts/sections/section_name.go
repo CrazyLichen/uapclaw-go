@@ -35,6 +35,8 @@ const (
 	SectionContext = "context"
 	// SectionExternalMemory 外部记忆节名称
 	SectionExternalMemory = "external_memory"
+	// SectionResponse 响应节名称
+	SectionResponse = "response"
 	// SectionCompletionSignal 完成信号节名称
 	SectionCompletionSignal = "completion_signal"
 	// SectionVerificationContract 验证契约节名称
