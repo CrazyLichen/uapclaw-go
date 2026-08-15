@@ -477,6 +477,24 @@ func TestAgentConfigurator_UpdateModelPool(t *testing.T) {
 		c := NewAgentConfigurator(card)
 		c.UpdateModelPool(nil)
 	})
+
+	t.Run("有pool时创建分配器", func(t *testing.T) {
+		card := agentschema.NewAgentCard()
+		c := NewAgentConfigurator(card)
+		spec := atschema.NewTeamAgentSpec()
+		ctx := atschema.TeamRuntimeContext{
+			Role:       atschema.TeamRoleLeader,
+			MemberName: "l1",
+			TeamSpec:   &atschema.TeamSpec{TeamName: "team_a"},
+		}
+		c.Configure(spec, ctx)
+		// 使用非空 pool
+		pool := []models.ModelPoolEntry{
+			{ModelName: "model-a"},
+		}
+		c.UpdateModelPool(pool)
+		// 不 panic 即可
+	})
 }
 
 // TestAgentConfigurator_AttachModelAllocator 测试附加模型分配器
