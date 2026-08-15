@@ -53,7 +53,7 @@ type TeamMemoryManager struct {
 	workspace *workspace.Workspace
 	// teamMemoryDir 团队记忆目录路径
 	teamMemoryDir *string
-	// toolkit 成员记忆工具集。⤵️ 回填: 7.2+7.3
+	// toolkit 成员记忆工具集。⤵️ 回填: 7.2
 	toolkit *MemberMemoryToolkit
 	// ownedToolNames 已注册工具名集合。⤵️ 回填: 7.2
 	ownedToolNames map[string]struct{}
@@ -116,7 +116,7 @@ func NewTeamMemoryManager(params TeamMemoryManagerParams) *TeamMemoryManager {
 	return mgr
 }
 
-// InitToolkit 初始化成员记忆工具集。⤵️ 回填: 7.1+7.2+7.3 — 当前返回 false
+// InitToolkit 初始化成员记忆工具集。⤵️ 回填: 7.1+7.2 — 当前返回 false
 func (m *TeamMemoryManager) InitToolkit(_ context.Context) (bool, error) {
 	return false, nil
 }

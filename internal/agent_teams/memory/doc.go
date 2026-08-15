@@ -13,7 +13,7 @@
 //	├── manager_params.go        # TeamMemoryManagerParams + 类型别名                    ← 新建
 //	├── manager.go               # TeamMemoryManager 5个生命周期方法                     ⤵️ 7.1+7.2+9.65a
 //	├── shared_memory.go         # SharedMemoryManager（真实实现）                       ← 新建
-//	├── member_memory_toolkit.go # MemberMemoryToolkit + 工具创建                        ⤵️ 7.2+7.3
+//	├── member_memory_toolkit.go # MemberMemoryToolkit + 工具创建                        ⤵️ 7.2
 //	└── extractor.go             # ExtractTeamMemories + ExtractionAgentPrompt           ⤵️ 7.2+9.65a
 //
 // 对应 Python 代码：openjiuwen/agent_teams/memory/
