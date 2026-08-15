@@ -593,7 +593,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.58 | ✅ | SpawnManager | 子进程管理（InProcessSpawnHandle+InProcessSpawn+SharedResources+SpawnManager+回调类型+BuildSpawnConfig） | `openjiuwen/agent_teams/spawn/` |
 | 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；⤵️ 9.55 回填 TeamAgent 类型依赖；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
 | 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ 9.55 回填 pendingInterruptResumes 类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
-| 9.61 | ☐ | RecoveryManager | 恢复管理（⤴️ 依赖 9.65a-1/9.65a-4 的 RecoveryBackend 接口；⤴️ 依赖 9.65a-1 的 SessionPersistence 接口） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
+| 9.61 | ☐ | RecoveryManager | 恢复管理（⤴️ 依赖 9.65a-4 的 *TeamBackend；⤴️ 依赖 9.65a-1 的 SessionPersistence 接口） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
 | 9.62 | ☐ | CoordinationKernel | 协调内核 | `openjiuwen/agent_teams/` |
 | 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
 | 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
@@ -601,7 +601,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65a-1 | ✅ | TeamDB 基础层 | 数据模型+TeamDatabase接口+InMemoryDAO（TeamDao/MemberDao含FSM校验）+会话表生命周期；覆盖率92.6% | `openjiuwen/agent_teams/tools/database/` · `tools/models.py` |
 | 9.65a-2 | ✅ | TaskDao + TaskManager | InMemoryTaskDao（18方法+依赖图变更管线+终止传播）+TeamTaskManager（20+方法+PLAN_MODE审批）；database 89.1% tools 85.2% | `openjiuwen/agent_teams/tools/database/task_dao.py` · `tools/task_manager.py` |
 | 9.65a-3 | ✅ | MessageDao + MessageManager | InMemoryMessageDao（7方法+read_status watermark）+TeamMessageManager（7方法薄门面）+Messager接口+InProcessMessager | `openjiuwen/agent_teams/tools/database/message_dao.py` · `tools/message_manager.py` |
-| 9.65a-4 | ☐ | TeamBackend 门面 | TeamBackend结构体+30+方法（spawn_member/startup/build_team/shutdown_member/clean_team/force_clean/HITT名册/inbound回调） | `openjiuwen/agent_teams/tools/team.py` |
+| 9.65a-4 | ✅ | TeamBackend 门面 | TeamBackend结构体+30+方法（spawn_member/startup/build_team/shutdown_member/clean_team/force_clean/HITT名册/inbound回调） | `openjiuwen/agent_teams/tools/team.py` |
 | 9.65a-5 | ☐ | SQL 实现 | SQLite/PostgreSQL后端（Go SQL引擎+动态表命名+4个SQL DAO） | `openjiuwen/agent_teams/tools/database/engine.py` · `database/*.py` |
 | 9.65-1 | ✅ | Messager 接口 + InProcess | Messager接口（8方法）+InProcessMessager+全局Bus+CreateMessager工厂+TaskManager事件发布回填（9处）；循环依赖重构完成：配置搬入schema打断schema→messager/memory循环链，Messager接口改回*schema.EventMessage，删除SenderIDStamper，tools包改用schema.TypedEvent，删除sessionID字段改用schema.GetSessionID(ctx)，MessageID改用UUID v4 | `openjiuwen/agent_teams/messager/messager.py` · `messager/inprocess.py` |
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
