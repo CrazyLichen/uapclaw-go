@@ -756,7 +756,7 @@ func TestToSliceOfAny(t *testing.T) {
 		t.Errorf("[]map[string]any 转换失败: ok=%v, len=%d", ok, len(result))
 	}
 	// nil
-	result, ok = toSliceOfAny(nil)
+	_, ok = toSliceOfAny(nil)
 	if ok {
 		t.Error("nil 应返回 false")
 	}

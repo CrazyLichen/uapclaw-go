@@ -2045,7 +2045,7 @@ func (sm *SkillManager) locateSkillDir(dir string) string {
 	}
 	// 递归搜索子目录（匹配 Python 的 rglob("SKILL.md")）
 	var found string
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || found != "" {
 			return nil
 		}
@@ -2393,7 +2393,7 @@ func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {
 			return fmt.Errorf("路径解析失败: %w", err)
 		}
 		if strings.HasPrefix(relPath, "..") {
-			return fmt.Errorf("Zip Slip 检测：路径 %q 超出目标目录", f.Name)
+			return fmt.Errorf("zip slip 检测：路径 %q 超出目标目录", f.Name)
 		}
 
 		if f.FileInfo().IsDir() {
@@ -2412,7 +2412,7 @@ func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {
 			return err
 		}
 		data, readErr := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if readErr != nil {
 			return readErr
 		}

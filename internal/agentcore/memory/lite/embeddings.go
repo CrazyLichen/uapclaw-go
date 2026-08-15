@@ -136,9 +136,7 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 	// 优先使用 embeddingConfig
 	if embeddingConfig != nil && embeddingConfig.APIKey != "" {
 		// 对齐 Python: base_url 以 /embeddings 结尾时裁剪
-		if strings.HasSuffix(embeddingConfig.BaseURL, "/embeddings") {
-			embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
-		}
+		embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
 		base := apiEmbedding.NewAPIEmbedding(*embeddingConfig)
 		return &baseEmbeddingAdapter{base: base, prov: provider, model: model}, nil
 	}

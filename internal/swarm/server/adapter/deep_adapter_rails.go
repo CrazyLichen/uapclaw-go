@@ -106,10 +106,11 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 
 	// 步骤 11: subagentRail
 	sa := d.buildSubagentRail()
-	if sa != nil {
-		d.subagentRail = sa.(*subagent.SubagentRail)
-		railsList = append(railsList, sa)
+	// buildSubagentRail 始终返回非 nil 的 SubagentRail
+	if rail, ok := sa.(*subagent.SubagentRail); ok {
+		d.subagentRail = rail
 	}
+	railsList = append(railsList, sa)
 
 	// 步骤 12: securityRail
 	sec := d.buildSecurityRail(configBase)
