@@ -124,7 +124,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 //  2. 解析 frontmatter → ParseFrontmatter + ValidateFrontmatter
 //  3. 丰富 frontmatter → EnrichFrontmatter (时间戳)
 //  4. 重建内容 → RebuildContentWithFrontmatter
-//  5. 提取 body → extractBody
+//  5. 提取 body → ExtractBody
 //  6. 快照目录文件列表 → snapshotMemoryFiles
 //  7. 冲突检测（分创建/追加两种模式）
 //  8. 获取文件级锁 → getFileLock
@@ -156,7 +156,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	fm = EnrichFrontmatter(fm, false)
 	content = RebuildContentWithFrontmatter(content, fm)
 	// 对齐 Python step 5: 提取 body
-	body := extractBody(content)
+	body := ExtractBody(content)
 	if body == "" {
 		return map[string]any{"success": false, "path": path, "error": "no content body"}
 	}
@@ -395,7 +395,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 		if err != nil || readResult == nil || readResult.Data == nil {
 			continue
 		}
-		oldBody := extractBody(readResult.Data.Content)
+		oldBody := ExtractBody(readResult.Data.Content)
 		if oldBody != "" {
 			oldMemories[r.Path] = oldBody
 		}
@@ -422,7 +422,7 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 	if sysOp != nil {
 		readResult, err := sysOp.Fs().ReadFile(context.Background(), resolved)
 		if err == nil && readResult != nil && readResult.Data != nil {
-			existingBody := extractBody(readResult.Data.Content)
+			existingBody := ExtractBody(readResult.Data.Content)
 			if existingBody != "" {
 				oldMemories["__self__"] = existingBody
 			}
