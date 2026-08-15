@@ -12,6 +12,7 @@
 //   - interrupt 子包：中断-恢复（HITL）Rail 实现（BaseInterruptRail/AskUserRail/ConfirmInterruptRail）
 //   - context_engineer 子包：上下文引擎护栏（ContextProcessorRail/ContextAssembleRail）
 //   - subagent 子包：子代理委派和验证约束（SubagentRail/VerificationRail/VerificationContractRail）
+//   - memory 子包：编程记忆和通用记忆护栏（CodingMemoryRail/MemoryRail）
 //
 // 文件目录：
 //
@@ -42,6 +43,10 @@
 //	    ├── subagent_rail.go              # SubagentRail 子代理委派 Rail
 //	    ├── verification_rail.go          # VerificationRail 验证代理约束 Rail
 //	    └── verification_contract_rail.go # VerificationContractRail 验证门控契约 Rail
+//	└── memory/              # 记忆护栏子包
+//	    ├── doc.go                  # 包文档
+//	    ├── coding_memory_rail.go   # CodingMemoryRail 编程记忆护栏（自动召回 + 互斥注入 + 数据隔离）
+//	    └── memory_rail.go          # MemoryRail 通用记忆护栏（工具注册 + 提示词注入 + 管理器初始化）
 //
 // 对应 Python 代码：openjiuwen/harness/rails/
 package rails
