@@ -9,6 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -48,7 +50,6 @@ type CodeAdapter struct {
 	// ⤵️ 10.6.3-10: ProjectMemoryRail
 	projectMemoryRail sainterfaces.AgentRail
 	// codingMemoryRail 编码记忆护栏
-	// ⤵️ 10.6.3-10: CodingMemoryRail
 	codingMemoryRail sainterfaces.AgentRail
 	// worktreeRail 工作树护栏
 	// ⤵️ 10.6.3-10: WorktreeRail
@@ -438,6 +439,14 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// resolveEmbeddingConfig 解析嵌入配置。
+// 从 configCache 中获取 embedding 配置，暂不可用则返回 nil。
+// TODO: 补充从 config 解析 EmbeddingConfig 的逻辑
+func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
+	// 暂时返回 nil，等 embedding 配置解析链路完善后补充
+	return nil
+}
+
 // buildCodeAgentRails 构建 Code 模式 Agent Rails 列表。
 // 对齐 Python: JiuwenClawCodeAdapter._build_agent_rails(config, config_base, mode="code")
 //
@@ -502,7 +511,6 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 9: CodingMemoryRail
-	// ⤵️ 10.6.3-10: CodingMemoryRail 尚未实现
 	if cm := c.buildCodingMemoryRail(); cm != nil {
 		c.codingMemoryRail = cm
 		railsList = append(railsList, cm)
@@ -645,10 +653,28 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 
 // buildCodingMemoryRail 构建编码记忆护栏。
 // 对齐 Python: JiuwenClawCodeAdapter._build_coding_memory_rail() (interface_code.py)
-// ⤵️ 10.6.3-10: CodingMemoryRail 尚未实现
 func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 CodingMemoryRail
-	return nil
+	// 获取 embeddingConfig（从 config 中获取，暂不可用则返回 nil）
+	embCfg := c.resolveEmbeddingConfig()
+	if embCfg == nil {
+		return nil
+	}
+
+	// 获取 codingMemoryDir
+	codingMemoryDir := ""
+	if c.deep.instance != nil && c.deep.instance.Config().Workspace != nil {
+		if nodePath := c.deep.instance.Config().Workspace.GetNodePath("coding_memory"); nodePath != nil {
+			codingMemoryDir = *nodePath
+		}
+	}
+
+	// 获取语言
+	language := "en"
+	if c.deep.instance != nil && c.deep.instance.Config().Language != "" {
+		language = c.deep.instance.Config().Language
+	}
+
+	return memoryrail.NewCodingMemoryRail(codingMemoryDir, embCfg, language)
 }
 
 // buildStructuredAskUserRail 构建结构化询问护栏。

@@ -39,8 +39,6 @@ type requiredRailEntry struct {
 //
 // 预定义 CodeAgent 配备 SysOperationRail + AgentModeRail + AskUserRail + ConfirmInterruptRail，
 // 并自动注入 ExploreAgent + PlanAgent 作为子 Agent。用户可自由覆盖配置。
-//
-// ⤵️ 9.19-23 CodingMemoryRail 回填：当 EmbeddingConfig 可用时条件注入 CodingMemoryRail
 func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
 	language := hpromts.ResolveLanguage(params.Language)
 
@@ -62,10 +60,11 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 		{railType: (*interrupt.ConfirmInterruptRail)(nil), factory: func() sainterfaces.AgentRail { return interrupt.NewConfirmInterruptRail("switch_mode") }},
 	})
 
-	// ⤵️ 9.19-23 CodingMemoryRail 回填
-	// if embeddingConfig != nil {
+	// 注入 CodingMemoryRail（当 EmbeddingConfig 可用时）
+	// TODO: 等 SubagentCreateParams 添加 EmbeddingConfig 字段后启用
+	// if params.EmbeddingConfig != nil {
 	//     codingMemoryDir := resolveCodingMemoryDir(params.Workspace)
-	//     finalRails = append(finalRails, NewCodingMemoryRail(codingMemoryDir, embeddingConfig, language))
+	//     finalRails = append(finalRails, memoryrail.NewCodingMemoryRail(codingMemoryDir, params.EmbeddingConfig, language))
 	// }
 
 	// 3. 默认 AgentCard
