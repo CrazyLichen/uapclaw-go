@@ -343,7 +343,7 @@ func NewWorkspace(rootPath string, language string) *Workspace {
 			logger.Info(logComponent).
 				Str("name", name).
 				Str("path", pathStr).
-				Msg("Workspace: supplemented missing default directory")
+				Msg("Workspace: 补充缺失的默认目录")
 		}
 	}
 
@@ -490,7 +490,7 @@ func validateDirectoryNode(node DirectoryNode) error {
 	}
 	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
-			exception.WithMsg(fmt.Sprintf("Directory `name` must not contain path separators: %q", name)))
+			exception.WithMsg(fmt.Sprintf("目录 name 不能包含路径分隔符: %q", name)))
 	}
 
 	if path, ok := node["path"]; ok && path != nil {
@@ -610,7 +610,7 @@ func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 		for i, item := range v {
 			node, ok := item.(DirectoryNode)
 			if !ok {
-				return nil, fmt.Errorf("children[%d] is not a map", i)
+				return nil, fmt.Errorf("children[%d] 不是 map 类型", i)
 			}
 			result[i] = node
 		}
@@ -618,7 +618,7 @@ func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 	case nil:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("children must be a list, got %T", v)
+		return nil, fmt.Errorf("children 必须是列表，实际类型: %T", v)
 	}
 }
 
@@ -647,7 +647,7 @@ func normalizeNode(node map[string]any) DirectoryNode {
 func (w *Workspace) ensureLinkDir(dir string) (string, error) {
 	fullDir := filepath.Join(w.RootPath, dir)
 	if err := os.MkdirAll(fullDir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create link directory %q: %w", fullDir, err)
+		return "", fmt.Errorf("创建链接目录 %q 失败: %w", fullDir, err)
 	}
 	return fullDir, nil
 }
@@ -665,7 +665,7 @@ func createWindowsJunction(linkPath, targetPath string) error {
 	// Windows junction 通过 syscall 或外部命令实现
 	// 此处简化处理：先尝试 symlink，失败则返回错误
 	if err := os.Symlink(targetPath, linkPath); err != nil {
-		return fmt.Errorf("failed to create directory link %q -> %q on windows: %w", linkPath, targetPath, err)
+		return fmt.Errorf("在 Windows 上创建目录链接 %q -> %q 失败: %w", linkPath, targetPath, err)
 	}
 	return nil
 }
@@ -702,14 +702,14 @@ func (w *Workspace) createLink(subdir, name, targetPath string) error {
 			Str("link_path", linkPath).
 			Str("target_path", targetPath).
 			Err(err).
-			Msg("Workspace: failed to create directory link")
+			Msg("Workspace: 创建目录链接失败")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("link_path", linkPath).
 		Str("target_path", targetPath).
-		Msg("Workspace: created directory link")
+		Msg("Workspace: 已创建目录链接")
 	return nil
 }
 
@@ -720,7 +720,7 @@ func (w *Workspace) removeLink(subdir, name string) error {
 	if !isDirectoryLink(linkPath) {
 		logger.Warn(logComponent).
 			Str("link_path", linkPath).
-			Msg("Workspace: link does not exist or is not a symlink")
+			Msg("Workspace: 链接不存在或不是符号链接")
 		return nil
 	}
 
@@ -728,13 +728,13 @@ func (w *Workspace) removeLink(subdir, name string) error {
 		logger.Error(logComponent).
 			Str("link_path", linkPath).
 			Err(err).
-			Msg("Workspace: failed to remove directory link")
+			Msg("Workspace: 移除目录链接失败")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("link_path", linkPath).
-		Msg("Workspace: removed directory link")
+		Msg("Workspace: 已移除目录链接")
 	return nil
 }
 

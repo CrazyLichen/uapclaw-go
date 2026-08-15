@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cmt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/coding_memory"
 	gmt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"

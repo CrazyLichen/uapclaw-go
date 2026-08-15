@@ -1151,15 +1151,15 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	// 记录安装信息
 	sm.mu.Lock()
 	sm.AddLocalSkill(map[string]any{
-		"name":        skillName,
-		"origin":      "clawhub:" + slug,
-		"source":      "clawhub",
+		"name":         skillName,
+		"origin":       "clawhub:" + slug,
+		"source":       "clawhub",
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
 	sm.AddInstalledPlugin(map[string]any{
-		"name":        skillName,
-		"marketplace": "clawhub",
-		"source":      "clawhub",
+		"name":         skillName,
+		"marketplace":  "clawhub",
+		"source":       "clawhub",
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
 	sm.saveState()
@@ -1524,15 +1524,15 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	if output == "" {
 		sm.mu.Lock()
 		sm.AddLocalSkill(map[string]any{
-			"name":        skillName,
-			"origin":      "teamskillshub:" + assetID,
-			"source":      "teamskillshub",
+			"name":         skillName,
+			"origin":       "teamskillshub:" + assetID,
+			"source":       "teamskillshub",
 			"installed_at": time.Now().Format(time.RFC3339),
 		})
 		sm.AddInstalledPlugin(map[string]any{
-			"name":        skillName,
-			"marketplace": "teamskillshub",
-			"source":      "teamskillshub",
+			"name":         skillName,
+			"marketplace":  "teamskillshub",
+			"source":       "teamskillshub",
 			"installed_at": time.Now().Format(time.RFC3339),
 		})
 		sm.saveState()

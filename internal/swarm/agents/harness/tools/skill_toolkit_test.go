@@ -1,9 +1,9 @@
 package tools
 
 import (
-	"context"
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,9 +51,9 @@ func TestGetTools(t *testing.T) {
 // TestNormalizeSource 验证来源规范化
 func TestNormalizeSource(t *testing.T) {
 	tests := []struct {
-		input    string
-		want     string
-		wantErr  bool
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{"skillnet", "skillnet", false},
 		{"ClawHub", "clawhub", false},
@@ -918,4 +918,3 @@ func TestBuildInstalledItem_TeamSkillsHub(t *testing.T) {
 		t.Errorf("identifier = %v, want tsh-asset-456", item["identifier"])
 	}
 }
-

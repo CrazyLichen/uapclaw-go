@@ -41,7 +41,7 @@ jobs:
 
       - name: 验证代码格式 (gofmt)
         run: |
-          output=$(gofmt -l .)
+          output=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))
           if [ -n "$output" ]; then
             echo "::error::以下文件格式不符合 gofmt："
             echo "$output"

@@ -525,7 +525,9 @@ func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.T
 func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager }
 
 // SetMessageManager 设置消息管理器。
-func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) { c.infra.MessageManager = v }
+func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) {
+	c.infra.MessageManager = v
+}
 
 // Harness 返回 TeamHarness。
 // 对齐 Python: AgentConfigurator.harness property

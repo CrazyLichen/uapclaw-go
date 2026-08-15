@@ -249,7 +249,7 @@ func DeliverDirect(body string, sender string, target string, messageManager *to
 	}
 	logger.Debug(routerLogComponent).Str("sender", sender).Str("target", target).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("DeliverDirect")
+		Msg("点对点投递")
 	return NewDeliverResultSuccess(&msgID), nil
 }
 

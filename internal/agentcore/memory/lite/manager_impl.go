@@ -80,12 +80,12 @@ type memoryIndexManager struct {
 
 	// 会话增量。对齐 Python sessions_dirty / sessions_dirty_files / session_warm / _session_pending_files / _session_deltas
 	// 注：Python 中这些字段也是声明但未实现操作逻辑的脚手架，Go 同步对齐
-	sessionsDirty      bool
-	sessionsDirtyFiles map[string]struct{}
-	sessionWarm        map[string]struct{}
+	sessionsDirty       bool
+	sessionsDirtyFiles  map[string]struct{}
+	sessionWarm         map[string]struct{}
 	sessionPendingFiles map[string]struct{}
-	sessionDeltas      map[string]*SessionDeltaState
-	sessionTimer       *time.Timer
+	sessionDeltas       map[string]*SessionDeltaState
+	sessionTimer        *time.Timer
 
 	// 外部依赖
 	embeddingConfig *apiEmbedding.EmbeddingConfig
@@ -182,19 +182,19 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 	}
 
 	mgr := &memoryIndexManager{
-		agentID:         params.AgentID,
-		workspace:       params.Workspace,
-		nodeName:        params.NodeName,
-		memoryDir:       memoryDir,
-		settings:        settings,
-		dirty:              true,
-		watchDebounce:      2 * time.Second,
-		sessionsDirtyFiles: make(map[string]struct{}),
-		sessionWarm:        make(map[string]struct{}),
+		agentID:             params.AgentID,
+		workspace:           params.Workspace,
+		nodeName:            params.NodeName,
+		memoryDir:           memoryDir,
+		settings:            settings,
+		dirty:               true,
+		watchDebounce:       2 * time.Second,
+		sessionsDirtyFiles:  make(map[string]struct{}),
+		sessionWarm:         make(map[string]struct{}),
 		sessionPendingFiles: make(map[string]struct{}),
-		sessionDeltas:      make(map[string]*SessionDeltaState),
-		embeddingConfig: params.EmbeddingConfig,
-		sysOperation:    params.SysOperation,
+		sessionDeltas:       make(map[string]*SessionDeltaState),
+		embeddingConfig:     params.EmbeddingConfig,
+		sysOperation:        params.SysOperation,
 	}
 
 	if err := mgr.Initialize(context.Background()); err != nil {
@@ -879,9 +879,9 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	embedCancel()
 	if embedErr != nil {
 		if embedCtx.Err() == context.DeadlineExceeded {
-			logger.Warn(logger.ComponentCommon).Err(embedErr).Msg("Embedding query timed out")
+			logger.Warn(logger.ComponentCommon).Err(embedErr).Msg("Embedding 查询超时")
 		} else {
-			logger.Error(logger.ComponentCommon).Err(embedErr).Msg("Embedding query failed")
+			logger.Error(logger.ComponentCommon).Err(embedErr).Msg("Embedding 查询失败")
 		}
 		queryVec = nil
 	}

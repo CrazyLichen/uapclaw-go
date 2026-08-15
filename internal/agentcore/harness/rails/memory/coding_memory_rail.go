@@ -9,15 +9,15 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cmt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/coding_memory"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

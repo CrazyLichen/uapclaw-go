@@ -9,12 +9,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -475,9 +475,9 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── 固定挂载：explore_agent ──
 	// 对齐 Python: explore_agent 始终启用
 	exploreParams := &hschema.SubagentCreateParams{
-		Model:      c.deep.model,
-		Language:   resolvedLanguage,
-		Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+		Model:         c.deep.model,
+		Language:      resolvedLanguage,
+		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 		MaxIterations: 15,
 	}
 	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
@@ -495,9 +495,9 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── 固定挂载：plan_agent ──
 	// 对齐 Python: plan_agent 始终启用
 	planParams := &hschema.SubagentCreateParams{
-		Model:      c.deep.model,
-		Language:   resolvedLanguage,
-		Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+		Model:         c.deep.model,
+		Language:      resolvedLanguage,
+		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 		MaxIterations: 25,
 	}
 	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
@@ -514,9 +514,9 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// 对齐 Python: code_agent 按配置启用
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "code_agent") {
 		codeParams := &hschema.SubagentCreateParams{
-			Model:      c.deep.model,
-			Language:   resolvedLanguage,
-			Workspace:  hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+			Model:         c.deep.model,
+			Language:      resolvedLanguage,
+			Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 			MaxIterations: 15,
 		}
 		codeCfg := subagents.BuildCodeAgentConfig(c.deep.model, codeParams)

@@ -25,15 +25,15 @@ func TestBuildCodeSystemPrompt(t *testing.T) {
 
 	// 验证包含所有 8 个 section 的关键内容
 	checks := []string{
-		"JiuwenSwarm",       // code_intro
-		"# System",          // code_system
-		"# Doing tasks",     // code_doing_tasks
-		"# Using your tools", // code_using_your_tools
-		"Git Safety Protocol", // code_using_your_tools 子段
+		"JiuwenSwarm",                 // code_intro
+		"# System",                    // code_system
+		"# Doing tasks",               // code_doing_tasks
+		"# Using your tools",          // code_using_your_tools
+		"Git Safety Protocol",         // code_using_your_tools 子段
 		"Executing actions with care", // code_actions_with_care
-		"# Tone and style",  // code_tone_and_style
-		"Text output",       // code_output_efficiency
-		"Session-specific guidance", // code_session_guidance
+		"# Tone and style",            // code_tone_and_style
+		"Text output",                 // code_output_efficiency
+		"Session-specific guidance",   // code_session_guidance
 	}
 	for _, want := range checks {
 		if !contains(result, want) {

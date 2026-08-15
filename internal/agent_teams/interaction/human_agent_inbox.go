@@ -99,7 +99,7 @@ func (h *HumanAgentInbox) Send(body string, to *string, sender *string) (*Delive
 	logger.Debug(inboxLogComponent).Str("sender", resolvedSender).
 		Str("to", toStr).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("HumanAgentInbox.Send")
+		Msg("HumanAgentInbox: 发送")
 
 	// 对齐 Python 步骤 3: if to is None: return await self._drive_agent(...)
 	if to == nil {
@@ -196,7 +196,7 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 	// 对齐 Python 步骤 1
 	if h.agentLookup == nil {
 		logger.Warn(inboxLogComponent).Str("sender", sender).
-			Msg("HumanAgentInbox: no agent_lookup wired; cannot deliver input")
+			Msg("HumanAgentInbox: 未配置 agent_lookup，无法投递输入")
 		return NewDeliverResultFailure("agent_unavailable"), nil
 	}
 
@@ -206,7 +206,7 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 	// 对齐 Python 步骤 3
 	if agent == nil {
 		logger.Warn(inboxLogComponent).Str("sender", sender).
-			Msg("HumanAgentInbox: human agent has no live runtime")
+			Msg("HumanAgentInbox: human agent 无活跃运行时")
 		return NewDeliverResultFailure("agent_unavailable"), nil
 	}
 

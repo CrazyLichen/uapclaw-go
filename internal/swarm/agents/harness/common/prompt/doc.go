@@ -7,8 +7,7 @@
 //
 //	prompt/
 //	├── doc.go               # 包文档
-//	├── prompt_builder.go    # BuildResponseSection + BuildAgentIdentityPrompt + readWorkspaceFile
-//	└── prompt_builder_test.go # 单元测试
+//	└── prompt_builder.go    # BuildResponseSection + BuildAgentIdentityPrompt + readWorkspaceFile
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/prompt/prompt_builder.py
 package prompt

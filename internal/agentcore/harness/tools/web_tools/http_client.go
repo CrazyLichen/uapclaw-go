@@ -217,14 +217,14 @@ func newHTTPResponse(resp *http.Response) *httpResponse {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		// 读取失败时记录日志，返回空 body 和原始状态码
-	return &httpResponse{
-		statusCode: resp.StatusCode,
-		status:     resp.Status,
-		headers:    resp.Header,
-		body:       nil,
-		text:       "",
-		finalURL:   resp.Request.URL.String(),
-	}
+		return &httpResponse{
+			statusCode: resp.StatusCode,
+			status:     resp.Status,
+			headers:    resp.Header,
+			body:       nil,
+			text:       "",
+			finalURL:   resp.Request.URL.String(),
+		}
 	}
 	return &httpResponse{
 		statusCode: resp.StatusCode,

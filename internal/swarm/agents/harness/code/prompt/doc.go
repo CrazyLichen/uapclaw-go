@@ -7,8 +7,7 @@
 //
 //	prompt/
 //	├── doc.go                   # 包文档
-//	├── code_prompt_builder.go   # 8 个 section builder + BuildCodeSystemPrompt
-//	└── code_prompt_builder_test.go # 单元测试
+//	└── code_prompt_builder.go   # 8 个 section builder + BuildCodeSystemPrompt
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/code/prompt/code_prompt_builder.py
 package prompt

@@ -41,7 +41,7 @@ func ParseFrontmatter(content string) map[string]string {
 func ValidateFrontmatter(fm map[string]string) (bool, string) {
 	for _, field := range []string{"name", "description", "type"} {
 		if fm[field] == "" {
-			return false, fmt.Sprintf("Missing required field: %s", field)
+			return false, fmt.Sprintf("缺少必填字段: %s", field)
 		}
 	}
 	valid := false
@@ -52,7 +52,7 @@ func ValidateFrontmatter(fm map[string]string) (bool, string) {
 		}
 	}
 	if !valid {
-		return false, "type must be one of: user, feedback, project, reference"
+		return false, "type 必须是以下之一: user, feedback, project, reference"
 	}
 	return true, ""
 }
@@ -84,8 +84,6 @@ func RebuildContentWithFrontmatter(content string, fm map[string]string) string 
 	}
 	return strings.Join(parts, "\n\n")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ExtractBody 提取 frontmatter 后的 body 内容。对齐 Python _extract_body
 func ExtractBody(content string) string {

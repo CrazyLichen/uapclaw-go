@@ -643,7 +643,7 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Int("member_count", memberCount).Int("task_count", taskCount).
-		Msg("TeamAgent.ConcludeCompletedRound")
+		Msg("TeamAgent: 完成轮次")
 	if a.streamController != nil {
 		a.streamController.EmitCompletionAndClose(memberCount, taskCount)
 	}

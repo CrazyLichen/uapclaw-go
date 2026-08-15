@@ -7,15 +7,15 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	mt "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -74,7 +74,7 @@ var memoryLogComponent = logger.ComponentAgentCore
 // 对齐 Python: MemoryRail.__init__(embedding_config, is_proactive)
 func NewMemoryRail(embeddingConfig *embedding.EmbeddingConfig, isProactive bool) *MemoryRail {
 	r := &MemoryRail{
-		DeepAgentRail:  *rails.NewDeepAgentRail(),
+		DeepAgentRail:   *rails.NewDeepAgentRail(),
 		embeddingConfig: embeddingConfig,
 		isProactive:     isProactive,
 		ownedToolNames:  make(map[string]struct{}),

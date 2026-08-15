@@ -3,10 +3,10 @@ package prompt
 import (
 	"os"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

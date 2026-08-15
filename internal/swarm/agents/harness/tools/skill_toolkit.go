@@ -229,15 +229,15 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 			toString(existingItem["name"]),
 		)
 		return map[string]any{
-			"success":          true,
-			"source":           normalizedSource,
-			"installed":        true,
+			"success":           true,
+			"source":            normalizedSource,
+			"installed":         true,
 			"already_installed": true,
-			"name":             existingItem["name"],
-			"description":      existingItem["description"],
-			"identifier":       existingItem["identifier"],
-			"skill_file":       existingItem["skill_file"],
-			"detail":           detail,
+			"name":              existingItem["name"],
+			"description":       existingItem["description"],
+			"identifier":        existingItem["identifier"],
+			"skill_file":        existingItem["skill_file"],
+			"detail":            detail,
 		}, nil
 	}
 
@@ -367,8 +367,8 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 
 	return map[string]any{
 		"success": true, "removed": true, "name": skillName,
-		"source":  toString(installedItem["source"]),
-		"detail":  fmt.Sprintf("Skill `%s` uninstalled successfully.", skillName),
+		"source": toString(installedItem["source"]),
+		"detail": fmt.Sprintf("Skill `%s` uninstalled successfully.", skillName),
 	}, nil
 }
 

@@ -141,7 +141,7 @@ func (m *TeamRuntimeManager) Interact(
 // ⤵️ 待 9.62 CoordinationKernel 章节回填
 func (m *TeamRuntimeManager) Activate(ctx context.Context, teamName string, sessionID string, agent any) error {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Activate (stub)")
+		Msg("Activate（桩实现）")
 	// ⤵️ 待 9.62: 创建 ActiveTeam → pool.Add(entry)
 	return nil
 }
@@ -150,7 +150,7 @@ func (m *TeamRuntimeManager) Activate(ctx context.Context, teamName string, sess
 // ⤵️ 待 9.62 CoordinationKernel 章节回填
 func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sessionID string) error {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Finalize (stub)")
+		Msg("Finalize（桩实现）")
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sess
 // ⤵️ 待 9.62 CoordinationKernel 章节回填
 func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Pause (stub)")
+		Msg("Pause（桩实现）")
 	return false, nil
 }
 
@@ -166,7 +166,7 @@ func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, session
 // ⤵️ 待 9.62 CoordinationKernel 章节回填
 func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("StopTeam (stub)")
+		Msg("StopTeam（桩实现）")
 	return false, nil
 }
 
@@ -174,7 +174,7 @@ func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sess
 // ⤵️ 待 9.62 CoordinationKernel 章节回填
 func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("DeleteTeam (stub)")
+		Msg("DeleteTeam（桩实现）")
 	return false, nil
 }
 

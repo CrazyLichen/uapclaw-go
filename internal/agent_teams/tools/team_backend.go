@@ -460,14 +460,15 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 // 对齐 Python: TeamBackend.build_team(display_name, desc, leader_display_name, leader_desc, enable_hitt)
 //
 // Python 步骤：
-//  A. 强制 spec 天花板：enable_hitt=True 但 spec_enable_hitt=False → 报错
-//  B. 计算有效 HITT 开关：enable_hitt=None 继承 spec，否则覆盖
-//  1. 创建团队行
-//  2. 注册 Leader（status=BUSY, execution=RUNNING, allocation=leader_allocation）
-//  3. 注册预定义成员（跳过 HUMAN_AGENT，由后续 spawn_human_agent 处理）
-//  4. HITT 处理：若 effective_enable_hitt，为每个 HUMAN_AGENT spec 调用 spawn_human_agent
-//  5. 回调触发
-//  6. 事件发布
+//
+//	A. 强制 spec 天花板：enable_hitt=True 但 spec_enable_hitt=False → 报错
+//	B. 计算有效 HITT 开关：enable_hitt=None 继承 spec，否则覆盖
+//	1. 创建团队行
+//	2. 注册 Leader（status=BUSY, execution=RUNNING, allocation=leader_allocation）
+//	3. 注册预定义成员（跳过 HUMAN_AGENT，由后续 spawn_human_agent 处理）
+//	4. HITT 处理：若 effective_enable_hitt，为每个 HUMAN_AGENT spec 调用 spawn_human_agent
+//	5. 回调触发
+//	6. 事件发布
 func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderDisplayName, leaderDesc string, enableHITT *bool) error {
 	// 步骤 A: 强制 spec 天花板
 	if enableHITT != nil && *enableHITT && !tb.specEnableHITT {

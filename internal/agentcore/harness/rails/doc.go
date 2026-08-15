@@ -30,7 +30,8 @@
 //	│   ├── doc.go              # 包文档
 //	│   ├── interrupt_base.go   # BaseInterruptRail + 决策类型
 //	│   ├── ask_user_rail.go    # AskUserRail + AskUserPayload/AskUserRequest
-//	│   └── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
+//	│   ├── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
+//	│   └── helpers.go          # 中断辅助工具函数
 //	└── context_engineer/  # 上下文引擎护栏子包
 //	    ├── doc.go                       # 包文档
 //	    ├── merge_config.go              # 反射配置合并工具

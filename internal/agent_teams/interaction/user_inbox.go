@@ -55,7 +55,7 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 	logger.Debug(inboxLogComponent).Str("target", target).
 		Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox.Direct")
+		Msg("UserInbox: 点对点发送")
 	// 对齐 Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.SendMessage(ctx, body, target, agentteams.UserPseudoMemberName)
@@ -76,7 +76,7 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 	logger.Debug(inboxLogComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox.Broadcast")
+		Msg("UserInbox: 广播")
 	// 对齐 Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.BroadcastMessage(ctx, body, agentteams.UserPseudoMemberName)
@@ -99,7 +99,7 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 func DeliverToLeader(deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {
 	// 对齐 Python 步骤 1
 	logger.Debug(inboxLogComponent).Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("DeliverToLeader")
+		Msg("向 Leader 投递")
 
 	if deliverInput == nil {
 		reason := "deliver_to_leader_failed:no_deliver_fn"
