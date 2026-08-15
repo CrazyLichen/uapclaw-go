@@ -318,6 +318,17 @@ func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName
 	return true
 }
 
+// SetMemberMode 设置成员模式（仅用于测试）。
+// 绕过 FSM 校验，直接修改成员的 Mode 字段。
+func (db *InMemoryTeamDatabase) SetMemberMode(memberName, teamName, mode string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	if member, exists := db.members[key]; exists {
+		member.Mode = mode
+	}
+}
+
 // TryTransitionMemberStatus CAS 原子状态转换。对齐 Python: MemberDao.try_transition_member_status()
 // 仅当当前状态 == fromStatus 时才更新为 toStatus，否则返回 false
 func (db *InMemoryTeamDatabase) TryTransitionMemberStatus(_ context.Context, memberName, teamName, fromStatus, toStatus string) bool {
