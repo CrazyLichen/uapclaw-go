@@ -645,17 +645,40 @@ func TestAgentConfigService_DeleteAgent_NotFound(t *testing.T) {
 	assert.False(t, deleted)
 }
 
-// TestAgentConfigService_ListAvailableTools 测试列出可用工具
+// TestAgentConfigService_ListAvailableTools 测试列出可用工具（动态构建）
 func TestAgentConfigService_ListAvailableTools(t *testing.T) {
 	svc := NewAgentConfigService("/tmp")
 	result := svc.ListAvailableTools()
 
-	assert.GreaterOrEqual(t, len(result.Tools), 10, "应至少有 10 个工具")
+	// 验证工具数量与 ToolGroups 中定义的数量一致
+	assert.NotEmpty(t, result.Tools, "工具列表不应为空")
+	assert.GreaterOrEqual(t, len(result.Tools), 20, "应至少有 20 个工具")
+
+	// 验证分组列表与 ToolGroups 一致
 	assert.Contains(t, result.Groups, "核心")
 	assert.Contains(t, result.Groups, "搜索")
 	assert.Contains(t, result.Groups, "代码智能")
 	assert.Contains(t, result.Groups, "高级")
 	assert.Contains(t, result.Groups, "可视化")
+
+	// 验证 ToolGroups 中每个工具都出现在结果中
+	for group, displayNames := range types.ToolGroups {
+		for _, dn := range displayNames {
+			found := false
+			for _, ti := range result.Tools {
+				if ti.Name == dn {
+					found = true
+					assert.Equal(t, group, ti.Group, "工具 %s 的分组应为 %s", dn, group)
+					assert.NotEmpty(t, ti.Description, "工具 %s 应有描述", dn)
+					assert.NotEmpty(t, ti.InternalName, "工具 %s 应有内部名", dn)
+					break
+				}
+			}
+			assert.True(t, found, "ToolGroups 中的工具 %s 应出现在结果中", dn)
+		}
+	}
+
+	// 验证 disallowed_for_subagents
 	assert.NotEmpty(t, result.DisallowedForSubagents, "应包含 disallowed_for_subagents")
 	assert.Contains(t, result.DisallowedForSubagents, "Agent")
 }

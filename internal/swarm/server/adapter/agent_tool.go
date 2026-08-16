@@ -228,7 +228,14 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	// 步骤 1: 将 AgentDefinition 转换为 SubAgentConfig
 	// 对齐 Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
 	var model *llm.Model
+	// 对齐 Python: getattr(self._parent_agent, "_model_cache", None)
+	// 通过匿名接口类型断言获取 modelCache，拿不到则 fallback nil
 	var modelCache map[string]*llm.Model
+	if t.parentAgent != nil {
+		if v, ok := t.parentAgent.(interface{ ModelCache() map[string]*llm.Model }); ok {
+			modelCache = v.ModelCache()
+		}
+	}
 	var language string
 	var ws *hworkspace.Workspace
 	var deepCfg *hschema.DeepAgentConfig

@@ -374,9 +374,28 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	return nil
 }
 
-// ReloadAgentConfig 委托 DeepAdapter。
+// ReloadAgentConfig 热重载配置，不重启进程。
+// 对齐 Python: JiuwenClawCodeAdapter._get_current_agent_rails() 覆写 (interface_code.py L836-848)
+//
+// Python 通过覆写 _get_current_agent_rails() 将 CodeAgentRail 纳入热重载范围。
+// Go 使用组合模式，无法覆写 getter，因此在 ReloadAgentConfig 中额外调用 CodeAgentRail.Reload。
 func (c *CodeAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
-	return c.deep.ReloadAgentConfig(ctx, configBase, envOverrides)
+	if err := c.deep.ReloadAgentConfig(ctx, configBase, envOverrides); err != nil {
+		return err
+	}
+
+	// 对齐 Python: _get_current_agent_rails() 覆写中追加 CodeAgentRail
+	if c.codeAgentRail != nil {
+		if car, ok := c.codeAgentRail.(*CodeAgentRail); ok && c.deep.instance != nil {
+			if err := car.Reload(c.deep.instance); err != nil {
+				logger.Warn(logComponent).
+					Err(err).
+					Msg("CodeAgentRail Reload 失败，继续执行")
+			}
+		}
+	}
+
+	return nil
 }
 
 // ProcessMessageImpl 委托 DeepAdapter。

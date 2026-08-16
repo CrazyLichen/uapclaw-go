@@ -28,6 +28,35 @@ var ToolGroups = map[string][]string{
 	"可视化":  {"VisionQA", "ImageOCR", "AudioTranscribe"},
 }
 
+// ToolDescriptions 工具描述映射（显示名→描述）。
+// 对齐 Python: _TOOL_DESCRIPTIONS (agent_config_service.py L28-52)
+// ListAvailableTools() 动态构建工具列表时使用此映射。
+var ToolDescriptions = map[string]string{
+	"Read":            "读取文件内容",
+	"Write":           "写入文件",
+	"Edit":            "编辑文件（精准替换）",
+	"Bash":            "执行 shell 命令",
+	"LS":              "列出目录内容",
+	"Grep":            "搜索文件内容",
+	"Glob":            "按模式搜索文件名",
+	"WebSearch":       "网络搜索",
+	"WebFetch":        "获取网页内容",
+	"LSP":             "代码智能（定义跳转、引用查找）",
+	"TodoWrite":       "创建/更新任务列表",
+	"TodoList":        "查看任务列表",
+	"MemorySearch":    "搜索记忆",
+	"MemoryGet":       "获取记忆条目",
+	"WriteMemory":     "写入记忆",
+	"EditMemory":      "编辑记忆",
+	"CronCreate":      "创建定时任务",
+	"CronList":        "列出定时任务",
+	"CronDelete":      "删除定时任务",
+	"SkillTool":       "调用 Skill",
+	"VisionQA":        "视觉问答",
+	"ImageOCR":        "图片文字识别",
+	"AudioTranscribe": "音频转录",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -132,6 +132,23 @@ var (
 		types.AgentSourceUser:    2,
 		types.AgentSourceProject: 3,
 	}
+
+	// internalToDisplay 内部名→显示名映射。
+	// 对齐 Python: _TOOL_DISPLAY_NAMES (tool_display.py L19-40)
+	// 与 adapter 包中的 displayToInternal 方向相反，但因 adapter↔runtime 循环依赖无法共享。
+	// ListAvailableTools() 动态构建工具列表时使用此映射。
+	internalToDisplay = map[string]string{
+		"read_file": "Read", "write_file": "Write", "edit_file": "Edit",
+		"bash": "Bash", "grep": "Grep", "glob": "Glob",
+		"ls": "LS", "list_dir": "LS",
+		"todo_create": "TodoWrite", "todo_modify": "TodoWrite", "todo_list": "TodoList",
+		"web_search": "WebSearch", "web_free_search": "WebSearch",
+		"web_fetch": "WebFetch", "web_fetch_webpage": "WebFetch",
+		"image_ocr": "ImageOCR", "visual_question_answering": "VisionQA",
+		"audio_transcription": "AudioTranscribe",
+		"audio_question_answering": "AudioQA",
+		"audio_metadata":       "AudioMetadata",
+	}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -367,53 +384,84 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 }
 
 // ListAvailableTools 返回可用工具及其分组信息。
-// 对齐 Python: AgentConfigService.list_available_tools()
+// 对齐 Python: AgentConfigService.list_available_tools() (agent_config_service.py L351-401)
+//
+// 从 3 个共享数据源动态构建：
+//   - internalToDisplay（internal→display，对齐 Python _TOOL_DISPLAY_NAMES）
+//   - types.ToolGroups（group→display names）
+//   - types.ToolDescriptions（display→description）
 func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
-	// ⤵️ 10.3.7-11: 当前工具列表和分组硬编码，
-	// 等 code_agent_rail 实现后从 TOOL_GROUPS / _TOOL_DISPLAY_NAMES 动态构建。
-	// 对齐 Python: TOOL_GROUPS = {"核心": [...], "搜索": [...], "代码智能": [...], "高级": [...], "可视化": [...]}
+	// 步骤 1: 从 internalToDisplay 构建 internal→display 映射（去重）
+	// 对齐 Python: internal_to_display = {}; for internal_name, display_name in _TOOL_DISPLAY_NAMES.items()
+	//   if internal_name not in internal_to_display: internal_to_display[internal_name] = display_name
+	// Go 中 internalToDisplay 本身就是 internal→display 映射，无需额外去重
+	// （Python 的去重是因为 dict 是有序的，同一 internal_name 可能出现多次，Go map 无此问题）
 
-	// 步骤 1: 构建工具描述列表
-	// 对齐 Python: tools.append({"name": display_name, "internal_name": internal_name, ...})
-	// 对齐 Python: _TOOL_DISPLAY_NAMES 映射（internal_name → display_name）
-	tools := []ToolInfo{
-		{Name: "Read", InternalName: "read_file", Description: "读取文件内容", Group: "核心"},
-		{Name: "Write", InternalName: "write_file", Description: "写入文件", Group: "核心"},
-		{Name: "Edit", InternalName: "edit_file", Description: "编辑文件（精准替换）", Group: "核心"},
-		{Name: "Bash", InternalName: "bash", Description: "执行 shell 命令", Group: "核心"},
-		{Name: "LS", InternalName: "ls", Description: "列出目录内容", Group: "核心"},
-		{Name: "Grep", InternalName: "grep", Description: "搜索文件内容", Group: "搜索"},
-		{Name: "Glob", InternalName: "glob", Description: "按模式搜索文件名", Group: "搜索"},
-		{Name: "WebSearch", InternalName: "web_search", Description: "网络搜索", Group: "搜索"},
-		{Name: "WebFetch", InternalName: "web_fetch", Description: "获取网页内容", Group: "搜索"},
-		{Name: "LSP", InternalName: "lsp", Description: "代码智能（定义跳转、引用查找）", Group: "代码智能"},
-		{Name: "TodoWrite", InternalName: "todo_create", Description: "创建/更新任务列表", Group: "代码智能"},
-		{Name: "TodoList", InternalName: "todo_list", Description: "查看任务列表", Group: "代码智能"},
-		{Name: "MemorySearch", InternalName: "memory_search", Description: "搜索记忆", Group: "高级"},
-		{Name: "MemoryGet", InternalName: "memory_get", Description: "获取记忆条目", Group: "高级"},
-		{Name: "WriteMemory", InternalName: "write_memory", Description: "写入记忆", Group: "高级"},
-		{Name: "EditMemory", InternalName: "edit_memory", Description: "编辑记忆", Group: "高级"},
-		{Name: "CronCreate", InternalName: "cron_create", Description: "创建定时任务", Group: "高级"},
-		{Name: "CronList", InternalName: "cron_list", Description: "列出定时任务", Group: "高级"},
-		{Name: "CronDelete", InternalName: "cron_delete", Description: "删除定时任务", Group: "高级"},
-		{Name: "SkillTool", InternalName: "skill_tool", Description: "调用 Skill", Group: "高级"},
-		{Name: "VisionQA", InternalName: "visual_question_answering", Description: "视觉问答", Group: "可视化"},
-		{Name: "ImageOCR", InternalName: "image_ocr", Description: "图片文字识别", Group: "可视化"},
-		{Name: "AudioTranscribe", InternalName: "audio_transcription", Description: "音频转录", Group: "可视化"},
+	// 步骤 2: 从 ToolGroups 构建 display→group 映射
+	// 对齐 Python: display_to_group = {}; for group_name, display_names in TOOL_GROUPS.items()
+	displayToGroup := make(map[string]string)
+	for group, displayNames := range types.ToolGroups {
+		for _, dn := range displayNames {
+			displayToGroup[dn] = group
+		}
 	}
 
-	// 步骤 2: 构建分组列表
+	// 步骤 3: 从 internalToDisplay 构建工具列表（按 display_name 去重）
+	// 对齐 Python: for internal_name, display_name in internal_to_display.items()
+	tools := make([]ToolInfo, 0, len(internalToDisplay))
+	seenDisplay := make(map[string]bool)
+	for internalName, displayName := range internalToDisplay {
+		if seenDisplay[displayName] {
+			continue
+		}
+		seenDisplay[displayName] = true
+		group := displayToGroup[displayName]
+		if group == "" {
+			group = "高级"
+		}
+		description := types.ToolDescriptions[displayName]
+		if description == "" {
+			description = displayName
+		}
+		tools = append(tools, ToolInfo{
+			Name:         displayName,
+			InternalName: internalName,
+			Description:  description,
+			Group:        group,
+		})
+	}
+
+	// 步骤 4: 补充 ToolGroups 中有但 internalToDisplay 中没有的工具
+	// 对齐 Python: for group_name, display_names in TOOL_GROUPS.items(): if dn not in seen_display
+	for group, displayNames := range types.ToolGroups {
+		for _, dn := range displayNames {
+			if seenDisplay[dn] {
+				continue
+			}
+			seenDisplay[dn] = true
+			description := types.ToolDescriptions[dn]
+			if description == "" {
+				description = dn
+			}
+			tools = append(tools, ToolInfo{
+				Name:         dn,
+				InternalName: strings.ToLower(dn),
+				Description:  description,
+				Group:        group,
+			})
+		}
+	}
+
+	// 步骤 5: 构建分组列表
 	// 对齐 Python: groups = list(TOOL_GROUPS.keys())
-	// 从 types.ToolGroups 共享常量获取
 	groups := make([]string, 0, len(types.ToolGroups))
 	for group := range types.ToolGroups {
 		groups = append(groups, group)
 	}
 	sort.Strings(groups)
 
-	// 步骤 3: 子 agent 禁用工具列表
-	// 对齐 Python: DISALLOWED_FOR_SUBAGENTS
-	// 从 types.DisallowedForSubagents 共享常量获取
+	// 步骤 6: 子 agent 禁用工具列表
+	// 对齐 Python: disallowed_for_subagents = list(DISALLOWED_FOR_SUBAGENTS)
 	disallowedForSubagents := types.DisallowedForSubagents
 
 	return &AvailableToolsResult{

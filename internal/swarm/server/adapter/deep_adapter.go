@@ -261,6 +261,13 @@ func (d *DeepAdapter) SetConfigLister(lister AgentConfigLister) {
 	d.configLister = lister
 }
 
+// ModelCache 返回模型缓存。
+// 对齐 Python: self._model_cache (interface_deep.py L543)
+// AgentTool 通过类型断言获取，拿不到则 fallback nil。
+func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
+	return d.modelCache
+}
+
 // NewDeepAdapter 创建 DeepAdapter 实例。
 //
 // 对应 Python: JiuWenClawDeepAdapter.__init__()
@@ -836,7 +843,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 7: team 模式分流
 	// 对齐 Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
-	// ⤵️ 10.3.7-11 TeamHelpers
+	// ⤵️ 9.55-9.65 TeamHelpers
 
 	// 步骤 8: auto_harness 分流
 	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
@@ -1070,7 +1077,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 步骤 10: 清理 evolution watchers
-	// ⤵️ 10.3.7-11 EvolutionHelpers（进化助手）: 取消进化监听任务
+	// ⤵️ 9.55-9.65 EvolutionHelpers（进化助手）: 取消进化监听任务
 
 	// 步骤 11: 构造响应
 	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})
@@ -1121,13 +1128,13 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	// 步骤 5-7: 按 request_id 前缀分发
 	switch {
 	case strings.HasPrefix(requestID, "team_skill_evolve_"):
-		// ⤵️ 10.6.3-10 / 10.3.7-11: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
+		// ⤵️ 10.6.3-10: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
 		resolved = false
 	case strings.HasPrefix(requestID, "evolve_simplify_"):
-		// ⤵️ 10.6.3-10 / 10.3.7-11: _handle_governance_approval(requestID, answers, "simplify")
+		// ⤵️ 10.6.3-10: _handle_governance_approval(requestID, answers, "simplify")
 		resolved = false
 	case strings.HasPrefix(requestID, "skill_evolve_"):
-		// ⤵️ 10.6.3-10 / 10.3.7-11: _handle_evolution_approval(requestID, answers)
+		// ⤵️ 10.6.3-10: _handle_evolution_approval(requestID, answers)
 		resolved = false
 	}
 
