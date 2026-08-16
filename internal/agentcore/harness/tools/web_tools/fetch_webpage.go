@@ -183,7 +183,7 @@ func fetchViaJinaReader(rawURL string, timeoutSeconds int) (map[string]any, erro
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Jina Reader 获取失败: %w", err)
+		return nil, fmt.Errorf("jina Reader 获取失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		return nil, err

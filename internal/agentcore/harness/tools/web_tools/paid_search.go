@@ -190,7 +190,7 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 	)
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina 搜索请求失败")
-		return nil, fmt.Errorf("Jina 搜索请求失败: %w", err)
+		return nil, fmt.Errorf("jina 搜索请求失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Int("status_code", resp.statusCode).Err(err).Msg("jina 搜索 HTTP 错误")
@@ -200,7 +200,7 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "jinaSearch").Str("model_provider", "jina").Err(err).Msg("jina 搜索解析响应失败")
-		return nil, fmt.Errorf("Jina 搜索解析响应失败: %w", err)
+		return nil, fmt.Errorf("jina 搜索解析响应失败: %w", err)
 	}
 
 	// 对齐 Python: L1126-1128
@@ -248,7 +248,7 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 	)
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha 搜索请求失败")
-		return nil, fmt.Errorf("Bocha 搜索请求失败: %w", err)
+		return nil, fmt.Errorf("bocha 搜索请求失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Int("status_code", resp.statusCode).Err(err).Msg("bocha 搜索 HTTP 错误")
@@ -258,7 +258,7 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "bochaSearch").Str("model_provider", "bocha").Err(err).Msg("bocha 搜索解析响应失败")
-		return nil, fmt.Errorf("Bocha 搜索解析响应失败: %w", err)
+		return nil, fmt.Errorf("bocha 搜索解析响应失败: %w", err)
 	}
 
 	return &paidSearchResult{
@@ -292,7 +292,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 	)
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索请求失败")
-		return nil, fmt.Errorf("Serper 搜索请求失败: %w", err)
+		return nil, fmt.Errorf("serper 搜索请求失败: %w", err)
 	}
 
 	// 对齐 Python: L1223-1230 — 400 时重试不带 num
@@ -306,7 +306,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 		)
 		if err != nil {
 			logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索重试请求失败")
-			return nil, fmt.Errorf("Serper 搜索重试请求失败: %w", err)
+			return nil, fmt.Errorf("serper 搜索重试请求失败: %w", err)
 		}
 	}
 
@@ -318,7 +318,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "serperSearch").Str("model_provider", "serper").Err(err).Msg("serper 搜索解析响应失败")
-		return nil, fmt.Errorf("Serper 搜索解析响应失败: %w", err)
+		return nil, fmt.Errorf("serper 搜索解析响应失败: %w", err)
 	}
 
 	// 对齐 Python: L1233-1238
@@ -378,7 +378,7 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 	)
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity 搜索请求失败")
-		return nil, fmt.Errorf("Perplexity 搜索请求失败: %w", err)
+		return nil, fmt.Errorf("perplexity 搜索请求失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Int("status_code", resp.statusCode).Err(err).Msg("perplexity 搜索 HTTP 错误")

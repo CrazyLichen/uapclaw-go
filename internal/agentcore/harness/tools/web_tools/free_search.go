@@ -219,7 +219,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Bing 搜索失败: %w", err)
+		return nil, fmt.Errorf("bing 搜索失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		return nil, err
