@@ -194,38 +194,38 @@ func TestAskUserRail_resolveInterrupt_Dict输入Answers非Dict(t *testing.T) {
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
-// ──────────────────────────── parseToolArgs ────────────────────────────
+// ──────────────────────────── ParseToolArgs ────────────────────────────
 
-// TestAskUserRail_parseToolArgs 验证 JSON 参数解析
-func TestAskUserRail_parseToolArgs(t *testing.T) {
+// TestParseToolArgs 验证 JSON 参数解析
+func TestParseToolArgs(t *testing.T) {
 	toolCall := &llmschema.ToolCall{
 		ID:        "tc1",
 		Name:      "ask_user",
 		Arguments: `{"questions":[{"question":"你喜欢什么？"}],"other":"value"}`,
 	}
 
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	assert.Contains(t, args, "questions")
 	assert.Contains(t, args, "other")
 }
 
-// TestAskUserRail_parseToolArgs_空参数 验证空参数
-func TestAskUserRail_parseToolArgs_空参数(t *testing.T) {
+// TestParseToolArgs_空参数 验证空参数
+func TestParseToolArgs_空参数(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{}`}
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	assert.Empty(t, args)
 }
 
-// TestAskUserRail_parseToolArgs_nil 验证 nil ToolCall
-func TestAskUserRail_parseToolArgs_nil(t *testing.T) {
-	args := parseToolArgs(nil)
+// TestParseToolArgs_nil 验证 nil ToolCall
+func TestParseToolArgs_nil(t *testing.T) {
+	args := ParseToolArgs(nil)
 	assert.Empty(t, args)
 }
 
-// TestAskUserRail_parseToolArgs_错误JSON 验证无效 JSON
-func TestAskUserRail_parseToolArgs_错误JSON(t *testing.T) {
+// TestParseToolArgs_错误JSON 验证无效 JSON
+func TestParseToolArgs_错误JSON(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `invalid json`}
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	assert.Empty(t, args)
 }
 

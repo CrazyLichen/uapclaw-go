@@ -336,26 +336,6 @@ func TestParseStructuredInput_InvalidType(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// ──────────────────────────── parseToolArgsJSON ────────────────────────────
-
-// TestParseToolArgsJSON_正常JSON 验证正常 JSON 解析
-func TestParseToolArgsJSON_正常JSON(t *testing.T) {
-	args := parseToolArgsJSON(`{"key": "value", "num": 1}`)
-	assert.Equal(t, "value", args["key"])
-}
-
-// TestParseToolArgsJSON_空字符串 验证空字符串
-func TestParseToolArgsJSON_空字符串(t *testing.T) {
-	args := parseToolArgsJSON("")
-	assert.Empty(t, args)
-}
-
-// TestParseToolArgsJSON_无效JSON 验证无效 JSON
-func TestParseToolArgsJSON_无效JSON(t *testing.T) {
-	args := parseToolArgsJSON("not json")
-	assert.Empty(t, args)
-}
-
 // ──────────────────────────── 编译时接口验证 ────────────────────────────
 
 // TestStructuredAskUserRail_AgentRail接口 验证满足 AgentRail 接口

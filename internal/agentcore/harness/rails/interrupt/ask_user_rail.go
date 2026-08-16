@@ -213,7 +213,7 @@ func (r *AskUserRail) parseUserInput(userInput any, toolCall *llmschema.ToolCall
 			return &AskUserPayload{}, true
 		}
 		// 字符串输入：尝试匹配第一个问题
-		args := parseToolArgs(toolCall)
+		args := ParseToolArgs(toolCall)
 		questions, _ := args["questions"].([]any)
 		if len(questions) > 0 {
 			if q, ok := questions[0].(map[string]any); ok {
@@ -244,7 +244,7 @@ func (r *AskUserRail) parseUserInputDict(userInput map[string]any, toolCall *llm
 	}
 
 	// 检查 answer 字段（单问题模式）
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	questions, _ := args["questions"].([]any)
 	if len(questions) == 1 {
 		if q, ok := questions[0].(map[string]any); ok {
@@ -265,7 +265,7 @@ func (r *AskUserRail) parseUserInputDict(userInput map[string]any, toolCall *llm
 //
 // 对齐 Python: AskUserRail._format_tool_result(tool_call, payload)
 func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *AskUserPayload) string {
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	questions, _ := args["questions"].([]any)
 
 	if len(questions) == 0 {
@@ -291,7 +291,7 @@ func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *As
 //
 // 对齐 Python: AskUserRail._build_ask_request(tool_call)
 func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
-	args := parseToolArgs(toolCall)
+	args := ParseToolArgs(toolCall)
 	questions, _ := args["questions"].([]any)
 	// 转换 []any → []map[string]any
 	questionsList := make([]map[string]any, 0, len(questions))
@@ -312,6 +312,20 @@ func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequ
 	}
 }
 
+// ParseToolArgs 解析 ToolCall.Arguments JSON 为 map。
+//
+// 对齐 Python: AskUserRail._parse_tool_args(tool_call)
+func ParseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
+	if toolCall == nil {
+		return map[string]any{}
+	}
+	args := make(map[string]any)
+	if err := json.Unmarshal([]byte(toolCall.Arguments), &args); err != nil {
+		return map[string]any{}
+	}
+	return args
+}
+
 // askUserPayloadSchema 返回 AskUserPayload 的 JSON Schema。
 // 严格对齐 Python Pydantic AskUserPayload.model_json_schema() 输出。
 func askUserPayloadSchema() map[string]any {
@@ -327,20 +341,6 @@ func askUserPayloadSchema() map[string]any {
 		},
 		"title": "AskUserPayload",
 	}
-}
-
-// parseToolArgs 解析 ToolCall.Arguments JSON 为 map。
-//
-// 对齐 Python: AskUserRail._parse_tool_args(tool_call)
-func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
-	if toolCall == nil {
-		return map[string]any{}
-	}
-	args := make(map[string]any)
-	if err := json.Unmarshal([]byte(toolCall.Arguments), &args); err != nil {
-		return map[string]any{}
-	}
-	return args
 }
 
 // joinStrings 连接字符串切片。

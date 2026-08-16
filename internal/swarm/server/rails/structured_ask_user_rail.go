@@ -2,7 +2,6 @@ package rails
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -176,7 +175,7 @@ func (r *StructuredAskUserRail) ExtractQuestions(toolCall *llmschema.ToolCall) [
 		return nil
 	}
 
-	args := parseToolArgsJSON(toolCall.Arguments)
+	args := interrupt.ParseToolArgs(toolCall)
 	questionsRaw, ok := args["questions"].([]any)
 	if !ok || len(questionsRaw) == 0 {
 		return nil
@@ -314,19 +313,4 @@ func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*Structured
 		// 对齐 Python: else: return self.interrupt(self._build_ask_request(tool_call))
 		return nil, false
 	}
-}
-
-// parseToolArgsJSON 解析 ToolCall.Arguments JSON 字符串为 map。
-// 本包本地实现，不依赖 interrupt 包的未导出函数。
-//
-// 对齐 Python: StructuredAskUserRail.extract_questions 中的 json.loads(tool_call.arguments)
-func parseToolArgsJSON(arguments string) map[string]any {
-	if arguments == "" {
-		return map[string]any{}
-	}
-	args := make(map[string]any)
-	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
-		return map[string]any{}
-	}
-	return args
 }
