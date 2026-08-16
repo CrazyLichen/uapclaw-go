@@ -76,10 +76,10 @@ type taskFailedError struct {
 	text string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // StreamControllerOption 流式控制器可选配置
 type StreamControllerOption func(*StreamController)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -736,7 +736,7 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 		logger.Error(scLogComponent).Int("error_code", code).
 			Int("attempts", attempt).Str("error_text", text).
 			Msg("DeepAgent 循环失败")
-		return fmt.Errorf("streaming task failed after %d retries, last error code=%d: %s",
+		return fmt.Errorf("流式任务在 %d 次重试后失败，最后错误码=%d: %s",
 			attempt, code, text)
 	}
 }

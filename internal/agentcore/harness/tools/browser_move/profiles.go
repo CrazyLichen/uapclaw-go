@@ -189,7 +189,7 @@ func (s *BrowserProfileStore) GetProfile(name string) *BrowserProfile {
 func (s *BrowserProfileStore) UpsertProfile(profile *BrowserProfile, selectProfile bool) (*BrowserProfile, error) {
 	name := strings.TrimSpace(profile.Name)
 	if name == "" {
-		return nil, fmt.Errorf("profile.name is required")
+		return nil, fmt.Errorf("profile.name 不能为空")
 	}
 	profile.Name = name
 	driverType := strings.TrimSpace(strings.ToLower(profile.DriverType))

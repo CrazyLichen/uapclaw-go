@@ -67,7 +67,7 @@ func (t *MemorySearchTool) Card() *tool.ToolCard { return t.card }
 func (t *MemorySearchTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	query, _ := inputs["query"].(string)
 	if query == "" {
-		return nil, fmt.Errorf("query is required")
+		return nil, fmt.Errorf("query 不能为空")
 	}
 	var maxResults *int
 	if v, ok := inputs["max_results"]; ok {
@@ -98,7 +98,7 @@ func (t *MemoryGetTool) Card() *tool.ToolCard { return t.card }
 func (t *MemoryGetTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 	var fromLine *int
 	if v, ok := inputs["from_line"]; ok {
@@ -128,7 +128,7 @@ func (t *ReadMemoryTool) Card() *tool.ToolCard { return t.card }
 func (t *ReadMemoryTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 	var offset *int
 	if v, ok := inputs["offset"]; ok {
@@ -158,11 +158,11 @@ func (t *WriteMemoryTool) Card() *tool.ToolCard { return t.card }
 func (t *WriteMemoryTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 	content, _ := inputs["content"].(string)
 	if content == "" {
-		return nil, fmt.Errorf("content is required")
+		return nil, fmt.Errorf("content 不能为空")
 	}
 	appendMode := false
 	if v, ok := inputs["append"].(bool); ok {
@@ -184,15 +184,15 @@ func (t *EditMemoryTool) Card() *tool.ToolCard { return t.card }
 func (t *EditMemoryTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 	oldText, _ := inputs["old_text"].(string)
 	if oldText == "" {
-		return nil, fmt.Errorf("old_text is required")
+		return nil, fmt.Errorf("old_text 不能为空")
 	}
 	newText, _ := inputs["new_text"].(string)
 	if newText == "" {
-		return nil, fmt.Errorf("new_text is required")
+		return nil, fmt.Errorf("new_text 不能为空")
 	}
 	result := lite.EditMemoryWithContext(ctx, t.ctx, path, oldText, newText)
 	return structToMap(result), nil

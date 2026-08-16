@@ -78,6 +78,16 @@ type TeamRuntimeContext struct {
 	MemberModel *models.TeamModelConfig `json:"member_model,omitempty"`
 }
 
+// UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
+// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
+// 从 interaction 包提升到 schema 包，避免 tools → interaction 循环依赖。
+type UnknownHumanAgentError struct {
+	// Sender 尝试使用的发送者名
+	Sender string
+	// Registered 已注册的 human-agent 成员名列表
+	Registered []string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TeamLifecycle 团队生命周期模式。
@@ -105,16 +115,6 @@ const (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
-// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
-// 从 interaction 包提升到 schema 包，避免 tools → interaction 循环依赖。
-type UnknownHumanAgentError struct {
-	// Sender 尝试使用的发送者名
-	Sender string
-	// Registered 已注册的 human-agent 成员名列表
-	Registered []string
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

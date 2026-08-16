@@ -18,7 +18,7 @@ import (
 // 管理三种碎片记忆类型：user_profile、semantic_memory、episodic_memory。
 // 一个实例同时服务三种类型（对齐 Python 中 managers 字典映射到同一实例的设计）。
 // 所有实际存储操作委托给 BaseMemoryIndex，FragmentMemoryManager 只负责业务逻辑
-//（冲突检查、操作分发、数据转换）。
+// （冲突检查、操作分发、数据转换）。
 //
 // 对应 Python: openjiuwen/core/memory/manage/index/fragment_memory_manager.py (FragmentMemoryManager)
 type FragmentMemoryManager struct {

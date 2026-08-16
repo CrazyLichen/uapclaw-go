@@ -730,8 +730,6 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 	return db.MutateDependencyGraph(context.Background(), teamName, []NewTaskSpec{newTaskSpec}, edges)
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetMessage 按 ID 查消息。对齐 Python: MessageDao.get_message()
 func (db *InMemoryTeamDatabase) GetMessage(_ context.Context, messageID string) (*TeamMessageBase, error) {
 	db.mu.Lock()

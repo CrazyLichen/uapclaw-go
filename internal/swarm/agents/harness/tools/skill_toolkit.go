@@ -470,14 +470,14 @@ func normalizeSource(source string) (string, error) {
 func detectSource(target string) (string, error) {
 	raw := strings.TrimSpace(target)
 	if raw == "" {
-		return "", fmt.Errorf("identifier is required")
+		return "", fmt.Errorf("identifier 不能为空")
 	}
 	for _, rule := range installSourceByTarget {
 		if rule.pattern.MatchString(raw) {
 			return rule.source, nil
 		}
 	}
-	return "", fmt.Errorf("cannot infer source from identifier: %s", target)
+	return "", fmt.Errorf("无法从 identifier 推断来源: %s", target)
 }
 
 // safeInt 安全地转换为整数，失败时返回默认值。

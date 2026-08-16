@@ -41,7 +41,7 @@ func ValidateToolMetadata(provider ToolMetadataProvider) error {
 	for _, lang := range []string{"cn", "en"} {
 		desc := provider.GetDescription(lang)
 		if strings.TrimSpace(desc) == "" {
-			return fmt.Errorf("[%s] %s description is empty", name, lang)
+			return fmt.Errorf("[%s] %s 描述为空", name, lang)
 		}
 	}
 
@@ -60,16 +60,16 @@ func validateSchemaPair(name string, refSchema, otherSchema map[string]any, refL
 	prefix := fmt.Sprintf("[%s]%s", name, path)
 
 	if refSchema["type"] != "object" {
-		return fmt.Errorf("%s %s schema type != 'object'", prefix, refLang)
+		return fmt.Errorf("%s %s schema 类型不是 'object'", prefix, refLang)
 	}
 	if otherSchema["type"] != "object" {
-		return fmt.Errorf("%s %s schema type != 'object'", prefix, otherLang)
+		return fmt.Errorf("%s %s schema 类型不是 'object'", prefix, otherLang)
 	}
 	if _, ok := refSchema["properties"]; !ok {
-		return fmt.Errorf("%s %s schema missing 'properties'", prefix, refLang)
+		return fmt.Errorf("%s %s schema 缺少 'properties'", prefix, refLang)
 	}
 	if _, ok := refSchema["required"]; !ok {
-		return fmt.Errorf("%s %s schema missing 'required'", prefix, refLang)
+		return fmt.Errorf("%s %s schema 缺少 'required'", prefix, refLang)
 	}
 
 	refProps, _ := refSchema["properties"].(map[string]any)
@@ -86,7 +86,7 @@ func validateSchemaPair(name string, refSchema, otherSchema map[string]any, refL
 	refKeys := keySet(refProps)
 	otherKeys := keySet(otherProps)
 	if !keysEqual(refKeys, otherKeys) {
-		return fmt.Errorf("%s property keys differ: %s=%v, %s=%v",
+		return fmt.Errorf("%s 属性键不一致: %s=%v, %s=%v",
 			prefix, refLang, sortedKeys(refKeys), otherLang, sortedKeys(otherKeys))
 	}
 
@@ -103,7 +103,7 @@ func validateSchemaPair(name string, refSchema, otherSchema map[string]any, refL
 				continue
 			}
 			if _, ok := prop["description"]; !ok {
-				return fmt.Errorf("%s.%s %s missing description", prefix, key, langProps.lang)
+				return fmt.Errorf("%s.%s %s 缺少描述", prefix, key, langProps.lang)
 			}
 			// 递归检查嵌套 object
 			if prop["type"] == "object" {

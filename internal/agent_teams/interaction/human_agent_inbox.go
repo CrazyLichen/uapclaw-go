@@ -132,7 +132,7 @@ func (e *HumanAgentNotEnabledError) Error() string {
 	if e.Message != "" {
 		return e.Message
 	}
-	return "no human-agent member is registered on this team"
+	return "该团队未注册 human-agent 成员"
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -187,7 +187,7 @@ func dispatchCronAction(
 		logger.Warn(logComponent).
 			Str("action", actionName).
 			Msg("不支持的 cron action")
-		return nil, fmt.Errorf("unsupported cron action: %s", actionName)
+		return nil, fmt.Errorf("不支持的 cron action: %s", actionName)
 	}
 }
 

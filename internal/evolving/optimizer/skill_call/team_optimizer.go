@@ -410,7 +410,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 
 	parsed, lastError := parsePatchResponse(raw)
 	if parsed == nil {
-		return nil, fmt.Errorf("TeamSkillExperienceOptimizer response could not be parsed: %s", lastError)
+		return nil, fmt.Errorf("TeamSkillExperienceOptimizer 响应无法解析: %s", lastError)
 	}
 
 	elapsed := time.Since(t0).Seconds()
@@ -427,7 +427,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 	section := getStrFromAny(parsed["section"], "Instructions")
 	content := getStrFromAny(parsed["content"], "")
 	if strings.TrimSpace(content) == "" {
-		return nil, fmt.Errorf("TeamSkill user patch response contained empty content")
+		return nil, fmt.Errorf("TeamSkill 用户 patch 响应内容为空")
 	}
 
 	logger.Info(logComponent).
@@ -506,7 +506,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 
 	parsed, lastError := parsePatchResponse(raw)
 	if parsed == nil {
-		return nil, fmt.Errorf("TeamSkillExperienceOptimizer response could not be parsed: %s", lastError)
+		return nil, fmt.Errorf("TeamSkillExperienceOptimizer 响应无法解析: %s", lastError)
 	}
 
 	elapsed := time.Since(t0).Seconds()
@@ -522,7 +522,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 	section := getStrFromAny(parsed["section"], "Workflow")
 	content := getStrFromAny(parsed["content"], "")
 	if strings.TrimSpace(content) == "" {
-		return nil, fmt.Errorf("TeamSkill trajectory patch response contained empty content")
+		return nil, fmt.Errorf("TeamSkill 轨迹 patch 响应内容为空")
 	}
 
 	logger.Info(logComponent).
@@ -656,7 +656,7 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 		if attemptNumber >= 3 {
 			logger.Warn(logComponent).
 				Msg("[TeamSkillOptimizer] output still truncated on attempt 3, giving up")
-			return nil, brokenRaw, fmt.Errorf("output truncated on attempt 3")
+			return nil, brokenRaw, fmt.Errorf("第 3 次尝试输出仍被截断")
 		}
 		logger.Warn(logComponent).
 			Msg("[TeamSkillOptimizer] output appears truncated, retrying full regeneration")
@@ -717,7 +717,7 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 		logger.Warn(logComponent).
 			Str("strategy", strategy).
 			Msg("[TeamSkillOptimizer] retry also failed, giving up")
-		return nil, response, fmt.Errorf("retry (%s) failed", strategy)
+		return nil, response, fmt.Errorf("重试 (%s) 失败", strategy)
 	}
 
 	logger.Info(logComponent).
@@ -804,7 +804,7 @@ func (o *TeamSkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Con
 		}
 	}
 
-	return nil, fmt.Errorf("TeamSkillExperienceOptimizer aggregated response could not be parsed")
+	return nil, fmt.Errorf("TeamSkillExperienceOptimizer 聚合响应无法解析")
 }
 
 // parsePatchResponse 解析 patch 响应为 dict。

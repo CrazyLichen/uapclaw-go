@@ -265,7 +265,7 @@ func BuildMemorySection(mode string, todayDate string, lang string) saprompt.Pro
 		} else {
 			parts = append(parts, memoryInactivePromptCN)
 		}
-	default: // "proactive"
+	default: // "proactive" 模式
 		if lang == "en" {
 			parts = append(parts, memoryPromptEN)
 			parts = append(parts, memoryMgmtPromptEN)

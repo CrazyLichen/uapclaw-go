@@ -374,7 +374,7 @@ func extractMultilineElements(text string, elements []*MarkdownElement) []*Markd
 
 	for _, line := range lines {
 		lineStartPos := currentPos
-		currentPos += len(line) + 1 // +1 for \n
+		currentPos += len(line) + 1 // +1 表示换行符
 
 		// 表格识别
 		if strings.Contains(line, "|") && strings.TrimSpace(line) != "" {

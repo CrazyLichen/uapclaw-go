@@ -103,15 +103,15 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("duckduckgo search failed: %w", err)
+		return nil, fmt.Errorf("DuckDuckGo 搜索失败: %w", err)
 	}
 
 	// 对齐 Python: L676-688 — 反爬检测
 	if isDDGChallengePage(resp.statusCode, resp.text) {
-		return nil, fmt.Errorf("duckduckgo: anti-bot challenge page returned")
+		return nil, fmt.Errorf("duckduckgo: 反爬挑战页面返回")
 	}
 	if resp.statusCode != 200 {
-		return nil, fmt.Errorf("duckduckgo: non-200 status: %d", resp.statusCode)
+		return nil, fmt.Errorf("duckduckgo: 非 200 状态码: %d", resp.statusCode)
 	}
 
 	html := resp.text
@@ -158,7 +158,7 @@ func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]se
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("duckduckgo-jina search failed: %w", err)
+		return nil, fmt.Errorf("DuckDuckGo-Jina 搜索失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("bing search failed: %w", err)
+		return nil, fmt.Errorf("Bing 搜索失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 
 	// 对齐 Python: L919-923
 	if len(engines) == 0 {
-		return "", nil, fmt.Errorf("all free search engines are disabled")
+		return "", nil, fmt.Errorf("所有免费搜索引擎已禁用")
 	}
 
 	// 对齐 Python: L925-1003 — 逐引擎尝试
@@ -397,7 +397,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 	writeDebugPayload(debugRunID, "final", "decision", map[string]any{
 		"query": query, "decision": "error", "errors": strings.Join(errors, " | "),
 	})
-	return "", nil, fmt.Errorf("all engines failed: %s", strings.Join(errors, " | "))
+	return "", nil, fmt.Errorf("所有搜索引擎均失败: %s", strings.Join(errors, " | "))
 }
 
 // isDDGChallengePage 检测 DDG 反爬页面

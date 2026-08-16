@@ -10,8 +10,7 @@
 //
 //	fsm/
 //	├── doc.go           # 包文档
-//	├── transitions.go   # 状态常量 + 转换表 + 校验函数
-//	└── transitions_test.go # 转换表和校验函数测试
+//	└── transitions.go   # 状态常量 + 转换表 + 校验函数
 //
 // 对应 Python 代码：openjiuwen/agent_teams/schema/status.py
 package fsm

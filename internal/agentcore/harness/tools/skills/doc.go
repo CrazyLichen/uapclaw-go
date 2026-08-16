@@ -13,8 +13,7 @@
 //	skills/
 //	├── doc.go           # 包文档
 //	├── skill_tool.go    # SkillTool 技能查看工具
-//	├── list_skill.go    # ListSkillTool 技能列表/路由工具
-//	└── skills_test.go   # 单元测试
+//	└── list_skill.go    # ListSkillTool 技能列表/路由工具
 //
 // 对应 Python 代码：openjiuwen/harness/tools/skills/
 package skills

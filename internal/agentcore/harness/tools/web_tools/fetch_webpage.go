@@ -143,7 +143,7 @@ func fetchWebpage(rawURL string, timeoutSeconds int) (map[string]any, error) {
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("fetch webpage failed: %w", err)
+		return nil, fmt.Errorf("获取网页失败: %w", err)
 	}
 
 	// 对齐 Python: L1558-1559 — 401/403/429 降级到 Jina
@@ -183,7 +183,7 @@ func fetchViaJinaReader(rawURL string, timeoutSeconds int) (map[string]any, erro
 		withTimeout(timeoutSeconds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("jina reader fetch failed: %w", err)
+		return nil, fmt.Errorf("Jina Reader 获取失败: %w", err)
 	}
 	if err := raiseForStatusWithBody(resp); err != nil {
 		return nil, err

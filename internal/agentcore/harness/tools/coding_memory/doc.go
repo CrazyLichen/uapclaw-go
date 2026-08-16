@@ -11,8 +11,7 @@
 //
 //	coding_memory/
 //	├── doc.go                    # 包文档
-//	├── coding_memory_tool.go     # 三个 Tool 结构体 + CreateCodingMemoryTools 工厂函数
-//	└── coding_memory_tool_test.go # 单元测试
+//	└── coding_memory_tool.go     # 三个 Tool 结构体 + CreateCodingMemoryTools 工厂函数
 //
 // 对应 Python 代码：openjiuwen/harness/tools/coding_memory.py
 package coding_memory

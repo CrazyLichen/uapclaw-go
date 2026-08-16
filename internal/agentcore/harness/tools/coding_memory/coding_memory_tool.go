@@ -51,7 +51,7 @@ func (t *CodingMemoryReadTool) Invoke(ctx context.Context, inputs map[string]any
 	// 提取 path（required）
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 
 	// 提取 offset（optional）
@@ -95,13 +95,13 @@ func (t *CodingMemoryWriteTool) Invoke(ctx context.Context, inputs map[string]an
 	// 提取 path（required）
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 
 	// 提取 content（required）
 	content, _ := inputs["content"].(string)
 	if content == "" {
-		return nil, fmt.Errorf("content is required")
+		return nil, fmt.Errorf("content 不能为空")
 	}
 
 	result := lite.CodingMemoryWriteWithContext(ctx, t.ctx, path, content)
@@ -121,19 +121,19 @@ func (t *CodingMemoryEditTool) Invoke(ctx context.Context, inputs map[string]any
 	// 提取 path（required）
 	path, _ := inputs["path"].(string)
 	if path == "" {
-		return nil, fmt.Errorf("path is required")
+		return nil, fmt.Errorf("path 不能为空")
 	}
 
 	// 提取 old_text（required）
 	oldText, _ := inputs["old_text"].(string)
 	if oldText == "" {
-		return nil, fmt.Errorf("old_text is required")
+		return nil, fmt.Errorf("old_text 不能为空")
 	}
 
 	// 提取 new_text（required）
 	newText, _ := inputs["new_text"].(string)
 	if newText == "" {
-		return nil, fmt.Errorf("new_text is required")
+		return nil, fmt.Errorf("new_text 不能为空")
 	}
 
 	result := lite.CodingMemoryEditWithContext(ctx, t.ctx, path, oldText, newText)

@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -38,11 +38,11 @@ func (f *fakeBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 	return nil, nil
 }
 
-func (f *fakeBaseAgent) Card() *agentschema.AgentCard                                          { return f.card }
-func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                                   { return nil }
-func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface              { return f.am }
-func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager               { return nil }
-func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface            { return f.sb }
+func (f *fakeBaseAgent) Card() *agentschema.AgentCard                               { return f.card }
+func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                        { return nil }
+func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface    { return f.am }
+func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager     { return nil }
+func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return f.sb }
 func (f *fakeBaseAgent) RegisterCallback(ctx context.Context, event agentinterfaces.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
 	return nil
 }
@@ -58,11 +58,15 @@ type fakeSystemPromptBuilder struct {
 	language string
 }
 
-func (f *fakeSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder { return nil }
-func (f *fakeSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPromptBuilder                  { return nil }
-func (f *fakeSystemPromptBuilder) Language() string                                                          { return f.language }
-func (f *fakeSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection                           { return nil }
-func (f *fakeSystemPromptBuilder) HasSection(name string) bool                                               { return false }
+func (f *fakeSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder {
+	return nil
+}
+func (f *fakeSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPromptBuilder {
+	return nil
+}
+func (f *fakeSystemPromptBuilder) Language() string                               { return f.language }
+func (f *fakeSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection { return nil }
+func (f *fakeSystemPromptBuilder) HasSection(name string) bool                    { return false }
 
 // ──────────────────────────── NewStructuredAskUserRail ────────────────────────────
 
@@ -90,8 +94,8 @@ func TestNewStructuredAskUserRail_空语言(t *testing.T) {
 func TestExtractQuestions_有questions(t *testing.T) {
 	r := NewStructuredAskUserRail("cn")
 	toolCall := &llmschema.ToolCall{
-		ID:   "tc1",
-		Name: "ask_user",
+		ID:        "tc1",
+		Name:      "ask_user",
 		Arguments: `{"questions": [{"question": "选择方案", "header": "方案", "options": [{"label": "A"}, {"label": "B"}]}]}`,
 	}
 

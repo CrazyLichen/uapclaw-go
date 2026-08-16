@@ -76,17 +76,17 @@ type Subscription struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// ErrQueueNotRunning 队列未运行
-	ErrQueueNotRunning = errors.New("message queue is not running")
+	ErrQueueNotRunning = errors.New("消息队列未运行")
 	// ErrQueueClosed 队列已关闭
-	ErrQueueClosed = errors.New("message queue is closed")
+	ErrQueueClosed = errors.New("消息队列已关闭")
 	// ErrTopicNotFound topic 不存在
-	ErrTopicNotFound = errors.New("topic not found")
+	ErrTopicNotFound = errors.New("topic 不存在")
 	// ErrSubscriptionNotActive 订阅未激活
-	ErrSubscriptionNotActive = errors.New("subscription is not active")
+	ErrSubscriptionNotActive = errors.New("订阅未激活")
 	// ErrHandlerNotSet handler 未设置
-	ErrHandlerNotSet = errors.New("message handler not set")
+	ErrHandlerNotSet = errors.New("消息处理器未设置")
 	// ErrTopicAlreadySubscribed topic 已被订阅
-	ErrTopicAlreadySubscribed = errors.New("topic is already subscribed")
+	ErrTopicAlreadySubscribed = errors.New("topic 已被订阅")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

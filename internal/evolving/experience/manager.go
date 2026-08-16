@@ -159,7 +159,7 @@ func NewExperienceManager(
 	pendingGovernance map[string]*PendingGovernance,
 ) (*ExperienceManager, error) {
 	if !supportedKinds[kind] {
-		return nil, fmt.Errorf("unsupported experience manager kind: %s", kind)
+		return nil, fmt.Errorf("不支持的体验管理器类型: %s", kind)
 	}
 
 	em := &ExperienceManager{
@@ -487,7 +487,7 @@ func BuildLocalApplyPreview(
 			continue
 		}
 		if result.LifecycleStage != nil && *result.LifecycleStage != schema.LocalApplyCompleted {
-			return LocalApplyPreview{}, fmt.Errorf("unsupported apply lifecycle stage for %s: %s", skillName, *result.LifecycleStage)
+			return LocalApplyPreview{}, fmt.Errorf("%s 不支持的 apply 生命周期阶段: %s", skillName, *result.LifecycleStage)
 		}
 		// 对齐 Python: records.extend(result.records) — 需将 []any 转为 []EvolutionRecord
 		for _, item := range result.Records {
@@ -694,7 +694,7 @@ func (m *ExperienceManager) commitStagedRequest(
 	request ExperienceApprovalRequest,
 ) (ExperienceApplyResult, error) {
 	if request.RequestID == "" {
-		return ExperienceApplyResult{}, fmt.Errorf("staged request missing request_id")
+		return ExperienceApplyResult{}, fmt.Errorf("暂存请求缺少 request_id")
 	}
 
 	result, err := m.ApproveRequest(ctx, request.RequestID)
@@ -703,7 +703,7 @@ func (m *ExperienceManager) commitStagedRequest(
 	}
 	if !result.Ok() {
 		return result, fmt.Errorf(
-			"auto-commit failed for skill=%s, request_id=%s, applied=%d, pending=%d, errors=%v",
+			"自动提交失败: skill=%s, request_id=%s, applied=%d, pending=%d, errors=%v",
 			request.SkillName, request.RequestID,
 			result.AppliedCount, result.PendingCount, result.Errors,
 		)

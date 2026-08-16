@@ -64,6 +64,9 @@ type TeamBackend struct {
 	cleanupPaths map[string]struct{}
 }
 
+// TeamBackendOption TeamBackend 构造可选参数。
+type TeamBackendOption func(*TeamBackend)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -78,13 +81,10 @@ const (
 var (
 	// ErrHITTConfigInvalid build_team(enable_hitt=True) 但 spec_enable_hitt=False 时返回。
 	// 对齐 Python: raise_error(StatusCode.AGENT_TEAM_CONFIG_INVALID, ...)
-	ErrHITTConfigInvalid = errors.New("build_team(enable_hitt=True) requires spec_enable_hitt=True; capability ceiling violated")
+	ErrHITTConfigInvalid = errors.New("build_team(enable_hitt=True) 要求 spec_enable_hitt=True；能力天花板被违反")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TeamBackendOption TeamBackend 构造可选参数。
-type TeamBackendOption func(*TeamBackend)
 
 // WithTeammateMode 设置默认成员模式。
 func WithTeammateMode(mode string) TeamBackendOption {

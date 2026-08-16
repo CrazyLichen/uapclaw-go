@@ -169,7 +169,7 @@ func generateIsolationKeyTemplate(isolationPrefix string, containerScope Contain
 		identity = "{session_id}"
 	case ContainerScopeCustom:
 		if customID == "" {
-			return "", fmt.Errorf("container_scope is CUSTOM but custom_id is empty")
+			return "", fmt.Errorf("container_scope 为 CUSTOM 但 custom_id 为空")
 		}
 		identity = customID
 	default:

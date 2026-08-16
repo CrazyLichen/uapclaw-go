@@ -48,9 +48,9 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// ErrQueueClosed 队列已关闭
-	ErrQueueClosed = errors.New("stream queue is closed")
+	ErrQueueClosed = errors.New("流式队列已关闭")
 	// ErrQueueSendRetryExhausted 发送重试耗尽
-	ErrQueueSendRetryExhausted = errors.New("stream queue send retry exhausted")
+	ErrQueueSendRetryExhausted = errors.New("流式队列发送重试耗尽")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -8,8 +8,7 @@
 //
 //	ask_user/
 //	├── doc.go            # 包文档
-//	├── ask_user.go       # AskUserTool 空壳工具 + NewAskUserTool 工厂函数
-//	└── ask_user_test.go  # 单元测试
+//	└── ask_user.go       # AskUserTool 空壳工具 + NewAskUserTool 工厂函数
 //
 // 对应 Python 代码：openjiuwen/harness/tools/ask_user.py
 package ask_user

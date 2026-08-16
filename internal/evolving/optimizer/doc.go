@@ -32,8 +32,7 @@
 //	│   └── pipeline.go       # CustomizedPipeline（自定义流水线）
 //	├── memory_call/          # 记忆维度优化器
 //	│   ├── doc.go            # 包文档
-//	│   ├── base.go           # MemoryOptimizerBase（记忆优化器基类） 声明式骨架
-//	│   └── base_test.go      # 单元测试
+//	│   └── base.go           # MemoryOptimizerBase（记忆优化器基类） 声明式骨架
 //	├── skill_call/          # 技能经验优化器
 //	│   ├── doc.go            # 包文档
 //	│   ├── base.go           # SkillExperienceOptimizerBase（技能经验优化器基类） 共享字段/方法/常量

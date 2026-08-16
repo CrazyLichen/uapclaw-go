@@ -32,14 +32,14 @@
 //	│   ├── ask_user_rail.go    # AskUserRail + AskUserPayload/AskUserRequest
 //	│   ├── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
 //	│   └── helpers.go          # 中断辅助工具函数
-//	└── context_engineer/  # 上下文引擎护栏子包
+//	├── context_engineer/  # 上下文引擎护栏子包
 //	    ├── doc.go                       # 包文档
 //	    ├── merge_config.go              # 反射配置合并工具
 //	    ├── refresh_task_state.go        # 任务状态刷新
 //	    ├── fix_incomplete_tool_context.go     # 不完整工具上下文修复
 //	    ├── context_processor_rail.go    # ContextProcessorRail 实现
 //	    └── context_assemble_rail.go     # ContextAssembleRail 实现
-//	└── subagent/          # 子代理委派和验证约束 Rail 子包
+//	├── subagent/          # 子代理委派和验证约束 Rail 子包
 //	    ├── doc.go                        # 包文档
 //	    ├── subagent_rail.go              # SubagentRail 子代理委派 Rail
 //	    ├── verification_rail.go          # VerificationRail 验证代理约束 Rail

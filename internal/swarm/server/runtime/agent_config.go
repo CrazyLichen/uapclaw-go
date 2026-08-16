@@ -145,9 +145,9 @@ var (
 		"web_search": "WebSearch", "web_free_search": "WebSearch",
 		"web_fetch": "WebFetch", "web_fetch_webpage": "WebFetch",
 		"image_ocr": "ImageOCR", "visual_question_answering": "VisionQA",
-		"audio_transcription": "AudioTranscribe",
+		"audio_transcription":      "AudioTranscribe",
 		"audio_question_answering": "AudioQA",
-		"audio_metadata":       "AudioMetadata",
+		"audio_metadata":           "AudioMetadata",
 	}
 )
 

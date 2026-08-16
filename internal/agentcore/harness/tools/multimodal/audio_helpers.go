@@ -415,7 +415,7 @@ func downloadAudioToTemp(
 func parseWAVDuration(audioPath string) (float64, error) {
 	ext := strings.ToLower(filepath.Ext(audioPath))
 	if ext != ".wav" && ext != ".wave" {
-		return 0, fmt.Errorf("not a WAV file")
+		return 0, fmt.Errorf("不是 WAV 文件")
 	}
 
 	data, err := os.ReadFile(audioPath)
@@ -427,11 +427,11 @@ func parseWAVDuration(audioPath string) (float64, error) {
 	// RIFF 头（12 字节）: "RIFF" + size + "WAVE"
 	// fmt 块（24+ 字节）: "fmt " + size + audioFormat + numChannels + sampleRate + byteRate + blockAlign + bitsPerSample
 	if len(data) < 44 {
-		return 0, fmt.Errorf("WAV file too short")
+		return 0, fmt.Errorf("WAV 文件过短")
 	}
 
 	if string(data[0:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
-		return 0, fmt.Errorf("not a valid WAV file")
+		return 0, fmt.Errorf("不是有效的 WAV 文件")
 	}
 
 	// 找 fmt chunk
@@ -441,7 +441,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 		chunkSize := uint32(data[offset+4]) | uint32(data[offset+5])<<8 | uint32(data[offset+6])<<16 | uint32(data[offset+7])<<24
 		if chunkID == "fmt " {
 			if offset+24 > len(data) {
-				return 0, fmt.Errorf("fmt chunk too short")
+				return 0, fmt.Errorf("fmt 块过短")
 			}
 			sampleRate := uint32(data[offset+12]) | uint32(data[offset+13])<<8 | uint32(data[offset+14])<<16 | uint32(data[offset+15])<<24
 			byteRate := uint32(data[offset+16]) | uint32(data[offset+17])<<8 | uint32(data[offset+18])<<16 | uint32(data[offset+19])<<24
@@ -474,7 +474,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 		offset += 8 + int(chunkSize)
 	}
 
-	return 0, fmt.Errorf("could not parse WAV duration")
+	return 0, fmt.Errorf("无法解析 WAV 时长")
 }
 
 // ffprobeDuration 使用 ffprobe 获取音频时长。
@@ -484,7 +484,7 @@ func ffprobeDuration(audioPath string) (float64, error) {
 	// 检查 ffprobe 是否可用
 	_, err := osStat("/usr/bin/ffprobe")
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe not available")
+		return 0, fmt.Errorf("ffprobe 不可用")
 	}
 
 	output, err := execCommand("ffprobe",
@@ -494,17 +494,17 @@ func ffprobeDuration(audioPath string) (float64, error) {
 		audioPath,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %s", err.Error())
+		return 0, fmt.Errorf("ffprobe 执行失败: %s", err.Error())
 	}
 
 	durationStr := strings.TrimSpace(output)
 	if durationStr == "" || durationStr == "N/A" {
-		return 0, fmt.Errorf("ffprobe returned no duration")
+		return 0, fmt.Errorf("ffprobe 未返回时长")
 	}
 
 	duration, err := parseFloat(durationStr)
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe duration parse failed: %s", err.Error())
+		return 0, fmt.Errorf("ffprobe 时长解析失败: %s", err.Error())
 	}
 
 	return duration, nil
@@ -670,7 +670,7 @@ func callWithRetries(maxRetries int, fn func() error) error {
 		time.Sleep(time.Duration(1<<(attempt-1)) * time.Second)
 	}
 	if lastErr == nil {
-		return fmt.Errorf("audio model call failed without a captured exception")
+		return fmt.Errorf("音频模型调用失败，未捕获异常")
 	}
 	return lastErr
 }

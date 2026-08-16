@@ -252,7 +252,7 @@ func (a *ByModelNameAllocator) LoadStateDict(state map[string]any) {
 // NewRouterAllocator 创建路由分配器。⤴️ 9.64 回填完成
 func NewRouterAllocator(pool []ModelPoolEntry) (*RouterAllocator, error) {
 	if len(pool) == 0 {
-		return nil, fmt.Errorf("RouterAllocator requires a non-empty pool")
+		return nil, fmt.Errorf("RouterAllocator 要求非空模型池")
 	}
 	names := make([]string, 0, len(pool))
 	for _, entry := range pool {
@@ -272,7 +272,7 @@ func NewRouterAllocator(pool []ModelPoolEntry) (*RouterAllocator, error) {
 		}
 	}
 	if len(duplicates) > 0 {
-		return nil, fmt.Errorf("RouterAllocator pool must have unique model_names; duplicates: %v", duplicates)
+		return nil, fmt.Errorf("RouterAllocator 模型池中 model_name 必须唯一，重复项: %v", duplicates)
 	}
 	byName := make(map[string]ModelPoolEntry, len(pool))
 	for _, entry := range pool {

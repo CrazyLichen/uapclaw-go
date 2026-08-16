@@ -289,7 +289,7 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 		if attemptNumber >= 3 {
 			logger.Warn(logComponent).
 				Msg("[SkillExperienceOptimizer] output still truncated on attempt 3, giving up")
-			return nil, brokenRaw, fmt.Errorf("output truncated on attempt 3")
+			return nil, brokenRaw, fmt.Errorf("第 3 次尝试输出仍被截断")
 		}
 		logger.Warn(logComponent).
 			Msg("[SkillExperienceOptimizer] output appears truncated, retrying full regeneration")
@@ -353,7 +353,7 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 		logger.Warn(logComponent).
 			Str("strategy", strategy).
 			Msg("[SkillExperienceOptimizer] retry also failed, giving up")
-		return nil, response, fmt.Errorf("retry (%s) failed: %s", strategy, lastError)
+		return nil, response, fmt.Errorf("重试 (%s) 失败: %s", strategy, lastError)
 	}
 
 	logger.Info(logComponent).
@@ -428,7 +428,7 @@ func (o *SkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Context
 		}
 	}
 
-	return nil, fmt.Errorf("SkillExperienceOptimizer response could not be parsed")
+	return nil, fmt.Errorf("SkillExperienceOptimizer 响应无法解析")
 }
 
 // buildConversationSnippet 构建紧凑对话片段用于 LLM 提示词上下文。

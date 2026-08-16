@@ -14,8 +14,7 @@
 //
 //	memory/
 //	├── doc.go              # 包文档
-//	├── memory_tool.go      # 5 个 Tool 结构体 + CreateMemoryTools 工厂函数
-//	└── memory_tool_test.go # 单元测试
+//	└── memory_tool.go      # 5 个 Tool 结构体 + CreateMemoryTools 工厂函数
 //
 // 对应 Python 代码：openjiuwen/harness/tools/memory.py
 package memory

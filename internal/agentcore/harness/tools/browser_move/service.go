@@ -754,7 +754,7 @@ func (s *BrowserService) runTaskOnceWithTimeout(
 	// TODO(#9.38-49): ⤵️ 回填 Worker Agent 执行逻辑
 	// 对齐 Python: _run_task_once → Runner.run_agent
 	if s.browserAgent == nil {
-		return nil, fmt.Errorf("BrowserService is not started")
+		return nil, fmt.Errorf("BrowserService 未启动")
 	}
 
 	// 占位：使用 context 超时模拟

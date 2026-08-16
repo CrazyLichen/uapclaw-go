@@ -119,13 +119,11 @@ type DeepAdapter struct {
 	// taskPlanningRail 任务规划护栏
 	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
-	// contextAssembleRail 上下文组装轨道
 	contextAssembleRail sainterfaces.AgentRail
 	// contextAssembleMode 当前上下文组装模式（"agent.plan" / "agent.fast"）
 	// 值已赋，按模式切换逻辑待 10.6.3-10
 	contextAssembleMode string
 	// contextProcessorRail 上下文处理护栏
-	// contextProcessorRail 上下文处理轨道
 	contextProcessorRail sainterfaces.AgentRail
 	// runtimePromptRail 运行时提示词护栏
 	// ⤵️ 10.6.3-10: RuntimePromptRail
@@ -146,7 +144,6 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: 防止重复注册
 	externalMemoryRailRegistered bool
 	// heartbeatRail 心跳护栏
-	// heartbeatRail 心跳轨道
 	heartbeatRail *rails.HeartbeatRail
 	// skillEvolutionRail 技能演进护栏
 	// ⤵️ 10.6.3-10: SkillEvolutionRail
@@ -167,7 +164,6 @@ type DeepAdapter struct {
 	// ─── 运行时 ───
 
 	// toolCards 工具卡片列表
-	// 工具卡片列表
 	toolCards []*tool.ToolCard
 	// sysOperation 系统操作实例（已回填 10.3.7-11 SysOpBuilder）
 	sysOperation sysop.SysOperation

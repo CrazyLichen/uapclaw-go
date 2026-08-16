@@ -1811,6 +1811,8 @@ func (sm *SkillManager) removeInstalledPlugin(name string) {
 // addLocalSkill 添加本地技能记录
 // 对应 Python: SkillManager._add_local_skill(skill)
 func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 	raw, ok := sm.state["local_skills"]
 	if !ok {
 		raw = []any{}
@@ -1826,6 +1828,8 @@ func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
 // getLocalSkills 返回本地技能列表
 // 对应 Python: SkillManager.get_local_skills()
 func (sm *SkillManager) GetLocalSkills() []map[string]any {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
 	raw, ok := sm.state["local_skills"]
 	if !ok {
 		return []map[string]any{}

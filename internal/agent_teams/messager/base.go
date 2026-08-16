@@ -24,7 +24,7 @@ func CreateMessager(config schema.MessagerTransportConfig) (Messager, error) {
 		return NewInProcessMessager(config), nil
 	// ⤵️ 9.65-2: pyzmq 后端
 	default:
-		return nil, fmt.Errorf("unsupported messager backend: %s", config.Backend)
+		return nil, fmt.Errorf("不支持的消息传输后端: %s", config.Backend)
 	}
 }
 

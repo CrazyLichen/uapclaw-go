@@ -418,7 +418,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
 	if err != nil {
 		close(ch)
-		return ch, fmt.Errorf("resolve target path failed: %w", err)
+		return ch, fmt.Errorf("解析目标路径失败: %w", err)
 	}
 
 	go func() {

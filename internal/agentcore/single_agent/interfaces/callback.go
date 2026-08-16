@@ -332,7 +332,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ErrSteeringQueueFull steering 队列已满
-var ErrSteeringQueueFull = errors.New("steering queue full")
+var ErrSteeringQueueFull = errors.New("steering 队列已满")
 
 // BaseEventMethodMap 基础事件→方法名映射（8个，不含 task-iteration）。
 //
