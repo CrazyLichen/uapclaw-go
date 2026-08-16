@@ -133,16 +133,16 @@ func TestNormalizeSearchItem(t *testing.T) {
 		"version":      "1.0.0",
 	}
 	result := normalizeSearchItem(clawhubItem, "clawhub", installedNames)
-	if result["name"] != "Test Skill" {
-		t.Errorf("name = %v, want Test Skill", result["name"])
+	if result.Name != "Test Skill" {
+		t.Errorf("name = %v, want Test Skill", result.Name)
 	}
-	if result["identifier"] != "test-skill" {
-		t.Errorf("identifier = %v, want test-skill", result["identifier"])
+	if result.Identifier != "test-skill" {
+		t.Errorf("identifier = %v, want test-skill", result.Identifier)
 	}
-	if result["source"] != "clawhub" {
-		t.Errorf("source = %v, want clawhub", result["source"])
+	if result.Source != "clawhub" {
+		t.Errorf("source = %v, want clawhub", result.Source)
 	}
-	if result["installed"] != false {
+	if result.Installed != false {
 		t.Error("应返回 installed=false")
 	}
 
@@ -154,8 +154,8 @@ func TestNormalizeSearchItem(t *testing.T) {
 		"version":      "2.0.0",
 	}
 	result = normalizeSearchItem(tshItem, "teamskillshub", installedNames)
-	if result["identifier"] != "asset-123" {
-		t.Errorf("identifier = %v, want asset-123", result["identifier"])
+	if result.Identifier != "asset-123" {
+		t.Errorf("identifier = %v, want asset-123", result.Identifier)
 	}
 }
 
@@ -401,17 +401,17 @@ func TestBuildInstalledItem(t *testing.T) {
 	tk := NewSkillToolkit(sm)
 	item := tk.buildInstalledItem("test-skill", "clawhub")
 
-	if item["name"] != "test-skill" {
-		t.Errorf("name = %v, want test-skill", item["name"])
+	if item.Name != "test-skill" {
+		t.Errorf("name = %v, want test-skill", item.Name)
 	}
-	if item["identifier"] != "test-skill" {
-		t.Errorf("identifier = %v, want test-skill", item["identifier"])
+	if item.Identifier != "test-skill" {
+		t.Errorf("identifier = %v, want test-skill", item.Identifier)
 	}
-	if item["installed"] != true {
+	if item.Installed != true {
 		t.Error("应返回 installed=true")
 	}
-	if item["source"] != "clawhub" {
-		t.Errorf("source = %v, want clawhub", item["source"])
+	if item.Source != "clawhub" {
+		t.Errorf("source = %v, want clawhub", item.Source)
 	}
 }
 
@@ -455,14 +455,10 @@ func TestListInstalledSkills(t *testing.T) {
 	tk := NewSkillToolkit(sm)
 	result := tk.listInstalledSkills(context.Background())
 
-	if toBool(result["success"]) != true {
+	if result.Success != true {
 		t.Error("应返回 success=true")
 	}
-	items, ok := result["items"].([]map[string]any)
-	if !ok {
-		t.Fatalf("items 类型错误: %T", result["items"])
-	}
-	if len(items) == 0 {
+	if len(result.Items) == 0 {
 		t.Error("应返回至少一个技能")
 	}
 }
@@ -621,14 +617,14 @@ func TestNormalizeSearchItem_SkillNet(t *testing.T) {
 		"stars":             5,
 	}
 	result := normalizeSearchItem(item, "skillnet", installedNames)
-	if result["name"] != "Test Skill" {
-		t.Errorf("name = %v, want Test Skill", result["name"])
+	if result.Name != "Test Skill" {
+		t.Errorf("name = %v, want Test Skill", result.Name)
 	}
-	if result["identifier"] != "https://example.com/skill" {
-		t.Errorf("identifier = %v, want URL", result["identifier"])
+	if result.Identifier != "https://example.com/skill" {
+		t.Errorf("identifier = %v, want URL", result.Identifier)
 	}
-	if result["author"] != "test-author" {
-		t.Errorf("author = %v, want test-author", result["author"])
+	if result.Author != "test-author" {
+		t.Errorf("author = %v, want test-author", result.Author)
 	}
 }
 
@@ -654,8 +650,8 @@ func TestFindInstalledByTarget_ClawHub(t *testing.T) {
 	if result == nil {
 		t.Fatal("应找到已安装的技能")
 	}
-	if result["name"] != "test-skill" {
-		t.Errorf("name = %v, want test-skill", result["name"])
+	if result.Name != "test-skill" {
+		t.Errorf("name = %v, want test-skill", result.Name)
 	}
 }
 
@@ -834,8 +830,8 @@ func TestFindInstalledByTarget_SkillNet(t *testing.T) {
 	if result == nil {
 		t.Fatal("应找到已安装的 SkillNet 技能")
 	}
-	if result["name"] != "sn-skill" {
-		t.Errorf("name = %v, want sn-skill", result["name"])
+	if result.Name != "sn-skill" {
+		t.Errorf("name = %v, want sn-skill", result.Name)
 	}
 }
 
@@ -862,8 +858,8 @@ func TestFindInstalledByTarget_TeamSkillsHub(t *testing.T) {
 	if result == nil {
 		t.Fatal("应找到已安装的 TeamSkillsHub 技能")
 	}
-	if result["name"] != "tsh-skill" {
-		t.Errorf("name = %v, want tsh-skill", result["name"])
+	if result.Name != "tsh-skill" {
+		t.Errorf("name = %v, want tsh-skill", result.Name)
 	}
 }
 
@@ -889,8 +885,8 @@ func TestFindInstalledByTarget_PluginSource(t *testing.T) {
 	if result == nil {
 		t.Fatal("应通过 installed_plugins 找到技能")
 	}
-	if result["name"] != "plugin-skill" {
-		t.Errorf("name = %v, want plugin-skill", result["name"])
+	if result.Name != "plugin-skill" {
+		t.Errorf("name = %v, want plugin-skill", result.Name)
 	}
 }
 
@@ -914,7 +910,7 @@ func TestBuildInstalledItem_TeamSkillsHub(t *testing.T) {
 	item := tk.buildInstalledItem("tsh-skill", "teamskillshub")
 
 	// 验证 identifier 已清理前缀
-	if item["identifier"] != "tsh-asset-456" {
-		t.Errorf("identifier = %v, want tsh-asset-456", item["identifier"])
+	if item.Identifier != "tsh-asset-456" {
+		t.Errorf("identifier = %v, want tsh-asset-456", item.Identifier)
 	}
 }

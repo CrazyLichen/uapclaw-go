@@ -21,6 +21,82 @@ type SkillToolkit struct {
 	manager *skillpkg.SkillManager
 }
 
+// SkillSearchItem 搜索结果归一化项，替代 map[string]any 的动态结构。
+// 对应 Python: SkillToolkit._normalize_search_item 返回的字典
+type SkillSearchItem struct {
+	// Name 技能名称
+	Name string `json:"name"`
+	// Description 技能描述
+	Description string `json:"description"`
+	// Source 来源标识
+	Source string `json:"source"`
+	// Identifier 来源无关的统一标识符
+	Identifier string `json:"identifier"`
+	// Installed 是否已安装
+	Installed bool `json:"installed"`
+	// Version 版本号
+	Version string `json:"version"`
+	// Author 作者
+	Author string `json:"author"`
+	// Score 评分（SkillNet 的 stars，其他来源为 nil）
+	Score any `json:"score"`
+}
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (s *SkillSearchItem) ToMap() map[string]any {
+	return map[string]any{
+		"name":        s.Name,
+		"description": s.Description,
+		"source":      s.Source,
+		"identifier":  s.Identifier,
+		"installed":   s.Installed,
+		"version":     s.Version,
+		"author":      s.Author,
+		"score":       s.Score,
+	}
+}
+
+// InstalledItem 已安装技能展示信息，替代 map[string]any 的动态结构。
+// 对应 Python: SkillToolkit._build_installed_item 返回的字典
+type InstalledItem struct {
+	// Name 技能名称
+	Name string `json:"name"`
+	// Description 技能描述
+	Description string `json:"description"`
+	// Source 来源标识
+	Source string `json:"source"`
+	// Identifier 来源无关的统一标识符
+	Identifier string `json:"identifier"`
+	// Installed 是否已安装
+	Installed bool `json:"installed"`
+	// Version 版本号
+	Version string `json:"version"`
+	// Author 作者
+	Author string `json:"author"`
+	// Score 评分（已安装项通常为 nil）
+	Score any `json:"score"`
+	// SkillDir 技能目录路径
+	SkillDir string `json:"skill_dir"`
+	// SkillFile SKILL.md 文件路径
+	SkillFile string `json:"skill_file"`
+}
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (it *InstalledItem) ToMap() map[string]any {
+	return map[string]any{
+		"name":        it.Name,
+		"description": it.Description,
+		"source":      it.Source,
+		"identifier":  it.Identifier,
+		"installed":   it.Installed,
+		"version":     it.Version,
+		"author":      it.Author,
+		"score":       it.Score,
+		"skill_dir":   it.SkillDir,
+		"skill_file":  it.SkillFile,
+	}
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -108,7 +184,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 		sources = []string{normalizedSource}
 	}
 
-	var items []map[string]any
+	var searchItems []*SkillSearchItem
 	var errors []string
 	anySuccess := false
 
@@ -149,14 +225,14 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 		if skills, ok := toSliceOfAny(payload["skills"]); ok {
 			for _, rawItem := range skills {
 				if m, ok := rawItem.(map[string]any); ok {
-					items = append(items, normalizeSearchItem(m, currentSource, installedNames))
+					searchItems = append(searchItems, normalizeSearchItem(m, currentSource, installedNames))
 				}
 			}
 		}
 	}
 
 	detail := strings.Join(errors, "; ")
-	if len(items) == 0 {
+	if len(searchItems) == 0 {
 		noResultDetail := fmt.Sprintf(
 			"No skills found from %s for query %q. Underlying search returned success but an empty skills list.",
 			normalizedSource, query,
@@ -169,8 +245,14 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 	}
 
 	// 截断到 limit
-	if len(items) > limit {
-		items = items[:limit]
+	if len(searchItems) > limit {
+		searchItems = searchItems[:limit]
+	}
+
+	// 转换为 map 输出
+	items := make([]map[string]any, len(searchItems))
+	for i, si := range searchItems {
+		items[i] = si.ToMap()
 	}
 
 	return map[string]any{
@@ -226,17 +308,17 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	if existingItem != nil {
 		detail := fmt.Sprintf(
 			"Skill `%s` is already installed. Skipping duplicate installation.",
-			toString(existingItem["name"]),
+			existingItem.Name,
 		)
 		return map[string]any{
 			"success":           true,
 			"source":            normalizedSource,
 			"installed":         true,
 			"already_installed": true,
-			"name":              existingItem["name"],
-			"description":       existingItem["description"],
-			"identifier":        existingItem["identifier"],
-			"skill_file":        existingItem["skill_file"],
+			"name":              existingItem.Name,
+			"description":       existingItem.Description,
+			"identifier":        existingItem.Identifier,
+			"skill_file":        existingItem.SkillFile,
 			"detail":            detail,
 		}, nil
 	}
@@ -279,29 +361,29 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	}
 
 	installedItem := tk.buildInstalledItem(name, normalizedSource)
-	desc := strings.TrimSpace(toString(installedItem["description"]))
+	desc := strings.TrimSpace(installedItem.Description)
 	if desc == "" {
 		desc = "No description provided."
 	}
-	detail := fmt.Sprintf("Skill installed successfully. Available now: - `%s`: %s", installedItem["name"], desc)
-	if toString(installedItem["skill_file"]) != "" {
+	detail := fmt.Sprintf("Skill installed successfully. Available now: - `%s`: %s", installedItem.Name, desc)
+	if installedItem.SkillFile != "" {
 		detail = detail + " Read SKILL.md before use."
 	}
 
 	logger.Info(logComponent).
-		Str("name", toString(installedItem["name"])).
+		Str("name", installedItem.Name).
 		Str("source", normalizedSource).
-		Str("skill_dir", toString(installedItem["skill_dir"])).
+		Str("skill_dir", installedItem.SkillDir).
 		Msg("SkillToolkit: install_skill 成功")
 
 	return map[string]any{
 		"success":     true,
 		"source":      normalizedSource,
 		"installed":   true,
-		"name":        installedItem["name"],
-		"description": installedItem["description"],
-		"identifier":  installedItem["identifier"],
-		"skill_file":  installedItem["skill_file"],
+		"name":        installedItem.Name,
+		"description": installedItem.Description,
+		"identifier":  installedItem.Identifier,
+		"skill_file":  installedItem.SkillFile,
 		"detail":      detail,
 	}, nil
 }
@@ -330,25 +412,23 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	}
 
 	// 检查是否已安装
-	installedPayload := tk.listInstalledSkills(ctx)
-	if !toBool(installedPayload["success"]) {
+	installedResult := tk.listInstalledSkills(ctx)
+	if !installedResult.Success {
 		return map[string]any{
 			"success": false, "removed": false, "name": skillName,
-			"detail": strings.TrimSpace(toString(installedPayload["detail"])),
+			"detail": strings.TrimSpace(installedResult.Detail),
 		}, nil
 	}
 
-	var installedItem map[string]any
-	if items, ok := toSliceOfAny(installedPayload["items"]); ok {
-		for _, item := range items {
-			if m, ok := item.(map[string]any); ok && toString(m["name"]) == skillName {
-				installedItem = m
-				break
-			}
+	var foundSource string
+	for _, item := range installedResult.Items {
+		if item.Name == skillName {
+			foundSource = item.Source
+			break
 		}
 	}
 
-	if installedItem == nil {
+	if foundSource == "" {
 		return map[string]any{
 			"success": false, "removed": false, "name": skillName,
 			"detail": fmt.Sprintf("Skill `%s` is not installed.", skillName),
@@ -367,7 +447,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 
 	return map[string]any{
 		"success": true, "removed": true, "name": skillName,
-		"source": toString(installedItem["source"]),
+		"source": foundSource,
 		"detail": fmt.Sprintf("Skill `%s` uninstalled successfully.", skillName),
 	}, nil
 }
@@ -443,7 +523,7 @@ func (tk *SkillToolkit) getInstalledNames() map[string]bool {
 
 // findInstalledByTarget 按统一 identifier 反查是否已安装。
 // 对应 Python: SkillToolkit._find_installed_by_target(identifier, source)
-func (tk *SkillToolkit) findInstalledByTarget(identifier, source string) map[string]any {
+func (tk *SkillToolkit) findInstalledByTarget(identifier, source string) *InstalledItem {
 	target := strings.TrimSpace(identifier)
 	if target == "" {
 		return nil
@@ -496,7 +576,7 @@ func (tk *SkillToolkit) findInstalledByTarget(identifier, source string) map[str
 
 // buildInstalledItem 补齐已安装技能的展示信息。
 // 对应 Python: SkillToolkit._build_installed_item(name, source)
-func (tk *SkillToolkit) buildInstalledItem(name, source string) map[string]any {
+func (tk *SkillToolkit) buildInstalledItem(name, source string) *InstalledItem {
 	meta := tk.manager.GetSkillMeta(name)
 	if meta == nil {
 		meta = make(map[string]any)
@@ -525,23 +605,23 @@ func (tk *SkillToolkit) buildInstalledItem(name, source string) map[string]any {
 		identifier = name
 	}
 
-	return map[string]any{
-		"name":        name,
-		"description": description,
-		"source":      source,
-		"identifier":  identifier,
-		"installed":   true,
-		"version":     toString(meta["version"]),
-		"author":      toString(meta["author"]),
-		"score":       nil,
-		"skill_dir":   skillDir,
-		"skill_file":  skillFile,
+	return &InstalledItem{
+		Name:        name,
+		Description: description,
+		Source:      source,
+		Identifier:  identifier,
+		Installed:   true,
+		Version:     toString(meta["version"]),
+		Author:      toString(meta["author"]),
+		Score:       nil,
+		SkillDir:    skillDir,
+		SkillFile:   skillFile,
 	}
 }
 
 // normalizeSearchItem 将不同来源的搜索结果归一化。
 // 对应 Python: SkillToolkit._normalize_search_item(item, source, installed_names)
-func normalizeSearchItem(item map[string]any, source string, installedNames map[string]bool) map[string]any {
+func normalizeSearchItem(item map[string]any, source string, installedNames map[string]bool) *SkillSearchItem {
 	var name, description, identifier, version, author string
 	var score any
 
@@ -579,15 +659,15 @@ func normalizeSearchItem(item map[string]any, source string, installedNames map[
 		score = nil
 	}
 
-	return map[string]any{
-		"name":        name,
-		"description": description,
-		"source":      source,
-		"identifier":  identifier,
-		"installed":   installedNames[name],
-		"version":     version,
-		"author":      author,
-		"score":       score,
+	return &SkillSearchItem{
+		Name:        name,
+		Description: description,
+		Source:      source,
+		Identifier:  identifier,
+		Installed:   installedNames[name],
+		Version:     version,
+		Author:      author,
+		Score:       score,
 	}
 }
 
@@ -619,14 +699,33 @@ func summarizeSearchPayload(source, query string, payload map[string]any) map[st
 	}
 }
 
+// ListInstalledResult 列出已安装技能的结果
+type ListInstalledResult struct {
+	// Success 是否成功
+	Success bool `json:"success"`
+	// Items 已安装技能列表
+	Items []*InstalledItem `json:"items"`
+	// Detail 详细信息
+	Detail string `json:"detail"`
+}
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (r *ListInstalledResult) ToMap() map[string]any {
+	items := make([]map[string]any, len(r.Items))
+	for i, item := range r.Items {
+		items[i] = item.ToMap()
+	}
+	return map[string]any{"success": r.Success, "items": items, "detail": r.Detail}
+}
+
 // listInstalledSkills 列出已安装技能，供 toolkit 内部逻辑复用。
 // 对应 Python: SkillToolkit._list_installed_skills()
-func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) map[string]any {
+func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) *ListInstalledResult {
 	logger.Info(logComponent).Msg("SkillToolkit: list_installed_skills 调用")
 
 	payload, _ := tk.manager.HandleSkillsInstalled(ctx, map[string]any{})
 
-	var pluginItems []map[string]any
+	var pluginItems []*InstalledItem
 	if plugins, ok := toSliceOfAny(payload["plugins"]); ok {
 		for _, plugin := range plugins {
 			if p, ok := plugin.(map[string]any); ok {
@@ -642,14 +741,13 @@ func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) map[string]any 
 		}
 	}
 
-	var items []map[string]any
+	var items []*InstalledItem
 	seen := make(map[string]bool)
 	for _, item := range pluginItems {
-		name := strings.TrimSpace(toString(item["name"]))
-		if name == "" || seen[name] {
+		if item.Name == "" || seen[item.Name] {
 			continue
 		}
-		seen[name] = true
+		seen[item.Name] = true
 		items = append(items, item)
 	}
 
@@ -667,7 +765,7 @@ func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) map[string]any 
 		items = append(items, tk.buildInstalledItem(name, source))
 	}
 
-	return map[string]any{"success": true, "items": items, "detail": ""}
+	return &ListInstalledResult{Success: true, Items: items, Detail: ""}
 }
 
 // newSearchSkillTool 创建 search_skill 工具
