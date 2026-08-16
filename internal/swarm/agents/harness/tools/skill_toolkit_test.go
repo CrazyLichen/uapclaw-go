@@ -10,7 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -912,5 +914,116 @@ func TestBuildInstalledItem_TeamSkillsHub(t *testing.T) {
 	// 验证 identifier 已清理前缀
 	if item.Identifier != "tsh-asset-456" {
 		t.Errorf("identifier = %v, want tsh-asset-456", item.Identifier)
+	}
+}
+
+// TestInstallSkill_SkillNet_轮询成功 验证 SkillNet 安装轮询成功
+func TestInstallSkill_SkillNet_轮询成功(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := skillpkg.NewSkillManager(tmpDir)
+
+	// 创建本地技能目录（用于 buildInstalledItem）
+	skillDir := filepath.Join(sm.SkillsDir(), "sn-skill")
+	os.MkdirAll(skillDir, 0o755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: sn-skill\ndescription: SkillNet 技能\n---\n技能正文"), 0o644)
+
+	tk := NewSkillToolkit(sm)
+
+	// 在 goroutine 中延迟更新 install job 为 done
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// 等待 install job 被创建
+		time.Sleep(800 * time.Millisecond)
+		// 找到并更新 job
+		for _, jobID := range sm.GetInstallJobIDs() {
+			sm.SetSkillnetInstallJob(jobID, map[string]any{
+				"status": "done",
+				"skill": map[string]any{
+					"name": "sn-skill",
+				},
+			})
+		}
+		// 添加 local skill 以便 buildInstalledItem 能找到
+		sm.AddLocalSkill(map[string]any{
+			"name":   "sn-skill",
+			"source": "skillnet",
+			"origin": "https://example.com/skill",
+		})
+	}()
+
+	result, err := tk.InstallSkill(context.Background(), map[string]any{
+		"identifier":  "https://example.com/skill",
+		"source":      "skillnet",
+		"timeout_sec": 5,
+	})
+	<-done
+
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if !toBool(result["success"]) {
+		t.Errorf("应返回 success=true, got %v", result)
+	}
+	if result["installed"] != true {
+		t.Error("应返回 installed=true")
+	}
+}
+
+// TestInstallSkill_SkillNet_超时 验证 SkillNet 安装超时
+func TestInstallSkill_SkillNet_超时(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := skillpkg.NewSkillManager(tmpDir)
+	tk := NewSkillToolkit(sm)
+
+	result, err := tk.InstallSkill(context.Background(), map[string]any{
+		"identifier":  "https://example.com/skill",
+		"source":      "skillnet",
+		"timeout_sec": 1,
+	})
+
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) {
+		t.Errorf("超时应返回 success=false, got %v", result)
+	}
+	detail := toString(result["detail"])
+	if !strings.Contains(detail, "timed out") {
+		t.Errorf("detail 应包含 'timed out', got %q", detail)
+	}
+}
+
+// TestInstallSkill_SkillNet_安装失败 验证 SkillNet 安装请求失败
+func TestInstallSkill_SkillNet_安装失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := skillpkg.NewSkillManager(tmpDir)
+	tk := NewSkillToolkit(sm)
+
+	// 在 goroutine 中延迟更新 install job 为 failed
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		time.Sleep(800 * time.Millisecond)
+		for _, jobID := range sm.GetInstallJobIDs() {
+			sm.SetSkillnetInstallJob(jobID, map[string]any{
+				"status": "failed",
+				"detail": "download failed",
+			})
+		}
+	}()
+
+	result, err := tk.InstallSkill(context.Background(), map[string]any{
+		"identifier":  "https://example.com/skill",
+		"source":      "skillnet",
+		"timeout_sec": 5,
+	})
+	<-done
+
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if toBool(result["success"]) {
+		t.Errorf("安装失败应返回 success=false, got %v", result)
 	}
 }

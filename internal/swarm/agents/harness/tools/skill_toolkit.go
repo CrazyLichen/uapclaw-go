@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -327,10 +328,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	var payload map[string]any
 	switch normalizedSource {
 	case "skillnet":
-		// SkillNet 暂时 stub，直接调用安装方法
-		payload, _ = tk.manager.HandleSkillsInstall(ctx, map[string]any{
-			"url": identifier, "force": false, "source": "skillnet",
-		})
+		payload = tk.installSkillnetSyncWait(ctx, identifier, timeoutSec)
 	case "teamskillshub":
 		installParams := map[string]any{"asset_id": identifier, "force": false}
 		if marketURL := strings.TrimSpace(toString(inputs["market_url"])); marketURL != "" {
@@ -766,6 +764,52 @@ func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) *ListInstalledR
 	}
 
 	return &ListInstalledResult{Success: true, Items: items, Detail: ""}
+}
+
+// installSkillnetSyncWait 在单次 tool 调用内轮询 SkillNet 安装状态，直到完成或超时。
+// 对应 Python: SkillToolkit._install_skillnet_sync_wait(identifier, timeout_sec)
+func (tk *SkillToolkit) installSkillnetSyncWait(ctx context.Context, identifier string, timeoutSec int) map[string]any {
+	// 1. 发起安装
+	payload, _ := tk.manager.HandleSkillsSkillnetInstall(ctx, map[string]any{"url": identifier, "force": false})
+	if !toBool(payload["success"]) {
+		return payload
+	}
+	if !toBool(payload["pending"]) {
+		return payload
+	}
+
+	// 2. 提取 install_id
+	installID := strings.TrimSpace(toString(payload["install_id"]))
+	if installID == "" {
+		return map[string]any{"success": false, "detail": "missing install_id from skillnet install"}
+	}
+
+	// 3. 轮询安装状态
+	pollCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pollCtx.Done():
+			return map[string]any{
+				"success": false,
+				"detail":  fmt.Sprintf("skill installation timed out after %d seconds", timeoutSec),
+			}
+		case <-ticker.C:
+			statusPayload, _ := tk.manager.HandleSkillsSkillnetInstallStatus(
+				pollCtx, map[string]any{"install_id": installID},
+			)
+			if toString(statusPayload["status"]) != "pending" {
+				if !toBool(statusPayload["success"]) {
+					return statusPayload
+				}
+				return map[string]any{"success": true, "skill": statusPayload["skill"]}
+			}
+		}
+	}
 }
 
 // newSearchSkillTool 创建 search_skill 工具

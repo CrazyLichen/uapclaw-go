@@ -25,6 +25,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
+	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
@@ -620,8 +621,21 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			// ⤵️ 10.6.3-10: user_todos 工具尚未实现
 			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos 工具尚未实现，跳过")
 		case "skill_toolkit":
-			// ⤵️ 10.6.3-10: skill_toolkit 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("skill_toolkit 工具尚未实现，跳过")
+			// 对齐 Python: JiuwenClawCodeAdapter._build_skill_toolkit(agent_id)
+			// 构建 SkillToolkit 并注册到 ResourceMgr，与 Deep 模式步骤 9 逻辑一致
+			if c.deep.skillManager != nil {
+				skillToolkit := skilltools.NewSkillToolkit(c.deep.skillManager)
+				for _, t := range skillToolkit.GetTools() {
+					existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})
+					if len(existing) == 0 {
+						if err := runner.GetResourceMgr().AddTool(t); err != nil {
+							logger.Warn(logComponent).Err(err).Str("tool", "skill_toolkit").Msg("注册工具到 ResourceMgr 失败")
+						}
+					}
+					toolCards = append(toolCards, t.Card())
+				}
+				logger.Info(logComponent).Msg("CodeAdapter: SkillToolkit 已注册")
+			}
 		default:
 			logger.Warn(logComponent).Str("tool", toolName).Msg("未知的 code 模式工具名，跳过")
 		}

@@ -939,6 +939,24 @@ func (sm *SkillManager) HandleSkillsSkillnetInstallStatus(ctx context.Context, p
 	}
 }
 
+// SetSkillnetInstallJob 设置 SkillNet 安装任务（测试辅助方法）
+func (sm *SkillManager) SetSkillnetInstallJob(installID string, job map[string]any) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.skillnetInstallJobs[installID] = job
+}
+
+// GetInstallJobIDs 获取所有安装任务 ID（测试辅助方法）
+func (sm *SkillManager) GetInstallJobIDs() []string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	ids := make([]string, 0, len(sm.skillnetInstallJobs))
+	for id := range sm.skillnetInstallJobs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // HandleSkillsSkillnetEvaluate 使用 SkillNet 评估
 // 对应 Python: SkillManager.handle_skills_skillnet_evaluate(params)
 func (sm *SkillManager) HandleSkillsSkillnetEvaluate(ctx context.Context, params map[string]any) (map[string]any, error) {
