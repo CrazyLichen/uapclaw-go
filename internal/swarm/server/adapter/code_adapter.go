@@ -28,6 +28,7 @@ import (
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
+	serverrails "github.com/uapclaw/uapclaw-go/internal/swarm/server/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -794,8 +795,8 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 11: StructuredAskUserRail
-	// ⤵️ 10.6.3-10: StructuredAskUserRail 尚未实现
-	if sau := c.buildStructuredAskUserRail(c.resolveRuntimeLanguage()); sau != nil {
+	// ✅ 10.6.3: StructuredAskUserRail 已实现
+	if sau := c.buildStructuredAskUserRail(); sau != nil {
 		railsList = append(railsList, sau)
 	}
 
@@ -956,11 +957,18 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildStructuredAskUserRail 构建结构化询问护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail(language=self._resolve_runtime_language()) (interface_code.py)
-// ⤵️ 10.6.3-10: StructuredAskUserRail 尚未实现
-func (c *CodeAdapter) buildStructuredAskUserRail(language string) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 StructuredAskUserRail，使用 language 参数
-	return nil
+// 对齐 Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail() (interface_code.py)
+// ✅ 10.6.3: StructuredAskUserRail 已实现
+func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).
+				Msg("StructuredAskUserRail 创建失败")
+		}
+	}()
+	rail := serverrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
+	logger.Info(logComponent).Msg("StructuredAskUserRail 创建成功")
+	return rail
 }
 
 // buildConfirmInterruptRail 构建确认中断护栏。

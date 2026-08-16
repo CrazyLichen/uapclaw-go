@@ -1,4 +1,4 @@
-package model
+package mem_model
 
 import (
 	"context"
