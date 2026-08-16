@@ -136,9 +136,9 @@ func TestBaseInterruptRail_BeforeToolCall_允许(t *testing.T) {
 
 // TestBaseInterruptRail_BeforeToolCall_拒绝 验证拒绝决策设置 _skip_tool
 func TestBaseInterruptRail_BeforeToolCall_拒绝(t *testing.T) {
-	// 使用自定义 resolveInterruptFn 测试拒绝
+	// 使用自定义 ResolveInterruptFn 测试拒绝
 	r := NewBaseInterruptRail("dangerous_tool")
-	r.resolveInterruptFn = func(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ *llmschema.ToolCall, _ any, _ map[string]any) InterruptDecision {
+	r.ResolveInterruptFn = func(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ *llmschema.ToolCall, _ any, _ map[string]any) InterruptDecision {
 		return r.Reject("已拒绝")
 	}
 	cbc := newTestCBC(nil)

@@ -63,8 +63,8 @@ func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 			PayloadSchema: confirmPayloadSchema(),
 		},
 	}
-	// 覆盖 resolveInterruptFn
-	r.resolveInterruptFn = r.resolveConfirmInterrupt
+	// 覆盖 ResolveInterruptFn
+	r.ResolveInterruptFn = r.resolveConfirmInterrupt
 	return r
 }
 

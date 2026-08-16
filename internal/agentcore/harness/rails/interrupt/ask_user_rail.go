@@ -69,8 +69,8 @@ func NewAskUserRail(toolNames ...string) *AskUserRail {
 	r := &AskUserRail{
 		BaseInterruptRail: *NewBaseInterruptRail(toolNames...),
 	}
-	// 覆盖 resolveInterruptFn
-	r.resolveInterruptFn = r.resolveAskUserInterrupt
+	// 覆盖 ResolveInterruptFn
+	r.ResolveInterruptFn = r.resolveAskUserInterrupt
 	return r
 }
 
@@ -178,19 +178,19 @@ func (r *AskUserRail) resolveAskUserInterrupt(
 			logger.Warn(askUserRailLogComponent).
 				Str("event_type", "ask_user_rail_resolve_interrupt").
 				Msgf("解析用户输入异常，回退到 interrupt: %v", rec)
-			decision = r.Interrupt(r.buildAskRequest(toolCall))
+			decision = r.Interrupt(r.BuildAskRequest(toolCall))
 		}
 	}()
 
 	// 无用户输入 → 中断
 	if userInput == nil {
-		return r.Interrupt(r.buildAskRequest(toolCall))
+		return r.Interrupt(r.BuildAskRequest(toolCall))
 	}
 
 	// 解析用户输入为 AskUserPayload
 	payload, ok := r.parseUserInput(userInput, toolCall)
 	if !ok || len(payload.Answers) == 0 {
-		return r.Interrupt(r.buildAskRequest(toolCall))
+		return r.Interrupt(r.BuildAskRequest(toolCall))
 	}
 
 	// 有有效输入 → Reject（跳过工具执行，返回格式化结果）
@@ -285,12 +285,12 @@ func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *As
 	return fmt.Sprintf("User has answered your questions: %s. You can now continue with the user's answers in mind.", joinStrings(parts, ", "))
 }
 
-// buildAskRequest 构建 AskUserRequest。
+// BuildAskRequest 构建 AskUserRequest。
 // 返回 *AskUserRequest（InterruptRequester 接口实现），携带 questions 字段。
 // JSON 序列化时，questions 自然出现在输出中（对齐 Python model_dump + extra="allow"）。
 //
 // 对齐 Python: AskUserRail._build_ask_request(tool_call)
-func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
+func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
 	args := parseToolArgs(toolCall)
 	questions, _ := args["questions"].([]any)
 	// 转换 []any → []map[string]any

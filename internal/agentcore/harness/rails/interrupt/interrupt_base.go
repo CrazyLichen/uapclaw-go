@@ -51,12 +51,12 @@ type BaseInterruptRail struct {
 	agentinterfaces.BaseRail
 	// toolNames 需拦截的工具名集合
 	toolNames map[string]struct{}
-	// resolveInterruptFn 中断解析函数，子类设置。默认：无输入→中断，有输入→允许。
-	resolveInterruptFn resolveInterruptFn
+	// ResolveInterruptFn 中断解析函数，子类设置。默认：无输入→中断，有输入→允许。
+	ResolveInterruptFn ResolveInterruptFn
 }
 
-// resolveInterruptFn 中断解析函数类型，子类设置。默认：无输入→中断，有输入→允许。
-type resolveInterruptFn func(
+// ResolveInterruptFn 中断解析函数类型，子类设置。默认：无输入→中断，有输入→允许。
+type ResolveInterruptFn func(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
@@ -95,7 +95,7 @@ func NewBaseInterruptRail(toolNames ...string) *BaseInterruptRail {
 	}
 	r.WithPriority(baseInterruptRailPriority)
 	// 设置默认 resolveInterruptFn：无输入→中断，有输入→允许
-	r.resolveInterruptFn = r.defaultResolveInterrupt
+	r.ResolveInterruptFn = r.defaultResolveInterrupt
 	return r
 }
 
@@ -167,7 +167,7 @@ func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterf
 	}
 
 	// 调用 resolveInterruptFn 获取决策
-	decision := r.resolveInterruptFn(ctx, cbc, toolInputs.ToolCall, userInput, autoConfirmConfig)
+	decision := r.ResolveInterruptFn(ctx, cbc, toolInputs.ToolCall, userInput, autoConfirmConfig)
 
 	// 执行决策
 	r.applyDecision(cbc, toolInputs, decision)

@@ -247,7 +247,7 @@ func TestAskUserRail_parseUserInputDict_单问题answer字段(t *testing.T) {
 // ──────────────────────────── buildAskRequest ────────────────────────────
 
 // TestAskUserRail_buildAskRequest 验证请求构建
-func TestAskUserRail_buildAskRequest(t *testing.T) {
+func TestAskUserRail_BuildAskRequest(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{
 		ID:        "tc1",
@@ -255,7 +255,7 @@ func TestAskUserRail_buildAskRequest(t *testing.T) {
 		Arguments: `{"questions":[{"question":"你喜欢什么？"}]}`,
 	}
 
-	request := r.buildAskRequest(toolCall)
+	request := r.BuildAskRequest(toolCall)
 	assert.Equal(t, "", request.Message)
 	assert.NotNil(t, request.PayloadSchema)
 }
