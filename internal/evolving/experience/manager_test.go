@@ -18,8 +18,8 @@ func TestNewExperienceManager(t *testing.T) {
 		if err == nil {
 			t.Errorf("期望返回错误")
 		}
-		if !strings.Contains(err.Error(), "unsupported") {
-			t.Errorf("错误消息 = %s, 应包含 'unsupported'", err.Error())
+		if !strings.Contains(err.Error(), "不支持的体验管理器类型") {
+			t.Errorf("错误消息 = %s, 应包含 '不支持的体验管理器类型'", err.Error())
 		}
 	})
 	t.Run("skill kind", func(t *testing.T) {

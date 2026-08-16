@@ -744,7 +744,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		return map[string]any{"success": false, "detail": fmt.Sprintf("导入失败: %s", err)}, nil
 	}
 
-	sm.AddLocalSkill(map[string]any{
+	sm.addLocalSkill(map[string]any{
 		"name":         safeSkillName,
 		"origin":       absPath,
 		"source":       "local",
@@ -1168,7 +1168,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 
 	// 记录安装信息
 	sm.mu.Lock()
-	sm.AddLocalSkill(map[string]any{
+	sm.addLocalSkill(map[string]any{
 		"name":         skillName,
 		"origin":       "clawhub:" + slug,
 		"source":       "clawhub",
@@ -1541,7 +1541,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	// 记录安装信息（非自定义 output 时）
 	if output == "" {
 		sm.mu.Lock()
-		sm.AddLocalSkill(map[string]any{
+		sm.addLocalSkill(map[string]any{
 			"name":         skillName,
 			"origin":       "teamskillshub:" + assetID,
 			"source":       "teamskillshub",
@@ -1808,11 +1808,9 @@ func (sm *SkillManager) removeInstalledPlugin(name string) {
 	sm.state["installed_plugins"] = mapSliceToAny(filtered)
 }
 
-// addLocalSkill 添加本地技能记录
+// addLocalSkill 添加本地技能记录（内部方法，调用者需持有锁）
 // 对应 Python: SkillManager._add_local_skill(skill)
-func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 	raw, ok := sm.state["local_skills"]
 	if !ok {
 		raw = []any{}
@@ -1823,6 +1821,13 @@ func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
 	}
 	list = append(list, skill)
 	sm.state["local_skills"] = list
+}
+
+// AddLocalSkill 添加本地技能记录（外部接口，自带锁保护）
+func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.addLocalSkill(skill)
 }
 
 // getLocalSkills 返回本地技能列表

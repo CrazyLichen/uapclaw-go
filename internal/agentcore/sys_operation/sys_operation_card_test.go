@@ -177,7 +177,7 @@ func TestGenerateIsolationKeyTemplate_CUSTOM(t *testing.T) {
 func TestGenerateIsolationKeyTemplate_CUSTOM空customID(t *testing.T) {
 	_, err := generateIsolationKeyTemplate("prefix3", ContainerScopeCustom, "", "docker", "go")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "container_scope is CUSTOM but custom_id is empty")
+	assert.Contains(t, err.Error(), "container_scope 为 CUSTOM 但 custom_id 为空")
 }
 
 // TestGenerateIsolationKeyTemplate_空前缀 测试空前缀生成隔离键模板

@@ -269,8 +269,8 @@ func TestDispatchCronAction_不支持的action(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for unsupported action")
 	}
-	if !strings.Contains(err.Error(), "unsupported cron action") {
-		t.Errorf("error = %q, should contain 'unsupported cron action'", err.Error())
+	if !strings.Contains(err.Error(), "不支持的 cron action") {
+		t.Errorf("error = %q, should contain '不支持的 cron action'", err.Error())
 	}
 }
 
