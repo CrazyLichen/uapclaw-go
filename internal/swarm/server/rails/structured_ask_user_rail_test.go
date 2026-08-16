@@ -10,7 +10,59 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
+
+// ──────────────────────────── 测试辅助 ────────────────────────────
+
+// fakeBaseAgent 用于测试的 mock BaseAgent
+type fakeBaseAgent struct {
+	card *agentschema.AgentCard
+	am   agentinterfaces.AbilityManagerInterface
+	sb   saprompt.SystemPromptBuilderInterface
+}
+
+func (f *fakeBaseAgent) Configure(ctx context.Context, config agentinterfaces.AgentConfig) error {
+	return nil
+}
+
+func (f *fakeBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+
+func (f *fakeBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
+	return nil, nil
+}
+
+func (f *fakeBaseAgent) Card() *agentschema.AgentCard                                          { return f.card }
+func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                                   { return nil }
+func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface              { return f.am }
+func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager               { return nil }
+func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface            { return f.sb }
+func (f *fakeBaseAgent) RegisterCallback(ctx context.Context, event agentinterfaces.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
+	return nil
+}
+func (f *fakeBaseAgent) RegisterRail(ctx context.Context, rail agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
+	return nil
+}
+func (f *fakeBaseAgent) UnregisterRail(ctx context.Context, rail agentinterfaces.AgentRail) error {
+	return nil
+}
+
+// fakeSystemPromptBuilder 用于测试的 mock SystemPromptBuilder
+type fakeSystemPromptBuilder struct {
+	language string
+}
+
+func (f *fakeSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder { return nil }
+func (f *fakeSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPromptBuilder                  { return nil }
+func (f *fakeSystemPromptBuilder) Language() string                                                          { return f.language }
+func (f *fakeSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection                           { return nil }
+func (f *fakeSystemPromptBuilder) HasSection(name string) bool                                               { return false }
 
 // ──────────────────────────── NewStructuredAskUserRail ────────────────────────────
 
@@ -327,4 +379,280 @@ func TestStructuredAskUserPayload_JSON序列化(t *testing.T) {
 	}
 	// 验证字段存在
 	assert.Equal(t, "选项A", payload.Answers["问题1"])
+}
+
+// ──────────────────────────── Init ────────────────────────────
+
+// TestInit_正常注册 验证 Init 注册工具到 AbilityManager
+func TestInit_正常注册(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	agent := &fakeBaseAgent{
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
+	}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+	assert.Len(t, r.structuredTools, 1)
+	assert.Equal(t, "ask_user", r.structuredTools[0].Card().Name)
+}
+
+// TestInit_空语言从Agent获取 验证空语言时从 SystemPromptBuilder 获取
+func TestInit_空语言从Agent获取(t *testing.T) {
+	r := NewStructuredAskUserRail("")
+	agent := &fakeBaseAgent{
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
+		sb:   &fakeSystemPromptBuilder{language: "en"},
+	}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+	assert.Len(t, r.structuredTools, 1)
+	// 工具描述应为英文
+	assert.Contains(t, r.structuredTools[0].Card().Description, "Structured questions")
+}
+
+// TestInit_空语言无Builder默认中文 验证空语言且无 SystemPromptBuilder 时默认中文
+func TestInit_空语言无Builder默认中文(t *testing.T) {
+	r := NewStructuredAskUserRail("")
+	agent := &fakeBaseAgent{
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
+	}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+	assert.Contains(t, r.structuredTools[0].Card().Description, "结构化选项")
+}
+
+// TestInit_无AgentID 验证无 Card 时 agentID 为空
+func TestInit_无AgentID(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	agent := &fakeBaseAgent{}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+	// 工具 ID 应包含 "ask_user_"（使用 UUID 代替 agentID）
+	assert.Contains(t, r.structuredTools[0].Card().ID, "ask_user_")
+}
+
+// ──────────────────────────── Uninit ────────────────────────────
+
+// TestUninit_正常注销 验证 Uninit 注销工具
+func TestUninit_正常注销(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	agent := &fakeBaseAgent{
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
+	}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+	assert.Len(t, r.structuredTools, 1)
+
+	err = r.Uninit(agent)
+	require.NoError(t, err)
+	assert.Nil(t, r.structuredTools)
+}
+
+// TestUninit_无工具 验证无工具时 Uninit 不报错
+func TestUninit_无工具(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	agent := &fakeBaseAgent{}
+
+	err := r.Uninit(agent)
+	require.NoError(t, err)
+}
+
+// ──────────────────────────── GetStructuredTools ────────────────────────────
+
+// TestGetStructuredTools_初始化前 验证 Init 前返回 nil
+func TestGetStructuredTools_初始化前(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	assert.Nil(t, r.GetStructuredTools())
+}
+
+// TestGetStructuredTools_初始化后 验证 Init 后返回工具列表
+func TestGetStructuredTools_初始化后(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	agent := &fakeBaseAgent{
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
+	}
+
+	err := r.Init(agent)
+	require.NoError(t, err)
+
+	tools := r.GetStructuredTools()
+	assert.Len(t, tools, 1)
+	assert.Equal(t, "ask_user", tools[0].Card().Name)
+}
+
+// ──────────────────────────── resolveStructuredInterrupt 补充 ────────────────────────────
+
+// TestResolveStructuredInterrupt_结构化路径Answers为空 验证结构化路径 answers 为空返回中断
+func TestResolveStructuredInterrupt_结构化路径Answers为空(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}]}`,
+	}
+
+	// 空字符串输入 → parseStructuredInput 返回空 Answers → Interrupt
+	decision := r.resolveStructuredInterrupt(
+		context.Background(), nil, toolCall, "", nil,
+	)
+
+	_, ok := decision.(*interrupt.InterruptResult)
+	assert.True(t, ok, "结构化路径空 Answers 应返回 InterruptResult")
+}
+
+// TestResolveStructuredInterrupt_结构化路径多问题 验证结构化路径多问题格式化
+func TestResolveStructuredInterrupt_结构化路径多问题(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}, {"question": "Q2", "header": "H2"}]}`,
+	}
+
+	userInput := map[string]any{
+		"answers": map[string]any{
+			"Q1": "A1",
+			"Q2": "A2",
+		},
+	}
+
+	decision := r.resolveStructuredInterrupt(
+		context.Background(), nil, toolCall, userInput, nil,
+	)
+
+	rejectResult, ok := decision.(*interrupt.RejectResult)
+	require.True(t, ok)
+	assert.Contains(t, rejectResult.ToolResult, "Q1: A1")
+	assert.Contains(t, rejectResult.ToolResult, "Q2: A2")
+}
+
+// TestResolveStructuredInterrupt_结构化路径自由文本键 验证 __free_text__ 键不添加前缀
+func TestResolveStructuredInterrupt_结构化路径自由文本键(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}]}`,
+	}
+
+	userInput := &StructuredAskUserPayload{
+		Answers: map[string]string{
+			"__free_text__": "自由文本内容",
+		},
+	}
+
+	decision := r.resolveStructuredInterrupt(
+		context.Background(), nil, toolCall, userInput, nil,
+	)
+
+	rejectResult, ok := decision.(*interrupt.RejectResult)
+	require.True(t, ok)
+	assert.Equal(t, "自由文本内容", rejectResult.ToolResult)
+}
+
+// TestResolveStructuredInterrupt_无效类型输入有Questions 验证有 questions 但无效输入类型返回中断
+func TestResolveStructuredInterrupt_无效类型输入有Questions(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}]}`,
+	}
+
+	// int 输入 → parseStructuredInput 返回 false → Interrupt
+	decision := r.resolveStructuredInterrupt(
+		context.Background(), nil, toolCall, 42, nil,
+	)
+
+	_, ok := decision.(*interrupt.InterruptResult)
+	assert.True(t, ok, "无效类型输入应返回 InterruptResult")
+}
+
+// TestResolveStructuredInterrupt_非结构化路径ParentResolve 验证非结构化路径回退到 parentResolve
+func TestResolveStructuredInterrupt_非结构化路径ParentResolve(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"query": "你好"}`,
+	}
+
+	// AskUserPayload 输入 → 回退到 parentResolve（对齐 Python: isinstance(user_input, AskUserPayload) → super().resolve_interrupt()）
+	userInput := &interrupt.AskUserPayload{
+		Answers: map[string]string{"q1": "回答1"},
+	}
+
+	decision := r.resolveStructuredInterrupt(
+		context.Background(), nil, toolCall, userInput, nil,
+	)
+
+	// parentResolve 是原始 AskUserRail 的 resolveAskUserInterrupt
+	// AskUserPayload 有 Answers → RejectResult
+	rejectResult, ok := decision.(*interrupt.RejectResult)
+	require.True(t, ok)
+	assert.Contains(t, rejectResult.ToolResult, "回答1")
+}
+
+// ──────────────────────────── parseStructuredInput 补充 ────────────────────────────
+
+// TestParseStructuredInput_DictWithAnswersNonStringValues 验证 dict 中 answers 值非字符串被过滤
+func TestParseStructuredInput_DictWithAnswersNonStringValues(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	input := map[string]any{
+		"answers": map[string]any{
+			"Q1": "A1",
+			"Q2": 42, // 非字符串应被过滤
+		},
+	}
+	result, ok := r.parseStructuredInput(input)
+	assert.True(t, ok)
+	assert.Equal(t, "A1", result.Answers["Q1"])
+	_, exists := result.Answers["Q2"]
+	assert.False(t, exists, "非字符串值应被过滤")
+}
+
+// TestParseStructuredInput_DictWithoutAnswersNonStringValues 验证 dict 无 answers 键时非字符串值被过滤
+func TestParseStructuredInput_DictWithoutAnswersNonStringValues(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	input := map[string]any{
+		"Q1": "A1",
+		"Q2": 42, // 非字符串应被过滤
+	}
+	result, ok := r.parseStructuredInput(input)
+	assert.True(t, ok)
+	assert.Equal(t, "A1", result.Answers["Q1"])
+	_, exists := result.Answers["Q2"]
+	assert.False(t, exists, "非字符串值应被过滤")
+}
+
+// ──────────────────────────── ExtractQuestions 补充 ────────────────────────────
+
+// TestExtractQuestions_questions非列表 验证 questions 非列表类型返回 nil
+func TestExtractQuestions_questions非列表(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": "not a list"}`,
+	}
+
+	questions := r.ExtractQuestions(toolCall)
+	assert.Nil(t, questions)
+}
+
+// TestExtractQuestions_questions元素非Dict 验证 questions 元素非 dict 被过滤
+func TestExtractQuestions_questions元素非Dict(t *testing.T) {
+	r := NewStructuredAskUserRail("cn")
+	toolCall := &llmschema.ToolCall{
+		ID:        "tc1",
+		Name:      "ask_user",
+		Arguments: `{"questions": ["not a dict", 42]}`,
+	}
+
+	questions := r.ExtractQuestions(toolCall)
+	assert.Nil(t, questions)
 }
