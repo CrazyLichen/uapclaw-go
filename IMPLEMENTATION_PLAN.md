@@ -448,10 +448,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.3 | ✅ | CodingMemoryToolContext | 编程记忆工具上下文 | `openjiuwen/core/memory/lite/coding_memory_tool_context.py` |
 | 7.4 | ✅ | MemoryConfig | 记忆配置 | `openjiuwen/core/memory/lite/config.py` |
 | 7.5 | ✅ | Frontmatter 解析 | YAML frontmatter 读写 | `openjiuwen/core/memory/lite/frontmatter.py` |
-| 7.6 | ☐ | FragmentMemoryManager | 片段记忆管理 | `openjiuwen/core/memory/manage/` |
+| 7.6 | ✅ | FragmentMemoryManager | 片段记忆管理（含冲突检查 stub，⤵️ 回填: 7.8） | `openjiuwen/core/memory/manage/` |
 | 7.7 | ☐ | SummaryManager / VariableManager | 摘要与变量管理 | `openjiuwen/core/memory/manage/` |
-| 7.8 | ☐ | WriteManager / SearchManager | 写入与搜索管理 | `openjiuwen/core/memory/manage/update/` · `search/` |
-| 7.9 | ☐ | Memory DB Models | MemoryUnit/DataIdManager/SemanticStore 等 | `openjiuwen/core/memory/manage/mem_model/` |
+| 7.8 | ☐ | WriteManager / SearchManager / MemUpdateChecker | 写入与搜索管理（含冲突检查回填） | `openjiuwen/core/memory/manage/update/` · `search/` |
+| 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit | `openjiuwen/core/memory/manage/mem_model/` |
 | 7.10 | ☐ | Memory Index | 记忆索引 | `openjiuwen/core/memory/manage/index/` |
 | 7.11 | ☐ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
 | 7.12 | ☐ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
