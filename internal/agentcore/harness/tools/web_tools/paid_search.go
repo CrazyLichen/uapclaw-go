@@ -388,7 +388,7 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 	var data map[string]any
 	if err := json.Unmarshal(resp.body, &data); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").Str("method", "perplexitySearch").Str("model_provider", "perplexity").Err(err).Msg("perplexity 搜索解析响应失败")
-		return nil, fmt.Errorf("Perplexity 搜索解析响应失败: %w", err)
+		return nil, fmt.Errorf("perplexity 搜索解析响应失败: %w", err)
 	}
 
 	// 对齐 Python: L1288-1290

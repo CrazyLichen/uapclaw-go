@@ -138,11 +138,12 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	// Step 4: 执行添加/删除操作
 	var addUnitList []*mem_model.FragmentMemoryUnit
 	for _, item := range actionItems {
-		if item.Status == update.MemoryStatusAdd {
+		switch item.Status {
+		case update.MemoryStatusAdd:
 			if unit, ok := newMemUnits[item.ID]; ok {
 				addUnitList = append(addUnitList, unit)
 			}
-		} else if item.Status == update.MemoryStatusDelete {
+		case update.MemoryStatusDelete:
 			deleteSet[item.ID] = true
 		}
 	}
