@@ -3,6 +3,12 @@
 // SkillToolkit 是将 SkillManager 暴露为模型友好工具的聚合器，提供 3 个工具：
 // search_skill、install_skill、uninstall_skill。
 //
+// 核心类型：
+//   - SkillToolkit: 工具聚合器，持有 SkillManager 实例
+//   - SkillSearchItem: 搜索结果归一化项（内部方法返回具体类型，ToMap 输出给 MapFunction）
+//   - InstalledItem: 已安装技能展示信息（内部方法返回具体类型，ToMap 输出给 MapFunction）
+//   - ListInstalledResult: 列出已安装技能的结果
+//
 // 文件目录：
 //
 //	tools/
