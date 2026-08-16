@@ -64,6 +64,10 @@ type DeepAdapter struct {
 	projectDir string
 	// workspaceDir 工作区目录
 	workspaceDir string
+	// agentWorkspaceDir Agent 数据存储路径，始终指向系统 workspace。
+	// 对齐 Python: _agent_workspace_dir（用于 coding_memory、todo 文件等不应写入用户项目目录的数据）。
+	// 默认空，使用时回退到 workspaceDir（对齐 Python: getattr(self, "_agent_workspace_dir", None) or self._workspace_dir）。
+	agentWorkspaceDir string
 	// isCodeAgent 是否编码 Agent 形态（Deep=false, Code=true）
 	// 单点 source-of-truth，决定沙箱"主写入根"：
 	//   - code-agent → project_dir（工程目录）

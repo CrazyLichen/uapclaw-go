@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
@@ -404,18 +405,20 @@ func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string,
 
 // CancelAllTasks 批量取消。对齐 Python: TeamTaskManager.cancel_all_tasks()
 func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []string) ([]*database.TeamTaskBase, error) {
-	cancelled, err := tm.db.Task().CancelAllTasks(ctx, tm.teamName, skipAssignees)
+	result, err := tm.db.Task().CancelAllTasks(ctx, tm.teamName, skipAssignees)
 	if err != nil {
 		return nil, err
 	}
-	for _, task := range cancelled {
+	for _, task := range result.Cancelled {
 		tm.publishTaskEvent(ctx, schema.TaskCancelledEvent{
 			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
 			TaskID:           task.TaskID,
 		})
 	}
+	// 对齐 Python: await self._publish_unblocked_events(unblocked_tasks)
+	tm.publishUnblockedEvents(ctx, result.Unblocked)
 	tm.maybePublishTaskListDrained(ctx)
-	return cancelled, nil
+	return result.Cancelled, nil
 }
 
 // Reset 重置任务（CLAIMED→PENDING）。对齐 Python: TeamTaskManager.reset()
@@ -650,6 +653,9 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		ToolCallID:       toolCallID,
 	})
 
+	// 8. 对齐 Python: _notify_leader_of_plan — 通过 P2P 消息直接通知 leader
+	tm.notifyLeaderOfPlan(ctx, record, destPath, toolCallID)
+
 	return record, nil
 }
 
@@ -728,6 +734,83 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// notifyLeaderOfPlan 通过 P2P 消息直接通知 leader 审批计划。
+// 对齐 Python: TeamTaskManager._notify_leader_of_plan()
+func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) {
+	if tm.messager == nil {
+		return
+	}
+	leaderName := tm.resolveLeaderMemberName()
+	if leaderName == "" {
+		logger.Warn(logger.ComponentChannel).
+			Str("team", tm.teamName).
+			Str("task_id", record.TaskID).
+			Str("plan_id", record.PlanID).
+			Msg("notifyLeaderOfPlan: 无法通知 leader，leader_member_name 为空")
+		return
+	}
+	// 对齐 Python: leader_member_name == self.member_name → 跳过
+	if leaderName == tm.memberName {
+		return
+	}
+
+	content := renderPlanReviewMessage(record.MemberName, record.TaskID, record.PlanID, planFilePath, toolCallID)
+	msg := schema.EventMessageFromEvent(schema.MessageEvent{
+		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+		MessageID:        fmt.Sprintf("plan_notify_%s_%d", record.PlanID, time.Now().UnixMilli()),
+		FromMemberName:   tm.memberName,
+		ToMemberName:     leaderName,
+	})
+	// 在 payload 中附加内容信息，供 leader 处理
+	if msg.Payload == nil {
+		msg.Payload = make(map[string]any)
+	}
+	msg.Payload["content"] = content
+	if err := tm.messager.Send(ctx, leaderName, msg); err != nil {
+		logger.Warn(logger.ComponentChannel).
+			Str("leader", leaderName).
+			Str("task_id", record.TaskID).
+			Str("plan_id", record.PlanID).
+			Err(err).
+			Msg("notifyLeaderOfPlan: 发送 P2P 消息失败")
+	}
+}
+
+// resolveLeaderMemberName 解析 leader 成员名。
+// 对齐 Python: TeamTaskManager._resolve_leader_member_name()
+func (tm *TeamTaskManager) resolveLeaderMemberName() string {
+	if tm.leaderMemberName != "" {
+		return tm.leaderMemberName
+	}
+	// 对齐 Python: 从 db.team.get_team 获取 leader_member_name
+	team, err := tm.db.Team().GetTeam(context.Background(), tm.teamName)
+	if err != nil || team == nil {
+		return ""
+	}
+	name := team.LeaderMemberName
+	if name != "" {
+		tm.leaderMemberName = name
+	}
+	return name
+}
+
+// renderPlanReviewMessage 渲染计划审批消息。
+// 对齐 Python: TeamTaskManager._render_plan_review_message()
+func renderPlanReviewMessage(memberName, taskID, planID, planFilePath, toolCallID string) string {
+	lines := []string{
+		"Member task plan approval request.",
+		fmt.Sprintf("Member: %s", memberName),
+		fmt.Sprintf("Task ID: %s", taskID),
+		fmt.Sprintf("Plan ID: %s", planID),
+		fmt.Sprintf("Plan file: %s", planFilePath),
+	}
+	if toolCallID != "" {
+		lines = append(lines, fmt.Sprintf("Tool Call ID: %s", toolCallID))
+	}
+	lines = append(lines, "", "Please review the plan file and call approve_plan with this plan_id.")
+	return strings.Join(lines, "\n")
+}
 
 // publishTaskEvent 发布任务事件到 TeamTopic。
 // 对齐 Python: TeamTaskManager._publish_task_event()

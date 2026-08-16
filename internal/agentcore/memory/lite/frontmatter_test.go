@@ -77,6 +77,17 @@ func TestValidateFrontmatter_非法类型(t *testing.T) {
 	}
 }
 
+// TestValidateFrontmatter_nilMap 测试 nil frontmatter
+func TestValidateFrontmatter_nilMap(t *testing.T) {
+	ok, err := ValidateFrontmatter(nil)
+	if ok {
+		t.Error("Expected invalid for nil frontmatter")
+	}
+	if err == "" {
+		t.Error("Expected error message for nil frontmatter")
+	}
+}
+
 // TestEnrichFrontmatter_创建 测试创建时填充时间戳
 func TestEnrichFrontmatter_创建(t *testing.T) {
 	fm := map[string]string{"name": "n"}

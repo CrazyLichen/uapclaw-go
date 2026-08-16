@@ -96,7 +96,6 @@ var codeFixedRailNames = map[string]bool{
 	"StructuredAskUserRail":   true,
 	"ConfirmInterruptRail":    true,
 	"FileSystemRail":          true, // 别名
-	"CodeAgentRail":           true,
 }
 
 // codeRailBuildNames 动态 Rail 名字 → builder 方法名映射。
@@ -239,7 +238,8 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 
 	// 步骤 10: agentWorkspaceDir 始终指向系统 workspace
-	// （Go 中 workspace.AgentRootDir() 即为系统 workspace）
+	// 对齐 Python: self._agent_workspace_dir = str(get_agent_workspace_dir())
+	c.deep.agentWorkspaceDir = workspace.AgentRootDir()
 
 	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
 	c.deep.model = c.deep.createModel(configBase)
@@ -479,6 +479,13 @@ func (c *CodeAdapter) resolveRuntimeLanguage() string {
 		return c.runtimeLanguageOverride
 	}
 	return "en"
+}
+
+// resolveOutputLanguage 解析用户偏好输出语言，用于 RuntimeState 显示。
+// 与 resolveRuntimeLanguage 不同：code 模式运行时语言固定 "en"，但输出语言遵循用户偏好。
+// 对齐 Python: JiuwenClawCodeAdapter._resolve_output_language() → ResolveLanguage(preferred_language)
+func (c *CodeAdapter) resolveOutputLanguage() string {
+	return c.deep.resolveRuntimeLanguage()
 }
 
 // buildConfiguredSubagents 覆写 DeepAdapter，code 模式固定挂载 explore/plan/code 子代理。
@@ -762,7 +769,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 
 	// 7: PermissionInterruptRail
 	// ⤵️ 10.6.3-10: PermissionInterruptRail 尚未实现
-	if perm := c.buildPermissionRail(configBase); perm != nil {
+	if perm := c.buildPermissionRail(configBase, nil, ""); perm != nil {
 		c.deep.permissionRail = perm
 		railsList = append(railsList, perm)
 	}
@@ -788,7 +795,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 
 	// 11: StructuredAskUserRail
 	// ⤵️ 10.6.3-10: StructuredAskUserRail 尚未实现
-	if sau := c.buildStructuredAskUserRail(); sau != nil {
+	if sau := c.buildStructuredAskUserRail(c.resolveRuntimeLanguage()); sau != nil {
 		railsList = append(railsList, sau)
 	}
 
@@ -925,7 +932,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 	embCfg := c.resolveEmbeddingConfig()
 
 	// 对齐 Python: coding_memory_dir = agent_workspace_dir/coding_memory/project_name
-	agentWorkspaceDir := workspace.AgentRootDir()
+	agentWorkspaceDir := c.deep.agentWorkspaceDir
 	projectName := "default"
 	if c.deep.projectDir != "" {
 		projectName = filepath.Base(c.deep.projectDir)
@@ -949,10 +956,10 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildStructuredAskUserRail 构建结构化询问护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail() (interface_code.py)
+// 对齐 Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail(language=self._resolve_runtime_language()) (interface_code.py)
 // ⤵️ 10.6.3-10: StructuredAskUserRail 尚未实现
-func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 StructuredAskUserRail
+func (c *CodeAdapter) buildStructuredAskUserRail(language string) sainterfaces.AgentRail {
+	// ⤵️ 10.6.3-10: 实现 StructuredAskUserRail，使用 language 参数
 	return nil
 }
 
@@ -965,10 +972,10 @@ func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
 }
 
 // buildPermissionRail 构建权限护栏。
-// 对齐 Python: build_permission_rail() (interface_code.py)
+// 对齐 Python: build_permission_rail(config=config, llm=llm, model_name=model_name) (interface_code.py)
 // ⤵️ 10.6.3-10: PermissionInterruptRail 尚未实现
-func (c *CodeAdapter) buildPermissionRail(configBase map[string]any) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 PermissionInterruptRail
+func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llm any, modelName string) sainterfaces.AgentRail {
+	// ⤵️ 10.6.3-10: 实现 PermissionInterruptRail，使用 llm 和 modelName 参数
 	return nil
 }
 

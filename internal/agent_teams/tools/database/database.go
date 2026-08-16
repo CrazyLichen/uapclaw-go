@@ -124,7 +124,8 @@ type TaskDao interface {
 	// CancelTask 取消任务（原子终止传播），返回 unblocked task IDs。
 	CancelTask(ctx context.Context, taskID string) ([]string, error)
 	// CancelAllTasks 批量取消（原子终止传播），支持 skipAssignees 过滤。
-	CancelAllTasks(ctx context.Context, teamName string, skipAssignees []string) ([]*TeamTaskBase, error)
+	// 对齐 Python: cancel_all_tasks() → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
+	CancelAllTasks(ctx context.Context, teamName string, skipAssignees []string) (*CancelAllTasksResult, error)
 	// CompleteTask 完成任务（原子终止传播），返回 unblocked task IDs。
 	CompleteTask(ctx context.Context, taskID string) ([]string, error)
 	// VerifyAndFixTaskConsistency 一致性修复：扫描 BLOCKED 任务并刷新状态。

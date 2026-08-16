@@ -619,7 +619,7 @@ func (db *InMemoryTeamDatabase) CompleteTask(_ context.Context, taskID string) (
 
 // CancelAllTasks 批量取消（原子终止传播）。对齐 Python: TaskDao.cancel_all_tasks()
 // skipAssignees 列表中的 assignee 对应的任务不会被取消。
-func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName string, skipAssignees []string) ([]*TeamTaskBase, error) {
+func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName string, skipAssignees []string) (*CancelAllTasksResult, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -628,7 +628,8 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		skipSet[a] = true
 	}
 
-	var cancelled []*TeamTaskBase
+	result := &CancelAllTasksResult{}
+	unblockedSet := make(map[string]bool)
 	for _, task := range db.tasks {
 		if task.TeamName != teamName {
 			continue
@@ -641,10 +642,26 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		if skipSet[task.Assignee] {
 			continue
 		}
-		_, _ = db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
-		cancelled = append(cancelled, task)
+		refreshed, _ := db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
+		result.Cancelled = append(result.Cancelled, task)
+		// 收集所有被解除阻塞的任务 ID
+		for _, id := range refreshed {
+			unblockedSet[id] = true
+		}
 	}
-	return cancelled, nil
+
+	// 对齐 Python: unblocked_tasks = [t for tid, t in unblocked_by_id.items() if tid not in cancelled_ids]
+	cancelledSet := make(map[string]bool, len(result.Cancelled))
+	for _, t := range result.Cancelled {
+		cancelledSet[t.TaskID] = true
+	}
+	for id := range unblockedSet {
+		if !cancelledSet[id] {
+			result.Unblocked = append(result.Unblocked, id)
+		}
+	}
+
+	return result, nil
 }
 
 // VerifyAndFixTaskConsistency 一致性修复：扫描 BLOCKED 任务并刷新状态。

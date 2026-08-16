@@ -158,6 +158,15 @@ type GraphMutationResult struct {
 	RefreshedTasks []string
 }
 
+// CancelAllTasksResult 批量取消任务的返回结果。
+// 对齐 Python: cancel_all_tasks() → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
+type CancelAllTasksResult struct {
+	// Cancelled 被取消的任务列表
+	Cancelled []*TeamTaskBase
+	// Unblocked 被解除阻塞的任务 ID 列表（从 BLOCKED→PENDING 的任务）
+	Unblocked []string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

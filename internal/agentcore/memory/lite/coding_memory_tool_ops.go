@@ -69,10 +69,12 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 
 	ws := toolCtx.Workspace
 	if ws == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryReadWithContext: Workspace 未初始化")
 		return &CodingReadResult{Success: false, Path: path, Error: "Workspace 未初始化"}
 	}
 	isValid, resolvedPath := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Str("reason", resolvedPath).Msg("CodingMemoryReadWithContext: 路径校验失败")
 		return &CodingReadResult{Success: false, Path: path, Error: resolvedPath}
 	}
 	fullPath := resolvedPath
@@ -92,6 +94,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
 	if err != nil {
+		logger.Warn(logger.ComponentAgentCore).Err(err).Str("path", path).Msg("CodingMemoryReadWithContext: 读取文件失败")
 		return &CodingReadResult{Success: false, Path: path, Error: err.Error()}
 	}
 	var content string
@@ -150,22 +153,27 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	}()
 
 	if toolCtx == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryWriteWithContext: toolCtx 为 nil")
 		return map[string]any{"success": false, "path": path, "error": "Workspace 未初始化"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryWriteWithContext: Workspace 未初始化")
 		return map[string]any{"success": false, "path": path, "error": "Workspace 未初始化"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: 路径校验失败")
 		return map[string]any{"success": false, "path": path, "error": resolved}
 	}
 	// 对齐 Python step 2: frontmatter 解析验证
 	fm := ParseFrontmatter(content)
 	if fm == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter 解析失败")
 		return map[string]any{"success": false, "path": path, "error": "必须包含 frontmatter(name/description/type)"}
 	}
 	if ok, err := ValidateFrontmatter(fm); !ok {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter 校验失败")
 		return map[string]any{"success": false, "path": path, "error": err}
 	}
 	// 对齐 Python step 3-4: 丰富 frontmatter 并重建内容
@@ -174,6 +182,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	// 对齐 Python step 5: 提取 body
 	body := ExtractBody(content)
 	if body == "" {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryWriteWithContext: 无内容体")
 		return map[string]any{"success": false, "path": path, "error": "无内容体"}
 	}
 
@@ -306,6 +315,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		Type:             fm["type"],
 		ConflictDetected: conflict.ConflictDetected,
 		ConflictingFiles: conflict.ConflictingFiles,
+		Note:             conflict.Note,
 	}
 	return wr.ToDict()
 }
@@ -321,22 +331,27 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	}()
 
 	if oldText == "" {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryEditWithContext: old_text 为空")
 		return &CodingEditResult{Error: "old_text 不能为空"}
 	}
 	if toolCtx == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryEditWithContext: toolCtx 为 nil")
 		return &CodingEditResult{Error: "Workspace 未初始化"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryEditWithContext: Workspace 未初始化")
 		return &CodingEditResult{Error: "Workspace 未初始化"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Str("reason", resolved).Msg("CodingMemoryEditWithContext: 路径校验失败")
 		return &CodingEditResult{Error: resolved}
 	}
 	memoryDir := resolveMemoryDir(toolCtx, resolved)
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryEditWithContext: 无可用 sys_operation")
 		return &CodingEditResult{Error: "无可用 sys_operation"}
 	}
 
@@ -346,16 +361,19 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
 	if err != nil || readResult == nil || readResult.Data == nil {
 		fileLock.Unlock()
+		logger.Warn(logger.ComponentAgentCore).Err(err).Str("path", path).Msg("CodingMemoryEditWithContext: 读取文件失败")
 		return &CodingEditResult{Error: fmt.Sprintf("读取文件失败: %s", path)}
 	}
 	content := readResult.Data.Content
 	occurrences := strings.Count(content, oldText)
 	if occurrences == 0 {
 		fileLock.Unlock()
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Msg("CodingMemoryEditWithContext: old_text 未找到")
 		return &CodingEditResult{Error: "old_text 在文件中未找到"}
 	}
 	if occurrences > 1 {
 		fileLock.Unlock()
+		logger.Warn(logger.ComponentAgentCore).Str("path", path).Int("occurrences", occurrences).Msg("CodingMemoryEditWithContext: old_text 出现多次")
 		return &CodingEditResult{Error: fmt.Sprintf("old_text 出现 %d 次，请更精确地指定", occurrences)}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
@@ -551,6 +569,9 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 	readResult, err := sysOp.Fs().ReadFile(ctx, indexPath)
 	if err == nil && readResult != nil && readResult.Data != nil {
 		lines = strings.Split(readResult.Data.Content, "\n")
+	} else if err != nil {
+		// 对齐 Python: Failed to read memory index 时记录 warning
+		logger.Warn(logger.ComponentAgentCore).Err(err).Str("path", indexPath).Msg("upsertMemoryIndex: 读取 MEMORY.md 索引失败")
 	}
 
 	// 对齐 Python: 如果文件名已存在则更新条目，否则在头部插入新条目
@@ -571,7 +592,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 		lines = lines[:maxIndexLines]
 	}
 	newContent := strings.Join(lines, "\n")
-	_, _ = sysOp.Fs().WriteFile(ctx, indexPath, newContent, sysop.WithFsCreateIfNotExist(true))
+	_, _ = sysOp.Fs().WriteFile(ctx, indexPath, newContent, sysop.WithFsCreateIfNotExist(true), sysop.WithFsPrependNewline(false))
 }
 
 // appendToExistingFile 追加内容到已有文件并更新 frontmatter。对齐 Python _append_to_existing_file

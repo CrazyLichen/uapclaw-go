@@ -380,6 +380,15 @@ func (d *DeepAdapter) resolvePromptLanguage() string {
 	return "zh"
 }
 
+// getAgentWorkspaceDir 获取 Agent 数据存储路径，带回退。
+// 对齐 Python: getattr(self, "_agent_workspace_dir", None) or self._workspace_dir
+func (d *DeepAdapter) getAgentWorkspaceDir() string {
+	if d.agentWorkspaceDir != "" {
+		return d.agentWorkspaceDir
+	}
+	return d.workspaceDir
+}
+
 // createSysOperation 创建系统操作实例。
 // 对齐 Python: _create_sys_operation() (line 2262-2320)
 //

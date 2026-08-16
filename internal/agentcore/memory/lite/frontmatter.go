@@ -8,8 +8,13 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ValidTypes 合法的记忆类型。对齐 Python VALID_TYPES
-var ValidTypes = []string{"user", "feedback", "project", "reference"}
+// validTypes 合法的记忆类型。对齐 Python VALID_TYPES（tuple 不可变）
+var validTypes = [...]string{"user", "feedback", "project", "reference"}
+
+// ValidTypes 返回合法记忆类型的不可变副本。对齐 Python VALID_TYPES（tuple 不可变）
+func ValidTypes() []string {
+	return validTypes[:]
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -39,13 +44,16 @@ func ParseFrontmatter(content string) map[string]string {
 
 // ValidateFrontmatter 验证 name/description/type 字段。对齐 Python validate_frontmatter
 func ValidateFrontmatter(fm map[string]string) (bool, string) {
+	if fm == nil {
+		return false, "frontmatter 为 nil"
+	}
 	for _, field := range []string{"name", "description", "type"} {
 		if fm[field] == "" {
 			return false, fmt.Sprintf("缺少必填字段: %s", field)
 		}
 	}
 	valid := false
-	for _, t := range ValidTypes {
+	for _, t := range validTypes[:] {
 		if fm["type"] == t {
 			valid = true
 			break

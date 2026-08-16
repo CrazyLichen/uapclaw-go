@@ -876,9 +876,9 @@ func TestCancelAllTasks(t *testing.T) {
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
 
-	cancelled, _ := db.CancelAllTasks(ctx, "alpha", nil)
-	if len(cancelled) != 2 {
-		t.Errorf("应取消2个任务: got %d", len(cancelled))
+	result, _ := db.CancelAllTasks(ctx, "alpha", nil)
+	if len(result.Cancelled) != 2 {
+		t.Errorf("应取消2个任务: got %d", len(result.Cancelled))
 	}
 }
 
@@ -890,9 +890,9 @@ func TestCancelAllTasks_skipAssignees(t *testing.T) {
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
 
-	cancelled, _ := db.CancelAllTasks(ctx, "alpha", []string{"agent1"})
-	if len(cancelled) != 1 {
-		t.Errorf("skipAssignees 后应只取消1个任务: got %d", len(cancelled))
+	result, _ := db.CancelAllTasks(ctx, "alpha", []string{"agent1"})
+	if len(result.Cancelled) != 1 {
+		t.Errorf("skipAssignees 后应只取消1个任务: got %d", len(result.Cancelled))
 	}
 }
 
