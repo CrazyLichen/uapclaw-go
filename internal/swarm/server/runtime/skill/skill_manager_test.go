@@ -1619,8 +1619,8 @@ func TestAddLocalSkill(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
-	sm.mu.Lock()
 	sm.AddLocalSkill(map[string]any{"name": "local1", "source": "local"})
+	sm.mu.Lock()
 	sm.saveState()
 	sm.mu.Unlock()
 
@@ -3238,7 +3238,7 @@ func TestSaveState_持久化(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	sm.mu.Lock()
-	sm.AddLocalSkill(map[string]any{
+	sm.addLocalSkill(map[string]any{
 		"name":   "test-skill",
 		"source": "local",
 	})
