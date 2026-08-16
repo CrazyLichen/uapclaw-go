@@ -94,7 +94,7 @@ func NewBaseInterruptRail(toolNames ...string) *BaseInterruptRail {
 		r.toolNames[name] = struct{}{}
 	}
 	r.WithPriority(baseInterruptRailPriority)
-	// 设置默认 resolveInterruptFn：无输入→中断，有输入→允许
+	// 设置默认 ResolveInterruptFn：无输入→中断，有输入→允许
 	r.ResolveInterruptFn = r.defaultResolveInterrupt
 	return r
 }
@@ -137,7 +137,7 @@ func (r *BaseInterruptRail) GetTools() []string {
 	return names
 }
 
-// BeforeToolCall 工具调用前拦截，根据 resolveInterruptFn 决策放行、拒绝或中断。
+// BeforeToolCall 工具调用前拦截，根据 ResolveInterruptFn 决策放行、拒绝或中断。
 func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 获取 ToolCallInputs
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -166,7 +166,7 @@ func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterf
 		}
 	}
 
-	// 调用 resolveInterruptFn 获取决策
+	// 调用 ResolveInterruptFn 获取决策
 	decision := r.ResolveInterruptFn(ctx, cbc, toolInputs.ToolCall, userInput, autoConfirmConfig)
 
 	// 执行决策
