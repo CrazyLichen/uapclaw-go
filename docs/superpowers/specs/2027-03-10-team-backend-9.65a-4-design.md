@@ -264,7 +264,7 @@ RecoveryManager 调用的 3 个 TeamBackend 方法：
 ### spawn_member（Python 232-306）
 
 ```
-1. 校验：member_name 非空、不含"/"、非保留名
+1. 校验：仅检查 DB 中是否已存在同名成员，格式校验留给 Tool 层（9.68）
 2. 查 agent_card：若 predefined_members 中有则用其 persona，否则用参数
 3. 模型分配：调用 _allocate_model_config(model_name)
 4. DB 写入：db.member.create_member(...)
@@ -277,7 +277,7 @@ RecoveryManager 调用的 3 个 TeamBackend 方法：
 
 ```
 1. HITT 能力开关：effective_enable_hitt = _spec_enable_hitt and enable_hitt
-2. DB 初始化：db.initialize() + db.create_cur_session_tables()
+2. DB 初始化：不在 build_team 中调用（db.initialize 在 runtime/manager 和 coordination/kernel 中调用，create_cur_session_tables 在 SessionManager.bind_session 中调用）
 3. 创建团队行：db.team.create_team(team_name, display_name, leader_member_name, desc, prompt)
 4. 注册 Leader：db.member.create_member(leader 信息)
 5. 模型分配持久化：leader_allocation 写入 leader 的 model_ref_json
