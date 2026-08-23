@@ -204,8 +204,9 @@ func (r *MemoryRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.Agent
 	// 获取语言
 	lang := r.systemPromptBuilder.Language()
 
-	// 获取当前日期
-	todayDate := time.Now().Format("2006-01-02")
+	// 获取当前日期（北京时间 UTC+8，对齐 Python: _get_beijing_date()）
+	cst := time.FixedZone("CST", 8*3600)
+	todayDate := time.Now().In(cst).Format("2006-01-02")
 
 	// 构建记忆节
 	memorySection := sections.BuildMemorySection(mode, todayDate, lang)

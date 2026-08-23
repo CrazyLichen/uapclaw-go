@@ -231,26 +231,14 @@ func TestCleanTeam(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
 
-	// 有活跃成员 → 应返回 false
+	// 有活跃成员（leader 是 BUSY，但跳过 self，所以只有非 self 成员算活跃）→ 应返回 false
 	ok, err := tb.CleanTeam(ctx)
 	if err != nil {
 		t.Fatalf("CleanTeam() error = %v", err)
 	}
-	if ok {
-		t.Error("CleanTeam() = true（有活跃成员），应返回 false")
-	}
-
-	// 关闭所有成员（BUSY → SHUTDOWN_REQUESTED → SHUTDOWN）
-	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdownRequested))
-	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdown))
-
-	// 再次清理 → 应成功
-	ok, err = tb.CleanTeam(ctx)
-	if err != nil {
-		t.Fatalf("CleanTeam() error = %v", err)
-	}
+	// leader 被跳过，没有其他成员，所以应该返回 true
 	if !ok {
-		t.Error("CleanTeam() = false（无活跃成员），应返回 true")
+		t.Error("CleanTeam() = false（leader 被跳过，无其他活跃成员），应返回 true")
 	}
 }
 
@@ -298,7 +286,7 @@ func TestShutdownMember_不存在(t *testing.T) {
 	}
 }
 
-// TestShutdownMember_已终态 测试关闭已终态成员。
+// TestShutdownMember_已终态 测试关闭已终态成员（幂等返回 success，对齐 Python）。
 func TestShutdownMember_已终态(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
@@ -308,8 +296,8 @@ func TestShutdownMember_已终态(t *testing.T) {
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
 
 	result := tb.ShutdownMember(ctx, "teammate1")
-	if result.OK {
-		t.Error("ShutdownMember(已终态) = OK, want fail")
+	if !result.OK {
+		t.Error("ShutdownMember(已终态) should return success (idempotent, aligns with Python)")
 	}
 }
 
@@ -631,14 +619,23 @@ func TestApprovePlan(t *testing.T) {
 	}
 }
 
-// TestApproveTool 测试审批工具调用。
+// TestApproveTool 测试审批工具调用（需成员存在）。
 func TestApproveTool(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+
 	result := tb.ApproveTool(ctx, "teammate1", "tool-call-1", true, "ok", false)
 	if !result.OK {
 		t.Errorf("ApproveTool() = %v, want OK", result)
+	}
+
+	// 成员不存在应返回 fail
+	result = tb.ApproveTool(ctx, "nonexistent", "tool-call-2", true, "", false)
+	if result.OK {
+		t.Error("ApproveTool(nonexistent) should fail")
 	}
 }
 

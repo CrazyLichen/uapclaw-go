@@ -1705,6 +1705,128 @@ func (sm *SkillManager) HandlePluginsReload(ctx context.Context, params map[stri
 	return map[string]any{"success": true}, nil
 }
 
+// GetInstalledPlugins 获取已安装插件列表
+// 对应 Python: SkillManager._get_installed_plugins()
+func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
+	raw, ok := sm.state["installed_plugins"]
+	if !ok {
+		return nil
+	}
+	list, ok := toSliceOfAny(raw)
+	if !ok {
+		return nil
+	}
+	var result []map[string]any
+	for _, item := range list {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// AddInstalledPlugin 添加已安装插件记录
+// 对应 Python: SkillManager._add_installed_plugin(plugin)
+func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
+	plugins := sm.GetInstalledPlugins()
+	// 如果已存在同名插件，替换
+	name := toString(plugin["name"])
+	for i, p := range plugins {
+		if toString(p["name"]) == name {
+			plugins[i] = plugin
+			sm.state["installed_plugins"] = mapSliceToAny(plugins)
+			return
+		}
+	}
+	plugins = append(plugins, plugin)
+	sm.state["installed_plugins"] = mapSliceToAny(plugins)
+}
+
+// AddLocalSkill 添加本地技能记录（外部接口，自带锁保护）
+func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.addLocalSkill(skill)
+}
+
+// GetLocalSkills 返回本地技能列表
+// 对应 Python: SkillManager.get_local_skills()
+func (sm *SkillManager) GetLocalSkills() []map[string]any {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	raw, ok := sm.state["local_skills"]
+	if !ok {
+		return []map[string]any{}
+	}
+	list, ok := toSliceOfAny(raw)
+	if !ok {
+		return []map[string]any{}
+	}
+	var result []map[string]any
+	for _, item := range list {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// SetClawhubToken 设置 ClawHub token
+// 对应 Python: SkillManager._set_clawhub_token(token)
+func (sm *SkillManager) SetClawhubToken(token string) {
+	sm.state[clawhubTokenKey] = token
+}
+
+// GetSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
+// 对应 Python: SkillManager.get_skill_meta(skill_name)
+func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
+	skillDir := sm.resolveLocalSkillDir(name)
+	if skillDir == "" {
+		return nil
+	}
+	skillFile := sm.tryFindSkillFile(skillDir)
+	if skillFile == "" {
+		return nil
+	}
+	meta := sm.parseSkillMD(skillFile)
+	if meta == nil {
+		return nil
+	}
+	meta["skill_dir"] = skillDir
+	meta["skill_file"] = skillFile
+	return meta
+}
+
+// IsBuiltinSkill 判断技能是否为内置技能
+// 对应 Python: SkillManager.is_builtin_skill(skill_name)
+// 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
+func (sm *SkillManager) IsBuiltinSkill(name string) bool {
+	if name == "" {
+		return false
+	}
+	builtinDir := getBuiltinSkillsDir()
+	if builtinDir == "" {
+		return false
+	}
+	// 安全校验路径名称
+	if _, err := safePathName(name, "skill"); err != nil {
+		return false
+	}
+	// 用户 skills 目录下的技能路径
+	userSkillPath := filepath.Join(sm.skillsDir, name)
+	userInfo, err := os.Stat(userSkillPath)
+	if err != nil {
+		return false
+	}
+	// 内置目录下的技能路径
+	builtinSkillPath := filepath.Join(builtinDir, name)
+	builtinInfo, err := os.Stat(builtinSkillPath)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(userInfo, builtinInfo)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadState 从文件加载状态
@@ -1759,43 +1881,6 @@ func (sm *SkillManager) getMarketplaces() []map[string]any {
 	return result
 }
 
-// getInstalledPlugins 获取已安装插件列表
-// 对应 Python: SkillManager._get_installed_plugins()
-func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
-	raw, ok := sm.state["installed_plugins"]
-	if !ok {
-		return nil
-	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
-		return nil
-	}
-	var result []map[string]any
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
-// addInstalledPlugin 添加已安装插件记录
-// 对应 Python: SkillManager._add_installed_plugin(plugin)
-func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
-	plugins := sm.GetInstalledPlugins()
-	// 如果已存在同名插件，替换
-	name := toString(plugin["name"])
-	for i, p := range plugins {
-		if toString(p["name"]) == name {
-			plugins[i] = plugin
-			sm.state["installed_plugins"] = mapSliceToAny(plugins)
-			return
-		}
-	}
-	plugins = append(plugins, plugin)
-	sm.state["installed_plugins"] = mapSliceToAny(plugins)
-}
-
 // removeInstalledPlugin 移除已安装插件记录
 func (sm *SkillManager) removeInstalledPlugin(name string) {
 	plugins := sm.GetInstalledPlugins()
@@ -1823,35 +1908,6 @@ func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 	sm.state["local_skills"] = list
 }
 
-// AddLocalSkill 添加本地技能记录（外部接口，自带锁保护）
-func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.addLocalSkill(skill)
-}
-
-// getLocalSkills 返回本地技能列表
-// 对应 Python: SkillManager.get_local_skills()
-func (sm *SkillManager) GetLocalSkills() []map[string]any {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	raw, ok := sm.state["local_skills"]
-	if !ok {
-		return []map[string]any{}
-	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
-		return []map[string]any{}
-	}
-	var result []map[string]any
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
 // normalizePlugin 规范化插件记录
 // 对应 Python: SkillManager._normalize_plugin(p)
 func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
@@ -1866,12 +1922,6 @@ func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
 // 对应 Python: SkillManager._get_clawhub_token()
 func (sm *SkillManager) getClawhubToken() string {
 	return toString(sm.state[clawhubTokenKey])
-}
-
-// setClawhubToken 设置 ClawHub token
-// 对应 Python: SkillManager._set_clawhub_token(token)
-func (sm *SkillManager) SetClawhubToken(token string) {
-	sm.state[clawhubTokenKey] = token
 }
 
 // maskClawhubToken 掩码 ClawHub token
@@ -1898,32 +1948,37 @@ func (sm *SkillManager) getSkillEvolutionPath(skillName string) string {
 
 // resolveLocalSkillDir 查找本地技能目录
 // 对应 Python: SkillManager._resolve_local_skill_dir(skill_name)
+// resolveLocalSkillDir 解析本地技能目录。
+// 对应 Python: SkillManager._resolve_local_skill_dir(skill_name)
+// 先尝试 skillsDir/skillName 直接路径，若不存在则遍历子目录通过 SKILL.md 的 name 字段匹配。
 func (sm *SkillManager) resolveLocalSkillDir(skillName string) string {
+	// 直接路径匹配
 	candidate := filepath.Join(sm.skillsDir, skillName)
 	if dirExists(candidate) {
 		return candidate
 	}
+	// 回退：遍历子目录，通过 SKILL.md 的 name 字段匹配（对齐 Python）
+	entries, err := os.ReadDir(sm.skillsDir)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
+			continue
+		}
+		childDir := filepath.Join(sm.skillsDir, entry.Name())
+		mdPath := sm.tryFindSkillFile(childDir)
+		if mdPath == "" {
+			continue
+		}
+		meta := sm.parseSkillMD(mdPath)
+		if meta != nil {
+			if toString(meta["name"]) == skillName {
+				return childDir
+			}
+		}
+	}
 	return ""
-}
-
-// getSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
-// 对应 Python: SkillManager.get_skill_meta(skill_name)
-func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
-	skillDir := sm.resolveLocalSkillDir(name)
-	if skillDir == "" {
-		return nil
-	}
-	skillFile := sm.tryFindSkillFile(skillDir)
-	if skillFile == "" {
-		return nil
-	}
-	meta := sm.parseSkillMD(skillFile)
-	if meta == nil {
-		return nil
-	}
-	meta["skill_dir"] = skillDir
-	meta["skill_file"] = skillFile
-	return meta
 }
 
 // resolveSkillSource 确定技能来源
@@ -2247,36 +2302,6 @@ func getBuiltinSkillsDir() string {
 	}
 	// 后续补充：从 package root 解析 resources/agent/workspace/skills
 	return ""
-}
-
-// isBuiltinSkill 判断技能是否为内置技能
-// 对应 Python: SkillManager.is_builtin_skill(skill_name)
-// 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
-func (sm *SkillManager) IsBuiltinSkill(name string) bool {
-	if name == "" {
-		return false
-	}
-	builtinDir := getBuiltinSkillsDir()
-	if builtinDir == "" {
-		return false
-	}
-	// 安全校验路径名称
-	if _, err := safePathName(name, "skill"); err != nil {
-		return false
-	}
-	// 用户 skills 目录下的技能路径
-	userSkillPath := filepath.Join(sm.skillsDir, name)
-	userInfo, err := os.Stat(userSkillPath)
-	if err != nil {
-		return false
-	}
-	// 内置目录下的技能路径
-	builtinSkillPath := filepath.Join(builtinDir, name)
-	builtinInfo, err := os.Stat(builtinSkillPath)
-	if err != nil {
-		return false
-	}
-	return os.SameFile(userInfo, builtinInfo)
 }
 
 // dirExists 检查目录是否存在

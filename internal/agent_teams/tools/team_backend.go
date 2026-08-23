@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -420,10 +421,10 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 	if err != nil || member == nil {
 		return atschema.NewMemberOpResultFail("member not found: " + memberName)
 	}
-	// 步骤 2: 若已是终态
+	// 步骤 2: 若已是终态（幂等返回 success，对齐 Python）
 	if member.Status == string(atschema.MemberStatusShutdown) ||
-		member.Status == string(atschema.MemberStatusError) {
-		return atschema.NewMemberOpResultFail("member already in terminal state: " + memberName)
+		member.Status == string(atschema.MemberStatusShutdownRequested) {
+		return atschema.NewMemberOpResultSuccess()
 	}
 	// 步骤 3: CAS 转换
 	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
@@ -431,9 +432,11 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 	if !ok {
 		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
 	}
-	// 步骤 4: 取消该成员的任务
+	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
+	tb.messageManager.SendMessage(ctx, atschema.T("team.shutdown_request_content"), memberName, tb.memberName)
+	// 步骤 5: 取消该成员的任务
 	_, _ = tb.taskManager.CancelAllTasks(ctx, []string{memberName})
-	// 步骤 5: 发布事件
+	// 步骤 6: 发布事件
 	tb.publishEvent(ctx, atschema.MemberShutdownEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		Force:            false,
@@ -443,14 +446,14 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 	return atschema.NewMemberOpResultSuccess()
 }
 
-// CancelMember 取消成员执行（重置 CLAIMED 任务 + 事件）。
+// CancelMember 取消成员执行（仅 BUSY 成员，重置 CLAIMED 任务 + 发送取消消息 + 事件）。
 // 对齐 Python: TeamBackend.cancel_member(member_name)
 //
 // Python 步骤：
 //  1. 查成员
-//  2. 若不存在/已是终态 → fail
-//  3. CAS: current → SHUTDOWN_REQUESTED
-//  4. 重置该成员的 CLAIMED 任务
+//  2. 若非 BUSY → 直接返回（不改变状态）
+//  3. 重置该成员的 CLAIMED 任务（通过 task_manager.reset）
+//  4. 发送取消消息
 //  5. 发布 MemberCanceledEvent
 //  6. 返回 MemberOpResult
 func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atschema.MemberOpResult {
@@ -459,22 +462,22 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	if err != nil || member == nil {
 		return atschema.NewMemberOpResultFail("member not found: " + memberName)
 	}
-	// 步骤 2: 若已是终态
-	if member.Status == string(atschema.MemberStatusShutdown) ||
-		member.Status == string(atschema.MemberStatusError) {
-		return atschema.NewMemberOpResultFail("member already in terminal state: " + memberName)
+	// 步骤 2: 仅对 BUSY 成员操作（对齐 Python: 非 BUSY 直接返回）
+	if member.Status != string(atschema.MemberStatusBusy) {
+		logger.Info(tbLogComponent).Str("member_name", memberName).Str("status", member.Status).
+			Msg("CancelMember: member is not busy, no need to cancel")
+		return atschema.NewMemberOpResultSuccess()
 	}
-	// 步骤 3: CAS 转换
-	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
-		member.Status, string(atschema.MemberStatusShutdownRequested))
-	if !ok {
-		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
-	}
-	// 步骤 4: 重置该成员的 CLAIMED 任务
-	tasks, _ := tb.db.Task().GetTasksByAssignee(ctx, tb.teamName, memberName, string(atschema.TaskStatusClaimed))
+	// 步骤 3: 重置该成员的 CLAIMED 任务（通过 taskManager.Reset，对齐 Python）
+	tasks, _ := tb.taskManager.GetTasksByAssignee(ctx, memberName, string(atschema.TaskStatusClaimed))
 	for _, t := range tasks {
-		tb.db.Task().ResetTask(ctx, t.TaskID) //nolint:errcheck // 清理路径，忽略错误
+		if err := tb.taskManager.Reset(ctx, t.TaskID); err != nil {
+			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Err(err).
+				Msg("CancelMember: reset task failed")
+		}
 	}
+	// 步骤 4: 发送取消消息（对齐 Python: message_manager.send_message）
+	tb.messageManager.SendMessage(ctx, atschema.T("team.cancel_request_content"), memberName, tb.memberName)
 	// 步骤 5: 发布事件
 	tb.publishEvent(ctx, atschema.MemberCanceledEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
@@ -517,7 +520,9 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	tb.hittMu.Unlock()
 
 	// 步骤 1: 创建团队行
-	tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "")
+	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "") {
+		return fmt.Errorf("failed to create team %s", tb.teamName)
+	}
 
 	// 步骤 2: 注册 Leader（status=BUSY, execution=RUNNING）
 	leaderModelRefJSON := ""
@@ -587,6 +592,10 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	for _, m := range members {
+		// 跳过 leader 自身（对齐 Python: member_data.member_name == self.member_name → continue）
+		if m.MemberName == tb.memberName {
+			continue
+		}
 		if m.Status != string(atschema.MemberStatusShutdown) &&
 			m.Status != string(atschema.MemberStatusError) {
 			logger.Warn(tbLogComponent).Str("team_name", tb.teamName).
@@ -618,12 +627,20 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 // ForceCleanTeam 强制清理团队（shutdown_all + force_delete + 清理路径）。
 // 对齐 Python: TeamBackend.force_clean_team(shutdown_members=force)
 func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool) (bool, error) {
-	// 步骤 1: 可选关闭所有成员
+	// 步骤 1: 可选关闭所有成员（对齐 Python: 调用 shutdown_member，跳过 self）
 	if shutdownMembers {
 		members, _ := tb.db.Member().GetTeamMembers(ctx, tb.teamName, "")
 		for _, m := range members {
+			if m.MemberName == tb.memberName {
+				continue // 跳过 leader 自身
+			}
 			if m.Status != string(atschema.MemberStatusShutdown) {
-				tb.db.Member().UpdateMemberStatus(ctx, m.MemberName, tb.teamName, string(atschema.MemberStatusShutdown))
+				result := tb.ShutdownMember(ctx, m.MemberName)
+				if !result.OK {
+					logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
+						Str("reason", result.Reason).
+						Msg("ForceCleanTeam: shutdown_member failed, continuing")
+				}
 			}
 		}
 	}
@@ -653,6 +670,10 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 	// 通知 assignee（如果有）
 	task, _ := tb.taskManager.Get(ctx, taskID)
 	if task != nil && task.Assignee != "" {
+		// 发送取消消息通知（对齐 Python: message_manager.send_message）
+		content := fmt.Sprintf("Task '%s' (ID: %s) has been cancelled by the team leader.", task.Title, taskID)
+		tb.messageManager.SendMessage(ctx, content, task.Assignee, tb.memberName)
+		// 发布取消事件
 		tb.publishEvent(ctx, atschema.TaskCancelledEvent{
 			BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: task.Assignee},
 			TaskID:           taskID,
@@ -672,9 +693,14 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 // CancelAllTasks 批量取消 + 广播。
 // 对齐 Python: TeamBackend.cancel_all_tasks(skip_assignees)
 func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []string) atschema.MemberOpResult {
-	_, err := tb.taskManager.CancelAllTasks(ctx, skipAssignees)
+	cancelled, err := tb.taskManager.CancelAllTasks(ctx, skipAssignees)
 	if err != nil {
 		return atschema.NewMemberOpResultFail("cancel_all_tasks failed: " + err.Error())
+	}
+	// 广播取消消息（对齐 Python: message_manager.broadcast_message）
+	if len(cancelled) > 0 {
+		content := fmt.Sprintf("All tasks (%d) have been cancelled by team leader.", len(cancelled))
+		tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
 	}
 	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CancelAllTasks: 所有任务已取消")
 	return atschema.NewMemberOpResultSuccess()
@@ -705,6 +731,11 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, taskID string) atschema.
 // ApproveTool 审批工具调用。
 // 对齐 Python: TeamBackend.approve_tool(member_name, tool_call_id, approved, feedback, auto_confirm)
 func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID string, approved bool, feedback string, autoConfirm bool) atschema.MemberOpResult {
+	// 成员存在性检查（对齐 Python: db.member.get_member(member_name)，不存在返回 False）
+	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
+	if err != nil || member == nil {
+		return atschema.NewMemberOpResultFail("member not found: " + memberName)
+	}
 	tb.publishEvent(ctx, atschema.ToolApprovalResultEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		ToolCallID:       toolCallID,
@@ -724,6 +755,13 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayName, desc, prompt string) atschema.MemberOpResult {
 	if !tb.HITTEnabled() {
 		return atschema.NewMemberOpResultFail("hitt_not_enabled")
+	}
+	// i18n 默认值（对齐 Python: display_name = t("hitt.human_agent_display_name"), desc = t("hitt.human_agent_default_persona")）
+	if displayName == "" {
+		displayName = atschema.T("hitt.human_agent_display_name")
+	}
+	if desc == "" {
+		desc = atschema.T("hitt.human_agent_default_persona")
 	}
 	result := tb.SpawnMember(ctx, memberName, displayName, "", string(atschema.TeamRoleHumanAgent), desc, prompt, "")
 	if !result.OK {

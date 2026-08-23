@@ -263,6 +263,16 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 		Str("member_name", memberName).
 		Msg("teammate 不健康，尝试重启")
 
+	// 对齐 Python: await self.cleanup_teammate(member_name)
+	m.CleanupTeammate(context.Background(), memberName)
+
+	// 对齐 Python: await db.update_member_status(member_name, MemberStatus.RESTARTING)
+	backend := m.configurator.TeamBackend()
+	if backend != nil {
+		backend.DB().Member().UpdateMemberStatus(context.Background(), memberName, backend.TeamName(),
+			string(atschema.MemberStatusRestarting))
+	}
+
 	// 在独立 goroutine 中重启，避免阻塞健康检查
 	recoverCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 

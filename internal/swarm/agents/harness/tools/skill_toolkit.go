@@ -170,7 +170,16 @@ func (tk *SkillToolkit) GetTools() []tool.Tool {
 
 // SearchSkill 搜索技能，统一查询 SkillNet、ClawHub、TeamSkillsHub。
 // 对应 Python: SkillToolkit.search_skill(query, source, limit)
-func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
+	// 顶层 panic 恢复（对齐 Python: except Exception）
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Msg("search_skill panicked")
+			result = map[string]any{"success": false, "source": toString(inputs["source"]), "items": []any{}, "detail": fmt.Sprintf("internal error: %v", r)}
+			err = nil
+		}
+	}()
+
 	query := strings.TrimSpace(toString(inputs["query"]))
 	source := strings.TrimSpace(toString(inputs["source"]))
 	if source == "" {
@@ -289,7 +298,16 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 
 // InstallSkill 安装技能，需要显式指定来源。
 // 对应 Python: SkillToolkit.install_skill(identifier, source, timeout_sec)
-func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
+	// 顶层 panic 恢复（对齐 Python: except Exception）
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Msg("install_skill panicked")
+			result = map[string]any{"success": false, "source": toString(inputs["source"]), "installed": false, "detail": fmt.Sprintf("internal error: %v", r)}
+			err = nil
+		}
+	}()
+
 	identifier := strings.TrimSpace(toString(inputs["identifier"]))
 	source := strings.TrimSpace(toString(inputs["source"]))
 	timeoutSec := safeInt(inputs["timeout_sec"], 60)
@@ -353,9 +371,6 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 		payload = tk.installSkillnetSyncWait(ctx, identifier, timeoutSec)
 	case "teamskillshub":
 		installParams := map[string]any{"asset_id": identifier, "force": false}
-		if marketURL := strings.TrimSpace(toString(inputs["market_url"])); marketURL != "" {
-			installParams["market_url"] = marketURL
-		}
 		payload, _ = tk.manager.HandleSkillsTeamSkillsHubInstall(ctx, installParams)
 	default: // clawhub 来源
 		payload, _ = tk.manager.HandleSkillsClawhubDownload(ctx, map[string]any{
@@ -410,7 +425,16 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 
 // UninstallSkill 卸载技能。
 // 对应 Python: SkillToolkit.uninstall_skill(name)
-func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
+	// 顶层 panic 恢复（对齐 Python: except Exception）
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Msg("uninstall_skill panicked")
+			result = map[string]any{"success": false, "removed": false, "name": toString(inputs["name"]), "detail": fmt.Sprintf("internal error: %v", r)}
+			err = nil
+		}
+	}()
+
 	skillName := strings.TrimSpace(toString(inputs["name"]))
 
 	logger.Info(logComponent).

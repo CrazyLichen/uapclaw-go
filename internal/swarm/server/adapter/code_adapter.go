@@ -22,6 +22,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
@@ -72,6 +73,15 @@ type CodeAdapter struct {
 	runtimeLanguageOverride string
 	// forceEnglishRuntimePrompt 强制英文运行时提示词
 	forceEnglishRuntimePrompt bool
+
+	// ─── 实例属性（对齐 Python setattr）──
+
+	// uapswarmAdapterMode 适配器模式标识，对齐 Python: _jiuwenswarm_adapter_mode = "code"
+	uapswarmAdapterMode string
+	// uapswarmCodeProjectDir 代码项目目录，对齐 Python: _jiuwenswarm_code_project_dir
+	uapswarmCodeProjectDir string
+	// uapswarmProjectDir 项目目录，对齐 Python: _jiuwenswarm_project_dir
+	uapswarmProjectDir string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -156,8 +166,8 @@ func NewCodeAdapter() *CodeAdapter {
 //  19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
 //  20. await self._instance.ensure_initialized()
 //  21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
-//     21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-//     21.2 coding_memory workspace set_directory
+//     Python: 21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
+//     Python: 21.2 coding_memory workspace set_directory
 //     21.3 agent_history 写入路径修正
 //  22. self._registered_mcp_server_ids.clear()
 //  23. await self._register_mcp_servers_from_config(config_base, tag="code")
@@ -190,7 +200,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
-	// 步骤 4: ⤵️ 10.6.24 多模态工具: _refresh_multimodal_configs(configBase)
+	// 步骤 3.5: load_dotenv（对齐 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
+	if err := dotenv.Load(workspace.EnvFile()); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("load_dotenv failed, continuing with current env vars")
+	}
+
+	// 步骤 4: 多模态工具 _refresh_multimodal_configs(configBase)
+	// 对齐 Python: self._refresh_multimodal_configs(config_base)
+	c.deep.refreshMultimodalConfigs(configBase)
 
 	// 步骤 5-6: 读取 react 配置段，缓存到 configCache
 	if reactRaw, ok := configBase["react"]; ok {
@@ -317,9 +334,17 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 	c.deep.seedRuntimeCwd(ctx, initCwd)
 
-	// 步骤 21.1: _jiuwenswarm_adapter_mode = "code"
+	// 步骤 21.1: 实例属性设置
 	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-	// ⤵️ 10.6.3-10: 待 DeepAgent 实例属性扩展后回填（Python 猴子补丁，Go 需等 TeamManager 设计）
+	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_code_project_dir", self._project_dir or self._workspace_dir)
+	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)
+	c.uapswarmAdapterMode = "code"
+	projectDir := c.deep.projectDir
+	if projectDir == "" {
+		projectDir = c.deep.workspaceDir
+	}
+	c.uapswarmCodeProjectDir = projectDir
+	c.uapswarmProjectDir = projectDir
 
 	// 步骤 21.2: coding_memory workspace set_directory
 	// ✅ 已回填：Workspace.SetDirectory（对齐 Python: self._instance.deep_config.workspace.set_directory(...)）
@@ -576,10 +601,6 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		}
 	}
 
-	// ── 自定义 agent ──
-	customSpecs := c.deep.loadCustomSubagents(subagentsCfg)
-	specs = append(specs, customSpecs...)
-
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
 		Msg("CodeAdapter buildConfiguredSubagents 完成")
@@ -644,6 +665,9 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 				}
 				logger.Info(logComponent).Msg("CodeAdapter: SkillToolkit 已注册")
 			}
+		case "acp_chat":
+			// ⤵️ 10.6.24: acp_chat 工具尚未实现
+			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat tool not yet implemented, skipping")
 		default:
 			logger.Warn(logComponent).Str("tool", toolName).Msg("未知的 code 模式工具名，跳过")
 		}
@@ -927,7 +951,7 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 // 对齐 Python: JiuwenClawCodeAdapter._build_coding_memory_rail() → create_coding_memory_rail() (interface_code.py)
 //
 // 始终创建 CodingMemoryRail（即使 embedding 不完整也创建，降级到 fallback provider）。
-// codingMemoryDir = agentWorkspaceDir/coding_memory/projectName
+// Python: codingMemoryDir = agentWorkspaceDir/coding_memory/projectName
 func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 	// 对齐 Python create_coding_memory_rail: 获取 embedding 配置
 	embCfg := c.resolveEmbeddingConfig()

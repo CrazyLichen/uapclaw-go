@@ -173,6 +173,7 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	r.ownedToolNames = make(map[string]struct{})
 	r.ownedToolIDs = make(map[string]struct{})
 	r.managerInitialized = false
+	r.manager = nil
 	r.toolCtx = nil
 
 	// 从 systemPromptBuilder 移除 memory section
@@ -196,6 +197,9 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 // 对齐 Python: CodingMemoryRail.before_invoke(ctx)
 func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 初始化 Coding Memory Manager（首次）
+	// Go 行为差异：仅在初始化成功时设置 managerInitialized = true，失败后每次 BeforeInvoke 重试。
+	// Python 行为：无条件设置 _manager_initialized = True，失败后不再重试。
+	// Go 的重试策略更合理（初始化失败可能是临时问题），保留当前行为。
 	if !r.managerInitialized {
 		r.initCodingMemoryManager(ctx)
 	}
@@ -398,8 +402,7 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 		if toolCard == nil {
 			logger.Warn(codingMemoryLogComponent).
 				Str("event_type", "coding_memory_rail_register_tools").
-				Str("tool_name", toolCard.Name).
-				Msg("工具无 card，跳过注册")
+				Msg("tool has no card, skipping registration")
 			continue
 		}
 
@@ -711,7 +714,7 @@ func (r *CodingMemoryRail) countMemoryFiles(ctx context.Context) int {
 		if f.IsDirectory {
 			continue
 		}
-		if !strings.EqualFold(f.Name, ".md") && !strings.HasSuffix(strings.ToLower(f.Name), ".md") {
+		if !strings.HasSuffix(strings.ToLower(f.Name), ".md") {
 			continue
 		}
 		if strings.EqualFold(f.Name, "memory.md") {
