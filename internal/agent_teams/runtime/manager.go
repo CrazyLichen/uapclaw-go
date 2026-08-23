@@ -188,7 +188,7 @@ func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, team
 	if entry == nil {
 		return false, nil
 	}
-	// 获取 TeamBackend（Agent 当前为 any，待 9.55 回填为 *TeamAgent；通过 TeamBackendProvider 接口断言）
+	// 获取 TeamBackend（entry.Agent 为 *agent.TeamAgent，直接调用 TeamBackend()）
 	backend := getTeamBackend(entry.Agent)
 	if backend == nil {
 		return false, nil
@@ -289,7 +289,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		deliverInput := func(ctx context.Context, content string) error {
 			logger.Debug(mgrLogComponent).Str("body_len", fmt.Sprintf("%d", len(content))).
 				Msg("deliverInput (stub)")
-			// ⤵️ 待 9.55 回填: agent.(*TeamAgent).DeliverInput(ctx, content)
+			// ⤵️ 待 9.55 回填: entry.Agent.DeliverInput(ctx, content)
 			return nil
 		}
 		return interaction.DeliverToLeader(deliverInput, p.Body()), nil
