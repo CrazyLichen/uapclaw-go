@@ -433,7 +433,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
 	}
 	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
-	tb.messageManager.SendMessage(ctx, atschema.T("team.shutdown_request_content"), memberName, tb.memberName)
+	_, _ = tb.messageManager.SendMessage(ctx, atschema.T("team.shutdown_request_content"), memberName, tb.memberName)
 	// 步骤 5: 取消该成员的任务
 	_, _ = tb.taskManager.CancelAllTasks(ctx, []string{memberName})
 	// 步骤 6: 发布事件
@@ -477,7 +477,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 		}
 	}
 	// 步骤 4: 发送取消消息（对齐 Python: message_manager.send_message）
-	tb.messageManager.SendMessage(ctx, atschema.T("team.cancel_request_content"), memberName, tb.memberName)
+	_, _ = tb.messageManager.SendMessage(ctx, atschema.T("team.cancel_request_content"), memberName, tb.memberName)
 	// 步骤 5: 发布事件
 	tb.publishEvent(ctx, atschema.MemberCanceledEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
@@ -672,7 +672,7 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 	if task != nil && task.Assignee != "" {
 		// 发送取消消息通知（对齐 Python: message_manager.send_message）
 		content := fmt.Sprintf("Task '%s' (ID: %s) has been cancelled by the team leader.", task.Title, taskID)
-		tb.messageManager.SendMessage(ctx, content, task.Assignee, tb.memberName)
+		_, _ = tb.messageManager.SendMessage(ctx, content, task.Assignee, tb.memberName)
 		// 发布取消事件
 		tb.publishEvent(ctx, atschema.TaskCancelledEvent{
 			BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: task.Assignee},
@@ -700,7 +700,7 @@ func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []strin
 	// 广播取消消息（对齐 Python: message_manager.broadcast_message）
 	if len(cancelled) > 0 {
 		content := fmt.Sprintf("All tasks (%d) have been cancelled by team leader.", len(cancelled))
-		tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
+		_, _ = tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
 	}
 	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CancelAllTasks: 所有任务已取消")
 	return atschema.NewMemberOpResultSuccess()
