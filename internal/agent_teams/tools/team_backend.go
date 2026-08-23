@@ -340,8 +340,18 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName,
 
 // Startup 启动所有 UNSTARTED 成员。
 // 对齐 Python: TeamBackend.startup(on_created=...)
-// 返回已启动的成员名列表。
-func (tb *TeamBackend) Startup(ctx context.Context) ([]string, error) {
+//
+// Python 步骤：
+//  1. 查询所有 UNSTARTED 成员
+//  2. 逐个调用 startup_member(member_name, on_created)
+//  3. 返回已启动的成员名列表
+//
+// startup_member 失败时回滚 STARTING→UNSTARTED 并 re-raise，
+// Python 的 startup() 会在异常时中断循环。Go 也对齐此行为。
+func (tb *TeamBackend) Startup(
+	ctx context.Context,
+	onCreated func(ctx context.Context, memberName string) error,
+) ([]string, error) {
 	members, err := tb.db.Member().GetTeamMembers(ctx, tb.teamName, string(atschema.MemberStatusUnstarted))
 	if err != nil {
 		return nil, err
@@ -351,12 +361,12 @@ func (tb *TeamBackend) Startup(ctx context.Context) ([]string, error) {
 		if m.MemberName == tb.memberName {
 			continue // 跳过自身
 		}
-		ok := tb.db.Member().TryTransitionMemberStatus(ctx, m.MemberName, tb.teamName,
-			string(atschema.MemberStatusUnstarted), string(atschema.MemberStatusStarting))
+		ok, err := tb.StartupMember(ctx, m.MemberName, onCreated)
+		if err != nil {
+			return started, err
+		}
 		if ok {
 			started = append(started, m.MemberName)
-			logger.Info(tbLogComponent).Str("member_name", m.MemberName).Str("team_name", tb.teamName).
-				Msg("Startup: 成员已启动")
 		}
 	}
 	return started, nil
@@ -364,14 +374,34 @@ func (tb *TeamBackend) Startup(ctx context.Context) ([]string, error) {
 
 // StartupMember CAS 启动单个成员（UNSTARTED→STARTING）。
 // 对齐 Python: TeamBackend.startup_member(member_name, on_created=...)
-func (tb *TeamBackend) StartupMember(ctx context.Context, memberName string) (bool, error) {
-	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
+//
+// Python 步骤：
+//  1. CAS: UNSTARTED→STARTING（若失败返回 false）
+//  2. 调用 _spawn_and_publish(member_name, on_created)
+//  3. 如果 _spawn_and_publish 失败 → 回滚 STARTING→UNSTARTED + re-raise
+//  4. 返回 true
+func (tb *TeamBackend) StartupMember(
+	ctx context.Context,
+	memberName string,
+	onCreated func(ctx context.Context, memberName string) error,
+) (bool, error) {
+	// 步骤 1: CAS 转换
+	transitioned := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
 		string(atschema.MemberStatusUnstarted), string(atschema.MemberStatusStarting))
-	if ok {
-		logger.Info(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
-			Msg("StartupMember: 成员已启动")
+	if !transitioned {
+		return false, nil
 	}
-	return ok, nil
+
+	// 步骤 2: 调用 spawnAndPublish
+	err := tb.spawnAndPublish(ctx, memberName, onCreated)
+	if err != nil {
+		// 步骤 3: 失败回滚 STARTING→UNSTARTED
+		tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
+			string(atschema.MemberStatusStarting), string(atschema.MemberStatusUnstarted))
+		return false, err
+	}
+
+	return true, nil
 }
 
 // ShutdownMember 关闭成员（FSM + 取消任务 + 事件）。
@@ -831,4 +861,39 @@ func (tb *TeamBackend) publishEvent(ctx context.Context, event atschema.TypedEve
 		logger.Error(tbLogComponent).Str("event_type", event.EventTypeName()).Err(err).
 			Msg("publishEvent: 发布事件失败")
 	}
+}
+
+// spawnAndPublish 启动成员 agent 并发布 MemberSpawnedEvent。
+// 对齐 Python: _spawn_and_publish(member_name, on_created)
+//
+// Python 步骤：
+//  1. await on_created(member_name) — 调用回调启动 agent 进程
+//  2. try: messager.publish(MemberSpawnedEvent) — 事件发布失败仅记日志不抛异常
+//  3. 日志：Member {member_name} started
+func (tb *TeamBackend) spawnAndPublish(
+	ctx context.Context,
+	memberName string,
+	onCreated func(ctx context.Context, memberName string) error,
+) error {
+	// 步骤 1: 调用 onCreated 回调（启动 agent 进程）
+	if onCreated != nil {
+		if err := onCreated(ctx, memberName); err != nil {
+			return err
+		}
+	}
+
+	// 步骤 2: 发布 MemberSpawnedEvent（失败只记日志不抛异常）
+	tb.publishEvent(ctx, atschema.MemberSpawnedEvent{
+		BaseEventMessage: atschema.BaseEventMessage{
+			TeamName:   tb.teamName,
+			MemberName: memberName,
+		},
+	})
+	logger.Debug(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
+		Msg("spawnAndPublish: MemberSpawnedEvent 已发布")
+
+	// 步骤 3: 日志
+	logger.Info(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
+		Msg("spawnAndPublish: 成员已启动")
+	return nil
 }

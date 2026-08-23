@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"os"
 	"sync"
 	"testing"
@@ -336,7 +337,7 @@ func TestStartup(t *testing.T) {
 	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
 	tb.SpawnMember(ctx, "teammate2", "T2", "", string(atschema.TeamRoleTeammate), "", "", "")
 
-	started, err := tb.Startup(ctx)
+	started, err := tb.Startup(ctx, nil)
 	if err != nil {
 		t.Fatalf("Startup() error = %v", err)
 	}
@@ -353,12 +354,75 @@ func TestStartupMember(t *testing.T) {
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
 
-	ok, err := tb.StartupMember(ctx, "teammate1")
+	ok, err := tb.StartupMember(ctx, "teammate1", nil)
 	if err != nil {
 		t.Fatalf("StartupMember() error = %v", err)
 	}
 	if !ok {
 		t.Error("StartupMember() = false, want true")
+	}
+}
+
+// TestStartupMember_回调失败回滚 测试 onCreated 失败时回滚到 UNSTARTED。
+// 对齐 Python: startup_member 中 _spawn_and_publish 失败 → 回滚 STARTING→UNSTARTED
+func TestStartupMember_回调失败回滚(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+
+	errOnCreated := errors.New("spawn failed")
+	ok, err := tb.StartupMember(ctx, "teammate1", func(ctx context.Context, memberName string) error {
+		return errOnCreated
+	})
+	if err == nil {
+		t.Fatal("StartupMember() 应返回错误")
+	}
+	if ok {
+		t.Error("StartupMember() = true, want false on error")
+	}
+	// 验证回滚：成员应回到 UNSTARTED
+	member, _ := tb.GetMember(ctx, "teammate1")
+	if member == nil {
+		t.Fatal("回滚后成员不应为 nil")
+	}
+	if member.Status != string(atschema.MemberStatusUnstarted) {
+		t.Errorf("回滚后成员状态 = %s, want unstarted", member.Status)
+	}
+}
+
+// TestSpawnAndPublish 测试 spawnAndPublish 内部方法。
+// 对齐 Python: _spawn_and_publish(member_name, on_created)
+func TestSpawnAndPublish(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+
+	var called bool
+	onCreated := func(ctx context.Context, memberName string) error {
+		called = true
+		return nil
+	}
+
+	err := tb.spawnAndPublish(ctx, "leader", onCreated)
+	if err != nil {
+		t.Fatalf("spawnAndPublish() error = %v", err)
+	}
+	if !called {
+		t.Error("onCreated 未被调用")
+	}
+}
+
+// TestSpawnAndPublish_nil回调 测试 onCreated 为 nil 时跳过回调。
+func TestSpawnAndPublish_nil回调(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+
+	err := tb.spawnAndPublish(ctx, "leader", nil)
+	if err != nil {
+		t.Fatalf("spawnAndPublish(nil) error = %v", err)
 	}
 }
 
