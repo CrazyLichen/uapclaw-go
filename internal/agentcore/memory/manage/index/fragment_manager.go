@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
@@ -125,6 +126,8 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 
 	// Step 3: MemUpdateChecker 冲突检查 ← ⤵️ 回填: 7.8
 	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model)
+	// ⤵️ 回填: 7.8 — Python _process_conflict_info 将 LLM 返回的数字 id 映射回 mem_id，
+	// 当前 stub 直接返回 ADD 无冲突，不需要映射；7.8 实现 LLM 驱动检查时需补充此方法
 	checker := &update.MemUpdateChecker{}
 	actionItems, err := checker.Check(newMemContent, oldMemories)
 	if err != nil {
@@ -294,6 +297,15 @@ func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryGetMemoryExecutionError, m.memType)
 	}
+	// 对齐 Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
+	sort.Slice(docs, func(i, j int) bool {
+		if docs[i].Text != docs[j].Text {
+			return docs[i].Text > docs[j].Text
+		}
+		ti := docs[i].Timestamp.Format(time.RFC3339Nano)
+		tj := docs[j].Timestamp.Format(time.RFC3339Nano)
+		return ti > tj
+	})
 	return docs, nil
 }
 
@@ -384,6 +396,10 @@ func (m *FragmentMemoryManager) getRelatedOldMemories(
 // convertToMemoryDoc 将 FragmentMemoryUnit 转换为 MemoryDoc。
 //
 // 对齐 Python: FragmentMemoryManager._convert_to_memory_doc
+//
+// 设计决策：Fields 保持 map[string]any，对齐 Python fields=dict 设计。
+// 写入时硬编码 key 字符串（如 "source_id"），读取时需类型断言。
+// 7.8 回填时可能增加更多字段，届时评估是否引入 typed struct。
 func (m *FragmentMemoryManager) convertToMemoryDoc(unit *mem_model.FragmentMemoryUnit) *index.MemoryDoc {
 	ts := parseTimestamp(unit.Timestamp)
 	return &index.MemoryDoc{

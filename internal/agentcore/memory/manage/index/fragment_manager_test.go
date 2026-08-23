@@ -871,3 +871,40 @@ func TestFragmentMemoryManager_AddMemories_WithCryptoKey(t *testing.T) {
 		t.Fatalf("期望返回 1 个结果，得到 %d", len(result))
 	}
 }
+
+func TestFragmentMemoryManager_ListFragmentMemories_Sorted(t *testing.T) {
+	// 对齐 Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
+	fakeIdx := newFakeMemoryIndex()
+	baseTime := time.Now()
+	_ = fakeIdx.AddMemories(context.Background(), "user-1", "scope-1", []*index.MemoryDoc{
+		{ID: "mem-001", Text: "alpha", Type: "user_profile", Timestamp: baseTime.Add(1 * time.Hour)},
+		{ID: "mem-002", Text: "gamma", Type: "semantic_memory", Timestamp: baseTime},
+		{ID: "mem-003", Text: "alpha", Type: "episodic_memory", Timestamp: baseTime.Add(2 * time.Hour)},
+		{ID: "mem-004", Text: "beta", Type: "user_profile", Timestamp: baseTime.Add(3 * time.Hour)},
+	})
+
+	mgr := NewFragmentMemoryManager(fakeIdx, nil)
+	docs, err := mgr.ListFragmentMemories(context.Background(), "user-1", "scope-1", 0, 100, "")
+	if err != nil {
+		t.Fatalf("ListFragmentMemories 返回 error: %v", err)
+	}
+	if len(docs) != 4 {
+		t.Fatalf("期望返回 4 条记忆，得到 %d", len(docs))
+	}
+
+	// 验证按 Text 降序排列，Text 相同时按 Timestamp 降序排列
+	// 期望顺序: gamma(3) > beta(4) > alpha(3,较晚) > alpha(1,较早)
+	if docs[0].Text != "gamma" {
+		t.Errorf("docs[0].Text = %q, want %q", docs[0].Text, "gamma")
+	}
+	if docs[1].Text != "beta" {
+		t.Errorf("docs[1].Text = %q, want %q", docs[1].Text, "beta")
+	}
+	if docs[2].Text != "alpha" || docs[3].Text != "alpha" {
+		t.Errorf("docs[2:4].Text = %q, %q, want both %q", docs[2].Text, docs[3].Text, "alpha")
+	}
+	// 两个 alpha 中，timestamp 较晚的应排在前面
+	if !docs[2].Timestamp.After(docs[3].Timestamp) {
+		t.Errorf("alpha 记忆中 timestamp 应降序，got docs[2]=%v, docs[3]=%v", docs[2].Timestamp, docs[3].Timestamp)
+	}
+}
