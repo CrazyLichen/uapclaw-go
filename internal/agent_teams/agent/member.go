@@ -4,7 +4,9 @@ import (
 	"context"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -22,11 +24,9 @@ type TeamMember struct {
 	// AgentCard Agent 身份卡片
 	AgentCard *agentschema.AgentCard
 	// DB 团队数据库实例
-	// TODO(#9.65): TeamDatabase 类型
-	DB any
+	DB database.TeamDatabase
 	// Messager 消息总线实例
-	// TODO(#9.65): Messager 类型
-	Messager any
+	Messager messager.Messager
 	// Prompt 启动提示
 	Prompt string
 	// Desc 人设描述
