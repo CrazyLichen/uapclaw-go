@@ -21,6 +21,7 @@ type Skill struct {
 	Directory string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // descriptionTruncateLen __repr__ 中 description 截断长度

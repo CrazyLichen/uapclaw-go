@@ -47,6 +47,10 @@ type AskUserRail struct {
 	tools []tool.Tool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 AskUserRail 满足 AgentRail 接口
@@ -156,6 +160,47 @@ func (r *AskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		Msg("AskUserRail 注销完成")
 
 	return nil
+}
+
+// ParseToolArgs 解析 ToolCall.Arguments JSON 为 map。
+//
+// 对齐 Python: AskUserRail._parse_tool_args(tool_call)
+func ParseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
+	if toolCall == nil {
+		return map[string]any{}
+	}
+	args := make(map[string]any)
+	if err := json.Unmarshal([]byte(toolCall.Arguments), &args); err != nil {
+		return map[string]any{}
+	}
+	return args
+}
+
+// BuildAskRequest 构建 AskUserRequest。
+// 返回 *AskUserRequest（InterruptRequester 接口实现），携带 questions 字段。
+// JSON 序列化时，questions 自然出现在输出中（对齐 Python model_dump + extra="allow"）。
+//
+// 对齐 Python: AskUserRail._build_ask_request(tool_call)
+func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
+	args := ParseToolArgs(toolCall)
+	questions, _ := args["questions"].([]any)
+	// 转换 []any → []map[string]any
+	questionsList := make([]map[string]any, 0, len(questions))
+	for _, q := range questions {
+		if qMap, ok := q.(map[string]any); ok {
+			questionsList = append(questionsList, qMap)
+		}
+	}
+
+	return &AskUserRequest{
+		InterruptRequest: saschema.InterruptRequest{
+			Message:        "",
+			PayloadSchema:  askUserPayloadSchema(),
+			AutoConfirmKey: "",
+			UIOptions:      nil,
+		},
+		Questions: questionsList,
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -283,47 +328,6 @@ func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *As
 	}
 
 	return fmt.Sprintf("User has answered your questions: %s. You can now continue with the user's answers in mind.", joinStrings(parts, ", "))
-}
-
-// BuildAskRequest 构建 AskUserRequest。
-// 返回 *AskUserRequest（InterruptRequester 接口实现），携带 questions 字段。
-// JSON 序列化时，questions 自然出现在输出中（对齐 Python model_dump + extra="allow"）。
-//
-// 对齐 Python: AskUserRail._build_ask_request(tool_call)
-func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
-	args := ParseToolArgs(toolCall)
-	questions, _ := args["questions"].([]any)
-	// 转换 []any → []map[string]any
-	questionsList := make([]map[string]any, 0, len(questions))
-	for _, q := range questions {
-		if qMap, ok := q.(map[string]any); ok {
-			questionsList = append(questionsList, qMap)
-		}
-	}
-
-	return &AskUserRequest{
-		InterruptRequest: saschema.InterruptRequest{
-			Message:        "",
-			PayloadSchema:  askUserPayloadSchema(),
-			AutoConfirmKey: "",
-			UIOptions:      nil,
-		},
-		Questions: questionsList,
-	}
-}
-
-// ParseToolArgs 解析 ToolCall.Arguments JSON 为 map。
-//
-// 对齐 Python: AskUserRail._parse_tool_args(tool_call)
-func ParseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
-	if toolCall == nil {
-		return map[string]any{}
-	}
-	args := make(map[string]any)
-	if err := json.Unmarshal([]byte(toolCall.Arguments), &args); err != nil {
-		return map[string]any{}
-	}
-	return args
 }
 
 // askUserPayloadSchema 返回 AskUserPayload 的 JSON Schema。

@@ -17,6 +17,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -72,7 +74,7 @@ func CommitPendingChange(
 		if err := store.AppendRecord(ctx, pending.SkillName, record); err != nil {
 			// 对齐 Python: 任何一条失败时保留剩余记录
 			remainingRecords = pending.Payload[i:]
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("skill", pending.SkillName).
 				Str("record_id", record.ID).
 				Err(err).
@@ -125,7 +127,7 @@ func ExecuteSimplifyActions(
 		case "DELETE":
 			deleted, err := store.DeleteRecords(ctx, skillName, []string{recordID})
 			if err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("action", "DELETE").
 					Str("record_id", recordID).
 					Str("skill", skillName).
@@ -143,7 +145,7 @@ func ExecuteSimplifyActions(
 			newContent := getStrFromAny(action, "new_content", "")
 			result, err := store.MergeRecords(ctx, skillName, recordID, mergeRemoveIDs, newContent, nil)
 			if err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("action", "MERGE").
 					Str("record_id", recordID).
 					Str("skill", skillName).
@@ -161,7 +163,7 @@ func ExecuteSimplifyActions(
 			newScore := getFloatPtrFromAny(action, "new_score")
 			result, err := store.UpdateRecordContent(ctx, skillName, recordID, newContent, newScore)
 			if err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("action", "REFINE").
 					Str("record_id", recordID).
 					Str("skill", skillName).
@@ -178,14 +180,14 @@ func ExecuteSimplifyActions(
 			counts["kept"]++
 
 		default:
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action_type", actionType).
 				Msg("[experience.common] 未知 action_type")
 			counts["errors"]++
 		}
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("skill", skillName).
 		Int("deleted", counts["deleted"]).
 		Int("merged", counts["merged"]).
@@ -222,7 +224,7 @@ func RequestRebuildContext(
 	evoArchiveResult, err := store.ArchiveEvolutions(ctx, request.SkillName)
 	if err != nil {
 		archiveError = err
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", request.SkillName).
 			Err(err).
 			Msg("[experience.common] archive_evolutions 失败")
@@ -255,7 +257,7 @@ func RequestRebuildContext(
 
 	if archiveEvolutionsOnSuccess && evoArchive != "" {
 		if err := store.ClearEvolutions(ctx, request.SkillName); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("skill", request.SkillName).
 				Err(err).
 				Msg("[experience.common] clear_evolutions 失败")

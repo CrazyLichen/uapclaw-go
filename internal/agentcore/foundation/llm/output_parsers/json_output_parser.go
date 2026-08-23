@@ -22,6 +22,7 @@ import (
 // 对应 Python: openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py (JsonOutputParser)
 type JsonOutputParser struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent output_parsers 包日志组件标识（AgentCore 层）。
@@ -191,3 +192,5 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 
 	return out
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

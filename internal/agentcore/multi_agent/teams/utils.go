@@ -20,7 +20,7 @@ import (
 
 const (
 	// logComponent 日志组件标识
-	logComponent = logger.ComponentChannel
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -20,7 +20,6 @@ type PromptMgr struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -52,7 +51,7 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 
 	m.repo.Set(templateID, template)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "PROMPT_ADD_SUCCESS").
 		Str("template_id", templateID).
 		Msg("添加 Prompt 模板成功")
@@ -65,14 +64,14 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 	for _, entry := range templates {
 		if entry.ID == "" || entry.Template == nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "PROMPT_ADD_ERROR").
 				Str("template_id", entry.ID).
 				Msg("批量添加 Prompt 跳过无效条目")
 			continue
 		}
 		m.repo.Set(entry.ID, entry.Template)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "PROMPT_ADD_SUCCESS").
 			Str("template_id", entry.ID).
 			Msg("批量添加 Prompt 模板成功")
@@ -96,7 +95,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 		return nil, nil
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "PROMPT_REMOVE_SUCCESS").
 		Str("template_id", templateID).
 		Msg("移除 Prompt 模板成功")

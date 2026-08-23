@@ -67,6 +67,7 @@ const (
 	IntentUnknownTask IntentType = "unknown_task"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntent 创建意图实例，初始化默认值并校验。
@@ -202,3 +203,5 @@ func WithConfidence(c float64) IntentOption {
 func WithClarificationPrompt(prompt string) IntentOption {
 	return func(i *Intent) { i.ClarificationPrompt = prompt }
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

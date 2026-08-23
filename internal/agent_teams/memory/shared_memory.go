@@ -39,7 +39,7 @@ const (
 
 var (
 	// sharedLogComponent 日志组件
-	sharedLogComponent = logger.ComponentCommon
+	sharedLogComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -146,17 +146,17 @@ type MemoryIndexBase struct {
 	backups map[string]*backupData
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 const (
 	// defaultTopK Search 默认返回结果数量（被 simple.go 等实现类引用）
 	defaultTopK = 10
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-var (
-	// logComponent 日志组件常量，store 属于基础设施层（被 simple.go 等实现类引用）
-	logComponent = logger.ComponentCommon
-)
+var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -230,3 +230,5 @@ func (b *MemoryIndexBase) CleanupBackup(_ context.Context, backupID string) erro
 func (b *MemoryIndexBase) ListUserScopes(_ context.Context) ([]UserScope, error) {
 	return nil, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

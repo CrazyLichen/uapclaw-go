@@ -22,6 +22,7 @@ type SkillUtil struct {
 	remoteSkillUtil *RemoteSkillUtil
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // skillPromptContent 技能提示词模板内容。
@@ -46,6 +47,7 @@ const skillSystemPrefix = "You are an agent equipped with various skills to solv
 	"Before attempting any task, read the relevant skill document (SKILL.md) " +
 	"using read_file and follow its workflow.\n"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillUtil 创建 SkillUtil 实例。
@@ -152,7 +154,7 @@ func (su *SkillUtil) GetSkillPrompt() string {
 
 // loggerWarnSkillPrompt 记录技能提示词格式化失败警告。
 func loggerWarnSkillPrompt(err error) {
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("event_type", "skill_prompt_format_error").
 		Err(err).
 		Msg("技能提示词格式化失败")

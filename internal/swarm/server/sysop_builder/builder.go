@@ -28,9 +28,9 @@ const preserveFileSharingMode = "mount"
 //
 // Python 实现：
 //
-//	return SysOperationCard(
-//	    mode=OperationMode.LOCAL,
-//	    work_config=LocalWorkConfig(shell_allowlist=None),
+//	Python: return SysOperationCard(
+//	    Python: mode=OperationMode.LOCAL,
+//	    Python: work_config=LocalWorkConfig(shell_allowlist=None),
 //	)
 //
 // shell_allowlist=None 表示允许所有命令，Go 中 nil []string 等价。

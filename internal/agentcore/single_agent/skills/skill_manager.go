@@ -68,6 +68,7 @@ type DirInfo struct {
 // 【临时实现】后续 9.32 SysOperation 实现后删除，替换为 SysOperation 适配器。
 type osFsProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // SkillFileName 技能文件名（SKILL.md）。
@@ -78,6 +79,7 @@ const SkillFileName = "SKILL.md"
 // yamlFrontMatterSeparator YAML front matter 分隔符
 const yamlFrontMatterSeparator = "---"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillManager 创建 SkillManager 实例。

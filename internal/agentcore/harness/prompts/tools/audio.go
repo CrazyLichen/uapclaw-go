@@ -11,6 +11,9 @@ type AudioQuestionAnsweringMetadataProvider struct{}
 // AudioMetadataMetadataProvider 工具元数据提供者
 type AudioMetadataMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // audioTranscriptionDescription audio_transcription 工具双语描述

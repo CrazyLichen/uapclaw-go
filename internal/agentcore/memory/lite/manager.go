@@ -46,6 +46,11 @@ type MemoryManagerParams struct {
 	NodeName string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
@@ -57,3 +62,5 @@ func GetMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 func ClearMemoryManagerCache() {
 	clearMemoryManagerCache()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

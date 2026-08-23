@@ -323,7 +323,7 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 	allMessages := append(allMsgs, messagesToAdd...)
 	totalTokens := rlc.countContextWindowTokens(nil, allMessages, nil, mc)
 	if totalTokens > rlc.triggerTotalTokens {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "RoundLevelCompressor_triggered").
 			Int("total_tokens", totalTokens).
 			Int("trigger_total_tokens", rlc.triggerTotalTokens).
@@ -345,7 +345,7 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 	if err != nil {
 		// MODEL_CALL_FAILED 时降级跳过
 		if isModelCallFailedError(err) {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(err).
 				Msg("压缩模型调用失败，跳过当前处理器")
@@ -593,7 +593,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 ) ([]llm_schema.BaseMessage, error) {
 	modelMessages := rlc.prepareRoundCompressionMessages(messages, targets, mc, phaseName, targetTokens, aggressive, keepRecentMessages, systemMessages, tools)
 	if modelMessages == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "RoundLevelCompressor_phase_skipped").
 			Str("phase", phaseName).
 			Msg("压缩调用预算不足，跳过阶段")
@@ -622,7 +622,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 	}
 
 	if len(replacements) == 0 {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "RoundLevelCompressor_no_replacements").
 			Str("phase", phaseName).
 			Msg("压缩阶段未产生有效替换")
@@ -630,7 +630,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 	}
 
 	updatedMessages := processor.ReplaceMessages(messages, replacements)
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RoundLevelCompressor_phase_complete").
 		Str("phase", phaseName).
 		Int("before_tokens", rlc.countContextWindowTokens(systemMessages, messages, tools, mc)).
@@ -1513,13 +1513,13 @@ func (rlc *RoundLevelCompressor) countContextWindowTokens(
 				return count + toolCount
 			}
 			// CountMessages 成功但 CountTools 失败，记录工具计数错误
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(toolErr).
 				Msg("token_counter CountTools 返回错误，降级为字符估算")
 		} else {
 			// CountMessages 失败
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(msgErr).
 				Msg("token_counter CountMessages 返回错误，降级为字符估算")
@@ -1564,7 +1564,7 @@ func (rlc *RoundLevelCompressor) countCompressionCallTokens(systemPrompt string,
 		if err == nil {
 			return count
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", rlc.ProcessorType()).
 			Err(err).
 			Msg("压缩 token 计数降级")
@@ -1589,7 +1589,7 @@ func (rlc *RoundLevelCompressor) countMessageTokens(messages []llm_schema.BaseMe
 		if err == nil {
 			return count
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", rlc.ProcessorType()).
 			Err(err).
 			Msg("token_counter 返回错误，降级为字符估算")

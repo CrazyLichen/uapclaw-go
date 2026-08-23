@@ -73,17 +73,13 @@ type CreateInstanceOption func(*createInstanceConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentServer
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var (
-	// logComponent 日志组件，对齐项目规范 runtime 层使用 ComponentAgentServer
-	logComponent = logger.ComponentAgentServer
-)
+var ()
 
-// defaultCreateInstanceConfig 返回 CreateInstance 默认配置。
-func defaultCreateInstanceConfig() createInstanceConfig {
-	return createInstanceConfig{mode: "agent"}
-}
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithCreateInstanceConfig 设置 CreateInstance 配置。
 func WithCreateInstanceConfig(config map[string]any) CreateInstanceOption {
@@ -99,8 +95,6 @@ func WithCreateInstanceMode(mode string) CreateInstanceOption {
 func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 	return func(c *createInstanceConfig) { c.subMode = subMode }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewUapClaw 创建 UapClaw 实例。
 //
@@ -723,6 +717,11 @@ func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// defaultCreateInstanceConfig 返回 CreateInstance 默认配置。
+func defaultCreateInstanceConfig() createInstanceConfig {
+	return createInstanceConfig{mode: "agent"}
+}
+
 // isTeamMode 判断请求是否为 Team 模式。
 // 对齐 Python: is_team_mode = team_flag or (mode in {"team", "team.plan", "code.team"})
 func isTeamMode(request *schema.AgentRequest) bool {
@@ -776,7 +775,7 @@ func (uc *UapClaw) processTeamInterrupt(
 		// ⤵️ 10.6.19-23: team_manager.pause_session_runtime(sessionID, reason)
 		// S10: paused 硬编码为 false，Team pause 功能完全无效，依赖 TeamManager
 		paused := false
-		// paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
+		// Python: paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
 		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(pause)", nil)
 		message := "团队已暂停"
 		if !paused {
@@ -796,7 +795,7 @@ func (uc *UapClaw) processTeamInterrupt(
 		// ⤵️ 10.6.19-23: team_manager.cancel_session_runtime(sessionID, reason)
 		// S10: cancelled 硬编码为 false，Team cancel 功能完全无效，依赖 TeamManager
 		cancelled := false
-		// cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
+		// Python: cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
 		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", nil)
 		message := "团队当前执行已结束"
 		if !cancelled {

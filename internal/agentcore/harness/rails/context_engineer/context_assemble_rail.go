@@ -38,6 +38,8 @@ const (
 	contextAssembleRailPriority = 85
 )
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -70,7 +72,7 @@ func (r *ContextAssembleRail) Init(agent sainterfaces.BaseAgent) error {
 		}
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_init").
 		Msg("ContextAssembleRail 初始化完成")
 
@@ -87,7 +89,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_uninit").
 		Msg("ContextAssembleRail 注销完成")
 

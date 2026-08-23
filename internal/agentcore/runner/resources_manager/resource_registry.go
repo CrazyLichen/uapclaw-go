@@ -29,7 +29,6 @@ type ResourceRegistry struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -48,7 +47,7 @@ func NewResourceRegistry() *ResourceRegistry {
 		sysOperationMgr: NewSysOperationMgr(),
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_REGISTRY_INIT").
 		Msg("资源注册表初始化完成")
 

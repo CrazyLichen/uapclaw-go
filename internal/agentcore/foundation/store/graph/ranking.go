@@ -44,6 +44,7 @@ type RankerRegistry struct {
 	backends map[string]map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultWeightNameDense 默认名称向量权重

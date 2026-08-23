@@ -118,6 +118,7 @@ const (
 	TailChunkSize = 1024
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func NewFsOptions(opts ...FsOption) *FsOptions {
@@ -261,3 +262,5 @@ func (b *BaseFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ .
 }
 
 func (b *BaseFsOperation) ListTools() []*tool.ToolCard { return nil }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

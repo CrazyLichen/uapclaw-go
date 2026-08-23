@@ -366,10 +366,10 @@ func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session TracerSession) s
 
 	// 从 workflow.Card() 提取元数据，对齐 Python:
 	//
-	//	metadata = dict(id=workflow.card.id, name=workflow.card.name,
-	//	                description=workflow.card.description,
-	//	                version=workflow.card.version)
-	//	instance_info = {"class_name": workflow.card.name, "type": "workflow", "metadata": metadata}
+	//	Python: metadata = dict(id=workflow.card.id, name=workflow.card.name,
+	//	                Python: description=workflow.card.description,
+	//	                Python: version=workflow.card.version)
+	//	Python: instance_info = {"class_name": workflow.card.name, "type": "workflow", "metadata": metadata}
 	className := "Workflow"
 	instanceInfo := map[string]any{"class_name": className, "type": "workflow"}
 

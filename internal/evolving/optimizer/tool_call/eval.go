@@ -137,8 +137,8 @@ func NewSimpleEval(
 //
 //	for run in range(runs):
 //	    for i, (instruction, expected_fn_call, fn_output, answer) in enumerate(examples):
-//	        result = self._evaluate_single_example(...)
-//	    total_score = fn_call_weight * avg_fn_call_score + output_effectiveness_weight * avg_output_score
+//	    Python: result = self._evaluate_single_example(...)
+//	    Python: total_score = fn_call_weight * avg_fn_call_score + output_effectiveness_weight * avg_output_score
 //	return {score_avg, score_std, fn_call_accuracy, output_effectiveness, results}
 func (e *SimpleEval) Eval(
 	ctx context.Context,

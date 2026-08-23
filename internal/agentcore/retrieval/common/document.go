@@ -61,6 +61,8 @@ type AddFieldOption func(*addFieldOptions)
 type ModalityKind string
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 const (
 	// ModalityText 文本模态
 	ModalityText ModalityKind = "text"
@@ -77,9 +79,6 @@ var (
 	// audioBase64Pattern 音频 base64 正则，提取格式类型。
 	// 提取为包级变量避免每次调用 Content() 时重复编译，对齐 T-28 修复。
 	audioBase64Pattern = regexp.MustCompile(`data:audio/(.+?);base64,`)
-
-	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

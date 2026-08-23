@@ -38,6 +38,8 @@ type InProcessMessager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -107,7 +109,7 @@ func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message
 
 	for aid, handler := range handlers {
 		if err := handler(ctx, message); err != nil {
-			logger.Error(logger.ComponentAgentCore).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("agent_id", aid).Str("topic", topicID).
 				Msg("InProcess Publish 处理失败")
 		}
@@ -160,7 +162,7 @@ func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *s
 	handler, ok := b.p2p[agentID]
 	b.mu.Unlock()
 	if !ok {
-		logger.Warn(logger.ComponentAgentCore).Str("agent_id", agentID).
+		logger.Warn(logComponent).Str("agent_id", agentID).
 			Msg("InProcess Send: 无 P2P handler")
 		return nil
 	}

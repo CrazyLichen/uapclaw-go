@@ -11,6 +11,9 @@ type PaidSearchMetadataProvider struct{}
 // FetchWebpageMetadataProvider fetch_webpage 工具元数据提供者
 type FetchWebpageMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // freeSearchDescription free_search 工具双语描述

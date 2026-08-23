@@ -131,16 +131,16 @@ func NewVerificationContractRail() *VerificationContractRail {
 // Init 初始化钩子：捕获 system_prompt_builder，预构建契约 section。
 //
 // 对齐 Python: VerificationContractRail.init(agent)
-// Python L140-153
+// 对齐 Python L140-153
 func (r *VerificationContractRail) Init(agent agentinterfaces.BaseAgent) error {
 	r.promptBuilder = agent.SystemPromptBuilder()
 
 	// 预构建契约 section
 	// 对齐 Python L148-152:
-	//   self._section = PromptSection(
-	//       name=SectionName.VERIFICATION_CONTRACT,
-	//       content={"en": _CONTRACT_EN, "cn": _CONTRACT_CN},
-	//       priority=_CONTRACT_PRIORITY,
+	//   Python: self._section = PromptSection(
+	//       Python: name=SectionName.VERIFICATION_CONTRACT,
+	//       Python: content={"en": _CONTRACT_EN, "cn": _CONTRACT_CN},
+	//       Python: priority=_CONTRACT_PRIORITY,
 	//   )
 	section := saprompt.PromptSection{
 		Name:     hsections.SectionVerificationContract,
@@ -149,7 +149,7 @@ func (r *VerificationContractRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 	r.section = &section
 
-	logger.Info(logger.ComponentAgentCore).Msg("[VerificationContractRail] 已初始化")
+	logger.Info(logComponent).Msg("[VerificationContractRail] 已初始化")
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (r *VerificationContractRail) Init(agent agentinterfaces.BaseAgent) error {
 // 先移除再添加，避免跨轮次累积重复。
 //
 // 对齐 Python: VerificationContractRail.before_model_call(ctx)
-// Python L155-169
+// 对齐 Python L155-169
 func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.promptBuilder == nil || r.section == nil {
 		return nil
@@ -170,6 +170,6 @@ func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *age
 	r.promptBuilder.RemoveSection(hsections.SectionVerificationContract)
 	r.promptBuilder.AddSection(*r.section)
 
-	logger.Debug(logger.ComponentAgentCore).Msg("[VerificationContractRail] 已注入验证契约 section")
+	logger.Debug(logComponent).Msg("[VerificationContractRail] 已注入验证契约 section")
 	return nil
 }

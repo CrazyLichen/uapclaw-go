@@ -518,7 +518,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 	if afterErr != nil {
 		if origErr != nil {
 			// after 回调出错但有原始异常 → log 不掩盖
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event", string(after)).
 				Err(afterErr).
 				Msg("after 回调出错，掩盖原始异常")

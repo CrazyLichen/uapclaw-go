@@ -40,10 +40,9 @@ type BrowserAgentRuntime struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// logComponentBR 日志组件标识
-	logComponentBR = logger.ComponentAgentCore
-)
+const logComponentBR = logger.ComponentAgentCore
+
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -197,14 +196,14 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	}
 
 	// 对齐 Python:
-	//   from .runtime_tools import (
-	//       BrowserCustomActionTool, BrowserListActionsTool,
-	//       BrowserProbeCardsTool, BrowserProbeInteractivesTool,
+	//   Python: from .runtime_tools import (
+	//       Python: BrowserCustomActionTool, BrowserListActionsTool,
+	//       Python: BrowserProbeCardsTool, BrowserProbeInteractivesTool,
 	//   )
-	//   self._browser_custom_action_tool = BrowserCustomActionTool(self, language="en")
-	//   self._browser_list_actions_tool = BrowserListActionsTool(self, language="en")
-	//   self._browser_probe_interactives_tool = BrowserProbeInteractivesTool(self, language="en")
-	//   self._browser_probe_cards_tool = BrowserProbeCardsTool(self, language="en")
+	//   Python: self._browser_custom_action_tool = BrowserCustomActionTool(self, language="en")
+	//   Python: self._browser_list_actions_tool = BrowserListActionsTool(self, language="en")
+	//   Python: self._browser_probe_interactives_tool = BrowserProbeInteractivesTool(self, language="en")
+	//   Python: self._browser_probe_cards_tool = BrowserProbeCardsTool(self, language="en")
 	r.browserCustomActionTool = NewBrowserCustomActionTool(r)
 	r.browserListActionsTool = NewBrowserListActionsTool(r)
 	r.browserProbeInteractivesTool = NewBrowserProbeInteractivesTool(r)
@@ -302,9 +301,9 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 
 	// TODO(#9.38-49): ⤵️ 回填 buildInteractiveProbeJS
 	// 对齐 Python:
-	//   js_code = build_interactive_probe_js(max_items=max_items, viewport_only=viewport_only, query=query)
-	//   raw = await self._code_executor(js_code)
-	//   raw = self._unwrap_mcp_text_result(raw)
+	//   Python: js_code = build_interactive_probe_js(max_items=max_items, viewport_only=viewport_only, query=query)
+	//   Python: raw = await self._code_executor(js_code)
+	//   Python: raw = self._unwrap_mcp_text_result(raw)
 	jsCode := buildInteractiveProbeJSPlaceholder(maxItems, viewportOnly, query)
 
 	raw, err := r.codeExecutor(ctx, jsCode)
@@ -366,12 +365,12 @@ func (r *BrowserAgentRuntime) ProbeCards(
 
 	// TODO(#9.38-49): ⤵️ 回填 buildCardProbeJS + builtinSiteProfiles + getSelectorCache
 	// 对齐 Python:
-	//   site_profiles = builtin_site_profiles()
-	//   selector_cache = get_selector_cache()
-	//   selector_cache_records = selector_cache.export_for_probe()
-	//   js_code = build_card_probe_js(max_cards=max_cards, viewport_only=viewport_only,
-	//       include_buttons=include_buttons, query=query,
-	//       site_profiles=site_profiles, selector_cache_records=selector_cache_records)
+	//   Python: site_profiles = builtin_site_profiles()
+	//   Python: selector_cache = get_selector_cache()
+	//   Python: selector_cache_records = selector_cache.export_for_probe()
+	//   Python: js_code = build_card_probe_js(max_cards=max_cards, viewport_only=viewport_only,
+	//       Python: include_buttons=include_buttons, query=query,
+	//       Python: site_profiles=site_profiles, selector_cache_records=selector_cache_records)
 	jsCode := buildCardProbeJSPlaceholder(maxCards, viewportOnly, includeButtons, query)
 
 	raw, err := r.codeExecutor(ctx, jsCode)
@@ -406,11 +405,11 @@ func (r *BrowserAgentRuntime) ProbeCards(
 
 	// TODO(#9.38-49): ⤵️ 回填 selector cache 记录
 	// 对齐 Python:
-	//   if parsed.get("ok") and parsed.get("cards"):
-	//       try:
-	//           selector_cache.record_card_probe_result(parsed)
-	//       except Exception:
-	//           logger.debug("Failed to record card probe result in selector cache", exc_info=True)
+	//   Python: if parsed.get("ok") and parsed.get("cards"):
+	//       Python: try:
+	//           Python: selector_cache.record_card_probe_result(parsed)
+	//       Python: except Exception:
+	//           Python: logger.debug("Failed to record card probe result in selector cache", exc_info=True)
 
 	return parsed
 }

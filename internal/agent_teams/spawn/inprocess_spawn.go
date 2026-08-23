@@ -72,7 +72,7 @@ func InProcessSpawn(
 
 		// 对齐 Python: await Runner.run_agent_team(teammate, inputs, member=True, session=session_id)
 		// ⤵️ 预留：TeamRunner（9.85）实现后回填
-		// _, err := runner.RunAgentTeam(runCtx, teammate, inputs, true, sessionID)
+		// Python: _, err := runner.RunAgentTeam(runCtx, teammate, inputs, true, sessionID)
 		_ = runCtx    // 同上
 		_ = inputs    // 避免未使用变量警告
 		_ = query     // 同上

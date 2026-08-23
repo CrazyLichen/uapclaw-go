@@ -22,6 +22,11 @@ type CryptoUtilityStub struct {
 	BaseExtensionImpl
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetCrypto 返回 nil，⤵️ 10.5.10 延后实现后返回 CryptoProvider
@@ -34,3 +39,5 @@ func (c *CryptoUtilityStub) Initialize(ctx context.Context, config *extensions.E
 
 // Shutdown 空实现，对齐 Python CryptoUtility.shutdown()
 func (c *CryptoUtilityStub) Shutdown(ctx context.Context) error { return nil }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

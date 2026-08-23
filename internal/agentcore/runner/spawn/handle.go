@@ -48,12 +48,13 @@ type SpawnedProcessHandle struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
-	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
+// logComponent 日志组件
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSpawnedProcessHandle 创建子进程句柄。

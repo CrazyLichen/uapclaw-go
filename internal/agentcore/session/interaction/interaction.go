@@ -59,7 +59,6 @@ type AgentInteraction struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -73,7 +72,7 @@ func NewWorkflowInteraction(session interfaces.InnerSession) *WorkflowInteractio
 	// 类型断言获取 WorkflowState
 	ws, ok := session.State().(state.WorkflowState)
 	if !ok {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "new_workflow_interaction").
 			Str("state_type", fmt.Sprintf("%T", session.State())).
 			Msg("当前状态不支持 Workflow 操作，对齐 Python AttributeError")
@@ -128,7 +127,7 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "workflow_interaction_interrupt").
 		Str("node_id", nodeID).
 		Int("index", w.idx).
@@ -160,7 +159,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "workflow_latest_input_interrupt").
 		Str("node_id", nodeID).
 		Int("index", w.idx).
@@ -190,7 +189,7 @@ func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any
 		}
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "simple_agent_interaction_interrupt").
 		Str("message", fmt.Sprintf("%v", message)).
 		Msg("简单 Agent 交互中断")
@@ -222,7 +221,7 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(a.session, InteractionType, a.idx, payload)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "agent_interaction_interrupt").
 		Str("executable_id", nodeID).
 		Int("index", a.idx).

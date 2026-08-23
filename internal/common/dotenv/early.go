@@ -159,7 +159,7 @@ func expandHome(path string) string {
 		if len(path) == 1 {
 			return home
 		}
-		// ~/xxx → /home/user/xxx
+		// 路径展开: ~/xxx → /home/user/xxx
 		if path[1] == '/' || path[1] == '\\' {
 			return filepath.Join(home, path[2:])
 		}

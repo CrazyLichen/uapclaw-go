@@ -43,7 +43,6 @@ type AgentTeamSessionOption func(*AgentTeamSession)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查接口实现
@@ -64,7 +63,7 @@ var (
 //   - tracer: nil 时自动创建 Tracer() + init(swm)
 //   - teamSpan: nil 时从 tracer.AgentSpanManager.CreateAgentSpan() 创建
 func NewAgentTeamSession(sessionID, teamID string, opts ...AgentTeamSessionOption) *AgentTeamSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_agent_team_session").
 		Str("session_id", sessionID).
 		Str("team_id", teamID).

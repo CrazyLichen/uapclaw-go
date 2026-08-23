@@ -108,7 +108,7 @@ var (
 	// 对齐 Python: _ERROR_CODE_PATTERN = re.compile(r"^\[(\d+)\]")
 	errorCodePattern = regexp.MustCompile(`^\[(\d+)\]`)
 	// scLogComponent StreamController 日志组件
-	scLogComponent = logger.ComponentCommon
+	scLogComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -126,7 +126,7 @@ func WithRequestCompletionPoll(cb func(ctx context.Context) error) StreamControl
 // NewStreamController 创建新的流式控制器。
 // 对齐 Python: StreamController.__init__(blueprint_getter, state, resources, status_updater,
 //
-//	execution_updater, wake_mailbox_callback, request_completion_poll_callback)
+// Python 参数: execution_updater, wake_mailbox_callback, request_completion_poll_callback)
 func NewStreamController(
 	getBlueprint func() *TeamAgentBlueprint,
 	state *TeamAgentState,

@@ -5,6 +5,9 @@ package tools
 // AskUserMetadataProvider ask_user 工具元数据提供者
 type AskUserMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // askUserDescription ask_user 工具双语描述

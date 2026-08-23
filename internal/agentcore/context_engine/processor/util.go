@@ -17,6 +17,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -318,7 +320,7 @@ func CountMessagesTokens(tokenCounter token.TokenCounter, messages []llm_schema.
 		if processorType != "" {
 			prefix = fmt.Sprintf("[%s] ", processorType)
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", processorType).
 			Err(err).
 			Msg(prefix + "token_counter 返回错误，降级为字符估算")

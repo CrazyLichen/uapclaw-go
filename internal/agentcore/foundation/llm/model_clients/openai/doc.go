@@ -19,6 +19,7 @@
 //	├── request_builder.go  # 请求构建（headers、参数调整、SSL/代理）
 //	├── parse_response.go   # 非流式响应解析
 //	├── parse_stream_chunk.go # 流式块解析
+//	├── transcription.go    # 音频转写（Whisper API）
 //	└── client.go           # OpenAIModelClient 主结构体 + Invoke/Stream + init 注册
 //
 // # 注册

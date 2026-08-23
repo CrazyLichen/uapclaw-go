@@ -88,8 +88,6 @@ func (c *MemUpdateChecker) Check(newMemories map[string]string, oldMemories map[
 	return result, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // String 实现 fmt.Stringer 接口，对齐 Python CheckResult.value
 func (cr CheckResult) String() string {
 	switch cr {
@@ -115,3 +113,5 @@ func (ms MemoryStatus) String() string {
 		return "unknown"
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

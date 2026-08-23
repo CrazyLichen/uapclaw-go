@@ -477,6 +477,7 @@ const (
 // DefaultScope 默认作用域，与 Python DEFAULT_SCOPE 一致。
 const DefaultScope = "_framework"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildEventName 构建带 scope 的事件名。
@@ -646,3 +647,5 @@ func (d *TaskManagerEventData) String() string {
 	}
 	return fmt.Sprintf("TaskManagerEventData{事件:%s, 任务ID:%s, 状态:%s}", d.Event, d.TaskID, d.Status)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

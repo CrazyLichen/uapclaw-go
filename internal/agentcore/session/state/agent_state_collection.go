@@ -29,13 +29,15 @@ type AgentStateCollection struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentStateCollection 创建 Agent 状态集合实例。
 func NewAgentStateCollection() *AgentStateCollection {
-	logger.Info(logger.ComponentAgentCore).Str("action", "new_agent_state_collection").Msg("创建 Agent 状态集合")
+	logger.Info(logComponent).Str("action", "new_agent_state_collection").Msg("创建 Agent 状态集合")
 	return &AgentStateCollection{
 		globalState: NewInMemoryStateLike(),
 		agentState:  NewInMemoryStateLike(),

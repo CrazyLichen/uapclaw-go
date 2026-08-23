@@ -57,6 +57,12 @@ type Session struct {
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查 *Session 满足 SessionFacade 接口
@@ -116,7 +122,7 @@ func NewSession(opts ...SessionOption) *Session {
 		internal.WithStreamWriterManager(s.streamWriterManager),
 	)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_session").
 		Str("session_id", s.sessionID).
 		Msg("创建公开层 Session")
@@ -335,7 +341,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	}
 
 	s.preRunDone = true
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "session_pre_run").
 		Str("session_id", s.GetSessionID()).
 		Msg("Session PreRun 完成")
@@ -361,7 +367,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 	// G-08 修复：不再吞掉 Commit 错误，对齐 Python 异常传播行为
 	// G17 修复：commit 失败后不设 postRunDone=true，允许重试 PostRun
 	if err := s.Commit(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("action", "session_post_run").
 			Str("session_id", s.GetSessionID()).
 			Msg("Session PostRun Commit 失败")
@@ -369,7 +375,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 	}
 
 	s.postRunDone = true
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "session_post_run").
 		Str("session_id", s.GetSessionID()).
 		Msg("Session PostRun 完成")

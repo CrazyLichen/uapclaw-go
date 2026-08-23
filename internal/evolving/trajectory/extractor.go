@@ -10,6 +10,22 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TrajectoryExtractor 轨迹提取器接口。
+//
+// 从 Agent 执行 Session 中提取完整 Trajectory。
+// TracerTrajectoryExtractor 是默认实现。
+//
+// 对应 Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
+//
+//	class TrajectoryExtractor:
+//	    def extract(self, session: Any, case_id: Optional[str] = None) -> Trajectory: ...
+type TrajectoryExtractor interface {
+	// Extract 从 Session 提取 Trajectory。
+	//
+	// 对应 Python: TrajectoryExtractor.extract(session, case_id)
+	Extract(sess *session.Session, caseID string) *Trajectory
+}
+
 // TracerTrajectoryExtractor 基于 Tracer Span 的轨迹提取器。
 //
 // 从 Session.tracer() 的 AgentSpanManager 中提取所有 Span，
@@ -26,25 +42,12 @@ type TracerTrajectoryExtractor struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件常量
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TrajectoryExtractor 轨迹提取器接口。
-//
-// 从 Agent 执行 Session 中提取完整 Trajectory。
-// TracerTrajectoryExtractor 是默认实现。
-//
-// 对应 Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
-//
-//	class TrajectoryExtractor:
-//	    def extract(self, session: Any, case_id: Optional[str] = None) -> Trajectory: ...
-type TrajectoryExtractor interface {
-	// Extract 从 Session 提取 Trajectory。
-	//
-	// 对应 Python: TrajectoryExtractor.extract(session, case_id)
-	Extract(sess *session.Session, caseID string) *Trajectory
-}
 
 // NewTracerTrajectoryExtractor 创建基于 Tracer 的轨迹提取器。
 //
@@ -261,7 +264,7 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.Span) *ToolCall
 	var toolSchema map[string]any
 
 	// 对齐 Python: if self._resource_manager is not None and tool_name
-	//     tool_info = self._resource_manager.get_tool_infos(tool_name)
+	//     Python: tool_info = self._resource_manager.get_tool_infos(tool_name)
 	if e.resourceManager != nil && toolName != "" {
 		// Go 中 resourceManager 类型待定，当前为 any
 		// 后续通过 ResourceManager 接口调用
@@ -395,7 +398,7 @@ func parseLLMResponse(outputs any) map[string]any {
 // extractInputs 从 Span 提取输入数据。
 //
 // 对齐 Python: TrajectoryExtractor._extract_inputs(span)
-// raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
+// Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
 func extractInputs(span *tracer.Span) any {
 	raw := span.Inputs
 	if m, ok := raw.(map[string]any); ok {
@@ -436,6 +439,3 @@ func extractOutputsAsMap(span *tracer.Span) map[string]any {
 	}
 	return nil
 }
-
-// logComponent 日志组件常量
-const logComponent = logger.ComponentAgentCore

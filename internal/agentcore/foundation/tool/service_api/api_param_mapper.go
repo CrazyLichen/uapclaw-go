@@ -53,6 +53,9 @@ const (
 	formHandlerTypeKey = "form_handler_type"
 )
 
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回 APIParamLocation 的字符串表示。
@@ -206,7 +209,7 @@ func parseAPIParamLocation(s string) (APIParamLocation, error) {
 	case "form":
 		return APIParamLocationForm, nil
 	default:
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("location", s).
 			Msg("未知的参数位置类型，fallback 到 body")
 		return APIParamLocationBody, nil // 未知值 fallback 到 body

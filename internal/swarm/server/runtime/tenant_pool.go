@@ -46,8 +46,6 @@ var tenantAgentPoolSingleton utils.Singleton[TenantAgentPool]
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // GetInstance 获取 TenantAgentPool 单例实例。
 // 对齐 Python: TenantAgentPool.get_instance()
 func GetInstance() *TenantAgentPool {

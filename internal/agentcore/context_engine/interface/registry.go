@@ -10,3 +10,11 @@ package iface
 // 对应 Python: ContextEngine._PROCESSOR_MAP 中存储的 processor_class，
 // 运行时通过 processor_class(config) 创建实例。
 type ProcessorFactory func(config ProcessorConfig) (ContextProcessor, error)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

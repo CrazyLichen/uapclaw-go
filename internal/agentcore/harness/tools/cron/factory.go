@@ -75,6 +75,7 @@ type CronPreviewJobInput struct {
 	Count int `json:"count"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -223,11 +224,11 @@ func makeLegacyTool[I any](
 ) tool.Tool {
 	card, _ := ptools.BuildToolCard(name, name+"_"+scope, language, nil, agentID)
 
-	// 对齐 Python L106-115: if target_schema is not None:
-	// input_params = get_tool_input_params(name, language)
-	// if "properties" in input_params and "targets" in input_params["properties"]:
-	//     input_params["properties"]["targets"] = target_schema
-	//     card = ToolCard(id=card.id, name=card.name, description=card.description, input_params=input_params)
+	// 对齐 Python L106-115: Python: if target_schema is not None:
+	// Python: input_params = get_tool_input_params(name, language)
+	// Python: if "properties" in input_params and "targets" in input_params["properties"]:
+	//     Python: input_params["properties"]["targets"] = target_schema
+	//     Python: card = ToolCard(id=card.id, name=card.name, description=card.description, input_params=input_params)
 	if targetSchemaMap != nil {
 		provider, ok := ptools.GetToolProvider(name)
 		if ok {
@@ -252,10 +253,10 @@ func makeLegacyTool[I any](
 // 对齐 Python: _target_schema (cron.py L119-132)
 //
 // Python 逻辑：
-// schema = {"type": "string", "description": "Legacy compatibility target channel"}
-// enum_values = [str(item).strip() for item in list(target_channels or []) if str(item).strip()]
-// if enum_values: schema["enum"] = enum_values
-// if default_target_channel: schema["default"] = str(default_target_channel).strip()
+// Python: schema = {"type": "string", "description": "Legacy compatibility target channel"}
+// Python: enum_values = [str(item).strip() for item in list(target_channels or []) if str(item).strip()]
+// Python: if enum_values: schema["enum"] = enum_values
+// Python: if default_target_channel: schema["default"] = str(default_target_channel).strip()
 func targetSchema(targetChannels []string, defaultTargetChannel string) map[string]any {
 	schema := map[string]any{
 		"type":        "string",

@@ -24,6 +24,7 @@ type StoreRecordsHelper struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // langToExt 语言扩展名映射。
 // 对应 Python: _LANG_TO_EXT
@@ -34,8 +35,6 @@ var langToExt = map[string]string{
 	"shell":      "sh",
 	"bash":       "sh",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -61,14 +60,14 @@ func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string,
 	scriptPath := filepath.Join(scriptsDir, filename)
 
 	if err := h.store.WriteFileText(ctx, scriptPath, record.Change.Content); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("filename", filename).
 			Str("record_id", record.ID).
 			Err(err).
 			Msg("[EvolutionStore] 持久化脚本写入失败")
 		return err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("filename", filename).
 		Str("record_id", record.ID).
 		Msg("[EvolutionStore] 持久化脚本")
@@ -103,7 +102,7 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name stri
 	}
 	var data map[string]any
 	if err := json.Unmarshal([]byte(fileContent), &data); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("file", evoPath).
 			Err(err).
 			Msg("[EvolutionStore] 解析失败")
@@ -111,7 +110,7 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name stri
 	}
 	evoLog, err := FromDictEvolutionLog(data)
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("file", evoPath).
 			Err(err).
 			Msg("[EvolutionStore] FromDict 解析失败")
@@ -134,7 +133,7 @@ func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, 
 	evoPath := filepath.Join(targetDir, evolutionFilename)
 	data, err := json.Marshal(evoLog.ToDict())
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("[EvolutionStore] 序列化演进日志失败")
+		logger.Error(logComponent).Err(err).Msg("[EvolutionStore] 序列化演进日志失败")
 		return err
 	}
 	return h.store.WriteFileText(ctx, evoPath, string(data))
@@ -168,7 +167,7 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 		if err := h.SaveEvolutionLog(ctx, name, evoLog, ""); err != nil {
 			return updatedCount, err
 		}
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 更新记录分数")
@@ -222,7 +221,7 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 			return deletedCount, err
 		}
 		_ = h.store.RenderEvolutionMarkdown(ctx, name)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Int("deleted_count", deletedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 删除记录")
@@ -254,7 +253,7 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 			return updatedCount, err
 		}
 		_ = h.store.RenderEvolutionMarkdown(ctx, name)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
 			Msg("[EvolutionStore] 标记记录已应用")
@@ -288,7 +287,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	}
 
 	if primaryRecord == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("primary_id", primaryID).
 			Msg("[EvolutionStore] merge_records: 主记录未找到")
 		return nil, nil
@@ -322,7 +321,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	}
 	_ = h.store.RenderEvolutionMarkdown(ctx, name)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Int("removed_count", len(recordsToRemove)).
 		Str("primary_id", primaryID).
 		Str("skill", name).
@@ -344,7 +343,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name strin
 	}
 
 	if targetRecord == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("record_id", recordID).
 			Msg("[EvolutionStore] update_record_content: 记录未找到")
 		return nil, nil
@@ -363,7 +362,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name strin
 	}
 	_ = h.store.RenderEvolutionMarkdown(ctx, name)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("record_id", recordID).
 		Str("skill", name).
 		Msg("[EvolutionStore] 更新记录内容")

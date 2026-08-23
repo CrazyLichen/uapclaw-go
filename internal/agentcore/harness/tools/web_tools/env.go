@@ -222,7 +222,7 @@ func safeEnvChoice(name, defaultVal string, allowed map[string]bool) string {
 	if allowed[normalized] {
 		return normalized
 	}
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("env", name).
 		Str("value", raw).
 		Str("default", defaultVal).

@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -33,7 +32,7 @@ import (
 func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event_type", "fix_incomplete_tool_context_error").
 				Str("error", fmt.Sprintf("%v", r)).
 				Msg("修复不完整工具上下文时发生异常")
@@ -92,7 +91,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 		case *llmschema.AssistantMessage:
 			// 遇到 AssistantMessage 时，先 flush 之前的 pending tools
 			if len(toolIDCache) > 0 {
-				logger.Info(logger.ComponentAgentCore).
+				logger.Info(logComponent).
 					Str("event_type", "fix_incomplete_tool_context").
 					Msg("Fixed incomplete tool context with placeholder messages")
 				flushPendingTools()
@@ -127,7 +126,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 		default:
 			// 其他消息类型（UserMessage 等），先 flush pending
 			if len(toolIDCache) > 0 {
-				logger.Info(logger.ComponentAgentCore).
+				logger.Info(logComponent).
 					Str("event_type", "fix_incomplete_tool_context").
 					Msg("Fixed incomplete tool context with placeholder messages")
 				flushPendingTools()
@@ -138,7 +137,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 
 	// 处理末尾残留的 pending tools
 	if len(toolIDCache) > 0 {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "fix_incomplete_tool_context").
 			Msg("Fixed incomplete tool context with placeholder messages")
 		flushPendingTools()
@@ -156,7 +155,7 @@ func EnsureJSONArguments(arguments string) string {
 	// 尝试解析为 JSON
 	var parsed any
 	if err := json.Unmarshal([]byte(arguments), &parsed); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "illegal_tool_call_arguments").
 			Str("arguments", arguments).
 			Msg("Illegal Tool call arguments")
@@ -168,7 +167,7 @@ func EnsureJSONArguments(arguments string) string {
 		return arguments
 	}
 
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("event_type", "illegal_tool_call_arguments").
 		Str("arguments", arguments).
 		Msg("Illegal Tool call arguments")

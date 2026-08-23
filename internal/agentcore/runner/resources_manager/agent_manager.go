@@ -22,6 +22,8 @@ type AgentMgr struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -69,7 +71,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 
 	err := m.registerProvider(agentID, wrappedProvider)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_ADD_ERROR").
 			Str("agent_id", agentID).
 			Err(err).
@@ -80,7 +82,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "AGENT_ADD_SUCCESS").
 		Str("agent_id", agentID).
 		Msg("添加 Agent 成功")
@@ -95,7 +97,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 	unwrapped, err := m.unregisterProvider(agentID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_REMOVE_ERROR").
 			Str("agent_id", agentID).
 			Err(err).
@@ -112,7 +114,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 		return unwrapped(ctx)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "AGENT_REMOVE_SUCCESS").
 		Str("agent_id", agentID).
 		Msg("移除 Agent 成功")
@@ -129,7 +131,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.BaseAgent, error) {
 	agent, err := m.getResource(ctx, agentID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_GET_ERROR").
 			Str("agent_id", agentID).
 			Err(err).

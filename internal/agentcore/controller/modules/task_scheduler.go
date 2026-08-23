@@ -63,6 +63,7 @@ type runningTaskEntry struct {
 	done chan struct{}
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// payloadTypeTaskCompletion 任务完成载荷类型（对齐 EventType 枚举值）
@@ -73,6 +74,7 @@ const (
 	payloadTypeTaskFailed = "task_failed"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskScheduler 创建新的 TaskScheduler 实例。

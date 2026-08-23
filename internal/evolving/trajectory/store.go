@@ -107,8 +107,8 @@ func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) 
 		trajectories = append(trajectories, t)
 	}
 	// 应用过滤器
-	// 对齐 Python: for key, value in filters.items():
-	//     trajectories = [t for t in trajectories if getattr(t, key, None) == value]
+	// 对齐 Python: Python: for key, value in filters.items():
+	//     Python: trajectories = [t for t in trajectories if getattr(t, key, None) == value]
 	for key, value := range filters {
 		filtered := make([]*Trajectory, 0, len(trajectories))
 		for _, t := range trajectories {
@@ -247,17 +247,17 @@ func trajectoryToDict(trajectory *Trajectory) map[string]any {
 //
 // 对齐 Python:
 //
-//	if hasattr(obj, "model_dump") and callable(obj.model_dump):
-//	    return _to_json_compatible(obj.model_dump())
-//	if hasattr(obj, "__dataclass_fields__"):
-//	    return _to_json_compatible(asdict(obj))
-//	if isinstance(obj, (list, tuple)):
-//	    return [_to_json_compatible(item) for item in obj]
-//	if isinstance(obj, dict):
-//	    return {str(key): _to_json_compatible(value) for key, value in obj.items()}
-//	if isinstance(obj, (str, int, float, bool)) or obj is None:
-//	    return obj
-//	return str(obj)
+//	Python: if hasattr(obj, "model_dump") and callable(obj.model_dump):
+//	    Python: return _to_json_compatible(obj.model_dump())
+//	Python: if hasattr(obj, "__dataclass_fields__"):
+//	    Python: return _to_json_compatible(asdict(obj))
+//	Python: if isinstance(obj, (list, tuple)):
+//	    Python: return [_to_json_compatible(item) for item in obj]
+//	Python: if isinstance(obj, dict):
+//	    Python: return {str(key): _to_json_compatible(value) for key, value in obj.items()}
+//	Python: if isinstance(obj, (str, int, float, bool)) or obj is None:
+//	    Python: return obj
+//	Python: return str(obj)
 //
 // 对应 Python: FileTrajectoryStore._to_json_compatible()
 func toJSONCompatible(obj any) any {
@@ -303,20 +303,20 @@ func jsonSafeRecursive(v any) any {
 //
 // 对齐 Python:
 //
-//	steps_data = data.get("steps", [])
-//	steps = []
-//	for step_data in steps_data:
-//	    detail_data = step_data.pop("detail", None)
-//	    detail = None
-//	    if detail_data:
-//	        if "messages" in detail_data:
-//	            detail = LLMCallDetail(**detail_data)
-//	        elif "tool_name" in detail_data:
-//	            detail = ToolCallDetail(**detail_data)
-//	    step_data["detail"] = detail
-//	    steps.append(TrajectoryStep(**step_data))
-//	data["steps"] = steps
-//	return Trajectory(**data)
+//	Python: steps_data = data.get("steps", [])
+//	Python: steps = []
+//	Python: for step_data in steps_data:
+//	    Python: detail_data = step_data.pop("detail", None)
+//	    Python: detail = None
+//	    Python: if detail_data:
+//	        Python: if "messages" in detail_data:
+//	            Python: detail = LLMCallDetail(**detail_data)
+//	        Python: elif "tool_name" in detail_data:
+//	            Python: detail = ToolCallDetail(**detail_data)
+//	    Python: step_data["detail"] = detail
+//	    Python: steps.append(TrajectoryStep(**step_data))
+//	Python: data["steps"] = steps
+//	Python: return Trajectory(**data)
 //
 // 对应 Python: FileTrajectoryStore._dict_to_trajectory()
 func dictToTrajectory(data map[string]any) *Trajectory {

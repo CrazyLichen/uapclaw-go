@@ -102,7 +102,7 @@ func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, er
 //
 // 深度学习风格推理加载器，从检查点 JSON 读取 operators_state：
 //
-//		state = store.load_state_dict(path)
+//		Python: state = store.load_state_dict(path)
 //	   加载操作状态（op.load_state）
 //
 // 对应 Python: FileCheckpointStore.load_state_dict(path)

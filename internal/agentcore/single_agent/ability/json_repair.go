@@ -7,6 +7,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RepairToolArgumentsJSON 尝试修复畸形的 JSON 字符串，通过补全缺失的闭合括号。
@@ -107,7 +110,7 @@ func ParseToolArguments(arguments string) (map[string]any, error) {
 	repaired := RepairToolArgumentsJSON(arguments)
 	if repaired != nil && *repaired != arguments {
 		if err := json.Unmarshal([]byte(*repaired), &result); err == nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Msg("通过补全闭合括号修复了畸形的工具参数")
 			return result, nil
 		}

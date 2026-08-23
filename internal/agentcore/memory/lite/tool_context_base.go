@@ -27,6 +27,10 @@ type LiteMemoryToolContextBase struct {
 	NodeName string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithWorkspace 设置工作空间
@@ -97,7 +101,7 @@ func (b *LiteMemoryToolContextBase) EnsureManager() bool {
 	}
 	mgr, err := GetMemoryIndexManager(params)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("node_name", b.NodeName).
 			Err(err).
 			Msg("初始化记忆管理器失败")
@@ -117,3 +121,5 @@ func (b *LiteMemoryToolContextBase) IsClosed() bool {
 	}
 	return false
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

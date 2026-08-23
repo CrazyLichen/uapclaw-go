@@ -15,6 +15,11 @@ type ExtensionManager struct {
 	loader   *ExtensionLoader
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExtensionManager 创建 ExtensionManager，对齐 Python ExtensionManager(registry)
@@ -38,3 +43,5 @@ func (m *ExtensionManager) ShutdownAllExtensions(ctx context.Context) error { re
 // ListExtensions 列出已加载扩展，对齐 Python ExtensionManager.list_extensions()
 // ⤵️ 10.5.8 延后：当前返回空列表
 func (m *ExtensionManager) ListExtensions() []map[string]string { return nil }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

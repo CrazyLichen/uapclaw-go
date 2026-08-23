@@ -42,7 +42,7 @@ var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 // 对齐 Python: normalize_keywords(raw)
 //
 //	if not isinstance(raw, list): return None
-//	keywords = [str(item).strip() for item in raw if str(item).strip()]
+//	Python: keywords = [str(item).strip() for item in raw if str(item).strip()]
 //	return keywords or None
 func NormalizeKeywords(raw any) []string {
 	if raw == nil {
@@ -70,7 +70,7 @@ func NormalizeKeywords(raw any) []string {
 // 对齐 Python: normalize_summary(raw)
 //
 //	if not isinstance(raw, str): return None
-//	summary = " ".join(raw.split())
+//	Python: summary = " ".join(raw.split())
 //	if not summary or summary.lower() == "null": return None
 //	return summary
 func NormalizeSummary(raw any) *string {
@@ -92,7 +92,7 @@ func NormalizeSummary(raw any) *string {
 //
 // 对齐 Python: parse_experience_draft(data)
 //
-//	action = data.get("action", "append")
+//	Python: action = data.get("action", "append")
 //	if action == "skip": return ParsedExperienceDraft(patch=EvolutionPatch(action="skip", ...))
 //	section 校验: section not in VALID_SECTIONS → fallback "Troubleshooting"
 //	target 解析: EvolutionTarget(raw_target)，失败 → fallback BODY
@@ -148,7 +148,7 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 	}
 
 	// 对齐 Python: keywords = normalize_keywords(data.get("keywords"))
-	//	summary = normalize_summary(data.get("summary"))
+	//	Python: summary = normalize_summary(data.get("summary"))
 	keywords := NormalizeKeywords(data["keywords"])
 	summary := NormalizeSummary(data["summary"])
 
@@ -178,9 +178,9 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 //
 // 对齐 Python: parse_experience_drafts_with_error(raw, extract_json_with_error_fn)
 //
-//	data, last_error = extract_json_with_error_fn(raw)
-//	if data is None: return None, last_error
-//	items = data if isinstance(data, list) else [data]
+//	Python: data, last_error = extract_json_with_error_fn(raw)
+//	Python: if data is None: return None, last_error
+//	Python: items = data if isinstance(data, list) else [data]
 //	逐条 ParseExperienceDraft
 func ParseExperienceDraftsWithError(raw string, extractFn func(string) (any, string)) ([]ParsedExperienceDraft, string) {
 	data, lastError := extractFn(raw)
@@ -271,8 +271,8 @@ func ExtractJSONWithError(raw string) (any, string) {
 //
 // 对齐 Python: _looks_truncated(text)
 //
-//	opens = text.count("{") + text.count("[")
-//	closes = text.count("}") + text.count("]")
+//	Python: opens = text.count("{") + text.count("[")
+//	Python: closes = text.count("}") + text.count("]")
 //	return opens > closes + 1
 func LooksTruncated(text string) bool {
 	opens := strings.Count(text, "{") + strings.Count(text, "[")

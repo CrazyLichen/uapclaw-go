@@ -17,8 +17,8 @@ const vec0InitFuncName = "sqlite3_vec_init"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveVec0Path 解析 vec0.so 的路径。
-// Linux: third_party/sqlite-vec/linux-amd64/vec0.so
-// macOS: third_party/sqlite-vec/darwin-arm64/vec0.dylib
+// Linux 下: third_party/sqlite-vec/linux-amd64/vec0.so
+// macOS 下: third_party/sqlite-vec/darwin-arm64/vec0.dylib
 func ResolveVec0Path() string {
 	ext := ".so"
 	if runtime.GOOS == "darwin" {

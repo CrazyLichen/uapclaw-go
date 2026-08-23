@@ -27,7 +27,6 @@ type PlaywrightClient struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：PlaywrightClient 实现 McpClient 接口
@@ -46,13 +45,13 @@ func NewPlaywrightClient(config *types.McpServerConfig) *PlaywrightClient {
 // Connect 根据传输类型创建委托客户端并建立连接。
 func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
 	if strings.HasPrefix(c.config.ServerPath, "http://") || strings.HasPrefix(c.config.ServerPath, "https://") {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
 			Msg("Playwright 选择 SSE 传输")
 		c.delegate = NewSseClient(c.config)
 	} else {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
 			Msg("ServerPath 不是 HTTP URL，将回退使用 Stdio 传输")
@@ -60,14 +59,14 @@ func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOpt
 	}
 
 	if err := c.delegate.Connect(ctx, opts...); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("server_name", c.serverName).
 			Err(err).
 			Msg("Playwright 连接失败")
 		return err
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("Playwright 客户端连接成功")
 	return nil
@@ -79,13 +78,13 @@ func (c *PlaywrightClient) Disconnect(ctx context.Context) error {
 		return nil
 	}
 	if err := c.delegate.Disconnect(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("server_name", c.serverName).
 			Err(err).
 			Msg("Playwright 断开连接失败")
 		return err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("Playwright 客户端已断开连接")
 	return nil

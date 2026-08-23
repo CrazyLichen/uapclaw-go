@@ -32,6 +32,7 @@
 //	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
 //	├── agent_tool.go             # AgentTool 自定义 Agent 调度工具（10.3.7）
 //	├── code_agent_rail.go        # CodeAgentRail Code 模式自定义 Agent 护栏 + 常量 + 辅助函数（10.3.7）
+//	├── owner_scopes_permission.go # OwnerScopes 权限解析与校验
 //	└── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/interface_deep.py

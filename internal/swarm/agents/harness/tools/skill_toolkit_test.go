@@ -832,13 +832,14 @@ func TestInstallSkill_TeamSkillsHub(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := skillpkg.NewSkillManager(tmpDir)
 	t.Setenv("TEAM_SKILLS_HUB_ALLOWED_DOWNLOAD_HOSTS", "127.0.0.1,localhost")
+	// SkillToolkit.InstallSkill 不转发 market_url，需要通过环境变量设置 mock 服务器
+	t.Setenv("TEAM_SKILLS_HUB_BASE_URL", metadataServer.URL)
 
 	tk := NewSkillToolkit(sm)
 
 	result, err := tk.InstallSkill(context.Background(), map[string]any{
 		"identifier": "test-asset",
 		"source":     "teamskillshub",
-		"market_url": metadataServer.URL,
 	})
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)

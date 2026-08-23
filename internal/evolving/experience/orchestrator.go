@@ -40,7 +40,6 @@ type OnlineEvolutionOrchestrator struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -117,7 +116,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 
 	if len(preview.Records) == 0 {
 		message := fmt.Sprintf("no applied updates for skill=%s", skillName)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("skill", skillName).
 			Msg(message)
 		return &OnlineEvolutionResult{
@@ -163,7 +162,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 	requestID := request.RequestID
 	result, err := o.manager.ApproveRequest(ctx, requestID)
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Str("request_id", requestID).
 			Err(err).
@@ -171,7 +170,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 		// 对齐 Python: auto-approve 失败不返回 error，仍返回 auto_approved 状态
 	}
 	if result.AppliedCount > 0 || result.PendingCount > 0 {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("skill", skillName).
 			Int("applied_count", result.AppliedCount).
 			Int("pending_count", result.PendingCount).
@@ -273,7 +272,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	// 对齐 Python: updater.process()
 	updates, err := o.updater.Process(ctx, trajectories, signalPtrs, map[string]any{})
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", onlineContext.SkillName).
 			Err(err).
 			Msg("[OnlineEvolutionOrchestrator] updater.Process 失败")
@@ -284,7 +283,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	// 将 updater.Process 返回的 []map[UpdateKey]any 第一个元素转为 map[UpdateKey]UpdateValue
 	var updateValues map[schema.UpdateKey]schema.UpdateValue
 	if len(updates) == 0 {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", onlineContext.SkillName).
 			Msg("[OnlineEvolutionOrchestrator] updater.Process 返回空更新，跳过 apply")
 		preview, _ := BuildLocalApplyPreview(onlineContext.SkillName, nil)

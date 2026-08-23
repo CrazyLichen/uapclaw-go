@@ -28,6 +28,7 @@ type OriginChecker struct {
 	allowedHostsEnv string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultEnableCheckEnv 默认的总开关环境变量名。
@@ -133,3 +134,5 @@ func (c *OriginChecker) ForbiddenResponse() (code int, headers map[string][]stri
 		"Content-Type": {"text/plain; charset=utf-8"},
 	}, forbiddenBody
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

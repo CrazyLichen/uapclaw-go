@@ -15,6 +15,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentServer
+
 const (
 	// titleMaxLen 自动标题截取长度，对齐 Python _TITLE_MAX_LEN = 50
 	titleMaxLen = 50
@@ -22,14 +24,9 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var (
-	// logComponent 日志组件，对齐项目规范 server 层使用 ComponentAgentServer
-	logComponent = logger.ComponentAgentServer
-)
+var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // AutoTitle 从首条用户消息自动生成会话标题。
 //
@@ -119,5 +116,3 @@ func NormalizeSessionID(sessionID string) string {
 func CurrentTimestamp() float64 {
 	return float64(time.Now().UnixMilli()) / 1000.0
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -21,7 +21,6 @@ type SwitchModeInput struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 对齐 Python L165-184: 中英文消息
@@ -78,7 +77,7 @@ func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID s
 			currentMode = hschema.AgentModeNormal.String()
 		}
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "switch_mode").
 			Str("mode", currentMode).
 			Msg("AgentModeRail 已切换模式")

@@ -180,7 +180,7 @@ func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.Mode
 
 	mc.SetMessages(allMessages, true)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "MicroCompactProcessor_cleared").
 		Int("cleared_count", len(modifiedIndices)).
 		Strs("tools", toolNames).

@@ -30,7 +30,6 @@ type WorkflowSessionOption func(*WorkflowSession)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -39,7 +38,7 @@ type WorkflowSessionOption func(*WorkflowSession)
 //
 // 对应 Python: openjiuwen/core/session/workflow.py create_workflow_session()
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_workflow_session_facade").
 		Msg("创建公开层 WorkflowSession")
 

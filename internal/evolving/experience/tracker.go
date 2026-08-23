@@ -46,7 +46,6 @@ type RecordScoreUpdate struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // sessionPresentedRecords 包级 map，sessionID → 展示记录条目列表。
@@ -118,7 +117,7 @@ func (t *ExperienceTracker) RecordPresented(
 	}
 
 	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceTracker] update_record_scores 失败")
@@ -141,7 +140,7 @@ func (t *ExperienceTracker) RecordPresented(
 	existing := sessionPresentedRecords[sessionID]
 	sessionPresentedRecords[sessionID] = append(existing, presentedEntries...)
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Int("presented_count", len(presentedEntries)).
 		Str("skill", skillName).
 		Msg("[ExperienceTracker] tracked presented records")
@@ -200,7 +199,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 	}
 
 	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceTracker] update_record_scores 失败")
@@ -253,7 +252,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 	}
 
 	// 对齐 Python: 按 (skill_name, snippet) 分组
-	bySkillSnippet := map[string]map[string][]checkpointing.EvolutionRecord{} // skillName → snippet → records
+	bySkillSnippet := map[string]map[string][]checkpointing.EvolutionRecord{} // 技能名 → 片段 → 记录
 	for _, entry := range presentedEntries {
 		snippets, ok := bySkillSnippet[entry.SkillName]
 		if !ok {
@@ -293,13 +292,13 @@ func (t *ExperienceTracker) EvaluatePresented(
 
 			if len(updates) > 0 {
 				if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("skill", skillName).
 						Err(err).
 						Msg("[ExperienceTracker] evaluate_presented: update_record_scores 失败")
 					continue
 				}
-				logger.Info(logger.ComponentAgentCore).
+				logger.Info(logComponent).
 					Int("updated_count", len(updates)).
 					Str("skill", skillName).
 					Msg("[ExperienceTracker] async evaluation updated records")

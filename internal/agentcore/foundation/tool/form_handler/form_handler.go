@@ -52,6 +52,8 @@ type FormHandlerManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	handlerManagerOnce sync.Once
@@ -83,13 +85,13 @@ func GetFormHandlerManager() *FormHandlerManager {
 // 对应 Python: FormHandlerManager.register()
 func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	if handlerType == "" {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("handler_type", handlerType).
 			Msg("注册处理器失败，handler_type 无效")
 		return
 	}
 	if handler == nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("handler_type", handlerType).
 			Msg("注册处理器失败，handler 为 nil")
 		return
@@ -97,7 +99,7 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	m.mu.Lock()
 	m.handlerMap[handlerType] = handler
 	m.mu.Unlock()
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("handler_type", handlerType).
 		Str("handler", fmt.Sprintf("%T", handler)).
 		Msg("注册处理器成功")
@@ -110,14 +112,14 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 // 对应 Python: FormHandlerManager.register_default_handler()
 func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 	if handler == nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Msg("注册默认处理器失败，handler 为 nil")
 		return
 	}
 	m.mu.Lock()
 	m.defaultHandler = handler
 	m.mu.Unlock()
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("handler", fmt.Sprintf("%T", handler)).
 		Msg("注册默认处理器成功")
 }

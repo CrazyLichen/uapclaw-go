@@ -36,7 +36,6 @@ type NodeSessionFacade struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查 *NodeSessionFacade 满足 SessionFacade 接口
@@ -49,7 +48,7 @@ var _ interfaces.SessionFacade = (*NodeSessionFacade)(nil)
 // streamMode 为 true 时，Interact() 将返回错误（流式模式不支持交互）。
 // 对应 Python: Session(session, stream_mode)
 func NewNodeSessionFacade(inner *internal.NodeSession, streamMode bool) *NodeSessionFacade {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_node_session_facade").
 		Str("node_id", inner.NodeID()).
 		Bool("stream_mode", streamMode).
@@ -103,7 +102,7 @@ func (f *NodeSessionFacade) GetSessionID() string {
 // 对应 Python: Session.update_state(data)
 func (f *NodeSessionFacade) UpdateState(data map[string]any) {
 	if err := f.inner.State().Update(data); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("action", "update_state").
 			Str("node_id", f.GetComponentID()).

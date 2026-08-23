@@ -19,6 +19,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -70,7 +72,7 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 
 		msg := strings.ReplaceAll(enterPlanCreatedMsg[lang], "{plan_path}", formatPlanPath(planPath))
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "enter_plan_mode").
 			Str("plan_slug", slug).
 			Str("plan_path", planPath).

@@ -44,6 +44,8 @@ const (
 	defaultVarName = "default"
 )
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -194,7 +196,7 @@ func formatValue(placeholderName string, value any, kwargs map[string]any) strin
 		// 非 str/int/float/bool 类型，记录日志并转为字符串
 		// 对齐 Python: prompt_logger.info("Converting non-string value using str()...", placeholder=..., input_data=..., output_data=...)
 		outputData := fmt.Sprintf("%v", val)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("placeholder", placeholderName).
 			Str("input_data", fmt.Sprintf("%v", value)).
 			Str("output_data", outputData).

@@ -17,6 +17,7 @@ import (
 // TestDesignStageHandler TEST_DESIGN 阶段：Agent 设计测试用例，输出 evals.json。
 type TestDesignStageHandler struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // TestDesignSystemPrompt TEST_DESIGN 阶段 Agent 系统 Prompt。
@@ -55,6 +56,7 @@ const TestDesignSystemPrompt = `根据以下 Skill 内容，设计 {count} 个�
 }
 `
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 TEST_DESIGN 阶段逻辑。

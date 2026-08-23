@@ -43,6 +43,8 @@ type StructuredAskUserRail struct {
 	parentResolve interrupt.ResolveInterruptFn
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -295,7 +297,7 @@ func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*Structured
 			}
 		}
 		// 对齐 Python: else: StructuredAskUserPayload(answers=user_input)
-		// Frontend sends answers as {question: selected_option}
+		// 前端以 {question: selected_option} 格式发送答案
 		answers := make(map[string]string, len(input))
 		for k, v := range input {
 			if s, ok := v.(string); ok {

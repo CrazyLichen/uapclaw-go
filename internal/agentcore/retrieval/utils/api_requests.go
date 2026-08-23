@@ -36,6 +36,8 @@ type RetryConfig struct {
 type TaskName string
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 const (
 	// TaskReranker 重排序任务
 	TaskReranker TaskName = "Reranker"
@@ -52,8 +54,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
-	// logComponent 日志组件常量
-	logComponent = logger.ComponentAgentCore
 	// censorshipKeywords 审查内容检测关键词，对齐 Python
 	censorshipKeywords = []string{"safety", "violation", "policy", "inspection", "appropriate"}
 )

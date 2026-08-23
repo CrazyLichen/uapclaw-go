@@ -32,7 +32,6 @@ type TagMgr struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -100,7 +99,7 @@ func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 	// 检查是否包含 GLOBAL 标签
 	if _, hasGlobal := tagsToAdd[TagGlobal]; hasGlobal {
 		oldTags := m.setGlobalResource(resourceID)
-		logger.Info(logger.ComponentCommon).
+		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Strs("old_tags", oldTags).
 			Msg("已为资源添加 GLOBAL 标签，变更为 [GLOBAL]")
@@ -110,7 +109,7 @@ func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 	// 添加标签
 	currentTags := m.addResourceTags(resourceID, tagsToAdd)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("resource_id", resourceID).
 		Strs("added_tags", tagSetToSortedSlice(tagsToAdd)).
 		Strs("current_tags", currentTags).
@@ -131,7 +130,7 @@ func (m *TagMgr) RemoveResource(resourceID string) []Tag {
 
 	removedTags := m.removeResource(resourceID)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("resource_id", resourceID).
 		Strs("removed_tags", removedTags).
 		Msg("已移除资源")
@@ -177,7 +176,7 @@ func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExis
 
 	remainingTags := m.removeResourceTagsInternal(resourceID, tagsToRemove)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("resource_id", resourceID).
 		Strs("removed_tags", tagSetToSortedSlice(tagsToRemove)).
 		Strs("remaining_tags", remainingTags).
@@ -206,7 +205,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 	// 检查是否包含 GLOBAL 标签
 	if _, hasGlobal := newTags[TagGlobal]; hasGlobal {
 		oldTags := m.setGlobalResource(resourceID)
-		logger.Info(logger.ComponentCommon).
+		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Str("strategy", strategy.String()).
 			Strs("old_tags", oldTags).
@@ -218,14 +217,14 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 	switch strategy {
 	case TagUpdateReplace:
 		currentTags := m.replaceResourceTags(resourceID, newTags)
-		logger.Info(logger.ComponentCommon).
+		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Strs("new_tags", tagSetToSortedSlice(newTags)).
 			Msg("已替换资源标签")
 		return currentTags, nil
 	case TagUpdateMerge:
 		currentTags := m.addResourceTags(resourceID, newTags)
-		logger.Info(logger.ComponentCommon).
+		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Strs("added_tags", tagSetToSortedSlice(newTags)).
 			Strs("current_tags", currentTags).
@@ -260,7 +259,7 @@ func (m *TagMgr) RemoveTag(tag Tag, skipIfNotExists bool) ([]string, error) {
 
 	affectedResources := m.removeTagInternal(tag)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("tag", tag).
 		Strs("affected_resources", affectedResources).
 		Msg("已移除标签")
@@ -422,7 +421,7 @@ func (m *TagMgr) Display(enableLog bool) string {
 
 	msg := sb.String()
 	if enableLog {
-		logger.Info(logger.ComponentCommon).
+		logger.Info(logComponent).
 			Str("msg", msg).
 			Msg("---- 标签管理器状态 ----")
 	}

@@ -49,6 +49,7 @@ type BaseInteraction struct {
 	session interfaces.InnerSession
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// InteractionType 交互事件类型标识
@@ -59,6 +60,9 @@ const (
 	InteractiveInputKey = "__interactive_input__"
 )
 
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Error 实现 error 接口，返回中断描述信息。
@@ -112,7 +116,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 		// 无已有输入，仅更新 session state
 		if len(b.interactiveInputs) > 0 {
 			if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Err(err).
 					Str("action", "init_interactive_inputs").
 					Msg("更新交互输入到 session state 失败")
@@ -133,7 +137,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 	// 写回 session state
 	if len(b.interactiveInputs) > 0 {
 		if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Err(err).
 				Str("action", "init_interactive_inputs").
 				Msg("写回交互输入到 session state 失败")
@@ -148,7 +152,7 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 	if b.interactiveInputs != nil && b.idx < len(b.interactiveInputs) {
 		res := b.interactiveInputs[b.idx]
 		b.idx++
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("action", "interaction_resume").
 			Int("index", b.idx).
 			Msg("交互恢复：从队列获取到用户输入")
@@ -170,7 +174,7 @@ func writeInteractionOutput(session interfaces.InnerSession, outputType string, 
 	}
 	err := writer.WriteInteraction(outputType, index, payload)
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Err(err).
 			Str("output_type", outputType).
 			Msg("交互输出写入流失败")
@@ -188,7 +192,7 @@ func commitCMP(session interfaces.InnerSession) {
 		ws.CommitCmp()
 		return
 	}
-	logger.Error(logger.ComponentAgentCore).
+	logger.Error(logComponent).
 		Str("action", "commit_cmp").
 		Str("state_type", fmt.Sprintf("%T", st)).
 		Msg("当前状态不支持 CommitCmp，对齐 Python AttributeError")
@@ -202,7 +206,7 @@ func getExecutableID(session interfaces.InnerSession) string {
 	if provider, ok := session.(interfaces.ExecutableIDProvider); ok {
 		return provider.ExecutableID()
 	}
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("action", "get_executable_id").
 		Str("session_type", fmt.Sprintf("%T", session)).
 		Msg("session 不满足 ExecutableIDProvider 接口，返回空字符串")

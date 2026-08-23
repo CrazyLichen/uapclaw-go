@@ -59,6 +59,7 @@ type SystemPromptBuilder struct {
 	sections map[string]PromptSection
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultLanguage 默认提示词语言

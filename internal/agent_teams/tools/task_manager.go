@@ -97,6 +97,8 @@ type TeamTaskManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponentChannel = logger.ComponentChannel
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -358,7 +360,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 					CreatedAt:  time.Now().UnixMilli(),
 				}
 				if err := tm.updatePlanIndex(latestPlanID, planRecord); err != nil {
-					logger.Warn(logger.ComponentAgentCore).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
+					logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
 				}
 			}
 		}
@@ -743,7 +745,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	}
 	leaderName := tm.resolveLeaderMemberName()
 	if leaderName == "" {
-		logger.Warn(logger.ComponentChannel).
+		logger.Warn(logComponentChannel).
 			Str("team", tm.teamName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
@@ -768,7 +770,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	}
 	msg.Payload["content"] = content
 	if err := tm.messager.Send(ctx, leaderName, msg); err != nil {
-		logger.Warn(logger.ComponentChannel).
+		logger.Warn(logComponentChannel).
 			Str("leader", leaderName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
@@ -822,7 +824,7 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.Ty
 	msg := schema.EventMessageFromEvent(event)
 	topicID := schema.TeamTopicTask.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("event_type", event.EventTypeName()).
 			Msg("发布任务事件失败")
 	}

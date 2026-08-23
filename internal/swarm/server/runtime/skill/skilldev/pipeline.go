@@ -30,6 +30,7 @@ type SkillDevPipeline struct {
 	deps *SkillDevDeps
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // maxPipelineIterations Pipeline 最大迭代次数，防止无限循环

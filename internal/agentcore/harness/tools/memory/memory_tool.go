@@ -205,9 +205,9 @@ func (t *EditMemoryTool) Stream(_ context.Context, _ map[string]any, _ ...tool.T
 
 // CreateMemoryTools 创建记忆工具集。对齐 Python create_memory_tools(ctx, language, agent_id)
 func CreateMemoryTools(ctx *lite.MemoryToolContext, language string, agentID string) []tool.Tool {
-	// 对齐 Python: if ctx.settings is None and ctx.workspace is not None:
-	//   memory_dir = str(ctx.workspace.get_node_path("memory") or "")
-	//   ctx.settings = create_memory_settings(memory_dir)
+	// 对齐 Python: Python: if ctx.settings is None and ctx.workspace is not None:
+	//   Python: memory_dir = str(ctx.workspace.get_node_path("memory") or "")
+	//   Python: ctx.settings = create_memory_settings(memory_dir)
 	if ctx.Settings == nil && ctx.Workspace != nil {
 		memoryDir := ""
 		if nodePath := ctx.Workspace.GetNodePath("memory"); nodePath != nil {

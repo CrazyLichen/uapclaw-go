@@ -57,6 +57,8 @@ type HooksConfig struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentCommon
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -151,7 +153,7 @@ func LoadHooksConfig(configBase map[string]any) *HooksConfig {
 		}
 		configsList, ok := eventConfigs.([]any)
 		if !ok {
-			logger.Warn(logger.ComponentCommon).
+			logger.Warn(logComponent).
 				Str("event", eventName).
 				Msg("hooks 配置：event 段期望 []any 类型")
 			continue
@@ -160,7 +162,7 @@ func LoadHooksConfig(configBase map[string]any) *HooksConfig {
 		for _, entry := range configsList {
 			entryMap, ok := entry.(map[string]any)
 			if !ok {
-				logger.Warn(logger.ComponentCommon).
+				logger.Warn(logComponent).
 					Str("event", eventName).
 					Msg("hooks 配置：entry 期望 map[string]any 类型")
 				continue

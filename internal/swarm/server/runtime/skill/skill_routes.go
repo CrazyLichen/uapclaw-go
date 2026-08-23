@@ -11,6 +11,7 @@ import (
 // SkillHandler skills/plugins 请求处理函数签名。
 type SkillHandler func(sm *SkillManager, ctx context.Context, params map[string]any) (map[string]any, error)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────

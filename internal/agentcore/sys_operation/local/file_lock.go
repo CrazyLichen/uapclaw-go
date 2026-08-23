@@ -17,6 +17,7 @@ type FileLock struct {
 	fd uintptr
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -26,6 +27,7 @@ const (
 	fileLockDefaultTimeout = 10 * time.Second
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AcquireFileLock 获取文件锁，超时返回 error。
@@ -39,3 +41,5 @@ func AcquireFileLock(filePath string, timeout time.Duration) (*FileLock, error) 
 func ReleaseFileLock(lock *FileLock) error {
 	return releaseFileLockPlatform(lock)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

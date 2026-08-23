@@ -32,14 +32,18 @@ type QueryLanguageDefinition struct {
 	TextMatch func(QueryExpr) (any, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// queryExprFunctions 查询语言注册表
 	queryExprFunctions = make(map[string]QueryLanguageDefinition)
 	// queryExprMu 注册表读写锁
 	queryExprMu sync.RWMutex
-	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -41,6 +41,11 @@ type BrowserWorkerConfig struct {
 // 对齐 Python: ToolResultObserver callback
 type ToolResultObserverFunc func(ctx context.Context, toolName string, result any) error
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildBrowserWorkerSystemPrompt 构建浏览器 Worker Agent 系统提示词。
@@ -136,11 +141,11 @@ func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, e
 	// ⤵️ 9.38-49 完整实现 ReActAgent 配置
 	// 当前仅返回 nil，待后续章节回填完整的 ReActAgent 构建逻辑
 	// 对齐 Python:
-	//   agent = ReActAgent(
-	//       model_client=model_client,
-	//       system_prompt=system_prompt,
-	//       max_steps=max_steps,
-	//       ...
+	//   Python: agent = ReActAgent(
+	//       Python: model_client=model_client,
+	//       Python: system_prompt=system_prompt,
+	//       Python: max_steps=max_steps,
+	//       Python: ...,
 	//   )
 	return nil, fmt.Errorf("BuildBrowserWorkerAgent: ReActAgent 完整配置待 9.38-49 回填")
 }

@@ -41,6 +41,7 @@ type cwdStateKeyType struct{}
 // cwdOption InitCwd 的选项函数。
 type cwdOption func(s *CwdState)
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // cwdStateKey CwdState 的 context key。

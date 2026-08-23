@@ -11,12 +11,12 @@ import (
 // validTypes 合法的记忆类型。对齐 Python VALID_TYPES（tuple 不可变）
 var validTypes = [...]string{"user", "feedback", "project", "reference"}
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ValidTypes 返回合法记忆类型的不可变副本。对齐 Python VALID_TYPES（tuple 不可变）
 func ValidTypes() []string {
 	return validTypes[:]
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseFrontmatter 解析 --- frontmatter。对齐 Python parse_frontmatter
 func ParseFrontmatter(content string) map[string]string {

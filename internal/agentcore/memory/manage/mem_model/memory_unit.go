@@ -128,8 +128,6 @@ func ParseOperationType(s string) OperationType {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // String 实现 fmt.Stringer 接口，对齐 Python MemoryType.value
 func (mt MemoryType) String() string {
 	switch mt {
@@ -163,3 +161,5 @@ func (ot OperationType) String() string {
 		return "add"
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

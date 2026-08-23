@@ -35,7 +35,7 @@ type StreamFunction[I any, O any] struct {
 // 使用示例：
 //
 //	创建流式搜索工具：
-//	fn, _ := NewStreamFunction("stream_search", StreamSearch)
+//	示例: fn, _ := NewStreamFunction("stream_search", StreamSearch)
 func NewStreamFunction[I any, O any](name string, fn func(context.Context, I, ...ToolOption) (<-chan O, error), opts ...LocalFuncOption) (*StreamFunction[I, O], error) {
 	cfg := &localFuncConfig{}
 	for _, opt := range opts {

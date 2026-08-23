@@ -66,7 +66,7 @@ func (b *LLMCallOptimizerBase) isTargetFrozen(op operator.Operator, target strin
 //
 // 对齐 Python: LLMCallOptimizerBase._get_prompt_template(op, target)
 //
-//	state = op.get_state()
+//	Python: state = op.get_state()
 //	content = state.get(target, "")
 //	return PromptTemplate(content=content)
 //

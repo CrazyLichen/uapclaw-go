@@ -544,9 +544,10 @@ func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) 
 // 对齐 Python: TeamAgent.human_agent_say(content, to, sender)
 //
 // Python 执行步骤：
-//  1. inbox = HumanAgentInbox(self.team_backend, self.team_backend.message_manager,
-//     agent_lookup=self.lookup_human_agent_runtime)
-//  2. return await inbox.send(body=content, to=to, sender=sender)
+//
+//	Python: 1. inbox = HumanAgentInbox(self.team_backend, self.team_backend.message_manager,
+//	   Python: agent_lookup=self.lookup_human_agent_runtime)
+//	Python: 2. return await inbox.send(body=content, to=to, sender=sender)
 //
 // 可委托路径：interaction.HumanAgentInbox.Send(content, &to, &sender)
 // ⤵️ 待 9.55 TeamAgent 完善后注入 HumanAgentInbox 并实现

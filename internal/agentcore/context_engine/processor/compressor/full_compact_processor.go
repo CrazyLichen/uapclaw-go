@@ -448,7 +448,7 @@ func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, 
 	boundaryIndex := fcp._findLastCompactionBoundaryIndex(allMessages)
 	prefix, activeMessages := fcp._splitMessagesAtCompactionBoundary(allMessages, boundaryIndex)
 	if len(activeMessages) == 0 {
-		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] 替换跳过：边界后无活跃消息")
+		logger.Info(logComponent).Msg("[FullCompact] 替换跳过：边界后无活跃消息")
 		return nil, nil, nil
 	}
 
@@ -457,25 +457,25 @@ func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, 
 	if sessionMemoryMessages != nil {
 		sessionMemoryTokens := fcp.countContextWindowTokens(mc, sessionMemoryMessages)
 		if sessionMemoryTokens <= fcp.fcpConfig.TriggerTotalTokens {
-			logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] 使用 session_memory 替换")
+			logger.Info(logComponent).Msg("[FullCompact] 使用 session_memory 替换")
 			return &iface.ContextEvent{
 				EventType:        fcp.ProcessorType(),
 				MessagesToModify: buildRangeIndices(0, len(allMessages)-1),
 				CompactSummary:   processor.MessageToText(sessionMemoryMessage),
 			}, sessionMemoryMessages, sessionMemoryMessage
 		}
-		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory 候选被拒绝：token 预算超限")
+		logger.Info(logComponent).Msg("[FullCompact] session_memory 候选被拒绝：token 预算超限")
 	} else {
-		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory 候选不可用，回退到 full_compact")
+		logger.Info(logComponent).Msg("[FullCompact] session_memory 候选不可用，回退到 full_compact")
 	}
 
 	// LLM 全量压缩路径（回退）
 	newContextMessages, compactSummary := fcp._buildFullCompactMessages(ctx, mc, prefix, activeMessages)
 	if newContextMessages == nil {
-		logger.Warn(logger.ComponentAgentCore).Msg("[FullCompact] full_compact 候选构建失败")
+		logger.Warn(logComponent).Msg("[FullCompact] full_compact 候选构建失败")
 		return nil, nil, nil
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Int("output_messages", len(newContextMessages)).
 		Msg("[FullCompact] 使用 full_compact 替换")
 
@@ -502,7 +502,7 @@ func (fcp *FullCompactProcessor) _buildFullCompactMessages(ctx context.Context, 
 
 	summary := fcp._generateSummary(ctx, compactInput, mc)
 	if summary == "" {
-		logger.Warn(logger.ComponentAgentCore).Msg("[FullCompact] full_compact 摘要生成返回空内容")
+		logger.Warn(logComponent).Msg("[FullCompact] full_compact 摘要生成返回空内容")
 		return nil, ""
 	}
 
@@ -526,26 +526,26 @@ func (fcp *FullCompactProcessor) _buildFullCompactMessages(ctx context.Context, 
 // 对应 Python: FullCompactProcessor._build_session_memory_messages()
 func (fcp *FullCompactProcessor) _buildSessionMemoryMessages(ctx context.Context, mc iface.ModelContext, prefix []llm_schema.BaseMessage, activeMessages []llm_schema.BaseMessage, hasBoundary bool) ([]llm_schema.BaseMessage, *llm_schema.UserMessage) {
 	if !fcp.fcpConfig.SessionMemoryEnabled {
-		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory 已禁用")
+		logger.Info(logComponent).Msg("[FullCompact] session_memory 已禁用")
 		return nil, nil
 	}
 
 	sessionMemoryRuntime := fcp._loadSessionMemoryRuntime(ctx, mc)
 	if sessionMemoryRuntime != nil {
 		if isExtracting, _ := sessionMemoryRuntime["is_extracting"].(bool); isExtracting {
-			logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory 提取中，使用最新已提交笔记")
+			logger.Info(logComponent).Msg("[FullCompact] session_memory 提取中，使用最新已提交笔记")
 		}
 	}
 
 	sessionMemoryText := fcp._loadSessionMemoryText(ctx, mc, sessionMemoryRuntime)
 	if sessionMemoryText == "" {
-		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory 不可用：笔记内容为空或路径未解析")
+		logger.Info(logComponent).Msg("[FullCompact] session_memory 不可用：笔记内容为空或路径未解析")
 		return nil, nil
 	}
 
 	preservedMessages := fcp._selectMessagesAfterSessionMemory(activeMessages, sessionMemoryRuntime, hasBoundary)
 	if preservedMessages == nil {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Bool("has_boundary", hasBoundary).
 			Int("active", len(activeMessages)).
 			Msg("[FullCompact] session_memory 跳过：无有效活跃锚点")
@@ -595,7 +595,7 @@ func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages 
 
 	response, err := fcp.model.Invoke(ctx, model_clients.NewMessagesParam(promptMessages...))
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Err(err).
 			Msg("[FullCompact] LLM 摘要生成失败，回退")
 		return fcp._buildFallbackSummary(messages)
@@ -604,7 +604,7 @@ func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages 
 	fcp.RecordCompressionUsage(response)
 	content := strings.TrimSpace(response.GetContent().Text())
 	if content == "" {
-		logger.Warn(logger.ComponentAgentCore).Msg("[FullCompact] LLM 返回空摘要，回退")
+		logger.Warn(logComponent).Msg("[FullCompact] LLM 返回空摘要，回退")
 		return fcp._buildFallbackSummary(messages)
 	}
 	return _formatSummary(content)
@@ -924,7 +924,7 @@ func (fcp *FullCompactProcessor) countContextWindowTokens(mc iface.ModelContext,
 		if err == nil {
 			return count
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", fcp.ProcessorType()).
 			Err(err).
 			Msg("TokenCounter 返回错误，降级为字符估算")

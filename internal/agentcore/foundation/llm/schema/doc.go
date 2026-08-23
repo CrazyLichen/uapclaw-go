@@ -54,6 +54,7 @@
 //	├── tool_message.go      # ToolMessage（嵌入 DefaultMessage + 扩展字段）
 //	├── message_chunk.go     # AssistantMessageChunk + ToolMessageChunk（流式消息块）
 //	├── generation_response.go # 多模态生成响应（图片/音频/视频）
+//	├── transcription.go    # 音频转写响应模型
 //	├── config.go            # ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
 //	└── model_info.go        # BaseModelInfo + ModelConfig
 //

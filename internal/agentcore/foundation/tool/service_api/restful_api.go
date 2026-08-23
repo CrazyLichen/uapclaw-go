@@ -65,6 +65,7 @@ type RestfulApi struct {
 // RestfulApiCardOption RestfulApiCard 构造选项函数。
 type RestfulApiCardOption func(*RestfulApiCard)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultTimeout 默认超时秒数
@@ -469,7 +470,7 @@ func (r *RestfulApi) doRequest(
 	if proxyURL, _ := http.ProxyFromEnvironment(req); proxyURL != nil {
 		proxyEnabled = true
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("method", r.card.Method).
 		Str("url", reqURL).
 		Bool("proxy_enabled", proxyEnabled).
@@ -772,7 +773,7 @@ func prepareHeadersForFormData(headers map[string]string) map[string]string {
 	processed := make(map[string]string, len(headers))
 	for key, value := range headers {
 		if strings.ToLower(key) == "content-type" {
-			logger.Debug(logger.ComponentAgentCore).
+			logger.Debug(logComponent).
 				Str("content_type", value).
 				Msg("multipart/form-data 请求移除手动设置的 Content-Type，将自动设置含 boundary 的正确值")
 			continue

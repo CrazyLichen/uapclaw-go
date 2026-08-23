@@ -186,10 +186,10 @@ func buildMergedConfig(
 //
 // 对齐 Python:
 //
-//	if hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None:
-//	    merged_cfg.model = model_config
-//	if hasattr(merged_cfg, "model_client") and getattr(merged_cfg, "model_client", None) is None:
-//	    merged_cfg.model_client = model_client_config
+//	Python: if hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None:
+//	    Python: merged_cfg.model = model_config
+//	    Python: if hasattr(merged_cfg, "model_client") and getattr(merged_cfg, "model_client", None) is None:
+//	    Python: merged_cfg.model_client = model_client_config
 func fillModelDefaults(cfg iface.ProcessorConfig, modelConfig *llmschema.ModelRequestConfig, modelClientConfig *llmschema.ModelClientConfig) {
 	cfg.SetModelDefaults(modelConfig, modelClientConfig)
 }

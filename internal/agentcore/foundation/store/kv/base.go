@@ -52,11 +52,11 @@ type BaseKVStore interface {
 // 用于收集多个操作后一次性提交执行，减少网络往返。
 // 使用方式：
 //
-//	p := store.Pipeline(ctx)
-//	p.Set(ctx, "k1", []byte("v1"), 0)  // 第4参数为过期秒数，0 表示不过期
-//	p.Get(ctx, "k2")
-//	p.Exists(ctx, "k3")
-//	results, err := p.Execute(ctx)
+//	示例: p := store.Pipeline(ctx)
+//	示例: p.Set(ctx, "k1", []byte("v1"), 0)  // 第4参数为过期秒数，0 表示不过期
+//	示例: p.Get(ctx, "k2")
+//	示例: p.Exists(ctx, "k3")
+//	示例: results, err := p.Execute(ctx)
 //
 // 对应 Python: openjiuwen/core/foundation/store/base_kv_store.py (BasedKVStorePipeline)
 type KVPipeline interface {
@@ -97,3 +97,13 @@ type PipelineResult struct {
 	// Err 操作执行错误，nil 表示成功
 	Err error
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -32,6 +32,9 @@ type StdioClient struct {
 	mcpClient *mcpclient.Client
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：StdioClient 实现 McpClient 接口
@@ -73,7 +76,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 	env := extractEnvSlice(c.config.Params)
 	cwd := extractStringParam(c.config.Params, "cwd")
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("command", command).
 		Strs("args", args).
@@ -97,7 +100,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 
 	client, err := mcpclient.NewStdioMCPClientWithOptions(command, env, args, stdioOpts...)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("command", command).
 			Str("server_name", c.serverName).
@@ -112,7 +115,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 
 	// 启动客户端（设置通知处理器等，传输层已由 NewStdioMCPClient 启动）
 	if err := client.Start(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("Stdio 客户端启动失败")
@@ -135,7 +138,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 		},
 	}
 	if _, err := client.Initialize(ctx, initReq); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("Stdio 客户端初始化会话失败")
@@ -152,7 +155,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 	c.mcpClient = client
 	c.isConnected = true
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("Stdio 客户端连接成功")
 
@@ -166,7 +169,7 @@ func (c *StdioClient) Disconnect(_ context.Context) error {
 	}
 	if c.mcpClient != nil {
 		if err := c.mcpClient.Close(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Err(err).
 				Str("server_name", c.serverName).
 				Msg("Stdio 客户端断开连接失败")
@@ -175,7 +178,7 @@ func (c *StdioClient) Disconnect(_ context.Context) error {
 	}
 	c.isConnected = false
 	c.mcpClient = nil
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("Stdio 客户端已断开连接")
 	return nil
@@ -192,7 +195,7 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]*types.McpToolCard, erro
 
 	resp, err := c.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("Stdio 客户端列出工具失败")
@@ -216,7 +219,7 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]*types.McpToolCard, erro
 		))
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(tools)).
 		Msg("Stdio 客户端列出工具成功")
@@ -240,7 +243,7 @@ func (c *StdioClient) CallTool(ctx context.Context, toolName string, arguments m
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -295,7 +298,7 @@ func (c *StdioClient) ListResources(ctx context.Context) ([]map[string]any, erro
 
 	resp, err := c.mcpClient.ListResources(ctx, mcp.ListResourcesRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("Stdio 客户端列出资源失败")
@@ -329,7 +332,7 @@ func (c *StdioClient) ReadResource(ctx context.Context, uri string) ([]map[strin
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("uri", uri).

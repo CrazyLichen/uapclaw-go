@@ -82,7 +82,7 @@ const (
 
 var (
 	// mgrLogComponent 日志组件
-	mgrLogComponent = logger.ComponentCommon
+	mgrLogComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

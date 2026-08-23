@@ -219,8 +219,8 @@ func WithTeamStreamModes(modes []stream.StreamMode) TeamOption {
 //
 // 用于 HierarchicalToolsTeam.AddAgent() 时声明父子关系：
 //
-//	team.AddAgent(ctx, childCard, childProvider,
-//	    maschema.WithParentAgentID("parent_agent_id"),
+//	示例: team.AddAgent(ctx, childCard, childProvider,
+//	    示例: maschema.WithParentAgentID("parent_agent_id"),
 //	)
 func WithParentAgentID(parentID string) TeamOption {
 	return func(o *TeamOptions) { o.ParentAgentID = parentID }

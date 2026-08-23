@@ -40,6 +40,9 @@ type GlobalSessionController struct {
 	enableSessionController bool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	globalController     *GlobalSessionController
@@ -125,7 +128,7 @@ func (g *GlobalSessionController) FlushAgent(agentID string) error {
 	defer g.mu.Unlock()
 	controller, ok := g.Controllers[agentID]
 	if !ok {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "flush_agent").
 			Str("agent_id", agentID).
 			Msg("Agent 未找到，跳过刷盘")
@@ -219,7 +222,7 @@ func (g *GlobalSessionController) RemoveAgent(agentID string) (bool, error) {
 
 	agentDir := SessionPaths{}.AgentDir(g.BasePath, agentID)
 	if err := os.RemoveAll(agentDir); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "remove_agent_dir").
 			Str("agent_id", agentID).
 			Str("path", agentDir).
@@ -240,7 +243,7 @@ func (g *GlobalSessionController) RemoveAll() {
 	}
 	g.Controllers = make(map[string]*SessionController)
 	if err := os.RemoveAll(g.BasePath); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "remove_all_dirs").
 			Str("path", g.BasePath).
 			Err(err).
@@ -377,7 +380,7 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 				for _, dirName := range orphanDirs {
 					orphanDir := SessionPaths{}.SessionDir(g.BasePath, currentAgentID, dirName)
 					if err := os.RemoveAll(orphanDir); err != nil {
-						logger.Warn(logger.ComponentAgentCore).
+						logger.Warn(logComponent).
 							Str("action", "cleanup_orphan_dir").
 							Str("agent_id", currentAgentID).
 							Str("path", orphanDir).
@@ -385,7 +388,7 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 							Msg("删除孤立目录失败")
 					}
 				}
-				logger.Info(logger.ComponentAgentCore).
+				logger.Info(logComponent).
 					Str("action", "cleanup_orphan_files").
 					Str("agent_id", currentAgentID).
 					Int("deleted", len(orphanDirs)).
@@ -476,7 +479,7 @@ func AddDirectSessionDownstream(callerAgentID, callerUserID, targetAgentID, targ
 
 	callerSession.AddDownstream(targetAgentID, targetSession.SessionID, policy)
 	if err := callerSession.Flush(); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "add_downstream_flush").
 			Str("caller_agent_id", callerAgentID).
 			Str("session_id", callerSession.SessionID).
@@ -616,7 +619,7 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 	if asc, ok := session.DataContainer.(*AgentSessionContainer); ok {
 		if sa, ok := data.Session.(StateAccessor); ok {
 			asc.SetSession(sa)
-			logger.Debug(logger.ComponentAgentCore).
+			logger.Debug(logComponent).
 				Str("action", "on_session_created").
 				Str("agent_id", card.ID).
 				Str("session_id", data.SessionID).
@@ -628,7 +631,7 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 
 // onAgentP2PReceived P2P 消息接收回调，当前仅记录日志。
 func onAgentP2PReceived(ctx context.Context, data *callback.AgentTeamEventData) any {
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("event_type", "agent_p2p_received").
 		Str("agent_id", data.AgentID).
 		Msg("收到 P2P 消息")
@@ -637,7 +640,7 @@ func onAgentP2PReceived(ctx context.Context, data *callback.AgentTeamEventData) 
 
 // onAgentPubsubReceived Pub-Sub 消息接收回调，当前仅记录日志。
 func onAgentPubsubReceived(ctx context.Context, data *callback.AgentTeamEventData) any {
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("event_type", "agent_pubsub_received").
 		Str("agent_id", data.AgentID).
 		Msg("收到 Pub-Sub 消息")
@@ -648,7 +651,7 @@ func onAgentPubsubReceived(ctx context.Context, data *callback.AgentTeamEventDat
 func (g *GlobalSessionController) ensureBasePath() error {
 	if g.BasePath != "" {
 		if err := os.MkdirAll(g.BasePath, 0o755); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "ensure_base_path").
 				Str("path", g.BasePath).
 				Err(err).
@@ -673,7 +676,7 @@ func (g *GlobalSessionController) getOrCreateController(agentID string) *Session
 		return controller
 	}
 	if err := g.ensureBasePath(); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "get_or_create_controller").
 			Str("agent_id", agentID).
 			Err(err).

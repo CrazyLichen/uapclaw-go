@@ -26,7 +26,6 @@ type TaskToolInput struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -58,7 +57,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 		parentSessionID := sess.GetSessionID()
 		subSessionID := buildSubSessionID(parentSessionID, input.SubagentType)
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "task_tool_create_subagent").
 			Str("subagent_type", input.SubagentType).
 			Str("parent_session_id", parentSessionID).
@@ -68,7 +67,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 		// 对齐 Python L100-107: 创建子代理
 		subagent, err := parentAgent.CreateSubagent(ctx, input.SubagentType, subSessionID)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("subagent_type", input.SubagentType).
 				Err(err).
@@ -82,7 +81,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			"conversation_id": subSessionID,
 		})
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("subagent_type", input.SubagentType).
 				Err(err).

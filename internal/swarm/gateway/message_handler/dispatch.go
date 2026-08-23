@@ -28,7 +28,7 @@ import (
 func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
 	// TODO(#ACP): ACP session alias 处理（等 ACP 章节回填）
 	// 对齐 Python: ACP渠道检测
-	//     msg = await self._ensure_acp_agent_session(msg)
+	//     Python: msg = await self._ensure_acp_agent_session(msg)
 	return msg
 }
 

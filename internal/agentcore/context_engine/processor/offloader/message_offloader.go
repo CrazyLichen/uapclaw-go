@@ -76,6 +76,8 @@ const (
 	defaultTrimSize = 100
 )
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -152,7 +154,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 		if !mo.hasOffloadCandidate(allMessages, mc) {
 			return false, nil
 		}
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("processor_type", mo.ProcessorType()).
 			Int("message_size", messageSize).
 			Int("threshold", *cfg.MessagesThreshold).
@@ -171,7 +173,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 			if !mo.hasOffloadCandidate(allMessages, mc) {
 				return false, nil
 			}
-			logger.Info(logger.ComponentAgentCore).
+			logger.Info(logComponent).
 				Str("processor_type", mo.ProcessorType()).
 				Int("tokens", tokens).
 				Int("threshold", cfg.TokensThreshold).
@@ -255,7 +257,7 @@ func (mo *MessageOffloader) offloadLargeMessages(ctx context.Context, messages [
 		}
 		offloadMsg, err := mo.offloadMessage(ctx, msg, mc, opts...)
 		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", mo.ProcessorType()).
 				Int("message_idx", idx).
 				Err(err).

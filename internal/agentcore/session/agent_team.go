@@ -48,6 +48,9 @@ type AgentTeamSession struct {
 // AgentTeamSessionOption AgentTeamSession 构造选项函数类型
 type AgentTeamSessionOption func(*AgentTeamSession)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查 *AgentTeamSession 满足 SessionFacade 接口
@@ -95,7 +98,7 @@ func NewAgentTeamSession(opts ...AgentTeamSessionOption) *AgentTeamSession {
 		internal.WithTeamStreamWriterManager(s.streamWriterManager),
 	)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_agent_team_session").
 		Str("session_id", s.sessionID).
 		Str("team_id", s.teamID).
@@ -240,7 +243,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 			inputVal = inputs[0]
 		}
 		if err := cp.PreAgentTeamExecute(ctx, s.inner, inputVal); err != nil {
-			logger.Error(logger.ComponentAgentCore).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("action", "agent_team_pre_run").
 				Str("session_id", s.GetSessionID()).
 				Str("team_id", s.GetTeamID()).
@@ -250,7 +253,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 	}
 
 	s.preRunDone = true
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "agent_team_pre_run").
 		Str("session_id", s.GetSessionID()).
 		Str("team_id", s.GetTeamID()).
@@ -275,7 +278,7 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 	// 提交检查点
 	// G17 修复：commit 失败后不设 postRunDone=true，允许重试 PostRun
 	if err := s.Commit(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("action", "agent_team_post_run").
 			Str("session_id", s.GetSessionID()).
 			Str("team_id", s.GetTeamID()).
@@ -284,7 +287,7 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 	}
 
 	s.postRunDone = true
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "agent_team_post_run").
 		Str("session_id", s.GetSessionID()).
 		Str("team_id", s.GetTeamID()).
@@ -328,7 +331,7 @@ func (s *AgentTeamSession) CloseStream() error {
 //
 // 从当前 AgentTeamSession 创建子 Agent 会话，对齐 Python:
 //
-//	Session.create_agent_session(card, agent_id, share_stream_writer=True)
+//	Python: Session.create_agent_session(card, agent_id, share_stream_writer=True)
 //
 // 参数：
 //   - card: Agent 身份元数据，nil 时用 agentID 构造默认 AgentCard

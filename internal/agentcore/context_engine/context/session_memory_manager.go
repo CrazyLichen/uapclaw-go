@@ -212,6 +212,7 @@ or any past session summaries), update the session notes file.
 
 The file {{notesPath}} has already been read for you. Here are its current contents:
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 <current_notes_content>

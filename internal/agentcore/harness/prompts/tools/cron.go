@@ -26,6 +26,9 @@ type CronToggleJobMetadataProvider struct{}
 // CronPreviewJobMetadataProvider cron_preview_job 遗留工具元数据提供者
 type CronPreviewJobMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // cronDescription cron 工具双语描述

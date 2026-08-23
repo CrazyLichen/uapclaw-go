@@ -64,6 +64,7 @@ type ChromaVectorStore struct {
 	createClient func(persistPath string) (chromav2.Client, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// chromaMetadataKeySchema CollectionMetadata 中存储 Schema JSON 的键
@@ -78,6 +79,7 @@ const (
 	chromaDefaultBatchSize = 100
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 实现 WhereFilter 接口

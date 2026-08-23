@@ -14,6 +14,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -41,7 +43,7 @@ func dispatchCronAction(
 
 	// 2. 提取 jobId（兼容 Python kwargs.pop("id", None)）
 	// 对齐 Python: legacy_job_id = kwargs.pop("id", None)
-	// target_job_id = str(jobId or legacy_job_id or "").strip()
+	// Python: target_job_id = str(jobId or legacy_job_id or "").strip()
 	targetJobID := strings.TrimSpace(strVal(inputs, "jobId"))
 	if targetJobID == "" {
 		targetJobID = strings.TrimSpace(strVal(inputs, "id"))
@@ -99,7 +101,7 @@ func dispatchCronAction(
 
 	case "add":
 		// 对齐 Python L176-179:
-		// create_input = dict(job or {})
+		// Python: create_input = dict(job or {})
 		// if not create_input: create_input = flat_kwargs
 		// return await backend.create_job(create_input, context=context)
 		createInput := mapVal(inputs, "job")
@@ -115,7 +117,7 @@ func dispatchCronAction(
 	case "update":
 		// 对齐 Python L180-186:
 		// if not target_job_id: raise ValueError("jobId is required")
-		// patch_input = dict(patch or {})
+		// Python: patch_input = dict(patch or {})
 		// if not patch_input: patch_input = flat_kwargs
 		// return await backend.update_job(target_job_id, patch_input, context=context)
 		if targetJobID == "" {

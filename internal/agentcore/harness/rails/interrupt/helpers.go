@@ -91,6 +91,8 @@ func ConvertInteractionsToAskUserQuestion(stateOutputs any) map[string]any {
 	return nil
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // extractQuestionFromInteraction 从单个 interaction payload 中提取问题信息。
 // 对齐 Python: extract_question_from_interaction(payload) (line 426-475)
 func extractQuestionFromInteraction(payload any) map[string]any {

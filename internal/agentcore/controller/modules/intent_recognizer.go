@@ -51,9 +51,11 @@ type EventHandlerWithIntentRecognition struct {
 	recognizer *IntentRecognizer
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const logComponentIntent = logger.ComponentAgentCore
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntentRecognizer 创建意图识别器。

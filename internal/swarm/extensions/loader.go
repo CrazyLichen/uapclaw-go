@@ -14,6 +14,11 @@ type ExtensionLoader struct {
 	registry *ExtensionRegistry
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExtensionLoader 创建 ExtensionLoader，对齐 Python ExtensionLoader(registry)
@@ -34,3 +39,5 @@ func (l *ExtensionLoader) DiscoverExtensionRoots() []string { return nil }
 func (l *ExtensionLoader) LoadExtension(ctx context.Context, root string) (any, error) {
 	return nil, fmt.Errorf("ExtensionLoader 尚未实现，⤵️ 10.5.7（Go 插件加载机制待定）")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

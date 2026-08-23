@@ -77,6 +77,7 @@ const (
 	ShellTypeSh ShellType = 4
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func (s ShellType) String() string {
@@ -172,3 +173,5 @@ func (b *BaseShellOperation) KillProcess(_ context.Context, _ string, _ ...Shell
 func (b *BaseShellOperation) ListProcesses(_ context.Context, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: ListProcesses")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

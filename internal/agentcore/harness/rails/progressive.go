@@ -49,6 +49,7 @@ type ProgressiveToolRail struct {
 	cachedAllTools []cschema.ToolInfoInterface
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

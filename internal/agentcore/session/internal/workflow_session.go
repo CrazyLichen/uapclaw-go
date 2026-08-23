@@ -99,7 +99,6 @@ type WorkflowSessionOption func(*WorkflowSession)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -112,7 +111,7 @@ type WorkflowSessionOption func(*WorkflowSession)
 //   - state 默认创建 InMemoryWorkflowState（workflowOnly=true）
 //   - streamWriterManager 和 actorManager 初始为 nil，需外部注入
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_workflow_session").
 		Msg("创建内部 WorkflowSession")
 
@@ -181,7 +180,7 @@ func WithWorkflowID(id string) WorkflowSessionOption {
 // executableID = parentID + "." + nodeID（parentID 为空时退化为 nodeID）。
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
 func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, skipTrace bool) *NodeSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_node_session").
 		Str("node_id", nodeID).
 		Str("node_type", nodeType).
@@ -194,7 +193,7 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 	var nodeState state.SessionState
 	ws, ok := parent.State().(state.WorkflowState)
 	if !ok {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "create_node_session").
 			Str("state_type", fmt.Sprintf("%T", parent.State())).
 			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")
@@ -223,7 +222,7 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 // 使用原 NodeSession 的 nodeID 和 nodeType。
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
 func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorManager any) *SubWorkflowSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_sub_workflow_session").
 		Str("workflow_id", workflowID).
 		Msg("创建子工作流会话")
@@ -237,7 +236,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 	var nodeState state.SessionState
 	ws, ok := parentSession.State().(state.WorkflowState)
 	if !ok {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "create_sub_workflow_session").
 			Str("state_type", fmt.Sprintf("%T", parentSession.State())).
 			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")

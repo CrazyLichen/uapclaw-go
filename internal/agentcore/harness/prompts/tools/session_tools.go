@@ -11,6 +11,9 @@ type SessionsSpawnMetadataProvider struct{}
 // SessionsCancelMetadataProvider sessions_cancel 工具元数据提供者
 type SessionsCancelMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // sessionsListDescription sessions_list 工具双语描述

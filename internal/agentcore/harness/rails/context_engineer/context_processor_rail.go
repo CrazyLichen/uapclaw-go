@@ -113,7 +113,7 @@ func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
 	// 对齐 Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "context_processor_rail_init").
 		Int("processors_count", len(allProcessors)).
 		Bool("preset", r.preset).
@@ -139,7 +139,7 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 	}
 	r.allProcessors = nil
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "context_processor_rail_uninit").
 		Msg("ContextProcessorRail 注销完成")
 

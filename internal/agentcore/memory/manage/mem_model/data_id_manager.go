@@ -18,6 +18,12 @@ import (
 // 对应 Python: openjiuwen/core/memory/manage/mem_model/data_id_manager.py (DataIdManager)
 type DataIdManager struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDataIdManager 创建 DataIdManager 实例。

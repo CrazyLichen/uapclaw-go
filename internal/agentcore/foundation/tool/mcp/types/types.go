@@ -85,6 +85,7 @@ type McpServerConfigOption func(*McpServerConfig)
 // McpToolCardOption MCP 工具卡片选项函数。
 type McpToolCardOption func(*McpToolCard)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。

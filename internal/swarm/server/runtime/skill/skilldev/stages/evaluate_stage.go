@@ -19,6 +19,7 @@ import (
 // EvaluateStageHandler EVALUATE 阶段：Grader 评分 → Benchmark 聚合 → Analyst 分析。
 type EvaluateStageHandler struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // GraderSystemPrompt Grader Agent 系统 Prompt。
@@ -62,6 +63,7 @@ const AnalystSystemPrompt = `你是一个 Benchmark 分析师。分析所有评�
 ["观察1", "观察2", ...]
 `
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 EVALUATE 阶段逻辑。

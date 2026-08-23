@@ -41,6 +41,7 @@ type SimpleMemoryIndex struct {
 	mu sync.RWMutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// kvPrefix KV 键前缀，对齐 Python _KV_PREFIX = "UMD"
@@ -53,6 +54,7 @@ const (
 	byteNumPerID = 24
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSimpleMemoryIndex 创建简单记忆索引实例。
@@ -914,7 +916,7 @@ func parseMemTypeFromCollection(name string) string {
 // ensureCollection 懒创建向量集合，已创建则跳过。
 // 对齐 Python _ensure_collection，集合 Schema 包含：
 //   - id: VARCHAR(256), 主键
-//   - embedding: FLOAT_VECTOR(dim)
+//   - embedding（嵌入向量）: FLOAT_VECTOR(dim)
 func (s *SimpleMemoryIndex) ensureCollection(ctx context.Context, name string, dim int) error {
 	s.mu.RLock()
 	if s.createdCollections[name] {

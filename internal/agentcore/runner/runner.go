@@ -46,6 +46,7 @@ type Runner struct {
 	systemReplySub any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultRunnerID 默认Runner ID（对齐 Python _DEFAULT_RUNNER_ID = "global"）
@@ -686,7 +687,7 @@ func (r *Runner) prepareAgent(
 
 	// 分支 2：session 是 string 或 nil（对齐 Python L513-530）
 	// 解析 sessionID（对齐 Python L513-514:
-	//   session_id = inputs.get(conversation_id, session if isinstance(session, str) else default)
+	//   Python: session_id = inputs.get(conversation_id, session if isinstance(session, str) else default)
 	// 优先级：inputs["conversation_id"] > SessionRef.ID > default
 	sessionID := defaultAgentSessionID
 	if inputs != nil {

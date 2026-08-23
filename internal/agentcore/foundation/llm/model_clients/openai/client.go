@@ -29,6 +29,7 @@ type OpenAIModelClient struct {
 	baseHeaders map[string]string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent openai 包统一使用 AgentCore 组件标识记录日志。

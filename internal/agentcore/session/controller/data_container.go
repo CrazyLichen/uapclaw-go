@@ -127,7 +127,7 @@ func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataC
 		// PreRun 触发 AGENT_SESSION_CREATED 回调，回调中会注入 Session
 		// G-08 修复：PreRun 失败时返回 error，阻止部分初始化的容器被使用
 		if err := sa.PreRun(context.Background()); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "load_agent_session_container").
 				Str("session_id", sessionID).
 				Err(err).

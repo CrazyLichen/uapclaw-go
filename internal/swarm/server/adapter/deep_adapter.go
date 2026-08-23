@@ -535,8 +535,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 //  9. new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 //  10. self._update_permission_rail(config_base)
 //  11. await self._instance.configure(
-//     model=model, tools=new_tool_cards, rails=rails_list,
-//     subagents=subagents, enable_task_loop=..., max_iterations=...)
+//     Python: model=model, tools=new_tool_cards, rails=rails_list,
+//     Python: subagents=subagents, enable_task_loop=..., max_iterations=...)
 //  12. self._registered_mcp_server_ids.clear()
 //  13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
@@ -1095,8 +1095,8 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 
 	// ⤵️ 10.6.3-10: todos 和 cancelled_tools 依赖 StreamEventRail 实现
 	// 待实现：流事件Rail处理 if d.streamEventRail != nil {
-	//     payload["todos"] = ...
-	//     payload["cancelled_tools"] = ...
+	//     Python: payload["todos"] = ...
+	//     Python: payload["cancelled_tools"] = ...
 	// }
 
 	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
@@ -1253,8 +1253,8 @@ func (d *DeepAdapter) Cleanup() error {
 func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	// 步骤 1: 中止 rail 上所有活跃 session
 	// 对齐 Python: if self._stream_event_rail is not None:
-	//   active = [sid for sid, count in self._active_session_ids.items() if count > 0]
-	//   for sid in active: self._stream_event_rail.abort(sid)
+	//   Python: active = [sid for sid, count in self._active_session_ids.items() if count > 0]
+	//   Python: for sid in active: self._stream_event_rail.abort(sid)
 	// ⤵️ 10.6.3-10: streamEventRail abort 所有活跃 session
 	if d.streamEventRail != nil {
 		// 快照收集所有活跃 session ID

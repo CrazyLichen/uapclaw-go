@@ -11,6 +11,9 @@ type CodingMemoryWriteMetadataProvider struct{}
 // CodingMemoryEditMetadataProvider coding_memory_edit 工具元数据提供者
 type CodingMemoryEditMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // codingMemoryReadDescription coding_memory_read 工具双语描述

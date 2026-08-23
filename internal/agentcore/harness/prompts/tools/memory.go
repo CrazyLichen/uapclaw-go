@@ -17,6 +17,9 @@ type EditMemoryMetadataProvider struct{}
 // ReadMemoryMetadataProvider read_memory 工具元数据提供者
 type ReadMemoryMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // memorySearchDescription memory_search 工具双语描述

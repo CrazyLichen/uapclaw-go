@@ -72,6 +72,7 @@ type gitHubFileItem struct {
 	RelativePath string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // githubAPI GitHub API 基础 URL
@@ -82,6 +83,8 @@ const skillsDirName = "skills/"
 
 // githubRequestTimeout GitHub API 请求超时时间
 const githubRequestTimeout = 30 * time.Second
+
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -174,7 +177,7 @@ func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) 
 	}
 
 	if truncated {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "github_tree_truncated").
 			Msg("GitHub 文件列表被截断，结果可能不完整")
 	}
@@ -264,7 +267,7 @@ func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir stri
 		}
 
 		relativePath := file.RelativePath
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "skill_file_upload").
 			Str("relative_path", relativePath).
 			Msg("上传技能文件")

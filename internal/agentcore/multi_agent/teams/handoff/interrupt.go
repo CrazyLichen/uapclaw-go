@@ -22,7 +22,6 @@ type TeamInterruptSignal struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -74,7 +73,7 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 
 	// 关闭流
 	if err := sess.CloseStream(); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Err(err).
 			Str("action", "flush_team_session").
 			Str("session_id", sess.GetSessionID()).
@@ -83,7 +82,7 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 
 	// 提交检查点
 	if err := sess.Commit(ctx); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Err(err).
 			Str("action", "flush_team_session").
 			Str("session_id", sess.GetSessionID()).

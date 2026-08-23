@@ -18,6 +18,7 @@ import (
 // Python 中 AskUserTool.invoke(query, **kwargs) return {} / stream(query, **kwargs) yield {}
 type AskUserTool struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -25,6 +26,7 @@ const (
 	logComponent = logger.ComponentAgentCore
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAskUserTool 创建 AskUserTool 空壳实例。
@@ -62,3 +64,5 @@ func NewAskUserTool(language, agentID string) (tool.Tool, error) {
 
 	return askUserTool, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

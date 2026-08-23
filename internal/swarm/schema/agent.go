@@ -100,6 +100,7 @@ type AgentResponseOption func(*AgentResponse)
 // AgentResponseChunkOption Agent 响应片段可选配置函数。
 type AgentResponseChunkOption func(*AgentResponseChunk)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────

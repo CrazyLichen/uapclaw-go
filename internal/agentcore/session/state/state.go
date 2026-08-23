@@ -80,9 +80,9 @@ type SessionState interface {
 //
 // Python 中通过继承链直接调用，Go 中通过类型断言获取：
 //
-//	if ws, ok := session.State().(state.WorkflowState); ok {
-//	    ws.CommitCmp()
-//	} else {
+//	示例: if ws, ok := session.State().(state.WorkflowState); ok {
+//	    示例: ws.CommitCmp()
+//	示例: } else {
 //	    // 对齐 Python AttributeError — Log Error + Panic
 //	}
 //

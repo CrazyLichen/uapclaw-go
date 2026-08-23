@@ -49,6 +49,9 @@ type ExtensionRegistry struct {
 	cryptoUtil CryptoUtilityExtension
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -178,3 +181,5 @@ func (r *ExtensionRegistry) Trigger(ctx context.Context, event string, data map[
 func (r *ExtensionRegistry) Config() *ExtensionConfig {
 	return r.config
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

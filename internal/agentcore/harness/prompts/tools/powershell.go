@@ -5,6 +5,9 @@ package tools
 // PowerShellMetadataProvider powershell 工具元数据提供者
 type PowerShellMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // powershellDescription powershell 工具双语描述

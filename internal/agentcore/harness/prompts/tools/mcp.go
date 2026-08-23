@@ -8,6 +8,9 @@ type ListMcpResourcesMetadataProvider struct{}
 // ReadMcpResourceMetadataProvider read_mcp_resource 工具元数据提供者
 type ReadMcpResourceMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // listMcpResourcesDescription list_mcp_resources 工具双语描述

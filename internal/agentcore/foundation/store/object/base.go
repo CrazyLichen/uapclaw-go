@@ -60,17 +60,17 @@ type ListOptions struct {
 // ListOption 列表查询选项
 type ListOption func(*ListOptions)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 const (
 	// defaultMaxObjects ListObjects 默认最大返回对象数
 	defaultMaxObjects = 100
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-var (
-	// logComponent 对象存储日志组件，agentcore 下的包应使用 ComponentAgentCore
-	logComponent = logger.ComponentAgentCore
-)
+var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

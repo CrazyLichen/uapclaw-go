@@ -31,6 +31,7 @@ type StandardReranker struct {
 // StandardRerankerOption StandardReranker 可选配置
 type StandardRerankerOption func(*StandardReranker)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// standardEndPoint 标准重排序 API 端点

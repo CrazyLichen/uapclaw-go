@@ -326,7 +326,7 @@ func (mso *MessageSummaryOffloader) OnAddMessages(ctx context.Context, mc iface.
 		}
 		offloadedMsg, err := mso.offloadMessageAdaptive(ctx, message, mc)
 		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", mso.ProcessorType()).
 				Int("message_idx", baseIndex+index).
 				Err(err).
@@ -546,7 +546,7 @@ func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, 
 		var err error
 		step, err = mso.getStepFromChainPrecise(ctx, append(contextMessages, message))
 		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", mso.ProcessorType()).
 				Err(err).
 				Msg("精确任务提取失败，回退到默认方式")

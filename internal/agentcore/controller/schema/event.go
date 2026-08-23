@@ -149,6 +149,7 @@ const (
 	EventFollowUp EventType = "follow_up"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEventType 实现 Event 接口，返回事件类型。
@@ -320,6 +321,8 @@ func (e *FollowUpEvent) UnmarshalJSON(data []byte) error {
 	e.InputData = []DataFrame(j.InputData)
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 Event 按具体类型序列化。
 func (es eventSlice) MarshalJSON() ([]byte, error) {

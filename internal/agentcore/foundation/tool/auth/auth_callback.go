@@ -56,6 +56,7 @@ type AuthStrategyRegistry struct {
 	strategies map[string]AuthStrategy
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// AuthTypeSSL SSL 认证类型
@@ -63,6 +64,8 @@ const (
 	// AuthTypeHeaderAndQuery 请求头和查询参数认证类型
 	AuthTypeHeaderAndQuery = "header_and_query"
 )
+
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -92,7 +95,7 @@ func RegisterAuthCallback(fw *callback.CallbackFramework) {
 	fw.OnTool(callback.ToolAuth, func(ctx context.Context, data *callback.ToolCallEventData) any {
 		authConfig, ok := data.Extra["auth_config"].(*ToolAuthConfig)
 		if !ok {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("tool_name", data.ToolName).
 				Str("tool_id", data.ToolID).
 				Msg("auth_config 未找到或类型不匹配，跳过认证处理")
@@ -138,7 +141,7 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 
 	verify, certPath, err := security.GetSSLConfig(verifySwitchEnv, sslCertEnv, []string{"false"}, urlIsHTTPS)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("auth_type", AuthTypeSSL).
 			Str("tool_type", authConfig.ToolType).
@@ -150,7 +153,7 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 	if verify {
 		tlsConfig, err = security.CreateStrictTLSConfig(certPath)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Err(err).
 				Str("auth_type", AuthTypeSSL).
 				Str("tool_type", authConfig.ToolType).
@@ -177,7 +180,7 @@ func (s *HeaderQueryAuthStrategy) Authenticate(_ context.Context, authConfig *To
 		headers := toStringMap(authConfig.Config["auth_headers"])
 		queryParams := toStringMap(authConfig.Config["auth_query_params"])
 		provider = NewHeaderQueryProvider(headers, queryParams)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("auth_type", AuthTypeHeaderAndQuery).
 			Str("tool_type", authConfig.ToolType).
 			Msg("使用自定义 header 和 query 认证")
@@ -200,7 +203,7 @@ func (r *AuthStrategyRegistry) Register(authType string, strategy AuthStrategy) 
 func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error) {
 	strategy, ok := r.strategies[authConfig.AuthType]
 	if !ok {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("auth_type", authConfig.AuthType).
 			Msg("不支持的认证类型")
 		return &ToolAuthResult{

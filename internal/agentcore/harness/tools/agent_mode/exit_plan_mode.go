@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -69,7 +68,7 @@ func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID
 		agent.RestoreModeAfterPlanExit(sess)
 		prefix := strings.ReplaceAll(exitPlanWithContentPrefix[lang], "{plan_path}", planPathStr)
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "exit_plan_mode").
 			Str("plan_path", planPath).
 			Int("plan_length", len(planText)).

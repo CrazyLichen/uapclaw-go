@@ -7,6 +7,22 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TrajectorySink 成员轨迹快照写入端点。
+//
+// 对应 Python: TrajectorySink(Protocol)
+type TrajectorySink interface {
+	// PublishMemberTrajectory 发布成员最新轨迹快照。
+	PublishMemberTrajectory(snapshot *MemberTrajectorySnapshot)
+}
+
+// TrajectorySource 聚合轨迹证据读取端点。
+//
+// 对应 Python: TrajectorySource(Protocol)
+type TrajectorySource interface {
+	// GetTrajectory 返回指定会话的聚合团队轨迹。
+	GetTrajectory(teamID, sessionID string, filterCollaborative bool) *Trajectory
+}
+
 // MemberTrajectorySnapshot 团队成员在单个会话中的最新有界轨迹视图。
 //
 // 对应 Python: MemberTrajectorySnapshot dataclass
@@ -23,22 +39,6 @@ type MemberTrajectorySnapshot struct {
 	Trajectory *Trajectory
 	// RecordedAtMs 记录时间（毫秒时间戳）
 	RecordedAtMs int
-}
-
-// TrajectorySink 成员轨迹快照写入端点。
-//
-// 对应 Python: TrajectorySink(Protocol)
-type TrajectorySink interface {
-	// PublishMemberTrajectory 发布成员最新轨迹快照。
-	PublishMemberTrajectory(snapshot *MemberTrajectorySnapshot)
-}
-
-// TrajectorySource 聚合轨迹证据读取端点。
-//
-// 对应 Python: TrajectorySource(Protocol)
-type TrajectorySource interface {
-	// GetTrajectory 返回指定会话的聚合团队轨迹。
-	GetTrajectory(teamID, sessionID string, filterCollaborative bool) *Trajectory
 }
 
 // InMemoryTrajectoryRegistry 内存轨迹注册表，同时实现 TrajectorySink 和 TrajectorySource。
@@ -72,6 +72,12 @@ type snapshotEntry struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口合规检查
+var (
+	_ TrajectorySink   = (*InMemoryTrajectoryRegistry)(nil)
+	_ TrajectorySource = (*InMemoryTrajectoryRegistry)(nil)
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -116,15 +122,15 @@ func NewInMemoryTrajectoryRegistry() *InMemoryTrajectoryRegistry {
 //
 // 对齐 Python:
 //
-//	key = (snapshot.team_id, snapshot.session_id)
-//	with self._lock:
-//	    self._sequence += 1
-//	    incoming = _SnapshotEntry(snapshot=snapshot, sequence=self._sequence)
-//	    members = self._snapshots.setdefault(key, {})
-//	    current = members.get(snapshot.member_id)
-//	    if current is not None and _should_keep_current(current, incoming):
-//	        return
-//	    members[snapshot.member_id] = incoming
+//	Python: key = (snapshot.team_id, snapshot.session_id)
+//	Python: with self._lock:
+//	    Python: self._sequence += 1
+//	    Python: incoming = _SnapshotEntry(snapshot=snapshot, sequence=self._sequence)
+//	    Python: members = self._snapshots.setdefault(key, {})
+//	    Python: current = members.get(snapshot.member_id)
+//	    Python: if current is not None and _should_keep_current(current, incoming):
+//	        Python: return
+//	    Python: members[snapshot.member_id] = incoming
 func (r *InMemoryTrajectoryRegistry) PublishMemberTrajectory(snapshot *MemberTrajectorySnapshot) {
 	key := registryKey{teamID: snapshot.TeamID, sessionID: snapshot.SessionID}
 	r.mu.Lock()
@@ -147,16 +153,16 @@ func (r *InMemoryTrajectoryRegistry) PublishMemberTrajectory(snapshot *MemberTra
 //
 // 对齐 Python:
 //
-//	key = (team_id, session_id)
-//	with self._lock:
-//	    snapshots = [entry.snapshot for entry in self._snapshots.get(key, {}).values()]
-//	if not snapshots:
-//	    return None
-//	return aggregate_member_trajectories(
-//	    [_trajectory_for_snapshot(snapshot) for snapshot in snapshots],
-//	    team_id=team_id,
-//	    session_id=session_id,
-//	    filter_collaborative=filter_collaborative,
+//	Python: key = (team_id, session_id)
+//	Python: with self._lock:
+//	    Python: snapshots = [entry.snapshot for entry in self._snapshots.get(key, {}).values()]
+//	Python: if not snapshots:
+//	    Python: return None
+//	Python: return aggregate_member_trajectories(
+//	    Python: [_trajectory_for_snapshot(snapshot) for snapshot in snapshots],
+//	    Python: team_id=team_id,
+//	    Python: session_id=session_id,
+//	    Python: filter_collaborative=filter_collaborative,
 //	)
 func (r *InMemoryTrajectoryRegistry) GetTrajectory(teamID, sessionID string, filterCollaborative bool) *Trajectory {
 	key := registryKey{teamID: teamID, sessionID: sessionID}
@@ -205,11 +211,11 @@ func NowMs() int {
 //
 // 对齐 Python:
 //
-//	meta = dict(snapshot.trajectory.meta)
-//	meta["member_id"] = snapshot.member_id
-//	if snapshot.member_role is not None:
-//	    meta["member_role"] = snapshot.member_role
-//	return replace(snapshot.trajectory, meta=meta)
+//	Python: meta = dict(snapshot.trajectory.meta)
+//	Python: meta["member_id"] = snapshot.member_id
+//	Python: if snapshot.member_role is not None:
+//	    Python: meta["member_role"] = snapshot.member_role
+//	Python: return replace(snapshot.trajectory, meta=meta)
 func trajectoryForSnapshot(snapshot *MemberTrajectorySnapshot) *Trajectory {
 	meta := make(map[string]any)
 	for k, v := range snapshot.Trajectory.Meta {
@@ -234,22 +240,12 @@ func trajectoryForSnapshot(snapshot *MemberTrajectorySnapshot) *Trajectory {
 //
 // 对齐 Python:
 //
-//	if incoming.snapshot.recorded_at_ms != current.snapshot.recorded_at_ms:
-//	    return current.snapshot.recorded_at_ms > incoming.snapshot.recorded_at_ms
-//	return current.sequence >= incoming.sequence
+//	Python: if incoming.snapshot.recorded_at_ms != current.snapshot.recorded_at_ms:
+//	    Python: return current.snapshot.recorded_at_ms > incoming.snapshot.recorded_at_ms
+//	Python: return current.sequence >= incoming.sequence
 func shouldKeepCurrent(current, incoming *snapshotEntry) bool {
 	if incoming.snapshot.RecordedAtMs != current.snapshot.RecordedAtMs {
 		return current.snapshot.RecordedAtMs > incoming.snapshot.RecordedAtMs
 	}
 	return current.sequence >= incoming.sequence
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 编译时接口合规检查
-var (
-	_ TrajectorySink   = (*InMemoryTrajectoryRegistry)(nil)
-	_ TrajectorySource = (*InMemoryTrajectoryRegistry)(nil)
-)

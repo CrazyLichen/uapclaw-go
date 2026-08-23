@@ -24,6 +24,7 @@ type policyBuilder struct {
 	readOnlyPromote  []string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // envSandboxProjectDir 沙箱项目目录环境变量。
@@ -59,7 +60,7 @@ var intrinsicROFilePathFuncs = []func() string{
 //   - isCodeAgent: 是否 code-agent 形态
 //
 // 返回：
-//   - policyDict: {"filesystem_policy": {"files": [], "directories": [], "bind_mounts": [], "read_write": [], "read_only": []}}
+//   - policyDict（策略字典）: {"filesystem_policy": {"files": [], "directories": [], "bind_mounts": [], "read_write": [], "read_only": []}}
 //   - uploadList: 当前始终为空列表（mount 模式下走 bind_mounts）
 //   - error: files.allow/deny 中 path 不存在时返回 os.ErrNotExist
 func BuildFilesystemPolicy(

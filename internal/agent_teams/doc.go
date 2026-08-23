@@ -15,6 +15,7 @@
 //	├── constants.go        # 保留名常量
 //	├── context.go          # SessionState 可变容器 + session_id context 传播（9.59）
 //	├── i18n.go             # 多语言 i18n 支持
+//	├── paths.go            # 团队路径工具
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）

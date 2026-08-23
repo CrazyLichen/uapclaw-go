@@ -135,7 +135,7 @@ var (
 	// 用于判断 Trajectory 是否处于团队协作成员上下文。
 	//
 	// 对应 Python: openjiuwen/agent_evolving/trajectory/aggregator.py
-	// CROSS_MEMBER_META_KEYS = frozenset({"invoke_id", "parent_invoke_id", "child_invokes"})
+	// Python: CROSS_MEMBER_META_KEYS = frozenset({"invoke_id", "parent_invoke_id", "child_invokes"})
 	CrossMemberMetaKeys = map[string]bool{
 		"invoke_id":        true,
 		"parent_invoke_id": true,
@@ -160,13 +160,13 @@ func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 //
 // 对齐 Python:
 //
-//		for step in self.steps:
-//		    if step.kind != "llm" or not isinstance(step.detail, LLMCallDetail):
-//		        continue
-//		    messages.extend(self._message_to_dict(message) for message in step.detail.messages)
-//		    response_message = self._message_to_dict(response) if response is not None else None
+//		Python: for step in self.steps:
+//		    Python: if step.kind != "llm" or not isinstance(step.detail, LLMCallDetail):
+//		        Python: continue
+//		    Python: messages.extend(self._message_to_dict(message) for message in step.detail.messages)
+//		    Python: response_message = self._message_to_dict(response) if response is not None else None
 //	   如果 response_message 包含 role 或 content 字段
-//		        messages.append(response_message)
+//		        Python: messages.append(response_message)
 //
 // 对应 Python: Trajectory.to_messages()
 func (t *Trajectory) ToMessages() []map[string]any {

@@ -18,6 +18,7 @@ import (
 // 对齐 Python: importlib.import_module + getattr + cls(**kwargs)
 type DefaultAgentCreator struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// AgentTypeReAct ReAct Agent 类型名
@@ -44,9 +45,9 @@ func SupportedAgentTypes() []string {
 // CreateByType 根据 agent_type 创建 Agent 实例。
 // 对齐 Python:
 //
-//	module = importlib.import_module(class_config.agent_module)
-//	agent_cls = getattr(module, class_config.agent_class)
-//	agent = agent_cls(**class_config.init_kwargs)
+//	Python: module = importlib.import_module(class_config.agent_module)
+//	Python: agent_cls = getattr(module, class_config.agent_class)
+//	Python: agent = agent_cls(**class_config.init_kwargs)
 //
 // agentCard 为 map[string]any 格式的 AgentCard（从 spawn 消息反序列化），
 // 内部反序列化为 schema.AgentCard 后创建 Agent。

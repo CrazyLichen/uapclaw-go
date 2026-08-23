@@ -26,7 +26,6 @@ type StoreArchiveHelper struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -37,13 +36,13 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 	// 对齐 Python: 校验名称
 	validNameRe := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 	if name == "" || !validNameRe.MatchString(name) {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 无效名称")
 		return "", nil
 	}
 	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 路径遍历尝试")
 		return "", nil
@@ -51,14 +50,14 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 
 	skillDir := h.store.ResolveSkillDir(ctx, name, true)
 	if skillDir == "" {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("name", name).
 			Msg("[EvolutionStore] create_skill: 无法解析技能目录")
 		return "", nil
 	}
 
 	if isDir(skillDir) && hasFiles(skillDir) {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("name", name).
 			Str("skill_dir", skillDir).
 			Msg("[EvolutionStore] create_skill: 技能已存在")
@@ -90,7 +89,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 	evoDir := filepath.Join(skillDir, "evolution")
 	_ = os.MkdirAll(evoDir, 0755)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("name", name).
 		Str("skill_dir", skillDir).
 		Msg("[EvolutionStore] 创建新技能")
@@ -118,7 +117,7 @@ func (h *StoreArchiveHelper) ArchiveSkillBody(ctx context.Context, name string) 
 	if err := h.store.WriteFileText(ctx, dest, content); err != nil {
 		return "", err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("src", filepath.Base(mdPath)).
 		Str("dest", filepath.Base(dest)).
 		Msg("[EvolutionStore] 归档 SKILL.md")
@@ -146,7 +145,7 @@ func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string)
 	if err := h.store.WriteFileText(ctx, dest, content); err != nil {
 		return "", err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("dest", filepath.Base(dest)).
 		Msg("[EvolutionStore] 归档演进数据")
 	return filepath.Base(dest), nil
@@ -162,7 +161,7 @@ func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) e
 	if err := h.store.RenderEvolutionMarkdown(ctx, name); err != nil {
 		return err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("skill", name).
 		Msg("[EvolutionStore] 清空演进数据")
 	return nil

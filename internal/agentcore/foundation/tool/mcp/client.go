@@ -7,6 +7,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMcpClient 根据配置创建对应类型的 MCP 客户端。
@@ -35,7 +41,7 @@ func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 	case "playwright":
 		return client.NewPlaywrightClient(config), nil
 	default:
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("client_type", config.ClientType).
 			Msg("未知的 MCP 客户端类型")
 		return nil, exception.BuildError(

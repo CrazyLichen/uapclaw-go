@@ -69,17 +69,17 @@ func (o *SkillExperienceOptimizer) AddTrajectory(traj *signal.EvolutionSignal) {
 //
 // 对齐 Python: SkillExperienceOptimizer._backward(signals)
 //
-//		for op_id, op in self._operators.items():
-//		    skill_name = op_id.removeprefix("skill_experience_")
-//		    skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
+//		Python: for op_id, op in self._operators.items():
+//		    Python: skill_name = op_id.removeprefix("skill_experience_")
+//		    Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
 //	   如果没有 skill_signals 则跳过
-//		    ctx = self._build_evolution_context(skill_name, op, skill_signals)
-//		    records = await self.generate_records(ctx)
-//		    if not records:
+//		    Python: ctx = self._build_evolution_context(skill_name, op, skill_signals)
+//		    Python: records = await self.generate_records(ctx)
+//		    Python: if not records:
 //	       logger.info: 无记录生成（skill=%s）
 //		        continue
-//		    existing = param.get_gradient(EXPERIENCES_TARGET) or []
-//		    param.set_gradient(EXPERIENCES_TARGET, existing + records)
+//		    Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
+//		    Python: param.set_gradient(EXPERIENCES_TARGET, existing + records)
 func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	o.ValidateParameters()
 	selected := o.SelectSignals(signals)
@@ -148,11 +148,11 @@ func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*sign
 //
 // 对齐 Python: SkillExperienceOptimizer._step()
 //
-//	updates = {}
-//	for op_id, param in self._parameters.items():
-//	    records = param.get_gradient(EXPERIENCES_TARGET) or []
-//	    if records: updates[(op_id, EXPERIENCES_TARGET)] = records
-//	return updates
+//	Python: updates = {}
+//	Python: for op_id, param in self._parameters.items():
+//	    Python: records = param.get_gradient(EXPERIENCES_TARGET) or []
+//	    Python: if records: updates[(op_id, EXPERIENCES_TARGET)] = records
+//	Python: return updates
 func (o *SkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
 	o.ValidateParameters()
 	updates := make(map[schema.UpdateKey]any)
@@ -368,9 +368,9 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 //
 // 对齐 Python: SkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals)
 //
-//	online_ctx = self._online_contexts.get(skill_name)
-//	if online_ctx is not None: return online_ctx
-//	raise build_error(...)
+//	Python: online_ctx = self._online_contexts.get(skill_name)
+//	Python: if online_ctx is not None: return online_ctx
+//	Python: raise build_error(...)
 func (o *SkillExperienceOptimizer) buildEvolutionContext(skillName string, op operator.Operator, skillSignals []*signal.EvolutionSignal) (*experience.EvolutionContext, error) {
 	onlineCtx := o.onlineContexts[skillName]
 	if onlineCtx != nil {

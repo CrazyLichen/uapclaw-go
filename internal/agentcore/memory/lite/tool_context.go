@@ -13,6 +13,11 @@ type MemoryToolContext struct {
 	LiteMemoryToolContextBase
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryToolContext 创建通用记忆工具上下文
@@ -59,3 +64,5 @@ func (c *MemoryToolContext) WithManager(mgr MemoryIndexManager) *MemoryToolConte
 	c.Manager = mgr
 	return c
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -31,6 +31,8 @@ type RerankerBase struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 const (
 	// defaultMaxRetries 默认最大重试次数
 	defaultMaxRetries = 3
@@ -39,10 +41,7 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-var (
-	// logComponent 日志组件常量
-	logComponent = logger.ComponentAgentCore
-)
+var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

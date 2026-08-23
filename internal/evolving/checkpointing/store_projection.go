@@ -27,7 +27,6 @@ type StoreProjectionHelper struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -83,7 +82,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 	if err := h.UpdateSkillMDIndex(ctx, skillDir, activeEntries); err != nil {
 		return err
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("skill", name).
 		Int("entries", len(activeEntries)).
 		Msg("[EvolutionStore] 渲染 markdown")

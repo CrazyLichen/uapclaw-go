@@ -5,6 +5,9 @@ package tools
 // SearchToolsMetadataProvider search_tools 工具元数据提供者
 type SearchToolsMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // searchToolsDescription search_tools 工具双语描述

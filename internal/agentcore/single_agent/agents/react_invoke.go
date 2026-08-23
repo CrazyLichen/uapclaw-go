@@ -23,7 +23,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -41,7 +40,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 		if v, ok := transformed.(map[string]any); ok {
 			inputs = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformAgentIOInput").
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
@@ -69,7 +68,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 		if _, ok := err.(*exception.BaseError); ok {
 			return nil, err
 		}
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("agent_id", a.card.ID).
 			Err(err).
 			Msg("Agent invoke 错误")
@@ -83,7 +82,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 		if v, ok := transformed.(map[string]any); ok {
 			result = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformAgentIOOutput").
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
@@ -116,7 +115,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 		if v, ok := transformed.(map[string]any); ok {
 			inputs = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformAgentIOInput").
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
@@ -140,7 +139,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 		if _, ok := err.(*exception.BaseError); ok {
 			return nil, err
 		}
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("agent_id", a.card.ID).
 			Err(err).
 			Msg("Agent stream 错误")
@@ -159,7 +158,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 				if v, ok := transformed.(stream.Schema); ok {
 					item = v
 				} else {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("event", "TransformAgentIOOutput").
 						Str("agent_id", a.card.ID).
 						Str("expected", "stream.Schema").
@@ -364,7 +363,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			interruptionState = *hitlState
 		}
 		// ⤵️ Workflow: 中断状态加载（暂未实现）
-		// interruptionState = a.loadInterruptionState(sess)
+		// Python: interruptionState = a.loadInterruptionState(sess)
 
 		// 如果存在中断状态，恢复原始 query
 		if hitlState != nil {

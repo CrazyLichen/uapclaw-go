@@ -269,18 +269,19 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 // 对齐 Python: AgentConfigurator.setup_team_backend(spec, ctx, messager, ...)
 //
 // Python 步骤：
-//  1. team_name = (ctx.team_spec.team_name if ctx.team_spec else None) or "default"
-//  2. db = get_shared_db(ctx.db_config)
-//  3. is_leader = ctx.role == TeamRole.LEADER
-//  4. current_member_name = ctx.member_name or ctx.team_spec.leader_member_name
-//  5. agent_team = TeamBackend(team_name=..., member_name=..., is_leader=..., db=..., messager=...,
-//     teammate_mode=..., predefined_members=..., model_config_allocator=..., leader_allocation=...,
-//     enable_hitt=..., on_team_cleaned=..., on_team_built=..., leader_member_name=...)
-//  6. self.team_backend = agent_team
-//  7. self.task_manager = agent_team.task_manager
-//  8. self.message_manager = agent_team.message_manager
-//  9. if self.workspace_manager: agent_team.register_cleanup_path(ws.workspace_path)
-//  10. agent_team.register_cleanup_path(str(team_home(team_name)))
+//
+//	Python: 1. team_name = (ctx.team_spec.team_name if ctx.team_spec else None) or "default"
+//	Python: 2. db = get_shared_db(ctx.db_config)
+//	Python: 3. is_leader = ctx.role == TeamRole.LEADER
+//	Python: 4. current_member_name = ctx.member_name or ctx.team_spec.leader_member_name
+//	Python: 5. agent_team = TeamBackend(team_name=..., member_name=..., is_leader=..., db=..., messager=...,
+//	   Python: teammate_mode=..., predefined_members=..., model_config_allocator=..., leader_allocation=...,
+//	   Python: enable_hitt=..., on_team_cleaned=..., on_team_built=..., leader_member_name=...)
+//	Python: 6. self.team_backend = agent_team
+//	Python: 7. self.task_manager = agent_team.task_manager
+//	Python: 8. self.message_manager = agent_team.message_manager
+//	Python: 9. if self.workspace_manager: agent_team.register_cleanup_path(ws.workspace_path)
+//	Python: 10. agent_team.register_cleanup_path(str(team_home(team_name)))
 func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, msg messager.Messager, opts ...SetupTeamBackendOption) *tools.TeamBackend {
 	cfg := &setupTeamBackendConfig{}
 	for _, opt := range opts {

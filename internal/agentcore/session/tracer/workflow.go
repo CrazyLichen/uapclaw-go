@@ -53,6 +53,7 @@ type WorkflowNodeSession interface {
 // 空结构体，所有方法均为静态风格（不持有状态）。
 type TracerWorkflowUtils struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
@@ -65,6 +66,7 @@ const loopID = "__sys_loop_id"
 // 完整 key 为 loopID_value + "." + "index"，如 "loop_node_1.index"
 const loopIndexSuffix = ".index"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TraceWorkflowStart 追踪工作流开始，对应 Python TracerWorkflowUtils.trace_workflow_start。
@@ -263,10 +265,10 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 // 当循环组件写入 LOOP_ID 后，额外返回 loop_node_id/loop_index。
 // 对齐 Python:
 //
-//	loop_id = state.get_global(LOOP_ID)
-//	if loop_id is None: return component_metadata
-//	index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
-//	component_metadata.update({"loop_node_id": loop_id, "loop_index": index})
+//	Python: loop_id = state.get_global(LOOP_ID)
+//	Python: if loop_id is None: return component_metadata
+//	Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
+//	Python: component_metadata.update({"loop_node_id": loop_id, "loop_index": index})
 func getComponentMetadata(session WorkflowNodeSession) map[string]any {
 	metadata := map[string]any{
 		"component_id":   session.NodeID(),

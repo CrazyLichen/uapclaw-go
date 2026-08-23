@@ -157,14 +157,14 @@ func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajecto
 //
 // 对齐 Python:
 //
-//	members = {}
-//	for trajectory in trajectories:
-//	    member_id = str(trajectory.meta.get("member_id", trajectory.execution_id[:8]))
-//	    processed = trajectory
-//	    if filter_collaborative and not _is_leader_trajectory(trajectory, member_id):
-//	        processed = filter_member_trajectory(trajectory)
-//	    if processed.steps:
-//	        members[member_id] = _merge_member_trajectory(members.get(member_id), processed)
+//	Python: members = {}
+//	Python: for trajectory in trajectories:
+//	    Python: member_id = str(trajectory.meta.get("member_id", trajectory.execution_id[:8]))
+//	    Python: processed = trajectory
+//	    Python: if filter_collaborative and not _is_leader_trajectory(trajectory, member_id):
+//	        Python: processed = filter_member_trajectory(trajectory)
+//	    Python: if processed.steps:
+//	        Python: members[member_id] = _merge_member_trajectory(members.get(member_id), processed)
 //
 // 对应 Python: _member_trajectories_by_id()
 func memberTrajectoriesByID(trajectories []*Trajectory, filterCollaborative bool) map[string]*Trajectory {
@@ -196,10 +196,10 @@ func memberTrajectoriesByID(trajectories []*Trajectory, filterCollaborative bool
 //
 // 对齐 Python:
 //
-//	all_steps = []
-//	for trajectory in members.values():
-//	    all_steps.extend(trajectory.steps)
-//	all_steps.sort(key=lambda step: step.start_time_ms or 0)
+//	Python: all_steps = []
+//	Python: for trajectory in members.values():
+//	    Python: all_steps.extend(trajectory.steps)
+//	Python: all_steps.sort(key=lambda step: step.start_time_ms or 0)
 //
 // 对应 Python: _build_combined_trajectory()
 func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID string) *Trajectory {
@@ -249,13 +249,13 @@ func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID s
 //
 // 对齐 Python:
 //
-//	for key in _MEMBER_ROLE_META_KEYS:
-//	    role = trajectory.meta.get(key)
-//	    if role is None:
-//	        continue
-//	    role_value = getattr(role, "value", role)
-//	    return str(role_value).lower() == _LEADER_ROLE
-//	return member_id == _LEADER_ROLE
+//	Python: for key in _MEMBER_ROLE_META_KEYS:
+//	    Python: role = trajectory.meta.get(key)
+//	    Python: if role is None:
+//	        Python: continue
+//	    Python: role_value = getattr(role, "value", role)
+//	    Python: return str(role_value).lower() == _LEADER_ROLE
+//	Python: return member_id == _LEADER_ROLE
 //
 // 对应 Python: _is_leader_trajectory()
 func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
@@ -272,20 +272,20 @@ func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
 //
 // 对齐 Python:
 //
-//	if existing is None:
-//	    return new
-//	if len(new.steps) > len(existing.steps) and _steps_are_prefix(existing.steps, new.steps):
-//	    return new
-//	if len(existing.steps) > len(new.steps) and _steps_are_prefix(new.steps, existing.steps):
-//	    return existing
-//	return Trajectory(
-//	    execution_id=existing.execution_id,
-//	    session_id=existing.session_id or new.session_id,
-//	    source=existing.source,
-//	    case_id=existing.case_id or new.case_id,
-//	    steps=[*existing.steps, *new.steps],
-//	    cost=_merge_cost(existing.cost, new.cost),
-//	    meta={**existing.meta, **new.meta},
+//	Python: if existing is None:
+//	    Python: return new
+//	Python: if len(new.steps) > len(existing.steps) and _steps_are_prefix(existing.steps, new.steps):
+//	    Python: return new
+//	Python: if len(existing.steps) > len(new.steps) and _steps_are_prefix(new.steps, existing.steps):
+//	    Python: return existing
+//	Python: return Trajectory(
+//	    Python: execution_id=existing.execution_id,
+//	    Python: session_id=existing.session_id or new.session_id,
+//	    Python: source=existing.source,
+//	    Python: case_id=existing.case_id or new.case_id,
+//	    Python: steps=[*existing.steps, *new.steps],
+//	    Python: cost=_merge_cost(existing.cost, new.cost),
+//	    Python: meta={**existing.meta, **new.meta},
 //	)
 //
 // 对应 Python: _merge_member_trajectory()
@@ -369,12 +369,12 @@ func mergeCost(first, second CostInfo) CostInfo {
 //
 // 对齐 Python:
 //
-//	if step.meta and any(key in step.meta for key in CROSS_MEMBER_META_KEYS):
-//	    return True
-//	if step.kind != "tool" or not step.detail:
-//	    return False
-//	tool_name = getattr(step.detail, "tool_name", "").lower()
-//	return tool_name in COLLABORATIVE_TOOLS or _is_team_skill_file_access(step, tool_name)
+//	Python: if step.meta and any(key in step.meta for key in CROSS_MEMBER_META_KEYS):
+//	    Python: return True
+//	Python: if step.kind != "tool" or not step.detail:
+//	    Python: return False
+//	Python: tool_name = getattr(step.detail, "tool_name", "").lower()
+//	Python: return tool_name in COLLABORATIVE_TOOLS or _is_team_skill_file_access(step, tool_name)
 //
 // 对应 Python: _is_collaborative_step()
 func isCollaborativeStep(step *TrajectoryStep) bool {
@@ -405,10 +405,10 @@ func isCollaborativeStep(step *TrajectoryStep) bool {
 //
 // 对齐 Python:
 //
-//	if "read" not in tool_name and "write" not in tool_name:
-//	    return False
-//	args = str(getattr(step.detail, "call_args", "")).lower()
-//	return "skill" in args
+//	Python: if "read" not in tool_name and "write" not in tool_name:
+//	    Python: return False
+//	Python: args = str(getattr(step.detail, "call_args", "")).lower()
+//	Python: return "skill" in args
 //
 // 对应 Python: _is_team_skill_file_access()
 func isTeamSkillFileAccess(step *TrajectoryStep, toolName string) bool {

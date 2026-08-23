@@ -70,8 +70,8 @@ func upsertSubagentInConfigAt(name string, enabled bool, configPath string) erro
 	}
 
 	// 步骤 4: 在目标 agent 条目中设置 enabled
-	// 对齐 Python: if target not in subagents or not isinstance(subagents[target], dict): subagents[target] = {}
-	// subagents[target]["enabled"] = bool(enabled)
+	// 对齐 Python: Python: if target not in subagents or not isinstance(subagents[target], dict): subagents[target] = {}
+	// Python: subagents[target]["enabled"] = bool(enabled)
 	agentCfg, _ := subagents[target].(map[string]any)
 	if agentCfg == nil {
 		agentCfg = make(map[string]any)

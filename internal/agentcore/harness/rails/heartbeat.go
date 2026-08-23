@@ -33,6 +33,7 @@ type HeartbeatRail struct {
 	heartbeatDir string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -168,3 +169,5 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

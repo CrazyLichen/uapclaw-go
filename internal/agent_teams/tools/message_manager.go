@@ -31,6 +31,8 @@ type TeamMessageManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -67,7 +69,7 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 		IsRead:         database.BoolPtr(false),
 	}
 	if !tm.db.Message().CreateMessage(ctx, msg) {
-		logger.Error(logger.ComponentAgentCore).Str("message_id", messageID).
+		logger.Error(logComponent).Str("message_id", messageID).
 			Msg("创建消息失败")
 		return "", fmt.Errorf("创建消息失败: message_id 冲突 %s", messageID)
 	}
@@ -102,7 +104,7 @@ func (tm *TeamMessageManager) BroadcastMessage(ctx context.Context, content stri
 		IsRead:         nil, // 广播消息 is_read=nil
 	}
 	if !tm.db.Message().CreateMessage(ctx, msg) {
-		logger.Error(logger.ComponentAgentCore).Str("message_id", messageID).
+		logger.Error(logComponent).Str("message_id", messageID).
 			Msg("创建广播消息失败")
 		return "", fmt.Errorf("创建广播消息失败: message_id 冲突 %s", messageID)
 	}
@@ -146,10 +148,10 @@ func (tm *TeamMessageManager) HasUnreadMessages(ctx context.Context, includeBroa
 func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, memberName string) bool {
 	success := tm.db.Message().MarkMessageRead(ctx, messageID, memberName)
 	if success {
-		logger.Debug(logger.ComponentAgentCore).Str("message_id", messageID).Str("member_name", memberName).
+		logger.Debug(logComponent).Str("message_id", messageID).Str("member_name", memberName).
 			Msg("消息已标记已读")
 	} else {
-		logger.Error(logger.ComponentAgentCore).Str("message_id", messageID).Str("member_name", memberName).
+		logger.Error(logComponent).Str("message_id", messageID).Str("member_name", memberName).
 			Msg("标记消息已读失败")
 	}
 	return success
@@ -166,7 +168,7 @@ func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event sch
 	msg := schema.EventMessageFromEvent(event)
 	topicID := schema.TeamTopicMessage.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("event_type", event.EventTypeName()).
 			Msg("发布消息事件失败")
 	}

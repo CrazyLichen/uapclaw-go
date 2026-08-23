@@ -48,6 +48,9 @@ type SkillDevService struct {
 // 返回 chunk channel，调用方逐个读取，channel 关闭表示结束。
 type methodHandler func(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error)
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillDevService 创建新的 SkillDevService 实例。

@@ -158,7 +158,7 @@ func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc ifa
 	allMessages := append(allMsgs, messagesToAdd...)
 	exceededRounds := p.roundBudgetExceeded(allMessages, mc)
 	if len(exceededRounds) > 0 {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("processor_type", p.ProcessorType()).
 			Msg("存在轮次工具结果超过预算，触发卸载")
 		return true, nil
@@ -345,7 +345,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 		targetIdx := candidates[0].idx
 		offloaded, err := p.offloadToolMessage(ctx, messages[targetIdx], mc)
 		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", p.ProcessorType()).
 				Int("message_idx", targetIdx).
 				Err(err).
@@ -358,7 +358,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 			modifiedIndices = append(modifiedIndices, targetIdx)
 			changed = true
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", p.ProcessorType()).
 				Int("message_idx", targetIdx).
 				Msg("卸载返回空消息，跳过当前候选继续尝试")
@@ -521,7 +521,7 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 		preview, hasMore)
 	offloadMsg.SetContent(llm_schema.NewTextContent(finalContent))
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("processor_type", p.ProcessorType()).
 		Str("offload_handle", actualHandle).
 		Str("offload_type", actualType).

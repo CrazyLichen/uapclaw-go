@@ -1012,8 +1012,8 @@ func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string
 	normalizedMessages := normalizeContextMessages(messages)
 
 	// 对齐 Python: await self._react_agent.context_engine.create_context(
-	//     session=Session(session_id=new_session_id, card=self.card),
-	//     history_messages=normalized_messages,
+	//     Python: session=Session(session_id=new_session_id, card=self.card),
+	//     Python: history_messages=normalized_messages,
 	// )
 	sess := session.NewSession(session.WithSessionID(newSessionID), session.WithCard(card))
 	_, err := reactAgent.ContextEngine().CreateContext(ctx, "default_context_id", sess,

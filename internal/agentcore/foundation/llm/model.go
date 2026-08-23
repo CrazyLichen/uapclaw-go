@@ -32,8 +32,8 @@ type SessionLike interface {
 //
 // 使用方式：
 //
-//	model, err := NewModel(clientConfig, modelConfig)
-//	result, err := model.Invoke(ctx, messages, opts...)
+//	示例: model, err := NewModel(clientConfig, modelConfig)
+//	示例: result, err := model.Invoke(ctx, messages, opts...)
 type Model struct {
 	// ModelConfig 模型请求配置
 	ModelConfig *llmschema.ModelRequestConfig
@@ -51,6 +51,8 @@ type ModelOption func(*Model)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -121,7 +123,7 @@ func (m *Model) Invoke(
 		if v, ok := transformed.(model_clients.MessagesParam); ok {
 			messages = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformLLMIOInput").
 				Str("expected", "MessagesParam").
 				Str("actual", fmt.Sprintf("%T", transformed)).
@@ -166,7 +168,7 @@ func (m *Model) Invoke(
 		if v, ok := transformed.(*llmschema.AssistantMessage); ok {
 			result = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformLLMIOOutput").
 				Str("expected", "*AssistantMessage").
 				Str("actual", fmt.Sprintf("%T", transformed)).
@@ -201,9 +203,9 @@ func (m *Model) Invoke(
 //
 // 对齐 Python 装饰器链：
 //
-//	fn = _fw.emit_before(LLM_STREAM_INPUT)(fn)
-//	fn = _fw.transform_io(LLM_STREAM_INPUT, LLM_STREAM_OUTPUT)(fn)
-//	fn = _fw.emit_after(LLM_STREAM_OUTPUT, item_key="result")(fn)
+//	Python: fn = _fw.emit_before(LLM_STREAM_INPUT)(fn)
+//	Python: fn = _fw.transform_io(LLM_STREAM_INPUT, LLM_STREAM_OUTPUT)(fn)
+//	Python: fn = _fw.emit_after(LLM_STREAM_OUTPUT, item_key="result")(fn)
 func (m *Model) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -219,7 +221,7 @@ func (m *Model) Stream(
 		if v, ok := transformed.(model_clients.MessagesParam); ok {
 			messages = v
 		} else {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("event", "TransformLLMIOInput").
 				Str("expected", "MessagesParam").
 				Str("actual", fmt.Sprintf("%T", transformed)).
@@ -269,7 +271,7 @@ func (m *Model) Stream(
 				if v, ok := transformed.(*llmschema.AssistantMessageChunk); ok {
 					chunk = v
 				} else {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("event", "TransformLLMIOOutput").
 						Str("expected", "*AssistantMessageChunk").
 						Str("actual", fmt.Sprintf("%T", transformed)).

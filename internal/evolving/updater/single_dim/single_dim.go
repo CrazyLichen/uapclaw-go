@@ -93,12 +93,12 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajecto
 //
 // 对齐 Python:
 //
-//	   初始化信号列表为空
-//		for case in evaluated_cases:
-//		    signal = from_evaluated_case(case, score_threshold=score_threshold)
-//		    if signal is not None:
-//		        signals.append(signal)
-//		return await self.process(trajectories, signals, config)
+//	   Python: 初始化信号列表为空
+//	Python: for case in evaluated_cases:
+//	    Python: signal = from_evaluated_case(case, score_threshold=score_threshold)
+//	    Python: if signal is not None:
+//	        Python: signals.append(signal)
+//	Python: return await self.process(trajectories, signals, config)
 //
 // 对应 Python: SingleDimUpdater.update(trajectories, evaluated_cases, config)
 func (u *SingleDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error) {

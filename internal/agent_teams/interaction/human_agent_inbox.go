@@ -29,11 +29,6 @@ type HumanAgentNotEnabledError struct {
 	Message string
 }
 
-// UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
-// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
-// 类型已提升到 schema 包，此处保留别名以兼容现有调用方。
-type UnknownHumanAgentError = schema.UnknownHumanAgentError
-
 // HumanAgentInbox Human-Agent 收件箱，路由 human-agent 输入。
 // 对齐 Python: HumanAgentInbox (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
 //
@@ -57,6 +52,11 @@ type HumanAgentInbox struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
+// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
+// 类型已提升到 schema 包，此处保留别名以兼容现有调用方。
+type UnknownHumanAgentError = schema.UnknownHumanAgentError
 
 // ──────────────────────────── 常量 ────────────────────────────
 

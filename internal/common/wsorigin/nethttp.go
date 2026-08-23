@@ -11,8 +11,8 @@ import (
 //
 // 使用示例：
 //
-//	handler := wsorigin.HTTPMiddleware()(wsHandler)
-//	http.Handle("/ws", handler)
+//	示例: handler := wsorigin.HTTPMiddleware()(wsHandler)
+//	示例: http.Handle("/ws", handler)
 //
 // 逻辑：
 //   - 非 WebSocket 升级请求 → 直接放行（传递给下一个 handler）

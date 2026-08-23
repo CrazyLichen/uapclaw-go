@@ -75,6 +75,11 @@ type ControllerConfig struct {
 	StreamFirstFrameTimeout float64 `json:"stream_first_frame_timeout"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultControllerConfig 返回默认 Controller 配置。
@@ -100,3 +105,5 @@ func DefaultControllerConfig() *ControllerConfig {
 		StreamFirstFrameTimeout:  30.0,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

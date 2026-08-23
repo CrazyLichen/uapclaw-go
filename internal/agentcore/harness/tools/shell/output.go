@@ -98,8 +98,8 @@ func TruncateOutput(text string, maxChars int) string {
 
 // PersistLargeOutput 持久化大输出到临时文件。
 // 对齐 Python: persist_large_output (bash/_output.py L50-77)
-// 写入 /tmp/openjiuwen_bash_outputs/bash_{sha256[:12]}.txt 或
-// /tmp/openjiuwen_powershell_outputs/powershell_{sha256[:12]}.txt
+// 写入 /tmp/openjiuwen_bash_outputs/bash_{sha256前12位}.txt 或
+// /tmp/openjiuwen_powershell_outputs/powershell_{sha256前12位}.txt
 // 返回文件路径和总字节数
 func PersistLargeOutput(stdout, stderr string, isPowerShell bool) (string, int) {
 	combined := stdout

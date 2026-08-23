@@ -37,14 +37,13 @@ type WorkflowStateCollection struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowStateCollection 创建工作流状态集合实例。
 func NewWorkflowStateCollection(ioState, globalState, compState, workflowState CommitStateLike, traceState map[string]any, parentID, nodeID string) *WorkflowStateCollection {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_workflow_state_collection").
 		Str("parent_id", parentID).
 		Str("node_id", nodeID).
@@ -92,7 +91,7 @@ func (s *WorkflowStateCollection) UpdateGlobal(data map[string]any) {
 		return
 	}
 	if err := s.globalState.UpdateByID(s.nodeID, data); err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "update_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		logger.Error(logComponent).Err(err).Str("action", "update_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
 	}
 }
 

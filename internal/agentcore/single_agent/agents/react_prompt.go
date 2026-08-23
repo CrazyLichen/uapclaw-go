@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
@@ -132,7 +131,7 @@ func (a *ReActAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail)
 			if err == nil {
 				return uninitErr
 			}
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "rail_uninit_error").
 				Err(uninitErr).
 				Msg("Rail Uninit 返回错误")

@@ -25,6 +25,10 @@ type AbilityExecutionError struct {
 
 // saschema.ExecuteResult 单个工具调用的执行结果。
 // 实际定义在 saschema (single_agent/schema) 包，本包直接使用 saschema.ExecuteResult。
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InterruptAutoConfirmKey 中断自动确认状态键。

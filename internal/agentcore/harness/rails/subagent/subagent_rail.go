@@ -46,6 +46,8 @@ const (
 	subagentRailPriority = 95
 )
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // knownAgentTools 已知代理工具映射
@@ -97,7 +99,7 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 
 	deepCfg := deepAgent.DeepConfig()
 	if deepCfg == nil || len(deepCfg.Subagents) == 0 {
-		logger.Info(logger.ComponentAgentCore).Msg("[SubagentRail] 无子代理配置，跳过")
+		logger.Info(logComponent).Msg("[SubagentRail] 无子代理配置，跳过")
 		return nil
 	}
 
@@ -121,7 +123,7 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 
 	if r.enableAsyncSubagent {
 		// ⤵️ 异步模式待回填：SessionToolkit + build_session_tools
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Bool("enable_async_subagent", true).
 			Int("subagent_count", len(deepCfg.Subagents)).
 			Msg("[SubagentRail] 异步模式暂未实现")
@@ -142,7 +144,7 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 	if r.enableAsyncSubagent {
 		mode = "async session"
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("mode", mode).
 		Int("subagent_count", len(deepCfg.Subagents)).
 		Msg("[SubagentRail] 已初始化")
@@ -198,9 +200,9 @@ func (r *SubagentRail) extractAgentMeta(spec hschema.SubagentSpec) (string, stri
 		return cfg.AgentCard.GetName(), cfg.AgentCard.GetDescription()
 	}
 	// 对齐 Python: DeepAgent 实例回退
-	// card = getattr(spec, "card", None)
-	// name = getattr(card, "name", None) or "general-purpose"
-	// description = getattr(card, "description", None) or "DeepAgent instance"
+	// Python: card = getattr(spec, "card", None)
+	// Python: name = getattr(card, "name", None) or "general-purpose"
+	// Python: description = getattr(card, "description", None) or "DeepAgent instance"
 	return "general-purpose", "DeepAgent instance"
 }
 

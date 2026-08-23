@@ -5,6 +5,9 @@ package tools
 // EnterWorktreeMetadataProvider enter_worktree 工具元数据提供者
 type EnterWorktreeMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // enterWorktreeDescription enter_worktree 工具双语描述

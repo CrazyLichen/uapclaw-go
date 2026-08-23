@@ -5,6 +5,9 @@ package tools
 // ListSkillMetadataProvider list_skill 工具元数据提供者
 type ListSkillMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // listSkillDescription list_skill 工具双语描述

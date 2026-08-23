@@ -24,7 +24,6 @@ type InMemoryCommitState struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -107,7 +106,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 		for key, updates := range s.updates {
 			for _, update := range updates {
 				if err := s.state.Update(update); err != nil {
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Err(err).
 						Str("action", "commit").
 						Str("node_id", key).
@@ -125,7 +124,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 			}
 			for _, update := range nodeUpdates {
 				if err := s.state.Update(update); err != nil {
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Err(err).
 						Str("action", "commit").
 						Str("node_id", id).

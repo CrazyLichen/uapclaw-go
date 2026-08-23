@@ -78,6 +78,7 @@ type MilvusVectorStore struct {
 	createClient func(ctx context.Context, uri, token, dbName string) (milvusClient, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultDistanceMetric 默认距离度量方式
@@ -88,6 +89,7 @@ const (
 	logComponent = logger.ComponentAgentCore
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMilvusVectorStore 创建 MilvusVectorStore 实例。

@@ -24,6 +24,7 @@ type generationItem struct {
 	Role string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // GenerateSystemPrompt GENERATE 阶段 Agent 系统 Prompt。
@@ -86,6 +87,7 @@ ALWAYS use this exact template:
 除了说明 skill 做什么，还要列举具体触发场景，即使用户没有明确提到 skill 名称。
 `
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 GENERATE 阶段逻辑。
@@ -174,12 +176,12 @@ func (h *GenerateStageHandler) resolveGenerationOrder(plan map[string]any) []gen
 // 待实现: 接入 create_stage_agent + 逐文件生成逻辑
 func (h *GenerateStageHandler) generateAllFiles(_ *skilldev.SkillDevContext, skillDir string, generationOrder []generationItem) []string {
 	// 待实现:
-	// 待实现：创建生成Agent agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
-	// 待实现：逐文件生成 for idx, item := range generationOrder {
-	//     os.MkdirAll(filepath.Dir(filepath.Join(skillDir, item.FilePath)), 0o755)
-	//     content := await generateSingleFile(agent, sctx, item.FilePath, item.Role)
-	//     os.WriteFile(filepath.Join(skillDir, item.FilePath), []byte(content), 0o644)
-	//     sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
+	// 待实现：创建生成Agent Python: agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
+	// 待实现：逐文件生成 Python: for idx, item := range generationOrder {
+	//     Python: os.MkdirAll(filepath.Dir(filepath.Join(skillDir, item.FilePath)), 0o755)
+	//     Python: content := await generateSingleFile(agent, sctx, item.FilePath, item.Role)
+	//     Python: os.WriteFile(filepath.Join(skillDir, item.FilePath), []byte(content), 0o644)
+	//     Python: sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
 	//         "message":     fmt.Sprintf("已生成: %s", item.FilePath),
 	//         "files_done":  idx + 1,
 	//         "files_total": len(generationOrder),

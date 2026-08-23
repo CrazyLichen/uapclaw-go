@@ -19,6 +19,7 @@ type HierarchicalTeamConfig struct {
 	Timeout float64
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -26,6 +27,7 @@ const (
 	defaultP2PTimeout = 1800.0
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHierarchicalTeamConfig 创建默认 HierarchicalTeamConfig。
@@ -35,3 +37,5 @@ func NewHierarchicalTeamConfig() *HierarchicalTeamConfig {
 		Timeout:    defaultP2PTimeout,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

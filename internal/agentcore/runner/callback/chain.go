@@ -45,6 +45,8 @@ type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) 
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -149,7 +151,7 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 			// 超时错误处理
 			if err != nil {
 				if execCtx.Err() == context.DeadlineExceeded {
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Str("callback_name", "callback").
 						Msg("回调执行超时")
 
@@ -199,14 +201,14 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 						}
 						break
 					}
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Err(handlerErr).
 						Msg("错误处理器执行失败")
 				}
 
 				// 重试
 				if attempt < info.MaxRetries {
-					logger.Info(logger.ComponentAgentCore).
+					logger.Info(logComponent).
 						Str("callback_name", "callback").
 						Int("attempt", attempt+1).
 						Msg("重试回调")
@@ -295,7 +297,7 @@ func (c *CallbackChain) rollback(ctx context.Context, cctx *ChainContext, execut
 		info := executedInfos[i]
 		if handler, ok := c.rollbackHandlers[info]; ok {
 			if err := handler(ctx, cctx); err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Err(err).
 					Msg("回滚处理器执行失败")
 			}

@@ -161,8 +161,8 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		}
 
 		// 对齐 Python: Stage 1 - Example
-		// default_config_desc['llm_api_key'] = self.llm_api_key
-		// default_config_eg['llm_api_key'] = self.llm_api_key
+		// Python: default_config_desc['llm_api_key'] = self.llm_api_key
+		// Python: default_config_eg['llm_api_key'] = self.llm_api_key
 		b.configEg["llm_api_key"] = b.llmAPIKey
 		b.configDesc["llm_api_key"] = b.llmAPIKey
 

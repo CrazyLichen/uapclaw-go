@@ -59,7 +59,7 @@ const (
 	// defaultMaxHandoffs 默认最大交接次数
 	defaultMaxHandoffs = 10
 	// logComponent 日志组件标识
-	logComponent = logger.ComponentChannel
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

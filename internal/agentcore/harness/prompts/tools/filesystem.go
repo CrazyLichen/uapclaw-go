@@ -20,6 +20,9 @@ type ListDirMetadataProvider struct{}
 // GrepMetadataProvider 工具元数据提供者
 type GrepMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // readFileDescription read_file 工具双语描述

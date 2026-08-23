@@ -11,6 +11,10 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -53,7 +57,7 @@ func SetRunnerConfig(cfg *RunnerConfig) {
 	defer globalConfigMu.Unlock()
 	globalConfig = cfg
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "runner_config_set").
 		Bool("distributed_mode", cfg.DistributedMode).
 		Bool("enable_session_controller", cfg.EnableSessionController).

@@ -69,7 +69,7 @@ const (
 )
 
 // logComponent 日志组件标识
-const logComponent = logger.ComponentCommon
+const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -345,9 +345,9 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	// 对齐 Python: model_name = config.get("model", "")
 	modelName, _ := config["model"].(string)
 
-	// 对齐 Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False)
-	// final_prompt = prompt_template.replace("$ARGUMENTS", hook_input_json)
-	// final_prompt = final_prompt.replace("$TOOL_NAME", tool_name)
+	// 对齐 Python: Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False)
+	// Python: final_prompt = prompt_template.replace("$ARGUMENTS", hook_input_json)
+	// Python: final_prompt = final_prompt.replace("$TOOL_NAME", tool_name)
 	hookInputJSON, _ := json.Marshal(hookInput)
 	toolName, _ := hookInput["tool_name"].(string)
 	finalPrompt := strings.ReplaceAll(promptTemplate, "$ARGUMENTS", string(hookInputJSON))
@@ -443,7 +443,7 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 	}
 
 	// 对齐 Python: content = response.content
-	// isinstance(content, str) → return content
+	// isinstance(content, str) → 返回文本内容
 	// isinstance(content, list) → 拼接文本部分
 	content := response.Content
 	if content.IsText() {

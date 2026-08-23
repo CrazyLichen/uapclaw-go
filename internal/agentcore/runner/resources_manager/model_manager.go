@@ -22,7 +22,6 @@ type ModelMgr struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -58,7 +57,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 
 	err := m.registerProvider(modelID, wrappedProvider)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "MODEL_ADD_ERROR").
 			Str("model_id", modelID).
 			Err(err).
@@ -69,7 +68,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "MODEL_ADD_SUCCESS").
 		Str("model_id", modelID).
 		Msg("添加模型成功")
@@ -82,7 +81,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 	unwrapped, err := m.unregisterProvider(modelID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "MODEL_REMOVE_ERROR").
 			Str("model_id", modelID).
 			Err(err).
@@ -99,7 +98,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 		return unwrapped(ctx)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "MODEL_REMOVE_SUCCESS").
 		Str("model_id", modelID).
 		Msg("移除模型成功")
@@ -114,7 +113,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorator.TracerSession) (model_clients.BaseModelClient, error) {
 	model, err := m.getResource(ctx, modelID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "MODEL_GET_ERROR").
 			Str("model_id", modelID).
 			Err(err).

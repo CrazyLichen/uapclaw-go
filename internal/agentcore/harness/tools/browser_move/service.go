@@ -265,7 +265,7 @@ func ShouldTreatAsCompleted(parsed map[string]any) bool {
 
 // NormalizeProgressStatus 规范化进度状态字符串。
 // complete/completed/done → completed，partial/in_progress/in-progress → partial，
-// blocked → blocked，failed → failed。
+// blocked → 阻塞，failed → 失败。
 //
 // 对齐 Python: BrowserService._normalize_progress_status
 func NormalizeProgressStatus(value any) string {

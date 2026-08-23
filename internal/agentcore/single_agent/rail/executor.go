@@ -17,12 +17,12 @@ import (
 //
 // Go 没有装饰器语法，用结构体 + 闭包模式替代：
 //
-//	var modelCallRail = NewRailExecutor(
+//	示例: var modelCallRail = NewRailExecutor(
 //	    interfaces.CallbackBeforeModelCall（模型调用前回调）,
 //	    interfaces.CallbackAfterModelCall（模型调用后回调）,
 //	    interfaces.CallbackOnModelException（模型异常回调）,
 //	)
-//	err := modelCallRail.Execute(ctx, cbc, func() error {
+//	示例: err := modelCallRail.Execute(ctx, cbc, func() error {
 //	    result, e = a.callModel(ctx, cbc)
 //	    return e
 //	})

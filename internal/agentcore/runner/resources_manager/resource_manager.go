@@ -101,6 +101,7 @@ type McpOption func(*mcpOptions)
 // TagOption 标签操作选项函数。
 type TagOption func(*tagOptions)
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// registryAccessors 资源类型 → 子管理器访问器名称的映射
@@ -153,7 +154,7 @@ func NewResourceMgr() *ResourceMgr {
 		idToCard: NewThreadSafeDict[string, schema.CardInterface](),
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_INIT").
 		Msg("资源管理器初始化完成")
 
@@ -255,7 +256,7 @@ func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) []R
 	results := make([]Result, 0, len(agents))
 	for _, entry := range agents {
 		if err := m.AddAgent(entry.Card, entry.Provider, opts...); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_ADD_AGENTS_ERROR").
 				Str("agent_id", entry.Card.ID).
 				Err(err).
@@ -333,7 +334,7 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 	for _, entry := range workflows {
 		card := schema.NewWorkflowCard(schema.WithID(entry.ID))
 		if err := m.AddWorkflow(card, entry.Provider, opts...); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_ADD_WORKFLOWS_ERROR").
 				Str("workflow_id", entry.ID).
 				Err(err).
@@ -474,7 +475,7 @@ func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) []R
 	results := make([]Result, 0, len(models))
 	for _, entry := range models {
 		if err := m.AddModel(entry.ID, entry.Provider, opts...); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_ADD_MODELS_ERROR").
 				Str("model_id", entry.ID).
 				Err(err).
@@ -547,7 +548,7 @@ func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) 
 	results := make([]Result, 0, len(prompts))
 	for _, entry := range prompts {
 		if err := m.AddPrompt(entry.ID, entry.Template, opts...); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_ADD_PROMPTS_ERROR").
 				Str("prompt_id", entry.ID).
 				Err(err).
@@ -637,7 +638,7 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...Resou
 	}
 	if len(toolIDsToRemove) > 0 {
 		if _, rmErr := m.innerRemoveResources(toolIDsToRemove, "tool", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists); rmErr != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_REMOVE_SYS_OP_TOOLS_ERROR").
 				Err(rmErr).
 				Msg("移除系统操作关联工具失败")
@@ -754,7 +755,7 @@ func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcptypes.M
 	// S8 修复：为 server_id 也标记 tag，对齐 Python tag_resource(config.server_id, tag)
 	m.tagMgr.TagResource(serverConfig.ServerID, []Tag{tag})
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_ADD_MCP_SERVER").
 		Str("server_id", serverConfig.ServerID).
 		Str("server_name", serverConfig.ServerName).
@@ -906,7 +907,7 @@ func (m *ResourceMgr) RemoveTag(tag Tag, opts ...TagOption) ([]string, error) {
 		m.idToCard.Pop(resourceID)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_REMOVE_TAG").
 		Str("tag", string(tag)).
 		Strs("removal_resource_ids", removedResourceIDs).
@@ -1005,7 +1006,7 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 	m.tagMgr = NewTagMgr()
 	m.idToCard = NewThreadSafeDict[string, schema.CardInterface]()
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_RELEASE").
 		Msg("ResourceManager 已释放并重建")
 
@@ -1090,7 +1091,7 @@ func (m *ResourceMgr) registerSysOperationTools(sysOperationID string, instance 
 	var toolIDs []string
 	for _, entry := range entries {
 		if addErr := m.innerAddResource(entry.ToolID, "tool", entry.Tool, entry.Tool.Card(), tag, ""); addErr != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_REGISTER_SYS_OP_TOOL_ERROR").
 				Str("tool_id", entry.ToolID).
 				Err(addErr).
@@ -1414,7 +1415,7 @@ func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource
 	m.tagMgr.TagResource(resourceID, []Tag{effectiveTag})
 
 	// 5. 日志记录
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_ADD_RESOURCE").
 		Str("resource_id", resourceID).
 		Str("resource_type", resourceType).
@@ -1463,7 +1464,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 		removedCard := m.idToCard.Pop(removeID)
 
 		if rmErr != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_REMOVE_RESOURCE").
 				Str("resource_id", removeID).
 				Str("resource_type", resourceType).
@@ -1485,7 +1486,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 			}
 		}
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "RESOURCE_MGR_REMOVE_RESOURCE").
 			Str("resource_id", removeID).
 			Str("resource_type", resourceType).
@@ -1517,7 +1518,7 @@ func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceIDs []strin
 		}
 		resource, getErr := m.dispatchGet(ctx, resourceType, id, session)
 		if getErr != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_GET_RESOURCE").
 				Str("resource_id", id).
 				Str("resource_type", resourceType).

@@ -118,104 +118,7 @@ const (
 // indexCache 管理器缓存
 var indexCache sync.Map
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getBaseDirForFile 获取文件相对路径计算的基础目录。对齐 Python _get_base_dir_for_file
-// USER.md 位于 workspace 根目录，其他文件使用 memoryDir
-func (m *memoryIndexManager) getBaseDirForFile(fp string) string {
-	if m.workspace != nil {
-		if userMDPath := m.workspace.GetNodePath("USER.md"); userMDPath != nil {
-			if filepath.Clean(fp) == filepath.Clean(*userMDPath) {
-				if m.workspace.RootPath != "" {
-					return m.workspace.RootPath
-				}
-			}
-		}
-	}
-	return m.memoryDir
-}
-
-// isRecentSessionFile 判断 session 文件是否为最近两天（今天/昨天）的记录。
-// 对齐 Python _is_recent_session_file
-func isRecentSessionFile(filename string) bool {
-	// 匹配 YYYY-MM-DD.md 格式
-	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})\.md$`)
-	matches := re.FindStringSubmatch(filename)
-	if len(matches) < 2 {
-		return false
-	}
-	fileDateStr := matches[1]
-	fileDate, err := time.Parse("2006-01-02", fileDateStr)
-	if err != nil {
-		return false
-	}
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	yesterday := today.AddDate(0, 0, -1)
-	fileDay := time.Date(fileDate.Year(), fileDate.Month(), fileDate.Day(), 0, 0, 0, 0, fileDate.Location())
-	return fileDay.Equal(today) || fileDay.Equal(yesterday)
-}
-
-// getMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
-func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
-	if params.Workspace == nil {
-		return nil, fmt.Errorf("workspace 为 nil")
-	}
-	nodePath := params.Workspace.GetNodePath(params.NodeName)
-	memoryDir := ""
-	if nodePath != nil {
-		memoryDir = *nodePath
-	}
-	cacheKey := fmt.Sprintf("%s:%s:%s", params.AgentID, params.NodeName, memoryDir)
-
-	if cached, ok := indexCache.Load(cacheKey); ok {
-		mgr := cached.(*memoryIndexManager)
-		if !mgr.closed {
-			return mgr, nil
-		}
-		_ = mgr.Close()
-	}
-
-	settings := params.Settings
-	if settings == nil {
-		settings = CreateMemorySettings(memoryDir, nil)
-	}
-
-	mgr := &memoryIndexManager{
-		agentID:             params.AgentID,
-		workspace:           params.Workspace,
-		nodeName:            params.NodeName,
-		memoryDir:           memoryDir,
-		settings:            settings,
-		dirty:               true,
-		watchDebounce:       2 * time.Second,
-		sessionsDirtyFiles:  make(map[string]struct{}),
-		sessionWarm:         make(map[string]struct{}),
-		sessionPendingFiles: make(map[string]struct{}),
-		sessionDeltas:       make(map[string]*SessionDeltaState),
-		embeddingConfig:     params.EmbeddingConfig,
-		sysOperation:        params.SysOperation,
-	}
-
-	if err := mgr.Initialize(context.Background()); err != nil {
-		logger.Error(logger.ComponentCommon).Err(err).Msg("初始化记忆管理器失败")
-		return nil, err
-	}
-
-	indexCache.Store(cacheKey, mgr)
-	return mgr, nil
-}
-
-// clearMemoryManagerCache 清除缓存。对齐 Python clear_memory_manager_cache
-func clearMemoryManagerCache() {
-	indexCache.Range(func(key, value any) bool {
-		if mgr, ok := value.(*memoryIndexManager); ok {
-			_ = mgr.Close()
-		}
-		indexCache.Delete(key)
-		return true
-	})
-}
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Initialize 初始化管理器。对齐 Python MemoryIndexManager.initialize
 func (m *memoryIndexManager) Initialize(ctx context.Context) error {
@@ -243,11 +146,11 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	if err := m.loadVectorExtension(); err != nil {
 		m.vectorAvailable = false
 		m.vectorError = err.Error()
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("加载 vec0 扩展失败，将使用内存余弦 fallback")
+		logger.Warn(logComponent).Err(err).Msg("加载 vec0 扩展失败，将使用内存余弦 fallback")
 	}
 
 	if err := m.Sync(ctx, "initial", false); err != nil {
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("初始同步失败")
+		logger.Warn(logComponent).Err(err).Msg("初始同步失败")
 	}
 
 	// 文件监听
@@ -258,128 +161,7 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	// 定时同步
 	m.ensureIntervalSync()
 
-	logger.Info(logger.ComponentCommon).Str("agent_id", m.agentID).Msg("记忆管理器初始化完成")
-	return nil
-}
-
-// resolveDBPath 解析数据库路径。对齐 Python _resolve_db_path
-func (m *memoryIndexManager) resolveDBPath() string {
-	storePath := "memory.db"
-	if v, ok := m.settings.Store["path"].(string); ok && v != "" {
-		storePath = v
-	}
-	if filepath.IsAbs(storePath) {
-		return storePath
-	}
-	// 对齐 Python: 处理 workspace_name 前缀
-	workspaceName := filepath.Base(m.memoryDir)
-	if strings.HasPrefix(storePath, workspaceName+"/") || strings.HasPrefix(storePath, workspaceName+`\`) {
-		storePath = storePath[len(workspaceName)+1:]
-	}
-	return filepath.Join(m.memoryDir, storePath)
-}
-
-// ensureSchema 建数据库表。对齐 Python _ensure_schema
-func (m *memoryIndexManager) ensureSchema() error {
-	// meta 表
-	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"); err != nil {
-		return fmt.Errorf("建 meta 表失败: %w", err)
-	}
-	// files 表
-	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, source TEXT, hash TEXT, mtime INTEGER, size INTEGER)"); err != nil {
-		return fmt.Errorf("建 files 表失败: %w", err)
-	}
-	// chunks 表
-	if _, err := m.db.Exec(`CREATE TABLE IF NOT EXISTS chunks (
-		id TEXT PRIMARY KEY, path TEXT, source TEXT, start_line INTEGER, end_line INTEGER,
-		hash TEXT, model TEXT, text TEXT, embedding BLOB, updated_at INTEGER
-	)`); err != nil {
-		return fmt.Errorf("建 chunks 表失败: %w", err)
-	}
-	// embedding_cache 表
-	if _, err := m.db.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		provider TEXT, model TEXT, provider_key TEXT, hash TEXT PRIMARY KEY,
-		embedding BLOB, dims INTEGER, updated_at INTEGER
-	)`, embeddingCacheTable)); err != nil {
-		return fmt.Errorf("建 embedding_cache 表失败: %w", err)
-	}
-	// FTS5 虚拟表
-	ftsEnabled := true
-	if v, ok := m.settings.Store["fts"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			ftsEnabled = v2
-		}
-	}
-	if ftsEnabled {
-		_, err := m.db.Exec(fmt.Sprintf(
-			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1)",
-			ftsTable,
-		))
-		if err != nil {
-			m.ftsAvailable = false
-			m.ftsError = err.Error()
-			logger.Warn(logger.ComponentCommon).Err(err).Msg("建 FTS5 表失败")
-		} else {
-			m.ftsAvailable = true
-		}
-	}
-	return nil
-}
-
-// initializeProvider 初始化嵌入提供者。对齐 Python _initialize_provider
-func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
-	provider, err := CreateEmbeddingProvider(
-		m.settings.Provider,
-		m.settings.Model,
-		m.settings.Fallback,
-		m.embeddingConfig,
-	)
-	if err != nil {
-		return err
-	}
-	m.provider = provider
-	// 对齐 Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
-	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
-	logger.Info(logger.ComponentCommon).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("嵌入提供者初始化完成")
-	return nil
-}
-
-// loadVectorExtension 加载 vec0.so 扩展。对齐 Python _load_vector_extension
-func (m *memoryIndexManager) loadVectorExtension() error {
-	vecEnabled := true
-	if v, ok := m.settings.Store["vector"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			vecEnabled = v2
-		}
-	}
-	if !vecEnabled || m.db == nil {
-		return nil
-	}
-
-	vecPath := ResolveVec0Path()
-	if _, err := os.Stat(vecPath); err != nil {
-		return fmt.Errorf("vec0.so 不存在: %s", vecPath)
-	}
-
-	conn, err := m.db.Conn(context.Background())
-	if err != nil {
-		return fmt.Errorf("获取连接失败: %w", err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	err = conn.Raw(func(driverConn interface{}) error {
-		dc, ok := driverConn.(*sqlite3.SQLiteConn)
-		if !ok {
-			return fmt.Errorf("不支持 LoadExtension 的驱动类型")
-		}
-		return LoadVec0Extension(dc, vecPath)
-	})
-	if err != nil {
-		return fmt.Errorf("加载 vec0 扩展失败: %w", err)
-	}
-
-	m.vectorAvailable = true
-	logger.Info(logger.ComponentCommon).Str("vec_path", vecPath).Msg("vec0 扩展加载成功")
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("记忆管理器初始化完成")
 	return nil
 }
 
@@ -395,11 +177,11 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	needsFullReindex := force || m.shouldFullReindex()
 
 	if needsFullReindex {
-		logger.Info(logger.ComponentCommon).Str("reason", reason).Msg("执行全量重建索引")
+		logger.Info(logComponent).Str("reason", reason).Msg("执行全量重建索引")
 		return m.runReindex(ctx)
 	}
 
-	logger.Debug(logger.ComponentCommon).Str("reason", reason).Msg("增量同步")
+	logger.Debug(logComponent).Str("reason", reason).Msg("增量同步")
 
 	if containsSource(m.settings.Sources, "memory") && m.dirty {
 		if err := m.syncMemoryFiles(ctx); err != nil {
@@ -417,395 +199,6 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	return nil
 }
 
-// shouldFullReindex 检查是否需要全量重建。对齐 Python _should_full_reindex
-func (m *memoryIndexManager) shouldFullReindex() bool {
-	row := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey)
-	var value string
-	if err := row.Scan(&value); err != nil {
-		return true
-	}
-	var meta map[string]any
-	if err := json.Unmarshal([]byte(value), &meta); err != nil {
-		return true
-	}
-	// 对齐 Python: 检查 provider 和 model 是否变化
-	if meta["provider"] != m.settings.Provider {
-		return true
-	}
-	if meta["model"] != m.settings.Model {
-		return true
-	}
-	if meta["chunkTokens"] != m.settings.Chunking["tokens"] {
-		return true
-	}
-	return false
-}
-
-// runReindex 全量重建。对齐 Python _run_reindex
-func (m *memoryIndexManager) runReindex(ctx context.Context) error {
-	if containsSource(m.settings.Sources, "memory") {
-		if err := m.syncMemoryFiles(ctx); err != nil {
-			return err
-		}
-		m.dirty = false
-	}
-	if containsSource(m.settings.Sources, "sessions") {
-		if err := m.syncSessionFiles(ctx); err != nil {
-			return err
-		}
-	}
-	meta := map[string]any{
-		"provider":     m.settings.Provider,
-		"model":        m.settings.Model,
-		"providerKey":  m.providerKey,
-		"chunkTokens":  m.settings.Chunking["tokens"],
-		"chunkOverlap": m.settings.Chunking["overlap"],
-	}
-	if m.vectorAvailable && m.vectorDims != nil {
-		meta["vectorDims"] = *m.vectorDims
-	}
-	return m.writeMeta(meta)
-}
-
-// syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
-func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
-	// 对齐 Python: files = list_memory_files(self.workspace, node_name=self.node_name)
-	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
-
-	logger.Debug(logger.ComponentCommon).Int("file_count", len(files)).Msg("同步记忆文件")
-
-	activePaths := make(map[string]bool)
-	for _, fp := range files {
-		// 对齐 Python: _get_base_dir_for_file — USER.md 用 workspace root
-		baseDir := m.getBaseDirForFile(fp)
-		entry, err := m.buildFileEntry(fp, baseDir)
-		if err != nil {
-			continue
-		}
-		activePaths[entry.Path] = true
-
-		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
-		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
-			continue
-		}
-		if err := m.indexFile(ctx, entry, "memory"); err != nil {
-			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引文件失败")
-		}
-	}
-
-	// 删除不存在的文件
-	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "memory")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var path string
-		if err := rows.Scan(&path); err != nil {
-			continue
-		}
-		if !activePaths[path] {
-			m.removeFileFromIndex(context.Background(), path)
-		}
-	}
-	return nil
-}
-
-// syncSessionFiles 同步 session 文件。对齐 Python _sync_session_files
-func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
-	sessionsDir := filepath.Join(m.memoryDir, "sessions")
-	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
-		return nil
-	}
-
-	var sessionFiles []string
-	_ = filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
-			return nil
-		}
-		// 对齐 Python: _is_recent_session_file — 只索引今天/昨天的 session
-		if !isRecentSessionFile(filepath.Base(path)) {
-			return nil
-		}
-		sessionFiles = append(sessionFiles, path)
-		return nil
-	})
-
-	logger.Debug(logger.ComponentCommon).Int("file_count", len(sessionFiles)).Msg("同步 session 文件")
-
-	activePaths := make(map[string]bool)
-	for _, sessionFile := range sessionFiles {
-		entry, err := m.buildFileEntry(sessionFile, m.memoryDir)
-		if err != nil {
-			continue
-		}
-		activePaths[entry.Path] = true
-
-		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
-		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
-			continue
-		}
-		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
-			logger.Error(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引 session 文件失败")
-		}
-	}
-
-	// 删除不存在的文件
-	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "sessions")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var path string
-		if err := rows.Scan(&path); err != nil {
-			continue
-		}
-		if !activePaths[path] {
-			m.removeFileFromIndex(context.Background(), path)
-		}
-	}
-	return nil
-}
-
-// indexFile 索引单个文件。对齐 Python _index_file
-func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, source string) error {
-	tx, err := m.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	absPath := entry.AbsPath
-	var content string
-	if m.sysOperation != nil {
-		// 对齐 Python: 使用 sys_operation 读取文件
-		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("读取文件失败: %w", err)
-		}
-		if readResult.Data != nil {
-			content = readResult.Data.Content
-		}
-	} else {
-		data, err := os.ReadFile(absPath)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("读取文件失败: %w", err)
-		}
-		content = string(data)
-	}
-
-	chunkTokens, _ := m.settings.Chunking["tokens"].(int)
-	chunkOverlap, _ := m.settings.Chunking["overlap"].(int)
-	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
-
-	// 清除旧索引
-	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
-	if m.ftsAvailable {
-		_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
-	}
-
-	for _, chunk := range chunks {
-		if err := m.indexChunk(ctx, entry.Path, source, chunk); err != nil {
-			logger.Warn(logger.ComponentCommon).Err(err).Str("path", entry.Path).Msg("索引 chunk 失败")
-		}
-	}
-
-	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
-		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}
-
-// indexChunk 索引单个 chunk。对齐 Python _index_chunk
-func (m *memoryIndexManager) indexChunk(ctx context.Context, filePath, source string, chunk MemoryChunk) error {
-	return m.indexChunkWithTx(ctx, m.db, filePath, source, chunk)
-}
-
-// indexChunkWithTx 使用指定 DB/TX 索引单个 chunk
-func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor, filePath, source string, chunk MemoryChunk) error {
-	chunkID := fmt.Sprintf("%s:%d:%d", filePath, chunk.StartLine, chunk.EndLine)
-	chunkHash := HashText(chunk.Text)
-
-	var embBlob []byte
-	emb, err := m.getEmbedding(ctx, chunk.Text)
-	if err == nil && emb != nil {
-		embBlob = vectorToBlob(emb)
-	}
-
-	// 对齐 Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
-	var rowid int64
-	err = db.QueryRow(
-		"INSERT OR REPLACE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid",
-		chunkID, filePath, source, chunk.StartLine, chunk.EndLine, chunkHash, m.provider.Model(), chunk.Text, embBlob, time.Now().Unix(),
-	).Scan(&rowid)
-	if err != nil {
-		return err
-	}
-
-	// FTS5 全文搜索索引写入
-	if m.ftsAvailable && rowid > 0 {
-		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
-			rowid, chunkID, filePath, source, chunk.Text)
-		if err != nil {
-			logger.Debug(logger.ComponentCommon).Err(err).Msg("插入 FTS5 失败")
-		}
-	}
-
-	// vec0 向量索引写入
-	if m.vectorAvailable && emb != nil && rowid > 0 {
-		if m.ensureVectorTable(len(emb)) {
-			_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, embedding) VALUES (?, vec_f32(?))", vectorTable),
-				rowid, embBlob)
-			if err != nil {
-				logger.Debug(logger.ComponentCommon).Err(err).Msg("插入 vec0 失败")
-			}
-		}
-	}
-
-	return nil
-}
-
-// removeFileFromIndex 删除文件索引。对齐 Python _remove_file_from_index
-func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath string) {
-	tx, err := m.db.BeginTx(ctx, nil)
-	if err != nil {
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("removeFileFromIndex 开启事务失败")
-		return
-	}
-
-	if m.vectorAvailable {
-		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
-		if err == nil {
-			for rows.Next() {
-				var rowid int64
-				if rows.Scan(&rowid) == nil {
-					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", vectorTable), rowid)
-				}
-			}
-			_ = rows.Close()
-		}
-	}
-	if m.ftsAvailable {
-		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
-		if err == nil {
-			for rows.Next() {
-				var rowid int64
-				if rows.Scan(&rowid) == nil {
-					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", ftsTable), rowid)
-				}
-			}
-			_ = rows.Close()
-		}
-	}
-	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", filePath)
-	_, _ = tx.Exec("DELETE FROM files WHERE path = ?", filePath)
-
-	if err := tx.Commit(); err != nil {
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("removeFileFromIndex 提交事务失败")
-	}
-}
-
-// buildFileEntry 构建文件索引条目。对齐 Python build_file_entry
-func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (*FileEntry, error) {
-	stat, err := os.Stat(absPath)
-	if err != nil {
-		return nil, err
-	}
-	content, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, err
-	}
-	relPath, err := filepath.Rel(baseDir, absPath)
-	if err != nil {
-		relPath = absPath
-	}
-	return &FileEntry{
-		Path:    relPath,
-		AbsPath: absPath,
-		Hash:    HashText(string(content)),
-		MtimeMs: stat.ModTime().UnixMilli(),
-		Size:    stat.Size(),
-	}, nil
-}
-
-// getEmbedding 获取 embedding（带缓存）。对齐 Python _get_embedding
-func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]float64, error) {
-	if m.provider == nil {
-		return nil, nil
-	}
-	textHash := HashText(text)
-
-	tx, err := m.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// 查缓存
-	cacheEnabled := true
-	if v, ok := m.settings.Cache["enabled"].(bool); ok {
-		cacheEnabled = v
-	}
-	if cacheEnabled {
-		row := tx.QueryRow(
-			fmt.Sprintf("SELECT embedding FROM %s WHERE provider = ? AND model = ? AND provider_key = ? AND hash = ?", embeddingCacheTable),
-			m.provider.ID(), m.provider.Model(), m.providerKey, textHash,
-		)
-		var blob []byte
-		if err := row.Scan(&blob); err == nil && blob != nil {
-			_ = tx.Rollback()
-			return blobToVector(blob), nil
-		}
-	}
-
-	emb, err := m.provider.EmbedQuery(ctx, text)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	// 写缓存
-	if cacheEnabled && emb != nil {
-		_, _ = tx.Exec(
-			fmt.Sprintf("INSERT OR REPLACE INTO %s (provider, model, provider_key, hash, embedding, dims, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", embeddingCacheTable),
-			m.provider.ID(), m.provider.Model(), m.providerKey, textHash, vectorToBlob(emb), len(emb), time.Now().Unix(),
-		)
-	}
-
-	if err := tx.Commit(); err != nil {
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("getEmbedding 提交事务失败")
-	}
-	return emb, nil
-}
-
-// ensureVectorTable 确保 vec0 虚拟表存在。对齐 Python _ensure_vector_table
-func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
-	if !m.vectorAvailable {
-		return false
-	}
-	if m.vectorDims != nil && *m.vectorDims == dims {
-		return true
-	}
-	if m.vectorDims != nil && *m.vectorDims != dims {
-		_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
-	}
-	_, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims))
-	if err != nil {
-		m.vectorAvailable = false
-		m.vectorError = err.Error()
-		return false
-	}
-	m.vectorDims = &dims
-	logger.Info(logger.ComponentCommon).Int("dims", dims).Msg("vec0 虚拟表创建成功")
-	return true
-}
-
 // Search 混合搜索。对齐 Python MemoryIndexManager.search
 func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[string]any) ([]SearchResult, error) {
 	if opts == nil {
@@ -819,7 +212,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 	if onSearch && m.dirty {
 		if err := m.Sync(ctx, "search", false); err != nil {
-			logger.Warn(logger.ComponentCommon).Err(err).Msg("搜索前同步失败")
+			logger.Warn(logComponent).Err(err).Msg("搜索前同步失败")
 		}
 	}
 
@@ -868,7 +261,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		var err error
 		keywordResults, err = m.searchKeyword(ctx, cleaned, candidates)
 		if err != nil {
-			logger.Debug(logger.ComponentCommon).Err(err).Msg("关键词搜索失败")
+			logger.Debug(logComponent).Err(err).Msg("关键词搜索失败")
 		}
 	}
 
@@ -879,9 +272,9 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	embedCancel()
 	if embedErr != nil {
 		if embedCtx.Err() == context.DeadlineExceeded {
-			logger.Warn(logger.ComponentCommon).Err(embedErr).Msg("Embedding 查询超时")
+			logger.Warn(logComponent).Err(embedErr).Msg("Embedding 查询超时")
 		} else {
-			logger.Error(logger.ComponentCommon).Err(embedErr).Msg("Embedding 查询失败")
+			logger.Error(logComponent).Err(embedErr).Msg("Embedding 查询失败")
 		}
 		queryVec = nil
 	}
@@ -899,7 +292,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		var err error
 		vectorResults, err = m.searchVector(ctx, queryVec, candidates)
 		if err != nil {
-			logger.Debug(logger.ComponentCommon).Err(err).Msg("向量搜索失败")
+			logger.Debug(logComponent).Err(err).Msg("向量搜索失败")
 		}
 	}
 
@@ -939,246 +332,6 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		filtered = filtered[:maxResults]
 	}
 	return filtered, nil
-}
-
-// searchVector vec0 向量搜索。对齐 Python _search_vector
-func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
-	if !m.vectorAvailable {
-		return m.searchVectorFallback(ctx, queryVec, limit)
-	}
-	if m.vectorDims == nil {
-		sample, err := m.provider.EmbedQuery(ctx, "sample")
-		if err != nil {
-			return nil, err
-		}
-		m.ensureVectorTable(len(sample))
-	} else {
-		// 对齐 Python: 即使已有值也重新确认 vec0 表存在
-		m.ensureVectorTable(*m.vectorDims)
-	}
-	if !m.vectorAvailable {
-		return m.searchVectorFallback(ctx, queryVec, limit)
-	}
-
-	queryBlob := vectorToBlob(queryVec)
-	sourceFilter, sourceParams := m.buildSourceFilter()
-
-	// 获取 chunk 映射
-	chunkMap := make(map[int64]ChunkData)
-	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var rowid int64
-		var id, path, source, text string
-		var startLine, endLine int
-		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
-			continue
-		}
-		chunkMap[rowid] = ChunkData{
-			ID: id, Path: path, Source: source,
-			StartLine: startLine, EndLine: endLine,
-			Snippet: truncateString(text, snippetMaxChars),
-		}
-	}
-	_ = rows.Close()
-
-	if len(chunkMap) == 0 {
-		return nil, nil
-	}
-
-	// vec0 搜索
-	placeholders := make([]string, len(chunkMap))
-	args := make([]any, 0, len(chunkMap)+2)
-	args = append(args, queryBlob)
-	i := 0
-	for rowid := range chunkMap {
-		placeholders[i] = "?"
-		args = append(args, rowid)
-		i++
-	}
-	query := fmt.Sprintf("SELECT rowid, vec_distance_cosine(embedding, vec_f32(?)) as distance FROM %s WHERE rowid IN (%s) ORDER BY distance LIMIT ?",
-		vectorTable, strings.Join(placeholders, ","))
-	args = append(args, limit)
-
-	vecRows, err := m.db.Query(query, args...)
-	if err != nil {
-		return m.searchVectorFallback(ctx, queryVec, limit)
-	}
-	defer func() { _ = vecRows.Close() }()
-
-	var results []SearchResult
-	for vecRows.Next() {
-		var rowid int64
-		var distance float64
-		if err := vecRows.Scan(&rowid, &distance); err != nil {
-			continue
-		}
-		if chunk, ok := chunkMap[rowid]; ok {
-			score := math.Max(0, 1-distance/2)
-			results = append(results, SearchResult{
-				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
-				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
-				Snippet: chunk.Snippet, Score: score,
-			})
-		}
-	}
-	return results, nil
-}
-
-// searchVectorFallback 内存余弦相似度 fallback。对齐 Python _search_vector_fallback
-func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
-	sourceFilter, sourceParams := m.buildSourceFilter()
-	rows, err := m.db.Query(fmt.Sprintf("SELECT id, path, source, start_line, end_line, text, embedding FROM chunks WHERE %s AND embedding IS NOT NULL", sourceFilter), sourceParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var results []SearchResult
-	for rows.Next() {
-		var id, path, source, text string
-		var startLine, endLine int
-		var embBlob []byte
-		if err := rows.Scan(&id, &path, &source, &startLine, &endLine, &text, &embBlob); err != nil {
-			continue
-		}
-		vec := blobToVector(embBlob)
-		if len(vec) != len(queryVec) {
-			continue
-		}
-		similarity := CosineSimilarity(queryVec, vec)
-		results = append(results, SearchResult{
-			ID: id, Path: path, Source: source,
-			StartLine: startLine, EndLine: endLine,
-			Snippet: truncateString(text, snippetMaxChars),
-			Score:   similarity,
-		})
-	}
-	// 按分数排序
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
-	})
-	if len(results) > limit {
-		results = results[:limit]
-	}
-	return results, nil
-}
-
-// searchKeyword FTS5 关键词搜索。对齐 Python _search_keyword
-func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]SearchResult, error) {
-	if !m.ftsAvailable {
-		return nil, nil
-	}
-	ftsQuery := BuildFTSQuery(query)
-	if ftsQuery == "" {
-		return nil, nil
-	}
-
-	sourceFilter, sourceParams := m.buildSourceFilter()
-	// 获取 chunk 映射
-	chunkMap := make(map[int64]ChunkData)
-	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var rowid int64
-		var id, path, source, text string
-		var startLine, endLine int
-		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
-			continue
-		}
-		chunkMap[rowid] = ChunkData{
-			ID: id, Path: path, Source: source,
-			StartLine: startLine, EndLine: endLine,
-			Snippet: truncateString(text, snippetMaxChars),
-		}
-	}
-	_ = rows.Close()
-
-	if len(chunkMap) == 0 {
-		return nil, nil
-	}
-
-	ftsRows, err := m.db.Query(fmt.Sprintf("SELECT rowid, rank FROM %s WHERE %s MATCH ? ORDER BY rank LIMIT ?", ftsTable, ftsTable), ftsQuery, limit)
-	if err != nil {
-		logger.Debug(logger.ComponentCommon).Err(err).Msg("FTS5 查询失败")
-		return nil, nil
-	}
-	defer func() { _ = ftsRows.Close() }()
-
-	var results []SearchResult
-	for ftsRows.Next() {
-		var rowid int64
-		var rank float64
-		if err := ftsRows.Scan(&rowid, &rank); err != nil {
-			continue
-		}
-		if chunk, ok := chunkMap[rowid]; ok {
-			score := BM25RankToScore(rank)
-			results = append(results, SearchResult{
-				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
-				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
-				Snippet: chunk.Snippet, Score: score,
-			})
-		}
-	}
-	return results, nil
-}
-
-// buildSourceFilter 构建 SQL source 过滤条件。对齐 Python _build_source_filter
-func (m *memoryIndexManager) buildSourceFilter() (string, []any) {
-	sources := m.settings.Sources
-	if len(sources) == 0 {
-		return "1=0", nil
-	}
-	if len(sources) == 1 {
-		return "source = ?", []any{sources[0]}
-	}
-	placeholders := make([]string, len(sources))
-	args := make([]any, len(sources))
-	for i, s := range sources {
-		placeholders[i] = "?"
-		args[i] = s
-	}
-	return fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ",")), args
-}
-
-// mergeHybridResults 混合搜索结果合并。对齐 Python _merge_hybrid_results
-func mergeHybridResults(vectorResults, keywordResults []SearchResult, vectorWeight, textWeight float64) []SearchResult {
-	// 用 id 做合并键
-	type mergeEntry struct {
-		result      SearchResult
-		vectorScore float64
-		textScore   float64
-	}
-	byID := make(map[string]*mergeEntry)
-
-	for _, r := range vectorResults {
-		e := &mergeEntry{result: r, vectorScore: r.Score, textScore: 0.0}
-		byID[r.ID] = e
-	}
-
-	for _, r := range keywordResults {
-		if existing, exists := byID[r.ID]; exists {
-			existing.textScore = r.Score
-		} else {
-			e := &mergeEntry{result: r, vectorScore: 0.0, textScore: r.Score}
-			byID[r.ID] = e
-		}
-	}
-
-	results := make([]SearchResult, 0, len(byID))
-	for _, e := range byID {
-		e.result.Score = vectorWeight*e.vectorScore + textWeight*e.textScore
-		results = append(results, e.result)
-	}
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
-	})
-	return results
 }
 
 // ReadFile 读取记忆文件内容。对齐 Python MemoryIndexManager.read_file
@@ -1361,15 +514,864 @@ func (m *memoryIndexManager) Close() error {
 	cacheKey := fmt.Sprintf("%s:%s:%s", m.agentID, m.nodeName, m.memoryDir)
 	indexCache.Delete(cacheKey)
 
-	logger.Info(logger.ComponentCommon).Str("agent_id", m.agentID).Msg("记忆管理器已关闭")
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("记忆管理器已关闭")
 	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getBaseDirForFile 获取文件相对路径计算的基础目录。对齐 Python _get_base_dir_for_file
+// USER.md 位于 workspace 根目录，其他文件使用 memoryDir
+func (m *memoryIndexManager) getBaseDirForFile(fp string) string {
+	if m.workspace != nil {
+		if userMDPath := m.workspace.GetNodePath("USER.md"); userMDPath != nil {
+			if filepath.Clean(fp) == filepath.Clean(*userMDPath) {
+				if m.workspace.RootPath != "" {
+					return m.workspace.RootPath
+				}
+			}
+		}
+	}
+	return m.memoryDir
+}
+
+// isRecentSessionFile 判断 session 文件是否为最近两天（今天/昨天）的记录。
+// 对齐 Python _is_recent_session_file
+func isRecentSessionFile(filename string) bool {
+	// 匹配 YYYY-MM-DD.md 格式
+	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})\.md$`)
+	matches := re.FindStringSubmatch(filename)
+	if len(matches) < 2 {
+		return false
+	}
+	fileDateStr := matches[1]
+	fileDate, err := time.Parse("2006-01-02", fileDateStr)
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterday := today.AddDate(0, 0, -1)
+	fileDay := time.Date(fileDate.Year(), fileDate.Month(), fileDate.Day(), 0, 0, 0, 0, fileDate.Location())
+	return fileDay.Equal(today) || fileDay.Equal(yesterday)
+}
+
+// getMemoryIndexManager 幂等获取管理器实例。对齐 Python MemoryIndexManager.get
+func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, error) {
+	if params.Workspace == nil {
+		return nil, fmt.Errorf("workspace 为 nil")
+	}
+	nodePath := params.Workspace.GetNodePath(params.NodeName)
+	memoryDir := ""
+	if nodePath != nil {
+		memoryDir = *nodePath
+	}
+	cacheKey := fmt.Sprintf("%s:%s:%s", params.AgentID, params.NodeName, memoryDir)
+
+	if cached, ok := indexCache.Load(cacheKey); ok {
+		mgr := cached.(*memoryIndexManager)
+		if !mgr.closed {
+			return mgr, nil
+		}
+		_ = mgr.Close()
+	}
+
+	settings := params.Settings
+	if settings == nil {
+		settings = CreateMemorySettings(memoryDir, nil)
+	}
+
+	mgr := &memoryIndexManager{
+		agentID:             params.AgentID,
+		workspace:           params.Workspace,
+		nodeName:            params.NodeName,
+		memoryDir:           memoryDir,
+		settings:            settings,
+		dirty:               true,
+		watchDebounce:       2 * time.Second,
+		sessionsDirtyFiles:  make(map[string]struct{}),
+		sessionWarm:         make(map[string]struct{}),
+		sessionPendingFiles: make(map[string]struct{}),
+		sessionDeltas:       make(map[string]*SessionDeltaState),
+		embeddingConfig:     params.EmbeddingConfig,
+		sysOperation:        params.SysOperation,
+	}
+
+	if err := mgr.Initialize(context.Background()); err != nil {
+		logger.Error(logComponent).Err(err).Msg("初始化记忆管理器失败")
+		return nil, err
+	}
+
+	indexCache.Store(cacheKey, mgr)
+	return mgr, nil
+}
+
+// clearMemoryManagerCache 清除缓存。对齐 Python clear_memory_manager_cache
+func clearMemoryManagerCache() {
+	indexCache.Range(func(key, value any) bool {
+		if mgr, ok := value.(*memoryIndexManager); ok {
+			_ = mgr.Close()
+		}
+		indexCache.Delete(key)
+		return true
+	})
+}
+
+// resolveDBPath 解析数据库路径。对齐 Python _resolve_db_path
+func (m *memoryIndexManager) resolveDBPath() string {
+	storePath := "memory.db"
+	if v, ok := m.settings.Store["path"].(string); ok && v != "" {
+		storePath = v
+	}
+	if filepath.IsAbs(storePath) {
+		return storePath
+	}
+	// 对齐 Python: 处理 workspace_name 前缀
+	workspaceName := filepath.Base(m.memoryDir)
+	if strings.HasPrefix(storePath, workspaceName+"/") || strings.HasPrefix(storePath, workspaceName+`\`) {
+		storePath = storePath[len(workspaceName)+1:]
+	}
+	return filepath.Join(m.memoryDir, storePath)
+}
+
+// ensureSchema 建数据库表。对齐 Python _ensure_schema
+func (m *memoryIndexManager) ensureSchema() error {
+	// meta 表
+	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"); err != nil {
+		return fmt.Errorf("建 meta 表失败: %w", err)
+	}
+	// files 表
+	if _, err := m.db.Exec("CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, source TEXT, hash TEXT, mtime INTEGER, size INTEGER)"); err != nil {
+		return fmt.Errorf("建 files 表失败: %w", err)
+	}
+	// chunks 表
+	if _, err := m.db.Exec(`CREATE TABLE IF NOT EXISTS chunks (
+		id TEXT PRIMARY KEY, path TEXT, source TEXT, start_line INTEGER, end_line INTEGER,
+		hash TEXT, model TEXT, text TEXT, embedding BLOB, updated_at INTEGER
+	)`); err != nil {
+		return fmt.Errorf("建 chunks 表失败: %w", err)
+	}
+	// embedding_cache 表
+	if _, err := m.db.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		provider TEXT, model TEXT, provider_key TEXT, hash TEXT PRIMARY KEY,
+		embedding BLOB, dims INTEGER, updated_at INTEGER
+	)`, embeddingCacheTable)); err != nil {
+		return fmt.Errorf("建 embedding_cache 表失败: %w", err)
+	}
+	// FTS5 虚拟表
+	ftsEnabled := true
+	if v, ok := m.settings.Store["fts"].(map[string]any); ok {
+		if v2, ok := v["enabled"].(bool); ok {
+			ftsEnabled = v2
+		}
+	}
+	if ftsEnabled {
+		_, err := m.db.Exec(fmt.Sprintf(
+			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1)",
+			ftsTable,
+		))
+		if err != nil {
+			m.ftsAvailable = false
+			m.ftsError = err.Error()
+			logger.Warn(logComponent).Err(err).Msg("建 FTS5 表失败")
+		} else {
+			m.ftsAvailable = true
+		}
+	}
+	return nil
+}
+
+// initializeProvider 初始化嵌入提供者。对齐 Python _initialize_provider
+func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
+	provider, err := CreateEmbeddingProvider(
+		m.settings.Provider,
+		m.settings.Model,
+		m.settings.Fallback,
+		m.embeddingConfig,
+	)
+	if err != nil {
+		return err
+	}
+	m.provider = provider
+	// 对齐 Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
+	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
+	logger.Info(logComponent).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("嵌入提供者初始化完成")
+	return nil
+}
+
+// loadVectorExtension 加载 vec0.so 扩展。对齐 Python _load_vector_extension
+func (m *memoryIndexManager) loadVectorExtension() error {
+	vecEnabled := true
+	if v, ok := m.settings.Store["vector"].(map[string]any); ok {
+		if v2, ok := v["enabled"].(bool); ok {
+			vecEnabled = v2
+		}
+	}
+	if !vecEnabled || m.db == nil {
+		return nil
+	}
+
+	vecPath := ResolveVec0Path()
+	if _, err := os.Stat(vecPath); err != nil {
+		return fmt.Errorf("vec0.so 不存在: %s", vecPath)
+	}
+
+	conn, err := m.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("获取连接失败: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	err = conn.Raw(func(driverConn interface{}) error {
+		dc, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			return fmt.Errorf("不支持 LoadExtension 的驱动类型")
+		}
+		return LoadVec0Extension(dc, vecPath)
+	})
+	if err != nil {
+		return fmt.Errorf("加载 vec0 扩展失败: %w", err)
+	}
+
+	m.vectorAvailable = true
+	logger.Info(logComponent).Str("vec_path", vecPath).Msg("vec0 扩展加载成功")
+	return nil
+}
+
+// shouldFullReindex 检查是否需要全量重建。对齐 Python _should_full_reindex
+func (m *memoryIndexManager) shouldFullReindex() bool {
+	row := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		return true
+	}
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(value), &meta); err != nil {
+		return true
+	}
+	// 对齐 Python: 检查 provider 和 model 是否变化
+	if meta["provider"] != m.settings.Provider {
+		return true
+	}
+	if meta["model"] != m.settings.Model {
+		return true
+	}
+	if meta["chunkTokens"] != m.settings.Chunking["tokens"] {
+		return true
+	}
+	return false
+}
+
+// runReindex 全量重建。对齐 Python _run_reindex
+func (m *memoryIndexManager) runReindex(ctx context.Context) error {
+	if containsSource(m.settings.Sources, "memory") {
+		if err := m.syncMemoryFiles(ctx); err != nil {
+			return err
+		}
+		m.dirty = false
+	}
+	if containsSource(m.settings.Sources, "sessions") {
+		if err := m.syncSessionFiles(ctx); err != nil {
+			return err
+		}
+	}
+	meta := map[string]any{
+		"provider":     m.settings.Provider,
+		"model":        m.settings.Model,
+		"providerKey":  m.providerKey,
+		"chunkTokens":  m.settings.Chunking["tokens"],
+		"chunkOverlap": m.settings.Chunking["overlap"],
+	}
+	if m.vectorAvailable && m.vectorDims != nil {
+		meta["vectorDims"] = *m.vectorDims
+	}
+	return m.writeMeta(meta)
+}
+
+// syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
+func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
+	// 对齐 Python: files = list_memory_files(self.workspace, node_name=self.node_name)
+	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
+
+	logger.Debug(logComponent).Int("file_count", len(files)).Msg("同步记忆文件")
+
+	activePaths := make(map[string]bool)
+	for _, fp := range files {
+		// 对齐 Python: _get_base_dir_for_file — USER.md 用 workspace root
+		baseDir := m.getBaseDirForFile(fp)
+		entry, err := m.buildFileEntry(fp, baseDir)
+		if err != nil {
+			continue
+		}
+		activePaths[entry.Path] = true
+
+		var hash string
+		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
+		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+			continue
+		}
+		if err := m.indexFile(ctx, entry, "memory"); err != nil {
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("索引文件失败")
+		}
+	}
+
+	// 删除不存在的文件
+	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "memory")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			continue
+		}
+		if !activePaths[path] {
+			m.removeFileFromIndex(context.Background(), path)
+		}
+	}
+	return nil
+}
+
+// syncSessionFiles 同步 session 文件。对齐 Python _sync_session_files
+func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
+	sessionsDir := filepath.Join(m.memoryDir, "sessions")
+	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	var sessionFiles []string
+	_ = filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return nil
+		}
+		// 对齐 Python: _is_recent_session_file — 只索引今天/昨天的 session
+		if !isRecentSessionFile(filepath.Base(path)) {
+			return nil
+		}
+		sessionFiles = append(sessionFiles, path)
+		return nil
+	})
+
+	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Msg("同步 session 文件")
+
+	activePaths := make(map[string]bool)
+	for _, sessionFile := range sessionFiles {
+		entry, err := m.buildFileEntry(sessionFile, m.memoryDir)
+		if err != nil {
+			continue
+		}
+		activePaths[entry.Path] = true
+
+		var hash string
+		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
+		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+			continue
+		}
+		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("索引 session 文件失败")
+		}
+	}
+
+	// 删除不存在的文件
+	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "sessions")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			continue
+		}
+		if !activePaths[path] {
+			m.removeFileFromIndex(context.Background(), path)
+		}
+	}
+	return nil
+}
+
+// indexFile 索引单个文件。对齐 Python _index_file
+func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, source string) error {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	absPath := entry.AbsPath
+	var content string
+	if m.sysOperation != nil {
+		// 对齐 Python: 使用 sys_operation 读取文件
+		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: %w", err)
+		}
+		if readResult.Data != nil {
+			content = readResult.Data.Content
+		}
+	} else {
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: %w", err)
+		}
+		content = string(data)
+	}
+
+	chunkTokens, _ := m.settings.Chunking["tokens"].(int)
+	chunkOverlap, _ := m.settings.Chunking["overlap"].(int)
+	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
+
+	// 清除旧索引
+	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
+	if m.ftsAvailable {
+		_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
+	}
+
+	for _, chunk := range chunks {
+		if err := m.indexChunk(ctx, entry.Path, source, chunk); err != nil {
+			logger.Warn(logComponent).Err(err).Str("path", entry.Path).Msg("索引 chunk 失败")
+		}
+	}
+
+	_, err = tx.Exec("INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)",
+		entry.Path, source, entry.Hash, entry.MtimeMs, entry.Size)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// indexChunk 索引单个 chunk。对齐 Python _index_chunk
+func (m *memoryIndexManager) indexChunk(ctx context.Context, filePath, source string, chunk MemoryChunk) error {
+	return m.indexChunkWithTx(ctx, m.db, filePath, source, chunk)
+}
+
+// indexChunkWithTx 使用指定 DB/TX 索引单个 chunk
+func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor, filePath, source string, chunk MemoryChunk) error {
+	chunkID := fmt.Sprintf("%s:%d:%d", filePath, chunk.StartLine, chunk.EndLine)
+	chunkHash := HashText(chunk.Text)
+
+	var embBlob []byte
+	emb, err := m.getEmbedding(ctx, chunk.Text)
+	if err == nil && emb != nil {
+		embBlob = vectorToBlob(emb)
+	}
+
+	// 对齐 Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
+	var rowid int64
+	err = db.QueryRow(
+		"INSERT OR REPLACE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid",
+		chunkID, filePath, source, chunk.StartLine, chunk.EndLine, chunkHash, m.provider.Model(), chunk.Text, embBlob, time.Now().Unix(),
+	).Scan(&rowid)
+	if err != nil {
+		return err
+	}
+
+	// FTS5 全文搜索索引写入
+	if m.ftsAvailable && rowid > 0 {
+		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
+			rowid, chunkID, filePath, source, chunk.Text)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Msg("插入 FTS5 失败")
+		}
+	}
+
+	// vec0 向量索引写入
+	if m.vectorAvailable && emb != nil && rowid > 0 {
+		if m.ensureVectorTable(len(emb)) {
+			_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, embedding) VALUES (?, vec_f32(?))", vectorTable),
+				rowid, embBlob)
+			if err != nil {
+				logger.Debug(logComponent).Err(err).Msg("插入 vec0 失败")
+			}
+		}
+	}
+
+	return nil
+}
+
+// removeFileFromIndex 删除文件索引。对齐 Python _remove_file_from_index
+func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath string) {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex 开启事务失败")
+		return
+	}
+
+	if m.vectorAvailable {
+		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
+		if err == nil {
+			for rows.Next() {
+				var rowid int64
+				if rows.Scan(&rowid) == nil {
+					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", vectorTable), rowid)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
+	if m.ftsAvailable {
+		rows, err := tx.Query("SELECT rowid FROM chunks WHERE path = ?", filePath)
+		if err == nil {
+			for rows.Next() {
+				var rowid int64
+				if rows.Scan(&rowid) == nil {
+					_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE rowid = ?", ftsTable), rowid)
+				}
+			}
+			_ = rows.Close()
+		}
+	}
+	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", filePath)
+	_, _ = tx.Exec("DELETE FROM files WHERE path = ?", filePath)
+
+	if err := tx.Commit(); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex 提交事务失败")
+	}
+}
+
+// buildFileEntry 构建文件索引条目。对齐 Python build_file_entry
+func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (*FileEntry, error) {
+	stat, err := os.Stat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+	relPath, err := filepath.Rel(baseDir, absPath)
+	if err != nil {
+		relPath = absPath
+	}
+	return &FileEntry{
+		Path:    relPath,
+		AbsPath: absPath,
+		Hash:    HashText(string(content)),
+		MtimeMs: stat.ModTime().UnixMilli(),
+		Size:    stat.Size(),
+	}, nil
+}
+
+// getEmbedding 获取 embedding（带缓存）。对齐 Python _get_embedding
+func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]float64, error) {
+	if m.provider == nil {
+		return nil, nil
+	}
+	textHash := HashText(text)
+
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// 查缓存
+	cacheEnabled := true
+	if v, ok := m.settings.Cache["enabled"].(bool); ok {
+		cacheEnabled = v
+	}
+	if cacheEnabled {
+		row := tx.QueryRow(
+			fmt.Sprintf("SELECT embedding FROM %s WHERE provider = ? AND model = ? AND provider_key = ? AND hash = ?", embeddingCacheTable),
+			m.provider.ID(), m.provider.Model(), m.providerKey, textHash,
+		)
+		var blob []byte
+		if err := row.Scan(&blob); err == nil && blob != nil {
+			_ = tx.Rollback()
+			return blobToVector(blob), nil
+		}
+	}
+
+	emb, err := m.provider.EmbedQuery(ctx, text)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	// 写缓存
+	if cacheEnabled && emb != nil {
+		_, _ = tx.Exec(
+			fmt.Sprintf("INSERT OR REPLACE INTO %s (provider, model, provider_key, hash, embedding, dims, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", embeddingCacheTable),
+			m.provider.ID(), m.provider.Model(), m.providerKey, textHash, vectorToBlob(emb), len(emb), time.Now().Unix(),
+		)
+	}
+
+	if err := tx.Commit(); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("getEmbedding 提交事务失败")
+	}
+	return emb, nil
+}
+
+// ensureVectorTable 确保 vec0 虚拟表存在。对齐 Python _ensure_vector_table
+func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
+	if !m.vectorAvailable {
+		return false
+	}
+	if m.vectorDims != nil && *m.vectorDims == dims {
+		return true
+	}
+	if m.vectorDims != nil && *m.vectorDims != dims {
+		_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
+	}
+	_, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims))
+	if err != nil {
+		m.vectorAvailable = false
+		m.vectorError = err.Error()
+		return false
+	}
+	m.vectorDims = &dims
+	logger.Info(logComponent).Int("dims", dims).Msg("vec0 虚拟表创建成功")
+	return true
+}
+
+// searchVector vec0 向量搜索。对齐 Python _search_vector
+func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
+	if !m.vectorAvailable {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+	if m.vectorDims == nil {
+		sample, err := m.provider.EmbedQuery(ctx, "sample")
+		if err != nil {
+			return nil, err
+		}
+		m.ensureVectorTable(len(sample))
+	} else {
+		// 对齐 Python: 即使已有值也重新确认 vec0 表存在
+		m.ensureVectorTable(*m.vectorDims)
+	}
+	if !m.vectorAvailable {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+
+	queryBlob := vectorToBlob(queryVec)
+	sourceFilter, sourceParams := m.buildSourceFilter()
+
+	// 获取 chunk 映射
+	chunkMap := make(map[int64]ChunkData)
+	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var rowid int64
+		var id, path, source, text string
+		var startLine, endLine int
+		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
+			continue
+		}
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+		}
+	}
+	_ = rows.Close()
+
+	if len(chunkMap) == 0 {
+		return nil, nil
+	}
+
+	// vec0 搜索
+	placeholders := make([]string, len(chunkMap))
+	args := make([]any, 0, len(chunkMap)+2)
+	args = append(args, queryBlob)
+	i := 0
+	for rowid := range chunkMap {
+		placeholders[i] = "?"
+		args = append(args, rowid)
+		i++
+	}
+	query := fmt.Sprintf("SELECT rowid, vec_distance_cosine(embedding, vec_f32(?)) as distance FROM %s WHERE rowid IN (%s) ORDER BY distance LIMIT ?",
+		vectorTable, strings.Join(placeholders, ","))
+	args = append(args, limit)
+
+	vecRows, err := m.db.Query(query, args...)
+	if err != nil {
+		return m.searchVectorFallback(ctx, queryVec, limit)
+	}
+	defer func() { _ = vecRows.Close() }()
+
+	var results []SearchResult
+	for vecRows.Next() {
+		var rowid int64
+		var distance float64
+		if err := vecRows.Scan(&rowid, &distance); err != nil {
+			continue
+		}
+		if chunk, ok := chunkMap[rowid]; ok {
+			score := math.Max(0, 1-distance/2)
+			results = append(results, SearchResult{
+				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+				Snippet: chunk.Snippet, Score: score,
+			})
+		}
+	}
+	return results, nil
+}
+
+// searchVectorFallback 内存余弦相似度 fallback。对齐 Python _search_vector_fallback
+func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec []float64, limit int) ([]SearchResult, error) {
+	sourceFilter, sourceParams := m.buildSourceFilter()
+	rows, err := m.db.Query(fmt.Sprintf("SELECT id, path, source, start_line, end_line, text, embedding FROM chunks WHERE %s AND embedding IS NOT NULL", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var results []SearchResult
+	for rows.Next() {
+		var id, path, source, text string
+		var startLine, endLine int
+		var embBlob []byte
+		if err := rows.Scan(&id, &path, &source, &startLine, &endLine, &text, &embBlob); err != nil {
+			continue
+		}
+		vec := blobToVector(embBlob)
+		if len(vec) != len(queryVec) {
+			continue
+		}
+		similarity := CosineSimilarity(queryVec, vec)
+		results = append(results, SearchResult{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+			Score:   similarity,
+		})
+	}
+	// 按分数排序
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
+// searchKeyword FTS5 关键词搜索。对齐 Python _search_keyword
+func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	if !m.ftsAvailable {
+		return nil, nil
+	}
+	ftsQuery := BuildFTSQuery(query)
+	if ftsQuery == "" {
+		return nil, nil
+	}
+
+	sourceFilter, sourceParams := m.buildSourceFilter()
+	// 获取 chunk 映射
+	chunkMap := make(map[int64]ChunkData)
+	rows, err := m.db.Query(fmt.Sprintf("SELECT rowid, id, path, source, start_line, end_line, text FROM chunks WHERE %s", sourceFilter), sourceParams...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var rowid int64
+		var id, path, source, text string
+		var startLine, endLine int
+		if err := rows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err != nil {
+			continue
+		}
+		chunkMap[rowid] = ChunkData{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: truncateString(text, snippetMaxChars),
+		}
+	}
+	_ = rows.Close()
+
+	if len(chunkMap) == 0 {
+		return nil, nil
+	}
+
+	ftsRows, err := m.db.Query(fmt.Sprintf("SELECT rowid, rank FROM %s WHERE %s MATCH ? ORDER BY rank LIMIT ?", ftsTable, ftsTable), ftsQuery, limit)
+	if err != nil {
+		logger.Debug(logComponent).Err(err).Msg("FTS5 查询失败")
+		return nil, nil
+	}
+	defer func() { _ = ftsRows.Close() }()
+
+	var results []SearchResult
+	for ftsRows.Next() {
+		var rowid int64
+		var rank float64
+		if err := ftsRows.Scan(&rowid, &rank); err != nil {
+			continue
+		}
+		if chunk, ok := chunkMap[rowid]; ok {
+			score := BM25RankToScore(rank)
+			results = append(results, SearchResult{
+				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+				Snippet: chunk.Snippet, Score: score,
+			})
+		}
+	}
+	return results, nil
+}
+
+// buildSourceFilter 构建 SQL source 过滤条件。对齐 Python _build_source_filter
+func (m *memoryIndexManager) buildSourceFilter() (string, []any) {
+	sources := m.settings.Sources
+	if len(sources) == 0 {
+		return "1=0", nil
+	}
+	if len(sources) == 1 {
+		return "source = ?", []any{sources[0]}
+	}
+	placeholders := make([]string, len(sources))
+	args := make([]any, len(sources))
+	for i, s := range sources {
+		placeholders[i] = "?"
+		args[i] = s
+	}
+	return fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ",")), args
+}
+
+// mergeHybridResults 混合搜索结果合并。对齐 Python _merge_hybrid_results
+func mergeHybridResults(vectorResults, keywordResults []SearchResult, vectorWeight, textWeight float64) []SearchResult {
+	// 用 id 做合并键
+	type mergeEntry struct {
+		result      SearchResult
+		vectorScore float64
+		textScore   float64
+	}
+	byID := make(map[string]*mergeEntry)
+
+	for _, r := range vectorResults {
+		e := &mergeEntry{result: r, vectorScore: r.Score, textScore: 0.0}
+		byID[r.ID] = e
+	}
+
+	for _, r := range keywordResults {
+		if existing, exists := byID[r.ID]; exists {
+			existing.textScore = r.Score
+		} else {
+			e := &mergeEntry{result: r, vectorScore: 0.0, textScore: r.Score}
+			byID[r.ID] = e
+		}
+	}
+
+	results := make([]SearchResult, 0, len(byID))
+	for _, e := range byID {
+		e.result.Score = vectorWeight*e.vectorScore + textWeight*e.textScore
+		results = append(results, e.result)
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+	return results
 }
 
 // setupFileWatcher 设置文件监听。对齐 Python _setup_file_watcher
 func (m *memoryIndexManager) setupFileWatcher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logger.Warn(logger.ComponentCommon).Err(err).Msg("创建文件监听器失败")
+		logger.Warn(logComponent).Err(err).Msg("创建文件监听器失败")
 		return
 	}
 	m.watcher = watcher
@@ -1408,7 +1410,7 @@ func (m *memoryIndexManager) setupFileWatcher() {
 
 	for p := range watchPaths {
 		if err := watcher.Add(p); err != nil {
-			logger.Warn(logger.ComponentCommon).Err(err).Str("path", p).Msg("添加监听路径失败")
+			logger.Warn(logComponent).Err(err).Str("path", p).Msg("添加监听路径失败")
 		}
 	}
 
@@ -1418,7 +1420,7 @@ func (m *memoryIndexManager) setupFileWatcher() {
 	// 延迟 1 秒后标记为已初始化，避免初始扫描触发
 	time.AfterFunc(1*time.Second, func() {
 		m.watcherInitialized = true
-		logger.Debug(logger.ComponentCommon).Int("watch_paths", len(watchPaths)).Msg("文件监听器已初始化")
+		logger.Debug(logComponent).Int("watch_paths", len(watchPaths)).Msg("文件监听器已初始化")
 	})
 }
 
@@ -1463,7 +1465,7 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 			return
 		}
 		if err := m.Sync(context.Background(), "watch", false); err != nil {
-			logger.Warn(logger.ComponentCommon).Err(err).Msg("文件监听同步失败")
+			logger.Warn(logComponent).Err(err).Msg("文件监听同步失败")
 		}
 	})
 }
@@ -1494,13 +1496,13 @@ func (m *memoryIndexManager) ensureIntervalSync() {
 					return
 				}
 				if err := m.Sync(ctx, "interval", false); err != nil {
-					logger.Warn(logger.ComponentCommon).Err(err).Msg("定时同步失败")
+					logger.Warn(logComponent).Err(err).Msg("定时同步失败")
 				}
 			}
 		}
 	}()
 
-	logger.Info(logger.ComponentCommon).Int("interval_minutes", minutes).Msg("定时同步已启用")
+	logger.Info(logComponent).Int("interval_minutes", minutes).Msg("定时同步已启用")
 }
 
 // writeMeta 写入元数据。对齐 Python _write_meta

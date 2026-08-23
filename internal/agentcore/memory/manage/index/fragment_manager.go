@@ -76,7 +76,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	deleteSet := make(map[string]bool)
 	processResult := make(map[string]*mem_model.FragmentMemoryUnit)
 
-	// Step 1: 分离 ADD/UPDATE/DELETE 操作
+	// 步骤 1：分离 ADD/UPDATE/DELETE 操作
 	// 对齐 Python: _get_new_mem_units_and_update_memories
 	newMemUnits, err := m.getNewMemUnitsAndUpdateMemories(ctx, userID, scopeID, memories, deleteSet, processResult)
 	if err != nil {
@@ -99,7 +99,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		return mapValues(processResult), nil
 	}
 
-	// Step 2: 搜索相关旧记忆
+	// 步骤 2：搜索相关旧记忆
 	// 对齐 Python: _get_related_old_memories
 	oldMemories, err := m.getRelatedOldMemories(ctx, newMemContent, userID, scopeID)
 	if err != nil {
@@ -124,7 +124,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		return mapValues(processResult), nil
 	}
 
-	// Step 3: MemUpdateChecker 冲突检查 ← ⤵️ 回填: 7.8
+	// 步骤 3：MemUpdateChecker 冲突检查 ← ⤵️ 回填: 7.8
 	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model)
 	// ⤵️ 回填: 7.8 — Python _process_conflict_info 将 LLM 返回的数字 id 映射回 mem_id，
 	// 当前 stub 直接返回 ADD 无冲突，不需要映射；7.8 实现 LLM 驱动检查时需补充此方法
@@ -138,7 +138,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		Str("event_type", "MEMORY_PROCESS").
 		Msg("记忆冲突检查完成")
 
-	// Step 4: 执行添加/删除操作
+	// 步骤 4：执行添加/删除操作
 	var addUnitList []*mem_model.FragmentMemoryUnit
 	for _, item := range actionItems {
 		switch item.Status {
@@ -343,7 +343,7 @@ func (m *FragmentMemoryManager) getNewMemUnitsAndUpdateMemories(
 			case mem_model.OperationTypeDelete:
 				deleteSet[unit.MemID] = true
 				processResult[unit.MemID] = unit
-			default: // OperationTypeAdd
+			default: // 新增操作
 				if unit.Content != "" {
 					newMemUnits[unit.MemID] = unit
 				}

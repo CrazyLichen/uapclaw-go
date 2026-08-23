@@ -21,7 +21,6 @@ type AgentTeamMgr struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -59,7 +58,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 
 	err := m.registerProvider(agentTeamID, wrappedProvider)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_TEAM_ADD_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).
@@ -70,7 +69,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "AGENT_TEAM_ADD_SUCCESS").
 		Str("agent_team_id", agentTeamID).
 		Msg("添加 Agent 团队成功")
@@ -83,7 +82,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamProvider, error) {
 	unwrapped, err := m.unregisterProvider(agentTeamID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_TEAM_REMOVE_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).
@@ -100,7 +99,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 		return unwrapped(ctx)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "AGENT_TEAM_REMOVE_SUCCESS").
 		Str("agent_team_id", agentTeamID).
 		Msg("移除 Agent 团队成功")
@@ -114,7 +113,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (maschema.BaseTeam, error) {
 	team, err := m.getResource(ctx, agentTeamID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "AGENT_TEAM_GET_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).

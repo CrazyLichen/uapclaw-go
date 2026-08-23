@@ -46,6 +46,11 @@ type baseEmbeddingAdapter struct {
 	dims  int    // 嵌入向量维度
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMockEmbeddingProvider 创建模拟嵌入提供者
@@ -148,3 +153,5 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 
 	return nil, fmt.Errorf("嵌入提供者未配置: provider=%s, model=%s", provider, model)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

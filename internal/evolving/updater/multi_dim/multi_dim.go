@@ -86,11 +86,11 @@ func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets [
 //
 // 对齐 Python:
 //
-//	for opt in self._domain_optimizers.values():
-//	    requires = getattr(opt, "requires_forward_data", None)
-//	    if callable(requires) and requires():
-//	        return True
-//	return False
+//	Python: for opt in self._domain_optimizers.values():
+//	    Python: requires = getattr(opt, "requires_forward_data", None)
+//	    Python: if callable(requires) and requires():
+//	        Python: return True
+//	Python: return False
 //
 // 对应 Python: MultiDimUpdater.requires_forward_data()
 func (u *MultiDimUpdater) RequiresForwardData() bool {
@@ -114,13 +114,13 @@ func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajector
 //
 // 对齐 Python:
 //
-//		score_threshold = config.get("score_threshold")
+//		Python: score_threshold = config.get("score_threshold")
 //	   初始化信号列表为空
-//		for case in evaluated_cases:
-//		    signal = from_evaluated_case(case, score_threshold=score_threshold)
-//		    if signal is not None:
-//		        signals.append(signal)
-//		return await self.process(trajectories, signals, config)
+//		Python: for case in evaluated_cases:
+//		    Python: signal = from_evaluated_case(case, score_threshold=score_threshold)
+//		    Python: if signal is not None:
+//		        Python: signals.append(signal)
+//		Python: return await self.process(trajectories, signals, config)
 //
 // 对应 Python: MultiDimUpdater.update(trajectories, evaluated_cases, config)
 func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error) {

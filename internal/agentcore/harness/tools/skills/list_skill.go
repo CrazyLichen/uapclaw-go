@@ -37,8 +37,10 @@ type ListSkillTool struct {
 	language string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewListSkillTool 创建 ListSkillTool 实例。
@@ -170,8 +172,8 @@ func (t *ListSkillTool) dumpAllSkills() []map[string]any {
 //
 // 一比一复刻 Python: ListSkillTool._dump_skills(skills):
 //
-//	skill_dict = skill.asdict(include_directory=True)
-//	skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
+//	Python: skill_dict = skill.asdict(include_directory=True)
+//	Python: skill_dict["skill_md_path"] = str(Path(skill.directory) / "SKILL.md")
 func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 	results := make([]map[string]any, 0, len(skills))
 	for _, s := range skills {
@@ -187,10 +189,10 @@ func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 //
 // 一比一复刻 Python: ListSkillTool._route_skills(query):
 //
-//	payload = self._dump_all_skills()
-//	response = await self.list_skill_model.invoke(messages=[...])
-//	content = getattr(response, "content", "") or ""
-//	return self._parse_selected_skill_names(content)
+//	Python: payload = self._dump_all_skills()
+//	Python: response = await self.list_skill_model.invoke(messages=[...])
+//	Python: content = getattr(response, "content", "") or ""
+//	Python: return self._parse_selected_skill_names(content)
 func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string, error) {
 	payload := t.dumpAllSkills()
 	payloadJSON, jsonErr := json.Marshal(payload)
@@ -292,9 +294,9 @@ func parseSelectedSkillNames(content string) []string {
 //
 // 一比一复刻 Python: ListSkillTool._select_skills_by_names(names):
 //
-//	if not names → []
-//	skill_map = {skill.name: skill for skill in self.get_skills() or []}
-//	selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
+//	Python: if not names → []
+//	Python: skill_map = {skill.name: skill for skill in self.get_skills() or []}
+//	Python: selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
 func (t *ListSkillTool) selectSkillsByNames(names []string) []*skillpkg.Skill {
 	if len(names) == 0 {
 		return []*skillpkg.Skill{}

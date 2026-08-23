@@ -296,7 +296,7 @@ func CalcUtilization(stats *checkpointing.UsageStats) float64 {
 // CalcFreshness 计算 F（Freshness）评分，指数衰减 + 版本惩罚。
 //
 // timestamp 空 → 返回 0.5；解析失败 → 返回 0.5；
-// decay = 0.5 * 2^(-daysOld/90)，freshness = 0.5 + decay；
+// 衰减 = 0.5 * 2^(-daysOld/90)，新鲜度 = 0.5 + 衰减；
 // 版本不匹配 → *= 0.7；clamp 到 [0,1]。
 // 对应 Python: calc_freshness()
 func CalcFreshness(record *checkpointing.EvolutionRecord, currentSkillVersion *string) float64 {
@@ -349,7 +349,7 @@ func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *strin
 // 如果 record.UsageStats == nil → 初始化零值；
 // 按 evalResult["used/positive/negative"] 更新 TimesUsed/TimesPositive/TimesNegative（bool 类型断言）；
 // 设置 LastEvaluatedAt = time.Now().UTC().Format(time.RFC3339Nano)；
-// record.Score = CalcScore(record, currentSkillVersion)。
+// Python: record.Score = CalcScore(record, currentSkillVersion)。
 // 对应 Python: update_score()
 func UpdateScore(
 	record *checkpointing.EvolutionRecord,
@@ -382,7 +382,7 @@ func UpdateScore(
 // Evaluate 评估展示经验是否被有效使用。
 //
 // 空 records → 返回空 slice, nil；
-// formatted = formatPresentedExperiences(presentedRecords)；
+// Python: formatted = formatPresentedExperiences(presentedRecords)；
 // 选择语言模板，替换 {presented_experiences} 和 {conversation_snippet}（snippet 限制 4000 字符）；
 // 调用 llm_resilience.InvokeTextWithRetry + WithIsResultUsable(parseLLMJSON != nil)；
 // err != nil → logger.Error 并返回空 slice, nil；
@@ -416,7 +416,7 @@ func (s *ExperienceScorer) Evaluate(
 		}),
 	)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("method", "ExperienceScorer.Evaluate").
 			Err(err).
 			Msg("[ExperienceScorer] evaluate LLM 调用失败")
@@ -425,7 +425,7 @@ func (s *ExperienceScorer) Evaluate(
 
 	results := parseLLMJSON(raw)
 	if results == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("method", "ExperienceScorer.Evaluate").
 			Msg("[ExperienceScorer] evaluate: 无法解析 LLM 响应")
 		return nil, nil
@@ -437,7 +437,7 @@ func (s *ExperienceScorer) Evaluate(
 // Simplify 生成经验库整理建议。
 //
 // 空 records → logger.Info 并返回空 slice, nil；
-// formatted = formatScoredExperiences(records)；
+// Python: formatted = formatScoredExperiences(records)；
 // 选择语言模板，替换 {skill_name}/{skill_summary}(限1000)/{scored_experiences}；
 // userIntent != nil → prompt += "\n\n**用户意图**: " + *userIntent；
 // 记录 simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）；
@@ -445,7 +445,7 @@ func (s *ExperienceScorer) Evaluate(
 // err != nil → logger.Error（elapsed, skill, records, prompt_chars, error）并返回空 slice, nil；
 // 记录 simplify 完成日志（elapsed, skill, response_chars）；
 // parseLLMJSON nil → logger.Warn 并返回空 slice, nil；
-// logger.Info（skill, actions_count）；
+// Python: logger.Info（skill, actions_count）；
 // 返回 actions, nil。
 // 对应 Python: ExperienceScorer.simplify()
 func (s *ExperienceScorer) Simplify(
@@ -456,7 +456,7 @@ func (s *ExperienceScorer) Simplify(
 	userIntent *string,
 ) ([]map[string]any, error) {
 	if len(records) == 0 {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("skill_name", skillName).
 			Msg("[ExperienceScorer] simplify 跳过: 无记录")
 		return nil, nil
@@ -479,7 +479,7 @@ func (s *ExperienceScorer) Simplify(
 	}
 
 	// 对齐 Python: simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("skill_name", skillName).
 		Int("records_count", len(records)).
 		Int("prompt_chars", len(prompt)).
@@ -498,7 +498,7 @@ func (s *ExperienceScorer) Simplify(
 	)
 	if err != nil {
 		elapsed := time.Since(startedAt).Seconds()
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Float64("elapsed", elapsed).
 			Str("skill", skillName).
 			Int("records", len(records)).
@@ -509,7 +509,7 @@ func (s *ExperienceScorer) Simplify(
 	}
 
 	elapsed := time.Since(startedAt).Seconds()
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Float64("elapsed", elapsed).
 		Str("skill", skillName).
 		Int("response_chars", len(raw)).
@@ -517,14 +517,14 @@ func (s *ExperienceScorer) Simplify(
 
 	actions := parseLLMJSON(raw)
 	if actions == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Int("response_chars", len(raw)).
 			Msg("[ExperienceScorer] simplify: 无法解析 LLM 响应")
 		return nil, nil
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("skill", skillName).
 		Int("actions_count", len(actions)).
 		Msg("[ExperienceScorer] simplify 解析完成")

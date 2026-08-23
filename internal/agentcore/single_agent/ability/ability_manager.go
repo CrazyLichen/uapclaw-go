@@ -30,6 +30,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // AbilityManager Agent 能力注册与调度中心。
@@ -93,7 +95,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 	case *tool.ToolCard:
 		existing, ok := am.tools[a.Name]
 		if ok {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
@@ -106,7 +108,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 	case *schema.WorkflowCard:
 		existing, ok := am.workflows[a.Name]
 		if ok {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
@@ -119,7 +121,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 	case *agentschema.AgentCard:
 		existing, ok := am.agents[a.Name]
 		if ok {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
@@ -132,7 +134,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 	case *mcptypes.McpServerConfig:
 		existing, ok := am.mcpServers[a.ServerName]
 		if ok {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("ability_name", a.ServerName).
 				Str("existing_id", existing.ServerID).
 				Str("new_id", a.ServerID).
@@ -147,7 +149,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 		if a != nil {
 			name = ability.AbilityName()
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("ability_type", fmt.Sprintf("%T", a)).
 			Msg("未知能力类型")
 		return agentschema.AddAbilityResult{Name: name, Added: false, Reason: "unknown_ability_type"}
@@ -358,7 +360,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 			mcpServerID := mcpServer.ServerID
 			mcpToolInfos, mcpErr := am.resourceMgr.GetMcpToolInfos(ctx, "", mcpServerID)
 			if mcpErr != nil {
-				logger.Warn(logger.ComponentAgentCore).
+				logger.Warn(logComponent).
 					Str("event_type", "mcp_lazy_load_error").
 					Str("server_name", mcpServerName).
 					Str("server_id", mcpServerID).
@@ -457,9 +459,9 @@ func (am *AbilityManager) Execute(
 	wg.Wait()
 
 	// force-finish 信号传播：子 toolCtx → 父 cbc
-	// 对应 Python: for tool_ctx in tool_contexts:
-	//   ff = tool_ctx.consume_force_finish()
-	//   if ff is not None: ctx.request_force_finish(ff.result); break
+	// 对应 Python: Python: for tool_ctx in tool_contexts:
+	//   Python: ff = tool_ctx.consume_force_finish()
+	//   Python: if ff is not None: ctx.request_force_finish(ff.result); break
 	for _, toolCtx := range toolCtxs {
 		if ff := toolCtx.ConsumeForceFinish(); ff != nil {
 			cbc.RequestForceFinish(ff.Result)
@@ -572,7 +574,7 @@ func (am *AbilityManager) executeSingleToolCall(
 	// 解析参数
 	toolArgs, err := ParseToolArguments(toolCall.Arguments)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(err).
 			Msg("工具收到畸形参数")
@@ -600,7 +602,7 @@ func (am *AbilityManager) executeSingleToolCall(
 		// 命中此分支说明 toolName 恰好等于 serverName（非 mcp_ 前缀），
 		// 记录 warning 后走 fallback 尝试查找。
 		// 对齐 Python: AbilityManager._execute_single_tool_call L815-824
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "mcp_tool_direct_server_name_call").
 			Str("tool_name", toolName).
 			Msg("MCP 工具调用使用了 server_name 而非 mcp_ 前缀工具名，尝试 fallback")
@@ -665,7 +667,7 @@ func (am *AbilityManager) executeTool(
 		if errors.As(err, &tie) {
 			return agentschema.ExecuteResult{}, tie
 		}
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(err).
 			Msg("工具执行错误")
@@ -760,7 +762,7 @@ func (am *AbilityManager) executeWorkflow(
 	// 步骤 5：通过 Runner.RunWorkflow 执行（对齐 Python L713-718: workflow_output = await Runner.run_workflow(...)）
 	result, err := runner.RunWorkflow(ctx, runner.ByWorkflow(wf), toolArgs, workflowSess, wfCtx, nil)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("workflow_name", toolName).
 			Err(err).
 			Msg("工作流执行错误")
@@ -876,7 +878,7 @@ func (am *AbilityManager) executeAgent(
 	// 步骤 8：通过 Runner.RunAgent 执行（对齐 Python L800: result = await Runner.run_agent(agent, inputs, session=child_session)）
 	result, err := runner.RunAgent(ctx, runner.ByAgent(ag), toolArgs, runner.BySession(childSession), nil, nil)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("agent_name", toolName).
 			Err(err).
 			Msg("Agent 执行错误")
@@ -944,7 +946,7 @@ func (am *AbilityManager) executeFallbackTool(
 		if errors.As(invokeErr, &tie) {
 			return agentschema.ExecuteResult{}, tie
 		}
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(invokeErr).
 			Msg("工具执行错误")

@@ -80,6 +80,9 @@ type ParserRegistry struct {
 	decompressors map[string]BaseResponseDecompressor
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	registryOnce sync.Once
@@ -310,7 +313,7 @@ func (d GzipDecompressor) Decompress(data []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("encoding", "gzip").
 		Int("data_size", len(data)).
 		Msg("GZIP 三级解压均失败（gzip → zlib → raw deflate）")
@@ -354,7 +357,7 @@ func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
 		return result, nil
 	}
 
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("encoding", "deflate").
 		Int("data_size", len(data)).
 		Msg("deflate 两级解压均失败（zlib → raw deflate）")
@@ -402,7 +405,7 @@ func (r *ParserRegistry) applyDecompression(data []byte, contentEncoding string)
 			if decompressor.CanDecompress(enc) {
 				decompressed, err := decompressor.Decompress(data)
 				if err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("encoding", enc).
 						Err(err).
 						Msg("响应解压失败")

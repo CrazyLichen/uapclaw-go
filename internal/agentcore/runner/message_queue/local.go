@@ -26,6 +26,8 @@ type LocalSubscription struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -34,7 +36,7 @@ type LocalSubscription struct{}
 //
 // 对应 Python: LocalMessageQueue.start() → True
 func (q *LocalMessageQueue) Start() {
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_started").
 		Msg("本地消息队列已启动（no-op）")
 }
@@ -43,7 +45,7 @@ func (q *LocalMessageQueue) Start() {
 //
 // 对应 Python: LocalMessageQueue.stop() → True
 func (q *LocalMessageQueue) Stop(_ context.Context) error {
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_stopped").
 		Msg("本地消息队列已停止（no-op）")
 	return nil
@@ -53,7 +55,7 @@ func (q *LocalMessageQueue) Stop(_ context.Context) error {
 //
 // 对应 Python: MessageQueueBase.subscribe() 的本地 no-op 实现
 func (q *LocalMessageQueue) Subscribe(topic string) (SubscriptionBase, error) {
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_subscribed").
 		Str("topic", topic).
 		Msg("本地消息队列订阅已创建（no-op）")
@@ -64,7 +66,7 @@ func (q *LocalMessageQueue) Subscribe(topic string) (SubscriptionBase, error) {
 //
 // 对应 Python: MessageQueueBase.unsubscribe() 的本地 no-op 实现
 func (q *LocalMessageQueue) Unsubscribe(_ context.Context, topic string) error {
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_unsubscribed").
 		Str("topic", topic).
 		Msg("本地消息队列订阅已取消（no-op）")
@@ -76,7 +78,7 @@ func (q *LocalMessageQueue) Unsubscribe(_ context.Context, topic string) error {
 //
 // 对应 Python: MessageQueueBase.produce_message() 的本地 no-op 实现
 func (q *LocalMessageQueue) Produce(_ context.Context, topic string, _ QueueMessageBase) error {
-	logger.Debug(logger.ComponentCommon).
+	logger.Debug(logComponent).
 		Str("event_type", "local_message_queue_produce").
 		Str("topic", topic).
 		Msg("本地消息队列发布消息（no-op，消息丢弃）")

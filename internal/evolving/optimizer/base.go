@@ -162,7 +162,7 @@ func (p *TextualParameter) GetDescription() string {
 //	self._trajectories = []
 //	self._selected_signals = []
 //	if not self._operators:
-//	    logger.error("[optimizer] no operator matches targets=%s; will soft-exit", self._targets)
+//	    Python: logger.error("[optimizer] no operator matches targets=%s; will soft-exit", self._targets)
 //	return len(self._operators)
 //
 // 对应 Python: BaseOptimizer.bind()
@@ -286,12 +286,12 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 // 对齐 Python:
 //
 //	for op_id, op in (operators or {}).items():
-//	    tunables = op.get_tunables()
-//	    matched = [t for t in targets if t in tunables]
+//	    Python: tunables = op.get_tunables()
+//	    Python: matched = [t for t in targets if t in tunables]
 //	    if not matched:
-//	        logger.warning("[optimizer] operator %s has no tunables in targets=%s", op_id, targets)
+//	        Python: logger.warning("[optimizer] operator %s has no tunables in targets=%s", op_id, targets)
 //	        continue
-//	    out[op_id] = op
+//	    Python: out[op_id] = op
 //
 // 对应 Python: BaseOptimizer.filter_operators()
 func FilterOperators(operators map[string]operator.Operator, targets []string) map[string]operator.Operator {

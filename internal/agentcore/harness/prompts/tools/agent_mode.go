@@ -11,6 +11,9 @@ type EnterPlanModeMetadataProvider struct{}
 // ExitPlanModeMetadataProvider exit_plan_mode 工具元数据提供者
 type ExitPlanModeMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // switchModeDescription switch_mode 工具双语描述

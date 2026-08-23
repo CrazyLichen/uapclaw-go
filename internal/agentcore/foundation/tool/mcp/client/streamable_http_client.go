@@ -36,7 +36,6 @@ type StreamableHttpClient struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：StreamableHttpClient 实现 McpClient 接口
@@ -112,7 +111,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	}
 	// 所有认证结果均失败时记录 Warn 日志
 	if authSuccessCount == 0 && authFailCount > 0 {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Int("auth_fail_count", authFailCount).
 			Msg("StreamableHTTP 客户端所有认证结果均失败，将以无认证模式连接")
@@ -166,7 +165,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 				exception.WithParam("card", c.serverName),
 			)
 		}
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Debug(logComponent).
 			Str("server_name", c.serverName).
 			Int("query_param_count", len(mergedQueryParams)).
 			Msg("StreamableHTTP 客户端注入认证查询参数")
@@ -175,7 +174,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	// 创建 Streamable HTTP 客户端
 	mcpCli, err := mcpclient.NewStreamableHttpClient(effectivePath, transportOpts...)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
@@ -189,7 +188,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 
 	// 启动连接
 	if err := mcpCli.Start(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
@@ -215,7 +214,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	}
 
 	if _, err := mcpCli.Initialize(ctx, initReq); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
@@ -230,7 +229,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 
 	c.client = mcpCli
 	c.isConnected = true
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("server_path", c.config.ServerPath).
 		Msg("StreamableHTTP 客户端连接成功")
@@ -244,7 +243,7 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 	}
 	if c.client != nil {
 		if err := c.client.Close(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("server_name", c.serverName).
 				Err(err).
 				Msg("StreamableHTTP 断开连接失败")
@@ -253,7 +252,7 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 		c.client = nil
 	}
 	c.isConnected = false
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("StreamableHTTP 客户端已断开连接")
 	return nil
@@ -270,7 +269,7 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 
 	result, err := c.client.ListTools(ctx, mcpcore.ListToolsRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Err(err).
@@ -290,7 +289,7 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 		)
 		cards = append(cards, card)
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(cards)).
 		Msg("StreamableHTTP 获取工具列表成功")
@@ -306,7 +305,7 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Msg("StreamableHTTP 调用工具")
@@ -318,7 +317,7 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -327,7 +326,7 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 		return nil, err
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Msg("StreamableHTTP 工具调用完成")
@@ -348,14 +347,14 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 	}
 	for _, card := range tools {
 		if card.Name == toolName {
-			logger.Debug(logger.ComponentAgentCore).
+			logger.Debug(logComponent).
 				Str("server_name", c.serverName).
 				Str("tool_name", toolName).
 				Msg("StreamableHTTP 找到工具信息")
 			return card, nil
 		}
 	}
-	logger.Warn(logger.ComponentAgentCore).
+	logger.Warn(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Msg("StreamableHTTP 未找到工具")
@@ -378,7 +377,7 @@ func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]
 
 	result, err := c.client.ListResources(ctx, mcpcore.ListResourcesRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Err(err).
@@ -408,7 +407,7 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("uri", uri).

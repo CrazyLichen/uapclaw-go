@@ -38,7 +38,6 @@ type SessionController struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -59,7 +58,7 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 		MetaMap:           make(map[string]*ScopeSessionsMeta),
 	}
 	if err := os.MkdirAll(sc.BasePath, 0o755); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "new_session_controller").
 			Str("agent_id", agentID).
 			Str("base_path", sc.BasePath).
@@ -82,7 +81,7 @@ func (sc *SessionController) Flush() error {
 		s := s
 		eg.Go(func() error {
 			if err := s.Flush(); err != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("action", "session_controller_flush").
 					Str("agent_id", sc.AgentID).
 					Str("session_id", s.SessionID).
@@ -172,7 +171,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 	for scopeKeyStr, scopeMetaData := range metaData {
 		scopeKey, err := ParseSessionScopeKey(scopeKeyStr)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "session_controller_load").
 				Str("scope_key", scopeKeyStr).
 				Err(err).
@@ -184,7 +183,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		scopeMetaBytes, _ := json.Marshal(scopeMetaData)
 		var scopeMeta ScopeSessionsMeta
 		if err := json.Unmarshal(scopeMetaBytes, &scopeMeta); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "session_controller_load").
 				Str("scope_key", scopeKeyStr).
 				Err(err).
@@ -198,7 +197,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		if loadActiveOnly {
 			if scopeMeta.ActiveSession != "" {
 				if err := sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("action", "session_controller_load").
 						Str("session_id", scopeMeta.ActiveSession).
 						Err(err).
@@ -208,7 +207,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		} else {
 			for _, sm := range scopeMeta.Sessions {
 				if err := sc.loadSession(scopeKey.SessionScope, sm.SessionID); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("action", "session_controller_load").
 						Str("session_id", sm.SessionID).
 						Err(err).
@@ -218,7 +217,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		}
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "session_controller_loaded").
 		Str("agent_id", sc.AgentID).
 		Int("scopes", len(sc.MetaMap)).
@@ -267,7 +266,7 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 		if loadActiveOnly {
 			if scopeMeta.ActiveSession != "" {
 				if err := sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("action", "load_scope").
 						Str("session_id", scopeMeta.ActiveSession).
 						Err(err).
@@ -277,7 +276,7 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 		} else {
 			for _, sm := range scopeMeta.Sessions {
 				if err := sc.loadSession(scopeKey.SessionScope, sm.SessionID); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("action", "load_scope").
 						Str("session_id", sm.SessionID).
 						Err(err).
@@ -358,7 +357,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 
 	// 保存到磁盘
 	if err := session.Flush(); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "create_if_not_exists_flush").
 			Str("agent_id", sc.AgentID).
 			Str("session_id", sessionID).
@@ -367,7 +366,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 		return false, nil, fmt.Errorf("创建会话后刷写失败: %w", err)
 	}
 	if err := sc.writeMetaFile(); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "create_if_not_exists_write_meta").
 			Str("agent_id", sc.AgentID).
 			Err(err).
@@ -375,7 +374,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 		return false, nil, fmt.Errorf("创建会话后写入元数据失败: %w", err)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "session_created").
 		Str("agent_id", sc.AgentID).
 		Str("session_id", sessionID).
@@ -399,7 +398,7 @@ func (sc *SessionController) GetScopeActiveSession(sessionScope SessionScope) *C
 	session, ok := sc.SessionCache[scopeMeta.ActiveSession]
 	if !ok {
 		if err := sc.loadSession(sessionScope, scopeMeta.ActiveSession); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "get_scope_active_session").
 				Str("session_id", scopeMeta.ActiveSession).
 				Err(err).
@@ -457,7 +456,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 				}
 				targetScope = parsedScope
 				if err := sc.loadSession(parsedScope, sessionID); err != nil {
-					logger.Warn(logger.ComponentAgentCore).
+					logger.Warn(logComponent).
 						Str("action", "activate_session").
 						Str("session_id", sessionID).
 						Err(err).
@@ -478,7 +477,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 		scopeMeta.ActivateSession(sessionID)
 		session.SetIsActive(true)
 		if err := session.Flush(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "activate_session_flush").
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sessionID).
@@ -487,7 +486,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 			return fmt.Errorf("激活会话后刷写失败: %w", err)
 		}
 		if err := sc.writeMetaFile(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "activate_session_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
@@ -495,7 +494,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 			return fmt.Errorf("激活会话后写入元数据失败: %w", err)
 		}
 
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("action", "session_activated").
 			Str("agent_id", sc.AgentID).
 			Str("session_id", sessionID).
@@ -557,7 +556,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 		// 删除磁盘数据
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sm.SessionID)
 		if err := os.RemoveAll(sessionDir); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "cleanup_inactive_remove").
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sm.SessionID).
@@ -572,7 +571,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 
 	if len(cleaned) > 0 {
 		if err := sc.writeMetaFile(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("action", "cleanup_inactive_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
@@ -581,7 +580,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 		}
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "cleanup_inactive").
 		Str("agent_id", sc.AgentID).
 		Str("scope", sessionScope.String()).
@@ -627,7 +626,7 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 		// 删除磁盘数据
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sessionID)
 		if err := os.RemoveAll(sessionDir); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "remove_session_remove").
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sessionID).
@@ -644,7 +643,7 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 
 	if len(removed) > 0 {
 		if err := sc.writeMetaFile(); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "remove_session_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
@@ -670,7 +669,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 		delete(sc.SessionCache, sm.SessionID)
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sm.SessionID)
 		if err := os.RemoveAll(sessionDir); err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "remove_scope_sessions_remove").
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sm.SessionID).
@@ -685,14 +684,14 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 	delete(sc.MetaMap, sessionScope.String())
 
 	if err := sc.writeMetaFile(); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "remove_scope_sessions_write_meta").
 			Str("agent_id", sc.AgentID).
 			Err(err).
 			Msg("删除作用域会话后写入元数据失败")
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "remove_scope_sessions").
 		Str("agent_id", sc.AgentID).
 		Str("scope", sessionScope.String()).
@@ -710,7 +709,7 @@ func (sc *SessionController) RemoveAll() {
 	sc.SessionCache = make(map[string]*ChainSession)
 	sc.MetaMap = make(map[string]*ScopeSessionsMeta)
 	if err := os.RemoveAll(sc.BasePath); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", "remove_all").
 			Str("agent_id", sc.AgentID).
 			Str("base_path", sc.BasePath).
@@ -718,7 +717,7 @@ func (sc *SessionController) RemoveAll() {
 			Msg("删除所有会话数据失败")
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "remove_all").
 		Str("agent_id", sc.AgentID).
 		Msg("删除所有会话数据")
@@ -744,7 +743,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 	// 创建数据容器
 	container, err := GetFactory().Load(dct, sc.AgentID, sessionID, nil)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "load_session").
 			Str("session_id", sessionID).
 			Err(err).
@@ -755,7 +754,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 	sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sessionID)
 	session := NewChainSession(sc.AgentID, sessionScope, sessionID, container, sessionDir)
 	if err := session.Load(); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("action", "load_session").
 			Str("session_id", sessionID).
 			Err(err).
@@ -765,7 +764,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 
 	sc.SessionCache[sessionID] = session
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "load_session").
 		Str("session_id", sessionID).
 		Str("container_type", dct).

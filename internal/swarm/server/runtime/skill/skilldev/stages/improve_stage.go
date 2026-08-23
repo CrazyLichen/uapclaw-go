@@ -17,6 +17,7 @@ import (
 // ImproveStageHandler IMPROVE 阶段：Agent 根据用户反馈改进 Skill，随后进入下一轮测试。
 type ImproveStageHandler struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ImproveSystemPrompt IMPROVE 阶段 Agent 系统 Prompt。
@@ -68,6 +69,7 @@ const ImproveSystemPrompt = `你是一个 Skill 优化专家。根据用户反�
 请输出改进后的完整文件内容。
 `
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 IMPROVE 阶段逻辑。

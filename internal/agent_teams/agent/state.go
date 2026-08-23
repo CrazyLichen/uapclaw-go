@@ -8,7 +8,7 @@ package agent
 //
 // 注意：session_id 不在此处保存。
 // session_id 的唯一真实来源是 agent_teams contextvar
-// （agent_teams.GetSessionID）。
+// （通过 agent_teams.GetSessionID 获取）。
 // 在 state 上缓存字符串会重新引入"双真实来源"问题。
 type TeamAgentState struct {
 	// TeamSession 团队会话

@@ -30,6 +30,9 @@ type StructSchemaExtractor struct{}
 // schemaTagMap jsonschema tag 的键值对映射
 type schemaTagMap map[string]string
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // commonAbbreviations 常见缩写列表，humanizeName 时转大写处理。
@@ -79,7 +82,7 @@ var commonAbbreviations = map[string]string{
 //   - 基本类型 → 直接映射 ParamType
 //
 // 对应 Python:
-//   - CallableSchemaExtractor.generate_schema()
+//   - CallableSchemaExtractor.generate_schema()（可调用模式提取器的 generate_schema 方法）
 //   - TypeSchemaExtractor 注册表
 func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) {
 	if typ.Kind() == reflect.Pointer {

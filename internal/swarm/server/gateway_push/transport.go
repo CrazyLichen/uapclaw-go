@@ -18,7 +18,7 @@ type GatewayPushTransport interface {
 	// SendPush 向 Gateway 发送一条 server_push 语义的消息。
 	//
 	// msg 格式与 Python AgentWebSocketServer.send_push 入参一致：
-	//   {request_id, channel_id, session_id, payload, metadata?, response_kind?}
+	//   {request_id, channel_id, session_id, payload, metadata（可选）, response_kind（可选）}
 	// 内部自动调 BuildServerPushWire 编码为 E2A wire 格式。
 	SendPush(ctx context.Context, msg map[string]any) error
 }
@@ -32,6 +32,7 @@ type GatewayPushTransport interface {
 // Go 侧同样通过 server.GetInstance().SendPush(msg) 推送。
 type ChannelPushTransport struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponentPush 推送日志组件
@@ -58,3 +59,5 @@ func (t *ChannelPushTransport) SendPush(ctx context.Context, msg map[string]any)
 	}
 	return s.SendPush(ctx, msg)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

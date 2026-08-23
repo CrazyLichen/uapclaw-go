@@ -257,9 +257,9 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	}
 
 	// ── 视觉工具同步 ──
-	// 对齐 Python: self._vision_tools, self._vision_tools_registered = self._sync_tool_group(
-	//   current_tools=self._vision_tools, registered=self._vision_tools_registered,
-	//   enabled=self._vision_model_config is not None, create_fn=..., warn_label="vision tools")
+	// 对齐 Python: Python: self._vision_tools, self._vision_tools_registered = self._sync_tool_group(
+	//   Python: current_tools=self._vision_tools, registered=self._vision_tools_registered,
+	//   Python: enabled=self._vision_model_config is not None, create_fn=..., warn_label="vision tools")
 	if d.visionModelConfig != nil && !d.visionToolsRegistered {
 		client := d.resolveVisionModelClient()
 		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), "")
@@ -518,10 +518,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 1: wiki 工具 ──
 	// 对齐 Python:
-	//   for wtool in [wiki_ingest, wiki_query, wiki_lint]:
-	//       if not Runner.resource_mgr.get_tool(wtool.card.id):
-	//           Runner.resource_mgr.add_tool(wtool)
-	//       tool_cards.append(wtool.card)
+	//   Python: for wtool in [wiki_ingest, wiki_query, wiki_lint]:
+	//       Python: if not Runner.resource_mgr.get_tool(wtool.card.id):
+	//           Python: Runner.resource_mgr.add_tool(wtool)
+	//       Python: tool_cards.append(wtool.card)
 	// ⤵️ 10.6.24: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
 	// 待实现：注册Wiki工具 for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
 	//     if rm.GetTool([]string{wtool.Card().ID}) == nil {
@@ -532,10 +532,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 2: 付费搜索工具 ──
 	// 对齐 Python:
-	//   if is_paid_search_enabled():
-	//       self._paid_search_tool = WebPaidSearchTool(language=..., agent_id=agent_id)
-	//       Runner.resource_mgr.add_tool(self._paid_search_tool)
-	//       tool_cards.append(self._paid_search_tool.card)
+	//   Python: if is_paid_search_enabled():
+	//       Python: self._paid_search_tool = WebPaidSearchTool(language=..., agent_id=agent_id)
+	//       Python: Runner.resource_mgr.add_tool(self._paid_search_tool)
+	//       Python: tool_cards.append(self._paid_search_tool.card)
 	//       self._paid_search_registered = True
 	if web_tools.IsPaidSearchEnabled() {
 		paidSearchTool := web_tools.NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
@@ -549,10 +549,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 3: 免费搜索工具 ──
 	// 对齐 Python:
-	//   for tool_cls in [WebFreeSearchTool, WebFetchWebpageTool]:
-	//       tool_instance = tool_cls(agent_id=agent_id)
-	//       Runner.resource_mgr.add_tool(tool_instance)
-	//       tool_cards.append(tool_instance.card)
+	//   Python: for tool_cls in [WebFreeSearchTool, WebFetchWebpageTool]:
+	//       Python: tool_instance = tool_cls(agent_id=agent_id)
+	//       Python: Runner.resource_mgr.add_tool(tool_instance)
+	//       Python: tool_cards.append(tool_instance.card)
 	for _, toolCls := range []func(string, string) tool.Tool{
 		web_tools.NewWebFreeSearchTool,
 		web_tools.NewWebFetchWebpageTool,
@@ -566,12 +566,12 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 4: 视觉工具 ──
 	// 对齐 Python:
-	//   if self._vision_model_config is not None:
-	//       for tool in create_vision_tools(language=..., vision_model_config=..., agent_id=...):
-	//           Runner.resource_mgr.add_tool(tool)
-	//           tool_cards.append(tool.card)
-	//           self._vision_tools.append(tool)
-	//       self._vision_tools_registered = bool(self._vision_tools)
+	//   Python: if self._vision_model_config is not None:
+	//       Python: for tool in create_vision_tools(language=..., vision_model_config=..., agent_id=...):
+	//           Python: Runner.resource_mgr.add_tool(tool)
+	//           Python: tool_cards.append(tool.card)
+	//           Python: self._vision_tools.append(tool)
+	//       Python: self._vision_tools_registered = bool(self._vision_tools)
 	if d.visionModelConfig != nil {
 		client := d.resolveVisionModelClient()
 		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), agentID)
@@ -619,10 +619,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 6: 视频工具 ──
 	// 对齐 Python:
-	//   if self._video_model_config:
-	//       Runner.resource_mgr.add_tool(video_understanding)
-	//       tool_cards.append(video_understanding.card)
-	//       self._video_tool_registered = True
+	//   Python: if self._video_model_config:
+	//       Python: Runner.resource_mgr.add_tool(video_understanding)
+	//       Python: tool_cards.append(video_understanding.card)
+	//       Python: self._video_tool_registered = True
 	if d.videoModelConfig != nil {
 		client := d.resolveVideoModelClient()
 		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), agentID)
@@ -636,10 +636,10 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 7: 图片生成工具 ──
 	// 对齐 Python:
-	//   if self._image_gen_model_config:
-	//       Runner.resource_mgr.add_tool(generate_image)
-	//       tool_cards.append(generate_image.card)
-	//       self._image_gen_tool_registered = True
+	//   Python: if self._image_gen_model_config:
+	//       Python: Runner.resource_mgr.add_tool(generate_image)
+	//       Python: tool_cards.append(generate_image.card)
+	//       Python: self._image_gen_tool_registered = True
 	if d.imageGenToolRegistered {
 		// ⤵️ 10.6.24: generate_image 工具实例尚未实现
 		// 待实现：注册图像生成工具 _ = rm.AddTool(generateImage)
@@ -649,13 +649,13 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 8: 小艺手机端工具 ──
 	// 对齐 Python:
-	//   xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
-	//   if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
-	//    _xiaoyi_tools 工具列表（get_user_location, create_note, search_notes 等）
-	//       for xt in _xiaoyi_tools:
-	//           Runner.resource_mgr.add_tool(xt)
-	//           tool_cards.append(xt.card)
-	//       self._xiaoyi_phone_tools_registered = True
+	//   Python: xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
+	//   Python: if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
+	//    Python: _xiaoyi_tools 工具列表（get_user_location, create_note, search_notes 等）
+	//       Python: for xt in _xiaoyi_tools:
+	//           Python: Runner.resource_mgr.add_tool(xt)
+	//           Python: tool_cards.append(xt.card)
+	//       Python: self._xiaoyi_phone_tools_registered = True
 	// ⤵️ 10.6.24: 小艺手机端工具类 (28个) 尚未实现
 	// 待实现：检查小艺手机端工具是否启用 xiaoyiEnabled := false
 	// if channels, ok := configBase["channels"].(map[string]any); ok {
@@ -676,11 +676,11 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 9: SkillToolkit ──
 	// 对齐 Python:
-	//   skill_toolkit = SkillToolkit(manager=self._skill_manager)
-	//   for tool in skill_toolkit.get_tools():
-	//       if not Runner.resource_mgr.get_tool(tool.card.id):
-	//           Runner.resource_mgr.add_tool(tool)
-	//       tool_cards.append(tool.card)
+	//   Python: skill_toolkit = SkillToolkit(manager=self._skill_manager)
+	//   Python: for tool in skill_toolkit.get_tools():
+	//       Python: if not Runner.resource_mgr.get_tool(tool.card.id):
+	//           Python: Runner.resource_mgr.add_tool(tool)
+	//       Python: tool_cards.append(tool.card)
 	if d.skillManager != nil {
 		skillToolkit := skilltools.NewSkillToolkit(d.skillManager)
 		for _, t := range skillToolkit.GetTools() {
@@ -695,11 +695,11 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 10: acp_chat ──
 	// 对齐 Python:
-	//   acp_cfg = get_config().get("acp_agents")
-	//   if isinstance(acp_cfg, dict) and acp_cfg:
-	//       if not Runner.resource_mgr.get_tool(acp_chat.card.id):
-	//           Runner.resource_mgr.add_tool(acp_chat)
-	//       tool_cards.append(acp_chat.card)
+	//   Python: acp_cfg = get_config().get("acp_agents")
+	//   Python: if isinstance(acp_cfg, dict) and acp_cfg:
+	//       Python: if not Runner.resource_mgr.get_tool(acp_chat.card.id):
+	//           Python: Runner.resource_mgr.add_tool(acp_chat)
+	//       Python: tool_cards.append(acp_chat.card)
 	// ⤵️ 10.6.24: acp_chat 工具尚未实现
 	// 待实现：ACP配置检查 acpCfg, _ := configBase["acp_agents"].(map[string]any)
 	// 如果存在 ACP 配置

@@ -359,8 +359,8 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 
 		// TODO(⤵️ 10.3.2 Team): 更新 team evolution config
 		// 对齐 Python L331-339:
-		//   team_config = config if isinstance(config, dict) else get_config()
-		//   await get_team_manager(channel_id).update_evolution_config(team_config)
+		//   Python: team_config = config if isinstance(config, dict) else get_config()
+		//   Python: await get_team_manager(channel_id).update_evolution_config(team_config)
 
 		// 对齐 Python L340: logger.info(f"channel {channel_id} reload agent config success.")
 		logger.Info(amLogComponent).

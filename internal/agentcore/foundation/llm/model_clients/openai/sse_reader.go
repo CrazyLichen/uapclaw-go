@@ -12,8 +12,8 @@ import (
 //
 // SSE 协议格式：
 //
-//	data: {"id":"...","choices":[...]}\n\n
-//	data: {"id":"...","choices":[...]}\n\n
+//	SSE 数据格式: data: {"id":"...","choices":[...]}\n\n
+//	SSE 数据格式: data: {"id":"...","choices":[...]}\n\n
 //	data: [DONE]\n\n  ← SSE 流结束标记
 //
 // 本读取器：

@@ -31,6 +31,7 @@ type SupervisorAgent struct {
 	*agents.ReActAgent
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -185,3 +186,5 @@ func (s *SupervisorAgent) Configure(ctx context.Context, config agentinterfaces.
 	// 非 ReActAgentConfig 类型 no-op，与 Python isinstance 判断一致
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -5,6 +5,9 @@ package tools
 // ExitWorktreeMetadataProvider exit_worktree 工具元数据提供者
 type ExitWorktreeMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // exitWorktreeDescription exit_worktree 工具双语描述

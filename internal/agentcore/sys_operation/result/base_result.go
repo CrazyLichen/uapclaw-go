@@ -11,6 +11,11 @@ type BaseResult struct {
 	Message string `json:"message"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildOperationErrorResult 构造标准化错误结果。
@@ -23,3 +28,5 @@ func BuildOperationErrorResult(errorCode int, errMsg string) BaseResult {
 func (r BaseResult) IsSuccess() bool {
 	return r.Code == 0
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

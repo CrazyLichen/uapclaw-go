@@ -349,7 +349,7 @@ func (m *ExperienceManager) RequestSimplify(
 	startedAt := time.Now()
 
 	if !m.store.SkillExists(ctx, skillName) {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("kind", m.kind).
 			Str("skill", skillName).
 			Str("reason", "skill_not_found").
@@ -360,7 +360,7 @@ func (m *ExperienceManager) RequestSimplify(
 	evoLog := m.store.LoadFullEvolutionLog(ctx, skillName)
 	records := evoLog.Entries
 	if len(records) == 0 {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("kind", m.kind).
 			Str("skill", skillName).
 			Str("reason", "no_records").
@@ -370,7 +370,7 @@ func (m *ExperienceManager) RequestSimplify(
 
 	content, err := m.store.ReadSkillContent(ctx, skillName)
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceManager] request_simplify: read_skill_content 失败")
@@ -379,7 +379,7 @@ func (m *ExperienceManager) RequestSimplify(
 
 	summary := checkpointing.ExtractDescriptionFromSkillMD(content)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("kind", m.kind).
 		Str("skill", skillName).
 		Int("records", len(records)).
@@ -388,7 +388,7 @@ func (m *ExperienceManager) RequestSimplify(
 	actions, err := m.scorer.Simplify(ctx, skillName, summary, records, userIntent)
 	if err != nil || len(actions) == 0 {
 		elapsed := time.Since(startedAt).Seconds()
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("kind", m.kind).
 			Str("skill", skillName).
 			Float64("elapsed", elapsed).
@@ -404,7 +404,7 @@ func (m *ExperienceManager) RequestSimplify(
 	}
 
 	elapsed := time.Since(startedAt).Seconds()
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("kind", m.kind).
 		Str("skill", skillName).
 		Str("request", requestID).
@@ -638,7 +638,7 @@ func (m *ExperienceManager) stagePendingRequest(
 	)
 	stagedPending := m.stagePendingChange(pending)
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("change_id", stagedPending.ChangeID).
 		Int("records", len(stagedPending.Payload)).
 		Str("skill", proposal.SkillName).
@@ -664,7 +664,7 @@ func (m *ExperienceManager) applyRequest(
 ) (ExperienceApplyResult, error) {
 	pending := m.pendingApprovalSnapshots[requestID]
 	if pending == nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("action", action).
 			Str("request_id", requestID).
 			Msg("[ExperienceManager] unknown request_id")

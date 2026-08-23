@@ -81,6 +81,8 @@ type RouterAllocator struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -328,14 +330,14 @@ func BuildModelAllocatorForPool(pool []ModelPoolEntry, strategy string, teamName
 	case "router":
 		alloc, err := NewRouterAllocator(pool)
 		if err != nil {
-			logger.Info(logger.ComponentCommon).Str("team_name", teamName).
+			logger.Info(logComponent).Str("team_name", teamName).
 				Str("strategy", strategy).Err(err).
 				Msg("RouterAllocator 构造失败")
 			return nil
 		}
 		return alloc
 	default:
-		logger.Info(logger.ComponentCommon).Str("team_name", teamName).
+		logger.Info(logComponent).Str("team_name", teamName).
 			Str("strategy", strategy).Int("pool_size", len(pool)).
 			Msg("未知 model_pool_strategy，回退为 nil")
 		return nil

@@ -522,7 +522,7 @@ func (e *BaseClientEmbed) convertOneMessage(msg llmschema.BaseMessage) (map[stri
 
 	// AssistantMessage 特有字段
 	if am, ok := msg.(*llmschema.AssistantMessage); ok {
-		// tool_calls
+		// 工具调用列表
 		if len(am.ToolCalls) > 0 {
 			calls := make([]map[string]any, 0, len(am.ToolCalls))
 			for _, tc := range am.ToolCalls {

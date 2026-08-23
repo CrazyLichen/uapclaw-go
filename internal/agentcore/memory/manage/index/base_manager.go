@@ -55,6 +55,8 @@ type memoryManagerBase struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 const (
 	// FragmentMemoryTypeUserProfile 用户画像类型
 	FragmentMemoryTypeUserProfile = "user_profile"
@@ -73,9 +75,6 @@ var (
 		FragmentMemoryTypeSemanticMemory,
 		FragmentMemoryTypeEpisodicMemory,
 	}
-
-	// logComponent 日志组件常量
-	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

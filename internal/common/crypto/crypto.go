@@ -113,9 +113,9 @@ func GetCryptoProvider() CryptoProvider {
 //
 // 使用示例：
 //
-//	provider, _ := crypto.NewAesGcmProvider(key)
-//	crypto.SetCryptoProvider(provider)
-//	cfg, _ := config.New("config.yaml", config.WithDecrypt(crypto.NewDecryptFunc()))
+//	示例: provider, _ := crypto.NewAesGcmProvider(key)
+//	示例: crypto.SetCryptoProvider(provider)
+//	示例: cfg, _ := config.New("config.yaml", config.WithDecrypt(crypto.NewDecryptFunc()))
 func NewDecryptFunc() func(envName, value string) (string, bool) {
 	// 敏感字段关键词（与 config/envvar.go 中 sensitiveKeywords 保持一致）
 	sensitiveKeywords := []string{"api_key", "token"}

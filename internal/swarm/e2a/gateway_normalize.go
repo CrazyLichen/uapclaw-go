@@ -32,11 +32,11 @@ const (
 	e2aLegacyAgentRequestKey = "legacy_agent_request"
 	// maxLegacyAgentRequestJSONBytes 旧版请求 JSON 最大字节数
 	maxLegacyAgentRequestJSONBytes = 512000
+	// logComponent 日志组件
+	logComponent = logger.ComponentChannel
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-var logComponent = logger.ComponentChannel
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

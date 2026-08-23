@@ -23,7 +23,6 @@ type WorkflowMgr struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -59,7 +58,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 
 	err := m.registerProvider(workflowID, wrappedProvider)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "WORKFLOW_ADD_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).
@@ -70,7 +69,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "WORKFLOW_ADD_SUCCESS").
 		Str("workflow_id", workflowID).
 		Msg("添加工作流成功")
@@ -83,14 +82,14 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 	for _, entry := range workflows {
 		if entry.ID == "" || entry.Provider == nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "WORKFLOW_ADD_ERROR").
 				Str("workflow_id", entry.ID).
 				Msg("批量添加工作流跳过无效条目")
 			continue
 		}
 		if err := m.AddWorkflow(entry.ID, entry.Provider); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "WORKFLOW_ADD_ERROR").
 				Str("workflow_id", entry.ID).
 				Err(err).
@@ -105,7 +104,7 @@ func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error) {
 	unwrapped, err := m.unregisterProvider(workflowID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "WORKFLOW_REMOVE_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).
@@ -122,7 +121,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 		return unwrapped(ctx)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "WORKFLOW_REMOVE_SUCCESS").
 		Str("workflow_id", workflowID).
 		Msg("移除工作流成功")
@@ -137,7 +136,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, session decorator.TracerSession) (interfaces.Workflow, error) {
 	w, err := m.getResource(ctx, workflowID)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "WORKFLOW_GET_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).

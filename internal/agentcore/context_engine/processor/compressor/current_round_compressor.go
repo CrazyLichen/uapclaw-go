@@ -467,6 +467,8 @@ Your task is to merge them into one shorter, stable memory block while preservin
 Output plain text only.
 `
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -605,7 +607,7 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 	allMsgs, _ := mc.GetMessages(0, true)
 	tokens := processor.CountMessagesTokens(mc.TokenCounter(), append(allMsgs, messagesToAdd...), modelName, crc.ProcessorType())
 	if tokens > crc.tokenThreshold {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "CurrentRoundCompressor_triggered").
 			Int("tokens", tokens).
 			Int("threshold", crc.tokenThreshold).
@@ -686,7 +688,7 @@ func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMess
 	if compressedIdx >= keepIndex {
 		return -1
 	}
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "compress_idx_found").
 		Int("compress_idx", compressedIdx).
 		Int("keep_start_idx", keepIndex).
@@ -772,7 +774,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	modelName := crc.getModelName()
 	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
 	if inputTokens < crc.minSelectedTokens {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "compress_skipped").
 			Int("input_tokens", inputTokens).
 			Int("min_selected_tokens", crc.minSelectedTokens).
@@ -809,7 +811,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	// 调用 LLM（纯文本输出，不使用 output_parser）
 	response, err := crc.model.Invoke(ctx, model_clients.NewMessagesParam(llm_schema.NewUserMessage(filledPrompt)))
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", crc.ProcessorType()).
 			Err(err).
 			Msg("压缩模型调用失败，跳过当前轮次压缩")
@@ -821,14 +823,14 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	if summary != "" {
 		compressedTokens := processor.CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summary)}, modelName, crc.ProcessorType())
 		if compressedTokens >= inputTokens {
-			logger.Info(logger.ComponentAgentCore).
+			logger.Info(logComponent).
 				Str("event_type", "compress_no_benefit").
 				Int("compressed_tokens", compressedTokens).
 				Int("input_tokens", inputTokens).
 				Msg("压缩后 Token 数未减少，跳过")
 			return nil, nil
 		}
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "compress_success").
 			Int("original_tokens", inputTokens).
 			Int("compressed_tokens", compressedTokens).
@@ -848,7 +850,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 	modelName := crc.getModelName()
 	totalTokens := processor.CountMessagesTokens(mc.TokenCounter(), oldCompressMessages, modelName, crc.ProcessorType())
 	if totalTokens <= crc.accumulatedSummaryTokenLimit {
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Debug(logComponent).
 			Str("event_type", "merge_skipped").
 			Int("total_tokens", totalTokens).
 			Int("limit", crc.accumulatedSummaryTokenLimit).
@@ -874,7 +876,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 	modelMessages := []llm_schema.BaseMessage{llm_schema.NewUserMessage(filledPrompt)}
 	response, err := crc.model.Invoke(ctx, model_clients.NewMessagesParam(modelMessages...))
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("processor_type", crc.ProcessorType()).
 			Err(err).
 			Msg("摘要合并模型调用失败，跳过合并")
@@ -885,7 +887,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 	summaryText := response.GetContent().Text()
 	if summaryText != "" {
 		mergedTokens := processor.CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summaryText)}, modelName, crc.ProcessorType())
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "merge_success").
 			Int("block_count", len(oldCompressMessages)).
 			Int("original_tokens", totalTokens).
@@ -894,7 +896,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 		return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summaryText)), nil
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "merge_failed").
 		Int("block_count", len(oldCompressMessages)).
 		Int("original_tokens", totalTokens).

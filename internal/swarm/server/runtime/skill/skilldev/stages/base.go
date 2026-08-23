@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件标识。
-var logComponent = logger.ComponentAgentServer
+const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

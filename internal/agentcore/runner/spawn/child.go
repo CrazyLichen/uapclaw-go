@@ -44,7 +44,10 @@ type AgentCreator interface {
 	CreateByType(ctx context.Context, agentType string, agentCard map[string]any, initKwargs map[string]any) (interfaces.BaseAgent, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -68,7 +71,7 @@ func RunSpawnedProcess(
 	// 对齐 Python: child_process.py L22-27（在 import logger 之前从 env 应用 logging_config）
 	applyLoggingConfigFromEnv()
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_CHILD_START").
 		Msg("子进程启动")
 
@@ -77,13 +80,13 @@ func RunSpawnedProcess(
 
 	// Runner 生命周期管理。
 	// 对齐 Python: run_spawned_process() L456-468
-	//   Runner.set_config(deserialize_runner_config(...))
-	//   Runner.start()
-	//   process_message_loop(...)
-	//   Runner.stop()
+	//   1. 设置配置（反序列化 RunnerConfig）
+	//   2. 启动 Runner
+	//   3. 消息处理循环
+	//   4. 停止 Runner
 	if childRunner != nil && spawnAgentConfig != nil && spawnAgentConfig.RunnerConfig != nil {
 		if err := childRunner.SetConfig(spawnAgentConfig.RunnerConfig); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "SPAWN_RUNNER_CONFIG_ERROR").
 				Err(err).
 				Msg("设置 Runner 配置失败")
@@ -92,7 +95,7 @@ func RunSpawnedProcess(
 
 	if childRunner != nil {
 		if err := childRunner.Start(ctx); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "SPAWN_RUNNER_START_ERROR").
 				Err(err).
 				Msg("runner 启动失败")
@@ -100,7 +103,7 @@ func RunSpawnedProcess(
 		}
 		defer func() {
 			if stopErr := childRunner.Stop(ctx); stopErr != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("event_type", "SPAWN_RUNNER_STOP_ERROR").
 					Err(stopErr).
 					Msg("Runner 停止失败")
@@ -115,14 +118,14 @@ func RunSpawnedProcess(
 	// 运行消息循环
 	err := ProcessMessageLoop(ctx, stdin, stdout, spawnAgentConfig, inputs, childRunner, agentCreator)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "SPAWN_CHILD_ERROR").
 			Err(err).
 			Msg("子进程消息循环错误")
 		return err
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_CHILD_EXIT").
 		Msg("子进程退出")
 	return nil
@@ -162,7 +165,7 @@ func ProcessMessageLoop(
 			switch msg.Type {
 			case MessageTypeHealthCheck:
 				if err := HandleHealthCheck(ctx, msg, stdout); err != nil {
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Str("event_type", "SPAWN_HEALTH_CHECK_ERROR").
 						Err(err).
 						Msg("健康检查处理错误")
@@ -172,7 +175,7 @@ func ProcessMessageLoop(
 					agentCancel()
 				}
 				if err := HandleShutdown(ctx, msg, stdout); err != nil {
-					logger.Error(logger.ComponentAgentCore).
+					logger.Error(logComponent).
 						Str("event_type", "SPAWN_SHUTDOWN_ERROR").
 						Err(err).
 						Msg("关闭处理错误")
@@ -220,7 +223,7 @@ func ProcessMessageLoop(
 					go runAgentTask(agentCtx, *agentConfig, inputs, stdout, msg.MessageID, streaming, streamModes, agentDoneCh, childRunner, agentCreator)
 				}
 			default:
-				logger.Warn(logger.ComponentAgentCore).
+				logger.Warn(logComponent).
 					Str("event_type", "SPAWN_UNKNOWN_MESSAGE").
 					Str("message_type", msg.Type.String()).
 					Msg("未知消息类型")
@@ -236,7 +239,7 @@ func ProcessMessageLoop(
 		case err := <-errCh:
 			// stdin 读取错误
 			if err == io.EOF {
-				logger.Info(logger.ComponentAgentCore).
+				logger.Info(logComponent).
 					Str("event_type", "SPAWN_STDIN_CLOSED").
 					Msg("stdin 关闭，退出消息循环")
 				if agentCancel != nil {
@@ -244,7 +247,7 @@ func ProcessMessageLoop(
 				}
 				return nil
 			}
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "SPAWN_STDIN_ERROR").
 				Err(err).
 				Msg("stdin 读取错误")
@@ -277,7 +280,7 @@ func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error
 	if err := WriteMessage(stdout, response); err != nil {
 		return fmt.Errorf("写入健康检查响应失败: %w", err)
 	}
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("event_type", "SPAWN_HEALTH_CHECK_RESPONSE").
 		Msg("回复健康检查")
 	return nil
@@ -286,7 +289,7 @@ func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error
 // HandleShutdown 处理关闭请求。
 // 对齐 Python: handle_shutdown()
 func HandleShutdown(ctx context.Context, msg Message, stdout io.Writer) error {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_SHUTDOWN_RECEIVED").
 		Msg("收到关闭请求")
 	ack := NewMessage(MessageTypeShutdownAck, map[string]any{
@@ -331,7 +334,7 @@ func prepareSpawnAgentConfig(agentConfig map[string]any) *SpawnAgentConfig {
 	}
 	cfg, err := ParseSpawnAgentConfig(agentConfig)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "SPAWN_CONFIG_PARSE_ERROR").
 			Err(err).
 			Msg("解析 Agent 配置失败")
@@ -367,7 +370,7 @@ func runAgentTask(
 
 	result, err := ExecuteAgent(ctx, agentConfig, inputs, stdout, streaming, streamModes, childRunner, agentCreator)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Err(err).
 			Msg("Agent 执行错误")
@@ -383,7 +386,7 @@ func runAgentTask(
 		"result": result,
 	})
 	_ = WriteMessage(stdout, doneMsg)
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_AGENT_DONE").
 		Msg("Agent 执行完成")
 }
@@ -423,9 +426,9 @@ func executeChildAgent(
 
 	// 创建 Agent 实例。
 	// 对齐 Python:
-	//   module = importlib.import_module(class_config.agent_module)
-	//   agent_cls = getattr(module, class_config.agent_class)
-	//   agent = agent_cls(**class_config.init_kwargs)
+	//   Python: module = importlib.import_module(class_config.agent_module)
+	//   Python: agent_cls = getattr(module, class_config.agent_class)
+	//   Python: agent = agent_cls(**class_config.init_kwargs)
 	if agentCreator == nil {
 		return nil, fmt.Errorf("未注入 AgentCreator，无法创建 Agent 实例")
 	}
@@ -442,7 +445,7 @@ func executeChildAgent(
 	// 对齐 Python: session = agent_config.session_id
 	sessionID := agentConfig.SessionID
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_CHILD_AGENT").
 		Str("agent_type", agentType).
 		Bool("streaming", streaming).
@@ -456,11 +459,11 @@ func executeChildAgent(
 	if streaming {
 		// streaming 路径。
 		// 对齐 Python:
-		//   async for chunk in Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes):
-		//       stream_message = Message(type=MessageType.STREAM_CHUNK, payload=chunk)
-		//       await write_output_to_stdout(stream_message, writer)
-		//       result_chunks.append(chunk)
-		//   return result_chunks
+		//   Python: async for chunk in Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes):
+		//       Python: stream_message = Message(type=MessageType.STREAM_CHUNK, payload=chunk)
+		//       Python: await write_output_to_stdout(stream_message, writer)
+		//       Python: result_chunks.append(chunk)
+		//   Python: return result_chunks
 		streamCh, err := childRunner.RunAgentStreaming(ctx, agent, inputs, sessionID, streamModes)
 		if err != nil {
 			return nil, fmt.Errorf("启动 Agent 流式执行失败: %w", err)
@@ -470,7 +473,7 @@ func executeChildAgent(
 		for chunk := range streamCh {
 			chunkMsg := NewMessage(MessageTypeStreamChunk, chunk)
 			if writeErr := WriteMessage(stdout, chunkMsg); writeErr != nil {
-				logger.Error(logger.ComponentAgentCore).
+				logger.Error(logComponent).
 					Str("event_type", "SPAWN_STREAM_WRITE_ERROR").
 					Err(writeErr).
 					Msg("写入 STREAM_CHUNK 失败")
@@ -488,9 +491,9 @@ func executeChildAgent(
 // applyLoggingConfigFromEnv 从环境变量 UAPCLAW_SPAWN_LOGGING_CONFIG 读取日志配置并应用。
 // 对齐 Python: child_process.py L22-27
 //
-//	_logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
-//	如果存在日志配置JSON
-//	    configure_log_config(_json.loads(_logging_config_json))
+//	Python: _logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
+//	Python: 如果存在日志配置JSON
+//	    Python: configure_log_config(_json.loads(_logging_config_json))
 //
 // 子进程首次初始化时调用 logger.Setup()，后续调用 logger.Reconfigure()。
 func applyLoggingConfigFromEnv() {
@@ -509,7 +512,7 @@ func applyLoggingConfigFromEnv() {
 		if !logger.IsSetup() {
 			_ = logger.Setup()
 		}
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event_type", "SPAWN_LOGGING_CONFIG_PARSE_ERROR").
 			Err(err).
 			Msg("解析日志配置环境变量失败，使用默认配置")
@@ -539,7 +542,7 @@ func applyLoggingConfigMap(loggingConfig map[string]any) {
 		_ = logger.Reconfigure(logger.WithLogLevel(levelStr))
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_LOGGING_CONFIG_APPLIED").
 		Str("level", levelStr).
 		Msg("已应用日志配置")

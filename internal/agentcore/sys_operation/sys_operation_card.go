@@ -33,10 +33,10 @@ type ToolIdProxy struct {
 	opType string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // SysOperationCardOption SysOperationCard 构造选项函数
 type SysOperationCardOption func(*SysOperationCard)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

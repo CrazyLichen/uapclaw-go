@@ -31,6 +31,11 @@ type PowerShellStreamInput struct {
 	Description string `json:"description"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPowerShellStreamTool 创建 PowerShellStreamTool 实例（流式执行）。
@@ -241,3 +246,5 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return streamFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

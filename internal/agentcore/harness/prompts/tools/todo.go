@@ -14,6 +14,9 @@ type TodoModifyMetadataProvider struct{}
 // TodoGetMetadataProvider todo_get 工具元数据提供者
 type TodoGetMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // todoCreateDescription todo_create 工具双语描述

@@ -37,7 +37,10 @@ type BashInput struct {
 	ShellType string `json:"shell_type"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
 
 const (
 	// bashDefaultTimeout 默认超时秒数。
@@ -52,8 +55,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// logComponent 日志组件常量
-	logComponent = logger.ComponentAgentCore
 
 	// validShellTypes 合法的 shell 类型集合。
 	// 对齐 Python: _VALID_SHELL_TYPES (bash/_tool.py L57)

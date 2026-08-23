@@ -24,6 +24,7 @@ const (
 	stateFileName = "skills_state.json"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json

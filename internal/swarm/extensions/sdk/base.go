@@ -30,11 +30,13 @@ type BaseExtensionImpl struct {
 	configCache   map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ManifestFilename 扩展清单文件名，对齐 Python MANIFEST_FILENAME
 const ManifestFilename = "extension.yaml"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Metadata 返回扩展元数据，对齐 Python BaseExtension.metadata @property

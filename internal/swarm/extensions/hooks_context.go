@@ -63,6 +63,11 @@ type SystemPromptHookContext struct {
 	SkillDir *string `json:"skill_dir,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ToMap 将 MemoryHookContext 转为字典，对齐 Python MemoryHookContext.to_dict()
@@ -113,3 +118,5 @@ func (c *SystemPromptHookContext) ToMap() map[string]any {
 	}
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

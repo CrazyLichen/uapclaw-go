@@ -34,38 +34,48 @@ type milvusClientAdapter struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateCollection 创建集合。
 func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
 	return a.client.CreateCollection(ctx, option)
 }
 
+// DropCollection 删除集合。
 func (a *milvusClientAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error {
 	return a.client.DropCollection(ctx, option)
 }
 
+// HasCollection 检查集合是否存在。
 func (a *milvusClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error) {
 	return a.client.HasCollection(ctx, option)
 }
 
+// DescribeCollection 获取集合描述信息。
 func (a *milvusClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error) {
 	return a.client.DescribeCollection(ctx, option)
 }
 
+// Insert 插入数据。
 func (a *milvusClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
 	return a.client.Insert(ctx, option)
 }
 
+// Search 执行向量搜索。
 func (a *milvusClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
 	return a.client.Search(ctx, option)
 }
 
+// Delete 删除数据。
 func (a *milvusClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error) {
 	return a.client.Delete(ctx, option)
 }
 
+// ListCollections 列出所有集合名称。
 func (a *milvusClientAdapter) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error) {
 	return a.client.ListCollections(ctx, option)
 }
 
+// LoadCollection 加载集合到内存。
 func (a *milvusClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error {
 	task, err := a.client.LoadCollection(ctx, option)
 	if err != nil {
@@ -74,6 +84,7 @@ func (a *milvusClientAdapter) LoadCollection(ctx context.Context, option milvusc
 	return task.Await(ctx)
 }
 
+// Flush 刷新数据到持久化存储。
 func (a *milvusClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error {
 	task, err := a.client.Flush(ctx, option)
 	if err != nil {
@@ -85,6 +96,7 @@ func (a *milvusClientAdapter) Flush(ctx context.Context, option milvusclient.Flu
 	return nil
 }
 
+// CreateIndex 创建索引。
 func (a *milvusClientAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
 	task, err := a.client.CreateIndex(ctx, option)
 	if err != nil {
@@ -96,10 +108,12 @@ func (a *milvusClientAdapter) CreateIndex(ctx context.Context, option milvusclie
 	return nil
 }
 
+// DescribeIndex 获取索引描述信息。
 func (a *milvusClientAdapter) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...interface{}) (milvusclient.IndexDescription, error) {
 	return a.client.DescribeIndex(ctx, option)
 }
 
+// Close 关闭客户端连接。
 func (a *milvusClientAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)
 }

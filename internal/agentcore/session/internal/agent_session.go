@@ -48,6 +48,8 @@ type AgentSessionOption func(*AgentSession)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -62,7 +64,7 @@ type AgentSessionOption func(*AgentSession)
 //   - tracer: nil 时留空（⤵️ 5.11 回填：自动创建 Tracer() + init(swm)）
 //   - agentSpan: nil 时留空（⤵️ 5.11 回填：自动创建 tracer.create_agent_span()）
 func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "new_agent_session").
 		Str("session_id", sessionID).
 		Msg("创建内部 AgentSession")

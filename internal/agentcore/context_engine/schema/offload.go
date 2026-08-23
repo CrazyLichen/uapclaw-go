@@ -13,7 +13,7 @@ import (
 //
 // 4 个 Offload 子类型均实现此接口，用于防重复卸载检查：
 //
-//	_, ok := msg.(Offloadable)
+// 示例: _, ok := msg.(Offloadable)
 //
 // 对应 Python: isinstance(message, OffloadMixin)
 type Offloadable interface {

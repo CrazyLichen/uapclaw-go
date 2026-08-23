@@ -268,7 +268,7 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 	messageSize := mc.Len() + len(messagesToAdd)
 
 	if dc.messageNumThreshold > 0 && messageSize > dc.messageNumThreshold {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "DialogueCompressor_triggered").
 			Int("message_size", messageSize).
 			Int("threshold", dc.messageNumThreshold).
@@ -283,7 +283,7 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 	allMsgs, _ := mc.GetMessages(0, true)
 	tokens := dc.countMessagesTokens(mc, allMsgs)
 	if tokens > dc.tokenThreshold {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("event_type", "DialogueCompressor_triggered").
 			Int("tokens", tokens).
 			Int("threshold", dc.tokenThreshold).
@@ -316,7 +316,7 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 	if err != nil {
 		// MODEL_CALL_FAILED 时降级跳过
 		if isModelCallFailedError(err) {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("processor_type", dc.ProcessorType()).
 				Err(err).
 				Msg("压缩模型调用失败，跳过当前处理器")

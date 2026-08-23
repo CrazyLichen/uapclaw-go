@@ -149,10 +149,10 @@ func WithAllowedTools(tools map[string]bool) VerificationRailOption {
 // Init 初始化钩子：捕获 system_prompt_builder。
 //
 // 对齐 Python: VerificationRail.init(agent)
-// Python L115-123: self._agent = agent; self.system_prompt_builder = agent.system_prompt_builder
+// 对齐 Python L115-123： self._agent = agent; self.system_prompt_builder = agent.system_prompt_builder
 func (r *VerificationRail) Init(agent agentinterfaces.BaseAgent) error {
 	r.promptBuilder = agent.SystemPromptBuilder()
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Int("allowed_tools_count", len(r.allowedTools)).
 		Msg("[VerificationRail] 已初始化")
 	return nil
@@ -166,7 +166,7 @@ func (r *VerificationRail) Init(agent agentinterfaces.BaseAgent) error {
 // 3. 先移除旧 section 再添加新 section，避免重复累积
 //
 // 对齐 Python: VerificationRail.before_model_call(ctx)
-// Python L125-163
+// 对齐 Python L125-163
 func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.promptBuilder == nil {
 		return nil
@@ -174,7 +174,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 	// 构建约束提醒 section
 	// 对齐 Python L156-161:
-	//   reminder = PromptSection(name=_REMINDER_SECTION_NAME, content={"en": _REMINDER_EN, "cn": _REMINDER_CN}, priority=_REMINDER_PRIORITY)
+	//   Python: reminder = PromptSection(name=_REMINDER_SECTION_NAME, content={"en": _REMINDER_EN, "cn": _REMINDER_CN}, priority=_REMINDER_PRIORITY)
 	section := saprompt.PromptSection{
 		Name:     reminderSectionName,
 		Content:  map[string]string{"en": reminderEN, "cn": reminderCN},
@@ -182,12 +182,12 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	}
 
 	// 对齐 Python L161-162:
-	//   self.system_prompt_builder.remove_section(_REMINDER_SECTION_NAME)
-	//   self.system_prompt_builder.add_section(reminder)
+	//   Python: self.system_prompt_builder.remove_section(_REMINDER_SECTION_NAME)
+	//   Python: self.system_prompt_builder.add_section(reminder)
 	r.promptBuilder.RemoveSection(reminderSectionName)
 	r.promptBuilder.AddSection(section)
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("language", r.promptBuilder.Language()).
 		Msg("[VerificationRail] 已注入约束提醒 section")
 
@@ -203,7 +203,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 //     提供清晰的说明而非让 SysOperation 层弹出晦涩的"Access denied"错误
 //
 // 对齐 Python: VerificationRail.before_tool_call(ctx)
-// Python L165-233
+// 对齐 Python L165-233
 func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L179-180: if ctx.extra.get("_skip_tool"): return
 	if _, skip := cbc.Extra()["_skip_tool"]; skip {
@@ -234,7 +234,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 				"Permitted tools: %s.",
 			toolName, strings.Join(sortedTools, ", "),
 		)
-		logger.Info(logger.ComponentAgentCore).
+		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Msg("[VerificationRail] 已拦截工具")
 
@@ -283,7 +283,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 					"Use paths relative to '%s' or absolute paths within it.",
 				rawPath, root, root,
 			)
-			logger.Info(logger.ComponentAgentCore).
+			logger.Info(logComponent).
 				Str("raw_path", rawPath).
 				Str("tool_name", toolName).
 				Str("workspace_root", root).
@@ -301,7 +301,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 // rejectTool 标记工具调用为跳过并注入错误结果。
 //
 // 对齐 Python: VerificationRail._reject_tool(ctx, error_msg)
-// Python L235-248
+// 对齐 Python L235-248
 func (r *VerificationRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, inputs *agentinterfaces.ToolCallInputs, errorMsg string) {
 	// 对齐 Python L242-243: tool_call_id = tool_call.id if tool_call else ""
 	toolCallID := ""
@@ -313,9 +313,9 @@ func (r *VerificationRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 	msg := llmschema.NewToolMessage(toolCallID, errorMsg)
 
 	// 对齐 Python L245-247:
-	//   ctx.extra["_skip_tool"] = True
-	//   ctx.inputs.tool_result = {"error": error_msg}
-	//   ctx.inputs.tool_msg = msg
+	//   Python: ctx.extra["_skip_tool"] = True
+	//   Python: ctx.inputs.tool_result = {"error": error_msg}
+	//   Python: ctx.inputs.tool_msg = msg
 	cbc.Extra()["_skip_tool"] = true
 	inputs.ToolResult = map[string]any{"error": errorMsg}
 	inputs.ToolMsg = msg

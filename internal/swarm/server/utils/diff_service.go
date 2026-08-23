@@ -47,7 +47,7 @@ type TurnDiff struct {
 type FileDiff struct {
 	// FilePath 文件路径
 	FilePath string `json:"filePath"`
-	// Hunks diff hunks 列表
+	// Hunks diff 块列表
 	Hunks []Hunk `json:"hunks"`
 	// IsNewFile 是否是新建文件
 	IsNewFile bool `json:"isNewFile"`
@@ -91,7 +91,7 @@ type FileRestoreInfo struct {
 	Action string `json:"action"`
 }
 
-// historyRecord session history 记录
+// historyRecord 会话历史记录
 type historyRecord struct {
 	Role      string  `json:"role"`
 	Content   string  `json:"content"`
@@ -108,16 +108,18 @@ type opEntry struct {
 
 // opCode diff 操作码，对齐 Python difflib.SequenceMatcher.get_opcodes() 输出
 type opCode struct {
-	tag string // "equal", "delete", "insert", "replace"
-	i1  int    // old 起始索引
-	i2  int    // old 结束索引（exclusive）
-	j1  int    // new 起始索引
-	j2  int    // new 结束索引（exclusive）
+	tag string // 操作标签："equal"、"delete"、"insert"、"replace"
+	i1  int    // 旧文件起始索引
+	i2  int    // 旧文件结束索引（不含）
+	j1  int    // 新文件起始索引
+	j2  int    // 新文件结束索引（不含）
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentGateway
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -143,7 +145,7 @@ func GetDiffService() *DiffService {
 // GetTurnDiffs 获取 session 的所有 turn diff（完整信息）。
 // 对齐 Python: DiffService.get_turn_diffs(session_id, project_dir) (line 26-37)
 //
-// Returns: turn diff 列表，按时间倒序排列（most recent first）
+// 返回值：turn diff 列表，按时间倒序排列（最近的优先）
 func (ds *DiffService) GetTurnDiffs(sessionID string, projectDir string) []TurnDiff {
 	turns := ds.computeTurnDiffs(sessionID, projectDir)
 	// 对齐 Python: list(reversed(turns))
@@ -465,7 +467,7 @@ func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map
 
 		var fileData map[string]any
 		if err := json.Unmarshal(data, &fileData); err != nil {
-			logger.Warn(logger.ComponentGateway).
+			logger.Warn(logComponent).
 				Str("history_file", historyFile).
 				Err(err).
 				Msg("读取 agent history 文件失败")

@@ -73,6 +73,9 @@ type Subscription struct {
 	ts *topicSubscription
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// ErrQueueNotRunning 队列未运行
@@ -107,7 +110,7 @@ func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueIn
 // 对应 Python: MessageQueueInMemory.start()
 func (q *MessageQueueInMemory) Start() {
 	q.running.Store(true)
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "message_queue_started").
 		Msg("消息队列已启动")
 }
@@ -130,7 +133,7 @@ func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 		delete(q.topics, topic)
 	}
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "message_queue_stopped").
 		Msg("消息队列已停止")
 	return nil
@@ -179,7 +182,7 @@ func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) er
 	close(ts.ch)
 	delete(q.topics, topic)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "message_queue_unsubscribed").
 		Str("topic", topic).
 		Msg("topic 订阅已取消")
@@ -264,7 +267,7 @@ func (ts *topicSubscription) activate() {
 
 	go ts.consume(ctx)
 
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "subscription_activated").
 		Str("topic", ts.topic).
 		Msg("topic 订阅已激活")
@@ -283,7 +286,7 @@ func (ts *topicSubscription) deactivate() {
 	if ts.done != nil {
 		<-ts.done
 	}
-	logger.Info(logger.ComponentCommon).
+	logger.Info(logComponent).
 		Str("event_type", "subscription_deactivated").
 		Str("topic", ts.topic).
 		Msg("topic 订阅已停用")
@@ -316,7 +319,7 @@ func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMess
 	ts.handlerMu.RUnlock()
 
 	if handler == nil {
-		logger.Warn(logger.ComponentCommon).
+		logger.Warn(logComponent).
 			Str("event_type", "message_handler_not_set").
 			Str("topic", ts.topic).
 			Msg("消息处理回调未设置，丢弃消息")

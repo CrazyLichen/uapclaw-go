@@ -27,18 +27,18 @@ import (
 //
 // 对齐 Python:
 //
-//	if value is None or isinstance(value, (str, int, float, bool)):
-//	    return value
-//	if isinstance(value, (list, tuple)):
-//	    return [_json_safe(item) for item in value]
-//	if isinstance(value, dict):
-//	    return {str(key): _json_safe(item) for key, item in value.items()}
-//	model_dump = getattr(value, "model_dump", None)
-//	if callable(model_dump):
-//	    dumped = model_dump()
-//	    if isinstance(dumped, dict):
-//	        return _json_safe(dumped)
-//	return str(value)
+//	Python: if value is None or isinstance(value, (str, int, float, bool)):
+//	    Python: return value
+//	Python: if isinstance(value, (list, tuple)):
+//	    Python: return [_json_safe(item) for item in value]
+//	Python: if isinstance(value, dict):
+//	    Python: return {str(key): _json_safe(item) for key, item in value.items()}
+//	Python: model_dump = getattr(value, "model_dump", None)
+//	Python: if callable(model_dump):
+//	    Python: dumped = model_dump()
+//	    Python: if isinstance(dumped, dict):
+//	        Python: return _json_safe(dumped)
+//	Python: return str(value)
 //
 // 对应 Python: _json_safe(value)
 func JSONSafe(value any) any {
@@ -84,19 +84,19 @@ func JSONSafe(value any) any {
 //
 // 对齐 Python:
 //
-//	if isinstance(message, dict):
-//	    return _json_safe(message)
-//	role = getattr(message, "role", None)
-//	if role is not None:
-//	    item = {"role": role, "content": _json_safe(getattr(message, "content", ""))}
-//	    ...
-//	    return item
-//	model_dump = getattr(message, "model_dump", None)
-//	if callable(model_dump):
-//	    dumped = model_dump()
-//	    if isinstance(dumped, dict):
-//	        return _json_safe(dumped)
-//	return {"role": "unknown", "content": str(message)}
+//	Python: if isinstance(message, dict):
+//	    Python: return _json_safe(message)
+//	Python: role = getattr(message, "role", None)
+//	Python: if role is not None:
+//	    Python: item = {"role": role, "content": _json_safe(getattr(message, "content", ""))}
+//	    Python: ...
+//	    Python: return item
+//	Python: model_dump = getattr(message, "model_dump", None)
+//	Python: if callable(model_dump):
+//	    Python: dumped = model_dump()
+//	    Python: if isinstance(dumped, dict):
+//	        Python: return _json_safe(dumped)
+//	Python: return {"role": "unknown", "content": str(message)}
 //
 // 对应 Python: Trajectory._message_to_dict(message)
 func MessageToDict(msg any) map[string]any {
@@ -130,11 +130,11 @@ func MessageToDict(msg any) map[string]any {
 //
 // 对齐 Python:
 //
-//	if hasattr(response, "content"):
-//	    return str(response.content or "")
-//	if isinstance(response, dict):
-//	    return str(response.get("content", "") or response.get("text", "") or "")
-//	return str(response or "")
+//	Python: if hasattr(response, "content"):
+//	    Python: return str(response.content or "")
+//	Python: if isinstance(response, dict):
+//	    Python: return str(response.get("content", "") or response.get("text", "") or "")
+//	Python: return str(response or "")
 //
 // 对应 Python: _response_to_text(response)
 func responseToText(response any) string {

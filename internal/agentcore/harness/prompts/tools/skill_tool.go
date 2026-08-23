@@ -5,6 +5,9 @@ package tools
 // SkillToolMetadataProvider skill_tool 工具元数据提供者
 type SkillToolMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // skillToolDescription skill_tool 工具双语描述

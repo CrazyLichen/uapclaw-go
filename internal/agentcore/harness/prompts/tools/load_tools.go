@@ -5,6 +5,9 @@ package tools
 // LoadToolsMetadataProvider load_tools 工具元数据提供者
 type LoadToolsMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // loadToolsDescription load_tools 工具双语描述

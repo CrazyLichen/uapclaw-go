@@ -30,6 +30,8 @@ const (
 
 // SpawnProcess 创建子进程运行 Agent，返回 SpawnedProcessHandle。
 // 对齐 Python: spawn_process() (process_manager.py)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func SpawnProcess(
@@ -82,7 +84,7 @@ func SpawnProcess(
 	go drainStderr(stderrPipe)
 
 	commandStr := fmt.Sprintf("%s %s", exePath, SpawnChildSubCommand)
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_PROCESS_START").
 		Str("process_id", processID).
 		Str("command", commandStr).
@@ -104,7 +106,7 @@ func SpawnProcess(
 		return nil, fmt.Errorf("发送初始消息失败: %w", err)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event_type", "SPAWN_PROCESS_SUCCESS").
 		Str("process_id", processID).
 		Int("pid", cmd.Process.Pid).
@@ -124,7 +126,7 @@ func getSelfExecutable() (string, error) {
 func drainStderr(stderrPipe io.Reader) {
 	scanner := bufio.NewScanner(stderrPipe)
 	for scanner.Scan() {
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Debug(logComponent).
 			Str("event_type", "SPAWN_CHILD_STDERR").
 			Str("line", scanner.Text()).
 			Msg("子进程 stderr")

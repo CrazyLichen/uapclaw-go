@@ -27,6 +27,7 @@ type McpRail struct {
 	tools []tool.Tool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -78,7 +79,7 @@ func (r *McpRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 对齐 Python L28-30: list_tool = ListMcpResourcesTool(lang, agent_id)
-	//                     read_tool = ReadMcpResourceTool(lang, agent_id)
+	// Python: read_tool = ReadMcpResourceTool(lang, agent_id)
 	r.tools = []tool.Tool{
 		mcptools.NewListMcpResourcesTool(language, agentID),
 		mcptools.NewReadMcpResourceTool(language, agentID),
@@ -112,9 +113,9 @@ func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		return nil
 	}
 
-	// 对齐 Python L42-48: for tool in self.tools:
-	//   name = tool.card.name; ability_manager.remove(name)
-	//   tool_id = tool.card.id; Runner.resource_mgr.remove_tool(tool_id)
+	// 对齐 Python L42-48: Python: for tool in self.tools:
+	//   Python: name = tool.card.name; ability_manager.remove(name)
+	//   Python: tool_id = tool.card.id; Runner.resource_mgr.remove_tool(tool_id)
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range r.tools {

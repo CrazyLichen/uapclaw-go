@@ -117,7 +117,6 @@ type ConditionalFilter struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -252,7 +251,7 @@ func (f *CircuitBreakerFilter) RecordFailure(event string, callbackName string) 
 
 	if f.failures[key] >= f.FailureThreshold {
 		f.isOpen[key] = true
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("event", event).
 			Str("callback_name", callbackName).
 			Str("key", key).
@@ -313,7 +312,7 @@ func (f *LoggingFilter) Name() string { return f.name }
 //
 // 对应 Python: LoggingFilter.filter()
 func (f *LoggingFilter) Filter(_ context.Context, event string, callbackName string, data any) FilterResult {
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("event", event).
 		Str("callback_name", callbackName).
 		Any("data", data).

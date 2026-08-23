@@ -3,10 +3,10 @@ package agent
 import (
 	"context"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -38,7 +38,7 @@ type TeamMember struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
-const logComponent = logger.ComponentCommon
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

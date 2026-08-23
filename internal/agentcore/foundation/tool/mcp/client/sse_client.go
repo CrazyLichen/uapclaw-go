@@ -35,6 +35,7 @@ type SseClient struct {
 	mcpClient *mcpclient.Client
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// mcpProtocolVersion MCP 协议版本
@@ -120,7 +121,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 	}
 	// 所有认证结果均失败时记录 Warn 日志
 	if authSuccessCount == 0 && authFailCount > 0 {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Int("auth_fail_count", authFailCount).
 			Msg("SSE 客户端所有认证结果均失败，将以无认证模式连接")
@@ -186,7 +187,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 				exception.WithParam("card", c.serverName),
 			)
 		}
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Debug(logComponent).
 			Str("server_name", c.serverName).
 			Int("query_param_count", len(mergedQueryParams)).
 			Msg("SSE 客户端注入认证查询参数")
@@ -195,7 +196,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 	// 创建 SSE 客户端
 	client, err := mcpclient.NewSSEMCPClient(effectivePath, transportOpts...)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
@@ -210,7 +211,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 
 	// 启动传输
 	if err := client.Start(ctx); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
@@ -236,7 +237,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 		},
 	}
 	if _, err := client.Initialize(ctx, initReq); err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
@@ -254,7 +255,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 	c.mcpClient = client
 	c.isConnected = true
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_path", c.config.ServerPath).
 		Str("server_name", c.serverName).
 		Msg("SSE 客户端连接成功")
@@ -269,7 +270,7 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 	}
 	if c.mcpClient != nil {
 		if err := c.mcpClient.Close(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Err(err).
 				Str("server_name", c.serverName).
 				Msg("SSE 客户端断开连接失败")
@@ -278,7 +279,7 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 	}
 	c.isConnected = false
 	c.mcpClient = nil
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("SSE 客户端已断开连接")
 	return nil
@@ -295,7 +296,7 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 
 	resp, err := c.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("SSE 客户端列出工具失败")
@@ -336,7 +337,7 @@ func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -391,7 +392,7 @@ func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error)
 
 	resp, err := c.mcpClient.ListResources(ctx, mcp.ListResourcesRequest{})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Msg("SSE 客户端列出资源失败")
@@ -425,7 +426,7 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]
 		},
 	})
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("uri", uri).
@@ -445,3 +446,5 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]
 func (c *SseClient) Close() error {
 	return c.Disconnect(context.Background())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

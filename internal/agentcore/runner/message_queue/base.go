@@ -211,7 +211,7 @@ func (m *InvokeQueueMessage) WaitResponse(ctx context.Context) (any, error) {
 //
 // 对应 Python: queue_message.response.set_result(result) /
 //
-//	queue_message.response.set_exception(err)
+//	Python: queue_message.response.set_exception(err)
 func (m *InvokeQueueMessage) CompleteResponse(result any, err error) {
 	select {
 	case m.response <- invokeResponse{result: result, err: err}:

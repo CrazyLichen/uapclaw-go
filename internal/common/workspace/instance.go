@@ -54,6 +54,7 @@ type instanceEntry struct {
 	Ports     map[string]int `yaml:"ports,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// BasePortAgentServer 默认实例的 AgentServer 基准端口。

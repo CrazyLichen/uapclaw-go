@@ -269,8 +269,8 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 
 	// 步骤 3: 按 Agent 定义的 tools 字段进一步过滤
-	// 对齐 Python: parent_tool_cards = _filter_tool_cards(all_tool_cards,
-	//             allowed_tools=list(spec.tools) if spec.tools else ["*"], disallowed_tools=None)
+	// 对齐 Python: Python: parent_tool_cards = _filter_tool_cards(all_tool_cards,
+	//             Python: allowed_tools=list(spec.tools) if spec.tools else ["*"], disallowed_tools=None)
 	// 注意：_agent_def_to_subagent_config() 已将 disallowed_tools 合并进 spec.tools（Python 中是 []string），
 	// 所以这里的 disallowed_tools 传 nil。
 	// Go 中需要自己构建等价于 Python spec.tools 的字符串列表

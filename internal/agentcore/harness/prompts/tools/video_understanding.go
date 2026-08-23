@@ -5,6 +5,9 @@ package tools
 // VideoUnderstandingMetadataProvider video_understanding 工具元数据提供者
 type VideoUnderstandingMetadataProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // videoUnderstandingDescription video_understanding 工具双语描述

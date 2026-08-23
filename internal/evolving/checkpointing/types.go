@@ -434,7 +434,7 @@ func FromDictEvolutionRecord(data map[string]any) (*EvolutionRecord, error) {
 	}
 
 	// 对齐 Python: usage_stats_data = data.get("usage_stats")
-	//   usage_stats = UsageStats.from_dict(usage_stats_data) if usage_stats_data else UsageStats()
+	// Python: usage_stats = UsageStats.from_dict(usage_stats_data) if usage_stats_data else UsageStats()
 	var usageStats *UsageStats
 	if v, ok := data["usage_stats"]; ok && v != nil {
 		if statsMap, ok := v.(map[string]any); ok {

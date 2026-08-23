@@ -22,6 +22,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// EvolutionStore 接口 — 用于 loadSkillContent / loadExistingEvolutionsSummary。
+// 对齐 Python: EvolutionStore；签名对齐 checkpointing.EvolutionStore 结构体方法。
+type EvolutionStore interface {
+	// ReadSkillContent 读取技能内容
+	ReadSkillContent(ctx context.Context, skillName string) (string, error)
+	// LoadFullEvolutionLog 加载完整演进日志
+	LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog
+}
+
 // TeamSkillExperienceOptimizer 团队技能经验优化器。
 //
 // 对应 Python: TeamSkillExperienceOptimizer
@@ -33,15 +42,6 @@ type TeamSkillExperienceOptimizer struct {
 	recordLLMPolicy llm_resilience.LLMInvokePolicy
 	// evolutionStore 演进存储接口（可选，用于加载技能内容和已有演进）
 	evolutionStore EvolutionStore
-}
-
-// EvolutionStore 接口 — 用于 loadSkillContent / loadExistingEvolutionsSummary。
-// 对齐 Python: EvolutionStore；签名对齐 checkpointing.EvolutionStore 结构体方法。
-type EvolutionStore interface {
-	// ReadSkillContent 读取技能内容
-	ReadSkillContent(ctx context.Context, skillName string) (string, error)
-	// LoadFullEvolutionLog 加载完整演进日志
-	LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -596,55 +596,6 @@ func (o *TeamSkillExperienceOptimizer) RegenerateBody(ctx context.Context, skill
 	return body, nil
 }
 
-// callLLM 调用 LLM，有 policy 时走 InvokeTextWithRetry，无 policy 时直接 invoke。
-//
-// 对齐 Python: TeamSkillExperienceOptimizer._call_llm(prompt, retry_prompt, policy, is_result_usable)
-func (o *TeamSkillExperienceOptimizer) callLLM(ctx context.Context, prompt string, retryPrompt string, policy *llm_resilience.LLMInvokePolicy, isResultUsable func(string) bool) (string, error) {
-	logger.Info(logComponent).
-		Str("model", o.model).
-		Int("prompt_len", len(prompt)).
-		Msg("[TeamSkillOptimizer] LLM call start")
-
-	t0 := time.Now()
-	var result string
-	var err error
-
-	if policy == nil {
-		// 对齐 Python: 无 policy → 走 InvokeTextWithRetry 单次尝试
-		singlePolicy := llm_resilience.LLMInvokePolicy{
-			MaxAttempts:        1,
-			AttemptTimeoutSecs: 120,
-			TotalBudgetSecs:    120,
-		}
-		result, err = llm_resilience.InvokeTextWithRetry(ctx, o.llm, o.model, prompt, singlePolicy)
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("[TeamSkillOptimizer] LLM call failed")
-			return "", err
-		}
-	} else {
-		opts := []llm_resilience.InvokeRetryOption{}
-		if retryPrompt != "" {
-			opts = append(opts, llm_resilience.WithRetryPrompt(retryPrompt))
-		}
-		if isResultUsable != nil {
-			opts = append(opts, llm_resilience.WithIsResultUsable(isResultUsable))
-		}
-		result, err = llm_resilience.InvokeTextWithRetry(ctx, o.llm, o.model, prompt, *policy, opts...)
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("[TeamSkillOptimizer] LLM call failed")
-			return "", err
-		}
-	}
-
-	elapsed := time.Since(t0).Seconds()
-	logger.Info(logComponent).
-		Float64("elapsed_sec", elapsed).
-		Int("response_len", len(result)).
-		Msg("[TeamSkillOptimizer] LLM call done")
-
-	return result, nil
-}
-
 // RetryParseDrafts 重试解析：截断→重新生成 / 格式错误→TEAM_JSON_FIX / attempt≥3→TEAM_JSON_FIX_STRICT。
 //
 // 对齐 Python: TeamSkillExperienceOptimizer.retry_parse_drafts(...)
@@ -727,6 +678,55 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// callLLM 调用 LLM，有 policy 时走 InvokeTextWithRetry，无 policy 时直接 invoke。
+//
+// 对齐 Python: TeamSkillExperienceOptimizer._call_llm(prompt, retry_prompt, policy, is_result_usable)
+func (o *TeamSkillExperienceOptimizer) callLLM(ctx context.Context, prompt string, retryPrompt string, policy *llm_resilience.LLMInvokePolicy, isResultUsable func(string) bool) (string, error) {
+	logger.Info(logComponent).
+		Str("model", o.model).
+		Int("prompt_len", len(prompt)).
+		Msg("[TeamSkillOptimizer] LLM call start")
+
+	t0 := time.Now()
+	var result string
+	var err error
+
+	if policy == nil {
+		// 对齐 Python: 无 policy → 走 InvokeTextWithRetry 单次尝试
+		singlePolicy := llm_resilience.LLMInvokePolicy{
+			MaxAttempts:        1,
+			AttemptTimeoutSecs: 120,
+			TotalBudgetSecs:    120,
+		}
+		result, err = llm_resilience.InvokeTextWithRetry(ctx, o.llm, o.model, prompt, singlePolicy)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("[TeamSkillOptimizer] LLM call failed")
+			return "", err
+		}
+	} else {
+		opts := []llm_resilience.InvokeRetryOption{}
+		if retryPrompt != "" {
+			opts = append(opts, llm_resilience.WithRetryPrompt(retryPrompt))
+		}
+		if isResultUsable != nil {
+			opts = append(opts, llm_resilience.WithIsResultUsable(isResultUsable))
+		}
+		result, err = llm_resilience.InvokeTextWithRetry(ctx, o.llm, o.model, prompt, *policy, opts...)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("[TeamSkillOptimizer] LLM call failed")
+			return "", err
+		}
+	}
+
+	elapsed := time.Since(t0).Seconds()
+	logger.Info(logComponent).
+		Float64("elapsed_sec", elapsed).
+		Int("response_len", len(result)).
+		Msg("[TeamSkillOptimizer] LLM call done")
+
+	return result, nil
+}
 
 // buildEvolutionContext 从 onlineContexts 查找，trajectory 为 nil 时填充 default_trajectory。
 //

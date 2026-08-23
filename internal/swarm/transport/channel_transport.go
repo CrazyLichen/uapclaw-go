@@ -40,7 +40,7 @@ const (
 )
 
 // logComponentCh 日志组件
-const logComponentCh = logger.ComponentCommon
+const logComponentCh = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

@@ -29,9 +29,9 @@ type AdmissionTicket struct {
 //
 // 状态转换：
 //
-//	OPEN    --Admit()-------->      OPEN, inflight++
+//	状态转换: OPEN    --Admit()-------->      OPEN, inflight++
 //	OPEN    --CloseAndDrain()--> CLOSING --(inflight==0)--> DRAINED
-//	CLOSING --Admit()-------->      nil (rejected)
+//	状态转换: CLOSING --Admit()-------->      nil (rejected)
 //	*       --ConsumeDone()-->      inflight--; signal drained when zero
 //
 // Python 使用 asyncio.Lock 保护状态（单线程协程）。

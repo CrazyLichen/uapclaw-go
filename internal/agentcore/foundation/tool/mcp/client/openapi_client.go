@@ -68,6 +68,12 @@ type openapiRequestBodyInfo struct {
 	schema      map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：OpenApiClient 实现 McpClient 接口
@@ -99,7 +105,7 @@ func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) err
 
 		spec, err := loadOpenAPISpec(filePath)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
+			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("server_name", c.serverName).
 				Str("file_path", filePath).
@@ -145,7 +151,7 @@ func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) err
 	}
 	c.isConnected = true
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(c.tools)).
 		Msg("OpenAPI 客户端连接成功")
@@ -161,7 +167,7 @@ func (c *OpenApiClient) Disconnect(_ context.Context) error {
 	c.isConnected = false
 	c.tools = nil
 	c.toolCards = nil
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("OpenAPI 客户端已断开连接")
 	return nil
@@ -195,7 +201,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Str("method", info.method).
@@ -205,7 +211,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 	// 使用 Schema 驱动的请求构建
 	req, err := buildRequestFromSchema(info.method, c.baseURL, info.path, info.parameters, info.requestBody, arguments)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -220,7 +226,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -236,7 +242,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
@@ -248,7 +254,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 		)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Int("status_code", resp.StatusCode).
@@ -472,7 +478,7 @@ func (c *OpenApiClient) getUniqueName(name string) string {
 		return name
 	}
 	newName := fmt.Sprintf("%s_%d", name, c.usedNames[name])
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("original_name", name).
 		Str("new_name", newName).
 		Msg("OpenAPI 工具名称冲突，已重命名")
@@ -1331,7 +1337,7 @@ func loadOpenAPISpec(filePath string) (*openapi3.T, error) {
 	// 验证规格（仅警告，不阻断）
 	ctx := context.Background()
 	if err := spec.Validate(ctx); err != nil {
-		logger.Warn(logger.ComponentAgentCore).
+		logger.Warn(logComponent).
 			Str("file_path", filePath).
 			Err(err).
 			Msg("OpenAPI 规格验证有警告，继续使用")

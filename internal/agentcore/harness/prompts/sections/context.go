@@ -449,7 +449,7 @@ func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspac
 		var fullPath string
 		if fileKey == "MEMORY.md" {
 			// 对齐 Python: memory_dir = workspace.get_node_path(WorkspaceNode.MEMORY)
-			// full_path = memory_dir / WorkspaceNode.MEMORY_MD.value
+			// Python: full_path = memory_dir / WorkspaceNode.MEMORY_MD.value
 			memoryDir := ws.GetNodePath(hworkspace.WorkspaceNodeMemory)
 			if memoryDir == nil {
 				continue

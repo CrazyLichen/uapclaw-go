@@ -12,6 +12,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // dailyMemoryPattern 日期文件名正则。对齐 Python: re.match(r"^\d{4}-\d{2}-\d{2}\.md$", basename)
@@ -82,7 +85,7 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	}
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Memory search failed")
+		logger.Error(logComponent).Err(err).Msg("Memory search failed")
 		return &MemorySearchResult{Disabled: true, Error: err.Error()}
 	}
 	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
@@ -124,7 +127,7 @@ func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path 
 	}
 	rf, err := toolCtx.Manager.ReadFile(ctx, resolvedPath, fromLine, lines)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Msg("Memory get failed")
+		logger.Error(logComponent).Err(err).Msg("Memory get failed")
 		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: err.Error()}
 	}
 	return &MemoryGetResult{
@@ -147,7 +150,7 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("Read memory failed, no available sys_operation")
+		logger.Error(logComponent).Msg("Read memory failed, no available sys_operation")
 		return &ReadMemoryResult{Success: false, Path: path, Error: "Read failed, no available sys_operation."}
 	}
 	// 对齐 Python: 使用 line_range 读取
@@ -193,7 +196,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("Memory write failed, no available sys_operation")
+		logger.Error(logComponent).Msg("Memory write failed, no available sys_operation")
 		return &WriteMemoryResult{Success: false, Path: path, Error: "Memory write failed, no available sys_operation."}
 	}
 	fsOpts := []sysop.FsOption{
@@ -206,7 +209,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	}
 	writeResult, err := sysOp.Fs().WriteFile(ctx, resolvedPath, content, fsOpts...)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("Write failed")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("Write failed")
 		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
 	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
@@ -214,7 +217,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	if appendMode {
 		action = "Appended to"
 	}
-	logger.Info(logger.ComponentAgentCore).Str("action", action).Str("path", resolvedPath).Msg("Memory file written")
+	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("Memory file written")
 	return &WriteMemoryResult{
 		Success:     true,
 		Path:        resolvedPath,
@@ -237,7 +240,7 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logger.ComponentAgentCore).Msg("Edit failed, no available sys_operation")
+		logger.Error(logComponent).Msg("Edit failed, no available sys_operation")
 		return &EditMemoryResult{Success: false, Path: path, Error: "Edit failed, no available sys_operation."}
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolvedPath)
@@ -267,10 +270,10 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		sysop.WithFsAppendNewline(false),
 	)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Err(err).Str("path", resolvedPath).Msg("Edit write failed")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("Edit write failed")
 		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
-	logger.Info(logger.ComponentAgentCore).Str("path", resolvedPath).Msg("Edited file")
+	logger.Info(logComponent).Str("path", resolvedPath).Msg("Edited file")
 	return &EditMemoryResult{
 		Success:  true,
 		Path:     resolvedPath,

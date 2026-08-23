@@ -47,6 +47,8 @@ type ChainSession struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -73,7 +75,7 @@ func (cs *ChainSession) Load() error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "chain_session_load").
 		Str("session_id", cs.SessionID).
 		Str("session_dir", cs.sessionDir).
@@ -111,7 +113,7 @@ func (cs *ChainSession) Load() error {
 	if _, ok := stateData["data"]; ok {
 		container, err := GetFactory().Load(cs.dataContainerType, cs.AgentID, cs.SessionID, stateData["data"])
 		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
+			logger.Warn(logComponent).
 				Str("action", "chain_session_load").
 				Str("session_id", cs.SessionID).
 				Err(err).
@@ -127,7 +129,7 @@ func (cs *ChainSession) Load() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 下游目录不存在不是错误，只跳过下游加载
-			logger.Debug(logger.ComponentAgentCore).
+			logger.Debug(logComponent).
 				Str("action", "chain_session_load").
 				Str("session_id", cs.SessionID).
 				Msg("下游目录不存在，跳过下游加载")
@@ -186,7 +188,7 @@ func (cs *ChainSession) Load() error {
 
 		cs.downstreamPolicies[[2]string{targetAgent, targetSession}] = policy
 
-		logger.Debug(logger.ComponentAgentCore).
+		logger.Debug(logComponent).
 			Str("action", "chain_session_load_link").
 			Str("session_id", cs.SessionID).
 			Str("target_agent", targetAgent).
@@ -194,7 +196,7 @@ func (cs *ChainSession) Load() error {
 			Msg("加载下游关系")
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "chain_session_loaded").
 		Str("session_id", cs.SessionID).
 		Int("downstreams", len(cs.downstreamPolicies)).
@@ -214,7 +216,7 @@ func (cs *ChainSession) Flush() error {
 
 	cs.updatedAt = float64(time.Now().UnixMilli()) / 1000.0
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "chain_session_flush").
 		Str("session_id", cs.SessionID).
 		Msg("刷写链式会话")
@@ -316,7 +318,7 @@ func (cs *ChainSession) Flush() error {
 		_ = os.Remove(linkPath)
 	}
 
-	logger.Info(logger.ComponentAgentCore).
+	logger.Info(logComponent).
 		Str("action", "chain_session_flushed").
 		Str("session_id", cs.SessionID).
 		Int("version", cs.version).
@@ -333,7 +335,7 @@ func (cs *ChainSession) AddDownstream(targetAgent, targetSession string, policy 
 	cs.downstreamPolicies[[2]string{targetAgent, targetSession}] = policy
 	cs.updatedAt = float64(time.Now().UnixMilli()) / 1000.0
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "add_downstream").
 		Str("session_id", cs.SessionID).
 		Str("target_agent", targetAgent).
@@ -348,7 +350,7 @@ func (cs *ChainSession) RemoveDownstream(targetAgent, targetSession string) {
 	delete(cs.downstreamPolicies, [2]string{targetAgent, targetSession})
 	cs.updatedAt = float64(time.Now().UnixMilli()) / 1000.0
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "remove_downstream").
 		Str("session_id", cs.SessionID).
 		Str("target_agent", targetAgent).
@@ -392,7 +394,7 @@ func (cs *ChainSession) RemoveAllDownstreams() {
 	cs.downstreamPolicies = make(map[[2]string]SharingPolicy)
 	cs.updatedAt = float64(time.Now().UnixMilli()) / 1000.0
 
-	logger.Debug(logger.ComponentAgentCore).
+	logger.Debug(logComponent).
 		Str("action", "remove_all_downstreams").
 		Str("session_id", cs.SessionID).
 		Msg("清空所有下游关系")

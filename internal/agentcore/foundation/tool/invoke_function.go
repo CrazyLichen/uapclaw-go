@@ -27,6 +27,8 @@ type InvokeFunction[I any, O any] struct {
 
 type LocalFuncOption func(*localFuncConfig)
 
+// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func WithDescription(desc string) LocalFuncOption {

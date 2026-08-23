@@ -24,7 +24,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件
-var logComponent = logger.ComponentAgentServer
+const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

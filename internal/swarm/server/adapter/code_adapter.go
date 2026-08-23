@@ -21,8 +21,8 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
@@ -667,7 +667,7 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			}
 		case "acp_chat":
 			// ⤵️ 10.6.24: acp_chat 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat tool not yet implemented, skipping")
+			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat 工具尚未实现，跳过")
 		default:
 			logger.Warn(logComponent).Str("tool", toolName).Msg("未知的 code 模式工具名，跳过")
 		}
@@ -754,88 +754,88 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	// ─── 固定 Rails — code 模式特有 ───
 	// 对齐 Python: rail_infos = [...] 中的固定列表
 
-	// 1: RuntimePromptRail
+	// 1: RuntimePromptRail（运行时提示词护栏）
 	if rp := c.deep.buildRuntimePromptRail(); rp != nil {
 		c.deep.runtimePromptRail = rp
 		railsList = append(railsList, rp)
 	}
 
-	// 2: ResponsePromptRail
+	// 2: ResponsePromptRail（响应提示词护栏）
 	if resp := c.deep.buildResponsePromptRail(); resp != nil {
 		c.deep.responsePromptRail = resp
 		railsList = append(railsList, resp)
 	}
 
-	// 3: StreamEventRail
+	// 3: StreamEventRail（流事件护栏）
 	if se := c.deep.buildStreamEventRail(); se != nil {
 		c.deep.streamEventRail = se
 		railsList = append(railsList, se)
 	}
 
-	// 4: SecurityRail
+	// 4: SecurityRail（安全护栏）
 	if sec := c.deep.buildSecurityRail(configBase); sec != nil {
 		c.deep.securityRail = sec
 		railsList = append(railsList, sec)
 	}
 
-	// 5: LspRail
+	// 5: LspRail（LSP 护栏）
 	// ⤵️ 10.6.3-10: LspRail 尚未实现
 	if lsp := c.buildLspRail(); lsp != nil {
 		c.lspRail = lsp
 		railsList = append(railsList, lsp)
 	}
 
-	// 6: ProjectMemoryRail
+	// 6: ProjectMemoryRail（项目记忆护栏）
 	// ⤵️ 10.6.3-10: ProjectMemoryRail 尚未实现
 	if pm := c.buildProjectMemoryRail(); pm != nil {
 		c.projectMemoryRail = pm
 		railsList = append(railsList, pm)
 	}
 
-	// 7: PermissionInterruptRail
+	// 7: PermissionInterruptRail（权限中断护栏）
 	// ⤵️ 10.6.3-10: PermissionInterruptRail 尚未实现
 	if perm := c.buildPermissionRail(configBase, nil, ""); perm != nil {
 		c.deep.permissionRail = perm
 		railsList = append(railsList, perm)
 	}
 
-	// 8: FileSystemRail (SysOperationRail)
+	// 8: FileSystemRail / SysOperationRail（文件系统护栏）
 	fs := c.deep.buildFilesystemRail(false)
 	if fs != nil {
 		c.deep.filesystemRail = fs
 		railsList = append(railsList, fs)
 	}
 
-	// 9: CodingMemoryRail
+	// 9: CodingMemoryRail（编程记忆护栏）
 	if cm := c.buildCodingMemoryRail(); cm != nil {
 		c.codingMemoryRail = cm
 		railsList = append(railsList, cm)
 	}
 
-	// 10: AgentModeRail
+	// 10: AgentModeRail（Agent 模式护栏）
 	am := c.deep.buildAgentModeRail(nil)
 	if am != nil {
 		railsList = append(railsList, am)
 	}
 
-	// 11: StructuredAskUserRail
+	// 11: StructuredAskUserRail（结构化询问护栏）
 	// ✅ 10.6.3: StructuredAskUserRail 已实现
 	if sau := c.buildStructuredAskUserRail(); sau != nil {
 		railsList = append(railsList, sau)
 	}
 
-	// 12: ConfirmInterruptRail
+	// 12: ConfirmInterruptRail（确认中断护栏）
 	// ⤵️ 10.6.3-10: ConfirmInterruptRail 尚未实现
 	if ci := c.buildConfirmInterruptRail(); ci != nil {
 		railsList = append(railsList, ci)
 	}
 
-	// 13: ContextProcessorRail
+	// 13: ContextProcessorRail（上下文处理器护栏）
 	cp := c.deep.buildContextProcessorRail()
 	c.deep.contextProcessorRail = cp
 	railsList = append(railsList, cp)
 
-	// 14: CodeAgentRail
+	// 14: CodeAgentRail（Code Agent 护栏）
 	if car := c.buildCodeAgentRail(); car != nil {
 		c.codeAgentRail = car
 		railsList = append(railsList, car)

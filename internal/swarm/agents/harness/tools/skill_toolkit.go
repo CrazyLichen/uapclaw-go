@@ -89,7 +89,7 @@ const (
 	// defaultSource 默认来源
 	defaultSource = "skillnet"
 	// logComponent 日志组件标识
-logComponent = logger.ComponentAgentServer
+	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -15,6 +15,11 @@ type CodingMemoryToolContext struct {
 	CodingMemoryDir string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodingMemoryToolContext 创建编程记忆工具上下文
@@ -67,3 +72,5 @@ func (c *CodingMemoryToolContext) WithCodingMemoryDir(dir string) *CodingMemoryT
 	c.CodingMemoryDir = dir
 	return c
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
