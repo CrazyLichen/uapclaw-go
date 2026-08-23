@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // newTestTeamBackendForInteraction 创建测试用的 TeamBackend。
@@ -19,6 +21,12 @@ func newTestTeamBackendForInteraction() *tools.TeamBackend {
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
 	tb.SpawnHumanAgent(ctx, "human_agent", "Human Agent", "", "")
 	return tb
+}
+
+// newTestAgentForInteraction 创建测试用的 TeamAgent。
+func newTestAgentForInteraction() *agent.TeamAgent {
+	a := agent.NewTeamAgent(&agentschema.AgentCard{})
+	return a
 }
 
 func TestHumanAgentNotEnabledError(t *testing.T) {
@@ -54,9 +62,9 @@ func TestNewHumanAgentInbox(t *testing.T) {
 func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	var lookedUp string
-	lookup := func(sender string) any {
+	lookup := func(sender string) *agent.TeamAgent {
 		lookedUp = sender
-		return "mock-agent" // 非 nil 表示有活跃运行时
+		return newTestAgentForInteraction() // 非 nil 表示有活跃运行时
 	}
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send("hello", nil, nil)
@@ -105,7 +113,7 @@ func TestHumanAgentInbox_Send_无lookup时驱动失败(t *testing.T) {
 
 func TestHumanAgentInbox_Send_lookup返回nil(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
-	lookup := func(sender string) any { return nil }
+	lookup := func(sender string) *agent.TeamAgent { return nil }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send("hello", nil, nil)
 	if err != nil {
@@ -134,7 +142,7 @@ func TestHumanAgentInbox_Send_未知发送者(t *testing.T) {
 
 func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
-	lookup := func(sender string) any { return "mock-agent" }
+	lookup := func(sender string) *agent.TeamAgent { return newTestAgentForInteraction() }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	sender := "human_agent"
 	result, err := h.Send("hello", nil, &sender)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -344,17 +345,12 @@ func (m *TeamRuntimeManager) dispatchPayload(
 	}
 }
 
-// getTeamBackend 从 Agent（any 类型）中提取 TeamBackend。
-// 待 9.55 回填 ActiveTeam.Agent 为 *TeamAgent 后，此函数可简化为直接调用。
-func getTeamBackend(agent any) *tools.TeamBackend {
-	if agent == nil {
+// getTeamBackend 从 Agent 中提取 TeamBackend。
+func getTeamBackend(a *agent.TeamAgent) *tools.TeamBackend {
+	if a == nil {
 		return nil
 	}
-	provider, ok := agent.(TeamBackendProvider)
-	if !ok {
-		return nil
-	}
-	return provider.TeamBackend()
+	return a.TeamBackend()
 }
 
 // strPtr 返回字符串指针。

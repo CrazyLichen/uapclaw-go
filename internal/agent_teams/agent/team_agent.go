@@ -270,6 +270,13 @@ func (a *TeamAgent) TeamBackend() *tools.TeamBackend {
 	return nil
 }
 
+// SetTeamBackend 设置 TeamBackend（测试辅助）。
+func (a *TeamAgent) SetTeamBackend(tb *tools.TeamBackend) {
+	if a.configurator != nil {
+		a.configurator.SetTeamBackend(tb)
+	}
+}
+
 // SessionID 返回当前会话 ID（从 agent_teams contextvar 读取）。
 // 对齐 Python: TeamAgent.session_id property → get_session_id()
 func (a *TeamAgent) SessionID(ctx context.Context) string {

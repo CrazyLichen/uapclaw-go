@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -15,8 +16,7 @@ import (
 
 // AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
 // 对齐 Python: AgentLookup = Callable[[str], Optional[TeamAgent]]
-// ⤵️ 待 9.55 回填: 返回 *TeamAgent
-type AgentLookup func(sender string) any
+type AgentLookup func(sender string) *agent.TeamAgent
 
 // OnInbound 团队→用户通知回调。
 // 对齐 Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]
@@ -211,7 +211,8 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 	}
 
 	// 对齐 Python 步骤 4-5
-	// ⤵️ 待 9.55 回填: agent.(*TeamAgent).DeliverInput(ctx, body)
+	// ⤵️ 待 9.55 回填: agent.DeliverInput(ctx, body)
+	_ = agent // 避免未使用变量编译错误
 	return NewDeliverResultSuccess(nil), nil
 }
 
