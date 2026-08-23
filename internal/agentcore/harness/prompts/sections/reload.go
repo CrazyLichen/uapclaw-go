@@ -11,7 +11,7 @@ import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/p
 const (
 	reloadHintCN = "# 上下文压缩\n\n" +
 		"你的上下文在过长时会被自动压缩，" +
-		"并标记为[[OFFLOAD: handle=<id>, type=<type>]]。\n\n" +
+		"并标记为[OFFLOAD: handle=<id>, type=<type>]。\n\n" +
 		"如果你认为需要读取隐藏的内容，" +
 		"可随时调用reload_original_context_messages工具，" +
 		`使用标记中的handle和type值：reload_original_context_messages(offload_handle="<id>", offload_type="<type>")。` +
@@ -21,9 +21,9 @@ const (
 
 	reloadHintEN = "# Context Compression\n\n" +
 		"Your context will be automatically compressed when it becomes too long " +
-		"and marked with [[OFFLOAD: handle=<id>, type=<type>]].\n\n" +
+		"and marked with [OFFLOAD: handle=<id>, type=<type>].\n\n" +
 		`Call reload_original_context_messages(offload_handle="<id>", ` +
-		`offload_type="<type>"), using the exact handle and type values from the marker.\n\n` +
+		`offload_type="<type>"), using the exact values from the marker.\n\n` +
 		"Do not guess or fabricate missing content.\n\n" +
 		`Storage types: "in_memory" (session cache), "filesystem" (disk file)`
 

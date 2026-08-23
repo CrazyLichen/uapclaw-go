@@ -412,7 +412,6 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 		QAModel: envOrWithDefault(
 			DefaultOpenAIAudioQAModel,
 			"AUDIO_QUESTION_ANSWERING_MODEL",
-			"AUDIO_MODEL_NAME",
 		),
 		MaxRetries:      parseIntEnv("AUDIO_MAX_RETRIES", 3),
 		HTTPTimeout:     parseIntEnv("AUDIO_HTTP_TIMEOUT", DefaultAudioHTTPTimeout),

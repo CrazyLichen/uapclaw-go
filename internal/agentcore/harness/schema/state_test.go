@@ -242,7 +242,7 @@ func TestDeepAgentState_往返(t *testing.T) {
 // TestDeepAgentState_包含TaskPlan 验证 TaskPlan 非空时的序列化与反序列化
 func TestDeepAgentState_包含TaskPlan(t *testing.T) {
 	// 构造一个简单的 TaskPlan（依赖 task.go 中的定义）
-	tp := NewTaskPlan("test-task", "test goal")
+	tp := NewTaskPlan("test goal")
 	original := DeepAgentState{
 		Iteration: 1,
 		TaskPlan:  &tp,
@@ -260,7 +260,7 @@ func TestDeepAgentState_包含TaskPlan(t *testing.T) {
 	if restored.TaskPlan == nil {
 		t.Error("期望恢复后 TaskPlan 不为 nil")
 	}
-	if restored.TaskPlan.TaskName != "test-task" {
-		t.Errorf("期望 TaskName = %q, 实际 = %q", "test-task", restored.TaskPlan.TaskName)
+	if restored.TaskPlan.Goal != "test goal" {
+		t.Errorf("期望 Goal = %q, 实际 = %q", "test goal", restored.TaskPlan.Goal)
 	}
 }

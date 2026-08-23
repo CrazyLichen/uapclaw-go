@@ -132,7 +132,7 @@ func (r *PromptReport) ToDict() map[string]any {
 //
 // 对应 Python: PromptReport.summary()
 func (r *PromptReport) Summary() string {
-	return "mode=" + r.Mode + " lang=" + r.Language +
+	return "[PromptReport] mode=" + r.Mode + " lang=" + r.Language +
 		" sections=" + strconv.Itoa(r.SectionCount) +
 		" chars=" + strconv.Itoa(r.TotalChars) +
 		" est_tokens≈" + strconv.Itoa(r.EstimatedTokens)

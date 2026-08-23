@@ -118,7 +118,7 @@ func TestTaskLoopEventExecutor_Pause返回不支持(t *testing.T) {
 func TestTaskLoopEventExecutor_Cancel标记取消并请求中止(t *testing.T) {
 	// 构造含 TaskPlan 的 DeepAgentState
 	taskID := "task-cancel-1"
-	plan := hschema.NewTaskPlan("测试计划", "测试目标")
+	plan := hschema.NewTaskPlan("测试目标")
 	plan.AddTask(hschema.TodoItem{
 		ID:      taskID,
 		Content: "待取消的任务",
@@ -301,7 +301,7 @@ func TestTaskLoopEventExecutor_Cancel无TaskPlan(t *testing.T) {
 // TestTaskLoopEventExecutor_Cancel无Coordinator Cancel 时 coordinator 为 nil 不 panic
 func TestTaskLoopEventExecutor_Cancel无Coordinator(t *testing.T) {
 	taskID := "task-cancel-2"
-	plan := hschema.NewTaskPlan("测试计划", "测试目标")
+	plan := hschema.NewTaskPlan("测试目标")
 	plan.AddTask(hschema.TodoItem{
 		ID:      taskID,
 		Content: "待取消的任务",

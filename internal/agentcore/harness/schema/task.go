@@ -34,8 +34,6 @@ type TodoItem struct {
 
 // TaskPlan 任务计划
 type TaskPlan struct {
-	// TaskName 任务名称
-	TaskName string `json:"task_name"`
 	// Goal 目标描述
 	Goal string `json:"goal"`
 	// Tasks 任务列表
@@ -165,10 +163,9 @@ func (TodoItem) FromDict(data map[string]any) TodoItem {
 }
 
 // NewTaskPlan 创建带默认值的 TaskPlan
-func NewTaskPlan(taskName, goal string) TaskPlan {
+func NewTaskPlan(goal string) TaskPlan {
 	return TaskPlan{
-		TaskName: taskName,
-		Goal:     goal,
+		Goal: goal,
 	}
 }
 
@@ -253,9 +250,7 @@ func (tp *TaskPlan) GetProgressSummary() string {
 // ToMarkdown 将任务计划渲染为 Markdown 格式
 func (tp *TaskPlan) ToMarkdown() string {
 	var sb strings.Builder
-	sb.WriteString("# ")
-	sb.WriteString(tp.TaskName)
-	sb.WriteString("\n\n**Goal:** ")
+	sb.WriteString("# Task Plan\n\n**Goal:** ")
 	sb.WriteString(tp.Goal)
 	sb.WriteString("\n\n")
 	for _, task := range tp.Tasks {
@@ -275,8 +270,7 @@ func (tp *TaskPlan) ToMarkdown() string {
 // ToDict 将 TaskPlan 序列化为 JSON 友好的字典
 func (tp TaskPlan) ToDict() map[string]any {
 	result := map[string]any{
-		"task_name": tp.TaskName,
-		"goal":      tp.Goal,
+		"goal": tp.Goal,
 	}
 	if len(tp.Tasks) > 0 {
 		tasks := make([]any, len(tp.Tasks))
@@ -294,8 +288,7 @@ func (tp TaskPlan) ToDict() map[string]any {
 // FromDict 从序列化字典恢复 TaskPlan
 func (TaskPlan) FromDict(data map[string]any) TaskPlan {
 	tp := TaskPlan{
-		TaskName: strVal(data, "task_name", ""),
-		Goal:     strVal(data, "goal", ""),
+		Goal: strVal(data, "goal", ""),
 	}
 	if v, ok := data["tasks"].([]any); ok {
 		for _, item := range v {

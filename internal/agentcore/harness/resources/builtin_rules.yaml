@@ -81,5 +81,4 @@ rules:
     tools: [bash, mcp_exec_command, create_terminal]
     match_type: command
     pattern: 're:(?i)(^|[\s;&|()])((shutdown|reboot|halt|poweroff)\b|(init|telinit)\s+(0|6)\b)'
-    severity: CRITICAL
     action: deny

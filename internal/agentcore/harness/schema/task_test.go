@@ -192,10 +192,7 @@ func TestTodoItem_往返(t *testing.T) {
 
 // TestTaskPlan_默认值 验证 NewTaskPlan 返回的默认值
 func TestTaskPlan_默认值(t *testing.T) {
-	tp := NewTaskPlan("my-task", "my goal")
-	if tp.TaskName != "my-task" {
-		t.Errorf("期望 TaskName = %q, 实际 = %q", "my-task", tp.TaskName)
-	}
+	tp := NewTaskPlan("my goal")
 	if tp.Goal != "my goal" {
 		t.Errorf("期望 Goal = %q, 实际 = %q", "my goal", tp.Goal)
 	}
@@ -206,7 +203,7 @@ func TestTaskPlan_默认值(t *testing.T) {
 
 // TestTaskPlan_GetTask_找到 验证 GetTask 找到存在的任务
 func TestTaskPlan_GetTask_找到(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item := NewTodoItem()
 	item.Content = "找到我"
 	tp.AddTask(item)
@@ -221,7 +218,7 @@ func TestTaskPlan_GetTask_找到(t *testing.T) {
 
 // TestTaskPlan_GetTask_未找到 验证 GetTask 对不存在的 ID 返回 nil
 func TestTaskPlan_GetTask_未找到(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	found := tp.GetTask("nonexistent")
 	if found != nil {
 		t.Error("期望 nil, 实际不为 nil")
@@ -230,7 +227,7 @@ func TestTaskPlan_GetTask_未找到(t *testing.T) {
 
 // TestTaskPlan_GetNextTask_无依赖 验证无依赖时返回第一个 Pending 任务
 func TestTaskPlan_GetNextTask_无依赖(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item1 := NewTodoItem()
 	item1.Content = "第一个"
 	item2 := NewTodoItem()
@@ -248,7 +245,7 @@ func TestTaskPlan_GetNextTask_无依赖(t *testing.T) {
 
 // TestTaskPlan_GetNextTask_依赖排序 验证依赖未完成时不可选
 func TestTaskPlan_GetNextTask_依赖排序(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 
 	// A 依赖于 B
 	itemB := NewTodoItem()
@@ -280,7 +277,7 @@ func TestTaskPlan_GetNextTask_依赖排序(t *testing.T) {
 
 // TestTaskPlan_AddTask 验证添加任务
 func TestTaskPlan_AddTask(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item := NewTodoItem()
 	item.Content = "新增任务"
 	tp.AddTask(item)
@@ -295,7 +292,7 @@ func TestTaskPlan_AddTask(t *testing.T) {
 
 // TestTaskPlan_MarkInProgress 验证标记执行中
 func TestTaskPlan_MarkInProgress(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item := NewTodoItem()
 	tp.AddTask(item)
 
@@ -314,7 +311,7 @@ func TestTaskPlan_MarkInProgress(t *testing.T) {
 
 // TestTaskPlan_MarkCompleted 验证标记完成
 func TestTaskPlan_MarkCompleted(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item := NewTodoItem()
 	tp.AddTask(item)
 
@@ -333,7 +330,7 @@ func TestTaskPlan_MarkCompleted(t *testing.T) {
 
 // TestTaskPlan_MarkCancelled 验证标记取消
 func TestTaskPlan_MarkCancelled(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	item := NewTodoItem()
 	tp.AddTask(item)
 
@@ -352,7 +349,7 @@ func TestTaskPlan_MarkCancelled(t *testing.T) {
 
 // TestTaskPlan_Mark_不存在 验证对不存在的任务 ID 返回错误
 func TestTaskPlan_Mark_不存在(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 
 	if err := tp.MarkInProgress("no-id"); err == nil {
 		t.Error("MarkInProgress 对不存在的 ID 应返回错误")
@@ -367,7 +364,7 @@ func TestTaskPlan_Mark_不存在(t *testing.T) {
 
 // TestTaskPlan_GetProgressSummary 验证进度摘要
 func TestTaskPlan_GetProgressSummary(t *testing.T) {
-	tp := NewTaskPlan("test", "goal")
+	tp := NewTaskPlan("goal")
 	for i := 0; i < 7; i++ {
 		item := NewTodoItem()
 		tp.AddTask(item)
@@ -386,7 +383,7 @@ func TestTaskPlan_GetProgressSummary(t *testing.T) {
 
 // TestTaskPlan_ToMarkdown 验证 Markdown 输出格式
 func TestTaskPlan_ToMarkdown(t *testing.T) {
-	tp := NewTaskPlan("my-task", "实现功能")
+	tp := NewTaskPlan("实现功能")
 	item1 := NewTodoItem()
 	item1.Content = "步骤一"
 	item1.Status = TodoStatusCompleted
@@ -400,7 +397,7 @@ func TestTaskPlan_ToMarkdown(t *testing.T) {
 	tp.AddTask(item3)
 
 	md := tp.ToMarkdown()
-	if !containsSubstring(md, "# my-task") {
+	if !containsSubstring(md, "# Task Plan") {
 		t.Errorf("Markdown 缺少标题行: %q", md)
 	}
 	if !containsSubstring(md, "**Goal:** 实现功能") {
@@ -419,15 +416,12 @@ func TestTaskPlan_ToMarkdown(t *testing.T) {
 
 // TestTaskPlan_ToDict 验证 TaskPlan 序列化
 func TestTaskPlan_ToDict(t *testing.T) {
-	tp := NewTaskPlan("plan-name", "目标")
+	tp := NewTaskPlan("目标")
 	item := NewTodoItem()
 	item.Content = "任务1"
 	tp.AddTask(item)
 
 	d := tp.ToDict()
-	if d["task_name"] != "plan-name" {
-		t.Errorf("期望 task_name = %q, 实际 = %v", "plan-name", d["task_name"])
-	}
 	if d["goal"] != "目标" {
 		t.Errorf("期望 goal = %q, 实际 = %v", "目标", d["goal"])
 	}
@@ -440,8 +434,7 @@ func TestTaskPlan_ToDict(t *testing.T) {
 // TestTaskPlan_FromDict 验证从字典反序列化
 func TestTaskPlan_FromDict(t *testing.T) {
 	data := map[string]any{
-		"task_name": "plan-1",
-		"goal":      "目标1",
+		"goal": "目标1",
 		"tasks": []any{
 			map[string]any{
 				"id":      "t1",
@@ -453,9 +446,6 @@ func TestTaskPlan_FromDict(t *testing.T) {
 	}
 	tp := TaskPlan{}.FromDict(data)
 
-	if tp.TaskName != "plan-1" {
-		t.Errorf("期望 TaskName = %q, 实际 = %q", "plan-1", tp.TaskName)
-	}
 	if tp.Goal != "目标1" {
 		t.Errorf("期望 Goal = %q, 实际 = %q", "目标1", tp.Goal)
 	}
@@ -469,7 +459,7 @@ func TestTaskPlan_FromDict(t *testing.T) {
 
 // TestTaskPlan_往返 验证 ToDict → FromDict 往返一致
 func TestTaskPlan_往返(t *testing.T) {
-	original := NewTaskPlan("rt-task", "往返目标")
+	original := NewTaskPlan("往返目标")
 	item1 := NewTodoItem()
 	item1.Content = "任务1"
 	item1.Status = TodoStatusCompleted
@@ -483,9 +473,6 @@ func TestTaskPlan_往返(t *testing.T) {
 
 	restored := TaskPlan{}.FromDict(original.ToDict())
 
-	if restored.TaskName != original.TaskName {
-		t.Errorf("期望 TaskName = %q, 实际 = %q", original.TaskName, restored.TaskName)
-	}
 	if restored.Goal != original.Goal {
 		t.Errorf("期望 Goal = %q, 实际 = %q", original.Goal, restored.Goal)
 	}
@@ -526,8 +513,7 @@ func TestModelUsageRecord_String(t *testing.T) {
 // TestTaskPlanFromDict 验证 TaskPlanFromDict 包级函数
 func TestTaskPlanFromDict(t *testing.T) {
 	data := map[string]any{
-		"task_name": "fp-task",
-		"goal":      "函数目标",
+		"goal": "函数目标",
 	}
 	tp := TaskPlanFromDict(data)
 	if !reflect.DeepEqual(tp, TaskPlan{}.FromDict(data)) {

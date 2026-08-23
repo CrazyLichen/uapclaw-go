@@ -2020,7 +2020,7 @@ func TestDeepAgent_hasRemainingTasks_有TaskPlan(t *testing.T) {
 
 	// 设置含待执行任务的 TaskPlan
 	state := d.LoadState(sess)
-	plan := schema.NewTaskPlan("测试计划", "测试目标")
+	plan := schema.NewTaskPlan("测试目标")
 	plan.AddTask(schema.TodoItem{
 		ID:      "task-1",
 		Content: "待执行任务",
@@ -2040,7 +2040,7 @@ func TestDeepAgent_hasRemainingTasks_全部完成(t *testing.T) {
 	sess := newFakeSessionFacade("sess-1")
 
 	state := d.LoadState(sess)
-	plan := schema.NewTaskPlan("测试计划", "测试目标")
+	plan := schema.NewTaskPlan("测试目标")
 	plan.AddTask(schema.TodoItem{
 		ID:      "task-1",
 		Content: "已完成任务",

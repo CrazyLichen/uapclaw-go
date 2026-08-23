@@ -30,15 +30,24 @@ func TestParseBuiltinRules_规则ID非空(t *testing.T) {
 	}
 }
 
-// TestParseBuiltinRules_严重等级 验证每条规则的 severity 均为 CRITICAL
+// TestParseBuiltinRules_严重等级 验证前 9 条规则的 severity 均为 CRITICAL，第 10 条无 severity
 func TestParseBuiltinRules_严重等级(t *testing.T) {
 	rules, err := ParseBuiltinRules()
 	if err != nil {
 		t.Fatalf("解析内置规则失败: %v", err)
 	}
-	for i, rule := range rules.Rules {
+	// 前 9 条规则 severity = CRITICAL（对齐 Python：前 9 条均有 severity 字段）
+	for i := 0; i < 9 && i < len(rules.Rules); i++ {
+		rule := rules.Rules[i]
 		if rule.Severity != "CRITICAL" {
 			t.Errorf("第 %d 条规则(%s)的 severity 为 %q，期望 CRITICAL", i, rule.ID, rule.Severity)
+		}
+	}
+	// 第 10 条规则（shell_system_shutdown_or_reboot）无 severity，走 action=deny（对齐 Python）
+	if len(rules.Rules) >= 10 {
+		lastRule := rules.Rules[9]
+		if lastRule.Severity != "" {
+			t.Errorf("第 10 条规则(%s)的 severity 应为空（对齐 Python：只有 action=deny，无 severity），实际 %q", lastRule.ID, lastRule.Severity)
 		}
 	}
 }
