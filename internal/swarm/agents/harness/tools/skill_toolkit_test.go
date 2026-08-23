@@ -628,6 +628,9 @@ func TestNormalizeSearchItem_SkillNet(t *testing.T) {
 	if result.Author != "test-author" {
 		t.Errorf("author = %v, want test-author", result.Author)
 	}
+	if result.Score == nil || *result.Score != 5 {
+		t.Errorf("score = %v, want 5", result.Score)
+	}
 }
 
 // TestFindInstalledByTarget_ClawHub 验证 ClawHub 已安装查找
@@ -701,6 +704,41 @@ func TestGetInstalledNames_有数据(t *testing.T) {
 }
 
 // TestToBool 验证 toBool 转换
+// TestToIntPtr 验证 toIntPtr 转换
+func TestToIntPtr(t *testing.T) {
+	tests := []struct {
+		input any
+		want  *int
+	}{
+		{nil, nil},
+		{float64(42), intPtr(42)},
+		{float64(0), intPtr(0)},
+		{int(7), intPtr(7)},
+		{json.Number("99"), intPtr(99)},
+		{json.Number("bad"), nil},
+		{"not-a-number", nil},
+	}
+	for _, tt := range tests {
+		got := toIntPtr(tt.input)
+		if tt.want == nil {
+			if got != nil {
+				t.Errorf("toIntPtr(%v) = %v, want nil", tt.input, *got)
+			}
+		} else if got == nil || *got != *tt.want {
+			var gotVal int
+			if got != nil {
+				gotVal = *got
+			}
+			t.Errorf("toIntPtr(%v) = %v, want %v", tt.input, gotVal, *tt.want)
+		}
+	}
+}
+
+// intPtr 辅助函数，返回 int 指针
+func intPtr(v int) *int {
+	return &v
+}
+
 func TestToBool(t *testing.T) {
 	tests := []struct {
 		input any

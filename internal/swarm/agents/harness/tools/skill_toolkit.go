@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -40,21 +41,7 @@ type SkillSearchItem struct {
 	// Author 作者
 	Author string `json:"author"`
 	// Score 评分（SkillNet 的 stars，其他来源为 nil）
-	Score any `json:"score"`
-}
-
-// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
-func (s *SkillSearchItem) ToMap() map[string]any {
-	return map[string]any{
-		"name":        s.Name,
-		"description": s.Description,
-		"source":      s.Source,
-		"identifier":  s.Identifier,
-		"installed":   s.Installed,
-		"version":     s.Version,
-		"author":      s.Author,
-		"score":       s.Score,
-	}
+	Score *int `json:"score"`
 }
 
 // InstalledItem 已安装技能展示信息，替代 map[string]any 的动态结构。
@@ -75,28 +62,24 @@ type InstalledItem struct {
 	// Author 作者
 	Author string `json:"author"`
 	// Score 评分（已安装项通常为 nil）
-	Score any `json:"score"`
+	Score *int `json:"score"`
 	// SkillDir 技能目录路径
 	SkillDir string `json:"skill_dir"`
 	// SkillFile SKILL.md 文件路径
 	SkillFile string `json:"skill_file"`
 }
 
-// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
-func (it *InstalledItem) ToMap() map[string]any {
-	return map[string]any{
-		"name":        it.Name,
-		"description": it.Description,
-		"source":      it.Source,
-		"identifier":  it.Identifier,
-		"installed":   it.Installed,
-		"version":     it.Version,
-		"author":      it.Author,
-		"score":       it.Score,
-		"skill_dir":   it.SkillDir,
-		"skill_file":  it.SkillFile,
-	}
+// ListInstalledResult 列出已安装技能的结果
+type ListInstalledResult struct {
+	// Success 是否成功
+	Success bool `json:"success"`
+	// Items 已安装技能列表
+	Items []*InstalledItem `json:"items"`
+	// Detail 详细信息
+	Detail string `json:"detail"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -106,7 +89,7 @@ const (
 	// defaultSource 默认来源
 	defaultSource = "skillnet"
 	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentServer
+logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -129,6 +112,45 @@ var installSourceByTarget = []struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (s *SkillSearchItem) ToMap() map[string]any {
+	return map[string]any{
+		"name":        s.Name,
+		"description": s.Description,
+		"source":      s.Source,
+		"identifier":  s.Identifier,
+		"installed":   s.Installed,
+		"version":     s.Version,
+		"author":      s.Author,
+		"score":       s.Score,
+	}
+}
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (it *InstalledItem) ToMap() map[string]any {
+	return map[string]any{
+		"name":        it.Name,
+		"description": it.Description,
+		"source":      it.Source,
+		"identifier":  it.Identifier,
+		"installed":   it.Installed,
+		"version":     it.Version,
+		"author":      it.Author,
+		"score":       it.Score,
+		"skill_dir":   it.SkillDir,
+		"skill_file":  it.SkillFile,
+	}
+}
+
+// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
+func (r *ListInstalledResult) ToMap() map[string]any {
+	items := make([]map[string]any, len(r.Items))
+	for i, item := range r.Items {
+		items[i] = item.ToMap()
+	}
+	return map[string]any{"success": r.Success, "items": items, "detail": r.Detail}
+}
 
 // NewSkillToolkit 创建 SkillToolkit 实例。
 // 对应 Python: SkillToolkit.__init__(manager)
@@ -335,7 +357,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 			installParams["market_url"] = marketURL
 		}
 		payload, _ = tk.manager.HandleSkillsTeamSkillsHubInstall(ctx, installParams)
-	default: // clawhub
+	default: // clawhub 来源
 		payload, _ = tk.manager.HandleSkillsClawhubDownload(ctx, map[string]any{
 			"slug": identifier, "force": false,
 		})
@@ -621,7 +643,7 @@ func (tk *SkillToolkit) buildInstalledItem(name, source string) *InstalledItem {
 // 对应 Python: SkillToolkit._normalize_search_item(item, source, installed_names)
 func normalizeSearchItem(item map[string]any, source string, installedNames map[string]bool) *SkillSearchItem {
 	var name, description, identifier, version, author string
-	var score any
+	var score *int
 
 	switch source {
 	case "skillnet":
@@ -630,7 +652,7 @@ func normalizeSearchItem(item map[string]any, source string, installedNames map[
 		identifier = strings.TrimSpace(toString(item["skill_url"]))
 		version = ""
 		author = strings.TrimSpace(toString(item["author"]))
-		score = item["stars"]
+		score = toIntPtr(item["stars"])
 	case "teamskillshub":
 		assetID := strings.TrimSpace(toString(item["asset_id"]))
 		name = strings.TrimSpace(toString(item["display_name"]))
@@ -645,7 +667,7 @@ func normalizeSearchItem(item map[string]any, source string, installedNames map[
 		version = strings.TrimSpace(toString(item["version"]))
 		author = ""
 		score = nil
-	default: // clawhub
+	default: // clawhub 来源
 		name = strings.TrimSpace(toString(item["display_name"]))
 		if name == "" {
 			name = strings.TrimSpace(toString(item["slug"]))
@@ -695,25 +717,6 @@ func summarizeSearchPayload(source, query string, payload map[string]any) map[st
 			"summary":    toString(first["skill_description"]),
 		},
 	}
-}
-
-// ListInstalledResult 列出已安装技能的结果
-type ListInstalledResult struct {
-	// Success 是否成功
-	Success bool `json:"success"`
-	// Items 已安装技能列表
-	Items []*InstalledItem `json:"items"`
-	// Detail 详细信息
-	Detail string `json:"detail"`
-}
-
-// ToMap 转换为 map[string]any，供 MapFunction 输出使用。
-func (r *ListInstalledResult) ToMap() map[string]any {
-	items := make([]map[string]any, len(r.Items))
-	for i, item := range r.Items {
-		items[i] = item.ToMap()
-	}
-	return map[string]any{"success": r.Success, "items": items, "detail": r.Detail}
 }
 
 // listInstalledSkills 列出已安装技能，供 toolkit 内部逻辑复用。
@@ -929,6 +932,26 @@ func toBool(v any) bool {
 	default:
 		return false
 	}
+}
+
+// toIntPtr 安全地将 any 转为 *int，用于 JSON 反序列化后的数值字段（float64）
+func toIntPtr(v any) *int {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case float64:
+		i := int(val)
+		return &i
+	case int:
+		return &val
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			ii := int(i)
+			return &ii
+		}
+	}
+	return nil
 }
 
 // toSliceOfAny 安全地将 any 转为 []any
