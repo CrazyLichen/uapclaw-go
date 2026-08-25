@@ -156,8 +156,6 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // iterInteractions 递归展开嵌套的 interaction 列表。
 // 对齐 Python: _iter_interactions(state_outputs) (line 342-348)
 func iterInteractions(outputs []any) []any {

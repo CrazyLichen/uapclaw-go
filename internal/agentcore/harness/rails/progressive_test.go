@@ -395,7 +395,7 @@ func TestToolSummaryForNavigation(t *testing.T) {
 func TestToolSummaryForNavigation_空描述(t *testing.T) {
 	info := cschema.NewToolInfo("test", "", nil)
 	summary := toolSummaryForNavigation(info)
-	assert.Equal(t, "No summary available.", summary)
+	assert.Equal(t, "暂无摘要。", summary)
 }
 
 // TestToolSummaryForNavigation_截断 验证超长摘要被截断

@@ -209,7 +209,7 @@ func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *Tool
 		return &ToolAuthResult{
 			Success:  false,
 			AuthData: map[string]any{},
-			Message:  fmt.Sprintf("Unsupported auth type: %s", authConfig.AuthType),
+			Message:  fmt.Sprintf("不支持的认证类型: %s", authConfig.AuthType),
 		}, nil
 	}
 	return strategy.Authenticate(ctx, authConfig)

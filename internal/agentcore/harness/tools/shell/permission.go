@@ -132,7 +132,7 @@ func CheckPermission(command string, config PermissionConfig, isPowerShell bool)
 		for _, segment := range SplitPipeline(command, isPowerShell) {
 			for _, pattern := range config.DenyPatterns {
 				if pattern.MatchString(segment) {
-					return false, "Command denied by pattern: " + pattern.String()
+					return false, "命令被规则拒绝: " + pattern.String()
 				}
 			}
 		}

@@ -894,7 +894,7 @@ func dedupPreserveOrder(names []string) []string {
 func toolSummaryForNavigation(t cschema.ToolInfoInterface) string {
 	description := strings.TrimSpace(t.GetDescription())
 	if description == "" {
-		return "No summary available."
+		return "暂无摘要。"
 	}
 	line := description
 	if idx := strings.IndexByte(line, '\n'); idx >= 0 {

@@ -521,7 +521,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 
 	// 步骤 1: 创建团队行
 	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "") {
-		return fmt.Errorf("failed to create team %s", tb.teamName)
+		return fmt.Errorf("创建团队 %s 失败", tb.teamName)
 	}
 
 	// 步骤 2: 注册 Leader（status=BUSY, execution=RUNNING）

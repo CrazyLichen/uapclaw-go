@@ -285,7 +285,7 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 			Str("channel_id", channelID).
 			Str("mode", mode).
 			Msg("[AgentManager] Error in process_message: no agent available")
-		return nil, fmt.Errorf("[AgentManager] No agent available for channel %s: %w", channelID, err)
+		return nil, fmt.Errorf("[AgentManager] 渠道 %s 无可用 Agent: %w", channelID, err)
 	}
 
 	return agent.ProcessMessage(ctx, request)
@@ -307,7 +307,7 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 			Str("channel_id", channelID).
 			Str("mode", mode).
 			Msg("[AgentManager] Error in process_message_stream: no agent available")
-		return nil, fmt.Errorf("[AgentManager] No agent available for channel %s: %w", channelID, err)
+		return nil, fmt.Errorf("[AgentManager] 渠道 %s 无可用 Agent: %w", channelID, err)
 	}
 
 	return agent.ProcessMessageStream(ctx, request)

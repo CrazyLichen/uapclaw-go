@@ -391,7 +391,7 @@ func checkType(key string, val any, propSchema map[string]any) error {
 			return fmt.Errorf("属性 %q: 期望 object 类型，实际类型 %T", key, val)
 		}
 		if err := ValidateArgs(propSchema, obj); err != nil {
-			return fmt.Errorf("property %q: %w", key, err)
+			return fmt.Errorf("属性 %q: %w", key, err)
 		}
 	}
 

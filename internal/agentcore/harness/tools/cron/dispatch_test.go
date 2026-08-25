@@ -190,15 +190,15 @@ func TestDispatchCronAction_update(t *testing.T) {
 }
 
 // TestDispatchCronAction_update_缺jobId 测试 action=update，jobId 缺失
-// 对齐 Python L182: raise ValueError("jobId is required")
+// 对齐 Python L182: raise ValueError("jobId 为必填项")
 func TestDispatchCronAction_update_缺jobId(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "update"}, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing jobId")
 	}
-	if err.Error() != "jobId is required" {
-		t.Errorf("error = %q, want 'jobId is required'", err.Error())
+	if err.Error() != "jobId 为必填项" {
+		t.Errorf("error = %q, want 'jobId 为必填项'", err.Error())
 	}
 }
 
@@ -333,8 +333,8 @@ func TestDispatchCronAction_remove_缺jobId(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for missing jobId")
 	}
-	if err.Error() != "jobId is required" {
-		t.Errorf("error = %q, want 'jobId is required'", err.Error())
+	if err.Error() != "jobId 为必填项" {
+		t.Errorf("error = %q, want 'jobId 为必填项'", err.Error())
 	}
 }
 
@@ -345,8 +345,8 @@ func TestDispatchCronAction_run_缺jobId(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for missing jobId")
 	}
-	if err.Error() != "jobId is required" {
-		t.Errorf("error = %q, want 'jobId is required'", err.Error())
+	if err.Error() != "jobId 为必填项" {
+		t.Errorf("error = %q, want 'jobId 为必填项'", err.Error())
 	}
 }
 
@@ -357,8 +357,8 @@ func TestDispatchCronAction_runs_缺jobId(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for missing jobId")
 	}
-	if err.Error() != "jobId is required" {
-		t.Errorf("error = %q, want 'jobId is required'", err.Error())
+	if err.Error() != "jobId 为必填项" {
+		t.Errorf("error = %q, want 'jobId 为必填项'", err.Error())
 	}
 }
 

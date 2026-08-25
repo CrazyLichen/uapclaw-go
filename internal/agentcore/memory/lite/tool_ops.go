@@ -12,8 +12,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -25,10 +28,10 @@ var dailyMemoryPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\.md$`)
 // ValidateMemoryPath 验证路径在 memory 目录内。对齐 Python validate_memory_path
 func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
 	if ws == nil {
-		return false, "Workspace not initialized"
+		return false, "工作空间未初始化"
 	}
 	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		return false, "Invalid path: directory traversal not allowed"
+		return false, "路径无效：不允许目录遍历"
 	}
 	basename := filepath.Base(path)
 	memoryDir := ""
@@ -57,7 +60,7 @@ func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
 		}
 	}
 	if resolvedPath == "" {
-		return false, fmt.Sprintf("Cannot resolve path: %s", path)
+		return false, fmt.Sprintf("无法解析路径: %s", path)
 	}
 	return true, resolvedPath
 }
@@ -65,13 +68,13 @@ func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
 // MemorySearchWithContext 语义搜索记忆。对齐 Python memory_search_with_context
 func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, query string, maxResults *int, minScore *float64, sessionKey string) *MemorySearchResult {
 	if toolCtx == nil {
-		return &MemorySearchResult{Disabled: true, Error: "Memory manager not available"}
+		return &MemorySearchResult{Disabled: true, Error: "记忆管理器不可用"}
 	}
 	if !toolCtx.EnsureManager() {
-		return &MemorySearchResult{Disabled: true, Error: "Memory manager not available"}
+		return &MemorySearchResult{Disabled: true, Error: "记忆管理器不可用"}
 	}
 	if toolCtx.Manager == nil {
-		return &MemorySearchResult{Disabled: true, Error: "Memory manager not initialized"}
+		return &MemorySearchResult{Disabled: true, Error: "记忆管理器未初始化"}
 	}
 	opts := make(map[string]any)
 	if maxResults != nil {
@@ -85,7 +88,7 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	}
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("Memory search failed")
+		logger.Error(logComponent).Err(err).Msg("记忆搜索失败")
 		return &MemorySearchResult{Disabled: true, Error: err.Error()}
 	}
 	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
@@ -112,7 +115,7 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, fromLine *int, lines *int) *MemoryGetResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return &MemoryGetResult{Path: path, Disabled: true, Error: "Workspace not initialized"}
+		return &MemoryGetResult{Path: path, Disabled: true, Error: "工作空间未初始化"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
@@ -120,14 +123,14 @@ func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path 
 	}
 	resolvedPath := result
 	if !toolCtx.EnsureManager() {
-		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "Memory manager not available"}
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "记忆管理器不可用"}
 	}
 	if toolCtx.Manager == nil {
-		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "Memory manager not initialized"}
+		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: "记忆管理器未初始化"}
 	}
 	rf, err := toolCtx.Manager.ReadFile(ctx, resolvedPath, fromLine, lines)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("Memory get failed")
+		logger.Error(logComponent).Err(err).Msg("记忆获取失败")
 		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: err.Error()}
 	}
 	return &MemoryGetResult{
@@ -141,7 +144,7 @@ func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path 
 func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, offset *int, limit *int) *ReadMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return &ReadMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
+		return &ReadMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
@@ -150,8 +153,8 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("Read memory failed, no available sys_operation")
-		return &ReadMemoryResult{Success: false, Path: path, Error: "Read failed, no available sys_operation."}
+		logger.Error(logComponent).Msg("读取记忆失败，无可用的系统操作接口")
+		return &ReadMemoryResult{Success: false, Path: path, Error: "读取失败，无可用的系统操作接口"}
 	}
 	// 对齐 Python: 使用 line_range 读取
 	fsOpts := []sysop.FsOption{}
@@ -187,7 +190,7 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, content string, appendMode bool) *WriteMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return &WriteMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
+		return &WriteMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
@@ -196,8 +199,8 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("Memory write failed, no available sys_operation")
-		return &WriteMemoryResult{Success: false, Path: path, Error: "Memory write failed, no available sys_operation."}
+		logger.Error(logComponent).Msg("记忆写入失败，无可用的系统操作接口")
+		return &WriteMemoryResult{Success: false, Path: path, Error: "记忆写入失败，无可用的系统操作接口"}
 	}
 	fsOpts := []sysop.FsOption{
 		sysop.WithFsCreateIfNotExist(true),
@@ -209,15 +212,15 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	}
 	writeResult, err := sysOp.Fs().WriteFile(ctx, resolvedPath, content, fsOpts...)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("Write failed")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("写入失败")
 		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
 	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
-	action := "Wrote"
+	action := "写入"
 	if appendMode {
-		action = "Appended to"
+		action = "追加到"
 	}
-	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("Memory file written")
+	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("记忆文件已写入")
 	return &WriteMemoryResult{
 		Success:     true,
 		Path:        resolvedPath,
@@ -231,7 +234,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path string, oldText string, newText string) *EditMemoryResult {
 	ws := toolCtx.Workspace
 	if ws == nil {
-		return &EditMemoryResult{Success: false, Path: path, Error: "Workspace not initialized"}
+		return &EditMemoryResult{Success: false, Path: path, Error: "工作空间未初始化"}
 	}
 	isValid, result := ValidateMemoryPath(path, ws)
 	if !isValid {
@@ -240,19 +243,19 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("Edit failed, no available sys_operation")
-		return &EditMemoryResult{Success: false, Path: path, Error: "Edit failed, no available sys_operation."}
+		logger.Error(logComponent).Msg("编辑失败，无可用的系统操作接口")
+		return &EditMemoryResult{Success: false, Path: path, Error: "编辑失败，无可用的系统操作接口"}
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolvedPath)
 	if err != nil || readResult == nil || readResult.Data == nil {
-		return &EditMemoryResult{Success: false, Path: path, Error: fmt.Sprintf("failed to read file: %s", path)}
+		return &EditMemoryResult{Success: false, Path: path, Error: fmt.Sprintf("读取文件失败: %s", path)}
 	}
 	content := readResult.Data.Content
 	if !strings.Contains(content, oldText) {
 		return &EditMemoryResult{
 			Success: false,
 			Path:    path,
-			Error:   "old_text not found in file. Use read_memory tool to check exact content.",
+			Error:   "未在文件中找到 old_text。请使用 read_memory 工具检查确切内容。",
 		}
 	}
 	occurrences := strings.Count(content, oldText)
@@ -270,10 +273,10 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		sysop.WithFsAppendNewline(false),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("Edit write failed")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("编辑写入失败")
 		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
-	logger.Info(logComponent).Str("path", resolvedPath).Msg("Edited file")
+	logger.Info(logComponent).Str("path", resolvedPath).Msg("文件已编辑")
 	return &EditMemoryResult{
 		Success:  true,
 		Path:     resolvedPath,

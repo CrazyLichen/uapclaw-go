@@ -173,8 +173,8 @@ func TestAuthStrategyRegistry_ExecuteAuth_不支持的类型(t *testing.T) {
 	if result.Success {
 		t.Error("不支持的类型期望 Success=false")
 	}
-	if result.Message != "Unsupported auth type: unknown" {
-		t.Errorf("Message = %q, want Unsupported auth type: unknown", result.Message)
+	if result.Message != "不支持的认证类型: unknown" {
+		t.Errorf("Message = %q, want 不支持的认证类型: unknown", result.Message)
 	}
 }
 
@@ -294,7 +294,7 @@ func TestToolAuthResult_失败(t *testing.T) {
 	result := &ToolAuthResult{
 		Success:  false,
 		AuthData: map[string]any{},
-		Message:  "Unsupported auth type: unknown",
+		Message:  "不支持的认证类型: unknown",
 	}
 
 	if result.Success {

@@ -50,7 +50,7 @@ func chromaComparisonFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ComparisonExpr)
 	chromaOp, ok := chromaOperatorMap[e.Operator]
 	if !ok {
-		return nil, raiseQueryError(fmt.Sprintf("Unsupported comparison operator: %s", e.Operator))
+		return nil, raiseQueryError(fmt.Sprintf("不支持的比较运算符: %s", e.Operator))
 	}
 
 	whereFilter := make(map[string]any)
@@ -80,11 +80,11 @@ func chromaRangeFilter(expr QueryExpr) (any, error) {
 	case "in":
 		values, ok := toSlice(e.Value)
 		if !ok {
-			return nil, raiseQueryError("in operator requires a sequence or set value")
+			return nil, raiseQueryError("in 操作符需要序列或集合值")
 		}
 		whereFilter[e.Field] = map[string]any{"$in": values}
 	default:
-		return nil, raiseQueryError(fmt.Sprintf("Unsupported range operator: %s", e.Operator))
+		return nil, raiseQueryError(fmt.Sprintf("不支持的范围运算符: %s", e.Operator))
 	}
 
 	return map[string]any{
@@ -98,8 +98,8 @@ func chromaRangeFilter(expr QueryExpr) (any, error) {
 // 对应 Python: chroma_arithmetic_filter()
 func chromaArithmeticFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
-		"Chroma does not support arithmetic operations in metadata filters. " +
-			"Consider pre-computing the arithmetic result and storing it as a metadata field.")
+		"Chroma 不支持元数据过滤中的算术操作。" +
+			"请考虑预计算算术结果并将其存储为元数据字段。")
 }
 
 // chromaNullFilter Chroma 不支持 null 操作
@@ -107,9 +107,9 @@ func chromaArithmeticFilter(_ QueryExpr) (any, error) {
 // 对应 Python: chroma_null_filter()
 func chromaNullFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
-		"Chroma does not support nested JSON fields in metadata. " +
-			"Chroma only supports flat metadata (str, int, float, bool, None). " +
-			"Consider flattening your metadata structure (e.g., 'user.name' -> 'user_name').")
+		"Chroma 不支持元数据中的嵌套 JSON 字段。" +
+			"Chroma 仅支持扁平元数据（str, int, float, bool, None）。" +
+			"请考虑扁平化元数据结构（如 'user.name' → 'user_name'）。")
 }
 
 // chromaJSONFilter Chroma 不支持 JSON 字段操作
@@ -117,9 +117,9 @@ func chromaNullFilter(_ QueryExpr) (any, error) {
 // 对应 Python: chroma_json_filter()
 func chromaJSONFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
-		"Chroma does not support nested JSON fields in metadata. " +
-			"Chroma only supports flat metadata (str, int, float, bool, None). " +
-			"Consider flattening your metadata structure (e.g., 'user.name' -> 'user_name').")
+		"Chroma 不支持元数据中的嵌套 JSON 字段。" +
+			"Chroma 仅支持扁平元数据（str, int, float, bool, None）。" +
+			"请考虑扁平化元数据结构（如 'user.name' → 'user_name'）。")
 }
 
 // chromaArrayFilter Chroma 不支持数组索引操作
@@ -127,9 +127,9 @@ func chromaJSONFilter(_ QueryExpr) (any, error) {
 // 对应 Python: chroma_array_filter()
 func chromaArrayFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
-		"Chroma does not support array indexing in metadata. " +
-			"Chroma only supports flat metadata (str, int, float, bool, None). " +
-			"Consider flattening your array structure (e.g., 'tags[0]' -> 'tag_0').")
+		"Chroma 不支持元数据中的数组索引。" +
+			"Chroma 仅支持扁平元数据（str, int, float, bool, None）。" +
+			"请考虑扁平化数组结构（如 'tags[0]' → 'tag_0'）。")
 }
 
 // chromaLogicalFilter 将逻辑表达式转换为 Chroma where/where_document 过滤字典
@@ -140,11 +140,11 @@ func chromaLogicalFilter(expr QueryExpr) (any, error) {
 
 	// 对齐 Python: "not" 操作符不被 Chroma 支持
 	if strings.ToLower(e.Operator) == "not" {
-		return nil, raiseQueryError("Unsupported logical operator: not")
+		return nil, raiseQueryError("不支持逻辑操作符: not")
 	}
 
 	if e.Right == nil {
-		return nil, raiseQueryError(fmt.Sprintf("%s operator requires both left and right operands", strings.ToLower(e.Operator)))
+		return nil, raiseQueryError(fmt.Sprintf("%s 操作符需要左右两个操作数", strings.ToLower(e.Operator)))
 	}
 
 	leftResult, err := e.Left.ToExpr("chroma")
@@ -174,7 +174,7 @@ func chromaLogicalFilter(expr QueryExpr) (any, error) {
 		whereFilter = combineFilters(leftWhere, rightWhere, "$or")
 		whereDocFilter = combineFilters(leftWhereDoc, rightWhereDoc, "$or")
 	default:
-		return nil, raiseQueryError(fmt.Sprintf("Unsupported logical operator: %s", e.Operator))
+		return nil, raiseQueryError(fmt.Sprintf("不支持的逻辑操作符: %s", e.Operator))
 	}
 
 	return map[string]any{
@@ -200,7 +200,7 @@ func chromaTextMatchFilter(expr QueryExpr) (any, error) {
 	case MatchModeInfix:
 		whereDocFilter["$contains"] = e.Value
 	default:
-		return nil, raiseQueryError(fmt.Sprintf("Unknown match mode: %s", e.MatchMode))
+		return nil, raiseQueryError(fmt.Sprintf("未知匹配模式: %s", e.MatchMode))
 	}
 
 	return map[string]any{

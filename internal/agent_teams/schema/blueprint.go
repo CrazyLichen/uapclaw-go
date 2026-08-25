@@ -270,7 +270,7 @@ func ValidateLeaderModelResolved(spec TeamAgentSpec, leaderMemberModel *models.T
 		)
 	}
 
-	return fmt.Errorf("%s; resolve by either: %s", cause, tail)
+	return fmt.Errorf("%s; 解决方式: %s", cause, tail)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

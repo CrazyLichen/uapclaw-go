@@ -290,7 +290,7 @@ func grepSemantics(code int) ExitCodeMeaning {
 		return ExitCodeMeaning{IsError: false}
 	}
 	if code == 1 {
-		return ExitCodeMeaning{IsError: false, Message: "No matches found"}
+		return ExitCodeMeaning{IsError: false, Message: "未找到匹配项"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "grep error (exit " + itoa(code) + ")"}
 }
@@ -302,7 +302,7 @@ func findSemantics(code int) ExitCodeMeaning {
 		return ExitCodeMeaning{IsError: false}
 	}
 	if code == 1 {
-		return ExitCodeMeaning{IsError: false, Message: "Some directories inaccessible"}
+		return ExitCodeMeaning{IsError: false, Message: "部分目录不可访问"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "find error (exit " + itoa(code) + ")"}
 }
@@ -311,10 +311,10 @@ func findSemantics(code int) ExitCodeMeaning {
 // 对齐 Python: _diff_semantics (bash/_semantics.py L166-171)
 func diffSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
-		return ExitCodeMeaning{IsError: false, Message: "Files are identical"}
+		return ExitCodeMeaning{IsError: false, Message: "文件相同"}
 	}
 	if code == 1 {
-		return ExitCodeMeaning{IsError: false, Message: "Files differ"}
+		return ExitCodeMeaning{IsError: false, Message: "文件不同"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "diff error (exit " + itoa(code) + ")"}
 }
@@ -323,10 +323,10 @@ func diffSemantics(code int) ExitCodeMeaning {
 // 对齐 Python: _test_semantics (bash/_semantics.py L174-179)
 func testSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
-		return ExitCodeMeaning{IsError: false, Message: "Condition is true"}
+		return ExitCodeMeaning{IsError: false, Message: "条件为真"}
 	}
 	if code == 1 {
-		return ExitCodeMeaning{IsError: false, Message: "Condition is false"}
+		return ExitCodeMeaning{IsError: false, Message: "条件为假"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "test error (exit " + itoa(code) + ")"}
 }
@@ -338,7 +338,7 @@ func psReadSemantics(code int, stderr string) ExitCodeMeaning {
 		return ExitCodeMeaning{IsError: false}
 	}
 	if code == 1 && strings.TrimSpace(stderr) == "" {
-		return ExitCodeMeaning{IsError: false, Message: "No output returned"}
+		return ExitCodeMeaning{IsError: false, Message: "无输出返回"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "PowerShell read command error (exit " + itoa(code) + ")"}
 }
@@ -350,7 +350,7 @@ func psGetChildItemSemantics(code int, stdout, stderr string) ExitCodeMeaning {
 		return ExitCodeMeaning{IsError: false}
 	}
 	if code == 1 && stdout != "" && stderr == "" {
-		return ExitCodeMeaning{IsError: false, Message: "Partial results produced; some items may be inaccessible"}
+		return ExitCodeMeaning{IsError: false, Message: "部分结果已产生，部分项可能不可访问"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "Get-ChildItem error (exit " + itoa(code) + ")"}
 }
@@ -362,7 +362,7 @@ func psSearchSemantics(code int, stdout, stderr string) ExitCodeMeaning {
 		return ExitCodeMeaning{IsError: false}
 	}
 	if code == 1 && stdout == "" && stderr == "" {
-		return ExitCodeMeaning{IsError: false, Message: "No matches found"}
+		return ExitCodeMeaning{IsError: false, Message: "未找到匹配项"}
 	}
 	return ExitCodeMeaning{IsError: true, Message: "Search command error (exit " + itoa(code) + ")"}
 }

@@ -51,7 +51,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 		// 提取 session
 		sess := extractTaskToolSession(opts)
 		if sess == nil {
-			return nil, fmt.Errorf("taskTool requires a valid session in kwargs")
+			return nil, fmt.Errorf("taskTool 需要 kwargs 中提供有效的 session")
 		}
 
 		parentSessionID := sess.GetSessionID()

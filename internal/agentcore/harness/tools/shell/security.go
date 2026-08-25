@@ -85,13 +85,13 @@ var (
 // 3. 进程替换 <() 或 >()
 func CheckBashInjection(command string) (bool, string) {
 	if hasBacktickSubstitution(command) {
-		return true, "Shell injection detected: backtick command substitution"
+		return true, "检测到 Shell 注入：反引号命令替换"
 	}
 	if bashDollarParenRe.MatchString(command) {
-		return true, "Shell injection detected: $() command substitution"
+		return true, "检测到 Shell 注入：$() 命令替换"
 	}
 	if bashProcSubstRe.MatchString(command) {
-		return true, "Shell injection detected: process substitution <() or >()"
+		return true, "检测到 Shell 注入：进程替换 <() 或 >()"
 	}
 	return false, ""
 }

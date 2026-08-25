@@ -121,7 +121,7 @@ func dispatchCronAction(
 		// if not patch_input: patch_input = flat_kwargs
 		// return await backend.update_job(target_job_id, patch_input, context=context)
 		if targetJobID == "" {
-			return nil, fmt.Errorf("jobId is required")
+			return nil, fmt.Errorf("jobId 为必填项")
 		}
 		patchInput := mapVal(inputs, "patch")
 		if len(patchInput) == 0 {
@@ -138,7 +138,7 @@ func dispatchCronAction(
 		// if not target_job_id: raise ValueError("jobId is required")
 		// return {"deleted": await backend.delete_job(target_job_id)}
 		if targetJobID == "" {
-			return nil, fmt.Errorf("jobId is required")
+			return nil, fmt.Errorf("jobId 为必填项")
 		}
 		deleted, err := backend.DeleteJob(ctx, targetJobID)
 		if err != nil {
@@ -151,7 +151,7 @@ func dispatchCronAction(
 		// if not target_job_id: raise ValueError("jobId is required")
 		// return {"run_id": await backend.run_now(target_job_id)}
 		if targetJobID == "" {
-			return nil, fmt.Errorf("jobId is required")
+			return nil, fmt.Errorf("jobId 为必填项")
 		}
 		runID, err := backend.RunNow(ctx, targetJobID)
 		if err != nil {
@@ -165,7 +165,7 @@ func dispatchCronAction(
 		// return {"runs": await backend.get_runs(target_job_id)}
 		// Python 调用 get_runs 时未传 limit，使用接口默认值 20
 		if targetJobID == "" {
-			return nil, fmt.Errorf("jobId is required")
+			return nil, fmt.Errorf("jobId 为必填项")
 		}
 		runs, err := backend.GetRuns(ctx, targetJobID, 20)
 		if err != nil {
