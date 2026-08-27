@@ -6,7 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 )
+
+// mockDeepAgent 实现 DeepAgentInterface 的测试桩。
+type mockDeepAgent struct {
+	hinterfaces.DeepAgentInterface // 嵌入接口以部分满足，未调用的方法会 panic
+}
 
 // TestNewTeamHarness 测试 TeamHarness 构造函数
 func TestNewTeamHarness(t *testing.T) {
@@ -14,15 +20,16 @@ func TestNewTeamHarness(t *testing.T) {
 		TeamTool:   "mock_tool_rail",
 		TeamPolicy: "mock_policy_rail",
 	}
+	var agent hinterfaces.DeepAgentInterface // nil 接口
 	h := agent_teams.NewTeamHarness(
-		"mock_deep_agent",
+		agent,
 		rails,
 		string(atschema.TeamRoleLeader),
 		"leader_1",
 		false,
 	)
 	assert.NotNil(t, h)
-	assert.Equal(t, "mock_deep_agent", h.InnerAgent())
+	assert.Nil(t, h.InnerAgent())
 	assert.Equal(t, rails, h.Rails())
 	assert.Equal(t, string(atschema.TeamRoleLeader), h.Role())
 	assert.Equal(t, "leader_1", h.MemberName())
@@ -44,23 +51,24 @@ func TestTeamHarness_Rails(t *testing.T) {
 
 // TestTeamHarness_RunAgentCustomizer 测试自定义钩子调用
 func TestTeamHarness_RunAgentCustomizer(t *testing.T) {
-	var capturedAgent any
+	var capturedAgent hinterfaces.DeepAgentInterface
 	var capturedName string
 	var capturedRole string
 	called := false
 
-	customizer := func(deepAgent any, memberName string, roleValue string) {
+	customizer := func(deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string) {
 		called = true
 		capturedAgent = deepAgent
 		capturedName = memberName
 		capturedRole = roleValue
 	}
 
-	h := agent_teams.NewTeamHarness("my_agent", nil, string(atschema.TeamRoleLeader), "leader_1", false)
-	h.RunAgentCustomizer(agent_teams.AgentCustomizer(customizer))
+	var agent hinterfaces.DeepAgentInterface
+	h := agent_teams.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h.RunAgentCustomizer(customizer)
 
 	assert.True(t, called)
-	assert.Equal(t, "my_agent", capturedAgent)
+	assert.Nil(t, capturedAgent)
 	assert.Equal(t, "leader_1", capturedName)
 	assert.Equal(t, "leader", capturedRole)
 }

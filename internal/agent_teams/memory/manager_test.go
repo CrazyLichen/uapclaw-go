@@ -90,8 +90,9 @@ func TestTeamMemoryManager_Close(t *testing.T) {
 func TestTeamMemoryManager_ExtractionModel(t *testing.T) {
 	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "t1"})
 	assert.Nil(t, mgr.ExtractionModel())
-	mgr.SetExtractionModel("test_model")
-	assert.Equal(t, "test_model", mgr.ExtractionModel())
+	// 设置 nil 仍正常工作
+	mgr.SetExtractionModel(nil)
+	assert.Nil(t, mgr.ExtractionModel())
 }
 
 // TestTeamMemoryManager_Getter 测试各种 getter

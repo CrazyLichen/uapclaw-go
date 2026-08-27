@@ -5,7 +5,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -43,8 +45,8 @@ type TeamMemoryManager struct {
 	db database.TeamDatabase
 	// taskManager 任务管理器。⤵️ 回填: 9.65a
 	taskManager *tools.TeamTaskManager
-	// extractionModel 提取模型。⤵️ 回填: 9.65a
-	extractionModel any
+	// extractionModel 提取模型
+	extractionModel *llm.Model
 	// tzOffset 时区偏移
 	tzOffset float64
 	// sysOperation 系统操作接口。⤴️ 9.64 具体类型回填
@@ -59,8 +61,8 @@ type TeamMemoryManager struct {
 	ownedToolNames map[string]struct{}
 	// ownedToolIDs 已注册工具ID集合。⤵️ 回填: 7.2
 	ownedToolIDs map[string]struct{}
-	// deepAgentForCleanup 用于清理的 DeepAgent。⤵️ 回填: 7.2
-	deepAgentForCleanup any
+	// deepAgentForCleanup 用于清理的 DeepAgent
+	deepAgentForCleanup interfaces.DeepAgentInterface
 	// sharedManager 共享记忆管理器
 	sharedManager *SharedMemoryManager
 	// cachedBaseSection 缓存的基础提示词段。⤵️ 回填: 7.2
@@ -122,10 +124,10 @@ func (m *TeamMemoryManager) InitToolkit(_ context.Context) (bool, error) {
 }
 
 // RegisterTools 将记忆工具注册到 DeepAgent。⤵️ 回填: 7.2+9.65a — 当前空实现
-func (m *TeamMemoryManager) RegisterTools(_ any) {}
+func (m *TeamMemoryManager) RegisterTools(_ interfaces.DeepAgentInterface) {}
 
 // LoadAndInject 加载个人记忆+共享记忆→注入系统提示词。⤵️ 回填: 7.2 — 当前空实现
-func (m *TeamMemoryManager) LoadAndInject(_ context.Context, _ any, _ string) error { return nil }
+func (m *TeamMemoryManager) LoadAndInject(_ context.Context, _ interfaces.DeepAgentInterface, _ string) error { return nil }
 
 // ExtractAfterRound Leader 专属：提取 agent 蒸馏团队记忆。⤵️ 回填: 7.2+9.65a — 当前空实现
 func (m *TeamMemoryManager) ExtractAfterRound(_ context.Context) error { return nil }
@@ -134,10 +136,10 @@ func (m *TeamMemoryManager) ExtractAfterRound(_ context.Context) error { return 
 func (m *TeamMemoryManager) Close(_ context.Context) error { return nil }
 
 // ExtractionModel 返回提取模型
-func (m *TeamMemoryManager) ExtractionModel() any { return m.extractionModel }
+func (m *TeamMemoryManager) ExtractionModel() *llm.Model { return m.extractionModel }
 
 // SetExtractionModel 设置提取模型
-func (m *TeamMemoryManager) SetExtractionModel(model any) { m.extractionModel = model }
+func (m *TeamMemoryManager) SetExtractionModel(model *llm.Model) { m.extractionModel = model }
 
 // SharedManager 返回共享记忆管理器
 func (m *TeamMemoryManager) SharedManager() *SharedMemoryManager { return m.sharedManager }

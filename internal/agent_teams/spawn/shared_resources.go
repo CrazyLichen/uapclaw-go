@@ -3,6 +3,7 @@ package spawn
 import (
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -24,11 +25,9 @@ var (
 	// ⤵️ 预留：TeamRuntime（9.85）实现后回填类型
 	sharedRuntime any
 	// sharedMemoryDB 进程级 InMemoryTeamDatabase 单例
-	// ⤵️ 回填: 9.65a — InMemoryTeamDatabase 具体实现
-	sharedMemoryDB any
-	// sharedDBInstances 按 db_type::connection_string 紙引的 TeamDatabase 实例
-	// ⤵️ 回填: 9.65a — TeamDatabase 具体实现
-	sharedDBInstances = make(map[string]any)
+	sharedMemoryDB *database.InMemoryTeamDatabase
+	// sharedDBInstances 按 db_type::connection_string 索引的 TeamDatabase 实例
+	sharedDBInstances = make(map[string]database.TeamDatabase)
 	// resourcesMu 共享资源读写锁
 	resourcesMu sync.RWMutex
 )
@@ -76,7 +75,7 @@ func CleanupSharedResources() {
 
 	sharedRuntime = nil
 	sharedMemoryDB = nil
-	sharedDBInstances = make(map[string]any)
+	sharedDBInstances = make(map[string]database.TeamDatabase)
 
 	// ⤵️ 预留：Messager（9.65）实现后回填
 	// cleanupInprocessBus()

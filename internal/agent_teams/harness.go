@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -37,10 +38,10 @@ type MountedRails struct {
 }
 
 // AgentCustomizer 用户自定义钩子签名。
-// 对齐 Python: AgentCustomizer = Callable[[Any, Optional[str], str], None]
+// 对齐 Python: AgentCustomizer = Callable[[DeepAgent, Optional[str], str], None]
 //
 // 参数：deepAgent, memberName, roleValue
-type AgentCustomizer func(deepAgent any, memberName string, roleValue string)
+type AgentCustomizer func(deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string)
 
 // TeamHarness TeamAgent 与底层 DeepAgent 之间的唯一适配器。
 // 对齐 Python: TeamHarness (openjiuwen/agent_teams/harness.py)
@@ -50,8 +51,7 @@ type AgentCustomizer func(deepAgent any, memberName string, roleValue string)
 // agent_teams 中的业务代码保持相同的调用面。
 type TeamHarness struct {
 	// deepAgent 内层 DeepAgent 实例
-	// TODO(#9.57): 改为 hinterfaces.DeepAgentInterface 类型
-	deepAgent any
+	deepAgent hinterfaces.DeepAgentInterface
 	// rails 已挂载的 Rails 句柄
 	rails *MountedRails
 	// role 团队角色（对齐 Python TeamRole，底层为 string）
@@ -83,7 +83,7 @@ const (
 // NewTeamHarness 创建新的 TeamHarness 实例。
 // 对齐 Python: TeamHarness.__init__(deep_agent, rails, ...)
 func NewTeamHarness(
-	deepAgent any,
+	deepAgent hinterfaces.DeepAgentInterface,
 	rails *MountedRails,
 	role string,
 	memberName string,
@@ -176,7 +176,7 @@ func (h *TeamHarness) MemberName() string {
 // 对齐 Python: TeamHarness.inner_agent property
 //
 // 生产代码不得使用此方法。仅用于测试和少量迁移辅助。
-func (h *TeamHarness) InnerAgent() any {
+func (h *TeamHarness) InnerAgent() hinterfaces.DeepAgentInterface {
 	return h.deepAgent
 }
 

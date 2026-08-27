@@ -4,6 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
@@ -45,8 +46,8 @@ type TeamMemoryManagerParams struct {
 	DB database.TeamDatabase
 	// TaskManager 任务管理器。⤵️ 回填: 9.65a
 	TaskManager *tools.TeamTaskManager
-	// ExtractionModel 提取模型。⤵️ 回填: 9.65a
-	ExtractionModel any
+	// ExtractionModel 提取模型
+	ExtractionModel *llm.Model
 	// TimezoneOffsetHours 时区偏移小时数
 	TimezoneOffsetHours float64
 }
