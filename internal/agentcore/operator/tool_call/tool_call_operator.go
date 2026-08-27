@@ -1,6 +1,8 @@
 package tool_call
 
 import (
+	"maps"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
@@ -21,7 +23,7 @@ type ToolCallOperator struct {
 	// operatorID 操作器标识
 	operatorID string
 	// descriptions 工具描述字典 map[tool_name]description
-	descriptions map[string]any
+	descriptions map[string]string
 	// onParameterUpdated 参数变更回调
 	onParameterUpdated operator.ParameterUpdatedCallback
 }
@@ -49,7 +51,7 @@ const (
 func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *ToolCallOperator {
 	op := &ToolCallOperator{
 		operatorID:   operatorID,
-		descriptions: make(map[string]any),
+		descriptions: map[string]string{},
 	}
 
 	for _, opt := range opts {
@@ -86,22 +88,22 @@ func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 }
 
 // SetParameter 设置可调参数值（工具描述）。
-// 仅接受 target="tool_description" 且 value 为 map 类型。
-// 直接赋值，不做类型转换，对齐 Python value.copy() 行为。
+// 仅接受 target="tool_description" 且 value 为 map[string]string 或 map[string]any 类型。
+// 不合法类型静默忽略（对齐 Python 行为），不更新内部状态。
 //
 // 对应 Python: ToolCallOperator.set_parameter(target, value)
 func (op *ToolCallOperator) SetParameter(target string, value any) {
 	if target != TargetToolDescription {
 		return
 	}
-	descMap, ok := value.(map[string]any)
-	if !ok {
+	descs := toDescriptions(value)
+	if descs == nil {
 		return
 	}
-	op.descriptions = cloneAnyMap(descMap)
+	op.descriptions = descs
 
 	if op.onParameterUpdated != nil {
-		op.onParameterUpdated(target, cloneAnyMap(op.descriptions))
+		op.onParameterUpdated(target, maps.Clone(op.descriptions))
 	}
 }
 
@@ -110,22 +112,23 @@ func (op *ToolCallOperator) SetParameter(target string, value any) {
 // 对应 Python: ToolCallOperator.get_state()
 func (op *ToolCallOperator) GetState() map[string]any {
 	return map[string]any{
-		TargetToolDescription: cloneAnyMap(op.descriptions),
+		TargetToolDescription: maps.Clone(op.descriptions),
 	}
 }
 
 // LoadState 从检查点恢复状态。
 // 触发 onParameterUpdated 回调。
-// 直接赋值，不做类型转换，对齐 Python state["tool_description"].copy() 行为。
+// 直接赋值，对齐 Python state["tool_description"].copy() 行为。
 //
 // 对应 Python: ToolCallOperator.load_state(state)
 func (op *ToolCallOperator) LoadState(state map[string]any) {
 	if td, ok := state[TargetToolDescription]; ok {
-		if descMap, ok := td.(map[string]any); ok {
-			op.descriptions = cloneAnyMap(descMap)
+		descs := toDescriptions(td)
+		if descs != nil {
+			op.descriptions = descs
 
 			if op.onParameterUpdated != nil {
-				op.onParameterUpdated(TargetToolDescription, cloneAnyMap(op.descriptions))
+				op.onParameterUpdated(TargetToolDescription, maps.Clone(op.descriptions))
 			}
 		}
 	}
@@ -140,10 +143,10 @@ func (op *ToolCallOperator) ApplyUpdate(target string, update schema.UpdateValue
 }
 
 // WithDescriptions 设置初始工具描述选项。
-func WithDescriptions(descriptions map[string]any) ToolCallOperatorOption {
+func WithDescriptions(descriptions map[string]string) ToolCallOperatorOption {
 	return func(op *ToolCallOperator) {
 		if descriptions != nil {
-			op.descriptions = cloneAnyMap(descriptions)
+			op.descriptions = maps.Clone(descriptions)
 		}
 	}
 }
@@ -155,14 +158,34 @@ func WithToolCallOnParameterUpdated(cb operator.ParameterUpdatedCallback) ToolCa
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// cloneAnyMap 克隆 map[string]any。
-func cloneAnyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
+// toDescriptions 将 any 值转为 map[string]string。
+// 支持 map[string]string 和 map[string]any 两种输入，
+// map[string]any 中的值会被转为字符串（对齐 Python Dict[str, str]）。
+// 不合法类型返回 nil。
+func toDescriptions(value any) map[string]string {
+	if value == nil {
+		return nil
 	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
+	switch v := value.(type) {
+	case map[string]string:
+		return maps.Clone(v)
+	case map[string]any:
+		result := make(map[string]string, len(v))
+		for k, val := range v {
+			result[k] = toString(val)
+		}
+		return result
+	default:
+		return nil
 	}
-	return result
+}
+
+// toString 将 any 转为 string。
+func toString(v any) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	default:
+		return ""
+	}
 }

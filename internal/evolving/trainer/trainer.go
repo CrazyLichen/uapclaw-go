@@ -137,7 +137,6 @@ func (t *Trainer) Train(
 		return agent, nil
 	}
 
-	// ⤴️ 9.78 EvolveCheckpoint 已回填：恢复检查点逻辑
 	// 对齐 Python: self._resume_if_needed(agent, progress)
 	_ = t.ResumeIfNeeded(ctx, agent, progress)
 
@@ -227,7 +226,6 @@ func (t *Trainer) Train(
 
 		fireCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
 
-		// ⤴️ 9.78 EvolveCheckpoint 已回填：检查点保存逻辑
 		// 对齐 Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
 		_ = t.SaveCheckpointIfNeeded(agent, progress, improved)
 
