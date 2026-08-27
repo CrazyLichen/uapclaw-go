@@ -661,7 +661,7 @@ func TestPushEvolutionStatus(t *testing.T) {
 		SessionID: "sess-1",
 	}
 	update := BuildEvolutionStatusUpdate("req-1", "running", "generating", "Updating")
-	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
+	buildMsgFn := func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any {
 		return map[string]any{
 			"session_id": sessionID,
 			"request_id": requestID,
@@ -695,7 +695,7 @@ func TestPushEvolutionStatus_noRequestID(t *testing.T) {
 		SessionID: "sess-1",
 	}
 	update := BuildEvolutionStatusUpdate("req-1", "running", "generating")
-	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
+	buildMsgFn := func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any {
 		return payload
 	}
 
@@ -720,7 +720,7 @@ func TestPushEvolutionEvent(t *testing.T) {
 		SessionID: "sess-1",
 	}
 	evt := map[string]any{"event_type": "chat.answer", "content": "result"}
-	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
+	buildMsgFn := func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any {
 		return map[string]any{"session_id": sessionID, "payload": payload}
 	}
 
@@ -778,7 +778,7 @@ func TestPushEvolutionProgress(t *testing.T) {
 	parseFn := func(evt map[string]any) map[string]any {
 		return evt
 	}
-	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
+	buildMsgFn := func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any {
 		return map[string]any{"session_id": sessionID, "payload": payload}
 	}
 
@@ -804,7 +804,7 @@ func TestPushEvolutionProgress_nilChunk(t *testing.T) {
 		SessionID: "sess-1",
 	}
 	parseFn := func(evt map[string]any) map[string]any { return nil }
-	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
+	buildMsgFn := func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any {
 		return payload
 	}
 

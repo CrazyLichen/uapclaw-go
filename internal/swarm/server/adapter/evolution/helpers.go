@@ -59,8 +59,9 @@ type TerminalProgressItem struct {
 }
 
 // BuildPushMessageFunc 构建 server_push 消息的函数类型。
-// 对齐 Python: build_server_push_message 回调参数
-type BuildPushMessageFunc func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any
+// 对齐 Python: build_server_push_message 回调参数（关键字参数，位置无关）。
+// 参数顺序与 session.BuildServerPushMessage 一致，可直接赋值。
+type BuildPushMessageFunc func(sessionID, requestID string, payload map[string]any, fallbackChannelID ...string) map[string]any
 
 // ParseStreamChunkFunc 解析流式 chunk 的函数类型。
 // 对齐 Python: parse_stream_chunk 回调参数
@@ -566,7 +567,7 @@ func PushEvolutionStatus(
 		payload["request_id"] = update.RequestID
 	}
 
-	msg := buildMsgFn(pushCtx.SessionID, update.RequestID, pushCtx.ChannelID, payload)
+	msg := buildMsgFn(pushCtx.SessionID, update.RequestID, payload, pushCtx.ChannelID)
 	return pushCtx.Transport.SendPush(ctx, msg)
 }
 
@@ -589,7 +590,7 @@ func PushEvolutionEvent(
 		evt["request_id"] = requestID
 	}
 
-	msg := buildMsgFn(pushCtx.SessionID, requestID, pushCtx.ChannelID, evt)
+	msg := buildMsgFn(pushCtx.SessionID, requestID, evt, pushCtx.ChannelID)
 	return pushCtx.Transport.SendPush(ctx, msg)
 }
 
@@ -641,7 +642,7 @@ func PushEvolutionProgress(
 		if parsed == nil {
 			continue
 		}
-		msg := buildMsgFn(pushCtx.SessionID, requestID, pushCtx.ChannelID, parsed)
+		msg := buildMsgFn(pushCtx.SessionID, requestID, parsed, pushCtx.ChannelID)
 		if err := pushCtx.Transport.SendPush(ctx, msg); err != nil {
 			logger.Warn(logComponentEvolution).
 				Str("request_id", requestID).
