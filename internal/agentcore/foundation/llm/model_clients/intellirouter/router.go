@@ -157,7 +157,6 @@ const (
 	defaultHealthCheckTimeout = 5.0    // 健康检查超时(秒)
 )
 
-// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────

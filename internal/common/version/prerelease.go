@@ -20,8 +20,8 @@ var prereleasePattern = regexp.MustCompile(
 	`\d[.\-_]?(?:alpha|beta|rc|dev|pre|a|b)(?:\.?\d+)?(?:\b|$)`,
 )
 
-// baseVersionPattern 基础版本号的正则表达式
-// 匹配纯数字点分版本号，如 0.2.0
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var baseVersionPattern = regexp.MustCompile(
 	`^(\d+(?:\.\d+)*)` +
 		`(?:[.\-_]?(?:alpha|beta|rc|dev|pre|a|b)(?:[.\-_]?\d+)?)*$`,

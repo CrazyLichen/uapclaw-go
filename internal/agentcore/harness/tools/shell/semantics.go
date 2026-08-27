@@ -40,6 +40,9 @@ const (
 
 // bash 命令集
 // 对齐 Python: _SEARCH_COMMANDS (bash/_semantics.py L33-36)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var bashSearchCommands = map[string]bool{
 	"find": true, "grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true, "ack": true,
 	"locate": true, "which": true, "whereis": true, "type": true, "command": true, "findstr": true,

@@ -77,7 +77,8 @@ const (
 // 编译时验证 ProgressiveToolRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProgressiveToolRail)(nil)
 
-// progressiveLogComponent 日志组件标识
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var progressiveLogComponent = logger.ComponentAgentCore
 
 // navigationBaselineTools 导航中始终包含的基础工具名集合

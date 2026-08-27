@@ -68,6 +68,8 @@ const (
 	WorkspaceNodeWorktreeLinks WorkspaceNode = ".worktree"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore

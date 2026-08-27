@@ -79,7 +79,8 @@ const (
 // 编译时验证 BaseInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*BaseInterruptRail)(nil)
 
-// interruptLogComponent 中断拦截日志组件标识
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var interruptLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

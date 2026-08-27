@@ -8,7 +8,7 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryIndexManager 记忆索引管理器接口。对齐 Python MemoryIndexManager
 type MemoryIndexManager interface {

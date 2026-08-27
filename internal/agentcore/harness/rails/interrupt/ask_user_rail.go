@@ -56,7 +56,8 @@ type AskUserRail struct {
 // 编译时验证 AskUserRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AskUserRail)(nil)
 
-// askUserRailLogComponent 日志组件标识
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var askUserRailLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

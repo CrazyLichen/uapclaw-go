@@ -341,6 +341,8 @@ const (
 	LLMOutput LLMCallEventType = "_framework:llm_output"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// ToolCallStarted 工具调用启动
 	ToolCallStarted ToolCallEventType = "_framework:tool_call_started"

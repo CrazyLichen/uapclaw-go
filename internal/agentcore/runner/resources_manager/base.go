@@ -75,6 +75,8 @@ const (
 	TagMatchAny
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// TagUpdateMerge 合并策略：新标签与已有标签合并
 	TagUpdateMerge TagUpdateStrategy = iota

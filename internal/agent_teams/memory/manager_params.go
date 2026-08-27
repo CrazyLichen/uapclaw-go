@@ -3,8 +3,8 @@ package memory
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )

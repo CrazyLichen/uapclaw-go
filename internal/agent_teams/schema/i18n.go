@@ -35,11 +35,8 @@ var (
 	mu              sync.RWMutex
 )
 
-// STRINGS 双语字典。
-// 对齐 Python: STRINGS (openjiuwen/agent_teams/i18n.py)
-// 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
-//
-// 包含：blueprint.default_persona / team.* / dispatcher.* / hitt.* 全部条目
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var STRINGS = map[Language]map[string]string{
 	LanguageCN: {
 		// 对齐 Python: schema/blueprint.py

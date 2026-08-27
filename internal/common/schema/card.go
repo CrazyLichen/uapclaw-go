@@ -75,6 +75,8 @@ const (
 // 确保 BaseCard 和 WorkflowCard 实现 CardInterface 接口。
 var _ CardInterface = (*BaseCard)(nil)
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var _ CardInterface = (*WorkflowCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

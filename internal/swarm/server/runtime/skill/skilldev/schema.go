@@ -263,6 +263,8 @@ const (
 	SkillDevStageError SkillDevStage = "error"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// SkillDevTaskModeCreate 纯 query 创建
 	SkillDevTaskModeCreate SkillDevTaskMode = "create"

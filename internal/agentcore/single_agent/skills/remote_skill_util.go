@@ -65,7 +65,7 @@ type gitHubTreeResponse struct {
 	// Tree 文件树条目列表
 	Tree []gitHubTreeItem `json:"tree"`
 	// Truncated 是否被截断
-	Truncated bool   `json:"truncated"`
+	Truncated bool `json:"truncated"`
 	// Message 错误消息
 	Message string `json:"message,omitempty"`
 }

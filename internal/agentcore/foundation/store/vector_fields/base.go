@@ -38,6 +38,8 @@ const (
 	DatabaseTypeES
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// IndexTypeAUTO 自动选择索引类型
 	IndexTypeAUTO IndexType = iota

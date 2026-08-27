@@ -37,6 +37,7 @@ type ProcessInfo struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -46,7 +47,6 @@ const (
 	forceKillWait = 1 * time.Second
 )
 
-// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────

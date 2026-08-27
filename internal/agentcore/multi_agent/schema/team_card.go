@@ -112,7 +112,8 @@ type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
 // 编译时验证 TeamCard 满足 TeamCardInterface。
 var _ TeamCardInterface = (*TeamCard)(nil)
 
-// 编译时验证 EventDrivenTeamCard 满足 TeamCardInterface。
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var _ TeamCardInterface = (*EventDrivenTeamCard)(nil)
 
 // 编译时验证 TeamCard 满足 schema.CardInterface。

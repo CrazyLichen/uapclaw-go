@@ -15,6 +15,9 @@ import (
 
 // PlanAgentFactoryName plan 子代理工厂名称
 // 对齐 Python: PLAN_AGENT_FACTORY_NAME (隐含于 agent_card.name="plan_agent")
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const PlanAgentFactoryName = "plan_agent"
 
 // ──────────────────────────── 全局变量 ────────────────────────────

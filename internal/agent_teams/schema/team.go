@@ -103,6 +103,8 @@ const (
 	TeamLifecyclePersistent TeamLifecycle = "persistent"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// TeamRoleLeader Leader 角色
 	TeamRoleLeader TeamRole = "leader"

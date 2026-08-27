@@ -10,6 +10,8 @@ import (
 	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -627,3 +629,73 @@ func TestResumeIfNeeded_无ResumeFrom(t *testing.T) {
 		t.Errorf("期望 nil 错误, 实际=%v", err)
 	}
 }
+
+// TestProgress_GetEpoch 测试 GetEpoch getter
+func TestProgress_GetEpoch(t *testing.T) {
+	p := NewProgress()
+	p.CurrentEpoch = 7
+	if p.GetEpoch() != 7 {
+		t.Errorf("期望 GetEpoch=7, 实际=%d", p.GetEpoch())
+	}
+}
+
+// TestProgress_GetBatchIter 测试 GetBatchIter getter
+func TestProgress_GetBatchIter(t *testing.T) {
+	p := NewProgress()
+	p.CurrentBatchIter = 3
+	if p.GetBatchIter() != 3 {
+		t.Errorf("期望 GetBatchIter=3, 实际=%d", p.GetBatchIter())
+	}
+}
+
+// TestProgress_GetBestScore 测试 GetBestScore getter
+func TestProgress_GetBestScore(t *testing.T) {
+	p := NewProgress()
+	p.BestScore = 0.95
+	if p.GetBestScore() != 0.95 {
+		t.Errorf("期望 GetBestScore=0.95, 实际=%f", p.GetBestScore())
+	}
+}
+
+// TestProgress_GetCurrentEpochScore 测试 GetCurrentEpochScore getter
+func TestProgress_GetCurrentEpochScore(t *testing.T) {
+	p := NewProgress()
+	p.CurrentEpochScore = 0.82
+	if p.GetCurrentEpochScore() != 0.82 {
+		t.Errorf("期望 GetCurrentEpochScore=0.82, 实际=%f", p.GetCurrentEpochScore())
+	}
+}
+
+// TestProgress_GetSeed 测试 GetSeed 返回 nil
+func TestProgress_GetSeed(t *testing.T) {
+	p := NewProgress()
+	if p.GetSeed() != nil {
+		t.Errorf("期望 GetSeed=nil, 实际=%v", p.GetSeed())
+	}
+}
+
+// TestTrainer_UpdaterRequiresForward_有Updater 测试有 Updater 时 UpdaterRequiresForward
+func TestTrainer_UpdaterRequiresForward_有Updater(t *testing.T) {
+	trainer := NewTrainer(WithUpdater(&fakeUpdater{requiresForward: false}))
+	if trainer.UpdaterRequiresForward() {
+		t.Error("期望 UpdaterRequiresForward=false")
+	}
+}
+
+// fakeUpdater 用于测试的模拟 Updater
+type fakeUpdater struct {
+	requiresForward bool
+}
+
+func (u *fakeUpdater) Bind(_ map[string]operator.Operator, _ []string, _ map[string]any) int {
+	return 0
+}
+func (u *fakeUpdater) RequiresForwardData() bool { return u.requiresForward }
+func (u *fakeUpdater) Update(_ context.Context, _ []*trajectory.Trajectory, _ []*dataset.EvaluatedCase, _ map[string]any) ([]map[schema.UpdateKey]any, error) {
+	return nil, nil
+}
+func (u *fakeUpdater) Process(_ context.Context, _ []*trajectory.Trajectory, _ []*signal.EvolutionSignal, _ map[string]any) ([]map[schema.UpdateKey]any, error) {
+	return nil, nil
+}
+func (u *fakeUpdater) GetState() map[string]any   { return nil }
+func (u *fakeUpdater) LoadState(_ map[string]any) {}

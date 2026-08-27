@@ -26,7 +26,8 @@ type DecryptFunc func(envName, value string) (string, bool)
 // 分组 1: 变量名；分组 2: 默认值（可选）。
 var envVarPattern = regexp.MustCompile(`\$\{([^:}]+)(?::-([^}]*))?\}`)
 
-// sensitiveKeywords 需要解密的敏感字段关键词。
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var sensitiveKeywords = []string{"api_key", "token"}
 
 // ──────────────────────────── 导出函数 ────────────────────────────

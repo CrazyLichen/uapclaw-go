@@ -65,6 +65,8 @@ const (
 	SlashRewind
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// ModeAgent 代理模式
 	ModeAgent ModeSubcommand = iota

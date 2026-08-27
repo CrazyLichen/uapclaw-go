@@ -96,7 +96,8 @@ const (
 	currentRoundMemoryBlockMarker = "[CURRENT_ROUND_MEMORY_BLOCK]"
 )
 
-// defaultCurrentRoundCompressionPrompt 内置压缩提示词，与 Python DEFAULT_COMPRESSION_PROMPT 完全对齐
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const defaultCurrentRoundCompressionPrompt = `You are a **Task Data Preservation Expert**.
 
 Your role is to produce a **high-fidelity incremental memory block** for long-running agent tasks.

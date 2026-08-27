@@ -59,9 +59,8 @@ var browserProgressTagRE = regexp.MustCompile(
 	`<browser_progress>\s*(\{.*?\})\s*</browser_progress>`,
 )
 
-// browserProgressFormatGuidance 进度格式指南。
-//
-// 对齐 Python: _BROWSER_PROGRESS_FORMAT_GUIDANCE
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var browserProgressFormatGuidance = map[string]string{
 	"en": "When you stop and answer without another browser tool call, append exactly one " +
 		"<browser_progress>{...}</browser_progress> JSON block. " +

@@ -70,6 +70,9 @@ const (
 
 // vcsDirectoriesToExclude 版本控制目录排除列表。
 // 对齐 Python: GrepTool.VCS_DIRECTORIES_TO_EXCLUDE (filesystem.py L1537)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var vcsDirectoriesToExclude = []string{".git", ".svn", ".hg", ".bzr", ".jj", ".sl"}
 
 // grepLineRe 匹配 grep/rg content 模式输出行：filepath:linenum:content

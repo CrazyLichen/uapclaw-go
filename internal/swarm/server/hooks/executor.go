@@ -68,7 +68,6 @@ const (
 	HookOutcomeNonBlockingError = "non_blocking_error"
 )
 
-// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────

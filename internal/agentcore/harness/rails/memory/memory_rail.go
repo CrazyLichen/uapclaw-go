@@ -64,7 +64,8 @@ const (
 // 编译时验证 MemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*MemoryRail)(nil)
 
-// memoryLogComponent 日志组件标识
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var memoryLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

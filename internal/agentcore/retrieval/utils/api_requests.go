@@ -46,6 +46,8 @@ const (
 	TaskEmbedding TaskName = "Embedding"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// defaultMaxRetries 默认最大重试次数
 	defaultMaxRetries = 3

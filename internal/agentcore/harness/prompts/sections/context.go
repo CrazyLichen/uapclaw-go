@@ -53,7 +53,8 @@ var templateMarkers = []string{
 // htmlCommentRegexp HTML 注释正则
 var htmlCommentRegexp = regexp.MustCompile(`(?s)<!--.*?-->`)
 
-// markdownHeadingRegexp Markdown 标题正则
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var markdownHeadingRegexp = regexp.MustCompile(`(?m)^#{1,6}\s+.*$`)
 
 // hiddenTools 隐藏工具集合（不在工具列表中展示）

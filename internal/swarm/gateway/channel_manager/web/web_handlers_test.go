@@ -822,3 +822,33 @@ func splitSessionID(sid string) []string {
 	parts = append(parts, sid[start:])
 	return parts
 }
+
+// TestIsSensitiveKey 测试敏感键判断
+func TestIsSensitiveKey(t *testing.T) {
+	assert.True(t, isSensitiveKey("api_key"))
+	assert.True(t, isSensitiveKey("my_api_key"))
+	assert.True(t, isSensitiveKey("access_token"))
+	assert.True(t, isSensitiveKey("token_secret"))
+	assert.False(t, isSensitiveKey("model_name"))
+	assert.False(t, isSensitiveKey("base_url"))
+	assert.False(t, isSensitiveKey("timeout"))
+}
+
+// TestStrOrEmpty 测试 strOrEmpty 转换
+func TestStrOrEmpty(t *testing.T) {
+	assert.Equal(t, "", strOrEmpty(nil))
+	assert.Equal(t, "hello", strOrEmpty("hello"))
+	assert.Equal(t, "42", strOrEmpty(42))
+	assert.Equal(t, "", strOrEmpty((*string)(nil)))
+	assert.Equal(t, "3.14", strOrEmpty(3.14))
+}
+
+// TestBuildSessionDeleteEnvelope 测试构建 session.delete 信封
+func TestBuildSessionDeleteEnvelope(t *testing.T) {
+	params := map[string]any{"reason": "cleanup"}
+	envelope := buildSessionDeleteEnvelope("sess-123", params)
+	require.NotNil(t, envelope)
+	assert.Equal(t, "session.delete", envelope.Method)
+	assert.Equal(t, "sess-123", envelope.SessionID)
+	assert.Equal(t, params, envelope.Params)
+}

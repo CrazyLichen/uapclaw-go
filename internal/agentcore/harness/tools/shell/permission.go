@@ -39,6 +39,9 @@ const (
 
 // bash 文件操作命令集
 // 对齐 Python: _FILE_OP_COMMANDS (bash/_permission.py L43-46)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var bashFileOpCommands = map[string]bool{
 	"mkdir": true, "touch": true, "rm": true, "rmdir": true, "mv": true, "cp": true,
 	"sed": true, "chmod": true, "chown": true, "chgrp": true, "ln": true,

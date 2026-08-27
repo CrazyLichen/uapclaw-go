@@ -87,6 +87,8 @@ const (
 	UpdateModeMerge UpdateMode = MergeMode // "merge"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// UpdateEffectState 直接状态更新效果。
 	UpdateEffectState UpdateEffect = StateEffect // "state"

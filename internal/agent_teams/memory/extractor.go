@@ -23,7 +23,8 @@ const (
 	extractionAgentMaxIterations = 5
 )
 
-// ExtractionAgentPrompt 提取 agent 提示词。对齐 Python EXTRACTION_AGENT_PROMPT — 真实实现
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const ExtractionAgentPrompt = `你是团队记忆提取 agent。你的工作目录是团队记忆目录，里面可能已有之前提取的记忆文件。
 
 ## 你的任务

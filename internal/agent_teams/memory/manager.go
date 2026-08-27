@@ -5,9 +5,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -127,7 +127,9 @@ func (m *TeamMemoryManager) InitToolkit(_ context.Context) (bool, error) {
 func (m *TeamMemoryManager) RegisterTools(_ interfaces.DeepAgentInterface) {}
 
 // LoadAndInject 加载个人记忆+共享记忆→注入系统提示词。⤵️ 回填: 7.2 — 当前空实现
-func (m *TeamMemoryManager) LoadAndInject(_ context.Context, _ interfaces.DeepAgentInterface, _ string) error { return nil }
+func (m *TeamMemoryManager) LoadAndInject(_ context.Context, _ interfaces.DeepAgentInterface, _ string) error {
+	return nil
+}
 
 // ExtractAfterRound Leader 专属：提取 agent 蒸馏团队记忆。⤵️ 回填: 7.2+9.65a — 当前空实现
 func (m *TeamMemoryManager) ExtractAfterRound(_ context.Context) error { return nil }

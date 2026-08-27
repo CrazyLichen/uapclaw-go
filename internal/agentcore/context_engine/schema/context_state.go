@@ -124,6 +124,8 @@ const (
 	CompressionFailed CompressionStatus = "failed"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// PhaseAddMessages 添加消息阶段
 	PhaseAddMessages CompressionPhase = "add_messages"

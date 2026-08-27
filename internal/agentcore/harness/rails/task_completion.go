@@ -50,6 +50,8 @@ const (
 
 var _ agentinterfaces.AgentRail = (*TaskCompletionRail)(nil)
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var taskCompLogComponent = logger.ComponentAgentCore
 
 var promiseTagPattern = regexp.MustCompile(`(?i)(?s)<promise>\s*(.*?)\s*</promise>`)

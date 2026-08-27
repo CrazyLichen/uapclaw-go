@@ -42,6 +42,9 @@ type HarnessConfigBuilder struct{}
 // builtinToolGroups 内置工具组注册表
 //
 // 每个条目：(点分模块路径, 类名列表, 是否需要 SysOperation)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var builtinToolGroups = map[string]toolGroupDef{
 	"filesystem": {
 		ModulePath: "openjiuwen.harness.tools.filesystem",

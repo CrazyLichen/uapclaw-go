@@ -94,7 +94,8 @@ const (
 	msoDefaultContentMaxCharsForCompression = 200000
 )
 
-// truncatedMarker 智能截断标记
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const truncatedMarker = "...[TRUNCATED]..."
 
 // adaptiveOffloadPromptTemplate 自适应压缩提示词模板

@@ -69,6 +69,8 @@ const (
 	SpawnAgentKindTeamAgent SpawnAgentKind = "team_agent"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// DefaultHealthCheckInterval 默认健康检查间隔
 	DefaultHealthCheckInterval = 5 * time.Second

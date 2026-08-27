@@ -37,8 +37,8 @@ var powershellTokens = []string{
 // 对齐 Python _PS_VARIABLE_PATTERN。
 var psVariablePattern = regexp.MustCompile(`(^|[\s;(])\$[A-Za-z_][A-Za-z0-9_]*`)
 
-// powershellExecutablePattern PowerShell 可执行文件模式。
-// 对齐 Python _POWERSHELL_EXECUTABLE_PATTERN。
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var powershellExecutablePattern = regexp.MustCompile(`(?i)^\s*(?:powershell(?:\.exe)?|pwsh(?:\.exe)?)\b`)
 
 // powershellCommandArgPattern PowerShell -Command 参数模式。

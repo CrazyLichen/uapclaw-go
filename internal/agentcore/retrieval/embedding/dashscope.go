@@ -52,7 +52,7 @@ type DashscopeEmbedding struct {
 // dashscopeResponse DashScope API 响应结构
 type dashscopeResponse struct {
 	// StatusCode 状态码
-	StatusCode int    `json:"status_code"`
+	StatusCode int `json:"status_code"`
 	// Code 错误码
 	Code string `json:"code"`
 	// Message 错误消息

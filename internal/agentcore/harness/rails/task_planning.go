@@ -75,6 +75,8 @@ const (
 
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var taskPlanLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

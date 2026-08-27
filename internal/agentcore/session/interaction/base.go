@@ -60,8 +60,7 @@ const (
 	InteractiveInputKey = "__interactive_input__"
 )
 
-// logComponent 日志组件标识
-const logComponent = logger.ComponentAgentCore
+const logComponent = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────

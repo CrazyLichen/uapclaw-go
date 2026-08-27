@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -106,4 +107,48 @@ func TestTeamMemoryManager_Getter(t *testing.T) {
 	assert.Equal(t, "t1", mgr.MemberName())
 	assert.Equal(t, "team_a", mgr.TeamName())
 	assert.Equal(t, TeamRoleLeader, mgr.Role())
+}
+
+// TestNewTeamMemoryManager_启用共享记忆 测试启用共享记忆时创建 SharedManager
+func TestNewTeamMemoryManager_启用共享记忆(t *testing.T) {
+	dir := "/tmp/test-team-memory"
+	params := TeamMemoryManagerParams{
+		MemberName:    "leader1",
+		TeamName:      "team_b",
+		SharedMemory:  true,
+		TeamMemoryDir: &dir,
+		SysOperation:  &fakeSysOperation{},
+	}
+	mgr := NewTeamMemoryManager(params)
+	require.NotNil(t, mgr)
+	assert.NotNil(t, mgr.SharedManager(), "启用共享记忆时应创建 SharedManager")
+}
+
+// TestNewTeamMemoryManager_共享记忆Dir为nil 测试 TeamMemoryDir 为 nil 时不创建 SharedManager
+func TestNewTeamMemoryManager_共享记忆Dir为nil(t *testing.T) {
+	params := TeamMemoryManagerParams{
+		MemberName:   "t1",
+		SharedMemory: true,
+		// TeamMemoryDir 为 nil
+	}
+	mgr := NewTeamMemoryManager(params)
+	require.NotNil(t, mgr)
+	assert.Nil(t, mgr.SharedManager(), "TeamMemoryDir 为 nil 时不应创建 SharedManager")
+}
+
+// TestTeamMemoryManager_RegisterTools_不panic 测试注册工具不 panic
+func TestTeamMemoryManager_RegisterTools_不panic(t *testing.T) {
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "t1"})
+	assert.NotPanics(t, func() {
+		mgr.RegisterTools(nil)
+	})
+}
+
+// TestTeamMemoryManager_ExtractionModel_设置有效值 测试提取模型设置有效值
+func TestTeamMemoryManager_ExtractionModel_设置有效值(t *testing.T) {
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "t1"})
+	assert.Nil(t, mgr.ExtractionModel())
+	model := &llm.Model{}
+	mgr.SetExtractionModel(model)
+	assert.Equal(t, model, mgr.ExtractionModel())
 }

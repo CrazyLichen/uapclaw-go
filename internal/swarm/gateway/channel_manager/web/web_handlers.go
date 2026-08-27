@@ -126,8 +126,9 @@ const (
 	WsErrAgentUnavailable = "AGENT_UNAVAILABLE"
 )
 
-// logComponent 本包日志组件
 const logComponent = logger.ComponentGateway
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // maxTeamsConfigPanel 配置面板最大团队数。
 // 对齐 Python _flatten_modes_team_for_config_panel 中 range(10)。

@@ -95,7 +95,8 @@ var failureKeywords = regexp.MustCompile(
 		`|npm err!`,
 )
 
-// errorEqualsNonePattern 匹配 "error = None"（Python 负向前瞻的替代方案）。
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var errorEqualsNonePattern = regexp.MustCompile(`(?i)error\s*=\s*None`)
 
 // correctionPatterns 用户纠正模式列表（中英文）。

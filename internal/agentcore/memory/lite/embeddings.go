@@ -10,7 +10,7 @@ import (
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // EmbeddingProvider 嵌入向量提供者接口。对齐 Python EmbeddingProvider
 type EmbeddingProvider interface {

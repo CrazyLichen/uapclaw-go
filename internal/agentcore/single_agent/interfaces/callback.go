@@ -306,6 +306,8 @@ const (
 	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// RunKindNormal 正常运行
 	RunKindNormal RunKind = "normal"

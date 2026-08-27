@@ -135,6 +135,8 @@ const (
 	strategyAbortOnError
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 const (
 	// maxEventHistory 事件历史记录最大条数
 	maxEventHistory = 1000
