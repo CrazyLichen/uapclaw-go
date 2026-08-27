@@ -63,6 +63,7 @@ type ListOption func(*ListOptions)
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 const (
 	// defaultMaxObjects ListObjects 默认最大返回对象数

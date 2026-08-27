@@ -93,36 +93,54 @@ type FollowUpEvent struct {
 
 // inputEventJSON InputEvent 的 JSON 序列化中间结构。
 type inputEventJSON struct {
-	EventTypeField EventType      `json:"event_type"`
-	EventID        string         `json:"event_id"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
-	InputData      dataFrameSlice `json:"input_data"`
+	// EventTypeField 事件类型
+	EventTypeField EventType `json:"event_type"`
+	// EventID 事件唯一标识
+	EventID string `json:"event_id"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// InputData 输入数据列表
+	InputData dataFrameSlice `json:"input_data"`
 }
 
 // taskInteractionEventJSON TaskInteractionEvent 的 JSON 序列化中间结构。
 type taskInteractionEventJSON struct {
-	EventTypeField EventType      `json:"event_type"`
-	EventID        string         `json:"event_id"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
-	Interaction    dataFrameSlice `json:"interaction"`
-	Task           *Task          `json:"task,omitempty"`
+	// EventTypeField 事件类型
+	EventTypeField EventType `json:"event_type"`
+	// EventID 事件唯一标识
+	EventID string `json:"event_id"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// Interaction 交互内容列表
+	Interaction dataFrameSlice `json:"interaction"`
+	// Task 关联的任务对象
+	Task *Task `json:"task,omitempty"`
 }
 
 // taskCompletionEventJSON TaskCompletionEvent 的 JSON 序列化中间结构。
 type taskCompletionEventJSON struct {
-	EventTypeField EventType      `json:"event_type"`
-	EventID        string         `json:"event_id"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
-	TaskResult     dataFrameSlice `json:"task_result"`
-	Task           *Task          `json:"task,omitempty"`
+	// EventTypeField 事件类型
+	EventTypeField EventType `json:"event_type"`
+	// EventID 事件唯一标识
+	EventID string `json:"event_id"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// TaskResult 任务结果列表
+	TaskResult dataFrameSlice `json:"task_result"`
+	// Task 关联的任务对象
+	Task *Task `json:"task,omitempty"`
 }
 
 // followUpEventJSON FollowUpEvent 的 JSON 序列化中间结构。
 type followUpEventJSON struct {
-	EventTypeField EventType      `json:"event_type"`
-	EventID        string         `json:"event_id"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
-	InputData      dataFrameSlice `json:"input_data"`
+	// EventTypeField 事件类型
+	EventTypeField EventType `json:"event_type"`
+	// EventID 事件唯一标识
+	EventID string `json:"event_id"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// InputData 输入数据列表
+	InputData dataFrameSlice `json:"input_data"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

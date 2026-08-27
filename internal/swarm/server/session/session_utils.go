@@ -15,6 +15,7 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentServer
 
 const (

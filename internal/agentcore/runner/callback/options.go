@@ -4,13 +4,21 @@ package callback
 
 // callbackOptionConfig 回调注册选项内部配置。
 type callbackOptionConfig struct {
-	Priority     int
-	Once         bool
-	Namespace    string
-	Tags         []string
-	MaxRetries   int
-	RetryDelay   float64
-	Timeout      float64
+	// Priority 优先级
+	Priority int
+	// Once 是否一次性执行
+	Once bool
+	// Namespace 命名空间
+	Namespace string
+	// Tags 标签集合
+	Tags []string
+	// MaxRetries 最大重试次数
+	MaxRetries int
+	// RetryDelay 重试间隔（秒）
+	RetryDelay float64
+	// Timeout 执行超时（秒），0 表示不限
+	Timeout float64
+	// CallbackType 语义类型标记
 	CallbackType string
 }
 

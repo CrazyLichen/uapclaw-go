@@ -11,13 +11,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// defaultInlineFileSizeLimit 默认内联文件大小限制（128KB）
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// defaultInlineFileSizeLimit 默认内联文件大小限制（128KB）
 const defaultInlineFileSizeLimit = 128 * 1024
 
 // atFilePattern 匹配 @path 或 @"quoted path" 的正则

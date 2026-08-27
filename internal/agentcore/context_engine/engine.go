@@ -41,6 +41,7 @@ type contextEngine struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 const (
 	// compressResultBusy 压缩结果：被动压缩正在进行中

@@ -104,6 +104,7 @@ type MessageHandler struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentGateway
 
 // ──────────────────────────── 全局变量 ────────────────────────────

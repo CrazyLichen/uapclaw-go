@@ -40,8 +40,8 @@ var (
 	// bash 破坏性命令正则
 	// 对齐 Python: _DESTRUCTIVE_PATTERNS (bash/_security.py L54-68)
 	bashDestructivePatterns = []struct {
-		pattern *regexp.Regexp
-		warning string
+		pattern *regexp.Regexp // 正则表达式
+		warning string        // 警告信息
 	}{
 		{regexp.MustCompile(`\bgit\s+reset\s+--hard\b`), "May discard uncommitted changes"},
 		{regexp.MustCompile(`\bgit\s+push\b[^\n]*(?:--force|-f)\b`), "May overwrite remote history"},
@@ -61,8 +61,8 @@ var (
 	// powershell 破坏性命令正则
 	// 对齐 Python: _DESTRUCTIVE_PATTERNS (powershell/_security.py L36-45)
 	psDestructivePatterns = []struct {
-		pattern *regexp.Regexp
-		warning string
+		pattern *regexp.Regexp // 正则表达式
+		warning string        // 警告信息
 	}{
 		{regexp.MustCompile(`(?i)\bremove-item\b[^\n]*-(?:recurse|force)\b`), "May permanently remove files or directories"},
 		{regexp.MustCompile(`(?i)\bclear-content\b`), "May remove file contents"},

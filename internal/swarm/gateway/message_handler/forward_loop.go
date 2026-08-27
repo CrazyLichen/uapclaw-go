@@ -80,7 +80,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 						logger.Error(logComponent).
 							Any("panic", r).
 							Str("msg_id", msg.ID).
-							Msg("forwardLoop panic recovered")
+							Msg("forwardLoop panic 已恢复")
 						errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 						mh.PublishRobotMessages(errMsg)
 					}
@@ -170,7 +170,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 						Any("panic", r).
 						Str("msg_id", msg.ID).
 						Str("request_id", streamRid).
-						Msg("processStream goroutine panic recovered")
+						Msg("processStream goroutine panic 已恢复")
 					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 					mh.PublishRobotMessages(errMsg)
 				}
@@ -192,7 +192,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 						Any("panic", r).
 						Str("msg_id", msg.ID).
 						Str("request_id", streamRid).
-						Msg("nonStream goroutine panic recovered")
+						Msg("nonStream goroutine panic 已恢复")
 					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 					mh.PublishRobotMessages(errMsg)
 				}

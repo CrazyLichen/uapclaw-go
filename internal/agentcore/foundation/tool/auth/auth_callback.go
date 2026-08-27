@@ -65,6 +65,7 @@ const (
 	AuthTypeHeaderAndQuery = "header_and_query"
 )
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────

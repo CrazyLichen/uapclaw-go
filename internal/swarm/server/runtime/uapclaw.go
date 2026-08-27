@@ -73,6 +73,7 @@ type CreateInstanceOption func(*createInstanceConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────

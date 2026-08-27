@@ -55,6 +55,7 @@ type memoryManagerBase struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
 const (

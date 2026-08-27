@@ -40,6 +40,7 @@ type BrowserAgentRuntime struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponentBR 日志组件标识
 const logComponentBR = logger.ComponentAgentCore
 
 const ()

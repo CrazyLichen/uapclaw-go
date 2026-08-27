@@ -32,6 +32,7 @@ type RerankerBase struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 const (
 	// defaultMaxRetries 默认最大重试次数

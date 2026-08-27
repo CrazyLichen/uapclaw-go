@@ -37,6 +37,7 @@ type TaskName string
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 const (
 	// TaskReranker 重排序任务

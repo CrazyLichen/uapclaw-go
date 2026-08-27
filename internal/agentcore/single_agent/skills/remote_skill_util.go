@@ -52,23 +52,33 @@ type RemoteSkillUtil struct {
 
 // gitHubTreeItem GitHub Tree API 返回的单个条目
 type gitHubTreeItem struct {
+	// Path 文件路径
 	Path string `json:"path"`
-	Type string `json:"type"` // "blob" 或 "tree"
-	SHA  string `json:"sha"`
+	// Type 条目类型，"blob" 或 "tree"
+	Type string `json:"type"`
+	// SHA 文件 SHA 哈希
+	SHA string `json:"sha"`
 }
 
 // gitHubTreeResponse GitHub Tree API 响应
 type gitHubTreeResponse struct {
-	Tree      []gitHubTreeItem `json:"tree"`
-	Truncated bool             `json:"truncated"`
-	Message   string           `json:"message,omitempty"`
+	// Tree 文件树条目列表
+	Tree []gitHubTreeItem `json:"tree"`
+	// Truncated 是否被截断
+	Truncated bool   `json:"truncated"`
+	// Message 错误消息
+	Message string `json:"message,omitempty"`
 }
 
 // gitHubFileItem 带相对路径的文件条目（用于 search_github_for_skills 结果）
 type gitHubFileItem struct {
-	Path         string
-	Type         string
-	SHA          string
+	// Path 文件路径
+	Path string
+	// Type 条目类型
+	Type string
+	// SHA 文件 SHA 哈希
+	SHA string
+	// RelativePath 相对路径
 	RelativePath string
 }
 
@@ -84,6 +94,7 @@ const skillsDirName = "skills/"
 // githubRequestTimeout GitHub API 请求超时时间
 const githubRequestTimeout = 30 * time.Second
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -149,6 +149,7 @@ type MemoryIndexBase struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 const (
 	// defaultTopK Search 默认返回结果数量（被 simple.go 等实现类引用）

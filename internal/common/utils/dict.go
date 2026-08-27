@@ -18,8 +18,10 @@ import (
 
 // LeafNode 叶子节点，表示嵌套结构中的一个末端值及其路径。
 type LeafNode struct {
-	Path  []string // 从根到叶子的路径（列表索引格式为 "[0]"）
-	Value any      // 叶子节点的值
+	// Path 从根到叶子的路径（列表索引格式为 "[0]"）
+	Path []string
+	// Value 叶子节点的值
+	Value any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

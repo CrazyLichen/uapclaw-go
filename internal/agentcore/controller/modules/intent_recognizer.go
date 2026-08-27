@@ -53,6 +53,8 @@ type EventHandlerWithIntentRecognition struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
+
+// logComponentIntent 日志组件标识
 const logComponentIntent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────

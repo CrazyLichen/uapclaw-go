@@ -97,6 +97,7 @@ type TeamTaskManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponentChannel 日志组件标识
 const logComponentChannel = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────

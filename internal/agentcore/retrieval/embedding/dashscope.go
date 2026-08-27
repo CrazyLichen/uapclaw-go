@@ -51,14 +51,22 @@ type DashscopeEmbedding struct {
 
 // dashscopeResponse DashScope API 响应结构
 type dashscopeResponse struct {
+	// StatusCode 状态码
 	StatusCode int    `json:"status_code"`
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	RequestID  string `json:"request_id"`
-	Output     struct {
+	// Code 错误码
+	Code string `json:"code"`
+	// Message 错误消息
+	Message string `json:"message"`
+	// RequestID 请求 ID
+	RequestID string `json:"request_id"`
+	// Output 响应输出
+	Output struct {
+		// Embeddings 嵌入向量列表
 		Embeddings []struct {
+			// Embedding 嵌入向量
 			Embedding []float64 `json:"embedding"`
-			Index     int       `json:"index"`
+			// Index 向量索引
+			Index int `json:"index"`
 		} `json:"embeddings"`
 	} `json:"output"`
 }
