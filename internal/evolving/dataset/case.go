@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -55,8 +56,15 @@ type CaseOption func(*Case)
 
 // NewCase 创建 Case 实例，默认自动生成 CaseID。
 //
-// 对应 Python: Case(inputs=..., label=..., tools=..., case_id=uuid...)
-func NewCase(inputs, label map[string]any, opts ...CaseOption) *Case {
+// inputs 和 label 不能为空 map，否则返回 error。
+// 对应 Python: Case(inputs=..., label=..., tools=..., case_id=uuid...) 中 Field(min_length=1) 验证
+func NewCase(inputs, label map[string]any, opts ...CaseOption) (*Case, error) {
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("inputs 不能为空 map（对应 Python Field(min_length=1)）")
+	}
+	if len(label) == 0 {
+		return nil, fmt.Errorf("label 不能为空 map（对应 Python Field(min_length=1)）")
+	}
 	c := &Case{
 		Inputs: inputs,
 		Label:  label,
@@ -65,7 +73,7 @@ func NewCase(inputs, label map[string]any, opts ...CaseOption) *Case {
 	for _, opt := range opts {
 		opt(c)
 	}
-	return c
+	return c, nil
 }
 
 // NewEvaluatedCase 创建 EvaluatedCase 实例，Score 默认 0.0。

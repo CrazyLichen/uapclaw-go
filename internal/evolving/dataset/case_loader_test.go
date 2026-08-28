@@ -7,11 +7,21 @@ import (
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
+// newCaseForTest 测试辅助函数，创建 Case 并在错误时 fatal
+func newCaseForTest(t *testing.T, inputs, label map[string]any, opts ...CaseOption) *Case {
+	t.Helper()
+	c, err := NewCase(inputs, label, opts...)
+	if err != nil {
+		t.Fatalf("NewCase 返回错误: %v", err)
+	}
+	return c
+}
+
 // TestNewCaseLoader 测试 CaseLoader 构造
 func TestNewCaseLoader(t *testing.T) {
 	cases := []Case{
-		*NewCase(map[string]any{"q": "1"}, map[string]any{"a": "1"}),
-		*NewCase(map[string]any{"q": "2"}, map[string]any{"a": "2"}),
+		*newCaseForTest(t, map[string]any{"q": "1"}, map[string]any{"a": "1"}),
+		*newCaseForTest(t, map[string]any{"q": "2"}, map[string]any{"a": "2"}),
 	}
 	loader := NewCaseLoader(cases)
 	if loader.Len() != 2 {
@@ -26,7 +36,7 @@ func TestNewCaseLoader(t *testing.T) {
 func TestCaseLoader_Split(t *testing.T) {
 	cases := make([]Case, 10)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i})
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i})
 	}
 	loader := NewCaseLoader(cases)
 
@@ -60,7 +70,7 @@ func TestCaseLoader_Split_空样本(t *testing.T) {
 
 // TestCaseLoader_Split_Ratio校验 测试 ratio 范围校验
 func TestCaseLoader_Split_Ratio校验(t *testing.T) {
-	loader := NewCaseLoader([]Case{*NewCase(map[string]any{"q": 1}, map[string]any{"a": 1})})
+	loader := NewCaseLoader([]Case{*newCaseForTest(t, map[string]any{"q": 1}, map[string]any{"a": 1})})
 
 	_, _, err := loader.Split(-0.1)
 	if err == nil {
@@ -87,7 +97,7 @@ func TestCaseLoader_Split_Ratio校验(t *testing.T) {
 func TestCaseLoader_Split_可复现(t *testing.T) {
 	cases := make([]Case, 100)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
 	loader := NewCaseLoader(cases)
 
@@ -113,7 +123,7 @@ func TestCaseLoader_Split_可复现(t *testing.T) {
 func TestCaseLoader_Split_先打乱(t *testing.T) {
 	cases := make([]Case, 100)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
 	loader := NewCaseLoader(cases)
 
@@ -135,7 +145,7 @@ func TestCaseLoader_Split_先打乱(t *testing.T) {
 func TestCaseLoader_ShuffleCases(t *testing.T) {
 	cases := make([]Case, 100)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
 	loader := NewCaseLoader(cases)
 
@@ -164,7 +174,7 @@ func TestCaseLoader_ShuffleCases(t *testing.T) {
 func TestCaseLoader_ShuffleCases_可复现(t *testing.T) {
 	cases := make([]Case, 100)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
 
 	loader1 := NewCaseLoader(cases)
@@ -186,7 +196,7 @@ func TestCaseLoader_ShuffleCases_可复现(t *testing.T) {
 func TestCaseLoader_ShuffledCopy(t *testing.T) {
 	cases := make([]Case, 10)
 	for i := range cases {
-		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+		cases[i] = *newCaseForTest(t, map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
 	loader := NewCaseLoader(cases)
 	original := loader.Cases()

@@ -57,10 +57,20 @@ func TestMultiDimUpdater_Process直接接受信号(t *testing.T) {
 	}
 }
 
+// newCaseForTest 测试辅助函数，创建 Case 并在错误时 fatal
+func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
+	t.Helper()
+	c, err := dataset.NewCase(inputs, label)
+	if err != nil {
+		t.Fatalf("NewCase 返回错误: %v", err)
+	}
+	return c
+}
+
 // 对齐 Python: test_update_adapts_evaluated_cases_to_process
 func TestMultiDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	u := NewMultiDimUpdater()
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"q": "question"},
 		map[string]any{"a": "answer"},
 	)
@@ -81,7 +91,7 @@ func TestMultiDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 // 对齐 Python: test_update_respects_score_threshold_from_config
 func TestMultiDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	u := NewMultiDimUpdater()
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"q": "question"},
 		map[string]any{"a": "answer"},
 	)
@@ -111,7 +121,7 @@ func TestMultiDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 // 对齐 Python: test_update_adapts_multiple_evaluated_cases_to_signals_in_order
 func TestMultiDimUpdater_Update多个EvaluatedCases按序转换(t *testing.T) {
 	u := NewMultiDimUpdater()
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"q": "question"},
 		map[string]any{"a": "answer"},
 	)

@@ -14,7 +14,10 @@ import (
 func TestNewCase(t *testing.T) {
 	inputs := map[string]any{"query": "hello"}
 	label := map[string]any{"answer": "world"}
-	c := NewCase(inputs, label)
+	c, err := NewCase(inputs, label)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	if c.CaseID == "" {
 		t.Error("期望 CaseID 自动生成，实际为空")
 	}
@@ -29,12 +32,31 @@ func TestNewCase(t *testing.T) {
 	}
 }
 
+// TestNewCase_空Inputs返回错误 测试 inputs 为空 map 时返回 error
+func TestNewCase_空Inputs返回错误(t *testing.T) {
+	_, err := NewCase(map[string]any{}, map[string]any{"a": "1"})
+	if err == nil {
+		t.Error("期望空 inputs 返回错误，实际无错误")
+	}
+}
+
+// TestNewCase_空Label返回错误 测试 label 为空 map 时返回 error
+func TestNewCase_空Label返回错误(t *testing.T) {
+	_, err := NewCase(map[string]any{"q": "1"}, map[string]any{})
+	if err == nil {
+		t.Error("期望空 label 返回错误，实际无错误")
+	}
+}
+
 // TestNewCase_使用选项 测试 Case 构造函数带选项
 func TestNewCase_使用选项(t *testing.T) {
 	inputs := map[string]any{"q": "1"}
 	label := map[string]any{"a": "2"}
 	tools := []schema.ToolInfo{{Name: "tool1"}}
-	c := NewCase(inputs, label, WithCaseTools(tools), WithCaseID("my-id"))
+	c, err := NewCase(inputs, label, WithCaseTools(tools), WithCaseID("my-id"))
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	if c.CaseID != "my-id" {
 		t.Errorf("期望 CaseID=my-id, 实际=%s", c.CaseID)
 	}
@@ -45,7 +67,10 @@ func TestNewCase_使用选项(t *testing.T) {
 
 // TestNewEvaluatedCase 测试 EvaluatedCase 构造
 func TestNewEvaluatedCase(t *testing.T) {
-	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	c, err := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	answer := map[string]any{"output": "result"}
 	ec := NewEvaluatedCase(*c, answer)
 	if ec.GetScore() != 0.0 {
@@ -64,7 +89,10 @@ func TestNewEvaluatedCase(t *testing.T) {
 
 // TestEvaluatedCase_SetScore_钳位 测试 Score 钳位到 [0, 1]
 func TestEvaluatedCase_SetScore_钳位(t *testing.T) {
-	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	c, err := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	ec := NewEvaluatedCase(*c, nil)
 
 	ec.SetScore(1.5)
@@ -86,7 +114,10 @@ func TestEvaluatedCase_SetScore_钳位(t *testing.T) {
 // TestEvaluatedCase_便捷属性 测试 EvaluatedCase 代理属性
 func TestEvaluatedCase_便捷属性(t *testing.T) {
 	tools := []schema.ToolInfo{{Name: "tool1"}}
-	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"}, WithCaseTools(tools), WithCaseID("test-id"))
+	c, err := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"}, WithCaseTools(tools), WithCaseID("test-id"))
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	ec := NewEvaluatedCase(*c, nil)
 
 	if ec.GetInputs()["q"] != "1" {
@@ -105,7 +136,10 @@ func TestEvaluatedCase_便捷属性(t *testing.T) {
 
 // TestEvaluatedCase_MarshalJSON 测试 JSON 序列化包含 score 字段
 func TestEvaluatedCase_MarshalJSON(t *testing.T) {
-	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	c, err := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
 	ec := NewEvaluatedCase(*c, map[string]any{"output": "result"})
 	ec.SetScore(0.75)
 

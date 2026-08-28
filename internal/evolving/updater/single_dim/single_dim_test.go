@@ -259,6 +259,16 @@ func TestSingleDimUpdater_Process使用信号优先流程(t *testing.T) {
 	}
 }
 
+// newCaseForTest 测试辅助函数，创建 Case 并在错误时 fatal
+func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
+	t.Helper()
+	c, err := dataset.NewCase(inputs, label)
+	if err != nil {
+		t.Fatalf("NewCase 返回错误: %v", err)
+	}
+	return c
+}
+
 // 对齐 Python: test_update_adapts_evaluated_cases_to_process
 func TestSingleDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
@@ -267,7 +277,7 @@ func TestSingleDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -301,7 +311,7 @@ func TestSingleDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -396,7 +406,7 @@ func TestSingleDimUpdater_UpdateScoreThreshold类型不匹配(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -425,7 +435,7 @@ func TestSingleDimUpdater_UpdateConfigNil(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)

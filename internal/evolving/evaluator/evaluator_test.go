@@ -11,6 +11,16 @@ import (
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
+// newCaseForTest 测试辅助函数，创建 Case 并在错误时 fatal
+func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
+	t.Helper()
+	c, err := dataset.NewCase(inputs, label)
+	if err != nil {
+		t.Fatalf("NewCase 返回错误: %v", err)
+	}
+	return c
+}
+
 // TestNewDefaultEvaluator_空配置 测试空配置构造
 func TestNewDefaultEvaluator_空配置(t *testing.T) {
 	_, err := NewDefaultEvaluator(
@@ -50,7 +60,7 @@ func TestMetricEvaluator_Evaluate(t *testing.T) {
 	em := metrics.NewExactMatchMetric()
 	me := NewMetricEvaluator([]metrics.Metric{em}, "mean")
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "1+1"},
 		map[string]any{"answer": "2"},
 	)
@@ -74,7 +84,7 @@ func TestMetricEvaluator_Evaluate_不匹配(t *testing.T) {
 	em := metrics.NewExactMatchMetric()
 	me := NewMetricEvaluator([]metrics.Metric{em}, "mean")
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "1+1"},
 		map[string]any{"answer": "2"},
 	)
@@ -93,7 +103,7 @@ func TestMetricEvaluator_Evaluate_不匹配(t *testing.T) {
 func TestBatchEvaluate_长度不匹配(t *testing.T) {
 	me := NewMetricEvaluator([]metrics.Metric{metrics.NewExactMatchMetric()}, "mean")
 
-	cases := []dataset.Case{*dataset.NewCase(map[string]any{"q": "1"}, map[string]any{"a": "1"})}
+	cases := []dataset.Case{*newCaseForTest(t, map[string]any{"q": "1"}, map[string]any{"a": "1"})}
 	predicts := []map[string]any{{"output": "1"}, {"output": "2"}}
 
 	_, err := me.BatchEvaluate(context.Background(), cases, predicts, 1)
@@ -107,8 +117,8 @@ func TestBatchEvaluate_并行测试(t *testing.T) {
 	me := NewMetricEvaluator([]metrics.Metric{metrics.NewExactMatchMetric()}, "mean")
 
 	cases := []dataset.Case{
-		*dataset.NewCase(map[string]any{"q": "1"}, map[string]any{"a": "hello"}),
-		*dataset.NewCase(map[string]any{"q": "2"}, map[string]any{"a": "world"}),
+		*newCaseForTest(t, map[string]any{"q": "1"}, map[string]any{"a": "hello"}),
+		*newCaseForTest(t, map[string]any{"q": "2"}, map[string]any{"a": "world"}),
 	}
 	predicts := []map[string]any{
 		{"a": "hello"},
@@ -218,7 +228,7 @@ func TestMetricEvaluator_多指标聚合(t *testing.T) {
 	em := metrics.NewExactMatchMetric()
 	me := NewMetricEvaluator([]metrics.Metric{em}, "mean")
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "1+1"},
 		map[string]any{"answer": "2"},
 	)
@@ -241,7 +251,7 @@ func TestMetricEvaluator_多指标聚合_混合分数(t *testing.T) {
 	m2 := &fixedScoreMetric{name: "metric_b", score: 0.0}
 	me := NewMetricEvaluator([]metrics.Metric{m1, m2}, "mean")
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "test"},
 		map[string]any{"answer": "test"},
 	)
@@ -263,7 +273,7 @@ func TestMetricEvaluator_first聚合(t *testing.T) {
 	m2 := &fixedScoreMetric{name: "metric_b", score: 0.0}
 	me := NewMetricEvaluator([]metrics.Metric{m1, m2}, "first")
 
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "test"},
 		map[string]any{"answer": "test"},
 	)

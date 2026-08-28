@@ -6,8 +6,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 )
 
+// newCaseForTest 测试辅助函数，创建 Case 并在错误时 fatal
+func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
+	t.Helper()
+	c, err := dataset.NewCase(inputs, label)
+	if err != nil {
+		t.Fatalf("NewCase 返回错误: %v", err)
+	}
+	return c
+}
+
 func TestFromEvaluatedCase_低分产生信号(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "what is Go?"},
 		map[string]any{"answer": "a programming language"},
 	)
@@ -37,7 +47,7 @@ func TestFromEvaluatedCase_低分产生信号(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_非零分产生Evaluated信号(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "what is Go?"},
 		map[string]any{"answer": "a programming language"},
 	)
@@ -55,7 +65,7 @@ func TestFromEvaluatedCase_非零分产生Evaluated信号(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_达到阈值返回nil(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -71,7 +81,7 @@ func TestFromEvaluatedCase_达到阈值返回nil(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_无阈值不过滤(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -89,7 +99,7 @@ func TestFromEvaluatedCase_无阈值不过滤(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_operatorID传入SkillName(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -104,7 +114,7 @@ func TestFromEvaluatedCase_operatorID传入SkillName(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_空operatorID无SkillName(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -119,7 +129,7 @@ func TestFromEvaluatedCase_空operatorID无SkillName(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_Context包含完整诊断信息(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "what is Go?"},
 		map[string]any{"answer": "a programming language"},
 	)
@@ -145,7 +155,7 @@ func TestFromEvaluatedCase_Context包含完整诊断信息(t *testing.T) {
 }
 
 func TestFromEvaluatedCase_Excerpt格式(t *testing.T) {
-	case_ := dataset.NewCase(
+	case_ := newCaseForTest(t,
 		map[string]any{"query": "q"},
 		map[string]any{"answer": "a"},
 	)
@@ -161,11 +171,11 @@ func TestFromEvaluatedCase_Excerpt格式(t *testing.T) {
 }
 
 func TestFromEvaluatedCases_批量转换(t *testing.T) {
-	case1 := dataset.NewCase(
+	case1 := newCaseForTest(t,
 		map[string]any{"query": "q1"},
 		map[string]any{"answer": "a1"},
 	)
-	case2 := dataset.NewCase(
+	case2 := newCaseForTest(t,
 		map[string]any{"query": "q2"},
 		map[string]any{"answer": "a2"},
 	)
@@ -186,11 +196,11 @@ func TestFromEvaluatedCases_批量转换(t *testing.T) {
 }
 
 func TestFromEvaluatedCases_无阈值全部保留(t *testing.T) {
-	case1 := dataset.NewCase(
+	case1 := newCaseForTest(t,
 		map[string]any{"query": "q1"},
 		map[string]any{"answer": "a1"},
 	)
-	case2 := dataset.NewCase(
+	case2 := newCaseForTest(t,
 		map[string]any{"query": "q2"},
 		map[string]any{"answer": "a2"},
 	)
