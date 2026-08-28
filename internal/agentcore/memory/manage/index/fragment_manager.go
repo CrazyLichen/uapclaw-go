@@ -67,7 +67,9 @@ func NewFragmentMemoryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byt
 //
 // 对齐 Python: FragmentMemoryManager.add_memories
 // llm 可选参数用于 LLM 驱动冲突检查（对齐 Python: add_memories(llm=None)），
-// ⤵️ 回填: 7.8 — MemUpdateChecker.Check 完整逻辑 + processConflictInfo 方法
+// ⤵️ 回填: 7.8 — LLM 驱动冲突检查实现时需补：
+//   1. MemUpdateChecker.Check 完整逻辑（当前 stub 直接返回全部 ADD）
+//   2. processConflictInfo 方法（将 LLM 返回的数字 ID 映射回实际记忆 ID）
 func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
