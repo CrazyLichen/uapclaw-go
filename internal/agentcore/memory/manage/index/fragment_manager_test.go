@@ -26,9 +26,9 @@ func TestFragmentMemoryManager_AddMemories_SingleAdd(t *testing.T) {
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
 
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -209,9 +209,9 @@ func TestFragmentMemoryManager_AddMemories_WithDelete(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "old-001",
@@ -239,9 +239,9 @@ func TestFragmentMemoryManager_AddMemories_WithUpdate(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -362,9 +362,9 @@ func TestFragmentMemoryManager_AddMemories_MultipleNewMemoriesWithOldMemories(t 
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -372,7 +372,7 @@ func TestFragmentMemoryManager_AddMemories_MultipleNewMemoriesWithOldMemories(t 
 				Content:       "用户喜欢阅读科幻小说",
 				OperationType: mem_model.OperationTypeAdd,
 			},
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-002",
@@ -395,7 +395,7 @@ func TestFragmentMemoryManager_AddMemories_MultipleNewMemoriesWithOldMemories(t 
 func TestFragmentMemoryManager_AddMemories_EmptyMemories(t *testing.T) {
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{}
+	memories := map[string][]mem_model.MemoryUnit{}
 	result, err := mgr.AddMemories(context.Background(), "user-1", "scope-1", memories)
 	if err != nil {
 		t.Fatalf("AddMemories 返回 error: %v", err)
@@ -409,9 +409,9 @@ func TestFragmentMemoryManager_AddMemories_NonFragmentTypeIgnored(t *testing.T) 
 	// 测试非碎片记忆类型被忽略
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"variable": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeVariable,
 					MemID:   "var-001",
@@ -435,9 +435,9 @@ func TestFragmentMemoryManager_AddMemories_EmptyContentIgnored(t *testing.T) {
 	// 测试空内容的 ADD 记忆被忽略
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -466,9 +466,9 @@ func TestFragmentMemoryManager_AddMemories_DeleteAndUpdate(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -476,7 +476,7 @@ func TestFragmentMemoryManager_AddMemories_DeleteAndUpdate(t *testing.T) {
 				Content:       "更新内容",
 				OperationType: mem_model.OperationTypeUpdate,
 			},
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-002",
@@ -604,9 +604,9 @@ func TestFragmentMemoryManager_AddMemories_SingleAddWithExistingOldMemories(t *t
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -634,9 +634,9 @@ func TestFragmentMemoryManager_AddMemories_DeleteOnly(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "old-001",
@@ -665,9 +665,9 @@ func TestFragmentMemoryManager_AddMemories_UpdateDuplicate(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -675,7 +675,7 @@ func TestFragmentMemoryManager_AddMemories_UpdateDuplicate(t *testing.T) {
 				Content:       "更新1",
 				OperationType: mem_model.OperationTypeUpdate,
 			},
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -705,9 +705,9 @@ func TestFragmentMemoryManager_AddMemories_DeleteUpdateConflict(t *testing.T) {
 	})
 
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -715,7 +715,7 @@ func TestFragmentMemoryManager_AddMemories_DeleteUpdateConflict(t *testing.T) {
 				Content:       "更新内容",
 				OperationType: mem_model.OperationTypeUpdate,
 			},
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",
@@ -741,9 +741,9 @@ func TestFragmentMemoryManager_AddMemories_SemanticMemoryType(t *testing.T) {
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
 
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"semantic_memory": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeSemanticMemory,
 					MemID:   "sem-001",
@@ -771,9 +771,9 @@ func TestFragmentMemoryManager_AddMemories_EpisodicMemoryType(t *testing.T) {
 	fakeIdx := newFakeMemoryIndex()
 	mgr := NewFragmentMemoryManager(fakeIdx, nil)
 
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"episodic_memory": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeEpisodicMemory,
 					MemID:   "epi-001",
@@ -851,9 +851,9 @@ func TestFragmentMemoryManager_AddMemories_WithCryptoKey(t *testing.T) {
 	}
 	mgr := NewFragmentMemoryManager(fakeIdx, key)
 
-	memories := map[string][]*mem_model.FragmentMemoryUnit{
+	memories := map[string][]mem_model.MemoryUnit{
 		"user_profile": {
-			{
+			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{
 					MemType: mem_model.MemoryTypeUserProfile,
 					MemID:   "mem-001",

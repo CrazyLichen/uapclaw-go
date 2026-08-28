@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/update"
@@ -65,12 +66,28 @@ func NewFragmentMemoryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byt
 //  5. 执行删除 + 添加
 //
 // 对齐 Python: FragmentMemoryManager.add_memories
+// llm 可选参数用于 LLM 驱动冲突检查（对齐 Python: add_memories(llm=None)），
+// ⤵️ 回填: 7.8 — MemUpdateChecker.Check 完整逻辑 + processConflictInfo 方法
 func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]*mem_model.FragmentMemoryUnit) ([]*mem_model.FragmentMemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryAddMemoryExecutionError, m.memType); err != nil {
 		return nil, err
+	}
+
+	// 类型断言：将基类型转为碎片记忆类型（对齐 Python: isinstance(mem_unit, FragmentMemoryUnit)）
+	fragmentMemories := make(map[string][]*mem_model.FragmentMemoryUnit, len(memories))
+	for key, units := range memories {
+		fragUnits := make([]*mem_model.FragmentMemoryUnit, 0, len(units))
+		for _, unit := range units {
+			frag, ok := unit.(*mem_model.FragmentMemoryUnit)
+			if !ok {
+				continue // 跳过非 FragmentMemoryUnit 类型
+			}
+			fragUnits = append(fragUnits, frag)
+		}
+		fragmentMemories[key] = fragUnits
 	}
 
 	deleteSet := make(map[string]bool)
@@ -78,7 +95,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 
 	// 步骤 1：分离 ADD/UPDATE/DELETE 操作
 	// 对齐 Python: _get_new_mem_units_and_update_memories
-	newMemUnits, err := m.getNewMemUnitsAndUpdateMemories(ctx, userID, scopeID, memories, deleteSet, processResult)
+	newMemUnits, err := m.getNewMemUnitsAndUpdateMemories(ctx, userID, scopeID, fragmentMemories, deleteSet, processResult)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +113,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			}
 			removeUpdateEntriesFromProcessResult(deleteSet, processResult)
 		}
-		return mapValues(processResult), nil
+		return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 	}
 
 	// 步骤 2：搜索相关旧记忆
@@ -121,15 +138,20 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 		}
 		appendMemUnitListToDict(processResult, addList)
-		return mapValues(processResult), nil
+		return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 	}
 
 	// 步骤 3：MemUpdateChecker 冲突检查 ← ⤵️ 回填: 7.8
-	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model)
+	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
 	// ⤵️ 回填: 7.8 — Python _process_conflict_info 将 LLM 返回的数字 id 映射回 mem_id，
 	// 当前 stub 直接返回 ADD 无冲突，不需要映射；7.8 实现 LLM 驱动检查时需补充此方法
 	checker := &update.MemUpdateChecker{}
-	actionItems, err := checker.Check(newMemContent, oldMemories)
+	// 提取 llmModel 参数（对齐 Python: base_chat_model=llm）
+	var model *llm.Model
+	if len(llmModel) > 0 {
+		model = llmModel[0]
+	}
+	actionItems, err := checker.Check(newMemContent, oldMemories, update.WithModel(model))
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 	}
@@ -166,7 +188,16 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		appendMemUnitListToDict(processResult, addUnitList)
 	}
 
-	return mapValues(processResult), nil
+	return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
+}
+
+// fragmentUnitsToMemoryUnits 将 FragmentMemoryUnit 切片转为 MemoryUnit 切片。
+func fragmentUnitsToMemoryUnits(units []*mem_model.FragmentMemoryUnit) []mem_model.MemoryUnit {
+	result := make([]mem_model.MemoryUnit, len(units))
+	for i, u := range units {
+		result[i] = u
+	}
+	return result
 }
 
 // Update 按 ID 更新记忆内容。

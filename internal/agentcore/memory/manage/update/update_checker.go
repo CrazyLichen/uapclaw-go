@@ -1,5 +1,9 @@
 package update
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryActionItem 记忆动作项，表示一条记忆的 ADD 或 DELETE 动作。
@@ -36,6 +40,14 @@ type MemCheckItem struct {
 // 对应 Python: openjiuwen/core/memory/manage/update/mem_update_checker.py (MemUpdateChecker)
 type MemUpdateChecker struct{}
 
+// checkConfig Check 配置。
+type checkConfig struct {
+	// model LLM 模型（对齐 Python: base_chat_model）
+	model *llm.Model
+	// retries 重试次数（对齐 Python: retries=3）
+	retries int
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CheckResult 记忆检查结果枚举。
@@ -70,13 +82,33 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// CheckOption Check 可选参数。
+type CheckOption func(*checkConfig)
+
+// WithModel 设置 LLM 模型（对齐 Python: base_chat_model）。
+func WithModel(m *llm.Model) CheckOption {
+	return func(c *checkConfig) { c.model = m }
+}
+
+// WithRetries 设置重试次数（对齐 Python: retries）。
+func WithRetries(n int) CheckOption {
+	return func(c *checkConfig) { c.retries = n }
+}
+
 // Check 检查新记忆与旧记忆的冗余/冲突。
 //
 // 当前 stub 实现：直接返回所有新记忆为 ADD（对齐 Python 中 base_chat_model=None 时
 // MemUpdateChecker.Check() 的行为）。
 //
 // ⤵️ 回填: 7.8 — 7.8 实现时替换为 LLM 驱动的冲突检查。
-func (c *MemUpdateChecker) Check(newMemories map[string]string, oldMemories map[string]string) ([]*MemoryActionItem, error) {
+func (c *MemUpdateChecker) Check(newMemories map[string]string, oldMemories map[string]string, opts ...CheckOption) ([]*MemoryActionItem, error) {
+	cfg := &checkConfig{retries: 3}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	// 当前 stub 不使用 cfg.model / cfg.retries，7.8 回填时使用
+	_ = cfg
+
 	result := make([]*MemoryActionItem, 0, len(newMemories))
 	for id, content := range newMemories {
 		result = append(result, &MemoryActionItem{
