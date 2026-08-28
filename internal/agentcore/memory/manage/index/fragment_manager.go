@@ -246,6 +246,14 @@ func (m *FragmentMemoryManager) Search(ctx context.Context, userID string, scope
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryGetMemoryExecutionError, m.memType)
 	}
+	// 防御性排序（对齐 Python: result.sort(key=lambda x: x["score"], reverse=True)）
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+	// 截断（对齐 Python: return result[:top_k]）
+	if topK > 0 && len(results) > topK {
+		results = results[:topK]
+	}
 	return results, nil
 }
 
