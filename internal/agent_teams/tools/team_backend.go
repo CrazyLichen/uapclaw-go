@@ -68,6 +68,44 @@ type TeamBackend struct {
 // TeamBackendOption TeamBackend 构造可选参数。
 type TeamBackendOption func(*TeamBackend)
 
+// ShutdownOption ShutdownMember 可选参数。
+// 对齐 Python: shutdown_member(force=False)
+type ShutdownOption func(*shutdownConfig)
+
+// shutdownConfig ShutdownMember 配置
+type shutdownConfig struct {
+	// force 是否强制关闭（对齐 Python: force=False）
+	force bool
+}
+
+// ApprovePlanOption ApprovePlan 可选参数。
+// 对齐 Python: approve_plan(approved=True, feedback=None)
+type ApprovePlanOption func(*approvePlanConfig)
+
+// approvePlanConfig ApprovePlan 配置
+type approvePlanConfig struct {
+	// approved 是否批准（对齐 Python: approved=True）
+	approved bool
+	// feedback 反馈意见（对齐 Python: feedback=None）
+	feedback string
+}
+
+// SpawnMemberOption SpawnMember 可选参数。
+// 对齐 Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)
+type SpawnMemberOption func(*spawnMemberConfig)
+
+// spawnMemberConfig SpawnMember 配置
+type spawnMemberConfig struct {
+	// status 成员状态（对齐 Python: status=UNSTARTED）
+	status string
+	// executionStatus 执行状态（对齐 Python: execution_status=IDLE）
+	executionStatus string
+	// mode 成员模式（对齐 Python: mode=BUILD_MODE）
+	mode string
+	// allocation 模型配置分配（对齐 Python: allocation=None）
+	allocation *models.Allocation
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -137,6 +175,41 @@ func WithPlanID(id string) TeamBackendOption {
 // WithLeaderMemberName 设置 Leader 成员名（覆盖默认值）。
 func WithLeaderMemberName(name string) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.leaderMemberName = name }
+}
+
+// WithForce 设置强制关闭（对齐 Python: shutdown_member(force=True)）。
+func WithForce(force bool) ShutdownOption {
+	return func(c *shutdownConfig) { c.force = force }
+}
+
+// WithApproved 设置是否批准（对齐 Python: approve_plan(approved=False) 可拒绝计划）。
+func WithApproved(approved bool) ApprovePlanOption {
+	return func(c *approvePlanConfig) { c.approved = approved }
+}
+
+// WithFeedback 设置反馈意见（对齐 Python: approve_plan(feedback="...")）。
+func WithFeedback(feedback string) ApprovePlanOption {
+	return func(c *approvePlanConfig) { c.feedback = feedback }
+}
+
+// WithStatus 设置成员状态（对齐 Python: spawn_member(status=...)）。
+func WithStatus(s string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.status = s }
+}
+
+// WithExecutionStatus 设置执行状态（对齐 Python: spawn_member(execution_status=...)）。
+func WithExecutionStatus(s string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.executionStatus = s }
+}
+
+// WithMode 设置成员模式（对齐 Python: spawn_member(mode=...)）。
+func WithMode(m string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.mode = m }
+}
+
+// WithAllocation 设置模型配置分配（对齐 Python: spawn_member(allocation=...)）。
+func WithAllocation(a *models.Allocation) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.allocation = a }
 }
 
 // NewTeamBackend 创建团队后端门面。
@@ -301,7 +374,16 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 //  5. HITT 缓存写透：若 role == HUMAN_AGENT，hittNames.add
 //  6. 日志
 //  7. 返回 MemberOpResult
-func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName, agentCard, role, desc, prompt, modelName string) atschema.MemberOpResult {
+func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName, agentCard, role, desc, prompt, modelName string, opts ...SpawnMemberOption) atschema.MemberOpResult {
+	// 解析可选参数（对齐 Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)）
+	cfg := &spawnMemberConfig{
+		status:           string(atschema.MemberStatusUnstarted),
+		executionStatus:  string(atschema.ExecutionStatusIdle),
+		mode:             tb.teammateMode,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	// 步骤 1: 查已有成员
 	existing, _ := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if existing != nil {
@@ -309,9 +391,14 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName,
 			Msg("SpawnMember: 成员已存在")
 		return atschema.NewMemberOpResultFail("member " + memberName + " already exists in team " + tb.teamName)
 	}
-	// 步骤 2: 模型分配
+	// 步骤 2: 模型分配（优先使用 opts 中的 allocation，否则使用 modelConfigAllocator）
 	modelRefJSON := ""
-	if tb.modelConfigAllocator != nil {
+	if cfg.allocation != nil {
+		refMap := map[string]any{"model_name": cfg.allocation.Entry.ModelName, "model_index": cfg.allocation.GroupIndex}
+		if data, err := json.Marshal(refMap); err == nil {
+			modelRefJSON = string(data)
+		}
+	} else if tb.modelConfigAllocator != nil {
 		if alloc := tb.modelConfigAllocator(modelName); alloc != nil {
 			refMap := map[string]any{"model_name": alloc.Entry.ModelName, "model_index": alloc.GroupIndex}
 			if data, err := json.Marshal(refMap); err == nil {
@@ -319,10 +406,10 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName,
 			}
 		}
 	}
-	// 步骤 3: DB 写入
+	// 步骤 3: DB 写入（使用 cfg 中的状态值，对齐 Python: create_member(status=cfg.status, ...)）
 	ok := tb.db.Member().CreateMember(ctx, memberName, tb.teamName, displayName, agentCard,
-		string(atschema.MemberStatusUnstarted), role, desc,
-		string(atschema.ExecutionStatusIdle), tb.teammateMode, prompt, modelRefJSON)
+		cfg.status, role, desc,
+		cfg.executionStatus, cfg.mode, prompt, modelRefJSON)
 	if !ok {
 		logger.Warn(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 			Msg("SpawnMember: DB 拒绝创建")
@@ -415,7 +502,12 @@ func (tb *TeamBackend) StartupMember(
 //  4. 取消该成员的任务（skip self）
 //  5. 发布 MemberShutdownEvent
 //  6. 返回 MemberOpResult
-func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) atschema.MemberOpResult {
+func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, opts ...ShutdownOption) atschema.MemberOpResult {
+	// 解析可选参数（对齐 Python: shutdown_member(force=False)）
+	cfg := &shutdownConfig{force: false}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	// 步骤 1: 查成员
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
@@ -434,14 +526,13 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string) at
 	}
 	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
 	_, _ = tb.messageManager.SendMessage(ctx, atschema.T("team.shutdown_request_content"), memberName, tb.memberName)
-	// 步骤 5: 取消该成员的任务
-	_, _ = tb.taskManager.CancelAllTasks(ctx, []string{memberName})
-	// 步骤 6: 发布事件
+	// 步骤 5: 发布事件（对齐 Python: MemberShutdownEvent(force=force)）
 	tb.publishEvent(ctx, atschema.MemberShutdownEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
-		Force:            false,
+		Force:            cfg.force,
 	})
 	logger.Info(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
+		Bool("force", cfg.force).
 		Msg("ShutdownMember: 成员已请求关闭")
 	return atschema.NewMemberOpResultSuccess()
 }
@@ -524,17 +615,17 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 		return fmt.Errorf("创建团队 %s 失败", tb.teamName)
 	}
 
-	// 步骤 2: 注册 Leader（status=BUSY, execution=RUNNING）
-	leaderModelRefJSON := ""
-	if tb.leaderAllocation != nil {
-		refMap := map[string]any{"model_name": tb.leaderAllocation.Entry.ModelName, "model_index": tb.leaderAllocation.GroupIndex}
-		if data, err := json.Marshal(refMap); err == nil {
-			leaderModelRefJSON = string(data)
-		}
+	// 步骤 2: 注册 Leader（改走 SpawnMember 统一路径，对齐 Python: spawn_member(status=BUSY, execution_status=RUNNING, mode=BUILD_MODE)）
+	result := tb.SpawnMember(ctx, tb.memberName, leaderDisplayName, "", string(atschema.TeamRoleLeader),
+		leaderDesc, "", "",
+		WithStatus(string(atschema.MemberStatusBusy)),
+		WithExecutionStatus(string(atschema.ExecutionStatusRunning)),
+		WithMode(string(atschema.MemberModeBuildMode)),
+		WithAllocation(tb.leaderAllocation),
+	)
+	if !result.OK {
+		return fmt.Errorf("注册 Leader 失败: %s", tb.memberName)
 	}
-	tb.db.Member().CreateMember(ctx, tb.memberName, tb.teamName, leaderDisplayName, "",
-		string(atschema.MemberStatusBusy), string(atschema.TeamRoleLeader), leaderDesc,
-		string(atschema.ExecutionStatusRunning), string(atschema.MemberModeBuildMode), "", leaderModelRefJSON)
 
 	// 步骤 3: 注册预定义成员（跳过 HUMAN_AGENT）
 	for _, pm := range tb.predefinedMembers {
@@ -627,32 +718,25 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 // ForceCleanTeam 强制清理团队（shutdown_all + force_delete + 清理路径）。
 // 对齐 Python: TeamBackend.force_clean_team(shutdown_members=force)
 func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool) (bool, error) {
-	// 步骤 1: 可选关闭所有成员（对齐 Python: 调用 shutdown_member，跳过 self）
+	// 步骤 1: 可选关闭所有成员（对齐 Python: 调用 shutdown_member(force=True)，跳过 self）
 	if shutdownMembers {
 		members, _ := tb.db.Member().GetTeamMembers(ctx, tb.teamName, "")
 		for _, m := range members {
 			if m.MemberName == tb.memberName {
 				continue // 跳过 leader 自身
 			}
-			if m.Status != string(atschema.MemberStatusShutdown) {
-				result := tb.ShutdownMember(ctx, m.MemberName)
-				if !result.OK {
-					logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
-						Str("reason", result.Reason).
-						Msg("ForceCleanTeam: shutdown_member failed, continuing")
-				}
+			// 对齐 Python: 直接调用 shutdown_member(force=True)，不做前置状态检查
+			result := tb.ShutdownMember(ctx, m.MemberName, WithForce(true))
+			if !result.OK {
+				logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
+					Str("reason", result.Reason).
+					Msg("ForceCleanTeam: shutdown_member failed, continuing")
 			}
 		}
 	}
 	// 步骤 2: 强制删除
 	tb.db.ForceDeleteTeamSession(ctx, tb.teamName)
-	// 步骤 3: 回调触发
-	if tb.onTeamCleaned != nil {
-		if err := tb.onTeamCleaned(ctx); err != nil {
-			logger.Warn(tbLogComponent).Err(err).Msg("ForceCleanTeam: onTeamCleaned 回调失败")
-		}
-	}
-	// 步骤 4: 清理路径
+	// 步骤 3: 清理路径
 	tb.RemoveCleanupPaths(ctx)
 	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("ForceCleanTeam: 团队已强制清理")
 	return true, nil
@@ -708,23 +792,30 @@ func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []strin
 
 // ApprovePlan 审批计划。
 // 对齐 Python: TeamBackend.approve_plan(task_id)
-func (tb *TeamBackend) ApprovePlan(ctx context.Context, taskID string) atschema.MemberOpResult {
-	err := tb.taskManager.ApprovePlan(ctx, taskID, true, "")
+// ApprovePlan 审批计划。
+// 对齐 Python: TeamBackend.approve_plan(plan_id, approved=True, feedback=None)
+func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...ApprovePlanOption) atschema.MemberOpResult {
+	// 解析可选参数（对齐 Python: approved=True, feedback=None）
+	cfg := &approvePlanConfig{approved: true}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	err := tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
 	if err != nil {
 		return atschema.NewMemberOpResultFail("approve_plan failed: " + err.Error())
 	}
-	task, _ := tb.taskManager.Get(ctx, taskID)
+	task, _ := tb.taskManager.Get(ctx, planID)
 	memberName := ""
 	if task != nil {
 		memberName = task.Assignee
 	}
 	tb.publishEvent(ctx, atschema.TaskPlanResponseEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
-		TaskID:           taskID,
-		Approved:         true,
+		TaskID:           planID,
+		Approved:         cfg.approved,
 		Status:           string(atschema.TaskStatusPlanApproved),
 	})
-	logger.Info(tbLogComponent).Str("task_id", taskID).Msg("ApprovePlan: 计划已审批")
+	logger.Info(tbLogComponent).Str("plan_id", planID).Bool("approved", cfg.approved).Msg("ApprovePlan: 计划已审批")
 	return atschema.NewMemberOpResultSuccess()
 }
 
