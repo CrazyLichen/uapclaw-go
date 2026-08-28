@@ -327,6 +327,14 @@ func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID
 
 	var memTypes []string
 	if memType != "" {
+		// 非 FragmentMemoryType 校验（对齐 Python: mem_type.value not in FRAGMENT_MEMORY_TYPE）
+		if !isFragmentMemoryType(memType) {
+			logger.Error(logComponent).
+				Str("mem_type", memType).
+				Str("memory_type", m.memType).
+				Msg("非法碎片记忆类型")
+			return nil, nil
+		}
 		memTypes = []string{memType}
 	} else {
 		memTypes = FragmentMemoryTypes
