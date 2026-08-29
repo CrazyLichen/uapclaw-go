@@ -22,15 +22,19 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// modelSwitcher 模型切换接口
 type modelSwitcher interface {
 	SetLLM(model *llm.Model)
 	GetLLM() (*llm.Model, error)
 }
 
+// deepStateLoader 深度状态加载接口
 type deepStateLoader interface {
 	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
 
+// TaskPlanningRail 任务规划护栏，管理 todo 工具、进度提醒和模型切换。
+// 对齐 Python: TaskPlanningRail (task_planning_rail.py)
 type TaskPlanningRail struct {
 	DeepAgentRail
 	// tools 已注册的 todo 工具列表
@@ -61,6 +65,7 @@ type TaskPlanningRail struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// TaskPlanningOption TaskPlanningRail 可选配置函数
 type TaskPlanningOption func(*TaskPlanningRail)
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -75,16 +80,16 @@ const (
 
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var taskPlanLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithEnableProgressRepeat 设置是否注入周期性进度提醒
 func WithEnableProgressRepeat(enable bool) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.enableProgressRepeat = enable }
 }
 
+// WithListToolCallInterval 设置进度提醒的工具调用间隔次数（最小为 1，默认 20）
 func WithListToolCallInterval(n int) TaskPlanningOption {
 	return func(r *TaskPlanningRail) {
 		if n < 1 {
@@ -94,18 +99,23 @@ func WithListToolCallInterval(n int) TaskPlanningOption {
 	}
 }
 
+// WithModelSelection 设置模型选择映射
 func WithModelSelection(m map[*llm.Model]string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.modelSelection = m }
 }
 
+// WithLanguage 设置语言
 func WithLanguage(lang string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.language = lang }
 }
 
+// WithAgentID 设置 Agent 标识
 func WithAgentID(id string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.agentID = id }
 }
 
+// NewTaskPlanningRail 创建任务规划护栏实例。
+// 对齐 Python: TaskPlanningRail.__init__()
 func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	r := &TaskPlanningRail{
 		DeepAgentRail:        *NewDeepAgentRail(),

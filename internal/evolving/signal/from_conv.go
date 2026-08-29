@@ -95,7 +95,6 @@ var failureKeywords = regexp.MustCompile(
 		`|npm err!`,
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var errorEqualsNonePattern = regexp.MustCompile(`(?i)error\s*=\s*None`)
 

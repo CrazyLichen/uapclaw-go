@@ -96,7 +96,6 @@ const (
 	UpdateEffectPendingChange UpdateEffect = PendingChangeEffect // "pending_change"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -238,8 +238,6 @@ following this structure and ensuring precision and thoroughness in your respons
 // analysisRegex 匹配 <analysis>...</analysis> 的正则（编译一次复用）
 var analysisRegex = regexp.MustCompile(`(?s)<analysis>.*?</analysis>`)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var summaryRegex = regexp.MustCompile(`(?s)<summary>(.*?)</summary>`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

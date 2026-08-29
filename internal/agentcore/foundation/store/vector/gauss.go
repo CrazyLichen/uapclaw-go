@@ -78,7 +78,6 @@ const (
 	gaussDefaultBatchSize = 128
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // gaussLogComponent 日志组件
 var gaussLogComponent = logger.ComponentAgentCore

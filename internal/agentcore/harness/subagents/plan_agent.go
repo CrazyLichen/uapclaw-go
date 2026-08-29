@@ -20,7 +20,6 @@ import (
 
 const PlanAgentFactoryName = "plan_agent"
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// defaultPlanAgentSystemPrompt 默认系统提示词

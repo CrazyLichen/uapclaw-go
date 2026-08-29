@@ -13,6 +13,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// PromptEntry 提示模板注册条目
 type PromptEntry struct {
 	// ID 模板标识
 	ID string
@@ -20,6 +21,7 @@ type PromptEntry struct {
 	Template *prompt.PromptTemplate
 }
 
+// WorkflowEntry 工作流注册条目
 type WorkflowEntry struct {
 	// ID 工作流标识
 	ID string
@@ -27,6 +29,7 @@ type WorkflowEntry struct {
 	Provider WorkflowProvider
 }
 
+// ModelEntry 模型注册条目
 type ModelEntry struct {
 	// ID 模型标识
 	ID string
@@ -34,6 +37,7 @@ type ModelEntry struct {
 	Provider ModelProvider
 }
 
+// AgentEntry Agent 注册条目
 type AgentEntry struct {
 	// Card Agent 身份元数据
 	Card *agentschema.AgentCard
@@ -41,6 +45,7 @@ type AgentEntry struct {
 	Provider AgentProvider
 }
 
+// AgentTeamEntry 团队注册条目
 type AgentTeamEntry struct {
 	// Card 团队身份元数据
 	Card maschema.TeamCardInterface
@@ -103,7 +108,6 @@ const (
 	TagInactive Tag = "__inactive__"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

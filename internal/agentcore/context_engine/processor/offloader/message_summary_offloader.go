@@ -204,7 +204,6 @@ const defaultOffloadSummaryPrompt = `
     Begin:
     `
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
 var contextOverflowKeywords = []string{

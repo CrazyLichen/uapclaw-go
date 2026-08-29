@@ -8,6 +8,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ParsedChannelControl 斜杠命令解析结果
 type ParsedChannelControl struct {
 	// Action 解析结果动作
 	Action ParsedControlAction
@@ -23,6 +24,7 @@ type ParsedChannelControl struct {
 	RewindPendingTurn int
 }
 
+// SlashCommandEntry 斜杠命令条目
 type SlashCommandEntry struct {
 	// ID 命令标识
 	ID string
@@ -38,12 +40,16 @@ type SlashCommandEntry struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// GatewaySlashCommand 网关斜杠命令枚举
 type GatewaySlashCommand int
 
+// ModeSubcommand 模式子命令枚举
 type ModeSubcommand int
 
+// SwitchSubcommand 切换子命令枚举
 type SwitchSubcommand int
 
+// ParsedControlAction 解析后的控制动作枚举
 type ParsedControlAction int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -126,7 +132,6 @@ const (
 	ActionRewindCancel
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashNewSession: "/new_session",
@@ -156,20 +161,27 @@ var switchSubcommandStrings = map[SwitchSubcommand]string{
 	SwitchTeam:   "team",
 }
 
+// ValidModeLines 合法的模式命令文本集合
 var ValidModeLines = buildValidModeLines()
 
+// ValidModeSubcommands 合法的模式子命令值集合
 var ValidModeSubcommands = buildModeSubcommandValues()
 
+// ValidSwitchLines 合法的切换命令文本集合
 var ValidSwitchLines = buildValidSwitchLines()
 
+// ValidSwitchSubcommands 合法的切换子命令值集合
 var ValidSwitchSubcommands = buildSwitchSubcommandValues()
 
+// ControlMessageTexts 控制消息文本映射
 var ControlMessageTexts = buildControlMessageTexts()
 
+// FirstBatchRegistry 首批注册表
 var FirstBatchRegistry = buildFirstBatchRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GatewaySlashCommandString 返回 GatewaySlashCommand 的字符串表示
 func GatewaySlashCommandString(cmd GatewaySlashCommand) string {
 	if s, ok := gatewaySlashCommandStrings[cmd]; ok {
 		return s
@@ -177,6 +189,7 @@ func GatewaySlashCommandString(cmd GatewaySlashCommand) string {
 	return ""
 }
 
+// ModeSubcommandString 返回 ModeSubcommand 的字符串表示
 func ModeSubcommandString(sub ModeSubcommand) string {
 	if s, ok := modeSubcommandStrings[sub]; ok {
 		return s
@@ -184,6 +197,7 @@ func ModeSubcommandString(sub ModeSubcommand) string {
 	return ""
 }
 
+// SwitchSubcommandString 返回 SwitchSubcommand 的字符串表示
 func SwitchSubcommandString(sub SwitchSubcommand) string {
 	if s, ok := switchSubcommandStrings[sub]; ok {
 		return s
@@ -191,6 +205,7 @@ func SwitchSubcommandString(sub SwitchSubcommand) string {
 	return ""
 }
 
+// ParseChannelControlText 解析通道控制文本为结构化结果
 func ParseChannelControlText(text string) ParsedChannelControl {
 	if text == "" {
 		return ParsedChannelControl{Action: ActionNone}
@@ -287,6 +302,7 @@ func ParseChannelControlText(text string) ParsedChannelControl {
 	return ParsedChannelControl{Action: ActionNone}
 }
 
+// IsControlLikeForIMBatching 判断文本是否类似控制命令（用于 IM 批处理判断）
 func IsControlLikeForIMBatching(text string) bool {
 	if text == "" {
 		return false
@@ -324,6 +340,7 @@ func IsControlLikeForIMBatching(text string) bool {
 	return false
 }
 
+// FormatSkillsListForNotice 格式化技能列表用于通知
 func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 	if maxItems <= 0 {
 		maxItems = 50

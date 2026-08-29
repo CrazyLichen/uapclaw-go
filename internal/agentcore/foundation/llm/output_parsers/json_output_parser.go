@@ -33,7 +33,6 @@ const logComponent = logger.ComponentAgentCore
 // jsonCodeBlockRegexp 匹配 markdown 代码块中的 JSON。
 // 对齐 Python: re.search(r"```json\n(.*?)```", text, re.DOTALL)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var jsonCodeBlockRegexp = regexp.MustCompile("(?s)```json\n(.*?)```")
 

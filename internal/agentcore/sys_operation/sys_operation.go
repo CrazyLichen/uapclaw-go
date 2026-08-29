@@ -53,8 +53,6 @@ type LocalSysOperation struct {
 // 编译时验证 BaseSysOperation 满足 SysOperation 接口
 var _ SysOperation = (*BaseSysOperation)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var _ SysOperation = (*LocalSysOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

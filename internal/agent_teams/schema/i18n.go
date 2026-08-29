@@ -35,8 +35,8 @@ var (
 	mu              sync.RWMutex
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
+// STRINGS 多语言字符串映射表
 var STRINGS = map[Language]map[string]string{
 	LanguageCN: {
 		// 对齐 Python: schema/blueprint.py

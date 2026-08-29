@@ -13,6 +13,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// eventHistoryEntry 事件历史条目
 type eventHistoryEntry struct {
 	// Event 事件名
 	Event string
@@ -22,6 +23,7 @@ type eventHistoryEntry struct {
 	Data any
 }
 
+// CallbackFramework 回调框架，管理 LLM 和工具回调的注册、触发和错误处理
 type CallbackFramework struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -142,9 +144,9 @@ const (
 	maxEventHistory = 1000
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewCallbackFramework 创建回调框架实例
 func NewCallbackFramework() *CallbackFramework {
 	fw := &CallbackFramework{
 		llmCallbacks:         make(map[LLMCallEventType][]*CallbackInfo[LLMCallbackFunc]),

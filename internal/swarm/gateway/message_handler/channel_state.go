@@ -14,6 +14,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ChannelControlState 渠道控制状态
 type ChannelControlState struct {
 	// SessionID 当前会话标识
 	SessionID string
@@ -23,6 +24,7 @@ type ChannelControlState struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ChannelMode 渠道模式枚举
 type ChannelMode int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -44,6 +46,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// channelModeStrings 渠道模式字符串映射
 var channelModeStrings = map[ChannelMode]string{
 	ChannelModeAgentPlan:  "agent.plan",
 	ChannelModeAgentFast:  "agent.fast",
@@ -53,14 +56,17 @@ var channelModeStrings = map[ChannelMode]string{
 	ChannelModeTeam:       "team",
 }
 
+// channelModeLookup 渠道模式反向查找表
 var channelModeLookup map[string]ChannelMode
 
+// controlChannelTypes 控制类渠道类型集合
 var controlChannelTypes map[string]bool
 
 var _ sync.RWMutex //nolint:unused // 保留 import 引用
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ChannelModeString 返回 ChannelMode 的字符串表示
 func ChannelModeString(m ChannelMode) string {
 	if s, ok := channelModeStrings[m]; ok {
 		return s
@@ -68,6 +74,7 @@ func ChannelModeString(m ChannelMode) string {
 	return "agent.plan"
 }
 
+// ParseChannelMode 解析字符串为 ChannelMode
 func ParseChannelMode(s string) ChannelMode {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if m, ok := channelModeLookup[s]; ok {
@@ -76,6 +83,7 @@ func ParseChannelMode(s string) ChannelMode {
 	return ChannelModeAgentPlan
 }
 
+// IsValidChannelMode 判断字符串是否为合法的渠道模式
 func IsValidChannelMode(s string) bool {
 	_, ok := channelModeLookup[strings.TrimSpace(strings.ToLower(s))]
 	return ok
@@ -142,6 +150,7 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 	return state
 }
 
+// GenerateChannelSessionID 生成渠道会话标识
 func GenerateChannelSessionID(channelID string) string {
 	ts := fmt.Sprintf("%x", time.Now().UnixMilli())
 	suffix := generateRandomHex(3) // 3 字节 = 6 个十六进制字符

@@ -57,8 +57,6 @@ const (
 // 编译时接口检查：TaskLoopEventHandler 必须满足 modules.EventHandler
 var _ modules.EventHandler = (*TaskLoopEventHandler)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var _ interactionQueuesProvider = (*TaskLoopEventHandler)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

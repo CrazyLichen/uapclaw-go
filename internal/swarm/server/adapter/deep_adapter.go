@@ -242,7 +242,6 @@ type DeepAdapter struct {
 // persistentCheckpointerReady 持久化检查点器是否已就绪。
 // 对应 Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_READY)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var persistentCheckpointerReady bool
 

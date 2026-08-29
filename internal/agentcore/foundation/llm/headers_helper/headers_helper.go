@@ -24,7 +24,6 @@ import (
 // 这些头部由 HTTP 客户端/传输层自动管理，不应由用户手动设置。
 // 对应 Python: openjiuwen/core/common/utils/header_utils.py (PROTECTED_HEADERS)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var ProtectedHeaders = map[string]bool{
 	"host":              true,

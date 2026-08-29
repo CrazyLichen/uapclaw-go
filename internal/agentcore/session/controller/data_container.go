@@ -84,7 +84,6 @@ const (
 	DefaultDataContainerType = "agent"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	factoryOnce     sync.Once

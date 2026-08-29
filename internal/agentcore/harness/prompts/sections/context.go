@@ -53,7 +53,6 @@ var templateMarkers = []string{
 // htmlCommentRegexp HTML 注释正则
 var htmlCommentRegexp = regexp.MustCompile(`(?s)<!--.*?-->`)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var markdownHeadingRegexp = regexp.MustCompile(`(?m)^#{1,6}\s+.*$`)
 

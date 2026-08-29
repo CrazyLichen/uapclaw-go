@@ -80,7 +80,6 @@ const (
 	WorktreeLinksDir = ".worktree"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // defaultWorkspaceSchemaCN 中文默认工作空间模式
 var defaultWorkspaceSchemaCN = []DirectoryNode{

@@ -85,8 +85,7 @@ type ToolOption func(*ToolCallOptions)
 // 编译时验证 ToolCard 满足 schema.CardInterface 接口
 var _ schema.CardInterface = (*ToolCard)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
+// ErrStreamNotSupported 工具不支持流式调用时返回的错误
 var ErrStreamNotSupported = exception.BuildError(
 	exception.StatusToolStreamNotSupported,
 	exception.WithParam("card", ""),

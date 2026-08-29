@@ -52,7 +52,6 @@ var (
 	busMu sync.Mutex
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var _ Messager = (*InProcessMessager)(nil)
 

@@ -34,7 +34,6 @@ type ParsedExperienceDraft struct {
 // headingRE Markdown 章节标题正则
 // 对齐 Python: _HEADING_RE = re.compile(r"^#{1,4}\s+")
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 

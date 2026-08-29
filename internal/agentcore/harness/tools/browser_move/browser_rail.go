@@ -59,7 +59,6 @@ var browserProgressTagRE = regexp.MustCompile(
 	`<browser_progress>\s*(\{.*?\})\s*</browser_progress>`,
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var browserProgressFormatGuidance = map[string]string{
 	"en": "When you stop and answer without another browser tool call, append exactly one " +

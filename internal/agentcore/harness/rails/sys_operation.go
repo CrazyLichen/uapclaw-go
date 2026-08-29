@@ -56,8 +56,6 @@ const (
 // 编译时验证 SysOperationRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*SysOperationRail)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var sysOpRailLogComponent = logger.ComponentAgentCore
 
 // 确保编译时引用 hinterfaces 包（SysOperationRail 需要 DeepAgentInterface 类型断言）

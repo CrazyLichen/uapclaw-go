@@ -112,7 +112,6 @@ var (
 		"你自己的检查和注意事项不能替代验证代理的判决。"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)
 

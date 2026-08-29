@@ -41,8 +41,6 @@ const (
 // 编译时验证 McpRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*McpRail)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var mcpRailLogComponent = logger.ComponentAgentCore
 
 // init 确保编译时引用 hinterfaces 包（McpRail 不直接使用但子类可能需要）

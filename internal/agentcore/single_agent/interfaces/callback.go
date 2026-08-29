@@ -331,7 +331,6 @@ const (
 	steeringQueueSize = 4096
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ErrSteeringQueueFull steering 队列已满
 var ErrSteeringQueueFull = errors.New("steering 队列已满")

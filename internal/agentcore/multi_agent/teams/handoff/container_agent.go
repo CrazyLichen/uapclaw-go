@@ -70,8 +70,6 @@ const (
 // 确保 ContainerAgent 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*ContainerAgent)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var _ tool.Tool = (*HandoffTool)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

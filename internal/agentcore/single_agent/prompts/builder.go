@@ -72,8 +72,6 @@ const (
 // 编译时验证 *SystemPromptBuilder 满足 SystemPromptBuilderInterface 接口。
 var _ SystemPromptBuilderInterface = (*SystemPromptBuilder)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// SupportedLanguages 支持的语言列表
 	// 对应 Python: SUPPORTED_LANGUAGES = ("cn", "en")

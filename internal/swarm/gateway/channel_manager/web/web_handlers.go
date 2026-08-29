@@ -134,7 +134,6 @@ const logComponent = logger.ComponentGateway
 // 对齐 Python _flatten_modes_team_for_config_panel 中 range(10)。
 const maxTeamsConfigPanel = 10
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // configEnvMap 前端配置键名 → 环境变量名映射。
 //

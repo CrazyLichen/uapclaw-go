@@ -8,6 +8,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// VectorField 向量字段配置
 type VectorField struct {
 	// DatabaseType 向量数据库类型
 	DatabaseType DatabaseType `vf:"-"`
@@ -19,8 +20,10 @@ type VectorField struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// DatabaseType 向量数据库类型枚举
 type DatabaseType int
 
+// IndexType 索引类型枚举
 type IndexType int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -62,7 +65,6 @@ const (
 	StageSearch = "search"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// databaseTypeStrings DatabaseType 枚举值对应的字符串表示，与 Python 枚举值保持一致。
@@ -86,6 +88,7 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewVectorField 创建向量字段配置实例
 func NewVectorField(dbType DatabaseType, indexType IndexType, fieldName string) *VectorField {
 	return &VectorField{
 		DatabaseType:    dbType,
@@ -94,6 +97,7 @@ func NewVectorField(dbType DatabaseType, indexType IndexType, fieldName string) 
 	}
 }
 
+// String 返回 DatabaseType 的字符串表示
 func (dt DatabaseType) String() string {
 	if dt >= 0 && int(dt) < len(databaseTypeStrings) {
 		return databaseTypeStrings[dt]
@@ -101,6 +105,7 @@ func (dt DatabaseType) String() string {
 	return fmt.Sprintf("UNKNOWN(%d)", dt)
 }
 
+// String 返回 IndexType 的字符串表示
 func (it IndexType) String() string {
 	if it >= 0 && int(it) < len(indexTypeStrings) {
 		return indexTypeStrings[it]
@@ -108,10 +113,12 @@ func (it IndexType) String() string {
 	return fmt.Sprintf("UNKNOWN(%d)", it)
 }
 
+// Validate 校验向量字段配置
 func (vf *VectorField) Validate() error {
 	return nil
 }
 
+// ToDict 将向量字段配置转换为字典，用于序列化
 func ToDict(v any, stage string) map[string]any {
 	result := make(map[string]any)
 	rv := reflect.ValueOf(v)

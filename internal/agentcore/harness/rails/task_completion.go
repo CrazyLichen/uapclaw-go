@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TaskCompletionRail 任务完成护栏，检测 LLM 输出中的完成承诺标签并通知评估器。
+// 对齐 Python: TaskCompletionRail (task_completion_rail.py)
 type TaskCompletionRail struct {
 	DeepAgentRail
 	// taskInstruction 带 {query} 占位符的格式模板，首轮迭代时应用到查询
@@ -36,6 +38,7 @@ type TaskCompletionRail struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// TaskCompletionOption TaskCompletionRail 可选配置函数
 type TaskCompletionOption func(*TaskCompletionRail)
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -50,22 +53,23 @@ const (
 
 var _ agentinterfaces.AgentRail = (*TaskCompletionRail)(nil)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var taskCompLogComponent = logger.ComponentAgentCore
 
 var promiseTagPattern = regexp.MustCompile(`(?i)(?s)<promise>\s*(.*?)\s*</promise>`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithTaskInstruction 设置任务指令模板，首轮迭代时应用到查询
 func WithTaskInstruction(template string) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.taskInstruction = template }
 }
 
+// WithCompletionPromise 设置完成承诺令牌，模型须输出 <promise>令牌</promise> 宣告完成
 func WithCompletionPromise(promise string) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.completionPromise = promise }
 }
 
+// WithRequiredConfirmations 设置需要连续确认的次数（最小为 1）
 func WithRequiredConfirmations(n int) TaskCompletionOption {
 	return func(r *TaskCompletionRail) {
 		if n < 1 {
@@ -75,22 +79,28 @@ func WithRequiredConfirmations(n int) TaskCompletionOption {
 	}
 }
 
+// WithAllowPromiseDetails 设置是否允许 promise 块包含额外详情
 func WithAllowPromiseDetails(allow bool) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.allowPromiseDetails = allow }
 }
 
+// WithMaxRounds 设置外层循环最大轮数（0 = 不限）
 func WithMaxRounds(n int) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.maxRounds = n }
 }
 
+// WithTimeoutSeconds 设置整个任务循环的墙钟超时秒数（0 = 不限）
 func WithTimeoutSeconds(sec float64) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.timeoutSeconds = sec }
 }
 
+// WithExtraEvaluators 设置额外自定义评估器
 func WithExtraEvaluators(evaluators ...task_loop.StopConditionEvaluator) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.extraEvaluators = evaluators }
 }
 
+// NewTaskCompletionRail 创建任务完成护栏实例。
+// 对齐 Python: TaskCompletionRail.__init__()
 func NewTaskCompletionRail(opts ...TaskCompletionOption) *TaskCompletionRail {
 	r := &TaskCompletionRail{
 		DeepAgentRail:         *NewDeepAgentRail(),
@@ -103,6 +113,7 @@ func NewTaskCompletionRail(opts ...TaskCompletionOption) *TaskCompletionRail {
 	return r
 }
 
+// BuildEvaluators 构建停止条件评估器列表
 func (r *TaskCompletionRail) BuildEvaluators() []task_loop.StopConditionEvaluator {
 	var result []task_loop.StopConditionEvaluator
 	if r.maxRounds > 0 {
@@ -120,6 +131,7 @@ func (r *TaskCompletionRail) BuildEvaluators() []task_loop.StopConditionEvaluato
 	return result
 }
 
+// BeforeModelCall 注入完成信号提示词节
 func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.completionPromise == "" {
 		return nil
@@ -141,6 +153,7 @@ func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterf
 	return nil
 }
 
+// BeforeTaskIteration 首轮迭代时格式化任务指令
 func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.taskInstruction == "" {
 		return nil
@@ -166,6 +179,7 @@ func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentin
 	return nil
 }
 
+// AfterTaskIteration 检测 LLM 输出中的完成承诺标签，满足时通知评估器
 func (r *TaskCompletionRail) AfterTaskIteration(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.completionPromise == "" {
 		return nil
@@ -203,6 +217,7 @@ func (r *TaskCompletionRail) AfterTaskIteration(_ context.Context, cbc *agentint
 	return nil
 }
 
+// GetCallbacks 返回回调映射
 func (r *TaskCompletionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -219,6 +234,7 @@ func (r *TaskCompletionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 	return callbacks
 }
 
+// ExtractPromiseBlock 从文本中提取 <promise>...</promise> 标签内的内容
 func ExtractPromiseBlock(text string) string {
 	if text == "" {
 		return ""
@@ -230,6 +246,7 @@ func ExtractPromiseBlock(text string) string {
 	return strings.TrimSpace(match[1])
 }
 
+// PromiseMatches 判断 promise 块是否匹配预期令牌（允许详情后缀）
 func PromiseMatches(block string, expected string) bool {
 	if block == "" || expected == "" {
 		return false

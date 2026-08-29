@@ -80,7 +80,6 @@ const (
 //
 // 对齐 Python: BUILTIN_SITE_PROFILES (site_profiles.py L16-57)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var builtinSiteProfiles = []map[string]any{
 	{

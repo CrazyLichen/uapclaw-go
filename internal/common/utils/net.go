@@ -28,7 +28,6 @@ import (
 // urlPattern 匹配以 scheme:// 开头的 URL 字符串。
 // 对应 Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 

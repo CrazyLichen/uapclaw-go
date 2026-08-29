@@ -30,7 +30,6 @@ var atFilePattern = regexp2.MustCompile(
 	0,
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var agentMentionQuotedPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@"(?<name>[\w:.@-]+)\s+\(agent\)"`, 0)
 
@@ -47,6 +46,7 @@ var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<
 // 对齐 Python resolve_at_file_references
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ResolveAtFileReferences 解析内容中的 @文件 引用，替换为文件内容
 func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string {
 	if content == "" {
 		return content

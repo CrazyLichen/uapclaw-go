@@ -55,7 +55,6 @@ const (
 	defaultRetryWait = 100 * time.Millisecond
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// censorshipKeywords 审查内容检测关键词，对齐 Python
 	censorshipKeywords = []string{"safety", "violation", "policy", "inspection", "appropriate"}

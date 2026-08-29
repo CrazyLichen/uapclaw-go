@@ -100,7 +100,6 @@ feel free to call reload_original_context_messages:
 
 Storage types: "in_memory" (session cache), "filesystem" (disk file).`
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
