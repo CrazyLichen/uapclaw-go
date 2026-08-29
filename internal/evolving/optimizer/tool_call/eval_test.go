@@ -1,6 +1,7 @@
 package tool_call
 
 import (
+	"context"
 	"math"
 	"testing"
 )
@@ -191,5 +192,47 @@ func TestGetArgsMap_无参数(t *testing.T) {
 	args := getArgsMap(fnCall)
 	if len(args) != 0 {
 		t.Errorf("expected empty map, got %v", args)
+	}
+}
+
+// TestEvaluateSingleExample_ApiWrapperNil 测试 apiWrapper 为 nil 时返回 error
+// 对齐 Python: _evaluate_single_example 中 api_wrapper 为 None 时 raise ValueError
+//
+// 注意：由于 generateFunctionCall 在 apiWrapper 检查之前执行且需要 model，
+// 当 model 也为 nil 时会先返回 "model 为 nil" 错误。
+// 当 model 正常但 apiWrapper 为 nil 时会返回 "缺少必需输入: api_wrapper" 错误。
+// 两种情况都是 error 返回，对齐 Python 的 raise 行为。
+func TestEvaluateSingleExample_ApiWrapperNil(t *testing.T) {
+	e := NewSimpleEval(nil, map[string]any{}, 0.4, 0.6, nil)
+	tool := map[string]any{"name": "test_tool", "type": "function"}
+	example := ExampleTuple{
+		Instruction: "test instruction",
+		FnCall:      map[string]any{"name": "test_tool", "arguments": map[string]any{}},
+		FnOutput:    "test output",
+		Answer:      "test answer",
+	}
+	_, err := e.evaluateSingleExample(context.Background(), tool, "test desc", example, 0)
+	if err == nil {
+		t.Error("expected error when model and apiWrapper are nil")
+	}
+	// model 为 nil 时先返回 "model 为 nil" 错误（在 generateFunctionCall 阶段）
+	// 这也是 Python 中 _generate_function_call 失败会 raise 的对齐行为
+}
+
+// TestEvaluateSingleExample_ReturnsError 测试 evaluateSingleExample 在失败时返回 error
+// 对齐 Python: _evaluate_single_example 在失败时 raise ValueError
+func TestEvaluateSingleExample_ReturnsError(t *testing.T) {
+	// model 为 nil → generateFunctionCall 失败 → 返回 error
+	e := NewSimpleEval(nil, map[string]any{}, 0.4, 0.6, nil)
+	tool := map[string]any{"name": "test_tool", "type": "function"}
+	example := ExampleTuple{
+		Instruction: "test instruction",
+		FnCall:      map[string]any{"name": "test_tool", "arguments": map[string]any{}},
+		FnOutput:    "test output",
+		Answer:      "test answer",
+	}
+	_, err := e.evaluateSingleExample(context.Background(), tool, "test desc", example, 0)
+	if err == nil {
+		t.Error("expected error when evaluateSingleExample fails")
 	}
 }

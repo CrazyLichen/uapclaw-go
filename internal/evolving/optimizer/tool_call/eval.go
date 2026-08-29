@@ -158,7 +158,16 @@ func (e *SimpleEval) Eval(
 		totalCount := len(examples)
 
 		for i, example := range examples {
-			result := e.evaluateSingleExample(ctx, tool, description, example, i)
+			result, err := e.evaluateSingleExample(ctx, tool, description, example, i)
+			if err != nil {
+				// 对齐 Python: ValueError 传播中断整个评估
+				logger.Error(logComponent).
+					Str("method", "Eval").
+					Int("example_id", i).
+					Err(err).
+					Msg("评估单个示例失败，中断评估")
+				return nil
+			}
 			allResults = append(allResults, result)
 			totalFnCallScore += result.FnCallScore
 			totalOutputScore += result.OutputEffectivenessScore
@@ -304,7 +313,7 @@ func (e *SimpleEval) evaluateSingleExample(
 	description string,
 	example ExampleTuple,
 	exampleID int,
-) EvalItemResult {
+) (EvalItemResult, error) {
 	// 对齐 Python: generated_fn_call = self._generate_function_call(tool, description, instruction)
 	generatedFnCall, err := e.generateFunctionCall(ctx, tool, description, example.Instruction)
 	if err != nil {
@@ -313,22 +322,8 @@ func (e *SimpleEval) evaluateSingleExample(
 			Int("example_id", exampleID).
 			Err(err).
 			Msg("生成函数调用出错")
-		return EvalItemResult{
-			Instruction:              example.Instruction,
-			ExpectedFnCall:           example.FnCall,
-			GeneratedFnCall:          nil,
-			FnCallScore:              0.0,
-			ExecutionResult:          nil,
-			ExecutionError:           map[string]any{"error": err.Error()},
-			OutputEffectivenessScore: 0.0,
-			WeightedScore:            0.0,
-			Answer:                   example.Answer,
-			Errors: []EvalError{{
-				FunctionName: getToolName(tool),
-				Arguments:    map[string]any{},
-				ErrorMsg:     err.Error(),
-			}},
-		}
+		// 对齐 Python: generateFunctionCall 失败时返回 error
+		return EvalItemResult{}, fmt.Errorf("生成函数调用出错: %w", err)
 	}
 
 	// 对齐 Python: fn_call_score = self._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
@@ -362,14 +357,11 @@ func (e *SimpleEval) evaluateSingleExample(
 			})
 		}
 	} else {
+		// 对齐 Python: raise ValueError("Missing required input: api_wrapper")
 		logger.Error(logComponent).
 			Str("method", "evaluateSingleExample").
 			Msg("缺少必需输入: api_wrapper")
-		errors = append(errors, EvalError{
-			FunctionName: getToolName(tool),
-			Arguments:    map[string]any{},
-			ErrorMsg:     "缺少必需输入: api_wrapper",
-		})
+		return EvalItemResult{}, fmt.Errorf("缺少必需输入: api_wrapper")
 	}
 
 	// 对齐 Python: output_effectiveness_score = self._evaluate_output_effectiveness(...)
@@ -391,7 +383,7 @@ func (e *SimpleEval) evaluateSingleExample(
 		WeightedScore:            weightedScore,
 		Answer:                   example.Answer,
 		Errors:                   errors,
-	}
+	}, nil
 }
 
 // generateFunctionCall 使用 LLM Function Calling 模式生成函数调用。

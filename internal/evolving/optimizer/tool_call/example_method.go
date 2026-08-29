@@ -256,7 +256,12 @@ func (m *APICallToExampleMethod) Step(
 				}}
 				// 对齐 Python: eval_res = self.eval_fn(tool, description, examples, runs=1)
 				evalRes := m.evalFn.Eval(ctx, tool, description, exampleTuples, 1)
-				evalScore = evalRes.ScoreAvg / 100.0
+				if evalRes != nil {
+					evalScore = evalRes.ScoreAvg / 100.0
+				} else {
+					// 对齐 Python: ValueError 传播时评估分数为 0
+					evalScore = 0.0
+				}
 			} else {
 				evalScore = 1.0
 			}

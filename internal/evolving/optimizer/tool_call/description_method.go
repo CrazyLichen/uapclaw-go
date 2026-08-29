@@ -139,7 +139,12 @@ func (m *ToolDescriptionMethod) EvalLoop(
 	examples []ExampleTuple,
 	runs int,
 ) *EvalResult {
-	return m.evalFn.Eval(ctx, tool, description, examples, runs)
+	result := m.evalFn.Eval(ctx, tool, description, examples, runs)
+	if result == nil {
+		// 对齐 Python: ValueError 传播时返回默认 0 分
+		return &EvalResult{ScoreAvg: 0, ScoreStd: 0, FnCallAccuracy: 0, OutputEffectiveness: 0}
+	}
+	return result
 }
 
 // CritiqueDescriptions 批判描述（正负例对比版）。
