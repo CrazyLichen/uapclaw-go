@@ -35,7 +35,7 @@ Task 5 (10.6.1-2 Prompt) → 独立
 
 ### 1.1 S7.2: BaseMemoryManager 接口改用 BaseMemoryUnit 基类型
 
-- [ ] **Step 1: 修改 BaseMemoryManager.AddMemories 签名**
+- [x] **Step 1: 修改 BaseMemoryManager.AddMemories 签名**
 
 `internal/agentcore/memory/manage/index/base_manager.go` L25:
 ```go
@@ -47,7 +47,7 @@ AddMemories(ctx context.Context, userID string, scopeID string, memories map[str
 
 注意：同时添加 `llm ...*llm.Model` 可选参数（S7.1 一起改）。需要导入 `llm` 包。
 
-- [ ] **Step 2: 修改 FragmentMemoryManager.AddMemories 签名和实现**
+- [x] **Step 2: 修改 FragmentMemoryManager.AddMemories 签名和实现**
 
 `internal/agentcore/memory/manage/index/fragment_manager.go` L68:
 ```go
@@ -78,7 +78,7 @@ for key, units := range memories {
 
 返回值也需要对应转换。
 
-- [ ] **Step 3: 修改 MemUpdateChecker.Check 签名**
+- [x] **Step 3: 修改 MemUpdateChecker.Check 签名**
 
 `internal/agentcore/memory/manage/update/update_checker.go` L79:
 ```go
@@ -126,7 +126,7 @@ for _, opt := range opts {
 
 当前 stub 实现不使用 cfg，但接口已就绪供 7.8 回填。
 
-- [ ] **Step 4: 修改 FragmentMemoryManager.AddMemories 中 Check 调用**
+- [x] **Step 4: 修改 FragmentMemoryManager.AddMemories 中 Check 调用**
 
 `fragment_manager.go` 中 Check 调用处传递 llm 参数：
 ```go
@@ -138,25 +138,25 @@ if len(llm) > 0 {
 }
 ```
 
-- [ ] **Step 5: 添加 ⤵️ 标记注释**
+- [x] **Step 5: 添加 ⤵️ 标记注释**
 
 在 `AddMemories` 方法签名旁添加注释说明 llm 参数供 7.8 回填使用。
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/memory/...`
 Expected: 编译成功
 
-- [ ] **Step 7: 更新测试**
+- [x] **Step 7: 更新测试**
 
 更新 `fragment_manager_test.go` 和 `update_checker_test.go` 中的调用签名，适配新参数。
 
-- [ ] **Step 8: 运行测试**
+- [x] **Step 8: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/... -v -count=1`
 Expected: 全部 PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add internal/agentcore/memory/
@@ -165,7 +165,7 @@ git commit -m "fix(S7.1+S7.2): AddMemories 改用 BaseMemoryUnit + 添加 llm �
 
 ### 1.2 M7.1: Search 添加排序+截断
 
-- [ ] **Step 1: 修改 FragmentMemoryManager.Search**
+- [x] **Step 1: 修改 FragmentMemoryManager.Search**
 
 `fragment_manager.go` L205-222，在 `return results, nil` 前添加：
 ```go
@@ -181,12 +181,12 @@ if topK > 0 && len(results) > topK {
 
 需要导入 `sort` 包。
 
-- [ ] **Step 2: 编译+测试**
+- [x] **Step 2: 编译+测试**
 
 Run: `go build ./internal/agentcore/memory/... && go test ./internal/agentcore/memory/... -v -count=1`
 Expected: 编译成功，测试 PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/agentcore/memory/manage/index/fragment_manager.go
@@ -195,7 +195,7 @@ git commit -m "fix(M7.1): Search 添加 score 降序排序和 topK 截断"
 
 ### 1.3 M7.2: ListFragmentMemories 添加校验+排序
 
-- [ ] **Step 1: 修改 ListFragmentMemories 添加 memType 校验**
+- [x] **Step 1: 修改 ListFragmentMemories 添加 memType 校验**
 
 `fragment_manager.go` L283，在 `var memTypes []string` 之前添加：
 ```go
@@ -211,7 +211,7 @@ if memType != "" && !isFragmentMemoryType(memType) {
 
 注意：`isFragmentMemoryType` 已在 L447 定义。
 
-- [ ] **Step 2: 添加结果排序**
+- [x] **Step 2: 添加结果排序**
 
 在 `return docs, nil` 前添加：
 ```go
@@ -231,12 +231,12 @@ sort.Slice(docs, func(i, j int) bool {
 
 注意：`parseTimestamp` 已在 L426 定义。
 
-- [ ] **Step 3: 编译+测试**
+- [x] **Step 3: 编译+测试**
 
 Run: `go build ./internal/agentcore/memory/... && go test ./internal/agentcore/memory/... -v -count=1`
 Expected: 编译成功，测试 PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/agentcore/memory/manage/index/fragment_manager.go
@@ -245,7 +245,7 @@ git commit -m "fix(M7.2): ListFragmentMemories 添加 memType 校验和降序排
 
 ### 1.4 M7.3: 添加 ⤵️ 标记注释
 
-- [ ] **Step 1: 在 AddMemories 的 ⤵️ 注释处补充说明**
+- [x] **Step 1: 在 AddMemories 的 ⤵️ 注释处补充说明**
 
 `fragment_manager.go` 约 L63 已有 `⤵️ 回填: 7.8` 注释，补充：
 ```go
@@ -254,7 +254,7 @@ git commit -m "fix(M7.2): ListFragmentMemories 添加 memType 校验和降序排
 //   2. processConflictInfo 方法（将 LLM 返回的数字 ID 映射回实际记忆 ID）
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add internal/agentcore/memory/manage/index/fragment_manager.go
@@ -271,7 +271,7 @@ git commit -m "docs(M7.3): 补充 processConflictInfo ⤵️ 回填标记"
 
 ### 2.1 S9.2: ShutdownMember 加 ShutdownOption
 
-- [ ] **Step 1: 添加 ShutdownOption 定义**
+- [x] **Step 1: 添加 ShutdownOption 定义**
 
 在 `team_backend.go` 的适当位置（TeamBackendOption 之后）添加：
 ```go
@@ -290,7 +290,7 @@ func WithForce(force bool) ShutdownOption {
 }
 ```
 
-- [ ] **Step 2: 修改 ShutdownMember 签名**
+- [x] **Step 2: 修改 ShutdownMember 签名**
 
 L418:
 ```go
@@ -310,16 +310,16 @@ for _, opt := range opts {
 
 将事件发布中的 `Force: false` 改为 `Force: cfg.force`。
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `go build ./internal/agent_teams/...`
 Expected: 编译成功（可能需要更新调用方）
 
-- [ ] **Step 4: 更新所有 ShutdownMember 调用方**
+- [x] **Step 4: 更新所有 ShutdownMember 调用方**
 
 搜索所有调用 `tb.ShutdownMember(ctx,` 的位置，签名兼容（opts 可选，无需改动），但 ForceCleanTeam 中应传 `WithForce(true)`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agent_teams/
@@ -328,7 +328,7 @@ git commit -m "fix(S9.2): ShutdownMember 添加 ShutdownOption(WithForce)"
 
 ### 2.2 S9.4: 移除 CancelAllTasks 调用
 
-- [ ] **Step 1: 删除 CancelAllTasks 调用**
+- [x] **Step 1: 删除 CancelAllTasks 调用**
 
 `team_backend.go` ShutdownMember 方法中的：
 ```go
@@ -336,12 +336,12 @@ git commit -m "fix(S9.2): ShutdownMember 添加 ShutdownOption(WithForce)"
 _, _ = tb.taskManager.CancelAllTasks(ctx, []string{memberName})
 ```
 
-- [ ] **Step 2: 编译+测试**
+- [x] **Step 2: 编译+测试**
 
 Run: `go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1`
 Expected: 编译成功，测试 PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -350,7 +350,7 @@ git commit -m "fix(S9.4): ShutdownMember 移除 CancelAllTasks 调用（对齐 P
 
 ### 2.3 S9.7: ApprovePlan 加 ApprovePlanOption
 
-- [ ] **Step 1: 添加 ApprovePlanOption 定义**
+- [x] **Step 1: 添加 ApprovePlanOption 定义**
 
 ```go
 // ApprovePlanOption ApprovePlan 可选参数
@@ -375,7 +375,7 @@ func WithFeedback(feedback string) ApprovePlanOption {
 }
 ```
 
-- [ ] **Step 2: 修改 ApprovePlan 签名**
+- [x] **Step 2: 修改 ApprovePlan 签名**
 
 L711:
 ```go
@@ -394,11 +394,11 @@ for _, opt := range opts {
 err := tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback, tb.memberName)
 ```
 
-- [ ] **Step 3: 更新调用方和测试**
+- [x] **Step 3: 更新调用方和测试**
 
 搜索所有 `ApprovePlan(ctx,` 调用，更新参数名 taskID→planID 和 opts。
 
-- [ ] **Step 4: 编译+测试+Commit**
+- [x] **Step 4: 编译+测试+Commit**
 
 ```bash
 go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1
@@ -408,7 +408,7 @@ git commit -m "fix(S9.7): ApprovePlan 添加 ApprovePlanOption(WithApproved/With
 
 ### 2.4 S9.9: 移除 ForceCleanTeam 的 onTeamCleaned 调用
 
-- [ ] **Step 1: 删除 onTeamCleaned 调用**
+- [x] **Step 1: 删除 onTeamCleaned 调用**
 
 `team_backend.go` ForceCleanTeam 方法中删除：
 ```go
@@ -420,7 +420,7 @@ if tb.onTeamCleaned != nil {
 }
 ```
 
-- [ ] **Step 2: 编译+测试+Commit**
+- [x] **Step 2: 编译+测试+Commit**
 
 ```bash
 go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1
@@ -430,7 +430,7 @@ git commit -m "fix(S9.9): ForceCleanTeam 移除 onTeamCleaned 回调（对齐 Py
 
 ### 2.5 S9.10: ForceCleanTeam 修复
 
-- [ ] **Step 1: 移除前置状态检查，传 WithForce(true)**
+- [x] **Step 1: 移除前置状态检查，传 WithForce(true)**
 
 `team_backend.go` ForceCleanTeam 中：
 ```go
@@ -443,7 +443,7 @@ result := tb.ShutdownMember(ctx, m.MemberName, WithForce(true))
 
 删除 `if m.Status != string(atschema.MemberStatusShutdown)` 判断，依赖 ShutdownMember 幂等逻辑。
 
-- [ ] **Step 2: 编译+测试+Commit**
+- [x] **Step 2: 编译+测试+Commit**
 
 ```bash
 go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1
@@ -453,7 +453,7 @@ git commit -m "fix(S9.10): ForceCleanTeam 传 WithForce(true) + 移除前置状�
 
 ### 2.6 S9.12: SpawnMember 加 SpawnMemberOption
 
-- [ ] **Step 1: 添加 SpawnMemberOption 定义**
+- [x] **Step 1: 添加 SpawnMemberOption 定义**
 
 ```go
 // SpawnMemberOption SpawnMember 可选参数
@@ -492,7 +492,7 @@ func WithAllocation(a *models.Allocation) SpawnMemberOption {
 }
 ```
 
-- [ ] **Step 2: 修改 SpawnMember 签名**
+- [x] **Step 2: 修改 SpawnMember 签名**
 
 L304:
 ```go
@@ -516,11 +516,11 @@ for _, opt := range opts {
 
 将 CreateMember 中的硬编码状态替换为 cfg 中的值。
 
-- [ ] **Step 3: 更新调用方**
+- [x] **Step 3: 更新调用方**
 
 搜索所有 `SpawnMember(ctx,` 调用，确保兼容（opts 可选）。
 
-- [ ] **Step 4: 编译+测试+Commit**
+- [x] **Step 4: 编译+测试+Commit**
 
 ```bash
 go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1
@@ -530,7 +530,7 @@ git commit -m "fix(S9.12): SpawnMember 添加 SpawnMemberOption(WithStatus/WithE
 
 ### 2.7 M9.3: Leader 改走 SpawnMember
 
-- [ ] **Step 1: 修改 BuildTeam 中 Leader 注册**
+- [x] **Step 1: 修改 BuildTeam 中 Leader 注册**
 
 `team_backend.go` BuildTeam 中约 L535-537，将 `tb.db.Member().CreateMember(...)` 改为：
 ```go
@@ -546,7 +546,7 @@ if !result.Success {
 
 注意：需确认 SpawnMember 中 allocation/modelName 的处理逻辑，确保 Leader 的模型配置正确传递。
 
-- [ ] **Step 2: 编译+测试+Commit**
+- [x] **Step 2: 编译+测试+Commit**
 
 ```bash
 go build ./internal/agent_teams/... && go test ./internal/agent_teams/... -v -count=1
@@ -568,13 +568,13 @@ git commit -m "fix(M9.3): BuildTeam Leader 注册改走 SpawnMember（对齐 Pyt
 
 ### 3.1 目录迁移
 
-- [ ] **Step 1: 创建目标目录**
+- [x] **Step 1: 创建目标目录**
 
 ```bash
 mkdir -p internal/swarm/agents/harness/common/rails
 ```
 
-- [ ] **Step 2: 移动文件**
+- [x] **Step 2: 移动文件**
 
 ```bash
 git mv internal/swarm/server/rails/structured_ask_user_tool.go internal/swarm/agents/harness/common/rails/structured_ask_user_tool.go
@@ -583,22 +583,22 @@ git mv internal/swarm/server/rails/structured_ask_user_tool_test.go internal/swa
 git mv internal/swarm/server/rails/structured_ask_user_rail_test.go internal/swarm/agents/harness/common/rails/structured_ask_user_rail_test.go
 ```
 
-- [ ] **Step 3: 修改包名**
+- [x] **Step 3: 修改包名**
 
 所有移动文件中 `package rails` → `package rails`（包名不变，同目录下包名一致即可）。
 
-- [ ] **Step 4: 更新 import 路径**
+- [x] **Step 4: 更新 import 路径**
 
 搜索所有引用 `uapclaw-go/internal/swarm/server/rails` 中 structured_ask_user 相关的位置，更新为 `uapclaw-go/internal/swarm/agents/harness/common/rails`。
 
-- [ ] **Step 5: 更新 doc.go**
+- [x] **Step 5: 更新 doc.go**
 
 - `internal/swarm/server/rails/doc.go`：移除 structured_ask_user 条目
 - 创建 `internal/swarm/agents/harness/common/rails/doc.go`
 
 ### 3.2 S10.1+S10.2: Schema 重构
 
-- [ ] **Step 6: 重写 NewStructuredAskUserTool，自建 EXTENDED_INPUT_PARAMS schema**
+- [x] **Step 6: 重写 NewStructuredAskUserTool，自建 EXTENDED_INPUT_PARAMS schema**
 
 `structured_ask_user_tool.go` 中：
 ```go
@@ -616,12 +616,12 @@ func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 - questions item: `required: ["question"]`（仅 question 必填）
 - options item: `required: ["label"]`（仅 label 必填）
 
-- [ ] **Step 7: 编译+测试**
+- [x] **Step 7: 编译+测试**
 
 Run: `go build ./internal/swarm/... && go test ./internal/swarm/... -v -count=1`
 Expected: 编译成功，测试 PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/swarm/
@@ -646,7 +646,7 @@ git commit -m "fix(S10.1+S10.2+M10.1+M10.2): StructuredAskUserTool 自建 schema
 
 ### 4.1 S10.3.6: 实现 git 操作
 
-- [ ] **Step 1: 创建 git_ops.go，实现 gitClone/gitPull/gitGetCommit**
+- [x] **Step 1: 创建 git_ops.go，实现 gitClone/gitPull/gitGetCommit**
 
 使用 `os/exec` 调用 git 命令：
 - `gitClone(ctx, url, dir) error` → `git clone --depth 1 <url> <dir>`
@@ -655,11 +655,11 @@ git commit -m "fix(S10.1+S10.2+M10.1+M10.2): StructuredAskUserTool 自建 schema
 
 返回 commit hash。处理命令执行错误、超时（使用 ctx）。
 
-- [ ] **Step 2: 替换 skill_manager.go 中的 stub 实现**
+- [x] **Step 2: 替换 skill_manager.go 中的 stub 实现**
 
 将 L2249-2265 的 stub 替换为调用 git_ops.go 中的函数。
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ```bash
 go test ./internal/swarm/server/runtime/skill/... -v -count=1
@@ -669,7 +669,7 @@ git commit -m "fix(S10.3.6): 实现 gitClone/gitPull/gitGetCommit（os/exec 调�
 
 ### 4.2 T10.3.1: 实现 safeRmtree
 
-- [ ] **Step 1: 创建 safe_rmtree.go**
+- [x] **Step 1: 创建 safe_rmtree.go**
 
 ```go
 // safeRmtree 安全删除目录（对齐 Python: _safe_rmtree）
@@ -700,25 +700,25 @@ func safeRmtree(path string) error {
 }
 ```
 
-- [ ] **Step 2: 替换 skill_manager.go 中的 os.RemoveAll 调用**
+- [x] **Step 2: 替换 skill_manager.go 中的 os.RemoveAll 调用**
 
 搜索所有 `os.RemoveAll` 用于删除技能目录的位置，替换为 `safeRmtree`。
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.3 M10.3.1: marketplace_add 默认 enabled 改为 false
 
-- [ ] **Step 1: 修改 HandleSkillsMarketplaceAdd**
+- [x] **Step 1: 修改 HandleSkillsMarketplaceAdd**
 
 L781: `"enabled": true` → `"enabled": false`
 
 添加注释：`// 新增源默认禁用（对齐 Python: enabled=False，避免未经确认就触发远程同步）`
 
-- [ ] **Step 2: 测试+Commit**
+- [x] **Step 2: 测试+Commit**
 
 ### 4.4 S10.3.2: 实现 getMirrorSkillsDirs
 
-- [ ] **Step 1: 添加 getMirrorSkillsDirs 方法**
+- [x] **Step 1: 添加 getMirrorSkillsDirs 方法**
 
 ```go
 // getMirrorSkillsDirs 返回需要镜像同步的 skills 目录（对齐 Python: _get_mirror_skills_dirs）。
@@ -729,7 +729,7 @@ func (sm *SkillManager) getMirrorSkillsDirs() []string {
 }
 ```
 
-- [ ] **Step 2: 在 ClawHub/TeamSkillsHub/SkillNet/Uninstall 四处调用**
+- [x] **Step 2: 在 ClawHub/TeamSkillsHub/SkillNet/Uninstall 四处调用**
 
 每个安装方法中在 copyto 技能目录后添加：
 ```go
@@ -749,11 +749,11 @@ for _, mirrorRoot := range sm.getMirrorSkillsDirs() {
 }
 ```
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.5 S10.3.3: 实现 uninstall 内置技能保护
 
-- [ ] **Step 1: 在 HandleSkillsUninstall 中添加 builtin 检测**
+- [x] **Step 1: 在 HandleSkillsUninstall 中添加 builtin 检测**
 
 在删除目录之前添加：
 ```go
@@ -773,13 +773,13 @@ if builtinDir != "" {
 
 添加 `isBuiltinSkill` 方法：遍历 builtin 目录 → 解析 SKILL.md 匹配技能名。
 
-- [ ] **Step 2: 测试+Commit**
+- [x] **Step 2: 测试+Commit**
 
 ### 4.6 S10.3.1: SkillNet 标注 ⤵️ + Install job 状态修复
 
-- [ ] **Step 1: Search/Evaluate 添加 ⤵️ 标记**
+- [x] **Step 1: Search/Evaluate 添加 ⤵️ 标记**
 
-- [ ] **Step 2: Install 修改 job 为 failed 状态**
+- [x] **Step 2: Install 修改 job 为 failed 状态**
 
 在 `HandleSkillsSkillnetInstall` 创建 job 后，添加 goroutine 设置 job 为 failed：
 ```go
@@ -794,11 +794,11 @@ go func() {
 }()
 ```
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.7 S10.3.4: 实现远程 URL 下载
 
-- [ ] **Step 1: 创建 remote_import.go**
+- [x] **Step 1: 创建 remote_import.go**
 
 实现：
 - `isHTTPDownloadTarget(url string) bool`
@@ -809,7 +809,7 @@ go func() {
   - ZIP/tar.gz 解压（archive/zip, compress/gzip）
   - 复用本地导入逻辑
 
-- [ ] **Step 2: 修改 HandleSkillsImportLocal 添加 URL 分支**
+- [x] **Step 2: 修改 HandleSkillsImportLocal 添加 URL 分支**
 
 在本地路径处理之前添加 URL 检测：
 ```go
@@ -821,11 +821,11 @@ if isHTTPDownloadTarget(rawPath) {
 }
 ```
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.8 S10.3.5: 实现 plugin.yaml 规范化
 
-- [ ] **Step 1: 创建 plugin_yaml.go**
+- [x] **Step 1: 创建 plugin_yaml.go**
 
 实现：
 - `buildTeamSkillsPublishZip(skillDir string) ([]byte, string, error)`
@@ -834,15 +834,15 @@ if isHTTPDownloadTarget(rawPath) {
   - 构建规范化 ZIP
   - 计算 SHA256
 
-- [ ] **Step 2: 修改 HandleSkillsTeamSkillsHubPublish**
+- [x] **Step 2: 修改 HandleSkillsTeamSkillsHubPublish**
 
 替换直接上传原始 ZIP 为调用 `buildTeamSkillsPublishZip`。
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.9 M10.3.2: 实现 marketplace 缓存清理 + git 同步
 
-- [ ] **Step 1: 修改 HandleSkillsMarketplaceRemove**
+- [x] **Step 1: 修改 HandleSkillsMarketplaceRemove**
 
 添加本地缓存目录删除：
 ```go
@@ -852,38 +852,38 @@ if dirExists(repoDir) {
 }
 ```
 
-- [ ] **Step 2: 修改 HandleSkillsMarketplaceToggle**
+- [x] **Step 2: 修改 HandleSkillsMarketplaceToggle**
 
 - 启用时：gitPull（已存在）或 gitClone（不存在）
 - 禁用时：safeRmtree 删除本地缓存
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.10 M10.3.3: 实现 Validate 完整校验
 
-- [ ] **Step 1: 修改 HandleSkillsTeamSkillsHubValidate**
+- [x] **Step 1: 修改 HandleSkillsTeamSkillsHubValidate**
 
 添加 skill_type 判断 + teamskills 类型的 roles 完整校验。
 
-- [ ] **Step 2: 测试+Commit**
+- [x] **Step 2: 测试+Commit**
 
 ### 4.11 M10.3.4: 引入 yaml.v3 完整解析
 
-- [ ] **Step 1: 添加依赖**
+- [x] **Step 1: 添加依赖**
 
 ```bash
 go get gopkg.in/yaml.v3
 ```
 
-- [ ] **Step 2: 重写 parseYAMLFrontmatter**
+- [x] **Step 2: 重写 parseYAMLFrontmatter**
 
 使用 `yaml.Unmarshal` 替代逐行解析。补全默认字段和 tags/allowed_tools 类型转换。
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.12 M10.3.5: matchHost 添加后缀匹配
 
-- [ ] **Step 1: 修改 matchHost**
+- [x] **Step 1: 修改 matchHost**
 
 在 `matchHost` 函数中添加 `. 前缀` 规则的处理：
 ```go
@@ -893,11 +893,11 @@ if strings.HasPrefix(pattern, ".") {
 }
 ```
 
-- [ ] **Step 2: 测试+Commit**
+- [x] **Step 2: 测试+Commit**
 
 ### 4.13 M10.3.6: 实现代理环境变量上下文
 
-- [ ] **Step 1: 创建 proxy_context.go**
+- [x] **Step 1: 创建 proxy_context.go**
 
 ```go
 // skillnetNetworkContext 在 SkillNet 调用期间临时设置代理环境变量，调用结束后恢复。
@@ -924,18 +924,18 @@ func skillnetNetworkContext() func() {
 }
 ```
 
-- [ ] **Step 2: 在 SkillNet 搜索/评估/下载调用前使用**
+- [x] **Step 2: 在 SkillNet 搜索/评估/下载调用前使用**
 
 ```go
 restore := skillnetNetworkContext()
 defer restore()
 ```
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ### 4.14 M10.3.7: 安装记录添加 version/commit
 
-- [ ] **Step 1: 修改 HandleSkillsClawhubDownload 的 AddInstalledPlugin**
+- [x] **Step 1: 修改 HandleSkillsClawhubDownload 的 AddInstalledPlugin**
 
 添加 `version` 和 `commit` 字段：
 ```go
@@ -949,20 +949,20 @@ sm.AddInstalledPlugin(map[string]any{
 })
 ```
 
-- [ ] **Step 2: 测试+Commit**
+- [x] **Step 2: 测试+Commit**
 
 ### 4.15 T10.3.2: 实现 refreshAgentDataIndexes
 
-- [ ] **Step 1: 创建 agent_data.go**
+- [x] **Step 1: 创建 agent_data.go**
 
 实现 `generateAgentDataForWorkspace(workspaceRoot string)` 和 `refreshAgentDataIndexes`：
 - 遍历工作区目录收集技能信息
 - 生成 `agent-data.json`
 - refreshAgentDataIndexes 遍历 sm.skillsDir 的 parent + getMirrorSkillsDirs() 的 parent
 
-- [ ] **Step 2: 替换空操作**
+- [x] **Step 2: 替换空操作**
 
-- [ ] **Step 3: 测试+Commit**
+- [x] **Step 3: 测试+Commit**
 
 ---
 
@@ -974,19 +974,19 @@ sm.AddInstalledPlugin(map[string]any{
 
 ### 5.1 M10.6.1: 统一品牌名为 "UapClawSwarm"
 
-- [ ] **Step 1: 修改 Code Intro 中的品牌名**
+- [x] **Step 1: 修改 Code Intro 中的品牌名**
 
 `code_prompt_builder.go` BuildCodeIntroSection 中：
 - `"JiuwenSwarm"` → `"UapClawSwarm"`
 
-- [ ] **Step 2: 修改 identity 节中的品牌名**
+- [x] **Step 2: 修改 identity 节中的品牌名**
 
 `prompt_builder.go` BuildAgentIdentityPrompt 中：
 - `"UapClaw"` → `"UapClawSwarm"`
 - `".uapclaw"` → `".uapclawswarm"`
 - `"UapClaw"` → `"UapClawSwarm"`（英文版）
 
-- [ ] **Step 3: 编译+测试+Commit**
+- [x] **Step 3: 编译+测试+Commit**
 
 ```bash
 go build ./internal/swarm/... && go test ./internal/swarm/... -v -count=1
@@ -996,7 +996,7 @@ git commit -m "fix(M10.6.1): 统一品牌名为 UapClawSwarm"
 
 ### 5.2 T10.6.1+T10.6.2: readWorkspaceFile 修复
 
-- [ ] **Step 1: 添加 Debug 日志**
+- [x] **Step 1: 添加 Debug 日志**
 
 `prompt_builder.go` readWorkspaceFile 中，`os.IsNotExist(err)` 分支添加：
 ```go
@@ -1005,14 +1005,14 @@ logger.Debug(logComponent).
     Msg("文件不存在")
 ```
 
-- [ ] **Step 2: 添加 TrimSpace**
+- [x] **Step 2: 添加 TrimSpace**
 
 在返回 content 前添加：
 ```go
 content = strings.TrimSpace(content)
 ```
 
-- [ ] **Step 3: 编译+测试+Commit**
+- [x] **Step 3: 编译+测试+Commit**
 
 ```bash
 go build ./internal/swarm/... && go test ./internal/swarm/... -v -count=1
