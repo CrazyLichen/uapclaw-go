@@ -7,6 +7,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -73,13 +74,30 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 	}
 
 	if result == "compressed" {
-		// 压缩后重新统计 token
-		totalTokens, _ := d.countFullContextTokens(ctx, sessionID)
-		stats := modelCtx.Statistic()
-		response["stats"] = map[string]any{
-			"total_messages":   stats.TotalMessages,
-			"total_tokens":     totalTokens,
-			"raw_total_tokens": rawTotalTokens,
+		// 对齐 Python (L5440-5441): context = context_engine.get_context(session_id=session_id)
+		// 压缩后重新获取 context，确保统计的是压缩后的数据
+		newModelCtx := contextEngine.GetContext("default_context", sessionID)
+		if newModelCtx != nil {
+			// 对齐 Python (L5443-5445): total_tokens = await self._count_full_context_tokens(context, react_agent, session_id)
+			totalTokens, _ := d.countFullContextTokens(ctx, sessionID)
+			// 对齐 Python (L5447): stats = context.statistic()
+			stats := newModelCtx.Statistic()
+			response["stats"] = map[string]any{
+				"total_messages":   stats.TotalMessages,
+				"total_tokens":     totalTokens,
+				"raw_total_tokens": rawTotalTokens,
+			}
+			// 对齐 Python (L5453-5455):
+			//   if summary:
+			//     response["summary"] = summary
+			//     response.setdefault("compact_summary", summary)
+			if compactResult.CompactSummary != "" {
+				response["summary"] = compactResult.CompactSummary
+				// setdefault: 仅在 compact_summary 未设置时才写入
+				if _, exists := response["compact_summary"]; !exists {
+					response["compact_summary"] = compactResult.CompactSummary
+				}
+			}
 		}
 	}
 
@@ -181,7 +199,8 @@ func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers any) boo
 // getRecentMessages 获取最近消息列表。
 // 对齐 Python: _get_recent_messages() (line 5593-5609)
 // 从 ContextEngine 内存中获取，不读 JSONL。
-func (d *DeepAdapter) getRecentMessages(sessionID string) []map[string]any {
+// 返回原始 BaseMessage 列表，由 callModelForRecap 负责提取 role/content。
+func (d *DeepAdapter) getRecentMessages(sessionID string) []llmschema.BaseMessage {
 	if d.instance == nil {
 		return nil
 	}
@@ -199,34 +218,25 @@ func (d *DeepAdapter) getRecentMessages(sessionID string) []map[string]any {
 		return nil
 	}
 
-	// 获取所有消息，取最近 recentMessageWindow 条
-	// GetMessages(size<=0, withHistory=true) 返回全部消息
+	// 对齐 Python: all_messages = list(context.get_messages() or [])
 	allMessages, err := modelCtx.GetMessages(0, true)
 	if err != nil || len(allMessages) == 0 {
 		return nil
 	}
 
+	// 对齐 Python: return all_messages[-window:]
 	window := recentMessageWindow
 	if len(allMessages) < window {
 		window = len(allMessages)
 	}
 
-	recent := allMessages[len(allMessages)-window:]
-	result := make([]map[string]any, 0, len(recent))
-	for _, msg := range recent {
-		entry := map[string]any{
-			"role":    msg.GetRole().String(),
-			"content": msg.GetContent().Text(),
-		}
-		result = append(result, entry)
-	}
-	return result
+	return allMessages[len(allMessages)-window:]
 }
 
 // callModelForRecap 调用模型生成 recap。
 // 对齐 Python: _call_model_for_recap() (line 5611-5663)
 // 不传 system prompt，prompt 作为最后一条 user message。
-func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []map[string]any, prompt string) (string, error) {
+func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []llmschema.BaseMessage, prompt string) (string, error) {
 	if d.model == nil {
 		logger.Error(logComponent).Msg("callModelForRecap: 无可用模型实例")
 		return "", nil
@@ -235,15 +245,37 @@ func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []map[stri
 	// 构建消息列表：原始消息 + recap 提示词作为最后一条 user message
 	recapMessages := make([]llmschema.BaseMessage, 0, len(messages)+1)
 	for _, msg := range messages {
-		content, _ := msg["content"].(string)
+		// 对齐 Python: role = getattr(msg, "role", None) or ""
+		role := msg.GetRole()
+
+		// 对齐 Python: content = getattr(msg, "content", None) or ""
+		//   if isinstance(content, list): → 多模态，提取文本部分
+		mc := msg.GetContent()
+		var content string
+		if mc.IsText() {
+			content = mc.Text()
+		} else {
+			// 多模态：拼接 Parts() 中 Type=="text" 的 Text 字段
+			// 对齐 Python: " ".join(str(p) for p in content if isinstance(p, str) or (isinstance(p, dict) and p.get("type") == "text"))
+			var textParts []string
+			for _, part := range mc.Parts() {
+				if part.Type == "text" && part.Text != "" {
+					textParts = append(textParts, part.Text)
+				}
+			}
+			content = strings.Join(textParts, " ")
+		}
+
+		// 对齐 Python: if not content.strip(): continue
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		role, _ := msg["role"].(string)
+
+		// 对齐 Python: if role == "user": UserMessage / elif role == "assistant": AssistantMessage / else: UserMessage
 		switch role {
-		case "user":
+		case llmschema.RoleTypeUser:
 			recapMessages = append(recapMessages, llmschema.NewUserMessage(content))
-		case "assistant":
+		case llmschema.RoleTypeAssistant:
 			recapMessages = append(recapMessages, llmschema.NewAssistantMessage(content))
 		default:
 			recapMessages = append(recapMessages, llmschema.NewUserMessage(content))
@@ -269,6 +301,7 @@ func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []map[stri
 
 // countFullContextTokens 计算完整上下文 token 数。
 // 对齐 Python: _count_full_context_tokens() (line 5665-5723)
+// 包含三部分：1. system prompt  2. 对话消息  3. 工具定义
 func (d *DeepAdapter) countFullContextTokens(ctx context.Context, sessionID string) (int, error) {
 	if d.instance == nil {
 		return 0, nil
@@ -287,40 +320,85 @@ func (d *DeepAdapter) countFullContextTokens(ctx context.Context, sessionID stri
 		return 0, nil
 	}
 
-	// 对齐 Python: context.token_counter().count(system_prompt) + context token 计数
+	// 对齐 Python: token_counter = context.token_counter()
 	tc := modelCtx.TokenCounter()
-	if tc == nil {
-		// 无 token 计数器时使用统计值
-		stats := modelCtx.Statistic()
-		if stats != nil {
-			return stats.TotalTokens, nil
-		}
-		return 0, nil
-	}
+
+	// 对齐 Python: 无 token_counter 时使用 len // 4 粗估 fallback
+	useFallback := tc == nil
 
 	// 获取模型名称用于 token 计数
 	modelName := reactAgent.Config().ModelName()
 
-	// 计算 system prompt token 数
 	totalTokens := 0
+
+	// 对齐 Python 步骤1: 计算系统消息的 tokens (L5686-5697)
+	//   if hasattr(react_agent, "prompt_builder") and react_agent.prompt_builder is not None:
+	//     system_prompt = react_agent.prompt_builder.build()
+	//   elif hasattr(react_agent, "system_prompt_builder") and react_agent.system_prompt_builder is not None:
+	//     system_prompt = react_agent.system_prompt_builder.build()
+	//
+	// Go 中 PromptBuilder() 返回 *SystemPromptBuilder（具体类型，有 Build()），
+	// SystemPromptBuilder() 返回接口（无 Build()），需类型断言。
+	systemPrompt := ""
 	pb := reactAgent.PromptBuilder()
 	if pb != nil {
-		systemPrompt := pb.Build()
-		if systemPrompt != "" {
+		systemPrompt = pb.Build()
+	}
+	if strings.TrimSpace(systemPrompt) == "" {
+		spb := reactAgent.SystemPromptBuilder()
+		if spb != nil {
+			// SystemPromptBuilderInterface 无 Build()，断言为具体类型
+			if builder, ok := spb.(*prompts.SystemPromptBuilder); ok {
+				systemPrompt = builder.Build()
+			}
+		}
+	}
+	if systemPrompt != "" {
+		if !useFallback {
 			count, _ := tc.Count(systemPrompt, modelName)
 			totalTokens += count
+		} else {
+			// 对齐 Python: total_tokens += len(system_prompt) // 4
+			totalTokens += len(systemPrompt) / 4
 		}
 	}
 
-	// 加上上下文消息的 token 数
+	// 对齐 Python 步骤2: 计算对话消息的 tokens (L5699-5705)
+	//   if token_counter is not None:
+	//     total_tokens += token_counter.count_messages(context_messages)
+	//   else:
+	//     total_tokens += sum(len(str(msg.content)) // 4 for msg in context_messages)
 	messages, err := modelCtx.GetMessages(0, true)
-	if err == nil {
-		for _, msg := range messages {
-			text := msg.GetContent().Text()
-			if text != "" {
-				count, _ := tc.Count(text, modelName)
+	if err == nil && len(messages) > 0 {
+		if !useFallback {
+			count, _ := tc.CountMessages(messages, modelName)
+			totalTokens += count
+		} else {
+			for _, msg := range messages {
+				text := msg.GetContent().Text()
+				if text != "" {
+					totalTokens += len(text) / 4
+				}
+			}
+		}
+	}
+
+	// 对齐 Python 步骤3: 计算工具定义的 tokens (L5707-5721)
+	//   tools = []
+	//   if hasattr(react_agent, "ability_manager") and react_agent.ability_manager is not None:
+	//     for card in react_agent.ability_manager.list() or []:
+	//       if hasattr(card, "to_tool_info"): tools.append(card.to_tool_info())
+	//   if tools and token_counter is not None:
+	//     total_tokens += token_counter.count_tools(tools)
+	am := reactAgent.AbilityManager()
+	if am != nil {
+		toolInfos, listErr := am.ListToolInfo(ctx, nil)
+		if listErr == nil && len(toolInfos) > 0 {
+			if !useFallback {
+				count, _ := tc.CountTools(toolInfos, modelName)
 				totalTokens += count
 			}
+			// 对齐 Python: tc==nil 时无 count_tools fallback（Python 也不做）
 		}
 	}
 

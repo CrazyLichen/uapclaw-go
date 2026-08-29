@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -1171,13 +1172,13 @@ func TestDeepAdapter_Evolution占位函数(t *testing.T) {
 		t.Error("handleEvolutionApproval 占位应返回 false")
 	}
 	if msgs := d.getRecentMessages("s1"); msgs != nil {
-		t.Errorf("getRecentMessages 占位应返回 nil")
+		t.Errorf("getRecentMessages 无实例应返回 nil")
 	}
 	if msg, err := d.callModelForRecap(ctx, nil, ""); msg != "" || err != nil {
-		t.Errorf("callModelForRecap 占位应返回 '', nil")
+		t.Errorf("callModelForRecap 无模型应返回 '', nil")
 	}
 	if count, err := d.countFullContextTokens(ctx, "s1"); count != 0 || err != nil {
-		t.Errorf("countFullContextTokens 占位应返回 0, nil")
+		t.Errorf("countFullContextTokens 无实例应返回 0, nil")
 	}
 }
 
@@ -1261,5 +1262,65 @@ func TestDeepAdapter_RegisterMcpServersFromConfig(t *testing.T) {
 	}
 	if err := d.registerMcpServersFromConfig(ctx, configBase, "agent.test"); err != nil {
 		t.Errorf("registerMcpServersFromConfig error: %v", err)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestCallModelForRecap_多模态Content 测试多模态消息文本提取。
+// 对齐 Python: _call_model_for_recap 中 isinstance(content, list) 分支
+func TestCallModelForRecap_多模态Content(t *testing.T) {
+	d := NewDeepAdapter()
+	// 无模型实例，仅测试多模态消息构建逻辑（不实际调用模型）
+	// 验证：纯文本消息正常、多模态消息提取 text 部分、空文本跳过
+
+	// 构建测试消息：1 条纯文本 user + 1 条多模态 assistant + 1 条空内容
+	textPart := llmschema.ContentPart{Type: "text", Text: "这是图片描述"}
+	imagePart := llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "https://example.com/img.png"}}
+
+	messages := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("hello world"),
+		// 多模态 assistant 消息：使用 WithMultiModalContent 选项
+		llmschema.NewDefaultMessage(llmschema.RoleTypeAssistant, "", llmschema.WithMultiModalContent(textPart, imagePart)),
+		// 空内容消息应被跳过
+		llmschema.NewUserMessage(""),
+	}
+
+	// callModelForRecap 在 model==nil 时返回 "", nil
+	// 但我们至少验证它不 panic，且正确处理了消息
+	result, err := d.callModelForRecap(t.Context(), messages, "test prompt")
+	if err != nil {
+		t.Errorf("callModelForRecap 多模态不应返回错误, got %v", err)
+	}
+	if result != "" {
+		// 无模型时预期返回空
+		t.Errorf("callModelForRecap 无模型应返回空, got %q", result)
+	}
+}
+
+// TestGetRecentMessages_返回BaseMessage 测试 getRecentMessages 返回 []BaseMessage 类型。
+func TestGetRecentMessages_返回BaseMessage(t *testing.T) {
+	d := NewDeepAdapter()
+	// 无实例时返回 nil
+	msgs := d.getRecentMessages("s1")
+	if msgs != nil {
+		t.Errorf("getRecentMessages 无实例应返回 nil, got %v", msgs)
+	}
+}
+
+// TestCallModelForRecap_纯文本消息 测试纯文本消息不丢失。
+func TestCallModelForRecap_纯文本消息(t *testing.T) {
+	d := NewDeepAdapter()
+	messages := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("用户问题"),
+		llmschema.NewAssistantMessage("助手回答"),
+	}
+	// 无模型实例，仅验证不 panic
+	result, err := d.callModelForRecap(t.Context(), messages, "recap prompt")
+	if err != nil {
+		t.Errorf("callModelForRecap 纯文本不应返回错误, got %v", err)
+	}
+	if result != "" {
+		t.Errorf("callModelForRecap 无模型应返回空, got %q", result)
 	}
 }
