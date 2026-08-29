@@ -74,3 +74,32 @@ func TestFormatPromptLlama_空SystemPrompt(t *testing.T) {
 		t.Errorf("got %q, want %q", result, "user prompt")
 	}
 }
+
+// TestParseJSON_Python字面量 测试 Python 字面量（True/False/None）替换
+// 对齐 Python: ast.literal_eval 支持解析 True/False/None
+func TestParseJSON_Python字面量(t *testing.T) {
+	output := `{"active": True, "visible": False, "extra": None}`
+	result := ParseJSON(output)
+	if result["active"] != true {
+		t.Errorf("active = %v, want true", result["active"])
+	}
+	if result["visible"] != false {
+		t.Errorf("visible = %v, want false", result["visible"])
+	}
+	if result["extra"] != nil {
+		t.Errorf("extra = %v, want nil", result["extra"])
+	}
+}
+
+// TestParseJSON_单引号加字面量 测试单引号和 Python 字面量混合
+// 对齐 Python: ast.literal_eval 支持单引号 + Python 字面量
+func TestParseJSON_单引号加字面量(t *testing.T) {
+	output := `{'active': True, 'visible': False}`
+	result := ParseJSON(output)
+	if result["active"] != true {
+		t.Errorf("active = %v, want true", result["active"])
+	}
+	if result["visible"] != false {
+		t.Errorf("visible = %v, want false", result["visible"])
+	}
+}

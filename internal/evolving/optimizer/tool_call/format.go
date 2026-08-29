@@ -23,7 +23,7 @@ import (
 //  1. 如果指定 header，先尝试查找 '{"<header>":' 或 '{\n"<header>":'
 //  2. 否则查找 '{\n' 或 '{'
 //  3. 提取第一个 '{' 到最后一个 '}' 之间的内容
-//  4. 尝试 json.Unmarshal，失败时尝试单引号→双引号修复
+//  4. 尝试 json.Unmarshal，失败时尝试单引号→双引号 + Python 字面量→JSON 字面量修复
 func ParseJSON(output string, header ...string) map[string]any {
 	// 对齐 Python: json_idx = -1
 	jsonIdx := -1
@@ -64,8 +64,12 @@ func ParseJSON(output string, header ...string) map[string]any {
 	// 对齐 Python: output_json = json.loads(output)
 	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		// 对齐 Python: output_json = ast.literal_eval(output)
-		// 常见问题：单引号 → 双引号
+		// 1. 单引号 → 双引号
 		fixed := strings.ReplaceAll(extracted, "'", `"`)
+		// 2. Python 字面量 → JSON 字面量
+		fixed = strings.ReplaceAll(fixed, "True", "true")
+		fixed = strings.ReplaceAll(fixed, "False", "false")
+		fixed = strings.ReplaceAll(fixed, "None", "null")
 		if jsonErr := json.Unmarshal([]byte(fixed), &result); jsonErr != nil {
 			return map[string]any{}
 		}
