@@ -1,6 +1,8 @@
 package skill_call
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -146,4 +148,101 @@ func TestTeamExtractJSONWithError_数组提取(t *testing.T) {
 	result, errStr := teamExtractJSONWithError(raw)
 	assert.Equal(t, "", errStr)
 	assert.NotNil(t, result)
+}
+
+// ──────────────────────────── loadSkillContent 测试 ────────────────────────────
+
+// TestLoadSkillContent_nilStore nil evolutionStore 时返回 fallback
+func TestLoadSkillContent_nilStore(t *testing.T) {
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, nil)
+	assert.Equal(t, "无", opt.loadSkillContent(context.Background(), "skill"))
+	optEn := NewTeamSkillExperienceOptimizer(nil, "test", "en", "", TeamSkillRecordLLMPolicy, nil)
+	assert.Equal(t, "N/A", optEn.loadSkillContent(context.Background(), "skill"))
+}
+
+// TestLoadSkillContent_正常内容 有 store 且返回有效内容时使用内容
+func TestLoadSkillContent_正常内容(t *testing.T) {
+	store := &mockEvolutionStore{
+		readSkillContentFn: func(_ context.Context, _ string) (string, error) {
+			return "skill body content", nil
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadSkillContent(context.Background(), "my_skill")
+	assert.Equal(t, "skill body content", result)
+}
+
+// TestLoadSkillContent_错误返回 有 store 但 ReadSkillContent 返回错误时降级 fallback
+func TestLoadSkillContent_错误返回(t *testing.T) {
+	store := &mockEvolutionStore{
+		readSkillContentFn: func(_ context.Context, _ string) (string, error) {
+			return "", fmt.Errorf("skill not found")
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadSkillContent(context.Background(), "missing_skill")
+	assert.Equal(t, "无", result)
+}
+
+// TestLoadSkillContent_空内容 有 store 但返回空字符串时降级 fallback
+func TestLoadSkillContent_空内容(t *testing.T) {
+	store := &mockEvolutionStore{
+		readSkillContentFn: func(_ context.Context, _ string) (string, error) {
+			return "   ", nil // 只有空白
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "en", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadSkillContent(context.Background(), "empty_skill")
+	assert.Equal(t, "N/A", result)
+}
+
+// ──────────────────────────── loadExistingEvolutionsSummary 测试 ────────────────────────────
+
+// TestLoadExistingEvolutionsSummary_nilStore nil evolutionStore 时返回 fallback
+func TestLoadExistingEvolutionsSummary_nilStore(t *testing.T) {
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, nil)
+	assert.Equal(t, "无已有演进经验", opt.loadExistingEvolutionsSummary(context.Background(), "skill"))
+	optEn := NewTeamSkillExperienceOptimizer(nil, "test", "en", "", TeamSkillRecordLLMPolicy, nil)
+	assert.Equal(t, "No existing evolution records", optEn.loadExistingEvolutionsSummary(context.Background(), "skill"))
+}
+
+// TestLoadExistingEvolutionsSummary_有记录 有 store 且返回有效演进日志时汇总
+func TestLoadExistingEvolutionsSummary_有记录(t *testing.T) {
+	store := &mockEvolutionStore{
+		loadFullEvolutionLogFn: func(_ context.Context, _ string) (*checkpointing.EvolutionLog, error) {
+			return &checkpointing.EvolutionLog{
+				Entries: []checkpointing.EvolutionRecord{
+					{ID: "ev_001", Change: checkpointing.EvolutionPatch{Section: "Troubleshooting", Content: "fix bug"}},
+				},
+			}, nil
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadExistingEvolutionsSummary(context.Background(), "my_skill")
+	assert.Contains(t, result, "已有演进经验：")
+	assert.Contains(t, result, "ev_001")
+}
+
+// TestLoadExistingEvolutionsSummary_错误返回 有 store 但 LoadFullEvolutionLog 返回错误时降级 fallback
+func TestLoadExistingEvolutionsSummary_错误返回(t *testing.T) {
+	store := &mockEvolutionStore{
+		loadFullEvolutionLogFn: func(_ context.Context, _ string) (*checkpointing.EvolutionLog, error) {
+			return nil, fmt.Errorf("skill not found")
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadExistingEvolutionsSummary(context.Background(), "missing_skill")
+	assert.Equal(t, "无已有演进经验", result)
+}
+
+// TestLoadExistingEvolutionsSummary_nil日志 有 store 但返回 nil EvolutionLog 时降级 fallback
+func TestLoadExistingEvolutionsSummary_nil日志(t *testing.T) {
+	store := &mockEvolutionStore{
+		loadFullEvolutionLogFn: func(_ context.Context, _ string) (*checkpointing.EvolutionLog, error) {
+			return nil, nil
+		},
+	}
+	opt := NewTeamSkillExperienceOptimizer(nil, "test", "en", "", TeamSkillRecordLLMPolicy, store)
+	result := opt.loadExistingEvolutionsSummary(context.Background(), "empty_skill")
+	assert.Equal(t, "No existing evolution records", result)
 }

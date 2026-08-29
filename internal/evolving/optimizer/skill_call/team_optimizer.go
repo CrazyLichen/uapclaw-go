@@ -22,15 +22,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// EvolutionStore 接口 — 用于 loadSkillContent / loadExistingEvolutionsSummary。
-// 对齐 Python: EvolutionStore；签名对齐 checkpointing.EvolutionStore 结构体方法。
-type EvolutionStore interface {
-	// ReadSkillContent 读取技能内容
-	ReadSkillContent(ctx context.Context, skillName string) (string, error)
-	// LoadFullEvolutionLog 加载完整演进日志
-	LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog
-}
-
 // TeamSkillExperienceOptimizer 团队技能经验优化器。
 //
 // 对应 Python: TeamSkillExperienceOptimizer
@@ -40,8 +31,9 @@ type TeamSkillExperienceOptimizer struct {
 	debugDir string
 	// recordLLMPolicy 团队记录生成 LLM 调用策略
 	recordLLMPolicy llm_resilience.LLMInvokePolicy
-	// evolutionStore 演进存储接口（可选，用于加载技能内容和已有演进）
-	evolutionStore EvolutionStore
+	// evolutionStore 演进存储只读接口（可选，用于加载技能内容和已有演进）
+	// 对齐 Python: TeamSkillExperienceOptimizer._evolution_store
+	evolutionStore checkpointing.EvolutionStoreReader
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -60,7 +52,7 @@ type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 // 对齐 Python:
 //
 //	创建 TeamSkillExperienceOptimizer（参数: llm, model, language, debug_dir, record_llm_policy, evolution_store）
-func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, debugDir string, recordLLMPolicy llm_resilience.LLMInvokePolicy, evolutionStore EvolutionStore) *TeamSkillExperienceOptimizer {
+func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, debugDir string, recordLLMPolicy llm_resilience.LLMInvokePolicy, evolutionStore checkpointing.EvolutionStoreReader) *TeamSkillExperienceOptimizer {
 	return &TeamSkillExperienceOptimizer{
 		SkillExperienceOptimizerBase: SkillExperienceOptimizerBase{
 			llm:            llmModel,
@@ -367,8 +359,8 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		workflowSummary = "Present in trajectory"
 	}
 
-	skillContent := summarizeSkillContentTeamFallback(skillName, o.language)
-	existingEvolutions := langDefault("无已有演进经验", "No existing evolution records", o.language)
+	skillContent := o.loadSkillContent(ctx, skillName)
+	existingEvolutions := o.loadExistingEvolutionsSummary(ctx, skillName)
 
 	promptTemplate := UserPatchPrompt[o.language]
 	if promptTemplate == "" {
@@ -463,7 +455,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		issuesText = string(data)
 	}
 
-	existingEvolutions := langDefault("无已有演进经验", "No existing evolution records", o.language)
+	existingEvolutions := o.loadExistingEvolutionsSummary(ctx, skillName)
 
 	logger.Info(logComponent).
 		Str("skill_name", skillName).
@@ -678,6 +670,52 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// loadSkillContent 从 evolutionStore 读取技能内容摘要。
+// 对齐 Python: TeamSkillExperienceOptimizer._load_skill_content(skill_name)
+func (o *TeamSkillExperienceOptimizer) loadSkillContent(
+	ctx context.Context,
+	skillName string,
+) string {
+	if o.evolutionStore == nil {
+		return langDefault("无", "N/A", o.language)
+	}
+	content, err := o.evolutionStore.ReadSkillContent(ctx, skillName)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("skill_name", skillName).
+			Err(err).
+			Msg("[TeamSkillOptimizer] loadSkillContent 失败，使用 fallback")
+		return langDefault("无", "N/A", o.language)
+	}
+	if strings.TrimSpace(content) == "" {
+		return langDefault("无", "N/A", o.language)
+	}
+	return summarizeSkillContentTeam(content)
+}
+
+// loadExistingEvolutionsSummary 从 evolutionStore 加载已有演进经验摘要。
+// 对齐 Python: TeamSkillExperienceOptimizer._load_existing_evolutions_summary(skill_name)
+func (o *TeamSkillExperienceOptimizer) loadExistingEvolutionsSummary(
+	ctx context.Context,
+	skillName string,
+) string {
+	if o.evolutionStore == nil {
+		return langDefault("无已有演进经验", "No existing evolution records", o.language)
+	}
+	evoLog, err := o.evolutionStore.LoadFullEvolutionLog(ctx, skillName)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("skill_name", skillName).
+			Err(err).
+			Msg("[TeamSkillOptimizer] loadExistingEvolutionsSummary 失败，使用 fallback")
+		return langDefault("无已有演进经验", "No existing evolution records", o.language)
+	}
+	if evoLog == nil {
+		return langDefault("无已有演进经验", "No existing evolution records", o.language)
+	}
+	return summarizeExistingEvolutions(evoLog.Entries, o.language)
+}
 
 // callLLM 调用 LLM，有 policy 时走 InvokeTextWithRetry，无 policy 时直接 invoke。
 //
@@ -975,10 +1013,3 @@ func getStrFromAny(v any, defaultVal string) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// summarizeSkillContentTeamFallback 返回 N/A 或 无（根据语言）的占位内容。
-func summarizeSkillContentTeamFallback(skillName string, language string) string {
-	if language == "en" {
-		return "N/A"
-	}
-	return "无"
-}

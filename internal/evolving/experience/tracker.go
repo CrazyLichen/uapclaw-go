@@ -2,6 +2,7 @@ package experience
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -161,7 +162,10 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		return nil
 	}
 
-	evoLog := t.store.LoadFullEvolutionLog(ctx, skillName)
+	evoLog, err := t.store.LoadFullEvolutionLog(ctx, skillName)
+	if err != nil {
+		return fmt.Errorf("load evolution log for record_presented_records: %w", err)
+	}
 	requestedIDs := map[string]bool{}
 	for _, id := range recordIDs {
 		requestedIDs[id] = true

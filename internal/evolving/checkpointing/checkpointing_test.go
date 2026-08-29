@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -1802,7 +1804,8 @@ func TestEvolutionStore_AppendRecord(t *testing.T) {
 	}
 
 	// 验证记录已写入
-	evoLog := store.LoadFullEvolutionLog(ctx, "test_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "test_skill")
+	require.NoError(t, err)
 	if len(evoLog.Entries) != 1 {
 		t.Errorf("追加后 Entries 长度 = %d, 期望 1", len(evoLog.Entries))
 	}
@@ -2329,7 +2332,8 @@ func TestEvolutionStore_UpdateRecordScores(t *testing.T) {
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "score_skill")
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "score_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "score_skill")
+	require.NoError(t, err)
 	if len(evoLog.Entries) == 0 {
 		t.Fatalf("应有记录")
 	}
@@ -2347,7 +2351,8 @@ func TestEvolutionStore_UpdateRecordScores(t *testing.T) {
 		t.Errorf("更新数量 = %d, 期望 1", count)
 	}
 
-	updatedLog := store.LoadFullEvolutionLog(ctx, "score_skill")
+	updatedLog, err := store.LoadFullEvolutionLog(ctx, "score_skill")
+	require.NoError(t, err)
 	for _, entry := range updatedLog.Entries {
 		if entry.ID == targetID && entry.Score != 0.95 {
 			t.Errorf("ID %s 更新后 Score = %f, 期望 0.95", entry.ID, entry.Score)
@@ -2397,7 +2402,8 @@ func TestEvolutionStore_DeleteRecords(t *testing.T) {
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "delete_skill")
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "delete_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "delete_skill")
+	require.NoError(t, err)
 	ids := []string{evoLog.Entries[0].ID}
 	count, err := store.DeleteRecords(ctx, "delete_skill", ids)
 	if err != nil {
@@ -2407,7 +2413,8 @@ func TestEvolutionStore_DeleteRecords(t *testing.T) {
 		t.Errorf("删除数量 = %d, 期望 1", count)
 	}
 
-	remaining := store.LoadFullEvolutionLog(ctx, "delete_skill")
+	remaining, err := store.LoadFullEvolutionLog(ctx, "delete_skill")
+	require.NoError(t, err)
 	if len(remaining.Entries) != 2 {
 		t.Errorf("删除后剩余记录数 = %d, 期望 2", len(remaining.Entries))
 	}
@@ -2434,7 +2441,8 @@ func TestEvolutionStore_MarkRecordsApplied(t *testing.T) {
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "apply_skill")
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "apply_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "apply_skill")
+	require.NoError(t, err)
 	ids := []string{evoLog.Entries[0].ID, evoLog.Entries[1].ID}
 	count, err := store.MarkRecordsApplied(ctx, "apply_skill", ids)
 	if err != nil {
@@ -2444,7 +2452,8 @@ func TestEvolutionStore_MarkRecordsApplied(t *testing.T) {
 		t.Errorf("标记数量 = %d, 期望 2", count)
 	}
 
-	updatedLog := store.LoadFullEvolutionLog(ctx, "apply_skill")
+	updatedLog, err := store.LoadFullEvolutionLog(ctx, "apply_skill")
+	require.NoError(t, err)
 	if !updatedLog.Entries[0].Applied {
 		t.Errorf("第一条记录应标记为已应用")
 	}
@@ -2457,7 +2466,8 @@ func TestEvolutionStore_MergeRecords(t *testing.T) {
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "merge_skill")
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "merge_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "merge_skill")
+	require.NoError(t, err)
 	primaryID := evoLog.Entries[0].ID
 	removeIDs := []string{evoLog.Entries[1].ID}
 	newScore := 0.95
@@ -2476,7 +2486,8 @@ func TestEvolutionStore_MergeRecords(t *testing.T) {
 		t.Errorf("合并后 Content 不正确")
 	}
 
-	remaining := store.LoadFullEvolutionLog(ctx, "merge_skill")
+	remaining, err := store.LoadFullEvolutionLog(ctx, "merge_skill")
+	require.NoError(t, err)
 	if len(remaining.Entries) != 2 {
 		t.Errorf("合并后剩余记录数 = %d, 期望 2（primary + ev3）", len(remaining.Entries))
 	}
@@ -2505,7 +2516,8 @@ func TestEvolutionStore_UpdateRecordContent(t *testing.T) {
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "update_skill")
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "update_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "update_skill")
+	require.NoError(t, err)
 	newScore := 0.88
 
 	result, err := store.UpdateRecordContent(ctx, "update_skill", evoLog.Entries[0].ID, "更新的内容", &newScore)
@@ -2520,18 +2532,20 @@ func TestEvolutionStore_UpdateRecordContent(t *testing.T) {
 	}
 }
 
-// TestEvolutionStore_UpdateRecordContent_不存在的ID 测试更新不存在记录
-func TestEvolutionStore_UpdateRecordContent_不存在的ID(t *testing.T) {
+// TestEvolutionStore_UpdateRecordContent_不存在的技能 测试更新不存在技能的记录
+// 当技能在演进存储中不存在时，LoadFullEvolutionLog 返回 error（决策 D2），
+// 因此 UpdateRecordContent 应返回 error 而非静默 nil
+func TestEvolutionStore_UpdateRecordContent_不存在的技能(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := NewEvolutionStore(tmpDir, nil)
 	ctx := context.Background()
 
 	result, err := store.UpdateRecordContent(ctx, "skill", "nonexistent", "内容", nil)
-	if err != nil {
-		t.Errorf("不存在的 ID 应无错误")
+	if err == nil {
+		t.Errorf("不存在的技能应返回 error")
 	}
 	if result != nil {
-		t.Errorf("不存在的 ID 应返回 nil")
+		t.Errorf("不存在的技能应返回 nil record")
 	}
 }
 
@@ -2733,7 +2747,8 @@ func TestEvolutionStore_ClearEvolutions(t *testing.T) {
 		t.Fatalf("清空演进数据失败: %v", err)
 	}
 
-	evoLog := store.LoadFullEvolutionLog(ctx, "clear_evo_skill")
+	evoLog, err := store.LoadFullEvolutionLog(ctx, "clear_evo_skill")
+	require.NoError(t, err)
 	if len(evoLog.Entries) != 0 {
 		t.Errorf("清空后 Entries 应为空, 实际长度 %d", len(evoLog.Entries))
 	}

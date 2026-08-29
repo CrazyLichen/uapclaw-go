@@ -39,7 +39,11 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 		return nil
 	}
 
-	evoLog := h.store.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.store.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[StoreProjection] 加载演进日志失败")
+		return err
+	}
 	// 对齐 Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
 	activeEntries := make([]EvolutionRecord, 0)
 	for _, r := range evoLog.Entries {

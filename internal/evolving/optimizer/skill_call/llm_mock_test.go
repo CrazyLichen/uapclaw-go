@@ -1150,12 +1150,6 @@ func TestOrElse_defaults(t *testing.T) {
 	assert.Equal(t, "", orDefault(""))
 }
 
-// TestSummarizeSkillContentTeamFallback 团队技能内容 fallback
-func TestSummarizeSkillContentTeamFallback(t *testing.T) {
-	assert.Equal(t, "无", summarizeSkillContentTeamFallback("skill", "cn"))
-	assert.Equal(t, "N/A", summarizeSkillContentTeamFallback("skill", "en"))
-}
-
 // TestDumpRaw 调试输出
 func TestDumpRaw(t *testing.T) {
 	opt := NewTeamSkillExperienceOptimizer(nil, "test", "cn", "", TeamSkillRecordLLMPolicy, nil)
@@ -1606,8 +1600,8 @@ func TestNewTeamSkillExperienceOptimizer_有EvolutionStore(t *testing.T) {
 		readSkillContentFn: func(ctx context.Context, skillName string) (string, error) {
 			return "mock skill content for " + skillName, nil
 		},
-		loadFullEvolutionLogFn: func(ctx context.Context, skillName string) *checkpointing.EvolutionLog {
-			return &checkpointing.EvolutionLog{SkillID: skillName}
+		loadFullEvolutionLogFn: func(ctx context.Context, skillName string) (*checkpointing.EvolutionLog, error) {
+			return &checkpointing.EvolutionLog{SkillID: skillName}, nil
 		},
 	}
 	opt := NewTeamSkillExperienceOptimizer(model, "test-model", "cn", "", TeamSkillRecordLLMPolicy, store)
@@ -1619,7 +1613,8 @@ func TestNewTeamSkillExperienceOptimizer_有EvolutionStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "mock skill content for test_skill", content)
 
-	log := opt.evolutionStore.LoadFullEvolutionLog(context.Background(), "test_skill")
+	log, err := opt.evolutionStore.LoadFullEvolutionLog(context.Background(), "test_skill")
+	assert.NoError(t, err)
 	assert.NotNil(t, log)
 	assert.Equal(t, "test_skill", log.SkillID)
 }
@@ -1633,7 +1628,8 @@ func TestEvolutionStore_接口对齐(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "", content)
 
-	log := store.LoadFullEvolutionLog(context.Background(), "any")
+	log, err := store.LoadFullEvolutionLog(context.Background(), "any")
+	assert.NoError(t, err)
 	assert.Nil(t, log)
 }
 
@@ -1664,10 +1660,10 @@ func newMockSkillModel(t *testing.T, invokeFn func(ctx context.Context, messages
 	return model
 }
 
-// mockEvolutionStore 用于测试的模拟 EvolutionStore 接口实现
+// mockEvolutionStore 用于测试的模拟 checkpointing.EvolutionStoreReader 接口实现
 type mockEvolutionStore struct {
 	readSkillContentFn     func(ctx context.Context, skillName string) (string, error)
-	loadFullEvolutionLogFn func(ctx context.Context, skillName string) *checkpointing.EvolutionLog
+	loadFullEvolutionLogFn func(ctx context.Context, skillName string) (*checkpointing.EvolutionLog, error)
 }
 
 func (m *mockEvolutionStore) ReadSkillContent(ctx context.Context, skillName string) (string, error) {
@@ -1677,14 +1673,14 @@ func (m *mockEvolutionStore) ReadSkillContent(ctx context.Context, skillName str
 	return "", nil
 }
 
-func (m *mockEvolutionStore) LoadFullEvolutionLog(ctx context.Context, skillName string) *checkpointing.EvolutionLog {
+func (m *mockEvolutionStore) LoadFullEvolutionLog(ctx context.Context, skillName string) (*checkpointing.EvolutionLog, error) {
 	if m.loadFullEvolutionLogFn != nil {
 		return m.loadFullEvolutionLogFn(ctx, skillName)
 	}
-	return nil
+	return nil, nil
 }
 
-var _ EvolutionStore = (*mockEvolutionStore)(nil)
+var _ checkpointing.EvolutionStoreReader = (*mockEvolutionStore)(nil)
 
 // dummyOperator 用于测试的最简 Operator 实现
 type dummyOperator struct {

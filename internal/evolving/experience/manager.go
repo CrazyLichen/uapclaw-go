@@ -357,7 +357,10 @@ func (m *ExperienceManager) RequestSimplify(
 		return "", nil
 	}
 
-	evoLog := m.store.LoadFullEvolutionLog(ctx, skillName)
+	evoLog, err := m.store.LoadFullEvolutionLog(ctx, skillName)
+	if err != nil {
+		return "", fmt.Errorf("load evolution log for request_simplify: %w", err)
+	}
 	records := evoLog.Entries
 	if len(records) == 0 {
 		logger.Info(logComponent).

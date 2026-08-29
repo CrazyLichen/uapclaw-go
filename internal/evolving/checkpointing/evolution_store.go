@@ -22,6 +22,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// EvolutionStoreReader 技能经验优化器所需的演进存储只读接口。
+// 从 skill_call/team_optimizer.go 迁移至此，与 Python evolution_store.py 位置对齐。
+//
+// 对应 Python: EvolutionStore
+type EvolutionStoreReader interface {
+	// ReadSkillContent 读取技能内容
+	ReadSkillContent(ctx context.Context, skillName string) (string, error)
+	// LoadFullEvolutionLog 加载完整演进日志
+	LoadFullEvolutionLog(ctx context.Context, skillName string) (*EvolutionLog, error)
+}
+
 // EvolutionStore 技能演进数据的文件系统 IO 门面。
 //
 // 组合三个 Helper（Records/Projection/Archive）+ SysOperation 路由 + RWMutex 并发控制。
@@ -64,6 +75,9 @@ const (
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期断言：EvolutionStore 必须满足 EvolutionStoreReader 接口
+var _ EvolutionStoreReader = (*EvolutionStore)(nil)
 
 // evolutionIndexPattern evolution-index 块正则
 // 对应 Python: _EVOLUTION_INDEX_PATTERN
@@ -402,7 +416,11 @@ func (s *EvolutionStore) WriteSkillContent(ctx context.Context, name string, con
 
 // LoadEvolutionLog 加载演进日志（可按 target 过滤）。
 func (s *EvolutionStore) LoadEvolutionLog(ctx context.Context, name string, target *signal.EvolutionTarget) *EvolutionLog {
-	evoLog := s.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := s.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] load_evolution_log 失败")
+		return EmptyEvolutionLog(name)
+	}
 	if target != nil {
 		filtered := make([]EvolutionRecord, 0)
 		for _, record := range evoLog.Entries {
@@ -439,7 +457,11 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 		}
 	}
 
-	evoLog := s.LoadFullEvolutionLog(ctx, name)
+	evoLog, loadErr := s.LoadFullEvolutionLog(ctx, name)
+	if loadErr != nil {
+		lock.Unlock()
+		return fmt.Errorf("load evolution log for append_record: %w", loadErr)
+	}
 	mergeTarget := record.Change.MergeTarget
 	if mergeTarget != nil && *mergeTarget != "" {
 		replaced := false
@@ -486,7 +508,7 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 }
 
 // LoadFullEvolutionLog 加载完整演进日志。
-func (s *EvolutionStore) LoadFullEvolutionLog(ctx context.Context, name string) *EvolutionLog {
+func (s *EvolutionStore) LoadFullEvolutionLog(ctx context.Context, name string) (*EvolutionLog, error) {
 	return s.records.LoadFullEvolutionLog(ctx, name)
 }
 

@@ -87,36 +87,34 @@ func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string,
 
 // LoadFullEvolutionLog 加载完整演进日志。
 // 对应 Python: StoreRecordsHelper.load_full_evolution_log(name)
-func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name string) *EvolutionLog {
+//
+// 对齐 Python 异常语义：错误场景返回 (nil, error)，首次无记录返回 (EmptyEvolutionLog, nil)
+func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name string) (*EvolutionLog, error) {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
-		return EmptyEvolutionLog(name)
+		return nil, fmt.Errorf("skill %s not found in evolution store", name)
 	}
 	evoPath := filepath.Join(skillDir, evolutionFilename)
 	if !isFile(evoPath) {
-		return EmptyEvolutionLog(name)
+		// 首次无演进记录是正常情况，不是错误
+		return EmptyEvolutionLog(name), nil
 	}
 	fileContent, err := h.store.ReadFileText(ctx, evoPath)
-	if err != nil || fileContent == "" {
-		return EmptyEvolutionLog(name)
+	if err != nil {
+		return nil, fmt.Errorf("read evolution log for skill %s: %w", name, err)
+	}
+	if fileContent == "" {
+		return EmptyEvolutionLog(name), nil
 	}
 	var data map[string]any
 	if err := json.Unmarshal([]byte(fileContent), &data); err != nil {
-		logger.Warn(logComponent).
-			Str("file", evoPath).
-			Err(err).
-			Msg("[EvolutionStore] 解析失败")
-		return EmptyEvolutionLog(name)
+		return nil, fmt.Errorf("parse evolution log for skill %s: %w", name, err)
 	}
 	evoLog, err := FromDictEvolutionLog(data)
 	if err != nil {
-		logger.Warn(logComponent).
-			Str("file", evoPath).
-			Err(err).
-			Msg("[EvolutionStore] FromDict 解析失败")
-		return EmptyEvolutionLog(name)
+		return nil, fmt.Errorf("decode evolution log for skill %s: %w", name, err)
 	}
-	return evoLog
+	return evoLog, nil
 }
 
 // SaveEvolutionLog 持久化演进日志。
@@ -145,7 +143,10 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 	if len(updates) == 0 {
 		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("load evolution log for update_record_scores: %w", err)
+	}
 	updatedCount := 0
 
 	for i := range evoLog.Entries {
@@ -178,7 +179,11 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 // GetRecordsByScore 按分数获取记录。
 // 对应 Python: StoreRecordsHelper.get_records_by_score(name, min_score)
 func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] get_records_by_score: 加载失败")
+		return nil
+	}
 	records := evoLog.Entries
 	if minScore != nil {
 		filtered := make([]EvolutionRecord, 0)
@@ -200,7 +205,10 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 	if len(recordIDs) == 0 {
 		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("load evolution log for delete_records: %w", err)
+	}
 	idsSet := make(map[string]bool, len(recordIDs))
 	for _, id := range recordIDs {
 		idsSet[id] = true
@@ -235,7 +243,10 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 	if len(recordIDs) == 0 {
 		return 0, nil
 	}
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("load evolution log for mark_records_applied: %w", err)
+	}
 	idsSet := make(map[string]bool, len(recordIDs))
 	for _, id := range recordIDs {
 		idsSet[id] = true
@@ -264,7 +275,10 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 // MergeRecords 合并记录。
 // 对应 Python: StoreRecordsHelper.merge_records(name, primary_id, remove_ids, new_content, new_score)
 func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("load evolution log for merge_records: %w", err)
+	}
 	var primaryRecord *EvolutionRecord
 	var recordsToRemove []*EvolutionRecord
 	var allScores []float64
@@ -332,7 +346,10 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 // UpdateRecordContent 更新记录内容。
 // 对应 Python: StoreRecordsHelper.update_record_content(name, record_id, new_content, new_score)
 func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name string, recordID string, newContent string, newScore *float64) (*EvolutionRecord, error) {
-	evoLog := h.LoadFullEvolutionLog(ctx, name)
+	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("load evolution log for update_record_content: %w", err)
+	}
 	var targetRecord *EvolutionRecord
 
 	for i := range evoLog.Entries {

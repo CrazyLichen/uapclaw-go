@@ -233,7 +233,10 @@ func RequestRebuildContext(
 		evoArchive = evoArchiveResult
 	}
 
-	recordsLog := store.LoadFullEvolutionLog(ctx, request.SkillName)
+	recordsLog, err := store.LoadFullEvolutionLog(ctx, request.SkillName)
+	if err != nil {
+		return nil, fmt.Errorf("load evolution log for rebuild_context: %w", err)
+	}
 	filteredRecords := []checkpointing.EvolutionRecord{}
 	for _, record := range recordsLog.Entries {
 		if record.Score < request.MinScore {
