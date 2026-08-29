@@ -1730,13 +1730,27 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 
 // HandleSkillsTeamSkillsHubPublish 发布 TeamSkills
 // 对应 Python: SkillManager.handle_skills_team_skills_hub_publish(params)
+//
+// 步骤（对齐 Python: _prepare_teamskills_publish_zip 规范化后上传）：
+//  1. 从 path/file 构建 plugin.yaml + 规范化 ZIP
+//  2. 计算 SHA256 校验和
+//  3. 上传到 TeamSkills Hub
 func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, params map[string]any) (map[string]any, error) {
-	zipPath := trimSpace(toString(params["path"]))
-	if zipPath == "" {
-		return map[string]any{"success": false, "detail": "缺少参数: path"}, nil
+	pathRaw := trimSpace(toString(params["path"]))
+	fileRaw := trimSpace(toString(params["file"]))
+	pluginVersion := trimSpace(toString(params["version"]))
+	if pluginVersion == "" {
+		pluginVersion = "1.0.0"
 	}
-	if !fileExists(zipPath) {
-		return map[string]any{"success": false, "detail": "ZIP 文件不存在"}, nil
+
+	if pathRaw == "" && fileRaw == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: path 或 file"}, nil
+	}
+
+	// 构建规范化 ZIP（对齐 Python: _prepare_teamskills_publish_zip）
+	zipData, checksumSHA256, err := buildTeamskillsPublishZipFromPath(pathRaw, fileRaw, pluginVersion)
+	if err != nil {
+		return map[string]any{"success": false, "detail": "构建发布 ZIP 失败: " + err.Error()}, nil
 	}
 
 	baseURL := trimSpace(toString(params["market_url"]))
@@ -1744,16 +1758,10 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
 	}
 
-	// 读取 ZIP 文件
-	zipData, err := os.ReadFile(zipPath)
-	if err != nil {
-		return map[string]any{"success": false, "detail": "读取 ZIP 文件失败: " + err.Error()}, nil
-	}
-
 	// 构建 multipart/form-data 上传
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", filepath.Base(zipPath))
+	part, err := writer.CreateFormFile("file", "teamskills_publish_normalized.zip")
 	if err != nil {
 		return map[string]any{"success": false, "detail": "构建上传请求失败: " + err.Error()}, nil
 	}
@@ -1767,6 +1775,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 		return map[string]any{"success": false, "detail": "构建请求失败: " + err.Error()}, nil
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Checksum-SHA256", checksumSHA256)
 
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
@@ -1788,7 +1797,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 	if data, ok := result["data"].(map[string]any); ok {
 		assetID = toString(data["asset_id"])
 	}
-	return map[string]any{"success": true, "asset_id": assetID}, nil
+	return map[string]any{"success": true, "asset_id": assetID, "checksum_sha256": checksumSHA256}, nil
 }
 
 // HandleSkillsTeamSkillsHubDelete 删除 TeamSkills

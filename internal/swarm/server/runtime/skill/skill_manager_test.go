@@ -1902,39 +1902,11 @@ func TestGetBuiltinSkillsDir(t *testing.T) {
 	_ = dir // 不验证具体值
 }
 
-// TestSyncMarketplaceRepos 验证同步 marketplace
-func TestSyncMarketplaceRepos(t *testing.T) {
-	tmpDir := t.TempDir()
-	sm := NewSkillManager(tmpDir)
-
-	sm.mu.Lock()
-	sm.state["marketplaces"] = []any{
-		map[string]any{"name": "m1", "url": "https://github.com/m1", "enabled": true},
-		map[string]any{"name": "m2", "url": "https://github.com/m2", "enabled": false},
-	}
-	sm.saveState()
-	sm.mu.Unlock()
-
-	err := sm.syncMarketplaceRepos(context.Background())
-	// git 未实现，但不应 panic
-	_ = err
-}
-
 // TestRefreshAgentDataIndexes 验证刷新索引
 func TestRefreshAgentDataIndexes(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 	sm.refreshAgentDataIndexes() // 仅验证不 panic
-}
-
-// TestGitMethods 验证 git 相关方法
-func TestGitMethods(t *testing.T) {
-	tmpDir := t.TempDir()
-	sm := NewSkillManager(tmpDir)
-
-	sm.gitClone(context.Background(), "https://github.com/test", filepath.Join(tmpDir, "clone"))
-	sm.gitPull(context.Background(), filepath.Join(tmpDir, "pull"))
-	sm.gitGetCommit(tmpDir)
 }
 
 // TestAddInstalledPlugin_替换 验证替换已有插件
@@ -2049,27 +2021,7 @@ func TestHandleSkillsInstallBuiltin_成功安装(t *testing.T) {
 }
 
 // TestHandleSkillsInstall_marketplace有URL 验证 marketplace 有 URL 的情况
-func TestHandleSkillsInstall_marketplace有URL(t *testing.T) {
-	tmpDir := t.TempDir()
-	sm := NewSkillManager(tmpDir)
-
-	sm.mu.Lock()
-	sm.state["marketplaces"] = []any{
-		map[string]any{"name": "test-market", "url": "https://github.com/test/market", "enabled": true},
-	}
-	sm.saveState()
-	sm.mu.Unlock()
-
-	// git clone 未实现，但路径可达
-	result, err := sm.HandleSkillsInstall(context.Background(), map[string]any{
-		"spec": "some-plugin@test-market",
-	})
-	if err != nil {
-		t.Fatalf("不应返回错误: %v", err)
-	}
-	// gitClone 未实现返回 errNotImplemented，但代码不会因此 panic
-	_ = result
-}
+// 需要真实 git 网络，已移至 skill_manager_integration_test.go
 
 // TestSaveState_错误路径 验证保存到不可写路径
 func TestSaveState_错误路径(t *testing.T) {
@@ -2322,29 +2274,7 @@ func TestHandleSkillsInstall_单skill模式(t *testing.T) {
 }
 
 // TestHandleSkillsInstall_缺SKILLMD 验证缺少 SKILL.md
-func TestHandleSkillsInstall_缺SKILLMD(t *testing.T) {
-	tmpDir := t.TempDir()
-	sm := NewSkillManager(tmpDir)
-
-	sm.mu.Lock()
-	sm.state["marketplaces"] = []any{
-		map[string]any{"name": "no-md-market", "url": "https://github.com/test/no-md", "enabled": true},
-	}
-	sm.saveState()
-	sm.mu.Unlock()
-
-	// 仓库有 skills/ 子目录但无 SKILL.md
-	repoDir := filepath.Join(sm.marketplaceDir, "no-md-market")
-	skillSrcDir := filepath.Join(repoDir, "skills", "no-md-plugin")
-	os.MkdirAll(skillSrcDir, 0o755)
-
-	result, _ := sm.HandleSkillsInstall(context.Background(), map[string]any{
-		"spec": "no-md-plugin@no-md-market",
-	})
-	if toBool(result["success"]) != false {
-		t.Error("缺 SKILL.md 应返回 success=false")
-	}
-}
+// 需要真实 git 网络，已移至 skill_manager_integration_test.go
 
 // TestHandleSkillsInstallBuiltin_成功复制 验证成功复制内置技能
 func TestHandleSkillsInstallBuiltin_成功复制(t *testing.T) {
@@ -3073,17 +3003,13 @@ func TestHandleSkillsTeamSkillsHubInstall_正常(t *testing.T) {
 	}
 }
 
-// TestHandleSkillsTeamSkillsHubPublish_正常 验证正常发布
+// TestHandleSkillsTeamSkillsHubPublish_正常 验证正常发布（从目录构建）
 func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
-	// 创建一个临时 ZIP 文件
+	// 创建一个技能目录（含 SKILL.md）
 	tmpDir := t.TempDir()
-	zipPath := filepath.Join(tmpDir, "test-skill.zip")
-	zipFile, _ := os.Create(zipPath)
-	zipWriter := zip.NewWriter(zipFile)
-	w, _ := zipWriter.Create("test.txt")
-	fmt.Fprint(w, "hello")
-	zipWriter.Close()
-	zipFile.Close()
+	skillDir := filepath.Join(tmpDir, "test-skill")
+	os.MkdirAll(skillDir, 0o755)
+	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: test-skill\ndescription: 测试技能\n---\n技能正文"), 0o644)
 
 	// 上传服务器
 	uploadServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3092,6 +3018,10 @@ func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
 		}
 		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 			t.Errorf("Content-Type 应为 multipart/form-data")
+		}
+		// 验证 SHA256 校验和 header
+		if r.Header.Get("X-Checksum-SHA256") == "" {
+			t.Error("应包含 X-Checksum-SHA256 header")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
@@ -3104,7 +3034,7 @@ func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{
-		"path":       zipPath,
+		"path":       skillDir,
 		"market_url": uploadServer.URL,
 	})
 	if err != nil {
