@@ -2915,8 +2915,8 @@ func TestHandleSkillsTeamSkillsHubValidate_有效(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
-	if toBool(result["valid"]) != true {
-		t.Errorf("应返回 valid=true, got %v", result)
+	if toBool(result["success"]) != true {
+		t.Errorf("应返回 success=true, got %v", result)
 	}
 }
 
@@ -2937,8 +2937,8 @@ func TestHandleSkillsTeamSkillsHubValidate_无效(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
-	if toBool(result["valid"]) != false {
-		t.Errorf("应返回 valid=false, got %v", result)
+	if toBool(result["success"]) != false {
+		t.Errorf("应返回 success=false, got %v", result)
 	}
 }
 

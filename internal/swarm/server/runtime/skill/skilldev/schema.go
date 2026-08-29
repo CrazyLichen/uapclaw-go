@@ -14,6 +14,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SkillDevEvent SkillDev 事件
 type SkillDevEvent struct {
 	// EventType 事件类型
 	EventType SkillDevEventType `json:"event_type"`
@@ -23,6 +24,7 @@ type SkillDevEvent struct {
 	TaskID string `json:"task_id"`
 }
 
+// SkillDevState SkillDev 任务状态
 type SkillDevState struct {
 	// TaskID 任务标识
 	TaskID string `json:"task_id"`
@@ -67,6 +69,7 @@ type SkillDevState struct {
 	Error *string `json:"error"`
 }
 
+// SuspensionAction 暂挂动作按钮
 type SuspensionAction struct {
 	// ID 动作标识
 	ID string `json:"id"`
@@ -76,6 +79,7 @@ type SuspensionAction struct {
 	Style string `json:"style"`
 }
 
+// SuspensionConfig 暂挂确认配置
 type SuspensionConfig struct {
 	// ConfirmType 标识确认类型（前端用于区分弹框样式）
 	ConfirmType string `json:"confirm_type"`
@@ -95,6 +99,7 @@ type SuspensionConfig struct {
 	NextStageFunc func(data map[string]any) SkillDevStage
 }
 
+// StageGroup 阶段分组
 type StageGroup struct {
 	// ID 分组标识
 	ID string `json:"id"`
@@ -106,6 +111,7 @@ type StageGroup struct {
 	Modes map[SkillDevTaskMode]bool
 }
 
+// EvalCase 评估用例
 type EvalCase struct {
 	// ID 用例标识
 	ID int `json:"id"`
@@ -119,6 +125,7 @@ type EvalCase struct {
 	Expectations []string `json:"expectations"`
 }
 
+// EvalSet 评估用例集
 type EvalSet struct {
 	// SkillName 技能名称
 	SkillName string `json:"skill_name"`
@@ -126,6 +133,7 @@ type EvalSet struct {
 	Evals []EvalCase `json:"evals"`
 }
 
+// GradingExpectation 评分期望断言
 type GradingExpectation struct {
 	// Text 断言原文
 	Text string `json:"text"`
@@ -135,6 +143,7 @@ type GradingExpectation struct {
 	Evidence string `json:"evidence"`
 }
 
+// GradingResult 评分结果
 type GradingResult struct {
 	// Expectations 评分详情列表
 	Expectations []GradingExpectation `json:"expectations"`
@@ -146,6 +155,7 @@ type GradingResult struct {
 	FailedCount int `json:"failed_count"`
 }
 
+// RunTiming 运行耗时统计
 type RunTiming struct {
 	// TotalTokens 总 token 数
 	TotalTokens int `json:"total_tokens"`
@@ -155,6 +165,7 @@ type RunTiming struct {
 	TotalDurationSeconds float64 `json:"total_duration_seconds"`
 }
 
+// MetricStats 指标统计
 type MetricStats struct {
 	// Mean 均值
 	Mean float64 `json:"mean"`
@@ -166,6 +177,7 @@ type MetricStats struct {
 	Max float64 `json:"max"`
 }
 
+// BenchmarkRun 基准测试单次运行记录
 type BenchmarkRun struct {
 	// EvalID 用例标识
 	EvalID int `json:"eval_id"`
@@ -185,6 +197,7 @@ type BenchmarkRun struct {
 	Expectations []map[string]any `json:"expectations"`
 }
 
+// Benchmark 基准测试结果
 type Benchmark struct {
 	// SkillName 技能名称
 	SkillName string `json:"skill_name"`
@@ -198,6 +211,7 @@ type Benchmark struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// TriggerEvalQuery 触发评估查询
 type TriggerEvalQuery struct {
 	// Query 查询文本
 	Query string `json:"query"`
@@ -205,6 +219,7 @@ type TriggerEvalQuery struct {
 	ShouldTrigger bool `json:"should_trigger"`
 }
 
+// DescOptimizeIteration 描述优化迭代记录
 type DescOptimizeIteration struct {
 	// Iteration 迭代号
 	Iteration int `json:"iteration"`
@@ -306,7 +321,6 @@ const (
 	SkillDescMaxLen = 1024
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// AllowedFrontmatterKeys SKILL.md 允许的 frontmatter 键集合

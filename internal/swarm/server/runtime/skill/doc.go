@@ -18,7 +18,11 @@
 //	├── doc.go              # 包文档
 //	├── state_utils.go      # 纯函数式状态查询（GetStateFile/NormalizeSkillConfigs 等）
 //	├── skill_manager.go    # SkillManager 核心结构体与 handler 方法（含 ClawHub/TeamSkillsHub 全套）
-//	└── skill_routes.go     # ReqMethod → handler 路由映射 + NeedsRebuild
+//	├── skill_routes.go     # ReqMethod → handler 路由映射 + NeedsRebuild
+//	├── remote_import.go    # 远程 URL 下载技能归档（ZIP/tar.gz）+ SHA256 校验 + 解压导入
+//	├── git_ops.go          # git clone/pull/rev-parse 操作
+//	├── proxy_context.go    # SkillNet 代理环境变量上下文
+//	└── safe_rmtree.go      # 安全删除目录（带重试和 Windows 权限修复）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/server/runtime/skill/skilldev/state_utils.py → state_utils.go

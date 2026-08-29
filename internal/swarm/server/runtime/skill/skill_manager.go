@@ -23,6 +23,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -582,7 +583,7 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("skill %s 已存在", safePlugin)}, nil
 		}
-		if err := os.RemoveAll(dest); err != nil {
+		if err := safeRmtree(dest); err != nil {
 			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
 		}
 	}
@@ -678,7 +679,20 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到技能: %s", safeName)}, nil
 	}
 
-	if err := os.RemoveAll(dest); err != nil {
+	// 内置技能保护（对齐 Python: 检查 builtin 目录，不允许删除内置技能）
+	builtinDir := sm.getBuiltinSkillsDir()
+	if builtinDir != "" {
+		isBuiltin, builtinPath := sm.isBuiltinSkill(safeName, builtinDir)
+		if isBuiltin {
+			destAbs, _ := filepath.Abs(dest)
+			builtinAbs, _ := filepath.Abs(builtinPath)
+			if destAbs == builtinAbs {
+				return map[string]any{"success": false, "detail": "内置技能不允许删除"}, nil
+			}
+		}
+	}
+
+	if err := safeRmtree(dest); err != nil {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("卸载失败: %s", err)}, nil
 	}
 
@@ -696,6 +710,17 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 	if path == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: path"}, nil
 	}
+
+	// URL 检测分支（对齐 Python: import_local 支持远程 URL 下载）
+	if isHTTPDownloadTarget(path) {
+		checksumSHA256 := toString(params["checksum_sha256"])
+		result, err := importSkillFromRemoteArchive(ctx, sm, path, toBool(params["force"]), checksumSHA256)
+		if err != nil {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("远程下载失败: %s", err.Error())}, nil
+		}
+		return result, nil
+	}
+
 	name := toString(params["name"])
 	force := toBool(params["force"])
 
@@ -735,7 +760,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
 		}
-		if err := os.RemoveAll(dest); err != nil {
+		if err := safeRmtree(dest); err != nil {
 			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
 		}
 	}
@@ -778,7 +803,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params m
 	marketplaces = append(marketplaces, map[string]any{
 		"name":    name,
 		"url":     url,
-		"enabled": true,
+		"enabled": false, // 新增源默认禁用（对齐 Python: enabled=False，避免未经确认就触发远程同步）
 	})
 	// 转为 []any 以保持 state 的 JSON 兼容性
 	anyList := make([]any, len(marketplaces))
@@ -823,6 +848,12 @@ func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, param
 	sm.state["marketplaces"] = anyList
 	sm.saveState()
 
+	// 删除本地缓存目录（对齐 Python: safeRmtree(repo_dir)）
+	repoDir := filepath.Join(sm.marketplaceDir, name)
+	if dirExists(repoDir) {
+		_ = safeRmtree(repoDir)
+	}
+
 	return map[string]any{"success": true, "name": name}, nil
 }
 
@@ -858,12 +889,43 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 	sm.state["marketplaces"] = anyList
 	sm.saveState()
 
+	// 启用/禁用时处理本地缓存
+	repoDir := filepath.Join(sm.marketplaceDir, name)
+	if enabled {
+		// 启用时：同步远程仓库（对齐 Python: git pull 或 git clone）
+		if dirExists(repoDir) {
+			_ = gitPull(ctx, repoDir)
+		} else {
+			// 查找 marketplace URL
+			var repoURL string
+			for _, m := range marketplaces {
+				if toString(m["name"]) == name {
+					repoURL = toString(m["url"])
+					break
+				}
+			}
+			if repoURL != "" {
+				_ = gitClone(ctx, repoURL, repoDir)
+			}
+		}
+	} else {
+		// 禁用时：删除本地缓存（对齐 Python: safeRmtree）
+		if dirExists(repoDir) {
+			_ = safeRmtree(repoDir)
+		}
+	}
+
 	return map[string]any{"success": true, "name": name, "enabled": enabled}, nil
 }
 
 // HandleSkillsSkillnetSearch 在线搜索 SkillNet 技能
 // 对应 Python: SkillManager.handle_skills_skillnet_search(params)
 func (sm *SkillManager) HandleSkillsSkillnetSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
+	// ⤵️ 回填: SkillNet 搜索尚未实现
+	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
+	restore := skillnetNetworkContext()
+	defer restore()
+
 	query := trimSpace(toString(params["q"]))
 	if query == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: q"}, nil
@@ -876,6 +938,10 @@ func (sm *SkillManager) HandleSkillsSkillnetSearch(ctx context.Context, params m
 // HandleSkillsSkillnetInstall 从 SkillNet URL 异步安装
 // 对应 Python: SkillManager.handle_skills_skillnet_install(params)
 func (sm *SkillManager) HandleSkillsSkillnetInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
+	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
+	restore := skillnetNetworkContext()
+	defer restore()
+
 	skillURL := trimSpace(toString(params["url"]))
 	if skillURL == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: url"}, nil
@@ -885,6 +951,17 @@ func (sm *SkillManager) HandleSkillsSkillnetInstall(ctx context.Context, params 
 	sm.mu.Lock()
 	sm.skillnetInstallJobs[installID] = map[string]any{"status": "pending"}
 	sm.mu.Unlock()
+
+	// 异步设置 job 为 failed（对齐 Python: SkillNet 安装尚未实现）
+	go func() {
+		time.Sleep(100 * time.Millisecond) // 确保调用方获取到 pending 状态
+		job := sm.GetInstallJob(installID)
+		if job != nil {
+			job["status"] = "failed"
+			job["detail"] = "SkillNet 安装尚未实现 ⤵️"
+			sm.SetSkillnetInstallJob(installID, job)
+		}
+	}()
 
 	return map[string]any{
 		"success":    true,
@@ -946,6 +1023,22 @@ func (sm *SkillManager) SetSkillnetInstallJob(installID string, job map[string]a
 	sm.skillnetInstallJobs[installID] = job
 }
 
+// GetInstallJob 获取指定安装任务（测试辅助方法）
+func (sm *SkillManager) GetInstallJob(installID string) map[string]any {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	job, ok := sm.skillnetInstallJobs[installID]
+	if !ok {
+		return nil
+	}
+	// 返回副本以避免外部修改
+	cp := make(map[string]any, len(job))
+	for k, v := range job {
+		cp[k] = v
+	}
+	return cp
+}
+
 // GetInstallJobIDs 获取所有安装任务 ID（测试辅助方法）
 func (sm *SkillManager) GetInstallJobIDs() []string {
 	sm.mu.RLock()
@@ -960,6 +1053,11 @@ func (sm *SkillManager) GetInstallJobIDs() []string {
 // HandleSkillsSkillnetEvaluate 使用 SkillNet 评估
 // 对应 Python: SkillManager.handle_skills_skillnet_evaluate(params)
 func (sm *SkillManager) HandleSkillsSkillnetEvaluate(ctx context.Context, params map[string]any) (map[string]any, error) {
+	// ⤵️ 回填: SkillNet 评估尚未实现
+	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
+	restore := skillnetNetworkContext()
+	defer restore()
+
 	skillURL := trimSpace(toString(params["url"]))
 	if skillURL == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: url"}, nil
@@ -1155,7 +1253,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	finalDest := filepath.Join(sm.skillsDir, skillName)
 	if dirExists(finalDest) {
 		if force {
-			_ = os.RemoveAll(finalDest)
+			_ = safeRmtree(finalDest)
 		} else {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
 		}
@@ -1178,6 +1276,8 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 		"name":         skillName,
 		"marketplace":  "clawhub",
 		"source":       "clawhub",
+		"version":      toString(meta["version"]), // 从 SKILL.md meta 获取
+		"commit":       "",                        // 对齐 Python 默认空
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
 	sm.saveState()
@@ -1279,10 +1379,74 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubValidate(ctx context.Context, p
 		errs = append(errs, "SKILL.md 缺少 description 字段")
 	}
 
-	if len(errs) > 0 {
-		return map[string]any{"success": true, "valid": false, "errors": errs}, nil
+	// skill_type 判断 + teamskills roles 校验（对齐 Python: handle_skills_team_skills_hub_validate）
+	skillType := strings.ToLower(trimSpace(toString(params["skill_type"])))
+	if skillType == "" {
+		skillType = strings.ToLower(trimSpace(toString(params["plugin_type"])))
 	}
-	return map[string]any{"success": true, "valid": true, "errors": []string{}}, nil
+	if skillType == "" {
+		skillType = strings.ToLower(trimSpace(toString(params["type"])))
+	}
+	if skillType != "teamskills" && skillType != "skill" {
+		// 推断 skill_type（对齐 Python: kind=="team-skill" → teamskills）
+		if strings.ToLower(trimSpace(toString(meta["kind"]))) == "team-skill" {
+			skillType = "teamskills"
+		} else {
+			skillType = "skill"
+		}
+	}
+
+	if skillType == "teamskills" {
+		// roles 完整校验（对齐 Python: frontmatter roles 必须是非空列表，至少 2 项有效 id）
+		roles, _ := meta["roles"].([]any)
+		if len(roles) == 0 {
+			errs = append(errs, "frontmatter `roles` must be a non-empty list")
+		} else {
+			var roleIDs []string
+			for i, role := range roles {
+				roleMap, ok := role.(map[string]any)
+				if !ok {
+					errs = append(errs, fmt.Sprintf("roles[%d] must be an object", i))
+					continue
+				}
+				roleID := trimSpace(toString(roleMap["id"]))
+				if roleID == "" {
+					errs = append(errs, fmt.Sprintf("roles[%d] missing required field `id`", i))
+					continue
+				}
+				roleIDs = append(roleIDs, roleID)
+			}
+			if len(roleIDs) < 2 {
+				errs = append(errs, "frontmatter `roles` must list at least 2 entries with valid `id`")
+			} else {
+				// 检查重复 id
+				seen := make(map[string]bool)
+				for _, id := range roleIDs {
+					if seen[id] {
+						errs = append(errs, "frontmatter `roles` must not repeat the same `id`")
+						break
+					}
+					seen[id] = true
+				}
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		detail := "校验失败"
+		if skillType == "teamskills" {
+			detail = "TeamSkills roles 校验失败"
+		}
+		return map[string]any{"success": false, "detail": detail, "errors": errs}, nil
+	}
+	return map[string]any{
+		"success":    true,
+		"path":       dirPath,
+		"skill_file": skillFile,
+		"skill_type": skillType,
+		"name":       trimSpace(toString(meta["name"])),
+		"warnings":   []string{},
+	}, nil
 }
 
 // HandleSkillsTeamSkillsHubPack 将 TeamSkills 目录打包为 zip
@@ -1531,7 +1695,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
 	}
 	if dirExists(finalDest) {
-		_ = os.RemoveAll(finalDest)
+		_ = safeRmtree(finalDest)
 	}
 	skillSrcDir := skillDir
 	if err := copyDir(skillSrcDir, finalDest); err != nil {
@@ -1828,6 +1992,69 @@ func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getMirrorSkillsDirs 返回需要镜像同步的 skills 目录（对齐 Python: _get_mirror_skills_dirs）。
+// Go 二进制等价 Python package 安装模式，始终返回空切片。
+// ⤵️ 回填: 如未来需要源码开发模式支持，需补全 mirror 路径逻辑。
+func (sm *SkillManager) getMirrorSkillsDirs() []string {
+	return []string{} // Go 二进制 = package 安装模式，无 mirror 目录
+}
+
+// getBuiltinSkillsDir 返回内置技能目录。
+func (sm *SkillManager) getBuiltinSkillsDir() string {
+	// 对齐 Python: 检查 skills/builtin 目录
+	builtinDir := filepath.Join(sm.skillsDir, "builtin")
+	if dirExists(builtinDir) {
+		return builtinDir
+	}
+	return ""
+}
+
+// isBuiltinSkill 检查技能是否为内置技能。
+func (sm *SkillManager) isBuiltinSkill(skillName, builtinDir string) (bool, string) {
+	entries, err := os.ReadDir(builtinDir)
+	if err != nil {
+		return false, ""
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillDir := filepath.Join(builtinDir, entry.Name(), "skill")
+		skillMd := filepath.Join(skillDir, "SKILL.md")
+		if _, err := os.Stat(skillMd); err == nil {
+			// 解析 SKILL.md 检查技能名
+			meta, _ := parseSKILLMd(skillMd)
+			if meta != nil {
+				if name, ok := meta["name"].(string); ok && name == skillName {
+					return true, skillDir
+				}
+			}
+		}
+	}
+	return false, ""
+}
+
+// parseSKILLMd 解析 SKILL.md 文件返回元数据（包级函数，用于内置技能检查等场景）。
+func parseSKILLMd(path string) (map[string]any, error) {
+	if !fileExists(path) {
+		return nil, fmt.Errorf("文件不存在: %s", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	content := string(data)
+	meta := make(map[string]any)
+	if strings.HasPrefix(content, "---") {
+		end := strings.Index(content[3:], "---")
+		if end >= 0 {
+			frontmatter := content[3 : 3+end]
+			meta = parseYAMLFrontmatter(frontmatter)
+		}
+	}
+	return meta, nil
+}
 
 // loadState 从文件加载状态
 // 对应 Python: SkillManager._load_state()
@@ -2238,30 +2465,20 @@ func (sm *SkillManager) syncMarketplaceRepos(ctx context.Context) error {
 	return nil
 }
 
-// refreshAgentDataIndexes 刷新 Agent 数据索引
-// 对应 Python: SkillManager._refresh_agent_data_indexes()
-func (sm *SkillManager) refreshAgentDataIndexes() {
-	// 后续补充：触发 Agent 重新加载技能索引
-	logger.Debug(logComponent).Msg("刷新 Agent 数据索引（当前为空操作）")
-}
-
-// gitClone 执行 git clone
+// gitClone 执行 git clone（委托给 git_ops.go 中的包级函数）。
 func (sm *SkillManager) gitClone(ctx context.Context, url, dir string) error {
-	// 后续补充：实际 git clone 实现
-	logger.Warn(logComponent).Str("url", url).Msg("git clone 尚未实现")
-	return errNotImplemented
+	return gitClone(ctx, url, dir)
 }
 
-// gitPull 执行 git pull
+// gitPull 执行 git pull（委托给 git_ops.go 中的包级函数）。
 func (sm *SkillManager) gitPull(ctx context.Context, dir string) {
-	// 后续补充：实际 git pull 实现
-	logger.Warn(logComponent).Str("dir", dir).Msg("git pull 尚未实现")
+	_ = gitPull(ctx, dir)
 }
 
-// gitGetCommit 获取当前 commit hash
+// gitGetCommit 获取当前 commit hash（委托给 git_ops.go 中的包级函数）。
 func (sm *SkillManager) gitGetCommit(dir string) string {
-	// 后续补充：实际 git rev-parse HEAD 实现
-	return ""
+	hash, _ := gitGetCommit(dir)
+	return hash
 }
 
 // safePathName 校验路径名称安全性
@@ -2370,8 +2587,27 @@ func envString(key, defaultVal string) string {
 	return defaultVal
 }
 
-// parseYAMLFrontmatter 解析 YAML frontmatter（最小实现）
+// parseYAMLFrontmatter 解析 YAML frontmatter（使用 gopkg.in/yaml.v3 完整解析）。
+// 对齐 Python: yaml.safe_load(frontmatter)，补全默认字段和 tags/allowed_tools 类型转换。
 func parseYAMLFrontmatter(text string) map[string]any {
+	result := make(map[string]any)
+	// 使用 yaml.v3 解析（对齐 Python: yaml.safe_load）
+	if err := yaml.Unmarshal([]byte(text), &result); err != nil {
+		// 解析失败时回退到逐行解析
+		return parseYAMLFrontmatterFallback(text)
+	}
+	// 补全默认字段（对齐 Python: tags 默认空列表, allowed_tools 默认空列表）
+	if _, ok := result["tags"]; !ok {
+		result["tags"] = []any{}
+	}
+	if _, ok := result["allowed_tools"]; !ok {
+		result["allowed_tools"] = []any{}
+	}
+	return result
+}
+
+// parseYAMLFrontmatterFallback 逐行解析 YAML frontmatter（yaml.v3 解析失败时回退）
+func parseYAMLFrontmatterFallback(text string) map[string]any {
 	result := make(map[string]any)
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	for _, line := range lines {
@@ -2553,6 +2789,10 @@ func (sm *SkillManager) assertTeamSkillsHubDownloadURLAllowed(downloadURL string
 func matchHost(host, pattern string) bool {
 	if pattern == "*" {
 		return true
+	}
+	// 后缀匹配（对齐 Python: rule.startswith(".") → host.endswith(rule)）
+	if strings.HasPrefix(pattern, ".") {
+		return strings.HasSuffix(host, pattern)
 	}
 	// 前缀通配 *.example.com → 匹配 foo.example.com 和 example.com
 	if strings.HasPrefix(pattern, "*.") {
