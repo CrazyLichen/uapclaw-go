@@ -26,10 +26,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
+	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
-	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

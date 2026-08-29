@@ -719,3 +719,50 @@ func TestStep_通过MockRits(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestToInt 安全转换 any 为 int
+func TestToInt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected int
+	}{
+		{"int直接返回", 42, 42},
+		{"float64转换", 3.14, 3},
+		{"int64转换", int64(100), 100},
+		{"字符串0", "0", 0},
+		{"nil返回0", nil, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := toInt(tt.input)
+			if result != tt.expected {
+				t.Errorf("toInt(%v) = %d, 期望 %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatExampleCalls 格式化示例调用列表
+func TestFormatExampleCalls(t *testing.T) {
+	t.Run("空列表", func(t *testing.T) {
+		if formatExampleCalls(nil) != "" {
+			t.Error("formatExampleCalls(nil) 应返回空字符串")
+		}
+	})
+	t.Run("单个调用", func(t *testing.T) {
+		result := formatExampleCalls([]string{"grep -r pattern"})
+		if result != `"grep -r pattern"` {
+			t.Errorf("formatExampleCalls 结果 = %q, 不符合预期", result)
+		}
+	})
+	t.Run("多个调用换行连接", func(t *testing.T) {
+		result := formatExampleCalls([]string{"call1", "call2"})
+		if !strings.Contains(result, "\n") {
+			t.Error("formatExampleCalls 多个调用应包含换行符")
+		}
+		if !strings.Contains(result, `"call1"`) || !strings.Contains(result, `"call2"`) {
+			t.Errorf("formatExampleCalls 结果 = %q, 应包含引号包裹的调用", result)
+		}
+	})
+}

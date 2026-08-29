@@ -1,6 +1,7 @@
 package iface
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
@@ -113,6 +114,7 @@ func TestNewCompressContextOptions_带选项(t *testing.T) {
 		WithProcessorTypes([]string{"compressor"}),
 		WithModelName("qwen-max"),
 		WithCompressSessionID("sess-1"),
+		WithReturnState(true),
 	)
 	if len(o.ProcessorTypes) != 1 || o.ProcessorTypes[0] != "compressor" {
 		t.Errorf("ProcessorTypes = %v, 期望 [compressor]", o.ProcessorTypes)
@@ -122,6 +124,22 @@ func TestNewCompressContextOptions_带选项(t *testing.T) {
 	}
 	if o.SessionID != "sess-1" {
 		t.Errorf("SessionID = %q, 期望 %q", o.SessionID, "sess-1")
+	}
+	if !o.ReturnState {
+		t.Errorf("ReturnState = %v, 期望 true", o.ReturnState)
+	}
+}
+
+// TestWithReturnState 设置返回压缩状态详情
+func TestWithReturnState(t *testing.T) {
+	o := &CompressContextOptions{}
+	WithReturnState(true)(o)
+	if !o.ReturnState {
+		t.Error("ReturnState 应为 true")
+	}
+	WithReturnState(false)(o)
+	if o.ReturnState {
+		t.Error("ReturnState 应为 false")
 	}
 }
 
@@ -438,6 +456,46 @@ func TestCountSingleMessageTokens_nilTokenCounter(t *testing.T) {
 	// fallback: len("hello world") / 4 = 11 / 4 = 2
 	if result != 2 {
 		t.Errorf("countSingleMessageTokens() = %d, 期望 2", result)
+	}
+}
+
+// TestCountSingleMessageTokens_有TokenCounter 测试有 TokenCounter 时使用计数器
+func TestCountSingleMessageTokens_有TokenCounter(t *testing.T) {
+	msg := llm_schema.NewUserMessage("hello world")
+	tc := &fakeTokenCounter{count: 50}
+	result := countSingleMessageTokens(msg, tc)
+	if result != 50 {
+		t.Errorf("countSingleMessageTokens() = %d, 期望 50", result)
+	}
+}
+
+// TestCountSingleMessageTokens_TokenCounter错误 测试 TokenCounter 报错时 fallback
+func TestCountSingleMessageTokens_TokenCounter错误(t *testing.T) {
+	msg := llm_schema.NewUserMessage("hello world")
+	tc := &fakeTokenCounter{countErr: fmt.Errorf("count error")}
+	result := countSingleMessageTokens(msg, tc)
+	// fallback: len("hello world") / 4 = 11 / 4 = 2
+	if result != 2 {
+		t.Errorf("countSingleMessageTokens() = %d, 期望 2（TokenCounter 出错 fallback）", result)
+	}
+}
+
+// TestCountToolTokens_nilTokenCounter 测试 TokenCounter 为 nil 时的 fallback
+func TestCountToolTokens_nilTokenCounter(t *testing.T) {
+	tool := &fakeToolInfo{name: "grep", description: "搜索文件", parameters: map[string]any{"type": "object"}}
+	result := countToolTokens(tool, nil)
+	if result <= 0 {
+		t.Errorf("countToolTokens() = %d, 应大于 0", result)
+	}
+}
+
+// TestCountToolTokens_有TokenCounter 测试有 TokenCounter 时使用计数器
+func TestCountToolTokens_有TokenCounter(t *testing.T) {
+	tool := &fakeToolInfo{name: "grep"}
+	tc := &fakeTokenCounter{count: 100}
+	result := countToolTokens(tool, tc)
+	if result != 100 {
+		t.Errorf("countToolTokens() = %d, 期望 100", result)
 	}
 }
 

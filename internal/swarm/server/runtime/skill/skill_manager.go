@@ -1712,13 +1712,13 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 			"installed_at": time.Now().Format(time.RFC3339),
 		})
 		sm.AddInstalledPlugin(map[string]any{
-				"name":         skillName,
-				"marketplace":  "teamskillshub",
-				"version":      toString(meta["version"]), // 从 SKILL.md meta 获取
-				"commit":       "",                        // TeamSkillsHub 安装无 git commit
-				"source":       "teamskillshub",
-				"installed_at": time.Now().Format(time.RFC3339),
-			})
+			"name":         skillName,
+			"marketplace":  "teamskillshub",
+			"version":      toString(meta["version"]), // 从 SKILL.md meta 获取
+			"commit":       "",                        // TeamSkillsHub 安装无 git commit
+			"source":       "teamskillshub",
+			"installed_at": time.Now().Format(time.RFC3339),
+		})
 		sm.saveState()
 		sm.mu.Unlock()
 		sm.refreshAgentDataIndexes()

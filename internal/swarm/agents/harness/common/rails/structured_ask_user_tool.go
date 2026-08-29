@@ -84,13 +84,13 @@ func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 //   - query (string, required) — 问题文本
 //   - questions (array, optional) — 结构化选项列表
 //
-// questions item (object, required=["question"]):
+// questions 条目（对象，必填=["question"]）:
 //   - question (string, required) — 问题文本
 //   - header (string, optional) — 短标签（最多 12 字符）
 //   - options (array, optional) — 选项列表（2-4 项）
 //   - multi_select (boolean, optional, default=false) — 是否多选
 //
-// options item (object, required=["label"]):
+// options 条目（对象，必填=["label"]）:
 //   - label (string, required) — 选项文本（1-5 个词）
 //   - description (string, optional) — 选项说明
 func buildExtendedInputParams(language string) []*schema.Param {

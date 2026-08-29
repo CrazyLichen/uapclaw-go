@@ -41,3 +41,11 @@ func TestCustomizedPipeline_FnCallPath(t *testing.T) {
 		t.Error("expected error for fn_call_path")
 	}
 }
+
+// TestPipelineError_Error 返回流水线错误消息
+func TestPipelineError_Error(t *testing.T) {
+	err := &pipelineError{msg: "测试错误"}
+	if err.Error() != "测试错误" {
+		t.Errorf("pipelineError.Error() = %q, 期望 %q", err.Error(), "测试错误")
+	}
+}

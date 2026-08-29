@@ -98,6 +98,74 @@ func TestSessionMemoryConfig_Validate_UpdateMode非法(t *testing.T) {
 	}
 }
 
+// TestSessionMemoryConfig_SetModelDefaults_两者均为nil时设置 测试 Model 和 ModelClient 均为 nil 时设置
+func TestSessionMemoryConfig_SetModelDefaults_两者均为nil时设置(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	modelConfig := &llm_schema.ModelRequestConfig{ModelName: "test-model"}
+	clientConfig := &llm_schema.ModelClientConfig{ClientProvider: "test-provider"}
+
+	cfg.SetModelDefaults(modelConfig, clientConfig)
+
+	if cfg.Model != modelConfig {
+		t.Error("SetModelDefaults 未设置 Model")
+	}
+	if cfg.ModelClient != clientConfig {
+		t.Error("SetModelDefaults 未设置 ModelClient")
+	}
+}
+
+// TestSessionMemoryConfig_SetModelDefaults_两者均已存在时不覆盖 测试已有配置不被覆盖
+func TestSessionMemoryConfig_SetModelDefaults_两者均已存在时不覆盖(t *testing.T) {
+	existingModel := &llm_schema.ModelRequestConfig{ModelName: "existing"}
+	existingClient := &llm_schema.ModelClientConfig{ClientProvider: "existing-provider"}
+
+	cfg := NewSessionMemoryConfig()
+	cfg.Model = existingModel
+	cfg.ModelClient = existingClient
+
+	newModel := &llm_schema.ModelRequestConfig{ModelName: "new-model"}
+	newClient := &llm_schema.ModelClientConfig{ClientProvider: "new-provider"}
+
+	cfg.SetModelDefaults(newModel, newClient)
+
+	if cfg.Model != existingModel {
+		t.Error("已有 Model 不应被覆盖")
+	}
+	if cfg.ModelClient != existingClient {
+		t.Error("已有 ModelClient 不应被覆盖")
+	}
+}
+
+// TestSessionMemoryConfig_SetModelDefaults_传入nil时不设置 测试传入 nil 时不设置
+func TestSessionMemoryConfig_SetModelDefaults_传入nil时不设置(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	cfg.SetModelDefaults(nil, nil)
+
+	if cfg.Model != nil {
+		t.Error("传入 nil 时 Model 应保持 nil")
+	}
+	if cfg.ModelClient != nil {
+		t.Error("传入 nil 时 ModelClient 应保持 nil")
+	}
+}
+
+// TestSessionMemoryConfig_GetModel 测试 GetModel 返回模型配置
+func TestSessionMemoryConfig_GetModel(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+
+	// 默认为 nil
+	if cfg.GetModel() != nil {
+		t.Error("默认 GetModel 应返回 nil")
+	}
+
+	// 设置后应返回正确的值
+	modelConfig := &llm_schema.ModelRequestConfig{ModelName: "test-model"}
+	cfg.Model = modelConfig
+	if cfg.GetModel() != modelConfig {
+		t.Error("GetModel 应返回已设置的 Model")
+	}
+}
+
 // ──────────────────────────── SessionMemoryDirectUpdater 测试 ────────────────────────────
 
 // TestNewSessionMemoryDirectUpdater 测试创建 direct_replace 更新器

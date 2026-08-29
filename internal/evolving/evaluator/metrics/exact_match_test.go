@@ -3,6 +3,8 @@ package metrics
 import (
 	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
@@ -159,5 +161,75 @@ func TestExactMatchMetric_混合类型(t *testing.T) {
 	}
 	if result2["exact_match"] != 1.0 {
 		t.Errorf("期望数字匹配 exact_match=1.0, 实际=%f", result2["exact_match"])
+	}
+}
+
+// ──────────────────────────── WithQuestion / WithCase 测试 ────────────────────────────
+
+// TestWithQuestion 测试 WithQuestion 选项设置 question 上下文
+func TestWithQuestion(t *testing.T) {
+	q := map[string]any{"query": "测试问题"}
+	mc := applyMetricOptions(WithQuestion(q))
+	if mc.question == nil {
+		t.Fatal("question 不应为 nil")
+	}
+	if mc.question["query"] != "测试问题" {
+		t.Errorf("question[query] = %v, want 测试问题", mc.question["query"])
+	}
+}
+
+// TestWithCase 测试 WithCase 选项设置 case 上下文
+func TestWithCase(t *testing.T) {
+	c := dataset.Case{Inputs: map[string]any{"q": "hello"}}
+	mc := applyMetricOptions(WithCase(c))
+	if mc.case_ == nil {
+		t.Fatal("case 不应为 nil")
+	}
+	if mc.case_.Inputs["q"] != "hello" {
+		t.Errorf("case.Inputs[q] = %v, want hello", mc.case_.Inputs["q"])
+	}
+}
+
+// TestApplyMetricOptions_多个选项 测试多个 MetricOption 同时生效
+func TestApplyMetricOptions_多个选项(t *testing.T) {
+	q := map[string]any{"q": "test"}
+	c := dataset.Case{Inputs: map[string]any{"q": "test"}}
+	mc := applyMetricOptions(WithQuestion(q), WithCase(c))
+	if mc.question == nil || mc.case_ == nil {
+		t.Error("question 和 case 都应设置")
+	}
+}
+
+// TestApplyMetricOptions_无选项 测试无选项时上下文字段为零值
+func TestApplyMetricOptions_无选项(t *testing.T) {
+	mc := applyMetricOptions()
+	if mc.question != nil {
+		t.Error("无选项时 question 应为 nil")
+	}
+	if mc.case_ != nil {
+		t.Error("无选项时 case 应为 nil")
+	}
+}
+
+// TestDefaultComputeBatch_通过ExactMatch 测试 DefaultComputeBatch 委托到 Compute
+func TestDefaultComputeBatch_通过ExactMatch(t *testing.T) {
+	m := NewExactMatchMetric()
+	predictions := []any{"a", "b", "c"}
+	labels := []any{"a", "x", "c"}
+	results, err := DefaultComputeBatch(m, context.Background(), predictions, labels)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("期望 3 个结果, 实际=%d", len(results))
+	}
+	if results[0]["exact_match"] != 1.0 {
+		t.Errorf("results[0] exact_match = %f, want 1.0", results[0]["exact_match"])
+	}
+	if results[1]["exact_match"] != 0.0 {
+		t.Errorf("results[1] exact_match = %f, want 0.0", results[1]["exact_match"])
+	}
+	if results[2]["exact_match"] != 1.0 {
+		t.Errorf("results[2] exact_match = %f, want 1.0", results[2]["exact_match"])
 	}
 }

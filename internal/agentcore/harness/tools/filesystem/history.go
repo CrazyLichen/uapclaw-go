@@ -44,7 +44,6 @@ const (
 // historyMu 文件操作历史写入互斥锁。
 // 对齐 Python: _HISTORY_LOCK = asyncio.Lock()
 
-
 var historyMu sync.Mutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────

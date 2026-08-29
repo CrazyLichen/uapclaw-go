@@ -52,7 +52,6 @@ var (
 	busMu sync.Mutex
 )
 
-
 var _ Messager = (*InProcessMessager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

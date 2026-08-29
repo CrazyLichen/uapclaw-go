@@ -321,7 +321,6 @@ const (
 	SkillDescMaxLen = 1024
 )
 
-
 var (
 	// AllowedFrontmatterKeys SKILL.md 允许的 frontmatter 键集合
 	AllowedFrontmatterKeys = map[string]bool{

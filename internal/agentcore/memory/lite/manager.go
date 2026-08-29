@@ -28,7 +28,6 @@ type MemoryIndexManager interface {
 	Close() error
 }
 
-
 // MemoryManagerParams 记忆管理器构造参数
 type MemoryManagerParams struct {
 	// AgentID Agent 标识

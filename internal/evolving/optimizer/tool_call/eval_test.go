@@ -236,3 +236,103 @@ func TestEvaluateSingleExample_ReturnsError(t *testing.T) {
 		t.Error("expected error when evaluateSingleExample fails")
 	}
 }
+
+// ──────────────────────────── 非导出函数 测试 ────────────────────────────
+
+// TestGetFnName 从 fn_call 中获取函数名
+func TestGetFnName(t *testing.T) {
+	t.Run("正常获取", func(t *testing.T) {
+		result := getFnName(map[string]any{"name": "grep"})
+		if result != "grep" {
+			t.Errorf("getFnName = %q, 期望 %q", result, "grep")
+		}
+	})
+	t.Run("nil返回unknown", func(t *testing.T) {
+		if getFnName(nil) != "unknown" {
+			t.Error("getFnName(nil) 应返回 unknown")
+		}
+	})
+	t.Run("name非字符串返回unknown", func(t *testing.T) {
+		if getFnName(map[string]any{"name": 42}) != "unknown" {
+			t.Error("getFnName(非字符串 name) 应返回 unknown")
+		}
+	})
+}
+
+// TestGetToolName 从 tool 字典中获取工具名
+func TestGetToolName(t *testing.T) {
+	t.Run("正常获取", func(t *testing.T) {
+		result := getToolName(map[string]any{"name": "read_file"})
+		if result != "read_file" {
+			t.Errorf("getToolName = %q, 期望 %q", result, "read_file")
+		}
+	})
+	t.Run("无name返回unknown", func(t *testing.T) {
+		if getToolName(map[string]any{}) != "unknown" {
+			t.Error("getToolName(无 name) 应返回 unknown")
+		}
+	})
+}
+
+// TestGetToolDescription 从 tool 字典中获取描述
+func TestGetToolDescription(t *testing.T) {
+	t.Run("正常获取", func(t *testing.T) {
+		result := getToolDescription(map[string]any{"description": "搜索文件"})
+		if result != "搜索文件" {
+			t.Errorf("getToolDescription = %q, 期望 %q", result, "搜索文件")
+		}
+	})
+	t.Run("无description返回空字符串", func(t *testing.T) {
+		if getToolDescription(map[string]any{}) != "" {
+			t.Error("getToolDescription(无 description) 应返回空字符串")
+		}
+	})
+}
+
+// TestGetToolParameters 从 tool 字典中获取参数
+func TestGetToolParameters(t *testing.T) {
+	t.Run("正常获取", func(t *testing.T) {
+		params := map[string]any{"type": "object"}
+		result := getToolParameters(map[string]any{"parameters": params})
+		if result["type"] != "object" {
+			t.Errorf("getToolParameters 返回值不正确")
+		}
+	})
+	t.Run("无parameters返回空map", func(t *testing.T) {
+		result := getToolParameters(map[string]any{})
+		if len(result) != 0 {
+			t.Error("getToolParameters(无 parameters) 应返回空 map")
+		}
+	})
+}
+
+// TestIsNumeric 判断是否为数值类型
+func TestIsNumeric(t *testing.T) {
+	if !isNumeric(42) || !isNumeric(3.14) || !isNumeric(int64(1)) {
+		t.Error("数值类型应返回 true")
+	}
+	if isNumeric("string") || isNumeric(nil) {
+		t.Error("非数值类型应返回 false")
+	}
+}
+
+// TestToFloat 将数值转为 float64 指针
+func TestToFloat(t *testing.T) {
+	t.Run("int转换", func(t *testing.T) {
+		f := toFloat(42)
+		if f == nil || *f != 42.0 {
+			t.Error("toFloat(int) 失败")
+		}
+	})
+	t.Run("float64直接返回", func(t *testing.T) {
+		f := toFloat(3.14)
+		if f == nil || *f != 3.14 {
+			t.Error("toFloat(float64) 失败")
+		}
+	})
+	t.Run("非数值返回nil", func(t *testing.T) {
+		if toFloat("string") != nil {
+			t.Error("toFloat(string) 应返回 nil")
+		}
+	})
+}

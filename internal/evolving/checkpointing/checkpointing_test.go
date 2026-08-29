@@ -2835,3 +2835,26 @@ func TestEvolutionStore_ClearRenderedOutputs(t *testing.T) {
 		t.Errorf("清空后 pristine 内容不应包含 evolution-index 块")
 	}
 }
+
+// TestNormalizeBaseDirsFromList 规范化基础目录列表
+func TestNormalizeBaseDirsFromList(t *testing.T) {
+	t.Run("空列表返回空", func(t *testing.T) {
+		result := normalizeBaseDirsFromList(nil)
+		if len(result) != 0 {
+			t.Errorf("normalizeBaseDirsFromList(nil) 长度 = %d, 期望 0", len(result))
+		}
+	})
+	t.Run("去重并解析绝对路径", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		result := normalizeBaseDirsFromList([]string{tmpDir, tmpDir})
+		if len(result) != 1 {
+			t.Errorf("重复目录去重后长度 = %d, 期望 1", len(result))
+		}
+	})
+	t.Run("无效路径跳过", func(t *testing.T) {
+		result := normalizeBaseDirsFromList([]string{t.TempDir()})
+		if len(result) != 1 {
+			t.Errorf("有效路径应被保留，长度 = %d, 期望 1", len(result))
+		}
+	})
+}

@@ -301,3 +301,25 @@ func TestTeamRuntimeManager_RegisterHumanAgentInbound_stub(t *testing.T) {
 		t.Error("RegisterHumanAgentInbound stub 应返回 false")
 	}
 }
+
+// TestStrPtr 测试 strPtr 辅助函数
+func TestStrPtr(t *testing.T) {
+	p := strPtr("hello")
+	if p == nil {
+		t.Fatal("strPtr 不应返回 nil")
+	}
+	if *p != "hello" {
+		t.Errorf("*p = %q, want hello", *p)
+	}
+}
+
+// TestStrPtr_空字符串 测试 strPtr 对空字符串的处理
+func TestStrPtr_空字符串(t *testing.T) {
+	p := strPtr("")
+	if p == nil {
+		t.Fatal("strPtr 空字符串不应返回 nil")
+	}
+	if *p != "" {
+		t.Errorf("*p = %q, want empty", *p)
+	}
+}

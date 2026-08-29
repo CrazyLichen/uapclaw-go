@@ -1264,3 +1264,57 @@ func TestEstimateContentTokens_NilContent(t *testing.T) {
 		t.Errorf("nil 内容应返回非负数，实际: %d", tokens)
 	}
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState 测试 ────────────────────────────
+
+// TestDialogueCompressorConfig_SetModelDefaults_均非空 设置默认模型配置
+func TestDialogueCompressorConfig_SetModelDefaults_均非空(t *testing.T) {
+	cfg := validDialogueCompressorConfig()
+	cfg.Model = nil
+	cfg.ModelClient = nil
+	model := &llm_schema.ModelRequestConfig{ModelName: "default-model"}
+	modelClient := &llm_schema.ModelClientConfig{ClientID: "default-client"}
+	cfg.SetModelDefaults(model, modelClient)
+	if cfg.Model != model {
+		t.Errorf("Model 未被设置，期望 ModelName=%q", model.ModelName)
+	}
+	if cfg.ModelClient != modelClient {
+		t.Errorf("ModelClient 未被设置")
+	}
+}
+
+// TestDialogueCompressorConfig_SetModelDefaults_已有Model不覆盖 已有 Model 时不应覆盖
+func TestDialogueCompressorConfig_SetModelDefaults_已有Model不覆盖(t *testing.T) {
+	cfg := validDialogueCompressorConfig()
+	existingModel := cfg.Model // 已有 Model
+	cfg.SetModelDefaults(&llm_schema.ModelRequestConfig{ModelName: "new"}, nil)
+	if cfg.Model != existingModel {
+		t.Errorf("已有 Model 不应被覆盖")
+	}
+}
+
+// TestDialogueCompressorConfig_SetModelDefaults_传入nil不设置 传入 nil 时不设置
+func TestDialogueCompressorConfig_SetModelDefaults_传入nil不设置(t *testing.T) {
+	cfg := validDialogueCompressorConfig()
+	cfg.Model = nil
+	cfg.ModelClient = nil
+	cfg.SetModelDefaults(nil, nil)
+	if cfg.Model != nil {
+		t.Errorf("传入 nil 时 Model 应保持 nil")
+	}
+	if cfg.ModelClient != nil {
+		t.Errorf("传入 nil 时 ModelClient 应保持 nil")
+	}
+}
+
+// TestDialogueCompressorConfig_GetModel 返回模型请求配置
+func TestDialogueCompressorConfig_GetModel(t *testing.T) {
+	cfg := validDialogueCompressorConfig()
+	if cfg.GetModel() == nil {
+		t.Errorf("validDialogueCompressorConfig 应已有 Model")
+	}
+	cfg.Model = nil
+	if cfg.GetModel() != nil {
+		t.Errorf("Model 为 nil 时 GetModel 应返回 nil")
+	}
+}

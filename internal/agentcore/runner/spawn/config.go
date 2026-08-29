@@ -86,7 +86,6 @@ const (
 	ShutdownWaitPeriod = 2 * time.Second
 )
 
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultSpawnConfig 返回默认 SpawnConfig。

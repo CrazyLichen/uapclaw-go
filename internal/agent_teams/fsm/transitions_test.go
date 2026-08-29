@@ -157,3 +157,16 @@ func TestMemberSettledStatuses_完整性(t *testing.T) {
 		}
 	}
 }
+
+// TestIsTaskTerminal 判断任务终态
+func TestIsTaskTerminal(t *testing.T) {
+	if !IsTaskTerminal(TaskStatusCompleted) {
+		t.Errorf("IsTaskTerminal(%q) 应返回 true", TaskStatusCompleted)
+	}
+	if !IsTaskTerminal(TaskStatusCancelled) {
+		t.Errorf("IsTaskTerminal(%q) 应返回 true", TaskStatusCancelled)
+	}
+	if IsTaskTerminal("running") {
+		t.Error("IsTaskTerminal(\"running\") 应返回 false")
+	}
+}

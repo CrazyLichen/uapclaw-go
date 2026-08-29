@@ -26,7 +26,6 @@ type EmbeddingProvider interface {
 	Dims() int
 }
 
-
 // MockEmbeddingProvider 模拟嵌入提供者。对齐 Python MockEmbeddingProvider
 type MockEmbeddingProvider struct {
 	// id 提供者标识

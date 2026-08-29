@@ -563,3 +563,45 @@ func (f *fakeModelContext) CountMessages(messages []llm_schema.BaseMessage, mode
 func (f *fakeModelContext) CountTools(tools []commonschema.ToolInfoInterface, model string) (int, error) {
 	return 0, nil
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / SaveState / LoadState 测试 ────────────────────────────
+
+// TestMessageOffloaderConfig_SetModelDefaults 空实现，调用不 panic 即可
+func TestMessageOffloaderConfig_SetModelDefaults(t *testing.T) {
+	cfg := &MessageOffloaderConfig{
+		TokensThreshold:       20000,
+		LargeMessageThreshold: 1000,
+		TrimSize:              100,
+		KeepLastRound:         true,
+	}
+	// MessageOffloaderConfig 无 Model/ModelClient 字段，空实现
+	cfg.SetModelDefaults(nil, nil)
+}
+
+// TestMessageOffloaderConfig_GetModel 始终返回 nil
+func TestMessageOffloaderConfig_GetModel(t *testing.T) {
+	cfg := &MessageOffloaderConfig{
+		TokensThreshold:       20000,
+		LargeMessageThreshold: 1000,
+		TrimSize:              100,
+		KeepLastRound:         true,
+	}
+	if cfg.GetModel() != nil {
+		t.Errorf("MessageOffloaderConfig.GetModel() 应始终返回 nil")
+	}
+}
+
+// TestMessageOffloader_SaveState 导出处理器内部状态
+func TestMessageOffloader_SaveState(t *testing.T) {
+	mo := newTestMessageOffloader()
+	state := mo.SaveState()
+	if state == nil {
+		t.Error("SaveState 不应返回 nil")
+	}
+}
+
+// TestMessageOffloader_LoadState 从 map 恢复状态（空操作，不 panic 即可）
+func TestMessageOffloader_LoadState(t *testing.T) {
+	mo := newTestMessageOffloader()
+	mo.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
+}

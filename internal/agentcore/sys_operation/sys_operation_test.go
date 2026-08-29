@@ -364,3 +364,148 @@ func TestWithFsPermissions(t *testing.T) {
 	opts := NewFsOptions(WithFsPermissions("755"))
 	assert.Equal(t, "755", opts.Permissions)
 }
+
+// TestNewSandboxLauncherConfig 测试创建默认 SandboxLauncherConfig
+func TestNewSandboxLauncherConfig(t *testing.T) {
+	cfg := NewSandboxLauncherConfig()
+	assert.Equal(t, "pre_deploy", cfg.LauncherType)
+	assert.Equal(t, "mock", cfg.SandboxType)
+	assert.Equal(t, "delete", cfg.OnStop)
+}
+
+// TestNewPreDeployLauncherConfig 测试创建 PreDeployLauncherConfig
+func TestNewPreDeployLauncherConfig(t *testing.T) {
+	cfg := NewPreDeployLauncherConfig("http://localhost:8080")
+	assert.Equal(t, "aio", cfg.SandboxType)
+	assert.Equal(t, "http://localhost:8080", cfg.BaseURL)
+}
+
+// TestNewGatewayStoreConfig 测试创建 GatewayStoreConfig
+func TestNewGatewayStoreConfig(t *testing.T) {
+	cfg := NewGatewayStoreConfig()
+	assert.Equal(t, "memory", cfg.Type)
+}
+
+// TestNewGatewayConfig 测试创建 GatewayConfig
+func TestNewGatewayConfig(t *testing.T) {
+	cfg := NewGatewayConfig()
+	assert.Equal(t, "memory", cfg.Store.Type)
+}
+
+// TestContainerScope_MarshalJSON 测试 JSON 序列化
+func TestContainerScope_MarshalJSON(t *testing.T) {
+	data, err := json.Marshal(ContainerScopeSession)
+	assert.NoError(t, err)
+	assert.Equal(t, `"session"`, string(data))
+}
+
+// TestContainerScope_UnmarshalJSON 测试 JSON 反序列化
+func TestContainerScope_UnmarshalJSON(t *testing.T) {
+	var s ContainerScope
+	err := json.Unmarshal([]byte(`"system"`), &s)
+	assert.NoError(t, err)
+	assert.Equal(t, ContainerScopeSystem, s)
+}
+
+// TestContainerScope_UnmarshalJSON_未知值 测试未知值报错
+func TestContainerScope_UnmarshalJSON_未知值(t *testing.T) {
+	var s ContainerScope
+	err := json.Unmarshal([]byte(`"invalid_scope"`), &s)
+	assert.Error(t, err)
+}
+
+// TestWithFsChunkSize 测试 WithFsChunkSize 选项
+func TestWithFsChunkSize(t *testing.T) {
+	opts := NewFsOptions(WithFsChunkSize(1024))
+	assert.Equal(t, 1024, opts.ChunkSize)
+}
+
+// TestWithFsLineRange 测试 WithFsLineRange 选项
+func TestWithFsLineRange(t *testing.T) {
+	opts := NewFsOptions(WithFsLineRange(10, 20))
+	assert.Equal(t, [2]int{10, 20}, opts.LineRange)
+}
+
+// TestWithFsPrependNewline 测试 WithFsPrependNewline 选项
+func TestWithFsPrependNewline(t *testing.T) {
+	opts := NewFsOptions(WithFsPrependNewline(true))
+	assert.NotNil(t, opts.PrependNewline)
+	assert.True(t, *opts.PrependNewline)
+}
+
+// TestWithFsAppendNewline 测试 WithFsAppendNewline 选项
+func TestWithFsAppendNewline(t *testing.T) {
+	opts := NewFsOptions(WithFsAppendNewline(true))
+	assert.NotNil(t, opts.AppendNewline)
+	assert.True(t, *opts.AppendNewline)
+}
+
+// TestWithFsCreateIfNotExist 测试 WithFsCreateIfNotExist 选项
+func TestWithFsCreateIfNotExist(t *testing.T) {
+	opts := NewFsOptions(WithFsCreateIfNotExist(true))
+	assert.True(t, opts.CreateIfNotExist)
+}
+
+// TestWithFsOverwrite 测试 WithFsOverwrite 选项
+func TestWithFsOverwrite(t *testing.T) {
+	opts := NewFsOptions(WithFsOverwrite(true))
+	assert.True(t, opts.Overwrite)
+}
+
+// TestWithFsCreateParentDirs 测试 WithFsCreateParentDirs 选项
+func TestWithFsCreateParentDirs(t *testing.T) {
+	opts := NewFsOptions(WithFsCreateParentDirs(true))
+	assert.True(t, opts.CreateParentDirs)
+}
+
+// TestWithFsPreservePerms 测试 WithFsPreservePerms 选项
+func TestWithFsPreservePerms(t *testing.T) {
+	opts := NewFsOptions(WithFsPreservePerms(true))
+	assert.True(t, opts.PreservePerms)
+}
+
+// TestWithFsMaxDepth 测试 WithFsMaxDepth 选项
+func TestWithFsMaxDepth(t *testing.T) {
+	opts := NewFsOptions(WithFsMaxDepth(5))
+	assert.Equal(t, 5, opts.MaxDepth)
+}
+
+// TestWithFsSortBy 测试 WithFsSortBy 选项
+func TestWithFsSortBy(t *testing.T) {
+	opts := NewFsOptions(WithFsSortBy("name"))
+	assert.Equal(t, "name", opts.SortBy)
+}
+
+// TestWithFsSortDescending 测试 WithFsSortDescending 选项
+func TestWithFsSortDescending(t *testing.T) {
+	opts := NewFsOptions(WithFsSortDescending(true))
+	assert.True(t, opts.SortDescending)
+}
+
+// TestWithFsFileTypes 测试 WithFsFileTypes 选项
+func TestWithFsFileTypes(t *testing.T) {
+	fts := []string{".go", ".py"}
+	opts := NewFsOptions(WithFsFileTypes(fts))
+	assert.Equal(t, fts, opts.FileTypes)
+}
+
+// TestWithFsExcludePatterns 测试 WithFsExcludePatterns 选项
+func TestWithFsExcludePatterns(t *testing.T) {
+	patterns := []string{"*.log", "*.tmp"}
+	opts := NewFsOptions(WithFsExcludePatterns(patterns))
+	assert.Equal(t, patterns, opts.ExcludePatterns)
+}
+
+// TestWithFsOptions 测试 WithFsOptions 选项
+func TestWithFsOptions_Map(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewFsOptions(WithFsOptions(m))
+	assert.Equal(t, m, opts.Options)
+}
+
+// TestWithCodeOptions 测试 WithCodeOptions 选项
+func TestWithCodeOptions_Map(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewCodeOptions(WithCodeOptions(m))
+	assert.Equal(t, m, opts.Options)
+}

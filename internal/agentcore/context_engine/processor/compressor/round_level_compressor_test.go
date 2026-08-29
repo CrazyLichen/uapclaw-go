@@ -2209,3 +2209,121 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState / Validate 测试 ────────────────────────────
+
+// TestRoundLevelCompressorConfig_SetModelDefaults_均非空 设置默认模型配置
+func TestRoundLevelCompressorConfig_SetModelDefaults_均非空(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.Model = nil
+	cfg.ModelClient = nil
+	model := &llm_schema.ModelRequestConfig{ModelName: "default-model"}
+	modelClient := &llm_schema.ModelClientConfig{ClientID: "default-client"}
+	cfg.SetModelDefaults(model, modelClient)
+	if cfg.Model != model {
+		t.Errorf("Model 未被设置，期望 ModelName=%q", model.ModelName)
+	}
+	if cfg.ModelClient != modelClient {
+		t.Errorf("ModelClient 未被设置")
+	}
+}
+
+// TestRoundLevelCompressorConfig_SetModelDefaults_已有Model不覆盖 已有 Model 时不应覆盖
+func TestRoundLevelCompressorConfig_SetModelDefaults_已有Model不覆盖(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	existingModel := &llm_schema.ModelRequestConfig{ModelName: "existing"}
+	cfg.Model = existingModel
+	cfg.SetModelDefaults(&llm_schema.ModelRequestConfig{ModelName: "new"}, nil)
+	if cfg.Model != existingModel {
+		t.Errorf("已有 Model 不应被覆盖，期望 ModelName=%q", existingModel.ModelName)
+	}
+}
+
+// TestRoundLevelCompressorConfig_SetModelDefaults_传入nil不设置 传入 nil 时不设置
+func TestRoundLevelCompressorConfig_SetModelDefaults_传入nil不设置(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.Model = nil
+	cfg.ModelClient = nil
+	cfg.SetModelDefaults(nil, nil)
+	if cfg.Model != nil {
+		t.Errorf("传入 nil 时 Model 应保持 nil")
+	}
+	if cfg.ModelClient != nil {
+		t.Errorf("传入 nil 时 ModelClient 应保持 nil")
+	}
+}
+
+// TestRoundLevelCompressorConfig_GetModel 返回模型请求配置
+func TestRoundLevelCompressorConfig_GetModel(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	if cfg.GetModel() != nil {
+		t.Errorf("validRoundLevelCompressorConfig 默认无 Model，GetModel 应返回 nil")
+	}
+	model := &llm_schema.ModelRequestConfig{ModelName: "test"}
+	cfg.Model = model
+	if cfg.GetModel() != model {
+		t.Errorf("GetModel 应返回已设置的 Model")
+	}
+}
+
+// TestRoundLevelCompressor_LoadState 从 map 恢复状态（空操作，不 panic 即可）
+func TestRoundLevelCompressor_LoadState(t *testing.T) {
+	fakeClient := &rlcFakeBaseModelClient{}
+	rlc := newRLCWithModel(nil, fakeClient)
+	rlc.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
+}
+
+// TestRoundLevelCompressor_SaveState 导出处理器内部状态
+func TestRoundLevelCompressor_SaveState(t *testing.T) {
+	fakeClient := &rlcFakeBaseModelClient{}
+	rlc := newRLCWithModel(nil, fakeClient)
+	state := rlc.SaveState()
+	if state == nil {
+		t.Error("SaveState 不应返回 nil")
+	}
+}
+
+// TestRoundLevelCompressorConfig_Validate_TruncateHeadRatio越界 TruncateHeadRatio 不在 (0,1) 报错
+func TestRoundLevelCompressorConfig_Validate_TruncateHeadRatio0值(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.TruncateHeadRatio = 0.0
+	if err := cfg.Validate(); err == nil {
+		t.Error("TruncateHeadRatio=0.0 应报错")
+	}
+}
+
+// TestRoundLevelCompressorConfig_Validate_TruncatedMarker为空 TruncatedMarker 为空报错
+func TestRoundLevelCompressorConfig_Validate_TruncatedMarker为空(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.TruncatedMarker = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("TruncatedMarker 为空应报错")
+	}
+}
+
+// TestRoundLevelCompressorConfig_Validate_CompressionMarker为空 CompressionMarker 为空报错
+func TestRoundLevelCompressorConfig_Validate_CompressionMarker为空(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.CompressionMarker = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("CompressionMarker 为空应报错")
+	}
+}
+
+// TestRoundLevelCompressorConfig_Validate_ThirdPassTargetTokens零 ThirdPassTargetTokens <= 0 报错
+func TestRoundLevelCompressorConfig_Validate_ThirdPassTargetTokens零(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.ThirdPassTargetTokens = 0
+	if err := cfg.Validate(); err == nil {
+		t.Error("ThirdPassTargetTokens=0 应报错")
+	}
+}
+
+// TestRoundLevelCompressorConfig_Validate_CompressionCallMaxTokens零 CompressionCallMaxTokens <= 0 报错
+func TestRoundLevelCompressorConfig_Validate_CompressionCallMaxTokens零(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	cfg.CompressionCallMaxTokens = 0
+	if err := cfg.Validate(); err == nil {
+		t.Error("CompressionCallMaxTokens=0 应报错")
+	}
+}

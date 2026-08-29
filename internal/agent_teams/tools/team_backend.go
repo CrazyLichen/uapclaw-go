@@ -377,9 +377,9 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName, agentCard, role, desc, prompt, modelName string, opts ...SpawnMemberOption) atschema.MemberOpResult {
 	// 解析可选参数（对齐 Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)）
 	cfg := &spawnMemberConfig{
-		status:           string(atschema.MemberStatusUnstarted),
-		executionStatus:  string(atschema.ExecutionStatusIdle),
-		mode:             tb.teammateMode,
+		status:          string(atschema.MemberStatusUnstarted),
+		executionStatus: string(atschema.ExecutionStatusIdle),
+		mode:            tb.teammateMode,
 	}
 	for _, opt := range opts {
 		opt(cfg)

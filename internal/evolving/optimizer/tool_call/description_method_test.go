@@ -495,3 +495,130 @@ func TestDescResultsToMap(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestDescToMap 安全转换 any 为 map[string]any
+func TestDescToMap(t *testing.T) {
+	t.Run("nil返回nil", func(t *testing.T) {
+		if descToMap(nil) != nil {
+			t.Error("descToMap(nil) 应返回 nil")
+		}
+	})
+	t.Run("map直接返回", func(t *testing.T) {
+		m := map[string]any{"key": "value"}
+		result := descToMap(m)
+		if result["key"] != "value" {
+			t.Errorf("descToMap(map) 应返回原 map")
+		}
+	})
+	t.Run("非map返回nil", func(t *testing.T) {
+		if descToMap("string") != nil {
+			t.Error("descToMap(string) 应返回 nil")
+		}
+	})
+}
+
+// TestDescToSliceAny 安全转换 any 为 []any
+func TestDescToSliceAny(t *testing.T) {
+	t.Run("nil返回nil", func(t *testing.T) {
+		if descToSliceAny(nil) != nil {
+			t.Error("descToSliceAny(nil) 应返回 nil")
+		}
+	})
+	t.Run("slice直接返回", func(t *testing.T) {
+		s := []any{"a", "b"}
+		result := descToSliceAny(s)
+		if len(result) != 2 {
+			t.Errorf("descToSliceAny(slice) 长度 = %d, 期望 2", len(result))
+		}
+	})
+	t.Run("非slice返回nil", func(t *testing.T) {
+		if descToSliceAny(42) != nil {
+			t.Error("descToSliceAny(42) 应返回 nil")
+		}
+	})
+}
+
+// TestDescToSliceOfMaps 安全转换 any 为 []map[string]any
+func TestDescToSliceOfMaps(t *testing.T) {
+	t.Run("nil返回nil", func(t *testing.T) {
+		if descToSliceOfMaps(nil) != nil {
+			t.Error("descToSliceOfMaps(nil) 应返回 nil")
+		}
+	})
+	t.Run("从[]any转换", func(t *testing.T) {
+		input := []any{
+			map[string]any{"a": 1},
+			map[string]any{"b": 2},
+			"not-a-map", // 应跳过
+		}
+		result := descToSliceOfMaps(input)
+		if len(result) != 2 {
+			t.Errorf("descToSliceOfMaps 长度 = %d, 期望 2（跳过非 map 元素）", len(result))
+		}
+	})
+	t.Run("从[]map[string]any直接返回", func(t *testing.T) {
+		input := []map[string]any{{"a": 1}, {"b": 2}}
+		result := descToSliceOfMaps(input)
+		if len(result) != 2 {
+			t.Errorf("descToSliceOfMaps([]map) 长度 = %d, 期望 2", len(result))
+		}
+	})
+	t.Run("其他类型返回nil", func(t *testing.T) {
+		if descToSliceOfMaps("string") != nil {
+			t.Error("descToSliceOfMaps(string) 应返回 nil")
+		}
+	})
+}
+
+// TestDescIsString 判断 any 是否为 string
+func TestDescIsString(t *testing.T) {
+	if !descIsString("hello") {
+		t.Error("descIsString(\"hello\") 应返回 true")
+	}
+	if descIsString(42) {
+		t.Error("descIsString(42) 应返回 false")
+	}
+	if descIsString(nil) {
+		t.Error("descIsString(nil) 应返回 false")
+	}
+}
+
+// TestDescZipExampleAndResult 配对示例和结果
+func TestDescZipExampleAndResult(t *testing.T) {
+	examples := []ExampleTuple{
+		{Instruction: "q1"},
+		{Instruction: "q2"},
+	}
+	results := []map[string]any{
+		{"r": 1},
+		{"r": 2},
+	}
+	pairs := descZipExampleAndResult(examples, results)
+	if len(pairs) != 2 {
+		t.Fatalf("descZipExampleAndResult 长度 = %d, 期望 2", len(pairs))
+	}
+	if pairs[0].Example.Instruction != "q1" || pairs[0].Result["r"] != 1 {
+		t.Error("第一对配对不正确")
+	}
+}
+
+// TestDescZipExampleAndResult_长度不等 结果较短时取最短长度
+func TestDescZipExampleAndResult_长度不等(t *testing.T) {
+	examples := []ExampleTuple{{Instruction: "q1"}, {Instruction: "q2"}}
+	results := []map[string]any{{"r": 1}}
+	pairs := descZipExampleAndResult(examples, results)
+	if len(pairs) != 1 {
+		t.Errorf("descZipExampleAndResult 长度 = %d, 期望 1（取最短）", len(pairs))
+	}
+}
+
+// TestDescDefaultPolicy 默认策略配置
+func TestDescDefaultPolicy(t *testing.T) {
+	policy := descDefaultPolicy()
+	if policy.MaxAttempts != 15 {
+		t.Errorf("MaxAttempts = %d, 期望 15", policy.MaxAttempts)
+	}
+	if policy.TotalBudgetSecs != 300 {
+		t.Errorf("TotalBudgetSecs = %f, 期望 300", policy.TotalBudgetSecs)
+	}
+}

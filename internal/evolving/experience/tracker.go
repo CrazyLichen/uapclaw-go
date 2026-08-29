@@ -318,8 +318,6 @@ func (t *ExperienceTracker) ClearSession(sessionID string) {
 	sessionEvalCounter[sessionID] = 0
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ToMap 转换为 map[string]any，用于调用 EvolutionStore.UpdateRecordScores。
 func (u *RecordScoreUpdate) ToMap() map[string]any {
 	return map[string]any{
@@ -327,6 +325,8 @@ func (u *RecordScoreUpdate) ToMap() map[string]any {
 		"usage_stats": u.UsageStats,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updatesToMap 将 RecordScoreUpdate map 转换为 UpdateRecordScores 所需的 map[string]map[string]any 格式。
 func updatesToMap(updates map[string]*RecordScoreUpdate) map[string]map[string]any {

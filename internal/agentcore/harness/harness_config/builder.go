@@ -43,7 +43,6 @@ type HarnessConfigBuilder struct{}
 //
 // 每个条目：(点分模块路径, 类名列表, 是否需要 SysOperation)
 
-
 var builtinToolGroups = map[string]toolGroupDef{
 	"filesystem": {
 		ModulePath: "openjiuwen.harness.tools.filesystem",

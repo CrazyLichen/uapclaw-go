@@ -85,7 +85,7 @@ func (m *ToolDescriptionMethod) Step(
 			Str("output", fmt.Sprintf("%v", outputMap)).
 			Msg("当前描述——原始描述")
 	} else {
-		// 对齐 Python: improve with neg ex
+		// 对齐 Python: 用负例改进描述
 		// 对齐 Python: neg_examples = self.get_negative_examples(function_name)
 		// 对齐 Python: examples_obtained = {"neg_examples": neg_examples, "examples": examples}
 		negExamples := m.GetNegativeExamples(getToolName(tool))
@@ -99,7 +99,7 @@ func (m *ToolDescriptionMethod) Step(
 			Msg("当前描述——生成的描述")
 	}
 
-	// 对齐 Python: eval with pos ex
+	// 对齐 Python: 用正例评估
 	results := m.EvalLoop(ctx, tool, toString(outputMap["description"]), examples, 1)
 
 	// 对齐 Python: output = output | results

@@ -114,3 +114,78 @@ func TestTeamHarness_StubMethods(t *testing.T) {
 	assert.False(t, h.HasPendingInterrupt())
 	assert.Nil(t, h.FindRails(nil))
 }
+
+// TestTeamHarness_IsPendingInterruptResumeValid 测试中断恢复验证占位返回 false
+func TestTeamHarness_IsPendingInterruptResumeValid(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.False(t, h.IsPendingInterruptResumeValid(nil))
+	assert.False(t, h.IsPendingInterruptResumeValid("some input"))
+}
+
+// TestTeamHarness_PersistDBState 测试持久化占位方法不 panic
+func TestTeamHarness_PersistDBState(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NotPanics(t, func() {
+		h.PersistTeamDBState()
+		h.MarkTeamCleaned()
+		h.MarkTeamBuilt()
+		h.RequestCompletionPoll()
+		h.WakeMailboxIfInterruptCleared()
+		h.InitCwdForRound()
+	})
+}
+
+// TestTeamHarness_Steer 测试 Steer 占位返回 nil
+func TestTeamHarness_Steer(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.Steer(nil, "转向"))
+}
+
+// TestTeamHarness_FollowUp 测试 FollowUp 占位返回 nil
+func TestTeamHarness_FollowUp(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.FollowUp(nil, "追加"))
+}
+
+// TestTeamHarness_Abort 测试 Abort 占位返回 nil
+func TestTeamHarness_Abort(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.Abort(nil))
+}
+
+// TestTeamHarness_RunStreaming 测试 RunStreaming 占位返回关闭的通道
+func TestTeamHarness_RunStreaming(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	ch, err := h.RunStreaming(nil, nil, "", nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	// 通道应已关闭
+	_, ok := <-ch
+	assert.False(t, ok)
+}
+
+// TestTeamHarness_RegisterRail 测试 RegisterRail 占位返回 nil
+func TestTeamHarness_RegisterRail(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.RegisterRail(nil, nil))
+}
+
+// TestTeamHarness_UnregisterRail 测试 UnregisterRail 占位返回 nil
+func TestTeamHarness_UnregisterRail(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.UnregisterRail(nil, nil))
+}
+
+// TestTeamHarness_RegisterMemberTools_Nil 测试 nil memoryManager 不 panic
+func TestTeamHarness_RegisterMemberTools_Nil(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NotPanics(t, func() {
+		h.RegisterMemberTools(nil)
+	})
+}
+
+// TestTeamHarness_InjectMemberMemory_Nil 测试 nil memoryManager 返回 nil
+func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	assert.NoError(t, h.InjectMemberMemory(nil, nil, ""))
+}

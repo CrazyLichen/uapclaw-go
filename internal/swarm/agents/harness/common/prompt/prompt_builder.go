@@ -24,7 +24,6 @@ import (
 
 const responsePriority = 60
 
-
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 

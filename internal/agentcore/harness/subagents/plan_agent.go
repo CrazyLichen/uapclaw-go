@@ -20,7 +20,6 @@ import (
 
 const PlanAgentFactoryName = "plan_agent"
 
-
 var (
 	// defaultPlanAgentSystemPrompt 默认系统提示词
 	// 对齐 Python: PLAN_AGENT_SYSTEM_PROMPT_CN / PLAN_AGENT_SYSTEM_PROMPT_EN

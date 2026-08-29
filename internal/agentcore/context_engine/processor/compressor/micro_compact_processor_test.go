@@ -558,3 +558,43 @@ func (f *fakeModelContextForMicro) LoadState(_ map[string]any)                  
 func (f *fakeModelContextForMicro) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
 	return &iface.CompressContextResult{Result: ""}, nil
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState 测试 ────────────────────────────
+
+// TestMicroCompactProcessorConfig_SetModelDefaults 空实现，调用不 panic 即可
+func TestMicroCompactProcessorConfig_SetModelDefaults(t *testing.T) {
+	cfg := NewMicroCompactProcessorConfig()
+	// MicroCompactProcessorConfig 无 Model/ModelClient 字段，空实现
+	cfg.SetModelDefaults(&llm_schema.ModelRequestConfig{ModelName: "any"}, &llm_schema.ModelClientConfig{})
+}
+
+// TestMicroCompactProcessorConfig_GetModel 始终返回 nil
+func TestMicroCompactProcessorConfig_GetModel(t *testing.T) {
+	cfg := NewMicroCompactProcessorConfig()
+	if cfg.GetModel() != nil {
+		t.Errorf("MicroCompactProcessorConfig.GetModel() 应始终返回 nil")
+	}
+}
+
+// TestMicroCompactProcessor_LoadState 从 map 恢复状态（空操作，不 panic 即可）
+func TestMicroCompactProcessor_LoadState(t *testing.T) {
+	cfg := NewMicroCompactProcessorConfig()
+	mcp, err := NewMicroCompactProcessor(cfg)
+	if err != nil {
+		t.Fatalf("NewMicroCompactProcessor 失败: %v", err)
+	}
+	mcp.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
+}
+
+// TestMicroCompactProcessor_SaveState 导出处理器内部状态
+func TestMicroCompactProcessor_SaveState(t *testing.T) {
+	cfg := NewMicroCompactProcessorConfig()
+	mcp, err := NewMicroCompactProcessor(cfg)
+	if err != nil {
+		t.Fatalf("NewMicroCompactProcessor 失败: %v", err)
+	}
+	state := mcp.SaveState()
+	if state == nil {
+		t.Error("SaveState 不应返回 nil")
+	}
+}

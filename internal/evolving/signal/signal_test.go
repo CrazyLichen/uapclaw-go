@@ -189,3 +189,67 @@ func TestMakeSignalFingerprint_截断长excerpt(t *testing.T) {
 		t.Errorf("fingerprint[3] length = %d, want 200", len(fp[3]))
 	}
 }
+
+// TestParseEvolutionTarget 解析演进目标枚举值
+func TestParseEvolutionTarget(t *testing.T) {
+	t.Run("合法值description", func(t *testing.T) {
+		result, err := ParseEvolutionTarget("description")
+		if err != nil {
+			t.Errorf("ParseEvolutionTarget(\"description\") 不应报错: %v", err)
+		}
+		if result != EvolutionTargetDescription {
+			t.Errorf("result = %q, 期望 %q", result, EvolutionTargetDescription)
+		}
+	})
+	t.Run("合法值body", func(t *testing.T) {
+		result, err := ParseEvolutionTarget("body")
+		if err != nil {
+			t.Errorf("ParseEvolutionTarget(\"body\") 不应报错: %v", err)
+		}
+		if result != EvolutionTargetBody {
+			t.Errorf("result = %q, 期望 %q", result, EvolutionTargetBody)
+		}
+	})
+	t.Run("合法值script", func(t *testing.T) {
+		result, err := ParseEvolutionTarget("script")
+		if err != nil {
+			t.Errorf("ParseEvolutionTarget(\"script\") 不应报错: %v", err)
+		}
+		if result != EvolutionTargetScript {
+			t.Errorf("result = %q, 期望 %q", result, EvolutionTargetScript)
+		}
+	})
+	t.Run("无效值报错", func(t *testing.T) {
+		_, err := ParseEvolutionTarget("invalid")
+		if err == nil {
+			t.Error("ParseEvolutionTarget(\"invalid\") 应报错")
+		}
+	})
+}
+
+// TestWithSource 设置信号来源
+func TestWithSource(t *testing.T) {
+	cfg := &evolutionSignalConfig{}
+	WithSource("eval")(cfg)
+	if cfg.source == nil || *cfg.source != "eval" {
+		t.Error("WithSource 未生效")
+	}
+}
+
+// TestWithToolName 设置工具名称
+func TestWithToolName(t *testing.T) {
+	cfg := &evolutionSignalConfig{}
+	WithToolName("grep")(cfg)
+	if cfg.toolName == nil || *cfg.toolName != "grep" {
+		t.Error("WithToolName 未生效")
+	}
+}
+
+// TestWithSkillName 设置技能名称
+func TestWithSkillName(t *testing.T) {
+	cfg := &evolutionSignalConfig{}
+	WithSkillName("my_skill")(cfg)
+	if cfg.skillName == nil || *cfg.skillName != "my_skill" {
+		t.Error("WithSkillName 未生效")
+	}
+}

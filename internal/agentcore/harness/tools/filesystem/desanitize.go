@@ -17,7 +17,6 @@ import (
 // desanitizations 压缩标记 → 原始标记映射表。
 // 对齐 Python: EditFileTool._DESANITIZATIONS (filesystem.py L1021-1040)
 
-
 var desanitizations = map[string]string{
 	"<fnr>":          "<function_results>",
 	"<n>":            "<name>",

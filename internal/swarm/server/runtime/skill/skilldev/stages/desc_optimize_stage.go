@@ -46,7 +46,6 @@ type improveDescriptionInput struct {
 // DescOptimizeStageHandler DESC_OPTIMIZE 阶段：优化 SKILL.md 的 description 以提高触发准确率。
 type DescOptimizeStageHandler struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MaxIterations 描述优化最大迭代次数。
@@ -104,7 +103,6 @@ description 出现在模型的 available_skills 列表中，模型仅凭 descrip
 <new_description>新描述内容</new_description>
 `
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 DESC_OPTIMIZE 阶段逻辑。

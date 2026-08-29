@@ -65,7 +65,6 @@ const (
 	StageSearch = "search"
 )
 
-
 var (
 	// databaseTypeStrings DatabaseType 枚举值对应的字符串表示，与 Python 枚举值保持一致。
 	databaseTypeStrings = [...]string{

@@ -132,7 +132,6 @@ const (
 	ActionRewindCancel
 )
 
-
 var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashNewSession: "/new_session",
 	SlashMode:       "/mode",

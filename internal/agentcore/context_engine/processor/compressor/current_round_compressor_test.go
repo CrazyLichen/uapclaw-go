@@ -1820,3 +1820,52 @@ func TestCurrentRoundCompressor_OnAddMessages_无UserMessage不压缩(t *testing
 		t.Errorf("无 UserMessage 时应透传消息，实际: %d 条", len(result))
 	}
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState / SaveState 测试 ────────────────────────────
+
+// TestCurrentRoundCompressorConfig_SetModelDefaults_均非空 设置默认模型配置
+func TestCurrentRoundCompressorConfig_SetModelDefaults_均非空(t *testing.T) {
+	cfg := validCurrentRoundCompressorConfig()
+	model := &llm_schema.ModelRequestConfig{ModelName: "default-model"}
+	modelClient := &llm_schema.ModelClientConfig{ClientID: "default-client"}
+	cfg.SetModelDefaults(model, modelClient)
+	if cfg.Model != model {
+		t.Errorf("Model 未被设置，期望 ModelName=%q", model.ModelName)
+	}
+	if cfg.ModelClient != modelClient {
+		t.Errorf("ModelClient 未被设置")
+	}
+}
+
+// TestCurrentRoundCompressorConfig_SetModelDefaults_已有Model不覆盖 已有 Model 时不应覆盖
+func TestCurrentRoundCompressorConfig_SetModelDefaults_已有Model不覆盖(t *testing.T) {
+	cfg := validCurrentRoundCompressorConfig()
+	existingModel := &llm_schema.ModelRequestConfig{ModelName: "existing"}
+	cfg.Model = existingModel
+	cfg.SetModelDefaults(&llm_schema.ModelRequestConfig{ModelName: "new"}, nil)
+	if cfg.Model != existingModel {
+		t.Errorf("已有 Model 不应被覆盖，期望 ModelName=%q", existingModel.ModelName)
+	}
+}
+
+// TestCurrentRoundCompressorConfig_SetModelDefaults_传入nil不设置 传入 nil 时不设置
+func TestCurrentRoundCompressorConfig_SetModelDefaults_传入nil不设置(t *testing.T) {
+	cfg := validCurrentRoundCompressorConfig()
+	cfg.SetModelDefaults(nil, nil)
+	if cfg.Model != nil {
+		t.Errorf("传入 nil 时 Model 应保持 nil")
+	}
+}
+
+// TestCurrentRoundCompressorConfig_GetModel 返回模型请求配置
+func TestCurrentRoundCompressorConfig_GetModel(t *testing.T) {
+	cfg := validCurrentRoundCompressorConfig()
+	if cfg.GetModel() != nil {
+		t.Errorf("未设置 Model 时 GetModel 应返回 nil")
+	}
+	model := &llm_schema.ModelRequestConfig{ModelName: "test"}
+	cfg.Model = model
+	if cfg.GetModel() != model {
+		t.Errorf("GetModel 应返回已设置的 Model")
+	}
+}

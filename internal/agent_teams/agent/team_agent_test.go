@@ -636,3 +636,20 @@ func TestTeamAgent_属性代理_配置后(t *testing.T) {
 	assert.Equal(t, "my_team", a.TeamName())
 	assert.True(t, a.IsAgentReady())
 }
+
+// TestTeamAgent_SetTeamBackend 测试 SetTeamBackend 方法
+func TestTeamAgent_SetTeamBackend(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+	// configurator 为 nil 时不 panic
+	a.SetTeamBackend(nil)
+}
+
+// TestTaskFailedError_Error 测试 taskFailedError.Error 方法
+func TestTaskFailedError_Error(t *testing.T) {
+	e := &taskFailedError{code: 1, text: "task failed"}
+	assert.Equal(t, "[1] task failed", e.Error())
+
+	e2 := &taskFailedError{code: 0, text: "simple error"}
+	assert.Equal(t, "simple error", e2.Error())
+}

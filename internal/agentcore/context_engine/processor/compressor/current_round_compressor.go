@@ -471,7 +471,6 @@ Output plain text only.
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。

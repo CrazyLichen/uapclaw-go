@@ -30,7 +30,6 @@ var atFilePattern = regexp2.MustCompile(
 	0,
 )
 
-
 var agentMentionQuotedPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@"(?<name>[\w:.@-]+)\s+\(agent\)"`, 0)
 
 // agentMentionPlainPattern 匹配 @agent-<type> 格式

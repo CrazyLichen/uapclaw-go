@@ -365,3 +365,36 @@ func TestToolResultBudgetProcessor_TriggerGetContextWindow(t *testing.T) {
 		t.Error("TriggerGetContextWindow 应始终返回 false")
 	}
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState 测试 ────────────────────────────
+
+// TestToolResultBudgetProcessorConfig_SetModelDefaults 空实现，调用不 panic 即可
+func TestToolResultBudgetProcessorConfig_SetModelDefaults(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{}
+	_ = cfg.Validate()
+	// ToolResultBudgetProcessorConfig 无 Model/ModelClient 字段，空实现
+	cfg.SetModelDefaults(nil, nil)
+}
+
+// TestToolResultBudgetProcessorConfig_GetModel 始终返回 nil
+func TestToolResultBudgetProcessorConfig_GetModel(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{}
+	_ = cfg.Validate()
+	if cfg.GetModel() != nil {
+		t.Errorf("ToolResultBudgetProcessorConfig.GetModel() 应始终返回 nil")
+	}
+}
+
+// TestToolResultBudgetProcessor_LoadState 从 map 恢复状态（空操作，不 panic 即可）
+func TestToolResultBudgetProcessor_LoadState(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{
+		TokensThreshold:       50000,
+		LargeMessageThreshold: 5000,
+		TrimSize:              1000,
+	}
+	p, err := NewToolResultBudgetProcessor(cfg)
+	if err != nil {
+		t.Fatalf("创建处理器失败: %v", err)
+	}
+	p.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
+}

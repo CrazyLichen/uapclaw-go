@@ -233,16 +233,10 @@ type DeepAdapter struct {
 	paidSearchTool tool.Tool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // persistentCheckpointerReady 持久化检查点器是否已就绪。
 // 对应 Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_READY)
-
-
 var persistentCheckpointerReady bool
 
 // persistentCheckpointerLock 持久化检查点器初始化锁（double-check locking）。

@@ -411,3 +411,27 @@ func TestAllocation_ToTeamModelConfig_无Metadata(t *testing.T) {
 		t.Errorf("ClientProvider = %q, want %q", cfg.ModelClientConfig.ClientProvider, "OpenAI")
 	}
 }
+
+// TestRouterAllocator_LoadStateDict 验证 RouterAllocator.LoadStateDict 空操作不 panic
+func TestRouterAllocator_LoadStateDict(t *testing.T) {
+	pool := []ModelPoolEntry{*NewModelPoolEntry("m", "key", "http://x", "OpenAI")}
+	alloc, _ := NewRouterAllocator(pool)
+	// 应不 panic
+	alloc.LoadStateDict(map[string]any{"pool_digest": "abc"})
+}
+
+// TestMarshalForSignature 测试序列化辅助函数
+func TestMarshalForSignature(t *testing.T) {
+	result := marshalForSignature(map[string]string{"key": "value"})
+	if result != `{"key":"value"}` {
+		t.Errorf("marshalForSignature = %q, want {\"key\":\"value\"}", result)
+	}
+}
+
+// TestMarshalForSignature_空map 测试空 map
+func TestMarshalForSignature_空map(t *testing.T) {
+	result := marshalForSignature(map[string]string{})
+	if result != `{}` {
+		t.Errorf("marshalForSignature = %q, want {}", result)
+	}
+}

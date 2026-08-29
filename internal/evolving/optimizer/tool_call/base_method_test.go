@@ -199,11 +199,87 @@ type fakeToolOpOperator struct {
 	id string
 }
 
-func (o *fakeToolOpOperator) OperatorID() string                           { return o.id }
-func (o *fakeToolOpOperator) GetTunables() map[string]operator.TunableSpec { return nil }
-func (o *fakeToolOpOperator) GetState() map[string]any                     { return nil }
-func (o *fakeToolOpOperator) SetParameter(_ string, _ any)                 {}
+func (o *fakeToolOpOperator) OperatorID() string { return o.id }
+func (o *fakeToolOpOperator) GetTunables() map[string]operator.TunableSpec {
+	return map[string]operator.TunableSpec{
+		"tool_description": {Name: "tool_description"},
+	}
+}
+func (o *fakeToolOpOperator) GetState() map[string]any     { return nil }
+func (o *fakeToolOpOperator) SetParameter(_ string, _ any) {}
 func (o *fakeToolOpOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return schema.ApplyResult{OperatorID: o.id, Target: target, Applied: true}
 }
 func (o *fakeToolOpOperator) LoadState(_ map[string]any) {}
+
+// ──────────────────────────── ToolOptimizerBase 测试 ────────────────────────────
+
+// TestWithConfigEg 设置 Example Stage 配置
+func TestWithConfigEg(t *testing.T) {
+	cfg := map[string]any{"num_init_loop": 3}
+	b := NewToolOptimizerBase(nil, WithConfigEg(cfg))
+	if b.configEg["num_init_loop"] != 3 {
+		t.Errorf("WithConfigEg 未生效，configEg = %v", b.configEg)
+	}
+}
+
+// TestWithConfigDesc 设置 Description Stage 配置
+func TestWithConfigDesc(t *testing.T) {
+	cfg := map[string]any{"num_examples_for_desc": 5}
+	b := NewToolOptimizerBase(nil, WithConfigDesc(cfg))
+	if b.configDesc["num_examples_for_desc"] != 5 {
+		t.Errorf("WithConfigDesc 未生效，configDesc = %v", b.configDesc)
+	}
+}
+
+// TestWithMaxTurns 设置最大迭代轮次
+func TestWithMaxTurns(t *testing.T) {
+	b := NewToolOptimizerBase(nil, WithMaxTurns(3))
+	if b.maxTurns != 3 {
+		t.Errorf("WithMaxTurns 未生效，maxTurns = %d, 期望 3", b.maxTurns)
+	}
+}
+
+// TestWithLLMAPIKey 设置 LLM API 密钥
+func TestWithLLMAPIKey(t *testing.T) {
+	b := NewToolOptimizerBase(nil, WithLLMAPIKey("test-key"))
+	if b.llmAPIKey != "test-key" {
+		t.Errorf("WithLLMAPIKey 未生效，llmAPIKey = %q", b.llmAPIKey)
+	}
+}
+
+// TestWithPathSaveDir 设置结果保存目录
+func TestWithPathSaveDir(t *testing.T) {
+	b := NewToolOptimizerBase(nil, WithPathSaveDir("/tmp/test_results"))
+	if b.pathSaveDir != "/tmp/test_results" {
+		t.Errorf("WithPathSaveDir 未生效，pathSaveDir = %q", b.pathSaveDir)
+	}
+}
+
+// TestWithToolName 设置工具名称
+func TestWithToolName(t *testing.T) {
+	b := NewToolOptimizerBase(nil, WithToolName("grep"))
+	if b.toolName != "grep" {
+		t.Errorf("WithToolName 未生效，toolName = %q", b.toolName)
+	}
+}
+
+// TestToolOptimizerBase_Bind 绑定目标
+func TestToolOptimizerBase_Bind(t *testing.T) {
+	b := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	n := b.Bind(ops, []string{"tool_description"}, map[string]any{})
+	if n != 1 {
+		t.Errorf("Bind 返回 %d, 期望 1", n)
+	}
+}
+
+// TestToolOptimizerBase_Bind_空目标使用默认 绑定空目标使用默认
+func TestToolOptimizerBase_Bind_空目标使用默认(t *testing.T) {
+	b := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	n := b.Bind(ops, nil, map[string]any{})
+	if n != 1 {
+		t.Errorf("Bind(空目标) 返回 %d, 期望 1（使用默认目标）", n)
+	}
+}

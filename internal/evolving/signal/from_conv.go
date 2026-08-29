@@ -95,7 +95,6 @@ var failureKeywords = regexp.MustCompile(
 		`|npm err!`,
 )
 
-
 var errorEqualsNonePattern = regexp.MustCompile(`(?i)error\s*=\s*None`)
 
 // correctionPatterns 用户纠正模式列表（中英文）。

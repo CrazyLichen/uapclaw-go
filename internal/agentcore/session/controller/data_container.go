@@ -84,7 +84,6 @@ const (
 	DefaultDataContainerType = "agent"
 )
 
-
 var (
 	factoryOnce     sync.Once
 	factoryInstance *DataContainerFactory

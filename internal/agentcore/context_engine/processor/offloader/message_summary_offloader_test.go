@@ -1320,3 +1320,83 @@ func TestMessageSummaryOffloader_buildStepContextText_补充(t *testing.T) {
 		assert.Contains(t, text, "actual content")
 	})
 }
+
+// ──────────────────────────── SetModelDefaults / GetModel / LoadState 测试 ────────────────────────────
+
+// TestMessageSummaryOffloaderConfig_SetModelDefaults_均非空 设置默认模型配置
+func TestMessageSummaryOffloaderConfig_SetModelDefaults_均非空(t *testing.T) {
+	cfg := &MessageSummaryOffloaderConfig{
+		TokensThreshold:               20000,
+		LargeMessageThreshold:         1000,
+		StepSummaryMaxContextMessages: 5,
+	}
+	require.NoError(t, cfg.Validate())
+	model := &llm_schema.ModelRequestConfig{ModelName: "default-model"}
+	modelClient := &llm_schema.ModelClientConfig{ClientID: "default-client"}
+	cfg.SetModelDefaults(model, modelClient)
+	if cfg.Model != model {
+		t.Errorf("Model 未被设置，期望 ModelName=%q", model.ModelName)
+	}
+	if cfg.ModelClient != modelClient {
+		t.Errorf("ModelClient 未被设置")
+	}
+}
+
+// TestMessageSummaryOffloaderConfig_SetModelDefaults_已有Model不覆盖 已有 Model 时不应覆盖
+func TestMessageSummaryOffloaderConfig_SetModelDefaults_已有Model不覆盖(t *testing.T) {
+	cfg := &MessageSummaryOffloaderConfig{
+		TokensThreshold:               20000,
+		LargeMessageThreshold:         1000,
+		StepSummaryMaxContextMessages: 5,
+		Model:                         &llm_schema.ModelRequestConfig{ModelName: "existing"},
+	}
+	require.NoError(t, cfg.Validate())
+	cfg.SetModelDefaults(&llm_schema.ModelRequestConfig{ModelName: "new"}, nil)
+	if cfg.Model.ModelName != "existing" {
+		t.Errorf("已有 Model 不应被覆盖，期望 ModelName=existing")
+	}
+}
+
+// TestMessageSummaryOffloaderConfig_SetModelDefaults_传入nil不设置 传入 nil 时不设置
+func TestMessageSummaryOffloaderConfig_SetModelDefaults_传入nil不设置(t *testing.T) {
+	cfg := &MessageSummaryOffloaderConfig{
+		TokensThreshold:               20000,
+		LargeMessageThreshold:         1000,
+		StepSummaryMaxContextMessages: 5,
+	}
+	require.NoError(t, cfg.Validate())
+	cfg.SetModelDefaults(nil, nil)
+	if cfg.Model != nil {
+		t.Errorf("传入 nil 时 Model 应保持 nil")
+	}
+}
+
+// TestMessageSummaryOffloaderConfig_GetModel 返回模型请求配置
+func TestMessageSummaryOffloaderConfig_GetModel(t *testing.T) {
+	cfg := &MessageSummaryOffloaderConfig{
+		TokensThreshold:               20000,
+		LargeMessageThreshold:         1000,
+		StepSummaryMaxContextMessages: 5,
+	}
+	require.NoError(t, cfg.Validate())
+	if cfg.GetModel() != nil {
+		t.Errorf("未设置 Model 时 GetModel 应返回 nil")
+	}
+	model := &llm_schema.ModelRequestConfig{ModelName: "test"}
+	cfg.Model = model
+	if cfg.GetModel() != model {
+		t.Errorf("GetModel 应返回已设置的 Model")
+	}
+}
+
+// TestMessageSummaryOffloader_LoadState 从 map 恢复状态（空操作，不 panic 即可）
+func TestMessageSummaryOffloader_LoadState(t *testing.T) {
+	cfg := &MessageSummaryOffloaderConfig{
+		TokensThreshold:               20000,
+		LargeMessageThreshold:         1000,
+		StepSummaryMaxContextMessages: 5,
+	}
+	require.NoError(t, cfg.Validate())
+	mso := msoNewForTest(cfg)
+	mso.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
+}

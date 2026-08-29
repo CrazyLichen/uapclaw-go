@@ -20,7 +20,6 @@ var prereleasePattern = regexp.MustCompile(
 	`\d[.\-_]?(?:alpha|beta|rc|dev|pre|a|b)(?:\.?\d+)?(?:\b|$)`,
 )
 
-
 var baseVersionPattern = regexp.MustCompile(
 	`^(\d+(?:\.\d+)*)` +
 		`(?:[.\-_]?(?:alpha|beta|rc|dev|pre|a|b)(?:[.\-_]?\d+)?)*$`,

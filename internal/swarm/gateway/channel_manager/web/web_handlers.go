@@ -101,8 +101,6 @@ type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, con
 //   - error：处理错误
 type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -128,12 +126,9 @@ const (
 
 const logComponent = logger.ComponentGateway
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // maxTeamsConfigPanel 配置面板最大团队数。
 // 对齐 Python _flatten_modes_team_for_config_panel 中 range(10)。
 const maxTeamsConfigPanel = 10
-
 
 // configEnvMap 前端配置键名 → 环境变量名映射。
 //

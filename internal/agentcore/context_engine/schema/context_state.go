@@ -141,7 +141,6 @@ const (
 // 对应 Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
 const ContextCompressionStateType = "context.compression_state"
 
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
