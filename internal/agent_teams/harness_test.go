@@ -157,7 +157,7 @@ func TestTeamHarness_Abort(t *testing.T) {
 // TestTeamHarness_RunStreaming 测试 RunStreaming 占位返回关闭的通道
 func TestTeamHarness_RunStreaming(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	ch, err := h.RunStreaming(nil, nil, "", nil)
+	ch, err := h.RunStreaming(context.TODO(), nil, "", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	// 通道应已关闭
@@ -168,13 +168,13 @@ func TestTeamHarness_RunStreaming(t *testing.T) {
 // TestTeamHarness_RegisterRail 测试 RegisterRail 占位返回 nil
 func TestTeamHarness_RegisterRail(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.RegisterRail(nil, nil))
+	assert.NoError(t, h.RegisterRail(context.TODO(), nil))
 }
 
 // TestTeamHarness_UnregisterRail 测试 UnregisterRail 占位返回 nil
 func TestTeamHarness_UnregisterRail(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.UnregisterRail(nil, nil))
+	assert.NoError(t, h.UnregisterRail(context.TODO(), nil))
 }
 
 // TestTeamHarness_RegisterMemberTools_Nil 测试 nil memoryManager 不 panic
@@ -188,5 +188,5 @@ func TestTeamHarness_RegisterMemberTools_Nil(t *testing.T) {
 // TestTeamHarness_InjectMemberMemory_Nil 测试 nil memoryManager 返回 nil
 func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.InjectMemberMemory(nil, nil, ""))
+	assert.NoError(t, h.InjectMemberMemory(context.TODO(), nil, ""))
 }

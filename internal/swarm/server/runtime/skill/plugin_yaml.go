@@ -212,7 +212,7 @@ func buildTeamskillsPublishZipFromPath(pathRaw, fileRaw, pluginVersion string) (
 		if err != nil {
 			return nil, "", fmt.Errorf("创建临时目录失败: %w", err)
 		}
-		defer safeRmtree(tmpDir)
+		defer func() { _ = safeRmtree(tmpDir) }()
 
 		if err := extractZipFile(srcZip, tmpDir); err != nil {
 			return nil, "", fmt.Errorf("解压 ZIP 失败: %w", err)
