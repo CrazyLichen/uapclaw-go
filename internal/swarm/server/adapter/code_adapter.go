@@ -29,7 +29,7 @@ import (
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
-	serverrails "github.com/uapclaw/uapclaw-go/internal/swarm/server/rails"
+	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -990,7 +990,7 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 				Msg("StructuredAskUserRail 创建失败")
 		}
 	}()
-	rail := serverrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
+	rail := commonrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
 	logger.Info(logComponent).Msg("StructuredAskUserRail 创建成功")
 	return rail
 }
