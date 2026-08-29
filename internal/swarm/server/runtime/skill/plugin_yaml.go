@@ -156,7 +156,7 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 	}
 
 	// 遍历 skillDir 下所有文件，写入 {skill_name}/{skill_name}/* 结构
-	filepath.WalkDir(skillDir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(skillDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -173,10 +173,12 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 		if err != nil {
 			return nil
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		_, _ = io.Copy(w, f)
 		return nil
-	})
+	}); err != nil {
+		return nil, "", fmt.Errorf("遍历 skillDir 失败: %w", err)
+	}
 
 	if err := zipWriter.Close(); err != nil {
 		return nil, "", fmt.Errorf("关闭 ZIP 失败: %w", err)
@@ -235,7 +237,7 @@ func extractZipFile(zipPath, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("打开 ZIP 失败: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	for _, f := range r.File {
 		path := filepath.Join(destDir, f.Name)
@@ -246,17 +248,21 @@ func extractZipFile(zipPath, destDir string) error {
 		}
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(path, 0o755)
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				return fmt.Errorf("创建目录失败: %w", err)
+			}
 			continue
 		}
 
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("创建父目录失败: %w", err)
+		}
 		rc, err := f.Open()
 		if err != nil {
 			continue
 		}
 		data, _ := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		_ = os.WriteFile(path, data, 0o644)
 	}
 	return nil

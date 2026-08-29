@@ -1,6 +1,7 @@
 package agent_teams_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -138,19 +139,19 @@ func TestTeamHarness_PersistDBState(t *testing.T) {
 // TestTeamHarness_Steer 测试 Steer 占位返回 nil
 func TestTeamHarness_Steer(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.Steer(nil, "转向"))
+	assert.NoError(t, h.Steer(context.TODO(), "转向"))
 }
 
 // TestTeamHarness_FollowUp 测试 FollowUp 占位返回 nil
 func TestTeamHarness_FollowUp(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.FollowUp(nil, "追加"))
+	assert.NoError(t, h.FollowUp(context.TODO(), "追加"))
 }
 
 // TestTeamHarness_Abort 测试 Abort 占位返回 nil
 func TestTeamHarness_Abort(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.Abort(nil))
+	assert.NoError(t, h.Abort(context.TODO()))
 }
 
 // TestTeamHarness_RunStreaming 测试 RunStreaming 占位返回关闭的通道
