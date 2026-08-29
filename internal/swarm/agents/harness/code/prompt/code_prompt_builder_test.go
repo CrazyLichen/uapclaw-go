@@ -25,7 +25,7 @@ func TestBuildCodeSystemPrompt(t *testing.T) {
 
 	// 验证包含所有 8 个 section 的关键内容
 	checks := []string{
-		"JiuwenSwarm",                 // code_intro
+		"UapClawSwarm",                // code_intro
 		"# System",                    // code_system
 		"# Doing tasks",               // code_doing_tasks
 		"# Using your tools",          // code_using_your_tools

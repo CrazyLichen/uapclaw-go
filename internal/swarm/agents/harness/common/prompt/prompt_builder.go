@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"os"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -23,7 +24,6 @@ import (
 
 const responsePriority = 60
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
@@ -130,7 +130,12 @@ func readWorkspaceFile(filePath string) string {
 	}
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if os.IsNotExist(err) {
+			// T10.6.1: 添加 Debug 日志（对齐 Python: logger.debug 文件不存在）
+			logger.Debug(logComponent).
+				Str("file_path", filePath).
+				Msg("文件不存在")
+		} else {
 			logger.Error(logComponent).
 				Str("event_type", "read_workspace_file_error").
 				Str("file_path", filePath).
@@ -143,5 +148,7 @@ func readWorkspaceFile(filePath string) string {
 	if content == "" {
 		return ""
 	}
+	// T10.6.2: 添加 TrimSpace（对齐 Python: content.strip()）
+	content = strings.TrimSpace(content)
 	return content
 }

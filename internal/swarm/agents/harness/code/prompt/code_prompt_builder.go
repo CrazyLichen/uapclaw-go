@@ -69,7 +69,7 @@ func BuildCodeSystemPrompt() string {
 // 对齐 Python: _code_intro_prompt() (code_prompt_builder.py L36-57)
 func BuildCodeIntroSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
-	content := "You are JiuwenSwarm, an interactive coding agent. " +
+	content := "You are UapClawSwarm, an interactive coding agent. " +
 		"You help users with software engineering tasks. " +
 		"Use the instructions below and the tools available to you to assist the user.\n" +
 		"\n" +
@@ -282,7 +282,7 @@ func BuildCodeDoingTasksSection() saprompt.PromptSection {
 		"say so explicitly rather than claiming success.\n" +
 		"- If the user asks for help or wants to give feedback " +
 		"inform them of the following:\n" +
-		"  - /help: Get help with using JiuwenSwarm\n" +
+		"  - /help: Get help with using UapClawSwarm\n" +
 		"  - To give feedback, users should report the issue " +
 		"at the project's issue tracker."
 
