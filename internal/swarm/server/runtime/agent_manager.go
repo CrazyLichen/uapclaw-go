@@ -273,11 +273,12 @@ func (am *AgentManager) GetClientCapabilities(channelID string) map[string]any {
 // 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 对齐 Python L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
+	// 对齐 Python L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, subMode := resolveModeFromRequest(request)
+	mode, _ := resolveModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
-	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, subMode)
+	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
 	if err != nil {
 		// 对齐 Python L454-456: logger.error + raise
 		logger.Error(amLogComponent).
@@ -296,11 +297,12 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 // 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// 对齐 Python L468-487: 同 process_message 但流式
+	// 对齐 Python L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, subMode := resolveModeFromRequest(request)
+	mode, _ := resolveModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
-	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, subMode)
+	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
 	if err != nil {
 		logger.Error(amLogComponent).
 			Err(err).
@@ -317,11 +319,14 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 // 对齐 Python AgentManager.reload_agents_config (agent_manager.py L308-340)。
 func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]string) error {
 	// 对齐 Python L310-316: 1. 保存最新 env overrides + 注入 os.environ
+	// 对齐 Python L310: self._latest_env_overrides = dict(env) if isinstance(env, dict) else {}
+	am.mu.Lock()
 	if envOverrides != nil {
-		am.mu.Lock()
 		am.latestEnvOverrides = copyStringMap(envOverrides)
-		am.mu.Unlock()
+	} else {
+		am.latestEnvOverrides = make(map[string]string)
 	}
+	am.mu.Unlock()
 
 	for key, val := range envOverrides {
 		if val == "" {
@@ -407,9 +412,13 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		}
 	}
 
-	// 对齐 Python L380-397: 2. cleanup + 删除
+	// 对齐 Python L380-397: 2. cleanup + 删除（失败时 warn 日志，对齐 Python try/except）
 	for _, entry := range channelAgents {
-		_ = entry.agent.Cleanup()
+		if err := entry.agent.Cleanup(); err != nil {
+			logger.Warn(amLogComponent).Err(err).
+				Str("cache_key", entry.cacheKey).
+				Msg("[AgentManager] recreate cleanup 失败")
+		}
 	}
 	delete(am.agents, channelKey)
 	delete(am.agentCreateParams, channelKey)
@@ -451,9 +460,9 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 }
 
 // CancelAllInflightWork 取消所有在途任务。
-// 对齐 Python AgentManager.cancel_all_inflight_work。
-func (am *AgentManager) CancelAllInflightWork(ctx context.Context) error {
-	// 对齐 Python L186-191: 遍历所有 agents 调用 cancel_inflight_work
+// 对齐 Python AgentManager.cancel_all_inflight_work(reason)。
+func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string) error {
+	// 对齐 Python L186-191: 遍历所有 agents 调用 cancel_inflight_work(reason)
 	am.mu.RLock()
 	var agentsCopy []*UapClaw
 	for _, chAgents := range am.agents {
@@ -463,8 +472,12 @@ func (am *AgentManager) CancelAllInflightWork(ctx context.Context) error {
 	}
 	am.mu.RUnlock()
 
+	// 对齐 Python: try/except + logger.exception
 	for _, agent := range agentsCopy {
-		_ = agent.CancelInflightWork()
+		if err := agent.CancelInflightWork(reason); err != nil {
+			logger.Warn(amLogComponent).Err(err).
+				Msg("[AgentManager] cancel_inflight_work 失败")
+		}
 	}
 	return nil
 }
@@ -478,7 +491,11 @@ func (am *AgentManager) Cleanup() error {
 
 	for chKey, chAgents := range am.agents {
 		for _, entry := range chAgents {
-			_ = entry.agent.Cleanup()
+			// 对齐 Python L493-497: cleanup 失败时 warn 日志
+			if err := entry.agent.Cleanup(); err != nil {
+				logger.Warn(amLogComponent).Err(err).
+					Msg("[AgentManager] Agent cleanup 失败")
+			}
 		}
 		delete(am.agents, chKey)
 	}

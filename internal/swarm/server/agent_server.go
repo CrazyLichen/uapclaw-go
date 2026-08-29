@@ -409,12 +409,13 @@ func (s *AgentServer) startTeammateBootstrapDaemon(ctx context.Context) {
 }
 
 // cancelAllInflightWork 取消所有进行中的任务。
-// 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work()
+// 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work(reason)
 func (s *AgentServer) cancelAllInflightWork() {
 	if s.agentManager == nil {
 		return
 	}
-	_ = s.agentManager.CancelAllInflightWork(context.Background())
+	// 对齐 Python agent_ws_server.py L726-727: reason="[gateway ws closed {remote}] "
+	_ = s.agentManager.CancelAllInflightWork(context.Background(), "[gateway ws disconnect] ")
 }
 
 // stopScheduler 停止调度器。

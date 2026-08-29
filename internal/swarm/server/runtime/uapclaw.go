@@ -670,9 +670,9 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 
 // CancelInflightWork 取消在途任务。
 //
-// 对齐 Python: JiuWenClaw.cancel_inflight_work()
-func (uc *UapClaw) CancelInflightWork() error {
-	_ = uc.sessionManager.CancelAllSessionTasks(context.Background(), "[gateway disconnect]")
+// 对齐 Python: JiuWenClaw.cancel_inflight_work(log_prefix)
+func (uc *UapClaw) CancelInflightWork(reason string) error {
+	_ = uc.sessionManager.CancelAllSessionTasks(context.Background(), reason)
 	uc.adapterMu.Lock()
 	a := uc.adapter
 	uc.adapterMu.Unlock()

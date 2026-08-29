@@ -231,9 +231,15 @@ func TestAgentManager_ProcessMessage_GetAgent委托(t *testing.T) {
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)
 
-	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", subMode)
+	// 对齐 Python: sub_mode 不参与实例查找
+	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", "")
 	require.NoError(t, err)
 	assert.NotNil(t, agent)
+
+	// 不同 sub_mode 应命中同一个实例
+	agent2, err := am.GetAgent(context.Background(), req.ChannelID, "agent", "", "")
+	require.NoError(t, err)
+	assert.Same(t, agent, agent2)
 }
 
 // --- ProcessMessageStream ---
@@ -251,9 +257,15 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 	assert.Equal(t, "code", mode)
 	assert.Equal(t, "normal", subMode)
 
-	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", subMode)
+	// 对齐 Python: sub_mode 不参与实例查找
+	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", "")
 	require.NoError(t, err)
 	assert.NotNil(t, agent)
+
+	// 不同 sub_mode 应命中同一个实例
+	agent2, err := am.GetAgent(context.Background(), req.ChannelID, "code", "", "")
+	require.NoError(t, err)
+	assert.Same(t, agent, agent2)
 }
 
 // --- ReloadAgentsConfig ---
@@ -332,6 +344,34 @@ func TestReloadAgentsConfig_保存latestEnvOverrides(t *testing.T) {
 	_ = os.Unsetenv("TEST_KEY")
 }
 
+func TestReloadAgentsConfig_nil值时清空latestEnvOverrides(t *testing.T) {
+	am := NewAgentManager()
+
+	// 先设值
+	envOverrides := map[string]string{
+		"TEST_KEY_A": "value_a",
+	}
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	require.NoError(t, err)
+
+	am.mu.RLock()
+	val, ok := am.latestEnvOverrides["TEST_KEY_A"]
+	am.mu.RUnlock()
+	assert.True(t, ok)
+	assert.Equal(t, "value_a", val)
+
+	// 对齐 Python: env 为 nil 时清空 latestEnvOverrides
+	err = am.ReloadAgentsConfig(context.Background(), nil, nil)
+	require.NoError(t, err)
+
+	am.mu.RLock()
+	envMap := am.latestEnvOverrides
+	am.mu.RUnlock()
+	assert.Empty(t, envMap)
+
+	_ = os.Unsetenv("TEST_KEY_A")
+}
+
 // --- RecreateAgent ---
 
 func TestAgentManager_RecreateAgent(t *testing.T) {
@@ -384,7 +424,7 @@ func TestAgentManager_RecreateAgent_immediateFalse(t *testing.T) {
 
 func TestAgentManager_CancelAllInflightWork(t *testing.T) {
 	am := NewAgentManager()
-	err := am.CancelAllInflightWork(context.Background())
+	err := am.CancelAllInflightWork(context.Background(), "[gateway ws disconnect] ")
 	assert.NoError(t, err)
 }
 
@@ -393,7 +433,7 @@ func TestAgentManager_CancelAllInflightWork_有agent时(t *testing.T) {
 	_, err := am.GetAgent(context.Background(), "web", "agent", "", "")
 	require.NoError(t, err)
 
-	err = am.CancelAllInflightWork(context.Background())
+	err = am.CancelAllInflightWork(context.Background(), "[gateway ws disconnect] ")
 	assert.NoError(t, err)
 }
 

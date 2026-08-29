@@ -225,7 +225,7 @@ func TestUapClaw_CancelInflightWork(t *testing.T) {
 	uc := NewUapClaw()
 	fa := newFakeAdapter()
 	uc.adapter = fa
-	err := uc.CancelInflightWork()
+	err := uc.CancelInflightWork("[gateway ws disconnect] ")
 	require.NoError(t, err)
 }
 
