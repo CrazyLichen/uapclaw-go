@@ -45,7 +45,8 @@ func NewToolDescriptionReviewer(evalModelID string, llmAPIKey string, model *llm
 }
 
 // Format 将文本描述转换为目标 JSON 结构。
-// 使用中文版 prompt，一比一复刻 Python 原文。
+// 定义 4 个 prompt 变体（promptOriginal/prompt1/prompt2/中文prompt），一比一复刻 Python 原文。
+// 最终只使用中文 prompt 传给 LLM，与 Python 行为一致。
 //
 // 对齐 Python: ToolDescriptionReviewer.format(json_schema, description, example)
 func (r *ToolDescriptionReviewer) Format(
@@ -54,8 +55,72 @@ func (r *ToolDescriptionReviewer) Format(
 	description string,
 	example string,
 ) (map[string]any, error) {
-	// 对齐 Python: prompt（中文版）— 一比一复刻
+	// 对齐 Python: prompt_original — 一比一复刻，定义后未使用
 	schemaJSON, _ := json.MarshalIndent(jsonSchema, "", "  ")
+	promptOriginal := fmt.Sprintf(`You will receive an input that contains a textual description.
+The input may be free-form text, bullet points, or JSON in any structure.
+Your task is to convert that content into MY target JSON format, while keeping the information and meaning exactly the same.
+
+Do not add new information, remove information, or reinterpret ambiguous content.
+Only reorganize and reformat the content according to the schema provided below.
+Target JSON format:
+%s.
+
+Output only valid JSON, following the exact structure of the target schema. Do not include explanations, comments, or additional text outside the JSON.
+
+Now convert my following input to desired JSON format:
+Input to be converted:
+%s
+`, string(schemaJSON), description)
+	_ = promptOriginal // 对齐 Python：定义后未使用
+
+	// 对齐 Python: prompt_1 — 一比一复刻，定义后未使用
+	prompt1 := fmt.Sprintf(`You will receive an input that contains a textual description.
+Your task is to convert it into the target JSON format below.
+
+Rules:
+- Preserve all information and meaning exactly.
+- Do not add, remove, or reinterpret any information.
+- You may rewrite and compress wording to eliminate redundancy.
+- Do not restate information already implied by the schema (e.g. type=number/string, required fields).
+- Enum/value lists must appear only once at the most relevant location; do not repeat them at field level.
+- Use short, content-focused phrases for field descriptions.
+
+Target JSON format:
+%s
+
+Output only valid JSON following the exact structure.
+No explanations or extra text.
+
+Input:
+%s
+`, string(schemaJSON), description)
+	_ = prompt1 // 对齐 Python：定义后未使用
+
+	// 对齐 Python: prompt_2 — 一比一复刻，定义后未使用
+	prompt2 := fmt.Sprintf(`You will receive an input that contains a textual description.
+Your task is to convert it into the target JSON format below.
+
+Rules:
+- Preserve all information and meaning exactly.
+- Do not add, remove, or reinterpret any information.
+- You may rewrite and compress wording to eliminate redundancy.
+- Do not restate information already implied by the schema (e.g. field types, required fields).
+- Do not describe required fields in natural language (e.g. phrases like "each item includes/contains …").
+- Enum/value lists must appear only once at the most relevant location.
+
+Target JSON format:
+%s
+
+Output only valid JSON following the exact structure.
+No explanations or extra text.
+
+Input:
+%s
+`, string(schemaJSON), description)
+	_ = prompt2 // 对齐 Python：定义后未使用
+
+	// 对齐 Python: prompt（中文版）— 实际使用的版本
 	prompt := fmt.Sprintf(`将下面输入转换为目标 JSON 结构。必须满足：
 
 - 输出只允许是有效 JSON，且严格匹配目标结构的键路径与层级（不多不少）。
