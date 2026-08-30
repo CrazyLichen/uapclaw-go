@@ -62,14 +62,11 @@ func NewFragmentMemoryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byt
 //  1. 分离 ADD/UPDATE/DELETE 操作
 //  2. 搜索相关旧记忆（top_k=5, score>0.75）
 //  3. 无旧记忆且仅 1 条新记忆 → 直接写入，跳过冲突检查
-//  4. MemUpdateChecker 冲突检查（⤵️ 回填: 7.8，当前 stub 直接返回全部 ADD）
+//  4. MemUpdateChecker 冲突检查（LLM 驱动）
 //  5. 执行删除 + 添加
 //
 // 对齐 Python: FragmentMemoryManager.add_memories
-// llm 可选参数用于 LLM 驱动冲突检查（对齐 Python: add_memories(llm=None)），
-// ⤵️ 回填: 7.8 — LLM 驱动冲突检查实现时需补：
-//  1. MemUpdateChecker.Check 完整逻辑（当前 stub 直接返回全部 ADD）
-//  2. processConflictInfo 方法（将 LLM 返回的数字 ID 映射回实际记忆 ID）
+// llm 可选参数用于 LLM 驱动冲突检查（对齐 Python: add_memories(llm=None)）
 func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
@@ -147,17 +144,15 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 	}
 
-	// 步骤 3：MemUpdateChecker 冲突检查 ← ⤵️ 回填: 7.8
+	// 步骤 3：MemUpdateChecker 冲突检查
 	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
-	// ⤵️ 回填: 7.8 — Python _process_conflict_info 将 LLM 返回的数字 id 映射回 mem_id，
-	// 当前 stub 直接返回 ADD 无冲突，不需要映射；7.8 实现 LLM 驱动检查时需补充此方法
 	checker := &update.MemUpdateChecker{}
 	// 提取 llmModel 参数（对齐 Python: base_chat_model=llm）
 	var model *llm.Model
 	if len(llmModel) > 0 {
 		model = llmModel[0]
 	}
-	actionItems, err := checker.Check(newMemContent, oldMemories, update.WithModel(model))
+	actionItems, err := checker.Check(ctx, newMemContent, oldMemories, update.WithModel(model))
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 	}
