@@ -448,11 +448,11 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.3 | ✅ | CodingMemoryToolContext | 编程记忆工具上下文 | `openjiuwen/core/memory/lite/coding_memory_tool_context.py` |
 | 7.4 | ✅ | MemoryConfig | 记忆配置 | `openjiuwen/core/memory/lite/config.py` |
 | 7.5 | ✅ | Frontmatter 解析 | YAML frontmatter 读写 | `openjiuwen/core/memory/lite/frontmatter.py` |
-| 7.6 | ✅ | FragmentMemoryManager | 片段记忆管理（含冲突检查 stub，⤵️ 回填: 7.8） | `openjiuwen/core/memory/manage/` |
+| 7.6 | ✅ | FragmentMemoryManager | 片段记忆管理（含冲突检查回填 ✅） | `openjiuwen/core/memory/manage/` |
 | 7.7 | ✅ | SummaryManager / VariableManager | ✅ SummaryManager + ✅ VariableManager（独立实现，不嵌入 memoryManagerBase）+ ✅ KvPrefixRegistry | `openjiuwen/core/memory/manage/` |
-| 7.8 | ☐ | WriteManager / SearchManager / MemUpdateChecker | 写入与搜索管理（含冲突检查回填） | `openjiuwen/core/memory/manage/update/` · `search/` |
+| 7.8 | ✅ | WriteManager / SearchManager / MemUpdateChecker | ✅ MemUpdateChecker LLM 驱动冲突检查 + ✅ PromptApplier（运行时读文件+缓存） + ✅ WriteManager 写入路由器 + ✅ SearchManager 搜索路由器 + ✅ FragmentMemoryManager 冲突检查回填 + ✅ lite runChecker 回填 | `openjiuwen/core/memory/manage/update/` · `search/` · `index/write_manager.py` |
 | 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit | `openjiuwen/core/memory/manage/mem_model/` |
-| 7.10 | ☐ | Memory Index | 记忆索引 | `openjiuwen/core/memory/manage/index/` |
+| 7.10 | ✅ | Memory Index | ✅ BaseMemoryIndex 接口 + SimpleMemoryIndex 实现 + BaseMemoryManager 接口 + FragmentMemoryManager + SummaryManager + VariableManager + WriteManager（实际已在 7.6/7.7/7.8 中完成） | `openjiuwen/core/memory/manage/index/` · `openjiuwen/core/foundation/store/` |
 | 7.11 | ☐ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
 | 7.12 | ☐ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
 | 7.13 | ☐ | MemoryProvider 协议 | 外部 Memory Provider 接口 | `openjiuwen/core/memory/external/provider.py` |
