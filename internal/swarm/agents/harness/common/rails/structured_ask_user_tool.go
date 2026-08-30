@@ -3,8 +3,8 @@ package rails
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"math/big"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -200,8 +200,10 @@ func getMultiSelectDesc(language string) string {
 }
 
 // generateToolID 生成唯一工具 ID。
-// 对齐 Python: uuid.uuid4().hex
+//
+// 对齐 Python: uuid.uuid4().hex（128 位随机，32 字符 hex）
 func generateToolID() string {
-	n, _ := rand.Int(rand.Reader, big.NewInt(0xFFFFFFFF))
-	return fmt.Sprintf("%08x", n)
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
