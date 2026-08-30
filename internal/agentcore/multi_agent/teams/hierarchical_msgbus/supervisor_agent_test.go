@@ -141,7 +141,7 @@ func TestCreate(t *testing.T) {
 		agentschema.WithAgentID("supervisor_id"),
 	)
 
-	card, provider := Create(
+	card, provider := NewSupervisorAgentCard(
 		[]*agentschema.AgentCard{subCard1, subCard2},
 		nil, // modelClientConfig
 		nil, // modelRequestConfig
@@ -212,7 +212,7 @@ func TestCreate_带模型配置(t *testing.T) {
 		ModelName: "gpt-4",
 	}
 
-	card, provider := Create(
+	card, provider := NewSupervisorAgentCard(
 		[]*agentschema.AgentCard{subCard},
 		modelClientConfig,
 		modelRequestConfig,
@@ -246,7 +246,7 @@ func TestCreate_默认迭代数(t *testing.T) {
 		agentschema.WithAgentID("supervisor_id"),
 	)
 
-	card, provider := Create(
+	card, provider := NewSupervisorAgentCard(
 		[]*agentschema.AgentCard{subCard},
 		nil,
 		nil,
@@ -283,7 +283,7 @@ func TestCreate_空AgentsPanic(t *testing.T) {
 		}
 	}()
 
-	Create(nil, nil, nil, supervisorCard, "", 5, 3)
+	NewSupervisorAgentCard(nil, nil, nil, supervisorCard, "", 5, 3)
 }
 
 // TestCreate_NilAgentInListPanic 验证 agents 列表中含 nil 项时 panic。
@@ -300,7 +300,7 @@ func TestCreate_NilAgentInListPanic(t *testing.T) {
 		}
 	}()
 
-	Create([]*agentschema.AgentCard{nil}, nil, nil, supervisorCard, "", 5, 3)
+	NewSupervisorAgentCard([]*agentschema.AgentCard{nil}, nil, nil, supervisorCard, "", 5, 3)
 }
 
 // ──────────────────────────── Configure 测试 ────────────────────────────

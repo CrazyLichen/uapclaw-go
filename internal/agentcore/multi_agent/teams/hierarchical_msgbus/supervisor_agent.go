@@ -80,11 +80,11 @@ func NewSupervisorAgent(
 	return supervisor
 }
 
-// Create 创建预加载子 Agent 卡片的 SupervisorAgent。
+// NewSupervisorAgentCard 创建预加载子 Agent 卡片的 SupervisorAgent。
 // 返回 (AgentCard, AgentProvider) 元组，兼容 HierarchicalTeam.AddAgent()。
 //
 // 对应 Python: SupervisorAgent.create()
-func Create(
+func NewSupervisorAgentCard(
 	agentsList []*agentschema.AgentCard,
 	modelClientConfig *llmschema.ModelClientConfig,
 	modelRequestConfig *llmschema.ModelRequestConfig,
