@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/update"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -203,7 +204,39 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			// 对齐 Python step 7a: 创建模式 — 搜索相似文件
 			conflict = ConflictResult{}
 			similarFiles := searchSimilar(toolCtx, body, basename, 5, 0.75)
-			if len(similarFiles) > 0 {
+
+			// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
+			actions := runChecker(basename, body, similarFiles)
+
+			// REDUNDANT: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
+			if len(actions) > 0 && !containsActionForID(actions, basename) {
+				return (&WriteResult{
+					Success: true,
+					Path:    resolved,
+					Mode:    WriteModeSkip,
+					Type:    fm["type"],
+					Note:    "Content is redundant with existing memories",
+				}).ToDict()
+			}
+
+			// 收集冲突信息（对齐 Python: conflicting = [a.id for a in actions if a.id != basename and a.status == MemoryStatus.DELETE]）
+			if len(actions) > 0 {
+				var conflicting []string
+				for _, a := range actions {
+					if a.ID != basename && a.Status == update.MemoryStatusDelete {
+						conflicting = append(conflicting, a.ID)
+					}
+				}
+				if len(conflicting) > 0 {
+					conflict.ConflictDetected = true
+					conflict.ConflictingFiles = conflicting
+					conflict.Note = fmt.Sprintf(
+						"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
+						strings.Join(conflicting, ", "),
+					)
+				}
+			} else if len(similarFiles) > 0 {
+				// 无 LLM 结果时，基于 searchSimilar 结果判断冲突
 				conflicting := make([]string, 0, len(similarFiles))
 				for name := range similarFiles {
 					conflicting = append(conflicting, name)
@@ -215,13 +248,19 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 					strings.Join(conflicting, ", "),
 				)
 			}
-			// ⤵️ 回填: 7.8 MemUpdateChecker — LLM 冗余判断，当前跳过 SKIP 逻辑
-			// Python 中 runChecker 返回 actions 后，如果新记忆不在 actions 中（即 REDUNDANT），
-			// 直接返回 WriteResult(mode=SKIP)。当前缺少 LLM 判断，无法判断冗余，故不做 SKIP。
 		} else {
 			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件
 			conflict = *prepareAppendMode(toolCtx, resolved, basename, body, fm)
-			// 检查是否 SKIP（当前 searchSimilar 不做 SKIP，仅 conflict 检测）
+			// 对齐 Python: if result.get("mode") == WriteMode.SKIP.value: return result
+			if conflict.Skip {
+				return (&WriteResult{
+					Success: true,
+					Path:    resolved,
+					Mode:    WriteModeSkip,
+					Type:    fm["type"],
+					Note:    "Content is redundant with existing memories",
+				}).ToDict()
+			}
 		}
 
 		// 对齐 Python step 8-9: 文件级锁保护实际写入 + 快照验证
@@ -409,7 +448,6 @@ func resolveMemoryDir(ctx *CodingMemoryToolContext, resolvedPath string) string 
 }
 
 // searchSimilar 语义搜索相似记忆。对齐 Python _search_similar
-// ⤵️ 回填: 7.8 MemUpdateChecker — 当前仅基于搜索结果，不做 LLM 冗余判断
 func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) map[string]string {
 	oldMemories := make(map[string]string)
 	if toolCtx == nil || toolCtx.Manager == nil {
@@ -443,9 +481,11 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 }
 
 // runChecker 调用 MemUpdateChecker 执行 LLM 冲突检测。
-// ⤵️ 回填: 7.8 MemUpdateChecker — 当前返回空列表，不做 LLM 判断
-func runChecker(manager MemoryIndexManager, newID string, newBody string, oldMemories map[string]string) []any {
-	// TODO: 7.8 实现 MemUpdateChecker 后替换
+// 对齐 Python: coding_memory_tool_ops.py 中 runChecker 调用 MemUpdateChecker。
+// 当前 CodingMemoryToolContext 不携带 ctx 和 model，故返回 nil（退化为不检查冗余）。
+// 后续集成 LongTermMemory 门面后，可通过 Context 注入 model 启用 LLM 冗余判断。
+func runChecker(newID string, newBody string, oldMemories map[string]string) []*update.MemoryActionItem {
+	// 当前无 LLM 模型可用，返回 nil（对齐 MemUpdateChecker.Check model=nil 时的 fallback 行为）
 	return nil
 }
 
@@ -453,10 +493,10 @@ func runChecker(manager MemoryIndexManager, newID string, newBody string, oldMem
 func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) *ConflictResult {
 	result := &ConflictResult{}
 
-	// 构建旧记忆：自身文件 + 其他相似文件
+	// 构建旧记忆：自身文件 + 其他相似文件（对齐 Python: old_memories）
 	oldMemories := make(map[string]string)
 
-	// 读取自身文件
+	// 读取自身文件（对齐 Python: existing_body → old_memories["__self__"]）
 	sysOp := toolCtx.SysOperation
 	if sysOp != nil {
 		readResult, err := sysOp.Fs().ReadFile(context.Background(), resolved)
@@ -468,15 +508,45 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 		}
 	}
 
-	// 其他相似文件
+	// 其他相似文件（对齐 Python: other = await _search_similar(...)）
 	other := searchSimilar(toolCtx, body, basename, 5, 0.75)
 	for k, v := range other {
 		oldMemories[k] = v
 	}
 
-	// ⤵️ 回填: 7.8 MemUpdateChecker — LLM 冗余/冲突判断
-	// 当前仅基于 searchSimilar 结果判断冲突
-	if len(other) > 0 {
+	// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
+	// 当前 runChecker 返回 nil（无 LLM 模型），仅基于 searchSimilar 结果判断冲突
+	actions := runChecker(basename, body, oldMemories)
+
+	// REDUNDANT: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
+	if len(actions) > 0 && !containsActionForID(actions, basename) {
+		result.Skip = true
+		return result
+	}
+
+	// 收集冲突信息（对齐 Python: conflicting = [a.id for a in actions if a.id != basename and a.status == MemoryStatus.DELETE]）
+	if len(actions) > 0 {
+		var conflicting []string
+		for _, a := range actions {
+			if a.ID != basename && a.Status == update.MemoryStatusDelete {
+				// 对齐 Python: basename if a.id == "__self__" else a.id
+				if a.ID == "__self__" {
+					conflicting = append(conflicting, basename)
+				} else {
+					conflicting = append(conflicting, a.ID)
+				}
+			}
+		}
+		if len(conflicting) > 0 {
+			result.ConflictDetected = true
+			result.ConflictingFiles = conflicting
+			result.Note = fmt.Sprintf(
+				"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
+				strings.Join(conflicting, ", "),
+			)
+		}
+	} else if len(other) > 0 {
+		// 无 LLM 结果时，基于 searchSimilar 结果判断冲突
 		conflicting := make([]string, 0, len(other))
 		for name := range other {
 			conflicting = append(conflicting, name)
@@ -640,4 +710,14 @@ func readFileSafe(ctx context.Context, toolCtx *CodingMemoryToolContext, filepat
 		return ""
 	}
 	return readResult.Data.Content
+}
+
+// containsActionForID 检查 action 列表中是否包含指定 ID 的 ADD 操作。
+func containsActionForID(actions []*update.MemoryActionItem, id string) bool {
+	for _, a := range actions {
+		if a.ID == id && a.Status == update.MemoryStatusAdd {
+			return true
+		}
+	}
+	return false
 }

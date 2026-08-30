@@ -248,6 +248,8 @@ type CodingEditResult struct {
 
 // ConflictResult 冲突检测结果。对齐 Python _prepare_append_mode / _search_similar 返回的 dict
 type ConflictResult struct {
+	// Skip 是否跳过写入（对齐 Python WriteMode.SKIP）
+	Skip bool
 	// ConflictDetected 是否检测到冲突
 	ConflictDetected bool
 	// ConflictingFiles 冲突文件列表
