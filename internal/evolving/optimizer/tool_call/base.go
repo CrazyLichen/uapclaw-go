@@ -250,17 +250,45 @@ func (b *ToolOptimizerBase) OptimizeTool(
 	return finalDesc, nil
 }
 
-// Backward 反向传播：从信号计算梯度。对齐 Python 空实现。
+// Backward 反向传播：从信号计算梯度。
 //
-// 对齐 Python: async def _backward(self, signals): pass
-func (b *ToolOptimizerBase) Backward(_ context.Context, _ []*signal.EvolutionSignal) error {
+// 对齐 Python: BaseOptimizer.backward() 模板方法流程：
+//
+//	self._validate_parameters()
+//	self._selected_signals = self._select_signals(signals)
+//	await self._backward(signals)  # pass
+//
+// 对应 Python: async def _backward(self, signals): pass
+func (b *ToolOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
+	b.ValidateParameters()
+	selected := b.SelectSignals(signals)
+	b.SetSelectedSignals(selected)
+	// ToolOptimizer 是黑盒优化器，_backward 为 pass
 	return nil
 }
 
-// Step 生成更新映射。对齐 Python 空实现。
+// Step 生成更新映射。
 //
-// 对齐 Python: def _step(self): updates = {}; for operator in self.operators.items(): return
+// 对齐 Python: BaseOptimizer.step() 模板方法流程：
+//
+//	self._validate_parameters()
+//	updates = self._step()
+//	self.clear_trajectories()
+//	return updates or {}
+//
+// 对应 Python: BaseOptimizer.step() → _step() → return
 func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
+	b.ValidateParameters()
+	updates := b.step()
+	b.ClearTrajectories()
+	return updates
+}
+
+// step 子类逻辑，对齐 Python _step()。
+// ToolOptimizer 为空实现，返回空映射。
+//
+// 对应 Python: def _step(self): updates = {}; return
+func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
 	return map[cschema.UpdateKey]any{}
 }
 

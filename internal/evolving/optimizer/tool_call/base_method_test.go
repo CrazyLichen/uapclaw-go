@@ -118,21 +118,91 @@ func TestNewToolOptimizerBase_WithOptions(t *testing.T) {
 	}
 }
 
-// TestToolOptimizerBase_Backward 测试 Backward 空实现
+// TestToolOptimizerBase_Backward 测试 Backward 模板方法流程
 func TestToolOptimizerBase_Backward(t *testing.T) {
 	base := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	base.Bind(ops, []string{"tool_description"}, map[string]any{})
+
 	err := base.Backward(context.Background(), nil)
 	if err != nil {
 		t.Errorf("期望 Backward 返回 nil, 实际=%v", err)
 	}
+	// 验证 SelectedSignals 已设置（空信号列表）
+	selected := base.SelectedSignals()
+	if len(selected) != 0 {
+		t.Errorf("期望 SelectedSignals 长度 0, 实际=%d", len(selected))
+	}
 }
 
-// TestToolOptimizerBase_Step 测试 Step 空实现
+// TestToolOptimizerBase_Backward_未绑定时panic 测试 Backward 未绑定参数时 panic
+func TestToolOptimizerBase_Backward_未绑定时panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("期望 Backward 未绑定时 panic, 实际未 panic")
+		}
+	}()
+	base := NewToolOptimizerBase(nil)
+	base.Backward(context.Background(), nil)
+}
+
+// TestToolOptimizerBase_Backward_信号选择 测试 Backward 正确选择信号
+func TestToolOptimizerBase_Backward_信号选择(t *testing.T) {
+	base := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	base.Bind(ops, []string{"tool_description"}, map[string]any{})
+
+	sig1 := signal.MakeEvolutionSignal("execution_failure", "Test", "excerpt1")
+	sig2 := signal.MakeEvolutionSignal("low_score", "Test", "excerpt2")
+	err := base.Backward(context.Background(), []*signal.EvolutionSignal{sig1, sig2})
+	if err != nil {
+		t.Errorf("期望 Backward 返回 nil, 实际=%v", err)
+	}
+	selected := base.SelectedSignals()
+	if len(selected) != 2 {
+		t.Errorf("期望 SelectedSignals 长度 2, 实际=%d", len(selected))
+	}
+}
+
+// TestToolOptimizerBase_Step 测试 Step 模板方法流程
 func TestToolOptimizerBase_Step(t *testing.T) {
 	base := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	base.Bind(ops, []string{"tool_description"}, map[string]any{})
+
 	updates := base.Step()
 	if len(updates) != 0 {
 		t.Errorf("期望 Step 返回空 map, 实际=%d 项", len(updates))
+	}
+}
+
+// TestToolOptimizerBase_Step_未绑定时panic 测试 Step 未绑定参数时 panic
+func TestToolOptimizerBase_Step_未绑定时panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("期望 Step 未绑定时 panic, 实际未 panic")
+		}
+	}()
+	base := NewToolOptimizerBase(nil)
+	base.Step()
+}
+
+// TestToolOptimizerBase_Step_清空轨迹 测试 Step 后轨迹被清空
+func TestToolOptimizerBase_Step_清空轨迹(t *testing.T) {
+	base := NewToolOptimizerBase(nil)
+	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
+	base.Bind(ops, []string{"tool_description"}, map[string]any{})
+
+	base.AddTrajectory(&trajectory.Trajectory{ExecutionID: "test"})
+	if len(base.GetTrajectories()) != 1 {
+		t.Errorf("添加轨迹后期望 1 条, 实际=%d", len(base.GetTrajectories()))
+	}
+
+	base.Step()
+	if len(base.GetTrajectories()) != 0 {
+		t.Errorf("Step 后期望轨迹清空, 实际=%d 条", len(base.GetTrajectories()))
 	}
 }
 
