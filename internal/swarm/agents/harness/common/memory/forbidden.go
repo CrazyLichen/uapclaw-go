@@ -27,7 +27,7 @@ type MemoryForbiddenConfig struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var forbiddenLogComponent = logger.ComponentChannel
+var forbiddenLogComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
