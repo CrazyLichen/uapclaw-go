@@ -220,6 +220,80 @@ func TestParseTeamModelJSON_嵌套对象(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── parseTeamModelJSONAsDict/List 测试 ────────────────────────────
+
+func TestParseTeamModelJSONAsDict_有效dict(t *testing.T) {
+	raw := `{"is_improvement": true, "intent": "优化协作流程"}`
+	m, ok := parseTeamModelJSONAsDict(raw)
+	if !ok {
+		t.Fatalf("expected ok=true for dict JSON")
+	}
+	if m["is_improvement"] != true {
+		t.Errorf("is_improvement = %v, want true", m["is_improvement"])
+	}
+}
+
+func TestParseTeamModelJSONAsDict_数组应失败(t *testing.T) {
+	raw := `[{"issue_type": "coordination", "severity": "high"}]`
+	_, ok := parseTeamModelJSONAsDict(raw)
+	if ok {
+		t.Error("expected ok=false for list JSON, got ok=true")
+	}
+}
+
+func TestParseTeamModelJSONAsDict_无效JSON应失败(t *testing.T) {
+	raw := `not json at all`
+	_, ok := parseTeamModelJSONAsDict(raw)
+	if ok {
+		t.Error("expected ok=false for invalid JSON, got ok=true")
+	}
+}
+
+func TestParseTeamModelJSONAsDict_空字符串应失败(t *testing.T) {
+	_, ok := parseTeamModelJSONAsDict("")
+	if ok {
+		t.Error("expected ok=false for empty string, got ok=true")
+	}
+}
+
+func TestParseTeamModelJSONAsList_有效list(t *testing.T) {
+	raw := `[{"issue_type": "coordination", "severity": "high"}]`
+	list, ok := parseTeamModelJSONAsList(raw)
+	if !ok {
+		t.Fatalf("expected ok=true for list JSON")
+	}
+	if len(list) != 1 {
+		t.Errorf("len = %d, want 1", len(list))
+	}
+}
+
+func TestParseTeamModelJSONAsList_dict应失败(t *testing.T) {
+	raw := `{"is_improvement": true, "intent": "优化协作流程"}`
+	_, ok := parseTeamModelJSONAsList(raw)
+	if ok {
+		t.Error("expected ok=false for dict JSON, got ok=true")
+	}
+}
+
+func TestParseTeamModelJSONAsList_无效JSON应失败(t *testing.T) {
+	raw := `not json at all`
+	_, ok := parseTeamModelJSONAsList(raw)
+	if ok {
+		t.Error("expected ok=false for invalid JSON, got ok=true")
+	}
+}
+
+func TestParseTeamModelJSONAsList_空数组(t *testing.T) {
+	raw := `[]`
+	list, ok := parseTeamModelJSONAsList(raw)
+	if !ok {
+		t.Fatalf("expected ok=true for empty list JSON")
+	}
+	if len(list) != 0 {
+		t.Errorf("len = %d, want 0", len(list))
+	}
+}
+
 // ──────────────────────────── fixJSONText 测试 ────────────────────────────
 
 func TestFixJSONText_移除代码块标记(t *testing.T) {

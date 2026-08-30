@@ -418,7 +418,8 @@ func (d *TeamSignalDetector) DetectUserIntent(
 	raw, err := llm_resilience.InvokeTextWithRetry(
 		ctx, d.llm, d.model, prompt, d.userIntentLLMPolicy,
 		llm_resilience.WithIsResultUsable(func(text string) bool {
-			return ParseTeamModelJSON(text) != nil
+			_, ok := parseTeamModelJSONAsDict(text)
+			return ok
 		}),
 	)
 	if err != nil {
@@ -429,8 +430,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 		return nil, err
 	}
 
-	parsed := ParseTeamModelJSON(raw)
-	m, ok := parsed.(map[string]any)
+	m, ok := parseTeamModelJSONAsDict(raw)
 	if !ok {
 		return nil, nil
 	}
@@ -494,8 +494,7 @@ func (d *TeamSignalDetector) DetectTrajectoryIssues(
 	raw, err := llm_resilience.InvokeTextWithRetry(
 		ctx, d.llm, d.model, prompt, d.trajectoryIssueLLMPolicy,
 		llm_resilience.WithIsResultUsable(func(text string) bool {
-			parsed := ParseTeamModelJSON(text)
-			_, ok := parsed.([]any)
+			_, ok := parseTeamModelJSONAsList(text)
 			return ok
 		}),
 	)
@@ -507,11 +506,7 @@ func (d *TeamSignalDetector) DetectTrajectoryIssues(
 		return nil, err
 	}
 
-	parsed := ParseTeamModelJSON(raw)
-	if parsed == nil {
-		return nil, nil
-	}
-	list, ok := parsed.([]any)
+	list, ok := parseTeamModelJSONAsList(raw)
 	if !ok {
 		return nil, nil
 	}
@@ -661,6 +656,22 @@ func normalizeIssue(item map[string]any) map[string]string {
 		"affected_role": stringOrDefault(item, "affected_role", ""),
 		"severity":      severity,
 	}
+}
+
+// parseTeamModelJSONAsDict 解析 JSON 并严格检查返回值为 dict 类型。
+// 对齐 Python: isinstance(parse_team_model_json(text), dict)
+func parseTeamModelJSONAsDict(text string) (map[string]any, bool) {
+	parsed := ParseTeamModelJSON(text)
+	m, ok := parsed.(map[string]any)
+	return m, ok
+}
+
+// parseTeamModelJSONAsList 解析 JSON 并严格检查返回值为 list 类型。
+// 对齐 Python: isinstance(parse_team_model_json(text), list)
+func parseTeamModelJSONAsList(text string) ([]any, bool) {
+	parsed := ParseTeamModelJSON(text)
+	s, ok := parsed.([]any)
+	return s, ok
 }
 
 // stringOrDefault 从 map 中安全获取字符串值。
