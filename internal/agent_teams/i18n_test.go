@@ -11,7 +11,10 @@ func TestT_中文默认(t *testing.T) {
 		t.Fatalf("SetLanguage 失败: %v", err)
 	}
 
-	got := T("blueprint.default_persona")
+	got, err := T("blueprint.default_persona")
+	if err != nil {
+		t.Fatalf("T() 返回错误: %v", err)
+	}
 	want := "天才项目管理专家"
 	if got != want {
 		t.Errorf("T(\"blueprint.default_persona\") = %q, want %q", got, want)
@@ -25,29 +28,32 @@ func TestT_英文切换(t *testing.T) {
 	}
 	defer SetLanguage(LanguageCN) // 恢复
 
-	got := T("blueprint.default_persona")
+	got, err := T("blueprint.default_persona")
+	if err != nil {
+		t.Fatalf("T() 返回错误: %v", err)
+	}
 	want := "Genius project management expert"
 	if got != want {
 		t.Errorf("T(\"blueprint.default_persona\") = %q, want %q", got, want)
 	}
 }
 
-// TestT_缺失Key 验证缺失 key 时 panic。
+// TestT_缺失Key 验证缺失 key 时返回 error（对齐 Python: KeyError 可恢复行为）。
 func TestT_缺失Key(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("期望 panic，但未发生")
-		}
-	}()
 	SetLanguage(LanguageCN)
-	T("nonexistent.key")
+	_, err := T("nonexistent.key")
+	if err == nil {
+		t.Error("期望返回 error，但 T() 成功返回")
+	}
 }
 
 // TestT_插值 验证 T() 支持插值参数。
 func TestT_插值(t *testing.T) {
 	SetLanguage(LanguageCN)
-	got := T("dispatcher.member_online", map[string]any{"target_id": "dev-1"})
+	got, err := T("dispatcher.member_online", map[string]any{"target_id": "dev-1"})
+	if err != nil {
+		t.Fatalf("T() 返回错误: %v", err)
+	}
 	want := "[成员事件] 成员 dev-1 已上线"
 	if got != want {
 		t.Errorf("T with kwargs = %q, want %q", got, want)

@@ -153,8 +153,8 @@ func GetLanguage() Language {
 // kwargs 为可选的插值参数映射。
 //
 // 当 key 在当前语言中缺失时，尝试在默认语言（cn）中查找，
-// 仍缺失则 panic。
-func T(key string, kwargs ...map[string]any) string {
+// 仍缺失则返回 error（对齐 Python: KeyError 可恢复行为，不再 panic）。
+func T(key string, kwargs ...map[string]any) (string, error) {
 	mu.RLock()
 	lang := currentLanguage
 	mu.RUnlock()
@@ -171,17 +171,17 @@ func T(key string, kwargs ...map[string]any) string {
 			if raw, ok = table[key]; ok {
 				// 找到回退
 			} else {
-				panic(fmt.Sprintf("缺失 i18n key '%s'，语言 '%s' 和默认语言均无此键", key, lang))
+				return "", fmt.Errorf("缺失 i18n key '%s'，语言 '%s' 和默认语言均无此键", key, lang)
 			}
 		} else {
-			panic(fmt.Sprintf("缺失 i18n key '%s'，语言 '%s'", key, lang))
+			return "", fmt.Errorf("缺失 i18n key '%s'，语言 '%s'", key, lang)
 		}
 	}
 
 	if len(kwargs) > 0 && len(kwargs[0]) > 0 {
-		return formatMap(raw, kwargs[0])
+		return formatMap(raw, kwargs[0]), nil
 	}
-	return raw
+	return raw, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

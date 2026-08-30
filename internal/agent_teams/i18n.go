@@ -35,6 +35,6 @@ func SetLanguage(lang Language) error { return schema.SetLanguage(lang) }
 func GetLanguage() Language { return schema.GetLanguage() }
 
 // T 解析本地化字符串。委托到 schema.T()。
-func T(key string, kwargs ...map[string]any) string { return schema.T(key, kwargs...) }
+func T(key string, kwargs ...map[string]any) (string, error) { return schema.T(key, kwargs...) }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

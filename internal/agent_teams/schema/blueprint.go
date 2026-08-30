@@ -113,10 +113,11 @@ var (
 
 // NewLeaderSpec 创建默认 LeaderSpec。
 func NewLeaderSpec() LeaderSpec {
+	persona, _ := T("blueprint.default_persona")
 	return LeaderSpec{
 		MemberName:  DefaultLeaderMemberName,
 		DisplayName: "Team Leader",
-		Persona:     T("blueprint.default_persona"),
+		Persona:     persona,
 	}
 }
 

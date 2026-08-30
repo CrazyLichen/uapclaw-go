@@ -539,7 +539,12 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
 	}
 	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
-	_, _ = tb.messageManager.SendMessage(ctx, atschema.T("team.shutdown_request_content"), memberName, tb.memberName)
+	shutdownMsg, shutdownI18nErr := atschema.T("team.shutdown_request_content")
+	if shutdownI18nErr != nil {
+		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n key missing, using fallback")
+		shutdownMsg = "team.shutdown_request_content"
+	}
+	_, _ = tb.messageManager.SendMessage(ctx, shutdownMsg, memberName, tb.memberName)
 	// 步骤 5: 发布事件（对齐 Python: MemberShutdownEvent(force=force)）
 	tb.publishEvent(ctx, atschema.MemberShutdownEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
@@ -590,7 +595,12 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 			Int("reset_count", resetCount).Msg("CancelMember: reset tasks from member")
 	}
 	// 步骤 4: 发送取消消息（对齐 Python: success = send_message; if not success → return False）
-	_, msgErr := tb.messageManager.SendMessage(ctx, atschema.T("team.cancel_request_content"), memberName, tb.memberName)
+	cancelMsg, cancelI18nErr := atschema.T("team.cancel_request_content")
+	if cancelI18nErr != nil {
+		logger.Warn(tbLogComponent).Err(cancelI18nErr).Msg("i18n key missing, using fallback")
+		cancelMsg = "team.cancel_request_content"
+	}
+	_, msgErr := tb.messageManager.SendMessage(ctx, cancelMsg, memberName, tb.memberName)
 	if msgErr != nil {
 		logger.Error(tbLogComponent).Str("member_name", memberName).Err(msgErr).
 			Msg("CancelMember: 发送取消消息失败")
@@ -917,10 +927,20 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 	}
 	// i18n 默认值（对齐 Python: display_name = t("hitt.human_agent_display_name"), desc = t("hitt.human_agent_default_persona")）
 	if displayName == "" {
-		displayName = atschema.T("hitt.human_agent_display_name")
+		if val, err := atschema.T("hitt.human_agent_display_name"); err == nil {
+			displayName = val
+		} else {
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback")
+			displayName = "hitt.human_agent_display_name"
+		}
 	}
 	if desc == "" {
-		desc = atschema.T("hitt.human_agent_default_persona")
+		if val, err := atschema.T("hitt.human_agent_default_persona"); err == nil {
+			desc = val
+		} else {
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback")
+			desc = "hitt.human_agent_default_persona"
+		}
 	}
 	// 对齐 Python: member_card = AgentCard(id=f"{self.team_name}_{member_name}", name=resolved_display_name, description=resolved_desc)
 	memberCard := agentschema.NewAgentCard(
