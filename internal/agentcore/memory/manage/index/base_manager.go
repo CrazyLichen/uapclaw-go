@@ -23,8 +23,7 @@ import (
 type BaseMemoryManager interface {
 	// AddMemories 批量添加记忆（含冲突检查和冗余消除）。
 	// memories 的 key 为 mem_type 字符串（如 "user_profile"），value 为该类型的记忆列表。
-	// llmModel 可选参数用于 LLM 驱动的冲突检查（对齐 Python: add_memories(llm=None)），
-	// 当前 stub 实现不使用，⤵️ 回填: 7.8 完整实现时需传入。
+	// llmModel 可选参数用于 LLM 驱动的冲突检查（对齐 Python: add_memories(llm=None)）。
 	AddMemories(ctx context.Context, userID string, scopeID string,
 		memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error)
 	// Update 按 ID 更新记忆内容
