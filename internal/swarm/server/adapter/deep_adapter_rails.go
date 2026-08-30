@@ -7,6 +7,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
@@ -308,12 +309,12 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 	return nil
 }
 
-// buildAvatarRail 构建头像护栏。
-// ⤵️ 10.6.3-10: AvatarRail
+// buildAvatarRail 构建数字分身护栏。
 // 对齐 Python: _build_avatar_rail() (line 2146-2155)
 func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 AvatarRail
-	return nil
+	rail := commrails.NewAvatarPromptRail()
+	logger.Info(logComponent).Msg("AvatarPromptRail create success")
+	return rail
 }
 
 // buildRuntimePromptRail 构建运行时提示词护栏。

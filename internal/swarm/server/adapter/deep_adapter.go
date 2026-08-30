@@ -157,8 +157,7 @@ type DeepAdapter struct {
 	// permissionRail 权限护栏
 	// ⤵️ 10.6.3-10: PermissionInterruptRail
 	permissionRail sainterfaces.AgentRail
-	// avatarRail 头像护栏
-	// ⤵️ 10.6.3-10: AvatarRail
+	// avatarRail 数字分身护栏
 	avatarRail sainterfaces.AgentRail
 
 	// ─── 运行时 ───

@@ -8,7 +8,11 @@
 //	rails/
 //	├── doc.go                        # 包文档
 //	├── structured_ask_user_rail.go    # StructuredAskUserRail + StructuredAskUserPayload
-//	└── structured_ask_user_tool.go    # StructuredAskUserTool + 扩展 schema
+//	├── structured_ask_user_tool.go    # StructuredAskUserTool + 扩展 schema
+//	├── avatar_rail.go                # AvatarPromptRail 数字分身 Rail
+//	└── permissions/
+//	    ├── doc.go                    # 包文档
+//	    └── owner_scopes.go           # OwnerScopesPermissionContext 权限上下文
 //
-// 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
+// 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/
 package rails
