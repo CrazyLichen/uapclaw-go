@@ -250,8 +250,11 @@ func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 // TruncateHistoryRecords 截断 history 到指定位置索引（rewind 使用）。
 //
 // 对齐 Python: truncate_history_records(session_id, cut_index: int) → dict
-// 先等异步队列刷盘（Go chan 不支持 join，用持锁截断保证顺序），再截断到 cutIndex。
+// 先等异步队列刷盘（FlushHistoryQueue 哨兵机制等价 Python _WRITE_QUEUE.join()），再截断到 cutIndex。
 func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, error) {
+	// 对齐 Python: _WRITE_QUEUE.join()，先等异步队列刷盘再截断
+	FlushHistoryQueue()
+
 	sid := NormalizeSessionID(sessionID)
 	fpath := historyFilePath(sid)
 

@@ -276,3 +276,37 @@ func TestReadHistoryRecords_损坏JSON返回空列表(t *testing.T) {
 	assert.NoError(t, err, "损坏 JSON 不应返回 error，应对齐 Python 吞掉错误")
 	assert.Empty(t, records, "损坏 JSON 应返回空列表")
 }
+
+// TestTruncateHistoryRecords_异步写入后截断不被覆盖 验证截断前先刷盘，
+// 对齐 Python truncate_history_records: _WRITE_QUEUE.join() 后再截断
+func TestTruncateHistoryRecords_异步写入后截断不被覆盖(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetHistoryWorkspaceCache()
+	ResetHistoryWorker()
+	ClearAllSessionMetadataCache()
+
+	sessionID := "sess-trunc-flush"
+
+	// 先写入 2 条记录（异步队列）
+	AppendHistoryRecord(sessionID, "r1", "web", "user", "第一条", 1.0, "", nil, nil, "")
+	AppendHistoryRecord(sessionID, "r2", "web", "user", "第二条", 2.0, "", nil, nil, "")
+
+	// 截断到索引 1，保留第一条
+	// 对齐 Python: truncate_history_records 先 _WRITE_QUEUE.join() 刷盘再截断
+	result, err := TruncateHistoryRecords(sessionID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.RemainingRecords)
+	assert.Equal(t, 1, result.RemovedRecords)
+
+	// 验证截断后只剩 1 条
+	records, err := ReadHistoryRecords(sessionID)
+	require.NoError(t, err)
+	assert.Len(t, records, 1)
+	assert.Equal(t, "第一条", records[0]["content"])
+
+	// 清理：刷盘 + 关闭 worker，释放目录锁，允许 t.TempDir() 清理
+	FlushHistoryQueue()
+	ResetHistoryWorker()
+	FlushMetadataQueue()
+}
