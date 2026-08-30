@@ -683,12 +683,12 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 			agentschema.WithAgentDescription(pm.Persona),
 		)
 		// 对齐 Python: allocation = self._allocate_model_config(member_spec.model_name) if self._allocate_model_config else None
-		var allocOpt SpawnMemberOption
+		var spawnOpts []SpawnMemberOption
 		if tb.modelConfigAllocator != nil {
-			allocOpt = WithAllocation(tb.modelConfigAllocator(pm.ModelName))
+			spawnOpts = append(spawnOpts, WithAllocation(tb.modelConfigAllocator(pm.ModelName)))
 		}
 		tb.SpawnMember(ctx, pm.MemberName, pm.DisplayName, memberCard, string(pm.RoleType),
-			pm.Persona, pm.PromptHint, pm.ModelName, allocOpt)
+			pm.Persona, pm.PromptHint, pm.ModelName, spawnOpts...)
 	}
 
 	// 步骤 4: HITT 处理
@@ -864,14 +864,20 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id is required")
 		return atschema.NewMemberOpResultFail("approve_plan requires plan_id")
 	}
-	// 校验 2: plan record 存在（对齐 Python: plan_record = get_plan_record(plan_id); if not plan_record → return False）
-	task, err := tb.taskManager.Get(ctx, planID)
-	if err != nil || task == nil {
+	// 校验 2: plan record 存在（对齐 Python: plan_record = self.task_manager.get_plan_record(plan_id); if not plan_record → return False）
+	planIndex, planErr := tb.taskManager.loadPlanIndex()
+	if planErr != nil || planIndex == nil {
+		logger.Error(tbLogComponent).Str("plan_id", planID).Err(planErr).Msg("ApprovePlan: plan index not found")
+		return atschema.NewMemberOpResultFail("plan index not found")
+	}
+	planRecord, planExists := planIndex.TaskPlans[planID]
+	if !planExists || planRecord == nil {
 		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan not found")
 		return atschema.NewMemberOpResultFail("plan not found: " + planID)
 	}
+	memberName := planRecord.MemberName
+	taskID := planRecord.TaskID
 	// 校验 3: member 存在（对齐 Python: member_data = get_member(member_name); if member_data is None → return False）
-	memberName := task.Assignee
 	if memberName == "" {
 		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan has no member_name")
 		return atschema.NewMemberOpResultFail("plan has no member_name: " + planID)
@@ -889,11 +895,12 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 	}
 	tb.publishEvent(ctx, atschema.TaskPlanResponseEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
-		TaskID:           planID,
+		TaskID:           taskID,
 		Approved:         cfg.approved,
 		Status:           string(atschema.TaskStatusPlanApproved),
 	})
-	logger.Info(tbLogComponent).Str("plan_id", planID).Bool("approved", cfg.approved).Msg("ApprovePlan: 计划已审批")
+	logger.Info(tbLogComponent).Str("plan_id", planID).Str("task_id", taskID).Str("member_name", memberName).
+		Bool("approved", cfg.approved).Msg("ApprovePlan: 计划已审批")
 	return atschema.NewMemberOpResultSuccess()
 }
 

@@ -2,6 +2,7 @@ package lite
 
 import (
 	"context"
+	"fmt"
 	"testing"
 )
 
@@ -78,6 +79,7 @@ func TestCreateEmbeddingProvider_无配置无回退(t *testing.T) {
 }
 
 // TestMockEmbeddingProvider_EmbedQuery 测试 MockEmbeddingProvider 的 EmbedQuery
+// 对齐 Python: MockEmbeddingProvider.embed_query — 基于 md5 种子的 128 维确定性随机向量
 func TestMockEmbeddingProvider_EmbedQuery(t *testing.T) {
 	mock := NewMockEmbeddingProvider()
 	ctx := context.Background()
@@ -85,12 +87,25 @@ func TestMockEmbeddingProvider_EmbedQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EmbedQuery 失败: %v", err)
 	}
-	if len(vec) != 0 {
-		t.Errorf("MockEmbeddingProvider.EmbedQuery 应返回空向量，实际长度 %d", len(vec))
+	if len(vec) != 128 {
+		t.Errorf("EmbedQuery 应返回 128 维向量，实际长度 %d", len(vec))
+	}
+	// 确定性：相同输入返回相同向量
+	vec2, _ := mock.EmbedQuery(ctx, "test")
+	if fmt.Sprintf("%v", vec) != fmt.Sprintf("%v", vec2) {
+		t.Error("相同输入应返回相同向量")
+	}
+	// 值在 [-1, 1] 范围内
+	for _, v := range vec {
+		if v < -1.0 || v > 1.0 {
+			t.Errorf("向量值 %v 超出 [-1, 1] 范围", v)
+			break
+		}
 	}
 }
 
 // TestMockEmbeddingProvider_EmbedDocuments 测试 MockEmbeddingProvider 的 EmbedDocuments
+// 对齐 Python: MockEmbeddingProvider.embed_documents — 迭代 EmbedQuery 生成向量
 func TestMockEmbeddingProvider_EmbedDocuments(t *testing.T) {
 	mock := NewMockEmbeddingProvider()
 	ctx := context.Background()
@@ -98,8 +113,15 @@ func TestMockEmbeddingProvider_EmbedDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EmbedDocuments 失败: %v", err)
 	}
-	if vecs != nil {
-		t.Errorf("MockEmbeddingProvider.EmbedDocuments 应返回 nil，实际为 %v", vecs)
+	if len(vecs) != 2 {
+		t.Fatalf("EmbedDocuments 应返回 2 个向量，实际为 %d", len(vecs))
+	}
+	if len(vecs[0]) != 128 || len(vecs[1]) != 128 {
+		t.Errorf("EmbedDocuments 每个向量应为 128 维，实际为 %d/%d", len(vecs[0]), len(vecs[1]))
+	}
+	// 不同输入返回不同向量
+	if fmt.Sprintf("%v", vecs[0]) == fmt.Sprintf("%v", vecs[1]) {
+		t.Error("不同输入应返回不同向量")
 	}
 }
 
