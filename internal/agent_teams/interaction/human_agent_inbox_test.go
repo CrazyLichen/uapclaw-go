@@ -157,7 +157,7 @@ func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
 func TestHumanAgentInbox_Send_点对点(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	// 创建 alice 成员
-	tb.SpawnMember(context.Background(), "alice", "Alice", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(context.Background(), "alice", "Alice", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	target := "alice"
 	result, err := h.Send("hello", &target, nil)

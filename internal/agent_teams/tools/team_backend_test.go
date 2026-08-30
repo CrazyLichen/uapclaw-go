@@ -11,6 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -22,6 +24,15 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// newTestAgentCard 创建测试用 AgentCard（对齐 Python: AgentCard(id=..., name=..., description=...)）。
+func newTestAgentCard(id, name, desc string) *agentschema.AgentCard {
+	return agentschema.NewAgentCard(
+		agentschema.WithAgentID(id),
+		agentschema.WithAgentName(name),
+		agentschema.WithAgentDescription(desc),
+	)
+}
 
 // newTestMessager 创建测试用的 Messager。
 func newTestMessager() messager.Messager {
@@ -88,7 +99,7 @@ func TestSpawnMember(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	result := tb.SpawnMember(ctx, "teammate1", "Teammate 1", "card1", string(atschema.TeamRoleTeammate), "desc", "prompt", "")
+	result := tb.SpawnMember(ctx, "teammate1", "Teammate 1", newTestAgentCard("card1", "Teammate 1", "desc"), string(atschema.TeamRoleTeammate), "desc", "prompt", "")
 	if !result.OK {
 		t.Fatalf("SpawnMember() = %v, want OK", result)
 	}
@@ -111,8 +122,8 @@ func TestSpawnMember_已存在(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.SpawnMember(ctx, "teammate1", "Teammate 1", "", string(atschema.TeamRoleTeammate), "", "", "")
-	result := tb.SpawnMember(ctx, "teammate1", "Teammate 1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "Teammate 1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	result := tb.SpawnMember(ctx, "teammate1", "Teammate 1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	if result.OK {
 		t.Error("SpawnMember() 第二次应返回 fail")
 	}
@@ -123,7 +134,7 @@ func TestSpawnMember_HITT缓存写透(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	result := tb.SpawnMember(ctx, "human1", "Human 1", "", string(atschema.TeamRoleHumanAgent), "", "", "")
+	result := tb.SpawnMember(ctx, "human1", "Human 1", nil, string(atschema.TeamRoleHumanAgent), "", "", "")
 	if !result.OK {
 		t.Fatalf("SpawnMember() = %v, want OK", result)
 	}
@@ -141,8 +152,8 @@ func TestListMembers(t *testing.T) {
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
 
 	// 添加成员
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
-	tb.SpawnMember(ctx, "teammate2", "T2", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate2", "T2", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	members, err := tb.ListMembers(ctx)
 	if err != nil {
@@ -265,7 +276,7 @@ func TestShutdownMember(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	// 先启动成员
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
 
@@ -292,7 +303,7 @@ func TestShutdownMember_已终态(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
 
 	result := tb.ShutdownMember(ctx, "teammate1")
@@ -307,7 +318,7 @@ func TestCancelMember(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
 
 	result := tb.CancelMember(ctx, "teammate1")
@@ -322,8 +333,8 @@ func TestStartup(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
-	tb.SpawnMember(ctx, "teammate2", "T2", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate2", "T2", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	started, err := tb.Startup(ctx, nil)
 	if err != nil {
@@ -340,7 +351,7 @@ func TestStartupMember(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	ok, err := tb.StartupMember(ctx, "teammate1", nil)
 	if err != nil {
@@ -358,7 +369,7 @@ func TestStartupMember_回调失败回滚(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	errOnCreated := errors.New("spawn failed")
 	ok, err := tb.StartupMember(ctx, "teammate1", func(ctx context.Context, memberName string) error {
@@ -625,7 +636,7 @@ func TestApproveTool(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	result := tb.ApproveTool(ctx, "teammate1", "tool-call-1", true, "ok", false)
 	if !result.OK {
@@ -813,7 +824,7 @@ func TestWithModelConfigAllocator(t *testing.T) {
 	ctx := context.Background()
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
-	tb.SpawnMember(ctx, "teammate1", "T1", "", string(atschema.TeamRoleTeammate), "", "", "qwen-max")
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "qwen-max")
 
 	if !called {
 		t.Error("modelConfigAllocator was not called")

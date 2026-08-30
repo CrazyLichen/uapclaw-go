@@ -16,6 +16,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -374,7 +376,7 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 //  5. HITT 缓存写透：若 role == HUMAN_AGENT，hittNames.add
 //  6. 日志
 //  7. 返回 MemberOpResult
-func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName, agentCard, role, desc, prompt, modelName string, opts ...SpawnMemberOption) atschema.MemberOpResult {
+func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName string, agentCard *agentschema.AgentCard, role, desc, prompt, modelName string, opts ...SpawnMemberOption) atschema.MemberOpResult {
 	// 解析可选参数（对齐 Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)）
 	cfg := &spawnMemberConfig{
 		status:          string(atschema.MemberStatusUnstarted),
@@ -407,7 +409,14 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName,
 		}
 	}
 	// 步骤 3: DB 写入（使用 cfg 中的状态值，对齐 Python: create_member(status=cfg.status, ...)）
-	ok := tb.db.Member().CreateMember(ctx, memberName, tb.teamName, displayName, agentCard,
+	// 对齐 Python: agent_card.model_dump_json() — 将 AgentCard 序列化为 JSON 存入 DB
+	agentCardJSON := "{}"
+	if agentCard != nil {
+		if data, err := json.Marshal(agentCard); err == nil {
+			agentCardJSON = string(data)
+		}
+	}
+	ok := tb.db.Member().CreateMember(ctx, memberName, tb.teamName, displayName, agentCardJSON,
 		cfg.status, role, desc,
 		cfg.executionStatus, cfg.mode, prompt, modelRefJSON)
 	if !ok {
@@ -634,7 +643,13 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	}
 
 	// 步骤 2: 注册 Leader（改走 SpawnMember 统一路径，对齐 Python: spawn_member(status=BUSY, execution_status=RUNNING, mode=BUILD_MODE)）
-	result := tb.SpawnMember(ctx, tb.memberName, leaderDisplayName, "", string(atschema.TeamRoleLeader),
+	// 对齐 Python: leader_card = AgentCard(id=leader_card_id, name=leader_display_name, description=leader_desc)
+	leaderCard := agentschema.NewAgentCard(
+		agentschema.WithAgentID(tb.teamName+"_"+tb.memberName),
+		agentschema.WithAgentName(leaderDisplayName),
+		agentschema.WithAgentDescription(leaderDesc),
+	)
+	result := tb.SpawnMember(ctx, tb.memberName, leaderDisplayName, leaderCard, string(atschema.TeamRoleLeader),
 		leaderDesc, "", "",
 		WithStatus(string(atschema.MemberStatusBusy)),
 		WithExecutionStatus(string(atschema.ExecutionStatusRunning)),
@@ -651,12 +666,18 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 			continue // 由后续 spawn_human_agent 处理
 		}
 		memberCardID := tb.teamName + "_" + pm.MemberName
+		// 对齐 Python: member_card = AgentCard(id=member_card_id, name=member_spec.display_name, description=member_spec.persona)
+		memberCard := agentschema.NewAgentCard(
+			agentschema.WithAgentID(memberCardID),
+			agentschema.WithAgentName(pm.DisplayName),
+			agentschema.WithAgentDescription(pm.Persona),
+		)
 		// 对齐 Python: allocation = self._allocate_model_config(member_spec.model_name) if self._allocate_model_config else None
 		var allocOpt SpawnMemberOption
 		if tb.modelConfigAllocator != nil {
 			allocOpt = WithAllocation(tb.modelConfigAllocator(pm.ModelName))
 		}
-		tb.SpawnMember(ctx, pm.MemberName, pm.DisplayName, memberCardID, string(pm.RoleType),
+		tb.SpawnMember(ctx, pm.MemberName, pm.DisplayName, memberCard, string(pm.RoleType),
 			pm.Persona, pm.PromptHint, pm.ModelName, allocOpt)
 	}
 
@@ -901,7 +922,13 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 	if desc == "" {
 		desc = atschema.T("hitt.human_agent_default_persona")
 	}
-	result := tb.SpawnMember(ctx, memberName, displayName, "", string(atschema.TeamRoleHumanAgent), desc, prompt, "")
+	// 对齐 Python: member_card = AgentCard(id=f"{self.team_name}_{member_name}", name=resolved_display_name, description=resolved_desc)
+	memberCard := agentschema.NewAgentCard(
+		agentschema.WithAgentID(tb.teamName+"_"+memberName),
+		agentschema.WithAgentName(displayName),
+		agentschema.WithAgentDescription(desc),
+	)
+	result := tb.SpawnMember(ctx, memberName, displayName, memberCard, string(atschema.TeamRoleHumanAgent), desc, prompt, "")
 	if !result.OK {
 		return result
 	}
