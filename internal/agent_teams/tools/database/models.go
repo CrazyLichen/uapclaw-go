@@ -22,7 +22,7 @@ type Team struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
-// TableName 指定 Team 对应的数据库表名。
+// TableName 指定 Team 对应的数据库表名
 func (Team) TableName() string { return "team_info" }
 
 // TeamMember 团队成员模型。
@@ -55,7 +55,7 @@ type TeamMember struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
-// TableName 指定 TeamMember 对应的数据库表名。
+// TableName 指定 TeamMember 对应的数据库表名
 func (TeamMember) TableName() string { return "team_member" }
 
 // TeamTaskBase 任务行模型。

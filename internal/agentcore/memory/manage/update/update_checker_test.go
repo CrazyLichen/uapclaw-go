@@ -138,9 +138,9 @@ func TestParseCheckResult(t *testing.T) {
 // TestParseCheckItems_单对象 测试 map 输入
 func TestParseCheckItems_单对象(t *testing.T) {
 	parsed := map[string]any{
-		"info_id":   "1",
-		"info_text": "内容",
-		"result":    "none",
+		"info_id":       "1",
+		"info_text":     "内容",
+		"result":        "none",
 		"related_infos": map[string]any{},
 	}
 
@@ -163,15 +163,15 @@ func TestParseCheckItems_单对象(t *testing.T) {
 func TestParseCheckItems_数组(t *testing.T) {
 	parsed := []any{
 		map[string]any{
-			"info_id":   "1",
-			"info_text": "内容1",
-			"result":    "redundant",
+			"info_id":       "1",
+			"info_text":     "内容1",
+			"result":        "redundant",
 			"related_infos": map[string]any{"a": "旧1"},
 		},
 		map[string]any{
-			"info_id":   "2",
-			"info_text": "内容2",
-			"result":    "conflicting",
+			"info_id":       "2",
+			"info_text":     "内容2",
+			"result":        "conflicting",
 			"related_infos": map[string]any{},
 		},
 	}

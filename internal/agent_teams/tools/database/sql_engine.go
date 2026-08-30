@@ -46,6 +46,43 @@ type SqlTeamDatabase struct {
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentCommon
+	// 对齐 Python: TeamTaskBase (team_task_{suffix})
+	createTaskTableDDL = `CREATE TABLE IF NOT EXISTS team_task_%s (
+    task_id      TEXT PRIMARY KEY,
+    team_name    TEXT NOT NULL DEFAULT '',
+    title        TEXT NOT NULL DEFAULT '',
+    content      TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT '',
+    assignee     TEXT NOT NULL DEFAULT '',
+    updated_at   INTEGER NOT NULL DEFAULT 0
+)`
+	// 对齐 Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
+	// 复合主键 (task_id, depends_on_task_id)，task_id 和 depends_on_task_id 引用同 suffix 的 team_task
+	createDepTableDDL = `CREATE TABLE IF NOT EXISTS team_task_dependency_%s (
+    task_id            TEXT NOT NULL DEFAULT '',
+    depends_on_task_id TEXT NOT NULL DEFAULT '',
+    team_name          TEXT NOT NULL DEFAULT '',
+    resolved           INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (task_id, depends_on_task_id)
+)`
+	// 对齐 Python: TeamMessageBase (team_message_{suffix})
+	createMessageTableDDL = `CREATE TABLE IF NOT EXISTS team_message_%s (
+    message_id       TEXT PRIMARY KEY,
+    team_name        TEXT NOT NULL DEFAULT '',
+    from_member_name TEXT NOT NULL DEFAULT '',
+    to_member_name   TEXT NOT NULL DEFAULT '',
+    content          TEXT NOT NULL DEFAULT '',
+    timestamp        INTEGER NOT NULL DEFAULT 0,
+    broadcast        INTEGER NOT NULL DEFAULT 0,
+    is_read          INTEGER DEFAULT NULL
+)`
+	// 对齐 Python: MessageReadStatusBase (message_read_status_{suffix})
+	createReadStatusTableDDL = `CREATE TABLE IF NOT EXISTS message_read_status_%s (
+    member_name TEXT NOT NULL DEFAULT '',
+    team_name   TEXT NOT NULL DEFAULT '',
+    read_at     INTEGER DEFAULT NULL,
+    PRIMARY KEY (member_name, team_name)
+)`
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -393,51 +430,6 @@ func dropSessionTablesDDL(db *gorm.DB, suffix string) {
 		}
 	}
 }
-
-// DDL 常量：统一兼容类型（INTEGER/TEXT），SQLite 和 PostgreSQL 都能接受。
-// is_read / read_at 用 DEFAULT NULL 表示广播消息/未初始化水位。
-const (
-	// 对齐 Python: TeamTaskBase (team_task_{suffix})
-	createTaskTableDDL = `CREATE TABLE IF NOT EXISTS team_task_%s (
-    task_id      TEXT PRIMARY KEY,
-    team_name    TEXT NOT NULL DEFAULT '',
-    title        TEXT NOT NULL DEFAULT '',
-    content      TEXT NOT NULL DEFAULT '',
-    status       TEXT NOT NULL DEFAULT '',
-    assignee     TEXT NOT NULL DEFAULT '',
-    updated_at   INTEGER NOT NULL DEFAULT 0
-)`
-
-	// 对齐 Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
-	// 复合主键 (task_id, depends_on_task_id)，task_id 和 depends_on_task_id 引用同 suffix 的 team_task
-	createDepTableDDL = `CREATE TABLE IF NOT EXISTS team_task_dependency_%s (
-    task_id            TEXT NOT NULL DEFAULT '',
-    depends_on_task_id TEXT NOT NULL DEFAULT '',
-    team_name          TEXT NOT NULL DEFAULT '',
-    resolved           INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (task_id, depends_on_task_id)
-)`
-
-	// 对齐 Python: TeamMessageBase (team_message_{suffix})
-	createMessageTableDDL = `CREATE TABLE IF NOT EXISTS team_message_%s (
-    message_id       TEXT PRIMARY KEY,
-    team_name        TEXT NOT NULL DEFAULT '',
-    from_member_name TEXT NOT NULL DEFAULT '',
-    to_member_name   TEXT NOT NULL DEFAULT '',
-    content          TEXT NOT NULL DEFAULT '',
-    timestamp        INTEGER NOT NULL DEFAULT 0,
-    broadcast        INTEGER NOT NULL DEFAULT 0,
-    is_read          INTEGER DEFAULT NULL
-)`
-
-	// 对齐 Python: MessageReadStatusBase (message_read_status_{suffix})
-	createReadStatusTableDDL = `CREATE TABLE IF NOT EXISTS message_read_status_%s (
-    member_name TEXT NOT NULL DEFAULT '',
-    team_name   TEXT NOT NULL DEFAULT '',
-    read_at     INTEGER DEFAULT NULL,
-    PRIMARY KEY (member_name, team_name)
-)`
-)
 
 // isDynamicTable 判断表名是否为动态表（按前缀匹配）。
 // 对齐 Python: table_name.startswith(TEAM_DYNAMIC_TABLE_PREFIXES)

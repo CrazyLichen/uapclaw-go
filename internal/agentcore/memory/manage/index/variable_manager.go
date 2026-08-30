@@ -145,7 +145,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 
 // Update 按 ID 更新变量记忆。
 //
-// ⚠️ Not implemented — 对齐 Python: memory_logger.warning("Not implemented method update"); pass
+// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method update"); pass
 func (m *VariableManager) Update(_ context.Context, userID string, scopeID string, memID string, _ string) (bool, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -153,13 +153,13 @@ func (m *VariableManager) Update(_ context.Context, userID string, scopeID strin
 		Strs("memory_id", []string{memID}).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("Not implemented method update")
+		Msg("未实现方法 update")
 	return false, nil
 }
 
 // Search 语义搜索变量记忆。
 //
-// ⚠️ Not implemented — 对齐 Python: memory_logger.warning("Not implemented method search"); pass
+// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method search"); pass
 func (m *VariableManager) Search(_ context.Context, userID string, scopeID string, query string, _ int, _ []string) ([]*index.MemorySearchResult, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -167,27 +167,26 @@ func (m *VariableManager) Search(_ context.Context, userID string, scopeID strin
 		Str("query", query).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("Not implemented method search")
+		Msg("未实现方法 search")
 	return nil, nil
 }
 
 // Get 按 ID 获取变量记忆。
 //
-// ⚠️ Not implemented — 对齐 Python: memory_logger.warning("Not implemented method get"); pass
+// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method get"); pass
 func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
 	logger.Warn(logComponent).
-		Str("event_type", "MEMORY_STORE").
 		Strs("memory_id", []string{memID}).
 		Str("memory_type", m.memType).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("Not implemented method get")
+		Msg("未实现方法 get")
 	return nil, nil
 }
 
 // Delete 按 ID 删除变量记忆。
 //
-// ⚠️ Not implemented — 对齐 Python: memory_logger.error("Not implemented method delete"); pass
+// ⚠️ 未实现 — 对齐 Python: memory_logger.error("Not implemented method delete"); pass
 func (m *VariableManager) Delete(_ context.Context, userID string, scopeID string, memID string) (bool, error) {
 	logger.Error(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -195,7 +194,7 @@ func (m *VariableManager) Delete(_ context.Context, userID string, scopeID strin
 		Str("memory_type", m.memType).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("Not implemented method delete")
+		Msg("未实现方法 delete")
 	return false, nil
 }
 
@@ -423,4 +422,3 @@ func checkExist(variableDict map[string]string, variableName string) bool {
 	}
 	return val != ""
 }
-

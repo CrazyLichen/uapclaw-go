@@ -281,10 +281,10 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 		depStatus := endpointTasks[e.DependsOnID].Status
 		resolved := fsm.IsTaskTerminal(depStatus)
 		newEdges = append(newEdges, TeamTaskDependencyBase{
-			TaskID:     e.TaskID,
+			TaskID:      e.TaskID,
 			DependsOnID: e.DependsOnID,
-			TeamName:   teamName,
-			Resolved:   resolved,
+			TeamName:    teamName,
+			Resolved:    resolved,
 		})
 	}
 

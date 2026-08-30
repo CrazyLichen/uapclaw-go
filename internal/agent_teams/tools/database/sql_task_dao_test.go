@@ -368,4 +368,3 @@ func TestSQLTaskDao_VerifyAndFixTaskConsistency(t *testing.T) {
 	require.NoError(t, err)
 	_ = refreshed
 }
-

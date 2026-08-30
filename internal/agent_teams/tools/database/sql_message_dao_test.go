@@ -15,14 +15,14 @@ func TestSQLMessageDao_CreateAndGet(t *testing.T) {
 
 	// 对齐 Python: 直发消息
 	msg := &TeamMessageBase{
-		MessageID:       "m1",
-		TeamName:        "team1",
-		FromMemberName:  "a",
-		ToMemberName:    "b",
-		Content:         "hello",
-		Timestamp:       GetCurrentTime(),
-		Broadcast:       false,
-		IsRead:          BoolPtr(false),
+		MessageID:      "m1",
+		TeamName:       "team1",
+		FromMemberName: "a",
+		ToMemberName:   "b",
+		Content:        "hello",
+		Timestamp:      GetCurrentTime(),
+		Broadcast:      false,
+		IsRead:         BoolPtr(false),
 	}
 	ok := dao.CreateMessage(ctx, msg)
 	assert.True(t, ok)
@@ -50,24 +50,24 @@ func TestSQLMessageDao_BroadcastWatermark(t *testing.T) {
 
 	// 对齐 Python: 创建广播消息
 	bc1 := &TeamMessageBase{
-		MessageID:       "bc1",
-		TeamName:        "team1",
-		FromMemberName:  "a",
-		Content:         "broadcast1",
-		Timestamp:       1000,
-		Broadcast:       true,
-		IsRead:          nil,
+		MessageID:      "bc1",
+		TeamName:       "team1",
+		FromMemberName: "a",
+		Content:        "broadcast1",
+		Timestamp:      1000,
+		Broadcast:      true,
+		IsRead:         nil,
 	}
 	dao.CreateMessage(ctx, bc1)
 
 	bc2 := &TeamMessageBase{
-		MessageID:       "bc2",
-		TeamName:        "team1",
-		FromMemberName:  "a",
-		Content:         "broadcast2",
-		Timestamp:       2000,
-		Broadcast:       true,
-		IsRead:          nil,
+		MessageID:      "bc2",
+		TeamName:       "team1",
+		FromMemberName: "a",
+		Content:        "broadcast2",
+		Timestamp:      2000,
+		Broadcast:      true,
+		IsRead:         nil,
 	}
 	dao.CreateMessage(ctx, bc2)
 
@@ -93,14 +93,14 @@ func TestSQLMessageDao_MarkMessageRead_直发(t *testing.T) {
 	dao := db.Message()
 
 	msg := &TeamMessageBase{
-		MessageID:       "dm1",
-		TeamName:        "team1",
-		FromMemberName:  "a",
-		ToMemberName:    "b",
-		Content:         "direct",
-		Timestamp:       1000,
-		Broadcast:       false,
-		IsRead:          BoolPtr(false),
+		MessageID:      "dm1",
+		TeamName:       "team1",
+		FromMemberName: "a",
+		ToMemberName:   "b",
+		Content:        "direct",
+		Timestamp:      1000,
+		Broadcast:      false,
+		IsRead:         BoolPtr(false),
 	}
 	dao.CreateMessage(ctx, msg)
 

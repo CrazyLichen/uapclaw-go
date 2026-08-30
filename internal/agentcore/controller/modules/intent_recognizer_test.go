@@ -9,15 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -31,7 +31,7 @@ func defaultTestControllerConfig() *config.ControllerConfig {
 type mockSessionFacade struct {
 	writeStreamCalled bool
 	writeCustomCalled bool
-	sessionID        string
+	sessionID         string
 }
 
 func (m *mockSessionFacade) GetSessionID() string                   { return m.sessionID }
@@ -120,17 +120,17 @@ func (m *mockModelContext) AddMessages(_ context.Context, messages []llmschema.B
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema.ToolInfoInterface, _, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return iface.NewContextWindow(), nil
 }
-func (m *mockModelContext) Statistic() *iface.ContextStats { return &iface.ContextStats{} }
-func (m *mockModelContext) SessionID() string              { return "test-session" }
-func (m *mockModelContext) ContextID() string              { return "test-context" }
-func (m *mockModelContext) TokenCounter() token.TokenCounter  { return nil }
-func (m *mockModelContext) ReloaderTool() tool.Tool           { return nil }
-func (m *mockModelContext) WorkspaceDir() string              { return "" }
-func (m *mockModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)  {}
-func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade    { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats                      { return &iface.ContextStats{} }
+func (m *mockModelContext) SessionID() string                                   { return "test-session" }
+func (m *mockModelContext) ContextID() string                                   { return "test-context" }
+func (m *mockModelContext) TokenCounter() token.TokenCounter                    { return nil }
+func (m *mockModelContext) ReloaderTool() tool.Tool                             { return nil }
+func (m *mockModelContext) WorkspaceDir() string                                { return "" }
+func (m *mockModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)     {}
+func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade      { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
-func (m *mockModelContext) SaveState() map[string]any { return nil }
-func (m *mockModelContext) LoadState(_ map[string]any) {}
+func (m *mockModelContext) SaveState() map[string]any                           { return nil }
+func (m *mockModelContext) LoadState(_ map[string]any)                          {}
 func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
 	return &iface.CompressContextResult{Result: "noop"}, nil
 }
@@ -247,7 +247,7 @@ func TestIntentRecognizer_Recognize_LLM调用失败(t *testing.T) {
 	recognizer := NewIntentRecognizer(cfg, tm, ce)
 
 	provider := &mockModelProvider{
-		err:      fmt.Errorf("LLM 服务不可用"),
+		err:       fmt.Errorf("LLM 服务不可用"),
 		errOnCall: 1,
 	}
 	recognizer.SetModelProvider(provider)
@@ -419,66 +419,66 @@ func TestInvokeToolkitMethod(t *testing.T) {
 	toolkits := NewIntentToolkits(event, 0.5)
 
 	tests := []struct {
-		name      string
-		toolName  string
-		args      string
-		wantErr   bool
+		name       string
+		toolName   string
+		args       string
+		wantErr    bool
 		intentType schema.IntentType
 	}{
 		{
-			name:     "create_task",
-			toolName: "create_task",
-			args:     `{"confidence":0.9,"task_description":"测试任务"}`,
-			wantErr:  false,
+			name:       "create_task",
+			toolName:   "create_task",
+			args:       `{"confidence":0.9,"task_description":"测试任务"}`,
+			wantErr:    false,
 			intentType: schema.IntentCreateTask,
 		},
 		{
-			name:     "pause_task",
-			toolName: "pause_task",
-			args:     `{"confidence":0.9,"task_id":"task-1"}`,
-			wantErr:  false,
+			name:       "pause_task",
+			toolName:   "pause_task",
+			args:       `{"confidence":0.9,"task_id":"task-1"}`,
+			wantErr:    false,
 			intentType: schema.IntentPauseTask,
 		},
 		{
-			name:     "cancel_task",
-			toolName: "cancel_task",
-			args:     `{"confidence":0.9,"task_id":"task-1"}`,
-			wantErr:  false,
+			name:       "cancel_task",
+			toolName:   "cancel_task",
+			args:       `{"confidence":0.9,"task_id":"task-1"}`,
+			wantErr:    false,
 			intentType: schema.IntentCancelTask,
 		},
 		{
-			name:     "resume_task",
-			toolName: "resume_task",
-			args:     `{"confidence":0.9,"task_id":"task-1"}`,
-			wantErr:  false,
+			name:       "resume_task",
+			toolName:   "resume_task",
+			args:       `{"confidence":0.9,"task_id":"task-1"}`,
+			wantErr:    false,
 			intentType: schema.IntentResumeTask,
 		},
 		{
-			name:     "unknown_task",
-			toolName: "unknown_task",
-			args:     `{"confidence":0.9,"question_for_user":"你想做什么？"}`,
-			wantErr:  false,
+			name:       "unknown_task",
+			toolName:   "unknown_task",
+			args:       `{"confidence":0.9,"question_for_user":"你想做什么？"}`,
+			wantErr:    false,
 			intentType: schema.IntentUnknownTask,
 		},
 		{
-			name:     "create_dependent_task",
-			toolName: "create_dependent_task",
-			args:     `{"confidence":0.9,"task_description":"依赖任务","dependent_task_ids":["t1","t2"]}`,
-			wantErr:  false,
+			name:       "create_dependent_task",
+			toolName:   "create_dependent_task",
+			args:       `{"confidence":0.9,"task_description":"依赖任务","dependent_task_ids":["t1","t2"]}`,
+			wantErr:    false,
 			intentType: schema.IntentContinueTask,
 		},
 		{
-			name:     "modify_task",
-			toolName: "modify_task",
-			args:     `{"confidence":0.9,"task_id":"task-1","new_task_description":"新描述"}`,
-			wantErr:  false,
+			name:       "modify_task",
+			toolName:   "modify_task",
+			args:       `{"confidence":0.9,"task_id":"task-1","new_task_description":"新描述"}`,
+			wantErr:    false,
 			intentType: schema.IntentModifyTask,
 		},
 		{
-			name:     "supplement_task",
-			toolName: "supplement_task",
-			args:     `{"confidence":0.9,"task_id":"task-1","supplement_info":"补充信息"}`,
-			wantErr:  false,
+			name:       "supplement_task",
+			toolName:   "supplement_task",
+			args:       `{"confidence":0.9,"task_id":"task-1","supplement_info":"补充信息"}`,
+			wantErr:    false,
 			intentType: schema.IntentSupplementTask,
 		},
 		{

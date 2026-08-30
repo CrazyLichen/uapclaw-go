@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	baseEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -53,6 +53,7 @@ type baseEmbeddingAdapter struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMockEmbeddingProvider 创建模拟嵌入提供者

@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -31,11 +31,13 @@ func (f *fakeBaseAgentForAvatar) Invoke(_ context.Context, _ map[string]any, _ .
 func (f *fakeBaseAgentForAvatar) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeBaseAgentForAvatar) Card() *agentschema.AgentCard                                         { return nil }
-func (f *fakeBaseAgentForAvatar) Config() agentinterfaces.AgentConfig                                  { return nil }
-func (f *fakeBaseAgentForAvatar) AbilityManager() agentinterfaces.AbilityManagerInterface              { return nil }
-func (f *fakeBaseAgentForAvatar) CallbackManager() *agentinterfaces.AgentCallbackManager               { return nil }
-func (f *fakeBaseAgentForAvatar) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface            { return f.sb }
+func (f *fakeBaseAgentForAvatar) Card() *agentschema.AgentCard                            { return nil }
+func (f *fakeBaseAgentForAvatar) Config() agentinterfaces.AgentConfig                     { return nil }
+func (f *fakeBaseAgentForAvatar) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
+func (f *fakeBaseAgentForAvatar) CallbackManager() *agentinterfaces.AgentCallbackManager  { return nil }
+func (f *fakeBaseAgentForAvatar) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return f.sb
+}
 func (f *fakeBaseAgentForAvatar) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }

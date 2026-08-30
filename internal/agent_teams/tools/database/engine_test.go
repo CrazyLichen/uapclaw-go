@@ -66,4 +66,3 @@ func TestSanitizeSessionIDForTable_对齐Python(t *testing.T) {
 		t.Errorf("对齐 Python 输出格式: 后缀长度应为 16, got %d", len(suffix))
 	}
 }
-

@@ -33,9 +33,9 @@ func TestSummaryManager_AddMemories(t *testing.T) {
 					MemType: mem_model.MemoryTypeSummary,
 					MemID:   "sum-001",
 				},
-				Summary:       "用户讨论了项目架构设计",
-				MessageMemID:  "msg-001",
-				Timestamp:     "2027-04-15 10:00:00",
+				Summary:      "用户讨论了项目架构设计",
+				MessageMemID: "msg-001",
+				Timestamp:    "2027-04-15 10:00:00",
 			},
 		},
 	}
@@ -71,11 +71,11 @@ func TestSummaryManager_AddMemories_Multiple(t *testing.T) {
 		"summary": {
 			&mem_model.SummaryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeSummary, MemID: "sum-001"},
-				Summary: "摘要1", Timestamp: "2027-04-15 10:00:00",
+				Summary:        "摘要1", Timestamp: "2027-04-15 10:00:00",
 			},
 			&mem_model.SummaryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeSummary, MemID: "sum-002"},
-				Summary: "摘要2", Timestamp: "2027-04-15 11:00:00",
+				Summary:        "摘要2", Timestamp: "2027-04-15 11:00:00",
 			},
 		},
 	}
@@ -96,7 +96,7 @@ func TestSummaryManager_AddMemories_NonSummaryTypeIgnored(t *testing.T) {
 		"user_profile": {
 			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeUserProfile, MemID: "prof-001"},
-				Content: "用户喜欢阅读",
+				Content:        "用户喜欢阅读",
 			},
 		},
 	}
@@ -355,7 +355,7 @@ func TestSummaryManager_AddMemories_WithCryptoKey(t *testing.T) {
 		"summary": {
 			&mem_model.SummaryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeSummary, MemID: "sum-001"},
-				Summary: "加密摘要", Timestamp: "2027-04-15 10:00:00",
+				Summary:        "加密摘要", Timestamp: "2027-04-15 10:00:00",
 			},
 		},
 	}
@@ -377,7 +377,7 @@ func TestSummaryManager_AddMemories_NonSummaryUnitTypeIgnored(t *testing.T) {
 		"summary": {
 			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeSummary, MemID: "sum-001"},
-				Content: "这不是摘要",
+				Content:        "这不是摘要",
 			},
 		},
 	}

@@ -170,14 +170,14 @@ func (p *PermissionContext) OwnerScopeKey() [2]string {
 // ToDict 将权限上下文转换为字典。
 func (p *PermissionContext) ToDict() map[string]any {
 	return map[string]any{
-		"principal_user_id":    p.PrincipalUserID,
-		"triggering_user_id":   p.TriggeringUserID,
-		"channel_id":           p.ChannelID,
-		"group_digital_avatar": p.GroupDigitalAvatar,
-		"web_user_id":          p.WebUserID,
-		"enable_memory":        p.EnableMemory,
+		"principal_user_id":     p.PrincipalUserID,
+		"triggering_user_id":    p.TriggeringUserID,
+		"channel_id":            p.ChannelID,
+		"group_digital_avatar":  p.GroupDigitalAvatar,
+		"web_user_id":           p.WebUserID,
+		"enable_memory":         p.EnableMemory,
 		"avatar_principal_name": p.AvatarPrincipalName,
-		"avatar_mode":          p.AvatarMode,
+		"avatar_mode":           p.AvatarMode,
 	}
 }
 

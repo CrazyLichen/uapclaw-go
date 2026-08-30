@@ -57,6 +57,9 @@ type checkConfig struct {
 	retries int
 }
 
+// CheckOption Check 可选参数。
+type CheckOption func(*checkConfig)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CheckResult 记忆检查结果枚举。
@@ -93,9 +96,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// CheckOption Check 可选参数。
-type CheckOption func(*checkConfig)
 
 // WithModel 设置 LLM 模型（对齐 Python: base_chat_model）。
 func WithModel(m *llm.Model) CheckOption {

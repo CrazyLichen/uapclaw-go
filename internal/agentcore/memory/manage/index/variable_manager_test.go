@@ -76,7 +76,7 @@ func TestVariableManager_AddMemories_NonVariableTypeIgnored(t *testing.T) {
 		"user_profile": {
 			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeUserProfile, MemID: "prof-001"},
-				Content: "用户画像",
+				Content:        "用户画像",
 			},
 		},
 	}
@@ -96,7 +96,7 @@ func TestVariableManager_AddMemories_KVStoreNil(t *testing.T) {
 		"variable": {
 			&mem_model.VariableUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeVariable, MemID: "var-001"},
-				VariableName: "age", VariableMem: "25",
+				VariableName:   "age", VariableMem: "25",
 			},
 		},
 	}
@@ -391,7 +391,7 @@ func TestVariableManager_AddMemories_WithCryptoKey(t *testing.T) {
 		"variable": {
 			&mem_model.VariableUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeVariable, MemID: "var-001"},
-				VariableName: "age", VariableMem: "25",
+				VariableName:   "age", VariableMem: "25",
 			},
 		},
 	}
@@ -428,7 +428,7 @@ func TestVariableManager_AddMemories_NonVariableUnitTypeIgnored(t *testing.T) {
 		"variable": {
 			&mem_model.FragmentMemoryUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeVariable, MemID: "var-001"},
-				Content: "不是变量",
+				Content:        "不是变量",
 			},
 		},
 	}
@@ -449,11 +449,11 @@ func TestVariableManager_AddMemories_Multiple(t *testing.T) {
 		"variable": {
 			&mem_model.VariableUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeVariable, MemID: "var-001"},
-				VariableName: "age", VariableMem: "25",
+				VariableName:   "age", VariableMem: "25",
 			},
 			&mem_model.VariableUnit{
 				BaseMemoryUnit: mem_model.BaseMemoryUnit{MemType: mem_model.MemoryTypeVariable, MemID: "var-002"},
-				VariableName: "name", VariableMem: "Alice",
+				VariableName:   "name", VariableMem: "Alice",
 			},
 		},
 	}

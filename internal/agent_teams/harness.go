@@ -5,8 +5,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"

@@ -76,11 +76,11 @@ type agentCreateParamsEntry struct {
 	cacheKey string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClaw, error)。
 // 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
 type AgentFactory func(config map[string]any, mode, subMode string) (*UapClaw, error)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

@@ -187,7 +187,7 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 		coordinator = c.coordinatorLookup(sessionID)
 	}
 	if coordinator == nil {
-		errMsg := fmt.Sprintf("coordinator not found for session_id=%s", sessionID)
+		errMsg := fmt.Sprintf("未找到 session_id=%s 的协调器", sessionID)
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "ContainerAgent.Invoke").

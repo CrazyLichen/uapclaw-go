@@ -213,8 +213,8 @@ func TestWriteManager_DeleteMemByUserID_遍历(t *testing.T) {
 func TestWriteManager_DeleteMemByUserID_错误传播(t *testing.T) {
 	expectedErr := errors.New("delete failed")
 	fragMgr := &stubWriteManagerManager{
-		memTypeStr:         "user_profile",
-		deleteByUserIDErr:  expectedErr,
+		memTypeStr:        "user_profile",
+		deleteByUserIDErr: expectedErr,
 	}
 
 	managers := map[string]BaseMemoryManager{

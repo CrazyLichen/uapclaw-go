@@ -367,7 +367,7 @@ func ensureHistoryWorker() {
 // historyWorker 写入队列消费者。
 func historyWorker() {
 	for item := range historyWriteQueue {
-		// 嗨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
+		// 哨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
 		if item.sessionID == "" && item.record == nil {
 			if item.flushDone != nil {
 				item.flushDone <- struct{}{}

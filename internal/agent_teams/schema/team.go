@@ -101,11 +101,6 @@ const (
 	TeamLifecycleTemporary TeamLifecycle = "temporary"
 	// TeamLifecyclePersistent 持久团队
 	TeamLifecyclePersistent TeamLifecycle = "persistent"
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-const (
 	// TeamRoleLeader Leader 角色
 	TeamRoleLeader TeamRole = "leader"
 	// TeamRoleTeammate Teammate 角色
@@ -115,6 +110,8 @@ const (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

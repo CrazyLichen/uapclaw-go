@@ -313,7 +313,7 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 // 对齐 Python: _build_avatar_rail() (line 2146-2155)
 func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
 	rail := commrails.NewAvatarPromptRail()
-	logger.Info(logComponent).Msg("AvatarPromptRail create success")
+	logger.Info(logComponent).Msg("AvatarPromptRail 创建成功")
 	return rail
 }
 

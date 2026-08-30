@@ -111,7 +111,7 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 				return nil, exception.NewBaseError(
 					exception.StatusMemoryGetMemoryExecutionError,
 					exception.WithParam("memory_type", st),
-					exception.WithMsg(fmt.Sprintf("%s is not a valid search type", st)),
+					exception.WithMsg(fmt.Sprintf("%s 不是合法的搜索类型", st)),
 				)
 			}
 		}
@@ -127,7 +127,7 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 				return nil, exception.NewBaseError(
 					exception.StatusMemoryGetMemoryExecutionError,
 					exception.WithParam("memory_type", st),
-					exception.WithMsg(fmt.Sprintf("%s memory manager not inited", st)),
+					exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", st)),
 				)
 			}
 			usedTypes[manager] = append(usedTypes[manager], st)
@@ -187,7 +187,7 @@ func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID 
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", "search_memory"),
-			exception.WithMsg("memory index not inited"),
+			exception.WithMsg("记忆索引未初始化"),
 		)
 	}
 	start := nums * (pages - 1)
@@ -208,7 +208,7 @@ func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scop
 			return nil, exception.NewBaseError(
 				exception.StatusMemoryGetMemoryExecutionError,
 				exception.WithParam("memory_type", "fragment_memory"),
-				exception.WithMsg("fragment memory manager not inited"),
+				exception.WithMsg("片段记忆管理器未初始化"),
 			)
 		}
 	}
@@ -218,7 +218,7 @@ func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scop
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", "fragment_memory"),
-			exception.WithMsg("fragment memory manager not inited"),
+			exception.WithMsg("片段记忆管理器未初始化"),
 		)
 	}
 	fm, ok := manager.(*index.FragmentMemoryManager)
@@ -226,7 +226,7 @@ func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scop
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", "fragment_memory"),
-			exception.WithMsg("fragment memory manager class is not FragmentMemoryManager"),
+			exception.WithMsg("片段记忆管理器类型不是 FragmentMemoryManager"),
 		)
 	}
 	return fm.ListFragmentMemories(ctx, userID, scopeID, 0, 0, "")
@@ -241,7 +241,7 @@ func (s *SearchManager) ListUserSummary(ctx context.Context, userID string, scop
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeSummary.String()),
-			exception.WithMsg(fmt.Sprintf("%s memory manager not inited", mem_model.MemoryTypeSummary.String())),
+			exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", mem_model.MemoryTypeSummary.String())),
 		)
 	}
 	sm, ok := manager.(*index.SummaryManager)
@@ -249,7 +249,7 @@ func (s *SearchManager) ListUserSummary(ctx context.Context, userID string, scop
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeSummary.String()),
-			exception.WithMsg(fmt.Sprintf("%s manager class is not SummaryManager", mem_model.MemoryTypeSummary.String())),
+			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 SummaryManager", mem_model.MemoryTypeSummary.String())),
 		)
 	}
 	return sm.ListUserSummary(ctx, userID, scopeID, 0, 0)
@@ -264,7 +264,7 @@ func (s *SearchManager) GetUserVariable(ctx context.Context, userID string, scop
 		return "", exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeVariable.String()),
-			exception.WithMsg(fmt.Sprintf("%s memory manager not inited", mem_model.MemoryTypeVariable.String())),
+			exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", mem_model.MemoryTypeVariable.String())),
 		)
 	}
 	vm, ok := manager.(*index.VariableManager)
@@ -272,7 +272,7 @@ func (s *SearchManager) GetUserVariable(ctx context.Context, userID string, scop
 		return "", exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeVariable.String()),
-			exception.WithMsg(fmt.Sprintf("%s manager class is not VariableManager", mem_model.MemoryTypeVariable.String())),
+			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 VariableManager", mem_model.MemoryTypeVariable.String())),
 		)
 	}
 	// 对齐 Python: query_variable(user_id, scope_id, name=var_name)
@@ -299,7 +299,7 @@ func (s *SearchManager) GetAllUserVariable(ctx context.Context, userID string, s
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeVariable.String()),
-			exception.WithMsg(fmt.Sprintf("%s memory manager not inited", mem_model.MemoryTypeVariable.String())),
+			exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", mem_model.MemoryTypeVariable.String())),
 		)
 	}
 	vm, ok := manager.(*index.VariableManager)
@@ -307,7 +307,7 @@ func (s *SearchManager) GetAllUserVariable(ctx context.Context, userID string, s
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", mem_model.MemoryTypeVariable.String()),
-			exception.WithMsg(fmt.Sprintf("%s manager class is not VariableManager", mem_model.MemoryTypeVariable.String())),
+			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 VariableManager", mem_model.MemoryTypeVariable.String())),
 		)
 	}
 	// 对齐 Python: query_variable(user_id, scope_id) — name 为空表示查询所有

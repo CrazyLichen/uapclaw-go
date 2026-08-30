@@ -96,19 +96,19 @@ func (b *memoryManagerBase) validateParams(userID, scopeID string, statusCode ex
 	if userID == "" {
 		return exception.BuildError(statusCode,
 			exception.WithParam("memory_type", memType),
-			exception.WithMsg("user_id is required"),
+			exception.WithMsg("user_id 不能为空"),
 		)
 	}
 	if scopeID == "" {
 		return exception.BuildError(statusCode,
 			exception.WithParam("memory_type", memType),
-			exception.WithMsg("scope_id is required"),
+			exception.WithMsg("scope_id 不能为空"),
 		)
 	}
 	if b.memoryIndex == nil {
 		return exception.BuildError(statusCode,
 			exception.WithParam("memory_type", memType),
-			exception.WithMsg("memory_index is not initialized"),
+			exception.WithMsg("记忆索引未初始化"),
 		)
 	}
 	return nil
