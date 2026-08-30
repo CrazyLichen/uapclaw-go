@@ -26,6 +26,16 @@ func TestNewPermissionContext(t *testing.T) {
 	if pc.WebUserID != "" {
 		t.Errorf("WebUserID 应为空，实际 %q", pc.WebUserID)
 	}
+	// 对齐 Python: enable_memory 默认 true
+	if !pc.EnableMemory {
+		t.Error("EnableMemory 应为 true（默认值）")
+	}
+	if pc.AvatarPrincipalName != "" {
+		t.Errorf("AvatarPrincipalName 应为空，实际 %q", pc.AvatarPrincipalName)
+	}
+	if pc.AvatarMode {
+		t.Error("AvatarMode 应为 false")
+	}
 }
 
 // TestNewPermissionContext_使用Option 验证通过 Option 设置各字段
@@ -36,6 +46,9 @@ func TestNewPermissionContext_使用Option(t *testing.T) {
 		WithPermissionChannelID("web"),
 		WithPermissionGroupDigitalAvatar(true),
 		WithPermissionWebUserID("web-user-1"),
+		WithPermissionEnableMemory(false),
+		WithPermissionAvatarPrincipalName("张三"),
+		WithPermissionAvatarMode(true),
 	)
 	if pc.PrincipalUserID != "user-1" {
 		t.Errorf("PrincipalUserID = %q, 期望 \"user-1\"", pc.PrincipalUserID)
@@ -51,6 +64,15 @@ func TestNewPermissionContext_使用Option(t *testing.T) {
 	}
 	if pc.WebUserID != "web-user-1" {
 		t.Errorf("WebUserID = %q, 期望 \"web-user-1\"", pc.WebUserID)
+	}
+	if pc.EnableMemory {
+		t.Error("EnableMemory 应为 false")
+	}
+	if pc.AvatarPrincipalName != "张三" {
+		t.Errorf("AvatarPrincipalName = %q, 期望 \"张三\"", pc.AvatarPrincipalName)
+	}
+	if !pc.AvatarMode {
+		t.Error("AvatarMode 应为 true")
 	}
 }
 
@@ -121,6 +143,9 @@ func TestPermissionContext_ToDict(t *testing.T) {
 		WithPermissionChannelID("web"),
 		WithPermissionGroupDigitalAvatar(true),
 		WithPermissionWebUserID("web-user-1"),
+		WithPermissionEnableMemory(false),
+		WithPermissionAvatarPrincipalName("张三"),
+		WithPermissionAvatarMode(true),
 	)
 	d := pc.ToDict()
 	if d["principal_user_id"] != "user-1" {
@@ -138,16 +163,28 @@ func TestPermissionContext_ToDict(t *testing.T) {
 	if d["web_user_id"] != "web-user-1" {
 		t.Errorf("ToDict()[\"web_user_id\"] = %v, 期望 \"web-user-1\"", d["web_user_id"])
 	}
+	if d["enable_memory"] != false {
+		t.Errorf("ToDict()[\"enable_memory\"] = %v, 期望 false", d["enable_memory"])
+	}
+	if d["avatar_principal_name"] != "张三" {
+		t.Errorf("ToDict()[\"avatar_principal_name\"] = %v, 期望 \"张三\"", d["avatar_principal_name"])
+	}
+	if d["avatar_mode"] != true {
+		t.Errorf("ToDict()[\"avatar_mode\"] = %v, 期望 true", d["avatar_mode"])
+	}
 }
 
 // TestNewPermissionContextFromDict 验证反序列化往返
 func TestNewPermissionContextFromDict(t *testing.T) {
 	data := map[string]any{
-		"principal_user_id":    "user-1",
-		"triggering_user_id":   "sender-1",
-		"channel_id":           "web",
-		"group_digital_avatar": true,
-		"web_user_id":          "web-user-1",
+		"principal_user_id":     "user-1",
+		"triggering_user_id":    "sender-1",
+		"channel_id":            "web",
+		"group_digital_avatar":  true,
+		"web_user_id":           "web-user-1",
+		"enable_memory":         false,
+		"avatar_principal_name": "张三",
+		"avatar_mode":           true,
 	}
 	pc := NewPermissionContextFromDict(data)
 	if pc.PrincipalUserID != "user-1" {
@@ -164,6 +201,15 @@ func TestNewPermissionContextFromDict(t *testing.T) {
 	}
 	if pc.WebUserID != "web-user-1" {
 		t.Errorf("WebUserID = %q, 期望 \"web-user-1\"", pc.WebUserID)
+	}
+	if pc.EnableMemory {
+		t.Error("EnableMemory 应为 false")
+	}
+	if pc.AvatarPrincipalName != "张三" {
+		t.Errorf("AvatarPrincipalName = %q, 期望 \"张三\"", pc.AvatarPrincipalName)
+	}
+	if !pc.AvatarMode {
+		t.Error("AvatarMode 应为 true")
 	}
 }
 
@@ -182,6 +228,13 @@ func TestNewPermissionContextFromDict_缺失字段用零值(t *testing.T) {
 	if pc.GroupDigitalAvatar {
 		t.Error("GroupDigitalAvatar 应为 false（零值）")
 	}
+	// 对齐 Python: meta.get("enable_memory", True) — 缺失时默认 true
+	if !pc.EnableMemory {
+		t.Error("EnableMemory 缺失时应为 true（默认值）")
+	}
+	if pc.AvatarMode {
+		t.Error("AvatarMode 缺失时应为 false（零值）")
+	}
 }
 
 // TestPermissionContext_ToDictFromDict往返 验证 ToDict → FromDict 往返一致
@@ -192,6 +245,9 @@ func TestPermissionContext_ToDictFromDict往返(t *testing.T) {
 		WithPermissionChannelID("feishu"),
 		WithPermissionGroupDigitalAvatar(false),
 		WithPermissionWebUserID(""),
+		WithPermissionEnableMemory(true),
+		WithPermissionAvatarPrincipalName(""),
+		WithPermissionAvatarMode(false),
 	)
 	roundtrip := NewPermissionContextFromDict(original.ToDict())
 	if roundtrip.PrincipalUserID != original.PrincipalUserID {
@@ -208,6 +264,15 @@ func TestPermissionContext_ToDictFromDict往返(t *testing.T) {
 	}
 	if roundtrip.WebUserID != original.WebUserID {
 		t.Errorf("WebUserID 往返不一致: %q vs %q", roundtrip.WebUserID, original.WebUserID)
+	}
+	if roundtrip.EnableMemory != original.EnableMemory {
+		t.Errorf("EnableMemory 往返不一致: %v vs %v", roundtrip.EnableMemory, original.EnableMemory)
+	}
+	if roundtrip.AvatarPrincipalName != original.AvatarPrincipalName {
+		t.Errorf("AvatarPrincipalName 往返不一致: %q vs %q", roundtrip.AvatarPrincipalName, original.AvatarPrincipalName)
+	}
+	if roundtrip.AvatarMode != original.AvatarMode {
+		t.Errorf("AvatarMode 往返不一致: %v vs %v", roundtrip.AvatarMode, original.AvatarMode)
 	}
 }
 
@@ -234,11 +299,14 @@ func TestPermissionContext_Validate_校验失败(t *testing.T) {
 // TestPermissionContext_JSON往返 验证 JSON marshal/unmarshal 往返一致
 func TestPermissionContext_JSON往返(t *testing.T) {
 	original := &PermissionContext{
-		PrincipalUserID:    "user-1",
-		TriggeringUserID:   "sender-1",
-		ChannelID:          "web",
-		GroupDigitalAvatar: true,
-		WebUserID:          "web-user-1",
+		PrincipalUserID:     "user-1",
+		TriggeringUserID:    "sender-1",
+		ChannelID:           "web",
+		GroupDigitalAvatar:  true,
+		WebUserID:           "web-user-1",
+		EnableMemory:        false,
+		AvatarPrincipalName: "张三",
+		AvatarMode:          true,
 	}
 
 	data, err := json.Marshal(original)
@@ -265,6 +333,15 @@ func TestPermissionContext_JSON往返(t *testing.T) {
 	}
 	if decoded.WebUserID != original.WebUserID {
 		t.Errorf("WebUserID: got %q, want %q", decoded.WebUserID, original.WebUserID)
+	}
+	if decoded.EnableMemory != original.EnableMemory {
+		t.Errorf("EnableMemory: got %v, want %v", decoded.EnableMemory, original.EnableMemory)
+	}
+	if decoded.AvatarPrincipalName != original.AvatarPrincipalName {
+		t.Errorf("AvatarPrincipalName: got %q, want %q", decoded.AvatarPrincipalName, original.AvatarPrincipalName)
+	}
+	if decoded.AvatarMode != original.AvatarMode {
+		t.Errorf("AvatarMode: got %v, want %v", decoded.AvatarMode, original.AvatarMode)
 	}
 }
 

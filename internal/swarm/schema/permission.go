@@ -19,6 +19,15 @@ type PermissionContext struct {
 	GroupDigitalAvatar bool `json:"group_digital_avatar"`
 	// WebUserID 预留：第二期 web 端本人审批
 	WebUserID string `json:"web_user_id"`
+	// EnableMemory 是否启用记忆（默认 true）
+	// 对齐 Python: PermissionContext.enable_memory
+	EnableMemory bool `json:"enable_memory"`
+	// AvatarPrincipalName 数字分身主体名称
+	// 对齐 Python: PermissionContext.avatar_principal_name
+	AvatarPrincipalName string `json:"avatar_principal_name"`
+	// AvatarMode 是否为群聊消息
+	// 对齐 Python: PermissionContext.avatar_mode
+	AvatarMode bool `json:"avatar_mode"`
 }
 
 // toolPermChannelIDKey 权限上下文 channelID 的 context key
@@ -39,8 +48,11 @@ type PermissionContextOption func(*PermissionContext)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionContext 创建权限上下文实例。
+// EnableMemory 默认为 true，对齐 Python: PermissionContext.enable_memory = True。
 func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
-	pc := &PermissionContext{}
+	pc := &PermissionContext{
+		EnableMemory: true,
+	}
 	for _, opt := range opts {
 		opt(pc)
 	}
@@ -48,8 +60,9 @@ func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
 }
 
 // NewPermissionContextFromDict 从字典创建权限上下文实例。
+// 对齐 Python: setup_permission_context(request) 中从 metadata 构建 PermissionContext。
 func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
-	pc := &PermissionContext{}
+	pc := &PermissionContext{EnableMemory: true}
 	if v, ok := data["principal_user_id"]; ok {
 		if s, ok := v.(string); ok {
 			pc.PrincipalUserID = s
@@ -73,6 +86,23 @@ func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 	if v, ok := data["web_user_id"]; ok {
 		if s, ok := v.(string); ok {
 			pc.WebUserID = s
+		}
+	}
+	// 对齐 Python: meta.get("enable_memory", True)
+	if v, ok := data["enable_memory"]; ok {
+		if b, ok := v.(bool); ok {
+			pc.EnableMemory = b
+		}
+	}
+	if v, ok := data["avatar_principal_name"]; ok {
+		if s, ok := v.(string); ok {
+			pc.AvatarPrincipalName = s
+		}
+	}
+	// 对齐 Python: avatar_mode = bool(meta.get("avatar_mode", False))
+	if v, ok := data["avatar_mode"]; ok {
+		if b, ok := v.(bool); ok {
+			pc.AvatarMode = b
 		}
 	}
 	return pc
@@ -103,6 +133,24 @@ func WithPermissionWebUserID(id string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.WebUserID = id }
 }
 
+// WithPermissionEnableMemory 设置是否启用记忆的选项。
+// 对齐 Python: PermissionContext.enable_memory
+func WithPermissionEnableMemory(v bool) PermissionContextOption {
+	return func(pc *PermissionContext) { pc.EnableMemory = v }
+}
+
+// WithPermissionAvatarPrincipalName 设置数字分身主体名称的选项。
+// 对齐 Python: PermissionContext.avatar_principal_name
+func WithPermissionAvatarPrincipalName(name string) PermissionContextOption {
+	return func(pc *PermissionContext) { pc.AvatarPrincipalName = name }
+}
+
+// WithPermissionAvatarMode 设置群聊消息标志的选项。
+// 对齐 Python: PermissionContext.avatar_mode
+func WithPermissionAvatarMode(v bool) PermissionContextOption {
+	return func(pc *PermissionContext) { pc.AvatarMode = v }
+}
+
 // Scene 返回权限场景类型（web/group_digital_avatar/normal_im）。
 func (p *PermissionContext) Scene() string {
 	if p.ChannelID == "web" {
@@ -127,6 +175,9 @@ func (p *PermissionContext) ToDict() map[string]any {
 		"channel_id":           p.ChannelID,
 		"group_digital_avatar": p.GroupDigitalAvatar,
 		"web_user_id":          p.WebUserID,
+		"enable_memory":        p.EnableMemory,
+		"avatar_principal_name": p.AvatarPrincipalName,
+		"avatar_mode":          p.AvatarMode,
 	}
 }
 
