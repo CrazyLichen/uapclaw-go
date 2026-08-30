@@ -2,11 +2,15 @@ package lite
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 
 	baseEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
@@ -56,14 +60,33 @@ func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 	return &MockEmbeddingProvider{id: "mock", model: "mock", dims: 128}
 }
 
-// EmbedQuery MockEmbeddingProvider 的 EmbedQuery 实现，返回空向量
-func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, _ string) ([]float64, error) {
-	return make([]float64, 0), nil
+// EmbedQuery 返回基于文本 hash 的 128 维确定性随机向量。
+//
+// 对齐 Python: MockEmbeddingProvider.embed_query — random.seed(md5(text).hexdigest()), [random.uniform(-1,1) for _ in range(128)]
+func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]float64, error) {
+	h := md5.Sum([]byte(text))
+	seed := int64(binary.BigEndian.Uint64(h[:8]))
+	r := rand.New(rand.NewSource(seed))
+	vec := make([]float64, 128)
+	for i := range vec {
+		vec[i] = r.Float64()*2 - 1 // uniform(-1, 1)
+	}
+	return vec, nil
 }
 
-// EmbedDocuments MockEmbeddingProvider 的 EmbedDocuments 实现，返回空切片
-func (m *MockEmbeddingProvider) EmbedDocuments(_ context.Context, _ []string) ([][]float64, error) {
-	return nil, nil
+// EmbedDocuments 批量嵌入文档。
+//
+// 对齐 Python: MockEmbeddingProvider.embed_documents
+func (m *MockEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
+	result := make([][]float64, len(texts))
+	for i, text := range texts {
+		vec, err := m.EmbedQuery(ctx, text)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = vec
+	}
+	return result, nil
 }
 
 // ID 返回提供者标识
@@ -98,9 +121,6 @@ func (a *baseEmbeddingAdapter) Dims() int { return a.dims }
 func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey string) *apiEmbedding.EmbeddingConfig {
 	envModelName := os.Getenv("EMBEDDING_MODEL_NAME")
 	if envModelName == "" {
-		envModelName = os.Getenv("EMBED_MODEL")
-	}
-	if envModelName == "" {
 		envModelName = modelName
 	}
 	baseURL := os.Getenv("EMBEDDING_BASE_URL")
@@ -117,10 +137,8 @@ func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey st
 	if apiKey == "" {
 		apiKey = fallbackAPIKey
 	}
-	if envModelName == "" {
-		envModelName = "default"
-	}
-	if baseURL == "" || apiKey == "" {
+	// 对齐 Python: if model_name and base_url and api_key → 返回配置，否则返回 None
+	if envModelName == "" || baseURL == "" || apiKey == "" {
 		return nil
 	}
 	return &apiEmbedding.EmbeddingConfig{
@@ -141,11 +159,13 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 		// 对齐 Python: base_url 以 /embeddings 结尾时裁剪
 		embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
 		base := apiEmbedding.NewAPIEmbedding(*embeddingConfig)
-		return &baseEmbeddingAdapter{base: base, prov: provider, model: model}, nil
+		return &baseEmbeddingAdapter{base: base, prov: provider, model: model, dims: 1024}, nil
 	}
 
 	// fallback 到 mock
+	// 对齐 Python: logger.warning("Embedding API key not found, using mock provider")
 	if fallback == "mock" || fallback == "" {
+		logger.Warn(logComponent).Msg("Embedding API key not found, using mock provider")
 		return NewMockEmbeddingProvider(), nil
 	}
 
