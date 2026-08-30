@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"testing"
 )
 
@@ -254,7 +255,7 @@ func TestCheck_无模型(t *testing.T) {
 	checker := &MemUpdateChecker{}
 	newMem := map[string]string{"1": "内容1", "2": "内容2"}
 
-	items, err := checker.Check(nil, newMem, nil)
+	items, err := checker.Check(context.TODO(), newMem, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

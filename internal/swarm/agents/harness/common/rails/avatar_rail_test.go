@@ -426,5 +426,6 @@ func TestNewAvatarPromptRail(t *testing.T) {
 func TestAvatarPromptRail_嵌入DeepAgentRail(t *testing.T) {
 	rail := NewAvatarPromptRail()
 	// 确认可以赋值给 DeepAgentRail
-	var _ *rails.DeepAgentRail = &rail.DeepAgentRail
+	// 确认嵌入的 DeepAgentRail 可以当作 *rails.DeepAgentRail 使用
+	_ = (*rails.DeepAgentRail)(&rail.DeepAgentRail)
 }
