@@ -1,0 +1,12 @@
+memory:
+  forbidden_memory_definition:
+    enabled: true
+    patterns:
+      - 密码
+      - API密钥
+      - Secret
+      - Token
+      - 信用卡号
+    description:
+      zh: "以下内容禁止记忆：密码、API密钥等敏感信息"
+      en: "The following content is forbidden to remember: passwords, API keys, etc."

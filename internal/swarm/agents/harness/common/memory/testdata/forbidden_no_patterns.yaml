@@ -1,0 +1,6 @@
+memory:
+  forbidden_memory_definition:
+    enabled: true
+    description:
+      zh: "以下内容禁止记忆：敏感信息"
+      en: "The following content is forbidden to remember: sensitive information"
