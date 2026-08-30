@@ -112,6 +112,19 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// AllMemoryTypeValues 返回所有记忆类型的字符串值列表。
+//
+// 对齐 Python: [item.value for item in MemoryType]
+func AllMemoryTypeValues() []string {
+	return []string{
+		MemoryTypeUserProfile.String(),
+		MemoryTypeSemanticMemory.String(),
+		MemoryTypeEpisodicMemory.String(),
+		MemoryTypeVariable.String(),
+		MemoryTypeSummary.String(),
+	}
+}
+
 // ParseMemoryType 从字符串解析 MemoryType，未匹配时返回 MemoryTypeUnknown。
 func ParseMemoryType(s string) MemoryType {
 	switch s {

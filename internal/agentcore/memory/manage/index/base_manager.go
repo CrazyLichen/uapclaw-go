@@ -85,6 +85,12 @@ var (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// getMemType 返回管理器类型（供 WriteManager 等外部路由使用）。
+// 对齐 Python: BaseMemoryManager.mem_type 属性
+func (b *memoryManagerBase) getMemType() string {
+	return b.memType
+}
+
 // validateParams 校验必填参数，缺少时返回 *BaseError。
 // 对齐 Python: BaseMemoryManager._validate_required_params
 func (b *memoryManagerBase) validateParams(userID, scopeID string, statusCode exception.StatusCode, memType string) error {
