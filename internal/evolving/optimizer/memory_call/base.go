@@ -97,27 +97,43 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 
 // Backward 反向传播：从信号计算梯度。
 //
-// 对齐 Python:
+// 对齐 Python: BaseOptimizer.backward() 模板方法流程：
 //
-//		async def _backward(self, signals: List["EvolutionSignal"]) -> None:
-//	   子类实现记忆特定反向逻辑
-//		    pass
+//	self._validate_parameters()
+//	self._selected_signals = self._select_signals(signals)
+//	await self._backward(signals)  # pass
 //
 // 对应 Python: MemoryOptimizerBase._backward(signals) → pass
-func (b *MemoryOptimizerBase) Backward(_ context.Context, _ []*signal.EvolutionSignal) error {
+func (b *MemoryOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
+	b.ValidateParameters()
+	selected := b.SelectSignals(signals)
+	b.SetSelectedSignals(selected)
+	// MemoryOptimizer _backward 为 pass
 	return nil
 }
 
-// Step 生成更新映射。空梯度自然产生空映射。
+// Step 生成更新映射。
 //
-// 对齐 Python:
+// 对齐 Python: BaseOptimizer.step() 模板方法流程：
 //
-//	MemoryOptimizerBase._backward() 是 pass，不写梯度；
-//	_step() 是 BaseOptimizer 的抽象方法，子类必须实现。
-//	此处返回空 map，与 ToolOptimizerBase.Step() 模式一致。
+//	self._validate_parameters()
+//	updates = self._step()
+//	self.clear_trajectories()
+//	return updates or {}
+//
+// 对应 Python: BaseOptimizer.step() → _step()
+func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
+	b.ValidateParameters()
+	updates := b.step()
+	b.ClearTrajectories()
+	return updates
+}
+
+// step 子类逻辑，对齐 Python _step()。
+// MemoryOptimizerBase 为空实现，返回空映射。
 //
 // 对应 Python: BaseOptimizer._step() → 抽象（子类实现）
-func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
+func (b *MemoryOptimizerBase) step() map[cschema.UpdateKey]any {
 	return map[cschema.UpdateKey]any{}
 }
 

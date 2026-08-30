@@ -79,19 +79,79 @@ func TestMemoryOptimizerBase_Bind_无匹配Operator(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
-// TestMemoryOptimizerBase_Backward 测试 Backward 返回 nil（空实现）。
+// TestMemoryOptimizerBase_Backward 测试 Backward 模板方法流程。
 func TestMemoryOptimizerBase_Backward(t *testing.T) {
 	base := &MemoryOptimizerBase{}
+	memOp := memoryop.NewMemoryCallOperator()
+	operators := map[string]operator.Operator{"memory_call": memOp}
+	base.Bind(operators, nil, nil)
+
 	err := base.Backward(context.Background(), nil)
 	assert.NoError(t, err)
+	// 验证 SelectedSignals 已设置（空信号列表）
+	selected := base.SelectedSignals()
+	assert.Equal(t, 0, len(selected))
 }
 
-// TestMemoryOptimizerBase_Step 测试 Step 返回空 map。
+// TestMemoryOptimizerBase_Backward_未绑定参数时panic 测试 Backward 未绑定参数时 panic。
+func TestMemoryOptimizerBase_Backward_未绑定参数时panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "期望 Backward 未绑定时 panic")
+	}()
+	base := &MemoryOptimizerBase{}
+	base.Backward(context.Background(), nil)
+}
+
+// TestMemoryOptimizerBase_Backward_信号选择 测试 Backward 正确选择信号。
+func TestMemoryOptimizerBase_Backward_信号选择(t *testing.T) {
+	base := &MemoryOptimizerBase{}
+	memOp := memoryop.NewMemoryCallOperator()
+	operators := map[string]operator.Operator{"memory_call": memOp}
+	base.Bind(operators, nil, nil)
+
+	sig1 := signal.MakeEvolutionSignal("execution_failure", "Test", "excerpt1")
+	sig2 := signal.MakeEvolutionSignal("low_score", "Test", "excerpt2")
+	err := base.Backward(context.Background(), []*signal.EvolutionSignal{sig1, sig2})
+	assert.NoError(t, err)
+	selected := base.SelectedSignals()
+	assert.Equal(t, 2, len(selected))
+}
+
+// TestMemoryOptimizerBase_Step 测试 Step 模板方法流程。
 func TestMemoryOptimizerBase_Step(t *testing.T) {
 	base := &MemoryOptimizerBase{}
+	memOp := memoryop.NewMemoryCallOperator()
+	operators := map[string]operator.Operator{"memory_call": memOp}
+	base.Bind(operators, nil, nil)
+
 	updates := base.Step()
 	assert.NotNil(t, updates)
 	assert.Equal(t, 0, len(updates))
+}
+
+// TestMemoryOptimizerBase_Step_未绑定参数时panic 测试 Step 未绑定参数时 panic。
+func TestMemoryOptimizerBase_Step_未绑定参数时panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "期望 Step 未绑定时 panic")
+	}()
+	base := &MemoryOptimizerBase{}
+	base.Step()
+}
+
+// TestMemoryOptimizerBase_Step_清空轨迹 测试 Step 后轨迹被清空。
+func TestMemoryOptimizerBase_Step_清空轨迹(t *testing.T) {
+	base := &MemoryOptimizerBase{}
+	memOp := memoryop.NewMemoryCallOperator()
+	operators := map[string]operator.Operator{"memory_call": memOp}
+	base.Bind(operators, nil, nil)
+
+	base.AddTrajectory(&trajectory.Trajectory{ExecutionID: "test"})
+	assert.Equal(t, 1, len(base.GetTrajectories()))
+
+	base.Step()
+	assert.Equal(t, 0, len(base.GetTrajectories()))
 }
 
 // TestMemoryOptimizerBase_AddTrajectoryAndGet 测试 AddTrajectory/GetTrajectories/ClearTrajectories。
