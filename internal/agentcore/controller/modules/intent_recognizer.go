@@ -2,13 +2,17 @@ package modules
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"golang.org/x/sync/errgroup"
@@ -17,11 +21,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelProvider 意图识别所需的模型调用接口。
-// ⤵️ 6.23 ResourceMgr 实现后回填
+// 解耦 IntentRecognizer 与 ResourceMgr，通过 SetModelProvider 注入。
 type ModelProvider interface {
-	// Invoke 调用模型，messages 为消息列表，tools 为工具 Schema
-	// 返回模型响应
-	Invoke(ctx context.Context, messages []any, tools []map[string]any) (any, error)
+	// Invoke 调用模型并返回完整响应
+	Invoke(ctx context.Context, messages model_clients.MessagesParam, tools []cschema.ToolInfoInterface) (*llmschema.AssistantMessage, error)
 }
 
 // IntentRecognizer 意图识别器，负责识别用户输入中的意图，将事件转换为 Intent 对象。
@@ -33,8 +36,7 @@ type IntentRecognizer struct {
 	taskManager *TaskManager
 	// contextEngine 上下文引擎
 	contextEngine iface.ContextEngine
-	// modelProvider 模型提供者
-	// ⤵️ 6.23 ResourceMgr 实现后回填
+	// modelProvider 模型提供者，通过 SetModelProvider 注入
 	modelProvider ModelProvider
 	// systemMessage 系统提示词
 	systemMessage string
@@ -102,14 +104,139 @@ func NewIntentRecognizer(
 
 // Recognize 识别意图。
 // 对应 Python: IntentRecognizer.recognize(event, session)
-// ⤵️ 6.23 ResourceMgr 实现后回填 LLM 调用逻辑
 func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, sess sessioninterfaces.SessionFacade) ([]*schema.Intent, error) {
-	logger.Warn(logComponentIntent).Msg("IntentRecognizer.Recognize 尚未实现，⤵️ 6.23 ResourceMgr 实现后回填 LLM 调用逻辑")
-	return nil, nil
+	// Step 0: 校验 ModelProvider
+	if r.modelProvider == nil {
+		logger.Warn(logComponentIntent).Msg("IntentRecognizer.Recognize: ModelProvider 未设置，跳过意图识别")
+		return nil, nil
+	}
+
+	// Step 1: 获取/创建上下文
+	sessionID := sess.GetSessionID()
+	contextID := sessionID
+	mc := r.contextEngine.GetContext(contextID, sessionID)
+	if mc == nil {
+		var createErr error
+		mc, createErr = r.contextEngine.CreateContext(ctx, contextID, sess)
+		if createErr != nil {
+			return nil, fmt.Errorf("创建上下文失败: %w", createErr)
+		}
+	}
+
+	// Step 2: 校验事件类型
+	inputEvent, ok := event.(*schema.InputEvent)
+	if !ok {
+		return nil, exception.NewBaseError(
+			exception.StatusAgentControllerRuntimeError,
+			exception.WithMsg(fmt.Sprintf("输入事件必须是 InputEvent 类型，当前类型 %T", event)),
+		)
+	}
+
+	// Step 3: 提取文本输入
+	texts := make([]*schema.TextDataFrame, 0)
+	files := make([]*schema.FileDataFrame, 0)
+	jsons := make([]*schema.JsonDataFrame, 0)
+	for _, df := range inputEvent.InputData {
+		switch v := df.(type) {
+		case *schema.TextDataFrame:
+			texts = append(texts, v)
+		case *schema.FileDataFrame:
+			files = append(files, v)
+		case *schema.JsonDataFrame:
+			jsons = append(jsons, v)
+		}
+	}
+
+	if len(files) > 0 || len(jsons) > 0 {
+		return nil, exception.NewBaseError(
+			exception.StatusAgentControllerRuntimeError,
+			exception.WithMsg("Inputs with files or jsons are not supported for intent recognition."),
+		)
+	}
+	if len(texts) > 1 {
+		return nil, exception.NewBaseError(
+			exception.StatusAgentControllerRuntimeError,
+			exception.WithMsg("Multiple inputs are not supported for intent recognition."),
+		)
+	}
+
+	// Step 4: 构建用户消息并添加到上下文
+	userMsgText, err := r.prepareUserMessage(ctx, texts[0].Text)
+	if err != nil {
+		return nil, fmt.Errorf("构建用户消息失败: %w", err)
+	}
+	userMsg := llmschema.NewUserMessage(userMsgText)
+	mc.AddMessages(ctx, []llmschema.BaseMessage{userMsg})
+
+	// Step 5: 构建 IntentToolkits + 转换工具 Schema
+	toolkits := NewIntentToolkits(event, r.config.IntentConfidenceThreshold)
+	toolSchemas := toolkits.GetOpenAIToolSchemas(r.config.IntentTypeList...)
+	tools := make([]cschema.ToolInfoInterface, 0, len(toolSchemas))
+	for _, ts := range toolSchemas {
+		fn, _ := ts["function"].(map[string]any)
+		name, _ := fn["name"].(string)
+		desc, _ := fn["description"].(string)
+		params, _ := fn["parameters"].(map[string]any)
+		tools = append(tools, cschema.NewToolInfo(name, desc, params))
+	}
+
+	// Step 6: 构建 LLM 消息
+	sysMsg := llmschema.NewSystemMessage(r.systemMessage)
+	const maxMessageLen = 50
+	ctxMsgs, _ := mc.GetMessages(maxMessageLen, false)
+	allMsgs := make([]llmschema.BaseMessage, 0, 1+len(ctxMsgs))
+	allMsgs = append(allMsgs, sysMsg)
+	for _, msg := range ctxMsgs {
+		if msg != nil {
+			allMsgs = append(allMsgs, msg)
+		}
+	}
+	messages := model_clients.NewMessagesParam(allMsgs...)
+
+	// Step 7: 循环调用 LLM + 解析 tool_calls
+	var intents []*schema.Intent
+	response, err := r.modelProvider.Invoke(ctx, messages, tools)
+	if err != nil {
+		return nil, fmt.Errorf("调用 LLM 失败: %w", err)
+	}
+	mc.AddMessages(ctx, []llmschema.BaseMessage{response})
+
+	for {
+		if len(response.ToolCalls) == 0 {
+			break
+		}
+		for _, toolCall := range response.ToolCalls {
+			intent, result, invokeErr := r.invokeToolkitMethod(toolkits, toolCall.Name, toolCall.Arguments)
+			if invokeErr != nil {
+				logger.Warn(logComponentIntent).Err(invokeErr).Str("tool_name", toolCall.Name).Msg("调用工具方法失败")
+			}
+			if intent != nil {
+				intents = append(intents, intent)
+			}
+			toolMsg := llmschema.NewToolMessage(toolCall.ID, result)
+			mc.AddMessages(ctx, []llmschema.BaseMessage{toolMsg})
+		}
+		// 重新构建消息并再次调用
+		ctxMsgs, _ = mc.GetMessages(maxMessageLen, false)
+		allMsgs = make([]llmschema.BaseMessage, 0, 1+len(ctxMsgs))
+		allMsgs = append(allMsgs, sysMsg)
+		for _, msg := range ctxMsgs {
+			if msg != nil {
+				allMsgs = append(allMsgs, msg)
+			}
+		}
+		messages = model_clients.NewMessagesParam(allMsgs...)
+		response, err = r.modelProvider.Invoke(ctx, messages, tools)
+		if err != nil {
+			return nil, fmt.Errorf("调用 LLM 失败: %w", err)
+		}
+		mc.AddMessages(ctx, []llmschema.BaseMessage{response})
+	}
+
+	return intents, nil
 }
 
 // SetModelProvider 设置模型提供者。
-// ⤵️ 6.23 回填时调用
 func (r *IntentRecognizer) SetModelProvider(provider ModelProvider) {
 	r.modelProvider = provider
 }
@@ -334,10 +461,18 @@ func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx contex
 		}
 	}
 
-	// ⤵️ 6.23 ContextEngine.GetContext 回填：将依赖任务的上下文消息附加到 InputEvent
-	// 对齐 Python: 追加上下文消息到输入数据
-	// 当前简化处理：仅合并前置事件
-	_ = contextIDs // 预留：后续回填时使用 ContextEngine 获取上下文消息
+	// 对齐 Python: 通过 ContextEngine 获取依赖任务的上下文消息并附加到 InputEvent
+	// Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages()}))
+	for _, contextID := range contextIDs {
+		ctxMC := h.ContextEngine.GetContext(contextID, contextID)
+		if ctxMC != nil {
+			ctxMsgs, msgErr := ctxMC.GetMessages(0, false)
+			if msgErr == nil && len(ctxMsgs) > 0 {
+				contextData := map[string]any{contextID: ctxMsgs}
+				inputEvent.InputData = append(inputEvent.InputData, &schema.JsonDataFrame{Data: contextData})
+			}
+		}
+	}
 	previousEvents = append(previousEvents, inputEvent)
 
 	task := schema.NewTask(sess.GetSessionID(), "default_task_type")
@@ -460,6 +595,80 @@ func joinStrings(parts []string, sep string) string {
 			result += sep
 		}
 		result += s
+	}
+	return result
+}
+
+// invokeToolkitMethod 根据工具名称分发到 IntentToolkits 对应方法。
+// 对应 Python: getattr(toolkits, tool_call.name)(**json.loads(tool_call.arguments))
+func (r *IntentRecognizer) invokeToolkitMethod(toolkits *IntentToolkits, name, arguments string) (*schema.Intent, string, error) {
+	var args map[string]any
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return nil, "", fmt.Errorf("解析工具参数失败: %w", err)
+	}
+
+	confidence := toFloat64(args["confidence"])
+
+	switch name {
+	case "create_task":
+		taskDesc, _ := args["task_description"].(string)
+		return toolkits.CreateTask(confidence, taskDesc)
+	case "pause_task":
+		taskID, _ := args["task_id"].(string)
+		return toolkits.PauseTask(confidence, taskID)
+	case "cancel_task":
+		taskID, _ := args["task_id"].(string)
+		return toolkits.CancelTask(confidence, taskID)
+	case "resume_task":
+		taskID, _ := args["task_id"].(string)
+		return toolkits.ResumeTask(confidence, taskID)
+	case "unknown_task":
+		question, _ := args["question_for_user"].(string)
+		return toolkits.UnknownTask(confidence, question)
+	case "create_dependent_task":
+		taskDesc, _ := args["task_description"].(string)
+		dependentIDs := toStringSlice(args["dependent_task_ids"])
+		return toolkits.CreateDependentTask(confidence, taskDesc, dependentIDs)
+	case "modify_task":
+		taskID, _ := args["task_id"].(string)
+		newDesc, _ := args["new_task_description"].(string)
+		return toolkits.ModifyTask(confidence, taskID, newDesc)
+	case "supplement_task":
+		taskID, _ := args["task_id"].(string)
+		supplementInfo, _ := args["supplement_info"].(string)
+		return toolkits.SupplementTask(confidence, taskID, supplementInfo)
+	default:
+		return nil, "", fmt.Errorf("未知工具名称: %s", name)
+	}
+}
+
+// toFloat64 将 any 值转换为 float64，支持 float64/int 等数值类型。
+func toFloat64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
+	}
+}
+
+// toStringSlice 将 any 值转换为 []string，支持 []any 中每个元素为 string 的场景。
+func toStringSlice(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if s, ok := item.(string); ok {
+			result = append(result, s)
+		}
 	}
 	return result
 }

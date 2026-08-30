@@ -237,9 +237,9 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 
 // getWorkflowMetadata 获取工作流元数据，对应 Python TracerWorkflowUtils._get_workflow_metadata。
 // 返回 workflow_id/workflow_version/workflow_name。
-// ⤵️ 5.12 回填：workflow_version/workflow_name 当前硬编码为空字符串，
+// ⤵️ 8.15 回填：workflow_version/workflow_name 当前硬编码为空字符串，
 // Python 从 session.config().get_workflow_config(executable_id).card 提取 version 和 name，
-// Go 中 Config() 返回 any，无法调用 get_workflow_config。
+// Go 中 Config() 已返回 SessionConfig，GetWorkflowConfig 可调用，但 WorkflowConfig 尚未暴露 card.version/name。
 func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 	workflowID := session.WorkflowID()
 	metadata := map[string]any{
