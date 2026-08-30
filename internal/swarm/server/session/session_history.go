@@ -412,7 +412,9 @@ func readHistoryFile(fpath string) ([]map[string]any, error) {
 	}
 	var records []map[string]any
 	if err := json.Unmarshal(data, &records); err != nil {
-		return nil, err
+		// 对齐 Python _read_history: 读取失败时 Warn 日志 + 返回空列表，不阻断主流程
+		logger.Warn(logComponent).Err(err).Str("path", fpath).Msg("读取 history.json 失败，已忽略并重建")
+		return []map[string]any{}, nil
 	}
 	return records, nil
 }

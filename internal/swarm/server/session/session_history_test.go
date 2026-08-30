@@ -255,3 +255,24 @@ func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
 	// 应写入 compact 记录
 	assert.GreaterOrEqual(t, len(records), 1)
 }
+
+// TestReadHistoryRecords_损坏JSON返回空列表 验证损坏的 history.json 不返回 error，
+// 对齐 Python _read_history: 读取失败时 log.Warn + 返回空列表
+func TestReadHistoryRecords_损坏JSON返回空列表(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetHistoryWorkspaceCache()
+
+	sessionID := "sess-corrupt"
+	sessionsDir := GetSessionsDir()
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	os.MkdirAll(sessionDir, 0o755)
+
+	// 写入损坏的 JSON
+	historyPath := filepath.Join(sessionDir, "history.json")
+	os.WriteFile(historyPath, []byte("{invalid json}"), 0o644)
+
+	records, err := ReadHistoryRecords(sessionID)
+	assert.NoError(t, err, "损坏 JSON 不应返回 error，应对齐 Python 吞掉错误")
+	assert.Empty(t, records, "损坏 JSON 应返回空列表")
+}
