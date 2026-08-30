@@ -460,4 +460,45 @@ func TestParseTimestamp(t *testing.T) {
 			t.Errorf("期望返回错误")
 		}
 	})
+	// 对齐 Python: fromisoformat 可解析无时区时间戳，然后补 UTC
+	t.Run("无时区ISO", func(t *testing.T) {
+		ts := "2025-01-15T10:30:00"
+		got, err := parseTimestamp(ts)
+		if err != nil {
+			t.Fatalf("parseTimestamp(无时区) 失败: %v", err)
+		}
+		if got.Year() != 2025 {
+			t.Errorf("Year = %d, 期望 2025", got.Year())
+		}
+		if got.Location().String() != "UTC" {
+			t.Errorf("无时区时间戳应补 UTC，实际 %v", got.Location())
+		}
+	})
+	t.Run("无时区ISO纳秒", func(t *testing.T) {
+		ts := "2025-01-15T10:30:00.123456789"
+		got, err := parseTimestamp(ts)
+		if err != nil {
+			t.Fatalf("parseTimestamp(无时区纳秒) 失败: %v", err)
+		}
+		if got.Year() != 2025 {
+			t.Errorf("Year = %d, 期望 2025", got.Year())
+		}
+		if got.Nanosecond() != 123456789 {
+			t.Errorf("Nanosecond = %d, 期望 123456789", got.Nanosecond())
+		}
+	})
+	t.Run("带时区偏移", func(t *testing.T) {
+		ts := "2025-01-15T10:30:00+08:00"
+		got, err := parseTimestamp(ts)
+		if err != nil {
+			t.Fatalf("parseTimestamp(带偏移) 失败: %v", err)
+		}
+		if got.Location().String() != "UTC" {
+			t.Errorf("应为 UTC 时区，实际 %v", got.Location())
+		}
+		// +08:00 的 10:30 → UTC 的 02:30
+		if got.Hour() != 2 {
+			t.Errorf("Hour = %d, 期望 2（UTC 转换后）", got.Hour())
+		}
+	})
 }

@@ -657,20 +657,22 @@ func convertSliceToMapSlice(slice []any) []map[string]any {
 // parseTimestamp 解析 UTC ISO 时间戳，对齐 Python 的 datetime.fromisoformat。
 //
 // 对齐 Python: record_time = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
+// 对齐 Python: if record_time.tzinfo is None: record_time = record_time.replace(tzinfo=timezone.utc)
 func parseTimestamp(ts string) (time.Time, error) {
 	s := strings.ReplaceAll(ts, "Z", "+00:00")
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		// 尝试 RFC3339（无纳秒）
-		t, err = time.Parse(time.RFC3339, s)
-		if err != nil {
-			return time.Time{}, err
+	// 先尝试标准格式（含时区）
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
 		}
 	}
-	if t.Location() == nil {
-		t = t.UTC()
+	// 尝试无时区 ISO 格式，补 UTC（对齐 Python: fromisoformat + tzinfo=None → UTC）
+	for _, layout := range []string{"2006-01-02T15:04:05.999999999", "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
+		}
 	}
-	return t.UTC(), nil
+	return time.Time{}, fmt.Errorf("cannot parse timestamp: %s", ts)
 }
 
 // truncateString 截断字符串到最大长度。
