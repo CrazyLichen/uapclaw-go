@@ -602,7 +602,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65a-2 | ✅ | TaskDao + TaskManager | InMemoryTaskDao（18方法+依赖图变更管线+终止传播）+TeamTaskManager（20+方法+PLAN_MODE审批）；database 89.1% tools 85.2% | `openjiuwen/agent_teams/tools/database/task_dao.py` · `tools/task_manager.py` |
 | 9.65a-3 | ✅ | MessageDao + MessageManager | InMemoryMessageDao（7方法+read_status watermark）+TeamMessageManager（7方法薄门面）+Messager接口+InProcessMessager | `openjiuwen/agent_teams/tools/database/message_dao.py` · `tools/message_manager.py` |
 | 9.65a-4 | ✅ | TeamBackend 门面 | TeamBackend结构体+30+方法（spawn_member/startup/build_team/shutdown_member/clean_team/force_clean/HITT名册/inbound回调） | `openjiuwen/agent_teams/tools/team.py` |
-| 9.65a-5 | ☐ | SQL 实现 | SQLite/PostgreSQL后端（Go SQL引擎+动态表命名+4个SQL DAO） | `openjiuwen/agent_teams/tools/database/engine.py` · `database/*.py` |
+| 9.65a-5 | ✅ | SQL 实现 | SQLite/PostgreSQL后端（SqlTeamDatabase+newGormDB+DDL动态表+4个SQL DAO+NewTeamDatabase工厂+WithTx跨表事务）；覆盖率86.0% | `openjiuwen/agent_teams/tools/database/engine.py` · `database/*.py` |
 | 9.65-1 | ✅ | Messager 接口 + InProcess | Messager接口（8方法）+InProcessMessager+全局Bus+CreateMessager工厂+TaskManager事件发布回填（9处）；循环依赖重构完成：配置搬入schema打断schema→messager/memory循环链，Messager接口改回*schema.EventMessage，删除SenderIDStamper，tools包改用schema.TypedEvent，删除sessionID字段改用schema.GetSessionID(ctx)，MessageID改用UUID v4 | `openjiuwen/agent_teams/messager/messager.py` · `messager/inprocess.py` |
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
 | 9.66 | ☐ | Team Workspace | 团队工作空间 | `openjiuwen/agent_teams/team_workspace/` |

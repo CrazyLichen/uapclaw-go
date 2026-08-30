@@ -7,7 +7,7 @@ package database
 // 静态表 team_info 的行模型。
 type Team struct {
 	// TeamName 团队名称（主键）
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"primaryKey"`
 	// DisplayName 显示名称
 	DisplayName string `json:"display_name"`
 	// LeaderMemberName Leader 成员名
@@ -22,14 +22,17 @@ type Team struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
+// TableName 指定 Team 对应的数据库表名。
+func (Team) TableName() string { return "team_info" }
+
 // TeamMember 团队成员模型。
 // 对齐 Python: TeamMember (openjiuwen/agent_teams/tools/models.py)
 // 静态表 team_member 的行模型，复合主键 (member_name, team_name)。
 type TeamMember struct {
 	// MemberName 成员名称（主键）
-	MemberName string `json:"member_name"`
+	MemberName string `json:"member_name" gorm:"primaryKey"`
 	// TeamName 团队名称（主键，外键 team_info.team_name）
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"primaryKey"`
 	// DisplayName 显示名称
 	DisplayName string `json:"display_name"`
 	// Desc 成员描述
@@ -52,24 +55,27 @@ type TeamMember struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
+// TableName 指定 TeamMember 对应的数据库表名。
+func (TeamMember) TableName() string { return "team_member" }
+
 // TeamTaskBase 任务行模型。
 // 对齐 Python: TeamTaskBase (openjiuwen/agent_teams/tools/database/task_dao.py)
 // 动态表 team_task_<session_suffix> 的行模型。
 type TeamTaskBase struct {
 	// TaskID 任务唯一标识
-	TaskID string `json:"task_id"`
+	TaskID string `json:"task_id" gorm:"column:task_id;primaryKey"`
 	// TeamName 团队名称
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"column:team_name"`
 	// Title 任务标题
-	Title string `json:"title"`
+	Title string `json:"title" gorm:"column:title"`
 	// Content 任务内容
-	Content string `json:"content"`
+	Content string `json:"content" gorm:"column:content"`
 	// Status 任务状态（TaskStatus 枚举值）
-	Status string `json:"status"`
+	Status string `json:"status" gorm:"column:status"`
 	// Assignee 认领人/分配人
-	Assignee string `json:"assignee,omitempty"`
+	Assignee string `json:"assignee,omitempty" gorm:"column:assignee"`
 	// UpdatedAt 更新时间（毫秒时间戳）
-	UpdatedAt int64 `json:"updated_at,omitempty"`
+	UpdatedAt int64 `json:"updated_at,omitempty" gorm:"column:updated_at"`
 }
 
 // TeamTaskDependencyBase 依赖边模型。
@@ -77,13 +83,13 @@ type TeamTaskBase struct {
 // 动态表 team_task_dependency_<session_suffix> 的行模型。
 type TeamTaskDependencyBase struct {
 	// TaskID 下游任务ID（被阻塞的任务）
-	TaskID string `json:"task_id"`
+	TaskID string `json:"task_id" gorm:"column:task_id;primaryKey"`
 	// DependsOnID 上游任务ID（阻塞源）
-	DependsOnID string `json:"depends_on_task_id"`
+	DependsOnID string `json:"depends_on_task_id" gorm:"column:depends_on_task_id;primaryKey"`
 	// TeamName 团队名称
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"column:team_name"`
 	// Resolved 依赖是否已解决（上游完成/取消时标记为 true）
-	Resolved bool `json:"resolved"`
+	Resolved bool `json:"resolved" gorm:"column:resolved"`
 }
 
 // NewTaskSpec 图变更管线中待插入的新任务规范。
@@ -114,24 +120,24 @@ type EdgeSpec struct {
 // 动态表 team_message_<session_suffix> 的行模型。
 type TeamMessageBase struct {
 	// MessageID 消息唯一标识（主键）
-	MessageID string `json:"message_id"`
+	MessageID string `json:"message_id" gorm:"column:message_id;primaryKey"`
 	// TeamName 团队名称
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"column:team_name"`
 	// FromMemberName 发送者
-	FromMemberName string `json:"from_member_name"`
+	FromMemberName string `json:"from_member_name" gorm:"column:from_member_name"`
 	// ToMemberName 接收者（广播消息为空）
-	ToMemberName string `json:"to_member_name,omitempty"`
+	ToMemberName string `json:"to_member_name,omitempty" gorm:"column:to_member_name"`
 	// Content 消息内容
-	Content string `json:"content"`
+	Content string `json:"content" gorm:"column:content"`
 	// Timestamp 毫秒时间戳
-	Timestamp int64 `json:"timestamp"`
+	Timestamp int64 `json:"timestamp" gorm:"column:timestamp"`
 	// Broadcast 是否广播消息
-	Broadcast bool `json:"broadcast"`
+	Broadcast bool `json:"broadcast" gorm:"column:broadcast"`
 	// IsRead 直发消息的已读标记。广播消息为 nil（广播已读状态由 MessageReadStatusBase 管理）。
 	// 对齐 Python: is_read = None if broadcast else is_read
 	// nil = 广播消息（不参与直发已读判定）
 	// *false = 直发未读, *true = 直发已读
-	IsRead *bool `json:"is_read"`
+	IsRead *bool `json:"is_read" gorm:"column:is_read"`
 }
 
 // MessageReadStatusBase 广播已读水位模型。
@@ -140,11 +146,11 @@ type TeamMessageBase struct {
 // 每个 member 每个团队一条记录，存储已读的最新广播消息的 timestamp。
 type MessageReadStatusBase struct {
 	// MemberName 成员名（主键）
-	MemberName string `json:"member_name"`
+	MemberName string `json:"member_name" gorm:"column:member_name;primaryKey"`
 	// TeamName 团队名（主键）
-	TeamName string `json:"team_name"`
+	TeamName string `json:"team_name" gorm:"column:team_name;primaryKey"`
 	// ReadAt 已读水位时间戳（该成员已读的最新广播消息的 timestamp）
-	ReadAt *int64 `json:"read_at"`
+	ReadAt *int64 `json:"read_at" gorm:"column:read_at"`
 }
 
 // GraphMutationResult 图变更操作结果。

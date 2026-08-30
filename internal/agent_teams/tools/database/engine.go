@@ -16,6 +16,16 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// GetSessionIDFunc 从 context 中获取当前 session_id 的函数。
+	// 由调用方在 init 阶段注入（如 schema 包的 GetSessionID），
+	// 避免 database → schema 循环依赖。
+	// 默认返回空字符串（InMemory 不需要 session ID）。
+	GetSessionIDFunc = func(ctx context.Context) string { return "" }
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetCurrentTime 返回当前毫秒时间戳。对齐 Python: get_current_time()
@@ -42,21 +52,4 @@ func SanitizeSessionIDForTable(sessionID string) string {
 	return hex.EncodeToString(buf)
 }
 
-// InitializeEngine 初始化数据库引擎。⤵️ 9.65a-5 SQL 实现时回填
-func InitializeEngine(_ context.Context, _ DBConfigProvider) (any, error) { return nil, nil }
-
-// CreateCurSessionTablesFromEngine 创建当前会话动态表。⤵️ 9.65a-5
-func CreateCurSessionTablesFromEngine(_ context.Context, _ any) error { return nil }
-
-// DropCurSessionTablesFromEngine 删除当前会话动态表。⤵️ 9.65a-5
-func DropCurSessionTablesFromEngine(_ context.Context, _ any) error { return nil }
-
-// CleanupAllRuntimeStateFromEngine 清理所有运行时状态。⤵️ 9.65a-5
-func CleanupAllRuntimeStateFromEngine(_ context.Context, _ any) ([]string, []string, error) {
-	return nil, nil, nil
-}
-
-// DropSessionTablesByIDFromEngine 按 ID 删除动态表。⤵️ 9.65a-5
-func DropSessionTablesByIDFromEngine(_ context.Context, _ any, _ string) ([]string, error) {
-	return nil, nil
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────

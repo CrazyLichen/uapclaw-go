@@ -1,7 +1,6 @@
 package database
 
 import (
-	"context"
 	"testing"
 )
 
@@ -68,20 +67,3 @@ func TestSanitizeSessionIDForTable_对齐Python(t *testing.T) {
 	}
 }
 
-// TestInitializeEngine 占位函数应返回 nil, nil。
-func TestInitializeEngine(t *testing.T) {
-	result, err := InitializeEngine(context.TODO(), nil)
-	if err != nil {
-		t.Errorf("InitializeEngine 占位应返回 nil error: %v", err)
-	}
-	if result != nil {
-		t.Error("InitializeEngine 占位应返回 nil result")
-	}
-}
-
-// TestCreateCurSessionTablesFromEngine 占位函数应返回 nil error。
-func TestCreateCurSessionTablesFromEngine(t *testing.T) {
-	if err := CreateCurSessionTablesFromEngine(context.TODO(), nil); err != nil {
-		t.Errorf("CreateCurSessionTablesFromEngine 占位应返回 nil error: %v", err)
-	}
-}

@@ -1,6 +1,10 @@
 package database
 
-import "context"
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -162,5 +166,23 @@ type MessageDao interface {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewTeamDatabase 根据配置创建数据库实例。
+// 对齐 Python: 根据 DatabaseConfig.db_type 选择后端。
+// memory → InMemoryTeamDatabase，sqlite/postgresql/mysql → SqlTeamDatabase。
+// SQL 初始化失败时降级为 InMemoryTeamDatabase。
+func NewTeamDatabase(ctx context.Context, config DBConfigProvider) TeamDatabase {
+	switch config.GetDBType() {
+	case DatabaseTypeMemory:
+		return NewInMemoryTeamDatabase()
+	default:
+		sqlDB := NewSqlTeamDatabase(config.(DatabaseConfig))
+		if err := sqlDB.Initialize(ctx); err != nil {
+			logger.Error(logComponent).Err(err).Msg("SQL 数据库初始化失败，降级为 InMemory")
+			return NewInMemoryTeamDatabase()
+		}
+		return sqlDB
+	}
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
