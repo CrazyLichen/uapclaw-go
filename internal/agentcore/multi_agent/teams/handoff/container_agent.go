@@ -254,9 +254,6 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 				return map[string]any{}, nil
 			}
 		}
-		if interruptSignal == nil {
-			interruptSignal = ExtractInterruptSignal(result, nil)
-		}
 		signal = ExtractHandoffSignal(result, agentSession)
 	}
 
