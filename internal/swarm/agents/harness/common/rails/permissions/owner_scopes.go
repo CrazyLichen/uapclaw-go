@@ -1,4 +1,4 @@
-package adapter
+package permissions
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -23,7 +23,7 @@ type OwnerScopesPermissionContext struct {
 	AvatarMode bool `json:"avatar_mode"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -31,7 +31,8 @@ type OwnerScopesPermissionContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewOwnerScopesPermissionContextFromDict 从字典创建权限上下文
+// NewOwnerScopesPermissionContextFromDict 从字典创建权限上下文。
+// 对齐 Python: setup_permission_context(request) 中构建 PermissionContext
 func NewOwnerScopesPermissionContextFromDict(data map[string]any) *OwnerScopesPermissionContext {
 	pc := &OwnerScopesPermissionContext{EnableMemory: true}
 	if v, ok := data["channel_id"].(string); ok {
@@ -60,7 +61,8 @@ func NewOwnerScopesPermissionContextFromDict(data map[string]any) *OwnerScopesPe
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// Scene 返回权限场景类型
+// Scene 返回权限场景类型。
+// 对齐 Python: PermissionContext.scene
 func (p *OwnerScopesPermissionContext) Scene() string {
 	if p.GroupDigitalAvatar {
 		return "group_digital_avatar"
@@ -71,7 +73,8 @@ func (p *OwnerScopesPermissionContext) Scene() string {
 	return "normal_im"
 }
 
-// OwnerScopeKey 返回 (channel_id, principal_user_id)
+// OwnerScopeKey 返回 (channel_id, principal_user_id)。
+// 对齐 Python: PermissionContext.owner_scope_key
 func (p *OwnerScopesPermissionContext) OwnerScopeKey() [2]string {
 	return [2]string{p.ChannelID, p.PrincipalUserID}
 }
