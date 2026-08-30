@@ -9,7 +9,6 @@ import (
 )
 
 func TestSQLTeamDao_CreateTeam(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Team()
 
@@ -22,7 +21,6 @@ func TestSQLTeamDao_CreateTeam(t *testing.T) {
 }
 
 func TestSQLTeamDao_GetTeam(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Team()
 
@@ -40,7 +38,6 @@ func TestSQLTeamDao_GetTeam(t *testing.T) {
 }
 
 func TestSQLTeamDao_TeamExists(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Team()
 
@@ -50,7 +47,6 @@ func TestSQLTeamDao_TeamExists(t *testing.T) {
 }
 
 func TestSQLTeamDao_DeleteTeam(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Team()
 
@@ -60,7 +56,6 @@ func TestSQLTeamDao_DeleteTeam(t *testing.T) {
 }
 
 func TestSQLTeamDao_GetTeamUpdatedAt(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Team()
 

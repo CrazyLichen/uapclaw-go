@@ -8,7 +8,6 @@ import (
 )
 
 func TestSQLMessageDao_CreateAndGet(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "msg-test")
 	ctx := newTestCtx("msg-test")
 
@@ -44,7 +43,6 @@ func TestSQLMessageDao_CreateAndGet(t *testing.T) {
 }
 
 func TestSQLMessageDao_BroadcastWatermark(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "watermark-test")
 	ctx := newTestCtx("watermark-test")
 
@@ -89,7 +87,6 @@ func TestSQLMessageDao_BroadcastWatermark(t *testing.T) {
 }
 
 func TestSQLMessageDao_MarkMessageRead_直发(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "direct-read-test")
 	ctx := newTestCtx("direct-read-test")
 
@@ -115,7 +112,6 @@ func TestSQLMessageDao_MarkMessageRead_直发(t *testing.T) {
 }
 
 func TestSQLMessageDao_HasUnreadMessages_广播(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "unread-bc-test")
 	ctx := newTestCtx("unread-bc-test")
 
@@ -138,7 +134,6 @@ func TestSQLMessageDao_HasUnreadMessages_广播(t *testing.T) {
 }
 
 func TestSQLMessageDao_MarkMessageRead_广播(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "bc-read-test")
 	ctx := newTestCtx("bc-read-test")
 
@@ -162,7 +157,6 @@ func TestSQLMessageDao_MarkMessageRead_广播(t *testing.T) {
 }
 
 func TestSQLMessageDao_GetTeamMessages(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "team-msg-test")
 	ctx := newTestCtx("team-msg-test")
 
@@ -191,7 +185,6 @@ func TestSQLMessageDao_GetTeamMessages(t *testing.T) {
 }
 
 func TestSQLMessageDao_GetMessages_直发(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "dm-list-test")
 	ctx := newTestCtx("dm-list-test")
 

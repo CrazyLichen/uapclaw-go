@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -47,14 +48,14 @@ func (d *SQLTaskDao) withTx(tx *gorm.DB) *SQLTaskDao {
 
 // taskTableName 获取当前 session 的任务表名。
 func (d *SQLTaskDao) taskTableName(ctx context.Context) string {
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_task_" + suffix
 }
 
 // depTableName 获取当前 session 的依赖表名。
 func (d *SQLTaskDao) depTableName(ctx context.Context) string {
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_task_dependency_" + suffix
 }
@@ -103,13 +104,15 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 		// 对齐 Python: pending + unresolved > 0 → blocked
 		if task.Status == fsm.TaskStatusPending && unresolved > 0 {
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
-				Updates(map[string]any{"status": fsm.TaskStatusBlocked, "updated_at": now})
+				Select("status", "updated_at").
+				Updates(&TeamTaskBase{Status: fsm.TaskStatusBlocked, UpdatedAt: now})
 			refreshedIDs = append(refreshedIDs, task.TaskID)
 			logger.Info(logComponent).Str("task_id", task.TaskID).Int("unresolved", unresolved).Msg("任务被阻塞")
 		} else if task.Status == fsm.TaskStatusBlocked && unresolved == 0 {
 			// 对齐 Python: blocked + unresolved == 0 → pending
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
-				Updates(map[string]any{"status": fsm.TaskStatusPending, "updated_at": now})
+				Select("status", "updated_at").
+				Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, UpdatedAt: now})
 			refreshedIDs = append(refreshedIDs, task.TaskID)
 			logger.Info(logComponent).Str("task_id", task.TaskID).Msg("任务解除阻塞")
 		}
@@ -147,7 +150,8 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 
 	// 对齐 Python: task.status = new_status; task.updated_at = now
 	tx.Table(taskTable).Where("task_id = ?", taskID).
-		Updates(map[string]any{"status": newStatus, "updated_at": now})
+		Select("status", "updated_at").
+		Updates(&TeamTaskBase{Status: newStatus, UpdatedAt: now})
 	logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务终止")
 
 	// 对齐 Python: 标记下游依赖 resolved
@@ -183,13 +187,13 @@ func stageNewTasksInTx(tx *gorm.DB, taskTable, teamName string, newTasks []NewTa
 			return &mutationFailure{reason: fmt.Sprintf("Duplicate task_id %s in new_tasks", spec.TaskID)}
 		}
 		seenIDs[spec.TaskID] = true
-		row := map[string]any{
-			"task_id":    spec.TaskID,
-			"team_name":  teamName,
-			"title":      spec.Title,
-			"content":    spec.Content,
-			"status":     spec.InitialStatus,
-			"updated_at": now,
+		row := &TeamTaskBase{
+			TaskID:    spec.TaskID,
+			TeamName:  teamName,
+			Title:     spec.Title,
+			Content:   spec.Content,
+			Status:    spec.InitialStatus,
+			UpdatedAt: now,
 		}
 		if err := tx.Table(taskTable).Create(row).Error; err != nil {
 			return &mutationFailure{reason: fmt.Sprintf("插入任务 %s 失败: %s", spec.TaskID, err.Error())}
@@ -353,16 +357,8 @@ func formatCycle(cycle []string) string {
 // 对齐 Python: create_task(task_id, team_name, title, content, status) → bool
 func (d *SQLTaskDao) CreateTask(ctx context.Context, task *TeamTaskBase) (bool, error) {
 	table := d.taskTableName(ctx)
-	row := map[string]any{
-		"task_id":    task.TaskID,
-		"team_name":  task.TeamName,
-		"title":      task.Title,
-		"content":    task.Content,
-		"status":     task.Status,
-		"assignee":   task.Assignee,
-		"updated_at": GetCurrentTime(),
-	}
-	result := d.db.WithContext(ctx).Table(table).Create(row)
+	task.UpdatedAt = GetCurrentTime()
+	result := d.db.WithContext(ctx).Table(table).Create(task)
 	if result.Error != nil {
 		// 对齐 Python: except IntegrityError → False
 		return false, nil
@@ -440,7 +436,8 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
-			Updates(map[string]any{"status": fsm.TaskStatusClaimed, "assignee": assignee, "updated_at": GetCurrentTime()})
+			Select("status", "assignee", "updated_at").
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: assignee, UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("任务认领成功")
 		return nil
@@ -469,7 +466,8 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
-			Updates(map[string]any{"status": fsm.TaskStatusPending, "assignee": "", "updated_at": GetCurrentTime()})
+			Select("status", "assignee", "updated_at").
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, Assignee: "", UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Msg("任务重置为 pending")
 		return nil
@@ -493,7 +491,8 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
-			Updates(map[string]any{"status": fsm.TaskStatusPlanApproved, "updated_at": GetCurrentTime()})
+			Select("status", "updated_at").
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusPlanApproved, UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Msg("任务计划已审批")
 		return nil
@@ -520,7 +519,8 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 
 		now := GetCurrentTime()
 		tx.Table(table).Where("task_id = ?", taskID).
-			Updates(map[string]any{"status": newStatus, "updated_at": now})
+			Select("status", "updated_at").
+			Updates(&TeamTaskBase{Status: newStatus, UpdatedAt: now})
 
 		// 对齐 Python: if status == completed → 标记依赖 resolved
 		if newStatus == fsm.TaskStatusCompleted {
@@ -611,13 +611,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		// 步骤4: applyNewEdgesInTx — INSERT 依赖行
 		// 对齐 Python: _apply_new_edges(session, team_name, new_edge_set, endpoint_tasks)
 		for _, edge := range newEdges {
-			row := map[string]any{
-				"task_id":            edge.TaskID,
-				"depends_on_task_id": edge.DependsOnID,
-				"team_name":          edge.TeamName,
-				"resolved":           edge.Resolved,
-			}
-			if createErr := tx.Table(depTable).Create(row).Error; createErr != nil {
+			if createErr := tx.Table(depTable).Create(&edge).Error; createErr != nil {
 				mutationErr = createErr
 				return createErr // rollback
 			}

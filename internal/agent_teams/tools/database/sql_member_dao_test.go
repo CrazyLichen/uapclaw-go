@@ -11,7 +11,6 @@ import (
 )
 
 func TestSQLMemberDao_CreateAndGet(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -35,7 +34,6 @@ func TestSQLMemberDao_CreateAndGet(t *testing.T) {
 }
 
 func TestSQLMemberDao_GetTeamMembers(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -54,7 +52,6 @@ func TestSQLMemberDao_GetTeamMembers(t *testing.T) {
 }
 
 func TestSQLMemberDao_UpdateMemberStatus(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -74,7 +71,6 @@ func TestSQLMemberDao_UpdateMemberStatus(t *testing.T) {
 }
 
 func TestSQLMemberDao_TryTransitionMemberStatus_CAS(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -90,7 +86,6 @@ func TestSQLMemberDao_TryTransitionMemberStatus_CAS(t *testing.T) {
 }
 
 func TestSQLMemberDao_ListHumanAgentNames(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -104,7 +99,6 @@ func TestSQLMemberDao_ListHumanAgentNames(t *testing.T) {
 }
 
 func TestSQLMemberDao_GetMembersMaxUpdatedAt(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
@@ -118,7 +112,6 @@ func TestSQLMemberDao_GetMembersMaxUpdatedAt(t *testing.T) {
 }
 
 func TestSQLMemberDao_UpdateMemberExecutionStatus(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	dao := db.Member()
 	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")

@@ -38,16 +38,16 @@ func (d *SQLTeamDao) withTx(tx *gorm.DB) *SQLTeamDao {
 func (d *SQLTeamDao) CreateTeam(ctx context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool {
 	// 对齐 Python: ts = get_current_time()
 	now := GetCurrentTime()
-	row := map[string]any{
-		"team_name":          teamName,
-		"display_name":       displayName,
-		"leader_member_name": leaderMemberName,
-		"desc":               desc,
-		"prompt":             prompt,
-		"created":            now,
-		"updated_at":         now,
+	team := &Team{
+		TeamName:         teamName,
+		DisplayName:      displayName,
+		LeaderMemberName: leaderMemberName,
+		Desc:             desc,
+		Prompt:           prompt,
+		Created:          now,
+		UpdatedAt:        now,
 	}
-	result := d.db.WithContext(ctx).Table("team_info").Create(row)
+	result := d.db.WithContext(ctx).Create(team)
 	if result.Error != nil {
 		// 对齐 Python: except IntegrityError → False
 		logger.Error(logComponent).Str("team_name", teamName).Err(result.Error).Msg("团队已存在")

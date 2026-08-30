@@ -5,7 +5,8 @@
 // 对齐 Python 端 openjiuwen/agent_teams/tools/database/ + tools/memory_database.py 的实现。
 // 支持 SQLite、PostgreSQL、MySQL、Memory 四种数据库后端。
 // 通过 NewTeamDatabase 工厂函数按 db_type 自动选择实现。
-// SQL DAO 操作动态表（team_task_{suffix}/team_message_{suffix}），表名由 ctx 中 session_id 决定。
+// SQL DAO 操作动态表（team_task_{suffix}/team_message_{suffix}），表名由 ctx 中 session_id 决定，
+// session_id 通过 sessionctx.GetSessionID(ctx) 获取（对齐 Python contextvars.ContextVar）。
 //
 // 文件目录：
 //
@@ -15,7 +16,7 @@
 //	├── models.go            # Team + TeamMember + TeamTaskBase + TeamMessageBase + MessageReadStatusBase 数据模型 + 辅助类型 + 动态表常量
 //	├── database.go          # TeamDatabase 门面接口 + TeamDao/MemberDao/TaskDao/MessageDao DAO 接口 + NewTeamDatabase 工厂
 //	├── fsm.go               # FSM 状态转换表（MemberTransitions/ExecutionTransitions/TaskTransitions）+ 校验函数
-//	├── engine.go            # GetCurrentTime / SanitizeSessionIDForTable 工具函数 + GetSessionIDFunc 注入点
+//	├── engine.go            # GetCurrentTime / SanitizeSessionIDForTable 工具函数
 //	├── memory_impl.go       # InMemoryTeamDatabase 单体实现（TeamDatabase+TeamDao+MemberDao+TaskDao+MessageDao + 管线+终止传播）
 //	├── sql_engine.go        # SqlTeamDatabase 门面 + newGormDB + DDL 建表/删表 + 清理 + WithTx
 //	├── sql_team_dao.go      # SQLTeamDao（5 方法，静态表 team_info）

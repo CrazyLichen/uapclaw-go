@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -93,7 +94,7 @@ func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
 	if s.db == nil {
 		return nil
 	}
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	if sessionID == "" {
 		// 对齐 Python: team_logger.warning("No session_id in context, cannot create session tables")
 		logger.Warn(logComponent).Msg("上下文中无 session_id，无法创建会话表")
@@ -114,7 +115,7 @@ func (s *SqlTeamDatabase) DropCurSessionTables(ctx context.Context) error {
 	if s.db == nil {
 		return nil
 	}
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	if sessionID == "" {
 		logger.Warn(logComponent).Msg("上下文中无 session_id，无法删除会话表")
 		return nil

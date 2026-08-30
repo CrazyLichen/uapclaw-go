@@ -37,21 +37,21 @@ func (d *SQLMemberDao) withTx(tx *gorm.DB) *SQLMemberDao {
 // 对齐 Python: create_member() → bool（IntegrityError → False）
 func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
 	now := GetCurrentTime()
-	row := map[string]any{
-		"member_name":      memberName,
-		"team_name":        teamName,
-		"display_name":     displayName,
-		"agent_card":       agentCard,
-		"status":           status,
-		"role":             role,
-		"desc":             desc,
-		"execution_status": executionStatus,
-		"mode":             mode,
-		"prompt":           prompt,
-		"model_ref_json":   modelRefJSON,
-		"updated_at":       now,
+	member := &TeamMember{
+		MemberName:      memberName,
+		TeamName:        teamName,
+		DisplayName:     displayName,
+		AgentCard:       agentCard,
+		Status:          status,
+		Role:            role,
+		Desc:            desc,
+		ExecutionStatus: executionStatus,
+		Mode:            mode,
+		Prompt:          prompt,
+		ModelRefJSON:    modelRefJSON,
+		UpdatedAt:       now,
 	}
-	result := d.db.WithContext(ctx).Table("team_member").Create(row)
+	result := d.db.WithContext(ctx).Create(member)
 	if result.Error != nil {
 		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).Err(result.Error).Msg("成员已存在")
 		return false

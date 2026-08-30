@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -37,14 +38,14 @@ func (d *SQLMessageDao) withTx(tx *gorm.DB) *SQLMessageDao {
 
 // msgTableName 获取当前 session 的消息表名。
 func (d *SQLMessageDao) msgTableName(ctx context.Context) string {
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_message_" + suffix
 }
 
 // readStatusTableName 获取当前 session 的已读状态表名。
 func (d *SQLMessageDao) readStatusTableName(ctx context.Context) string {
-	sessionID := GetSessionIDFunc(ctx)
+	sessionID := sessionctx.GetSessionID(ctx)
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "message_read_status_" + suffix
 }
@@ -70,19 +71,8 @@ func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase)
 	// 对齐 Python: backoff = [0.1, 0.3, 0.5] 秒
 	backoffs := []time.Duration{100 * time.Millisecond, 300 * time.Millisecond, 500 * time.Millisecond}
 
-	row := map[string]any{
-		"message_id":       msg.MessageID,
-		"team_name":        msg.TeamName,
-		"from_member_name": msg.FromMemberName,
-		"to_member_name":   msg.ToMemberName,
-		"content":          msg.Content,
-		"timestamp":        msg.Timestamp,
-		"broadcast":        msg.Broadcast,
-		"is_read":          msg.IsRead,
-	}
-
 	for attempt := 0; attempt <= 3; attempt++ {
-		err := d.db.WithContext(ctx).Table(msgTable).Create(row).Error
+		err := d.db.WithContext(ctx).Table(msgTable).Create(msg).Error
 		if err == nil {
 			return true
 		}

@@ -6,7 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 )
+
 // newTestSqlDB 创建测试用 SQLite 内存数据库。
 func newTestSqlDB(t *testing.T) *SqlTeamDatabase {
 	t.Helper()
@@ -19,29 +23,21 @@ func newTestSqlDB(t *testing.T) *SqlTeamDatabase {
 }
 
 // newTestCtx 创建带 session ID 的 context。
+// 通过 sessionctx 包直接注入 SessionState，无需全局变量覆盖。
 func newTestCtx(sessionID string) context.Context {
-	ctx := context.Background()
-	// 通过注入的 GetSessionIDFunc 提供 session ID
-	origFunc := GetSessionIDFunc
-	GetSessionIDFunc = func(_ context.Context) string { return sessionID }
-	// 恢复：使用 defer 模式不方便，测试中手动管理
-	_ = origFunc // 保存引用
-	return ctx
+	state := sessionctx.InitSessionState()
+	state.SetSessionID(sessionID)
+	return sessionctx.WithSessionState(context.Background(), state)
 }
 
-// restoreGetSessionID 恢复 GetSessionIDFunc。
-func restoreGetSessionID() {
-	GetSessionIDFunc = func(_ context.Context) string { return "" }
-}
+// ──────────────────────────── SqlTeamDatabase 测试 ────────────────────────────
 
 func TestSqlTeamDatabase_Initialize(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	assert.True(t, db.initialized)
 }
 
 func TestSqlTeamDatabase_CreateCurSessionTables(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	ctx := newTestCtx("session-ddl-test")
 
@@ -56,7 +52,6 @@ func TestSqlTeamDatabase_CreateCurSessionTables(t *testing.T) {
 }
 
 func TestSqlTeamDatabase_DropCurSessionTables(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	ctx := newTestCtx("session-drop-test")
 
@@ -69,7 +64,6 @@ func TestSqlTeamDatabase_DropCurSessionTables(t *testing.T) {
 }
 
 func TestSqlTeamDatabase_CleanupAllRuntimeState(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	ctx := newTestCtx("cleanup-test")
 	_ = db.CreateCurSessionTables(ctx)
@@ -85,7 +79,6 @@ func TestSqlTeamDatabase_CleanupAllRuntimeState(t *testing.T) {
 }
 
 func TestSqlTeamDatabase_DropSessionTablesByID(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDB(t)
 	ctx := newTestCtx("by-id-test")
 	_ = db.CreateCurSessionTables(ctx)
@@ -96,7 +89,6 @@ func TestSqlTeamDatabase_DropSessionTablesByID(t *testing.T) {
 }
 
 func TestSqlTeamDatabase_Close(t *testing.T) {
-	defer restoreGetSessionID()
 	config := DatabaseConfig{DBType: DatabaseTypeSQLite, ConnectionString: ":memory:"}
 	db := NewSqlTeamDatabase(config)
 	ctx := newTestCtx("close-test")
@@ -108,8 +100,9 @@ func TestSqlTeamDatabase_Close(t *testing.T) {
 	assert.Nil(t, db.db)
 }
 
+// ──────────────────────────── NewTeamDatabase 工厂测试 ────────────────────────────
+
 func TestNewTeamDatabase_Memory(t *testing.T) {
-	defer restoreGetSessionID()
 	ctx := context.Background()
 	db := NewTeamDatabase(ctx, NewMemoryDatabaseConfig())
 	_, ok := db.(*InMemoryTeamDatabase)
@@ -117,7 +110,6 @@ func TestNewTeamDatabase_Memory(t *testing.T) {
 }
 
 func TestNewTeamDatabase_SQL(t *testing.T) {
-	defer restoreGetSessionID()
 	ctx := newTestCtx("factory-test")
 	db := NewTeamDatabase(ctx, NewDatabaseConfig())
 	_, ok := db.(*SqlTeamDatabase)
@@ -125,8 +117,9 @@ func TestNewTeamDatabase_SQL(t *testing.T) {
 	_ = db.Close()
 }
 
+// ──────────────────────────── 数据库变体测试 ────────────────────────────
+
 func TestNewSqlTeamDatabase_文件SQLite(t *testing.T) {
-	defer restoreGetSessionID()
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 	config := DatabaseConfig{DBType: DatabaseTypeSQLite, ConnectionString: dbPath, DBEnableWAL: true}
@@ -138,7 +131,6 @@ func TestNewSqlTeamDatabase_文件SQLite(t *testing.T) {
 }
 
 func TestNewSqlTeamDatabase_PostgreSQL_缺连接串(t *testing.T) {
-	defer restoreGetSessionID()
 	config := DatabaseConfig{DBType: DatabaseTypePostgreSQL, ConnectionString: ""}
 	db := NewSqlTeamDatabase(config)
 	ctx := newTestCtx("pg-test")
@@ -148,7 +140,6 @@ func TestNewSqlTeamDatabase_PostgreSQL_缺连接串(t *testing.T) {
 }
 
 func TestNewSqlTeamDatabase_MySQL_不支持(t *testing.T) {
-	defer restoreGetSessionID()
 	config := DatabaseConfig{DBType: DatabaseTypeMySQL, ConnectionString: "root@/test"}
 	db := NewSqlTeamDatabase(config)
 	ctx := newTestCtx("mysql-test")
@@ -158,10 +149,37 @@ func TestNewSqlTeamDatabase_MySQL_不支持(t *testing.T) {
 }
 
 func TestNewSqlTeamDatabase_不支持的类型(t *testing.T) {
-	defer restoreGetSessionID()
 	config := DatabaseConfig{DBType: "unknown", ConnectionString: ""}
 	db := NewSqlTeamDatabase(config)
 	ctx := newTestCtx("unknown-test")
 	err := db.Initialize(ctx)
 	assert.Error(t, err)
+}
+
+// ──────────────────────────── ForceDeleteTeamSession / WithTx 测试 ────────────────────────────
+
+func TestSqlTeamDatabase_ForceDeleteTeamSession(t *testing.T) {
+	db := newTestSqlDB(t)
+	ctx := newTestCtx("force-delete-test")
+
+	db.Team().CreateTeam(ctx, "ft1", "FT1", "l1", "", "")
+	db.Member().CreateMember(ctx, "m1", "ft1", "M1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+
+	result := db.ForceDeleteTeamSession(ctx, "ft1")
+	assert.True(t, result)
+}
+
+func TestSqlTeamDatabase_WithTx(t *testing.T) {
+	db := newTestSqlDB(t)
+	ctx := newTestCtx("withtx-test")
+
+	err := db.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		teamDao, memberDao, taskDao, messageDao := db.WithTx(tx)
+		assert.NotNil(t, teamDao)
+		assert.NotNil(t, memberDao)
+		assert.NotNil(t, taskDao)
+		assert.NotNil(t, messageDao)
+		return nil
+	})
+	assert.NoError(t, err)
 }

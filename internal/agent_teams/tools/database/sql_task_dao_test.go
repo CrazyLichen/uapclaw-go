@@ -1,18 +1,15 @@
 package database
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 )
 
 // newTestSqlDBWithSession 创建带指定 session ID 的测试数据库。
-// 注意：调用方需在测试函数中 defer restoreGetSessionID()。
 func newTestSqlDBWithSession(t *testing.T, sessionID string) *SqlTeamDatabase {
 	t.Helper()
 	config := DatabaseConfig{DBType: DatabaseTypeSQLite, ConnectionString: ":memory:"}
@@ -24,7 +21,6 @@ func newTestSqlDBWithSession(t *testing.T, sessionID string) *SqlTeamDatabase {
 }
 
 func TestSQLTaskDao_CreateAndGet(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "task-test-1")
 	ctx := newTestCtx("task-test-1")
 
@@ -41,7 +37,6 @@ func TestSQLTaskDao_CreateAndGet(t *testing.T) {
 }
 
 func TestSQLTaskDao_GetTeamTasks(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "task-list-test")
 	ctx := newTestCtx("task-list-test")
 
@@ -59,7 +54,6 @@ func TestSQLTaskDao_GetTeamTasks(t *testing.T) {
 }
 
 func TestSQLTaskDao_GetTasksByAssignee(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "assignee-test")
 	ctx := newTestCtx("assignee-test")
 
@@ -80,7 +74,6 @@ func TestSQLTaskDao_GetTasksByAssignee(t *testing.T) {
 }
 
 func TestSQLTaskDao_ClaimTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "claim-test")
 	ctx := newTestCtx("claim-test")
 
@@ -98,7 +91,6 @@ func TestSQLTaskDao_ClaimTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_ResetTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "reset-test")
 	ctx := newTestCtx("reset-test")
 
@@ -119,7 +111,6 @@ func TestSQLTaskDao_ResetTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_ApprovePlanTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "approve-test")
 	ctx := newTestCtx("approve-test")
 
@@ -137,7 +128,6 @@ func TestSQLTaskDao_ApprovePlanTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "update-status-test")
 	ctx := newTestCtx("update-status-test")
 
@@ -154,7 +144,6 @@ func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
 }
 
 func TestSQLTaskDao_UpdateTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "update-task-test")
 	ctx := newTestCtx("update-task-test")
 
@@ -178,7 +167,6 @@ func TestSQLTaskDao_UpdateTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_MutateDependencyGraph_成功(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "mutate-test")
 	ctx := newTestCtx("mutate-test")
 
@@ -195,7 +183,6 @@ func TestSQLTaskDao_MutateDependencyGraph_成功(t *testing.T) {
 }
 
 func TestSQLTaskDao_MutateDependencyGraph_环检测(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "cycle-test")
 	ctx := newTestCtx("cycle-test")
 
@@ -214,7 +201,6 @@ func TestSQLTaskDao_MutateDependencyGraph_环检测(t *testing.T) {
 }
 
 func TestSQLTaskDao_MutateDependencyGraph_新增任务(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "new-tasks-test")
 	ctx := newTestCtx("new-tasks-test")
 
@@ -236,7 +222,6 @@ func TestSQLTaskDao_MutateDependencyGraph_新增任务(t *testing.T) {
 }
 
 func TestSQLTaskDao_AddTaskWithBidirectionalDependencies(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "bidir-test")
 	ctx := newTestCtx("bidir-test")
 
@@ -256,7 +241,6 @@ func TestSQLTaskDao_AddTaskWithBidirectionalDependencies(t *testing.T) {
 }
 
 func TestSQLTaskDao_CancelTask_终止传播(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "cancel-test")
 	ctx := newTestCtx("cancel-test")
 
@@ -278,7 +262,6 @@ func TestSQLTaskDao_CancelTask_终止传播(t *testing.T) {
 }
 
 func TestSQLTaskDao_CompleteTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "complete-test")
 	ctx := newTestCtx("complete-test")
 
@@ -295,7 +278,6 @@ func TestSQLTaskDao_CompleteTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "cancel-all-test")
 	ctx := newTestCtx("cancel-all-test")
 
@@ -326,7 +308,6 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 }
 
 func TestSQLTaskDao_DeleteTask(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "delete-test")
 	ctx := newTestCtx("delete-test")
 
@@ -341,7 +322,6 @@ func TestSQLTaskDao_DeleteTask(t *testing.T) {
 }
 
 func TestSQLTaskDao_GetUnresolvedDependenciesCount(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "unresolved-test")
 	ctx := newTestCtx("unresolved-test")
 
@@ -357,7 +337,6 @@ func TestSQLTaskDao_GetUnresolvedDependenciesCount(t *testing.T) {
 }
 
 func TestSQLTaskDao_GetTasksDependingOn(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "depending-on-test")
 	ctx := newTestCtx("depending-on-test")
 
@@ -374,7 +353,6 @@ func TestSQLTaskDao_GetTasksDependingOn(t *testing.T) {
 }
 
 func TestSQLTaskDao_VerifyAndFixTaskConsistency(t *testing.T) {
-	defer restoreGetSessionID()
 	db := newTestSqlDBWithSession(t, "verify-test")
 	ctx := newTestCtx("verify-test")
 
@@ -391,32 +369,3 @@ func TestSQLTaskDao_VerifyAndFixTaskConsistency(t *testing.T) {
 	_ = refreshed
 }
 
-func TestSqlTeamDatabase_ForceDeleteTeamSession(t *testing.T) {
-	defer restoreGetSessionID()
-	db := newTestSqlDB(t)
-	ctx := newTestCtx("force-del-test")
-
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
-	db.Member().CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
-	_ = db.CreateCurSessionTables(ctx)
-
-	// 对齐 Python: force_delete_team_session
-	ok := db.ForceDeleteTeamSession(ctx, "t1")
-	assert.True(t, ok)
-	assert.False(t, db.Team().TeamExists(context.Background(), "t1"))
-}
-
-func TestSqlTeamDatabase_WithTx(t *testing.T) {
-	defer restoreGetSessionID()
-	db := newTestSqlDB(t)
-
-	// 对齐 Python: 使用事务进行跨表操作
-	err := db.db.Transaction(func(tx *gorm.DB) error {
-		teamDao, memberDao, _, _ := db.WithTx(tx)
-		teamDao.CreateTeam(context.Background(), "tx1", "TX1", "l1", "", "")
-		memberDao.CreateMember(context.Background(), "m1", "tx1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
-		return nil
-	})
-	require.NoError(t, err)
-	assert.True(t, db.Team().TeamExists(context.Background(), "tx1"))
-}

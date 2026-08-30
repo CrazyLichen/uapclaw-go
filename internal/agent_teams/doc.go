@@ -13,12 +13,15 @@
 //	agent_teams/
 //	├── doc.go              # 包文档
 //	├── constants.go        # 保留名常量
-//	├── context.go          # SessionState 可变容器 + session_id context 传播（9.59）
+//	├── context.go          # SessionState 委托（定义已迁移至 sessionctx 包）
 //	├── i18n.go             # 多语言 i18n 支持
 //	├── paths.go            # 团队路径工具
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）
+//	├── sessionctx/         # 会话上下文状态管理（对齐 Python context.py，独立子包避免循环依赖）
+//	│   ├── doc.go          # 包文档
+//	│   └── session_state.go # SessionState/GetSessionID 会话上下文管理
 //	├── interaction/        # 外部交互层（9.59b）
 //	│   ├── doc.go          # 包文档
 //	│   ├── payload.go      # 载荷类型（GodViewMessage/OperatorMessage/HumanAgentMessage/InteractPayload/DeliverResult）
