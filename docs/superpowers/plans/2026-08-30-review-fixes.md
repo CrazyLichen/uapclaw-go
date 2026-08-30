@@ -1,6 +1,6 @@
 # 审查问题修复实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 修复 2026-08-30 审查文档中验证确认的 23 个代码问题 + 2 个注释修改
 
@@ -35,7 +35,7 @@
 - Modify: `internal/evolving/experience/scorer.go:L660-L674`
 - Test: `internal/evolving/experience/scorer_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `scorer_test.go` 中添加测试：
 
@@ -67,12 +67,12 @@ func TestParseTimestamp_无时区ISO时间戳(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/evolving/experience/... -run TestParseTimestamp_无时区 -v`
 Expected: 无时区格式 FAIL
 
-- [ ] **Step 3: 修改 parseTimestamp 函数**
+- [x] **Step 3: 修改 parseTimestamp 函数**
 
 将 `scorer.go:L660-L674` 替换为：
 
@@ -95,12 +95,12 @@ func parseTimestamp(ts string) (time.Time, error) {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/evolving/experience/... -run TestParseTimestamp -v`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/evolving/experience/scorer.go internal/evolving/experience/scorer_test.go
@@ -115,7 +115,7 @@ git commit -m "fix: parseTimestamp 增加无时区 ISO 时间戳回退解析，�
 - Modify: `internal/agentcore/memory/lite/embeddings.go:L30-L37,L55-L67`
 - Test: `internal/agentcore/memory/lite/embeddings_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestMockEmbeddingProvider_EmbedQuery_返回128维向量(t *testing.T) {
@@ -145,12 +145,12 @@ func TestMockEmbeddingProvider_EmbedDocuments(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/lite/... -run TestMockEmbeddingProvider -v`
 Expected: FAIL（当前返回空切片，长度不为 128）
 
-- [ ] **Step 3: 修改 MockEmbeddingProvider 实现**
+- [x] **Step 3: 修改 MockEmbeddingProvider 实现**
 
 将 `embeddings.go:L60-L67` 的 EmbedQuery 和 EmbedDocuments 替换为：
 
@@ -187,12 +187,12 @@ func (m *MockEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []stri
 
 同时在 import 中添加 `"crypto/md5"`, `"encoding/binary"`, `"math/rand"`
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/lite/... -run TestMockEmbeddingProvider -v`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/memory/lite/embeddings.go internal/agentcore/memory/lite/embeddings_test.go
@@ -209,7 +209,7 @@ git commit -m "fix: MockEmbeddingProvider 返回 128 维确定性随机向量，
 
 这三个问题在同一文件中，合并修复。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestResolveEmbeddingConfigFromEnv_modelName为空时返回nil(t *testing.T) {
@@ -230,11 +230,11 @@ func TestCreateEmbeddingProvider_dims默认1024(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/lite/... -run "TestResolveEmbeddingConfigFromEnv_modelName|TestCreateEmbeddingProvider_dims" -v`
 
-- [ ] **Step 3: 修改 embeddings.go**
+- [x] **Step 3: 修改 embeddings.go**
 
 1. 删除 `L101` 的 `EMBED_MODEL` 读取行
 2. 删除 `L121` 的 `envModelName = "default"` 行
@@ -247,11 +247,11 @@ Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/lit
    logger.Warn(logComponent).Msg("Embedding API key not found, using mock provider")
    ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/memory/lite/... -v`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/memory/lite/embeddings.go internal/agentcore/memory/lite/embeddings_test.go
@@ -265,7 +265,7 @@ git commit -m "fix: 删除 model_name 默认值、EMBED_MODEL 变量，dims 默�
 **Files:**
 - Modify: `internal/agentcore/memory/manage/index/fragment_manager.go:L86-L89`
 
-- [ ] **Step 1: 修改 fragment_manager.go**
+- [x] **Step 1: 修改 fragment_manager.go**
 
 将 `L86-L89`：
 ```go
@@ -286,11 +286,11 @@ if !ok {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/memory/manage/index/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agentcore/memory/manage/index/fragment_manager.go
@@ -304,7 +304,7 @@ git commit -m "fix: 类型断言失败时添加 Warn 日志，对齐 Python isin
 **Files:**
 - Modify: `internal/agent_teams/tools/team_backend.go:L521-L526`
 
-- [ ] **Step 1: 在 ShutdownMember 中添加 FSM 校验**
+- [x] **Step 1: 在 ShutdownMember 中添加 FSM 校验**
 
 在 `L521`（`ok := tb.db.Member().TryTransitionMemberStatus`）之前插入：
 
@@ -318,11 +318,11 @@ if !fsm.IsValidMemberTransition(member.Status, string(atschema.MemberStatusShutd
 
 确认 `fsm` 包已导入（`internal/agent_teams/fsm`）。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/tools/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -336,7 +336,7 @@ git commit -m "fix: ShutdownMember CAS 前添加 FSM 状态转换校验，返回
 **Files:**
 - Modify: `internal/agent_teams/tools/team_backend.go:L797-L820`
 
-- [ ] **Step 1: 在 ApprovePlan 中添加三层校验**
+- [x] **Step 1: 在 ApprovePlan 中添加三层校验**
 
 在 `L803`（`err := tb.taskManager.ApprovePlan`）之前插入：
 
@@ -369,11 +369,11 @@ if err != nil || member == nil {
 
 同时删除原 `L807-L810` 的 `task, _ := tb.taskManager.Get(ctx, planID)` 和 `memberName := ""` 相关代码（已在上面的校验中完成）。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/tools/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -387,7 +387,7 @@ git commit -m "fix: ApprovePlan 添加三层前置校验（planID/plan_record/me
 **Files:**
 - Modify: `internal/agent_teams/tools/team_backend.go:L631-L639`
 
-- [ ] **Step 1: 修改 BuildTeam 预定义成员循环**
+- [x] **Step 1: 修改 BuildTeam 预定义成员循环**
 
 将 `L631-L639`：
 ```go
@@ -420,11 +420,11 @@ for _, pm := range tb.predefinedMembers {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/tools/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -438,7 +438,7 @@ git commit -m "fix: BuildTeam 预定义成员显式传 WithAllocation，对齐 P
 **Files:**
 - Modify: `internal/agent_teams/tools/team_backend.go:L562-L578`
 
-- [ ] **Step 1: 修改 CancelMember 中的 reset 循环和 SendMessage**
+- [x] **Step 1: 修改 CancelMember 中的 reset 循环和 SendMessage**
 
 将 `L562-L578`：
 ```go
@@ -478,11 +478,11 @@ if msgErr != nil || (msgResult != nil && !msgResult.OK) {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/tools/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -496,7 +496,7 @@ git commit -m "fix: CancelMember 检查消息发送结果+添加 reset 计数汇
 **Files:**
 - Modify: `internal/agent_teams/tools/team_backend.go:L690-L691,L738-L742`
 
-- [ ] **Step 1: 修改 CleanTeam**
+- [x] **Step 1: 修改 CleanTeam**
 
 将 `L690-L691`：
 ```go
@@ -510,7 +510,7 @@ if m.Status != string(atschema.MemberStatusShutdown) &&
 if m.Status != string(atschema.MemberStatusShutdown) {
 ```
 
-- [ ] **Step 2: 修改 ForceCleanTeam**
+- [x] **Step 2: 修改 ForceCleanTeam**
 
 将 `L738-L742`：
 ```go
@@ -538,15 +538,15 @@ return success, nil
 
 注意：需要先修改 `RemoveCleanupPaths` 签名增加 error 返回值。
 
-- [ ] **Step 3: 修改 RemoveCleanupPaths 签名**
+- [x] **Step 3: 修改 RemoveCleanupPaths 签名**
 
 搜索 `RemoveCleanupPaths` 定义，将签名从 `func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context)` 改为 `func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error`，在实现中收集错误并返回。
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/tools/...`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go
@@ -568,7 +568,7 @@ git commit -m "fix: CleanTeam 移除 ERROR 豁免，ForceCleanTeam 综合返回�
 3. BuildTeam 和 SpawnHumanAgent 中构造完整 AgentCard 传入
 4. 所有测试调用方适配新签名
 
-- [ ] **Step 1: 修改 SpawnMember 签名**
+- [x] **Step 1: 修改 SpawnMember 签名**
 
 将 `L377`：
 ```go
@@ -580,11 +580,11 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName,
 func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName string, agentCard *agentschema.AgentCard, role, desc, prompt, modelName string, opts ...SpawnMemberOption) atschema.MemberOpResult
 ```
 
-- [ ] **Step 2: 修改 SpawnMember 内部对 agentCard 的使用**
+- [x] **Step 2: 修改 SpawnMember 内部对 agentCard 的使用**
 
 在 SpawnMember 内部，将原来使用 `agentCard`（string）的地方改为 `agentCard.CardID` 或从 `agentCard` 提取字段。
 
-- [ ] **Step 3: 修改 BuildTeam 中的 SpawnMember 调用（L619, L638）**
+- [x] **Step 3: 修改 BuildTeam 中的 SpawnMember 调用（L619, L638）**
 
 构造 AgentCard 对象传入：
 ```go
@@ -598,7 +598,7 @@ card := &agentschema.AgentCard{
 tb.SpawnMember(ctx, ..., card, ...)
 ```
 
-- [ ] **Step 4: 修改 SpawnHumanAgent 中的调用（L857）**
+- [x] **Step 4: 修改 SpawnHumanAgent 中的调用（L857）**
 
 ```go
 memberCardID := tb.teamName + "_" + memberName
@@ -612,15 +612,15 @@ card := &agentschema.AgentCard{
 result := tb.SpawnMember(ctx, memberName, displayName, card, ...)
 ```
 
-- [ ] **Step 5: 修改所有测试调用方**
+- [x] **Step 5: 修改所有测试调用方**
 
 搜索所有 `SpawnMember(` 调用，将 agentCard 字符串参数改为 AgentCard 结构体。
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/...`
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/agent_teams/
@@ -634,17 +634,17 @@ git commit -m "refactor: SpawnMember 签名改用 AgentCard 结构体，SpawnHum
 **Files:**
 - Modify: `internal/agentcore/multi_agent/teams/handoff/container_agent.go:L258`
 
-- [ ] **Step 1: 移除 L258 的重复提取**
+- [x] **Step 1: 移除 L258 的重复提取**
 
 删除 `L258`：`interruptSignal = ExtractInterruptSignal(result, nil)`
 
 保留 L268 作为 err==nil 时的统一提取点，L228/L246 作为异常路径提取点。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/multi_agent/teams/handoff/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agentcore/multi_agent/teams/handoff/container_agent.go
@@ -660,7 +660,7 @@ git commit -m "fix: 移除 interrupt_signal 重复提取，统一为单次提取
 - Modify: `internal/agent_teams/i18n.go:L38`
 - Modify: `internal/agent_teams/tools/team_backend.go` — 所有 T() 调用方（4处）
 
-- [ ] **Step 1: 修改 T() 签名**
+- [x] **Step 1: 修改 T() 签名**
 
 将 `i18n.go:L157` 的 `func T(key string, kwargs ...map[string]any) string` 改为 `func T(key string, kwargs ...map[string]any) (string, error)`
 
@@ -668,11 +668,11 @@ git commit -m "fix: 移除 interrupt_signal 重复提取，统一为单次提取
 
 正常返回改为 `return translated, nil`
 
-- [ ] **Step 2: 修改 i18n 包装函数**
+- [x] **Step 2: 修改 i18n 包装函数**
 
 将 `internal/agent_teams/i18n.go:L38` 的 `func T(key string, kwargs ...map[string]any) string { return schema.T(key, kwargs...) }` 改为 `func T(key string, kwargs ...map[string]any) (string, error) { return schema.T(key, kwargs...) }`
 
-- [ ] **Step 3: 修改 team_backend.go 中 4 处 T() 调用**
+- [x] **Step 3: 修改 team_backend.go 中 4 处 T() 调用**
 
 所有 `atschema.T(...)` 调用改为处理 error：
 ```go
@@ -683,11 +683,11 @@ if err != nil {
 }
 ```
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agent_teams/...`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agent_teams/schema/i18n.go internal/agent_teams/i18n.go internal/agent_teams/tools/team_backend.go
@@ -701,7 +701,7 @@ git commit -m "fix: i18n T() 改为返回 (string, error)，对齐 Python KeyErr
 **Files:**
 - Modify: `internal/swarm/server/runtime/skill/skill_manager.go:L1905-L1918,L597,L606,L646,L655,L1275,L1283,L1714,L1722`
 
-- [ ] **Step 1: 修改 AddInstalledPlugin**
+- [x] **Step 1: 修改 AddInstalledPlugin**
 
 在 `L1906`（`plugins := sm.GetInstalledPlugins()`）前添加：
 ```go
@@ -712,7 +712,7 @@ plugin = sm.normalizePlugin(plugin)
 
 在 `L1917`（`plugins = append` 后）的 `sm.state[...]` 后添加 `sm.saveState()`
 
-- [ ] **Step 2: 移除外层冗余 saveState 调用**
+- [x] **Step 2: 移除外层冗余 saveState 调用**
 
 删除以下 4 处冗余 saveState：
 - `L606`（HandleSkillsInstall 中）
@@ -720,11 +720,11 @@ plugin = sm.normalizePlugin(plugin)
 - `L1283`（HandleSkillsClawhubDownload 中）
 - `L1722`（HandleSkillsTeamSkillsHubInstall 中）
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/server/runtime/skill/...`
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/skill/skill_manager.go
@@ -738,14 +738,14 @@ git commit -m "fix: AddInstalledPlugin 内补齐 normalizePlugin + saveState，�
 **Files:**
 - Modify: `internal/swarm/server/runtime/skill/plugin_yaml.go:L67,L77,L150,L172-L178`
 
-- [ ] **Step 1: 保存原始 skillDir**
+- [x] **Step 1: 保存原始 skillDir**
 
 在 `L69`（`skillMdPath := filepath.Join(skillDir, "SKILL.md")`）前添加：
 ```go
 originalDir := skillDir // 保存原始路径，README.md 在原始目录查找（对齐 Python: root / "README.md"）
 ```
 
-- [ ] **Step 2: 修改 README.md 路径**
+- [x] **Step 2: 修改 README.md 路径**
 
 将 `L150`：
 ```go
@@ -756,7 +756,7 @@ readmePath := filepath.Join(filepath.Dir(skillDir), "README.md")
 readmePath := filepath.Join(originalDir, "README.md") // 对齐 Python: root / "README.md"
 ```
 
-- [ ] **Step 3: 修改 WalkDir 内 defer f.Close() 为闭包**
+- [x] **Step 3: 修改 WalkDir 内 defer f.Close() 为闭包**
 
 将 `L172-L178`：
 ```go
@@ -782,11 +782,11 @@ func() {
 return nil
 ```
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/server/runtime/skill/...`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/skill/plugin_yaml.go
@@ -800,7 +800,7 @@ git commit -m "fix: README.md 在原始目录查找，WalkDir 内文件句柄用
 **Files:**
 - Modify: `internal/swarm/agents/harness/common/rails/structured_ask_user_tool.go:L204-L207`
 
-- [ ] **Step 1: 替换 generateToolID 实现**
+- [x] **Step 1: 替换 generateToolID 实现**
 
 将 `L204-L207`：
 ```go
@@ -824,11 +824,11 @@ func generateToolID() string {
 
 同时修改 import：删除 `"math/big"` 和 `"math/rand"`（如果无其他使用），添加 `"crypto/rand"` as `crypto_rand` 和 `"encoding/hex"`。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/agents/harness/common/rails/...`
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/swarm/agents/harness/common/rails/structured_ask_user_tool.go
@@ -843,19 +843,19 @@ git commit -m "fix: generateToolID 使用 crypto/rand 16 字节对齐 Python uui
 - Modify: `internal/agentcore/multi_agent/teams/hierarchical_msgbus/supervisor_agent.go:L87`
 - Modify: `internal/agentcore/multi_agent/teams/hierarchical_msgbus/supervisor_agent_test.go` — 5处调用
 
-- [ ] **Step 1: 重命名函数**
+- [x] **Step 1: 重命名函数**
 
 将 `L87` 的 `func Create(` 改为 `func NewSupervisorAgentCard(`
 
-- [ ] **Step 2: 修改测试文件中所有调用**
+- [x] **Step 2: 修改测试文件中所有调用**
 
 将 `supervisor_agent_test.go` 中 5 处 `Create(` 改为 `NewSupervisorAgentCard(`
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/multi_agent/teams/hierarchical_msgbus/...`
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/multi_agent/teams/hierarchical_msgbus/
@@ -870,7 +870,7 @@ git commit -m "refactor: SupervisorAgent.Create 重命名为 NewSupervisorAgentC
 - Modify: `internal/agentcore/multi_agent/teams/handoff/container_agent.go` — 问题4
 - Modify: `internal/swarm/server/runtime/agent_manager.go` — 问题10
 
-- [ ] **Step 1: 在 container_agent.go 中 HandoffRequest.InputMessage 字段添加注释**
+- [x] **Step 1: 在 container_agent.go 中 HandoffRequest.InputMessage 字段添加注释**
 
 在 `handoff_request.go` 的 `InputMessage map[string]any` 字段上方添加：
 ```go
@@ -879,7 +879,7 @@ git commit -m "refactor: SupervisorAgent.Create 重命名为 NewSupervisorAgentC
 // Python 的 isinstance(msg, dict) 安全网在 Go 中由类型系统保证。
 ```
 
-- [ ] **Step 2: 在 agent_manager.go 中 latestEnvOverrides 字段添加注释**
+- [x] **Step 2: 在 agent_manager.go 中 latestEnvOverrides 字段添加注释**
 
 在 `latestEnvOverrides map[string]string` 字段上方添加：
 ```go
@@ -889,11 +889,11 @@ git commit -m "refactor: SupervisorAgent.Create 重命名为 NewSupervisorAgentC
 // 当前约定：空串=删除，设置空串的需求极少，如有需要需改为 map[string]*string。
 ```
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./...`
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/multi_agent/teams/handoff/handoff_request.go internal/swarm/server/runtime/agent_manager.go
@@ -904,18 +904,18 @@ git commit -m "docs: 添加 InputMessage 调用方约定注释和 env override �
 
 ### Task 18: 全量编译 + 测试验证
 
-- [ ] **Step 1: 检查残留编译进程**
+- [x] **Step 1: 检查残留编译进程**
 
 Run: `pgrep -f 'go (build|test)'`
 
-- [ ] **Step 2: 全量编译**
+- [x] **Step 2: 全量编译**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./...`
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && go test -cover ./internal/evolving/... ./internal/agentcore/memory/... ./internal/agent_teams/... ./internal/swarm/... -timeout 120s`
 
-- [ ] **Step 4: 提交最终状态**
+- [x] **Step 4: 提交最终状态**
 
 确认所有测试通过后，更新 `IMPLEMENTATION_PLAN.md` 中的相关状态。
