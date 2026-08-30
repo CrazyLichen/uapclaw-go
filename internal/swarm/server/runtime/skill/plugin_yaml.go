@@ -65,6 +65,8 @@ type pluginMetadata struct {
 //  4. 创建规范化 ZIP（{skill_name}/plugin.yaml + {skill_name}/{skill_name}/*）
 //  5. 计算 SHA256
 func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, string, error) {
+	// 保存原始路径，README.md 在原始目录查找（对齐 Python: root / "README.md"）
+	originalDir := skillDir
 	// 定位 SKILL.md
 	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillMdPath); err != nil {
@@ -147,7 +149,7 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 	}
 
 	// 写入 README.md（如果存在）
-	readmePath := filepath.Join(filepath.Dir(skillDir), "README.md")
+	readmePath := filepath.Join(originalDir, "README.md") // 对齐 Python: root / "README.md"
 	if data, err := os.ReadFile(readmePath); err == nil {
 		w, err := zipWriter.Create(fmt.Sprintf("%s/README.md", skillName))
 		if err == nil {
@@ -169,12 +171,15 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 		if err != nil {
 			return nil
 		}
-		f, err := os.Open(path)
-		if err != nil {
-			return nil
-		}
-		defer func() { _ = f.Close() }()
-		_, _ = io.Copy(w, f)
+		// 使用闭包确保 defer 在每次回调返回时执行，文件句柄不累积（对齐 Python: with open(...) 上下文管理器语义）
+		func() {
+			f, err := os.Open(path)
+			if err != nil {
+				return
+			}
+			defer func() { _ = f.Close() }()
+			_, _ = io.Copy(w, f)
+		}()
 		return nil
 	}); err != nil {
 		return nil, "", fmt.Errorf("遍历 skillDir 失败: %w", err)
