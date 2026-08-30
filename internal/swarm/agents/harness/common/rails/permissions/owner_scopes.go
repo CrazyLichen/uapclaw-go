@@ -1,5 +1,9 @@
 package permissions
 
+import (
+	"strings"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OwnerScopesPermissionContext 数字分身场景下的权限上下文。
@@ -67,7 +71,7 @@ func (p *OwnerScopesPermissionContext) Scene() string {
 	if p.GroupDigitalAvatar {
 		return "group_digital_avatar"
 	}
-	if p.ChannelID == "web" {
+	if strings.TrimSpace(p.ChannelID) == "web" {
 		return "web"
 	}
 	return "normal_im"
