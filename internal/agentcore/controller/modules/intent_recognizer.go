@@ -166,7 +166,9 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 		return nil, fmt.Errorf("构建用户消息失败: %w", err)
 	}
 	userMsg := llmschema.NewUserMessage(userMsgText)
-	mc.AddMessages(ctx, []llmschema.BaseMessage{userMsg})
+	if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{userMsg}); err != nil {
+		return nil, fmt.Errorf("添加用户消息失败: %w", err)
+	}
 
 	// Step 5: 构建 IntentToolkits + 转换工具 Schema
 	toolkits := NewIntentToolkits(event, r.config.IntentConfidenceThreshold)
@@ -199,12 +201,11 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 	if err != nil {
 		return nil, fmt.Errorf("调用 LLM 失败: %w", err)
 	}
-	mc.AddMessages(ctx, []llmschema.BaseMessage{response})
+	if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{response}); err != nil {
+		return nil, fmt.Errorf("添加 LLM 响应消息失败: %w", err)
+	}
 
-	for {
-		if len(response.ToolCalls) == 0 {
-			break
-		}
+	for len(response.ToolCalls) > 0 {
 		for _, toolCall := range response.ToolCalls {
 			intent, result, invokeErr := r.invokeToolkitMethod(toolkits, toolCall.Name, toolCall.Arguments)
 			if invokeErr != nil {
@@ -214,7 +215,9 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 				intents = append(intents, intent)
 			}
 			toolMsg := llmschema.NewToolMessage(toolCall.ID, result)
-			mc.AddMessages(ctx, []llmschema.BaseMessage{toolMsg})
+			if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{toolMsg}); err != nil {
+				return nil, fmt.Errorf("添加工具消息失败: %w", err)
+			}
 		}
 		// 重新构建消息并再次调用
 		ctxMsgs, _ = mc.GetMessages(maxMessageLen, false)
@@ -230,7 +233,9 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 		if err != nil {
 			return nil, fmt.Errorf("调用 LLM 失败: %w", err)
 		}
-		mc.AddMessages(ctx, []llmschema.BaseMessage{response})
+		if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{response}); err != nil {
+			return nil, fmt.Errorf("添加 LLM 响应消息失败: %w", err)
+		}
 	}
 
 	return intents, nil

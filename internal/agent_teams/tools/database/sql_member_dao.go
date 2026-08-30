@@ -143,10 +143,13 @@ func (d *SQLMemberDao) ListHumanAgentNames(ctx context.Context, teamName string)
 // 对齐 Python: get_members_max_updated_at() → int
 func (d *SQLMemberDao) GetMembersMaxUpdatedAt(ctx context.Context, teamName string) int64 {
 	var maxVal *int64
-	d.db.WithContext(ctx).Table("team_member").
+	row := d.db.WithContext(ctx).Table("team_member").
 		Select("MAX(updated_at)").
 		Where("team_name = ?", teamName).
-		Row().Scan(&maxVal)
+		Row()
+	if err := row.Scan(&maxVal); err != nil {
+		return 0
+	}
 	if maxVal == nil {
 		return 0
 	}

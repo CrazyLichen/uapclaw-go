@@ -142,9 +142,10 @@ func (d *SQLMessageDao) GetBroadcastMessages(ctx context.Context, teamName, memb
 func (d *SQLMessageDao) GetTeamMessages(ctx context.Context, teamName string, broadcast string) ([]*TeamMessageBase, error) {
 	msgTable := d.msgTableName(ctx)
 	query := d.db.WithContext(ctx).Table(msgTable).Where("team_name = ?", teamName)
-	if broadcast == "true" {
+	switch broadcast {
+	case "true":
 		query = query.Where("broadcast = 1")
-	} else if broadcast == "false" {
+	case "false":
 		query = query.Where("broadcast = 0")
 	}
 	var messages []*TeamMessageBase

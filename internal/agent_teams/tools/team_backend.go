@@ -758,7 +758,9 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		}
 	}
 	// 步骤 5: 清理路径
-	tb.RemoveCleanupPaths(ctx)
+	if err := tb.RemoveCleanupPaths(ctx); err != nil {
+		logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: 移除清理路径失败")
+	}
 	// 步骤 6: 事件发布
 	tb.publishEvent(ctx, atschema.TeamCleanedEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName},

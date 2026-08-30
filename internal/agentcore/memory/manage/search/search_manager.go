@@ -105,33 +105,29 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 	searchType := params.SearchType
 
 	// 校验 search_type 合法性（对齐 Python: if st not in self.all_mem_manager_list）
-	if searchType != nil {
-		for _, st := range searchType {
-			if !containsString(allMemManagerList, st) {
-				return nil, exception.NewBaseError(
-					exception.StatusMemoryGetMemoryExecutionError,
-					exception.WithParam("memory_type", st),
-					exception.WithMsg(fmt.Sprintf("%s 不是合法的搜索类型", st)),
-				)
-			}
+	for _, st := range searchType {
+		if !containsString(allMemManagerList, st) {
+			return nil, exception.NewBaseError(
+				exception.StatusMemoryGetMemoryExecutionError,
+				exception.WithParam("memory_type", st),
+				exception.WithMsg(fmt.Sprintf("%s 不是合法的搜索类型", st)),
+			)
 		}
 	}
 
 	// 校验 search_type 对应 Manager 是否已初始化
 	// 对齐 Python: if st and not self.managers.get(st)
 	usedTypes := make(map[index.BaseMemoryManager][]string)
-	if searchType != nil {
-		for _, st := range searchType {
-			manager, ok := s.managers[st]
-			if !ok {
-				return nil, exception.NewBaseError(
-					exception.StatusMemoryGetMemoryExecutionError,
-					exception.WithParam("memory_type", st),
-					exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", st)),
-				)
-			}
-			usedTypes[manager] = append(usedTypes[manager], st)
+	for _, st := range searchType {
+		manager, ok := s.managers[st]
+		if !ok {
+			return nil, exception.NewBaseError(
+				exception.StatusMemoryGetMemoryExecutionError,
+				exception.WithParam("memory_type", st),
+				exception.WithMsg(fmt.Sprintf("%s 记忆管理器未初始化", st)),
+			)
 		}
+		usedTypes[manager] = append(usedTypes[manager], st)
 	}
 
 	var allResults []*storeindex.MemorySearchResult
