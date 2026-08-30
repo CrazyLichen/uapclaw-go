@@ -2,7 +2,9 @@
 //
 // 本包实现记忆系统的核心管理器（FragmentMemoryManager、SummaryManager、VariableManager）
 // 以及统一写入管理器（WriteManager）和搜索管理器（SearchManager）。
-// 所有管理器通过 BaseMemoryManager 接口统一抽象，通过 BaseMemoryIndex 接口委托存储操作。
+// FragmentMemoryManager 和 SummaryManager 通过 BaseMemoryManager 接口统一抽象，
+// 通过 BaseMemoryIndex 接口委托存储操作。
+// VariableManager 独立实现 BaseMemoryManager 接口，通过 BaseKVStore 委托 KV 存储操作。
 //
 // 文件目录：
 //
@@ -11,7 +13,9 @@
 //	├── index/              # 记忆管理器实现
 //	│   ├── doc.go          # index 包文档
 //	│   ├── base_manager.go # BaseMemoryManager 接口 + memoryManagerBase 嵌入结构体
-//	│   └── fragment_manager.go # FragmentMemoryManager 碎片记忆管理器
+//	│   ├── fragment_manager.go # FragmentMemoryManager 碎片记忆管理器
+//	│   ├── summary_manager.go  # SummaryManager 摘要记忆管理器
+//	│   └── variable_manager.go # VariableManager 变量记忆管理器
 //	├── mem_model/          # 记忆数据模型和数据库操作
 //	│   ├── doc.go          # mem_model 包文档
 //	│   ├── memory_unit.go  # 记忆数据模型（MemoryType/OperationType/FragmentMemoryUnit 等）

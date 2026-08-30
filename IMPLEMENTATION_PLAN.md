@@ -449,7 +449,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.4 | ✅ | MemoryConfig | 记忆配置 | `openjiuwen/core/memory/lite/config.py` |
 | 7.5 | ✅ | Frontmatter 解析 | YAML frontmatter 读写 | `openjiuwen/core/memory/lite/frontmatter.py` |
 | 7.6 | ✅ | FragmentMemoryManager | 片段记忆管理（含冲突检查 stub，⤵️ 回填: 7.8） | `openjiuwen/core/memory/manage/` |
-| 7.7 | ☐ | SummaryManager / VariableManager | 摘要与变量管理 | `openjiuwen/core/memory/manage/` |
+| 7.7 | ✅ | SummaryManager / VariableManager | ✅ SummaryManager + ✅ VariableManager（独立实现，不嵌入 memoryManagerBase）+ ✅ KvPrefixRegistry | `openjiuwen/core/memory/manage/` |
 | 7.8 | ☐ | WriteManager / SearchManager / MemUpdateChecker | 写入与搜索管理（含冲突检查回填） | `openjiuwen/core/memory/manage/update/` · `search/` |
 | 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit | `openjiuwen/core/memory/manage/mem_model/` |
 | 7.10 | ☐ | Memory Index | 记忆索引 | `openjiuwen/core/memory/manage/index/` |
