@@ -16,7 +16,9 @@ type HandoffHistoryEntry struct {
 
 // HandoffRequest 交接驱动消息
 type HandoffRequest struct {
-	// InputMessage 输入消息，类型与 BaseTeam.Invoke/BaseAgent.Invoke 一致
+	// InputMessage 输入消息，类型与 BaseTeam.Invoke/BaseAgent.Invoke 一致。
+	// 调用方必须将纯字符串包装为 {"query": msg} 传入，
+	// Python 的 isinstance(msg, dict) 安全网在 Go 中由类型系统保证。
 	InputMessage map[string]any
 	// History 交接历史
 	History []HandoffHistoryEntry

@@ -36,7 +36,9 @@ type AgentManager struct {
 
 	// latestEnvOverrides 最近一次 env 覆盖
 	// 对齐 Python: self._latest_env_overrides
-	// 收窄为 map[string]string：Python 中 dict[str, Any]，但所有 value 均作为 os.environ 字符串使用
+	// 收窄为 map[string]string：Python 中 dict[str, Any]，但所有 value 均作为 os.environ 字符串使用。
+	// 注意：Go 收窄为 map[string]string，空字符串 "" 表示删除环境变量（Python 中 None = 删除，"" = 设置空串）。
+	// 当前约定：空串=删除，设置空串的需求极少，如有需要需改为 map[string]*string。
 	latestEnvOverrides map[string]string
 
 	// createAgentFactory 创建 Agent 的工厂函数（默认 NewUapClaw + CreateInstance，测试可注入 mock）。
