@@ -54,7 +54,7 @@ func GetSharedRuntime() any {
 // db_type == "memory" → 全局唯一 InMemoryTeamDatabase 单例。
 // db_type != "memory" → 按 db_type::connection_string 去重。
 // ⤵️ 预留：TeamDatabase（9.64）实现后回填
-func GetSharedDB(config any) any {
+func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 	resourcesMu.Lock()
 	defer resourcesMu.Unlock()
 

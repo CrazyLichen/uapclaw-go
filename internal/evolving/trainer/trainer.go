@@ -175,7 +175,8 @@ func (t *Trainer) Train(
 				logger.Warn(logComponent).
 					Int("epoch", progress.CurrentEpoch).
 					Err(err).
-					Msg("Train Forward 失败")
+					Msg("Train Forward 失败，跳过当前 epoch")
+				continue
 			}
 			progress.CurrentEpochScore = forwardScore
 			evaluated = forwardEvaluated
@@ -198,25 +199,25 @@ func (t *Trainer) Train(
 		var valScore float64
 		var valEvaluated []*dataset.EvaluatedCase
 
-		if updateErr == nil {
-			// 对齐 Python: isinstance(updated, list) — 候选列表多方案评估
-			if len(updated) > 1 {
-				// 多候选集：对每个候选方案在验证集上评估，选择最优
-				// 对齐 Python: self._select_best_candidate_on_val(...)
-				candidates := make([]map[schema.UpdateKey]schema.UpdateValue, 0, len(updated))
-				for _, cand := range updated {
-					candidates = append(candidates, normalizeUpdates(cand))
-				}
-				valScore, valEvaluated, _ = t.SelectBestCandidateOnVal(
-					ctx, agent, operators, candidates, valCases,
-				)
-			} else if len(updated) == 1 {
-				// 单映射：直接应用更新
-				// 对齐 Python: self.apply_updates(operators, updates)
-				updates := normalizeUpdates(updated[0])
-				ApplyUpdates(operators, updates)
-				valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+		if len(updated) > 1 {
+			// 多候选集：对每个候选方案在验证集上评估，选择最优
+			// 对齐 Python: self._select_best_candidate_on_val(...)
+			candidates := make([]map[schema.UpdateKey]schema.UpdateValue, 0, len(updated))
+			for _, cand := range updated {
+				candidates = append(candidates, normalizeUpdates(cand))
 			}
+			valScore, valEvaluated, _ = t.SelectBestCandidateOnVal(
+				ctx, agent, operators, candidates, valCases,
+			)
+		} else if len(updated) == 1 {
+			// 单映射：直接应用更新
+			// 对齐 Python: self.apply_updates(operators, updates)
+			updates := normalizeUpdates(updated[0])
+			ApplyUpdates(operators, updates)
+			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
+		} else {
+			// len(updated)==0: 空更新，仍需评估验证分数（对齐 Python updated or {} 分支）
+			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
 		}
 
 		improved := valScore > progress.BestScore

@@ -28,6 +28,8 @@ type SignalOption func(*evolutionSignalConfig)
 
 // evolutionSignalConfig MakeEvolutionSignal 的内部配置。
 type evolutionSignalConfig struct {
+	section   string
+	excerpt   string
 	source    *string
 	toolName  *string
 	skillName *string
@@ -80,6 +82,16 @@ func ParseEvolutionTarget(value string) (EvolutionTarget, error) {
 	}
 }
 
+// WithSection 设置建议修改的 SKILL.md 区域。
+func WithSection(section string) SignalOption {
+	return func(cfg *evolutionSignalConfig) { cfg.section = section }
+}
+
+// WithExcerpt 设置问题摘要或关键片段。
+func WithExcerpt(excerpt string) SignalOption {
+	return func(cfg *evolutionSignalConfig) { cfg.excerpt = excerpt }
+}
+
 // WithSource 设置信号来源。
 func WithSource(source string) SignalOption {
 	return func(cfg *evolutionSignalConfig) { cfg.source = &source }
@@ -104,7 +116,7 @@ func WithContext(context map[string]any) SignalOption {
 //
 // 对应 Python: make_evolution_signal(signal_type, section, excerpt, tool_name, skill_name, source, context)
 func MakeEvolutionSignal(signalType, section, excerpt string, opts ...SignalOption) *EvolutionSignal {
-	cfg := &evolutionSignalConfig{}
+	cfg := &evolutionSignalConfig{section: section, excerpt: excerpt}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -136,8 +148,8 @@ func MakeEvolutionSignal(signalType, section, excerpt string, opts ...SignalOpti
 
 	return &EvolutionSignal{
 		SignalType: signalType,
-		Section:    section,
-		Excerpt:    excerpt,
+		Section:    cfg.section,
+		Excerpt:    cfg.excerpt,
 		SkillName:  skillName,
 		Context:    context,
 	}

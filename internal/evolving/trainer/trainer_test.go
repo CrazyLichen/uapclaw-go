@@ -2,6 +2,7 @@ package trainer
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
@@ -685,17 +686,248 @@ func TestTrainer_UpdaterRequiresForward_有Updater(t *testing.T) {
 // fakeUpdater 用于测试的模拟 Updater
 type fakeUpdater struct {
 	requiresForward bool
+	updateResult    []map[schema.UpdateKey]any
+	updateErr       error
+	bindCount       int
 }
 
 func (u *fakeUpdater) Bind(_ map[string]operator.Operator, _ []string, _ map[string]any) int {
-	return 0
+	u.bindCount++
+	return 1
 }
 func (u *fakeUpdater) RequiresForwardData() bool { return u.requiresForward }
 func (u *fakeUpdater) Update(_ context.Context, _ []*trajectory.Trajectory, _ []*dataset.EvaluatedCase, _ map[string]any) ([]map[schema.UpdateKey]any, error) {
-	return nil, nil
+	return u.updateResult, u.updateErr
 }
 func (u *fakeUpdater) Process(_ context.Context, _ []*trajectory.Trajectory, _ []*signal.EvolutionSignal, _ map[string]any) ([]map[schema.UpdateKey]any, error) {
 	return nil, nil
 }
 func (u *fakeUpdater) GetState() map[string]any   { return nil }
 func (u *fakeUpdater) LoadState(_ map[string]any) {}
+
+// fakeEvaluator 用于测试的模拟评估器
+type fakeEvaluator struct {
+	score float64
+}
+
+func (e *fakeEvaluator) Evaluate(_ context.Context, _ dataset.Case, _ map[string]any) (*dataset.EvaluatedCase, error) {
+	ec := dataset.NewEvaluatedCase(dataset.Case{}, nil)
+	ec.SetScore(e.score)
+	return ec, nil
+}
+
+func (e *fakeEvaluator) BatchEvaluate(_ context.Context, cases []dataset.Case, _ []map[string]any, _ int) ([]*dataset.EvaluatedCase, error) {
+	results := make([]*dataset.EvaluatedCase, len(cases))
+	for i := range cases {
+		ec := dataset.NewEvaluatedCase(cases[i], nil)
+		ec.SetScore(e.score)
+		results[i] = ec
+	}
+	return results, nil
+}
+
+func TestTrain_单候选更新(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+	valCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "v1", Inputs: map[string]any{"q": "test"}},
+	})
+
+	op := &fakeOperator{id: "test_op", params: make(map[string]any)}
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{"test_op": op},
+	}
+
+	updater := &fakeUpdater{
+		requiresForward: true,
+		updateResult: []map[schema.UpdateKey]any{
+			{schema.UpdateKey{"test_op", "system_prompt"}: schema.UpdateValue{Payload: "new prompt", Mode: schema.UpdateModeReplace, Effect: schema.UpdateEffectState}},
+		},
+	}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(&fakeEvaluator{score: 0.5}),
+	)
+
+	_, err := trainer.Train(context.Background(), agent, trainCases, valCases, 1, nil)
+	if err != nil {
+		t.Errorf("Train 返回错误: %v", err)
+	}
+	if op.params["system_prompt"] != "new prompt" {
+		t.Errorf("期望 system_prompt=new prompt, 实际=%v", op.params["system_prompt"])
+	}
+}
+
+func TestTrain_Update返回空仍调用Evaluate(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+	valCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "v1", Inputs: map[string]any{"q": "test"}},
+	})
+
+	op := &fakeOperator{id: "test_op", params: make(map[string]any)}
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{"test_op": op},
+	}
+
+	updater := &fakeUpdater{
+		requiresForward: true,
+		updateResult:    []map[schema.UpdateKey]any{}, // 空结果
+	}
+
+	evaluator := &fakeEvaluator{score: 0.7}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(evaluator),
+	)
+
+	result, err := trainer.Train(context.Background(), agent, trainCases, valCases, 1, nil)
+	if err != nil {
+		t.Errorf("Train 返回错误: %v", err)
+	}
+	if result == nil {
+		t.Error("期望返回非 nil agent")
+	}
+}
+
+func TestTrain_Forward失败时continue(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+	valCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "v1", Inputs: map[string]any{"q": "test"}},
+	})
+
+	op := &fakeOperator{id: "test_op", params: make(map[string]any)}
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{"test_op": op},
+		invokeFn: func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+			return nil, fmt.Errorf("invoke error")
+		},
+	}
+
+	updater := &fakeUpdater{
+		requiresForward: true,
+		updateResult: []map[schema.UpdateKey]any{
+			{schema.UpdateKey{"test_op", "system_prompt"}: schema.UpdateValue{Payload: "should not apply", Mode: schema.UpdateModeReplace, Effect: schema.UpdateEffectState}},
+		},
+	}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(&fakeEvaluator{score: 0.5}),
+	)
+
+	_, err := trainer.Train(context.Background(), agent, trainCases, valCases, 1, nil)
+	if err != nil {
+		t.Errorf("Train 返回错误: %v", err)
+	}
+}
+
+func TestTrain_Update失败时continue(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+	valCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "v1", Inputs: map[string]any{"q": "test"}},
+	})
+
+	op := &fakeOperator{id: "test_op", params: make(map[string]any)}
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{"test_op": op},
+	}
+
+	updater := &fakeUpdater{
+		requiresForward: true,
+		updateErr:       fmt.Errorf("update error"),
+	}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(&fakeEvaluator{score: 0.5}),
+	)
+
+	_, err := trainer.Train(context.Background(), agent, trainCases, valCases, 1, nil)
+	if err != nil {
+		t.Errorf("Train 返回错误: %v", err)
+	}
+}
+
+func TestTrain_回调被调用(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+	valCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "v1", Inputs: map[string]any{"q": "test"}},
+	})
+
+	op := &fakeOperator{id: "test_op", params: make(map[string]any)}
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{"test_op": op},
+	}
+
+	updater := &fakeUpdater{
+		requiresForward: false,
+		updateResult: []map[schema.UpdateKey]any{
+			{schema.UpdateKey{"test_op", "system_prompt"}: schema.UpdateValue{Payload: "new", Mode: schema.UpdateModeReplace, Effect: schema.UpdateEffectState}},
+		},
+	}
+
+	var beginCalled, endCalled bool
+	cb := &Callbacks{
+		OnTrainBegin: func(evolving.TrainableAgent, *Progress, []*dataset.EvaluatedCase) { beginCalled = true },
+		OnTrainEnd:   func(evolving.TrainableAgent, *Progress, []*dataset.EvaluatedCase) { endCalled = true },
+	}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(&fakeEvaluator{score: 0.5}),
+		WithCallbacks(cb),
+	)
+
+	_, err := trainer.Train(context.Background(), agent, trainCases, valCases, 1, nil)
+	if err != nil {
+		t.Errorf("Train 返回错误: %v", err)
+	}
+	if !beginCalled {
+		t.Error("期望 OnTrainBegin 被调用")
+	}
+	if !endCalled {
+		t.Error("期望 OnTrainEnd 被调用")
+	}
+}
+
+func TestTrain_无Operator匹配软退出(t *testing.T) {
+	trainCases := dataset.NewCaseLoader([]dataset.Case{
+		{CaseID: "t1", Inputs: map[string]any{"q": "hello"}},
+	})
+
+	agent := &fakeTrainableAgent{
+		card:      &agentschema.AgentCard{},
+		operators: map[string]operator.Operator{},
+	}
+
+	updater := &fakeUpdater{requiresForward: true}
+
+	trainer := NewTrainer(
+		WithUpdater(updater),
+		WithEvaluator(&fakeEvaluator{score: 0.5}),
+	)
+
+	result, err := trainer.Train(context.Background(), agent, trainCases, nil, 3, nil)
+	if err != nil {
+		t.Errorf("期望无错误, 实际=%v", err)
+	}
+	if result == nil {
+		t.Error("期望返回非 nil agent")
+	}
+}

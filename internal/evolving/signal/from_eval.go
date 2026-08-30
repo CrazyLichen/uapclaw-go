@@ -32,9 +32,9 @@ func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThr
 		signalType = "low_score"
 	}
 
-	var skillName *string
+	var opts []SignalOption
 	if operatorID != "" {
-		skillName = &operatorID
+		opts = append(opts, WithSkillName(operatorID))
 	}
 
 	context := map[string]any{
@@ -43,16 +43,21 @@ func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThr
 		"answer":   fmt.Sprintf("%v", case_.Answer),
 		"reason":   case_.Reason,
 		"score":    case_.GetScore(),
-		"source":   "offline_evaluation",
 	}
 
-	return &EvolutionSignal{
-		SignalType: signalType,
-		Section:    "Troubleshooting",
-		Excerpt:    fmt.Sprintf("score=%.2f", case_.GetScore()),
-		SkillName:  skillName,
-		Context:    context,
-	}
+	opts = append(opts,
+		WithSection("Troubleshooting"),
+		WithExcerpt(fmt.Sprintf("score=%.2f", case_.GetScore())),
+		WithSource("offline_evaluation"),
+		WithContext(context),
+	)
+
+	return MakeEvolutionSignal(
+		signalType,
+		"",
+		"",
+		opts...,
+	)
 }
 
 // FromEvaluatedCases 批量将 EvaluatedCase 列表转换为 EvolutionSignal 列表。

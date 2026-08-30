@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -426,6 +427,6 @@ func isMostlyEnglish(text string) bool {
 
 	// 对齐 Python: english_ratio = english_chars / len(text_no_space)
 	// 对齐 Python: return english_ratio > 0.7
-	englishRatio := float64(englishChars) / float64(len(textNoSpace))
+	englishRatio := float64(englishChars) / float64(utf8.RuneCountInString(textNoSpace))
 	return englishRatio > 0.7
 }

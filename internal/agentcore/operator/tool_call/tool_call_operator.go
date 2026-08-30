@@ -1,6 +1,7 @@
 package tool_call
 
 import (
+	"fmt"
 	"maps"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
@@ -186,6 +187,6 @@ func toString(v any) string {
 	case string:
 		return val
 	default:
-		return ""
+		return fmt.Sprintf("%v", val)
 	}
 }

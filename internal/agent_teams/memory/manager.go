@@ -107,13 +107,24 @@ func NewTeamMemoryManager(params TeamMemoryManagerParams) *TeamMemoryManager {
 		extractionModel:   params.ExtractionModel,
 		tzOffset:          params.TimezoneOffsetHours,
 		sysOperation:      params.SysOperation,
-		workspace:         params.Workspace,
 		teamMemoryDir:     params.TeamMemoryDir,
 		ownedToolNames:    make(map[string]struct{}),
 		ownedToolIDs:      make(map[string]struct{}),
 	}
-	if params.TeamMemoryDir != nil && params.SharedMemory {
+
+	// 对齐 Python: if self._read_only_source: self._workspace = Workspace(root_path=self._read_only_source)
+	if params.ReadOnlySourceWorkspace != nil && *params.ReadOnlySourceWorkspace != "" {
+		mgr.workspace = workspace.NewWorkspace(*params.ReadOnlySourceWorkspace, "")
+	} else {
+		mgr.workspace = params.Workspace
+	}
+
+	if params.TeamMemoryDir != nil && *params.TeamMemoryDir != "" {
 		mgr.sharedManager = NewSharedMemoryManager(*params.TeamMemoryDir, params.SysOperation)
+		if err := mgr.sharedManager.EnsureDir(); err != nil {
+			logger.Warn(mgrLogComponent).Err(err).Str("team_memory_dir", *params.TeamMemoryDir).
+				Msg("SharedMemoryManager EnsureDir 失败")
+		}
 	}
 	return mgr
 }

@@ -120,7 +120,7 @@ func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *Traj
 	if span.MetaData != nil {
 		baseMeta = span.MetaData
 	}
-	detail := e.buildDetail(&span.Span, kind)
+	detail := e.buildDetail(span, kind)
 	fullMeta := e.buildMeta(span, baseMeta, kind, detail)
 
 	// 对齐 Python: 从 LLMCallDetail.response 中提取 prompt_token_ids/completion_token_ids/logprobs
@@ -167,10 +167,10 @@ func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *Traj
 // buildDetail 根据 kind 构建 StepDetail。
 //
 // 对齐 Python: TrajectoryExtractor._build_detail(span, kind)
-func (e *TracerTrajectoryExtractor) buildDetail(span *tracer.Span, kind StepKind) StepDetail {
+func (e *TracerTrajectoryExtractor) buildDetail(span *tracer.TraceAgentSpan, kind StepKind) StepDetail {
 	switch kind {
 	case StepKindLLM:
-		return e.buildLLMDetail(span)
+		return e.buildLLMDetail(&span.Span)
 	case StepKindTool:
 		return e.buildToolDetail(span)
 	default:
@@ -254,11 +254,9 @@ func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDe
 // buildToolDetail 从 Span 构建 ToolCallDetail。
 //
 // 对齐 Python: TrajectoryExtractor._build_tool_detail(span)
-func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.Span) *ToolCallDetail {
+func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan) *ToolCallDetail {
 	// 对齐 Python: tool_name = getattr(span, "name", "") or ""
-	// tool_name 需要从外部传入（因为 TraceAgentSpan 的 Name 在 buildDetail 中不可用）
-	// 这里使用 span 的 InvokeID 作为 fallback
-	toolName := ""
+	toolName := span.Name
 
 	var toolDescription string
 	var toolSchema map[string]any
@@ -275,8 +273,8 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.Span) *ToolCall
 
 	return &ToolCallDetail{
 		ToolName:        toolName,
-		CallArgs:        extractInputsAsMap(span),
-		CallResult:      extractOutputsAsMap(span),
+		CallArgs:        extractInputsAsMap(&span.Span),
+		CallResult:      extractOutputsAsMap(&span.Span),
 		ToolDescription: toolDescription,
 		ToolSchema:      toolSchema,
 	}
@@ -297,6 +295,12 @@ func (e *TracerTrajectoryExtractor) buildMeta(span *tracer.TraceAgentSpan, baseM
 
 	// 对齐 Python: meta["span_name"] = getattr(span, "name", None)
 	meta["span_name"] = span.Name
+
+	// 对齐 Python: agent_id = getattr(span, "agent_id", None) or base_meta.get("agent_id")
+	// Go 中 TraceAgentSpan 没有 AgentID 字段，从 baseMeta 回退
+	if aid, ok := baseMeta["agent_id"]; ok && aid != nil {
+		meta["agent_id"] = aid
+	}
 
 	// 对齐 Python: if kind not in ("llm", "tool"): meta["inputs"] = ...; meta["outputs"] = ...
 	if kind != StepKindLLM && kind != StepKindTool {

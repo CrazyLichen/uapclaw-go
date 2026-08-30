@@ -67,4 +67,11 @@ func TeamHome(teamName string) string {
 	return filepath.Join(GetAgentTeamsHome(), teamName)
 }
 
+// DefaultTeamMemoryDir 返回团队共享记忆目录默认路径。
+// 对齐 Python: team_memory_dir(team_name)
+// 布局：{TeamHome(teamName)}/team-workspace/team-memory/
+func DefaultTeamMemoryDir(teamName string) string {
+	return filepath.Join(TeamHome(teamName), "team-workspace", "team-memory")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

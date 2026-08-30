@@ -47,7 +47,7 @@ func TestIsMostlyEnglish(t *testing.T) {
 		{
 			name:     "中英混合偏中文",
 			text:     "这是中文描述 with some English words",
-			expected: false,
+			expected: true, // rune 计数: 21英文字母 / 27总rune ≈ 0.78 > 0.7
 		},
 		{
 			name:     "空字符串",
@@ -92,7 +92,7 @@ func TestIsMostlyEnglish(t *testing.T) {
 		{
 			name:     "恰好超过阈值",
 			text:     "abcde测试",
-			expected: false, // 5/11 ≈ 0.45 < 0.7
+			expected: true, // rune 计数: 5/7 ≈ 0.71 > 0.7
 		},
 		{
 			name:     "恰好低于阈值",
@@ -239,14 +239,14 @@ func TestNewToolDescriptionReviewer(t *testing.T) {
 
 // TestIsMostlyEnglish_边界值测试 测试英文占比阈值边界
 func TestIsMostlyEnglish_边界值测试(t *testing.T) {
-	// 构造恰好 0.7 的情况：7 个英文字符 + 3 个非英文字符 = 0.7
+	// 构造恰好 0.7 的情况（rune 计数）：7 个英文字符 + 3 个中文字符 = 7/10 = 0.7
 	// 0.7 不大于 0.7，所以返回 false
-	text70Percent := "abcdefg测试"
+	text70Percent := "abcdefg测试测"
 	result := isMostlyEnglish(text70Percent)
 	assert.False(t, result, "恰好 0.7 应该返回 false（需要 > 0.7）")
 
-	// 8 个英文字符 + 2 个非英文字符 = 0.8 > 0.7
-	text80Percent := "abcdefgh测"
+	// 8 个英文字符 + 2 个中文字符 = 8/10 = 0.8 > 0.7
+	text80Percent := "abcdefgh测试"
 	result = isMostlyEnglish(text80Percent)
 	assert.True(t, result, "0.8 > 0.7 应该返回 true")
 }

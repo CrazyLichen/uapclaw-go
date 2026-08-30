@@ -85,10 +85,27 @@ func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string
 	e2aResp.ResponseKind = responseKind
 	e2aResp.EnsureTimestamp()
 
+	// 对齐 Python: Provenance(converter, converted_at, details)
+	e2aResp.Provenance = e2a.E2AProvenance{
+		SourceProtocol: e2a.E2ASourceProtocolE2A,
+		Converter:      "uapclaw-go/internal/swarm/transport/wire:BuildServerPushWire",
+		ConvertedAt:    e2a.UTCNowISO(),
+		Details:        map[string]any{"kind": "server_push"},
+	}
+
+	// 对齐 Python: identity_origin=AGENT
+	e2aResp.IdentityOrigin = e2a.IdentityOriginAgent
+
+	// 对齐 Python: is_stream=False
+	e2aResp.IsStream = false
+
+	// 对齐 Python: channel=str(msg.get("channel_id", "")) or None → 空串不设置
 	if channel, ok := msg["channel_id"].(string); ok && channel != "" {
 		e2aResp.Channel = channel
 	}
-	if sessionID, ok := msg["session_id"].(string); ok {
+
+	// 对齐 Python: session_id 非空时才设置（合并 Issue 20）
+	if sessionID, ok := msg["session_id"].(string); ok && sessionID != "" {
 		e2aResp.SessionID = sessionID
 	}
 	if body, ok := msg["body"].(map[string]any); ok {
@@ -125,6 +142,12 @@ func buildServerPushWireChunk(msg map[string]any) map[string]any {
 
 	// 使用 EncodeAgentChunkForWire 编码
 	chunk := schema.NewAgentResponseChunk(requestID, channelID, payload)
+
+	// 对齐 Python: is_complete=bool(msg.get("is_complete", False))
+	if isComplete, ok := msg["is_complete"].(bool); ok {
+		schema.WithChunkIsComplete(isComplete)(chunk)
+	}
+
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, 0, false)
 
 	// 合并 metadata

@@ -4,8 +4,12 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -182,23 +186,51 @@ func (h *TeamHarness) InnerAgent() hinterfaces.DeepAgentInterface {
 
 // DeepConfig 返回 DeepAgent 配置快照。
 // 对齐 Python: TeamHarness.deep_config property
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) DeepConfig() any { return nil }
+func (h *TeamHarness) DeepConfig() *hschema.DeepAgentConfig {
+	if h.deepAgent == nil {
+		return nil
+	}
+	return h.deepAgent.DeepConfig()
+}
 
 // Workspace 返回绑定到底层 Agent 的工作空间。
 // 对齐 Python: TeamHarness.workspace property
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) Workspace() any { return nil }
+func (h *TeamHarness) Workspace() *workspace.Workspace {
+	if h.deepAgent == nil {
+		return nil
+	}
+	dc := h.deepAgent.DeepConfig()
+	if dc == nil {
+		return nil
+	}
+	return dc.Workspace
+}
 
 // SysOperation 返回绑定到底层 Agent 的系统操作。
 // 对齐 Python: TeamHarness.sys_operation property
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) SysOperation() any { return nil }
+func (h *TeamHarness) SysOperation() sysop.SysOperation {
+	if h.deepAgent == nil {
+		return nil
+	}
+	dc := h.deepAgent.DeepConfig()
+	if dc == nil {
+		return nil
+	}
+	return dc.SysOperation
+}
 
 // Model 返回底层 Agent 使用的模型。
 // 对齐 Python: TeamHarness.model property
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) Model() any { return nil }
+func (h *TeamHarness) Model() *llm.Model {
+	if h.deepAgent == nil {
+		return nil
+	}
+	dc := h.deepAgent.DeepConfig()
+	if dc == nil {
+		return nil
+	}
+	return dc.Model
+}
 
 // HasPendingInterrupt 返回 Agent 是否有待恢复的中断状态。
 // 对齐 Python: TeamHarness.has_pending_interrupt()

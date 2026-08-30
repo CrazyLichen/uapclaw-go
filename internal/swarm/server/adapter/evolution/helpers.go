@@ -580,17 +580,20 @@ func PushEvolutionEvent(
 	evt map[string]any,
 	buildMsgFn BuildPushMessageFunc,
 ) error {
+	// 对齐 Python: payload = event_payload_dict(evt) — 浅拷贝避免修改原始 evt
+	payload := EventPayloadDict(evt)
+
 	evtType := EventType(evt)
 	if evtType != "" {
-		if _, ok := evt["event_type"]; !ok {
-			evt["event_type"] = evtType
+		if _, ok := payload["event_type"]; !ok {
+			payload["event_type"] = evtType
 		}
 	}
-	if _, ok := evt["request_id"]; !ok {
-		evt["request_id"] = requestID
+	if _, ok := payload["request_id"]; !ok {
+		payload["request_id"] = requestID
 	}
 
-	msg := buildMsgFn(pushCtx.SessionID, requestID, evt, pushCtx.ChannelID)
+	msg := buildMsgFn(pushCtx.SessionID, requestID, payload, pushCtx.ChannelID)
 	return pushCtx.Transport.SendPush(ctx, msg)
 }
 

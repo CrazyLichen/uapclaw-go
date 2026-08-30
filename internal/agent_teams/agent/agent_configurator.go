@@ -299,9 +299,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	if db == nil {
 		// 尝试从 spawn.GetSharedDB 获取，若为 nil 则降级为内存数据库
 		if sharedDB := spawn.GetSharedDB(ctx.DBConfig); sharedDB != nil {
-			if typedDB, ok := sharedDB.(database.TeamDatabase); ok {
-				db = typedDB
-			}
+			db = sharedDB
 		}
 		if db == nil {
 			logger.Info(logComponent).Str("team_name", teamName).
@@ -387,18 +385,40 @@ func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx 
 	// 记忆配置从 spec 中获取，当前为默认配置
 	memCfg := atschema.NewTeamMemoryConfig()
 
+	// 对齐 Python: team_memory_dir = team_memory_dir(team_name)
+	teamMemoryDir := agentteams.DefaultTeamMemoryDir(c.TeamName())
+
+	// 对齐 Python: read_only_source = ctx.get("read_only_source_workspace")
+	var readOnlySource *string
+
+	// 对齐 Python: enable_auto_extract = (spec.memory.auto_extract and spec.lifecycle == "persistent")
+	autoExtract := memCfg.AutoExtract && c.Lifecycle() == string(memory.TeamLifecyclePersistent)
+
+	// 对齐 Python: db = self.team_backend.db if self.team_backend else None
+	var db database.TeamDatabase
+	if c.TeamBackend() != nil {
+		db = c.TeamBackend().DB()
+	}
+
 	params := memory.TeamMemoryManagerParams{
-		MemberName:          memberName,
-		TeamName:            c.TeamName(),
-		Role:                memory.TeamRole(c.Role()),
-		Lifecycle:           memory.TeamLifecycle(c.Lifecycle()),
-		Scenario:            memory.TeamScenario(memCfg.Scenario),
-		EmbeddingConfig:     memory.ResolveEmbeddingConfig(&memCfg),
-		Language:            memory.TeamLanguage(language),
-		PromptMode:          memory.PromptMode(memCfg.MemberMemoryPromptMode),
-		EnableAutoExtract:   memCfg.AutoExtract,
-		SharedMemory:        memCfg.SharedMemory,
-		TimezoneOffsetHours: memCfg.TimezoneOffsetHours,
+		MemberName:              memberName,
+		TeamName:                c.TeamName(),
+		Role:                    memory.TeamRole(c.Role()),
+		Lifecycle:               memory.TeamLifecycle(c.Lifecycle()),
+		Scenario:                memory.TeamScenario(memCfg.Scenario),
+		EmbeddingConfig:         memory.ResolveEmbeddingConfig(&memCfg),
+		Language:                memory.TeamLanguage(language),
+		PromptMode:              memory.PromptMode(memCfg.MemberMemoryPromptMode),
+		EnableAutoExtract:       autoExtract,
+		SharedMemory:            memCfg.SharedMemory,
+		TimezoneOffsetHours:     memCfg.TimezoneOffsetHours,
+		Workspace:               c.Harness().Workspace(),
+		SysOperation:            c.Harness().SysOperation(),
+		TeamMemoryDir:           &teamMemoryDir,
+		ReadOnlySourceWorkspace: readOnlySource,
+		DB:                      db,
+		TaskManager:             c.TaskManager(),
+		ExtractionModel:         c.Harness().Model(),
 	}
 	return memory.NewTeamMemoryManager(params)
 }

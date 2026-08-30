@@ -116,13 +116,13 @@ func TestToolCallOperator_SetParameter(t *testing.T) {
 		}
 	})
 
-	t.Run("map[string]any中非string值转空字符串", func(t *testing.T) {
+	t.Run("map[string]any中非string值用Sprintf转换", func(t *testing.T) {
 		op := NewToolCallOperator("tool_op", WithDescriptions(map[string]string{"search": "old"}))
 		op.SetParameter(TargetToolDescription, map[string]any{"search": 42})
 		state := op.GetState()
 		td := state[TargetToolDescription].(map[string]string)
-		if td["search"] != "" {
-			t.Errorf("desc = %q, expected empty string for non-string value", td["search"])
+		if td["search"] != "42" {
+			t.Errorf("desc = %q, expected %q for non-string value via Sprintf", td["search"], "42")
 		}
 	})
 }
