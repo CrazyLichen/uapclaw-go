@@ -603,7 +603,7 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()
-	sm.saveState()
+	// saveState 已在 AddInstalledPlugin 内调用，此处不再冗余（对齐 Python: _add_installed_plugin 自身 _save_state）
 
 	return map[string]any{"success": true}, nil
 }
@@ -652,7 +652,7 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()
-	sm.saveState()
+	// saveState 已在 AddInstalledPlugin 内调用，此处不再冗余
 	sm.mu.Unlock()
 
 	return map[string]any{"success": true}, nil
@@ -1280,7 +1280,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 		"commit":       "",                        // 对齐 Python 默认空
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
-	sm.saveState()
+	// saveState 已在 AddInstalledPlugin 内调用，此处不再冗余
 	sm.mu.Unlock()
 
 	sm.refreshAgentDataIndexes()
@@ -1719,7 +1719,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 			"source":       "teamskillshub",
 			"installed_at": time.Now().Format(time.RFC3339),
 		})
-		sm.saveState()
+		// saveState 已在 AddInstalledPlugin 内调用，此处不再冗余
 		sm.mu.Unlock()
 		sm.refreshAgentDataIndexes()
 	}
@@ -1903,6 +1903,8 @@ func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
 // AddInstalledPlugin 添加已安装插件记录
 // 对应 Python: SkillManager._add_installed_plugin(plugin)
 func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
+	// 对齐 Python: plugin = self._normalize_plugin(plugin) — 补全 enabled=True
+	plugin = sm.normalizePlugin(plugin)
 	plugins := sm.GetInstalledPlugins()
 	// 如果已存在同名插件，替换
 	name := toString(plugin["name"])
@@ -1910,11 +1912,15 @@ func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
 		if toString(p["name"]) == name {
 			plugins[i] = plugin
 			sm.state["installed_plugins"] = mapSliceToAny(plugins)
+			// 对齐 Python: self._save_state()
+			sm.saveState()
 			return
 		}
 	}
 	plugins = append(plugins, plugin)
 	sm.state["installed_plugins"] = mapSliceToAny(plugins)
+	// 对齐 Python: self._save_state()
+	sm.saveState()
 }
 
 // AddLocalSkill 添加本地技能记录（外部接口，自带锁保护）
