@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
@@ -320,8 +321,8 @@ func (m *VariableManager) QueryVariable(ctx context.Context, userID string, scop
 		result := make(map[string]string)
 		for k, v := range kvRet {
 			decoded := m.aesCodec.Decode(string(v))
-			// 取最后一个分隔符后的部分作为变量名
-			parts := splitBySeparator(k)
+			// 对齐 Python: k.split(f"{self.SEPARATOR}")[-1]
+			parts := strings.Split(k, separator)
 			result[parts[len(parts)-1]] = decoded
 		}
 		return result, nil
@@ -387,7 +388,7 @@ func (m *VariableManager) makeVariablePairs(usrID string, forDeletion bool, scop
 //
 // 对齐 Python: VariableManager._check_user_and_scope_id
 func (m *VariableManager) checkUserAndScopeID(userID string, scopeID string, context string) {
-	if userID == "" || len(userID) != len(trimSpaceForVariable(userID)) {
+	if userID == "" || strings.TrimSpace(userID) == "" {
 		// 对齐 Python: memory_logger.error("Check user and scope id operation failed, user ID is empty", ...)
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_RETRIEVE").
@@ -397,7 +398,7 @@ func (m *VariableManager) checkUserAndScopeID(userID string, scopeID string, con
 			Str("context", context).
 			Msg("校验用户和 scope 失败，user ID 为空")
 	}
-	if scopeID == "" || len(scopeID) != len(trimSpaceForVariable(scopeID)) {
+	if scopeID == "" || strings.TrimSpace(scopeID) == "" {
 		// 对齐 Python: memory_logger.error("Check user and scope id operation failed, scope ID is empty", ...)
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_RETRIEVE").
@@ -423,29 +424,3 @@ func checkExist(variableDict map[string]string, variableName string) bool {
 	return val != ""
 }
 
-// trimSpaceForVariable 去除前后空白。
-func trimSpaceForVariable(s string) string {
-	// 简化实现，对齐 Python: not user_id or not user_id.strip()
-	for _, r := range s {
-		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
-			return s // 只要有一个非空白字符就不算纯空白
-		}
-	}
-	return ""
-}
-
-// splitBySeparator 按分隔符拆分 key。
-//
-// 对齐 Python: k.split(f"{self.SEPARATOR}")[-1]
-func splitBySeparator(key string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(key); i++ {
-		if key[i] == '/' {
-			parts = append(parts, key[start:i])
-			start = i + 1
-		}
-	}
-	parts = append(parts, key[start:])
-	return parts
-}
