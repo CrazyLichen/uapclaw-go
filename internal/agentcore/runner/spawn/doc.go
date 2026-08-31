@@ -14,8 +14,8 @@
 // 通信协议：
 //
 //	父子进程通过 stdin/stdout 交换 NDJSON 消息（每行一个 JSON 对象）。
-//	消息类型：INPUT, OUTPUT, HEALTH_CHECK, HEALTH_CHECK_RESPONSE,
-//	SHUTDOWN, SHUTDOWN_ACK, ERROR, STREAM_CHUNK, DONE。
+//	消息类型：INPUT（输入）、OUTPUT（输出）、HEALTH_CHECK（健康检查）、HEALTH_CHECK_RESPONSE（健康检查响应）、
+//	SHUTDOWN（关闭）、SHUTDOWN_ACK（关闭确认）、ERROR（错误）、STREAM_CHUNK（流式块）、DONE（完成）。
 //
 // 子进程入口：
 //

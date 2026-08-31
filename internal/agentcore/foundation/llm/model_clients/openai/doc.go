@@ -26,8 +26,8 @@
 //
 // init() 时自动注册到全局 ClientRegistry：
 //
-//	Register("OpenAI", "llm", ...)    → llm_OpenAI
-//	Register("OpenRouter", "llm", ...) → llm_OpenRouter
+//	Register("OpenAI", "llm", ...)    → llm_OpenAI（注册 OpenAI 为 LLM 客户端）
+//	Register("OpenRouter", "llm", ...) → llm_OpenRouter（注册 OpenRouter 为 LLM 客户端）
 //
 // 使用 Model 门面或 CLI 入口时需 blank import 本包触发注册：
 //

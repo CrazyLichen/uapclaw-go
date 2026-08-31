@@ -591,21 +591,21 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 步骤1: stageNewTasksInTx
 		if mutationErr = stageNewTasksInTx(tx, taskTable, teamName, newTasks, now); mutationErr != nil {
-			return mutationErr // rollback
+			return mutationErr // 回滚
 		}
 
 		// 步骤2: loadEndpointsAndValidateInTx
 		endpointTasks, err := loadEndpointsAndValidateInTx(tx, taskTable, addEdges)
 		if err != nil {
 			mutationErr = err
-			return err // rollback
+			return err // 回滚
 		}
 
 		// 步骤3: checkCycleAndComputeNewEdgesInTx
 		newEdges, err := checkCycleAndComputeNewEdgesInTx(tx, depTable, teamName, addEdges, endpointTasks)
 		if err != nil {
 			mutationErr = err
-			return err // rollback
+			return err // 回滚
 		}
 
 		// 步骤4: applyNewEdgesInTx — INSERT 依赖行
@@ -634,7 +634,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 
 		result.Ok = true
 		result.RefreshedTasks = refreshedIDs
-		return nil // commit
+		return nil // 提交
 	})
 
 	if err != nil {

@@ -467,7 +467,7 @@ func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx contex
 	}
 
 	// 对齐 Python: 通过 ContextEngine 获取依赖任务的上下文消息并附加到 InputEvent
-	// Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages()}))
+	// 对应 Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages()}))
 	for _, contextID := range contextIDs {
 		ctxMC := h.ContextEngine.GetContext(contextID, contextID)
 		if ctxMC != nil {

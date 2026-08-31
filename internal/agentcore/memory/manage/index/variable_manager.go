@@ -89,7 +89,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 	memories map[string][]mem_model.MemoryUnit, _ ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
 	// 对齐 Python: for mem_type, memory in memories.items():
-	//               if mem_type != self.mem_type: continue
+	//               if mem_type != self.mem_type: 跳过
 	for memType, units := range memories {
 		if memType != m.memType {
 			continue
@@ -216,8 +216,8 @@ func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, sco
 	}
 
 	// 对齐 Python:
-	//   user_prefix = f"{self.USER_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}"
-	//   session_prefix = f"{self.SESSION_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}"
+	//   用户前缀 = f"{self.USER_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}"
+	//   会话前缀 = f"{self.SESSION_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}"
 	userPrefix := fmt.Sprintf("%s%s%s%s%s%s", userVarPrefix, separator, userID, separator, scopeID, separator)
 	sessionPrefix := fmt.Sprintf("%s%s%s%s%s%s", sessionVarPrefix, separator, userID, separator, scopeID, separator)
 
@@ -328,7 +328,7 @@ func (m *VariableManager) QueryVariable(ctx context.Context, userID string, scop
 	}
 
 	// 对齐 Python: if session_id:
-	//   key = f"{self.SESSION_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}{session_id}{self.SEPARATOR}{name}"
+	//   会话变量键 = f"{self.SESSION_VAR_PREFIX}{self.SEPARATOR}{user_id}...{session_id}{self.SEPARATOR}{name}"
 	var key string
 	if sessionID != "" {
 		key = fmt.Sprintf("%s%s%s%s%s%s%s%s%s", sessionVarPrefix, separator, userID, separator, scopeID, separator, sessionID, separator, name)
@@ -365,15 +365,15 @@ func (m *VariableManager) makeVariablePairs(usrID string, forDeletion bool, scop
 
 	if varName != "" {
 		if sessionID == "" {
-			// 对齐 Python: 1) user_var
-			//   key = f"{self.USER_VAR_PREFIX}{VariableManager.SEPARATOR}{usr_id}{VariableManager.SEPARATOR}{scope_id}{VariableManager.SEPARATOR}{var_name}"
+			// 对齐 Python: 1) 用户变量
+			//   用户变量键 = f"{self.USER_VAR_PREFIX}{VariableManager.SEPARATOR}{usr_id}...{var_name}"
 			key = fmt.Sprintf("%s%s%s%s%s%s%s", userVarPrefix, separator, usrID, separator, scopeID, separator, varName)
 			if !forDeletion {
 				value = []byte(encodedUserValue)
 			}
 		} else {
-			// 对齐 Python: 2) session_var
-			//   key = f"{self.SESSION_VAR_PREFIX}{VariableManager.SEPARATOR}{usr_id}{VariableManager.SEPARATOR}{scope_id}{VariableManager.SEPARATOR}{session_id}{VariableManager.SEPARATOR}{var_name}"
+			// 对齐 Python: 2) 会话变量
+			//   会话变量键 = f"{self.SESSION_VAR_PREFIX}{VariableManager.SEPARATOR}{usr_id}...{var_name}"
 			key = fmt.Sprintf("%s%s%s%s%s%s%s%s%s", sessionVarPrefix, separator, usrID, separator, scopeID, separator, sessionID, separator, varName)
 			if !forDeletion {
 				value = []byte(encodedSessionValue)

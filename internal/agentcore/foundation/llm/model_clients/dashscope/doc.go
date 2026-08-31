@@ -26,7 +26,7 @@
 //
 // init() 时自动注册到全局 ClientRegistry：
 //
-//	Register("DashScope", "llm", ...) → llm_DashScope
+//	Register("DashScope", "llm", ...) → llm_DashScope（注册 DashScope 为 LLM 客户端）
 //
 // 使用 Model 门面或 CLI 入口时需 blank import 本包触发注册：
 //

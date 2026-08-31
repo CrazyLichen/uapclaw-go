@@ -33,7 +33,7 @@
 //	    ↓ jsonschema:"description=xxx,required" → Param.Description, Param.Required
 //	    ↓ jsonschema:"default=10" → Param.Default
 //	    ↓ 递归处理嵌套 struct（→ ParamTypeObject）和 slice（→ ParamTypeArray）
-//	ToolCard.InputParams → ToolCard.ToolInfo() → LLM function calling JSON Schema
+//	ToolCard.InputParams → ToolCard.ToolInfo() → LLM function calling JSON Schema（工具参数→工具信息→LLM 函数调用 JSON Schema）
 //
 //	调用流程：
 //

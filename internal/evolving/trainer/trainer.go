@@ -270,7 +270,7 @@ func (t *Trainer) Forward(
 	// 对齐 Python:
 	//    初始化轨迹列表为空
 	//   for case, sess in zip(cases.get_cases(), sessions):
-	//       Python: trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
+	//       对应 Python: trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
 	trajectories := make([]*trajectory.Trajectory, len(caseList))
 	if t.extractor != nil {
 		for i, c := range caseList {
@@ -550,13 +550,13 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 //
 // 对齐 Python:
 //
-//	Python: ckpt = self._checkpoint_store.load_checkpoint(self._resume_from)
-//	Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
-//	Python: progress.start_epoch = int(restored.get("start_epoch", 0))
-//	Python: progress.best_score = float(restored.get("best_score", 0.0))
-//	Python: load_state = getattr(self._updater, "load_state", None)
+//	Python: ckpt = self._checkpoint_store.load_checkpoint(self._resume_from) — 加载检查点
+//	Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt) — 恢复状态
+//	Python: progress.start_epoch = int(restored.get("start_epoch", 0)) — 恢复起始轮次
+//	Python: progress.best_score = float(restored.get("best_score", 0.0)) — 恢复最佳分数
+//	Python: load_state = getattr(self._updater, "load_state", None) — 获取更新器加载方法
 //	Python: if callable(load_state):
-//	    Python: load_state(getattr(ckpt, "updater_state", {}) or {})
+//	    对应 Python: load_state(getattr(ckpt, "updater_state", {}) or {}) — 加载更新器状态
 //
 // 对应 Python: Trainer._resume_if_needed(agent, progress)
 func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent, progress *Progress) error {
@@ -590,7 +590,7 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 	}
 
 	// 对齐 Python: load_state = getattr(self._updater, "load_state", None)
-	//             if callable(load_state): load_state(getattr(ckpt, "updater_state", {}) or {})
+	//             若可调用则: load_state(getattr(ckpt, "updater_state", {}) or {})
 	if t.updater != nil {
 		updaterState := ckpt.UpdaterState
 		if updaterState == nil {

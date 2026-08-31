@@ -265,10 +265,10 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 // 当循环组件写入 LOOP_ID 后，额外返回 loop_node_id/loop_index。
 // 对齐 Python:
 //
-//	Python: loop_id = state.get_global(LOOP_ID)
-//	Python: if loop_id is None: return component_metadata
-//	Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
-//	Python: component_metadata.update({"loop_node_id": loop_id, "loop_index": index})
+//	Python: loop_id = state.get_global(LOOP_ID) — 获取循环标识
+//	Python: if loop_id is None: return component_metadata — 无循环则直接返回
+//	Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX) — 获取循环索引
+//	Python: component_metadata.update({"loop_node_id": loop_id, "loop_index": index}) — 更新元数据
 func getComponentMetadata(session WorkflowNodeSession) map[string]any {
 	metadata := map[string]any{
 		"component_id":   session.NodeID(),

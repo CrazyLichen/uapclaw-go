@@ -4,7 +4,7 @@
 // 通过 BaseModelClient 统一入口调用视觉模型、音频转写 API、ACRCloud 元数据识别等。
 //
 // 工具使用 tool.NewTool[I,O] 模式，工厂函数对齐 Python 的
-// create_vision_tools/create_audio_tools。
+// create_vision_tools（创建视觉工具集）/ create_audio_tools（创建音频工具集）。
 //
 // 文件目录：
 //

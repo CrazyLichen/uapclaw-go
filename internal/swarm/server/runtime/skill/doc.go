@@ -21,6 +21,8 @@
 //	├── skill_routes.go     # ReqMethod → handler 路由映射 + NeedsRebuild
 //	├── remote_import.go    # 远程 URL 下载技能归档（ZIP/tar.gz）+ SHA256 校验 + 解压导入
 //	├── git_ops.go          # git clone/pull/rev-parse 操作
+//	├── plugin_yaml.go      # plugin.yaml 解析、技能包 ZIP 安装、README 提取
+//	├── agent_data.go       # agent-data.json 索引文件生成与刷新
 //	├── proxy_context.go    # SkillNet 代理环境变量上下文
 //	└── safe_rmtree.go      # 安全删除目录（带重试和 Windows 权限修复）
 //

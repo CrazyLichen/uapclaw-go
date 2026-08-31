@@ -55,15 +55,15 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 //
 // 对齐 Python: ToolOptimizerBase.__init__(self, **kwargs)
 //
-//	self.max_turns = kwargs.get("max_turns", 5)
-//	self.llm_api_key = kwargs.get("llm_api_key", "")
-//	self.config_eg = kwargs.get("config_eg", default_config_eg)
-//	self.config_desc = kwargs.get("config_desc", default_config_desc)
-//	self.path_save_dir = kwargs.get("path_save_dir", "./tool_optimizer_results")
-//	self.config_eg['save_dir'] = os.path.join(self.path_save_dir, "examples")
-//	self.config_desc['save_dir'] = os.path.join(self.path_save_dir, "descriptions")
-//	self.config_desc['examples_dir'] = self.config_eg['save_dir']
-//	self.config_desc['neg_ex_input_path'] = os.path.join(self.path_save_dir, f"{kwargs.get('tool_name','tool')}.json")
+//	self.max_turns = kwargs.get("max_turns", 5) — 最大迭代轮数
+//	self.llm_api_key = kwargs.get("llm_api_key", "") — LLM API 密钥
+//	self.config_eg = kwargs.get("config_eg", default_config_eg) — 示例生成配置
+//	self.config_desc = kwargs.get("config_desc", default_config_desc) — 描述生成配置
+//	self.path_save_dir = kwargs.get("path_save_dir", "./tool_optimizer_results") — 结果保存目录
+//	self.config_eg['save_dir'] = os.path.join(self.path_save_dir, "examples") — 示例保存路径
+//	self.config_desc['save_dir'] = os.path.join(self.path_save_dir, "descriptions") — 描述保存路径
+//	self.config_desc['examples_dir'] = self.config_eg['save_dir'] — 描述配置引用示例路径
+//	self.config_desc['neg_ex_input_path'] = os.path.join(self.path_save_dir, f"{kwargs.get('tool_name','tool')}.json") — 负例输入路径
 func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *ToolOptimizerBase {
 	// 对齐 Python: 使用默认配置
 	configEg := deepCopyMap(DefaultConfigEg)
@@ -125,9 +125,9 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 //  1. 保存原始描述 original_desc = tool["description"]
 //  2. for i in range(self.max_turns):
 //     if i > 0: tool["description"] = 最新描述
-//     阶段 1 — 示例
+//     阶段 1 — 示例生成
 //     result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
-//     阶段 2 — 描述
+//     阶段 2 — 描述生成
 //     result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
 //  3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
 //  4. 格式化：ToolDescriptionReviewer.Format(schema, processed)
@@ -160,9 +160,9 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			}
 		}
 
-		// 对齐 Python: Stage 1 - Example
-		// Python: default_config_desc['llm_api_key'] = self.llm_api_key
-		// Python: default_config_eg['llm_api_key'] = self.llm_api_key
+		// 对齐 Python: Stage 1 - 示例生成
+		// 对应 Python: default_config_desc['llm_api_key'] = self.llm_api_key
+		// 对应 Python: default_config_eg['llm_api_key'] = self.llm_api_key
 		b.configEg["llm_api_key"] = b.llmAPIKey
 		b.configDesc["llm_api_key"] = b.llmAPIKey
 
@@ -254,9 +254,9 @@ func (b *ToolOptimizerBase) OptimizeTool(
 //
 // 对齐 Python: BaseOptimizer.backward() 模板方法流程：
 //
-//	self._validate_parameters()
-//	self._selected_signals = self._select_signals(signals)
-//	await self._backward(signals)  # pass
+//	self._validate_parameters() — 校验参数
+//	self._selected_signals = self._select_signals(signals) — 筛选信号
+//	await self._backward(signals)  # pass — 工具优化器反向传播为空操作
 //
 // 对应 Python: async def _backward(self, signals): pass
 func (b *ToolOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
@@ -271,10 +271,10 @@ func (b *ToolOptimizerBase) Backward(_ context.Context, signals []*signal.Evolut
 //
 // 对齐 Python: BaseOptimizer.step() 模板方法流程：
 //
-//	self._validate_parameters()
-//	updates = self._step()
-//	self.clear_trajectories()
-//	return updates or {}
+//	self._validate_parameters() — 校验参数
+//	updates = self._step() — 执行步骤
+//	self.clear_trajectories() — 清空轨迹
+//	return updates or {} — 返回更新或空映射
 //
 // 对应 Python: BaseOptimizer.step() → _step() → return
 func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
@@ -298,7 +298,7 @@ func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
 //
 // 对齐 Python:
 //
-//	self._targets = list(targets or self.default_targets())
+//	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
 //
 // 对应 Python: ToolOptimizerBase.bind() → BaseOptimizer.bind()
 func (b *ToolOptimizerBase) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {

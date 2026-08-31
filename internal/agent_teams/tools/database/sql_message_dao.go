@@ -118,7 +118,7 @@ func (d *SQLMessageDao) GetBroadcastMessages(ctx context.Context, teamName, memb
 
 	if unreadOnly {
 		// 对齐 Python: 基于 MessageReadStatus 水位线的已读判断
-		// timestamp > COALESCE((SELECT read_at FROM message_read_status_{suffix} WHERE member_name = ? AND team_name = ?), 0)
+		// SQL 条件: timestamp > COALESCE((SELECT read_at FROM message_read_status_{suffix} WHERE member_name = ? AND team_name = ?), 0)
 		subQuery := fmt.Sprintf(
 			"SELECT read_at FROM %s WHERE member_name = ? AND team_name = ?",
 			quoteTableName(rsTable),

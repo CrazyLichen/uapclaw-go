@@ -12,10 +12,10 @@
 // 组件间依赖关系：
 //
 //	EventQueue ← EventHandler（订阅时绑定 handler 回调）
-//	TaskScheduler ← TaskManager + EventQueue + TaskExecutor
-//	TaskManager.SetOnTaskSubmitted → TaskScheduler.NotifyTaskSubmitted
-//	IntentRecognizer ← ModelProvider（⤵️ 6.23 回填）
-//	EventHandlerWithIntentRecognition ← IntentRecognizer + EventHandlerBase
+//	TaskScheduler ← TaskManager + EventQueue + TaskExecutor（调度器组合任务管理+事件队列+执行器）
+//	TaskManager.SetOnTaskSubmitted → TaskScheduler.NotifyTaskSubmitted（提交任务时通知调度器）
+//	IntentRecognizer ← ModelProvider（意图识别器依赖模型提供者，⤵️ 6.23 回填）
+//	EventHandlerWithIntentRecognition ← IntentRecognizer + EventHandlerBase（意图识别事件处理器组合意图识别器+基础处理器）
 //
 // 文件目录：
 //

@@ -413,8 +413,8 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 
 	for _, targetID := range sortedTargets {
 		// 获取目标 Agent 的描述
-		// 对应 Python: Python: card = self._runtime.get_agent_card(target_id) if self._runtime else None
-		//              Python: description = card.description if card else ""
+		// 对应 Python: card = self._runtime.get_agent_card(target_id) if self._runtime else None
+		//              description = card.description if card else ""
 		description := ""
 		if rt := c.Runtime(); rt != nil {
 			if card, cardErr := rt.GetAgentCard(targetID); cardErr == nil && card != nil {
@@ -542,6 +542,7 @@ func (c *ContainerAgent) writeResultToStream(ctx context.Context, result any, te
 // 对应 Python: ContainerAgent._save_agent_context(target_agent, agent_session)
 //
 //	Python: context_engine = getattr(target_agent, "context_engine", None)
+//	即获取目标 Agent 的上下文引擎属性
 func (c *ContainerAgent) saveAgentContext(ctx context.Context, targetAgent agentinterfaces.BaseAgent, agentSession *session.Session) {
 	if targetAgent == nil || agentSession == nil {
 		return

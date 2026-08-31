@@ -236,7 +236,7 @@ func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, sco
 // convertToMemoryDocs 将 SummaryUnit 列表转换为 MemoryDoc 列表。
 //
 // 对齐 Python: SummaryManager._convert_to_memory_docs
-// text = mem_unit.summary, fields = {"source_id": mem_unit.message_mem_id, "metadata": {}}
+// 文本取 mem_unit.summary，字段含 source_id=mem_unit.message_mem_id, metadata={}
 func (m *SummaryManager) convertToMemoryDocs(units []*mem_model.SummaryUnit) []*index.MemoryDoc {
 	docs := make([]*index.MemoryDoc, 0, len(units))
 	for _, unit := range units {

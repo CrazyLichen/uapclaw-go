@@ -70,7 +70,7 @@ func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]fl
 	r := rand.New(rand.NewSource(seed))
 	vec := make([]float64, 128)
 	for i := range vec {
-		vec[i] = r.Float64()*2 - 1 // uniform(-1, 1)
+		vec[i] = r.Float64()*2 - 1 // 均匀分布 uniform(-1, 1)
 	}
 	return vec, nil
 }

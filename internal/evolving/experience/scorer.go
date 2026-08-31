@@ -349,7 +349,7 @@ func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *strin
 // 如果 record.UsageStats == nil → 初始化零值；
 // 按 evalResult["used/positive/negative"] 更新 TimesUsed/TimesPositive/TimesNegative（bool 类型断言）；
 // 设置 LastEvaluatedAt = time.Now().UTC().Format(time.RFC3339Nano)；
-// Python: record.Score = CalcScore(record, currentSkillVersion)。
+// 对应 Python: record.Score = CalcScore(record, currentSkillVersion)
 // 对应 Python: update_score()
 func UpdateScore(
 	record *checkpointing.EvolutionRecord,
@@ -382,7 +382,7 @@ func UpdateScore(
 // Evaluate 评估展示经验是否被有效使用。
 //
 // 空 records → 返回空 slice, nil；
-// Python: formatted = formatPresentedExperiences(presentedRecords)；
+// 对应 Python: formatted = formatPresentedExperiences(presentedRecords)
 // 选择语言模板，替换 {presented_experiences} 和 {conversation_snippet}（snippet 限制 4000 字符）；
 // 调用 llm_resilience.InvokeTextWithRetry + WithIsResultUsable(parseLLMJSON != nil)；
 // err != nil → logger.Error 并返回空 slice, nil；
@@ -437,7 +437,7 @@ func (s *ExperienceScorer) Evaluate(
 // Simplify 生成经验库整理建议。
 //
 // 空 records → logger.Info 并返回空 slice, nil；
-// Python: formatted = formatScoredExperiences(records)；
+// 对应 Python: formatted = formatScoredExperiences(records)
 // 选择语言模板，替换 {skill_name}/{skill_summary}(限1000)/{scored_experiences}；
 // userIntent != nil → prompt += "\n\n**用户意图**: " + *userIntent；
 // 记录 simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）；
@@ -445,7 +445,7 @@ func (s *ExperienceScorer) Evaluate(
 // err != nil → logger.Error（elapsed, skill, records, prompt_chars, error）并返回空 slice, nil；
 // 记录 simplify 完成日志（elapsed, skill, response_chars）；
 // parseLLMJSON nil → logger.Warn 并返回空 slice, nil；
-// Python: logger.Info（skill, actions_count）；
+// 对应 Python: logger.Info(skill, actions_count)
 // 返回 actions, nil。
 // 对应 Python: ExperienceScorer.simplify()
 func (s *ExperienceScorer) Simplify(

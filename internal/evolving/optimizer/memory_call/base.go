@@ -43,7 +43,7 @@ func (b *MemoryOptimizerBase) Domain() string {
 // 对齐 Python:
 //
 //	def default_targets(self) -> List[str]:
-//	    return ["enabled", "max_retries"]
+//	    返回 ["enabled", "max_retries"]
 //
 // 对应 Python: MemoryOptimizerBase.default_targets()
 func (b *MemoryOptimizerBase) DefaultTargets() []string {
@@ -56,7 +56,7 @@ func (b *MemoryOptimizerBase) DefaultTargets() []string {
 //
 //	@staticmethod
 //	def requires_forward_data() -> bool:
-//	    return True
+//	    返回 True
 //
 // 对应 Python: BaseOptimizer.requires_forward_data() → True
 func (b *MemoryOptimizerBase) RequiresForwardData() bool {
@@ -67,7 +67,7 @@ func (b *MemoryOptimizerBase) RequiresForwardData() bool {
 //
 // 对齐 Python:
 //
-//	self._targets = list(targets or self.default_targets())
+//	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
 //	MemoryOptimizerBase.filter_operators() 委托 super().filter_operators()，
 //	仅为文档目的显式声明，Go 中 Mixin.Bind 内部已调用 FilterOperators。
 //
@@ -99,9 +99,9 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 //
 // 对齐 Python: BaseOptimizer.backward() 模板方法流程：
 //
-//	self._validate_parameters()
-//	self._selected_signals = self._select_signals(signals)
-//	await self._backward(signals)  # pass
+//	self._validate_parameters() — 校验参数
+//	self._selected_signals = self._select_signals(signals) — 筛选信号
+//	await self._backward(signals)  # pass — 记忆优化器反向传播为空操作
 //
 // 对应 Python: MemoryOptimizerBase._backward(signals) → pass
 func (b *MemoryOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
@@ -116,10 +116,10 @@ func (b *MemoryOptimizerBase) Backward(_ context.Context, signals []*signal.Evol
 //
 // 对齐 Python: BaseOptimizer.step() 模板方法流程：
 //
-//	self._validate_parameters()
-//	updates = self._step()
-//	self.clear_trajectories()
-//	return updates or {}
+//	self._validate_parameters() — 校验参数
+//	updates = self._step() — 执行步骤
+//	self.clear_trajectories() — 清空轨迹
+//	return updates or {} — 返回更新或空映射
 //
 // 对应 Python: BaseOptimizer.step() → _step()
 func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {

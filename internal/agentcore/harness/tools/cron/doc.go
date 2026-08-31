@@ -1,6 +1,6 @@
 // Package cron 提供定时任务（Cron）工具集，包含统一入口工具（action 路由）
 // 和可选的 7 个遗留兼容工具（cron_list_jobs/cron_get_job/cron_create_job/
-// cron_update_job/cron_delete_job/cron_toggle_job/cron_preview_job）。
+// cron_update_job（更新任务）/ cron_delete_job（删除任务）/ cron_toggle_job（启停任务）/ cron_preview_job（预览任务））。
 //
 // 统一入口工具通过 action 字段路由 8 种操作：status/list/add/update/remove/run/runs/wake，
 // 使用 MapFunction 直接操作 map 输入以保留 kwargs 剩余字段。

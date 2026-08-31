@@ -19,6 +19,7 @@ import (
 //
 //	class TrajectoryExtractor:
 //	    def extract(self, session: Any, case_id: Optional[str] = None) -> Trajectory: ...
+//	    从会话中提取轨迹
 type TrajectoryExtractor interface {
 	// Extract 从 Session 提取 Trajectory。
 	//
@@ -262,7 +263,7 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan)
 	var toolSchema map[string]any
 
 	// 对齐 Python: if self._resource_manager is not None and tool_name
-	//     Python: tool_info = self._resource_manager.get_tool_infos(tool_name)
+	//     对应 Python: tool_info = self._resource_manager.get_tool_infos(tool_name)
 	if e.resourceManager != nil && toolName != "" {
 		// Go 中 resourceManager 类型待定，当前为 any
 		// 后续通过 ResourceManager 接口调用
@@ -402,7 +403,7 @@ func parseLLMResponse(outputs any) map[string]any {
 // extractInputs 从 Span 提取输入数据。
 //
 // 对齐 Python: TrajectoryExtractor._extract_inputs(span)
-// Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
+// 对应 Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
 func extractInputs(span *tracer.Span) any {
 	raw := span.Inputs
 	if m, ok := raw.(map[string]any); ok {
