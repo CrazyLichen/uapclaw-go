@@ -338,7 +338,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 			logger.Warn(permRailLogComponent).
 				Err(err).
 				Msg("permission.scene_hook.failed")
-		} else if sceneOut != nil && len(sceneOut) > 0 {
+		} else if len(sceneOut) > 0 {
 			switch sceneOut[0] {
 			case "approve":
 				return r.Approve("")

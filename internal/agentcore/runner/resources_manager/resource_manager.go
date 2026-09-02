@@ -816,9 +816,7 @@ func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string
 
 	results := make([]schema.ToolInfoInterface, 0, len(tools))
 	for _, t := range tools {
-		if info := t.Card().ToolInfo(); info != nil {
-			results = append(results, info)
-		}
+		results = append(results, t.Card().ToolInfo())
 	}
 	return results, nil
 }

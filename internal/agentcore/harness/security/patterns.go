@@ -328,7 +328,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 		_ = yaml.Unmarshal(raw, &data)
 	}
 	if data == nil {
-		if bootstrapPermissions == nil || len(bootstrapPermissions) == 0 {
+		if len(bootstrapPermissions) == 0 {
 			logger.Warn(patternsLogComponent).Str("path", cfgPath).Msg("permission.persist.abort: new_yaml_requires_fallback_permissions")
 			return map[string]any{"ok": false, "error": "cannot bootstrap yaml (missing file; pass bootstrap_permissions with non-empty permissions dict)"}
 		}
@@ -573,10 +573,7 @@ func parseURL(urlStr string) (scheme, host, path string) {
 		host = urlStr
 	}
 	// 去掉 host 中的 port
-	colonIdx := strings.LastIndex(host, ":")
-	if colonIdx >= 0 && colonIdx > strings.LastIndex(host, "]") {
-		// 有端口号，host 保持原样（含端口）
-	}
+	// 注意：若存在端口号（colonIdx >= 0 且 > 右方括号位置），host 保持原样（含端口）
 	return
 }
 
@@ -654,7 +651,7 @@ func persistTieredApprovalOverrideSuggestions(permissions map[string]any, sugges
 	persistedAny := false
 	for _, suggestion := range suggestions {
 		for _, toolName := range suggestion.Tools {
-			if ensureSingleAllowOverride(overrides, toolName, suggestion.MatchType, suggestion.Pattern, suggestion.Action) {
+			if ensureSingleAllowOverride(&overrides, toolName, suggestion.MatchType, suggestion.Pattern, suggestion.Action) {
 				persistedAny = true
 			}
 		}
@@ -668,8 +665,8 @@ func persistTieredApprovalOverrideSuggestions(permissions map[string]any, sugges
 // ensureSingleAllowOverride 确保单个 allow override 条目存在。
 //
 // 对齐 Python: _ensure_single_allow_override(overrides, ...) (patterns.py L302-345)
-func ensureSingleAllowOverride(overrides []any, toolName, matchType, pattern, action string) bool {
-	for _, existing := range overrides {
+func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, action string) bool {
+	for _, existing := range *overrides {
 		m, ok := existing.(map[string]any)
 		if !ok {
 			continue
@@ -698,7 +695,7 @@ func ensureSingleAllowOverride(overrides []any, toolName, matchType, pattern, ac
 		}
 	}
 
-	overrides = append(overrides, map[string]any{
+	*overrides = append(*overrides, map[string]any{
 		"id":         buildApprovalOverrideID(toolName, matchType, pattern),
 		"tools":      []string{toolName},
 		"match_type": matchType,

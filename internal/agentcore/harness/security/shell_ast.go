@@ -115,9 +115,9 @@ type ShellAstParseResult struct {
 // 对齐 Python: shell_ast.py L28-31
 var (
 	commandSubstitutionRe = regexp.MustCompile("`|\\$\\(")
-	processSubstitutionRe = regexp.MustCompile("[<>]\\(")
+	processSubstitutionRe = regexp.MustCompile(`[<>]\(`)
 	heredocRe             = regexp.MustCompile("<<<?")
-	paramExpansionRe      = regexp.MustCompile("\\$\\{")
+	paramExpansionRe      = regexp.MustCompile(`\$\{`)
 )
 
 // 保守扫描检测的操作符标记
@@ -506,7 +506,7 @@ func shlexSplit(s string) []string {
 	inDoubleQuote := false
 	escaped := false
 
-	for i, ch := range s {
+	for _, ch := range s {
 		if escaped {
 			current.WriteRune(ch)
 			escaped = false
@@ -537,11 +537,6 @@ func shlexSplit(s string) []string {
 		}
 
 		current.WriteRune(ch)
-
-		// 处理末尾
-		if i == len(s)-1 {
-			// 已在循环内处理
-		}
 	}
 
 	if current.Len() > 0 {
