@@ -683,14 +683,16 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Python: tool_cards.append(tool.card)
 	if d.skillManager != nil {
 		skillToolkit := skilltools.NewSkillToolkit(d.skillManager)
+		var skillToolNames []string
 		for _, t := range skillToolkit.GetTools() {
 			existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})
 			if len(existing) == 0 {
 				_ = runner.GetResourceMgr().AddTool(t)
 			}
 			toolCards = append(toolCards, t.Card())
+			skillToolNames = append(skillToolNames, t.Card().ID)
 		}
-		logger.Info(logComponent).Msg("getToolCards: SkillToolkit 已注册")
+		logger.Info(logComponent).Strs("tools", skillToolNames).Msg("getToolCards: SkillToolkit 已注册")
 	}
 
 	// ── 步骤 10: acp_chat ──

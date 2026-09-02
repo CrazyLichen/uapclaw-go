@@ -756,7 +756,13 @@ func summarizeSearchPayload(source, query string, payload map[string]any) map[st
 			"skill_name": toString(first["skill_name"]),
 			"skill_url":  toString(first["skill_url"]),
 			"asset_id":   toString(first["asset_id"]),
-			"summary":    toString(first["skill_description"]),
+			"summary": func() string {
+				v := toString(first["skill_description"])
+				if v == "" {
+					v = toString(first["summary"])
+				}
+				return v
+			}(),
 		},
 	}
 }

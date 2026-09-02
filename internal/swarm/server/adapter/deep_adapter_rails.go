@@ -250,6 +250,8 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 // 对齐 Python: _build_skill_rail() (line 1916-1960)
 func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SkillUseRail
+	// 对齐 Python: disabled_skills=self._skill_manager.list_execution_disabled_skills()
+	// 待 Rail 类型实现后: d.skillManager.ListExecutionDisabledSkills()
 	return nil
 }
 
@@ -258,6 +260,8 @@ func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
 // 对齐 Python: _build_skill_evolution_rail() (line 1961-2010)
 func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SkillEvolutionRail
+	// 对齐 Python: disabled_skills=self._skill_manager.list_execution_disabled_skills()
+	// 待 Rail 类型实现后: d.skillManager.ListExecutionDisabledSkills()
 	return nil
 }
 

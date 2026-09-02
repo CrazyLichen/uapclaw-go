@@ -2008,6 +2008,30 @@ func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 	return os.SameFile(userInfo, builtinInfo)
 }
 
+// GetSkillEnabled 读取技能的 enabled 标志，默认为 true（向后兼容）。
+// 对应 Python: SkillManager.get_skill_enabled(skill_name)
+func (sm *SkillManager) GetSkillEnabled(name string) bool {
+	return GetSkillEnabled(sm.state, name)
+}
+
+// SetSkillEnabled 将技能的 enabled 标志持久化到 state 中。
+// 对应 Python: SkillManager.set_skill_enabled(skill_name, enabled)
+func (sm *SkillManager) SetSkillEnabled(name string, enabled bool) {
+	SetSkillEnabled(sm.state, name, enabled)
+}
+
+// ListDisabledSkills 从 skill_configs 中返回已禁用的技能名称列表（排序）。
+// 对应 Python: SkillManager.list_disabled_skills()
+func (sm *SkillManager) ListDisabledSkills() []string {
+	return ListDisabledSkills(sm.state)
+}
+
+// ListExecutionDisabledSkills 返回当前已安装的已禁用技能名称列表。
+// 对应 Python: SkillManager.list_execution_disabled_skills()
+func (sm *SkillManager) ListExecutionDisabledSkills() []string {
+	return ListExecutionDisabledSkills(sm.state)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getMirrorSkillsDirs 返回需要镜像同步的 skills 目录（对齐 Python: _get_mirror_skills_dirs）。
