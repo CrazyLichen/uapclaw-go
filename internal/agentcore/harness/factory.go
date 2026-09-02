@@ -18,6 +18,7 @@ import (
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -548,11 +549,11 @@ func addDefaultRails(
 		}
 	}
 
-	// SecurityRail — 始终添加
-	// ⤵️ 9.8-9.24 回填：SecurityRail 具体实例化
-	if !alreadyProvidedByType(userProvidedTypes, nil) {
-		agent.AddRail(agentinterfaces.NewBaseRail())
-		logger.Debug(logComponent).Msg("已添加默认 SecurityRail 占位，⤵️ 9.8-9.24 回填")
+	// SecurityRail（SafetyPromptRail）— 始终添加
+	// ⤴️ 9.19-23 回填：SafetyPromptRail 具体实例化
+	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&securityrail.SafetyPromptRail{})) {
+		agent.AddRail(securityrail.NewSafetyPromptRail())
+		logger.Debug(logComponent).Msg("已添加 SafetyPromptRail（SecurityRail）")
 	}
 
 	// AskUserRail — 始终添加（拦截 ask_user 工具，实现 HITL 用户交互）
