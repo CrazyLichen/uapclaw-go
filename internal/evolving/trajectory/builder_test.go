@@ -174,3 +174,75 @@ func TestToIntFromAny(t *testing.T) {
 	assert.Equal(t, 0, toIntFromAny("not a number"))
 	assert.Equal(t, 0, toIntFromAny(nil))
 }
+
+// TestWithMemberID_空字符串 验证空字符串不设置 member_id
+func TestWithMemberID_空字符串(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online", WithMemberID(""))
+	assert.Equal(t, "", b.memberID)
+	// 空 meta + 空字符串 memberID → meta 中无 member_id
+	assert.NotContains(t, b.meta, "member_id")
+}
+
+// TestWithMemberID_Meta已有MemberID 验证不覆盖已存在的 member_id
+func TestWithMemberID_Meta已有MemberID(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online",
+		WithMeta(map[string]any{"member_id": "existing"}),
+		WithMemberID("new_member"),
+	)
+	// WithMeta 先执行，设置 member_id=existing；WithMemberID 发现已存在，不覆盖
+	assert.Equal(t, "existing", b.meta["member_id"])
+}
+
+// TestBuild_MemberID已在Meta 验证 Build 时不覆盖 meta 中已存在的 member_id
+func TestBuild_MemberID已在Meta(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online",
+		WithMeta(map[string]any{"member_id": "original"}),
+		WithMemberID("new_member"),
+	)
+	traj := b.Build()
+	// setdefault 语义：member_id 已存在于 meta 中，不覆盖
+	assert.Equal(t, "original", traj.Meta["member_id"])
+}
+
+// TestRecordStep_LLMCost累积_float64验证 验证 float64 类型的 token 使用量
+func TestRecordStep_LLMCost累积_float64验证(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online")
+	step := &TrajectoryStep{
+		Kind: StepKindLLM,
+		Detail: &LLMCallDetail{
+			Usage: map[string]any{
+				"prompt_tokens":     float64(100),
+				"completion_tokens": float64(50),
+			},
+		},
+		Meta: map[string]any{},
+	}
+	b.RecordStep(step)
+	assert.Equal(t, 100, b.cost["input_tokens"])
+	assert.Equal(t, 50, b.cost["output_tokens"])
+}
+
+// TestRecordStep_LLMCost累积_int64验证 验证 int64 类型的 token 使用量
+func TestRecordStep_LLMCost累积_int64验证(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online")
+	step := &TrajectoryStep{
+		Kind: StepKindLLM,
+		Detail: &LLMCallDetail{
+			Usage: map[string]any{
+				"prompt_tokens":     int64(200),
+				"completion_tokens": int64(100),
+			},
+		},
+		Meta: map[string]any{},
+	}
+	b.RecordStep(step)
+	assert.Equal(t, 200, b.cost["input_tokens"])
+	assert.Equal(t, 100, b.cost["output_tokens"])
+}
+
+// TestBuild_无MemberID 验证无 memberID 时 meta 中无 member_id
+func TestBuild_无MemberID(t *testing.T) {
+	b := NewTrajectoryBuilder("sess", "online")
+	traj := b.Build()
+	assert.NotContains(t, traj.Meta, "member_id")
+}

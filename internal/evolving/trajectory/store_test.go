@@ -1,6 +1,7 @@
 package trajectory
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -397,6 +398,126 @@ func TestMatchTrajectoryField(t *testing.T) {
 	assert.True(t, matchTrajectoryField(traj, "session_id", "sess-1"))
 	assert.False(t, matchTrajectoryField(traj, "source", "offline"))
 	assert.False(t, matchTrajectoryField(traj, "unknown_field", "value"))
+}
+
+// ──────────────────────────── toInt 分支测试 ────────────────────────────
+
+// TestToInt_各类型 验证各类型安全转换
+func TestToInt_各类型(t *testing.T) {
+	assert.Equal(t, 42, toInt(42))
+	assert.Equal(t, 42, toInt(float64(42)))
+	assert.Equal(t, 0, toInt(nil))
+	assert.Equal(t, 0, toInt("not_a_number"))
+	assert.Equal(t, 0, toInt(int64(42))) // int64 不在 switch 分支中，返回 0
+}
+
+// TestToInt_JSONNumber 验证 json.Number 类型
+func TestToInt_JSONNumber(t *testing.T) {
+	n := json.Number("42")
+	assert.Equal(t, 42, toInt(n))
+}
+
+// TestToInt_JSONNumber无效 验证无效 json.Number 返回 0
+func TestToInt_JSONNumber无效(t *testing.T) {
+	n := json.Number("not_a_number")
+	assert.Equal(t, 0, toInt(n))
+}
+
+// TestToInt_字符串数字 验证字符串数字解析
+func TestToInt_字符串数字(t *testing.T) {
+	assert.Equal(t, 100, toInt("100"))
+	assert.Equal(t, 0, toInt("abc"))
+}
+
+// ──────────────────────────── toFloat64 分支测试 ────────────────────────────
+
+// TestToFloat64_各类型 验证各类型安全转换
+func TestToFloat64_各类型(t *testing.T) {
+	assert.Equal(t, 3.14, toFloat64(3.14))
+	assert.Equal(t, 42.0, toFloat64(42))
+	assert.Equal(t, 0.0, toFloat64(nil))
+	assert.Equal(t, 0.0, toFloat64("not_a_number"))
+}
+
+// TestToFloat64_JSONNumber 验证 json.Number 类型
+func TestToFloat64_JSONNumber(t *testing.T) {
+	n := json.Number("3.14")
+	assert.Equal(t, 3.14, toFloat64(n))
+}
+
+// TestToFloat64_JSONNumber无效 验证无效 json.Number 返回 0
+func TestToFloat64_JSONNumber无效(t *testing.T) {
+	n := json.Number("not_a_number")
+	assert.Equal(t, 0.0, toFloat64(n))
+}
+
+// ──────────────────────────── toString 分支测试 ────────────────────────────
+
+// TestToString_各类型 验证各类型安全转换
+func TestToString_各类型(t *testing.T) {
+	assert.Equal(t, "hello", toString("hello"))
+	assert.Equal(t, "42", toString(42))
+	assert.Equal(t, "", toString(nil))
+}
+
+// ──────────────────────────── FileTrajectoryStore 错误路径测试 ────────────────────────────
+
+// TestFileTrajectoryStore_Save写入失败 验证写入失败不 panic
+func TestFileTrajectoryStore_Save写入失败(t *testing.T) {
+	// 使用不存在的深层目录创建 store（但 baseDir 本身不存在为文件时会导致写入失败）
+	store := NewFileTrajectoryStore("/nonexistent/path/that/should/not/work")
+	traj := &Trajectory{ExecutionID: "exec-1", Source: "online", Steps: []*TrajectoryStep{}}
+	// 不 panic 即通过
+	store.Save(traj, "")
+}
+
+// TestFileTrajectoryStore_Load读取失败 验证读取失败不 panic
+func TestFileTrajectoryStore_Load读取失败(t *testing.T) {
+	store := &FileTrajectoryStore{baseDir: "/nonexistent"}
+	// 不 panic 即通过
+	result := store.Load("exec-1", "")
+	assert.Nil(t, result)
+}
+
+// TestFileTrajectoryStore_Query含无效JSON 验证跳过无效 JSON 行
+func TestFileTrajectoryStore_Query含无效JSON(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileTrajectoryStore(dir)
+
+	// 手动写入一行无效 JSON
+	filePath := filepath.Join(dir, "trajectories_default.jsonl")
+	err := os.WriteFile(filePath, []byte("invalid json line\n"), 0o644)
+	require.NoError(t, err)
+
+	// 查询应不 panic，返回空结果
+	results := store.Query("", nil)
+	assert.Len(t, results, 0)
+}
+
+// ──────────────────────────── trajectoryToDict 边界测试 ────────────────────────────
+
+// TestTrajectoryToDict_nil输入 验证 nil Trajectory 处理
+func TestTrajectoryToDict_nil输入(t *testing.T) {
+	// toJSONCompatible 处理 nil
+	result := toJSONCompatible(nil)
+	assert.Nil(t, result)
+}
+
+// ──────────────────────────── toJSONCompatible 边界测试 ────────────────────────────
+
+// TestToJSONCompatible_切片 验证切片类型
+func TestToJSONCompatible_切片(t *testing.T) {
+	input := []string{"a", "b"}
+	result := toJSONCompatible(input)
+	slice, ok := result.([]any)
+	require.True(t, ok)
+	assert.Len(t, slice, 2)
+}
+
+// TestToJSONCompatible_bool 验证 bool 类型
+func TestToJSONCompatible_bool(t *testing.T) {
+	assert.Equal(t, true, toJSONCompatible(true))
+	assert.Equal(t, false, toJSONCompatible(false))
 }
 
 // TestRoundTrip 保存后加载完整往返
