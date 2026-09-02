@@ -27,6 +27,8 @@ import (
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	hsecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
@@ -1454,8 +1456,17 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	}
 
 	if config.Permissions != nil {
-		// ⤵️ 9.11 回填：build_permission_interrupt_rail
-		logger.Debug(logComponent).Msg("PermissionInterruptRail 待创建，⤵️ 9.11 回填")
+		// ⤴️ 9.19 SecurityRail 回填：build_permission_interrupt_rail
+		permConfig := permissionsSectionToMap(config.Permissions)
+		var host *hsecurity.ToolPermissionHost
+		if config.PermissionHost != nil {
+			if h, ok := config.PermissionHost.(*hsecurity.ToolPermissionHost); ok {
+				host = h
+			}
+		}
+		permRail := securityrail.NewPermissionInterruptRail(permConfig, nil, nil, host)
+		d.pendingRails = append(d.pendingRails, permRail)
+		logger.Debug(logComponent).Msg("PermissionInterruptRail 已创建，⤴️ 9.19 SecurityRail 回填")
 	}
 }
 
@@ -2705,4 +2716,28 @@ func matchType(r agentinterfaces.AgentRail, types []reflect.Type) bool {
 		}
 	}
 	return false
+}
+
+// permissionsSectionToMap 将 PermissionsSection 转换为 map[string]any 供 PermissionEngine 使用。
+// 对齐 Python: config = cast(dict[str, Any], config)
+func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any {
+	if perm == nil {
+		return make(map[string]any)
+	}
+	// 通过 JSON 序列化/反序列化实现结构体→map 转换
+	data, err := json.Marshal(perm)
+	if err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("permissionsSectionToMap 序列化失败，返回空配置")
+		return make(map[string]any)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("permissionsSectionToMap 反序列化失败，返回空配置")
+		return make(map[string]any)
+	}
+	return result
 }

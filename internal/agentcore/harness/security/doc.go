@@ -23,7 +23,8 @@
 //	├── patterns.go           # 通配符/路径匹配 + YAML 持久化
 //	├── checker.go            # ExternalDirectoryChecker 外部目录检查
 //	├── suggestions.go        # 权限建议构建
-//	└── permission_engine.go  # PermissionEngine 权限引擎
+//	├── permission_engine.go  # PermissionEngine 权限引擎
+//	└── factory.go            # BuildPermissionInterruptRail 工厂函数
 //
 // 对应 Python 代码：openjiuwen/harness/security/
 package security

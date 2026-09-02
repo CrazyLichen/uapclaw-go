@@ -566,6 +566,7 @@ func addDefaultRails(
 	// 由具体场景（如 CLI、SecurityRail）显式提供，例如：
 	//   agent.AddRail(interrupt.NewConfirmInterruptRail("write_file", "edit_file"))（添加确认中断 Rail）
 	// 或由 PermissionInterruptRail（SecurityRail 体系）内部继承复用
+	// ⤴️ 9.19 回填：PermissionInterruptRail 已在 deep_agent.go 中按 config.Permissions 条件创建
 
 	// SysOperationRail — 始终添加（系统操作工具注册）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{})) {
