@@ -93,7 +93,7 @@ jobs:
 
       - name: 检查覆盖率阈值（≥ 75%）
         run: |
-          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "📊 总覆盖率: ${COVERAGE}%"
           PASS=$(echo "$COVERAGE >= 75" | bc -l)
           if [ "$PASS" != "1" ]; then
@@ -210,7 +210,7 @@ jobs:
           fi
 
           BASELINE=$(cat coverage-baseline.txt)
-          CURRENT=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          CURRENT=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           DIFF=$(echo "scale=1; $BASELINE - $CURRENT" | bc)
 
           echo "📊 覆盖率回归检查："
@@ -236,7 +236,7 @@ jobs:
       - name: 保存覆盖率基线
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "$COVERAGE" > coverage-baseline.txt
           echo "📊 已保存覆盖率基线: ${COVERAGE}%"
 

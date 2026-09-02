@@ -98,7 +98,7 @@ func TestBuildShellPermissionSuggestions_多子命令管道(t *testing.T) {
 			{Text: "echo hello", Argv: []string{"echo", "hello"}},
 			{Text: "grep h", Argv: []string{"grep", "h"}},
 		},
-		Flags: ShellStructureFlags{Pipeline: true},
+		Flags:   ShellStructureFlags{Pipeline: true},
 		Backend: "test",
 	}
 	result := BuildShellPermissionSuggestions("bash", "echo hello | grep h", astResult)
@@ -174,8 +174,8 @@ func TestBuildShellPermissionSuggestions_风险结构标志(t *testing.T) {
 // TestBuildShellPermissionSuggestions_ParseUnavailable风险 测试 parse_unavailable + risky 返回空
 func TestBuildShellPermissionSuggestions_ParseUnavailable风险(t *testing.T) {
 	astResult := &ShellAstParseResult{
-		Kind: ShellAstKindParseUnavailable,
-		Flags: ShellStructureFlags{Pipeline: true},
+		Kind:    ShellAstKindParseUnavailable,
+		Flags:   ShellStructureFlags{Pipeline: true},
 		Reason:  "tree-sitter 后端不可用且保守扫描检测到 shell 结构",
 		Backend: "fallback",
 	}

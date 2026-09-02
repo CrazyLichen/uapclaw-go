@@ -247,7 +247,7 @@ func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy(nil))
 	assert.False(t, isSecurityTruthy(false))
 	assert.True(t, isSecurityTruthy(true))
-	assert.False(t, isSecurityTruthy("yes"))   // 非 bool → false（对齐 Python bool()，仅 bool 类型）
-	assert.False(t, isSecurityTruthy(1))        // 非 bool → false
-	assert.False(t, isSecurityTruthy("true"))   // 非 bool → false
+	assert.False(t, isSecurityTruthy("yes"))  // 非 bool → false（对齐 Python bool()，仅 bool 类型）
+	assert.False(t, isSecurityTruthy(1))      // 非 bool → false
+	assert.False(t, isSecurityTruthy("true")) // 非 bool → false
 }

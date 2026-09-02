@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -55,7 +55,7 @@ func TestNewPermissionInterruptRail_带Engine(t *testing.T) {
 // TestNewPermissionInterruptRail_带Host 测试传入 ToolPermissionHost
 func TestNewPermissionInterruptRail_带Host(t *testing.T) {
 	host := &harnesssecurity.ToolPermissionHost{
-		ResolveWorkspaceDir: func() string { return "/test/workspace" },
+		ResolveWorkspaceDir:        func() string { return "/test/workspace" },
 		ToolPermissionChecksActive: func() bool { return true },
 	}
 	r := NewPermissionInterruptRail(
@@ -443,8 +443,8 @@ func TestResolvePermissionInterrupt_Allow(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "read", Arguments: `{"path": "/tmp"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil, // userInput = nil → 首次检查
 		nil, // autoConfirmConfig
@@ -467,8 +467,8 @@ func TestResolvePermissionInterrupt_Deny(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "rm -rf /"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil,
 		nil,
@@ -491,8 +491,8 @@ func TestResolvePermissionInterrupt_AskInterrupt(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil,
 		nil,
@@ -518,8 +518,8 @@ func TestResolvePermissionInterrupt_AutoConfirm(t *testing.T) {
 	autoConfirmConfig := map[string]any{"read": true}
 
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil, // userInput = nil
 		autoConfirmConfig,
@@ -547,8 +547,8 @@ func TestResolvePermissionInterrupt_UserApproved(t *testing.T) {
 	}
 
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		userInput,
 		nil,
@@ -576,8 +576,8 @@ func TestResolvePermissionInterrupt_UserRejected(t *testing.T) {
 	}
 
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		userInput,
 		nil,
@@ -601,8 +601,8 @@ func TestResolvePermissionInterrupt_InvalidPayload(t *testing.T) {
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		42, // 无效类型
 		nil,
@@ -630,8 +630,8 @@ func TestResolvePermissionInterrupt_SceneHookApprove(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil,
 		nil,
@@ -659,8 +659,8 @@ func TestResolvePermissionInterrupt_SceneHookReject(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil,  // ctx
-		nil,  // cbc
+		nil, // ctx
+		nil, // cbc
 		toolCall,
 		nil,
 		nil,

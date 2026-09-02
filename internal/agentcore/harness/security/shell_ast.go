@@ -309,10 +309,10 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 	}
 
 	return &ShellAstParseResult{
-		Kind:         ShellAstKindSimple,
-		Subcommands:  subcommands,
-		Flags:        flags,
-		Backend:      "tree-sitter",
+		Kind:        ShellAstKindSimple,
+		Subcommands: subcommands,
+		Flags:       flags,
+		Backend:     "tree-sitter",
 	}, nil
 }
 

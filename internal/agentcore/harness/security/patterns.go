@@ -370,11 +370,11 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	if !hasOverrideID(overrides, pathOverrideID) {
 		pathTools := sortedPathTools()
 		overrides = append(overrides, map[string]any{
-			"id":        pathOverrideID,
-			"tools":     pathTools,
+			"id":         pathOverrideID,
+			"tools":      pathTools,
 			"match_type": "path",
-			"pattern":   pathPattern,
-			"action":    "allow",
+			"pattern":    pathPattern,
+			"action":     "allow",
 		})
 		permissions["approval_overrides"] = overrides
 		logger.Info(patternsLogComponent).
@@ -385,11 +385,11 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	if !hasOverrideID(overrides, shellOverrideID) {
 		shellTools := sortedShellTools()
 		overrides = append(overrides, map[string]any{
-			"id":        shellOverrideID,
-			"tools":     shellTools,
+			"id":         shellOverrideID,
+			"tools":      shellTools,
 			"match_type": "command",
-			"pattern":   shellPattern,
-			"action":    "allow",
+			"pattern":    shellPattern,
+			"action":     "allow",
 		})
 		permissions["approval_overrides"] = overrides
 		logger.Info(patternsLogComponent).
@@ -408,10 +408,10 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	}
 
 	return map[string]any{
-		"ok":              true,
-		"normalized":      dirNorm,
-		"path_pattern":    pathPattern,
-		"shell_pattern":   shellPattern,
+		"ok":               true,
+		"normalized":       dirNorm,
+		"path_pattern":     pathPattern,
+		"shell_pattern":    shellPattern,
 		"tiered_overrides": true,
 	}
 }
@@ -699,11 +699,11 @@ func ensureSingleAllowOverride(overrides []any, toolName, matchType, pattern, ac
 	}
 
 	overrides = append(overrides, map[string]any{
-		"id":        buildApprovalOverrideID(toolName, matchType, pattern),
-		"tools":     []string{toolName},
+		"id":         buildApprovalOverrideID(toolName, matchType, pattern),
+		"tools":      []string{toolName},
 		"match_type": matchType,
-		"pattern":   pattern,
-		"action":    action,
+		"pattern":    pattern,
+		"action":     action,
 	})
 	return true
 }

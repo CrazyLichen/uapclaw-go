@@ -16,7 +16,7 @@ import (
 // mockSystemPromptBuilder 用于测试的 SystemPromptBuilder mock
 type mockSystemPromptBuilder struct {
 	sections map[string]saprompt.PromptSection
-	language  string
+	language string
 }
 
 func newMockSystemPromptBuilder() *mockSystemPromptBuilder {
@@ -36,9 +36,9 @@ func (m *mockSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPro
 	return nil
 }
 
-func (m *mockSystemPromptBuilder) Language() string                                                { return m.language }
-func (m *mockSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection                { return nil }
-func (m *mockSystemPromptBuilder) HasSection(name string) bool                                   { return false }
+func (m *mockSystemPromptBuilder) Language() string                               { return m.language }
+func (m *mockSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection { return nil }
+func (m *mockSystemPromptBuilder) HasSection(name string) bool                    { return false }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
