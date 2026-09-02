@@ -2680,8 +2680,6 @@ func mapSliceToAny(items []map[string]any) []any {
 	return result
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // safeExtractZIPBytesToDir 安全解压 ZIP 字节到目标目录（防 Zip Slip）
 // 对应 Python: SkillManager._safe_extract_zip_bytes_to_dir(zip_bytes, dest_dir)
 func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {

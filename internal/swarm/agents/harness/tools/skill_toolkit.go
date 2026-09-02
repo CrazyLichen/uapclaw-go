@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -211,7 +213,11 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 	// 确定搜索来源列表
 	var sources []string
 	if normalizedSource == autoSource {
-		sources = []string{"clawhub", "skillnet", "teamskillshub"}
+		// 对齐 Python: sorted(_SUPPORTED_SOURCES)，动态从 supportedSources 构建
+		for src := range supportedSources {
+			sources = append(sources, src)
+		}
+		sort.Strings(sources)
 	} else {
 		sources = []string{normalizedSource}
 	}
@@ -392,7 +398,12 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	skill, _ := payload["skill"].(map[string]any)
 	name := strings.TrimSpace(toString(skill["name"]))
 	if name == "" {
-		name = identifier
+		// 对齐 Python: Path(target).name if resolved_source == "skillnet" else target
+		if normalizedSource == "skillnet" {
+			name = path.Base(identifier)
+		} else {
+			name = identifier
+		}
 	}
 
 	installedItem := tk.buildInstalledItem(name, normalizedSource)
@@ -480,7 +491,14 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	}
 
 	// 执行卸载
-	payload, _ := tk.manager.HandleSkillsUninstall(ctx, map[string]any{"name": skillName})
+	payload, err := tk.manager.HandleSkillsUninstall(ctx, map[string]any{"name": skillName})
+	if err != nil {
+		logger.Error(logComponent).Str("name", skillName).Err(err).Msg("uninstall_skill failed")
+		return map[string]any{
+			"success": false, "removed": false, "name": skillName,
+			"detail": err.Error(),
+		}, nil
+	}
 
 	if !toBool(payload["success"]) {
 		return map[string]any{

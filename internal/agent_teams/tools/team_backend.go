@@ -455,9 +455,6 @@ func (tb *TeamBackend) Startup(
 	}
 	var started []string
 	for _, m := range members {
-		if m.MemberName == tb.memberName {
-			continue // 跳过自身
-		}
 		ok, err := tb.StartupMember(ctx, m.MemberName, onCreated)
 		if err != nil {
 			return started, err
@@ -968,6 +965,11 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 // RefreshHumanAgentRoster 从 DB 重建 HITT 名册缓存。
 // 对齐 Python: TeamBackend.refresh_human_agent_roster()
 func (tb *TeamBackend) RefreshHumanAgentRoster(ctx context.Context) {
+	// 步骤 0: 对齐 Python — 先初始化 DB（预热 DAO），确保冷恢复路径中 DAO 已就绪
+	if err := tb.db.Initialize(ctx); err != nil {
+		logger.Debug(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: DB 初始化失败")
+	}
+	// 步骤 1: 查询 human_agent 成员名
 	names, err := tb.db.Member().ListHumanAgentNames(ctx, tb.teamName)
 	if err != nil {
 		logger.Error(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: 查询失败")
@@ -1047,6 +1049,12 @@ func (tb *TeamBackend) RegisterCleanupPath(path string) {
 		return
 	}
 	expanded := filepath.Clean(os.ExpandEnv(path))
+	// 对齐 Python: Path.expanduser() — 展开 ~ 为 $HOME
+	if strings.HasPrefix(expanded, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			expanded = filepath.Join(home, expanded[2:])
+		}
+	}
 	tb.cleanupPaths[expanded] = struct{}{}
 }
 

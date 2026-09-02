@@ -247,21 +247,33 @@ func (tp *TaskPlan) GetProgressSummary() string {
 	return fmt.Sprintf("%d/%d completed", completed, len(tp.Tasks))
 }
 
-// ToMarkdown 将任务计划渲染为 Markdown 格式
+// ToMarkdown 将任务计划渲染为 Markdown 格式。
+// 对齐 Python: TaskPlan.to_markdown()
 func (tp *TaskPlan) ToMarkdown() string {
 	var sb strings.Builder
-	sb.WriteString("# Task Plan\n\n**Goal:** ")
+	sb.WriteString("## Goal: ")
 	sb.WriteString(tp.Goal)
 	sb.WriteString("\n\n")
 	for _, task := range tp.Tasks {
-		icon, ok := StatusIcons[task.Status]
-		if !ok {
-			icon = "[?]"
+		var mark string
+		switch task.Status {
+		case TodoStatusCompleted:
+			mark = "√"
+		case TodoStatusInProgress:
+			mark = ">"
+		case TodoStatusCancelled:
+			mark = "×"
+		default:
+			mark = " "
 		}
-		sb.WriteString("- ")
-		sb.WriteString(icon)
-		sb.WriteString(" ")
+		sb.WriteString("- [")
+		sb.WriteString(mark)
+		sb.WriteString("] ")
 		sb.WriteString(task.Content)
+		if task.ResultSummary != "" {
+			sb.WriteString(" — ")
+			sb.WriteString(task.ResultSummary)
+		}
 		sb.WriteString("\n")
 	}
 	return sb.String()

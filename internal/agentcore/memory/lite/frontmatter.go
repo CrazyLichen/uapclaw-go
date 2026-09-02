@@ -2,6 +2,7 @@ package lite
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -88,9 +89,27 @@ func RebuildContentWithFrontmatter(content string, fm map[string]string) string 
 	body := ExtractBody(content)
 	var fmLines []string
 	fmLines = append(fmLines, "---")
-	for key, value := range fm {
-		fmLines = append(fmLines, key+": "+value)
+
+	// 按固定优先级输出核心字段，其余按 key 排序，确保输出稳定（Python dict 3.7+ 保持插入顺序）
+	fixedOrder := []string{"name", "description", "type"}
+	fixedSet := make(map[string]bool, len(fixedOrder))
+	for _, k := range fixedOrder {
+		fixedSet[k] = true
+		if v, ok := fm[k]; ok {
+			fmLines = append(fmLines, k+": "+v)
+		}
 	}
+	var rest []string
+	for k := range fm {
+		if !fixedSet[k] {
+			rest = append(rest, k)
+		}
+	}
+	sort.Strings(rest)
+	for _, k := range rest {
+		fmLines = append(fmLines, k+": "+fm[k])
+	}
+
 	fmLines = append(fmLines, "---")
 	parts := []string{strings.Join(fmLines, "\n")}
 	if body != "" {

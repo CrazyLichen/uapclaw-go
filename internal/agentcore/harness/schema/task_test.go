@@ -381,36 +381,47 @@ func TestTaskPlan_GetProgressSummary(t *testing.T) {
 	}
 }
 
-// TestTaskPlan_ToMarkdown 验证 Markdown 输出格式
+// TestTaskPlan_ToMarkdown 验证 Markdown 输出格式（对齐 Python to_markdown）
 func TestTaskPlan_ToMarkdown(t *testing.T) {
 	tp := NewTaskPlan("实现功能")
 	item1 := NewTodoItem()
 	item1.Content = "步骤一"
 	item1.Status = TodoStatusCompleted
+	item1.ResultSummary = "已完成步骤一"
 	item2 := NewTodoItem()
 	item2.Content = "步骤二"
 	item2.Status = TodoStatusInProgress
 	item3 := NewTodoItem()
 	item3.Content = "步骤三"
+	item4 := NewTodoItem()
+	item4.Content = "步骤四"
+	item4.Status = TodoStatusCancelled
+	item4.ResultSummary = "不再需要"
 	tp.AddTask(item1)
 	tp.AddTask(item2)
 	tp.AddTask(item3)
+	tp.AddTask(item4)
 
 	md := tp.ToMarkdown()
-	if !containsSubstring(md, "# Task Plan") {
+	// 对齐 Python: ## Goal: {goal}
+	if !containsSubstring(md, "## Goal: 实现功能") {
 		t.Errorf("Markdown 缺少标题行: %q", md)
 	}
-	if !containsSubstring(md, "**Goal:** 实现功能") {
-		t.Errorf("Markdown 缺少目标行: %q", md)
+	// 对齐 Python: - [√] 完成项 — result_summary
+	if !containsSubstring(md, "- [√] 步骤一 — 已完成步骤一") {
+		t.Errorf("Markdown 缺少完成项(含 result_summary): %q", md)
 	}
-	if !containsSubstring(md, "- [√] 步骤一") {
-		t.Errorf("Markdown 缺少完成项: %q", md)
-	}
-	if !containsSubstring(md, "- [→] 步骤二") {
+	// 对齐 Python: - [>] 进行中项
+	if !containsSubstring(md, "- [>] 步骤二") {
 		t.Errorf("Markdown 缺少进行中项: %q", md)
 	}
+	// 对齐 Python: - [ ] 待执行项
 	if !containsSubstring(md, "- [ ] 步骤三") {
 		t.Errorf("Markdown 缺少待执行项: %q", md)
+	}
+	// 对齐 Python: - [×] 取消项 — result_summary
+	if !containsSubstring(md, "- [×] 步骤四 — 不再需要") {
+		t.Errorf("Markdown 缺少取消项(含 result_summary): %q", md)
 	}
 }
 

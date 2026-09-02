@@ -31,8 +31,8 @@ type AdmissionTicket struct {
 //
 //	状态转换: OPEN    --Admit()-------->      OPEN, inflight++
 //	OPEN    --CloseAndDrain()--> CLOSING --(inflight==0)--> DRAINED
-//	状态转换: CLOSING --Admit()-------->      nil (rejected)
-//	*       --ConsumeDone()-->      inflight--; signal drained when zero
+//	状态转换: CLOSING --Admit()-------->      nil (被拒绝)
+//	*       --ConsumeDone()-->      inflight--; inflight 为零时发送排空信号
 //
 // Python 使用 asyncio.Lock 保护状态（单线程协程）。
 // Go 使用 sync.Mutex（多 goroutine 并发）。
