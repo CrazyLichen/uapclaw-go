@@ -35,6 +35,8 @@
 //	├── process.go          # 子进程创建工厂（SpawnProcess 函数）
 //	├── child.go            # 子端逻辑（ChildRunner 接口 + 消息循环 + Agent 执行 + 日志重配）
 //	└── factory/            # Agent 创建工厂（DefaultAgentCreator：switch 按类型创建 Agent 实例）
+//	    ├── doc.go                      # 子包文档
+//	    └── agent_creator_factory.go    # DefaultAgentCreator 实现
 //
 // 对应 Python 代码：openjiuwen/core/runner/spawn/
 package spawn

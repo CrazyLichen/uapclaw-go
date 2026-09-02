@@ -197,7 +197,7 @@ func TestSQLTaskDao_MutateDependencyGraph_环检测(t *testing.T) {
 	// 对齐 Python: a→b, b→c, c→a 构成环
 	result := dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "c", DependsOnID: "a"}})
 	assert.False(t, result.Ok)
-	assert.Contains(t, result.Reason, "Circular dependency")
+	assert.Contains(t, result.Reason, "循环依赖")
 }
 
 func TestSQLTaskDao_MutateDependencyGraph_新增任务(t *testing.T) {

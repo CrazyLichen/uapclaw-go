@@ -23,10 +23,10 @@
 //	    ├── fsm.go           # FSM 状态转换表 + 校验函数
 //	    ├── engine.go        # 数据库引擎初始化函数 + GetCurrentTime/SanitizeSessionIDForTable
 //	    ├── memory_impl.go   # InMemoryTeamDatabase 单体实现（含 TaskDao + MessageDao）
-//	    ├── team_dao.go      # TeamDao 占位文件
-//	    ├── member_dao.go    # MemberDao 占位文件
-//	    ├── task_dao.go      # TaskDao 注释说明文件
-//	    └── message_dao.go   # MessageDao 注释说明文件
+//	    ├── team_dao.go      # TeamDao 占位文件（已迁移为 sql_team_dao.go）
+//	    ├── member_dao.go    # MemberDao 占位文件（已迁移为 sql_member_dao.go）
+//	    ├── task_dao.go      # TaskDao 注释说明文件（已迁移为 sql_task_dao.go）
+//	    └── message_dao.go   # MessageDao 注释说明文件（已迁移为 sql_message_dao.go）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/tools/
 package tools

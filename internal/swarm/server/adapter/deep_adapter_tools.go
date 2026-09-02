@@ -21,8 +21,7 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// 工具名称常量，对齐 Python tool_cards 中的工具名。
-// 工具名称常量
+// 工具名称常量，对齐 Python tool_cards 中的工具名
 const (
 	// ToolNamePaidSearch 付费搜索工具
 	ToolNamePaidSearch = "paid_search"
@@ -246,7 +245,7 @@ func (d *DeepAdapter) pruneToolCards(cards []*tool.ToolCard, namesToRemove map[s
 
 // syncMultimodalToolsForRuntime 热同步多模态工具。
 // 对齐 Python: _sync_multimodal_tools_for_runtime() (line 1170-1238)
-// Vision/Audio/Video 注册/注销已回填，image_gen 待后续回填
+// 视觉/音频/视频 注册/注销已回填，image_gen 待后续回填
 func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	if d.instance == nil {
 		return

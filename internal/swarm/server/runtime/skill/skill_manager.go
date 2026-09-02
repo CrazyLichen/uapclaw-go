@@ -2038,7 +2038,7 @@ func (sm *SkillManager) ListExecutionDisabledSkills() []string {
 // Go 二进制等价 Python package 安装模式，始终返回空切片。
 // ⤵️ 回填: 如未来需要源码开发模式支持，需补全 mirror 路径逻辑。
 func (sm *SkillManager) getMirrorSkillsDirs() []string {
-	return []string{} // Go 二进制 = package 安装模式，无 mirror 目录
+	return []string{} // Go 二进制 = 包安装模式，无 mirror 目录
 }
 
 // getBuiltinSkillsDir 返回内置技能目录。
@@ -2214,8 +2214,6 @@ func (sm *SkillManager) getSkillEvolutionPath(skillName string) string {
 	return filepath.Join(localDir, evolutionFilename)
 }
 
-// resolveLocalSkillDir 查找本地技能目录
-// 对应 Python: SkillManager._resolve_local_skill_dir(skill_name)
 // resolveLocalSkillDir 解析本地技能目录。
 // 对应 Python: SkillManager._resolve_local_skill_dir(skill_name)
 // 先尝试 skillsDir/skillName 直接路径，若不存在则遍历子目录通过 SKILL.md 的 name 字段匹配。

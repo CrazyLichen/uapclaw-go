@@ -10,18 +10,23 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
+// ──────────────────────────── TracerTrajectoryExtractor 基础测试 ────────────────────────────
+
+// TestNewTracerTrajectoryExtractor 创建默认提取器
 func TestNewTracerTrajectoryExtractor(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 	assert.NotNil(t, e)
 	assert.Nil(t, e.resourceManager)
 }
 
-func TestNewTracerTrajectoryExtractor_WithResourceManager(t *testing.T) {
+// TestNewTracerTrajectoryExtractor_带资源管理器 创建带资源管理器的提取器
+func TestNewTracerTrajectoryExtractor_带资源管理器(t *testing.T) {
 	rm := "mock_resource_manager"
 	e := NewTracerTrajectoryExtractor(rm)
 	assert.Equal(t, rm, e.resourceManager)
 }
 
+// TestTracerTrajectoryExtractor_Extract_空Session 空会话提取
 func TestTracerTrajectoryExtractor_Extract_空Session(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 	traj := e.Extract(nil, "case_1")
@@ -30,6 +35,7 @@ func TestTracerTrajectoryExtractor_Extract_空Session(t *testing.T) {
 	assert.Empty(t, traj.Steps)
 }
 
+// TestTracerTrajectoryExtractor_Extract_空Tracer 空 Tracer 提取
 func TestTracerTrajectoryExtractor_Extract_空Tracer(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 	sess := session.NewSession()
@@ -38,6 +44,7 @@ func TestTracerTrajectoryExtractor_Extract_空Tracer(t *testing.T) {
 	assert.Empty(t, traj.Steps)
 }
 
+// TestTracerTrajectoryExtractor_Extract_有Spans 有 Spans 的提取
 func TestTracerTrajectoryExtractor_Extract_有Spans(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 	sess := session.NewSession()
@@ -72,6 +79,7 @@ func TestTracerTrajectoryExtractor_Extract_有Spans(t *testing.T) {
 	assert.Equal(t, "offline", traj.Source)
 }
 
+// TestClassifyKind 验证分类 InvokeType
 func TestClassifyKind(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 
@@ -93,9 +101,10 @@ func TestClassifyKind(t *testing.T) {
 	}
 }
 
+// TestExtractInputs 验证提取输入数据
+// 对齐 Python: raw = getattr(span, "inputs", None)
+// 当 raw 是 dict 且含 "inputs" 键时返回 raw["inputs"]
 func TestExtractInputs(t *testing.T) {
-	// 对齐 Python: raw = getattr(span, "inputs", None)
-	//     if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
 	span := &tracer.Span{Inputs: map[string]any{"inputs": map[string]any{"query": "test"}}}
 	result := extractInputs(span)
 	m, ok := result.(map[string]any)
@@ -110,6 +119,7 @@ func TestExtractInputs(t *testing.T) {
 	assert.Equal(t, "test", m2["query"])
 }
 
+// TestExtractOutputs 验证提取输出数据
 func TestExtractOutputs(t *testing.T) {
 	span := &tracer.Span{Outputs: map[string]any{"outputs": map[string]any{"result": "ok"}}}
 	result := extractOutputs(span)
@@ -118,6 +128,7 @@ func TestExtractOutputs(t *testing.T) {
 	assert.Equal(t, "ok", m["result"])
 }
 
+// TestParseLLMResponse 验证解析 LLM 响应
 func TestParseLLMResponse(t *testing.T) {
 	// 对齐 Python: isinstance(outputs, dict) → return outputs
 	resp := map[string]any{"role": "assistant", "content": "hello"}
@@ -133,6 +144,7 @@ func TestParseLLMResponse(t *testing.T) {
 	assert.Nil(t, result3)
 }
 
+// TestGetOperatorID 验证获取操作者 ID
 func TestGetOperatorID(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 
@@ -155,6 +167,7 @@ func TestGetOperatorID(t *testing.T) {
 	assert.Equal(t, "tool_name", id3)
 }
 
+// TestDtToMs 验证时间转毫秒
 func TestDtToMs(t *testing.T) {
 	// nil 时间
 	assert.Equal(t, 0, dtToMs(nil))
@@ -186,10 +199,10 @@ func TestBuildStep_LLM步骤(t *testing.T) {
 					},
 				},
 			},
-			Outputs:    map[string]any{"role": "assistant", "content": "hi"},
-			StartTime:  &now,
-			Error:      map[string]any{"code": "timeout"},
-			InvokeID:   "inv-1",
+			Outputs:   map[string]any{"role": "assistant", "content": "hi"},
+			StartTime: &now,
+			Error:     map[string]any{"code": "timeout"},
+			InvokeID:  "inv-1",
 		},
 		InvokeType: "llm",
 		Name:       "llm_call",
@@ -267,11 +280,11 @@ func TestBuildStep_TokenLevel字段提升(t *testing.T) {
 				},
 			},
 			Outputs: map[string]any{
-				"role":                "assistant",
-				"content":             "hi",
-				"prompt_token_ids":    []int{1, 2, 3},
+				"role":                 "assistant",
+				"content":              "hi",
+				"prompt_token_ids":     []int{1, 2, 3},
 				"completion_token_ids": []int{4, 5},
-				"logprobs":            []any{0.1, 0.2},
+				"logprobs":             []any{0.1, 0.2},
 			},
 		},
 		InvokeType: "llm",
@@ -471,14 +484,14 @@ func TestBuildMeta_完整(t *testing.T) {
 
 	span := &tracer.TraceAgentSpan{
 		Span: tracer.Span{
-			Inputs:        "raw_input",
-			Outputs:       "raw_output",
-			InvokeID:      "inv-1",
+			Inputs:         "raw_input",
+			Outputs:        "raw_output",
+			InvokeID:       "inv-1",
 			ParentInvokeID: "parent-1",
 			ChildInvokesID: []string{"child-1"},
 		},
-		Name:       "test_step",
-		MetaData:   map[string]any{"custom_key": "custom_val"},
+		Name:     "test_step",
+		MetaData: map[string]any{"custom_key": "custom_val"},
 	}
 
 	meta := e.buildMeta(span, map[string]any{"custom_key": "custom_val"}, StepKindWorkflow, nil)
@@ -516,8 +529,8 @@ func TestBuildMeta_AgentID从BaseMeta(t *testing.T) {
 	e := NewTracerTrajectoryExtractor()
 
 	span := &tracer.TraceAgentSpan{
-		Span:   tracer.Span{},
-		Name:   "step",
+		Span:     tracer.Span{},
+		Name:     "step",
 		MetaData: map[string]any{},
 	}
 

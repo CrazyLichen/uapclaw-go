@@ -54,6 +54,7 @@ type WorkflowNodeSession interface {
 type TracerWorkflowUtils struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
@@ -67,6 +68,7 @@ const loopID = "__sys_loop_id"
 const loopIndexSuffix = ".index"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TraceWorkflowStart 追踪工作流开始，对应 Python TracerWorkflowUtils.trace_workflow_start。

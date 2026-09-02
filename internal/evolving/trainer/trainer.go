@@ -379,7 +379,7 @@ func (t *Trainer) Predict(
 			res, err := agent.Invoke(gCtx, inputs, agentinterfaces.WithSession(sess))
 			if err != nil {
 				// 对齐 Python: res = dict(error=f"Get wrong result due to {str(e)}")
-				predicts[i] = map[string]any{"error": fmt.Sprintf("Get wrong result due to %s", err.Error())}
+				predicts[i] = map[string]any{"error": fmt.Sprintf("因 %s 导致结果错误", err.Error())}
 				sessionsList[i] = sess
 				return nil // 不中断其他 case
 			}

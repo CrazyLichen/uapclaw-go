@@ -176,7 +176,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("search_skill panicked")
+			logger.Error(logComponent).Any("panic", r).Msg("search_skill 发生 panic")
 			result = map[string]any{"success": false, "source": toString(inputs["source"]), "items": []any{}, "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -308,7 +308,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("install_skill panicked")
+			logger.Error(logComponent).Any("panic", r).Msg("install_skill 发生 panic")
 			result = map[string]any{"success": false, "source": toString(inputs["source"]), "installed": false, "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -440,7 +440,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("uninstall_skill panicked")
+			logger.Error(logComponent).Any("panic", r).Msg("uninstall_skill 发生 panic")
 			result = map[string]any{"success": false, "removed": false, "name": toString(inputs["name"]), "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -493,7 +493,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	// 执行卸载
 	payload, err := tk.manager.HandleSkillsUninstall(ctx, map[string]any{"name": skillName})
 	if err != nil {
-		logger.Error(logComponent).Str("name", skillName).Err(err).Msg("uninstall_skill failed")
+		logger.Error(logComponent).Str("name", skillName).Err(err).Msg("uninstall_skill 失败")
 		return map[string]any{
 			"success": false, "removed": false, "name": skillName,
 			"detail": err.Error(),

@@ -2164,7 +2164,8 @@ func TestIsDir(t *testing.T) {
 	if isDir(tmpFile) {
 		t.Errorf("文件不应被判定为目录")
 	}
-	if isDir("/nonexistent/path") {
+	nonexistentPath := filepath.Join(t.TempDir(), "no_such_dir")
+	if isDir(nonexistentPath) {
 		t.Errorf("不存在的路径不应被判定为目录")
 	}
 }

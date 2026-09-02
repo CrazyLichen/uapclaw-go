@@ -166,7 +166,7 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 	// fallback 到 mock
 	// 对齐 Python: logger.warning("Embedding API key not found, using mock provider")
 	if fallback == "mock" || fallback == "" {
-		logger.Warn(logComponent).Msg("Embedding API key not found, using mock provider")
+		logger.Warn(logComponent).Msg("未找到 Embedding API 密钥，使用模拟提供者")
 		return NewMockEmbeddingProvider(), nil
 	}
 

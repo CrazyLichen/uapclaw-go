@@ -259,7 +259,7 @@ func (m *VariableManager) UpdateUserVariable(ctx context.Context, userID string,
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("KV_store 不能为 nil")
+			Msg("kv_store 不能为 nil")
 		return nil
 	}
 

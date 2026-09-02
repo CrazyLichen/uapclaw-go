@@ -391,7 +391,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	if existing != nil {
 		logger.Warn(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 			Msg("SpawnMember: 成员已存在")
-		return atschema.NewMemberOpResultFail("member " + memberName + " already exists in team " + tb.teamName)
+		return atschema.NewMemberOpResultFail("成员 " + memberName + " 已存在于团队 " + tb.teamName)
 	}
 	// 步骤 2: 模型分配（优先使用 opts 中的 allocation，否则使用 modelConfigAllocator）
 	modelRefJSON := ""
@@ -517,7 +517,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	// 步骤 1: 查成员
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
-		return atschema.NewMemberOpResultFail("member not found: " + memberName)
+		return atschema.NewMemberOpResultFail("成员未找到: " + memberName)
 	}
 	// 步骤 2: 若已是终态（幂等返回 success，对齐 Python）
 	if member.Status == string(atschema.MemberStatusShutdown) ||
@@ -527,18 +527,18 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	// 步骤 3: FSM 状态转换校验（对齐 Python: is_valid_transition(current_status, SHUTDOWN_REQUESTED, MEMBER_TRANSITIONS)）
 	if !fsm.IsValidMemberTransition(member.Status, string(atschema.MemberStatusShutdownRequested)) {
 		return atschema.NewMemberOpResultFail(
-			fmt.Sprintf("Member %s cannot shut down from status '%s'", memberName, member.Status))
+			fmt.Sprintf("成员 %s 无法从状态 '%s' 关闭", memberName, member.Status))
 	}
 	// 步骤 4: CAS 转换
 	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
 		member.Status, string(atschema.MemberStatusShutdownRequested))
 	if !ok {
-		return atschema.NewMemberOpResultFail("CAS transition failed for: " + memberName)
+		return atschema.NewMemberOpResultFail("CAS 状态转换失败: " + memberName)
 	}
 	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
 	shutdownMsg, shutdownI18nErr := atschema.T("team.shutdown_request_content")
 	if shutdownI18nErr != nil {
-		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n key missing, using fallback")
+		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n 键缺失，使用回退值")
 		shutdownMsg = "team.shutdown_request_content"
 	}
 	_, _ = tb.messageManager.SendMessage(ctx, shutdownMsg, memberName, tb.memberName)
@@ -567,12 +567,12 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	// 步骤 1: 查成员
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
-		return atschema.NewMemberOpResultFail("member not found: " + memberName)
+		return atschema.NewMemberOpResultFail("成员未找到: " + memberName)
 	}
 	// 步骤 2: 仅对 BUSY 成员操作（对齐 Python: 非 BUSY 直接返回）
 	if member.Status != string(atschema.MemberStatusBusy) {
 		logger.Info(tbLogComponent).Str("member_name", memberName).Str("status", member.Status).
-			Msg("CancelMember: member is not busy, no need to cancel")
+			Msg("CancelMember: 成员非忙碌状态，无需取消")
 		return atschema.NewMemberOpResultSuccess()
 	}
 	// 步骤 3: 重置该成员的 CLAIMED 任务（通过 taskManager.Reset，对齐 Python）
@@ -594,14 +594,14 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	// 步骤 4: 发送取消消息（对齐 Python: success = send_message; if not success → return False）
 	cancelMsg, cancelI18nErr := atschema.T("team.cancel_request_content")
 	if cancelI18nErr != nil {
-		logger.Warn(tbLogComponent).Err(cancelI18nErr).Msg("i18n key missing, using fallback")
+		logger.Warn(tbLogComponent).Err(cancelI18nErr).Msg("i18n 键缺失，使用回退值")
 		cancelMsg = "team.cancel_request_content"
 	}
 	_, msgErr := tb.messageManager.SendMessage(ctx, cancelMsg, memberName, tb.memberName)
 	if msgErr != nil {
 		logger.Error(tbLogComponent).Str("member_name", memberName).Err(msgErr).
 			Msg("CancelMember: 发送取消消息失败")
-		return atschema.NewMemberOpResultFail("cancel message failed for: " + memberName)
+		return atschema.NewMemberOpResultFail("取消消息发送失败: " + memberName)
 	}
 	// 步骤 5: 发布事件
 	tb.publishEvent(ctx, atschema.MemberCanceledEvent{
@@ -781,7 +781,7 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 			if !result.OK {
 				logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
 					Str("reason", result.Reason).
-					Msg("ForceCleanTeam: shutdown_member failed, continuing")
+					Msg("ForceCleanTeam: 关闭成员失败，继续执行")
 			}
 		}
 	}
@@ -860,32 +860,32 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 	// 对齐 Python: 三层前置校验
 	// 校验 1: planID 非空（对齐 Python: if not plan_id → return False）
 	if planID == "" {
-		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id is required")
-		return atschema.NewMemberOpResultFail("approve_plan requires plan_id")
+		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id 不能为空")
+		return atschema.NewMemberOpResultFail("approve_plan 需要 plan_id")
 	}
 	// 校验 2: plan record 存在（对齐 Python: plan_record = self.task_manager.get_plan_record(plan_id); if not plan_record → return False）
 	planIndex, planErr := tb.taskManager.loadPlanIndex()
 	if planErr != nil || planIndex == nil {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Err(planErr).Msg("ApprovePlan: plan index not found")
-		return atschema.NewMemberOpResultFail("plan index not found")
+		logger.Error(tbLogComponent).Str("plan_id", planID).Err(planErr).Msg("ApprovePlan: 计划索引未找到")
+		return atschema.NewMemberOpResultFail("计划索引未找到")
 	}
 	planRecord, planExists := planIndex.TaskPlans[planID]
 	if !planExists || planRecord == nil {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan not found")
-		return atschema.NewMemberOpResultFail("plan not found: " + planID)
+		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: 计划未找到")
+		return atschema.NewMemberOpResultFail("计划未找到: " + planID)
 	}
 	memberName := planRecord.MemberName
 	taskID := planRecord.TaskID
 	// 校验 3: member 存在（对齐 Python: member_data = get_member(member_name); if member_data is None → return False）
 	if memberName == "" {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan has no member_name")
-		return atschema.NewMemberOpResultFail("plan has no member_name: " + planID)
+		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: 计划缺少 member_name")
+		return atschema.NewMemberOpResultFail("计划缺少 member_name: " + planID)
 	}
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
 		logger.Error(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
-			Msg("ApprovePlan: member not found in team")
-		return atschema.NewMemberOpResultFail(fmt.Sprintf("member %s not found in team %s", memberName, tb.teamName))
+			Msg("ApprovePlan: 成员不在团队中")
+		return atschema.NewMemberOpResultFail(fmt.Sprintf("成员 %s 不在团队 %s 中", memberName, tb.teamName))
 	}
 	// 执行审批
 	err = tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
@@ -909,7 +909,7 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 	// 成员存在性检查（对齐 Python: db.member.get_member(member_name)，不存在返回 False）
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
-		return atschema.NewMemberOpResultFail("member not found: " + memberName)
+		return atschema.NewMemberOpResultFail("成员未找到: " + memberName)
 	}
 	tb.publishEvent(ctx, atschema.ToolApprovalResultEvent{
 		BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
@@ -936,7 +936,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 		if val, err := atschema.T("hitt.human_agent_display_name"); err == nil {
 			displayName = val
 		} else {
-			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback")
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n 键缺失，使用回退值")
 			displayName = "hitt.human_agent_display_name"
 		}
 	}
@@ -944,7 +944,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 		if val, err := atschema.T("hitt.human_agent_default_persona"); err == nil {
 			desc = val
 		} else {
-			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback")
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n 键缺失，使用回退值")
 			desc = "hitt.human_agent_default_persona"
 		}
 	}

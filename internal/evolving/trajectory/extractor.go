@@ -267,7 +267,7 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan)
 	if e.resourceManager != nil && toolName != "" {
 		// Go 中 resourceManager 类型待定，当前为 any
 		// 后续通过 ResourceManager 接口调用
-		// TODO: 实现 resourceManager.get_tool_infos(tool_name)
+		// TODO: 待实现 resourceManager.get_tool_infos(tool_name)
 		_ = toolDescription
 		_ = toolSchema
 	}

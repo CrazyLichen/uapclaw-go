@@ -3,15 +3,17 @@ package session
 import (
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestAutoTitle_基本截取(t *testing.T) {
-	longContent := "这是一段很长的用户消息内容，超过了五十个字符的限制所以需要被截断加上省略号标记"
+	// 构造超过 50 个 rune 的中文内容，确保触发截断
+	longContent := "这是一段很长的用户消息内容，超过了五十个字符的限制所以需要被截断加上省略号标记，继续追加更多文字确保超过阈值"
 	result := AutoTitle(longContent)
-	if len(result) != titleMaxLen+3 { // 50 + "..."
-		t.Errorf("AutoTitle 长度 = %d, 期望 %d", len(result), titleMaxLen+3)
+	if utf8.RuneCountInString(result) != titleMaxLen+3 { // 50 runes + "..."
+		t.Errorf("AutoTitle rune 长度 = %d, 期望 %d", utf8.RuneCountInString(result), titleMaxLen+3)
 	}
 	if !stringsHasSuffix(result, "...") {
 		t.Errorf("AutoTitle 应以 ... 结尾, 实际: %q", result)
