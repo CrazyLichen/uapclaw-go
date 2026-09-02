@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -443,8 +444,8 @@ func TestResolvePermissionInterrupt_Allow(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "read", Arguments: `{"path": "/tmp"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil, // userInput = nil → 首次检查
 		nil, // autoConfirmConfig
@@ -467,8 +468,8 @@ func TestResolvePermissionInterrupt_Deny(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "rm -rf /"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil,
 		nil,
@@ -491,8 +492,8 @@ func TestResolvePermissionInterrupt_AskInterrupt(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil,
 		nil,
@@ -518,8 +519,8 @@ func TestResolvePermissionInterrupt_AutoConfirm(t *testing.T) {
 	autoConfirmConfig := map[string]any{"read": true}
 
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil, // userInput = nil
 		autoConfirmConfig,
@@ -547,8 +548,8 @@ func TestResolvePermissionInterrupt_UserApproved(t *testing.T) {
 	}
 
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		userInput,
 		nil,
@@ -576,8 +577,8 @@ func TestResolvePermissionInterrupt_UserRejected(t *testing.T) {
 	}
 
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		userInput,
 		nil,
@@ -601,8 +602,8 @@ func TestResolvePermissionInterrupt_InvalidPayload(t *testing.T) {
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		42, // 无效类型
 		nil,
@@ -630,8 +631,8 @@ func TestResolvePermissionInterrupt_SceneHookApprove(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil,
 		nil,
@@ -659,8 +660,8 @@ func TestResolvePermissionInterrupt_SceneHookReject(t *testing.T) {
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
-		nil, // ctx
-		nil, // cbc
+		context.TODO(), // ctx
+		nil,            // cbc
 		toolCall,
 		nil,
 		nil,
