@@ -73,6 +73,58 @@ type PermissionsSection struct {
 	ExternalDirectory map[string]string `json:"external_directory,omitempty" yaml:"external_directory,omitempty"`
 }
 
+// PermissionSceneHookInput 传给 PermissionSceneHook 的入参。
+//
+// 对齐 Python: PermissionSceneHookInput (host.py L15-23)
+type PermissionSceneHookInput struct {
+	// Ctx 上下文
+	Ctx any
+	// ToolCall 工具调用
+	ToolCall any
+	// UserInput 用户输入
+	UserInput any
+	// NormalizedToolName 归一化工具名
+	NormalizedToolName string
+	// ToolArgs 工具参数
+	ToolArgs map[string]any
+	// Engine 权限引擎
+	Engine any
+}
+
+// PermissionConfirmationRequest 传给 RequestPermissionConfirmationHook 的入参。
+//
+// 对齐 Python: PermissionConfirmationRequest (host.py L36-43)
+type PermissionConfirmationRequest struct {
+	// Ctx 上下文
+	Ctx any
+	// ToolCall 工具调用
+	ToolCall any
+	// Result 权限判定结果
+	Result *PermissionResult
+	// AutoConfirmKey 自动确认键
+	AutoConfirmKey string
+}
+
+// ToolPermissionHost 由 Agent 服务或 CLI 在构造 DeepAgent / PermissionInterruptRail 时注入。
+//
+// 对齐 Python: ToolPermissionHost (host.py L62-99)
+type ToolPermissionHost struct {
+	// GetPermissionsSnapshot 返回与 config['permissions'] 同结构的 dict
+	GetPermissionsSnapshot func() map[string]any
+	// PersistAllowRule 自定义「总是允许」写盘
+	PersistAllowRule func(permissions map[string]any) bool
+	// ResolveWorkspaceDir 外部路径校验用的 workspace 根目录
+	ResolveWorkspaceDir func() string
+	// PermissionYAMLPath Agent 配置文件路径
+	PermissionYAMLPath string
+	// ToolPermissionChecksActive 若返回假则跳过工具权限校验
+	ToolPermissionChecksActive func() bool
+	// RequestPermissionConfirmation 对 ASK 征求用户确认
+	RequestPermissionConfirmation RequestPermissionConfirmationHook
+	// PermissionSceneHook 宿主场景钩子
+	PermissionSceneHook PermissionSceneHookFn
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // PermissionLevel 权限级别枚举
@@ -106,6 +158,19 @@ func ParsePermissionLevel(s string) (PermissionLevel, error) {
 		return PermissionLevelAllow, fmt.Errorf("未知的 PermissionLevel: %q", s)
 	}
 }
+
+// PermissionSceneHookFn 宿主场景钩子函数类型。
+// 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
+// 返回 nil 表示继续走引擎 tiered 判定；
+// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
+//
+// 对齐 Python: PermissionSceneHook (host.py L26-33)
+type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
+
+// RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
+//
+// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
+type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
 
 // IsAllowed 判断权限是否为允许
 func (r *PermissionResult) IsAllowed() bool {
