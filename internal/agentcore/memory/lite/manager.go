@@ -3,6 +3,7 @@ package lite
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -22,8 +23,8 @@ type MemoryIndexManager interface {
 	ReadFile(ctx context.Context, relPath string, fromLine *int, lines *int) (*ReadFileResult, error)
 	// Status 返回系统状态报告
 	Status() *StatusResult
-	// HasLLM 判断是否有 LLM 实例可用。对齐 Python ctx.manager.llm
-	HasLLM() bool
+	// LLM 返回 LLM 实例。对齐 Python ctx.manager.llm
+	LLM() *llm.Model
 	// Close 关闭管理器
 	Close() error
 }
@@ -42,6 +43,8 @@ type MemoryManagerParams struct {
 	SysOperation sysop.SysOperation
 	// NodeName 节点名称（"memory" 或 "coding_memory"）
 	NodeName string
+	// LLM LLM 实例。对齐 Python manager.llm
+	LLM *llm.Model
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

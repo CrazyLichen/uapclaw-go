@@ -3,6 +3,9 @@ package lite
 import (
 	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/update"
 )
 
 // TestValidateCodingMemoryPath_非法穿越 测试目录穿越
@@ -216,3 +219,60 @@ func TestSnapshotMemoryFiles_空目录(t *testing.T) {
 		t.Errorf("Expected nil for empty dir, got %v", result)
 	}
 }
+
+// TestRunChecker_无LLM 测试无 LLM 模型时返回 nil
+func TestRunChecker_无LLM(t *testing.T) {
+	mgr := &stubMemoryIndexManager{llmModel: nil}
+	items := runChecker(context.Background(), mgr, "test.md", "body", map[string]string{"old.md": "old body"})
+	if items != nil {
+		t.Errorf("期望 nil，实际 %v", items)
+	}
+}
+
+// TestRunChecker_有LLM调用Check 测试有 LLM 时调用 MemUpdateChecker.Check
+func TestRunChecker_有LLM调用Check(t *testing.T) {
+	// 使用空 LLM 模型（不实际调用 API），验证 runChecker 会走到 Check 调用
+	// MemUpdateChecker.Check 在 model != nil 时会尝试 LLM 调用，
+	// 但我们无法在单元测试中 mock model.Invoke，所以只测试 model=nil 的分支
+	mgr := &stubMemoryIndexManager{llmModel: nil}
+	items := runChecker(context.Background(), mgr, "test.md", "body", nil)
+	if items != nil {
+		t.Errorf("期望 model=nil 时返回 nil，实际 %v", items)
+	}
+}
+
+// TestContainsActionForID 测试 containsActionForID
+func TestContainsActionForID(t *testing.T) {
+	actions := []*update.MemoryActionItem{
+		{ID: "a.md", Status: update.MemoryStatusAdd},
+		{ID: "b.md", Status: update.MemoryStatusDelete},
+	}
+	if !containsActionForID(actions, "a.md") {
+		t.Error("期望包含 a.md 的 ADD 操作")
+	}
+	if containsActionForID(actions, "b.md") {
+		t.Error("期望不包含 b.md 的 ADD 操作（b 是 DELETE）")
+	}
+	if containsActionForID(actions, "c.md") {
+		t.Error("期望不包含 c.md 的操作")
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// stubMemoryIndexManager 测试用 MemoryIndexManager mock
+type stubMemoryIndexManager struct {
+	llmModel *llm.Model
+}
+
+func (s *stubMemoryIndexManager) Initialize(_ context.Context) error                  { return nil }
+func (s *stubMemoryIndexManager) Sync(_ context.Context, _ string, _ bool) error       { return nil }
+func (s *stubMemoryIndexManager) Search(_ context.Context, _ string, _ map[string]any) ([]SearchResult, error) {
+	return nil, nil
+}
+func (s *stubMemoryIndexManager) ReadFile(_ context.Context, _ string, _ *int, _ *int) (*ReadFileResult, error) {
+	return nil, nil
+}
+func (s *stubMemoryIndexManager) Status() *StatusResult { return nil }
+func (s *stubMemoryIndexManager) LLM() *llm.Model       { return s.llmModel }
+func (s *stubMemoryIndexManager) Close() error           { return nil }

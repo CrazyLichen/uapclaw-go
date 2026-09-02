@@ -16,6 +16,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-sqlite3"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -90,8 +91,8 @@ type memoryIndexManager struct {
 	// 外部依赖
 	embeddingConfig *apiEmbedding.EmbeddingConfig
 	sysOperation    sysop.SysOperation
-	// TODO: 7.2 实现时替换为具体接口（如 MemUpdateChecker），当前用 any 规避循环依赖
-	llm any
+	// llm LLM 实例。对齐 Python ctx.manager.llm
+	llm *llm.Model
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -474,9 +475,9 @@ func (m *memoryIndexManager) IsClosed() bool {
 	return m.closed
 }
 
-// HasLLM 判断是否有 LLM 实例可用。对齐 Python ctx.manager.llm
-func (m *memoryIndexManager) HasLLM() bool {
-	return m.llm != nil
+// LLM 返回 LLM 实例。对齐 Python ctx.manager.llm
+func (m *memoryIndexManager) LLM() *llm.Model {
+	return m.llm
 }
 
 // Close 关闭管理器。对齐 Python MemoryIndexManager.close
@@ -595,6 +596,7 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		sessionDeltas:       make(map[string]*SessionDeltaState),
 		embeddingConfig:     params.EmbeddingConfig,
 		sysOperation:        params.SysOperation,
+		llm:                 params.LLM,
 	}
 
 	if err := mgr.Initialize(context.Background()); err != nil {

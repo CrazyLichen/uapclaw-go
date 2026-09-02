@@ -214,6 +214,25 @@ func TestSearchManager_ListUserMem_无索引(t *testing.T) {
 	}
 }
 
+// TestListUserMemResult_字段 测试 ListUserMemResult 包含 UserID/ScopeID
+func TestListUserMemResult_字段(t *testing.T) {
+	doc := &storeindex.MemoryDoc{ID: "mem1", Text: "hello"}
+	r := &ListUserMemResult{
+		UserID:  "u1",
+		ScopeID: "s1",
+		Doc:     doc,
+	}
+	if r.UserID != "u1" {
+		t.Errorf("UserID = %q, want %q", r.UserID, "u1")
+	}
+	if r.ScopeID != "s1" {
+		t.Errorf("ScopeID = %q, want %q", r.ScopeID, "s1")
+	}
+	if r.Doc.ID != "mem1" {
+		t.Errorf("Doc.ID = %q, want %q", r.Doc.ID, "mem1")
+	}
+}
+
 // TestContainsString 测试辅助函数
 func TestContainsString(t *testing.T) {
 	slice := []string{"a", "b", "c"}

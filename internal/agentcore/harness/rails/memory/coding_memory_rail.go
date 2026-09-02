@@ -481,7 +481,7 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 		agentID,
 		r.embeddingConfig,
 		r.SysOperation(),
-		nil, // ⤵️ 7.8: LLM 实例待 MemUpdateChecker 实现后传入
+		nil, // LLM 实例暂未注入，runChecker 在 LLM() == nil 时跳过冲突检查
 	)
 	if err != nil {
 		logger.Error(codingMemoryLogComponent).

@@ -210,7 +210,10 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			similarFiles := searchSimilar(toolCtx, body, basename, 5, 0.75)
 
 			// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
-			actions := runChecker(basename, body, similarFiles)
+			var actions []*update.MemoryActionItem
+			if len(similarFiles) > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+				actions = runChecker(ctx, toolCtx.Manager, basename, body, similarFiles)
+			}
 
 			// REDUNDANT: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
 			if len(actions) > 0 && !containsActionForID(actions, basename) {
@@ -254,7 +257,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			}
 		} else {
 			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件
-			conflict = *prepareAppendMode(toolCtx, resolved, basename, body, fm)
+			conflict = *prepareAppendMode(ctx, toolCtx, resolved, basename, body, fm)
 			// 对齐 Python: if result.get("mode") == WriteMode.SKIP.value: return result
 			if conflict.Skip {
 				return (&WriteResult{
@@ -485,16 +488,23 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 }
 
 // runChecker 调用 MemUpdateChecker 执行 LLM 冲突检测。
-// 对齐 Python: coding_memory_tool_ops.py 中 runChecker 调用 MemUpdateChecker。
-// 当前 CodingMemoryToolContext 不携带 ctx 和 model，故返回 nil（退化为不检查冗余）。
-// 后续集成 LongTermMemory 门面后，可通过 Context 注入 model 启用 LLM 冗余判断。
-func runChecker(newID string, newBody string, oldMemories map[string]string) []*update.MemoryActionItem {
-	// 当前无 LLM 模型可用，返回 nil（对齐 MemUpdateChecker.Check model=nil 时的 fallback 行为）
-	return nil
+// 对齐 Python: _run_checker(coding_memory_manager, basename, body, old_memories)
+func runChecker(ctx context.Context, manager MemoryIndexManager, newID string, newBody string, oldMemories map[string]string) []*update.MemoryActionItem {
+	model := manager.LLM()
+	if model == nil {
+		return nil
+	}
+	checker := &update.MemUpdateChecker{}
+	items, err := checker.Check(ctx, map[string]string{newID: newBody}, oldMemories, update.WithModel(model))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker 冲突检查失败")
+		return nil
+	}
+	return items
 }
 
 // prepareAppendMode 准备追加模式并返回冲突检测结果。对齐 Python _prepare_append_mode
-func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) *ConflictResult {
+func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, resolved string, basename string, body string, fm map[string]string) *ConflictResult {
 	result := &ConflictResult{}
 
 	// 构建旧记忆：自身文件 + 其他相似文件（对齐 Python: old_memories）
@@ -519,8 +529,10 @@ func prepareAppendMode(toolCtx *CodingMemoryToolContext, resolved string, basena
 	}
 
 	// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
-	// 当前 runChecker 返回 nil（无 LLM 模型），仅基于 searchSimilar 结果判断冲突
-	actions := runChecker(basename, body, oldMemories)
+	var actions []*update.MemoryActionItem
+	if len(oldMemories) > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+		actions = runChecker(ctx, toolCtx.Manager, basename, body, oldMemories)
+	}
 
 	// REDUNDANT: 新记忆不在 actions 中 → 跳过写入（对齐 Python: if actions and not any(a.id == basename for a in actions)）
 	if len(actions) > 0 && !containsActionForID(actions, basename) {

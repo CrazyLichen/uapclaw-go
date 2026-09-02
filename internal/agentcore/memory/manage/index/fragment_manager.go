@@ -447,7 +447,6 @@ func (m *FragmentMemoryManager) getRelatedOldMemories(
 //
 // 设计决策：Fields 保持 map[string]any，对齐 Python fields=dict 设计。
 // 写入时硬编码 key 字符串（如 "source_id"），读取时需类型断言。
-// 7.8 回填时可能增加更多字段，届时评估是否引入 typed struct。
 func (m *FragmentMemoryManager) convertToMemoryDoc(unit *mem_model.FragmentMemoryUnit) *index.MemoryDoc {
 	ts := parseTimestamp(unit.Timestamp)
 	return &index.MemoryDoc{

@@ -32,6 +32,16 @@ type SearchParams struct {
 	SearchType []string
 }
 
+// ListUserMemResult 分页列表结果。对齐 Python list_user_mem 返回的 dict
+type ListUserMemResult struct {
+	// UserID 用户 ID
+	UserID string
+	// ScopeID 范围 ID
+	ScopeID string
+	// Doc 记忆文档
+	Doc *storeindex.MemoryDoc
+}
+
 // SearchManager 搜索操作统一路由器。
 //
 // 语义搜索按 search_type 分发到各 Manager；列表/分页直接走 memory_index。
@@ -178,7 +188,7 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 // ListUserMem 分页列出用户记忆。
 //
 // 对齐 Python: SearchManager.list_user_mem(user_id, scope_id, nums, pages, mem_type)
-func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID string, nums int, pages int, memType string) ([]*storeindex.MemoryDoc, error) {
+func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID string, nums int, pages int, memType string) ([]*ListUserMemResult, error) {
 	if s.memoryIndex == nil {
 		return nil, exception.NewBaseError(
 			exception.StatusMemoryGetMemoryExecutionError,
@@ -191,7 +201,19 @@ func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID 
 	if memType != "" {
 		memTypes = []string{memType}
 	}
-	return s.memoryIndex.ListMemories(ctx, userID, scopeID, start, nums, memTypes)
+	docs, err := s.memoryIndex.ListMemories(ctx, userID, scopeID, start, nums, memTypes)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*ListUserMemResult, 0, len(docs))
+	for _, doc := range docs {
+		results = append(results, &ListUserMemResult{
+			UserID:  userID,
+			ScopeID: scopeID,
+			Doc:     doc,
+		})
+	}
+	return results, nil
 }
 
 // ListUserProfile 列出用户画像记忆。
