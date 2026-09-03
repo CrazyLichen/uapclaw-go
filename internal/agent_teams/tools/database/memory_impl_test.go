@@ -1097,10 +1097,45 @@ func TestMutateDependencyGraph_终态目标(t *testing.T) {
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
+	// 对齐 Python: 下游 t2 依赖已完成 t1 是允许的（终态依赖自动 resolved=True）
 	edges := []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}}
 	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
+	if !result.Ok {
+		t.Errorf("下游 PENDING 任务依赖终态上游应成功，got: %s", result.Reason)
+	}
+	// 验证依赖行 resolved=True
+	deps, _ := db.GetTaskDependencies(ctx, "t2")
+	if len(deps) != 1 || !deps[0].Resolved {
+		t.Error("终态依赖应自动标记为 resolved=True")
+	}
+}
+
+func TestMutateDependencyGraph_CLAIMED源拒绝(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "m1", Title: "已认领"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	// 尝试让已认领任务 t1 依赖 t2（给 CLAIMED 源任务加依赖）
+	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
+	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
 	if result.Ok {
-		t.Error("终态目标应导致管线失败")
+		t.Error("CLAIMED 源任务添加依赖应被拒绝")
+	}
+}
+
+func TestMutateDependencyGraph_PLAN_APPROVED源拒绝(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Assignee: "m1", Title: "计划已批准"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
+	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
+	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
+	if result.Ok {
+		t.Error("PLAN_APPROVED 源任务添加依赖应被拒绝")
 	}
 }
 

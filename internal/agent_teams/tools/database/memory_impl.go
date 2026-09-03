@@ -959,12 +959,14 @@ func (mc *mutationContext) stageNewTasks() {
 	}
 }
 
-// loadEndpointsAndValidate 步骤2：加载边端点，拒绝缺失/终态目标。
+// loadEndpointsAndValidate 步骤2：加载边端点，拒绝缺失/终态/已执行源。
 // 对齐 Python: _load_endpoints_and_validate()
+// 拒绝规则对齐 Python TASK_DEPENDENCY_REJECT_STATUSES：
+// 源任务（TaskID，被阻塞的下游）处于 COMPLETED/CANCELLED/CLAIMED/PLAN_APPROVED 时拒绝。
 func (mc *mutationContext) loadEndpointsAndValidate() {
 	mc.endpointTasks = make(map[string]*TeamTaskBase)
 	for _, edge := range mc.addEdges {
-		// 加载下游任务（被阻塞的）
+		// 加载下游任务（被阻塞的，即源任务 edge.TaskID）
 		downstream, downExists := mc.db.tasks[edge.TaskID]
 		if !downExists {
 			mc.failReason = "edge endpoint not found: " + edge.TaskID
@@ -973,7 +975,7 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 		}
 		mc.endpointTasks[edge.TaskID] = downstream
 
-		// 加载上游任务（阻塞源）
+		// 加载上游任务（阻塞源 edge.DependsOnID）
 		upstream, upExists := mc.db.tasks[edge.DependsOnID]
 		if !upExists {
 			mc.failReason = "edge endpoint not found: " + edge.DependsOnID
@@ -982,9 +984,12 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 		}
 		mc.endpointTasks[edge.DependsOnID] = upstream
 
-		// 拒绝终态目标：上游是 COMPLETED/CANCELLED 时不允许添加依赖
-		if upstream.Status == fsm.TaskStatusCompleted || upstream.Status == fsm.TaskStatusCancelled {
-			mc.failReason = "cannot add dependency on terminal task: " + edge.DependsOnID
+		// 对齐 Python TASK_DEPENDENCY_REJECT_STATUSES：
+		// 源任务（edge.TaskID）处于终态或已执行状态时拒绝添加依赖
+		srcStatus := downstream.Status
+		if srcStatus == fsm.TaskStatusCompleted || srcStatus == fsm.TaskStatusCancelled ||
+			srcStatus == fsm.TaskStatusClaimed || srcStatus == fsm.TaskStatusPlanApproved {
+			mc.failReason = "cannot add dependency to " + edge.TaskID + " in terminal or executing status: " + srcStatus
 			mc.rollbackStagedTasks()
 			return
 		}
