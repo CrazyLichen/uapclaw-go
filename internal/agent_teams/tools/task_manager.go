@@ -134,6 +134,7 @@ func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, m
 
 // Add 创建单条任务。对齐 Python: TeamTaskManager.add()
 // 支持可选参数 WithTaskID、WithDependencies，对齐 Python: add(task_id, dependencies)
+// 有依赖时走 MutateDependencyGraph 原子路径（环检测+状态刷新），无依赖时走 CreateTask。
 func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts ...TaskAddOption) (*database.TeamTaskBase, error) {
 	cfg := &taskAddConfig{}
 	for _, opt := range opts {
@@ -141,8 +142,41 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 	}
 	taskID := cfg.taskID
 	if taskID == "" {
-		taskID = fmt.Sprintf("task_%s_%d_%d", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+		taskID = generateTaskID(tm.teamName)
 	}
+
+	if len(cfg.dependencies) > 0 {
+		// 有依赖：走 MutateDependencyGraph 原子路径（对齐 Python: mutate_dependency_graph）
+		newTaskSpec := database.NewTaskSpec{
+			TaskID:        taskID,
+			Title:         title,
+			Content:       content,
+			InitialStatus: fsm.TaskStatusPending,
+		}
+		edges := make([]database.EdgeSpec, 0, len(cfg.dependencies))
+		for _, depID := range cfg.dependencies {
+			edges = append(edges, database.EdgeSpec{TaskID: taskID, DependsOnID: depID})
+		}
+		result := tm.db.Task().MutateDependencyGraph(ctx, tm.teamName, []database.NewTaskSpec{newTaskSpec}, edges)
+		if !result.Ok {
+			return nil, fmt.Errorf("创建任务失败: %s", result.Reason)
+		}
+		// 从 RefreshedTasks 中提取新任务的最终状态（可能 PENDING→BLOCKED）
+		task := findRefreshedTask(result.RefreshedTasks, taskID)
+		if task == nil {
+			task, _ = tm.db.Task().GetTask(ctx, taskID)
+		}
+		if task != nil {
+			tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
+				BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+				TaskID:           task.TaskID,
+				Status:           task.Status,
+			})
+		}
+		return task, nil
+	}
+
+	// 无依赖：走 CreateTask
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
@@ -156,10 +190,6 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 	}
 	if !ok {
 		return nil, fmt.Errorf("创建任务失败: task_id 冲突 %s", taskID)
-	}
-	// 对齐 Python: dependencies — 创建依赖关系（委托 AddTaskWithBidirectionalDependencies 的图变更）
-	if len(cfg.dependencies) > 0 {
-		tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, cfg.dependencies)
 	}
 	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
@@ -946,4 +976,24 @@ func (tm *TeamTaskManager) loadPlanIndex() (*PlanIndex, error) {
 		return nil, err
 	}
 	return &index, nil
+}
+
+// findRefreshedTask 从 refreshedTasks 列表中按 taskID 查找任务。
+// 对齐 Python: for refreshed in mutation.refreshed_tasks: if refreshed.task_id == task_id
+func findRefreshedTask(refreshed []*database.TeamTaskBase, taskID string) *database.TeamTaskBase {
+	for _, t := range refreshed {
+		if t.TaskID == taskID {
+			return t
+		}
+	}
+	return nil
+}
+
+// generateTaskID 生成任务 ID，对齐 Python: uuid.uuid4() 的等价逻辑。
+func generateTaskID(teamName string, suffixes ...string) string {
+	base := fmt.Sprintf("task_%s_%d_%d", teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+	if len(suffixes) > 0 {
+		base += "_" + strings.Join(suffixes, "_")
+	}
+	return base
 }

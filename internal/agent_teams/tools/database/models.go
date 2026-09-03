@@ -160,8 +160,8 @@ type GraphMutationResult struct {
 	Ok bool
 	// Reason 失败原因（Ok=false 时）
 	Reason string
-	// RefreshedTasks 状态刷新产出的任务ID列表
-	RefreshedTasks []string
+	// RefreshedTasks 状态刷新产出的任务列表（对齐 Python: refreshed_tasks: list[TeamTaskBase]）
+	RefreshedTasks []*TeamTaskBase
 }
 
 // CancelAllTasksResult 批量取消任务的返回结果。

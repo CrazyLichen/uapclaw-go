@@ -45,7 +45,7 @@ type mutationContext struct {
 	stagedTasks   map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
 	endpointTasks map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
 	newEdgeRows   []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
-	refreshedIDs  []string                 // 步骤5产出：状态刷新的 task IDs
+	refreshedTasks []*TeamTaskBase         // 步骤5产出：状态刷新的任务列表
 
 	// 失败标记（替代 Python _MutationFailure）
 	failReason string
@@ -669,7 +669,12 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 func (db *InMemoryTeamDatabase) VerifyAndFixTaskConsistency(_ context.Context, teamName string) ([]string, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.refreshTaskStatuses(teamName), nil
+	refreshedTasks := db.refreshTaskStatuses(teamName)
+	var refreshedIDs []string
+	for _, t := range refreshedTasks {
+		refreshedIDs = append(refreshedIDs, t.TaskID)
+	}
+	return refreshedIDs, nil
 }
 
 // MutateDependencyGraph 原子图变更：5 步管线。
@@ -704,7 +709,7 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 	// 步骤5：刷新 PENDING↔BLOCKED 状态
 	mc.refreshStatus()
 
-	return GraphMutationResult{Ok: true, RefreshedTasks: mc.refreshedIDs}
+	return GraphMutationResult{Ok: true, RefreshedTasks: mc.refreshedTasks}
 }
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。
@@ -1066,7 +1071,7 @@ func (mc *mutationContext) applyNewEdges() {
 // refreshStatus 步骤5：刷新 PENDING↔BLOCKED 状态。
 // 对齐 Python: _refresh_status_in_session()
 func (mc *mutationContext) refreshStatus() {
-	mc.refreshedIDs = mc.db.refreshTaskStatuses(mc.teamName)
+	mc.refreshedTasks = mc.db.refreshTaskStatuses(mc.teamName)
 }
 
 // rollbackStagedTasks 回滚步骤1插入的新任务。
@@ -1146,8 +1151,8 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 // 对齐 Python: _refresh_status_in_session()
 // PENDING + 有未解决依赖 → BLOCKED
 // BLOCKED + 无未解决依赖 → PENDING
-func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []string {
-	var refreshed []string
+func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []*TeamTaskBase {
+	var refreshed []*TeamTaskBase
 	for _, task := range db.tasks {
 		if task.TeamName != teamName {
 			continue
@@ -1167,7 +1172,7 @@ func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []string {
 		}
 		if oldStatus != task.Status {
 			task.UpdatedAt = GetCurrentTime()
-			refreshed = append(refreshed, task.TaskID)
+			refreshed = append(refreshed, task)
 		}
 	}
 	return refreshed
