@@ -314,10 +314,10 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		for id := range affectedIDs {
 			ids = append(ids, id)
 		}
-		refreshedIDs := refreshStatusInTx(tx, taskTable, depTable, ids, now)
+		refreshedTasks := refreshStatusInTx(tx, taskTable, depTable, ids, now)
 
 		result.Ok = true
-		result.RefreshedTasks = refreshedIDs
+		result.RefreshedTasks = refreshedTasks
 		return nil // 提交
 	})
 
@@ -337,8 +337,8 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 }
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
-// 对齐 Python: add_task_with_bidirectional_dependencies(task_id, team_name, ...) → bool
-func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependsOnIDs []string) GraphMutationResult {
+// 对齐 Python: add_task_with_bidirectional_dependencies(task_id, team_name, title, content, status, *, dependencies, dependent_task_ids)
+func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	newTaskSpec := NewTaskSpec{
 		TaskID:        task.TaskID,
 		Title:         task.Title,
@@ -347,8 +347,12 @@ func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, t
 	}
 	// 对齐 Python: edges = [(task_id, dep_id) for dep_id in dependencies]
 	var edges []EdgeSpec
-	for _, depID := range dependsOnIDs {
+	for _, depID := range dependencies {
 		edges = append(edges, EdgeSpec{TaskID: task.TaskID, DependsOnID: depID})
+	}
+	// 对齐 Python: dep_edges = [(dep_id, task_id) for dep_id in dependent_task_ids]
+	for _, depID := range dependentTaskIDs {
+		edges = append(edges, EdgeSpec{TaskID: depID, DependsOnID: task.TaskID})
 	}
 
 	result := d.MutateDependencyGraph(ctx, teamName, []NewTaskSpec{newTaskSpec}, edges)
@@ -501,9 +505,9 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 		for _, t := range result.Cancelled {
 			cancelledIDs[t.TaskID] = true
 		}
-		for id := range unblockedByID {
+		for id, t := range unblockedByID {
 			if !cancelledIDs[id] {
-				result.Unblocked = append(result.Unblocked, id)
+				result.Unblocked = append(result.Unblocked, t)
 			}
 		}
 
@@ -536,7 +540,10 @@ func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName s
 		}
 
 		now := GetCurrentTime()
-		refreshedIDs = refreshStatusInTx(tx, taskTable, depTable, blockedIDs, now)
+		refreshedTasks := refreshStatusInTx(tx, taskTable, depTable, blockedIDs, now)
+		for _, t := range refreshedTasks {
+			refreshedIDs = append(refreshedIDs, t.TaskID)
+		}
 		return nil
 	})
 	return refreshedIDs, err
@@ -570,7 +577,7 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
 // 对齐 Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]
-func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string, now int64) []string {
+func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string, now int64) []*TeamTaskBase {
 	if len(taskIDs) == 0 {
 		return nil
 	}
@@ -604,7 +611,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 		countMap[c.TaskID] = c.Unresolved
 	}
 
-	var refreshedIDs []string
+	var refreshedTasks []*TeamTaskBase
 	for _, task := range candidates {
 		unresolved := countMap[task.TaskID]
 		// 对齐 Python: pending + unresolved > 0 → blocked
@@ -612,18 +619,22 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
 				Select("status", "updated_at").
 				Updates(&TeamTaskBase{Status: fsm.TaskStatusBlocked, UpdatedAt: now})
-			refreshedIDs = append(refreshedIDs, task.TaskID)
+			task.Status = fsm.TaskStatusBlocked
+			task.UpdatedAt = now
+			refreshedTasks = append(refreshedTasks, &task)
 			logger.Info(logComponent).Str("task_id", task.TaskID).Int("unresolved", unresolved).Msg("任务被阻塞")
 		} else if task.Status == fsm.TaskStatusBlocked && unresolved == 0 {
 			// 对齐 Python: blocked + unresolved == 0 → pending
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
 				Select("status", "updated_at").
 				Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, UpdatedAt: now})
-			refreshedIDs = append(refreshedIDs, task.TaskID)
+			task.Status = fsm.TaskStatusPending
+			task.UpdatedAt = now
+			refreshedTasks = append(refreshedTasks, &task)
 			logger.Info(logComponent).Str("task_id", task.TaskID).Msg("任务解除阻塞")
 		}
 	}
-	return refreshedIDs
+	return refreshedTasks
 }
 
 // terminateTaskInTx 终止任务 + 标记依赖 resolved + 传播解除阻塞。
@@ -676,8 +687,13 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 		Distinct().Find(&downstreamIDs)
 
 	// 对齐 Python: 刷新下游任务状态
-	refreshed := refreshStatusInTx(tx, taskTable, depTable, downstreamIDs, now)
-	return refreshed, nil
+	refreshedTasks := refreshStatusInTx(tx, taskTable, depTable, downstreamIDs, now)
+	// terminateTaskInTx 返回 unblocked task IDs（对齐 Python 返回值）
+	var unblockedIDs []string
+	for _, t := range refreshedTasks {
+		unblockedIDs = append(unblockedIDs, t.TaskID)
+	}
+	return unblockedIDs, nil
 }
 
 // stageNewTasksInTx INSERT 新任务行。
