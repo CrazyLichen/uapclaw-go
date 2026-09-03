@@ -176,7 +176,7 @@ func (s *UserMemStore) Update(ctx context.Context, userID, scopeID, memID string
 	}
 
 	oldData, _ := s.kvStore.Get(ctx, userMemKey)
-	if oldData == nil || len(oldData) == 0 {
+	if len(oldData) == 0 {
 		jsonData, err := json.Marshal(data)
 		if err != nil {
 			return false, err
@@ -268,14 +268,12 @@ func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType stri
 		return nil, nil
 	}
 	userIDsValue, _ := s.kvStore.Get(ctx, userIDsKey)
-	if userIDsValue == nil || len(userIDsValue) == 0 {
+	if len(userIDsValue) == 0 {
 		return nil, nil
 	}
 	allIDs := getAllIDs(string(userIDsValue))
 	memIDs := make([]string, len(allIDs))
-	for i, id := range allIDs {
-		memIDs[i] = id
-	}
+	copy(memIDs, allIDs)
 	return s.BatchGet(ctx, userID, scopeID, memIDs)
 }
 
@@ -291,14 +289,12 @@ func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic st
 		return nil, nil
 	}
 	userMemTopicValue, _ := s.kvStore.Get(ctx, userMemTopicKey)
-	if userMemTopicValue == nil || len(userMemTopicValue) == 0 {
+	if len(userMemTopicValue) == 0 {
 		return nil, nil
 	}
 	allIDs := getAllIDs(string(userMemTopicValue))
 	memIDs := make([]string, len(allIDs))
-	for i, id := range allIDs {
-		memIDs[i] = id
-	}
+	copy(memIDs, allIDs)
 	return s.BatchGet(ctx, userID, scopeID, memIDs)
 }
 
@@ -314,7 +310,7 @@ func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, s
 		return nil, nil
 	}
 	userIDsValue, _ := s.kvStore.Get(ctx, userIDsKey)
-	if userIDsValue == nil || len(userIDsValue) == 0 {
+	if len(userIDsValue) == 0 {
 		return nil, nil
 	}
 	memIDs := getIDsInRange(string(userIDsValue), startIdx, endIdx)
@@ -367,7 +363,7 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 	}
 
 	data, _ := s.kvStore.Get(ctx, userMemKey)
-	if data != nil && len(data) > 0 {
+	if len(data) > 0 {
 		var dictValue map[string]any
 		if err := json.Unmarshal(data, &dictValue); err == nil {
 			if memType, ok := dictValue[memTypeFieldKey]; ok {
@@ -427,7 +423,7 @@ func (s *UserMemStore) get(ctx context.Context, memKey string) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	if memValue == nil || len(memValue) == 0 {
+	if len(memValue) == 0 {
 		return nil, nil
 	}
 	var result map[string]any
