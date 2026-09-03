@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -32,10 +33,12 @@ var ()
 // AutoTitle 从首条用户消息自动生成会话标题。
 //
 // 对齐 Python _auto_title(content): 截取前 50 字符，换行替换为空格
+// 注意：Python len() 计算字符数，Go len() 计算字节数，需用 utf8.RuneCountInString 对齐
 func AutoTitle(content string) string {
 	title := strings.TrimSpace(strings.ReplaceAll(content, "\n", " "))
-	if len(title) > titleMaxLen {
-		title = title[:titleMaxLen] + "..."
+	if utf8.RuneCountInString(title) > titleMaxLen {
+		runes := []rune(title)
+		title = string(runes[:titleMaxLen]) + "..."
 	}
 	return title
 }

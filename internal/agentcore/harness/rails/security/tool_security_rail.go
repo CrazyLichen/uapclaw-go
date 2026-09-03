@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -338,7 +338,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 			logger.Warn(permRailLogComponent).
 				Err(err).
 				Msg("permission.scene_hook.failed")
-		} else if sceneOut != nil && len(sceneOut) > 0 {
+		} else if len(sceneOut) > 0 {
 			switch sceneOut[0] {
 			case "approve":
 				return r.Approve("")
@@ -566,9 +566,9 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		return input
 	case *interrupt.ConfirmPayload:
 		return &harnesssecurity.PermissionConfirmResponse{
-			Approved:     input.Approved,
-			Feedback:     input.Feedback,
-			AutoConfirm:  input.AutoConfirm,
+			Approved:    input.Approved,
+			Feedback:    input.Feedback,
+			AutoConfirm: input.AutoConfirm,
 		}
 	case map[string]any:
 		approved, _ := input["approved"].(bool)
@@ -581,9 +581,9 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		feedback, _ := input["feedback"].(string)
 		autoConfirm, _ := input["auto_confirm"].(bool)
 		return &harnesssecurity.PermissionConfirmResponse{
-			Approved:     approved,
-			Feedback:     feedback,
-			AutoConfirm:  autoConfirm,
+			Approved:    approved,
+			Feedback:    feedback,
+			AutoConfirm: autoConfirm,
 		}
 	case string:
 		var raw map[string]any

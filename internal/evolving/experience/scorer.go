@@ -672,7 +672,7 @@ func parseTimestamp(ts string) (time.Time, error) {
 			return t.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("cannot parse timestamp: %s", ts)
+	return time.Time{}, fmt.Errorf("无法解析时间戳: %s", ts)
 }
 
 // truncateString 截断字符串到最大长度。

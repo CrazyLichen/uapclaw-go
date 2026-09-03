@@ -265,7 +265,8 @@ func TestGetResolvedPaths_未初始化无resources(t *testing.T) {
 
 // TestResourcesDir_环境变量不存在 测试 ResourcesDir 环境变量指向不存在的目录
 func TestResourcesDir_环境变量不存在(t *testing.T) {
-	_ = os.Setenv(EnvResourcesDir, "/nonexistent/path")
+	nonexistentPath := filepath.Join(t.TempDir(), "no_such_dir")
+	_ = os.Setenv(EnvResourcesDir, nonexistentPath)
 	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	_, err := ResourcesDir()

@@ -265,8 +265,8 @@ type stubMemoryIndexManager struct {
 	llmModel *llm.Model
 }
 
-func (s *stubMemoryIndexManager) Initialize(_ context.Context) error                  { return nil }
-func (s *stubMemoryIndexManager) Sync(_ context.Context, _ string, _ bool) error       { return nil }
+func (s *stubMemoryIndexManager) Initialize(_ context.Context) error             { return nil }
+func (s *stubMemoryIndexManager) Sync(_ context.Context, _ string, _ bool) error { return nil }
 func (s *stubMemoryIndexManager) Search(_ context.Context, _ string, _ map[string]any) ([]SearchResult, error) {
 	return nil, nil
 }
@@ -275,4 +275,4 @@ func (s *stubMemoryIndexManager) ReadFile(_ context.Context, _ string, _ *int, _
 }
 func (s *stubMemoryIndexManager) Status() *StatusResult { return nil }
 func (s *stubMemoryIndexManager) LLM() *llm.Model       { return s.llmModel }
-func (s *stubMemoryIndexManager) Close() error           { return nil }
+func (s *stubMemoryIndexManager) Close() error          { return nil }

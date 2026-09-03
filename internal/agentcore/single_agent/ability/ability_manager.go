@@ -310,9 +310,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 		if am.isToolInMcpServer(item.card.ID) {
 			continue
 		}
-		if info := item.card.ToolInfo(); info != nil {
-			toolInfos = append(toolInfos, info)
-		}
+		toolInfos = append(toolInfos, item.card.ToolInfo())
 	}
 
 	// 2. WorkflowCards → ToolInfo（工作流卡片转工具信息）
@@ -329,9 +327,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 				continue
 			}
 		}
-		if info := wf.ToolInfo(); info != nil {
-			toolInfos = append(toolInfos, info)
-		}
+		toolInfos = append(toolInfos, wf.ToolInfo())
 	}
 
 	// 3. AgentCards → ToolInfo（Agent 卡片转工具信息）
@@ -348,9 +344,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 				continue
 			}
 		}
-		if info := ag.ToolInfo(); info != nil {
-			toolInfos = append(toolInfos, info)
-		}
+		toolInfos = append(toolInfos, ag.ToolInfo())
 	}
 
 	// 4. MCP 懒加载：遍历 mcpServers，通过 ResourceMgr 获取 MCP 工具信息，

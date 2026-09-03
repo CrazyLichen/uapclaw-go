@@ -1341,6 +1341,9 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.15
 github.com/mattn/go-isatty
+# github.com/mattn/go-pointer v0.0.1
+## explicit
+github.com/mattn/go-pointer
 # github.com/mattn/go-sqlite3 v1.14.22
 ## explicit; go 1.19
 github.com/mattn/go-sqlite3
@@ -1562,6 +1565,12 @@ github.com/tklauser/numcpus
 # github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802
 ## explicit
 github.com/tmc/grpc-websocket-proxy/wsproxy
+# github.com/tree-sitter/go-tree-sitter v0.25.0
+## explicit; go 1.23
+github.com/tree-sitter/go-tree-sitter
+# github.com/tree-sitter/tree-sitter-bash v0.25.1
+## explicit; go 1.22
+github.com/tree-sitter/tree-sitter-bash/bindings/go
 # github.com/twpayne/go-geom v1.6.1
 ## explicit; go 1.22
 github.com/twpayne/go-geom

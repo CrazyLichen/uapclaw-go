@@ -25,6 +25,15 @@
 //	├── agent_data.go       # agent-data.json 索引文件生成与刷新
 //	├── proxy_context.go    # SkillNet 代理环境变量上下文
 //	└── safe_rmtree.go      # 安全删除目录（带重试和 Windows 权限修复）
+//	└── skilldev/           # 技能开发子包（SkillDev 服务、Schema、Store、Workspace 等）
+//	    ├── doc.go          # 子包文档
+//	    ├── schema.go       # 技能开发 Schema 定义
+//	    ├── deps.go         # 依赖管理
+//	    ├── store.go        # 技能开发 Store
+//	    ├── workspace.go    # 工作区管理
+//	    ├── context.go      # 上下文管理
+//	    ├── pipeline.go     # 技能开发 Pipeline
+//	    └── service.go      # 技能开发 Service
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/server/runtime/skill/skilldev/state_utils.py → state_utils.go

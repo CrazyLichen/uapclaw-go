@@ -7,7 +7,8 @@
 //
 //	common/
 //	├── doc.go                  # 包文档
-//	└── kv_prefix_registry.go   # KV 前缀注册表
+//	├── kv_prefix_registry.go   # KV 前缀注册表
+//	└── base.go                 # 记忆索引名称生成/解析 + 命中结果解析
 //
 // 对应 Python 代码：
 //

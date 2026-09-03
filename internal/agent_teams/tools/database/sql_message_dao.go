@@ -29,27 +29,6 @@ type SQLMessageDao struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// withTx 返回绑定指定事务的 DAO 实例。
-func (d *SQLMessageDao) withTx(tx *gorm.DB) *SQLMessageDao {
-	return &SQLMessageDao{db: tx}
-}
-
-// msgTableName 获取当前 session 的消息表名。
-func (d *SQLMessageDao) msgTableName(ctx context.Context) string {
-	sessionID := sessionctx.GetSessionID(ctx)
-	suffix := SanitizeSessionIDForTable(sessionID)
-	return "team_message_" + suffix
-}
-
-// readStatusTableName 获取当前 session 的已读状态表名。
-func (d *SQLMessageDao) readStatusTableName(ctx context.Context) string {
-	sessionID := sessionctx.GetSessionID(ctx)
-	suffix := SanitizeSessionIDForTable(sessionID)
-	return "message_read_status_" + suffix
-}
-
 // GetMessage 按 ID 查消息。返回 nil 表示不存在。
 // 对齐 Python: get_message(message_id) → Optional[TeamMessageBase]
 func (d *SQLMessageDao) GetMessage(ctx context.Context, messageID string) (*TeamMessageBase, error) {
@@ -217,4 +196,25 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 		)
 	}
 	return true
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// withTx 返回绑定指定事务的 DAO 实例。
+func (d *SQLMessageDao) withTx(tx *gorm.DB) *SQLMessageDao {
+	return &SQLMessageDao{db: tx}
+}
+
+// msgTableName 获取当前 session 的消息表名。
+func (d *SQLMessageDao) msgTableName(ctx context.Context) string {
+	sessionID := sessionctx.GetSessionID(ctx)
+	suffix := SanitizeSessionIDForTable(sessionID)
+	return "team_message_" + suffix
+}
+
+// readStatusTableName 获取当前 session 的已读状态表名。
+func (d *SQLMessageDao) readStatusTableName(ctx context.Context) string {
+	sessionID := sessionctx.GetSessionID(ctx)
+	suffix := SanitizeSessionIDForTable(sessionID)
+	return "message_read_status_" + suffix
 }

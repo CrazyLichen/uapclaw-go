@@ -90,7 +90,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("No valid summary docs to add")
+			Msg("无有效摘要文档可添加")
 		return nil, nil
 	}
 

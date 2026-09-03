@@ -19,8 +19,8 @@ func TestNewInMemoryTrajectoryStore(t *testing.T) {
 	assert.NotNil(t, store.data)
 }
 
-// TestInMemoryTrajectoryStore_SaveAndLoad 保存和加载
-func TestInMemoryTrajectoryStore_SaveAndLoad(t *testing.T) {
+// TestInMemoryTrajectoryStore_保存和加载 保存和加载
+func TestInMemoryTrajectoryStore_保存和加载(t *testing.T) {
 	store := NewInMemoryTrajectoryStore()
 	traj := &Trajectory{
 		ExecutionID: "exec-1",
@@ -41,8 +41,8 @@ func TestInMemoryTrajectoryStore_SaveAndLoad(t *testing.T) {
 	assert.Nil(t, nilResult)
 }
 
-// TestInMemoryTrajectoryStore_SaveWithVersion 版本隔离
-func TestInMemoryTrajectoryStore_SaveWithVersion(t *testing.T) {
+// TestInMemoryTrajectoryStore_版本隔离保存 版本隔离
+func TestInMemoryTrajectoryStore_版本隔离保存(t *testing.T) {
 	store := NewInMemoryTrajectoryStore()
 	traj := &Trajectory{
 		ExecutionID: "exec-1",
@@ -136,8 +136,8 @@ func TestNewFileTrajectoryStore(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
-// TestFileTrajectoryStore_SaveAndLoad 保存和加载
-func TestFileTrajectoryStore_SaveAndLoad(t *testing.T) {
+// TestFileTrajectoryStore_保存和加载 保存和加载
+func TestFileTrajectoryStore_保存和加载(t *testing.T) {
 	dir := t.TempDir()
 	store := NewFileTrajectoryStore(dir)
 
@@ -205,8 +205,8 @@ func TestFileTrajectoryStore_Load不存在(t *testing.T) {
 	assert.Nil(t, loaded)
 }
 
-// TestFileTrajectoryStore_SaveWithVersion 版本隔离
-func TestFileTrajectoryStore_SaveWithVersion(t *testing.T) {
+// TestFileTrajectoryStore_版本隔离保存 版本隔离
+func TestFileTrajectoryStore_版本隔离保存(t *testing.T) {
 	dir := t.TempDir()
 	store := NewFileTrajectoryStore(dir)
 

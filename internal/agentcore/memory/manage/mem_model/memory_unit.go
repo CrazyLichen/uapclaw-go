@@ -106,6 +106,17 @@ const (
 	OperationTypeDelete
 )
 
+// SupportMemoryType 支持的记忆类型枚举（仅包含支持写入和读取的类型）。
+// 对齐 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (SupportMemoryType)
+type SupportMemoryType int
+
+const (
+	// SupportMemoryTypeUserProfile 用户画像
+	SupportMemoryTypeUserProfile SupportMemoryType = iota
+	// SupportMemoryTypeSummary 摘要
+	SupportMemoryTypeSummary
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -188,6 +199,38 @@ func (ot OperationType) String() string {
 		return "delete"
 	default:
 		return "add"
+	}
+}
+
+// AllSupportMemoryTypeValues 返回所有支持记忆类型的字符串值列表。
+func AllSupportMemoryTypeValues() []string {
+	return []string{
+		SupportMemoryTypeUserProfile.String(),
+		SupportMemoryTypeSummary.String(),
+	}
+}
+
+// ParseSupportMemoryType 从字符串解析 SupportMemoryType，未匹配时返回 SupportMemoryTypeUserProfile。
+func ParseSupportMemoryType(s string) SupportMemoryType {
+	switch s {
+	case "user_profile":
+		return SupportMemoryTypeUserProfile
+	case "summary":
+		return SupportMemoryTypeSummary
+	default:
+		return SupportMemoryTypeUserProfile
+	}
+}
+
+// String 实现 fmt.Stringer 接口，对齐 Python SupportMemoryType.value
+func (t SupportMemoryType) String() string {
+	switch t {
+	case SupportMemoryTypeUserProfile:
+		return "user_profile"
+	case SupportMemoryTypeSummary:
+		return "summary"
+	default:
+		return "user_profile"
 	}
 }
 

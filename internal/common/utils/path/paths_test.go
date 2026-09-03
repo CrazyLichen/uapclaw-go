@@ -288,7 +288,8 @@ func TestConfigDir_已初始化_无回退(t *testing.T) {
 }
 
 func TestResourcesDir_环境变量不存在(t *testing.T) {
-	_ = os.Setenv(EnvResourcesDir, "/nonexistent/path")
+	nonexistentPath := filepath.Join(t.TempDir(), "no_such_dir")
+	_ = os.Setenv(EnvResourcesDir, nonexistentPath)
 	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	_, err := ResourcesDir()

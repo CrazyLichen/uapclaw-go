@@ -48,11 +48,11 @@ func TestEvaluateTieredPolicy_内置规则CRITICAL普通模式(t *testing.T) {
 		"permission_mode": "normal",
 		"rules": []any{
 			map[string]any{
-				"id":        "test_critical_rule",
-				"tools":     []string{"bash"},
+				"id":         "test_critical_rule",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "rm -rf",
-				"severity":  "CRITICAL",
+				"pattern":    "rm -rf",
+				"severity":   "CRITICAL",
 			},
 		},
 	}
@@ -70,11 +70,11 @@ func TestEvaluateTieredPolicy_内置规则CRITICAL严格模式(t *testing.T) {
 		"permission_mode": "strict",
 		"rules": []any{
 			map[string]any{
-				"id":        "test_critical_strict",
-				"tools":     []string{"bash"},
+				"id":         "test_critical_strict",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "rm -rf",
-				"severity":  "CRITICAL",
+				"pattern":    "rm -rf",
+				"severity":   "CRITICAL",
 			},
 		},
 	}
@@ -89,11 +89,11 @@ func TestEvaluateTieredPolicy_approval覆盖匹配(t *testing.T) {
 	config := map[string]any{
 		"approval_overrides": []any{
 			map[string]any{
-				"id":        "allow_ls",
-				"tools":     []string{"bash"},
+				"id":         "allow_ls",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "ls",
-				"action":    "allow",
+				"pattern":    "ls",
+				"action":     "allow",
 			},
 		},
 	}
@@ -122,11 +122,11 @@ func TestEvaluateTieredPolicy_shell元字符加approval覆盖(t *testing.T) {
 	config := map[string]any{
 		"approval_overrides": []any{
 			map[string]any{
-				"id":        "allow_git_status_pipe",
-				"tools":     []string{"bash"},
+				"id":         "allow_git_status_pipe",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "re:^git\\s+status$",
-				"action":    "allow",
+				"pattern":    "re:^git\\s+status$",
+				"action":     "allow",
 			},
 		},
 	}
@@ -226,17 +226,17 @@ func TestMatchedRuleUsesApprovalOverride_判断(t *testing.T) {
 
 // TestRuleToolsCategoryConsistent_同类 测试同类工具返回 true
 func TestRuleToolsCategoryConsistent_同类(t *testing.T) {
-	assert.True(t, RuleToolsCategoryConsistent([]string{"bash", "mcp_exec_command"}))   // 同为 shell
-	assert.True(t, RuleToolsCategoryConsistent([]string{"read_file", "write_file"}))   // 同为 path
-	assert.True(t, RuleToolsCategoryConsistent([]string{"bash"}))                      // 单个工具
+	assert.True(t, RuleToolsCategoryConsistent([]string{"bash", "mcp_exec_command"})) // 同为 shell
+	assert.True(t, RuleToolsCategoryConsistent([]string{"read_file", "write_file"}))  // 同为 path
+	assert.True(t, RuleToolsCategoryConsistent([]string{"bash"}))                     // 单个工具
 }
 
 // TestRuleToolsCategoryConsistent_混合 测试混合工具类别返回 false
 func TestRuleToolsCategoryConsistent_混合(t *testing.T) {
-	assert.False(t, RuleToolsCategoryConsistent([]string{"bash", "read_file"}))         // shell + path
+	assert.False(t, RuleToolsCategoryConsistent([]string{"bash", "read_file"}))              // shell + path
 	assert.False(t, RuleToolsCategoryConsistent([]string{"read_file", "mcp_fetch_webpage"})) // path + network
-	assert.False(t, RuleToolsCategoryConsistent([]string{}))                            // 空列表
-	assert.False(t, RuleToolsCategoryConsistent([]string{"unknown_tool"}))              // 未知类别
+	assert.False(t, RuleToolsCategoryConsistent([]string{}))                                 // 空列表
+	assert.False(t, RuleToolsCategoryConsistent([]string{"unknown_tool"}))                   // 未知类别
 }
 
 // TestShellPatternMatches_通配符 测试通配符模式匹配
@@ -308,11 +308,11 @@ func TestEvaluateTieredPolicy_用户规则deny短路(t *testing.T) {
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "deny_env",
-				"tools":     []string{"read_file"},
+				"id":         "deny_env",
+				"tools":      []string{"read_file"},
 				"match_type": "path",
-				"pattern":   "re:\\.env$",
-				"action":    "deny",
+				"pattern":    "re:\\.env$",
+				"action":     "deny",
 			},
 		},
 	}
@@ -326,11 +326,11 @@ func TestEvaluateTieredPolicy_路径工具匹配规则(t *testing.T) {
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "ask_tmp",
-				"tools":     []string{"read_file"},
+				"id":         "ask_tmp",
+				"tools":      []string{"read_file"},
 				"match_type": "path",
-				"pattern":   "/tmp/*",
-				"severity":  "HIGH",
+				"pattern":    "/tmp/*",
+				"severity":   "HIGH",
 			},
 		},
 	}
@@ -344,11 +344,11 @@ func TestEvaluateTieredPolicy_规则不匹配(t *testing.T) {
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "deny_env",
-				"tools":     []string{"read_file"},
+				"id":         "deny_env",
+				"tools":      []string{"read_file"},
 				"match_type": "path",
-				"pattern":   "re:\\.env$",
-				"action":    "deny",
+				"pattern":    "re:\\.env$",
+				"action":     "deny",
 			},
 		},
 	}
@@ -384,11 +384,11 @@ func TestEvaluateTieredPolicy_网络工具无参数规则(t *testing.T) {
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "deny_url",
-				"tools":     []string{"mcp_fetch_webpage"},
+				"id":         "deny_url",
+				"tools":      []string{"mcp_fetch_webpage"},
 				"match_type": "url",
-				"pattern":   "re:evil\\.com",
-				"severity":  "CRITICAL",
+				"pattern":    "re:evil\\.com",
+				"severity":   "CRITICAL",
 			},
 		},
 	}
@@ -414,11 +414,11 @@ func TestEvaluateTieredPolicy_shell子命令聚合(t *testing.T) {
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "deny_rm",
-				"tools":     []string{"bash"},
+				"id":         "deny_rm",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "rm *", // 通配符匹配 "rm -rf /" 等
-				"action":    "deny",
+				"pattern":    "rm *", // 通配符匹配 "rm -rf /" 等
+				"action":     "deny",
 			},
 		},
 	}
@@ -451,20 +451,20 @@ func TestEvaluateTieredPolicy_approval覆盖优先于规则命中(t *testing.T) 
 	config := map[string]any{
 		"rules": []any{
 			map[string]any{
-				"id":        "ask_ls",
-				"tools":     []string{"bash"},
+				"id":         "ask_ls",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "ls",
-				"severity":  "HIGH",
+				"pattern":    "ls",
+				"severity":   "HIGH",
 			},
 		},
 		"approval_overrides": []any{
 			map[string]any{
-				"id":        "allow_ls",
-				"tools":     []string{"bash"},
+				"id":         "allow_ls",
+				"tools":      []string{"bash"},
 				"match_type": "command",
-				"pattern":   "ls",
-				"action":    "allow",
+				"pattern":    "ls",
+				"action":     "allow",
 			},
 		},
 	}

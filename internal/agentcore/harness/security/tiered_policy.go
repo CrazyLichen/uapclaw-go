@@ -52,7 +52,7 @@ const (
 // 对齐 Python: _STRICT_ORDER (tiered_policy.py L28)
 var strictOrder = map[PermissionLevel]int{
 	PermissionLevelDeny:  0,
-	PermissionLevelAsk:  1,
+	PermissionLevelAsk:   1,
 	PermissionLevelAllow: 2,
 }
 
@@ -131,13 +131,13 @@ func EvaluateTieredPolicy(permissionConfig map[string]any, toolName string, tool
 
 	builtinRules := getBuiltinSecurityRules()
 	invCtx := &tieredInvocationContext{
-		Mode:             mode,
-		BuiltinRules:     builtinRules,
-		Rules:            rules,
+		Mode:              mode,
+		BuiltinRules:      builtinRules,
+		Rules:             rules,
 		ApprovalOverrides: approvalOverrides,
-		BaselineLevel:    bl,
-		BaselineRule:     blRule,
-		DefaultsCfg:      defaultsCfg,
+		BaselineLevel:     bl,
+		BaselineRule:      blRule,
+		DefaultsCfg:       defaultsCfg,
 	}
 
 	// Shell "simple" 含子命令：逐个评估
@@ -282,11 +282,11 @@ func GetBuiltinSecurityRules() []map[string]any {
 		tools := make([]string, len(r.TargetTools))
 		copy(tools, r.TargetTools)
 		entry := map[string]any{
-			"id":        r.ID,
-			"tools":     tools,
+			"id":         r.ID,
+			"tools":      tools,
 			"match_type": r.MatchType,
-			"pattern":   r.Pattern,
-			"severity":  r.Severity,
+			"pattern":    r.Pattern,
+			"severity":   r.Severity,
 		}
 		if r.Action != "" {
 			entry["action"] = r.Action

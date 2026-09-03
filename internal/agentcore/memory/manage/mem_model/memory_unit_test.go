@@ -135,3 +135,31 @@ func TestSummaryUnitFields(t *testing.T) {
 		t.Errorf("Summary = %q, want %q", unit.Summary, "用户偏好摘要")
 	}
 }
+
+func TestSupportMemoryType_String(t *testing.T) {
+	if SupportMemoryTypeUserProfile.String() != "user_profile" {
+		t.Errorf("SupportMemoryTypeUserProfile.String() = %q, want %q", SupportMemoryTypeUserProfile.String(), "user_profile")
+	}
+	if SupportMemoryTypeSummary.String() != "summary" {
+		t.Errorf("SupportMemoryTypeSummary.String() = %q, want %q", SupportMemoryTypeSummary.String(), "summary")
+	}
+}
+
+func TestParseSupportMemoryType(t *testing.T) {
+	if ParseSupportMemoryType("user_profile") != SupportMemoryTypeUserProfile {
+		t.Error("ParseSupportMemoryType(user_profile) != SupportMemoryTypeUserProfile")
+	}
+	if ParseSupportMemoryType("summary") != SupportMemoryTypeSummary {
+		t.Error("ParseSupportMemoryType(summary) != SupportMemoryTypeSummary")
+	}
+	if ParseSupportMemoryType("unknown") != SupportMemoryTypeUserProfile {
+		t.Error("ParseSupportMemoryType(unknown) 应返回 SupportMemoryTypeUserProfile")
+	}
+}
+
+func TestAllSupportMemoryTypeValues(t *testing.T) {
+	vals := AllSupportMemoryTypeValues()
+	if len(vals) != 2 {
+		t.Errorf("AllSupportMemoryTypeValues() 返回 %d 项, want 2", len(vals))
+	}
+}

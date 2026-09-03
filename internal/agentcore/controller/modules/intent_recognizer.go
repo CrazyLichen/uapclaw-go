@@ -54,12 +54,14 @@ type EventHandlerWithIntentRecognition struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponentIntent 日志组件标识
 const logComponentIntent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntentRecognizer 创建意图识别器。
@@ -150,13 +152,13 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 	if len(files) > 0 || len(jsons) > 0 {
 		return nil, exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
-			exception.WithMsg("Inputs with files or jsons are not supported for intent recognition."),
+			exception.WithMsg("意图识别不支持包含文件或 JSON 的输入。"),
 		)
 	}
 	if len(texts) > 1 {
 		return nil, exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
-			exception.WithMsg("Multiple inputs are not supported for intent recognition."),
+			exception.WithMsg("意图识别不支持多个输入。"),
 		)
 	}
 
@@ -550,18 +552,27 @@ func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.
 		)
 	}
 
-	if _, err := h.TaskScheduler.CancelTask(ctx, intent.TargetTaskID); err != nil {
-		logger.Warn(logComponentIntent).Err(err).Str("task_id", intent.TargetTaskID).Msg("取消旧任务失败，继续修改")
+	if len(intent.DependTaskID) == 0 {
+		return nil, exception.NewBaseError(
+			exception.StatusAgentControllerRuntimeError,
+			exception.WithMsg("修改任务意图缺少 DependTaskID，无法定位旧任务"),
+		)
+	}
+	// 对齐 CONTINUE_TASK 模式：用 DependTaskID[0] 查找旧任务，而非 TargetTaskID（新生成 UUID）
+	oldTaskID := intent.DependTaskID[0]
+
+	if _, err := h.TaskScheduler.CancelTask(ctx, oldTaskID); err != nil {
+		logger.Warn(logComponentIntent).Err(err).Str("task_id", oldTaskID).Msg("取消旧任务失败，继续修改")
 	}
 
-	tasks, err := h.TaskManager.GetTask(ctx, &TaskFilter{TaskID: intent.TargetTaskID})
+	tasks, err := h.TaskManager.GetTask(ctx, &TaskFilter{TaskID: oldTaskID})
 	if err != nil {
 		return nil, err
 	}
 	if len(tasks) == 0 {
 		return nil, exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
-			exception.WithMsg(fmt.Sprintf("任务未找到: %s", intent.TargetTaskID)),
+			exception.WithMsg(fmt.Sprintf("任务未找到: %s", oldTaskID)),
 		)
 	}
 
