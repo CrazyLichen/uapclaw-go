@@ -45,8 +45,8 @@ type SemanticStore struct {
 // 对齐 Python: SemanticStore.__init__
 func NewSemanticStore(vectorStore vector.BaseVectorStore, embeddingModel embedding.BaseEmbedding) *SemanticStore {
 	return &SemanticStore{
-		embeddingModel:    embeddingModel,
-		vectorStore:       vectorStore,
+		embeddingModel:     embeddingModel,
+		vectorStore:        vectorStore,
 		createdCollections: make(map[string]struct{}),
 	}
 }

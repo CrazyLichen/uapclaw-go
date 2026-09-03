@@ -242,8 +242,8 @@ func TestTransformMemoryDocFieldOperation_回调(t *testing.T) {
 // TestAddMemoryDocFieldOperation_字段 测试 AddMemoryDocFieldOperation 字段
 func TestAddMemoryDocFieldOperation_字段(t *testing.T) {
 	op := AddMemoryDocFieldOperation{
-		BaseOperation:     BaseOperation{Metadata: OperationMetadata{SchemaVersion: 1}},
-		FieldName:         "new_field",
+		BaseOperation:      BaseOperation{Metadata: OperationMetadata{SchemaVersion: 1}},
+		FieldName:          "new_field",
 		DefaultValueOrFunc: "default_val",
 	}
 	if op.FieldName != "new_field" {
@@ -258,8 +258,8 @@ func TestAddMemoryDocFieldOperation_字段(t *testing.T) {
 func TestAddMemoryDocFieldOperation_函数默认值(t *testing.T) {
 	fn := func() any { return 42 }
 	op := AddMemoryDocFieldOperation{
-		BaseOperation:     BaseOperation{Metadata: OperationMetadata{SchemaVersion: 2}},
-		FieldName:         "computed_field",
+		BaseOperation:      BaseOperation{Metadata: OperationMetadata{SchemaVersion: 2}},
+		FieldName:          "computed_field",
 		DefaultValueOrFunc: fn,
 	}
 	// 运行时判断是值还是函数

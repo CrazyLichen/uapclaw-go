@@ -42,10 +42,10 @@ type mutationContext struct {
 	addEdges []EdgeSpec
 
 	// 步骤间共享数据（闭包操作）
-	stagedTasks   map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
-	endpointTasks map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
-	newEdgeRows   []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
-	refreshedTasks []*TeamTaskBase         // 步骤5产出：状态刷新的任务列表
+	stagedTasks    map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
+	endpointTasks  map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
+	newEdgeRows    []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
+	refreshedTasks []*TeamTaskBase          // 步骤5产出：状态刷新的任务列表
 
 	// 失败标记（替代 Python _MutationFailure）
 	failReason string

@@ -704,8 +704,8 @@ func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
 	// 对齐 Python: 缺 title 或 content 的规格应被跳过
 	specs := []TaskCreateSpec{
 		{Title: "有效任务", Content: "内容"},
-		{Title: "", Content: "缺标题"},  // 应跳过
-		{Title: "缺内容", Content: ""},  // 应跳过
+		{Title: "", Content: "缺标题"}, // 应跳过
+		{Title: "缺内容", Content: ""}, // 应跳过
 		{Title: "又一个有效", Content: "内容2"},
 	}
 	tasks, err := tm.AddBatch(ctx, specs)
