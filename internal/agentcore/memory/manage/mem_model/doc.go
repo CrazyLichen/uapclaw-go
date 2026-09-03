@@ -16,7 +16,9 @@
 //	├── sql_message_store.go            # SqlMessageStore 消息存储实现
 //	├── message_manager.go              # MessageManager 消息管理器
 //	├── scope_user_mapping_manager.go   # ScopeUserMappingManager 作用域用户映射管理器
-//	└── data_id_manager.go              # DataIdManager 唯一 ID 生成器
+//	├── data_id_manager.go              # DataIdManager 唯一 ID 生成器
+//	├── user_mem_store.go               # UserMemStore KV 记忆 CRUD
+//	└── semantic_store.go               # SemanticStore 向量语义检索
 //
 // 对应 Python 代码：
 //
@@ -43,4 +45,9 @@
 //	MessageManager            — 消息管理器
 //	ScopeUserMappingManager   — 作用域用户映射管理器
 //	DataIdManager             — 唯一 ID 生成器，12字节=6时间+3随机+3哈希
+//	UserMemStore              — 基于 KV 存储的用户记忆 CRUD
+//	SemanticStore             — 向量语义检索存储
+//	DocTuple                  — 文档元组 (id, text)
+//	SearchResult              — 语义搜索结果 (id, score)
+//	SupportMemoryType         — 支持的记忆类型枚举
 package mem_model

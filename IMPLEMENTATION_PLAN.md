@@ -451,7 +451,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.6 | ✅ | FragmentMemoryManager | 片段记忆管理（含冲突检查回填 ✅） | `openjiuwen/core/memory/manage/` |
 | 7.7 | ✅ | SummaryManager / VariableManager | ✅ SummaryManager + ✅ VariableManager（独立实现，不嵌入 memoryManagerBase）+ ✅ KvPrefixRegistry | `openjiuwen/core/memory/manage/` |
 | 7.8 | ✅ | WriteManager / SearchManager / MemUpdateChecker | ✅ MemUpdateChecker LLM 驱动冲突检查 + ✅ PromptApplier（运行时读文件+缓存） + ✅ WriteManager 写入路由器 + ✅ SearchManager 搜索路由器 + ✅ FragmentMemoryManager 冲突检查回填 + ✅ lite runChecker 回填 | `openjiuwen/core/memory/manage/update/` · `search/` · `index/write_manager.py` |
-| 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit | `openjiuwen/core/memory/manage/mem_model/` |
+| 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit；⤴️ 回填 UserMemStore + SemanticStore + SupportMemoryType + memory/common/base.go | `openjiuwen/core/memory/manage/mem_model/` |
 | 7.10 | ✅ | Memory Index | ✅ BaseMemoryIndex 接口 + SimpleMemoryIndex 实现 + BaseMemoryManager 接口 + FragmentMemoryManager + SummaryManager + VariableManager + WriteManager（实际已在 7.6/7.7/7.8 中完成） | `openjiuwen/core/memory/manage/index/` · `openjiuwen/core/foundation/store/` |
 | 7.11 | ☐ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
 | 7.12 | ☐ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
@@ -463,7 +463,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.18 | ☐ | LongTermMemoryExtractor | 长期记忆提取 | `openjiuwen/core/memory/process/extract/` |
 | 7.19 | ☐ | MemoryAnalyzer / Refiner | 记忆精炼 | `openjiuwen/core/memory/process/refine/` |
 | 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
-| 7.21 | ☐ | MigrationPlan | 迁移计划 | `openjiuwen/core/memory/migration/migration_plan.py` |
+| 7.21 | 🔄 | MigrationPlan | 迁移计划（部分提前：OperationRegistry + BaseOperation + Operations + MigrationPlan；⤵️ 7.22-7.23 Migrator + run_migrations 待后续回填） | `openjiuwen/core/memory/migration/migration_plan.py` |
 | 7.22 | ☐ | Migration Operations | 迁移操作注册表（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/operation/` |
 | 7.23 | ☐ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/migrator/` |
 | 7.24 | ☐ | Memory Codec | 记忆编解码 | `openjiuwen/core/memory/codec/` |
