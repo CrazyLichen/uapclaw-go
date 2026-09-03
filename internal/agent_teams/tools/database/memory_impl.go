@@ -629,7 +629,7 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 	}
 
 	result := &CancelAllTasksResult{}
-	unblockedSet := make(map[string]bool)
+	unblockedByID := make(map[string]*TeamTaskBase)
 	for _, task := range db.tasks {
 		if task.TeamName != teamName {
 			continue
@@ -644,9 +644,13 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		}
 		refreshed, _ := db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
 		result.Cancelled = append(result.Cancelled, task)
-		// 收集所有被解除阻塞的任务 ID
+		// 收集被解除阻塞的任务对象
 		for _, id := range refreshed {
-			unblockedSet[id] = true
+			if unblockedTask, exists := db.tasks[id]; exists {
+				if _, already := unblockedByID[id]; !already {
+					unblockedByID[id] = unblockedTask
+				}
+			}
 		}
 	}
 
@@ -655,9 +659,9 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 	for _, t := range result.Cancelled {
 		cancelledSet[t.TaskID] = true
 	}
-	for id := range unblockedSet {
+	for id, t := range unblockedByID {
 		if !cancelledSet[id] {
-			result.Unblocked = append(result.Unblocked, id)
+			result.Unblocked = append(result.Unblocked, t)
 		}
 	}
 

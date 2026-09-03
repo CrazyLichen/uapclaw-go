@@ -831,9 +831,9 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 		for _, t := range result.Cancelled {
 			cancelledIDs[t.TaskID] = true
 		}
-		for id := range unblockedByID {
+		for id, t := range unblockedByID {
 			if !cancelledIDs[id] {
-				result.Unblocked = append(result.Unblocked, id)
+				result.Unblocked = append(result.Unblocked, t)
 			}
 		}
 

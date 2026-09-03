@@ -443,7 +443,14 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
 		TaskID:           taskID,
 	})
-	tm.publishUnblockedEvents(ctx, refreshed)
+	// refreshed 是 []string（unblocked task ID 列表），转换为 []*TeamTaskBase
+	var unblockedTasks []*database.TeamTaskBase
+	for _, id := range refreshed {
+		if t, _ := tm.db.Task().GetTask(ctx, id); t != nil {
+			unblockedTasks = append(unblockedTasks, t)
+		}
+	}
+	tm.publishUnblockedEvents(ctx, unblockedTasks)
 	tm.maybePublishTaskListDrained(ctx)
 	return refreshed, nil
 }
@@ -462,7 +469,14 @@ func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string,
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
 		TaskID:           taskID,
 	})
-	tm.publishUnblockedEvents(ctx, refreshed)
+	// refreshed 是 []string（unblocked task ID 列表），转换为 []*TeamTaskBase
+	var unblockedTasks []*database.TeamTaskBase
+	for _, id := range refreshed {
+		if t, _ := tm.db.Task().GetTask(ctx, id); t != nil {
+			unblockedTasks = append(unblockedTasks, t)
+		}
+	}
+	tm.publishUnblockedEvents(ctx, unblockedTasks)
 	tm.maybePublishTaskListDrained(ctx)
 	return refreshed, nil
 }
@@ -922,11 +936,11 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.Ty
 
 // publishUnblockedEvents 逐条发布 TaskUnblockedEvent。
 // 对齐 Python: TeamTaskManager._publish_unblocked_events()
-func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblockedIDs []string) {
-	for _, id := range unblockedIDs {
+func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblockedTasks []*database.TeamTaskBase) {
+	for _, t := range unblockedTasks {
 		tm.publishTaskEvent(ctx, schema.TaskUnblockedEvent{
 			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
-			TaskID:           id,
+			TaskID:           t.TaskID,
 		})
 	}
 }
