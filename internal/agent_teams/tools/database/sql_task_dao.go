@@ -663,17 +663,22 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
 // 对齐 Python: add_task_with_bidirectional_dependencies(task_id, team_name, ...) → bool
-func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependsOnIDs []string) GraphMutationResult {
+func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	newTaskSpec := NewTaskSpec{
 		TaskID:        task.TaskID,
 		Title:         task.Title,
 		Content:       task.Content,
 		InitialStatus: task.Status,
 	}
-	// 对齐 Python: edges = [(task_id, dep_id) for dep_id in dependencies]
+	// 构建双向 EdgeSpec
 	var edges []EdgeSpec
-	for _, depID := range dependsOnIDs {
+	// dependencies：新任务依赖上游 → 边方向 (new_task, upstream)
+	for _, depID := range dependencies {
 		edges = append(edges, EdgeSpec{TaskID: task.TaskID, DependsOnID: depID})
+	}
+	// dependentTaskIDs：下游依赖新任务 → 边方向 (existing_task, new_task)
+	for _, downstreamID := range dependentTaskIDs {
+		edges = append(edges, EdgeSpec{TaskID: downstreamID, DependsOnID: task.TaskID})
 	}
 
 	result := d.MutateDependencyGraph(ctx, teamName, []NewTaskSpec{newTaskSpec}, edges)

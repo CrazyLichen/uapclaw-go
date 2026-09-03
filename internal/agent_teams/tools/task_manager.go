@@ -33,6 +33,16 @@ type taskAddConfig struct {
 	dependencies []string
 }
 
+// TaskAddWithPriorityOption AddWithPriority 的可选参数。
+type TaskAddWithPriorityOption func(*taskAddWithPriorityConfig)
+
+// taskAddWithPriorityConfig AddWithPriority 的可选配置
+type taskAddWithPriorityConfig struct {
+	taskID           string
+	dependencies     []string    // 对齐 Python: dependencies
+	dependentTaskIDs []string    // 对齐 Python: dependent_task_ids
+}
+
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
 	Task      *database.TeamTaskBase
@@ -115,6 +125,27 @@ func WithTaskID(taskID string) TaskAddOption {
 func WithDependencies(deps []string) TaskAddOption {
 	return func(c *taskAddConfig) {
 		c.dependencies = deps
+	}
+}
+
+// WithPriorityTaskID 设置自定义任务 ID。对齐 Python: add_with_priority(task_id=...)
+func WithPriorityTaskID(taskID string) TaskAddWithPriorityOption {
+	return func(c *taskAddWithPriorityConfig) {
+		c.taskID = taskID
+	}
+}
+
+// WithPriorityDependencies 设置新任务依赖的上游任务。对齐 Python: add_with_priority(dependencies=...)
+func WithPriorityDependencies(deps []string) TaskAddWithPriorityOption {
+	return func(c *taskAddWithPriorityConfig) {
+		c.dependencies = deps
+	}
+}
+
+// WithPriorityDependentTaskIDs 设置依赖新任务的下游任务。对齐 Python: add_with_priority(dependent_task_ids=...)
+func WithPriorityDependentTaskIDs(ids []string) TaskAddWithPriorityOption {
+	return func(c *taskAddWithPriorityConfig) {
+		c.dependentTaskIDs = ids
 	}
 }
 
@@ -483,29 +514,72 @@ func (tm *TeamTaskManager) UpdateTask(ctx context.Context, taskID, title, conten
 }
 
 // AddWithPriority 带双向依赖创建任务。对齐 Python: TeamTaskManager.add_with_priority()
-func (tm *TeamTaskManager) AddWithPriority(ctx context.Context, taskID, title, content string, dependsOnIDs []string, newTasksSpec []database.NewTaskSpec) (database.GraphMutationResult, error) {
+// 支持双向依赖：dependencies（新任务依赖谁）+ dependentTaskIDs（谁依赖新任务）。
+// 有 dependencies 时初始状态为 BLOCKED，否则为 PENDING。
+func (tm *TeamTaskManager) AddWithPriority(ctx context.Context, title, content string, opts ...TaskAddWithPriorityOption) (*database.TeamTaskBase, error) {
+	cfg := &taskAddWithPriorityConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	taskID := cfg.taskID
+	if taskID == "" {
+		taskID = generateTaskID(tm.teamName)
+	}
+
+	// 初始状态逻辑（对齐 Python: 有 dependencies → BLOCKED，否则 PENDING）
+	initialStatus := fsm.TaskStatusPending
+	if len(cfg.dependencies) > 0 {
+		initialStatus = fsm.TaskStatusBlocked
+	}
+
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
 		Title:    title,
 		Content:  content,
-		Status:   fsm.TaskStatusPending,
+		Status:   initialStatus,
 	}
-	result := tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, dependsOnIDs)
+	result := tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, cfg.dependencies, cfg.dependentTaskIDs)
 	if !result.Ok {
-		return result, fmt.Errorf("带依赖创建任务失败: %s", result.Reason)
+		return nil, fmt.Errorf("带依赖创建任务失败: %s", result.Reason)
 	}
-	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
-		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
-		TaskID:           taskID,
-		Status:           fsm.TaskStatusPending,
-	})
-	return result, nil
+
+	// 从 RefreshedTasks 中取最终状态
+	created := findRefreshedTask(result.RefreshedTasks, taskID)
+	if created == nil {
+		created, _ = tm.db.Task().GetTask(ctx, taskID)
+	}
+	if created != nil {
+		tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
+			BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+			TaskID:           created.TaskID,
+			Status:           created.Status,
+		})
+	}
+	return created, nil
 }
 
 // AddAsTopPriority 最高优先级插入。对齐 Python: TeamTaskManager.add_as_top_priority()
-func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content string) (*database.TeamTaskBase, error) {
-	taskID := fmt.Sprintf("task_%s_%d_%d_priority", tm.teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+// 让所有 PENDING 任务依赖新任务，保证新任务最先执行。
+func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content string, opts ...TaskAddOption) (*database.TeamTaskBase, error) {
+	cfg := &taskAddConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	taskID := cfg.taskID
+	if taskID == "" {
+		taskID = generateTaskID(tm.teamName, "priority")
+	}
+
+	// 查询所有 PENDING 任务作为 dependentTaskIDs
+	pendingTasks, _ := tm.db.Task().GetTeamTasks(ctx, tm.teamName, fsm.TaskStatusPending)
+	var dependentTaskIDs []string
+	for _, t := range pendingTasks {
+		if t.TaskID != taskID {
+			dependentTaskIDs = append(dependentTaskIDs, t.TaskID)
+		}
+	}
+
 	task := &database.TeamTaskBase{
 		TaskID:   taskID,
 		TeamName: tm.teamName,
@@ -513,37 +587,22 @@ func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content 
 		Content:  content,
 		Status:   fsm.TaskStatusPending,
 	}
-	ok, err := tm.db.Task().CreateTask(ctx, task)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("创建最高优先级任务失败: task_id 冲突 %s", taskID)
+	// 一步原子：通过 AddTaskWithBidirectionalDependencies（对齐 Python）
+	result := tm.db.Task().AddTaskWithBidirectionalDependencies(ctx, tm.teamName, task, nil, dependentTaskIDs)
+	if !result.Ok {
+		return nil, fmt.Errorf("创建最高优先级任务失败: %s", result.Reason)
 	}
 
-	// 阻塞所有 PENDING 任务：每个 PENDING 任务依赖新任务
-	pendingTasks, _ := tm.db.Task().GetTeamTasks(ctx, tm.teamName, fsm.TaskStatusPending)
-	var edges []database.EdgeSpec
-	for _, existing := range pendingTasks {
-		if existing.TaskID == taskID {
-			continue // 跳过自己
-		}
-		edges = append(edges, database.EdgeSpec{TaskID: existing.TaskID, DependsOnID: taskID})
+	created := findRefreshedTask(result.RefreshedTasks, taskID)
+	if created == nil {
+		created = task
 	}
-
-	if len(edges) > 0 {
-		result := tm.db.Task().MutateDependencyGraph(ctx, tm.teamName, nil, edges)
-		if !result.Ok {
-			return task, fmt.Errorf("添加阻塞依赖失败: %s", result.Reason)
-		}
-	}
-
 	tm.publishTaskEvent(ctx, schema.TaskCreatedEvent{
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
-		TaskID:           taskID,
-		Status:           fsm.TaskStatusPending,
+		TaskID:           created.TaskID,
+		Status:           created.Status,
 	})
-	return task, nil
+	return created, nil
 }
 
 // AddDependencies 向已有任务添加依赖。对齐 Python: TeamTaskManager.add_dependencies()

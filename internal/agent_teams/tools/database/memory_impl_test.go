@@ -1021,7 +1021,7 @@ func TestAddTaskWithBidirectionalDependencies(t *testing.T) {
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "已有任务"})
 
 	newTask := &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Title: "新任务", Status: fsm.TaskStatusPending}
-	result := db.AddTaskWithBidirectionalDependencies(ctx, "alpha", newTask, []string{"t1"})
+	result := db.AddTaskWithBidirectionalDependencies(ctx, "alpha", newTask, []string{"t1"}, nil)
 	if !result.Ok {
 		t.Errorf("应成功: reason=%s", result.Reason)
 	}

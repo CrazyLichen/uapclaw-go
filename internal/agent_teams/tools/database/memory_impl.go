@@ -714,7 +714,7 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。
 // 对齐 Python: add_task_with_bidirectional_dependencies()
-func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.Context, teamName string, task *TeamTaskBase, dependsOnIDs []string) GraphMutationResult {
+func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	// 构建 NewTaskSpec
 	newTaskSpec := NewTaskSpec{
 		TaskID:        task.TaskID,
@@ -726,10 +726,15 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 		newTaskSpec.InitialStatus = fsm.TaskStatusPending
 	}
 
-	// 构建 EdgeSpec：task 依赖 dependsOnIDs 中的每个上游任务
-	edges := make([]EdgeSpec, 0, len(dependsOnIDs))
-	for _, upstreamID := range dependsOnIDs {
+	// 构建双向 EdgeSpec
+	edges := make([]EdgeSpec, 0, len(dependencies)+len(dependentTaskIDs))
+	// dependencies：新任务依赖上游 → 边方向 (new_task, upstream)
+	for _, upstreamID := range dependencies {
 		edges = append(edges, EdgeSpec{TaskID: task.TaskID, DependsOnID: upstreamID})
+	}
+	// dependentTaskIDs：下游依赖新任务 → 边方向 (existing_task, new_task)
+	for _, downstreamID := range dependentTaskIDs {
+		edges = append(edges, EdgeSpec{TaskID: downstreamID, DependsOnID: task.TaskID})
 	}
 
 	return db.MutateDependencyGraph(context.Background(), teamName, []NewTaskSpec{newTaskSpec}, edges)

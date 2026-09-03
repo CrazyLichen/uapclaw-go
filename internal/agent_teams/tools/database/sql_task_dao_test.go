@@ -232,6 +232,7 @@ func TestSQLTaskDao_AddTaskWithBidirectionalDependencies(t *testing.T) {
 	result := dao.AddTaskWithBidirectionalDependencies(ctx, "team1",
 		&TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending},
 		[]string{"t1"},
+		nil,
 	)
 	assert.True(t, result.Ok)
 

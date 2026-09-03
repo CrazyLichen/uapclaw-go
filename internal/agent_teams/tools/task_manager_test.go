@@ -125,7 +125,10 @@ func TestTaskManager_ListTasksWithDeps(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "上游任务", "")
-	tm.AddWithPriority(ctx, "dep_task", "下游任务", "依赖上游", []string{task.TaskID}, nil)
+	tm.AddWithPriority(ctx, "下游任务", "依赖上游",
+		WithPriorityTaskID("dep_task"),
+		WithPriorityDependencies([]string{task.TaskID}),
+	)
 
 	summaries, err := tm.ListTasksWithDeps(ctx)
 	if err != nil {
@@ -478,7 +481,10 @@ func TestTaskManager_AddWithPriority_失败(t *testing.T) {
 	ctx := context.Background()
 
 	// 依赖不存在的任务应失败
-	_, err := tm.AddWithPriority(ctx, "new_task", "新任务", "内容", []string{"nonexist"}, nil)
+	_, err := tm.AddWithPriority(ctx, "新任务", "内容",
+		WithPriorityTaskID("new_task"),
+		WithPriorityDependencies([]string{"nonexist"}),
+	)
 	if err == nil {
 		t.Error("依赖不存在任务应返回错误")
 	}

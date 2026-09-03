@@ -115,8 +115,8 @@ type TaskDao interface {
 	// 对齐 Python: mutate_dependency_graph()
 	MutateDependencyGraph(ctx context.Context, teamName string, newTasks []NewTaskSpec, addEdges []EdgeSpec) GraphMutationResult
 	// AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
-	// 对齐 Python: add_task_with_bidirectional_dependencies()
-	AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependsOnIDs []string) GraphMutationResult
+	// 对齐 Python: add_task_with_bidirectional_dependencies(task_id, team_name, title, content, status, *, dependencies, dependent_task_ids)
+	AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult
 	// GetTaskDependencies 查询任务依赖。
 	GetTaskDependencies(ctx context.Context, taskID string) ([]*TeamTaskDependencyBase, error)
 	// GetUnresolvedDependenciesCount 未解决依赖计数。
