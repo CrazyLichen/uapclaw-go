@@ -19,9 +19,16 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskCreateSpec 批量创建任务的输入规范。
+// 对齐 Python: add_batch(tasks: List[dict]) 中每个 dict 的字段。
 type TaskCreateSpec struct {
-	Title   string
+	// TaskID 可选自定义任务 ID，空则自动生成。对齐 Python: task_spec.get("task_id")
+	TaskID string
+	// Title 任务标题
+	Title string
+	// Content 任务内容
 	Content string
+	// Dependencies 可选依赖列表。对齐 Python: task_spec.get("dependencies")
+	Dependencies []string
 }
 
 // TaskAddOption 添加任务的可选参数，对齐 Python: add(task_id, dependencies) 可选参数
@@ -231,15 +238,29 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 }
 
 // AddBatch 批量创建任务。对齐 Python: TeamTaskManager.add_batch()
+// 跳过无效规格（缺 title/content）和创建失败的任务，返回成功创建的列表。
+// 对齐 Python: created_tasks 遇错不中断，继续处理后续规格。
 func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec) ([]*database.TeamTaskBase, error) {
 	var tasks []*database.TeamTaskBase
 	for _, spec := range specs {
-		task, err := tm.Add(ctx, spec.Title, spec.Content)
+		// 对齐 Python: if not title or not content → skip
+		if spec.Title == "" || spec.Content == "" {
+			logger.Warn(logComponentChannel).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
+			continue
+		}
+		task, err := tm.Add(ctx, spec.Title, spec.Content,
+			WithTaskID(spec.TaskID),
+			WithDependencies(spec.Dependencies),
+		)
 		if err != nil {
-			return tasks, err
+			// 对齐 Python: if not result.ok → warning + skip
+			logger.Warn(logComponentChannel).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
+			continue
 		}
 		tasks = append(tasks, task)
 	}
+	// 对齐 Python: team_logger.info(f"Batch added {len(created_tasks)} tasks")
+	logger.Info(logComponentChannel).Int("count", len(tasks)).Msg("批量创建完成")
 	return tasks, nil
 }
 

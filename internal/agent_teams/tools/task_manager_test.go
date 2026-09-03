@@ -247,7 +247,7 @@ func TestTaskManager_AddBatch(t *testing.T) {
 
 	specs := []TaskCreateSpec{
 		{Title: "任务1", Content: "内容1"},
-		{Title: "任务2", Content: "内容2"},
+		{Title: "任务2", Content: "内容2", TaskID: "custom_id_1"},
 	}
 	tasks, err := tm.AddBatch(ctx, specs)
 	if err != nil {
@@ -255,6 +255,10 @@ func TestTaskManager_AddBatch(t *testing.T) {
 	}
 	if len(tasks) != 2 {
 		t.Errorf("批量创建应返回2个任务: got %d", len(tasks))
+	}
+	// 验证自定义 TaskID
+	if tasks[1].TaskID != "custom_id_1" {
+		t.Errorf("自定义 TaskID 应为 custom_id_1: got %q", tasks[1].TaskID)
 	}
 }
 
@@ -690,27 +694,72 @@ func TestTaskManager_Add_冲突ID(t *testing.T) {
 	}
 }
 
-func TestTaskManager_AddBatch_中途失败(t *testing.T) {
-	tm, db := setupTestTaskManager()
+func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
+	tm, _ := setupTestTaskManager()
 	ctx := context.Background()
 
-	task1, _ := tm.Add(ctx, "任务1", "")
-	// 手动往 db 写入与 task_manager 同 ID 的任务，制造冲突
-	db.Task().CreateTask(ctx, &database.TeamTaskBase{
-		TaskID:   task1.TaskID,
-		TeamName: "alpha",
-		Title:    "冲突",
-		Status:   fsm.TaskStatusPending,
-	})
-
-	// AddBatch 第二个应失败
-	_, err := tm.AddBatch(ctx, []TaskCreateSpec{
-		{Title: "新任务", Content: "内容"},
-	})
-	// 正常情况不应失败（ID 是自动生成的），此测试验证正常路径覆盖
+	// 对齐 Python: 缺 title 或 content 的规格应被跳过
+	specs := []TaskCreateSpec{
+		{Title: "有效任务", Content: "内容"},
+		{Title: "", Content: "缺标题"},  // 应跳过
+		{Title: "缺内容", Content: ""},  // 应跳过
+		{Title: "又一个有效", Content: "内容2"},
+	}
+	tasks, err := tm.AddBatch(ctx, specs)
 	if err != nil {
-		// 只要不是 ID 冲突就行
-		t.Logf("AddBatch 返回错误: %v（可接受）", err)
+		t.Fatalf("AddBatch 返回错误: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("应跳过无效规格，返回2个任务: got %d", len(tasks))
+	}
+}
+
+func TestTaskManager_AddBatch_跳过创建失败(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	// 对齐 Python: 创建失败的规格应跳过，不影响后续
+	// 依赖不存在的任务会走 MutateDependencyGraph 原子路径失败
+	specs := []TaskCreateSpec{
+		{Title: "正常任务", Content: "内容"},
+		{Title: "依赖失败", Content: "内容", Dependencies: []string{"nonexistent_task"}},
+		{Title: "另一个正常", Content: "内容2"},
+	}
+	tasks, err := tm.AddBatch(ctx, specs)
+	if err != nil {
+		t.Fatalf("AddBatch 不应返回错误（容错）: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("应跳过创建失败的规格，返回2个任务: got %d", len(tasks))
+	}
+}
+
+func TestTaskManager_AddBatch_带依赖(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	// 先创建上游任务
+	upstream, _ := tm.Add(ctx, "上游任务", "内容")
+
+	// AddBatch 中指定 dependencies
+	specs := []TaskCreateSpec{
+		{Title: "独立任务", Content: "独立内容"},
+		{Title: "依赖任务", Content: "依赖上游", TaskID: "dep_batch_task", Dependencies: []string{upstream.TaskID}},
+	}
+	tasks, err := tm.AddBatch(ctx, specs)
+	if err != nil {
+		t.Fatalf("AddBatch 返回错误: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("批量创建应返回2个任务: got %d", len(tasks))
+	}
+	// 有依赖的任务应被阻塞
+	depTask, _ := tm.Get(ctx, "dep_batch_task")
+	if depTask == nil {
+		t.Fatal("依赖任务应存在")
+	}
+	if depTask.Status != fsm.TaskStatusBlocked {
+		t.Errorf("有依赖的任务应为 blocked: got %q", depTask.Status)
 	}
 }
 
