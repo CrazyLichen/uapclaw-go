@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
@@ -135,5 +137,38 @@ func TestTeamMessageManager_GetTeamMessages(t *testing.T) {
 	}
 	if len(msgs) != 2 {
 		t.Errorf("GetTeamMessages 返回 %d 条, want 2", len(msgs))
+	}
+}
+
+// TestTeamMessageManager_带Messager 测试带 messager 的消息管理器（覆盖 publishMessageEvent）
+func TestTeamMessageManager_带Messager(t *testing.T) {
+	db := database.NewInMemoryTeamDatabase()
+	_ = db.Initialize(context.Background())
+	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "")
+	_ = db.CreateMember(context.Background(), "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
+	_ = db.CreateMember(context.Background(), "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
+
+	// 创建带 messager 的消息管理器
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	mm := NewTeamMessageManager(db, "team1", "alice", msg)
+
+	ctx := context.Background()
+
+	// SendMessage 带 messager
+	msgID, err := mm.SendMessage(ctx, "hello bob", "bob", "alice")
+	if err != nil {
+		t.Fatalf("SendMessage 失败: %v", err)
+	}
+	if msgID == "" {
+		t.Fatal("SendMessage 返回空 messageID")
+	}
+
+	// BroadcastMessage 带 messager
+	bcID, err := mm.BroadcastMessage(ctx, "announcement", "alice")
+	if err != nil {
+		t.Fatalf("BroadcastMessage 失败: %v", err)
+	}
+	if bcID == "" {
+		t.Fatal("BroadcastMessage 返回空 messageID")
 	}
 }

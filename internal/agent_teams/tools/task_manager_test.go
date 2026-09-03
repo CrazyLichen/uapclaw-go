@@ -4,9 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
@@ -807,5 +810,318 @@ func TestTaskManager_ApprovePlan_不存在计划(t *testing.T) {
 	err := tm.ApprovePlan(ctx, "nonexist_plan", true, "")
 	if err == nil {
 		t.Error("审批不存在的计划应返回错误")
+	}
+}
+
+// TestTaskManager_SubmitPlan_带Messager 测试带 messager 的 SubmitPlan（覆盖 notifyLeaderOfPlan）
+func TestTaskManager_SubmitPlan_带Messager(t *testing.T) {
+	db := database.NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
+	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "plan_mode", "", "")
+
+	plansDir := t.TempDir()
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	tm := NewTeamTaskManager(db, "alpha", "agent1", msg, plansDir, "plan_session_1", "leader1")
+	db.Initialize(ctx)
+
+	planFile := filepath.Join(t.TempDir(), "plan.md")
+	os.WriteFile(planFile, []byte("# 执行计划"), 0o644)
+
+	task, _ := tm.Add(ctx, "数据分析", "完成数据分析任务")
+
+	record, err := tm.SubmitPlan(ctx, task.TaskID, planFile, "call_123")
+	if err != nil {
+		t.Fatalf("SubmitPlan 返回错误: %v", err)
+	}
+	if record.PlanID == "" {
+		t.Error("PlanID 应非空")
+	}
+}
+
+func TestTaskManager_WithPriorityDependentTaskIDs(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, _ := tm.Add(ctx, "下游", "")
+
+	// 创建中间任务，依赖上游，被下游依赖
+	middle, err := tm.AddWithPriority(ctx, "中间任务", "内容",
+		WithPriorityDependencies([]string{upstream.TaskID}),
+		WithPriorityDependentTaskIDs([]string{downstream.TaskID}),
+	)
+	if err != nil {
+		t.Fatalf("AddWithPriority 双向依赖应成功: %v", err)
+	}
+	if middle.Status != fsm.TaskStatusBlocked {
+		t.Errorf("有 dependencies 的任务初始应为 blocked: got %q", middle.Status)
+	}
+
+	// 验证下游被阻塞
+	got, _ := tm.Get(ctx, downstream.TaskID)
+	if got.Status != fsm.TaskStatusBlocked {
+		t.Errorf("下游任务应被中间任务阻塞: got %q", got.Status)
+	}
+}
+
+func TestTaskManager_renderPlanReviewMessage(t *testing.T) {
+	msg := renderPlanReviewMessage("agent1", "task_1", "plan_1", "/path/plan.md", "call_1")
+	if !strings.Contains(msg, "agent1") {
+		t.Error("消息应包含成员名")
+	}
+	if !strings.Contains(msg, "task_1") {
+		t.Error("消息应包含任务ID")
+	}
+	if !strings.Contains(msg, "plan_1") {
+		t.Error("消息应包含计划ID")
+	}
+	if !strings.Contains(msg, "call_1") {
+		t.Error("消息应包含 ToolCallID")
+	}
+
+	// 无 toolCallID
+	msg2 := renderPlanReviewMessage("agent1", "task_1", "plan_1", "/path/plan.md", "")
+	if strings.Contains(msg2, "Tool Call ID") {
+		t.Error("无 toolCallID 时不应包含 Tool Call ID 行")
+	}
+}
+
+func TestTaskManager_Claim_已被他人认领(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	task, _ := tm.Add(ctx, "任务", "")
+	// agent1 认领
+	tm.Claim(ctx, task.TaskID)
+
+	// 创建另一个 manager 以 leader1 身份认领
+	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, "", "", "leader1")
+	err := leaderTM.Claim(ctx, task.TaskID)
+	if err == nil {
+		t.Error("已被他人认领的任务应返回错误")
+	}
+}
+
+func TestTaskManager_Claim_BLOCKED任务(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, _ := tm.AddWithPriority(ctx, "下游", "内容",
+		WithPriorityDependencies([]string{upstream.TaskID}),
+	)
+	// 下游应处于 BLOCKED
+	if downstream.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
+	}
+
+	err := tm.Claim(ctx, downstream.TaskID)
+	if err == nil {
+		t.Error("BLOCKED 任务不能被认领")
+	}
+}
+
+func TestTaskManager_Assign_已被他人认领(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	task, _ := tm.Add(ctx, "任务", "")
+	tm.Assign(ctx, task.TaskID, "agent1")
+
+	// 分配给不同人应失败
+	err := tm.Assign(ctx, task.TaskID, "leader1")
+	if err == nil {
+		t.Error("已被他人认领的任务应返回错误")
+	}
+}
+
+func TestTaskManager_Complete_解除阻塞(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, _ := tm.AddWithPriority(ctx, "下游", "内容",
+		WithPriorityDependencies([]string{upstream.TaskID}),
+	)
+	if downstream.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
+	}
+
+	// 认领并完成上游 → 下游应解除阻塞
+	tm.Claim(ctx, upstream.TaskID)
+	_, err := tm.Complete(ctx, upstream.TaskID)
+	if err != nil {
+		t.Fatalf("完成上游应成功: %v", err)
+	}
+
+	// 下游应变为 PENDING
+	got, _ := tm.Get(ctx, downstream.TaskID)
+	if got.Status != fsm.TaskStatusPending {
+		t.Errorf("上游完成后下游应为 pending: got %q", got.Status)
+	}
+}
+
+func TestTaskManager_Cancel_解除阻塞(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, _ := tm.AddWithPriority(ctx, "下游", "内容",
+		WithPriorityDependencies([]string{upstream.TaskID}),
+	)
+	if downstream.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
+	}
+
+	// 取消上游 → 下游应解除阻塞
+	_, err := tm.Cancel(ctx, upstream.TaskID)
+	if err != nil {
+		t.Fatalf("取消上游应成功: %v", err)
+	}
+
+	got, _ := tm.Get(ctx, downstream.TaskID)
+	if got.Status != fsm.TaskStatusPending {
+		t.Errorf("上游取消后下游应为 pending: got %q", got.Status)
+	}
+}
+
+func TestTaskManager_publishUnblockedEvents(t *testing.T) {
+	// 通过 CancelAllTasks 触发 publishUnblockedEvents
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, _ := tm.AddWithPriority(ctx, "下游", "内容",
+		WithPriorityDependencies([]string{upstream.TaskID}),
+	)
+	if downstream.Status != fsm.TaskStatusBlocked {
+		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
+	}
+
+	cancelled, err := tm.CancelAllTasks(ctx, nil)
+	if err != nil {
+		t.Fatalf("CancelAllTasks 应成功: %v", err)
+	}
+	if len(cancelled) < 2 {
+		t.Errorf("应至少取消2个任务: got %d", len(cancelled))
+	}
+}
+
+func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	// 已有 leader1 在构造时传入
+	name := tm.resolveLeaderMemberName()
+	if name != "leader1" {
+		t.Errorf("应返回 leader1: got %q", name)
+	}
+
+	// 从 team 获取（清空 leaderMemberName 后）
+	tm2 := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, "", "", "")
+	// team 表有 leader_member_name
+	team, _ := tm2.db.Team().GetTeam(ctx, "alpha")
+	if team == nil || team.LeaderMemberName != "leader1" {
+		t.Log("team.LeaderMemberName 不为 leader1，跳过回退测试")
+	} else {
+		name2 := tm2.resolveLeaderMemberName()
+		if name2 != "leader1" {
+			t.Errorf("从 team 获取应返回 leader1: got %q", name2)
+		}
+	}
+}
+
+func TestTaskManager_Add_带依赖(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	upstream, _ := tm.Add(ctx, "上游", "")
+	downstream, err := tm.Add(ctx, "下游", "依赖上游",
+		WithDependencies([]string{upstream.TaskID}),
+	)
+	if err != nil {
+		t.Fatalf("Add 带依赖应成功: %v", err)
+	}
+	if downstream.Status != fsm.TaskStatusBlocked {
+		t.Errorf("有依赖的任务应为 blocked: got %q", downstream.Status)
+	}
+
+	// 上游完成后下游解除阻塞
+	tm.Claim(ctx, upstream.TaskID)
+	tm.Complete(ctx, upstream.TaskID)
+	got, _ := tm.Get(ctx, downstream.TaskID)
+	if got.Status != fsm.TaskStatusPending {
+		t.Errorf("上游完成后下游应为 pending: got %q", got.Status)
+	}
+}
+
+func TestTaskManager_Add_依赖不存在(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	_, err := tm.Add(ctx, "依赖不存在", "内容",
+		WithDependencies([]string{"nonexistent"}),
+	)
+	if err == nil {
+		t.Error("依赖不存在的任务应返回错误")
+	}
+}
+
+func TestTaskManager_Claim_成员不存在(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+
+	task, _ := tm.Add(ctx, "任务", "")
+	// 创建不存在的成员的 manager
+	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, "", "", "leader1")
+	err := ghostTM.Claim(ctx, task.TaskID)
+	if err == nil {
+		t.Error("不存在的成员认领应返回错误")
+	}
+}
+
+func TestTaskManager_Claim_PLAN_MODE(t *testing.T) {
+	tm, db := setupTestTaskManager()
+	ctx := context.Background()
+
+	// 将 agent1 改为 plan_mode
+	db.SetMemberMode("agent1", "alpha", "plan_mode")
+	task, _ := tm.Add(ctx, "任务", "")
+	err := tm.Claim(ctx, task.TaskID)
+	if err == nil {
+		t.Error("PLAN_MODE 成员不应直接认领")
+	}
+}
+
+func TestTaskManager_Complete_PLAN_MODE_非PLAN_APPROVED(t *testing.T) {
+	tm, _, _ := setupPlanModeTaskManager(t)
+	ctx := context.Background()
+
+	task, _ := tm.Add(ctx, "任务", "")
+	tm.Assign(ctx, task.TaskID, "agent1")
+
+	// PLAN_MODE 成员只能完成 PLAN_APPROVED 任务，CLAIMED 应失败
+	_, err := tm.Complete(ctx, task.TaskID)
+	if err == nil {
+		t.Error("PLAN_MODE 成员完成 CLAIMED 任务应返回错误")
+	}
+}
+
+func TestTaskManager_Complete_成员不存在(t *testing.T) {
+	// 创建一个不存在的成员的 manager
+	db := database.NewInMemoryTeamDatabase()
+	ctx := context.Background()
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
+	// 不创建 agent1
+	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, "", "", "leader1")
+	db.Initialize(ctx)
+
+	task, _ := tm.Add(ctx, "任务", "")
+	_, err := tm.Complete(ctx, task.TaskID)
+	if err == nil {
+		t.Error("不存在的成员完成任务应返回错误")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -902,3 +903,324 @@ func TestBuildTeam_HITT未启用但有预定义HumanAgent(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestCancelMember_Busy 成员取消时重置 CLAIMED 任务
+func TestCancelMember_Busy(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
+
+	// 创建任务并让 teammate1 认领
+	tb.taskManager.Add(ctx, "测试任务", "内容")
+	pendingTasks, _ := tb.taskManager.GetClaimableTasks(ctx)
+	if len(pendingTasks) > 0 {
+		tb.taskManager.Claim(ctx, pendingTasks[0].TaskID)
+	}
+
+	// 设为 BUSY
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusBusy))
+
+	result := tb.CancelMember(ctx, "teammate1")
+	if !result.OK {
+		t.Fatalf("CancelMember(BUSY) = %v, want OK", result)
+	}
+}
+
+// TestWithForce_WithApproved_WithFeedback 测试 Option 构造函数
+func TestWithForce_WithApproved_WithFeedback(t *testing.T) {
+	// WithForce
+	shutdownCfg := &shutdownConfig{}
+	WithForce(true)(shutdownCfg)
+	if !shutdownCfg.force {
+		t.Error("WithForce(true) 应设置 force=true")
+	}
+
+	// WithApproved
+	approveCfg := &approvePlanConfig{}
+	WithApproved(false)(approveCfg)
+	if approveCfg.approved {
+		t.Error("WithApproved(false) 应设置 approved=false")
+	}
+
+	// WithFeedback
+	feedbackCfg := &approvePlanConfig{}
+	WithFeedback("needs revision")(feedbackCfg)
+	if feedbackCfg.feedback != "needs revision" {
+		t.Error("WithFeedback 应设置 feedback")
+	}
+}
+
+// TestCancelTask_有Assignee 测试取消有认领人的任务
+func TestCancelTask_有Assignee(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	task, _ := tb.taskManager.Add(ctx, "可取消任务", "内容")
+	tb.taskManager.Claim(ctx, task.TaskID)
+
+	result := tb.CancelTask(ctx, task.TaskID)
+	if !result.OK {
+		t.Errorf("CancelTask() = %v, want OK", result)
+	}
+}
+
+// TestApprovePlan_通过Backend 测试通过 TeamBackend 审批计划
+func TestApprovePlan_通过Backend(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	// 设为 plan_mode（InMemory 特有方法）
+	if imDB, ok := tb.db.(*database.InMemoryTeamDatabase); ok {
+		imDB.SetMemberMode("teammate1", tb.TeamName(), "plan_mode")
+	} else {
+		t.Skip("需要 InMemoryTeamDatabase")
+	}
+
+	task, _ := tb.taskManager.Add(ctx, "计划任务", "内容")
+
+	planFile := filepath.Join(t.TempDir(), "plan.md")
+	os.WriteFile(planFile, []byte("# 计划"), 0o644)
+
+	// 用 teammate1 的 taskManager 提交计划
+	teammateTM := NewTeamTaskManager(tb.db, tb.TeamName(), "teammate1", nil,
+		tb.taskManager.plansDir, tb.taskManager.teamPlanID, tb.taskManager.leaderMemberName)
+	record, err := teammateTM.SubmitPlan(ctx, task.TaskID, planFile, "call_1")
+	if err != nil {
+		t.Fatalf("SubmitPlan 返回错误: %v", err)
+	}
+
+	// 通过 Backend 审批
+	result := tb.ApprovePlan(ctx, record.PlanID, WithApproved(true))
+	if !result.OK {
+		t.Errorf("ApprovePlan(通过) = %v, want OK", result)
+	}
+}
+
+// TestCleanTeam_有活跃成员 有活跃成员时无法清理
+func TestCleanTeam_有活跃成员(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
+
+	// 成员非 SHUTDOWN → CleanTeam 应返回 false
+	cleaned, err := tb.CleanTeam(ctx)
+	if err != nil {
+		t.Fatalf("CleanTeam 返回错误: %v", err)
+	}
+	if cleaned {
+		t.Error("有活跃成员时 CleanTeam 应返回 false")
+	}
+}
+
+// TestCleanTeam_所有成员已关闭 所有成员 SHUTDOWN 后可清理
+func TestCleanTeam_所有成员已关闭(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	// 将成员设为 SHUTDOWN
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
+
+	cleaned, err := tb.CleanTeam(ctx)
+	if err != nil {
+		t.Fatalf("CleanTeam 返回错误: %v", err)
+	}
+	if !cleaned {
+		t.Error("所有成员 SHUTDOWN 后 CleanTeam 应返回 true")
+	}
+}
+
+// TestForceCleanTeam_不关闭成员 不 shutdown 直接强制删除
+func TestForceCleanTeam_不关闭成员(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	// shutdownMembers=false → 直接删除
+	success, err := tb.ForceCleanTeam(ctx, false)
+	if err != nil {
+		t.Fatalf("ForceCleanTeam 返回错误: %v", err)
+	}
+	if !success {
+		t.Error("ForceCleanTeam(false) 应成功")
+	}
+}
+
+// TestForceCleanTeam_关闭成员 shutdownMembers=true
+func TestForceCleanTeam_关闭成员(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	// 将成员设为 ready 以便可以被 shutdown
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
+
+	success, err := tb.ForceCleanTeam(ctx, true)
+	if err != nil {
+		t.Fatalf("ForceCleanTeam 返回错误: %v", err)
+	}
+	if !success {
+		t.Error("ForceCleanTeam(true) 应成功")
+	}
+}
+
+// TestApprovePlan_空PlanID 空计划 ID 应返回失败
+func TestApprovePlan_空PlanID(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	result := tb.ApprovePlan(ctx, "")
+	if result.OK {
+		t.Error("空 planID 应返回失败")
+	}
+}
+
+// TestApprovePlan_不存在的PlanID 不存在的计划应返回失败
+func TestApprovePlan_不存在的PlanID(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	result := tb.ApprovePlan(ctx, "nonexistent_plan_id")
+	if result.OK {
+		t.Error("不存在的 planID 应返回失败")
+	}
+}
+
+// TestRefreshHumanAgentRoster_HITT未启用 HITT 未启用时不应 panic
+func TestRefreshHumanAgentRoster_HITT未启用(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	// 不应 panic
+	tb.RefreshHumanAgentRoster(ctx)
+}
+
+// TestRegisterCleanupPath_空路径 空路径应跳过
+func TestRegisterCleanupPath_空路径(t *testing.T) {
+	tb := newTestTeamBackend()
+	tb.RegisterCleanupPath("")
+	if len(tb.cleanupPaths) != 0 {
+		t.Error("空路径不应注册到清理路径")
+	}
+}
+
+// TestRegisterCleanupPath_有效路径 有效路径应注册
+func TestRegisterCleanupPath_有效路径(t *testing.T) {
+	tb := newTestTeamBackend()
+	tb.RegisterCleanupPath("/tmp/test_cleanup")
+	if len(tb.cleanupPaths) != 1 {
+		t.Error("有效路径应注册到清理路径")
+	}
+}
+
+// TestRemoveCleanupPaths_空列表 无清理路径时直接返回
+func TestRemoveCleanupPaths_空列表(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	err := tb.RemoveCleanupPaths(ctx)
+	if err != nil {
+		t.Errorf("无清理路径时不应返回错误: %v", err)
+	}
+}
+
+// TestRemoveCleanupPaths_不存在路径 路径不存在时跳过
+func TestRemoveCleanupPaths_不存在路径(t *testing.T) {
+	tb := newTestTeamBackend()
+	tb.RegisterCleanupPath("/tmp/nonexistent_path_for_test_xxx")
+	ctx := context.Background()
+	err := tb.RemoveCleanupPaths(ctx)
+	if err != nil {
+		t.Errorf("不存在路径不应返回错误: %v", err)
+	}
+}
+
+// TestShutdownMember_成员不存在 不存在的成员应返回失败
+func TestShutdownMember_成员不存在(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	result := tb.ShutdownMember(ctx, "nonexistent_member")
+	if result.OK {
+		t.Error("不存在的成员应返回失败")
+	}
+}
+
+// TestShutdownMember_已关闭 已 SHUTDOWN 的成员幂等返回成功
+func TestShutdownMember_已关闭(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
+
+	result := tb.ShutdownMember(ctx, "teammate1")
+	if !result.OK {
+		t.Errorf("已 SHUTDOWN 的成员应幂等返回成功: %s", result.Reason)
+	}
+}
+
+// TestCancelMember_成员不存在 不存在的成员应返回失败
+func TestCancelMember_成员不存在(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	result := tb.CancelMember(ctx, "nonexistent_member")
+	if result.OK {
+		t.Error("不存在的成员应返回失败")
+	}
+}
+
+// TestSpawnMember_已存在 已存在的成员应返回失败
+func TestSpawnMember_已存在成员(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	result := tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	if !result.OK {
+		t.Fatalf("首次 SpawnMember 应成功: %s", result.Reason)
+	}
+	// 再次创建同名成员应返回 false
+	result2 := tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	if result2.OK {
+		t.Error("重复 SpawnMember 同名成员应返回失败")
+	}
+}
+
+// TestStartupMember_回调失败 回调失败时应回滚状态
+func TestStartupMember_回调失败2(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	// 回调返回错误
+	started, err := tb.StartupMember(ctx, "teammate1", func(ctx context.Context, memberName string) error {
+		return errors.New("spawn callback failed")
+	})
+	if err == nil {
+		t.Error("回调失败时应返回错误")
+	}
+	if started {
+		t.Error("回调失败时不应标记为已启动")
+	}
+}
