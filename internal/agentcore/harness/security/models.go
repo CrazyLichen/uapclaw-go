@@ -1,7 +1,6 @@
 package security
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"

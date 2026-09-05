@@ -12,9 +12,26 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// mockSessionFacade 测试用 mock SessionFacade
+type mockSessionFacade struct{}
+
+func (m *mockSessionFacade) GetSessionID() string                                       { return "test-session" }
+func (m *mockSessionFacade) UpdateState(_ map[string]any)                               {}
+func (m *mockSessionFacade) GetState(_ state.StateKey) (any, error)                     { return nil, nil }
+func (m *mockSessionFacade) DumpState() map[string]any                                  { return nil }
+func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error                 { return nil }
+func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error           { return nil }
+func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any                              { return nil }
+func (m *mockSessionFacade) Interact(_ context.Context, _ any) error                    { return nil }
+
+// 编译时接口检查
+var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -114,20 +131,21 @@ func TestBuildShellAutoConfirmKey(t *testing.T) {
 
 // TestShouldStoreAutoConfirm 测试是否应存储 auto-confirm key
 func TestShouldStoreAutoConfirm(t *testing.T) {
+	mockSession := &mockSessionFacade{}
 	tests := []struct {
 		name           string
 		autoConfirm    bool
-		session        any
+		session        sessioninterfaces.SessionFacade
 		autoConfirmKey string
 		persisted      bool
 		expected       bool
 	}{
-		{"全满足", true, "session", "bash:ls", false, true},
-		{"autoConfirm为false", false, "session", "bash:ls", false, false},
+		{"全满足", true, mockSession, "bash:ls", false, true},
+		{"autoConfirm为false", false, mockSession, "bash:ls", false, false},
 		{"session为nil", true, nil, "bash:ls", false, false},
-		{"key为空", true, "session", "", false, false},
-		{"已持久化", true, "session", "bash:ls", true, false},
-		{"key非空且全满足", true, "session", "bash", false, true},
+		{"key为空", true, mockSession, "", false, false},
+		{"已持久化", true, mockSession, "bash:ls", true, false},
+		{"key非空且全满足", true, mockSession, "bash", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
