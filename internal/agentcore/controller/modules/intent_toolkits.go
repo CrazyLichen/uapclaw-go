@@ -241,8 +241,8 @@ func (t *IntentToolkits) lowConfidenceIntent(confidence float64) (*schema.Intent
 		t.event,
 		schema.WithConfidence(confidence),
 		schema.WithClarificationPrompt(
-			"Sorry, I couldn't understand your meaning. " +
-				"Please clarify whether you want to create a new " +
+			"Sorry, I couldn't understand your meaning. "+
+				"Please clarify whether you want to create a new "+
 				"task or modify an existing one.",
 		),
 	)

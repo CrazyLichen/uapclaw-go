@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
-	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -25,9 +25,9 @@ import (
 
 // mockSystemPromptBuilder 测试用 mock SystemPromptBuilder
 type mockSystemPromptBuilder struct {
-	language  string
-	sections  map[string]saprompt.PromptSection
-	removed   []string
+	language string
+	sections map[string]saprompt.PromptSection
+	removed  []string
 }
 
 func newMockSystemPromptBuilder(lang string) *mockSystemPromptBuilder {
@@ -99,7 +99,7 @@ func (m *mockAbilityManager) Execute(_ context.Context, _ *agentinterfaces.Agent
 	return nil
 }
 func (m *mockAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}
-func (m *mockAbilityManager) ReorderTools(_ []string)         {}
+func (m *mockAbilityManager) ReorderTools(_ []string)                      {}
 func (m *mockAbilityManager) AddMany(abilities []schema.Ability) []agentschema.AddAbilityResult {
 	var results []agentschema.AddAbilityResult
 	for _, a := range abilities {
@@ -117,9 +117,9 @@ func (m *mockAbilityManager) RemoveMany(names []string) []schema.Ability {
 
 // mockBaseAgent 测试用 mock BaseAgent
 type mockBaseAgent struct {
-	card   *agentschema.AgentCard
-	am     agentinterfaces.AbilityManagerInterface
-	spb    saprompt.SystemPromptBuilderInterface
+	card *agentschema.AgentCard
+	am   agentinterfaces.AbilityManagerInterface
+	spb  saprompt.SystemPromptBuilderInterface
 }
 
 func newMockBaseAgent(spb saprompt.SystemPromptBuilderInterface, am agentinterfaces.AbilityManagerInterface) *mockBaseAgent {
@@ -130,8 +130,8 @@ func newMockBaseAgent(spb saprompt.SystemPromptBuilderInterface, am agentinterfa
 	}
 }
 
-func (m *mockBaseAgent) Card() *agentschema.AgentCard                          { return m.card }
-func (m *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return m.am }
+func (m *mockBaseAgent) Card() *agentschema.AgentCard                               { return m.card }
+func (m *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface    { return m.am }
 func (m *mockBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return m.spb }
 func (m *mockBaseAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil

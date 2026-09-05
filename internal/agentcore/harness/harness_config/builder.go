@@ -34,9 +34,6 @@ type toolGroupDef struct {
 // HarnessConfigBuilder 将 ResolvedHarnessConfig 转换为配置好的 DeepAgent
 type HarnessConfigBuilder struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // builtinToolGroups 内置工具组注册表

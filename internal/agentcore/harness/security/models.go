@@ -113,6 +113,19 @@ type PermissionConfirmationRequest struct {
 	AutoConfirmKey string
 }
 
+// PermissionSceneHookFn 宿主场景钩子函数类型。
+// 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
+// 返回 nil 表示继续走引擎 tiered 判定；
+// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
+//
+// 对齐 Python: PermissionSceneHook (host.py L26-33)
+type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
+
+// RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
+//
+// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
+type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
+
 // ToolPermissionHost 由 Agent 服务或 CLI 在构造 DeepAgent / PermissionInterruptRail 时注入。
 //
 // 对齐 Python: ToolPermissionHost (host.py L62-99)
@@ -132,19 +145,6 @@ type ToolPermissionHost struct {
 	// PermissionSceneHook 宿主场景钩子
 	PermissionSceneHook PermissionSceneHookFn
 }
-
-// PermissionSceneHookFn 宿主场景钩子函数类型。
-// 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
-// 返回 nil 表示继续走引擎 tiered 判定；
-// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
-//
-// 对齐 Python: PermissionSceneHook (host.py L26-33)
-type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
-
-// RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
-//
-// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
-type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

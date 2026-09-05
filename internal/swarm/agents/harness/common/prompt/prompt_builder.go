@@ -19,13 +19,12 @@ import (
 
 // responsePriority 响应节优先级
 // 对齐 Python: PromptPriority.RESPONSE = 60 (prompt_builder.py L29)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const responsePriority = 60
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

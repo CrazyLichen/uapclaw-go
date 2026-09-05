@@ -66,11 +66,7 @@ const (
 	WorkspaceNodeTeamLinks WorkspaceNode = ".team"
 	// WorkspaceNodeWorktreeLinks 工作树链接目录
 	WorkspaceNodeWorktreeLinks WorkspaceNode = ".worktree"
-)
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 
@@ -79,6 +75,8 @@ const (
 	// WorktreeLinksDir 工作树链接目录名
 	WorktreeLinksDir = ".worktree"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // defaultWorkspaceSchemaCN 中文默认工作空间模式
 var defaultWorkspaceSchemaCN = []DirectoryNode{

@@ -375,6 +375,69 @@ func (l SecurityAlertLevel) String() string {
 	}
 }
 
+// PopLastUserMessage 从当前 turn 移除最后一条用户消息并返回。
+// 对齐 Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
+func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
+}
+
+// PopMatchingMessages 移除匹配正则的消息并返回。
+// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L564-585)
+func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
+}
+
+// ExtractMessageContent 从消息对象提取文本内容。
+// 对齐 Python: BaseSecurityRail._extract_message_content(msg) (base_security_rail.py L587-601)
+func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
+	if msg == nil {
+		return ""
+	}
+	switch v := msg.(type) {
+	case string:
+		return v
+	case map[string]any:
+		if content, ok := v["content"]; ok {
+			return fmt.Sprintf("%v", content)
+		}
+		return fmt.Sprintf("%v", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// ContainsAnyPattern 检查文本是否匹配任一正则。
+// 对齐 Python: BaseSecurityRail._contains_any_pattern(text, patterns) (base_security_rail.py L603-613)
+func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bool {
+	for _, p := range patterns {
+		if matched, err := regexp.MatchString(p, text); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// SanitizeMatchingMessages 脱敏替换匹配正则的消息内容。
+// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L615-689)
+func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isSecurityDecision 实现 SecurityDecision 接口标记
@@ -827,8 +890,6 @@ func (r *BaseSecurityRail) getAutoConfirmConfig(cbc *agentinterfaces.AgentCallba
 }
 
 // isSecurityTruthy 宽松真值判断（对齐 Python bool(val)）。
-// bool → 直接判断，其余 → false
-// isSecurityTruthy 宽松真值判断（对齐 Python bool(val)）。
 // bool → 直接判断；int/int64/float64 → 非0为true；
 // string → "true"/"1"/"yes" 为 true（安全语义，非 Python 全非空字符串为 true）；
 // 其余 → false
@@ -872,69 +933,4 @@ func tryGetAutoConfirm(val any) (bool, bool) {
 		return a.GetAutoConfirm(), true
 	}
 	return false, false
-}
-
-// ──────────────────────────── 导出函数（消息操作） ────────────────────────────
-
-// PopLastUserMessage 从当前 turn 移除最后一条用户消息并返回。
-// 对齐 Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
-func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []any {
-	sess := cbc.Session()
-	if sess == nil {
-		return nil
-	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
-	return nil
-}
-
-// PopMatchingMessages 移除匹配正则的消息并返回。
-// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L564-585)
-func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []any {
-	sess := cbc.Session()
-	if sess == nil {
-		return nil
-	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
-	return nil
-}
-
-// ExtractMessageContent 从消息对象提取文本内容。
-// 对齐 Python: BaseSecurityRail._extract_message_content(msg) (base_security_rail.py L587-601)
-func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
-	if msg == nil {
-		return ""
-	}
-	switch v := msg.(type) {
-	case string:
-		return v
-	case map[string]any:
-		if content, ok := v["content"]; ok {
-			return fmt.Sprintf("%v", content)
-		}
-		return fmt.Sprintf("%v", v)
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-// ContainsAnyPattern 检查文本是否匹配任一正则。
-// 对齐 Python: BaseSecurityRail._contains_any_pattern(text, patterns) (base_security_rail.py L603-613)
-func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bool {
-	for _, p := range patterns {
-		if matched, err := regexp.MatchString(p, text); err == nil && matched {
-			return true
-		}
-	}
-	return false
-}
-
-// SanitizeMatchingMessages 脱敏替换匹配正则的消息内容。
-// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L615-689)
-func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []any {
-	sess := cbc.Session()
-	if sess == nil {
-		return nil
-	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
-	return nil
 }

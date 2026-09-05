@@ -33,6 +33,15 @@ type Operation interface {
 	TypeName() string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时校验 BaseOperation 满足 Operation 接口
+var _ Operation = (*BaseOperation)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SchemaVersion 返回操作的 schema 版本号。
@@ -59,8 +68,3 @@ func (op *BaseOperation) Description() string {
 func (op *BaseOperation) TypeName() string {
 	return "BaseOperation"
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 编译时校验 BaseOperation 满足 Operation 接口
-var _ Operation = (*BaseOperation)(nil)

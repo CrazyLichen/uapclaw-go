@@ -45,7 +45,7 @@ func WithPrefix(prefix string) ProgressEventOption {
 // BuildProgressEvent 构建 llm_reasoning 进度事件。
 func BuildProgressEvent(prefix, message string) *stream.OutputSchema {
 	return &stream.OutputSchema{
-		Type: "llm_reasoning",
+		Type:  "llm_reasoning",
 		Index: 0,
 		Payload: map[string]any{
 			"content": fmt.Sprintf("%s %s\n", prefix, message),

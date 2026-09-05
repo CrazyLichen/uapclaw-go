@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

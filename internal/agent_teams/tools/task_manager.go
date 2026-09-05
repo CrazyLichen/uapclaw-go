@@ -83,23 +83,23 @@ type TaskSummary struct {
 // PlanRecord 计划记录（index.json 中的一条）。
 // 对齐 Python: _write_task_plan_index 写入的完整字段集
 type PlanRecord struct {
-	PlanID           string `json:"plan_id"`
-	TaskID           string `json:"task_id"`
-	TeamPlanID       string `json:"team_plan_id,omitempty"`
-	MemberName       string `json:"member_name"`
-	Status           string `json:"status"`
-	LatestPlanID     string `json:"latest_plan_id,omitempty"`
-	MemberPlanMD     string `json:"member_plan_md,omitempty"`
-	SourcePlanPath   string `json:"source_plan_path,omitempty"`
-	ToolCallID       string `json:"tool_call_id,omitempty"`
-	LeaderMessageID  string `json:"leader_message_id,omitempty"`
-	LeaderName       string `json:"leader_name,omitempty"`
-	Decision         string `json:"decision"`
-	Feedback         string `json:"feedback,omitempty"`
-	SubmittedAt      string `json:"submitted_at,omitempty"`
-	DecidedAt        string `json:"decided_at,omitempty"`
-	CompletedAt      string `json:"completed_at,omitempty"`
-	UpdatedAt        string `json:"updated_at,omitempty"`
+	PlanID          string `json:"plan_id"`
+	TaskID          string `json:"task_id"`
+	TeamPlanID      string `json:"team_plan_id,omitempty"`
+	MemberName      string `json:"member_name"`
+	Status          string `json:"status"`
+	LatestPlanID    string `json:"latest_plan_id,omitempty"`
+	MemberPlanMD    string `json:"member_plan_md,omitempty"`
+	SourcePlanPath  string `json:"source_plan_path,omitempty"`
+	ToolCallID      string `json:"tool_call_id,omitempty"`
+	LeaderMessageID string `json:"leader_message_id,omitempty"`
+	LeaderName      string `json:"leader_name,omitempty"`
+	Decision        string `json:"decision"`
+	Feedback        string `json:"feedback,omitempty"`
+	SubmittedAt     string `json:"submitted_at,omitempty"`
+	DecidedAt       string `json:"decided_at,omitempty"`
+	CompletedAt     string `json:"completed_at,omitempty"`
+	UpdatedAt       string `json:"updated_at,omitempty"`
 }
 
 // PlanIndex 计划索引（index.json 结构）。
@@ -457,27 +457,27 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
 		}
 
-			// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
-			planIndex, err := tm.loadPlanIndex()
-			if err == nil && planIndex != nil {
-				taskIdx, ok := planIndex.Tasks[taskID]
-				if ok && taskIdx != nil {
-					latestPlanID := ""
-					if len(taskIdx.PlanIDs) > 0 {
-						latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
-					}
-					nowISO := time.Now().Format(time.RFC3339)
-					// 对齐 Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
-					planRecord := &PlanRecord{
-						PlanID:     latestPlanID,
-						TaskID:     taskID,
-						TeamPlanID: tm.teamPlanID,
-						MemberName: task.Assignee,
-						Status:     string(fsm.TaskStatusCompleted),
-						CompletedAt: nowISO,
-						UpdatedAt:  nowISO,
-					}
-					if err := tm.writePlanIndex(planRecord); err != nil {
+		// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
+		planIndex, err := tm.loadPlanIndex()
+		if err == nil && planIndex != nil {
+			taskIdx, ok := planIndex.Tasks[taskID]
+			if ok && taskIdx != nil {
+				latestPlanID := ""
+				if len(taskIdx.PlanIDs) > 0 {
+					latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
+				}
+				nowISO := time.Now().Format(time.RFC3339)
+				// 对齐 Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
+				planRecord := &PlanRecord{
+					PlanID:      latestPlanID,
+					TaskID:      taskID,
+					TeamPlanID:  tm.teamPlanID,
+					MemberName:  task.Assignee,
+					Status:      string(fsm.TaskStatusCompleted),
+					CompletedAt: nowISO,
+					UpdatedAt:   nowISO,
+				}
+				if err := tm.writePlanIndex(planRecord); err != nil {
 					logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
 				}
 			}

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"gopkg.in/yaml.v3"
 )
 
@@ -290,4 +290,3 @@ func setNestedValue(m map[string]any, parts []string, value any) {
 		}
 	}
 }
-

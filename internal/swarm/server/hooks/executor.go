@@ -84,8 +84,8 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 
 	// 对齐 Python: 只收集已知类型的 hook，未知类型不加入 tasks（不占用 result 位置）
 	type indexedHook struct {
-		idx  int
-		cfg  map[string]any
+		idx int
+		cfg map[string]any
 	}
 	var validHooks []indexedHook
 	for i, cfg := range hookConfigs {

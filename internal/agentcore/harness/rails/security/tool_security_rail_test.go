@@ -22,14 +22,14 @@ import (
 // mockSessionFacade 测试用 mock SessionFacade
 type mockSessionFacade struct{}
 
-func (m *mockSessionFacade) GetSessionID() string                                       { return "test-session" }
-func (m *mockSessionFacade) UpdateState(_ map[string]any)                               {}
-func (m *mockSessionFacade) GetState(_ state.StateKey) (any, error)                     { return nil, nil }
-func (m *mockSessionFacade) DumpState() map[string]any                                  { return nil }
-func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error                 { return nil }
-func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error           { return nil }
-func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any                              { return nil }
-func (m *mockSessionFacade) Interact(_ context.Context, _ any) error                    { return nil }
+func (m *mockSessionFacade) GetSessionID() string                             { return "test-session" }
+func (m *mockSessionFacade) UpdateState(_ map[string]any)                     {}
+func (m *mockSessionFacade) GetState(_ state.StateKey) (any, error)           { return nil, nil }
+func (m *mockSessionFacade) DumpState() map[string]any                        { return nil }
+func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error       { return nil }
+func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error { return nil }
+func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *mockSessionFacade) Interact(_ context.Context, _ any) error          { return nil }
 
 // 编译时接口检查
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)

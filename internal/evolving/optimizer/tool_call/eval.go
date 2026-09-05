@@ -11,8 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 )
 

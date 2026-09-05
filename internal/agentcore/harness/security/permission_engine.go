@@ -251,4 +251,3 @@ func getReason(permission PermissionLevel, toolName, matchedRule string) string 
 		return fmt.Sprintf("Approval required for %s (rule: %s)", toolName, matchedRule)
 	}
 }
-

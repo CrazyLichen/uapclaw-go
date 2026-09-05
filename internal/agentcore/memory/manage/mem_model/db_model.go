@@ -50,7 +50,7 @@ type MemoryMeta struct {
 	SchemaVersion string `gorm:"size:64;not null"`
 }
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -95,7 +95,7 @@ func CreateTables(db *gorm.DB) error {
 	// 对齐 Python: current_version = sql_registry.get_current_version(entity_key)
 	// 仅 current_version > 0 时写入，等于 0 时不写
 	tableEntityKeys := map[string]string{
-		"user_message":      "user_message",
+		"user_message":       "user_message",
 		"scope_user_mapping": "scope_user_mapping",
 	}
 	for tbl, entityKey := range tableEntityKeys {

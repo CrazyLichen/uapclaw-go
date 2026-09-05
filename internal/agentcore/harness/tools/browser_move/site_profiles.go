@@ -816,4 +816,3 @@ func deepCopyProfiles(profiles []map[string]any) []map[string]any {
 	_ = json.Unmarshal(data, &result)
 	return result
 }
-

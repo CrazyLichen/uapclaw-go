@@ -101,6 +101,8 @@ type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, con
 //   - error：处理错误
 type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -124,6 +126,7 @@ const (
 	WsErrAgentUnavailable = "AGENT_UNAVAILABLE"
 )
 
+// logComponent 本文件日志组件
 const logComponent = logger.ComponentGateway
 
 // maxTeamsConfigPanel 配置面板最大团队数。

@@ -101,12 +101,12 @@ type Trajectory struct {
 	Meta map[string]any `json:"meta"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // CostInfo 聚合成本指标。
 //
 // 对应 Python: CostInfo = Dict[str, int]  # {"input_tokens": N, "output_tokens": M}
 type CostInfo map[string]int
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // StepKind 执行步骤类型。
 //

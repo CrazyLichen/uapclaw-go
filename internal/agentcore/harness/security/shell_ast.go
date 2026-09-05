@@ -508,4 +508,3 @@ func scanShellStructure(command string) ShellStructureFlags {
 
 	return flags
 }
-

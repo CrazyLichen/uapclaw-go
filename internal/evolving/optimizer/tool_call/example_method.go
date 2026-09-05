@@ -881,7 +881,6 @@ func (m *APICallToExampleMethod) GetOriginalDescription(tool map[string]any) str
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-
 // lastN 返回字符串切片的最后 n 个元素。
 func lastN(slice []string, n int) []string {
 	if n >= len(slice) {

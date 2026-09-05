@@ -11,6 +11,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ApprovalManager 审批管理器窄接口。
+//
+// ExperienceManager 隐式满足此接口：
+//   - ApproveRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
+//   - RejectRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
+type ApprovalManager interface {
+	// ApproveRequest 持久化或应用一个暂存的审批请求。
+	ApproveRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
+	// RejectRequest 拒绝一个暂存的审批请求。
+	RejectRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
+}
+
 // EvolutionHostEventMeta 演化事件元数据，携带于 OutputSchema.Payload["_evolution_meta"] 中。
 type EvolutionHostEventMeta struct {
 	// EventKind 事件类型
@@ -75,22 +87,13 @@ type TeamSkillQuestion struct {
 	Content string
 }
 
-// ApprovalManager 审批管理器窄接口。
-//
-// ExperienceManager 隐式满足此接口：
-//   - ApproveRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
-//   - RejectRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
-type ApprovalManager interface {
-	// ApproveRequest 持久化或应用一个暂存的审批请求。
-	ApproveRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
-	// RejectRequest 拒绝一个暂存的审批请求。
-	RejectRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // EvolutionEventKind 演化事件类型。
 type EvolutionEventKind = string
+
+// PendingApprovalSnapshotStore 暂存审批快照映射。
+type PendingApprovalSnapshotStore = map[string]*experience.PendingChange
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -104,9 +107,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// PendingApprovalSnapshotStore 暂存审批快照映射。
-type PendingApprovalSnapshotStore = map[string]*experience.PendingChange
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

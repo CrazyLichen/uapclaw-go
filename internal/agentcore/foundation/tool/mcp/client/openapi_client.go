@@ -670,7 +670,6 @@ func replaceSchemaRefs(m map[string]any) {
 	}
 }
 
-
 // formatSimpleDescription 为 OpenAPI 工具生成增强描述。
 //
 // 对照 Python: fastmcp.utilities.openapi.format_simple_description

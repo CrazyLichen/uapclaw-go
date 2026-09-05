@@ -417,8 +417,6 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Match 实现 PatternMatcher 的静态匹配方法。
 //
 // 对齐 Python: PatternMatcher.match(pattern, value) (patterns.py L166-169)
@@ -544,6 +542,8 @@ func (pm *CommandMatcher) MatchCommandAny(patterns []string, command string) boo
 	}
 	return false
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // escapeRegexChars 转义正则特殊字符（保留 skip 中的字符）
 func escapeRegexChars(s, toEscape string) string {

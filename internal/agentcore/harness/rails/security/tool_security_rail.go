@@ -11,8 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -872,7 +872,6 @@ func confirmPayloadSchemaForPermission() map[string]any {
 		"title":    "ConfirmPayload",
 	}
 }
-
 
 // applyDecision 根据中断决策类型执行对应的处理逻辑。
 // 对齐 Python: BaseInterruptRail._apply_decision — 复用基类逻辑。

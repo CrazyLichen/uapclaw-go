@@ -12,12 +12,6 @@ type BaseMemoryUnit struct {
 	MemID string
 }
 
-// GetMemType 返回记忆类型（实现 MemoryUnit 接口）。
-func (u *BaseMemoryUnit) GetMemType() MemoryType { return u.MemType }
-
-// GetMemID 返回记忆唯一标识（实现 MemoryUnit 接口）。
-func (u *BaseMemoryUnit) GetMemID() string { return u.MemID }
-
 // MemoryUnit 记忆数据项接口，所有记忆类型（FragmentMemoryUnit/VariableUnit/SummaryUnit）必须实现。
 //
 // 对齐 Python: BaseMemoryUnit（作为基类，Go 中用接口替代继承）
@@ -122,6 +116,12 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetMemType 返回记忆类型（实现 MemoryUnit 接口）。
+func (u *BaseMemoryUnit) GetMemType() MemoryType { return u.MemType }
+
+// GetMemID 返回记忆唯一标识（实现 MemoryUnit 接口）。
+func (u *BaseMemoryUnit) GetMemID() string { return u.MemID }
 
 // AllMemoryTypeValues 返回所有记忆类型的字符串值列表。
 //

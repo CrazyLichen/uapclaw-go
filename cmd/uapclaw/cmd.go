@@ -34,8 +34,12 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const logComponentGateway = logger.ComponentGateway
-const logComponentAgentServer = logger.ComponentAgentServer
+const (
+	// logComponentGateway Gateway 日志组件常量
+	logComponentGateway = logger.ComponentGateway
+	// logComponentAgentServer AgentServer 日志组件常量
+	logComponentAgentServer = logger.ComponentAgentServer
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

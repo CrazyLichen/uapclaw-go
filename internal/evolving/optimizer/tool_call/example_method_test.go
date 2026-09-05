@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

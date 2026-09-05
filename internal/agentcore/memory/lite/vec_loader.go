@@ -18,6 +18,8 @@ import (
 // vec0InitFuncName vec0 扩展初始化函数名
 const vec0InitFuncName = "sqlite3_vec_init"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveVec0Path 解析 vec0.so 的路径。
