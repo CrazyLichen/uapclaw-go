@@ -3,10 +3,12 @@ package adapter
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
@@ -246,13 +248,49 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 // ──────────────────────────── 未实现 Rail Builder（⤵️ 10.6.3-10） ────────────────────────────
 
 // buildSkillRail 构建技能使用护栏。
-// ⤵️ 10.6.3-10: SkillUseRail
-// 对齐 Python: _build_skill_rail() (line 1916-1960)
+// ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
 func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 SkillUseRail
-	// 对齐 Python: disabled_skills=self._skill_manager.list_execution_disabled_skills()
-	// 待 Rail 类型实现后: d.skillManager.ListExecutionDisabledSkills()
-	return nil
+	skillsDir := workspace.AgentSkillsDir()
+	if skillsDir == "" {
+		return nil
+	}
+	skillMode := d.resolveSkillMode()
+	var disabled []string
+	if d.skillManager != nil {
+		disabled = d.skillManager.ListExecutionDisabledSkills()
+	}
+	rail := skillrails.NewSkillUseRail(
+		[]string{skillsDir},
+		skillrails.WithSkillMode(skillMode),
+		skillrails.WithIncludeTools(false),
+		skillrails.WithDisabledSkills(disabled),
+	)
+	logger.Info(logComponent).
+		Str("skill_mode", skillMode).
+		Int("disabled_count", len(disabled)).
+		Msg("SkillUseRail create success")
+	return rail
+}
+
+// resolveSkillMode 校验配置的 skill_mode 并在无效值时安全回退。
+// 对齐 Python: _resolve_skill_mode(config)
+func (d *DeepAdapter) resolveSkillMode() string {
+	rawSkillMode := skillrails.SkillModeAll // 默认值
+	if d.configCache != nil {
+		if sm, ok := d.configCache["skill_mode"]; ok {
+			if s, ok := sm.(string); ok {
+				rawSkillMode = s
+			}
+		}
+	}
+	if _, ok := skillrails.ValidSkillModes[rawSkillMode]; ok {
+		return rawSkillMode
+	}
+	logger.Warn(logComponent).
+		Str("raw_skill_mode", rawSkillMode).
+		Str("fallback", skillrails.SkillModeAll).
+		Msg("invalid skill_mode, fallback to all")
+	return skillrails.SkillModeAll
 }
 
 // buildSkillEvolutionRail 构建技能演进护栏。
