@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 )
 
@@ -165,6 +166,32 @@ func TestUpdateEmbeddingDimensionOperation_默认batchSize(t *testing.T) {
 	}
 }
 
+// TestUpdateEmbeddingDimensionOperation_回调 测试 RecomputeEmbeddingFunc 回调
+func TestUpdateEmbeddingDimensionOperation_回调(t *testing.T) {
+	fn := func(doc map[string]any) []float64 {
+		return []float64{0.1, 0.2, 0.3}
+	}
+	op := UpdateEmbeddingDimensionOperation{
+		BaseOperation:          BaseOperation{Metadata: OperationMetadata{SchemaVersion: 2}},
+		DataType:               "vector_summary",
+		FieldName:              "embedding",
+		NewDimension:           3,
+		RecomputeEmbeddingFunc: fn,
+		BatchSize:              100,
+	}
+	if op.RecomputeEmbeddingFunc == nil {
+		t.Error("RecomputeEmbeddingFunc 不应为 nil")
+	}
+	doc := map[string]any{"text": "hello"}
+	result := op.RecomputeEmbeddingFunc(doc)
+	if len(result) != 3 {
+		t.Errorf("RecomputeEmbeddingFunc 返回长度 %d, want 3", len(result))
+	}
+	if result[0] != 0.1 {
+		t.Errorf("RecomputeEmbeddingFunc(doc)[0] = %v, want 0.1", result[0])
+	}
+}
+
 // ──────────────────────────── KV Operations ────────────────────────────
 
 // TestUpdateKVOperation_回调 测试 UpdateKVOperation 回调函数
@@ -192,7 +219,7 @@ func TestUpdateKVOperation_回调(t *testing.T) {
 // TestUpdateMessageOperation_回调 测试 UpdateMessageOperation 回调函数
 func TestUpdateMessageOperation_回调(t *testing.T) {
 	called := false
-	fn := func(ctx context.Context, store any) error {
+	fn := func(ctx context.Context, store db.BaseMessageStore) error {
 		called = true
 		return nil
 	}

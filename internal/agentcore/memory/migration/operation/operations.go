@@ -3,6 +3,7 @@ package operation
 import (
 	"context"
 
+	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 )
 
@@ -116,7 +117,8 @@ type UpdateEmbeddingDimensionOperation struct {
 	// NewDimension 新的嵌入向量维度
 	NewDimension int
 	// RecomputeEmbeddingFunc 重新计算嵌入的回调函数（由 Adapter 调用）
-	RecomputeEmbeddingFunc func(any) any
+	// 输入为文档 dict，输出为嵌入向量
+	RecomputeEmbeddingFunc func(map[string]any) []float64
 	// BatchSize 重新计算嵌入时的批量大小（Python 默认 1000，Go 使用者需显式设置）
 	BatchSize int
 }
@@ -156,8 +158,8 @@ func (op *UpdateKVOperation) TypeName() string { return "UpdateKVOperation" }
 // ==================== Message Operations ====================
 
 // MessageUpdateCallable 消息更新回调函数类型。
-// 对齐 Python: MessageUpdateCallable = Callable[[Any], Awaitable[None]]
-type MessageUpdateCallable func(ctx context.Context, store any) error
+// 对齐 Python: MessageUpdateCallable = Callable[[BaseMessageStore], Awaitable[None]]
+type MessageUpdateCallable func(ctx context.Context, store db.BaseMessageStore) error
 
 // UpdateMessageOperation 消息更新操作。
 // 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateMessageOperation)
@@ -192,6 +194,8 @@ type TransformMemoryDocFieldOperation struct {
 	// FieldName 目标字段名
 	FieldName string
 	// TransformFunc 字段值变换函数
+	// 输入输出类型取决于目标字段（如 int→int、float→string），调用方负责类型安全
+	// 对齐 Python: Callable[[Any], Any] — Python 同样不约束输入输出类型
 	TransformFunc func(any) any
 }
 
