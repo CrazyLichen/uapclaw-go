@@ -154,8 +154,9 @@ func (m *DefaultCheckpointManager) GetPending(operatorID string) []*PendingChang
 // CommitPending 清空并返回 pending payload 中的 EvolutionRecord 总数。
 //
 // 只清空内存中的待定状态并返回记录计数，不负责写磁盘。
+// store 参数当前未使用，预留对齐 Python commit_pending(operator_id, store) 签名。
 // 对应 Python: DefaultCheckpointManager.commit_pending(operator_id, store)
-func (m *DefaultCheckpointManager) CommitPending(operatorID string) int {
+func (m *DefaultCheckpointManager) CommitPending(operatorID string, store *EvolutionStore) int {
 	pendingList := m.pending[operatorID]
 	delete(m.pending, operatorID)
 	count := 0

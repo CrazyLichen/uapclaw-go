@@ -300,7 +300,7 @@ func TestCommitPending(t *testing.T) {
 	m.AddPending("op_1", change1)
 	m.AddPending("op_1", change2)
 
-	count := m.CommitPending("op_1")
+	count := m.CommitPending("op_1", nil)
 	if count != 3 {
 		t.Errorf("CommitPending 返回记录总数 = %d, 期望 3", count)
 	}
