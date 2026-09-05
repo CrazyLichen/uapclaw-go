@@ -89,30 +89,31 @@ var evolutionIndexPattern = regexp.MustCompile(
 
 // NewEvolutionStore 创建 EvolutionStore 实例。
 //
+// dirs 为技能基础目录列表（至少一个），单个目录也用切片传入。
+// sysOperation 通过 SetSysOperation 方法注入，对齐 Python 属性赋值模式。
+//
 // 对应 Python: EvolutionStore.__init__(skills_base_dir: Union[str, List[str]])
-// skillsBaseDirs 支持 string 和 []string 两种输入，对齐 Python Union[str, List[str]]
-func NewEvolutionStore(skillsBaseDirs any, sysOp sys_operation.SysOperation) *EvolutionStore {
-	var dirs []string
-	switch v := skillsBaseDirs.(type) {
-	case string:
-		dirs = normalizeBaseDirs(v)
-	case []string:
-		dirs = normalizeBaseDirsFromList(v)
-	default:
-		panic(fmt.Sprintf("skillsBaseDirs 必须为 string 或 []string，实际类型: %T", skillsBaseDirs))
-	}
+func NewEvolutionStore(dirs []string) *EvolutionStore {
+	dirs = normalizeBaseDirsFromList(dirs)
 	if len(dirs) == 0 {
 		panic("skills_base_dir 为空")
 	}
 	s := &EvolutionStore{
-		baseDirs:     dirs,
-		sysOperation: sysOp,
-		skillLocks:   map[string]*sync.RWMutex{},
+		baseDirs:   dirs,
+		skillLocks: map[string]*sync.RWMutex{},
 	}
 	s.records = &StoreRecordsHelper{store: s}
 	s.projection = &StoreProjectionHelper{store: s}
 	s.archive = &StoreArchiveHelper{store: s}
 	return s
+}
+
+// SetSysOperation 注入系统操作接口。
+//
+// 构造后调用，对齐 Python: self.sys_operation = sys_operation 属性赋值模式。
+// 缺省时 ReadFileText/WriteFileText 回退到本地 os/fs。
+func (s *EvolutionStore) SetSysOperation(op sys_operation.SysOperation) {
+	s.sysOperation = op
 }
 
 // BaseDirs 返回配置的技能基础目录列表。
@@ -657,26 +658,6 @@ func (s *EvolutionStore) getSkillLock(name string) *sync.RWMutex {
 	l := &sync.RWMutex{}
 	s.skillLocks[name] = l
 	return l
-}
-
-// normalizeBaseDirs 解析和规范化技能基础目录列表。
-// 对应 Python: EvolutionStore._normalize_base_dirs(skills_base_dir)
-func normalizeBaseDirs(skillsBaseDir string) []string {
-	parsed := parseBaseDirs(skillsBaseDir)
-	var result []string
-	seen := map[string]bool{}
-	for _, rawDir := range parsed {
-		resolved, err := filepath.Abs(rawDir)
-		if err != nil {
-			continue
-		}
-		if seen[resolved] {
-			continue
-		}
-		seen[resolved] = true
-		result = append(result, resolved)
-	}
-	return result
 }
 
 // normalizeBaseDirsFromList 从 []string 规范化基础目录列表。

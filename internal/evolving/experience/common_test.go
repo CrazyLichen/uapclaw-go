@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
@@ -212,7 +211,7 @@ func TestCommitPendingChange(t *testing.T) {
 		tmpDir := t.TempDir()
 		skillDir := filepath.Join(tmpDir, "skills")
 		os.MkdirAll(skillDir, 0o755)
-		store := checkpointing.NewEvolutionStore(skillDir, sys_operation.SysOperation(nil))
+		store := checkpointing.NewEvolutionStore([]string{skillDir})
 
 		// 创建技能目录和空的 evolutions.json
 		skillPath := filepath.Join(skillDir, "test_skill")

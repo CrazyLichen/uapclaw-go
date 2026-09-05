@@ -1327,7 +1327,7 @@ func TestGetBoolFromAny(t *testing.T) {
 // TestNewEvolutionStore_基本创建 测试创建 EvolutionStore
 func TestNewEvolutionStore_基本创建(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	if len(store.BaseDirs()) == 0 {
 		t.Errorf("BaseDirs 不应为空")
 	}
@@ -1340,7 +1340,7 @@ func TestNewEvolutionStore_基本创建(t *testing.T) {
 func TestNewEvolutionStore_多目录(t *testing.T) {
 	tmpDir1 := t.TempDir()
 	tmpDir2 := t.TempDir()
-	store := NewEvolutionStore(tmpDir1+","+tmpDir2, nil)
+	store := NewEvolutionStore([]string{tmpDir1, tmpDir2})
 	if len(store.BaseDirs()) != 2 {
 		t.Errorf("BaseDirs 长度 = %d, 期望 2", len(store.BaseDirs()))
 	}
@@ -1353,7 +1353,7 @@ func TestNewEvolutionStore_Panic(t *testing.T) {
 			t.Errorf("空 baseDir 应触发 panic")
 		}
 	}()
-	NewEvolutionStore("", nil)
+	NewEvolutionStore(nil)
 }
 
 // ──────────────────────────── EvolutionStore 功能测试 ────────────────────────────
@@ -1361,7 +1361,7 @@ func TestNewEvolutionStore_Panic(t *testing.T) {
 // TestEvolutionStore_ResolveSkillDir 测试解析技能目录
 func TestEvolutionStore_ResolveSkillDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	// 创建技能目录
 	skillDir := filepath.Join(tmpDir, "my_skill")
@@ -1389,7 +1389,7 @@ func TestEvolutionStore_ResolveSkillDir(t *testing.T) {
 // TestEvolutionStore_SkillExists 测试技能是否存在
 func TestEvolutionStore_SkillExists(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	os.MkdirAll(filepath.Join(tmpDir, "existing_skill"), 0755)
 
@@ -1405,7 +1405,7 @@ func TestEvolutionStore_SkillExists(t *testing.T) {
 // TestEvolutionStore_FindSkillMD 测试查找 SKILL.md
 func TestEvolutionStore_FindSkillMD(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	skillDir := filepath.Join(tmpDir, "skill1")
 	os.MkdirAll(skillDir, 0755)
@@ -1424,7 +1424,7 @@ func TestEvolutionStore_FindSkillMD(t *testing.T) {
 // TestEvolutionStore_FindSkillMD_其他MD 测试查找非 SKILL.md 的 .md 文件
 func TestEvolutionStore_FindSkillMD_其他MD(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	skillDir := filepath.Join(tmpDir, "skill2")
 	os.MkdirAll(skillDir, 0755)
@@ -1440,7 +1440,7 @@ func TestEvolutionStore_FindSkillMD_其他MD(t *testing.T) {
 // TestEvolutionStore_ReadWriteFileText 测试读写文本文件
 func TestEvolutionStore_ReadWriteFileText(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	ctx := context.Background()
 	testPath := filepath.Join(tmpDir, "test_file.txt")
@@ -1463,7 +1463,7 @@ func TestEvolutionStore_ReadWriteFileText(t *testing.T) {
 // TestEvolutionStore_ReadSkillContent 测试读取技能内容
 func TestEvolutionStore_ReadSkillContent(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	skillDir := filepath.Join(tmpDir, "skill3")
 	os.MkdirAll(skillDir, 0755)
@@ -1482,7 +1482,7 @@ func TestEvolutionStore_ReadSkillContent(t *testing.T) {
 // TestEvolutionStore_ReadPristineSkillContent 测试读取不含 evolution-index 的内容
 func TestEvolutionStore_ReadPristineSkillContent(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	skillDir := filepath.Join(tmpDir, "skill4")
 	os.MkdirAll(skillDir, 0755)
@@ -1505,7 +1505,7 @@ func TestEvolutionStore_ReadPristineSkillContent(t *testing.T) {
 // TestEvolutionStore_ListSkillNames 测试列出技能名称
 func TestEvolutionStore_ListSkillNames(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 
 	os.MkdirAll(filepath.Join(tmpDir, "skill_a"), 0755)
 	os.MkdirAll(filepath.Join(tmpDir, "skill_b"), 0755)
@@ -1678,7 +1678,7 @@ func TestExtractDescriptionFromSkillMD_无Frontmatter(t *testing.T) {
 // TestEvolutionStore_CreateSkill 测试创建新技能
 func TestEvolutionStore_CreateSkill(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	skillDir, err := store.CreateSkill(ctx, "new_skill", "描述", "技能内容", "")
@@ -1702,7 +1702,7 @@ func TestEvolutionStore_CreateSkill(t *testing.T) {
 // TestEvolutionStore_CreateSkill_无效名称 测试无效技能名称
 func TestEvolutionStore_CreateSkill_无效名称(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	// 空名称
@@ -1724,7 +1724,7 @@ func TestEvolutionStore_CreateSkill_无效名称(t *testing.T) {
 // TestEvolutionStore_CreateSkill_自定义Frontmatter 测试自定义 frontmatter 创建技能
 func TestEvolutionStore_CreateSkill_自定义Frontmatter(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	fm := "---\nskill_id: sk_custom\n---"
@@ -1744,7 +1744,7 @@ func TestEvolutionStore_CreateSkill_自定义Frontmatter(t *testing.T) {
 // TestEvolutionStore_ReadSkillID 测试读取 skill_id
 func TestEvolutionStore_ReadSkillID(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	skillDir := filepath.Join(tmpDir, "skill5")
@@ -1763,7 +1763,7 @@ func TestEvolutionStore_ReadSkillID(t *testing.T) {
 // TestEvolutionStore_EnsureSkillID 测试确保 skill_id 存在
 func TestEvolutionStore_EnsureSkillID(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	skillDir := filepath.Join(tmpDir, "skill6")
@@ -1784,7 +1784,7 @@ func TestEvolutionStore_EnsureSkillID(t *testing.T) {
 // TestEvolutionStore_AppendRecord 测试追加演进记录
 func TestEvolutionStore_AppendRecord(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	// 先创建技能
@@ -1816,7 +1816,7 @@ func TestEvolutionStore_AppendRecord(t *testing.T) {
 // TestEvolutionStore_ArchiveSkillBody 测试归档 SKILL.md
 func TestEvolutionStore_ArchiveSkillBody(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	skillDir, _ := store.CreateSkill(ctx, "archive_skill", "描述", "内容", "")
@@ -1843,7 +1843,7 @@ func TestEvolutionStore_ArchiveSkillBody(t *testing.T) {
 // TestEvolutionStore_ListArchives 测试列出归档文件
 func TestEvolutionStore_ListArchives(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	store.CreateSkill(ctx, "list_archive_skill", "描述", "内容", "")
@@ -1918,7 +1918,7 @@ func TestEvolutionLog_序列化循环(t *testing.T) {
 // TestEvolutionStore_InstallSkillPackage 测试安装技能包
 func TestEvolutionStore_InstallSkillPackage(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	// 先创建一个技能包
@@ -1947,7 +1947,7 @@ func TestEvolutionStore_InstallSkillPackage(t *testing.T) {
 // TestEvolutionStore_InstallSkillPackage_空包 测试空包
 func TestEvolutionStore_InstallSkillPackage_空包(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	dest, err := store.InstallSkillPackage(ctx, nil, "skill")
@@ -1964,7 +1964,7 @@ func TestEvolutionStore_InstallSkillPackage_空包(t *testing.T) {
 // TestEvolutionStore_WriteSkillContent 测试写入技能内容
 func TestEvolutionStore_WriteSkillContent(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	// 创建技能
@@ -2278,7 +2278,7 @@ func createSkillWithRecords(t *testing.T, store *EvolutionStore, ctx context.Con
 // TestEvolutionStore_LoadEvolutionLog_按Target过滤 测试按目标过滤的日志加载
 func TestEvolutionStore_LoadEvolutionLog_按Target过滤(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "filter_skill", "描述", "内容", "")
 
@@ -2311,7 +2311,7 @@ func TestEvolutionStore_LoadEvolutionLog_按Target过滤(t *testing.T) {
 // TestEvolutionStore_GetPendingRecords 测试获取待定记录
 func TestEvolutionStore_GetPendingRecords(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "pending_skill", "描述", "内容", "")
 
@@ -2329,7 +2329,7 @@ func TestEvolutionStore_GetPendingRecords(t *testing.T) {
 // TestEvolutionStore_UpdateRecordScores 测试更新记录分数
 func TestEvolutionStore_UpdateRecordScores(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "score_skill")
 
@@ -2364,7 +2364,7 @@ func TestEvolutionStore_UpdateRecordScores(t *testing.T) {
 // TestEvolutionStore_UpdateRecordScores_空更新 测试空更新
 func TestEvolutionStore_UpdateRecordScores_空更新(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	count, err := store.UpdateRecordScores(ctx, "skill", nil)
 	if err != nil {
@@ -2378,7 +2378,7 @@ func TestEvolutionStore_UpdateRecordScores_空更新(t *testing.T) {
 // TestEvolutionStore_GetRecordsByScore 测试按分数获取记录
 func TestEvolutionStore_GetRecordsByScore(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "by_score_skill")
 
@@ -2399,7 +2399,7 @@ func TestEvolutionStore_GetRecordsByScore(t *testing.T) {
 // TestEvolutionStore_DeleteRecords 测试删除记录
 func TestEvolutionStore_DeleteRecords(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "delete_skill")
 
@@ -2424,7 +2424,7 @@ func TestEvolutionStore_DeleteRecords(t *testing.T) {
 // TestEvolutionStore_DeleteRecords_空ID 测试空 ID 列表
 func TestEvolutionStore_DeleteRecords_空ID(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	count, err := store.DeleteRecords(ctx, "skill", nil)
 	if err != nil {
@@ -2438,7 +2438,7 @@ func TestEvolutionStore_DeleteRecords_空ID(t *testing.T) {
 // TestEvolutionStore_MarkRecordsApplied 测试标记记录已应用
 func TestEvolutionStore_MarkRecordsApplied(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "apply_skill")
 
@@ -2463,7 +2463,7 @@ func TestEvolutionStore_MarkRecordsApplied(t *testing.T) {
 // TestEvolutionStore_MergeRecords 测试合并记录
 func TestEvolutionStore_MergeRecords(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "merge_skill")
 
@@ -2497,7 +2497,7 @@ func TestEvolutionStore_MergeRecords(t *testing.T) {
 // TestEvolutionStore_MergeRecords_不存在的Primary 测试合并时不存在的 primary
 func TestEvolutionStore_MergeRecords_不存在的Primary(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "merge_miss_skill")
 
@@ -2513,7 +2513,7 @@ func TestEvolutionStore_MergeRecords_不存在的Primary(t *testing.T) {
 // TestEvolutionStore_UpdateRecordContent 测试更新记录内容
 func TestEvolutionStore_UpdateRecordContent(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	createSkillWithRecords(t, store, ctx, "update_skill")
 
@@ -2538,7 +2538,7 @@ func TestEvolutionStore_UpdateRecordContent(t *testing.T) {
 // 因此 UpdateRecordContent 应返回 error 而非静默 nil
 func TestEvolutionStore_UpdateRecordContent_不存在的技能(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	result, err := store.UpdateRecordContent(ctx, "skill", "nonexistent", "内容", nil)
@@ -2555,7 +2555,7 @@ func TestEvolutionStore_UpdateRecordContent_不存在的技能(t *testing.T) {
 // TestEvolutionStore_FormatDescExperienceText 测试格式化描述层经验
 func TestEvolutionStore_FormatDescExperienceText(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "desc_exp_skill", "描述", "内容", "")
 
@@ -2576,7 +2576,7 @@ func TestEvolutionStore_FormatDescExperienceText(t *testing.T) {
 // TestEvolutionStore_FormatAllDescExperiences 测试格式化所有技能描述经验
 func TestEvolutionStore_FormatAllDescExperiences(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "all_desc_skill1", "描述1", "内容1", "")
 	store.CreateSkill(ctx, "all_desc_skill2", "描述2", "内容2", "")
@@ -2594,7 +2594,7 @@ func TestEvolutionStore_FormatAllDescExperiences(t *testing.T) {
 // TestEvolutionStore_FormatBodyExperienceText 测试格式化主体层经验
 func TestEvolutionStore_FormatBodyExperienceText(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "body_exp_skill", "描述", "内容", "")
 
@@ -2611,7 +2611,7 @@ func TestEvolutionStore_FormatBodyExperienceText(t *testing.T) {
 // TestEvolutionStore_ListPendingSummary 测试列出待定经验摘要
 func TestEvolutionStore_ListPendingSummary(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "summary_skill", "描述", "内容", "")
 
@@ -2628,7 +2628,7 @@ func TestEvolutionStore_ListPendingSummary(t *testing.T) {
 // TestEvolutionStore_ListPendingSummary_空技能 测试空技能列表
 func TestEvolutionStore_ListPendingSummary_空技能(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	summary := store.ListPendingSummary(ctx, []string{"nonexistent"})
@@ -2642,7 +2642,7 @@ func TestEvolutionStore_ListPendingSummary_空技能(t *testing.T) {
 // TestEvolutionStore_PackSkillForSharing 测试打包技能用于分享
 func TestEvolutionStore_PackSkillForSharing(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "share_skill", "描述", "内容", "")
 
@@ -2658,7 +2658,7 @@ func TestEvolutionStore_PackSkillForSharing(t *testing.T) {
 // TestEvolutionStore_PackSkillForSharing_不存在 测试打包不存在的技能
 func TestEvolutionStore_PackSkillForSharing_不存在(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	pkg, err := store.PackSkillForSharing(ctx, "nonexistent")
@@ -2675,7 +2675,7 @@ func TestEvolutionStore_PackSkillForSharing_不存在(t *testing.T) {
 // TestEvolutionStore_ListSkillNamesWithDescriptions 测试列出技能及描述
 func TestEvolutionStore_ListSkillNamesWithDescriptions(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "list_desc_skill", "这是描述", "内容", "")
 
@@ -2693,7 +2693,7 @@ func TestEvolutionStore_ListSkillNamesWithDescriptions(t *testing.T) {
 // TestEvolutionStore_ArchiveEvolutions 测试归档演进数据
 func TestEvolutionStore_ArchiveEvolutions(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "archive_evo_skill", "描述", "内容", "")
 
@@ -2718,7 +2718,7 @@ func TestEvolutionStore_ArchiveEvolutions(t *testing.T) {
 // 注意：CreateSkill 会创建空 evolutions.json 文件，isFile 检查会通过
 func TestEvolutionStore_ArchiveEvolutions_无演进数据(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 
 	// 不存在的技能
@@ -2734,7 +2734,7 @@ func TestEvolutionStore_ArchiveEvolutions_无演进数据(t *testing.T) {
 // TestEvolutionStore_ClearEvolutions 测试清空演进数据
 func TestEvolutionStore_ClearEvolutions(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "clear_evo_skill", "描述", "内容", "")
 
@@ -2775,7 +2775,7 @@ func TestNewPendingChange_带消息(t *testing.T) {
 // TestRenderScriptIndex 测试渲染脚本索引
 func TestRenderScriptIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	skillDir, _ := store.CreateSkill(ctx, "script_skill", "描述", "内容", "")
 
@@ -2810,7 +2810,7 @@ func TestRenderScriptIndex(t *testing.T) {
 // TestEvolutionStore_ClearRenderedOutputs 测试清除投影文件
 func TestEvolutionStore_ClearRenderedOutputs(t *testing.T) {
 	tmpDir := t.TempDir()
-	store := NewEvolutionStore(tmpDir, nil)
+	store := NewEvolutionStore([]string{tmpDir})
 	ctx := context.Background()
 	store.CreateSkill(ctx, "clear_render_skill", "描述", "内容", "")
 
