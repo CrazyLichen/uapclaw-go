@@ -145,7 +145,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 	// 创建输出 chunk channel
 	chunkCh := make(chan *schema.AgentResponseChunk, 64)
 
-	// 启动 goroutine：推送 started → 读取 pipeline 事件 → 转为 chunk → 推送 suspended
+	// 启动 goroutine：推送 started → 读取 pipeline 事件 → 转为 chunk → 推送终态
 	go func() {
 		defer close(chunkCh)
 
@@ -163,6 +163,17 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 		}
 		for evt := range eventCh {
 			chunkCh <- eventToChunk(evt, requestID, channelID)
+		}
+
+		// 对齐 Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		// Pipeline goroutine 内的 fatal error 通过 runErr 传播到此处
+		if pipeline.runErr != nil {
+			logger.Error(logComponent).
+				Str("task_id", taskID).
+				Err(pipeline.runErr).
+				Msg("[SkillDevService] skilldev 请求处理失败")
+			chunkCh <- errorChunk(requestID, channelID, pipeline.runErr.Error())
+			return
 		}
 
 		// 发送 suspended chunk
@@ -218,6 +229,16 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 		}
 		for evt := range eventCh {
 			chunkCh <- eventToChunk(evt, requestID, channelID)
+		}
+
+		// 对齐 Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		if pipeline.runErr != nil {
+			logger.Error(logComponent).
+				Str("task_id", taskID).
+				Err(pipeline.runErr).
+				Msg("[SkillDevService] skilldev 请求处理失败")
+			chunkCh <- errorChunk(requestID, channelID, pipeline.runErr.Error())
+			return
 		}
 
 		// 推送 completed 或 suspended 事件

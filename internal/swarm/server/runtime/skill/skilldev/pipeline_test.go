@@ -231,6 +231,10 @@ func TestPipeline_Run_ErrorHandling(t *testing.T) {
 }
 
 // TestPipeline_Run_UnknownHandler 测试未知阶段处理。
+//
+// 对齐 Python: raise RuntimeError("阶段 X 没有对应的处理器")
+// Go 等价：Pipeline 不 emit ERROR 事件，而是通过 runErr 传播，
+// 上层 Service range 完后检查 pipeline.runErr 兜底。
 func TestPipeline_Run_UnknownHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	deps := &SkillDevDeps{
@@ -248,16 +252,22 @@ func TestPipeline_Run_UnknownHandler(t *testing.T) {
 		t.Fatalf("Run 返回错误: %v", err)
 	}
 
-	// 未知阶段：goroutine 应通过 channel 发送 ERROR 事件后 close
+	// 未知阶段：goroutine 应 close channel，不 emit ERROR 事件，
+	// 而是通过 pipeline.runErr 传播（对齐 Python raise RuntimeError）
 	events := collectEvents(eventCh)
-	hasError := false
 	for _, evt := range events {
 		if evt.EventType == SkillDevEventTypeError {
-			hasError = true
+			t.Error("不应收到 ERROR 事件（应通过 runErr 传播，对齐 Python raise）")
 		}
 	}
-	if !hasError {
-		t.Error("期望收到 ERROR 事件（未知阶段），实际未收到")
+	if pipeline.runErr == nil {
+		t.Error("期望 pipeline.runErr 非 nil（未知阶段）")
+	}
+	if pipeline.runErr != nil {
+		expected := "阶段 unknown_stage 没有对应的处理器"
+		if pipeline.runErr.Error() != expected {
+			t.Errorf("期望 runErr=%q, 实际: %q", expected, pipeline.runErr.Error())
+		}
 	}
 }
 

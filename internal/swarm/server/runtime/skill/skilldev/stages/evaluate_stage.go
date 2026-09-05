@@ -247,6 +247,7 @@ func (h *EvaluateStageHandler) aggregateBenchmark(sctx *skilldev.SkillDevContext
 				EvalID:        evalID,
 				EvalName:      evalName,
 				Configuration: config,
+				RunNumber:     1, // 对齐 Python: run_number 默认值为 1
 				PassRate:      passRate,
 				TimeSeconds:   timeSeconds,
 				Tokens:        tokens,

@@ -28,6 +28,10 @@ type SkillDevPipeline struct {
 	State *SkillDevState
 	// deps 外部依赖
 	deps *SkillDevDeps
+	// runErr goroutine 内设置的错误，调用方在 channel close 后读取。
+	// 对齐 Python: raise RuntimeError → 穿过 Service → UapClaw try/except 兜底。
+	// channel close 保证 happens-before，无数据竞争。
+	runErr error
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -111,9 +115,14 @@ func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error
 			// 执行当前阶段
 			handler, ok := stageHandlers[p.State.Stage]
 			if !ok {
-				p.emit(eventCh, SkillDevEventTypeError, map[string]any{
-					"message": fmt.Sprintf("阶段 %s 没有对应的处理器", p.State.Stage),
-				})
+				// 对齐 Python: raise RuntimeError("阶段 X 没有对应的处理器")
+				// Python 中异常穿过 Pipeline→Service，由 UapClaw 的 try/except 兜底。
+				// Go 等价：赋值 runErr 后退出 goroutine，上层 Service range 完后检查兜底。
+				logger.Error(logComponent).
+					Str("task_id", p.TaskID).
+					Str("stage", string(p.State.Stage)).
+					Msg("[Pipeline] 阶段没有对应的处理器")
+				p.runErr = fmt.Errorf("阶段 %s 没有对应的处理器", p.State.Stage)
 				return
 			}
 

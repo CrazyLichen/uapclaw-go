@@ -1002,8 +1002,17 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 		return nil, err
 	}
 	// 若方法需要重建 Agent 实例
+	// 对齐 Python: skillnet_install 且 pending 时不重建，等安装完成回调触发
 	if skill.NeedsRebuild(request.ReqMethod) {
-		_ = uc.CreateInstance()
+		if request.ReqMethod == schema.ReqMethodSkillsSkillnetInstall {
+			if pending, _ := result["pending"].(bool); pending {
+				// SkillNet 安装尚在进行中，等完成回调触发重建
+			} else {
+				_ = uc.CreateInstance()
+			}
+		} else {
+			_ = uc.CreateInstance()
+		}
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithResponseOK(true),
