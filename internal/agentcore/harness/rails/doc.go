@@ -48,6 +48,9 @@
 //	    ├── doc.go                  # 包文档
 //	    ├── coding_memory_rail.go   # CodingMemoryRail 编程记忆护栏（自动召回 + 互斥注入 + 数据隔离）
 //	    └── memory_rail.go          # MemoryRail 通用记忆护栏（工具注册 + 提示词注入 + 管理器初始化）
+//	├── skills/            # 技能使用护栏子包
+//	    ├── doc.go                # 包文档
+//	    └── skill_use_rail.go     # SkillUseRail 技能使用护栏（提示词注入 + 工具注册）
 //
 // 对应 Python 代码：openjiuwen/harness/rails/
 package rails
