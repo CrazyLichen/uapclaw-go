@@ -678,8 +678,14 @@ func (m *ExperienceManager) applyRequest(
 	}
 
 	if action == schema.RejectAction {
-		m.rejectPendingChange(requestID)
-		return RejectPendingChange(pending), nil
+		rejected, err := m.rejectPendingChange(requestID)
+		if err != nil {
+			return ExperienceApplyResult{
+				SkillName: pending.SkillName,
+				Errors:    []string{err.Error()},
+			}, nil
+		}
+		return RejectPendingChange(rejected), nil
 	}
 
 	commitResult, err := m.commitPendingChange(ctx, requestID)
@@ -783,13 +789,14 @@ func (m *ExperienceManager) stagePendingChange(pending *PendingChange) *PendingC
 // rejectPendingChange 从快照存储中移除一个暂存变更，不持久化。
 //
 // 对应 Python: ExperienceManager._reject_pending_change()
-func (m *ExperienceManager) rejectPendingChange(changeID string) *PendingChange {
+// Python 中 pop(change_id, None) 静默忽略不存在的 key，Go 中返回 error 对齐 Go 惯用法。
+func (m *ExperienceManager) rejectPendingChange(changeID string) (*PendingChange, error) {
 	pending := m.pendingApprovalSnapshots[changeID]
 	delete(m.pendingApprovalSnapshots, changeID)
 	if pending == nil {
-		panic(fmt.Sprintf("key error: %s", changeID))
+		return nil, fmt.Errorf("reject_pending_change: change_id %s 不存在", changeID)
 	}
-	return pending
+	return pending, nil
 }
 
 // commitPendingChange 持久化暂存变更，部分失败时保留未写入尾部。
