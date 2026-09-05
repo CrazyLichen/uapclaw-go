@@ -52,20 +52,22 @@ func TestNewBaseSecurityRail(t *testing.T) {
 // TestSecurityAllow 测试允许决策
 func TestSecurityAllow(t *testing.T) {
 	r := NewBaseSecurityRail()
-	allow := r.Allow("")
+	allow := r.Allow(nil)
 	assert.NotNil(t, allow)
-	assert.Equal(t, "", allow.NewArgs)
+	assert.Nil(t, allow.NewArgs)
 
-	allowWithArgs := r.Allow(`{"command": "ls"}`)
-	assert.Equal(t, `{"command": "ls"}`, allowWithArgs.NewArgs)
+	args := map[string]any{"command": "ls"}
+	allowWithArgs := r.Allow(&args)
+	assert.NotNil(t, allowWithArgs.NewArgs)
+	assert.Equal(t, args, *allowWithArgs.NewArgs)
 }
 
 // TestSecurityApprove 测试批准决策（Allow 别名）
 func TestSecurityApprove(t *testing.T) {
 	r := NewBaseSecurityRail()
-	approve := r.Approve("")
+	approve := r.Approve(nil)
 	assert.NotNil(t, approve)
-	assert.Equal(t, "", approve.NewArgs)
+	assert.Nil(t, approve.NewArgs)
 }
 
 // TestSecurityReject 测试拒绝决策

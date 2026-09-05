@@ -80,7 +80,7 @@ func (r *SafetyPromptRail) Uninit(agent agentinterfaces.BaseAgent) error {
 func (r *SafetyPromptRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
 	if r.systemPromptBuilder == nil {
 		// 对齐 Python: if self.system_prompt_builder is None: return self.allow()
-		return r.Allow(""), nil
+		return r.Allow(nil), nil
 	}
 
 	// 对齐 Python: safety_section = build_safety_section(self.system_prompt_builder.language)
@@ -92,5 +92,5 @@ func (r *SafetyPromptRail) runSecurityCheck(_ context.Context, _ *SecurityCheckC
 		Str("section", sections.SectionSafety).
 		Msg("已注入安全提示词 section")
 
-	return r.Allow(""), nil
+	return r.Allow(nil), nil
 }

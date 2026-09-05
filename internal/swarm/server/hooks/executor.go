@@ -82,30 +82,61 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 		return nil
 	}
 
-	results := make([]HookResult, len(hookConfigs))
+	// 对齐 Python: 只收集已知类型的 hook，未知类型不加入 tasks（不占用 result 位置）
+	type indexedHook struct {
+		idx  int
+		cfg  map[string]any
+	}
+	var validHooks []indexedHook
+	for i, cfg := range hookConfigs {
+		hookType, _ := cfg["type"].(string)
+		// 对齐 Python: hook_type = cfg.get("type", "command")
+		// 未知类型跳过，不加入执行列表
+		if hookType == string(hookscfg.HookTypeCommand) || hookType == "" || hookType == string(hookscfg.HookTypePrompt) {
+			validHooks = append(validHooks, indexedHook{idx: i, cfg: cfg})
+		}
+	}
+
+	if len(validHooks) == 0 {
+		return nil
+	}
+
+	results := make([]HookResult, len(validHooks))
 	var wg sync.WaitGroup
 
-	for i, cfg := range hookConfigs {
+	for i, h := range validHooks {
 		wg.Add(1)
-		go func(idx int, c map[string]any) {
+		go func(resultIdx int, cfg map[string]any) {
 			defer wg.Done()
-			hookType, _ := c["type"].(string)
+			// 对齐 Python asyncio.gather(return_exceptions=True)：
+			// goroutine 内 panic 等价于 Python coroutine 异常，
+			// 用 defer/recover 捕获，转为 NON_BLOCKING_ERROR
+			defer func() {
+				if r := recover(); r != nil {
+					results[resultIdx] = HookResult{
+						Outcome: HookOutcomeNonBlockingError,
+						Error:   fmt.Sprintf("hook panic: %v", r),
+					}
+				}
+			}()
+
+			hookType, _ := cfg["type"].(string)
 			if hookType == string(hookscfg.HookTypeCommand) || hookType == "" {
 				// 默认类型为 command，对齐 Python: hook_type = cfg.get("type", "command")
-				results[idx] = e.runCommandHook(ctx, c, hookInput)
+				results[resultIdx] = e.runCommandHook(ctx, cfg, hookInput)
 			} else if hookType == string(hookscfg.HookTypePrompt) {
-				results[idx] = e.runPromptHook(ctx, c, hookInput)
+				results[resultIdx] = e.runPromptHook(ctx, cfg, hookInput)
 			}
-			// 未知类型：对齐 Python 静默跳过，不设置 results[idx]，保持零值 HookResult{Outcome:""}
-		}(i, cfg)
+		}(i, h.cfg)
 	}
 	wg.Wait()
 
-	// 将异常结果（outcome 为空）替换为 SUCCESS
-	// 对齐 Python: 未知 hook 类型静默跳过，视为 SUCCESS
+	// 对齐 Python: r if isinstance(r, HookResult) else HookResult(outcome=NON_BLOCKING_ERROR, error=str(r))
+	// defer/recover 已在 goroutine 内处理 panic，
+	// 此处检查 outcome 为空的异常情况（不应出现，防御性编程）
 	for i, r := range results {
 		if r.Outcome == "" {
-			results[i] = HookResult{Outcome: HookOutcomeSuccess}
+			results[i] = HookResult{Outcome: HookOutcomeNonBlockingError, Error: "unknown hook execution error"}
 		}
 	}
 	return results

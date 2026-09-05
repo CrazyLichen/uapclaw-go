@@ -2,7 +2,6 @@ package rails
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -413,10 +412,9 @@ func TestAgentModeRail_BeforeToolCall_Git写操作拦截(t *testing.T) {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	// bash 工具执行 git add .
-	argsJSON, _ := json.Marshal(map[string]any{"command": "git add ."})
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "bash",
-		ToolArgs: string(argsJSON),
+		ToolArgs: map[string]any{"command": "git add ."},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -441,10 +439,9 @@ func TestAgentModeRail_BeforeToolCall_计划文件路径拦截(t *testing.T) {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	// write_file 写入非计划文件
-	argsJSON, _ := json.Marshal(map[string]any{"file_path": "/tmp/other.md", "content": "hello"})
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "write_file",
-		ToolArgs: string(argsJSON),
+		ToolArgs: map[string]any{"file_path": "/tmp/other.md", "content": "hello"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -469,10 +466,9 @@ func TestAgentModeRail_BeforeToolCall_计划文件路径放行(t *testing.T) {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	// write_file 写入计划文件
-	argsJSON, _ := json.Marshal(map[string]any{"file_path": "/tmp/plan.md", "content": "plan content"})
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "write_file",
-		ToolArgs: string(argsJSON),
+		ToolArgs: map[string]any{"file_path": "/tmp/plan.md", "content": "plan content"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -529,7 +525,7 @@ func TestAgentModeRail_AfterToolCall_ExitPlanMode注销TaskTool(t *testing.T) {
 
 // --- 辅助函数测试 ---
 
-// TestExtractFilePath 验证从工具参数 JSON 提取 file_path
+// TestExtractFilePath 验证从工具参数 map 提取 file_path
 func TestExtractFilePath(t *testing.T) {
 	t.Parallel()
 
@@ -537,37 +533,28 @@ func TestExtractFilePath(t *testing.T) {
 	agent := newFakeDeepAgentForAgentMode()
 
 	// 正常提取
-	argsJSON, _ := json.Marshal(map[string]any{"file_path": "/tmp/test.md"})
-	inputs := &agentinterfaces.ToolCallInputs{ToolArgs: string(argsJSON)}
+	inputs := &agentinterfaces.ToolCallInputs{ToolArgs: map[string]any{"file_path": "/tmp/test.md"}}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
 	filePath := r.extractFilePath(cbc)
 	assert.Equal(t, "/tmp/test.md", filePath)
 
 	// 缺少 file_path
-	argsJSON2, _ := json.Marshal(map[string]any{"command": "ls"})
-	inputs2 := &agentinterfaces.ToolCallInputs{ToolArgs: string(argsJSON2)}
+	inputs2 := &agentinterfaces.ToolCallInputs{ToolArgs: map[string]any{"command": "ls"}}
 	cbc2 := agentinterfaces.NewAgentCallbackContext(agent, inputs2, nil)
 
 	filePath2 := r.extractFilePath(cbc2)
 	assert.Equal(t, "", filePath2)
 
-	// 空 ToolArgs
-	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: ""}
+	// nil ToolArgs
+	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: nil}
 	cbc3 := agentinterfaces.NewAgentCallbackContext(agent, inputs3, nil)
 
 	filePath3 := r.extractFilePath(cbc3)
 	assert.Equal(t, "", filePath3)
-
-	// 无效 JSON
-	inputs4 := &agentinterfaces.ToolCallInputs{ToolArgs: "not json"}
-	cbc4 := agentinterfaces.NewAgentCallbackContext(agent, inputs4, nil)
-
-	filePath4 := r.extractFilePath(cbc4)
-	assert.Equal(t, "", filePath4)
 }
 
-// TestExtractBashCommand 验证从工具参数 JSON 提取 command
+// TestExtractBashCommand 验证从工具参数 map 提取 command
 func TestExtractBashCommand(t *testing.T) {
 	t.Parallel()
 
@@ -575,34 +562,25 @@ func TestExtractBashCommand(t *testing.T) {
 	agent := newFakeDeepAgentForAgentMode()
 
 	// 正常提取
-	argsJSON, _ := json.Marshal(map[string]any{"command": "git push"})
-	inputs := &agentinterfaces.ToolCallInputs{ToolArgs: string(argsJSON)}
+	inputs := &agentinterfaces.ToolCallInputs{ToolArgs: map[string]any{"command": "git push"}}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
 	cmd := r.extractBashCommand(cbc)
 	assert.Equal(t, "git push", cmd)
 
 	// 缺少 command
-	argsJSON2, _ := json.Marshal(map[string]any{"file_path": "/tmp/test.md"})
-	inputs2 := &agentinterfaces.ToolCallInputs{ToolArgs: string(argsJSON2)}
+	inputs2 := &agentinterfaces.ToolCallInputs{ToolArgs: map[string]any{"file_path": "/tmp/test.md"}}
 	cbc2 := agentinterfaces.NewAgentCallbackContext(agent, inputs2, nil)
 
 	cmd2 := r.extractBashCommand(cbc2)
 	assert.Equal(t, "", cmd2)
 
-	// 空 ToolArgs
-	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: ""}
+	// nil ToolArgs
+	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: nil}
 	cbc3 := agentinterfaces.NewAgentCallbackContext(agent, inputs3, nil)
 
 	cmd3 := r.extractBashCommand(cbc3)
 	assert.Equal(t, "", cmd3)
-
-	// 无效 JSON
-	inputs4 := &agentinterfaces.ToolCallInputs{ToolArgs: "not json"}
-	cbc4 := agentinterfaces.NewAgentCallbackContext(agent, inputs4, nil)
-
-	cmd4 := r.extractBashCommand(cbc4)
-	assert.Equal(t, "", cmd4)
 }
 
 // --- GetCallbacks 测试 ---
@@ -732,10 +710,9 @@ func TestAgentModeRail_BeforeToolCall_Git只读放行(t *testing.T) {
 	r.agent = agent
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
-	argsJSON, _ := json.Marshal(map[string]any{"command": "git status"})
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "bash",
-		ToolArgs: string(argsJSON),
+		ToolArgs: map[string]any{"command": "git status"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -759,10 +736,9 @@ func TestAgentModeRail_BeforeToolCall_EditFile拦截(t *testing.T) {
 	r.agent = agent
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
-	argsJSON, _ := json.Marshal(map[string]any{"file_path": "/tmp/other.md", "content": "hello"})
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "edit_file",
-		ToolArgs: string(argsJSON),
+		ToolArgs: map[string]any{"file_path": "/tmp/other.md", "content": "hello"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -967,24 +943,6 @@ func TestBuildPlanModeSection_英文(t *testing.T) {
 	s3 := sections.BuildPlanModeSection("/tmp/plan.md", false, "en")
 	assert.Contains(t, s3.Content["en"], "/tmp/plan.md")
 	assert.Contains(t, s3.Content["en"], "write_file")
-}
-
-// TestParseToolArgs 验证工具参数解析
-func TestParseToolArgs(t *testing.T) {
-	t.Parallel()
-
-	r := NewAgentModeRail(nil)
-
-	// 空字符串
-	assert.Nil(t, r.parseToolArgs(""))
-
-	// 无效 JSON
-	assert.Nil(t, r.parseToolArgs("not json"))
-
-	// 正常 JSON
-	result := r.parseToolArgs(`{"file_path": "/tmp/test.md"}`)
-	require.NotNil(t, result)
-	assert.Equal(t, "/tmp/test.md", result["file_path"])
 }
 
 // TestFilterHiddenTools 验证工具过滤逻辑

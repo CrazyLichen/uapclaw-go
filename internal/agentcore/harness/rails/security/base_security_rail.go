@@ -45,8 +45,8 @@ type SecurityCheckContext struct {
 //
 // 对齐 Python: SecurityAllow(SecurityDecision) (base_security_rail.py L51-55)
 type SecurityAllow struct {
-	// NewArgs 可选，替换后的参数（仅对 BEFORE_TOOL_CALL 有效）
-	NewArgs string
+	// NewArgs 可选，替换后的参数（nil=不替换，对齐 Python new_args: dict | None）
+	NewArgs *map[string]any
 }
 
 // SecurityReject 拒绝执行。
@@ -185,14 +185,14 @@ func WithSecurityToolNames(names ...string) SecurityRailOption {
 // Allow 返回允许决策。
 //
 // 对齐 Python: BaseSecurityRail.allow(new_args=None)
-func (r *BaseSecurityRail) Allow(newArgs string) *SecurityAllow {
+func (r *BaseSecurityRail) Allow(newArgs *map[string]any) *SecurityAllow {
 	return &SecurityAllow{NewArgs: newArgs}
 }
 
 // Approve 返回允许决策（Allow 别名，兼容从 InterruptRail 迁移的子类）。
 //
 // 对齐 Python: BaseSecurityRail.approve(new_args=None)
-func (r *BaseSecurityRail) Approve(newArgs string) *SecurityAllow {
+func (r *BaseSecurityRail) Approve(newArgs *map[string]any) *SecurityAllow {
 	return r.Allow(newArgs)
 }
 
@@ -420,7 +420,7 @@ func (r *BaseSecurityRail) runAndApply(
 // 对齐 Python: BaseSecurityRail.run_security_check(security_ctx) (base_security_rail.py L218-223)
 // 默认实现返回 Allow。
 func (r *BaseSecurityRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
-	return r.Allow(""), nil
+	return r.Allow(nil), nil
 }
 
 // applySecurityDecision 应用安全决策。
@@ -438,9 +438,9 @@ func (r *BaseSecurityRail) applySecurityDecision(
 	switch d := decision.(type) {
 	case *SecurityAllow:
 		// 允许：不做任何操作
-		if d.NewArgs != "" {
+		if d.NewArgs != nil {
 			if toolInputs, ok := securityCtx.CallbackCtx.Inputs().(*agentinterfaces.ToolCallInputs); ok {
-				toolInputs.ToolArgs = d.NewArgs
+				toolInputs.ToolArgs = *d.NewArgs
 			}
 		}
 		return nil
@@ -654,7 +654,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 ) SecurityDecision {
 	// 1. 检查 auto_confirm
 	if r.isAutoConfirmed(securityCtx.AutoConfirmConfig, autoConfirmKey) {
-		return r.Allow("")
+		return r.Allow(nil)
 	}
 
 	// 2. 获取 userInput
@@ -684,7 +684,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 		if autoConfirm && securityCtx.CallbackCtx != nil {
 			r.storeAutoConfirm(securityCtx.CallbackCtx, autoConfirmKey)
 		}
-		return r.Allow("")
+		return r.Allow(nil)
 	}
 
 	// 5. rejected → Reject

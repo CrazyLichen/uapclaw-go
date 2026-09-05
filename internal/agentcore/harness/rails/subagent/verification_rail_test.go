@@ -90,7 +90,7 @@ func TestVerificationRail_BeforeToolCall_允许工具(t *testing.T) {
 
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "read_file",
-		ToolArgs: `{"file_path": "/tmp/test.txt"}`,
+		ToolArgs: map[string]any{"file_path": "/tmp/test.txt"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
 
@@ -106,7 +106,7 @@ func TestVerificationRail_BeforeToolCall_拦截工具(t *testing.T) {
 
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "write_file",
-		ToolArgs: `{"file_path": "/tmp/test.txt", "content": "hello"}`,
+		ToolArgs: map[string]any{"file_path": "/tmp/test.txt", "content": "hello"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
 
@@ -126,7 +126,7 @@ func TestVerificationRail_BeforeToolCall_MCP放行(t *testing.T) {
 
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "mcp__server__tool",
-		ToolArgs: `{}`,
+		ToolArgs: map[string]any{},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
 
@@ -160,7 +160,7 @@ func TestVerificationRail_BeforeToolCall_路径范围守卫(t *testing.T) {
 
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "read_file",
-		ToolArgs: `{"file_path": "/etc/passwd"}`,
+		ToolArgs: map[string]any{"file_path": "/etc/passwd"},
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
 

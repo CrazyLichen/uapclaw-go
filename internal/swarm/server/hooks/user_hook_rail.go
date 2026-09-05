@@ -80,8 +80,8 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 		}
 		if result.ModifiedInput != nil {
 			// 对齐 Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
-			jsonBytes, _ := json.Marshal(result.ModifiedInput)
-			toolInputs.ToolArgs = string(jsonBytes)
+			// ToolArgs 现在是 map[string]any 类型，直接赋值
+			toolInputs.ToolArgs = result.ModifiedInput
 			// 对齐 Python: new_name = r.modified_input.get("_tool_name")
 			if newName, ok := result.ModifiedInput["_tool_name"]; ok {
 				if s, ok := newName.(string); ok && s != "" {

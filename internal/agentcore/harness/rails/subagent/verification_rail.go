@@ -2,7 +2,6 @@ package subagent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -245,12 +244,10 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 	// 对齐 Python L198-233
 	pathArgKey, hasPathArg := r.pathToolArg[toolName]
 	if hasPathArg && r.Workspace() != nil {
-		toolArgs := toolCallInputs.ToolArgs
-
-		// 对齐 Python L203-208: tool_args 可能是 JSON 字符串，需要解析
-		var args map[string]any
-		if err := json.Unmarshal([]byte(toolArgs), &args); err != nil {
-			// 无法解析，不做路径检查
+		// ToolArgs 现在已经是 map[string]any 类型（对齐 Python tool_args: Any）
+		args := toolCallInputs.ToolArgs
+		if args == nil {
+			// 无参数，不做路径检查
 			return nil
 		}
 

@@ -25,8 +25,8 @@ type InterruptDecision interface {
 //
 // 对齐 Python: ApproveResult(InterruptDecision)
 type ApproveResult struct {
-	// NewArgs 可选，替换工具参数的 JSON 字符串
-	NewArgs string
+	// NewArgs 可选，替换工具参数（nil=不替换，对齐 Python new_args: dict | None）
+	NewArgs *map[string]any
 }
 
 // RejectResult 拒绝执行决策。
@@ -99,7 +99,7 @@ func NewBaseInterruptRail(toolNames ...string) *BaseInterruptRail {
 }
 
 // Approve 返回允许继续执行的决策。
-func (r *BaseInterruptRail) Approve(newArgs string) *ApproveResult {
+func (r *BaseInterruptRail) Approve(newArgs *map[string]any) *ApproveResult {
 	return &ApproveResult{NewArgs: newArgs}
 }
 
@@ -207,7 +207,7 @@ func (r *BaseInterruptRail) defaultResolveInterrupt(
 			Message: "等待用户确认",
 		})
 	}
-	return r.Approve("")
+	return r.Approve(nil)
 }
 
 // applyDecision 根据中断决策类型执行对应的处理逻辑。
@@ -218,11 +218,9 @@ func (r *BaseInterruptRail) applyDecision(
 ) {
 	switch d := decision.(type) {
 	case *ApproveResult:
-		// 注意：Python 用 new_args is not None 判断（空字符串也会替换参数），
-		// Go 用 NewArgs != "" 判断（空字符串不替换）。
-		// 当前所有调用方都不传空字符串，行为一致。如需严格对齐，改为 *string。
-		if d.NewArgs != "" {
-			toolInputs.ToolArgs = d.NewArgs
+		// 对齐 Python: new_args is not None
+		if d.NewArgs != nil {
+			toolInputs.ToolArgs = *d.NewArgs
 		}
 	case *RejectResult:
 		r.skipTool(cbc, toolInputs, d)

@@ -93,7 +93,7 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 	if userInput == nil {
 		// 检查 auto_confirm
 		if isAutoConfirmed(autoConfirmConfig, autoConfirmKey) {
-			return r.Approve("")
+			return r.Approve(nil)
 		}
 		return r.Interrupt(&saschema.InterruptRequest{
 			Message:        r.request.Message,
@@ -114,7 +114,7 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 
 	// approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）
 	if payload.Approved {
-		return r.Approve("")
+		return r.Approve(nil)
 	}
 	feedback := payload.Feedback
 	if feedback == "" {

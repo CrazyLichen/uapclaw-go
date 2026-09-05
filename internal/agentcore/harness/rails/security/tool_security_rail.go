@@ -342,7 +342,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		} else if len(sceneOut) > 0 {
 			switch sceneOut[0] {
 			case "approve":
-				return r.Approve("")
+				return r.Approve(nil)
 			case "reject":
 				msg := "[PERMISSION_DENIED]"
 				if len(sceneOut) > 1 {
@@ -378,7 +378,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				Str("tool", toolName).
 				Str("matched_rule", result.MatchedRule).
 				Msg("permission.rail.result decision=allow")
-			return r.Approve("")
+			return r.Approve(nil)
 		}
 
 		// DENY → 拒绝
@@ -400,7 +400,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				Str("tool", toolName).
 				Str("key", autoConfirmKey).
 				Msg("permission.auto_confirm.hit")
-			return r.Approve("")
+			return r.Approve(nil)
 		}
 
 		// ASK → 尝试 hosted 确认
@@ -452,7 +452,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 					Str("decision", decision).
 					Bool("persisted", persisted).
 					Msg("permission.user.decision")
-				return r.Approve("")
+				return r.Approve(nil)
 			}
 
 			logger.Info(permRailLogComponent).
@@ -524,7 +524,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 			Str("decision", decision).
 			Bool("persisted", persisted).
 			Msg("permission.user.decision")
-		return r.Approve("")
+		return r.Approve(nil)
 	}
 
 	logger.Info(permRailLogComponent).
@@ -888,8 +888,8 @@ func (r *PermissionInterruptRail) applyDecision(
 ) {
 	switch d := decision.(type) {
 	case *interrupt.ApproveResult:
-		if d.NewArgs != "" {
-			toolInputs.ToolArgs = d.NewArgs
+		if d.NewArgs != nil {
+			toolInputs.ToolArgs = *d.NewArgs
 		}
 	case *interrupt.RejectResult:
 		r.skipPermissionTool(cbc, toolInputs, d)

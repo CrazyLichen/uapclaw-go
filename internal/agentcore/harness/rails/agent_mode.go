@@ -2,7 +2,6 @@ package rails
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -581,7 +580,7 @@ func (r *AgentModeRail) extractFilePath(cbc *agentinterfaces.AgentCallbackContex
 	if !ok || inputs == nil {
 		return ""
 	}
-	args := r.parseToolArgs(inputs.ToolArgs)
+	args := inputs.ToolArgs
 	if args == nil {
 		return ""
 	}
@@ -597,24 +596,12 @@ func (r *AgentModeRail) extractBashCommand(cbc *agentinterfaces.AgentCallbackCon
 	if !ok || inputs == nil {
 		return ""
 	}
-	args := r.parseToolArgs(inputs.ToolArgs)
+	args := inputs.ToolArgs
 	if args == nil {
 		return ""
 	}
 	cmd, _ := args["command"].(string)
 	return cmd
-}
-
-// parseToolArgs 将 JSON 字符串形式的工具参数解析为 map[string]any。
-func (r *AgentModeRail) parseToolArgs(toolArgs string) map[string]any {
-	if toolArgs == "" {
-		return nil
-	}
-	var args map[string]any
-	if err := json.Unmarshal([]byte(toolArgs), &args); err != nil {
-		return nil
-	}
-	return args
 }
 
 // registerTaskTool 在 enter_plan_mode 成功后注册 task_tool。

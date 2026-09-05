@@ -63,9 +63,11 @@ func TestBaseInterruptRail_GetTools(t *testing.T) {
 // TestBaseInterruptRail_Approve 验证允许决策构造
 func TestBaseInterruptRail_Approve(t *testing.T) {
 	r := NewBaseInterruptRail()
-	decision := r.Approve(`{"arg":"val"}`)
+	args := map[string]any{"arg": "val"}
+	decision := r.Approve(&args)
 	assert.IsType(t, &ApproveResult{}, decision)
-	assert.Equal(t, `{"arg":"val"}`, decision.NewArgs)
+	assert.NotNil(t, decision.NewArgs)
+	assert.Equal(t, args, *decision.NewArgs)
 }
 
 // TestBaseInterruptRail_Reject 验证拒绝决策构造
@@ -94,7 +96,7 @@ func TestBaseInterruptRail_BeforeToolCall_未注册工具(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: "{}"},
 		ToolName: "bash",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	})
 
 	err := r.BeforeToolCall(context.Background(), cbc)
@@ -108,7 +110,7 @@ func TestBaseInterruptRail_BeforeToolCall_中断(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: "{}"},
 		ToolName: "ask_user",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	})
 
 	assert.Panics(t, func() {
@@ -127,7 +129,7 @@ func TestBaseInterruptRail_BeforeToolCall_允许(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: "{}"},
 		ToolName: "ask_user",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	})
 
 	err := r.BeforeToolCall(context.Background(), cbc)
@@ -145,7 +147,7 @@ func TestBaseInterruptRail_BeforeToolCall_拒绝(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "dangerous_tool", Arguments: "{}"},
 		ToolName: "dangerous_tool",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	})
 
 	err := r.BeforeToolCall(context.Background(), cbc)
@@ -260,11 +262,12 @@ func TestBaseInterruptRail_applyDecision_ApproveResult_修改参数(t *testing.T
 	toolInputs := &agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: `{"cmd":"ls"}`},
 		ToolName: "bash",
-		ToolArgs: `{"cmd":"ls"}`,
+		ToolArgs: map[string]any{"cmd": "ls"},
 	}
 
-	r.applyDecision(cbc, toolInputs, &ApproveResult{NewArgs: `{"cmd":"pwd"}`})
-	assert.Equal(t, `{"cmd":"pwd"}`, toolInputs.ToolArgs)
+	pwdArgs := map[string]any{"cmd": "pwd"}
+	r.applyDecision(cbc, toolInputs, &ApproveResult{NewArgs: &pwdArgs})
+	assert.Equal(t, map[string]any{"cmd": "pwd"}, toolInputs.ToolArgs)
 }
 
 // TestBaseInterruptRail_applyDecision_ApproveResult_无修改 验证 NewArgs 为空时不修改
@@ -274,11 +277,11 @@ func TestBaseInterruptRail_applyDecision_ApproveResult_无修改(t *testing.T) {
 	toolInputs := &agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: `{"cmd":"ls"}`},
 		ToolName: "bash",
-		ToolArgs: `{"cmd":"ls"}`,
+		ToolArgs: map[string]any{"cmd": "ls"},
 	}
 
-	r.applyDecision(cbc, toolInputs, &ApproveResult{NewArgs: ""})
-	assert.Equal(t, `{"cmd":"ls"}`, toolInputs.ToolArgs)
+	r.applyDecision(cbc, toolInputs, &ApproveResult{NewArgs: nil})
+	assert.Equal(t, map[string]any{"cmd": "ls"}, toolInputs.ToolArgs)
 }
 
 // TestBaseInterruptRail_applyDecision_InterruptResult 验证中断决策抛出 panic
@@ -288,7 +291,7 @@ func TestBaseInterruptRail_applyDecision_InterruptResult(t *testing.T) {
 	toolInputs := &agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: "{}"},
 		ToolName: "bash",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	}
 
 	assert.Panics(t, func() {
@@ -305,7 +308,7 @@ func TestBaseInterruptRail_applyDecision_RejectResult(t *testing.T) {
 	toolInputs := &agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: "{}"},
 		ToolName: "bash",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	}
 
 	r.applyDecision(cbc, toolInputs, &RejectResult{ToolResult: "拒绝结果"})
@@ -345,7 +348,7 @@ func TestBaseInterruptRail_skipTool_自定义ToolMessage(t *testing.T) {
 	toolInputs := &agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: "{}"},
 		ToolName: "bash",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	}
 	customMsg := llmschema.NewToolMessage("tc1", "自定义拒绝消息")
 
@@ -381,7 +384,7 @@ func TestBaseInterruptRail_GetCallbacks_调用BeforeToolCall(t *testing.T) {
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "bash", Arguments: "{}"},
 		ToolName: "bash",
-		ToolArgs: "{}",
+		ToolArgs: map[string]any{},
 	})
 
 	err := fn(context.Background(), cbc)

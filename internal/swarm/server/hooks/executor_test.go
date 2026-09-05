@@ -271,18 +271,15 @@ func TestHookExecutor_RunAll_prompt空模板(t *testing.T) {
 }
 
 // TestHookExecutor_RunAll_未知类型 测试未知 hook 类型
-// 对齐 Python: 未知 hook 类型静默跳过，视为 SUCCESS
+// 对齐 Python: 未知 hook 类型不加入 tasks 列表，不占用 result 位置
 func TestHookExecutor_RunAll_未知类型(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	hookConfigs := []map[string]any{
 		{"type": "unknown"},
 	}
 	results := exec.RunAll(context.Background(), hookConfigs, map[string]any{}, "")
-	if len(results) != 1 {
-		t.Errorf("unknown type should produce 1 result (SUCCESS), got %d", len(results))
-	}
-	if results[0].Outcome != HookOutcomeSuccess {
-		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeSuccess)
+	if len(results) != 0 {
+		t.Errorf("unknown type should produce 0 results (skipped), got %d", len(results))
 	}
 }
 

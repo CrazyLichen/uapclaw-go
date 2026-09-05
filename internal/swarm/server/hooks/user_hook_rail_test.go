@@ -39,7 +39,7 @@ func TestUserHookRail_BeforeToolCall_阻塞(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "dangerous_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "dangerous_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
@@ -58,7 +58,7 @@ func TestUserHookRail_BeforeToolCall_无匹配(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "any_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "any_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("BeforeToolCall with no hooks should return nil, got: %v", err)
@@ -79,16 +79,17 @@ func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
 	inputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
-	// 对齐 Python: ctx.inputs.tool_args = r.modified_input — 整个 dict 序列化为 JSON
-	expected := `{"tool_args":"{\"path\": \"/safe\"}"}`
-	if inputs.ToolArgs != expected {
-		t.Errorf("ToolArgs = %q, want %q", inputs.ToolArgs, expected)
+	// 对齐 Python: ctx.inputs.tool_args = r.modified_input — 整个 dict 赋值给 tool_args
+	// ToolArgs 现在是 map[string]any，modifiedInput 的 dict 直接赋值
+	expected := map[string]any{"tool_args": `{"path": "/safe"}`}
+	if fmt.Sprintf("%v", inputs.ToolArgs) != fmt.Sprintf("%v", expected) {
+		t.Errorf("ToolArgs = %v, want %v", inputs.ToolArgs, expected)
 	}
 }
 
@@ -105,7 +106,7 @@ func TestUserHookRail_BeforeToolCall_附加上下文(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
@@ -128,7 +129,7 @@ func TestUserHookRail_AfterToolCall_阻塞(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}", ToolResult: "result"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}, ToolResult: "result"}, nil)
 	err := rail.AfterToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("AfterToolCall error: %v", err)
@@ -151,7 +152,7 @@ func TestUserHookRail_AfterToolCall_附加上下文(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}", ToolResult: "original result"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}, ToolResult: "original result"}, nil)
 	err := rail.AfterToolCall(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("AfterToolCall error: %v", err)
@@ -172,7 +173,7 @@ func TestUserHookRail_OnToolException_无匹配(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.OnToolException(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("OnToolException with no hooks should return nil, got: %v", err)
@@ -192,7 +193,7 @@ func TestUserHookRail_OnToolException_有匹配(t *testing.T) {
 	exec := NewHookExecutor(LLMConfig{})
 	rail := NewUserHookRail(cfg, exec)
 
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: "{}"}, nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.OnToolException(context.Background(), cbc)
 	if err != nil {
 		t.Errorf("OnToolException error: %v", err)

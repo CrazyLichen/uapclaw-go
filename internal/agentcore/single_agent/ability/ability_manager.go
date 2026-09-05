@@ -2,6 +2,7 @@ package ability
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -512,8 +513,10 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 			if inputs.ToolName != "" {
 				toolCall.Name = inputs.ToolName
 			}
-			if inputs.ToolArgs != "" {
-				toolCall.Arguments = inputs.ToolArgs
+			if len(inputs.ToolArgs) > 0 {
+				if argsJSON, marshalErr := json.Marshal(inputs.ToolArgs); marshalErr == nil {
+					toolCall.Arguments = string(argsJSON)
+				}
 			}
 		}
 
@@ -526,7 +529,11 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 			if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 				inputs.ToolCall = toolCall
 				inputs.ToolName = toolCall.Name
-				inputs.ToolArgs = toolCall.Arguments
+				var args map[string]any
+				if unmarshalErr := json.Unmarshal([]byte(toolCall.Arguments), &args); unmarshalErr != nil {
+					args = map[string]any{}
+				}
+				inputs.ToolArgs = args
 				inputs.ToolResult = result.Result
 				inputs.ToolMsg = result.ToolMsg
 			}
