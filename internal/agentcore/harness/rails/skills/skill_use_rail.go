@@ -13,12 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/skills"
 	codetool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/code"
 	filesystemtool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	shelltool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/shell"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -48,6 +46,8 @@ type SkillUseRail struct {
 	enableCache bool
 	// includeTools 是否注册 read_file / code / bash 工具
 	includeTools bool
+	// enableImageMultimodal 是否启用图片多模态读取（includeTools=true 时使用）
+	enableImageMultimodal *bool
 	// enabledSkills 白名单
 	enabledSkills map[string]struct{}
 	// disabledSkills 黑名单
@@ -179,6 +179,11 @@ func WithEvolutionStore(store *checkpointing.EvolutionStore) SkillUseRailOption 
 	return func(r *SkillUseRail) { r.evolutionStore = store }
 }
 
+// WithEnableImageMultimodal 设置图片多模态读取
+func WithEnableImageMultimodal(enabled bool) SkillUseRailOption {
+	return func(r *SkillUseRail) { r.enableImageMultimodal = &enabled }
+}
+
 // SkillsMeta 返回当前技能列表副本。
 // 对齐 Python: SkillUseRail.skills_meta property
 func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
@@ -244,11 +249,8 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 	// 对齐 Python L255-271: includeTools 时注册 ReadFileTool/CodeTool/BashTool
 	if r.includeTools {
 		enableImageMultimodal := true
-		// 对齐 Python L256-259: 从 deep_config 获取 enable_read_image_multimodal
-		if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
-			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil {
-				enableImageMultimodal = deepCfg.EnableReadImageMultimodal
-			}
+		if r.enableImageMultimodal != nil {
+			enableImageMultimodal = *r.enableImageMultimodal
 		}
 		tools = append(tools,
 			filesystemtool.NewReadFileTool(op, language, agentID, enableImageMultimodal),
