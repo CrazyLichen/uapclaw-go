@@ -332,7 +332,12 @@ func (sm *SkillManager) createSkillFromPath(skillMDPath string) (*Skill, error) 
 	}
 	skillDir := filepath.Dir(skillMDPath)
 	skillName := filepath.Base(skillDir)
-	return NewSkill(skillName, description, skillDir), nil
+	skill := NewSkill(skillName, description, skillDir)
+	// 获取文件修改时间
+	if info, err := os.Stat(skillMDPath); err == nil {
+		skill.UpdateAt = info.ModTime()
+	}
+	return skill, nil
 }
 
 // findSkillMD 在文件列表中查找 SKILL.md（不区分大小写）。

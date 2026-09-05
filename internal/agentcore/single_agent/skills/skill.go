@@ -2,6 +2,7 @@ package skills
 
 import (
 	"fmt"
+	"time"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -19,6 +20,8 @@ type Skill struct {
 	Description string
 	// Directory 技能所在目录路径
 	Directory string
+	// UpdateAt 文件修改时间，用于增量缓存判断
+	UpdateAt time.Time
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -55,6 +58,9 @@ func (s *Skill) AsDict(includeDirectory bool) map[string]any {
 	}
 	if includeDirectory {
 		result["directory"] = s.Directory
+	}
+	if !s.UpdateAt.IsZero() {
+		result["update_at"] = s.UpdateAt.Format(time.RFC3339)
 	}
 	return result
 }

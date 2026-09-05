@@ -2,6 +2,7 @@ package skills
 
 import (
 	"testing"
+	"time"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -49,6 +50,29 @@ func TestSkill_AsDict_不含目录(t *testing.T) {
 	d := s.AsDict(false)
 	if _, ok := d["directory"]; ok {
 		t.Error("期望不含 directory 字段")
+	}
+}
+
+// TestSkill_AsDict_含UpdateAt 转字典（含 UpdateAt）
+func TestSkill_AsDict_含UpdateAt(t *testing.T) {
+	s := NewSkill("translate", "翻译技能", "/skills/translate")
+	s.UpdateAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	d := s.AsDict(true)
+	if _, ok := d["update_at"]; !ok {
+		t.Error("期望含 update_at 字段")
+	}
+	got, _ := d["update_at"].(string)
+	if got != "2026-01-01T00:00:00Z" {
+		t.Errorf("update_at = %q, want RFC3339 格式", got)
+	}
+}
+
+// TestSkill_AsDict_不含UpdateAt 转字典（UpdateAt 为零值时不含 update_at）
+func TestSkill_AsDict_不含UpdateAt(t *testing.T) {
+	s := NewSkill("translate", "翻译技能", "/skills/translate")
+	d := s.AsDict(true)
+	if _, ok := d["update_at"]; ok {
+		t.Error("UpdateAt 为零值时不应含 update_at 字段")
 	}
 }
 
