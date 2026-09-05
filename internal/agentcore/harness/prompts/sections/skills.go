@@ -1,6 +1,9 @@
 package sections
 
 import (
+	"fmt"
+	"strings"
+
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
@@ -70,41 +73,59 @@ No skill was selected for this task. When skill information is available, read t
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildSkillsSection 构建技能节
-//
-// mode 支持 "all"、"auto_list"、"no_skill"；skillLines 仅在 all 模式下使用。
+// BuildSkillLine 生成单行技能描述行。
+// 对齐 Python: build_skill_line(index, skill_name, description)
+func BuildSkillLine(index int, skillName, description string) string {
+	return fmt.Sprintf("%d. %s: %s", index, skillName, description)
+}
 
-func BuildSkillsSection(mode string, skillPaths []string, lang string) saprompt.PromptSection {
+// BuildSkillLines 拼接多行技能描述行（用 "\n\n" 分隔）。
+// 对齐 Python: build_skill_lines(lines)
+func BuildSkillLines(lines []string) string {
+	var filtered []string
+	for _, line := range lines {
+		if line != "" {
+			filtered = append(filtered, line)
+		}
+	}
+	return strings.Join(filtered, "\n\n")
+}
+
+// BuildAllModeSkillPrompt 构建 all 模式技能提示词。
+// 对齐 Python: build_all_mode_skill_prompt(skill_lines, language)
+func BuildAllModeSkillPrompt(skillLines, lang string) string {
+	text := strings.TrimSpace(skillLines)
+	if text == "" {
+		if lang == "en" {
+			return skillRailNoSkillPromptEN
+		}
+		return skillRailNoSkillPromptCN
+	}
+	if lang == "en" {
+		return skillRailAllModeHeaderEN + text + skillRailAllModeInstructionEN
+	}
+	return skillRailAllModeHeaderCN + text + skillRailAllModeInstructionCN
+}
+
+// BuildAutoListModeSkillPrompt 构建 auto_list 模式技能提示词。
+// 对齐 Python: build_auto_list_mode_skill_prompt(language)
+func BuildAutoListModeSkillPrompt(lang string) string {
+	if lang == "en" {
+		return skillRailAutoListModePromptEN
+	}
+	return skillRailAutoListModePromptCN
+}
+
+// BuildSkillsSection 构建技能节。
+// 对齐 Python: build_skills_section(skill_lines, language, mode)
+func BuildSkillsSection(mode string, skillLines string, lang string) saprompt.PromptSection {
 	var content string
 
 	switch mode {
 	case "all":
-		text := buildSkillLinesText(skillPaths)
-		if text == "" {
-			if lang == "en" {
-				content = skillRailNoSkillPromptEN
-			} else {
-				content = skillRailNoSkillPromptCN
-			}
-		} else {
-			if lang == "en" {
-				content = skillRailAllModeHeaderEN + text + skillRailAllModeInstructionEN
-			} else {
-				content = skillRailAllModeHeaderCN + text + skillRailAllModeInstructionCN
-			}
-		}
+		content = BuildAllModeSkillPrompt(skillLines, lang)
 	case "auto_list":
-		if lang == "en" {
-			content = skillRailAutoListModePromptEN
-		} else {
-			content = skillRailAutoListModePromptCN
-		}
-	case "no_skill":
-		if lang == "en" {
-			content = skillRailNoSkillPromptEN
-		} else {
-			content = skillRailNoSkillPromptCN
-		}
+		content = BuildAutoListModeSkillPrompt(lang)
 	default:
 		if lang == "en" {
 			content = skillRailNoSkillPromptEN
@@ -128,22 +149,4 @@ func GetListSkillSystemPrompt(lang string) string {
 	return skillRailListSkillSystemPromptCN
 }
 
-// buildSkillLinesText 从技能路径列表构建技能行文本
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-func buildSkillLinesText(skillPaths []string) string {
-	if len(skillPaths) == 0 {
-		return ""
-	}
-	result := ""
-	for i, path := range skillPaths {
-		if path == "" {
-			continue
-		}
-		if i > 0 {
-			result += "\n\n"
-		}
-		result += path
-	}
-	return result
-}

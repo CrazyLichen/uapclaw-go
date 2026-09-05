@@ -128,9 +128,9 @@ func TestBuildContextSection_包含文件内容(t *testing.T) {
 
 // TestBuildSkillsSection_所有模式 测试技能节所有模式
 func TestBuildSkillsSection_所有模式(t *testing.T) {
-	for _, mode := range []string{"all", "auto_list", "no_skill"} {
+	for _, mode := range []string{"all", "auto_list"} {
 		for _, lang := range []string{"cn", "en"} {
-			s := BuildSkillsSection(mode, []string{"skill1"}, lang)
+			s := BuildSkillsSection(mode, "1. foo: bar", lang)
 			if s.Name != SectionSkills {
 				t.Errorf("mode=%s lang=%s: Name = %q, want %q", mode, lang, s.Name, SectionSkills)
 			}
@@ -146,7 +146,7 @@ func TestBuildSkillsSection_所有模式(t *testing.T) {
 
 // TestBuildSkillsSection_all模式带技能 测试 all 模式带技能路径
 func TestBuildSkillsSection_all模式带技能(t *testing.T) {
-	s := BuildSkillsSection("all", []string{"1. foo: bar", "2. baz: qux"}, "cn")
+	s := BuildSkillsSection("all", "1. foo: bar\n\n2. baz: qux", "cn")
 	if !strings.Contains(s.Content["cn"], "foo") {
 		t.Error("all 模式应包含技能名称")
 	}
@@ -154,7 +154,7 @@ func TestBuildSkillsSection_all模式带技能(t *testing.T) {
 
 // TestBuildSkillsSection_all模式空技能 测试 all 模式空技能列表回退到 no_skill
 func TestBuildSkillsSection_all模式空技能(t *testing.T) {
-	s := BuildSkillsSection("all", nil, "cn")
+	s := BuildSkillsSection("all", "", "cn")
 	if !strings.Contains(s.Content["cn"], "没有选择任何技能") {
 		t.Error("all 模式空技能列表应回退到 no_skill 提示")
 	}
@@ -554,6 +554,61 @@ func TestGetListSkillSystemPrompt_双语言(t *testing.T) {
 	}
 	if !strings.Contains(en, "list_skill selector") {
 		t.Error("EN 提示词应包含 'list_skill selector'")
+	}
+}
+
+// TestBuildSkillLine 测试单行技能描述行
+func TestBuildSkillLine(t *testing.T) {
+	got := BuildSkillLine(0, "implement", "实现代码")
+	want := "0. implement: 实现代码"
+	if got != want {
+		t.Errorf("BuildSkillLine() = %q, want %q", got, want)
+	}
+}
+
+// TestBuildSkillLines 测试多行技能描述行
+func TestBuildSkillLines(t *testing.T) {
+	got := BuildSkillLines([]string{"1. a: b", "2. c: d"})
+	want := "1. a: b\n\n2. c: d"
+	if got != want {
+		t.Errorf("BuildSkillLines() = %q, want %q", got, want)
+	}
+}
+
+// TestBuildSkillLines_过滤空行 测试 BuildSkillLines 过滤空行
+func TestBuildSkillLines_过滤空行(t *testing.T) {
+	got := BuildSkillLines([]string{"1. a: b", "", "2. c: d"})
+	want := "1. a: b\n\n2. c: d"
+	if got != want {
+		t.Errorf("BuildSkillLines() = %q, want %q", got, want)
+	}
+}
+
+// TestBuildAllModeSkillPrompt_有技能 测试 all 模式有技能
+func TestBuildAllModeSkillPrompt_有技能(t *testing.T) {
+	got := BuildAllModeSkillPrompt("1. foo: bar", "cn")
+	if !strings.Contains(got, "可用技能") {
+		t.Errorf("BuildAllModeSkillPrompt(cn) missing header")
+	}
+}
+
+// TestBuildAllModeSkillPrompt_无技能 测试 all 模式无技能回退
+func TestBuildAllModeSkillPrompt_无技能(t *testing.T) {
+	got := BuildAllModeSkillPrompt("", "cn")
+	if !strings.Contains(got, "当前任务没有选择任何技能") {
+		t.Errorf("BuildAllModeSkillPrompt(empty cn) missing no_skill fallback")
+	}
+}
+
+// TestBuildAutoListModeSkillPrompt 测试 auto_list 模式
+func TestBuildAutoListModeSkillPrompt(t *testing.T) {
+	got := BuildAutoListModeSkillPrompt("cn")
+	if !strings.Contains(got, "list_skill") {
+		t.Errorf("BuildAutoListModeSkillPrompt(cn) missing list_skill")
+	}
+	gotEN := BuildAutoListModeSkillPrompt("en")
+	if !strings.Contains(gotEN, "list_skill") {
+		t.Errorf("BuildAutoListModeSkillPrompt(en) missing list_skill")
 	}
 }
 
