@@ -564,7 +564,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.17 | ☐ | LSPRail | LSP 集成 | `openjiuwen/harness/lsp/` |
 | 9.18 | ✅ | SysOperationRail | 系统操作管理 | `openjiuwen/harness/rails/` |
 | 9.19-23 | ☐ | 其他 Rails | Security(✅ BaseSecurityRail+SafetyPromptRail+PermissionInterruptRail+TieredPolicy+Patterns+Checker+Suggestions+PermissionEngine+Factory)/Interrupt(✅)/Skill(✅ SkillUseRail: 增量加载+YAML解析+enabled/disabled过滤+SkillTool/ListSkillTool注册+all/auto_list提示词注入+演化经验附加+includeTools幂等注册)/ContextEngine(✅)/Memory(✅)/Verification(⤴️9.29✅)/Subagent(⤴️9.29✅) Rails | `openjiuwen/harness/rails/` |
-| 9.24 | ☐ | EvolutionRail | SkillEvolutionRail（after_invoke 触发在线自演化）/ EvolutionRail 基类 / ContextEvolutionRail / TrajectoryRail / ApprovalRuntime / SkillEvolutionSharing / TeamSkillEvolutionRail | `openjiuwen/harness/rails/evolution/` |
+| 9.24 | ☐ | EvolutionRail | P1(✅ 契约层: contracts+approval_events+approval_runtime; 覆盖率95.9%) / P2(☐ 基类+纯收集: EvolutionRail基类+TrajectoryRail) / P3(☐ 单Agent演化: SkillEvolutionRail+slash命令回填+DeepAdapter占位回填) / P4(☐ 团队演化: TeamSkillEvolutionRail+team审批回填) / P5(☐ 跨用户共享: SkillEvolutionSharingMixin; ⤴️9.80a) / P6(☐ 上下文演化: ContextEvolutionRail; ⤴️9.82) | `openjiuwen/harness/rails/evolution/` |
 | **9.x 子 Agent** | — | | | |
 | 9.25 | ✅ | ResearchAgent | 研究子 Agent（BuildResearchAgentConfig + CreateResearchAgent，默认 SysOperationRail） | `openjiuwen/harness/subagents/` |
 | 9.26 | ✅ | BrowserAgent | ✅ Layer1 配置层（env/config/progress/service）；✅ Layer2 运行时核心（runtime/browser_rail/runtime_tools/browser_agent_factory）；✅ Layer3 探测与控制（profiles/probes/controllers/agents）；⤵️ 9.38-49 Playwright MCP 端到端集成（6处占位：CodeExecutor/ManagedBrowserDriver/WorkerAgent/runTaskOnce/Probe占位/restart） | `openjiuwen/harness/subagents/` · `tools/browser_move/` |
