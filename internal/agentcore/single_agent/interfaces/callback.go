@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -193,8 +194,8 @@ type ToolCallInputs struct {
 	ToolCall *llmschema.ToolCall
 	// ToolName 工具名称（before 钩子可改写）
 	ToolName string
-	// ToolArgs 工具参数 JSON 字符串（before 钩子可改写）
-	ToolArgs string
+	// ToolArgs 工具参数字典（对齐 Python ToolCallInputs.tool_args: Any，运行时 dict）
+	ToolArgs map[string]any
 	// ToolResult 工具执行结果。
 	//
 	// 两种语义（对齐 Python tool_result: Optional[Any]）：
@@ -598,7 +599,7 @@ func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *Ag
 		inputs: &ToolCallInputs{
 			ToolCall: toolCall,
 			ToolName: toolCall.Name,
-			ToolArgs: toolCall.Arguments,
+			ToolArgs: parseToolArguments(toolCall.Arguments),
 		},
 		config:        c.config,
 		session:       c.session,
@@ -880,6 +881,19 @@ func (i *TaskIterationInputs) EventKind() string { return "task_iteration" }
 func (m *MapInputs) EventKind() string { return "map" }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// parseToolArguments 将 JSON 字符串解析为 map[string]any
+// 对齐 Python: json.loads(tool_call.arguments) if isinstance(str) else tool_call.arguments
+func parseToolArguments(args string) map[string]any {
+	if args == "" {
+		return map[string]any{}
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(args), &result); err != nil {
+		return map[string]any{}
+	}
+	return result
+}
 
 // getAgentEvent 生成带 agentID 前缀的事件名。
 func (m *AgentCallbackManager) getAgentEvent(event AgentCallbackEvent) string {
