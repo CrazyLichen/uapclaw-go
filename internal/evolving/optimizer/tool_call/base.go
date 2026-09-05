@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
 	cschema "github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
@@ -66,8 +67,8 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 //	self.config_desc['neg_ex_input_path'] = os.path.join(self.path_save_dir, f"{kwargs.get('tool_name','tool')}.json") — 负例输入路径
 func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *ToolOptimizerBase {
 	// 对齐 Python: 使用默认配置
-	configEg := deepCopyMap(DefaultConfigEg)
-	configDesc := deepCopyMap(DefaultConfigDesc)
+	configEg := utils.DeepCopyMap(DefaultConfigEg)
+	configDesc := utils.DeepCopyMap(DefaultConfigDesc)
 
 	o := &ToolOptimizerBase{
 		maxTurns:    5,

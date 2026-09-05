@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -165,7 +166,7 @@ func (r *Reloader) reload() {
 
 	// 获取最新配置数据（深拷贝，避免外部修改影响内部状态）
 	r.config.mu.RLock()
-	dataCopy := deepCopyMap(r.config.data)
+	dataCopy := utils.DeepCopyMap(r.config.data)
 	r.config.mu.RUnlock()
 
 	// 触发所有回调

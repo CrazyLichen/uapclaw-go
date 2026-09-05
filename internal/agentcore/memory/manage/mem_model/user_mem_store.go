@@ -117,7 +117,15 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 
 	// 更新 mem_type ids 和 user profile topic ids
 	if memType, ok := data[memTypeFieldKey]; ok {
-		memTypeStr := fmt.Sprintf("%v", memType)
+		// 对齐 Python: mem_type 始终是字符串，非 string 视为异常
+		memTypeStr, ok := memType.(string)
+		if !ok {
+			logger.Error(logComponent).Str("memory_id", memID).
+				Str("event_type", "MEMORY_STORE").
+				Str("field", memTypeFieldKey).
+				Msg("mem_type 字段不是字符串类型")
+			return false, fmt.Errorf("mem_type 字段不是字符串类型，实际类型: %T", memType)
+		}
 		// mem_type ids
 		userMemIDsKey := s.getUserIDsKey(userID, scopeID, memTypeStr)
 		userMemIDsValue, _ := s.kvStore.Get(ctx, userMemIDsKey)
@@ -367,7 +375,15 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 		var dictValue map[string]any
 		if err := json.Unmarshal(data, &dictValue); err == nil {
 			if memType, ok := dictValue[memTypeFieldKey]; ok {
-				memTypeStr := fmt.Sprintf("%v", memType)
+				// 对齐 Python: mem_type 始终是字符串，非 string 视为异常
+				memTypeStr, ok := memType.(string)
+				if !ok {
+					logger.Error(logComponent).Str("memory_id", memID).
+						Str("event_type", "MEMORY_STORE").
+						Str("field", memTypeFieldKey).
+						Msg("mem_type 字段不是字符串类型")
+					return fmt.Errorf("mem_type 字段不是字符串类型，实际类型: %T", memType)
+				}
 				// 删除 mem_type ids
 				userMemIDsKey := s.getUserIDsKey(userID, scopeID, memTypeStr)
 				if err := s.deleteMemID(ctx, userMemIDsKey, memID); err != nil {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -242,7 +243,7 @@ func TestDeepCopyMap_基本拷贝(t *testing.T) {
 		"key1": "value1",
 		"key2": 42,
 	}
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	assert.Equal(t, original, copied)
 
@@ -257,7 +258,7 @@ func TestDeepCopyMap_嵌套map(t *testing.T) {
 			"level2": "deep_value",
 		},
 	}
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	assert.Equal(t, original, copied)
 
@@ -270,7 +271,7 @@ func TestDeepCopyMap_嵌套slice(t *testing.T) {
 	original := map[string]any{
 		"items": []any{"a", "b", "c"},
 	}
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	assert.Equal(t, original, copied)
 
@@ -280,11 +281,11 @@ func TestDeepCopyMap_嵌套slice(t *testing.T) {
 }
 
 func TestDeepCopyMap_nil输入(t *testing.T) {
-	assert.Nil(t, deepCopyMap(nil))
+	assert.Nil(t, utils.DeepCopyMap(nil))
 }
 
 func TestDeepCopyMap_空map(t *testing.T) {
-	result := deepCopyMap(map[string]any{})
+	result := utils.DeepCopyMap(map[string]any{})
 	assert.Empty(t, result)
 	assert.NotNil(t, result)
 }
@@ -296,7 +297,7 @@ func TestDeepCopyMap_嵌套slice中的map(t *testing.T) {
 			map[string]any{"id": "r2", "action": "deny"},
 		},
 	}
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	// 修改嵌套结构不影响原件
 	rules := copied["rules"].([]any)

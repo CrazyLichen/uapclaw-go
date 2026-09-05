@@ -73,12 +73,12 @@ func TestSecurityApprove(t *testing.T) {
 // TestSecurityReject 测试拒绝决策
 func TestSecurityReject(t *testing.T) {
 	r := NewBaseSecurityRail()
-	reject := r.Reject("危险操作", "已拒绝", nil)
+	reject := r.Reject("危险操作", "已拒绝", nil, nil)
 	assert.Equal(t, "危险操作", reject.Message)
 	assert.Equal(t, "已拒绝", reject.Result)
 
 	// 对齐 Python: tool_result 参数兼容
-	rejectWithMsg := r.Reject("消息", nil, llmschema.NewToolMessage("tc-1", "拒绝"))
+	rejectWithMsg := r.Reject("消息", nil, nil, llmschema.NewToolMessage("tc-1", "拒绝"))
 	assert.Equal(t, "消息", rejectWithMsg.Message)
 	assert.NotNil(t, rejectWithMsg.ToolMessage)
 }
@@ -116,18 +116,18 @@ func TestBuildForceFinishResult(t *testing.T) {
 	r := NewBaseSecurityRail()
 
 	// 对齐 Python: isinstance(decision.result, dict) → 直接返回
-	reject := r.Reject("", map[string]any{"status": "denied"}, nil)
+	reject := r.Reject("", map[string]any{"status": "denied"}, nil, nil)
 	result := r.buildForceFinishResult(reject)
 	assert.Equal(t, map[string]any{"status": "denied"}, result)
 
 	// 对齐 Python: {"output": message, "result_type": "error"}
-	rejectNoResult := r.Reject("操作被拒绝", nil, nil)
+	rejectNoResult := r.Reject("操作被拒绝", nil, nil, nil)
 	result2 := r.buildForceFinishResult(rejectNoResult)
 	assert.Equal(t, "操作被拒绝", result2["output"])
 	assert.Equal(t, "error", result2["result_type"])
 
 	// 无消息无结果 → 默认消息
-	rejectEmpty := r.Reject("", nil, nil)
+	rejectEmpty := r.Reject("", nil, nil, nil)
 	result3 := r.buildForceFinishResult(rejectEmpty)
 	assert.Equal(t, "Rejected by security rail.", result3["output"])
 }
@@ -244,12 +244,27 @@ func TestSecurityDecisionInterface(t *testing.T) {
 	var _ SecurityDecision = &SecurityAlert{}
 }
 
-// TestIsSecurityTruthy 测试宽松真值判断
+// TestIsSecurityTruthy 测试安全语义真值判断
+// 对齐 Python: bool() 语义扩展，支持 bool/int/float/string
 func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy(nil))
 	assert.False(t, isSecurityTruthy(false))
 	assert.True(t, isSecurityTruthy(true))
-	assert.False(t, isSecurityTruthy("yes"))  // 非 bool → false（对齐 Python bool()，仅 bool 类型）
-	assert.False(t, isSecurityTruthy(1))      // 非 bool → false
-	assert.False(t, isSecurityTruthy("true")) // 非 bool → false
+	// int/int64/float64：非零为真
+	assert.True(t, isSecurityTruthy(1))
+	assert.True(t, isSecurityTruthy(int64(1)))
+	assert.True(t, isSecurityTruthy(1.0))
+	assert.False(t, isSecurityTruthy(0))
+	assert.False(t, isSecurityTruthy(int64(0)))
+	assert.False(t, isSecurityTruthy(0.0))
+	// string：安全语义（true/1/yes 为真，其余为假）
+	assert.True(t, isSecurityTruthy("true"))
+	assert.True(t, isSecurityTruthy("1"))
+	assert.True(t, isSecurityTruthy("yes"))
+	assert.True(t, isSecurityTruthy("True"))
+	assert.True(t, isSecurityTruthy("YES"))
+	assert.False(t, isSecurityTruthy("false"))
+	assert.False(t, isSecurityTruthy("0"))
+	assert.False(t, isSecurityTruthy("no"))
+	assert.False(t, isSecurityTruthy("random"))
 }

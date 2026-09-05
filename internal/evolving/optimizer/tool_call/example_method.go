@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 )
 
@@ -91,7 +92,7 @@ func (m *APICallToExampleMethod) Step(
 		Msg("获取原始描述")
 
 	// 对齐 Python: tool_for_opt = copy.deepcopy(tool)
-	toolForOpt := deepCopyMap(tool)
+	toolForOpt := utils.DeepCopyMap(tool)
 	logger.Info(logComponent).
 		Str("tool_for_opt", fmt.Sprintf("%v", toolForOpt)).
 		Msg("待优化工具")
@@ -880,44 +881,6 @@ func (m *APICallToExampleMethod) GetOriginalDescription(tool map[string]any) str
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// deepCopyMap 深拷贝 map[string]any。
-// 对齐 Python: copy.deepcopy(tool)
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			result[k] = deepCopyMap(val)
-		case []any:
-			result[k] = deepCopySlice(val)
-		default:
-			result[k] = v
-		}
-	}
-	return result
-}
-
-// deepCopySlice 深拷贝 []any。
-func deepCopySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]any:
-			result[i] = deepCopyMap(val)
-		case []any:
-			result[i] = deepCopySlice(val)
-		default:
-			result[i] = v
-		}
-	}
-	return result
-}
 
 // lastN 返回字符串切片的最后 n 个元素。
 func lastN(slice []string, n int) []string {

@@ -142,7 +142,11 @@ func GetSkillEnabled(state map[string]any, skillName string) bool {
 	}
 
 	if v, exists := configMap["enabled"]; exists {
-		return toBool(v)
+		// 对齐 Python: bool(config.get("enabled", True)) — 非 bool 默认 true
+		if b, ok := v.(bool); ok {
+			return b
+		}
+		return true
 	}
 	return true
 }
@@ -181,8 +185,11 @@ func ListDisabledSkills(state map[string]any) []string {
 		if !ok {
 			continue
 		}
-		if v, exists := configMap["enabled"]; exists && !toBool(v) {
-			disabled = append(disabled, name)
+		// 对齐 Python: if config.get("enabled") is False — 只有布尔值 False 才算禁用
+		if v, exists := configMap["enabled"]; exists {
+			if b, ok := v.(bool); ok && !b {
+				disabled = append(disabled, name)
+			}
 		}
 	}
 	sort.Strings(disabled)

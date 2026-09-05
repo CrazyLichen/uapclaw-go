@@ -10,22 +10,22 @@ import (
 // TestNewPermissionEngine 测试创建权限引擎
 func TestNewPermissionEngine(t *testing.T) {
 	// 有配置
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, "/workspace")
+	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "/workspace")
 	assert.True(t, engine.Enabled())
 	assert.Equal(t, "/workspace", engine.workspaceRoot)
 
 	// 无配置
-	engine2 := NewPermissionEngine(nil, "")
+	engine2 := NewPermissionEngine(nil, nil, "", "")
 	assert.True(t, engine2.Enabled())
 
 	// 明确禁用
-	engine3 := NewPermissionEngine(map[string]any{"enabled": false}, "")
+	engine3 := NewPermissionEngine(map[string]any{"enabled": false}, nil, "", "")
 	assert.False(t, engine3.Enabled())
 }
 
 // TestPermissionEngine_UpdateConfig 测试热更新配置
 func TestPermissionEngine_UpdateConfig(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, "/workspace")
+	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "/workspace")
 	assert.True(t, engine.Enabled())
 
 	engine.UpdateConfig(map[string]any{"enabled": false})
@@ -37,7 +37,7 @@ func TestPermissionEngine_UpdateConfig(t *testing.T) {
 
 // TestPermissionEngine_EnabledFalse 允许 系统禁用时 → 允许
 func TestPermissionEngine_EnabledFalse(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": false}, "")
+	engine := NewPermissionEngine(map[string]any{"enabled": false}, nil, "", "")
 	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
@@ -46,7 +46,7 @@ func TestPermissionEngine_EnabledFalse(t *testing.T) {
 
 // TestPermissionEngine_ChecksInactive 宿主说不要校验 → 允许
 func TestPermissionEngine_ChecksInactive(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, "/workspace")
+	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "/workspace")
 	engine.SetPermissionChecksActive(func() bool { return false })
 
 	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
@@ -63,7 +63,7 @@ func TestPermissionEngine_TieredPolicyDeny(t *testing.T) {
 			"bash": "deny",
 		},
 	}
-	engine := NewPermissionEngine(config, "")
+	engine := NewPermissionEngine(config, nil, "", "")
 
 	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
@@ -78,7 +78,7 @@ func TestPermissionEngine_DefaultsAllow(t *testing.T) {
 			"*": "allow",
 		},
 	}
-	engine := NewPermissionEngine(config, "")
+	engine := NewPermissionEngine(config, nil, "", "")
 
 	result := engine.CheckPermission("read_file", map[string]any{"path": "/home/user/file.txt"})
 	require.NotNil(t, result)
@@ -87,7 +87,7 @@ func TestPermissionEngine_DefaultsAllow(t *testing.T) {
 
 // TestPermissionEngine_NoConfig 无匹配 → 默认 ASK
 func TestPermissionEngine_NoConfig(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, "")
+	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "")
 
 	result := engine.CheckPermission("read_file", map[string]any{"path": "/home/user/file.txt"})
 	require.NotNil(t, result)
@@ -102,7 +102,7 @@ func TestPermissionEngine_EvaluateGlobalPolicyDirectly(t *testing.T) {
 			"bash": "deny",
 		},
 	}
-	engine := NewPermissionEngine(config, "")
+	engine := NewPermissionEngine(config, nil, "", "")
 
 	permission, matchedRule := engine.EvaluateGlobalPolicyDirectly("bash", map[string]any{"command": "ls"}, false)
 	assert.Equal(t, PermissionLevelDeny, permission)
@@ -117,7 +117,7 @@ func TestPermissionEngine_CheckToolPermissionDirectly(t *testing.T) {
 			"*": "allow",
 		},
 	}
-	engine := NewPermissionEngine(config, "")
+	engine := NewPermissionEngine(config, nil, "", "")
 
 	permission, matchedRule := engine.CheckToolPermissionDirectly("read_file", map[string]any{"path": "/home/user/file.txt"})
 	assert.Equal(t, PermissionLevelAllow, permission)
@@ -126,7 +126,7 @@ func TestPermissionEngine_CheckToolPermissionDirectly(t *testing.T) {
 
 // TestPermissionEngine_SetWorkspaceRoot 设置工作空间
 func TestPermissionEngine_SetWorkspaceRoot(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, "")
+	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "")
 	assert.Equal(t, "", engine.workspaceRoot)
 
 	engine.SetWorkspaceRoot("/new/workspace")

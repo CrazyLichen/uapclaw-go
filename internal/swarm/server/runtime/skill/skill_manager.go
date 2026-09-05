@@ -60,8 +60,6 @@ const (
 	skillnetDownloadTimeoutEnv = "SKILLNET_DOWNLOAD_TIMEOUT"
 	// skillnetMaxRetriesEnv SkillNet 最大重试环境变量
 	skillnetMaxRetriesEnv = "SKILLNET_MAX_RETRIES"
-	// clawhubTokenKey ClawHub token 在 state 中的键
-	clawhubTokenKey = "clawhub_token"
 	// teamSkillsHubBaseURLEnv TeamSkillsHub 基础 URL 环境变量
 	teamSkillsHubBaseURLEnv = "TEAM_SKILLS_HUB_BASE_URL"
 	// teamSkillsHubTimeoutEnv TeamSkillsHub 超时环境变量
@@ -264,8 +262,7 @@ func (sm *SkillManager) HandleSkillsToggle(ctx context.Context, params map[strin
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	SetSkillEnabled(sm.state, safeName, enabled)
-	sm.saveState()
+	sm.SetSkillEnabled(safeName, enabled)
 
 	return map[string]any{
 		"success": true,
@@ -1954,8 +1951,16 @@ func (sm *SkillManager) GetLocalSkills() []map[string]any {
 
 // SetClawhubToken 设置 ClawHub token
 // 对应 Python: SkillManager._set_clawhub_token(token)
+// SetClawhubToken 设置 ClawHub CLI token。
+// 对齐 Python: state.setdefault("clawhub", {})["token"] = token
 func (sm *SkillManager) SetClawhubToken(token string) {
-	sm.state[clawhubTokenKey] = token
+	clawhub, ok := sm.state["clawhub"].(map[string]any)
+	if !ok {
+		clawhub = make(map[string]any)
+		sm.state["clawhub"] = clawhub
+	}
+	clawhub["token"] = strings.TrimSpace(token)
+	sm.saveState()
 }
 
 // GetSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
@@ -2015,9 +2020,10 @@ func (sm *SkillManager) GetSkillEnabled(name string) bool {
 }
 
 // SetSkillEnabled 将技能的 enabled 标志持久化到 state 中。
-// 对应 Python: SkillManager.set_skill_enabled(skill_name, enabled)
+// 对齐 Python: set_skill_enabled 修改后立即 _save_state()
 func (sm *SkillManager) SetSkillEnabled(name string, enabled bool) {
 	SetSkillEnabled(sm.state, name, enabled)
+	sm.saveState()
 }
 
 // ListDisabledSkills 从 skill_configs 中返回已禁用的技能名称列表（排序）。
@@ -2188,8 +2194,17 @@ func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
 
 // getClawhubToken 获取 ClawHub token
 // 对应 Python: SkillManager._get_clawhub_token()
+// 对齐 Python: state.get("clawhub", {}).get("token") or ""
 func (sm *SkillManager) getClawhubToken() string {
-	return toString(sm.state[clawhubTokenKey])
+	clawhub, ok := sm.state["clawhub"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	token, ok := clawhub["token"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(token)
 }
 
 // maskClawhubToken 掩码 ClawHub token
@@ -2317,7 +2332,10 @@ func (sm *SkillManager) scanBuiltinSkills() []map[string]any {
 			meta["is_builtin"] = true
 			meta["is_builtin_source"] = true
 			if name != "" {
-				meta["enabled"] = GetSkillEnabled(sm.state, name)
+				enabled := GetSkillEnabled(sm.state, name)
+				meta["enabled"] = enabled
+				// 对齐 Python: payload["config"] = {"enabled": enabled}
+				meta["config"] = map[string]any{"enabled": enabled}
 			}
 			skills = append(skills, meta)
 		}
@@ -2362,7 +2380,10 @@ func (sm *SkillManager) scanMarketplaceSkills() []map[string]any {
 				meta["is_builtin_source"] = false
 				name := toString(meta["name"])
 				if name != "" {
-					meta["enabled"] = GetSkillEnabled(sm.state, name)
+					enabled := GetSkillEnabled(sm.state, name)
+					meta["enabled"] = enabled
+					// 对齐 Python: payload["config"] = {"enabled": enabled}
+					meta["config"] = map[string]any{"enabled": enabled}
 				}
 				skills = append(skills, meta)
 			}
@@ -2476,7 +2497,10 @@ func (sm *SkillManager) findSkillInDir(dir, name, marketplaceName string) (map[s
 				meta["is_builtin_source"] = isBuiltin
 			}
 			meta["has_evolutions"] = fileExists(filepath.Join(childPath, evolutionFilename))
-			meta["enabled"] = GetSkillEnabled(sm.state, name)
+			enabled := GetSkillEnabled(sm.state, name)
+			meta["enabled"] = enabled
+			// 对齐 Python: payload["config"] = {"enabled": enabled}
+			meta["config"] = map[string]any{"enabled": enabled}
 			return meta, nil
 		}
 	}

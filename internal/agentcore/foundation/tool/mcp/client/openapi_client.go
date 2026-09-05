@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -569,7 +570,7 @@ func extractOutputSchema(op *openapi3.Operation, schemaDefinitions map[string]ma
 		if strings.HasPrefix(refPath, "#/$defs/") {
 			schemaName := strings.TrimPrefix(refPath, "#/$defs/")
 			if def, exists := schemaDefinitions[schemaName]; exists {
-				outputSchema = deepCopyMap(def)
+				outputSchema = utils.DeepCopyMap(def)
 				replaceSchemaRefs(outputSchema)
 			}
 		}
@@ -607,7 +608,7 @@ func extractOutputSchema(op *openapi3.Operation, schemaDefinitions map[string]ma
 		defs := make(map[string]any, len(referencedDefs))
 		for name := range referencedDefs {
 			if def, exists := schemaDefinitions[name]; exists {
-				copied := deepCopyMap(def)
+				copied := utils.DeepCopyMap(def)
 				replaceSchemaRefs(copied)
 				// OpenAPI → JSON Schema 转换
 				if openAPIVersion != "" && strings.HasPrefix(openAPIVersion, "3") {
@@ -669,43 +670,6 @@ func replaceSchemaRefs(m map[string]any) {
 	}
 }
 
-// deepCopyMap 深拷贝 map[string]any，避免共享引用导致副作用。
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			result[k] = deepCopyMap(val)
-		case []any:
-			result[k] = deepCopySlice(val)
-		default:
-			result[k] = v
-		}
-	}
-	return result
-}
-
-// deepCopySlice 深拷贝 []any。
-func deepCopySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]any:
-			result[i] = deepCopyMap(val)
-		case []any:
-			result[i] = deepCopySlice(val)
-		default:
-			result[i] = v
-		}
-	}
-	return result
-}
 
 // formatSimpleDescription 为 OpenAPI 工具生成增强描述。
 //
@@ -1361,7 +1325,7 @@ func convertOpenAPISchemaToJSONSchema(schema map[string]any, openAPIVersion stri
 		return nil
 	}
 
-	result := deepCopyMap(schema)
+	result := utils.DeepCopyMap(schema)
 
 	// 处理 nullable（仅 OpenAPI 3.0）
 	if strings.HasPrefix(openAPIVersion, "3.0") {

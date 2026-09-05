@@ -434,34 +434,34 @@ func (d *SQLTaskDao) DeleteTask(ctx context.Context, taskID string) error {
 	return nil
 }
 
-// CancelTask 取消任务（原子终止传播），返回 unblocked task IDs。
+// CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。
 // 对齐 Python: cancel_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
-func (d *SQLTaskDao) CancelTask(ctx context.Context, taskID string) ([]string, error) {
+func (d *SQLTaskDao) CancelTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
-	var unblocked []string
+	var task *TeamTaskBase
+	var unblocked []*TeamTaskBase
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := GetCurrentTime()
-		refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, taskID, fsm.TaskStatusCancelled, now)
-		unblocked = refreshed
+		task, unblocked, _ = terminateTaskInTx(tx, taskTable, depTable, taskID, fsm.TaskStatusCancelled, now)
 		return nil
 	})
-	return unblocked, err
+	return task, unblocked, err
 }
 
-// CompleteTask 完成任务（原子终止传播），返回 unblocked task IDs。
+// CompleteTask 完成任务（原子终止传播），返回被完成的任务和解除阻塞的任务列表。
 // 对齐 Python: complete_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
-func (d *SQLTaskDao) CompleteTask(ctx context.Context, taskID string) ([]string, error) {
+func (d *SQLTaskDao) CompleteTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
-	var unblocked []string
+	var task *TeamTaskBase
+	var unblocked []*TeamTaskBase
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := GetCurrentTime()
-		refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, taskID, fsm.TaskStatusCompleted, now)
-		unblocked = refreshed
+		task, unblocked, _ = terminateTaskInTx(tx, taskTable, depTable, taskID, fsm.TaskStatusCompleted, now)
 		return nil
 	})
-	return unblocked, err
+	return task, unblocked, err
 }
 
 // CancelAllTasks 批量取消（原子终止传播），支持 skipAssignees 过滤。
@@ -496,14 +496,11 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 				logger.Debug(logComponent).Str("task_id", task.TaskID).Str("assignee", task.Assignee).Msg("跳过：assignee 在 skipAssignees 中")
 				continue
 			}
-			refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, task.TaskID, fsm.TaskStatusCancelled, now)
+			_, refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, task.TaskID, fsm.TaskStatusCancelled, now)
 			result.Cancelled = append(result.Cancelled, &task)
-			for _, id := range refreshed {
-				if _, exists := unblockedByID[id]; !exists {
-					var t TeamTaskBase
-					if findErr := tx.Table(taskTable).Where("task_id = ?", id).First(&t).Error; findErr == nil {
-						unblockedByID[id] = &t
-					}
+			for _, t := range refreshed {
+				if _, exists := unblockedByID[t.TaskID]; !exists {
+					unblockedByID[t.TaskID] = t
 				}
 			}
 		}
@@ -648,10 +645,10 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 // terminateTaskInTx 终止任务 + 标记依赖 resolved + 传播解除阻塞。
 // 对齐 Python: _terminate_task_in_session(session, task_id, new_status, now)
 // 返回 (unblocked_task_ids, error)
-func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus string, now int64) ([]string, error) {
+func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus string, now int64) (*TeamTaskBase, []*TeamTaskBase, error) {
 	// 对齐 Python: new_status 必须是终态
 	if !fsm.IsTaskTerminal(newStatus) {
-		return nil, fmt.Errorf("terminateTaskInTx 期望终态，收到 %s", newStatus)
+		return nil, nil, fmt.Errorf("terminateTaskInTx 期望终态，收到 %s", newStatus)
 	}
 
 	// 对齐 Python: 查任务
@@ -659,24 +656,28 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 	result := tx.Table(taskTable).Where("task_id = ?", taskID).First(&task)
 	if result.Error != nil {
 		// 对齐 Python: team_logger.error("Task %s not found", task_id); return None
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	// 对齐 Python: 已是目标状态
+	// 对齐 Python: 已是目标状态（幂等）
 	if task.Status == newStatus {
-		return nil, nil
+		logger.Debug(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务已是目标状态")
+		return &task, []*TeamTaskBase{}, nil
 	}
 
 	// 对齐 Python: is_valid_transition 校验
 	if !fsm.IsValidTaskTransition(task.Status, newStatus) {
 		logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("任务状态转换不合法")
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// 对齐 Python: task.status = new_status; task.updated_at = now
 	tx.Table(taskTable).Where("task_id = ?", taskID).
 		Select("status", "updated_at").
 		Updates(&TeamTaskBase{Status: newStatus, UpdatedAt: now})
+	// 更新本地 task 对象状态
+	task.Status = newStatus
+	task.UpdatedAt = now
 	logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务终止")
 
 	// 对齐 Python: 标记下游依赖 resolved
@@ -696,12 +697,7 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 
 	// 对齐 Python: 刷新下游任务状态
 	refreshedTasks := refreshStatusInTx(tx, taskTable, depTable, downstreamIDs, now)
-	// terminateTaskInTx 返回 unblocked task IDs（对齐 Python 返回值）
-	var unblockedIDs []string
-	for _, t := range refreshedTasks {
-		unblockedIDs = append(unblockedIDs, t.TaskID)
-	}
-	return unblockedIDs, nil
+	return &task, refreshedTasks, nil
 }
 
 // stageNewTasksInTx INSERT 新任务行。

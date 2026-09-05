@@ -25,10 +25,15 @@ type PermissionResult struct {
 
 // PermissionConfirmResponse 工具权限确认响应
 //
-// 在 ASK 场景下用户对「允许一次 / 记住并写回策略 / 拒绝」的确认结果。
+// 在 ASK 场景下用户对「允许一次 / 记住并写回策略 / 拒绝 / 回退到内置中断」的确认结果。
 // Approved 且 AutoConfirm 时，护栏走合并 permissions、更新内存并写盘的路径；
-// 仅 Approved 则为本次放行。
+// 仅 Approved 则为本次放行；
+// Action=ConfirmActionInterrupt 时回退到内置 ConfirmInterrupt 流程。
+//
+// 对齐 Python: PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
 type PermissionConfirmResponse struct {
+	// Action 确认动作类型（默认 ConfirmActionConfirm）
+	Action ConfirmAction `json:"action,omitempty"`
 	// Approved 是否批准
 	Approved bool `json:"approved"`
 	// Feedback 用户反馈
@@ -146,9 +151,25 @@ type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (
 // PermissionLevel 权限级别枚举
 type PermissionLevel int
 
+// ConfirmAction 权限确认动作类型
+//
+// 对齐 Python: PermissionConfirmationResult = PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
+type ConfirmAction int
+
 const (
+	// ConfirmActionConfirm 宿主确认结果（默认）
+	ConfirmActionConfirm ConfirmAction = iota
+	// ConfirmActionInterrupt 回退到内置 ConfirmInterrupt 流程
+	// 对齐 Python: ext_out == "interrupt" → 跳过 hosted 处理，走标准 interrupt
+	ConfirmActionInterrupt
+)
+
+const (
+	// PermissionLevelNone 无匹配规则（对齐 Python fallback(no_config) 时的 None）
+	// 调用方应将 None 提升为 Ask，表示"未配置时默认询问"
+	PermissionLevelNone PermissionLevel = iota
 	// PermissionLevelAllow 允许执行，无需确认
-	PermissionLevelAllow PermissionLevel = iota
+	PermissionLevelAllow
 	// PermissionLevelAsk 弹出确认框，用户决定
 	PermissionLevelAsk
 	// PermissionLevelDeny 拒绝执行，返回错误
@@ -164,6 +185,8 @@ const (
 // ParsePermissionLevel 从字符串解析 PermissionLevel
 func ParsePermissionLevel(s string) (PermissionLevel, error) {
 	switch strings.ToLower(s) {
+	case "none":
+		return PermissionLevelNone, nil
 	case "allow":
 		return PermissionLevelAllow, nil
 	case "ask":
@@ -193,6 +216,8 @@ func (r *PermissionResult) NeedsApproval() bool {
 // String 返回 PermissionLevel 的字符串表示
 func (l PermissionLevel) String() string {
 	switch l {
+	case PermissionLevelNone:
+		return "none"
 	case PermissionLevelAllow:
 		return "allow"
 	case PermissionLevelAsk:

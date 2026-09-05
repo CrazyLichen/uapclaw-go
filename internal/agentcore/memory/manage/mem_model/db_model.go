@@ -1,7 +1,11 @@
 package mem_model
 
 import (
+	"fmt"
+
 	"gorm.io/gorm"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -70,7 +74,7 @@ func (MemoryMeta) TableName() string { return "memory_meta" }
 // 步骤：
 //  1. 检测 user_message 表是否有旧版 group_id 列，有则 DROP 重建
 //  2. 使用 GORM AutoMigrate 自动建表
-//  3. 为新创建的表写入初始 schema_version="0" 到 memory_meta
+//  3. 为新创建的表写入初始 schema_version（从 sql_registry 获取当前版本）
 func CreateTables(db *gorm.DB) error {
 	// 步骤1：旧表迁移检测——检测 user_message 表是否有旧版 group_id 列
 	// 对齐 Python: if "group_id" in column_names → DROP TABLE
@@ -88,12 +92,24 @@ func CreateTables(db *gorm.DB) error {
 	}
 
 	// 步骤3：为新表写入初始 schema_version
-	// 对齐 Python: for table_name, is_new in newly_created.items(): if is_new → MemoryMeta(schema_version="0")
-	for _, tbl := range []string{"user_message", "scope_user_mapping"} {
+	// 对齐 Python: current_version = sql_registry.get_current_version(entity_key)
+	// 仅 current_version > 0 时写入，等于 0 时不写
+	tableEntityKeys := map[string]string{
+		"user_message":      "user_message",
+		"scope_user_mapping": "scope_user_mapping",
+	}
+	for tbl, entityKey := range tableEntityKeys {
 		var count int64
 		db.Model(&MemoryMeta{}).Where("table_name = ?", tbl).Count(&count)
 		if count == 0 {
-			db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: "0"})
+			currentVersion := migration.SQLRegistry.GetCurrentVersion(entityKey)
+			// 对齐 Python: create_tables 总是为新表写入 schema_version="0"
+			// 如果注册表有版本，使用注册表版本；否则默认写入 "0"
+			versionToWrite := 0
+			if currentVersion > 0 {
+				versionToWrite = currentVersion
+			}
+			db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: fmt.Sprintf("%d", versionToWrite)})
 		}
 	}
 

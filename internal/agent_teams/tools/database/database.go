@@ -125,13 +125,15 @@ type TaskDao interface {
 	GetTasksDependingOn(ctx context.Context, taskID string) ([]*TeamTaskBase, error)
 	// DeleteTask 删除任务。
 	DeleteTask(ctx context.Context, taskID string) error
-	// CancelTask 取消任务（原子终止传播），返回 unblocked task IDs。
-	CancelTask(ctx context.Context, taskID string) ([]string, error)
+	// CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。
+	// 对齐 Python: cancel_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
+	CancelTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error)
 	// CancelAllTasks 批量取消（原子终止传播），支持 skipAssignees 过滤。
 	// 对齐 Python: cancel_all_tasks() → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
 	CancelAllTasks(ctx context.Context, teamName string, skipAssignees []string) (*CancelAllTasksResult, error)
-	// CompleteTask 完成任务（原子终止传播），返回 unblocked task IDs。
-	CompleteTask(ctx context.Context, taskID string) ([]string, error)
+	// CompleteTask 完成任务（原子终止传播），返回被完成的任务和解除阻塞的任务列表。
+	// 对齐 Python: complete_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
+	CompleteTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error)
 	// VerifyAndFixTaskConsistency 一致性修复：扫描 BLOCKED 任务并刷新状态。
 	VerifyAndFixTaskConsistency(ctx context.Context, teamName string) ([]string, error)
 }

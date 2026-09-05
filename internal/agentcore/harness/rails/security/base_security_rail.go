@@ -3,6 +3,8 @@ package security
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
@@ -103,6 +105,14 @@ type BaseSecurityRail struct {
 	toolNames map[string]struct{}
 }
 
+// TypeName 返回 Rail 类型名称，用于日志和 metadata 标识。
+// 子类应 override 返回自己的类型名。
+//
+// 对齐 Python: self.__class__.__name__
+func (r *BaseSecurityRail) TypeName() string {
+	return "BaseSecurityRail"
+}
+
 // SecurityRailOption BaseSecurityRail 配置选项
 type SecurityRailOption func(*BaseSecurityRail)
 
@@ -197,9 +207,19 @@ func (r *BaseSecurityRail) Approve(newArgs *map[string]any) *SecurityAllow {
 }
 
 // Reject 返回拒绝决策。
+// toolResult: 兼容 Python reject(tool_result=...) 的参数，result 为 nil 时自动赋值。
+// message 为空且 result 非 nil 时，自动从 result 推导 message。
 //
 // 对齐 Python: BaseSecurityRail.reject(message, result, tool_result, tool_message)
-func (r *BaseSecurityRail) Reject(message string, result any, toolMessage *llmschema.ToolMessage) *SecurityReject {
+func (r *BaseSecurityRail) Reject(message string, result any, toolResult any, toolMessage *llmschema.ToolMessage) *SecurityReject {
+	// 对齐 Python: if result is None and tool_result is not None: result = tool_result
+	if result == nil && toolResult != nil {
+		result = toolResult
+	}
+	// 对齐 Python: if not message and result is not None: message = str(result)
+	if message == "" && result != nil {
+		message = fmt.Sprintf("%v", result)
+	}
 	return &SecurityReject{
 		Message:     message,
 		Result:      result,
@@ -406,7 +426,7 @@ func (r *BaseSecurityRail) runAndApply(
 		if msg == "" {
 			msg = "Security interrupt not allowed on model events"
 		}
-		decision = r.Reject(msg, nil, nil)
+		decision = r.Reject(msg, nil, nil, nil)
 	}
 
 	// 对齐 Python: ctx.extra["_interrupt_decision"] = decision
@@ -584,6 +604,7 @@ func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decisio
 					"level":             decision.Level.String(),
 					"alert_type":        decision.AlertType,
 					"display_mode":      decision.DisplayMode,
+					"rail":              r.TypeName(),
 				},
 			},
 		})
@@ -602,6 +623,9 @@ func (r *BaseSecurityRail) buildForceFinishResult(decision *SecurityReject) map[
 	}
 	// 对齐 Python: return {"output": message, "result_type": "error"}
 	msg := decision.Message
+	if msg == "" && decision.Result != nil {
+		msg = fmt.Sprintf("%v", decision.Result)
+	}
 	if msg == "" {
 		msg = "Rejected by security rail."
 	}
@@ -688,7 +712,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 	}
 
 	// 5. rejected → Reject
-	return r.Reject("", nil, nil)
+	return r.Reject("", nil, nil, nil)
 }
 
 // isAutoConfirmed 检查 auto_confirm 配置。
@@ -745,7 +769,8 @@ func (r *BaseSecurityRail) resolveSubjectID(cbc *agentinterfaces.AgentCallbackCo
 			return toolInputs.ToolCall.ID
 		}
 	}
-	return ""
+	// 对齐 Python: f"{self.__class__.__name__}:{event.value}"
+	return r.TypeName() + ":" + string(event)
 }
 
 // getUserInput 从 session 获取用户输入。
@@ -803,14 +828,28 @@ func (r *BaseSecurityRail) getAutoConfirmConfig(cbc *agentinterfaces.AgentCallba
 
 // isSecurityTruthy 宽松真值判断（对齐 Python bool(val)）。
 // bool → 直接判断，其余 → false
+// isSecurityTruthy 宽松真值判断（对齐 Python bool(val)）。
+// bool → 直接判断；int/int64/float64 → 非0为true；
+// string → "true"/"1"/"yes" 为 true（安全语义，非 Python 全非空字符串为 true）；
+// 其余 → false
 func isSecurityTruthy(val any) bool {
 	if val == nil {
 		return false
 	}
-	if b, ok := val.(bool); ok {
-		return b
+	switch v := val.(type) {
+	case bool:
+		return v
+	case int:
+		return v != 0
+	case int64:
+		return v != 0
+	case float64:
+		return v != 0
+	case string:
+		return strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
+	default:
+		return false
 	}
-	return false
 }
 
 // tryGetApproved 尝试从任意类型获取 approved 字段（通过反射或接口断言）
@@ -833,4 +872,69 @@ func tryGetAutoConfirm(val any) (bool, bool) {
 		return a.GetAutoConfirm(), true
 	}
 	return false, false
+}
+
+// ──────────────────────────── 导出函数（消息操作） ────────────────────────────
+
+// PopLastUserMessage 从当前 turn 移除最后一条用户消息并返回。
+// 对齐 Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
+func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
+}
+
+// PopMatchingMessages 移除匹配正则的消息并返回。
+// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L564-585)
+func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
+}
+
+// ExtractMessageContent 从消息对象提取文本内容。
+// 对齐 Python: BaseSecurityRail._extract_message_content(msg) (base_security_rail.py L587-601)
+func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
+	if msg == nil {
+		return ""
+	}
+	switch v := msg.(type) {
+	case string:
+		return v
+	case map[string]any:
+		if content, ok := v["content"]; ok {
+			return fmt.Sprintf("%v", content)
+		}
+		return fmt.Sprintf("%v", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// ContainsAnyPattern 检查文本是否匹配任一正则。
+// 对齐 Python: BaseSecurityRail._contains_any_pattern(text, patterns) (base_security_rail.py L603-613)
+func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bool {
+	for _, p := range patterns {
+		if matched, err := regexp.MatchString(p, text); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+// SanitizeMatchingMessages 脱敏替换匹配正则的消息内容。
+// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L615-689)
+func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []any {
+	sess := cbc.Session()
+	if sess == nil {
+		return nil
+	}
+	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	return nil
 }

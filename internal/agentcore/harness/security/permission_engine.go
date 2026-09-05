@@ -22,6 +22,10 @@ type PermissionEngine struct {
 	workspaceRoot string
 	// externalChecker 外部目录检查器
 	externalChecker *ExternalDirectoryChecker
+	// llm 保留字段（对齐 Python _llm，供 PermissionInterruptRail 等热更新模型）
+	llm any
+	// modelName 保留字段（对齐 Python _model_name）
+	modelName string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -37,7 +41,7 @@ var engineLogComponent = logger.ComponentAgentCore
 // NewPermissionEngine 创建权限引擎。
 //
 // 对齐 Python: PermissionEngine.__init__(config, llm, model_name, workspace_root) (core.py L36-52)
-func NewPermissionEngine(config map[string]any, workspaceRoot string) *PermissionEngine {
+func NewPermissionEngine(config map[string]any, llm any, modelName string, workspaceRoot string) *PermissionEngine {
 	if config == nil {
 		config = make(map[string]any)
 	}
@@ -52,6 +56,8 @@ func NewPermissionEngine(config map[string]any, workspaceRoot string) *Permissio
 		enabled:         enabled,
 		workspaceRoot:   workspaceRoot,
 		externalChecker: NewExternalDirectoryChecker(config, workspaceRoot),
+		llm:             llm,
+		modelName:       modelName,
 	}
 }
 
@@ -71,6 +77,13 @@ func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 	}
 	e.enabled = enabled
 	e.externalChecker = NewExternalDirectoryChecker(config, e.workspaceRoot)
+}
+
+// UpdateLLM 热更新模型实例。
+// 对齐 Python: PermissionEngine.update_llm(llm, model_name) (core.py L64-67)
+func (e *PermissionEngine) UpdateLLM(llm any, modelName string) {
+	e.llm = llm
+	e.modelName = modelName
 }
 
 // Enabled 返回权限系统是否启用。
@@ -125,8 +138,8 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 	// 1. 工具级 + 参数规则 + 默认（分层策略 evaluate_tiered_policy）
 	var externalPaths []string
 	permission, matchedRule := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
-	if permission == PermissionLevelAllow && matchedRule == "" {
-		// fallback(no_config) → 用 ASK
+	// 对齐 Python: if permission is None → ASK
+	if permission == PermissionLevelNone {
 		permission = PermissionLevelAsk
 		matchedRule = "default"
 	}
@@ -141,8 +154,11 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 	if extResult != nil {
 		logger.Info(engineLogComponent).
 			Str("tool", toolName).
+			Bool("checked", true).
 			Str("ext_permission", extResult.Permission.String()).
 			Str("matched_rule", extResult.MatchedRule).
+			Strs("external_paths", extResult.ExternalPaths).
+			Str("merged_with", permission.String()).
 			Msg("permission.external.result")
 		permission = Strictest(permission, extResult.Permission)
 		if matchedRule != "" {
@@ -187,9 +203,10 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 
 	permission, matchedRule := EvaluateTieredPolicy(e.config, toolName, toolArgs)
 
-	// fallback(no_config) → 返回 (Allow, "")
+	// fallback(no_config) → 返回 (None, "")
+	// 对齐 Python: permission = None, matched_rule = None
 	if matchedRule == mr+":fallback(no_config)" {
-		permission = PermissionLevelAllow
+		permission = PermissionLevelNone
 		matchedRule = ""
 	} else if !MatchedRuleUsesApprovalOverride(matchedRule) {
 		permission = MaybeEscalateShellOperators(toolName, toolArgs, permission, matchedRule)
@@ -198,7 +215,7 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 	if includeExternalDirectory {
 		extResult := e.externalChecker.CheckExternalPaths(toolName, toolArgs)
 		if extResult != nil {
-			if permission == PermissionLevelAllow && matchedRule == "" {
+			if permission == PermissionLevelNone {
 				permission = extResult.Permission
 				matchedRule = extResult.MatchedRule
 			} else {

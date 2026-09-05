@@ -12,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -796,7 +797,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 		originIndexVal, hasOrigin := entry["origin_index"]
 		if !hasOrigin || originIndexVal == nil {
 			// 新条目：加密 api_key 后原样存入
-			newEntry := deepCopyMap(entry)
+			newEntry := utils.DeepCopyMap(entry)
 			if crypto != nil {
 				if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
 					if apiKey, ok := mcc["api_key"].(string); ok && apiKey != "" {
@@ -823,7 +824,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 
 		if oi < 0 || oi >= len(rawDefaults) {
 			// origin_index 越界，当作新条目处理
-			newEntry := deepCopyMap(entry)
+			newEntry := utils.DeepCopyMap(entry)
 			if crypto != nil {
 				if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
 					if apiKey, ok := mcc["api_key"].(string); ok && apiKey != "" {
@@ -836,7 +837,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 		}
 
 		// 深拷贝原始条目（保留占位符、custom_headers 等未暴露字段）
-		merged := deepCopyMap(rawDefaults[oi])
+		merged := utils.DeepCopyMap(rawDefaults[oi])
 
 		// 获取解析后的默认条目（用于与前端值比较）
 		var resolvedEntry map[string]any
@@ -970,40 +971,3 @@ func loadRawModelsDefaults() []map[string]any {
 	return result
 }
 
-// deepCopyMap 深拷贝 map[string]any。
-func deepCopyMap(src map[string]any) map[string]any {
-	if src == nil {
-		return nil
-	}
-	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		switch val := v.(type) {
-		case map[string]any:
-			dst[k] = deepCopyMap(val)
-		case []any:
-			dst[k] = deepCopySlice(val)
-		default:
-			dst[k] = v
-		}
-	}
-	return dst
-}
-
-// deepCopySlice 深拷贝 []any。
-func deepCopySlice(src []any) []any {
-	if src == nil {
-		return nil
-	}
-	dst := make([]any, len(src))
-	for i, v := range src {
-		switch val := v.(type) {
-		case map[string]any:
-			dst[i] = deepCopyMap(val)
-		case []any:
-			dst[i] = deepCopySlice(val)
-		default:
-			dst[i] = v
-		}
-	}
-	return dst
-}

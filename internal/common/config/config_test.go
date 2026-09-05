@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -409,7 +410,7 @@ func TestDeepCopyMap(t *testing.T) {
 		"slice": []any{1, 2, 3},
 	}
 
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	// 修改拷贝不影响原始
 	copied["key"] = "changed"
@@ -513,7 +514,7 @@ func TestDeepCopySlice(t *testing.T) {
 		[]any{2, 3},
 	}
 
-	copied := deepCopySlice(original)
+	copied := utils.DeepCopySlice(original)
 
 	// 修改拷贝不影响原始
 	copied[0] = 100
@@ -529,7 +530,7 @@ func TestDeepCopySlice(t *testing.T) {
 
 // TestDeepCopyMap_nil 测试 nil map 深拷贝
 func TestDeepCopyMap_nil(t *testing.T) {
-	result := deepCopyMap(nil)
+	result := utils.DeepCopyMap(nil)
 	if result != nil {
 		t.Errorf("nil map 深拷贝应返回 nil，实际 %v", result)
 	}
@@ -537,7 +538,7 @@ func TestDeepCopyMap_nil(t *testing.T) {
 
 // TestDeepCopySlice_nil 测试 nil slice 深拷贝
 func TestDeepCopySlice_nil(t *testing.T) {
-	result := deepCopySlice(nil)
+	result := utils.DeepCopySlice(nil)
 	if result != nil {
 		t.Errorf("nil slice 深拷贝应返回 nil，实际 %v", result)
 	}

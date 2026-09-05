@@ -836,8 +836,11 @@ func TestCompleteTask_终止传播(t *testing.T) {
 
 	// 先认领上游，然后完成（对齐 Python FSM：pending→claimed→completed）
 	db.ClaimTask(ctx, "upstream", "leader1")
-	refreshed, _ := db.CompleteTask(ctx, "upstream")
-	if len(refreshed) == 0 {
+	refreshed, unblocked, _ := db.CompleteTask(ctx, "upstream")
+	if refreshed == nil {
+		t.Error("完成上游应返回任务对象")
+	}
+	if len(unblocked) == 0 {
 		t.Error("完成上游应刷新下游任务")
 	}
 
@@ -857,7 +860,7 @@ func TestCancelTask_终止传播(t *testing.T) {
 
 	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
 
-	refreshed, _ := db.CancelTask(ctx, "upstream")
+	_, refreshed, _ := db.CancelTask(ctx, "upstream")
 	if len(refreshed) == 0 {
 		t.Error("取消上游应刷新下游任务")
 	}

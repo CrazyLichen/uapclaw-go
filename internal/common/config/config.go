@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -156,7 +157,7 @@ func (c *Config) Raw() (map[string]any, error) {
 	c.raw = raw
 
 	// 深拷贝一份返回，避免外部修改影响内部状态
-	result := deepCopyMap(raw)
+	result := utils.DeepCopyMap(raw)
 	return result, nil
 }
 
@@ -290,40 +291,3 @@ func setNestedValue(m map[string]any, parts []string, value any) {
 	}
 }
 
-// deepCopyMap 深拷贝 map[string]any。
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			result[k] = deepCopyMap(val)
-		case []any:
-			result[k] = deepCopySlice(val)
-		default:
-			result[k] = v
-		}
-	}
-	return result
-}
-
-// deepCopySlice 深拷贝 []any。
-func deepCopySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]any:
-			result[i] = deepCopyMap(val)
-		case []any:
-			result[i] = deepCopySlice(val)
-		default:
-			result[i] = v
-		}
-	}
-	return result
-}

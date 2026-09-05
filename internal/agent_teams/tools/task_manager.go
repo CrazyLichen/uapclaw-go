@@ -485,12 +485,12 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	}
 
 	// 3. 执行完成（对齐 Python: result = await self.db.task.complete_task(task_id)）
-	refreshed, err := tm.db.Task().CompleteTask(ctx, taskID)
+	task, unblockedTasks, err := tm.db.Task().CompleteTask(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
-	// terminateTaskInSession: nil=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
-	if refreshed == nil {
+	// terminateTaskInSession: task=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
+	if task == nil {
 		return nil, fmt.Errorf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)
 	}
 
@@ -499,41 +499,39 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
 		TaskID:           taskID,
 	})
-	// refreshed 是 []string（unblocked task ID 列表），转换为 []*TeamTaskBase
-	var unblockedTasks []*database.TeamTaskBase
-	for _, id := range refreshed {
-		if t, _ := tm.db.Task().GetTask(ctx, id); t != nil {
-			unblockedTasks = append(unblockedTasks, t)
-		}
-	}
+	// unblockedTasks 是 []*TeamTaskBase，直接发布事件
 	tm.publishUnblockedEvents(ctx, unblockedTasks)
 	tm.maybePublishTaskListDrained(ctx)
+	// 返回 unblocked task ID 列表
+	var refreshed []string
+	for _, t := range unblockedTasks {
+		refreshed = append(refreshed, t.TaskID)
+	}
 	return refreshed, nil
 }
 
 // Cancel 取消单条任务。对齐 Python: TeamTaskManager.cancel()
 func (tm *TeamTaskManager) Cancel(ctx context.Context, taskID string) ([]string, error) {
-	refreshed, err := tm.db.Task().CancelTask(ctx, taskID)
+	task, unblockedTasks, err := tm.db.Task().CancelTask(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
-	// terminateTaskInSession: nil=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
-	if refreshed == nil {
+	// terminateTaskInSession: task=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
+	if task == nil {
 		return nil, fmt.Errorf("取消任务失败: 任务不存在或状态不允许取消 %s", taskID)
 	}
 	tm.publishTaskEvent(ctx, schema.TaskCancelledEvent{
 		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
 		TaskID:           taskID,
 	})
-	// refreshed 是 []string（unblocked task ID 列表），转换为 []*TeamTaskBase
-	var unblockedTasks []*database.TeamTaskBase
-	for _, id := range refreshed {
-		if t, _ := tm.db.Task().GetTask(ctx, id); t != nil {
-			unblockedTasks = append(unblockedTasks, t)
-		}
-	}
+	// unblockedTasks 是 []*TeamTaskBase，直接发布事件
 	tm.publishUnblockedEvents(ctx, unblockedTasks)
 	tm.maybePublishTaskListDrained(ctx)
+	// 返回 unblocked task ID 列表
+	var refreshed []string
+	for _, t := range unblockedTasks {
+		refreshed = append(refreshed, t.TaskID)
+	}
 	return refreshed, nil
 }
 
@@ -729,7 +727,10 @@ func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context) ([]*TaskSummar
 		deps, _ := tm.db.Task().GetTaskDependencies(ctx, task.TaskID)
 		var blockedBy []string
 		for _, dep := range deps {
-			blockedBy = append(blockedBy, dep.DependsOnID)
+			// 对齐 Python: [d.depends_on_task_id for d in deps if not d.resolved]
+			if !dep.Resolved {
+				blockedBy = append(blockedBy, dep.DependsOnID)
+			}
 		}
 		result = append(result, &TaskSummary{
 			TaskID:    task.TaskID,

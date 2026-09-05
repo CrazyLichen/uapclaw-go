@@ -3,6 +3,7 @@ package security
 import (
 	"testing"
 
+	"github.com/anmitsu/go-shlex"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -124,12 +125,18 @@ func TestShellAstKind_String(t *testing.T) {
 
 // TestShlexSplit 测试 shell 分词
 func TestShlexSplit(t *testing.T) {
-	assert.Equal(t, []string{"ls", "-la"}, shlexSplit("ls -la"))
-	assert.Equal(t, []string{"echo", "hello world"}, shlexSplit(`echo "hello world"`))
-	assert.Equal(t, []string{"echo", "hello world"}, shlexSplit(`echo 'hello world'`))
-	assert.Equal(t, []string{"echo", "hello world"}, shlexSplit(`echo hello\ world`))
-	assert.Nil(t, shlexSplit(""))
-	assert.Equal(t, []string{"ls"}, shlexSplit("ls"))
+	result, _ := shlex.Split("ls -la", true)
+	assert.Equal(t, []string{"ls", "-la"}, result)
+	result, _ = shlex.Split(`echo "hello world"`, true)
+	assert.Equal(t, []string{"echo", "hello world"}, result)
+	result, _ = shlex.Split(`echo 'hello world'`, true)
+	assert.Equal(t, []string{"echo", "hello world"}, result)
+	result, _ = shlex.Split(`echo hello\ world`, true)
+	assert.Equal(t, []string{"echo", "hello world"}, result)
+	result, _ = shlex.Split("", true)
+	assert.Empty(t, result)
+	result, _ = shlex.Split("ls", true)
+	assert.Equal(t, []string{"ls"}, result)
 }
 
 // TestScanShellStructure 测试保守扫描

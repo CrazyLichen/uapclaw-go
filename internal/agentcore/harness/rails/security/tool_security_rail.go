@@ -17,6 +17,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -108,7 +109,7 @@ func NewPermissionInterruptRail(
 					Msg("permission.rail.workspace_resolve_failed")
 			}
 		}
-		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, workspaceRoot)
+		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, nil, "", workspaceRoot)
 	}
 
 	// 宿主级权限校验活跃检查
@@ -425,45 +426,54 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				}
 				return r.Reject(fmt.Sprintf("[PERMISSION_DENIED] %s (Hosted permission request failed)", reason))
 			}
-			// 有效响应 → 处理确认结果
-			persisted := false
-			if extOut.Approved && extOut.AutoConfirm {
-				persisted = r.persistAllowAlways(normalizedName, toolArgs)
-			}
-			logger.Info(permRailLogComponent).
-				Str("tool", toolName).
-				Str("confirm_path", "hosted").
-				Bool("persisted", persisted).
-				Msg("permission.persist.result")
 
-			session := resolveSession(cbc)
-			if shouldStoreAutoConfirm(extOut.AutoConfirm, session, autoConfirmKey, persisted) {
-				r.storeAutoConfirm(cbc, autoConfirmKey)
-			}
-
-			if extOut.Approved {
-				decision := "allow_once"
-				if extOut.AutoConfirm {
-					decision = "allow_always"
+			// 对齐 Python: if ext_out == "interrupt" → 回退到标准 interrupt 流程
+			if extOut.Action == harnesssecurity.ConfirmActionInterrupt {
+				logger.Info(permRailLogComponent).
+					Str("tool", toolName).
+					Msg("permission.hosted_confirm.fallback_interrupt")
+				// 跳过 hosted 处理，走下面的标准 interrupt 流程
+			} else {
+				// ConfirmActionConfirm（默认）→ 处理确认结果
+				persisted := false
+				if extOut.Approved && extOut.AutoConfirm {
+					persisted = r.persistAllowAlways(normalizedName, toolArgs)
 				}
 				logger.Info(permRailLogComponent).
 					Str("tool", toolName).
 					Str("confirm_path", "hosted").
-					Str("decision", decision).
 					Bool("persisted", persisted).
-					Msg("permission.user.decision")
-				return r.Approve(nil)
-			}
+					Msg("permission.persist.result")
 
-			logger.Info(permRailLogComponent).
-				Str("tool", toolName).
-				Str("confirm_path", "hosted").
-				Msg("permission.user.decision decision=deny")
-			feedback := extOut.Feedback
-			if feedback == "" {
-				feedback = "[PERMISSION_REJECTED] User rejected the request."
+				session := resolveSession(cbc)
+				if shouldStoreAutoConfirm(extOut.AutoConfirm, session, autoConfirmKey, persisted) {
+					r.storeAutoConfirm(cbc, autoConfirmKey)
+				}
+
+				if extOut.Approved {
+					decision := "allow_once"
+					if extOut.AutoConfirm {
+						decision = "allow_always"
+					}
+					logger.Info(permRailLogComponent).
+						Str("tool", toolName).
+						Str("confirm_path", "hosted").
+						Str("decision", decision).
+						Bool("persisted", persisted).
+						Msg("permission.user.decision")
+					return r.Approve(nil)
+				}
+
+				logger.Info(permRailLogComponent).
+					Str("tool", toolName).
+					Str("confirm_path", "hosted").
+					Msg("permission.user.decision decision=deny")
+				feedback := extOut.Feedback
+				if feedback == "" {
+					feedback = "[PERMISSION_REJECTED] User rejected the request."
+				}
+				return r.Reject(feedback)
 			}
-			return r.Reject(feedback)
 		}
 
 		// ASK → 标准 interrupt 流程
@@ -705,7 +715,7 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 // 对齐 Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args) (tool_security_rail.py L241-286)
 func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
 	// 深拷贝当前配置
-	cfg := deepCopyMap(r.engine.Config())
+	cfg := utils.DeepCopyMap(r.engine.Config())
 
 	cfg, okTool := harnesssecurity.MergePermissionAllowRuleIntoPermissions(cfg, normalizedName, toolArgs)
 	extPaths := r.collectExternalDirectoryPersistPaths(normalizedName, toolArgs, cfg)
@@ -718,7 +728,7 @@ func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, tool
 	}
 
 	// 保存旧配置以便回滚
-	prevCfg := deepCopyMap(r.engine.Config())
+	prevCfg := utils.DeepCopyMap(r.engine.Config())
 	r.UpdateConfig(cfg, nil)
 
 	// 持久化
@@ -863,21 +873,6 @@ func confirmPayloadSchemaForPermission() map[string]any {
 	}
 }
 
-// deepCopyMap 深拷贝 map[string]any
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return make(map[string]any)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return make(map[string]any)
-	}
-	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		return make(map[string]any)
-	}
-	return result
-}
 
 // applyDecision 根据中断决策类型执行对应的处理逻辑。
 // 对齐 Python: BaseInterruptRail._apply_decision — 复用基类逻辑。

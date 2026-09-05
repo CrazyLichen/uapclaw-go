@@ -274,20 +274,20 @@ func TestBaselineLevel_整工具deny(t *testing.T) {
 	assert.Equal(t, "tools.bash", rule)
 }
 
-// TestBaselineLevel_无配置 测试无 tools 配置返回 ALLOW
+// TestBaselineLevel_无配置 测试无 tools 配置返回 NONE
 func TestBaselineLevel_无配置(t *testing.T) {
 	level, rule := baselineLevel(nil, "bash")
-	assert.Equal(t, PermissionLevelAllow, level)
+	assert.Equal(t, PermissionLevelNone, level)
 	assert.Empty(t, rule)
 }
 
-// TestBaselineLevel_工具未配置 测试工具未在 tools 配置中返回 ALLOW
+// TestBaselineLevel_工具未配置 测试工具未在 tools 配置中返回 NONE
 func TestBaselineLevel_工具未配置(t *testing.T) {
 	toolsCfg := map[string]any{
 		"bash": "deny",
 	}
 	level, rule := baselineLevel(toolsCfg, "read_file")
-	assert.Equal(t, PermissionLevelAllow, level)
+	assert.Equal(t, PermissionLevelNone, level)
 	assert.Empty(t, rule)
 }
 

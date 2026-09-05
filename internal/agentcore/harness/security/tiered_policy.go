@@ -373,11 +373,11 @@ func toolCategory(toolName string) string {
 // 对齐 Python: _baseline_level(tools_cfg, tool_name) (tiered_policy.py L348-375)
 func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, string) {
 	if toolsCfg == nil {
-		return PermissionLevelAllow, "" // 无配置时不短路
+		return PermissionLevelNone, "" // 无配置，对齐 Python baseline_level is None
 	}
 	raw, ok := toolsCfg[toolName]
 	if !ok {
-		return PermissionLevelAllow, "" // 无配置时不短路
+		return PermissionLevelNone, "" // 无配置，对齐 Python baseline_level is None
 	}
 
 	switch v := raw.(type) {
@@ -645,11 +645,10 @@ func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tie
 	}
 
 	// 6. 基线
-	if ctx.BaselineLevel != PermissionLevelAllow || ctx.BaselineRule != "" {
-		// 只要有 tools 配置（即使为 allow），就用基线
-		if ctx.BaselineRule != "" {
-			return subcommandResult{Permission: ctx.BaselineLevel, MatchedRule: ctx.BaselineRule}
-		}
+	// 对齐 Python: if ctx.baseline_level is not None → 使用基线
+	// BaselineLevel != PermissionLevelNone 表示 tools 配置中存在该工具名
+	if ctx.BaselineLevel != PermissionLevelNone {
+		return subcommandResult{Permission: ctx.BaselineLevel, MatchedRule: ctx.BaselineRule}
 	}
 
 	// 7. 默认配置

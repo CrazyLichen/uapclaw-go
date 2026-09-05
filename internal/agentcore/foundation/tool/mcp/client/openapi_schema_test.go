@@ -5,6 +5,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── extractOutputSchema 测试 ────────────────────────────
@@ -952,7 +953,7 @@ func TestOapiSchemaToMap_然后OapiMapToParam_完整流程(t *testing.T) {
 
 // TestDeepCopyMap_Nil 测试 nil 输入返回 nil。
 func TestDeepCopyMap_Nil(t *testing.T) {
-	result := deepCopyMap(nil)
+	result := utils.DeepCopyMap(nil)
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
@@ -960,7 +961,7 @@ func TestDeepCopyMap_Nil(t *testing.T) {
 
 // TestDeepCopyMap_空Map 测试空 map 拷贝。
 func TestDeepCopyMap_空Map(t *testing.T) {
-	result := deepCopyMap(map[string]any{})
+	result := utils.DeepCopyMap(map[string]any{})
 	if len(result) != 0 {
 		t.Errorf("期望空 map，实际 %v", result)
 	}
@@ -978,7 +979,7 @@ func TestDeepCopyMap_嵌套Map(t *testing.T) {
 		},
 		"str": "hello",
 	}
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	// 修改原始不影响拷贝
 	original["key"].(map[string]any)["nested"] = "changed"
@@ -991,7 +992,7 @@ func TestDeepCopyMap_嵌套Map(t *testing.T) {
 
 // TestDeepCopySlice_Nil 测试 nil 输入返回 nil。
 func TestDeepCopySlice_Nil(t *testing.T) {
-	result := deepCopySlice(nil)
+	result := utils.DeepCopySlice(nil)
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
@@ -1004,7 +1005,7 @@ func TestDeepCopySlice_嵌套Slice(t *testing.T) {
 		[]any{"nested"},
 		"simple",
 	}
-	copied := deepCopySlice(original)
+	copied := utils.DeepCopySlice(original)
 
 	// 修改原始不影响拷贝
 	original[0].(map[string]any)["key"] = "changed"
@@ -1346,7 +1347,7 @@ func TestExtractOutputSchema_含Defs引用(t *testing.T) {
 		defs := make(map[string]any, len(referencedDefs))
 		for name := range referencedDefs {
 			if def, exists := schemaDefinitions[name]; exists {
-				copied := deepCopyMap(def)
+				copied := utils.DeepCopyMap(def)
 				replaceSchemaRefs(copied)
 				defs[name] = copied
 			}
@@ -1881,7 +1882,7 @@ func TestExtractOutputSchema_顶层Ref内联展开(t *testing.T) {
 		if refPath == "#/$defs/User" {
 			schemaName := "User"
 			if def, exists := schemaDefinitions[schemaName]; exists {
-				expanded := deepCopyMap(def)
+				expanded := utils.DeepCopyMap(def)
 				replaceSchemaRefs(expanded)
 				if expanded["type"] != "object" {
 					t.Errorf("期望 type=object，实际 %v", expanded["type"])

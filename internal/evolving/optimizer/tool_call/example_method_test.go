@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -528,7 +529,7 @@ func TestDeepCopyMap(t *testing.T) {
 		"list":   []any{1, 2, 3},
 	}
 
-	copied := deepCopyMap(original)
+	copied := utils.DeepCopyMap(original)
 
 	// 修改拷贝不影响原始
 	copied["name"] = "modified"
@@ -546,11 +547,11 @@ func TestDeepCopyMap(t *testing.T) {
 
 // TestDeepCopyMap_Nil 测试 nil map 深拷贝。
 func TestDeepCopyMap_Nil(t *testing.T) {
-	if deepCopyMap(nil) != nil {
-		t.Error("deepCopyMap(nil) 应返回 nil")
+	if utils.DeepCopyMap(nil) != nil {
+		t.Error("utils.DeepCopyMap(nil) 应返回 nil")
 	}
 
-	result := deepCopyMap(map[string]any{})
+	result := utils.DeepCopyMap(map[string]any{})
 	if len(result) != 0 {
 		t.Error("空 map 深拷贝应返回空 map")
 	}
@@ -559,7 +560,7 @@ func TestDeepCopyMap_Nil(t *testing.T) {
 // TestDeepCopySlice 测试深拷贝 slice。
 func TestDeepCopySlice(t *testing.T) {
 	original := []any{1, "two", map[string]any{"key": "val"}}
-	copied := deepCopySlice(original)
+	copied := utils.DeepCopySlice(original)
 
 	if len(copied) != len(original) {
 		t.Errorf("期望长度 %d, 实际 %d", len(original), len(copied))

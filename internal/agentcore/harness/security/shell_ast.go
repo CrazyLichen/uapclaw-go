@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
+	"github.com/anmitsu/go-shlex"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_bash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 
@@ -132,6 +134,15 @@ var shellAstLogComponent = logger.ComponentAgentCore
 // treeSitterReady tree-sitter 后端可用状态（nil=未检测, true=可用, false=不可用）
 var treeSitterReady *bool
 
+// treeSitterParser 全局缓存的 tree-sitter Parser 实例
+var treeSitterParser *tree_sitter.Parser
+
+// treeSitterOnce 确保 Parser 只初始化一次
+var treeSitterOnce sync.Once
+
+// treeSitterMu 保护 Parser 并发访问（tree-sitter Parser 不是并发安全的）
+var treeSitterMu sync.Mutex
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseShellForPermission 解析 Shell 命令用于权限评估。
@@ -150,7 +161,9 @@ func ParseShellForPermission(command string) *ShellAstParseResult {
 	// 尝试 tree-sitter 后端
 	parser := getTreeSitterBashParser()
 	if parser != nil {
+		treeSitterMu.Lock()
 		result, err := parseWithTreeSitter(text, parser)
+		treeSitterMu.Unlock()
 		if err == nil {
 			return result
 		}
@@ -182,26 +195,29 @@ func (k ShellAstKind) String() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getTreeSitterBashParser 获取或初始化 tree-sitter bash 解析器。
+// 使用 sync.Once 缓存全局 Parser 实例，避免每次调用重新创建。
 //
 // 对齐 Python: _get_tree_sitter_bash_parser() (shell_ast.py L106-128)
 func getTreeSitterBashParser() *tree_sitter.Parser {
+	treeSitterOnce.Do(func() {
+		parser := tree_sitter.NewParser()
+		lang := tree_sitter.NewLanguage(tree_sitter_bash.Language())
+		if err := parser.SetLanguage(lang); err != nil {
+			parser.Close()
+			falseVal := false
+			treeSitterReady = &falseVal
+			logger.Info(shellAstLogComponent).Msg("tree-sitter bash 后端不可用，使用保守扫描")
+			return
+		}
+		trueVal := true
+		treeSitterReady = &trueVal
+		treeSitterParser = parser
+	})
+
 	if treeSitterReady != nil && !*treeSitterReady {
 		return nil
 	}
-
-	parser := tree_sitter.NewParser()
-	lang := tree_sitter.NewLanguage(tree_sitter_bash.Language())
-	if err := parser.SetLanguage(lang); err != nil {
-		parser.Close()
-		falseVal := false
-		treeSitterReady = &falseVal
-		logger.Info(shellAstLogComponent).Msg("tree-sitter bash 后端不可用，使用保守扫描")
-		return nil
-	}
-
-	trueVal := true
-	treeSitterReady = &trueVal
-	return parser
+	return treeSitterParser
 }
 
 // parseWithTreeSitter 使用 tree-sitter 精确解析。
@@ -278,7 +294,7 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 		}
 
 		// 对齐 Python: shlex.split(text) → Go shlex 分词
-		argv := shlexSplit(text)
+		argv, _ := shlex.Split(text, true)
 
 		// 对齐 Python: 收集重定向
 		var redirects []string
@@ -444,7 +460,7 @@ func parseWithConservativeFallback(command string) *ShellAstParseResult {
 	}
 
 	// 对齐 Python: shlex.split(command)
-	argv := shlexSplit(command)
+	argv, _ := shlex.Split(command, true)
 
 	subcommand := ShellSubcommand{
 		Text:       command,
@@ -493,55 +509,3 @@ func scanShellStructure(command string) ShellStructureFlags {
 	return flags
 }
 
-// shlexSplit 简单的 shell 分词（对齐 Python shlex.split）。
-// 处理单引号、双引号和反斜杠转义。
-func shlexSplit(s string) []string {
-	if s == "" {
-		return nil
-	}
-
-	var tokens []string
-	var current strings.Builder
-	inSingleQuote := false
-	inDoubleQuote := false
-	escaped := false
-
-	for _, ch := range s {
-		if escaped {
-			current.WriteRune(ch)
-			escaped = false
-			continue
-		}
-
-		if ch == '\\' && !inSingleQuote {
-			escaped = true
-			continue
-		}
-
-		if ch == '\'' && !inDoubleQuote {
-			inSingleQuote = !inSingleQuote
-			continue
-		}
-
-		if ch == '"' && !inSingleQuote {
-			inDoubleQuote = !inDoubleQuote
-			continue
-		}
-
-		if !inSingleQuote && !inDoubleQuote && (ch == ' ' || ch == '\t') {
-			if current.Len() > 0 {
-				tokens = append(tokens, current.String())
-				current.Reset()
-			}
-			continue
-		}
-
-		current.WriteRune(ch)
-	}
-
-	if current.Len() > 0 {
-		tokens = append(tokens, current.String())
-	}
-
-	return tokens
-}

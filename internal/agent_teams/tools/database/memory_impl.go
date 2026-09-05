@@ -598,7 +598,12 @@ func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newS
 
 	// 如果是终态（COMPLETED/CANCELLED），执行终止传播
 	if newStatus == fsm.TaskStatusCompleted || newStatus == fsm.TaskStatusCancelled {
-		return db.terminateTaskInSession(taskID, newStatus)
+		_, refreshed, _ := db.terminateTaskInSession(taskID, newStatus)
+		var unblockedIDs []string
+		for _, t := range refreshed {
+			unblockedIDs = append(unblockedIDs, t.TaskID)
+		}
+		return unblockedIDs, nil
 	}
 
 	// 非终态转换：直接更新状态
@@ -607,15 +612,17 @@ func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newS
 	return nil, nil
 }
 
-// CancelTask 取消任务（原子终止传播）。对齐 Python: TaskDao.cancel_task()
-func (db *InMemoryTeamDatabase) CancelTask(_ context.Context, taskID string) ([]string, error) {
+// CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。
+// 对齐 Python: TaskDao.cancel_task() → {"task": ..., "unblocked_tasks": [...]}
+func (db *InMemoryTeamDatabase) CancelTask(_ context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.terminateTaskInSession(taskID, fsm.TaskStatusCancelled)
 }
 
-// CompleteTask 完成任务（原子终止传播）。对齐 Python: TaskDao.complete_task()
-func (db *InMemoryTeamDatabase) CompleteTask(_ context.Context, taskID string) ([]string, error) {
+// CompleteTask 完成任务（原子终止传播），返回被完成的任务和解除阻塞的任务列表。
+// 对齐 Python: TaskDao.complete_task() → {"task": ..., "unblocked_tasks": [...]}
+func (db *InMemoryTeamDatabase) CompleteTask(_ context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.terminateTaskInSession(taskID, fsm.TaskStatusCompleted)
@@ -646,14 +653,12 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		if skipSet[task.Assignee] {
 			continue
 		}
-		refreshed, _ := db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
+		_, refreshed, _ := db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
 		result.Cancelled = append(result.Cancelled, task)
 		// 收集被解除阻塞的任务对象
-		for _, id := range refreshed {
-			if unblockedTask, exists := db.tasks[id]; exists {
-				if _, already := unblockedByID[id]; !already {
-					unblockedByID[id] = unblockedTask
-				}
+		for _, t := range refreshed {
+			if _, already := unblockedByID[t.TaskID]; !already {
+				unblockedByID[t.TaskID] = t
 			}
 		}
 	}
@@ -1144,17 +1149,17 @@ func (mc *mutationContext) rollbackStagedTasks() {
 // 一次 Lock 内完成所有操作（由调用方持锁，此方法不加锁）。
 // 返回值语义对齐 Python：(nil, nil)=任务不存在/FSM不合法，([]string{}, nil)=幂等成功（已终态），
 // (非空切片, nil)=成功且有下游刷新。
-func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus string) ([]string, error) {
+func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	task, exists := db.tasks[taskID]
 	if !exists {
-		return nil, nil
+		return nil, nil, nil
 	}
 	// 幂等：任务已处于目标终态，视为成功（对齐 Python _terminate_task_in_session idempotent branch）
 	if task.Status == terminalStatus {
-		return []string{}, nil
+		return task, []*TeamTaskBase{}, nil
 	}
 	if !IsValidTaskTransition(task.Status, terminalStatus) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// 1. 将任务设为终态
@@ -1179,8 +1184,7 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 	}
 
 	// 刷新每个下游任务的状态
-	// 初始化为非 nil 空切片，确保"成功无下游"时 refreshed != nil（对齐 Python 返回 [] 而非 None）
-	refreshed := []string{}
+	refreshed := []*TeamTaskBase{}
 	for _, downID := range downstreamIDs {
 		downTask, downExists := db.tasks[downID]
 		if !downExists {
@@ -1197,12 +1201,12 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 			if unresolved == 0 {
 				downTask.Status = fsm.TaskStatusPending
 				downTask.UpdatedAt = GetCurrentTime()
-				refreshed = append(refreshed, downID)
+				refreshed = append(refreshed, downTask)
 			}
 		}
 	}
 
-	return refreshed, nil
+	return task, refreshed, nil
 }
 
 // refreshTaskStatuses 刷新团队内所有任务的 PENDING↔BLOCKED 状态。

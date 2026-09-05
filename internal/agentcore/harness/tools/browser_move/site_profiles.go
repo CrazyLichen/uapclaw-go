@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -281,7 +282,7 @@ func (c *BrowserSelectorCache) ExportForProbe(maxRecords ...int) []map[string]an
 	result := make([]map[string]any, 0, limit)
 	for i := 0; i < limit; i++ {
 		if m, ok := records[i].(map[string]any); ok {
-			result = append(result, deepCopyMap(m))
+			result = append(result, utils.DeepCopyMap(m))
 		}
 	}
 	return result
@@ -816,10 +817,3 @@ func deepCopyProfiles(profiles []map[string]any) []map[string]any {
 	return result
 }
 
-// deepCopyMap 深拷贝 map。
-func deepCopyMap(m map[string]any) map[string]any {
-	data, _ := json.Marshal(m)
-	var result map[string]any
-	_ = json.Unmarshal(data, &result)
-	return result
-}

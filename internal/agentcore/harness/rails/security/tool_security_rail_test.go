@@ -14,6 +14,7 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -58,6 +59,7 @@ func TestNewPermissionInterruptRail(t *testing.T) {
 func TestNewPermissionInterruptRail_带Engine(t *testing.T) {
 	engine := harnesssecurity.NewPermissionEngine(
 		map[string]any{"enabled": false},
+		nil, "",
 		"/workspace",
 	)
 	r := NewPermissionInterruptRail(
@@ -312,9 +314,8 @@ func TestConfirmPayloadSchemaForPermission(t *testing.T) {
 // TestDeepCopyMap 测试深拷贝 map
 func TestDeepCopyMap(t *testing.T) {
 	t.Run("nil输入", func(t *testing.T) {
-		result := deepCopyMap(nil)
-		assert.NotNil(t, result)
-		assert.Empty(t, result)
+		result := utils.DeepCopyMap(nil)
+		assert.Nil(t, result)
 	})
 
 	t.Run("正常拷贝", func(t *testing.T) {
@@ -322,7 +323,7 @@ func TestDeepCopyMap(t *testing.T) {
 			"enabled": true,
 			"tools":   map[string]any{"bash": "allow"},
 		}
-		copied := deepCopyMap(original)
+		copied := utils.DeepCopyMap(original)
 
 		// 修改拷贝不影响原始
 		copied["enabled"] = false
@@ -334,7 +335,7 @@ func TestDeepCopyMap(t *testing.T) {
 		original := map[string]any{
 			"tools": map[string]any{"bash": "allow"},
 		}
-		copied := deepCopyMap(original)
+		copied := utils.DeepCopyMap(original)
 
 		tools := copied["tools"].(map[string]any)
 		tools["bash"] = "deny"

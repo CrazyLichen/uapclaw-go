@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,7 +55,7 @@ func MigrateFromTemplate(tmplPath, userPath string) (bool, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 用户配置不存在，从模板创建
-			merged := deepCopyMap(tmplData)
+			merged := utils.DeepCopyMap(tmplData)
 			if err := writeYAMLFile(userPath, merged); err != nil {
 				return true, fmt.Errorf("创建用户配置失败: %w", err)
 			}
@@ -82,7 +84,7 @@ func MigrateFromTemplate(tmplPath, userPath string) (bool, error) {
 // deepMerge 递归合并实现。
 func deepMerge(tmpl, user map[string]any, depth int) map[string]any {
 	if depth <= 0 {
-		return deepCopyMap(user)
+		return utils.DeepCopyMap(user)
 	}
 
 	result := make(map[string]any)
@@ -123,9 +125,9 @@ func deepMerge(tmpl, user map[string]any, depth int) map[string]any {
 func deepCopyValue(v any) any {
 	switch val := v.(type) {
 	case map[string]any:
-		return deepCopyMap(val)
+		return utils.DeepCopyMap(val)
 	case []any:
-		return deepCopySlice(val)
+		return utils.DeepCopySlice(val)
 	default:
 		return v
 	}

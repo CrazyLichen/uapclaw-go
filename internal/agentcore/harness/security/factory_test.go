@@ -32,7 +32,7 @@ func TestBuildPermissionInterruptRail(t *testing.T) {
 
 	t.Run("enabled=true_有host", func(t *testing.T) {
 		config := map[string]any{"enabled": true}
-		existingEngine := NewPermissionEngine(config, "")
+		existingEngine := NewPermissionEngine(config, nil, "", "")
 		existingHost := &ToolPermissionHost{
 			ResolveWorkspaceDir: func() string { return "/existing" },
 		}

@@ -3,6 +3,8 @@ package security
 import (
 	"strings"
 
+	"github.com/anmitsu/go-shlex"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -212,7 +214,7 @@ func extractPrefixBeforeHeredoc(command string) string {
 //
 // 对齐 Python: _extract_simple_command_prefix(command) (suggestions.py L155-162)
 func extractSimpleCommandPrefix(command string) string {
-	argv := shlexSplit(command)
+	argv, _ := shlex.Split(command, true)
 	if len(argv) == 0 {
 		return ""
 	}

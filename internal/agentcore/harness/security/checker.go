@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/anmitsu/go-shlex"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -206,7 +208,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 		return nil
 	}
 
-	tokens := shlexSplit(command)
+	tokens, _ := shlex.Split(command, true)
 	if len(tokens) == 0 {
 		return nil
 	}

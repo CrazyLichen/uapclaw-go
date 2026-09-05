@@ -253,9 +253,16 @@ func TestSQLTaskDao_CancelTask_终止传播(t *testing.T) {
 	dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
 
 	// 对齐 Python: cancel_task(t1) → t2 解除阻塞
-	unblocked, err := dao.CancelTask(ctx, "t1")
+	task, unblocked, err := dao.CancelTask(ctx, "t1")
 	require.NoError(t, err)
-	assert.Contains(t, unblocked, "t2")
+	require.NotNil(t, task)
+	assert.Equal(t, fsm.TaskStatusCancelled, task.Status)
+	// 检查 unblocked 中是否包含 t2
+	var unblockedIDs []string
+	for _, t := range unblocked {
+		unblockedIDs = append(unblockedIDs, t.TaskID)
+	}
+	assert.Contains(t, unblockedIDs, "t2")
 
 	got, _ := dao.GetTask(ctx, "t2")
 	require.NotNil(t, got)
@@ -269,7 +276,7 @@ func TestSQLTaskDao_CompleteTask(t *testing.T) {
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed})
 
-	unblocked, err := dao.CompleteTask(ctx, "t1")
+	_, unblocked, err := dao.CompleteTask(ctx, "t1")
 	require.NoError(t, err)
 	_ = unblocked
 

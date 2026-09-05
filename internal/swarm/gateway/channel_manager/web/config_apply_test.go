@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -202,7 +203,7 @@ func deepCopySliceOfMap(src []map[string]any) []map[string]any {
 	}
 	dst := make([]map[string]any, len(src))
 	for i, m := range src {
-		dst[i] = deepCopyMap(m)
+		dst[i] = utils.DeepCopyMap(m)
 	}
 	return dst
 }
@@ -393,13 +394,13 @@ func TestInferIsDefault_多个default(t *testing.T) {
 }
 
 func TestDeepCopyMap_Nil(t *testing.T) {
-	result := deepCopyMap(nil)
+	result := utils.DeepCopyMap(nil)
 	assert.Nil(t, result)
 }
 
 func TestDeepCopyMap_基本(t *testing.T) {
 	src := map[string]any{"key": "val", "num": 42}
-	dst := deepCopyMap(src)
+	dst := utils.DeepCopyMap(src)
 	assert.Equal(t, src, dst)
 }
 
@@ -410,7 +411,7 @@ func TestDeepCopyMap_嵌套(t *testing.T) {
 		},
 		"list": []any{"a", "b"},
 	}
-	dst := deepCopyMap(src)
+	dst := utils.DeepCopyMap(src)
 	assert.Equal(t, src, dst)
 	// 修改 dst 不影响 src
 	dst["nested"].(map[string]any)["inner"] = "modified"

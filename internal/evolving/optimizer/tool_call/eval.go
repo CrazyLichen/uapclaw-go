@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 )
@@ -400,7 +401,7 @@ func (e *SimpleEval) generateFunctionCall(
 	}
 
 	// 对齐 Python: tool schema 处理
-	toolForCall := deepCopyMap(tool)
+	toolForCall := utils.DeepCopyMap(tool)
 	if _, hasType := toolForCall["type"]; !hasType {
 		toolForCall["type"] = "function"
 	}

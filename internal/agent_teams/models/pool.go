@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -211,7 +212,7 @@ func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 			APIBaseURL:  r.APIBaseURL,
 			APIProvider: r.APIProvider,
 			ModelID:     uuid.New().String(),
-			Metadata:    deepCopyMap(r.Metadata),
+			Metadata:    utils.DeepCopyMap(r.Metadata),
 		}
 		entries = append(entries, entry)
 	}
@@ -389,31 +390,6 @@ func buildModelRequestConfig(requestExtra map[string]any, modelName string) *llm
 	}
 
 	return cfg
-}
-
-// deepCopyMap 深拷贝 map[string]any，通过 JSON 序列化/反序列化实现。
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		// 降级：返回浅拷贝
-		cp := make(map[string]any, len(m))
-		for k, v := range m {
-			cp[k] = v
-		}
-		return cp
-	}
-	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		cp := make(map[string]any, len(m))
-		for k, v := range m {
-			cp[k] = v
-		}
-		return cp
-	}
-	return result
 }
 
 // toFloat64 将 any 转换为 float64。

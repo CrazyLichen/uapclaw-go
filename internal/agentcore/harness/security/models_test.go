@@ -7,10 +7,10 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestPermissionLevel_默认值为Allow(t *testing.T) {
+func TestPermissionLevel_零值为None(t *testing.T) {
 	var l PermissionLevel
-	if l != PermissionLevelAllow {
-		t.Errorf("PermissionLevel 零值应为 PermissionLevelAllow(0)，实际为 %d", l)
+	if l != PermissionLevelNone {
+		t.Errorf("PermissionLevel 零值应为 PermissionLevelNone(0)，实际为 %d", l)
 	}
 }
 
@@ -19,6 +19,7 @@ func TestPermissionLevel_String(t *testing.T) {
 		level PermissionLevel
 		want  string
 	}{
+		{PermissionLevelNone, "none"},
 		{PermissionLevelAllow, "allow"},
 		{PermissionLevelAsk, "ask"},
 		{PermissionLevelDeny, "deny"},

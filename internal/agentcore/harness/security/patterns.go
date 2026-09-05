@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -200,7 +201,7 @@ func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions
 		data = make(map[string]any)
 	}
 
-	data["permissions"] = deepCopyMap(permissions)
+	data["permissions"] = utils.DeepCopyMap(permissions)
 
 	out, err := yaml.Marshal(data)
 	if err != nil {
@@ -222,9 +223,9 @@ func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions
 // 对齐 Python: merge_external_directory_allow_into_permissions(permissions, paths) (patterns.py L415-439)
 func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, paths []string) (map[string]any, bool) {
 	if len(paths) == 0 {
-		return deepCopyMap(permissions), false
+		return utils.DeepCopyMap(permissions), false
 	}
-	perms := deepCopyMap(permissions)
+	perms := utils.DeepCopyMap(permissions)
 
 	extCfg, ok := perms["external_directory"].(map[string]any)
 	if !ok {
@@ -259,7 +260,7 @@ func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, path
 //
 // 对齐 Python: merge_permission_allow_rule_into_permissions(permissions, tool_name, tool_args) (patterns.py L442-493)
 func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolName string, toolArgs map[string]any) (map[string]any, bool) {
-	perms := deepCopyMap(permissions)
+	perms := utils.DeepCopyMap(permissions)
 
 	currentPermission, _ := EvaluateTieredPolicy(perms, toolName, toolArgs)
 	if currentPermission != PermissionLevelAsk {
@@ -332,7 +333,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 			logger.Warn(patternsLogComponent).Str("path", cfgPath).Msg("permission.persist.abort: new_yaml_requires_fallback_permissions")
 			return map[string]any{"ok": false, "error": "cannot bootstrap yaml (missing file; pass bootstrap_permissions with non-empty permissions dict)"}
 		}
-		data = map[string]any{"permissions": deepCopyMap(bootstrapPermissions)}
+		data = map[string]any{"permissions": utils.DeepCopyMap(bootstrapPermissions)}
 	}
 
 	permissions, ok := data["permissions"].(map[string]any)
@@ -595,44 +596,6 @@ func resolveAgentConfigYAMLPath(explicit string) string {
 		return p
 	}
 	return ""
-}
-
-// deepCopyMap 深拷贝 map[string]any
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			result[k] = deepCopyMap(val)
-		case []any:
-			result[k] = deepCopySlice(val)
-		default:
-			result[k] = v
-		}
-	}
-	return result
-}
-
-// deepCopySlice 深拷贝 []any
-func deepCopySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]any:
-			result[i] = deepCopyMap(val)
-		case []any:
-			result[i] = deepCopySlice(val)
-		default:
-			result[i] = v
-		}
-	}
-	return result
 }
 
 // persistTieredApprovalOverrideSuggestions 持久化审批覆盖建议。
