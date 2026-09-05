@@ -11,7 +11,6 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
@@ -127,39 +126,18 @@ func (o *InstructionOptimizer) SelectSignals(signals []*signal.EvolutionSignal) 
 //
 // 对齐 Python: BaseOptimizer.backward(signals)
 //
-//	self._validate_parameters()
-//	self._selected_signals = self._select_signals(signals)
-//	try: await self._backward(signals)
+//	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
-	o.ValidateParameters()
-
-	// 对齐 Python: self._selected_signals = self._select_signals(signals)
-	selected := o.SelectSignals(signals)
-	o.SetSelectedSignals(selected)
-
-	if err := o.backward(ctx, selected); err != nil {
-		return exception.NewBaseError(
-			exception.NewStatusCode("TOOLCHAIN_OPTIMIZER_BACKWARD_EXECUTION_ERROR", 174040, ""),
-			exception.WithMsg(err.Error()),
-			exception.WithCause(err),
-		)
-	}
-	return nil
+	return o.BackwardTemplate(ctx, signals, o.backward)
 }
 
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
 //
 // 对齐 Python: BaseOptimizer.step()
 //
-//	self._validate_parameters()
-//	try: updates = self._step()
-//	self.clear_trajectories()
-//	return updates or {}
+//	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
-	o.ValidateParameters()
-	updates := o.step()
-	o.ClearTrajectories()
-	return updates
+	return o.StepTemplate(o.step)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -175,10 +153,11 @@ func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
 //  4. 设置 system_prompt / user_prompt 梯度
 //  5. 根据 targets 决定优化方式：optimizeBoth / optimizeSingle
 //  6. 结果写入 param.SetGradient("xxx_optimized", val)
-func (o *InstructionOptimizer) backward(ctx context.Context, selectedSignals []*signal.EvolutionSignal) error {
+func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	params := o.BaseOptimizerMixin.Parameters()
 	ops := o.BaseOptimizerMixin.Operators()
 	targets := o.BaseOptimizerMixin.Targets()
+	selectedSignals := o.SelectedSignals()
 
 	for opID, param := range params {
 		op, ok := ops[opID]

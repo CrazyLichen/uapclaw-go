@@ -362,13 +362,30 @@ func updateYAMLKeyInConfig(key string, value any) error {
 	case "memory_forbidden_enabled":
 		return cfg.Set("memory.forbidden_memory_definition.enabled", parsed)
 	case "memory_forbidden_description":
-		descVal := strings.TrimSpace(fmt.Sprintf("%v", value))
-		// 动态读取 preferred_language（对齐 Python L720-748）
-		preferredLang := "zh"
-		if lang, ok := cfgData["preferred_language"].(string); ok && lang != "" {
-			preferredLang = lang
+		// 对齐 Python: update_memory_forbidden_description_in_config
+		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
+		// config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
+		descMap := cfg.Get("memory.forbidden_memory_definition.description")
+		currentDesc := make(map[string]any)
+		if descMap != nil {
+			if m, ok := descMap.(map[string]any); ok {
+				currentDesc = m
+			}
 		}
-		return cfg.Set(fmt.Sprintf("memory.forbidden_memory_definition.description.%s", preferredLang), descVal)
+		// 合并：新值覆盖同名 key，旧的其他 key 保留
+		if descVal, ok := value.(map[string]any); ok {
+			for k, v := range descVal {
+				currentDesc[k] = v
+			}
+		} else if descStr, ok := value.(string); ok {
+			// 单语言字符串：用 preferred_language 确定写入的 key
+			preferredLang := "zh"
+			if lang, ok := cfgData["preferred_language"].(string); ok && lang != "" {
+				preferredLang = lang
+			}
+			currentDesc[preferredLang] = strings.TrimSpace(descStr)
+		}
+		return cfg.Set("memory.forbidden_memory_definition.description", currentDesc)
 	default:
 		return fmt.Errorf("未知的 YAML 配置键: %s", key)
 	}
@@ -440,6 +457,61 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 
 	if err := cfg.Set("models.defaults", models); err != nil {
 		return fmt.Errorf("写入 models.defaults 失败: %w", err)
+	}
+
+	return nil
+}
+
+// updateMemoryForbiddenInConfig 更新 memory.forbidden_memory_definition 并写回。
+// 对齐 Python: update_memory_forbidden_in_config (common/config.py)。
+// description 字段使用先读后合并逻辑（新值覆盖同名 key，旧的其他 key 保留）。
+func updateMemoryForbiddenInConfig(updates map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	cfgData, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	// 读取当前 memory.forbidden_memory_definition
+	section := make(map[string]any)
+	if memRaw, ok := cfgData["memory"].(map[string]any); ok {
+		if fmd, ok := memRaw["forbidden_memory_definition"].(map[string]any); ok {
+			section = fmd
+		}
+	}
+
+	// 合并更新
+	for k, v := range updates {
+		if k == "description" {
+			// 对齐 Python: description 字段先读后合并
+			// {**current_desc, **description}：新值覆盖同名 key，旧的其他 key 保留
+			currentDesc := make(map[string]any)
+			if existing, ok := section["description"].(map[string]any); ok {
+				for dk, dv := range existing {
+					currentDesc[dk] = dv
+				}
+			}
+			if newDesc, ok := v.(map[string]any); ok {
+				for dk, dv := range newDesc {
+					currentDesc[dk] = dv
+				}
+			} else {
+				// 非字典类型直接覆盖
+				currentDesc = map[string]any{"_value": v}
+			}
+			section[k] = currentDesc
+		} else {
+			section[k] = v
+		}
+	}
+
+	// 写回 memory.forbidden_memory_definition
+	if err := cfg.Set("memory.forbidden_memory_definition", section); err != nil {
+		return fmt.Errorf("写入 memory.forbidden_memory_definition 失败: %w", err)
 	}
 
 	return nil

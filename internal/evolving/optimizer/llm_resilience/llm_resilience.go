@@ -2,6 +2,7 @@ package llm_resilience
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"reflect"
 	"strings"
@@ -305,6 +306,8 @@ func InvokeTextWithRetryAndPrompt(
 				defer func() {
 					if r := recover(); r != nil {
 						usable = false
+						// 对齐 Python: last_error = exc
+						lastError = fmt.Errorf("isResultUsable panic: %v", r)
 					}
 				}()
 				usable = cfg.isResultUsable(raw)

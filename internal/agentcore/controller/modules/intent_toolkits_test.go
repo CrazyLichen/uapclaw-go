@@ -33,7 +33,7 @@ func TestIntentToolkits_CreateTask_高置信度(t *testing.T) {
 	assert.Equal(t, schema.IntentCreateTask, intent.IntentType)
 	assert.Equal(t, "查询天气", intent.TargetTaskDescription)
 	assert.NotEmpty(t, intent.TargetTaskID)
-	assert.Contains(t, result, "已创建并提交执行")
+	assert.Contains(t, result, "Created and submitted for execution")
 }
 
 // TestIntentToolkits_CreateTask_低置信度 测试创建任务意图（低置信度）
@@ -44,7 +44,7 @@ func TestIntentToolkits_CreateTask_低置信度(t *testing.T) {
 	intent, result, err := toolkits.CreateTask(0.3, "不确定")
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentUnknownTask, intent.IntentType)
-	assert.Contains(t, result, "自动转换为 unknown_task")
+	assert.Contains(t, result, "Automatically converted to unknown_task")
 }
 
 // TestIntentToolkits_PauseTask_高置信度 测试暂停任务意图（高置信度）
@@ -56,7 +56,7 @@ func TestIntentToolkits_PauseTask_高置信度(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentPauseTask, intent.IntentType)
 	assert.Equal(t, "task-123", intent.TargetTaskID)
-	assert.Contains(t, result, "已暂停")
+	assert.Contains(t, result, "Paused")
 }
 
 // TestIntentToolkits_PauseTask_低置信度 测试暂停任务意图（低置信度）
@@ -67,7 +67,7 @@ func TestIntentToolkits_PauseTask_低置信度(t *testing.T) {
 	intent, result, err := toolkits.PauseTask(0.3, "task-123")
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentUnknownTask, intent.IntentType)
-	assert.Contains(t, result, "自动转换为 unknown_task")
+	assert.Contains(t, result, "Automatically converted to unknown_task")
 }
 
 // TestIntentToolkits_CancelTask_高置信度 测试取消任务意图
@@ -78,7 +78,7 @@ func TestIntentToolkits_CancelTask_高置信度(t *testing.T) {
 	intent, result, err := toolkits.CancelTask(0.9, "task-123")
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentCancelTask, intent.IntentType)
-	assert.Contains(t, result, "已取消")
+	assert.Contains(t, result, "Cancelled")
 }
 
 // TestIntentToolkits_CancelTask_低置信度 测试取消任务意图（低置信度）
@@ -99,7 +99,7 @@ func TestIntentToolkits_ResumeTask_高置信度(t *testing.T) {
 	intent, result, err := toolkits.ResumeTask(0.9, "task-123")
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentResumeTask, intent.IntentType)
-	assert.Contains(t, result, "已恢复")
+	assert.Contains(t, result, "Resumed")
 }
 
 // TestIntentToolkits_ResumeTask_低置信度 测试恢复任务意图（低置信度）
@@ -121,7 +121,7 @@ func TestIntentToolkits_UnknownTask_高置信度(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentUnknownTask, intent.IntentType)
 	assert.Equal(t, "请问您要做什么？", intent.ClarificationPrompt)
-	assert.Contains(t, result, "等待用户响应")
+	assert.Contains(t, result, "waiting for user response")
 }
 
 // TestIntentToolkits_UnknownTask_低置信度 测试未知任务意图（低置信度）
@@ -144,7 +144,7 @@ func TestIntentToolkits_CreateDependentTask_高置信度(t *testing.T) {
 	assert.Equal(t, schema.IntentContinueTask, intent.IntentType)
 	assert.Equal(t, "执行任务B", intent.TargetTaskDescription)
 	assert.Equal(t, []string{"task-a"}, intent.DependTaskID)
-	assert.Contains(t, result, "已创建并提交执行")
+	assert.Contains(t, result, "Created and submitted for execution")
 }
 
 // TestIntentToolkits_CreateDependentTask_低置信度 测试创建依赖任务意图（低置信度）
@@ -168,7 +168,7 @@ func TestIntentToolkits_ModifyTask_高置信度(t *testing.T) {
 	assert.Equal(t, "新描述", intent.TargetTaskDescription)
 	assert.Equal(t, []string{"task-123"}, intent.DependTaskID)
 	assert.Equal(t, "新描述", intent.ModificationDetails)
-	assert.Contains(t, result, "已创建并提交执行")
+	assert.Contains(t, result, "Created and submitted for execution")
 }
 
 // TestIntentToolkits_ModifyTask_低置信度 测试修改任务意图（低置信度）
@@ -191,7 +191,7 @@ func TestIntentToolkits_SupplementTask_高置信度(t *testing.T) {
 	assert.Equal(t, schema.IntentSupplementTask, intent.IntentType)
 	assert.Equal(t, "task-123", intent.TargetTaskID)
 	assert.Equal(t, "额外信息", intent.SupplementaryInfo)
-	assert.Contains(t, result, "补充信息已提交")
+	assert.Contains(t, result, "supplement info submitted")
 }
 
 // TestIntentToolkits_SupplementTask_低置信度 测试补充任务意图（低置信度）
@@ -242,5 +242,5 @@ func TestIntentToolkits_lowConfidenceIntent(t *testing.T) {
 	assert.Equal(t, schema.IntentUnknownTask, intent.IntentType)
 	assert.Equal(t, 0.3, intent.Confidence)
 	assert.NotEmpty(t, intent.ClarificationPrompt)
-	assert.Contains(t, result, "自动转换为 unknown_task")
+	assert.Contains(t, result, "Automatically converted to unknown_task")
 }

@@ -99,34 +99,27 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 //
 // 对齐 Python: BaseOptimizer.backward() 模板方法流程：
 //
-//	self._validate_parameters() — 校验参数
-//	self._selected_signals = self._select_signals(signals) — 筛选信号
-//	await self._backward(signals)  # pass — 记忆优化器反向传播为空操作
+//	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
+//	MemoryOptimizerBase _backward 为 pass
 //
 // 对应 Python: MemoryOptimizerBase._backward(signals) → pass
-func (b *MemoryOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
-	b.ValidateParameters()
-	selected := b.SelectSignals(signals)
-	b.SetSelectedSignals(selected)
-	// MemoryOptimizer _backward 为 pass
-	return nil
+func (b *MemoryOptimizerBase) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
+	return b.BackwardTemplate(ctx, signals, func(_ context.Context, _ []*signal.EvolutionSignal) error {
+		// MemoryOptimizer _backward 为 pass
+		return nil
+	})
 }
 
 // Step 生成更新映射。
 //
 // 对齐 Python: BaseOptimizer.step() 模板方法流程：
 //
-//	self._validate_parameters() — 校验参数
-//	updates = self._step() — 执行步骤
-//	self.clear_trajectories() — 清空轨迹
-//	return updates or {} — 返回更新或空映射
+//	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
+//	MemoryOptimizerBase 为空实现，返回空映射。
 //
 // 对应 Python: BaseOptimizer.step() → _step()
 func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
-	b.ValidateParameters()
-	updates := b.step()
-	b.ClearTrajectories()
-	return updates
+	return b.StepTemplate(b.step)
 }
 
 // step 子类逻辑，对齐 Python _step()。

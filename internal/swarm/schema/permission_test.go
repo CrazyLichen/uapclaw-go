@@ -105,14 +105,15 @@ func TestPermissionContext_Scene_normalIM(t *testing.T) {
 	}
 }
 
-// TestPermissionContext_Scene_web优先级高于数字分身 验证 web 渠道优先级
-func TestPermissionContext_Scene_web优先级高于数字分身(t *testing.T) {
+// TestPermissionContext_Scene_数字分身优先级高于web 验证 group_digital_avatar 优先级高于 web
+// 对齐 Python owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
+func TestPermissionContext_Scene_数字分身优先级高于web(t *testing.T) {
 	pc := NewPermissionContext(
 		WithPermissionChannelID("web"),
 		WithPermissionGroupDigitalAvatar(true),
 	)
-	if got := pc.Scene(); got != "web" {
-		t.Errorf("当 channel_id=web 且 group_digital_avatar=true 时，Scene() = %q, 期望 \"web\"", got)
+	if got := pc.Scene(); got != "group_digital_avatar" {
+		t.Errorf("当 channel_id=web 且 group_digital_avatar=true 时，Scene() = %q, 期望 \"group_digital_avatar\"", got)
 	}
 }
 
@@ -130,6 +131,21 @@ func TestPermissionContext_OwnerScopeKey(t *testing.T) {
 	}
 	if key[1] != "user-1" {
 		t.Errorf("OwnerScopeKey()[1] = %q, 期望 \"user-1\"", key[1])
+	}
+}
+
+// TestPermissionContext_OwnerScopeKey_Trimspace 验证 OwnerScopeKey 对字段 TrimSpace
+func TestPermissionContext_OwnerScopeKey_Trimspace(t *testing.T) {
+	pc := NewPermissionContext(
+		WithPermissionPrincipalUserID("  user-1  "),
+		WithPermissionChannelID("  web  "),
+	)
+	key := pc.OwnerScopeKey()
+	if key[0] != "web" {
+		t.Errorf("OwnerScopeKey()[0] = %q, 期望 \"web\"（TrimSpace 后）", key[0])
+	}
+	if key[1] != "user-1" {
+		t.Errorf("OwnerScopeKey()[1] = %q, 期望 \"user-1\"（TrimSpace 后）", key[1])
 	}
 }
 

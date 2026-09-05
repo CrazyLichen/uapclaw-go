@@ -2,6 +2,7 @@ package session
 
 import (
 	"testing"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
@@ -92,8 +93,8 @@ func TestApplySessionRename_标题截断(t *testing.T) {
 		t.Fatalf("ApplySessionRename 返回错误: %v", err)
 	}
 	title, _ := result["title"].(string)
-	if len(title) > renameTitleMaxLen {
-		t.Errorf("title 长度 = %d, want <= %d", len(title), renameTitleMaxLen)
+	if utf8.RuneCountInString(title) > renameTitleMaxLen {
+		t.Errorf("title 字符数 = %d, want <= %d", utf8.RuneCountInString(title), renameTitleMaxLen)
 	}
 	FlushMetadataQueue()
 }

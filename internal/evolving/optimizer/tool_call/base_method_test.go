@@ -88,8 +88,8 @@ func TestNewToolOptimizerBase(t *testing.T) {
 	if base.DefaultTargets()[0] != "tool_description" {
 		t.Errorf("期望 DefaultTargets[0]=tool_description, 实际=%s", base.DefaultTargets()[0])
 	}
-	if base.RequiresForwardData() {
-		t.Error("期望 RequiresForwardData=false")
+	if !base.RequiresForwardData() {
+		t.Error("期望 RequiresForwardData=true，对齐 Python BaseOptimizer 默认值")
 	}
 	if base.maxTurns != 5 {
 		t.Errorf("期望 maxTurns=5, 实际=%d", base.maxTurns)

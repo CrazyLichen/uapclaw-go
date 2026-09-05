@@ -220,12 +220,11 @@ func TestSnapshotMemoryFiles_空目录(t *testing.T) {
 	}
 }
 
-// TestRunChecker_无LLM 测试无 LLM 模型时返回 nil
+// TestRunChecker_无LLM 测试无 LLM 模型时返回空切片
 func TestRunChecker_无LLM(t *testing.T) {
-	mgr := &stubMemoryIndexManager{llmModel: nil}
-	items := runChecker(context.Background(), mgr, "test.md", "body", map[string]string{"old.md": "old body"})
-	if items != nil {
-		t.Errorf("期望 nil，实际 %v", items)
+	items := runChecker(context.Background(), nil, "test.md", "body", map[string]string{"old.md": "old body"})
+	if len(items) != 0 {
+		t.Errorf("期望空切片，实际 %v", items)
 	}
 }
 
@@ -234,10 +233,9 @@ func TestRunChecker_有LLM调用Check(t *testing.T) {
 	// 使用空 LLM 模型（不实际调用 API），验证 runChecker 会走到 Check 调用
 	// MemUpdateChecker.Check 在 model != nil 时会尝试 LLM 调用，
 	// 但我们无法在单元测试中 mock model.Invoke，所以只测试 model=nil 的分支
-	mgr := &stubMemoryIndexManager{llmModel: nil}
-	items := runChecker(context.Background(), mgr, "test.md", "body", nil)
-	if items != nil {
-		t.Errorf("期望 model=nil 时返回 nil，实际 %v", items)
+	items := runChecker(context.Background(), nil, "test.md", "body", nil)
+	if len(items) != 0 {
+		t.Errorf("期望 model=nil 时返回空切片，实际 %v", items)
 	}
 }
 

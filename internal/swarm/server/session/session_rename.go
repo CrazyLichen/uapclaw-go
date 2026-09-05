@@ -1,6 +1,9 @@
 package session
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -64,10 +67,11 @@ func ApplySessionRename(
 		}
 	}
 
-	// 截断标题
+	// 截断标题（按字符数截断，对齐 Python str[:max_len] 语义）
 	newTitle := strings.TrimSpace(*title)
-	if len(newTitle) > renameTitleMaxLen {
-		newTitle = newTitle[:renameTitleMaxLen]
+	if utf8.RuneCountInString(newTitle) > renameTitleMaxLen {
+		runes := []rune(newTitle)
+		newTitle = string(runes[:renameTitleMaxLen])
 	}
 
 	if newTitle != "" {

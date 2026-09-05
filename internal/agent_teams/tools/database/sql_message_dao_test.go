@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,6 +49,10 @@ func TestSQLMessageDao_BroadcastWatermark(t *testing.T) {
 
 	dao := db.Message()
 
+	// 创建成员，per-member 水位检查需要成员存在
+	db.Member().CreateMember(ctx, "a", "team1", "A", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.Member().CreateMember(ctx, "b", "team1", "B", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+
 	// 对齐 Python: 创建广播消息
 	bc1 := &TeamMessageBase{
 		MessageID:      "bc1",
@@ -92,6 +97,10 @@ func TestSQLMessageDao_MarkMessageRead_直发(t *testing.T) {
 
 	dao := db.Message()
 
+	// 创建成员，MarkMessageRead 非直发非 "user" 成员存在性检查需要成员
+	db.Member().CreateMember(ctx, "a", "team1", "A", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.Member().CreateMember(ctx, "b", "team1", "B", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+
 	msg := &TeamMessageBase{
 		MessageID:      "dm1",
 		TeamName:       "team1",
@@ -126,7 +135,12 @@ func TestSQLMessageDao_HasUnreadMessages_广播(t *testing.T) {
 		Content: "broadcast", Timestamp: 1000, Broadcast: true, IsRead: nil,
 	})
 
-	// 对齐 Python: include_broadcast=true 时有未读
+	// 对齐 Python: 无成员时 per-member 水位检查返回 false（没有成员需要检查）
+	assert.False(t, dao.HasUnreadMessages(ctx, "team1", true))
+
+	// 创建成员后，per-member 水位检查应检测到未读
+	db.Member().CreateMember(ctx, "a", "team1", "A", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.Member().CreateMember(ctx, "b", "team1", "B", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	assert.True(t, dao.HasUnreadMessages(ctx, "team1", true))
 
 	// 对齐 Python: include_broadcast=false 时广播不算
@@ -138,6 +152,10 @@ func TestSQLMessageDao_MarkMessageRead_广播(t *testing.T) {
 	ctx := newTestCtx("bc-read-test")
 
 	dao := db.Message()
+
+	// 创建成员，per-member 水位检查需要成员存在
+	db.Member().CreateMember(ctx, "a", "team1", "A", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	db.Member().CreateMember(ctx, "b", "team1", "B", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "bc1", TeamName: "team1", FromMemberName: "a",
@@ -153,6 +171,23 @@ func TestSQLMessageDao_MarkMessageRead_广播(t *testing.T) {
 
 	// 对齐 Python: MarkMessageRead 消息不存在
 	ok = dao.MarkMessageRead(ctx, "nonexist", "b")
+	assert.False(t, ok)
+}
+
+func TestSQLMessageDao_MarkMessageRead_成员不存在(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "member-not-exist-test")
+	ctx := newTestCtx("member-not-exist-test")
+
+	dao := db.Message()
+
+	// 创建广播消息但不创建成员
+	dao.CreateMessage(ctx, &TeamMessageBase{
+		MessageID: "bc1", TeamName: "team1", FromMemberName: "a",
+		Content: "broadcast", Timestamp: 1000, Broadcast: true, IsRead: nil,
+	})
+
+	// 对齐 Python: 成员不存在时返回 false
+	ok := dao.MarkMessageRead(ctx, "bc1", "nonexistent_member")
 	assert.False(t, ok)
 }
 
@@ -182,6 +217,36 @@ func TestSQLMessageDao_GetTeamMessages(t *testing.T) {
 	dmOnly, err := dao.GetTeamMessages(ctx, "team1", "false")
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(dmOnly))
+}
+
+func TestIsIntegrityError(t *testing.T) {
+	// 对齐 Python: IntegrityError 检测
+	assert.True(t, isIntegrityError(fmt.Errorf("UNIQUE constraint failed: team_message_x.message_id")))
+	assert.True(t, isIntegrityError(fmt.Errorf("PRIMARY KEY constraint failed")))
+	assert.False(t, isIntegrityError(fmt.Errorf("database is locked")))
+	assert.False(t, isIntegrityError(nil))
+}
+
+func TestSQLMessageDao_CreateMessage_IntegrityError立即返回(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "integrity-test")
+	ctx := newTestCtx("integrity-test")
+
+	dao := db.Message()
+
+	msg := &TeamMessageBase{
+		MessageID: "dup", TeamName: "team1", FromMemberName: "a",
+		Content: "first", Timestamp: 1000, Broadcast: false, IsRead: BoolPtr(false),
+	}
+	ok := dao.CreateMessage(ctx, msg)
+	assert.True(t, ok)
+
+	// 对齐 Python: 重复 ID → IntegrityError → 立即返回 False，不重试
+	msg2 := &TeamMessageBase{
+		MessageID: "dup", TeamName: "team1", FromMemberName: "a",
+		Content: "second", Timestamp: 2000, Broadcast: false, IsRead: BoolPtr(false),
+	}
+	ok = dao.CreateMessage(ctx, msg2)
+	assert.False(t, ok)
 }
 
 func TestSQLMessageDao_GetMessages_直发(t *testing.T) {

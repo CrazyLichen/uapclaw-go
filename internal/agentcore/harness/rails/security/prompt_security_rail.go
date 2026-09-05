@@ -23,6 +23,8 @@ type SafetyPromptRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // SecurityRail 类型别名，对齐 Python: SecurityRail = SafetyPromptRail (prompt_security_rail.py L49)
 type SecurityRail = SafetyPromptRail
 

@@ -32,6 +32,19 @@ type tieredInvocationContext struct {
 	DefaultsCfg map[string]any
 }
 
+// subcommandResult 子命令评估结果
+type subcommandResult struct {
+	Command     string
+	Permission  PermissionLevel
+	MatchedRule string
+}
+
+// paramRuleHit 参数规则命中
+type paramRuleHit struct {
+	Level PermissionLevel
+	Label string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -326,13 +339,6 @@ func TieredPolicyRuleMatches(toolName string, pattern string, toolArgs map[strin
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// subcommandResult 子命令评估结果
-type subcommandResult struct {
-	Command     string
-	Permission  PermissionLevel
-	MatchedRule string
-}
 
 // getBuiltinSecurityRules 别名（内部用）
 func getBuiltinSecurityRules() []map[string]any {
@@ -740,12 +746,6 @@ func aggregateSubcommandResults(results []subcommandResult) subcommandResult {
 		return subcommandResult{Permission: final, MatchedRule: mr + ":shell_subcommands"}
 	}
 	return subcommandResult{Permission: final, MatchedRule: mr + ":shell_subcommands:" + strings.Join(contributing, "+")}
-}
-
-// paramRuleHit 参数规则命中
-type paramRuleHit struct {
-	Level PermissionLevel
-	Label string
 }
 
 // hasDenyHit 是否有 DENY 命中

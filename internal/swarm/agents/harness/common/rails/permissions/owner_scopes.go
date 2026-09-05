@@ -78,7 +78,7 @@ func (p *OwnerScopesPermissionContext) Scene() string {
 }
 
 // OwnerScopeKey 返回 (channel_id, principal_user_id)。
-// 对齐 Python: PermissionContext.owner_scope_key
+// 对齐 Python owner_scopes.PermissionContext.owner_scope_key：对两个字段 TrimSpace
 func (p *OwnerScopesPermissionContext) OwnerScopeKey() [2]string {
-	return [2]string{p.ChannelID, p.PrincipalUserID}
+	return [2]string{strings.TrimSpace(p.ChannelID), strings.TrimSpace(p.PrincipalUserID)}
 }

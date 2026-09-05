@@ -518,8 +518,9 @@ func (h *EventHandlerWithIntentRecognition) processSupplementTaskIntent(ctx cont
 		)
 	}
 
+	// 对齐 Python：pause_task 失败时抛异常中断流程，Go 改为返回 error
 	if _, err := h.TaskScheduler.PauseTask(ctx, intent.TargetTaskID); err != nil {
-		logger.Warn(logComponentIntent).Err(err).Str("task_id", intent.TargetTaskID).Msg("暂停任务失败，继续补充信息")
+		return nil, fmt.Errorf("暂停任务 %s 失败: %w", intent.TargetTaskID, err)
 	}
 
 	task := tasks[0]
@@ -590,14 +591,14 @@ func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.
 
 // processUnknownTaskIntent 处理未知任务意图。
 // 对应 Python: EventHandlerWithIntentRecognition._process_unknown_task_intent(intent, session)
-func (h *EventHandlerWithIntentRecognition) processUnknownTaskIntent(_ context.Context, intent *schema.Intent, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+func (h *EventHandlerWithIntentRecognition) processUnknownTaskIntent(ctx context.Context, intent *schema.Intent, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if intent.IntentType != schema.IntentUnknownTask {
 		return nil, exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
 			exception.WithMsg("意图类型必须是 UNKNOWN_TASK"),
 		)
 	}
-	if err := sess.WriteStream(context.Background(), map[string]any{"clarification_prompt": intent.ClarificationPrompt}); err != nil {
+	if err := sess.WriteStream(ctx, map[string]any{"clarification_prompt": intent.ClarificationPrompt}); err != nil {
 		return nil, err
 	}
 	return nil, nil

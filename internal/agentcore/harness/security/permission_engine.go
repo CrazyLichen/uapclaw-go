@@ -2,7 +2,6 @@ package security
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -236,6 +235,3 @@ func getReason(permission PermissionLevel, toolName, matchedRule string) string 
 	}
 }
 
-// baselineLevelAlias 为 baselineLevel 提供一个被 PermissionEngine 可能使用的别名
-// 实际在 tiered_policy 包内已实现，此处仅为文档完整性
-var _ = strings.TrimSpace // 避免未使用 import

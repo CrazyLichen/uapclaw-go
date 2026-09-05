@@ -216,7 +216,7 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories map[string]str
 	}
 
 	// 步骤 5：映射结果为动作项（对齐 Python: check → action_items 逻辑）
-	actionItems := mapCheckItemsToActionItems(checkItems, newMemories)
+	actionItems := mapCheckItemsToActionItems(checkItems, newMemories, oldMemories)
 
 	logger.Debug(logComponent).
 		Int("action_count", len(actionItems)).
@@ -256,14 +256,19 @@ func (ms MemoryStatus) String() string {
 // formatInput 格式化新旧记忆字典为提示词输入文本。
 //
 // 对齐 Python: _format_input(new_memories, old_memories)
-// 新记忆行倒序排列，旧记忆行正序排列。
+// 新记忆按 key 倒序排列，旧记忆按 key 正序排列。
 func formatInput(newMemories map[string]string, oldMemories map[string]string) (string, string) {
-	// 新记忆：收集行后倒序排列（对齐 Python: new_info_lines[::-1]）
-	newLines := make([]string, 0, len(newMemories))
-	for id, content := range newMemories {
-		newLines = append(newLines, fmt.Sprintf("%s: %s", id, content))
+	// 新记忆：按 key 倒序排列（对齐 Python: 按 key 排序后反序）
+	newKeys := make([]string, 0, len(newMemories))
+	for id := range newMemories {
+		newKeys = append(newKeys, id)
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(newLines)))
+	sort.Sort(sort.Reverse(sort.StringSlice(newKeys)))
+
+	newLines := make([]string, 0, len(newMemories))
+	for _, id := range newKeys {
+		newLines = append(newLines, fmt.Sprintf("%s: %s", id, newMemories[id]))
+	}
 	newInfoStr := ""
 	for i, line := range newLines {
 		if i > 0 {
@@ -272,12 +277,17 @@ func formatInput(newMemories map[string]string, oldMemories map[string]string) (
 		newInfoStr += line
 	}
 
-	// 旧记忆：正序排列
-	oldLines := make([]string, 0, len(oldMemories))
-	for id, content := range oldMemories {
-		oldLines = append(oldLines, fmt.Sprintf("%s: %s", id, content))
+	// 旧记忆：按 key 正序排列（对齐 Python: 按 key 正序）
+	oldKeys := make([]string, 0, len(oldMemories))
+	for id := range oldMemories {
+		oldKeys = append(oldKeys, id)
 	}
-	sort.Strings(oldLines)
+	sort.Strings(oldKeys)
+
+	oldLines := make([]string, 0, len(oldMemories))
+	for _, id := range oldKeys {
+		oldLines = append(oldLines, fmt.Sprintf("%s: %s", id, oldMemories[id]))
+	}
 	oldInfoStr := ""
 	for i, line := range oldLines {
 		if i > 0 {
@@ -293,10 +303,16 @@ func formatInput(newMemories map[string]string, oldMemories map[string]string) (
 //
 // 对齐 Python: check() 方法中的 action_items 映射逻辑。
 // REDUNDANT → 跳过 / CONFLICTING → 新ADD+旧DELETE / NONE → 新ADD
-func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[string]string) []*MemoryActionItem {
+// 使用 processedNewIds 追踪已处理的新记忆 ID（对齐 Python: processed_new_ids）。
+func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[string]string, oldMemories map[string]string) []*MemoryActionItem {
 	var actionItems []*MemoryActionItem
+	// 对齐 Python: processed_new_ids = set()
+	processedNewIds := make(map[string]bool)
 
 	for _, item := range checkItems {
+		// 对齐 Python: processed_new_ids.add(new_id)
+		processedNewIds[item.InfoID] = true
+
 		switch item.Result {
 		case CheckResultRedundant:
 			// 冗余 → 跳过（对齐 Python: if check_item.result == CheckResult.REDUNDANT）
@@ -316,7 +332,11 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[stri
 				Content: newContent,
 				Status:  MemoryStatusAdd,
 			})
+			// 对齐 Python: for old_id in item.related_infos: if old_id in old_memories
 			for oldID, oldContent := range item.RelatedInfos {
+				if _, exists := oldMemories[oldID]; !exists {
+					continue
+				}
 				actionItems = append(actionItems, &MemoryActionItem{
 					ID:      oldID,
 					Content: oldContent,

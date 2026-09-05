@@ -300,8 +300,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("permissions.approval_overrides.set", permStub)
 
 	// ─── 禁止记忆 ───
-	d.Register("memory.forbidden.get", stubHandler("memory.forbidden.get", map[string]any{}))
-	d.Register("memory.forbidden.set", stubHandler("memory.forbidden.set", map[string]any{}))
+	d.Register("memory.forbidden.get", handleMemoryForbiddenGet())
+	d.Register("memory.forbidden.set", handleMemoryForbiddenSet())
 
 	// ─── IM 平台配置 ───
 	channelConfStub := stubHandler("channel.conf", map[string]any{})
@@ -537,6 +537,43 @@ func strOrEmpty(val any) string {
 		return ""
 	}
 	return s
+}
+
+// handleMemoryForbiddenGet 处理 memory.forbidden.get 请求。
+//
+// 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
+// 对齐 Python: _memory_forbidden_get (app_web_handlers.py)。
+func handleMemoryForbiddenGet() RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		cfg, err := loadAppConfig()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get 加载配置失败")
+			return map[string]any{}, nil
+		}
+		// 对齐 Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
+		payload := getConfigAny(cfg, "memory.forbidden_memory_definition", map[string]any{})
+		if m, ok := payload.(map[string]any); ok {
+			return m, nil
+		}
+		return map[string]any{}, nil
+	}
+}
+
+// handleMemoryForbiddenSet 处理 memory.forbidden.set 请求。
+//
+// 接收 params，调用 updateMemoryForbiddenInConfig 写回。
+// 对齐 Python: _memory_forbidden_set (app_web_handlers.py) + update_memory_forbidden_in_config (config.py)。
+func handleMemoryForbiddenSet() RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
+		}
+		if err := updateMemoryForbiddenInConfig(params); err != nil {
+			logger.Error(logComponent).Err(err).Msg("memory.forbidden.set 写回配置失败")
+			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+		}
+		return map[string]any{"ok": true}, nil
+	}
 }
 
 // stubHandler 返回固定 stub 响应的处理函数。

@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -152,19 +153,21 @@ func WithPermissionAvatarMode(v bool) PermissionContextOption {
 }
 
 // Scene 返回权限场景类型（web/group_digital_avatar/normal_im）。
+// 对齐 Python owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
 func (p *PermissionContext) Scene() string {
-	if p.ChannelID == "web" {
-		return "web"
-	}
 	if p.GroupDigitalAvatar {
 		return "group_digital_avatar"
+	}
+	if strings.TrimSpace(p.ChannelID) == "web" {
+		return "web"
 	}
 	return "normal_im"
 }
 
 // OwnerScopeKey 返回权限所有者范围键（channelID + principalUserID）。
+// 对齐 Python owner_scopes.PermissionContext.owner_scope_key：对两个字段 TrimSpace
 func (p *PermissionContext) OwnerScopeKey() [2]string {
-	return [2]string{p.ChannelID, p.PrincipalUserID}
+	return [2]string{strings.TrimSpace(p.ChannelID), strings.TrimSpace(p.PrincipalUserID)}
 }
 
 // ToDict 将权限上下文转换为字典。

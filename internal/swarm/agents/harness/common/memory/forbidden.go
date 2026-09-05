@@ -114,6 +114,14 @@ func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
 		}
 	}
 
+	// 对齐 Python: description 为空时提供默认值
+	if result.Description == nil || len(result.Description) == 0 {
+		result.Description = map[string]string{
+			"zh": "以下内容禁止记忆：密码、API密钥、Secret、Token、信用卡号、身份证号、手机号等敏感信息",
+			"en": "The following content is forbidden to remember: passwords, API keys, secrets, tokens, credit card numbers, ID numbers, phone numbers and other sensitive information",
+		}
+	}
+
 	return result
 }
 

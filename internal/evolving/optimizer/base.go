@@ -281,6 +281,53 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 	}
 }
 
+// BackwardTemplate 模板方法，统一 ValidateParameters + SelectSignals + _backward + 错误包装。
+//
+// 对齐 Python: BaseOptimizer.backward(signals)
+//
+//	self._validate_parameters()
+//	self._selected_signals = self._select_signals(signals)
+//	try: await self._backward(signals)
+//	except: raise build_error(StatusCode.TOOLCHAIN_OPTIMIZER_BACKWARD_EXECUTION_ERROR, ...)
+//
+// 对应 Python: BaseOptimizer.backward()
+func (m *BaseOptimizerMixin) BackwardTemplate(
+	ctx context.Context,
+	signals []*signal.EvolutionSignal,
+	backwardFn func(context.Context, []*signal.EvolutionSignal) error,
+) error {
+	m.ValidateParameters()
+	m.SetSelectedSignals(m.SelectSignals(signals))
+	if err := backwardFn(ctx, signals); err != nil {
+		return exception.NewBaseError(exception.StatusToolchainOptimizerBackwardExecutionError,
+			exception.WithCause(err),
+		)
+	}
+	return nil
+}
+
+// StepTemplate 模板方法，统一 ValidateParameters + _step + ClearTrajectories + 错误包装。
+//
+// 对齐 Python: BaseOptimizer.step()
+//
+//	self._validate_parameters()
+//	try: updates = self._step()
+//	finally: self.clear_trajectories()
+//	return updates or {}
+//
+// 对应 Python: BaseOptimizer.step()
+func (m *BaseOptimizerMixin) StepTemplate(
+	stepFn func() map[schema.UpdateKey]any,
+) map[schema.UpdateKey]any {
+	m.ValidateParameters()
+	defer m.ClearTrajectories()
+	updates := stepFn()
+	if updates == nil {
+		updates = make(map[schema.UpdateKey]any)
+	}
+	return updates
+}
+
 // FilterOperators 过滤暴露任何 target 的 Operator。对不匹配的记录警告，不中断。
 //
 // 对齐 Python:

@@ -13,20 +13,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ShellAstKind Shell AST 解析结果类型
-//
-// 对齐 Python: ShellAstParseResult.kind (shell_ast.py L74-79)
-type ShellAstKind int
-
-const (
-	// ShellAstKindSimple 可信任，子命令可评估
-	ShellAstKindSimple ShellAstKind = iota
-	// ShellAstKindTooComplex 结构风险，不可信任
-	ShellAstKindTooComplex
-	// ShellAstKindParseUnavailable 解析器不可用
-	ShellAstKindParseUnavailable
-)
-
 // ShellStructureFlags Shell 结构标志。
 // 跟踪命令中出现的各种 shell 结构特征。
 //
@@ -109,7 +95,23 @@ type ShellAstParseResult struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ShellAstKind Shell AST 解析结果类型
+//
+// 对齐 Python: ShellAstParseResult.kind (shell_ast.py L74-79)
+type ShellAstKind int
+
+const (
+	// ShellAstKindSimple 可信任，子命令可评估
+	ShellAstKindSimple ShellAstKind = iota
+	// ShellAstKindTooComplex 结构风险，不可信任
+	ShellAstKindTooComplex
+	// ShellAstKindParseUnavailable 解析器不可用
+	ShellAstKindParseUnavailable
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 保守扫描用的正则表达式
 // 对齐 Python: shell_ast.py L28-31
@@ -123,8 +125,6 @@ var (
 // 保守扫描检测的操作符标记
 // 对齐 Python: _collect_operator_markers (shell_ast.py L181-186)
 var operatorMarkers = []string{"&&", "||", ";", "|", ">>", ">", "<", "$(", "`", "<(", ">(", "<<", "<<<"}
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // shellAstLogComponent ShellAST 日志组件
 var shellAstLogComponent = logger.ComponentAgentCore

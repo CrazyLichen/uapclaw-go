@@ -59,113 +59,24 @@ func NewSkillExperienceOptimizer(llmModel *llm.Model, model string, language str
 
 // Bind 由 SkillExperienceOptimizerBase.Bind 继承，无需重复定义。
 // 基类已实现 online_contexts 提取 + BaseOptimizerMixin.Bind 调用。
-
-// AddTrajectory 缓存 Trajectory 供 backward 阶段查询。
-func (o *SkillExperienceOptimizer) AddTrajectory(traj *signal.EvolutionSignal) {
-	// SkillExperienceOptimizer 不使用 trajectory
-}
+// AddTrajectory 由 BaseOptimizerMixin 继承提供正确签名，无需覆盖（对齐 Python 不覆盖 add_trajectory）。
 
 // Backward 反向传播：从信号计算梯度。
 //
 // 对齐 Python: SkillExperienceOptimizer._backward(signals)
 //
-//		Python: for op_id, op in self._operators.items():
-//		    Python: skill_name = op_id.removeprefix("skill_experience_")
-//		    Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
-//	   如果没有 skill_signals 则跳过
-//		    Python: ctx = self._build_evolution_context(skill_name, op, skill_signals)
-//		    Python: records = await self.generate_records(ctx)
-//		    Python: if not records:
-//	       logger.info: 无记录生成（skill=%s）
-//		        continue
-//		    Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
-//		    Python: param.set_gradient(EXPERIENCES_TARGET, existing + records)
+//	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
-	o.ValidateParameters()
-	selected := o.SelectSignals(signals)
-	o.SetSelectedSignals(selected)
-
-	for opID, op := range o.BaseOptimizerMixin.Operators() {
-		skillName := removeSkillPrefix(opID)
-		// 对齐 Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
-		var skillSignals []*signal.EvolutionSignal
-		for _, s := range selected {
-			if (s.SkillName != nil && *s.SkillName == skillName) || s.SkillName == nil {
-				skillSignals = append(skillSignals, s)
-			}
-		}
-		if len(skillSignals) == 0 {
-			continue
-		}
-
-		evoCtx, err := o.buildEvolutionContext(skillName, op, skillSignals)
-		if err != nil {
-			logger.Error(logComponent).
-				Str("method", "Backward").
-				Str("skill_name", skillName).
-				Err(err).
-				Msg("[SkillExperienceOptimizer] 上下文构建失败，跳过")
-			continue
-		}
-
-		records, err := o.GenerateRecords(ctx, evoCtx)
-		if err != nil {
-			logger.Error(logComponent).
-				Str("method", "Backward").
-				Str("skill_name", skillName).
-				Err(err).
-				Msg("[SkillExperienceOptimizer] GenerateRecords 失败")
-			continue
-		}
-		if len(records) == 0 {
-			logger.Info(logComponent).
-				Str("skill_name", skillName).
-				Msg("[SkillExperienceOptimizer] no records generated for skill")
-			continue
-		}
-
-		// 对齐 Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
-		//	param.set_gradient(EXPERIENCES_TARGET, existing + records)
-		param := o.BaseOptimizerMixin.Parameters()[opID]
-		existingAny := param.GetGradient(schema.ExperiencesTarget)
-		var existing []checkpointing.EvolutionRecord
-		if existingAny != nil {
-			if eList, ok := existingAny.([]checkpointing.EvolutionRecord); ok {
-				existing = eList
-			}
-		}
-		param.SetGradient(schema.ExperiencesTarget, append(existing, records...))
-
-		logger.Info(logComponent).
-			Str("skill_name", skillName).
-			Int("record_count", len(records)).
-			Msg("[SkillExperienceOptimizer] generated record(s) for skill")
-	}
-	return nil
+	return o.BackwardTemplate(ctx, signals, o.backward)
 }
 
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
 //
 // 对齐 Python: SkillExperienceOptimizer._step()
 //
-//	Python: updates = {}
-//	Python: for op_id, param in self._parameters.items():
-//	    Python: records = param.get_gradient(EXPERIENCES_TARGET) or []
-//	    Python: if records: updates[(op_id, EXPERIENCES_TARGET)] = records
-//	Python: return updates
+//	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 func (o *SkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
-	o.ValidateParameters()
-	updates := make(map[schema.UpdateKey]any)
-	for opID, param := range o.BaseOptimizerMixin.Parameters() {
-		recordsAny := param.GetGradient(schema.ExperiencesTarget)
-		if recordsAny != nil {
-			if records, ok := recordsAny.([]checkpointing.EvolutionRecord); ok && len(records) > 0 {
-				updates[schema.UpdateKey{opID, schema.ExperiencesTarget}] = records
-			}
-		}
-	}
-	o.ClearTrajectories()
-	return updates
+	return o.StepTemplate(o.step)
 }
 
 // SelectSignals 选择此优化器可消费的信号。默认保留全部信号。
@@ -363,6 +274,103 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// backward 反向传播子类逻辑。
+//
+// 对齐 Python: SkillExperienceOptimizer._backward(signals)
+//
+//	Python: for op_id, op in self._operators.items():
+//	    Python: skill_name = op_id.removeprefix("skill_experience_")
+//	    Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
+//	   如果没有 skill_signals 则跳过
+//	    Python: ctx = self._build_evolution_context(skill_name, op, skill_signals)
+//	    Python: records = await self.generate_records(ctx)
+//	    Python: if not records: continue
+//	    Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
+//	    Python: param.set_gradient(EXPERIENCES_TARGET, existing + records)
+func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
+	selected := o.SelectedSignals()
+
+	for opID, op := range o.BaseOptimizerMixin.Operators() {
+		skillName := removeSkillPrefix(opID)
+		// 对齐 Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
+		var skillSignals []*signal.EvolutionSignal
+		for _, s := range selected {
+			if (s.SkillName != nil && *s.SkillName == skillName) || s.SkillName == nil {
+				skillSignals = append(skillSignals, s)
+			}
+		}
+		if len(skillSignals) == 0 {
+			continue
+		}
+
+		evoCtx, err := o.buildEvolutionContext(skillName, op, skillSignals)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "backward").
+				Str("skill_name", skillName).
+				Err(err).
+				Msg("[SkillExperienceOptimizer] 上下文构建失败，跳过")
+			continue
+		}
+
+		records, err := o.GenerateRecords(ctx, evoCtx)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "backward").
+				Str("skill_name", skillName).
+				Err(err).
+				Msg("[SkillExperienceOptimizer] GenerateRecords 失败")
+			continue
+		}
+		if len(records) == 0 {
+			logger.Info(logComponent).
+				Str("skill_name", skillName).
+				Msg("[SkillExperienceOptimizer] no records generated for skill")
+			continue
+		}
+
+		// 对齐 Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
+		//	param.set_gradient(EXPERIENCES_TARGET, existing + records)
+		param := o.BaseOptimizerMixin.Parameters()[opID]
+		existingAny := param.GetGradient(schema.ExperiencesTarget)
+		var existing []checkpointing.EvolutionRecord
+		if existingAny != nil {
+			if eList, ok := existingAny.([]checkpointing.EvolutionRecord); ok {
+				existing = eList
+			}
+		}
+		param.SetGradient(schema.ExperiencesTarget, append(existing, records...))
+
+		logger.Info(logComponent).
+			Str("skill_name", skillName).
+			Int("record_count", len(records)).
+			Msg("[SkillExperienceOptimizer] generated record(s) for skill")
+	}
+	return nil
+}
+
+// step 子类逻辑，返回预计算的更新映射。
+//
+// 对齐 Python: SkillExperienceOptimizer._step()
+//
+//	Python: updates = {}
+//	Python: for op_id, param in self._parameters.items():
+//	    Python: records = param.get_gradient(EXPERIENCES_TARGET) or []
+//	    Python: if records: updates[(op_id, EXPERIENCES_TARGET)] = records
+//	Python: return updates
+func (o *SkillExperienceOptimizer) step() map[schema.UpdateKey]any {
+	updates := make(map[schema.UpdateKey]any)
+	for opID, param := range o.BaseOptimizerMixin.Parameters() {
+		recordsAny := param.GetGradient(schema.ExperiencesTarget)
+		if recordsAny != nil {
+			if records, ok := recordsAny.([]checkpointing.EvolutionRecord); ok && len(records) > 0 {
+				updates[schema.UpdateKey{opID, schema.ExperiencesTarget}] = records
+			}
+		}
+	}
+	return updates
+}
 
 // buildEvolutionContext 从 onlineContexts 查找 EvolutionContext，不存在时抛异常。
 //

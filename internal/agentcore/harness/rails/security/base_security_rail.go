@@ -17,6 +17,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SecurityDecision 安全决策接口，所有决策类型实现此接口。
+//
+// 对齐 Python: SecurityDecision (base_security_rail.py L47-49)
+type SecurityDecision interface {
+	isSecurityDecision()
+}
+
 // SecurityCheckContext 安全检查上下文。
 // 传递给子类的 runSecurityCheck 方法。
 //
@@ -32,13 +39,6 @@ type SecurityCheckContext struct {
 	AutoConfirmConfig map[string]any
 	// SubjectID 主体标识（用于中断恢复匹配）
 	SubjectID string
-}
-
-// SecurityDecision 安全决策接口，所有决策类型实现此接口。
-//
-// 对齐 Python: SecurityDecision (base_security_rail.py L47-49)
-type SecurityDecision interface {
-	isSecurityDecision()
 }
 
 // SecurityAllow 允许执行。
@@ -70,22 +70,6 @@ type SecurityInterrupt struct {
 	// SubjectID 主体标识
 	SubjectID string
 }
-
-// SecurityAlertLevel 告警级别枚举。
-//
-// 对齐 Python: SecurityAlertLevel(str, Enum) (base_security_rail.py L75-83)
-type SecurityAlertLevel int
-
-const (
-	// SecurityAlertLevelInfo 信息
-	SecurityAlertLevelInfo SecurityAlertLevel = iota
-	// SecurityAlertLevelWarning 警告
-	SecurityAlertLevelWarning
-	// SecurityAlertLevelError 错误
-	SecurityAlertLevelError
-	// SecurityAlertLevelCritical 严重
-	SecurityAlertLevelCritical
-)
 
 // SecurityAlert 允许执行但告警。
 //
@@ -119,7 +103,26 @@ type BaseSecurityRail struct {
 	toolNames map[string]struct{}
 }
 
+// SecurityRailOption BaseSecurityRail 配置选项
+type SecurityRailOption func(*BaseSecurityRail)
+
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// SecurityAlertLevel 告警级别枚举。
+//
+// 对齐 Python: SecurityAlertLevel(str, Enum) (base_security_rail.py L75-83)
+type SecurityAlertLevel int
+
+const (
+	// SecurityAlertLevelInfo 信息
+	SecurityAlertLevelInfo SecurityAlertLevel = iota
+	// SecurityAlertLevelWarning 警告
+	SecurityAlertLevelWarning
+	// SecurityAlertLevelError 错误
+	SecurityAlertLevelError
+	// SecurityAlertLevelCritical 严重
+	SecurityAlertLevelCritical
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -160,9 +163,6 @@ func NewBaseSecurityRail(opts ...SecurityRailOption) *BaseSecurityRail {
 	}
 	return r
 }
-
-// SecurityRailOption BaseSecurityRail 配置选项
-type SecurityRailOption func(*BaseSecurityRail)
 
 // WithSupportedEvents 设置支持的事件集合
 func WithSupportedEvents(events ...agentinterfaces.AgentCallbackEvent) SecurityRailOption {

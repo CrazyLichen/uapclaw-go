@@ -818,8 +818,9 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 	return newEdges, nil
 }
 
-// detectCycleInAdjacencySQL DFS 三色法检测有向图环。
+// detectCycleInAdjacencySQL 迭代 DFS 三色法检测有向图环。
 // 对齐 Python: detect_cycle_in_adjacency(adjacency)
+// 使用显式栈替代递归，WHITE/GRAY/BLACK 三色标记，避免深依赖链栈溢出。
 func detectCycleInAdjacencySQL(adjacency map[string][]string) []string {
 	const (
 		white = 0
@@ -827,41 +828,64 @@ func detectCycleInAdjacencySQL(adjacency map[string][]string) []string {
 		black = 2
 	)
 	color := make(map[string]int)
-	parent := make(map[string]string)
 
-	var cycle []string
-
-	var dfs func(node string) bool
-	dfs = func(node string) bool {
-		color[node] = gray
-		for _, next := range adjacency[node] {
-			if color[next] == gray {
-				// 找到环：回溯路径
-				cycle = []string{next}
-				cur := node
-				for cur != next {
-					cycle = append([]string{cur}, cycle...)
-					cur = parent[cur]
-				}
-				cycle = append([]string{next}, cycle...)
-				return true
-			}
-			if color[next] == white {
-				parent[next] = node
-				if dfs(next) {
-					return true
-				}
+	// 初始化所有节点为白色
+	for node, deps := range adjacency {
+		color[node] = white
+		for _, dep := range deps {
+			if _, ok := color[dep]; !ok {
+				color[dep] = white
 			}
 		}
-		color[node] = black
-		return false
 	}
 
-	// 按插入顺序遍历确保确定性
-	for node := range adjacency {
-		if color[node] == white {
-			if dfs(node) {
+	// 栈元素：当前节点 + 待访问的邻居列表
+	type stackEntry struct {
+		node     string
+		children []string
+	}
+
+	for root := range color {
+		if color[root] != white {
+			continue
+		}
+		// 当前 DFS 路径
+		path := []string{root}
+		color[root] = gray
+		stack := []stackEntry{{node: root, children: append([]string{}, adjacency[root]...)}}
+
+		for len(stack) > 0 {
+			top := &stack[len(stack)-1]
+			if len(top.children) == 0 {
+				// 所有邻居已访问，回溯
+				color[top.node] = black
+				stack = stack[:len(stack)-1]
+				path = path[:len(path)-1]
+				continue
+			}
+			// 取出下一个待访问的邻居
+			nxt := top.children[len(top.children)-1]
+			top.children = top.children[:len(top.children)-1]
+
+			c := color[nxt]
+			if c == gray {
+				// 找到环：从路径中 nxt 出现的位置截取
+				idx := -1
+				for i, p := range path {
+					if p == nxt {
+						idx = i
+						break
+					}
+				}
+				cycle := make([]string, len(path[idx:]))
+				copy(cycle, path[idx:])
+				cycle = append(cycle, nxt)
 				return cycle
+			}
+			if c == white {
+				color[nxt] = gray
+				path = append(path, nxt)
+				stack = append(stack, stackEntry{node: nxt, children: append([]string{}, adjacency[nxt]...)})
 			}
 		}
 	}

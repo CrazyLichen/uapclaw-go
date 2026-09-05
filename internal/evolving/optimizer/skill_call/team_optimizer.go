@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -72,93 +75,19 @@ func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language
 // Backward 反向传播：使用 Trajectory 和信号。
 //
 // 对齐 Python: TeamSkillExperienceOptimizer._backward(signals)
+//
+//	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 func (o *TeamSkillExperienceOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
-	o.ValidateParameters()
-	selected := o.SelectSignals(signals)
-	o.SetSelectedSignals(selected)
-
-	trajectories := o.GetTrajectories()
-	defaultTrajectory := &trajectory.Trajectory{
-		ExecutionID: "team-skill-evolution",
-		SessionID:   "team-skill-evolution",
-		Source:      "online",
-	}
-	if len(trajectories) > 0 {
-		defaultTrajectory = trajectories[len(trajectories)-1]
-	}
-
-	for opID, op := range o.BaseOptimizerMixin.Operators() {
-		skillName := removeSkillPrefix(opID)
-		var skillSignals []*signal.EvolutionSignal
-		for _, s := range selected {
-			if (s.SkillName != nil && *s.SkillName == skillName) || s.SkillName == nil {
-				skillSignals = append(skillSignals, s)
-			}
-		}
-		if len(skillSignals) == 0 {
-			continue
-		}
-
-		evoCtx, err := o.buildEvolutionContext(skillName, op, skillSignals, defaultTrajectory)
-		if err != nil {
-			logger.Error(logComponent).
-				Str("method", "Backward").
-				Str("skill_name", skillName).
-				Err(err).
-				Msg("[TeamSkillOptimizer] 上下文构建失败")
-			continue
-		}
-
-		generated, err := o.GenerateRecords(ctx, evoCtx)
-		if err != nil {
-			logger.Error(logComponent).
-				Str("method", "Backward").
-				Str("skill_name", skillName).
-				Err(err).
-				Msg("[TeamSkillOptimizer] GenerateRecords 失败")
-			continue
-		}
-		if len(generated) == 0 {
-			logger.Info(logComponent).
-				Str("skill_name", skillName).
-				Msg("[TeamSkillOptimizer] no records generated for skill")
-			continue
-		}
-
-		param := o.BaseOptimizerMixin.Parameters()[opID]
-		existingAny := param.GetGradient(schema.ExperiencesTarget)
-		var existing []checkpointing.EvolutionRecord
-		if existingAny != nil {
-			if eList, ok := existingAny.([]checkpointing.EvolutionRecord); ok {
-				existing = eList
-			}
-		}
-		param.SetGradient(schema.ExperiencesTarget, append(existing, generated...))
-
-		logger.Info(logComponent).
-			Str("skill_name", skillName).
-			Int("record_count", len(generated)).
-			Msg("[TeamSkillOptimizer] generated record(s) for skill")
-	}
-	return nil
+	return o.BackwardTemplate(ctx, signals, o.backward)
 }
 
 // Step 生成更新映射。
 //
 // 对齐 Python: TeamSkillExperienceOptimizer._step()
+//
+//	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 func (o *TeamSkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
-	o.ValidateParameters()
-	updates := make(map[schema.UpdateKey]any)
-	for opID, param := range o.BaseOptimizerMixin.Parameters() {
-		recordsAny := param.GetGradient(schema.ExperiencesTarget)
-		if recordsAny != nil {
-			if records, ok := recordsAny.([]checkpointing.EvolutionRecord); ok && len(records) > 0 {
-				updates[schema.UpdateKey{opID, schema.ExperiencesTarget}] = records
-			}
-		}
-	}
-	o.ClearTrajectories()
-	return updates
+	return o.StepTemplate(o.step)
 }
 
 // SelectSignals 选择此优化器可消费的信号。
@@ -671,6 +600,94 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// backward 反向传播子类逻辑。
+//
+// 对齐 Python: TeamSkillExperienceOptimizer._backward(signals)
+func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
+	selected := o.SelectedSignals()
+
+	trajectories := o.GetTrajectories()
+	defaultTrajectory := &trajectory.Trajectory{
+		ExecutionID: "team-skill-evolution",
+		SessionID:   "team-skill-evolution",
+		Source:      "online",
+	}
+	if len(trajectories) > 0 {
+		defaultTrajectory = trajectories[len(trajectories)-1]
+	}
+
+	for opID, op := range o.BaseOptimizerMixin.Operators() {
+		skillName := removeSkillPrefix(opID)
+		var skillSignals []*signal.EvolutionSignal
+		for _, s := range selected {
+			if (s.SkillName != nil && *s.SkillName == skillName) || s.SkillName == nil {
+				skillSignals = append(skillSignals, s)
+			}
+		}
+		if len(skillSignals) == 0 {
+			continue
+		}
+
+		evoCtx, err := o.buildEvolutionContext(skillName, op, skillSignals, defaultTrajectory)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "backward").
+				Str("skill_name", skillName).
+				Err(err).
+				Msg("[TeamSkillOptimizer] 上下文构建失败")
+			continue
+		}
+
+		generated, err := o.GenerateRecords(ctx, evoCtx)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("method", "backward").
+				Str("skill_name", skillName).
+				Err(err).
+				Msg("[TeamSkillOptimizer] GenerateRecords 失败")
+			continue
+		}
+		if len(generated) == 0 {
+			logger.Info(logComponent).
+				Str("skill_name", skillName).
+				Msg("[TeamSkillOptimizer] no records generated for skill")
+			continue
+		}
+
+		param := o.BaseOptimizerMixin.Parameters()[opID]
+		existingAny := param.GetGradient(schema.ExperiencesTarget)
+		var existing []checkpointing.EvolutionRecord
+		if existingAny != nil {
+			if eList, ok := existingAny.([]checkpointing.EvolutionRecord); ok {
+				existing = eList
+			}
+		}
+		param.SetGradient(schema.ExperiencesTarget, append(existing, generated...))
+
+		logger.Info(logComponent).
+			Str("skill_name", skillName).
+			Int("record_count", len(generated)).
+			Msg("[TeamSkillOptimizer] generated record(s) for skill")
+	}
+	return nil
+}
+
+// step 子类逻辑，返回预计算的更新映射。
+//
+// 对齐 Python: TeamSkillExperienceOptimizer._step()
+func (o *TeamSkillExperienceOptimizer) step() map[schema.UpdateKey]any {
+	updates := make(map[schema.UpdateKey]any)
+	for opID, param := range o.BaseOptimizerMixin.Parameters() {
+		recordsAny := param.GetGradient(schema.ExperiencesTarget)
+		if recordsAny != nil {
+			if records, ok := recordsAny.([]checkpointing.EvolutionRecord); ok && len(records) > 0 {
+				updates[schema.UpdateKey{opID, schema.ExperiencesTarget}] = records
+			}
+		}
+	}
+	return updates
+}
+
 // loadSkillContent 从 evolutionStore 读取技能内容摘要。
 // 对齐 Python: TeamSkillExperienceOptimizer._load_skill_content(skill_name)
 func (o *TeamSkillExperienceOptimizer) loadSkillContent(
@@ -983,7 +1000,19 @@ func (o *TeamSkillExperienceOptimizer) dumpRaw(tag string, raw string) {
 	if o.debugDir == "" || raw == "" {
 		return
 	}
-	logger.Info(logComponent).Str("tag", tag).Msg("[TeamSkillOptimizer] dump raw (not implemented in Go: file I/O in debug dir)")
+	// 对齐 Python _dump_raw: 写文件到 debug_dir
+	if err := os.MkdirAll(o.debugDir, 0o755); err != nil {
+		logger.Warn(logComponent).Err(err).Str("dir", o.debugDir).Msg("创建 debug 目录失败")
+		return
+	}
+	ts := time.Now().UTC().Format("20060102_150405")
+	shortUUID := uuid.New().String()[:8]
+	path := filepath.Join(o.debugDir, fmt.Sprintf("llm_raw_%s_%s_%s.txt", tag, ts, shortUUID))
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("写入 dump raw 文件失败")
+		return
+	}
+	logger.Info(logComponent).Str("path", path).Msg("[TeamSkillOptimizer] raw response dumped")
 }
 
 // langDefault 根据语言返回默认值。

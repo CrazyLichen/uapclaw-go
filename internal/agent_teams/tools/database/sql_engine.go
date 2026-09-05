@@ -89,6 +89,35 @@ const (
 
 var (
 	_ TeamDatabase = (*SqlTeamDatabase)(nil) // SqlTeamDatabase 必须满足 TeamDatabase 接口
+
+	// 对齐 Python: TeamTaskBase index=True 字段
+	// team_name, status, assignee, updated_at
+	createTaskIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_task_team_name ON team_task_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_status ON team_task_%s (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_assignee ON team_task_%s (assignee)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_updated_at ON team_task_%s (updated_at)`,
+	}
+	// 对齐 Python: TeamTaskDependencyBase index=True 字段
+	// team_name, resolved
+	createDepIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_dep_team_name ON team_task_dependency_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_dep_resolved ON team_task_dependency_%s (resolved)`,
+	}
+	// 对齐 Python: TeamMessageBase index=True 字段
+	// team_name, to_member_name, timestamp, broadcast, is_read
+	createMessageIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_msg_team_name ON team_message_%s (team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_to_member_name ON team_message_%s (to_member_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_timestamp ON team_message_%s (timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_broadcast ON team_message_%s (broadcast)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_is_read ON team_message_%s (is_read)`,
+	}
+	// 对齐 Python: MessageReadStatusBase index=True 字段
+	// read_at
+	createReadStatusIndexesDDL = []string{
+		`CREATE INDEX IF NOT EXISTS idx_readstat_read_at ON message_read_status_%s (read_at)`,
+	}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -398,20 +427,38 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 	logger.Info(logComponent).Msg("迁移 team_member 表：补充 role 列，默认值 teammate")
 }
 
-// createSessionTablesDDL 用手写 DDL 创建4张动态表。
+// createSessionTablesDDL 用手写 DDL 创建4张动态表并建立索引。
 // 对齐 Python: create_cur_session_tables(engine) — 逐模型调用 __table__.create(checkfirst=True)
+// 索引对齐 Python SQLModel 的 index=True 声明。
 func createSessionTablesDDL(db *gorm.DB, suffix string) error {
-	stmts := []string{
+	// 建表
+	tableStmts := []string{
 		fmt.Sprintf(createTaskTableDDL, suffix),
 		fmt.Sprintf(createDepTableDDL, suffix),
 		fmt.Sprintf(createMessageTableDDL, suffix),
 		fmt.Sprintf(createReadStatusTableDDL, suffix),
 	}
-	for _, stmt := range stmts {
+	for _, stmt := range tableStmts {
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("创建动态表失败: %w", err)
 		}
 	}
+
+	// 建索引：对齐 Python SQLModel index=True
+	indexGroups := [][]string{
+		createTaskIndexesDDL,
+		createDepIndexesDDL,
+		createMessageIndexesDDL,
+		createReadStatusIndexesDDL,
+	}
+	for _, group := range indexGroups {
+		for _, tmpl := range group {
+			if err := db.Exec(fmt.Sprintf(tmpl, suffix)).Error; err != nil {
+				return fmt.Errorf("创建动态表索引失败: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
 

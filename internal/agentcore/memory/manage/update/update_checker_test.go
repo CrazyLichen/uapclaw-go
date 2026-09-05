@@ -49,8 +49,9 @@ func TestMapCheckItemsToActionItems_冗余跳过(t *testing.T) {
 		{InfoID: "1", InfoText: "内容1", Result: CheckResultRedundant, RelatedInfos: nil},
 	}
 	newMem := map[string]string{"1": "内容1"}
+	oldMem := map[string]string{}
 
-	actionItems := mapCheckItemsToActionItems(items, newMem)
+	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 0 {
 		t.Errorf("冗余项不应产生 action，实际 %d 项", len(actionItems))
 	}
@@ -69,8 +70,9 @@ func TestMapCheckItemsToActionItems_冲突(t *testing.T) {
 		},
 	}
 	newMem := map[string]string{"2": "新内容2"}
+	oldMem := map[string]string{"1": "旧内容1"}
 
-	actionItems := mapCheckItemsToActionItems(items, newMem)
+	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 2 {
 		t.Fatalf("冲突项应产生 2 个 action，实际 %d 项", len(actionItems))
 	}
@@ -84,14 +86,44 @@ func TestMapCheckItemsToActionItems_冲突(t *testing.T) {
 	}
 }
 
+// TestMapCheckItemsToActionItems_冲突旧记忆不存在 测试 CONFLICTING 中 old_id 不在 old_memories 时跳过 DELETE
+func TestMapCheckItemsToActionItems_冲突旧记忆不存在(t *testing.T) {
+	items := []*MemCheckItem{
+		{
+			InfoID:   "2",
+			InfoText: "新内容2",
+			Result:   CheckResultConflicting,
+			RelatedInfos: map[string]string{
+				"1":     "旧内容1",
+				"ghost": "不存在的旧记忆",
+			},
+		},
+	}
+	newMem := map[string]string{"2": "新内容2"}
+	oldMem := map[string]string{"1": "旧内容1"} // 不含 "ghost"
+
+	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
+	// 应产生 1 ADD + 1 DELETE（ghost 被跳过）
+	if len(actionItems) != 2 {
+		t.Fatalf("冲突项应产生 2 个 action（ADD+DELETE），实际 %d 项", len(actionItems))
+	}
+	if actionItems[0].ID != "2" || actionItems[0].Status != MemoryStatusAdd {
+		t.Errorf("第一个 action 应为 ADD(id=2), 实际 ID=%s Status=%s", actionItems[0].ID, actionItems[0].Status)
+	}
+	if actionItems[1].ID != "1" || actionItems[1].Status != MemoryStatusDelete {
+		t.Errorf("第二个 action 应为 DELETE(id=1), 实际 ID=%s Status=%s", actionItems[1].ID, actionItems[1].Status)
+	}
+}
+
 // TestMapCheckItemsToActionItems_共存 测试 NONE 仅 ADD
 func TestMapCheckItemsToActionItems_共存(t *testing.T) {
 	items := []*MemCheckItem{
 		{InfoID: "3", InfoText: "独立内容", Result: CheckResultNone, RelatedInfos: nil},
 	}
 	newMem := map[string]string{"3": "独立内容"}
+	oldMem := map[string]string{}
 
-	actionItems := mapCheckItemsToActionItems(items, newMem)
+	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 1 {
 		t.Fatalf("共存项应产生 1 个 action，实际 %d 项", len(actionItems))
 	}
@@ -106,8 +138,9 @@ func TestMapCheckItemsToActionItems_内容Fallback(t *testing.T) {
 		{InfoID: "x", InfoText: "来自LLM的内容", Result: CheckResultNone, RelatedInfos: nil},
 	}
 	newMem := map[string]string{} // 不含 "x"
+	oldMem := map[string]string{}
 
-	actionItems := mapCheckItemsToActionItems(items, newMem)
+	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 1 {
 		t.Fatalf("应产生 1 个 action，实际 %d 项", len(actionItems))
 	}

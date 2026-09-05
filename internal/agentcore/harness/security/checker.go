@@ -33,9 +33,9 @@ type ExternalDirectoryChecker struct {
 //
 // 对齐 Python: _SHELL_OPERATORS_RE (checker.py L36-40)
 var shellOperatorsRE = regexp.MustCompile(
-	`[;&|` + "`" + `<>]` + // ; & | ` < > (covers &&, ||, pipes, redirects, backticks)
-		`|\$[({]` + // $( or ${ — command / variable substitution
-		`|\r?\n`, // newline injection
+	`[;&|` + "`" + `<>]` + // ; & | ` < >（覆盖 &&、||、管道、重定向、反引号）
+		`|\$[({]` + // $( 或 ${ — 命令/变量替换
+		`|\r?\n`, // 换行注入
 )
 
 // commandExecTools 命令执行工具集合

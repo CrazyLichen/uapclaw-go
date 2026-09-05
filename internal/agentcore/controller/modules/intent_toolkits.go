@@ -60,7 +60,7 @@ func (t *IntentToolkits) CreateTask(confidence float64, taskDescription string) 
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 任务描述: %s, 当前状态: 已创建并提交执行", targetTaskID, taskDescription)
+	result := fmt.Sprintf("Task ID: %s, Task Description: %s, Current Status: Created and submitted for execution", targetTaskID, taskDescription)
 	return intent, result, nil
 }
 
@@ -80,7 +80,7 @@ func (t *IntentToolkits) PauseTask(confidence float64, taskID string) (*schema.I
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 当前状态: 已暂停", taskID)
+	result := fmt.Sprintf("Task ID: %s, Current Status: Paused", taskID)
 	return intent, result, nil
 }
 
@@ -100,7 +100,7 @@ func (t *IntentToolkits) CancelTask(confidence float64, taskID string) (*schema.
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 当前状态: 已取消", taskID)
+	result := fmt.Sprintf("Task ID: %s, Current Status: Cancelled", taskID)
 	return intent, result, nil
 }
 
@@ -120,7 +120,7 @@ func (t *IntentToolkits) ResumeTask(confidence float64, taskID string) (*schema.
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 当前状态: 已恢复", taskID)
+	result := fmt.Sprintf("Task ID: %s, Current Status: Resumed", taskID)
 	return intent, result, nil
 }
 
@@ -140,7 +140,7 @@ func (t *IntentToolkits) UnknownTask(confidence float64, questionForUser string)
 	if err != nil {
 		return nil, "", err
 	}
-	result := "请求已发送，等待用户响应。"
+	result := "Request sent, waiting for user response."
 	return intent, result, nil
 }
 
@@ -163,7 +163,7 @@ func (t *IntentToolkits) CreateDependentTask(confidence float64, taskDescription
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 任务描述: %s, 当前状态: 已创建并提交执行", targetTaskID, taskDescription)
+	result := fmt.Sprintf("Task ID: %s, Task Description: %s, Current Status: Created and submitted for execution", targetTaskID, taskDescription)
 	return intent, result, nil
 }
 
@@ -187,7 +187,7 @@ func (t *IntentToolkits) ModifyTask(confidence float64, taskID string, newTaskDe
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("任务 ID: %s, 任务描述: %s, 当前状态: 已创建并提交执行", targetTaskID, newTaskDescription)
+	result := fmt.Sprintf("Task ID: %s, Task Description: %s, Current Status: Created and submitted for execution", targetTaskID, newTaskDescription)
 	return intent, result, nil
 }
 
@@ -208,7 +208,7 @@ func (t *IntentToolkits) SupplementTask(confidence float64, taskID string, suppl
 	if err != nil {
 		return nil, "", err
 	}
-	result := "任务补充信息已提交。"
+	result := "Task supplement info submitted."
 	return intent, result, nil
 }
 
@@ -241,10 +241,12 @@ func (t *IntentToolkits) lowConfidenceIntent(confidence float64) (*schema.Intent
 		t.event,
 		schema.WithConfidence(confidence),
 		schema.WithClarificationPrompt(
-			"抱歉，无法理解您的意图。请明确是要创建新任务还是修改已有任务。",
+			"Sorry, I couldn't understand your meaning. " +
+				"Please clarify whether you want to create a new " +
+				"task or modify an existing one.",
 		),
 	)
-	result := "由于置信度较低，自动转换为 unknown_task"
+	result := "Automatically converted to unknown_task due to low confidence"
 	return intent, result
 }
 

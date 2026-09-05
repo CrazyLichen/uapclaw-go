@@ -112,10 +112,10 @@ func (b *ToolOptimizerBase) DefaultTargets() []string {
 	return []string{"tool_description"}
 }
 
-// RequiresForwardData 返回 false，ToolOptimizer 是黑盒优化器，
-// 内部自己生成/执行/评估，不依赖框架前向推理。
+// RequiresForwardData 返回 true，对齐 Python：ToolOptimizerBase 未覆盖 requires_forward_data()，
+// 继承 BaseOptimizer 返回 True（Trainer 会执行前向推理）。
 func (b *ToolOptimizerBase) RequiresForwardData() bool {
-	return false
+	return true
 }
 
 // OptimizeTool 核心入口：两阶段迭代优化工具描述。
@@ -254,34 +254,27 @@ func (b *ToolOptimizerBase) OptimizeTool(
 //
 // 对齐 Python: BaseOptimizer.backward() 模板方法流程：
 //
-//	self._validate_parameters() — 校验参数
-//	self._selected_signals = self._select_signals(signals) — 筛选信号
-//	await self._backward(signals)  # pass — 工具优化器反向传播为空操作
+//	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
+//	ToolOptimizer 是黑盒优化器，_backward 为 pass
 //
 // 对应 Python: async def _backward(self, signals): pass
-func (b *ToolOptimizerBase) Backward(_ context.Context, signals []*signal.EvolutionSignal) error {
-	b.ValidateParameters()
-	selected := b.SelectSignals(signals)
-	b.SetSelectedSignals(selected)
-	// ToolOptimizer 是黑盒优化器，_backward 为 pass
-	return nil
+func (b *ToolOptimizerBase) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
+	return b.BackwardTemplate(ctx, signals, func(_ context.Context, _ []*signal.EvolutionSignal) error {
+		// ToolOptimizer 是黑盒优化器，_backward 为 pass
+		return nil
+	})
 }
 
 // Step 生成更新映射。
 //
 // 对齐 Python: BaseOptimizer.step() 模板方法流程：
 //
-//	self._validate_parameters() — 校验参数
-//	updates = self._step() — 执行步骤
-//	self.clear_trajectories() — 清空轨迹
-//	return updates or {} — 返回更新或空映射
+//	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
+//	ToolOptimizer 为空实现，返回空映射。
 //
 // 对应 Python: BaseOptimizer.step() → _step() → return
 func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
-	b.ValidateParameters()
-	updates := b.step()
-	b.ClearTrajectories()
-	return updates
+	return b.StepTemplate(b.step)
 }
 
 // step 子类逻辑，对齐 Python _step()。

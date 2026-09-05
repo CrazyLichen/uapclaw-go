@@ -125,6 +125,19 @@ type ToolPermissionHost struct {
 	PermissionSceneHook PermissionSceneHookFn
 }
 
+// PermissionSceneHookFn 宿主场景钩子函数类型。
+// 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
+// 返回 nil 表示继续走引擎 tiered 判定；
+// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
+//
+// 对齐 Python: PermissionSceneHook (host.py L26-33)
+type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
+
+// RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
+//
+// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
+type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // PermissionLevel 权限级别枚举
@@ -158,19 +171,6 @@ func ParsePermissionLevel(s string) (PermissionLevel, error) {
 		return PermissionLevelAllow, fmt.Errorf("未知的 PermissionLevel: %q", s)
 	}
 }
-
-// PermissionSceneHookFn 宿主场景钩子函数类型。
-// 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
-// 返回 nil 表示继续走引擎 tiered 判定；
-// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
-//
-// 对齐 Python: PermissionSceneHook (host.py L26-33)
-type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
-
-// RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
-//
-// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
-type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
 
 // IsAllowed 判断权限是否为允许
 func (r *PermissionResult) IsAllowed() bool {

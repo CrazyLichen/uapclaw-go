@@ -53,6 +53,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// legacyPrefixes 遗留 KV 前缀列表。
+	// 对齐 Python: VariableManager.LEGACY_PREFIXES: List[str] = []
+	legacyPrefixes []string
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVariableManager 创建变量记忆管理器。
@@ -68,9 +74,19 @@ func NewVariableManager(kvStore kv.BaseKVStore, cryptoKey []byte) (*VariableMana
 	}
 
 	// 对齐 Python: kv_prefix_registry.register_current(self.USER_VAR_PREFIX)
-	_ = common.KVPrefixRegistry.RegisterCurrent(userVarPrefix)
+	if err := common.KVPrefixRegistry.RegisterCurrent(userVarPrefix); err != nil {
+		return nil, fmt.Errorf("注册 user_var 前缀失败: %w", err)
+	}
 	// 对齐 Python: kv_prefix_registry.register_current(self.SESSION_VAR_PREFIX)
-	_ = common.KVPrefixRegistry.RegisterCurrent(sessionVarPrefix)
+	if err := common.KVPrefixRegistry.RegisterCurrent(sessionVarPrefix); err != nil {
+		return nil, fmt.Errorf("注册 session_var 前缀失败: %w", err)
+	}
+	// 对齐 Python: for legacy_prefix in self.LEGACY_PREFIXES: kv_prefix_registry.register_legacy(legacy_prefix)
+	for _, prefix := range legacyPrefixes {
+		if err := common.KVPrefixRegistry.RegisterLegacy(prefix); err != nil {
+			return nil, fmt.Errorf("注册遗留前缀 %s 失败: %w", prefix, err)
+		}
+	}
 
 	return &VariableManager{
 		kvStore:   kvStore,
@@ -145,7 +161,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 
 // Update 按 ID 更新变量记忆。
 //
-// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method update"); pass
+// 未实现 — 对齐 Python: memory_logger.warning("Not implemented method update"); pass
 func (m *VariableManager) Update(_ context.Context, userID string, scopeID string, memID string, _ string) (bool, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -159,7 +175,7 @@ func (m *VariableManager) Update(_ context.Context, userID string, scopeID strin
 
 // Search 语义搜索变量记忆。
 //
-// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method search"); pass
+// 未实现 — 对齐 Python: memory_logger.warning("Not implemented method search"); pass
 func (m *VariableManager) Search(_ context.Context, userID string, scopeID string, query string, _ int, _ []string) ([]*index.MemorySearchResult, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -173,7 +189,7 @@ func (m *VariableManager) Search(_ context.Context, userID string, scopeID strin
 
 // Get 按 ID 获取变量记忆。
 //
-// ⚠️ 未实现 — 对齐 Python: memory_logger.warning("Not implemented method get"); pass
+// 未实现 — 对齐 Python: memory_logger.warning("Not implemented method get"); pass
 func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
 	logger.Warn(logComponent).
 		Strs("memory_id", []string{memID}).
@@ -186,7 +202,7 @@ func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, 
 
 // Delete 按 ID 删除变量记忆。
 //
-// ⚠️ 未实现 — 对齐 Python: memory_logger.error("Not implemented method delete"); pass
+// 未实现 — 对齐 Python: memory_logger.error("Not implemented method delete"); pass
 func (m *VariableManager) Delete(_ context.Context, userID string, scopeID string, memID string) (bool, error) {
 	logger.Error(logComponent).
 		Str("event_type", "MEMORY_STORE").
@@ -308,7 +324,7 @@ func (m *VariableManager) QueryVariable(ctx context.Context, userID string, scop
 	m.checkUserAndScopeID(userID, scopeID, "Search")
 
 	// 对齐 Python: if not name or not name.strip():
-	if name == "" {
+	if strings.TrimSpace(name) == "" {
 		// 对齐 Python: prefix_str = f"{self.USER_VAR_PREFIX}{self.SEPARATOR}{user_id}{self.SEPARATOR}{scope_id}{self.SEPARATOR}"
 		prefixStr := fmt.Sprintf("%s%s%s%s%s%s", userVarPrefix, separator, userID, separator, scopeID, separator)
 		// 对齐 Python: kv_ret = await self.kv_store.get_by_prefix(prefix_str)
