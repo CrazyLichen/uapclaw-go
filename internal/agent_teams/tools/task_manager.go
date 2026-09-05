@@ -50,6 +50,20 @@ type taskAddWithPriorityConfig struct {
 	dependentTaskIDs []string // 对齐 Python: dependent_task_ids
 }
 
+// TaskCreateResult 任务创建结果，对齐 Python TaskCreateResult。
+// 对齐 Python: openjiuwen/agent_teams/schema/task.py (TaskCreateResult)
+type TaskCreateResult struct {
+	// Task 成功时为创建的任务，失败时为 nil
+	Task *database.TeamTaskBase
+	// Reason 失败原因
+	Reason string
+}
+
+// Ok 返回创建是否成功。
+func (r *TaskCreateResult) Ok() bool {
+	return r.Task != nil
+}
+
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
 	Task      *database.TeamTaskBase
@@ -67,15 +81,25 @@ type TaskSummary struct {
 }
 
 // PlanRecord 计划记录（index.json 中的一条）。
-// 对齐 Python: PlanRecord (openjiuwen/agent_teams/tools/task_manager.py)
+// 对齐 Python: _write_task_plan_index 写入的完整字段集
 type PlanRecord struct {
-	PlanID     string `json:"plan_id"`
-	TaskID     string `json:"task_id"`
-	MemberName string `json:"member_name"`
-	Status     string `json:"status"`
-	Decision   string `json:"decision"`
-	Feedback   string `json:"feedback,omitempty"`
-	CreatedAt  int64  `json:"created_at"`
+	PlanID           string `json:"plan_id"`
+	TaskID           string `json:"task_id"`
+	TeamPlanID       string `json:"team_plan_id,omitempty"`
+	MemberName       string `json:"member_name"`
+	Status           string `json:"status"`
+	LatestPlanID     string `json:"latest_plan_id,omitempty"`
+	MemberPlanMD     string `json:"member_plan_md,omitempty"`
+	SourcePlanPath   string `json:"source_plan_path,omitempty"`
+	ToolCallID       string `json:"tool_call_id,omitempty"`
+	LeaderMessageID  string `json:"leader_message_id,omitempty"`
+	LeaderName       string `json:"leader_name,omitempty"`
+	Decision         string `json:"decision"`
+	Feedback         string `json:"feedback,omitempty"`
+	SubmittedAt      string `json:"submitted_at,omitempty"`
+	DecidedAt        string `json:"decided_at,omitempty"`
+	CompletedAt      string `json:"completed_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
 }
 
 // PlanIndex 计划索引（index.json 结构）。
@@ -238,14 +262,15 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 }
 
 // AddBatch 批量创建任务。对齐 Python: TeamTaskManager.add_batch()
-// 跳过无效规格（缺 title/content）和创建失败的任务，返回成功创建的列表。
+// 跳过无效规格（缺 title/content）和创建失败的任务，返回 TaskCreateResult 列表。
 // 对齐 Python: created_tasks 遇错不中断，继续处理后续规格。
-func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec) ([]*database.TeamTaskBase, error) {
-	var tasks []*database.TeamTaskBase
+func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec) ([]*TaskCreateResult, error) {
+	var results []*TaskCreateResult
 	for _, spec := range specs {
 		// 对齐 Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
 			logger.Warn(logComponentChannel).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
+			results = append(results, &TaskCreateResult{Reason: "invalid spec: missing title or content"})
 			continue
 		}
 		task, err := tm.Add(ctx, spec.Title, spec.Content,
@@ -255,13 +280,20 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 		if err != nil {
 			// 对齐 Python: if not result.ok → warning + skip
 			logger.Warn(logComponentChannel).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
+			results = append(results, &TaskCreateResult{Reason: err.Error()})
 			continue
 		}
-		tasks = append(tasks, task)
+		results = append(results, &TaskCreateResult{Task: task})
 	}
 	// 对齐 Python: team_logger.info(f"Batch added {len(created_tasks)} tasks")
-	logger.Info(logComponentChannel).Int("count", len(tasks)).Msg("批量创建完成")
-	return tasks, nil
+	created := 0
+	for _, r := range results {
+		if r.Ok() {
+			created++
+		}
+	}
+	logger.Info(logComponentChannel).Int("count", created).Int("total", len(results)).Msg("批量创建完成")
+	return results, nil
 }
 
 // Get 按 ID 查任务。对齐 Python: TeamTaskManager.get()
@@ -425,24 +457,27 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
 		}
 
-		// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
-		planIndex, err := tm.loadPlanIndex()
-		if err == nil && planIndex != nil {
-			taskIdx, ok := planIndex.Tasks[taskID]
-			if ok && taskIdx != nil {
-				latestPlanID := ""
-				if len(taskIdx.PlanIDs) > 0 {
-					latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
-				}
-				planRecord := &PlanRecord{
-					PlanID:     latestPlanID,
-					TaskID:     taskID,
-					MemberName: task.Assignee,
-					Status:     string(fsm.TaskStatusCompleted),
-					Decision:   "completed",
-					CreatedAt:  time.Now().UnixMilli(),
-				}
-				if err := tm.updatePlanIndex(latestPlanID, planRecord); err != nil {
+			// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
+			planIndex, err := tm.loadPlanIndex()
+			if err == nil && planIndex != nil {
+				taskIdx, ok := planIndex.Tasks[taskID]
+				if ok && taskIdx != nil {
+					latestPlanID := ""
+					if len(taskIdx.PlanIDs) > 0 {
+						latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
+					}
+					nowISO := time.Now().Format(time.RFC3339)
+					// 对齐 Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
+					planRecord := &PlanRecord{
+						PlanID:     latestPlanID,
+						TaskID:     taskID,
+						TeamPlanID: tm.teamPlanID,
+						MemberName: task.Assignee,
+						Status:     string(fsm.TaskStatusCompleted),
+						CompletedAt: nowISO,
+						UpdatedAt:  nowISO,
+					}
+					if err := tm.writePlanIndex(planRecord); err != nil {
 					logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
 				}
 			}
@@ -758,13 +793,17 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	}
 
 	// 6. 写入 index.json
+	nowISO := time.Now().Format(time.RFC3339)
 	record := &PlanRecord{
-		PlanID:     planID,
-		TaskID:     taskID,
-		MemberName: tm.memberName,
-		Status:     fsm.TaskStatusClaimed,
-		Decision:   "pending",
-		CreatedAt:  time.Now().UnixMilli(),
+		PlanID:       planID,
+		TaskID:       taskID,
+		TeamPlanID:   tm.teamPlanID,
+		MemberName:   tm.memberName,
+		Status:       fsm.TaskStatusClaimed,
+		MemberPlanMD: destPath,
+		Decision:     "pending",
+		SubmittedAt:  nowISO,
+		UpdatedAt:    nowISO,
 	}
 	if err := tm.writePlanIndex(record); err != nil {
 		return nil, fmt.Errorf("写入计划索引失败: %v", err)
@@ -841,6 +880,8 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 		planRecord.Feedback = feedback
 		planRecord.Status = fsm.TaskStatusClaimed
 	}
+	planRecord.DecidedAt = time.Now().Format(time.RFC3339)
+	planRecord.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	// 更新 index.json
 	if err := tm.updatePlanIndex(planID, planRecord); err != nil {

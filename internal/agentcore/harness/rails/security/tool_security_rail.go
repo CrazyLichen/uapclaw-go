@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -295,7 +296,7 @@ func buildShellAutoConfirmKey(toolName string, command string) string {
 // shouldStoreAutoConfirm 判断是否应存储 auto-confirm key 到 session。
 //
 // 对齐 Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
-func shouldStoreAutoConfirm(autoConfirm bool, session any, autoConfirmKey string, persisted bool) bool {
+func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
 	return autoConfirm && session != nil && autoConfirmKey != "" && !persisted
 }
 
@@ -652,7 +653,7 @@ func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCal
 // resolveSession 从 cbc 中解析 session 对象。
 //
 // 对齐 Python: PermissionInterruptRail._resolve_session_id(ctx) (tool_security_rail.py L584-594)
-func resolveSession(cbc *agentinterfaces.AgentCallbackContext) any {
+func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces.SessionFacade {
 	if cbc == nil {
 		return nil
 	}

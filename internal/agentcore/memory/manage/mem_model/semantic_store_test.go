@@ -173,7 +173,7 @@ func TestSemanticStore_AddDocs(t *testing.T) {
 	}
 }
 
-// TestSemanticStore_AddDocs_无Embedding 测试 embeddingModel 为 nil 返回 false
+// TestSemanticStore_AddDocs_无Embedding 测试 embeddingModel 为 nil 返回 false + error
 func TestSemanticStore_AddDocs_无Embedding(t *testing.T) {
 	vs := newFakeVectorStore()
 	store := NewSemanticStore(vs, nil)
@@ -181,11 +181,11 @@ func TestSemanticStore_AddDocs_无Embedding(t *testing.T) {
 
 	docs := []DocTuple{{ID: "doc1", Text: "hello"}}
 	ok, err := store.AddDocs(ctx, docs, "test_collection", "scope1")
-	if err != nil {
-		t.Fatalf("AddDocs() error = %v", err)
-	}
 	if ok {
 		t.Error("AddDocs() embeddingModel 为 nil 时应返回 false")
+	}
+	if err == nil {
+		t.Error("AddDocs() embeddingModel 为 nil 时应返回 error")
 	}
 }
 
@@ -265,7 +265,7 @@ func TestSemanticStore_Search(t *testing.T) {
 	}
 }
 
-// TestSemanticStore_Search_无Embedding 测试 embeddingModel 为 nil 返回空
+// TestSemanticStore_Search_无Embedding 测试 embeddingModel 为 nil 返回空 + error
 func TestSemanticStore_Search_无Embedding(t *testing.T) {
 	vs := newFakeVectorStore()
 	vs.collections["test_collection"] = true
@@ -273,8 +273,8 @@ func TestSemanticStore_Search_无Embedding(t *testing.T) {
 	ctx := context.Background()
 
 	results, err := store.Search(ctx, "hello", "test_collection", "scope1", 5)
-	if err != nil {
-		t.Fatalf("Search() error = %v", err)
+	if err == nil {
+		t.Error("Search() embeddingModel 为 nil 时应返回 error")
 	}
 	if len(results) != 0 {
 		t.Error("Search() embeddingModel 为 nil 时应返回空结果")

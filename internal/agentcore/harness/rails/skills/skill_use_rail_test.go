@@ -239,14 +239,6 @@ func TestNewSkillUseRail_选项(t *testing.T) {
 
 // ──────────────────────────── 辅助方法测试 ────────────────────────────
 
-// TestNormalizeNameList_字符串 测试字符串输入
-func TestNormalizeNameList_字符串(t *testing.T) {
-	result := normalizeNameList("a;b,c")
-	if len(result) != 3 || result[0] != "a" || result[1] != "b" || result[2] != "c" {
-		t.Errorf("normalizeNameList('a;b,c') = %v, want [a b c]", result)
-	}
-}
-
 // TestNormalizeNameList_切片 测试切片输入
 func TestNormalizeNameList_切片(t *testing.T) {
 	result := normalizeNameList([]string{"a;b", "c"})
@@ -255,7 +247,7 @@ func TestNormalizeNameList_切片(t *testing.T) {
 	}
 }
 
-// TestNormalizeNameList_空值 测试 nil 输入
+// TestNormalizeNameList_空值 测试空切片输入
 func TestNormalizeNameList_空值(t *testing.T) {
 	result := normalizeNameList(nil)
 	if result != nil {
@@ -263,19 +255,19 @@ func TestNormalizeNameList_空值(t *testing.T) {
 	}
 }
 
-// TestNormalizeNameList_空字符串 测试空字符串
+// TestNormalizeNameList_空字符串 测试空字符串元素
 func TestNormalizeNameList_空字符串(t *testing.T) {
-	result := normalizeNameList("")
+	result := normalizeNameList([]string{""})
 	if result != nil {
-		t.Errorf("normalizeNameList('') = %v, want nil", result)
+		t.Errorf("normalizeNameList(['']) = %v, want nil", result)
 	}
 }
 
 // TestNormalizeNameSet 测试名称集合
 func TestNormalizeNameSet(t *testing.T) {
-	result := normalizeNameSet("a;a;b")
+	result := normalizeNameSet([]string{"a;a", "b"})
 	if len(result) != 2 {
-		t.Errorf("normalizeNameSet('a;a;b') len = %d, want 2", len(result))
+		t.Errorf("normalizeNameSet len = %d, want 2", len(result))
 	}
 	if _, ok := result["a"]; !ok {
 		t.Error("normalizeNameSet 应包含 'a'")

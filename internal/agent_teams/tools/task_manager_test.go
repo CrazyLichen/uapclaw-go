@@ -257,11 +257,11 @@ func TestTaskManager_AddBatch(t *testing.T) {
 		t.Fatalf("AddBatch 返回错误: %v", err)
 	}
 	if len(tasks) != 2 {
-		t.Errorf("批量创建应返回2个任务: got %d", len(tasks))
+		t.Errorf("批量创建应返回2个结果: got %d", len(tasks))
 	}
 	// 验证自定义 TaskID
-	if tasks[1].TaskID != "custom_id_1" {
-		t.Errorf("自定义 TaskID 应为 custom_id_1: got %q", tasks[1].TaskID)
+	if tasks[1].Task.TaskID != "custom_id_1" {
+		t.Errorf("自定义 TaskID 应为 custom_id_1: got %q", tasks[1].Task.TaskID)
 	}
 }
 
@@ -673,7 +673,7 @@ func TestTaskManager_AddBatch_空(t *testing.T) {
 		t.Fatalf("AddBatch 返回错误: %v", err)
 	}
 	if len(tasks) != 0 {
-		t.Errorf("空批量应返回0个任务: got %d", len(tasks))
+		t.Errorf("空批量应返回0个结果: got %d", len(tasks))
 	}
 }
 
@@ -712,8 +712,17 @@ func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddBatch 返回错误: %v", err)
 	}
-	if len(tasks) != 2 {
-		t.Errorf("应跳过无效规格，返回2个任务: got %d", len(tasks))
+	if len(tasks) != 4 {
+		t.Errorf("应返回4个结果（含跳过的）: got %d", len(tasks))
+	}
+	okCount := 0
+	for _, r := range tasks {
+		if r.Ok() {
+			okCount++
+		}
+	}
+	if okCount != 2 {
+		t.Errorf("应跳过无效规格，成功2个: got %d", okCount)
 	}
 }
 
@@ -732,8 +741,17 @@ func TestTaskManager_AddBatch_跳过创建失败(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddBatch 不应返回错误（容错）: %v", err)
 	}
-	if len(tasks) != 2 {
-		t.Errorf("应跳过创建失败的规格，返回2个任务: got %d", len(tasks))
+	if len(tasks) != 3 {
+		t.Errorf("应返回3个结果（含失败的）: got %d", len(tasks))
+	}
+	okCount := 0
+	for _, r := range tasks {
+		if r.Ok() {
+			okCount++
+		}
+	}
+	if okCount != 2 {
+		t.Errorf("应跳过创建失败的规格，成功2个: got %d", okCount)
 	}
 }
 
@@ -754,7 +772,7 @@ func TestTaskManager_AddBatch_带依赖(t *testing.T) {
 		t.Fatalf("AddBatch 返回错误: %v", err)
 	}
 	if len(tasks) != 2 {
-		t.Fatalf("批量创建应返回2个任务: got %d", len(tasks))
+		t.Fatalf("批量创建应返回2个结果: got %d", len(tasks))
 	}
 	// 有依赖的任务应被阻塞
 	depTask, _ := tm.Get(ctx, "dep_batch_task")

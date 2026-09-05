@@ -1,9 +1,13 @@
 package security
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -77,28 +81,28 @@ type PermissionsSection struct {
 //
 // 对齐 Python: PermissionSceneHookInput (host.py L15-23)
 type PermissionSceneHookInput struct {
-	// Ctx 上下文
-	Ctx any
+	// Ctx 回调上下文
+	Ctx *agentinterfaces.AgentCallbackContext
 	// ToolCall 工具调用
-	ToolCall any
-	// UserInput 用户输入
+	ToolCall *llmschema.ToolCall
+	// UserInput 用户输入（来源多样：InteractiveInput / map / string）
 	UserInput any
 	// NormalizedToolName 归一化工具名
 	NormalizedToolName string
 	// ToolArgs 工具参数
 	ToolArgs map[string]any
 	// Engine 权限引擎
-	Engine any
+	Engine *PermissionEngine
 }
 
 // PermissionConfirmationRequest 传给 RequestPermissionConfirmationHook 的入参。
 //
 // 对齐 Python: PermissionConfirmationRequest (host.py L36-43)
 type PermissionConfirmationRequest struct {
-	// Ctx 上下文
-	Ctx any
+	// Ctx 回调上下文
+	Ctx *agentinterfaces.AgentCallbackContext
 	// ToolCall 工具调用
-	ToolCall any
+	ToolCall *llmschema.ToolCall
 	// Result 权限判定结果
 	Result *PermissionResult
 	// AutoConfirmKey 自动确认键

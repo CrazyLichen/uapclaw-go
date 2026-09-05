@@ -1,6 +1,8 @@
 package mem_model
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -44,7 +46,7 @@ type MemoryMeta struct {
 	SchemaVersion string `gorm:"size:64;not null"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -63,14 +65,37 @@ func (ScopeUserMapping) TableName() string { return "scope_user_mapping" }
 func (MemoryMeta) TableName() string { return "memory_meta" }
 
 // CreateTables 创建所有记忆表。
-// 使用 GORM AutoMigrate 自动建表，对齐 Python 的 create_tables()。
+// 对齐 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (create_tables)
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (create_tables)
-// TODO(#通用): 待实现旧表迁移检测（group_id 列检测+DROP 重建）和版本初始化逻辑
+// 步骤：
+//  1. 检测 user_message 表是否有旧版 group_id 列，有则 DROP 重建
+//  2. 使用 GORM AutoMigrate 自动建表
+//  3. 为新创建的表写入初始 schema_version="0" 到 memory_meta
 func CreateTables(db *gorm.DB) error {
-	return db.AutoMigrate(
+	// 步骤1：旧表迁移检测——检测 user_message 表是否有旧版 group_id 列
+	// 对齐 Python: if "group_id" in column_names → DROP TABLE
+	if db.Migrator().HasTable(&UserMessage{}) && db.Migrator().HasColumn(&UserMessage{}, "group_id") {
+		_ = db.Migrator().DropTable(&UserMessage{})
+	}
+
+	// 步骤2：建表
+	if err := db.AutoMigrate(
 		&UserMessage{},
 		&ScopeUserMapping{},
 		&MemoryMeta{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// 步骤3：为新表写入初始 schema_version
+	// 对齐 Python: for table_name, is_new in newly_created.items(): if is_new → MemoryMeta(schema_version="0")
+	for _, tbl := range []string{"user_message", "scope_user_mapping"} {
+		var count int64
+		db.Model(&MemoryMeta{}).Where("table_name = ?", tbl).Count(&count)
+		if count == 0 {
+			db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: "0"})
+		}
+	}
+
+	return nil
 }

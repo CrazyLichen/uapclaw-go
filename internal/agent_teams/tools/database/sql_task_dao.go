@@ -271,6 +271,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 
 	var result GraphMutationResult
 	var mutationErr error
+	var newEdges []TeamTaskDependencyBase
 
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 步骤1: stageNewTasksInTx
@@ -286,7 +287,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		}
 
 		// 步骤3: checkCycleAndComputeNewEdgesInTx
-		newEdges, err := checkCycleAndComputeNewEdgesInTx(tx, depTable, teamName, addEdges, endpointTasks)
+		newEdges, err = checkCycleAndComputeNewEdgesInTx(tx, depTable, teamName, addEdges, endpointTasks)
 		if err != nil {
 			mutationErr = err
 			return err // 回滚
@@ -326,12 +327,19 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		result.Reason = mutationErr.Error()
 		logger.Error(logComponent).Str("reason", result.Reason).Msg("图变更管线失败")
 	} else if result.Ok {
-		// 对齐 Python 日志
-		logger.Info(logComponent).
-			Int("new_tasks", len(newTasks)).
-			Int("new_edges", len(addEdges)).
-			Int("refreshed", len(result.RefreshedTasks)).
-			Msg("图变更管线完成")
+		// 对齐 Python 内存实现: 分支日志，使用去重后的 newEdges 计数
+		if len(newTasks) > 0 {
+			logger.Info(logComponent).
+				Int("new_tasks", len(newTasks)).
+				Int("new_edges", len(newEdges)).
+				Int("refreshed", len(result.RefreshedTasks)).
+				Msg("Created task(s); added edge(s); refreshed task(s)")
+		} else {
+			logger.Info(logComponent).
+				Int("new_edges", len(newEdges)).
+				Int("refreshed", len(result.RefreshedTasks)).
+				Msg("Added edge(s); refreshed task(s)")
+		}
 	}
 	return result
 }

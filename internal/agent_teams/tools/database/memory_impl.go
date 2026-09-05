@@ -2,9 +2,11 @@ package database
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -44,8 +46,10 @@ type mutationContext struct {
 	// 步骤间共享数据（闭包操作）
 	stagedTasks    map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
 	endpointTasks  map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
+	newEdgeSet     map[string]bool          // 步骤3产出：去重后的新边集合（key=taskID+"\x00"+dependsOnID）
 	newEdgeRows    []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
 	refreshedTasks []*TeamTaskBase          // 步骤5产出：状态刷新的任务列表
+	affectedIDs    map[string]bool          // 步骤5输入：受影响的任务 ID 集合
 
 	// 失败标记（替代 Python _MutationFailure）
 	failReason string
@@ -713,6 +717,20 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 	// 步骤5：刷新 PENDING↔BLOCKED 状态
 	mc.refreshStatus()
 
+	// 对齐 Python 内存实现: 分支日志
+	if len(newTasks) > 0 {
+		logger.Info(logComponent).
+			Int("new_tasks", len(newTasks)).
+			Int("new_edges", len(mc.newEdgeSet)).
+			Int("refreshed", len(mc.refreshedTasks)).
+			Msg("Created task(s); added edge(s); refreshed task(s)")
+	} else {
+		logger.Info(logComponent).
+			Int("new_edges", len(mc.newEdgeSet)).
+			Int("refreshed", len(mc.refreshedTasks)).
+			Msg("Added edge(s); refreshed task(s)")
+	}
+
 	return GraphMutationResult{Ok: true, RefreshedTasks: mc.refreshedTasks}
 }
 
@@ -942,6 +960,11 @@ func depKey(taskID, dependsOnID string) string {
 	return taskID + "\x00" + dependsOnID
 }
 
+// splitDepKey 拆分依赖边复合主键 key。
+func splitDepKey(key string) []string {
+	return strings.SplitN(key, "\x00", 2)
+}
+
 // stageNewTasks 步骤1：插入新任务行，检测 task_id 重复。
 // 对齐 Python: _stage_new_tasks()
 func (mc *mutationContext) stageNewTasks() {
@@ -1012,17 +1035,30 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 
 // checkCycleAndComputeNewEdges 步骤3：构建后变更邻接表，检测环路。
 // 对齐 Python: _check_cycle_and_compute_new_edges()
+// 对齐 Python 内存实现: existing_edge_set + new_edge_set 双重去重
 func (mc *mutationContext) checkCycleAndComputeNewEdges() {
 	// 构建后变更邻接表：downstream → [upstream1, upstream2, ...]
 	adj := make(map[string][]string)
-	// 加载已有边
+
+	// 加载已有边，构建 existingEdgeSet
+	// 对齐 Python: existing_edge_set = {(d.task_id, d.depends_on_task_id) for d in self._task_deps}
+	existingEdgeSet := make(map[string]bool)
 	for _, dep := range mc.db.deps {
 		if dep.TeamName == mc.teamName {
 			adj[dep.TaskID] = append(adj[dep.TaskID], dep.DependsOnID)
+			existingEdgeSet[dep.TaskID+"\x00"+dep.DependsOnID] = true
 		}
 	}
-	// 加载新边
+
+	// 加载新边（去重）
+	// 对齐 Python: new_edge_set = set(); if edge in existing_edge_set or edge in new_edge_set: continue
+	mc.newEdgeSet = make(map[string]bool)
 	for _, edge := range mc.addEdges {
+		key := edge.TaskID + "\x00" + edge.DependsOnID
+		if existingEdgeSet[key] || mc.newEdgeSet[key] {
+			continue
+		}
+		mc.newEdgeSet[key] = true
 		adj[edge.TaskID] = append(adj[edge.TaskID], edge.DependsOnID)
 	}
 
@@ -1036,15 +1072,18 @@ func (mc *mutationContext) checkCycleAndComputeNewEdges() {
 		}
 	}
 
-	// 计算新边行
-	mc.newEdgeRows = make([]TeamTaskDependencyBase, 0, len(mc.addEdges))
-	for _, edge := range mc.addEdges {
-		upstream := mc.endpointTasks[edge.DependsOnID]
+	// 计算新边行（仅包含去重后的边）
+	// 对齐 Python: for tid, dep_id in new_edge_set
+	mc.newEdgeRows = make([]TeamTaskDependencyBase, 0, len(mc.newEdgeSet))
+	for key := range mc.newEdgeSet {
+		parts := splitDepKey(key)
+		tid, depID := parts[0], parts[1]
+		upstream := mc.endpointTasks[depID]
 		// 终态依赖初始 resolved=True（对齐 Python）
 		resolved := upstream.Status == fsm.TaskStatusCompleted || upstream.Status == fsm.TaskStatusCancelled
 		mc.newEdgeRows = append(mc.newEdgeRows, TeamTaskDependencyBase{
-			TaskID:      edge.TaskID,
-			DependsOnID: edge.DependsOnID,
+			TaskID:      tid,
+			DependsOnID: depID,
 			TeamName:    mc.teamName,
 			Resolved:    resolved,
 		})
@@ -1078,9 +1117,19 @@ func (mc *mutationContext) applyNewEdges() {
 }
 
 // refreshStatus 步骤5：刷新 PENDING↔BLOCKED 状态。
-// 对齐 Python: _refresh_status_in_session()
+// 对齐 Python 内存实现: _refresh_status_for_tasks(affected_ids, now) —— 仅刷新受影响的任务
 func (mc *mutationContext) refreshStatus() {
-	mc.refreshedTasks = mc.db.refreshTaskStatuses(mc.teamName)
+	// 收集 affectedIDs：newTasks 的 ID + newEdgeSet 的 TaskID
+	// 对齐 Python: affected_ids = {spec.task_id for spec in new_tasks}; affected_ids.update(tid for tid, _ in new_edge_set)
+	mc.affectedIDs = make(map[string]bool)
+	for _, spec := range mc.newTasks {
+		mc.affectedIDs[spec.TaskID] = true
+	}
+	for key := range mc.newEdgeSet {
+		parts := splitDepKey(key)
+		mc.affectedIDs[parts[0]] = true
+	}
+	mc.refreshedTasks = mc.db.refreshTaskStatusesByID(mc.teamName, mc.affectedIDs)
 }
 
 // rollbackStagedTasks 回滚步骤1插入的新任务。
@@ -1157,7 +1206,7 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 }
 
 // refreshTaskStatuses 刷新团队内所有任务的 PENDING↔BLOCKED 状态。
-// 对齐 Python: _refresh_status_in_session()
+// 对齐 Python: _refresh_status_in_session() —— 全量刷新（仅用于 VerifyAndFixTaskConsistency）
 // PENDING + 有未解决依赖 → BLOCKED
 // BLOCKED + 无未解决依赖 → PENDING
 func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []*TeamTaskBase {
@@ -1178,6 +1227,45 @@ func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []*TeamTask
 			task.Status = fsm.TaskStatusBlocked
 		} else if task.Status == fsm.TaskStatusBlocked && unresolvedCount == 0 {
 			task.Status = fsm.TaskStatusPending
+		}
+		if oldStatus != task.Status {
+			task.UpdatedAt = GetCurrentTime()
+			refreshed = append(refreshed, task)
+		}
+	}
+	return refreshed
+}
+
+// refreshTaskStatusesByID 仅刷新指定任务 ID 的 PENDING↔BLOCKED 状态。
+// 对齐 Python 内存实现: _refresh_status_for_tasks(task_ids, now) —— 只刷新受影响的任务
+func (db *InMemoryTeamDatabase) refreshTaskStatusesByID(teamName string, taskIDs map[string]bool) []*TeamTaskBase {
+	if len(taskIDs) == 0 {
+		return nil
+	}
+	var refreshed []*TeamTaskBase
+	for tid := range taskIDs {
+		task, exists := db.tasks[tid]
+		if !exists || task.TeamName != teamName {
+			continue
+		}
+		// 仅处理 PENDING/BLOCKED 状态的任务
+		if task.Status != fsm.TaskStatusPending && task.Status != fsm.TaskStatusBlocked {
+			continue
+		}
+		unresolvedCount := 0
+		for _, dep := range db.deps {
+			if dep.TaskID == tid && dep.TeamName == teamName && !dep.Resolved {
+				unresolvedCount++
+			}
+		}
+
+		oldStatus := task.Status
+		if task.Status == fsm.TaskStatusPending && unresolvedCount > 0 {
+			task.Status = fsm.TaskStatusBlocked
+			logger.Info(logComponent).Str("task_id", tid).Int("unresolved", unresolvedCount).Msg("任务被阻塞")
+		} else if task.Status == fsm.TaskStatusBlocked && unresolvedCount == 0 {
+			task.Status = fsm.TaskStatusPending
+			logger.Info(logComponent).Str("task_id", tid).Msg("任务解除阻塞")
 		}
 		if oldStatus != task.Status {
 			task.UpdatedAt = GetCurrentTime()

@@ -1,7 +1,5 @@
 package operation
 
-import "reflect"
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OperationMetadata 操作元数据。
@@ -29,6 +27,10 @@ type Operation interface {
 	SchemaVersion() int
 	// Description 返回操作的描述
 	Description() string
+	// TypeName 返回操作类型的名称。
+	// 对齐 Python: self.__class__.__name__ —— Go 中由于嵌入 BaseOperation 的方法集
+	// 无法通过反射获取子类名，因此每个子类必须显式实现此方法返回自身类型名。
+	TypeName() string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -41,13 +43,21 @@ func (op *BaseOperation) SchemaVersion() int {
 
 // Description 返回操作的描述。
 // 对齐 Python: BaseOperation.description (property)
-// 若 Metadata.Description 为空，返回结构体类型名。
+// 若 Metadata.Description 为空，返回类型名称（通过 TypeName 接口方法获取子类名）。
 func (op *BaseOperation) Description() string {
 	if op.Metadata.Description != "" {
 		return op.Metadata.Description
 	}
 	// 对齐 Python: return self.__class__.__name__
-	return reflect.TypeOf(op).Elem().Name()
+	// 通过 Operation 接口的 TypeName() 获取子类类型名；
+	// 若无法获取（BaseOperation 自身），回退到反射。
+	return op.TypeName()
+}
+
+// TypeName 返回 "BaseOperation"。
+// 嵌入 BaseOperation 的子类必须覆盖此方法返回自身类型名。
+func (op *BaseOperation) TypeName() string {
+	return "BaseOperation"
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

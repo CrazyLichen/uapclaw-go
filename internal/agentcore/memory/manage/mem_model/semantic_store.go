@@ -2,6 +2,7 @@ package mem_model
 
 import (
 	"context"
+	"fmt"
 
 	embedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
@@ -66,7 +67,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 			Str("scope_id", scopeID).
 			Str("collection_name", tableName).
 			Msg("Embedding model not initialized, please call InitializeEmbeddingModel first.")
-		return false, nil
+		return false, fmt.Errorf("embedding model not initialized")
 	}
 
 	// 分离 ID 和文本
@@ -86,7 +87,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 			Str("collection_name", tableName).
 			Err(err).
 			Msg("Failed to add documents to semantic store.")
-		return false, nil
+		return false, fmt.Errorf("embed documents failed: %w", err)
 	}
 
 	if len(memoryIDs) != len(embeddings) {
@@ -95,7 +96,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 			Str("scope_id", scopeID).
 			Str("collection_name", tableName).
 			Msg("memory_ids and embeddings must have same length")
-		return false, nil
+		return false, fmt.Errorf("memory_ids and embeddings must have same length")
 	}
 
 	// 创建集合（如果不存在）
@@ -108,7 +109,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 				Str("collection_name", tableName).
 				Err(err).
 				Msg("Failed to create collection.")
-			return false, nil
+			return false, fmt.Errorf("create collection failed: %w", err)
 		}
 	}
 
@@ -129,7 +130,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 			Str("collection_name", tableName).
 			Err(err).
 			Msg("Failed to add documents to semantic store.")
-		return false, nil
+		return false, fmt.Errorf("add docs to vector store failed: %w", err)
 	}
 
 	return true, nil
@@ -145,7 +146,7 @@ func (s *SemanticStore) DeleteDocs(ctx context.Context, ids []string, tableName 
 			Str("collection_name", tableName).
 			Err(err).
 			Msg("Failed to delete documents from semantic store.")
-		return nil
+		return fmt.Errorf("check collection exists failed: %w", err)
 	}
 	if !exists {
 		logger.Debug(logComponent).
@@ -175,11 +176,12 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 			Str("query", query).
 			Str("collection_name", tableName).
 			Msg("Embedding model not initialized, please call InitializeEmbeddingModel first.")
-		return []SearchResult{}, nil
+		return []SearchResult{}, fmt.Errorf("embedding model not initialized")
 	}
 
 	// 生成查询嵌入
-	queryEmbedding, err := s.embeddingModel.EmbedQuery(ctx, query)
+	// 对齐 Python: query_embeddings = await self.embedding_model.embed_documents(texts=[query])
+	queryEmbeddings, err := s.embeddingModel.EmbedDocuments(ctx, []string{query})
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_RETRIEVE").
@@ -187,20 +189,24 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 			Str("collection_name", tableName).
 			Err(err).
 			Msg("Failed to embed query.")
-		return []SearchResult{}, nil
+		return []SearchResult{}, fmt.Errorf("embed query failed: %w", err)
 	}
-	if len(queryEmbedding) == 0 {
+	if len(queryEmbeddings) == 0 || len(queryEmbeddings[0]) == 0 {
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("query", query).
 			Str("collection_name", tableName).
 			Msg("Failed to embed query.")
-		return []SearchResult{}, nil
+		return []SearchResult{}, fmt.Errorf("embed query returned empty result")
 	}
+	queryEmbedding := queryEmbeddings[0]
 
 	// 检查集合是否存在
 	exists, err := s.vectorStore.CollectionExists(ctx, tableName)
-	if err != nil || !exists {
+	if err != nil {
+		return []SearchResult{}, fmt.Errorf("check collection exists failed: %w", err)
+	}
+	if !exists {
 		return []SearchResult{}, nil
 	}
 
@@ -212,8 +218,8 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 			Str("query", query).
 			Str("collection_name", tableName).
 			Err(err).
-			Msg("Failed to embed query.")
-		return []SearchResult{}, nil
+			Msg("Failed to search vector store.")
+		return []SearchResult{}, fmt.Errorf("search vector store failed: %w", err)
 	}
 
 	// 转换结果格式
@@ -232,8 +238,6 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 // 对齐 Python: SemanticStore.delete_table
 func (s *SemanticStore) DeleteTable(ctx context.Context, tableName string) error {
 	err := s.vectorStore.DeleteCollection(ctx, tableName)
-	// 从缓存中移除
-	delete(s.createdCollections, tableName)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_DELETE").
@@ -242,6 +246,8 @@ func (s *SemanticStore) DeleteTable(ctx context.Context, tableName string) error
 			Msg("Failed to delete table from semantic store.")
 		return err
 	}
+	// 删除成功后才移除缓存（对齐 Python: if table_name in self._created_collections: remove）
+	delete(s.createdCollections, tableName)
 	return nil
 }
 

@@ -720,55 +720,36 @@ func skillMDPath(skill *skillpkg.Skill) string {
 	return filepath.Join(skill.Directory, "SKILL.md")
 }
 
-// normalizeNameList 规范化名称列表（支持逗号/分号）。
-// 对齐 Python: SkillUseRail._normalize_name_list()
-func normalizeNameList(raw any) []string {
-	if raw == nil {
+// normalizeNameList 规范化名称列表（支持逗号/分号分隔）。
+// 对齐 Python: SkillUseRail._normalize_name_list()，但仅接受 []string
+// （字符串输入场景由 parseSkillDirs 单独处理）。
+func normalizeNameList(names []string) []string {
+	if len(names) == 0 {
 		return nil
 	}
-
-	switch v := raw.(type) {
-	case string:
-		text := strings.TrimSpace(v)
+	var result []string
+	for _, item := range names {
+		text := strings.TrimSpace(item)
 		if text == "" {
-			return nil
+			continue
 		}
 		normalized := strings.ReplaceAll(text, ";", ",")
-		var result []string
-		for _, item := range strings.Split(normalized, ",") {
-			item = strings.TrimSpace(item)
-			if item != "" {
-				result = append(result, item)
+		for _, part := range strings.Split(normalized, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				result = append(result, part)
 			}
 		}
-		return result
-	case []string:
-		var result []string
-		for _, item := range v {
-			text := strings.TrimSpace(item)
-			if text == "" {
-				continue
-			}
-			normalized := strings.ReplaceAll(text, ";", ",")
-			for _, part := range strings.Split(normalized, ",") {
-				part = strings.TrimSpace(part)
-				if part != "" {
-					result = append(result, part)
-				}
-			}
-		}
-		return result
-	default:
-		return nil
 	}
+	return result
 }
 
 // normalizeNameSet 规范化名称集合。
 // 对齐 Python: SkillUseRail._normalize_name_set()
-func normalizeNameSet(raw any) map[string]struct{} {
-	names := normalizeNameList(raw)
-	result := make(map[string]struct{})
-	for _, name := range names {
+func normalizeNameSet(names []string) map[string]struct{} {
+	normalized := normalizeNameList(names)
+	result := make(map[string]struct{}, len(normalized))
+	for _, name := range normalized {
 		result[name] = struct{}{}
 	}
 	return result

@@ -349,9 +349,12 @@ func (s *SqlMessageStore) GetSchemaVersion(ctx context.Context) (int32, error) {
 }
 
 // SetSchemaVersion 设置 schema 版本号。
+// 先删除旧版本记录再插入新版本（upsert 语义），避免 UNIQUE 约束冲突。
 //
 // 对应 Python: SqlMessageStore.set_schema_version(version)
 func (s *SqlMessageStore) SetSchemaVersion(ctx context.Context, version int32) error {
+	// 先删除旧版本记录，再插入新版本（对齐 Python 的 upsert 行为）
+	_ = s.metaMgr.DeleteByTableName(ctx, s.tableName)
 	return s.metaMgr.Add(ctx, s.tableName, fmt.Sprintf("%d", version))
 }
 

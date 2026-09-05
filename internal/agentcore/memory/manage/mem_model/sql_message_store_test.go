@@ -327,13 +327,13 @@ func TestSqlMessageStore_CountMessages(t *testing.T) {
 func TestSqlMessageStore_SchemaVersion(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
-	// 初始版本应为 -1（未设置，对齐 Python 返回 None 的语义）
+	// 初始版本应为 0（对齐 Python create_tables 为新表写入 schema_version="0"）
 	version, err := store.GetSchemaVersion(context.Background())
 	if err != nil {
 		t.Fatalf("GetSchemaVersion 失败: %v", err)
 	}
-	if version != -1 {
-		t.Errorf("初始版本 = %d, want -1（未设置）", version)
+	if version != 0 {
+		t.Errorf("初始版本 = %d, want 0（对齐 Python create_tables 初始化）", version)
 	}
 
 	// 设置版本
