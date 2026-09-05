@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/skills"
 	codetool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/code"
 	filesystemtool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
@@ -23,7 +24,6 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 )
@@ -184,11 +184,14 @@ func WithEnableImageMultimodal(enabled bool) SkillUseRailOption {
 	return func(r *SkillUseRail) { r.enableImageMultimodal = &enabled }
 }
 
-// SkillsMeta 返回当前技能列表副本。
+// SkillsMeta 返回当前技能列表深拷贝。
 // 对齐 Python: SkillUseRail.skills_meta property
 func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 	result := make([]*skillpkg.Skill, len(r.skills))
-	copy(result, r.skills)
+	for i, s := range r.skills {
+		cp := *s // 值拷贝 Skill 结构体
+		result[i] = &cp
+	}
 	return result
 }
 
@@ -255,7 +258,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		tools = append(tools,
 			filesystemtool.NewReadFileTool(op, language, agentID, enableImageMultimodal),
 			codetool.NewCodeTool(op, language, agentID),
-			shelltool.NewBashTool(op, language, agentID, shelltool.NewPermissionConfig("auto", nil, nil)),
+			shelltool.NewBashTool(op, language, agentID, shelltool.NewPermissionConfig(shelltool.PermissionModeAuto, nil, nil)),
 		)
 	}
 

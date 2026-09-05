@@ -13,6 +13,10 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -69,7 +73,7 @@ func newMockAbilityManager() *mockAbilityManager {
 }
 
 func (m *mockAbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResult {
-	name := ability.Name()
+	name := ability.AbilityName()
 	m.abilities[name] = ability
 	return agentschema.AddAbilityResult{Added: true}
 }
@@ -91,10 +95,10 @@ func (m *mockAbilityManager) List() []schema.Ability {
 func (m *mockAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]schema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (m *mockAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*schema.ToolCall, _ interface{}, _ string) []agentschema.ExecuteResult {
+func (m *mockAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
 	return nil
 }
-func (m *mockAbilityManager) SetContextEngine(_ interface{}) {}
+func (m *mockAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}
 func (m *mockAbilityManager) ReorderTools(_ []string)         {}
 func (m *mockAbilityManager) AddMany(abilities []schema.Ability) []agentschema.AddAbilityResult {
 	var results []agentschema.AddAbilityResult
@@ -120,7 +124,7 @@ type mockBaseAgent struct {
 
 func newMockBaseAgent(spb saprompt.SystemPromptBuilderInterface, am agentinterfaces.AbilityManagerInterface) *mockBaseAgent {
 	return &mockBaseAgent{
-		card: &agentschema.AgentCard{ID: "test-agent"},
+		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
 		am:   am,
 		spb:  spb,
 	}
@@ -137,10 +141,10 @@ func (m *mockBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...agentin
 }
 func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig                    { return nil }
 func (m *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager { return nil }
-func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ interface{}, _ ...interface{}) error {
+func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...interface{}) error {
+func (m *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...cb.CallbackOption) error {
 	return nil
 }
 func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
@@ -582,7 +586,7 @@ func TestPrepareSkills(t *testing.T) {
 	}
 }
 
-// TestPrepareSkills_禁用缓存 测试 enableCache=false 时清空缓存
+// TestPrepareSkills_禁用缓存 测试 enableCache=false 时每次都重新加载（缓存仍会被填充）
 func TestPrepareSkills_禁用缓存(t *testing.T) {
 	dir := createTempSkillDir(t, map[string]string{
 		"alpha": "技能 A",
@@ -592,11 +596,26 @@ func TestPrepareSkills_禁用缓存(t *testing.T) {
 	if err := r.prepareSkills(); err != nil {
 		t.Fatalf("第一次 prepareSkills 错误: %v", err)
 	}
-	if len(r.skillCache) != 0 {
-		t.Errorf("enableCache=false 时 skillCache 应为空，实际 len=%d", len(r.skillCache))
-	}
+	// enableCache=false 时，prepareSkills 先清空缓存再重新加载，
+	// 加载完成后 skillCache 仍会被 refreshSkillsIncrementally 填充
 	if len(r.skills) != 1 {
 		t.Errorf("skills len = %d, want 1", len(r.skills))
+	}
+
+	// 验证每次调用都重新加载：先手动修改缓存内容，再次调用后应被覆盖
+	r.skillCache[filepath.Join(dir, "alpha")].Description = "旧描述"
+	if err := r.prepareSkills(); err != nil {
+		t.Fatalf("第二次 prepareSkills 错误: %v", err)
+	}
+	key := ""
+	for k := range r.skillCache {
+		if strings.Contains(k, "alpha") {
+			key = k
+			break
+		}
+	}
+	if key != "" && r.skillCache[key].Description != "技能 A" {
+		t.Errorf("enableCache=false 时应每次重新加载，description = %q, want '技能 A'", r.skillCache[key].Description)
 	}
 }
 
