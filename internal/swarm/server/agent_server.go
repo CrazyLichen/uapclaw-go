@@ -215,6 +215,12 @@ func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
 			Str("channel_id", channelID).
 			Str("response_kind", responseKind).
 			Msg("SendPush response_kind wire 已发送")
+	} else {
+		// 对齐 Python: logger.info("send_push 已发送(E2A wire): channel_id=%s", ...)
+		channelID, _ := msg["channel_id"].(string)
+		logger.Info(logComponent).
+			Str("channel_id", channelID).
+			Msg("SendPush 已发送(E2A wire)")
 	}
 	return nil
 }
