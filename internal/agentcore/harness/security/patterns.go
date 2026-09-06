@@ -13,6 +13,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -198,30 +199,62 @@ func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions
 		return false
 	}
 
-	var data map[string]any
-	raw, err := os.ReadFile(cfgPath)
-	if err == nil && len(raw) > 0 {
-		if err := yaml.Unmarshal(raw, &data); err != nil {
-			data = make(map[string]any)
-		}
-	} else {
+	data := ReadAgentConfigYAML(cfgPath)
+	if data == nil {
 		data = make(map[string]any)
 	}
 
 	data["permissions"] = utils.DeepCopyMap(permissions)
 
+	return WriteAgentConfigYAML(cfgPath, data) == nil
+}
+
+// ReadAgentConfigYAML 读取 agent YAML 配置文件，返回顶层 map。
+// 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
+//
+// 对齐 Python: load_yaml_round_trip(CONFIG_YAML_PATH)
+func ReadAgentConfigYAML(filePath string) map[string]any {
+	cfgPath := filePath
+	if cfgPath == "" {
+		cfgPath = resolveDefaultConfigPath()
+	}
+	if cfgPath == "" {
+		return map[string]any{}
+	}
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil || len(raw) == 0 {
+		return map[string]any{}
+	}
+	var data map[string]any
+	if err := yaml.Unmarshal(raw, &data); err != nil {
+		return map[string]any{}
+	}
+	if data == nil {
+		return map[string]any{}
+	}
+	return data
+}
+
+// WriteAgentConfigYAML 将顶层 map 写回 agent YAML 配置文件。
+// 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
+//
+// 对齐 Python: dump_yaml_round_trip(CONFIG_YAML_PATH, data)
+func WriteAgentConfigYAML(filePath string, data map[string]any) error {
+	cfgPath := filePath
+	if cfgPath == "" {
+		cfgPath = resolveDefaultConfigPath()
+	}
+	if cfgPath == "" {
+		return fmt.Errorf("no config yaml path")
+	}
 	out, err := yaml.Marshal(data)
 	if err != nil {
-		logger.Error(patternsLogComponent).Err(err).Str("path", cfgPath).Msg("permission.write_yaml.failed: marshal error")
-		return false
+		return fmt.Errorf("yaml marshal error: %w", err)
 	}
 	if err := os.WriteFile(cfgPath, out, 0644); err != nil {
-		logger.Error(patternsLogComponent).Err(err).Str("path", cfgPath).Msg("permission.write_yaml.failed: write error")
-		return false
+		return fmt.Errorf("yaml write error: %w", err)
 	}
-
-	logger.Info(patternsLogComponent).Str("path", cfgPath).Msg("permission.write_yaml.ok")
-	return true
+	return nil
 }
 
 // MergeExternalDirectoryAllowIntoPermissions 在 permissions 副本上合并外部目录白名单。
@@ -564,6 +597,12 @@ func (pm *CommandMatcher) MatchCommandAny(patterns []string, command string) boo
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// resolveDefaultConfigPath 返回默认的 agent 配置文件路径。
+// 对齐 Python: CONFIG_YAML_PATH = get_config_file()
+func resolveDefaultConfigPath() string {
+	return workspace.ConfigFile()
+}
+
 // escapeRegexChars 转义正则特殊字符（保留 skip 中的字符）
 func escapeRegexChars(s, toEscape string) string {
 	var b strings.Builder
@@ -602,7 +641,7 @@ func parseURL(urlStr string) (scheme, host, path string) {
 // 对齐 Python: _resolve_agent_config_yaml_path(explicit) (patterns.py L38-55)
 func resolveAgentConfigYAMLPath(explicit string) string {
 	if explicit == "" {
-		return ""
+		return resolveDefaultConfigPath()
 	}
 	p := explicit
 	info, err := os.Stat(p)

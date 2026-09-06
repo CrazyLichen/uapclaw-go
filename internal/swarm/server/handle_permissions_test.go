@@ -57,13 +57,14 @@ func TestHandlePermissionsConfig_ApprovalOverridesGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handlePermissionsConfig 返回错误: %v", err)
 	}
-	if _, ok := resp.Payload["overrides"]; !ok {
-		t.Error("payload 应包含 overrides")
+	// 真实实现返回的键为 "approval_overrides"（对齐 Python: get_permissions_approval_overrides）
+	if _, ok := resp.Payload["approval_overrides"]; !ok {
+		t.Error("payload 应包含 approval_overrides")
 	}
 }
 
-// TestHandlePermissionsConfig_ToolsSet 验证 permissions.tools.set 返回 ok=true。
-func TestHandlePermissionsConfig_ToolsSet(t *testing.T) {
+// TestHandlePermissionsConfig_ToolsSet_缺少tools 验证 permissions.tools.set 缺少 tools 参数时返回错误。
+func TestHandlePermissionsConfig_ToolsSet_缺少tools(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodPermissionsToolsSet, json.RawMessage(`{}`))
 
@@ -71,7 +72,8 @@ func TestHandlePermissionsConfig_ToolsSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handlePermissionsConfig 返回错误: %v", err)
 	}
-	if ok := resp.Payload["ok"]; ok != true {
-		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
+	// 缺少 tools 参数时，真实实现返回 ok=false + error
+	if resp.OK {
+		t.Error("缺少 tools 参数时应返回 ok=false")
 	}
 }

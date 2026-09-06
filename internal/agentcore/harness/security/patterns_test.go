@@ -308,7 +308,9 @@ func TestDeepCopyMap_嵌套slice中的map(t *testing.T) {
 // ──────────────────────────── resolveAgentConfigYAMLPath ────────────────────────────
 
 func TestResolveAgentConfigYAMLPath_空路径(t *testing.T) {
-	assert.Equal(t, "", resolveAgentConfigYAMLPath(""))
+	// 空路径时回退到默认配置路径（对齐 Python: CONFIG_YAML_PATH = get_config_file()）
+	result := resolveAgentConfigYAMLPath("")
+	assert.NotEqual(t, "", result, "空路径应回退到默认配置路径")
 }
 
 func TestResolveAgentConfigYAMLPath_文件存在(t *testing.T) {

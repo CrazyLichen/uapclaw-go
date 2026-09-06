@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -20,70 +21,16 @@ import (
 
 // handlePermissionsConfig 处理 permissions.* 请求。统一入口，按 req_method 二次分发。
 //
-// 对齐 Python AgentWebSocketServer 中 permissions 相关处理函数。当前全部为 stub。
+// 对齐 Python: dispatch_permissions_config_request(request) (permissions_config_rpc.py L57-156)
 func (s *AgentServer) handlePermissionsConfig(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	switch request.ReqMethod {
-	case schema.ReqMethodPermissionsToolsGet:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"tools": []any{},
-			}),
-		), nil
-	case schema.ReqMethodPermissionsToolsSet:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsToolsUpdate:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsToolsDelete:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsRulesGet:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"rules": []any{},
-			}),
-		), nil
-	case schema.ReqMethodPermissionsRulesCreate:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsRulesUpdate:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsRulesDelete:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	case schema.ReqMethodPermissionsApprovalOverridesGet:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"overrides": []any{},
-			}),
-		), nil
-	case schema.ReqMethodPermissionsApprovalOverridesDelete:
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok": true,
-			}),
-		), nil
-	default:
-		return notImplementedResponse(request)
+	params := permrpc.ParseParams(request.Params)
+	ok, payload := permrpc.DispatchPermissionsConfigRequest(string(request.ReqMethod), params)
+
+	respOpts := []schema.AgentResponseOption{schema.WithPayload(payload)}
+	if ok {
+		respOpts = append(respOpts, schema.WithResponseOK(true))
+	} else {
+		respOpts = append(respOpts, schema.WithResponseOK(false))
 	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID, respOpts...), nil
 }
