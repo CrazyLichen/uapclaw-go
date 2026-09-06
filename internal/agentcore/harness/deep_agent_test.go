@@ -3562,3 +3562,15 @@ func TestDeepAgent_SetSessionToolkit_设置后读取(t *testing.T) {
 	toolkit.UpsertRunning("task-1", "sub-sess-1", "测试")
 	assert.True(t, agent.hasPendingSessionSpawn())
 }
+
+// TestDeepAgent_SpecName 测试 SpecName 返回 card 名称
+func TestDeepAgent_SpecName(t *testing.T) {
+	// card 为 nil
+	agent := &DeepAgent{}
+	assert.Equal(t, "", agent.SpecName())
+
+	// card 有值（Name 通过 BaseCard 嵌入）
+	agent.card = &agentschema.AgentCard{}
+	agent.card.Name = "test-agent"
+	assert.Equal(t, "test-agent", agent.SpecName())
+}

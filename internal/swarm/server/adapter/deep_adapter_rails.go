@@ -607,7 +607,7 @@ func (d *DeepAdapter) permissionSceneHook(input harnesssecurity.PermissionSceneH
 
 	permAll := d.getPermissionsSnapshot()
 	ownerScopes, _ := permAll["owner_scopes"].(map[string]any)
-	if ownerScopes == nil || len(ownerScopes) == 0 {
+	if len(ownerScopes) == 0 {
 		return nil, nil
 	}
 

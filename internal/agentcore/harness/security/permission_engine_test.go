@@ -157,3 +157,10 @@ func TestPermissionEngine_SetSceneHook(t *testing.T) {
 	})
 	assert.NotNil(t, engine.sceneHook)
 }
+
+// TestPermissionEngine_Config 测试 Config 返回当前配置
+func TestPermissionEngine_Config(t *testing.T) {
+	cfg := map[string]any{"enabled": true}
+	engine := NewPermissionEngine(cfg, nil, "", "/workspace")
+	assert.Equal(t, cfg, engine.Config())
+}

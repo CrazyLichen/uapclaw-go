@@ -206,7 +206,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 		Msg("[check_avatar_permission] 开始检查")
 
 	// 对齐 Python: if not isinstance(owner_scopes, dict) or not owner_scopes: return "allow"
-	if ownerScopes == nil || len(ownerScopes) == 0 {
+	if len(ownerScopes) == 0 {
 		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Msg("[check_avatar_permission] owner_scopes 为空，返回 allow")
