@@ -150,6 +150,11 @@ func (b *TrajectoryBuilder) RecordStep(step *TrajectoryStep) {
 	}
 }
 
+// SessionID 返回会话标识。
+func (b *TrajectoryBuilder) SessionID() string {
+	return b.sessionID
+}
+
 // Build 组装最终 Trajectory。
 //
 // 对齐 Python: TrajectoryBuilder.build()

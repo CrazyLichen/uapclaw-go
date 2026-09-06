@@ -3,6 +3,7 @@ package trajectory
 import (
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -36,7 +37,7 @@ type TrajectoryExtractor interface {
 type TracerTrajectoryExtractor struct {
 	// resourceManager 用于查询 Tool 元数据（可选）
 	// 对应 Python: self._resource_manager
-	resourceManager any
+	resourceManager *resources_manager.ResourceMgr
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -53,7 +54,7 @@ const logComponent = logger.ComponentAgentCore
 // NewTracerTrajectoryExtractor 创建基于 Tracer 的轨迹提取器。
 //
 // 对应 Python: TrajectoryExtractor(resource_manager=resource_manager)
-func NewTracerTrajectoryExtractor(resourceManager ...any) *TracerTrajectoryExtractor {
+func NewTracerTrajectoryExtractor(resourceManager ...*resources_manager.ResourceMgr) *TracerTrajectoryExtractor {
 	e := &TracerTrajectoryExtractor{}
 	if len(resourceManager) > 0 {
 		e.resourceManager = resourceManager[0]
@@ -265,11 +266,12 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan)
 	// 对齐 Python: if self._resource_manager is not None and tool_name
 	//     对应 Python: tool_info = self._resource_manager.get_tool_infos(tool_name)
 	if e.resourceManager != nil && toolName != "" {
-		// Go 中 resourceManager 类型待定，当前为 any
-		// 后续通过 ResourceManager 接口调用
-		// TODO: 待实现 resourceManager.get_tool_infos(tool_name)
-		_ = toolDescription
-		_ = toolSchema
+		toolInfos, err := e.resourceManager.GetToolInfos([]string{toolName}, nil)
+		if err == nil && len(toolInfos) > 0 {
+			info := toolInfos[0]
+			toolDescription = info.GetDescription()
+			toolSchema = info.GetParameters()
+		}
 	}
 
 	return &ToolCallDetail{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
@@ -21,7 +22,7 @@ func TestNewTracerTrajectoryExtractor(t *testing.T) {
 
 // TestNewTracerTrajectoryExtractor_带资源管理器 创建带资源管理器的提取器
 func TestNewTracerTrajectoryExtractor_带资源管理器(t *testing.T) {
-	rm := "mock_resource_manager"
+	rm := &resources_manager.ResourceMgr{}
 	e := NewTracerTrajectoryExtractor(rm)
 	assert.Equal(t, rm, e.resourceManager)
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -222,6 +223,43 @@ func ensureNonNilMap(m map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return m
+}
+
+// baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。
+//
+// BaseMessage 接口没有 ToMap/ToDict 方法，需要从接口字段手动构建。
+// 对齐 Python: BaseMessage.model_dump() 或 OpenAI dict 格式。
+func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
+	if msg == nil {
+		return map[string]any{}
+	}
+	result := map[string]any{
+		"role":    msg.GetRole().String(),
+		"content": msg.GetContent(),
+	}
+	if name := msg.GetName(); name != "" {
+		result["name"] = name
+	}
+	if meta := msg.GetMetadata(); len(meta) > 0 {
+		result["metadata"] = meta
+	}
+	return result
+}
+
+// toolInfoToMap 将 ToolInfoInterface 转换为 map[string]any 表示。
+//
+// ToolInfoInterface 接口没有 ToMap 方法，需要从接口字段手动构建。
+// 对齐 Python: ToolInfo.model_dump() 或 OpenAI tool dict 格式。
+func toolInfoToMap(tool cschema.ToolInfoInterface) map[string]any {
+	if tool == nil {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"type":        tool.GetType(),
+		"name":        tool.GetName(),
+		"description": tool.GetDescription(),
+		"parameters":  tool.GetParameters(),
+	}
 }
 
 // fmtErrorf 格式化错误（避免导入 fmt 仅用于 Errorf）。
