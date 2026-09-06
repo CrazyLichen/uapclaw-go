@@ -371,13 +371,19 @@ func (m *TeamWorkspaceManager) GetHistory(ctx context.Context, relativePath stri
 		_, _ = m.Pull(ctx)
 	}
 
-	r := runGit(ctx, []string{
+	// limit <= 0 使用默认值 10（对齐 Python: limit: int = 10）
+	if limit <= 0 {
+		limit = 10
+	}
+
+	args := []string{
 		"log",
 		fmt.Sprintf("--max-count=%d", limit),
 		"--format=%H|%an|%ai|%s",
 		"--",
 		relativePath,
-	}, m.workspacePath)
+	}
+	r := runGit(ctx, args, m.workspacePath)
 	if !r.OK || r.Stdout == "" {
 		return nil, nil
 	}
