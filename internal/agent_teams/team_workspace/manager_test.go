@@ -1138,7 +1138,8 @@ func TestResolveWorkspaceRelative(t *testing.T) {
 		want     string
 	}{
 		{".team/alpha/src/main.go", "alpha", "src/main.go"},
-		{".team/alpha", "alpha", ""},
+		{".team/alpha", "alpha", "alpha"},
+		{".team/src/main.go", "alpha", "src/main.go"},
 	}
 	for _, tc := range cases {
 		got := resolveWorkspaceRelative(tc.input, tc.teamName)

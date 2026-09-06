@@ -10,7 +10,8 @@
 //	team_workspace/
 //	├── doc.go           # 包文档
 //	├── manager.go       # TeamWorkspaceManager 核心管理器
-//	└── models.go        # 核心数据结构与枚举定义
+//	├── models.go        # 核心数据结构与枚举定义
+//	└── rail.go          # TeamWorkspaceRail 透明拦截工具调用施加锁检查和版本控制
 //
 // 对应 Python 代码：openjiuwen/agent_teams/team_workspace/
 package team_workspace

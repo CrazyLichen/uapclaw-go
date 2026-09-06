@@ -724,17 +724,19 @@ func (m *TeamWorkspaceManager) isMountedToWorkspace(linkPath string) bool {
 func (m *TeamWorkspaceManager) maybePull() {} // LOCAL 模式下无需操作
 
 // resolveWorkspaceRelative 从 .team/ 前缀路径提取工作空间相对路径。
-// 对齐 Python: resolve_workspace_relative
+// 对齐 Python: TeamWorkspaceRail._resolve_workspace_relative
+//
+// 处理两种布局：
+//   - Hub:   .team/{team_name}/artifacts/report.md → artifacts/report.md
+//   - Legacy: .team/artifacts/report.md             → artifacts/report.md
 func resolveWorkspaceRelative(path, teamName string) string {
-	prefix := filepath.Join(".team", teamName)
-	rel, err := filepath.Rel(prefix, path)
-	if err != nil {
-		return path
+	const prefix = ".team/"
+	afterPrefix := path[len(prefix):]
+	teamNamePrefix := teamName + "/"
+	if strings.HasPrefix(afterPrefix, teamNamePrefix) {
+		return afterPrefix[len(teamNamePrefix):]
 	}
-	if rel == "." {
-		return ""
-	}
-	return rel
+	return afterPrefix
 }
 
 // copyFile 复制单个文件，保留权限。
