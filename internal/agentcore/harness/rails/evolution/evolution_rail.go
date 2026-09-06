@@ -189,9 +189,9 @@ func (r *EvolutionRail) DrainPendingHostEvents(wait bool, timeout *time.Duration
 				// 任务已完成
 			default:
 				if timeout != nil {
-					task.Wait() // 简化：不实现精确超时，后续补充
+					_ = task.Wait() // 简化：不实现精确超时，后续补充
 				} else {
-					task.Wait()
+					_ = task.Wait()
 				}
 			}
 			delete(r.bgTasks, task)
@@ -214,7 +214,7 @@ func (r *EvolutionRail) CleanupBackgroundTasks() error {
 		case <-task.Done():
 			// 任务已完成
 		default:
-			task.Stop(5 * time.Second)
+			_ = task.Stop(5 * time.Second)
 		}
 		delete(r.bgTasks, task)
 	}

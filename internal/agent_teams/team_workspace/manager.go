@@ -295,7 +295,7 @@ func (m *TeamWorkspaceManager) MountIntoWorktree(worktreePath string) error {
 		if err != nil {
 			return fmt.Errorf("打开 .gitignore 失败: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		if existing != "" && !strings.HasSuffix(existing, "\n") {
 			if _, err := f.WriteString("\n"); err != nil {
@@ -661,11 +661,11 @@ func (m *TeamWorkspaceManager) prepareMountPath(linkPath string) bool {
 // 已有的工作空间文件优先，不覆盖。
 func (m *TeamWorkspaceManager) mergeExistingMountContents(linkPath string, info os.FileInfo) {
 	// 仅处理真实目录，跳过符号链接
-	if info == nil || info.IsDir() == false || info.Mode()&os.ModeSymlink != 0 {
+	if info == nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return
 	}
 
-	filepath.WalkDir(linkPath, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(linkPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -687,7 +687,7 @@ func (m *TeamWorkspaceManager) mergeExistingMountContents(linkPath string, info 
 
 		// 仅复制工作空间中不存在的文件
 		if _, statErr := os.Stat(dstRoot); os.IsNotExist(statErr) {
-			copyFile(path, dstRoot)
+			_ = copyFile(path, dstRoot)
 		}
 		return nil
 	})
@@ -750,13 +750,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	d, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	if _, err := io.Copy(d, s); err != nil {
 		return err

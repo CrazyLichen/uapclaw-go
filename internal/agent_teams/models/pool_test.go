@@ -510,3 +510,72 @@ func TestModelRouterConfig_ToPoolEntries_无Metadata(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestToFloat64 测试 any→float64 类型转换
+func TestToFloat64(t *testing.T) {
+	tests := []struct {
+		input    any
+		expected float64
+		ok       bool
+	}{
+		{float64(3.14), 3.14, true},
+		{float32(2.5), 2.5, true},
+		{int(42), 42.0, true},
+		{int64(100), 100.0, true},
+		{int32(7), 7.0, true},
+		{"not a number", 0, false},
+	}
+	for _, tt := range tests {
+		got, ok := toFloat64(tt.input)
+		if ok != tt.ok {
+			t.Errorf("toFloat64(%v) ok = %v, want %v", tt.input, ok, tt.ok)
+		}
+		if ok && got != tt.expected {
+			t.Errorf("toFloat64(%v) = %v, want %v", tt.input, got, tt.expected)
+		}
+	}
+}
+
+// TestToInt 测试 any→int 类型转换
+func TestToInt(t *testing.T) {
+	tests := []struct {
+		input    any
+		expected int
+		ok       bool
+	}{
+		{int(42), 42, true},
+		{int64(100), 100, true},
+		{int32(7), 7, true},
+		{float64(3.0), 3, true},
+		{float32(2.0), 2, true},
+		{"not a number", 0, false},
+	}
+	for _, tt := range tests {
+		got, ok := toInt(tt.input)
+		if ok != tt.ok {
+			t.Errorf("toInt(%v) ok = %v, want %v", tt.input, ok, tt.ok)
+		}
+		if ok && got != tt.expected {
+			t.Errorf("toInt(%v) = %v, want %v", tt.input, got, tt.expected)
+		}
+	}
+}
+
+// TestEntrySignature 测试 entrySignature 分支
+func TestEntrySignature(t *testing.T) {
+	// 无 Metadata
+	e1 := ModelPoolEntry{ModelName: "gpt-4", APIKey: "key", APIBaseURL: "base", APIProvider: "p"}
+	sig1 := entrySignature(e1)
+	if sig1 == "" {
+		t.Error("entrySignature 不应为空")
+	}
+	// 有 Metadata
+	e2 := ModelPoolEntry{
+		ModelName: "gpt-4", APIKey: "key", APIBaseURL: "base", APIProvider: "p",
+		Metadata: map[string]any{"temperature": 0.7},
+	}
+	sig2 := entrySignature(e2)
+	if sig2 == "" {
+		t.Error("有 Metadata 时 entrySignature 不应为空")
+	}
+}

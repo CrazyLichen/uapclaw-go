@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +96,20 @@ func TestTeamRole_值(t *testing.T) {
 	}
 	if string(TeamRoleHumanAgent) != "human_agent" {
 		t.Errorf("不匹配")
+	}
+}
+
+// TestUnknownHumanAgentError_Error 测试 Error 方法
+func TestUnknownHumanAgentError_Error(t *testing.T) {
+	err := &UnknownHumanAgentError{
+		Sender:     "unknown_user",
+		Registered: []string{"charlie", "alice", "bob"},
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "unknown_user") {
+		t.Errorf("Error() 消息应包含 sender，实际: %q", msg)
+	}
+	if !strings.Contains(msg, "alice") {
+		t.Errorf("Error() 消息应包含注册成员，实际: %q", msg)
 	}
 }

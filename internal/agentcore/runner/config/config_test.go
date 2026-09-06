@@ -111,3 +111,25 @@ func TestRunnerConfig_CheckpointerConfig(t *testing.T) {
 	assert.NotNil(t, cfg.CheckpointerConfig)
 	assert.Equal(t, "in_memory", cfg.CheckpointerConfig.Type)
 }
+
+// TestNewMessageQueueConfig 测试 NewMessageQueueConfig 默认值
+func TestNewMessageQueueConfig(t *testing.T) {
+	cfg := NewMessageQueueConfig()
+	assert.Equal(t, MessageQueueTypePulsar, cfg.Type)
+}
+
+// TestNewDistributedConfig 测试 NewDistributedConfig 默认值
+func TestNewDistributedConfig(t *testing.T) {
+	cfg := NewDistributedConfig()
+	assert.Equal(t, 30.0, cfg.RequestTimeout)
+	assert.Equal(t, 10000, cfg.MaxRequestConcurrency)
+	assert.Equal(t, MessageQueueTypePulsar, cfg.MessageQueueConfig.Type)
+}
+
+// TestNewRunnerConfig 测试 NewRunnerConfig 默认值
+func TestNewRunnerConfig(t *testing.T) {
+	cfg := NewRunnerConfig()
+	assert.True(t, cfg.DistributedMode)
+	assert.NotEmpty(t, cfg.InstanceID)
+	assert.NotNil(t, cfg.DistributedConfig)
+}

@@ -140,3 +140,20 @@ func TestGetReason(t *testing.T) {
 	assert.Contains(t, getReason(PermissionLevelDeny, "bash", "test_rule"), "拒绝")
 	assert.Contains(t, getReason(PermissionLevelAsk, "bash", "test_rule"), "需审批")
 }
+
+// TestPermissionEngine_UpdateLLM 测试 UpdateLLM 热更新模型
+func TestPermissionEngine_UpdateLLM(t *testing.T) {
+	engine := NewPermissionEngine(nil, nil, "", "/workspace")
+	engine.UpdateLLM(nil, "test-model")
+	assert.Equal(t, "test-model", engine.modelName)
+	assert.Nil(t, engine.llm)
+}
+
+// TestPermissionEngine_SetSceneHook 测试 SetSceneHook
+func TestPermissionEngine_SetSceneHook(t *testing.T) {
+	engine := NewPermissionEngine(nil, nil, "", "/workspace")
+	engine.SetSceneHook(func(input PermissionSceneHookInput) ([]string, error) {
+		return nil, nil
+	})
+	assert.NotNil(t, engine.sceneHook)
+}
