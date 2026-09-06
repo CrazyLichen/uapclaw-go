@@ -240,6 +240,10 @@ type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventDat
 // PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
 // agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext，回调内需类型断言。
 //
+// TODO: 收紧为 *AgentCallbackContext 具体类型。当前因循环依赖
+// (callback → agentinterfaces → callback) 无法直接引用。
+// 可能的解决方案：(A) 定义回调上下文接口于底层包 (B) 抽取共享类型包
+//
 // 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
 type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
 
