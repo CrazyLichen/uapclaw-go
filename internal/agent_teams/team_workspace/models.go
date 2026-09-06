@@ -36,6 +36,19 @@ type WorkspaceFileLock struct {
 	TimeoutSeconds int `json:"timeout_seconds"`
 }
 
+// HistoryEntry 版本历史条目。
+// 对齐 Python: get_history() 返回的 dict
+type HistoryEntry struct {
+	// Commit 提交哈希
+	Commit string `json:"commit"`
+	// Author 作者
+	Author string `json:"author"`
+	// Date 日期
+	Date string `json:"date"`
+	// Message 提交消息
+	Message string `json:"message"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // WorkspaceMode 工作空间操作模式。
