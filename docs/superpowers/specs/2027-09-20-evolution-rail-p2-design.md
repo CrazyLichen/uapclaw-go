@@ -371,7 +371,7 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *inter
             func(ctx context.Context) error {
                 return r.safeRunEvolution(ctx, snapshot)
             },
-            "evolution-"+snapshotKey(snapshot), "evolution",
+            "evolution-"+formatSkillName(snapshot), "evolution",
         )
         if err != nil {
             logger.Warn(logger.ComponentAgentCore).Err(err).Msg("创建演化后台任务失败")
@@ -380,8 +380,11 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *inter
         r.bgTasks[bgTask] = true
         // 清理已完成任务
         for t := range r.bgTasks {
-            if t.Done() {
+            select {
+            case <-t.Done():
                 delete(r.bgTasks, t)
+            default:
+                // 任务仍在运行
             }
         }
     } else {
@@ -433,13 +436,18 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 |---|---|
 | `resolveSessionID(cbc, inputs) string` | 解析运行时 session ID |
 | `buildTrajectory() *Trajectory` | 从 builder 构建 trajectory 并 snapshot steps |
-| `saveTrajectory(traj)` | 保存到 trajectoryStore |
 | `publishTrajectorySnapshot(traj)` | 通过 Sink 发布成员轨迹快照 |
 | `triggerEvolution(traj, cbc) error` | 异步/同步演化分派 |
 | `safeRunEvolution(ctx, snapshot) error` | 后台安全执行（信号量+异常捕获） |
 | `emitBackgroundOutcomeEvent(outcome)` | 将后台执行结果写入 host event 缓冲 |
 | `collectPendingHostEvents() []*OutputSchema` | 返回并清空主机事件缓冲 |
 | `resetTrajectoryBuilder()` | 重置 builder（子类生命周期边界用） |
+| `_normalizeNameSet(raw any) map[string]bool` | 桥接 normalizeSkillNames（P3/P4 子类预留，保留 any 参数兼容动态类型） |
+| `_isSkillDisabled(skillName string) bool` | 检查技能是否被禁用 |
+| `_collectMessagesFromTrajectory(traj) []map[string]any` | 桥接 collectMessagesFromTrajectory |
+| `normalizeCallbackMessagesGo(messages) []map[string]any` | 桥接 normalizeCallbackMessages |
+| `_getAgentIDStr(cbc) string` | 从回调上下文获取 agent ID |
+| `_isBlank(s string) bool` | 检查字符串是否为空或仅含空白 |
 
 ### 3. trajectory_rail.go — TrajectoryRail
 
@@ -467,15 +475,17 @@ func (r *TrajectoryRail) Priority() int { return 10 }
 
 | 函数 | Go 签名 | 对齐 Python |
 |---|---|---|
-| `splitResponseTokenFields` | `func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]any, []int, []int, any)` | `_split_response_token_fields` |
-| `normalizeSkillNames` | `func normalizeSkillNames(raw any) map[string]bool` | `_normalize_skill_names` |
-| `normalizeMemberRole` | `func normalizeMemberRole(role any) *string` | `_normalize_member_role` |
+| `splitResponseTokenFields` | `func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]any, []int, []int, []map[string]any)` | `_split_response_token_fields` |
+| `normalizeSkillNames` | `func normalizeSkillNames(names []string) map[string]bool` | `_normalize_skill_names` |
+| `normalizeMemberRole` | `func normalizeMemberRole(role string) *string` | `_normalize_member_role` |
 | `collectMessagesFromTrajectory` | `func collectMessagesFromTrajectory(traj *trajectory.Trajectory) []map[string]any` | `_collect_messages_from_trajectory` |
+| `baseMessageToMap` | `func baseMessageToMap(msg llmschema.BaseMessage) map[string]any` | Python `model_dump()` / OpenAI dict 格式 |
+| `toolInfoToMap` | `func toolInfoToMap(tool cschema.ToolInfoInterface) map[string]any` | Python `model_dump()` / OpenAI tool dict 格式 |
 
 `collectMessagesFromTrajectory` 内部流程：
 1. 调用 `signal.ConversationSignalDetector{}.ConvertTrajectoryToMessages(traj)` 获取消息列表
-2. 调用 `normalizeCallbackMessages` 将 BaseMessage 规范化为 `map[string]any`
-3. 去重（对齐 Python deduped 逻辑）
+2. 调用 `normalizeCallbackMessages` 将 BaseMessage 规范化为 `map[string]any`（浅拷贝防止外部修改）
+3. 去重（对齐 Python deduped 逻辑，使用 `json.Marshal` 序列化后比较确保 map 顺序无关）
 
 ### 5. extractor.go — resourceManager any 消除
 
@@ -562,8 +572,8 @@ resources_manager 不导入 trajectory                          ✅
 ### helpers_test.go
 
 - `splitResponseTokenFields`：正常分离 / nil response / 无 token 字段
-- `normalizeSkillNames`：nil / string / []string / 空 / 混合
-- `normalizeMemberRole`：nil / string / 枚举 value / 空
+- `normalizeSkillNames`：[]string / 空切片 / 含空格和空项
+- `normalizeMemberRole`：string / 空字符串
 - `collectMessagesFromTrajectory`：正常轨迹 / nil / 去重验证
 
 ### extractor_test.go 更新
