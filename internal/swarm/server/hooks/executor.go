@@ -351,6 +351,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 }
 
 // runPromptHook 执行 prompt 类型 hook（LLM 审核），对齐 Python _run_prompt_hook
+// 集成测试覆盖：LLM 调用路径由 //go:build llm 标签的 executor_llm_test.go 覆盖
 func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any, hookInput map[string]any) HookResult {
 	promptTemplate, _ := config["prompt"].(string)
 	if promptTemplate == "" {
@@ -439,6 +440,7 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 
 // queryLLM 调用 LLM 执行 hook 审查，对齐 Python _query_llm
 // 内部用 LLMConfig 创建 Model 实例（对齐 Python: 动态 import config + 创建 Model）
+// 集成测试覆盖：由 //go:build llm 标签的 executor_llm_test.go 覆盖，不纳入单元测试覆盖率基线
 func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (string, error) {
 	clientConfig, cfgErr := llmschema.NewModelClientConfig(e.llmConfig.ClientProvider, e.llmConfig.APIKey, e.llmConfig.APIBase)
 	if cfgErr != nil {

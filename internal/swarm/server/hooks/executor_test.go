@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -400,5 +401,68 @@ func TestHookExecutor_RunAll_command阻塞stderrFallback(t *testing.T) {
 	}
 	if results[0].Outcome != HookOutcomeBlocking {
 		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeBlocking)
+	}
+}
+
+// TestHookExecutor_RunAll_command序列化失败 测试 hookInput 含不可序列化值时返回 NON_BLOCKING_ERROR
+// 对齐 Python: json.dumps(hook_input) 失败时不会发生（Python json.dumps 支持所有基本类型），
+// Go 中 chan/func 等类型不可序列化，需返回 NON_BLOCKING_ERROR 保护
+func TestHookExecutor_RunAll_command序列化失败(t *testing.T) {
+	exec := NewHookExecutor(LLMConfig{})
+	hookConfigs := []map[string]any{
+		{"type": "command", "command": "echo ok", "timeout": 10},
+	}
+	// chan int 不可 JSON 序列化
+	hookInput := map[string]any{"tool_name": "test_tool", "bad_field": make(chan int)}
+	results := exec.RunAll(context.Background(), hookConfigs, hookInput, "")
+	if len(results) != 1 {
+		t.Fatalf("RunAll = %d results, want 1", len(results))
+	}
+	if results[0].Outcome != HookOutcomeNonBlockingError {
+		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeNonBlockingError)
+	}
+	if !strings.Contains(results[0].Error, "serialize hook input") {
+		t.Errorf("Error = %q, want contains 'serialize hook input'", results[0].Error)
+	}
+}
+
+// TestHookExecutor_RunAll_commandFloat64Timeout 测试 timeout 为 float64 类型时正确转换
+// 对齐 Python: config.get("timeout", 30) 从 YAML 加载时 timeout 可能是 float 类型
+func TestHookExecutor_RunAll_commandFloat64Timeout(t *testing.T) {
+	exec := NewHookExecutor(LLMConfig{})
+	hookConfigs := []map[string]any{
+		{"type": "command", "command": `echo '{"decision": "allow"}'`, "timeout": float64(10.5)},
+	}
+	hookInput := map[string]any{"tool_name": "test_tool"}
+	results := exec.RunAll(context.Background(), hookConfigs, hookInput, "")
+	if len(results) != 1 {
+		t.Fatalf("RunAll = %d results, want 1", len(results))
+	}
+	if results[0].Outcome != HookOutcomeSuccess {
+		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeSuccess)
+	}
+}
+
+// TestHookExecutor_RunAll_command进程被杀 测试 context cancel 导致进程被 kill（非 timeout）
+// 对齐 Python: proc.returncode is None → NON_BLOCKING_ERROR("hook process killed")
+func TestHookExecutor_RunAll_command进程被杀(t *testing.T) {
+	exec := NewHookExecutor(LLMConfig{})
+	hookConfigs := []map[string]any{
+		{"type": "command", "command": "sleep 30", "timeout": 60},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	// 在 goroutine 中延迟 cancel，让进程先启动
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+	hookInput := map[string]any{"tool_name": "test_tool"}
+	results := exec.RunAll(ctx, hookConfigs, hookInput, "")
+	if len(results) != 1 {
+		t.Fatalf("RunAll = %d results, want 1", len(results))
+	}
+	// context cancel 后进程被 kill，应返回 NON_BLOCKING_ERROR
+	if results[0].Outcome != HookOutcomeNonBlockingError {
+		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeNonBlockingError)
 	}
 }
