@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -138,7 +139,13 @@ func MatchWildcard(value, pattern string) bool {
 	}
 
 	// 4. 全串匹配
-	re, err := regexp.Compile("^" + escaped + "$")
+	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	prefix := "^"
+	suffix := "$"
+	if runtime.GOOS == "windows" {
+		prefix = "(?i)^"
+	}
+	re, err := regexp.Compile(prefix + escaped + suffix)
 	if err != nil {
 		return false
 	}
@@ -496,15 +503,27 @@ func (pm *URLMatcher) MatchURL(pattern, url string) bool {
 	// 简易 URL 解析
 	scheme, host, path := parseURL(url)
 	if host != "" {
+		// 对齐 Python: parsed.hostname — 去除端口部分的纯域名
+		hostname := host
+		if idx := strings.LastIndex(host, ":"); idx > 0 {
+			// 排除 IPv6 地址中的冒号（如 [::1]）
+			if !strings.Contains(host[:idx], "]") {
+				hostname = host[:idx]
+			}
+		}
+		if pm.pm.Match(pattern, hostname) {
+			return true
+		}
+		// 对齐 Python: parsed.netloc — 含端口的完整 netloc
 		if pm.pm.Match(pattern, host) {
 			return true
 		}
-		netloc := host
+		// 对齐 Python: scheme://netloc 和 scheme://netloc/*
 		if scheme != "" {
-			if pm.pm.Match(pattern, scheme+"://"+netloc) {
+			if pm.pm.Match(pattern, scheme+"://"+host) {
 				return true
 			}
-			if pm.pm.Match(pattern, scheme+"://"+netloc+"/*") {
+			if pm.pm.Match(pattern, scheme+"://"+host+"/*") {
 				return true
 			}
 		}

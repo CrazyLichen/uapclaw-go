@@ -286,6 +286,11 @@ func TestHandlePluginsEnable_正常(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
+	// 预置 installed_plugins 数据
+	sm.state["installed_plugins"] = []map[string]any{
+		{"name": "test-skill", "enabled": false},
+	}
+
 	result, err := sm.HandlePluginsEnable(context.Background(), map[string]any{
 		"name": "test-skill",
 	})
@@ -729,6 +734,12 @@ func TestHandleSkillsEvolutionSave_缺名称(t *testing.T) {
 func TestHandlePluginsDisable_正常(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
+
+	// 预置 installed_plugins 数据
+	sm.state["installed_plugins"] = []map[string]any{
+		{"name": "test-plugin", "enabled": true},
+	}
+
 	result, err := sm.HandlePluginsDisable(context.Background(), map[string]any{
 		"name": "test-plugin",
 	})
@@ -2689,7 +2700,8 @@ func TestMatchHost(t *testing.T) {
 	}{
 		{"example.com", "example.com", true},
 		{"foo.example.com", "*.example.com", true},
-		{"example.com", "*.example.com", true},
+		// 对齐 Python: *.example.com 不匹配裸域名 example.com（段数不同）
+		{"example.com", "*.example.com", false},
 		{"evil.com", "example.com", false},
 		{"evil.com", "*.example.com", false},
 		{"127.0.0.1", "127.0.0.1", true},

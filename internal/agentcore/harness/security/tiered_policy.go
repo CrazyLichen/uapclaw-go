@@ -3,8 +3,10 @@ package security
 import (
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -104,10 +106,16 @@ var tieredPolicyLogComponent = logger.ComponentAgentCore
 
 // builtinRulesCache 内置规则缓存
 // 对齐 Python: _BUILTIN_RULES_CACHE (tiered_policy.py L47)
-var builtinRulesCache []map[string]any
+// 三元组: (路径字符串, mtime, 规则列表)
+var builtinRulesCache struct {
+	path   string
+	mtime  float64
+	rules  []map[string]any
+	loaded bool
+}
 
-// builtinRulesCacheLoaded 是否已加载内置规则
-var builtinRulesCacheLoaded bool
+// builtinRulesCacheMu 保护 builtinRulesCache 的并发访问
+var builtinRulesCacheMu sync.Mutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -276,9 +284,42 @@ func RuleToolsCategoryConsistent(tools []string) bool {
 // GetBuiltinSecurityRules 获取内置安全规则列表（进程内缓存）。
 //
 // 对齐 Python: get_builtin_security_rules() (tiered_policy.py L88-110)
+// GetBuiltinSecurityRules 获取内置安全规则列表（进程内按路径+mtime 缓存）。
+// 对齐 Python: get_builtin_security_rules() (tiered_policy.py L64-90)
+// 优先从文件系统读取（支持 mtime 自动重载），回退到嵌入资源。
 func GetBuiltinSecurityRules() []map[string]any {
-	if builtinRulesCacheLoaded {
-		return builtinRulesCache
+	builtinRulesCacheMu.Lock()
+	defer builtinRulesCacheMu.Unlock()
+
+	// 尝试从文件系统读取（对齐 Python: 从包内 resources/builtin_rules.yaml 读取）
+	yamlPath := resources.ResolveBuiltinRulesYAMLPath()
+	if yamlPath != "" {
+		mtime := resources.GetFileModTime(yamlPath)
+		// 缓存命中：路径和 mtime 未变
+		if builtinRulesCache.loaded && builtinRulesCache.path == yamlPath && builtinRulesCache.mtime == mtime {
+			return builtinRulesCache.rules
+		}
+
+		// mtime 变化或首次加载：从文件系统读取
+		parsed, err := resources.ParseBuiltinRulesFromFile(yamlPath)
+		if err != nil {
+			logger.Warn(tieredPolicyLogComponent).
+				Str("path", yamlPath).
+				Err(err).
+				Msg("permission.tiered_policy.builtin_rules_file_read_failed")
+		} else {
+			rules := convertBuiltinRules(parsed)
+			builtinRulesCache.path = yamlPath
+			builtinRulesCache.mtime = mtime
+			builtinRulesCache.rules = rules
+			builtinRulesCache.loaded = true
+			return rules
+		}
+	}
+
+	// 回退到嵌入资源
+	if builtinRulesCache.loaded {
+		return builtinRulesCache.rules
 	}
 
 	parsed, err := resources.ParseBuiltinRules()
@@ -286,10 +327,18 @@ func GetBuiltinSecurityRules() []map[string]any {
 		logger.Warn(tieredPolicyLogComponent).
 			Err(err).
 			Msg("permission.tiered_policy.builtin_rules_missing")
-		builtinRulesCacheLoaded = true
+		builtinRulesCache.loaded = true
 		return nil
 	}
 
+	rules := convertBuiltinRules(parsed)
+	builtinRulesCache.rules = rules
+	builtinRulesCache.loaded = true
+	return rules
+}
+
+// convertBuiltinRules 将 BuiltinRules 转换为 []map[string]any
+func convertBuiltinRules(parsed *resources.BuiltinRules) []map[string]any {
 	rules := make([]map[string]any, 0, len(parsed.Rules))
 	for _, r := range parsed.Rules {
 		tools := make([]string, len(r.TargetTools))
@@ -306,9 +355,6 @@ func GetBuiltinSecurityRules() []map[string]any {
 		}
 		rules = append(rules, entry)
 	}
-
-	builtinRulesCache = rules
-	builtinRulesCacheLoaded = true
 	return rules
 }
 
@@ -430,12 +476,19 @@ func shellPatternMatches(pattern, command string) bool {
 		return false
 	}
 	p := strings.TrimSpace(pattern)
+
+	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	regexFlags := ""
+	if runtime.GOOS == "windows" {
+		regexFlags = "(?i)"
+	}
+
 	if strings.HasPrefix(strings.ToLower(p), "re:") {
 		expr := strings.TrimSpace(p[3:])
 		norm := strings.ReplaceAll(command, `\`, "/")
 
 		// 尝试主表达式
-		re, err := regexp.Compile(expr)
+		re, err := regexp.Compile(regexFlags + expr)
 		if err != nil {
 			// 尝试分管道分割（如 YAML 双引号落盘后非法正则）
 			if strings.Contains(expr, "|") {
@@ -444,7 +497,7 @@ func shellPatternMatches(pattern, command string) bool {
 					if part == "" {
 						continue
 					}
-					subRe, subErr := regexp.Compile(part)
+					subRe, subErr := regexp.Compile(regexFlags + part)
 					if subErr != nil {
 						continue
 					}
@@ -482,9 +535,16 @@ func pathPatternMatches(pattern, value string) bool {
 		return false
 	}
 	p := strings.TrimSpace(pattern)
+
+	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	regexFlags := ""
+	if runtime.GOOS == "windows" {
+		regexFlags = "(?i)"
+	}
+
 	if strings.HasPrefix(strings.ToLower(p), "re:") {
 		expr := strings.TrimSpace(p[3:])
-		re, err := regexp.Compile(expr)
+		re, err := regexp.Compile(regexFlags + expr)
 		if err != nil {
 			logger.Warn(tieredPolicyLogComponent).
 				Str("expr", expr).
@@ -802,7 +862,12 @@ func withShellCommand(toolArgs map[string]any, command string) map[string]any {
 	for k, v := range toolArgs {
 		subArgs[k] = v
 	}
-	subArgs["command"] = command
+	// 对齐 Python: if "command" in sub_args or "cmd" not in sub_args:
+	if _, hasCommand := toolArgs["command"]; hasCommand {
+		subArgs["command"] = command
+	} else if _, hasCmd := toolArgs["cmd"]; !hasCmd {
+		subArgs["command"] = command
+	}
 	if _, hasCmd := toolArgs["cmd"]; hasCmd {
 		subArgs["cmd"] = command
 	}

@@ -377,24 +377,53 @@ func (l SecurityAlertLevel) String() string {
 
 // PopLastUserMessage 从当前 turn 移除最后一条用户消息并返回。
 // 对齐 Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
-func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []any {
-	sess := cbc.Session()
-	if sess == nil {
+func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []llmschema.BaseMessage {
+	mc := cbc.ModelContext()
+	if mc == nil {
 		return nil
 	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
+	messages, err := mc.GetMessages(0, false)
+	if err != nil {
+		return nil
+	}
+	// 反序查找最后一条 user 消息
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].GetRole() == llmschema.RoleTypeUser {
+			popped := mc.PopMessages(1, false)
+			return popped
+		}
+	}
 	return nil
 }
 
 // PopMatchingMessages 移除匹配正则的消息并返回。
-// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L564-585)
-func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []any {
-	sess := cbc.Session()
-	if sess == nil {
+// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L567-602)
+func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []llmschema.BaseMessage {
+	mc := cbc.ModelContext()
+	if mc == nil {
 		return nil
 	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
-	return nil
+	messages, err := mc.GetMessages(0, withHistory)
+	if err != nil {
+		return nil
+	}
+
+	var kept []llmschema.BaseMessage
+	var popped []llmschema.BaseMessage
+	for _, msg := range messages {
+		content := r.ExtractMessageContent(msg)
+		if content != "" && r.ContainsAnyPattern(content, patterns) {
+			popped = append(popped, msg)
+		} else {
+			kept = append(kept, msg)
+		}
+	}
+
+	if len(popped) > 0 {
+		mc.SetMessages(kept, withHistory)
+	}
+
+	return popped
 }
 
 // ExtractMessageContent 从消息对象提取文本内容。
@@ -402,6 +431,10 @@ func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbac
 func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
 	if msg == nil {
 		return ""
+	}
+	// 优先处理 BaseMessage 接口
+	if bm, ok := msg.(llmschema.BaseMessage); ok {
+		return bm.GetContent().Text()
 	}
 	switch v := msg.(type) {
 	case string:
@@ -428,14 +461,37 @@ func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bo
 }
 
 // SanitizeMatchingMessages 脱敏替换匹配正则的消息内容。
-// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L615-689)
-func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []any {
-	sess := cbc.Session()
-	if sess == nil {
+// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L648-689)
+func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []llmschema.BaseMessage {
+	mc := cbc.ModelContext()
+	if mc == nil {
 		return nil
 	}
-	// TODO: 依赖 session 消息操作接口，待接口实现后补齐
-	return nil
+	messages, err := mc.GetMessages(0, withHistory)
+	if err != nil {
+		return nil
+	}
+
+	var sanitized []llmschema.BaseMessage
+	for _, msg := range messages {
+		content := r.ExtractMessageContent(msg)
+		if content != "" && r.ContainsAnyPattern(content, patterns) {
+			newContent := content
+			for _, p := range patterns {
+				if re, err := regexp.Compile(p); err == nil {
+					newContent = re.ReplaceAllString(newContent, replacement)
+				}
+			}
+			msg.SetContent(llmschema.NewTextContent(newContent))
+			sanitized = append(sanitized, msg)
+		}
+	}
+
+	if len(sanitized) > 0 {
+		mc.SetMessages(messages, withHistory)
+	}
+
+	return sanitized
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -503,7 +559,8 @@ func (r *BaseSecurityRail) runAndApply(
 // 对齐 Python: BaseSecurityRail.run_security_check(security_ctx) (base_security_rail.py L218-223)
 // 默认实现返回 Allow。
 func (r *BaseSecurityRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
-	return r.Allow(nil), nil
+	// 对齐 Python: raise NotImplementedError — 强制子类必须实现
+	return nil, fmt.Errorf("BaseSecurityRail.runSecurityCheck 必须由子类实现")
 }
 
 // applySecurityDecision 应用安全决策。
@@ -637,8 +694,9 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 // 记录日志 + WriteStream OutputSchema with is_security_alert=true → 继续执行
 func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decision *SecurityAlert) {
 	// 对齐 Python: log_method = getattr(logger, decision.level.value, logger.warning)
-	logMsg := fmt.Sprintf("[SecurityAlert] message=%s alert_type=%s level=%s display_mode=%s",
-		decision.Message, decision.AlertType, decision.Level.String(), decision.DisplayMode)
+	// 对齐 Python: log_method("[SecurityAlert] rail=%s message=%s ...", self.__class__.__name__, ...)
+	logMsg := fmt.Sprintf("[SecurityAlert] rail=%s message=%s alert_type=%s level=%s display_mode=%s",
+		r.TypeName(), decision.Message, decision.AlertType, decision.Level.String(), decision.DisplayMode)
 
 	switch decision.Level {
 	case SecurityAlertLevelInfo:

@@ -1848,33 +1848,151 @@ func (sm *SkillManager) HandlePluginsUninstall(ctx context.Context, params map[s
 	return sm.HandleSkillsUninstall(ctx, params)
 }
 
+// setPluginEnabled 设置插件的启用/禁用状态。
+// 对齐 Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
+func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
+	plugins, _ := sm.state["installed_plugins"].([]map[string]any)
+	if plugins == nil {
+		return false
+	}
+	for _, p := range plugins {
+		if toString(p["name"]) == name {
+			p["enabled"] = enabled
+			return true
+		}
+	}
+	return false
+}
+
 // HandlePluginsEnable 启用插件
-// 对应 Python: SkillManager.handle_plugins_enable(params)
+// 对齐 Python: handle_plugins_enable(params) (skill_manager.py L3809-3818)
 func (sm *SkillManager) HandlePluginsEnable(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
-	return sm.HandleSkillsToggle(ctx, map[string]any{"name": name, "enabled": true})
+	sm.mu.Lock()
+	ok := sm.setPluginEnabled(name, true)
+	sm.mu.Unlock()
+	if !ok {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到插件: %s", name)}, nil
+	}
+	sm.saveState()
+	return map[string]any{"success": true, "detail": fmt.Sprintf("插件 %s 已启用，请执行 /reload-plugins 使其生效", name)}, nil
 }
 
 // HandlePluginsDisable 禁用插件
-// 对应 Python: SkillManager.handle_plugins_disable(params)
+// 对齐 Python: handle_plugins_disable(params) (skill_manager.py L3820-3829)
 func (sm *SkillManager) HandlePluginsDisable(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
-	return sm.HandleSkillsToggle(ctx, map[string]any{"name": name, "enabled": false})
+	sm.mu.Lock()
+	ok := sm.setPluginEnabled(name, false)
+	sm.mu.Unlock()
+	if !ok {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到插件: %s", name)}, nil
+	}
+	sm.saveState()
+	return map[string]any{"success": true, "detail": fmt.Sprintf("插件 %s 已禁用，请执行 /reload-plugins 使其生效", name)}, nil
 }
 
-// HandlePluginsReload 重载插件
-// 对应 Python: SkillManager.handle_plugins_reload(params)
+// HandlePluginsReload 重载插件：根据 enabled 状态物理移动技能目录，然后统计摘要。
+// 对齐 Python: handle_plugins_reload(params) (skill_manager.py L3504-3553)
 func (sm *SkillManager) HandlePluginsReload(ctx context.Context, params map[string]any) (map[string]any, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
+	// 规范化所有插件记录
+	allPlugins := sm.GetInstalledPlugins()
+	for _, p := range allPlugins {
+		sm.normalizePlugin(p)
+	}
+	sm.saveState()
+
+	// 根据 enabled 状态物理移动技能目录
+	disabledCache := filepath.Join(sm.skillsDir, "_disabled_plugins")
+
+	for _, p := range allPlugins {
+		name := toString(p["name"])
+		if name == "" {
+			continue
+		}
+		skillDir := filepath.Join(sm.skillsDir, name)
+		cachedDir := filepath.Join(disabledCache, name)
+
+		enabled := true
+		if v, ok := p["enabled"]; ok {
+			if b, ok := v.(bool); ok {
+				enabled = b
+			}
+		}
+
+		if enabled {
+			// 启用状态：从 disabled 缓存恢复
+			cachedInfo, _ := os.Stat(cachedDir)
+			skillInfo, _ := os.Stat(skillDir)
+			if cachedInfo != nil && skillInfo == nil {
+				_ = os.MkdirAll(disabledCache, 0o755)
+				_ = os.Rename(cachedDir, skillDir)
+			}
+		} else {
+			// 禁用状态：移动到 disabled 缓存
+			skillInfo, _ := os.Stat(skillDir)
+			if skillInfo != nil {
+				_ = os.MkdirAll(disabledCache, 0o755)
+				cachedInfo, _ := os.Stat(cachedDir)
+				if cachedInfo != nil {
+					_ = os.RemoveAll(cachedDir)
+				}
+				_ = os.Rename(skillDir, cachedDir)
+			}
+		}
+	}
+
 	sm.refreshAgentDataIndexes()
-	return map[string]any{"success": true}, nil
+
+	// 统计
+	var enabledPlugins, disabledPlugins []map[string]any
+	for _, p := range allPlugins {
+		enabled := true
+		if v, ok := p["enabled"]; ok {
+			if b, ok := v.(bool); ok {
+				enabled = b
+			}
+		}
+		if enabled {
+			enabledPlugins = append(enabledPlugins, p)
+		} else {
+			disabledPlugins = append(disabledPlugins, p)
+		}
+	}
+
+	totalSkills := 0
+	for _, p := range enabledPlugins {
+		skills, _ := p["skills"].([]any)
+		if len(skills) == 0 {
+			if p["name"] != nil {
+				skills = []any{p["name"]}
+			}
+		}
+		totalSkills += len(skills)
+	}
+
+	result := map[string]any{
+		"success":       true,
+		"plugins_count": len(enabledPlugins),
+		"disabled_count": len(disabledPlugins),
+		"skills_count":  totalSkills,
+		"detail": fmt.Sprintf("Reloaded: %d plugins · %d skills", len(enabledPlugins), totalSkills),
+	}
+	if len(disabledPlugins) > 0 {
+		result["detail"] = fmt.Sprintf("Reloaded: %d plugins · %d skills (%d disabled)",
+			len(enabledPlugins), totalSkills, len(disabledPlugins))
+	}
+
+	return result, nil
 }
 
 // GetInstalledPlugins 获取已安装插件列表
@@ -2855,10 +2973,11 @@ func matchHost(host, pattern string) bool {
 	if strings.HasPrefix(pattern, ".") {
 		return strings.HasSuffix(host, pattern)
 	}
-	// 前缀通配 *.example.com → 匹配 foo.example.com 和 example.com
+	// 前缀通配 *.example.com → 只匹配子域名 foo.example.com，不匹配裸域名 example.com
+	// 对齐 Python: 段数必须相同，*.example.com 有 3 段，example.com 只有 2 段，不匹配
 	if strings.HasPrefix(pattern, "*.") {
 		suffix := pattern[2:]
-		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+		if strings.HasSuffix(host, "."+suffix) {
 			return true
 		}
 	}

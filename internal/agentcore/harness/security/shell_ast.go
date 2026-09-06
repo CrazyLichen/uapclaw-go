@@ -459,8 +459,17 @@ func parseWithConservativeFallback(command string) *ShellAstParseResult {
 		}
 	}
 
-	// 对齐 Python: shlex.split(command)
-	argv, _ := shlex.Split(command, true)
+	// 对齐 Python: shlex.split(command, posix=True)
+	// Python 在未闭合引号时抛 ValueError，被 except 捕获后返回 parse_unavailable
+	argv, err := shlex.Split(command, true)
+	if err != nil {
+		return &ShellAstParseResult{
+			Kind:    ShellAstKindParseUnavailable,
+			Flags:   flags,
+			Reason:  "fallback 分词失败: " + err.Error(),
+			Backend: "fallback",
+		}
+	}
 
 	subcommand := ShellSubcommand{
 		Text:       command,

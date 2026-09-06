@@ -169,6 +169,15 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 		if extResult.ExternalPaths != nil {
 			externalPaths = extResult.ExternalPaths
 		}
+	} else {
+		// 对齐 Python: else 分支日志 — ext_result is None 时也记录
+		logger.Info(engineLogComponent).
+			Str("tool", toolName).
+			Bool("checked", true).
+			Str("permission", "none").
+			Str("matched_rule", "none").
+			Strs("external_paths", []string{}).
+			Msg("permission.external.result")
 	}
 
 	result := &PermissionResult{

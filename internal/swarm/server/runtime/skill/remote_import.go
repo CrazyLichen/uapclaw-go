@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,20 +43,15 @@ func IsHTTPDownloadTarget(url string) bool {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// isHTTPDownloadTarget 检查 URL 是否为 HTTP(S) 下载目标
+// isHTTPDownloadTarget 检查 URL 是否为 HTTP(S) 下载目标。
+// 对齐 Python: _is_http_download_target(value) (skill_manager.py L2904-2906)
+// 只检查 scheme 为 http/https 且 netloc 非空，不检查 URL 后缀
 func isHTTPDownloadTarget(downloadURL string) bool {
-	lower := strings.ToLower(downloadURL)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+	u, err := url.Parse(strings.TrimSpace(downloadURL))
+	if err != nil {
 		return false
 	}
-	// 检查后缀：.zip, .tar.gz, .tgz, .tar.bz2
-	if strings.HasSuffix(lower, ".zip") ||
-		strings.HasSuffix(lower, ".tar.gz") ||
-		strings.HasSuffix(lower, ".tgz") ||
-		strings.HasSuffix(lower, ".tar.bz2") {
-		return true
-	}
-	return false
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // importSkillFromRemoteArchive 从远程 URL 下载技能归档并导入。

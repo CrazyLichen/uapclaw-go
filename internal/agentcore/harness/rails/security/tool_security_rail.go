@@ -161,6 +161,7 @@ func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agent
 	logger.Info(permRailLogComponent).
 		Str("tool", toolName).
 		Str("normalized", normalizedName).
+		Interface("optional_tool_tags", r.GetTools()).
 		Msg("permission.rail.before_tool_call")
 
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
@@ -322,6 +323,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	logger.Info(permRailLogComponent).
 		Str("tool", toolName).
 		Str("normalized", normalizedName).
+		Interface("tool_args", toolArgs).
 		Interface("auto_confirm_key", autoConfirmKey).
 		Str("user_input_type", fmt.Sprintf("%T", userInput)).
 		Msg("permission.rail.resolve")
