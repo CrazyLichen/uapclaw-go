@@ -20,7 +20,7 @@ const descKey = "_desc"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-//go:embed descs/*.md
+//go:embed descs/**/*.md
 var descFS embed.FS
 
 // descCache 工具描述缓存（lang+"/"+tool → content）。
