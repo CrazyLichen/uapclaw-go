@@ -3463,3 +3463,75 @@ func TestHandleSkillsTeamSkillsHubSearch_失败(t *testing.T) {
 		t.Error("搜索失败应返回 success=false")
 	}
 }
+
+// TestSkillManager_SkillsDir 测试 SkillsDir 方法
+func TestSkillManager_SkillsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+	expected := filepath.Join(tmpDir, "skills")
+	if sm.SkillsDir() != expected {
+		t.Errorf("SkillsDir() = %q, want %q", sm.SkillsDir(), expected)
+	}
+}
+
+// TestSkillManager_SetSkillnetInstallJobAndGet 测试 SetSkillnetInstallJob 和 GetInstallJob
+func TestSkillManager_SetSkillnetInstallJobAndGet(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 不存在的任务
+	if job := sm.GetInstallJob("nonexistent"); job != nil {
+		t.Errorf("不存在的任务应返回 nil，got %v", job)
+	}
+
+	// 设置任务
+	jobData := map[string]any{"skill": "test-skill", "status": "installing"}
+	sm.SetSkillnetInstallJob("job-1", jobData)
+
+	// 获取任务
+	job := sm.GetInstallJob("job-1")
+	if job == nil {
+		t.Fatal("应找到任务")
+	}
+	if job["skill"] != "test-skill" {
+		t.Errorf("skill = %v, want test-skill", job["skill"])
+	}
+	if job["status"] != "installing" {
+		t.Errorf("status = %v, want installing", job["status"])
+	}
+
+	// 修改返回副本不应影响原始
+	job["status"] = "done"
+	original := sm.GetInstallJob("job-1")
+	if original["status"] != "installing" {
+		t.Errorf("修改副本不应影响原始，got status = %v", original["status"])
+	}
+}
+
+// TestSkillManager_GetInstallJobIDs 测试 GetInstallJobIDs
+func TestSkillManager_GetInstallJobIDs(t *testing.T) {
+	tmpDir := t.TempDir()
+	sm := NewSkillManager(tmpDir)
+
+	// 空时应返回空切片
+	if ids := sm.GetInstallJobIDs(); len(ids) != 0 {
+		t.Errorf("空时应返回空切片，got %v", ids)
+	}
+
+	// 设置多个任务
+	sm.SetSkillnetInstallJob("job-1", map[string]any{"skill": "a"})
+	sm.SetSkillnetInstallJob("job-2", map[string]any{"skill": "b"})
+
+	ids := sm.GetInstallJobIDs()
+	if len(ids) != 2 {
+		t.Fatalf("应有 2 个任务 ID，got %d", len(ids))
+	}
+	// 检查包含
+	idSet := make(map[string]bool)
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	if !idSet["job-1"] || !idSet["job-2"] {
+		t.Errorf("应包含 job-1 和 job-2，got %v", ids)
+	}
+}

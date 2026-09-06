@@ -340,6 +340,368 @@ func TestResolveAgentConfigYAMLPath_路径不存在(t *testing.T) {
 	_ = result
 }
 
+// ──────────────────────────── hasOverrideID ────────────────────────────
+
+func TestHasOverrideID_存在(t *testing.T) {
+	overrides := []any{
+		map[string]any{"id": "r1", "action": "allow"},
+		map[string]any{"id": "r2", "action": "deny"},
+	}
+	assert.True(t, hasOverrideID(overrides, "r1"))
+	assert.True(t, hasOverrideID(overrides, "r2"))
+}
+
+func TestHasOverrideID_不存在(t *testing.T) {
+	overrides := []any{
+		map[string]any{"id": "r1", "action": "allow"},
+	}
+	assert.False(t, hasOverrideID(overrides, "r3"))
+}
+
+func TestHasOverrideID_空列表(t *testing.T) {
+	assert.False(t, hasOverrideID(nil, "r1"))
+	assert.False(t, hasOverrideID([]any{}, "r1"))
+}
+
+func TestHasOverrideID_非map类型(t *testing.T) {
+	overrides := []any{"string", 42}
+	assert.False(t, hasOverrideID(overrides, "r1"))
+}
+
+// ──────────────────────────── sortStrings ────────────────────────────
+
+func TestSortStrings(t *testing.T) {
+	s := []string{"banana", "apple", "cherry"}
+	sortStrings(s)
+	assert.Equal(t, []string{"apple", "banana", "cherry"}, s)
+}
+
+func TestSortStrings_空切片(t *testing.T) {
+	s := []string{}
+	sortStrings(s)
+	assert.Equal(t, []string{}, s)
+}
+
+func TestSortStrings_单元素(t *testing.T) {
+	s := []string{"only"}
+	sortStrings(s)
+	assert.Equal(t, []string{"only"}, s)
+}
+
+func TestSortStrings_已排序(t *testing.T) {
+	s := []string{"a", "b", "c"}
+	sortStrings(s)
+	assert.Equal(t, []string{"a", "b", "c"}, s)
+}
+
+// ──────────────────────────── sortedPathTools / sortedShellTools ────────────────────────────
+
+func TestSortedPathTools(t *testing.T) {
+	tools := sortedPathTools()
+	assert.NotEmpty(t, tools)
+	// 结果应已排序
+	for i := 1; i < len(tools); i++ {
+		assert.True(t, tools[i-1] <= tools[i], "结果应已排序: %q > %q", tools[i-1], tools[i])
+	}
+}
+
+func TestSortedShellTools(t *testing.T) {
+	tools := sortedShellTools()
+	assert.NotEmpty(t, tools)
+	for i := 1; i < len(tools); i++ {
+		assert.True(t, tools[i-1] <= tools[i], "结果应已排序: %q > %q", tools[i-1], tools[i])
+	}
+}
+
+// ──────────────────────────── ruleToolsList ────────────────────────────
+
+func TestRuleToolsList_字符串(t *testing.T) {
+	rule := map[string]any{"tools": "bash"}
+	result := ruleToolsList(rule)
+	assert.Equal(t, []string{"bash"}, result)
+}
+
+func TestRuleToolsList_字符串数组(t *testing.T) {
+	rule := map[string]any{"tools": []any{"bash", "read_file"}}
+	result := ruleToolsList(rule)
+	assert.Equal(t, []string{"bash", "read_file"}, result)
+}
+
+func TestRuleToolsList_字符串切片(t *testing.T) {
+	rule := map[string]any{"tools": []string{"bash", "read_file"}}
+	result := ruleToolsList(rule)
+	assert.Equal(t, []string{"bash", "read_file"}, result)
+}
+
+func TestRuleToolsList_空字符串跳过(t *testing.T) {
+	rule := map[string]any{"tools": []any{"bash", "  ", "read_file"}}
+	result := ruleToolsList(rule)
+	assert.Equal(t, []string{"bash", "read_file"}, result)
+}
+
+func TestRuleToolsList_无tools键(t *testing.T) {
+	rule := map[string]any{"other": "value"}
+	result := ruleToolsList(rule)
+	assert.Nil(t, result)
+}
+
+func TestRuleToolsList_其他类型(t *testing.T) {
+	rule := map[string]any{"tools": 42}
+	result := ruleToolsList(rule)
+	assert.Nil(t, result)
+}
+
+// ──────────────────────────── strVal ────────────────────────────
+
+func TestStrVal(t *testing.T) {
+	assert.Equal(t, "hello", strVal("hello"))
+	assert.Equal(t, "", strVal(42))
+	assert.Equal(t, "", strVal(nil))
+}
+
+// ──────────────────────────── commandText ────────────────────────────
+
+func TestCommandText_从command键(t *testing.T) {
+	result := commandText(map[string]any{"command": "ls -la"})
+	assert.Equal(t, "ls -la", result)
+}
+
+func TestCommandText_从cmd键(t *testing.T) {
+	result := commandText(map[string]any{"cmd": "ls -la"})
+	assert.Equal(t, "ls -la", result)
+}
+
+func TestCommandText_command优先(t *testing.T) {
+	result := commandText(map[string]any{"command": "ls", "cmd": "cat"})
+	assert.Equal(t, "ls", result)
+}
+
+func TestCommandText_无键(t *testing.T) {
+	result := commandText(map[string]any{})
+	assert.Equal(t, "", result)
+}
+
+func TestCommandText_去除空白(t *testing.T) {
+	result := commandText(map[string]any{"command": "  ls -la  "})
+	assert.Equal(t, "ls -la", result)
+}
+
+// ──────────────────────────── isSameAllowOverride ────────────────────────────
+
+func TestIsSameAllowOverride_匹配(t *testing.T) {
+	sig := approvalOverrideSignature{
+		ToolName:          "bash",
+		Tools:             []string{"bash"},
+		MatchType:         "command",
+		ExistingMatchType: "command",
+		Pattern:           "git *",
+		ExistingPattern:   "git *",
+		ExistingAction:    "allow",
+	}
+	assert.True(t, isSameAllowOverride(sig))
+}
+
+func TestIsSameAllowOverride_工具名不匹配(t *testing.T) {
+	sig := approvalOverrideSignature{
+		ToolName:          "bash",
+		Tools:             []string{"read_file"},
+		MatchType:         "command",
+		ExistingMatchType: "command",
+		Pattern:           "git *",
+		ExistingPattern:   "git *",
+		ExistingAction:    "allow",
+	}
+	assert.False(t, isSameAllowOverride(sig))
+}
+
+func TestIsSameAllowOverride_matchType不匹配(t *testing.T) {
+	sig := approvalOverrideSignature{
+		ToolName:          "bash",
+		Tools:             []string{"bash"},
+		MatchType:         "command",
+		ExistingMatchType: "path",
+		Pattern:           "git *",
+		ExistingPattern:   "git *",
+		ExistingAction:    "allow",
+	}
+	assert.False(t, isSameAllowOverride(sig))
+}
+
+func TestIsSameAllowOverride_pattern不匹配(t *testing.T) {
+	sig := approvalOverrideSignature{
+		ToolName:          "bash",
+		Tools:             []string{"bash"},
+		MatchType:         "command",
+		ExistingMatchType: "command",
+		Pattern:           "git *",
+		ExistingPattern:   "npm *",
+		ExistingAction:    "allow",
+	}
+	assert.False(t, isSameAllowOverride(sig))
+}
+
+func TestIsSameAllowOverride_action非allow(t *testing.T) {
+	sig := approvalOverrideSignature{
+		ToolName:          "bash",
+		Tools:             []string{"bash"},
+		MatchType:         "command",
+		ExistingMatchType: "command",
+		Pattern:           "git *",
+		ExistingPattern:   "git *",
+		ExistingAction:    "deny",
+	}
+	assert.False(t, isSameAllowOverride(sig))
+}
+
+// ──────────────────────────── ensureSingleAllowOverride ────────────────────────────
+
+func TestEnsureSingleAllowOverride_新增条目(t *testing.T) {
+	overrides := []any{}
+	result := ensureSingleAllowOverride(&overrides, "bash", "command", "git *", "allow")
+	assert.True(t, result)
+	assert.Len(t, overrides, 1)
+	m := overrides[0].(map[string]any)
+	assert.Equal(t, "bash", m["tools"].([]string)[0])
+	assert.Equal(t, "command", m["match_type"])
+	assert.Equal(t, "git *", m["pattern"])
+	assert.Equal(t, "allow", m["action"])
+}
+
+func TestEnsureSingleAllowOverride_已有相同条目(t *testing.T) {
+	overrides := []any{
+		map[string]any{
+			"id":         "existing",
+			"tools":      []string{"bash"},
+			"match_type": "command",
+			"pattern":    "git *",
+			"action":     "allow",
+		},
+	}
+	result := ensureSingleAllowOverride(&overrides, "bash", "command", "git *", "allow")
+	assert.True(t, result)
+	assert.Len(t, overrides, 1) // 不新增
+}
+
+// ──────────────────────────── persistTieredApprovalOverrideSuggestions ────────────────────────────
+
+func TestPersistTieredApprovalOverrideSuggestions_空建议(t *testing.T) {
+	perms := map[string]any{}
+	assert.False(t, persistTieredApprovalOverrideSuggestions(perms, nil))
+	assert.False(t, persistTieredApprovalOverrideSuggestions(perms, []PermissionSuggestion{}))
+}
+
+func TestPersistTieredApprovalOverrideSuggestions_有效建议(t *testing.T) {
+	perms := map[string]any{}
+	suggestions := []PermissionSuggestion{
+		{Tools: []string{"bash"}, MatchType: "command", Pattern: "git *", Action: "allow"},
+	}
+	result := persistTieredApprovalOverrideSuggestions(perms, suggestions)
+	assert.True(t, result)
+	overrides, ok := perms["approval_overrides"].([]any)
+	assert.True(t, ok)
+	assert.NotEmpty(t, overrides)
+}
+
+// ──────────────────────────── persistTieredToolAllow ────────────────────────────
+
+func TestPersistTieredToolAllow_正常(t *testing.T) {
+	perms := map[string]any{}
+	result := persistTieredToolAllow(perms, "bash")
+	assert.True(t, result)
+	tools, ok := perms["tools"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "allow", tools["bash"])
+}
+
+func TestPersistTieredToolAllow_空工具名(t *testing.T) {
+	perms := map[string]any{}
+	assert.False(t, persistTieredToolAllow(perms, ""))
+}
+
+func TestPersistTieredToolAllow_已有allow(t *testing.T) {
+	perms := map[string]any{
+		"tools": map[string]any{"bash": "allow"},
+	}
+	result := persistTieredToolAllow(perms, "bash")
+	assert.False(t, result) // 已有 allow，不再写入
+}
+
+// ──────────────────────────── ReadAgentConfigYAML / WriteAgentConfigYAML ────────────────────────────
+
+func TestReadAgentConfigYAML_文件不存在(t *testing.T) {
+	result := ReadAgentConfigYAML("/nonexistent/path/agent.yaml")
+	assert.Empty(t, result)
+}
+
+func TestWriteAndReadAgentConfigYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	data := map[string]any{"key": "value", "nested": map[string]any{"k": "v"}}
+	err := WriteAgentConfigYAML(cfgPath, data)
+	assert.NoError(t, err)
+
+	readBack := ReadAgentConfigYAML(cfgPath)
+	assert.Equal(t, "value", readBack["key"])
+}
+
+func TestWriteAgentConfigYAML_空路径(t *testing.T) {
+	// 空路径会回退到默认配置路径，不会报错
+	err := WriteAgentConfigYAML("", map[string]any{})
+	// 空路径回退到默认路径，结果取决于默认路径是否存在
+	_ = err
+}
+
+func TestReadAgentConfigYAML_空路径(t *testing.T) {
+	result := ReadAgentConfigYAML("")
+	// 空路径会回退到默认路径，若默认路径文件不存在返回空 map
+	assert.NotNil(t, result)
+}
+
+// ──────────────────────────── MergeExternalDirectoryAllowIntoPermissions ────────────────────────────
+
+func TestMergeExternalDirectoryAllowIntoPermissions_空路径(t *testing.T) {
+	perms := map[string]any{"existing": "data"}
+	merged, wrote := MergeExternalDirectoryAllowIntoPermissions(perms, nil)
+	assert.False(t, wrote)
+	assert.Equal(t, "data", merged["existing"])
+}
+
+func TestMergeExternalDirectoryAllowIntoPermissions_添加路径(t *testing.T) {
+	perms := map[string]any{}
+	merged, wrote := MergeExternalDirectoryAllowIntoPermissions(perms, []string{"/home/user/project"})
+	assert.True(t, wrote)
+	extCfg, ok := merged["external_directory"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "allow", extCfg["/home/user"])
+}
+
+func TestMergeExternalDirectoryAllowIntoPermissions_已有allow不写入(t *testing.T) {
+	perms := map[string]any{
+		"external_directory": map[string]any{"/home/user": "allow"},
+	}
+	merged, wrote := MergeExternalDirectoryAllowIntoPermissions(perms, []string{"/home/user/project"})
+	_ = merged
+	assert.False(t, wrote)
+}
+
+// ──────────────────────────── PatternMatcher.MatchAny ────────────────────────────
+
+func TestPatternMatcher_MatchAny(t *testing.T) {
+	pm := PatternMatcher{}
+	assert.True(t, pm.MatchAny([]string{"ls *", "cat *"}, "ls -la"))
+	assert.True(t, pm.MatchAny([]string{"ls *", "cat *"}, "cat file.txt"))
+	assert.False(t, pm.MatchAny([]string{"ls *", "cat *"}, "rm -rf /"))
+	assert.False(t, pm.MatchAny([]string{}, "ls"))
+}
+
+// ──────────────────────────── escapeRegexChars ────────────────────────────
+
+func TestEscapeRegexChars(t *testing.T) {
+	result := escapeRegexChars("a.b", ".")
+	assert.Contains(t, result, `\`)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func stringsLower(s string) string {

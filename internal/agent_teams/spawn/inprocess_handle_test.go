@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 )
 
@@ -191,5 +192,30 @@ func TestInProcessSpawnHandle_Shutdown_重复请求(t *testing.T) {
 	_, err := h.Shutdown(context.Background(), 1*time.Second)
 	if err == nil {
 		t.Error("第二次 Shutdown() error = nil, want error（关闭已请求）")
+	}
+}
+
+// TestInProcessSpawnHandle_AgentRef 测试 AgentRef 方法。
+func TestInProcessSpawnHandle_AgentRef(t *testing.T) {
+	h := spawn.NewInProcessSpawnHandle("inproc-test", func() {}, make(chan struct{}), nil)
+	if h.AgentRef() != nil {
+		t.Error("nil agentRef 应返回 nil")
+	}
+}
+
+// TestInProcessSpawnHandle_ChunkForward 测试 ChunkForward 和 SetChunkForward 方法。
+func TestInProcessSpawnHandle_ChunkForward(t *testing.T) {
+	h := spawn.NewInProcessSpawnHandle("inproc-test", func() {}, make(chan struct{}), nil)
+
+	// 初始为 nil
+	if h.ChunkForward() != nil {
+		t.Error("初始 ChunkForward 应为 nil")
+	}
+
+	// 设置后应返回设置的值
+	var observer atschema.ChunkObserver // nil 但类型正确
+	h.SetChunkForward(observer)
+	if h.ChunkForward() != nil {
+		t.Error("设置为 nil 后应返回 nil")
 	}
 }

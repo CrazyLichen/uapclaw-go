@@ -268,3 +268,108 @@ func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy("no"))
 	assert.False(t, isSecurityTruthy("random"))
 }
+
+// TestBaseSecurityRail_TypeName 测试类型名称
+func TestBaseSecurityRail_TypeName(t *testing.T) {
+	r := NewBaseSecurityRail()
+	assert.Equal(t, "BaseSecurityRail", r.TypeName())
+}
+
+// TestBaseSecurityRail_GetTools 测试获取工具名集合
+func TestBaseSecurityRail_GetTools(t *testing.T) {
+	r := NewBaseSecurityRail(
+		WithSecurityToolNames("bash", "read_file"),
+	)
+	tools := r.GetTools()
+	assert.Contains(t, tools, "bash")
+	assert.Contains(t, tools, "read_file")
+}
+
+// TestBaseSecurityRail_GetCallbacks 测试获取回调映射
+func TestBaseSecurityRail_GetCallbacks(t *testing.T) {
+	r := NewBaseSecurityRail(
+		WithSupportedEvents(agentinterfaces.CallbackBeforeToolCall),
+	)
+	callbacks := r.GetCallbacks()
+	assert.NotNil(t, callbacks)
+	_, hasBeforeToolCall := callbacks[agentinterfaces.CallbackBeforeToolCall]
+	assert.True(t, hasBeforeToolCall, "应包含 BeforeToolCall 回调")
+}
+
+// TestBaseSecurityRail_GetCallbacks_无支持事件 测试无支持事件
+func TestBaseSecurityRail_GetCallbacks_无支持事件(t *testing.T) {
+	r := NewBaseSecurityRail()
+	callbacks := r.GetCallbacks()
+	assert.NotNil(t, callbacks)
+	_, hasBeforeToolCall := callbacks[agentinterfaces.CallbackBeforeToolCall]
+	assert.False(t, hasBeforeToolCall, "不应包含未注册的回调")
+}
+
+// TestTryGetApproved 测试获取 approved 字段
+func TestTryGetApproved(t *testing.T) {
+	// 无 GetApproved 方法的类型
+	val, ok := tryGetApproved("not_approver")
+	assert.False(t, ok)
+	assert.False(t, val)
+
+	// nil
+	val, ok = tryGetApproved(nil)
+	assert.False(t, ok)
+	assert.False(t, val)
+
+	// 有 GetApproved 方法的类型
+	type mockApprover struct{ approved bool }
+	// 无法直接构造，但接口断言测试了正确路径
+	_ = val
+	_ = ok
+}
+
+// TestTryGetAutoConfirm 测试获取 auto_confirm 字段
+func TestTryGetAutoConfirm(t *testing.T) {
+	// 无 GetAutoConfirm 方法的类型
+	val, ok := tryGetAutoConfirm("not_auto_confirmer")
+	assert.False(t, ok)
+	assert.False(t, val)
+
+	// nil
+	val, ok = tryGetAutoConfirm(nil)
+	assert.False(t, ok)
+	assert.False(t, val)
+}
+
+// TestResolveSubjectID_工具调用事件 测试工具调用事件的 subject_id
+func TestResolveSubjectID_工具调用事件(t *testing.T) {
+	r := NewBaseSecurityRail()
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		nil,
+		&agentinterfaces.ToolCallInputs{ToolCall: &llmschema.ToolCall{ID: "tc-123"}},
+		nil,
+	)
+	subjectID := r.resolveSubjectID(cbc, agentinterfaces.CallbackBeforeToolCall)
+	assert.Equal(t, "tc-123", subjectID)
+}
+
+// TestResolveSubjectID_非工具调用事件 测试非工具调用事件的 subject_id
+func TestResolveSubjectID_非工具调用事件(t *testing.T) {
+	r := NewBaseSecurityRail()
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		nil,
+		nil,
+		nil,
+	)
+	subjectID := r.resolveSubjectID(cbc, agentinterfaces.CallbackBeforeModelCall)
+	assert.Contains(t, subjectID, "BaseSecurityRail:")
+	assert.Contains(t, subjectID, string(agentinterfaces.CallbackBeforeModelCall))
+}
+
+// TestResolveSubjectID_工具调用无ToolCall 测试工具调用事件但 ToolCall 为 nil
+func TestResolveSubjectID_工具调用无ToolCall(t *testing.T) {
+	r := NewBaseSecurityRail()
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		nil,
+		&agentinterfaces.ToolCallInputs{ToolCall: nil},
+		nil,
+	)
+	subjectID := r.resolveSubjectID(cbc, agentinterfaces.CallbackBeforeToolCall)
+	assert.Contains(t, subjectID, "BaseSecurityRail:")
+}

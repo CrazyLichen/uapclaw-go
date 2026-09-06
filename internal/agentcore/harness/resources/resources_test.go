@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -98,5 +100,77 @@ func TestParseBuiltinRules_最后规则动作(t *testing.T) {
 	lastRule := rules.Rules[len(rules.Rules)-1]
 	if lastRule.Action != "deny" {
 		t.Errorf("最后一条规则(%s)的 action 为 %q，期望 deny", lastRule.ID, lastRule.Action)
+	}
+}
+
+// TestParseBuiltinRulesFromFile_文件不存在 测试文件不存在
+func TestParseBuiltinRulesFromFile_文件不存在(t *testing.T) {
+	_, err := ParseBuiltinRulesFromFile("/nonexistent/path/rules.yaml")
+	if err == nil {
+		t.Errorf("文件不存在应返回错误")
+	}
+}
+
+// TestParseBuiltinRulesFromFile_无效YAML 测试无效 YAML
+func TestParseBuiltinRulesFromFile_无效YAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	yamlPath := filepath.Join(tmpDir, "bad.yaml")
+	err := os.WriteFile(yamlPath, []byte("invalid: [yaml: content"), 0644)
+	if err != nil {
+		t.Fatalf("写入临时文件失败: %v", err)
+	}
+	_, err = ParseBuiltinRulesFromFile(yamlPath)
+	if err == nil {
+		t.Errorf("无效 YAML 应返回错误")
+	}
+}
+
+// TestParseBuiltinRulesFromFile_有效YAML 测试有效 YAML
+func TestParseBuiltinRulesFromFile_有效YAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	yamlPath := filepath.Join(tmpDir, "rules.yaml")
+	content := `
+rules:
+  - id: test-rule
+    target_tools:
+      - bash
+    pattern: "rm -rf /"
+    severity: CRITICAL
+`
+	err := os.WriteFile(yamlPath, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("写入临时文件失败: %v", err)
+	}
+	rules, err := ParseBuiltinRulesFromFile(yamlPath)
+	if err != nil {
+		t.Fatalf("解析有效 YAML 不应返回错误: %v", err)
+	}
+	if len(rules.Rules) != 1 {
+		t.Errorf("应有 1 条规则，got %d", len(rules.Rules))
+	}
+	if rules.Rules[0].ID != "test-rule" {
+		t.Errorf("规则 ID = %q, want %q", rules.Rules[0].ID, "test-rule")
+	}
+}
+
+// TestGetFileModTime_文件不存在 测试文件不存在返回 -1
+func TestGetFileModTime_文件不存在(t *testing.T) {
+	mtime := GetFileModTime("/nonexistent/path/file.txt")
+	if mtime != -1 {
+		t.Errorf("文件不存在应返回 -1，got %v", mtime)
+	}
+}
+
+// TestGetFileModTime_文件存在 测试文件存在返回正数
+func TestGetFileModTime_文件存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.txt")
+	err := os.WriteFile(filePath, []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("写入临时文件失败: %v", err)
+	}
+	mtime := GetFileModTime(filePath)
+	if mtime <= 0 {
+		t.Errorf("文件存在应返回正数，got %v", mtime)
 	}
 }
