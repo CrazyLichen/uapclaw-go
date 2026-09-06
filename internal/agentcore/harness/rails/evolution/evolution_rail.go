@@ -757,9 +757,16 @@ func normalizeSkillNamesGo(names []string) map[string]bool {
 // ensureNonNilSlice 已移到 helpers.go
 
 // _normalizeNameSet 对齐 Python: @classmethod _normalize_name_set
-// Go 中直接调用 normalizeSkillNames
+// 保留 any 参数作为桥接（P3/P4 子类可能传入动态类型），内部转发到 normalizeSkillNames
 func (r *EvolutionRail) _normalizeNameSet(raw any) map[string]bool {
-	return normalizeSkillNames(raw)
+	switch v := raw.(type) {
+	case string:
+		return normalizeSkillNames([]string{v})
+	case []string:
+		return normalizeSkillNames(v)
+	default:
+		return map[string]bool{}
+	}
 }
 
 // _isSkillDisabled 检查技能是否被禁用。

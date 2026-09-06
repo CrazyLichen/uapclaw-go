@@ -51,32 +51,20 @@ func TestSplitResponseTokenFields_含token字段(t *testing.T) {
 
 // ──────────────────────────── normalizeSkillNames 测试 ────────────────────────────
 
-func TestNormalizeSkillNames_nil(t *testing.T) {
-	assert.Equal(t, map[string]bool{}, normalizeSkillNames(nil))
+func TestNormalizeSkillNames_空切片(t *testing.T) {
+	assert.Equal(t, map[string]bool{}, normalizeSkillNames([]string{}))
 }
 
-func TestNormalizeSkillNames_字符串(t *testing.T) {
-	assert.Equal(t, map[string]bool{"foo": true}, normalizeSkillNames("foo"))
+func TestNormalizeSkillNames_单个名称(t *testing.T) {
+	assert.Equal(t, map[string]bool{"foo": true}, normalizeSkillNames([]string{"foo"}))
 }
 
-func TestNormalizeSkillNames_字符串前后空格(t *testing.T) {
-	assert.Equal(t, map[string]bool{"bar": true}, normalizeSkillNames("  bar  "))
-}
-
-func TestNormalizeSkillNames_空字符串(t *testing.T) {
-	assert.Equal(t, map[string]bool{}, normalizeSkillNames(""))
-}
-
-func TestNormalizeSkillNames_列表(t *testing.T) {
+func TestNormalizeSkillNames_多个名称(t *testing.T) {
 	assert.Equal(t, map[string]bool{"a": true, "b": true}, normalizeSkillNames([]string{"a", "b"}))
 }
 
-func TestNormalizeSkillNames_列表含空格和空项(t *testing.T) {
+func TestNormalizeSkillNames_含空格和空项(t *testing.T) {
 	assert.Equal(t, map[string]bool{"x": true}, normalizeSkillNames([]string{" x ", "", "  "}))
-}
-
-func TestNormalizeSkillNames_其他类型(t *testing.T) {
-	assert.Equal(t, map[string]bool{}, normalizeSkillNames(42))
 }
 
 // ──────────────────────────── normalizeMemberRole 测试 ────────────────────────────

@@ -65,34 +65,21 @@ func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]
 	return result, promptTokenIDs, completionTokenIDs, logprobs
 }
 
-// normalizeSkillNames 将技能名称规范化为集合。
+// normalizeSkillNames 将技能名称切片规范化为集合。
 //
-// 字符串视为单个技能名；切片视为多个名称。前后空格会被裁剪。
+// 前后空格会被裁剪，空项会被跳过。
 //
 // 对齐 Python: _normalize_skill_names(raw)
-func normalizeSkillNames(raw any) map[string]bool {
-	if raw == nil {
-		return map[string]bool{}
-	}
-	switch v := raw.(type) {
-	case string:
-		name := strings.TrimSpace(v)
-		if name == "" {
-			return map[string]bool{}
+// Python 中 raw 可以是 str 或 list，Go 版本统一接受 []string（单个 string 包裹为 []string{s}）。
+func normalizeSkillNames(names []string) map[string]bool {
+	result := map[string]bool{}
+	for _, s := range names {
+		name := strings.TrimSpace(s)
+		if name != "" {
+			result[name] = true
 		}
-		return map[string]bool{name: true}
-	case []string:
-		result := map[string]bool{}
-		for _, s := range v {
-			name := strings.TrimSpace(s)
-			if name != "" {
-				result[name] = true
-			}
-		}
-		return result
-	default:
-		return map[string]bool{}
 	}
+	return result
 }
 
 // normalizeMemberRole 将成员角色规范化为稳定字符串值。
