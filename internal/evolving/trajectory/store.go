@@ -393,7 +393,7 @@ func mapToTrajectoryStep(data map[string]any) *TrajectoryStep {
 		Reward:             toFloat64(data["reward"]),
 		PromptTokenIDs:     toIntSlice(data["prompt_token_ids"]),
 		CompletionTokenIDs: toIntSlice(data["completion_token_ids"]),
-		Logprobs:           data["logprobs"],
+		Logprobs:           toLogprobsSlice(data["logprobs"]),
 		Meta:               toMapAny(data["meta"]),
 	}
 }
@@ -445,6 +445,17 @@ func toFloat64(v any) float64 {
 	default:
 		return 0
 	}
+}
+
+// toLogprobsSlice 安全转换为 []map[string]any。
+func toLogprobsSlice(v any) []map[string]any {
+	if v == nil {
+		return nil
+	}
+	if s, ok := v.([]map[string]any); ok {
+		return s
+	}
+	return nil
 }
 
 // toMapAny 安全转换为 map[string]any。

@@ -76,7 +76,8 @@ type TrajectoryStep struct {
 	// CompletionTokenIDs 补全 token ID 列表，仅 kind=llm（可选）
 	CompletionTokenIDs []int `json:"completion_token_ids"`
 	// Logprobs token 对数概率，仅 kind=llm（可选）
-	Logprobs any `json:"logprobs"`
+	// OpenAI 最常见格式为 []map[string]any（list of dict），非标准格式存入 Meta 字段
+	Logprobs []map[string]any `json:"logprobs"`
 	// Meta 扩展元数据，包含 operator_id、agent_id、invoke 关系等
 	Meta map[string]any `json:"meta"`
 }

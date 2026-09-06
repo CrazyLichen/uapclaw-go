@@ -35,7 +35,7 @@ func TestSplitResponseTokenFields_含token字段(t *testing.T) {
 	orig := llmschema.NewAssistantMessage("hello",
 		llmschema.WithPromptTokenIDs([]int{1, 2, 3}),
 		llmschema.WithCompletionTokenIDs([]int{4, 5}),
-		llmschema.WithLogprobs(map[string]any{"top_logprobs": []any{"a"}}),
+		llmschema.WithLogprobs([]map[string]any{{"token": "a", "logprob": 0.9}}),
 	)
 	resp, ptids, ctids, lp := splitResponseTokenFields(orig)
 	assert.NotNil(t, resp)
@@ -47,6 +47,17 @@ func TestSplitResponseTokenFields_含token字段(t *testing.T) {
 	assert.Equal(t, []int{1, 2, 3}, ptids)
 	assert.Equal(t, []int{4, 5}, ctids)
 	assert.NotNil(t, lp)
+	assert.Len(t, lp, 1)
+}
+
+func TestSplitResponseTokenFields_非标准logprobs格式被丢弃(t *testing.T) {
+	orig := llmschema.NewAssistantMessage("hello",
+		llmschema.WithPromptTokenIDs([]int{1, 2, 3}),
+		llmschema.WithLogprobs(map[string]any{"top_logprobs": []any{"a"}}),
+	)
+	_, _, _, lp := splitResponseTokenFields(orig)
+	// map[string]any 格式的 logprobs 无法转为 []map[string]any，丢弃
+	assert.Nil(t, lp)
 }
 
 // ──────────────────────────── normalizeSkillNames 测试 ────────────────────────────

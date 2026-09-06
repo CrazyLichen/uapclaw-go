@@ -128,7 +128,7 @@ func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *Traj
 	// 对齐 Python: 从 LLMCallDetail.response 中提取 prompt_token_ids/completion_token_ids/logprobs
 	var promptTokenIDs []int
 	var completionTokenIDs []int
-	var logprobs any
+	var logprobs []map[string]any
 	if llmDetail, ok := detail.(*LLMCallDetail); ok && llmDetail != nil && llmDetail.Response != nil {
 		if ptids, ok := llmDetail.Response["prompt_token_ids"]; ok {
 			if ids, ok := ptids.([]int); ok {
@@ -143,7 +143,9 @@ func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *Traj
 			}
 		}
 		if lp, ok := llmDetail.Response["logprobs"]; ok {
-			logprobs = lp
+			if lps, ok := lp.([]map[string]any); ok {
+				logprobs = lps
+			}
 			delete(llmDetail.Response, "logprobs")
 		}
 	}

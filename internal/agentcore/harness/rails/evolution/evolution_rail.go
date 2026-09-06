@@ -320,7 +320,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 	var detail *trajectory.LLMCallDetail
 	var promptTokenIDs []int
 	var completionTokenIDs []int
-	var logprobs any
+	var logprobs []map[string]any
 
 	if len(inputs.Messages) > 0 || inputs.Response != nil {
 		// 获取模型名称

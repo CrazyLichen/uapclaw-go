@@ -38,7 +38,7 @@ import (
 //
 // Go 中 AssistantMessage 直接暴露 PromptTokenIDs / CompletionTokenIDs / Logprobs 字段，
 // 同时有 ToOpenAIDict() 方法获取完整 map 表示。
-func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]any, []int, []int, any) {
+func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]any, []int, []int, []map[string]any) {
 	if response == nil {
 		return nil, nil, nil, nil
 	}
@@ -46,7 +46,14 @@ func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]
 	// 从结构体字段直接提取 token 级数据
 	promptTokenIDs := response.PromptTokenIDs
 	completionTokenIDs := response.CompletionTokenIDs
-	logprobs := response.Logprobs
+	// 尝试将 Logprobs 转为 []map[string]any
+	var logprobs []map[string]any
+	if response.Logprobs != nil {
+		if lp, ok := response.Logprobs.([]map[string]any); ok {
+			logprobs = lp
+		}
+		// 非标准格式不赋值，丢弃
+	}
 
 	// 获取 response 的 map 表示，从中移除 token 字段
 	dump := response.ToOpenAIDict()

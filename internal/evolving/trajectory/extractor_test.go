@@ -296,7 +296,8 @@ func TestBuildStep_TokenLevel字段提升(t *testing.T) {
 	step := e.buildStep(span)
 	assert.Equal(t, []int{1, 2, 3}, step.PromptTokenIDs)
 	assert.Equal(t, []int{4, 5}, step.CompletionTokenIDs)
-	assert.NotNil(t, step.Logprobs)
+	// Logprobs 为 []map[string]any 类型，span.Outputs 中的 []any 无法自动转换，所以为 nil
+	assert.Nil(t, step.Logprobs)
 	// 提升后从 response 中移除
 	llmDetail, ok := step.Detail.(*LLMCallDetail)
 	require.True(t, ok)
