@@ -4,8 +4,10 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── splitResponseTokenFields 测试 ────────────────────────────
@@ -174,4 +176,70 @@ func TestNormalizeCallbackMessages_浅拷贝(t *testing.T) {
 	// 修改 result 不应影响 original
 	result[0]["content"] = "changed"
 	assert.Equal(t, "hi", original[0]["content"])
+}
+
+// ──────────────────────────── baseMessageToMap 测试 ────────────────────────────
+
+func TestBaseMessageToMap_nil(t *testing.T) {
+	assert.Equal(t, map[string]any{}, baseMessageToMap(nil))
+}
+
+func TestBaseMessageToMap_纯文本消息(t *testing.T) {
+	msg := llmschema.NewUserMessage("hello")
+	result := baseMessageToMap(msg)
+	assert.Equal(t, "user", result["role"])
+	assert.NotNil(t, result["content"])
+	assert.NotContains(t, result, "name")
+	assert.NotContains(t, result, "metadata")
+}
+
+func TestBaseMessageToMap_带Name和Metadata(t *testing.T) {
+	msg := llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "hello",
+		llmschema.WithMessageName("test_user"),
+		llmschema.WithMetadata(map[string]any{"key": "val"}),
+	)
+	result := baseMessageToMap(msg)
+	assert.Equal(t, "user", result["role"])
+	assert.Equal(t, "test_user", result["name"])
+	meta, ok := result["metadata"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "val", meta["key"])
+}
+
+// ──────────────────────────── toolInfoToMap 测试 ────────────────────────────
+
+func TestToolInfoToMap_nil(t *testing.T) {
+	assert.Equal(t, map[string]any{}, toolInfoToMap(nil))
+}
+
+func TestToolInfoToMap_完整字段(t *testing.T) {
+	tool := cschema.NewToolInfo("search", "搜索工具", map[string]any{"type": "object"})
+	result := toolInfoToMap(tool)
+	assert.Equal(t, "function", result["type"])
+	assert.Equal(t, "search", result["name"])
+	assert.Equal(t, "搜索工具", result["description"])
+	assert.NotNil(t, result["parameters"])
+}
+
+// ──────────────────────────── stringPtr 测试 ────────────────────────────
+
+func TestStringPtr_空字符串(t *testing.T) {
+	assert.Nil(t, stringPtr(""))
+}
+
+func TestStringPtr_非空字符串(t *testing.T) {
+	p := stringPtr("hello")
+	assert.NotNil(t, p)
+	assert.Equal(t, "hello", *p)
+}
+
+// ──────────────────────────── formatSkillName 测试 ────────────────────────────
+
+func TestFormatSkillName_nil(t *testing.T) {
+	assert.Equal(t, "unknown", formatSkillName(nil))
+}
+
+func TestFormatSkillName_有技能名称(t *testing.T) {
+	name := "search_optimization"
+	assert.Equal(t, "search_optimization", formatSkillName(&EvolutionSnapshot{SkillName: &name}))
 }

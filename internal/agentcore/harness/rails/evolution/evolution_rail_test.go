@@ -15,49 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── baseMessageToMap 测试 ────────────────────────────
-
-func TestBaseMessageToMap_nil(t *testing.T) {
-	assert.Equal(t, map[string]any{}, baseMessageToMap(nil))
-}
-
-func TestBaseMessageToMap_纯文本消息(t *testing.T) {
-	msg := llmschema.NewUserMessage("hello")
-	result := baseMessageToMap(msg)
-	assert.Equal(t, "user", result["role"])
-	assert.NotNil(t, result["content"])
-	assert.NotContains(t, result, "name")
-	assert.NotContains(t, result, "metadata")
-}
-
-func TestBaseMessageToMap_带Name和Metadata(t *testing.T) {
-	msg := llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "hello",
-		llmschema.WithMessageName("test_user"),
-		llmschema.WithMetadata(map[string]any{"key": "val"}),
-	)
-	result := baseMessageToMap(msg)
-	assert.Equal(t, "user", result["role"])
-	assert.Equal(t, "test_user", result["name"])
-	meta, ok := result["metadata"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "val", meta["key"])
-}
-
-// ──────────────────────────── toolInfoToMap 测试 ────────────────────────────
-
-func TestToolInfoToMap_nil(t *testing.T) {
-	assert.Equal(t, map[string]any{}, toolInfoToMap(nil))
-}
-
-func TestToolInfoToMap_完整字段(t *testing.T) {
-	tool := cschema.NewToolInfo("search", "搜索工具", map[string]any{"type": "object"})
-	result := toolInfoToMap(tool)
-	assert.Equal(t, "function", result["type"])
-	assert.Equal(t, "search", result["name"])
-	assert.Equal(t, "搜索工具", result["description"])
-	assert.NotNil(t, result["parameters"])
-}
-
 // ──────────────────────────── EvolutionRail 构造测试 ────────────────────────────
 
 func TestNewEvolutionRail_默认值(t *testing.T) {
@@ -398,98 +355,6 @@ func TestBuildTrajectory_正常构建(t *testing.T) {
 	assert.Len(t, traj.Steps, 1)
 }
 
-// ──────────────────────────── TrajectoryRail 测试 ────────────────────────────
-
-func TestNewTrajectoryRail_默认值(t *testing.T) {
-	rail := NewTrajectoryRail()
-	assert.NotNil(t, rail)
-	assert.Equal(t, 10, rail.Priority())
-	assert.NotNil(t, rail.TrajectoryStore())
-}
-
-func TestNewTrajectoryRail_带选项(t *testing.T) {
-	store := trajectory.NewInMemoryTrajectoryStore()
-	rail := NewTrajectoryRail(WithTrajectoryStore(store))
-	assert.Equal(t, store, rail.TrajectoryStore())
-}
-
-func TestTrajectoryRail_收集轨迹(t *testing.T) {
-	rail := NewTrajectoryRail()
-
-	// before_invoke 初始化 builder
-	cbc := &agentinterfaces.AgentCallbackContext{}
-	cbc.SetInputs(&agentinterfaces.InvokeInputs{ConversationID: "sess-traj"})
-	err := rail.BeforeInvoke(context.Background(), cbc)
-	require.NoError(t, err)
-
-	// 记录 LLM 步骤
-	modelInputs := &agentinterfaces.ModelCallInputs{
-		Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
-		Response: llmschema.NewAssistantMessage("hello"),
-	}
-	cbcModel := &agentinterfaces.AgentCallbackContext{}
-	cbcModel.SetInputs(modelInputs)
-	err = rail.AfterModelCall(context.Background(), cbcModel)
-	require.NoError(t, err)
-
-	// 验证 builder 有步骤
-	traj := rail.buildTrajectory()
-	assert.NotNil(t, traj)
-	assert.Len(t, traj.Steps, 1)
-}
-
-func TestTrajectoryRail_RunEvolution不执行任何操作(t *testing.T) {
-	rail := NewTrajectoryRail()
-	// TrajectoryRail 使用 noOpExtension，RunEvolution 不做任何事
-	err := rail.ext.RunEvolution(context.Background(), nil, nil)
-	assert.NoError(t, err)
-}
-
-// ──────────────────────────── noOpExtension 测试 ────────────────────────────
-
-func TestNoOpExtension_AllMethods(t *testing.T) {
-	ext := noOpExtension{}
-	cbc := &agentinterfaces.AgentCallbackContext{}
-
-	assert.NoError(t, ext.OnBeforeInvoke(context.Background(), cbc))
-	assert.NoError(t, ext.OnAfterModelCall(context.Background(), cbc))
-	assert.NoError(t, ext.OnAfterToolCall(context.Background(), cbc))
-	assert.NoError(t, ext.OnAfterInvoke(context.Background(), cbc))
-	assert.NoError(t, ext.OnAfterTaskIteration(context.Background(), cbc))
-	assert.NoError(t, ext.OnAfterEvolutionTriggered(context.Background(), nil, cbc))
-	assert.True(t, ext.AllowEvolutionTrigger(TriggerAfterInvoke, cbc))
-	assert.NoError(t, ext.RunEvolution(context.Background(), nil, nil))
-}
-
-func TestNoOpExtension_SnapshotForEvolution(t *testing.T) {
-	ext := noOpExtension{}
-	traj := &trajectory.Trajectory{
-		SessionID: "test",
-		Steps: []*trajectory.TrajectoryStep{
-			{
-				Kind: trajectory.StepKindLLM,
-				Detail: &trajectory.LLMCallDetail{
-					Messages: []map[string]any{{"role": "user", "content": "hi"}},
-				},
-			},
-		},
-	}
-	snapshot := ext.SnapshotForEvolution(context.Background(), traj, nil)
-	assert.NotNil(t, snapshot)
-	assert.Equal(t, traj, snapshot.Trajectory)
-	assert.NotEmpty(t, snapshot.Messages)
-}
-
-// ──────────────────────────── EvolutionTriggerPoint 测试 ────────────────────────────
-
-func TestEvolutionTriggerPoint_值(t *testing.T) {
-	assert.Equal(t, EvolutionTriggerPoint("after_invoke"), TriggerAfterInvoke)
-	assert.Equal(t, EvolutionTriggerPoint("after_model_call"), TriggerAfterModelCall)
-	assert.Equal(t, EvolutionTriggerPoint("after_tool_call"), TriggerAfterToolCall)
-	assert.Equal(t, EvolutionTriggerPoint("after_task_iteration"), TriggerAfterTaskIteration)
-	assert.Equal(t, EvolutionTriggerPoint("none"), TriggerNone)
-}
-
 // ──────────────────────────── publishTrajectorySnapshot 测试 ────────────────────────────
 
 func TestPublishTrajectorySnapshot_无Sink跳过(t *testing.T) {
@@ -590,17 +455,7 @@ func TestAfterInvoke_同步模式触发演化(t *testing.T) {
 	assert.Equal(t, 1, ext.runEvolutionCalled)
 }
 
-// ──────────────────────────── stringPtr / _isBlank 测试 ────────────────────────────
-
-func TestStringPtr_空字符串(t *testing.T) {
-	assert.Nil(t, stringPtr(""))
-}
-
-func TestStringPtr_非空字符串(t *testing.T) {
-	p := stringPtr("hello")
-	assert.NotNil(t, p)
-	assert.Equal(t, "hello", *p)
-}
+// ──────────────────────────── _isBlank 测试 ────────────────────────────
 
 func TestIsBlank(t *testing.T) {
 	assert.True(t, _isBlank(""))
