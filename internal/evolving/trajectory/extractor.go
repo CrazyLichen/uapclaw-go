@@ -207,8 +207,7 @@ func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDe
 	}
 
 	// 对齐 Python: outputs = self._extract_outputs(span); response = self._parse_llm_response(outputs)
-	outputs := extractOutputs(span)
-	response := parseLLMResponse(outputs)
+	response := extractOutputsAsMap(span)
 
 	// 对齐 Python: usage = response.get("usage") if response else None
 	var usage map[string]any
@@ -309,8 +308,8 @@ func (e *TracerTrajectoryExtractor) buildMeta(span *tracer.TraceAgentSpan, baseM
 
 	// 对齐 Python: if kind not in ("llm", "tool"): meta["inputs"] = ...; meta["outputs"] = ...
 	if kind != StepKindLLM && kind != StepKindTool {
-		meta["inputs"] = extractInputs(&span.Span)
-		meta["outputs"] = extractOutputs(&span.Span)
+		meta["inputs"] = extractInputsAsMap(&span.Span)
+		meta["outputs"] = extractOutputsAsMap(&span.Span)
 	}
 
 	// 对齐 Python: meta["invoke_id"] = getattr(span, "invoke_id", None)
@@ -389,61 +388,34 @@ func dtToMs(t *time.Time) int {
 	return int(t.UnixMilli())
 }
 
-// parseLLMResponse 解析 LLM 响应。
-//
-// 对齐 Python: TrajectoryExtractor._parse_llm_response(outputs)
-func parseLLMResponse(outputs any) map[string]any {
-	if outputs == nil {
-		return nil
-	}
-	switch v := outputs.(type) {
-	case map[string]any:
-		return v
-	default:
-		return nil
-	}
-}
-
-// extractInputs 从 Span 提取输入数据。
+// extractInputsAsMap 从 Span 提取输入数据为 map[string]any。
 //
 // 对齐 Python: TrajectoryExtractor._extract_inputs(span)
 // 对应 Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
-func extractInputs(span *tracer.Span) any {
+func extractInputsAsMap(span *tracer.Span) map[string]any {
 	raw := span.Inputs
 	if m, ok := raw.(map[string]any); ok {
 		if inner, ok := m["inputs"]; ok {
-			return inner
+			if innerMap, ok := inner.(map[string]any); ok {
+				return innerMap
+			}
 		}
-	}
-	return raw
-}
-
-// extractOutputs 从 Span 提取输出数据。
-//
-// 对齐 Python: TrajectoryExtractor._extract_outputs(span)
-func extractOutputs(span *tracer.Span) any {
-	raw := span.Outputs
-	if m, ok := raw.(map[string]any); ok {
-		if inner, ok := m["outputs"]; ok {
-			return inner
-		}
-	}
-	return raw
-}
-
-// extractInputsAsMap 从 Span 提取输入数据为 map[string]any。
-func extractInputsAsMap(span *tracer.Span) map[string]any {
-	raw := extractInputs(span)
-	if m, ok := raw.(map[string]any); ok {
 		return m
 	}
 	return nil
 }
 
 // extractOutputsAsMap 从 Span 提取输出数据为 map[string]any。
+//
+// 对齐 Python: TrajectoryExtractor._extract_outputs(span)
 func extractOutputsAsMap(span *tracer.Span) map[string]any {
-	raw := extractOutputs(span)
+	raw := span.Outputs
 	if m, ok := raw.(map[string]any); ok {
+		if inner, ok := m["outputs"]; ok {
+			if innerMap, ok := inner.(map[string]any); ok {
+				return innerMap
+			}
+		}
 		return m
 	}
 	return nil
