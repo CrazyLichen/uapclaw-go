@@ -279,8 +279,8 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("WorkspaceManager设置后获取", func(t *testing.T) {
-		c.SetWorkspaceManager("ws_manager")
-		assert.Equal(t, "ws_manager", c.WorkspaceManager())
+		c.SetWorkspaceManager(nil)
+		assert.Nil(t, c.WorkspaceManager())
 	})
 
 	t.Run("WorkspaceInitialized设置后获取", func(t *testing.T) {
@@ -455,12 +455,12 @@ func TestAgentConfigurator_CreateWorkspaceManager(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// TestAgentConfigurator_CreateWorktreeManager 测试返回 nil
+// TestAgentConfigurator_CreateWorktreeManager 测试无 panic
 func TestAgentConfigurator_CreateWorktreeManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	c := NewAgentConfigurator(card)
-	result := c.CreateWorktreeManager(atschema.NewTeamAgentSpec())
-	assert.Nil(t, result)
+	// CreateWorktreeManager 不返回值（WorktreeManager 待 #9.68 实现）
+	c.CreateWorktreeManager(atschema.NewTeamAgentSpec())
 }
 
 // TestAgentConfigurator_UpdateModelPool 测试模型池更新

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -31,8 +32,8 @@ type MountedRails struct {
 	// TODO(#9.68): FirstIterationGate 类型
 	FirstIterGate any
 	// TeamWorkspace 团队工作空间轨
-	// TODO(#9.66+#9.68): TeamWorkspaceRail 类型
-	TeamWorkspace any
+	// ⤴️ 9.66 回填完成：TeamWorkspaceRail 具体类型
+	TeamWorkspace *team_workspace.TeamWorkspaceRail
 	// ToolApproval 工具审批轨
 	// TODO(#9.68): TeamToolApprovalRail 类型
 	ToolApproval any
@@ -116,7 +117,7 @@ func BuildTeamHarness(
 	teamToolRail any, // TODO(#9.68): 团队工具Rail
 	teamPolicyRail any, // TODO(#9.68): 团队策略Rail
 	firstIterGate any, // TODO(#9.68): 首轮门控
-	teamWorkspaceRail any, // TODO(#9.66+#9.68): 团队工作空间Rail
+	teamWorkspaceRail *team_workspace.TeamWorkspaceRail, // ⤴️ 9.66: 团队工作空间Rail
 	toolApprovalRail any, // TODO(#9.68): 工具审批Rail
 	teamPlanModeRail any, // TODO(#9.68): 团队规划模式Rail
 	initialPlanMode bool,
@@ -124,7 +125,7 @@ func BuildTeamHarness(
 	// TODO(#9.56): 构建深度Agent deepAgent = agentSpec.Build()
 	// TODO(#9.68): 添加团队策略Rail deepAgent.AddRail(teamPolicyRail)
 	// TODO(#9.68): 首轮门控Rail deepAgent.AddRail(firstIterGate)
-	// TODO(#9.66+#9.68): 团队工作空间Rail deepAgent.AddRail(teamWorkspaceRail)
+	// TODO(#9.68): 团队工作空间Rail deepAgent.AddRail(teamWorkspaceRail)
 	// TODO(#9.68): 工具审批Rail deepAgent.AddRail(toolApprovalRail)
 	// TODO(#9.68): 团队规划模式Rail deepAgent.AddRail(teamPlanModeRail)
 	rails := &MountedRails{

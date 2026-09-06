@@ -2,6 +2,7 @@ package agent
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 )
 
@@ -17,8 +18,8 @@ type TeamInfra struct {
 	// TeamBackend 团队后端（DB + task/message managers）
 	TeamBackend *tools.TeamBackend
 	// WorkspaceManager 团队工作空间管理器
-	// TODO(#9.66): TeamWorkspaceManager 类型
-	WorkspaceManager any
+	// ⤴️ 9.66 回填完成：从 any 替换为具体类型
+	WorkspaceManager *team_workspace.TeamWorkspaceManager
 	// WorkspaceInitialized 工作空间是否已初始化
 	WorkspaceInitialized bool
 	// TaskManager 任务管理器（概念上从 TeamBackend 派生，显式保留以便测试注入）

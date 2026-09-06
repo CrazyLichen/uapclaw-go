@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
@@ -9,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -194,9 +197,10 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// 待实现：c.SetMessager(createMessager(messagerConfig))
 
 	// 6. 工作空间管理器
+	// ⤴️ 9.66 回填完成：创建并设置工作空间管理器
 	if spec.Workspace != nil && spec.Workspace.Enabled {
-		_ = agentSpec // 避免 unused 警告
-		// TODO(#9.66): 设置工作空间管理器 c.SetWorkspaceManager(c.CreateWorkspaceManager(spec, ctx))
+		ws := c.CreateWorkspaceManager(spec, ctx)
+		c.SetWorkspaceManager(ws)
 	}
 
 	// 7. 模型分配器（仅 leader）
@@ -207,7 +211,11 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
 
 	// 9. 工作树管理器（仅非 leader）
-	// TODO(#9.66): 设置工作树管理器 c.CreateWorktreeManager(spec)
+	// ⤴️ 9.66 回填：工作树管理器初始化
+	// TODO(#9.68): WorktreeManager 实现后替换为具体类型
+	if ctx.Role != atschema.TeamRoleLeader {
+		c.CreateWorktreeManager(spec)
+	}
 }
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
@@ -220,13 +228,26 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.53): 从 blueprint 或 resolveLanguage 获取
 
 	// 3. workspace 路径解析 + symlink
-	// TODO(#9.66): workspace 管理器
+	// ⤴️ 9.66 回填完成：工作空间初始化
+	if c.WorkspaceManager() != nil && !c.WorkspaceInitialized() {
+		if err := c.WorkspaceManager().Initialize(context.Background()); err != nil {
+			logger.Error(logComponent).Err(err).Msg("工作空间初始化失败")
+		} else {
+			c.SetWorkspaceInitialized(true)
+		}
+	}
 
 	// 4. 团队后端注册清理路径
 	// TODO(#9.58): 团队后端工作空间路径 if teamBackend && wsSpec.RootPath
 
 	// 5. 工作空间管理器挂载路径
-	// TODO(#9.66): 工作空间管理器路径 if workspaceManager && wsSpec.RootPath
+	// 5. 工作空间管理器挂载路径
+	// ⤴️ 9.66 回填完成：MountIntoWorkspace
+	if c.WorkspaceManager() != nil && spec.Workspace.RootPath != "" {
+		if err := c.WorkspaceManager().MountIntoWorkspace(spec.Workspace.RootPath); err != nil {
+			logger.Error(logComponent).Err(err).Str("root_path", spec.Workspace.RootPath).Msg("工作空间挂载失败")
+		}
+	}
 
 	// 6. modelConfig = ctx.MemberModel 或 agentSpec.Model
 	// 7. sysOperationSpec 构造（默认 LOCAL mode）
@@ -249,7 +270,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		nil,   // TODO(#9.68): 团队工具Rail
 		nil,   // TODO(#9.68): 团队策略Rail
 		nil,   // TODO(#9.68): 首轮门控
-		nil,   // TODO(#9.66+#9.68): 团队工作空间Rail
+		nil,   // TODO(#9.68): 团队工作空间Rail（9.66 已实现 TeamWorkspaceRail，待 9.68 集成）
 		nil,   // TODO(#9.68): 工具审批Rail
 		nil,   // TODO(#9.68): 团队规划模式Rail
 		false, // TODO(#9.runtime): 是否启用团队规划模式
@@ -349,7 +370,10 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	c.SetMessageManager(tb.MessageManager())
 
 	// 对齐 Python 步骤 9: workspace_manager cleanup path
-	// TODO(#9.66): WorkspaceManager 类型回填后调用 tb.RegisterCleanupPath(ws.workspace_path)
+	// ⤴️ 9.66 回填完成
+	if ws := c.WorkspaceManager(); ws != nil {
+		tb.RegisterCleanupPath(ws.WorkspacePath())
+	}
 
 	// 对齐 Python 步骤 10: team_home cleanup path
 	tb.RegisterCleanupPath(agentteams.TeamHome(teamName))
@@ -363,19 +387,45 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 // CreateWorkspaceManager 创建团队工作空间管理器。
 // 对齐 Python: AgentConfigurator.create_workspace_manager(spec, ctx)
 //
-// TODO(#9.66): TeamWorkspaceManager 实现后替换
-func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) any {
-	// TODO(#9.66): TeamWorkspaceManager 构造
-	return nil
+// ⤴️ 9.66 回填完成
+func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *team_workspace.TeamWorkspaceManager {
+	wsConfig := spec.Workspace
+	if wsConfig == nil {
+		return nil
+	}
+	teamName := "default"
+	if ctx.TeamSpec != nil && ctx.TeamSpec.TeamName != "" {
+		teamName = ctx.TeamSpec.TeamName
+	}
+
+	// 对齐 Python: ws_path = ws_config.root_path or str(team_home(team_name) / "team-workspace")
+	wsPath := wsConfig.RootPath
+	if wsPath == "" {
+		wsPath = filepath.Join(agentteams.TeamHome(teamName), "team-workspace")
+	}
+
+	// 对齐 Python: os.makedirs(ws_path, exist_ok=True)
+	if err := os.MkdirAll(wsPath, 0o755); err != nil {
+		logger.Error(logComponent).Err(err).Str("ws_path", wsPath).Msg("创建工作空间目录失败")
+		return nil
+	}
+	logger.Info(logComponent).Str("ws_path", wsPath).Msg("工作空间目录已确认")
+
+	// 对齐 Python: TeamWorkspaceManager(config=ws_config, workspace_path=ws_path, team_name=team_name)
+	return team_workspace.NewTeamWorkspaceManager(
+		*wsConfig,
+		wsPath,
+		teamName,
+		team_workspace.WorkspaceModeLocal,
+	)
 }
 
 // CreateWorktreeManager 创建工作树管理器。
 // 对齐 Python: AgentConfigurator.create_worktree_manager(spec)
 //
-// TODO(#9.66): WorktreeManager 实现后替换
-func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) any {
-	// TODO(#9.66): WorktreeManager 构造 + 事件镜像
-	return nil
+// ⤴️ 9.66 回填：框架就绪，WorktreeManager 具体实现待 #9.68
+func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) {
+	// TODO(#9.68): WorktreeManager 实现 + 事件镜像回调
 }
 
 // BuildMemoryManager 构建团队共享记忆管理器。
@@ -523,10 +573,12 @@ func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.TeamB
 
 // WorkspaceManager 返回工作空间管理器。
 // 对齐 Python: AgentConfigurator.workspace_manager property
-func (c *AgentConfigurator) WorkspaceManager() any { return c.infra.WorkspaceManager }
+// ⤴️ 9.66 回填完成
+func (c *AgentConfigurator) WorkspaceManager() *team_workspace.TeamWorkspaceManager { return c.infra.WorkspaceManager }
 
 // SetWorkspaceManager 设置工作空间管理器。
-func (c *AgentConfigurator) SetWorkspaceManager(v any) { c.infra.WorkspaceManager = v }
+// ⤴️ 9.66 回填完成
+func (c *AgentConfigurator) SetWorkspaceManager(v *team_workspace.TeamWorkspaceManager) { c.infra.WorkspaceManager = v }
 
 // WorkspaceInitialized 返回工作空间是否已初始化。
 func (c *AgentConfigurator) WorkspaceInitialized() bool { return c.infra.WorkspaceInitialized }
