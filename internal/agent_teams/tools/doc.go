@@ -12,6 +12,7 @@
 //
 //	tools/
 //	├── doc.go               # 包文档
+//	├── team_tool.go         # TeamTool 团队工具基类 ✅ 9.66
 //	├── team_backend.go      # TeamBackend 门面（30+ 方法 + Functional Options） ✅ 9.65a-4
 //	├── task_manager.go      # TeamTaskManager 具体实现（20+ 方法 + 事件发布） ✅ 9.65a-2 + 9.65-1
 //	├── message_manager.go   # TeamMessageManager 具体实现（7 方法薄门面） ✅ 9.65a-3
