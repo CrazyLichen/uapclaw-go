@@ -204,8 +204,8 @@ func TestNewSkillUseRail_无效模式(t *testing.T) {
 		if r == nil {
 			t.Error("期望 panic，但没有发生")
 		}
-		if !strings.Contains(fmt.Sprintf("%v", r), "Unsupported skill_mode") {
-			t.Errorf("panic 消息不包含 'Unsupported skill_mode': %v", r)
+		if !strings.Contains(fmt.Sprintf("%v", r), "不支持的 skill_mode") {
+			t.Errorf("panic 消息不包含 '不支持的 skill_mode': %v", r)
 		}
 	}()
 	NewSkillUseRail([]string{"/tmp/skills"}, WithSkillMode("invalid"))
