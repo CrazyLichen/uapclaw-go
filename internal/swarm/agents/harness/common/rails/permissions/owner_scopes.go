@@ -33,6 +33,10 @@ type OwnerScopesPermissionContext struct {
 	AvatarMode bool `json:"avatar_mode"`
 }
 
+// permissionContextKey context.Context 中存储 OwnerScopesPermissionContext 的键类型。
+// 对齐 Python: TOOL_PERMISSION_CONTEXT ContextVar
+type permissionContextKey struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -45,11 +49,12 @@ var severityMap = map[string]int{
 	"deny":  2,
 }
 
-// ownerScopesLogComponent 日志组件
-var ownerScopesLogComponent = logger.ComponentChannel
+// ──────────────────────────── 全局变量 ────────────────────────────
 
-// persistLock 持久化写锁，防止并发写 YAML
-// 对齐 Python: _persist_lock = threading.Lock()
+// logComponent 日志组件
+var logComponent = logger.ComponentPermissions
+
+// persistLock 持久化写锁，对齐 Python: _persist_lock = threading.Lock()
 var persistLock sync.Mutex
 
 // matchers 全局匹配器实例（只读，线程安全）。
@@ -75,9 +80,6 @@ func NewOwnerScopesPermissionContextFromDict(data map[string]any) *OwnerScopesPe
 	}
 	if v, ok := data["principal_user_id"].(string); ok {
 		pc.PrincipalUserID = v
-	}
-	if v, ok := data["triggering_user_id"].(bool); ok {
-		pc.TriggeringUserID = fmt.Sprintf("%v", v)
 	}
 	if v, ok := data["triggering_user_id"].(string); ok {
 		pc.TriggeringUserID = v
@@ -181,7 +183,7 @@ func ResolveOwnerScopeLevel(scopeCfg map[string]any, toolName string, toolArgs m
 func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map[string]any, channelID string, principalUserID string) (string, error) {
 	// 对齐 Python: if perm_ctx is None or not perm_ctx.principal_user_id: return "deny"
 	if strings.TrimSpace(principalUserID) == "" {
-		logger.Info(ownerScopesLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Msg("[check_avatar_permission] principalUserID 为空，返回 deny")
 		return "deny", nil
@@ -196,7 +198,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	cid := strings.TrimSpace(channelID)
 	uid := strings.TrimSpace(principalUserID)
 
-	logger.Info(ownerScopesLogComponent).
+	logger.Info(logComponent).
 		Str("tool_name", toolName).
 		Str("channel_id", cid).
 		Str("principal_user_id", uid).
@@ -205,7 +207,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 
 	// 对齐 Python: if not isinstance(owner_scopes, dict) or not owner_scopes: return "allow"
 	if ownerScopes == nil || len(ownerScopes) == 0 {
-		logger.Info(ownerScopesLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Msg("[check_avatar_permission] owner_scopes 为空，返回 allow")
 		return "allow", nil
@@ -215,7 +217,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	chScopes, _ := ownerScopes[cid].(map[string]any)
 	scopeCfg, _ := chScopes[uid].(map[string]any)
 
-	logger.Info(ownerScopesLogComponent).
+	logger.Info(logComponent).
 		Str("channel_id", cid).
 		Str("principal_user_id", uid).
 		Bool("scope_cfg_found", scopeCfg != nil).
@@ -224,7 +226,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	// 对齐 Python: level = _resolve_owner_scope_level(scope_cfg, tool_name, tool_args)
 	level := ResolveOwnerScopeLevel(scopeCfg, toolName, toolArgs)
 
-	logger.Info(ownerScopesLogComponent).
+	logger.Info(logComponent).
 		Str("tool_name", toolName).
 		Str("resolved_level", level).
 		Msg("[check_avatar_permission] owner_scope 级别已解析")
@@ -317,13 +319,13 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 	}
 	ok := harnesssecurity.WritePermissionsSectionToAgentConfigYAML(configPath, permCfg)
 	if !ok {
-		logger.Warn(ownerScopesLogComponent).
+		logger.Warn(logComponent).
 			Str("config_path", configPath).
 			Msg("persistToOwnerScope 写盘失败")
 		return false
 	}
 
-	logger.Info(ownerScopesLogComponent).
+	logger.Info(logComponent).
 		Str("tool_name", toolName).
 		Str("channel_id", channelID).
 		Str("user_id", userID).

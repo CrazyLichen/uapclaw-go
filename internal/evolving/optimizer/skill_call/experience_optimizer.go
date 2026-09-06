@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
@@ -120,7 +121,7 @@ func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *
 		"conversation_snippet", strings.TrimSpace(buildConversationSnippet(evoCtx.Messages, 10, 100, o.language)),
 		"existing_desc_summary", orDefault(limitSummaryLines(descSummary, 2), defaultExistingSummary),
 		"existing_body_summary", orDefault(limitSummaryLines(bodySummary, 2), defaultExistingSummary),
-		"user_query", truncateOrDefault(evoCtx.UserQuery, 500, "无", "None"),
+		"user_query", truncateOrDefault(evoCtx.UserQuery, 500, o.language, "无", "None"),
 	)
 
 	logger.Info(logComponent).
@@ -712,15 +713,17 @@ func orDefault(value string, defaults ...string) string {
 }
 
 // truncateOrDefault 截断字符串或返回语言默认值。
-func truncateOrDefault(s string, maxLen int, cnDefault string, enDefault string) string {
+// 对齐 Python: ctx.user_query[:500] if ctx.user_query else default
+func truncateOrDefault(s string, maxLen int, language string, cnDefault string, enDefault string) string {
 	if s == "" {
-		if true { // 由调用方决定语言
-			return cnDefault
+		if language == "en" {
+			return enDefault
 		}
-		return enDefault
+		return cnDefault
 	}
-	if len(s) > maxLen {
-		return s[:maxLen]
+	if utf8.RuneCountInString(s) > maxLen {
+		runes := []rune(s)
+		return string(runes[:maxLen])
 	}
 	return s
 }

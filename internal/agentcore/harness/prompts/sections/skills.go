@@ -74,8 +74,10 @@ No skill was selected for this task. When skill information is available, read t
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildSkillLine 生成单行技能描述行。
-// 对齐 Python: build_skill_line(index, skill_name, description)
-func BuildSkillLine(index int, skillName, description string) string {
+// 对齐 Python: build_skill_line(index, skill_name, description, skill_md_path)
+func BuildSkillLine(index int, skillName, description string, skillMDPath string) string {
+	// skillMDPath 当前未使用，保留参数以对齐 Python 接口
+	_ = skillMDPath
 	return fmt.Sprintf("%d. %s: %s", index, skillName, description)
 }
 

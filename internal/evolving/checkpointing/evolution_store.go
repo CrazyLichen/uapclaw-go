@@ -209,16 +209,18 @@ func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string,
 			// 对齐 Python: result = await self.sys_operation.fs().read_file(...)
 			result, err := fsOp.ReadFile(ctx, path)
 			if err != nil || result == nil || result.Code != 0 {
+				// 对齐 Python: sys_operation 读文件失败时返回空串，不 fallback 到本地
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
-					Msg("[EvolutionStore] sys_operation 读文件失败，fallback 到本地")
-				return localRead()
+					Msg("[EvolutionStore] sys_operation 读文件失败")
+				return "", nil
 			}
 			if result.Data != nil && result.Data.Content != "" {
 				return result.Data.Content, nil
 			}
-			return localRead()
+			// 对齐 Python: content 为空时也返回空串，不 fallback
+			return "", nil
 		}
 	}
 	return localRead()
@@ -239,18 +241,20 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 		if fsOp != nil {
 			result, err := fsOp.WriteFile(ctx, path, content)
 			if err != nil {
+				// 对齐 Python: sys_operation 写文件失败时返回 error，不 fallback 到本地
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
 					Msg("[EvolutionStore] sys_operation 写文件失败")
-				return localWrite()
+				return fmt.Errorf("sys_operation 写文件失败: %w", err)
 			}
 			if result != nil && result.Code != 0 {
+				// 对齐 Python: sys_operation 写文件返回非零状态码时打 warning，不 fallback
 				logger.Warn(logComponent).
 					Str("path", path).
 					Str("message", result.Message).
 					Msg("[EvolutionStore] sys_operation 写文件返回非零状态码")
-				return localWrite()
+				return fmt.Errorf("sys_operation 写文件返回非零状态码: %s", result.Message)
 			}
 			return nil
 		}
@@ -460,7 +464,6 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 
 	evoLog, loadErr := s.LoadFullEvolutionLog(ctx, name)
 	if loadErr != nil {
-		lock.Unlock()
 		return fmt.Errorf("load evolution log for append_record: %w", loadErr)
 	}
 	mergeTarget := record.Change.MergeTarget

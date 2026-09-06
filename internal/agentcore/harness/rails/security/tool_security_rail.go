@@ -119,6 +119,11 @@ func NewPermissionInterruptRail(
 		r.engine.SetPermissionChecksActive(r.host.ToolPermissionChecksActive)
 	}
 
+	// 宿主场景钩子注入引擎
+	if r.host.PermissionSceneHook != nil {
+		r.engine.SetSceneHook(r.host.PermissionSceneHook)
+	}
+
 	// 设置 ResolveInterruptFn
 	r.ResolveInterruptFn = r.resolvePermissionInterrupt
 
@@ -206,6 +211,9 @@ func (r *PermissionInterruptRail) UpdateConfig(config map[string]any, toolNames 
 	r.engine.UpdateConfig(config)
 	if r.host.ToolPermissionChecksActive != nil {
 		r.engine.SetPermissionChecksActive(r.host.ToolPermissionChecksActive)
+	}
+	if r.host.PermissionSceneHook != nil {
+		r.engine.SetSceneHook(r.host.PermissionSceneHook)
 	}
 	if toolNames != nil {
 		newToolNames := make(map[string]struct{}, len(toolNames))

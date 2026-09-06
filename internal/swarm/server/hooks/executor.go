@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -256,10 +257,14 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 		shell = v
 	}
 
-	hookInputJSON, err := json.Marshal(hookInput)
-	if err != nil {
+	// 对齐 Python: json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(hookInput); err != nil {
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("serialize hook input: %v", err)}
 	}
+	hookInputJSON := bytes.TrimSpace(buf.Bytes())
 	// 对齐 Python: tool_name = hook_input.get("tool_name", "")
 	toolName, _ := hookInput["tool_name"].(string)
 
@@ -306,11 +311,6 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 
 	stdout := stdoutBuf.String()
 	stderr := stderrBuf.String()
-
-	// 对齐 Python: if returncode is None → NON_BLOCKING_ERROR("hook process killed")
-	if cmd.ProcessState == nil {
-		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: "hook process killed"}
-	}
 
 	// 对齐 Python 退出码语义：
 	if returnCode == 0 {
@@ -372,10 +372,16 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	// 对齐 Python: model_name = config.get("model", "")
 	modelName, _ := config["model"].(string)
 
-	// 对齐 Python: Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False)
+	// 对齐 Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
 	// Python: final_prompt = prompt_template.replace("$ARGUMENTS", hook_input_json)
 	// Python: final_prompt = final_prompt.replace("$TOOL_NAME", tool_name)
-	hookInputJSON, _ := json.Marshal(hookInput)
+	var promptBuf bytes.Buffer
+	promptEnc := json.NewEncoder(&promptBuf)
+	promptEnc.SetEscapeHTML(false)
+	if err := promptEnc.Encode(hookInput); err != nil {
+		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("serialize hook input: %v", err)}
+	}
+	hookInputJSON := bytes.TrimSpace(promptBuf.Bytes())
 	toolName, _ := hookInput["tool_name"].(string)
 	finalPrompt := strings.ReplaceAll(promptTemplate, "$ARGUMENTS", string(hookInputJSON))
 	finalPrompt = strings.ReplaceAll(finalPrompt, "$TOOL_NAME", toolName)

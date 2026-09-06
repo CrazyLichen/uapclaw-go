@@ -116,7 +116,11 @@ func (h *EvaluateStageHandler) gradeAllEvals(sctx *skilldev.SkillDevContext, ite
 
 	for _, ec := range evalCases {
 		caseMap, _ := ec.(map[string]any)
-		evalName := "eval-0"
+		evalID := 0
+		if id, ok := caseMap["id"]; ok {
+			evalID = toIntFromAny(id)
+		}
+		evalName := fmt.Sprintf("eval-%d", evalID)
 		if name, ok := caseMap["name"].(string); ok {
 			evalName = name
 		}

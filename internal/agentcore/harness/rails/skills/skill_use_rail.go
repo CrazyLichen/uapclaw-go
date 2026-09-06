@@ -279,7 +279,12 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		if resourceMgr != nil && toolID != "" {
 			existing, err := resourceMgr.GetTool([]string{toolID})
 			if err == nil && len(existing) > 0 {
-				_, _ = resourceMgr.RemoveTool([]string{toolID})
+				if _, removeErr := resourceMgr.RemoveTool([]string{toolID}); removeErr != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("tool_id", toolID).
+						Err(removeErr).
+						Msg("从 ResourceMgr 移除旧工具失败")
+				}
 			}
 			if err := resourceMgr.AddTool(t); err != nil {
 				logger.Warn(logger.ComponentAgentCore).
@@ -315,13 +320,18 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
-// Uninit 从 AbilityManager + ResourceMgr 注销工具。
+// Uninit 从 AbilityManager 注销工具。
 // 对齐 Python: SkillUseRail.uninit() L308-321
 func (r *SkillUseRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
 	if am != nil {
 		for toolName := range r.ownedToolNames {
-			am.Remove(toolName)
+			removed := am.Remove(toolName)
+			if removed == nil {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("tool_name", toolName).
+					Msg("从 AbilityManager 注销工具失败，工具不存在")
+			}
 		}
 	}
 
@@ -554,9 +564,12 @@ func (r *SkillUseRail) loadSkill(dir string, modTime time.Time) (*skillpkg.Skill
 			Str("path", skillMDPath).
 			Err(err).
 			Msg("Failed to load description")
-		description = fmt.Sprintf("Skill located in %s", dir)
 	} else {
 		description = desc
+	}
+	// 对齐 Python: description or f"Skill located in {skill_dir}"，空串也走 fallback
+	if description == "" {
+		description = fmt.Sprintf("Skill located in %s", dir)
 	}
 
 	skill := skillpkg.NewSkill(filepath.Base(dir), description, dir)
@@ -664,8 +677,18 @@ func (r *SkillUseRail) fetchEvolutionTexts(ctx context.Context) {
 		return
 	}
 	for _, skill := range r.skills {
-		text := r.evolutionStore.FormatDescExperienceText(ctx, skill.Name, 5)
-		r.evolutionTexts[skill.Name] = text
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("skill", skill.Name).
+						Any("recover", rec).
+						Msg("获取演进经验文本失败")
+				}
+			}()
+			text := r.evolutionStore.FormatDescExperienceText(ctx, skill.Name, 5)
+			r.evolutionTexts[skill.Name] = text
+		}()
 	}
 }
 
@@ -699,6 +722,7 @@ func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
 			idx,
 			skill.Name,
 			r.getSkillDescription(skill),
+			skill.MDPath,
 		))
 	}
 	skillLines := sections.BuildSkillLines(bodyLines)

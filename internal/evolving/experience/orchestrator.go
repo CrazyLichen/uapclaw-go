@@ -168,7 +168,12 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 			Str("request_id", requestID).
 			Err(err).
 			Msg("[OnlineEvolutionOrchestrator] auto-approve 失败")
-		// 对齐 Python: auto-approve 失败不返回 error，仍返回 auto_approved 状态
+		return &OnlineEvolutionResult{
+			SkillName: skillName,
+			Status:    OnlineEvolutionStatusAutoApproved,
+			Request:   request,
+			Message:   fmt.Sprintf("auto-approve failed for skill=%s: %v", skillName, err),
+		}, fmt.Errorf("auto-approve failed: %w", err)
 	}
 	if result.AppliedCount > 0 || result.PendingCount > 0 {
 		logger.Info(logComponent).

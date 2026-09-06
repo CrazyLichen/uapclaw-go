@@ -155,6 +155,9 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 			exception.WithMsg("意图识别不支持包含文件或 JSON 的输入。"),
 		)
 	}
+	if len(texts) == 0 {
+		return nil, exception.NewBaseError(exception.StatusError, exception.WithMsg("no text input found"))
+	}
 	if len(texts) > 1 {
 		return nil, exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
@@ -553,14 +556,7 @@ func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.
 		)
 	}
 
-	if len(intent.DependTaskID) == 0 {
-		return nil, exception.NewBaseError(
-			exception.StatusAgentControllerRuntimeError,
-			exception.WithMsg("修改任务意图缺少 DependTaskID，无法定位旧任务"),
-		)
-	}
-	// 对齐 CONTINUE_TASK 模式：用 DependTaskID[0] 查找旧任务，而非 TargetTaskID（新生成 UUID）
-	oldTaskID := intent.DependTaskID[0]
+	oldTaskID := intent.TargetTaskID
 
 	if _, err := h.TaskScheduler.CancelTask(ctx, oldTaskID); err != nil {
 		logger.Warn(logComponentIntent).Err(err).Str("task_id", oldTaskID).Msg("取消旧任务失败，继续修改")

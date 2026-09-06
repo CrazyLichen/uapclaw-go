@@ -179,7 +179,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoC
 		"existing_desc_summary", shortenExistingEvolutionsSummary(descSummary, 2),
 		"existing_body_summary", shortenExistingEvolutionsSummary(bodySummary, 2),
 		"existing_script_summary", shortenExistingEvolutionsSummary(scriptSummary, 1),
-		"user_query", truncateOrDefault(evoCtx.UserQuery, UserIntentRetryChars, "无", "None"),
+		"user_query", truncateOrDefault(evoCtx.UserQuery, UserIntentRetryChars, o.language, "无", "None"),
 	)
 
 	logger.Info(logComponent).
@@ -878,40 +878,10 @@ func parsePatchResponse(raw string) (map[string]any, string) {
 
 // teamExtractJSONWithError 团队专用的 JSON 提取 + 错误返回。
 //
+// 复用通用版 ExtractJSONWithError（已包含 FixJSONText 修复步骤），
 // 对齐 Python: TeamSkillExperienceOptimizer._extract_json_with_error(raw)
 func teamExtractJSONWithError(raw string) (any, string) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, "empty response"
-	}
-
-	// 步骤 1: 直接解析
-	result := tryParse(raw)
-	if result != nil {
-		return result, ""
-	}
-
-	// 步骤 2: 正则提取 [ ... ] 或 { ... }
-	lastError := "unknown"
-	for _, pattern := range []string{"\\[[\\s\\S]*\\]", "\\{[\\s\\S]*\\}"} {
-		re := regexp.MustCompile(pattern)
-		matched := re.FindString(raw)
-		if matched != "" {
-			result = tryParse(matched)
-			if result != nil {
-				return result, ""
-			}
-			var err error
-			result, err = tryParseWithError(matched)
-			if err != nil {
-				lastError = err.Error()
-			}
-			if result != nil {
-				return result, ""
-			}
-		}
-	}
-	return nil, lastError
+	return ExtractJSONWithError(raw)
 }
 
 // summarizeSkillContentTeam 团队优化器技能内容截断。

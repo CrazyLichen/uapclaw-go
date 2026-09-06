@@ -257,7 +257,15 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 
 // buildSkillRail 构建技能使用护栏。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
-func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
+func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
+	// 对齐 Python: try-except 保护，失败返回 nil 不影响其他 Rail
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).Msg("buildSkillRail panic，跳过")
+			rail = nil
+		}
+	}()
+
 	skillsDir := workspace.AgentSkillsDir()
 	if skillsDir == "" {
 		return nil
@@ -267,14 +275,26 @@ func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
 	if d.skillManager != nil {
 		disabled = d.skillManager.ListExecutionDisabledSkills()
 	}
-	rail := skillrails.NewSkillUseRail(
+	// 对齐 Python: include_tools = self._skill_include_tools_for_profile()
+	includeTools := d.skillIncludeToolsForProfile(d.instanceOverrides)
+	// 对齐 Python: enable_read_image_multimodal = deep_config.enable_read_image_multimodal
+	enableImageMultimodal := true
+	if v, ok := d.instanceOverrides["enable_read_image_multimodal"]; ok {
+		if b, ok := v.(bool); ok {
+			enableImageMultimodal = b
+		}
+	}
+	rail = skillrails.NewSkillUseRail(
 		[]string{skillsDir},
 		skillrails.WithSkillMode(skillMode),
-		skillrails.WithIncludeTools(false),
+		skillrails.WithIncludeTools(includeTools),
+		skillrails.WithEnableImageMultimodal(enableImageMultimodal),
 		skillrails.WithDisabledSkills(disabled),
 	)
 	logger.Info(logComponent).
 		Str("skill_mode", skillMode).
+		Bool("include_tools", includeTools).
+		Bool("enable_image_multimodal", enableImageMultimodal).
 		Int("disabled_count", len(disabled)).
 		Msg("SkillUseRail create success")
 	return rail

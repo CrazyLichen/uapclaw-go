@@ -2,6 +2,7 @@ package evolution
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
@@ -244,13 +245,7 @@ func BuildSimplifyApprovalEvent(
 		}
 		previewParts = append(previewParts, fmt.Sprintf("- **%s** `%s`: %s", act, recordID, reason))
 	}
-	preview := ""
-	for i, p := range previewParts {
-		if i > 0 {
-			preview += "\n"
-		}
-		preview += p
-	}
+	preview := strings.Join(previewParts, "\n")
 
 	var question string
 	if en {
@@ -320,8 +315,9 @@ func BuildTeamSkillApprovalEventFromRecords(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isEn 判断语言是否为英文。
+// 对齐 Python: str(language).lower() == "en"
 func isEn(language string) bool {
-	return language == "en"
+	return strings.ToLower(strings.TrimSpace(language)) == "en"
 }
 
 // buildTeamSkillExperienceQuestionEvent 从标准化问题输入构建团队技能经验审批事件。

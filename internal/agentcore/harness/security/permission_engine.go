@@ -26,6 +26,8 @@ type PermissionEngine struct {
 	llm any
 	// modelName 保留字段（对齐 Python _model_name）
 	modelName string
+	// sceneHook 宿主场景钩子（对齐 Python PermissionSceneHook）
+	sceneHook PermissionSceneHookFn
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -104,6 +106,13 @@ func (e *PermissionEngine) SetWorkspaceRoot(root string) {
 	e.externalChecker = NewExternalDirectoryChecker(e.config, root)
 }
 
+// SetSceneHook 设置宿主场景钩子。
+//
+// 对齐 Python: PermissionEngine.set_scene_hook(fn)
+func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
+	e.sceneHook = fn
+}
+
 // CheckPermission 检查工具调用权限。
 //
 // 对齐 Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
@@ -133,6 +142,48 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 
 	if toolArgs == nil {
 		toolArgs = make(map[string]any)
+	}
+
+	// 0. PermissionSceneHook 短路：在分层评估前调用宿主场景钩子
+	if e.sceneHook != nil {
+		sceneOut, err := e.sceneHook(PermissionSceneHookInput{
+			NormalizedToolName: toolName,
+			ToolArgs:           toolArgs,
+			Engine:             e,
+		})
+		if err != nil {
+			logger.Warn(engineLogComponent).
+				Str("tool", toolName).
+				Err(err).
+				Msg("permission.scene_hook.failed")
+		} else if len(sceneOut) > 0 {
+			switch sceneOut[0] {
+			case "approve":
+				logger.Info(engineLogComponent).
+					Str("tool", toolName).
+					Str("decision", "allow").
+					Msg("permission.scene_hook.short_circuit")
+				return &PermissionResult{
+					Permission:  PermissionLevelAllow,
+					MatchedRule: "scene_hook",
+					Reason:      "Allowed by scene hook",
+				}
+			case "reject":
+				msg := "Operation not allowed"
+				if len(sceneOut) > 1 {
+					msg = sceneOut[1]
+				}
+				logger.Info(engineLogComponent).
+					Str("tool", toolName).
+					Str("decision", "deny").
+					Msg("permission.scene_hook.short_circuit")
+				return &PermissionResult{
+					Permission:  PermissionLevelDeny,
+					MatchedRule: "scene_hook",
+					Reason:      msg,
+				}
+			}
+		}
 	}
 
 	// 1. 工具级 + 参数规则 + 默认（分层策略 evaluate_tiered_policy）

@@ -243,18 +243,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 						strings.Join(conflicting, ", "),
 					)
 				}
-			} else if len(similarFiles) > 0 {
-				// 无 LLM 结果时，基于 searchSimilar 结果判断冲突
-				conflicting := make([]string, 0, len(similarFiles))
-				for name := range similarFiles {
-					conflicting = append(conflicting, name)
-				}
-				conflict.ConflictDetected = true
-				conflict.ConflictingFiles = conflicting
-				conflict.Note = fmt.Sprintf(
-					"与 %s 冲突。请使用 coding_memory_read 查看，然后 coding_memory_edit 更新。",
-					strings.Join(conflicting, ", "),
-				)
+			// 对齐 Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
 			}
 		} else {
 			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件
