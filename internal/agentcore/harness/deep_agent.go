@@ -1456,7 +1456,7 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	}
 
 	if config.Permissions != nil {
-		// ⤴️ 9.19 SecurityRail 回填：build_permission_interrupt_rail
+		// 对齐 Python: build_permission_interrupt_rail(permissions=..., llm=..., model_name=..., host=..., workspace_root=...)
 		permConfig := permissionsSectionToMap(config.Permissions)
 		var host *hsecurity.ToolPermissionHost
 		if config.PermissionHost != nil {
@@ -1464,9 +1464,20 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 				host = h
 			}
 		}
-		permRail := securityrail.NewPermissionInterruptRail(permConfig, nil, nil, host)
-		d.pendingRails = append(d.pendingRails, permRail)
-		logger.Debug(logComponent).Msg("PermissionInterruptRail 已创建，⤴️ 9.19 SecurityRail 回填")
+		wsRoot := ""
+		if config.Workspace != nil {
+			wsRoot = config.Workspace.RootPath
+		}
+		permRail := hsecurity.BuildPermissionInterruptRail(
+			permConfig, nil, host, wsRoot, nil, "",
+			func(config map[string]any, engine *hsecurity.PermissionEngine, toolNames []string, llm any, modelName string, h *hsecurity.ToolPermissionHost) agentinterfaces.AgentRail {
+				return securityrail.NewPermissionInterruptRail(config, engine, toolNames, llm, modelName, h)
+			},
+		)
+		if permRail != nil {
+			d.pendingRails = append(d.pendingRails, permRail)
+			logger.Debug(logComponent).Msg("PermissionInterruptRail 已创建，⤴️ 9.19 SecurityRail 回填")
+		}
 	}
 }
 

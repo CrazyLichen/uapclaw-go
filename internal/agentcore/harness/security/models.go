@@ -126,6 +126,19 @@ type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error
 // 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
 type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
 
+// PermissionRailConstructor 权限护栏构造器函数类型。
+// 由调用方传入具体实现，解耦 security 与 rails/security 的循环依赖。
+//
+// 对齐 Python: factory.py 函数内 from...import PermissionInterruptRail
+type PermissionRailConstructor func(
+	config map[string]any,
+	engine *PermissionEngine,
+	toolNames []string,
+	llm any,
+	modelName string,
+	host *ToolPermissionHost,
+) agentinterfaces.AgentRail
+
 // ToolPermissionHost 由 Agent 服务或 CLI 在构造 DeepAgent / PermissionInterruptRail 时注入。
 //
 // 对齐 Python: ToolPermissionHost (host.py L62-99)

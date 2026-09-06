@@ -80,6 +80,8 @@ func NewPermissionInterruptRail(
 	config map[string]any,
 	engine *harnesssecurity.PermissionEngine,
 	toolNames []string,
+	llm any,
+	modelName string,
 	host *harnesssecurity.ToolPermissionHost,
 ) *PermissionInterruptRail {
 	r := &PermissionInterruptRail{
@@ -109,7 +111,7 @@ func NewPermissionInterruptRail(
 					Msg("permission.rail.workspace_resolve_failed")
 			}
 		}
-		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, nil, "", workspaceRoot)
+		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, llm, modelName, workspaceRoot)
 	}
 
 	// 宿主级权限校验活跃检查

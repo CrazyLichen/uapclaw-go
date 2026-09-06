@@ -49,6 +49,8 @@ func TestNewPermissionInterruptRail(t *testing.T) {
 		nil,
 		[]string{"bash", "read"},
 		nil,
+		"",
+		nil,
 	)
 	assert.NotNil(t, r)
 	assert.NotNil(t, r.Engine())
@@ -67,6 +69,8 @@ func TestNewPermissionInterruptRail_带Engine(t *testing.T) {
 		engine,
 		nil,
 		nil,
+		"",
+		nil,
 	)
 	assert.NotNil(t, r)
 	assert.False(t, r.Engine().Enabled())
@@ -82,6 +86,8 @@ func TestNewPermissionInterruptRail_带Host(t *testing.T) {
 		map[string]any{"enabled": true},
 		nil,
 		nil,
+		nil,
+		"",
 		host,
 	)
 	assert.NotNil(t, r)
@@ -89,7 +95,7 @@ func TestNewPermissionInterruptRail_带Host(t *testing.T) {
 
 // TestNormalizeToolName 测试工具名归一化
 func TestNormalizeToolName(t *testing.T) {
-	r := NewPermissionInterruptRail(nil, nil, nil, nil)
+	r := NewPermissionInterruptRail(nil, nil, nil, nil, "", nil)
 	tests := []struct {
 		input    string
 		expected string
@@ -348,7 +354,7 @@ func TestDeepCopyMap(t *testing.T) {
 
 // TestBuildMessage 测试中断消息构建
 func TestBuildMessage(t *testing.T) {
-	r := NewPermissionInterruptRail(nil, nil, nil, nil)
+	r := NewPermissionInterruptRail(nil, nil, nil, nil, "", nil)
 
 	t.Run("基本消息", func(t *testing.T) {
 		tc := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
@@ -386,7 +392,7 @@ func TestBuildMessage(t *testing.T) {
 
 // TestBuildAlwaysAllowHint 测试自动确认提示构建
 func TestBuildAlwaysAllowHint(t *testing.T) {
-	r := NewPermissionInterruptRail(nil, nil, nil, nil)
+	r := NewPermissionInterruptRail(nil, nil, nil, nil, "", nil)
 
 	t.Run("nil_ToolCall", func(t *testing.T) {
 		assert.Equal(t, "", r.buildAlwaysAllowHint(nil))
@@ -422,7 +428,7 @@ func TestBuildAlwaysAllowHint(t *testing.T) {
 // TestConfirmPathLabel 测试确认路径标签
 func TestConfirmPathLabel(t *testing.T) {
 	t.Run("无hosted", func(t *testing.T) {
-		r := NewPermissionInterruptRail(nil, nil, nil, nil)
+		r := NewPermissionInterruptRail(nil, nil, nil, nil, "", nil)
 		assert.Equal(t, "interrupt", r.confirmPathLabel())
 	})
 
@@ -432,7 +438,7 @@ func TestConfirmPathLabel(t *testing.T) {
 				return nil, nil
 			},
 		}
-		r := NewPermissionInterruptRail(nil, nil, nil, host)
+		r := NewPermissionInterruptRail(nil, nil, nil, nil, "", host)
 		assert.Equal(t, "hosted", r.confirmPathLabel())
 	})
 }
@@ -443,6 +449,8 @@ func TestUpdateConfig(t *testing.T) {
 		map[string]any{"enabled": true},
 		nil,
 		[]string{"bash"},
+		nil,
+		"",
 		nil,
 	)
 	assert.True(t, r.Engine().Enabled())
@@ -459,7 +467,7 @@ func TestResolvePermissionInterrupt_Allow(t *testing.T) {
 			"read": "allow",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "read", Arguments: `{"path": "/tmp"}`}
 	decision := r.resolvePermissionInterrupt(
@@ -483,7 +491,7 @@ func TestResolvePermissionInterrupt_Deny(t *testing.T) {
 			"bash": "deny",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "rm -rf /"}`}
 	decision := r.resolvePermissionInterrupt(
@@ -507,7 +515,7 @@ func TestResolvePermissionInterrupt_AskInterrupt(t *testing.T) {
 			"bash": "ask",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
@@ -531,7 +539,7 @@ func TestResolvePermissionInterrupt_AutoConfirm(t *testing.T) {
 			"read": "ask",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "read", Arguments: `{"path": "/tmp"}`}
 	// read 工具的 auto-confirm key 为 "read"
@@ -558,7 +566,7 @@ func TestResolvePermissionInterrupt_UserApproved(t *testing.T) {
 			"bash": "ask",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	userInput := map[string]any{
@@ -587,7 +595,7 @@ func TestResolvePermissionInterrupt_UserRejected(t *testing.T) {
 			"bash": "ask",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	userInput := map[string]any{
@@ -616,7 +624,7 @@ func TestResolvePermissionInterrupt_InvalidPayload(t *testing.T) {
 			"bash": "ask",
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, nil)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", nil)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 
@@ -646,7 +654,7 @@ func TestResolvePermissionInterrupt_SceneHookApprove(t *testing.T) {
 			return []string{"approve"}, nil
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, host)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", host)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
@@ -675,7 +683,7 @@ func TestResolvePermissionInterrupt_SceneHookReject(t *testing.T) {
 			return []string{"reject", "custom deny reason"}, nil
 		},
 	}
-	r := NewPermissionInterruptRail(config, nil, nil, host)
+	r := NewPermissionInterruptRail(config, nil, nil, nil, "", host)
 
 	toolCall := &llmschema.ToolCall{Name: "bash", Arguments: `{"command": "ls"}`}
 	decision := r.resolvePermissionInterrupt(
