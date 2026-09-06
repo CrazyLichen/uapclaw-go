@@ -58,7 +58,7 @@ var (
 	//
 	// 对齐 Python: @rail(before=BEFORE_MODEL_CALL, after=AFTER_MODEL_CALL, on_exception=ON_MODEL_EXCEPTION)
 	// 用法：
-	//   err := rail.ModelCallRail.Execute(ctx, cbc, func() error { ... })
+	// 用法: err := rail.ModelCallRail.Execute(ctx, cbc, func() error { ... })
 	ModelCallRail = NewRailExecutor(
 		interfaces.CallbackBeforeModelCall,
 		interfaces.CallbackAfterModelCall,
@@ -68,7 +68,7 @@ var (
 	//
 	// 对齐 Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
 	// 用法：
-	//   err := rail.ToolCallRail.Execute(ctx, cbc, func() error { ... })
+	// 用法: err := rail.ToolCallRail.Execute(ctx, cbc, func() error { ... })
 	ToolCallRail = NewRailExecutor(
 		interfaces.CallbackBeforeToolCall,
 		interfaces.CallbackAfterToolCall,

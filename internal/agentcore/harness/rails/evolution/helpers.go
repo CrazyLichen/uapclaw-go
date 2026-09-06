@@ -112,9 +112,9 @@ func normalizeMemberRole(role string) *string {
 // 对齐 Python: _collect_messages_from_trajectory(trajectory)
 //
 // Python 实现：
-//   1. ConversationSignalDetector.convert_trajectory_to_messages(trajectory) 获取 raw
-//   2. _normalize_callback_messages(raw) 规范化为 JSON 安全的 dict
-//   3. 去重（message not in deduped）
+//  1. ConversationSignalDetector.convert_trajectory_to_messages(trajectory) 获取 raw
+//  2. _normalize_callback_messages(raw) 规范化为 JSON 安全的 dict
+//  3. 去重（message not in deduped）
 func collectMessagesFromTrajectory(traj *trajectory.Trajectory) []map[string]any {
 	if traj == nil {
 		return []map[string]any{}

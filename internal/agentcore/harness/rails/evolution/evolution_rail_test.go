@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── EvolutionRail 构造测试 ────────────────────────────
@@ -402,14 +402,14 @@ func TestPublishTrajectorySnapshot_正常发布(t *testing.T) {
 func TestEmitBackgroundOutcomeEvent_失败状态(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
 	outcome := map[string]string{
-		"status":     "failed",
-		"message":    "evolution error occurred",
-		"rail_kind":  "skill_evolution",
-		"skill_name": "search_optimization",
-		"request_id": "req-1",
-		"stage":      "apply",
+		"status":      "failed",
+		"message":     "evolution error occurred",
+		"rail_kind":   "skill_evolution",
+		"skill_name":  "search_optimization",
+		"request_id":  "req-1",
+		"stage":       "apply",
 		"signal_type": "experience",
-		"source":     "auto",
+		"source":      "auto",
 	}
 	rail.emitBackgroundOutcomeEvent(outcome)
 	assert.Len(t, rail.pendingHostEvents, 1)
@@ -455,36 +455,36 @@ func TestAfterInvoke_同步模式触发演化(t *testing.T) {
 	assert.Equal(t, 1, ext.runEvolutionCalled)
 }
 
-// ──────────────────────────── _isBlank 测试 ────────────────────────────
+// ──────────────────────────── isBlank 测试 ────────────────────────────
 
 func TestIsBlank(t *testing.T) {
-	assert.True(t, _isBlank(""))
-	assert.True(t, _isBlank("   "))
-	assert.False(t, _isBlank("a"))
+	assert.True(t, isBlank(""))
+	assert.True(t, isBlank("   "))
+	assert.False(t, isBlank("a"))
 }
 
-// ──────────────────────────── normalizeSkillNamesGo / _normalizeNameSet 测试 ────────────────────────────
+// ──────────────────────────── normalizeSkillNamesGo / normalizeNameSetGo 测试 ────────────────────────────
 
 func TestNormalizeSkillNamesGo(t *testing.T) {
 	result := normalizeSkillNamesGo([]string{"a", "b"})
 	assert.Equal(t, map[string]bool{"a": true, "b": true}, result)
 }
 
-func TestNormalizeNameSet(t *testing.T) {
+func TestNormalizeNameSetGo(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
-	result := rail._normalizeNameSet([]string{"x"})
+	result := rail.normalizeNameSetGo([]string{"x"})
 	assert.Equal(t, map[string]bool{"x": true}, result)
 }
 
-// ──────────────────────────── _isSkillDisabled 测试 ────────────────────────────
+// ──────────────────────────── isSkillDisabled 测试 ────────────────────────────
 
 func TestIsSkillDisabled(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{}, WithDisabledSkills([]string{"foo"}))
-	assert.True(t, rail._isSkillDisabled("foo"))
-	assert.False(t, rail._isSkillDisabled("bar"))
+	assert.True(t, rail.isSkillDisabled("foo"))
+	assert.False(t, rail.isSkillDisabled("bar"))
 }
 
-// ──────────────────────────── _collectMessagesFromTrajectory 测试 ────────────────────────────
+// ──────────────────────────── collectMessagesFromTrajectoryGo 测试 ────────────────────────────
 
 func TestCollectMessagesFromTrajectory_通过Rail方法(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
@@ -498,19 +498,19 @@ func TestCollectMessagesFromTrajectory_通过Rail方法(t *testing.T) {
 			},
 		},
 	}
-	msgs := rail._collectMessagesFromTrajectory(traj)
+	msgs := rail.collectMessagesFromTrajectoryGo(traj)
 	assert.Len(t, msgs, 1)
 }
 
-// ──────────────────────────── _getAgentIDStr 测试 ────────────────────────────
+// ──────────────────────────── getAgentIDStr 测试 ────────────────────────────
 
 func TestGetAgentIDStr_nil(t *testing.T) {
-	assert.Equal(t, "unknown", _getAgentIDStr(nil))
+	assert.Equal(t, "unknown", getAgentIDStr(nil))
 }
 
 func TestGetAgentIDStr_noAgent(t *testing.T) {
 	cbc := &agentinterfaces.AgentCallbackContext{}
-	assert.Equal(t, "unknown", _getAgentIDStr(cbc))
+	assert.Equal(t, "unknown", getAgentIDStr(cbc))
 }
 
 // ──────────────────────────── BeforeInvoke inputs 类型不匹配 ────────────────────────────
@@ -557,8 +557,8 @@ type fakeSessionFacade struct {
 	sessionID string
 }
 
-func (f *fakeSessionFacade) GetSessionID() string                        { return f.sessionID }
-func (f *fakeSessionFacade) UpdateState(_ map[string]any)                {}
+func (f *fakeSessionFacade) GetSessionID() string                       { return f.sessionID }
+func (f *fakeSessionFacade) UpdateState(_ map[string]any)               {}
 func (f *fakeSessionFacade) GetState(_ state.StateKey) (any, error)     { return nil, nil }
 func (f *fakeSessionFacade) DumpState() map[string]any                  { return map[string]any{} }
 func (f *fakeSessionFacade) WriteStream(_ context.Context, _ any) error { return nil }

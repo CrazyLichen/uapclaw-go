@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
@@ -697,14 +697,14 @@ func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 		status = "unknown"
 	}
 	meta := EvolutionHostEventMeta{
-		EventKind: EvolutionEventKindOutcome,
-		RailKind:  stringPtr(outcome["rail_kind"]),
-		Stage:     stringPtr(outcome["stage"]),
-		SkillName: stringPtr(outcome["skill_name"]),
-		RequestID: stringPtr(outcome["request_id"]),
+		EventKind:  EvolutionEventKindOutcome,
+		RailKind:   stringPtr(outcome["rail_kind"]),
+		Stage:      stringPtr(outcome["stage"]),
+		SkillName:  stringPtr(outcome["skill_name"]),
+		RequestID:  stringPtr(outcome["request_id"]),
 		SignalType: stringPtr(outcome["signal_type"]),
-		Source:    stringPtr(outcome["source"]),
-		Status:    &status,
+		Source:     stringPtr(outcome["source"]),
+		Status:     &status,
 	}
 
 	// 对齐 Python: content = f"[Evolution] {outcome['message']}\n"
@@ -717,7 +717,7 @@ func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 		Type:  "llm_reasoning",
 		Index: 0,
 		Payload: map[string]any{
-			"content":        "[Evolution] " + message + "\n",
+			"content":         "[Evolution] " + message + "\n",
 			"_evolution_meta": meta.ToPayload(),
 		},
 	})
@@ -756,9 +756,9 @@ func normalizeSkillNamesGo(names []string) map[string]bool {
 
 // ensureNonNilSlice 已移到 helpers.go
 
-// _normalizeNameSet 对齐 Python: @classmethod _normalize_name_set
+// normalizeNameSetGo 对齐 Python: @classmethod _normalize_name_set
 // 保留 any 参数作为桥接（P3/P4 子类可能传入动态类型），内部转发到 normalizeSkillNames
-func (r *EvolutionRail) _normalizeNameSet(raw any) map[string]bool {
+func (r *EvolutionRail) normalizeNameSetGo(raw any) map[string]bool {
 	switch v := raw.(type) {
 	case string:
 		return normalizeSkillNames([]string{v})
@@ -769,19 +769,19 @@ func (r *EvolutionRail) _normalizeNameSet(raw any) map[string]bool {
 	}
 }
 
-// _isSkillDisabled 检查技能是否被禁用。
+// isSkillDisabled 检查技能是否被禁用。
 // 对齐 Python: skill_name in self._disabled_skills
-func (r *EvolutionRail) _isSkillDisabled(skillName string) bool {
+func (r *EvolutionRail) isSkillDisabled(skillName string) bool {
 	return r.disabledSkills[skillName]
 }
 
-// _collectMessagesFromTrajectory 从轨迹中收集消息。
+// collectMessagesFromTrajectoryGo 从轨迹中收集消息。
 // 对齐 Python: EvolutionRail._collect_messages_from_trajectory(trajectory)
-func (r *EvolutionRail) _collectMessagesFromTrajectory(traj *trajectory.Trajectory) []map[string]any {
+func (r *EvolutionRail) collectMessagesFromTrajectoryGo(traj *trajectory.Trajectory) []map[string]any {
 	return collectMessagesFromTrajectory(traj)
 }
 
-// ──────────────────────────── 以下为对齐 Python 但暂不使用的辅助方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeCallbackMessagesGo 规范化回调消息。
 // 对齐 Python: _normalize_callback_messages(messages)
@@ -789,8 +789,8 @@ func (r *EvolutionRail) normalizeCallbackMessagesGo(messages []map[string]any) [
 	return normalizeCallbackMessages(messages)
 }
 
-// _getAgentIDStr 从回调上下文获取 agent ID 字符串。
-func _getAgentIDStr(cbc *agentinterfaces.AgentCallbackContext) string {
+// getAgentIDStr 从回调上下文获取 agent ID 字符串。
+func getAgentIDStr(cbc *agentinterfaces.AgentCallbackContext) string {
 	if cbc == nil || cbc.Agent() == nil {
 		return "unknown"
 	}
@@ -800,7 +800,7 @@ func _getAgentIDStr(cbc *agentinterfaces.AgentCallbackContext) string {
 	return "unknown"
 }
 
-// _isBlank 检查字符串是否为空或仅含空白。
-func _isBlank(s string) bool {
+// isBlank 检查字符串是否为空或仅含空白。
+func isBlank(s string) bool {
 	return strings.TrimSpace(s) == ""
 }

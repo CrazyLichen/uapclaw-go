@@ -404,9 +404,9 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				Msg("permission.rail.result decision=deny")
 			reason := result.Reason
 			if reason == "" {
-				reason = "Operation not allowed"
+				reason = "操作不被允许"
 			}
-			return r.Reject(fmt.Sprintf("[PERMISSION_DENIED] %s", reason))
+			return r.Reject(fmt.Sprintf("[权限拒绝] %s", reason))
 		}
 
 		// ASK → 检查 auto_confirm session 状态
@@ -437,9 +437,9 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				// nil → 拒绝
 				reason := result.Reason
 				if reason == "" {
-					reason = "Operation requires approval"
+					reason = "操作需要审批"
 				}
-				return r.Reject(fmt.Sprintf("[PERMISSION_DENIED] %s (Hosted permission request failed)", reason))
+				return r.Reject(fmt.Sprintf("[权限拒绝] %s（托管权限请求失败）", reason))
 			}
 
 			// 对齐 Python: if ext_out == "interrupt" → 回退到标准 interrupt 流程
@@ -485,7 +485,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 					Msg("permission.user.decision decision=deny")
 				feedback := extOut.Feedback
 				if feedback == "" {
-					feedback = "[PERMISSION_REJECTED] User rejected the request."
+					feedback = "[权限驳回] 用户拒绝了请求。"
 				}
 				return r.Reject(feedback)
 			}
@@ -514,7 +514,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		message := r.buildMessage(toolCall, &harnesssecurity.PermissionResult{
 			Permission:  harnesssecurity.PermissionLevelAsk,
 			MatchedRule: "",
-			Reason:      "Invalid confirmation payload",
+			Reason:      "无效的确认载荷",
 		})
 		return r.Interrupt(&saschema.InterruptRequest{
 			Message:        message,
@@ -558,7 +558,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		Msg("permission.user.decision decision=deny")
 	feedback := payload.Feedback
 	if feedback == "" {
-		feedback = "[PERMISSION_REJECTED] User rejected the request."
+		feedback = "[权限驳回] 用户拒绝了请求。"
 	}
 	return r.Reject(feedback)
 }
@@ -934,7 +934,7 @@ func (r *PermissionInterruptRail) raiseInterrupt(
 		ToolCall: toolCall,
 	}
 	panic(cb.NewAbortError(
-		fmt.Sprintf("Tool execution interrupted: %s", toolName),
+		fmt.Sprintf("工具执行已中断: %s", toolName),
 		exc,
 	))
 }

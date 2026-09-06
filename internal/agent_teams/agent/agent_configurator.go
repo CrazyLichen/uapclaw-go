@@ -574,11 +574,15 @@ func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.TeamB
 // WorkspaceManager 返回工作空间管理器。
 // 对齐 Python: AgentConfigurator.workspace_manager property
 // ⤴️ 9.66 回填完成
-func (c *AgentConfigurator) WorkspaceManager() *team_workspace.TeamWorkspaceManager { return c.infra.WorkspaceManager }
+func (c *AgentConfigurator) WorkspaceManager() *team_workspace.TeamWorkspaceManager {
+	return c.infra.WorkspaceManager
+}
 
 // SetWorkspaceManager 设置工作空间管理器。
 // ⤴️ 9.66 回填完成
-func (c *AgentConfigurator) SetWorkspaceManager(v *team_workspace.TeamWorkspaceManager) { c.infra.WorkspaceManager = v }
+func (c *AgentConfigurator) SetWorkspaceManager(v *team_workspace.TeamWorkspaceManager) {
+	c.infra.WorkspaceManager = v
+}
 
 // WorkspaceInitialized 返回工作空间是否已初始化。
 func (c *AgentConfigurator) WorkspaceInitialized() bool { return c.infra.WorkspaceInitialized }

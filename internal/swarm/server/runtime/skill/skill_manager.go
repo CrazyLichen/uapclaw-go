@@ -1981,11 +1981,11 @@ func (sm *SkillManager) HandlePluginsReload(ctx context.Context, params map[stri
 	}
 
 	result := map[string]any{
-		"success":       true,
-		"plugins_count": len(enabledPlugins),
+		"success":        true,
+		"plugins_count":  len(enabledPlugins),
 		"disabled_count": len(disabledPlugins),
-		"skills_count":  totalSkills,
-		"detail": fmt.Sprintf("Reloaded: %d plugins · %d skills", len(enabledPlugins), totalSkills),
+		"skills_count":   totalSkills,
+		"detail":         fmt.Sprintf("Reloaded: %d plugins · %d skills", len(enabledPlugins), totalSkills),
 	}
 	if len(disabledPlugins) > 0 {
 		result["detail"] = fmt.Sprintf("Reloaded: %d plugins · %d skills (%d disabled)",

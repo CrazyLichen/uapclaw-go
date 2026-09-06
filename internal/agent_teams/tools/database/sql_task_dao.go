@@ -578,7 +578,7 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 	return "team_task_dependency_" + suffix
 }
 
-// ──────────────────────────── 底层辅助函数（对齐 Python 的 _xxx_in_session 函数） ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
 // 对齐 Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]

@@ -128,7 +128,7 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 		logger.Info(engineLogComponent).Msg("permission.check.skip: reason=system_disabled decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
-			Reason:     "Permission system is disabled",
+			Reason:     "权限系统已禁用",
 		}
 	}
 
@@ -137,7 +137,7 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 		logger.Info(engineLogComponent).Msg("permission.check.skip: reason=permission_checks_inactive decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
-			Reason:     "Tool permission checks are inactive for this context",
+			Reason:     "当前上下文未启用工具权限检查",
 		}
 	}
 
@@ -167,10 +167,10 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 				return &PermissionResult{
 					Permission:  PermissionLevelAllow,
 					MatchedRule: "scene_hook",
-					Reason:      "Allowed by scene hook",
+					Reason:      "由场景钩子放行",
 				}
 			case "reject":
-				msg := "Operation not allowed"
+				msg := "操作不被允许"
 				if len(sceneOut) > 1 {
 					msg = sceneOut[1]
 				}
@@ -305,10 +305,10 @@ func (e *PermissionEngine) Config() map[string]any {
 func getReason(permission PermissionLevel, toolName, matchedRule string) string {
 	switch permission {
 	case PermissionLevelAllow:
-		return fmt.Sprintf("Allowed by rule: %s", matchedRule)
+		return fmt.Sprintf("由规则放行: %s", matchedRule)
 	case PermissionLevelDeny:
-		return fmt.Sprintf("Denied by rule: %s", matchedRule)
+		return fmt.Sprintf("由规则拒绝: %s", matchedRule)
 	default:
-		return fmt.Sprintf("Approval required for %s (rule: %s)", toolName, matchedRule)
+		return fmt.Sprintf("需审批: %s（规则: %s）", toolName, matchedRule)
 	}
 }

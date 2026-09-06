@@ -9,8 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ==================== SQL 操作 ====================
-
 // AddColumnOperation 添加列操作。
 // 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (AddColumnOperation)
 type AddColumnOperation struct {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

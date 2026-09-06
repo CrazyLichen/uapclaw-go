@@ -129,7 +129,7 @@ func TestBuildForceFinishResult(t *testing.T) {
 	// 无消息无结果 → 默认消息
 	rejectEmpty := r.Reject("", nil, nil, nil)
 	result3 := r.buildForceFinishResult(rejectEmpty)
-	assert.Equal(t, "Rejected by security rail.", result3["output"])
+	assert.Equal(t, "被安全护栏拒绝。", result3["output"])
 }
 
 // TestHandleInterruptResume_首次调用 测试中断恢复首次调用

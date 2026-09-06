@@ -504,7 +504,7 @@ func TestResolvePermissionInterrupt_Deny(t *testing.T) {
 
 	reject, ok := decision.(*interrupt.RejectResult)
 	require.True(t, ok, "期望 RejectResult，实际 %T", decision)
-	assert.Contains(t, fmt.Sprintf("%v", reject.ToolResult), "PERMISSION_DENIED")
+	assert.Contains(t, fmt.Sprintf("%v", reject.ToolResult), "权限拒绝")
 }
 
 // TestResolvePermissionInterrupt_AskInterrupt 测试 ASK → Interrupt 路径

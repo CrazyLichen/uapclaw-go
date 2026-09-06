@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 )
 
@@ -314,7 +314,8 @@ func TestUserHookRail_BeforeToolCall_修改工具名(t *testing.T) {
 
 // TestUserHookRail_BeforeToolCall_多次附加上下文 测试多个 hook 返回 additionalContext 时换行拼接
 // 对齐 Python: existing = ctx.extra.get("_hook_additional_context", "")
-//              ctx.extra["_hook_additional_context"] = existing + "\n" + r.additional_context
+//
+//	ctx.extra["_hook_additional_context"] = existing + "\n" + r.additional_context
 func TestUserHookRail_BeforeToolCall_多次附加上下文(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {
@@ -349,7 +350,7 @@ func TestUserHookRail_AfterToolCall_非string结果(t *testing.T) {
 		hookscfg.HookEventPostToolUse: {
 			{
 				Matcher: "*",
-				Hooks: []map[string]any{{"type": "command", "command": `echo '{"decision": "allow", "additionalContext": "extra info"}'`, "timeout": 10}},
+				Hooks:   []map[string]any{{"type": "command", "command": `echo '{"decision": "allow", "additionalContext": "extra info"}'`, "timeout": 10}},
 			},
 		},
 	}}
@@ -381,7 +382,8 @@ func TestUserHookRail_AfterToolCall_非string结果(t *testing.T) {
 
 // TestUserHookRail_AfterInvoke_超长reason截断 测试 reason 超过 200 字符时日志截断但 _stop_hook_feedback 存完整值
 // 对齐 Python: ctx.extra["_stop_hook_feedback"] = r.error（存完整值）
-//              logger.info("UserHookRail: Stop hook feedback: %s", r.error[:200])（日志截断）
+//
+//	logger.info("UserHookRail: Stop hook feedback: %s", r.error[:200])（日志截断）
 func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 	// 构造超长 reason（300 字符）
 	longReason := strings.Repeat("x", 300)
@@ -392,9 +394,9 @@ func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 				Matcher: "*",
 				// exit 2 + 超长 reason
 				Hooks: []map[string]any{{
-					"type":     "command",
-					"command":  fmt.Sprintf(`echo '{"decision": "block", "reason": "%s"}' && exit 2`, longReason),
-					"timeout":  10,
+					"type":    "command",
+					"command": fmt.Sprintf(`echo '{"decision": "block", "reason": "%s"}' && exit 2`, longReason),
+					"timeout": 10,
 				}},
 			},
 		},

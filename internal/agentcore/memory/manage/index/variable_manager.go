@@ -11,7 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/codec"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -229,7 +228,7 @@ func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, sco
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Msg("kv_store 不能为 nil")
-		return false, exception.NewBaseError(exception.StatusMemoryStoreInitFailed, exception.WithMsg("kv store not initialized"))
+		return false, nil
 	}
 
 	// 对齐 Python:

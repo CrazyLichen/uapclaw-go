@@ -65,15 +65,14 @@ const (
 	gitTimeoutSeconds = 30
 	// defaultLockTimeoutSeconds 默认锁超时秒数
 	defaultLockTimeoutSeconds = 300
+	// logComponent 日志组件
+	logComponent = logger.ComponentChannel
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ErrDistributedNotImplemented 分布式模式尚未实现错误
 var ErrDistributedNotImplemented = errors.New("分布式模式尚未实现")
-
-// logComponent 日志组件
-const logComponent = logger.ComponentChannel
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -619,7 +618,7 @@ func revParse(ctx context.Context, ref, cwd string) (string, error) {
 // mountDirectory 创建目录符号链接。
 // 对齐 Python: TeamWorkspaceManager._mount_directory
 //
-// TODO: Windows junction fallback
+// TODO: Windows junction 回退方案
 func mountDirectory(targetPath, linkPath string) error {
 	return os.Symlink(targetPath, linkPath)
 }

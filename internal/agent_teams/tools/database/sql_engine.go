@@ -91,7 +91,7 @@ var (
 	_ TeamDatabase = (*SqlTeamDatabase)(nil) // SqlTeamDatabase 必须满足 TeamDatabase 接口
 
 	// 对齐 Python: TeamTaskBase index=True 字段
-	// team_name, status, assignee, updated_at
+	// 列: team_name, status, assignee, updated_at
 	createTaskIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_task_team_name ON team_task_%s (team_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_status ON team_task_%s (status)`,
@@ -105,7 +105,7 @@ var (
 		`CREATE INDEX IF NOT EXISTS idx_dep_resolved ON team_task_dependency_%s (resolved)`,
 	}
 	// 对齐 Python: TeamMessageBase index=True 字段
-	// team_name, to_member_name, timestamp, broadcast, is_read
+	// 列: team_name, to_member_name, timestamp, broadcast, is_read
 	createMessageIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_msg_team_name ON team_message_%s (team_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_msg_to_member_name ON team_message_%s (to_member_name)`,

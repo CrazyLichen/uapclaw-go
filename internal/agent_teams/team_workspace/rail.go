@@ -169,8 +169,8 @@ func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.A
 		r.ws.publishEvent(
 			eventWorkspaceArtifactUpdated,
 			map[string]any{
-				"team_name":    r.ws.TeamName(),
-				"member_name":  r.memberName,
+				"team_name":     r.ws.TeamName(),
+				"member_name":   r.memberName,
 				"artifact_path": realPath,
 			},
 		)
@@ -201,9 +201,8 @@ func (r *TeamWorkspaceRail) maybePull() {
 		return
 	}
 	// TODO: 实现分布式模式的节流拉取逻辑
-	// now := time.Now().Sub(epoch).Seconds()
-	// if now - r.lastPullTime < r.pullInterval { return }
-	// r.lastPullTime = now
+	// 对齐 Python: now := time.Now().Sub(epoch).Seconds()
+	// 对齐 Python: if now - r.lastPullTime < r.pullInterval { return }
+	// 对齐 Python: r.lastPullTime = now
 	// r.ws.Pull(ctx)
 }
-

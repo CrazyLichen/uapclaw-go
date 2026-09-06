@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -448,13 +448,13 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	modelName := extractModelName(configBase)
 
 	host := &harnesssecurity.ToolPermissionHost{
-		GetPermissionsSnapshot:       d.getPermissionsSnapshot,
-		PersistAllowRule:             d.persistAllowRule,
-		ResolveWorkspaceDir:          d.resolveWorkspaceDir,
-		PermissionYAMLPath:           d.getPermissionYAMLPath(),
-		ToolPermissionChecksActive:   func() bool { return true },
+		GetPermissionsSnapshot:        d.getPermissionsSnapshot,
+		PersistAllowRule:              d.persistAllowRule,
+		ResolveWorkspaceDir:           d.resolveWorkspaceDir,
+		PermissionYAMLPath:            d.getPermissionYAMLPath(),
+		ToolPermissionChecksActive:    func() bool { return true },
 		RequestPermissionConfirmation: d.requestPermissionConfirmation,
-		PermissionSceneHook:          d.permissionSceneHook,
+		PermissionSceneHook:           d.permissionSceneHook,
 	}
 
 	workspaceRoot := workspace.WorkspaceDir()

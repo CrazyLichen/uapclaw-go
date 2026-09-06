@@ -62,7 +62,7 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 
 	// 注入 CodingMemoryRail（当 EmbeddingConfig 可用时）
 	// TODO: 等 SubagentCreateParams 添加 EmbeddingConfig 字段后启用
-	// if params.EmbeddingConfig != nil {
+	// 对齐 Python: if params.EmbeddingConfig != nil {
 	//     codingMemoryDir := resolveCodingMemoryDir(params.Workspace)
 	// Python: finalRails = append(finalRails, memoryrail.NewCodingMemoryRail(codingMemoryDir, params.EmbeddingConfig, language))
 	// }

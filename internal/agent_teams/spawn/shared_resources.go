@@ -59,7 +59,7 @@ func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 	defer resourcesMu.Unlock()
 
 	// TODO(#9.64): 解析 config.db_type
-	// if dbType == "memory" { return _getSharedMemoryDB() }
+	// 对齐 Python: if dbType == "memory" { return _getSharedMemoryDB() }
 	// return _getSharedDBInstance(config)
 
 	logger.Debug(sharedLogComponent).Msg("GetSharedDB 当前返回 nil（TODO #9.64）")

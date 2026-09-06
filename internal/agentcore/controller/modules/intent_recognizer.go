@@ -156,7 +156,7 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 		)
 	}
 	if len(texts) == 0 {
-		return nil, exception.NewBaseError(exception.StatusError, exception.WithMsg("no text input found"))
+		return nil, exception.NewBaseError(exception.StatusError, exception.WithMsg("未找到文本输入"))
 	}
 	if len(texts) > 1 {
 		return nil, exception.NewBaseError(

@@ -243,7 +243,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 						strings.Join(conflicting, ", "),
 					)
 				}
-			// 对齐 Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
+				// 对齐 Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
 			}
 		} else {
 			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件

@@ -1031,13 +1031,13 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 	}
 
 	host := &harnesssecurity.ToolPermissionHost{
-		GetPermissionsSnapshot:       c.deep.getPermissionsSnapshot,
-		PersistAllowRule:             c.deep.persistAllowRule,
-		ResolveWorkspaceDir:          c.deep.resolveWorkspaceDir,
-		PermissionYAMLPath:           c.deep.getPermissionYAMLPath(),
-		ToolPermissionChecksActive:   func() bool { return true },
+		GetPermissionsSnapshot:        c.deep.getPermissionsSnapshot,
+		PersistAllowRule:              c.deep.persistAllowRule,
+		ResolveWorkspaceDir:           c.deep.resolveWorkspaceDir,
+		PermissionYAMLPath:            c.deep.getPermissionYAMLPath(),
+		ToolPermissionChecksActive:    func() bool { return true },
 		RequestPermissionConfirmation: c.deep.requestPermissionConfirmation,
-		PermissionSceneHook:          c.deep.permissionSceneHook,
+		PermissionSceneHook:           c.deep.permissionSceneHook,
 	}
 
 	workspaceRoot := workspace.WorkspaceDir()

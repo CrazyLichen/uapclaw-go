@@ -10,7 +10,16 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Translator 翻译器闭包。
+// 对齐 Python: Translator = Callable[..., str]
+//
+// 调用方式:
+//
+//	t("workspace_meta")           → 加载 descs/{lang}/workspace_meta.md 作为 _desc
+//	t("workspace_meta", "action") → 查 STRINGS["workspace_meta.action"]
+type Translator func(tool string, key ...string) string
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -28,14 +37,6 @@ var descFS embed.FS
 var descCache sync.Map
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// Translator 翻译器闭包。
-// 对齐 Python: Translator = Callable[..., str]
-//
-// 调用方式:
-//   t("workspace_meta")           → 加载 descs/{lang}/workspace_meta.md 作为 _desc
-//   t("workspace_meta", "action") → 查 STRINGS["workspace_meta.action"]
-type Translator func(tool string, key ...string) string
 
 // MakeTranslator 创建绑定到指定语言的翻译器闭包。
 // 对齐 Python: make_translator(lang)

@@ -105,18 +105,10 @@ type BaseSecurityRail struct {
 	toolNames map[string]struct{}
 }
 
-// TypeName 返回 Rail 类型名称，用于日志和 metadata 标识。
-// 子类应 override 返回自己的类型名。
-//
-// 对齐 Python: self.__class__.__name__
-func (r *BaseSecurityRail) TypeName() string {
-	return "BaseSecurityRail"
-}
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // SecurityRailOption BaseSecurityRail 配置选项
 type SecurityRailOption func(*BaseSecurityRail)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // SecurityAlertLevel 告警级别枚举。
 //
@@ -157,6 +149,14 @@ var modelEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// TypeName 返回 Rail 类型名称，用于日志和 metadata 标识。
+// 子类应 override 返回自己的类型名。
+//
+// 对齐 Python: self.__class__.__name__
+func (r *BaseSecurityRail) TypeName() string {
+	return "BaseSecurityRail"
+}
 
 // NewBaseSecurityRail 创建安全 Rail 基类实例。
 //
@@ -543,7 +543,7 @@ func (r *BaseSecurityRail) runAndApply(
 		interrupt := decision.(*SecurityInterrupt)
 		msg := interrupt.Request.GetMessage()
 		if msg == "" {
-			msg = "Security interrupt not allowed on model events"
+			msg = "安全护栏不允许中断模型事件"
 		}
 		decision = r.Reject(msg, nil, nil, nil)
 	}
@@ -611,12 +611,12 @@ func (r *BaseSecurityRail) applyReject(securityCtx *SecurityCheckContext, decisi
 	if event == agentinterfaces.CallbackBeforeToolCall {
 		errorMsg = decision.Message
 		if errorMsg == "" {
-			errorMsg = "Tool execution skipped"
+			errorMsg = "工具执行已跳过"
 		}
 	} else {
 		errorMsg = decision.Message
 		if errorMsg == "" {
-			errorMsg = "Blocked by security rail"
+			errorMsg = "被安全护栏阻止"
 		}
 	}
 
@@ -748,7 +748,7 @@ func (r *BaseSecurityRail) buildForceFinishResult(decision *SecurityReject) map[
 		msg = fmt.Sprintf("%v", decision.Result)
 	}
 	if msg == "" {
-		msg = "Rejected by security rail."
+		msg = "被安全护栏拒绝。"
 	}
 	return map[string]any{
 		"output":      msg,
@@ -769,7 +769,7 @@ func (r *BaseSecurityRail) raiseToolInterrupt(
 		ToolCall: toolCall,
 	}
 	panic(cb.NewAbortError(
-		fmt.Sprintf("Tool execution interrupted: %s", toolName),
+		fmt.Sprintf("工具执行已中断: %s", toolName),
 		exc,
 	))
 }

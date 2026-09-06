@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // validPermLevels 有效权限级别
 // 对齐 Python: _VALID_PERM_LEVEL = frozenset({"allow", "ask", "deny"})
 var validPermLevels = map[string]bool{
@@ -36,17 +38,16 @@ var validRuleSeverities = map[string]bool{
 // ruleMutableKeys 规则可变键集合
 // 对齐 Python: _RULE_MUTABLE_KEYS = frozenset({"tools", "pattern", "severity", "action", "description", "match_type"})
 var ruleMutableKeys = map[string]bool{
-	"tools":        true,
-	"pattern":      true,
-	"severity":     true,
-	"action":       true,
-	"description":  true,
-	"match_type":   true,
+	"tools":       true,
+	"pattern":     true,
+	"severity":    true,
+	"action":      true,
+	"description": true,
+	"match_type":  true,
 }
 
+// permRpcLogComponent 日志组件
 var permRpcLogComponent = logger.ComponentChannel
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

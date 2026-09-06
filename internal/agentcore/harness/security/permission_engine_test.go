@@ -41,7 +41,7 @@ func TestPermissionEngine_EnabledFalse(t *testing.T) {
 	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
-	assert.Contains(t, result.Reason, "disabled")
+	assert.Contains(t, result.Reason, "已禁用")
 }
 
 // TestPermissionEngine_ChecksInactive 宿主说不要校验 → 允许
@@ -52,7 +52,7 @@ func TestPermissionEngine_ChecksInactive(t *testing.T) {
 	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
-	assert.Contains(t, result.Reason, "inactive")
+	assert.Contains(t, result.Reason, "未启用")
 }
 
 // TestPermissionEngine_TieredPolicyDeny TieredPolicy DENY → DENY
@@ -136,7 +136,7 @@ func TestPermissionEngine_SetWorkspaceRoot(t *testing.T) {
 
 // TestGetReason 测试 reason 生成
 func TestGetReason(t *testing.T) {
-	assert.Contains(t, getReason(PermissionLevelAllow, "bash", "test_rule"), "Allowed")
-	assert.Contains(t, getReason(PermissionLevelDeny, "bash", "test_rule"), "Denied")
-	assert.Contains(t, getReason(PermissionLevelAsk, "bash", "test_rule"), "Approval required")
+	assert.Contains(t, getReason(PermissionLevelAllow, "bash", "test_rule"), "放行")
+	assert.Contains(t, getReason(PermissionLevelDeny, "bash", "test_rule"), "拒绝")
+	assert.Contains(t, getReason(PermissionLevelAsk, "bash", "test_rule"), "需审批")
 }

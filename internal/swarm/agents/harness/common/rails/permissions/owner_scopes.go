@@ -41,6 +41,8 @@ type permissionContextKey struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // severityMap 权限级别严重度映射，数值越大越严格。
 // 对齐 Python: _severity = {"allow": 0, "ask": 1, "deny": 2}
 var severityMap = map[string]int{
@@ -48,8 +50,6 @@ var severityMap = map[string]int{
 	"ask":   1,
 	"deny":  2,
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件
 var logComponent = logger.ComponentPermissions

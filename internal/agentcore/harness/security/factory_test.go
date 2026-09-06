@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -21,9 +21,9 @@ type fakeRail struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeRail) Priority() int { return 0 }
-func (f *fakeRail) Init(_ agentinterfaces.BaseAgent) error                 { return nil }
-func (f *fakeRail) Uninit(_ agentinterfaces.BaseAgent) error               { return nil }
+func (f *fakeRail) Priority() int                            { return 0 }
+func (f *fakeRail) Init(_ agentinterfaces.BaseAgent) error   { return nil }
+func (f *fakeRail) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 func (f *fakeRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
