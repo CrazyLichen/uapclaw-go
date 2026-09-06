@@ -86,30 +86,15 @@ func normalizeSkillNames(names []string) map[string]bool {
 //
 // 对齐 Python: _normalize_member_role(role)
 //
-// Python 实现：
-//   - role 为 None → 返回 None
-//   - getattr(role, "value", role) 获取枚举值
-//   - str(role_value) 转字符串
-//   - 空字符串返回 None
-func normalizeMemberRole(role any) *string {
-	if role == nil {
+// Python 实现：role 为 None 返回 None；getattr(role, "value", role) 获取枚举值；
+// str(role_value) 转字符串；空字符串返回 None。
+//
+// Go 版本统一接受 string（枚举类型调用方自行 String() 转换后传入）。
+func normalizeMemberRole(role string) *string {
+	if role == "" {
 		return nil
 	}
-	text := ""
-	switch v := role.(type) {
-	case string:
-		text = v
-	default:
-		// 对齐 Python: role_value = getattr(role, "value", role)
-		// Go 中枚举通常实现 String() 方法
-		if stringer, ok := v.(interface{ String() string }); ok {
-			text = stringer.String()
-		}
-	}
-	if text == "" {
-		return nil
-	}
-	return &text
+	return &role
 }
 
 // collectMessagesFromTrajectory 从轨迹中提取消息列表。

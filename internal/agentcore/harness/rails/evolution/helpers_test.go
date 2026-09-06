@@ -69,34 +69,13 @@ func TestNormalizeSkillNames_含空格和空项(t *testing.T) {
 
 // ──────────────────────────── normalizeMemberRole 测试 ────────────────────────────
 
-func TestNormalizeMemberRole_nil(t *testing.T) {
-	assert.Nil(t, normalizeMemberRole(nil))
-}
-
-func TestNormalizeMemberRole_字符串(t *testing.T) {
+func TestNormalizeMemberRole_非空字符串(t *testing.T) {
 	s := "leader"
 	assert.Equal(t, &s, normalizeMemberRole("leader"))
 }
 
 func TestNormalizeMemberRole_空字符串(t *testing.T) {
 	assert.Nil(t, normalizeMemberRole(""))
-}
-
-func TestNormalizeMemberRole_自定义Stringer(t *testing.T) {
-	// 验证实现 String() 接口的非 string 类型被正确处理
-	role := &stringerMock{val: "admin"}
-	result := normalizeMemberRole(role)
-	s := "admin"
-	assert.Equal(t, &s, result)
-}
-
-// stringerMock 实现 fmt.Stringer 接口的测试辅助类型
-type stringerMock struct {
-	val string
-}
-
-func (s *stringerMock) String() string {
-	return s.val
 }
 
 // ──────────────────────────── collectMessagesFromTrajectory 测试 ────────────────────────────
