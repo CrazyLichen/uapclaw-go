@@ -417,3 +417,83 @@ func TestPermissionContextFromCtx_空值(t *testing.T) {
 		t.Errorf("空 context 应返回 nil，got %v", got)
 	}
 }
+
+// ──────────────────────────── NewPermissionContextFromRequest 测试 ────────────────────────────
+
+// TestNewPermissionContextFromRequest_数字分身模式 验证 avatar_mode 场景
+func TestNewPermissionContextFromRequest_数字分身模式(t *testing.T) {
+	metadata := map[string]any{
+		"avatar_mode":           true,
+		"group_digital_avatar":  true,
+		"principal_user_id":     "user_123",
+		"triggering_user_id":    "sender_456",
+		"avatar_principal_name": "助手A",
+	}
+	pc := NewPermissionContextFromRequest("feishu_ch1", metadata)
+	if pc == nil {
+		t.Fatal("数字分身模式应返回非 nil")
+	}
+	if pc.Scene() != "group_digital_avatar" {
+		t.Fatalf("scene=%s，期望 group_digital_avatar", pc.Scene())
+	}
+	if pc.PrincipalUserID != "user_123" {
+		t.Fatalf("principal_user_id=%s，期望 user_123", pc.PrincipalUserID)
+	}
+	if pc.ChannelID != "feishu_ch1" {
+		t.Fatalf("channel_id=%s，期望 feishu_ch1", pc.ChannelID)
+	}
+}
+
+// TestNewPermissionContextFromRequest_非数字分身_禁用记忆 验证 enable_memory=false 场景
+func TestNewPermissionContextFromRequest_非数字分身_禁用记忆(t *testing.T) {
+	metadata := map[string]any{
+		"enable_memory": false,
+	}
+	pc := NewPermissionContextFromRequest("web", metadata)
+	if pc == nil {
+		t.Fatal("禁用记忆应返回非 nil")
+	}
+	if pc.EnableMemory {
+		t.Fatal("EnableMemory 应为 false")
+	}
+	if pc.AvatarMode {
+		t.Fatal("AvatarMode 应为 false")
+	}
+	if pc.ChannelID != "web" {
+		t.Fatalf("ChannelID=%s，期望 web", pc.ChannelID)
+	}
+}
+
+// TestNewPermissionContextFromRequest_无metadata返回nil 验证无 avatar_mode 且非禁用记忆时返回 nil
+func TestNewPermissionContextFromRequest_无metadata返回nil(t *testing.T) {
+	pc := NewPermissionContextFromRequest("web", nil)
+	if pc != nil {
+		t.Fatal("无 avatar_mode 且非禁用记忆时应返回 nil")
+	}
+
+	pc = NewPermissionContextFromRequest("web", map[string]any{})
+	if pc != nil {
+		t.Fatal("空 metadata 应返回 nil")
+	}
+
+	pc = NewPermissionContextFromRequest("web", map[string]any{"enable_memory": true})
+	if pc != nil {
+		t.Fatal("enable_memory=true 非 avatar_mode 时应返回 nil")
+	}
+}
+
+// TestNewPermissionContextFromRequest_channelID回填 验证 metadata 无 channel_id 时使用参数
+func TestNewPermissionContextFromRequest_channelID回填(t *testing.T) {
+	metadata := map[string]any{
+		"avatar_mode":          true,
+		"group_digital_avatar": true,
+		"principal_user_id":    "user_123",
+	}
+	pc := NewPermissionContextFromRequest("feishu_ch1", metadata)
+	if pc == nil {
+		t.Fatal("数字分身模式应返回非 nil")
+	}
+	if pc.ChannelID != "feishu_ch1" {
+		t.Fatalf("metadata 无 channel_id 时应使用参数，得到 %s", pc.ChannelID)
+	}
+}

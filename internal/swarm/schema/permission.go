@@ -223,3 +223,41 @@ func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
 	}
 	return nil
 }
+
+// NewPermissionContextFromRequest 从 AgentRequest 的 metadata 构造 PermissionContext。
+//
+// 对齐 Python: setup_permission_context(request) (owner_scopes.py L61-88)
+//
+// 返回 nil 表示无需设置权限上下文（非数字分身且非禁用记忆场景）。
+// Go 端不需要 Python 的 ContextVar token/reset，使用 context.WithValue 不可变模式。
+func NewPermissionContextFromRequest(channelID string, metadata map[string]any) *PermissionContext {
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	avatarMode := false
+	if v, ok := metadata["avatar_mode"].(bool); ok {
+		avatarMode = v
+	}
+
+	if !avatarMode {
+		// 非 avatar_mode：仅当 enable_memory=false 时才设置上下文（用于禁用记忆）
+		// 对齐 Python: if meta.get("enable_memory") is False
+		if v, ok := metadata["enable_memory"].(bool); ok && !v {
+			return NewPermissionContext(
+				WithPermissionChannelID(channelID),
+				WithPermissionEnableMemory(false),
+				WithPermissionAvatarMode(false),
+			)
+		}
+		return nil
+	}
+
+	// avatar_mode=True → 从 metadata 构建完整 PermissionContext
+	pc := NewPermissionContextFromDict(metadata)
+	// 对齐 Python: channel_id=getattr(request, "channel_id", "") — Python 从 request 取而非 metadata
+	if strings.TrimSpace(pc.ChannelID) == "" && channelID != "" {
+		pc.ChannelID = channelID
+	}
+	return pc
+}

@@ -1,7 +1,13 @@
 package adapter
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
@@ -10,6 +16,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
@@ -328,11 +336,22 @@ func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
 }
 
 // buildSecurityRail 构建安全护栏。
-// ⤵️ 10.6.3-10: SecurityRail
-// 对齐 Python: _build_security_rail() (line 2101-2115)
+// ✅ 已回填：SafetyPromptRail（对齐 Python: _build_security_rail() — SecurityRail()）
+//
+// 对齐 Python: _build_security_rail() (line 2033-2042)
+// Python: try/except 包裹创建过程，失败时 warning 并返回 nil
 func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 SecurityRail
-	return nil
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn(logComponent).Any("panic", r).
+					Msg("SafetyPromptRail 创建失败，跳过")
+			}
+		}()
+	}()
+	rail := secrail.NewSafetyPromptRail()
+	logger.Info(logComponent).Msg("SafetyPromptRail 创建成功")
+	return rail
 }
 
 // buildMemoryRail 构建记忆护栏。
@@ -389,11 +408,50 @@ func (d *DeepAdapter) buildContextProcessorRail() sainterfaces.AgentRail {
 }
 
 // buildPermissionRail 构建权限护栏。
-// ⤵️ 10.6.3-10: PermissionInterruptRail
-// 对齐 Python: _build_permission_rail() (line 2213-2250)
+// ✅ 已回填：PermissionInterruptRail（对齐 Python: _build_permission_rail() — build_permission_rail()）
+//
+// 对齐 Python: build_permission_rail(config, llm, model_name) (interrupt_helpers.py L16-281)
+// 对齐 Python: _build_permission_rail() (interface_deep.py L2213-2250)
 func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 PermissionInterruptRail
-	return nil
+	permissionConfig, _ := configBase["permissions"].(map[string]any)
+	if permissionConfig == nil {
+		return nil
+	}
+	enabled, _ := permissionConfig["enabled"].(bool)
+	if !enabled {
+		logger.Info(logComponent).Msg("PermissionRail: permissions.enabled=false，跳过创建")
+		return nil
+	}
+
+	toolNames := collectOptionalToolTags(permissionConfig)
+	modelName := extractModelName(configBase)
+
+	host := &harnesssecurity.ToolPermissionHost{
+		GetPermissionsSnapshot:       d.getPermissionsSnapshot,
+		PersistAllowRule:             d.persistAllowRule,
+		ResolveWorkspaceDir:          d.resolveWorkspaceDir,
+		PermissionYAMLPath:           d.getPermissionYAMLPath(),
+		ToolPermissionChecksActive:   func() bool { return true },
+		RequestPermissionConfirmation: d.requestPermissionConfirmation,
+		PermissionSceneHook:          d.permissionSceneHook,
+	}
+
+	workspaceRoot := workspace.WorkspaceDir()
+
+	rail := harnesssecurity.BuildPermissionInterruptRail(
+		permissionConfig, nil, host, workspaceRoot, d.model, modelName,
+		func(config map[string]any, engine *harnesssecurity.PermissionEngine, toolNames []string, llm any, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
+			return secrail.NewPermissionInterruptRail(config, engine, toolNames, llm, mn, h)
+		},
+	)
+	if rail != nil {
+		logger.Info(logComponent).
+			Strs("tool_names", toolNames).
+			Msg("PermissionInterruptRail 创建成功")
+	} else {
+		logger.Warn(logComponent).Msg("PermissionInterruptRail 创建失败")
+	}
+	return rail
 }
 
 // ──────────────────────────── Rail 模式切换（⤵️ 10.6.3-10） ────────────────────────────
@@ -417,6 +475,198 @@ func (d *DeepAdapter) updateRailsForMode(mode string) {
 func (d *DeepAdapter) updatePromptForMode(mode string) {
 	// ⤵️ 10.6.3-10: 同步 system_prompt_builder 语言
 	logger.Info(logComponent).Str("mode", mode).Msg("updatePromptForMode 等待 10.6.3-10 回填")
+}
+
+// ──────────────────────────── ToolPermissionHost 回调方法 ────────────────────────────
+
+// getPermissionsSnapshot 返回当前权限配置快照。
+// 对齐 Python: get_permissions_snapshot = lambda: get_config().get("permissions", {}) (interrupt_helpers.py L215)
+func (d *DeepAdapter) getPermissionsSnapshot() map[string]any {
+	if d.configCache == nil {
+		return map[string]any{}
+	}
+	perm, _ := d.configCache["permissions"].(map[string]any)
+	if perm == nil {
+		return map[string]any{}
+	}
+	return perm
+}
+
+// persistAllowRule 将合并后的 permissions 配置写回 config.yaml。
+// 对齐 Python: _persist_allow_rule(permissions) (interrupt_helpers.py L68-84)
+func (d *DeepAdapter) persistAllowRule(permissions map[string]any) bool {
+	yamlPath := d.getPermissionYAMLPath()
+	if yamlPath == "" {
+		logger.Warn(logComponent).Msg("persistAllowRule: config path 为空")
+		return false
+	}
+	ok := harnesssecurity.WritePermissionsSectionToAgentConfigYAML(yamlPath, permissions)
+	if !ok {
+		logger.Warn(logComponent).Str("yaml_path", yamlPath).Msg("persistAllowRule 写盘失败")
+	}
+	return ok
+}
+
+// resolveWorkspaceDir 返回 workspace 根目录。
+// 对齐 Python: get_workspace_dir (interrupt_helpers.py L221)
+func (d *DeepAdapter) resolveWorkspaceDir() string {
+	return workspace.WorkspaceDir()
+}
+
+// getPermissionYAMLPath 返回 Agent 配置文件路径。
+// 对齐 Python: get_config_file (interrupt_helpers.py L222)
+func (d *DeepAdapter) getPermissionYAMLPath() string {
+	return workspace.ConfigFile()
+}
+
+// requestPermissionConfirmation 对 ASK 级别征求用户确认。
+// 对齐 Python: _request_permission_confirmation (interrupt_helpers.py L126-208)
+//
+// 非 ACP 通道返回 ConfirmActionInterrupt（走内置中断），ACP 通道走 JSON-RPC。
+// 当前 ACP output manager 尚未实现，统一降级为 ConfirmActionInterrupt。
+func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.PermissionConfirmationRequest) (*harnesssecurity.PermissionConfirmResponse, error) {
+	// 对齐 Python: channel = TOOL_PERMISSION_CHANNEL_ID.get() or "web"
+	channelID := sschema.ToolPermissionChannelIDFromCtx(req.GoCtx)
+	if channelID == "" {
+		channelID = "web"
+	}
+	// 对齐 Python: if channel != "acp": return "interrupt"
+	if channelID != "acp" {
+		return &harnesssecurity.PermissionConfirmResponse{
+			Action: harnesssecurity.ConfirmActionInterrupt,
+		}, nil
+	}
+	// ⤵️ ACP: ACP output manager 尚未实现，降级为 ConfirmActionInterrupt
+	logger.Info(logComponent).Str("channel_id", channelID).Msg("ACP 通道权限确认尚未实现，降级为 interrupt")
+	return &harnesssecurity.PermissionConfirmResponse{
+		Action: harnesssecurity.ConfirmActionInterrupt,
+	}, nil
+}
+
+// permissionSceneHook 宿主场景钩子（数字分身/owner_scopes）。
+// 对齐 Python: _permission_scene_hook (interrupt_helpers.py L210-254)
+//
+// 返回 nil 表示继续走引擎 tiered 判定；
+// 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
+func (d *DeepAdapter) permissionSceneHook(input harnesssecurity.PermissionSceneHookInput) ([]string, error) {
+	// 对齐 Python: perm_ctx = TOOL_PERMISSION_CONTEXT.get()
+	permCtx := sschema.PermissionContextFromCtx(input.GoCtx)
+	if permCtx == nil {
+		return nil, nil
+	}
+
+	// 对齐 Python: if getattr(perm_ctx, "scene", None) == "group_digital_avatar":
+	if permCtx.Scene() == "group_digital_avatar" {
+		if input.UserInput != nil {
+			return []string{"reject", "[PERMISSION_DENIED] 数字分身场景不支持交互审批"}, nil
+		}
+		// 对齐 Python: level = await check_avatar_permission(normalized_tool_name, tool_args, channel_id=..., session_id=None)
+		level, err := permowner.CheckAvatarPermission(
+			d.getPermissionsSnapshot(),
+			input.NormalizedToolName,
+			input.ToolArgs,
+			permCtx.ChannelID,
+			permCtx.PrincipalUserID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if level == "allow" {
+			return []string{"approve"}, nil
+		}
+		return []string{"reject", "[PERMISSION_DENIED] 该工具未被授权在数字分身场景下使用"}, nil
+	}
+
+	// 对齐 Python: owner_scopes 场景
+	principalUID := strings.TrimSpace(permCtx.PrincipalUserID)
+	chID := strings.TrimSpace(permCtx.ChannelID)
+	if principalUID == "" || chID == "" {
+		return nil, nil
+	}
+
+	permAll := d.getPermissionsSnapshot()
+	ownerScopes, _ := permAll["owner_scopes"].(map[string]any)
+	if ownerScopes == nil || len(ownerScopes) == 0 {
+		return nil, nil
+	}
+
+	chScopes, _ := ownerScopes[chID].(map[string]any)
+	scopeCfg, _ := chScopes[principalUID].(map[string]any)
+
+	ownerLevel := permowner.ResolveOwnerScopeLevel(scopeCfg, input.NormalizedToolName, input.ToolArgs)
+	if ownerLevel == "" {
+		return nil, nil
+	}
+	if ownerLevel == "allow" {
+		return []string{"approve"}, nil
+	}
+	return []string{"reject", fmt.Sprintf("[PERMISSION_DENIED] 该工具未被授权 (owner_scopes: %s)", ownerLevel)}, nil
+}
+
+// ──────────────────────────── 辅助函数 ────────────────────────────
+
+// collectOptionalToolTags 从 permissions 配置中收集工具名标签（仅作展示/日志用）。
+// 对齐 Python: _collect_optional_tool_tags() (interrupt_helpers.py L56-80)
+func collectOptionalToolTags(permissionConfig map[string]any) []string {
+	names := make(map[string]struct{})
+	if toolsCfg, ok := permissionConfig["tools"].(map[string]any); ok {
+		for k := range toolsCfg {
+			if s := strings.TrimSpace(k); s != "" {
+				names[s] = struct{}{}
+			}
+		}
+	}
+	if rules, ok := permissionConfig["rules"].([]any); ok {
+		for _, entry := range rules {
+			m, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			rawTools := m["tools"]
+			switch v := rawTools.(type) {
+			case string:
+				if s := strings.TrimSpace(v); s != "" {
+					names[s] = struct{}{}
+				}
+			case []any:
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						if s = strings.TrimSpace(s); s != "" {
+							names[s] = struct{}{}
+						}
+					}
+				}
+			}
+		}
+	}
+	result := make([]string, 0, len(names))
+	for n := range names {
+		result = append(result, n)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// extractModelName 从 configBase 提取默认模型名称。
+// 对齐 Python: config_base.get("models", {}).get("default", {}).get("model_client_config", {}).get("model_name", "gpt-4")
+func extractModelName(configBase map[string]any) string {
+	modelsCfg, _ := configBase["models"].(map[string]any)
+	if modelsCfg == nil {
+		return "gpt-4"
+	}
+	defaultCfg, _ := modelsCfg["default"].(map[string]any)
+	if defaultCfg == nil {
+		return "gpt-4"
+	}
+	clientCfg, _ := defaultCfg["model_client_config"].(map[string]any)
+	if clientCfg == nil {
+		return "gpt-4"
+	}
+	modelName, _ := clientCfg["model_name"].(string)
+	if modelName == "" {
+		return "gpt-4"
+	}
+	return modelName
 }
 
 // extractLLMConfig 从 configBase 提取 LLM 配置，对齐 Python _query_llm 中的 config 提取

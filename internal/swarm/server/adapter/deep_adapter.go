@@ -18,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -132,7 +133,7 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: ResponsePromptRail
 	responsePromptRail sainterfaces.AgentRail
 	// securityRail 安全护栏
-	// ⤵️ 10.6.3-10: SecurityRail
+	// ✅ 已回填：SafetyPromptRail（对齐 Python: _security_rail: SecurityRail | None）
 	securityRail sainterfaces.AgentRail
 	// memoryRail 记忆护栏
 	// ⤵️ 10.6.3-10: MemoryRail
@@ -155,7 +156,7 @@ type DeepAdapter struct {
 	// ✅ 已回填：SubagentRail（对齐 Python: _subagent_rail: SubagentRail | None）
 	subagentRail *subagent.SubagentRail
 	// permissionRail 权限护栏
-	// ⤵️ 10.6.3-10: PermissionInterruptRail
+	// ✅ 已回填：PermissionInterruptRail（对齐 Python: _permission_rail: PermissionInterruptRail | None）
 	permissionRail sainterfaces.AgentRail
 	// avatarRail 数字分身护栏
 	avatarRail sainterfaces.AgentRail
@@ -621,7 +622,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	d.toolCards = newToolCards
 
 	// 步骤 10: _update_permission_rail(configBase)
-	// ⤵️ 10.6.3-10: _update_permission_rail(configBase)
+	// ✅ 已回填：updatePermissionRail 热更新
+	d.updatePermissionRail(configBase)
 
 	// 步骤 11: instance.ConfigureDeepConfig(deepCfg)
 	// 对齐 Python: deep_cfg = self._make_deep_agent_config(model=model, config=config, agent_card=agent_card, tool_cards=..., rails=rails_list); self._instance.configure(deep_cfg)
@@ -709,7 +711,11 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 10-11: 权限上下文设置
 	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	if req.PermissionContext != nil {
+	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
+	if permCtx != nil {
+		ctx = schema.WithPermissionContextValue(ctx, permCtx)
+	} else if req.PermissionContext != nil {
+		// 回退：使用请求中已携带的 PermissionContext
 		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
 	}
 
@@ -1981,4 +1987,34 @@ func extractReasoningContent(payload map[string]any) string {
 	return ""
 }
 
-// 占位函数（后续 Task 回填）
+// updatePermissionRail 原地更新已有 PermissionRail 配置，或在首次启用时新建。
+//
+// 对齐 Python: _update_permission_rail(config_base) (interface_deep.py L2286-2302)
+//
+// Python 执行步骤：
+//  1. permission_config = config_base.get("permissions", {})
+//  2. if self._permission_rail is not None: self._permission_rail.update_config(permission_config)
+//  3. elif permission_config.get("enabled", False): self._permission_rail = build_permission_rail(...)
+func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
+	permissionConfig, _ := configBase["permissions"].(map[string]any)
+
+	if d.permissionRail != nil {
+		// 对齐 Python: self._permission_rail.update_config(permission_config)
+		if rail, ok := d.permissionRail.(*secrail.PermissionInterruptRail); ok {
+			rail.UpdateConfig(permissionConfig, nil)
+			logger.Info(logComponent).Msg("permissionRail 配置热更新完成")
+		}
+		return
+	}
+
+	// 对齐 Python: elif permission_config.get("enabled", False):
+	if permissionConfig != nil {
+		if enabled, _ := permissionConfig["enabled"].(bool); enabled {
+			rail := d.buildPermissionRail(configBase)
+			if rail != nil {
+				d.permissionRail = rail
+				logger.Info(logComponent).Msg("permissionRail 首次创建完成（热重载触发）")
+			}
+		}
+	}
+}

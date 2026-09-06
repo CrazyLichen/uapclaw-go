@@ -11,7 +11,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -793,7 +795,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 7: PermissionInterruptRail（权限中断护栏）
-	// ⤵️ 10.6.3-10: PermissionInterruptRail 尚未实现
+	// ✅ 已回填：PermissionInterruptRail
 	if perm := c.buildPermissionRail(configBase, nil, ""); perm != nil {
 		c.deep.permissionRail = perm
 		railsList = append(railsList, perm)
@@ -1004,11 +1006,53 @@ func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
 }
 
 // buildPermissionRail 构建权限护栏。
-// 对齐 Python: build_permission_rail(config=config, llm=llm, model_name=model_name) (interface_code.py)
-// ⤵️ 10.6.3-10: PermissionInterruptRail 尚未实现
+// ✅ 已回填：PermissionInterruptRail（对齐 Python: build_permission_rail(config, llm, model_name) — interface_code.py）
+//
+// CodeAdapter 与 DeepAdapter 逻辑基本相同，但额外接收 llm 和 modelName 参数
+// （Code 模式在 create_instance 中传递显式 llm/modelName）。
 func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llm any, modelName string) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 PermissionInterruptRail，使用 llm 和 modelName 参数
-	return nil
+	permissionConfig, _ := configBase["permissions"].(map[string]any)
+	if permissionConfig == nil {
+		return nil
+	}
+	enabled, _ := permissionConfig["enabled"].(bool)
+	if !enabled {
+		return nil
+	}
+
+	toolNames := collectOptionalToolTags(permissionConfig)
+	// 如果调用方未传 llm/modelName，使用 DeepAdapter 的默认值
+	if llm == nil {
+		llm = c.deep.model
+	}
+	if modelName == "" {
+		modelName = extractModelName(configBase)
+	}
+
+	host := &harnesssecurity.ToolPermissionHost{
+		GetPermissionsSnapshot:       c.deep.getPermissionsSnapshot,
+		PersistAllowRule:             c.deep.persistAllowRule,
+		ResolveWorkspaceDir:          c.deep.resolveWorkspaceDir,
+		PermissionYAMLPath:           c.deep.getPermissionYAMLPath(),
+		ToolPermissionChecksActive:   func() bool { return true },
+		RequestPermissionConfirmation: c.deep.requestPermissionConfirmation,
+		PermissionSceneHook:          c.deep.permissionSceneHook,
+	}
+
+	workspaceRoot := workspace.WorkspaceDir()
+
+	rail := harnesssecurity.BuildPermissionInterruptRail(
+		permissionConfig, nil, host, workspaceRoot, llm, modelName,
+		func(config map[string]any, engine *harnesssecurity.PermissionEngine, names []string, l any, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
+			return secrail.NewPermissionInterruptRail(config, engine, names, l, mn, h)
+		},
+	)
+	if rail != nil {
+		logger.Info(logComponent).
+			Strs("tool_names", toolNames).
+			Msg("PermissionInterruptRail (CodeAdapter) 创建成功")
+	}
+	return rail
 }
 
 // buildWorktreeRail 构建工作树护栏。

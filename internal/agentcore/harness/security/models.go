@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -85,6 +86,10 @@ type PermissionsSection struct {
 //
 // 对齐 Python: PermissionSceneHookInput (host.py L15-23)
 type PermissionSceneHookInput struct {
+	// GoCtx Go 标准上下文（从 BeforeToolCall 的 ctx 参数传入）
+	// Python 端通过 ContextVar 获取权限上下文，Go 端通过 context.WithValue 传递，
+	// 需要此字段将 Go context 传递给 scene hook 实现方。
+	GoCtx context.Context
 	// Ctx 回调上下文
 	Ctx *agentinterfaces.AgentCallbackContext
 	// ToolCall 工具调用
@@ -103,6 +108,9 @@ type PermissionSceneHookInput struct {
 //
 // 对齐 Python: PermissionConfirmationRequest (host.py L36-43)
 type PermissionConfirmationRequest struct {
+	// GoCtx Go 标准上下文（从 BeforeToolCall 的 ctx 参数传入）
+	// 用于从 context 中读取 channelID 等权限上下文信息。
+	GoCtx context.Context
 	// Ctx 回调上下文
 	Ctx *agentinterfaces.AgentCallbackContext
 	// ToolCall 工具调用

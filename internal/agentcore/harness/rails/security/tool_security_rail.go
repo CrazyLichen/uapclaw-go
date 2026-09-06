@@ -308,7 +308,7 @@ func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionF
 //
 // 对齐 Python: PermissionInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config) (tool_security_rail.py L288-504)
 func (r *PermissionInterruptRail) resolvePermissionInterrupt(
-	_ context.Context,
+	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	userInput any,
@@ -333,6 +333,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	// ── 1. PermissionSceneHook 短路 ──
 	if r.host.PermissionSceneHook != nil {
 		sceneOut, err := r.host.PermissionSceneHook(harnesssecurity.PermissionSceneHookInput{
+			GoCtx:              ctx,
 			Ctx:                cbc,
 			ToolCall:           toolCall,
 			UserInput:          userInput,
@@ -411,6 +412,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		// ASK → 尝试 hosted 确认
 		if r.host.RequestPermissionConfirmation != nil {
 			extOut, err := r.host.RequestPermissionConfirmation(harnesssecurity.PermissionConfirmationRequest{
+				GoCtx:          ctx,
 				Ctx:            cbc,
 				ToolCall:       toolCall,
 				Result:         result,
