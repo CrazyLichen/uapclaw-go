@@ -859,14 +859,18 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 10: cron 上下文绑定
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
 
-	// 步骤 11-12: 权限上下文设置
+	// 步骤 10-11: 权限上下文设置
 	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	if req.PermissionContext != nil {
+	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
+	if permCtx != nil {
+		ctx = schema.WithPermissionContextValue(ctx, permCtx)
+	} else if req.PermissionContext != nil {
+		// 回退：使用请求中已携带的 PermissionContext
 		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
 	}
 
-	// 步骤 13-14: 模型选择 + 应用到 ReActAgent
+	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
 	resolvedModelStream := d.resolveModelForRequest(req)
 	if resolvedModelStream != nil && d.instance != nil {
 		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
