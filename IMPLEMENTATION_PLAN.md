@@ -605,7 +605,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65a-5 | ✅ | SQL 实现 | SQLite/PostgreSQL后端（SqlTeamDatabase+newGormDB+DDL动态表+4个SQL DAO+NewTeamDatabase工厂+WithTx跨表事务）；覆盖率86.0%；后续重构：①models.go补TableName()+gorm:column tag ②GetSessionIDFunc包级变量→sessionctx独立子包（对齐Python context.py） ③SQL DAO改用GORM结构体映射替换map[string]any ④spec补充字段映射表 | `openjiuwen/agent_teams/tools/database/engine.py` · `database/*.py` |
 | 9.65-1 | ✅ | Messager 接口 + InProcess | Messager接口（8方法）+InProcessMessager+全局Bus+CreateMessager工厂+TaskManager事件发布回填（9处）；循环依赖重构完成：配置搬入schema打断schema→messager/memory循环链，Messager接口改回*schema.EventMessage，删除SenderIDStamper，tools包改用schema.TypedEvent，删除sessionID字段改用schema.GetSessionID(ctx)，MessageID改用UUID v4 | `openjiuwen/agent_teams/messager/messager.py` · `messager/inprocess.py` |
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
-| 9.66 | ☐ | Team Workspace | 团队工作空间 | `openjiuwen/agent_teams/team_workspace/` |
+| 9.66 | ✅ | Team Workspace | 团队工作空间（TeamWorkspaceManager + TeamWorkspaceRail + WorkspaceMetaTool + ToolTranslator + i18n + locales + 回填 agent/harness） | `openjiuwen/agent_teams/team_workspace/` |
 | 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |
 | 9.68-69 | ☐ | Team Rails / Prompts | 团队级 Rails / 提示词 | `openjiuwen/agent_teams/rails/` · `prompts/` |
 | **9.x 自演化系统** | — | | | |
