@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
@@ -80,7 +81,7 @@ func NewPermissionInterruptRail(
 	config map[string]any,
 	engine *harnesssecurity.PermissionEngine,
 	toolNames []string,
-	llm any,
+	llmModel *llm.Model,
 	modelName string,
 	host *harnesssecurity.ToolPermissionHost,
 ) *PermissionInterruptRail {
@@ -111,7 +112,7 @@ func NewPermissionInterruptRail(
 					Msg("permission.rail.workspace_resolve_failed")
 			}
 		}
-		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, llm, modelName, workspaceRoot)
+		r.engine = harnesssecurity.NewPermissionEngine(r.staticConfig, llmModel, modelName, workspaceRoot)
 	}
 
 	// 宿主级权限校验活跃检查

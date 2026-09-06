@@ -21,6 +21,7 @@ import (
 	ctrlmodules "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -1470,8 +1471,8 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 		}
 		permRail := hsecurity.BuildPermissionInterruptRail(
 			permConfig, nil, host, wsRoot, nil, "",
-			func(config map[string]any, engine *hsecurity.PermissionEngine, toolNames []string, llm any, modelName string, h *hsecurity.ToolPermissionHost) agentinterfaces.AgentRail {
-				return securityrail.NewPermissionInterruptRail(config, engine, toolNames, llm, modelName, h)
+			func(config map[string]any, engine *hsecurity.PermissionEngine, toolNames []string, llmModel *llm.Model, modelName string, h *hsecurity.ToolPermissionHost) agentinterfaces.AgentRail {
+				return securityrail.NewPermissionInterruptRail(config, engine, toolNames, llmModel, modelName, h)
 			},
 		)
 		if permRail != nil {

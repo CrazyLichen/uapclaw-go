@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
@@ -62,7 +63,7 @@ func fakeCtor(
 	config map[string]any,
 	engine *PermissionEngine,
 	_ []string,
-	_ any,
+	_ *llm.Model,
 	_ string,
 	host *ToolPermissionHost,
 ) agentinterfaces.AgentRail {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -1010,7 +1011,7 @@ func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
 //
 // CodeAdapter 与 DeepAdapter 逻辑基本相同，但额外接收 llm 和 modelName 参数
 // （Code 模式在 create_instance 中传递显式 llm/modelName）。
-func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llm any, modelName string) sainterfaces.AgentRail {
+func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *llm.Model, modelName string) sainterfaces.AgentRail {
 	permissionConfig, _ := configBase["permissions"].(map[string]any)
 	if permissionConfig == nil {
 		return nil
@@ -1022,8 +1023,8 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llm any, mo
 
 	toolNames := collectOptionalToolTags(permissionConfig)
 	// 如果调用方未传 llm/modelName，使用 DeepAdapter 的默认值
-	if llm == nil {
-		llm = c.deep.model
+	if llmModel == nil {
+		llmModel = c.deep.model
 	}
 	if modelName == "" {
 		modelName = extractModelName(configBase)
@@ -1042,8 +1043,8 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llm any, mo
 	workspaceRoot := workspace.WorkspaceDir()
 
 	rail := harnesssecurity.BuildPermissionInterruptRail(
-		permissionConfig, nil, host, workspaceRoot, llm, modelName,
-		func(config map[string]any, engine *harnesssecurity.PermissionEngine, names []string, l any, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
+		permissionConfig, nil, host, workspaceRoot, llmModel, modelName,
+		func(config map[string]any, engine *harnesssecurity.PermissionEngine, names []string, l *llm.Model, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
 			return secrail.NewPermissionInterruptRail(config, engine, names, l, mn, h)
 		},
 	)

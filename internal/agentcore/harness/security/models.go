@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -142,7 +143,7 @@ type PermissionRailConstructor func(
 	config map[string]any,
 	engine *PermissionEngine,
 	toolNames []string,
-	llm any,
+	llm *llm.Model,
 	modelName string,
 	host *ToolPermissionHost,
 ) agentinterfaces.AgentRail

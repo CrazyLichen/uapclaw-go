@@ -1,6 +1,7 @@
 package security
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -26,7 +27,7 @@ func BuildPermissionInterruptRail(
 	engine *PermissionEngine,
 	host *ToolPermissionHost,
 	workspaceRoot string,
-	llm any,
+	model *llm.Model,
 	modelName string,
 	ctor PermissionRailConstructor,
 ) agentinterfaces.AgentRail {
@@ -60,7 +61,7 @@ func BuildPermissionInterruptRail(
 
 	// 对齐 Python: return PermissionInterruptRail(config=deepcopy(permissions), engine=engine, tool_names=None, llm=llm, model_name=model_name, host=h)
 	// deepcopy 由构造器内部 NewPermissionEngine 处理（PermissionEngine.NewPermissionEngine 会拷贝 config）
-	return ctor(permissions, engine, nil, llm, modelName, h)
+	return ctor(permissions, engine, nil, model, modelName, h)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

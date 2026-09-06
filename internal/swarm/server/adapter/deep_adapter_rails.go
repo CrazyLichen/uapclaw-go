@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
@@ -460,8 +461,8 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 
 	rail := harnesssecurity.BuildPermissionInterruptRail(
 		permissionConfig, nil, host, workspaceRoot, d.model, modelName,
-		func(config map[string]any, engine *harnesssecurity.PermissionEngine, toolNames []string, llm any, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
-			return secrail.NewPermissionInterruptRail(config, engine, toolNames, llm, mn, h)
+		func(config map[string]any, engine *harnesssecurity.PermissionEngine, toolNames []string, llmModel *llm.Model, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
+			return secrail.NewPermissionInterruptRail(config, engine, toolNames, llmModel, mn, h)
 		},
 	)
 	if rail != nil {

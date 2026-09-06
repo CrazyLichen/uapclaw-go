@@ -3,6 +3,7 @@ package security
 import (
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -23,7 +24,7 @@ type PermissionEngine struct {
 	// externalChecker 外部目录检查器
 	externalChecker *ExternalDirectoryChecker
 	// llm 保留字段（对齐 Python _llm，供 PermissionInterruptRail 等热更新模型）
-	llm any
+	llm *llm.Model
 	// modelName 保留字段（对齐 Python _model_name）
 	modelName string
 	// sceneHook 宿主场景钩子（对齐 Python PermissionSceneHook）
@@ -43,7 +44,7 @@ var engineLogComponent = logger.ComponentAgentCore
 // NewPermissionEngine 创建权限引擎。
 //
 // 对齐 Python: PermissionEngine.__init__(config, llm, model_name, workspace_root) (core.py L36-52)
-func NewPermissionEngine(config map[string]any, llm any, modelName string, workspaceRoot string) *PermissionEngine {
+func NewPermissionEngine(config map[string]any, llmModel *llm.Model, modelName string, workspaceRoot string) *PermissionEngine {
 	if config == nil {
 		config = make(map[string]any)
 	}
@@ -58,7 +59,7 @@ func NewPermissionEngine(config map[string]any, llm any, modelName string, works
 		enabled:         enabled,
 		workspaceRoot:   workspaceRoot,
 		externalChecker: NewExternalDirectoryChecker(config, workspaceRoot),
-		llm:             llm,
+		llm:             llmModel,
 		modelName:       modelName,
 	}
 }
@@ -83,8 +84,8 @@ func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 
 // UpdateLLM 热更新模型实例。
 // 对齐 Python: PermissionEngine.update_llm(llm, model_name) (core.py L64-67)
-func (e *PermissionEngine) UpdateLLM(llm any, modelName string) {
-	e.llm = llm
+func (e *PermissionEngine) UpdateLLM(llmModel *llm.Model, modelName string) {
+	e.llm = llmModel
 	e.modelName = modelName
 }
 
