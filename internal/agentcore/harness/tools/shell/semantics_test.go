@@ -213,9 +213,9 @@ func TestIsSilent_ps静默命令(t *testing.T) {
 // TestGrepSemantics 测试 grep 族退出码语义
 func TestGrepSemantics(t *testing.T) {
 	tests := []struct {
-		code     int
-		isError  bool
-		hasMsg   bool
+		code    int
+		isError bool
+		hasMsg  bool
 	}{
 		{0, false, false},
 		{1, false, true},
