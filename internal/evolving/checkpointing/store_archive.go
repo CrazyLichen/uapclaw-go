@@ -57,7 +57,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 		return "", nil
 	}
 
-	if isDir(skillDir) && hasFiles(skillDir) {
+	if isDir(skillDir) {
 		logger.Error(logComponent).
 			Str("name", name).
 			Str("skill_dir", skillDir).

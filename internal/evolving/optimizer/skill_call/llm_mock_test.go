@@ -1098,9 +1098,10 @@ func TestBuildContextFromValues_空(t *testing.T) {
 
 // TestTruncateOrDefault 截断或默认值
 func TestTruncateOrDefault(t *testing.T) {
-	assert.Equal(t, "abc", truncateOrDefault("abcdef", 3, "无", "None"))
-	assert.Equal(t, "无", truncateOrDefault("", 3, "无", "None"))
-	assert.Equal(t, "hello", truncateOrDefault("hello", 10, "无", "None"))
+	assert.Equal(t, "abc", truncateOrDefault("abcdef", 3, "cn", "无", "None"))
+	assert.Equal(t, "无", truncateOrDefault("", 3, "cn", "无", "None"))
+	assert.Equal(t, "None", truncateOrDefault("", 3, "en", "无", "None"))
+	assert.Equal(t, "hello", truncateOrDefault("hello", 10, "cn", "无", "None"))
 }
 
 // TestPtrToStr 指针转字符串
@@ -1577,7 +1578,7 @@ func TestTeamSkillExperienceOptimizer_GenerateTrajectoryPatch_LLM失败(t *testi
 
 // TestTruncateOrDefault_截断 截断超长字符串
 func TestTruncateOrDefault_截断(t *testing.T) {
-	result := truncateOrDefault(strings.Repeat("a", 100), 10, "无", "None")
+	result := truncateOrDefault(strings.Repeat("a", 100), 10, "cn", "无", "None")
 	assert.Equal(t, "aaaaaaaaaa", result)
 }
 

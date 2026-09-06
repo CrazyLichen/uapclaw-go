@@ -109,7 +109,8 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name stri
 	}
 	var data map[string]any
 	if err := json.Unmarshal([]byte(fileContent), &data); err != nil {
-		return nil, fmt.Errorf("parse evolution log for skill %s: %w", name, err)
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("解析演进日志失败，返回空日志")
+		return EmptyEvolutionLog(name), nil
 	}
 	evoLog, err := FromDictEvolutionLog(data)
 	if err != nil {

@@ -95,7 +95,7 @@ func CreateTables(db *gorm.DB) error {
 	// 对齐 Python: current_version = sql_registry.get_current_version(entity_key)
 	// 仅 current_version > 0 时写入，等于 0 时不写
 	tableEntityKeys := map[string]string{
-		"user_message":       "user_message",
+		"user_message":       "user_messages",
 		"scope_user_mapping": "scope_user_mapping",
 	}
 	for tbl, entityKey := range tableEntityKeys {
@@ -103,13 +103,10 @@ func CreateTables(db *gorm.DB) error {
 		db.Model(&MemoryMeta{}).Where("table_name = ?", tbl).Count(&count)
 		if count == 0 {
 			currentVersion := migration.SQLRegistry.GetCurrentVersion(entityKey)
-			// 对齐 Python: create_tables 总是为新表写入 schema_version="0"
-			// 如果注册表有版本，使用注册表版本；否则默认写入 "0"
-			versionToWrite := 0
+			// 对齐 Python: 仅在 current_version > 0 时写入 schema_version，等于 0 时不写
 			if currentVersion > 0 {
-				versionToWrite = currentVersion
+				db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: fmt.Sprintf("%d", currentVersion)})
 			}
-			db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: fmt.Sprintf("%d", versionToWrite)})
 		}
 	}
 

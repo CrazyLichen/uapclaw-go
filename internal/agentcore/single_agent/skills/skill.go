@@ -20,6 +20,8 @@ type Skill struct {
 	Description string
 	// Directory 技能所在目录路径
 	Directory string
+	// MDPath SKILL.md 文件路径（对齐 Python: skill_md_path）
+	MDPath string
 	// UpdateAt 文件修改时间，用于增量缓存判断
 	UpdateAt time.Time
 }

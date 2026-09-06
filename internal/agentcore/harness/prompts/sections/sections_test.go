@@ -559,7 +559,7 @@ func TestGetListSkillSystemPrompt_双语言(t *testing.T) {
 
 // TestBuildSkillLine 测试单行技能描述行
 func TestBuildSkillLine(t *testing.T) {
-	got := BuildSkillLine(0, "implement", "实现代码")
+	got := BuildSkillLine(0, "implement", "实现代码", "")
 	want := "0. implement: 实现代码"
 	if got != want {
 		t.Errorf("BuildSkillLine() = %q, want %q", got, want)

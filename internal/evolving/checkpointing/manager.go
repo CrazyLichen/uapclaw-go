@@ -145,10 +145,13 @@ func (m *DefaultCheckpointManager) AddPending(operatorID string, change *Pending
 	m.pending[operatorID] = append(m.pending[operatorID], change)
 }
 
-// GetPending 获取某 Operator 的待定变更列表。
+// GetPending 获取某 Operator 的待定变更列表（返回副本）。
 // 对应 Python: DefaultCheckpointManager.get_pending(operator_id)
 func (m *DefaultCheckpointManager) GetPending(operatorID string) []*PendingChange {
-	return m.pending[operatorID]
+	list := m.pending[operatorID]
+	result := make([]*PendingChange, len(list))
+	copy(result, list)
+	return result
 }
 
 // CommitPending 清空并返回 pending payload 中的 EvolutionRecord 总数。
