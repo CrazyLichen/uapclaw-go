@@ -156,8 +156,8 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				lastNode := lastDescBatch[len(lastDescBatch)-1]
 				if len(lastNode) > 0 {
 					// 对齐 Python: result_descs[-1][-1][0]["description"]
-				// 循环更新时取 [0]（首轮结果）作为下一轮的输入描述，
-				// 与最终输出 extractLastDescription 取 [len-1]（末轮结果）用途不同
+					// 循环更新时取 [0]（首轮结果）作为下一轮的输入描述，
+					// 与最终输出 extractLastDescription 取 [len-1]（末轮结果）用途不同
 					lastStep := lastNode[0]
 					if desc, ok := lastStep["description"].(string); ok {
 						tool["description"] = desc

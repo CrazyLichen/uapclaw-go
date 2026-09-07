@@ -60,7 +60,7 @@ const logComponent = logger.ComponentAgentServer
 var (
 	// globalCfg 全局 Config 实例，由 AgentServer 启动时通过 RegisterConfig 注册
 	// 对齐 Python: from jiuwenswarm.common.config import get_config
-	globalCfg  *config.Config
+	globalCfg   *config.Config
 	globalCfgMu sync.RWMutex
 )
 

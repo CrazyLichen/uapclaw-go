@@ -877,6 +877,10 @@ func TestStreamController_IsValidInterruptResume_有harness(t *testing.T) {
 }
 
 // TestStreamController_CancelAgent_有飞行轮次 测试有飞行中轮次时 CancelAgent。
+// 由于 TeamHarness.RunStreaming 当前为 stub（返回立即关闭的 channel），
+// 轮次会瞬间完成，无法可靠地让 HasInFlightRound 返回 true。
+// 因此本测试直接设置 roundDone 和 cancelRound 模拟飞行中轮次，
+// 验证 CancelAgent 的状态机推进逻辑。
 func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
 	sc.resources.Harness = &agentteams.TeamHarness{}
@@ -891,11 +895,22 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 		return nil
 	}
 
-	// 启动轮次
-	sc.startRound(context.Background(), "hello")
+	// 模拟飞行中轮次：设置 roundDone 为未关闭的 channel，cancelRound 为可取消函数
+	roundDone := make(chan struct{})
+	roundCtx, cancelRound := context.WithCancel(context.Background())
+	sc.roundDone = roundDone
+	sc.cancelRound = cancelRound
+
+	// 验证 HasInFlightRound 返回 true
 	if !sc.HasInFlightRound() {
 		t.Fatal("应有飞行中的轮次")
 	}
+
+	// 启动一个 goroutine 模拟轮次执行：等待取消信号后关闭 roundDone
+	go func() {
+		<-roundCtx.Done()
+		close(roundDone)
+	}()
 
 	// 取消
 	err := sc.CancelAgent(context.Background())
@@ -903,7 +918,7 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 		t.Errorf("CancelAgent 不应返回错误: %v", err)
 	}
 
-	// 等待轮次完成，确保 goroutine 中所有 updateExecution 调用都已完成
+	// 等待轮次完成
 	select {
 	case <-sc.roundDone:
 	case <-time.After(5 * time.Second):
