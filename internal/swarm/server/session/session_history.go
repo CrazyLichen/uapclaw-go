@@ -156,8 +156,8 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 	}
 
 	// 对齐 Python append_history_record 内部的元数据联动（第 176-200 行）
-	// 联动失败仅 log.Warn，不影响主流程
-	go func() {
+	// 同步调用，对齐 Python 行为。联动失败仅 log.Warn，不影响主流程
+	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("recover", r).Msg("会话元数据联动 panic 恢复")
@@ -334,12 +334,20 @@ func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
 				if len(allRecords) > 0 {
 					logger.Info(logComponent).
 						Int("attempt", attempt).
+						Str("session_id", sid).
 						Msg("ReadTeamHistoryRecords 重试成功")
 					break
 				}
 			}
 			if len(allRecords) == 0 {
-				logger.Warn(logComponent).Msg("ReadTeamHistoryRecords 重试耗尽，文件可能为空")
+				fileSize := int64(0)
+				if fi, statErr2 := os.Stat(fpath); statErr2 == nil {
+					fileSize = fi.Size()
+				}
+				logger.Warn(logComponent).
+					Str("session_id", sid).
+					Int64("file_size", fileSize).
+					Msg("ReadTeamHistoryRecords 重试耗尽，文件可能为空")
 			}
 		}
 	}

@@ -58,8 +58,8 @@ func TestSQLTaskDao_GetTasksByAssignee(t *testing.T) {
 	ctx := newTestCtx("assignee-test")
 
 	dao := db.Task()
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed, Assignee: "m1"})
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending, Assignee: "m2"})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m1")})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending, Assignee: StringPtr("m2")})
 
 	// 查询 m1 的任务
 	tasks, err := dao.GetTasksByAssignee(ctx, "team1", "m1", "")
@@ -87,7 +87,7 @@ func TestSQLTaskDao_ClaimTask(t *testing.T) {
 
 	got, _ := dao.GetTask(ctx, "t1")
 	assert.Equal(t, fsm.TaskStatusClaimed, got.Status)
-	assert.Equal(t, "member1", got.Assignee)
+	assert.Equal(t, "member1", *got.Assignee)
 }
 
 func TestSQLTaskDao_ResetTask(t *testing.T) {
@@ -107,7 +107,7 @@ func TestSQLTaskDao_ResetTask(t *testing.T) {
 
 	got, _ := dao.GetTask(ctx, "t1")
 	assert.Equal(t, fsm.TaskStatusPending, got.Status)
-	assert.Equal(t, "", got.Assignee)
+	assert.Nil(t, got.Assignee)
 }
 
 func TestSQLTaskDao_ApprovePlanTask(t *testing.T) {
@@ -290,8 +290,8 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 	ctx := newTestCtx("cancel-all-test")
 
 	dao := db.Task()
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending, Assignee: "m1"})
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusClaimed, Assignee: "m2"})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending, Assignee: StringPtr("m1")})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m2")})
 
 	// 对齐 Python: cancel_all_tasks(team_name, skip_assignees=[])
 	result, err := dao.CancelAllTasks(ctx, "team1", nil)
@@ -303,8 +303,8 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 	assert.Equal(t, fsm.TaskStatusCancelled, got1.Status)
 
 	// 对齐 Python: skip_assignees 过滤
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t3", TeamName: "team1", Title: "T3", Status: fsm.TaskStatusPending, Assignee: "m3"})
-	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t4", TeamName: "team1", Title: "T4", Status: fsm.TaskStatusPending, Assignee: "m4"})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t3", TeamName: "team1", Title: "T3", Status: fsm.TaskStatusPending, Assignee: StringPtr("m3")})
+	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t4", TeamName: "team1", Title: "T4", Status: fsm.TaskStatusPending, Assignee: StringPtr("m4")})
 	result2, err := dao.CancelAllTasks(ctx, "team1", []string{"m3"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(result2.Cancelled)) // 只取消 t4，跳过 t3

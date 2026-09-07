@@ -100,7 +100,7 @@ func (t *IntentToolkits) CancelTask(confidence float64, taskID string) (*schema.
 	if err != nil {
 		return nil, "", err
 	}
-	result := fmt.Sprintf("Task ID: %s, Current Status: Cancelled", taskID)
+	result := fmt.Sprintf("Task ID: %s, Current Status: Canceled", taskID)
 	return intent, result, nil
 }
 
@@ -208,7 +208,7 @@ func (t *IntentToolkits) SupplementTask(confidence float64, taskID string, suppl
 	if err != nil {
 		return nil, "", err
 	}
-	result := "Task supplement info submitted."
+	result := "Task supplementary information submitted."
 	return intent, result, nil
 }
 
@@ -222,11 +222,10 @@ func (t *IntentToolkits) GetOpenAIToolSchemas(choices ...string) []map[string]an
 		}
 		return result
 	}
-	result := make([]map[string]any, 0, len(choices))
-	for _, c := range choices {
-		if v, ok := t.toolSchemaChoices[c]; ok {
-			result = append(result, v)
-		}
+	result := make([]map[string]any, 0, len(t.toolSchemaChoices))
+	// 对齐 Python Bug: choices 非空时遍历 self._tool_schema_choices.keys() 而非 choices
+	for _, v := range t.toolSchemaChoices {
+		result = append(result, v)
 	}
 	return result
 }

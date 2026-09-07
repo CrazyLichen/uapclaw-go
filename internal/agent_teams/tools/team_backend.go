@@ -810,13 +810,13 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 	}
 	// 通知 assignee（如果有）
 	task, _ := tb.taskManager.Get(ctx, taskID)
-	if task != nil && task.Assignee != "" {
+	if task != nil && task.Assignee != nil {
 		// 发送取消消息通知（对齐 Python: message_manager.send_message）
 		content := fmt.Sprintf("Task '%s' (ID: %s) has been cancelled by the team leader.", task.Title, taskID)
-		_, _ = tb.messageManager.SendMessage(ctx, content, task.Assignee, tb.memberName)
+		_, _ = tb.messageManager.SendMessage(ctx, content, *task.Assignee, tb.memberName)
 		// 发布取消事件
 		tb.publishEvent(ctx, atschema.TaskCancelledEvent{
-			BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: task.Assignee},
+			BaseEventMessage: atschema.BaseEventMessage{TeamName: tb.teamName, MemberName: *task.Assignee},
 			TaskID:           taskID,
 		})
 	}

@@ -177,10 +177,8 @@ func SetSessionDeliveryContext(
 	deliveryContextCache[sessionID] = DeepCopyMap(meta)
 	deliveryContextMu.Unlock()
 
-	sessionsDir := GetSessionsDir()
-	if err := WriteSessionMetadata(sessionsDir, sessionID, meta); err != nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("写入会话元数据失败")
-	}
+	// 对齐 Python: _enqueue_write(metadata) — 异步写入队列
+	EnqueueMetadataWrite(sessionID, meta)
 
 	return DeepCopyMap(deliveryContext)
 }

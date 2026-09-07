@@ -33,11 +33,14 @@ var forbiddenLogComponent = logger.ComponentAgentServer
 
 // GetForbiddenMemoryPrompt 格式化禁止记忆提示词。enabled=false 时返回空串。
 // 对齐 Python: get_forbidden_memory_prompt(language)
-func GetForbiddenMemoryPrompt(language string) string {
-	cfg := getMemoryForbiddenConfig()
+func GetForbiddenMemoryPrompt(language string) (string, error) {
+	cfg, err := getMemoryForbiddenConfigSafe()
+	if err != nil {
+		return "", fmt.Errorf("获取禁止记忆配置失败: %w", err)
+	}
 
 	if !cfg.Enabled {
-		return ""
+		return "", nil
 	}
 
 	descText := ""
@@ -51,42 +54,49 @@ func GetForbiddenMemoryPrompt(language string) string {
 	}
 
 	if language == "zh" || language == "cn" {
-		return buildForbiddenPromptCN(descText, cfg.Patterns)
+		return buildForbiddenPromptCN(descText, cfg.Patterns), nil
 	}
-	return buildForbiddenPromptEN(descText, cfg.Patterns)
+	return buildForbiddenPromptEN(descText, cfg.Patterns), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getMemoryForbiddenConfig 从 config 读取 memory.forbidden_memory_definition。
 // 对齐 Python: _get_memory_forbidden_config()
+// 错误时返回 Enabled=false 的默认配置（不中断调用方）。
 func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
+	cfg, _ := getMemoryForbiddenConfigSafe()
+	return cfg
+}
+
+// getMemoryForbiddenConfigSafe 从 config 读取 memory.forbidden_memory_definition。
+// 对齐 Python: get_forbidden_memory_prompt 中的 try/except 防御性编程。
+// 返回配置和可能的错误，便于调用方决定是否中断。
+func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
 	cfg, err := config.New("")
 	if err != nil {
-		logger.Warn(forbiddenLogComponent).Err(err).Msg("加载配置失败")
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, fmt.Errorf("加载配置失败: %w", err)
 	}
 	configBase, err := cfg.Load()
 	if err != nil {
-		logger.Warn(forbiddenLogComponent).Err(err).Msg("读取配置失败")
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, fmt.Errorf("读取配置失败: %w", err)
 	}
 
 	memoryRaw, ok := configBase["memory"]
 	if !ok {
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, nil
 	}
 	memoryMap, ok := memoryRaw.(map[string]any)
 	if !ok {
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, nil
 	}
 	forbiddenRaw, ok := memoryMap["forbidden_memory_definition"]
 	if !ok {
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, nil
 	}
 	forbiddenMap, ok := forbiddenRaw.(map[string]any)
 	if !ok {
-		return &MemoryForbiddenConfig{Enabled: false}
+		return &MemoryForbiddenConfig{Enabled: false}, nil
 	}
 
 	result := &MemoryForbiddenConfig{}
@@ -122,7 +132,7 @@ func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // buildForbiddenPromptCN 构建中文禁止记忆提示词。

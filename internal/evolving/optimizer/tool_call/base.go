@@ -80,6 +80,9 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 		model:       model,
 	}
 
+	// 对齐 Python: default_targets 在 BaseOptimizerMixin 中设置
+	o.BaseOptimizerMixin.SetDefaultTargets(o.DefaultTargets())
+
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -152,7 +155,9 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			if len(lastDescBatch) > 0 {
 				lastNode := lastDescBatch[len(lastDescBatch)-1]
 				if len(lastNode) > 0 {
-					// 对齐 Python: result_descs[-1][-1][0]，取索引 [0] 而非 [len-1]
+					// 对齐 Python: result_descs[-1][-1][0]["description"]
+				// 循环更新时取 [0]（首轮结果）作为下一轮的输入描述，
+				// 与最终输出 extractLastDescription 取 [len-1]（末轮结果）用途不同
 					lastStep := lastNode[0]
 					if desc, ok := lastStep["description"].(string); ok {
 						tool["description"] = desc
@@ -363,6 +368,7 @@ func WithToolName(name string) ToolOptimizerBaseOption {
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。
 //
 // 对齐 Python: output_desc = result_descs[-1][-1][-1]["description"]
+// 最终输出取 [len-1]（末轮结果），与循环更新时取 [0]（首轮结果）用途不同
 func extractLastDescription(resultDescs [][][]map[string]any) string {
 	if len(resultDescs) == 0 {
 		return ""

@@ -7,9 +7,12 @@ import (
 
 // ──────────────────────────── GetForbiddenMemoryPrompt 测试 ────────────────────────────
 
-// TestGetForbiddenMemoryPrompt_未配置返回空 验证未配置时 enabled=false 返回空串
+// TestGetForbiddenMemoryPrompt_未配置返回空 验证未配置时 enabled=false 返回空串和 nil error
 func TestGetForbiddenMemoryPrompt_未配置返回空(t *testing.T) {
-	prompt := GetForbiddenMemoryPrompt("cn")
+	prompt, err := GetForbiddenMemoryPrompt("cn")
+	if err != nil {
+		t.Errorf("未配置时 GetForbiddenMemoryPrompt 不应返回 error，实际: %v", err)
+	}
 	if prompt != "" {
 		t.Errorf("未配置时 GetForbiddenMemoryPrompt 应返回空串，实际: %q", prompt)
 	}

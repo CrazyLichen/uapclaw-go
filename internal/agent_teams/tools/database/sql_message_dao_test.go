@@ -19,7 +19,7 @@ func TestSQLMessageDao_CreateAndGet(t *testing.T) {
 		MessageID:      "m1",
 		TeamName:       "team1",
 		FromMemberName: "a",
-		ToMemberName:   "b",
+		ToMemberName:   StringPtr("b"),
 		Content:        "hello",
 		Timestamp:      GetCurrentTime(),
 		Broadcast:      false,
@@ -105,7 +105,7 @@ func TestSQLMessageDao_MarkMessageRead_直发(t *testing.T) {
 		MessageID:      "dm1",
 		TeamName:       "team1",
 		FromMemberName: "a",
-		ToMemberName:   "b",
+		ToMemberName:   StringPtr("b"),
 		Content:        "direct",
 		Timestamp:      1000,
 		Broadcast:      false,
@@ -199,7 +199,7 @@ func TestSQLMessageDao_GetTeamMessages(t *testing.T) {
 
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "dm1", TeamName: "team1", FromMemberName: "a",
-		ToMemberName: "b", Content: "direct", Timestamp: 1000, Broadcast: false, IsRead: BoolPtr(false),
+		ToMemberName: StringPtr("b"), Content: "direct", Timestamp: 1000, Broadcast: false, IsRead: BoolPtr(false),
 	})
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "bc1", TeamName: "team1", FromMemberName: "a",
@@ -258,11 +258,11 @@ func TestSQLMessageDao_GetMessages_直发(t *testing.T) {
 	// 对齐 Python: 创建直发消息
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "dm1", TeamName: "team1", FromMemberName: "a",
-		ToMemberName: "b", Content: "hello", Timestamp: 1000, Broadcast: false, IsRead: BoolPtr(false),
+		ToMemberName: StringPtr("b"), Content: "hello", Timestamp: 1000, Broadcast: false, IsRead: BoolPtr(false),
 	})
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "dm2", TeamName: "team1", FromMemberName: "c",
-		ToMemberName: "b", Content: "world", Timestamp: 2000, Broadcast: false, IsRead: BoolPtr(true),
+		ToMemberName: StringPtr("b"), Content: "world", Timestamp: 2000, Broadcast: false, IsRead: BoolPtr(true),
 	})
 	dao.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "bc1", TeamName: "team1", FromMemberName: "a",

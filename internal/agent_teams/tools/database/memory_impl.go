@@ -442,7 +442,15 @@ func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, 
 	defer db.mu.Unlock()
 	var result []*TeamTaskBase
 	for _, task := range db.tasks {
-		if task.TeamName != teamName || task.Assignee != assignee {
+		if task.TeamName != teamName {
+			continue
+		}
+		// 对齐 Python: assignee == assignee_id（nil 与 "" 均视为未分配）
+		taskAssignee := ""
+		if task.Assignee != nil {
+			taskAssignee = *task.Assignee
+		}
+		if taskAssignee != assignee {
 			continue
 		}
 		if status != "" && task.Status != status {
@@ -466,7 +474,7 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 		return false, nil // 对齐 Python: invalid transition → False
 	}
 	task.Status = fsm.TaskStatusClaimed
-	task.Assignee = assignee
+	task.Assignee = StringPtr(assignee)
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
@@ -484,7 +492,7 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 		return false, nil
 	}
 	task.Status = fsm.TaskStatusPending
-	task.Assignee = ""
+	task.Assignee = nil
 	task.UpdatedAt = GetCurrentTime()
 	return true, nil
 }
@@ -650,7 +658,11 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 			continue
 		}
 		// skipAssignees 跳过（对齐 Python: skip tasks assigned to specified members）
-		if skipSet[task.Assignee] {
+		taskAssignee := ""
+		if task.Assignee != nil {
+			taskAssignee = *task.Assignee
+		}
+		if skipSet[taskAssignee] {
 			continue
 		}
 		_, refreshed, _ := db.terminateTaskInSession(task.TaskID, fsm.TaskStatusCancelled)
@@ -797,7 +809,14 @@ func (db *InMemoryTeamDatabase) GetMessages(_ context.Context, teamName, toMembe
 	defer db.mu.Unlock()
 	var result []*TeamMessageBase
 	for _, msg := range db.messages {
-		if msg.TeamName != teamName || msg.ToMemberName != toMemberName || msg.Broadcast {
+		if msg.TeamName != teamName {
+			continue
+		}
+		msgToMember := ""
+		if msg.ToMemberName != nil {
+			msgToMember = *msg.ToMemberName
+		}
+		if msgToMember != toMemberName || msg.Broadcast {
 			continue
 		}
 		if fromMemberName != "" && msg.FromMemberName != fromMemberName {

@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/wk8/go-ordered-map/v2"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
@@ -102,9 +104,9 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	if err != nil {
 		return nil, err
 	}
-	newMemContent := make(map[string]string)
+	newMemContent := orderedmap.New[string, string]()
 	for id, unit := range newMemUnits {
-		newMemContent[id] = unit.Content
+		newMemContent.Set(id, unit.Content)
 	}
 
 	// 无新记忆且有删除 → 执行删除，返回结果
@@ -127,7 +129,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	}
 
 	// 无旧记忆且仅 1 条新记忆 → 直接写入，跳过冲突检查
-	if len(oldMemories) == 0 && len(newMemContent) == 1 {
+	if oldMemories.Len() == 0 && newMemContent.Len() == 1 {
 		if len(deleteSet) > 0 {
 			ids := mapKeys(deleteSet)
 			if err := m.memoryIndex.DeleteMemories(ctx, userID, scopeID, ids); err != nil {
@@ -418,21 +420,21 @@ func (m *FragmentMemoryManager) getNewMemUnitsAndUpdateMemories(
 // 对齐 Python: FragmentMemoryManager._get_related_old_memories
 func (m *FragmentMemoryManager) getRelatedOldMemories(
 	ctx context.Context,
-	newMemContent map[string]string,
+	newMemContent *orderedmap.OrderedMap[string, string],
 	userID string, scopeID string,
-) (map[string]string, error) {
-	oldMemories := make(map[string]string)
+) (*orderedmap.OrderedMap[string, string], error) {
+	oldMemories := orderedmap.New[string, string]()
 	oldMemIDs := make(map[string]bool)
 
-	for _, newMem := range newMemContent {
-		searchResults, err := m.Search(ctx, userID, scopeID, newMem, UpdateCheckOldMemoryNum, nil)
+	for pair := newMemContent.Oldest(); pair != nil; pair = pair.Next() {
+		searchResults, err := m.Search(ctx, userID, scopeID, pair.Value, UpdateCheckOldMemoryNum, nil)
 		if err != nil {
 			return nil, err
 		}
 		for _, result := range searchResults {
 			if result.Doc != nil && result.Score > UpdateCheckOldMemoryRelevanceThreshold {
 				if !oldMemIDs[result.Doc.ID] {
-					oldMemories[result.Doc.ID] = result.Doc.Text
+					oldMemories.Set(result.Doc.ID, result.Doc.Text)
 					oldMemIDs[result.Doc.ID] = true
 				}
 			}

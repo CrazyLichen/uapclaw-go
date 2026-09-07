@@ -78,7 +78,7 @@ func TestIntentToolkits_CancelTask_高置信度(t *testing.T) {
 	intent, result, err := toolkits.CancelTask(0.9, "task-123")
 	require.NoError(t, err)
 	assert.Equal(t, schema.IntentCancelTask, intent.IntentType)
-	assert.Contains(t, result, "Cancelled")
+	assert.Contains(t, result, "Canceled")
 }
 
 // TestIntentToolkits_CancelTask_低置信度 测试取消任务意图（低置信度）
@@ -191,7 +191,7 @@ func TestIntentToolkits_SupplementTask_高置信度(t *testing.T) {
 	assert.Equal(t, schema.IntentSupplementTask, intent.IntentType)
 	assert.Equal(t, "task-123", intent.TargetTaskID)
 	assert.Equal(t, "额外信息", intent.SupplementaryInfo)
-	assert.Contains(t, result, "supplement info submitted")
+	assert.Contains(t, result, "supplementary information submitted")
 }
 
 // TestIntentToolkits_SupplementTask_低置信度 测试补充任务意图（低置信度）
@@ -214,21 +214,25 @@ func TestIntentToolkits_GetOpenAIToolSchemas_全量(t *testing.T) {
 }
 
 // TestIntentToolkits_GetOpenAIToolSchemas_过滤 测试获取指定 Schema
+// 对齐 Python Bug: choices 参数被忽略，始终返回 toolSchemaChoices 全量
 func TestIntentToolkits_GetOpenAIToolSchemas_过滤(t *testing.T) {
 	event, _ := schema.FromUserInput("hello")
 	toolkits := NewIntentToolkits(event, 0.7)
 
+	// 对齐 Python Bug: 传入 choices 参数不起过滤作用，返回全量
 	schemas := toolkits.GetOpenAIToolSchemas("create_task", "pause_task")
-	assert.Len(t, schemas, 2)
+	assert.Len(t, schemas, 8)
 }
 
 // TestIntentToolkits_GetOpenAIToolSchemas_空选择 测试传入不存在的名称
+// 对齐 Python Bug: choices 参数被忽略，即使传入不存在的名称也返回全量
 func TestIntentToolkits_GetOpenAIToolSchemas_空选择(t *testing.T) {
 	event, _ := schema.FromUserInput("hello")
 	toolkits := NewIntentToolkits(event, 0.7)
 
+	// 对齐 Python Bug: 传入不存在的名称仍返回全量
 	schemas := toolkits.GetOpenAIToolSchemas("nonexistent")
-	assert.Len(t, schemas, 0)
+	assert.Len(t, schemas, 8)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

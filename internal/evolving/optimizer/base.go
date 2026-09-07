@@ -196,6 +196,12 @@ func (m *BaseOptimizerMixin) AddTrajectory(traj *trajectory.Trajectory) {
 	m.trajectories = append(m.trajectories, traj)
 }
 
+// SetDefaultTargets 设置默认目标列表。
+// 对齐 Python: 具体优化器在 __init__ 中设置 self.default_targets
+func (m *BaseOptimizerMixin) SetDefaultTargets(targets []string) {
+	m.defaultTargets = targets
+}
+
 // GetTrajectories 返回当前缓存的轨迹列表（副本）。
 //
 // 对应 Python: BaseOptimizer.get_trajectories()

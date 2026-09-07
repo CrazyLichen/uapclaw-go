@@ -72,8 +72,8 @@ type TeamTaskBase struct {
 	Content string `json:"content" gorm:"column:content"`
 	// Status 任务状态（TaskStatus 枚举值）
 	Status string `json:"status" gorm:"column:status"`
-	// Assignee 认领人/分配人
-	Assignee string `json:"assignee,omitempty" gorm:"column:assignee"`
+	// Assignee 认领人/分配人（nil 表示未分配，对齐 Python: Optional[str] = Field(nullable=True)）
+	Assignee *string `json:"assignee,omitempty" gorm:"column:assignee"`
 	// UpdatedAt 更新时间（毫秒时间戳）
 	UpdatedAt int64 `json:"updated_at,omitempty" gorm:"column:updated_at"`
 }
@@ -125,8 +125,8 @@ type TeamMessageBase struct {
 	TeamName string `json:"team_name" gorm:"column:team_name"`
 	// FromMemberName 发送者
 	FromMemberName string `json:"from_member_name" gorm:"column:from_member_name"`
-	// ToMemberName 接收者（广播消息为空）
-	ToMemberName string `json:"to_member_name,omitempty" gorm:"column:to_member_name"`
+	// ToMemberName 接收者（nil 表示广播消息，对齐 Python: Optional[str] = Field(nullable=True)）
+	ToMemberName *string `json:"to_member_name,omitempty" gorm:"column:to_member_name"`
 	// Content 消息内容
 	Content string `json:"content" gorm:"column:content"`
 	// Timestamp 毫秒时间戳
@@ -203,5 +203,8 @@ func BoolPtr(v bool) *bool { return &v }
 
 // Int64Ptr 返回 int64 的指针。
 func Int64Ptr(v int64) *int64 { return &v }
+
+// StringPtr 返回 string 的指针。
+func StringPtr(v string) *string { return &v }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

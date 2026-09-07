@@ -3,7 +3,9 @@ package update
 import (
 	"context"
 	"fmt"
-	"sort"
+	"strings"
+
+	"github.com/wk8/go-ordered-map/v2"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -116,7 +118,7 @@ func WithRetries(n int) CheckOption {
 //  2. 格式化输入 → 加载提示词模板 → LLM 调用 → JSON 解析（最多 retries 次）
 //  3. 映射结果：REDUNDANT→跳过 / CONFLICTING→新ADD+旧DELETE / NONE→新ADD
 //  4. 解析失败 fallback：所有新记忆 ADD
-func (c *MemUpdateChecker) Check(ctx context.Context, newMemories map[string]string, oldMemories map[string]string, opts ...CheckOption) ([]*MemoryActionItem, error) {
+func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.OrderedMap[string, string], oldMemories *orderedmap.OrderedMap[string, string], opts ...CheckOption) ([]*MemoryActionItem, error) {
 	cfg := &checkConfig{retries: 3}
 	for _, opt := range opts {
 		opt(cfg)
@@ -125,8 +127,8 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories map[string]str
 	// 无 LLM 模型 → 直接返回所有新记忆为 ADD（对齐 Python: if not base_chat_model）
 	if cfg.model == nil {
 		logger.Debug(logComponent).
-			Int("new_count", len(newMemories)).
-			Int("old_count", len(oldMemories)).
+			Int("new_count", newMemories.Len()).
+			Int("old_count", oldMemories.Len()).
 			Msg("无 LLM 模型，跳过记忆冲突检查")
 		return allAddItems(newMemories), nil
 	}
@@ -256,47 +258,31 @@ func (ms MemoryStatus) String() string {
 // formatInput 格式化新旧记忆字典为提示词输入文本。
 //
 // 对齐 Python: _format_input(new_memories, old_memories)
-// 新记忆按 key 倒序排列，旧记忆按 key 正序排列。
-func formatInput(newMemories map[string]string, oldMemories map[string]string) (string, string) {
-	// 新记忆：按 key 倒序排列（对齐 Python: 按 key 排序后反序）
-	newKeys := make([]string, 0, len(newMemories))
-	for id := range newMemories {
-		newKeys = append(newKeys, id)
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(newKeys)))
-
-	newLines := make([]string, 0, len(newMemories))
-	for _, id := range newKeys {
-		newLines = append(newLines, fmt.Sprintf("%s: %s", id, newMemories[id]))
-	}
-	newInfoStr := ""
-	for i, line := range newLines {
-		if i > 0 {
-			newInfoStr += "\n"
+// 新记忆按插入顺序反序（[::-1]），旧记忆按插入顺序（不排序）。
+func formatInput(newMemories *orderedmap.OrderedMap[string, string], oldMemories *orderedmap.OrderedMap[string, string]) (string, string) {
+	// 新记忆：按插入顺序反序（对齐 Python: new_info_lines[::-1]）
+	var newLines []string
+	if newMemories != nil {
+		newLines = make([]string, 0, newMemories.Len())
+		for pair := newMemories.Oldest(); pair != nil; pair = pair.Next() {
+			newLines = append(newLines, fmt.Sprintf("%s: %s", pair.Key, pair.Value))
 		}
-		newInfoStr += line
-	}
-
-	// 旧记忆：按 key 正序排列（对齐 Python: 按 key 正序）
-	oldKeys := make([]string, 0, len(oldMemories))
-	for id := range oldMemories {
-		oldKeys = append(oldKeys, id)
-	}
-	sort.Strings(oldKeys)
-
-	oldLines := make([]string, 0, len(oldMemories))
-	for _, id := range oldKeys {
-		oldLines = append(oldLines, fmt.Sprintf("%s: %s", id, oldMemories[id]))
-	}
-	oldInfoStr := ""
-	for i, line := range oldLines {
-		if i > 0 {
-			oldInfoStr += "\n"
+		// 反转
+		for i, j := 0, len(newLines)-1; i < j; i, j = i+1, j-1 {
+			newLines[i], newLines[j] = newLines[j], newLines[i]
 		}
-		oldInfoStr += line
 	}
 
-	return newInfoStr, oldInfoStr
+	// 旧记忆：按插入顺序（对齐 Python: 不排序）
+	var oldLines []string
+	if oldMemories != nil {
+		oldLines = make([]string, 0, oldMemories.Len())
+		for pair := oldMemories.Oldest(); pair != nil; pair = pair.Next() {
+			oldLines = append(oldLines, fmt.Sprintf("%s: %s", pair.Key, pair.Value))
+		}
+	}
+
+	return strings.Join(newLines, "\n"), strings.Join(oldLines, "\n")
 }
 
 // mapCheckItemsToActionItems 将 LLM 检查结果映射为动作项列表。
@@ -304,7 +290,7 @@ func formatInput(newMemories map[string]string, oldMemories map[string]string) (
 // 对齐 Python: check() 方法中的 action_items 映射逻辑。
 // REDUNDANT → 跳过 / CONFLICTING → 新ADD+旧DELETE / NONE → 新ADD
 // 使用 processedNewIds 追踪已处理的新记忆 ID（对齐 Python: processed_new_ids）。
-func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[string]string, oldMemories map[string]string) []*MemoryActionItem {
+func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories *orderedmap.OrderedMap[string, string], oldMemories *orderedmap.OrderedMap[string, string]) []*MemoryActionItem {
 	var actionItems []*MemoryActionItem
 	// 对齐 Python: processed_new_ids = set()
 	processedNewIds := make(map[string]bool)
@@ -323,7 +309,7 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[stri
 
 		case CheckResultConflicting:
 			// 冲突 → 新记忆 ADD + 关联旧记忆 DELETE
-			newContent, ok := newMemories[item.InfoID]
+			newContent, ok := newMemories.Get(item.InfoID)
 			if !ok {
 				newContent = item.InfoText
 			}
@@ -334,7 +320,7 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[stri
 			})
 			// 对齐 Python: for old_id in item.related_infos: if old_id in old_memories
 			for oldID, oldContent := range item.RelatedInfos {
-				if _, exists := oldMemories[oldID]; !exists {
+				if _, exists := oldMemories.Get(oldID); !exists {
 					continue
 				}
 				actionItems = append(actionItems, &MemoryActionItem{
@@ -346,7 +332,7 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories map[stri
 
 		case CheckResultNone:
 			// 共存 → 新记忆 ADD
-			newContent, ok := newMemories[item.InfoID]
+			newContent, ok := newMemories.Get(item.InfoID)
 			if !ok {
 				newContent = item.InfoText
 			}
@@ -427,12 +413,15 @@ func parseCheckResult(s string) CheckResult {
 }
 
 // allAddItems 返回所有新记忆为 ADD 动作项（fallback 行为）。
-func allAddItems(newMemories map[string]string) []*MemoryActionItem {
-	result := make([]*MemoryActionItem, 0, len(newMemories))
-	for id, content := range newMemories {
+func allAddItems(newMemories *orderedmap.OrderedMap[string, string]) []*MemoryActionItem {
+	if newMemories == nil {
+		return nil
+	}
+	result := make([]*MemoryActionItem, 0, newMemories.Len())
+	for pair := newMemories.Oldest(); pair != nil; pair = pair.Next() {
 		result = append(result, &MemoryActionItem{
-			ID:      id,
-			Content: content,
+			ID:      pair.Key,
+			Content: pair.Value,
 			Status:  MemoryStatusAdd,
 		})
 	}
@@ -440,11 +429,14 @@ func allAddItems(newMemories map[string]string) []*MemoryActionItem {
 }
 
 // checkDuplicateIDs 检查新旧记忆 ID 重复。
-func checkDuplicateIDs(newMemories map[string]string, oldMemories map[string]string) []string {
+func checkDuplicateIDs(newMemories *orderedmap.OrderedMap[string, string], oldMemories *orderedmap.OrderedMap[string, string]) []string {
+	if newMemories == nil || oldMemories == nil {
+		return nil
+	}
 	var duplicates []string
-	for id := range newMemories {
-		if _, ok := oldMemories[id]; ok {
-			duplicates = append(duplicates, id)
+	for pair := newMemories.Oldest(); pair != nil; pair = pair.Next() {
+		if _, ok := oldMemories.Get(pair.Key); ok {
+			duplicates = append(duplicates, pair.Key)
 		}
 	}
 	return duplicates

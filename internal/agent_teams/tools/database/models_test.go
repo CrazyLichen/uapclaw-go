@@ -222,7 +222,7 @@ func TestTeamMessageBase_JSON(t *testing.T) {
 		MessageID:      "msg_1",
 		TeamName:       "team1",
 		FromMemberName: "alice",
-		ToMemberName:   "bob",
+		ToMemberName:   StringPtr("bob"),
 		Content:        "hello",
 		Timestamp:      1000,
 		Broadcast:      false,

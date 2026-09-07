@@ -229,7 +229,12 @@ func (r *AvatarPromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 // injectForbiddenMemory 注入 forbidden_memory PromptSection。
 // 对齐 Python L59-69: 尝试加载 forbidden_memory
 func (r *AvatarPromptRail) injectForbiddenMemory(builder saprompt.SystemPromptBuilderInterface, language string) {
-	forbidden := commmem.GetForbiddenMemoryPrompt(language)
+	// 对齐 Python: try/except 包裹 get_forbidden_memory_prompt，失败时不中断
+	forbidden, err := commmem.GetForbiddenMemoryPrompt(language)
+	if err != nil {
+		logger.Debug(avatarLogComponent).Err(err).Str("language", language).Msg("获取禁止记忆提示词失败，跳过注入")
+		return
+	}
 	if forbidden == "" {
 		return
 	}
@@ -249,7 +254,7 @@ func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 		toolCallID = toolInputs.ToolCall.ID
 	}
 	cbc.Extra()["_skip_tool"] = true
-	toolInputs.ToolResult = message
+	toolInputs.ToolResult = map[string]any{"error": message}
 	toolInputs.ToolMsg = llmschema.NewToolMessage(toolCallID, message)
 	logger.Info(avatarLogComponent).
 		Str("tool_name", toolInputs.ToolName).

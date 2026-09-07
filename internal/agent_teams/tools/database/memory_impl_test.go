@@ -680,8 +680,8 @@ func TestGetTasksByAssignee(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: "agent1", Status: fsm.TaskStatusClaimed, Title: "A1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: "agent2", Status: fsm.TaskStatusClaimed, Title: "A2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: StringPtr("agent1"), Status: fsm.TaskStatusClaimed, Title: "A1"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: StringPtr("agent2"), Status: fsm.TaskStatusClaimed, Title: "A2"})
 
 	result, _ := db.GetTasksByAssignee(ctx, "alpha", "agent1", "")
 	if len(result) != 1 {
@@ -716,8 +716,8 @@ func TestClaimTask_成功(t *testing.T) {
 		t.Error("ClaimTask PENDING→CLAIMED 应返回 true")
 	}
 	task, _ := db.GetTask(ctx, "t1")
-	if task.Assignee != "agent1" {
-		t.Errorf("Assignee: got %q, want %q", task.Assignee, "agent1")
+	if task.Assignee == nil || *task.Assignee != "agent1" {
+		t.Errorf("Assignee: got %v, want %q", task.Assignee, "agent1")
 	}
 }
 
@@ -737,15 +737,15 @@ func TestResetTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务"})
 
 	ok, _ := db.ResetTask(ctx, "t1")
 	if !ok {
 		t.Error("ResetTask CLAIMED→PENDING 应返回 true")
 	}
 	task, _ := db.GetTask(ctx, "t1")
-	if task.Assignee != "" {
-		t.Errorf("ResetTask 后 Assignee 应为空: got %q", task.Assignee)
+	if task.Assignee != nil {
+		t.Errorf("ResetTask 后 Assignee 应为 nil: got %v", task.Assignee)
 	}
 }
 
@@ -877,7 +877,7 @@ func TestCancelAllTasks(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
 
 	result, _ := db.CancelAllTasks(ctx, "alpha", nil)
 	if len(result.Cancelled) != 2 {
@@ -891,7 +891,7 @@ func TestCancelAllTasks_skipAssignees(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "任务2"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
 
 	result, _ := db.CancelAllTasks(ctx, "alpha", []string{"agent1"})
 	if len(result.Cancelled) != 1 {
@@ -904,7 +904,7 @@ func TestVerifyAndFixTaskConsistency(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "A"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "A"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
 
 	// 通过管线添加依赖，t2→t1
@@ -1000,7 +1000,7 @@ func TestUpdateTaskStatus_终态传播(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "agent1", Title: "上游"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
 	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
 
@@ -1118,7 +1118,7 @@ func TestMutateDependencyGraph_CLAIMED源拒绝(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: "m1", Title: "已认领"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m1"), Title: "已认领"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	// 尝试让已认领任务 t1 依赖 t2（给 CLAIMED 源任务加依赖）
 	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
@@ -1133,7 +1133,7 @@ func TestMutateDependencyGraph_PLAN_APPROVED源拒绝(t *testing.T) {
 	ctx := context.Background()
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
-	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Assignee: "m1", Title: "计划已批准"})
+	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Assignee: StringPtr("m1"), Title: "计划已批准"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	edges := []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}}
 	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
@@ -1162,7 +1162,7 @@ func TestCreateMessage_直发(t *testing.T) {
 	ctx := context.Background()
 	msg := &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	}
 	if !db.CreateMessage(ctx, msg) {
@@ -1193,7 +1193,7 @@ func TestCreateMessage_冲突(t *testing.T) {
 	ctx := context.Background()
 	msg := &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	}
 	db.CreateMessage(ctx, msg)
@@ -1208,7 +1208,7 @@ func TestGetMessage(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	msg, err := db.GetMessage(ctx, "msg_1")
@@ -1242,7 +1242,7 @@ func TestGetMessages_直发(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	msgs, err := db.GetMessages(ctx, "team1", "bob", false, "")
@@ -1263,12 +1263,12 @@ func TestGetMessages_未读(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "unread", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_2", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "read", Broadcast: false, IsRead: BoolPtr(true),
 	})
 	msgs, _ := db.GetMessages(ctx, "team1", "bob", true, "")
@@ -1286,12 +1286,12 @@ func TestGetMessages_按发送者(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "from alice", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_2", TeamName: "team1",
-		FromMemberName: "leader", ToMemberName: "bob",
+		FromMemberName: "leader", ToMemberName: StringPtr("bob"),
 		Content: "from leader", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	msgs, _ := db.GetMessages(ctx, "team1", "bob", false, "alice")
@@ -1363,7 +1363,7 @@ func TestGetTeamMessages(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "direct", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	db.CreateMessage(ctx, &TeamMessageBase{
@@ -1386,7 +1386,7 @@ func TestGetTeamMessages_按类型(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "direct", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	db.CreateMessage(ctx, &TeamMessageBase{
@@ -1409,7 +1409,7 @@ func TestHasUnreadMessages_直发未读(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	if !db.HasUnreadMessages(ctx, "team1", true) {
@@ -1423,7 +1423,7 @@ func TestHasUnreadMessages_全部已读(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(true),
 	})
 	if db.HasUnreadMessages(ctx, "team1", true) {
@@ -1451,7 +1451,7 @@ func TestMarkMessageRead_直发(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	if !db.MarkMessageRead(ctx, "msg_1", "bob") {
@@ -1497,7 +1497,7 @@ func TestMarkMessageRead_成员不存在(t *testing.T) {
 	ctx := context.Background()
 	db.CreateMessage(ctx, &TeamMessageBase{
 		MessageID: "msg_1", TeamName: "team1",
-		FromMemberName: "alice", ToMemberName: "bob",
+		FromMemberName: "alice", ToMemberName: StringPtr("bob"),
 		Content: "hello", Broadcast: false, IsRead: BoolPtr(false),
 	})
 	if db.MarkMessageRead(ctx, "msg_1", "nonexistent") {

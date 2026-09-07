@@ -247,7 +247,7 @@ func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scop
 			exception.WithMsg("片段记忆管理器类型不是 FragmentMemoryManager"),
 		)
 	}
-	return fm.ListFragmentMemories(ctx, userID, scopeID, 0, 0, "")
+	return fm.ListFragmentMemories(ctx, userID, scopeID, 0, 100, "")
 }
 
 // ListUserSummary 列出用户摘要记忆。
@@ -270,7 +270,7 @@ func (s *SearchManager) ListUserSummary(ctx context.Context, userID string, scop
 			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 SummaryManager", mem_model.MemoryTypeSummary.String())),
 		)
 	}
-	return sm.ListUserSummary(ctx, userID, scopeID, 0, 0)
+	return sm.ListUserSummary(ctx, userID, scopeID, 0, 100)
 }
 
 // GetUserVariable 获取用户变量。

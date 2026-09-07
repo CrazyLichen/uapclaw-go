@@ -53,7 +53,7 @@ const (
     title        TEXT NOT NULL DEFAULT '',
     content      TEXT NOT NULL DEFAULT '',
     status       TEXT NOT NULL DEFAULT '',
-    assignee     TEXT NOT NULL DEFAULT '',
+    assignee     TEXT,
     updated_at   INTEGER NOT NULL DEFAULT 0
 )`
 	// 对齐 Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
@@ -70,7 +70,7 @@ const (
     message_id       TEXT PRIMARY KEY,
     team_name        TEXT NOT NULL DEFAULT '',
     from_member_name TEXT NOT NULL DEFAULT '',
-    to_member_name   TEXT NOT NULL DEFAULT '',
+    to_member_name   TEXT,
     content          TEXT NOT NULL DEFAULT '',
     timestamp        INTEGER NOT NULL DEFAULT 0,
     broadcast        INTEGER NOT NULL DEFAULT 0,
@@ -319,7 +319,7 @@ func (s *SqlTeamDatabase) Task() TaskDao { return s.taskDao }
 func (s *SqlTeamDatabase) Message() MessageDao { return s.messageDao }
 
 // WithTx 返回绑定指定事务的临时 DAO 实例，用于跨表操作。
-func (s *SqlTeamDatabase) WithTx(tx *gorm.DB) (*SQLTeamDao, *SQLMemberDao, *SQLTaskDao, *SQLMessageDao) {
+func (s *SqlTeamDatabase) WithTx(tx *gorm.DB) (TeamDao, MemberDao, TaskDao, MessageDao) {
 	return s.teamDao.withTx(tx),
 		s.memberDao.withTx(tx),
 		s.taskDao.withTx(tx),

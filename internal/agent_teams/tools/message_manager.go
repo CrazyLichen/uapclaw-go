@@ -64,7 +64,7 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 		MessageID:      messageID,
 		TeamName:       tm.teamName,
 		FromMemberName: sender,
-		ToMemberName:   toMemberName,
+		ToMemberName:   database.StringPtr(toMemberName),
 		Content:        content,
 		Broadcast:      false,
 		IsRead:         database.BoolPtr(false),

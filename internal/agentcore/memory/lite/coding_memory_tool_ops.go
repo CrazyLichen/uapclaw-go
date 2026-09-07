@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wk8/go-ordered-map/v2"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/update"
@@ -484,8 +486,15 @@ func runChecker(ctx context.Context, model *llm.Model, newID string, newBody str
 	if model == nil {
 		return []*update.MemoryActionItem{}
 	}
+	// 将 map 转为有序 map（对齐 Python dict 插入顺序）
+	newMemOrdered := orderedmap.New[string, string]()
+	newMemOrdered.Set(newID, newBody)
+	oldMemOrdered := orderedmap.New[string, string]()
+	for k, v := range oldMemories {
+		oldMemOrdered.Set(k, v)
+	}
 	checker := &update.MemUpdateChecker{}
-	items, err := checker.Check(ctx, map[string]string{newID: newBody}, oldMemories, update.WithModel(model))
+	items, err := checker.Check(ctx, newMemOrdered, oldMemOrdered, update.WithModel(model))
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker 冲突检查失败")
 		return []*update.MemoryActionItem{}

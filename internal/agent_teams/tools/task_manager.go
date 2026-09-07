@@ -354,13 +354,13 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
 	}
 
 	// 4. 幂等性检查（对齐 Python: if task.assignee == member_name and task.status == CLAIMED）
-	if task.Assignee == tm.memberName && task.Status == fsm.TaskStatusClaimed {
+	if task.Assignee != nil && *task.Assignee == tm.memberName && task.Status == fsm.TaskStatusClaimed {
 		return nil // 已认领，幂等返回成功
 	}
 
 	// 5. 已被他人认领检查（对齐 Python: if task.assignee）
-	if task.Assignee != "" {
-		return fmt.Errorf("任务 %s 已被 %s 认领，%s 无法认领", taskID, task.Assignee, tm.memberName)
+	if task.Assignee != nil {
+		return fmt.Errorf("任务 %s 已被 %s 认领，%s 无法认领", taskID, *task.Assignee, tm.memberName)
 	}
 
 	// 6. FSM 状态转换合法性检查（对齐 Python: is_valid_transition(task.status, CLAIMED, TASK_TRANSITIONS)）
@@ -406,13 +406,13 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 	}
 
 	// 3. 幂等性检查（对齐 Python: if task.assignee == assignee and task.status == CLAIMED）
-	if task.Assignee == assignee && task.Status == fsm.TaskStatusClaimed {
+	if task.Assignee != nil && *task.Assignee == assignee && task.Status == fsm.TaskStatusClaimed {
 		return nil // 已分配给同一成员，幂等返回成功
 	}
 
 	// 4. 已被他人认领检查（对齐 Python: if task.assignee and task.assignee != assignee）
-	if task.Assignee != "" && task.Assignee != assignee {
-		return fmt.Errorf("任务 %s 已被 %s 认领，需先 reset 再分配给 %s", taskID, task.Assignee, assignee)
+	if task.Assignee != nil && *task.Assignee != assignee {
+		return fmt.Errorf("任务 %s 已被 %s 认领，需先 reset 再分配给 %s", taskID, *task.Assignee, assignee)
 	}
 
 	// 5. 执行分配（对齐 Python: success = await self.db.task.claim_task(task_id, assignee)）
@@ -468,11 +468,15 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 				}
 				nowISO := time.Now().Format(time.RFC3339)
 				// 对齐 Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
+				assigneeName := ""
+				if task.Assignee != nil {
+					assigneeName = *task.Assignee
+				}
 				planRecord := &PlanRecord{
 					PlanID:      latestPlanID,
 					TaskID:      taskID,
 					TeamPlanID:  tm.teamPlanID,
-					MemberName:  task.Assignee,
+					MemberName:  assigneeName,
 					Status:      string(fsm.TaskStatusCompleted),
 					CompletedAt: nowISO,
 					UpdatedAt:   nowISO,
@@ -732,11 +736,15 @@ func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context) ([]*TaskSummar
 				blockedBy = append(blockedBy, dep.DependsOnID)
 			}
 		}
+		assignee := ""
+		if task.Assignee != nil {
+			assignee = *task.Assignee
+		}
 		result = append(result, &TaskSummary{
 			TaskID:    task.TaskID,
 			Title:     task.Title,
 			Status:    task.Status,
-			Assignee:  task.Assignee,
+			Assignee:  assignee,
 			BlockedBy: blockedBy,
 		})
 	}
@@ -762,8 +770,12 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	if task.Status != fsm.TaskStatusPending && task.Status != fsm.TaskStatusClaimed {
 		return nil, fmt.Errorf("任务状态不允许提交计划: %s (当前: %s)", taskID, task.Status)
 	}
-	if task.Status == fsm.TaskStatusClaimed && task.Assignee != tm.memberName {
-		return nil, fmt.Errorf("任务 %s 已被 %s 认领，当前成员无法提交计划", taskID, task.Assignee)
+	if task.Status == fsm.TaskStatusClaimed && (task.Assignee == nil || *task.Assignee != tm.memberName) {
+		assigneeName := ""
+		if task.Assignee != nil {
+			assigneeName = *task.Assignee
+		}
+		return nil, fmt.Errorf("任务 %s 已被 %s 认领，当前成员无法提交计划", taskID, assigneeName)
 	}
 
 	// 3. 如果 PENDING → 先 claim

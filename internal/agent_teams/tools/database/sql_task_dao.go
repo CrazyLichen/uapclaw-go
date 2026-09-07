@@ -111,8 +111,12 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 			return nil // 不回滚，返回失败
 		}
 		// 对齐 Python: if task.assignee → warning + return False
-		if task.Assignee != "" {
-			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", task.Assignee).Msg("任务已被认领")
+		if task.Assignee != nil && *task.Assignee != "" {
+			assigneeStr := ""
+			if task.Assignee != nil {
+				assigneeStr = *task.Assignee
+			}
+			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", assigneeStr).Msg("任务已被认领")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
@@ -121,7 +125,7 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: assignee, UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("任务认领成功")
 		return nil
@@ -151,7 +155,7 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
-			Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, Assignee: "", UpdatedAt: GetCurrentTime()})
+			Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, Assignee: nil, UpdatedAt: GetCurrentTime()})
 		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Msg("任务重置为 pending")
 		return nil
@@ -492,8 +496,13 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 
 		for _, task := range candidates {
 			// 对齐 Python: if assignee in skip_assignees → continue
-			if skipSet[task.Assignee] {
-				logger.Debug(logComponent).Str("task_id", task.TaskID).Str("assignee", task.Assignee).Msg("跳过：assignee 在 skipAssignees 中")
+			assigneeKey := ""
+			if task.Assignee != nil {
+				assigneeKey = *task.Assignee
+			}
+			if skipSet[assigneeKey] {
+				assigneeStr := assigneeKey
+				logger.Debug(logComponent).Str("task_id", task.TaskID).Str("assignee", assigneeStr).Msg("跳过：assignee 在 skipAssignees 中")
 				continue
 			}
 			_, refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, task.TaskID, fsm.TaskStatusCancelled, now)

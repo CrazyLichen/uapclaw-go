@@ -3,6 +3,8 @@ package update
 import (
 	"context"
 	"testing"
+
+	"github.com/wk8/go-ordered-map/v2"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -15,20 +17,34 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// helper: 从键值对构建有序 map
+func newOrderedMap(entries []struct{ K, V string }) *orderedmap.OrderedMap[string, string] {
+	m := orderedmap.New[string, string]()
+	for _, e := range entries {
+		m.Set(e.K, e.V)
+	}
+	return m
+}
+
 // TestFormatInput 测试格式化新旧记忆为提示词输入文本
 func TestFormatInput(t *testing.T) {
-	newMem := map[string]string{"2": "新内容2", "1": "新内容1", "3": "新内容3"}
-	oldMem := map[string]string{"b": "旧内容b", "a": "旧内容a"}
+	// 有序 map：按插入顺序遍历，新记忆反转，旧记忆保留插入顺序
+	newMem := newOrderedMap([]struct{ K, V string }{
+		{"1", "新内容1"}, {"2", "新内容2"}, {"3", "新内容3"},
+	})
+	oldMem := newOrderedMap([]struct{ K, V string }{
+		{"a", "旧内容a"}, {"b", "旧内容b"},
+	})
 
 	newStr, oldStr := formatInput(newMem, oldMem)
 
-	// 新记忆应倒序排列
+	// 新记忆应按插入顺序反序（插入 1,2,3 → 反序 3,2,1）
 	if newStr != "3: 新内容3\n2: 新内容2\n1: 新内容1" {
-		t.Errorf("newStr = %q, want 倒序排列", newStr)
+		t.Errorf("newStr = %q, want 插入顺序反序", newStr)
 	}
-	// 旧记忆应正序排列
+	// 旧记忆应按插入顺序（a, b）
 	if oldStr != "a: 旧内容a\nb: 旧内容b" {
-		t.Errorf("oldStr = %q, want 正序排列", oldStr)
+		t.Errorf("oldStr = %q, want 插入顺序", oldStr)
 	}
 }
 
@@ -48,8 +64,8 @@ func TestMapCheckItemsToActionItems_冗余跳过(t *testing.T) {
 	items := []*MemCheckItem{
 		{InfoID: "1", InfoText: "内容1", Result: CheckResultRedundant, RelatedInfos: nil},
 	}
-	newMem := map[string]string{"1": "内容1"}
-	oldMem := map[string]string{}
+	newMem := newOrderedMap([]struct{ K, V string }{{"1", "内容1"}})
+	oldMem := orderedmap.New[string, string]()
 
 	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 0 {
@@ -69,8 +85,8 @@ func TestMapCheckItemsToActionItems_冲突(t *testing.T) {
 			},
 		},
 	}
-	newMem := map[string]string{"2": "新内容2"}
-	oldMem := map[string]string{"1": "旧内容1"}
+	newMem := newOrderedMap([]struct{ K, V string }{{"2", "新内容2"}})
+	oldMem := newOrderedMap([]struct{ K, V string }{{"1", "旧内容1"}})
 
 	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 2 {
@@ -99,8 +115,8 @@ func TestMapCheckItemsToActionItems_冲突旧记忆不存在(t *testing.T) {
 			},
 		},
 	}
-	newMem := map[string]string{"2": "新内容2"}
-	oldMem := map[string]string{"1": "旧内容1"} // 不含 "ghost"
+	newMem := newOrderedMap([]struct{ K, V string }{{"2", "新内容2"}})
+	oldMem := newOrderedMap([]struct{ K, V string }{{"1", "旧内容1"}}) // 不含 "ghost"
 
 	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	// 应产生 1 ADD + 1 DELETE（ghost 被跳过）
@@ -120,8 +136,8 @@ func TestMapCheckItemsToActionItems_共存(t *testing.T) {
 	items := []*MemCheckItem{
 		{InfoID: "3", InfoText: "独立内容", Result: CheckResultNone, RelatedInfos: nil},
 	}
-	newMem := map[string]string{"3": "独立内容"}
-	oldMem := map[string]string{}
+	newMem := newOrderedMap([]struct{ K, V string }{{"3", "独立内容"}})
+	oldMem := orderedmap.New[string, string]()
 
 	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 1 {
@@ -137,8 +153,8 @@ func TestMapCheckItemsToActionItems_内容Fallback(t *testing.T) {
 	items := []*MemCheckItem{
 		{InfoID: "x", InfoText: "来自LLM的内容", Result: CheckResultNone, RelatedInfos: nil},
 	}
-	newMem := map[string]string{} // 不含 "x"
-	oldMem := map[string]string{}
+	newMem := orderedmap.New[string, string]() // 不含 "x"
+	oldMem := orderedmap.New[string, string]()
 
 	actionItems := mapCheckItemsToActionItems(items, newMem, oldMem)
 	if len(actionItems) != 1 {
@@ -248,7 +264,9 @@ func TestParseCheckItems_不支持的类型(t *testing.T) {
 
 // TestAllAddItems 测试 fallback 函数
 func TestAllAddItems(t *testing.T) {
-	mem := map[string]string{"a": "内容a", "b": "内容b"}
+	mem := newOrderedMap([]struct{ K, V string }{
+		{"a", "内容a"}, {"b", "内容b"},
+	})
 
 	items := allAddItems(mem)
 	if len(items) != 2 {
@@ -261,10 +279,22 @@ func TestAllAddItems(t *testing.T) {
 	}
 }
 
+// TestAllAddItems_nil 测试 nil 输入
+func TestAllAddItems_nil(t *testing.T) {
+	items := allAddItems(nil)
+	if items != nil {
+		t.Errorf("nil 输入应返回 nil，实际 %v", items)
+	}
+}
+
 // TestCheckDuplicateIDs 测试重复 ID 检测
 func TestCheckDuplicateIDs(t *testing.T) {
-	newMem := map[string]string{"1": "a", "2": "b", "3": "c"}
-	oldMem := map[string]string{"2": "old_b", "4": "d"}
+	newMem := newOrderedMap([]struct{ K, V string }{
+		{"1", "a"}, {"2", "b"}, {"3", "c"},
+	})
+	oldMem := newOrderedMap([]struct{ K, V string }{
+		{"2", "old_b"}, {"4", "d"},
+	})
 
 	dupes := checkDuplicateIDs(newMem, oldMem)
 	if len(dupes) != 1 || dupes[0] != "2" {
@@ -274,8 +304,8 @@ func TestCheckDuplicateIDs(t *testing.T) {
 
 // TestCheckDuplicateIDs_无重复 测试无重复
 func TestCheckDuplicateIDs_无重复(t *testing.T) {
-	newMem := map[string]string{"1": "a"}
-	oldMem := map[string]string{"2": "b"}
+	newMem := newOrderedMap([]struct{ K, V string }{{"1", "a"}})
+	oldMem := newOrderedMap([]struct{ K, V string }{{"2", "b"}})
 
 	dupes := checkDuplicateIDs(newMem, oldMem)
 	if len(dupes) != 0 {
@@ -283,10 +313,20 @@ func TestCheckDuplicateIDs_无重复(t *testing.T) {
 	}
 }
 
+// TestCheckDuplicateIDs_nil 测试 nil 输入
+func TestCheckDuplicateIDs_nil(t *testing.T) {
+	dupes := checkDuplicateIDs(nil, nil)
+	if len(dupes) != 0 {
+		t.Errorf("nil 输入应返回空，实际 %v", dupes)
+	}
+}
+
 // TestCheck_无模型 测试无 LLM 模型时返回全部 ADD
 func TestCheck_无模型(t *testing.T) {
 	checker := &MemUpdateChecker{}
-	newMem := map[string]string{"1": "内容1", "2": "内容2"}
+	newMem := newOrderedMap([]struct{ K, V string }{
+		{"1", "内容1"}, {"2", "内容2"},
+	})
 
 	items, err := checker.Check(context.TODO(), newMem, nil)
 	if err != nil {

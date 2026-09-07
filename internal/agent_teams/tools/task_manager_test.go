@@ -51,8 +51,8 @@ func TestTaskManager_Claim(t *testing.T) {
 	if got.Status != fsm.TaskStatusClaimed {
 		t.Errorf("认领后状态应为 claimed: got %q", got.Status)
 	}
-	if got.Assignee != "agent1" {
-		t.Errorf("认领人应为 agent1: got %q", got.Assignee)
+	if got.Assignee == nil || *got.Assignee != "agent1" {
+		t.Errorf("认领人应为 agent1: got %v", got.Assignee)
 	}
 }
 
@@ -190,8 +190,8 @@ func TestTaskManager_Assign(t *testing.T) {
 		t.Fatalf("Assign 返回错误: %v", err)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
-	if got.Assignee != "agent1" {
-		t.Errorf("分配人应为 agent1: got %q", got.Assignee)
+	if got.Assignee == nil || *got.Assignee != "agent1" {
+		t.Errorf("分配人应为 agent1: got %v", got.Assignee)
 	}
 }
 
