@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
@@ -104,6 +105,10 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	}
 	s.running = true
 	s.runningMu.Unlock()
+
+	// 注册全局 Config，供 HookExecutor.queryLLM 运行时读取
+	// 对齐 Python: from jiuwenswarm.common.config import get_config
+	serverhooks.RegisterConfig(s.config)
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go func() {

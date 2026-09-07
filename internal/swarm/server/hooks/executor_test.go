@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // TestHookOutcome_常量值 测试 HookOutcome 对齐 Python
@@ -160,7 +162,7 @@ func TestExtractJSONFromResponse_无JSON(t *testing.T) {
 
 // TestHookExecutor_RunAll_空配置 测试空 hook 配置返回空列表
 func TestHookExecutor_RunAll_空配置(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	results := exec.RunAll(context.Background(), nil, map[string]any{}, "")
 	if len(results) != 0 {
 		t.Errorf("RunAll(nil) = %d results, want 0", len(results))
@@ -169,7 +171,7 @@ func TestHookExecutor_RunAll_空配置(t *testing.T) {
 
 // TestHookExecutor_RunAll_command成功 测试 command hook exit 0
 func TestHookExecutor_RunAll_command成功(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo '{\"decision\": \"allow\"}'", "timeout": 10},
 	}
@@ -185,7 +187,7 @@ func TestHookExecutor_RunAll_command成功(t *testing.T) {
 
 // TestHookExecutor_RunAll_command阻塞 测试 command hook exit 2（阻塞）
 func TestHookExecutor_RunAll_command阻塞(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	// exit 2 的 shell 命令
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo '{\"decision\": \"block\", \"reason\": \"blocked by command\"}' && exit 2", "timeout": 10},
@@ -205,7 +207,7 @@ func TestHookExecutor_RunAll_command阻塞(t *testing.T) {
 
 // TestHookExecutor_RunAll_command空命令 测试空 command 返回 NON_BLOCKING_ERROR
 func TestHookExecutor_RunAll_command空命令(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "", "timeout": 10},
 	}
@@ -223,7 +225,7 @@ func TestHookExecutor_RunAll_command空命令(t *testing.T) {
 
 // TestHookExecutor_RunAll_command超时 测试超时返回 NON_BLOCKING_ERROR
 func TestHookExecutor_RunAll_command超时(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "sleep 30", "timeout": 1},
 	}
@@ -240,7 +242,7 @@ func TestHookExecutor_RunAll_command超时(t *testing.T) {
 
 // TestHookExecutor_RunAll_command失败退出码 测试 exit 1 → NON_BLOCKING_ERROR
 func TestHookExecutor_RunAll_command失败退出码(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo 'error message' && exit 1", "timeout": 10},
 	}
@@ -255,7 +257,7 @@ func TestHookExecutor_RunAll_command失败退出码(t *testing.T) {
 
 // TestHookExecutor_RunAll_prompt空模板 测试空 prompt 返回 NON_BLOCKING_ERROR
 func TestHookExecutor_RunAll_prompt空模板(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "prompt", "prompt": "", "timeout": 10},
 	}
@@ -274,7 +276,7 @@ func TestHookExecutor_RunAll_prompt空模板(t *testing.T) {
 // TestHookExecutor_RunAll_未知类型 测试未知 hook 类型
 // 对齐 Python: 未知 hook 类型不加入 tasks 列表，不占用 result 位置
 func TestHookExecutor_RunAll_未知类型(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "unknown"},
 	}
@@ -286,7 +288,7 @@ func TestHookExecutor_RunAll_未知类型(t *testing.T) {
 
 // TestHookExecutor_RunAll_默认command类型 测试无 type 字段默认为 command
 func TestHookExecutor_RunAll_默认command类型(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"command": "echo '{\"decision\": \"allow\"}'", "timeout": 10},
 	}
@@ -302,7 +304,7 @@ func TestHookExecutor_RunAll_默认command类型(t *testing.T) {
 
 // TestHookExecutor_RunAll_多个hook并行 测试多个 hooks 并行执行
 func TestHookExecutor_RunAll_多个hook并行(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo '{\"decision\": \"allow\"}'", "timeout": 10},
 		{"type": "command", "command": "echo '{\"additionalContext\": \"extra\"}'", "timeout": 10},
@@ -320,26 +322,37 @@ func TestHookExecutor_RunAll_多个hook并行(t *testing.T) {
 	}
 }
 
-// TestLLMConfig_字段 测试 LLMConfig 字段赋值
-func TestLLMConfig_字段(t *testing.T) {
-	cfg := LLMConfig{
-		APIKey:         "test-key",
-		APIBase:        "https://api.test.com",
-		ClientProvider: "test-provider",
-		DefaultModel:   "test-model",
+// TestRegisterConfig_注册和获取 测试全局 Config 注册与获取
+func TestRegisterConfig_注册和获取(t *testing.T) {
+	// 保存原始值
+	globalCfgMu.Lock()
+	orig := globalCfg
+	globalCfg = nil
+	globalCfgMu.Unlock()
+	defer func() {
+		RegisterConfig(orig)
+	}()
+
+	// 未注册时应返回 nil
+	if getGlobalConfig() != nil {
+		t.Error("getGlobalConfig() 应返回 nil（未注册时）")
 	}
-	if cfg.APIKey != "test-key" {
-		t.Errorf("APIKey = %q, want %q", cfg.APIKey, "test-key")
+
+	// 注册后应返回非 nil
+	cfg, err := config.New("")
+	if err != nil {
+		t.Fatalf("config.New() 失败: %v", err)
 	}
-	if cfg.DefaultModel != "test-model" {
-		t.Errorf("DefaultModel = %q, want %q", cfg.DefaultModel, "test-model")
+	RegisterConfig(cfg)
+	if getGlobalConfig() == nil {
+		t.Error("getGlobalConfig() 应返回非 nil（注册后）")
 	}
 }
 
 // TestHookExecutor_RunAll_promptLLM创建失败 测试 LLM 创建失败返回 NON_BLOCKING_ERROR
 func TestHookExecutor_RunAll_promptLLM创建失败(t *testing.T) {
 	// 空 ClientProvider 会导致 Model 创建失败
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "prompt", "prompt": "Is this safe? $ARGUMENTS", "timeout": 10},
 	}
@@ -356,7 +369,7 @@ func TestHookExecutor_RunAll_promptLLM创建失败(t *testing.T) {
 // TestHookExecutor_RunAll_prompt模板替换 测试 prompt hook 模板替换逻辑
 // 此测试验证模板替换 $ARGUMENTS 和 $TOOL_NAME，但 LLM 调用会失败
 func TestHookExecutor_RunAll_prompt模板替换(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "prompt", "prompt": "Review: $ARGUMENTS for tool $TOOL_NAME", "timeout": 10, "model": "test-model"},
 	}
@@ -373,7 +386,7 @@ func TestHookExecutor_RunAll_prompt模板替换(t *testing.T) {
 
 // TestHookExecutor_RunAll_command环境变量 测试 command hook 设置 ARGUMENTS/TOOL_NAME 环境变量
 func TestHookExecutor_RunAll_command环境变量(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	// 命令读取 ARGUMENTS 和 TOOL_NAME 环境变量
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo \"$TOOL_NAME:$ARGUMENTS\" && echo '{\"decision\": \"allow\"}'", "timeout": 10},
@@ -390,7 +403,7 @@ func TestHookExecutor_RunAll_command环境变量(t *testing.T) {
 
 // TestHookExecutor_RunAll_command阻塞stderrFallback 测试 exit 2 且 stdout 不是 JSON 时 fallback 到 stderr
 func TestHookExecutor_RunAll_command阻塞stderrFallback(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	// stdout 不是 JSON，stderr 有内容
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo 'not json stdout' >&1 && echo 'blocked reason from stderr' >&2 && exit 2", "timeout": 10},
@@ -408,7 +421,7 @@ func TestHookExecutor_RunAll_command阻塞stderrFallback(t *testing.T) {
 // 对齐 Python: json.dumps(hook_input) 失败时不会发生（Python json.dumps 支持所有基本类型），
 // Go 中 chan/func 等类型不可序列化，需返回 NON_BLOCKING_ERROR 保护
 func TestHookExecutor_RunAll_command序列化失败(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "echo ok", "timeout": 10},
 	}
@@ -429,7 +442,7 @@ func TestHookExecutor_RunAll_command序列化失败(t *testing.T) {
 // TestHookExecutor_RunAll_commandFloat64Timeout 测试 timeout 为 float64 类型时正确转换
 // 对齐 Python: config.get("timeout", 30) 从 YAML 加载时 timeout 可能是 float 类型
 func TestHookExecutor_RunAll_commandFloat64Timeout(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": `echo '{"decision": "allow"}'`, "timeout": float64(10.5)},
 	}
@@ -446,7 +459,7 @@ func TestHookExecutor_RunAll_commandFloat64Timeout(t *testing.T) {
 // TestHookExecutor_RunAll_command进程被杀 测试 context cancel 导致进程被 kill（非 timeout）
 // 对齐 Python: proc.returncode is None → NON_BLOCKING_ERROR("hook process killed")
 func TestHookExecutor_RunAll_command进程被杀(t *testing.T) {
-	exec := NewHookExecutor(LLMConfig{})
+	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
 		{"type": "command", "command": "sleep 30", "timeout": 60},
 	}

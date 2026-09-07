@@ -32,11 +32,11 @@ type UserHookRail struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewUserHookRail 创建 UserHookRail，对齐 Python UserHookRail.__init__(hooks_config)
-func NewUserHookRail(config hookscfg.HooksConfig, executor *HookExecutor) *UserHookRail {
+// NewUserHookRail 创建 UserHookRail，对齐 Python UserHookRail(hooks_config)
+func NewUserHookRail(config hookscfg.HooksConfig) *UserHookRail {
 	r := &UserHookRail{
 		config:   config,
-		executor: executor,
+		executor: NewHookExecutor(),
 	}
 	// 对齐 Python: priority=60
 	base := agentinterfaces.NewBaseRail().WithPriority(60)

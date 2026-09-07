@@ -859,9 +859,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 		}()
 		hooksCfg := hookscfg.LoadHooksConfig(configBase)
 		if len(hooksCfg.Events) > 0 {
-			llmCfg := extractLLMConfig(configBase)
-			hookExec := serverhooks.NewHookExecutor(llmCfg)
-			userHookRail := serverhooks.NewUserHookRail(*hooksCfg, hookExec)
+			userHookRail := serverhooks.NewUserHookRail(*hooksCfg)
 			railsList = append(railsList, userHookRail)
 			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
 		}

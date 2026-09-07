@@ -34,8 +34,7 @@ func TestNewUserHookRail(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {{Matcher: "*"}},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 	if rail == nil {
 		t.Fatal("NewUserHookRail() = nil, want non-nil")
 	}
@@ -55,8 +54,7 @@ func TestUserHookRail_BeforeToolCall_阻塞(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "dangerous_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -74,8 +72,7 @@ func TestUserHookRail_BeforeToolCall_阻塞(t *testing.T) {
 // TestUserHookRail_BeforeToolCall_无匹配 测试无匹配事件时直接返回 nil
 func TestUserHookRail_BeforeToolCall_无匹配(t *testing.T) {
 	cfg := hookscfg.HooksConfig{} // 空 Events
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "any_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -95,8 +92,7 @@ func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -122,8 +118,7 @@ func TestUserHookRail_BeforeToolCall_附加上下文(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -145,8 +140,7 @@ func TestUserHookRail_AfterToolCall_阻塞(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}, ToolResult: "result"}, nil)
 	err := rail.AfterToolCall(context.Background(), cbc)
@@ -168,8 +162,7 @@ func TestUserHookRail_AfterToolCall_附加上下文(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}, ToolResult: "original result"}, nil)
 	err := rail.AfterToolCall(context.Background(), cbc)
@@ -189,8 +182,7 @@ func TestUserHookRail_AfterToolCall_附加上下文(t *testing.T) {
 // TestUserHookRail_OnToolException_无匹配 测试无匹配事件时返回 nil
 func TestUserHookRail_OnToolException_无匹配(t *testing.T) {
 	cfg := hookscfg.HooksConfig{} // 空 Events
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.OnToolException(context.Background(), cbc)
@@ -209,8 +201,7 @@ func TestUserHookRail_OnToolException_有匹配(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.OnToolException(context.Background(), cbc)
@@ -230,8 +221,7 @@ func TestUserHookRail_AfterInvoke_阻塞(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
 	err := rail.AfterInvoke(context.Background(), cbc)
@@ -246,8 +236,7 @@ func TestUserHookRail_AfterInvoke_阻塞(t *testing.T) {
 // TestUserHookRail_AfterInvoke_无匹配 测试无匹配事件时返回 nil
 func TestUserHookRail_AfterInvoke_无匹配(t *testing.T) {
 	cfg := hookscfg.HooksConfig{} // 空 Events
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
 	err := rail.AfterInvoke(context.Background(), cbc)
@@ -268,8 +257,7 @@ func TestUserHookRail_BeforeToolCall_带SessionID(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	sess := &mockSessionFacade{sessionID: "test-session-123"}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, sess)
@@ -298,8 +286,7 @@ func TestUserHookRail_BeforeToolCall_修改工具名(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "dangerous_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -328,8 +315,7 @@ func TestUserHookRail_BeforeToolCall_多次附加上下文(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{ToolName: "test_tool", ToolArgs: map[string]any{}}, nil)
 	err := rail.BeforeToolCall(context.Background(), cbc)
@@ -354,8 +340,7 @@ func TestUserHookRail_AfterToolCall_非string结果(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	// ToolResult 为 map[string]any（非 string），触发 JSON 序列化保底路径
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{
@@ -401,8 +386,7 @@ func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 			},
 		},
 	}}
-	exec := NewHookExecutor(LLMConfig{})
-	rail := NewUserHookRail(cfg, exec)
+	rail := NewUserHookRail(cfg)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, nil)
 	err := rail.AfterInvoke(context.Background(), cbc)

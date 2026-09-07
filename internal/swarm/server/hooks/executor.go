@@ -15,6 +15,7 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -35,25 +36,10 @@ type HookResult struct {
 	AdditionalContext string
 }
 
-// LLMConfig prompt hook 使用的 LLM 配置
-// 对齐 Python _query_llm 中从 config 提取的 APIKey/APIBase/ClientProvider/DefaultModel
-type LLMConfig struct {
-	// APIKey LLM API 密钥
-	APIKey string
-	// APIBase LLM API 地址
-	APIBase string
-	// ClientProvider LLM 客户端提供者
-	ClientProvider string
-	// DefaultModel 默认模型名
-	DefaultModel string
-}
-
 // HookExecutor hook 执行器，对齐 Python HookExecutor
 // 统一调度 command/prompt 两类 hook，返回 HookResult 列表
-type HookExecutor struct {
-	// llmConfig prompt hook 使用的 LLM 配置，内部创建 ModelClient，对齐 Python _query_llm
-	llmConfig LLMConfig
-}
+// LLM 配置在 queryLLM 调用时从全局 Config 读取，对齐 Python _query_llm 中动态 get_config()
+type HookExecutor struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -69,11 +55,28 @@ const (
 
 const logComponent = logger.ComponentAgentServer
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// globalCfg 全局 Config 实例，由 AgentServer 启动时通过 RegisterConfig 注册
+	// 对齐 Python: from jiuwenswarm.common.config import get_config
+	globalCfg  *config.Config
+	globalCfgMu sync.RWMutex
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewHookExecutor 创建 HookExecutor，对齐 Python HookExecutor()
-func NewHookExecutor(llmConfig LLMConfig) *HookExecutor {
-	return &HookExecutor{llmConfig: llmConfig}
+// RegisterConfig 注册全局 Config 实例，对齐 Python get_config() 的全局可用性。
+// 必须在首次创建 HookExecutor 之前调用（通常由 AgentServer 启动时注册）。
+func RegisterConfig(cfg *config.Config) {
+	globalCfgMu.Lock()
+	defer globalCfgMu.Unlock()
+	globalCfg = cfg
+}
+
+// NewHookExecutor 创建 HookExecutor，对齐 Python HookExecutor()（无参构造）
+func NewHookExecutor() *HookExecutor {
+	return &HookExecutor{}
 }
 
 // RunAll 并行执行同一 matcher 下的所有 hooks，对齐 Python HookExecutor.run_all()
@@ -445,22 +448,41 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 }
 
 // queryLLM 调用 LLM 执行 hook 审查，对齐 Python _query_llm
-// 内部用 LLMConfig 创建 Model 实例（对齐 Python: 动态 import config + 创建 Model）
+// 运行时从全局 Config 读取 LLM 配置，对齐 Python: config_base = get_config()
 // 集成测试覆盖：由 //go:build llm 标签的 executor_llm_test.go 覆盖，不纳入单元测试覆盖率基线
 func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (string, error) {
-	clientConfig, cfgErr := llmschema.NewModelClientConfig(e.llmConfig.ClientProvider, e.llmConfig.APIKey, e.llmConfig.APIBase)
+	// 对齐 Python: config_base = get_config()
+	cfg := getGlobalConfig()
+	if cfg == nil {
+		return "", fmt.Errorf("全局 Config 未注册，请先调用 RegisterConfig")
+	}
+	configBase, err := cfg.Load()
+	if err != nil {
+		return "", fmt.Errorf("读取配置失败: %w", err)
+	}
+
+	// 对齐 Python: models_cfg = config_base.get("models", {})
+	modelsCfg, _ := configBase["models"].(map[string]any)
+	defaultCfg, _ := modelsCfg["default"].(map[string]any)
+	clientCfg, _ := defaultCfg["model_client_config"].(map[string]any)
+	apiKey, _ := clientCfg["api_key"].(string)
+	apiBase, _ := clientCfg["api_base"].(string)
+	clientProvider, _ := clientCfg["client_provider"].(string)
+	defaultModel, _ := clientCfg["model_name"].(string)
+
+	clientConfig, cfgErr := llmschema.NewModelClientConfig(clientProvider, apiKey, apiBase)
 	if cfgErr != nil {
 		return "", fmt.Errorf("创建 ModelClientConfig 失败: %w", cfgErr)
 	}
-	model, err := llm.NewModel(clientConfig, nil)
-	if err != nil {
-		return "", fmt.Errorf("创建 Model 失败: %w", err)
+	model, modelErr := llm.NewModel(clientConfig, nil)
+	if modelErr != nil {
+		return "", fmt.Errorf("创建 Model 失败: %w", modelErr)
 	}
 
 	// 对齐 Python: model = model_name or default_model
 	effectiveModel := modelName
 	if effectiveModel == "" {
-		effectiveModel = e.llmConfig.DefaultModel
+		effectiveModel = defaultModel
 	}
 
 	// 对齐 Python: response = await model.invoke(messages=[{"role": "user", "content": prompt}], temperature=0.0, max_tokens=1024, model=model_name)
@@ -471,9 +493,9 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 		model_clients.WithInvokeModel(effectiveModel),
 	}
 
-	response, err := model.Invoke(ctx, messages, opts...)
-	if err != nil {
-		return "", fmt.Errorf("LLM Invoke 失败: %w", err)
+	response, invokeErr := model.Invoke(ctx, messages, opts...)
+	if invokeErr != nil {
+		return "", fmt.Errorf("LLM Invoke 失败: %w", invokeErr)
 	}
 
 	// 对齐 Python: content = response.content
@@ -492,4 +514,11 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 		}
 	}
 	return strings.Join(textParts, "\n"), nil
+}
+
+// getGlobalConfig 获取全局 Config 实例
+func getGlobalConfig() *config.Config {
+	globalCfgMu.RLock()
+	defer globalCfgMu.RUnlock()
+	return globalCfg
 }
