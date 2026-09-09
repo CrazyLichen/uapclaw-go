@@ -977,7 +977,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					accumulatedReasoning = ""
 				}
 				// ParseStreamChunk 处理其他类型
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter)
+				// 对齐 Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
+				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, accumulatedText != "")
 				if parsed != nil {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
 				}
