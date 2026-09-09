@@ -94,6 +94,7 @@ type TaskStatusOption func(*taskStatusConfig)
 type TaskPriorityOption func(*taskPriorityConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// logComponent 日志组件标识
@@ -101,6 +102,7 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ToMap 将 TaskManagerState 序列化为 map[string]any。

@@ -47,6 +47,7 @@ type OffloadMessageBuffer struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // offloadTypeInMemory 内存存储类型标识
@@ -56,6 +57,7 @@ const offloadTypeInMemory = "in_memory"
 const offloadTypeFilesystem = "filesystem"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextMessageBuffer 创建消息缓冲区实例。

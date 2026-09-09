@@ -42,6 +42,7 @@ type cwdStateKeyType struct{}
 type cwdOption func(s *CwdState)
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // cwdStateKey CwdState 的 context key。

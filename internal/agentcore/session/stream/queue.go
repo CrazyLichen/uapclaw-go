@@ -31,6 +31,7 @@ type StreamQueue struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultSendAttemptTimeout 每次发送尝试超时，对应 Python DEFAULT_SEND_ATTEMPT_TIMEOUT = 0.2

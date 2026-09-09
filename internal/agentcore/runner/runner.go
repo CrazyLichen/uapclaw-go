@@ -47,6 +47,7 @@ type Runner struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultRunnerID 默认Runner ID（对齐 Python _DEFAULT_RUNNER_ID = "global"）

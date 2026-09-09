@@ -23,6 +23,7 @@ import (
 type JsonOutputParser struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent output_parsers 包日志组件标识（AgentCore 层）。

@@ -53,6 +53,7 @@ type Controller struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore

@@ -42,6 +42,7 @@ type BrowserTaskProgressState struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserTaskProgressStateFromDict 从字典构造 BrowserTaskProgressState。

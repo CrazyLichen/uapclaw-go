@@ -21,6 +21,7 @@ import (
 type MarkdownOutputParser struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // mdLogComponent markdown output_parser 包日志组件标识（AgentCore 层）。

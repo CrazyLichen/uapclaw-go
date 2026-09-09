@@ -23,6 +23,7 @@ type SkillUtil struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // skillPromptContent 技能提示词模板内容。
@@ -48,6 +49,7 @@ const skillSystemPrefix = "You are an agent equipped with various skills to solv
 	"using read_file and follow its workflow.\n"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillUtil 创建 SkillUtil 实例。

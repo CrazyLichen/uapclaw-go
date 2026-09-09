@@ -141,6 +141,7 @@ type AdaptiveStrategy struct {
 type bytesReaderImpl struct{ data []byte }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

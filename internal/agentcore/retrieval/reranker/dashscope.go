@@ -36,6 +36,7 @@ type DashScopeReranker struct {
 type DashScopeRerankerOption func(*DashScopeReranker)
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// dashScopeEndPoint DashScope 重排序 API 端点

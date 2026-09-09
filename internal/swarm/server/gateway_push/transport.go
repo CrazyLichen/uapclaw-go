@@ -33,6 +33,7 @@ type GatewayPushTransport interface {
 type ChannelPushTransport struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponentPush 推送日志组件

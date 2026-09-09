@@ -63,6 +63,7 @@ type ESVectorStore struct {
 type ESOption func(*ESVectorStore)
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// esDefaultBatchSize ES 默认批量插入大小

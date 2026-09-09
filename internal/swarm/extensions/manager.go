@@ -20,6 +20,7 @@ type ExtensionManager struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExtensionManager 创建 ExtensionManager，对齐 Python ExtensionManager(registry)

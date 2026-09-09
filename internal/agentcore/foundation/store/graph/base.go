@@ -82,6 +82,7 @@ type GraphStoreFactory struct {
 type Option func(*Options)
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// EntityCollection 实体集合名称
