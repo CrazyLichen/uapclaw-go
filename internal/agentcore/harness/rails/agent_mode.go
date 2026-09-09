@@ -107,7 +107,8 @@ var planFileWriteTools = map[string]struct{}{
 
 // gitWriteRE 匹配 git 写操作的编译正则表达式
 // 对齐 Python L53-56: _GIT_WRITE_RE
-// nolint: lll
+//
+//nolint:lll
 var gitWriteRE = regexp.MustCompile(
 	`\bgit\s+(add|commit|push|pull|reset\s+--hard|checkout\s+--\.|clean\s+-[a-zA-Z]*f|` +
 		`stash\s+(drop|clear)|branch\s+-D|merge|tag|amend|rebase)\b`)
