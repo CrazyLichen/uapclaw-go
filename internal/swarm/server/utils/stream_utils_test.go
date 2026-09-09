@@ -2,6 +2,7 @@ package utils
 
 import (
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
@@ -32,10 +33,44 @@ func TestParseStreamChunk_controllerOutput_taskCompletion(t *testing.T) {
 }
 
 func TestParseStreamChunk_controllerOutput_taskFailed(t *testing.T) {
-	output := makeOutput("controller_output", map[string]any{"type": "task_failed", "error": "出错了"})
+	output := makeOutput("controller_output", map[string]any{
+		"type": "task_failed",
+		"data": []any{
+			map[string]any{"text": "执行超时"},
+			map[string]any{"code": 500},
+		},
+	})
 	result := ParseStreamChunk(output, nil, nil, nil)
 	if result["event_type"] != "chat.error" {
 		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
+	}
+	if result["error"] != "执行超时" {
+		t.Errorf("期望 '执行超时', 实际 %v", result["error"])
+	}
+}
+
+func TestParseStreamChunk_controllerOutput_taskFailed_无data(t *testing.T) {
+	output := makeOutput("controller_output", map[string]any{"type": "task_failed"})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "chat.error" {
+		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
+	}
+	if result["error"] != "任务执行失败" {
+		t.Errorf("期望默认错误信息, 实际 %v", result["error"])
+	}
+}
+
+func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
+	output := makeOutput("controller_output", map[string]any{
+		"type":    "__interaction__",
+		"payload": map[string]any{"request_id": "req-1"},
+	})
+	converter := func(payload any) map[string]any {
+		return map[string]any{"event_type": "chat.ask_user_question", "data": payload}
+	}
+	result := ParseStreamChunk(output, nil, nil, converter)
+	if result["event_type"] != "chat.ask_user_question" {
+		t.Errorf("期望 chat.ask_user_question, 实际 %v", result["event_type"])
 	}
 }
 
@@ -58,11 +93,61 @@ func TestParseStreamChunk_contentChunk(t *testing.T) {
 	}
 }
 
-func TestParseStreamChunk_answer(t *testing.T) {
+func TestParseStreamChunk_contentChunk_空内容(t *testing.T) {
+	output := makeOutput("content_chunk", map[string]any{"content": ""})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result != nil {
+		t.Errorf("空内容应返回 nil, 实际 %v", result)
+	}
+}
+
+func TestParseStreamChunk_contentChunk_空白内容(t *testing.T) {
+	output := makeOutput("content_chunk", map[string]any{"content": "   "})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result != nil {
+		t.Errorf("空白内容应返回 nil, 实际 %v", result)
+	}
+}
+
+func TestParseStreamChunk_answer_默认(t *testing.T) {
 	output := makeOutput("answer", map[string]any{"content": "最终答案"})
 	result := ParseStreamChunk(output, nil, nil, nil)
 	if result["event_type"] != "chat.final" {
 		t.Errorf("期望 chat.final, 实际 %v", result["event_type"])
+	}
+}
+
+func TestParseStreamChunk_answer_resultTypeError(t *testing.T) {
+	output := makeOutput("answer", map[string]any{
+		"result_type": "error",
+		"output":      "未知错误",
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "chat.error" {
+		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
+	}
+	if result["error"] != "未知错误" {
+		t.Errorf("期望 '未知错误', 实际 %v", result["error"])
+	}
+}
+
+func TestParseStreamChunk_answer_chunked(t *testing.T) {
+	output := makeOutput("answer", map[string]any{
+		"output": map[string]any{"output": "部分内容", "chunked": true},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "chat.delta" {
+		t.Errorf("is_chunked=true 期望 chat.delta, 实际 %v", result["event_type"])
+	}
+}
+
+func TestParseStreamChunk_answer_hasStreamedContent(t *testing.T) {
+	output := makeOutput("answer", map[string]any{
+		"output": map[string]any{"output": "最终内容", "chunked": false},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil, true)
+	if result["event_type"] != "chat.final" {
+		t.Errorf("hasStreamedContent=true 期望 chat.final, 实际 %v", result["event_type"])
 	}
 }
 
@@ -75,18 +160,84 @@ func TestParseStreamChunk_toolCall(t *testing.T) {
 }
 
 func TestParseStreamChunk_toolUpdate(t *testing.T) {
-	output := makeOutput("tool_update", map[string]any{"progress": "50%"})
+	output := makeOutput("tool_update", map[string]any{
+		"tool_update": map[string]any{"progress": "50%", "status": "running"},
+	})
 	result := ParseStreamChunk(output, nil, nil, nil)
 	if result["event_type"] != "chat.tool_update" {
 		t.Errorf("期望 chat.tool_update, 实际 %v", result["event_type"])
 	}
+	if result["progress"] != "50%" {
+		t.Errorf("期望 progress='50%%', 实际 %v", result["progress"])
+	}
+	if result["status"] != "running" {
+		t.Errorf("期望 status='running', 实际 %v", result["status"])
+	}
 }
 
 func TestParseStreamChunk_toolResult(t *testing.T) {
-	output := makeOutput("tool_result", map[string]any{"output": "result"})
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"result":       "文件内容",
+			"tool_name":    "read_file",
+			"tool_call_id": "call-1",
+			"success":      true,
+		},
+	})
 	result := ParseStreamChunk(output, nil, nil, nil)
 	if result["event_type"] != "chat.tool_result" {
 		t.Errorf("期望 chat.tool_result, 实际 %v", result["event_type"])
+	}
+	if result["result"] != "文件内容" {
+		t.Errorf("期望 result='文件内容', 实际 %v", result["result"])
+	}
+	if result["tool_name"] != "read_file" {
+		t.Errorf("期望 tool_name='read_file', 实际 %v", result["tool_name"])
+	}
+	if result["tool_call_id"] != "call-1" {
+		t.Errorf("期望 tool_call_id='call-1', 实际 %v", result["tool_call_id"])
+	}
+	if result["success"] != true {
+		t.Errorf("期望 success=true, 实际 %v", result["success"])
+	}
+}
+
+func TestParseStreamChunk_toolResult_toolName回退(t *testing.T) {
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"result": "ok",
+			"name":   "legacy_name",
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["tool_name"] != "legacy_name" {
+		t.Errorf("tool_name 应回退到 name, 实际 %v", result["tool_name"])
+	}
+}
+
+func TestParseStreamChunk_toolResult_toolCallId回退(t *testing.T) {
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"result":     "ok",
+			"toolCallId": "tc-123",
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["tool_call_id"] != "tc-123" {
+		t.Errorf("tool_call_id 应回退到 toolCallId, 实际 %v", result["tool_call_id"])
+	}
+}
+
+func TestParseStreamChunk_toolResult_rawOutput回退(t *testing.T) {
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"result":    "ok",
+			"rawOutput": "raw data",
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["raw_output"] != "raw data" {
+		t.Errorf("raw_output 应回退到 rawOutput, 实际 %v", result["raw_output"])
 	}
 }
 
@@ -101,25 +252,62 @@ func TestParseStreamChunk_error(t *testing.T) {
 func TestParseStreamChunk_thinking(t *testing.T) {
 	output := makeOutput("thinking", map[string]any{"content": "思考中"})
 	result := ParseStreamChunk(output, nil, nil, nil)
-	if result["event_type"] != "chat.thinking" {
-		t.Errorf("期望 chat.thinking, 实际 %v", result["event_type"])
+	if result["event_type"] != "chat.processing_status" {
+		t.Errorf("期望 chat.processing_status, 实际 %v", result["event_type"])
+	}
+	if result["is_processing"] != true {
+		t.Errorf("期望 is_processing=true, 实际 %v", result["is_processing"])
+	}
+	if result["current_task"] != "thinking" {
+		t.Errorf("期望 current_task=thinking, 实际 %v", result["current_task"])
 	}
 }
 
 func TestParseStreamChunk_todoUpdated(t *testing.T) {
-	output := makeOutput("todo.updated", map[string]any{"todo": "item"})
+	output := makeOutput("todo.updated", map[string]any{
+		"todos": []any{map[string]any{"id": "1", "text": "任务1"}},
+	})
 	result := ParseStreamChunk(output, nil, nil, nil)
 	if result["event_type"] != "todo.updated" {
 		t.Errorf("期望 todo.updated, 实际 %v", result["event_type"])
+	}
+	todos, ok := result["todos"].([]any)
+	if !ok || len(todos) != 1 {
+		t.Errorf("期望 todos 列表长度 1, 实际 %v", result["todos"])
+	}
+}
+
+func TestParseStreamChunk_todoUpdated_无todos(t *testing.T) {
+	output := makeOutput("todo.updated", map[string]any{})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "todo.updated" {
+		t.Errorf("期望 todo.updated, 实际 %v", result["event_type"])
+	}
+	todos, ok := result["todos"].([]any)
+	if !ok || len(todos) != 0 {
+		t.Errorf("无 todos 应返回空列表, 实际 %v", result["todos"])
 	}
 }
 
 func TestParseStreamChunk_contextUsage(t *testing.T) {
 	usage := &UsageAccumulator{}
-	output := makeOutput("context.usage", map[string]any{"input_tokens": 100, "output_tokens": 50})
+	output := makeOutput("context.usage", map[string]any{
+		"rate":        0.5,
+		"context_max": 128000,
+		"tokens_used": 64000,
+	})
 	result := ParseStreamChunk(output, usage, nil, nil)
-	if result["event_type"] != "chat.context_usage" {
-		t.Errorf("期望 chat.context_usage, 实际 %v", result["event_type"])
+	if result["event_type"] != "context.usage" {
+		t.Errorf("期望 context.usage, 实际 %v", result["event_type"])
+	}
+	if result["rate"] != 0.5 {
+		t.Errorf("期望 rate=0.5, 实际 %v", result["rate"])
+	}
+	if result["context_max"] != 128000 {
+		t.Errorf("期望 context_max=128000, 实际 %v", result["context_max"])
+	}
+	if result["tokens_used"] != 64000 {
+		t.Errorf("期望 tokens_used=64000, 实际 %v", result["tokens_used"])
 	}
 }
 
@@ -192,10 +380,32 @@ func TestParseStreamChunk_specialTypes(t *testing.T) {
 }
 
 func TestParseStreamChunk_defaultFallback(t *testing.T) {
-	output := makeOutput("unknown_type", map[string]any{"data": "test"})
+	output := makeOutput("custom_event", map[string]any{"key": "value"})
 	result := ParseStreamChunk(output, nil, nil, nil)
-	if result["event_type"] != "chat.delta" {
-		t.Errorf("未知类型期望 chat.delta, 实际 %v", result["event_type"])
+	if result["event_type"] != "chat.custom_event" {
+		t.Errorf("未知类型期望 chat.{chunkType}, 实际 %v", result["event_type"])
+	}
+	if result["key"] != "value" {
+		t.Errorf("期望展开 payload 字段 key=value, 实际 %v", result["key"])
+	}
+}
+
+func TestParseStreamChunk_defaultFallback_team(t *testing.T) {
+	output := makeOutput("team_event", map[string]any{
+		"event_type": "team.runtime_ready",
+		"status":     "ok",
+	})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "team.runtime_ready" {
+		t.Errorf("team 命名空间应直传, 实际 %v", result["event_type"])
+	}
+}
+
+func TestParseStreamChunk_defaultFallback_空payload(t *testing.T) {
+	output := makeOutput("custom_empty", map[string]any{})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "chat.custom_empty" {
+		t.Errorf("空 payload 期望 chat.{chunkType}, 实际 %v", result["event_type"])
 	}
 }
 
@@ -276,3 +486,134 @@ func TestParseInteractionPayload_无converter(t *testing.T) {
 	}
 }
 
+func TestSerializeValue_time(t *testing.T) {
+	now := time.Now()
+	result := SerializeValue(now)
+	s, ok := result.(string)
+	if !ok {
+		t.Fatalf("期望 string, 实际 %T", result)
+	}
+	_, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		t.Errorf("期望 RFC3339Nano 格式, 解析失败: %v", err)
+	}
+}
+
+func TestSerializeValue_普通值(t *testing.T) {
+	if SerializeValue("hello") != "hello" {
+		t.Error("字符串应直传")
+	}
+	if SerializeValue(42) != 42 {
+		t.Error("整数应直传")
+	}
+	if SerializeValue(nil) != nil {
+		t.Error("nil 应直传")
+	}
+}
+
+func TestFindInteractionPayloads_type为Interaction(t *testing.T) {
+	obj := map[string]any{
+		"type":    "__interaction__",
+		"payload": map[string]any{"request_id": "req-1"},
+	}
+	result := FindInteractionPayloads(obj)
+	if len(result) != 1 {
+		t.Fatalf("期望 1 个结果, 实际 %d", len(result))
+	}
+	m, ok := result[0].(map[string]any)
+	if !ok {
+		t.Fatalf("期望 map, 实际 %T", result[0])
+	}
+	if m["request_id"] != "req-1" {
+		t.Errorf("期望 req-1, 实际 %v", m["request_id"])
+	}
+}
+
+func TestFindInteractionPayloads_askUserQuestion(t *testing.T) {
+	obj := map[string]any{
+		"event_type": "chat.ask_user_question",
+		"request_id": "req-2",
+		"questions":  []any{map[string]any{"question": "是否继续？"}},
+	}
+	result := FindInteractionPayloads(obj)
+	if len(result) != 1 {
+		t.Fatalf("期望 1 个结果, 实际 %d", len(result))
+	}
+	m, ok := result[0].(map[string]any)
+	if !ok {
+		t.Fatalf("期望 map, 实际 %T", result[0])
+	}
+	if m["id"] != "req-2" {
+		t.Errorf("期望 req-2, 实际 %v", m["id"])
+	}
+}
+
+func TestFindInteractionPayloads_嵌套(t *testing.T) {
+	obj := map[string]any{
+		"controller_output": map[string]any{
+			"type":    "__interaction__",
+			"payload": map[string]any{"data": "nested"},
+		},
+	}
+	result := FindInteractionPayloads(obj)
+	if len(result) != 1 {
+		t.Fatalf("期望 1 个结果, 实际 %d", len(result))
+	}
+}
+
+func TestFindInteractionPayloads_列表(t *testing.T) {
+	obj := []any{
+		map[string]any{"type": "__interaction__", "payload": "first"},
+		map[string]any{"type": "__interaction__", "payload": "second"},
+	}
+	result := FindInteractionPayloads(obj)
+	if len(result) != 2 {
+		t.Fatalf("期望 2 个结果, 实际 %d", len(result))
+	}
+}
+
+func TestFindInteractionPayloads_深度限制(t *testing.T) {
+	// 构造 10 层嵌套
+	inner := map[string]any{"type": "__interaction__", "payload": "deep"}
+	for i := 0; i < 10; i++ {
+		inner = map[string]any{"nested": inner}
+	}
+	result := FindInteractionPayloads(inner)
+	if len(result) != 0 {
+		t.Errorf("超过深度限制应返回空, 实际 %d", len(result))
+	}
+}
+
+func TestFindInteractionPayloads_循环检测(t *testing.T) {
+	// 用共享子 map 模拟循环引用
+	shared := map[string]any{"type": "normal"}
+	obj := map[string]any{
+		"a": shared,
+		"b": shared,
+	}
+	// 不应死循环
+	result := FindInteractionPayloads(obj)
+	_ = result
+}
+
+func TestFindInteractionPayloads_nil(t *testing.T) {
+	result := FindInteractionPayloads(nil)
+	if len(result) != 0 {
+		t.Errorf("nil 应返回空, 实际 %d", len(result))
+	}
+}
+
+func TestFindInteractionPayload_有匹配(t *testing.T) {
+	obj := map[string]any{"type": "__interaction__", "payload": "found"}
+	result := FindInteractionPayload(obj)
+	if result != "found" {
+		t.Errorf("期望 found, 实际 %v", result)
+	}
+}
+
+func TestFindInteractionPayload_无匹配(t *testing.T) {
+	result := FindInteractionPayload(map[string]any{"type": "other"})
+	if result != nil {
+		t.Errorf("无匹配应返回 nil, 实际 %v", result)
+	}
+}
