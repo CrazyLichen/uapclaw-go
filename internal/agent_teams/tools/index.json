@@ -97,6 +97,125 @@
       ],
       "latest_plan_id": "plan_task_test-team_1788433252117_19_1788433252117_399",
       "status": "plan_approved"
+    },
+    "task_test-team_1788718501216_800": {
+      "plan_ids": [
+        "plan_task_test-team_1788718501216_800_1788718501217_963"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788718501216_800_1788718501217_963",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788718788772_357": {
+      "plan_ids": [
+        "plan_task_test-team_1788718788772_357_1788718788772_592"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788718788772_357_1788718788772_592",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788718829754_40": {
+      "plan_ids": [
+        "plan_task_test-team_1788718829754_40_1788718829754_465"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788718829754_40_1788718829754_465",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788718854935_167": {
+      "plan_ids": [
+        "plan_task_test-team_1788718854935_167_1788718854935_636"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788718854935_167_1788718854935_636",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719042239_934": {
+      "plan_ids": [
+        "plan_task_test-team_1788719042239_934_1788719042239_942"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719042239_934_1788719042239_942",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719229923_95": {
+      "plan_ids": [
+        "plan_task_test-team_1788719229923_95_1788719229924_181"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719229923_95_1788719229924_181",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719365223_270": {
+      "plan_ids": [
+        "plan_task_test-team_1788719365223_270_1788719365224_541"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719365223_270_1788719365224_541",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719624433_843": {
+      "plan_ids": [
+        "plan_task_test-team_1788719624433_843_1788719624434_400"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719624433_843_1788719624434_400",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719711585_6": {
+      "plan_ids": [
+        "plan_task_test-team_1788719711585_6_1788719711585_946"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719711585_6_1788719711585_946",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719816439_252": {
+      "plan_ids": [
+        "plan_task_test-team_1788719816439_252_1788719816439_286"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719816439_252_1788719816439_286",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788719901053_768": {
+      "plan_ids": [
+        "plan_task_test-team_1788719901053_768_1788719901053_215"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788719901053_768_1788719901053_215",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788721783393_704": {
+      "plan_ids": [
+        "plan_task_test-team_1788721783393_704_1788721783393_953"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788721783393_704_1788721783393_953",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788756591553_277": {
+      "plan_ids": [
+        "plan_task_test-team_1788756591553_277_1788756591553_555"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788756591553_277_1788756591553_555",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788756622965_236": {
+      "plan_ids": [
+        "plan_task_test-team_1788756622965_236_1788756622965_570"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788756622965_236_1788756622965_570",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788756732404_335": {
+      "plan_ids": [
+        "plan_task_test-team_1788756732404_335_1788756732404_758"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788756732404_335_1788756732404_758",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788756838962_118": {
+      "plan_ids": [
+        "plan_task_test-team_1788756838962_118_1788756838962_450"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788756838962_118_1788756838962_450",
+      "status": "plan_approved"
+    },
+    "task_test-team_1788804782437_213": {
+      "plan_ids": [
+        "plan_task_test-team_1788804782437_213_1788804782437_293"
+      ],
+      "latest_plan_id": "plan_task_test-team_1788804782437_213_1788804782437_293",
+      "status": "plan_approved"
     }
   },
   "task_plans": {
@@ -105,112 +224,285 @@
       "task_id": "task_test-team_1788410695713_653",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410695713
+      "decision": "approve"
     },
     "plan_task_test-team_1788410701409_947_1788410701409_757": {
       "plan_id": "plan_task_test-team_1788410701409_947_1788410701409_757",
       "task_id": "task_test-team_1788410701409_947",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410701409
+      "decision": "approve"
     },
     "plan_task_test-team_1788410774176_294_1788410774176_813": {
       "plan_id": "plan_task_test-team_1788410774176_294_1788410774176_813",
       "task_id": "task_test-team_1788410774176_294",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410774176
+      "decision": "approve"
     },
     "plan_task_test-team_1788410781180_33_1788410781181_833": {
       "plan_id": "plan_task_test-team_1788410781180_33_1788410781181_833",
       "task_id": "task_test-team_1788410781180_33",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410781181
+      "decision": "approve"
     },
     "plan_task_test-team_1788410821644_392_1788410821644_68": {
       "plan_id": "plan_task_test-team_1788410821644_392_1788410821644_68",
       "task_id": "task_test-team_1788410821644_392",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410821644
+      "decision": "approve"
     },
     "plan_task_test-team_1788410871187_842_1788410871187_226": {
       "plan_id": "plan_task_test-team_1788410871187_842_1788410871187_226",
       "task_id": "task_test-team_1788410871187_842",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410871187
+      "decision": "approve"
     },
     "plan_task_test-team_1788410910575_998_1788410910575_476": {
       "plan_id": "plan_task_test-team_1788410910575_998_1788410910575_476",
       "task_id": "task_test-team_1788410910575_998",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410910575
+      "decision": "approve"
     },
     "plan_task_test-team_1788410938240_223_1788410938240_727": {
       "plan_id": "plan_task_test-team_1788410938240_223_1788410938240_727",
       "task_id": "task_test-team_1788410938240_223",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410938240
+      "decision": "approve"
     },
     "plan_task_test-team_1788410982390_140_1788410982391_911": {
       "plan_id": "plan_task_test-team_1788410982390_140_1788410982391_911",
       "task_id": "task_test-team_1788410982390_140",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410982391
+      "decision": "approve"
     },
     "plan_task_test-team_1788410995255_777_1788410995255_958": {
       "plan_id": "plan_task_test-team_1788410995255_777_1788410995255_958",
       "task_id": "task_test-team_1788410995255_777",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788410995256
+      "decision": "approve"
     },
     "plan_task_test-team_1788411035020_607_1788411035020_766": {
       "plan_id": "plan_task_test-team_1788411035020_607_1788411035020_766",
       "task_id": "task_test-team_1788411035020_607",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788411035020
+      "decision": "approve"
     },
     "plan_task_test-team_1788411095138_371_1788411095138_58": {
       "plan_id": "plan_task_test-team_1788411095138_371_1788411095138_58",
       "task_id": "task_test-team_1788411095138_371",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788411095138
+      "decision": "approve"
     },
     "plan_task_test-team_1788411176939_713_1788411176939_420": {
       "plan_id": "plan_task_test-team_1788411176939_713_1788411176939_420",
       "task_id": "task_test-team_1788411176939_713",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "decision": "approve",
-      "created_at": 1788411176939
+      "decision": "approve"
     },
     "plan_task_test-team_1788433252117_19_1788433252117_399": {
       "plan_id": "plan_task_test-team_1788433252117_19_1788433252117_399",
       "task_id": "task_test-team_1788433252117_19",
       "member_name": "teammate1",
       "status": "plan_approved",
+      "decision": "approve"
+    },
+    "plan_task_test-team_1788718501216_800_1788718501217_963": {
+      "plan_id": "plan_task_test-team_1788718501216_800_1788718501217_963",
+      "task_id": "task_test-team_1788718501216_800",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788718501216_800/plans/plan_task_test-team_1788718501216_800_1788718501217_963.md",
       "decision": "approve",
-      "created_at": 1788433252117
+      "submitted_at": "2026-09-07T02:15:01+08:00",
+      "decided_at": "2026-09-07T02:15:01+08:00",
+      "updated_at": "2026-09-07T02:15:01+08:00"
+    },
+    "plan_task_test-team_1788718788772_357_1788718788772_592": {
+      "plan_id": "plan_task_test-team_1788718788772_357_1788718788772_592",
+      "task_id": "task_test-team_1788718788772_357",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788718788772_357/plans/plan_task_test-team_1788718788772_357_1788718788772_592.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:19:48+08:00",
+      "decided_at": "2026-09-07T02:19:48+08:00",
+      "updated_at": "2026-09-07T02:19:48+08:00"
+    },
+    "plan_task_test-team_1788718829754_40_1788718829754_465": {
+      "plan_id": "plan_task_test-team_1788718829754_40_1788718829754_465",
+      "task_id": "task_test-team_1788718829754_40",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788718829754_40/plans/plan_task_test-team_1788718829754_40_1788718829754_465.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:20:29+08:00",
+      "decided_at": "2026-09-07T02:20:29+08:00",
+      "updated_at": "2026-09-07T02:20:29+08:00"
+    },
+    "plan_task_test-team_1788718854935_167_1788718854935_636": {
+      "plan_id": "plan_task_test-team_1788718854935_167_1788718854935_636",
+      "task_id": "task_test-team_1788718854935_167",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788718854935_167/plans/plan_task_test-team_1788718854935_167_1788718854935_636.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:20:54+08:00",
+      "decided_at": "2026-09-07T02:20:54+08:00",
+      "updated_at": "2026-09-07T02:20:54+08:00"
+    },
+    "plan_task_test-team_1788719042239_934_1788719042239_942": {
+      "plan_id": "plan_task_test-team_1788719042239_934_1788719042239_942",
+      "task_id": "task_test-team_1788719042239_934",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719042239_934/plans/plan_task_test-team_1788719042239_934_1788719042239_942.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:24:02+08:00",
+      "decided_at": "2026-09-07T02:24:02+08:00",
+      "updated_at": "2026-09-07T02:24:02+08:00"
+    },
+    "plan_task_test-team_1788719229923_95_1788719229924_181": {
+      "plan_id": "plan_task_test-team_1788719229923_95_1788719229924_181",
+      "task_id": "task_test-team_1788719229923_95",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719229923_95/plans/plan_task_test-team_1788719229923_95_1788719229924_181.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:27:09+08:00",
+      "decided_at": "2026-09-07T02:27:09+08:00",
+      "updated_at": "2026-09-07T02:27:09+08:00"
+    },
+    "plan_task_test-team_1788719365223_270_1788719365224_541": {
+      "plan_id": "plan_task_test-team_1788719365223_270_1788719365224_541",
+      "task_id": "task_test-team_1788719365223_270",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719365223_270/plans/plan_task_test-team_1788719365223_270_1788719365224_541.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:29:25+08:00",
+      "decided_at": "2026-09-07T02:29:25+08:00",
+      "updated_at": "2026-09-07T02:29:25+08:00"
+    },
+    "plan_task_test-team_1788719624433_843_1788719624434_400": {
+      "plan_id": "plan_task_test-team_1788719624433_843_1788719624434_400",
+      "task_id": "task_test-team_1788719624433_843",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719624433_843/plans/plan_task_test-team_1788719624433_843_1788719624434_400.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:33:44+08:00",
+      "decided_at": "2026-09-07T02:33:44+08:00",
+      "updated_at": "2026-09-07T02:33:44+08:00"
+    },
+    "plan_task_test-team_1788719711585_6_1788719711585_946": {
+      "plan_id": "plan_task_test-team_1788719711585_6_1788719711585_946",
+      "task_id": "task_test-team_1788719711585_6",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719711585_6/plans/plan_task_test-team_1788719711585_6_1788719711585_946.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:35:11+08:00",
+      "decided_at": "2026-09-07T02:35:11+08:00",
+      "updated_at": "2026-09-07T02:35:11+08:00"
+    },
+    "plan_task_test-team_1788719816439_252_1788719816439_286": {
+      "plan_id": "plan_task_test-team_1788719816439_252_1788719816439_286",
+      "task_id": "task_test-team_1788719816439_252",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719816439_252/plans/plan_task_test-team_1788719816439_252_1788719816439_286.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:36:56+08:00",
+      "decided_at": "2026-09-07T02:36:56+08:00",
+      "updated_at": "2026-09-07T02:36:56+08:00"
+    },
+    "plan_task_test-team_1788719901053_768_1788719901053_215": {
+      "plan_id": "plan_task_test-team_1788719901053_768_1788719901053_215",
+      "task_id": "task_test-team_1788719901053_768",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788719901053_768/plans/plan_task_test-team_1788719901053_768_1788719901053_215.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T02:38:21+08:00",
+      "decided_at": "2026-09-07T02:38:21+08:00",
+      "updated_at": "2026-09-07T02:38:21+08:00"
+    },
+    "plan_task_test-team_1788721783393_704_1788721783393_953": {
+      "plan_id": "plan_task_test-team_1788721783393_704_1788721783393_953",
+      "task_id": "task_test-team_1788721783393_704",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788721783393_704/plans/plan_task_test-team_1788721783393_704_1788721783393_953.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T03:09:43+08:00",
+      "decided_at": "2026-09-07T03:09:43+08:00",
+      "updated_at": "2026-09-07T03:09:43+08:00"
+    },
+    "plan_task_test-team_1788756591553_277_1788756591553_555": {
+      "plan_id": "plan_task_test-team_1788756591553_277_1788756591553_555",
+      "task_id": "task_test-team_1788756591553_277",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788756591553_277/plans/plan_task_test-team_1788756591553_277_1788756591553_555.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T12:49:51+08:00",
+      "decided_at": "2026-09-07T12:49:51+08:00",
+      "updated_at": "2026-09-07T12:49:51+08:00"
+    },
+    "plan_task_test-team_1788756622965_236_1788756622965_570": {
+      "plan_id": "plan_task_test-team_1788756622965_236_1788756622965_570",
+      "task_id": "task_test-team_1788756622965_236",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788756622965_236/plans/plan_task_test-team_1788756622965_236_1788756622965_570.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T12:50:22+08:00",
+      "decided_at": "2026-09-07T12:50:22+08:00",
+      "updated_at": "2026-09-07T12:50:22+08:00"
+    },
+    "plan_task_test-team_1788756732404_335_1788756732404_758": {
+      "plan_id": "plan_task_test-team_1788756732404_335_1788756732404_758",
+      "task_id": "task_test-team_1788756732404_335",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788756732404_335/plans/plan_task_test-team_1788756732404_335_1788756732404_758.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T12:52:12+08:00",
+      "decided_at": "2026-09-07T12:52:12+08:00",
+      "updated_at": "2026-09-07T12:52:12+08:00"
+    },
+    "plan_task_test-team_1788756838962_118_1788756838962_450": {
+      "plan_id": "plan_task_test-team_1788756838962_118_1788756838962_450",
+      "task_id": "task_test-team_1788756838962_118",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788756838962_118/plans/plan_task_test-team_1788756838962_118_1788756838962_450.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-07T12:53:58+08:00",
+      "decided_at": "2026-09-07T12:53:58+08:00",
+      "updated_at": "2026-09-07T12:53:58+08:00"
+    },
+    "plan_task_test-team_1788804782437_213_1788804782437_293": {
+      "plan_id": "plan_task_test-team_1788804782437_213_1788804782437_293",
+      "task_id": "task_test-team_1788804782437_213",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1788804782437_213/plans/plan_task_test-team_1788804782437_213_1788804782437_293.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-08T02:13:02+08:00",
+      "decided_at": "2026-09-08T02:13:02+08:00",
+      "updated_at": "2026-09-08T02:13:02+08:00"
     }
   }
 }

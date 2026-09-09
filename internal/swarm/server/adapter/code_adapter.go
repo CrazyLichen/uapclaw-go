@@ -592,7 +592,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// 对齐 Python: browser_agent 按配置启用
 	// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
 	// 暂时跳过，等 browser 功能实现时回填
-	// TODO: c.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent")
+	// TODO: c.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") — 待 browser 功能实现时回填
 
 	// ── 按配置启用：research_agent ──
 	// 对齐 Python: research_agent 继承自 DeepAdapter

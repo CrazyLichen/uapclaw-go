@@ -769,19 +769,17 @@ func (r *EvolutionRail) normalizeNameSetGo(raw any) map[string]bool {
 	}
 }
 
-// isSkillDisabled 检查技能是否被禁用。
-// 对齐 Python: skill_name in self._disabled_skills
-func (r *EvolutionRail) isSkillDisabled(skillName string) bool {
-	return r.disabledSkills[skillName]
-}
-
 // collectMessagesFromTrajectoryGo 从轨迹中收集消息。
 // 对齐 Python: EvolutionRail._collect_messages_from_trajectory(trajectory)
 func (r *EvolutionRail) collectMessagesFromTrajectoryGo(traj *trajectory.Trajectory) []map[string]any {
 	return collectMessagesFromTrajectory(traj)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// isSkillDisabled 检查技能是否被禁用。
+// 对齐 Python: skill_name in self._disabled_skills
+func (r *EvolutionRail) isSkillDisabled(skillName string) bool {
+	return r.disabledSkills[skillName]
+}
 
 // normalizeCallbackMessagesGo 规范化回调消息。
 // 对齐 Python: _normalize_callback_messages(messages)

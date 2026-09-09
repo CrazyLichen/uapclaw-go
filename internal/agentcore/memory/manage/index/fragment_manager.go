@@ -194,15 +194,6 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 }
 
-// fragmentUnitsToMemoryUnits 将 FragmentMemoryUnit 切片转为 MemoryUnit 切片。
-func fragmentUnitsToMemoryUnits(units []*mem_model.FragmentMemoryUnit) []mem_model.MemoryUnit {
-	result := make([]mem_model.MemoryUnit, len(units))
-	for i, u := range units {
-		result[i] = u
-	}
-	return result
-}
-
 // Update 按 ID 更新记忆内容。
 //
 // 对齐 Python: FragmentMemoryManager.update
@@ -360,6 +351,15 @@ func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// fragmentUnitsToMemoryUnits 将 FragmentMemoryUnit 切片转为 MemoryUnit 切片。
+func fragmentUnitsToMemoryUnits(units []*mem_model.FragmentMemoryUnit) []mem_model.MemoryUnit {
+	result := make([]mem_model.MemoryUnit, len(units))
+	for i, u := range units {
+		result[i] = u
+	}
+	return result
+}
 
 // getNewMemUnitsAndUpdateMemories 分离 ADD/UPDATE/DELETE 操作，执行 UPDATE 和 DELETE。
 //

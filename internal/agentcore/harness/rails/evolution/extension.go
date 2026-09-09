@@ -9,35 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// noOpExtension EvolutionExtension 的默认空实现。
-// TrajectoryRail 直接使用此实例；子类可嵌入后只覆写需要的方法。
-type noOpExtension struct{}
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// EvolutionTriggerPoint 演化触发时机枚举。
-// 对齐 Python: EvolutionTriggerPoint
-type EvolutionTriggerPoint string
-
-const (
-	// TriggerAfterInvoke 在 invoke 完成后触发
-	TriggerAfterInvoke EvolutionTriggerPoint = "after_invoke"
-	// TriggerAfterModelCall 在每次模型调用后触发
-	TriggerAfterModelCall EvolutionTriggerPoint = "after_model_call"
-	// TriggerAfterToolCall 在每次工具调用后触发
-	TriggerAfterToolCall EvolutionTriggerPoint = "after_tool_call"
-	// TriggerAfterTaskIteration 在每次任务循环迭代后触发
-	TriggerAfterTaskIteration EvolutionTriggerPoint = "after_task_iteration"
-	// TriggerNone 不自动触发（子类手动调用 run_evolution）
-	TriggerNone EvolutionTriggerPoint = "none"
-)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // EvolutionExtension 演化轨道扩展点接口。
 //
 // EvolutionRail 的 4 个 final 回调内部完成轨迹收集后，
@@ -85,43 +56,79 @@ type EvolutionExtension interface {
 	RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error
 }
 
+// noOpExtension EvolutionExtension 的默认空实现。
+// TrajectoryRail 直接使用此实例；子类可嵌入后只覆写需要的方法。
+type noOpExtension struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// EvolutionTriggerPoint 演化触发时机枚举。
+// 对齐 Python: EvolutionTriggerPoint
+type EvolutionTriggerPoint string
+
+const (
+	// TriggerAfterInvoke 在 invoke 完成后触发
+	TriggerAfterInvoke EvolutionTriggerPoint = "after_invoke"
+	// TriggerAfterModelCall 在每次模型调用后触发
+	TriggerAfterModelCall EvolutionTriggerPoint = "after_model_call"
+	// TriggerAfterToolCall 在每次工具调用后触发
+	TriggerAfterToolCall EvolutionTriggerPoint = "after_tool_call"
+	// TriggerAfterTaskIteration 在每次任务循环迭代后触发
+	TriggerAfterTaskIteration EvolutionTriggerPoint = "after_task_iteration"
+	// TriggerNone 不自动触发（子类手动调用 run_evolution）
+	TriggerNone EvolutionTriggerPoint = "none"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// OnBeforeInvoke 空实现，对齐 Python NoOpExtension.on_before_invoke
 func (noOpExtension) OnBeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// OnAfterModelCall 空实现，对齐 Python NoOpExtension.on_after_model_call
 func (noOpExtension) OnAfterModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// OnAfterToolCall 空实现，对齐 Python NoOpExtension.on_after_tool_call
 func (noOpExtension) OnAfterToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// OnAfterInvoke 空实现，对齐 Python NoOpExtension.on_after_invoke
 func (noOpExtension) OnAfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// OnAfterTaskIteration 空实现，对齐 Python NoOpExtension.on_after_task_iteration
 func (noOpExtension) OnAfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// OnAfterEvolutionTriggered 空实现，对齐 Python NoOpExtension.on_after_evolution_triggered
 func (noOpExtension) OnAfterEvolutionTriggered(_ context.Context, _ *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
+// AllowEvolutionTrigger 空实现，始终允许，对齐 Python NoOpExtension.allow_evolution_trigger
 func (noOpExtension) AllowEvolutionTrigger(_ EvolutionTriggerPoint, _ *agentinterfaces.AgentCallbackContext) bool {
 	return true
 }
 
+// SnapshotForEvolution 空实现，对齐 Python NoOpExtension.snapshot_for_evolution
 func (noOpExtension) SnapshotForEvolution(_ context.Context, traj *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) *EvolutionSnapshot {
 	messages := collectMessagesFromTrajectory(traj)
 	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
 
+// RunEvolution 空实现，对齐 Python NoOpExtension.run_evolution
 func (noOpExtension) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _ *EvolutionSnapshot) error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

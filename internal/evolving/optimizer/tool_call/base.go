@@ -283,14 +283,6 @@ func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
 	return b.StepTemplate(b.step)
 }
 
-// step 子类逻辑，对齐 Python _step()。
-// ToolOptimizer 为空实现，返回空映射。
-//
-// 对应 Python: def _step(self): updates = {}; return
-func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
-	return map[cschema.UpdateKey]any{}
-}
-
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
 //
 // ✅ 9.70 已回填：Operator 接口已实现，委托 BaseOptimizerMixin.Bind()。
@@ -364,6 +356,14 @@ func WithToolName(name string) ToolOptimizerBaseOption {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// step 子类逻辑，对齐 Python _step()。
+// ToolOptimizer 为空实现，返回空映射。
+//
+// 对应 Python: def _step(self): updates = {}; return
+func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
+	return map[cschema.UpdateKey]any{}
+}
 
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。
 //

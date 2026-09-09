@@ -1848,22 +1848,6 @@ func (sm *SkillManager) HandlePluginsUninstall(ctx context.Context, params map[s
 	return sm.HandleSkillsUninstall(ctx, params)
 }
 
-// setPluginEnabled 设置插件的启用/禁用状态。
-// 对齐 Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
-func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
-	plugins, _ := sm.state["installed_plugins"].([]map[string]any)
-	if plugins == nil {
-		return false
-	}
-	for _, p := range plugins {
-		if toString(p["name"]) == name {
-			p["enabled"] = enabled
-			return true
-		}
-	}
-	return false
-}
-
 // HandlePluginsEnable 启用插件
 // 对齐 Python: handle_plugins_enable(params) (skill_manager.py L3809-3818)
 func (sm *SkillManager) HandlePluginsEnable(ctx context.Context, params map[string]any) (map[string]any, error) {
@@ -2157,6 +2141,22 @@ func (sm *SkillManager) ListExecutionDisabledSkills() []string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// setPluginEnabled 设置插件的启用/禁用状态。
+// 对齐 Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
+func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
+	plugins, _ := sm.state["installed_plugins"].([]map[string]any)
+	if plugins == nil {
+		return false
+	}
+	for _, p := range plugins {
+		if toString(p["name"]) == name {
+			p["enabled"] = enabled
+			return true
+		}
+	}
+	return false
+}
 
 // getMirrorSkillsDirs 返回需要镜像同步的 skills 目录（对齐 Python: _get_mirror_skills_dirs）。
 // Go 二进制等价 Python package 安装模式，始终返回空切片。

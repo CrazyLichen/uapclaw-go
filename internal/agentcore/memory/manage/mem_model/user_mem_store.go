@@ -128,7 +128,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 				Msg("mem_type 字段不是字符串类型")
 			return false, fmt.Errorf("mem_type 字段不是字符串类型，实际类型: %T", memType)
 		}
-		// mem_type ids
+		// 按 mem_type 查询 ID 列表
 		userMemIDsKey := s.getUserIDsKey(userID, scopeID, memTypeStr)
 		userMemIDsValue, _ := s.kvStore.Get(ctx, userMemIDsKey)
 		idsValueStr := ""

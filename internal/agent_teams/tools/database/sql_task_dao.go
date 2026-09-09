@@ -563,10 +563,10 @@ func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName s
 	return refreshedIDs, err
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Error 返回失败原因。
 func (e *mutationFailure) Error() string { return e.reason }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // withTx 返回绑定指定事务的 DAO 实例。
 func (d *SQLTaskDao) withTx(tx *gorm.DB) *SQLTaskDao {

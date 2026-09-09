@@ -142,8 +142,6 @@ type ToolPermissionHost struct {
 	PermissionSceneHook PermissionSceneHookFn
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // PermissionSceneHookFn 宿主场景钩子函数类型。
 // 在通用 tiered 判定前介入（如数字分身 / owner_scopes）。
 // 返回 nil 表示继续走引擎 tiered 判定；
@@ -169,6 +167,8 @@ type PermissionRailConstructor func(
 	modelName string,
 	host *ToolPermissionHost,
 ) agentinterfaces.AgentRail
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // PermissionLevel 权限级别枚举
 type PermissionLevel int

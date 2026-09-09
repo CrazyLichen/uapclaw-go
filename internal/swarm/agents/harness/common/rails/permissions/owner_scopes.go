@@ -333,8 +333,6 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 	return true
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Scene 返回权限场景类型。
 // 对齐 Python: PermissionContext.scene
 func (p *OwnerScopesPermissionContext) Scene() string {
@@ -352,3 +350,5 @@ func (p *OwnerScopesPermissionContext) Scene() string {
 func (p *OwnerScopesPermissionContext) OwnerScopeKey() [2]string {
 	return [2]string{strings.TrimSpace(p.ChannelID), strings.TrimSpace(p.PrincipalUserID)}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
