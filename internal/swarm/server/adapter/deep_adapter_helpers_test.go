@@ -495,15 +495,15 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 		{"tool_update", "tool_update", map[string]any{"status": "running"}, false, "chat.tool_update"},
 		{"tool_result", "tool_result", map[string]any{"result": "ok"}, false, "chat.tool_result"},
 		{"error", "error", map[string]any{"error": "oops"}, false, "chat.error"},
-		{"thinking", "thinking", map[string]any{"content": "think"}, false, "chat.thinking"},
+		{"thinking", "thinking", map[string]any{"content": "think"}, false, "chat.processing_status"},
 		{"todo_updated", "todo.updated", map[string]any{"todos": []any{}}, false, "todo.updated"},
-		{"context_usage", "context.usage", map[string]any{"percent": 0.5}, false, "chat.context_usage"},
+		{"context_usage", "context.usage", map[string]any{"percent": 0.5}, false, "context.usage"},
 		{"context_compression_state", "context.compression_state", map[string]any{"state": "done"}, false, "chat.context_compression_state"},
 		{"ask_user_question", "ask_user_question", map[string]any{"request_id": "ask1"}, false, "chat.ask_user_question"},
 		{"interaction", "__interaction__", map[string]any{"type": "confirm"}, false, "chat.interaction"},
 		{"message", "message", map[string]any{}, false, "chat.message"},
 		{"stage_result", "stage_result", map[string]any{}, false, "chat.stage_result"},
-		{"未知类型", "unknown_type", map[string]any{}, false, "chat.delta"},
+		{"未知类型", "unknown_type", map[string]any{}, false, "chat.unknown_type"},
 	}
 
 	for _, tt := range tests {
@@ -692,7 +692,7 @@ func TestDeepAdapter_HandleHeartbeat_空Params(t *testing.T) {
 }
 
 // TestBuildVisionModelConfig 测试视觉模型配置构建。
-// 对齐 Python: _build_vision_model_config 走 dedicated→apply→env 链路
+// Python: _build_vision_model_config 走 dedicated→apply→env 链路
 func TestBuildVisionModelConfig(t *testing.T) {
 	d := NewDeepAdapter()
 
@@ -772,7 +772,7 @@ func TestBuildVisionModelConfig(t *testing.T) {
 }
 
 // TestBuildAudioModelConfig 测试音频模型配置构建。
-// 对齐 Python: _build_audio_model_config 走 dedicated→apply→env 链路
+// Python: _build_audio_model_config 走 dedicated→apply→env 链路
 func TestBuildAudioModelConfig(t *testing.T) {
 	d := NewDeepAdapter()
 
@@ -972,7 +972,7 @@ func TestAppendToolCard(t *testing.T) {
 // TestRemoveRegisteredTools 测试工具移除。
 func TestRemoveRegisteredTools(t *testing.T) {
 	d := NewDeepAdapter()
-	d.removeRegisteredTools(nil) // 对齐 Python: 传工具实例列表，nil 时直接返回
+	d.removeRegisteredTools(nil) // Python: 传工具实例列表，nil 时直接返回
 }
 
 // TestSyncToolGroup 测试工具组同步。
@@ -982,7 +982,7 @@ func TestSyncToolGroup(t *testing.T) {
 }
 
 // TestExtractEnabledMcpServerEntries 测试启用 MCP 条目提取。
-// 对齐 Python: configBase["mcp"]["servers"] 嵌套列表结构
+// Python: configBase["mcp"]["servers"] 嵌套列表结构
 func TestExtractEnabledMcpServerEntries(t *testing.T) {
 	d := NewDeepAdapter()
 
@@ -1268,7 +1268,7 @@ func TestDeepAdapter_RegisterMcpServersFromConfig(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // TestCallModelForRecap_多模态Content 测试多模态消息文本提取。
-// 对齐 Python: _call_model_for_recap 中 isinstance(content, list) 分支
+// Python: _call_model_for_recap 中 isinstance(content, list) 分支
 func TestCallModelForRecap_多模态Content(t *testing.T) {
 	d := NewDeepAdapter()
 	// 无模型实例，仅测试多模态消息构建逻辑（不实际调用模型）
