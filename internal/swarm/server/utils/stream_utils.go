@@ -242,48 +242,4 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 	}
 }
 
-// ParseDictChunk 解析 dict 类型 chunk。
-// 对齐 Python: _parse_dict_chunk(chunk)
-// 当前为 stub，后续将补充完整实现。
-func ParseDictChunk(chunk map[string]any) map[string]any {
-	if chunk == nil {
-		return nil
-	}
-	return chunk
-}
-
-// ParseTypedChunk 解析带 type 字段的 chunk。
-// 对齐 Python: _parse_typed_chunk(chunk)
-// 当前为 stub，后续将补充完整实现。
-func ParseTypedChunk(chunk map[string]any) map[string]any {
-	if chunk == nil {
-		return nil
-	}
-	chunkType, _ := chunk["type"].(string)
-	if chunkType == "" {
-		return chunk
-	}
-	return chunk
-}
-
-// ParseEventTypedChunk 解析带 event_type 的 typed chunk。
-// 对齐 Python: _parse_event_typed_chunk(chunk)
-// 当前为 stub，后续将补充完整实现。
-func ParseEventTypedChunk(chunk map[string]any) map[string]any {
-	if chunk == nil {
-		return nil
-	}
-	return chunk
-}
-
-// ParseResponseChunk 解析响应 chunk。
-// 对齐 Python: _parse_response_chunk(chunk)
-// 当前为 stub，后续将补充完整实现。
-func ParseResponseChunk(chunk map[string]any) map[string]any {
-	if chunk == nil {
-		return nil
-	}
-	return chunk
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────

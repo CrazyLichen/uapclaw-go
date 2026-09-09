@@ -276,38 +276,3 @@ func TestParseInteractionPayload_无converter(t *testing.T) {
 	}
 }
 
-func TestParseDictChunk(t *testing.T) {
-	chunk := map[string]any{"event_type": "test", "data": "hello"}
-	result := ParseDictChunk(chunk)
-	if result["data"] != "hello" {
-		t.Errorf("期望保留原始数据")
-	}
-}
-
-func TestParseDictChunk_nil(t *testing.T) {
-	result := ParseDictChunk(nil)
-	if result != nil {
-		t.Errorf("nil 应返回 nil")
-	}
-}
-
-func TestParseTypedChunk_nil(t *testing.T) {
-	result := ParseTypedChunk(nil)
-	if result != nil {
-		t.Errorf("nil 应返回 nil")
-	}
-}
-
-func TestParseEventTypedChunk_nil(t *testing.T) {
-	result := ParseEventTypedChunk(nil)
-	if result != nil {
-		t.Errorf("nil 应返回 nil")
-	}
-}
-
-func TestParseResponseChunk_nil(t *testing.T) {
-	result := ParseResponseChunk(nil)
-	if result != nil {
-		t.Errorf("nil 应返回 nil")
-	}
-}
