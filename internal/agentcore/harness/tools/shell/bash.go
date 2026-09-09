@@ -38,6 +38,7 @@ type BashInput struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -279,12 +280,6 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 				"data":    map[string]any{"content": content},
 				"error":   content,
 			}, nil
-		}
-
-		// 执行后：检测并记录文件删除
-		// 对齐 Python: _detect_and_record_deletions(history_path)
-		if historyPath != "" {
-			filesystem.DetectAndRecordDeletions(historyPath)
 		}
 
 		return map[string]any{
