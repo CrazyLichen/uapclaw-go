@@ -16,7 +16,7 @@ import (
 
 // AbilityExecutionError 能力执行统一异常，嵌入 BaseError 并关联 ToolMessage。
 //
-// 对应 Python: AbilityExecutionError
+// Python: AbilityExecutionError
 type AbilityExecutionError struct {
 	*exception.BaseError
 	// ToolMessage 关联的工具返回消息
@@ -33,14 +33,14 @@ type AbilityExecutionError struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InterruptAutoConfirmKey 中断自动确认状态键。
-// 对齐 Python: openjiuwen/core/single_agent/interrupt/state.py INTERRUPT_AUTO_CONFIRM_KEY
+// Python: openjiuwen/core/single_agent/interrupt/state.py INTERRUPT_AUTO_CONFIRM_KEY
 var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbilityExecutionError 创建能力执行错误。
 //
-// 对应 Python: AbilityExecutionError(status=..., msg=..., tool_message=...)
+// Python: AbilityExecutionError(status=..., msg=..., tool_message=...)
 func NewAbilityExecutionError(
 	status exception.StatusCode,
 	toolCallID string,
@@ -83,7 +83,7 @@ func BuildToolMessageContent(result any) string {
 			}
 		}
 		// 1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
-		// 对齐 Python: LocalFunction 返回 string 时，Go 包装为 {"result": v}，
+		// Python: LocalFunction 返回 string 时，Go 包装为 {"result": v}，
 		// 需解包后递归，使 "search..." 走到路径 3 的 fmt.Sprintf("%v", result) 返回原值。
 		if v, ok := m["result"]; ok && len(m) == 1 {
 			return BuildToolMessageContent(v)
@@ -96,7 +96,7 @@ func BuildToolMessageContent(result any) string {
 
 	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
 	v := reflect.ValueOf(result)
-	if v.Kind() == 22 /* reflect.Ptr 指针类型 */ {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() == reflect.Struct {

@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UsageAccumulator usage 累加器。
-// 对齐 Python: process_message_stream_impl 中的 usage_accumulator (line 4514-4979)
+// Python: process_message_stream_impl 中的 usage_accumulator (line 4514-4979)
 type UsageAccumulator struct {
 	// InputTokens 输入 token 数
 	InputTokens int
@@ -29,7 +29,7 @@ type UsageAccumulator struct {
 }
 
 // InteractionConverterFunc 交互转换函数，用于自定义 __interaction__ 类型 chunk 的解析逻辑。
-// 对齐 Python: 不同 adapter 对 interaction payload 的转换方式不同，
+// Python: 不同 adapter 对 interaction payload 的转换方式不同，
 // 通过此函数参数实现多态，避免 utils 包依赖具体 adapter。
 type InteractionConverterFunc func(payload any) map[string]any
 
@@ -48,7 +48,7 @@ type FindOption struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseStreamChunk 解析流式 chunk。
-// 对齐 Python: _parse_stream_chunk(chunk) (stream_utils.py L10-44)
+// Python: _parse_stream_chunk(chunk) (stream_utils.py L10-44)
 // 及 _parse_typed_chunk(chunk) (stream_utils.py L107-353)
 //
 // 处理 15+ 种 chunk.Type，返回 payload dict。
@@ -73,7 +73,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 
 	switch chunkType {
 	case "controller_output":
-		// 对齐 Python L150-170: 先搜索 __interaction__ 载荷
+		// Python: L150-170: 先搜索 __interaction__ 载荷
 		interactions := FindInteractionPayloads(payload)
 		if len(interactions) > 0 {
 			if p, ok := interactions[0].(map[string]any); ok {
@@ -86,7 +86,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		case "task_completion":
 			return nil
 		case "task_failed":
-			// 对齐 Python: 从 data 列表找 .text 字段
+			// Python: 从 data 列表找 .text 字段
 			errorMsg := "任务执行失败"
 			if data, ok := payload["data"].([]any); ok {
 				for _, item := range data {
@@ -110,7 +110,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "content_chunk":
-		// 对齐 Python L192-200: 空内容返回 nil
+		// Python: L192-200: 空内容返回 nil
 		content := ExtractStringFromPayload(payload, "content")
 		if content == "" || strings.TrimSpace(content) == "" {
 			return nil
@@ -118,7 +118,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return map[string]any{"event_type": "chat.delta", "content": content}
 
 	case "answer":
-		// 对齐 Python L202-231
+		// Python: L202-231
 		if payload["result_type"] == "error" {
 			return map[string]any{
 				"event_type": "chat.error",
@@ -145,7 +145,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return map[string]any{"event_type": "chat.final", "content": content}
 
 	case "tool_call":
-		// 对齐 Python L233-239
+		// Python: L233-239
 		toolInfo := payload
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
@@ -156,7 +156,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "tool_update":
-		// 对齐 Python L241-250: 提取 tool_update 子对象
+		// Python: L241-250: 提取 tool_update 子对象
 		var updatePayload map[string]any
 		if sub, ok := payload["tool_update"].(map[string]any); ok {
 			updatePayload = sub
@@ -170,7 +170,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return ret
 
 	case "tool_result":
-		// 对齐 Python L252-282: 提取 tool_result 子对象 + 字段映射
+		// Python: L252-282: 提取 tool_result 子对象 + 字段映射
 		resultInfo := payload
 		if sub, ok := payload["tool_result"].(map[string]any); ok {
 			resultInfo = sub
@@ -196,7 +196,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		} else if ro2, ok := resultInfo["rawOutput"]; ok {
 			result["raw_output"] = ro2
 		}
-		// success/status/is_error/summary
+		// success/status/is_error/summary 字段提取
 		for _, key := range []string{"success", "status", "is_error", "summary"} {
 			if v, exists := resultInfo[key]; exists {
 				result[key] = v
@@ -209,7 +209,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return ret
 
 	case "error":
-		// 对齐 Python L284-290
+		// Python: L284-290
 		errorMsg := ExtractStringFromPayload(payload, "error")
 		if errorMsg == "" {
 			errorMsg = fmt.Sprintf("%v", payload)
@@ -220,7 +220,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "thinking":
-		// 对齐 Python L292-297: processing_status 而非 thinking
+		// Python: L292-297: processing_status 而非 thinking
 		return map[string]any{
 			"event_type":    "chat.processing_status",
 			"is_processing": true,
@@ -228,7 +228,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "todo.updated":
-		// 对齐 Python L299-305: 提取 todos 列表
+		// Python: L299-305: 提取 todos 列表
 		todos, _ := payload["todos"].([]any)
 		if todos == nil {
 			todos = []any{}
@@ -239,7 +239,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.usage":
-		// 对齐 Python L307-314: 透传 rate/context_max/tokens_used
+		// Python: L307-314: 透传 rate/context_max/tokens_used
 		return map[string]any{
 			"event_type":  "context.usage",
 			"rate":        ExtractFloatFromPayload(payload, "rate"),
@@ -248,14 +248,14 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.compression_state":
-		// 对齐 Python L112-131: dot-namespace 类型
+		// Python: L112-131: dot-namespace 类型
 		return map[string]any{
 			"event_type":        "chat.context_compression_state",
 			"compression_state": payload,
 		}
 
 	case "ask_user_question":
-		// 对齐 Python L316-320: ask_user_question 去重
+		// Python: L316-320: ask_user_question 去重
 		requestID, _ := payload["request_id"].(string)
 		if requestID != "" && emittedAskUserIDs[requestID] {
 			return nil // 去重：已发送过的 ask_user
@@ -272,14 +272,14 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return ParseInteractionPayload(payload, converter)
 
 	case "message", "stage_result", "extension_ready", "harness_session_finished", "activate_testing_guide":
-		// 对齐 Python: 各特殊类型的处理
+		// Python: 各特殊类型的处理
 		return map[string]any{
 			"event_type": "chat." + chunkType,
 			"content":    payload,
 		}
 
 	default:
-		// 对齐 Python L325-353: 保留原始类型名 + team.* 直传
+		// Python: L325-353: 保留原始类型名 + team.* 直传
 		if innerEventType, ok := payload["event_type"].(string); ok {
 			if strings.HasPrefix(innerEventType, "team.") {
 				// team 命名空间事件直传
@@ -311,7 +311,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 }
 
 // ParseInteractionPayload 解析 __interaction__ 类型的 payload。
-// 对齐 Python: _parse_interaction_payload(payload) (stream_utils.py L356-375)
+// Python: _parse_interaction_payload(payload) (stream_utils.py L356-375)
 // 若 converter 不为 nil，委托 converter 进行交互转换；
 // 否则回退为默认行为，直接返回 chat.interaction 事件。
 func ParseInteractionPayload(payload map[string]any, converter InteractionConverterFunc) map[string]any {
@@ -325,7 +325,7 @@ func ParseInteractionPayload(payload map[string]any, converter InteractionConver
 }
 
 // AccumulateUsage 累加 usage 信息。
-// 对齐 Python: usage_accumulator 的累加逻辑 (line 4580-4610)
+// Python: usage_accumulator 的累加逻辑 (line 4580-4610)
 func AccumulateUsage(usage *UsageAccumulator, payload map[string]any) {
 	if payload == nil || usage == nil {
 		return
@@ -384,7 +384,7 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 }
 
 // SerializeValue 将非 JSON 原生值序列化为前端安全的 payload。
-// 对齐 Python: _serialize_value(value) (stream_utils.py L472-483)
+// Python: _serialize_value(value) (stream_utils.py L472-483)
 func SerializeValue(value any) any {
 	switch v := value.(type) {
 	case time.Time:
@@ -395,13 +395,13 @@ func SerializeValue(value any) any {
 }
 
 // FindInteractionPayloads 递归搜索 __interaction__ 载荷。
-// 对齐 Python: _find_interaction_payloads(obj, _depth=0, _seen=None) (stream_utils.py L378-432)
+// Python: _find_interaction_payloads(obj, _depth=0, _seen=None) (stream_utils.py L378-432)
 func FindInteractionPayloads(obj any, opts ...FindOption) []any {
 	return findInteractionPayloadsRecursive(obj, 0, nil)
 }
 
 // FindInteractionPayload 返回第一个匹配的 __interaction__ 载荷。
-// 对齐 Python: _find_interaction_payload(obj) (stream_utils.py L435-443)
+// Python: _find_interaction_payload(obj) (stream_utils.py L435-443)
 func FindInteractionPayload(obj any, opts ...FindOption) any {
 	matches := FindInteractionPayloads(obj, opts...)
 	if len(matches) == 0 {
@@ -413,14 +413,14 @@ func FindInteractionPayload(obj any, opts ...FindOption) any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // findInteractionPayloadsRecursive 递归搜索 __interaction__ 载荷。
-// 对齐 Python: _find_interaction_payloads 内部递归逻辑 (stream_utils.py L378-432)
+// Python: _find_interaction_payloads 内部递归逻辑 (stream_utils.py L378-432)
 func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool) []any {
 	if obj == nil || depth > 8 {
 		return nil
 	}
 	// 循环检测：对 map/slice/ptr 取地址作 seen 标记
 	rv := reflect.ValueOf(obj)
-	if rv.Kind() == reflect.Map || rv.Kind() == reflect.Slice || rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Map || rv.Kind() == reflect.Slice || rv.Kind() == reflect.Pointer {
 		ptr := rv.Pointer()
 		if seen == nil {
 			seen = make(map[uintptr]bool)
