@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamMemoryManager 团队记忆管理器。
-// 对齐 Python TeamMemoryManager (manager.py)
+// Python: TeamMemoryManager (manager.py)
 //
 // 生命周期：InitToolkit → RegisterTools → LoadAndInject → ExtractAfterRound → Close
 type TeamMemoryManager struct {
@@ -112,7 +112,7 @@ func NewTeamMemoryManager(params TeamMemoryManagerParams) *TeamMemoryManager {
 		ownedToolIDs:      make(map[string]struct{}),
 	}
 
-	// 对齐 Python: if self._read_only_source: self._workspace = Workspace(root_path=self._read_only_source)
+	// Python: if self._read_only_source: self._workspace = Workspace(root_path=self._read_only_source)
 	if params.ReadOnlySourceWorkspace != nil && *params.ReadOnlySourceWorkspace != "" {
 		mgr.workspace = workspace.NewWorkspace(*params.ReadOnlySourceWorkspace, "")
 	} else {

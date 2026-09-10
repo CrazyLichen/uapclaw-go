@@ -128,7 +128,7 @@ type agentsDisableParams struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getAgentConfigService 获取 AgentConfigService 实例。
-// 对齐 Python: service = AgentConfigService(workspace_dir)
+// Python: service = AgentConfigService(workspace_dir)
 // 如果请求参数中指定了 workspace_dir，则创建临时 service，否则使用 server 级别的 service。
 func (s *AgentServer) getAgentConfigService(workspaceDir string) *runtime.AgentConfigService {
 	if workspaceDir != "" {
@@ -138,9 +138,9 @@ func (s *AgentServer) getAgentConfigService(workspaceDir string) *runtime.AgentC
 }
 
 // handleAgentsList 处理 agents.list 请求。
-// 对齐 Python: _handle_agents_list
+// Python: _handle_agents_list
 func (s *AgentServer) handleAgentsList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// 对齐 Python: service = AgentConfigService(workspace_dir); agents = service.list_agents()
+	// Python: service = AgentConfigService(workspace_dir); agents = service.list_agents()
 	var params agentsListParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		// 允许空参数
@@ -164,7 +164,7 @@ func (s *AgentServer) handleAgentsList(_ context.Context, request *schema.AgentR
 }
 
 // handleAgentsGet 处理 agents.get 请求。
-// 对齐 Python: _handle_agents_get
+// Python: _handle_agents_get
 func (s *AgentServer) handleAgentsGet(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsGetParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -205,7 +205,7 @@ func (s *AgentServer) handleAgentsGet(_ context.Context, request *schema.AgentRe
 }
 
 // handleAgentsCreate 处理 agents.create 请求。
-// 对齐 Python: _handle_agents_create
+// Python: _handle_agents_create
 func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsCreateParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -220,7 +220,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 	svc := s.getAgentConfigService(params.WorkspaceDir)
 
 	// 步骤 1: 如果 generate=true，使用 LLM 生成 whenToUse 和 prompt
-	// 对齐 Python: if generate: llm_result = await self._generate_agent_with_llm(name, description)
+	// Python: if generate: llm_result = await self._generate_agent_with_llm(name, description)
 	generated := false
 	if params.Generate && params.Name != "" && params.Description != "" {
 		llmResult := runtime.GenerateAgentWithLLM(context.Background(), s.resolveModel(), params.Name, params.Description)
@@ -232,7 +232,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 	}
 
 	// 步骤 2: 创建 agent
-	// 对齐 Python: agent = service.create_agent(p)
+	// Python: agent = service.create_agent(p)
 	location := params.Location
 	if location == "" {
 		location = types.AgentSourceLocal
@@ -264,7 +264,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 	}
 
 	// 步骤 3: 自动在 config.yaml 中启用新创建的 agent
-	// 对齐 Python: upsert_subagent_in_config(agent.name, enabled=True)
+	// Python: upsert_subagent_in_config(agent.name, enabled=True)
 	applied := true
 	reloadError := ""
 	if err := runtime.UpsertSubagentInConfig(agent.Name, true); err != nil {
@@ -284,7 +284,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 }
 
 // handleAgentsUpdate 处理 agents.update 请求。
-// 对齐 Python: _handle_agents_update
+// Python: _handle_agents_update
 func (s *AgentServer) handleAgentsUpdate(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsUpdateParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -353,7 +353,7 @@ func (s *AgentServer) handleAgentsUpdate(_ context.Context, request *schema.Agen
 }
 
 // handleAgentsDelete 处理 agents.delete 请求。
-// 对齐 Python: _handle_agents_delete
+// Python: _handle_agents_delete
 func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsDeleteParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -378,7 +378,7 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 	svc := s.getAgentConfigService(params.WorkspaceDir)
 
 	// 步骤 1: 删除 agent 文件
-	// 对齐 Python: ok = service.delete_agent(name)
+	// Python: ok = service.delete_agent(name)
 	ok, err := svc.DeleteAgent(name)
 	if err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -390,7 +390,7 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 	}
 
 	// 步骤 2: 自动从 config.yaml 中移除被删除的 agent
-	// 对齐 Python: remove_subagent_from_config(name)
+	// Python: remove_subagent_from_config(name)
 	applied := true
 	reloadError := ""
 	if _, rmErr := runtime.RemoveSubagentFromConfig(name); rmErr != nil {
@@ -409,19 +409,19 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 }
 
 // handleAgentsEnable 处理 agents.enable 请求。
-// 对齐 Python: _handle_agents_set_enabled(ws, request, send_lock, True)
+// Python: _handle_agents_set_enabled(ws, request, send_lock, True)
 func (s *AgentServer) handleAgentsEnable(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return s.handleAgentsSetEnabled(request, true)
 }
 
 // handleAgentsDisable 处理 agents.disable 请求。
-// 对齐 Python: _handle_agents_set_enabled(ws, request, send_lock, False)
+// Python: _handle_agents_set_enabled(ws, request, send_lock, False)
 func (s *AgentServer) handleAgentsDisable(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return s.handleAgentsSetEnabled(request, false)
 }
 
 // handleAgentsToolsList 处理 agents.tools_list 请求。
-// 对齐 Python: _handle_agents_tools_list
+// Python: _handle_agents_tools_list
 func (s *AgentServer) handleAgentsToolsList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	svc := s.getAgentConfigService("")
 	result := svc.ListAvailableTools()
@@ -437,7 +437,7 @@ func (s *AgentServer) handleAgentsToolsList(_ context.Context, request *schema.A
 }
 
 // handleAgentsSetEnabled 处理 agents.enable/disable 请求。
-// 对齐 Python: _handle_agents_set_enabled(ws, request, send_lock, enabled)
+// Python: _handle_agents_set_enabled(ws, request, send_lock, enabled)
 func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabled bool) (*schema.AgentResponse, error) {
 	var params agentsEnableParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -462,7 +462,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 	svc := s.getAgentConfigService(params.WorkspaceDir)
 
 	// 步骤 1: 验证 agent 存在
-	// 对齐 Python: agent = service.get_agent(name); if agent is None: raise ValueError(...)
+	// Python: agent = service.get_agent(name); if agent is None: raise ValueError(...)
 	agent := svc.GetAgent(name)
 	if agent == nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -482,7 +482,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 	}
 
 	// 步骤 2: 更新 config.yaml 中的 enabled 状态
-	// 对齐 Python: upsert_subagent_in_config(name, enabled=enabled)
+	// Python: upsert_subagent_in_config(name, enabled=enabled)
 	applied := true
 	reloadError := ""
 	if err := runtime.UpsertSubagentInConfig(name, enabled); err != nil {
@@ -502,7 +502,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 }
 
 // resolveModel 获取当前模型实例（用于 LLM 生成）。
-// 对齐 Python: self._resolve_model(None)
+// Python: self._resolve_model(None)
 func (s *AgentServer) resolveModel() *llm.Model {
 	// TODO(#agent-config): 从 AgentManager 获取当前模型
 	return nil

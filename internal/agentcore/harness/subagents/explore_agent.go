@@ -21,7 +21,7 @@ const ExploreAgentFactoryName = "explore_agent"
 
 var (
 	// defaultExploreAgentSystemPrompt 默认系统提示词
-	// 对齐 Python: _build_explore_system_prompt_en / _build_explore_system_prompt_cn
+	// Python: _build_explore_system_prompt_en / _build_explore_system_prompt_cn
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 	defaultExploreAgentSystemPrompt = map[string]string{
 		"cn": "你是宿主编程代理的代码库导航专家，职责是在现有代码中定位、读取并汇报信息。" +
@@ -81,7 +81,7 @@ var (
 			"\n\nReturn a clear, concise summary of your findings once the search is complete.",
 	}
 	// defaultExploreAgentDescription 默认描述
-	// 对齐 Python: DEFAULT_EXPLORE_AGENT_DESCRIPTION
+	// Python: DEFAULT_EXPLORE_AGENT_DESCRIPTION
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 	defaultExploreAgentDescription = map[string]string{
 		"cn": "以速度为优先的代码库导航子代理：按 glob 模式定位文件（如 src/components/**/*.tsx）、" +
@@ -100,7 +100,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildExploreAgentConfig 构建 explore 子代理配置（延迟实例化）。
-// 对齐 Python: build_explore_agent_config(card=..., system_prompt=..., tools=..., ...)
+// Python: build_explore_agent_config(card=..., system_prompt=..., tools=..., ...)
 //
 // 参数通过 SubagentCreateParams 传入，对齐 Python 的具名参数风格。
 // adapter 层负责从 map[string]any 解析出 SubagentCreateParams。
@@ -112,7 +112,7 @@ func BuildExploreAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	cfg := hschema.NewSubAgentConfig()
 
 	// AgentCard：用户未提供时使用默认
-	// 对齐 Python: card or AgentCard(name="explore_agent", description=DEFAULT_EXPLORE_AGENT_DESCRIPTION.get(...))
+	// Python: card or AgentCard(name="explore_agent", description=DEFAULT_EXPLORE_AGENT_DESCRIPTION.get(...))
 	cfg.AgentCard = params.Card
 	if cfg.AgentCard == nil {
 		desc := defaultExploreAgentDescription[language]
@@ -126,7 +126,7 @@ func BuildExploreAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	}
 
 	// SystemPrompt：用户未提供时使用默认
-	// 对齐 Python: system_prompt or _build_explore_system_prompt(language=resolved_language)
+	// Python: system_prompt or _build_explore_system_prompt(language=resolved_language)
 	cfg.SystemPrompt = params.SystemPrompt
 	if cfg.SystemPrompt == "" {
 		prompt := defaultExploreAgentSystemPrompt[language]
@@ -150,7 +150,7 @@ func BuildExploreAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	cfg.EnableTaskLoop = params.EnableTaskLoop
 
 	// MaxIterations：用户未提供（0）时默认 15
-	// 对齐 Python: max_iterations=15
+	// Python: max_iterations=15
 	cfg.MaxIterations = params.MaxIterations
 	if cfg.MaxIterations == 0 {
 		cfg.MaxIterations = 15
@@ -162,7 +162,7 @@ func BuildExploreAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	cfg.EnablePlanMode = params.EnablePlanMode
 
 	// RestrictToWorkDir：ExploreAgent 默认 false
-	// 对齐 Python: restrict_to_work_dir=False
+	// Python: restrict_to_work_dir=False
 	// params 为 *bool 指针，nil 表示未设置（使用 ExploreAgent 默认 false），非 nil 则使用用户显式指定的值
 	if params.RestrictToWorkDir != nil {
 		cfg.RestrictToWorkDir = *params.RestrictToWorkDir
@@ -174,7 +174,7 @@ func BuildExploreAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 }
 
 // DefaultExploreAgentSystemPrompt 返回指定语言的默认系统提示词。
-// 对齐 Python: _build_explore_system_prompt(language=resolved_language)
+// Python: _build_explore_system_prompt(language=resolved_language)
 func DefaultExploreAgentSystemPrompt(language string) string {
 	if s, ok := defaultExploreAgentSystemPrompt[language]; ok && s != "" {
 		return s
@@ -183,7 +183,7 @@ func DefaultExploreAgentSystemPrompt(language string) string {
 }
 
 // DefaultExploreAgentDescription 返回指定语言的默认描述。
-// 对齐 Python: DEFAULT_EXPLORE_AGENT_DESCRIPTION.get(resolved_language, ...)
+// Python: DEFAULT_EXPLORE_AGENT_DESCRIPTION.get(resolved_language, ...)
 func DefaultExploreAgentDescription(language string) string {
 	if s, ok := defaultExploreAgentDescription[language]; ok && s != "" {
 		return s

@@ -49,7 +49,7 @@ import (
 //   - _update_rails_for_mode: 保留 SubagentRail/ProjectMemoryRail/CodingMemoryRail
 //   - 语言: 强制英文系统提示词
 //
-// 对应 Python: jiuwenswarm/server/runtime/agent_adapter/interface_code.py (JiuwenClawCodeAdapter)
+// Python: jiuwenswarm/server/runtime/agent_adapter/interface_code.py (JiuwenClawCodeAdapter)
 type CodeAdapter struct {
 	// deep 内嵌 DeepAdapter，组合委托全部接口方法
 	deep *DeepAdapter
@@ -94,7 +94,7 @@ type CodeAdapter struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // codeFixedRailNames Code 模式固定 Rails 名字集合，用于动态 Rails 去重。
-// 对齐 Python: JiuwenClawCodeAdapter._FIXED_RAIL_NAMES
+// Python: JiuwenClawCodeAdapter._FIXED_RAIL_NAMES
 var codeFixedRailNames = map[string]bool{
 	"RuntimePromptRail":       true,
 	"ResponsePromptRail":      true,
@@ -113,7 +113,7 @@ var codeFixedRailNames = map[string]bool{
 }
 
 // codeRailBuildNames 动态 Rail 名字 → builder 方法名映射。
-// 对齐 Python: _RAIL_BUILD_NAMES
+// Python: _RAIL_BUILD_NAMES
 var codeRailBuildNames = map[string]string{
 	"SysOperationRail":     "buildFilesystemRail",
 	"FileSystemRail":       "buildFilesystemRail",
@@ -133,7 +133,7 @@ var codeRailBuildNames = map[string]string{
 
 // NewCodeAdapter 创建 CodeAdapter 实例。
 //
-// 对应 Python: JiuwenClawCodeAdapter.__init__() (line 177-192)
+// Python: JiuwenClawCodeAdapter.__init__() (line 177-192)
 func NewCodeAdapter() *CodeAdapter {
 	deep := NewDeepAdapter()
 	deep.isCodeAgent = true // 单点 source-of-truth：code-agent → project_dir
@@ -145,7 +145,7 @@ func NewCodeAdapter() *CodeAdapter {
 
 // CreateInstance 初始化底层 SDK Agent（code 模式）。
 //
-// 对应 Python: JiuwenClawCodeAdapter.create_instance() (line 221-342)
+// Python: JiuwenClawCodeAdapter.create_instance() (line 221-342)
 //
 // Python 执行步骤：
 //  1. set_checkpoint
@@ -209,7 +209,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 
 	// 步骤 4: 多模态工具 _refresh_multimodal_configs(configBase)
-	// 对齐 Python: self._refresh_multimodal_configs(config_base)
+	// Python: self._refresh_multimodal_configs(config_base)
 	c.deep.refreshMultimodalConfigs(configBase)
 
 	// 步骤 5-6: 读取 react 配置段，缓存到 configCache
@@ -259,7 +259,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 
 	// 步骤 10: agentWorkspaceDir 始终指向系统 workspace
-	// 对齐 Python: self._agent_workspace_dir = str(get_agent_workspace_dir())
+	// Python: self._agent_workspace_dir = str(get_agent_workspace_dir())
 	c.deep.agentWorkspaceDir = workspace.AgentRootDir()
 
 	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
@@ -268,14 +268,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 13: ⤵️ A2X / 11.10: code 模式不初始化 A2X 客户端
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
-	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+	// Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
 	agentCard := agentschema.NewAgentCard(
 		agentschema.WithAgentName(c.deep.agentName),
 		agentschema.WithAgentID("uapclaw"),
 	)
 
 	// 步骤 15: tool_cards = c.getToolCards(agent_card.id)
-	// 对齐 Python: tool_cards = await self._get_tool_cards(agent_card.id)
+	// Python: tool_cards = await self._get_tool_cards(agent_card.id)
 	toolCards := c.getToolCards(agentCard.ID)
 	c.deep.toolCards = toolCards
 
@@ -284,7 +284,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	railsList := c.buildCodeAgentRails(c.deep.configCache, configBase)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
-	// 对齐 Python: sys_operation = self._create_sys_operation()
+	// Python: sys_operation = self._create_sys_operation()
 	sysOpInstance, _ := c.deep.createSysOperation(configBase)
 	if sysOpInstance == nil {
 		return fmt.Errorf("sys_operation 不可用，可能任务未在运行")
@@ -292,11 +292,11 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.sysOperation = sysOpInstance
 
 	// 步骤 18: configured_subagents = _build_configured_subagents(model, config, config_base)
-	// 对齐 Python: configured_subagents, _should_add_general = self._build_configured_subagents(model, config, config_base)
+	// Python: configured_subagents, _should_add_general = self._build_configured_subagents(model, config, config_base)
 	subagentSpecs, _ := c.buildConfiguredSubagents(c.deep.configCache, configBase)
 
 	// 步骤 19: create_deep_agent(...)
-	// 对齐 Python: self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
+	// Python: self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
 	// code 模式不传: vision_model_config, audio_model_config, context_engine_config, completion_timeout
 	systemPrompt := codeprompt.BuildCodeSystemPrompt()
 	resolvedLanguage := c.resolveRuntimeLanguage()
@@ -312,7 +312,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		MaxIterations:       paramsInt(c.deep.configCache, "max_iterations", 15),
 		Workspace:           hworkspace.NewWorkspace(c.deep.workspaceDir, resolvedLanguage),
 		Language:            resolvedLanguage,
-		EnableTaskPlanning:  true, // 对齐 Python: 硬编码 true
+		EnableTaskPlanning:  true, // Python: 硬编码 true
 		AutoCreateWorkspace: false,
 		SysOperation:        sysOpInstance,
 	}
@@ -324,13 +324,13 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.instance = agent
 
 	// 步骤 20: d.instance.EnsureInitialized(ctx)
-	// 对齐 Python: await self._instance.ensure_initialized()
+	// Python: await self._instance.ensure_initialized()
 	if _, initErr := c.deep.instance.EnsureInitialized(ctx); initErr != nil {
 		return fmt.Errorf("DeepAgent EnsureInitialized 失败: %w", initErr)
 	}
 
 	// 步骤 21: _seed_runtime_cwd(c.projectDir or c.workspaceDir)
-	// 对齐 Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir) (interface_code.py:300)
+	// Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir) (interface_code.py:300)
 	initCwd := c.deep.projectDir
 	if initCwd == "" {
 		initCwd = c.deep.workspaceDir
@@ -338,9 +338,9 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.seedRuntimeCwd(ctx, initCwd)
 
 	// 步骤 21.1: 实例属性设置
-	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_code_project_dir", self._project_dir or self._workspace_dir)
-	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)
+	// Python: setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
+	// Python: setattr(self._instance, "_jiuwenswarm_code_project_dir", self._project_dir or self._workspace_dir)
+	// Python: setattr(self._instance, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)
 	c.uapswarmAdapterMode = "code"
 	projectDir := c.deep.projectDir
 	if projectDir == "" {
@@ -375,7 +375,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 
 	// 步骤 21.3: agent_history 写入路径修正
-	// 对齐 Python: 修正 .agent_history 写入路径到 agent 系统 workspace
+	// Python: 修正 .agent_history 写入路径到 agent 系统 workspace
 	// Python: for rail in registered_rails: for tool in rail.tools: setattr(tool, '_workspace_path', agent_workspace_dir)
 	// ⤵️ 10.6.3-10: Go 中工具没有 _workspace_path 属性，需要等 DeepAgent 实例属性扩展后回填
 
@@ -384,7 +384,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.registeredMCPServers = make(map[string]any)
 
 	// 步骤 23: _register_mcp_servers_from_config(configBase, tag="code")
-	// 对齐 Python: await self._register_mcp_servers_from_config(config_base, tag="code")
+	// Python: await self._register_mcp_servers_from_config(config_base, tag="code")
 	if regErr := c.deep.registerMcpServersFromConfig(ctx, configBase, "code"); regErr != nil {
 		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册(code 模式)失败，继续执行")
 	}
@@ -405,7 +405,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 }
 
 // ReloadAgentConfig 热重载配置，不重启进程。
-// 对齐 Python: JiuwenClawCodeAdapter._get_current_agent_rails() 覆写 (interface_code.py L836-848)
+// Python: JiuwenClawCodeAdapter._get_current_agent_rails() 覆写 (interface_code.py L836-848)
 //
 // Python 通过覆写 _get_current_agent_rails() 将 CodeAgentRail 纳入热重载范围。
 // Go 使用组合模式，无法覆写 getter，因此在 ReloadAgentConfig 中额外调用 CodeAgentRail.Reload。
@@ -414,7 +414,7 @@ func (c *CodeAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		return err
 	}
 
-	// 对齐 Python: _get_current_agent_rails() 覆写中追加 CodeAgentRail
+	// Python: _get_current_agent_rails() 覆写中追加 CodeAgentRail
 	if c.codeAgentRail != nil {
 		if car, ok := c.codeAgentRail.(*CodeAgentRail); ok && c.deep.instance != nil {
 			if err := car.Reload(c.deep.instance); err != nil {
@@ -496,13 +496,13 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolvePromptLanguage 覆写 DeepAdapter，code 模式强制英文。
-// 对齐 Python: JiuwenClawCodeAdapter._resolve_prompt_language() → "en"
+// Python: JiuwenClawCodeAdapter._resolve_prompt_language() → "en"
 func (c *CodeAdapter) resolvePromptLanguage() string {
 	return "en"
 }
 
 // resolveRuntimeLanguage 覆写 DeepAdapter，code 模式运行时语言。
-// 对齐 Python: JiuwenClawCodeAdapter._resolve_runtime_language() → self._runtime_language_override or "en"
+// Python: JiuwenClawCodeAdapter._resolve_runtime_language() → self._runtime_language_override or "en"
 func (c *CodeAdapter) resolveRuntimeLanguage() string {
 	if c.runtimeLanguageOverride != "" {
 		return c.runtimeLanguageOverride
@@ -512,13 +512,13 @@ func (c *CodeAdapter) resolveRuntimeLanguage() string {
 
 // resolveOutputLanguage 解析用户偏好输出语言，用于 RuntimeState 显示。
 // 与 resolveRuntimeLanguage 不同：code 模式运行时语言固定 "en"，但输出语言遵循用户偏好。
-// 对齐 Python: JiuwenClawCodeAdapter._resolve_output_language() → ResolveLanguage(preferred_language)
+// Python: JiuwenClawCodeAdapter._resolve_output_language() → ResolveLanguage(preferred_language)
 func (c *CodeAdapter) resolveOutputLanguage() string {
 	return c.deep.resolveRuntimeLanguage()
 }
 
 // buildConfiguredSubagents 覆写 DeepAdapter，code 模式固定挂载 explore/plan/code 子代理。
-// 对齐 Python: JiuwenClawCodeAdapter._build_configured_subagents()
+// Python: JiuwenClawCodeAdapter._build_configured_subagents()
 func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
 	var specs []hschema.SubagentSpec
 	resolvedLanguage := c.resolveRuntimeLanguage()
@@ -529,7 +529,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	subagentsCfg, _ := config["subagents"].(map[string]any)
 
 	// ── 固定挂载：explore_agent ──
-	// 对齐 Python: explore_agent 始终启用
+	// Python: explore_agent 始终启用
 	exploreParams := &hschema.SubagentCreateParams{
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
@@ -538,7 +538,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
 	if exploreCfg != nil {
-		// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+		// Python: factory_kwargs = {"auto_create_workspace": False}
 		// 注：Go 的 SubAgentConfig 没有 AutoCreateWorkspace 字段，
 		// 通过 FactoryKwargs 传递
 		if exploreCfg.FactoryKwargs == nil {
@@ -549,7 +549,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 固定挂载：plan_agent ──
-	// 对齐 Python: plan_agent 始终启用
+	// Python: plan_agent 始终启用
 	planParams := &hschema.SubagentCreateParams{
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
@@ -558,7 +558,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
 	if planCfg != nil {
-		// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+		// Python: factory_kwargs = {"auto_create_workspace": False}
 		if planCfg.FactoryKwargs == nil {
 			planCfg.FactoryKwargs = make(map[string]any)
 		}
@@ -567,7 +567,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 按配置启用：code_agent ──
-	// 对齐 Python: code_agent 按配置启用
+	// Python: code_agent 按配置启用
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "code_agent") {
 		codeParams := &hschema.SubagentCreateParams{
 			Model:         c.deep.model,
@@ -577,7 +577,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		}
 		codeCfg := subagents.BuildCodeAgentConfig(c.deep.model, codeParams)
 		if codeCfg != nil {
-			// 对齐 Python: factory_kwargs = {"auto_create_workspace": False}
+			// Python: factory_kwargs = {"auto_create_workspace": False}
 			if codeCfg.FactoryKwargs == nil {
 				codeCfg.FactoryKwargs = make(map[string]any)
 			}
@@ -589,13 +589,13 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 按配置启用：browser_agent ──
-	// 对齐 Python: browser_agent 按配置启用
+	// Python: browser_agent 按配置启用
 	// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
 	// 暂时跳过，等 browser 功能实现时回填
 	// TODO: c.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") — 待 browser 功能实现时回填
 
 	// ── 按配置启用：research_agent ──
-	// 对齐 Python: research_agent 继承自 DeepAdapter
+	// Python: research_agent 继承自 DeepAdapter
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
 		params := c.deep.buildResearchSubagentParams(config, configBase)
 		cfg := subagents.BuildResearchAgentConfig(c.deep.model, params)
@@ -608,7 +608,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		Int("subagent_count", len(specs)).
 		Msg("CodeAdapter buildConfiguredSubagents 完成")
 
-	// 对齐 Python: return subagents, False (should_add_general = False)
+	// Python: return subagents, False (should_add_general = False)
 	return specs, false
 }
 
@@ -618,7 +618,7 @@ func (c *CodeAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, n
 }
 
 // getToolCards 覆写 DeepAdapter，code 模式从 config.yaml::modes.code.tools 读取工具列表。
-// 对齐 Python: JiuwenClawCodeAdapter._get_tool_cards() → build_code_tool_cards()
+// Python: JiuwenClawCodeAdapter._get_tool_cards() → build_code_tool_cards()
 func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	var toolCards []*tool.ToolCard
 	resolvedLanguage := c.resolveRuntimeLanguage()
@@ -626,7 +626,7 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// 从 configBase 中读取 modes.code.tools 配置
 	configuredTools := c.getCodeModeTools()
 
-	// 对齐 Python: _TOOL_BUILD_NAMES 映射
+	// Python: _TOOL_BUILD_NAMES 映射
 	for _, toolName := range configuredTools {
 		switch toolName {
 		case "web_free_search":
@@ -653,7 +653,7 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			// ⤵️ 10.6.3-10: user_todos 工具尚未实现
 			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos 工具尚未实现，跳过")
 		case "skill_toolkit":
-			// 对齐 Python: JiuwenClawCodeAdapter._build_skill_toolkit(agent_id)
+			// Python: JiuwenClawCodeAdapter._build_skill_toolkit(agent_id)
 			// 构建 SkillToolkit 并注册到 ResourceMgr，与 Deep 模式步骤 9 逻辑一致
 			if c.deep.skillManager != nil {
 				skillToolkit := skilltools.NewSkillToolkit(c.deep.skillManager)
@@ -714,7 +714,7 @@ func (c *CodeAdapter) getCodeModeTools() []string {
 }
 
 // resolveEmbeddingConfig 从 configCache["embed"] 解析嵌入配置。
-// 对齐 Python create_coding_memory_rail() (interface_code.py)
+// Python: create_coding_memory_rail() (interface_code.py)
 //
 // 从 config 解析 embed_api_key/embed_base_url/embed_model，
 // 配置不完整时返回 EmbeddingConfig（api_key 为空），让 Rail 降级到 fallback provider。
@@ -738,7 +738,7 @@ func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
 		modelName = "text-embedding-v3"
 	}
 
-	// 对齐 Python: 即使配置不完整也返回 EmbeddingConfig（api_key 为空时降级）
+	// Python: 即使配置不完整也返回 EmbeddingConfig（api_key 为空时降级）
 	return &embedding.EmbeddingConfig{
 		ModelName: modelName,
 		BaseURL:   baseURL,
@@ -747,7 +747,7 @@ func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
 }
 
 // buildCodeAgentRails 构建 Code 模式 Agent Rails 列表。
-// 对齐 Python: JiuwenClawCodeAdapter._build_agent_rails(config, config_base, mode="code")
+// Python: JiuwenClawCodeAdapter._build_agent_rails(config, config_base, mode="code")
 //
 // Code 模式固定 Rails 列表（对齐 Python _RailBuildInfo）+ 动态 Rails from config。
 // 未实现的 Rail builder 返回 nil，通过 nil 检查自动跳过。
@@ -755,7 +755,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	var railsList []sainterfaces.AgentRail
 
 	// ─── 固定 Rails — code 模式特有 ───
-	// 对齐 Python: rail_infos = [...] 中的固定列表
+	// Python: rail_infos = [...] 中的固定列表
 
 	// 1: RuntimePromptRail（运行时提示词护栏）
 	if rp := c.deep.buildRuntimePromptRail(); rp != nil {
@@ -845,11 +845,11 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// ─── 动态 Rails — 从 config.yaml::modes.code.rails 读取 ───
-	// 对齐 Python: for rail_name in configured_rails
+	// Python: for rail_name in configured_rails
 	c.appendDynamicRails(configBase, &railsList)
 
 	// ─── UserHookRail — 用户配置的 hooks ───
-	// 对齐 Python: try/except 包裹注册流程，失败时 warning 并继续
+	// Python: try/except 包裹注册流程，失败时 warning 并继续
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -874,7 +874,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 }
 
 // appendDynamicRails 从 config.yaml::modes.code.rails 读取动态 Rails 并追加。
-// 对齐 Python: for rail_name in configured_rails
+// Python: for rail_name in configured_rails
 func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[]sainterfaces.AgentRail) {
 	modesCfg, _ := configBase["modes"].(map[string]any)
 	codeCfg, _ := modesCfg["code"].(map[string]any)
@@ -922,7 +922,7 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 }
 
 // buildCodeAgentRail 构建 CodeAgentRail。
-// 对齐 Python: JiuwenClawCodeAdapter._build_code_agent_rail() (interface_code.py L826-834)
+// Python: JiuwenClawCodeAdapter._build_code_agent_rail() (interface_code.py L826-834)
 //
 // 仅当 configLister 可用时创建 CodeAgentRail，否则返回 nil。
 func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
@@ -933,7 +933,7 @@ func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
 }
 
 // buildLspRail 构建 LSP 护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_lsp_rail_via_config() (interface_code.py)
+// Python: JiuwenClawCodeAdapter._build_lsp_rail_via_config() (interface_code.py)
 // ⤵️ 10.6.3-10: LspRail 尚未实现
 func (c *CodeAdapter) buildLspRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 LspRail
@@ -941,7 +941,7 @@ func (c *CodeAdapter) buildLspRail() sainterfaces.AgentRail {
 }
 
 // buildProjectMemoryRail 构建项目记忆护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_project_memory_rail() (interface_code.py)
+// Python: JiuwenClawCodeAdapter._build_project_memory_rail() (interface_code.py)
 // ⤵️ 10.6.3-10: ProjectMemoryRail 尚未实现
 func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ProjectMemoryRail
@@ -949,15 +949,15 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildCodingMemoryRail 构建编码记忆护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_coding_memory_rail() → create_coding_memory_rail() (interface_code.py)
+// Python: JiuwenClawCodeAdapter._build_coding_memory_rail() → create_coding_memory_rail() (interface_code.py)
 //
 // 始终创建 CodingMemoryRail（即使 embedding 不完整也创建，降级到 fallback provider）。
 // Python: codingMemoryDir = agentWorkspaceDir/coding_memory/projectName
 func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
-	// 对齐 Python create_coding_memory_rail: 获取 embedding 配置
+	// Python: create_coding_memory_rail: 获取 embedding 配置
 	embCfg := c.resolveEmbeddingConfig()
 
-	// 对齐 Python: coding_memory_dir = agent_workspace_dir/coding_memory/project_name
+	// Python: coding_memory_dir = agent_workspace_dir/coding_memory/project_name
 	agentWorkspaceDir := c.deep.agentWorkspaceDir
 	projectName := "default"
 	if c.deep.projectDir != "" {
@@ -965,7 +965,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 	}
 	codingMemoryDir := filepath.Join(agentWorkspaceDir, "coding_memory", projectName)
 
-	// 对齐 Python: os.makedirs(coding_memory_dir, exist_ok=True)
+	// Python: os.makedirs(coding_memory_dir, exist_ok=True)
 	if err := os.MkdirAll(codingMemoryDir, 0o755); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "build_coding_memory_rail").
@@ -974,7 +974,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 			Msg("创建 coding_memory 目录失败")
 	}
 
-	// 对齐 Python: 始终创建 Rail（embedding 不完整时降级到 fallback provider）
+	// Python: 始终创建 Rail（embedding 不完整时降级到 fallback provider）
 	if embCfg == nil {
 		embCfg = &embedding.EmbeddingConfig{}
 	}
@@ -982,7 +982,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildStructuredAskUserRail 构建结构化询问护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail() (interface_code.py)
+// Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail() (interface_code.py)
 // ✅ 10.6.3: StructuredAskUserRail 已实现
 func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 	defer func() {
@@ -1055,7 +1055,7 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 }
 
 // buildWorktreeRail 构建工作树护栏。
-// 对齐 Python: JiuwenClawCodeAdapter._build_worktree_rail_via_config() (interface_code.py)
+// Python: JiuwenClawCodeAdapter._build_worktree_rail_via_config() (interface_code.py)
 // ⤵️ 10.6.3-10: WorktreeRail 尚未实现
 func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 WorktreeRail

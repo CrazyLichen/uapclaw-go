@@ -52,12 +52,12 @@ import (
 //   - Deep evolution 绑定
 //   - Deep interrupt / user_answer 处理
 //
-// 对应 Python: jiuwenswarm/server/runtime/agent_adapter/interface_deep.py (JiuWenClawDeepAdapter)
+// Python: jiuwenswarm/server/runtime/agent_adapter/interface_deep.py (JiuWenClawDeepAdapter)
 type DeepAdapter struct {
 	// ─── 当前可用字段 ───
 
 	// instance DeepAgent 实例。
-	// 对齐 Python: self._instance（create_deep_agent 返回的 DeepAgent）
+	// Python: self._instance（create_deep_agent 返回的 DeepAgent）
 	instance *harness.DeepAgent
 	// agentName Agent 名称，默认 "main_agent"
 	agentName string
@@ -66,7 +66,7 @@ type DeepAdapter struct {
 	// workspaceDir 工作区目录
 	workspaceDir string
 	// agentWorkspaceDir Agent 数据存储路径，始终指向系统 workspace。
-	// 对齐 Python: _agent_workspace_dir（用于 coding_memory、todo 文件等不应写入用户项目目录的数据）。
+	// Python: _agent_workspace_dir（用于 coding_memory、todo 文件等不应写入用户项目目录的数据）。
 	// 默认空，使用时回退到 workspaceDir（对齐 Python: getattr(self, "_agent_workspace_dir", None) or self._workspace_dir）。
 	agentWorkspaceDir string
 	// isCodeAgent 是否编码 Agent 形态（Deep=false, Code=true）
@@ -83,7 +83,7 @@ type DeepAdapter struct {
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
 	// interactionConverter 交互 payload 转换函数，注入到 utils.ParseStreamChunk。
-	// 对齐 Python: lazy import convert_interactions_to_ask_user_question
+	// Python: lazy import convert_interactions_to_ask_user_question
 	interactionConverter utils.InteractionConverterFunc
 
 	// ─── 模型与配置 ───
@@ -104,7 +104,7 @@ type DeepAdapter struct {
 	// defaultModelName 默认模型名称
 	defaultModelName string
 	// configLister 自定义 agent 配置列表接口（避免 adapter↔runtime 循环依赖）
-	// 对齐 Python: AgentConfigService
+	// Python: AgentConfigService
 	configLister AgentConfigLister
 
 	// ─── ⤵️ 10.6.3-10: 轨道（Rails）───
@@ -240,29 +240,29 @@ type DeepAdapter struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // persistentCheckpointerReady 持久化检查点器是否已就绪。
-// 对应 Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_READY)
+// Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_READY)
 var persistentCheckpointerReady bool
 
 // persistentCheckpointerLock 持久化检查点器初始化锁（double-check locking）。
-// 对应 Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_LOCK)
+// Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_LOCK)
 var persistentCheckpointerLock sync.Mutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetSkillManager 设置技能管理器。
-// 对齐 Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
+// Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
 func (d *DeepAdapter) SetSkillManager(skillMgr *skill.SkillManager) {
 	d.skillManager = skillMgr
 }
 
 // SetConfigLister 设置自定义 agent 配置列表接口。
-// 对齐 Python: AgentConfigService 依赖注入
+// Python: AgentConfigService 依赖注入
 func (d *DeepAdapter) SetConfigLister(lister AgentConfigLister) {
 	d.configLister = lister
 }
 
 // ModelCache 返回模型缓存。
-// 对齐 Python: self._model_cache (interface_deep.py L543)
+// Python: self._model_cache (interface_deep.py L543)
 // AgentTool 通过类型断言获取，拿不到则 fallback nil。
 func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
 	return d.modelCache
@@ -270,7 +270,7 @@ func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
 
 // NewDeepAdapter 创建 DeepAdapter 实例。
 //
-// 对应 Python: JiuWenClawDeepAdapter.__init__()
+// Python: JiuWenClawDeepAdapter.__init__()
 func NewDeepAdapter() *DeepAdapter {
 	return &DeepAdapter{
 		agentName:              "main_agent",
@@ -286,7 +286,7 @@ func NewDeepAdapter() *DeepAdapter {
 
 // CreateInstance 初始化底层 SDK Agent。
 //
-// 对应 Python: JiuWenClawDeepAdapter.create_instance() (line 2527-2621)
+// Python: JiuWenClawDeepAdapter.create_instance() (line 2527-2621)
 //
 // Python 执行步骤：
 //  1. await self.set_checkpoint()
@@ -321,7 +321,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 2: dreaming_mode 设置
-	// 对齐 Python: self._dreaming_mode = mode if mode and mode.startswith("agent") else "agent"
+	// Python: self._dreaming_mode = mode if mode and mode.startswith("agent") else "agent"
 	if mode != "" && strings.HasPrefix(mode, "agent") {
 		d.dreamingMode = mode
 	} else {
@@ -353,7 +353,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.refreshMultimodalConfigs(configBase)
 
 	// 步骤 7-8: 读取 react 配置段，缓存到 configCache
-	// 对齐 Python: config = config_base.get("react", {}).copy(); self._config_cache = config.copy()
+	// Python: config = config_base.get("react", {}).copy(); self._config_cache = config.copy()
 	var config map[string]any
 	if reactRaw, ok := configBase["react"]; ok {
 		if reactMap, ok := reactRaw.(map[string]any); ok {
@@ -373,7 +373,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 9: agentName
-	// 对齐 Python: self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
+	// Python: self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
 	if v, ok := d.instanceOverrides["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			d.agentName = s
@@ -416,15 +416,15 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// ⤵️ A2X / 11.10: A2X 客户端初始化
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
-	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='uapclaw')
+	// Python: agent_card = AgentCard(name=self._agent_name, id='uapclaw')
 	agentCard := agentschema.NewAgentCard(
 		agentschema.WithAgentName(d.agentName),
 		agentschema.WithAgentID("uapclaw"),
 	)
 
 	// 步骤 15: tool_cards = await self._get_tool_cards(agent_card.id)
-	// 对齐 Python: tool_cards = await self._get_tool_cards(agent_card.id)
-	// 对齐 Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
+	// Python: tool_cards = await self._get_tool_cards(agent_card.id)
+	// Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
 	toolCards := d.getToolCards(agentCard.ID)
 	d.toolCards = toolCards
 
@@ -432,22 +432,22 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	railsList := d.buildAgentRails(config, configBase, mode)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
-	// 对齐 Python: sys_operation = self._create_sys_operation()
-	// 对齐 Python: if sys_operation is None: raise RuntimeError (G7: nil 检查)
+	// Python: sys_operation = self._create_sys_operation()
+	// Python: if sys_operation is None: raise RuntimeError (G7: nil 检查)
 	sysOpInstance, _ := d.createSysOperation(configBase)
 	if sysOpInstance == nil {
 		return fmt.Errorf("sys_operation 不可用，可能任务未在运行")
 	}
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
-	// 对齐 Python: _build_configured_subagents(model, config, configBase)
+	// Python: _build_configured_subagents(model, config, configBase)
 	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, configBase)
 
-	// 对齐 Python L2575-2577: should_enable_general_agent = should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
+	// Python: L2575-2577: should_enable_general_agent = should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
 	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
 
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
-	// 对齐 Python: self._instance = create_deep_agent(**common_kwargs, ...)
+	// Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
 	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
 
@@ -456,7 +456,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		Card:                   agentCard,
 		SystemPrompt:           systemPrompt,
 		ToolCards:              toolCards,
-		Mcps:                   nil, // 对齐 Python: mcps 在 create_deep_agent 之后通过 _register_mcp_servers_from_config 单独注册
+		Mcps:                   nil, // Python: mcps 在 create_deep_agent 之后通过 _register_mcp_servers_from_config 单独注册
 		Subagents:              subagentSpecs,
 		Rails:                  railsList,
 		EnableTaskLoop:         d.resolveEnableTaskLoop(config, configBase),
@@ -469,9 +469,9 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		VisionModelConfig:      d.visionModelConfig,
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
-		AutoCreateWorkspace:    false,                                             // 对齐 Python: 硬编码 false
-		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // 对齐 Python: config.get("completion_timeout", 3600.0)
-		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),            // 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
+		AutoCreateWorkspace:    false,                                             // Python: 硬编码 false
+		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -483,7 +483,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.instance = agent
 
 	// 步骤 20: d.instance.EnsureInitialized(ctx)
-	// 对齐 Python: await self._instance.ensure_initialized()
+	// Python: await self._instance.ensure_initialized()
 	if _, initErr := d.instance.EnsureInitialized(ctx); initErr != nil {
 		return fmt.Errorf("DeepAgent EnsureInitialized 失败: %w", initErr)
 	}
@@ -503,7 +503,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.registeredMCPServers = make(map[string]any)
 
 	// 步骤 24: _register_mcp_servers_from_config(configBase, tag)
-	// 对齐 Python: await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
+	// Python: await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
 	if regErr := d.registerMcpServersFromConfig(ctx, configBase, fmt.Sprintf("agent.%s", mode)); regErr != nil {
 		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册失败，继续执行")
 	}
@@ -521,7 +521,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 // ReloadAgentConfig 热重载配置，不重启进程。
 //
-// 对应 Python: JiuWenClawDeepAdapter.reload_agent_config() (line 2646-2752)
+// Python: JiuWenClawDeepAdapter.reload_agent_config() (line 2646-2752)
 //
 // Python 执行步骤：
 //  1. config_base = configBase or get_config()
@@ -545,14 +545,14 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
-	// 对齐 Python: clear_config_cache() + clear_memory_manager_cache()
+	// Python: clear_config_cache() + clear_memory_manager_cache()
 	// Go 无全局 config 缓存（Config.Load 每次从磁盘读取），无需 clear_config_cache
 	// ✅ 已回填：ClearMemoryManagerCache（对齐 Python: clear_memory_manager_cache()）
 	lite.ClearMemoryManagerCache()
 
 	// 步骤 1: configBase 或 get_config()
-	// 对齐 Python: if config_base is None: config_base = get_config()
-	// 对齐 Python: else: config_base = resolve_env_vars(config_base) (G10)
+	// Python: if config_base is None: config_base = get_config()
+	// Python: else: config_base = resolve_env_vars(config_base) (G10)
 	if configBase == nil {
 		cfg, err := config.New("")
 		if err != nil {
@@ -568,7 +568,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// 步骤 2: 应用环境变量覆盖
-	// 对齐 Python: for env_key, env_value in env_overrides.items(): os.environ[str(env_key)] = str(env_value)
+	// Python: for env_key, env_value in env_overrides.items(): os.environ[str(env_key)] = str(env_value)
 	for k, v := range envOverrides {
 		if v == nil {
 			_ = os.Unsetenv(k)
@@ -607,17 +607,17 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// ⤵️ A2X / 11.10: _sync_a2x_runtime_state()
 
 	// 步骤 8: _get_current_agent_rails(config, configBase)
-	// 对齐 Python: rails_list = self._get_current_agent_rails(config, config_base)
+	// Python: rails_list = self._get_current_agent_rails(config, config_base)
 	railsList := d.getCurrentAgentRails(config, configBase)
 
 	// 步骤 8.5: 工具同步
-	// 对齐 Python: self._sync_multimodal_tools_for_runtime() + self._sync_paid_search_tool_for_runtime()
+	// Python: self._sync_multimodal_tools_for_runtime() + self._sync_paid_search_tool_for_runtime()
 	d.syncMultimodalToolsForRuntime(ctx)
 	d.syncPaidSearchToolForRuntime()
 
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
-	// 对齐 Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
-	// 对齐 Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
+	// Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
+	// Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
 	newToolCards := d.getToolCards("uapclaw")
 	d.toolCards = newToolCards
 
@@ -626,7 +626,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	d.updatePermissionRail(configBase)
 
 	// 步骤 11: instance.ConfigureDeepConfig(deepCfg)
-	// 对齐 Python: deep_cfg = self._make_deep_agent_config(model=model, config=config, agent_card=agent_card, tool_cards=..., rails=rails_list); self._instance.configure(deep_cfg)
+	// Python: deep_cfg = self._make_deep_agent_config(model=model, config=config, agent_card=agent_card, tool_cards=..., rails=rails_list); self._instance.configure(deep_cfg)
 	agentCard := agentschema.NewAgentCard(
 		agentschema.WithAgentName(d.agentName),
 		agentschema.WithAgentID("uapclaw"),
@@ -637,7 +637,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// 步骤 12-13: 重新注册 MCP
-	// 对齐 Python: await self._sync_mcp_servers_for_runtime(config_base, tag="agent.reload")
+	// Python: await self._sync_mcp_servers_for_runtime(config_base, tag="agent.reload")
 	d.registeredMCPServerIDs = make(map[string]bool)
 	d.registeredMCPServers = make(map[string]any)
 	if syncErr := d.syncMcpServersForRuntime(ctx, configBase, "agent.reload"); syncErr != nil {
@@ -650,7 +650,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 
 // ProcessMessageImpl 执行非流式请求，返回完整响应。
 //
-// 对应 Python: JiuWenClawDeepAdapter.process_message_impl() (line 4409-4512)
+// Python: JiuWenClawDeepAdapter.process_message_impl() (line 4409-4512)
 //
 // Python 执行步骤：
 //  1. if self._instance is None: raise RuntimeError("未初始化")
@@ -709,7 +709,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
 
 	// 步骤 10-11: 权限上下文设置
-	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
+	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
 	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
 	if permCtx != nil {
@@ -725,7 +725,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
 			reactAgent.SetLLM(resolvedModel)
 		}
-		// 对齐 Python: _apply_model_to_react_agent 中同步 adapter 字段
+		// Python: _apply_model_to_react_agent 中同步 adapter 字段
 		d.modelRequestConfig = resolvedModel.ModelConfig
 		d.modelClientConfig = resolvedModel.ClientConfig
 		d.model = resolvedModel
@@ -751,7 +751,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	}
 
 	// 步骤 18: Runner.run_agent(agent=d.instance, inputs=inputs)
-	// 对齐 Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
+	// Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
 	var result map[string]any
 	var runErr error
 	func() {
@@ -774,7 +774,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	}
 
 	// 步骤 21: 构造 AgentResponse
-	// 对齐 Python: content = result if isinstance(result, (str, dict)) else str(result)
+	// Python: content = result if isinstance(result, (str, dict)) else str(result)
 	content := result
 	if content == nil {
 		content = make(map[string]any)
@@ -789,7 +789,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 
 // ProcessMessageStreamImpl 执行流式请求，通过 channel 返回响应块。
 //
-// 对应 Python: JiuWenClawDeepAdapter.process_message_stream_impl() (line 4514-4750)
+// Python: JiuWenClawDeepAdapter.process_message_stream_impl() (line 4514-4750)
 //
 // Python 执行步骤：
 //  1. if self._instance is None: raise RuntimeError("未初始化")
@@ -847,7 +847,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	mode := paramsString(params, "mode", "agent.plan")
 
 	// 步骤 7: team 模式分流
-	// 对齐 Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
+	// Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
 	// ⤵️ 9.55-9.65 TeamHelpers
 
 	// 步骤 8: auto_harness 分流
@@ -860,7 +860,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
 
 	// 步骤 10-11: 权限上下文设置
-	// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
+	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
 	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
 	if permCtx != nil {
@@ -876,7 +876,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
 			reactAgent.SetLLM(resolvedModelStream)
 		}
-		// 对齐 Python: _apply_model_to_react_agent 中同步 adapter 字段
+		// Python: _apply_model_to_react_agent 中同步 adapter 字段
 		d.modelRequestConfig = resolvedModelStream.ModelConfig
 		d.modelClientConfig = resolvedModelStream.ClientConfig
 		d.model = resolvedModelStream
@@ -899,7 +899,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	}
 
 	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
-	// 对齐 Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
+	// Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
 	rawCh, streamErr := runner.RunAgentStreaming(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil, nil)
 	if streamErr != nil {
 		d.unmarkSessionActive(sessionID)
@@ -977,7 +977,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					accumulatedReasoning = ""
 				}
 				// ParseStreamChunk 处理其他类型
-				// 对齐 Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
+				// Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
 				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, accumulatedText != "")
 				if parsed != nil {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
@@ -1017,7 +1017,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 // ProcessInterrupt 处理中断请求（pause/resume/cancel/supplement）。
 //
-// 对应 Python: JiuWenClawDeepAdapter.process_interrupt() (line 3268-3578)
+// Python: JiuWenClawDeepAdapter.process_interrupt() (line 3268-3578)
 //
 // Python 执行步骤：
 //  1. intent = request.params.get("intent", "cancel")
@@ -1052,7 +1052,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 步骤 6-9: 按 intent 分支
-	// 对齐 Python: process_interrupt() (line 3268-3476)
+	// Python: process_interrupt() (line 3268-3476)
 	interruptMsg := ""
 	switch intent {
 	case "pause":
@@ -1068,7 +1068,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.markSessionActive(normalizedSID)
 		}
 		// ⤵️ 10.6.3-10: rail.abort(sessionID)
-		// 对齐 Python: instance.abort() 仅当 otherActiveSessions == 0
+		// Python: instance.abort() 仅当 otherActiveSessions == 0
 		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
 			d.instance.Abort(ctx)
 		}
@@ -1090,7 +1090,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	// ⤵️ 9.55-9.65 EvolutionHelpers（进化助手）: 取消进化监听任务
 
 	// 步骤 11: 构造响应
-	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})
+	// Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})
 	payload := map[string]any{
 		"event_type": "chat.interrupt_result",
 		"intent":     intent,
@@ -1098,7 +1098,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		"message":    interruptMsg,
 	}
 
-	// 对齐 Python: payload["new_input"] = new_input（如果存在）
+	// Python: payload["new_input"] = new_input（如果存在）
 	if newInput != nil {
 		payload["new_input"] = newInput
 	}
@@ -1116,7 +1116,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
 //
-// 对应 Python: JiuWenClawDeepAdapter.handle_user_answer() (line 3579-3605)
+// Python: JiuWenClawDeepAdapter.handle_user_answer() (line 3579-3605)
 //
 // Python 执行步骤：
 //  1. request_id = request.params.get("request_id", "")
@@ -1156,7 +1156,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 
 // HandleHeartbeat 处理心跳请求。
 //
-// 对应 Python: JiuWenClawDeepAdapter.handle_heartbeat() (line 3607-3624)
+// Python: JiuWenClawDeepAdapter.handle_heartbeat() (line 3607-3624)
 //
 // Python 执行步骤：
 //  1. sid = str(request.session_id or "")
@@ -1190,7 +1190,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 			req.Params = updated
 		}
 	} else {
-		// 对齐 Python: 直接赋值 request.params["query"]，用 json.Marshal 避免注入风险
+		// Python: 直接赋值 request.params["query"]，用 json.Marshal 避免注入风险
 		params := map[string]any{"query": heartbeatQuery}
 		if updated, err := json.Marshal(params); err == nil {
 			req.Params = updated
@@ -1210,7 +1210,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 // SwitchMode 切换运行模式，执行完整的 session 生命周期。
 // 流程：preRun → switchMode → loadState → updateState → postRun
 //
-// 对应 Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
+// Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
 	if d.instance == nil {
 		return nil
@@ -1242,7 +1242,7 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 
 // Cleanup 清理适配器资源。
 //
-// 对应 Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
+// Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
 //
 // Python 执行步骤：
 //  1. await self._close_a2x_client()
@@ -1256,13 +1256,13 @@ func (d *DeepAdapter) Cleanup() error {
 
 // AbortOnGatewayDisconnect Gateway 断连时全局中止。
 //
-// 对应 Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3511-3538)
+// Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3511-3538)
 //
 // 与 interrupt(cancel) 不同：无 other_sessions 保护，
 // gateway 断开意味着前端已无法接收响应，无条件 abort 所有 session。
 func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	// 步骤 1: 中止 rail 上所有活跃 session
-	// 对齐 Python: if self._stream_event_rail is not None:
+	// Python: if self._stream_event_rail is not None:
 	//   对应 Python: active = [sid for sid, count in self._active_session_ids.items() if count > 0]
 	//   对应 Python: for sid in active: self._stream_event_rail.abort(sid)
 	// ⤵️ 10.6.3-10: streamEventRail abort 所有活跃 session
@@ -1278,7 +1278,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	}
 
 	// 步骤 2: 中止 DeepAgent 实例（协作式，无法中断进行中的 LLM HTTP 请求）
-	// 对齐 Python: await self._instance.abort()，try/except 捕获异常
+	// Python: await self._instance.abort()，try/except 捕获异常
 	if d.instance != nil {
 		func() {
 			defer func() {
@@ -1298,7 +1298,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 
 // EnsurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
 //
-// 对应 Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
+// Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
 //
 // 使用 double-check locking 模式保证只初始化一次。
 // 初始化步骤：
@@ -1374,7 +1374,7 @@ func (d *DeepAdapter) resolveVideoModelClient() modelclients.BaseModelClient {
 }
 
 // resolveModelClientFromConfig 统一的模型客户端构建逻辑。
-// 对齐 Python: init_model(provider="OpenAI", ...)
+// Python: init_model(provider="OpenAI", ...)
 func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string, maxRetries int) modelclients.BaseModelClient {
 	m, err := llm.InitModel("OpenAI", model, apiKey, apiBase,
 		llm.WithInitMaxRetries(maxRetries),
@@ -1388,7 +1388,7 @@ func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string
 }
 
 // deepAgentContextEngineConfig 从 react 配置构建上下文引擎配置。
-// 对齐 Python: _deep_agent_context_engine_config(react_cfg)
+// Python: _deep_agent_context_engine_config(react_cfg)
 // 仅根据 react.context_engine_config.enable_kv_cache_release 切换亲和开关；
 // 其余字段与 ReActAgentConfig 默认 context_engine_config 一致。
 func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *ceschema.ContextEngineConfig {
@@ -1403,7 +1403,7 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *cesch
 	if !ok {
 		return nil
 	}
-	// 对齐 Python: 仅根据 enable_kv_cache_release 切换
+	// Python: 仅根据 enable_kv_cache_release 切换
 	result := ceschema.NewContextEngineConfig()
 	if v, ok := cecMap["enable_kv_cache_release"]; ok {
 		if b, ok := v.(bool); ok {
@@ -1414,16 +1414,16 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *cesch
 }
 
 // seedRuntimeCwd 从请求/运行时 CWD 种子 CwdState。
-// 对齐 Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)
+// Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)
 //
 // 解析优先级：
 //   - runtimeCwd：传入的 cwd 参数
 //   - → d.projectDir：项目目录
 //   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
 //
-// 对齐 Python: workspace_root = workspaceDir or projectDir or os.Getwd()
+// Python: workspace_root = workspaceDir or projectDir or os.Getwd()
 func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
-	// 对齐 Python: workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
+	// Python: workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
 	workspaceRoot := d.workspaceDir
 	if workspaceRoot == "" {
 		workspaceRoot = d.projectDir
@@ -1432,9 +1432,9 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 		workspaceRoot, _ = os.Getwd()
 	}
 
-	// 对齐 Python: runtime_cwd = str(cwd or "").strip()
+	// Python: runtime_cwd = str(cwd or "").strip()
 	runtimeCwd := strings.TrimSpace(cwdArg)
-	// 对齐 Python: 目录不存在检测
+	// Python: 目录不存在检测
 	if runtimeCwd == "" || !isDir(runtimeCwd) {
 		runtimeCwd = strings.TrimSpace(d.projectDir)
 	}
@@ -1442,7 +1442,7 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 		runtimeCwd = workspaceRoot
 	}
 
-	// 对齐 Python: init_cwd(runtime_cwd, workspace=workspace_root)
+	// Python: init_cwd(runtime_cwd, workspace=workspace_root)
 	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
 	ctx = cwd.WithCwdState(ctx, cwdState)
 
@@ -1455,7 +1455,7 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 }
 
 // isDir 检查路径是否为有效目录。
-// 对齐 Python: os.path.isdir(path)
+// Python: os.path.isdir(path)
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
@@ -1463,7 +1463,7 @@ func isDir(path string) bool {
 
 // setCheckpoint 设置持久化检查点。
 //
-// 对应 Python: JiuWenClawDeepAdapter.set_checkpoint() (line 1479-1480)
+// Python: JiuWenClawDeepAdapter.set_checkpoint() (line 1479-1480)
 //
 // Python 实现：
 //
@@ -1478,7 +1478,7 @@ func (d *DeepAdapter) setCheckpoint() error {
 
 // buildModelFromEntry 根据单个模型条目的 model_client_config / model_config_obj 构建 Model 实例。
 //
-// 对应 Python: JiuWenClawDeepAdapter._build_model_from_entry() (line 1483-1493)
+// Python: JiuWenClawDeepAdapter._build_model_from_entry() (line 1483-1493)
 func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any) (*llm.Model, error) {
 	name, _ := mcc["model_name"].(string)
 
@@ -1489,7 +1489,7 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 			temperature = f
 		}
 	}
-	// 对齐 Python: 只在配置中有 top_p 时才设置，不设默认值
+	// Python: 只在配置中有 top_p 时才设置，不设默认值
 	mConfigOpts := []llmschema.ModelRequestConfigOption{
 		llmschema.WithModelName(name),
 		llmschema.WithTemperature(temperature),
@@ -1560,7 +1560,7 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 
 // buildModelCacheFromDefaults 从 models.defaults 列表构建模型缓存。
 //
-// 对应 Python: JiuWenClawDeepAdapter._build_model_cache_from_defaults() (line 1495-1533)
+// Python: JiuWenClawDeepAdapter._build_model_cache_from_defaults() (line 1495-1533)
 //
 // key 使用 {model_name}#{index} 格式以支持同名模型共存。
 // 同时记录 modelNameToKeys 映射以便按 model_name 查找。
@@ -1614,7 +1614,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
 
 // buildModelCacheLegacy 回退到旧格式（models.default / react 段）构建单条目缓存。
 //
-// 对应 Python: JiuWenClawDeepAdapter._build_model_cache_legacy() (line 1535-1560)
+// Python: JiuWenClawDeepAdapter._build_model_cache_legacy() (line 1535-1560)
 func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any) {
 	modelsSection, _ := configBase["models"].(map[string]any)
 	reactSection, _ := configBase["react"].(map[string]any)
@@ -1680,7 +1680,7 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any) {
 
 // createModel 从配置创建 Model 实例并构建模型缓存。
 //
-// 对应 Python: JiuWenClawDeepAdapter._create_model() (line 1562-1593)
+// Python: JiuWenClawDeepAdapter._create_model() (line 1562-1593)
 func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 	d.modelCache = make(map[string]*llm.Model)
 	d.buildModelCacheFromDefaults(configBase)
@@ -1735,7 +1735,7 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 
 // resolveModelForRequest 根据请求中的 model_name 参数查找对应模型。
 //
-// 对应 Python: JiuWenClawDeepAdapter._resolve_model_for_request() (line 1595-1612)
+// Python: JiuWenClawDeepAdapter._resolve_model_for_request() (line 1595-1612)
 //
 // 支持两种格式：
 //   - 纯 model_name：查找 is_default=true 的条目
@@ -1769,7 +1769,7 @@ func (d *DeepAdapter) resolveModelForRequest(req *schema.AgentRequest) *llm.Mode
 
 // hasValidModelConfig 检查请求的模型名是否有有效配置。
 //
-// 对应 Python: JiuWenClawDeepAdapter._has_valid_model_config() (line ~4389)
+// Python: JiuWenClawDeepAdapter._has_valid_model_config() (line ~4389)
 func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
 	if requestedModelName == "" {
 		return true // 空字符串表示使用默认模型
@@ -1780,7 +1780,7 @@ func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
 
 // markSessionActive 递增 session 活跃任务计数。
 //
-// 对应 Python: _mark_session_active() (line 576-578)
+// Python: _mark_session_active() (line 576-578)
 // Counter 语义：允许并发同 session（如 supplement 同时旧任务还在），
 // 避免第一个任务结束时驱逐第二个。
 func (d *DeepAdapter) markSessionActive(sessionID string) {
@@ -1789,7 +1789,7 @@ func (d *DeepAdapter) markSessionActive(sessionID string) {
 
 // unmarkSessionActive 递减 session 活跃任务计数，归零时移除。
 //
-// 对应 Python: _unmark_session_active() (line 580-599)
+// Python: _unmark_session_active() (line 580-599)
 // 归零时清理 StreamEventRail 的 per-session 状态，防止长期运行内存泄漏。
 func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
 	count := d.activeSessionIDs[sessionID]
@@ -1803,14 +1803,14 @@ func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
 
 // isSessionActive 检查 session 是否有活跃任务。
 //
-// 对应 Python: _is_session_active() (line 601-603)
+// Python: _is_session_active() (line 601-603)
 func (d *DeepAdapter) isSessionActive(sessionID string) bool {
 	return d.activeSessionIDs[sessionID] > 0
 }
 
 // otherActiveSessions 返回除指定 session 外的活跃任务总数。
 //
-// 对应 Python: _other_active_sessions() (line 605-610)
+// Python: _other_active_sessions() (line 605-610)
 func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 	total := 0
 	for sid, count := range d.activeSessionIDs {
@@ -1822,7 +1822,7 @@ func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 }
 
 // parseParams 将 json.RawMessage 解析为 map[string]any。
-// 对应 Python 中 request.params 直接作为 dict 使用。
+// Python: 中 request.params 直接作为 dict 使用。
 func parseParams(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
 		return make(map[string]any)
@@ -1835,7 +1835,7 @@ func parseParams(raw json.RawMessage) map[string]any {
 }
 
 // paramsString 从 params 中取字符串值，支持默认值。
-// 对应 Python: request.params.get(key, default)
+// Python: request.params.get(key, default)
 func paramsString(params map[string]any, key string, defaultVal string) string {
 	v, ok := params[key]
 	if !ok {
@@ -1850,7 +1850,7 @@ func paramsString(params map[string]any, key string, defaultVal string) string {
 
 // getDefaultModels 从配置获取默认模型列表。
 //
-// 对应 Python: common/config.py get_default_models() (line 697+)
+// Python: common/config.py get_default_models() (line 697+)
 //
 // 优先级：models.defaults（列表） > models.default（单对象）
 func getDefaultModels(configBase map[string]any) []map[string]any {
@@ -1905,7 +1905,7 @@ func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
 }
 
 // resolveEnableTaskLoop 解析是否启用任务循环。
-// 对齐 Python: _resolve_enable_task_loop(config, config_base)
+// Python: _resolve_enable_task_loop(config, config_base)
 func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase map[string]any) bool {
 	if v, ok := config["enable_task_loop"]; ok {
 		if b, ok := v.(bool); ok {
@@ -1916,7 +1916,7 @@ func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase ma
 }
 
 // resolveEnableTaskPlanning 解析是否启用任务规划。
-// 对齐 Python: _resolve_enable_task_planning(config, config_base)
+// Python: _resolve_enable_task_planning(config, config_base)
 func (d *DeepAdapter) resolveEnableTaskPlanning(config map[string]any, configBase map[string]any) bool {
 	if v, ok := config["enable_task_planning"]; ok {
 		if b, ok := v.(bool); ok {
@@ -1927,7 +1927,7 @@ func (d *DeepAdapter) resolveEnableTaskPlanning(config map[string]any, configBas
 }
 
 // resolvePromptMode 解析提示词模式。
-// 对齐 Python: _resolve_prompt_mode(config_base)
+// Python: _resolve_prompt_mode(config_base)
 func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.PromptMode {
 	if v, ok := configBase["prompt_mode"]; ok {
 		if s, ok := v.(string); ok {
@@ -1945,7 +1945,7 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 }
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
-// 对齐 Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
+// Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
 func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards []*tool.ToolCard, railsList []sainterfaces.AgentRail) *hschema.DeepAgentConfig {
 	return &hschema.DeepAgentConfig{
 		Model:          model,
@@ -1959,7 +1959,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 }
 
 // getCurrentAgentRails 获取当前 Agent Rails（热重载时使用）。
-// 对齐 Python: _get_current_agent_rails(config, config_base)
+// Python: _get_current_agent_rails(config, config_base)
 func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
 	return d.buildAgentRails(config, configBase, d.mode)
 }
@@ -1994,7 +1994,7 @@ func extractReasoningContent(payload map[string]any) string {
 
 // updatePermissionRail 原地更新已有 PermissionRail 配置，或在首次启用时新建。
 //
-// 对齐 Python: _update_permission_rail(config_base) (interface_deep.py L2286-2302)
+// Python: _update_permission_rail(config_base) (interface_deep.py L2286-2302)
 //
 // Python 执行步骤：
 //  1. permission_config = config_base.get("permissions", {})
@@ -2004,7 +2004,7 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 	permissionConfig, _ := configBase["permissions"].(map[string]any)
 
 	if d.permissionRail != nil {
-		// 对齐 Python: self._permission_rail.update_config(permission_config)
+		// Python: self._permission_rail.update_config(permission_config)
 		if rail, ok := d.permissionRail.(*secrail.PermissionInterruptRail); ok {
 			rail.UpdateConfig(permissionConfig, nil)
 			logger.Info(logComponent).Msg("permissionRail 配置热更新完成")
@@ -2012,7 +2012,7 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 		return
 	}
 
-	// 对齐 Python: elif permission_config.get("enabled", False):
+	// Python: elif permission_config.get("enabled", False):
 	if permissionConfig != nil {
 		if enabled, _ := permissionConfig["enabled"].(bool); enabled {
 			rail := d.buildPermissionRail(configBase)

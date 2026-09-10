@@ -25,7 +25,7 @@ import (
 // EvolutionStoreReader 技能经验优化器所需的演进存储只读接口。
 // 从 skill_call/team_optimizer.go 迁移至此，与 Python evolution_store.py 位置对齐。
 //
-// 对应 Python: EvolutionStore
+// Python: EvolutionStore
 type EvolutionStoreReader interface {
 	// ReadSkillContent 读取技能内容
 	ReadSkillContent(ctx context.Context, skillName string) (string, error)
@@ -38,7 +38,7 @@ type EvolutionStoreReader interface {
 // 组合三个 Helper（Records/Projection/Archive）+ SysOperation 路由 + RWMutex 并发控制。
 // 所有方法为同步方法（对齐 Python 的 asyncio 在 Go 中改为同步 + 锁）。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/evolution_store.py EvolutionStore
+// Python: openjiuwen/agent_evolving/checkpointing/evolution_store.py EvolutionStore
 type EvolutionStore struct {
 	// baseDirs 配置的技能基础目录列表（resolve 后的绝对路径）
 	baseDirs []string
@@ -62,13 +62,13 @@ type EvolutionStore struct {
 
 const (
 	// evolutionFilename 演进数据文件名
-	// 对应 Python: _EVOLUTION_FILENAME = "evolutions.json"
+	// Python: _EVOLUTION_FILENAME = "evolutions.json"
 	evolutionFilename = "evolutions.json"
 	// totalWarningThreshold 演进记录总量告警阈值
-	// 对应 Python: _TOTAL_WARNING_THRESHOLD = 30
+	// Python: _TOTAL_WARNING_THRESHOLD = 30
 	totalWarningThreshold = 30
 	// maxInjectDesc 最大注入描述经验条数
-	// 对应 Python: _MAX_INJECT_DESC = 5
+	// Python: _MAX_INJECT_DESC = 5
 	maxInjectDesc = 5
 )
 
@@ -80,7 +80,7 @@ const logComponent = logger.ComponentAgentCore
 var _ EvolutionStoreReader = (*EvolutionStore)(nil)
 
 // evolutionIndexPattern evolution-index 块正则
-// 对应 Python: _EVOLUTION_INDEX_PATTERN
+// Python: _EVOLUTION_INDEX_PATTERN
 var evolutionIndexPattern = regexp.MustCompile(
 	`<!-- evolution-index-start -->.*?<!-- evolution-index-end -->`,
 )
@@ -92,7 +92,7 @@ var evolutionIndexPattern = regexp.MustCompile(
 // dirs 为技能基础目录列表（至少一个），单个目录也用切片传入。
 // sysOperation 通过 SetSysOperation 方法注入，对齐 Python 属性赋值模式。
 //
-// 对应 Python: EvolutionStore.__init__(skills_base_dir: Union[str, List[str]])
+// Python: EvolutionStore.__init__(skills_base_dir: Union[str, List[str]])
 func NewEvolutionStore(dirs []string) *EvolutionStore {
 	dirs = normalizeBaseDirsFromList(dirs)
 	if len(dirs) == 0 {
@@ -127,7 +127,7 @@ func (s *EvolutionStore) BaseDir() string {
 }
 
 // ListSkillNames 列出所有技能名称。
-// 对应 Python: EvolutionStore.list_skill_names()
+// Python: EvolutionStore.list_skill_names()
 func (s *EvolutionStore) ListSkillNames(ctx context.Context) []string {
 	var names []string
 	seen := map[string]bool{}
@@ -157,7 +157,7 @@ func (s *EvolutionStore) SkillExists(ctx context.Context, name string) bool {
 }
 
 // ResolveSkillDir 查找技能目录路径，create=true 时返回第一个 baseDir/name。
-// 对应 Python: EvolutionStore.resolve_skill_dir(name, create)
+// Python: EvolutionStore.resolve_skill_dir(name, create)
 func (s *EvolutionStore) ResolveSkillDir(ctx context.Context, name string, create ...bool) string {
 	doCreate := len(create) > 0 && create[0]
 	for _, base := range s.baseDirs {
@@ -173,13 +173,13 @@ func (s *EvolutionStore) ResolveSkillDir(ctx context.Context, name string, creat
 }
 
 // FindSkillMD 查找技能的 Markdown 入口文件。
-// 对应 Python: EvolutionStore._find_skill_md(skill_dir)
+// Python: EvolutionStore._find_skill_md(skill_dir)
 func (s *EvolutionStore) FindSkillMD(ctx context.Context, skillDir string) string {
 	skillMD := filepath.Join(skillDir, "SKILL.md")
 	if isFile(skillMD) {
 		return skillMD
 	}
-	// 对齐 Python: md_files = list(skill_dir.glob("*.md"))
+	// Python: md_files = list(skill_dir.glob("*.md"))
 	entries, err := os.ReadDir(skillDir)
 	if err != nil {
 		return ""
@@ -193,7 +193,7 @@ func (s *EvolutionStore) FindSkillMD(ctx context.Context, skillDir string) strin
 }
 
 // ReadFileText 读取文本文件，路由通过 sysOperation。
-// 对应 Python: EvolutionStore.read_file_text(path)
+// Python: EvolutionStore.read_file_text(path)
 func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string, error) {
 	localRead := func() (string, error) {
 		data, err := os.ReadFile(path)
@@ -206,10 +206,10 @@ func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string,
 	if s.sysOperation != nil {
 		fsOp := s.sysOperation.Fs()
 		if fsOp != nil {
-			// 对齐 Python: result = await self.sys_operation.fs().read_file(...)
+			// Python: result = await self.sys_operation.fs().read_file(...)
 			result, err := fsOp.ReadFile(ctx, path)
 			if err != nil || result == nil || result.Code != 0 {
-				// 对齐 Python: sys_operation 读文件失败时返回空串，不 fallback 到本地
+				// Python: sys_operation 读文件失败时返回空串，不 fallback 到本地
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
@@ -219,7 +219,7 @@ func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string,
 			if result.Data != nil && result.Data.Content != "" {
 				return result.Data.Content, nil
 			}
-			// 对齐 Python: content 为空时也返回空串，不 fallback
+			// Python: content 为空时也返回空串，不 fallback
 			return "", nil
 		}
 	}
@@ -227,7 +227,7 @@ func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string,
 }
 
 // WriteFileText 写入文本文件，路由通过 sysOperation。
-// 对应 Python: EvolutionStore.write_file_text(path, content)
+// Python: EvolutionStore.write_file_text(path, content)
 func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content string) error {
 	localWrite := func() error {
 		// 确保父目录存在
@@ -241,7 +241,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 		if fsOp != nil {
 			result, err := fsOp.WriteFile(ctx, path, content)
 			if err != nil {
-				// 对齐 Python: sys_operation 写文件失败时返回 error，不 fallback 到本地
+				// Python: sys_operation 写文件失败时返回 error，不 fallback 到本地
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
@@ -249,7 +249,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 				return fmt.Errorf("sys_operation 写文件失败: %w", err)
 			}
 			if result != nil && result.Code != 0 {
-				// 对齐 Python: sys_operation 写文件返回非零状态码时打 warning，不 fallback
+				// Python: sys_operation 写文件返回非零状态码时打 warning，不 fallback
 				logger.Warn(logComponent).
 					Str("path", path).
 					Str("message", result.Message).
@@ -263,7 +263,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 }
 
 // ReadSkillContent 读取技能 SKILL.md 内容。
-// 对应 Python: EvolutionStore.read_skill_content(name)
+// Python: EvolutionStore.read_skill_content(name)
 func (s *EvolutionStore) ReadSkillContent(ctx context.Context, name string) (string, error) {
 	skillDir := s.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -277,7 +277,7 @@ func (s *EvolutionStore) ReadSkillContent(ctx context.Context, name string) (str
 }
 
 // ReadPristineSkillContent 读取不含 evolution-index 块的 SKILL.md 内容。
-// 对应 Python: EvolutionStore.read_pristine_skill_content(name)
+// Python: EvolutionStore.read_pristine_skill_content(name)
 func (s *EvolutionStore) ReadPristineSkillContent(ctx context.Context, name string) (string, error) {
 	content, err := s.ReadSkillContent(ctx, name)
 	if err != nil {
@@ -365,7 +365,7 @@ func (s *EvolutionStore) InstallSkillPackage(ctx context.Context, packageBytes [
 
 	resolvedName := strings.TrimSpace(skillName)
 	if resolvedName == "" {
-		// 对齐 Python: 从 tarball 推断名称
+		// Python: 从 tarball 推断名称
 		resolvedName = inferSkillNameFromPackage(packageBytes)
 	}
 	if resolvedName == "" {
@@ -444,7 +444,7 @@ func (s *EvolutionStore) LoadEvolutionLog(ctx context.Context, name string, targ
 }
 
 // AppendRecord 追加或合并一条演进记录。
-// 对应 Python: EvolutionStore.append_record(name, record)
+// Python: EvolutionStore.append_record(name, record)
 func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record EvolutionRecord) error {
 	lock := s.getSkillLock(name)
 	lock.Lock()
@@ -664,7 +664,7 @@ func (s *EvolutionStore) getSkillLock(name string) *sync.RWMutex {
 }
 
 // normalizeBaseDirsFromList 从 []string 规范化基础目录列表。
-// 对应 Python: EvolutionStore._normalize_base_dirs(skills_base_dir: List[str])
+// Python: EvolutionStore._normalize_base_dirs(skills_base_dir: List[str])
 func normalizeBaseDirsFromList(baseDirs []string) []string {
 	var result []string
 	seen := map[string]bool{}
@@ -686,7 +686,7 @@ func normalizeBaseDirsFromList(baseDirs []string) []string {
 }
 
 // parseBaseDirs 解析分号/逗号分隔的多路径。
-// 对应 Python: EvolutionStore._parse_base_dirs(raw)
+// Python: EvolutionStore._parse_base_dirs(raw)
 func parseBaseDirs(raw string) []string {
 	text := strings.TrimSpace(raw)
 	if text == "" {
@@ -705,7 +705,7 @@ func parseBaseDirs(raw string) []string {
 }
 
 // inferSkillNameFromPackage 从 tarball 推断技能名。
-// 对齐 Python: install_skill_package 中的 top_level_names 逻辑
+// Python: install_skill_package 中的 top_level_names 逻辑
 // 先检查是否只有一个顶级目录（Python: len(top_level_names) == 1），再回退到 SKILL.md 搜索
 func inferSkillNameFromPackage(packageBytes []byte) string {
 	buf := bytes.NewReader(packageBytes)
@@ -732,7 +732,7 @@ func inferSkillNameFromPackage(packageBytes []byte) string {
 		if err != nil {
 			return ""
 		}
-		// 对齐 Python: member.name and not member.name.startswith("/")
+		// Python: member.name and not member.name.startswith("/")
 		if header.Name != "" && !strings.HasPrefix(header.Name, "/") {
 			parts := strings.Split(filepath.ToSlash(header.Name), "/")
 			if len(parts) > 0 && parts[0] != "" {
@@ -742,7 +742,7 @@ func inferSkillNameFromPackage(packageBytes []byte) string {
 		}
 	}
 
-	// 对齐 Python: if len(top_level_names) == 1 → resolved_name = next(iter(top_level_names))
+	// Python: if len(top_level_names) == 1 → resolved_name = next(iter(top_level_names))
 	if len(topLevelNames) == 1 {
 		for name := range topLevelNames {
 			return name

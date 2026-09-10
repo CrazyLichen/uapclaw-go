@@ -15,7 +15,7 @@ import (
 // ID 生成算法：6字节时间戳 + 3字节随机数 + 3字节用户哈希 = 12字节 = 24字符hex串。
 // 与 Python 实现对齐，确保相同用户在相近时间生成的 ID 不冲突。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/data_id_manager.py (DataIdManager)
+// Python: openjiuwen/core/memory/manage/mem_model/data_id_manager.py (DataIdManager)
 type DataIdManager struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -34,7 +34,7 @@ func NewDataIdManager() *DataIdManager {
 // GenerateNextID 生成下一个唯一 ID。
 // 算法：6字节毫秒时间戳 + 3字节加密安全随机数 + 3字节用户ID哈希。
 //
-// 对应 Python: DataIdManager.generate_next_id(user_id)
+// Python: DataIdManager.generate_next_id(user_id)
 func (m *DataIdManager) GenerateNextID(userID string) string {
 	// 6字节时间戳：毫秒级，取低48位
 	t := uint64(time.Now().UnixMilli()) & 0xFFFFFFFFFFFF

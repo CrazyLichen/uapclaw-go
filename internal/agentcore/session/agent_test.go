@@ -412,7 +412,7 @@ func TestSession_GetEnvDefaultValue(t *testing.T) {
 
 // TestSession_GetEnvs返回内置默认值 测试 GetEnvs 返回包含内置默认值的 map（非 nil）
 // 5.12 回填后，NewSessionConfig 自动加载内置超时配置，GetEnvs 返回非空 map。
-// 对齐 Python: Session.__init__() 总是创建 Config()，get_envs() 返回内置默认值字典
+// Python: Session.__init__() 总是创建 Config()，get_envs() 返回内置默认值字典
 func TestSession_GetEnvs返回内置默认值(t *testing.T) {
 	s := NewSession()
 	envs := s.GetEnvs()
@@ -513,7 +513,7 @@ func TestSession_GetAgentDescription有Card(t *testing.T) {
 }
 
 // TestCreateAgentSession 测试通过 sessionID、card 和 envs 创建 Session
-// 对齐 Python: create_agent_session(session_id, envs, card)
+// Python: create_agent_session(session_id, envs, card)
 func TestCreateAgentSession(t *testing.T) {
 	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
 	s := CreateAgentSession("sess-1", card, nil)

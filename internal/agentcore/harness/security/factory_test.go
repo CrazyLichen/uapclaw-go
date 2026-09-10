@@ -22,7 +22,7 @@ type fakeRail struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func (f *fakeRail) Priority() int                            { return 0 }
-func (f *fakeRail) Init(_ agentinterfaces.BaseAgent) error   { return nil }
+func (f *fakeRail) Init(_ context.Context, _ agentinterfaces.BaseAgent) error   { return nil }
 func (f *fakeRail) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 func (f *fakeRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil

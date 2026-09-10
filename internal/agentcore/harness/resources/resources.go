@@ -57,7 +57,7 @@ func ParseBuiltinRules() (*BuiltinRules, error) {
 }
 
 // ParseBuiltinRulesFromFile 从文件系统解析内置安全规则 YAML。
-// 对齐 Python: get_builtin_security_rules() 中 with path.open(...) 读取
+// Python: get_builtin_security_rules() 中 with path.open(...) 读取
 func ParseBuiltinRulesFromFile(filePath string) (*BuiltinRules, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -71,7 +71,7 @@ func ParseBuiltinRulesFromFile(filePath string) (*BuiltinRules, error) {
 }
 
 // ResolveBuiltinRulesYAMLPath 返回包内 builtin_rules.yaml 的文件系统路径。
-// 对齐 Python: _package_builtin_rules_path() — Path(__file__).resolve().parent.parent / "resources" / "builtin_rules.yaml"
+// Python: _package_builtin_rules_path() — Path(__file__).resolve().parent.parent / "resources" / "builtin_rules.yaml"
 // 使用 runtime.Caller 获取当前源文件位置，推导 resources 目录下的 YAML 路径。
 func ResolveBuiltinRulesYAMLPath() string {
 	// runtime.Caller(0) 返回当前函数所在源文件的路径
@@ -89,7 +89,7 @@ func ResolveBuiltinRulesYAMLPath() string {
 }
 
 // GetFileModTime 返回文件的修改时间（Unix 时间戳秒），文件不存在返回 -1。
-// 对齐 Python: path.stat().st_mtime
+// Python: path.stat().st_mtime
 func GetFileModTime(filePath string) float64 {
 	info, err := os.Stat(filePath)
 	if err != nil {

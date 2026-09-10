@@ -32,7 +32,7 @@ const logComponent = logger.ComponentCommon
 //   - export KEY=VALUE（export 前缀被忽略）
 //   - KEY=VALUE # comment（无引号时行尾注释）
 //
-// 对应 Python: dotenv.load_dotenv() 的解析逻辑
+// Python: dotenv.load_dotenv() 的解析逻辑
 func Parse(content string) map[string]string {
 	result := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(content))
@@ -65,7 +65,7 @@ func Parse(content string) map[string]string {
 //
 // 读取指定路径的 .env 文件，解析后以 override 方式写入 os.Setenv，
 // 即 .env 中的值会覆盖已有环境变量。
-// 对应 Python: dotenv.load_dotenv(path, override=True)
+// Python: dotenv.load_dotenv(path, override=True)
 func Load(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

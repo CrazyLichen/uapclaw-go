@@ -22,7 +22,7 @@ const (
 
 // ApplySessionRename 实现会话重命名三种语义：查询(title=nil) / 清除(空串) / 设置(非空)。
 //
-// 对齐 Python apply_session_rename(params, connection_session_id, init_channel_id)
+// Python: apply_session_rename(params, connection_session_id, init_channel_id)
 // 返回 (payload, error)；payload 包含 session_id, title, previous_title
 func ApplySessionRename(
 	target string,

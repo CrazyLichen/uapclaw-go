@@ -10,10 +10,10 @@ import (
 
 // IntelliRouterClientConfig 从 ModelClientConfig.Extra 中提取的 IntelliRouter 路由配置。
 //
-// 对应 Python: IntelliRouterClientConfig（intelli_router_model_client.py 中的 dataclass）
+// Python: IntelliRouterClientConfig（intelli_router_model_client.py 中的 dataclass）
 //
 // 配置字段通过 intelli_router_ 前缀从 ModelClientConfig.Extra 中提取，
-// 对齐 Python 的 __pydantic_extra__ 读取逻辑。
+// Python: 的 __pydantic_extra__ 读取逻辑。
 type IntelliRouterClientConfig struct {
 	// Deployments 部署端点配置列表
 	Deployments []DeploymentConfig
@@ -35,7 +35,7 @@ type IntelliRouterClientConfig struct {
 
 // DeploymentConfig 单个部署端点配置。
 //
-// 对应 Python: intelli_router.Deployment 构造参数
+// Python: intelli_router.Deployment 构造参数
 type DeploymentConfig struct {
 	// ID 部署端点唯一标识，如 "deepseek-v4-flash-dep1"
 	ID string
@@ -67,7 +67,7 @@ type DeploymentConfig struct {
 
 // FromModelClientConfig 从 ModelClientConfig.Extra 中提取 IntelliRouter 路由配置。
 //
-// 对应 Python: IntelliRouterClientConfig.from_model_client_config(config)
+// Python: IntelliRouterClientConfig.from_model_client_config(config)
 //
 // Extra 字段命名约定：intelli_router_{field_name}
 //   - intelli_router_deployments → Deployments（部署列表）
@@ -114,7 +114,7 @@ func FromModelClientConfig(config *llmschema.ModelClientConfig) *IntelliRouterCl
 // parseDeployments 从 Extra 中的 deployments 列表解析为 []DeploymentConfig。
 //
 // 输入格式：[]map[string]any（从 YAML/JSON 反序列化得到）
-// 对应 Python: for dep_cfg in config.deployments: Deployment(...)
+// Python: for dep_cfg in config.deployments: Deployment(...)
 func parseDeployments(raw any, defaultVerifySSL bool) []DeploymentConfig {
 	// 支持两种类型：[]map[string]any 和 []any（JSON 反序列化可能产生 []any）
 	var depMaps []map[string]any

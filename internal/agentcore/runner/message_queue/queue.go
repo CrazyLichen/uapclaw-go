@@ -14,14 +14,14 @@ import (
 
 // MessageQueueInMemory 基于 Go channel 的内存消息队列。
 //
-// 对齐 Python MessageQueueInMemory，支持：
+// Python: MessageQueueInMemory，支持：
 //   - 按 topic 路由消息到不同订阅者
 //   - 火忘发布（QueueMessage，不等待）
 //   - 同步发布（InvokeQueueMessage，等待处理完成）
 //   - 流式发布（StreamQueueMessage，等待流式处理结果）
 //   - 订阅生命周期管理（Activate/Deactivate）
 //
-// 对应 Python: openjiuwen/core/runner/message_queue_inmemory.py
+// Python: openjiuwen/core/runner/message_queue_inmemory.py
 type MessageQueueInMemory struct {
 	// maxSize 单个 topic 的 channel 缓冲大小
 	maxSize int
@@ -67,7 +67,7 @@ type internalMessage struct {
 
 // Subscription 导出的订阅句柄，实现 SubscriptionBase 接口。
 //
-// 对应 Python: MessageQueueInMemory.subscribe() 返回的 Subscription 对象
+// Python: MessageQueueInMemory.subscribe() 返回的 Subscription 对象
 type Subscription struct {
 	// ts 内部 topic 订阅实体
 	ts *topicSubscription
@@ -97,7 +97,7 @@ var (
 
 // NewMessageQueueInMemory 创建内存消息队列。
 //
-// 对应 Python: MessageQueueInMemory(queue_max_size, timeout)
+// Python: MessageQueueInMemory(queue_max_size, timeout)
 func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueInMemory {
 	return &MessageQueueInMemory{
 		maxSize: maxSize,
@@ -108,7 +108,7 @@ func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueIn
 
 // Start 启动消息队列。实现 MessageQueueBase 接口。
 //
-// 对应 Python: MessageQueueInMemory.start()
+// Python: MessageQueueInMemory.start()
 func (q *MessageQueueInMemory) Start() {
 	q.running.Store(true)
 	logger.Info(logComponent).
@@ -118,7 +118,7 @@ func (q *MessageQueueInMemory) Start() {
 
 // Stop 停止消息队列，取消所有订阅和消费 goroutine。实现 MessageQueueBase 接口。
 //
-// 对应 Python: MessageQueueInMemory.stop()
+// Python: MessageQueueInMemory.stop()
 func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 	if !q.running.Load() {
 		return nil
@@ -144,7 +144,7 @@ func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 // 返回 SubscriptionBase 接口，调用方可通过类型断言获取 *Subscription。
 // 若 topic 已被订阅，返回 ErrTopicAlreadySubscribed 错误。
 //
-// 对应 Python: MessageQueueInMemory.subscribe(topic)
+// Python: MessageQueueInMemory.subscribe(topic)
 // Python 中重复订阅同一 topic 抛 ValueError。
 func (q *MessageQueueInMemory) Subscribe(topic string) (SubscriptionBase, error) {
 	q.mu.Lock()
@@ -169,7 +169,7 @@ func (q *MessageQueueInMemory) Subscribe(topic string) (SubscriptionBase, error)
 
 // Unsubscribe 取消订阅，停止消费 goroutine 并移除 topic。实现 MessageQueueBase 接口。
 //
-// 对应 Python: MessageQueueInMemory.unsubscribe(topic)
+// Python: MessageQueueInMemory.unsubscribe(topic)
 func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -196,7 +196,7 @@ func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) er
 //   - *InvokeQueueMessage: 同步发布，等待处理完成
 //   - *StreamQueueMessage: 流式发布，等待流式处理结果
 //
-// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message)
+// Python: MessageQueueInMemory.produce_message(topic, queue_message)
 func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg QueueMessageBase) error {
 	if !q.running.Load() {
 		return ErrQueueNotRunning
@@ -236,14 +236,14 @@ func (s *Subscription) SetMessageHandler(handler func(ctx context.Context, paylo
 
 // Activate 激活订阅，启动消费 goroutine。实现 SubscriptionBase 接口。
 //
-// 对齐 Python: Subscription.activate()
+// Python: Subscription.activate()
 func (s *Subscription) Activate() {
 	s.ts.activate()
 }
 
 // Deactivate 停用订阅，停止消费 goroutine。实现 SubscriptionBase 接口。
 //
-// 对应 Python: Subscription.deactivate()
+// Python: Subscription.deactivate()
 func (s *Subscription) Deactivate() {
 	s.ts.deactivate()
 }
@@ -313,7 +313,7 @@ func (ts *topicSubscription) consume(ctx context.Context) {
 
 // handleMessage 处理单条消息。
 // 通过 internalMessage.invoke / stream 字段判断消息类型，
-// 对齐 Python SubscriptionInMemory._handle_response 的 isinstance 判断。
+// Python: SubscriptionInMemory._handle_response 的 isinstance 判断。
 func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMessage) {
 	ts.handlerMu.RLock()
 	handler := ts.handler

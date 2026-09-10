@@ -16,7 +16,7 @@ import (
 //   - SetParameter(): 演化更新
 //   - LoadState(): 检查点恢复
 //
-// 对应 Python: openjiuwen/core/operator/memory_call/base.py MemoryCallOperator
+// Python: openjiuwen/core/operator/memory_call/base.py MemoryCallOperator
 type MemoryCallOperator struct {
 	// operatorID 操作器标识
 	operatorID string
@@ -37,10 +37,10 @@ type MemoryCallOperatorOption func(*MemoryCallOperator)
 
 const (
 	// TargetEnabled 启用状态目标名。
-	// 对应 Python: "enabled"
+	// Python: "enabled"
 	TargetEnabled = "enabled"
 	// TargetMaxRetries 最大重试次数目标名。
-	// 对应 Python: "max_retries"
+	// Python: "max_retries"
 	TargetMaxRetries = "max_retries"
 	// 默认操作器标识
 	defaultMemoryOperatorID = "memory_call"
@@ -56,7 +56,7 @@ const (
 
 // NewMemoryCallOperator 创建 MemoryCallOperator 实例。
 //
-// 对应 Python: MemoryCallOperator.__init__(operator_id, on_parameter_updated)
+// Python: MemoryCallOperator.__init__(operator_id, on_parameter_updated)
 func NewMemoryCallOperator(opts ...MemoryCallOperatorOption) *MemoryCallOperator {
 	op := &MemoryCallOperator{
 		operatorID: defaultMemoryOperatorID,
@@ -73,14 +73,14 @@ func NewMemoryCallOperator(opts ...MemoryCallOperatorOption) *MemoryCallOperator
 
 // OperatorID 返回操作器标识。
 //
-// 对应 Python: MemoryCallOperator.operator_id (property)
+// Python: MemoryCallOperator.operator_id (property)
 func (op *MemoryCallOperator) OperatorID() string {
 	return op.operatorID
 }
 
 // GetTunables 获取可调参数。
 //
-// 对应 Python: MemoryCallOperator.get_tunables()
+// Python: MemoryCallOperator.get_tunables()
 func (op *MemoryCallOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
 		TargetEnabled: {
@@ -101,7 +101,7 @@ func (op *MemoryCallOperator) GetTunables() map[string]operator.TunableSpec {
 // SetParameter 设置可调参数值。
 // 触发 onParameterUpdated 回调。
 //
-// 对应 Python: MemoryCallOperator.set_parameter(target, value)
+// Python: MemoryCallOperator.set_parameter(target, value)
 func (op *MemoryCallOperator) SetParameter(target string, value any) {
 	switch target {
 	case TargetEnabled:
@@ -119,7 +119,7 @@ func (op *MemoryCallOperator) SetParameter(target string, value any) {
 
 // GetState 获取当前状态，用于检查点。
 //
-// 对应 Python: MemoryCallOperator.get_state()
+// Python: MemoryCallOperator.get_state()
 func (op *MemoryCallOperator) GetState() map[string]any {
 	return map[string]any{
 		TargetEnabled:    op.enabled,
@@ -130,7 +130,7 @@ func (op *MemoryCallOperator) GetState() map[string]any {
 // LoadState 从检查点恢复状态。
 // 触发 onParameterUpdated 回调。
 //
-// 对应 Python: MemoryCallOperator.load_state(state)
+// Python: MemoryCallOperator.load_state(state)
 func (op *MemoryCallOperator) LoadState(state map[string]any) {
 	if e, ok := state[TargetEnabled]; ok {
 		op.enabled = toBool(e)
@@ -149,7 +149,7 @@ func (op *MemoryCallOperator) LoadState(state map[string]any) {
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
 //
-// 对应 Python: Operator.apply_update 默认实现
+// Python: Operator.apply_update 默认实现
 func (op *MemoryCallOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)
 }

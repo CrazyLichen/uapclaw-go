@@ -27,7 +27,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // trySetEnv 尝试将环境变量值设置到 envs 字典中，根据类型映射进行转换。
-// 对应 Python: _try_set_env
+// Python: _try_set_env
 func trySetEnv(envs map[string]any, configKey, envKey string, value any) {
 	if value == nil {
 		return
@@ -131,7 +131,7 @@ func trySetBool(envs map[string]any, configKey, envKey string, value any) {
 }
 
 // loadEnvConfigs 从 os.Getenv 和 context 加载环境变量配置。
-// 对应 Python: _load_env_configs
+// Python: _load_env_configs
 // 优先级：os.Getenv > context.Value > 内置默认值
 func loadEnvConfigs(ctx context.Context) map[string]any {
 	envConfigs := make(map[string]any)

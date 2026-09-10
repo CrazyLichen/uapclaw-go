@@ -248,7 +248,7 @@ func (tp *TaskPlan) GetProgressSummary() string {
 }
 
 // ToMarkdown 将任务计划渲染为 Markdown 格式。
-// 对齐 Python: TaskPlan.to_markdown()
+// Python: TaskPlan.to_markdown()
 func (tp *TaskPlan) ToMarkdown() string {
 	var sb strings.Builder
 	sb.WriteString("## Goal: ")

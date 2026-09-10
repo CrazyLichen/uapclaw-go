@@ -14,7 +14,7 @@ import (
 // 所有查询表达式（Comparison/Range/Arithmetic/Null/JSON/Array/Logical/Match/Custom）
 // 均实现此接口。通过 ToExpr 方法将表达式转换为数据库特定格式。
 // Milvus 后端返回 string，Chroma 后端返回 map[string]any。
-// 对应 Python: QueryExpr
+// Python: QueryExpr
 type QueryExpr interface {
 	// ToExpr 将过滤表达式转换为后端特定格式
 	ToExpr(backend string) (any, error)
@@ -22,7 +22,7 @@ type QueryExpr interface {
 
 // ComparisonExpr 比较表达式（==, !=, >, <, >=, <=）
 //
-// 对应 Python: ComparisonExpr
+// Python: ComparisonExpr
 type ComparisonExpr struct {
 	// Field 字段名
 	Field string
@@ -34,7 +34,7 @@ type ComparisonExpr struct {
 
 // RangeExpr 范围表达式（in, like）
 //
-// 对应 Python: RangeExpr
+// Python: RangeExpr
 type RangeExpr struct {
 	// Field 字段名
 	Field string
@@ -46,7 +46,7 @@ type RangeExpr struct {
 
 // ArithmeticExpr 算术表达式（字段 + - * / % ** 比较值）
 //
-// 对应 Python: ArithmeticExpr
+// Python: ArithmeticExpr
 type ArithmeticExpr struct {
 	// Field 字段名
 	Field string
@@ -62,7 +62,7 @@ type ArithmeticExpr struct {
 
 // NullExpr 空值检查表达式（is null / is not null）
 //
-// 对应 Python: NullExpr
+// Python: NullExpr
 type NullExpr struct {
 	// Field 字段名
 	Field string
@@ -72,7 +72,7 @@ type NullExpr struct {
 
 // JSONExpr JSON 字段查询表达式
 //
-// 对应 Python: JSONExpr
+// Python: JSONExpr
 type JSONExpr struct {
 	// Field JSON 字段名
 	Field string
@@ -86,7 +86,7 @@ type JSONExpr struct {
 
 // ArrayExpr 数组字段查询表达式
 //
-// 对应 Python: ArrayExpr
+// Python: ArrayExpr
 type ArrayExpr struct {
 	// Field 数组字段名
 	Field string
@@ -100,7 +100,7 @@ type ArrayExpr struct {
 
 // LogicalExpr 逻辑组合表达式（and, or, not, xor）
 //
-// 对应 Python: LogicalExpr
+// Python: LogicalExpr
 type LogicalExpr struct {
 	// Operator 逻辑运算符（and, or, not, xor）
 	Operator string
@@ -112,7 +112,7 @@ type LogicalExpr struct {
 
 // MatchExpr 文本匹配表达式（prefix, suffix, infix, exact）
 //
-// 对应 Python: MatchExpr
+// Python: MatchExpr
 type MatchExpr struct {
 	// Field 字段名
 	Field string
@@ -124,7 +124,7 @@ type MatchExpr struct {
 
 // CustomExpr 自定义原始表达式
 //
-// 对应 Python: CustomExpr
+// Python: CustomExpr
 type CustomExpr struct {
 	// Expr 自定义表达式（可为任意类型）
 	Expr any
@@ -150,7 +150,7 @@ const (
 
 // SanitizeStr 转义字符串值中的双引号并加上引号包裹
 //
-// 对应 Python: QueryExpr.sanitize_str()
+// Python: QueryExpr.sanitize_str()
 func SanitizeStr(value any) string {
 	s := fmt.Sprintf("%v", value)
 	if strings.Contains(s, `"`) {
@@ -241,7 +241,7 @@ func (e *MatchExpr) ToExpr(backend string) (any, error) {
 
 // raiseQueryError 构造查询错误
 //
-// 对应 Python: raise_query_error()
+// Python: raise_query_error()
 func raiseQueryError(reason string) error {
 	return exception.BuildError(exception.StatusRetrievalVectorStoreQueryInvalid,
 		exception.WithParam("error_msg", reason))

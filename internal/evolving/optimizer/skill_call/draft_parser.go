@@ -15,7 +15,7 @@ import (
 
 // ParsedExperienceDraft 解析后的 LLM 输出草稿，在持久化为 EvolutionRecord 前的中间形态。
 //
-// 对应 Python: experience_draft_parser.py ParsedExperienceDraft
+// Python: experience_draft_parser.py ParsedExperienceDraft
 type ParsedExperienceDraft struct {
 	// Patch 演进补丁
 	Patch checkpointing.EvolutionPatch
@@ -32,7 +32,7 @@ type ParsedExperienceDraft struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // headingRE Markdown 章节标题正则
-// 对齐 Python: _HEADING_RE = re.compile(r"^#{1,4}\s+")
+// Python: _HEADING_RE = re.compile(r"^#{1,4}\s+")
 
 var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 
@@ -40,7 +40,7 @@ var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 
 // NormalizeKeywords 规范化可选关键词列表，从 LLM JSON 输出中提取。
 //
-// 对齐 Python: normalize_keywords(raw)
+// Python: normalize_keywords(raw)
 //
 //	if not isinstance(raw, list): return None
 //	Python: keywords = [str(item).strip() for item in raw if str(item).strip()]
@@ -68,7 +68,7 @@ func NormalizeKeywords(raw any) []string {
 
 // NormalizeSummary 规范化可选的单行经验摘要，从 LLM JSON 输出中提取。
 //
-// 对齐 Python: normalize_summary(raw)
+// Python: normalize_summary(raw)
 //
 //	if not isinstance(raw, str): return None
 //	Python: summary = " ".join(raw.split())
@@ -91,7 +91,7 @@ func NormalizeSummary(raw any) *string {
 
 // ParseExperienceDraft 将单个 JSON 对象解析为 ParsedExperienceDraft。
 //
-// 对齐 Python: parse_experience_draft(data)
+// Python: parse_experience_draft(data)
 //
 //	Python: action = data.get("action", "append")
 //	if action == "skip": return ParsedExperienceDraft(patch=EvolutionPatch(action="skip", ...))
@@ -104,7 +104,7 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 	}
 	action := getStr(data, "action", "append")
 
-	// 对齐 Python: if action == "skip": return ParsedExperienceDraft(patch=EvolutionPatch(action="skip", ...))
+	// Python: if action == "skip": return ParsedExperienceDraft(patch=EvolutionPatch(action="skip", ...))
 	if action == "skip" {
 		skipReason := "unknown"
 		if v, ok := data["skip_reason"]; ok && v != nil {
@@ -122,14 +122,14 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 		}
 	}
 
-	// 对齐 Python: section = data.get("section", "Troubleshooting")
+	// Python: section = data.get("section", "Troubleshooting")
 	//	if section not in VALID_SECTIONS: section = "Troubleshooting"
 	section := getStr(data, "section", "Troubleshooting")
 	if !schema.ValidSections[section] {
 		section = "Troubleshooting"
 	}
 
-	// 对齐 Python: target = EvolutionTarget(raw_target)，失败 → fallback BODY
+	// Python: target = EvolutionTarget(raw_target)，失败 → fallback BODY
 	rawTarget := getStr(data, "target", "body")
 	var target signal.EvolutionTarget
 	if parsed, err := signal.ParseEvolutionTarget(rawTarget); err != nil {
@@ -138,7 +138,7 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 		target = parsed
 	}
 
-	// 对齐 Python: merge_target = data.get("merge_target")
+	// Python: merge_target = data.get("merge_target")
 	//	if merge_target in ("null", None): merge_target = None
 	var mergeTarget *string
 	if v, ok := data["merge_target"]; ok && v != nil {
@@ -148,7 +148,7 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 		}
 	}
 
-	// 对齐 Python: keywords = normalize_keywords(data.get("keywords"))
+	// Python: keywords = normalize_keywords(data.get("keywords"))
 	//	Python: summary = normalize_summary(data.get("summary"))
 	keywords := NormalizeKeywords(data["keywords"])
 	summary := NormalizeSummary(data["summary"])
@@ -177,7 +177,7 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 
 // ParseExperienceDraftsWithError 从原始 LLM JSON 文本中批量解析草稿，并返回解析错误信息。
 //
-// 对齐 Python: parse_experience_drafts_with_error(raw, extract_json_with_error_fn)
+// Python: parse_experience_drafts_with_error(raw, extract_json_with_error_fn)
 //
 //	Python: data, last_error = extract_json_with_error_fn(raw)
 //	Python: if data is None: return None, last_error
@@ -215,7 +215,7 @@ func ParseExperienceDraftsWithError(raw string, extractFn func(string) (any, str
 
 // ExtractJSONWithError 健壮 JSON 提取，同时返回最后的解析错误信息。
 //
-// 对齐 Python: _extract_json_with_error(raw)
+// Python: _extract_json_with_error(raw)
 //
 // 顺序尝试：
 //  1. 直接解析 raw
@@ -270,7 +270,7 @@ func ExtractJSONWithError(raw string) (any, string) {
 
 // LooksTruncated 判断 LLM 输出是否看起来被截断了。
 //
-// 对齐 Python: _looks_truncated(text)
+// Python: _looks_truncated(text)
 //
 //	Python: opens = text.count("{") + text.count("[")
 //	Python: closes = text.count("}") + text.count("]")
@@ -283,20 +283,20 @@ func LooksTruncated(text string) bool {
 
 // FixJSONText 修复 LLM 输出中常见的 JSON 格式错误。
 //
-// 对齐 Python: _fix_json_text(text)
+// Python: _fix_json_text(text)
 //
 //	去除代码块标记 (```json)
 //	去除注释 (//)
 //	去除尾逗号
 func FixJSONText(text string) string {
 	text = strings.TrimSpace(text)
-	// 对齐 Python: re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+	// Python: re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
 	text = regexp.MustCompile("^```(?:json)?\\s*").ReplaceAllString(text, "")
-	// 对齐 Python: re.sub(r"```\s*$", "", text, flags=re.MULTILINE)
+	// Python: re.sub(r"```\s*$", "", text, flags=re.MULTILINE)
 	text = regexp.MustCompile("```\\s*$").ReplaceAllString(text, "")
-	// 对齐 Python: re.sub(r"//[^\n]*", "", text)
+	// Python: re.sub(r"//[^\n]*", "", text)
 	text = regexp.MustCompile(`//[^\n]*`).ReplaceAllString(text, "")
-	// 对齐 Python: re.sub(r",\s*([}\]])", r"\1", text)
+	// Python: re.sub(r",\s*([}\]])", r"\1", text)
 	text = regexp.MustCompile(`,\s*([}\]])`).ReplaceAllString(text, "$1")
 	return strings.TrimSpace(text)
 }
@@ -304,7 +304,7 @@ func FixJSONText(text string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // tryParse 尝试 json.Unmarshal，失败返回 nil。
-// 对齐 Python: _try_parse(text)
+// Python: _try_parse(text)
 func tryParse(text string) any {
 	var result any
 	if err := json.Unmarshal([]byte(text), &result); err != nil {

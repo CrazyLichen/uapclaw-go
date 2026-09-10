@@ -13,18 +13,18 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BeamSearchMethod Beam Search 所需的方法接口。
-// 对齐 Python: BeamSearch.method — 需实现 step() 和 get_examples()
+// Python: BeamSearch.method — 需实现 step() 和 get_examples()
 type BeamSearchMethod interface {
 	// Step 执行单步扩展，返回 output/data/score。
-	// 对齐 Python: method.step(tool, examples, prev_outputs, it)
+	// Python: method.step(tool, examples, prev_outputs, it)
 	Step(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (output map[string]any, data []string, score float64, err error)
 	// GetExamples 获取工具的示例数据。
-	// 对齐 Python: method.get_examples(tool)
+	// Python: method.get_examples(tool)
 	GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple
 }
 
 // TreeNode Beam Search 树节点。
-// 对齐 Python: TreeNode
+// Python: TreeNode
 type TreeNode struct {
 	// Data Step 的 data 返回值
 	Data []string
@@ -41,7 +41,7 @@ type TreeNode struct {
 }
 
 // BeamSearch Beam Search 搜索器。
-// 对齐 Python: BeamSearch
+// Python: BeamSearch
 type BeamSearch struct {
 	// method 搜索方法
 	method BeamSearchMethod
@@ -88,7 +88,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBeamSearch 创建 BeamSearch 实例。
-// 对齐 Python: BeamSearch.__init__
+// Python: BeamSearch.__init__
 func NewBeamSearch(method BeamSearchMethod, opts ...BeamSearchOption) *BeamSearch {
 	bs := &BeamSearch{
 		method:     method,
@@ -166,7 +166,7 @@ func WithNumRetry(n int) BeamSearchOption {
 }
 
 // GetDepth 返回节点深度。
-// 对齐 Python: TreeNode.get_depth
+// Python: TreeNode.get_depth
 func (n *TreeNode) GetDepth() int {
 	if n.Parent == nil {
 		return 0
@@ -175,7 +175,7 @@ func (n *TreeNode) GetDepth() int {
 }
 
 // String 返回节点的树形字符串表示。
-// 对齐 Python: TreeNode.__repr__
+// Python: TreeNode.__repr__
 func (n *TreeNode) String() string {
 	depth := n.GetDepth()
 	indent := ""
@@ -190,7 +190,7 @@ func (n *TreeNode) String() string {
 }
 
 // Search 执行 Beam Search，返回 top-K 节点的历史路径。
-// 对齐 Python: BeamSearch.search
+// Python: BeamSearch.search
 func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]map[string]any, error) {
 	startTime := time.Now()
 
@@ -256,7 +256,7 @@ func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]map[
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTreeNode 创建树节点。
-// 对齐 Python: TreeNode.__init__
+// Python: TreeNode.__init__
 func newTreeNode(data []string, score float64, results map[string]any, history []map[string]any) *TreeNode {
 	h := make([]map[string]any, len(history))
 	copy(h, history)
@@ -270,7 +270,7 @@ func newTreeNode(data []string, score float64, results map[string]any, history [
 }
 
 // generateRoot 尝试生成根节点。
-// 对齐 Python: BeamSearch.search 中根节点生成循环
+// Python: BeamSearch.search 中根节点生成循环
 func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, examples []ExampleTuple) (*TreeNode, error) {
 	for i := 0; i < bs.numRetry; i++ {
 		output, data, score, err := bs.method.Step(ctx, tool, examples, nil, 0)
@@ -292,7 +292,7 @@ func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, exa
 }
 
 // expand 扩展当前 Beam 列表。
-// 对齐 Python: BeamSearch.expand
+// Python: BeamSearch.expand
 func (bs *BeamSearch) expand(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples []ExampleTuple, depth int) ([]*TreeNode, error) {
 	if bs.numWorkers <= 1 {
 		return bs.expandSerial(ctx, beamList, tool, examples, depth)
@@ -321,7 +321,7 @@ func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, to
 }
 
 // expandParallel 并行扩展（goroutine + channel）。
-// 对齐 Python: ThreadPoolExecutor + as_completed
+// Python: ThreadPoolExecutor + as_completed
 func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples []ExampleTuple, depth int) ([]*TreeNode, error) {
 	// 计算总任务数
 	totalTasks := len(beamList) * bs.expandNum
@@ -374,7 +374,7 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 }
 
 // expandSingleStep 扩展单步。
-// 对齐 Python: expand_single_step
+// Python: expand_single_step
 // 注意：并行调用时不能修改 node.Children，由调用方统一设置父子关系。
 func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool map[string]any, examples []ExampleTuple, depth int) (*TreeNode, error) {
 	var newNode *TreeNode
@@ -397,7 +397,7 @@ func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool
 }
 
 // prune 剪枝，保留 beamWidth 个最高分节点。
-// 对齐 Python: BeamSearch.prune
+// Python: BeamSearch.prune
 func (bs *BeamSearch) prune(beamList []*TreeNode) []*TreeNode {
 	sorted := make([]*TreeNode, len(beamList))
 	copy(sorted, beamList)
@@ -411,7 +411,7 @@ func (bs *BeamSearch) prune(beamList []*TreeNode) []*TreeNode {
 }
 
 // checkEarlyStop 检查是否满足早停条件。
-// 对齐 Python: BeamSearch.check_early_stop
+// Python: BeamSearch.check_early_stop
 func (bs *BeamSearch) checkEarlyStop(beamList []*TreeNode, maxScore float64, k int) bool {
 	if len(beamList) < k {
 		return false

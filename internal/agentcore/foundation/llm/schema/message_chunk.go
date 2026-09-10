@@ -10,14 +10,14 @@ package schema
 //   - 不可变语义：Merge 返回新对象，不修改接收者
 //   - 流式场景下，多个 chunk 通过 Merge 逐步合并为一个完整的 AssistantMessage
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (AssistantMessageChunk)
+// Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (AssistantMessageChunk)
 type AssistantMessageChunk struct {
 	AssistantMessage
 }
 
 // ToolMessageChunk 工具返回流式消息块，用于 SSE 流式场景中增量合并工具响应片段。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (ToolMessageChunk)
+// Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (ToolMessageChunk)
 type ToolMessageChunk struct {
 	ToolMessage
 }
@@ -83,7 +83,7 @@ func WithChunkLogprobs(logprobs any) AssistantMessageChunkOption {
 //   - finish_reason: "null"（结束原因为空）
 //   - content: 空文本
 //
-// 对应 Python: AssistantMessageChunk(role=..., content=..., ...)
+// Python: AssistantMessageChunk(role=..., content=..., ...)
 func NewAssistantMessageChunk(content string, opts ...AssistantMessageChunkOption) *AssistantMessageChunk {
 	chunk := &AssistantMessageChunk{
 		AssistantMessage: AssistantMessage{
@@ -102,7 +102,7 @@ func NewAssistantMessageChunk(content string, opts ...AssistantMessageChunkOptio
 
 // NewToolMessageChunk 创建工具返回流式消息块。
 //
-// 对应 Python: ToolMessageChunk(role="tool", content=..., tool_call_id=...)
+// Python: ToolMessageChunk(role="tool", content=..., tool_call_id=...)
 func NewToolMessageChunk(toolCallID, content string, opts ...ToolMessageChunkOption) *ToolMessageChunk {
 	chunk := &ToolMessageChunk{
 		ToolMessage: ToolMessage{
@@ -135,7 +135,7 @@ func NewToolMessageChunk(toolCallID, content string, opts ...ToolMessageChunkOpt
 //   - completion_token_ids: 列表拼接（增量 delta）
 //   - logprobs: 字典/列表合并
 //
-// 对应 Python: AssistantMessageChunk.__add__
+// Python: AssistantMessageChunk.__add__
 func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMessageChunk {
 	if other == nil {
 		return c
@@ -230,7 +230,7 @@ func (c *AssistantMessageChunk) ToAssistantMessage() *AssistantMessage {
 //   - content: 字符串拼接
 //   - tool_call_id: 取非空值，优先右侧
 //
-// 对应 Python: ToolMessageChunk.__add__
+// Python: ToolMessageChunk.__add__
 func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 	if other == nil {
 		return c
@@ -277,7 +277,7 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 //
 // 不同调用：作为新元素追加到列表末尾。
 //
-// 对应 Python: AssistantMessageChunk.__add__ 中 tool_calls 合并逻辑
+// Python: AssistantMessageChunk.__add__ 中 tool_calls 合并逻辑
 func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 	if len(left) == 0 && len(right) == 0 {
 		return nil
@@ -341,7 +341,7 @@ func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 //   - 两者均为多模态 → Parts 列表拼接，结果仍为多模态
 //   - 类型不同或一方为空文本 → 取右侧（other）的值
 //
-// 对应 Python: isinstance(self.content, str) and isinstance(other.content, str) 等
+// Python: isinstance(self.content, str) and isinstance(other.content, str) 等
 func mergeContent(left, right MessageContent) MessageContent {
 	if left.IsText() && right.IsText() {
 		// 两者均为纯文本：字符串拼接
@@ -373,7 +373,7 @@ func mergeContent(left, right MessageContent) MessageContent {
 // 这比 Python 实际使用的 `other.parser_content or self.parser_content` 更正确，
 // 能正确处理流式场景中多次解析成功的情况（如 dict 递归合并、列表拼接）。
 //
-// 对应 Python: merge_parser_content()
+// Python: merge_parser_content()
 func mergeParserContent(left, right any) any {
 	if right == nil {
 		return left
@@ -418,7 +418,7 @@ func mergeParserContent(left, right any) any {
 //   - 两侧均为 map[string]any → 递归合并
 //   - 其他 → 取右侧值
 //
-// 对应 Python: merge_dicts()
+// Python: merge_dicts()
 func mergeDicts(left, right map[string]any) map[string]any {
 	result := make(map[string]any, len(left))
 	// 先拷贝左侧所有键值
@@ -473,7 +473,7 @@ func mergeDicts(left, right map[string]any) map[string]any {
 // 两者均为 []int → 列表拼接
 // 一方为空 → 取非空侧
 //
-// 对应 Python: _concat_token_ids()
+// Python: _concat_token_ids()
 func concatTokenIDs(left, right []int) []int {
 	if len(left) == 0 {
 		return right
@@ -496,7 +496,7 @@ func concatTokenIDs(left, right []int) []int {
 //   - 两者均为 []any → 列表拼接
 //   - 其他情况 → 取右侧值
 //
-// 对应 Python: _merge_logprobs()
+// Python: _merge_logprobs()
 func mergeLogprobs(left, right any) any {
 	if left == nil {
 		return right

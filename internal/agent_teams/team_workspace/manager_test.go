@@ -1469,8 +1469,9 @@ func TestMountIntoWorktree_gitignore无换行结尾(t *testing.T) {
 
 // TestMaybePull 测试 LOCAL 模式下 maybePull 为 no-op
 func TestMaybePull(t *testing.T) {
-	m := newTestManager(t, true)
-	m.maybePull() // 不应崩溃
+	ws := newTestManager(t, true)
+	r := NewTeamWorkspaceRail(ws, "test-member")
+	r.maybePull(context.Background()) // LOCAL 模式下不应崩溃，也不应调用 Pull
 }
 
 // TestCopyFile_保留权限 测试 copyFile 保留源文件权限

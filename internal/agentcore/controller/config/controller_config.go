@@ -4,7 +4,7 @@ package config
 
 // DefaultResponse 默认响应配置。
 //
-// 对应 Python: openjiuwen/core/controller/config.py (DefaultResponse)
+// Python: openjiuwen/core/controller/config.py (DefaultResponse)
 type DefaultResponse struct {
 	// Type 响应类型："text" 或 "workflow"
 	Type string `json:"type"`
@@ -22,7 +22,7 @@ type DefaultResponse struct {
 //   - 完成信号：suppress_completion_signal
 //   - 流：stream_first_frame_timeout
 //
-// 对应 Python: openjiuwen/core/controller/config.py (ControllerConfig)
+// Python: openjiuwen/core/controller/config.py (ControllerConfig)
 type ControllerConfig struct {
 	// ─── 任务调度配置 ───
 

@@ -7,7 +7,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Serializer 类型化序列化器接口。
-// 对应 Python: openjiuwen/core/graph/store/serde.py (Serializer)
+// Python: openjiuwen/core/graph/store/serde.py (Serializer)
 //
 // DumpsTyped 返回 (格式标签, 字节流)，LoadsTyped 从格式标签和字节流反序列化。
 // 格式标签标识序列化格式（"json"/"gob"），便于存储时记录格式，读取时按格式反序列化。
@@ -27,7 +27,7 @@ type serdeTuple struct {
 }
 
 // JSONSerializer JSON 序列化器实现。
-// 对应 Python: openjiuwen/core/graph/store/serde.py (JsonSerializer)
+// Python: openjiuwen/core/graph/store/serde.py (JsonSerializer)
 type JSONSerializer struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -54,7 +54,7 @@ func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {
 
 // LoadsTyped 从 JSON 反序列化，仅处理格式标签为 "json" 的数据。
 // 其他格式标签返回 (nil, nil)。
-// 对应 Python: JsonSerializer.loads_typed() 中 if data is None: return None
+// Python: JsonSerializer.loads_typed() 中 if data is None: return None
 func (s *JSONSerializer) LoadsTyped(formatTag string, data []byte) (any, error) {
 	if len(data) == 0 {
 		return nil, nil

@@ -13,6 +13,22 @@ import (
 
 // ──────────────────────────── 辅助函数 ────────────────────────────
 
+// makeBaseMsg 创建 BaseMessage 格式的消息。
+func makeBaseMsg(role, content string) llmschema.BaseMessage {
+	switch role {
+	case "user":
+		return llmschema.NewUserMessage(content)
+	case "assistant":
+		return llmschema.NewAssistantMessage(content)
+	case "system":
+		return llmschema.NewSystemMessage(content)
+	case "tool":
+		return llmschema.NewToolMessage("", content)
+	default:
+		return llmschema.NewDefaultMessage(llmschema.RoleTypeUser, content)
+	}
+}
+
 // makeMsg 创建消息字典。
 func makeMsg(role, content string) map[string]any {
 	return map[string]any{"role": role, "content": content}
@@ -56,7 +72,7 @@ func makeTrajectory(meta map[string]any, steps ...*trajectory.TrajectoryStep) *t
 }
 
 // makeLLMStep 创建 LLM 调用步骤。
-func makeLLMStep(messages []map[string]any) *trajectory.TrajectoryStep {
+func makeLLMStep(messages []llmschema.BaseMessage) *trajectory.TrajectoryStep {
 	return &trajectory.TrajectoryStep{
 		Kind: trajectory.StepKindLLM,
 		Detail: &trajectory.LLMCallDetail{
@@ -231,9 +247,9 @@ func TestConvertTrajectoryToMessages_空轨迹(t *testing.T) {
 func TestConvertTrajectoryToMessages_LLM步骤(t *testing.T) {
 	d := newDetector()
 	traj := makeTrajectory(nil,
-		makeLLMStep([]map[string]any{
-			makeMsg("user", "hello"),
-			makeMsg("assistant", "hi there"),
+		makeLLMStep([]llmschema.BaseMessage{
+			makeBaseMsg("user", "hello"),
+			makeBaseMsg("assistant", "hi there"),
 		}),
 	)
 	messages := d.ConvertTrajectoryToMessages(traj)
@@ -268,8 +284,10 @@ func TestConvertTrajectoryToMessages_工具步骤(t *testing.T) {
 func TestConvertTrajectoryToMessages_工具调用ID映射(t *testing.T) {
 	d := newDetector()
 	traj := makeTrajectory(nil,
-		makeLLMStep([]map[string]any{
-			makeMsgWithToolCalls(makeToolCallDict("tc1", "read_file", `{"path": "/foo"}`)),
+		makeLLMStep([]llmschema.BaseMessage{
+			llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{
+				llmschema.NewToolCall("tc1", "read_file", `{"path": "/foo"}`),
+			})),
 		}),
 		makeToolStep("", "tc1", nil, map[string]any{"data": "content"}, nil),
 	)
@@ -709,13 +727,13 @@ func TestDetectUserIntent_无法推断技能(t *testing.T) {
 func TestDetectUserIntent_从轨迹转换(t *testing.T) {
 	d := newDetector("my_skill")
 	traj := makeTrajectory(nil,
-		makeLLMStep([]map[string]any{
-			makeMsgWithToolCalls(
-				makeToolCallDict("tc1", "read_file", `/skills/my_skill/SKILL.md`),
-			),
+		makeLLMStep([]llmschema.BaseMessage{
+			llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{
+				llmschema.NewToolCall("tc1", "read_file", `/skills/my_skill/SKILL.md`),
+			})),
 		}),
-		makeLLMStep([]map[string]any{
-			makeMsg("user", "不对，应该这样做"),
+		makeLLMStep([]llmschema.BaseMessage{
+			makeBaseMsg("user", "不对，应该这样做"),
 		}),
 	)
 	// 从轨迹转换为消息列表后调用
@@ -766,10 +784,10 @@ func TestDetectCollaborationSignals_sendMessage(t *testing.T) {
 	d := newDetector("my_skill")
 	traj := makeTrajectory(
 		map[string]any{"member_id": "member_1"},
-		makeLLMStep([]map[string]any{
-			makeMsgWithToolCalls(
-				makeToolCallDict("tc1", "read_file", `/skills/my_skill/SKILL.md`),
-			),
+		makeLLMStep([]llmschema.BaseMessage{
+			llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{
+				llmschema.NewToolCall("tc1", "read_file", `/skills/my_skill/SKILL.md`),
+			})),
 		}),
 		makeToolStep("send_message", "", map[string]any{
 			"to_member_name": "member_2",
@@ -1457,8 +1475,8 @@ func TestStringPtrValue_NonNil(t *testing.T) {
 func TestDetectTrajectorySignals_仅Trajectory(t *testing.T) {
 	d := newDetector()
 	traj := makeTrajectory(nil,
-		makeLLMStep([]map[string]any{
-			makeMsg("user", "hello"),
+		makeLLMStep([]llmschema.BaseMessage{
+			makeBaseMsg("user", "hello"),
 		}),
 	)
 	signals := d.DetectTrajectorySignals(traj, nil)

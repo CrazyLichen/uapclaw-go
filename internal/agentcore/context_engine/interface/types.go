@@ -23,7 +23,7 @@ import (
 //   - 上下文窗口构建（供 LLM 推理使用）
 //   - 统计与监控（消息数/Token数/对话轮次）
 //
-// 对应 Python: openjiuwen/core/context_engine/base.py (ModelContext)
+// Python: openjiuwen/core/context_engine/base.py (ModelContext)
 type ModelContext interface {
 	// Len 返回上下文消息数量
 	Len() int
@@ -61,32 +61,32 @@ type ModelContext interface {
 	ReloaderTool() tool.Tool
 	// WorkspaceDir 返回工作目录路径
 	//
-	// 对应 Python: SessionModelContext.workspace_dir()
+	// Python: SessionModelContext.workspace_dir()
 	WorkspaceDir() string
 	// SetSessionRef 设置会话引用
 	//
-	// 对应 Python: SessionModelContext.set_session_ref()
+	// Python: SessionModelContext.set_session_ref()
 	SetSessionRef(sess sessioninterfaces.SessionFacade)
 	// GetSessionRef 获取会话引用
 	//
-	// 对应 Python: SessionModelContext.get_session_ref()
+	// Python: SessionModelContext.get_session_ref()
 	GetSessionRef() sessioninterfaces.SessionFacade
 	// OffloadMessages 将消息卸载到内存缓冲区
 	//
-	// 对应 Python: SessionModelContext.offload_messages()
+	// Python: SessionModelContext.offload_messages()
 	OffloadMessages(handle string, messages []llm_schema.BaseMessage)
 	// SaveState 保存上下文状态为 map
 	//
-	// 对应 Python: SessionModelContext.save_state()
+	// Python: SessionModelContext.save_state()
 	SaveState() map[string]any
 	// LoadState 从 map 恢复上下文状态
 	//
-	// 对应 Python: SessionModelContext.load_state()
+	// Python: SessionModelContext.load_state()
 	LoadState(state map[string]any)
 	// CompressContext 主动压缩上下文
 	//
 	// 返回 CompressContextResult，包含结果标识和可选的压缩状态。
-	// 对应 Python: SessionModelContext.compress_context()
+	// Python: SessionModelContext.compress_context()
 	CompressContext(ctx context.Context, opts ...CompressContextOption) (*CompressContextResult, error)
 }
 
@@ -95,7 +95,7 @@ type ModelContext interface {
 // 管理上下文池、处理器注册、会话状态持久化。
 // 属于 Agent 级别组件（不在 Session 中），通过 agent.contextEngine 访问。
 //
-// 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
+// Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
 	// CreateContext 创建或获取上下文
 	CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CreateContextOption) (ModelContext, error)
@@ -111,7 +111,7 @@ type ContextEngine interface {
 
 // ProcessorSpec 处理器规格，指定类型和配置。
 //
-// 对应 Python: (processor_type, processor_config) 元组。
+// Python: (processor_type, processor_config) 元组。
 // ConfigOverrides 支持 dict 级别的部分覆盖（对齐 Python 中 (key, dict) 形式的 override），
 // 合并时将 dict 中的字段覆盖到 preset config 的对应字段上。
 type ProcessorSpec struct {
@@ -120,7 +120,7 @@ type ProcessorSpec struct {
 	// Config 处理器配置
 	Config ProcessorConfig
 	// ConfigOverrides dict 级别的部分配置覆盖（snake_case 键名）
-	// 对齐 Python: _merge_config_with_overrides(base_config, overrides)
+	// Python: _merge_config_with_overrides(base_config, overrides)
 	ConfigOverrides map[string]any
 }
 
@@ -158,7 +158,7 @@ type CompressContextOptions struct {
 
 // CompressContextResult CompressContext 返回值，对齐 Python compress_context(return_state=True) 的返回结构。
 //
-// 对应 Python: {"result": result, "state": state, "compact_summary": compact_summary}
+// Python: {"result": result, "state": state, "compact_summary": compact_summary}
 type CompressContextResult struct {
 	// Result 压缩结果标识："busy"/"compressed"/"noop"
 	Result string
@@ -178,7 +178,7 @@ type ClearContextOptions struct {
 
 // ContextStats 上下文统计快照，记录消息数量、Token 数量和对话轮次。
 //
-// 对应 Python: openjiuwen/core/context_engine/base.py (ContextStats)
+// Python: openjiuwen/core/context_engine/base.py (ContextStats)
 type ContextStats struct {
 	// TotalMessages 消息总数
 	TotalMessages int `json:"total_messages"`
@@ -210,7 +210,7 @@ type ContextStats struct {
 
 // ContextWindow LLM 推理上下文窗口快照，包含系统消息、上下文消息和工具定义。
 //
-// 对应 Python: openjiuwen/core/context_engine/base.py (ContextWindow)
+// Python: openjiuwen/core/context_engine/base.py (ContextWindow)
 type ContextWindow struct {
 	// SystemMessages 系统消息
 	SystemMessages []llm_schema.BaseMessage `json:"system_messages"`
@@ -343,7 +343,7 @@ func NewClearContextOptions(opts ...ClearContextOption) *ClearContextOptions {
 
 // GetMessages 合并系统消息和上下文消息，返回完整消息列表。
 //
-// 对应 Python: ContextWindow.get_messages()
+// Python: ContextWindow.get_messages()
 func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
 	result := make([]llm_schema.BaseMessage, 0, len(w.SystemMessages)+len(w.ContextMessages))
 	result = append(result, w.SystemMessages...)
@@ -353,7 +353,7 @@ func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
 
 // GetTools 返回工具列表。
 //
-// 对应 Python: ContextWindow.get_tools()
+// Python: ContextWindow.get_tools()
 func (w *ContextWindow) GetTools() []schema.ToolInfoInterface {
 	return w.Tools
 }
@@ -363,7 +363,7 @@ func (w *ContextWindow) GetTools() []schema.ToolInfoInterface {
 // Statistic 字段初始化为 ContextStats 零值（与 Python ContextStats() 默认实例对齐），
 // 消息和工具切片初始化为空切片（避免 JSON 序列化为 null）。
 //
-// 对应 Python: ContextWindow() 默认构造
+// Python: ContextWindow() 默认构造
 func NewContextWindow() *ContextWindow {
 	return &ContextWindow{
 		SystemMessages:  make([]llm_schema.BaseMessage, 0),
@@ -380,7 +380,7 @@ func NewContextWindow() *ContextWindow {
 //   - 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens 作为 total_tokens
 //   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/4）
 //
-// 对应 Python: Context._stat_messages(stat, messages)
+// Python: Context._stat_messages(stat, messages)
 func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
 	s.TotalMessages = len(messages)
 
@@ -413,7 +413,7 @@ func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCoun
 
 // StatTools 统计工具数量和 token 数，填充 ContextStats 的 Tools/ToolTokens 字段。
 //
-// 对应 Python: Context._stat_tools(stat, tools)
+// Python: Context._stat_tools(stat, tools)
 func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter token.TokenCounter) {
 	s.Tools = len(tools)
 	for _, t := range tools {
@@ -441,7 +441,7 @@ func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
 
 // countSingleMessageTokens 计算单条消息的 token 数。
 // 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/4 向下取整。
-// 对齐 Python: SessionModelContext._count_single_message_tokens()
+// Python: SessionModelContext._count_single_message_tokens()
 func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
 		count, err := tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
@@ -455,7 +455,7 @@ func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.Tok
 
 // countToolTokens 计算单个工具定义的 token 数。
 // 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4 向下取整。
-// 对齐 Python: SessionModelContext._count_tool_tokens()
+// Python: SessionModelContext._count_tool_tokens()
 func countToolTokens(toolInfo schema.ToolInfoInterface, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
 		count, err := tokenCounter.CountTools([]schema.ToolInfoInterface{toolInfo}, "")

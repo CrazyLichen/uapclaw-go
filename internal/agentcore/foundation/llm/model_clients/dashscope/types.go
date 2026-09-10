@@ -10,7 +10,7 @@ import "encoding/json"
 //
 //	{"status_code": 200, "request_id": "xxx", "code": "", "message": "", "output": {...}, "usage": {...}}
 //
-// 对应 Python: dashscope SDK Response 对象的 status_code/code/message/output 属性
+// Python: dashscope SDK Response 对象的 status_code/code/message/output 属性
 type DashScopeResponse struct {
 	// StatusCode HTTP 状态码，200 表示成功
 	StatusCode int `json:"status_code"`
@@ -28,7 +28,7 @@ type DashScopeResponse struct {
 
 // MultiModalOutput DashScope 多模态 API 输出（图片/语音共用）。
 //
-// 对应 Python: response.output（MultiModalConversation 响应）
+// Python: response.output（MultiModalConversation 响应）
 type MultiModalOutput struct {
 	// Choices 选项列表
 	Choices []MultiModalChoice `json:"choices"`
@@ -64,7 +64,7 @@ type ContentItem struct {
 
 // VideoOutput DashScope 视频生成 API 输出。
 //
-// 对应 Python: response.output（VideoSynthesis 响应）
+// Python: response.output（VideoSynthesis 响应）
 type VideoOutput struct {
 	// VideoURL 生成的视频 URL
 	VideoURL string `json:"video_url"`
@@ -72,7 +72,7 @@ type VideoOutput struct {
 
 // AudioOutput DashScope 语音生成 API 输出。
 //
-// 对应 Python: response.output.audio（Cosyvoice 语音合成响应）
+// Python: response.output.audio（Cosyvoice 语音合成响应）
 type AudioOutput struct {
 	// URL 音频文件 URL
 	URL string `json:"url,omitempty"`
@@ -113,7 +113,7 @@ const (
 
 // DashScopeVoices DashScope Cosyvoice 语音合成支持的声音列表。
 //
-// 对应 Python: DASHSCOPE_VOICE 常量
+// Python: DASHSCOPE_VOICE 常量
 var DashScopeVoices = []string{
 	"Cherry", "Serena", "Ethan", "Chelsie", "Momo", "Vivian", "Moon", "Maia",
 	"Kai", "Nofish", "Bella", "Jennifer", "Ryan", "Katerina", "Aiden",
@@ -126,7 +126,7 @@ var DashScopeVoices = []string{
 
 // DashScopeLanguageTypes DashScope Cosyvoice 语音合成支持的语言类型。
 //
-// 对应 Python: DASHSCOPE_LANGUAGE_TYPE 常量
+// Python: DASHSCOPE_LANGUAGE_TYPE 常量
 var DashScopeLanguageTypes = []string{
 	"Chinese", "English", "German", "Italian", "Portuguese",
 	"Spanish", "Japanese", "Korean", "French", "Russian",

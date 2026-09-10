@@ -13,7 +13,7 @@ import (
 
 // BrowserCancelTool 取消正在进行的浏览器任务。
 //
-// 对齐 Python: BrowserCancelTool
+// Python: BrowserCancelTool
 type BrowserCancelTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -21,7 +21,7 @@ type BrowserCancelTool struct {
 
 // BrowserClearCancelTool 清除浏览器任务的取消标记。
 //
-// 对齐 Python: BrowserClearCancelTool
+// Python: BrowserClearCancelTool
 type BrowserClearCancelTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -29,7 +29,7 @@ type BrowserClearCancelTool struct {
 
 // BrowserCustomActionTool 运行已注册的自定义浏览器动作。
 //
-// 对齐 Python: BrowserCustomActionTool
+// Python: BrowserCustomActionTool
 type BrowserCustomActionTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -37,7 +37,7 @@ type BrowserCustomActionTool struct {
 
 // BrowserListActionsTool 列出可用的自定义浏览器动作。
 //
-// 对齐 Python: BrowserListActionsTool
+// Python: BrowserListActionsTool
 type BrowserListActionsTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -45,7 +45,7 @@ type BrowserListActionsTool struct {
 
 // BrowserProbeInteractivesTool 紧凑可见交互元素探测。
 //
-// 对齐 Python: BrowserProbeInteractivesTool
+// Python: BrowserProbeInteractivesTool
 type BrowserProbeInteractivesTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -53,7 +53,7 @@ type BrowserProbeInteractivesTool struct {
 
 // BrowserProbeCardsTool 紧凑重复卡片/列表结构探测。
 //
-// 对齐 Python: BrowserProbeCardsTool
+// Python: BrowserProbeCardsTool
 type BrowserProbeCardsTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -61,7 +61,7 @@ type BrowserProbeCardsTool struct {
 
 // BrowserRuntimeHealthTool 返回运行时健康状态。
 //
-// 对齐 Python: BrowserRuntimeHealthTool
+// Python: BrowserRuntimeHealthTool
 type BrowserRuntimeHealthTool struct {
 	card    *tool.ToolCard
 	runtime *BrowserAgentRuntime
@@ -76,18 +76,18 @@ type json_number = interface{ Int64() (int64, error) }
 
 const (
 	// cancelDesc 取消工具描述
-	// 对齐 Python: _CANCEL_DESC
+	// Python: _CANCEL_DESC
 	cancelDesc = "Cancel an in-progress browser task by session_id. " +
 		"Optionally pass request_id to target a specific request within the session. " +
 		"Returns JSON with ok/session_id/request_id/error."
 
 	// clearCancelDesc 清除取消标记工具描述
-	// 对齐 Python: _CLEAR_CANCEL_DESC
+	// Python: _CLEAR_CANCEL_DESC
 	clearCancelDesc = "Clear the cancellation flag for a browser session or request. " +
 		"Returns JSON with ok/session_id/request_id/error."
 
 	// customActionDesc 自定义动作工具描述
-	// 对齐 Python: _CUSTOM_ACTION_DESC
+	// Python: _CUSTOM_ACTION_DESC
 	customActionDesc = "Run a registered custom browser action by name. " +
 		"Use for deterministic helpers such as drag-and-drop or coordinate resolution " +
 		"alongside the direct Playwright MCP browser tools. " +
@@ -95,16 +95,16 @@ const (
 		"Aliases source/target and source_x/source_y/target_x/target_y are accepted."
 
 	// listActionsDesc 列表动作工具描述
-	// 对齐 Python: _LIST_ACTIONS_DESC
+	// Python: _LIST_ACTIONS_DESC
 	listActionsDesc = "List available custom browser actions and detailed parameter guidance " +
 		"for browser_custom_action."
 
 	// runtimeHealthDesc 健康状态工具描述
-	// 对齐 Python: _RUNTIME_HEALTH_DESC
+	// Python: _RUNTIME_HEALTH_DESC
 	runtimeHealthDesc = "Return runtime readiness, heartbeat status, and selected provider/model configuration."
 
 	// probeInteractivesDesc 交互探测工具描述
-	// 对齐 Python: _PROBE_INTERACTIVES_DESC
+	// Python: _PROBE_INTERACTIVES_DESC
 	probeInteractivesDesc = "Return a compact list of visible, high-value interactive elements on the current page. " +
 		"Use this for page-level controls such as buttons, links, inputs, forms, navigation, login, " +
 		"pagination, menus, and visible actions. Prefer max_items around 20-30 unless a larger inventory " +
@@ -112,7 +112,7 @@ const (
 		"The result includes role/text/aria-label/testid/bbox/selector_hint for likely controls."
 
 	// probeCardsDesc 卡片探测工具描述
-	// 对齐 Python: _PROBE_CARDS_DESC
+	// Python: _PROBE_CARDS_DESC
 	probeCardsDesc = "Return compact repeated card/listing structures from the current page. " +
 		"Use this first on product pages, marketplace pages, search-result pages, catalog pages, " +
 		"article-list pages, or any page with repeated visible cards/listings. " +
@@ -183,7 +183,7 @@ func NewBrowserRuntimeHealthTool(runtime *BrowserAgentRuntime) *BrowserRuntimeHe
 
 // BuildBrowserRuntimeTools 构建所有浏览器运行时辅助工具。
 //
-// 对齐 Python: build_browser_runtime_tools
+// Python: build_browser_runtime_tools
 func BuildBrowserRuntimeTools(runtime *BrowserAgentRuntime) []tool.Tool {
 	return []tool.Tool{
 		NewBrowserCancelTool(runtime),

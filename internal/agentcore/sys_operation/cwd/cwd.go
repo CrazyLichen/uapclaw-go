@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CwdState 每个-Agent 的可变 CWD 状态容器。
-// 对齐 Python: CwdState dataclass (cwd.py:48-59)。
+// Python: CwdState dataclass (cwd.py:48-59)。
 //
 // 通过 context.Value 传播 *CwdState 指针：
 //   - 同一 Agent 内的 goroutine 共享同一 CwdState 引用，SetCwd 后立即可见
@@ -51,7 +51,7 @@ var cwdStateKey cwdStateKeyType
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitCwd 初始化所有 CWD 层，创建新的 CwdState 实例。
-// 对齐 Python: init_cwd(cwd, project_root, workspace, team_workspace) (cwd.py:167-198)
+// Python: init_cwd(cwd, project_root, workspace, team_workspace) (cwd.py:167-198)
 //
 // 在 DeepAgent.ensureInitialized 中调用。
 // 创建新 CwdState + WithCwdState 派生新 ctx，实现 inter-Agent 隔离。
@@ -69,7 +69,7 @@ func InitCwd(cwd string, opts ...cwdOption) *CwdState {
 }
 
 // WithProjectRoot 设置项目根目录选项。
-// 对齐 Python: init_cwd(cwd, project_root=...) (cwd.py:169)
+// Python: init_cwd(cwd, project_root=...) (cwd.py:169)
 func WithProjectRoot(root string) cwdOption {
 	return func(s *CwdState) {
 		s.projectRoot = resolve(root)
@@ -77,7 +77,7 @@ func WithProjectRoot(root string) cwdOption {
 }
 
 // WithWorkspace 设置 agent workspace 选项。
-// 对齐 Python: init_cwd(cwd, workspace=...) (cwd.py:171)
+// Python: init_cwd(cwd, workspace=...) (cwd.py:171)
 func WithWorkspace(path string) cwdOption {
 	return func(s *CwdState) {
 		s.workspace = resolve(path)
@@ -85,7 +85,7 @@ func WithWorkspace(path string) cwdOption {
 }
 
 // WithTeamWorkspace 设置团队 workspace 选项。
-// 对齐 Python: init_cwd(cwd, team_workspace=...) (cwd.py:172)
+// Python: init_cwd(cwd, team_workspace=...) (cwd.py:172)
 func WithTeamWorkspace(path string) cwdOption {
 	return func(s *CwdState) {
 		s.teamWorkspace = resolve(path)
@@ -93,7 +93,7 @@ func WithTeamWorkspace(path string) cwdOption {
 }
 
 // WithCwdState 将 CwdState 注入 context。
-// 对齐 Python: _cwd_state.set(state) (cwd.py:198)
+// Python: _cwd_state.set(state) (cwd.py:198)
 func WithCwdState(ctx context.Context, state *CwdState) context.Context {
 	return context.WithValue(ctx, cwdStateKey, state)
 }
@@ -108,7 +108,7 @@ func CwdStateFromCtx(ctx context.Context) *CwdState {
 }
 
 // GetCwd 从 context 中获取当前工作目录。
-// 对齐 Python: get_cwd() (cwd.py:80-87)
+// Python: get_cwd() (cwd.py:80-87)
 // 读取优先级：cwd -> originalCwd -> os.Getwd()
 func GetCwd(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
@@ -119,7 +119,7 @@ func GetCwd(ctx context.Context) string {
 }
 
 // GetOriginalCwd 从 context 中获取会话起始点。
-// 对齐 Python: get_original_cwd() (cwd.py:102-105)
+// Python: get_original_cwd() (cwd.py:102-105)
 func GetOriginalCwd(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
 		return s.GetOriginalCwd()
@@ -129,7 +129,7 @@ func GetOriginalCwd(ctx context.Context) string {
 }
 
 // GetProjectRoot 从 context 中获取项目根目录。
-// 对齐 Python: get_project_root() (cwd.py:115-121)
+// Python: get_project_root() (cwd.py:115-121)
 // 读取优先级：projectRoot -> originalCwd -> os.Getwd()
 func GetProjectRoot(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
@@ -140,7 +140,7 @@ func GetProjectRoot(ctx context.Context) string {
 }
 
 // GetWorkspace 从 context 中获取 agent workspace。
-// 对齐 Python: get_workspace() (cwd.py:131-139)
+// Python: get_workspace() (cwd.py:131-139)
 // 返回空字符串表示未设置（Python 返回 None）。
 func GetWorkspace(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
@@ -150,7 +150,7 @@ func GetWorkspace(ctx context.Context) string {
 }
 
 // GetTeamWorkspace 从 context 中获取团队 workspace。
-// 对齐 Python: get_team_workspace() (cwd.py:149-157)
+// Python: get_team_workspace() (cwd.py:149-157)
 // 返回空字符串表示未设置。
 func GetTeamWorkspace(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
@@ -160,7 +160,7 @@ func GetTeamWorkspace(ctx context.Context) string {
 }
 
 // ResolveCwd 解析工作目录。
-// 对齐 Python: ShellOperation._resolve_cwd(cwd) (shell_operation.py:864-874)
+// Python: ShellOperation._resolve_cwd(cwd) (shell_operation.py:864-874)
 //
 // 解析优先级：
 //  1. explicitCwd 非空且为绝对路径 → 直接使用（resolve）
@@ -178,7 +178,7 @@ func ResolveCwd(ctx context.Context, explicitCwd string) string {
 }
 
 // ResolvePath 基于当前 CWD 解析文件路径。
-// 对齐 Python: FsOperation._resolve_path(path) (fs_operation.py:1098-1133)
+// Python: FsOperation._resolve_path(path) (fs_operation.py:1098-1133)
 //
 // 对相对路径：基于 GetCwd(ctx) 解析
 // 对绝对路径：直接使用
@@ -190,7 +190,7 @@ func ResolvePath(ctx context.Context, path string) string {
 }
 
 // GetCwd 获取当前工作目录。
-// 对齐 Python: get_cwd() (cwd.py:80-87)
+// Python: get_cwd() (cwd.py:80-87)
 // 读取优先级：cwd -> originalCwd -> os.Getwd()
 func (s *CwdState) GetCwd() string {
 	s.mu.RLock()
@@ -206,7 +206,7 @@ func (s *CwdState) GetCwd() string {
 }
 
 // GetOriginalCwd 获取会话起始点。
-// 对齐 Python: get_original_cwd() (cwd.py:102-105)
+// Python: get_original_cwd() (cwd.py:102-105)
 func (s *CwdState) GetOriginalCwd() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -218,7 +218,7 @@ func (s *CwdState) GetOriginalCwd() string {
 }
 
 // GetProjectRoot 获取项目根目录。
-// 对齐 Python: get_project_root() (cwd.py:115-121)
+// Python: get_project_root() (cwd.py:115-121)
 // 读取优先级：projectRoot -> originalCwd -> os.Getwd()
 // 注意：内联读取 originalCwd 而非调用 GetOriginalCwd()，避免嵌套加锁风险。
 func (s *CwdState) GetProjectRoot() string {
@@ -235,7 +235,7 @@ func (s *CwdState) GetProjectRoot() string {
 }
 
 // GetWorkspace 获取 agent workspace。
-// 对齐 Python: get_workspace() (cwd.py:131-139)
+// Python: get_workspace() (cwd.py:131-139)
 func (s *CwdState) GetWorkspace() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -243,7 +243,7 @@ func (s *CwdState) GetWorkspace() string {
 }
 
 // GetTeamWorkspace 获取团队 workspace。
-// 对齐 Python: get_team_workspace() (cwd.py:149-157)
+// Python: get_team_workspace() (cwd.py:149-157)
 func (s *CwdState) GetTeamWorkspace() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -251,7 +251,7 @@ func (s *CwdState) GetTeamWorkspace() string {
 }
 
 // SetCwd 更新当前工作目录。
-// 对齐 Python: set_cwd(cwd) (cwd.py:90-97)
+// Python: set_cwd(cwd) (cwd.py:90-97)
 // 调用方：EnterWorktreeTool（切换到 worktree）、ExitWorktreeTool（恢复原始 CWD）
 func (s *CwdState) SetCwd(cwd string) {
 	s.mu.Lock()
@@ -260,7 +260,7 @@ func (s *CwdState) SetCwd(cwd string) {
 }
 
 // SetOriginalCwd 更新会话起始点。
-// 对齐 Python: set_original_cwd(cwd) (cwd.py:108-110)
+// Python: set_original_cwd(cwd) (cwd.py:108-110)
 // 调用方：EnterWorktreeTool（同步切到 worktree）、ExitWorktreeTool（恢复）
 func (s *CwdState) SetOriginalCwd(cwd string) {
 	s.mu.Lock()
@@ -269,7 +269,7 @@ func (s *CwdState) SetOriginalCwd(cwd string) {
 }
 
 // SetProjectRoot 设置项目根目录。
-// 对齐 Python: set_project_root(root) (cwd.py:124-126)
+// Python: set_project_root(root) (cwd.py:124-126)
 // 应在 agent 启动时调用一次。
 func (s *CwdState) SetProjectRoot(root string) {
 	s.mu.Lock()
@@ -278,7 +278,7 @@ func (s *CwdState) SetProjectRoot(root string) {
 }
 
 // SetWorkspace 设置 agent workspace。
-// 对齐 Python: set_workspace(path) (cwd.py:142-144)
+// Python: set_workspace(path) (cwd.py:142-144)
 func (s *CwdState) SetWorkspace(path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -286,7 +286,7 @@ func (s *CwdState) SetWorkspace(path string) {
 }
 
 // SetTeamWorkspace 设置团队 workspace。
-// 对齐 Python: set_team_workspace(path) (cwd.py:160-162)
+// Python: set_team_workspace(path) (cwd.py:160-162)
 func (s *CwdState) SetTeamWorkspace(path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -296,7 +296,7 @@ func (s *CwdState) SetTeamWorkspace(path string) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolve 解析路径为绝对路径。
-// 对齐 Python: _resolve(path) (cwd.py:65-66)
+// Python: _resolve(path) (cwd.py:65-66)
 func resolve(path string) string {
 	if path == "" {
 		return ""

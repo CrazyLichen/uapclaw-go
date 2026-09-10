@@ -29,13 +29,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json
-// 对应 Python: state_utils.get_state_file()
+// Python: state_utils.get_state_file()
 func GetStateFile() string {
 	return filepath.Join(getAgentSkillsDir(), stateFileName)
 }
 
 // NormalizeSkillConfigs 规范化每个技能的配置记录
-// 对应 Python: state_utils.normalize_skill_configs(raw_configs)
+// Python: state_utils.normalize_skill_configs(raw_configs)
 func NormalizeSkillConfigs(rawConfigs any) map[string]map[string]bool {
 	normalized := make(map[string]map[string]bool)
 
@@ -64,7 +64,7 @@ func NormalizeSkillConfigs(rawConfigs any) map[string]map[string]bool {
 }
 
 // GetRegisteredSkillNames 返回 installed_plugins 和 local_skills 中记录的所有技能名称
-// 对应 Python: state_utils.get_registered_skill_names(state)
+// Python: state_utils.get_registered_skill_names(state)
 func GetRegisteredSkillNames(state map[string]any) map[string]bool {
 	names := make(map[string]bool)
 
@@ -92,7 +92,7 @@ func GetRegisteredSkillNames(state map[string]any) map[string]bool {
 }
 
 // NormalizeLocalSkills 保留仍然存在于本地技能目录中的本地技能记录
-// 对应 Python: state_utils.normalize_local_skills(raw_local_skills, existing_local_skill_names)
+// Python: state_utils.normalize_local_skills(raw_local_skills, existing_local_skill_names)
 func NormalizeLocalSkills(rawLocalSkills any, existingLocalSkillNames map[string]bool) []map[string]any {
 	if rawLocalSkills == nil {
 		return nil
@@ -118,7 +118,7 @@ func NormalizeLocalSkills(rawLocalSkills any, existingLocalSkillNames map[string
 }
 
 // GetSkillEnabled 读取技能的 enabled 标志，默认为 true（向后兼容）
-// 对应 Python: state_utils.get_skill_enabled(state, skill_name)
+// Python: state_utils.get_skill_enabled(state, skill_name)
 func GetSkillEnabled(state map[string]any, skillName string) bool {
 	if skillName == "" {
 		return true
@@ -143,7 +143,7 @@ func GetSkillEnabled(state map[string]any, skillName string) bool {
 	}
 
 	if v, exists := configMap["enabled"]; exists {
-		// 对齐 Python: bool(config.get("enabled", True)) — 非 bool 默认 true
+		// Python: bool(config.get("enabled", True)) — 非 bool 默认 true
 		if b, ok := v.(bool); ok {
 			return b
 		}
@@ -153,7 +153,7 @@ func GetSkillEnabled(state map[string]any, skillName string) bool {
 }
 
 // SetSkillEnabled 将技能的 enabled 标志持久化到 state 中
-// 对应 Python: state_utils.set_skill_enabled(state, skill_name, enabled)
+// Python: state_utils.set_skill_enabled(state, skill_name, enabled)
 func SetSkillEnabled(state map[string]any, skillName string, enabled bool) {
 	configs, ok := state["skill_configs"]
 	if !ok {
@@ -169,7 +169,7 @@ func SetSkillEnabled(state map[string]any, skillName string, enabled bool) {
 }
 
 // ListDisabledSkills 从 skill_configs 中返回已禁用的技能名称列表（排序）
-// 对应 Python: state_utils.list_disabled_skills(state)
+// Python: state_utils.list_disabled_skills(state)
 func ListDisabledSkills(state map[string]any) []string {
 	configs, ok := state["skill_configs"]
 	if !ok {
@@ -186,7 +186,7 @@ func ListDisabledSkills(state map[string]any) []string {
 		if !ok {
 			continue
 		}
-		// 对齐 Python: if config.get("enabled") is False — 只有布尔值 False 才算禁用
+		// Python: if config.get("enabled") is False — 只有布尔值 False 才算禁用
 		if v, exists := configMap["enabled"]; exists {
 			if b, ok := v.(bool); ok && !b {
 				disabled = append(disabled, name)
@@ -198,7 +198,7 @@ func ListDisabledSkills(state map[string]any) []string {
 }
 
 // ListExecutionDisabledSkills 返回当前已安装的已禁用技能名称列表
-// 对应 Python: state_utils.list_execution_disabled_skills(state)
+// Python: state_utils.list_execution_disabled_skills(state)
 func ListExecutionDisabledSkills(state map[string]any) []string {
 	registered := GetRegisteredSkillNames(state)
 	if len(registered) == 0 {
@@ -216,7 +216,7 @@ func ListExecutionDisabledSkills(state map[string]any) []string {
 }
 
 // LoadExecutionDisabledSkills 读取 skills_state.json 并返回已安装的已禁用技能名称列表
-// 对应 Python: state_utils.load_execution_disabled_skills()
+// Python: state_utils.load_execution_disabled_skills()
 func LoadExecutionDisabledSkills() []string {
 	stateFile := GetStateFile()
 	data, err := os.ReadFile(stateFile)
@@ -237,7 +237,7 @@ func LoadExecutionDisabledSkills() []string {
 }
 
 // FilterVisibleSkillNames 返回未被禁用的技能名称列表
-// 对应 Python: state_utils.filter_visible_skill_names(names)
+// Python: state_utils.filter_visible_skill_names(names)
 func FilterVisibleSkillNames(names []string) []string {
 	disabled := LoadExecutionDisabledSkills()
 	disabledSet := make(map[string]bool, len(disabled))
@@ -258,7 +258,7 @@ func FilterVisibleSkillNames(names []string) []string {
 }
 
 // getAgentSkillsDir 返回 Agent 技能目录路径
-// 对应 Python: jiuwenswarm.common.utils.get_agent_skills_dir()
+// Python: jiuwenswarm.common.utils.get_agent_skills_dir()
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func getAgentSkillsDir() string {

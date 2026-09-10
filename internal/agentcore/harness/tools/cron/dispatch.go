@@ -21,7 +21,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // dispatchCronAction cron 统一工具的 action 路由分发器。
-// 对齐 Python: _dispatch_cron_action (cron.py L135-201)
+// Python: _dispatch_cron_action (cron.py L135-201)
 //
 // 关键对齐点：
 // - status/add/update/wake 直接返回 backend 结果（不加包装层）
@@ -38,11 +38,11 @@ func dispatchCronAction(
 	cronCtx *CronToolContext,
 ) (map[string]any, error) {
 	// 1. 提取 action
-	// 对齐 Python: action_name = str(action or "").strip().lower()
+	// Python: action_name = str(action or "").strip().lower()
 	actionName := strings.TrimSpace(strings.ToLower(strVal(inputs, "action")))
 
 	// 2. 提取 jobId（兼容 Python kwargs.pop("id", None)）
-	// 对齐 Python: legacy_job_id = kwargs.pop("id", None)
+	// Python: legacy_job_id = kwargs.pop("id", None)
 	// Python: target_job_id = str(jobId or legacy_job_id or "").strip()
 	targetJobID := strings.TrimSpace(strVal(inputs, "jobId"))
 	if targetJobID == "" {
@@ -56,7 +56,7 @@ func dispatchCronAction(
 		Msg("dispatchCronAction 入口")
 
 	// 4. 构建 excluded_keys 集合
-	// 对齐 Python: excluded_keys (cron.py L152-165)
+	// Python: excluded_keys (cron.py L152-165)
 	excludedKeys := map[string]bool{
 		"action": true, "job": true, "jobId": true, "patch": true,
 		"includeDisabled": true, "text": true, "mode": true,
@@ -65,7 +65,7 @@ func dispatchCronAction(
 	}
 
 	// 5. 收集 flat_kwargs（排除 excluded_keys 后的剩余字段）
-	// 对齐 Python: flat_kwargs (cron.py L166-170)
+	// Python: flat_kwargs (cron.py L166-170)
 	flatKwargs := map[string]any{}
 	for key, value := range inputs {
 		if !excludedKeys[key] {
@@ -74,10 +74,10 @@ func dispatchCronAction(
 	}
 
 	// 6. 路由分发
-	// 对齐 Python: if action_name == "xxx" 分支 (cron.py L171-201)
+	// Python: if action_name == "xxx" 分支 (cron.py L171-201)
 	switch actionName {
 	case "status":
-		// 对齐 Python L172: return await backend.status()
+		// Python: L172: return await backend.status()
 		result, err := backend.Status(ctx)
 		if err != nil {
 			return nil, err
@@ -85,8 +85,8 @@ func dispatchCronAction(
 		return result, nil
 
 	case "list":
-		// 对齐 Python L174: return {"jobs": await backend.list_jobs(include_disabled=bool(includeDisabled))}
-		// 对齐 Python: CronToolBackend.list_jobs 默认 include_disabled=False
+		// Python: L174: return {"jobs": await backend.list_jobs(include_disabled=bool(includeDisabled))}
+		// Python: CronToolBackend.list_jobs 默认 include_disabled=False
 		includeDisabled := false
 		if v, ok := inputs["includeDisabled"]; ok {
 			if b, ok := v.(bool); ok {
@@ -100,7 +100,7 @@ func dispatchCronAction(
 		return map[string]any{"jobs": jobs}, nil
 
 	case "add":
-		// 对齐 Python L176-179:
+		// Python: L176-179:
 		// Python: create_input = dict(job or {})
 		// if not create_input: create_input = flat_kwargs
 		// return await backend.create_job(create_input, context=context)
@@ -115,7 +115,7 @@ func dispatchCronAction(
 		return result, nil
 
 	case "update":
-		// 对齐 Python L180-186:
+		// Python: L180-186:
 		// if not target_job_id: raise ValueError("jobId is required")
 		// Python: patch_input = dict(patch or {})
 		// if not patch_input: patch_input = flat_kwargs
@@ -134,7 +134,7 @@ func dispatchCronAction(
 		return result, nil
 
 	case "remove":
-		// 对齐 Python L187-190:
+		// Python: L187-190:
 		// if not target_job_id: raise ValueError("jobId is required")
 		// return {"deleted": await backend.delete_job(target_job_id)}
 		if targetJobID == "" {
@@ -147,7 +147,7 @@ func dispatchCronAction(
 		return map[string]any{"deleted": deleted}, nil
 
 	case "run":
-		// 对齐 Python L191-194:
+		// Python: L191-194:
 		// if not target_job_id: raise ValueError("jobId is required")
 		// return {"run_id": await backend.run_now(target_job_id)}
 		if targetJobID == "" {
@@ -160,7 +160,7 @@ func dispatchCronAction(
 		return map[string]any{"run_id": runID}, nil
 
 	case "runs":
-		// 对齐 Python L195-198:
+		// Python: L195-198:
 		// if not target_job_id: raise ValueError("jobId is required")
 		// return {"runs": await backend.get_runs(target_job_id)}
 		// Python 调用 get_runs 时未传 limit，使用接口默认值 20
@@ -174,7 +174,7 @@ func dispatchCronAction(
 		return map[string]any{"runs": runs}, nil
 
 	case "wake":
-		// 对齐 Python L199-200:
+		// Python: L199-200:
 		// return await backend.wake(text or "", context=context, mode=mode)
 		text := strVal(inputs, "text")
 		mode := strVal(inputs, "mode")
@@ -185,7 +185,7 @@ func dispatchCronAction(
 		return result, nil
 
 	default:
-		// 对齐 Python L201: raise ValueError("unsupported cron action")
+		// Python: L201: raise ValueError("unsupported cron action")
 		logger.Warn(logComponent).
 			Str("action", actionName).
 			Msg("不支持的 cron action")

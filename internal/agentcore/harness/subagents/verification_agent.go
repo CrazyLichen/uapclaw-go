@@ -26,7 +26,7 @@ var (
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 
 	// defaultVerificationAgentDescription 默认描述
-	// 对齐 Python: VERIFICATION_AGENT_DESC
+	// Python: VERIFICATION_AGENT_DESC
 	defaultVerificationAgentDescription = map[string]string{
 		"cn": "对抗性验证专家。在实现工作完成后对其进行独立测试，" +
 			"尝试发现边界情况、回归问题和未经测试的失败路径。" +
@@ -37,7 +37,7 @@ var (
 	}
 
 	// defaultVerificationAgentSystemPrompt 默认系统提示词
-	// 对齐 Python: VERIFICATION_AGENT_SYSTEM_PROMPT_EN / VERIFICATION_AGENT_SYSTEM_PROMPT_CN
+	// Python: VERIFICATION_AGENT_SYSTEM_PROMPT_EN / VERIFICATION_AGENT_SYSTEM_PROMPT_CN
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 	defaultVerificationAgentSystemPrompt = map[string]string{
 		// EN prompt: 完整复制 Python VERIFICATION_AGENT_SYSTEM_PROMPT_EN
@@ -217,7 +217,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildVerificationAgentConfig 构建 verification 子代理配置（延迟实例化）。
-// 对齐 Python: build_verification_agent_config(card=..., system_prompt=..., tools=..., ...)
+// Python: build_verification_agent_config(card=..., system_prompt=..., tools=..., ...)
 //
 // 参数通过 SubagentCreateParams 传入，对齐 Python 的具名参数风格。
 // adapter 层负责从 map[string]any 解析出 SubagentCreateParams。
@@ -229,7 +229,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 	cfg := hschema.NewSubAgentConfig()
 
 	// AgentCard：用户未提供时使用默认
-	// 对齐 Python: card or AgentCard(name="verification_agent", description=VERIFICATION_AGENT_DESC.get(...))
+	// Python: card or AgentCard(name="verification_agent", description=VERIFICATION_AGENT_DESC.get(...))
 	cfg.AgentCard = params.Card
 	if cfg.AgentCard == nil {
 		desc := defaultVerificationAgentDescription[language]
@@ -243,7 +243,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 	}
 
 	// SystemPrompt：用户未提供时使用默认
-	// 对齐 Python: system_prompt or (VERIFICATION_AGENT_SYSTEM_PROMPT_CN if resolved_language == "cn" else ...)
+	// Python: system_prompt or (VERIFICATION_AGENT_SYSTEM_PROMPT_CN if resolved_language == "cn" else ...)
 	cfg.SystemPrompt = params.SystemPrompt
 	if cfg.SystemPrompt == "" {
 		prompt := defaultVerificationAgentSystemPrompt[language]
@@ -266,7 +266,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 	cfg.EnableTaskLoop = params.EnableTaskLoop
 
 	// MaxIterations：用户未提供（0）时默认 40
-	// 对齐 Python: max_iterations=40
+	// Python: max_iterations=40
 	cfg.MaxIterations = params.MaxIterations
 	if cfg.MaxIterations == 0 {
 		cfg.MaxIterations = 40
@@ -278,7 +278,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 	cfg.EnablePlanMode = params.EnablePlanMode
 
 	// RestrictToWorkDir：VerificationAgent 默认 false
-	// 对齐 Python: restrict_to_work_dir=False
+	// Python: restrict_to_work_dir=False
 	if params.RestrictToWorkDir != nil {
 		cfg.RestrictToWorkDir = *params.RestrictToWorkDir
 	} else {
@@ -286,7 +286,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 	}
 
 	// 默认 Rails：SysOperationRail() + VerificationRail()
-	// 对齐 Python: rails=rails if rails is not None else [SysOperationRail(), VerificationRail()]
+	// Python: rails=rails if rails is not None else [SysOperationRail(), VerificationRail()]
 	// Python 中 rails=None 时使用默认列表，rails 非空时保留用户指定
 	// Go 中 params.Rails == nil 表示用户未提供 Rails
 	if params.Rails == nil {
@@ -302,7 +302,7 @@ func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCrea
 }
 
 // DefaultVerificationAgentSystemPrompt 返回指定语言的默认系统提示词。
-// 对齐 Python: DEFAULT_VERIFICATION_AGENT_SYSTEM_PROMPT.get(language, ...)
+// Python: DEFAULT_VERIFICATION_AGENT_SYSTEM_PROMPT.get(language, ...)
 func DefaultVerificationAgentSystemPrompt(language string) string {
 	if s, ok := defaultVerificationAgentSystemPrompt[language]; ok && s != "" {
 		return s
@@ -311,7 +311,7 @@ func DefaultVerificationAgentSystemPrompt(language string) string {
 }
 
 // DefaultVerificationAgentDescription 返回指定语言的默认描述。
-// 对齐 Python: VERIFICATION_AGENT_DESC.get(resolved_language, ...)
+// Python: VERIFICATION_AGENT_DESC.get(resolved_language, ...)
 func DefaultVerificationAgentDescription(language string) string {
 	if s, ok := defaultVerificationAgentDescription[language]; ok && s != "" {
 		return s

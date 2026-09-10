@@ -154,7 +154,7 @@ func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMess
 
 // FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。
 //
-// 对应 Python: ContextUtils.find_last_n_dialogue_round()
+// Python: ContextUtils.find_last_n_dialogue_round()
 func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
 	rounds := processor.FindAllDialogueRound(messages)
 	if len(rounds) == 0 {
@@ -178,7 +178,7 @@ func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
 
 // FindLastAIAbsentToolCall 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
 //
-// 对应 Python: ContextUtils.find_last_ai_message_without_tool_call()
+// Python: ContextUtils.find_last_ai_message_without_tool_call()
 func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
@@ -196,7 +196,7 @@ func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
 //
 // 返回第一条匹配的消息索引，未找到返回 -1。
 //
-// 对应 Python: ContextUtils.find_message_index_by_context_message_id()
+// Python: ContextUtils.find_message_index_by_context_message_id()
 func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id string) int {
 	for i, msg := range messages {
 		metadata := msg.GetMetadata()

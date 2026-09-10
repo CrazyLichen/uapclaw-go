@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // searchRow 搜索结果行
-// 对齐 Python: 搜索结果行 dict (web_tools.py L708-714)
+// Python: 搜索结果行 dict (web_tools.py L708-714)
 type searchRow struct {
 	// Title 标题
 	Title string `json:"title"`
@@ -37,7 +37,7 @@ type searchRow struct {
 
 var (
 	// queryTermsRe 查询词提取正则
-	// 对齐 Python: re.findall(r"[A-Za-z0-9\u4e00-\u9fff]+", ...) (web_tools.py L490)
+	// Python: re.findall(r"[A-Za-z0-9\u4e00-\u9fff]+", ...) (web_tools.py L490)
 	queryTermsRe = regexp.MustCompile(`[A-Za-z0-9` + "\u4e00-\u9fff" + `]+`)
 	// cjkChunkRe CJK 连续字符正则
 	cjkChunkRe = regexp.MustCompile(`[` + "\u4e00-\u9fff" + `]+`)
@@ -46,7 +46,7 @@ var (
 	// dateSuffixRe 日期后缀正则
 	dateSuffixRe = regexp.MustCompile(`^\d+` + "\u6708" + `$|^\d+` + "\u65e5" + `$`)
 	// urlExtractRe URL 提取正则
-	// 对齐 Python: re.findall(r"https?://[^\s)\]>\"']+", ...) (web_tools.py L1129)
+	// Python: re.findall(r"https?://[^\s)\]>\"']+", ...) (web_tools.py L1129)
 	urlExtractRe = regexp.MustCompile(`https?://[^\s)\]>"']+`)
 )
 
@@ -55,7 +55,7 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // containsCJK 字符串是否包含 CJK 字符
-// 对齐 Python: _contains_cjk() (web_tools.py L431-433)
+// Python: _contains_cjk() (web_tools.py L431-433)
 func containsCJK(value string) bool {
 	for _, ch := range value {
 		if ch >= '\u4e00' && ch <= '\u9fff' {
@@ -66,7 +66,7 @@ func containsCJK(value string) bool {
 }
 
 // decodeDDGRedirect 解码 DuckDuckGo 重定向 URL
-// 对齐 Python: _decode_ddg_redirect() (web_tools.py L225-234)
+// Python: _decode_ddg_redirect() (web_tools.py L225-234)
 func decodeDDGRedirect(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -87,7 +87,7 @@ func decodeDDGRedirect(rawURL string) string {
 }
 
 // decodeBingRedirect 解码 Bing 重定向 URL
-// 对齐 Python: _decode_bing_redirect() (web_tools.py L237-266)
+// Python: _decode_bing_redirect() (web_tools.py L237-266)
 func decodeBingRedirect(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -102,7 +102,7 @@ func decodeBingRedirect(rawURL string) string {
 	}
 	encoded := values[0]
 
-	// 对齐 Python: L251-262 — a1 前缀 → base64 解码
+	// Python: L251-262 — a1 前缀 → base64 解码
 	if strings.HasPrefix(encoded, "a1") {
 		payload := encoded[2:]
 		padding := ""
@@ -120,7 +120,7 @@ func decodeBingRedirect(rawURL string) string {
 		return rawURL
 	}
 
-	// 对齐 Python: L263-264 — 直接是 http URL
+	// Python: L263-264 — 直接是 http URL
 	if strings.HasPrefix(encoded, "http://") || strings.HasPrefix(encoded, "https://") {
 		return encoded
 	}
@@ -129,7 +129,7 @@ func decodeBingRedirect(rawURL string) string {
 }
 
 // normalizedDomain 规范化域名
-// 对齐 Python: _normalized_domain() (web_tools.py L269-274)
+// Python: _normalized_domain() (web_tools.py L269-274)
 func normalizedDomain(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -143,7 +143,7 @@ func normalizedDomain(rawURL string) string {
 }
 
 // isLowFetchValueURL 是否为低抓取价值 URL
-// 对齐 Python: _is_low_fetch_value_url() (web_tools.py L277-280)
+// Python: _is_low_fetch_value_url() (web_tools.py L277-280)
 func isLowFetchValueURL(rawURL string) bool {
 	domain := normalizedDomain(rawURL)
 	for item := range lowFetchValueDomains {
@@ -155,7 +155,7 @@ func isLowFetchValueURL(rawURL string) bool {
 }
 
 // isTimelyQuery 是否为时效性查询
-// 对齐 Python: _is_timely_query() (web_tools.py L283-286)
+// Python: _is_timely_query() (web_tools.py L283-286)
 func isTimelyQuery(query string) bool {
 	lowered := strings.ToLower(query)
 	for hint := range timelyQueryHints {
@@ -167,7 +167,7 @@ func isTimelyQuery(query string) bool {
 }
 
 // isLowConfidenceResultDomain 是否为低置信度结果域名
-// 对齐 Python: _is_low_confidence_result_domain() (web_tools.py L289-292)
+// Python: _is_low_confidence_result_domain() (web_tools.py L289-292)
 func isLowConfidenceResultDomain(rawURL string) bool {
 	domain := normalizedDomain(rawURL)
 	for item := range lowConfidenceResultDomains {
@@ -179,7 +179,7 @@ func isLowConfidenceResultDomain(rawURL string) bool {
 }
 
 // searchRequestHeaders 根据查询语言返回请求头
-// 对齐 Python: _search_request_headers() (web_tools.py L478-485)
+// Python: _search_request_headers() (web_tools.py L478-485)
 func searchRequestHeaders(query string) map[string]string {
 	headers := map[string]string{"User-Agent": userAgent}
 	if containsCJK(query) {
@@ -191,7 +191,7 @@ func searchRequestHeaders(query string) map[string]string {
 }
 
 // duckduckgoSearchURL 构建 DDG 搜索 URL
-// 对齐 Python: _duckduckgo_search_url() (web_tools.py L138-144)
+// Python: _duckduckgo_search_url() (web_tools.py L138-144)
 func duckduckgoSearchURL(query string) string {
 	baseURL := strings.TrimSpace(os.Getenv(freeSearchDDGURLEnv))
 	if baseURL == "" {
@@ -206,7 +206,7 @@ func duckduckgoSearchURL(query string) string {
 }
 
 // queryTerms 提取查询词
-// 对齐 Python: _query_terms() (web_tools.py L488-513)
+// Python: _query_terms() (web_tools.py L488-513)
 func queryTerms(query string) []string {
 	lowered := strings.ToLower(query)
 	rawTerms := queryTermsRe.FindAllString(lowered, -1)
@@ -216,7 +216,7 @@ func queryTerms(query string) []string {
 	for _, term := range rawTerms {
 		var expandedTerms []string
 		if containsCJK(term) {
-			// 对齐 Python: L494-505 — CJK 词汇展开
+			// Python: L494-505 — CJK 词汇展开
 			numParts := numericRe.FindAllString(term, -1)
 			expandedTerms = append(expandedTerms, numParts...)
 			chunks := cjkChunkRe.FindAllString(term, -1)
@@ -224,7 +224,7 @@ func queryTerms(query string) []string {
 				runeCount := utf8.RuneCountInString(chunk)
 				if runeCount >= 2 && runeCount <= 4 {
 					expandedTerms = append(expandedTerms, chunk)
-					// 对齐 Python: L501 — 2-gram
+					// Python: L501 — 2-gram
 					runes := []rune(chunk)
 					for i := 0; i < len(runes)-1; i++ {
 						expandedTerms = append(expandedTerms, string(runes[i:i+2]))
@@ -254,7 +254,7 @@ func queryTerms(query string) []string {
 }
 
 // queryCoreTerms 提取核心查询词
-// 对齐 Python: _query_core_terms() (web_tools.py L516-528)
+// Python: _query_core_terms() (web_tools.py L516-528)
 func queryCoreTerms(query string) []string {
 	var coreTerms []string
 	seen := map[string]bool{}
@@ -278,7 +278,7 @@ func queryCoreTerms(query string) []string {
 }
 
 // matchTermCount 统计查询词在行中出现的次数
-// 对齐 Python: _match_term_count() (web_tools.py L531-541)
+// Python: _match_term_count() (web_tools.py L531-541)
 func matchTermCount(query string, row searchRow) int {
 	haystack := strings.ToLower(row.Title + " " + row.Snippet + " " + row.URL + " " + row.Origin)
 	count := 0
@@ -291,7 +291,7 @@ func matchTermCount(query string, row searchRow) int {
 }
 
 // scoreRow 对搜索结果行评分
-// 对齐 Python: WebFreeSearchTool._score_row() (web_tools.py L830-853)
+// Python: WebFreeSearchTool._score_row() (web_tools.py L830-853)
 func scoreRow(query string, row searchRow) float64 {
 	haystack := strings.ToLower(row.Title + " " + row.Snippet + " " + row.URL + " " + row.Origin)
 
@@ -321,7 +321,7 @@ func scoreRow(query string, row searchRow) float64 {
 }
 
 // buildBingRow 构建规范化的 Bing 结果行
-// 对齐 Python: _build_bing_row() (web_tools.py L544-561)
+// Python: _build_bing_row() (web_tools.py L544-561)
 func buildBingRow(href, title, snippet, origin, date, source string) searchRow {
 	if source == "" {
 		source = "bing-web"
@@ -337,7 +337,7 @@ func buildBingRow(href, title, snippet, origin, date, source string) searchRow {
 }
 
 // normalizeURL 规范化 URL
-// 对齐 Python: WebFetchWebpageTool._normalize_url() (web_tools.py L1586-1594)
+// Python: WebFetchWebpageTool._normalize_url() (web_tools.py L1586-1594)
 func normalizeURL(rawURL string) string {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -351,7 +351,7 @@ func normalizeURL(rawURL string) string {
 }
 
 // clipText 截断文本
-// 对齐 Python: WebFetchWebpageTool._clip_text() (web_tools.py L1579-1583)
+// Python: WebFetchWebpageTool._clip_text() (web_tools.py L1579-1583)
 func clipText(value string, maxChars int) string {
 	if maxChars <= 0 || len(value) <= maxChars {
 		return value
@@ -387,7 +387,7 @@ func getNestedValue(data map[string]any, path string) any {
 }
 
 // engineDisplayName 获取引擎显示名称
-// 对齐 Python: WebFreeSearchTool._engine_display_name() (web_tools.py L1028-1035)
+// Python: WebFreeSearchTool._engine_display_name() (web_tools.py L1028-1035)
 func engineDisplayName(engine string) string {
 	mapping := map[string]string{
 		"duckduckgo":      "DuckDuckGo",
@@ -401,7 +401,7 @@ func engineDisplayName(engine string) string {
 }
 
 // formatSearchResult 格式化搜索结果为文本
-// 对齐 Python: WebFreeSearchTool.invoke 中的格式化逻辑 (web_tools.py L1058-1083)
+// Python: WebFreeSearchTool.invoke 中的格式化逻辑 (web_tools.py L1058-1083)
 func formatSearchResult(engine string, query string, rows []searchRow) string {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("Free search results (%s) for: %s", engineDisplayName(engine), query))
@@ -413,7 +413,7 @@ func formatSearchResult(engine string, query string, rows []searchRow) string {
 		}
 	}
 
-	// 对齐 Python: L1065-1082 — 推荐抓取 URL
+	// Python: L1065-1082 — 推荐抓取 URL
 	var topFetchURLs []string
 	for _, row := range rows {
 		if row.URL != "" {

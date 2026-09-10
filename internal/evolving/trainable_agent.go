@@ -25,16 +25,16 @@ import (
 // 此接口从 trainer 包迁移至 evolving 根包，
 // 解决 checkpointing ↔ trainer 循环依赖问题。
 //
-// 对应 Python: BaseAgent + get_operators() 方法
+// Python: BaseAgent + get_operators() 方法
 type TrainableAgent interface {
 	// Invoke 非流式调用 Agent。
-	// 对应 Python: BaseAgent.invoke(inputs, session)
+	// Python: BaseAgent.invoke(inputs, session)
 	Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
 	// Card 返回 Agent 身份卡片。
-	// 对应 Python: BaseAgent.card 属性
+	// Python: BaseAgent.card 属性
 	Card() *agentschema.AgentCard
 	// GetOperators 获取 Operator 注册表。
-	// 对应 Python: BaseAgent.get_operators()
+	// Python: BaseAgent.get_operators()
 	GetOperators() map[string]operator.Operator
 }
 

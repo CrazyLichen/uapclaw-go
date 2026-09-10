@@ -39,7 +39,7 @@ type MessageHandler interface {
 
 // RPCDispatcher RPC 方法注册与分发。
 //
-// 对齐 Python app_web_handlers.py 中的方法注册模式：
+// Python: app_web_handlers.py 中的方法注册模式：
 // 所有 RPC 方法通过 Register 注册，Dispatch 按 method 查找并调用。
 type RPCDispatcher struct {
 	// handlers 已注册的 RPC 方法处理函数
@@ -50,7 +50,7 @@ type RPCDispatcher struct {
 
 // WebHandlersBindParams WebHandlers 绑定参数。
 //
-// 对齐 Python WebHandlersBindParams (app_web_handlers.py L512-522)，
+// Python: WebHandlersBindParams (app_web_handlers.py L512-522)，
 // 将 channel、agent_client、message_handler、channel_manager、回调等统一注入。
 type WebHandlersBindParams struct {
 	// Channel Web 通道实例
@@ -58,7 +58,7 @@ type WebHandlersBindParams struct {
 	// AgentClient AgentServer 客户端，可为 nil
 	AgentClient *routing.AgentClient
 	// MessageHandler 消息处理器，用于 ack 优先路径，可为 nil
-	// 对齐 Python: bind.message_handler，优先用 mh.publish_robot_messages 发 ack
+	// Python: bind.message_handler，优先用 mh.publish_robot_messages 发 ack
 	MessageHandler MessageHandler
 	// ChannelManager 通道管理器，可为 nil
 	ChannelManager *cm.ChannelManager
@@ -81,7 +81,7 @@ type WebHandlersBindParams struct {
 type EventSender func(event string, payload map[string]any)
 
 // OnConfigSavedFunc 配置保存回调函数类型。
-// 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
+// Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
 //
 // 参数说明：
 //   - updatedKeys: 变更的环境变量键集合
@@ -130,12 +130,14 @@ const (
 const logComponent = logger.ComponentGateway
 
 // maxTeamsConfigPanel 配置面板最大团队数。
-// 对齐 Python _flatten_modes_team_for_config_panel 中 range(10)。
+// Python: _flatten_modes_team_for_config_panel 中 range(10)。
 const maxTeamsConfigPanel = 10
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // configEnvMap 前端配置键名 → 环境变量名映射。
 //
-// 对齐 Python _CONFIG_SET_ENV_MAP，共 47 个条目。
+// Python: _CONFIG_SET_ENV_MAP，共 47 个条目。
 // config.get 通过此映射读取环境变量值返回给前端，
 // config.set 通过反向映射将前端参数写入环境变量。
 var configEnvMap = map[string]string{
@@ -207,7 +209,7 @@ func NewRPCDispatcher() *RPCDispatcher {
 
 // RegisterWebHandlers 创建 RPC 分发器并注册所有应用方法。
 //
-// 对齐 Python app_web_handlers.py 中 _register_web_handlers(bind)，
+// Python: app_web_handlers.py 中 _register_web_handlers(bind)，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
 // 消息转发由两层架构的第一层（normAndForward）处理，本地 handler 仅返回 ack。
 func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
@@ -300,7 +302,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("permissions.rules.get", permStub)
 	d.Register("permissions.rules.set", permStub)
 	d.Register("permissions.approval_overrides.get", permStub)
-	d.Register("permissions.approval_overrides.set", permStub)
 
 	// ─── 禁止记忆 ───
 	d.Register("memory.forbidden.get", handleMemoryForbiddenGet())
@@ -421,7 +422,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	}
 
 	// ─── 注册 onConnect 钩子：发送 connection.ack ───
-	// 对齐 Python WebChannel._connection_handler 中 _connect_hooks 逻辑
+	// Python: WebChannel._connection_handler 中 _connect_hooks 逻辑
 	if channel != nil {
 		ch := channel // 捕获循环变量
 		ac := agentClient
@@ -449,7 +450,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 				},
 				Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
 			}
-			// 对齐 Python L592-596: 优先用 mh.publish_robot_messages，否则 fallback channel.send
+			// Python: L592-596: 优先用 mh.publish_robot_messages，否则 fallback channel.send
 			if mh != nil {
 				if err := mh.PublishRobotMessages(context.Background(), ackMsg); err != nil {
 					logger.Warn(logComponent).Err(err).Msg("MessageHandler.PublishRobotMessages 发送 connection.ack 失败，fallback channel.Send")
@@ -474,7 +475,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 
 // Register 注册 RPC 方法处理函数。
 //
-// 对齐 Python app_web_handlers.py 中 @register_rpc_method 装饰器模式。
+// Python: app_web_handlers.py 中 @register_rpc_method 装饰器模式。
 func (d *RPCDispatcher) Register(method string, handler RPCHandlerFunc) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -487,7 +488,7 @@ func (d *RPCDispatcher) Register(method string, handler RPCHandlerFunc) {
 
 // Dispatch 分发 RPC 请求到对应处理函数。
 //
-// 对齐 Python _handle_rpc_request 中 method 查找与调用逻辑。
+// Python: _handle_rpc_request 中 method 查找与调用逻辑。
 // 方法未找到时返回 METHOD_NOT_FOUND 错误。
 func (d *RPCDispatcher) Dispatch(method string, params map[string]any, sessionID string) (map[string]any, error) {
 	d.mu.RLock()
@@ -515,7 +516,7 @@ func (d *RPCDispatcher) Dispatch(method string, params map[string]any, sessionID
 // MakeSessionID 生成会话标识。
 //
 // 格式：sess_{hex_timestamp}_{6_random_hex}
-// 对齐 Python _make_session_id() 和前端 generateSessionId。
+// Python: _make_session_id() 和前端 generateSessionId。
 func MakeSessionID() string {
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 16)
 	suffix := make([]byte, 3)
@@ -526,7 +527,7 @@ func MakeSessionID() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // strOrEmpty 将任意值转为字符串，nil 或无效值返回空串。
-// 对齐 Python: str(val) or ""。
+// Python: str(val) or ""。
 func strOrEmpty(val any) string {
 	if val == nil {
 		return ""
@@ -545,7 +546,7 @@ func strOrEmpty(val any) string {
 // handleMemoryForbiddenGet 处理 memory.forbidden.get 请求。
 //
 // 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
-// 对齐 Python: _memory_forbidden_get (app_web_handlers.py)。
+// Python: _memory_forbidden_get (app_web_handlers.py)。
 func handleMemoryForbiddenGet() RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		cfg, err := loadAppConfig()
@@ -553,7 +554,7 @@ func handleMemoryForbiddenGet() RPCHandlerFunc {
 			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get 加载配置失败")
 			return map[string]any{}, nil
 		}
-		// 对齐 Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
+		// Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
 		payload := getConfigAny(cfg, "memory.forbidden_memory_definition", map[string]any{})
 		if m, ok := payload.(map[string]any); ok {
 			return m, nil
@@ -565,7 +566,7 @@ func handleMemoryForbiddenGet() RPCHandlerFunc {
 // handleMemoryForbiddenSet 处理 memory.forbidden.set 请求。
 //
 // 接收 params，调用 updateMemoryForbiddenInConfig 写回。
-// 对齐 Python: _memory_forbidden_set (app_web_handlers.py) + update_memory_forbidden_in_config (config.py)。
+// Python: _memory_forbidden_set (app_web_handlers.py) + update_memory_forbidden_in_config (config.py)。
 func handleMemoryForbiddenSet() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
@@ -591,7 +592,7 @@ func stubHandler(_ string, payload map[string]any) RPCHandlerFunc {
 // handleConfigGet 处理 config.get 请求。
 //
 // 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
-// 对齐 Python config_get_handler 中 ~65 字段的返回。
+// Python: config_get_handler 中 ~65 字段的返回。
 // crypto 用于解密 api_key/token 等敏感字段。
 func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
@@ -600,7 +601,7 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 		// 从环境变量映射读取
 		for key, envVar := range configEnvMap {
 			val := os.Getenv(envVar)
-			// 对齐 Python: 对包含 api_key 或 token 的键解密
+			// Python: 对包含 api_key 或 token 的键解密
 			if crypto != nil && val != "" && isSensitiveKey(key) {
 				val = crypto.Decrypt(val)
 			}
@@ -685,13 +686,13 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 
 // isSensitiveKey 判断配置键是否为敏感字段（需要解密）。
 //
-// 对齐 Python: 包含 "api_key" 或 "token" 的键视为敏感字段。
+// Python: 包含 "api_key" 或 "token" 的键视为敏感字段。
 func isSensitiveKey(key string) bool {
 	return strings.Contains(key, "api_key") || strings.Contains(key, "token")
 }
 
 // normalizeTruthy 对布尔型环境变量做 truthy 归一化。
-// 对齐 Python: val.lower() in ("true", "1", "yes") → "true"，否则 "false"。
+// Python: val.lower() in ("true", "1", "yes") → "true"，否则 "false"。
 func normalizeTruthy(val string) string {
 	lower := strings.ToLower(strings.TrimSpace(val))
 	if lower == "true" || lower == "1" || lower == "yes" {
@@ -703,7 +704,7 @@ func normalizeTruthy(val string) string {
 // handleConfigSet 处理 config.set 请求。
 //
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
-// 对齐 Python: _config_set (app_web_handlers.py L870-895)。
+// Python: _config_set (app_web_handlers.py L870-895)。
 func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
@@ -745,7 +746,7 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cry
 // handleConfigSaveAll 处理 config.save_all 请求。
 //
 // 批量保存配置面板变更并触发热重载。
-// 对齐 Python: _config_save_all (app_web_handlers.py L1086-1151)。
+// Python: _config_save_all (app_web_handlers.py L1086-1151)。
 //
 // 支持子载荷：config、models、agents、team。
 func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
@@ -845,7 +846,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 // handleModelsList 处理 models.list 请求。
 //
 // 从 config.yaml 读取 models.defaults 配置，展平为前端格式。
-// 对齐 Python: _models_list_handler (app_web_handlers.py)。
+// Python: _models_list_handler (app_web_handlers.py)。
 // crypto 用于解密 api_key 字段。
 func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
@@ -900,7 +901,7 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 
 			// 从 model_config_obj 提取
 			if mco, ok := itemMap["model_config_obj"].(map[string]any); ok {
-				// 对齐 Python: mco.get("temperature", 0.95)
+				// Python: mco.get("temperature", 0.95)
 				temperature := 0.95
 				if v, ok := mco["temperature"]; ok && v != nil {
 					if f, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
@@ -936,7 +937,7 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 // handleChannelGet 处理 channel.get 请求。
 //
 // 从 ChannelManager 动态读取已启用的渠道列表。
-// 对齐 Python: channel_get_handler，返回数组 [{channel_id: cid}]。
+// Python: channel_get_handler，返回数组 [{channel_id: cid}]。
 func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		channels := make([]map[string]any, 0)
@@ -1035,7 +1036,7 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 // handleSessionCreate 处理 session.create 请求。
 //
 // 创建会话目录和 metadata.json。
-// 对齐 Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
+// Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
 func handleSessionCreate(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 	// 要求 session_id（对齐 Python: 必填参数）
 	sessionID, _ := params["session_id"].(string)
@@ -1084,7 +1085,7 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 
 // handleSessionDelete 处理 session.delete 请求。
 //
-// 对齐 Python _session_delete (app_web_handlers.py L1294-1354)：
+// Python: _session_delete (app_web_handlers.py L1294-1354)：
 //  1. AgentClient 可用 → 转发到 AgentServer → 成功则直接返回结果
 //  2. 转发失败 → fallback 本地删除
 //  3. AgentClient 不可用 → 本地删除（team 模式返回 AGENT_UNAVAILABLE）
@@ -1164,7 +1165,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 
 // handleModelsReplaceAll 处理 models.replace_all 请求。
 //
-// 对齐 Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
+// Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
 func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
@@ -1200,7 +1201,7 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoPr
 
 // handleModelsValidate 处理 models.validate 请求。
 //
-// 对齐 Python: _config_validate_model (app_web_handlers.py L897-1019)。
+// Python: _config_validate_model (app_web_handlers.py L897-1019)。
 // 调用 LLM 验证 api_key 和 api_base 是否有效。
 func handleModelsValidate() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
@@ -1296,7 +1297,7 @@ func handleModelsValidate() RPCHandlerFunc {
 // handleHistoryGet 处理 history.get 本地请求。
 //
 // 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
-// 对齐 Python (L1459-1466)。
+// Python: (L1459-1466)。
 func handleHistoryGet() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		payload := map[string]any{"accepted": true, "session_id": sessionID}
@@ -1315,7 +1316,7 @@ func handleHistoryGet() RPCHandlerFunc {
 // handleChatSend 处理 chat.send 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
-// 对齐 Python: chat.send handler 仅返回 ack。
+// Python: chat.send handler 仅返回 ack。
 func handleChatSend() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
@@ -1334,7 +1335,7 @@ func handleChatResume() RPCHandlerFunc {
 // handleChatInterrupt 处理 chat.interrupt 请求。
 //
 // 返回即时 ack 响应，从 params 中提取 intent。
-// 对齐 Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
+// Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
 // 消息转发由两层架构第一层（normAndForward）处理。
 func handleChatInterrupt() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
@@ -1413,11 +1414,11 @@ func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
 
 // flattenTeamConfig 展平 modes.team 配置到结果 map。
 //
-// 对齐 Python _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
+// Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
 // 遍历最多 10 个 team，提取 team_{idx}_* 前缀字段和 agent 详情。
 // flattenTeamConfig 展平 modes.team 配置为前端 config panel 格式。
 //
-// 对齐 Python _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)：
+// Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)：
 //   - teams_raw 为 dict（key=team_name, value=team_spec），最多 10 个 team
 //   - 每个 team 展平 team_0_name/lifecycle/teammate_mode/spawn_mode 等字段
 //   - leader 信息 + agent_key 推导（缺省时用 "{team_name}_leader"）
@@ -1439,7 +1440,7 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 
 	// 读取 web_config_panel.agent_team_agents 用于 agent 详情补充
-	// 对齐 Python L390-396
+	// Python: L390-396
 	agentSpecs := make(map[string]map[string]any)
 	panelCfg := getConfigAny(cfg, "web_config_panel", nil)
 	if panel, ok := panelCfg.(map[string]any); ok {
@@ -1453,7 +1454,7 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 
 	// addAgent 辅助函数：将 agent_key 加入 agentSpecs（如果尚未存在）
-	// 对齐 Python L398-403
+	// Python: L398-403
 	addAgent := func(agentKey string, spec any) string {
 		if agentKey == "" {
 			return ""
@@ -1467,7 +1468,7 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 
 	// modelNameFromSpec 辅助函数：从 agent spec 中提取 model name
-	// 对齐 Python L405-417
+	// Python: L405-417
 	modelNameFromSpec := func(spec map[string]any) string {
 		modelCfg, _ := spec["model"].(map[string]any)
 		if modelCfg == nil {
@@ -1490,7 +1491,7 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 
 	// 遍历 teams（dict，key=team_name，value=team_spec）
-	// 对齐 Python L419-470
+	// Python: L419-470
 	teamIdx := 0
 	for teamName, teamSpecRaw := range teamsRaw {
 		if teamIdx >= maxTeamsConfigPanel {
@@ -1630,7 +1631,7 @@ func buildSessionDeleteEnvelope(sessionID string, params map[string]any) *e2a.E2
 
 // persistEnvUpdates 将更新的环境变量持久化到 .env 文件。
 //
-// 对齐 Python _persist_env_updates：
+// Python: _persist_env_updates：
 //  1. 读取现有 .env 所有行
 //  2. 对每个更新的 key，找到 KEY=... 行替换
 //  3. 未找到的 key 追加到文件末尾

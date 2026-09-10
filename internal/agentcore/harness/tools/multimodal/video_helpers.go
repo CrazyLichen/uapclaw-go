@@ -23,7 +23,7 @@ import (
 
 // NormalizeVideoURL 规范化视频路径为 URL 或 data:URI。
 //
-// 对齐 Python: _normalize_video_url(video_path)
+// Python: _normalize_video_url(video_path)
 // HTTP URL → 保持原样；本地文件 → base64 → data:URI
 func NormalizeVideoURL(videoPath string) (string, error) {
 	value := strings.TrimSpace(videoPath)
@@ -47,7 +47,7 @@ func NormalizeVideoURL(videoPath string) (string, error) {
 			exception.WithMsg(fmt.Sprintf("video file does not exist: %s", value)),
 		)
 	}
-	// 对齐 Python: Path.is_file() — 传入目录时返回明确错误
+	// Python: Path.is_file() — 传入目录时返回明确错误
 	if info.IsDir() {
 		return "", exception.NewBaseError(
 			exception.StatusToolMultimodalVideoInvokeFailed,

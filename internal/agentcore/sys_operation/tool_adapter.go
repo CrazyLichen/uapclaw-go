@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolAdapterEntry 工具适配条目。
-// 对齐 Python SysOperationToolAdapter.extract_tools 返回的 (tool_id, LocalFunction) 元组。
+// Python: SysOperationToolAdapter.extract_tools 返回的 (tool_id, LocalFunction) 元组。
 type ToolAdapterEntry struct {
 	// ToolID 工具标识（格式：{cardID}.{opType}.{methodName}）
 	ToolID string
@@ -21,7 +21,7 @@ type ToolAdapterEntry struct {
 }
 
 // SysOperationToolAdapter SysOperation → tool.Tool 适配器。
-// 对齐 Python SysOperationToolAdapter：extract_tools。
+// Python: SysOperationToolAdapter：extract_tools。
 type SysOperationToolAdapter struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -33,7 +33,7 @@ type SysOperationToolAdapter struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractTools 从 SysOperation 提取所有方法包装为 tool.Tool。
-// 对齐 Python SysOperationToolAdapter.extract_tools 逻辑：
+// Python: SysOperationToolAdapter.extract_tools 逻辑：
 //  1. 遍历 OperationRegistry.GetSupportedOperations(card.Mode) 获取 op_type 列表
 //  2. 对每个 op_type，获取子操作实例
 //  3. 调用 sub_op.ListTools() 获取 ToolCard 列表
@@ -94,7 +94,7 @@ func (SysOperationToolAdapter) ExtractTools(
 			toolCardCopy.ID = toolID
 
 			// 使用 NewMapFunction 包装为 tool.Tool（弱类型 map 函数工具）
-			// 对齐 Python SysOperationToolAdapter 中 LocalFunction(func=None) 的降级场景
+			// Python: SysOperationToolAdapter 中 LocalFunction(func=None) 的降级场景
 			t, err := tool.NewMapFunction(&toolCardCopy, invokeFn, nil)
 			if err != nil {
 				return nil, fmt.Errorf("创建工具 %s 失败: %w", toolID, err)
@@ -111,7 +111,7 @@ func (SysOperationToolAdapter) ExtractTools(
 }
 
 // GetToolIDPrefix 获取工具标识前缀。
-// 对齐 Python SysOperationToolAdapter.get_tool_id_prefix（Deprecated 但保留）。
+// Python: SysOperationToolAdapter.get_tool_id_prefix（Deprecated 但保留）。
 // 输入 string → 返回 "{id}."；输入 []string → 返回每项加 "."；其他 → 返回 ""。
 func (SysOperationToolAdapter) GetToolIDPrefix(sysOperationID any) any {
 	switch v := sysOperationID.(type) {

@@ -315,7 +315,7 @@ func BuildTeamSkillApprovalEventFromRecords(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isEn 判断语言是否为英文。
-// 对齐 Python: str(language).lower() == "en"
+// Python: str(language).lower() == "en"
 func isEn(language string) bool {
 	return strings.ToLower(strings.TrimSpace(language)) == "en"
 }

@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserProfile 持久化的浏览器配置元数据。
 //
-// 对齐 Python: BrowserProfile (profiles.py L15-46)
+// Python: BrowserProfile (profiles.py L15-46)
 type BrowserProfile struct {
 	// Name 配置名称
 	Name string `json:"name"`
@@ -35,7 +37,7 @@ type BrowserProfile struct {
 
 // BrowserProfileStore JSON 后端配置存储，支持选中配置追踪。
 //
-// 对齐 Python: BrowserProfileStore (profiles.py L49-136)
+// Python: BrowserProfileStore (profiles.py L49-136)
 type BrowserProfileStore struct {
 	// path 存储文件路径
 	path string
@@ -55,7 +57,7 @@ type BrowserProfileStore struct {
 
 // NewBrowserProfileFromDict 从字典创建 BrowserProfile。
 //
-// 对齐 Python: BrowserProfile.from_dict
+// Python: BrowserProfile.from_dict
 func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 	debugPort := 0
 	if rawPort := raw["debug_port"]; rawPort != nil {
@@ -114,7 +116,7 @@ func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 
 // ToDict 将 BrowserProfile 转换为字典。
 //
-// 对齐 Python: BrowserProfile.to_dict
+// Python: BrowserProfile.to_dict
 func (p *BrowserProfile) ToDict() map[string]any {
 	return map[string]any{
 		"name":           p.Name,
@@ -130,10 +132,10 @@ func (p *BrowserProfile) ToDict() map[string]any {
 
 // NewBrowserProfileStore 创建 JSON 后端配置存储。
 //
-// 对齐 Python: BrowserProfileStore.__init__
+// Python: BrowserProfileStore.__init__
 func NewBrowserProfileStore(path string) *BrowserProfileStore {
 	store := &BrowserProfileStore{
-		path:     expandHome(path),
+		path:     pathutil.ExpandHome(path),
 		profiles: make(map[string]*BrowserProfile),
 		selected: "",
 	}
@@ -148,7 +150,7 @@ func (s *BrowserProfileStore) Path() string {
 
 // Save 将配置持久化到 JSON 文件。
 //
-// 对齐 Python: BrowserProfileStore.save
+// Python: BrowserProfileStore.save
 func (s *BrowserProfileStore) Save() error {
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -173,14 +175,14 @@ func (s *BrowserProfileStore) Save() error {
 
 // ListProfiles 返回按名称排序的配置列表。
 //
-// 对齐 Python: BrowserProfileStore.list_profiles
+// Python: BrowserProfileStore.list_profiles
 func (s *BrowserProfileStore) ListProfiles() []*BrowserProfile {
 	return s.sortedProfiles()
 }
 
 // GetProfile 根据名称获取配置。
 //
-// 对齐 Python: BrowserProfileStore.get_profile
+// Python: BrowserProfileStore.get_profile
 func (s *BrowserProfileStore) GetProfile(name string) *BrowserProfile {
 	key := strings.TrimSpace(name)
 	if key == "" {
@@ -191,7 +193,7 @@ func (s *BrowserProfileStore) GetProfile(name string) *BrowserProfile {
 
 // UpsertProfile 插入或更新配置，可选设为选中。
 //
-// 对齐 Python: BrowserProfileStore.upsert_profile
+// Python: BrowserProfileStore.upsert_profile
 func (s *BrowserProfileStore) UpsertProfile(profile *BrowserProfile, selectProfile bool) (*BrowserProfile, error) {
 	name := strings.TrimSpace(profile.Name)
 	if name == "" {
@@ -221,7 +223,7 @@ func (s *BrowserProfileStore) UpsertProfile(profile *BrowserProfile, selectProfi
 
 // RemoveProfile 移除配置。
 //
-// 对齐 Python: BrowserProfileStore.remove_profile
+// Python: BrowserProfileStore.remove_profile
 func (s *BrowserProfileStore) RemoveProfile(name string) bool {
 	key := strings.TrimSpace(name)
 	if key == "" {
@@ -240,7 +242,7 @@ func (s *BrowserProfileStore) RemoveProfile(name string) bool {
 
 // SelectProfile 选中指定配置。
 //
-// 对齐 Python: BrowserProfileStore.select_profile
+// Python: BrowserProfileStore.select_profile
 func (s *BrowserProfileStore) SelectProfile(name string) (*BrowserProfile, error) {
 	key := strings.TrimSpace(name)
 	profile, exists := s.profiles[key]
@@ -254,14 +256,14 @@ func (s *BrowserProfileStore) SelectProfile(name string) (*BrowserProfile, error
 
 // SelectedName 返回选中配置名称。
 //
-// 对齐 Python: BrowserProfileStore.selected_name
+// Python: BrowserProfileStore.selected_name
 func (s *BrowserProfileStore) SelectedName() string {
 	return s.selected
 }
 
 // SelectedProfile 返回选中配置。
 //
-// 对齐 Python: BrowserProfileStore.selected_profile
+// Python: BrowserProfileStore.selected_profile
 func (s *BrowserProfileStore) SelectedProfile() *BrowserProfile {
 	if s.selected == "" {
 		return nil
@@ -273,7 +275,7 @@ func (s *BrowserProfileStore) SelectedProfile() *BrowserProfile {
 
 // load 从 JSON 文件加载配置。
 //
-// 对齐 Python: BrowserProfileStore._load
+// Python: BrowserProfileStore._load
 func (s *BrowserProfileStore) load() {
 	s.profiles = make(map[string]*BrowserProfile)
 	s.selected = ""
@@ -334,18 +336,6 @@ func (s *BrowserProfileStore) sortedProfileDicts() []map[string]any {
 		result = append(result, p.ToDict())
 	}
 	return result
-}
-
-// expandHome 展开 ~ 为用户主目录。
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 // strValOrEmpty 从 any 值取字符串，nil 或 "<nil>" 返回空字符串。

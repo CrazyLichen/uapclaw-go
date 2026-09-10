@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // bus 进程内消息总线。
-// 对齐 Python: _Bus (openjiuwen/agent_teams/messager/inprocess.py)
+// Python: _Bus (openjiuwen/agent_teams/messager/inprocess.py)
 // 两个数据结构，均以 agentID 为 key 做 O(1) 查找：
 //   - topicSubs: topic → {agentID → handler}（发布订阅扇出）
 //   - p2p:       agentID → handler（点对点）
@@ -25,7 +25,7 @@ type bus struct {
 }
 
 // InProcessMessager 进程内消息通信实现。
-// 对齐 Python: InProcessMessager (openjiuwen/agent_teams/messager/inprocess.py)
+// Python: InProcessMessager (openjiuwen/agent_teams/messager/inprocess.py)
 // 所有实例共享进程全局 Bus，消息直接传递，无序列化。
 type InProcessMessager struct {
 	// config 传输配置
@@ -62,7 +62,7 @@ func NewInProcessMessager(config schema.MessagerTransportConfig) *InProcessMessa
 }
 
 // CleanupInProcessBus 重置进程全局 Bus（测试间调用）。
-// 对齐 Python: cleanup_inprocess_bus()
+// Python: cleanup_inprocess_bus()
 func CleanupInProcessBus() {
 	busMu.Lock()
 	defer busMu.Unlock()
@@ -87,7 +87,7 @@ func (m *InProcessMessager) Stop(_ context.Context) error {
 // 自动设置 SenderID 过滤自发布（对齐 Python message.model_copy(update={"sender_id": self._agent_id})）。
 func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message *schema.EventMessage) error {
 	agentID := m.agentID()
-	// 对齐 Python: message.model_copy(update={"sender_id": self._agent_id}) — 创建副本再修改
+	// Python: message.model_copy(update={"sender_id": self._agent_id}) — 创建副本再修改
 	if message.SenderID == "" {
 		msgCopy := *message
 		msgCopy.SenderID = agentID

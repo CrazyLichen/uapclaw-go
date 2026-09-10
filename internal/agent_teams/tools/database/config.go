@@ -3,7 +3,7 @@ package database
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DBConfigProvider 数据库配置提供者接口。
-// 对齐 Python: DatabaseConfig | MemoryDatabaseConfig 联合类型，
+// Python: DatabaseConfig | MemoryDatabaseConfig 联合类型，
 // 两种配置通过此接口统一访问。
 type DBConfigProvider interface {
 	// GetDBType 返回数据库类型

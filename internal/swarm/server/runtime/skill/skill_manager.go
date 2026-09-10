@@ -29,7 +29,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillManager 技能管理器，对应 skills.* 请求方法
-// 对应 Python: jiuwenswarm/server/runtime/skill/skill_manager.py SkillManager
+// Python: jiuwenswarm/server/runtime/skill/skill_manager.py SkillManager
 type SkillManager struct {
 	// mu 状态读写锁
 	mu sync.RWMutex
@@ -92,7 +92,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillManager 创建新的 SkillManager 实例
-// 对应 Python: SkillManager.__init__(workspace_dir)
+// Python: SkillManager.__init__(workspace_dir)
 func NewSkillManager(workspaceDir string) *SkillManager {
 	sm := &SkillManager{
 		skillnetInstallJobs: make(map[string]map[string]any),
@@ -120,14 +120,14 @@ func NewSkillManager(workspaceDir string) *SkillManager {
 }
 
 // SetSkillnetInstallCompleteHook 设置安装成功落盘后回调（通常为重载 Agent 实例）
-// 对应 Python: SkillManager.set_skillnet_install_complete_hook(hook)
+// Python: SkillManager.set_skillnet_install_complete_hook(hook)
 func (sm *SkillManager) SetSkillnetInstallCompleteHook(hook func(ctx context.Context) error) {
 	sm.skillnetInstallCompleteHook = hook
 }
 
 // HasPendingSkillnetInstall 检查是否有 pending 的 SkillNet 安装任务。
 //
-// 对齐 Python: SkillManager 中检查 _skillnet_install_jobs 是否有 pending 状态的任务
+// Python: SkillManager 中检查 _skillnet_install_jobs 是否有 pending 状态的任务
 func (sm *SkillManager) HasPendingSkillnetInstall() bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -140,7 +140,7 @@ func (sm *SkillManager) HasPendingSkillnetInstall() bool {
 }
 
 // HandleSkillsList 返回所有可用 skill（本地 + marketplace 中未安装的）
-// 对应 Python: SkillManager.handle_skills_list(params)
+// Python: SkillManager.handle_skills_list(params)
 func (sm *SkillManager) HandleSkillsList(ctx context.Context, params map[string]any) (map[string]any, error) {
 	refreshMarketplaces := toBool(params["refresh_marketplaces"])
 	if refreshMarketplaces {
@@ -169,7 +169,7 @@ func (sm *SkillManager) HandleSkillsList(ctx context.Context, params map[string]
 }
 
 // HandleSkillsInstalled 返回已安装的 marketplace 插件列表
-// 对应 Python: SkillManager.handle_skills_installed(params)
+// Python: SkillManager.handle_skills_installed(params)
 func (sm *SkillManager) HandleSkillsInstalled(ctx context.Context, params map[string]any) (map[string]any, error) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -200,7 +200,7 @@ func (sm *SkillManager) HandleSkillsInstalled(ctx context.Context, params map[st
 }
 
 // HandleSkillsGet 获取单个 skill 详情
-// 对应 Python: SkillManager.handle_skills_get(params)
+// Python: SkillManager.handle_skills_get(params)
 func (sm *SkillManager) HandleSkillsGet(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -240,7 +240,7 @@ func (sm *SkillManager) SkillsDir() string {
 }
 
 // HandleSkillsToggle 切换已安装本地 skill 的 enabled 状态
-// 对应 Python: SkillManager.handle_skills_toggle(params)
+// Python: SkillManager.handle_skills_toggle(params)
 func (sm *SkillManager) HandleSkillsToggle(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	enabledVal, hasEnabled := params["enabled"]
@@ -274,7 +274,7 @@ func (sm *SkillManager) HandleSkillsToggle(ctx context.Context, params map[strin
 }
 
 // HandleSkillsEvolutionStatus 检查某个 skill 是否存在 evolutions.json
-// 对应 Python: SkillManager.handle_skills_evolution_status(params)
+// Python: SkillManager.handle_skills_evolution_status(params)
 func (sm *SkillManager) HandleSkillsEvolutionStatus(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := trimSpace(toString(params["name"]))
 	if name == "" {
@@ -295,7 +295,7 @@ func (sm *SkillManager) HandleSkillsEvolutionStatus(ctx context.Context, params 
 }
 
 // HandleSkillsEvolutionGet 获取某个 skill 的 evolutions.json 内容
-// 对应 Python: SkillManager.handle_skills_evolution_get(params)
+// Python: SkillManager.handle_skills_evolution_get(params)
 func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := trimSpace(toString(params["name"]))
 	if name == "" {
@@ -365,7 +365,7 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 }
 
 // HandleSkillsEvolutionSave 保存某个 skill 的 evolutions.json 条目列表
-// 对应 Python: SkillManager.handle_skills_evolution_save(params)
+// Python: SkillManager.handle_skills_evolution_save(params)
 func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := trimSpace(toString(params["name"]))
 	if name == "" {
@@ -459,7 +459,7 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 }
 
 // HandleSkillsMarketplaceList 列出已配置的 marketplace 源
-// 对应 Python: SkillManager.handle_skills_marketplace_list(params)
+// Python: SkillManager.handle_skills_marketplace_list(params)
 func (sm *SkillManager) HandleSkillsMarketplaceList(ctx context.Context, params map[string]any) (map[string]any, error) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -484,7 +484,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceList(ctx context.Context, params 
 }
 
 // HandleSkillsInstall 安装 marketplace 中的 skill
-// 对应 Python: SkillManager.handle_skills_install(params)
+// Python: SkillManager.handle_skills_install(params)
 func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	spec := toString(params["spec"])
 	force := toBool(params["force"])
@@ -606,7 +606,7 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 }
 
 // HandleSkillsInstallBuiltin 安装内置技能
-// 对应 Python: SkillManager.handle_skills_install_builtin(params)
+// Python: SkillManager.handle_skills_install_builtin(params)
 func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -656,7 +656,7 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 }
 
 // HandleSkillsUninstall 卸载技能
-// 对应 Python: SkillManager.handle_skills_uninstall(params)
+// Python: SkillManager.handle_skills_uninstall(params)
 func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -701,7 +701,7 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 }
 
 // HandleSkillsImportLocal 导入本地技能
-// 对应 Python: SkillManager.handle_skills_import_local(params)
+// Python: SkillManager.handle_skills_import_local(params)
 func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[string]any) (map[string]any, error) {
 	path := toString(params["path"])
 	if path == "" {
@@ -779,7 +779,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 }
 
 // HandleSkillsMarketplaceAdd 添加 marketplace
-// 对应 Python: SkillManager.handle_skills_marketplace_add(params)
+// Python: SkillManager.handle_skills_marketplace_add(params)
 func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	url := toString(params["url"])
@@ -814,7 +814,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params m
 }
 
 // HandleSkillsMarketplaceRemove 移除 marketplace
-// 对应 Python: SkillManager.handle_skills_marketplace_remove(params)
+// Python: SkillManager.handle_skills_marketplace_remove(params)
 func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -855,7 +855,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, param
 }
 
 // HandleSkillsMarketplaceToggle 切换 marketplace 的 enabled 状态
-// 对应 Python: SkillManager.handle_skills_marketplace_toggle(params)
+// Python: SkillManager.handle_skills_marketplace_toggle(params)
 func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	enabled := toBool(params["enabled"])
@@ -916,7 +916,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 }
 
 // HandleSkillsSkillnetSearch 在线搜索 SkillNet 技能
-// 对应 Python: SkillManager.handle_skills_skillnet_search(params)
+// Python: SkillManager.handle_skills_skillnet_search(params)
 func (sm *SkillManager) HandleSkillsSkillnetSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
 	// ⤵️ 回填: SkillNet 搜索尚未实现
 	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
@@ -933,7 +933,7 @@ func (sm *SkillManager) HandleSkillsSkillnetSearch(ctx context.Context, params m
 }
 
 // HandleSkillsSkillnetInstall 从 SkillNet URL 异步安装
-// 对应 Python: SkillManager.handle_skills_skillnet_install(params)
+// Python: SkillManager.handle_skills_skillnet_install(params)
 func (sm *SkillManager) HandleSkillsSkillnetInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
 	restore := skillnetNetworkContext()
@@ -968,7 +968,7 @@ func (sm *SkillManager) HandleSkillsSkillnetInstall(ctx context.Context, params 
 }
 
 // HandleSkillsSkillnetInstallStatus 查询 SkillNet 异步安装状态
-// 对应 Python: SkillManager.handle_skills_skillnet_install_status(params)
+// Python: SkillManager.handle_skills_skillnet_install_status(params)
 func (sm *SkillManager) HandleSkillsSkillnetInstallStatus(ctx context.Context, params map[string]any) (map[string]any, error) {
 	installID := trimSpace(toString(params["install_id"]))
 	if installID == "" {
@@ -1048,7 +1048,7 @@ func (sm *SkillManager) GetInstallJobIDs() []string {
 }
 
 // HandleSkillsSkillnetEvaluate 使用 SkillNet 评估
-// 对应 Python: SkillManager.handle_skills_skillnet_evaluate(params)
+// Python: SkillManager.handle_skills_skillnet_evaluate(params)
 func (sm *SkillManager) HandleSkillsSkillnetEvaluate(ctx context.Context, params map[string]any) (map[string]any, error) {
 	// ⤵️ 回填: SkillNet 评估尚未实现
 	// 代理环境变量上下文（对齐 Python: _skillnet_network_context）
@@ -1063,7 +1063,7 @@ func (sm *SkillManager) HandleSkillsSkillnetEvaluate(ctx context.Context, params
 }
 
 // HandleSkillsClawhubGetToken 获取 ClawHub CLI token（已掩码）
-// 对应 Python: SkillManager.handle_skills_clawhub_get_token(params)
+// Python: SkillManager.handle_skills_clawhub_get_token(params)
 func (sm *SkillManager) HandleSkillsClawhubGetToken(ctx context.Context, params map[string]any) (map[string]any, error) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -1077,7 +1077,7 @@ func (sm *SkillManager) HandleSkillsClawhubGetToken(ctx context.Context, params 
 }
 
 // HandleSkillsClawhubSetToken 设置 ClawHub CLI token
-// 对应 Python: SkillManager.handle_skills_clawhub_set_token(params)
+// Python: SkillManager.handle_skills_clawhub_set_token(params)
 func (sm *SkillManager) HandleSkillsClawhubSetToken(ctx context.Context, params map[string]any) (map[string]any, error) {
 	token := trimSpace(toString(params["token"]))
 
@@ -1094,7 +1094,7 @@ func (sm *SkillManager) HandleSkillsClawhubSetToken(ctx context.Context, params 
 }
 
 // HandleSkillsClawhubSearch 从 ClawHub 搜索技能
-// 对应 Python: SkillManager.handle_skills_clawhub_search(params)
+// Python: SkillManager.handle_skills_clawhub_search(params)
 func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
 	query := trimSpace(toString(params["q"]))
 	if query == "" {
@@ -1166,7 +1166,7 @@ func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params ma
 }
 
 // HandleSkillsClawhubDownload 从 ClawHub 下载并安装技能
-// 对应 Python: SkillManager.handle_skills_clawhub_download(params)
+// Python: SkillManager.handle_skills_clawhub_download(params)
 func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params map[string]any) (map[string]any, error) {
 	slug, err := safePathName(params["slug"], "skill")
 	if err != nil {
@@ -1274,7 +1274,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 		"marketplace":  "clawhub",
 		"source":       "clawhub",
 		"version":      toString(meta["version"]), // 从 SKILL.md meta 获取
-		"commit":       "",                        // 对齐 Python 默认空
+		"commit":       "",                        // Python: 默认空
 		"installed_at": time.Now().Format(time.RFC3339),
 	})
 	// saveState 已在 AddInstalledPlugin 内调用，此处不再冗余
@@ -1289,7 +1289,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 }
 
 // HandleSkillsTeamSkillsHubInfo 查询 Team Skills Hub 技能版本详情
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_info(params)
+// Python: SkillManager.handle_skills_team_skills_hub_info(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, params map[string]any) (map[string]any, error) {
 	assetID := trimSpace(toString(params["asset_id"]))
 	if assetID == "" {
@@ -1311,7 +1311,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, param
 }
 
 // HandleSkillsTeamSkillsHubInit 初始化 TeamSkills 模板目录
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_init(params)
+// Python: SkillManager.handle_skills_team_skills_hub_init(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInit(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := trimSpace(toString(params["name"]))
 	if name == "" {
@@ -1347,7 +1347,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInit(ctx context.Context, param
 }
 
 // HandleSkillsTeamSkillsHubValidate 校验 TeamSkills 目录结构与 SKILL.md 内容
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_validate(params)
+// Python: SkillManager.handle_skills_team_skills_hub_validate(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubValidate(ctx context.Context, params map[string]any) (map[string]any, error) {
 	dirPath := trimSpace(toString(params["path"]))
 	if dirPath == "" {
@@ -1447,7 +1447,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubValidate(ctx context.Context, p
 }
 
 // HandleSkillsTeamSkillsHubPack 将 TeamSkills 目录打包为 zip
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_pack(params)
+// Python: SkillManager.handle_skills_team_skills_hub_pack(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubPack(ctx context.Context, params map[string]any) (map[string]any, error) {
 	dirPath := trimSpace(toString(params["path"]))
 	if dirPath == "" {
@@ -1520,7 +1520,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPack(ctx context.Context, param
 }
 
 // HandleSkillsTeamSkillsHubSearch 从 Team Skills Hub 搜索技能
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_search(params)
+// Python: SkillManager.handle_skills_team_skills_hub_search(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubSearch(ctx context.Context, params map[string]any) (map[string]any, error) {
 	query := trimSpace(toString(params["q"]))
 	baseURL := trimSpace(toString(params["market_url"]))
@@ -1615,7 +1615,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubSearch(ctx context.Context, par
 }
 
 // HandleSkillsTeamSkillsHubInstall 从 Team Skills Hub 安装技能
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_install(params)
+// Python: SkillManager.handle_skills_team_skills_hub_install(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	assetID := trimSpace(toString(params["asset_id"]))
 	if assetID == "" {
@@ -1728,7 +1728,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 }
 
 // HandleSkillsTeamSkillsHubPublish 发布 TeamSkills
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_publish(params)
+// Python: SkillManager.handle_skills_team_skills_hub_publish(params)
 //
 // 步骤（对齐 Python: _prepare_teamskills_publish_zip 规范化后上传）：
 //  1. 从 path/file 构建 plugin.yaml + 规范化 ZIP
@@ -1800,7 +1800,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 }
 
 // HandleSkillsTeamSkillsHubDelete 删除 TeamSkills
-// 对应 Python: SkillManager.handle_skills_team_skills_hub_delete(params)
+// Python: SkillManager.handle_skills_team_skills_hub_delete(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, params map[string]any) (map[string]any, error) {
 	assetID := trimSpace(toString(params["asset_id"]))
 	if assetID == "" {
@@ -1831,25 +1831,25 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, par
 }
 
 // HandlePluginsList 列出已安装的插件
-// 对应 Python: SkillManager.handle_plugins_list(params) → 同 handle_skills_installed
+// Python: SkillManager.handle_plugins_list(params) → 同 handle_skills_installed
 func (sm *SkillManager) HandlePluginsList(ctx context.Context, params map[string]any) (map[string]any, error) {
 	return sm.HandleSkillsInstalled(ctx, params)
 }
 
 // HandlePluginsInstall 安装插件
-// 对应 Python: SkillManager.handle_plugins_install(params)
+// Python: SkillManager.handle_plugins_install(params)
 func (sm *SkillManager) HandlePluginsInstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	return sm.HandleSkillsInstall(ctx, params)
 }
 
 // HandlePluginsUninstall 卸载插件
-// 对应 Python: SkillManager.handle_plugins_uninstall(params)
+// Python: SkillManager.handle_plugins_uninstall(params)
 func (sm *SkillManager) HandlePluginsUninstall(ctx context.Context, params map[string]any) (map[string]any, error) {
 	return sm.HandleSkillsUninstall(ctx, params)
 }
 
 // HandlePluginsEnable 启用插件
-// 对齐 Python: handle_plugins_enable(params) (skill_manager.py L3809-3818)
+// Python: handle_plugins_enable(params) (skill_manager.py L3809-3818)
 func (sm *SkillManager) HandlePluginsEnable(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -1866,7 +1866,7 @@ func (sm *SkillManager) HandlePluginsEnable(ctx context.Context, params map[stri
 }
 
 // HandlePluginsDisable 禁用插件
-// 对齐 Python: handle_plugins_disable(params) (skill_manager.py L3820-3829)
+// Python: handle_plugins_disable(params) (skill_manager.py L3820-3829)
 func (sm *SkillManager) HandlePluginsDisable(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
 	if name == "" {
@@ -1883,7 +1883,7 @@ func (sm *SkillManager) HandlePluginsDisable(ctx context.Context, params map[str
 }
 
 // HandlePluginsReload 重载插件：根据 enabled 状态物理移动技能目录，然后统计摘要。
-// 对齐 Python: handle_plugins_reload(params) (skill_manager.py L3504-3553)
+// Python: handle_plugins_reload(params) (skill_manager.py L3504-3553)
 func (sm *SkillManager) HandlePluginsReload(ctx context.Context, params map[string]any) (map[string]any, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -1980,7 +1980,7 @@ func (sm *SkillManager) HandlePluginsReload(ctx context.Context, params map[stri
 }
 
 // GetInstalledPlugins 获取已安装插件列表
-// 对应 Python: SkillManager._get_installed_plugins()
+// Python: SkillManager._get_installed_plugins()
 func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
 	raw, ok := sm.state["installed_plugins"]
 	if !ok {
@@ -2000,9 +2000,9 @@ func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
 }
 
 // AddInstalledPlugin 添加已安装插件记录
-// 对应 Python: SkillManager._add_installed_plugin(plugin)
+// Python: SkillManager._add_installed_plugin(plugin)
 func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
-	// 对齐 Python: plugin = self._normalize_plugin(plugin) — 补全 enabled=True
+	// Python: plugin = self._normalize_plugin(plugin) — 补全 enabled=True
 	plugin = sm.normalizePlugin(plugin)
 	plugins := sm.GetInstalledPlugins()
 	// 如果已存在同名插件，替换
@@ -2011,14 +2011,14 @@ func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
 		if toString(p["name"]) == name {
 			plugins[i] = plugin
 			sm.state["installed_plugins"] = mapSliceToAny(plugins)
-			// 对齐 Python: self._save_state()
+			// Python: self._save_state()
 			sm.saveState()
 			return
 		}
 	}
 	plugins = append(plugins, plugin)
 	sm.state["installed_plugins"] = mapSliceToAny(plugins)
-	// 对齐 Python: self._save_state()
+	// Python: self._save_state()
 	sm.saveState()
 }
 
@@ -2030,7 +2030,7 @@ func (sm *SkillManager) AddLocalSkill(skill map[string]any) {
 }
 
 // GetLocalSkills 返回本地技能列表
-// 对应 Python: SkillManager.get_local_skills()
+// Python: SkillManager.get_local_skills()
 func (sm *SkillManager) GetLocalSkills() []map[string]any {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -2052,9 +2052,9 @@ func (sm *SkillManager) GetLocalSkills() []map[string]any {
 }
 
 // SetClawhubToken 设置 ClawHub token
-// 对应 Python: SkillManager._set_clawhub_token(token)
+// Python: SkillManager._set_clawhub_token(token)
 // SetClawhubToken 设置 ClawHub CLI token。
-// 对齐 Python: state.setdefault("clawhub", {})["token"] = token
+// Python: state.setdefault("clawhub", {})["token"] = token
 func (sm *SkillManager) SetClawhubToken(token string) {
 	clawhub, ok := sm.state["clawhub"].(map[string]any)
 	if !ok {
@@ -2066,7 +2066,7 @@ func (sm *SkillManager) SetClawhubToken(token string) {
 }
 
 // GetSkillMeta 从本地技能目录读取解析后的 SKILL.md 元数据
-// 对应 Python: SkillManager.get_skill_meta(skill_name)
+// Python: SkillManager.get_skill_meta(skill_name)
 func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
 	skillDir := sm.resolveLocalSkillDir(name)
 	if skillDir == "" {
@@ -2086,7 +2086,7 @@ func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
 }
 
 // IsBuiltinSkill 判断技能是否为内置技能
-// 对应 Python: SkillManager.is_builtin_skill(skill_name)
+// Python: SkillManager.is_builtin_skill(skill_name)
 // 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
 func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 	if name == "" {
@@ -2116,26 +2116,26 @@ func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 }
 
 // GetSkillEnabled 读取技能的 enabled 标志，默认为 true（向后兼容）。
-// 对应 Python: SkillManager.get_skill_enabled(skill_name)
+// Python: SkillManager.get_skill_enabled(skill_name)
 func (sm *SkillManager) GetSkillEnabled(name string) bool {
 	return GetSkillEnabled(sm.state, name)
 }
 
 // SetSkillEnabled 将技能的 enabled 标志持久化到 state 中。
-// 对齐 Python: set_skill_enabled 修改后立即 _save_state()
+// Python: set_skill_enabled 修改后立即 _save_state()
 func (sm *SkillManager) SetSkillEnabled(name string, enabled bool) {
 	SetSkillEnabled(sm.state, name, enabled)
 	sm.saveState()
 }
 
 // ListDisabledSkills 从 skill_configs 中返回已禁用的技能名称列表（排序）。
-// 对应 Python: SkillManager.list_disabled_skills()
+// Python: SkillManager.list_disabled_skills()
 func (sm *SkillManager) ListDisabledSkills() []string {
 	return ListDisabledSkills(sm.state)
 }
 
 // ListExecutionDisabledSkills 返回当前已安装的已禁用技能名称列表。
-// 对应 Python: SkillManager.list_execution_disabled_skills()
+// Python: SkillManager.list_execution_disabled_skills()
 func (sm *SkillManager) ListExecutionDisabledSkills() []string {
 	return ListExecutionDisabledSkills(sm.state)
 }
@@ -2143,7 +2143,7 @@ func (sm *SkillManager) ListExecutionDisabledSkills() []string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setPluginEnabled 设置插件的启用/禁用状态。
-// 对齐 Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
+// Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
 func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
 	plugins, _ := sm.state["installed_plugins"].([]map[string]any)
 	if plugins == nil {
@@ -2167,7 +2167,7 @@ func (sm *SkillManager) getMirrorSkillsDirs() []string {
 
 // getBuiltinSkillsDir 返回内置技能目录。
 func (sm *SkillManager) getBuiltinSkillsDir() string {
-	// 对齐 Python: 检查 skills/builtin 目录
+	// Python: 检查 skills/builtin 目录
 	builtinDir := filepath.Join(sm.skillsDir, "builtin")
 	if dirExists(builtinDir) {
 		return builtinDir
@@ -2222,7 +2222,7 @@ func parseSKILLMd(path string) (map[string]any, error) {
 }
 
 // loadState 从文件加载状态
-// 对应 Python: SkillManager._load_state()
+// Python: SkillManager._load_state()
 func (sm *SkillManager) loadState() map[string]any {
 	data, err := os.ReadFile(sm.stateFile)
 	if err != nil {
@@ -2237,7 +2237,7 @@ func (sm *SkillManager) loadState() map[string]any {
 }
 
 // saveState 将状态保存到文件
-// 对应 Python: SkillManager._save_state()
+// Python: SkillManager._save_state()
 func (sm *SkillManager) saveState() {
 	data, err := json.MarshalIndent(sm.state, "", "  ")
 	if err != nil {
@@ -2254,7 +2254,7 @@ func (sm *SkillManager) saveState() {
 }
 
 // getMarketplaces 获取 marketplace 配置列表
-// 对应 Python: SkillManager._get_marketplaces()
+// Python: SkillManager._get_marketplaces()
 func (sm *SkillManager) getMarketplaces() []map[string]any {
 	raw, ok := sm.state["marketplaces"]
 	if !ok {
@@ -2286,7 +2286,7 @@ func (sm *SkillManager) removeInstalledPlugin(name string) {
 }
 
 // addLocalSkill 添加本地技能记录（内部方法，调用者需持有锁）
-// 对应 Python: SkillManager._add_local_skill(skill)
+// Python: SkillManager._add_local_skill(skill)
 func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 	raw, ok := sm.state["local_skills"]
 	if !ok {
@@ -2301,9 +2301,9 @@ func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 }
 
 // normalizePlugin 规范化插件记录
-// 对应 Python: SkillManager._normalize_plugin(p)
+// Python: SkillManager._normalize_plugin(p)
 func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
-	// 对齐 Python _normalize_plugin：补全 enabled 字段
+	// Python: _normalize_plugin：补全 enabled 字段
 	if _, ok := p["enabled"]; !ok {
 		p["enabled"] = true
 	}
@@ -2311,8 +2311,8 @@ func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
 }
 
 // getClawhubToken 获取 ClawHub token
-// 对应 Python: SkillManager._get_clawhub_token()
-// 对齐 Python: state.get("clawhub", {}).get("token") or ""
+// Python: SkillManager._get_clawhub_token()
+// Python: state.get("clawhub", {}).get("token") or ""
 func (sm *SkillManager) getClawhubToken() string {
 	clawhub, ok := sm.state["clawhub"].(map[string]any)
 	if !ok {
@@ -2326,7 +2326,7 @@ func (sm *SkillManager) getClawhubToken() string {
 }
 
 // maskClawhubToken 掩码 ClawHub token
-// 对应 Python: SkillManager._mask_clawhub_token(token)
+// Python: SkillManager._mask_clawhub_token(token)
 func maskClawhubToken(token string) string {
 	if token == "" {
 		return ""
@@ -2338,7 +2338,7 @@ func maskClawhubToken(token string) string {
 }
 
 // getSkillEvolutionPath 获取技能的演化记录文件路径
-// 对应 Python: SkillManager._get_skill_evolution_path(skill_name)
+// Python: SkillManager._get_skill_evolution_path(skill_name)
 func (sm *SkillManager) getSkillEvolutionPath(skillName string) string {
 	localDir := sm.resolveLocalSkillDir(skillName)
 	if localDir == "" {
@@ -2348,7 +2348,7 @@ func (sm *SkillManager) getSkillEvolutionPath(skillName string) string {
 }
 
 // resolveLocalSkillDir 解析本地技能目录。
-// 对应 Python: SkillManager._resolve_local_skill_dir(skill_name)
+// Python: SkillManager._resolve_local_skill_dir(skill_name)
 // 先尝试 skillsDir/skillName 直接路径，若不存在则遍历子目录通过 SKILL.md 的 name 字段匹配。
 func (sm *SkillManager) resolveLocalSkillDir(skillName string) string {
 	// 直接路径匹配
@@ -2381,7 +2381,7 @@ func (sm *SkillManager) resolveLocalSkillDir(skillName string) string {
 }
 
 // resolveSkillSource 确定技能来源
-// 对应 Python: SkillManager._resolve_skill_source(skill_name)
+// Python: SkillManager._resolve_skill_source(skill_name)
 func (sm *SkillManager) resolveSkillSource(skillName string) string {
 	plugins := sm.GetInstalledPlugins()
 	for _, p := range plugins {
@@ -2393,7 +2393,7 @@ func (sm *SkillManager) resolveSkillSource(skillName string) string {
 }
 
 // scanLocalSkills 扫描本地技能目录
-// 对应 Python: SkillManager._scan_local_skills()
+// Python: SkillManager._scan_local_skills()
 func (sm *SkillManager) scanLocalSkills() []map[string]any {
 	var skills []map[string]any
 	entries, err := os.ReadDir(sm.skillsDir)
@@ -2423,7 +2423,7 @@ func (sm *SkillManager) scanLocalSkills() []map[string]any {
 }
 
 // scanBuiltinSkills 扫描内置技能目录
-// 对应 Python: SkillManager._scan_builtin_skills()
+// Python: SkillManager._scan_builtin_skills()
 func (sm *SkillManager) scanBuiltinSkills() []map[string]any {
 	builtinDir := getBuiltinSkillsDir()
 	if !dirExists(builtinDir) {
@@ -2452,7 +2452,7 @@ func (sm *SkillManager) scanBuiltinSkills() []map[string]any {
 			if name != "" {
 				enabled := GetSkillEnabled(sm.state, name)
 				meta["enabled"] = enabled
-				// 对齐 Python: payload["config"] = {"enabled": enabled}
+				// Python: payload["config"] = {"enabled": enabled}
 				meta["config"] = map[string]any{"enabled": enabled}
 			}
 			skills = append(skills, meta)
@@ -2462,7 +2462,7 @@ func (sm *SkillManager) scanBuiltinSkills() []map[string]any {
 }
 
 // scanMarketplaceSkills 扫描 marketplace 技能
-// 对应 Python: SkillManager._scan_marketplace_skills()
+// Python: SkillManager._scan_marketplace_skills()
 func (sm *SkillManager) scanMarketplaceSkills() []map[string]any {
 	if !dirExists(sm.marketplaceDir) {
 		return nil
@@ -2500,7 +2500,7 @@ func (sm *SkillManager) scanMarketplaceSkills() []map[string]any {
 				if name != "" {
 					enabled := GetSkillEnabled(sm.state, name)
 					meta["enabled"] = enabled
-					// 对齐 Python: payload["config"] = {"enabled": enabled}
+					// Python: payload["config"] = {"enabled": enabled}
 					meta["config"] = map[string]any{"enabled": enabled}
 				}
 				skills = append(skills, meta)
@@ -2511,7 +2511,7 @@ func (sm *SkillManager) scanMarketplaceSkills() []map[string]any {
 }
 
 // tryFindSkillFile 在目录中查找 SKILL.md 文件
-// 对应 Python: SkillManager._try_find_skill_file(directory)
+// Python: SkillManager._try_find_skill_file(directory)
 func (sm *SkillManager) tryFindSkillFile(dir string) string {
 	candidates := []string{"SKILL.md", "skill.md", "Skill.md"}
 	for _, name := range candidates {
@@ -2524,7 +2524,7 @@ func (sm *SkillManager) tryFindSkillFile(dir string) string {
 }
 
 // locateSkillDir 定位包含 SKILL.md 的目录（优先当前目录，再向下递归）
-// 对应 Python: SkillManager._locate_skill_dir(path)
+// Python: SkillManager._locate_skill_dir(path)
 func (sm *SkillManager) locateSkillDir(dir string) string {
 	// 优先在当前目录直接查找
 	if f := sm.tryFindSkillFile(dir); f != "" {
@@ -2550,7 +2550,7 @@ func (sm *SkillManager) locateSkillDir(dir string) string {
 }
 
 // parseSkillMD 解析 SKILL.md 文件的 frontmatter 和 body
-// 对应 Python: SkillManager._parse_skill_md(path)
+// Python: SkillManager._parse_skill_md(path)
 func (sm *SkillManager) parseSkillMD(path string) map[string]any {
 	if path == "" || !fileExists(path) {
 		return nil
@@ -2609,7 +2609,7 @@ func (sm *SkillManager) findSkillInDir(dir, name, marketplaceName string) (map[s
 			} else {
 				source := sm.resolveSkillSource(name)
 				meta["source"] = source
-				// 对齐 Python：根据 source 判断 is_builtin/is_builtin_source
+				// Python: 根据 source 判断 is_builtin/is_builtin_source
 				isBuiltin := source == "builtin"
 				meta["is_builtin"] = isBuiltin
 				meta["is_builtin_source"] = isBuiltin
@@ -2617,7 +2617,7 @@ func (sm *SkillManager) findSkillInDir(dir, name, marketplaceName string) (map[s
 			meta["has_evolutions"] = fileExists(filepath.Join(childPath, evolutionFilename))
 			enabled := GetSkillEnabled(sm.state, name)
 			meta["enabled"] = enabled
-			// 对齐 Python: payload["config"] = {"enabled": enabled}
+			// Python: payload["config"] = {"enabled": enabled}
 			meta["config"] = map[string]any{"enabled": enabled}
 			return meta, nil
 		}
@@ -2626,7 +2626,7 @@ func (sm *SkillManager) findSkillInDir(dir, name, marketplaceName string) (map[s
 }
 
 // syncMarketplaceRepos 同步 marketplace 仓库
-// 对应 Python: SkillManager._sync_marketplace_repos()
+// Python: SkillManager._sync_marketplace_repos()
 func (sm *SkillManager) syncMarketplaceRepos(ctx context.Context) error {
 	for _, m := range sm.getMarketplaces() {
 		if !toBoolWithDefault(m["enabled"], true) {
@@ -2663,7 +2663,7 @@ func (sm *SkillManager) gitGetCommit(dir string) string {
 }
 
 // safePathName 校验路径名称安全性
-// 对应 Python: _safe_path_name(value, label)
+// Python: _safe_path_name(value, label)
 func safePathName(value any, label string) (string, error) {
 	raw := trimSpace(toString(value))
 	if raw == "" {
@@ -2682,7 +2682,7 @@ func safePathName(value any, label string) (string, error) {
 }
 
 // logRejectedName 记录被拒绝的无效名称
-// 对应 Python: _log_rejected_name(operation, label, value, exc)
+// Python: _log_rejected_name(operation, label, value, exc)
 func logRejectedName(operation, label string, value any, exc error) {
 	logger.Warn(logComponent).
 		Str("operation", operation).
@@ -2693,7 +2693,7 @@ func logRejectedName(operation, label string, value any, exc error) {
 }
 
 // getBuiltinSkillsDir 获取内置技能目录
-// 对应 Python: get_builtin_skills_dir()
+// Python: get_builtin_skills_dir()
 func getBuiltinSkillsDir() string {
 	if dir := os.Getenv("BUILTIN_SKILLS_DIR"); dir != "" {
 		return dir
@@ -2738,7 +2738,7 @@ func copyDir(src, dst string) error {
 
 // generateUUID 生成 UUID
 func generateUUID() string {
-	// 对齐 Python: uuid.uuid4()，使用 crypto/rand 生成标准 UUIDv4 格式
+	// Python: uuid.uuid4()，使用 crypto/rand 生成标准 UUIDv4 格式
 	var uuid [16]byte
 	_, _ = rand.Read(uuid[:])
 	// 设置版本 4 和变体位
@@ -2769,7 +2769,7 @@ func envString(key, defaultVal string) string {
 }
 
 // parseYAMLFrontmatter 解析 YAML frontmatter（使用 gopkg.in/yaml.v3 完整解析）。
-// 对齐 Python: yaml.safe_load(frontmatter)，补全默认字段和 tags/allowed_tools 类型转换。
+// Python: yaml.safe_load(frontmatter)，补全默认字段和 tags/allowed_tools 类型转换。
 func parseYAMLFrontmatter(text string) map[string]any {
 	result := make(map[string]any)
 	// 使用 yaml.v3 解析（对齐 Python: yaml.safe_load）
@@ -2845,7 +2845,7 @@ func mapSliceToAny(items []map[string]any) []any {
 }
 
 // safeExtractZIPBytesToDir 安全解压 ZIP 字节到目标目录（防 Zip Slip）
-// 对应 Python: SkillManager._safe_extract_zip_bytes_to_dir(zip_bytes, dest_dir)
+// Python: SkillManager._safe_extract_zip_bytes_to_dir(zip_bytes, dest_dir)
 func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {
 	reader, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
 	if err != nil {
@@ -2891,7 +2891,7 @@ func safeExtractZIPBytesToDir(zipBytes []byte, destDir string) error {
 }
 
 // teamSkillsHubHTTPGet 向 TeamSkillsHub 发送 GET 请求
-// 对应 Python: SkillManager._team_skills_hub_http_get_data(path, params, timeout, base_url)
+// Python: SkillManager._team_skills_hub_http_get_data(path, params, timeout, base_url)
 func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, params url.Values, timeout int, baseURL string) (map[string]any, error) {
 	if baseURL == "" {
 		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
@@ -2937,7 +2937,7 @@ func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, p
 }
 
 // assertTeamSkillsHubDownloadURLAllowed 校验下载 URL 主机名是否在白名单中
-// 对应 Python: SkillManager._assert_team_skills_hub_download_url_allowed(download_url)
+// Python: SkillManager._assert_team_skills_hub_download_url_allowed(download_url)
 func (sm *SkillManager) assertTeamSkillsHubDownloadURLAllowed(downloadURL string) error {
 	parsed, err := url.Parse(downloadURL)
 	if err != nil {
@@ -2974,7 +2974,7 @@ func matchHost(host, pattern string) bool {
 		return strings.HasSuffix(host, pattern)
 	}
 	// 前缀通配 *.example.com → 只匹配子域名 foo.example.com，不匹配裸域名 example.com
-	// 对齐 Python: 段数必须相同，*.example.com 有 3 段，example.com 只有 2 段，不匹配
+	// Python: 段数必须相同，*.example.com 有 3 段，example.com 只有 2 段，不匹配
 	if strings.HasPrefix(pattern, "*.") {
 		suffix := pattern[2:]
 		if strings.HasSuffix(host, "."+suffix) {
@@ -2999,7 +2999,7 @@ func matchHost(host, pattern string) bool {
 }
 
 // downloadZipAndVerify 下载 ZIP 并校验完整性
-// 对应 Python: SkillManager._download_zip_and_verify(download_url, checksum_sha256)
+// Python: SkillManager._download_zip_and_verify(download_url, checksum_sha256)
 func (sm *SkillManager) downloadZipAndVerify(ctx context.Context, downloadURL, checksumSHA256 string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {

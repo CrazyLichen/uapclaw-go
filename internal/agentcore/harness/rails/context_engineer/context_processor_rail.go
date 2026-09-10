@@ -30,7 +30,7 @@ import (
 //
 // 在 AfterModelCall 中刷新任务状态并调度会话记忆更新。
 //
-// 对齐 Python: ContextProcessorRail (openjiuwen/harness/rails/context_engineer/context_processor_rail.py)
+// Python: ContextProcessorRail (openjiuwen/harness/rails/context_engineer/context_processor_rail.py)
 type ContextProcessorRail struct {
 	rails.DeepAgentRail
 	// preset 是否启用预设默认处理器配置
@@ -60,7 +60,7 @@ type ContextProcessorRailOption func(*ContextProcessorRail)
 
 const (
 	// contextProcessorRailPriority ContextProcessorRail 优先级
-	// 对齐 Python: ContextProcessorRail.priority = 85
+	// Python: ContextProcessorRail.priority = 85
 	contextProcessorRailPriority = 85
 )
 
@@ -70,7 +70,7 @@ const (
 
 // NewContextProcessorRail 创建 ContextProcessorRail 实例。
 //
-// 对齐 Python: ContextProcessorRail(processors=..., preset=True, session_memory=...)
+// Python: ContextProcessorRail(processors=..., preset=True, session_memory=...)
 func NewContextProcessorRail(opts ...ContextProcessorRailOption) *ContextProcessorRail {
 	r := &ContextProcessorRail{
 		preset: true,
@@ -84,8 +84,8 @@ func NewContextProcessorRail(opts ...ContextProcessorRailOption) *ContextProcess
 
 // Init Rail 初始化钩子：注入/合并处理器到 agent.react_agent._config.context_processors。
 //
-// 对齐 Python: ContextProcessorRail.init(agent)
-func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
+// Python: ContextProcessorRail.init(agent)
+func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	config := getReactAgentConfig(agent)
 	if config == nil {
 		return nil
@@ -110,7 +110,7 @@ func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
 	r.allProcessors = allProcessors
 
 	// 获取 systemPromptBuilder 引用
-	// 对齐 Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
+	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	logger.Info(logComponent).
@@ -124,7 +124,7 @@ func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
 
 // Uninit Rail 注销钩子：清除处理器和 offload 节。
 //
-// 对齐 Python: ContextProcessorRail.uninit(agent)
+// Python: ContextProcessorRail.uninit(agent)
 func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 	// 关闭会话记忆管理器（预留）
 	// TODO(#通用): 后续回填 session memory manager shutdown
@@ -148,7 +148,7 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 
 // BeforeInvoke invoke 开始前：修复不完整的工具上下文。
 //
-// 对齐 Python: ContextProcessorRail.before_invoke(ctx)
+// Python: ContextProcessorRail.before_invoke(ctx)
 func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	FixIncompleteToolContext(ctx, cbc)
 	return nil
@@ -156,7 +156,7 @@ func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfac
 
 // BeforeModelCall LLM 调用前：刷新任务状态 + 注入 offload 节。
 //
-// 对齐 Python: ContextProcessorRail.before_model_call(ctx)
+// Python: ContextProcessorRail.before_model_call(ctx)
 func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	r.maybeInjectOffloadSection()
@@ -165,7 +165,7 @@ func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainter
 
 // AfterModelCall LLM 响应后：刷新任务状态 + 调度会话记忆更新。
 //
-// 对齐 Python: ContextProcessorRail.after_model_call(ctx)
+// Python: ContextProcessorRail.after_model_call(ctx)
 func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	// TODO(#通用): 后续回填 session memory update_inherited_system_prompt
@@ -175,7 +175,7 @@ func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterf
 
 // AfterToolCall 工具执行后：刷新任务状态。
 //
-// 对齐 Python: ContextProcessorRail.after_tool_call(ctx)
+// Python: ContextProcessorRail.after_tool_call(ctx)
 func (r *ContextProcessorRail) AfterToolCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	return nil
@@ -183,7 +183,7 @@ func (r *ContextProcessorRail) AfterToolCall(ctx context.Context, cbc *sainterfa
 
 // OnModelException LLM 调用异常：刷新任务状态 + 修复工具上下文。
 //
-// 对齐 Python: ContextProcessorRail.on_model_exception(ctx)
+// Python: ContextProcessorRail.on_model_exception(ctx)
 func (r *ContextProcessorRail) OnModelException(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
 	FixIncompleteToolContext(ctx, cbc)
@@ -233,7 +233,7 @@ func WithSessionMemoryEnabled(enabled bool) ContextProcessorRailOption {
 
 // buildPresetProcessors 构建预设默认处理器列表。
 //
-// 对齐 Python: ContextProcessorRail._build_preset_processors(model_config, model_client_config)
+// Python: ContextProcessorRail._build_preset_processors(model_config, model_client_config)
 // 根据 session_memory 是否启用选择不同的预设路径。
 func (r *ContextProcessorRail) buildPresetProcessors(
 	modelConfig *llmschema.ModelRequestConfig,
@@ -241,7 +241,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 ) []ceiface.ProcessorSpec {
 	if r.sessionMemoryEnabled {
 		// session memory 启用时的预设
-		// 对齐 Python: ContextProcessorRail._build_preset_processors (session_memory=True)
+		// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
 		return []ceiface.ProcessorSpec{
 			{
 				Type:   "ToolResultBudgetProcessor",
@@ -310,7 +310,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 
 // maybeInjectOffloadSection 如果配置了处理器，注入 offload 提示节。
 //
-// 对齐 Python: ContextProcessorRail._maybe_inject_offload_section()
+// Python: ContextProcessorRail._maybe_inject_offload_section()
 func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	if len(r.allProcessors) == 0 {
 		if r.systemPromptBuilder != nil {
@@ -333,7 +333,7 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 
 // getReactAgentConfig 从 BaseAgent 获取 ReActAgentConfig。
 //
-// 对齐 Python: config = getattr(getattr(agent, "react_agent", None), "_config", None)
+// Python: config = getattr(getattr(agent, "react_agent", None), "_config", None)
 func getReactAgentConfig(agent sainterfaces.BaseAgent) *saconfig.ReActAgentConfig {
 	if agent == nil {
 		return nil

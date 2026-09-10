@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InProcessSpawnHandle 进程内生成句柄，管理 goroutine 生命周期。
-// 对齐 Python: InProcessSpawnHandle (inprocess_handle.py)
+// Python: InProcessSpawnHandle (inprocess_handle.py)
 //
 // 用 context.CancelFunc 对齐 Python task.cancel()，
 // 用 done chan 对齐 Python task.done()。
@@ -55,7 +55,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInProcessSpawnHandle 创建新的 InProcessSpawnHandle。
-// 对齐 Python: InProcessSpawnHandle(process_id, _task, agent_ref)
+// Python: InProcessSpawnHandle(process_id, _task, agent_ref)
 func NewInProcessSpawnHandle(
 	processID string,
 	cancelCtx context.CancelFunc,
@@ -76,7 +76,7 @@ func (h *InProcessSpawnHandle) ProcessID() string {
 }
 
 // IsAlive 检查任务是否仍在运行。
-// 对齐 Python: InProcessSpawnHandle.is_alive
+// Python: InProcessSpawnHandle.is_alive
 func (h *InProcessSpawnHandle) IsAlive() bool {
 	select {
 	case <-h.done:
@@ -87,7 +87,7 @@ func (h *InProcessSpawnHandle) IsAlive() bool {
 }
 
 // IsHealthy 检查任务是否健康（存活且未请求关闭）。
-// 对齐 Python: InProcessSpawnHandle.is_healthy
+// Python: InProcessSpawnHandle.is_healthy
 func (h *InProcessSpawnHandle) IsHealthy() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -95,19 +95,19 @@ func (h *InProcessSpawnHandle) IsHealthy() bool {
 }
 
 // StartHealthCheck 启动健康检查后台任务（No-op：进程内无需 IPC 健康检查）。
-// 对齐 Python: InProcessSpawnHandle.start_health_check
+// Python: InProcessSpawnHandle.start_health_check
 func (h *InProcessSpawnHandle) StartHealthCheck(_ context.Context, _ ...time.Duration) error {
 	return nil
 }
 
 // StopHealthCheck 停止健康检查后台任务（No-op）。
-// 对齐 Python: InProcessSpawnHandle.stop_health_check
+// Python: InProcessSpawnHandle.stop_health_check
 func (h *InProcessSpawnHandle) StopHealthCheck() error {
 	return nil
 }
 
 // Shutdown 优雅关闭：取消 goroutine 并等待完成。
-// 对齐 Python: InProcessSpawnHandle.shutdown
+// Python: InProcessSpawnHandle.shutdown
 //
 // 返回 (graceful, error)：graceful=true 表示在超时内完成。
 func (h *InProcessSpawnHandle) Shutdown(ctx context.Context, timeout ...time.Duration) (bool, error) {
@@ -153,7 +153,7 @@ func (h *InProcessSpawnHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 }
 
 // ForceKill 强制终止：取消 goroutine，不等待完成。
-// 对齐 Python: InProcessSpawnHandle.force_kill
+// Python: InProcessSpawnHandle.force_kill
 func (h *InProcessSpawnHandle) ForceKill() error {
 	h.mu.Lock()
 	h.shutdownRequested = true
@@ -170,7 +170,7 @@ func (h *InProcessSpawnHandle) ForceKill() error {
 }
 
 // WaitForCompletion 等待任务完成。
-// 对齐 Python: InProcessSpawnHandle.wait_for_completion
+// Python: InProcessSpawnHandle.wait_for_completion
 //
 // 返回 0=成功，-1=异常或未启动。
 func (h *InProcessSpawnHandle) WaitForCompletion() (int, error) {
@@ -182,7 +182,7 @@ func (h *InProcessSpawnHandle) WaitForCompletion() (int, error) {
 }
 
 // SetOnUnhealthy 设置不健康回调。
-// 对齐 Python: SpawnedProcessHandle.on_unhealthy 构造后赋值
+// Python: SpawnedProcessHandle.on_unhealthy 构造后赋值
 func (h *InProcessSpawnHandle) SetOnUnhealthy(fn func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -200,7 +200,7 @@ func (h *InProcessSpawnHandle) OnUnhealthy() {
 }
 
 // AgentRef 返回进程内 Agent 引用。
-// 对齐 Python: InProcessSpawnHandle.agent_ref
+// Python: InProcessSpawnHandle.agent_ref
 // 消费者需自行断言为具体类型。
 func (h *InProcessSpawnHandle) AgentRef() SpawnableAgent {
 	return h.agentRef

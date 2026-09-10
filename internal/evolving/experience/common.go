@@ -25,7 +25,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MakePendingChange 构建暂存演进快照。
-// 对应 Python: make_pending_change()
+// Python: make_pending_change()
 func MakePendingChange(
 	skillName string,
 	records []checkpointing.EvolutionRecord,
@@ -43,7 +43,7 @@ func MakePendingChange(
 }
 
 // RejectPendingChange 构建拒绝结果，不修改持久状态。
-// 对应 Python: reject_pending_change()
+// Python: reject_pending_change()
 func RejectPendingChange(pending *PendingChange) ExperienceApplyResult {
 	return ExperienceApplyResult{
 		SkillName:     pending.SkillName,
@@ -52,7 +52,7 @@ func RejectPendingChange(pending *PendingChange) ExperienceApplyResult {
 }
 
 // CommitPendingChange 持久化一条暂存变更，失败时保留未写入尾部。
-// 对应 Python: commit_pending_change()
+// Python: commit_pending_change()
 func CommitPendingChange(
 	ctx context.Context,
 	pendingByID map[string]*PendingChange,
@@ -73,7 +73,7 @@ func CommitPendingChange(
 
 	for i, record := range pending.Payload {
 		if err := store.AppendRecord(ctx, pending.SkillName, record); err != nil {
-			// 对齐 Python: 任何一条失败时保留剩余记录
+			// Python: 任何一条失败时保留剩余记录
 			remainingRecords = pending.Payload[i:]
 			logger.Error(logComponent).
 				Str("skill", pending.SkillName).
@@ -87,7 +87,7 @@ func CommitPendingChange(
 		remainingRecords = pending.Payload[i+1:]
 	}
 
-	// 对齐 Python: 全部成功时 remainingRecords 为空
+	// Python: 全部成功时 remainingRecords 为空
 	if appliedCount == len(pending.Payload) {
 		remainingRecords = nil
 	}
@@ -105,7 +105,7 @@ func CommitPendingChange(
 }
 
 // ExecuteSimplifyActions 执行经验库整理操作。
-// 对应 Python: execute_simplify_actions()
+// Python: execute_simplify_actions()
 func ExecuteSimplifyActions(
 	ctx context.Context,
 	store *checkpointing.EvolutionStore,
@@ -201,7 +201,7 @@ func ExecuteSimplifyActions(
 }
 
 // RequestRebuildContext 归档当前状态、过滤重建输入、构建重建提示词。
-// 对应 Python: request_rebuild_context()
+// Python: request_rebuild_context()
 func RequestRebuildContext(
 	ctx context.Context,
 	store *checkpointing.EvolutionStore,
@@ -216,7 +216,7 @@ func RequestRebuildContext(
 		return nil, nil
 	}
 
-	// 对齐 Python: archive_skill_body（忽略错误，只记录日志）
+	// Python: archive_skill_body（忽略错误，只记录日志）
 	_, _ = store.ArchiveSkillBody(ctx, request.SkillName)
 
 	var evoArchive string
@@ -281,7 +281,7 @@ func RequestRebuildContext(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // generateShortID 生成短随机标识（8 位 hex）。
-// 对齐 Python: uuid.uuid4().hex[:8]
+// Python: uuid.uuid4().hex[:8]
 func generateShortID() string {
 	return fmt.Sprintf("%08x", time.Now().UTC().UnixNano()%0xFFFFFFFF)
 }

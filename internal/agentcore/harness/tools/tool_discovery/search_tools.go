@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SearchToolsInput search_tools 工具的输入参数。
-// 对齐 Python: SearchToolsInput
+// Python: SearchToolsInput
 type SearchToolsInput struct {
 	// Query 搜索查询文本
 	Query string `json:"query"`
@@ -51,7 +51,7 @@ var searchLogComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSearchToolsTool 创建搜索候选工具元工具。
-// 对齐 Python: SearchToolsTool.__init__
+// Python: SearchToolsTool.__init__
 func NewSearchToolsTool(
 	searchFn func(ctx context.Context, query string, limit int, detailLevel int) ([]map[string]any, error),
 	traceFn func(session interfaces.SessionFacade, event map[string]any),

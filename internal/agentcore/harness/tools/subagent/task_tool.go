@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskToolInput task_tool 工具输入参数。
-// 对齐 Python: TaskTool.invoke() L57-121
+// Python: TaskTool.invoke() L57-121
 type TaskToolInput struct {
 	// SubagentType 子代理类型
 	SubagentType string `json:"subagent_type"`
@@ -33,7 +33,7 @@ type TaskToolInput struct {
 
 // NewTaskTool 创建 task_tool 工具实例。
 //
-// 对齐 Python: TaskTool.__init__() L31-47 + invoke() L57-121
+// Python: TaskTool.__init__() L31-47 + invoke() L57-121
 func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, language, agentID string) tool.Tool {
 	lang := "cn"
 	if language == "en" {
@@ -44,7 +44,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 	}, agentID)
 
 	fn := func(ctx context.Context, input TaskToolInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python L87-91: 校验必填参数
+		// Python: L87-91: 校验必填参数
 		if input.SubagentType == "" || input.TaskDescription == "" {
 			return nil, fmt.Errorf("'subagent_type' 和 'task_description' 都是必填项")
 		}
@@ -65,7 +65,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			Str("sub_session_id", subSessionID).
 			Msg("TaskTool 创建子代理")
 
-		// 对齐 Python L100-107: 创建子代理
+		// Python: L100-107: 创建子代理
 		subagent, err := parentAgent.CreateSubagent(ctx, input.SubagentType, subSessionID)
 		if err != nil {
 			logger.Error(logComponent).
@@ -76,7 +76,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			return nil, fmt.Errorf("子代理 %s 创建失败: %w", input.SubagentType, err)
 		}
 
-		// 对齐 Python L111-115: 调用子代理
+		// Python: L111-115: 调用子代理
 		result, err := subagent.Invoke(ctx, map[string]any{
 			"query":           input.TaskDescription,
 			"conversation_id": subSessionID,
@@ -113,7 +113,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 
 // buildSubSessionID 构建子会话 ID。
 //
-// 对齐 Python: TaskTool._build_sub_session_id() L49-55
+// Python: TaskTool._build_sub_session_id() L49-55
 func buildSubSessionID(parentSessionID, subagentType string) string {
 	normalized := strings.TrimSpace(subagentType)
 	if normalized == "browser_agent" || normalized == "verification_agent" {

@@ -12,7 +12,7 @@ import (
 
 // HandoffSignal 交接信号，携带目标 Agent、上下文消息和交接原因。
 //
-// 对应 Python: HandoffSignal(target=str, message=Optional[str], reason=Optional[str])
+// Python: HandoffSignal(target=str, message=Optional[str], reason=Optional[str])
 // Python 中 HandoffSignal 是 frozen dataclass，Go 中为值结构体。
 type HandoffSignal struct {
 	// Target 目标 Agent ID
@@ -51,7 +51,7 @@ var stateKeyContext = state.StringKey("context")
 //  1. 第一层：从 result map 中查找 handoff payload（findHandoffPayload）
 //  2. 第二层：若第一层未找到且 agentSession 非 nil，从 session 消息历史查找（findHandoffFromSession）
 //
-// 对应 Python: extract_handoff_signal(result, agent_session=None)
+// Python: extract_handoff_signal(result, agent_session=None)
 func ExtractHandoffSignal(result map[string]any, agentSession sessioninterfaces.SessionFacade) *HandoffSignal {
 	// 第一层：从 result map 中查找
 	payload := findHandoffPayload(result)
@@ -102,7 +102,7 @@ func ExtractHandoffSignal(result map[string]any, agentSession sessioninterfaces.
 //  1. result 顶层包含 HandoffTargetKey → 直接返回 result
 //  2. 遍历 output/result/content 子键，若子值为 map 且包含 HandoffTargetKey → 返回子 map
 //
-// 对应 Python: _find_handoff_payload(result)
+// Python: _find_handoff_payload(result)
 func findHandoffPayload(result map[string]any) map[string]any {
 	if result == nil {
 		return nil
@@ -139,7 +139,7 @@ func findHandoffPayload(result map[string]any) map[string]any {
 //  3. 从默认上下文的 messages 列表倒序查找 role="tool" 的消息
 //  4. 尝试 JSON 解析消息 content，若包含 HandoffTargetKey 则返回
 //
-// 对应 Python: _find_handoff_from_session(agent_session)
+// Python: _find_handoff_from_session(agent_session)
 func findHandoffFromSession(agentSession sessioninterfaces.SessionFacade) map[string]any {
 	if agentSession == nil {
 		return nil
@@ -195,7 +195,7 @@ func findHandoffFromSession(agentSession sessioninterfaces.SessionFacade) map[st
 		// 尝试 JSON 解析
 		var parsed map[string]any
 		if err := json.Unmarshal([]byte(contentStr), &parsed); err != nil {
-			// 对齐 Python: ast.literal_eval fallback — LLM 输出可能使用 Python 单引号 dict 如 {'__handoff_to__': 'agent1'}
+			// Python: ast.literal_eval fallback — LLM 输出可能使用 Python 单引号 dict 如 {'__handoff_to__': 'agent1'}
 			// 尝试将 Python 单引号替换为双引号后再解析
 			fixed := strings.ReplaceAll(contentStr, "'", "\"")
 			if err2 := json.Unmarshal([]byte(fixed), &parsed); err2 != nil {

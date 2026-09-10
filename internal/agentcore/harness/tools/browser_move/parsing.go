@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // unsupportedSchemaKeys OpenAI 兼容 API 不支持的 schema 关键字
-// 对齐 Python: _UNSUPPORTED_SCHEMA_KEYS
+// Python: _UNSUPPORTED_SCHEMA_KEYS
 var unsupportedSchemaKeys = map[string]bool{
 	"$schema":     true,
 	"$id":         true,
@@ -22,7 +22,7 @@ var unsupportedSchemaKeys = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractJSONObject 从模型/工具文本中尽力提取 JSON 对象。
-// 对齐 Python: extract_json_object(text)
+// Python: extract_json_object(text)
 func ExtractJSONObject(text any) map[string]any {
 	// 如果输入已经是 map，直接返回
 	if m, ok := text.(map[string]any); ok {
@@ -37,7 +37,7 @@ func ExtractJSONObject(text any) map[string]any {
 		return map[string]any{}
 	}
 
-	// 对齐 Python: Playwright 特殊标记处理
+	// Python: Playwright 特殊标记处理
 	// ### 结果 ... ### 执行 Playwright 代码
 	markerResult := "### Result"
 	markerRan := "### Ran Playwright code"
@@ -93,7 +93,7 @@ func ExtractJSONObject(text any) map[string]any {
 }
 
 // SanitizeJSONSchema 递归清除 OpenAI 兼容 API 不支持的 schema 关键字。
-// 对齐 Python: sanitize_json_schema(schema)
+// Python: sanitize_json_schema(schema)
 func SanitizeJSONSchema(schema any) any {
 	m, ok := schema.(map[string]any)
 	if !ok {

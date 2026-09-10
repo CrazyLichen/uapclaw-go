@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeCronBackend 用于测试的模拟 cron 后端
-// 对齐 Python 各 backend 方法的调用参数和返回值
+// Python: 各 backend 方法的调用参数和返回值
 type fakeCronBackend struct {
 	jobs           []map[string]any
 	statusResult   map[string]any
@@ -104,7 +104,7 @@ func (f *fakeCronBackend) Wake(ctx context.Context, text string, cronCtx *CronTo
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestDispatchCronAction_status 测试 action=status
-// 对齐 Python L172: return await backend.status()
+// Python: L172: return await backend.status()
 func TestDispatchCronAction_status(t *testing.T) {
 	backend := newFakeCronBackend()
 	result, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "status"}, nil)
@@ -117,7 +117,7 @@ func TestDispatchCronAction_status(t *testing.T) {
 }
 
 // TestDispatchCronAction_list 测试 action=list
-// 对齐 Python L174: return {"jobs": await backend.list_jobs(...)}
+// Python: L174: return {"jobs": await backend.list_jobs(...)}
 func TestDispatchCronAction_list(t *testing.T) {
 	backend := newFakeCronBackend()
 	result, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "list", "includeDisabled": true}, nil)
@@ -131,7 +131,7 @@ func TestDispatchCronAction_list(t *testing.T) {
 }
 
 // TestDispatchCronAction_add_用job对象 测试 action=add，使用 job 对象
-// 对齐 Python L176-179: create_input = dict(job or {})
+// Python: L176-179: create_input = dict(job or {})
 func TestDispatchCronAction_add_用job对象(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -152,7 +152,7 @@ func TestDispatchCronAction_add_用job对象(t *testing.T) {
 }
 
 // TestDispatchCronAction_add_用flatKwargs 测试 action=add，job 为空，使用 flat_kwargs
-// 对齐 Python L178: if not create_input: create_input = flat_kwargs
+// Python: L178: if not create_input: create_input = flat_kwargs
 func TestDispatchCronAction_add_用flatKwargs(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{
@@ -170,7 +170,7 @@ func TestDispatchCronAction_add_用flatKwargs(t *testing.T) {
 }
 
 // TestDispatchCronAction_update 测试 action=update
-// 对齐 Python L180-186
+// Python: L180-186
 func TestDispatchCronAction_update(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -190,7 +190,7 @@ func TestDispatchCronAction_update(t *testing.T) {
 }
 
 // TestDispatchCronAction_update_缺jobId 测试 action=update，jobId 缺失
-// 对齐 Python L182: raise ValueError("jobId 为必填项")
+// Python: L182: raise ValueError("jobId 为必填项")
 func TestDispatchCronAction_update_缺jobId(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "update"}, nil)
@@ -203,7 +203,7 @@ func TestDispatchCronAction_update_缺jobId(t *testing.T) {
 }
 
 // TestDispatchCronAction_remove 测试 action=remove
-// 对齐 Python L187-190: return {"deleted": await backend.delete_job(target_job_id)}
+// Python: L187-190: return {"deleted": await backend.delete_job(target_job_id)}
 func TestDispatchCronAction_remove(t *testing.T) {
 	backend := newFakeCronBackend()
 	result, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "remove", "jobId": "job1"}, nil)
@@ -216,7 +216,7 @@ func TestDispatchCronAction_remove(t *testing.T) {
 }
 
 // TestDispatchCronAction_run 测试 action=run
-// 对齐 Python L191-194: return {"run_id": await backend.run_now(target_job_id)}
+// Python: L191-194: return {"run_id": await backend.run_now(target_job_id)}
 func TestDispatchCronAction_run(t *testing.T) {
 	backend := newFakeCronBackend()
 	result, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "run", "jobId": "job1"}, nil)
@@ -229,7 +229,7 @@ func TestDispatchCronAction_run(t *testing.T) {
 }
 
 // TestDispatchCronAction_runs 测试 action=runs
-// 对齐 Python L195-198: return {"runs": await backend.get_runs(target_job_id)}
+// Python: L195-198: return {"runs": await backend.get_runs(target_job_id)}
 func TestDispatchCronAction_runs(t *testing.T) {
 	backend := newFakeCronBackend()
 	backend.runsResults = []map[string]any{{"run_id": "r1", "status": "completed"}}
@@ -243,7 +243,7 @@ func TestDispatchCronAction_runs(t *testing.T) {
 }
 
 // TestDispatchCronAction_wake 测试 action=wake
-// 对齐 Python L199-200: return await backend.wake(text or "", context=context, mode=mode)
+// Python: L199-200: return await backend.wake(text or "", context=context, mode=mode)
 func TestDispatchCronAction_wake(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -262,7 +262,7 @@ func TestDispatchCronAction_wake(t *testing.T) {
 }
 
 // TestDispatchCronAction_不支持的action 测试未知 action
-// 对齐 Python L201: raise ValueError("unsupported cron action")
+// Python: L201: raise ValueError("unsupported cron action")
 func TestDispatchCronAction_不支持的action(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "invalid"}, nil)
@@ -275,7 +275,7 @@ func TestDispatchCronAction_不支持的action(t *testing.T) {
 }
 
 // TestDispatchCronAction_excludedKeys过滤 测试 excluded_keys 过滤
-// 对齐 Python: flat_kwargs 排除 excluded_keys (cron.py L152-170)
+// Python: flat_kwargs 排除 excluded_keys (cron.py L152-170)
 func TestDispatchCronAction_excludedKeys过滤(t *testing.T) {
 	backend := newFakeCronBackend()
 	inputs := map[string]any{
@@ -309,7 +309,7 @@ func TestDispatchCronAction_excludedKeys过滤(t *testing.T) {
 }
 
 // TestDispatchCronAction_legacyId兼容 测试 kwargs 中的 "id" 作为 jobId 兼容
-// 对齐 Python L150: legacy_job_id = kwargs.pop("id", None)
+// Python: L150: legacy_job_id = kwargs.pop("id", None)
 func TestDispatchCronAction_legacyId兼容(t *testing.T) {
 	backend := newFakeCronBackend()
 	result, err := dispatchCronAction(context.Background(), backend, map[string]any{
@@ -363,7 +363,7 @@ func TestDispatchCronAction_runs_缺jobId(t *testing.T) {
 }
 
 // TestDispatchCronAction_wake_空text 测试 action=wake，text 为空
-// 对齐 Python L200: await backend.wake(text or "", ...)
+// Python: L200: await backend.wake(text or "", ...)
 func TestDispatchCronAction_wake_空text(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{"action": "wake"}, nil)
@@ -376,7 +376,7 @@ func TestDispatchCronAction_wake_空text(t *testing.T) {
 }
 
 // TestDispatchCronAction_update_用flatKwargs 测试 action=update，patch 为空，使用 flat_kwargs
-// 对齐 Python L184-185: if not patch_input: patch_input = flat_kwargs
+// Python: L184-185: if not patch_input: patch_input = flat_kwargs
 func TestDispatchCronAction_update_用flatKwargs(t *testing.T) {
 	backend := newFakeCronBackend()
 	_, err := dispatchCronAction(context.Background(), backend, map[string]any{

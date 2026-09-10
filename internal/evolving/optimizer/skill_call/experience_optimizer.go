@@ -26,7 +26,7 @@ import (
 // 信号从 SkillEvolutionRail 到达，通过优化器的中性信号选择契约消费。
 // Backward 阶段按 skill_name 分组选中的信号，生成 EvolutionRecord(s)。
 //
-// 对应 Python: SkillExperienceOptimizer
+// Python: SkillExperienceOptimizer
 type SkillExperienceOptimizer struct {
 	SkillExperienceOptimizerBase
 	// generateRecordsLLMPolicy 个体记录生成 LLM 调用策略
@@ -43,7 +43,7 @@ type SkillExperienceOptimizer struct {
 
 // NewSkillExperienceOptimizer 创建 SkillExperienceOptimizer 实例。
 //
-// 对齐 Python:
+// Python:
 //
 //	创建 SkillExperienceOptimizer（参数: llm, model, language, generate_records_llm_policy）
 func NewSkillExperienceOptimizer(llmModel *llm.Model, model string, language string, policy llm_resilience.LLMInvokePolicy) *SkillExperienceOptimizer {
@@ -64,7 +64,7 @@ func NewSkillExperienceOptimizer(llmModel *llm.Model, model string, language str
 
 // Backward 反向传播：从信号计算梯度。
 //
-// 对齐 Python: SkillExperienceOptimizer._backward(signals)
+// Python: SkillExperienceOptimizer._backward(signals)
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
@@ -73,7 +73,7 @@ func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*sign
 
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
 //
-// 对齐 Python: SkillExperienceOptimizer._step()
+// Python: SkillExperienceOptimizer._step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 func (o *SkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
@@ -89,7 +89,7 @@ func (o *SkillExperienceOptimizer) SelectSignals(signals []*signal.EvolutionSign
 
 // GenerateRecords 生成并解析 LLM 输出的演进记录。
 //
-// 对齐 Python: SkillExperienceOptimizer.generate_records(ctx)
+// Python: SkillExperienceOptimizer.generate_records(ctx)
 func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *experience.EvolutionContext) ([]checkpointing.EvolutionRecord, error) {
 	if len(evoCtx.Signals) == 0 {
 		return nil, nil
@@ -192,7 +192,7 @@ func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *
 
 // RetryParseDrafts 重试解析：截断→重新生成 / 格式错误→JSON_FIX / attempt≥3→JSON_FIX_STRICT。
 //
-// 对齐 Python: SkillExperienceOptimizer.retry_parse_drafts(broken_raw, original_prompt, attempt_number, parse_error)
+// Python: SkillExperienceOptimizer.retry_parse_drafts(broken_raw, original_prompt, attempt_number, parse_error)
 func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenRaw string, originalPrompt string, attemptNumber int, parseError string) ([]ParsedExperienceDraft, string, error) {
 	truncated := LooksTruncated(brokenRaw)
 	var retryPrompt string
@@ -232,7 +232,7 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 		)
 	}
 
-	// 对齐 Python: response = await self._llm.invoke(model=self._model, messages=..., temperature=0.1, timeout=...)
+	// Python: response = await self._llm.invoke(model=self._model, messages=..., temperature=0.1, timeout=...)
 	response, err := llm_resilience.InvokeTextWithRetry(
 		ctx,
 		o.llm,
@@ -278,7 +278,7 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 
 // backward 反向传播子类逻辑。
 //
-// 对齐 Python: SkillExperienceOptimizer._backward(signals)
+// Python: SkillExperienceOptimizer._backward(signals)
 //
 //	Python: for op_id, op in self._operators.items():
 //	    Python: skill_name = op_id.removeprefix("skill_experience_")
@@ -294,7 +294,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 
 	for opID, op := range o.BaseOptimizerMixin.Operators() {
 		skillName := removeSkillPrefix(opID)
-		// 对齐 Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
+		// Python: skill_signals = [s for s in self._selected_signals if s.skill_name == skill_name or not s.skill_name]
 		var skillSignals []*signal.EvolutionSignal
 		for _, s := range selected {
 			if (s.SkillName != nil && *s.SkillName == skillName) || s.SkillName == nil {
@@ -331,7 +331,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 			continue
 		}
 
-		// 对齐 Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
+		// Python: existing = param.get_gradient(EXPERIENCES_TARGET) or []
 		//	param.set_gradient(EXPERIENCES_TARGET, existing + records)
 		param := o.BaseOptimizerMixin.Parameters()[opID]
 		existingAny := param.GetGradient(schema.ExperiencesTarget)
@@ -353,7 +353,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 
 // step 子类逻辑，返回预计算的更新映射。
 //
-// 对齐 Python: SkillExperienceOptimizer._step()
+// Python: SkillExperienceOptimizer._step()
 //
 //	Python: updates = {}
 //	Python: for op_id, param in self._parameters.items():
@@ -375,7 +375,7 @@ func (o *SkillExperienceOptimizer) step() map[schema.UpdateKey]any {
 
 // buildEvolutionContext 从 onlineContexts 查找 EvolutionContext，不存在时抛异常。
 //
-// 对齐 Python: SkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals)
+// Python: SkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals)
 //
 //	Python: online_ctx = self._online_contexts.get(skill_name)
 //	Python: if online_ctx is not None: return online_ctx
@@ -396,7 +396,7 @@ func (o *SkillExperienceOptimizer) buildEvolutionContext(skillName string, op op
 
 // generateDraftsWithRetries 调用 LLM + 解析草稿 + 重试循环（最多3次）。
 //
-// 对齐 Python: SkillExperienceOptimizer._generate_drafts_with_retries(prompt, retry_prompt)
+// Python: SkillExperienceOptimizer._generate_drafts_with_retries(prompt, retry_prompt)
 func (o *SkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Context, prompt string, retryPrompt string) ([]ParsedExperienceDraft, error) {
 	raw, promptUsed, err := llm_resilience.InvokeTextWithRetryAndPrompt(
 		ctx,
@@ -442,7 +442,7 @@ func (o *SkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Context
 
 // buildConversationSnippet 构建紧凑对话片段用于 LLM 提示词上下文。
 //
-// 对齐 Python: _build_conversation_snippet(messages, max_messages, content_preview_chars, language)
+// Python: _build_conversation_snippet(messages, max_messages, content_preview_chars, language)
 func buildConversationSnippet(messages []map[string]any, maxMessages int, contentPreviewChars int, language string) string {
 	if len(messages) == 0 {
 		return ""
@@ -480,7 +480,7 @@ func buildConversationSnippet(messages []map[string]any, maxMessages int, conten
 			}
 		}
 
-		// 对齐 Python: tool_calls handling
+		// Python: tool_calls handling
 		toolCalls, hasToolCalls := msg["tool_calls"]
 		if role == "assistant" && hasToolCalls {
 			var names []string
@@ -502,7 +502,7 @@ func buildConversationSnippet(messages []map[string]any, maxMessages int, conten
 
 // extractTextFromMessage 从消息中提取文本内容。
 //
-// 对齐 Python: _extract_text(message)
+// Python: _extract_text(message)
 func extractTextFromMessage(msg map[string]any) string {
 	content := msg["content"]
 	if content == nil {
@@ -527,7 +527,7 @@ func extractTextFromMessage(msg map[string]any) string {
 
 // summarizeSkillContent 将大型 SKILL.md 内容压缩为 LLM 提示词可用的摘要。
 //
-// 对齐 Python: _summarize_skill_content(raw, max_chars)
+// Python: _summarize_skill_content(raw, max_chars)
 func summarizeSkillContent(raw string) string {
 	return summarizeSkillContentWithMax(raw, SkillContentMaxChars)
 }
@@ -557,7 +557,7 @@ func summarizeSkillContentWithMax(raw string, maxChars int) string {
 
 // splitIntoSections 按 Markdown 章节标题拆分文本。
 //
-// 对齐 Python: _split_into_sections(text)
+// Python: _split_into_sections(text)
 func splitIntoSections(text string) []string {
 	lines := strings.Split(text, "\n")
 	var sections []string
@@ -578,7 +578,7 @@ func splitIntoSections(text string) []string {
 
 // previewSection 返回章节标题 + 前 previewChars 字符正文。
 //
-// 对齐 Python: _preview_section(section, preview_chars)
+// Python: _preview_section(section, preview_chars)
 func previewSection(section string) string {
 	lines := strings.Split(section, "\n")
 	heading := lines[0]
@@ -594,7 +594,7 @@ func previewSection(section string) string {
 
 // buildExistingSummary 从已有记录构建摘要字符串。
 //
-// 对齐 Python: _build_existing_summary(records, label)
+// Python: _build_existing_summary(records, label)
 func buildExistingSummary(records []checkpointing.EvolutionRecord, label string) string {
 	if len(records) == 0 {
 		return ""
@@ -612,7 +612,7 @@ func buildExistingSummary(records []checkpointing.EvolutionRecord, label string)
 
 // limitSummaryLines 限制摘要行数。
 //
-// 对齐 Python: _limit_summary_lines(summary, max_lines)
+// Python: _limit_summary_lines(summary, max_lines)
 func limitSummaryLines(summary string, maxLines int) string {
 	if summary == "" || maxLines <= 0 {
 		return ""
@@ -626,7 +626,7 @@ func limitSummaryLines(summary string, maxLines int) string {
 
 // buildContext 从信号构建简洁上下文字符串。
 //
-// 对齐 Python: _build_context(signals, max_chars)
+// Python: _build_context(signals, max_chars)
 func buildContext(signals []*signal.EvolutionSignal) string {
 	if len(signals) == 0 {
 		return ""
@@ -713,7 +713,7 @@ func orDefault(value string, defaults ...string) string {
 }
 
 // truncateOrDefault 截断字符串或返回语言默认值。
-// 对齐 Python: ctx.user_query[:500] if ctx.user_query else default
+// Python: ctx.user_query[:500] if ctx.user_query else default
 func truncateOrDefault(s string, maxLen int, language string, cnDefault string, enDefault string) string {
 	if s == "" {
 		if language == "en" {

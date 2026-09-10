@@ -1,7 +1,7 @@
 // Package utils 提供 retrieval 层的公共工具函数。
 //
 // 本包提供 HTTP 重试请求工具，供 Reranker 和 Embedding 等组件共享。
-// 对齐 Python: openjiuwen/core/retrieval/utils/api_requests.py
+// Python: openjiuwen/core/retrieval/utils/api_requests.py
 //
 // 文件目录：
 //

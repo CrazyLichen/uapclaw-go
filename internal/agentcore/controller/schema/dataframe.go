@@ -9,7 +9,7 @@ import (
 
 // DataFrame 数据帧接口，Controller 输出载荷的数据单元。
 //
-// 对应 Python: openjiuwen/core/controller/schema/dataframe.py (BaseDataFrame)
+// Python: openjiuwen/core/controller/schema/dataframe.py (BaseDataFrame)
 type DataFrame interface {
 	// DataType 返回数据类型标识："text" | "json" | "file"
 	DataType() string
@@ -17,7 +17,7 @@ type DataFrame interface {
 
 // TextDataFrame 文本数据帧。
 //
-// 对应 Python: openjiuwen/core/controller/schema/dataframe.py (TextDataFrame)
+// Python: openjiuwen/core/controller/schema/dataframe.py (TextDataFrame)
 type TextDataFrame struct {
 	// Text 文本内容
 	Text string `json:"text"`
@@ -25,7 +25,7 @@ type TextDataFrame struct {
 
 // JsonDataFrame JSON 数据帧。
 //
-// 对应 Python: openjiuwen/core/controller/schema/dataframe.py (JsonDataFrame)
+// Python: openjiuwen/core/controller/schema/dataframe.py (JsonDataFrame)
 type JsonDataFrame struct {
 	// Data JSON 数据
 	Data map[string]any `json:"data"`
@@ -33,7 +33,7 @@ type JsonDataFrame struct {
 
 // FileDataFrame 文件数据帧。
 //
-// 对应 Python: openjiuwen/core/controller/schema/dataframe.py (FileDataFrame)
+// Python: openjiuwen/core/controller/schema/dataframe.py (FileDataFrame)
 type FileDataFrame struct {
 	// Name 文件名
 	Name string `json:"name"`

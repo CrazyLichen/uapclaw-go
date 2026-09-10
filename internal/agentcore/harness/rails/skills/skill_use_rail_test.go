@@ -725,7 +725,7 @@ func TestInit_工具注册(t *testing.T) {
 	agent := newMockBaseAgent(spb, am)
 
 	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(true))
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
 	}
@@ -741,7 +741,7 @@ func TestInit_autoList注册ListSkillTool(t *testing.T) {
 	agent := newMockBaseAgent(spb, am)
 
 	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
 	}
@@ -758,7 +758,7 @@ func TestUninit_工具注销(t *testing.T) {
 	agent := newMockBaseAgent(spb, am)
 
 	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
-	_ = r.Init(agent)
+	_ = r.Init(context.Background(), agent)
 	_ = r.Uninit(agent)
 
 	if len(r.ownedToolNames) != 0 {

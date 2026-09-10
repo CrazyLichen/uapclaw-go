@@ -86,7 +86,7 @@ func (s *AgentServer) handleCommandChrome(_ context.Context, request *schema.Age
 }
 
 // handleCommandCompact 处理 command.compact 请求。
-// 对齐 Python: _handle_command_compact() → agent.compress_context(session_id, return_state=True)
+// Python: _handle_command_compact() → agent.compress_context(session_id, return_state=True)
 func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	sessionID := "default"
 	if request.SessionID != nil {
@@ -122,7 +122,7 @@ func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.
 }
 
 // handleCommandContext 处理 command.context 请求。
-// 对齐 Python: _handle_command_context() → agent.get_context_usage(session_id)
+// Python: _handle_command_context() → agent.get_context_usage(session_id)
 func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	sessionID := "default"
 	if request.SessionID != nil {
@@ -158,7 +158,7 @@ func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.
 }
 
 // handleCommandRecap 处理 command.recap 请求。
-// 对齐 Python: _handle_command_recap() → agent.generate_recap(session_id)
+// Python: _handle_command_recap() → agent.generate_recap(session_id)
 func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	sessionID := "default"
 	if request.SessionID != nil {
@@ -194,7 +194,7 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 }
 
 // handleCommandDiff 处理 command.diff 请求。
-// 对齐 Python: /diff 命令，调用 DiffService.GetTurnDiffs 获取 turn diff 列表。
+// Python: /diff 命令，调用 DiffService.GetTurnDiffs 获取 turn diff 列表。
 func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 解析参数：session_id（必填），project_dir（可选）
 	var params struct {
@@ -304,7 +304,7 @@ func (s *AgentServer) handleCommandSession(_ context.Context, request *schema.Ag
 
 // handleCommandStatus 处理 command.status 请求。返回版本、配置路径、模型信息等诊断信息。
 //
-// 对齐 Python _handle_command_status。
+// Python: _handle_command_status。
 func (s *AgentServer) handleCommandStatus(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	status := map[string]any{
 		"version":       version.Version,

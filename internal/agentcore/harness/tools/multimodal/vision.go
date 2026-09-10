@@ -46,7 +46,7 @@ type VQAInput struct {
 
 // NewImageOCRTool 创建图片 OCR 工具。
 //
-// 对齐 Python: ImageOCRTool.__init__ + ImageOCRTool.invoke
+// Python: ImageOCRTool.__init__ + ImageOCRTool.invoke
 // 使用 tool.NewTool[ImageOCRInput, map[string]any] 模式
 func NewImageOCRTool(
 	client modelclients.BaseModelClient,
@@ -56,7 +56,7 @@ func NewImageOCRTool(
 	card, _ := tools.BuildToolCard("image_ocr", "ImageOCRTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input ImageOCRInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: ImageOCRTool.invoke 的 try/except 异常包装
+		// Python: ImageOCRTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			// 1. 确定 OCR 提示词（对齐 Python: prompt = inputs.get("prompt") or DEFAULT_OCR_PROMPT）
 			prompt := input.Prompt
@@ -96,7 +96,7 @@ func NewImageOCRTool(
 
 // NewVisualQuestionAnsweringTool 创建图片问答工具。
 //
-// 对齐 Python: VisualQuestionAnsweringTool.__init__ + VisualQuestionAnsweringTool.invoke
+// Python: VisualQuestionAnsweringTool.__init__ + VisualQuestionAnsweringTool.invoke
 // 可选先 OCR 再 VQA（对齐 Python: include_ocr=True 默认）
 func NewVisualQuestionAnsweringTool(
 	client modelclients.BaseModelClient,
@@ -106,7 +106,7 @@ func NewVisualQuestionAnsweringTool(
 	card, _ := tools.BuildToolCard("visual_question_answering", "VisualQuestionAnsweringTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input VQAInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: VisualQuestionAnsweringTool.invoke 的 try/except 异常包装
+		// Python: VisualQuestionAnsweringTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			// 1. 构建图片内容块
 			imageContent, err := BuildImageContent(input.ImagePathOrURL)
@@ -116,7 +116,7 @@ func NewVisualQuestionAnsweringTool(
 
 			// 2. OCR 步骤（对齐 Python: if include_ocr → 先 OCR）
 			var ocrText string
-			// 对齐 Python 行为：默认 include_ocr=True
+			// Python: 行为：默认 include_ocr=True
 			// *bool: nil → 默认 true；显式 false → 跳过 OCR；显式 true → 包含 OCR
 			includeOCR := true
 			if input.IncludeOCR != nil {
@@ -174,7 +174,7 @@ func NewVisualQuestionAnsweringTool(
 
 // CreateVisionTools 创建视觉工具集。
 //
-// 对齐 Python: create_vision_tools(language, vision_model_config, agent_id) -> list[Tool]
+// Python: create_vision_tools(language, vision_model_config, agent_id) -> list[Tool]
 func CreateVisionTools(
 	client modelclients.BaseModelClient,
 	config *hschema.VisionModelConfig,

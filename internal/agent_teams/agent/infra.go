@@ -11,7 +11,7 @@ import (
 // TeamInfra 每进程团队基础设施。
 // 四象限分解的第三象限：每进程可达的基础设施资源。
 // Leader 和 Teammate 在不同进程运行，"共享"是进程级范围而非跨实例单例。
-// 对齐 Python: TeamInfra (openjiuwen/agent_teams/agent/infra.py)
+// Python: TeamInfra (openjiuwen/agent_teams/agent/infra.py)
 type TeamInfra struct {
 	// Messager 消息总线
 	Messager messager.Messager

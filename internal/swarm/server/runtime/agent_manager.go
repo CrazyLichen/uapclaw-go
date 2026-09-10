@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,23 +20,23 @@ import (
 //
 // 管理 UapClaw 实例的创建、获取和配置重载。
 // 使用两层嵌套 map：channel_key → cache_key → agentEntry。
-// 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py
+// Python: jiuwenswarm/server/runtime/agent_manager.py
 type AgentManager struct {
 	// agents 存储: channel_key → cache_key → agentEntry
-	// 对齐 Python: self.agents: dict[str, dict[str, "JiuWenClaw"]]
+	// Python: self.agents: dict[str, dict[str, "JiuWenClaw"]]
 	agents map[string]map[string]*agentEntry
 
 	// agentCreateParams 记录创建参数: channel_key → cache_key → agentCreateParamsEntry
-	// 对齐 Python: self._agent_create_params: dict[str, dict[str, dict[str, Any]]]
+	// Python: self._agent_create_params: dict[str, dict[str, dict[str, Any]]]
 	agentCreateParams map[string]map[string]*agentCreateParamsEntry
 
 	// clientCapabilitiesByChannel ACP 客户端能力: channel_key → capabilities
-	// 对齐 Python: self._client_capabilities_by_channel
+	// Python: self._client_capabilities_by_channel
 	// ⤵️ ACP 章节：等 ACP 实现后 initialize() 写入数据
 	clientCapabilitiesByChannel map[string]map[string]any
 
 	// latestEnvOverrides 最近一次 env 覆盖
-	// 对齐 Python: self._latest_env_overrides
+	// Python: self._latest_env_overrides
 	// 收窄为 map[string]string：Python 中 dict[str, Any]，但所有 value 均作为 os.environ 字符串使用。
 	// 注意：Go 收窄为 map[string]string，空字符串 "" 表示删除环境变量（Python 中 None = 删除，"" = 设置空串）。
 	// 当前约定：空串=删除，设置空串的需求极少，如有需要需改为 map[string]*string。
@@ -49,7 +50,7 @@ type AgentManager struct {
 }
 
 // agentEntry Agent 实例条目，记录元数据。
-// 对齐 Python: setattr(agent, "_jiuwenswarm_agent_cache_key/mode/sub_mode/project_dir", ...)
+// Python: setattr(agent, "_jiuwenswarm_agent_cache_key/mode/sub_mode/project_dir", ...)
 type agentEntry struct {
 	// agent UapClaw 实例
 	agent *UapClaw
@@ -64,7 +65,7 @@ type agentEntry struct {
 }
 
 // agentCreateParamsEntry 创建参数记录，用于 recreate_agent 重建。
-// 对齐 Python: self._agent_create_params[channel][cache_key] = {mode, sub_mode, config, cache_key}
+// Python: self._agent_create_params[channel][cache_key] = {mode, sub_mode, config, cache_key}
 type agentCreateParamsEntry struct {
 	// mode 运行模式
 	mode string
@@ -92,7 +93,7 @@ const amLogComponent = logger.ComponentAgentServer
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentManager 创建 AgentManager 实例。
-// 对齐 Python: AgentManager.__init__()
+// Python: AgentManager.__init__()
 func NewAgentManager() *AgentManager {
 	return &AgentManager{
 		agents:                      make(map[string]map[string]*agentEntry),
@@ -112,7 +113,7 @@ func (am *AgentManager) SetAgentFactory(factory AgentFactory) {
 
 // PreSetAgent 预注册 Agent 实例到指定 channel 和 cacheKey。
 // 用于测试或特殊初始化路径，跳过 createAgent 工厂调用。
-// 对齐 Python: 外部创建 agent 后 setattr 并放入 self.agents 的场景。
+// Python: 外部创建 agent 后 setattr 并放入 self.agents 的场景。
 func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClaw, mode, subMode, projectDir string) {
 	channelKey := normalizeChannelID(channelID)
 	entry := &agentEntry{
@@ -131,16 +132,16 @@ func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClaw, 
 }
 
 // GetAgent 获取 Agent 实例，不存在则自动创建。
-// 对齐 Python AgentManager.get_agent：异步，自动创建。
+// Python: AgentManager.get_agent：异步，自动创建。
 func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDir, subMode string) (*UapClaw, error) {
-	// 对齐 Python L238-242: normalize → cacheKey → 查找
+	// Python: L238-242: normalize → cacheKey → 查找
 	channelKey := normalizeChannelID(channelID)
 	modeKey := normalizeMode(mode)
 	subModeKey := normalizeSubMode(subMode)
 	projectKey := normalizeProjectDir(projectDir)
 	cacheKey := makeAgentCacheKey(modeKey, subModeKey, projectKey)
 
-	// 对齐 Python L243-245: cache hit → return
+	// Python: L243-245: cache hit → return
 	am.mu.RLock()
 	channelAgents, ok := am.agents[channelKey]
 	if ok {
@@ -151,22 +152,22 @@ func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDi
 	}
 	am.mu.RUnlock()
 
-	// 对齐 Python L247-261: cache miss → _create_agent
+	// Python: L247-261: cache miss → _create_agent
 	config := make(map[string]any)
 	if projectKey != "" {
 		config["project_dir"] = projectKey
 	}
 	// ⤵️ ACP: channel_key=="acp" 时合并 _build_acp_agent_config
-	// 对齐 Python L250-254: if channel_key == "acp": config = {**config, **_build_acp_agent_config()}
+	// Python: L250-254: if channel_key == "acp": config = {**config, **_build_acp_agent_config()}
 
 	return am.createAgent(ctx, channelKey, modeKey, config, subModeKey, cacheKey)
 }
 
 // GetAgentNoWait 获取已有 Agent 实例，不自动创建。
-// 对齐 Python AgentManager.get_agent_nowait：同步，不创建。
+// Python: AgentManager.get_agent_nowait：同步，不创建。
 // 找不到时返回 nil。
 func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode string) *UapClaw {
-	// 对齐 Python L278-279: normalize channel
+	// Python: L278-279: normalize channel
 	channelKey := normalizeChannelID(channelID)
 
 	am.mu.RLock()
@@ -177,7 +178,7 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 		return nil
 	}
 
-	// 对齐 Python L283-287: 1. 按 cacheKey 精确查找
+	// Python: L283-287: 1. 按 cacheKey 精确查找
 	if mode != "" || projectDir != "" || subMode != "" {
 		cacheKey := makeAgentCacheKey(mode, subMode, projectDir)
 		if entry, ok2 := channelAgents[cacheKey]; ok2 {
@@ -185,7 +186,7 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 		}
 	}
 
-	// 对齐 Python L289-299: 2. 按字段过滤遍历
+	// Python: L289-299: 2. 按字段过滤遍历
 	requestedMode := normalizeMode(mode)
 	requestedSubMode := normalizeSubMode(subMode)
 	requestedProjectDir := normalizeProjectDir(projectDir)
@@ -203,7 +204,7 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 		return entry.agent
 	}
 
-	// 对齐 Python L301-305: 3. 三个参数都为空时，优先返回 mode="agent" 的第一个，否则返回任意第一个
+	// Python: L301-305: 3. 三个参数都为空时，优先返回 mode="agent" 的第一个，否则返回任意第一个
 	if mode == "" && projectDir == "" && subMode == "" {
 		for _, entry := range channelAgents {
 			if entry.mode == "agent" {
@@ -219,10 +220,10 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 }
 
 // Initialize 初始化 AgentManager。
-// 对齐 Python AgentManager.initialize(channel_id, extra_config) -> dict|None。
+// Python: AgentManager.initialize(channel_id, extra_config) -> dict|None。
 // 非 ACP 通道返回 nil；ACP 通道 ⤵️ 延后。
 func (am *AgentManager) Initialize(ctx context.Context, channelID string, extraConfig map[string]any) (map[string]any, error) {
-	// 对齐 Python L160-182: channel_key == "acp" → 特殊处理
+	// Python: L160-182: channel_key == "acp" → 特殊处理
 	channelKey := normalizeChannelID(channelID)
 	// ⤵️ ACP: channel_key=="acp" 时：
 	//   1. 记录 client_capabilities 到 clientCapabilitiesByChannel
@@ -236,9 +237,9 @@ func (am *AgentManager) Initialize(ctx context.Context, channelID string, extraC
 }
 
 // CreateSession 创建会话。
-// 对齐 Python AgentManager.create_session(channel_id, session_id) -> str。
+// Python: AgentManager.create_session(channel_id, session_id) -> str。
 func (am *AgentManager) CreateSession(channelID, sessionID string) (string, error) {
-	// 对齐 Python L207-210: 有显式 sessionID → 直接返回
+	// Python: L207-210: 有显式 sessionID → 直接返回
 	explicitID := strings.TrimSpace(sessionID)
 	if explicitID != "" {
 		logger.Info(amLogComponent).
@@ -247,19 +248,19 @@ func (am *AgentManager) CreateSession(channelID, sessionID string) (string, erro
 			Msg("[AgentManager] 会话已确保")
 		return explicitID, nil
 	}
-	// 对齐 Python L211-215: ACP 通道 → acp_{uuid[:8]}
+	// Python: L211-215: ACP 通道 → acp_{uuid[:8]}
 	channelKey := normalizeChannelID(channelID)
 	// ⤵️ ACP: if channel_key == "acp": return fmt.Sprintf("acp_%s", randomHex[:8])
 	_ = channelKey
-	// 对齐 Python L216: 其他 → "default"
+	// Python: L216: 其他 → "default"
 	return "default", nil
 }
 
 // GetClientCapabilities 获取客户端能力。
-// 对齐 Python AgentManager.get_client_capabilities(channel_id)。
+// Python: AgentManager.get_client_capabilities(channel_id)。
 // 当前数据为空，等 ACP 实现后 initialize() 写入 clientCapabilitiesByChannel。
 func (am *AgentManager) GetClientCapabilities(channelID string) map[string]any {
-	// 对齐 Python L193-196: strip → get → copy or empty
+	// Python: L193-196: strip → get → copy or empty
 	channelKey := strings.TrimSpace(channelID)
 	am.mu.RLock()
 	defer am.mu.RUnlock()
@@ -271,18 +272,18 @@ func (am *AgentManager) GetClientCapabilities(channelID string) map[string]any {
 }
 
 // ProcessMessage 处理非流式请求。
-// 对齐 Python: AgentManager.process_message(request)
+// Python: AgentManager.process_message(request)
 // 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// 对齐 Python L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
-	// 对齐 Python L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
+	// Python: L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
+	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
 	mode, _ := resolveModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
 	if err != nil {
-		// 对齐 Python L454-456: logger.error + raise
+		// Python: L454-456: logger.error + raise
 		logger.Error(amLogComponent).
 			Err(err).
 			Str("channel_id", channelID).
@@ -295,11 +296,11 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 }
 
 // ProcessMessageStream 处理流式请求。
-// 对齐 Python: AgentManager.process_message_stream(request)
+// Python: AgentManager.process_message_stream(request)
 // 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
-	// 对齐 Python L468-487: 同 process_message 但流式
-	// 对齐 Python L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
+	// Python: L468-487: 同 process_message 但流式
+	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
 	mode, _ := resolveModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
@@ -318,10 +319,10 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 }
 
 // ReloadAgentsConfig 重载 Agent 配置。
-// 对齐 Python AgentManager.reload_agents_config (agent_manager.py L308-340)。
+// Python: AgentManager.reload_agents_config (agent_manager.py L308-340)。
 func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]string) error {
-	// 对齐 Python L310-316: 1. 保存最新 env overrides + 注入 os.environ
-	// 对齐 Python L310: self._latest_env_overrides = dict(env) if isinstance(env, dict) else {}
+	// Python: L310-316: 1. 保存最新 env overrides + 注入 os.environ
+	// Python: L310: self._latest_env_overrides = dict(env) if isinstance(env, dict) else {}
 	am.mu.Lock()
 	if envOverrides != nil {
 		am.latestEnvOverrides = copyStringMap(envOverrides)
@@ -338,7 +339,7 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 		}
 	}
 
-	// 对齐 Python L318-326: 2. 遍历所有 agent 调用 reload_agent_config
+	// Python: L318-326: 2. 遍历所有 agent 调用 reload_agent_config
 	am.mu.RLock()
 	agentsSnapshot := make(map[string]map[string]*agentEntry)
 	for chKey, chAgents := range am.agents {
@@ -351,11 +352,11 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 
 	for chKey, chAgents := range agentsSnapshot {
 		for _, entry := range chAgents {
-			// 对齐 Python L327-330: await agent.reload_agent_config(config_base=config, env_overrides=env)
+			// Python: L327-330: await agent.reload_agent_config(config_base=config, env_overrides=env)
 			// 将 map[string]string 转为 map[string]any 以匹配 adapter 接口签名
 			envAny := stringMapToAny(envOverrides)
 			if err := entry.agent.ReloadAgentConfig(configPayload, envAny); err != nil {
-				// 对齐 Python: 不中断，仅 warn
+				// Python: 不中断，仅 warn
 				logger.Warn(amLogComponent).
 					Err(err).
 					Str("channel_id", chKey).
@@ -365,11 +366,11 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 		}
 
 		// TODO(⤵️ 10.3.2 Team): 更新 team evolution config
-		// 对齐 Python L331-339:
+		// Python: L331-339:
 		//   对应 Python: team_config = config if isinstance(config, dict) else get_config()
 		//   对应 Python: await get_team_manager(channel_id).update_evolution_config(team_config)
 
-		// 对齐 Python L340: logger.info(f"channel {channel_id} reload agent config success.")
+		// Python: L340: logger.info(f"channel {channel_id} reload agent config success.")
 		logger.Info(amLogComponent).
 			Str("channel_id", chKey).
 			Msg("[AgentManager] 渠道重载 Agent 配置成功")
@@ -379,23 +380,23 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 }
 
 // RecreateAgent 重建 Agent 实例。
-// 对齐 Python AgentManager.recreate_agent。
+// Python: AgentManager.recreate_agent。
 func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, immediate bool) ([]string, error) {
-	// 对齐 Python L360-361: channel_key
+	// Python: L360-361: channel_key
 	channelKey := normalizeChannelID(channelID)
 
 	am.mu.Lock()
 	channelAgents, ok := am.agents[channelKey]
 	if !ok || len(channelAgents) == 0 {
 		am.mu.Unlock()
-		// 对齐 Python L362-367: no active agent → return []
+		// Python: L362-367: no active agent → return []
 		logger.Info(amLogComponent).
 			Str("channel_key", channelKey).
 			Msg("[AgentManager] recreate_agent: 渠道无活跃 Agent")
 		return nil, nil
 	}
 
-	// 对齐 Python L369-378: 1. 备份创建参数
+	// Python: L369-378: 1. 备份创建参数
 	existingModes := make([]string, 0, len(channelAgents))
 	backupParams := make(map[string]*agentCreateParamsEntry)
 	channelParams := am.agentCreateParams[channelKey]
@@ -404,7 +405,7 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		if params, ok2 := channelParams[cacheKey]; ok2 {
 			backupParams[cacheKey] = params
 		} else {
-			// 对齐 Python L376-377: 未记录创建参数兜底
+			// Python: L376-377: 未记录创建参数兜底
 			backupParams[cacheKey] = &agentCreateParamsEntry{
 				mode:     cacheKey,
 				subMode:  "",
@@ -414,7 +415,7 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		}
 	}
 
-	// 对齐 Python L380-397: 2. cleanup + 删除（失败时 warn 日志，对齐 Python try/except）
+	// Python: L380-397: 2. cleanup + 删除（失败时 warn 日志，对齐 Python try/except）
 	for _, entry := range channelAgents {
 		if err := entry.agent.Cleanup(); err != nil {
 			logger.Warn(amLogComponent).Err(err).
@@ -426,13 +427,13 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 	delete(am.agentCreateParams, channelKey)
 	am.mu.Unlock()
 
-	// 对齐 Python L393-397
+	// Python: L393-397
 	logger.Info(amLogComponent).
 		Str("channel_key", channelKey).
 		Strs("modes", existingModes).
 		Msg("[AgentManager] recreate_agent: Agent 已丢弃")
 
-	// 对齐 Python L399-404: immediate=False → 不重建
+	// Python: L399-404: immediate=False → 不重建
 	if !immediate {
 		logger.Info(amLogComponent).
 			Str("channel_key", channelKey).
@@ -440,11 +441,11 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		return existingModes, nil
 	}
 
-	// 对齐 Python L406-426: 3. 立即按原参数重建
+	// Python: L406-426: 3. 立即按原参数重建
 	for cacheKey, params := range backupParams {
 		_, err := am.createAgent(ctx, channelKey, params.mode, copyMap(params.config), params.subMode, cacheKey)
 		if err != nil {
-			// 对齐 Python L416-421: rebuild failed → error log but continue
+			// Python: L416-421: rebuild failed → error log but continue
 			logger.Error(amLogComponent).
 				Err(err).
 				Str("cache_key", cacheKey).
@@ -452,7 +453,7 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		}
 	}
 
-	// 对齐 Python L422-426
+	// Python: L422-426
 	logger.Info(amLogComponent).
 		Str("channel_key", channelKey).
 		Strs("modes", existingModes).
@@ -462,9 +463,9 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 }
 
 // CancelAllInflightWork 取消所有在途任务。
-// 对齐 Python AgentManager.cancel_all_inflight_work(reason)。
+// Python: AgentManager.cancel_all_inflight_work(reason)。
 func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string) error {
-	// 对齐 Python L186-191: 遍历所有 agents 调用 cancel_inflight_work(reason)
+	// Python: L186-191: 遍历所有 agents 调用 cancel_inflight_work(reason)
 	am.mu.RLock()
 	var agentsCopy []*UapClaw
 	for _, chAgents := range am.agents {
@@ -474,7 +475,7 @@ func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string
 	}
 	am.mu.RUnlock()
 
-	// 对齐 Python: try/except + logger.exception
+	// Python: try/except + logger.exception
 	for _, agent := range agentsCopy {
 		if err := agent.CancelInflightWork(reason); err != nil {
 			logger.Warn(amLogComponent).Err(err).
@@ -485,15 +486,15 @@ func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string
 }
 
 // Cleanup 清理资源。
-// 对齐 Python AgentManager.cleanup。
+// Python: AgentManager.cleanup。
 func (am *AgentManager) Cleanup() error {
-	// 对齐 Python L491-501: 遍历 cleanup → 清空 maps
+	// Python: L491-501: 遍历 cleanup → 清空 maps
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
 	for chKey, chAgents := range am.agents {
 		for _, entry := range chAgents {
-			// 对齐 Python L493-497: cleanup 失败时 warn 日志
+			// Python: L493-497: cleanup 失败时 warn 日志
 			if err := entry.agent.Cleanup(); err != nil {
 				logger.Warn(amLogComponent).Err(err).
 					Msg("[AgentManager] Agent cleanup 失败")
@@ -525,9 +526,9 @@ func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw,
 }
 
 // createAgent 创建 Agent 实例。
-// 对齐 Python: AgentManager._create_agent
+// Python: AgentManager._create_agent
 func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string, config map[string]any, subMode, cacheKey string) (*UapClaw, error) {
-	// 对齐 Python L108-113: 1. 注入最新 env overrides
+	// Python: L108-113: 1. 注入最新 env overrides
 	am.mu.RLock()
 	envOverrides := am.latestEnvOverrides
 	am.mu.RUnlock()
@@ -540,7 +541,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		}
 	}
 
-	// 对齐 Python L114-120: 2. normalize + 更新 config 中的 project_dir
+	// Python: L114-120: 2. normalize + 更新 config 中的 project_dir
 	modeKey := normalizeMode(mode)
 	subModeKey := normalizeSubMode(subMode)
 	projectDir := normalizeProjectDir("")
@@ -552,12 +553,12 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 			}
 		}
 	}
-	// 对齐 Python L121: agent_cache_key = cache_key or _make_agent_cache_key(...)
+	// Python: L121: agent_cache_key = cache_key or _make_agent_cache_key(...)
 	if cacheKey == "" {
 		cacheKey = makeAgentCacheKey(modeKey, subModeKey, projectDir)
 	}
 
-	// 对齐 Python L122-128
+	// Python: L122-128
 	logger.Info(amLogComponent).
 		Str("channel_key", channelKey).
 		Str("mode", modeKey).
@@ -565,7 +566,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		Str("project_dir", projectDir).
 		Msg("[AgentManager] 正在创建 Agent")
 
-	// 对齐 Python L129-130: 3. 创建 UapClaw + CreateInstance（通过工厂函数）
+	// Python: L129-130: 3. 创建 UapClaw + CreateInstance（通过工厂函数）
 	am.mu.RLock()
 	factory := am.createAgentFactory
 	am.mu.RUnlock()
@@ -574,7 +575,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		return nil, err
 	}
 
-	// 对齐 Python L131-134: 4. setattr → agentEntry
+	// Python: L131-134: 4. setattr → agentEntry
 	entry := &agentEntry{
 		agent:      agent,
 		cacheKey:   cacheKey,
@@ -583,14 +584,14 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		projectDir: projectDir,
 	}
 
-	// 对齐 Python L135: 5. 写入 agents map
+	// Python: L135: 5. 写入 agents map
 	am.mu.Lock()
 	if _, ok := am.agents[channelKey]; !ok {
 		am.agents[channelKey] = make(map[string]*agentEntry)
 	}
 	am.agents[channelKey][cacheKey] = entry
 
-	// 对齐 Python L137-142: 6. 写入 agentCreateParams
+	// Python: L137-142: 6. 写入 agentCreateParams
 	if _, ok := am.agentCreateParams[channelKey]; !ok {
 		am.agentCreateParams[channelKey] = make(map[string]*agentCreateParamsEntry)
 	}
@@ -602,7 +603,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	}
 	am.mu.Unlock()
 
-	// 对齐 Python L143
+	// Python: L143
 	logger.Info(amLogComponent).
 		Str("channel_key", channelKey).
 		Str("cache_key", cacheKey).
@@ -612,7 +613,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 }
 
 // normalizeChannelID 规范化通道 ID。
-// 对齐 Python: _normalize_channel_id — None→"default"，strip
+// Python: _normalize_channel_id — None→"default"，strip
 func normalizeChannelID(channelID string) string {
 	s := strings.TrimSpace(channelID)
 	if s == "" {
@@ -622,7 +623,7 @@ func normalizeChannelID(channelID string) string {
 }
 
 // normalizeMode 规范化模式。
-// 对齐 Python: _normalize_mode — None→"agent"，strip
+// Python: _normalize_mode — None→"agent"，strip
 func normalizeMode(mode string) string {
 	s := strings.TrimSpace(mode)
 	if s == "" {
@@ -632,63 +633,49 @@ func normalizeMode(mode string) string {
 }
 
 // normalizeSubMode 规范化子模式。
-// 对齐 Python: _normalize_sub_mode — None→""，strip
+// Python: _normalize_sub_mode — None→""，strip
 func normalizeSubMode(subMode string) string {
 	return strings.TrimSpace(subMode)
 }
 
 // normalizeProjectDir 规范化项目目录。
-// 对齐 Python: _normalize_project_dir — None→""，strip+abspath+expanduser
+// Python: _normalize_project_dir — None→""，strip+abspath+expanduser
 func normalizeProjectDir(projectDir string) string {
 	raw := strings.TrimSpace(projectDir)
 	if raw == "" {
 		return ""
 	}
-	// 对齐 Python: os.path.expanduser
+	// Python: os.path.expanduser
 	if strings.HasPrefix(raw, "~") {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			raw = strings.Replace(raw, "~", home, 1)
 		}
 	}
-	// 对齐 Python: os.path.abspath
+	// Python: os.path.abspath
 	abs, err := filepath.Abs(raw)
 	if err != nil {
 		return raw
 	}
-	// 对齐 Python: os.path.normcase（Linux 下 filepath.Clean 等价）
+	// Python: os.path.normcase（Linux 下 filepath.Clean 等价）
 	return filepath.Clean(abs)
 }
 
 // makeAgentCacheKey 生成 Agent 缓存键。
 // 格式：{mode}:{subMode}:{projectDir}
-// 对齐 Python: _make_agent_cache_key
+// Python: _make_agent_cache_key
 func makeAgentCacheKey(mode, subMode, projectDir string) string {
 	return fmt.Sprintf("%s:%s:%s", normalizeMode(mode), normalizeSubMode(subMode), normalizeProjectDir(projectDir))
 }
 
 // copyMap 深拷贝 map[string]any（仅一层）。
 func copyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(m)
 }
 
 // copyStringMap 深拷贝 map[string]string。
 func copyStringMap(m map[string]string) map[string]string {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]string, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(m)
 }
 
 // stringMapToAny 将 map[string]string 转为 map[string]any，
@@ -705,7 +692,7 @@ func stringMapToAny(m map[string]string) map[string]any {
 }
 
 // resolveModeFromRequest 从请求中解析 mode。
-// 对齐 Python: AgentManager.process_message 中 params.get("mode", "agent.plan")
+// Python: AgentManager.process_message 中 params.get("mode", "agent.plan")
 func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string) {
 	if request.Params == nil {
 		return "agent", ""
@@ -718,7 +705,7 @@ func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string)
 	if modeFull == "" {
 		modeFull = "agent.plan"
 	}
-	// 对齐 Python L441: mode = str(mode_full).split(".")[0]
+	// Python: L441: mode = str(mode_full).split(".")[0]
 	parts := strings.SplitN(modeFull, ".", 2)
 	mode = parts[0]
 	if mode == "" {
@@ -731,7 +718,7 @@ func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string)
 }
 
 // resolveWorkspaceDirFromRequest 从请求中解析 workspace_dir。
-// 对齐 Python: params.get("workspace_dir")
+// Python: params.get("workspace_dir")
 func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 	if request.Params == nil {
 		return ""

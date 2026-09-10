@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamController 管理轮次生命周期、流式分块处理、输入投递、中断处理和重试逻辑。
-// 对齐 Python: StreamController (openjiuwen/agent_teams/agent/stream_controller.py)
+// Python: StreamController (openjiuwen/agent_teams/agent/stream_controller.py)
 //
 // 职责：
 //   - 轮次生命周期管理（startRound → executeRound → 自动续轮）
@@ -68,7 +68,7 @@ type StreamController struct {
 }
 
 // taskFailedError task_failed 错误，携带 errorCode 和 errorText。
-// 对齐 Python: _detect_task_failed 返回 Optional[Tuple[Optional[int], str]]
+// Python: _detect_task_failed 返回 Optional[Tuple[Optional[int], str]]
 type taskFailedError struct {
 	// code 错误码（0 表示无码）
 	code int
@@ -85,16 +85,16 @@ type StreamControllerOption func(*StreamController)
 
 const (
 	// maxRetryAttempts 最大重试次数
-	// 对齐 Python: _MAX_RETRY_ATTEMPTS = 10
+	// Python: _MAX_RETRY_ATTEMPTS = 10
 	maxRetryAttempts = 10
 	// cooperativeAbortTimeout 协作取消超时
-	// 对齐 Python: _COOPERATIVE_ABORT_TIMEOUT_SECONDS = 2.0
+	// Python: _COOPERATIVE_ABORT_TIMEOUT_SECONDS = 2.0
 	cooperativeAbortTimeout = 2 * time.Second
 	// retryQuery 重试时的查询内容
-	// 对齐 Python: _RETRY_QUERY = "刚才有异常状况，继续执行"
+	// Python: _RETRY_QUERY = "刚才有异常状况，继续执行"
 	retryQuery = "刚才有异常状况，继续执行"
 	// taskFailedPayloadType task_failed 载荷类型
-	// 对齐 Python: _TASK_FAILED_PAYLOAD_TYPE = "task_failed"
+	// Python: _TASK_FAILED_PAYLOAD_TYPE = "task_failed"
 	taskFailedPayloadType = "task_failed"
 )
 
@@ -102,10 +102,10 @@ const (
 
 var (
 	// retryableErrorCodes 可重试的错误码集合
-	// 对齐 Python: _RETRYABLE_ERROR_CODES = {181001}
+	// Python: _RETRYABLE_ERROR_CODES = {181001}
 	retryableErrorCodes = map[int]bool{181001: true}
 	// errorCodePattern 错误码正则
-	// 对齐 Python: _ERROR_CODE_PATTERN = re.compile(r"^\[(\d+)\]")
+	// Python: _ERROR_CODE_PATTERN = re.compile(r"^\[(\d+)\]")
 	errorCodePattern = regexp.MustCompile(`^\[(\d+)\]`)
 	// scLogComponent StreamController 日志组件
 	scLogComponent = logger.ComponentAgentCore
@@ -124,7 +124,7 @@ func WithRequestCompletionPoll(cb func(ctx context.Context) error) StreamControl
 }
 
 // NewStreamController 创建新的流式控制器。
-// 对齐 Python: StreamController.__init__(blueprint_getter, state, resources, status_updater,
+// Python: StreamController.__init__(blueprint_getter, state, resources, status_updater,
 //
 // Python 参数: execution_updater, wake_mailbox_callback, request_completion_poll_callback)
 func NewStreamController(
@@ -149,7 +149,7 @@ func NewStreamController(
 }
 
 // AddChunkObserver 注册分块观察者。
-// 对齐 Python: StreamController.add_chunk_observer(cb)
+// Python: StreamController.add_chunk_observer(cb)
 // 观察者在分块标注来源成员并写入 streamQueue 之后触发。
 func (sc *StreamController) AddChunkObserver(cb atschema.ChunkObserver) {
 	sc.mu.Lock()
@@ -158,7 +158,7 @@ func (sc *StreamController) AddChunkObserver(cb atschema.ChunkObserver) {
 }
 
 // RemoveChunkObserver 移除分块观察者（幂等）。
-// 对齐 Python: StreamController.remove_chunk_observer(cb)
+// Python: StreamController.remove_chunk_observer(cb)
 func (sc *StreamController) RemoveChunkObserver(cb atschema.ChunkObserver) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -173,7 +173,7 @@ func (sc *StreamController) RemoveChunkObserver(cb atschema.ChunkObserver) {
 }
 
 // IsAgentRunning Agent 是否正在运行（流式输出中）。
-// 对齐 Python: StreamController.is_agent_running()
+// Python: StreamController.is_agent_running()
 func (sc *StreamController) IsAgentRunning() bool {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -181,7 +181,7 @@ func (sc *StreamController) IsAgentRunning() bool {
 }
 
 // HasInFlightRound 是否有飞行中的轮次。
-// 对齐 Python: StreamController.has_in_flight_round()
+// Python: StreamController.has_in_flight_round()
 // Python: agent_task is not None and not agent_task.done()
 // Go: roundDone != nil 且未关闭
 func (sc *StreamController) HasInFlightRound() bool {
@@ -197,7 +197,7 @@ func (sc *StreamController) HasInFlightRound() bool {
 }
 
 // HasPendingInterrupt 是否有待处理的中断。
-// 对齐 Python: StreamController.has_pending_interrupt()
+// Python: StreamController.has_pending_interrupt()
 func (sc *StreamController) HasPendingInterrupt() bool {
 	harness := sc.resources.Harness
 	if harness == nil {
@@ -207,7 +207,7 @@ func (sc *StreamController) HasPendingInterrupt() bool {
 }
 
 // IsValidInterruptResume 验证用户输入是否为有效中断恢复。
-// 对齐 Python: StreamController.is_valid_interrupt_resume(user_input)
+// Python: StreamController.is_valid_interrupt_resume(user_input)
 func (sc *StreamController) IsValidInterruptResume(userInput any) bool {
 	harness := sc.resources.Harness
 	if harness == nil {
@@ -217,7 +217,7 @@ func (sc *StreamController) IsValidInterruptResume(userInput any) bool {
 }
 
 // StartRound 启动一个新轮次。
-// 对齐 Python: StreamController.start_round(content)
+// Python: StreamController.start_round(content)
 func (sc *StreamController) StartRound(ctx context.Context, content any) error {
 	harness := sc.resources.Harness
 	if harness == nil || sc.streamQueue == nil {
@@ -239,7 +239,7 @@ func (sc *StreamController) StartRound(ctx context.Context, content any) error {
 }
 
 // Steer 运行中转向。
-// 对齐 Python: StreamController.steer(content)
+// Python: StreamController.steer(content)
 func (sc *StreamController) Steer(ctx context.Context, content string) error {
 	harness := sc.resources.Harness
 	if harness != nil {
@@ -249,7 +249,7 @@ func (sc *StreamController) Steer(ctx context.Context, content string) error {
 }
 
 // FollowUp 追加输入。
-// 对齐 Python: StreamController.follow_up(content)
+// Python: StreamController.follow_up(content)
 func (sc *StreamController) FollowUp(ctx context.Context, content string) error {
 	harness := sc.resources.Harness
 	if harness != nil {
@@ -259,7 +259,7 @@ func (sc *StreamController) FollowUp(ctx context.Context, content string) error 
 }
 
 // CancelAgent 取消飞行中的轮次，推进执行状态机。
-// 对齐 Python: StreamController.cancel_agent()
+// Python: StreamController.cancel_agent()
 // 状态机：RUNNING → CANCEL_REQUESTED → CANCELLING → CooperativeCancel
 func (sc *StreamController) CancelAgent(ctx context.Context) error {
 	if !sc.HasInFlightRound() {
@@ -271,7 +271,7 @@ func (sc *StreamController) CancelAgent(ctx context.Context) error {
 }
 
 // CloseStream 关闭流（向 streamQueue 写入 nil sentinel）。
-// 对齐 Python: StreamController.close_stream()
+// Python: StreamController.close_stream()
 func (sc *StreamController) CloseStream() {
 	if sc.streamQueue != nil {
 		// 非阻塞写入 nil sentinel
@@ -283,7 +283,7 @@ func (sc *StreamController) CloseStream() {
 }
 
 // EmitCompletionAndClose 发出 team.completed 标记块再关闭流。
-// 对齐 Python: StreamController.emit_completion_and_close(member_count, task_count)
+// Python: StreamController.emit_completion_and_close(member_count, task_count)
 func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 	if sc.streamQueue == nil {
 		return
@@ -315,7 +315,7 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 }
 
 // DrainAgentTask 拆卸飞行中的轮次（用于协调生命周期暂停/停止）。
-// 对齐 Python: StreamController.drain_agent_task()
+// Python: StreamController.drain_agent_task()
 // 清除 pendingInputs + pendingInterruptResumes，然后 CancelAgent
 func (sc *StreamController) DrainAgentTask(ctx context.Context) error {
 	sc.mu.Lock()
@@ -326,7 +326,7 @@ func (sc *StreamController) DrainAgentTask(ctx context.Context) error {
 }
 
 // CooperativeCancel 协作取消：两阶段关闭。
-// 对齐 Python: StreamController.cooperative_cancel()
+// Python: StreamController.cooperative_cancel()
 // Phase 1: 设 cancelRequested + harness.Abort()
 // Phase 2: 等 2s → 超时则 cancelRound()（强制取消 goroutine）
 func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
@@ -381,7 +381,7 @@ func (e *taskFailedError) Text() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // memberName 解析当前成员名。
-// 对齐 Python: StreamController._member_name()
+// Python: StreamController._member_name()
 func (sc *StreamController) memberName() string {
 	bp := sc.getBlueprint()
 	if bp == nil {
@@ -395,7 +395,7 @@ func (sc *StreamController) memberName() string {
 }
 
 // tagChunk 标注分块的来源成员和角色。
-// 对齐 Python: StreamController._tag_chunk(chunk)
+// Python: StreamController._tag_chunk(chunk)
 //
 // 四种情况：
 //  1. 非 OutputSchema（TraceSchema/CustomSchema）或无 memberName → 透传
@@ -437,10 +437,10 @@ func (sc *StreamController) tagChunk(chunk streambase.Schema) streambase.Schema 
 }
 
 // fanOutToObservers 扇出分块到观察者，异常时自动移除。
-// 对齐 Python: _chunk_observers 循环 + exception auto-detach
-// 对齐 Python: for ob in list(self._chunk_observers) — 先拷贝再迭代，避免迭代中修改
+// Python: _chunk_observers 循环 + exception auto-detach
+// Python: for ob in list(self._chunk_observers) — 先拷贝再迭代，避免迭代中修改
 func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged streambase.Schema) {
-	// 对齐 Python: list(self._chunk_observers) — 先拷贝切片，迭代中使用拷贝
+	// Python: list(self._chunk_observers) — 先拷贝切片，迭代中使用拷贝
 	sc.mu.Lock()
 	observers := make([]atschema.ChunkObserver, len(sc.chunkObservers))
 	copy(observers, sc.chunkObservers)
@@ -469,7 +469,7 @@ func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged stream
 }
 
 // startRound 启动一个新轮次（内部方法，由 StartRound 和 runOneRound 的续轮逻辑调用）。
-// 对齐 Python: StreamController.start_round(content) 内部启动逻辑
+// Python: StreamController.start_round(content) 内部启动逻辑
 func (sc *StreamController) startRound(ctx context.Context, content any) {
 	harness := sc.resources.Harness
 	if harness == nil || sc.streamQueue == nil {
@@ -486,7 +486,7 @@ func (sc *StreamController) startRound(ctx context.Context, content any) {
 }
 
 // logRoundPanic 记录轮次 goroutine 的 panic。
-// 对齐 Python: StreamController._log_agent_task_exception(task)
+// Python: StreamController._log_agent_task_exception(task)
 func (sc *StreamController) logRoundPanic() {
 	if r := recover(); r != nil {
 		logger.Error(scLogComponent).Str("member_name", sc.memberName()).
@@ -495,9 +495,9 @@ func (sc *StreamController) logRoundPanic() {
 }
 
 // runOneRound 执行一个完整轮次。
-// 对齐 Python: StreamController._run_one_round(message)
+// Python: StreamController._run_one_round(message)
 func (sc *StreamController) runOneRound(ctx context.Context, message any) {
-	// 对齐 Python: except BaseException → MemberStatus.ERROR
+	// Python: except BaseException → MemberStatus.ERROR
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(scLogComponent).Str("member_name", sc.memberName()).
@@ -523,10 +523,10 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	cancelled := false
 	func() {
 		defer func() {
-			// 对齐 Python: agent_task = None
+			// Python: agent_task = None
 			sc.cancelRound = nil
 
-			// 对齐 Python: if self._state.team_cleaned: close_stream()
+			// Python: if self._state.team_cleaned: close_stream()
 			if sc.state.TeamCleaned {
 				logger.Info(scLogComponent).Str("member_name", sc.memberName()).
 					Msg("team_cleaned 已设置；轮次结束后关闭流")
@@ -534,7 +534,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 				return
 			}
 
-			// 对齐 Python: elif not cancelled and not _cancel_requested:
+			// Python: elif not cancelled and not _cancel_requested:
 			sc.mu.Lock()
 			shouldContinue := !cancelled && !sc.cancelRequested
 			sc.mu.Unlock()
@@ -554,7 +554,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 					sc.startRound(ctx, combined)
 				} else {
 					_ = sc.wakeMailboxIfInterruptCleared(ctx)
-					// 对齐 Python: if team_member and await team_member.status() == MemberStatus.SHUTDOWN_REQUESTED: close_stream()
+					// Python: if team_member and await team_member.status() == MemberStatus.SHUTDOWN_REQUESTED: close_stream()
 					// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
 					// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时不会触发
 					memberStatus := atschema.MemberStatusReady
@@ -571,16 +571,16 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 			}
 		}()
 
-		// 对齐 Python: await _execute_round(message)
-		// 对齐 Python: CancelledError 只标记 cancelled，不设 ERROR
+		// Python: await _execute_round(message)
+		// Python: CancelledError 只标记 cancelled，不设 ERROR
 		if ctx.Err() != nil {
 			cancelled = true
-			// 对齐 Python: except asyncio.CancelledError: cancelled = True; raise
+			// Python: except asyncio.CancelledError: cancelled = True; raise
 			// 不设 MemberStatusError，取消不是错误
 			return
 		}
 		sc.executeRound(ctx, message)
-		// 对齐 Python: if team_member is None or await team_member.status() != MemberStatus.SHUTDOWN_REQUESTED:
+		// Python: if team_member is None or await team_member.status() != MemberStatus.SHUTDOWN_REQUESTED:
 		//     await self._update_status(MemberStatus.READY)
 		// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
 		// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时始终走 true 分支
@@ -596,7 +596,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 }
 
 // executeRound 执行状态机。
-// 对齐 Python: StreamController._execute_round(message)
+// Python: StreamController._execute_round(message)
 // 状态转换：STARTING → RUNNING → (COMPLETING→COMPLETED | CANCELLED | TIMED_OUT | FAILED) → IDLE
 func (sc *StreamController) executeRound(ctx context.Context, message any) {
 	_ = sc.updateExecution(ctx, atschema.ExecutionStatusStarting)
@@ -608,7 +608,7 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 		return
 	}
 
-	// 对齐 Python: asyncio.wait_for(coro, timeout=completion_timeout)
+	// Python: asyncio.wait_for(coro, timeout=completion_timeout)
 	// ⤵️ TODO: completion_timeout 应从 DeepAgentConfig.CompletionTimeout 读取，暂用默认 3600s
 	completionTimeout := 3600 * time.Second
 	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, completionTimeout)
@@ -637,7 +637,7 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 		}
 	} else {
 		if isCancelRequested {
-			// 对齐 Python: if self._cancel_requested: CANCELLED
+			// Python: if self._cancel_requested: CANCELLED
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCancelled)
 		} else {
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCompleting)
@@ -648,7 +648,7 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 }
 
 // streamOneRound 执行单轮流式读取。
-// 对齐 Python: StreamController._stream_one_round(query)
+// Python: StreamController._stream_one_round(query)
 // 返回 nil 表示成功，返回 error 表示检测到 task_failed
 func (sc *StreamController) streamOneRound(ctx context.Context, query any) error {
 	sc.mu.Lock()
@@ -665,17 +665,17 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) error
 		return nil
 	}
 
-	// 对齐 Python: stream_kwargs = {"session_id": get_session_id() or None}
-	// 对齐 Python: if self._state.team_session is not None: stream_kwargs["team_session"] = self._state.team_session
-	sessionID := agentteams.GetSessionID(ctx) // 对齐 Python get_session_id()
-	teamSession := sc.state.TeamSession       // 对齐 Python self._state.team_session
+	// Python: stream_kwargs = {"session_id": get_session_id() or None}
+	// Python: if self._state.team_session is not None: stream_kwargs["team_session"] = self._state.team_session
+	sessionID := agentteams.GetSessionID(ctx) // Python: get_session_id()
+	teamSession := sc.state.TeamSession       // Python: self._state.team_session
 	inputMap := map[string]any{"query": query}
 	chunkCh, err := harness.RunStreaming(ctx, inputMap, sessionID, teamSession)
 	if err != nil {
 		return nil
 	}
 
-	// 对齐 Python: async for chunk in harness.run_streaming(...)
+	// Python: async for chunk in harness.run_streaming(...)
 	var taskErr *taskFailedError
 	for chunk := range chunkCh {
 		if chunk == nil {
@@ -685,8 +685,8 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) error
 		if taskErr != nil {
 			continue
 		}
-		// 对齐 Python: detected = _detect_task_failed(chunk)
-		// 对齐 Python: if detected is not None: error_seen = True
+		// Python: detected = _detect_task_failed(chunk)
+		// Python: if detected is not None: error_seen = True
 		if err := detectTaskFailed(chunk); err != nil {
 			taskErr = err.(*taskFailedError)
 			continue
@@ -708,14 +708,14 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) error
 }
 
 // runRetryingStream 带重试的流式执行。
-// 对齐 Python: StreamController._run_retrying_stream(initial_query)
+// Python: StreamController._run_retrying_stream(initial_query)
 func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery any) error {
 	currentQuery := initialQuery
 	attempt := 0
 	for {
 		roundErr := sc.streamOneRound(ctx, currentQuery)
-		// 对齐 Python: outcome = await self._stream_one_round(current_query)
-		// 对齐 Python: if outcome is None: return
+		// Python: outcome = await self._stream_one_round(current_query)
+		// Python: if outcome is None: return
 		if roundErr == nil {
 			return nil
 		}
@@ -742,7 +742,7 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 }
 
 // dequeueValidInterruptResume 弹出有效中断恢复。
-// 对齐 Python: StreamController._dequeue_valid_interrupt_resume()
+// Python: StreamController._dequeue_valid_interrupt_resume()
 // ⤵️ 待 9.55 TeamAgent 完善后回填具体类型（interaction 包已实现）
 func (sc *StreamController) dequeueValidInterruptResume() any {
 	sc.mu.Lock()
@@ -758,7 +758,7 @@ func (sc *StreamController) dequeueValidInterruptResume() any {
 }
 
 // wakeMailboxIfInterruptCleared 中断清除后唤醒邮箱。
-// 对齐 Python: StreamController._wake_mailbox_if_interrupt_cleared()
+// Python: StreamController._wake_mailbox_if_interrupt_cleared()
 func (sc *StreamController) wakeMailboxIfInterruptCleared(ctx context.Context) error {
 	if sc.wakeMailboxCb == nil {
 		return nil
@@ -767,7 +767,7 @@ func (sc *StreamController) wakeMailboxIfInterruptCleared(ctx context.Context) e
 }
 
 // combinePendingInputs 合并多个待处理输入。
-// 对齐 Python: "\n\n---\n\n".join(items) — 多个用分隔符合并，单个直接用
+// Python: "\n\n---\n\n".join(items) — 多个用分隔符合并，单个直接用
 func (sc *StreamController) combinePendingInputs(items []any) any {
 	if len(items) == 1 {
 		return items[0]
@@ -791,7 +791,7 @@ func (sc *StreamController) combinePendingInputs(items []any) any {
 }
 
 // detectTaskFailed 检测 chunk 中的 task_failed 错误。
-// 对齐 Python: _detect_task_failed(chunk) → Optional[Tuple[Optional[int], str]]
+// Python: _detect_task_failed(chunk) → Optional[Tuple[Optional[int], str]]
 // 返回 nil 表示不是 task_failed，返回 error 表示检测到 task_failed。
 // errorCode 和 errorText 信息携带在 error 中，供重试逻辑使用。
 func detectTaskFailed(chunk streambase.Schema) error {
@@ -811,7 +811,7 @@ func detectTaskFailed(chunk streambase.Schema) error {
 	if payloadType != taskFailedPayloadType {
 		return nil
 	}
-	// 对齐 Python: 只要 type == "task_failed" 就是失败
+	// Python: 只要 type == "task_failed" 就是失败
 	data, _ := payloadMap["data"].([]any)
 	var text string
 	if len(data) > 0 {
@@ -836,7 +836,7 @@ func detectTaskFailed(chunk streambase.Schema) error {
 }
 
 // isRetryableErrorCode 检查错误码是否可重试。
-// 对齐 Python: error_code in _RETRYABLE_ERROR_CODES
+// Python: error_code in _RETRYABLE_ERROR_CODES
 func isRetryableErrorCode(code int) bool {
 	return retryableErrorCodes[code]
 }

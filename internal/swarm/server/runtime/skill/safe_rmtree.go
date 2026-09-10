@@ -30,7 +30,7 @@ const (
 // safeRmtree 安全删除目录（对齐 Python: _safe_rmtree）。
 // 最多 3 次重试，Windows 上修改文件权限为可写，指数退避延迟。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/skill/skill_manager.py (_safe_rmtree)
+// Python: jiuwenswarm/server/runtime/skill/skill_manager.py (_safe_rmtree)
 func safeRmtree(path string) error {
 	var lastErr error
 	for attempt := 0; attempt < maxRmtreeRetries; attempt++ {

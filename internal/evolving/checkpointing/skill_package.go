@@ -23,7 +23,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 排除规则常量。
-// 对应 Python: _EXCLUDE_DIR_NAMES / _EXCLUDE_FILE_NAMES
+// Python: _EXCLUDE_DIR_NAMES / _EXCLUDE_FILE_NAMES
 // 打包技能是为了"分享"，分享时只携带技能本身，
 // 不携带演进历史和本地治理数据。
 var excludeDirNames = map[string]bool{
@@ -41,14 +41,14 @@ var excludeFileNames = map[string]bool{
 
 // NewSkillID 生成全局唯一技能标识。
 //
-// 对应 Python: new_skill_id() → "sk_{uuid12}"
+// Python: new_skill_id() → "sk_{uuid12}"
 func NewSkillID() string {
 	return fmt.Sprintf("sk_%012x", time.Now().UnixNano()&0xFFFFFFFFFFFF)
 }
 
 // ReadSkillIDFromContent 从 SKILL.md frontmatter 读取 skill_id。
 //
-// 对应 Python: read_skill_id_from_content(content)
+// Python: read_skill_id_from_content(content)
 func ReadSkillIDFromContent(content string) string {
 	frontmatter := parseTopLevelFrontmatter(content)
 	if v, ok := frontmatter["skill_id"]; ok {
@@ -60,7 +60,7 @@ func ReadSkillIDFromContent(content string) string {
 // EnsureSkillIDInContent 确保 SKILL.md frontmatter 包含 skill_id。
 //
 // 返回 (updatedContent, skillID)。
-// 对应 Python: ensure_skill_id_in_content(content)
+// Python: ensure_skill_id_in_content(content)
 func EnsureSkillIDInContent(content string) (string, string) {
 	existing := ReadSkillIDFromContent(content)
 	if existing != "" {
@@ -68,7 +68,7 @@ func EnsureSkillIDInContent(content string) (string, string) {
 	}
 
 	skillID := NewSkillID()
-	// 对齐 Python: stripped = content.lstrip("\ufeff")
+	// Python: stripped = content.lstrip("\ufeff")
 	stripped := strings.TrimLeft(content, "\ufeff")
 	if strings.HasPrefix(stripped, "---") {
 		closing := strings.Index(stripped[3:], "---")
@@ -87,7 +87,7 @@ func EnsureSkillIDInContent(content string) (string, string) {
 		}
 	}
 
-	// 对齐 Python: 没有 frontmatter 时插入新 frontmatter
+	// Python: 没有 frontmatter 时插入新 frontmatter
 	updated := fmt.Sprintf("---\nskill_id: %s\n---\n\n%s", skillID, strings.TrimLeft(content, " \t\n\r"))
 	return strings.TrimSpace(updated) + "\n", skillID
 }
@@ -97,7 +97,7 @@ func EnsureSkillIDInContent(content string) (string, string) {
 // 排除演进本地产物（evolution/archive/.git 等）。
 // 当 skillMDRelpath 和 skillMDContent 提供时，
 // tarball 使用提供的 SKILL.md 内容而非磁盘文件。
-// 对应 Python: pack_skill_directory(skill_dir, skill_md_relpath, skill_md_content)
+// Python: pack_skill_directory(skill_dir, skill_md_relpath, skill_md_content)
 func PackSkillDirectory(skillDir string, skillMDRelpath string, skillMDContent string) ([]byte, error) {
 	root, err := filepath.Abs(skillDir)
 	if err != nil {
@@ -122,7 +122,7 @@ func PackSkillDirectory(skillDir string, skillMDRelpath string, skillMDContent s
 		}
 		arcname := filepath.ToSlash(rel)
 
-		// 对齐 Python: override_arcname 和 skill_md_content 替换
+		// Python: override_arcname 和 skill_md_content 替换
 		if overrideArcname != "" && skillMDContent != "" && arcname == overrideArcname {
 			payload := []byte(skillMDContent)
 			info := &tar.Header{
@@ -177,7 +177,7 @@ func PackSkillDirectory(skillDir string, skillMDRelpath string, skillMDContent s
 // UnpackSkillPackage 将技能包 tar.gz 解压到目标目录。
 //
 // 使用安全路径检查（防路径遍历），对应 Python tarfile.data_filter。
-// 对应 Python: unpack_skill_package(package_bytes, dest_dir)
+// Python: unpack_skill_package(package_bytes, dest_dir)
 func UnpackSkillPackage(packageBytes []byte, destDir string) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("创建目标目录失败: %w", err)
@@ -231,7 +231,7 @@ func UnpackSkillPackage(packageBytes []byte, destDir string) error {
 
 // ListPackableFiles 列出技能目录中可打包的文件路径。
 //
-// 对应 Python: list_packable_files(skill_dir)
+// Python: list_packable_files(skill_dir)
 func ListPackableFiles(skillDir string) ([]string, error) {
 	root, err := filepath.Abs(skillDir)
 	if err != nil {
@@ -243,22 +243,22 @@ func ListPackableFiles(skillDir string) ([]string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // shouldPackRelative 判断相对路径是否应该打包。
-// 对应 Python: _should_pack_relative(relative)
+// Python: _should_pack_relative(relative)
 func shouldPackRelative(relPath string) bool {
 	if relPath == "" {
 		return false
 	}
 	parts := strings.Split(filepath.ToSlash(relPath), "/")
-	// 对齐 Python: if parts[0] in _EXCLUDE_DIR_NAMES
+	// Python: if parts[0] in _EXCLUDE_DIR_NAMES
 	if excludeDirNames[parts[0]] {
 		return false
 	}
-	// 对齐 Python: if relative.name in _EXCLUDE_FILE_NAMES
+	// Python: if relative.name in _EXCLUDE_FILE_NAMES
 	filename := filepath.Base(relPath)
 	if excludeFileNames[filename] {
 		return false
 	}
-	// 对齐 Python: if relative.name.startswith(".")
+	// Python: if relative.name.startswith(".")
 	if strings.HasPrefix(filename, ".") {
 		return false
 	}
@@ -312,7 +312,7 @@ func isSafePath(baseDir, targetPath string) bool {
 }
 
 // parseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段。
-// 对应 Python: parse_top_level_frontmatter(content)
+// Python: parse_top_level_frontmatter(content)
 func parseTopLevelFrontmatter(content string) map[string]string {
 	text := strings.TrimSpace(content)
 	if !strings.HasPrefix(text, "---") {

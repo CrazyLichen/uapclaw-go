@@ -460,7 +460,7 @@ func TestParseTimestamp(t *testing.T) {
 			t.Errorf("期望返回错误")
 		}
 	})
-	// 对齐 Python: fromisoformat 可解析无时区时间戳，然后补 UTC
+	// Python: fromisoformat 可解析无时区时间戳，然后补 UTC
 	t.Run("无时区ISO", func(t *testing.T) {
 		ts := "2025-01-15T10:30:00"
 		got, err := parseTimestamp(ts)

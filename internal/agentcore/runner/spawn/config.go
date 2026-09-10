@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnAgentConfig Spawn 基础配置。
-// 对齐 Python: SpawnAgentConfig (agent_config.py)
+// Python: SpawnAgentConfig (agent_config.py)
 type SpawnAgentConfig struct {
 	// AgentKind Agent 启动方式
 	AgentKind SpawnAgentKind `json:"agent_kind"`
@@ -26,7 +26,7 @@ type SpawnAgentConfig struct {
 }
 
 // ClassAgentSpawnConfig 类 Agent Spawn 配置。
-// 对齐 Python: ClassAgentSpawnConfig (agent_config.py)
+// Python: ClassAgentSpawnConfig (agent_config.py)
 // Python 传 agent_module + agent_class + init_kwargs，
 // Go 传 AgentName + AgentCard + InitKwargs。
 // AgentCard 包含 Agent 完整元数据，由主进程从 ResourceMgr 中提取传给子进程，
@@ -36,16 +36,16 @@ type ClassAgentSpawnConfig struct {
 	// AgentName Agent 名称
 	AgentName string `json:"agent_name"`
 	// AgentCard Agent 完整配置卡片（序列化为 map）。
-	// 对齐 Python: ClassAgentSpawnConfig.agent_module + agent_class
+	// Python: ClassAgentSpawnConfig.agent_module + agent_class
 	// Go 用 AgentCard 替代，因为 Go 没有 importlib 的 module+class 动态导入。
 	AgentCard map[string]any `json:"agent_card,omitempty"`
 	// InitKwargs 实例化参数。
-	// 对齐 Python: ClassAgentSpawnConfig.init_kwargs
+	// Python: ClassAgentSpawnConfig.init_kwargs
 	InitKwargs map[string]any `json:"init_kwargs,omitempty"`
 }
 
 // SpawnConfig 子进程管理配置。
-// 对齐 Python: SpawnConfig (process_manager.py)
+// Python: SpawnConfig (process_manager.py)
 type SpawnConfig struct {
 	// HealthCheckInterval 健康检查间隔，默认 5s
 	HealthCheckInterval time.Duration
@@ -56,7 +56,7 @@ type SpawnConfig struct {
 }
 
 // SpawnAgentKind Agent 启动方式枚举。
-// 对齐 Python: SpawnAgentKind (agent_config.py)
+// Python: SpawnAgentKind (agent_config.py)
 type SpawnAgentKind string
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -98,7 +98,7 @@ func DefaultSpawnConfig() SpawnConfig {
 }
 
 // ParseSpawnAgentConfig 根据 agent_kind 解析为对应配置类型。
-// 对齐 Python: parse_spawn_agent_config()
+// Python: parse_spawn_agent_config()
 func ParseSpawnAgentConfig(payload map[string]any) (SpawnAgentConfig, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -122,7 +122,7 @@ func ParseSpawnAgentConfig(payload map[string]any) (SpawnAgentConfig, error) {
 }
 
 // SerializeRunnerConfig 将 RunnerConfig 序列化为 JSON-safe map。
-// 对齐 Python: serialize_runner_config()
+// Python: serialize_runner_config()
 func SerializeRunnerConfig(cfg *config.RunnerConfig) (map[string]any, error) {
 	data, err := json.Marshal(cfg)
 	if err != nil {
@@ -136,7 +136,7 @@ func SerializeRunnerConfig(cfg *config.RunnerConfig) (map[string]any, error) {
 }
 
 // DeserializeRunnerConfig 从 JSON-safe map 反序列化为 RunnerConfig。
-// 对齐 Python: deserialize_runner_config()
+// Python: deserialize_runner_config()
 func DeserializeRunnerConfig(payload map[string]any) (*config.RunnerConfig, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {

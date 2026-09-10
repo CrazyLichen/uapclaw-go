@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WriteFileInput 写入文件工具的输入参数。
-// 对齐 Python: WriteFileTool invoke inputs (filesystem.py L864)
+// Python: WriteFileTool invoke inputs (filesystem.py L864)
 type WriteFileInput struct {
 	// FilePath 文件路径（必需）
 	FilePath string `json:"file_path"`
@@ -29,11 +29,11 @@ type WriteFileInput struct {
 
 const (
 	// maxFileSizeGiB 文件大小上限 (1 GiB)。
-	// 对齐 Python: WriteFileTool.MAX_FILE_SIZE (filesystem.py L828)
+	// Python: WriteFileTool.MAX_FILE_SIZE (filesystem.py L828)
 	maxFileSizeGiB = 1 * 1024 * 1024 * 1024
 
 	// maxContentBytes 写入内容大小上限 (5 MiB)。
-	// 对齐 Python: WriteFileTool.MAX_CONTENT_SIZE (filesystem.py L829)
+	// Python: WriteFileTool.MAX_CONTENT_SIZE (filesystem.py L829)
 	maxContentBytes = 5 * 1024 * 1024
 )
 
@@ -42,13 +42,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWriteFileTool 创建 WriteFileTool 实例。
-// 对齐 Python: WriteFileTool (filesystem.py L825)
+// Python: WriteFileTool (filesystem.py L825)
 func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("write_file", "WriteFileTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input WriteFileInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 参数校验
-		// 对齐 Python L868-873
+		// Python: L868-873
 		if input.FilePath == "" {
 			return map[string]any{
 				"success": false,
@@ -66,7 +66,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 		content := input.Content
 
 		// 内容大小检查
-		// 对齐 Python L875-886
+		// Python: L875-886
 		contentBytes := len([]byte(content))
 		if contentBytes > maxContentBytes {
 			return map[string]any{
@@ -79,7 +79,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 		}
 
 		// 路径解析
-		// 对齐 Python L888-891
+		// Python: L888-891
 		path := ResolveToolFilePath(ctx, input.FilePath)
 		isUNC := isUNCPath(path)
 
@@ -87,10 +87,10 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 		var oldContent *string
 
 		if !isUNC {
-			// 对齐 Python L899-943
+			// Python: L899-943
 			if st, err := os.Stat(path); err == nil {
 				// 目录检测
-				// 对齐 Python L903-904
+				// Python: L903-904
 				if st.IsDir() {
 					return map[string]any{
 						"success": false,
@@ -99,7 +99,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 				}
 
 				// 文件大小检测
-				// 对齐 Python L906-914
+				// Python: L906-914
 				if st.Size() > int64(maxFileSizeGiB) {
 					return map[string]any{
 						"success": false,
@@ -111,7 +111,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 				}
 
 				// Pre-read 校验
-				// 对齐 Python L916-924
+				// Python: L916-924
 				readState, hasReadState := GetFileReadState(path)
 				if !hasReadState || readState.IsPartial {
 					return map[string]any{
@@ -121,7 +121,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 				}
 
 				// 外部修改检测
-				// 对齐 Python L926-939
+				// Python: L926-939
 				existingText, _ := readExistingText(ctx, op, path)
 				existingTextLF := strings.ReplaceAll(existingText, "\r\n", "\n")
 
@@ -151,7 +151,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 		}
 
 		// 写入文件
-		// 对齐 Python L945-953
+		// Python: L945-953
 		writeRes, writeErr := op.Fs().WriteFile(ctx, path, content,
 			sys_operation.WithFsPrependNewline(false),
 			sys_operation.WithFsCreateIfNotExist(true),
@@ -170,7 +170,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 		}
 
 		// 更新读取状态注册表
-		// 对齐 Python L955-965
+		// Python: L955-965
 		if !isUNC {
 			if stAfter, err := os.Stat(path); err == nil {
 				contentLF := strings.ReplaceAll(content, "\r\n", "\n")
@@ -193,11 +193,11 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 			Msg("WriteFileTool 写入成功")
 
 		// 追加文件操作历史
-		// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+		// Python: _session = get_current_session(); if _session: _append_op_history(...)
 		_ = appendHistoryFromOpts(opts, agentID, path, "write", oldContent, &content)
 
 		// 构建返回值
-		// 对齐 Python L972-981
+		// Python: L972-981
 		data := map[string]any{
 			"file_path":     path,
 			"bytes_written": contentBytes,
@@ -221,7 +221,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readExistingText 读取已有文件的文本内容。
-// 对齐 Python: WriteFileTool._read_existing_text (filesystem.py L852-862)
+// Python: WriteFileTool._read_existing_text (filesystem.py L852-862)
 func readExistingText(ctx context.Context, op sys_operation.SysOperation, filePath string) (string, string) {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil || !res.IsSuccess() {

@@ -39,7 +39,7 @@ func TestNewAskUserTool_ToolCard属性(t *testing.T) {
 }
 
 // TestNewAskUserTool_Invoke空壳 验证 invoke 返回空 map{}
-// 对齐 Python: AskUserTool.invoke(query, **kwargs) → return {}
+// Python: AskUserTool.invoke(query, **kwargs) → return {}
 func TestNewAskUserTool_Invoke空壳(t *testing.T) {
 	askUserTool, err := NewAskUserTool("cn", "test_agent")
 	require.NoError(t, err)

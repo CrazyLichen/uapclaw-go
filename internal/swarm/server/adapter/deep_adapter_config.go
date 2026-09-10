@@ -23,14 +23,14 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentConfigLister Agent 配置列表接口（避免 adapter↔runtime 循环依赖）。
-// 对齐 Python: AgentConfigService.list_agents()
+// Python: AgentConfigService.list_agents()
 type AgentConfigLister interface {
 	// ListCustomAgents 列出自定义 agent（非 builtin）
 	ListCustomAgents() []*types.AgentDefinition
 }
 
 // runtimeConfig 运行时配置。
-// 对齐 Python: _RuntimeConfig (line 3098-3106)
+// Python: _RuntimeConfig (line 3098-3106)
 type runtimeConfig struct {
 	// CWD 当前工作目录
 	CWD string
@@ -55,7 +55,7 @@ type runtimeConfig struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateRuntimeConfig 更新运行时配置。
-// 对齐 Python: _update_runtime_config() (line 3098-3266)
+// Python: _update_runtime_config() (line 3098-3266)
 //
 // 包含 CWD 种子、language/channel 解析、runtime state 写入、rail/tool 模式切换。
 func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeConfig) {
@@ -100,16 +100,16 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 }
 
 // buildConfiguredSubagents 构建子代理规格。
-// 对齐 Python: _build_configured_subagents() (line 878-970)
+// Python: _build_configured_subagents() (line 878-970)
 //
 // 根据 config 中 subagents 段的启用状态，调用各 builder 构建配置。
 // 返回 (subagentSpecs, shouldAddGeneralAgent)。
-// 对齐 Python: _build_configured_subagents() — Deep 模式下只直接构建
+// Python: _build_configured_subagents() — Deep 模式下只直接构建
 // research/browser/custom 子代理，explore/plan 通过 code_agent 间接注入
 func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
 	var specs []hschema.SubagentSpec
 
-	// 对齐 Python: 按 subagents 配置段构建
+	// Python: 按 subagents 配置段构建
 	subagentsCfg, _ := config["subagents"].(map[string]any)
 
 	// ── general_agent: 配置控制，需 enabled:true 才启用（默认禁用）──
@@ -134,7 +134,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
-	// 对齐 Python: custom_specs = _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
+	// Python: custom_specs = _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
 	customSpecs := d.loadCustomSubagents(subagentsCfg)
 	specs = append(specs, customSpecs...)
 
@@ -147,7 +147,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 }
 
 // isSubagentExplicitlyEnabled 检查子代理是否通过配置显式启用。
-// 对齐 Python: _is_subagent_enabled() — 只有 enabled:true 才启用，默认禁用
+// Python: _is_subagent_enabled() — 只有 enabled:true 才启用，默认禁用
 func (d *DeepAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, name string) bool {
 	if subagentsCfg == nil {
 		return false
@@ -173,11 +173,11 @@ func (d *DeepAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, n
 }
 
 // loadCustomSubagents 从 AgentConfigService 加载自定义 agent 并转换为 SubagentSpec 列表。
-// 对齐 Python: _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
+// Python: _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
 //
 // 仅加载 enabled:true 的自定义 agent（非 builtin）。
 func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema.SubagentSpec {
-	// 对齐 Python: agent_service = AgentConfigService(workspace_dir)
+	// Python: agent_service = AgentConfigService(workspace_dir)
 	// 通过 d.configLister 获取自定义 agent 列表（依赖注入，避免循环依赖）
 	if d.configLister == nil {
 		return nil
@@ -185,18 +185,18 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 	customAgents := d.configLister.ListCustomAgents()
 
 	var result []hschema.SubagentSpec
-	// 对齐 Python: for agent_def in agent_service.list_agents():
+	// Python: for agent_def in agent_service.list_agents():
 	for _, agentDef := range customAgents {
-		// 对齐 Python: if agent_def.source == "builtin": continue
+		// Python: if agent_def.source == "builtin": continue
 		// （ListCustomAgents 已过滤 builtin）
 
-		// 对齐 Python: subagent_cfg = subagents_cfg.get(agent_def.name)
+		// Python: subagent_cfg = subagents_cfg.get(agent_def.name)
 		// 只有显式 enabled: true 才加载
 		if !d.isSubagentExplicitlyEnabled(subagentsCfg, agentDef.Name) {
 			continue
 		}
 
-		// 对齐 Python: custom_spec = _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
+		// Python: custom_spec = _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
 		spec := agentDefToSubagentConfig(agentDef, d.model, d.modelCache, d.toolCards)
 		if spec != nil {
 			result = append(result, spec)
@@ -210,10 +210,10 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 }
 
 // agentDefToSubagentConfig 将 AgentDefinition 转换为 SubAgentConfig。
-// 对齐 Python: _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
+// Python: _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
 func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model, allToolCards []*tool.ToolCard) *hschema.SubAgentConfig {
 	// 步骤 1: 解析模型
-	// 对齐 Python: resolved_model = model; if agent_def.model and isinstance(model_cache, dict): resolved_model = model_cache.get(agent_def.model, model)
+	// Python: resolved_model = model; if agent_def.model and isinstance(model_cache, dict): resolved_model = model_cache.get(agent_def.model, model)
 	resolvedModel := model
 	if agentDef.Model != "" && modelCache != nil {
 		if cached, ok := modelCache[agentDef.Model]; ok {
@@ -222,7 +222,7 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 	}
 
 	// 步骤 2: 构建工具列表
-	// 对齐 Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
+	// Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
 	// if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
 	tools := agentDef.Tools
 	if len(tools) == 0 {
@@ -242,7 +242,7 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 		tools = filtered
 	}
 
-	// 对齐 Python: tools=tools — 将字符串列表转为 []*tool.ToolCard
+	// Python: tools=tools — 将字符串列表转为 []*tool.ToolCard
 	// Python 的 SubAgentConfig.tools 接受 List[Tool | ToolCard | str]
 	// Go 强类型，需要通过 filterToolCards 转换
 	var filteredToolCards []*tool.ToolCard
@@ -272,21 +272,21 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 		MaxIterations:  maxIter,
 		EnableTaskLoop: true,
 		FactoryName:    "custom_" + agentDef.Name,
-		// 对齐 Python: custom_spec.factory_kwargs = {"auto_create_workspace": False}
+		// Python: custom_spec.factory_kwargs = {"auto_create_workspace": False}
 		FactoryKwargs: map[string]any{"auto_create_workspace": false},
 	}
 }
 
 // writeRuntimeState 将键值对写入运行时状态。
-// 对齐 Python: _write_runtime_state(key, value)
+// Python: _write_runtime_state(key, value)
 func (d *DeepAdapter) writeRuntimeState(key string, value string) {
-	// 对齐 Python: os.environ[f"JCLAW_RUNTIME_{key.upper()}"] = value
+	// Python: os.environ[f"JCLAW_RUNTIME_{key.upper()}"] = value
 	envKey := "JCLAW_RUNTIME_" + strings.ToUpper(key)
 	_ = os.Setenv(envKey, value)
 }
 
 // skillIncludeToolsForProfile 检查当前 profile 下 skill 是否包含工具。
-// 对齐 Python: _skill_include_tools_for_profile() (line 722-726)
+// Python: _skill_include_tools_for_profile() (line 722-726)
 // 逻辑：ACP tool profile 下不包含工具；否则取决于 filesystemRail 是否为 nil。
 func (d *DeepAdapter) skillIncludeToolsForProfile(instanceOverrides map[string]any) bool {
 	if d.isAcpToolProfile(instanceOverrides) {
@@ -296,7 +296,7 @@ func (d *DeepAdapter) skillIncludeToolsForProfile(instanceOverrides map[string]a
 }
 
 // resolvePromptChannel 从 sessionID 解析 prompt channel。
-// 对齐 Python: _resolve_prompt_channel(session_id) (line 728-748)
+// Python: _resolve_prompt_channel(session_id) (line 728-748)
 // 逻辑：从 sessionID 前缀解析 channel，支持 acp/cron/heartbeat/feishu/web/dingtalk/wecom。
 func resolvePromptChannel(sessionID string) string {
 	if sessionID == "" {
@@ -317,7 +317,7 @@ func resolvePromptChannel(sessionID string) string {
 }
 
 // resolveModelName 从模型请求配置解析当前模型名称。
-// 对齐 Python: _resolve_model_name() (line 750-755)
+// Python: _resolve_model_name() (line 750-755)
 // 逻辑：从 modelRequestConfig.modelName 获取，默认 "unknown"。
 func (d *DeepAdapter) resolveModelName() string {
 	if d.modelRequestConfig != nil && d.modelRequestConfig.ModelName != "" {
@@ -327,7 +327,7 @@ func (d *DeepAdapter) resolveModelName() string {
 }
 
 // isAcpToolProfile 检查是否为 ACP Tool profile。
-// 对齐 Python: _is_acp_tool_profile(config) (L709-716)
+// Python: _is_acp_tool_profile(config) (L709-716)
 // 优先检查 tool_profile，fallback 检查 channel_id，值为 "acp"
 func (d *DeepAdapter) isAcpToolProfile(instanceOverrides map[string]any) bool {
 	if instanceOverrides == nil {
@@ -349,7 +349,7 @@ func (d *DeepAdapter) isAcpToolProfile(instanceOverrides map[string]any) bool {
 }
 
 // filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
-// 对齐 Python: _filesystem_rail_enabled_for_profile() — 读取 enable_filesystem_rail 配置，默认 true
+// Python: _filesystem_rail_enabled_for_profile() — 读取 enable_filesystem_rail 配置，默认 true
 func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[string]any) bool {
 	if instanceOverrides != nil {
 		if v, ok := instanceOverrides["enable_filesystem_rail"]; ok {
@@ -363,15 +363,15 @@ func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[stri
 }
 
 // resolveRuntimeLanguage 解析运行时语言（标准化后）。
-// 对齐 Python: _resolve_runtime_language() — 调用 resolve_language() 标准化
+// Python: _resolve_runtime_language() — 调用 resolve_language() 标准化
 func (d *DeepAdapter) resolveRuntimeLanguage() string {
 	return prompts.ResolveLanguage(d.resolvePromptLanguage())
 }
 
 // resolvePromptLanguage 解析提示词语言（原始配置值）。
-// 对齐 Python: _resolve_prompt_language() — 读取 preferred_language，默认 "zh"
+// Python: _resolve_prompt_language() — 读取 preferred_language，默认 "zh"
 func (d *DeepAdapter) resolvePromptLanguage() string {
-	// 对齐 Python: config_base.get("preferred_language", "zh")
+	// Python: config_base.get("preferred_language", "zh")
 	if v, ok := d.configCache["preferred_language"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			return strings.TrimSpace(strings.ToLower(s))
@@ -381,7 +381,7 @@ func (d *DeepAdapter) resolvePromptLanguage() string {
 }
 
 // getAgentWorkspaceDir 获取 Agent 数据存储路径，带回退。
-// 对齐 Python: getattr(self, "_agent_workspace_dir", None) or self._workspace_dir
+// Python: getattr(self, "_agent_workspace_dir", None) or self._workspace_dir
 func (d *DeepAdapter) getAgentWorkspaceDir() string {
 	if d.agentWorkspaceDir != "" {
 		return d.agentWorkspaceDir
@@ -390,7 +390,7 @@ func (d *DeepAdapter) getAgentWorkspaceDir() string {
 }
 
 // createSysOperation 创建系统操作实例。
-// 对齐 Python: _create_sys_operation() (line 2262-2320)
+// Python: _create_sys_operation() (line 2262-2320)
 //
 // 根据配置决定使用 local 或 sandbox 模式，
 // 通过 sysop_builder 构建卡片和实例。
@@ -467,7 +467,7 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOp
 }
 
 // resolveProjectDirForSandbox 解析沙箱挂载用的项目目录。
-// 对齐 Python: _resolve_project_dir_for_sandbox()
+// Python: _resolve_project_dir_for_sandbox()
 func (d *DeepAdapter) resolveProjectDirForSandbox() string {
 	if d.projectDir != "" {
 		return d.projectDir
@@ -476,7 +476,7 @@ func (d *DeepAdapter) resolveProjectDirForSandbox() string {
 }
 
 // getSandboxRuntime 从配置获取沙箱运行时参数。
-// 对齐 Python: get_sandbox_runtime() + get_config()["sandbox"]
+// Python: get_sandbox_runtime() + get_config()["sandbox"]
 func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ string, runtime map[string]any) {
 	sandbox, _ := configBase["sandbox"].(map[string]any)
 	if sandbox == nil {
@@ -489,15 +489,15 @@ func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ str
 }
 
 // buildResearchSubagentParams 从配置映射构建 research 子代理的 SubagentCreateParams。
-// 对齐 Python: _build_configured_subagents 中对 build_research_agent_config 的调用
+// Python: _build_configured_subagents 中对 build_research_agent_config 的调用
 //
 // adapter 层负责从 map[string]any 解析出类型安全的 SubagentCreateParams，
 // 然后传入 subagents.BuildResearchAgentConfig(model, params)。
 func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configBase map[string]any) *hschema.SubagentCreateParams {
-	// 对齐 Python: resolved_language = self._resolve_runtime_language()
+	// Python: resolved_language = self._resolve_runtime_language()
 	resolvedLanguage := d.resolveRuntimeLanguage()
 
-	// 对齐 Python: max_iterations=parse_int(
+	// Python: max_iterations=parse_int(
 	//   Python: research_agent_cfg.get("max_iterations"),
 	//   Python: 获取 max_iterations 配置（默认 15）
 	// )
@@ -534,7 +534,7 @@ func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configB
 	return &hschema.SubagentCreateParams{
 		Language:      resolvedLanguage,
 		MaxIterations: maxIterations,
-		// 对齐 Python: workspace=self._workspace_dir or "./"
+		// Python: workspace=self._workspace_dir or "./"
 		// DeepAdapter.workspaceDir 在初始化时已解析，默认为 workspace.AgentRootDir()
 		Workspace: hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
 	}

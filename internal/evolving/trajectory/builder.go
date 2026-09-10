@@ -20,7 +20,7 @@ import (
 //   - Span 解析（由 Extractor 处理）
 //   - 持久化（由 Store 处理）
 //
-// 对应 Python: openjiuwen/agent_evolving/trajectory/builder.py TrajectoryBuilder
+// Python: openjiuwen/agent_evolving/trajectory/builder.py TrajectoryBuilder
 type TrajectoryBuilder struct {
 	// sessionID 会话标识（在线模式为 conversation_id，离线模式为 case_id）
 	sessionID string
@@ -55,7 +55,7 @@ type TrajectoryBuilderOption func(*TrajectoryBuilder)
 
 // NewTrajectoryBuilder 创建 TrajectoryBuilder 实例。
 //
-// 对应 Python: TrajectoryBuilder(session_id, source, case_id, member_id, meta, max_steps)
+// Python: TrajectoryBuilder(session_id, source, case_id, member_id, meta, max_steps)
 func NewTrajectoryBuilder(sessionID, source string, opts ...TrajectoryBuilderOption) *TrajectoryBuilder {
 	b := &TrajectoryBuilder{
 		sessionID: sessionID,
@@ -77,7 +77,7 @@ func WithCaseID(caseID string) TrajectoryBuilderOption {
 
 // WithMemberID 设置团队成员标识。
 //
-// 对齐 Python: if member_id: self.meta.setdefault("member_id", member_id)
+// Python: if member_id: self.meta.setdefault("member_id", member_id)
 func WithMemberID(memberID string) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
 		b.memberID = memberID
@@ -92,7 +92,7 @@ func WithMemberID(memberID string) TrajectoryBuilderOption {
 
 // WithMeta 设置扩展元数据。
 //
-// 对齐 Python: self.meta: Dict[str, Any] = dict(meta or {})
+// Python: self.meta: Dict[str, Any] = dict(meta or {})
 func WithMeta(meta map[string]any) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
 		if meta != nil {
@@ -103,7 +103,7 @@ func WithMeta(meta map[string]any) TrajectoryBuilderOption {
 
 // WithMaxSteps 设置最大保留步骤数。
 //
-// 对齐 Python: max_steps < 1 时抛出 ValueError。
+// Python: max_steps < 1 时抛出 ValueError。
 // Go 中不 panic，maxSteps < 1 时忽略该选项。
 func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
@@ -117,18 +117,18 @@ func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
 
 // RecordStep 记录一个步骤并累积成本。
 //
-// 对齐 Python: TrajectoryBuilder.record_step(step)
+// Python: TrajectoryBuilder.record_step(step)
 func (b *TrajectoryBuilder) RecordStep(step *TrajectoryStep) {
-	// 对齐 Python: self.steps.append(step)
+	// Python: self.steps.append(step)
 	b.steps = append(b.steps, step)
 
-	// 对齐 Python: if self.max_steps is not None and len(self.steps) > self.max_steps:
+	// Python: if self.max_steps is not None and len(self.steps) > self.max_steps:
 	//     self.steps = self.steps[-self.max_steps:]
 	if b.maxSteps != nil && len(b.steps) > *b.maxSteps {
 		b.steps = b.steps[len(b.steps)-*b.maxSteps:]
 	}
 
-	// 对齐 Python: if step.kind == "llm" and step.detail:
+	// Python: if step.kind == "llm" and step.detail:
 	//     if isinstance(step.detail, LLMCallDetail) and step.detail.usage:
 	//         self.cost["input_tokens"] += step.detail.usage.get("prompt_tokens", 0)
 	//         self.cost["output_tokens"] += step.detail.usage.get("completion_tokens", 0)
@@ -143,7 +143,7 @@ func (b *TrajectoryBuilder) RecordStep(step *TrajectoryStep) {
 		}
 	}
 
-	// 对齐 Python: if self._start_time_ms is None and step.start_time_ms:
+	// Python: if self._start_time_ms is None and step.start_time_ms:
 	if b.startTimeMs == nil && step.StartTimeMs != 0 {
 		ms := step.StartTimeMs
 		b.startTimeMs = &ms
@@ -157,22 +157,22 @@ func (b *TrajectoryBuilder) SessionID() string {
 
 // Build 组装最终 Trajectory。
 //
-// 对齐 Python: TrajectoryBuilder.build()
+// Python: TrajectoryBuilder.build()
 func (b *TrajectoryBuilder) Build() *Trajectory {
-	// 对齐 Python: meta: dict[str, Any] = {}
+	// Python: meta: dict[str, Any] = {}
 	//     if self.member_id: meta["member_id"] = self.member_id
 	meta := map[string]any{}
 	for k, v := range b.meta {
 		meta[k] = v
 	}
-	// 对齐 Python: setdefault 语义，仅在 member_id 不存在时才设置
+	// Python: setdefault 语义，仅在 member_id 不存在时才设置
 	if b.memberID != "" {
 		if _, exists := meta["member_id"]; !exists {
 			meta["member_id"] = b.memberID
 		}
 	}
 
-	// 对齐 Python: cost=self.cost if self.cost["input_tokens"] > 0 else None
+	// Python: cost=self.cost if self.cost["input_tokens"] > 0 else None
 	var cost CostInfo
 	if b.cost["input_tokens"] > 0 {
 		cost = map[string]int{
@@ -196,7 +196,7 @@ func (b *TrajectoryBuilder) Build() *Trajectory {
 
 // generateUUID 生成唯一执行标识符。
 //
-// 对应 Python: _generate_uuid() -> str(uuid.uuid4())
+// Python: _generate_uuid() -> str(uuid.uuid4())
 func generateUUID() string {
 	return uuid.New().String()
 }

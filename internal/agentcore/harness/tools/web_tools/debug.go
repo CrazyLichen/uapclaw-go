@@ -27,7 +27,7 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // clipDebugText 截断调试文本，保留头尾
-// 对齐 Python: _clip_debug_text() (web_tools.py L318-324)
+// Python: _clip_debug_text() (web_tools.py L318-324)
 func clipDebugText(value string, maxChars ...int) string {
 	limit := clipDebugTextMaxChars
 	if len(maxChars) > 0 && maxChars[0] > 0 {
@@ -42,7 +42,7 @@ func clipDebugText(value string, maxChars ...int) string {
 }
 
 // writeDebugPayload 写调试数据到文件
-// 对齐 Python: _write_debug_payload() (web_tools.py L413-428)
+// Python: _write_debug_payload() (web_tools.py L413-428)
 func writeDebugPayload(runID, engine, stage string, payload map[string]any) {
 	if !isDebugEnabled() {
 		return
@@ -54,7 +54,7 @@ func writeDebugPayload(runID, engine, stage string, payload map[string]any) {
 	filename := fmt.Sprintf("%s_%s_%s.json", runID, engine, stage)
 	path := filepath.Join(debugDir, filename)
 
-	// 对齐 Python: L422-424 — 截断 raw_html
+	// Python: L422-424 — 截断 raw_html
 	normalized := make(map[string]any)
 	for k, v := range payload {
 		if k == "raw_html" {
@@ -76,13 +76,13 @@ func writeDebugPayload(runID, engine, stage string, payload map[string]any) {
 }
 
 // newDebugRunID 生成调试运行 ID
-// 对齐 Python: debug_run_id = datetime.now(timezone.utc).strftime(...) (web_tools.py L904)
+// Python: debug_run_id = datetime.now(timezone.utc).strftime(...) (web_tools.py L904)
 func newDebugRunID() string {
 	return time.Now().UTC().Format("20060102_150405_000000")
 }
 
 // extractDebugHTMLNeighborhood 提取 HTML 标记附近的内容
-// 对齐 Python: _extract_debug_html_neighborhood() (web_tools.py L336-347)
+// Python: _extract_debug_html_neighborhood() (web_tools.py L336-347)
 func extractDebugHTMLNeighborhood(htmlStr, marker string, window ...int) map[string]any {
 	w := 4000
 	if len(window) > 0 {
@@ -108,7 +108,7 @@ func extractDebugHTMLNeighborhood(htmlStr, marker string, window ...int) map[str
 }
 
 // summarizeRows 构建搜索结果摘要
-// 对齐 Python: _summarize_rows() (web_tools.py L564-584)
+// Python: _summarize_rows() (web_tools.py L564-584)
 func summarizeRows(rows []searchRow, limit ...int) map[string]any {
 	maxRows := 10
 	if len(limit) > 0 {

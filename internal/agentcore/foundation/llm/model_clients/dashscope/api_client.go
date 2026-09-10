@@ -42,7 +42,7 @@ import (
 //	https://dashscope.aliyuncs.com                    → https://dashscope.aliyuncs.com
 //	https://custom-proxy.example.com                  → https://custom-proxy.example.com
 //
-// 对应 Python: dashscope.base_http_api_url = self.model_client_config.api_base
+// Python: dashscope.base_http_api_url = self.model_client_config.api_base
 func ResolveDashScopeBaseURL(apiBase string) string {
 	idx := strings.Index(apiBase, compatibleModeMarker)
 	if idx == -1 {
@@ -57,7 +57,7 @@ func ResolveDashScopeBaseURL(apiBase string) string {
 // 统一封装认证、请求构建、响应解析、错误处理逻辑。
 // 不依赖 DashScope Go SDK，自行实现 HTTP 调用（与 OpenAI 客户端风格一致）。
 //
-// 对应 Python: dashscope.MultiModalConversation.call() / dashscope.VideoSynthesis.call()
+// Python: dashscope.MultiModalConversation.call() / dashscope.VideoSynthesis.call()
 func CallDashScopeAPI(
 	ctx context.Context,
 	apiBase, apiKey, path string,

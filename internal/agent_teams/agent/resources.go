@@ -11,7 +11,7 @@ import (
 // PrivateAgentResources 单个 TeamAgent 的实例级运行时资源。
 // 四象限分解的第四象限：每实例独占的资源。
 // 与 TeamInfra（进程级共享）不同，每个 TeamAgent 有自己的 harness/worktree/memory 等。
-// 对齐 Python: PrivateAgentResources (openjiuwen/agent_teams/agent/resources.py)
+// Python: PrivateAgentResources (openjiuwen/agent_teams/agent/resources.py)
 type PrivateAgentResources struct {
 	// Harness 底层 DeepAgent 运行时的 Harness
 	Harness *agentteams.TeamHarness

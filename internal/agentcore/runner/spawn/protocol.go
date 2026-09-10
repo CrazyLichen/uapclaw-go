@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Message 通信消息结构体。
-// 对齐 Python: Message (protocol.py)
+// Python: Message (protocol.py)
 type Message struct {
 	// Type 消息类型
 	Type MessageType `json:"type"`
@@ -27,7 +27,7 @@ type Message struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageType 消息类型枚举。
-// 对齐 Python: MessageType (protocol.py)
+// Python: MessageType (protocol.py)
 type MessageType int
 
 const (
@@ -61,7 +61,7 @@ var messageIDCounter uint64
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SerializeMessage 序列化消息为 JSON 字节。
-// 对齐 Python: serialize_message()
+// Python: serialize_message()
 func SerializeMessage(msg Message) ([]byte, error) {
 	return json.Marshal(msg)
 }
@@ -122,7 +122,7 @@ func (t *MessageType) UnmarshalJSON(data []byte) error {
 }
 
 // DeserializeMessage 反序列化 JSON 字节为消息。
-// 对齐 Python: deserialize_message()
+// Python: deserialize_message()
 func DeserializeMessage(data []byte) (Message, error) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil {
@@ -132,7 +132,7 @@ func DeserializeMessage(data []byte) (Message, error) {
 }
 
 // WriteMessage 写入消息到 io.Writer（JSON + \n）。
-// 对齐 Python: serialize_message_to_stream()
+// Python: serialize_message_to_stream()
 func WriteMessage(w io.Writer, msg Message) error {
 	data, err := SerializeMessage(msg)
 	if err != nil {
@@ -149,7 +149,7 @@ func WriteMessage(w io.Writer, msg Message) error {
 
 // ReadMessage 从 io.Reader 读取一行并反序列化为消息。
 // 跳过非 JSON 行（子进程可能输出非协议日志到 stdout）。
-// 对齐 Python: deserialize_message_from_stream()
+// Python: deserialize_message_from_stream()
 func ReadMessage(r io.Reader) (Message, error) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {

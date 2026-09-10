@@ -12,7 +12,7 @@ import "fmt"
 // 用于 AgentResponse/AgentResponseChunk 的 event_type 字段和 Gateway 消息路由。
 // 值为点分字符串格式（如 "chat.delta"），与 Python EventType 枚举值一一对应。
 //
-// 对应 Python: jiuwenswarm/common/schema/message.py (EventType)
+// Python: jiuwenswarm/common/schema/message.py (EventType)
 type EventType string
 
 const (

@@ -114,7 +114,7 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 //
 // 返回：配置完毕的 ReActAgent 实例（尚未执行）
 //
-// 对齐 Python: SkillDevContext.create_stage_agent()（返回 ReActAgent，尚未实现）
+// Python: SkillDevContext.create_stage_agent()（返回 ReActAgent，尚未实现）
 // 待实现: 接入 openjiuwen ReActAgent 的实际构造逻辑，参考 UapClaw.create_instance()
 func (c *SkillDevContext) CreateStageAgent(
 	stageName string,
@@ -132,7 +132,7 @@ func (c *SkillDevContext) CreateStageAgent(
 
 // RegisterTools 根据工具名白名单将工具注册到 Agent。
 //
-// 对齐 Python: SkillDevContext._register_tools(agent, tool_names)（尚未实现）
+// Python: SkillDevContext._register_tools(agent, tool_names)（尚未实现）
 // 待实现: 接入实际工具注册逻辑
 func (c *SkillDevContext) RegisterTools(_ *agents.ReActAgent, _ []string) error {
 	return fmt.Errorf("_register_tools 尚未实现")

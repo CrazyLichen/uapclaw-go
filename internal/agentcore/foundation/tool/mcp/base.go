@@ -16,7 +16,7 @@ import (
 
 // MCPTool MCP 协议工具，通过 McpClient 调用远程 MCP 服务器工具。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
+// Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
 type MCPTool struct {
 	card      *types.McpToolCard
 	mcpClient types.McpClient
@@ -55,7 +55,7 @@ var (
 //   - 如果有 data 字段 → 返回 data
 //   - 其他 → 返回字符串化结果
 //
-// 对应 Python: extract_mcp_tool_result_content()
+// Python: extract_mcp_tool_result_content()
 func ExtractMCPToolResultContent(toolResult any) any {
 	resultMap, ok := toolResult.(map[string]any)
 	if !ok {
@@ -117,7 +117,7 @@ func ExtractMCPToolResultContent(toolResult any) any {
 // NewMCPTool 创建 MCP 工具实例。
 // mcpClient 为 nil 时返回 StatusToolMcpClientNotSupported 错误。
 //
-// 对应 Python: MCPTool.__init__(mcp_client, tool_info)
+// Python: MCPTool.__init__(mcp_client, tool_info)
 func NewMCPTool(mcpClient types.McpClient, card *types.McpToolCard) (*MCPTool, error) {
 	if mcpClient == nil {
 		return nil, exception.BuildError(
@@ -146,7 +146,7 @@ func (t *MCPTool) McpCard() *types.McpToolCard {
 //  3. ExtractMCPToolResultContent 提取紧凑结果
 //  4. 返回 {"result": extracted}
 //
-// 对应 Python: MCPTool.invoke()
+// Python: MCPTool.invoke()
 func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	arguments := inputs
 	if t.card.InputParams != nil {
@@ -201,7 +201,7 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 
 // Stream MCP 工具不支持流式调用，返回 ErrStreamNotSupported。
 //
-// 对应 Python: MCPTool.stream() → raise TOOL_STREAM_NOT_SUPPORTED
+// Python: MCPTool.stream() → raise TOOL_STREAM_NOT_SUPPORTED
 func (t *MCPTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.String())
 }

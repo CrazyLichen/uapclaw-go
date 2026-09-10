@@ -231,7 +231,7 @@ func TestAgentManager_ProcessMessage_GetAgent委托(t *testing.T) {
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)
 
-	// 对齐 Python: sub_mode 不参与实例查找
+	// Python: sub_mode 不参与实例查找
 	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", "")
 	require.NoError(t, err)
 	assert.NotNil(t, agent)
@@ -257,7 +257,7 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 	assert.Equal(t, "code", mode)
 	assert.Equal(t, "normal", subMode)
 
-	// 对齐 Python: sub_mode 不参与实例查找
+	// Python: sub_mode 不参与实例查找
 	agent, err := am.GetAgent(context.Background(), req.ChannelID, mode, "", "")
 	require.NoError(t, err)
 	assert.NotNil(t, agent)
@@ -360,7 +360,7 @@ func TestReloadAgentsConfig_nil值时清空latestEnvOverrides(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "value_a", val)
 
-	// 对齐 Python: env 为 nil 时清空 latestEnvOverrides
+	// Python: env 为 nil 时清空 latestEnvOverrides
 	err = am.ReloadAgentsConfig(context.Background(), nil, nil)
 	require.NoError(t, err)
 
@@ -539,7 +539,7 @@ func TestNormalizeProjectDir_仅空格(t *testing.T) {
 }
 
 func TestNormalizeChannelID_default值(t *testing.T) {
-	// 对齐 Python: None 或空 → "default"
+	// Python: None 或空 → "default"
 	assert.Equal(t, "default", normalizeChannelID(""))
 	assert.Equal(t, "default", normalizeChannelID("   "))
 	assert.Equal(t, "acp", normalizeChannelID("acp"))

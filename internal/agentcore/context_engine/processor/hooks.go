@@ -20,7 +20,7 @@ import (
 // ProcessorType 返回处理器类型标识。
 //
 // 默认返回空字符串，具体处理器应覆写此方法返回自身结构体名。
-// 对应 Python: ContextProcessor.processor_type()（由元类自动注入类名）
+// Python: ContextProcessor.processor_type()（由元类自动注入类名）
 func (p *BaseProcessor) ProcessorType() string {
 	return ""
 }
@@ -30,7 +30,7 @@ func (p *BaseProcessor) ProcessorType() string {
 // 仅在 TriggerAddMessages 返回 true 时被调用。
 // 默认实现直接返回输入的消息列表，不执行任何变换。
 //
-// 对应 Python: ContextProcessor.on_add_messages() 默认实现
+// Python: ContextProcessor.on_add_messages() 默认实现
 func (p *BaseProcessor) OnAddMessages(_ context.Context, _ iface.ModelContext, messages []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	return nil, messages, nil
 }
@@ -40,7 +40,7 @@ func (p *BaseProcessor) OnAddMessages(_ context.Context, _ iface.ModelContext, m
 // 仅在 TriggerGetContextWindow 返回 true 时被调用。
 // 默认实现直接返回输入的上下文窗口，不执行任何变换。
 //
-// 对应 Python: ContextProcessor.on_get_context_window() 默认实现
+// Python: ContextProcessor.on_get_context_window() 默认实现
 func (p *BaseProcessor) OnGetContextWindow(_ context.Context, _ iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (*iface.ContextEvent, iface.ContextWindow, error) {
 	return nil, cw, nil
 }
@@ -50,7 +50,7 @@ func (p *BaseProcessor) OnGetContextWindow(_ context.Context, _ iface.ModelConte
 // 每次消息添加时调用，必须轻量。
 // 默认实现始终返回 false，表示此处理器不需要介入。
 //
-// 对应 Python: ContextProcessor.trigger_add_messages() 默认实现
+// Python: ContextProcessor.trigger_add_messages() 默认实现
 func (p *BaseProcessor) TriggerAddMessages(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	return false, nil
 }
@@ -60,7 +60,7 @@ func (p *BaseProcessor) TriggerAddMessages(_ context.Context, _ iface.ModelConte
 // 每次上下文窗口获取时调用，必须轻量。
 // 默认实现始终返回 false，表示此处理器不需要介入。
 //
-// 对应 Python: ContextProcessor.trigger_get_context_window() 默认实现
+// Python: ContextProcessor.trigger_get_context_window() 默认实现
 func (p *BaseProcessor) TriggerGetContextWindow(_ context.Context, _ iface.ModelContext, _ iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	return false, nil
 }
@@ -70,7 +70,7 @@ func (p *BaseProcessor) TriggerGetContextWindow(_ context.Context, _ iface.Model
 // 通过调用 GroupCompletedAPIRounds 判断最后一条消息
 // 是否恰好落在某个已完成轮次的结束位置。
 //
-// 对应 Python: ContextProcessor._api_round(messages)
+// Python: ContextProcessor._api_round(messages)
 func (p *BaseProcessor) IsAPIRound(messages []llm_schema.BaseMessage) bool {
 	rounds := GroupCompletedAPIRounds(messages)
 	if len(rounds) == 0 {

@@ -1,6 +1,6 @@
 // Package cwd 提供每 Agent CWD 状态管理。
 //
-// 对齐 Python: openjiuwen/core/sys_operation/cwd.py
+// Python: openjiuwen/core/sys_operation/cwd.py
 // 通过 context.Context 传播 CwdState（可变容器模式），
 // 实现 Agent 间隔离（InitCwd 创建新实例 + WithCwdState 派生新 ctx），
 // Agent 内共享（同一 CwdState 引用的 goroutine 共享修改）。

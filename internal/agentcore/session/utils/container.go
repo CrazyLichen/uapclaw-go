@@ -11,7 +11,7 @@ package utils
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SafeExtendContainer 安全地扩展列表容器到 targetIndex 位置。
-// 对齐 Python _safe_extend_container。
+// Python: _safe_extend_container。
 // 中间位置用 nil 填充，目标位置放空字典（isFinal=true）或空列表（isFinal=false）。
 // 有上限保护（索引 [0,10000]、扩展量 ≤ 10000）。
 func SafeExtendContainer(container []any, targetIndex int, isFinal bool) ([]any, bool) {

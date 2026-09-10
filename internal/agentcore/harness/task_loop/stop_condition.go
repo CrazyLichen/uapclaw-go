@@ -7,7 +7,7 @@ import "fmt"
 // StopConditionEvaluator 停止条件评估器接口。
 // 每个评估器回答一个问题："循环该停了吗？"
 // LoopCoordinator 持有评估器切片，OR 语义：第一个 ShouldStop=true 即停止。
-// 对齐 Python: StopConditionEvaluator
+// Python: StopConditionEvaluator
 type StopConditionEvaluator interface {
 	// ShouldStop 评估是否应该停止循环
 	ShouldStop(ctx StopEvaluationContext) bool
@@ -27,7 +27,7 @@ type StopConditionEvaluator interface {
 
 // StopEvaluationContext 停止条件评估上下文。
 // 与 AgentCallbackContext 解耦，使评估器不依赖 Agent 回调系统。
-// 对齐 Python: StopEvaluationContext
+// Python: StopEvaluationContext
 type StopEvaluationContext struct {
 	// Iteration 当前迭代次数（已完成的轮数）
 	Iteration int
@@ -43,7 +43,7 @@ type StopEvaluationContext struct {
 
 // MaxRoundsEvaluator 最大轮次评估器。
 // 当已完成轮数 >= maxRounds 时判定应停止。
-// 对齐 Python: MaxRoundsEvaluator
+// Python: MaxRoundsEvaluator
 type MaxRoundsEvaluator struct {
 	// maxRounds 最大轮次
 	maxRounds int
@@ -51,7 +51,7 @@ type MaxRoundsEvaluator struct {
 
 // TokenBudgetEvaluator token 预算评估器。
 // 当累计 token 用量 >= maxTokens 时判定应停止。
-// 对齐 Python: TokenBudgetEvaluator
+// Python: TokenBudgetEvaluator
 type TokenBudgetEvaluator struct {
 	// maxTokens 最大 token 数
 	maxTokens int
@@ -59,7 +59,7 @@ type TokenBudgetEvaluator struct {
 
 // TimeoutEvaluator 超时评估器。
 // 当墙钟时间 >= timeoutSeconds 时判定应停止。
-// 对齐 Python: TimeoutEvaluator
+// Python: TimeoutEvaluator
 type TimeoutEvaluator struct {
 	// timeoutSeconds 超时秒数
 	timeoutSeconds float64
@@ -69,7 +69,7 @@ type TimeoutEvaluator struct {
 // 追踪连续检测到 promise 标签的次数，连续达到 requiredConfirmations 次时判定完成。
 // TaskCompletionRail 在 before_model_call 时注入 promise 提示，
 // 在 after_model_call 时检测输出中的 promise 标签并调用 NotifyFulfilled/NotifyAbsent。
-// 对齐 Python: CompletionPromiseEvaluator
+// Python: CompletionPromiseEvaluator
 type CompletionPromiseEvaluator struct {
 	// promise 要匹配的标签（如 "<promise>"）
 	promise string
@@ -85,7 +85,7 @@ type CompletionPromiseEvaluator struct {
 
 // CustomPredicateEvaluator 自定义谓词评估器。
 // 通过用户提供的函数判断是否停止循环。
-// 对齐 Python: CustomPredicateEvaluator
+// Python: CustomPredicateEvaluator
 type CustomPredicateEvaluator struct {
 	// name 评估器名称
 	name string
@@ -103,28 +103,28 @@ type CustomPredicateEvaluator struct {
 
 // NewMaxRoundsEvaluator 创建最大轮次评估器。
 // maxRounds 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
-// 对齐 Python: MaxRoundsEvaluator
+// Python: MaxRoundsEvaluator
 func NewMaxRoundsEvaluator(maxRounds int) *MaxRoundsEvaluator {
 	return &MaxRoundsEvaluator{maxRounds: maxRounds}
 }
 
 // NewTokenBudgetEvaluator 创建 token 预算评估器。
 // maxTokens 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
-// 对齐 Python: TokenBudgetEvaluator
+// Python: TokenBudgetEvaluator
 func NewTokenBudgetEvaluator(maxTokens int) *TokenBudgetEvaluator {
 	return &TokenBudgetEvaluator{maxTokens: maxTokens}
 }
 
 // NewTimeoutEvaluator 创建超时评估器。
 // timeoutSeconds 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
-// 对齐 Python: TimeoutEvaluator
+// Python: TimeoutEvaluator
 func NewTimeoutEvaluator(timeoutSeconds float64) *TimeoutEvaluator {
 	return &TimeoutEvaluator{timeoutSeconds: timeoutSeconds}
 }
 
 // NewCompletionPromiseEvaluator 创建完成承诺评估器。
 // promise 为要匹配的标签，requiredConfirmations 为需连续检测到的次数（至少 1）。
-// 对齐 Python: CompletionPromiseEvaluator.__init__
+// Python: CompletionPromiseEvaluator.__init__
 func NewCompletionPromiseEvaluator(promise string, requiredConfirmations int) *CompletionPromiseEvaluator {
 	if requiredConfirmations < 1 {
 		requiredConfirmations = 1
@@ -136,7 +136,7 @@ func NewCompletionPromiseEvaluator(promise string, requiredConfirmations int) *C
 }
 
 // NewCustomPredicateEvaluator 创建自定义谓词评估器。
-// 对齐 Python: CustomPredicateEvaluator
+// Python: CustomPredicateEvaluator
 func NewCustomPredicateEvaluator(name string, predicate func(ctx StopEvaluationContext) bool) *CustomPredicateEvaluator {
 	if predicate == nil {
 		panic("NewCustomPredicateEvaluator: predicate 不能为 nil")
@@ -155,7 +155,7 @@ func (e *MaxRoundsEvaluator) Name() string {
 }
 
 // ExportState 无状态评估器，返回 nil。
-// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
+// Python: StopConditionEvaluator.get_state() 返回 None
 func (e *MaxRoundsEvaluator) ExportState() map[string]any {
 	return nil
 }
@@ -177,7 +177,7 @@ func (e *TokenBudgetEvaluator) Name() string {
 }
 
 // ExportState 无状态评估器，返回 nil。
-// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
+// Python: StopConditionEvaluator.get_state() 返回 None
 func (e *TokenBudgetEvaluator) ExportState() map[string]any {
 	return nil
 }
@@ -199,7 +199,7 @@ func (e *TimeoutEvaluator) Name() string {
 }
 
 // ExportState 无状态评估器，返回 nil。
-// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
+// Python: StopConditionEvaluator.get_state() 返回 None
 func (e *TimeoutEvaluator) ExportState() map[string]any {
 	return nil
 }
@@ -211,7 +211,7 @@ func (e *TimeoutEvaluator) ImportState(_ map[string]any) {}
 func (e *TimeoutEvaluator) Reset() {}
 
 // ShouldStop 当 fulfilled 标志为 true 时返回 true。
-// 对齐 Python: CompletionPromiseEvaluator.should_stop
+// Python: CompletionPromiseEvaluator.should_stop
 func (e *CompletionPromiseEvaluator) ShouldStop(_ StopEvaluationContext) bool {
 	return e.fulfilled
 }
@@ -222,7 +222,7 @@ func (e *CompletionPromiseEvaluator) Name() string {
 }
 
 // ExportState 导出状态：fulfilled, matchedText, requiredConfirmations, confirmationCount。
-// 对齐 Python: CompletionPromiseEvaluator.get_state
+// Python: CompletionPromiseEvaluator.get_state
 func (e *CompletionPromiseEvaluator) ExportState() map[string]any {
 	return map[string]any{
 		"fulfilled":              e.fulfilled,
@@ -233,7 +233,7 @@ func (e *CompletionPromiseEvaluator) ExportState() map[string]any {
 }
 
 // ImportState 从持久化状态恢复。
-// 对齐 Python: CompletionPromiseEvaluator.load_state
+// Python: CompletionPromiseEvaluator.load_state
 func (e *CompletionPromiseEvaluator) ImportState(data map[string]any) {
 	if data == nil {
 		return
@@ -253,7 +253,7 @@ func (e *CompletionPromiseEvaluator) ImportState(data map[string]any) {
 }
 
 // Reset 重置状态，用于新的 invoke 周期。
-// 对齐 Python: CompletionPromiseEvaluator.reset
+// Python: CompletionPromiseEvaluator.reset
 func (e *CompletionPromiseEvaluator) Reset() {
 	e.fulfilled = false
 	e.matchedText = ""
@@ -261,7 +261,7 @@ func (e *CompletionPromiseEvaluator) Reset() {
 }
 
 // NotifyFulfilled 标记 promise 已满足。
-// 对齐 Python: CompletionPromiseEvaluator.notify_fulfilled
+// Python: CompletionPromiseEvaluator.notify_fulfilled
 func (e *CompletionPromiseEvaluator) NotifyFulfilled(matchedText string) {
 	e.confirmationCount++
 	e.fulfilled = e.confirmationCount >= e.requiredConfirmations
@@ -269,7 +269,7 @@ func (e *CompletionPromiseEvaluator) NotifyFulfilled(matchedText string) {
 }
 
 // NotifyAbsent 记录 promise 未出现，连续计数归零。
-// 对齐 Python: CompletionPromiseEvaluator.notify_absent
+// Python: CompletionPromiseEvaluator.notify_absent
 func (e *CompletionPromiseEvaluator) NotifyAbsent() {
 	e.confirmationCount = 0
 	e.fulfilled = false
@@ -292,13 +292,13 @@ func (e *CompletionPromiseEvaluator) RequiredConfirmations() int {
 }
 
 // ShouldStop 委托给用户提供的谓词函数。
-// 对齐 Python: CustomPredicateEvaluator.should_stop
+// Python: CustomPredicateEvaluator.should_stop
 func (e *CustomPredicateEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 	return e.predicate(ctx)
 }
 
 // Name 返回评估器名称。
-// 对齐 Python: self.__class__.__name__ 默认返回 "CustomPredicateEvaluator"
+// Python: self.__class__.__name__ 默认返回 "CustomPredicateEvaluator"
 func (e *CustomPredicateEvaluator) Name() string {
 	if e.name == "" {
 		return "CustomPredicateEvaluator"
@@ -307,7 +307,7 @@ func (e *CustomPredicateEvaluator) Name() string {
 }
 
 // ExportState 无状态评估器，返回 nil。
-// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
+// Python: StopConditionEvaluator.get_state() 返回 None
 func (e *CustomPredicateEvaluator) ExportState() map[string]any {
 	return nil
 }

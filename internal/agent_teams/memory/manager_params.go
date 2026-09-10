@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamMemoryManagerParams 记忆管理器构造参数。
-// 对齐 Python TeamMemoryManagerParams (manager_params.py)
+// Python: TeamMemoryManagerParams (manager_params.py)
 type TeamMemoryManagerParams struct {
 	// MemberName 成员名称
 	MemberName string

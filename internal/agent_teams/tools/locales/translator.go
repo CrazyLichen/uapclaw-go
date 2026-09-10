@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // Translator 翻译器闭包。
-// 对齐 Python: Translator = Callable[..., str]
+// Python: Translator = Callable[..., str]
 //
 // 调用方式:
 //
@@ -24,7 +24,7 @@ type Translator func(tool string, key ...string) string
 // ──────────────────────────── 常量 ────────────────────────────
 
 // descKey 工具描述 key 后缀。
-// 对齐 Python: _desc
+// Python: _desc
 const descKey = "_desc"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -33,13 +33,13 @@ const descKey = "_desc"
 var descFS embed.FS
 
 // descCache 工具描述缓存（lang+"/"+tool → content）。
-// 对齐 Python: @cache _load_desc
+// Python: @cache _load_desc
 var descCache sync.Map
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MakeTranslator 创建绑定到指定语言的翻译器闭包。
-// 对齐 Python: make_translator(lang)
+// Python: make_translator(lang)
 func MakeTranslator(lang atschema.Language) Translator {
 	return func(tool string, key ...string) string {
 		// 无 key 或 key 为 "_desc" → 加载 Markdown 描述
@@ -69,7 +69,7 @@ func MakeTranslator(lang atschema.Language) Translator {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadToolDesc 从嵌入的 Markdown 文件中加载工具描述。
-// 对齐 Python: _load_desc(tool, lang)
+// Python: _load_desc(tool, lang)
 // 文件路径格式：descs/{lang}/{tool}.md
 func loadToolDesc(tool, lang string) string {
 	cacheKey := lang + "/" + tool

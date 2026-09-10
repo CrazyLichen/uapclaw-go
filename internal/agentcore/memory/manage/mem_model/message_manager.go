@@ -14,7 +14,7 @@ import (
 
 // MessageAddRequest 添加消息请求。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/message_manager.py (MessageAddRequest)
+// Python: openjiuwen/core/memory/manage/mem_model/message_manager.py (MessageAddRequest)
 type MessageAddRequest struct {
 	// UserID 用户 ID（必填）
 	UserID string
@@ -33,7 +33,7 @@ type MessageAddRequest struct {
 // MessageManager 消息管理器，BaseMessageStore 的上层封装。
 //
 // 提供验证和简化的消息操作接口，由 LongTermMemory 使用。
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/message_manager.py (MessageManager)
+// Python: openjiuwen/core/memory/manage/mem_model/message_manager.py (MessageManager)
 type MessageManager struct {
 	// store 消息存储接口
 	store db.BaseMessageStore
@@ -55,7 +55,7 @@ func NewMessageManager(store db.BaseMessageStore) *MessageManager {
 // Add 验证必填字段后添加消息。
 // 必填字段：UserID、ScopeID、Content。
 //
-// 对应 Python: MessageManager.add(req)
+// Python: MessageManager.add(req)
 func (m *MessageManager) Add(ctx context.Context, req *MessageAddRequest) (string, error) {
 	if req.UserID == "" {
 		return "", exception.BuildError(exception.StatusStoreMessageAddExecutionError,
@@ -96,7 +96,7 @@ func (m *MessageManager) Add(ctx context.Context, req *MessageAddRequest) (strin
 // Get 获取消息，返回 (消息, 时间戳) 列表。
 // 倒序获取后反转，使最旧的消息排在前面。
 //
-// 对应 Python: MessageManager.get(user_id, scope_id, session_id, message_len)
+// Python: MessageManager.get(user_id, scope_id, session_id, message_len)
 func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string, sessionID string, messageLen int) ([]*db.MessageAndMeta, error) {
 	if messageLen <= 0 {
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
@@ -127,7 +127,7 @@ func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string,
 // GetByID 按 ID 获取消息，不存在时返回 nil。
 // 修正：正确传播 error，只在"未找到"时返回 (nil, nil)。
 //
-// 对应 Python: MessageManager.get_by_id(msg_id)
+// Python: MessageManager.get_by_id(msg_id)
 func (m *MessageManager) GetByID(ctx context.Context, msgID string) (*db.MessageAndMeta, error) {
 	msg, meta, err := m.store.GetMessageByID(ctx, msgID)
 	if err != nil {
@@ -143,7 +143,7 @@ func (m *MessageManager) GetByID(ctx context.Context, msgID string) (*db.Message
 
 // DeleteByUserAndScope 删除指定用户+作用域的所有消息。
 //
-// 对应 Python: MessageManager.delete_by_user_and_scope(user_id, scope_id)
+// Python: MessageManager.delete_by_user_and_scope(user_id, scope_id)
 func (m *MessageManager) DeleteByUserAndScope(ctx context.Context, userID string, scopeID string) (int64, error) {
 	filter := &db.MessageFilter{
 		UserID:  userID,

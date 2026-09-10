@@ -1,7 +1,7 @@
 // Package utils 提供 AgentServer 工具函数。
 //
 // 包含流式 chunk 解析、请求参数提取、turn-based diff 查询等功能。
-// 对齐 Python: jiuwenswarm/server/utils/
+// Python: jiuwenswarm/server/utils/
 //
 // 文件目录：
 //

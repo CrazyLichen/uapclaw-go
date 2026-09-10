@@ -25,7 +25,7 @@ import (
 //   - AfterToolCall: 对 browser_ 前缀工具记录进度
 //   - AfterInvoke: 提取 <browser_progress> payload；判断完成/失败；持久化进度
 //
-// 对齐 Python: openjiuwen/harness/tools/browser_move/playwright_runtime/runtime.py (BrowserRuntimeRail L539-808)
+// Python: openjiuwen/harness/tools/browser_move/playwright_runtime/runtime.py (BrowserRuntimeRail L539-808)
 type BrowserRuntimeRail struct {
 	*sainterfaces.BaseRail
 	runtime *BrowserAgentRuntime
@@ -37,16 +37,16 @@ type BrowserRuntimeRail struct {
 
 const (
 	// browserProgressStateKeyStr 会话状态中进度状态的键名字符串
-	// 对齐 Python: _BROWSER_PROGRESS_STATE_KEY
+	// Python: _BROWSER_PROGRESS_STATE_KEY
 	browserProgressStateKeyStr = "__browser_subagent_progress_state__"
 	// browserProgressTaskKeyStr 会话状态中任务文本的键名字符串
-	// 对齐 Python: _BROWSER_PROGRESS_TASK_KEY
+	// Python: _BROWSER_PROGRESS_TASK_KEY
 	browserProgressTaskKeyStr = "__browser_subagent_last_task__"
 	// browserProgressSectionName 续行上下文 PromptSection 名称
-	// 对齐 Python: _BROWSER_PROGRESS_SECTION_NAME
+	// Python: _BROWSER_PROGRESS_SECTION_NAME
 	browserProgressSectionName = "browser_progress_continuation"
 	// browserProgressFormatSectionName 格式指南 PromptSection 名称
-	// 对齐 Python: _BROWSER_PROGRESS_FORMAT_SECTION_NAME
+	// Python: _BROWSER_PROGRESS_FORMAT_SECTION_NAME
 	browserProgressFormatSectionName = "browser_progress_format"
 )
 
@@ -54,7 +54,7 @@ const (
 
 // browserProgressTagRE 浏览器进度标签正则。
 //
-// 对齐 Python: _BROWSER_PROGRESS_TAG_RE
+// Python: _BROWSER_PROGRESS_TAG_RE
 var browserProgressTagRE = regexp.MustCompile(
 	`<browser_progress>\s*(\{.*?\})\s*</browser_progress>`,
 )
@@ -76,7 +76,7 @@ var browserProgressFormatGuidance = map[string]string{
 
 // NewBrowserRuntimeRail 创建浏览器运行时进度追踪 Rail。
 //
-// 对齐 Python: BrowserRuntimeRail(runtime)
+// Python: BrowserRuntimeRail(runtime)
 func NewBrowserRuntimeRail(runtime *BrowserAgentRuntime) *BrowserRuntimeRail {
 	return &BrowserRuntimeRail{
 		BaseRail: sainterfaces.NewBaseRail(),
@@ -91,7 +91,7 @@ func (r *BrowserRuntimeRail) Runtime() *BrowserAgentRuntime {
 
 // BeforeInvoke invoke 开始前：确保运行时就绪 + 注入 MCP 能力 + 恢复进度 + 记录任务文本。
 //
-// 对齐 Python: BrowserRuntimeRail.before_invoke
+// Python: BrowserRuntimeRail.before_invoke
 func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if err := r.runtime.EnsureRuntimeReady(ctx); err != nil {
 		logger.Warn(logComponentBR).
@@ -123,7 +123,7 @@ func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces
 
 // BeforeModelCall LLM 调用前：注入进度格式指南和续行上下文 PromptSection。
 //
-// 对齐 Python: BrowserRuntimeRail.before_model_call
+// Python: BrowserRuntimeRail.before_model_call
 func (r *BrowserRuntimeRail) BeforeModelCall(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
 	builder := cbc.Agent().SystemPromptBuilder()
@@ -172,7 +172,7 @@ func (r *BrowserRuntimeRail) BeforeModelCall(_ context.Context, cbc *sainterface
 
 // AfterToolCall 工具执行后：对 browser_ 前缀工具记录进度。
 //
-// 对齐 Python: BrowserRuntimeRail.after_tool_call
+// Python: BrowserRuntimeRail.after_tool_call
 func (r *BrowserRuntimeRail) AfterToolCall(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
 	if sess == nil {
@@ -201,7 +201,7 @@ func (r *BrowserRuntimeRail) AfterToolCall(_ context.Context, cbc *sainterfaces.
 
 // AfterInvoke invoke 完成后：提取 <browser_progress> payload；判断完成/失败；持久化进度。
 //
-// 对齐 Python: BrowserRuntimeRail.after_invoke
+// Python: BrowserRuntimeRail.after_invoke
 func (r *BrowserRuntimeRail) AfterInvoke(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
 	inputs := cbc.Inputs()
@@ -369,7 +369,7 @@ func (r *BrowserRuntimeRail) wrapAfterInvoke(ctx context.Context, agentCallbackC
 
 // ensureBrowserMCPAbility 确保 Agent 能力管理器中包含 MCP 配置。
 //
-// 对齐 Python: BrowserRuntimeRail._ensure_browser_mcp_ability
+// Python: BrowserRuntimeRail._ensure_browser_mcp_ability
 func (r *BrowserRuntimeRail) ensureBrowserMCPAbility(cbc *sainterfaces.AgentCallbackContext) {
 	agent := cbc.Agent()
 	if agent == nil {
@@ -386,7 +386,7 @@ func (r *BrowserRuntimeRail) ensureBrowserMCPAbility(cbc *sainterfaces.AgentCall
 
 // hydrateServiceProgressFromSession 从会话状态恢复进度到 service。
 //
-// 对齐 Python: BrowserRuntimeRail._hydrate_service_progress_from_session
+// Python: BrowserRuntimeRail._hydrate_service_progress_from_session
 func (r *BrowserRuntimeRail) hydrateServiceProgressFromSession(sess sessioninterfaces.SessionFacade) *BrowserTaskProgressState {
 	sessionID := sess.GetSessionID()
 	progressState := r.loadProgressState(sess)
@@ -400,7 +400,7 @@ func (r *BrowserRuntimeRail) hydrateServiceProgressFromSession(sess sessioninter
 
 // persistServiceProgressToSession 将 service 进度持久化到会话状态。
 //
-// 对齐 Python: BrowserRuntimeRail._persist_service_progress_to_session
+// Python: BrowserRuntimeRail._persist_service_progress_to_session
 func (r *BrowserRuntimeRail) persistServiceProgressToSession(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
 		return
@@ -424,7 +424,7 @@ func (r *BrowserRuntimeRail) persistServiceProgressToSession(sess sessioninterfa
 
 // clearProgressState 清除会话中的进度状态。
 //
-// 对齐 Python: BrowserRuntimeRail._clear_progress_state
+// Python: BrowserRuntimeRail._clear_progress_state
 func (r *BrowserRuntimeRail) clearProgressState(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
 		return
@@ -439,7 +439,7 @@ func (r *BrowserRuntimeRail) clearProgressState(sess sessioninterfaces.SessionFa
 
 // loadProgressState 从会话状态加载进度状态。
 //
-// 对齐 Python: BrowserRuntimeRail._load_progress_state
+// Python: BrowserRuntimeRail._load_progress_state
 func (r *BrowserRuntimeRail) loadProgressState(sess sessioninterfaces.SessionFacade) *BrowserTaskProgressState {
 	if sess == nil {
 		return &BrowserTaskProgressState{}
@@ -456,7 +456,7 @@ func (r *BrowserRuntimeRail) loadProgressState(sess sessioninterfaces.SessionFac
 
 // loadTaskText 从会话状态加载任务文本。
 //
-// 对齐 Python: BrowserRuntimeRail._load_task_text
+// Python: BrowserRuntimeRail._load_task_text
 func (r *BrowserRuntimeRail) loadTaskText(sess sessioninterfaces.SessionFacade) string {
 	if sess == nil {
 		return ""
@@ -470,7 +470,7 @@ func (r *BrowserRuntimeRail) loadTaskText(sess sessioninterfaces.SessionFacade) 
 
 // extractProgressPayload 从输出文本中提取 <browser_progress> payload。
 //
-// 对齐 Python: BrowserRuntimeRail._extract_progress_payload
+// Python: BrowserRuntimeRail._extract_progress_payload
 func extractProgressPayload(text string) (string, map[string]any) {
 	raw := text
 	if raw == "" {
@@ -491,7 +491,7 @@ func extractProgressPayload(text string) (string, map[string]any) {
 
 // buildProgressResult 从 progress payload 构建进度结果。
 //
-// 对齐 Python: BrowserRuntimeRail._build_progress_result
+// Python: BrowserRuntimeRail._build_progress_result
 func buildProgressResult(progressPayload map[string]any, cleanOutput string) map[string]any {
 	statusRaw := progressPayload["status"]
 	status := ""
@@ -516,7 +516,7 @@ func buildProgressResult(progressPayload map[string]any, cleanOutput string) map
 
 // isBrowserProgressTool 判断工具名是否为浏览器进度工具。
 //
-// 对齐 Python: BrowserRuntimeRail._is_browser_progress_tool
+// Python: BrowserRuntimeRail._is_browser_progress_tool
 func isBrowserProgressTool(toolName string) bool {
 	name := strings.TrimSpace(strings.ToLower(toolName))
 	if name == "" {
@@ -537,7 +537,7 @@ func isBrowserProgressTool(toolName string) bool {
 
 // normalizeToolResult 规范化工具结果。
 //
-// 对齐 Python: BrowserRuntimeRail._normalize_tool_result
+// Python: BrowserRuntimeRail._normalize_tool_result
 func normalizeToolResult(toolResult any) any {
 	if toolResult == nil {
 		return toolResult
@@ -563,7 +563,7 @@ func normalizeToolResult(toolResult any) any {
 
 // isMaxIterationResultFromMap 判断结果是否为最大迭代次数结果。
 //
-// 对齐 Python: BrowserRuntimeRail._is_max_iteration_result
+// Python: BrowserRuntimeRail._is_max_iteration_result
 func isMaxIterationResultFromMap(result map[string]any) bool {
 	output := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", result["output"])))
 	resultType := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", result["result_type"])))

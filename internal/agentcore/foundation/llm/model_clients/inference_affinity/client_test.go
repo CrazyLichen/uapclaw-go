@@ -1584,7 +1584,7 @@ func TestInferenceAffinity_ParseStreamChunk_Usage无费用(t *testing.T) {
 	if chunk.UsageMetadata.OutputTokens != 50 {
 		t.Errorf("OutputTokens = %d, 期望 50", chunk.UsageMetadata.OutputTokens)
 	}
-	// 对齐 Python InferenceAffinity: 不提取费用信息
+	// Python: InferenceAffinity: 不提取费用信息
 	if chunk.UsageMetadata.InputCost != 0 || chunk.UsageMetadata.OutputCost != 0 || chunk.UsageMetadata.TotalCost != 0 {
 		t.Error("InferenceAffinity usage 不应包含费用信息")
 	}

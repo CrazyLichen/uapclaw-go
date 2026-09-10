@@ -1100,7 +1100,7 @@ func TestMutateDependencyGraph_终态目标(t *testing.T) {
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
-	// 对齐 Python: 下游 t2 依赖已完成 t1 是允许的（终态依赖自动 resolved=True）
+	// Python: 下游 t2 依赖已完成 t1 是允许的（终态依赖自动 resolved=True）
 	edges := []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}}
 	result := db.MutateDependencyGraph(ctx, "alpha", nil, edges)
 	if !result.Ok {

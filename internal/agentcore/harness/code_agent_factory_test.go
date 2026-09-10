@@ -153,7 +153,7 @@ func TestCreateCodeAgent_默认SystemPrompt(t *testing.T) {
 	if cfg.SystemPrompt == "" {
 		t.Error("SystemPrompt 不应为空")
 	}
-	// 对齐 Python: DEFAULT_CODE_AGENT_SYSTEM_PROMPT 包含 "AI Coding Agent"
+	// Python: DEFAULT_CODE_AGENT_SYSTEM_PROMPT 包含 "AI Coding Agent"
 	if len(cfg.SystemPrompt) < 10 {
 		t.Error("SystemPrompt 应有足够长度")
 	}

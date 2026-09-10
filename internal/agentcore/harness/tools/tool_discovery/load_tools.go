@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LoadToolsInput load_tools 工具的输入参数。
-// 对齐 Python: LoadToolsInput
+// Python: LoadToolsInput
 type LoadToolsInput struct {
 	// ToolNames 要加载的工具名称列表
 	ToolNames []string `json:"tool_names"`
@@ -32,7 +32,7 @@ var loadLogComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLoadToolsTool 创建加载工具元工具。
-// 对齐 Python: LoadToolsTool.__init__
+// Python: LoadToolsTool.__init__
 func NewLoadToolsTool(
 	loadFn func(ctx context.Context, session interfaces.SessionFacade, toolNames []string, replace bool) (map[string]any, error),
 	language string,

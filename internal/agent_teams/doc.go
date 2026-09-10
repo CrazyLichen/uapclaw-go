@@ -6,7 +6,7 @@
 //   - SpawnManager/RecoveryManager/SessionManager/StreamController：专职 Manager
 //   - TeamBackend/Messager/Memory/Workspace：团队基础设施
 //
-// 对齐 Python: openjiuwen/agent_teams/
+// Python: openjiuwen/agent_teams/
 //
 // 文件目录：
 //

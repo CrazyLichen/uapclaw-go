@@ -7,7 +7,7 @@ import "fmt"
 // GaussDiskANN GaussDB DiskANN 向量索引配置。
 // DiskANN 是 GaussDB 的磁盘近似最近邻索引，支持大规模向量检索。
 //
-// 对应 Python: gauss_vector_store.py 中的 GSDISKANN 索引参数
+// Python: gauss_vector_store.py 中的 GSDISKANN 索引参数
 type GaussDiskANN struct {
 	VectorField
 	// EnablePQ 是否启用产品量化

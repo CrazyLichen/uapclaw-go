@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DefaultAgentCreator 默认 Agent 创建器，用 switch 按类型名直接创建。
-// 对齐 Python: importlib.import_module + getattr + cls(**kwargs)
+// Python: importlib.import_module + getattr + cls(**kwargs)
 type DefaultAgentCreator struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -44,7 +44,7 @@ func SupportedAgentTypes() []string {
 }
 
 // CreateByType 根据 agent_type 创建 Agent 实例。
-// 对齐 Python:
+// Python:
 //
 //	Python: module = importlib.import_module(class_config.agent_module)
 //	Python: agent_cls = getattr(module, class_config.agent_class)
@@ -74,7 +74,7 @@ func (c *DefaultAgentCreator) CreateByType(
 	switch agentType {
 	case AgentTypeReAct:
 		// 从 initKwargs 构建 ReActAgentConfig。
-		// 对齐 Python: agent = ReActAgent(**init_kwargs)
+		// Python: agent = ReActAgent(**init_kwargs)
 		reactCfg := buildReActAgentConfig(initKwargs)
 		return agents.NewReActAgent(card, reactCfg), nil
 	default:
@@ -86,7 +86,7 @@ func (c *DefaultAgentCreator) CreateByType(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildReActAgentConfig 从 initKwargs 构建 ReActAgentConfig。
-// 对齐 Python: agent = agent_cls(**init_kwargs)
+// Python: agent = agent_cls(**init_kwargs)
 func buildReActAgentConfig(kwargs map[string]any) *saconfig.ReActAgentConfig {
 	opts := make([]saconfig.ReActAgentConfigOption, 0)
 

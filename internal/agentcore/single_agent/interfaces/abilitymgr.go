@@ -14,7 +14,7 @@ import (
 
 // AbilityManagerInterface 能力管理器接口，Agent 通过此接口注册和调度能力。
 //
-// 对应 Python: AbilityManager 的公开方法集。
+// Python: AbilityManager 的公开方法集。
 // 具体实现：ability.AbilityManager、P2PAbilityManager。
 type AbilityManagerInterface interface {
 	// Add 添加单个能力。

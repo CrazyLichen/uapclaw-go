@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PowerShellInput PowerShellTool 输入参数。
-// 对齐 Python: _PowerShellInputs (powershell/_tool.py L47-55)
+// Python: _PowerShellInputs (powershell/_tool.py L47-55)
 type PowerShellInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
@@ -39,11 +39,11 @@ type PowerShellInput struct {
 
 const (
 	// psDefaultTimeout 默认超时秒数。
-	// 对齐 Python: PowerShellTool._resolve_timeout default=300
+	// Python: PowerShellTool._resolve_timeout default=300
 	psDefaultTimeout = 300
 
 	// psDefaultMaxOutputChars 默认最大输出字符数，0=无限制。
-	// 对齐 Python: PowerShellTool._resolve_max_output_chars default=0
+	// Python: PowerShellTool._resolve_max_output_chars default=0
 	psDefaultMaxOutputChars = 0
 )
 
@@ -52,13 +52,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPowerShellTool 创建 PowerShellTool 实例。
-// 对齐 Python: PowerShellTool (powershell/_tool.py L58-78)
+// Python: PowerShellTool (powershell/_tool.py L58-78)
 func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, permConfig PermissionConfig) tool.Tool {
 	card, _ := tools.BuildToolCard("powershell", "PowerShellTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input PowerShellInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// ── 参数解析 ──
-		// 对齐 Python: _parse_inputs (powershell/_tool.py L111-120)
+		// Python: _parse_inputs (powershell/_tool.py L111-120)
 		// PowerShell 无 sudo 注入，仅 strip
 		command := strings.TrimSpace(input.Command)
 		timeout := resolvePSTimeout(input.Timeout)
@@ -68,7 +68,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		description := input.Description
 
 		// ── 空命令检查 ──
-		// 对齐 Python L135-136
+		// Python: L135-136
 		if command == "" {
 			return map[string]any{
 				"success": false,
@@ -77,7 +77,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── cwd 解析 ──
-		// 对齐 Python L138-139
+		// Python: L138-139
 		currentCwd := cwd.GetCwd(ctx)
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
@@ -85,7 +85,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 安全守卫 (OPENJIUWEN_BASH_STRICT=1) ──
-		// 对齐 Python L141-144
+		// Python: L141-144
 		if os.Getenv("OPENJIUWEN_BASH_STRICT") == "1" {
 			blocked, reason := CheckPowerShellInjection(command)
 			if blocked {
@@ -105,11 +105,11 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 破坏性命令警告 ──
-		// 对齐 Python L146
+		// Python: L146
 		warning := GetPSDestructiveWarning(command)
 
 		// ── description 日志 ──
-		// 对齐 Python L148-149
+		// Python: L148-149
 		if description != "" {
 			logger.Debug(logComponent).
 				Str("description", description).
@@ -118,7 +118,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 后台执行 ──
-		// 对齐 Python L151-159
+		// Python: L151-159
 		if background {
 			bgRes, err := op.Shell().ExecuteCmdBackground(
 				ctx, command,
@@ -151,7 +151,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── rm 目标记录（执行前）──
-		// 对齐 Python L161-168: 执行前记录 PowerShell Remove-Item 目标
+		// Python: L161-168: 执行前记录 PowerShell Remove-Item 目标
 		var historyPath string
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
@@ -164,7 +164,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 前台执行 ──
-		// 对齐 Python L170-219
+		// Python: L170-219
 		res, err := op.Shell().ExecuteCmd(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -179,7 +179,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// 失败路径：部分输出渲染
-		// 对齐 Python L176-193
+		// Python: L176-193
 		if !res.IsSuccess() {
 			var partial string
 			if res.Data != nil {
@@ -213,7 +213,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// 成功路径
-		// 对齐 Python L195-219
+		// Python: L195-219
 		exitCode := -1
 		stdout := ""
 		stderr := ""
@@ -229,7 +229,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		meaning := InterpretPowerShellExitCode(command, exitCode, stdout, stderr)
 
 		// ── rm 目标记录（执行后）──
-		// 对齐 Python L201-203: 执行后检测并记录删除
+		// Python: L201-203: 执行后检测并记录删除
 		if historyPath != "" && !meaning.IsError {
 			filesystem.DetectAndRecordDeletions(historyPath)
 		}
@@ -266,7 +266,7 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolvePSTimeout 解析并钳制 PowerShell 超时值。
-// 对齐 Python: PowerShellTool._resolve_timeout (powershell/_tool.py L81-92)
+// Python: PowerShellTool._resolve_timeout (powershell/_tool.py L81-92)
 // 环境变量名: POWER_SHELL_TOOL_MAX_TIMEOUT_SECONDS
 func resolvePSTimeout(rawValue int) int {
 	timeout := rawValue
@@ -289,7 +289,7 @@ func resolvePSTimeout(rawValue int) int {
 }
 
 // resolvePSMaxOutputChars 解析并钳制 PowerShell 最大输出字符数。0 表示无限制。
-// 对齐 Python: PowerShellTool._resolve_max_output_chars (powershell/_tool.py L95-108)
+// Python: PowerShellTool._resolve_max_output_chars (powershell/_tool.py L95-108)
 // 环境变量名: POWER_SHELL_TOOL_MAX_OUTPUT_CHARS
 func resolvePSMaxOutputChars(rawValue int) int {
 	value := rawValue

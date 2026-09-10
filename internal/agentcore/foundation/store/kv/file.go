@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fileEntry 文件存储条目，统一 JSON 序列化格式。
-// 对齐 Python：Set 存原始值，ExclusiveSet 存 {EXCLUSIVE_VALUE_KEY, EXCLUSIVE_EXPIRY_KEY} dict。
+// Python: Set 存原始值，ExclusiveSet 存 {EXCLUSIVE_VALUE_KEY, EXCLUSIVE_EXPIRY_KEY} dict。
 // Go 统一用 JSON 结构体，ExpiryAt=0 表示不过期（等同于 Python 的普通 Set）。
 type fileEntry struct {
 	// Value 实际存储的值（Base64 编码）
@@ -24,7 +24,7 @@ type fileEntry struct {
 }
 
 // FileKVStore 基于 bbolt 的文件持久化键值存储。
-// 对应 Python ShelveStore，严格复刻其语义（包括已知的值解包不一致）。
+// Python: ShelveStore，严格复刻其语义（包括已知的值解包不一致）。
 type FileKVStore struct {
 	// db bbolt 数据库实例，构造时打开，Close() 关闭
 	db *bolt.DB
@@ -54,7 +54,7 @@ const (
 
 // NewFileKVStore 创建基于 bbolt 的文件 KV 存储。
 // dbPath: 数据库文件路径（自动创建父目录）。
-// 对齐 Python: Path(db_path).parent.mkdir(parents=True, exist_ok=True)。
+// Python: Path(db_path).parent.mkdir(parents=True, exist_ok=True)。
 func NewFileKVStore(dbPath string) (*FileKVStore, error) {
 	// 创建父目录
 	dir := filepath.Dir(dbPath)
@@ -109,7 +109,7 @@ func (s *FileKVStore) Set(_ context.Context, key string, value []byte) error {
 // ExclusiveSet 原子性地设置键值对，仅当 key 不存在时成功。
 // expiry 为过期秒数，0 表示不过期。
 // 返回 true 表示设置成功，false 表示 key 已存在且未过期。
-// 对齐 Python ShelveStore：Get 返回已过期值、Exists 对过期 key 返回 true、仅 ExclusiveSet 检查过期。
+// Python: ShelveStore：Get 返回已过期值、Exists 对过期 key 返回 true、仅 ExclusiveSet 检查过期。
 func (s *FileKVStore) ExclusiveSet(_ context.Context, key string, value []byte, expiry int) (bool, error) {
 	now := time.Now().Unix()
 	var result bool
@@ -159,7 +159,7 @@ func (s *FileKVStore) ExclusiveSet(_ context.Context, key string, value []byte, 
 }
 
 // Get 根据 key 获取值，key 不存在时返回 nil, nil。
-// 对齐 Python ShelveStore：解包 exclusive 值返回实际 []byte，不过期检查。
+// Python: ShelveStore：解包 exclusive 值返回实际 []byte，不过期检查。
 func (s *FileKVStore) Get(_ context.Context, key string) ([]byte, error) {
 	var result []byte
 
@@ -188,7 +188,7 @@ func (s *FileKVStore) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 // Exists 检查 key 是否存在。
-// 对齐 Python ShelveStore：不过期检查，过期 key 仍返回 true。
+// Python: ShelveStore：不过期检查，过期 key 仍返回 true。
 func (s *FileKVStore) Exists(_ context.Context, key string) (bool, error) {
 	var result bool
 
@@ -211,7 +211,7 @@ func (s *FileKVStore) Delete(_ context.Context, key string) error {
 }
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。
-// 对齐 Python ShelveStore：返回原始 JSON 字节，不解包。
+// Python: ShelveStore：返回原始 JSON 字节，不解包。
 func (s *FileKVStore) GetByPrefix(_ context.Context, prefix string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
 
@@ -269,7 +269,7 @@ func (s *FileKVStore) DeleteByPrefix(_ context.Context, prefix string, batchSize
 
 // MGet 批量获取多个 key 的值。
 // 返回值与输入 keys 顺序对应，不存在的 key 对应位置为 nil。
-// 对齐 Python ShelveStore：返回原始 JSON 字节，不解包。
+// Python: ShelveStore：返回原始 JSON 字节，不解包。
 func (s *FileKVStore) MGet(_ context.Context, keys []string) ([][]byte, error) {
 	result := make([][]byte, len(keys))
 
@@ -364,7 +364,7 @@ func (p *filePipeline) Exists(_ context.Context, key string) error {
 }
 
 // Execute 提交并执行管道中的所有操作，返回各操作的结果。
-// 对齐 Python ShelveStore：pipeline get 返回原始 JSON 字节（不解包），pipeline set 是普通 set（非 exclusive）。
+// Python: ShelveStore：pipeline get 返回原始 JSON 字节（不解包），pipeline set 是普通 set（非 exclusive）。
 // 执行后管道被清空，可复用。
 func (p *filePipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 	if len(p.ops) == 0 {

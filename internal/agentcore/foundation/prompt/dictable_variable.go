@@ -12,7 +12,7 @@ import (
 
 // DictableVariable 字典/列表模板变量，递归处理多模态内容中的占位符。
 //
-// 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/dictable.py (DictableVariable)
+// Python: openjiuwen/core/foundation/prompt/assemble/variables/dictable.py (DictableVariable)
 //
 // 与 TextableVariable 共享占位符语法和嵌套解析逻辑，区别在于：
 //   - TextableVariable 处理纯字符串模板
@@ -56,7 +56,7 @@ func WithDictableSuffix(suffix string) DictableOption {
 //   - name: 变量名
 //   - opts: 可选配置（WithDictablePrefix/WithDictableSuffix）
 //
-// 对应 Python: DictableVariable(data=..., name=..., prefix=..., suffix=...)
+// Python: DictableVariable(data=..., name=..., prefix=..., suffix=...)
 func NewDictableVariable(data any, name string, opts ...DictableOption) (*DictableVariable, error) {
 	v := &DictableVariable{
 		data:   data,
@@ -110,14 +110,14 @@ func (dv *DictableVariable) Placeholders() []string {
 }
 
 // Eval 求值：覆盖 baseVariable.Eval，确保调用自身的 Update。
-// 对应 Python: Variable.eval()
+// Python: Variable.eval()
 func (dv *DictableVariable) Eval(kwargs map[string]any) any {
 	return evalBase(&dv.baseVariable, dv, kwargs)
 }
 
 // Update 递归替换占位符，更新 value。
 //
-// 对应 Python: DictableVariable.update()
+// Python: DictableVariable.update()
 //
 // 逻辑：
 //  1. 深拷贝 data
@@ -136,14 +136,14 @@ func (dv *DictableVariable) Update(kwargs map[string]any) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // scanPlaceholders 递归扫描 obj 中所有字符串值，提取占位符。
-// 对应 Python: DictableVariable._scan_placeholders()
+// Python: DictableVariable._scan_placeholders()
 func scanPlaceholders(obj any, pattern *regexp.Regexp, seen map[string]struct{}, placeholders *[]string) {
 	switch val := obj.(type) {
 	case string:
 		for _, match := range pattern.FindAllStringSubmatch(val, -1) {
 			placeholder := strings.TrimSpace(match[1])
 			if len(placeholder) == 0 {
-				// 对应 Python: 空占位符抛异常，但此处无法返回 error，
+				// Python: 空占位符抛异常，但此处无法返回 error，
 				// 因此在 NewDictableVariable 中先验证数据中的占位符。
 				// 这里如果遇到空占位符，直接跳过（不应出现，构造时已校验）
 				continue
@@ -165,7 +165,7 @@ func scanPlaceholders(obj any, pattern *regexp.Regexp, seen map[string]struct{},
 }
 
 // recursiveFormat 递归替换 obj 中的占位符。
-// 对应 Python: DictableVariable._recursive_format()
+// Python: DictableVariable._recursive_format()
 func (dv *DictableVariable) recursiveFormat(obj any, kwargs map[string]any) (any, error) {
 	switch val := obj.(type) {
 	case []any:
@@ -207,7 +207,7 @@ func (dv *DictableVariable) formatString(s string, kwargs map[string]any) (strin
 
 		value, err := resolveNestedValue(placeholder, kwargs)
 		if err != nil {
-			// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
+			// Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
 			return "", exception.NewBaseError(
 				exception.StatusPromptAssemblerVariableInitFailed,
 				exception.WithMsg(fmt.Sprintf("error parsing the placeholder `%s`: %s", placeholder, err.Error())),

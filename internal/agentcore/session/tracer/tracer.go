@@ -84,7 +84,7 @@ func NewTracer() *Tracer {
 }
 
 // Init 初始化追踪器，创建默认 Handler 并构建事件分发表。
-// 对应 Python Tracer.init(stream_writer_manager)。
+// Python: Tracer.init(stream_writer_manager)。
 func (t *Tracer) Init(swm *stream.StreamWriterManager) {
 	t.streamWriterManager = swm
 
@@ -108,7 +108,7 @@ func (t *Tracer) Init(swm *stream.StreamWriterManager) {
 }
 
 // TriggerAgent 触发 Agent 追踪事件，通过 agentDispatch 分发到对应 handler 方法。
-// 对应 Python Tracer.trigger("tracer_agent", event_name, ...)。
+// Python: Tracer.trigger("tracer_agent", event_name, ...)。
 func (t *Tracer) TriggerAgent(ctx context.Context, event TraceEvent, params *TriggerParams) {
 	t.mu.RLock()
 	handler, ok := t.agentDispatch[event]
@@ -123,7 +123,7 @@ func (t *Tracer) TriggerAgent(ctx context.Context, event TraceEvent, params *Tri
 }
 
 // TriggerWorkflow 触发工作流追踪事件，按 parentNodeID 查找 workflowDispatch 分发。
-// 对应 Python Tracer.trigger("tracer_workflow", event_name, parent_node_id=..., ...)。
+// Python: Tracer.trigger("tracer_workflow", event_name, parent_node_id=..., ...)。
 func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNodeID string, params *TriggerParams) {
 	t.mu.RLock()
 	dispatch, ok := t.workflowDispatch[parentNodeID]
@@ -147,7 +147,7 @@ func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNo
 }
 
 // RegisterWorkflowSpanManager 注册新的 Workflow SpanManager，创建对应 Handler 并扩展分发表。
-// 对应 Python Tracer.register_workflow_span_manager(parent_node_id)。
+// Python: Tracer.register_workflow_span_manager(parent_node_id)。
 func (t *Tracer) RegisterWorkflowSpanManager(parentNodeID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

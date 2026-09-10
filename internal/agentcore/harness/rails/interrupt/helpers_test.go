@@ -24,7 +24,7 @@ func TestConvertInteractionsToAskUserQuestion_空输入(t *testing.T) {
 }
 
 func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt(t *testing.T) {
-	// 对齐 Python: AskUserRail 中断，value 有 questions 字段
+	// Python: AskUserRail 中断，value 有 questions 字段
 	stateOutputs := []any{
 		map[string]any{
 			"id": "req_001",
@@ -106,7 +106,7 @@ func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt带选项(t *testi
 }
 
 func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt(t *testing.T) {
-	// 对齐 Python: PermissionRail 中断，value 无 questions 字段
+	// Python: PermissionRail 中断，value 无 questions 字段
 	stateOutputs := []any{
 		map[string]any{
 			"id": "perm_001",
@@ -170,7 +170,7 @@ func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt默认选项(t 
 }
 
 func TestConvertInteractionsToAskUserQuestion_toolArgs中的questions(t *testing.T) {
-	// 对齐 Python: StructuredAskUserRail 路径，questions 嵌入 tool_args
+	// Python: StructuredAskUserRail 路径，questions 嵌入 tool_args
 	stateOutputs := []any{
 		map[string]any{
 			"id": "req_003",
@@ -219,7 +219,7 @@ func TestConvertInteractionsToAskUserQuestion_toolArgs为JSON字符串(t *testin
 }
 
 func TestConvertInteractionsToAskUserQuestion_嵌套列表(t *testing.T) {
-	// 对齐 Python: _iter_interactions 递归展开
+	// Python: _iter_interactions 递归展开
 	stateOutputs := []any{
 		[]any{
 			map[string]any{

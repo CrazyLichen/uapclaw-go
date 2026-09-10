@@ -16,7 +16,7 @@ import (
 //   - 如需 OpenAI API 格式，请调用 ToOpenAIDict()
 //   - finish_reason 默认值 "null"（字符串），表示流式场景尚未终止
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (AssistantMessage)
+// Python: openjiuwen/core/foundation/llm/schema/message.py (AssistantMessage)
 type AssistantMessage struct {
 	DefaultMessage
 	// ToolCalls 工具调用列表（扁平格式）
@@ -96,7 +96,7 @@ func WithLogprobs(logprobs any) AssistantMessageOption {
 
 // NewAssistantMessage 创建助手消息，finish_reason 默认 "null"。
 //
-// 对应 Python: AssistantMessage(content=..., tool_calls=..., ...)
+// Python: AssistantMessage(content=..., tool_calls=..., ...)
 func NewAssistantMessage(content string, opts ...AssistantMessageOption) *AssistantMessage {
 	msg := &AssistantMessage{
 		DefaultMessage: DefaultMessage{
@@ -114,7 +114,7 @@ func NewAssistantMessage(content string, opts ...AssistantMessageOption) *Assist
 // IsFinished 判断是否已收到终止信号。
 //
 // finish_reason != "null" 表示已收到终止信号。
-// 对应 Python: finish_reason != "null"
+// Python: finish_reason != "null"
 func (m *AssistantMessage) IsFinished() bool {
 	return m.FinishReason != FinishReasonNull
 }
@@ -125,7 +125,7 @@ func (m *AssistantMessage) IsFinished() bool {
 //   - ToolCalls 从扁平格式转为 OpenAI 嵌套格式
 //   - 仅输出非空字段
 //
-// 对应 Python: AssistantMessage.model_dump()
+// Python: AssistantMessage.model_dump()
 func (m *AssistantMessage) ToOpenAIDict() map[string]any {
 	result := map[string]any{
 		"role":    "assistant",
@@ -184,7 +184,7 @@ func (m *AssistantMessage) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口，自动将 OpenAI 嵌套 tool_calls 转为扁平格式。
 //
-// 对应 Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
+// Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
 func (m *AssistantMessage) UnmarshalJSON(data []byte) error {
 	// 使用临时结构体解析，避免无限递归
 	var raw struct {

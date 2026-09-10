@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SharedMemoryManager 管理 {team_home}/team-memory/ 目录下的团队摘要文件。
-// 对齐 Python SharedMemoryManager (shared_memory.py)
+// Python: SharedMemoryManager (shared_memory.py)
 //
 // 所有成员只读访问 ReadTeamSummary；
 // 提取 agent（leader extract_after_round）通过工具或 WriteTeamSummary 写入。
@@ -55,12 +55,12 @@ func (m *SharedMemoryManager) EnsureDir() error {
 }
 
 // ReadTeamSummary 读取团队记忆摘要文件。
-// 对齐 Python read_team_summary — sysOperation 分支优先，本地文件系统回退
+// Python: read_team_summary — sysOperation 分支优先，本地文件系统回退
 // 最多前 teamMemoryMaxReadLines 行，不存在或错误时返回空字符串
 func (m *SharedMemoryManager) ReadTeamSummary(ctx context.Context) string {
 	filePath := filepath.Join(m.dir, teamMemoryFilename)
 
-	// 对齐 Python: if self._sys_operation → sysOperation 分支优先
+	// Python: if self._sys_operation → sysOperation 分支优先
 	if m.sysOperation != nil {
 		fsOp := m.sysOperation.Fs()
 		if fsOp != nil {
@@ -89,14 +89,14 @@ func (m *SharedMemoryManager) ReadTeamSummary(ctx context.Context) string {
 }
 
 // WriteTeamSummary 写入团队记忆摘要（覆盖）。
-// 对齐 Python write_team_summary — sysOperation 分支优先，本地原子写入回退
+// Python: write_team_summary — sysOperation 分支优先，本地原子写入回退
 func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content string) error {
 	if err := m.EnsureDir(); err != nil {
 		return err
 	}
 	target := filepath.Join(m.dir, teamMemoryFilename)
 
-	// 对齐 Python: if self._sys_operation → sysOperation 分支优先
+	// Python: if self._sys_operation → sysOperation 分支优先
 	if m.sysOperation != nil {
 		fsOp := m.sysOperation.Fs()
 		if fsOp != nil {
@@ -106,7 +106,7 @@ func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content stri
 			if err == nil {
 				return nil
 			}
-			// 对齐 Python: sys_operation 写入失败时 warning 并回退到本地写入
+			// Python: sys_operation 写入失败时 warning 并回退到本地写入
 			logger.Warn(sharedLogComponent).Err(err).Str("path", target).
 				Msg("sysOperation 写入失败，回退到本地原子写入")
 		}
@@ -136,7 +136,7 @@ func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content stri
 }
 
 // AppendEntry 追加一条团队记忆。
-// 对齐 Python append_entry — 真实实现
+// Python: append_entry — 真实实现
 // 读取现有内容 + 分隔线 + 新条目 → 覆盖写（非原子，适合低频/单 writer）
 func (m *SharedMemoryManager) AppendEntry(ctx context.Context, entry string) error {
 	existing := m.ReadTeamSummary(ctx)

@@ -16,7 +16,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpHistoryEntry 文件操作历史条目。
-// 对齐 Python: _append_op_history / _detect_and_record_deletions 中每条记录的字段。
+// Python: _append_op_history / _detect_and_record_deletions 中每条记录的字段。
 // 此类型同时被 swarm/server/utils/diff_service.go 复用（readAgentHistory 解析后转为 OpHistoryEntry）。
 type OpHistoryEntry struct {
 	// Action 操作类型："write"、"edit"、"delete"
@@ -35,14 +35,14 @@ type OpHistoryEntry struct {
 
 const (
 	// MaxHistoryPerFile 每个文件最大历史条目数。
-	// 对齐 Python: MAX_HISTORY_PER_FILE = 100
+	// Python: MAX_HISTORY_PER_FILE = 100
 	MaxHistoryPerFile = 100
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // historyMu 文件操作历史写入互斥锁。
-// 对齐 Python: _HISTORY_LOCK = asyncio.Lock()
+// Python: _HISTORY_LOCK = asyncio.Lock()
 
 var historyMu sync.Mutex
 
@@ -50,7 +50,7 @@ var historyMu sync.Mutex
 
 // BuildHistoryPath 构建 .agent_history/file_ops_<agentID>_<sessionID>.json 文件路径。
 //
-// 对齐 Python: _build_history_path(session) — 合并 4 处 Python 重复实现：
+// Python: _build_history_path(session) — 合并 4 处 Python 重复实现：
 //   - filesystem.py WriteFileTool._build_history_path (line 846)
 //   - filesystem.py EditFileTool._build_history_path (line 1016)
 //   - shell/bash/_tool.py BashTool._build_history_path (line 146)
@@ -70,7 +70,7 @@ func BuildHistoryPath(baseDir, agentID, sessionID string) string {
 
 // AppendOpHistory 将一次写/编辑/删除操作追加到历史 JSON 文件。
 //
-// 对齐 Python: _append_op_history(history_path, file_path, action, old_content, new_content)
+// Python: _append_op_history(history_path, file_path, action, old_content, new_content)
 // (filesystem.py line 73-103)
 //
 // 并发安全：通过 historyMu 互斥锁保护文件读写（Python 用 asyncio.Lock）。
@@ -135,7 +135,7 @@ func AppendOpHistory(historyPath, filePath, action string, oldContent, newConten
 
 // DetectAndRecordDeletions 在 bash 执行后，扫描历史文件检测并记录已删除的文件。
 //
-// 对齐 Python: _detect_and_record_deletions(history_path)
+// Python: _detect_and_record_deletions(history_path)
 // (filesystem.py line 205-239)
 //
 // 对于每个文件路径的最后一条记录，如果最后操作不是 delete
@@ -227,7 +227,7 @@ func DetectAndRecordDeletions(historyPath string) {
 
 // appendHistoryFromOpts 从 ToolOption 列表中提取 session 信息，
 // 构建 history path 并追加操作记录。
-// 对齐 Python: _session = get_current_session(); if _session: ...
+// Python: _session = get_current_session(); if _session: ...
 func appendHistoryFromOpts(opts []tool.ToolOption, agentID, filePath, action string, oldContent, newContent *string) error {
 	// 解析 opts 获取 ToolCallOptions
 	callOpts := &tool.ToolCallOptions{}
@@ -251,7 +251,7 @@ func appendHistoryFromOpts(opts []tool.ToolOption, agentID, filePath, action str
 	}
 
 	// 构建 history path
-	// 对齐 Python: base_dir = get_workspace() or cwd
+	// Python: base_dir = get_workspace() or cwd
 	baseDir := workspace.WorkspaceDir()
 	historyPath := BuildHistoryPath(baseDir, agentID, sessionID)
 

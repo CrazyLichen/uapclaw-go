@@ -12,7 +12,7 @@ import (
 // Metadata：通道/业务自定义键值；兼容旧版 AgentResponse.metadata；协议转换失败时可临时写入兜底信息
 // （如原始片段、错误说明），与 a2a_metadata / acp_meta 分工不同。
 //
-// 对应 Python: jiuwenswarm/common/e2a/models.py (E2AResponse)
+// Python: jiuwenswarm/common/e2a/models.py (E2AResponse)
 type E2AResponse struct {
 	// ─── 核心响应字段 ───
 	// ProtocolVersion E2A 载荷版本（默认 "1.0"）
@@ -95,7 +95,7 @@ func NewE2AResponse() *E2AResponse {
 }
 
 // EnsureTimestamp 若未设置 Timestamp，则填当前 UTC ISO8601。
-// 对应 Python: E2AResponse.ensure_timestamp()
+// Python: E2AResponse.ensure_timestamp()
 func (r *E2AResponse) EnsureTimestamp() {
 	if r.Timestamp == "" {
 		r.Timestamp = UTCNowISO()
@@ -103,13 +103,13 @@ func (r *E2AResponse) EnsureTimestamp() {
 }
 
 // ToMap 序列化为 JSON 友好 map（枚举转为值）。
-// 对应 Python: E2AResponse.to_dict() → _dataclass_to_json_dict()
+// Python: E2AResponse.to_dict() → _dataclass_to_json_dict()
 func (r *E2AResponse) ToMap() map[string]any {
 	return structToMap(r)
 }
 
 // ResponseFromMap 从 map 反序列化为 E2AResponse。
-// 对应 Python: E2AResponse.from_dict(data) → _e2a_response_from_dict(data)
+// Python: E2AResponse.from_dict(data) → _e2a_response_from_dict(data)
 func ResponseFromMap(data map[string]any) *E2AResponse {
 	// 1. provenance 解析（无 legacy binding 迁移，与 envelope 不同）
 	prov := provenanceFromMap(data["provenance"])

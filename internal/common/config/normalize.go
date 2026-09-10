@@ -17,7 +17,7 @@ import (
 
 // NormalizeConfig 配置后处理，将需要结构化的字段解析为原生类型。
 //
-// 对应 Python: _normalize_config(config)
+// Python: _normalize_config(config)
 //  1. models.*.model_client_config.custom_headers — JSON 字符串 → map
 //  2. react.model_client_config.custom_headers — JSON 字符串 → map
 //  3. channels.web.send_file_allowed — 默认值 true
@@ -72,7 +72,7 @@ func NormalizeConfig(data map[string]any) {
 //
 // 如果输入已经是 map 类型则原样返回；如果是 JSON 字符串则解析为 map；
 // 其他类型或解析失败返回 nil。
-// 对应 Python: _parse_custom_headers(value)
+// Python: _parse_custom_headers(value)
 func ParseCustomHeaders(value any) map[string]any {
 	if value == nil {
 		return nil
@@ -94,7 +94,7 @@ func ParseCustomHeaders(value any) map[string]any {
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
-		// 对齐 Python: logger.warning(f"custom_headers JSON parse failed: {e}")
+		// Python: logger.warning(f"custom_headers JSON parse failed: {e}")
 		// config 包因循环依赖（logger → config）不能导入 logger，改用标准库 log.Printf
 		log.Printf("[config] custom_headers JSON 解析失败: value=%s, err=%v", truncateString(s, 100), err)
 		return nil

@@ -20,7 +20,7 @@ import (
 // 通过 SysOperation.Fs().ReadFile() 读取技能目录下的指定文件（默认 SKILL.md），
 // 通过 getSkills 回调查找技能。
 //
-// 对应 Python: SkillTool (openjiuwen/harness/tools/skills/skill_tool.py)
+// Python: SkillTool (openjiuwen/harness/tools/skills/skill_tool.py)
 type SkillTool struct {
 	// card 工具配置卡片
 	card *tool.ToolCard
@@ -51,7 +51,7 @@ const (
 
 // NewSkillTool 创建 SkillTool 实例。
 //
-// 对应 Python: SkillTool.__init__(operation, get_skills, language, agent_id)
+// Python: SkillTool.__init__(operation, get_skills, language, agent_id)
 func NewSkillTool(
 	operation sys_operation.SysOperation,
 	getSkills func() []*skillpkg.Skill,
@@ -78,7 +78,7 @@ func NewSkillTool(
 //  5. 成功 → success=true, data={skill_directory, skill_content}
 //  6. 异常 → success=false, error=err.Error()
 //
-// 对应 Python: SkillTool.invoke(inputs, **kwargs)
+// Python: SkillTool.invoke(inputs, **kwargs)
 func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	skillName := ""
 	if v, ok := inputs["skill_name"]; ok {
@@ -154,7 +154,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 
 // Stream SkillTool 不支持流式调用。
 //
-// 对应 Python: SkillTool.stream(inputs, **kwargs) — if False: yield None
+// Python: SkillTool.stream(inputs, **kwargs) — if False: yield None
 func (t *SkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.ID)
 }
@@ -166,7 +166,7 @@ func (t *SkillTool) Card() *tool.ToolCard { return t.card }
 
 // getSkillByName 按名称查找技能。
 //
-// 对应 Python: SkillTool._get_skill_by_name(skill_name)
+// Python: SkillTool._get_skill_by_name(skill_name)
 // 一比一复刻: name 为空返回 None；遍历 get_skills() 构建 name→skill 映射
 func (t *SkillTool) getSkillByName(name string) *skillpkg.Skill {
 	if name == "" {

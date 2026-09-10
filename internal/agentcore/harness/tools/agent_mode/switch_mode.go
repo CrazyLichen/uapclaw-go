@@ -24,7 +24,7 @@ type SwitchModeInput struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 对齐 Python L165-184: 中英文消息
+// Python: L165-184: 中英文消息
 var (
 	switchModeInvalidMsg = map[string]string{
 		"cn": "无效模式 '{mode}'。支持模式：normal、plan。",
@@ -44,7 +44,7 @@ var (
 
 // NewSwitchModeTool 创建 switch_mode 工具实例。
 //
-// 对齐 Python: SwitchModeTool.__init__() L205-221 + invoke() L224-256
+// Python: SwitchModeTool.__init__() L205-221 + invoke() L224-256
 func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)
 	card, _ := tools.BuildToolCard("switch_mode", "switch_mode", lang, nil, agentID)
@@ -53,7 +53,7 @@ func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID s
 		lang := normalizeLanguage(language)
 		rawMode := strings.TrimSpace(strings.ToLower(input.Mode))
 
-		// 对齐 Python L230: 校验模式值
+		// Python: L230: 校验模式值
 		if rawMode != hschema.AgentModePlan.String() && rawMode != hschema.AgentModeNormal.String() {
 			msg := strings.ReplaceAll(switchModeInvalidMsg[lang], "{mode}", rawMode)
 			return map[string]any{"error": msg}, nil
@@ -65,7 +65,7 @@ func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID s
 			return map[string]any{"error": "switch_mode 需要 session"}, nil
 		}
 
-		// 对齐 Python L239-249: 调用 agent.SwitchMode
+		// Python: L239-249: 调用 agent.SwitchMode
 		agent.SwitchMode(sess, rawMode)
 
 		var message string

@@ -18,7 +18,7 @@ import (
 //   - 通过 LoadState 从检查点恢复（不检查冻结标记）
 //   - 通过 ApplyUpdate 应用结构化更新
 //
-// 对应 Python: openjiuwen/core/operator/base.py Operator(ABC)
+// Python: openjiuwen/core/operator/base.py Operator(ABC)
 type Operator interface {
 	// OperatorID 返回唯一标识符，格式: {agent_id}/{kind}_{name}
 	OperatorID() string
@@ -48,7 +48,7 @@ type Operator interface {
 // 预览更新仅产生本地应用结果，审批和持久化由调用方的生命周期管理器负责，
 // 而非 Operator 自身。
 //
-// 对应 Python: openjiuwen/core/operator/base.py PreviewableOperator(Operator)
+// Python: openjiuwen/core/operator/base.py PreviewableOperator(Operator)
 type PreviewableOperator interface {
 	Operator
 	// PreviewUpdate 应用本地预览更新，不进入暂存或持久化。
@@ -57,7 +57,7 @@ type PreviewableOperator interface {
 
 // TunableSpec 描述单个可调参数。
 //
-// 对应 Python: openjiuwen/core/operator/base.py TunableSpec
+// Python: openjiuwen/core/operator/base.py TunableSpec
 type TunableSpec struct {
 	// Name 参数名称
 	Name string
@@ -72,14 +72,14 @@ type TunableSpec struct {
 // ParameterUpdatedCallback 参数变更回调函数类型。
 // 当 Operator 的参数被更新时触发，将变更推送给消费者（Agent/Rail）。
 //
-// 对应 Python: Callable[[str, Any], None]
+// Python: Callable[[str, Any], None]
 type ParameterUpdatedCallback func(target string, value any)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TunableKind 可调参数类型。
 //
-// 对应 Python: TunableKind = str（约束靠文档，Go 用常量增强类型安全）
+// Python: TunableKind = str（约束靠文档，Go 用常量增强类型安全）
 type TunableKind string
 
 const (
@@ -113,7 +113,7 @@ const (
 // 各具体 Operator 的 ApplyUpdate 方法内部应调用此函数。
 // SkillExperienceOperator 除外——它重写 ApplyUpdate 路由到 PreviewUpdate。
 //
-// 对应 Python: Operator.apply_update 默认实现
+// Python: Operator.apply_update 默认实现
 func DefaultApplyUpdate(op Operator, target string, update schema.UpdateValue) schema.ApplyResult {
 	if update.Mode != schema.UpdateModeReplace || update.Effect != schema.UpdateEffectState {
 		return schema.ApplyResultWithErrors(

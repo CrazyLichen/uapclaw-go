@@ -26,13 +26,13 @@ type operation struct {
 	// value Set 操作的值，仅 op 为 "set" 时有效
 	value []byte
 	// expiry Set 操作的过期秒数，0 表示不过期
-	// 对应 Python: BasedKVStorePipeline.set(key, value, ttl=None)
+	// Python: BasedKVStorePipeline.set(key, value, ttl=None)
 	expiry int
 }
 
 // InMemoryKVStore 基于内存的键值存储实现。
 //
-// 对应 Python: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
+// Python: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 type InMemoryKVStore struct {
 	// mu 读写锁，保证并发安全
 	mu sync.RWMutex
@@ -276,7 +276,7 @@ func (s *InMemoryKVStore) getWithoutLock(key string) []byte {
 	}
 	if e.expiryTs != 0 && time.Now().Unix() > e.expiryTs {
 		// 已过期：返回 nil，但不删除（允许 ExclusiveSet 覆盖）
-		// 对齐 Python: current_time > expiry_ts（严格大于才算过期）
+		// Python: current_time > expiry_ts（严格大于才算过期）
 		return nil
 	}
 	return e.value

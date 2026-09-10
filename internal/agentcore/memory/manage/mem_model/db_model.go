@@ -12,7 +12,7 @@ import (
 
 // UserMessage 用户消息表模型。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (UserMessage)
+// Python: openjiuwen/core/memory/manage/mem_model/db_model.py (UserMessage)
 type UserMessage struct {
 	// MessageID 消息唯一标识（SHA-256 hash 前16位 + 时间戳毫秒）
 	MessageID string `gorm:"primaryKey;size:64"`
@@ -32,7 +32,7 @@ type UserMessage struct {
 
 // ScopeUserMapping 作用域用户映射表模型。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (ScopeUserMapping)
+// Python: openjiuwen/core/memory/manage/mem_model/db_model.py (ScopeUserMapping)
 type ScopeUserMapping struct {
 	// UserID 用户 ID
 	UserID string `gorm:"primaryKey;size:64;not null"`
@@ -42,7 +42,7 @@ type ScopeUserMapping struct {
 
 // MemoryMeta 记忆元数据表模型，用于 schema 版本管理。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (MemoryMeta)
+// Python: openjiuwen/core/memory/manage/mem_model/db_model.py (MemoryMeta)
 type MemoryMeta struct {
 	// TblName 元数据对应的表名
 	TblName string `gorm:"primaryKey;size:64;not null;column:table_name"`
@@ -69,7 +69,7 @@ func (ScopeUserMapping) TableName() string { return "scope_user_mapping" }
 func (MemoryMeta) TableName() string { return "memory_meta" }
 
 // CreateTables 创建所有记忆表。
-// 对齐 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (create_tables)
+// Python: openjiuwen/core/memory/manage/mem_model/db_model.py (create_tables)
 //
 // 步骤：
 //  1. 检测 user_message 表是否有旧版 group_id 列，有则 DROP 重建
@@ -77,7 +77,7 @@ func (MemoryMeta) TableName() string { return "memory_meta" }
 //  3. 为新创建的表写入初始 schema_version（从 sql_registry 获取当前版本）
 func CreateTables(db *gorm.DB) error {
 	// 步骤1：旧表迁移检测——检测 user_message 表是否有旧版 group_id 列
-	// 对齐 Python: if "group_id" in column_names → DROP TABLE
+	// Python: if "group_id" in column_names → DROP TABLE
 	if db.Migrator().HasTable(&UserMessage{}) && db.Migrator().HasColumn(&UserMessage{}, "group_id") {
 		_ = db.Migrator().DropTable(&UserMessage{})
 	}
@@ -92,7 +92,7 @@ func CreateTables(db *gorm.DB) error {
 	}
 
 	// 步骤3：为新表写入初始 schema_version
-	// 对齐 Python: current_version = sql_registry.get_current_version(entity_key)
+	// Python: current_version = sql_registry.get_current_version(entity_key)
 	// 仅 current_version > 0 时写入，等于 0 时不写
 	tableEntityKeys := map[string]string{
 		"user_message":       "user_messages",
@@ -103,7 +103,7 @@ func CreateTables(db *gorm.DB) error {
 		db.Model(&MemoryMeta{}).Where("table_name = ?", tbl).Count(&count)
 		if count == 0 {
 			currentVersion := migration.SQLRegistry.GetCurrentVersion(entityKey)
-			// 对齐 Python: 仅在 current_version > 0 时写入 schema_version，等于 0 时不写
+			// Python: 仅在 current_version > 0 时写入 schema_version，等于 0 时不写
 			if currentVersion > 0 {
 				db.Create(&MemoryMeta{TblName: tbl, SchemaVersion: fmt.Sprintf("%d", currentVersion)})
 			}

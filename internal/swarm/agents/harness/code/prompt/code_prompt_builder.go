@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CodePromptPriority Code 模式提示词节优先级
-// 对齐 Python: CodePromptPriority (code_prompt_builder.py L22-30)
+// Python: CodePromptPriority (code_prompt_builder.py L22-30)
 type CodePromptPriority int
 
 const (
@@ -40,7 +40,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildCodeSystemPrompt 构建 Code 模式系统提示词。
-// 对齐 Python: build_code_system_prompt() (code_prompt_builder.py L615-626)
+// Python: build_code_system_prompt() (code_prompt_builder.py L615-626)
 //
 // Python 执行步骤：
 //
@@ -66,7 +66,7 @@ func BuildCodeSystemPrompt() string {
 }
 
 // BuildCodeIntroSection 构建 Code 模式介绍节。
-// 对齐 Python: _code_intro_prompt() (code_prompt_builder.py L36-57)
+// Python: _code_intro_prompt() (code_prompt_builder.py L36-57)
 func BuildCodeIntroSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "You are UapClawSwarm, an interactive coding agent. " +
@@ -92,7 +92,7 @@ func BuildCodeIntroSection() saprompt.PromptSection {
 }
 
 // BuildCodeSystemSection 构建 Code 模式系统规则节。
-// 对齐 Python: _code_system_prompt() (code_prompt_builder.py L63-106)
+// Python: _code_system_prompt() (code_prompt_builder.py L63-106)
 func BuildCodeSystemSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# System\n" +
@@ -140,7 +140,7 @@ func BuildCodeSystemSection() saprompt.PromptSection {
 }
 
 // BuildCodeDoingTasksSection 构建 Code 模式任务执行节。
-// 对齐 Python: _code_doing_tasks_prompt() (code_prompt_builder.py L170-319)
+// Python: _code_doing_tasks_prompt() (code_prompt_builder.py L170-319)
 func BuildCodeDoingTasksSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Doing tasks\n" +
@@ -294,7 +294,7 @@ func BuildCodeDoingTasksSection() saprompt.PromptSection {
 }
 
 // BuildCodeUsingYourToolsSection 构建 Code 模式工具使用节。
-// 对齐 Python: _code_using_your_tools_prompt() (code_prompt_builder.py L325-411)
+// Python: _code_using_your_tools_prompt() (code_prompt_builder.py L325-411)
 func BuildCodeUsingYourToolsSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Using your tools\n" +
@@ -385,7 +385,7 @@ func BuildCodeUsingYourToolsSection() saprompt.PromptSection {
 }
 
 // BuildCodeActionsWithCareSection 构建 Code 模式谨慎操作节。
-// 对齐 Python: _code_actions_with_care_prompt() (code_prompt_builder.py L417-492)
+// Python: _code_actions_with_care_prompt() (code_prompt_builder.py L417-492)
 func BuildCodeActionsWithCareSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Executing actions with care\n" +
@@ -465,7 +465,7 @@ func BuildCodeActionsWithCareSection() saprompt.PromptSection {
 }
 
 // BuildCodeToneAndStyleSection 构建 Code 模式语气风格节。
-// 对齐 Python: _code_tone_and_style_prompt() (code_prompt_builder.py L498-523)
+// Python: _code_tone_and_style_prompt() (code_prompt_builder.py L498-523)
 func BuildCodeToneAndStyleSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Tone and style\n" +
@@ -495,7 +495,7 @@ func BuildCodeToneAndStyleSection() saprompt.PromptSection {
 }
 
 // BuildCodeOutputEfficiencySection 构建 Code 模式输出效率节。
-// 对齐 Python: _code_output_efficiency_prompt() (code_prompt_builder.py L529-594)
+// Python: _code_output_efficiency_prompt() (code_prompt_builder.py L529-594)
 func BuildCodeOutputEfficiencySection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Text output (does not apply to tool calls)\n" +
@@ -565,7 +565,7 @@ func BuildCodeOutputEfficiencySection() saprompt.PromptSection {
 }
 
 // BuildCodeSessionGuidanceSection 构建 Code 模式会话指导节。
-// 对齐 Python: _code_session_guidance_prompt() (code_prompt_builder.py L112-164)
+// Python: _code_session_guidance_prompt() (code_prompt_builder.py L112-164)
 func BuildCodeSessionGuidanceSection() saprompt.PromptSection {
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	content := "# Session-specific guidance\n" +

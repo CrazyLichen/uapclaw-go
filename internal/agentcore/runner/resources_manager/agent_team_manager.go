@@ -12,7 +12,7 @@ import (
 
 // AgentTeamMgr Agent 团队资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
 //
-// 对应 Python: AgentTeamMgr (openjiuwen/core/runner/resources_manager/agent_team_manager.py)
+// Python: AgentTeamMgr (openjiuwen/core/runner/resources_manager/agent_team_manager.py)
 // Python 继承 AbstractManager[BaseTeam]，三个方法直接委托给父类。
 type AgentTeamMgr struct {
 	AbstractManager[maschema.BaseTeam]
@@ -35,7 +35,7 @@ func NewAgentTeamMgr() *AgentTeamMgr {
 
 // AddAgentTeam 注册 Agent 团队提供者。
 //
-// 对应 Python: AgentTeamMgr.add_agent_team(agent_team_id, agent_team) → self._register_resource_provider(...)
+// Python: AgentTeamMgr.add_agent_team(agent_team_id, agent_team) → self._register_resource_provider(...)
 func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentTeamProvider) error {
 	if agentTeamID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -79,7 +79,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 
 // RemoveAgentTeam 注销 Agent 团队提供者，返回被注销的 provider。
 //
-// 对应 Python: AgentTeamMgr.remove_agent_team(agent_team_id) → self._unregister_resource_provider(...)
+// Python: AgentTeamMgr.remove_agent_team(agent_team_id) → self._unregister_resource_provider(...)
 func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamProvider, error) {
 	unwrapped, err := m.unregisterProvider(agentTeamID)
 	if err != nil {
@@ -110,7 +110,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 // GetAgentTeam 获取 Agent 团队实例。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_agent_team 返回 None 行为。
 //
-// 对应 Python: AgentTeamMgr.get_agent_team(agent_team_id) → await self._get_resource(...)
+// Python: AgentTeamMgr.get_agent_team(agent_team_id) → await self._get_resource(...)
 func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (maschema.BaseTeam, error) {
 	team, err := m.getResource(ctx, agentTeamID)
 	if err != nil {

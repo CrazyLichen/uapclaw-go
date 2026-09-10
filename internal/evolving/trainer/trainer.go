@@ -26,41 +26,41 @@ import (
 // 编排 "evaluate → update → writeback" 自演化循环，
 // 接受 Updater 和 BaseEvaluator，管理检查点保存/恢复和早停。
 //
-// 对应 Python: openjiuwen/agent_evolving/trainer/trainer.py Trainer
+// Python: openjiuwen/agent_evolving/trainer/trainer.py Trainer
 type Trainer struct {
 	// updater 更新生成器。
-	// 对应 Python: evolving/updater/protocol.py Updater
+	// Python: evolving/updater/protocol.py Updater
 	updater updaterpkg.Updater
 	// evaluator 评估器。
-	// 对应 Python: evolving/evaluator.BaseEvaluator
+	// Python: evolving/evaluator.BaseEvaluator
 	evaluator evaluator.BaseEvaluator
 	// extractor 轨迹提取器。
-	// 对应 Python: evolving/trajectory/extractor.py TrajectoryExtractor
+	// Python: evolving/trajectory/extractor.py TrajectoryExtractor
 	extractor trajectory.TrajectoryExtractor
 	// callbacks 训练生命周期回调
 	callbacks *Callbacks
 	// numParallel 并发推理数。
-	// 对应 Python: _num_parallel, 默认 TuneConstant.default_parallel_num=1
+	// Python: _num_parallel, 默认 TuneConstant.default_parallel_num=1
 	numParallel int
 	// earlyStopScore 早停分数阈值。
-	// 对应 Python: _early_stop_score, 默认 TuneConstant.default_early_stop_score=1.0
+	// Python: _early_stop_score, 默认 TuneConstant.default_early_stop_score=1.0
 	earlyStopScore float64
 	// checkpointDir 检查点目录。非空启用检查点保存。
-	// 对应 Python: checkpoint_dir
+	// Python: checkpoint_dir
 	checkpointDir string
 	// checkpointEveryNEpochs 每 N 个 epoch 保存一次检查点。
-	// 对应 Python: checkpoint_every_n_epochs, 默认 1
+	// Python: checkpoint_every_n_epochs, 默认 1
 	checkpointEveryNEpochs int
 	// checkpointOnImprove 验证分数提升时是否保存检查点。
-	// 对应 Python: checkpoint_on_improve, 默认 true
+	// Python: checkpoint_on_improve, 默认 true
 	checkpointOnImprove bool
 	// checkpointStore 检查点存储。
-	// 对应 Python: _checkpoint_store, FileCheckpointStore
+	// Python: _checkpoint_store, FileCheckpointStore
 	checkpointStore *checkpointing.FileCheckpointStore
 	// resumeFrom 恢复检查点路径
 	resumeFrom string
 	// checkpointManager 检查点管理器。
-	// 对应 Python: _checkpoint_manager, DefaultCheckpointManager
+	// Python: _checkpoint_manager, DefaultCheckpointManager
 	checkpointManager checkpointing.CheckpointManager
 }
 
@@ -90,7 +90,7 @@ const (
 
 // NewTrainer 创建 Trainer 实例。
 //
-// 对应 Python: Trainer.__init__(updater, evaluator, extractor, callbacks, ...)
+// Python: Trainer.__init__(updater, evaluator, extractor, callbacks, ...)
 func NewTrainer(opts ...TrainerOption) *Trainer {
 	t := &Trainer{
 		numParallel:            defaultNumParallel,
@@ -117,7 +117,7 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 //
 // 返回优化后的 Agent 和 error。
 //
-// 对应 Python: Trainer.train(agent, train_cases, val_cases, num_iterations)
+// Python: Trainer.train(agent, train_cases, val_cases, num_iterations)
 func (t *Trainer) Train(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -137,7 +137,7 @@ func (t *Trainer) Train(
 		return agent, nil
 	}
 
-	// 对齐 Python: self._resume_if_needed(agent, progress)
+	// Python: self._resume_if_needed(agent, progress)
 	_ = t.ResumeIfNeeded(ctx, agent, progress)
 
 	var curEpochEvaluated []*dataset.EvaluatedCase
@@ -186,7 +186,7 @@ func (t *Trainer) Train(
 			progress.CurrentEpochScore = 0.0
 		}
 
-		// 对齐 Python: updated = asyncio.run(self._updater.update(trajectories, evaluated, config=kwargs))
+		// Python: updated = asyncio.run(self._updater.update(trajectories, evaluated, config=kwargs))
 		updated, updateErr := t.updater.Update(ctx, trajectories, evaluated, config)
 		if updateErr != nil {
 			logger.Warn(logComponent).
@@ -201,7 +201,7 @@ func (t *Trainer) Train(
 
 		if len(updated) > 1 {
 			// 多候选集：对每个候选方案在验证集上评估，选择最优
-			// 对齐 Python: self._select_best_candidate_on_val(...)
+			// Python: self._select_best_candidate_on_val(...)
 			candidates := make([]map[schema.UpdateKey]schema.UpdateValue, 0, len(updated))
 			for _, cand := range updated {
 				candidates = append(candidates, normalizeUpdates(cand))
@@ -211,7 +211,7 @@ func (t *Trainer) Train(
 			)
 		} else if len(updated) == 1 {
 			// 单映射：直接应用更新
-			// 对齐 Python: self.apply_updates(operators, updates)
+			// Python: self.apply_updates(operators, updates)
 			updates := normalizeUpdates(updated[0])
 			ApplyUpdates(operators, updates)
 			valScore, valEvaluated, _ = t.Evaluate(ctx, agent, valCases)
@@ -227,7 +227,7 @@ func (t *Trainer) Train(
 
 		fireCallback(t.callbacks.OnTrainEpochEnd, agent, progress, valEvaluated)
 
-		// 对齐 Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
+		// Python: self._save_checkpoint_if_needed(agent, progress, improved=improved)
 		_ = t.SaveCheckpointIfNeeded(agent, progress, improved)
 
 		if progress.BestScore >= t.earlyStopScore {
@@ -244,7 +244,7 @@ func (t *Trainer) Train(
 //
 // 返回 (平均分数, 评估结果列表, 轨迹列表, Session列表, error)。
 //
-// 对应 Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
+// Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
 func (t *Trainer) Forward(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -267,7 +267,7 @@ func (t *Trainer) Forward(
 
 	score := meanScore(evaluated)
 
-	// 对齐 Python:
+	// Python:
 	//    初始化轨迹列表为空
 	//   for case, sess in zip(cases.get_cases(), sessions):
 	//       对应 Python: trajectories.append(self._extractor.extract(sess, case_id=case.case_id))
@@ -291,7 +291,7 @@ func (t *Trainer) Forward(
 //
 // 不提取轨迹（与 Forward 的区别）。
 //
-// 对应 Python: Trainer.evaluate(agent, cases) -> (score, evaluated)
+// Python: Trainer.evaluate(agent, cases) -> (score, evaluated)
 func (t *Trainer) Evaluate(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -318,7 +318,7 @@ func (t *Trainer) Evaluate(
 
 // PredictOnly 仅运行推理，返回每个用例的模型输出（不含 Session）。
 //
-// 对应 Python: Trainer.predict_only(agent, cases) -> predicts
+// Python: Trainer.predict_only(agent, cases) -> predicts
 func (t *Trainer) PredictOnly(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -336,7 +336,7 @@ func (t *Trainer) PredictOnly(
 //
 // 返回 (模型输出列表, Session列表, error)。
 //
-// 对应 Python: Trainer.predict(agent, cases) -> (predicts, sessions)
+// Python: Trainer.predict(agent, cases) -> (predicts, sessions)
 func (t *Trainer) Predict(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -354,7 +354,7 @@ func (t *Trainer) Predict(
 	predicts := make([]map[string]any, len(caseList))
 	sessionsList := make([]*session.Session, len(caseList))
 
-	// 对齐 Python: asyncio.Semaphore(min(self._num_parallel, len(case_list)))
+	// Python: asyncio.Semaphore(min(self._num_parallel, len(case_list)))
 	limit := t.numParallel
 	if limit > len(caseList) {
 		limit = len(caseList)
@@ -366,10 +366,10 @@ func (t *Trainer) Predict(
 	for i, case_ := range caseList {
 		i, case_ := i, case_
 		g.Go(func() error {
-			// 对齐 Python: session = create_agent_session()
+			// Python: session = create_agent_session()
 			sess := session.CreateAgentSession(case_.CaseID, agent.Card(), nil)
 
-			// 对齐 Python: res = await agent.invoke({**case.inputs, "conversation_id": case.case_id}, session=session)
+			// Python: res = await agent.invoke({**case.inputs, "conversation_id": case.case_id}, session=session)
 			inputs := make(map[string]any, len(case_.Inputs)+1)
 			for k, v := range case_.Inputs {
 				inputs[k] = v
@@ -378,7 +378,7 @@ func (t *Trainer) Predict(
 
 			res, err := agent.Invoke(gCtx, inputs, agentinterfaces.WithSession(sess))
 			if err != nil {
-				// 对齐 Python: res = dict(error=f"Get wrong result due to {str(e)}")
+				// Python: res = dict(error=f"Get wrong result due to {str(e)}")
 				predicts[i] = map[string]any{"error": fmt.Sprintf("因 %s 导致结果错误", err.Error())}
 				sessionsList[i] = sess
 				return nil // 不中断其他 case
@@ -399,7 +399,7 @@ func (t *Trainer) Predict(
 
 // ApplyUpdates 将 Updater 生成的更新应用到 Operator 注册表。
 //
-// 对齐 Python: Trainer.apply_updates(operators, updates) — 静态方法
+// Python: Trainer.apply_updates(operators, updates) — 静态方法
 // 遍历 updates 映射，对每个 Operator 直接调用 SetParameter 设置参数值。
 // 注意：此方法与 update_execution.ApplyUpdates 不同——后者走 ApplyUpdate 路径
 // 返回 ApplyResult 列表，而此处直接调用 SetParameter，对齐 Python Trainer 行为。
@@ -422,7 +422,7 @@ func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.Upd
 //
 // 返回 (最优分数, 最优评估结果, error)。
 //
-// 对应 Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
+// Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
 func (t *Trainer) SelectBestCandidateOnVal(
 	ctx context.Context,
 	agent evolving.TrainableAgent,
@@ -480,7 +480,7 @@ func (t *Trainer) SelectBestCandidateOnVal(
 // 保存 Operator 注册表的状态副本，用于候选评估回滚/提交。
 // 返回 map[operatorID]operatorState。
 //
-// 对应 Python: Trainer._snapshot_operators_state(operators) — 静态方法
+// Python: Trainer._snapshot_operators_state(operators) — 静态方法
 func SnapshotOperatorsState(operators map[string]operator.Operator) map[string]map[string]any {
 	out := make(map[string]map[string]any, len(operators))
 	for opID, op := range operators {
@@ -494,7 +494,7 @@ func SnapshotOperatorsState(operators map[string]operator.Operator) map[string]m
 // 遍历快照中的每个 operator 状态，调用 LoadState 恢复。
 // operatorID 在 operators 中不存在时跳过。
 //
-// 对应 Python: Trainer._restore_operators_state(operators, state) — 静态方法
+// Python: Trainer._restore_operators_state(operators, state) — 静态方法
 func RestoreOperatorsState(operators map[string]operator.Operator, state map[string]map[string]any) {
 	for opID, st := range state {
 		op, ok := operators[opID]
@@ -509,7 +509,7 @@ func RestoreOperatorsState(operators map[string]operator.Operator, state map[str
 //
 // 调用 Agent 的 GetOperators() 方法获取其关联的 Operator 映射。
 //
-// 对应 Python: Trainer._get_operator_registry(agent) — 静态方法
+// Python: Trainer._get_operator_registry(agent) — 静态方法
 func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Operator {
 	if agent == nil {
 		return nil
@@ -522,7 +522,7 @@ func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Oper
 // 在训练开始前调用，使 Updater 能访问和修改 Operator。
 // 返回绑定的 Operator 数量；0 触发软退出。
 //
-// 对应 Python: Trainer._bind_updater(updater, operators)
+// Python: Trainer._bind_updater(updater, operators)
 func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map[string]any) int {
 	if t.updater == nil {
 		return 0
@@ -536,7 +536,7 @@ func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map
 // 而另一些（如基于规则的）则不需要。
 // 当 Updater 为 nil 时默认返回 true（兼容旧行为）。
 //
-// 对应 Python: Trainer._updater_requires_forward(updater)
+// Python: Trainer._updater_requires_forward(updater)
 func (t *Trainer) UpdaterRequiresForward() bool {
 	if t.updater == nil {
 		return true
@@ -548,7 +548,7 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 //
 // 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态和 Updater 状态。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: ckpt = self._checkpoint_store.load_checkpoint(self._resume_from) — 加载检查点
 //	Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt) — 恢复状态
@@ -558,7 +558,7 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 //	Python: if callable(load_state):
 //	    对应 Python: load_state(getattr(ckpt, "updater_state", {}) or {}) — 加载更新器状态
 //
-// 对应 Python: Trainer._resume_if_needed(agent, progress)
+// Python: Trainer._resume_if_needed(agent, progress)
 func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgent, progress *Progress) error {
 	if t.checkpointStore == nil || t.checkpointManager == nil || t.resumeFrom == "" {
 		return nil
@@ -570,10 +570,10 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 	if ckpt == nil {
 		return nil
 	}
-	// 对齐 Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
+	// Python: restored = self._checkpoint_manager.restore(agent=agent, checkpoint=ckpt)
 	restored := t.checkpointManager.Restore(agent, ckpt)
 
-	// 对齐 Python: progress.start_epoch / progress.best_score 从 restored 恢复
+	// Python: progress.start_epoch / progress.best_score 从 restored 恢复
 	if progress != nil {
 		if v, ok := restored["start_epoch"]; ok {
 			if f, ok := v.(float64); ok {
@@ -589,7 +589,7 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 		}
 	}
 
-	// 对齐 Python: load_state = getattr(self._updater, "load_state", None)
+	// Python: load_state = getattr(self._updater, "load_state", None)
 	//             若可调用则: load_state(getattr(ckpt, "updater_state", {}) or {})
 	if t.updater != nil {
 		updaterState := ckpt.UpdaterState
@@ -621,22 +621,22 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 //
 // 当达到 checkpointEveryNEpochs 间隔或验证分数提升（checkpointOnImprove）时保存。
 //
-// 对应 Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
+// Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
 func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress *Progress, improved bool) error {
 	if t.checkpointStore == nil || t.checkpointManager == nil {
 		return nil
 	}
-	// 对齐 Python: if not self._checkpoint_manager.should_save(epoch=progress.current_epoch, improved=improved)
+	// Python: if not self._checkpoint_manager.should_save(epoch=progress.current_epoch, improved=improved)
 	if !t.checkpointManager.ShouldSave(progress.CurrentEpoch, improved) {
 		return nil
 	}
-	// 对齐 Python: ckpt = self._checkpoint_manager.build_checkpoint(agent=agent, progress=progress, updater_state=self._updater.get_state())
+	// Python: ckpt = self._checkpoint_manager.build_checkpoint(agent=agent, progress=progress, updater_state=self._updater.get_state())
 	var updaterState map[string]any
 	if t.updater != nil {
 		updaterState = t.updater.GetState()
 	}
 	ckpt := t.checkpointManager.BuildCheckpoint(agent, progress, updaterState)
-	// 对齐 Python: path = self._checkpoint_store.save_checkpoint(ckpt, filename="latest.json")
+	// Python: path = self._checkpoint_store.save_checkpoint(ckpt, filename="latest.json")
 	_, err := t.checkpointStore.SaveCheckpoint(ckpt, "latest.json")
 	if err != nil {
 		return fmt.Errorf("保存检查点失败: %w", err)
@@ -650,7 +650,7 @@ func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress
 
 // SetCallbacks 设置训练生命周期回调。
 //
-// 对应 Python: Trainer.set_callbacks(callbacks)
+// Python: Trainer.set_callbacks(callbacks)
 func (t *Trainer) SetCallbacks(callbacks *Callbacks) {
 	t.callbacks = callbacks
 }
@@ -666,7 +666,7 @@ func WithEvaluator(e evaluator.BaseEvaluator) TrainerOption {
 }
 
 // WithExtractor 设置轨迹提取器。
-// 对应 Python: extractor 参数，默认 TracerTrajectoryExtractor()
+// Python: extractor 参数，默认 TracerTrajectoryExtractor()
 func WithExtractor(extractor trajectory.TrajectoryExtractor) TrainerOption {
 	return func(t *Trainer) { t.extractor = extractor }
 }
@@ -677,43 +677,43 @@ func WithCallbacks(callbacks *Callbacks) TrainerOption {
 }
 
 // WithNumParallel 设置并发推理数。
-// 对应 Python: num_parallel, 范围 [1, 20]（TuneConstant.min/max_parallel_num）。
+// Python: num_parallel, 范围 [1, 20]（TuneConstant.min/max_parallel_num）。
 func WithNumParallel(n int) TrainerOption {
 	return func(t *Trainer) { t.numParallel = n }
 }
 
 // WithEarlyStopScore 设置早停分数阈值。
-// 对应 Python: early_stop_score, 范围 [0.0, 1.0]。
+// Python: early_stop_score, 范围 [0.0, 1.0]。
 func WithEarlyStopScore(score float64) TrainerOption {
 	return func(t *Trainer) { t.earlyStopScore = score }
 }
 
 // WithCheckpointDir 设置检查点目录（非空启用检查点保存）。
-// 对应 Python: checkpoint_dir, None 表示禁用。
+// Python: checkpoint_dir, None 表示禁用。
 func WithCheckpointDir(dir string) TrainerOption {
 	return func(t *Trainer) { t.checkpointDir = dir }
 }
 
 // WithCheckpointEveryNEpochs 设置每 N 个 epoch 保存一次检查点。
-// 对应 Python: checkpoint_every_n_epochs, 默认 1。
+// Python: checkpoint_every_n_epochs, 默认 1。
 func WithCheckpointEveryNEpochs(n int) TrainerOption {
 	return func(t *Trainer) { t.checkpointEveryNEpochs = n }
 }
 
 // WithCheckpointOnImprove 设置验证分数提升时是否保存检查点。
-// 对应 Python: checkpoint_on_improve, 默认 true。
+// Python: checkpoint_on_improve, 默认 true。
 func WithCheckpointOnImprove(b bool) TrainerOption {
 	return func(t *Trainer) { t.checkpointOnImprove = b }
 }
 
 // WithResumeFrom 设置恢复检查点路径。
-// 对应 Python: resume_from
+// Python: resume_from
 func WithResumeFrom(path string) TrainerOption {
 	return func(t *Trainer) { t.resumeFrom = path }
 }
 
 // WithCheckpointManager 设置检查点管理器。
-// 对应 Python: checkpoint_manager
+// Python: checkpoint_manager
 func WithCheckpointManager(manager checkpointing.CheckpointManager) TrainerOption {
 	return func(t *Trainer) { t.checkpointManager = manager }
 }
@@ -722,7 +722,7 @@ func WithCheckpointManager(manager checkpointing.CheckpointManager) TrainerOptio
 
 // meanScore 计算评估用例的平均分数。
 //
-// 对应 Python: Trainer._mean_score(evaluated)
+// Python: Trainer._mean_score(evaluated)
 func meanScore(cases []*dataset.EvaluatedCase) float64 {
 	if len(cases) == 0 {
 		return 0
@@ -736,7 +736,7 @@ func meanScore(cases []*dataset.EvaluatedCase) float64 {
 
 // normalizeUpdates 将 Updater.Update 返回的 map[schema.UpdateKey]any 转为 map[schema.UpdateKey]schema.UpdateValue。
 //
-// 对齐 Python: updated 是 Updates (Dict[Tuple[str,str], UpdateValue]) 类型
+// Python: updated 是 Updates (Dict[Tuple[str,str], UpdateValue]) 类型
 func normalizeUpdates(updated map[schema.UpdateKey]any) map[schema.UpdateKey]schema.UpdateValue {
 	if updated == nil {
 		return nil

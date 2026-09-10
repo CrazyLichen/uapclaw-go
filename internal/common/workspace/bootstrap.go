@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // portEnvMapping 端口类型到环境变量名的映射。
-// 对应 Python: jiuwenswarm/instance_manager/bootstrap.py port_env_mapping
+// Python: jiuwenswarm/instance_manager/bootstrap.py port_env_mapping
 var portEnvMapping = map[string]string{
 	"agent_server": "AGENT_SERVER_PORT",
 	"web":          "WEB_PORT",
@@ -35,7 +35,7 @@ var portEnvMapping = map[string]string{
 //   - UAPCLAW_INSTANCE: 实例名称
 //   - 各端口变量：AGENT_SERVER_PORT, WEB_PORT, GATEWAY_PORT, FRONTEND_PORT
 //
-// 对应 Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env(config)
+// Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env(config)
 func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("config 不能为 nil")
@@ -76,7 +76,7 @@ func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 // CreateBootstrapEnvForName 按名称创建 bootstrap .env 文件。
 //
 // 便捷方法：从 instances.yaml 加载配置后调用 CreateBootstrapEnv。
-// 对应 Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env_for_name(name, workspace)
+// Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env_for_name(name, workspace)
 func CreateBootstrapEnvForName(name string, workspace string) (string, error) {
 	index, err := GetInstanceIndex(name)
 	if err != nil {

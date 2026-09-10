@@ -13,7 +13,7 @@ import (
 
 // McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
 type McpClient interface {
 	// Connect 建立 MCP 服务器连接
 	Connect(ctx context.Context, opts ...ConnectOption) error
@@ -43,7 +43,7 @@ type ConnectOptions struct {
 
 // McpServerConfig MCP 服务器配置。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpServerConfig)
+// Python: openjiuwen/core/foundation/tool/mcp/base.py (McpServerConfig)
 type McpServerConfig struct {
 	// ServerID 服务器唯一标识，默认自动生成 UUID
 	ServerID string
@@ -67,7 +67,7 @@ type McpServerConfig struct {
 
 // McpToolCard MCP 工具配置卡片，扩展 ToolCard 增加服务器标识。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpToolCard)
+// Python: openjiuwen/core/foundation/tool/mcp/base.py (McpToolCard)
 type McpToolCard struct {
 	tool.ToolCard
 	// ServerName MCP 服务器名称
@@ -142,7 +142,7 @@ func WithAuthQueryParams(params map[string]string) McpServerConfigOption {
 
 // NewMcpServerConfig 创建 MCP 服务器配置。
 //
-// 对应 Python: McpServerConfig(server_name=..., server_path=..., client_type=...)
+// Python: McpServerConfig(server_name=..., server_path=..., client_type=...)
 func NewMcpServerConfig(name, serverPath, clientType string, opts ...McpServerConfigOption) *McpServerConfig {
 	if clientType == "" {
 		clientType = "sse"
@@ -166,7 +166,7 @@ func WithMcpToolCardServerID(id string) McpToolCardOption {
 
 // NewMcpToolCard 创建 MCP 工具卡片。
 //
-// 对应 Python: McpToolCard(name=..., server_name=..., description=..., input_params=...)
+// Python: McpToolCard(name=..., server_name=..., description=..., input_params=...)
 func NewMcpToolCard(name, description, serverName string, inputParams []*schema.Param, opts ...McpToolCardOption) *McpToolCard {
 	card := &McpToolCard{
 		ToolCard:   *tool.NewToolCard(name, description, inputParams, nil),
@@ -184,7 +184,7 @@ func NewMcpToolCard(name, description, serverName string, inputParams []*schema.
 // AbilityManager 路由时可根据 ServerName 非空判断为 MCP 工具，
 // 也可根据 tool_call.Name 在注册表中查找 Tool 实例。
 //
-// 对应 Python: McpToolCard.tool_info() -> McpToolInfo
+// Python: McpToolCard.tool_info() -> McpToolInfo
 func (c *McpToolCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters)

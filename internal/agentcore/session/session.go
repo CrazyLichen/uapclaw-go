@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ProxySession 代理会话，将所有 InnerSession 方法委托给内部 stub。
-// 对应 Python: openjiuwen/core/session/session.py ProxySession
+// Python: openjiuwen/core/session/session.py ProxySession
 //
 // 修正 Python 遗漏：Python 的 ProxySession 未覆盖 actor_manager 和 close 方法，
 // 导致这两个方法不委托给 stub。Go 实现中全部 8 个方法均委托给 stub。

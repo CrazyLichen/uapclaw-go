@@ -38,7 +38,7 @@ type SessionsCancelInput struct {
 }
 
 // SessionTaskRow 会话任务行（业务视图）。
-// 对齐 Python: SessionTaskRow
+// Python: SessionTaskRow
 type SessionTaskRow struct {
 	// TaskID 任务标识
 	TaskID string `json:"task_id"`
@@ -55,7 +55,7 @@ type SessionTaskRow struct {
 }
 
 // SessionToolkit 会话任务注册表，跟踪异步子任务状态。
-// 对齐 Python: SessionToolkit
+// Python: SessionToolkit
 type SessionToolkit struct {
 	// rows 任务行映射
 	rows map[string]*SessionTaskRow
@@ -84,7 +84,7 @@ func NewSessionToolkit() *SessionToolkit {
 }
 
 // UpsertRunning 插入或更新任务为运行中状态。
-// 对齐 Python: SessionToolkit.upsert_running
+// Python: SessionToolkit.upsert_running
 func (t *SessionToolkit) UpsertRunning(taskID, subSessionID, description string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -97,7 +97,7 @@ func (t *SessionToolkit) UpsertRunning(taskID, subSessionID, description string)
 }
 
 // MarkCompleted 标记任务为已完成。
-// 对齐 Python: SessionToolkit.mark_completed
+// Python: SessionToolkit.mark_completed
 func (t *SessionToolkit) MarkCompleted(taskID, result string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -108,7 +108,7 @@ func (t *SessionToolkit) MarkCompleted(taskID, result string) {
 }
 
 // MarkFailed 标记任务为已失败。
-// 对齐 Python: SessionToolkit.mark_failed
+// Python: SessionToolkit.mark_failed
 func (t *SessionToolkit) MarkFailed(taskID, err string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -119,7 +119,7 @@ func (t *SessionToolkit) MarkFailed(taskID, err string) {
 }
 
 // MarkCanceled 标记任务为已取消。
-// 对齐 Python: SessionToolkit.mark_canceled
+// Python: SessionToolkit.mark_canceled
 func (t *SessionToolkit) MarkCanceled(taskID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -129,7 +129,7 @@ func (t *SessionToolkit) MarkCanceled(taskID string) {
 }
 
 // ListAll 返回所有任务行。
-// 对齐 Python: SessionToolkit.list_all
+// Python: SessionToolkit.list_all
 func (t *SessionToolkit) ListAll() []*SessionTaskRow {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -141,7 +141,7 @@ func (t *SessionToolkit) ListAll() []*SessionTaskRow {
 }
 
 // Get 按 ID 获取任务行。
-// 对齐 Python: SessionToolkit.get
+// Python: SessionToolkit.get
 func (t *SessionToolkit) Get(taskID string) *SessionTaskRow {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -149,7 +149,7 @@ func (t *SessionToolkit) Get(taskID string) *SessionTaskRow {
 }
 
 // Clear 清空所有任务行。
-// 对齐 Python: SessionToolkit.clear
+// Python: SessionToolkit.clear
 func (t *SessionToolkit) Clear() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -157,7 +157,7 @@ func (t *SessionToolkit) Clear() {
 }
 
 // NewSessionsListTool 创建查看子任务列表工具。
-// 对齐 Python: SessionsListTool.__init__
+// Python: SessionsListTool.__init__
 func NewSessionsListTool(toolkit *SessionToolkit, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("sessions_list", "SessionsListTool", language, nil, agentID)
 
@@ -188,7 +188,7 @@ func NewSessionsListTool(toolkit *SessionToolkit, language, agentID string) tool
 }
 
 // NewSessionsSpawnTool 创建异步子代理派生工具。
-// 对齐 Python: SessionsSpawnTool.__init__
+// Python: SessionsSpawnTool.__init__
 func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language, availableAgents, agentID string) tool.Tool {
 	var formatArgs map[string]string
 	if availableAgents != "" {
@@ -223,7 +223,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		}
 
 		// 步骤 3：生成 task_id 和 sub_session_id
-		// 对齐 Python: uuid.uuid4().hex — 32 位纯十六进制，不带连字符
+		// Python: uuid.uuid4().hex — 32 位纯十六进制，不带连字符
 		taskID := strings.ReplaceAll(uuid.New().String(), "-", "")
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
@@ -286,7 +286,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 }
 
 // NewSessionsCancelTool 创建取消子代理任务工具。
-// 对齐 Python: SessionsCancelTool.__init__
+// Python: SessionsCancelTool.__init__
 func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("sessions_cancel", "SessionsCancelTool", language, nil, agentID)
 
@@ -379,7 +379,7 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 }
 
 // BuildSessionTools 构建会话工具列表（list, spawn, cancel）。
-// 对齐 Python: build_session_tools
+// Python: build_session_tools
 func BuildSessionTools(
 	provider interfaces.DeepAgentInterface,
 	toolkit *SessionToolkit,
@@ -397,7 +397,7 @@ func BuildSessionTools(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // generateTokenHex 生成指定字节数的随机十六进制字符串。
-// 对齐 Python: secrets.token_hex(n)
+// Python: secrets.token_hex(n)
 func generateTokenHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)

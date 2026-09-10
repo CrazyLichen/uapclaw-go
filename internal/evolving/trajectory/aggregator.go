@@ -10,7 +10,7 @@ import (
 
 // TeamTrajectory 聚合的团队轨迹，属于单个会话。
 //
-// 对应 Python: TeamTrajectory dataclass
+// Python: TeamTrajectory dataclass
 type TeamTrajectory struct {
 	// TeamID 团队标识
 	TeamID string
@@ -24,7 +24,7 @@ type TeamTrajectory struct {
 
 // TeamTrajectoryAggregator 从 TrajectoryStore 聚合成员轨迹。
 //
-// 对应 Python: TeamTrajectoryAggregator
+// Python: TeamTrajectoryAggregator
 type TeamTrajectoryAggregator struct {
 	// store 轨迹存储
 	store TrajectoryStore
@@ -49,7 +49,7 @@ var (
 	//
 	// 注意：spawn_member 是 Leader 专用，不包含在 Teammate 上下文中。
 	//
-	// 对应 Python: COLLABORATIVE_TOOLS
+	// Python: COLLABORATIVE_TOOLS
 	CollaborativeTools = map[string]bool{
 		"view_task":      true,
 		"claim_task":     true,
@@ -59,7 +59,7 @@ var (
 
 	// memberRoleMetaKeys 成员角色元数据键。
 	//
-	// 对应 Python: _MEMBER_ROLE_META_KEYS
+	// Python: _MEMBER_ROLE_META_KEYS
 	memberRoleMetaKeys = []string{"member_role", "role"}
 )
 
@@ -67,7 +67,7 @@ var (
 
 // NewTeamTrajectoryAggregator 创建团队轨迹聚合器。
 //
-// 对应 Python: TeamTrajectoryAggregator(store=..., team_id=...)
+// Python: TeamTrajectoryAggregator(store=..., team_id=...)
 func NewTeamTrajectoryAggregator(store TrajectoryStore, teamID string) *TeamTrajectoryAggregator {
 	return &TeamTrajectoryAggregator{
 		store:  store,
@@ -77,7 +77,7 @@ func NewTeamTrajectoryAggregator(store TrajectoryStore, teamID string) *TeamTraj
 
 // Aggregate 聚合指定会话的所有成员轨迹。
 //
-// 对应 Python: TeamTrajectoryAggregator.aggregate()
+// Python: TeamTrajectoryAggregator.aggregate()
 func (a *TeamTrajectoryAggregator) Aggregate(sessionID string, filterCollaborative bool) *TeamTrajectory {
 	trajectories := a.store.Query("", map[string]any{"session_id": sessionID})
 	if len(trajectories) == 0 {
@@ -100,7 +100,7 @@ func (a *TeamTrajectoryAggregator) Aggregate(sessionID string, filterCollaborati
 
 // AggregateMemberTrajectories 聚合已加载到内存的成员轨迹。
 //
-// 对应 Python: aggregate_member_trajectories()
+// Python: aggregate_member_trajectories()
 func AggregateMemberTrajectories(trajectories []*Trajectory, teamID, sessionID string, filterCollaborative bool) *Trajectory {
 	members := memberTrajectoriesByID(trajectories, filterCollaborative)
 	return buildCombinedTrajectory(members, teamID, sessionID)
@@ -114,7 +114,7 @@ func AggregateMemberTrajectories(trajectories []*Trajectory, teamID, sessionID s
 //   - 读写团队技能文件的步骤
 //   - 跳过纯内部 LLM 推理和未白名单的工具调用
 //
-// 对应 Python: filter_member_trajectory()
+// Python: filter_member_trajectory()
 func FilterMemberTrajectory(trajectory *Trajectory) *Trajectory {
 	filteredSteps := make([]*TrajectoryStep, 0, len(trajectory.Steps))
 	for _, step := range trajectory.Steps {
@@ -137,7 +137,7 @@ func FilterMemberTrajectory(trajectory *Trajectory) *Trajectory {
 
 // emptyCombined 返回空的合并轨迹。
 //
-// 对应 Python: TeamTrajectoryAggregator._empty_combined()
+// Python: TeamTrajectoryAggregator._empty_combined()
 func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajectory {
 	combined := &Trajectory{
 		ExecutionID: fmt.Sprintf("team-%s", a.teamID),
@@ -155,7 +155,7 @@ func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajecto
 
 // memberTrajectoriesByID 按成员 ID 分组轨迹。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: members = {}
 //	Python: for trajectory in trajectories:
@@ -166,7 +166,7 @@ func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajecto
 //	    Python: if processed.steps:
 //	        Python: members[member_id] = _merge_member_trajectory(members.get(member_id), processed)
 //
-// 对应 Python: _member_trajectories_by_id()
+// Python: _member_trajectories_by_id()
 func memberTrajectoriesByID(trajectories []*Trajectory, filterCollaborative bool) map[string]*Trajectory {
 	members := make(map[string]*Trajectory)
 	for _, trajectory := range trajectories {
@@ -194,14 +194,14 @@ func memberTrajectoriesByID(trajectories []*Trajectory, filterCollaborative bool
 
 // buildCombinedTrajectory 构建合并后的轨迹。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: all_steps = []
 //	Python: for trajectory in members.values():
 //	    Python: all_steps.extend(trajectory.steps)
 //	Python: all_steps.sort(key=lambda step: step.start_time_ms or 0)
 //
-// 对应 Python: _build_combined_trajectory()
+// Python: _build_combined_trajectory()
 func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID string) *Trajectory {
 	allSteps := make([]*TrajectoryStep, 0)
 	for _, trajectory := range members {
@@ -247,7 +247,7 @@ func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID s
 
 // isLeaderTrajectory 判断轨迹是否属于 Leader 成员。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: for key in _MEMBER_ROLE_META_KEYS:
 //	    Python: role = trajectory.meta.get(key)
@@ -257,7 +257,7 @@ func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID s
 //	    Python: return str(role_value).lower() == _LEADER_ROLE
 //	Python: return member_id == _LEADER_ROLE
 //
-// 对应 Python: _is_leader_trajectory()
+// Python: _is_leader_trajectory()
 func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
 	for _, key := range memberRoleMetaKeys {
 		if role, ok := trajectory.Meta[key]; ok {
@@ -270,7 +270,7 @@ func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
 
 // mergeMemberTrajectory 合并同一成员的多个持久化轨迹快照。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if existing is None:
 //	    Python: return new
@@ -288,7 +288,7 @@ func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
 //	    Python: meta={**existing.meta, **new.meta},
 //	)
 //
-// 对应 Python: _merge_member_trajectory()
+// Python: _merge_member_trajectory()
 func mergeMemberTrajectory(existing, new *Trajectory) *Trajectory {
 	if existing == nil {
 		return new
@@ -333,7 +333,7 @@ func mergeMemberTrajectory(existing, new *Trajectory) *Trajectory {
 
 // stepsArePrefix 判断 prefix 是否是 steps 的前缀。
 //
-// 对应 Python: _steps_are_prefix()
+// Python: _steps_are_prefix()
 func stepsArePrefix(prefix, steps []*TrajectoryStep) bool {
 	if len(prefix) > len(steps) {
 		return false
@@ -348,7 +348,7 @@ func stepsArePrefix(prefix, steps []*TrajectoryStep) bool {
 
 // mergeCost 合并两个 token 成本字典。
 //
-// 对应 Python: _merge_cost()
+// Python: _merge_cost()
 func mergeCost(first, second CostInfo) CostInfo {
 	if first == nil && second == nil {
 		return nil
@@ -367,7 +367,7 @@ func mergeCost(first, second CostInfo) CostInfo {
 
 // isCollaborativeStep 判断步骤是否反映成员间协作。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if step.meta and any(key in step.meta for key in CROSS_MEMBER_META_KEYS):
 //	    Python: return True
@@ -376,7 +376,7 @@ func mergeCost(first, second CostInfo) CostInfo {
 //	Python: tool_name = getattr(step.detail, "tool_name", "").lower()
 //	Python: return tool_name in COLLABORATIVE_TOOLS or _is_team_skill_file_access(step, tool_name)
 //
-// 对应 Python: _is_collaborative_step()
+// Python: _is_collaborative_step()
 func isCollaborativeStep(step *TrajectoryStep) bool {
 	// 检查跨成员元数据键
 	if step.Meta != nil {
@@ -403,14 +403,14 @@ func isCollaborativeStep(step *TrajectoryStep) bool {
 
 // isTeamSkillFileAccess 判断是否为团队技能文件访问。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if "read" not in tool_name and "write" not in tool_name:
 //	    Python: return False
 //	Python: args = str(getattr(step.detail, "call_args", "")).lower()
 //	Python: return "skill" in args
 //
-// 对应 Python: _is_team_skill_file_access()
+// Python: _is_team_skill_file_access()
 func isTeamSkillFileAccess(step *TrajectoryStep, toolName string) bool {
 	if !strings.Contains(toolName, "read") && !strings.Contains(toolName, "write") {
 		return false

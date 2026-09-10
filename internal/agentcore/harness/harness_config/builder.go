@@ -84,7 +84,7 @@ var railDottedToName = buildRailDottedToName()
 // Build 将 ResolvedHarnessConfig 转换为 CreateDeepAgentParams，
 // 供调用方传入 CreateDeepAgent() 工厂创建 DeepAgent。
 //
-// 对齐 Python: HarnessConfigBuilder.build → create_deep_agent(config)。
+// Python: HarnessConfigBuilder.build → create_deep_agent(config)。
 // 注意：此方法返回 CreateDeepAgentParams 而非直接创建 DeepAgent，
 // 以避免 harness_config → harness 循环依赖。
 func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) (*CreateDeepAgentParams, error) {
@@ -287,7 +287,7 @@ func GenerateHarnessConfigYAML(
 // resolveBuiltinTools 按组名实例化内置工具。
 //
 // ⤵️ 9.38 回填：内置工具集实现后补全实例化逻辑。
-// 对齐 Python: resolve_builtin_tools → entry_point/module 工具加载。
+// Python: resolve_builtin_tools → entry_point/module 工具加载。
 func resolveBuiltinTools(groupName string, sysOperation sysop.SysOperation) ([]*tool.ToolCard, error) {
 	entry, ok := builtinToolGroups[groupName]
 	if !ok {
@@ -336,7 +336,7 @@ func resolveTools(resources *ResourcesSchema, sysOperation sysop.SysOperation) (
 
 // createSysOperation 创建并注册本地 SysOperation，以 AgentCard 为键
 //
-// 对齐 Python: create_sys_operation → LocalSysOperation(card, workspace)。
+// Python: create_sys_operation → LocalSysOperation(card, workspace)。
 func createSysOperation(card *sasc.AgentCard) (sysop.SysOperation, error) {
 	sysOpCard := sysop.NewSysOperationCard(sysop.WithSysOpMode(sysop.OperationModeLocal))
 	return sysop.NewLocalSysOperation(sysOpCard), nil

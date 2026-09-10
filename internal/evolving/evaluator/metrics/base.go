@@ -10,7 +10,7 @@ import (
 
 // Metric 评估指标抽象接口。
 //
-// 对应 Python: openjiuwen/agent_evolving/evaluator/metrics/base.py Metric
+// Python: openjiuwen/agent_evolving/evaluator/metrics/base.py Metric
 type Metric interface {
 	// Name 指标标识名
 	Name() string
@@ -38,7 +38,7 @@ type MetricOption func(*metricContext)
 // MetricResult 指标计算结果，统一用 map 表示。
 // 单指标：{"exact_match": 1.0}  多指标：{"precision": 0.8, "recall": 0.6}
 //
-// 对应 Python: MetricResult = Union[float, Dict[str, float]]
+// Python: MetricResult = Union[float, Dict[str, float]]
 type MetricResult = map[string]float64
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -59,7 +59,7 @@ func WithCase(c dataset.Case) MetricOption {
 
 // DefaultComputeBatch 默认批量计算实现：逐个调用 Compute。
 //
-// 对应 Python: Metric.compute_batch() 默认实现
+// Python: Metric.compute_batch() 默认实现
 func DefaultComputeBatch(m Metric, ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
 	results := make([]MetricResult, len(predictions))
 	for i := range predictions {

@@ -4,7 +4,7 @@
 // milvusClient 接口。由于适配器方法直接委托给真实 SDK Client，
 // 无法在单元测试中 mock，这些代码仅在集成测试中覆盖。
 //
-// 对应 Python: vector/milvus_vector_store.py (MilvusVectorStore)
+// Python: vector/milvus_vector_store.py (MilvusVectorStore)
 package vector
 
 import (

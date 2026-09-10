@@ -29,7 +29,7 @@ const (
 )
 
 // SpawnProcess 创建子进程运行 Agent，返回 SpawnedProcessHandle。
-// 对齐 Python: spawn_process() (process_manager.py)
+// Python: spawn_process() (process_manager.py)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

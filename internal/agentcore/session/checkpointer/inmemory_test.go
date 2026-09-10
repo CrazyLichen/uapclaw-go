@@ -883,7 +883,7 @@ func TestInteractiveInputKey(t *testing.T) {
 // ──────────────────────────── isInteractiveInput 测试 ────────────────────────────
 
 // TestIsInteractiveInput 测试交互输入判断
-// 对齐 Python: isinstance(inputs, InteractiveInput)
+// Python: isinstance(inputs, InteractiveInput)
 func TestIsInteractiveInput(t *testing.T) {
 	if isInteractiveInput(nil) {
 		t.Error("nil 不应视为交互输入")

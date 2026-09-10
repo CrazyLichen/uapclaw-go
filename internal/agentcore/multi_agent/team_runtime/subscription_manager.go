@@ -31,7 +31,7 @@ type SubscriptionMap struct {
 //   - subscriptions: topic_pattern → agent_id 集合（正查：模式查订阅者）
 //   - agentTopics: agent_id → topic_pattern 集合（反查：Agent 查其订阅的模式）
 //
-// 对应 Python: SubscriptionManager (openjiuwen/core/multi_agent/team_runtime/subscription_manager.py)
+// Python: SubscriptionManager (openjiuwen/core/multi_agent/team_runtime/subscription_manager.py)
 type SubscriptionManager struct {
 	// subscriptions 主题模式到 Agent ID 集合的映射
 	subscriptions map[string]map[string]struct{}
@@ -63,7 +63,7 @@ func NewSubscriptionManager() *SubscriptionManager {
 
 // Subscribe 将 Agent 订阅到主题模式，同时维护双向索引。
 //
-// 对应 Python: SubscriptionManager.subscribe
+// Python: SubscriptionManager.subscribe
 func (m *SubscriptionManager) Subscribe(agentID, topicPattern string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -86,7 +86,7 @@ func (m *SubscriptionManager) Subscribe(agentID, topicPattern string) {
 
 // Unsubscribe 将 Agent 从主题模式取消订阅，清理双向索引，空集合自动删除。
 //
-// 对应 Python: SubscriptionManager.unsubscribe
+// Python: SubscriptionManager.unsubscribe
 func (m *SubscriptionManager) Unsubscribe(agentID, topicPattern string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -113,7 +113,7 @@ func (m *SubscriptionManager) Unsubscribe(agentID, topicPattern string) {
 
 // UnsubscribeAll 移除 Agent 的所有订阅。
 //
-// 对应 Python: SubscriptionManager.unsubscribe_all
+// Python: SubscriptionManager.unsubscribe_all
 func (m *SubscriptionManager) UnsubscribeAll(agentID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -143,7 +143,7 @@ func (m *SubscriptionManager) UnsubscribeAll(agentID string) {
 //
 // 遍历所有 pattern 进行 fnmatch 匹配，返回去重后的 Agent ID 列表。
 //
-// 对应 Python: SubscriptionManager.get_subscribers
+// Python: SubscriptionManager.get_subscribers
 func (m *SubscriptionManager) GetSubscribers(topicID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -172,7 +172,7 @@ func (m *SubscriptionManager) GetSubscribers(topicID string) []string {
 
 // GetSubscriptionCount 获取总订阅数。
 //
-// 对应 Python: SubscriptionManager.get_subscription_count
+// Python: SubscriptionManager.get_subscription_count
 func (m *SubscriptionManager) GetSubscriptionCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -186,7 +186,7 @@ func (m *SubscriptionManager) GetSubscriptionCount() int {
 
 // ListSubscriptions 列出订阅信息用于调试，支持按 agentID 过滤。
 //
-// 对应 Python: SubscriptionManager.list_subscriptions
+// Python: SubscriptionManager.list_subscriptions
 func (m *SubscriptionManager) ListSubscriptions(agentID string) any {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -223,7 +223,7 @@ func (m *SubscriptionManager) ListSubscriptions(agentID string) any {
 //
 // 精确匹配优先，含 * 或 ? 时使用 fnmatch 通配符匹配。
 //
-// 对应 Python: SubscriptionManager._match_pattern
+// Python: SubscriptionManager._match_pattern
 func matchPattern(topicID, pattern string) bool {
 	if pattern == topicID {
 		return true

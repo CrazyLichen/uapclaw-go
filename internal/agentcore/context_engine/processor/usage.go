@@ -1,6 +1,10 @@
 package processor
 
-import llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+import (
+	"maps"
+
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -14,7 +18,7 @@ import llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/l
 
 // ResetCompressionUsage 重置压缩用量追踪。
 //
-// 对应 Python: ContextProcessor._reset_compression_usage()
+// Python: ContextProcessor._reset_compression_usage()
 func (p *BaseProcessor) ResetCompressionUsage() {
 	p.compressionUsage = nil
 }
@@ -23,7 +27,7 @@ func (p *BaseProcessor) ResetCompressionUsage() {
 //
 // 从 AssistantMessage 的 UsageMetadata 字段提取用量信息并合并到基类追踪中。
 //
-// 对应 Python: ContextProcessor._record_compression_usage(response)
+// Python: ContextProcessor._record_compression_usage(response)
 func (p *BaseProcessor) RecordCompressionUsage(response *llm_schema.AssistantMessage) {
 	usage := ExtractUsageMetadata(response)
 	if usage == nil {
@@ -36,16 +40,12 @@ func (p *BaseProcessor) RecordCompressionUsage(response *llm_schema.AssistantMes
 //
 // 返回用量 map 的副本，避免外部修改影响内部状态。
 //
-// 对应 Python: ContextProcessor._current_compression_usage()
+// Python: ContextProcessor._current_compression_usage()
 func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 	if p.compressionUsage == nil {
 		return nil
 	}
-	result := make(map[string]any, len(p.compressionUsage))
-	for k, v := range p.compressionUsage {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(p.compressionUsage)
 }
 
 // ExtractUsageMetadata 从 AssistantMessage 中提取用量元数据，
@@ -56,7 +56,7 @@ func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 //	calls=1（调用次数）, input_tokens（输入令牌）, output_tokens（输出令牌）, total_tokens（总令牌）, cache_tokens（缓存令牌）,
 //	输入成本、输出成本、总成本、模型名称、详情=[data]
 //
-// 对应 Python: ContextProcessor._extract_usage_metadata(response)
+// Python: ContextProcessor._extract_usage_metadata(response)
 func ExtractUsageMetadata(msg *llm_schema.AssistantMessage) map[string]any {
 	if msg == nil || msg.UsageMetadata == nil {
 		return nil
@@ -84,7 +84,7 @@ func ExtractUsageMetadata(msg *llm_schema.AssistantMessage) map[string]any {
 //   - model_name → 取 left 非空值，否则取 right
 //   - details → 追加合并
 //
-// 对应 Python: ContextProcessor._merge_compression_usage(left, right)
+// Python: ContextProcessor._merge_compression_usage(left, right)
 func MergeCompressionUsage(left, right map[string]any) map[string]any {
 	if left == nil {
 		if right == nil {
@@ -140,11 +140,7 @@ func usageMetadataToMap(um *llm_schema.UsageMetadata) map[string]any {
 
 // copyMap 创建 map 的浅拷贝
 func copyMap(m map[string]any) map[string]any {
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(m)
 }
 
 // toInt 将 any 转为 int

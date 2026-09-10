@@ -10,7 +10,7 @@ import (
 
 // AbortError 回调执行中止错误，在回调内部触发以中止整个 trigger 流程。
 //
-// 对应 Python: openjiuwen/core/runner/callback/errors.py (AbortError)
+// Python: openjiuwen/core/runner/callback/errors.py (AbortError)
 //
 // 传播逻辑（与 Python 对齐）：
 //   - Cause != nil → trigger 返回 Cause（对调用方透明，AbortError 仅作为包装器）
@@ -44,7 +44,7 @@ type AbortError struct {
 
 // NewAbortError 创建中止错误。
 //
-// 对应 Python: AbortError(reason, cause=cause, details=details)
+// Python: AbortError(reason, cause=cause, details=details)
 func NewAbortError(reason string, cause error) *AbortError {
 	var baseOpts []exception.ErrorOption
 	baseOpts = append(baseOpts, exception.WithMsg(reason))

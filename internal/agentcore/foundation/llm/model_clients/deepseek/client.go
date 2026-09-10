@@ -22,7 +22,7 @@ import (
 //   - 不传会返回 400 错误
 //   - 本客户端对所有 assistant 消息统一兜底补空字符串
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py (DeepSeekModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py (DeepSeekModelClient)
 type DeepSeekModelClient struct {
 	openai.OpenAIModelClient
 }
@@ -44,7 +44,7 @@ const logComponent = logger.ComponentAgentCore
 //  1. 先构造 OpenAI 客户端（复用 baseHeaders 初始化等）
 //  2. 覆盖 clientName 为 "DeepSeek client"
 //
-// 对应 Python: DeepSeekModelClient.__init__(model_config, model_client_config)
+// Python: DeepSeekModelClient.__init__(model_config, model_client_config)
 func NewDeepSeekModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -77,7 +77,7 @@ func NewDeepSeekModelClient(
 // DeepSeek API 要求有工具调用场景下 assistant 消息必须包含 reasoning_content 字段，
 // 否则返回 400 错误。本方法对所有 assistant 消息统一兜底补空字符串。
 //
-// 对应 Python: DeepSeekModelClient 继承 OpenAIModelClient.invoke()
+// Python: DeepSeekModelClient 继承 OpenAIModelClient.invoke()
 // （Python 通过动态分发自动走覆写的 _convert_messages_to_dict）
 func (c *DeepSeekModelClient) Invoke(
 	ctx context.Context,
@@ -99,7 +99,7 @@ func (c *DeepSeekModelClient) Invoke(
 // 覆写 OpenAI 客户端的 Stream，在委托前为所有 assistant 消息补充 reasoning_content。
 // 逻辑与 Invoke 一致，详见 Invoke 注释。
 //
-// 对应 Python: DeepSeekModelClient 继承 OpenAIModelClient.stream()
+// Python: DeepSeekModelClient 继承 OpenAIModelClient.stream()
 func (c *DeepSeekModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -212,7 +212,7 @@ func init() {
 //  2. 遍历结果，为所有 assistant 消息补充 reasoning_content
 //  3. 包装为 Dicts 模式回传（Dicts 模式直接透传，零转换开销）
 //
-// 对应 Python: DeepSeekModelClient._convert_messages_to_dict()
+// Python: DeepSeekModelClient._convert_messages_to_dict()
 func (c *DeepSeekModelClient) enrichMessagesWithReasoningContent(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {

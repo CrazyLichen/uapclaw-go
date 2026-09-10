@@ -91,7 +91,7 @@ var (
 	// sessionCreator 从序列化数据重建 Session 的函数。
 	// 由 session 包在 init 时通过 RegisterSessionCreator 注册，
 	// 解决 controller → session 的循环依赖问题。
-	// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+	// Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
 	sessionCreator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor
 )
 
@@ -117,7 +117,7 @@ func NewAgentSessionContainer() *AgentSessionContainer {
 func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
 	container := NewAgentSessionContainer()
 	if sessionCreator != nil {
-		// 对齐 Python: create_agent_session(session_id=session_id, card=AgentCard(id=agent_id))
+		// Python: create_agent_session(session_id=session_id, card=AgentCard(id=agent_id))
 		// controller 只有 agentID，构建最小 card 传给 sessionCreator
 		card := &agentschema.AgentCard{
 			BaseCard: schema.BaseCard{ID: agentID},

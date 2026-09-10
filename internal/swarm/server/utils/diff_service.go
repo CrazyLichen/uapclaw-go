@@ -18,14 +18,14 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DiffService 提供 turn-based diff 查询服务。
-// 对齐 Python: DiffService (diff_service.py line 20-465)
+// Python: DiffService (diff_service.py line 20-465)
 type DiffService struct {
 	// agentID Agent 标识，默认 "jiuwenswarm"
 	agentID string
 }
 
 // TurnDiff 单轮对话的 diff 信息。
-// 对齐 Python: _compute_turn_diffs 返回值中的每个 turn dict
+// Python: _compute_turn_diffs 返回值中的每个 turn dict
 type TurnDiff struct {
 	// TurnIndex 轮次序号（1-based）
 	TurnIndex int `json:"turnIndex"`
@@ -133,7 +133,7 @@ var diffServiceOnce sync.Once
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetDiffService 获取 DiffService 单例实例。
-// 对齐 Python: get_diff_service() (line 470-475)
+// Python: get_diff_service() (line 470-475)
 func GetDiffService() *DiffService {
 	diffServiceOnce.Do(func() {
 		diffServiceInstance = &DiffService{
@@ -144,12 +144,12 @@ func GetDiffService() *DiffService {
 }
 
 // GetTurnDiffs 获取 session 的所有 turn diff（完整信息）。
-// 对齐 Python: DiffService.get_turn_diffs(session_id, project_dir) (line 26-37)
+// Python: DiffService.get_turn_diffs(session_id, project_dir) (line 26-37)
 //
 // 返回值：turn diff 列表，按时间倒序排列（最近的优先）
 func (ds *DiffService) GetTurnDiffs(sessionID string, projectDir string) []TurnDiff {
 	turns := ds.computeTurnDiffs(sessionID, projectDir)
-	// 对齐 Python: list(reversed(turns))
+	// Python: list(reversed(turns))
 	reversed := make([]TurnDiff, len(turns))
 	for i, t := range turns {
 		reversed[len(turns)-1-i] = t
@@ -158,7 +158,7 @@ func (ds *DiffService) GetTurnDiffs(sessionID string, projectDir string) []TurnD
 }
 
 // GetFilesToRestore 返回需要恢复的文件及其目标内容。
-// 对齐 Python: DiffService.get_files_to_restore(session_id, turn_index, project_dir) (line 405-464)
+// Python: DiffService.get_files_to_restore(session_id, turn_index, project_dir) (line 405-464)
 //
 // 对于在 turn_index 及之后所有 turn 中被修改的文件，
 // 找到它们在 turn_index 开始前的状态（old_content of the first edit at/after the target turn），
@@ -297,7 +297,7 @@ func splitLinesKeepEnds(s string) []string {
 }
 
 // computeTurnDiffs 计算 turn-based diffs。
-// 对齐 Python: _compute_turn_diffs (line 39-125)
+// Python: _compute_turn_diffs (line 39-125)
 func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []TurnDiff {
 	history := ds.readHistory(sessionID)
 	agentHistory := ds.readAgentHistory(sessionID, projectDir)
@@ -378,7 +378,7 @@ func (ds *DiffService) computeTurnDiffs(sessionID string, projectDir string) []T
 }
 
 // findNextUserTime 查找下一次 user 消息的时间戳。
-// 对齐 Python: _find_next_user_time (line 138-145)
+// Python: _find_next_user_time (line 138-145)
 // 返回 0 表示"无下一个用户消息"（对齐 Python 返回 None，Go 用 0 表示语义等价，下游以 endTime == 0 判断）
 func (ds *DiffService) findNextUserTime(history []historyRecord, userIndex int) float64 {
 	for j := userIndex + 1; j < len(history); j++ {
@@ -390,7 +390,7 @@ func (ds *DiffService) findNextUserTime(history []historyRecord, userIndex int) 
 }
 
 // readHistory 读取 session history。
-// 对齐 Python: _read_history (line 148-156)
+// Python: _read_history (line 148-156)
 func (ds *DiffService) readHistory(sessionID string) []historyRecord {
 	sessionsDir := workspace.AgentSessionsDir()
 	historyFile := filepath.Join(sessionsDir, sessionID, "history.json")
@@ -408,7 +408,7 @@ func (ds *DiffService) readHistory(sessionID string) []historyRecord {
 }
 
 // readAgentHistory 读取 .agent_history 目录下多个文件并合并。
-// 对齐 Python: _read_agent_history (line 195-281)
+// Python: _read_agent_history (line 195-281)
 func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map[string][]filesystem.OpHistoryEntry {
 	result := make(map[string][]filesystem.OpHistoryEntry)
 
@@ -513,7 +513,7 @@ func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map
 }
 
 // findFileEditsByTimeRange 根据时间范围查找文件编辑记录。
-// 对齐 Python: _find_file_edits_by_time_range (line 283-313)
+// Python: _find_file_edits_by_time_range (line 283-313)
 func (ds *DiffService) findFileEditsByTimeRange(
 	agentHistory map[string][]filesystem.OpHistoryEntry,
 	startTime, endTime float64,
@@ -536,7 +536,7 @@ func (ds *DiffService) findFileEditsByTimeRange(
 }
 
 // isValidFileOpsFile 检查文件名是否是有效的 file_ops 文件。
-// 对齐 Python: _is_valid_file_ops_file (line 183-193)
+// Python: _is_valid_file_ops_file (line 183-193)
 func (ds *DiffService) isValidFileOpsFile(name string, sessionID string, requireSession bool) bool {
 	prefix := fmt.Sprintf("file_ops_%s_", ds.agentID)
 	if !strings.HasPrefix(name, prefix) {
@@ -552,7 +552,7 @@ func (ds *DiffService) isValidFileOpsFile(name string, sessionID string, require
 }
 
 // getProjectDirFromMetadata 从 session metadata.json 中读取项目目录。
-// 对齐 Python: _get_project_dir_from_metadata (line 159-181)
+// Python: _get_project_dir_from_metadata (line 159-181)
 func (ds *DiffService) getProjectDirFromMetadata(sessionID string) string {
 	sessionsDir := workspace.AgentSessionsDir()
 	metadataFile := filepath.Join(sessionsDir, sessionID, "metadata.json")
@@ -589,7 +589,7 @@ func (ds *DiffService) getProjectDirFromMetadata(sessionID string) string {
 }
 
 // computeHunks 计算结构化 diff hunks（line-level）。
-// 对齐 Python: _compute_hunks (line 327-392)
+// Python: _compute_hunks (line 327-392)
 // 使用简易行级 diff 算法（对齐 Python difflib.SequenceMatcher 的 line-level 输出）
 func computeHunks(oldContent, newContent *string) []Hunk {
 	// 处理删除文件的情况：newContent 为 nil
@@ -661,7 +661,7 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.i1; k < op.i2; k++ {
-				// 对齐 Python: line.rstrip() 去除行尾符
+				// Python: line.rstrip() 去除行尾符
 				currentHunk.Lines = append(currentHunk.Lines, "-"+strings.TrimRight(oldLines[k], "\r\n"))
 			}
 			currentHunk.OldLines += op.i2 - op.i1
@@ -674,7 +674,7 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.j1; k < op.j2; k++ {
-				// 对齐 Python: line.rstrip() 去除行尾符
+				// Python: line.rstrip() 去除行尾符
 				currentHunk.Lines = append(currentHunk.Lines, "+"+strings.TrimRight(newLines[k], "\r\n"))
 			}
 			currentHunk.NewLines += op.j2 - op.j1
@@ -687,12 +687,12 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 				}
 			}
 			for k := op.i1; k < op.i2; k++ {
-				// 对齐 Python: line.rstrip() 去除行尾符
+				// Python: line.rstrip() 去除行尾符
 				currentHunk.Lines = append(currentHunk.Lines, "-"+strings.TrimRight(oldLines[k], "\r\n"))
 			}
 			currentHunk.OldLines += op.i2 - op.i1
 			for k := op.j1; k < op.j2; k++ {
-				// 对齐 Python: line.rstrip() 去除行尾符
+				// Python: line.rstrip() 去除行尾符
 				currentHunk.Lines = append(currentHunk.Lines, "+"+strings.TrimRight(newLines[k], "\r\n"))
 			}
 			currentHunk.NewLines += op.j2 - op.j1
@@ -707,7 +707,7 @@ func computeHunks(oldContent, newContent *string) []Hunk {
 }
 
 // isoToTimestamp 将 ISO 8601 字符串转换为 Unix timestamp。
-// 对齐 Python: _iso_to_timestamp (line 316-319)
+// Python: _iso_to_timestamp (line 316-319)
 func isoToTimestamp(isoStr string) float64 {
 	if isoStr == "" {
 		return 0
@@ -724,7 +724,7 @@ func isoToTimestamp(isoStr string) float64 {
 }
 
 // timestampToISO 将 Unix timestamp 转换为 ISO 8601 字符串。
-// 对齐 Python: _timestamp_to_iso (line 322-325)
+// Python: _timestamp_to_iso (line 322-325)
 func timestampToISO(timestamp float64) string {
 	sec := int64(timestamp)
 	nsec := int64((timestamp - float64(sec)) * 1e9)
@@ -738,7 +738,7 @@ func normalizePath(p string) string {
 	if err != nil {
 		return strings.ToLower(strings.ReplaceAll(p, "\\", "/"))
 	}
-	// 对齐 Python: Path.resolve() 解析符号链接
+	// Python: Path.resolve() 解析符号链接
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return abs
@@ -825,7 +825,7 @@ func sumLinesRemoved(files map[string]*FileDiff) int {
 }
 
 // computeLineOpCodes 使用 LCS 算法计算行级 diff 操作码。
-// 对齐 Python: difflib.SequenceMatcher(None, old_lines, new_lines).get_opcodes()
+// Python: difflib.SequenceMatcher(None, old_lines, new_lines).get_opcodes()
 func computeLineOpCodes(oldLines, newLines []string) []opCode {
 	m := len(oldLines)
 	n := len(newLines)

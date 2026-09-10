@@ -15,7 +15,7 @@ import (
 // 仅拥有 "updates_generated → local_apply_completed" 阶段；
 // 暂存审批由 ExperienceManager 负责，持久化由 EvolutionStore 负责。
 //
-// 对应 Python: openjiuwen/core/operator/skill_call/base.py SkillExperienceOperator
+// Python: openjiuwen/core/operator/skill_call/base.py SkillExperienceOperator
 type SkillExperienceOperator struct {
 	// skillName 技能名称
 	skillName string
@@ -36,7 +36,7 @@ type SkillExperienceOperatorOption func(*SkillExperienceOperator)
 
 // NewSkillExperienceOperator 创建 SkillExperienceOperator 实例。
 //
-// 对应 Python: SkillExperienceOperator.__init__(skill_name, on_parameter_updated)
+// Python: SkillExperienceOperator.__init__(skill_name, on_parameter_updated)
 func NewSkillExperienceOperator(skillName string, opts ...SkillExperienceOperatorOption) *SkillExperienceOperator {
 	op := &SkillExperienceOperator{
 		skillName: skillName,
@@ -52,14 +52,14 @@ func NewSkillExperienceOperator(skillName string, opts ...SkillExperienceOperato
 // OperatorID 返回操作器标识。
 // 格式: "skill_experience_{skill_name}"
 //
-// 对应 Python: SkillExperienceOperator.operator_id (property)
+// Python: SkillExperienceOperator.operator_id (property)
 func (op *SkillExperienceOperator) OperatorID() string {
 	return fmt.Sprintf("skill_experience_%s", op.skillName)
 }
 
 // GetTunables 获取可调参数。
 //
-// 对应 Python: SkillExperienceOperator.get_tunables()
+// Python: SkillExperienceOperator.get_tunables()
 func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
 		schema.ExperiencesTarget: {
@@ -74,7 +74,7 @@ func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec
 // SetParameter 设置参数值。
 // 仅接受 target="experiences" 且 value 非 nil，通知消费者。
 //
-// 对应 Python: SkillExperienceOperator.set_parameter(target, value)
+// Python: SkillExperienceOperator.set_parameter(target, value)
 func (op *SkillExperienceOperator) SetParameter(target string, value any) {
 	if target != schema.ExperiencesTarget || value == nil {
 		return
@@ -90,7 +90,7 @@ func (op *SkillExperienceOperator) SetParameter(target string, value any) {
 // 仅支持 target="experiences" + effect=pending_change + mode 为 append 或 merge。
 // 其他组合返回 applied=False。
 //
-// 对应 Python: SkillExperienceOperator.preview_update(target, update)
+// Python: SkillExperienceOperator.preview_update(target, update)
 func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	if target != schema.ExperiencesTarget {
 		return schema.ApplyResultWithErrors(
@@ -138,14 +138,14 @@ func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.Up
 
 // GetState 获取当前状态（空操作）。
 //
-// 对应 Python: SkillExperienceOperator.get_state() → {}
+// Python: SkillExperienceOperator.get_state() → {}
 func (op *SkillExperienceOperator) GetState() map[string]any {
 	return map[string]any{}
 }
 
 // LoadState 从检查点恢复状态（空操作）。
 //
-// 对应 Python: SkillExperienceOperator.load_state(state) → None
+// Python: SkillExperienceOperator.load_state(state) → None
 func (op *SkillExperienceOperator) LoadState(_ map[string]any) {
 	// 空操作
 }
@@ -153,7 +153,7 @@ func (op *SkillExperienceOperator) LoadState(_ map[string]any) {
 // ApplyUpdate 应用结构化演化更新。
 // 重写默认行为，路由到 PreviewUpdate。
 //
-// 对应 Python: PreviewableOperator.apply_update → self.preview_update
+// Python: PreviewableOperator.apply_update → self.preview_update
 func (op *SkillExperienceOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return op.PreviewUpdate(target, update)
 }
@@ -166,7 +166,7 @@ func WithSkillOnParameterUpdated(cb operator.ParameterUpdatedCallback) SkillExpe
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // toSlice 将 value 转为 []any。
-// 对应 Python: items = value if isinstance(value, list) else [value]
+// Python: items = value if isinstance(value, list) else [value]
 func toSlice(value any) []any {
 	if value == nil {
 		return nil

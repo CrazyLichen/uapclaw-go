@@ -20,23 +20,23 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildIdentitySection 构建身份节。
-// 对齐 Python: _identity_prompt(language) (prompt_builder.py L111-242)
+// Python: _identity_prompt(language) (prompt_builder.py L111-242)
 // 内部调用 workspace 函数获取目录变量，与 Python 在函数内调用 get_agent_workspace_dir() 等价。
 func BuildIdentitySection() saprompt.PromptSection {
-	// 对齐 Python: config_dir = _get_config_dir() = get_user_workspace_dir() / "config"
+	// Python: config_dir = _get_config_dir() = get_user_workspace_dir() / "config"
 	configDir := workspace.ConfigDir()
-	// 对齐 Python: workspace_dir = get_agent_workspace_dir()
+	// Python: workspace_dir = get_agent_workspace_dir()
 	workspaceDir := workspace.AgentWorkspaceDir()
-	// 对齐 Python: memory_dir = get_agent_memory_dir()
+	// Python: memory_dir = get_agent_memory_dir()
 	memoryDir := workspace.AgentMemoryDir()
-	// 对齐 Python: skills_dir = get_agent_skills_dir()
+	// Python: skills_dir = get_agent_skills_dir()
 	skillsDir := workspace.AgentSkillsDir()
-	// 对齐 Python: todo_dir = get_deepagent_todo_dir()
+	// Python: todo_dir = get_deepagent_todo_dir()
 	todoDir := workspace.DeepAgentTodoDir()
-	// 对齐 Python: os_type = sys.platform
+	// Python: os_type = sys.platform
 	osType := runtime.GOOS
 
-	// 对齐 Python: identityCN (prompt_builder.py L120-177)
+	// Python: identityCN (prompt_builder.py L120-177)
 	// 模板中使用 BT 占位符替代反引号，构建后替换为实际反引号
 	identityCN := strings.ReplaceAll(fmt.Sprintf(
 		"你是一个私人智能体，由 UapClaw 创建。像一个有温度的人类助手一样与用户互动。\n\n"+
@@ -85,7 +85,7 @@ func BuildIdentitySection() saprompt.PromptSection {
 		workspaceDir, skillsDir,
 	), "BT", "`")
 
-	// 对齐 Python: identityEN (prompt_builder.py L179-237)
+	// Python: identityEN (prompt_builder.py L179-237)
 	identityEN := strings.ReplaceAll(fmt.Sprintf(
 		"You are a personal agent created by UapClaw. Interact with your user like a warm, human-like assistant.\n\n"+
 			"---\n\n"+

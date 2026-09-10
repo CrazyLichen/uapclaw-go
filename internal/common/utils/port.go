@@ -1,7 +1,7 @@
 // utils 包提供通用工具函数。
 //
 // port.go 实现端口等待和进程退出等待，使用指数退避策略。
-// 对应 Python：jiuwenswarm/common/utils.py → wait_for_tcp_port() / wait_for_pid_exit()
+// Python: jiuwenswarm/common/utils.py → wait_for_tcp_port() / wait_for_pid_exit()
 
 package utils
 
@@ -71,7 +71,7 @@ func WithTargetState(s TargetState) PortOption {
 
 // WaitForTCPPort 等待 TCP 端口达到目标状态，使用指数退避。
 //
-// 对应 Python: wait_for_tcp_port()
+// Python: wait_for_tcp_port()
 // 使用 context.Context 控制总超时，替代 Python 的 timeout 参数。
 // 通过 Functional Options 模式配置退避参数。
 //
@@ -122,7 +122,7 @@ func WaitForTCPPort(ctx context.Context, host string, port int, opts ...PortOpti
 
 // WaitForPIDExit 等待进程退出。
 //
-// 对应 Python: wait_for_pid_exit()
+// Python: wait_for_pid_exit()
 // 使用平台相关的 processExists 函数检查进程是否存在。
 // 如果进程不存在，函数返回 nil。超时后返回错误。
 func WaitForPIDExit(ctx context.Context, pid int) error {

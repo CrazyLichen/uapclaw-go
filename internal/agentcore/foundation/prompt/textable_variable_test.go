@@ -273,7 +273,7 @@ func TestTextableVariable_Eval_NonPrimitiveType(t *testing.T) {
 }
 
 // TestTextableVariable_Update_MissingNestedKey 验证 Update 中嵌套键缺失时返回错误。
-// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
+// Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED)
 func TestTextableVariable_Update_MissingNestedKey(t *testing.T) {
 	v, err := NewTextableVariable("Hello {{user.name}}!", "default")
 	if err != nil {

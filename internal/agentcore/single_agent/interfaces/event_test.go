@@ -6,7 +6,7 @@ import (
 
 // TestAgentCallbackEvent_事件值对齐Python 验证事件值与 Python AgentCallbackEvent 完全对齐
 func TestAgentCallbackEvent_事件值对齐Python(t *testing.T) {
-	// 对应 Python: openjiuwen/core/single_agent/rail/base.py AgentCallbackEvent
+	// Python: openjiuwen/core/single_agent/rail/base.py AgentCallbackEvent
 	tests := []struct {
 		got  AgentCallbackEvent
 		want string

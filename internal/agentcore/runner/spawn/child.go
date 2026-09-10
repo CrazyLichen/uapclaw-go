@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChildRunner 子进程 Runner 接口，由 runner 包实现并注入。
-// 对齐 Python: Runner.set_config() / Runner.start() / Runner.stop()
+// Python: Runner.set_config() / Runner.start() / Runner.stop()
 //
 // 与 runner.RunAgent 不同：这是子进程专用接口，只接收 BaseAgent 实例
 // （子进程已有 agent 实例，不需要 AgentRef 按ID查找），
@@ -29,18 +29,18 @@ type ChildRunner interface {
 	// Stop 停止 Runner。
 	Stop(ctx context.Context) error
 	// RunAgent 执行 Agent（非流式）。
-	// 对齐 Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
+	// Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
 	RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (map[string]any, error)
 	// RunAgentStreaming 执行 Agent（流式），返回消息块通道。
-	// 对齐 Python: Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes)
+	// Python: Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes)
 	RunAgentStreaming(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string, streamModes any) (<-chan stream.Schema, error)
 }
 
 // AgentCreator Agent 创建接口，由 spawn/factory 包实现并注入。
-// 对齐 Python: importlib.import_module(agent_module) → getattr(module, agent_class) → cls(**init_kwargs)
+// Python: importlib.import_module(agent_module) → getattr(module, agent_class) → cls(**init_kwargs)
 type AgentCreator interface {
 	// CreateByType 根据 agent_type 和 AgentCard 创建 Agent 实例。
-	// 对齐 Python: agent = agent_cls(**class_config.init_kwargs)
+	// Python: agent = agent_cls(**class_config.init_kwargs)
 	CreateByType(ctx context.Context, agentType string, agentCard map[string]any, initKwargs map[string]any) (interfaces.BaseAgent, error)
 }
 
@@ -56,7 +56,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunSpawnedProcess 子进程主入口。
-// 对齐 Python: run_spawned_process()
+// Python: run_spawned_process()
 //
 // childRunner 参数由调用方注入（cmd 层传入 runner.ChildRunnerImpl），
 // 避免 spawn 包直接依赖 runner 包导致循环导入。
@@ -70,7 +70,7 @@ func RunSpawnedProcess(
 	agentCreator AgentCreator,
 ) error {
 	// 场景(1)：从环境变量读取日志配置并初始化 logger。
-	// 对齐 Python: child_process.py L22-27（在 import logger 之前从 env 应用 logging_config）
+	// Python: child_process.py L22-27（在 import logger 之前从 env 应用 logging_config）
 	applyLoggingConfigFromEnv()
 
 	logger.Info(logComponent).
@@ -81,7 +81,7 @@ func RunSpawnedProcess(
 	spawnAgentConfig := prepareSpawnAgentConfig(agentConfig)
 
 	// Runner 生命周期管理。
-	// 对齐 Python: run_spawned_process() L456-468
+	// Python: run_spawned_process() L456-468
 	//   1. 设置配置（反序列化 RunnerConfig）
 	//   2. 启动 Runner
 	//   3. 消息处理循环
@@ -134,7 +134,7 @@ func RunSpawnedProcess(
 }
 
 // ProcessMessageLoop 子进程消息循环。
-// 对齐 Python: process_message_loop()
+// Python: process_message_loop()
 func ProcessMessageLoop(
 	ctx context.Context,
 	stdin io.Reader,
@@ -274,7 +274,7 @@ func ProcessMessageLoop(
 }
 
 // HandleHealthCheck 处理健康检查请求。
-// 对齐 Python: handle_health_check()
+// Python: handle_health_check()
 func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error {
 	response := NewMessage(MessageTypeHealthCheckResponse, map[string]any{
 		"status": "healthy",
@@ -289,7 +289,7 @@ func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error
 }
 
 // HandleShutdown 处理关闭请求。
-// 对齐 Python: handle_shutdown()
+// Python: handle_shutdown()
 func HandleShutdown(ctx context.Context, msg Message, stdout io.Writer) error {
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_SHUTDOWN_RECEIVED").
@@ -304,7 +304,7 @@ func HandleShutdown(ctx context.Context, msg Message, stdout io.Writer) error {
 }
 
 // ExecuteAgent 在子进程中执行 Agent。
-// 对齐 Python: execute_agent()
+// Python: execute_agent()
 func ExecuteAgent(
 	ctx context.Context,
 	agentConfig SpawnAgentConfig,
@@ -328,7 +328,7 @@ func ExecuteAgent(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // prepareSpawnAgentConfig 准备 Spawn Agent 配置。
-// 对齐 Python: _prepare_spawn_agent_config()
+// Python: _prepare_spawn_agent_config()
 // 额外行为：解析到 logging_config 非空时，调用 logger.Reconfigure() 动态更新日志配置。
 func prepareSpawnAgentConfig(agentConfig map[string]any) *SpawnAgentConfig {
 	if agentConfig == nil {
@@ -344,7 +344,7 @@ func prepareSpawnAgentConfig(agentConfig map[string]any) *SpawnAgentConfig {
 	}
 
 	// 场景(2)：从 SpawnAgentConfig.logging_config 动态更新日志配置。
-	// 对齐 Python: _prepare_spawn_agent_config() L119-122
+	// Python: _prepare_spawn_agent_config() L119-122
 	//   if spawn_agent_config.logging_config is not None:
 	//       configure_log_config(spawn_agent_config.logging_config)
 	if cfg.LoggingConfig != nil {
@@ -355,7 +355,7 @@ func prepareSpawnAgentConfig(agentConfig map[string]any) *SpawnAgentConfig {
 }
 
 // runAgentTask 包装 Agent 执行，成功发送 DONE，失败发送 ERROR。
-// 对齐 Python: _run_agent_task()
+// Python: _run_agent_task()
 func runAgentTask(
 	ctx context.Context,
 	agentConfig SpawnAgentConfig,
@@ -394,7 +394,7 @@ func runAgentTask(
 }
 
 // executeChildAgent 在子进程中执行 Agent。
-// 对齐 Python: execute_agent() L148-169
+// Python: execute_agent() L148-169
 func executeChildAgent(
 	ctx context.Context,
 	agentConfig SpawnAgentConfig,
@@ -427,7 +427,7 @@ func executeChildAgent(
 	}
 
 	// 创建 Agent 实例。
-	// 对齐 Python:
+	// Python:
 	//   Python: module = importlib.import_module(class_config.agent_module)
 	//   Python: agent_cls = getattr(module, class_config.agent_class)
 	//   Python: agent = agent_cls(**class_config.init_kwargs)
@@ -444,7 +444,7 @@ func executeChildAgent(
 	}
 
 	// 从 agentConfig 取 session_id。
-	// 对齐 Python: session = agent_config.session_id
+	// Python: session = agent_config.session_id
 	sessionID := agentConfig.SessionID
 
 	logger.Info(logComponent).
@@ -460,7 +460,7 @@ func executeChildAgent(
 
 	if streaming {
 		// streaming 路径。
-		// 对齐 Python:
+		// Python:
 		//   Python: async for chunk in Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes):
 		//       Python: stream_message = Message(type=MessageType.STREAM_CHUNK, payload=chunk)
 		//       Python: await write_output_to_stdout(stream_message, writer)
@@ -486,12 +486,12 @@ func executeChildAgent(
 	}
 
 	// 非 streaming 路径。
-	// 对齐 Python: return await Runner.run_agent(agent=agent, inputs=inputs, session=session)
+	// Python: return await Runner.run_agent(agent=agent, inputs=inputs, session=session)
 	return childRunner.RunAgent(ctx, agent, inputs, sessionID)
 }
 
 // applyLoggingConfigFromEnv 从环境变量 UAPCLAW_SPAWN_LOGGING_CONFIG 读取日志配置并应用。
-// 对齐 Python: child_process.py L22-27
+// Python: child_process.py L22-27
 //
 //	Python: _logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
 //	Python: 如果存在日志配置JSON
@@ -530,7 +530,7 @@ func applyLoggingConfigFromEnv() {
 }
 
 // applyLoggingConfigMap 从 map[string]any 类型的日志配置动态更新 logger。
-// 对齐 Python: configure_log_config(logging_config)
+// Python: configure_log_config(logging_config)
 func applyLoggingConfigMap(loggingConfig map[string]any) {
 	if loggingConfig == nil {
 		return

@@ -403,23 +403,23 @@ func TestTaskPlan_ToMarkdown(t *testing.T) {
 	tp.AddTask(item4)
 
 	md := tp.ToMarkdown()
-	// 对齐 Python: ## Goal: {goal}
+	// Python: ## Goal: {goal}
 	if !containsSubstring(md, "## Goal: 实现功能") {
 		t.Errorf("Markdown 缺少标题行: %q", md)
 	}
-	// 对齐 Python: - [√] 完成项 — result_summary
+	// Python: - [√] 完成项 — result_summary
 	if !containsSubstring(md, "- [√] 步骤一 — 已完成步骤一") {
 		t.Errorf("Markdown 缺少完成项(含 result_summary): %q", md)
 	}
-	// 对齐 Python: - [>] 进行中项
+	// Python: - [>] 进行中项
 	if !containsSubstring(md, "- [>] 步骤二") {
 		t.Errorf("Markdown 缺少进行中项: %q", md)
 	}
-	// 对齐 Python: - [ ] 待执行项
+	// Python: - [ ] 待执行项
 	if !containsSubstring(md, "- [ ] 步骤三") {
 		t.Errorf("Markdown 缺少待执行项: %q", md)
 	}
-	// 对齐 Python: - [×] 取消项 — result_summary
+	// Python: - [×] 取消项 — result_summary
 	if !containsSubstring(md, "- [×] 步骤四 — 不再需要") {
 		t.Errorf("Markdown 缺少取消项(含 result_summary): %q", md)
 	}

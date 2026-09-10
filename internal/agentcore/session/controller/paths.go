@@ -5,7 +5,7 @@ import "path/filepath"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionPaths 会话存储路径工具，提供静态方法构建各种存储路径。
-// 对应 Python: openjiuwen/core/session/session_controller/utils.py (SessionPaths)
+// Python: openjiuwen/core/session/session_controller/utils.py (SessionPaths)
 type SessionPaths struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────

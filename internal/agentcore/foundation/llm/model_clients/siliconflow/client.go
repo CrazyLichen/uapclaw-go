@@ -28,7 +28,7 @@ import (
 //   - tool_calls 中不能包含非标准扩展字段，否则 API 报错
 //   - 本客户端在发送请求前对 assistant 消息的 tool_calls 做清洗，只保留标准字段
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/siliconflow_model_client.py (SiliconFlowModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/siliconflow_model_client.py (SiliconFlowModelClient)
 type SiliconFlowModelClient struct {
 	openai.OpenAIModelClient
 }
@@ -50,7 +50,7 @@ const logComponent = logger.ComponentAgentCore
 //  1. 先构造 OpenAI 客户端（复用 baseHeaders 初始化等）
 //  2. 覆盖 clientName 为 "SiliconFlow client"
 //
-// 对应 Python: SiliconFlowModelClient.__init__(model_config, model_client_config)
+// Python: SiliconFlowModelClient.__init__(model_config, model_client_config)
 func NewSiliconFlowModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -82,7 +82,7 @@ func NewSiliconFlowModelClient(
 // 覆写 OpenAI 客户端的 Invoke，在委托前对消息中的 tool_calls 做清洗。
 // SiliconFlow API 对非标准字段严格，需要只保留标准字段并强制 type="function"。
 //
-// 对应 Python: SiliconFlowModelClient.invoke()
+// Python: SiliconFlowModelClient.invoke()
 func (c *SiliconFlowModelClient) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -101,7 +101,7 @@ func (c *SiliconFlowModelClient) Invoke(
 // Stream 流式调用 SiliconFlow API。
 //
 // 独立实现 Stream，不委托给 OpenAI 客户端。
-// 对齐 Python SiliconFlowModelClient：使用自己的 parseStreamChunk 解析流式块。
+// Python: SiliconFlowModelClient：使用自己的 parseStreamChunk 解析流式块。
 //
 // 与 OpenAI 的行为差异（对齐 Python）：
 //   - 不设置 stream_options.include_usage（SiliconFlow API 无此参数）
@@ -109,7 +109,7 @@ func (c *SiliconFlowModelClient) Invoke(
 //   - 不提取 prompt_token_ids / completion_token_ids / logprobs
 //   - usage 包含费用信息（对齐 Python SiliconFlow 调用 _extract_cost_info）
 //
-// 对应 Python: SiliconFlowModelClient.stream() + SiliconFlowModelClient._astream_with_parser()
+// Python: SiliconFlowModelClient.stream() + SiliconFlowModelClient._astream_with_parser()
 func (c *SiliconFlowModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -211,11 +211,11 @@ func (c *SiliconFlowModelClient) Stream(
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
-				// 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
+				// Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
 				if params.TracerRecordData != nil {
 					params.TracerRecordData(map[string]any{"llm_response": finalMessage})
 				}
-				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				// Python: 流结束时触发 LLMOutput 回调
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
 					ModelName:     modelName,
@@ -237,7 +237,7 @@ func (c *SiliconFlowModelClient) Stream(
 
 			var chunkResp openai.ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				// 对齐 Python: JSON 解析错误走日志，非回调
+				// Python: JSON 解析错误走日志，非回调
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -251,7 +251,7 @@ func (c *SiliconFlowModelClient) Stream(
 				continue
 			}
 
-			// 对齐 Python _astream_with_parser: 应用 output_parser
+			// Python: _astream_with_parser: 应用 output_parser
 			if params.OutputParser != nil {
 				if chunk.Content.Text() != "" {
 					accumulatedContent += chunk.Content.Text()
@@ -262,7 +262,7 @@ func (c *SiliconFlowModelClient) Stream(
 						chunk.ParserContent = parsed
 						accumulatedContent = "" // 清空缓冲区，增量输出
 					} else if parseErr != nil {
-						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						// Python: parser 错误走 llm_logger.debug，非回调
 						logger.Error(logComponent).
 							Str("model_name", modelName).
 							Str("model_provider", c.ClientConfig.ClientProvider).
@@ -279,7 +279,7 @@ func (c *SiliconFlowModelClient) Stream(
 				ModelProvider: c.ClientConfig.ClientProvider,
 				IsStream:      true,
 			})
-			// 对齐 Python: final_message = final_message + parsed_chunk
+			// Python: final_message = final_message + parsed_chunk
 			if finalMessage == nil {
 				finalMessage = chunk
 			} else {
@@ -391,7 +391,7 @@ func init() {
 
 // parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
 //
-// 对齐 Python SiliconFlowModelClient._parse_stream_chunk()，
+// Python: SiliconFlowModelClient._parse_stream_chunk()，
 // 与 OpenAI 的 ParseStreamChunk 有以下差异：
 //   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
 //   - 不提取 prompt_token_ids / completion_token_ids / logprobs
@@ -400,7 +400,7 @@ func init() {
 func (c *SiliconFlowModelClient) parseStreamChunk(
 	chunkResp *openai.ChatCompletionChunkResponse,
 ) *llmschema.AssistantMessageChunk {
-	// 对齐 Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
+	// Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
 	if len(chunkResp.Choices) == 0 {
 		return nil
 	}
@@ -444,7 +444,7 @@ func (c *SiliconFlowModelClient) parseStreamChunk(
 		finishReason = *choice.FinishReason
 	}
 
-	// 对齐 Python SiliconFlow: 空 content + 空 reasoning + 空 tool_calls → 丢弃
+	// Python: SiliconFlow: 空 content + 空 reasoning + 空 tool_calls → 丢弃
 	// 但如果有 finish_reason，仍需保留（Python 丢弃是已知行为，Go 保留 finish_reason）
 	if content == "" && reasoningContent == "" && len(toolCalls) == 0 && finishReason == llmschema.FinishReasonNull {
 		return nil
@@ -474,7 +474,7 @@ func (c *SiliconFlowModelClient) parseStreamChunk(
 
 // buildSiliconFlowUsageMetadata 构建 SiliconFlow 的 usage 元数据。
 //
-// 对齐 Python SiliconFlowModelClient: 包含 token 数 + 费用信息（_extract_cost_info），
+// Python: SiliconFlowModelClient: 包含 token 数 + 费用信息（_extract_cost_info），
 // 不包含 cache_tokens。
 func buildSiliconFlowUsageMetadata(
 	usage *openai.ResponseUsage,
@@ -518,7 +518,7 @@ func extractCostFromUsage(usage *openai.ResponseUsage) (inputCost, outputCost, t
 //  2. 对转换后的消息做 sanitizeToolCalls（只保留标准字段，强制 type="function"）
 //  3. 包装为 Dicts 模式回传（Dicts 模式直接透传，零转换开销）
 //
-// 对应 Python: SiliconFlowModelClient._build_and_sanitize_params()
+// Python: SiliconFlowModelClient._build_and_sanitize_params()
 func (c *SiliconFlowModelClient) sanitizeMessages(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {
@@ -545,7 +545,7 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 //
 // 原地修改 messages 中的 tool_calls 字段。
 //
-// 对应 Python: SiliconFlowModelClient._sanitize_tool_calls()
+// Python: SiliconFlowModelClient._sanitize_tool_calls()
 func (c *SiliconFlowModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {
 		// 仅处理 assistant 消息

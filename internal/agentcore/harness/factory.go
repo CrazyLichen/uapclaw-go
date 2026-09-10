@@ -38,10 +38,10 @@ import (
 
 const (
 	// freeSearchDDGEnabledEnv 免费搜索 DDG 启用环境变量
-	// 对齐 Python: _FREE_SEARCH_DDG_ENABLED_ENV
+	// Python: _FREE_SEARCH_DDG_ENABLED_ENV
 	freeSearchDDGEnabledEnv = "FREE_SEARCH_DDG_ENABLED"
 	// freeSearchBingEnabledEnv 免费搜索 Bing 启用环境变量
-	// 对齐 Python: _FREE_SEARCH_BING_ENABLED_ENV
+	// Python: _FREE_SEARCH_BING_ENABLED_ENV
 	freeSearchBingEnabledEnv = "FREE_SEARCH_BING_ENABLED"
 )
 
@@ -49,7 +49,7 @@ const (
 
 var (
 	// paidSearchAPIKeyEnvs 付费搜索 API Key 环境变量列表
-	// 对齐 Python: _PAID_SEARCH_API_KEY_ENVS
+	// Python: _PAID_SEARCH_API_KEY_ENVS
 	paidSearchAPIKeyEnvs = []string{
 		"PERPLEXITY_API_KEY",
 		"BOCHA_API_KEY",
@@ -75,11 +75,11 @@ var (
 //
 // 10. Rail 注册 (显式 + 默认自动添加)
 //
-// 对应 Python: openjiuwen/harness/factory.py create_deep_agent()
+// Python: openjiuwen/harness/factory.py create_deep_agent()
 
 func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) (*DeepAgent, error) {
 	// ── 步骤 1：默认 AgentCard ──
-	// 对齐 Python: factory.py L219-223
+	// Python: factory.py L219-223
 	card := params.Card
 	if card == nil {
 		card = agentschema.NewAgentCard(
@@ -89,15 +89,15 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	}
 
 	// ── 步骤 2：工具规范化 ──
-	// 对齐 Python: factory.py _normalize_tools(tools: List[Tool | ToolCard])
+	// Python: factory.py _normalize_tools(tools: List[Tool | ToolCard])
 	normalizedCards, toolInstances := normalizeTools(params.ToolCards, params.ToolInstances)
 
 	// ── 步骤 3：语言解析 ──
-	// 对齐 Python: factory.py L232-233
+	// Python: factory.py L232-233
 	resolvedLanguage := hprompts.ResolveLanguage(params.Language)
 
 	// ── 步骤 4：通用子 Agent 注入 ──
-	// 对齐 Python: factory.py L235-257
+	// Python: factory.py L235-257
 	effectiveSubagents := injectGeneralPurposeSubagent(
 		params.Subagents,
 		params.AddGeneralPurposeAgent,
@@ -112,18 +112,18 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	)
 
 	// ── 步骤 5：Workspace 构建 ──
-	// 对齐 Python: factory.py L260-265
+	// Python: factory.py L260-265
 	workspaceObj := buildWorkspace(params.Workspace, resolvedLanguage)
 
 	// ── 步骤 6：SysOperation 构建 ──
-	// 对齐 Python: factory.py L267-281
+	// Python: factory.py L267-281
 	sysOp, err := buildSysOperation(card, params.SysOperation, params.RestrictToWorkDir)
 	if err != nil {
 		return nil, fmt.Errorf("构建 SysOperation 失败: %w", err)
 	}
 
 	// ── 步骤 7：DeepAgentConfig 组装 ──
-	// 对齐 Python: factory.py L283-355
+	// Python: factory.py L283-355
 	config := hschema.NewDeepAgentConfig()
 	config.Model = params.Model
 	config.Card = card
@@ -132,7 +132,7 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	config.EnableAsyncSubagent = params.EnableAsyncSubagent
 	config.AddGeneralPurposeAgent = params.AddGeneralPurposeAgent
 	config.MaxIterations = params.MaxIterations
-	// 对齐 Python: subagents=effective_subagents or None（空列表 → nil）
+	// Python: subagents=effective_subagents or None（空列表 → nil）
 	if len(effectiveSubagents) > 0 {
 		config.Subagents = effectiveSubagents
 	}
@@ -159,14 +159,14 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	}
 
 	// ── 步骤 8：DeepAgent 实例化 ──
-	// 对齐 Python: factory.py L356-357
+	// Python: factory.py L356-357
 	agent := NewDeepAgent(card)
 	if cfgErr := agent.ConfigureDeepConfig(ctx, config); cfgErr != nil {
 		return nil, fmt.Errorf("配置 DeepAgent 失败: %w", cfgErr)
 	}
 
 	// ── 步骤 9：工具注册 ──
-	// 对齐 Python: factory.py L329-344
+	// Python: factory.py L329-344
 	if len(toolInstances) > 0 {
 		tag := card.GetID()
 		if tag == "" {
@@ -181,7 +181,7 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	}
 
 	// ── 步骤 10：Rail 注册 ──
-	// 对齐 Python: factory.py L346-367
+	// Python: factory.py L346-367
 	// 10a：显式提供的 Rails
 	for _, r := range params.Rails {
 		agent.AddRail(r)
@@ -194,13 +194,13 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 }
 
 // IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。
-// 对齐 Python: is_free_search_enabled() (web_tools.py line 444)
+// Python: is_free_search_enabled() (web_tools.py line 444)
 func IsFreeSearchEnabled() bool {
 	return envFlag(freeSearchDDGEnabledEnv, false) || envFlag(freeSearchBingEnabledEnv, false)
 }
 
 // IsPaidSearchEnabled 检查是否至少配置一个付费搜索 API Key。
-// 对齐 Python: is_paid_search_enabled() (web_tools.py line 452)
+// Python: is_paid_search_enabled() (web_tools.py line 452)
 func IsPaidSearchEnabled() bool {
 	for _, key := range paidSearchAPIKeyEnvs {
 		if strings.TrimSpace(os.Getenv(key)) != "" {
@@ -213,7 +213,7 @@ func IsPaidSearchEnabled() bool {
 // ResetFreeSearchRuntimeFlags 重置免费搜索运行时标志为禁用。
 //
 // 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
-// 对应 Python: reset_free_search_runtime_flags()
+// Python: reset_free_search_runtime_flags()
 func ResetFreeSearchRuntimeFlags() {
 	_ = os.Setenv(freeSearchDDGEnabledEnv, "false")
 	_ = os.Setenv(freeSearchBingEnabledEnv, "false")
@@ -223,7 +223,7 @@ func ResetFreeSearchRuntimeFlags() {
 
 // normalizeTools 将 ToolCard 列表和 Tool 实例列表统一规范化，
 // 合并为 ToolCard 列表和 Tool 实例列表，同时过滤被禁用的 free_search 工具。
-// 对齐 Python: _normalize_tools(tools: List[Tool | ToolCard])
+// Python: _normalize_tools(tools: List[Tool | ToolCard])
 
 func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
 	// 纯 ToolCard 直接加入 normalizedCards
@@ -248,7 +248,7 @@ func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (norm
 }
 
 // isDisabledFreeSearchTool 检查工具是否为被禁用的 free_search 工具。
-// 对齐 Python: _is_disabled_free_search_tool(tool)
+// Python: _is_disabled_free_search_tool(tool)
 func isDisabledFreeSearchTool(card *tool.ToolCard) bool {
 	if card == nil {
 		return false
@@ -260,7 +260,7 @@ func isDisabledFreeSearchTool(card *tool.ToolCard) bool {
 }
 
 // envFlag 解析布尔型环境变量值，保留空值时的默认值。
-// 对齐 Python: _env_flag(name, default) (web_tools.py line 436)
+// Python: _env_flag(name, default) (web_tools.py line 436)
 func envFlag(name string, defaultVal bool) bool {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
 	if raw == "" {
@@ -272,7 +272,7 @@ func envFlag(name string, defaultVal bool) bool {
 // registerToolInstances 将 Tool 实例注册到全局资源管理器，
 // 使 ToolCard 变为可执行。同 ID 已存在时仅追加 tag。
 //
-// 对应 Python: _register_tool_instances(tool_instances, tag=tag)
+// Python: _register_tool_instances(tool_instances, tag=tag)
 // 注意：Python 用 Runner.resource_mgr.get_tool(tool.card.id) 返回单个，
 // Go 用 GetTool([]string{toolID}) 返回切片。
 // Python 检查 existing_tool is not tool（同一指针），
@@ -318,7 +318,7 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 // 已存在名为 general-purpose 的子 Agent 时不重复注入。
 // 从调用方的 agentRails 中过滤掉 SubagentRail，确保有 SysOperationRail。
 //
-// 对应 Python: _inject_general_purpose_subagent()
+// Python: _inject_general_purpose_subagent()
 func injectGeneralPurposeSubagent(
 	subagents []hschema.SubagentSpec,
 	addGeneralPurposeAgent bool,
@@ -376,7 +376,7 @@ func injectGeneralPurposeSubagent(
 	}
 
 	// 注入到列表头部
-	// 对齐 Python: SubAgentConfig(tools=list(tools or []))
+	// Python: SubAgentConfig(tools=list(tools or []))
 	// toolCards 和 toolInstances 原样透传，后续 normalizeTools 统一拆分
 	gpConfig := hschema.SubAgentConfig{
 		AgentCard: agentschema.NewAgentCard(
@@ -401,19 +401,19 @@ func injectGeneralPurposeSubagent(
 // buildWorkspace 构建 Workspace 实例。
 // 传入 nil 时创建默认 Workspace(root_path="./")，传入已有实例时直接返回。
 //
-// 对齐 Python: factory.py L260-265 workspace 构建
+// Python: factory.py L260-265 workspace 构建
 func buildWorkspace(ws *workspace.Workspace, language string) *workspace.Workspace {
 	if ws != nil {
 		return ws
 	}
-	// 对齐 Python: 创建工作空间
+	// Python: 创建工作空间
 	return workspace.NewWorkspace("./", language)
 }
 
 // buildSysOperation 构建 SysOperation 实例。
 // 调用方未提供时，自动创建默认 SysOperationCard（LocalWorkConfig 模式）并注册到 resource_mgr。
 //
-// 对齐 Python: factory.py L267-281 sys_operation 构建
+// Python: factory.py L267-281 sys_operation 构建
 func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, restrictToWorkDir *bool) (sysop.SysOperation, error) {
 	if sysOp != nil {
 		return sysOp, nil
@@ -449,7 +449,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 		Msg("已创建默认 SysOperationCard")
 
 	// 注册到全局资源管理器
-	// 对齐 Python: Runner.resource_mgr.add_sys_operation(sysop_card)
+	// Python: Runner.resource_mgr.add_sys_operation(sysop_card)
 	// Go 签名：AddSysOperation(id, instance)
 	localSysOp := sysop.NewLocalSysOperation(sysopCard)
 	rm := runner.GetResourceMgr()
@@ -475,7 +475,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 // alreadyProvided 检查调用方是否已显式提供了指定类型的 Rail。
 // 使用 reflect.TypeOf 精确类型匹配，不匹配子类。
 //
-// 对应 Python: _already_provided(rail_cls) — Python 使用 issubclass 支持子类匹配，
+// Python: _already_provided(rail_cls) — Python 使用 issubclass 支持子类匹配，
 // Go 端当前使用精确匹配，后续需要可升级为接口断言。
 func alreadyProvided(rails []agentinterfaces.AgentRail, target agentinterfaces.AgentRail) bool {
 	targetType := reflect.TypeOf(target)
@@ -493,7 +493,7 @@ func alreadyProvided(rails []agentinterfaces.AgentRail, target agentinterfaces.A
 // collectDisabledSkillsFromState 从每个 skills_dir 读取 skills_state.json，
 // 收集 enabled=false 的技能名称。结果按字母排序。
 //
-// 对应 Python: _collect_disabled_skills_from_state(skills_dirs)
+// Python: _collect_disabled_skills_from_state(skills_dirs)
 func collectDisabledSkillsFromState(skillsDirs []string) []string {
 	disabled := make(map[string]struct{})
 	for _, dir := range skillsDirs {
@@ -531,7 +531,7 @@ func collectDisabledSkillsFromState(skillsDirs []string) []string {
 
 // addDefaultRails 自动添加调用方未显式提供的默认 Rail。
 //
-// 对齐 Python: factory.py L358-367 default_rails 自动添加
+// Python: factory.py L358-367 default_rails 自动添加
 // ⤵️ 9.8-9.24 回填：SecurityRail/SkillUseRail/SubagentRail/TaskPlanningRail 具体实例化
 func addDefaultRails(
 	agent *DeepAgent,
@@ -619,7 +619,7 @@ func addDefaultRails(
 	}
 
 	// VerificationContractRail — 仅当配置了 verification_agent 时注入到父 Agent
-	// 对齐 Python: create_deep_agent 中动态添加 VerificationContractRail
+	// Python: create_deep_agent 中动态添加 VerificationContractRail
 	if hasVerificationAgent(effectiveSubagents) && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&subagent.VerificationContractRail{})) {
 		agent.AddRail(subagent.NewVerificationContractRail())
 		logger.Debug(logComponent).Msg("已添加 VerificationContractRail（检测到 verification_agent）")
@@ -637,7 +637,7 @@ func alreadyProvidedByType(typeMap map[reflect.Type]bool, target reflect.Type) b
 }
 
 // hasVerificationAgent 检查子代理列表中是否包含 verification_agent。
-// 对齐 Python: create_deep_agent 中根据 subagents 动态注入 VerificationContractRail
+// Python: create_deep_agent 中根据 subagents 动态注入 VerificationContractRail
 func hasVerificationAgent(subagents []hschema.SubagentSpec) bool {
 	for _, s := range subagents {
 		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.AgentCard != nil && cfg.AgentCard.GetName() == "verification_agent" {
@@ -650,7 +650,7 @@ func hasVerificationAgent(subagents []hschema.SubagentSpec) bool {
 // buildCreateParamsFromSubagentKwargs 将 SubagentCreateParams 转换为 hconfig.CreateDeepAgentParams。
 // 用于 CreateSubagent 的 default 工厂分支调用 CreateDeepAgent。
 //
-// 对齐 Python: DeepAgent.create_subagent() 中 create_deep_agent(**create_kwargs)
+// Python: DeepAgent.create_subagent() 中 create_deep_agent(**create_kwargs)
 func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) hconfig.CreateDeepAgentParams {
 	if kwargs == nil {
 		return hconfig.CreateDeepAgentParams{}

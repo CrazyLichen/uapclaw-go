@@ -176,7 +176,7 @@ func TestParseInteractStr_美元前缀广播(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_human_agent_no_space_before_at_splits_sender_and_recipient
+// Python: test_human_agent_no_space_before_at_splits_sender_and_recipient
 // $alice@dev-1 ping me — @ 紧贴 $name，无空格，仍正确拆分
 func TestParseInteractStr_美元前缀无空格at拆分(t *testing.T) {
 	result := ParseInteractStr("$alice@dev-1 ping me")
@@ -198,7 +198,7 @@ func TestParseInteractStr_美元前缀无空格at拆分(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_human_agent_at_in_sender_name_is_rejected
+// Python: test_human_agent_at_in_sender_name_is_rejected
 // $player-6@player-3 汇报当前进展 — 含中划线名称 + 无空格 @
 func TestParseInteractStr_美元前缀含中划线名称无空格at(t *testing.T) {
 	result := ParseInteractStr("$player-6@player-3 汇报当前进展")
@@ -220,7 +220,7 @@ func TestParseInteractStr_美元前缀含中划线名称无空格at(t *testing.T
 	}
 }
 
-// 对齐 Python: test_human_agent_no_space_multi_recipient
+// Python: test_human_agent_no_space_multi_recipient
 // $alice@m1 @m2 sync — 无空格 @ 后接多个 recipient
 func TestParseInteractStr_美元前缀无空格at多接收者(t *testing.T) {
 	result := ParseInteractStr("$alice@m1 @m2 sync")
@@ -249,7 +249,7 @@ func TestParseInteractStr_美元前缀无空格at多接收者(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_dollar_without_body_falls_back_to_god_view
+// Python: test_dollar_without_body_falls_back_to_god_view
 // $alice 无后续内容，回退到 god-view
 func TestParseInteractStr_美元前缀无后续回退GodView(t *testing.T) {
 	result := ParseInteractStr("$alice")
@@ -394,7 +394,7 @@ func TestResolveTargets_未知接收者折叠(t *testing.T) {
 	if !ok {
 		t.Fatal("result[1] 应为折叠后的 GodViewMessage")
 	}
-	// 对齐 Python: mentions = "@ghost", general_body = "@ghost hi"
+	// Python: mentions = "@ghost", general_body = "@ghost hi"
 	if gv.Body() != "@ghost hi" {
 		t.Errorf("folded Body = %v, want @ghost hi", gv.Body())
 	}

@@ -26,7 +26,7 @@ import (
 // MakeSyncMCPCaller 创建同步 MCP 调用函数。
 // 返回的 APIWrapperFunc 内部会：创建 MCP 客户端 → 连接 → 调用工具 → 断开连接。
 //
-// 对齐 Python: openjiuwen/agent_evolving/optimizer/tool_call/callable_fortest.py (make_sync_mcp_caller)
+// Python: openjiuwen/agent_evolving/optimizer/tool_call/callable_fortest.py (make_sync_mcp_caller)
 //
 //	Python 使用 SSETransport + Client + asyncio.run，Go 使用已有 MCP 客户端体系
 //
@@ -36,7 +36,7 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// 对齐 Python: transport = SSETransport(url=url); client = Client(transport)
+		// Python: transport = SSETransport(url=url); client = Client(transport)
 		mcpConfig := mcptypes.NewMcpServerConfig(name, url, "sse")
 		client, err := mcp.NewMcpClient(mcpConfig)
 		if err != nil {
@@ -53,7 +53,7 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 			return string(result), 12
 		}
 
-		// 对齐 Python: async with client:
+		// Python: async with client:
 		if err := client.Connect(ctx); err != nil {
 			logger.Error(logComponent).
 				Str("method", "MakeSyncMCPCaller").
@@ -68,7 +68,7 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 		}
 		defer client.Disconnect(ctx)
 
-		// 对齐 Python: tool_name = tool_arguments["name"]
+		// Python: tool_name = tool_arguments["name"]
 		toolName, _ := toolInput["name"].(string)
 		if toolName == "" {
 			if n, ok := tool["name"]; ok {
@@ -76,14 +76,14 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 			}
 		}
 
-		// 对齐 Python: arguments = tool_arguments.get("arguments")
+		// Python: arguments = tool_arguments.get("arguments")
 		arguments := make(map[string]any)
 		if args, ok := toolInput["arguments"]; ok && args != nil {
 			switch v := args.(type) {
 			case map[string]any:
 				arguments = v
 			case string:
-				// 对齐 Python: if isinstance(arguments, str): arguments = json.loads(arguments)
+				// Python: if isinstance(arguments, str): arguments = json.loads(arguments)
 				if jsonErr := json.Unmarshal([]byte(v), &arguments); jsonErr != nil {
 					logger.Error(logComponent).
 						Str("method", "MakeSyncMCPCaller").
@@ -99,7 +99,7 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 			}
 		}
 
-		// 对齐 Python: result = await client.call_tool(tool_name, arguments)
+		// Python: result = await client.call_tool(tool_name, arguments)
 		callResult, err := client.CallTool(ctx, toolName, arguments)
 		if err != nil {
 			logger.Error(logComponent).
@@ -114,7 +114,7 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 			return string(result), 12
 		}
 
-		// 对齐 Python: return result.content[0].text → json.dumps({'response': output})
+		// Python: return result.content[0].text → json.dumps({'response': output})
 		responseStr := fmt.Sprintf("%v", callResult)
 		result, _ := json.Marshal(map[string]any{
 			"response": responseStr,

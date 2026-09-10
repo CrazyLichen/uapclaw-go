@@ -18,7 +18,7 @@ import (
 // 方法永远返回 string，不返回 error（对齐 Python Protocol 签名：encode/decode → str）。
 // 加解密失败时由实现方自行记录日志并返回原文（容错模式）。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (StorageCodec)
+// Python: openjiuwen/core/foundation/store/base_memory_index.py (StorageCodec)
 type StorageCodec interface {
 	// Encode 对文本进行编码（如加密），失败时返回原文
 	Encode(text string) string
@@ -31,7 +31,7 @@ type StorageCodec interface {
 // 所有记忆索引实现必须实现此接口。记忆文档以 user_id 和 scope_id 隔离，
 // 支持多租户和多场景的记忆管理。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (BaseMemoryIndex)
+// Python: openjiuwen/core/foundation/store/base_memory_index.py (BaseMemoryIndex)
 type BaseMemoryIndex interface {
 	// SetStorageCodec 设置存储编解码器。
 	SetStorageCodec(codec StorageCodec)
@@ -86,7 +86,7 @@ type BaseMemoryIndex interface {
 
 // MemoryDoc 记忆文档，表示一条存储的记忆条目。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (MemoryDoc)
+// Python: openjiuwen/core/foundation/store/base_memory_index.py (MemoryDoc)
 type MemoryDoc struct {
 	// ID 唯一标识
 	ID string `json:"id"`
@@ -105,7 +105,7 @@ type MemoryDoc struct {
 
 // MemorySearchResult 记忆搜索结果，包含匹配文档和相关度分数。
 //
-// 对应 Python: search 方法返回的 tuple[MemoryDoc, float]
+// Python: search 方法返回的 tuple[MemoryDoc, float]
 type MemorySearchResult struct {
 	// Doc 匹配的记忆文档
 	Doc *MemoryDoc
@@ -115,7 +115,7 @@ type MemorySearchResult struct {
 
 // UserScope 用户-作用域对，用于 ListUserScopes 返回值。
 //
-// 对应 Python: list_user_scopes 返回的 tuple[str, str]
+// Python: list_user_scopes 返回的 tuple[str, str]
 type UserScope struct {
 	// UserID 用户标识
 	UserID string
@@ -136,7 +136,7 @@ type backupData struct {
 // CreateBackup / RestoreBackup / CleanupBackup / ListUserScopes 的通用行为。
 // backups map 和 schemaVersion 字段通过 sync.RWMutex 保护并发安全。
 //
-// 对应 Python: BaseMemoryIndex 中的非抽象方法默认实现
+// Python: BaseMemoryIndex 中的非抽象方法默认实现
 type MemoryIndexBase struct {
 	// mu 保护 backups 和 schemaVersion 的并发访问
 	mu sync.RWMutex

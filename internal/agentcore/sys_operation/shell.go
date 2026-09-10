@@ -11,8 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ShellOperation Shell 操作接口，定义命令执行等操作。
-// 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
-// 对齐 Python 方法：write_stdin, kill_process, list_processes, list_tools。
+// Python: BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
+// Python: 方法：write_stdin, kill_process, list_processes, list_tools。
 type ShellOperation interface {
 	// ExecuteCmd 执行 Shell 命令
 	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
@@ -21,13 +21,13 @@ type ShellOperation interface {
 	// ExecuteCmdBackground 后台执行 Shell 命令，立即返回进程 PID
 	ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdBackgroundResult, error)
 	// WriteStdin 向后台进程写入标准输入。
-	// 对齐 Python ShellOperation.write_stdin。
+	// Python: ShellOperation.write_stdin。
 	WriteStdin(ctx context.Context, sessionID string, data string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
 	// KillProcess 终止指定后台进程。
-	// 对齐 Python ShellOperation.kill_process。
+	// Python: ShellOperation.kill_process。
 	KillProcess(ctx context.Context, sessionID string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
 	// ListProcesses 列出所有后台进程。
-	// 对齐 Python ShellOperation.list_processes。
+	// Python: ShellOperation.list_processes。
 	ListProcesses(ctx context.Context, opts ...ShellOption) (*result.ExecuteCmdResult, error)
 	// ListTools 返回 Shell 操作的工具卡片列表
 	ListTools() []*tool.ToolCard
@@ -37,7 +37,7 @@ type ShellOperation interface {
 type ShellOption func(*ShellOptions)
 
 // ShellOptions Shell 操作选项。
-// 对齐 Python execute_cmd 签名：command, cwd, timeout, environment, options, shell_type, grace。
+// Python: execute_cmd 签名：command, cwd, timeout, environment, options, shell_type, grace。
 type ShellOptions struct {
 	// Cwd 工作目录
 	Cwd string

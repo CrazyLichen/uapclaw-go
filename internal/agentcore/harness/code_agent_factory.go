@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // requiredRailEntry 必需 Rail 条目，用于 mergeRailsWithRequired 去重合并。
-// 对齐 Python: _merge_rails_with_required 的 Sequence[Tuple[type[AgentRail], Callable[[], AgentRail]]]
+// Python: _merge_rails_with_required 的 Sequence[Tuple[type[AgentRail], Callable[[], AgentRail]]]
 type requiredRailEntry struct {
 	// railType Rail 类型（零值指针），用于 reflect.TypeOf 去重
 	railType sainterfaces.AgentRail
@@ -35,7 +35,7 @@ type requiredRailEntry struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateCodeAgent 创建并配置 CodeAgent DeepAgent 实例。
-// 对齐 Python: create_code_agent(model, card=..., system_prompt=..., ...)
+// Python: create_code_agent(model, card=..., system_prompt=..., ...)
 //
 // 预定义 CodeAgent 配备 SysOperationRail + AgentModeRail + AskUserRail + ConfirmInterruptRail，
 // 并自动注入 ExploreAgent + PlanAgent 作为子 Agent。用户可自由覆盖配置。
@@ -43,7 +43,7 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 	language := hpromts.ResolveLanguage(params.Language)
 
 	// 1. 注入内置子 Agent（explore_agent + plan_agent）
-	// 对齐 Python: effective_subagents = _inject_builtin_plan_agents(list(subagents or []), ...)
+	// Python: effective_subagents = _inject_builtin_plan_agents(list(subagents or []), ...)
 	// 将 params.Subagents ([]SubAgentConfig) 转换为 []SubagentSpec
 	userSubagents := make([]hschema.SubagentSpec, len(params.Subagents))
 	for i := range params.Subagents {
@@ -52,7 +52,7 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 	effectiveSubagents := injectBuiltinPlanAgents(userSubagents, params.Model, language)
 
 	// 2. 合并必需 Rails（去重）
-	// 对齐 Python: final_rails = _merge_rails_with_required(rails, [...])
+	// Python: final_rails = _merge_rails_with_required(rails, [...])
 	finalRails := mergeRailsWithRequired(params.Rails, []requiredRailEntry{
 		{railType: (*rails.SysOperationRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewSysOperationRail() }},
 		{railType: (*rails.AgentModeRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewAgentModeRail(nil) }},
@@ -62,13 +62,13 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 
 	// 注入 CodingMemoryRail（当 EmbeddingConfig 可用时）
 	// TODO: 等 SubagentCreateParams 添加 EmbeddingConfig 字段后启用
-	// 对齐 Python: if params.EmbeddingConfig != nil {
+	// Python: if params.EmbeddingConfig != nil {
 	//     codingMemoryDir := resolveCodingMemoryDir(params.Workspace)
 	// Python: finalRails = append(finalRails, memoryrail.NewCodingMemoryRail(codingMemoryDir, params.EmbeddingConfig, language))
 	// }
 
 	// 3. 默认 AgentCard
-	// 对齐 Python: final_card = card or AgentCard(name="code_agent", description=...)
+	// Python: final_card = card or AgentCard(name="code_agent", description=...)
 	card := params.Card
 	if card == nil {
 		desc := subagents.DefaultCodeAgentDescription(language)
@@ -79,28 +79,28 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 	}
 
 	// 4. 默认 SystemPrompt
-	// 对齐 Python: final_prompt = system_prompt or DEFAULT_CODE_AGENT_SYSTEM_PROMPT.get(...)
+	// Python: final_prompt = system_prompt or DEFAULT_CODE_AGENT_SYSTEM_PROMPT.get(...)
 	systemPrompt := params.SystemPrompt
 	if systemPrompt == "" {
 		systemPrompt = subagents.DefaultCodeAgentSystemPrompt(language)
 	}
 
 	// 5. 默认 MaxIterations
-	// 对齐 Python: max_iterations=15
+	// Python: max_iterations=15
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
 		maxIterations = 15
 	}
 
 	// 6. RestrictToWorkDir：CodeAgent 默认 false（需要读写整个代码库）
-	// 对齐 Python: create_code_agent 不传 restrict_to_work_dir
+	// Python: create_code_agent 不传 restrict_to_work_dir
 	restrictToWorkDir := false
 	if params.RestrictToWorkDir != nil {
 		restrictToWorkDir = *params.RestrictToWorkDir
 	}
 
 	// 7. 转换为 CreateDeepAgentParams 并调用工厂
-	// 对齐 Python: return create_deep_agent(model=model, card=final_card, ..., enable_task_planning=True)
+	// Python: return create_deep_agent(model=model, card=final_card, ..., enable_task_planning=True)
 	return CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
 		Model:              params.Model,
 		Card:               card,
@@ -126,7 +126,7 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // injectBuiltinPlanAgents 自动注入 explore_agent 和 plan_agent 子 Agent（如果缺失）。
-// 对齐 Python: _inject_builtin_plan_agents(subagents, *, resolved_language, model)
+// Python: _inject_builtin_plan_agents(subagents, *, resolved_language, model)
 func injectBuiltinPlanAgents(
 	userSubagents []hschema.SubagentSpec,
 	model *llm.Model,
@@ -159,7 +159,7 @@ func injectBuiltinPlanAgents(
 }
 
 // hasAgent 检查子 Agent 列表中是否已有指定名称的 Agent。
-// 对齐 Python: _has_agent(subagents, name)
+// Python: _has_agent(subagents, name)
 func hasAgent(specs []hschema.SubagentSpec, name string) bool {
 	for _, spec := range specs {
 		if spec.SpecName() == name {
@@ -170,7 +170,7 @@ func hasAgent(specs []hschema.SubagentSpec, name string) bool {
 }
 
 // mergeRailsWithRequired 合并用户 Rails 与必需 Rails，按类型去重。
-// 对齐 Python: _merge_rails_with_required(user_rails, required_rails)
+// Python: _merge_rails_with_required(user_rails, required_rails)
 //
 // 去重规则：遍历 required 列表，如果用户 Rails 中已有该类型的实例则跳过，否则追加。
 // 使用 reflect.TypeOf 比较（取指针元素的类型）。

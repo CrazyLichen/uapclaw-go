@@ -16,7 +16,7 @@ import (
 
 const (
 	// heartbeatSessionPrefix 心跳会话目录前缀，不参与 session.list 等列表展示，
-	// 对齐 Python _HEARTBEAT_SESSION_PREFIX = "heartbeat_"
+	// Python: _HEARTBEAT_SESSION_PREFIX = "heartbeat_"
 	heartbeatSessionPrefix = "heartbeat_"
 )
 
@@ -26,7 +26,7 @@ const (
 
 // RemoveTeamModeSessionDirsAtStartup AgentServer 启动时删除 metadata.json 中 mode 为 team 的会话目录。
 //
-// 对齐 Python remove_team_mode_session_dirs_at_startup()
+// Python: remove_team_mode_session_dirs_at_startup()
 func RemoveTeamModeSessionDirsAtStartup() {
 	sessionsDir := GetSessionsDir()
 	entries, err := os.ReadDir(sessionsDir)
@@ -69,7 +69,7 @@ func RemoveTeamModeSessionDirsAtStartup() {
 
 // GetAllSessionsMetadata 分页获取所有会话元数据。
 //
-// 对齐 Python get_all_sessions_metadata(limit, offset) → (sessions, total)
+// Python: get_all_sessions_metadata(limit, offset) → (sessions, total)
 // 按 last_message_at 降序排列，跳过 heartbeat_ 前缀的会话。
 func GetAllSessionsMetadata(limit int, offset int) ([]map[string]any, int) {
 	sessionsDir := GetSessionsDir()
@@ -92,7 +92,7 @@ func GetAllSessionsMetadata(limit int, offset int) ([]map[string]any, int) {
 		meta := ReadSessionMetadata(sessionsDir, sessionID)
 		if meta == nil {
 			// 无 metadata.json 的旧会话：构造最小信息，不读取 history.json
-			// 对齐 Python: 避免大量旧会话导致接口变慢
+			// Python: 避免大量旧会话导致接口变慢
 			info, statErr := entry.Info()
 			mtime := float64(0)
 			if statErr == nil {

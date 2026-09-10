@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalWorkConfig 本地工作目录配置，控制 Shell 命令执行的安全边界。
-// 对齐 Python LocalWorkConfig：shell_allowlist, sandbox_root([]string), restrict_to_sandbox, dangerous_patterns。
+// Python: LocalWorkConfig：shell_allowlist, sandbox_root([]string), restrict_to_sandbox, dangerous_patterns。
 type LocalWorkConfig struct {
 	// ShellAllowlist Shell 命令白名单
 	ShellAllowlist []string `yaml:"shell_allowlist" json:"shell_allowlist"`
@@ -21,7 +21,7 @@ type LocalWorkConfig struct {
 }
 
 // SandboxIsolationConfig 沙箱隔离配置，定义容器隔离与命名粒度。
-// 对齐 Python SandboxIsolationConfig：custom_id, container_scope, prefix。
+// Python: SandboxIsolationConfig：custom_id, container_scope, prefix。
 type SandboxIsolationConfig struct {
 	// CustomID 核心身份覆盖，设置后替换自动的 session_id 或 context_id
 	CustomID string `yaml:"custom_id" json:"custom_id,omitempty"`
@@ -32,7 +32,7 @@ type SandboxIsolationConfig struct {
 }
 
 // SandboxLauncherConfig 沙箱启动器配置，定义如何获取/连接沙箱运行时。
-// 对齐 Python SandboxLauncherConfig：launcher_type, gateway_url, sandbox_type, on_stop, idle_ttl_seconds, extra_params。
+// Python: SandboxLauncherConfig：launcher_type, gateway_url, sandbox_type, on_stop, idle_ttl_seconds, extra_params。
 type SandboxLauncherConfig struct {
 	// LauncherType 启动器类型
 	LauncherType string `yaml:"launcher_type" json:"launcher_type"`
@@ -49,7 +49,7 @@ type SandboxLauncherConfig struct {
 }
 
 // PreDeployLauncherConfig 预部署启动器配置，用于已存在的可通过 HTTP/WS 访问的沙箱。
-// 对齐 Python PreDeployLauncherConfig：launcher_type="pre_deploy", sandbox_type, base_url。
+// Python: PreDeployLauncherConfig：launcher_type="pre_deploy", sandbox_type, base_url。
 // 嵌入 SandboxLauncherConfig，额外增加 BaseURL 字段。
 type PreDeployLauncherConfig struct {
 	// LauncherType 启动器类型，固定为 "pre_deploy"
@@ -69,7 +69,7 @@ type PreDeployLauncherConfig struct {
 }
 
 // SandboxGatewayConfig 沙箱网关配置，定义沙箱实例的网关连接与认证信息。
-// 对齐 Python SandboxGatewayConfig：isolation, launcher_config, timeout_seconds, auth_headers, auth_query_params。
+// Python: SandboxGatewayConfig：isolation, launcher_config, timeout_seconds, auth_headers, auth_query_params。
 type SandboxGatewayConfig struct {
 	// Isolation 隔离与命名策略配置
 	Isolation SandboxIsolationConfig `yaml:"isolation" json:"isolation"`
@@ -85,7 +85,7 @@ type SandboxGatewayConfig struct {
 }
 
 // GatewayStoreConfig 网关存储配置。
-// 对齐 Python GatewayStoreConfig：type, redis_url。
+// Python: GatewayStoreConfig：type, redis_url。
 type GatewayStoreConfig struct {
 	// Type 存储类型，Phase 1 仅支持 memory
 	Type string `yaml:"type" json:"type"`
@@ -94,14 +94,14 @@ type GatewayStoreConfig struct {
 }
 
 // GatewayConfig 网关配置。
-// 对齐 Python GatewayConfig：store。
+// Python: GatewayConfig：store。
 type GatewayConfig struct {
 	// Store 存储配置
 	Store GatewayStoreConfig `yaml:"store" json:"store"`
 }
 
 // SandboxCreateRequest 沙箱创建请求。
-// 对齐 Python SandboxCreateRequest：isolation_key, config。
+// Python: SandboxCreateRequest：isolation_key, config。
 type SandboxCreateRequest struct {
 	// IsolationKey 隔离键
 	IsolationKey string `yaml:"isolation_key" json:"isolation_key,omitempty"`
@@ -110,7 +110,7 @@ type SandboxCreateRequest struct {
 }
 
 // GatewayInvokeRequest 网关全链路路由请求。
-// 对齐 Python GatewayInvokeRequest：op_type, method, params, isolation_key。
+// Python: GatewayInvokeRequest：op_type, method, params, isolation_key。
 type GatewayInvokeRequest struct {
 	// OpType 操作类型：fs / shell / code
 	OpType string `json:"op_type"`
@@ -125,7 +125,7 @@ type GatewayInvokeRequest struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ContainerScope 容器作用域枚举。
-// 对齐 Python ContainerScope：SYSTEM, SESSION, CUSTOM。
+// Python: ContainerScope：SYSTEM, SESSION, CUSTOM。
 type ContainerScope int
 
 const (
@@ -144,7 +144,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLocalWorkConfig 创建 LocalWorkConfig 实例。
-// 对齐 Python LocalWorkConfig 默认值：shell_allowlist 有完整默认列表，restrict_to_sandbox=False。
+// Python: LocalWorkConfig 默认值：shell_allowlist 有完整默认列表，restrict_to_sandbox=False。
 func NewLocalWorkConfig() *LocalWorkConfig {
 	return &LocalWorkConfig{
 		ShellAllowlist: []string{
@@ -162,7 +162,7 @@ func NewLocalWorkConfig() *LocalWorkConfig {
 }
 
 // NewSandboxIsolationConfig 创建 SandboxIsolationConfig 实例，默认 ContainerScope=SESSION。
-// 对齐 Python SandboxIsolationConfig 默认值。
+// Python: SandboxIsolationConfig 默认值。
 func NewSandboxIsolationConfig() SandboxIsolationConfig {
 	return SandboxIsolationConfig{
 		ContainerScope: ContainerScopeSession,
@@ -170,7 +170,7 @@ func NewSandboxIsolationConfig() SandboxIsolationConfig {
 }
 
 // NewSandboxLauncherConfig 创建 SandboxLauncherConfig 实例。
-// 对齐 Python SandboxLauncherConfig 默认值：launcher_type="pre_deploy", sandbox_type="mock", on_stop="delete"。
+// Python: SandboxLauncherConfig 默认值：launcher_type="pre_deploy", sandbox_type="mock", on_stop="delete"。
 func NewSandboxLauncherConfig() *SandboxLauncherConfig {
 	return &SandboxLauncherConfig{
 		LauncherType: "pre_deploy",
@@ -180,7 +180,7 @@ func NewSandboxLauncherConfig() *SandboxLauncherConfig {
 }
 
 // NewPreDeployLauncherConfig 创建 PreDeployLauncherConfig 实例。
-// 对齐 Python PreDeployLauncherConfig：launcher_type="pre_deploy", sandbox_type="aio"。
+// Python: PreDeployLauncherConfig：launcher_type="pre_deploy", sandbox_type="aio"。
 func NewPreDeployLauncherConfig(baseURL string) *PreDeployLauncherConfig {
 	return &PreDeployLauncherConfig{
 		LauncherType: "pre_deploy",
@@ -191,7 +191,7 @@ func NewPreDeployLauncherConfig(baseURL string) *PreDeployLauncherConfig {
 }
 
 // NewSandboxGatewayConfig 创建 SandboxGatewayConfig 实例。
-// 对齐 Python SandboxGatewayConfig 默认值：
+// Python: SandboxGatewayConfig 默认值：
 // isolation=默认(SESSION), launcher_config=默认(pre_deploy+aio), timeout=30。
 func NewSandboxGatewayConfig() *SandboxGatewayConfig {
 	return &SandboxGatewayConfig{

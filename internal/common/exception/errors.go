@@ -14,7 +14,7 @@ import (
 //   - ErrorCategory 表达控制/恢复语义
 //   - 消息渲染基于模板，容忍缺失占位符
 //
-// 对应 Python: openjiuwen/core/common/exception/errors.py (BaseError)
+// Python: openjiuwen/core/common/exception/errors.py (BaseError)
 type BaseError struct {
 	// status 关联的 StatusCode，通过它访问 Code()/Name()/Message()
 	status StatusCode
@@ -50,7 +50,7 @@ type ErrorOption func(*baseErrorBuilder)
 // 选择 ErrorCategory = 选择控制语义（retry? abort? terminate gracefully?）。
 // 选 StatusCode = 选错误身份（哪个模块、哪种失败）。两者正交。
 //
-// 对应 Python: BaseError 子类层级（FrameworkError/ValidationError/ExecutionError/Termination）
+// Python: BaseError 子类层级（FrameworkError/ValidationError/ExecutionError/Termination）
 type ErrorCategory int
 
 const (
@@ -145,7 +145,7 @@ func WithParams(params map[string]any) ErrorOption {
 //   - status: 关联的 StatusCode
 //   - opts: 可选配置（WithMsg, WithDetails, WithCause, WithParam, WithParams）
 //
-// 对应 Python: BaseError.__init__
+// Python: BaseError.__init__
 func NewBaseError(status StatusCode, opts ...ErrorOption) *BaseError {
 	// 获取该 StatusCode 对应的 ErrorCategory
 	category := ResolveCategory(status)
@@ -189,7 +189,7 @@ func (e *BaseError) SetCategory(c ErrorCategory) { e.category = c }
 
 // Code 返回整数错误码，委托给 StatusCode.Code()。
 //
-// 对应 Python: BaseError.code
+// Python: BaseError.code
 func (e *BaseError) Code() int { return e.status.Code() }
 
 // Message 返回最终消息。
@@ -230,7 +230,7 @@ func (e *BaseError) IsRecoverable() bool {
 
 // Error 实现 error 接口，返回 "[code] message" 格式。
 //
-// 对应 Python: BaseError.__str__
+// Python: BaseError.__str__
 func (e *BaseError) Error() string {
 	return fmt.Sprintf("[%d] %s", e.Code(), e.message)
 }
@@ -242,7 +242,7 @@ func (e *BaseError) String() string {
 
 // ToDict 返回标准结构化输出，用于 API/RPC/日志。
 //
-// 对应 Python: BaseError.to_dict()
+// Python: BaseError.to_dict()
 func (e *BaseError) ToDict() map[string]any {
 	return map[string]any{
 		"code":        e.Code(),
@@ -259,7 +259,7 @@ func (e *BaseError) ToDict() map[string]any {
 
 // ToJSON 返回 JSON 格式的结构化输出。
 //
-// 对应 Python: BaseError.to_json()
+// Python: BaseError.to_json()
 func (e *BaseError) ToJSON() string {
 	data, _ := json.Marshal(e.ToDict())
 	return string(data)
@@ -267,7 +267,7 @@ func (e *BaseError) ToJSON() string {
 
 // BuildError 构建异常实例但不抛出，用于延迟抛出或包装到 Result 中。
 //
-// 对应 Python: build_error()
+// Python: build_error()
 func BuildError(status StatusCode, opts ...ErrorOption) *BaseError {
 	return NewBaseError(status, opts...)
 }
@@ -276,14 +276,14 @@ func BuildError(status StatusCode, opts ...ErrorOption) *BaseError {
 //
 // Go 没有 raise 语义，此函数返回 *BaseError 供调用方直接 return。
 //
-// 对应 Python: raise_error()
+// Python: raise_error()
 func RaiseError(status StatusCode, opts ...ErrorOption) *BaseError {
 	return NewBaseError(status, opts...)
 }
 
 // SystemError 返回 Framework 类别的异常。
 //
-// 对应 Python: system_error()
+// Python: system_error()
 func SystemError(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)
 	err.category = ErrorCategoryFramework
@@ -292,7 +292,7 @@ func SystemError(status StatusCode, opts ...ErrorOption) *BaseError {
 
 // ValidateError 返回 Validation 类别的异常。
 //
-// 对应 Python: validate_error()
+// Python: validate_error()
 func ValidateError(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)
 	err.category = ErrorCategoryValidation
@@ -301,7 +301,7 @@ func ValidateError(status StatusCode, opts ...ErrorOption) *BaseError {
 
 // Terminate 返回 Termination 类别的异常。
 //
-// 对应 Python: terminate()
+// Python: terminate()
 func Terminate(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)
 	err.category = ErrorCategoryTermination

@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SQLTaskDao TaskDao 的 SQL 实现。
-// 对齐 Python: TaskDao (openjiuwen/agent_teams/tools/database/task_dao.py)
+// Python: TaskDao (openjiuwen/agent_teams/tools/database/task_dao.py)
 // 操作动态表 team_task_{suffix} + team_task_dependency_{suffix}。
 type SQLTaskDao struct {
 	// db GORM 数据库实例
@@ -38,13 +38,13 @@ type mutationFailure struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateTask 创建单条任务。
-// 对齐 Python: create_task(task_id, team_name, title, content, status) → bool
+// Python: create_task(task_id, team_name, title, content, status) → bool
 func (d *SQLTaskDao) CreateTask(ctx context.Context, task *TeamTaskBase) (bool, error) {
 	table := d.taskTableName(ctx)
 	task.UpdatedAt = GetCurrentTime()
 	result := d.db.WithContext(ctx).Table(table).Create(task)
 	if result.Error != nil {
-		// 对齐 Python: except IntegrityError → False
+		// Python: except IntegrityError → False
 		return false, nil
 	}
 	logger.Info(logComponent).Str("task_id", task.TaskID).Msg("任务创建成功")
@@ -66,7 +66,7 @@ func (d *SQLTaskDao) GetTask(ctx context.Context, taskID string) (*TeamTaskBase,
 }
 
 // GetTeamTasks 查询团队全部任务。status 为空字符串表示不过滤。
-// 对齐 Python: get_team_tasks(team_name, status=None)
+// Python: get_team_tasks(team_name, status=None)
 func (d *SQLTaskDao) GetTeamTasks(ctx context.Context, teamName, status string) ([]*TeamTaskBase, error) {
 	table := d.taskTableName(ctx)
 	query := d.db.WithContext(ctx).Table(table).Where("team_name = ?", teamName)
@@ -82,7 +82,7 @@ func (d *SQLTaskDao) GetTeamTasks(ctx context.Context, teamName, status string) 
 }
 
 // GetTasksByAssignee 查询成员的任务。status 为空字符串表示不过滤。
-// 对齐 Python: get_tasks_by_assignee(team_name, assignee_id, status=None)
+// Python: get_tasks_by_assignee(team_name, assignee_id, status=None)
 func (d *SQLTaskDao) GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	table := d.taskTableName(ctx)
 	query := d.db.WithContext(ctx).Table(table).
@@ -99,7 +99,7 @@ func (d *SQLTaskDao) GetTasksByAssignee(ctx context.Context, teamName, assignee,
 }
 
 // ClaimTask 认领任务：设置 assignee + pending→claimed FSM 校验。
-// 对齐 Python: claim_task(task_id, member_name) → bool
+// Python: claim_task(task_id, member_name) → bool
 func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -107,10 +107,10 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 		var task TeamTaskBase
 		result := tx.Table(table).Where("task_id = ?", taskID).First(&task)
 		if result.Error != nil {
-			// 对齐 Python: team_logger.error("Task %s not found", task_id)
+			// Python: team_logger.error("Task %s not found", task_id)
 			return nil // 不回滚，返回失败
 		}
-		// 对齐 Python: if task.assignee → warning + return False
+		// Python: if task.assignee → warning + return False
 		if task.Assignee != nil && *task.Assignee != "" {
 			assigneeStr := ""
 			if task.Assignee != nil {
@@ -134,7 +134,7 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 }
 
 // ResetTask 重置任务：claimed→pending，清除 assignee。
-// 对齐 Python: reset_task(task_id) → Optional[TeamTaskBase]
+// Python: reset_task(task_id) → Optional[TeamTaskBase]
 func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -144,7 +144,7 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 		if result.Error != nil {
 			return nil
 		}
-		// 对齐 Python: if task.status != claimed → error
+		// Python: if task.status != claimed → error
 		if task.Status != fsm.TaskStatusClaimed {
 			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("只能重置 claimed 状态的任务")
 			return nil
@@ -164,7 +164,7 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 }
 
 // ApprovePlanTask 计划审批：claimed→plan_approved FSM 校验。
-// 对齐 Python: approve_plan_task(task_id) → Optional[TeamTaskBase]
+// Python: approve_plan_task(task_id) → Optional[TeamTaskBase]
 func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -189,7 +189,7 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 }
 
 // UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 blocked→pending。
-// 对齐 Python: update_task_status(task_id, status) → bool
+// Python: update_task_status(task_id, status) → bool
 func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus string) ([]string, error) {
 	table := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
@@ -210,7 +210,7 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 			Select("status", "updated_at").
 			Updates(&TeamTaskBase{Status: newStatus, UpdatedAt: now})
 
-		// 对齐 Python: if status == completed → 标记依赖 resolved
+		// Python: if status == completed → 标记依赖 resolved
 		if newStatus == fsm.TaskStatusCompleted {
 			logger.Info(logComponent).Str("task_id", taskID).Msg("任务已完成")
 			depResult := tx.Table(depTable).
@@ -228,7 +228,7 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 }
 
 // UpdateTask 更新标题/内容。claimed/plan_approved 状态下禁止编辑。
-// 对齐 Python: update_task(task_id, title, content) → bool
+// Python: update_task(task_id, title, content) → bool
 func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content string) (bool, error) {
 	table := d.taskTableName(ctx)
 	var ok bool
@@ -238,7 +238,7 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 		if result.Error != nil {
 			return nil
 		}
-		// 对齐 Python: if task.status in (claimed, plan_approved) → error
+		// Python: if task.status in (claimed, plan_approved) → error
 		if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
 			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("当前状态禁止编辑任务内容")
 			return nil
@@ -262,7 +262,7 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 }
 
 // MutateDependencyGraph 原子图变更：5 步管线。
-// 对齐 Python: mutate_dependency_graph(team_name, new_tasks, add_edges) → GraphMutationResult
+// Python: mutate_dependency_graph(team_name, new_tasks, add_edges) → GraphMutationResult
 // 管线失败时 return err 触发 rollback，对齐 Python 的 session.rollback()
 func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string, newTasks []NewTaskSpec, addEdges []EdgeSpec) GraphMutationResult {
 	if len(newTasks) == 0 && len(addEdges) == 0 {
@@ -298,7 +298,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		}
 
 		// 步骤4: applyNewEdgesInTx — INSERT 依赖行
-		// 对齐 Python: _apply_new_edges(session, team_name, new_edge_set, endpoint_tasks)
+		// Python: _apply_new_edges(session, team_name, new_edge_set, endpoint_tasks)
 		for _, edge := range newEdges {
 			if createErr := tx.Table(depTable).Create(&edge).Error; createErr != nil {
 				mutationErr = createErr
@@ -307,7 +307,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		}
 
 		// 步骤5: refreshStatusInTx
-		// 对齐 Python: affected_ids = new_tasks ids + new_edges task_ids
+		// Python: affected_ids = new_tasks ids + new_edges task_ids
 		affectedIDs := make(map[string]bool)
 		for _, spec := range newTasks {
 			affectedIDs[spec.TaskID] = true
@@ -327,11 +327,11 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 	})
 
 	if err != nil {
-		// 对齐 Python: except _MutationFailure → session.rollback(); return fail
+		// Python: except _MutationFailure → session.rollback(); return fail
 		result.Reason = mutationErr.Error()
 		logger.Error(logComponent).Str("reason", result.Reason).Msg("图变更管线失败")
 	} else if result.Ok {
-		// 对齐 Python 内存实现: 分支日志，使用去重后的 newEdges 计数
+		// Python: 内存实现: 分支日志，使用去重后的 newEdges 计数
 		if len(newTasks) > 0 {
 			logger.Info(logComponent).
 				Int("new_tasks", len(newTasks)).
@@ -349,7 +349,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 }
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。委托 MutateDependencyGraph。
-// 对齐 Python: add_task_with_bidirectional_dependencies(task_id, team_name, title, content, status, *, dependencies, dependent_task_ids)
+// Python: add_task_with_bidirectional_dependencies(task_id, team_name, title, content, status, *, dependencies, dependent_task_ids)
 func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	newTaskSpec := NewTaskSpec{
 		TaskID:        task.TaskID,
@@ -357,12 +357,12 @@ func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, t
 		Content:       task.Content,
 		InitialStatus: task.Status,
 	}
-	// 对齐 Python: edges = [(task_id, dep_id) for dep_id in dependencies]
+	// Python: edges = [(task_id, dep_id) for dep_id in dependencies]
 	var edges []EdgeSpec
 	for _, depID := range dependencies {
 		edges = append(edges, EdgeSpec{TaskID: task.TaskID, DependsOnID: depID})
 	}
-	// 对齐 Python: dep_edges = [(dep_id, task_id) for dep_id in dependent_task_ids]
+	// Python: dep_edges = [(dep_id, task_id) for dep_id in dependent_task_ids]
 	for _, depID := range dependentTaskIDs {
 		edges = append(edges, EdgeSpec{TaskID: depID, DependsOnID: task.TaskID})
 	}
@@ -375,7 +375,7 @@ func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, t
 }
 
 // GetTaskDependencies 查询任务依赖。
-// 对齐 Python: get_task_dependencies(task_id) → List[TeamTaskDependencyBase]
+// Python: get_task_dependencies(task_id) → List[TeamTaskDependencyBase]
 func (d *SQLTaskDao) GetTaskDependencies(ctx context.Context, taskID string) ([]*TeamTaskDependencyBase, error) {
 	depTable := d.depTableName(ctx)
 	var deps []*TeamTaskDependencyBase
@@ -387,7 +387,7 @@ func (d *SQLTaskDao) GetTaskDependencies(ctx context.Context, taskID string) ([]
 }
 
 // GetUnresolvedDependenciesCount 未解决依赖计数。
-// 对齐 Python: get_unresolved_dependencies_count(task_id) → int
+// Python: get_unresolved_dependencies_count(task_id) → int
 func (d *SQLTaskDao) GetUnresolvedDependenciesCount(ctx context.Context, taskID string) (int, error) {
 	depTable := d.depTableName(ctx)
 	var count int64
@@ -398,12 +398,12 @@ func (d *SQLTaskDao) GetUnresolvedDependenciesCount(ctx context.Context, taskID 
 }
 
 // GetTasksDependingOn 查询下游依赖任务（即被 taskID 阻塞的任务）。
-// 对齐 Python: get_tasks_depending_on(depends_on_task_id) → List[TeamTaskBase]
+// Python: get_tasks_depending_on(depends_on_task_id) → List[TeamTaskBase]
 func (d *SQLTaskDao) GetTasksDependingOn(ctx context.Context, taskID string) ([]*TeamTaskBase, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
 
-	// 对齐 Python: 先查 deps，再查 tasks
+	// Python: 先查 deps，再查 tasks
 	var depTaskIDs []string
 	d.db.WithContext(ctx).Table(depTable).
 		Select("task_id").
@@ -422,12 +422,12 @@ func (d *SQLTaskDao) GetTasksDependingOn(ctx context.Context, taskID string) ([]
 }
 
 // DeleteTask 删除任务。
-// 对齐 Python: delete_task(task_id) → bool
+// Python: delete_task(task_id) → bool
 func (d *SQLTaskDao) DeleteTask(ctx context.Context, taskID string) error {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
 
-	// 对齐 Python: session.delete(task) — 先检查存在
+	// Python: session.delete(task) — 先检查存在
 	result := d.db.WithContext(ctx).Table(taskTable).Where("task_id = ?", taskID).Delete(nil)
 	if result.RowsAffected == 0 {
 		logger.Warn(logComponent).Str("task_id", taskID).Msg("删除任务未找到")
@@ -439,7 +439,7 @@ func (d *SQLTaskDao) DeleteTask(ctx context.Context, taskID string) error {
 }
 
 // CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。
-// 对齐 Python: cancel_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
+// Python: cancel_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
 func (d *SQLTaskDao) CancelTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
@@ -454,7 +454,7 @@ func (d *SQLTaskDao) CancelTask(ctx context.Context, taskID string) (*TeamTaskBa
 }
 
 // CompleteTask 完成任务（原子终止传播），返回被完成的任务和解除阻塞的任务列表。
-// 对齐 Python: complete_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
+// Python: complete_task(task_id) → {"task": ..., "unblocked_tasks": [...]}
 func (d *SQLTaskDao) CompleteTask(ctx context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
@@ -469,7 +469,7 @@ func (d *SQLTaskDao) CompleteTask(ctx context.Context, taskID string) (*TeamTask
 }
 
 // CancelAllTasks 批量取消（原子终止传播），支持 skipAssignees 过滤。
-// 对齐 Python: cancel_all_tasks(team_name, skip_assignees) → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
+// Python: cancel_all_tasks(team_name, skip_assignees) → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
 func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAssignees []string) (*CancelAllTasksResult, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
@@ -480,7 +480,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 	}
 
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 对齐 Python: 查询所有非终态任务
+		// Python: 查询所有非终态任务
 		var candidates []TeamTaskBase
 		tx.Table(taskTable).
 			Where("team_name = ? AND status NOT IN ?", teamName, []string{fsm.TaskStatusCompleted, fsm.TaskStatusCancelled}).
@@ -495,7 +495,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 		unblockedByID := make(map[string]*TeamTaskBase)
 
 		for _, task := range candidates {
-			// 对齐 Python: if assignee in skip_assignees → continue
+			// Python: if assignee in skip_assignees → continue
 			assigneeKey := ""
 			if task.Assignee != nil {
 				assigneeKey = *task.Assignee
@@ -514,7 +514,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 			}
 		}
 
-		// 对齐 Python: 排除已取消的任务
+		// Python: 排除已取消的任务
 		cancelledIDs := make(map[string]bool, len(result.Cancelled))
 		for _, t := range result.Cancelled {
 			cancelledIDs[t.TaskID] = true
@@ -536,14 +536,14 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 }
 
 // VerifyAndFixTaskConsistency 一致性修复：扫描 blocked 任务并刷新状态。
-// 对齐 Python: verify_and_fix_task_consistency(team_name) → List[TeamTaskBase]
+// Python: verify_and_fix_task_consistency(team_name) → List[TeamTaskBase]
 func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName string) ([]string, error) {
 	taskTable := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
 
 	var refreshedIDs []string
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 对齐 Python: 查所有 blocked 任务
+		// Python: 查所有 blocked 任务
 		var blockedIDs []string
 		tx.Table(taskTable).
 			Select("task_id").
@@ -590,13 +590,13 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
-// 对齐 Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]
+// Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]
 func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string, now int64) []*TeamTaskBase {
 	if len(taskIDs) == 0 {
 		return nil
 	}
 
-	// 对齐 Python: 查询候选任务（仅 pending/blocked）
+	// Python: 查询候选任务（仅 pending/blocked）
 	var candidates []TeamTaskBase
 	tx.Table(taskTable).Where("task_id IN ? AND status IN ?", taskIDs, []string{fsm.TaskStatusPending, fsm.TaskStatusBlocked}).Find(&candidates)
 	if len(candidates) == 0 {
@@ -608,7 +608,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 		candidateIDs = append(candidateIDs, t.TaskID)
 	}
 
-	// 对齐 Python: 查询每个候选任务的 unresolved deps 计数
+	// Python: 查询每个候选任务的 unresolved deps 计数
 	type unresolvedCount struct {
 		TaskID     string
 		Unresolved int
@@ -628,7 +628,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 	var refreshedTasks []*TeamTaskBase
 	for _, task := range candidates {
 		unresolved := countMap[task.TaskID]
-		// 对齐 Python: pending + unresolved > 0 → blocked
+		// Python: pending + unresolved > 0 → blocked
 		if task.Status == fsm.TaskStatusPending && unresolved > 0 {
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
 				Select("status", "updated_at").
@@ -638,7 +638,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 			refreshedTasks = append(refreshedTasks, &task)
 			logger.Info(logComponent).Str("task_id", task.TaskID).Int("unresolved", unresolved).Msg("任务被阻塞")
 		} else if task.Status == fsm.TaskStatusBlocked && unresolved == 0 {
-			// 对齐 Python: blocked + unresolved == 0 → pending
+			// Python: blocked + unresolved == 0 → pending
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
 				Select("status", "updated_at").
 				Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, UpdatedAt: now})
@@ -652,35 +652,35 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 }
 
 // terminateTaskInTx 终止任务 + 标记依赖 resolved + 传播解除阻塞。
-// 对齐 Python: _terminate_task_in_session(session, task_id, new_status, now)
+// Python: _terminate_task_in_session(session, task_id, new_status, now)
 // 返回 (unblocked_task_ids, error)
 func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus string, now int64) (*TeamTaskBase, []*TeamTaskBase, error) {
-	// 对齐 Python: new_status 必须是终态
+	// Python: new_status 必须是终态
 	if !fsm.IsTaskTerminal(newStatus) {
 		return nil, nil, fmt.Errorf("terminateTaskInTx 期望终态，收到 %s", newStatus)
 	}
 
-	// 对齐 Python: 查任务
+	// Python: 查任务
 	var task TeamTaskBase
 	result := tx.Table(taskTable).Where("task_id = ?", taskID).First(&task)
 	if result.Error != nil {
-		// 对齐 Python: team_logger.error("Task %s not found", task_id); return None
+		// Python: team_logger.error("Task %s not found", task_id); return None
 		return nil, nil, nil
 	}
 
-	// 对齐 Python: 已是目标状态（幂等）
+	// Python: 已是目标状态（幂等）
 	if task.Status == newStatus {
 		logger.Debug(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务已是目标状态")
 		return &task, []*TeamTaskBase{}, nil
 	}
 
-	// 对齐 Python: is_valid_transition 校验
+	// Python: is_valid_transition 校验
 	if !fsm.IsValidTaskTransition(task.Status, newStatus) {
 		logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("任务状态转换不合法")
 		return nil, nil, nil
 	}
 
-	// 对齐 Python: task.status = new_status; task.updated_at = now
+	// Python: task.status = new_status; task.updated_at = now
 	tx.Table(taskTable).Where("task_id = ?", taskID).
 		Select("status", "updated_at").
 		Updates(&TeamTaskBase{Status: newStatus, UpdatedAt: now})
@@ -689,7 +689,7 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 	task.UpdatedAt = now
 	logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务终止")
 
-	// 对齐 Python: 标记下游依赖 resolved
+	// Python: 标记下游依赖 resolved
 	depResult := tx.Table(depTable).
 		Where("depends_on_task_id = ? AND resolved = 0", taskID).
 		Update("resolved", 1)
@@ -698,24 +698,24 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 		logger.Info(logComponent).Str("task_id", taskID).Int("resolved", resolvedCount).Msg("标记依赖已解决")
 	}
 
-	// 对齐 Python: 获取下游任务 ID
+	// Python: 获取下游任务 ID
 	var downstreamIDs []string
 	tx.Table(depTable).Select("task_id").
 		Where("depends_on_task_id = ?", taskID).
 		Distinct().Find(&downstreamIDs)
 
-	// 对齐 Python: 刷新下游任务状态
+	// Python: 刷新下游任务状态
 	refreshedTasks := refreshStatusInTx(tx, taskTable, depTable, downstreamIDs, now)
 	return &task, refreshedTasks, nil
 }
 
 // stageNewTasksInTx INSERT 新任务行。
-// 对齐 Python: _stage_new_tasks(session, team_name, new_tasks, now)
+// Python: _stage_new_tasks(session, team_name, new_tasks, now)
 func stageNewTasksInTx(tx *gorm.DB, taskTable, teamName string, newTasks []NewTaskSpec, now int64) error {
 	if len(newTasks) == 0 {
 		return nil
 	}
-	// 对齐 Python: seen_ids 去重
+	// Python: seen_ids 去重
 	seenIDs := make(map[string]bool, len(newTasks))
 	for _, spec := range newTasks {
 		if seenIDs[spec.TaskID] {
@@ -738,13 +738,13 @@ func stageNewTasksInTx(tx *gorm.DB, taskTable, teamName string, newTasks []NewTa
 }
 
 // loadEndpointsAndValidateInTx 解析边端点 + 校验存在性和源状态。
-// 对齐 Python: _load_endpoints_and_validate(session, add_edges) -> Dict[str, TeamTaskBase]
+// Python: _load_endpoints_and_validate(session, add_edges) -> Dict[str, TeamTaskBase]
 func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []EdgeSpec) (map[string]*TeamTaskBase, error) {
 	if len(addEdges) == 0 {
 		return nil, nil
 	}
 
-	// 对齐 Python: 收集所有端点 ID
+	// Python: 收集所有端点 ID
 	endpointIDs := make(map[string]bool)
 	for _, e := range addEdges {
 		endpointIDs[e.TaskID] = true
@@ -755,7 +755,7 @@ func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []Edge
 		ids = append(ids, id)
 	}
 
-	// 对齐 Python: 批量查询
+	// Python: 批量查询
 	var tasks []TeamTaskBase
 	tx.Table(taskTable).Where("task_id IN ?", ids).Find(&tasks)
 	taskMap := make(map[string]*TeamTaskBase, len(tasks))
@@ -763,7 +763,7 @@ func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []Edge
 		taskMap[tasks[i].TaskID] = &tasks[i]
 	}
 
-	// 对齐 Python: TASK_DEPENDENCY_REJECT_STATUSES
+	// Python: TASK_DEPENDENCY_REJECT_STATUSES
 	rejectStatuses := map[string]bool{
 		fsm.TaskStatusCompleted: true, fsm.TaskStatusCancelled: true,
 		fsm.TaskStatusClaimed: true, fsm.TaskStatusPlanApproved: true,
@@ -784,13 +784,13 @@ func loadEndpointsAndValidateInTx(tx *gorm.DB, taskTable string, addEdges []Edge
 }
 
 // checkCycleAndComputeNewEdgesInTx 环检测 + 计算新边集。
-// 对齐 Python: _check_cycle_and_compute_new_edges(session, team_name, add_edges) -> set[tuple]
+// Python: _check_cycle_and_compute_new_edges(session, team_name, add_edges) -> set[tuple]
 func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, addEdges []EdgeSpec, endpointTasks map[string]*TeamTaskBase) ([]TeamTaskDependencyBase, error) {
 	if len(addEdges) == 0 {
 		return nil, nil
 	}
 
-	// 对齐 Python: 获取现有边
+	// Python: 获取现有边
 	var existingRows []TeamTaskDependencyBase
 	tx.Table(depTable).Where("team_name = ?", teamName).Find(&existingRows)
 	existingEdgeSet := make(map[string]bool, len(existingRows))
@@ -801,7 +801,7 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 		adjacency[r.TaskID] = append(adjacency[r.TaskID], r.DependsOnID)
 	}
 
-	// 对齐 Python: 计算新边，去重
+	// Python: 计算新边，去重
 	var newEdges []TeamTaskDependencyBase
 	newEdgeSet := make(map[string]bool)
 	for _, e := range addEdges {
@@ -812,7 +812,7 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 		newEdgeSet[key] = true
 		adjacency[e.TaskID] = append(adjacency[e.TaskID], e.DependsOnID)
 
-		// 对齐 Python: dep_status = endpoint_tasks[dep_id].status; initial_resolved = dep_status in TASK_TERMINAL_STATUSES
+		// Python: dep_status = endpoint_tasks[dep_id].status; initial_resolved = dep_status in TASK_TERMINAL_STATUSES
 		depStatus := endpointTasks[e.DependsOnID].Status
 		resolved := fsm.IsTaskTerminal(depStatus)
 		newEdges = append(newEdges, TeamTaskDependencyBase{
@@ -823,7 +823,7 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 		})
 	}
 
-	// 对齐 Python: cycle = detect_cycle_in_adjacency(adjacency)
+	// Python: cycle = detect_cycle_in_adjacency(adjacency)
 	if cycle := detectCycleInAdjacencySQL(adjacency); cycle != nil {
 		return nil, &mutationFailure{reason: fmt.Sprintf("检测到循环依赖: %s", formatCycle(cycle))}
 	}
@@ -832,7 +832,7 @@ func checkCycleAndComputeNewEdgesInTx(tx *gorm.DB, depTable, teamName string, ad
 }
 
 // detectCycleInAdjacencySQL 迭代 DFS 三色法检测有向图环。
-// 对齐 Python: detect_cycle_in_adjacency(adjacency)
+// Python: detect_cycle_in_adjacency(adjacency)
 // 使用显式栈替代递归，WHITE/GRAY/BLACK 三色标记，避免深依赖链栈溢出。
 func detectCycleInAdjacencySQL(adjacency map[string][]string) []string {
 	const (

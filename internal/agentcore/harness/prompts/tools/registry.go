@@ -52,7 +52,7 @@ func AllProviders() []ToolMetadataProvider {
 // BuildToolCard 统一建卡函数。从 registry 获取 description + inputParams，
 // 转换为 []*schema.Param 后构建 ToolCard。
 //
-// 对齐 Python: openjiuwen/harness/prompts/tools/__init__.py build_tool_card()
+// Python: openjiuwen/harness/prompts/tools/__init__.py build_tool_card()
 func BuildToolCard(
 	name string,
 	toolID string,

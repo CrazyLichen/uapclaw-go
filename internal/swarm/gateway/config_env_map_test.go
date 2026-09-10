@@ -34,7 +34,7 @@ func TestBuildEnvMap_未设置的环境变量(t *testing.T) {
 }
 
 func TestConfigSetEnvMap_条目数量(t *testing.T) {
-	// 对齐 Python _CONFIG_SET_ENV_MAP 的条目数
+	// Python: _CONFIG_SET_ENV_MAP 的条目数
 	if len(configSetEnvMap) < 30 {
 		t.Errorf("configSetEnvMap 条目数过少: %d，期望至少 30", len(configSetEnvMap))
 	}
@@ -64,7 +64,7 @@ func TestShouldBrowserRestart_空键集合(t *testing.T) {
 }
 
 func TestBrowserRuntimeKeys_条目数量(t *testing.T) {
-	// 对齐 Python browser_runtime_keys（16 个模型相关键）
+	// Python: browser_runtime_keys（16 个模型相关键）
 	if len(browserRuntimeKeys) != 16 {
 		t.Errorf("browserRuntimeKeys 条目数: %d，期望 16", len(browserRuntimeKeys))
 	}

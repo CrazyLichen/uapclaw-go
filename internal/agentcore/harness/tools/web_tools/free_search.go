@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // FreeSearchInput free_search 工具的输入参数
-// 对齐 Python: WebFreeSearchTool.invoke inputs (web_tools.py L1039-1041)
+// Python: WebFreeSearchTool.invoke inputs (web_tools.py L1039-1041)
 type FreeSearchInput struct {
 	// Query 搜索查询文本
 	Query string `json:"query"`
@@ -35,25 +35,25 @@ type FreeSearchInput struct {
 
 var (
 	// ddgLinkRe DDG 结果链接正则
-	// 对齐 Python: re.findall(r'<a[^>]+class="result__a"...>', ...) (web_tools.py L691-694)
+	// Python: re.findall(r'<a[^>]+class="result__a"...>', ...) (web_tools.py L691-694)
 	ddgLinkRe = regexp.MustCompile(`(?i)<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>`)
 	// ddgSnippetRe DDG 结果摘要正则
-	// 对齐 Python: re.findall(r'<a[^>]+class="result__snippet"...>', ...) (web_tools.py L696-700)
+	// Python: re.findall(r'<a[^>]+class="result__snippet"...>', ...) (web_tools.py L696-700)
 	ddgSnippetRe = regexp.MustCompile(`(?is)<a[^>]+class="result__snippet"[^>]*>(.*?)</a>|<div[^>]+class="result__snippet"[^>]*>(.*?)</div>`)
 	// jinaLinkRe Jina 代理结果链接正则
-	// 对齐 Python: re.findall(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)", ...) (web_tools.py L725)
+	// Python: re.findall(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)", ...) (web_tools.py L725)
 	jinaLinkRe = regexp.MustCompile(`(?i)\[([^\]\n]+)\]\((https?://[^\s)]+)\)`)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebFreeSearchTool 创建免费搜索工具
-// 对齐 Python: WebFreeSearchTool.__init__ + invoke (web_tools.py L645-1088)
+// Python: WebFreeSearchTool.__init__ + invoke (web_tools.py L645-1088)
 func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 	card, _ := hprompts.BuildToolCard("free_search", "WebFreeSearchTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input FreeSearchInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: WebFreeSearchTool.invoke (web_tools.py L1037-1088)
+		// Python: WebFreeSearchTool.invoke (web_tools.py L1037-1088)
 		query := strings.TrimSpace(input.Query)
 		maxResults := input.MaxResults
 		timeoutSeconds := input.TimeoutSeconds
@@ -62,7 +62,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 			return map[string]any{"result": "[ERROR]: query cannot be empty."}, nil
 		}
 
-		// 对齐 Python: L1046-1047
+		// Python: L1046-1047
 		if maxResults <= 0 {
 			maxResults = 8
 		}
@@ -72,7 +72,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 		}
 		timeoutSeconds = max(5, min(timeoutSeconds, 60))
 
-		// 对齐 Python: L1048-1053 — search_free
+		// Python: L1048-1053 — search_free
 		engineUsed, rows, err := searchFree(query, maxResults, timeoutSeconds)
 		if err != nil {
 			logger.Error(logComponent).Str("query", query).Err(err).Msg("免费搜索失败")
@@ -83,7 +83,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 			return map[string]any{"result": fmt.Sprintf("No search results for: %s", query)}, nil
 		}
 
-		// 对齐 Python: L1058-1083 — 格式化输出
+		// Python: L1058-1083 — 格式化输出
 		result := formatSearchResult(engineUsed, query, rows)
 		return map[string]any{"result": result}, nil
 	}
@@ -95,7 +95,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // searchDuckDuckGo 搜索 DuckDuckGo HTML 端点
-// 对齐 Python: WebFreeSearchTool._search_duckduckgo_sync() (web_tools.py L672-715)
+// Python: WebFreeSearchTool._search_duckduckgo_sync() (web_tools.py L672-715)
 func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow, error) {
 	searchURL := duckduckgoSearchURL(query)
 	resp, err := httpRequest("GET", searchURL,
@@ -106,7 +106,7 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 		return nil, fmt.Errorf("DuckDuckGo 搜索失败: %w", err)
 	}
 
-	// 对齐 Python: L676-688 — 反爬检测
+	// Python: L676-688 — 反爬检测
 	if isDDGChallengePage(resp.statusCode, resp.text) {
 		return nil, fmt.Errorf("duckduckgo: 反爬挑战页面返回")
 	}
@@ -115,7 +115,7 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 	}
 
 	html := resp.text
-	// 对齐 Python: L691-700 — 正则提取
+	// Python: L691-700 — 正则提取
 	links := ddgLinkRe.FindAllStringSubmatch(html, maxResults)
 	snippets := ddgSnippetRe.FindAllStringSubmatch(html, -1)
 
@@ -126,7 +126,7 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 		}
 		href := match[1]
 		titleRaw := match[2]
-		// 对齐 Python: L704-706 — 摘要提取
+		// Python: L704-706 — 摘要提取
 		snippetRaw := ""
 		if i < len(snippets) {
 			snippetRaw = snippets[i][1]
@@ -149,9 +149,9 @@ func searchDuckDuckGo(query string, maxResults, timeoutSeconds int) ([]searchRow
 }
 
 // searchDuckDuckGoViaJina 通过 Jina 代理搜索 DuckDuckGo
-// 对齐 Python: WebFreeSearchTool._search_duckduckgo_via_jina_sync() (web_tools.py L718-745)
+// Python: WebFreeSearchTool._search_duckduckgo_via_jina_sync() (web_tools.py L718-745)
 func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]searchRow, error) {
-	// 对齐 Python: L720
+	// Python: L720
 	jinaURL := fmt.Sprintf("https://r.jina.ai/http://duckduckgo.com/html/?q=%s", url.QueryEscape(query))
 	resp, err := httpRequest("GET", jinaURL,
 		withHeaders(searchRequestHeaders(query)),
@@ -164,7 +164,7 @@ func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]se
 		return nil, err
 	}
 
-	// 对齐 Python: L725 — markdown 链接正则
+	// Python: L725 — markdown 链接正则
 	text := resp.text
 	matches := jinaLinkRe.FindAllStringSubmatch(text, -1)
 
@@ -174,7 +174,7 @@ func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]se
 		titleRaw := match[1]
 		href := match[2]
 		title := stripTags(titleRaw)
-		// 对齐 Python: L731-732
+		// Python: L731-732
 		if title == "" || strings.HasPrefix(title, "Image ") {
 			continue
 		}
@@ -183,7 +183,7 @@ func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]se
 		if err != nil || !strings.HasPrefix(parsed.Scheme, "http") {
 			continue
 		}
-		// 对齐 Python: L737-738
+		// Python: L737-738
 		if strings.Contains(strings.ToLower(parsed.Host), "duckduckgo.com") {
 			continue
 		}
@@ -204,9 +204,9 @@ func searchDuckDuckGoViaJina(query string, maxResults, timeoutSeconds int) ([]se
 }
 
 // searchBing 搜索 Bing
-// 对齐 Python: WebFreeSearchTool._search_bing_sync() (web_tools.py L748-827)
+// Python: WebFreeSearchTool._search_bing_sync() (web_tools.py L748-827)
 func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...string) ([]searchRow, error) {
-	// 对齐 Python: L757-759 — URL 构建
+	// Python: L757-759 — URL 构建
 	var bingURL string
 	if containsCJK(query) {
 		bingURL = fmt.Sprintf("https://www.bing.com/search?q=%s&setlang=zh-Hans&mkt=zh-CN&cc=CN", url.QueryEscape(query))
@@ -228,7 +228,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 	html := resp.text
 	soup := parseHTML(html)
 
-	// 对齐 Python: L767-778 — 调试
+	// Python: L767-778 — 调试
 	runID := ""
 	if len(debugRunID) > 0 {
 		runID = debugRunID[0]
@@ -241,7 +241,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 	var rows []searchRow
 	seen := map[string]bool{}
 
-	// 对齐 Python: L783-787 — 提取 answer cards
+	// Python: L783-787 — 提取 answer cards
 	answerRows := extractBingAnswerCards(soup, bingURL)
 	for _, row := range answerRows {
 		if row.URL != "" && !seen[row.URL] {
@@ -250,7 +250,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 		rows = append(rows, row)
 	}
 
-	// 对齐 Python: L789-813 — 提取有机结果 li.b_algo
+	// Python: L789-813 — 提取有机结果 li.b_algo
 	resultsArea := extractBingResultsArea(soup)
 	resultsArea.Find("li.b_algo").Each(func(i int, s *goquery.Selection) {
 		anchor := s.Find("h2 a[href]")
@@ -265,7 +265,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 		}
 		seen[href] = true
 
-		// 对齐 Python: L799-804
+		// Python: L799-804
 		captionNode := s.Find(".b_caption p")
 		if captionNode.Length() == 0 {
 			captionNode = s.Find("p")
@@ -294,7 +294,7 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 		rows = rows[:maxResults]
 	}
 
-	// 对齐 Python: L816-826 — 调试
+	// Python: L816-826 — 调试
 	writeDebugPayload(runID, "bing", "parsed", map[string]any{
 		"query": query, "request_url": bingURL, "rows": rows,
 		"row_summary": summarizeRows(rows),
@@ -304,14 +304,14 @@ func searchBing(query string, maxResults, timeoutSeconds int, debugRunID ...stri
 }
 
 // searchFree 多引擎免费搜索（带降级）
-// 对齐 Python: WebFreeSearchTool._search_free_sync() (web_tools.py L901-1025)
+// Python: WebFreeSearchTool._search_free_sync() (web_tools.py L901-1025)
 func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchRow, error) {
 	var errors []string
 	debugRunID := newDebugRunID()
 	bestEngine := ""
 	var bestRows []searchRow
 
-	// 对齐 Python: L908-917 — 引擎列表构建
+	// Python: L908-917 — 引擎列表构建
 	type engineEntry struct {
 		name   string
 		runner func(string, int, int, ...string) ([]searchRow, error)
@@ -332,12 +332,12 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 		engines = append(engines, engineEntry{"bing", searchBing})
 	}
 
-	// 对齐 Python: L919-923
+	// Python: L919-923
 	if len(engines) == 0 {
 		return "", nil, fmt.Errorf("所有免费搜索引擎已禁用")
 	}
 
-	// 对齐 Python: L925-1003 — 逐引擎尝试
+	// Python: L925-1003 — 逐引擎尝试
 	for _, engine := range engines {
 		rows, err := engine.runner(query, maxResults, timeoutSeconds, debugRunID)
 		if err != nil {
@@ -348,7 +348,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 			continue
 		}
 
-		// 对齐 Python: L946-947
+		// Python: L946-947
 		filteredRows := filterRankedRows(query, rows)
 		if len(filteredRows) > maxResults {
 			filteredRows = filteredRows[:maxResults]
@@ -363,13 +363,13 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 			"rows": scoredRows(query, filteredRows),
 		})
 
-		// 对齐 Python: L981-983
+		// Python: L981-983
 		if len(filteredRows) > 0 && len(bestRows) == 0 {
 			bestEngine = engine.name
 			bestRows = filteredRows
 		}
 
-		// 对齐 Python: L985-998
+		// Python: L985-998
 		if rowsAreUsable(query, filteredRows) {
 			writeDebugPayload(debugRunID, engine.name, "decision", map[string]any{
 				"query": query, "decision": "accepted", "row_summary": summarizeRows(filteredRows),
@@ -377,7 +377,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 			return engine.name, filteredRows, nil
 		}
 
-		// 对齐 Python: L1000-1003
+		// Python: L1000-1003
 		if len(filteredRows) > 0 && len(bestRows) == 0 {
 			bestEngine = engine.name
 			bestRows = filteredRows
@@ -385,7 +385,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 		errors = append(errors, fmt.Sprintf("%s: low-quality or empty result", engine.name))
 	}
 
-	// 对齐 Python: L1005-1017
+	// Python: L1005-1017
 	if len(bestRows) > 0 {
 		writeDebugPayload(debugRunID, bestEngine, "decision", map[string]any{
 			"query": query, "decision": "best_effort", "row_summary": summarizeRows(bestRows),
@@ -393,7 +393,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 		return bestEngine, bestRows, nil
 	}
 
-	// 对齐 Python: L1019-1025
+	// Python: L1019-1025
 	writeDebugPayload(debugRunID, "final", "decision", map[string]any{
 		"query": query, "decision": "error", "errors": strings.Join(errors, " | "),
 	})
@@ -401,7 +401,7 @@ func searchFree(query string, maxResults, timeoutSeconds int) (string, []searchR
 }
 
 // isDDGChallengePage 检测 DDG 反爬页面
-// 对齐 Python: WebFreeSearchTool._is_ddg_challenge_page() (web_tools.py L659-669)
+// Python: WebFreeSearchTool._is_ddg_challenge_page() (web_tools.py L659-669)
 func isDDGChallengePage(statusCode int, html string) bool {
 	if statusCode == 202 || statusCode == 418 || statusCode == 429 || statusCode == 503 {
 		return true
@@ -417,7 +417,7 @@ func isDDGChallengePage(statusCode int, html string) bool {
 }
 
 // filterRankedRows 过滤和排序搜索结果
-// 对齐 Python: WebFreeSearchTool._filter_ranked_rows() (web_tools.py L856-872)
+// Python: WebFreeSearchTool._filter_ranked_rows() (web_tools.py L856-872)
 func filterRankedRows(query string, rows []searchRow) []searchRow {
 	var preferred, deferred []searchRow
 	seenURLs := map[string]bool{}
@@ -436,7 +436,7 @@ func filterRankedRows(query string, rows []searchRow) []searchRow {
 }
 
 // rowsAreUsable 判断搜索结果是否可用
-// 对齐 Python: WebFreeSearchTool._rows_are_usable() (web_tools.py L875-892)
+// Python: WebFreeSearchTool._rows_are_usable() (web_tools.py L875-892)
 func rowsAreUsable(query string, rows []searchRow) bool {
 	if len(rows) == 0 {
 		return false
@@ -466,7 +466,7 @@ func rowsAreUsable(query string, rows []searchRow) bool {
 }
 
 // extractBingResultsArea 提取 Bing 搜索结果区域
-// 对齐 Python: _extract_bing_results_area() (web_tools.py L587-589)
+// Python: _extract_bing_results_area() (web_tools.py L587-589)
 func extractBingResultsArea(soup *goquery.Document) *goquery.Selection {
 	main := soup.Find(`main[aria-label="Search Results"]`)
 	if main.Length() > 0 {
@@ -476,12 +476,12 @@ func extractBingResultsArea(soup *goquery.Document) *goquery.Selection {
 }
 
 // extractBingAnswerCards 提取 Bing 答案卡片
-// 对齐 Python: _extract_bing_answer_cards() (web_tools.py L592-642)
+// Python: _extract_bing_answer_cards() (web_tools.py L592-642)
 func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []searchRow {
 	var rows []searchRow
 	seenTitles := map[string]bool{}
 
-	// 对齐 Python: L596-611 — 选择器列表
+	// Python: L596-611 — 选择器列表
 	selectors := []string{
 		"#b_context .b_ans", "#b_context .b_entityTP", "#b_context .b_card",
 		"#b_context .b_rich", "#b_topw .b_ans", "#b_topw .b_entityTP",
@@ -491,7 +491,7 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 	selector := strings.Join(selectors, ", ")
 
 	soup.Find(selector).Each(func(i int, s *goquery.Selection) {
-		// 对齐 Python: L613-620 — href 提取
+		// Python: L613-620 — href 提取
 		anchor := s.Find("a[href]")
 		var href string
 		if anchor.Length() > 0 {
@@ -503,7 +503,7 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 			}
 		}
 
-		// 对齐 Python: L621-628 — 标题提取
+		// Python: L621-628 — 标题提取
 		var titleParts []string
 		titleSelectors := []string{".b_focusLabel", ".b_focusTextLarge", ".b_focusTextMedium", ".b_focusTextSmall", "h2", "h3"}
 		for _, sel := range titleSelectors {
@@ -522,14 +522,14 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 			return
 		}
 
-		// 对齐 Python: L632-635 — 摘要
+		// Python: L632-635 — 摘要
 		caption := s.Find(".b_caption p")
 		if caption.Length() == 0 {
 			caption = s.Find("p")
 		}
 		snippet := strings.TrimSpace(caption.Text())
 
-		// 对齐 Python: L636-641 — 去重
+		// Python: L636-641 — 去重
 		rowURL := href
 		if rowURL == "" {
 			rowURL = fallbackURL
@@ -547,7 +547,7 @@ func extractBingAnswerCards(soup *goquery.Document, fallbackURL string) []search
 }
 
 // scoredRows 为行添加评分信息（用于调试）
-// 对齐 Python: L969-976 — filtered 调试输出中的 score 字段
+// Python: L969-976 — filtered 调试输出中的 score 字段
 func scoredRows(query string, rows []searchRow) []map[string]any {
 	var result []map[string]any
 	for _, row := range rows {

@@ -28,7 +28,7 @@ const configReloadTimeout = 10 * time.Second
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // OnConfigSaved 返回配置保存回调，供 WebHandler 注册。
-// 对齐 Python: WebHandlersBindParams(on_config_saved=_on_config_saved)。
+// Python: WebHandlersBindParams(on_config_saved=_on_config_saved)。
 func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 	return s.onConfigSavedImpl
 }
@@ -36,7 +36,7 @@ func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // onConfigSavedImpl 配置保存回调实现。
-// 对齐 Python: _on_config_saved (app_gateway.py L919-989)。
+// Python: _on_config_saved (app_gateway.py L919-989)。
 //
 // 执行步骤：
 //  1. 本地缓存更新（当前空操作，接口预留）
@@ -85,7 +85,7 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 		if resp.Payload != nil {
 			errPayload = resp.Payload
 		}
-		// 对齐 Python：ValidationError 是配置格式问题，不需要重启 gateway
+		// Python: ValidationError 是配置格式问题，不需要重启 gateway
 		// 检查错误消息中是否包含 ValidationError / validation error / Field required
 		errStr := ""
 		if errMsg, ok := errPayload["error"]; ok {
@@ -127,7 +127,7 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 }
 
 // isValidationError 检查错误字符串是否为 ValidationError 类型。
-// 对齐 Python：any(kw in err_str for kw in ("ValidationError", "validation error", "Field required"))。
+// Python: any(kw in err_str for kw in ("ValidationError", "validation error", "Field required"))。
 func isValidationError(errStr string) bool {
 	return strings.Contains(errStr, "ValidationError") ||
 		strings.Contains(errStr, "validation error") ||

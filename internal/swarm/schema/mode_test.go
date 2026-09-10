@@ -237,7 +237,7 @@ func TestMode_JSON序列化往返(t *testing.T) {
 
 // TestMode常量值与Python对齐 验证全部 6 个常量字符串值与 Python Mode 完全对齐
 func TestMode常量值与Python对齐(t *testing.T) {
-	// 对应 Python: jiuwenswarm/common/schema/message.py (Mode)
+	// Python: jiuwenswarm/common/schema/message.py (Mode)
 	tests := []struct {
 		got  Mode
 		want string

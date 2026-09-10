@@ -48,7 +48,7 @@ type chromaFieldMapping struct {
 // Schema 和字段映射信息通过 ChromaDB 的 CollectionMetadata 存储，
 // 支持跨进程持久化和恢复。
 //
-// 对应 Python: vector/chroma_vector_store.py (ChromaVectorStore)
+// Python: vector/chroma_vector_store.py (ChromaVectorStore)
 type ChromaVectorStore struct {
 	// client ChromaDB 客户端实例
 	client chromav2.Client
@@ -119,7 +119,7 @@ func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
 // NewChromaVectorStore 创建 ChromaVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 ChromaDB 可用。
 //
-// 对应 Python: ChromaVectorStore.__init__(persist_path)
+// Python: ChromaVectorStore.__init__(persist_path)
 func NewChromaVectorStore(persistPath string) *ChromaVectorStore {
 	return &ChromaVectorStore{
 		persistPath:       persistPath,
@@ -131,7 +131,7 @@ func NewChromaVectorStore(persistPath string) *ChromaVectorStore {
 
 // Close 关闭 ChromaDB 客户端连接。
 //
-// 对应 Python: ChromaVectorStore.close()
+// Python: ChromaVectorStore.close()
 func (s *ChromaVectorStore) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,7 +146,7 @@ func (s *ChromaVectorStore) Close() {
 // 校验 schema（必须有主键字段和向量字段），构建字段映射，
 // 将 schema 和字段映射序列化后存入 ChromaDB 的 CollectionMetadata。
 //
-// 对应 Python: ChromaVectorStore.create_collection(collection_name, schema, **kwargs)
+// Python: ChromaVectorStore.create_collection(collection_name, schema, **kwargs)
 func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
 	c, err := s.getClient()
@@ -245,7 +245,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 
 // DeleteCollection 删除集合。
 //
-// 对应 Python: ChromaVectorStore.delete_collection(collection_name)
+// Python: ChromaVectorStore.delete_collection(collection_name)
 func (s *ChromaVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	c, err := s.getClient()
 	if err != nil {
@@ -269,7 +269,7 @@ func (s *ChromaVectorStore) DeleteCollection(ctx context.Context, collectionName
 
 // CollectionExists 检查集合是否存在。
 //
-// 对应 Python: ChromaVectorStore.collection_exists(collection_name)
+// Python: ChromaVectorStore.collection_exists(collection_name)
 func (s *ChromaVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -293,7 +293,7 @@ func (s *ChromaVectorStore) CollectionExists(ctx context.Context, collectionName
 // 优先从 CollectionMetadata 的 "schema" 字段反序列化，
 // 其次从 "fields" 字段读取，最后从 fieldMapping 推断默认 schema。
 //
-// 对应 Python: ChromaVectorStore.get_schema(collection_name)
+// Python: ChromaVectorStore.get_schema(collection_name)
 func (s *ChromaVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	collection, err := s.getCollection(ctx, collectionName)
 	if err != nil {
@@ -324,7 +324,7 @@ func (s *ChromaVectorStore) GetSchema(ctx context.Context, collectionName string
 // 从 fieldMapping 提取 ids/embeddings/documents/metadatas，
 // 分批调用 ChromaDB 的 collection.Add。
 //
-// 对应 Python: ChromaVectorStore.add_docs(collection_name, docs, **kwargs)
+// Python: ChromaVectorStore.add_docs(collection_name, docs, **kwargs)
 func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
 		return nil
@@ -441,7 +441,7 @@ func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, 
 // 调用 ChromaDB 的 collection.Query，根据距离度量转换分数，
 // 遍历 QueryResult 映射回用户字段名。
 //
-// 对应 Python: ChromaVectorStore.search(collection_name, query_vector, vector_field, top_k, filters, **kwargs)
+// Python: ChromaVectorStore.search(collection_name, query_vector, vector_field, top_k, filters, **kwargs)
 func (s *ChromaVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	if topK <= 0 {
 		topK = 5
@@ -570,7 +570,7 @@ func (s *ChromaVectorStore) Search(ctx context.Context, collectionName string, q
 
 // DeleteDocsByIDs 按 ID 删除文档。
 //
-// 对应 Python: ChromaVectorStore.delete_docs_by_ids(collection_name, ids)
+// Python: ChromaVectorStore.delete_docs_by_ids(collection_name, ids)
 func (s *ChromaVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
 		return nil
@@ -599,7 +599,7 @@ func (s *ChromaVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
 //
-// 对应 Python: ChromaVectorStore.delete_docs_by_filters(collection_name, filters)
+// Python: ChromaVectorStore.delete_docs_by_filters(collection_name, filters)
 func (s *ChromaVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
 		return nil
@@ -628,7 +628,7 @@ func (s *ChromaVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 
 // ListCollectionNames 列出所有集合名称。
 //
-// 对应 Python: ChromaVectorStore.list_collection_names()
+// Python: ChromaVectorStore.list_collection_names()
 func (s *ChromaVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -650,7 +650,7 @@ func (s *ChromaVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 // UpdateSchema 执行 schema 迁移操作。
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
-// 对应 Python: ChromaVectorStore.update_schema(collection_name, operations)
+// Python: ChromaVectorStore.update_schema(collection_name, operations)
 func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
 	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
 	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
@@ -662,7 +662,7 @@ func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName str
 // UpdateCollectionMetadata 更新集合元数据。
 // 同时更新 ChromaDB 集合的 CollectionMetadata 和本地缓存。
 //
-// 对应 Python: ChromaVectorStore.update_collection_metadata(collection_name, metadata)
+// Python: ChromaVectorStore.update_collection_metadata(collection_name, metadata)
 func (s *ChromaVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	if len(metadata) == 0 {
 		return nil
@@ -714,7 +714,7 @@ func (s *ChromaVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 
 // GetCollectionMetadata 获取集合元数据。
 //
-// 对应 Python: ChromaVectorStore.get_collection_metadata(collection_name)
+// Python: ChromaVectorStore.get_collection_metadata(collection_name)
 func (s *ChromaVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	collection, err := s.getCollection(ctx, collectionName)
 	if err != nil {
@@ -746,7 +746,7 @@ func (s *ChromaVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 // GetAllDocuments 获取集合中的所有文档。
 // 调用 collection.Get 并按 fieldMapping 映射回用户字段。
 //
-// 对应 Python: ChromaVectorStore.get_all_documents(collection_name)
+// Python: ChromaVectorStore.get_all_documents(collection_name)
 func (s *ChromaVectorStore) GetAllDocuments(ctx context.Context, collectionName string) ([]map[string]any, error) {
 	collection, err := s.getCollection(ctx, collectionName)
 	if err != nil {

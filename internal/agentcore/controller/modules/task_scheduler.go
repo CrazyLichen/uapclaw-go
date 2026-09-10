@@ -20,7 +20,7 @@ import (
 
 // TaskScheduler 任务调度器，负责后台调度循环、并发执行、暂停/取消。
 //
-// 对齐 Python: openjiuwen/core/controller/modules/task_scheduler.py (TaskScheduler)
+// Python: openjiuwen/core/controller/modules/task_scheduler.py (TaskScheduler)
 type TaskScheduler struct {
 	// config 配置
 	config *config.ControllerConfig
@@ -81,7 +81,7 @@ const (
 
 // NewTaskScheduler 创建新的 TaskScheduler 实例。
 //
-// 对齐 Python: TaskScheduler.__init__
+// Python: TaskScheduler.__init__
 func NewTaskScheduler(
 	cfg *config.ControllerConfig,
 	taskManager *TaskManager,
@@ -106,7 +106,7 @@ func NewTaskScheduler(
 
 // Start 启动调度器，设置 running=true 并启动调度 goroutine。
 //
-// 对齐 Python: TaskScheduler.start
+// Python: TaskScheduler.start
 func (s *TaskScheduler) Start(ctx context.Context) error {
 	if s.running.Load() {
 		logger.Warn(logComponent).
@@ -132,7 +132,7 @@ func (s *TaskScheduler) Start(ctx context.Context) error {
 
 // Stop 停止调度器，取消运行中任务并等待退出。
 //
-// 对齐 Python: TaskScheduler.stop
+// Python: TaskScheduler.stop
 func (s *TaskScheduler) Stop(ctx context.Context) error {
 	if !s.running.Load() {
 		logger.Warn(logComponent).
@@ -158,7 +158,7 @@ func (s *TaskScheduler) Stop(ctx context.Context) error {
 
 // NotifyTaskSubmitted 非阻塞写入 notifyCh 唤醒调度循环。
 //
-// 对齐 Python: TaskScheduler.notify_task_submitted
+// Python: TaskScheduler.notify_task_submitted
 func (s *TaskScheduler) NotifyTaskSubmitted() {
 	select {
 	case s.notifyCh <- struct{}{}:
@@ -188,7 +188,7 @@ func (s *TaskScheduler) SetConfig(cfg *config.ControllerConfig) {
 
 // PauseTask 暂停指定任务。
 //
-// 对齐 Python: TaskScheduler.pause_task
+// Python: TaskScheduler.pause_task
 // 返回 (是否成功暂停, 系统级错误)。
 func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, error) {
 	s.mu.Lock()
@@ -297,7 +297,7 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 
 // CancelTask 取消指定任务。
 //
-// 对齐 Python: TaskScheduler.cancel_task
+// Python: TaskScheduler.cancel_task
 // 返回 (是否成功取消, 系统级错误)。
 func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, error) {
 	// 获取任务信息
@@ -434,7 +434,7 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 
 // EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
 //
-// 对齐 Python: TaskScheduler.ensure_session_completion_signal
+// Python: TaskScheduler.ensure_session_completion_signal
 // Controller.stream() 在 publish_event 返回后调用此方法，
 // 使得没有新任务的轮次也能发送完成信号。
 func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessionID string) {
@@ -495,7 +495,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 
 // schedule 调度循环，扫描 SUBMITTED 任务并启动执行。
 //
-// 对齐 Python: TaskScheduler._schedule
+// Python: TaskScheduler._schedule
 func (s *TaskScheduler) schedule(ctx context.Context) {
 	logger.Info(logComponent).
 		Str("event_type", "task_scheduler_started").
@@ -578,7 +578,7 @@ done:
 
 // executeTask 执行单个任务，读取 chunk channel 并处理状态转换。
 //
-// 对齐 Python: TaskScheduler._execute_task
+// Python: TaskScheduler._execute_task
 func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) {
 	// 1. 获取任务
 	tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{TaskID: taskID})
@@ -588,7 +588,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("task_id", taskID).
 			Err(err).
 			Msg("执行任务失败：无法获取任务")
-		// 对齐 Python: 抛出 AGENT_CONTROLLER_TASK_EXECUTION_ERROR
+		// Python: 抛出 AGENT_CONTROLLER_TASK_EXECUTION_ERROR
 		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务 %s 未找到", taskID))
 		return
 	}
@@ -613,7 +613,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("task_type", task.TaskType).
 			Err(err).
 			Msg("获取任务执行器失败")
-		// 对齐 Python: 失败时构建 failed chunk 并发布事件
+		// Python: 失败时构建 failed chunk 并发布事件
 		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("获取任务执行器失败: %v", err))
 		return
 	}
@@ -643,7 +643,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("task_id", taskID).
 			Err(err).
 			Msg("任务执行启动失败")
-		// 对齐 Python: 失败时构建 failed chunk 并发布事件
+		// Python: 失败时构建 failed chunk 并发布事件
 		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务执行启动失败: %v", err))
 		return
 	}
@@ -746,7 +746,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 
 // executeTaskWrapper 任务执行包装器，处理超时、取消和异常。
 //
-// 对齐 Python: TaskScheduler._execute_task_wrapper
+// Python: TaskScheduler._execute_task_wrapper
 func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade, entry *runningTaskEntry) {
 	defer s.wg.Done()
 
@@ -794,7 +794,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 				Str("method", "executeTaskWrapper").
 				Str("model_provider", "task_scheduler").
 				Msg(fmt.Sprintf("任务执行异常: %v", r))
-			// 对齐 Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
+			// Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
 			s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务执行异常: %v", r))
 		}
 	}()
@@ -823,7 +823,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
 				Msg(errorMsg)
-			// 对齐 Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
+			// Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
 			s.handleTaskExecutionFailure(ctx, taskID, sess, errorMsg)
 		} else if taskCtx.Err() == context.Canceled {
 			logger.Info(logComponent).
@@ -836,7 +836,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 
 // areAllTasksCompleted 检查会话内所有任务是否处于终态。
 //
-// 对齐 Python: TaskScheduler._are_all_tasks_completed
+// Python: TaskScheduler._are_all_tasks_completed
 func (s *TaskScheduler) areAllTasksCompleted(ctx context.Context, sessionID string) bool {
 	tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{SessionID: sessionID})
 	if err != nil {
@@ -858,7 +858,7 @@ func (s *TaskScheduler) areAllTasksCompleted(ctx context.Context, sessionID stri
 
 // handleTaskExecutionFailure 处理任务执行失败：更新状态为 FAILED + 构建 failed chunk + 发布事件。
 //
-// 对齐 Python: TaskScheduler._handle_task_execution_failure
+// Python: TaskScheduler._handle_task_execution_failure
 func (s *TaskScheduler) handleTaskExecutionFailure(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade, errorMsg string) {
 	// 1. 更新任务状态为 FAILED
 	_ = s.taskManager.UpdateTaskStatus(ctx, taskID, schema.TaskFailed, WithErrorMessage(errorMsg))
@@ -877,7 +877,7 @@ func (s *TaskScheduler) handleTaskExecutionFailure(ctx context.Context, taskID s
 
 // publishTaskEvent 根据 payload.type 构建事件并通过 EventQueue 发布。
 //
-// 对齐 Python: TaskScheduler._publish_task_event
+// Python: TaskScheduler._publish_task_event
 func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, payload *schema.ControllerOutputPayload, sess sessioninterfaces.SessionFacade) {
 	if s.eventQueue == nil || payload == nil {
 		return
@@ -917,14 +917,14 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 			Task:        task,
 		}
 	case payloadTypeTaskFailed:
-		// 对齐 Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
+		// Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
 		errMsg := "未知错误"
 		if len(payload.Data) > 0 {
 			if textDF, ok := payload.Data[0].(*schema.TextDataFrame); ok {
 				errMsg = textDF.Text
 			}
 		}
-		// 对齐 Python: task.error_message = error_msg（同步更新 Task 对象）
+		// Python: task.error_message = error_msg（同步更新 Task 对象）
 		task.ErrorMessage = errMsg
 		_ = s.taskManager.UpdateTask(ctx, task)
 		event = &schema.TaskFailedEvent{
@@ -936,7 +936,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 		return
 	}
 
-	// 对齐 Python: 合并 task.metadata 到 event.metadata（用于 _handler_round_id 传播）
+	// Python: 合并 task.metadata 到 event.metadata（用于 _handler_round_id 传播）
 	if task.Metadata != nil {
 		eventMeta := event.GetMetadata()
 		if eventMeta == nil {
@@ -948,7 +948,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 		event.SetMetadata(eventMeta)
 	}
 
-	// 对齐 Python: 同步发布事件，等待 EventHandler 处理完成
+	// Python: 同步发布事件，等待 EventHandler 处理完成
 	if err := s.eventQueue.PublishEvent(ctx, agentID, sess, event); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -966,7 +966,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 
 // waitAllTasksComplete 取消所有运行中任务并等待退出。
 //
-// 对齐 Python: TaskScheduler._wait_all_tasks_complete（使用 asyncio.gather 等待）
+// Python: TaskScheduler._wait_all_tasks_complete（使用 asyncio.gather 等待）
 func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 	// 取消所有运行中任务
 	s.mu.Lock()
@@ -996,7 +996,7 @@ func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 }
 
 // waitForTaskDone 等待任务 goroutine 退出。
-// 对齐 Python: await exec_task 等待 asyncio.Task 完成。
+// Python: await exec_task 等待 asyncio.Task 完成。
 func (s *TaskScheduler) waitForTaskDone(done chan struct{}, taskID string) {
 	if done == nil {
 		return

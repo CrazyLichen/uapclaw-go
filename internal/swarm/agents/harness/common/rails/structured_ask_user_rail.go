@@ -18,7 +18,7 @@ import (
 // StructuredAskUserPayload 结构化用户回答载荷。
 // 问题文本到选择选项标签的映射。
 //
-// 对齐 Python: StructuredAskUserPayload
+// Python: StructuredAskUserPayload
 type StructuredAskUserPayload struct {
 	// Answers 问题文本到选择选项标签的映射
 	Answers map[string]string `json:"answers"`
@@ -32,7 +32,7 @@ type StructuredAskUserPayload struct {
 // interrupt_helpers 的 _extract_questions_from_value() 检查 tool_args 中的 questions
 // 字段并转换为前端格式。
 //
-// 对齐 Python: StructuredAskUserRail(AskUserRail) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
+// Python: StructuredAskUserRail(AskUserRail) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
 type StructuredAskUserRail struct {
 	interrupt.AskUserRail
 	// structuredTools 已注册的 StructuredAskUserTool 引用，供 Uninit 注销
@@ -58,7 +58,7 @@ var structuredAskUserRailLogComponent = logger.ComponentAgentCore
 
 // NewStructuredAskUserRail 创建 StructuredAskUserRail 实例。
 //
-// 对齐 Python: StructuredAskUserRail.__init__(tool_names=None, language=None)
+// Python: StructuredAskUserRail.__init__(tool_names=None, language=None)
 func NewStructuredAskUserRail(language string) *StructuredAskUserRail {
 	r := &StructuredAskUserRail{
 		AskUserRail: *interrupt.NewAskUserRail(),
@@ -74,8 +74,8 @@ func NewStructuredAskUserRail(language string) *StructuredAskUserRail {
 // Init 注册 StructuredAskUserTool 到 ResourceMgr + AbilityManager。
 // 覆盖父类 AskUserRail 的 Init，注册扩展版工具。
 //
-// 对齐 Python: StructuredAskUserRail.init(agent)
-func (r *StructuredAskUserRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: StructuredAskUserRail.init(agent)
+func (r *StructuredAskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 确定语言（对齐 Python: self._language or resolve_language()）
 	language := r.language
 	if language == "" {
@@ -126,7 +126,7 @@ func (r *StructuredAskUserRail) Init(agent agentinterfaces.BaseAgent) error {
 
 // Uninit 从 AbilityManager + ResourceMgr 注销 StructuredAskUserTool。
 //
-// 对齐 Python: StructuredAskUserRail.uninit(agent)
+// Python: StructuredAskUserRail.uninit(agent)
 func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if len(r.structuredTools) == 0 {
 		return nil
@@ -163,14 +163,14 @@ func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // GetStructuredTools 返回已注册的结构化工具列表。
 //
-// 对齐 Python: StructuredAskUserRail.get_structured_tools()
+// Python: StructuredAskUserRail.get_structured_tools()
 func (r *StructuredAskUserRail) GetStructuredTools() []tool.Tool {
 	return r.structuredTools
 }
 
 // ExtractQuestions 从工具调用参数中提取 questions 列表。
 //
-// 对齐 Python: StructuredAskUserRail.extract_questions(tool_call)
+// Python: StructuredAskUserRail.extract_questions(tool_call)
 func (r *StructuredAskUserRail) ExtractQuestions(toolCall *llmschema.ToolCall) []map[string]any {
 	if toolCall == nil {
 		return nil
@@ -201,7 +201,7 @@ func (r *StructuredAskUserRail) ExtractQuestions(toolCall *llmschema.ToolCall) [
 // 结构化路径：解析为 StructuredAskUserPayload，格式化为 "question: answer" 文本，Reject。
 // 非结构化路径：回退父类 resolve 函数（对齐 Python super().resolve_interrupt()）。
 //
-// 对齐 Python: StructuredAskUserRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
+// Python: StructuredAskUserRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -209,7 +209,7 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 	userInput any,
 	autoConfirmConfig map[string]any,
 ) (decision interrupt.InterruptDecision) {
-	// 对齐 Python try/except Exception：异常时回退到 interrupt
+	// Python: try/except Exception：异常时回退到 interrupt
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Warn(structuredAskUserRailLogComponent).
@@ -246,13 +246,13 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 		}
 		answerText := strings.Join(answerParts, "\n")
 
-		// 对齐 Python: logger.info("[StructuredAskUserRail] Resolved structured answer: %s", answer_text)
+		// Python: logger.info("[StructuredAskUserRail] Resolved structured answer: %s", answer_text)
 		logger.Info(structuredAskUserRailLogComponent).
 			Str("event_type", "structured_ask_user_rail_resolve").
 			Str("answer_text", answerText).
 			Msg("Resolved structured answer")
 
-		// 对齐 Python: return self.reject(tool_result=answer_text)
+		// Python: return self.reject(tool_result=answer_text)
 		return r.AskUserRail.BaseInterruptRail.Reject(answerText)
 	}
 
@@ -261,7 +261,7 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 	// Python 对 AskUserPayload 输入回退父类：if isinstance(user_input, AskUserPayload): return await super().resolve_interrupt(...)
 	// Python 对其他类型也回退父类：return await super().resolve_interrupt(...)
 	if strInput, ok := userInput.(string); ok && strInput != "" {
-		// 对齐 Python: elif isinstance(user_input, str): return self.reject(tool_result=user_input)
+		// Python: elif isinstance(user_input, str): return self.reject(tool_result=user_input)
 		return r.AskUserRail.BaseInterruptRail.Reject(strInput)
 	}
 	return r.parentResolve(ctx, cbc, toolCall, userInput, autoConfirmConfig)
@@ -270,21 +270,21 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 // parseStructuredInput 解析用户输入为 StructuredAskUserPayload。
 // 支持 StructuredAskUserPayload / map[string]any / interrupt.AskUserPayload / string 四种格式。
 //
-// 对齐 Python: StructuredAskUserRail.resolve_interrupt 中的解析逻辑
+// Python: StructuredAskUserRail.resolve_interrupt 中的解析逻辑
 func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*StructuredAskUserPayload, bool) {
 	switch input := userInput.(type) {
 	case *StructuredAskUserPayload:
-		// 对齐 Python: isinstance(user_input, StructuredAskUserPayload)
+		// Python: isinstance(user_input, StructuredAskUserPayload)
 		return input, true
 	case *interrupt.AskUserPayload:
-		// 对齐 Python: isinstance(user_input, AskUserPayload)
+		// Python: isinstance(user_input, AskUserPayload)
 		// Python 中先检查 free_text = getattr(user_input, "answer", None)
 		// Go 的 AskUserPayload 没有 answer 字段，只有 answers，直接透传
 		return &StructuredAskUserPayload{Answers: input.Answers}, true
 	case map[string]any:
-		// 对齐 Python: isinstance(user_input, dict)
+		// Python: isinstance(user_input, dict)
 		if answersVal, ok := input["answers"]; ok {
-			// 对齐 Python: if "answers" in user_input: StructuredAskUserPayload(answers=user_input.get("answers", {}))
+			// Python: if "answers" in user_input: StructuredAskUserPayload(answers=user_input.get("answers", {}))
 			if answersMap, ok := answersVal.(map[string]any); ok {
 				answers := make(map[string]string, len(answersMap))
 				for k, v := range answersMap {
@@ -295,7 +295,7 @@ func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*Structured
 				return &StructuredAskUserPayload{Answers: answers}, true
 			}
 		}
-		// 对齐 Python: else: StructuredAskUserPayload(answers=user_input)
+		// Python: else: StructuredAskUserPayload(answers=user_input)
 		// 前端以 {question: selected_option} 格式发送答案
 		answers := make(map[string]string, len(input))
 		for k, v := range input {
@@ -305,13 +305,13 @@ func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*Structured
 		}
 		return &StructuredAskUserPayload{Answers: answers}, true
 	case string:
-		// 对齐 Python: isinstance(user_input, str) → StructuredAskUserPayload(answers={"__free_text__": user_input})
+		// Python: isinstance(user_input, str) → StructuredAskUserPayload(answers={"__free_text__": user_input})
 		if input == "" {
 			return &StructuredAskUserPayload{}, true
 		}
 		return &StructuredAskUserPayload{Answers: map[string]string{"__free_text__": input}}, true
 	default:
-		// 对齐 Python: else: return self.interrupt(self._build_ask_request(tool_call))
+		// Python: else: return self.interrupt(self._build_ask_request(tool_call))
 		return nil, false
 	}
 }

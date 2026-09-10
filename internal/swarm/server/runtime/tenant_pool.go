@@ -1,6 +1,6 @@
 // tenant_pool.go 实现 TenantAgentPool（10.3.14），AgentManager 管理器（单例）。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/tenant_agent_pool.py
+// Python: jiuwenswarm/server/runtime/tenant_agent_pool.py
 // 职责：
 // 1. 管理 AgentManager 实例的创建和生命周期
 // 2. 提供统一的函数调用接口
@@ -19,7 +19,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TenantAgentPool AgentManager 管理器（单例）。
-// 对齐 Python: TenantAgentPool
+// Python: TenantAgentPool
 //
 // 职责：
 // 1. 管理 AgentManager 实例的创建和生命周期
@@ -27,7 +27,7 @@ import (
 // 3. 调用 AgentManager 的方法（简单分发）
 type TenantAgentPool struct {
 	// agentManager 单个 AgentManager 实例
-	// 对齐 Python: self._agent_manager = AgentManager()
+	// Python: self._agent_manager = AgentManager()
 	agentManager *AgentManager
 }
 
@@ -41,13 +41,13 @@ const tapLogComponent = logger.ComponentAgentServer
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // tenantAgentPoolSingleton 全局 TenantAgentPool 单例持有器。
-// 对齐 Python: TenantAgentPool._instance
+// Python: TenantAgentPool._instance
 var tenantAgentPoolSingleton utils.Singleton[TenantAgentPool]
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetInstance 获取 TenantAgentPool 单例实例。
-// 对齐 Python: TenantAgentPool.get_instance()
+// Python: TenantAgentPool.get_instance()
 func GetInstance() *TenantAgentPool {
 	return tenantAgentPoolSingleton.Get(func() *TenantAgentPool {
 		logger.Info(tapLogComponent).Msg("[TenantAgentPool] 已创建单例实例")
@@ -58,7 +58,7 @@ func GetInstance() *TenantAgentPool {
 }
 
 // ResetInstance 重置单例（仅用于测试）。
-// 对齐 Python: TenantAgentPool.reset_instance()
+// Python: TenantAgentPool.reset_instance()
 func ResetInstance() {
 	logger.Info(tapLogComponent).
 		Msg("[TenantAgentPool] 正在重置单例实例")
@@ -66,7 +66,7 @@ func ResetInstance() {
 }
 
 // ProcessMessage 处理非流式请求（简单分发到 AgentManager）。
-// 对齐 Python: TenantAgentPool.process_message(request)
+// Python: TenantAgentPool.process_message(request)
 func (p *TenantAgentPool) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	logger.Info(tapLogComponent).
 		Str("request_id", request.RequestID).
@@ -86,7 +86,7 @@ func (p *TenantAgentPool) ProcessMessage(ctx context.Context, request *schema.Ag
 }
 
 // ProcessMessageStream 处理流式请求（简单分发到 AgentManager）。
-// 对齐 Python: TenantAgentPool.process_message_stream(request)
+// Python: TenantAgentPool.process_message_stream(request)
 func (p *TenantAgentPool) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	logger.Info(tapLogComponent).
 		Str("request_id", request.RequestID).
@@ -106,7 +106,7 @@ func (p *TenantAgentPool) ProcessMessageStream(ctx context.Context, request *sch
 }
 
 // Cleanup 清理资源。
-// 对齐 Python: TenantAgentPool.cleanup()
+// Python: TenantAgentPool.cleanup()
 // 同时实现 utils.resettable 接口，供 Singleton.Reset 时自动调用。
 func (p *TenantAgentPool) Cleanup() error {
 	logger.Info(tapLogComponent).Msg("[TenantAgentPool] 正在清理...")

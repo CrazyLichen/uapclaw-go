@@ -10,7 +10,7 @@
 // CronToolContext 结构体绑定 channel_id/session_id/metadata/mode，
 // 计算工具作用域用于工具名和 agentID 生成。
 //
-// 对齐 Python: openjiuwen/harness/tools/cron.py
+// Python: openjiuwen/harness/tools/cron.py
 //
 // 文件目录：
 //

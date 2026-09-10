@@ -30,7 +30,7 @@ type RuntimeConfig struct {
 
 // TeamRuntime 团队运行时，管理 Agent 注册、消息总线、会话绑定等。
 //
-// 对应 Python: TeamRuntime (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
+// Python: TeamRuntime (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
 type TeamRuntime struct {
 	// config 运行时配置
 	config RuntimeConfig
@@ -109,9 +109,9 @@ func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 // NewTeamRuntime 创建团队运行时实例。
 //
 // 自动从 config 创建 MessageBus，对齐 Python TeamRuntime.__init__ 中
-// 对齐 Python：self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
+// Python: self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
 //
-// 对应 Python: TeamRuntime.__init__(config)
+// Python: TeamRuntime.__init__(config)
 func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 	tr := &TeamRuntime{
 		config:             config,
@@ -121,7 +121,7 @@ func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 		p2pTimeout:         config.P2PTimeout,
 	}
 
-	// 对齐 Python L78: self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)
+	// Python: L78: self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)
 	if config.MessageBus != nil {
 		bus, err := NewMessageBus(*config.MessageBus, tr)
 		if err != nil {
@@ -169,7 +169,7 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	// 对齐 Python: self._running = False — 先标记停止，阻止新请求进入
+	// Python: self._running = False — 先标记停止，阻止新请求进入
 	tr.running.Store(false)
 
 	// 然后停 messageBus
@@ -201,7 +201,7 @@ func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) err
 
 // RegisterAgent 注册 Agent 到团队运行时。
 //
-// 对应 Python: TeamRuntime.register_agent(card, provider)
+// Python: TeamRuntime.register_agent(card, provider)
 func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.AgentCard, provider resources_manager.AgentProvider) error {
 	agentID := card.ID
 
@@ -217,7 +217,7 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 	// Go 直接调用 runner.GetResourceMgr() 等价访问全局 ResourceMgr。
 	if resourceMgr := runner.GetResourceMgr(); resourceMgr != nil {
 		if err := resourceMgr.AddAgent(card, wrappedProvider); err != nil {
-			// 对齐 Python: add_agent 的 is_err() 时 debug log 不抛异常（agent 已存在），
+			// Python: add_agent 的 is_err() 时 debug log 不抛异常（agent 已存在），
 			// 其他 ImportError/AttributeError/Exception 则 raise build_error
 			if isResourceAlreadyExistsError(err) {
 				logger.Debug(logComponent).Err(err).
@@ -312,25 +312,25 @@ func (tr *TeamRuntime) GetAgentCount() int {
 
 // Send P2P 发送消息到指定接收者，等待响应。
 //
-// 对应 Python: TeamRuntime.send(message, recipient, sender, **kwargs)
+// Python: TeamRuntime.send(message, recipient, sender, **kwargs)
 func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
-	// 对齐 Python: await self._ensure_started()
+	// Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
-	// 对齐 Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
+	// Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
 	if sender == "" {
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
-	// 对齐 Python: if not recipient: raise AGENT_TEAM_EXECUTION_ERROR
+	// Python: if not recipient: raise AGENT_TEAM_EXECUTION_ERROR
 	if recipient == "" {
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "recipient 不能为空"),
 		)
 	}
-	// 对齐 Python: if recipient not in self._agent_cards: raise AGENT_TEAM_EXECUTION_ERROR
+	// Python: if recipient not in self._agent_cards: raise AGENT_TEAM_EXECUTION_ERROR
 	// 注意：Python 不检查 sender 是否已注册，去掉 Go 新增的 HasAgent(sender) 检查
 	if !tr.HasAgent(recipient) {
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
@@ -350,19 +350,19 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 
 // Publish Pub-Sub 发布消息到指定主题。
 //
-// 对应 Python: TeamRuntime.publish(message, topic_id, sender, **kwargs)
+// Python: TeamRuntime.publish(message, topic_id, sender, **kwargs)
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
-	// 对齐 Python: await self._ensure_started()
+	// Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
 		return err
 	}
-	// 对齐 Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
+	// Python: if not sender: raise AGENT_TEAM_EXECUTION_ERROR
 	if sender == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
-	// 对齐 Python: if not topic_id: raise AGENT_TEAM_EXECUTION_ERROR
+	// Python: if not topic_id: raise AGENT_TEAM_EXECUTION_ERROR
 	if topicID == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "topic_id 不能为空"),
@@ -378,13 +378,13 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 
 // Subscribe 将 Agent 订阅到主题。
 func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic string) error {
-	// 对齐 Python: if not agent_id: raise ...
+	// Python: if not agent_id: raise ...
 	if agentID == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "agent_id 不能为空"),
 		)
 	}
-	// 对齐 Python: if not topic: raise ...
+	// Python: if not topic: raise ...
 	if topic == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "topic 不能为空"),
@@ -398,13 +398,13 @@ func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic stri
 
 // Unsubscribe 将 Agent 从主题取消订阅。
 func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic string) error {
-	// 对齐 Python: if not agent_id: raise ...
+	// Python: if not agent_id: raise ...
 	if agentID == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "agent_id 不能为空"),
 		)
 	}
-	// 对齐 Python: if not topic: raise ...
+	// Python: if not topic: raise ...
 	if topic == "" {
 		return exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", "topic 不能为空"),
@@ -484,7 +484,7 @@ func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureStarted 确保运行时已启动（懒启动）。
-// 对齐 Python: TeamRuntime._ensure_started() (line 153-159)
+// Python: TeamRuntime._ensure_started() (line 153-159)
 func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
 	if tr.IsRunning() {
 		return nil
@@ -499,7 +499,7 @@ func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
 
 // isResourceAlreadyExistsError 判断是否为"资源已存在"类错误。
 //
-// 对齐 Python: add_agent 的 result.is_err() 表示 agent 已存在，
+// Python: add_agent 的 result.is_err() 表示 agent 已存在，
 // 此时仅 debug log 不抛异常。
 func isResourceAlreadyExistsError(err error) bool {
 	if baseErr, ok := err.(*exception.BaseError); ok {

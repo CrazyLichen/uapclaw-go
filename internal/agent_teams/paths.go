@@ -26,19 +26,19 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ConfigureHome 覆盖运行时 home 目录。
-// 对齐 Python: configure_openjiuwen_home(path)
+// Python: configure_openjiuwen_home(path)
 func ConfigureHome(path string) {
 	configuredHome = path
 }
 
 // ResetHome 清除运行时 home 覆盖，恢复默认布局。
-// 对齐 Python: reset_openjiuwen_home()
+// Python: reset_openjiuwen_home()
 func ResetHome() {
 	configuredHome = ""
 }
 
 // GetHome 返回 openjiuwen 本地状态的根目录。
-// 对齐 Python: get_openjiuwen_home()
+// Python: get_openjiuwen_home()
 func GetHome() string {
 	if configuredHome != "" {
 		return configuredHome
@@ -48,13 +48,13 @@ func GetHome() string {
 }
 
 // GetAgentTeamsHome 返回 agent_teams 状态的根目录。
-// 对齐 Python: get_agent_teams_home()
+// Python: get_agent_teams_home()
 func GetAgentTeamsHome() string {
 	return filepath.Join(GetHome(), agentTeamsSubDir)
 }
 
 // TeamHome 返回每个团队的根目录。
-// 对齐 Python: team_home(team_name)
+// Python: team_home(team_name)
 //
 // 布局：
 //
@@ -68,7 +68,7 @@ func TeamHome(teamName string) string {
 }
 
 // DefaultTeamMemoryDir 返回团队共享记忆目录默认路径。
-// 对齐 Python: team_memory_dir(team_name)
+// Python: team_memory_dir(team_name)
 // 布局：{TeamHome(teamName)}/team-workspace/team-memory/
 func DefaultTeamMemoryDir(teamName string) string {
 	return filepath.Join(TeamHome(teamName), "team-workspace", "team-memory")

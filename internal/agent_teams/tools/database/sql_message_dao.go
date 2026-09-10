@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SQLMessageDao MessageDao 的 SQL 实现。
-// 对齐 Python: MessageDao (openjiuwen/agent_teams/tools/database/message_dao.py)
+// Python: MessageDao (openjiuwen/agent_teams/tools/database/message_dao.py)
 // 操作动态表 team_message_{suffix} + message_read_status_{suffix}。
 type SQLMessageDao struct {
 	// db GORM 数据库实例
@@ -38,7 +38,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetMessage 按 ID 查消息。返回 nil 表示不存在。
-// 对齐 Python: get_message(message_id) → Optional[TeamMessageBase]
+// Python: get_message(message_id) → Optional[TeamMessageBase]
 func (d *SQLMessageDao) GetMessage(ctx context.Context, messageID string) (*TeamMessageBase, error) {
 	var msg TeamMessageBase
 	result := d.db.WithContext(ctx).Table(d.msgTableName(ctx)).Where("message_id = ?", messageID).First(&msg)
@@ -52,7 +52,7 @@ func (d *SQLMessageDao) GetMessage(ctx context.Context, messageID string) (*Team
 }
 
 // CreateMessage 创建消息。IntegrityError 立即返回 false；OperationalError 指数退避重试。
-// 对齐 Python: create_message() → bool
+// Python: create_message() → bool
 // - IntegrityError（主键/唯一约束冲突）：直接返回 False，不重试
 // - OperationalError（SQLite 锁）：指数退避重试，delay = 0.5s * 2^attempt
 func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase) bool {
@@ -63,12 +63,12 @@ func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase)
 		if err == nil {
 			return true
 		}
-		// 对齐 Python: IntegrityError → 立即返回 False
+		// Python: IntegrityError → 立即返回 False
 		if isIntegrityError(err) {
 			logger.Error(logComponent).Str("message_id", msg.MessageID).Err(err).Msg("创建消息失败，主键冲突")
 			return false
 		}
-		// 对齐 Python: delay = _DB_RETRY_BASE_DELAY * (2**attempt)
+		// Python: delay = _DB_RETRY_BASE_DELAY * (2**attempt)
 		delay := dbRetryBaseDelay * time.Duration(1<<uint(attempt))
 		logger.Warn(logComponent).Str("message_id", msg.MessageID).
 			Int("attempt", attempt+1).Dur("delay", delay).Err(err).
@@ -79,13 +79,13 @@ func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase)
 }
 
 // GetMessages 获取直发消息（非广播）。
-// 对齐 Python: get_messages(team_name, to_member_name, unread_only, from_member_name)
+// Python: get_messages(team_name, to_member_name, unread_only, from_member_name)
 func (d *SQLMessageDao) GetMessages(ctx context.Context, teamName, toMemberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error) {
 	msgTable := d.msgTableName(ctx)
 	query := d.db.WithContext(ctx).Table(msgTable).
 		Where("team_name = ? AND to_member_name = ? AND broadcast = 0", teamName, toMemberName)
 	if unreadOnly {
-		// 对齐 Python: filter by is_read = False
+		// Python: filter by is_read = False
 		query = query.Where("is_read = 0")
 	}
 	if fromMemberName != "" {
@@ -100,7 +100,7 @@ func (d *SQLMessageDao) GetMessages(ctx context.Context, teamName, toMemberName 
 }
 
 // GetBroadcastMessages 获取广播消息（排除自己发送的）。
-// 对齐 Python: get_broadcast_messages(team_name, member_name, unread_only, from_member_name)
+// Python: get_broadcast_messages(team_name, member_name, unread_only, from_member_name)
 // 使用 read_status watermark 过滤已读
 func (d *SQLMessageDao) GetBroadcastMessages(ctx context.Context, teamName, memberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error) {
 	msgTable := d.msgTableName(ctx)
@@ -110,7 +110,7 @@ func (d *SQLMessageDao) GetBroadcastMessages(ctx context.Context, teamName, memb
 		Where("team_name = ? AND broadcast = 1 AND from_member_name != ?", teamName, memberName)
 
 	if unreadOnly {
-		// 对齐 Python: 基于 MessageReadStatus 水位线的已读判断
+		// Python: 基于 MessageReadStatus 水位线的已读判断
 		// SQL 条件: timestamp > COALESCE((SELECT read_at FROM message_read_status_{suffix} WHERE member_name = ? AND team_name = ?), 0)
 		subQuery := fmt.Sprintf(
 			"SELECT read_at FROM %s WHERE member_name = ? AND team_name = ?",
@@ -131,7 +131,7 @@ func (d *SQLMessageDao) GetBroadcastMessages(ctx context.Context, teamName, memb
 }
 
 // GetTeamMessages 获取团队所有消息。broadcast 为空字符串表示不过滤。
-// 对齐 Python: get_team_messages(team_name, broadcast)
+// Python: get_team_messages(team_name, broadcast)
 func (d *SQLMessageDao) GetTeamMessages(ctx context.Context, teamName string, broadcast string) ([]*TeamMessageBase, error) {
 	msgTable := d.msgTableName(ctx)
 	query := d.db.WithContext(ctx).Table(msgTable).Where("team_name = ?", teamName)
@@ -150,12 +150,12 @@ func (d *SQLMessageDao) GetTeamMessages(ctx context.Context, teamName string, br
 }
 
 // HasUnreadMessages 是否有未读消息。
-// 对齐 Python: has_unread_messages(team_name, include_broadcast) → bool
+// Python: has_unread_messages(team_name, include_broadcast) → bool
 // 直发：检查 is_read=False；广播：per-member watermark 比较
 func (d *SQLMessageDao) HasUnreadMessages(ctx context.Context, teamName string, includeBroadcast bool) bool {
 	msgTable := d.msgTableName(ctx)
 
-	// 对齐 Python: 检查直发未读
+	// Python: 检查直发未读
 	var count int64
 	d.db.WithContext(ctx).Table(msgTable).
 		Where("team_name = ? AND to_member_name != '' AND broadcast = 0 AND is_read = 0", teamName).
@@ -168,7 +168,7 @@ func (d *SQLMessageDao) HasUnreadMessages(ctx context.Context, teamName string, 
 		return false
 	}
 
-	// 对齐 Python: 广播消息 per-member watermark 比较
+	// Python: 广播消息 per-member watermark 比较
 	// 1. 查询所有广播消息
 	var broadcasts []*TeamMessageBase
 	d.db.WithContext(ctx).Table(msgTable).
@@ -214,22 +214,22 @@ func (d *SQLMessageDao) HasUnreadMessages(ctx context.Context, teamName string, 
 }
 
 // MarkMessageRead 标记已读。直发设 is_read=true；广播更新 read_status watermark。
-// 对齐 Python: mark_message_read(message_id, member_name)
+// Python: mark_message_read(message_id, member_name)
 func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberName string) bool {
 	msgTable := d.msgTableName(ctx)
 	rsTable := d.readStatusTableName(ctx)
 
-	// 对齐 Python: 查消息，确定直发还是广播
+	// Python: 查消息，确定直发还是广播
 	var msg TeamMessageBase
 	result := d.db.WithContext(ctx).Table(msgTable).Where("message_id = ?", messageID).First(&msg)
 	if result.Error != nil {
 		return false
 	}
 
-	// 对齐 Python: "user" 伪成员特殊处理 — 跳过成员存在性检查
+	// Python: "user" 伪成员特殊处理 — 跳过成员存在性检查
 	if memberName == "user" {
 		if msg.Broadcast {
-			// 对齐 Python: 'user' pseudo-member cannot read broadcast message
+			// Python: 'user' pseudo-member cannot read broadcast message
 			logger.Error(logComponent).
 				Str("message_id", messageID).
 				Str("member_name", memberName).
@@ -239,13 +239,13 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 		// 直发消息：设 is_read=true
 		d.db.WithContext(ctx).Table(msgTable).Where("message_id = ?", messageID).Update("is_read", 1)
 	} else {
-		// 对齐 Python: 成员存在性检查 — 查询 team_member 表确认成员存在
+		// Python: 成员存在性检查 — 查询 team_member 表确认成员存在
 		var memberCount int64
 		d.db.WithContext(ctx).Table("team_member").
 			Where("member_name = ? AND team_name = ?", memberName, msg.TeamName).
 			Count(&memberCount)
 		if memberCount == 0 {
-			// 对齐 Python: team_logger.error("Member %s not found", member_name)
+			// Python: team_logger.error("Member %s not found", member_name)
 			logger.Error(logComponent).
 				Str("message_id", messageID).
 				Str("member_name", memberName).
@@ -255,10 +255,10 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 		}
 
 		if !msg.Broadcast {
-			// 对齐 Python: 直发 → UPDATE is_read = True
+			// Python: 直发 → UPDATE is_read = True
 			d.db.WithContext(ctx).Table(msgTable).Where("message_id = ?", messageID).Update("is_read", 1)
 		} else {
-			// 对齐 Python: 广播 → INSERT OR UPDATE message_read_status
+			// Python: 广播 → INSERT OR UPDATE message_read_status
 			// read_at = max(现有 read_at, 消息 timestamp)
 			// 使用 SQLite 的 INSERT OR REPLACE / PostgreSQL 的 ON CONFLICT
 			d.db.WithContext(ctx).Exec(
@@ -277,7 +277,7 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isIntegrityError 判断 GORM 错误是否为 SQLite IntegrityError（唯一约束/主键冲突）。
-// 对齐 Python: except IntegrityError
+// Python: except IntegrityError
 // SQLite 错误字符串通常包含 "UNIQUE constraint failed" 或 "PRIMARY KEY"。
 func isIntegrityError(err error) bool {
 	if err == nil {

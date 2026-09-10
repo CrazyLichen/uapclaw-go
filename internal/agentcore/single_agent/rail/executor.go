@@ -12,7 +12,7 @@ import (
 
 // RailExecutor @rail 装饰器的 Go 等价：将函数包裹在 before/after/on_exception 钩子中。
 //
-// 对齐 Python: @rail(before, after, on_exception) 装饰器
+// Python: @rail(before, after, on_exception) 装饰器
 // (openjiuwen/core/single_agent/rail/base.py L579-667)
 //
 // Go 没有装饰器语法，用结构体 + 闭包模式替代：
@@ -56,7 +56,7 @@ const (
 var (
 	// ModelCallRail 模型调用的 Rail 执行器。
 	//
-	// 对齐 Python: @rail(before=BEFORE_MODEL_CALL, after=AFTER_MODEL_CALL, on_exception=ON_MODEL_EXCEPTION)
+	// Python: @rail(before=BEFORE_MODEL_CALL, after=AFTER_MODEL_CALL, on_exception=ON_MODEL_EXCEPTION)
 	// 用法：
 	// 用法: err := rail.ModelCallRail.Execute(ctx, cbc, func() error { ... })
 	ModelCallRail = NewRailExecutor(
@@ -66,7 +66,7 @@ var (
 	)
 	// ToolCallRail 工具调用的 Rail 执行器。
 	//
-	// 对齐 Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
+	// Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
 	// 用法：
 	// 用法: err := rail.ToolCallRail.Execute(ctx, cbc, func() error { ... })
 	ToolCallRail = NewRailExecutor(
@@ -89,7 +89,7 @@ func NewRailExecutor(before, after, onException interfaces.AgentCallbackEvent) *
 
 // Execute 在 before/after/on_exception 钩子包裹下执行 fn。
 //
-// 对齐 Python: @rail 装饰器的 wrapper 函数 (base.py L603-663)
+// Python: @rail 装饰器的 wrapper 函数 (base.py L603-663)
 //
 // 流程：
 //  1. 清除残留 retry 请求
@@ -168,7 +168,7 @@ func (re *RailExecutor) Execute(
 		}
 
 		// 7b. 检查重试请求（before 和 fn 异常都可触发重试）
-		// 对齐 Python: 在 except 块内检查，有重试时 exc_to_raise = None
+		// Python: 在 except 块内检查，有重试时 exc_to_raise = None
 		willRetry := false
 		if retryReq := cbc.ConsumeRetryRequest(); retryReq != nil {
 			willRetry = true
@@ -181,13 +181,13 @@ func (re *RailExecutor) Execute(
 					return re.fireAfter(ctx, cbc, excToRaise)
 				}
 			}
-			// 对齐 Python L640: exc_to_raise = None
+			// Python: L640: exc_to_raise = None
 			excToRaise = nil
 			attempt++
 		}
 
 		// 7c. after(finally) — 无条件触发
-		// 对齐 Python: finally 在 except 之后无条件执行
+		// Python: finally 在 except 之后无条件执行
 		// 重试时 excToRaise 已清空，after 看到无异常状态
 		if afterErr := re.fireAfter(ctx, cbc, excToRaise); afterErr != nil {
 			return afterErr
@@ -205,7 +205,7 @@ func (re *RailExecutor) Execute(
 
 // RailEvents 返回此执行器关联的三个事件。
 //
-// 对齐 Python: wrapper.rail_events = (before, after, on_exception)
+// Python: wrapper.rail_events = (before, after, on_exception)
 // 供反射/调试/测试使用。
 func (re *RailExecutor) RailEvents() (before, after, onException interfaces.AgentCallbackEvent) {
 	return re.Before, re.After, re.OnException
@@ -215,7 +215,7 @@ func (re *RailExecutor) RailEvents() (before, after, onException interfaces.Agen
 
 // fireAfter 触发 after 事件。
 //
-// 对齐 Python: finally 块中 after 事件触发逻辑 (base.py L642-663)
+// Python: finally 块中 after 事件触发逻辑 (base.py L642-663)
 //
 // 规则：
 //   - context 已取消时跳过 after 事件（对齐 Python CancelledError 保护）
@@ -229,7 +229,7 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 	}
 
 	// context 已取消 → 跳过 after 事件
-	// 对齐 Python: is_cancelled = isinstance(..., asyncio.CancelledError)
+	// Python: is_cancelled = isinstance(..., asyncio.CancelledError)
 	if isCancelled(ctx) {
 		return origErr
 	}
@@ -254,7 +254,7 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 
 // isCancelled 检查 context 是否已被取消。
 //
-// 对齐 Python: isinstance(sys.exc_info()[1], asyncio.CancelledError)
+// Python: isinstance(sys.exc_info()[1], asyncio.CancelledError)
 // Go 中 ctx.Err() != nil 等价于协程被取消（context.Canceled）或超时（context.DeadlineExceeded）。
 func isCancelled(ctx context.Context) bool {
 	return ctx.Err() != nil

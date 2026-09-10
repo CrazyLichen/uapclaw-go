@@ -17,7 +17,7 @@ func TestCronToolContext_ToolScope(t *testing.T) {
 }
 
 // TestCronToolContext_ToolScope_空值兜底 测试空 channel/session 的兜底逻辑
-// 对齐 Python: (self.channel_id or "unknown").strip() or "unknown"
+// Python: (self.channel_id or "unknown").strip() or "unknown"
 func TestCronToolContext_ToolScope_空值兜底(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -61,7 +61,7 @@ func TestCronToolContext_ToolScope_空值兜底(t *testing.T) {
 }
 
 // TestToolScope_无上下文 测试 nil context 时返回 "cron_default"
-// 对齐 Python: _tool_scope(None) → "cron:default" → replace(":","_") → "cron_default"
+// Python: _tool_scope(None) → "cron:default" → replace(":","_") → "cron_default"
 func TestToolScope_无上下文(t *testing.T) {
 	scope := toolScope(nil)
 	if scope != "cron_default" {
@@ -70,7 +70,7 @@ func TestToolScope_无上下文(t *testing.T) {
 }
 
 // TestToolScope_有上下文 测试有 context 时返回替换后的 scope
-// 对齐 Python: _tool_scope(context) → context.tool_scope.replace(":","_")
+// Python: _tool_scope(context) → context.tool_scope.replace(":","_")
 func TestToolScope_有上下文(t *testing.T) {
 	ctx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_123"}
 	scope := toolScope(ctx)

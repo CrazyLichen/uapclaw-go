@@ -18,7 +18,7 @@ import (
 
 // OnlineEvolutionOrchestrator 在线演进流水线协调器。
 //
-// 对应 Python: OnlineEvolutionOrchestrator
+// Python: OnlineEvolutionOrchestrator
 //
 // Manager 仍然是生命周期状态的所有者；此类仅编排
 // 上下文构建、更新生成、本地预览、暂存和可选自动审批。
@@ -47,7 +47,7 @@ type OnlineEvolutionOrchestrator struct {
 
 // NewOnlineEvolutionOrchestrator 创建在线演进编排器。
 //
-// 对应 Python: OnlineEvolutionOrchestrator.__init__()
+// Python: OnlineEvolutionOrchestrator.__init__()
 func NewOnlineEvolutionOrchestrator(
 	store *checkpointing.EvolutionStore,
 	updater *single_dim.SingleDimUpdater,
@@ -68,7 +68,7 @@ func NewOnlineEvolutionOrchestrator(
 
 // Evolve 执行在线演进并返回结构化结果。
 //
-// 对应 Python: OnlineEvolutionOrchestrator.evolve()
+// Python: OnlineEvolutionOrchestrator.evolve()
 func (o *OnlineEvolutionOrchestrator) Evolve(
 	ctx context.Context,
 	skillName string,
@@ -80,7 +80,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 	metadata map[string]any,
 	source *string,
 ) (*OnlineEvolutionResult, error) {
-	// 对齐 Python: 前置检查
+	// Python: 前置检查
 	if skillName == "" || len(signals) == 0 {
 		return &OnlineEvolutionResult{
 			SkillName: skillName,
@@ -96,20 +96,20 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 		}, nil
 	}
 
-	// 对齐 Python: 获取或创建 SkillExperienceOperator
+	// Python: 获取或创建 SkillExperienceOperator
 	op := o.skillOps[skillName]
 	if op == nil {
 		op = skill_call.NewSkillExperienceOperator(skillName)
 		o.skillOps[skillName] = op
 	}
 
-	// 对齐 Python: 构建上下文
+	// Python: 构建上下文
 	onlineContext, err := o.buildContext(ctx, skillName, signals, messages, userQuery, trajectoryArg, metadata)
 	if err != nil {
 		return nil, err
 	}
 
-	// 对齐 Python: 生成 LocalApplyPreview
+	// Python: 生成 LocalApplyPreview
 	preview, err := o.generateLocalApplyPreview(ctx, op, onlineContext)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 		}, nil
 	}
 
-	// 对齐 Python: stage_apply_results
+	// Python: stage_apply_results
 	stageSource := o.stageSource
 	if source != nil && *source != "" {
 		stageSource = *source
@@ -159,7 +159,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 		}, nil
 	}
 
-	// 对齐 Python: auto-approve
+	// Python: auto-approve
 	requestID := request.RequestID
 	result, err := o.manager.ApproveRequest(ctx, requestID)
 	if err != nil {
@@ -194,7 +194,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildContext 构建 EvolutionContext。
-// 对应 Python: OnlineEvolutionOrchestrator._build_context()
+// Python: OnlineEvolutionOrchestrator._build_context()
 func (o *OnlineEvolutionOrchestrator) buildContext(
 	ctx context.Context,
 	skillName string,
@@ -246,13 +246,13 @@ func (o *OnlineEvolutionOrchestrator) buildContext(
 }
 
 // generateLocalApplyPreview 生成 LocalApplyPreview。
-// 对应 Python: OnlineEvolutionOrchestrator._generate_local_apply_preview()
+// Python: OnlineEvolutionOrchestrator._generate_local_apply_preview()
 func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	ctx context.Context,
 	op *skill_call.SkillExperienceOperator,
 	onlineContext *EvolutionContext,
 ) (*LocalApplyPreview, error) {
-	// 对齐 Python: updater.bind()
+	// Python: updater.bind()
 	operators := map[string]operator.Operator{
 		op.OperatorID(): op,
 	}
@@ -263,19 +263,19 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	}
 	o.updater.Bind(operators, []string{schema.ExperiencesTarget}, config)
 
-	// 对齐 Python: 构建 trajectories 列表
+	// Python: 构建 trajectories 列表
 	var trajectories []*trajectory.Trajectory
 	if onlineContext.Trajectory != nil {
 		trajectories = []*trajectory.Trajectory{onlineContext.Trajectory}
 	}
 
-	// 对齐 Python: 将 EvolutionSignal 转为指针切片
+	// Python: 将 EvolutionSignal 转为指针切片
 	signalPtrs := make([]*signal.EvolutionSignal, len(onlineContext.Signals))
 	for i := range onlineContext.Signals {
 		signalPtrs[i] = &onlineContext.Signals[i]
 	}
 
-	// 对齐 Python: updater.process()
+	// Python: updater.process()
 	updates, err := o.updater.Process(ctx, trajectories, signalPtrs, map[string]any{})
 	if err != nil {
 		logger.Warn(logComponent).
@@ -285,7 +285,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 		return nil, err
 	}
 
-	// 对齐 Python: execute_updates → BuildLocalApplyPreview
+	// Python: execute_updates → BuildLocalApplyPreview
 	// 将 updater.Process 返回的 []map[UpdateKey]any 第一个元素转为 map[UpdateKey]UpdateValue
 	var updateValues map[schema.UpdateKey]schema.UpdateValue
 	if len(updates) == 0 {
@@ -314,7 +314,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 }
 
 // getPreferredSignal 获取优先信号。
-// 对应 Python: OnlineEvolutionOrchestrator._get_preferred_signal()
+// Python: OnlineEvolutionOrchestrator._get_preferred_signal()
 func getPreferredSignal(onlineContext *EvolutionContext) *signal.EvolutionSignal {
 	for i := range onlineContext.Signals {
 		if onlineContext.Signals[i].SignalType == schema.UserIntentSignal {
@@ -328,7 +328,7 @@ func getPreferredSignal(onlineContext *EvolutionContext) *signal.EvolutionSignal
 }
 
 // getSignalType 获取信号类型。
-// 对应 Python: OnlineEvolutionOrchestrator._get_signal_type()
+// Python: OnlineEvolutionOrchestrator._get_signal_type()
 func getSignalType(onlineContext *EvolutionContext) string {
 	preferred := getPreferredSignal(onlineContext)
 	if preferred != nil {
@@ -338,7 +338,7 @@ func getSignalType(onlineContext *EvolutionContext) string {
 }
 
 // getSignalSource 获取信号来源。
-// 对应 Python: OnlineEvolutionOrchestrator._get_signal_source()
+// Python: OnlineEvolutionOrchestrator._get_signal_source()
 func getSignalSource(onlineContext *EvolutionContext) string {
 	preferred := getPreferredSignal(onlineContext)
 	if preferred != nil {

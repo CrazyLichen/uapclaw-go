@@ -38,7 +38,7 @@ const (
 //
 // 选项中可传递 ToolCallID/Name/Metadata，在创建 OffloadMessage 时携带原始消息的关联信息。
 //
-// 对应 Python: ContextProcessor.offload_messages()
+// Python: ContextProcessor.offload_messages()
 func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, opts ...iface.Option) (llm_schema.BaseMessage, error) {
 	if len(messages) == 0 {
 		return nil, nil
@@ -94,7 +94,7 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 // 目录结构: {workspaceDir}/context/{sessionID}_context/offload/{handle}.json
 // 若 workspaceDir 为空，使用 memory/offloads/{sessionID}/{handle}.json。
 //
-// 对应 Python: ContextProcessor._generate_offload_path()
+// Python: ContextProcessor._generate_offload_path()
 func (p *BaseProcessor) GenerateOffloadPath(workspaceDir, sessionID, offloadHandle string) string {
 	fileName := offloadHandle + ".json"
 	if workspaceDir != "" {

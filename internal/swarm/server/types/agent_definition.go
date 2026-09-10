@@ -3,7 +3,7 @@ package types
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentDefinition Agent 定义数据模型。
-// 对齐 Python: jiuwenswarm/server/runtime/agent_config_service.py AgentDefinition dataclass
+// Python: jiuwenswarm/server/runtime/agent_config_service.py AgentDefinition dataclass
 //
 // 管理 Agent 的身份、行为和约束配置。
 // 支持 YAML frontmatter + Markdown body 文件格式持久化。
@@ -33,7 +33,7 @@ type AgentDefinition struct {
 	// ShadowedBy 被哪个来源覆盖（空字符串=活跃版本）
 	ShadowedBy string `json:"shadowed_by,omitempty" yaml:"-"`
 	// Enabled 启用状态（nil=未在config.yaml中配置, true=显式启用, false=显式禁用）
-	// 对齐 Python: enabled: bool | None = None
+	// Python: enabled: bool | None = None
 	Enabled *bool `json:"enabled,omitempty" yaml:"-"`
 	// WhenToUse 调度描述（告诉 LLM 何时调度此 agent）
 	WhenToUse string `json:"when_to_use,omitempty" yaml:"when_to_use,omitempty"`
@@ -46,7 +46,7 @@ type AgentDefinition struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentSource Agent 定义来源常量。
-// 对齐 Python: AgentSource = Literal["builtin", "user", "project", "local"]
+// Python: AgentSource = Literal["builtin", "user", "project", "local"]
 const (
 	// AgentSourceBuiltin 内置
 	AgentSourceBuiltin = "builtin"
@@ -63,7 +63,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // BuiltinAgents 内置 Agent 定义列表。
-// 对齐 Python: BUILTIN_AGENTS
+// Python: BUILTIN_AGENTS
 var BuiltinAgents = []*AgentDefinition{
 	{
 		Name:        "general-purpose",

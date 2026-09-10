@@ -28,7 +28,7 @@ import (
 //  3. 对缺失的 ToolMessage 生成占位消息
 //  4. 将修复后的消息回写
 //
-// 对齐 Python: ContextProcessorRail.fix_incomplete_tool_context(ctx)
+// Python: ContextProcessorRail.fix_incomplete_tool_context(ctx)
 // 调用时机：BeforeInvoke / OnModelException
 func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) {
 	defer func() {
@@ -147,7 +147,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 
 // EnsureJSONArguments 确保 tool call arguments 是合法 JSON 字符串。
 //
-// 对齐 Python: ContextProcessorRail._ensure_json_arguments(arguments)
+// Python: ContextProcessorRail._ensure_json_arguments(arguments)
 func EnsureJSONArguments(arguments string) string {
 	if arguments == "" {
 		return "{}"

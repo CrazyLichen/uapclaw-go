@@ -15,7 +15,7 @@ func TestSQLTeamDao_CreateTeam(t *testing.T) {
 	ok := dao.CreateTeam(context.Background(), "team1", "Team One", "leader1", "desc", "prompt")
 	assert.True(t, ok)
 
-	// 对齐 Python: IntegrityError → False
+	// Python: IntegrityError → False
 	ok = dao.CreateTeam(context.Background(), "team1", "Team One", "leader1", "desc", "prompt")
 	assert.False(t, ok)
 }
@@ -31,7 +31,7 @@ func TestSQLTeamDao_GetTeam(t *testing.T) {
 	require.NotNil(t, team)
 	assert.Equal(t, "Team One", team.DisplayName)
 
-	// 对齐 Python: Optional[Team] → nil
+	// Python: Optional[Team] → nil
 	team2, err := dao.GetTeam(context.Background(), "nonexist")
 	assert.Nil(t, team2)
 	assert.NoError(t, err)

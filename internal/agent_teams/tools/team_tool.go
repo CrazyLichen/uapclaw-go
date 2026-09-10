@@ -7,7 +7,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamTool 团队工具基类。
-// 对齐 Python: TeamTool(Tool, ABC)
+// Python: TeamTool(Tool, ABC)
 // 子类嵌入 TeamTool 获得 Card() 默认实现，只需实现 Invoke()。
 type TeamTool struct {
 	// card 工具配置卡片

@@ -15,7 +15,7 @@ import (
 // BaseMethod Beam Search 方法基类。
 // 提供公共配置和 ProduceAnswerFromAPICall 方法。
 //
-// 对应 Python: BaseMethod
+// Python: BaseMethod
 type BaseMethod struct {
 	// config 配置字典
 	config map[string]any
@@ -38,7 +38,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewBaseMethod 创建 BaseMethod 实例。
 //
-// 对齐 Python: BaseMethod.__init__(self, config)
+// Python: BaseMethod.__init__(self, config)
 func NewBaseMethod(config map[string]any, model *llm.Model) *BaseMethod {
 	verbose := false
 	if v, ok := config["verbose"]; ok {
@@ -58,7 +58,7 @@ func NewBaseMethod(config map[string]any, model *llm.Model) *BaseMethod {
 
 // ProduceAnswerFromAPICall 根据 API 调用结果生成自然语言回答。
 //
-// 对齐 Python: BaseMethod.produce_answer_from_api_call(instruction, doc_str, api_response)
+// Python: BaseMethod.produce_answer_from_api_call(instruction, doc_str, api_response)
 //
 //  1. 构建提示词（一比一复刻 Python 原文）
 //  2. 使用 InvokeWithVerify 调用 LLM
@@ -69,7 +69,7 @@ func (m *BaseMethod) ProduceAnswerFromAPICall(
 	docStr string,
 	apiResponse string,
 ) (string, error) {
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
 Please respond in natural language text. Do not include code in your responses. You are given an API tool with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -89,10 +89,10 @@ Finally, organize your output in the following JSON format:
 You must strictly follow the output format. You can begin your task now.`,
 		docStr, instruction, apiResponse)
 
-	// 对齐 Python: prompt = format_prompt_llama(system_prompt="", user_prompt=user_prompt)
+	// Python: prompt = format_prompt_llama(system_prompt="", user_prompt=user_prompt)
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output(output)
+	// Python: verify_output(output)
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output, "answer")
 		if _, ok := outputJSON["answer"]; !ok {
@@ -105,7 +105,7 @@ You must strictly follow the output format. You can begin your task now.`,
 		return answer, nil
 	}
 
-	// 对齐 Python: get_rits_response(config['gen_model_id'], prompt, config['llm_api_key'], verify_output, max_attempts=15, ...)
+	// Python: get_rits_response(config['gen_model_id'], prompt, config['llm_api_key'], verify_output, max_attempts=15, ...)
 	policy := llm_resilience.LLMInvokePolicy{
 		MaxAttempts:        15,
 		TotalBudgetSecs:    300,

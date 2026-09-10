@@ -25,7 +25,7 @@ func TestLLMAsJudgeMetric_HigherIsBetter(t *testing.T) {
 }
 
 // TestIsPassResult 测试 IsPassResult 判断逻辑
-// 对应 Python: DefaultEvaluator._is_pass_result(result)
+// Python: DefaultEvaluator._is_pass_result(result)
 func TestIsPassResult(t *testing.T) {
 	tests := []struct {
 		input    any

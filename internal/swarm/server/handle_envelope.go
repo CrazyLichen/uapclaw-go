@@ -252,7 +252,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 // handleUnary 处理非流式请求，对齐 Python _handle_unary。
 //
 // 特殊方法拦截 → 解析 mode → 获取 Agent → 调用 ProcessMessage → writeResponse。
-// 对齐 Python: handleUnary 通过 AgentManager 获取 agent，然后直接调用 agent 方法。
+// Python: handleUnary 通过 AgentManager 获取 agent，然后直接调用 agent 方法。
 func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequest) {
 	// 1. 特殊方法拦截
 	switch request.ReqMethod {
@@ -292,7 +292,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 
 	// 2. 解析 mode
 	mode, subMode := applyResolvedModeToRequest(request)
-	// 对齐 Python: auto_harness 模式等同于 agent 模式
+	// Python: auto_harness 模式等同于 agent 模式
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
@@ -339,7 +339,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 // handleStream 处理流式请求，对齐 Python _handle_stream。
 //
 // 创建子 context → 注册流式任务 → 心跳 goroutine → 获取 Agent → 逐 chunk 写入 RecvCh。
-// 对齐 Python: handleStream 通过 AgentManager 获取 agent，然后直接调用 agent 流式方法。
+// Python: handleStream 通过 AgentManager 获取 agent，然后直接调用 agent 流式方法。
 func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentRequest) {
 	sessionID := ""
 	if request.SessionID != nil {
@@ -355,7 +355,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 
 	// 3. 解析 mode + 获取 Agent
 	mode, subMode := applyResolvedModeToRequest(request)
-	// 对齐 Python: auto_harness 模式等同于 agent 模式
+	// Python: auto_harness 模式等同于 agent 模式
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
@@ -576,7 +576,7 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 }
 
 // resolveMode 从 request 中纯读取并解析 mode/subMode，不修改 request。
-// 对齐 Python: resolve_agent_request_mode(mode_param)
+// Python: resolve_agent_request_mode(mode_param)
 func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
 	if request.Params == nil {
 		return "agent", "plan"
@@ -715,7 +715,7 @@ func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode str
 }
 
 // writeCanonicalMode 将解析后的 canonicalMode 回写到 request.Params["mode"]。
-// 对齐 Python: request.params["mode"] = canonical_mode。
+// Python: request.params["mode"] = canonical_mode。
 func writeCanonicalMode(params map[string]any, canonicalMode string, request *schema.AgentRequest) {
 	params["mode"] = canonicalMode
 	if updated, err := json.Marshal(params); err == nil {
@@ -804,7 +804,7 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 // injectACPCapabilities 为 ACP 通道注入 client_capabilities 到 metadata。
 // 使用 setdefault 语义：不覆盖已有 client_capabilities 值。
 //
-// 对应 Python: jiuwenswarm/server/agent_ws_server.py:803-810
+// Python: jiuwenswarm/server/agent_ws_server.py:803-810
 // agent_manager.get_client_capabilities("acp") fallback 已实现
 func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelope *e2a.E2AEnvelope) {
 	if request.Metadata == nil {

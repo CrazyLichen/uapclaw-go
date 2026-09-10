@@ -15,7 +15,7 @@ import (
 
 // InstanceConfig 命名实例配置。
 //
-// 对应 Python: jiuwenswarm/instance_manager/config.py InstanceConfig
+// Python: jiuwenswarm/instance_manager/config.py InstanceConfig
 type InstanceConfig struct {
 	Name      string         // 实例名称（唯一标识）
 	Workspace string         // 实例工作区路径
@@ -25,7 +25,7 @@ type InstanceConfig struct {
 // InstanceStatus 实例运行状态。
 //
 // 1.7 仅定义结构，进程检测在领域十二实现。
-// 对应 Python: jiuwenswarm/instance_manager/config.py InstanceStatus
+// Python: jiuwenswarm/instance_manager/config.py InstanceStatus
 type InstanceStatus struct {
 	Name      string         // 实例名称
 	Running   bool           // 是否运行中
@@ -132,7 +132,7 @@ func IsValidInstanceName(name string) bool {
 // CalculateInstancePorts 计算实例端口分配：base + index * PortStep。
 //
 // index=0 为默认实例，index=1+ 为命名实例。
-// 对应 Python: calculate_instance_ports(index)
+// Python: calculate_instance_ports(index)
 func CalculateInstancePorts(index int) map[string]int {
 	ports := make(map[string]int, len(basePorts))
 	for k, v := range basePorts {
@@ -143,7 +143,7 @@ func CalculateInstancePorts(index int) map[string]int {
 
 // ComputeAutoPort 计算单个端口类型。
 //
-// 对应 Python: compute_auto_port(port_type, index)
+// Python: compute_auto_port(port_type, index)
 func ComputeAutoPort(portType string, index int) int {
 	base, ok := basePorts[portType]
 	if !ok {
@@ -154,21 +154,21 @@ func ComputeAutoPort(portType string, index int) int {
 
 // InstancesYAMLPath 返回 instances.yaml 路径：~/.uapclaw/instances.yaml
 //
-// 对应 Python: get_instances_yaml_path()
+// Python: get_instances_yaml_path()
 func InstancesYAMLPath() string {
 	return filepath.Join(WorkspaceDir(), "instances.yaml")
 }
 
 // InstancesDir 返回命名实例根目录：~/.uapclaw-instances/
 //
-// 对应 Python: get_instances_dir()
+// Python: get_instances_dir()
 func InstancesDir() string {
 	return filepath.Join(UserHomeDir(), DefaultInstancesDir)
 }
 
 // InstanceWorkspacePath 返回命名实例工作区路径：~/.uapclaw-instances/<name>/
 //
-// 对应 Python: get_instance_workspace_path(name)
+// Python: get_instance_workspace_path(name)
 func InstanceWorkspacePath(name string) string {
 	return filepath.Join(InstancesDir(), name)
 }
@@ -176,7 +176,7 @@ func InstanceWorkspacePath(name string) string {
 // LoadInstancesYAML 加载 instances.yaml。
 //
 // 文件不存在时返回空结构（不是错误）。
-// 对应 Python: load_instances_yaml()
+// Python: load_instances_yaml()
 func LoadInstancesYAML() (map[string]any, error) {
 	path := InstancesYAMLPath()
 
@@ -206,7 +206,7 @@ func LoadInstancesYAML() (map[string]any, error) {
 
 // SaveInstancesYAML 保存 instances.yaml。
 //
-// 对应 Python: save_instances_yaml(data)
+// Python: save_instances_yaml(data)
 func SaveInstancesYAML(data map[string]any) error {
 	path := InstancesYAMLPath()
 
@@ -230,7 +230,7 @@ func SaveInstancesYAML(data map[string]any) error {
 
 // UpdateInstancesYAML 添加或更新实例条目。
 //
-// 对应 Python: update_instances_yaml(name, workspace, ports)
+// Python: update_instances_yaml(name, workspace, ports)
 func UpdateInstancesYAML(name string, workspace string, ports map[string]int) error {
 	data, err := LoadInstancesYAML()
 	if err != nil {
@@ -266,7 +266,7 @@ func UpdateInstancesYAML(name string, workspace string, ports map[string]int) er
 
 // GetInstanceIndex 获取实例在 instances.yaml 中的序号（1 起始，0 预留给默认）。
 //
-// 对应 Python: get_instance_index(name)
+// Python: get_instance_index(name)
 func GetInstanceIndex(name string) (int, error) {
 	data, err := LoadInstancesYAML()
 	if err != nil {
@@ -291,7 +291,7 @@ func GetInstanceIndex(name string) (int, error) {
 
 // GetInstanceConfig 从 instances.yaml 加载实例配置。
 //
-// 对应 Python: get_instance_config(name)
+// Python: get_instance_config(name)
 func GetInstanceConfig(name string) (*InstanceConfig, error) {
 	data, err := LoadInstancesYAML()
 	if err != nil {
@@ -356,7 +356,7 @@ func GetInstanceConfig(name string) (*InstanceConfig, error) {
 
 // LoadAllInstanceConfigs 加载所有实例配置。
 //
-// 对应 Python: load_all_instance_configs()
+// Python: load_all_instance_configs()
 func LoadAllInstanceConfigs() (map[string]*InstanceConfig, error) {
 	data, err := LoadInstancesYAML()
 	if err != nil {
@@ -421,7 +421,7 @@ func LoadAllInstanceConfigs() (map[string]*InstanceConfig, error) {
 
 // IsPortAvailable 检查端口是否可用。
 //
-// 对应 Python: is_port_available(host, port)
+// Python: is_port_available(host, port)
 func IsPortAvailable(host string, port int) bool {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	listener, err := net.Listen("tcp", addr)
@@ -434,7 +434,7 @@ func IsPortAvailable(host string, port int) bool {
 
 // CheckPortConflicts 检查端口冲突。
 //
-// 对应 Python: check_port_conflicts(ports, host, existing_ports)
+// Python: check_port_conflicts(ports, host, existing_ports)
 func CheckPortConflicts(ports map[string]int, existingPorts []int) []int {
 	existingSet := make(map[int]bool, len(existingPorts))
 	for _, p := range existingPorts {

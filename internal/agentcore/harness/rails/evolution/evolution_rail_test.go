@@ -65,22 +65,25 @@ func TestNewEvolutionRail_WithDisabledSkills(t *testing.T) {
 func TestSetTrajectorySink_正常绑定(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
 	sink := &fakeTrajectorySink{}
-	rail.SetTrajectorySink(sink, "team-1", "leader")
+	err := rail.SetTrajectorySink(sink, "team-1", "leader")
+	assert.NoError(t, err)
 	assert.Equal(t, sink, rail.trajectorySink)
 	assert.Equal(t, "team-1", rail.teamID)
 	assert.Equal(t, "leader", rail.memberRole)
 }
 
-func TestSetTrajectorySink_空TeamID不生效(t *testing.T) {
+func TestSetTrajectorySink_空TeamID返回错误(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
 	sink := &fakeTrajectorySink{}
-	rail.SetTrajectorySink(sink, "", "leader")
+	err := rail.SetTrajectorySink(sink, "", "leader")
+	assert.Error(t, err)
 	assert.Nil(t, rail.trajectorySink)
 }
 
 func TestSetTrajectorySink_nilSink不绑定(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})
-	rail.SetTrajectorySink(nil, "team-1")
+	err := rail.SetTrajectorySink(nil, "team-1")
+	assert.NoError(t, err)
 	assert.Nil(t, rail.trajectorySink)
 }
 
@@ -345,7 +348,7 @@ func TestBuildTrajectory_正常构建(t *testing.T) {
 		Kind: trajectory.StepKindLLM,
 		Detail: &trajectory.LLMCallDetail{
 			Model:    "test-model",
-			Messages: []map[string]any{{"role": "user", "content": "hi"}},
+			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
 		},
 	})
 
@@ -446,7 +449,7 @@ func TestAfterInvoke_同步模式触发演化(t *testing.T) {
 		Kind: trajectory.StepKindLLM,
 		Detail: &trajectory.LLMCallDetail{
 			Model:    "test",
-			Messages: []map[string]any{{"role": "user", "content": "hi"}},
+			Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
 		},
 	})
 
@@ -455,24 +458,15 @@ func TestAfterInvoke_同步模式触发演化(t *testing.T) {
 	assert.Equal(t, 1, ext.runEvolutionCalled)
 }
 
-// ──────────────────────────── isBlank 测试 ────────────────────────────
+// ──────────────────────────── normalizeSkillNames / normalizeNameSet 测试 ────────────────────────────
 
-func TestIsBlank(t *testing.T) {
-	assert.True(t, isBlank(""))
-	assert.True(t, isBlank("   "))
-	assert.False(t, isBlank("a"))
-}
-
-// ──────────────────────────── normalizeSkillNamesGo / normalizeNameSetGo 测试 ────────────────────────────
-
-func TestNormalizeSkillNamesGo(t *testing.T) {
-	result := normalizeSkillNamesGo([]string{"a", "b"})
+func TestNormalizeSkillNames(t *testing.T) {
+	result := normalizeSkillNames([]string{"a", "b"})
 	assert.Equal(t, map[string]bool{"a": true, "b": true}, result)
 }
 
-func TestNormalizeNameSetGo(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
-	result := rail.normalizeNameSetGo([]string{"x"})
+func TestNormalizeNameSet_字符串输入(t *testing.T) {
+	result := normalizeSkillNames([]string{"x"})
 	assert.Equal(t, map[string]bool{"x": true}, result)
 }
 
@@ -484,21 +478,20 @@ func TestIsSkillDisabled(t *testing.T) {
 	assert.False(t, rail.isSkillDisabled("bar"))
 }
 
-// ──────────────────────────── collectMessagesFromTrajectoryGo 测试 ────────────────────────────
+// ──────────────────────────── collectMessagesFromTrajectory 测试 ────────────────────────────
 
-func TestCollectMessagesFromTrajectory_通过Rail方法(t *testing.T) {
-	rail := NewEvolutionRail(noOpExtension{})
+func TestCollectMessagesFromTrajectory(t *testing.T) {
 	traj := &trajectory.Trajectory{
 		Steps: []*trajectory.TrajectoryStep{
 			{
 				Kind: trajectory.StepKindLLM,
 				Detail: &trajectory.LLMCallDetail{
-					Messages: []map[string]any{{"role": "user", "content": "hi"}},
+					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
 				},
 			},
 		},
 	}
-	msgs := rail.collectMessagesFromTrajectoryGo(traj)
+	msgs := collectMessagesFromTrajectory(traj)
 	assert.Len(t, msgs, 1)
 }
 

@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Schema 流数据统一接口，三种 Schema 均实现此接口。
-// 对应 Python 中 Pydantic BaseModel 的 model_validate 验证能力，
+// Python: 中 Pydantic BaseModel 的 model_validate 验证能力，
 // Go 通过 Validate() 方法实现等价的字段校验逻辑。
 type Schema interface {
 	// SchemaType 返回数据类型标识

@@ -17,7 +17,7 @@ import (
 //
 // 支持提取的元素类型：headers, code_blocks, inline_code, links, images, tables, lists
 //
-// 对应 Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
+// Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
 type MarkdownOutputParser struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -31,19 +31,19 @@ const mdLogComponent = logger.ComponentAgentCore
 
 var (
 	// headerRegexp 匹配 Markdown 标题。
-	// 对齐 Python: r'^(#{1,6})\s+(.+)$' (MULTILINE)
+	// Python: r'^(#{1,6})\s+(.+)$' (MULTILINE)
 	headerRegexp = regexp.MustCompile(`(?m)^(#{1,6})\s+(.+)$`)
 
 	// codeBlockRegexp 匹配 Markdown 代码块。
-	// 对齐 Python: r'```(\w*)\n(.*?)\n```' (DOTALL)
+	// Python: r'```(\w*)\n(.*?)\n```' (DOTALL)
 	codeBlockRegexp = regexp.MustCompile("(?s)```(\\w*)\n(.*?)\n```")
 
 	// inlineCodeRegexp 匹配行内代码。
-	// 对齐 Python: r'`([^`\n]+)`'
+	// Python: r'`([^`\n]+)`'
 	inlineCodeRegexp = regexp.MustCompile("`([^`\n]+)`")
 
 	// imageRegexp 匹配图片。
-	// 对齐 Python: r'!\[([^\]]*)\]\(([^)]+)\)'
+	// Python: r'!\[([^\]]*)\]\(([^)]+)\)'
 	imageRegexp = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
 
 	// linkRegexp 匹配链接。
@@ -71,7 +71,7 @@ func NewMarkdownOutputParser() *MarkdownOutputParser {
 // 解析成功返回 *MarkdownContent，解析失败返回 nil, error。
 // 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
 //
-// 对应 Python: MarkdownOutputParser.parse()
+// Python: MarkdownOutputParser.parse()
 func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 	// 提前提取 text 和 modelName（供 defer 中日志使用）
 	text, modelName := ExtractText(input)
@@ -113,7 +113,7 @@ func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 
 // StreamParse 流式解析 LLM 输出中的 Markdown。
 //
-// 对齐 Python: MarkdownOutputParser.stream_parse() — 全量重解析模式。
+// Python: MarkdownOutputParser.stream_parse() — 全量重解析模式。
 // 每次 buffer 增长就对整个 buffer 重新提取所有元素。
 // chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
@@ -221,7 +221,7 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clien
 
 // extractAllElements 从文本中提取所有 Markdown 元素。
 //
-// 对齐 Python: MarkdownOutputParser._extract_all_elements()
+// Python: MarkdownOutputParser._extract_all_elements()
 func (p *MarkdownOutputParser) extractAllElements(text string, content *MarkdownContent) {
 	elements := make([]*MarkdownElement, 0)
 
@@ -272,7 +272,7 @@ func (p *MarkdownOutputParser) extractAllElements(text string, content *Markdown
 	}
 
 	// 提取链接（排除图片：![alt](url) 中的链接不算）
-	// 对齐 Python: r'(?<!\!)\[([^\]]+)\]\(([^)]+)\)' 使用 lookbehind 排除图片
+	// Python: r'(?<!\!)\[([^\]]+)\]\(([^)]+)\)' 使用 lookbehind 排除图片
 	// Go regexp 不支持 lookbehind，先匹配所有 [text](url)，再排除前面紧跟 ! 的
 	for _, match := range linkRegexp.FindAllStringSubmatchIndex(text, -1) {
 		// 检查匹配位置前一个字符是否为 '!'（图片标记）
@@ -302,7 +302,7 @@ func (p *MarkdownOutputParser) extractAllElements(text string, content *Markdown
 
 // populateCategorizedLists 按 type 分发到分类列表。
 //
-// 对齐 Python: MarkdownOutputParser._populate_categorized_lists()
+// Python: MarkdownOutputParser._populate_categorized_lists()
 // 使用安全类型断言，避免 Content map 中值类型不匹配导致 panic。
 func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent) {
 	for _, elem := range content.Elements {
@@ -363,7 +363,7 @@ func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent
 
 // extractMultilineElements 逐行扫描提取表格和列表元素。
 //
-// 对齐 Python: MarkdownOutputParser._extract_multiline_elements()
+// Python: MarkdownOutputParser._extract_multiline_elements()
 // 返回追加后的 elements 切片。
 func extractMultilineElements(text string, elements []*MarkdownElement) []*MarkdownElement {
 	lines := strings.Split(text, "\n")

@@ -13,7 +13,7 @@ import (
 
 // TextableVariable 字符串模板变量，处理 {{placeholder}} 占位符替换。
 //
-// 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/textable.py (TextableVariable)
+// Python: openjiuwen/core/foundation/prompt/assemble/variables/textable.py (TextableVariable)
 //
 // 语法特性：
 //   - 变量替换：{{var}}，前后缀可配置（如 ${var}$、{var}）
@@ -67,7 +67,7 @@ func WithSuffix(suffix string) TextableOption {
 //   - name: 变量名，默认 "default"，内部使用时为 "__inner__"
 //   - opts: 可选配置（WithPrefix/WithSuffix）
 //
-// 对应 Python: TextableVariable(text=..., name=..., prefix=..., suffix=...)
+// Python: TextableVariable(text=..., name=..., prefix=..., suffix=...)
 func NewTextableVariable(text, name string, opts ...TextableOption) (*TextableVariable, error) {
 	v := &TextableVariable{
 		text:   text,
@@ -84,7 +84,7 @@ func NewTextableVariable(text, name string, opts ...TextableOption) (*TextableVa
 	}
 
 	// 正则提取占位符
-	// 对应 Python: re.compile(re.escape(prefix) + r"([^{}]*?)" + re.escape(suffix))
+	// Python: re.compile(re.escape(prefix) + r"([^{}]*?)" + re.escape(suffix))
 	pattern, err := regexp.Compile(regexp.QuoteMeta(v.prefix) + `([^{}]*?)` + regexp.QuoteMeta(v.suffix))
 	if err != nil {
 		return nil, exception.NewBaseError(
@@ -133,14 +133,14 @@ func (v *TextableVariable) Placeholders() []string {
 }
 
 // Eval 求值：覆盖 baseVariable.Eval，确保调用自身的 Update。
-// 对应 Python: Variable.eval()
+// Python: Variable.eval()
 func (v *TextableVariable) Eval(kwargs map[string]any) any {
 	return evalBase(&v.baseVariable, v, kwargs)
 }
 
 // Update 根据传入的键值对替换占位符，更新 value。
 //
-// 对应 Python: TextableVariable.update()
+// Python: TextableVariable.update()
 //
 // 逻辑：
 //  1. 遍历 placeholders，对每个占位符逐层解析嵌套路径
@@ -153,7 +153,7 @@ func (v *TextableVariable) Update(kwargs map[string]any) error {
 	for _, placeholder := range v.placeholders {
 		value, err := resolveNestedValue(placeholder, kwargs)
 		if err != nil {
-			// 对齐 Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED, error_msg=f"error parsing the placeholder `{placeholder}`")
+			// Python: raise build_error(PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED, error_msg=f"error parsing the placeholder `{placeholder}`")
 			return exception.NewBaseError(
 				exception.StatusPromptAssemblerVariableInitFailed,
 				exception.WithMsg(fmt.Sprintf("error parsing the placeholder `%s`: %s", placeholder, err.Error())),
@@ -175,7 +175,7 @@ func (v *TextableVariable) Update(kwargs map[string]any) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatValue 将值转换为字符串，非 str/int/float/bool 类型记录日志。
-// 对应 Python: isinstance(value, (str, int, float, bool)) 检查 + str() 转换 + prompt_logger.info
+// Python: isinstance(value, (str, int, float, bool)) 检查 + str() 转换 + prompt_logger.info
 // placeholderName: 占位符名称（如 "user.name"），对齐 Python 日志中的占位符名称
 // kwargs: 原始输入数据，对齐 Python 日志中的 input_data 字段
 func formatValue(placeholderName string, value any, kwargs map[string]any) string {
@@ -194,7 +194,7 @@ func formatValue(placeholderName string, value any, kwargs map[string]any) strin
 		return fmt.Sprintf("%t", val)
 	default:
 		// 非 str/int/float/bool 类型，记录日志并转为字符串
-		// 对齐 Python: prompt_logger.info("Converting non-string value using str()...", placeholder=..., input_data=..., output_data=...)
+		// Python: prompt_logger.info("Converting non-string value using str()...", placeholder=..., input_data=..., output_data=...)
 		outputData := fmt.Sprintf("%v", val)
 		logger.Info(logComponent).
 			Str("placeholder", placeholderName).

@@ -10,7 +10,7 @@ import (
 // 支持两种输入模式：RawInputs（未绑定节点 ID，首次交互）和 UserInputs（按节点 ID 绑定）。
 // 两者互斥：RawInputs 已设置时不能调用 Update。
 //
-// 对应 Python: openjiuwen/core/session/interaction/interactive_input.py (InteractiveInput)
+// Python: openjiuwen/core/session/interaction/interactive_input.py (InteractiveInput)
 type InteractiveInput struct {
 	// UserInputs 按节点 ID 绑定的输入映射
 	UserInputs map[string]any
@@ -29,7 +29,7 @@ type InteractiveInput struct {
 // NewInteractiveInput 创建交互输入实例。
 // rawInputs 为可选参数：不传则 RawInputs 为 nil（标记为"未提供"），
 // 传入 nil 则返回错误（与 Python 一致：raw_inputs=None 被拒绝）。
-// 对应 Python: InteractiveInput.__init__(raw_inputs)
+// Python: InteractiveInput.__init__(raw_inputs)
 func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 	input := &InteractiveInput{
 		UserInputs: make(map[string]any),
@@ -50,13 +50,13 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 
 // IsInteractiveInput 实现 interfaces.InvokeQuery 接口，交互式输入始终返回 true。
 //
-// 对齐 Python: isinstance(query, InteractiveInput)
+// Python: isinstance(query, InteractiveInput)
 // 当 InvokeInputs.Query 为 *InteractiveInput 时，表示这是一次中断恢复操作。
 func (i *InteractiveInput) IsInteractiveInput() bool { return true }
 
 // PlainText 实现 interfaces.InvokeQuery 接口，从 RawInputs 提取纯文本。
 //
-// 对齐 Python: _extract_plain_text(user_input)
+// Python: _extract_plain_text(user_input)
 // - RawInputs 为 string → 返回该字符串
 // - RawInputs 为其他类型或 nil → 返回空串
 func (i *InteractiveInput) PlainText() string {
@@ -71,7 +71,7 @@ func (i *InteractiveInput) PlainText() string {
 // Update 添加节点绑定的输入。
 // RawInputs 已设置时返回错误（互斥约束），value 为 nil 时返回错误。
 // 注意：与 Python 对齐，nodeID 允许空字符串（Python 只拒绝 node_id is None，不拒绝 ""）。
-// 对应 Python: InteractiveInput.update(node_id, value)
+// Python: InteractiveInput.update(node_id, value)
 func (i *InteractiveInput) Update(nodeID string, value any) error {
 	if i.RawInputs != nil {
 		return exception.RaiseError(exception.StatusInteractionInputInvalid,

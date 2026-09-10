@@ -20,7 +20,7 @@ import (
 
 // CryptoProvider 加密/解密提供者接口。
 //
-// 对齐 Python ExtensionRegistry.get_crypto_provider()。
+// Python: ExtensionRegistry.get_crypto_provider()。
 type CryptoProvider interface {
 	// Encrypt 加密明文
 	Encrypt(plaintext string) string
@@ -29,14 +29,14 @@ type CryptoProvider interface {
 }
 
 // ConfigBadRequest 配置请求参数错误。
-// 对齐 Python: _ConfigBadRequest(ValueError)。
+// Python: _ConfigBadRequest(ValueError)。
 type ConfigBadRequest struct {
 	// Message 错误信息
 	Message string
 }
 
 // ConfigInternalError 配置内部错误。
-// 对齐 Python: _ConfigInternalError(RuntimeError)。
+// Python: _ConfigInternalError(RuntimeError)。
 type ConfigInternalError struct {
 	// Message 错误信息
 	Message string
@@ -52,7 +52,7 @@ const logComponentConfigApply = logger.ComponentGateway
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // configYAMLKeys 需要写入 config.yaml 的配置键集合。
-// 对齐 Python: _CONFIG_YAML_KEYS (app_web_handlers.py L371-377)。
+// Python: _CONFIG_YAML_KEYS (app_web_handlers.py L371-377)。
 var configYAMLKeys = map[string]bool{
 	"context_engine_enabled":       true,
 	"kv_cache_affinity_enabled":    true,
@@ -62,7 +62,7 @@ var configYAMLKeys = map[string]bool{
 }
 
 // availableModelProviders 可用的模型服务商列表。
-// 对齐 Python: [provider.value for provider in ProviderType]。
+// Python: [provider.value for provider in ProviderType]。
 var availableModelProviders = []string{
 	"OpenAI",
 	"OpenRouter",
@@ -82,13 +82,13 @@ func (e *ConfigBadRequest) Error() string { return e.Message }
 func (e *ConfigInternalError) Error() string { return e.Message }
 
 // ApplyConfigPayload 将 config.set 风格的参数应用到 .env 和 config.yaml，不触发重载。
-// 对齐 Python: _apply_config_payload (app_web_handlers.py L701-761)。
+// Python: _apply_config_payload (app_web_handlers.py L701-761)。
 //
 // 返回值：
 //   - envUpdates: 本次变更的环境变量增量
 //   - yamlUpdated: 本次变更的 YAML 键列表
 func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
-	// 对齐 Python _encrypt_config_params (L692-699):
+	// Python: _encrypt_config_params (L692-699):
 	// 遍历 params，key 名包含 api_key 或 token 时加密
 	if crypto != nil {
 		for key, val := range params {
@@ -186,7 +186,7 @@ func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdate
 }
 
 // NotifyConfigSavedOnce 在所有文件写入完成后触发一次热重载。
-// 对齐 Python: _notify_config_saved_once (app_web_handlers.py L763-782)。
+// Python: _notify_config_saved_once (app_web_handlers.py L763-782)。
 func NotifyConfigSavedOnce(
 	onConfigSaved OnConfigSavedFunc,
 	envUpdates map[string]string,
@@ -237,7 +237,7 @@ func NotifyConfigSavedOnce(
 
 // ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
 //
-// 对齐 Python _process_files (web_connect.py L189-221)。
+// Python: _process_files (web_connect.py L189-221)。
 func ProcessFiles(params map[string]any) map[string]any {
 	files, ok := params["files"]
 	if !ok {
@@ -298,7 +298,7 @@ func ProcessFiles(params map[string]any) map[string]any {
 }
 
 // GetDefaultModels 从 config.yaml 读取 models.defaults 并返回解析环境变量后的列表。
-// 对齐 Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
+// Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
 func GetDefaultModels() []map[string]any {
 	cfg, err := config.New("")
 	if err != nil {
@@ -338,7 +338,7 @@ func isAvailableProvider(provider string) bool {
 }
 
 // updateYAMLKeyInConfig 将单个 YAML 键写入 config.yaml。
-// 对齐 Python: update_context_engine_enabled_in_config 等系列函数。
+// Python: update_context_engine_enabled_in_config 等系列函数。
 func updateYAMLKeyInConfig(key string, value any) error {
 	cfg, err := config.New("")
 	if err != nil {
@@ -363,7 +363,7 @@ func updateYAMLKeyInConfig(key string, value any) error {
 	case "memory_forbidden_enabled":
 		return cfg.Set("memory.forbidden_memory_definition.enabled", parsed)
 	case "memory_forbidden_description":
-		// 对齐 Python: update_memory_forbidden_description_in_config
+		// Python: update_memory_forbidden_description_in_config
 		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
 		// config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
 		descMap := cfg.Get("memory.forbidden_memory_definition.description")
@@ -393,7 +393,7 @@ func updateYAMLKeyInConfig(key string, value any) error {
 }
 
 // replaceTeamsInConfig 替换 config.yaml 中的 modes.team 配置。
-// 对齐 Python: replace_teams_in_config (common/config.py L989-1038)。
+// Python: replace_teams_in_config (common/config.py L989-1038)。
 func replaceTeamsInConfig(params map[string]any) error {
 	cfg, err := config.New("")
 	if err != nil {
@@ -414,7 +414,7 @@ func replaceTeamsInConfig(params map[string]any) error {
 			if err != nil {
 				return fmt.Errorf("加载配置失败: %w", err)
 			}
-			// 对齐 Python: if "modes" in data and isinstance(data["modes"], dict) and "team" in data["modes"]: del data["modes"]["team"]
+			// Python: if "modes" in data and isinstance(data["modes"], dict) and "team" in data["modes"]: del data["modes"]["team"]
 			if modes, ok := data["modes"].(map[string]any); ok {
 				if _, hasTeamKey := modes["team"]; hasTeamKey {
 					delete(modes, "team")
@@ -444,7 +444,7 @@ func replaceTeamsInConfig(params map[string]any) error {
 }
 
 // updateDefaultModelsInConfig 将默认模型列表写入 config.yaml 的 models.defaults 段。
-// 对齐 Python: update_default_models_in_config (common/config.py L734-742)。
+// Python: update_default_models_in_config (common/config.py L734-742)。
 func updateDefaultModelsInConfig(models []map[string]any) error {
 	cfg, err := config.New("")
 	if err != nil {
@@ -464,7 +464,7 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 }
 
 // updateMemoryForbiddenInConfig 更新 memory.forbidden_memory_definition 并写回。
-// 对齐 Python: update_memory_forbidden_in_config (common/config.py)。
+// Python: update_memory_forbidden_in_config (common/config.py)。
 // description 字段使用先读后合并逻辑（新值覆盖同名 key，旧的其他 key 保留）。
 func updateMemoryForbiddenInConfig(updates map[string]any) error {
 	cfg, err := config.New("")
@@ -488,7 +488,7 @@ func updateMemoryForbiddenInConfig(updates map[string]any) error {
 	// 合并更新
 	for k, v := range updates {
 		if k == "description" {
-			// 对齐 Python: description 字段先读后合并
+			// Python: description 字段先读后合并
 			// {**current_desc, **description}：新值覆盖同名 key，旧的其他 key 保留
 			currentDesc := make(map[string]any)
 			if existing, ok := section["description"].(map[string]any); ok {
@@ -519,7 +519,7 @@ func updateMemoryForbiddenInConfig(updates map[string]any) error {
 }
 
 // buildModelsDefaultsFromFrontend 从前端 models 参数构建 models.defaults 列表。
-// 对齐 Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
+// Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
 // crypto 用于加密 api_key；rawModels 中的 origin_index 用于匹配原始 YAML 条目。
 func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]map[string]any, error) {
 	modelsList, ok := rawModels.([]any)
@@ -660,7 +660,7 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 }
 
 // getConfigSnapshot 获取当前配置快照。
-// 对齐 Python: get_config() / get_config_raw()。
+// Python: get_config() / get_config_raw()。
 func getConfigSnapshot() map[string]any {
 	cfg, err := config.New("")
 	if err != nil {
@@ -724,7 +724,7 @@ func parseInt(val any) (int, error) {
 
 // processFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
 //
-// 对齐 Python _process_files (web_connect.py L189-221)。
+// Python: _process_files (web_connect.py L189-221)。
 // 供 HandleWebSocket 内部调用，外部请使用 ProcessFiles。
 func processFiles(params map[string]any) map[string]any {
 	return ProcessFiles(params)
@@ -750,7 +750,7 @@ func downloadFile(url string) ([]byte, error) {
 }
 
 // valuesMatch 比较前端发送值与解析后的值是否相同。
-// 对齐 Python _values_match (app_web_handlers.py L63-79)。
+// Python: _values_match (app_web_handlers.py L63-79)。
 func valuesMatch(parsedVal, resolvedVal any) bool {
 	// bool 比较
 	if _, ok := parsedVal.(bool); ok {
@@ -782,7 +782,7 @@ func valuesMatch(parsedVal, resolvedVal any) bool {
 }
 
 // mergeModelsForReplaceAll 用 origin_index 匹配原始 YAML 条目，保留占位符和未暴露字段，仅覆写变化字段。
-// 对齐 Python _merge_models_for_replace_all (app_web_handlers.py L82-156)。
+// Python: _merge_models_for_replace_all (app_web_handlers.py L82-156)。
 //
 // 对每个前端条目：
 //   - 有 origin_index 指向已有原始条目：深拷贝原始条目，仅覆写与解析快照不同的字段
@@ -928,7 +928,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 }
 
 // inferIsDefault 确保模型列表中恰好一个 is_default=true。
-// 对齐 Python _infer_is_default。
+// Python: _infer_is_default。
 func inferIsDefault(models []map[string]any) []map[string]any {
 	if len(models) == 0 {
 		return models

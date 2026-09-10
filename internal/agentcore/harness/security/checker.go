@@ -16,7 +16,7 @@ import (
 
 // ExternalDirectoryChecker 检查命令是否访问 workspace 外路径，若越界则触发 external_directory 权限。
 //
-// 对齐 Python: ExternalDirectoryChecker (checker.py L98-101)
+// Python: ExternalDirectoryChecker (checker.py L98-101)
 type ExternalDirectoryChecker struct {
 	// config 权限配置
 	config map[string]any
@@ -33,7 +33,7 @@ type ExternalDirectoryChecker struct {
 // shellOperatorsRE Shell 操作符正则：检测命令链/注入元字符。
 // 如果命令匹配 allow 模式但同时包含这些操作符，权限从 ALLOW → ASK 作为安全网。
 //
-// 对齐 Python: _SHELL_OPERATORS_RE (checker.py L36-40)
+// Python: _SHELL_OPERATORS_RE (checker.py L36-40)
 var shellOperatorsRE = regexp.MustCompile(
 	`[;&|` + "`" + `<>]` + // ; & | ` < >（覆盖 &&、||、管道、重定向、反引号）
 		`|\$[({]` + // $( 或 ${ — 命令/变量替换
@@ -41,13 +41,13 @@ var shellOperatorsRE = regexp.MustCompile(
 )
 
 // commandExecTools 命令执行工具集合
-// 对齐 Python: _COMMAND_EXEC_TOOLS (checker.py L41)
+// Python: _COMMAND_EXEC_TOOLS (checker.py L41)
 var commandExecTools = map[string]bool{
 	"mcp_exec_command": true,
 }
 
 // pathAwareCommands 会操作路径的命令（需做外部目录检测）
-// 对齐 Python: _PATH_AWARE_COMMANDS (checker.py L44-48)
+// Python: _PATH_AWARE_COMMANDS (checker.py L44-48)
 var pathAwareCommands = map[string]bool{
 	"cd": true, "rm": true, "cp": true, "mv": true, "mkdir": true, "touch": true,
 	"chmod": true, "chown": true, "cat": true, "ls": true, "dir": true,
@@ -62,7 +62,7 @@ var checkerLogComponent = logger.ComponentAgentCore
 
 // NewExternalDirectoryChecker 创建外部目录检查器。
 //
-// 对齐 Python: ExternalDirectoryChecker.__init__(config, workspace_root) (checker.py L101-103)
+// Python: ExternalDirectoryChecker.__init__(config, workspace_root) (checker.py L101-103)
 func NewExternalDirectoryChecker(config map[string]any, workspaceRoot string) *ExternalDirectoryChecker {
 	return &ExternalDirectoryChecker{
 		config:        config,
@@ -72,7 +72,7 @@ func NewExternalDirectoryChecker(config map[string]any, workspaceRoot string) *E
 
 // CheckExternalPaths 若访问了 workspace 外路径，根据 external_directory 配置返回 DENY/ASK；否则返回 nil。
 //
-// 对齐 Python: ExternalDirectoryChecker.check_external_paths(tool_name, tool_args) (checker.py L105-197)
+// Python: ExternalDirectoryChecker.check_external_paths(tool_name, tool_args) (checker.py L105-197)
 func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs map[string]any) *PermissionResult {
 	workspace := c.workspaceRoot
 	if workspace == "" {
@@ -201,7 +201,7 @@ func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs 
 
 // extractPathsFromCommand 从命令字符串中提取可能为路径的参数，并解析为绝对路径。
 //
-// 对齐 Python: _extract_paths_from_command(command, workdir) (checker.py L51-84)
+// Python: _extract_paths_from_command(command, workdir) (checker.py L51-84)
 func extractPathsFromCommand(command, workdir string) []string {
 	command = strings.TrimSpace(command)
 	if command == "" {
@@ -256,7 +256,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 
 // looksLikePath 启发式路径检测。
 //
-// 对齐 Python: _looks_like_path(token) (checker.py L87-92)
+// Python: _looks_like_path(token) (checker.py L87-92)
 func looksLikePath(token string) bool {
 	if strings.HasPrefix(token, `\\`) || strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") {
 		return true
@@ -270,7 +270,7 @@ func looksLikePath(token string) bool {
 
 // iterPathStrings 遍历工具参数中的路径字符串。
 //
-// 对齐 Python: _iter_path_strings(tool_name, tool_args) (tiered_policy.py L232-239)
+// Python: _iter_path_strings(tool_name, tool_args) (tiered_policy.py L232-239)
 func iterPathStrings(toolName string, toolArgs map[string]any) []string {
 	var out []string
 	for k, v := range toolArgs {
@@ -287,7 +287,7 @@ func iterPathStrings(toolName string, toolArgs map[string]any) []string {
 
 // toolArgValueLooksLikePath 判断参数值是否纳入路径类 pattern 匹配。
 //
-// 对齐 Python: _tool_arg_value_looks_like_path(arg_key, value) (tiered_policy.py L223-229)
+// Python: _tool_arg_value_looks_like_path(arg_key, value) (tiered_policy.py L223-229)
 func toolArgValueLooksLikePath(argKey, value string) bool {
 	if pathArgKeys[argKey] {
 		return true

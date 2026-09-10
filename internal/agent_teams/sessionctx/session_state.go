@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionState 每-TeamAgent 的可变 session 状态容器。
-// 对齐 Python: _session_id_context (contextvars.ContextVar)
+// Python: _session_id_context (contextvars.ContextVar)
 //
 // 通过 context.Value 传播 *SessionState 指针：
 //   - 同一 TeamAgent 内的 goroutine 共享同一 SessionState 引用，SetSessionID 后立即可见
@@ -33,13 +33,13 @@ type sessionStateKeyType struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitSessionState 创建新的 SessionState 实例。
-// 对齐 Python: _session_id_context = ContextVar("session_id", default=None)
+// Python: _session_id_context = ContextVar("session_id", default=None)
 func InitSessionState() *SessionState {
 	return &SessionState{}
 }
 
 // WithSessionState 将 SessionState 注入 context。
-// 对齐 Python: set_session_id(session_id) — 但 Go 通过 context.Value 传播指针
+// Python: set_session_id(session_id) — 但 Go 通过 context.Value 传播指针
 func WithSessionState(ctx context.Context, state *SessionState) context.Context {
 	return context.WithValue(ctx, sessionStateKeyType{}, state)
 }
@@ -54,7 +54,7 @@ func SessionStateFromCtx(ctx context.Context) *SessionState {
 }
 
 // GetSessionID 从 context 中获取当前 session_id。
-// 对齐 Python: get_session_id() -> Optional[str]
+// Python: get_session_id() -> Optional[str]
 // 读取优先级：SessionState.sessionID → ""（空字符串）
 func GetSessionID(ctx context.Context) string {
 	if s := SessionStateFromCtx(ctx); s != nil {
@@ -73,7 +73,7 @@ func (s *SessionState) GetSessionID() string {
 }
 
 // SetSessionID 设置当前 session_id。
-// 对齐 Python: set_session_id(session_id) -> Token
+// Python: set_session_id(session_id) -> Token
 // Go 不需要 Token，直接原地修改，同一指针的 goroutine 立即可见。
 func (s *SessionState) SetSessionID(sessionID string) {
 	s.mu.Lock()

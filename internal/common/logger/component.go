@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // Component 日志组件枚举，决定日志路由到哪个文件。
-// 对应 Python: _log_component_from_logger_name 的返回值
+// Python: _log_component_from_logger_name 的返回值
 type Component int
 
 const (

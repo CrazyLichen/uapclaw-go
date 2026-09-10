@@ -28,15 +28,15 @@ const (
 
 // NewStructuredAskUserTool 创建支持结构化选项的 AskUserTool 空壳实例。
 // 自建 EXTENDED_INPUT_PARAMS schema（不再依赖 BuildToolCard/AskUserMetadataProvider），
-// 对齐 Python: StructuredAskUserTool.__init__ 直接构建 ToolCard。
+// Python: StructuredAskUserTool.__init__ 直接构建 ToolCard。
 //
-// 对齐 Python: StructuredAskUserTool(Tool) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
+// Python: StructuredAskUserTool(Tool) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
 func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 	// 自建 schema（对齐 Python: EXTENDED_INPUT_PARAMS_EN/CN）
 	inputParams := buildExtendedInputParams(language)
 	description := getStructuredDescription(language)
 
-	// 对齐 Python: tool_id = f"ask_user_{agent_id}" if agent_id else f"ask_user_{uuid.uuid4().hex}"
+	// Python: tool_id = f"ask_user_{agent_id}" if agent_id else f"ask_user_{uuid.uuid4().hex}"
 	toolID := fmt.Sprintf("ask_user_%s", agentID)
 	if agentID == "" {
 		toolID = fmt.Sprintf("ask_user_%s", generateToolID())
@@ -78,7 +78,7 @@ func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildExtendedInputParams 自建 EXTENDED_INPUT_PARAMS schema。
-// 对齐 Python: EXTENDED_INPUT_PARAMS_EN / EXTENDED_INPUT_PARAMS_CN
+// Python: EXTENDED_INPUT_PARAMS_EN / EXTENDED_INPUT_PARAMS_CN
 //
 // 顶层参数：
 //   - query (string, required) — 问题文本
@@ -119,7 +119,7 @@ func buildExtendedInputParams(language string) []*schema.Param {
 }
 
 // getStructuredDescription 返回结构化 ask_user 工具描述。
-// 对齐 Python: EXTENDED_DESCRIPTION_EN / EXTENDED_DESCRIPTION_CN
+// Python: EXTENDED_DESCRIPTION_EN / EXTENDED_DESCRIPTION_CN
 func getStructuredDescription(language string) string {
 	if language == "en" {
 		return "Interrupts execution and requests input from the user. " +
@@ -201,7 +201,7 @@ func getMultiSelectDesc(language string) string {
 
 // generateToolID 生成唯一工具 ID。
 //
-// 对齐 Python: uuid.uuid4().hex（128 位随机，32 字符 hex）
+// Python: uuid.uuid4().hex（128 位随机，32 字符 hex）
 func generateToolID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)

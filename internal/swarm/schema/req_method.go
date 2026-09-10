@@ -12,7 +12,7 @@ import "fmt"
 // 用于 E2AEnvelope.method 字段和 AgentServer 方法路由分发。
 // 值为点分字符串格式（如 "chat.send"），与 Python ReqMethod 枚举值一一对应。
 //
-// 对应 Python: jiuwenswarm/common/schema/message.py (ReqMethod)
+// Python: jiuwenswarm/common/schema/message.py (ReqMethod)
 type ReqMethod string
 
 const (

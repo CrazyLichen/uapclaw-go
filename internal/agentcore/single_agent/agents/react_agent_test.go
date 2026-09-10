@@ -269,7 +269,7 @@ func TestReActAgent_AddPromptBuilderSection(t *testing.T) {
 
 // TestReActAgent_AddPromptBuilderSection_空内容时移除 验证空内容时移除节
 //
-// 对齐 Python: ReActAgent.add_prompt_builder_section — content 为空时 remove_section
+// Python: ReActAgent.add_prompt_builder_section — content 为空时 remove_section
 func TestReActAgent_AddPromptBuilderSection_空内容时移除(t *testing.T) {
 	card := agentschema.NewAgentCard(
 		agentschema.WithAgentName("prompt_empty"),

@@ -25,7 +25,7 @@ import (
 // 的消息数/Token 数触发逻辑，messages_threshold 和 messages_to_keep
 // 仅作为兼容字段保留，供通用配置序列化使用。
 //
-// 对应 Python: ToolResultBudgetProcessorConfig (pydantic.BaseModel)
+// Python: ToolResultBudgetProcessorConfig (pydantic.BaseModel)
 type ToolResultBudgetProcessorConfig struct {
 	// ── 实际使用字段 ──
 
@@ -57,7 +57,7 @@ type ToolResultBudgetProcessorConfig struct {
 // 直到该轮预算内。卸载后的消息用 <persisted-output> 标签占位，
 // 保留前 TrimSize 字符的预览。
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/offloader/tool_result_budget_processor.py
+// Python: openjiuwen/core/context_engine/processor/offloader/tool_result_budget_processor.py
 type ToolResultBudgetProcessor struct {
 	*processor.BaseProcessor
 	// config 具体配置
@@ -91,7 +91,7 @@ const (
 
 // NewToolResultBudgetProcessor 创建工具结果预算处理器实例。
 //
-// 对应 Python: ToolResultBudgetProcessor.__init__(config)
+// Python: ToolResultBudgetProcessor.__init__(config)
 func NewToolResultBudgetProcessor(config *ToolResultBudgetProcessorConfig, opts ...ToolResultBudgetProcessorOption) (*ToolResultBudgetProcessor, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func WithSysOption(op sysop.SysOperation) ToolResultBudgetProcessorOption {
 // 校验流程：先应用默认值填充零值字段，再校验核心字段有效性。
 // 与 Python Pydantic Field(default=..., gt=0) 行为对齐：零值自动填充默认值。
 //
-// 对应 Python: ToolResultBudgetProcessorConfig._validate_config()
+// Python: ToolResultBudgetProcessorConfig._validate_config()
 func (c *ToolResultBudgetProcessorConfig) Validate() error {
 	c.applyDefaults()
 	if c.TokensThreshold <= 0 {
@@ -152,7 +152,7 @@ func (c *ToolResultBudgetProcessorConfig) GetModel() *llm_schema.ModelRequestCon
 //
 // 触发条件：存在轮次内工具结果 Token 总数超过预算。
 //
-// 对应 Python: ToolResultBudgetProcessor.trigger_add_messages()
+// Python: ToolResultBudgetProcessor.trigger_add_messages()
 func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
@@ -171,7 +171,7 @@ func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc ifa
 // 遍历每个对话轮次，若该轮工具结果 Token 总数超过预算，
 // 从最大的工具结果开始逐个卸载，直到该轮预算内。
 //
-// 对应 Python: ToolResultBudgetProcessor.on_add_messages()
+// Python: ToolResultBudgetProcessor.on_add_messages()
 func (p *ToolResultBudgetProcessor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	// 从 opts 中提取 sysOperation
 	po := iface.NewProcessorOption(opts...)
@@ -197,7 +197,7 @@ func (p *ToolResultBudgetProcessor) OnAddMessages(ctx context.Context, mc iface.
 
 	mc.SetMessages(updatedMessages[:contextSize], true)
 
-	// 对齐 Python: sorted(set(modified_indices))，去重排序
+	// Python: sorted(set(modified_indices))，去重排序
 	uniqueIndices := make(map[int]struct{})
 	for _, idx := range modifiedIndices {
 		uniqueIndices[idx] = struct{}{}
@@ -237,7 +237,7 @@ func (p *ToolResultBudgetProcessor) LoadState(_ map[string]any) {}
 
 // applyDefaults 设置默认值。
 //
-// 对应 Python: ToolResultBudgetProcessorConfig.__init__() 默认值
+// Python: ToolResultBudgetProcessorConfig.__init__() 默认值
 func (c *ToolResultBudgetProcessorConfig) applyDefaults() {
 	if c.TokensThreshold == 0 {
 		c.TokensThreshold = 50000
@@ -350,7 +350,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 				Int("message_idx", targetIdx).
 				Err(err).
 				Msg("卸载工具消息失败，跳过当前候选继续尝试")
-			// 对齐 Python：卸载失败时 continue 而非 break，继续尝试下一个候选
+			// Python: 卸载失败时 continue 而非 break，继续尝试下一个候选
 			continue
 		}
 		if offloaded != nil {
@@ -377,7 +377,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 //  4. 非白名单工具消息
 //  5. size > LargeMessageThreshold（消息大小超过大消息阈值）
 //
-// 对应 Python: ToolResultBudgetProcessor._should_offload_message()
+// Python: ToolResultBudgetProcessor._should_offload_message()
 func (p *ToolResultBudgetProcessor) shouldOffloadMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage, mc iface.ModelContext) bool {
 	// 规则 1：严格类型检查，对齐 Python isinstance(message, ToolMessage)
 	if message.GetRole() != llm_schema.RoleTypeTool {
@@ -456,7 +456,7 @@ func (p *ToolResultBudgetProcessor) messageSize(msg llm_schema.BaseMessage, mc i
 // 调用 OffloadMessages 时传递 tool_call_id/name/metadata/sys_operation，
 // 与 Python offload_messages(tool_call_id=..., name=..., metadata=..., sys_operation=...) 对齐。
 //
-// 对应 Python: ToolResultBudgetProcessor._offload_tool_message()
+// Python: ToolResultBudgetProcessor._offload_tool_message()
 func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext) (llm_schema.BaseMessage, error) {
 	content := message.GetContent().Text()
 	if content == "" {
@@ -535,7 +535,7 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 
 // buildPersistedOutputMessage 构建 <persisted-output> 格式的占位内容。
 //
-// 对应 Python: ToolResultBudgetProcessor._build_persisted_output_message()
+// Python: ToolResultBudgetProcessor._build_persisted_output_message()
 func buildPersistedOutputMessage(originalSize int, offloadHandle string, preview string, hasMore bool) string {
 	suffix := "\n...\n"
 	if !hasMore {
@@ -554,7 +554,7 @@ func buildPersistedOutputMessage(originalSize int, offloadHandle string, preview
 
 // newOffloadHandleAndPath 生成卸载句柄和文件路径。
 //
-// 对应 Python: ToolResultBudgetProcessor._new_offload_handle_and_path()
+// Python: ToolResultBudgetProcessor._new_offload_handle_and_path()
 //
 // ⤵️ 5.31 回填：mc.WorkspaceDir() 方法
 func (p *ToolResultBudgetProcessor) newOffloadHandleAndPath(mc iface.ModelContext) (string, string) {

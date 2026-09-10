@@ -21,7 +21,7 @@ type WorkspaceSpec struct {
 }
 
 // VisionModelSpec 视觉模型规格占位类型。
-// 对齐 Python: VisionModelSpec
+// Python: VisionModelSpec
 type VisionModelSpec struct {
 	// APIKey API 密钥
 	APIKey string `json:"api_key"`
@@ -34,7 +34,7 @@ type VisionModelSpec struct {
 }
 
 // AudioModelSpec 音频模型规格占位类型。
-// 对齐 Python: AudioModelSpec
+// Python: AudioModelSpec
 type AudioModelSpec struct {
 	// APIKey API 密钥
 	APIKey string `json:"api_key"`
@@ -59,7 +59,7 @@ type AudioModelSpec struct {
 }
 
 // ProgressiveToolSpec 渐进式工具规格占位类型。
-// 对齐 Python: ProgressiveToolSpec
+// Python: ProgressiveToolSpec
 type ProgressiveToolSpec struct {
 	// Enabled 是否启用渐进式工具
 	Enabled bool `json:"enabled"`
@@ -72,7 +72,7 @@ type ProgressiveToolSpec struct {
 }
 
 // SysOperationSpec 系统操作规格占位类型。
-// 对齐 Python: SysOperationSpec
+// Python: SysOperationSpec
 type SysOperationSpec struct {
 	// ID 操作标识
 	ID string `json:"id"`
@@ -87,7 +87,7 @@ type SysOperationSpec struct {
 }
 
 // RailSpec 约束规则规格占位类型。
-// 对齐 Python: RailSpec
+// Python: RailSpec
 type RailSpec struct {
 	// Type 规则类型
 	Type string `json:"type"`
@@ -96,7 +96,7 @@ type RailSpec struct {
 }
 
 // BuiltinToolSpec 内置工具规格占位类型。
-// 对齐 Python: BuiltinToolSpec
+// Python: BuiltinToolSpec
 type BuiltinToolSpec struct {
 	// Type 工具类型
 	Type string `json:"type"`
@@ -105,7 +105,7 @@ type BuiltinToolSpec struct {
 }
 
 // SubAgentSpec 子代理规格占位类型。
-// 对齐 Python: SubAgentSpec
+// Python: SubAgentSpec
 type SubAgentSpec struct {
 	// AgentCard 代理身份卡片
 	AgentCard *agentschema.AgentCard `json:"agent_card"`
@@ -142,7 +142,7 @@ type SubAgentSpec struct {
 }
 
 // DeepAgentSpec 单角色 DeepAgent 规格。
-// 对齐 Python: DeepAgentSpec
+// Python: DeepAgentSpec
 type DeepAgentSpec struct {
 	// Model 模型配置
 	Model *models.TeamModelConfig `json:"model,omitempty"`

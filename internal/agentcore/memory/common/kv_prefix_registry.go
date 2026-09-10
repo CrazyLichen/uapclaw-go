@@ -13,7 +13,7 @@ import (
 // 允许记忆模块注册当前和旧版前缀，使 KV 迁移器能动态发现正在使用的前缀，
 // 而无需硬编码。当模块在版本演进中添加或移除前缀时，迁移器能自动适应。
 //
-// 对应 Python: openjiuwen/core/memory/common/kv_prefix_registry.py (KvPrefixRegistry)
+// Python: openjiuwen/core/memory/common/kv_prefix_registry.py (KvPrefixRegistry)
 type KvPrefixRegistry struct {
 	// mu 保护并发访问
 	mu sync.RWMutex
@@ -31,7 +31,7 @@ type KvPrefixRegistry struct {
 
 var (
 	// KVPrefixRegistry 全局 KV 前缀注册表实例。
-	// 对齐 Python: kv_prefix_registry = KvPrefixRegistry()
+	// Python: kv_prefix_registry = KvPrefixRegistry()
 	KVPrefixRegistry = NewKvPrefixRegistry()
 )
 
@@ -49,7 +49,7 @@ func NewKvPrefixRegistry() *KvPrefixRegistry {
 //
 // 如果前缀为空或纯空白字符，返回 error。已存在的前缀不会重复添加。
 //
-// 对应 Python: KvPrefixRegistry.register_current
+// Python: KvPrefixRegistry.register_current
 func (r *KvPrefixRegistry) RegisterCurrent(prefix string) error {
 	if prefix == "" || strings.TrimSpace(prefix) == "" {
 		return fmt.Errorf("前缀不能为空或仅包含空白字符: %q", prefix)
@@ -65,7 +65,7 @@ func (r *KvPrefixRegistry) RegisterCurrent(prefix string) error {
 //
 // 如果前缀为空或纯空白字符，返回 error。已存在的前缀不会重复添加。
 //
-// 对应 Python: KvPrefixRegistry.register_legacy
+// Python: KvPrefixRegistry.register_legacy
 func (r *KvPrefixRegistry) RegisterLegacy(prefix string) error {
 	if prefix == "" || strings.TrimSpace(prefix) == "" {
 		return fmt.Errorf("前缀不能为空或仅包含空白字符: %q", prefix)
@@ -80,7 +80,7 @@ func (r *KvPrefixRegistry) RegisterLegacy(prefix string) error {
 //
 // 返回前缀切片的副本，调用方可以安全修改。
 //
-// 对应 Python: KvPrefixRegistry.get_all_prefixes
+// Python: KvPrefixRegistry.get_all_prefixes
 func (r *KvPrefixRegistry) GetAllPrefixes() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -93,7 +93,7 @@ func (r *KvPrefixRegistry) GetAllPrefixes() []string {
 
 // Unregister 从 current 和 all 集合中移除指定前缀。
 //
-// 对应 Python: KvPrefixRegistry.unregister
+// Python: KvPrefixRegistry.unregister
 func (r *KvPrefixRegistry) Unregister(prefix string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

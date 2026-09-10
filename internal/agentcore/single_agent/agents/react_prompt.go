@@ -32,7 +32,7 @@ var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 
 // AddPromptBuilderSection 添加或替换提示节，空内容时移除该节。
 //
-// 对应 Python: ReActAgent.add_prompt_builder_section(name, content, *, priority)
+// Python: ReActAgent.add_prompt_builder_section(name, content, *, priority)
 // Python 行为：content 为空/None 时 remove_section，否则 add_section 且 cn/en 内容相同。
 func (a *ReActAgent) AddPromptBuilderSection(name string, content string, priority int) {
 	text := strings.TrimSpace(content)
@@ -49,7 +49,7 @@ func (a *ReActAgent) AddPromptBuilderSection(name string, content string, priori
 
 // Configure 配置 ReActAgent。
 //
-// 对应 Python: ReActAgent.configure(config)
+// Python: ReActAgent.configure(config)
 func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfig) error {
 	cfg, ok := config.(*saconfig.ReActAgentConfig)
 	if !ok {
@@ -85,25 +85,25 @@ func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
 }
 
 // Card 返回Agent身份卡片。
-// 对齐 Python: BaseAgent.card 属性
+// Python: BaseAgent.card 属性
 func (a *ReActAgent) Card() *agentschema.AgentCard {
 	return a.card
 }
 
 // Config 返回当前配置。
-// 对齐 Python: BaseAgent.config 属性
+// Python: BaseAgent.config 属性
 func (a *ReActAgent) Config() interfaces.AgentConfig {
 	return a.config
 }
 
 // AbilityManager 返回能力管理器。
-// 对齐 Python: BaseAgent.ability_manager 属性
+// Python: BaseAgent.ability_manager 属性
 func (a *ReActAgent) AbilityManager() interfaces.AbilityManagerInterface {
 	return a.abilityManager
 }
 
 // RegisterCallback 注册回调。
-// 对齐 Python: BaseAgent.register_callback(event, callback, priority)
+// Python: BaseAgent.register_callback(event, callback, priority)
 func (a *ReActAgent) RegisterCallback(ctx context.Context, event interfaces.AgentCallbackEvent, fn callback.PerAgentCallbackFunc, opts ...callback.CallbackOption) error {
 	if a.callbackManager != nil {
 		a.callbackManager.RegisterCallback(ctx, event, fn, opts...)
@@ -112,10 +112,10 @@ func (a *ReActAgent) RegisterCallback(ctx context.Context, event interfaces.Agen
 }
 
 // RegisterRail 注册 Rail。
-// 对齐 Python: BaseAgent.register_rail(rail)
+// Python: BaseAgent.register_rail(rail)
 func (a *ReActAgent) RegisterRail(ctx context.Context, r interfaces.AgentRail, opts ...callback.CallbackOption) error {
 	if a.callbackManager != nil {
-		if err := r.Init(a); err != nil {
+		if err := r.Init(ctx, a); err != nil {
 			return err
 		}
 		return a.callbackManager.RegisterRail(ctx, r, opts...)
@@ -124,7 +124,7 @@ func (a *ReActAgent) RegisterRail(ctx context.Context, r interfaces.AgentRail, o
 }
 
 // UnregisterRail 注销 Rail。
-// 对齐 Python: BaseAgent.unregister_rail(rail)
+// Python: BaseAgent.unregister_rail(rail)
 func (a *ReActAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail) error {
 	if a.callbackManager != nil {
 		err := a.callbackManager.UnregisterRail(ctx, r)
@@ -154,7 +154,7 @@ func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
 
 // PromptBuilder 返回系统提示词构建器。
 //
-// 对应 Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
+// Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
 func (a *ReActAgent) PromptBuilder() *prompts.SystemPromptBuilder {
 	return a.promptBuilder
 }
@@ -177,7 +177,7 @@ func (a *ReActAgent) SystemPromptBuilder() prompts.SystemPromptBuilderInterface 
 // 如果渲染后的系统提示词为空、skillUtil 为 nil 或无已注册技能，则移除 skills section。
 // 否则将技能提示词注入 skills section（priority=90）。
 //
-// 对应 Python: ReActAgent._update_skill_prompt_builder_section(rendered_system_prompt)
+// Python: ReActAgent._update_skill_prompt_builder_section(rendered_system_prompt)
 func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context, renderedSystemPrompt string) {
 	if renderedSystemPrompt == "" || a.skillUtil == nil || !a.skillUtil.HasSkill() {
 		a.promptBuilder.RemoveSection(skillsSection)
@@ -191,7 +191,7 @@ func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context, render
 // warnMissingSkillReadFileTool 检查技能提示词启用时是否缺少必需的 read_file 工具，
 // 若缺少则记录警告日志。
 //
-// 对应 Python: ReActAgent._warn_missing_skill_read_file_tool()
+// Python: ReActAgent._warn_missing_skill_read_file_tool()
 func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 	toolInfos, err := a.abilityManager.ListToolInfo(ctx, nil)
 	if err != nil {

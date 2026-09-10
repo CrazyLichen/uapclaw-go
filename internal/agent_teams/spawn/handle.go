@@ -11,7 +11,7 @@ import (
 
 // SpawnHandle 统一 inprocess 和 subprocess 的操作接口。
 // 不含回调设置——回调在构造句柄时注入。
-// 对齐 Python: SpawnedProcessHandle / InProcessSpawnHandle 的公共方法集。
+// Python: SpawnedProcessHandle / InProcessSpawnHandle 的公共方法集。
 type SpawnHandle interface {
 	// ProcessID 返回进程唯一标识
 	ProcessID() string
@@ -33,7 +33,7 @@ type SpawnHandle interface {
 
 // SpawnableAgent 进程内生成的 Agent 最小接口。
 // 仅暴露 InProcessSpawnHandle 消费者所需操作，不包含运行方法——运行由 Runner 层负责。
-// 对齐 Python: InProcessSpawnHandle.agent_ref 的 Any 类型，
+// Python: InProcessSpawnHandle.agent_ref 的 Any 类型，
 // Go 中用接口替代以保留最小类型安全，同时避免 spawn/ 包 import agent/ 包。
 type SpawnableAgent interface {
 	// AgentCard 返回 Agent 身份卡片

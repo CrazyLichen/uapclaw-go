@@ -67,7 +67,7 @@ type StreamOutputOption func(*streamOutputConfig)
 
 // NewStreamWriterManager 创建流写入器管理器。
 // modes 为空时默认注册 Output/Trace/Custom 三种 Writer。
-// 对应 Python: StreamWriterManager(stream_emitter, modes)
+// Python: StreamWriterManager(stream_emitter, modes)
 func NewStreamWriterManager(emitter *StreamEmitter, modes ...StreamMode) *StreamWriterManager {
 	if emitter == nil {
 		panic("stream_emitter 不能为 nil")
@@ -88,13 +88,13 @@ func NewStreamWriterManager(emitter *StreamEmitter, modes ...StreamMode) *Stream
 }
 
 // StreamEmitter 返回内部发射器
-// 对应 Python: StreamWriterManager.stream_emitter()
+// Python: StreamWriterManager.stream_emitter()
 func (m *StreamWriterManager) StreamEmitter() *StreamEmitter {
 	return m.emitter
 }
 
 // AddWriter 添加自定义写入器。
-// 对应 Python: StreamWriterManager.add_writer(key, writer)
+// Python: StreamWriterManager.add_writer(key, writer)
 func (m *StreamWriterManager) AddWriter(key StreamMode, writer StreamWriter) error {
 	if writer == nil {
 		return exception.NewBaseError(exception.StatusStreamWriterManagerAddWriterError,
@@ -109,7 +109,7 @@ func (m *StreamWriterManager) AddWriter(key StreamMode, writer StreamWriter) err
 }
 
 // GetWriter 按模式获取写入器。
-// 对应 Python: StreamWriterManager.get_writer(key)
+// Python: StreamWriterManager.get_writer(key)
 func (m *StreamWriterManager) GetWriter(key StreamMode) StreamWriter {
 	m.writersMu.RLock()
 	defer m.writersMu.RUnlock()
@@ -117,19 +117,19 @@ func (m *StreamWriterManager) GetWriter(key StreamMode) StreamWriter {
 }
 
 // GetOutputWriter 获取标准输出流写入器
-// 对应 Python: StreamWriterManager.get_output_writer()
+// Python: StreamWriterManager.get_output_writer()
 func (m *StreamWriterManager) GetOutputWriter() StreamWriter {
 	return m.GetWriter(StreamModeOutput)
 }
 
 // GetTraceWriter 获取追踪流写入器
-// 对应 Python: StreamWriterManager.get_trace_writer()
+// Python: StreamWriterManager.get_trace_writer()
 func (m *StreamWriterManager) GetTraceWriter() StreamWriter {
 	return m.GetWriter(StreamModeTrace)
 }
 
 // GetCustomWriter 获取自定义流写入器
-// 对应 Python: StreamWriterManager.get_custom_writer()
+// Python: StreamWriterManager.get_custom_writer()
 func (m *StreamWriterManager) GetCustomWriter() StreamWriter {
 	return m.GetWriter(StreamModeCustom)
 }
@@ -148,7 +148,7 @@ func (m *StreamWriterManager) GetInteractionOutputWriter() InteractionOutputWrit
 }
 
 // RemoveWriter 移除写入器，不允许移除默认 Writer。
-// 对应 Python: StreamWriterManager.remove_writer(key)
+// Python: StreamWriterManager.remove_writer(key)
 func (m *StreamWriterManager) RemoveWriter(key StreamMode) error {
 	for _, mode := range m.defaultModes {
 		if mode.Mode() == key.Mode() {
@@ -179,7 +179,7 @@ func WithFrameTimeout(d time.Duration) StreamOutputOption {
 }
 
 // StreamOutput 返回流输出 channel，消费端通过 range 读取。
-// 对应 Python: StreamWriterManager.stream_output(first_frame_timeout, timeout)
+// Python: StreamWriterManager.stream_output(first_frame_timeout, timeout)
 // 内部启动 goroutine 从 emitter 的队列读取 Schema 数据，转发到输出 channel。
 // 流结束信号：Emitter.Close() 会调 queue.Close()，消费端通过 Receive() 返回
 // ErrQueueClosed 感知流结束，等价于 Python 的 END_FRAME 哨兵机制。

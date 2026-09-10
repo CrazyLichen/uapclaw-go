@@ -364,7 +364,7 @@ func TestStartupMember(t *testing.T) {
 }
 
 // TestStartupMember_回调失败回滚 测试 onCreated 失败时回滚到 UNSTARTED。
-// 对齐 Python: startup_member 中 _spawn_and_publish 失败 → 回滚 STARTING→UNSTARTED
+// Python: startup_member 中 _spawn_and_publish 失败 → 回滚 STARTING→UNSTARTED
 func TestStartupMember_回调失败回滚(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
@@ -393,7 +393,7 @@ func TestStartupMember_回调失败回滚(t *testing.T) {
 }
 
 // TestSpawnAndPublish 测试 spawnAndPublish 内部方法。
-// 对齐 Python: _spawn_and_publish(member_name, on_created)
+// Python: _spawn_and_publish(member_name, on_created)
 func TestSpawnAndPublish(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()

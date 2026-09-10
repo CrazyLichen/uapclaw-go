@@ -13,8 +13,8 @@ import (
 // AesStorageCodec AES-256-GCM 存储编解码器。
 //
 // 容错模式：key 为空时 passthrough 不加解密，key 非空时解密失败返回原文并记录 Warn 日志。
-// 对应 Python: openjiuwen/core/memory/codec/aes_storage_codec.py (AesStorageCodec)
-// 对齐 Python 容错行为：Python 解密失败时返回原文，Go 也应返回原文而非 error，
+// Python: openjiuwen/core/memory/codec/aes_storage_codec.py (AesStorageCodec)
+// Python: 容错行为：Python 解密失败时返回原文，Go 也应返回原文而非 error，
 // 确保 Go/Python 数据互操作性。
 //
 // 通过 crypto 全局注册表获取加密算法（对齐 Python CryptUtils.get_crypt），
@@ -51,7 +51,7 @@ const (
 // 注意：Python 不校验 key 长度，Go 校验 key 必须 32 字节。Go 更安全——
 // AES-256 本身要求 32 字节密钥，Python 不校验是缺陷。
 // 此处保持 Go 严格校验。
-// 对齐 Python：不在构造时缓存 provider，而是在 Encode/Decode 时通过注册表动态查找。
+// Python: 不在构造时缓存 provider，而是在 Encode/Decode 时通过注册表动态查找。
 func NewAesStorageCodec(key []byte) (*AesStorageCodec, error) {
 	if len(key) == 0 {
 		return &AesStorageCodec{key: nil}, nil
@@ -130,7 +130,7 @@ func (p *keyedProvider) Decrypt(ciphertext string) (string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getProvider 通过全局注册表获取加密算法，并构造持有当前密钥的 CryptoProvider。
-// 对齐 Python AesStorageCodec 中 CryptUtils.get_crypt() 的动态查找模式：
+// Python: AesStorageCodec 中 CryptUtils.get_crypt() 的动态查找模式：
 //   - key 为空时返回 nil（passthrough）
 //   - 注册表中找不到算法时返回 nil（passthrough 降级，对齐 Python）
 //   - 找到时构造 AesGcmProvider 并返回
@@ -140,7 +140,7 @@ func (c *AesStorageCodec) getProvider() crypto.CryptoProvider {
 	}
 	crypt, ok := crypto.Get(crypto.AesGcmName)
 	if !ok {
-		// 对齐 Python：CryptUtils.get_crypt() 返回 None 时 passthrough
+		// Python: CryptUtils.get_crypt() 返回 None 时 passthrough
 		logger.Warn(logComponent).
 			Str("method", "getProvider").
 			Str("event_type", "MEMORY_PROCESS").

@@ -17,7 +17,7 @@ import (
 
 // StoreArchiveHelper 归档、清空和创建技能辅助。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/store_archive.py StoreArchiveHelper
+// Python: openjiuwen/agent_evolving/checkpointing/store_archive.py StoreArchiveHelper
 type StoreArchiveHelper struct {
 	// store 所属的 EvolutionStore 实例
 	store *EvolutionStore
@@ -32,9 +32,9 @@ type StoreArchiveHelper struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateSkill 创建新技能。
-// 对应 Python: StoreArchiveHelper.create_skill(name, description, body, frontmatter)
+// Python: StoreArchiveHelper.create_skill(name, description, body, frontmatter)
 func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, description string, body string, frontmatter string) (string, error) {
-	// 对齐 Python: 校验名称
+	// Python: 校验名称
 	validNameRe := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 	if name == "" || !validNameRe.MatchString(name) {
 		logger.Error(logComponent).
@@ -67,7 +67,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 
 	_ = os.MkdirAll(skillDir, 0755)
 
-	// 对齐 Python: 构建 SKILL.md 内容
+	// Python: 构建 SKILL.md 内容
 	skillMDContent := ""
 	if frontmatter != "" {
 		skillMDContent = fmt.Sprintf("%s\n\n# %s\n\n%s\n", frontmatter, name, body)
@@ -80,13 +80,13 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 		return "", err
 	}
 
-	// 对齐 Python: 创建空 EvolutionLog
+	// Python: 创建空 EvolutionLog
 	emptyLog := EmptyEvolutionLog(name)
 	if err := h.store.SaveEvolutionLog(ctx, name, emptyLog, skillDir); err != nil {
 		return "", err
 	}
 
-	// 对齐 Python: 创建 evolution 目录
+	// Python: 创建 evolution 目录
 	evoDir := filepath.Join(skillDir, "evolution")
 	_ = os.MkdirAll(evoDir, 0755)
 
@@ -98,7 +98,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 }
 
 // ArchiveSkillBody 归档 SKILL.md。
-// 对应 Python: StoreArchiveHelper.archive_skill_body(name)
+// Python: StoreArchiveHelper.archive_skill_body(name)
 func (h *StoreArchiveHelper) ArchiveSkillBody(ctx context.Context, name string) (string, error) {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -126,7 +126,7 @@ func (h *StoreArchiveHelper) ArchiveSkillBody(ctx context.Context, name string) 
 }
 
 // ArchiveEvolutions 归档演进数据。
-// 对应 Python: StoreArchiveHelper.archive_evolutions(name)
+// Python: StoreArchiveHelper.archive_evolutions(name)
 func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string) (string, error) {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -153,7 +153,7 @@ func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string)
 }
 
 // ClearEvolutions 清空演进数据。
-// 对应 Python: StoreArchiveHelper.clear_evolutions(name)
+// Python: StoreArchiveHelper.clear_evolutions(name)
 func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) error {
 	emptyLog := EmptyEvolutionLog(name)
 	if err := h.store.SaveEvolutionLog(ctx, name, emptyLog, ""); err != nil {
@@ -169,7 +169,7 @@ func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) e
 }
 
 // ListArchives 列出归档文件。
-// 对应 Python: StoreArchiveHelper.list_archives(name)
+// Python: StoreArchiveHelper.list_archives(name)
 func (h *StoreArchiveHelper) ListArchives(ctx context.Context, name string) []string {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -194,7 +194,7 @@ func (h *StoreArchiveHelper) ListArchives(ctx context.Context, name string) []st
 }
 
 // ArchiveDir 创建/返回 archive 子目录。
-// 对应 Python: StoreArchiveHelper.archive_dir(skill_dir)
+// Python: StoreArchiveHelper.archive_dir(skill_dir)
 func ArchiveDir(skillDir string) string {
 	archive := filepath.Join(skillDir, "archive")
 	_ = os.MkdirAll(archive, 0755)
@@ -204,7 +204,7 @@ func ArchiveDir(skillDir string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // tsSuffix 生成 UTC 时间戳后缀。
-// 对应 Python: StoreArchiveHelper.ts_suffix() → "%Y%m%dT%H%M%S"
+// Python: StoreArchiveHelper.ts_suffix() → "%Y%m%dT%H%M%S"
 func tsSuffix() string {
 	return time.Now().UTC().Format("20060102T150405")
 }

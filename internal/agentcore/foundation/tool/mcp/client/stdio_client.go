@@ -20,7 +20,7 @@ import (
 // StdioClient Stdio 子进程传输的 MCP 客户端。
 // 通过 stdin/stdout 与子进程通信，组合 mcp-go 的 Client 实现 MCP 协议交互。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/stdio_client.py (StdioClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/stdio_client.py (StdioClient)
 type StdioClient struct {
 	// config MCP 服务器配置
 	config *types.McpServerConfig

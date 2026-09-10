@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CodeInput 代码执行工具的输入参数。
-// 对齐 Python: CodeTool inputs (code.py L34)
+// Python: CodeTool inputs (code.py L34)
 type CodeInput struct {
 	// Code 要执行的代码
 	Code string `json:"code"`
@@ -31,11 +31,11 @@ type CodeInput struct {
 
 const (
 	// defaultTimeout 代码执行默认超时时间（秒）。
-	// 对齐 Python: CodeTool._resolve_timeout default=300 (code.py L21)
+	// Python: CodeTool._resolve_timeout default=300 (code.py L21)
 	defaultTimeout = 300
 
 	// defaultMaxTimeout 代码执行最大超时时间（秒）。
-	// 对齐 Python: CodeTool._resolve_timeout CODE_TOOL_MAX_TIMEOUT_SECONDS (code.py L28)
+	// Python: CodeTool._resolve_timeout CODE_TOOL_MAX_TIMEOUT_SECONDS (code.py L28)
 	defaultMaxTimeout = 3600
 
 	// logComponent 日志组件标识
@@ -47,13 +47,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodeTool 创建 CodeTool 实例。
-// 对齐 Python: CodeTool (code.py L14)
+// Python: CodeTool (code.py L14)
 func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("code", "CodeTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input CodeInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 参数解析，默认值
-		// 对齐 Python L36-37
+		// Python: L36-37
 		code := input.Code
 		lang := input.Language
 		if lang == "" {
@@ -62,7 +62,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		timeout := resolveTimeout(input.Timeout)
 
 		// 构建选项
-		// 对齐 Python L39-41
+		// Python: L39-41
 		codeOpts := []sys_operation.CodeOption{
 			sys_operation.WithCodeLanguage(lang),
 			sys_operation.WithCodeTimeout(timeout),
@@ -73,7 +73,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 执行代码
-		// 对齐 Python L43
+		// Python: L43
 		res, execErr := op.Code().ExecuteCode(ctx, code, codeOpts...)
 		if execErr != nil {
 			logger.Error(logComponent).
@@ -88,7 +88,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 失败: res.Code != SUCCESS
-		// 对齐 Python L44-45
+		// Python: L44-45
 		if !res.IsSuccess() {
 			logger.Error(logComponent).
 				Str("language", lang).
@@ -101,7 +101,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 成功
-		// 对齐 Python L47-55
+		// Python: L47-55
 		if res.Data != nil {
 			exitCode := -1
 			if res.Data.ExitCode != nil {
@@ -153,7 +153,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveTimeout 解析并校验超时时间。
-// 对齐 Python: CodeTool._resolve_timeout (code.py L20-32)
+// Python: CodeTool._resolve_timeout (code.py L20-32)
 func resolveTimeout(rawValue int) int {
 	timeout := rawValue
 	if timeout <= 0 {

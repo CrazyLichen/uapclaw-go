@@ -71,7 +71,7 @@ func TestBaseRail_所有钩子为NoOp(t *testing.T) {
 // TestBaseRail_InitUninit为NoOp 测试 Init 和 Uninit 均返回 nil。
 func TestBaseRail_InitUninit为NoOp(t *testing.T) {
 	r := NewBaseRail()
-	if err := r.Init(nil); err != nil {
+	if err := r.Init(context.Background(), nil); err != nil {
 		t.Fatalf("Init 返回错误: %v", err)
 	}
 	if err := r.Uninit(nil); err != nil {

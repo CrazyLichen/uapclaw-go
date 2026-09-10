@@ -24,7 +24,7 @@ import (
 
 // GetSSLConfig 解析 SSL 配置环境变量，返回是否验证和证书路径。
 //
-// 对应 Python: SslUtils.get_ssl_config()
+// Python: SslUtils.get_ssl_config()
 //
 // 逻辑：
 //   - urlIsHTTPS=false → 不验证
@@ -51,7 +51,7 @@ func GetSSLConfig(verifySwitchEnv, sslCertEnv string, triggerValue []string, url
 
 // CreateStrictTLSConfig 创建严格 TLS 配置。
 //
-// 对应 Python: SslUtils.create_strict_ssl_context()
+// Python: SslUtils.create_strict_ssl_context()
 //
 // 安全策略（对齐 Python）：
 //   - 最低 TLS 1.2
@@ -81,7 +81,7 @@ func CreateStrictTLSConfig(certPath string) (*tls.Config, error) {
 
 // boolEnv 解析布尔环境变量，如果值在 triggerValue 中则返回 true。
 //
-// 对应 Python: SslUtils._bool_env()
+// Python: SslUtils._bool_env()
 func boolEnv(name string, triggerValue []string) bool {
 	val := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
 	for _, tv := range triggerValue {
@@ -94,7 +94,7 @@ func boolEnv(name string, triggerValue []string) bool {
 
 // secureLoadCert 安全加载 CA 证书文件到 TLS 配置。
 //
-// 对应 Python: SslUtils._secure_load_cert()
+// Python: SslUtils._secure_load_cert()
 //
 // 安全策略：
 //   - 证书路径必须在 SAFE_CERT_DIR 目录下

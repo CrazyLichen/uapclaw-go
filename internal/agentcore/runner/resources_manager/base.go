@@ -92,19 +92,19 @@ const (
 const (
 	// TagAll 匹配所有资源的特殊标签
 	//
-	// 对应 Python: ALL = "*"
+	// Python: ALL = "*"
 	TagAll Tag = "*"
 	// TagGlobal 全局标签，未分类资源的默认标签
 	//
-	// 对应 Python: GLOBAL = "__global__"
+	// Python: GLOBAL = "__global__"
 	TagGlobal Tag = "__global__"
 	// TagActive 活跃状态标签
 	//
-	// 对应 Python: ACTIVE = "__active__"
+	// Python: ACTIVE = "__active__"
 	TagActive Tag = "__active__"
 	// TagInactive 非活跃状态标签
 	//
-	// 对应 Python: INACTIVE = "__inactive__"
+	// Python: INACTIVE = "__inactive__"
 	TagInactive Tag = "__inactive__"
 )
 

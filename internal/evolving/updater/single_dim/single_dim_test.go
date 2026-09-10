@@ -68,7 +68,7 @@ func (m *mockOptimizer) Step() map[schema.UpdateKey]any {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// 对齐 Python: test_bind_delegates_to_optimizer
+// Python: test_bind_delegates_to_optimizer
 func TestSingleDimUpdater_Bind委托给优化器(t *testing.T) {
 	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
@@ -86,7 +86,7 @@ func TestSingleDimUpdater_Bind委托给优化器(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_bind_with_none_targets
+// Python: test_bind_with_none_targets
 func TestSingleDimUpdater_Bind空目标使用Config(t *testing.T) {
 	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
@@ -105,7 +105,7 @@ func TestSingleDimUpdater_Bind空目标使用Config(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_calls_optimizer_chain
+// Python: test_update_calls_optimizer_chain
 func TestSingleDimUpdater_Update调用优化器链路(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
 		schema.UpdateKey{"op1", "target"}: "new_value",
@@ -135,7 +135,7 @@ func TestSingleDimUpdater_Update调用优化器链路(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_empty_trajectories
+// Python: test_update_empty_trajectories
 func TestSingleDimUpdater_Update空轨迹(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
@@ -156,7 +156,7 @@ func TestSingleDimUpdater_Update空轨迹(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_get_state_returns_empty_dict
+// Python: test_get_state_returns_empty_dict
 func TestSingleDimUpdater_GetState返回空(t *testing.T) {
 	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
@@ -167,7 +167,7 @@ func TestSingleDimUpdater_GetState返回空(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_load_state_is_noop
+// Python: test_load_state_is_noop
 func TestSingleDimUpdater_LoadState无操作(t *testing.T) {
 	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
@@ -176,7 +176,7 @@ func TestSingleDimUpdater_LoadState无操作(t *testing.T) {
 	u.LoadState(map[string]any{"key": "value"})
 }
 
-// 对齐 Python: test_update_preserves_trajectory_order
+// Python: test_update_preserves_trajectory_order
 func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
@@ -199,7 +199,7 @@ func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_returns_updates
+// Python: test_update_returns_updates
 func TestSingleDimUpdater_Update返回更新(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
 		schema.UpdateKey{"op1", "prompt"}: "new prompt",
@@ -220,7 +220,7 @@ func TestSingleDimUpdater_Update返回更新(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_process_uses_signal_first_flow
+// Python: test_process_uses_signal_first_flow
 func TestSingleDimUpdater_Process使用信号优先流程(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
 		schema.UpdateKey{"op1", "prompt"}: "new prompt",
@@ -269,7 +269,7 @@ func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
 	return c
 }
 
-// 对齐 Python: test_update_adapts_evaluated_cases_to_process
+// Python: test_update_adapts_evaluated_cases_to_process
 func TestSingleDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
 		schema.UpdateKey{"op1", "prompt"}: "new prompt",
@@ -303,7 +303,7 @@ func TestSingleDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_respects_score_threshold_from_config
+// Python: test_update_respects_score_threshold_from_config
 func TestSingleDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	expectedUpdates := map[schema.UpdateKey]any{
 		schema.UpdateKey{"op1", "prompt"}: "new prompt",
@@ -342,7 +342,7 @@ func TestSingleDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_process_is_accepted_by_protocol_mock
+// Python: test_process_is_accepted_by_protocol_mock
 // 验证 SingleDimUpdater 可被用作 Updater 接口的实现
 func TestSingleDimUpdater_实现Updater接口(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}

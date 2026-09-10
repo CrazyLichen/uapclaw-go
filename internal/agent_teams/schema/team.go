@@ -79,7 +79,7 @@ type TeamRuntimeContext struct {
 }
 
 // UnknownHumanAgentError 发送者不是已注册的 human-agent 成员时抛出。
-// 对齐 Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
+// Python: UnknownHumanAgentError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
 // 从 interaction 包提升到 schema 包，避免 tools → interaction 循环依赖。
 type UnknownHumanAgentError struct {
 	// Sender 尝试使用的发送者名

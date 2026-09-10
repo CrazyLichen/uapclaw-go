@@ -4,7 +4,7 @@ package mem_model
 
 // BaseMemoryUnit 记忆数据项基类。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (BaseMemoryUnit)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (BaseMemoryUnit)
 type BaseMemoryUnit struct {
 	// MemType 记忆类型
 	MemType MemoryType
@@ -14,7 +14,7 @@ type BaseMemoryUnit struct {
 
 // MemoryUnit 记忆数据项接口，所有记忆类型（FragmentMemoryUnit/VariableUnit/SummaryUnit）必须实现。
 //
-// 对齐 Python: BaseMemoryUnit（作为基类，Go 中用接口替代继承）
+// Python: BaseMemoryUnit（作为基类，Go 中用接口替代继承）
 type MemoryUnit interface {
 	// GetMemType 返回记忆类型
 	GetMemType() MemoryType
@@ -24,7 +24,7 @@ type MemoryUnit interface {
 
 // FragmentMemoryUnit 碎片记忆数据项，包含文本内容、关联消息 ID 和操作类型。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (FragmentMemoryUnit)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (FragmentMemoryUnit)
 type FragmentMemoryUnit struct {
 	// BaseMemoryUnit 嵌入基类
 	BaseMemoryUnit
@@ -40,7 +40,7 @@ type FragmentMemoryUnit struct {
 
 // VariableUnit 变量记忆数据项。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (VariableUnit)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (VariableUnit)
 type VariableUnit struct {
 	// BaseMemoryUnit 嵌入基类
 	BaseMemoryUnit
@@ -52,7 +52,7 @@ type VariableUnit struct {
 
 // SummaryUnit 摘要记忆数据项。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (SummaryUnit)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (SummaryUnit)
 type SummaryUnit struct {
 	// BaseMemoryUnit 嵌入基类
 	BaseMemoryUnit
@@ -68,7 +68,7 @@ type SummaryUnit struct {
 
 // MemoryType 记忆类型枚举。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (MemoryType)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (MemoryType)
 type MemoryType int
 
 const (
@@ -88,7 +88,7 @@ const (
 
 // OperationType 操作类型枚举。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (OperationType)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (OperationType)
 type OperationType int
 
 const (
@@ -101,7 +101,7 @@ const (
 )
 
 // SupportMemoryType 支持的记忆类型枚举（仅包含支持写入和读取的类型）。
-// 对齐 Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (SupportMemoryType)
+// Python: openjiuwen/core/memory/manage/mem_model/memory_unit.py (SupportMemoryType)
 type SupportMemoryType int
 
 const (
@@ -125,7 +125,7 @@ func (u *BaseMemoryUnit) GetMemID() string { return u.MemID }
 
 // AllMemoryTypeValues 返回所有记忆类型的字符串值列表。
 //
-// 对齐 Python: [item.value for item in MemoryType]
+// Python: [item.value for item in MemoryType]
 func AllMemoryTypeValues() []string {
 	return []string{
 		MemoryTypeUserProfile.String(),

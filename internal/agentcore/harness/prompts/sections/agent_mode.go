@@ -201,7 +201,7 @@ func BuildPlanModeSection(planFilePath string, planExists bool, lang string) sap
 
 // buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
 //
-// 对齐 Python: _build_enter_plan_mode_status() L200-223 + L309
+// Python: _build_enter_plan_mode_status() L200-223 + L309
 // 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -214,7 +214,7 @@ func buildEnterPlanModeStatus(planFilePath string, lang string) string {
 	}
 	// 中文
 	if planFilePath != "" {
-		// 对齐 Python L309: 中文分支不含 Plan 文件路径（路径由 _build_plan_file_info 单独返回）
+		// Python: L309: 中文分支不含 Plan 文件路径（路径由 _build_plan_file_info 单独返回）
 		return "enter_plan_mode 已调用完成。请继续工作流。"
 	}
 	return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
@@ -222,7 +222,7 @@ func buildEnterPlanModeStatus(planFilePath string, lang string) string {
 
 // buildPlanFileInfo 构建 plan 文件信息描述。
 //
-// 对齐 Python: _build_plan_file_info() L226-257
+// Python: _build_plan_file_info() L226-257
 // 三状态分支 + 提示词一比一复刻 Python（含 edit_file/write_file 工具名引用）
 func buildPlanFileInfo(planFilePath string, planExists bool, lang string) string {
 	if planFilePath == "" {

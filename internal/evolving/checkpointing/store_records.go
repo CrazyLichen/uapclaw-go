@@ -15,7 +15,7 @@ import (
 
 // StoreRecordsHelper 演进记录 CRUD 和持久化辅助。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/store_records.py StoreRecordsHelper
+// Python: openjiuwen/agent_evolving/checkpointing/store_records.py StoreRecordsHelper
 type StoreRecordsHelper struct {
 	// store 所属的 EvolutionStore 实例
 	store *EvolutionStore
@@ -28,7 +28,7 @@ type StoreRecordsHelper struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // langToExt 语言扩展名映射。
-// 对应 Python: _LANG_TO_EXT
+// Python: _LANG_TO_EXT
 var langToExt = map[string]string{
 	"python":     "py",
 	"javascript": "js",
@@ -40,7 +40,7 @@ var langToExt = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PersistScript 将脚本源代码写入独立文件，替换 content 为引用。
-// 对应 Python: StoreRecordsHelper.persist_script(skill_dir, record)
+// Python: StoreRecordsHelper.persist_script(skill_dir, record)
 func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string, record *EvolutionRecord) error {
 	scriptsDir := filepath.Join(skillDir, "evolution", "scripts")
 	_ = os.MkdirAll(scriptsDir, 0755)
@@ -87,9 +87,9 @@ func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string,
 }
 
 // LoadFullEvolutionLog 加载完整演进日志。
-// 对应 Python: StoreRecordsHelper.load_full_evolution_log(name)
+// Python: StoreRecordsHelper.load_full_evolution_log(name)
 //
-// 对齐 Python 异常语义：错误场景返回 (nil, error)，首次无记录返回 (EmptyEvolutionLog, nil)
+// Python: 异常语义：错误场景返回 (nil, error)，首次无记录返回 (EmptyEvolutionLog, nil)
 func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name string) (*EvolutionLog, error) {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -120,7 +120,7 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name stri
 }
 
 // SaveEvolutionLog 持久化演进日志。
-// 对应 Python: StoreRecordsHelper.save_evolution_log(name, evo_log, skill_dir)
+// Python: StoreRecordsHelper.save_evolution_log(name, evo_log, skill_dir)
 func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, evoLog *EvolutionLog, skillDir string) error {
 	targetDir := skillDir
 	if targetDir == "" {
@@ -140,7 +140,7 @@ func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, 
 }
 
 // UpdateRecordScores 更新记录分数。
-// 对应 Python: StoreRecordsHelper.update_record_scores(name, updates)
+// Python: StoreRecordsHelper.update_record_scores(name, updates)
 func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string, updates map[string]map[string]any) (int, error) {
 	if len(updates) == 0 {
 		return 0, nil
@@ -179,7 +179,7 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 }
 
 // GetRecordsByScore 按分数获取记录。
-// 对应 Python: StoreRecordsHelper.get_records_by_score(name, min_score)
+// Python: StoreRecordsHelper.get_records_by_score(name, min_score)
 func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
 	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
 	if err != nil {
@@ -196,13 +196,13 @@ func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string,
 		}
 		records = filtered
 	}
-	// 对齐 Python: sorted(records, key=lambda r: r.score, reverse=True)
+	// Python: sorted(records, key=lambda r: r.score, reverse=True)
 	sortRecordsByScore(records)
 	return records
 }
 
 // DeleteRecords 删除记录。
-// 对应 Python: StoreRecordsHelper.delete_records(name, record_ids)
+// Python: StoreRecordsHelper.delete_records(name, record_ids)
 func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, recordIDs []string) (int, error) {
 	if len(recordIDs) == 0 {
 		return 0, nil
@@ -240,7 +240,7 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 }
 
 // MarkRecordsApplied 标记记录已应用。
-// 对应 Python: StoreRecordsHelper.mark_records_applied(name, record_ids)
+// Python: StoreRecordsHelper.mark_records_applied(name, record_ids)
 func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string, recordIDs []string) (int, error) {
 	if len(recordIDs) == 0 {
 		return 0, nil
@@ -275,7 +275,7 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 }
 
 // MergeRecords 合并记录。
-// 对应 Python: StoreRecordsHelper.merge_records(name, primary_id, remove_ids, new_content, new_score)
+// Python: StoreRecordsHelper.merge_records(name, primary_id, remove_ids, new_content, new_score)
 func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, primaryID string, removeIDs []string, newContent string, newScore *float64) (*EvolutionRecord, error) {
 	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
 	if err != nil {
@@ -285,7 +285,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	var recordsToRemove []*EvolutionRecord
 	var allScores []float64
 
-	// 对齐 Python: 查找 primary 和 remove 记录
+	// Python: 查找 primary 和 remove 记录
 	for i := range evoLog.Entries {
 		if evoLog.Entries[i].ID == primaryID {
 			primaryRecord = &evoLog.Entries[i]
@@ -322,7 +322,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	primaryRecord.Score = finalScore
 	primaryRecord.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 
-	// 对齐 Python: 从 entries 中移除 remove 记录
+	// Python: 从 entries 中移除 remove 记录
 	filtered := make([]EvolutionRecord, 0)
 	for _, entry := range evoLog.Entries {
 		if !removeSet[entry.ID] {
@@ -346,7 +346,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 }
 
 // UpdateRecordContent 更新记录内容。
-// 对应 Python: StoreRecordsHelper.update_record_content(name, record_id, new_content, new_score)
+// Python: StoreRecordsHelper.update_record_content(name, record_id, new_content, new_score)
 func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name string, recordID string, newContent string, newScore *float64) (*EvolutionRecord, error) {
 	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
 	if err != nil {

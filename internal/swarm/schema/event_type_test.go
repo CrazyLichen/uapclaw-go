@@ -153,7 +153,7 @@ func TestEventTypeJSON序列化往返(t *testing.T) {
 
 // TestEventType常量值与Python对齐 验证全部 26 个常量字符串值与 Python EventType 完全对齐
 func TestEventType常量值与Python对齐(t *testing.T) {
-	// 对应 Python: jiuwenswarm/common/schema/message.py (EventType)
+	// Python: jiuwenswarm/common/schema/message.py (EventType)
 	tests := []struct {
 		got  EventType
 		want string

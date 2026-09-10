@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // embedModelKeyMap embed 配置中的模型名称键映射。
-// 对齐 Python: _EMBED_MODEL_KEY_MAP
+// Python: _EMBED_MODEL_KEY_MAP
 var embedModelKeyMap = map[string]string{
 	"audio":     "audio_model",
 	"vision":    "vision_model",
@@ -26,7 +26,7 @@ var embedModelKeyMap = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ApplyVideoModelConfigFromYAML 从 config.yaml 读取视频模型配置并设置环境变量。
-// 对齐 Python: apply_video_model_config_from_yaml(config_base)
+// Python: apply_video_model_config_from_yaml(config_base)
 //
 // 配置优先级:
 //  1. models.video.model_config
@@ -79,7 +79,7 @@ func ApplyVideoModelConfigFromYAML(configBase map[string]any) {
 }
 
 // ApplyVisionModelConfigFromYAML 从 config.yaml 读取视觉模型配置并设置环境变量。
-// 对齐 Python: apply_vision_model_config_from_yaml(config_base)
+// Python: apply_vision_model_config_from_yaml(config_base)
 //
 // 配置优先级:
 //  1. models.vision.model_config
@@ -128,7 +128,7 @@ func ApplyVisionModelConfigFromYAML(configBase map[string]any) {
 }
 
 // ApplyAudioModelConfigFromYAML 从 config.yaml 读取音频模型配置并设置环境变量。
-// 对齐 Python: apply_audio_model_config_from_yaml(config_base)
+// Python: apply_audio_model_config_from_yaml(config_base)
 //
 // 配置优先级:
 //  1. models.audio.model_config
@@ -177,7 +177,7 @@ func ApplyAudioModelConfigFromYAML(configBase map[string]any) {
 }
 
 // DedicatedMultimodalModelConfigured 检查 models.{modelType} 是否有独立 api_key。
-// 对齐 Python: dedicated_multimodal_model_configured(config_base, model_type)
+// Python: dedicated_multimodal_model_configured(config_base, model_type)
 //
 // 仅当 models.{type}.model_config 中显式配置了 api_key 时才返回 true，
 // 用于注册门控：无独立 key 时不挂载多模态工具。
@@ -193,7 +193,7 @@ func DedicatedMultimodalModelConfigured(configBase map[string]any, modelType str
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getModelConfig 从 config.yaml 解析 models.{modelType}.model_config。
-// 对齐 Python: _get_model_config(config_base, model_type)
+// Python: _get_model_config(config_base, model_type)
 func getModelConfig(configBase map[string]any, modelType string) map[string]any {
 	if configBase == nil {
 		return nil
@@ -236,7 +236,7 @@ func getModelConfig(configBase map[string]any, modelType string) map[string]any 
 }
 
 // getEmbedConfig 从 config.yaml 解析 embed 配置。
-// 对齐 Python: _get_embed_config(config_base)
+// Python: _get_embed_config(config_base)
 func getEmbedConfig(configBase map[string]any) map[string]any {
 	if configBase == nil {
 		return nil
@@ -246,7 +246,7 @@ func getEmbedConfig(configBase map[string]any) map[string]any {
 }
 
 // getEmbedModelName 从 embed 配置获取模型名称。
-// 对齐 Python: _get_embed_model_name(embed_cfg, model_type)
+// Python: _get_embed_model_name(embed_cfg, model_type)
 func getEmbedModelName(embedCfg map[string]any, modelType string) string {
 	key, ok := embedModelKeyMap[modelType]
 	if !ok || embedCfg == nil {
@@ -256,7 +256,7 @@ func getEmbedModelName(embedCfg map[string]any, modelType string) string {
 }
 
 // parseBool 解析布尔值。
-// 对齐 Python: _parse_bool(val, default)
+// Python: _parse_bool(val, default)
 func parseBool(val any, defaultVal bool) bool {
 	if val == nil {
 		return defaultVal
@@ -269,7 +269,7 @@ func parseBool(val any, defaultVal bool) bool {
 }
 
 // strVal 提取字符串值。
-// 对齐 Python: str(val).strip()
+// Python: str(val).strip()
 func strVal(v any) string {
 	if v == nil {
 		return ""
@@ -281,7 +281,7 @@ func strVal(v any) string {
 }
 
 // strOr 返回第一个非空字符串值。
-// 对齐 Python: val1 or val2 逻辑
+// Python: val1 or val2 逻辑
 func strOr(v1, v2 any) string {
 	s1 := strVal(v1)
 	if s1 != "" {

@@ -21,13 +21,13 @@ type PermissionContext struct {
 	// WebUserID 预留：第二期 web 端本人审批
 	WebUserID string `json:"web_user_id"`
 	// EnableMemory 是否启用记忆（默认 true）
-	// 对齐 Python: PermissionContext.enable_memory
+	// Python: PermissionContext.enable_memory
 	EnableMemory bool `json:"enable_memory"`
 	// AvatarPrincipalName 数字分身主体名称
-	// 对齐 Python: PermissionContext.avatar_principal_name
+	// Python: PermissionContext.avatar_principal_name
 	AvatarPrincipalName string `json:"avatar_principal_name"`
 	// AvatarMode 是否为群聊消息
-	// 对齐 Python: PermissionContext.avatar_mode
+	// Python: PermissionContext.avatar_mode
 	AvatarMode bool `json:"avatar_mode"`
 }
 
@@ -61,7 +61,7 @@ func NewPermissionContext(opts ...PermissionContextOption) *PermissionContext {
 }
 
 // NewPermissionContextFromDict 从字典创建权限上下文实例。
-// 对齐 Python: setup_permission_context(request) 中从 metadata 构建 PermissionContext。
+// Python: setup_permission_context(request) 中从 metadata 构建 PermissionContext。
 func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 	pc := &PermissionContext{EnableMemory: true}
 	if v, ok := data["principal_user_id"]; ok {
@@ -89,7 +89,7 @@ func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 			pc.WebUserID = s
 		}
 	}
-	// 对齐 Python: meta.get("enable_memory", True)
+	// Python: meta.get("enable_memory", True)
 	if v, ok := data["enable_memory"]; ok {
 		if b, ok := v.(bool); ok {
 			pc.EnableMemory = b
@@ -100,7 +100,7 @@ func NewPermissionContextFromDict(data map[string]any) *PermissionContext {
 			pc.AvatarPrincipalName = s
 		}
 	}
-	// 对齐 Python: avatar_mode = bool(meta.get("avatar_mode", False))
+	// Python: avatar_mode = bool(meta.get("avatar_mode", False))
 	if v, ok := data["avatar_mode"]; ok {
 		if b, ok := v.(bool); ok {
 			pc.AvatarMode = b
@@ -135,25 +135,25 @@ func WithPermissionWebUserID(id string) PermissionContextOption {
 }
 
 // WithPermissionEnableMemory 设置是否启用记忆的选项。
-// 对齐 Python: PermissionContext.enable_memory
+// Python: PermissionContext.enable_memory
 func WithPermissionEnableMemory(v bool) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.EnableMemory = v }
 }
 
 // WithPermissionAvatarPrincipalName 设置数字分身主体名称的选项。
-// 对齐 Python: PermissionContext.avatar_principal_name
+// Python: PermissionContext.avatar_principal_name
 func WithPermissionAvatarPrincipalName(name string) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.AvatarPrincipalName = name }
 }
 
 // WithPermissionAvatarMode 设置群聊消息标志的选项。
-// 对齐 Python: PermissionContext.avatar_mode
+// Python: PermissionContext.avatar_mode
 func WithPermissionAvatarMode(v bool) PermissionContextOption {
 	return func(pc *PermissionContext) { pc.AvatarMode = v }
 }
 
 // Scene 返回权限场景类型（web/group_digital_avatar/normal_im）。
-// 对齐 Python owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
+// Python: owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
 func (p *PermissionContext) Scene() string {
 	if p.GroupDigitalAvatar {
 		return "group_digital_avatar"
@@ -165,7 +165,7 @@ func (p *PermissionContext) Scene() string {
 }
 
 // OwnerScopeKey 返回权限所有者范围键（channelID + principalUserID）。
-// 对齐 Python owner_scopes.PermissionContext.owner_scope_key：对两个字段 TrimSpace
+// Python: owner_scopes.PermissionContext.owner_scope_key：对两个字段 TrimSpace
 func (p *PermissionContext) OwnerScopeKey() [2]string {
 	return [2]string{strings.TrimSpace(p.ChannelID), strings.TrimSpace(p.PrincipalUserID)}
 }
@@ -193,14 +193,14 @@ func (p *PermissionContext) Validate() error {
 }
 
 // WithToolPermissionChannelID 将 channelID 注入 context。
-// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id)
+// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id)
 // Go 使用 context.WithValue 不可变值模式，无需 reset/cleanup。
 func WithToolPermissionChannelID(ctx context.Context, channelID string) context.Context {
 	return context.WithValue(ctx, toolPermChannelIDKey{}, channelID)
 }
 
 // ToolPermissionChannelIDFromCtx 从 context 中获取 channelID。
-// 对齐 Python: TOOL_PERMISSION_CHANNEL_ID.get()
+// Python: TOOL_PERMISSION_CHANNEL_ID.get()
 func ToolPermissionChannelIDFromCtx(ctx context.Context) string {
 	if v, ok := ctx.Value(toolPermChannelIDKey{}).(string); ok {
 		return v
@@ -209,14 +209,14 @@ func ToolPermissionChannelIDFromCtx(ctx context.Context) string {
 }
 
 // WithPermissionContextValue 将 PermissionContext 注入 context。
-// 对齐 Python: TOOL_PERMISSION_CONTEXT.set(permission_context)
+// Python: TOOL_PERMISSION_CONTEXT.set(permission_context)
 // Go 使用 context.WithValue 不可变值模式，无需 reset/cleanup。
 func WithPermissionContextValue(ctx context.Context, pc *PermissionContext) context.Context {
 	return context.WithValue(ctx, toolPermContextKey{}, pc)
 }
 
 // PermissionContextFromCtx 从 context 中获取 PermissionContext。
-// 对齐 Python: TOOL_PERMISSION_CONTEXT.get()
+// Python: TOOL_PERMISSION_CONTEXT.get()
 func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
 	if v, ok := ctx.Value(toolPermContextKey{}).(*PermissionContext); ok {
 		return v
@@ -226,7 +226,7 @@ func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
 
 // NewPermissionContextFromRequest 从 AgentRequest 的 metadata 构造 PermissionContext。
 //
-// 对齐 Python: setup_permission_context(request) (owner_scopes.py L61-88)
+// Python: setup_permission_context(request) (owner_scopes.py L61-88)
 //
 // 返回 nil 表示无需设置权限上下文（非数字分身且非禁用记忆场景）。
 // Go 端不需要 Python 的 ContextVar token/reset，使用 context.WithValue 不可变模式。
@@ -242,7 +242,7 @@ func NewPermissionContextFromRequest(channelID string, metadata map[string]any) 
 
 	if !avatarMode {
 		// 非 avatar_mode：仅当 enable_memory=false 时才设置上下文（用于禁用记忆）
-		// 对齐 Python: if meta.get("enable_memory") is False
+		// Python: if meta.get("enable_memory") is False
 		if v, ok := metadata["enable_memory"].(bool); ok && !v {
 			return NewPermissionContext(
 				WithPermissionChannelID(channelID),
@@ -255,7 +255,7 @@ func NewPermissionContextFromRequest(channelID string, metadata map[string]any) 
 
 	// avatar_mode=True → 从 metadata 构建完整 PermissionContext
 	pc := NewPermissionContextFromDict(metadata)
-	// 对齐 Python: channel_id=getattr(request, "channel_id", "") — Python 从 request 取而非 metadata
+	// Python: channel_id=getattr(request, "channel_id", "") — Python 从 request 取而非 metadata
 	if strings.TrimSpace(pc.ChannelID) == "" && channelID != "" {
 		pc.ChannelID = channelID
 	}

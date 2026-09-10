@@ -44,7 +44,7 @@ type gaussCollMeta struct {
 // 客户端惰性创建，初始化时不需要数据库可用。
 // 元数据仅存内存缓存，进程重启后从 information_schema 回查。
 //
-// 对应 Python: vector/gauss_vector_store.py (GaussVectorStore)
+// Python: vector/gauss_vector_store.py (GaussVectorStore)
 type GaussVectorStore struct {
 	// pool 数据库连接池
 	pool dbClient
@@ -107,7 +107,7 @@ func (s *GaussVectorStore) Close() {
 // CreateCollection 创建向量集合。
 // 从 schema 构建建表 SQL，在向量字段上创建 DiskANN 索引。
 //
-// 对应 Python: GaussVectorStore.create_collection()
+// Python: GaussVectorStore.create_collection()
 func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
 
@@ -200,7 +200,7 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 
 // DeleteCollection 删除向量集合。
 //
-// 对应 Python: GaussVectorStore.delete_collection()
+// Python: GaussVectorStore.delete_collection()
 func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	pool, err := s.getClient(ctx)
 	if err != nil {
@@ -232,7 +232,7 @@ func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName 
 
 // CollectionExists 检查集合是否存在。
 //
-// 对应 Python: GaussVectorStore.collection_exists()
+// Python: GaussVectorStore.collection_exists()
 func (s *GaussVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	pool, err := s.getClient(ctx)
 	if err != nil {
@@ -252,7 +252,7 @@ func (s *GaussVectorStore) CollectionExists(ctx context.Context, collectionName 
 
 // GetSchema 获取集合的 Schema。
 //
-// 对应 Python: GaussVectorStore.get_schema()
+// Python: GaussVectorStore.get_schema()
 func (s *GaussVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	pool, err := s.getClient(ctx)
 	if err != nil {
@@ -329,7 +329,7 @@ func (s *GaussVectorStore) GetSchema(ctx context.Context, collectionName string,
 // AddDocs 添加文档到集合。
 // 按 BatchSize 分批参数化插入。
 //
-// 对应 Python: GaussVectorStore.add_docs()
+// Python: GaussVectorStore.add_docs()
 func (s *GaussVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
 		return nil
@@ -378,7 +378,7 @@ func (s *GaussVectorStore) AddDocs(ctx context.Context, collectionName string, d
 // Search 向量相似度搜索。
 // 使用 GaussDB 的 <-> 距离操作符 + ORDER BY + LIMIT。
 //
-// 对应 Python: GaussVectorStore.search()
+// Python: GaussVectorStore.search()
 func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	if topK <= 0 {
 		topK = 5
@@ -483,7 +483,7 @@ func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, qu
 // DeleteDocsByIDs 按 ID 删除文档。
 // 使用 = ANY($1) 参数化删除。
 //
-// 对应 Python: GaussVectorStore.delete_docs_by_ids()
+// Python: GaussVectorStore.delete_docs_by_ids()
 func (s *GaussVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
 		return nil
@@ -516,7 +516,7 @@ func (s *GaussVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName s
 
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
 //
-// 对应 Python: GaussVectorStore.delete_docs_by_filters()
+// Python: GaussVectorStore.delete_docs_by_filters()
 func (s *GaussVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
 		return nil
@@ -549,7 +549,7 @@ func (s *GaussVectorStore) DeleteDocsByFilters(ctx context.Context, collectionNa
 
 // ListCollectionNames 列出所有集合名称。
 //
-// 对应 Python: GaussVectorStore.list_collection_names()
+// Python: GaussVectorStore.list_collection_names()
 func (s *GaussVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	pool, err := s.getClient(ctx)
 	if err != nil {
@@ -583,7 +583,7 @@ func (s *GaussVectorStore) ListCollectionNames(ctx context.Context) ([]string, e
 // UpdateSchema 执行 Schema 迁移操作。
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
-// 对应 Python: GaussVectorStore.update_schema()
+// Python: GaussVectorStore.update_schema()
 func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
@@ -592,7 +592,7 @@ func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName stri
 
 // UpdateCollectionMetadata 更新集合元数据。
 //
-// 对应 Python: GaussVectorStore.update_collection_metadata()
+// Python: GaussVectorStore.update_collection_metadata()
 func (s *GaussVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -622,7 +622,7 @@ func (s *GaussVectorStore) UpdateCollectionMetadata(ctx context.Context, collect
 // GetCollectionMetadata 获取集合元数据。
 // 优先缓存，未命中则从 information_schema 回查。
 //
-// 对应 Python: GaussVectorStore.get_collection_metadata()
+// Python: GaussVectorStore.get_collection_metadata()
 func (s *GaussVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	s.mu.RLock()
 	meta, ok := s.collectionMetadata[collectionName]

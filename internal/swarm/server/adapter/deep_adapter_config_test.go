@@ -209,7 +209,7 @@ func TestSkillIncludeToolsForProfile_非acpTool(t *testing.T) {
 }
 
 // TestIsSubagentExplicitlyEnabled_配置中存在 测试配置中子代理开关。
-// 对齐 Python: _is_subagent_enabled() — 只有 enabled:true 才启用
+// Python: _is_subagent_enabled() — 只有 enabled:true 才启用
 func TestIsSubagentExplicitlyEnabled_配置中存在(t *testing.T) {
 	d := NewDeepAdapter()
 	cfg := map[string]any{
@@ -252,7 +252,7 @@ func TestIsSubagentExplicitlyEnabled_配置中不存在(t *testing.T) {
 }
 
 // TestResolveRuntimeLanguage_有配置 测试 resolveRuntimeLanguage 有配置时返回标准化值。
-// 对齐 Python: _resolve_runtime_language() 调用 resolve_language() 标准化
+// Python: _resolve_runtime_language() 调用 resolve_language() 标准化
 func TestResolveRuntimeLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
 	// preferred_language=en → ResolveLanguage("en") → "en"
@@ -263,7 +263,7 @@ func TestResolveRuntimeLanguage_有配置(t *testing.T) {
 }
 
 // TestResolveRuntimeLanguage_无配置 测试 resolveRuntimeLanguage 无配置时返回默认值。
-// 对齐 Python: resolve_language("zh") → "zh" 不在 SUPPORTED_LANGUAGES → 回退 "cn"
+// Python: resolve_language("zh") → "zh" 不在 SUPPORTED_LANGUAGES → 回退 "cn"
 func TestResolveRuntimeLanguage_无配置(t *testing.T) {
 	d := NewDeepAdapter()
 	d.configCache = map[string]any{}
@@ -282,7 +282,7 @@ func TestResolveRuntimeLanguage_非字符串(t *testing.T) {
 }
 
 // TestResolvePromptLanguage_有配置 测试 resolvePromptLanguage 有配置时返回原始值。
-// 对齐 Python: _resolve_prompt_language() 读 preferred_language
+// Python: _resolve_prompt_language() 读 preferred_language
 func TestResolvePromptLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
 	d.configCache = map[string]any{"preferred_language": "en"}

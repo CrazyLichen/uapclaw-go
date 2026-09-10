@@ -16,7 +16,7 @@ import (
 // 实现此接口可自定义不同类型表单字段的处理方式（如文件上传、二进制数据等）。
 // 默认实现为 DefaultFormHandler，将值转为字符串写入 multipart Writer。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/form_handler/form_handler_manager.py (FormHandler)
+// Python: openjiuwen/core/foundation/tool/form_handler/form_handler_manager.py (FormHandler)
 type FormHandler interface {
 	// Handle 处理表单数据，将 formName=value 写入 multipart Writer。
 	//
@@ -33,7 +33,7 @@ type FormHandler interface {
 // 跳过 nil 值，将其余值通过 fmt.Sprintf 转为字符串后
 // 调用 writer.WriteField 写入。
 //
-// 对应 Python: DefaultFormHandler
+// Python: DefaultFormHandler
 type DefaultFormHandler struct{}
 
 // FormHandlerManager 表单处理器注册表，单例模式。
@@ -41,7 +41,7 @@ type DefaultFormHandler struct{}
 // 维护 handlerType → FormHandler 的映射，支持注册自定义处理器和默认处理器。
 // 获取处理器时，若指定类型未注册则返回默认处理器。
 //
-// 对应 Python: FormHandlerManager（Singleton 元类）
+// Python: FormHandlerManager（Singleton 元类）
 type FormHandlerManager struct {
 	mu             sync.RWMutex
 	handlerMap     map[string]FormHandler
@@ -83,7 +83,7 @@ func GetFormHandlerManager() *FormHandlerManager {
 // handlerType 为处理器类型标识（对应 schema 中的 form_handler_type 字段），
 // handler 为处理器实例。若 handlerType 无效或 handler 为 nil，记录错误日志并忽略。
 //
-// 对应 Python: FormHandlerManager.register()
+// Python: FormHandlerManager.register()
 func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	if handlerType == "" {
 		logger.Error(logComponent).
@@ -110,7 +110,7 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 //
 // 若 handler 为 nil，记录错误日志并忽略。
 //
-// 对应 Python: FormHandlerManager.register_default_handler()
+// Python: FormHandlerManager.register_default_handler()
 func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 	if handler == nil {
 		logger.Error(logComponent).
@@ -129,7 +129,7 @@ func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 //
 // 若 handlerType 未注册，返回默认处理器。
 //
-// 对应 Python: FormHandlerManager.get_handler()
+// Python: FormHandlerManager.get_handler()
 func (m *FormHandlerManager) GetHandler(handlerType string) FormHandler {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -143,7 +143,7 @@ func (m *FormHandlerManager) GetHandler(handlerType string) FormHandler {
 //
 // 跳过 nil 值，将其余值通过 fmt.Sprintf 转为字符串后写入。
 //
-// 对应 Python: DefaultFormHandler.handle()
+// Python: DefaultFormHandler.handle()
 func (DefaultFormHandler) Handle(_ context.Context, writer *multipart.Writer, formName string, value any) error {
 	if value == nil {
 		return nil

@@ -25,7 +25,7 @@ const logComponent = logger.ComponentAgentCore
 // 支持 clientType: sse / stdio / streamable-http / streamable_http / openapi / playwright
 // 未知类型返回 StatusToolMcpClientTypeUnknown 错误。
 //
-// 对应 Python: 各客户端的构造逻辑
+// Python: 各客户端的构造逻辑
 func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 	if config == nil {
 		return nil, exception.BuildError(

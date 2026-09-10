@@ -3,7 +3,7 @@ package worktree
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorktreeConfig Worktree 隔离配置。
-// 对齐 Python: WorktreeConfig
+// Python: WorktreeConfig
 type WorktreeConfig struct {
 	// Enabled 是否启用 Worktree 隔离
 	Enabled bool `json:"enabled"`
@@ -24,7 +24,7 @@ type WorktreeConfig struct {
 }
 
 // WorktreeSession Worktree 运行时状态。
-// 对齐 Python: WorktreeSession
+// Python: WorktreeSession
 type WorktreeSession struct {
 	// OriginalCWD 原始工作目录
 	OriginalCWD string `json:"original_cwd"`
@@ -55,7 +55,7 @@ type WorktreeSession struct {
 }
 
 // WorktreeCreateResult Worktree 创建结果。
-// 对齐 Python: WorktreeCreateResult
+// Python: WorktreeCreateResult
 type WorktreeCreateResult struct {
 	// WorktreePath Worktree 路径
 	WorktreePath string `json:"worktree_path"`
@@ -72,7 +72,7 @@ type WorktreeCreateResult struct {
 }
 
 // WorktreeChangeSummary Worktree 变更摘要。
-// 对齐 Python: WorktreeChangeSummary
+// Python: WorktreeChangeSummary
 type WorktreeChangeSummary struct {
 	// ChangedFiles 变更文件数
 	ChangedFiles int `json:"changed_files"`
@@ -83,7 +83,7 @@ type WorktreeChangeSummary struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // WorktreeLifecyclePolicy Worktree 生命周期策略。
-// 对齐 Python: WorktreeLifecyclePolicy
+// Python: WorktreeLifecyclePolicy
 type WorktreeLifecyclePolicy string
 
 const (
@@ -102,7 +102,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorktreeConfig 创建默认 WorktreeConfig。
-// 对齐 Python: WorktreeConfig()
+// Python: WorktreeConfig()
 func NewWorktreeConfig() WorktreeConfig {
 	return WorktreeConfig{
 		CleanupAfterDays:      30,

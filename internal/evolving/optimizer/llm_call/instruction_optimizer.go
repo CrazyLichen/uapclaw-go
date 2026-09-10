@@ -27,7 +27,7 @@ import (
 // （分析为什么 prompt 失败）→ 预计算优化后的 system_prompt 和 user_prompt。
 // Step 阶段：返回预计算的优化后 prompt，由 Trainer 统一 apply 到 LLMCallOperator。
 //
-// 对应 Python: openjiuwen/agent_evolving/optimizer/llm_call/instruction_optimizer.py InstructionOptimizer
+// Python: openjiuwen/agent_evolving/optimizer/llm_call/instruction_optimizer.py InstructionOptimizer
 type InstructionOptimizer struct {
 	LLMCallOptimizerBase
 	// model LLM 调用实例
@@ -49,7 +49,7 @@ const (
 
 // NewInstructionOptimizer 创建 InstructionOptimizer 实例。
 //
-// 对应 Python: InstructionOptimizer(model_config, model_client_config)
+// Python: InstructionOptimizer(model_config, model_client_config)
 func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 	return &InstructionOptimizer{
 		model: model,
@@ -58,11 +58,11 @@ func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量。
 //
-// 对齐 Python: BaseOptimizer.bind(operators, targets, **config)
+// Python: BaseOptimizer.bind(operators, targets, **config)
 //
 //	self._targets = list(targets or self.default_targets())
 func (o *InstructionOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	// 对齐 Python: targets or self.default_targets()
+	// Python: targets or self.default_targets()
 	if len(targets) == 0 {
 		targets = o.DefaultTargets()
 	}
@@ -91,7 +91,7 @@ func (o *InstructionOptimizer) Parameters() map[string]*optimizer.TextualParamet
 
 // SelectSignals 仅保留失败驱动信号用于 prompt 优化。
 //
-// 对齐 Python: InstructionOptimizer._select_signals(signals)
+// Python: InstructionOptimizer._select_signals(signals)
 //
 // 过滤规则：
 //   - 信号类型为 execution_failure / low_score / user_correction / collaboration_failure
@@ -124,7 +124,7 @@ func (o *InstructionOptimizer) SelectSignals(signals []*signal.EvolutionSignal) 
 
 // Backward 反向传播：从信号计算梯度并预计算优化后 prompt。
 //
-// 对齐 Python: BaseOptimizer.backward(signals)
+// Python: BaseOptimizer.backward(signals)
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
@@ -133,7 +133,7 @@ func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.E
 
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
 //
-// 对齐 Python: BaseOptimizer.step()
+// Python: BaseOptimizer.step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
@@ -144,7 +144,7 @@ func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
 
 // backward 反向传播主逻辑。
 //
-// 对齐 Python: InstructionOptimizer._backward(signals)
+// Python: InstructionOptimizer._backward(signals)
 //
 // 逻辑：
 //  1. 遍历每个 parameter，清空上一轮优化缓存
@@ -165,18 +165,18 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 			continue
 		}
 
-		// 对齐 Python: param.set_gradient("system_prompt_optimized", None)
+		// Python: param.set_gradient("system_prompt_optimized", None)
 		//             Python: param.set_gradient("user_prompt_optimized", None)
 		// nil 等同于 Python 的 None 语义
 		param.SetGradient("system_prompt_optimized", nil)
 		param.SetGradient("user_prompt_optimized", nil)
 
-		// 对齐 Python: if not self._selected_signals: continue
+		// Python: if not self._selected_signals: continue
 		if len(selectedSignals) == 0 {
 			continue
 		}
 
-		// 对齐 Python: textual_gradient = await self._generate_textual_gradient(op)
+		// Python: textual_gradient = await self._generate_textual_gradient(op)
 		gradient, err := o.generateTextualGradient(ctx, op)
 		if err != nil {
 			logger.Error(logComponent).
@@ -187,27 +187,27 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 			continue
 		}
 
-		// 对齐 Python:
+		// Python:
 		//   Python: if not self._is_target_frozen(op, "system_prompt"):
 		//       Python: param.set_gradient("system_prompt", textual_gradient)
 		if !o.isTargetFrozen(op, "system_prompt") {
 			param.SetGradient("system_prompt", gradient)
 		}
-		// 对齐 Python:
+		// Python:
 		//   Python: if not self._is_target_frozen(op, "user_prompt"):
 		//       Python: param.set_gradient("user_prompt", textual_gradient)
 		if !o.isTargetFrozen(op, "user_prompt") {
 			param.SetGradient("user_prompt", gradient)
 		}
 
-		// 对齐 Python: 预计算优化后 prompt
+		// Python: 预计算优化后 prompt
 		//   Python: has_sys = "system_prompt" in self._targets and not self._is_target_frozen(op, "system_prompt")
 		//   Python: has_usr = "user_prompt" in self._targets and not self._is_target_frozen(op, "user_prompt")
 		hasSys := containsTarget(targets, "system_prompt") && !o.isTargetFrozen(op, "system_prompt")
 		hasUsr := containsTarget(targets, "user_prompt") && !o.isTargetFrozen(op, "user_prompt")
 
 		if hasSys && hasUsr {
-			// 对齐 Python: sys_val, usr_val = await self._optimize_both(op, param)
+			// Python: sys_val, usr_val = await self._optimize_both(op, param)
 			sysVal, usrVal, err := o.optimizeBoth(ctx, op, param)
 			if err != nil {
 				logger.Error(logComponent).
@@ -224,7 +224,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 				param.SetGradient("user_prompt_optimized", usrVal)
 			}
 		} else if hasSys {
-			// 对齐 Python: val = await self._optimize_single(op, param, "system_prompt")
+			// Python: val = await self._optimize_single(op, param, "system_prompt")
 			val, err := o.optimizeSingle(ctx, op, param, "system_prompt")
 			if err != nil {
 				logger.Error(logComponent).
@@ -238,7 +238,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 				param.SetGradient("system_prompt_optimized", val)
 			}
 		} else if hasUsr {
-			// 对齐 Python: val = await self._optimize_single(op, param, "user_prompt")
+			// Python: val = await self._optimize_single(op, param, "user_prompt")
 			val, err := o.optimizeSingle(ctx, op, param, "user_prompt")
 			if err != nil {
 				logger.Error(logComponent).
@@ -258,7 +258,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 
 // step 返回预计算的优化后 prompt 映射。
 //
-// 对齐 Python: InstructionOptimizer._step()
+// Python: InstructionOptimizer._step()
 //
 //	Python: updates = {}
 //	Python: for op_id, param in self._parameters.items():
@@ -289,7 +289,7 @@ func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 
 // generateTextualGradient 使用 LLM 分析为什么当前 prompt 失败。
 //
-// 对齐 Python: InstructionOptimizer._generate_textual_gradient(op)
+// Python: InstructionOptimizer._generate_textual_gradient(op)
 //
 //	Python: system_tpl = self._get_prompt_template(op, "system_prompt")
 //	Python: user_tpl = self._get_prompt_template(op, "user_prompt")
@@ -321,7 +321,7 @@ func (o *InstructionOptimizer) generateTextualGradient(ctx context.Context, op o
 
 // invokeLLM 调用 LLM 并返回字符串内容。
 //
-// 对齐 Python: InstructionOptimizer._invoke_llm(messages)
+// Python: InstructionOptimizer._invoke_llm(messages)
 //
 //	Python: raw = (await self._model.invoke(messages)).content
 //	Python: return raw if isinstance(raw, str) else str(raw)
@@ -336,7 +336,7 @@ func (o *InstructionOptimizer) invokeLLM(ctx context.Context, messages []llmsche
 
 // optimizeBoth 联合优化 system 和 user prompt。
 //
-// 对齐 Python: InstructionOptimizer._optimize_both(op, param)
+// Python: InstructionOptimizer._optimize_both(op, param)
 //
 //	Python: system_tpl = self._get_prompt_template(op, "system_prompt")
 //	Python: user_tpl = self._get_prompt_template(op, "user_prompt")
@@ -352,7 +352,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 	sysTpl := o.getPromptTemplate(op, "system_prompt")
 	usrTpl := o.getPromptTemplate(op, "user_prompt")
 
-	// 对齐 Python: gradient = param.get_gradient("system_prompt") or ""
+	// Python: gradient = param.get_gradient("system_prompt") or ""
 	gradientAny := param.GetGradient("system_prompt")
 	gradient, _ := gradientAny.(string)
 
@@ -378,13 +378,13 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 		return "", "", err
 	}
 
-	// 对齐 Python:
+	// Python:
 	//   Python: sys_prompt = self._extract_tag(raw_response, "SYSTEM_PROMPT_OPTIMIZED")
 	//   Python: usr_prompt = self._extract_tag(raw_response, "USER_PROMPT_OPTIMIZED")
 	sysPrompt := extractTag(rawResponse, "SYSTEM_PROMPT_OPTIMIZED")
 	usrPrompt := extractTag(rawResponse, "USER_PROMPT_OPTIMIZED")
 
-	// 对齐 Python:
+	// Python:
 	//   Python: sys_prompt = await self._restore_placeholders(
 	//       Python: TuneUtils.get_content_string_from_template(system_tpl),
 	//       Python: sys_prompt or "",
@@ -414,7 +414,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 
 // optimizeSingle 单独优化一个 prompt。
 //
-// 对齐 Python: InstructionOptimizer._optimize_single(op, param, prompt_type)
+// Python: InstructionOptimizer._optimize_single(op, param, prompt_type)
 //
 //	Python: target_tpl = self._get_prompt_template(op, prompt_type)
 //	Python: gradient = param.get_gradient(prompt_type) or ""
@@ -427,7 +427,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.Operator, param *optimizer.TextualParameter, promptType string) (string, error) {
 	targetTpl := o.getPromptTemplate(op, promptType)
 
-	// 对齐 Python: gradient = param.get_gradient(prompt_type) or ""
+	// Python: gradient = param.get_gradient(prompt_type) or ""
 	gradientAny := param.GetGradient(promptType)
 	gradient, _ := gradientAny.(string)
 
@@ -452,13 +452,13 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 		return "", err
 	}
 
-	// 对齐 Python: optimized = self._extract_tag(raw_response, "PROMPT_OPTIMIZED")
+	// Python: optimized = self._extract_tag(raw_response, "PROMPT_OPTIMIZED")
 	optimized := extractTag(rawResponse, "PROMPT_OPTIMIZED")
 	if optimized == "" {
 		return "", nil
 	}
 
-	// 对齐 Python:
+	// Python:
 	//   Python: if optimized:
 	//       Python: optimized = await self._restore_placeholders(
 	//           Python: TuneUtils.get_content_string_from_template(target_tpl),
@@ -477,7 +477,7 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 
 // formatBadCases 格式化选中的失败信号为 LLM 提示词文本。
 //
-// 对齐 Python: InstructionOptimizer._format_bad_cases()
+// Python: InstructionOptimizer._format_bad_cases()
 //
 //	   Python: 初始化 parts 为空列表
 //	Python: for signal in self._selected_signals:
@@ -525,7 +525,7 @@ func (o *InstructionOptimizer) formatBadCases() string {
 
 // restorePlaceholders 确保优化后 prompt 保留与原始 prompt 相同的占位符。
 //
-// 对齐 Python: InstructionOptimizer._restore_placeholders(original_prompt, optimized_prompt)
+// Python: InstructionOptimizer._restore_placeholders(original_prompt, optimized_prompt)
 //
 // 逻辑：
 //  1. 提取原始和优化后 prompt 的 input_keys
@@ -534,7 +534,7 @@ func (o *InstructionOptimizer) formatBadCases() string {
 //  4. 如果有缺失 → 用 LLM 恢复
 //  5. 如果 LLM 恢复后仍有缺失 → 手动追加
 func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, originalPrompt, optimizedPrompt string) (string, error) {
-	// 对齐 Python:
+	// Python:
 	//   Python: original_keys = PromptAssembler(original_prompt).input_keys
 	//   Python: optimized_keys = PromptAssembler(optimized_prompt).input_keys
 	originalAssembler, err := prompt.NewPromptAssembler(originalPrompt)
@@ -549,7 +549,7 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 	originalKeys := originalAssembler.InputKeys()
 	optimizedKeys := optimizedAssembler.InputKeys()
 
-	// 对齐 Python: missing = set(original_keys) - set(optimized_keys)
+	// Python: missing = set(original_keys) - set(optimized_keys)
 	optimizedKeySet := make(map[string]bool, len(optimizedKeys))
 	for _, k := range optimizedKeys {
 		optimizedKeySet[k] = true
@@ -562,12 +562,12 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 		}
 	}
 
-	// 对齐 Python: if not missing: return optimized_prompt
+	// Python: if not missing: return optimized_prompt
 	if len(missing) == 0 {
 		return optimizedPrompt, nil
 	}
 
-	// 对齐 Python:
+	// Python:
 	//   Python: messages = PLACEHOLDER_RESTORE_TEMPLATE.format({
 	//       Python: "original_prompt": original_prompt,
 	//       Python: "revised_prompt": optimized_prompt,
@@ -597,7 +597,7 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 		return appendMissingPlaceholders(optimizedPrompt, missing), nil
 	}
 
-	// 对齐 Python:
+	// Python:
 	//   Python: restored_keys = PromptAssembler(raw).input_keys
 	//   Python: still_missing = set(original_keys) - set(restored_keys)
 	//   Python: if still_missing:
@@ -630,7 +630,7 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 
 // extractTag 提取 XML 标签内容。
 //
-// 对齐 Python: InstructionOptimizer._extract_tag(response, tag)
+// Python: InstructionOptimizer._extract_tag(response, tag)
 //
 //	Python: pattern = rf"<{tag}>(.*?)</{tag}>"
 //	Python: match = re.search(pattern, response, re.DOTALL)
@@ -651,7 +651,7 @@ func extractTag(response, tag string) string {
 
 // appendMissingPlaceholders 手动追加缺失的占位符。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: placeholder_text = "\n".join(f"{{{{{ph}}}}}" for ph in still_missing)
 //	Python: raw = str(raw) + "\n" + placeholder_text

@@ -16,7 +16,7 @@ import (
 
 // ParseStreamChunk 将 OpenAI ChatCompletionChunkResponse 转换为 AssistantMessageChunk。
 //
-// 对应 Python: OpenAIModelClient._parse_stream_chunk()
+// Python: OpenAIModelClient._parse_stream_chunk()
 //
 // 返回 nil 表示该 chunk 应被跳过（无 choices 且无 usage 的空块）。
 //

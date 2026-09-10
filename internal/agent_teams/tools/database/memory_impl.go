@@ -12,10 +12,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InMemoryTeamDatabase 内存数据库替代实现。
-// 对齐 Python: InMemoryTeamDatabase (openjiuwen/agent_teams/tools/memory_database.py)
+// Python: InMemoryTeamDatabase (openjiuwen/agent_teams/tools/memory_database.py)
 //
 // 单体结构体同时实现 TeamDatabase + TeamDao + MemberDao + TaskDao + MessageDao 接口，
-// 对齐 Python 的 self.team = self / self.member = self / self.task = self / self.message = self 自引用设计。
+// Python: 的 self.team = self / self.member = self / self.task = self / self.message = self 自引用设计。
 type InMemoryTeamDatabase struct {
 	// teams 团队数据，key=teamName
 	teams map[string]*Team
@@ -116,7 +116,7 @@ func (db *InMemoryTeamDatabase) DropSessionTablesByID(_ context.Context, _ strin
 }
 
 // ForceDeleteTeamSession 跨表拆卸：删 team 行 + 删该 team 下所有成员。
-// 对齐 Python: force_delete_team_session(team_name)
+// Python: force_delete_team_session(team_name)
 func (db *InMemoryTeamDatabase) ForceDeleteTeamSession(_ context.Context, teamName string) bool {
 	db.mu.Lock()
 	_, exists := db.teams[teamName]
@@ -187,7 +187,7 @@ func (db *InMemoryTeamDatabase) CreateTeam(_ context.Context, teamName, displayN
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if _, exists := db.teams[teamName]; exists {
-		return false // 对齐 Python IntegrityError → False
+		return false // Python: IntegrityError → False
 	}
 	ts := GetCurrentTime()
 	db.teams[teamName] = &Team{
@@ -208,7 +208,7 @@ func (db *InMemoryTeamDatabase) GetTeam(_ context.Context, teamName string) (*Te
 	defer db.mu.Unlock()
 	team, exists := db.teams[teamName]
 	if !exists {
-		return nil, nil // 对齐 Python Optional[Team] → None
+		return nil, nil // Python: Optional[Team] → None
 	}
 	return team, nil
 }
@@ -227,7 +227,7 @@ func (db *InMemoryTeamDatabase) DeleteTeam(_ context.Context, teamName string) b
 	defer db.mu.Unlock()
 	_, exists := db.teams[teamName]
 	if !exists {
-		return false // 对齐 Python: team not found → False
+		return false // Python: team not found → False
 	}
 	delete(db.teams, teamName)
 	// 级联删除成员（对齐 Python CASCADE on delete）
@@ -245,7 +245,7 @@ func (db *InMemoryTeamDatabase) GetTeamUpdatedAt(_ context.Context, teamName str
 	defer db.mu.Unlock()
 	team, exists := db.teams[teamName]
 	if !exists || team.UpdatedAt == 0 {
-		return 0 // 对齐 Python: missing → 0
+		return 0 // Python: missing → 0
 	}
 	return team.UpdatedAt
 }
@@ -257,7 +257,7 @@ func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, team
 	defer db.mu.Unlock()
 	key := memberKey(memberName, teamName)
 	if _, exists := db.members[key]; exists {
-		return false // 对齐 Python IntegrityError → False
+		return false // Python: IntegrityError → False
 	}
 	db.members[key] = &TeamMember{
 		MemberName:      memberName,
@@ -271,7 +271,7 @@ func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, team
 		Role:            role,
 		Prompt:          prompt,
 		ModelRefJSON:    modelRefJSON,
-		UpdatedAt:       GetCurrentTime(), // 对齐 Python: updated_at = get_current_time()
+		UpdatedAt:       GetCurrentTime(), // Python: updated_at = get_current_time()
 	}
 	return true
 }
@@ -282,7 +282,7 @@ func (db *InMemoryTeamDatabase) GetMember(_ context.Context, memberName, teamNam
 	defer db.mu.Unlock()
 	member, exists := db.members[memberKey(memberName, teamName)]
 	if !exists {
-		return nil, nil // 对齐 Python Optional[TeamMember] → None
+		return nil, nil // Python: Optional[TeamMember] → None
 	}
 	return member, nil
 }
@@ -297,7 +297,7 @@ func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName strin
 			continue
 		}
 		if status != "" && member.Status != status {
-			continue // 对齐 Python: status 过滤
+			continue // Python: status 过滤
 		}
 		result = append(result, member)
 	}
@@ -312,11 +312,11 @@ func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName
 	key := memberKey(memberName, teamName)
 	member, exists := db.members[key]
 	if !exists {
-		return false // 对齐 Python: member not found → False
+		return false // Python: member not found → False
 	}
 	// FSM 校验（对齐 Python: is_valid_transition）
 	if !IsValidMemberTransition(member.Status, status) {
-		return false // 对齐 Python: invalid transition → False
+		return false // Python: invalid transition → False
 	}
 	member.Status = status
 	return true
@@ -344,10 +344,10 @@ func (db *InMemoryTeamDatabase) TryTransitionMemberStatus(_ context.Context, mem
 		return false
 	}
 	if member.Status != fromStatus {
-		return false // 对齐 Python: rowcount == 0 → False (CAS 失败)
+		return false // Python: rowcount == 0 → False (CAS 失败)
 	}
 	member.Status = toStatus
-	return true // 对齐 Python: rowcount == 1 → True (CAS 成功)
+	return true // Python: rowcount == 1 → True (CAS 成功)
 }
 
 // ListHumanAgentNames 获取 human_agent 角色的成员名列表。对齐 Python: MemberDao.list_human_agent_names()
@@ -373,11 +373,11 @@ func (db *InMemoryTeamDatabase) GetMembersMaxUpdatedAt(_ context.Context, teamNa
 			maxVal = member.UpdatedAt
 		}
 	}
-	return maxVal // 对齐 Python: 无数据返回 0
+	return maxVal // Python: 无数据返回 0
 }
 
 // UpdateMemberExecutionStatus 更新执行状态（含 FSM 校验）。
-// 对齐 Python: MemberDao.update_member_execution_status()
+// Python: MemberDao.update_member_execution_status()
 func (db *InMemoryTeamDatabase) UpdateMemberExecutionStatus(_ context.Context, memberName, teamName, executionStatus string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -399,7 +399,7 @@ func (db *InMemoryTeamDatabase) CreateTask(_ context.Context, task *TeamTaskBase
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if _, exists := db.tasks[task.TaskID]; exists {
-		return false, nil // 对齐 Python IntegrityError → False
+		return false, nil // Python: IntegrityError → False
 	}
 	task.UpdatedAt = GetCurrentTime()
 	db.tasks[task.TaskID] = task
@@ -412,7 +412,7 @@ func (db *InMemoryTeamDatabase) GetTask(_ context.Context, taskID string) (*Team
 	defer db.mu.Unlock()
 	task, exists := db.tasks[taskID]
 	if !exists {
-		return nil, nil // 对齐 Python Optional[TeamTaskBase] → None
+		return nil, nil // Python: Optional[TeamTaskBase] → None
 	}
 	return task, nil
 }
@@ -445,7 +445,7 @@ func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, 
 		if task.TeamName != teamName {
 			continue
 		}
-		// 对齐 Python: assignee == assignee_id（nil 与 "" 均视为未分配）
+		// Python: assignee == assignee_id（nil 与 "" 均视为未分配）
 		taskAssignee := ""
 		if task.Assignee != nil {
 			taskAssignee = *task.Assignee
@@ -462,7 +462,7 @@ func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, 
 }
 
 // ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
-// 对齐 Python: TaskDao.claim_task()
+// Python: TaskDao.claim_task()
 func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -471,7 +471,7 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 		return false, nil
 	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
-		return false, nil // 对齐 Python: invalid transition → False
+		return false, nil // Python: invalid transition → False
 	}
 	task.Status = fsm.TaskStatusClaimed
 	task.Assignee = StringPtr(assignee)
@@ -480,7 +480,7 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 }
 
 // ResetTask 重置任务：CLAIMED→PENDING，清除 assignee。
-// 对齐 Python: TaskDao.reset_task()
+// Python: TaskDao.reset_task()
 func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -498,7 +498,7 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 }
 
 // ApprovePlanTask 计划审批：CLAIMED→PLAN_APPROVED FSM 校验。
-// 对齐 Python: TaskDao.approve_plan_task()
+// Python: TaskDao.approve_plan_task()
 func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -515,7 +515,7 @@ func (db *InMemoryTeamDatabase) ApprovePlanTask(_ context.Context, taskID string
 }
 
 // UpdateTask 更新标题/内容。CLAIMED/PLAN_APPROVED 状态下禁止编辑。
-// 对齐 Python: TaskDao.update_task()
+// Python: TaskDao.update_task()
 func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, content string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -523,7 +523,7 @@ func (db *InMemoryTeamDatabase) UpdateTask(_ context.Context, taskID, title, con
 	if !exists {
 		return false, nil
 	}
-	// 对齐 Python: PENDING/BLOCKED 状态才允许编辑；CLAIMED/PLAN_APPROVED 禁止
+	// Python: PENDING/BLOCKED 状态才允许编辑；CLAIMED/PLAN_APPROVED 禁止
 	if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
 		return false, nil
 	}
@@ -591,7 +591,7 @@ func (db *InMemoryTeamDatabase) GetTasksDependingOn(_ context.Context, taskID st
 }
 
 // UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 BLOCKED→PENDING。
-// 对齐 Python: TaskDao.update_task_status()
+// Python: TaskDao.update_task_status()
 func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newStatus string) ([]string, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -621,7 +621,7 @@ func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newS
 }
 
 // CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。
-// 对齐 Python: TaskDao.cancel_task() → {"task": ..., "unblocked_tasks": [...]}
+// Python: TaskDao.cancel_task() → {"task": ..., "unblocked_tasks": [...]}
 func (db *InMemoryTeamDatabase) CancelTask(_ context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -629,7 +629,7 @@ func (db *InMemoryTeamDatabase) CancelTask(_ context.Context, taskID string) (*T
 }
 
 // CompleteTask 完成任务（原子终止传播），返回被完成的任务和解除阻塞的任务列表。
-// 对齐 Python: TaskDao.complete_task() → {"task": ..., "unblocked_tasks": [...]}
+// Python: TaskDao.complete_task() → {"task": ..., "unblocked_tasks": [...]}
 func (db *InMemoryTeamDatabase) CompleteTask(_ context.Context, taskID string) (*TeamTaskBase, []*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -675,7 +675,7 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 		}
 	}
 
-	// 对齐 Python: unblocked_tasks = [t for tid, t in unblocked_by_id.items() if tid not in cancelled_ids]
+	// Python: unblocked_tasks = [t for tid, t in unblocked_by_id.items() if tid not in cancelled_ids]
 	cancelledSet := make(map[string]bool, len(result.Cancelled))
 	for _, t := range result.Cancelled {
 		cancelledSet[t.TaskID] = true
@@ -690,7 +690,7 @@ func (db *InMemoryTeamDatabase) CancelAllTasks(_ context.Context, teamName strin
 }
 
 // VerifyAndFixTaskConsistency 一致性修复：扫描 BLOCKED 任务并刷新状态。
-// 对齐 Python: TaskDao.verify_and_fix_task_consistency()
+// Python: TaskDao.verify_and_fix_task_consistency()
 func (db *InMemoryTeamDatabase) VerifyAndFixTaskConsistency(_ context.Context, teamName string) ([]string, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -703,7 +703,7 @@ func (db *InMemoryTeamDatabase) VerifyAndFixTaskConsistency(_ context.Context, t
 }
 
 // MutateDependencyGraph 原子图变更：5 步管线。
-// 对齐 Python: mutate_dependency_graph()
+// Python: mutate_dependency_graph()
 func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamName string, newTasks []NewTaskSpec, addEdges []EdgeSpec) GraphMutationResult {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -734,7 +734,7 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 	// 步骤5：刷新 PENDING↔BLOCKED 状态
 	mc.refreshStatus()
 
-	// 对齐 Python 内存实现: 分支日志
+	// Python: 内存实现: 分支日志
 	if len(newTasks) > 0 {
 		logger.Info(logComponent).
 			Int("new_tasks", len(newTasks)).
@@ -752,7 +752,7 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 }
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。
-// 对齐 Python: add_task_with_bidirectional_dependencies()
+// Python: add_task_with_bidirectional_dependencies()
 func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	// 构建 NewTaskSpec
 	newTaskSpec := NewTaskSpec{
@@ -939,7 +939,7 @@ func (db *InMemoryTeamDatabase) MarkMessageRead(_ context.Context, messageID, me
 	if !exists {
 		return false
 	}
-	// 对齐 Python: "user" 伪成员特殊处理 — 跳过成员存在性检查
+	// Python: "user" 伪成员特殊处理 — 跳过成员存在性检查
 	if memberName == "user" {
 		if msg.Broadcast {
 			return false
@@ -990,7 +990,7 @@ func splitDepKey(key string) []string {
 }
 
 // stageNewTasks 步骤1：插入新任务行，检测 task_id 重复。
-// 对齐 Python: _stage_new_tasks()
+// Python: _stage_new_tasks()
 func (mc *mutationContext) stageNewTasks() {
 	mc.stagedTasks = make(map[string]*TeamTaskBase)
 	for _, spec := range mc.newTasks {
@@ -1021,7 +1021,7 @@ func (mc *mutationContext) stageNewTasks() {
 }
 
 // loadEndpointsAndValidate 步骤2：加载边端点，拒绝缺失/终态/已执行源。
-// 对齐 Python: _load_endpoints_and_validate()
+// Python: _load_endpoints_and_validate()
 // 拒绝规则对齐 Python TASK_DEPENDENCY_REJECT_STATUSES：
 // 源任务（TaskID，被阻塞的下游）处于 COMPLETED/CANCELLED/CLAIMED/PLAN_APPROVED 时拒绝。
 func (mc *mutationContext) loadEndpointsAndValidate() {
@@ -1045,7 +1045,7 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 		}
 		mc.endpointTasks[edge.DependsOnID] = upstream
 
-		// 对齐 Python TASK_DEPENDENCY_REJECT_STATUSES：
+		// Python: TASK_DEPENDENCY_REJECT_STATUSES：
 		// 源任务（edge.TaskID）处于终态或已执行状态时拒绝添加依赖
 		srcStatus := downstream.Status
 		if srcStatus == fsm.TaskStatusCompleted || srcStatus == fsm.TaskStatusCancelled ||
@@ -1058,14 +1058,14 @@ func (mc *mutationContext) loadEndpointsAndValidate() {
 }
 
 // checkCycleAndComputeNewEdges 步骤3：构建后变更邻接表，检测环路。
-// 对齐 Python: _check_cycle_and_compute_new_edges()
-// 对齐 Python 内存实现: existing_edge_set + new_edge_set 双重去重
+// Python: _check_cycle_and_compute_new_edges()
+// Python: 内存实现: existing_edge_set + new_edge_set 双重去重
 func (mc *mutationContext) checkCycleAndComputeNewEdges() {
 	// 构建后变更邻接表：downstream → [upstream1, upstream2, ...]
 	adj := make(map[string][]string)
 
 	// 加载已有边，构建 existingEdgeSet
-	// 对齐 Python: existing_edge_set = {(d.task_id, d.depends_on_task_id) for d in self._task_deps}
+	// Python: existing_edge_set = {(d.task_id, d.depends_on_task_id) for d in self._task_deps}
 	existingEdgeSet := make(map[string]bool)
 	for _, dep := range mc.db.deps {
 		if dep.TeamName == mc.teamName {
@@ -1075,7 +1075,7 @@ func (mc *mutationContext) checkCycleAndComputeNewEdges() {
 	}
 
 	// 加载新边（去重）
-	// 对齐 Python: new_edge_set = set(); if edge in existing_edge_set or edge in new_edge_set: continue
+	// Python: new_edge_set = set(); if edge in existing_edge_set or edge in new_edge_set: continue
 	mc.newEdgeSet = make(map[string]bool)
 	for _, edge := range mc.addEdges {
 		key := edge.TaskID + "\x00" + edge.DependsOnID
@@ -1097,7 +1097,7 @@ func (mc *mutationContext) checkCycleAndComputeNewEdges() {
 	}
 
 	// 计算新边行（仅包含去重后的边）
-	// 对齐 Python: for tid, dep_id in new_edge_set
+	// Python: for tid, dep_id in new_edge_set
 	mc.newEdgeRows = make([]TeamTaskDependencyBase, 0, len(mc.newEdgeSet))
 	for key := range mc.newEdgeSet {
 		parts := splitDepKey(key)
@@ -1141,10 +1141,10 @@ func (mc *mutationContext) applyNewEdges() {
 }
 
 // refreshStatus 步骤5：刷新 PENDING↔BLOCKED 状态。
-// 对齐 Python 内存实现: _refresh_status_for_tasks(affected_ids, now) —— 仅刷新受影响的任务
+// Python: 内存实现: _refresh_status_for_tasks(affected_ids, now) —— 仅刷新受影响的任务
 func (mc *mutationContext) refreshStatus() {
 	// 收集 affectedIDs：newTasks 的 ID + newEdgeSet 的 TaskID
-	// 对齐 Python: affected_ids = {spec.task_id for spec in new_tasks}; affected_ids.update(tid for tid, _ in new_edge_set)
+	// Python: affected_ids = {spec.task_id for spec in new_tasks}; affected_ids.update(tid for tid, _ in new_edge_set)
 	mc.affectedIDs = make(map[string]bool)
 	for _, spec := range mc.newTasks {
 		mc.affectedIDs[spec.TaskID] = true
@@ -1164,7 +1164,7 @@ func (mc *mutationContext) rollbackStagedTasks() {
 }
 
 // terminateTaskInSession 原子终止传播：终止任务 + 标记下游 resolved + 刷新状态。
-// 对齐 Python: _terminate_task_in_session()
+// Python: _terminate_task_in_session()
 // 一次 Lock 内完成所有操作（由调用方持锁，此方法不加锁）。
 // 返回值语义对齐 Python：(nil, nil)=任务不存在/FSM不合法，([]string{}, nil)=幂等成功（已终态），
 // (非空切片, nil)=成功且有下游刷新。
@@ -1229,7 +1229,7 @@ func (db *InMemoryTeamDatabase) terminateTaskInSession(taskID, terminalStatus st
 }
 
 // refreshTaskStatuses 刷新团队内所有任务的 PENDING↔BLOCKED 状态。
-// 对齐 Python: _refresh_status_in_session() —— 全量刷新（仅用于 VerifyAndFixTaskConsistency）
+// Python: _refresh_status_in_session() —— 全量刷新（仅用于 VerifyAndFixTaskConsistency）
 // PENDING + 有未解决依赖 → BLOCKED
 // BLOCKED + 无未解决依赖 → PENDING
 func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []*TeamTaskBase {
@@ -1260,7 +1260,7 @@ func (db *InMemoryTeamDatabase) refreshTaskStatuses(teamName string) []*TeamTask
 }
 
 // refreshTaskStatusesByID 仅刷新指定任务 ID 的 PENDING↔BLOCKED 状态。
-// 对齐 Python 内存实现: _refresh_status_for_tasks(task_ids, now) —— 只刷新受影响的任务
+// Python: 内存实现: _refresh_status_for_tasks(task_ids, now) —— 只刷新受影响的任务
 func (db *InMemoryTeamDatabase) refreshTaskStatusesByID(teamName string, taskIDs map[string]bool) []*TeamTaskBase {
 	if len(taskIDs) == 0 {
 		return nil

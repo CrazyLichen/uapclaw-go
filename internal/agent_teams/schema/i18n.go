@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // Language 支持的语言代码。
-// 对齐 Python: Language = Literal["cn", "en"]
+// Python: Language = Literal["cn", "en"]
 // 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
 type Language string
 
@@ -38,9 +38,9 @@ var (
 // STRINGS 多语言字符串映射表
 var STRINGS = map[Language]map[string]string{
 	LanguageCN: {
-		// 对齐 Python: schema/blueprint.py
+		// Python: schema/blueprint.py
 		"blueprint.default_persona": "天才项目管理专家",
-		// 对齐 Python: tools/team.py
+		// Python: tools/team.py
 		"team.shutdown_request_content": "当前任务已全部完成，请结束流程",
 		"team.cancel_request_content":   "当前任务有变动，请停止执行当前任务，重新尝试认领合适任务",
 		// agent/dispatcher.py — 成员生命周期事件
@@ -81,9 +81,9 @@ var STRINGS = map[Language]map[string]string{
 		"workspace_meta.path":   "目标文件的相对路径（lock/unlock/history 时必填）",
 	},
 	LanguageEN: {
-		// 对齐 Python: schema/blueprint.py
+		// Python: schema/blueprint.py
 		"blueprint.default_persona": "Genius project management expert",
-		// 对齐 Python: tools/team.py
+		// Python: tools/team.py
 		"team.shutdown_request_content": "All tasks are complete. Please wrap up and exit.",
 		"team.cancel_request_content":   "The current task has changed. Stop executing it and try claiming a suitable task again.",
 		// agent/dispatcher.py — 成员生命周期事件
@@ -128,7 +128,7 @@ var STRINGS = map[Language]map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetLanguage 设置全局语言。
-// 对齐 Python: set_language(lang)
+// Python: set_language(lang)
 func SetLanguage(lang Language) error {
 	if _, ok := STRINGS[lang]; !ok {
 		supported := make([]string, 0, len(STRINGS))
@@ -144,7 +144,7 @@ func SetLanguage(lang Language) error {
 }
 
 // GetLanguage 获取当前全局语言。
-// 对齐 Python: get_language()
+// Python: get_language()
 func GetLanguage() Language {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -152,7 +152,7 @@ func GetLanguage() Language {
 }
 
 // T 解析本地化字符串。
-// 对齐 Python: t(key, **kwargs)
+// Python: t(key, **kwargs)
 // 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
 //
 // key 为点分查找键（如 "dispatcher.member_online"），
@@ -193,7 +193,7 @@ func T(key string, kwargs ...map[string]any) (string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatMap 将模板中的 {key} 占位符替换为 kwargs 中的值。
-// 对齐 Python: str.format_map(kwargs)
+// Python: str.format_map(kwargs)
 func formatMap(template string, kwargs map[string]any) string {
 	result := template
 	for k, v := range kwargs {

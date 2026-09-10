@@ -1225,7 +1225,7 @@ func TestBasePersistenceStorage_entityTitleLabel_空标签(t *testing.T) {
 }
 
 // TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection 测试 AgentTeam 钩子
-// 对齐 Python: AgentTeamStorage._get_state_to_save → session.state().get_global(None) → 只保存 globalState
+// Python: AgentTeamStorage._get_state_to_save → session.state().get_global(None) → 只保存 globalState
 func TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection(t *testing.T) {
 	h := &agentTeamEntityHooks{}
 	st := state.NewAgentStateCollection()
@@ -1258,7 +1258,7 @@ func TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection(t *testing.T) 
 }
 
 // TestAgentTeamEntityHooks_RestoreState_AgentStateCollection 测试 AgentTeam 恢复到 *AgentStateCollection
-// 对齐 Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
+// Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
 func TestAgentTeamEntityHooks_RestoreState_AgentStateCollection(t *testing.T) {
 	h := &agentTeamEntityHooks{}
 	st := state.NewAgentStateCollection()
@@ -1407,7 +1407,7 @@ func (p *errorPipeline) Execute(_ context.Context) ([]kv.PipelineResult, error) 
 // ──────────────────────────── T-06: PreWorkflowExecute workflowID 空值防御测试 ────────────────────────────
 
 // TestPreWorkflowExecute_workflowID为空_强制删除 测试 workflowID 为空时跳过清理
-// 对应 Python: if workflow_id is None: logger.warning(...) return
+// Python: if workflow_id is None: logger.warning(...) return
 func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 	store := kv.NewInMemoryKVStore()
 	cp := NewPersistenceCheckpointer(store)

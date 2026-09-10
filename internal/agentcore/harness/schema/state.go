@@ -37,11 +37,11 @@ type DeepAgentState struct {
 
 const (
 	// SessionRuntimeAttr 会话运行时属性键
-	// 对齐 Python: _SESSION_RUNTIME_ATTR = "_deepagent_runtime_state"
+	// Python: _SESSION_RUNTIME_ATTR = "_deepagent_runtime_state"
 	SessionRuntimeAttr = "_deepagent_runtime_state"
 
 	// SessionStateKey 会话状态持久化键
-	// 对齐 Python: _SESSION_STATE_KEY = "deepagent"
+	// Python: _SESSION_STATE_KEY = "deepagent"
 	SessionStateKey = "deepagent"
 )
 

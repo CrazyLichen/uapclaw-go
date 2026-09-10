@@ -9,7 +9,7 @@ import (
 
 // ScopeUserMappingManager 作用域用户映射管理器，管理 scope_user_mapping 表的 CRUD。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/scope_user_mapping_manager.py (ScopeUserMappingManager)
+// Python: openjiuwen/core/memory/manage/mem_model/scope_user_mapping_manager.py (ScopeUserMappingManager)
 type ScopeUserMappingManager struct {
 	// sqlDb 通用 SQL CRUD 层
 	sqlDb *SqlDbStore
@@ -27,7 +27,7 @@ type ScopeUserMappingManager struct {
 
 // NewScopeUserMappingManager 创建 ScopeUserMappingManager 实例。
 //
-// 对应 Python: ScopeUserMappingManager.__init__(sql_db_store)
+// Python: ScopeUserMappingManager.__init__(sql_db_store)
 func NewScopeUserMappingManager(sqlDb *SqlDbStore) *ScopeUserMappingManager {
 	return &ScopeUserMappingManager{
 		sqlDb:     sqlDb,
@@ -37,7 +37,7 @@ func NewScopeUserMappingManager(sqlDb *SqlDbStore) *ScopeUserMappingManager {
 
 // Add 添加作用域用户映射。已存在时跳过（幂等）。
 //
-// 对应 Python: ScopeUserMappingManager.add(user_id, scope_id, **kwargs)
+// Python: ScopeUserMappingManager.add(user_id, scope_id, **kwargs)
 func (m *ScopeUserMappingManager) Add(ctx context.Context, userID string, scopeID string) error {
 	data := map[string]any{
 		"user_id":  userID,
@@ -56,7 +56,7 @@ func (m *ScopeUserMappingManager) Add(ctx context.Context, userID string, scopeI
 
 // DeleteByScopeID 按 scope_id 删除映射记录。
 //
-// 对应 Python: ScopeUserMappingManager.delete_by_scope_id(scope_id)
+// Python: ScopeUserMappingManager.delete_by_scope_id(scope_id)
 func (m *ScopeUserMappingManager) DeleteByScopeID(ctx context.Context, scopeID string) error {
 	return m.sqlDb.Delete(ctx, m.metaTable,
 		map[string]any{"scope_id": scopeID})
@@ -64,7 +64,7 @@ func (m *ScopeUserMappingManager) DeleteByScopeID(ctx context.Context, scopeID s
 
 // GetByScopeID 按 scope_id 查询映射记录。
 //
-// 对应 Python: ScopeUserMappingManager.get_by_scope_id(scope_id)
+// Python: ScopeUserMappingManager.get_by_scope_id(scope_id)
 func (m *ScopeUserMappingManager) GetByScopeID(ctx context.Context, scopeID string) ([]map[string]any, error) {
 	results, err := m.sqlDb.ConditionGet(ctx, m.metaTable,
 		map[string]any{"scope_id": []string{scopeID}}, nil)

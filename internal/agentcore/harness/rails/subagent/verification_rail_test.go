@@ -51,7 +51,7 @@ func TestVerificationRail_Init_捕获Builder(t *testing.T) {
 	r := NewVerificationRail()
 	agent := newFakeBaseAgentForTest()
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 
 	require.NoError(t, err)
 	assert.NotNil(t, r.promptBuilder, "Init 应捕获 promptBuilder")
@@ -62,7 +62,7 @@ func TestVerificationRail_BeforeModelCall_注入提醒(t *testing.T) {
 	r := NewVerificationRail()
 	agent := newFakeBaseAgentForTest()
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)

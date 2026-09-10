@@ -15,7 +15,7 @@ import (
 //
 // 示例: _, ok := msg.(Offloadable)
 //
-// 对应 Python: isinstance(message, OffloadMixin)
+// Python: isinstance(message, OffloadMixin)
 type Offloadable interface {
 	llm_schema.BaseMessage
 	// GetOffloadInfo 获取卸载元数据
@@ -27,7 +27,7 @@ type Offloadable interface {
 // 当对话消息被卸载到外部存储时，OffloadInfo 携带检索句柄和存储后端类型，
 // 使 LLM 可以通过 reloader_tool 按需取回原始内容。
 //
-// 对应 Python: openjiuwen/core/context_engine/schema/messages.py (OffloadMixin)
+// Python: openjiuwen/core/context_engine/schema/messages.py (OffloadMixin)
 type OffloadInfo struct {
 	// OffloadType 存储后端类型："in_memory" 或 "filesystem"
 	OffloadType string `json:"offload_type"`
@@ -39,7 +39,7 @@ type OffloadInfo struct {
 
 // OffloadUserMessage 卸载的用户消息占位符。
 //
-// 对应 Python: OffloadUserMessage(UserMessage, OffloadMixin)
+// Python: OffloadUserMessage(UserMessage, OffloadMixin)
 type OffloadUserMessage struct {
 	llm_schema.UserMessage
 	OffloadInfo
@@ -47,7 +47,7 @@ type OffloadUserMessage struct {
 
 // OffloadAssistantMessage 卸载的助手消息占位符。
 //
-// 对应 Python: OffloadAssistantMessage(AssistantMessage, OffloadMixin)
+// Python: OffloadAssistantMessage(AssistantMessage, OffloadMixin)
 type OffloadAssistantMessage struct {
 	llm_schema.AssistantMessage
 	OffloadInfo
@@ -55,7 +55,7 @@ type OffloadAssistantMessage struct {
 
 // OffloadSystemMessage 卸载的系统消息占位符。
 //
-// 对应 Python: OffloadSystemMessage(SystemMessage, OffloadMixin)
+// Python: OffloadSystemMessage(SystemMessage, OffloadMixin)
 type OffloadSystemMessage struct {
 	llm_schema.SystemMessage
 	OffloadInfo
@@ -63,7 +63,7 @@ type OffloadSystemMessage struct {
 
 // OffloadToolMessage 卸载的工具消息占位符。
 //
-// 对应 Python: OffloadToolMessage(ToolMessage, OffloadMixin)
+// Python: OffloadToolMessage(ToolMessage, OffloadMixin)
 type OffloadToolMessage struct {
 	llm_schema.ToolMessage
 	OffloadInfo
@@ -138,7 +138,7 @@ func NewOffloadAssistantMessage(content, handle, offloadType string, opts ...llm
 }
 
 // NewOffloadMessage 工厂函数，根据 role 自动分派创建对应 Offload 子类型。
-// 等价 Python: create_offload_message(role, content, offload_handle, offload_type, **kwargs)
+// Python: create_offload_message(role, content, offload_handle, offload_type, **kwargs)
 //
 // 当 role 为 tool 时，toolCallID 传递给 NewOffloadToolMessage 以保持 ToolMessage 关联。
 func NewOffloadMessage(role llm_schema.RoleType, content, handle, offloadType, toolCallID string, opts ...llm_schema.MessageOption) Offloadable {
@@ -156,7 +156,7 @@ func NewOffloadMessage(role llm_schema.RoleType, content, handle, offloadType, t
 }
 
 // IsOffloaded 检查消息是否为已卸载的占位符。
-// 等价 Python: isinstance(message, OffloadMixin)，用于处理器防重复卸载。
+// Python: isinstance(message, OffloadMixin)，用于处理器防重复卸载。
 func IsOffloaded(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(Offloadable)
 	return ok

@@ -30,7 +30,7 @@ import (
 // 不使用 mcp-go ClientSession，而是基于 kin-openapi 自行实现 OpenAPI→MCP 转换。
 // 读取 OpenAPI/YAML 文件，将每个 Operation 转换为 MCP 工具，通过 HTTP 调用。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/openapi_client.py (OpenApiClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/openapi_client.py (OpenApiClient)
 type OpenApiClient struct {
 	config      *types.McpServerConfig
 	serverName  string
@@ -1312,7 +1312,7 @@ func loadOpenAPISpec(filePath string) (*openapi3.T, error) {
 
 // convertOpenAPISchemaToJSONSchema 将 OpenAPI Schema 转换为 JSON Schema 格式。
 //
-// 对应 Python: fastmcp.utilities.openapi.json_schema_converter.convert_openapi_schema_to_json_schema
+// Python: fastmcp.utilities.openapi.json_schema_converter.convert_openapi_schema_to_json_schema
 //
 // 主要转换：
 //   - nullable=true → type 数组 ["string", "null"]
@@ -1403,7 +1403,7 @@ func convertOpenAPISchemaToJSONSchema(schema map[string]any, openAPIVersion stri
 
 // formatDeepObjectParameter 将 deepObject 风格的参数序列化为 param[key]=value 格式。
 //
-// 对应 Python: fastmcp.utilities.openapi.formatters.format_deep_object_parameter
+// Python: fastmcp.utilities.openapi.formatters.format_deep_object_parameter
 //
 // OpenAPI 3.0 deepObject 样式 + explode=true：
 //   - 输入：{"id": "123", "type": "user"}, paramName="filter"

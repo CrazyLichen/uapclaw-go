@@ -19,7 +19,7 @@ import (
 //   - SetParameter(): 演化更新
 //   - LoadState(): 检查点恢复
 //
-// 对应 Python: openjiuwen/core/operator/tool_call/base.py ToolCallOperator
+// Python: openjiuwen/core/operator/tool_call/base.py ToolCallOperator
 type ToolCallOperator struct {
 	// operatorID 操作器标识
 	operatorID string
@@ -38,7 +38,7 @@ type ToolCallOperatorOption func(*ToolCallOperator)
 
 const (
 	// TargetToolDescription 工具描述目标名。
-	// 对应 Python: "tool_description"
+	// Python: "tool_description"
 	TargetToolDescription = "tool_description"
 )
 
@@ -48,7 +48,7 @@ const (
 
 // NewToolCallOperator 创建 ToolCallOperator 实例。
 //
-// 对应 Python: ToolCallOperator.__init__(operator_id, descriptions, on_parameter_updated)
+// Python: ToolCallOperator.__init__(operator_id, descriptions, on_parameter_updated)
 func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *ToolCallOperator {
 	op := &ToolCallOperator{
 		operatorID:   operatorID,
@@ -64,7 +64,7 @@ func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *Too
 
 // OperatorID 返回操作器标识。
 //
-// 对应 Python: ToolCallOperator.operator_id (property)
+// Python: ToolCallOperator.operator_id (property)
 func (op *ToolCallOperator) OperatorID() string {
 	return op.operatorID
 }
@@ -72,7 +72,7 @@ func (op *ToolCallOperator) OperatorID() string {
 // GetTunables 获取可调参数。
 // 仅当 descriptions 非空时暴露 tool_description。
 //
-// 对应 Python: ToolCallOperator.get_tunables()
+// Python: ToolCallOperator.get_tunables()
 func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 	if len(op.descriptions) == 0 {
 		return map[string]operator.TunableSpec{}
@@ -92,7 +92,7 @@ func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 // 仅接受 target="tool_description" 且 value 为 map[string]string 或 map[string]any 类型。
 // 不合法类型静默忽略（对齐 Python 行为），不更新内部状态。
 //
-// 对应 Python: ToolCallOperator.set_parameter(target, value)
+// Python: ToolCallOperator.set_parameter(target, value)
 func (op *ToolCallOperator) SetParameter(target string, value any) {
 	if target != TargetToolDescription {
 		return
@@ -110,7 +110,7 @@ func (op *ToolCallOperator) SetParameter(target string, value any) {
 
 // GetState 获取当前状态，用于检查点。
 //
-// 对应 Python: ToolCallOperator.get_state()
+// Python: ToolCallOperator.get_state()
 func (op *ToolCallOperator) GetState() map[string]any {
 	return map[string]any{
 		TargetToolDescription: maps.Clone(op.descriptions),
@@ -121,7 +121,7 @@ func (op *ToolCallOperator) GetState() map[string]any {
 // 触发 onParameterUpdated 回调。
 // 直接赋值，对齐 Python state["tool_description"].copy() 行为。
 //
-// 对应 Python: ToolCallOperator.load_state(state)
+// Python: ToolCallOperator.load_state(state)
 func (op *ToolCallOperator) LoadState(state map[string]any) {
 	if td, ok := state[TargetToolDescription]; ok {
 		descs := toDescriptions(td)
@@ -138,7 +138,7 @@ func (op *ToolCallOperator) LoadState(state map[string]any) {
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
 //
-// 对应 Python: Operator.apply_update 默认实现
+// Python: Operator.apply_update 默认实现
 func (op *ToolCallOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)
 }

@@ -13,7 +13,7 @@ import (
 // 供 ContextStats 统计和 ContextWindow 构建时使用。
 // 所有方法返回 (int, error)，调用方应检查 error 决定是否降级。
 //
-// 对应 Python: openjiuwen/core/context_engine/token/base.py (TokenCounter)
+// Python: openjiuwen/core/context_engine/token/base.py (TokenCounter)
 type TokenCounter interface {
 	// Count 计算文本的 Token 数量
 	Count(text string, model string) (int, error)

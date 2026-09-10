@@ -12,7 +12,7 @@ import (
 // QueryLanguageDefinition 数据库查询语言定义//
 // 每个数据库后端需注册一个 QueryLanguageDefinition 实例，
 // 包含 8 个转换回调函数，分别处理不同类型的查询表达式。
-// 对应 Python: QueryLanguageDefinition
+// Python: QueryLanguageDefinition
 type QueryLanguageDefinition struct {
 	// Comparison 比较表达式转换
 	Comparison func(QueryExpr) (any, error)
@@ -53,7 +53,7 @@ var (
 //
 // name 为后端名称（如 "milvus"、"chroma"），def 为查询语言定义，
 // force 为 true 时允许覆盖已注册的同名后端。
-// 对应 Python: register_database_query_language()
+// Python: register_database_query_language()
 func RegisterDatabaseQueryLanguage(name string, def QueryLanguageDefinition, force bool) error {
 	queryExprMu.Lock()
 	defer queryExprMu.Unlock()
@@ -83,7 +83,7 @@ func registerDatabaseQueryLanguage(m map[string]QueryLanguageDefinition, name st
 
 // validateLanguageRegistered 校验后端查询语言已注册
 //
-// 对应 Python: validate_language_registered()
+// Python: validate_language_registered()
 func validateLanguageRegistered(name string) error {
 	queryExprMu.RLock()
 	_, ok := queryExprFunctions[name]

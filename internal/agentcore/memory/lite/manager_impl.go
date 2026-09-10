@@ -267,7 +267,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 
 	// 向量搜索
-	// 对齐 Python: _embed_query_with_timeout 60s 超时保护
+	// Python: _embed_query_with_timeout 60s 超时保护
 	embedCtx, embedCancel := context.WithTimeout(ctx, 60*time.Second)
 	queryVec, embedErr := m.provider.EmbedQuery(embedCtx, cleaned)
 	embedCancel()
@@ -279,7 +279,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		}
 		queryVec = nil
 	}
-	// 对齐 Python: has_vector = any(v != 0 for v in query_vec)
+	// Python: has_vector = any(v != 0 for v in query_vec)
 	hasVector := false
 	for _, v := range queryVec {
 		if v != 0 {
@@ -537,7 +537,7 @@ func (m *memoryIndexManager) getBaseDirForFile(fp string) string {
 }
 
 // isRecentSessionFile 判断 session 文件是否为最近两天（今天/昨天）的记录。
-// 对齐 Python _is_recent_session_file
+// Python: _is_recent_session_file
 func isRecentSessionFile(filename string) bool {
 	// 匹配 YYYY-MM-DD.md 格式
 	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})\.md$`)
@@ -628,7 +628,7 @@ func (m *memoryIndexManager) resolveDBPath() string {
 	if filepath.IsAbs(storePath) {
 		return storePath
 	}
-	// 对齐 Python: 处理 workspace_name 前缀
+	// Python: 处理 workspace_name 前缀
 	workspaceName := filepath.Base(m.memoryDir)
 	if strings.HasPrefix(storePath, workspaceName+"/") || strings.HasPrefix(storePath, workspaceName+`\`) {
 		storePath = storePath[len(workspaceName)+1:]
@@ -695,7 +695,7 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 		return err
 	}
 	m.provider = provider
-	// 对齐 Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
+	// Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
 	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
 	logger.Info(logComponent).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("嵌入提供者初始化完成")
 	return nil
@@ -751,7 +751,7 @@ func (m *memoryIndexManager) shouldFullReindex() bool {
 	if err := json.Unmarshal([]byte(value), &meta); err != nil {
 		return true
 	}
-	// 对齐 Python: 检查 provider 和 model 是否变化
+	// Python: 检查 provider 和 model 是否变化
 	if meta["provider"] != m.settings.Provider {
 		return true
 	}
@@ -792,14 +792,14 @@ func (m *memoryIndexManager) runReindex(ctx context.Context) error {
 
 // syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
 func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
-	// 对齐 Python: files = list_memory_files(self.workspace, node_name=self.node_name)
+	// Python: files = list_memory_files(self.workspace, node_name=self.node_name)
 	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
 
 	logger.Debug(logComponent).Int("file_count", len(files)).Msg("同步记忆文件")
 
 	activePaths := make(map[string]bool)
 	for _, fp := range files {
-		// 对齐 Python: _get_base_dir_for_file — USER.md 用 workspace root
+		// Python: _get_base_dir_for_file — USER.md 用 workspace root
 		baseDir := m.getBaseDirForFile(fp)
 		entry, err := m.buildFileEntry(fp, baseDir)
 		if err != nil {
@@ -847,7 +847,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		if err != nil || info.IsDir() || filepath.Ext(path) != ".jsonl" {
 			return nil
 		}
-		// 对齐 Python: _is_recent_session_file — 只索引今天/昨天的 session
+		// Python: _is_recent_session_file — 只索引今天/昨天的 session
 		if !isRecentSessionFile(filepath.Base(path)) {
 			return nil
 		}
@@ -903,7 +903,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	absPath := entry.AbsPath
 	var content string
 	if m.sysOperation != nil {
-		// 对齐 Python: 使用 sys_operation 读取文件
+		// Python: 使用 sys_operation 读取文件
 		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
 		if err != nil {
 			_ = tx.Rollback()
@@ -962,7 +962,7 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 		embBlob = vectorToBlob(emb)
 	}
 
-	// 对齐 Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
+	// Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
 	var rowid int64
 	err = db.QueryRow(
 		"INSERT OR REPLACE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid",
@@ -1141,7 +1141,7 @@ func (m *memoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 		}
 		m.ensureVectorTable(len(sample))
 	} else {
-		// 对齐 Python: 即使已有值也重新确认 vec0 表存在
+		// Python: 即使已有值也重新确认 vec0 表存在
 		m.ensureVectorTable(*m.vectorDims)
 	}
 	if !m.vectorAvailable {
@@ -1386,14 +1386,14 @@ func (m *memoryIndexManager) setupFileWatcher() {
 		}
 	}
 
-	// 对齐 Python: 监听 daily_memory 子目录
+	// Python: 监听 daily_memory 子目录
 	if m.memoryDir != "" {
 		dailyDir := filepath.Join(m.memoryDir, "daily_memory")
 		if _, err := os.Stat(dailyDir); err == nil {
 			watchPaths[dailyDir] = true
 		}
 	}
-	// 对齐 Python: 监听 workspace root（用于 USER.md）
+	// Python: 监听 workspace root（用于 USER.md）
 	if m.workspace != nil {
 		if m.workspace.RootPath != "" {
 			if _, err := os.Stat(m.workspace.RootPath); err == nil {

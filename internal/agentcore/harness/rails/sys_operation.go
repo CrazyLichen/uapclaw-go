@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SysOperationRail 系统操作护栏，注册文件系统、Shell 和代码工具。
-// 对齐 Python: SysOperationRail (sys_operation_rail.py)
+// Python: SysOperationRail (sys_operation_rail.py)
 type SysOperationRail struct {
 	DeepAgentRail
 	// tools 已注册的工具实例
@@ -29,13 +29,13 @@ type SysOperationRail struct {
 	// enableReadImageMultimodal nil=从配置推断, true/false=显式设置
 	enableReadImageMultimodal *bool
 	// permissionMode Shell 工具权限模式，默认 Auto
-	// 对齐 Python: BashTool(permission_mode="auto") / PowerShellTool(permission_mode="auto")
+	// Python: BashTool(permission_mode="auto") / PowerShellTool(permission_mode="auto")
 	permissionMode shell.PermissionMode
 	// denyPatterns Shell 工具拒绝模式列表
-	// 对齐 Python: BashTool(deny_patterns=...)
+	// Python: BashTool(deny_patterns=...)
 	denyPatterns []string
 	// allowPatterns Shell 工具允许模式列表
-	// 对齐 Python: BashTool(allow_patterns=...)
+	// Python: BashTool(allow_patterns=...)
 	allowPatterns []string
 }
 
@@ -48,7 +48,7 @@ type SysOperationRailOption func(*SysOperationRail)
 
 const (
 	// sysOpRailPriority SysOperationRail 优先级
-	// 对齐 Python: SysOperationRail.priority = 100
+	// Python: SysOperationRail.priority = 100
 	sysOpRailPriority = 100
 )
 
@@ -80,25 +80,25 @@ func WithEnableReadImageMultimodal(enabled bool) SysOperationRailOption {
 }
 
 // WithPermissionMode 设置 Shell 工具权限模式。
-// 对齐 Python: BashTool(permission_mode=...) / PowerShellTool(permission_mode=...)
+// Python: BashTool(permission_mode=...) / PowerShellTool(permission_mode=...)
 func WithPermissionMode(mode shell.PermissionMode) SysOperationRailOption {
 	return func(r *SysOperationRail) { r.permissionMode = mode }
 }
 
 // WithDenyPatterns 设置 Shell 工具拒绝模式列表。
-// 对齐 Python: BashTool(deny_patterns=...) / PowerShellTool(deny_patterns=...)
+// Python: BashTool(deny_patterns=...) / PowerShellTool(deny_patterns=...)
 func WithDenyPatterns(patterns []string) SysOperationRailOption {
 	return func(r *SysOperationRail) { r.denyPatterns = patterns }
 }
 
 // WithAllowPatterns 设置 Shell 工具允许模式列表。
-// 对齐 Python: BashTool(allow_patterns=...) / PowerShellTool(allow_patterns=...)
+// Python: BashTool(allow_patterns=...) / PowerShellTool(allow_patterns=...)
 func WithAllowPatterns(patterns []string) SysOperationRailOption {
 	return func(r *SysOperationRail) { r.allowPatterns = patterns }
 }
 
 // NewSysOperationRail 创建系统操作护栏实例。
-// 对齐 Python: SysOperationRail.__init__()
+// Python: SysOperationRail.__init__()
 func NewSysOperationRail(opts ...SysOperationRailOption) *SysOperationRail {
 	r := &SysOperationRail{
 		DeepAgentRail:  *NewDeepAgentRail(),
@@ -112,8 +112,8 @@ func NewSysOperationRail(opts ...SysOperationRailOption) *SysOperationRail {
 }
 
 // Init 初始化系统操作护栏，创建并注册工具。
-// 对齐 Python: SysOperationRail.init (sys_operation_rail.py L42-91)
-func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: SysOperationRail.init (sys_operation_rail.py L42-91)
+func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 获取 language
 	var language string
 	sb := agent.SystemPromptBuilder()
@@ -146,7 +146,7 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	op := r.SysOperation()
 
 	// 创建工具实例
-	// 对齐 Python L51-67
+	// Python: L51-67
 	readTool := filesystem.NewReadFileTool(op, language, agentID, enableImageMultimodal)
 	writeTool := filesystem.NewWriteFileTool(op, language, agentID)
 	editTool := filesystem.NewEditFileTool(op, language, agentID)
@@ -158,7 +158,7 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	bashTool := shell.NewBashTool(op, language, agentID, permConfig)
 
 	// 构建工具列表
-	// 对齐 Python L69-78
+	// Python: L69-78
 	shared := []tool.Tool{globTool, listDirTool, grepTool, bashTool}
 	if r.readOnly {
 		r.tools = append([]tool.Tool{readTool}, shared...)
@@ -167,21 +167,21 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// PowerShellTool — 仅 Windows
-	// 对齐 Python L63-67: PowerShellTool(...) if os.name == "nt" else None
+	// Python: L63-67: PowerShellTool(...) if os.name == "nt" else None
 	if runtime.GOOS == "windows" {
 		powershellTool := shell.NewPowerShellTool(op, language, agentID, permConfig)
 		r.tools = append(r.tools, powershellTool)
 	}
 
 	// CodeTool — 仅 withCodeTool && !readOnly
-	// 对齐 Python L77-78
+	// Python: L77-78
 	if r.withCodeTool && !r.readOnly {
 		codeTool := code.NewCodeTool(op, language, agentID)
 		r.tools = append(r.tools, codeTool)
 	}
 
 	// 幂等注册: 已存在则先 remove, 再 add
-	// 对齐 Python L85-88
+	// Python: L85-88
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range r.tools {
 		toolID := t.Card().ID
@@ -194,7 +194,7 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 批量注册到 ResourceMgr
-	// 对齐 Python L88: Runner.resource_mgr.add_tool(self.tools)
+	// Python: L88: Runner.resource_mgr.add_tool(self.tools)
 	if resourceMgr != nil {
 		for _, t := range r.tools {
 			_ = resourceMgr.AddTool(t)
@@ -202,7 +202,7 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 注册到 AbilityManager
-	// 对齐 Python L90-91: agent.ability_manager.add(tool.card)
+	// Python: L90-91: agent.ability_manager.add(tool.card)
 	am := agent.AbilityManager()
 	if am != nil {
 		for _, t := range r.tools {
@@ -221,7 +221,7 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 }
 
 // Uninit 注销系统操作护栏，移除所有已注册工具。
-// 对齐 Python: SysOperationRail.uninit (sys_operation_rail.py L93-103)
+// Python: SysOperationRail.uninit (sys_operation_rail.py L93-103)
 func (r *SysOperationRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if len(r.tools) == 0 {
 		return nil
@@ -230,7 +230,7 @@ func (r *SysOperationRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 
-	// 对齐 Python L95-102
+	// Python: L95-102
 	for _, t := range r.tools {
 		func(t tool.Tool) {
 			defer func() {

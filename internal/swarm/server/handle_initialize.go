@@ -26,7 +26,7 @@ const (
 
 // handleInitialize 处理 initialize 请求。
 //
-// 对齐 Python: AgentWsServer._handle_initialize(ws, request, send_lock)
+// Python: AgentWsServer._handle_initialize(ws, request, send_lock)
 //
 // 步骤：
 //  1. 构建 extra_config（含 protocol_version、client_capabilities）

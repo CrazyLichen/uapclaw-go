@@ -2,6 +2,7 @@ package evolution
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 //     OnAfterInvoke / OnAfterTaskIteration / RunEvolution
 //   - 演化触发时机通过 evolution_trigger 参数配置
 //
-// 对齐 Python: EvolutionRail(DeepAgentRail)
+// Python: EvolutionRail(DeepAgentRail)
 type EvolutionRail struct {
 	rails.DeepAgentRail
 	// ext 扩展点接口，实现多态分派
@@ -52,6 +53,9 @@ type EvolutionRail struct {
 	teamID string
 	// memberRole 成员角色
 	memberRole string
+	// defaultMemberRole 默认成员角色。
+	// Python: EvolutionRail._default_member_role
+	defaultMemberRole string
 	// bgTasks 后台任务集合
 	bgTasks map[*utils.BackgroundTask]bool
 	// pendingHostEvents 待排空的主机事件缓冲
@@ -76,7 +80,7 @@ const logComponent = logger.ComponentAgentCore
 //
 // ext 参数为扩展点接口，不能为 nil；opts 可选覆盖默认配置。
 //
-// 对齐 Python: EvolutionRail.__init__(
+// Python: EvolutionRail.__init__(
 //
 //	trajectory_store=None, team_trajectory_store=None(已废弃),
 //	max_trajectory_steps=200, evolution_trigger=AFTER_INVOKE,
@@ -131,8 +135,16 @@ func WithDisabledSkills(names []string) EvolutionRailOption {
 	return func(r *EvolutionRail) { r.disabledSkills = normalizeSkillNames(names) }
 }
 
+// WithDefaultMemberRole 设置默认成员角色。
+// Python: EvolutionRail(default_member_role=...)
+func WithDefaultMemberRole(role string) EvolutionRailOption {
+	return func(r *EvolutionRail) {
+		r.defaultMemberRole = role
+	}
+}
+
 // Priority 返回优先级 60。
-// 对齐 Python: EvolutionRail.priority = 60
+// Python: EvolutionRail.priority = 60
 func (r *EvolutionRail) Priority() int { return 60 }
 
 // TrajectoryStore 返回轨迹存储。
@@ -146,18 +158,18 @@ func (r *EvolutionRail) DisabledSkills() map[string]bool {
 }
 
 // Builder 返回当前轨迹构造器（子类需要）。
-// 对齐 Python: EvolutionRail.builder property
+// Python: EvolutionRail.builder property
 func (r *EvolutionRail) Builder() *trajectory.TrajectoryBuilder {
 	return r.builder
 }
 
 // SetTrajectorySink 绑定轨迹写入端点。
 //
-// 对齐 Python: EvolutionRail.set_trajectory_sink(sink, *, team_id, member_role)
-func (r *EvolutionRail) SetTrajectorySink(sink trajectory.TrajectorySink, teamID string, memberRole ...string) {
+// Python: EvolutionRail.set_trajectory_sink(sink, *, team_id, member_role)
+// Python 在 sink 非 nil 且 team_id 为空时抛出 ValueError。
+func (r *EvolutionRail) SetTrajectorySink(sink trajectory.TrajectorySink, teamID string, memberRole ...string) error {
 	if sink != nil && teamID == "" {
-		logger.Warn(logComponent).Msg("SetTrajectorySink: team_id 为空时 sink 不生效")
-		return
+		return fmt.Errorf("team_id is required when binding a trajectory sink")
 	}
 	r.trajectorySink = sink
 	r.teamID = teamID
@@ -167,10 +179,11 @@ func (r *EvolutionRail) SetTrajectorySink(sink trajectory.TrajectorySink, teamID
 			r.memberRole = *role
 		}
 	}
+	return nil
 }
 
 // EmitHostEvent 缓存一个主机事件。
-// 对齐 Python: EvolutionRail.emit_host_event(event)
+// Python: EvolutionRail.emit_host_event(event)
 func (r *EvolutionRail) EmitHostEvent(event *stream.OutputSchema) {
 	if event != nil {
 		r.pendingHostEvents = append(r.pendingHostEvents, event)
@@ -179,35 +192,73 @@ func (r *EvolutionRail) EmitHostEvent(event *stream.OutputSchema) {
 
 // DrainPendingHostEvents 返回并清空主机事件缓冲。
 //
-// 对齐 Python: EvolutionRail.drain_pending_host_events(wait, timeout)
+// 如果 wait=true，先等待所有未完成的后台任务；timeout 控制最大等待时间。
+// timeout <= 0 表示不限制等待时间；timeout > 0 时精确超时，超时后返回已收集的事件。
+//
+// Python: EvolutionRail.drain_pending_host_events(wait, timeout)
 func (r *EvolutionRail) DrainPendingHostEvents(wait bool, timeout *time.Duration) []*stream.OutputSchema {
 	if wait && len(r.bgTasks) > 0 {
-		// 等待后台任务完成
+		// 筛选未完成的任务
+		pending := make([]*utils.BackgroundTask, 0)
 		for task := range r.bgTasks {
 			select {
 			case <-task.Done():
-				// 任务已完成
+				// 已完成，从集合中移除
+				delete(r.bgTasks, task)
 			default:
-				if timeout != nil {
-					_ = task.Wait() // 简化：不实现精确超时，后续补充
-				} else {
+				pending = append(pending, task)
+			}
+		}
+
+		if len(pending) > 0 {
+			if timeout != nil && *timeout > 0 {
+				// 精确超时等待
+				ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+				defer cancel()
+				for _, task := range pending {
+					select {
+					case <-task.Done():
+						// 任务在超时前完成
+					case <-ctx.Done():
+						// 超时，停止等待后续任务
+						goto collectEvents
+					}
+				}
+			} else {
+				// 无超时限制，等待所有任务完成
+				for _, task := range pending {
 					_ = task.Wait()
 				}
 			}
-			delete(r.bgTasks, task)
+			// 清理已完成任务
+			for t := range r.bgTasks {
+				select {
+				case <-t.Done():
+					delete(r.bgTasks, t)
+				default:
+				}
+			}
 		}
 	}
-	return r.collectPendingHostEvents()
+
+collectEvents:
+	drainedList := r.collectPendingHostEvents()
+
+	logger.Debug(logComponent).
+		Int("drained_count", len(drainedList)).
+		Msg("DrainPendingHostEvents 完成")
+
+	return drainedList
 }
 
 // DrainPendingApprovalEvents 兼容别名，返回并清空主机事件缓冲。
-// 对齐 Python: EvolutionRail.drain_pending_approval_events(wait, timeout)
+// Python: EvolutionRail.drain_pending_approval_events(wait, timeout)
 func (r *EvolutionRail) DrainPendingApprovalEvents(wait bool, timeout *time.Duration) []*stream.OutputSchema {
 	return r.DrainPendingHostEvents(wait, timeout)
 }
 
 // CleanupBackgroundTasks 取消并清空所有后台任务。
-// 对齐 Python: EvolutionRail.cleanup_background_tasks()
+// Python: EvolutionRail.cleanup_background_tasks()
 func (r *EvolutionRail) CleanupBackgroundTasks() error {
 	for task := range r.bgTasks {
 		select {
@@ -224,7 +275,7 @@ func (r *EvolutionRail) CleanupBackgroundTasks() error {
 // GetCallbacks 合并 DeepAgent 基础事件 + Evolution 扩展事件的回调映射。
 //
 // 注册 5 个事件：BeforeInvoke / AfterModelCall / AfterToolCall / AfterInvoke / AfterTaskIteration。
-// 对齐 Python: EvolutionRail 注册 before_invoke / after_model_call / after_tool_call / after_invoke / after_task_iteration
+// Python: EvolutionRail 注册 before_invoke / after_model_call / after_tool_call / after_invoke / after_task_iteration
 func (r *EvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -251,7 +302,7 @@ func (r *EvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 //
 // Final 回调——子类不应覆写，通过 ext.OnBeforeInvoke 扩展。
 //
-// 对齐 Python: EvolutionRail.before_invoke(ctx)
+// Python: EvolutionRail.before_invoke(ctx)
 func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
@@ -260,7 +311,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 
 	sessionID := r.resolveSessionID(cbc, inputs)
 
-	// 对齐 Python: 复用同 session 的 builder
+	// Python: 复用同 session 的 builder
 	if r.builder != nil && r.builder.SessionID() == sessionID {
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
@@ -268,7 +319,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 		return r.ext.OnBeforeInvoke(ctx, cbc)
 	}
 
-	// 对齐 Python: 捕获 member_id 用于团队轨迹聚合
+	// Python: 捕获 member_id 用于团队轨迹聚合
 	memberID := ""
 	if agent := cbc.Agent(); agent != nil {
 		if card := agent.Card(); card != nil {
@@ -305,7 +356,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 //
 // Final 回调——子类不应覆写，通过 ext.OnAfterModelCall 扩展。
 //
-// 对齐 Python: EvolutionRail.after_model_call(ctx)
+// Python: EvolutionRail.after_model_call(ctx)
 func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
 		return nil
@@ -316,7 +367,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 		return nil
 	}
 
-	// 对齐 Python: 构建 LLMCallDetail
+	// Python: 构建 LLMCallDetail
 	var detail *trajectory.LLMCallDetail
 	var promptTokenIDs []int
 	var completionTokenIDs []int
@@ -339,11 +390,8 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 			responseDict, promptTokenIDs, completionTokenIDs, logprobs = splitResponseTokenFields(inputs.Response)
 		}
 
-		// 构建 messages
-		messages := make([]map[string]any, 0, len(inputs.Messages))
-		for _, msg := range inputs.Messages {
-			messages = append(messages, baseMessageToMap(msg))
-		}
+		// 直接存储原始 BaseMessage 对象，与 Python List[Any] 对齐
+		messages := inputs.Messages
 
 		// 构建 tools
 		var tools []map[string]any
@@ -383,12 +431,12 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 	}
 	r.builder.RecordStep(step)
 
-	// 对齐 Python: 触发扩展点
+	// Python: 触发扩展点
 	if err := r.ext.OnAfterModelCall(ctx, cbc); err != nil {
 		return err
 	}
 
-	// 对齐 Python: if trigger == AFTER_MODEL_CALL and _allow_evolution_trigger → _trigger_evolution
+	// Python: if trigger == AFTER_MODEL_CALL and _allow_evolution_trigger → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterModelCall &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterModelCall, cbc) {
 		traj := r.buildTrajectory()
@@ -404,7 +452,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 //
 // Final 回调——子类不应覆写，通过 ext.OnAfterToolCall 扩展。
 //
-// 对齐 Python: EvolutionRail.after_tool_call(ctx)
+// Python: EvolutionRail.after_tool_call(ctx)
 func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
 		logger.Debug(logComponent).Msg("after_tool_call 跳过：轨迹构造器为空")
@@ -416,7 +464,7 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 		return nil
 	}
 
-	// 对齐 Python: 构建 ToolCallDetail
+	// Python: 构建 ToolCallDetail
 	var detail *trajectory.ToolCallDetail
 	if inputs.ToolName != "" {
 		// 构建 callArgs（Go 中 ToolArgs 已是 map[string]any）
@@ -435,10 +483,8 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 			}
 		}
 
+		// Python: tool_call_id=None → Go 中为空字符串
 		toolCallID := ""
-		if inputs.ToolCall != nil {
-			toolCallID = inputs.ToolCall.ID
-		}
 
 		detail = &trajectory.ToolCallDetail{
 			ToolName:   inputs.ToolName,
@@ -457,12 +503,12 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 	}
 	r.builder.RecordStep(step)
 
-	// 对齐 Python: 触发扩展点
+	// Python: 触发扩展点
 	if err := r.ext.OnAfterToolCall(ctx, cbc); err != nil {
 		return err
 	}
 
-	// 对齐 Python: if trigger == AFTER_TOOL_CALL → _trigger_evolution
+	// Python: if trigger == AFTER_TOOL_CALL → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterToolCall &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterToolCall, cbc) {
 		traj := r.buildTrajectory()
@@ -476,14 +522,14 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 
 // AfterTaskIteration 在每次任务循环迭代后触发扩展点。
 //
-// 对齐 Python: EvolutionRail.after_task_iteration(ctx)
+// Python: EvolutionRail.after_task_iteration(ctx)
 func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python: await self._on_after_task_iteration(ctx)
+	// Python: await self._on_after_task_iteration(ctx)
 	if err := r.ext.OnAfterTaskIteration(ctx, cbc); err != nil {
 		return err
 	}
 
-	// 对齐 Python: if trigger == AFTER_TASK_ITERATION → _trigger_evolution
+	// Python: if trigger == AFTER_TASK_ITERATION → _trigger_evolution
 	if r.evolutionTrigger == TriggerAfterTaskIteration &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterTaskIteration, cbc) {
 		traj := r.buildTrajectory()
@@ -499,30 +545,32 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 //
 // Final 回调——子类不应覆写，通过 ext.OnAfterInvoke 扩展。
 //
-// 对齐 Python: EvolutionRail.after_invoke(ctx)
+// Python: EvolutionRail.after_invoke(ctx)
 func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
 		return nil
 	}
 
-	// 对齐 Python: trajectory = self._build_trajectory()
+	// Python: trajectory = self._build_trajectory()
 	traj := r.buildTrajectory()
 	if traj == nil {
 		return nil
 	}
 
-	// 对齐 Python: self._trajectory_store.save(trajectory)
-	r.trajectoryStore.Save(traj, "")
+	// Python: self._trajectory_store.save(trajectory)
+	if err := r.saveTrajectory(ctx, traj); err != nil {
+		return err
+	}
 
-	// 对齐 Python: self._publish_trajectory_snapshot(trajectory)
+	// Python: self._publish_trajectory_snapshot(trajectory)
 	r.publishTrajectorySnapshot(traj)
 
-	// 对齐 Python: await self._on_after_invoke(ctx)
+	// Python: await self._on_after_invoke(ctx)
 	if err := r.ext.OnAfterInvoke(ctx, cbc); err != nil {
 		return err
 	}
 
-	// 对齐 Python: if trigger == AFTER_INVOKE and _allow_evolution_trigger:
+	// Python: if trigger == AFTER_INVOKE and _allow_evolution_trigger:
 	//     await self._trigger_evolution(trajectory, ctx)
 	//     await self._on_after_evolution_triggered(trajectory, ctx)
 	if r.evolutionTrigger == TriggerAfterInvoke &&
@@ -542,7 +590,7 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 
 // resolveSessionID 解析运行时 session ID。
 //
-// 对齐 Python: _resolve_trajectory_session_id(ctx, inputs)
+// Python: _resolve_trajectory_session_id(ctx, inputs)
 // Python 实现：从 ctx.session 获取 session_id，回退到 inputs.conversation_id
 func (r *EvolutionRail) resolveSessionID(cbc *agentinterfaces.AgentCallbackContext, inputs *agentinterfaces.InvokeInputs) string {
 	sess := cbc.Session()
@@ -559,7 +607,7 @@ func (r *EvolutionRail) resolveSessionID(cbc *agentinterfaces.AgentCallbackConte
 
 // buildTrajectory 从 builder 构建轨迹并 snapshot steps。
 //
-// 对齐 Python: _build_trajectory()
+// Python: _build_trajectory()
 // Python 实现：trajectory = self._builder.build(); trajectory.steps = list(trajectory.steps)
 func (r *EvolutionRail) buildTrajectory() *trajectory.Trajectory {
 	if r.builder == nil {
@@ -569,16 +617,26 @@ func (r *EvolutionRail) buildTrajectory() *trajectory.Trajectory {
 	if traj == nil {
 		return nil
 	}
-	// 对齐 Python: snapshot steps 避免共享引用变异
+	// Python: snapshot steps 避免共享引用变异
 	steps := make([]*trajectory.TrajectoryStep, len(traj.Steps))
 	copy(steps, traj.Steps)
 	traj.Steps = steps
 	return traj
 }
 
+// saveTrajectory 保存轨迹到存储。
+// Python: EvolutionRail._save_trajectory(traj)
+func (r *EvolutionRail) saveTrajectory(_ context.Context, traj *trajectory.Trajectory) error {
+	if r.trajectoryStore == nil {
+		return nil
+	}
+	r.trajectoryStore.Save(traj, "")
+	return nil
+}
+
 // publishTrajectorySnapshot 通过 Sink 发布成员轨迹快照。
 //
-// 对齐 Python: _publish_trajectory_snapshot(trajectory)
+// Python: _publish_trajectory_snapshot(trajectory)
 // Python 实现：if sink and team_id → sink.publish_member_trajectory(snapshot)
 func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 	if r.trajectorySink == nil || r.teamID == "" {
@@ -595,7 +653,7 @@ func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 		return
 	}
 
-	// 对齐 Python: member_role = _normalize_member_role(trajectory.meta.get("member_role")) or self._member_role
+	// Python: member_role = _normalize_member_role(trajectory.meta.get("member_role")) or self._member_role
 	memberRole := ""
 	if traj.Meta != nil {
 		if role, ok := traj.Meta["member_role"].(string); ok && role != "" {
@@ -618,19 +676,19 @@ func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 
 // triggerEvolution 根据配置异步或同步触发演化。
 //
-// 对齐 Python: _trigger_evolution(trajectory, ctx)
+// Python: _trigger_evolution(trajectory, ctx)
 // Python 实现：
 //   - async=True: snapshot → create_background_task → _safe_run_evolution
 //   - async=False: 直接调用 run_evolution(trajectory, ctx)
 func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.asyncEvolution {
-		// 对齐 Python: Phase 1 — 同步捕获快照
+		// Python: Phase 1 — 同步捕获快照
 		snapshot := r.ext.SnapshotForEvolution(context.Background(), traj, cbc)
 		if snapshot == nil {
 			return nil
 		}
 
-		// 对齐 Python: Phase 2 — 启动后台任务
+		// Python: Phase 2 — 启动后台任务
 		skillName := formatSkillName(snapshot)
 		bgTask, err := utils.CreateBackgroundTask(
 			context.Background(),
@@ -645,7 +703,7 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 		}
 		r.bgTasks[bgTask] = true
 
-		// 对齐 Python: 清理已完成任务
+		// Python: 清理已完成任务
 		for t := range r.bgTasks {
 			select {
 			case <-t.Done():
@@ -655,7 +713,7 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 			}
 		}
 	} else {
-		// 对齐 Python: 同步模式 — 直接调用 run_evolution(trajectory, ctx)
+		// Python: 同步模式 — 直接调用 run_evolution(trajectory, ctx)
 		return r.ext.RunEvolution(context.Background(), traj, nil)
 	}
 	return nil
@@ -663,20 +721,39 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 
 // safeRunEvolution 后台安全执行演化（信号量 + 异常捕获）。
 //
-// 对齐 Python: _safe_run_evolution(snapshot)
+// Python: _safe_run_evolution(snapshot)
 // Python 实现：
 //   - 获取 evolution_sem 信号量
 //   - 调用 run_evolution(trajectory, ctx=None, snapshot=snapshot)
 //   - 捕获异常 → _emit_background_outcome_event
 func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *EvolutionSnapshot) error {
-	// 对齐 Python: async with self._evolution_sem
+	// Python: total_timeout = self._get_evolution_total_timeout_secs()
+	timeoutSecs := r.ext.GetEvolutionTotalTimeoutSecs()
+	if timeoutSecs > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSecs*float64(time.Second)))
+		defer cancel()
+	}
+
+	// Python: async with self._evolution_sem
 	r.evolutionSem <- struct{}{}
 	defer func() { <-r.evolutionSem }()
 
 	traj := snapshot.Trajectory
 	err := r.ext.RunEvolution(ctx, traj, snapshot)
 	if err != nil {
-		// 对齐 Python: except Exception as exc → outcome = {"status": "failed", "message": str(exc)}
+		// Python: except TimeoutError → outcome = {"status": "timed_out", "message": f"background evolution timed out after {timeout}s"}
+		if ctx.Err() == context.DeadlineExceeded {
+			timeoutText := formatTimeoutSecs(timeoutSecs)
+			outcome := map[string]string{
+				"status":  "timed_out",
+				"message": "background evolution timed out after " + timeoutText + "s",
+			}
+			logger.Warn(logComponent).Str("timeout_secs", timeoutText).Msg("后台演化执行超时")
+			r.emitBackgroundOutcomeEvent(outcome)
+			return err
+		}
+		// Python: except Exception as exc → outcome = {"status": "failed", "message": str(exc)}
 		outcome := map[string]string{
 			"status":  "failed",
 			"message": err.Error(),
@@ -689,7 +766,7 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 
 // emitBackgroundOutcomeEvent 将后台执行结果写入主机事件缓冲。
 //
-// 对齐 Python: _emit_background_outcome_event(outcome)
+// Python: _emit_background_outcome_event(outcome)
 // Python 实现：构建 EvolutionHostEventMeta + OutputSchema → emit_host_event
 func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 	status := outcome["status"]
@@ -707,7 +784,7 @@ func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 		Status:     &status,
 	}
 
-	// 对齐 Python: content = f"[Evolution] {outcome['message']}\n"
+	// Python: content = f"[Evolution] {outcome['message']}\n"
 	message := outcome["message"]
 	if message == "" {
 		message = "background evolution completed with unknown outcome"
@@ -725,7 +802,7 @@ func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 
 // collectPendingHostEvents 返回并清空主机事件缓冲。
 //
-// 对齐 Python: _collect_pending_host_events()
+// Python: _collect_pending_host_events()
 func (r *EvolutionRail) collectPendingHostEvents() []*stream.OutputSchema {
 	events := r.pendingHostEvents
 	r.pendingHostEvents = make([]*stream.OutputSchema, 0)
@@ -734,7 +811,7 @@ func (r *EvolutionRail) collectPendingHostEvents() []*stream.OutputSchema {
 
 // resetTrajectoryBuilder 重置当前轨迹构造器。
 //
-// 对齐 Python: _reset_trajectory_builder()
+// Python: _reset_trajectory_builder()
 // Python 注释：子类在自身生命周期边界使用此方法，例如上传 RL episode 后。
 func (r *EvolutionRail) resetTrajectoryBuilder() {
 	r.builder = nil
@@ -748,43 +825,10 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-// normalizeSkillNamesGo 规范化技能名称（Go 类型安全的版本）。
-// 被 WithDisabledSkills option 使用。
-func normalizeSkillNamesGo(names []string) map[string]bool {
-	return normalizeSkillNames(names)
-}
-
-// ensureNonNilSlice 已移到 helpers.go
-
-// normalizeNameSetGo 对齐 Python: @classmethod _normalize_name_set
-// 保留 any 参数作为桥接（P3/P4 子类可能传入动态类型），内部转发到 normalizeSkillNames
-func (r *EvolutionRail) normalizeNameSetGo(raw any) map[string]bool {
-	switch v := raw.(type) {
-	case string:
-		return normalizeSkillNames([]string{v})
-	case []string:
-		return normalizeSkillNames(v)
-	default:
-		return map[string]bool{}
-	}
-}
-
-// collectMessagesFromTrajectoryGo 从轨迹中收集消息。
-// 对齐 Python: EvolutionRail._collect_messages_from_trajectory(trajectory)
-func (r *EvolutionRail) collectMessagesFromTrajectoryGo(traj *trajectory.Trajectory) []map[string]any {
-	return collectMessagesFromTrajectory(traj)
-}
-
 // isSkillDisabled 检查技能是否被禁用。
-// 对齐 Python: skill_name in self._disabled_skills
+// Python: skill_name in self._disabled_skills
 func (r *EvolutionRail) isSkillDisabled(skillName string) bool {
 	return r.disabledSkills[skillName]
-}
-
-// normalizeCallbackMessagesGo 规范化回调消息。
-// 对齐 Python: _normalize_callback_messages(messages)
-func (r *EvolutionRail) normalizeCallbackMessagesGo(messages []map[string]any) []map[string]any {
-	return normalizeCallbackMessages(messages)
 }
 
 // getAgentIDStr 从回调上下文获取 agent ID 字符串。
@@ -798,7 +842,12 @@ func getAgentIDStr(cbc *agentinterfaces.AgentCallbackContext) string {
 	return "unknown"
 }
 
-// isBlank 检查字符串是否为空或仅含空白。
-func isBlank(s string) bool {
-	return strings.TrimSpace(s) == ""
+// formatTimeoutSecs 将超时秒数格式化为字符串，去除尾部无意义的零。
+// Python: f"{total_timeout:.2f}".rstrip("0").rstrip(".")
+func formatTimeoutSecs(secs float64) string {
+	s := fmt.Sprintf("%.2f", secs)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	return s
 }
+

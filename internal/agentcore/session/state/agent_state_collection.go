@@ -13,7 +13,7 @@ import (
 // 组合 globalState（跨 Agent 共享的全局状态）和 agentState（当前 Agent 专属状态），
 // 提供统一的状态读写接口。实现 SessionState 接口。
 //
-// 对应 Python: openjiuwen/core/session/state/agent_state.py (StateCollection)
+// Python: openjiuwen/core/session/state/agent_state.py (StateCollection)
 type AgentStateCollection struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -65,7 +65,7 @@ func (s *AgentStateCollection) UpdateGlobal(data map[string]any) {
 }
 
 // SetGlobal 从快照恢复全局状态。
-// 对齐 Python: session.state().global_state.set_state(state)
+// Python: session.state().global_state.set_state(state)
 func (s *AgentStateCollection) SetGlobal(st map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

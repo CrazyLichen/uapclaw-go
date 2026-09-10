@@ -28,7 +28,7 @@ import (
 // Invoke 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
 // Stream 不做重试（流一旦开始无法重试）。
 //
-// 对应 Python: IntelliRouterModelClient（intelli_router_model_client.py）
+// Python: IntelliRouterModelClient（intelli_router_model_client.py）
 type IntelliRouterModelClient struct {
 	openai.OpenAIModelClient
 	// router 智能路由器实例
@@ -54,7 +54,7 @@ type IntelliRouterModelClient struct {
 //  4. 构造 BaseClientEmbed（WithSkipValidate 跳过 api_key/api_base 校验）
 //  5. 构造 OpenAI 客户端（placeholder 配置，实际调用时动态替换）
 //
-// 对应 Python: IntelliRouterModelClient.__init__(model_config, model_client_config)
+// Python: IntelliRouterModelClient.__init__(model_config, model_client_config)
 func NewIntelliRouterModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -102,7 +102,7 @@ func NewIntelliRouterModelClient(
 	}
 	openaiClient.BaseClientEmbed = *embed
 
-	// 对齐 Python: IntelliRouter 构造使用 llm_logger.info，非回调
+	// Python: IntelliRouter 构造使用 llm_logger.info，非回调
 	logger.Info(logComponent).
 		Str("model_name", "IntelliRouter").
 		Str("client_name", "IntelliRouter client").
@@ -123,7 +123,7 @@ func NewIntelliRouterModelClient(
 // 动态替换 api_key/api_base 后委托给 OpenAI.Invoke()。
 // 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
 //
-// 对应 Python: IntelliRouterModelClient.invoke()
+// Python: IntelliRouterModelClient.invoke()
 func (c *IntelliRouterModelClient) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -149,7 +149,7 @@ func (c *IntelliRouterModelClient) Invoke(
 		c.ClientConfig.APIKey = dep.APIKey
 		c.ClientConfig.APIBase = dep.APIBase
 
-		// 对齐 Python: 路由选择是内部逻辑，使用日志记录，非回调
+		// Python: 路由选择是内部逻辑，使用日志记录，非回调
 		logger.Info(logComponent).
 			Str("model_name", modelName).
 			Str("model_provider", "IntelliRouter").
@@ -190,7 +190,7 @@ func (c *IntelliRouterModelClient) Invoke(
 // Stream 流式调用 IntelliRouter API。
 //
 // 独立实现 Stream，不委托给 OpenAI 客户端。
-// 对齐 Python IntelliRouterModelClient：IntelliRouter 没有 _astream_with_parser，
+// Python: IntelliRouterModelClient：IntelliRouter 没有 _astream_with_parser，
 // 因此不支持 OutputParser。使用自己的 convertChunk 只提取 content。
 //
 // 与 OpenAI 的行为差异（对齐 Python）：
@@ -199,7 +199,7 @@ func (c *IntelliRouterModelClient) Invoke(
 //
 // Stream 不做重试（流一旦开始无法重试）。
 //
-// 对应 Python: IntelliRouterModelClient.stream()
+// Python: IntelliRouterModelClient.stream()
 func (c *IntelliRouterModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -221,7 +221,7 @@ func (c *IntelliRouterModelClient) Stream(
 	c.ClientConfig.APIKey = dep.APIKey
 	c.ClientConfig.APIBase = dep.APIBase
 
-	// 对齐 Python: 路由选择是内部逻辑，使用日志记录，非回调
+	// Python: 路由选择是内部逻辑，使用日志记录，非回调
 	logger.Info(logComponent).
 		Str("model_name", modelName).
 		Str("model_provider", "IntelliRouter").
@@ -280,7 +280,7 @@ func (c *IntelliRouterModelClient) Stream(
 	resp, err := client.Do(req)
 	if err != nil {
 		c.router.RecordFailure(dep)
-		// 对齐 Python: 路由层错误走日志，非回调
+		// Python: 路由层错误走日志，非回调
 		logger.Error(logComponent).
 			Str("model_name", modelName).
 			Str("model_provider", "IntelliRouter").
@@ -314,7 +314,7 @@ func (c *IntelliRouterModelClient) Stream(
 				return
 			}
 			if err != nil {
-				// 对齐 Python: 路由层 SSE 错误走日志，非回调
+				// Python: 路由层 SSE 错误走日志，非回调
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", "IntelliRouter").
@@ -325,7 +325,7 @@ func (c *IntelliRouterModelClient) Stream(
 
 			var chunkResp openai.ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				// 对齐 Python: JSON 解析错误走日志，非回调
+				// Python: JSON 解析错误走日志，非回调
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", "IntelliRouter").
@@ -434,7 +434,7 @@ func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
 
 // convertChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
 //
-// 对齐 Python IntelliRouterModelClient._convert_chunk()：
+// Python: IntelliRouterModelClient._convert_chunk()：
 // 只提取 content，不提取 reasoning_content / tool_calls / usage_metadata / finish_reason。
 // IntelliRouter 不使用 OutputParser（无 _astream_with_parser）。
 func (c *IntelliRouterModelClient) convertChunk(
@@ -451,7 +451,7 @@ func (c *IntelliRouterModelClient) convertChunk(
 		content = *delta.Content
 	}
 
-	// 对齐 Python: 空 content 也返回 chunk（Python 原样返回 content="" 的 chunk）
+	// Python: 空 content 也返回 chunk（Python 原样返回 content="" 的 chunk）
 	return llmschema.NewAssistantMessageChunk(content)
 }
 

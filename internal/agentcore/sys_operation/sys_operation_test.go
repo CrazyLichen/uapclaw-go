@@ -112,7 +112,7 @@ func TestFsOption(t *testing.T) {
 }
 
 // TestFsOption_默认值 测试文件系统操作选项默认值
-// 对齐 Python：mode 默认 "text"，encoding 默认 "utf-8"。
+// Python: mode 默认 "text"，encoding 默认 "utf-8"。
 func TestFsOption_默认值(t *testing.T) {
 	opts := NewFsOptions()
 	assert.Equal(t, "text", opts.Mode)
@@ -137,7 +137,7 @@ func TestShellOption(t *testing.T) {
 }
 
 // TestShellOption_默认值 测试 Shell 操作选项默认值
-// 对齐 Python：timeout 默认 300。
+// Python: timeout 默认 300。
 func TestShellOption_默认值(t *testing.T) {
 	opts := NewShellOptions()
 	assert.Equal(t, 300, opts.Timeout)
@@ -161,7 +161,7 @@ func TestCodeOption(t *testing.T) {
 }
 
 // TestCodeOption_默认值 测试代码执行选项默认值
-// 对齐 Python：language 默认 "python"，timeout 默认 300。
+// Python: language 默认 "python"，timeout 默认 300。
 func TestCodeOption_默认值(t *testing.T) {
 	opts := NewCodeOptions()
 	assert.Equal(t, "python", opts.Language)

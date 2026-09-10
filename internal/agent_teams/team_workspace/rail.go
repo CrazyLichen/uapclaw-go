@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -18,7 +20,7 @@ import (
 // 拦截 .team/ 路径下的标准文件工具调用，透明施加锁检查和版本控制。
 // Agent 使用标准 read_file/write_file — 本 Rail 添加行为。
 //
-// 对齐 Python: TeamWorkspaceRail (team_workspace/rails.py)
+// Python: TeamWorkspaceRail (team_workspace/rails.py)
 type TeamWorkspaceRail struct {
 	rails.DeepAgentRail
 	// ws 工作空间管理器
@@ -26,9 +28,24 @@ type TeamWorkspaceRail struct {
 	// memberName 当前成员名
 	memberName string
 	// lastPullTime 上次拉取时间（仅 DISTRIBUTED 模式使用）
-	lastPullTime float64
-	// pullInterval 拉取间隔秒数
-	pullInterval float64
+	lastPullTime time.Time
+	// pullInterval 拉取间隔
+	pullInterval time.Duration
+}
+
+// WorkspaceArtifactEventData 工件更新事件数据。
+// 因 team_workspace 和 schema 之间存在循环依赖（schema 导入 TeamWorkspaceConfig），
+// 无法直接引用 schema.WorkspaceArtifactEvent，故在本包定义等价结构体，
+// 由上层调用方转换为 schema.WorkspaceArtifactEvent。
+type WorkspaceArtifactEventData struct {
+	// TeamName 团队名
+	TeamName string
+	// MemberName 成员名
+	MemberName string
+	// ArtifactPath 工件在工作空间内的相对路径
+	ArtifactPath string
+	// CommitSHA Git 提交 SHA（如已版本化）
+	CommitSHA string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -38,10 +55,10 @@ type TeamWorkspaceRail struct {
 const (
 	// teamPrefix 团队路径前缀
 	teamPrefix = ".team/"
-	// pullIntervalDefault 默认拉取间隔秒数
-	pullIntervalDefault = 5.0
+	// pullIntervalDefault 默认拉取间隔
+	pullIntervalDefault = 5 * time.Second
 	// eventWorkspaceArtifactUpdated 工件更新事件类型
-	// 对齐 Python: TeamEvent.WORKSPACE_ARTIFACT_UPDATED（因循环依赖不导入 schema 包）
+	// Python: TeamEvent.WORKSPACE_ARTIFACT_UPDATED（因循环依赖不导入 schema 包）
 	eventWorkspaceArtifactUpdated = "workspace_artifact_updated"
 )
 
@@ -57,7 +74,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamWorkspaceRail 创建 TeamWorkspaceRail 实例。
-// 对齐 Python: TeamWorkspaceRail.__init__(workspace_manager, member_name)
+// Python: TeamWorkspaceRail.__init__(workspace_manager, member_name)
 func NewTeamWorkspaceRail(ws *TeamWorkspaceManager, memberName string) *TeamWorkspaceRail {
 	return &TeamWorkspaceRail{
 		DeepAgentRail: *rails.NewDeepAgentRail(),
@@ -68,18 +85,20 @@ func NewTeamWorkspaceRail(ws *TeamWorkspaceManager, memberName string) *TeamWork
 }
 
 // Init 初始化 Rail，设置 CwdState 的 team workspace。
-// 对齐 Python: TeamWorkspaceRail.init(agent)
-//
-// TODO: 待 AgentConfigurator 在 SetupAgent 中统一调用 cwd.InitCwd(WithTeamWorkspace) 后，
-// 此方法仅需保留 Rail 自身的初始化逻辑（当前由上层已处理，此处为 no-op）。
-func (r *TeamWorkspaceRail) Init(_ interfaces.BaseAgent) error {
+// Python: TeamWorkspaceRail.init(agent)
+func (r *TeamWorkspaceRail) Init(ctx context.Context, _ interfaces.BaseAgent) error {
+	// Python: set_team_workspace(self._ws.workspace_path)
+	cwdState := cwd.CwdStateFromCtx(ctx)
+	if cwdState != nil {
+		cwdState.SetTeamWorkspace(r.ws.WorkspacePath())
+	}
 	return nil
 }
 
 // BeforeToolCall 工具调用前拦截。
-// 对齐 Python: TeamWorkspaceRail.before_tool_call(ctx)
+// Python: TeamWorkspaceRail.before_tool_call(ctx)
 // 读操作→maybePull；写操作→maybePull + 锁检查（设 Extra 标记，不阻断）。
-func (r *TeamWorkspaceRail) BeforeToolCall(_ context.Context, cbc *interfaces.AgentCallbackContext) error {
+func (r *TeamWorkspaceRail) BeforeToolCall(ctx context.Context, cbc *interfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs)
 	if !ok {
 		return nil
@@ -98,7 +117,7 @@ func (r *TeamWorkspaceRail) BeforeToolCall(_ context.Context, cbc *interfaces.Ag
 
 	// 读操作路径：拉取后放行
 	if readTools[toolName] {
-		r.maybePull()
+		r.maybePull(ctx)
 		return nil
 	}
 
@@ -107,7 +126,7 @@ func (r *TeamWorkspaceRail) BeforeToolCall(_ context.Context, cbc *interfaces.Ag
 	}
 
 	// 写操作路径：拉取 + 锁检查
-	r.maybePull()
+	r.maybePull(ctx)
 
 	if r.ws.Config().ConflictStrategy == ConflictStrategyLock {
 		lock := r.ws.GetLock(path)
@@ -128,7 +147,7 @@ func (r *TeamWorkspaceRail) BeforeToolCall(_ context.Context, cbc *interfaces.Ag
 }
 
 // AfterToolCall 工具调用后拦截。
-// 对齐 Python: TeamWorkspaceRail.after_tool_call(ctx)
+// Python: TeamWorkspaceRail.after_tool_call(ctx)
 // 写操作→autoCommit + publishEvent。
 func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs)
@@ -154,13 +173,18 @@ func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.A
 	realPath := resolveWorkspaceRelative(path, r.ws.TeamName())
 
 	// 自动版本控制（分布式模式下含推送）
+	var commitSHA string
 	if r.ws.Config().VersionControl {
-		if _, err := r.ws.AutoCommit(ctx, realPath, r.memberName); err != nil {
+		sha, err := r.ws.AutoCommit(ctx, realPath, r.memberName)
+		if err != nil {
 			logger.Error(logComponent).
 				Str("event_type", "workspace_auto_commit_failed").
 				Str("file_path", realPath).
 				Err(err).
 				Msg("工作空间自动提交失败")
+		}
+		if sha != "" {
+			commitSHA = sha
 		}
 	}
 
@@ -168,10 +192,11 @@ func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.A
 	if r.ws.publishEvent != nil {
 		r.ws.publishEvent(
 			eventWorkspaceArtifactUpdated,
-			map[string]any{
-				"team_name":     r.ws.TeamName(),
-				"member_name":   r.memberName,
-				"artifact_path": realPath,
+			WorkspaceArtifactEventData{
+				TeamName:     r.ws.TeamName(),
+				MemberName:   r.memberName,
+				ArtifactPath: realPath,
+				CommitSHA:    commitSHA,
 			},
 		)
 	}
@@ -195,14 +220,19 @@ func (r *TeamWorkspaceRail) GetCallbacks() map[interfaces.AgentCallbackEvent]cb.
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // maybePull 节流拉取（LOCAL 模式下 no-op）。
-// 对齐 Python: TeamWorkspaceRail._maybe_pull
-func (r *TeamWorkspaceRail) maybePull() {
+// Python: TeamWorkspaceRail._maybe_pull
+func (r *TeamWorkspaceRail) maybePull(ctx context.Context) {
 	if r.ws.Mode() != WorkspaceModeDistributed {
 		return
 	}
-	// TODO: 实现分布式模式的节流拉取逻辑
-	// 对齐 Python: now := time.Now().Sub(epoch).Seconds()
-	// 对齐 Python: if now - r.lastPullTime < r.pullInterval { return }
-	// 对齐 Python: r.lastPullTime = now
-	// r.ws.Pull(ctx)
+	now := time.Now()
+	if now.Sub(r.lastPullTime) < r.pullInterval {
+		return
+	}
+	r.lastPullTime = now
+	if _, err := r.ws.Pull(ctx); err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("工作空间拉取失败")
+	}
 }

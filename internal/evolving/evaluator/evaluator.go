@@ -22,7 +22,7 @@ import (
 
 // BaseEvaluator 抽象评估器接口。
 //
-// 对应 Python: openjiuwen/agent_evolving/evaluator/evaluator.py BaseEvaluator
+// Python: openjiuwen/agent_evolving/evaluator/evaluator.py BaseEvaluator
 type BaseEvaluator interface {
 	// Evaluate 评估单个样本
 	Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error)
@@ -35,7 +35,7 @@ type BaseEvaluator interface {
 // 判定模型输出与期望答案的语义一致性，映射为 0/1 分数。
 // 解析失败时使用重试模板再调一次 LLM。
 //
-// 对应 Python: openjiuwen/agent_evolving/evaluator/evaluator.py DefaultEvaluator
+// Python: openjiuwen/agent_evolving/evaluator/evaluator.py DefaultEvaluator
 type DefaultEvaluator struct {
 	// model LLM 模型实例
 	model *llm.Model
@@ -49,7 +49,7 @@ type DefaultEvaluator struct {
 //
 // 遍历所有 Metric 计算 score，支持 per-metric 分解和可配置聚合方式。
 //
-// 对应 Python: openjiuwen/agent_evolving/evaluator/evaluator.py MetricEvaluator
+// Python: openjiuwen/agent_evolving/evaluator/evaluator.py MetricEvaluator
 type MetricEvaluator struct {
 	// metrics 指标列表
 	metrics []metrics.Metric
@@ -75,7 +75,7 @@ const (
 // 传入 ModelClientConfig + ModelRequestConfig，内部创建 llm.Model。
 // metric 为自定义验证规则字符串，会注入到评估模板中。
 //
-// 对应 Python: DefaultEvaluator(model_config, model_client_config, metric)
+// Python: DefaultEvaluator(model_config, model_client_config, metric)
 func NewDefaultEvaluator(
 	clientConfig llmschema.ModelClientConfig,
 	requestConfig llmschema.ModelRequestConfig,
@@ -106,7 +106,7 @@ func NewDefaultEvaluator(
 //
 // metrics 为指标列表，aggregate 为聚合方式（"mean" 或 "first"）。
 //
-// 对应 Python: MetricEvaluator(metrics, aggregate)
+// Python: MetricEvaluator(metrics, aggregate)
 func NewMetricEvaluator(ms []metrics.Metric, aggregate string) *MetricEvaluator {
 	if aggregate == "" {
 		aggregate = "mean"
@@ -116,7 +116,7 @@ func NewMetricEvaluator(ms []metrics.Metric, aggregate string) *MetricEvaluator 
 
 // Evaluate 使用 LLM-as-Judge 评估单个样本。
 //
-// 对应 Python: DefaultEvaluator.evaluate(case, predict)
+// Python: DefaultEvaluator.evaluate(case, predict)
 func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
 	ec := dataset.NewEvaluatedCase(case_, predict)
 
@@ -172,7 +172,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 //
 // 使用 errgroup.Group + SetLimit(numParallel) 控制并发。
 //
-// 对应 Python: BaseEvaluator.batch_evaluate(cases, predicts, num_parallel)
+// Python: BaseEvaluator.batch_evaluate(cases, predicts, num_parallel)
 func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Case, predicts []map[string]any, numParallel int) ([]*dataset.EvaluatedCase, error) {
 	numParallel, err := validateBatchArgs(len(cases), len(predicts), numParallel)
 	if err != nil {
@@ -203,7 +203,7 @@ func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Ca
 
 // Evaluate 使用多指标聚合评估单个样本。
 //
-// 对应 Python: MetricEvaluator.evaluate(case, predict)
+// Python: MetricEvaluator.evaluate(case, predict)
 func (m *MetricEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
 	ec := dataset.NewEvaluatedCase(case_, predict)
 	perMetric := make(map[string]float64)
@@ -265,7 +265,7 @@ func (m *MetricEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Cas
 
 // extractEvaluateResult 解析 LLM 评估响应，解析失败时用重试模板再调一次 LLM。
 //
-// 对应 Python: DefaultEvaluator._extract_evaluate_result(response, case, predict)
+// Python: DefaultEvaluator._extract_evaluate_result(response, case, predict)
 func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response string, case_ dataset.Case, predict map[string]any) map[string]any {
 	// 第一次解析
 	parsed, err := d.parser.Parse(response)
@@ -327,7 +327,7 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 
 // mapBoolToScore 将 result 字段映射为 0.0 或 1.0。
 //
-// 对应 Python: DefaultEvaluator._is_pass_result(result)
+// Python: DefaultEvaluator._is_pass_result(result)
 func mapBoolToScore(result any) float64 {
 	if metrics.IsPassResult(result) {
 		return 1.0
@@ -337,7 +337,7 @@ func mapBoolToScore(result any) float64 {
 
 // aggScore 聚合分数。
 //
-// 对应 Python: _agg_score(results, aggregate)
+// Python: _agg_score(results, aggregate)
 func aggScore(results []float64, aggregate string) float64 {
 	if len(results) == 0 {
 		return 0.0
@@ -358,7 +358,7 @@ func aggScore(results []float64, aggregate string) float64 {
 
 // safeConvert 安全转换 metric 值为 float64。
 //
-// 对应 Python: MetricEvaluator._safe_convert(num)
+// Python: MetricEvaluator._safe_convert(num)
 func safeConvert(num float64) float64 {
 	if math.IsNaN(num) || math.IsInf(num, 0) {
 		logger.Warn(logComponent).
@@ -397,7 +397,7 @@ func validateBatchArgs(casesLen, predictsLen, numParallel int) (int, error) {
 
 // formatValue 将任意值序列化为字符串，用于 LLM 模板填充。
 // nil 或零值 → 空字符串，非空 → JSON 序列化。
-// 对齐 Python 的 str(value or "") 语义。
+// Python: 的 str(value or "") 语义。
 func formatValue(v any) string {
 	if v == nil {
 		return ""

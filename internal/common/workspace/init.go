@@ -14,7 +14,7 @@ import (
 
 // InitOption 工作区初始化选项。
 //
-// 对应 Python: init_user_workspace(overwrite, workspace_dir) + prepare_workspace(overwrite, preferred_language, workspace_dir)
+// Python: init_user_workspace(overwrite, workspace_dir) + prepare_workspace(overwrite, preferred_language, workspace_dir)
 type InitOption struct {
 	Overwrite    bool   // 是否强制清理重建（-f 标志）
 	Language     string // "zh" 或 "en"，空则交互询问
@@ -24,7 +24,7 @@ type InitOption struct {
 
 // InitResult 工作区初始化结果。
 //
-// 对应 Python: init_user_workspace 返回值
+// Python: init_user_workspace 返回值
 type InitResult struct {
 	WorkspaceDir string         // 实际使用的工作区路径
 	Diff         CopyDiffResult // 文件变更差异
@@ -41,7 +41,7 @@ const logComponent = logger.ComponentCommon
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 多语言文件映射：模板源名 → 目标名
-// 对应 Python: prepare_workspace 中的 multilang_files
+// Python: prepare_workspace 中的 multilang_files
 var multilangFiles = []struct {
 	srcSuffix string // 如 "AGENT_ZH.md"
 	dstName   string // 如 "AGENT.md"
@@ -64,7 +64,7 @@ var memoryMultilangFiles = []struct {
 
 // Init 初始化工作区。
 //
-// 对应 Python: init_user_workspace(overwrite, workspace_dir)
+// Python: init_user_workspace(overwrite, workspace_dir)
 //
 // 完整流程：
 //  1. 验证实例名称（如有）
@@ -190,7 +190,7 @@ func Init(opt InitOption) (*InitResult, error) {
 
 // Prepare 复制模板文件到工作区。
 //
-// 对应 Python: prepare_workspace(overwrite, preferred_language, workspace_dir)
+// Python: prepare_workspace(overwrite, preferred_language, workspace_dir)
 //
 // 流程：
 //  1. 确保根目录存在
@@ -328,7 +328,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isInteractive 检查 stdin 是否连接到终端。
-// 对应 Python: _is_interactive()
+// Python: _is_interactive()
 func isInteractive() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
@@ -348,7 +348,7 @@ func promptYesNo(prompt string) bool {
 
 // promptPreferredLanguage 交互询问语言偏好。
 //
-// 对应 Python: prompt_preferred_language()
+// Python: prompt_preferred_language()
 // 非交互环境默认返回 "zh"。
 func promptPreferredLanguage() string {
 	if !isInteractive() {
@@ -391,7 +391,7 @@ func promptPreferredLanguage() string {
 // resolvePreferredLanguage 确定初始化使用的语言。
 //
 // 优先级：显式参数 > 已有 config.yaml 中的 preferred_language > 默认 "zh"
-// 对应 Python: _resolve_preferred_language()
+// Python: _resolve_preferred_language()
 func resolvePreferredLanguage(explicit string, workspaceDir string) string {
 	if explicit != "" {
 		lang := strings.TrimSpace(strings.ToLower(explicit))
@@ -425,7 +425,7 @@ func resolvePreferredLanguage(explicit string, workspaceDir string) string {
 
 // setPreferredLanguage 将语言偏好写入 config.yaml。
 //
-// 对应 Python: set_preferred_language_in_config_file()
+// Python: set_preferred_language_in_config_file()
 func setPreferredLanguage(configPath string, lang string) {
 	// 读取现有内容
 	data, err := os.ReadFile(configPath)

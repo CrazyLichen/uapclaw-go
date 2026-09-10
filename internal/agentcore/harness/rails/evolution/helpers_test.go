@@ -106,9 +106,9 @@ func TestCollectMessagesFromTrajectory_含LLM步骤(t *testing.T) {
 			{
 				Kind: trajectory.StepKindLLM,
 				Detail: &trajectory.LLMCallDetail{
-					Messages: []map[string]any{
-						{"role": "user", "content": "hi"},
-						{"role": "assistant", "content": "hello"},
+					Messages: []llmschema.BaseMessage{
+						llmschema.NewUserMessage("hi"),
+						llmschema.NewAssistantMessage("hello"),
 					},
 				},
 			},
@@ -126,9 +126,9 @@ func TestCollectMessagesFromTrajectory_去重(t *testing.T) {
 			{
 				Kind: trajectory.StepKindLLM,
 				Detail: &trajectory.LLMCallDetail{
-					Messages: []map[string]any{
-						{"role": "user", "content": "hi"},
-						{"role": "user", "content": "hi"},
+					Messages: []llmschema.BaseMessage{
+						llmschema.NewUserMessage("hi"),
+						llmschema.NewUserMessage("hi"),
 					},
 				},
 			},

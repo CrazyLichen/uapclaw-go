@@ -20,7 +20,7 @@ import (
 // 共享 Domain/DefaultTargets/RequiresForwardData/Bind 等行为，
 // 通过嵌入 BaseOptimizerMixin 避免重复实现。
 //
-// 对应 Python: SkillExperienceOptimizer 和 TeamSkillExperienceOptimizer 的共享字段
+// Python: SkillExperienceOptimizer 和 TeamSkillExperienceOptimizer 的共享字段
 type SkillExperienceOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
 	// llm LLM 模型实例
@@ -42,50 +42,50 @@ const logComponent = logger.ComponentAgentCore
 
 const (
 	// SkillContentMaxChars 个体优化器技能内容截断上限
-	// 对齐 Python: _SKILL_CONTENT_MAX_CHARS = 6000
+	// Python: _SKILL_CONTENT_MAX_CHARS = 6000
 	SkillContentMaxChars = 6000
 	// SectionPreviewChars 章节预览字符数
-	// 对齐 Python: _SECTION_PREVIEW_CHARS = 200
+	// Python: _SECTION_PREVIEW_CHARS = 200
 	SectionPreviewChars = 200
 	// ContextMaxChars 上下文拼接上限
-	// 对齐 Python: _CONTEXT_MAX_CHARS = 500
+	// Python: _CONTEXT_MAX_CHARS = 500
 	ContextMaxChars = 500
 	// RetryParseTimeoutSecs 重试解析超时（秒）
-	// 对齐 Python: _RETRY_PARSE_TIMEOUT_SECS = 20
+	// Python: _RETRY_PARSE_TIMEOUT_SECS = 20
 	RetryParseTimeoutSecs = 20
 	// TeamSkillContentMaxChars 团队优化器技能内容截断上限
-	// 对齐 Python: TEAM_SKILL_CONTENT_MAX_CHARS = 6000
+	// Python: TEAM_SKILL_CONTENT_MAX_CHARS = 6000
 	TeamSkillContentMaxChars = 6000
 	// PatchRetrySkillContentChars 团队 patch 重试时技能内容截断上限
-	// 对齐 Python: PATCH_RETRY_SKILL_CONTENT_CHARS = 3000
+	// Python: PATCH_RETRY_SKILL_CONTENT_CHARS = 3000
 	PatchRetrySkillContentChars = 3000
 	// PatchRetryTrajectoryChars 团队 patch 重试时轨迹截断上限
-	// 对齐 Python: PATCH_RETRY_TRAJECTORY_CHARS = 6000
+	// Python: PATCH_RETRY_TRAJECTORY_CHARS = 6000
 	PatchRetryTrajectoryChars = 6000
 	// TrajectoryIssuesRetryChars 团队 patch 重试时轨迹问题截断上限
-	// 对齐 Python: TRAJECTORY_ISSUES_RETRY_CHARS = 2000
+	// Python: TRAJECTORY_ISSUES_RETRY_CHARS = 2000
 	TrajectoryIssuesRetryChars = 2000
 	// UserIntentRetryChars 团队 patch 重试时用户意图截断上限
-	// 对齐 Python: USER_INTENT_RETRY_CHARS = 500
+	// Python: USER_INTENT_RETRY_CHARS = 500
 	UserIntentRetryChars = 500
 	// SummaryRetryChars 团队 patch 重试时摘要截断上限
-	// 对齐 Python: SUMMARY_RETRY_CHARS = 200
+	// Python: SUMMARY_RETRY_CHARS = 200
 	SummaryRetryChars = 200
 	// TeamEvolutionPreviewChars 团队已有演进预览截断上限
-	// 对齐 Python: TEAM_EVOLUTION_PREVIEW_CHARS = 200
+	// Python: TEAM_EVOLUTION_PREVIEW_CHARS = 200
 	TeamEvolutionPreviewChars = 200
 	// TeamEvolutionMaxRecords 团队已有演进最大展示条数
-	// 对齐 Python: TEAM_EVOLUTION_MAX_RECORDS = 6
+	// Python: TEAM_EVOLUTION_MAX_RECORDS = 6
 	TeamEvolutionMaxRecords = 6
 	// TeamRetryParseTimeoutSecs 团队重试解析超时（秒）
-	// 对齐 Python: TEAM_RETRY_PARSE_TIMEOUT_SECS = 20
+	// Python: TEAM_RETRY_PARSE_TIMEOUT_SECS = 20
 	TeamRetryParseTimeoutSecs = 20
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InitialScoreBySignal 个体优化器信号类型→初始评分映射
-// 对齐 Python: INITIAL_SCORE_BY_SIGNAL
+// Python: INITIAL_SCORE_BY_SIGNAL
 var InitialScoreBySignal = map[string]float64{
 	"execution_failure":   0.65,
 	"user_correction":     0.70,
@@ -94,7 +94,7 @@ var InitialScoreBySignal = map[string]float64{
 }
 
 // GenerateRecordsLLMPolicy 默认的个体记录生成 LLM 调用策略
-// 对齐 Python: GENERATE_RECORDS_LLM_POLICY
+// Python: GENERATE_RECORDS_LLM_POLICY
 var GenerateRecordsLLMPolicy = llm_resilience.LLMInvokePolicy{
 	AttemptTimeoutSecs: 150,
 	TotalBudgetSecs:    300,
@@ -102,7 +102,7 @@ var GenerateRecordsLLMPolicy = llm_resilience.LLMInvokePolicy{
 }
 
 // TeamSkillRecordLLMPolicy 默认的团队记录生成 LLM 调用策略
-// 对齐 Python: TEAM_SKILL_RECORD_LLM_POLICY
+// Python: TEAM_SKILL_RECORD_LLM_POLICY
 var TeamSkillRecordLLMPolicy = llm_resilience.LLMInvokePolicy{
 	AttemptTimeoutSecs: 120,
 	TotalBudgetSecs:    420,
@@ -110,7 +110,7 @@ var TeamSkillRecordLLMPolicy = llm_resilience.LLMInvokePolicy{
 }
 
 // TeamInitialScoreBySignal 团队优化器信号类型→初始评分映射
-// 对齐 Python: TEAM_INITIAL_SCORE_BY_SIGNAL
+// Python: TEAM_INITIAL_SCORE_BY_SIGNAL
 var TeamInitialScoreBySignal = map[string]float64{
 	"trajectory_issue": 0.65,
 	"user_intent":      0.70,
@@ -121,14 +121,14 @@ var TeamInitialScoreBySignal = map[string]float64{
 
 // Domain 返回优化器域 "skill_experience"。
 //
-// 对齐 Python: SkillExperienceOptimizer.domain = "skill_experience"
+// Python: SkillExperienceOptimizer.domain = "skill_experience"
 func (b *SkillExperienceOptimizerBase) Domain() string {
 	return "skill_experience"
 }
 
 // DefaultTargets 返回默认优化目标列表 ["experiences"]。
 //
-// 对齐 Python:
+// Python:
 //
 //	@staticmethod
 //	def default_targets() -> List[str]:
@@ -144,7 +144,7 @@ func (b *SkillExperienceOptimizerBase) RequiresForwardData() bool {
 
 // Bind 过滤并绑定可优化的 Operator，从 config 提取 online_contexts。
 //
-// 对齐 Python:
+// Python:
 //
 //	self._online_contexts = dict(config.get("online_contexts") or {})
 //	return super().bind(operators=operators, targets=targets, **config)
@@ -152,7 +152,7 @@ func (b *SkillExperienceOptimizerBase) Bind(operators map[string]operator.Operat
 	if len(targets) == 0 {
 		targets = b.DefaultTargets()
 	}
-	// 对齐 Python: self._online_contexts = dict(config.get("online_contexts") or {})
+	// Python: self._online_contexts = dict(config.get("online_contexts") or {})
 	if config != nil {
 		if oc, ok := config["online_contexts"]; ok && oc != nil {
 			b.onlineContexts = make(map[string]*experience.EvolutionContext)
@@ -180,7 +180,7 @@ func (b *SkillExperienceOptimizerBase) Bind(operators map[string]operator.Operat
 }
 
 // UpdateLLM 更新运行时 llm/model（热重载）。
-// 对齐 Python: SkillExperienceOptimizer.update_llm(llm, model)
+// Python: SkillExperienceOptimizer.update_llm(llm, model)
 func (b *SkillExperienceOptimizerBase) UpdateLLM(newLLM *llm.Model, newModel string) {
 	if newLLM == nil {
 		logger.Warn(logComponent).Msg("[SkillExperienceOptimizer] UpdateLLM: llm 为 nil，拒绝更新")
@@ -213,7 +213,7 @@ func (b *SkillExperienceOptimizerBase) OnlineContexts() map[string]*experience.E
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // removeSkillPrefix 从 operator ID 中移除 "skill_experience_" 前缀。
-// 对齐 Python: op_id.removeprefix("skill_experience_")
+// Python: op_id.removeprefix("skill_experience_")
 func removeSkillPrefix(opID string) string {
 	return strings.TrimPrefix(opID, "skill_experience_")
 }

@@ -1,7 +1,7 @@
 // utils 包提供通用工具函数。
 //
 // dict.go 实现字典操作工具和 JSON Schema 参数校验。
-// 对应 Python：
+// Python:
 //   - openjiuwen/core/common/utils/dict_utils.py（嵌套字典操作）
 //   - openjiuwen/core/common/utils/schema_utils.py → remove_none_values（零值清理）
 //   - uapclaw-main/pkg/tools/validate.go → validateToolArgs（参数校验）
@@ -34,7 +34,7 @@ type LeafNode struct {
 
 // CreateNestedDict 从点分路径创建嵌套字典。
 //
-// 对应 Python: create_nested_dict(path, value, separator)
+// Python: create_nested_dict(path, value, separator)
 // 将点分路径拆分为多层键，在叶子位置放置 value。
 // 空路径时直接返回 value。
 //
@@ -71,7 +71,7 @@ func CreateNestedDict(path string, value any, separator ...string) map[string]an
 
 // FlattenDict 将嵌套字典展平为点分路径键值对。
 //
-// 对应 Python: flatten_dict(data)
+// Python: flatten_dict(data)
 // 内部调用 ExtractLeafNodes 提取所有叶子节点，
 // 再将路径列表格式化为点分字符串键。
 func FlattenDict(data map[string]any) map[string]any {
@@ -85,7 +85,7 @@ func FlattenDict(data map[string]any) map[string]any {
 
 // ExtractLeafNodes 提取嵌套结构中的所有叶子节点。
 //
-// 对应 Python: extract_leaf_nodes(data, current_path)
+// Python: extract_leaf_nodes(data, current_path)
 // 递归遍历 map 和 slice，收集所有非集合类型的末端值。
 // 列表索引格式化为 "[0]"、"[1]" 等。
 //
@@ -129,7 +129,7 @@ func ExtractLeafNodes(data any, currentPath ...string) []LeafNode {
 
 // RebuildDict 从叶子节点列表重建嵌套字典。
 //
-// 对应 Python: rebuild_dict(path_value_pairs)
+// Python: rebuild_dict(path_value_pairs)
 // 支持列表索引路径元素（如 "[0]"），遇到索引时创建 slice。
 // 简化版路径重建，不处理 list 元素的 dict.go 复杂情况，
 // 对于纯 dict 路径直接调用 rebuildDictFromPaths。
@@ -167,7 +167,7 @@ func RebuildDict(pairs []LeafNode) map[string]any {
 
 // RemoveZeroValues 递归移除 map[string]any 中的零值。
 //
-// 对应 Python: remove_none_values()
+// Python: remove_none_values()
 // 参考场景：uapclaw-main 工具调用参数清理——LLM 返回的参数中可能包含
 // 未填写的零值字段，需要在提交前清理。
 //

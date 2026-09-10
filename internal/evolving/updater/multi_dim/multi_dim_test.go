@@ -38,7 +38,7 @@ func (m *mockDomainOptimizer) Step() map[schema.UpdateKey]any {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// 对齐 Python: test_process_accepts_signals_directly
+// Python: test_process_accepts_signals_directly
 func TestMultiDimUpdater_Process直接接受信号(t *testing.T) {
 	u := NewMultiDimUpdater()
 	sig := &signal.EvolutionSignal{
@@ -67,7 +67,7 @@ func newCaseForTest(t *testing.T, inputs, label map[string]any) *dataset.Case {
 	return c
 }
 
-// 对齐 Python: test_update_adapts_evaluated_cases_to_process
+// Python: test_update_adapts_evaluated_cases_to_process
 func TestMultiDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	u := NewMultiDimUpdater()
 	case_ := newCaseForTest(t,
@@ -88,7 +88,7 @@ func TestMultiDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_respects_score_threshold_from_config
+// Python: test_update_respects_score_threshold_from_config
 func TestMultiDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	u := NewMultiDimUpdater()
 	case_ := newCaseForTest(t,
@@ -118,7 +118,7 @@ func TestMultiDimUpdater_Update尊重ScoreThreshold(t *testing.T) {
 	}
 }
 
-// 对齐 Python: test_update_adapts_multiple_evaluated_cases_to_signals_in_order
+// Python: test_update_adapts_multiple_evaluated_cases_to_signals_in_order
 func TestMultiDimUpdater_Update多个EvaluatedCases按序转换(t *testing.T) {
 	u := NewMultiDimUpdater()
 	case_ := newCaseForTest(t,

@@ -15,7 +15,7 @@ import (
 // UapClaw 内部的 SkillManager、EvolutionService、对话历史等
 // 对 SkillDev 完全不可见，确保模块边界清晰。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/skill/skilldev/deps.py
+// Python: jiuwenswarm/server/runtime/skill/skilldev/deps.py
 type SkillDevDeps struct {
 	// ModelName 模型名称
 	ModelName string
@@ -23,10 +23,10 @@ type SkillDevDeps struct {
 	ModelClientConfig map[string]any
 
 	// MCPToolsFactory 返回当前可用 MCP 工具列表的工厂函数。
-	// 对齐 Python: Callable[[], list[Tool]]
+	// Python: Callable[[], list[Tool]]
 	MCPToolsFactory func() []tool.Tool
 	// SysOpConfig 文件系统访问配置；nil 表示禁止文件操作。
-	// 对齐 Python: object | None（注释说 SysOperationCard，类型标注松散）
+	// Python: object | None（注释说 SysOperationCard，类型标注松散）
 	SysOpConfig *sys_operation.SysOperationCard
 
 	// StateStore 任务状态存储

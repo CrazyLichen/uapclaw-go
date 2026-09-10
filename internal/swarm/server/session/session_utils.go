@@ -32,7 +32,7 @@ var ()
 
 // AutoTitle 从首条用户消息自动生成会话标题。
 //
-// 对齐 Python _auto_title(content): 截取前 50 字符，换行替换为空格
+// Python: _auto_title(content): 截取前 50 字符，换行替换为空格
 // 注意：Python len() 计算字符数，Go len() 计算字节数，需用 utf8.RuneCountInString 对齐
 func AutoTitle(content string) string {
 	title := strings.TrimSpace(strings.ReplaceAll(content, "\n", " "))
@@ -45,7 +45,7 @@ func AutoTitle(content string) string {
 
 // SerializeValue 递归序列化值，确保 JSON 可序列化。
 //
-// 对齐 Python _serialize_value(obj): time.Time→ISO string, map/slice 递归
+// Python: _serialize_value(obj): time.Time→ISO string, map/slice 递归
 func SerializeValue(obj any) any {
 	switch v := obj.(type) {
 	case time.Time:

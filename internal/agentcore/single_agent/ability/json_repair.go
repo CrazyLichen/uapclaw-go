@@ -20,7 +20,7 @@ import (
 // RepairToolArgumentsJSON 尝试修复畸形的 JSON 字符串，通过补全缺失的闭合括号。
 // 返回修复后的字符串指针；无法修复时返回 nil。
 //
-// 对应 Python: AbilityManager._repair_tool_arguments_json
+// Python: AbilityManager._repair_tool_arguments_json
 func RepairToolArgumentsJSON(arguments string) *string {
 	text := arguments
 	// 去除首尾空白
@@ -99,7 +99,7 @@ func RepairToolArgumentsJSON(arguments string) *string {
 // 先尝试 json.Unmarshal；失败后尝试 Repair + 再次 Unmarshal；
 // 仍失败则返回错误，包含原始 JSON 和错误信息。
 //
-// 对应 Python: AbilityManager._parse_tool_arguments
+// Python: AbilityManager._parse_tool_arguments
 func ParseToolArguments(arguments string) (map[string]any, error) {
 	if arguments == "" {
 		return nil, nil

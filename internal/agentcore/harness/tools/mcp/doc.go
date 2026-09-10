@@ -4,7 +4,7 @@
 // 两个工具供 McpRail 在 Init 阶段注册到 ResourceMgr + AbilityManager，
 // 使 LLM 能够发现和读取已注册 MCP 服务器上的资源。
 //
-// 对齐 Python: openjiuwen/harness/tools/mcp_tools.py
+// Python: openjiuwen/harness/tools/mcp_tools.py
 //
 // 文件目录：
 //

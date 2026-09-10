@@ -269,11 +269,11 @@ func (h *TraceWorkflowHandler) OnPreInvoke(ctx context.Context, invokeID string,
 }
 
 // OnPreStream 组件预流式，对应 Python TraceWorkflowHandler.on_pre_stream。
-// 对齐 Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加到 streamInputs。
+// Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加到 streamInputs。
 // Python 入口层 dict(chunk) 保证类型，Go 用类型断言替代。
 func (h *TraceWorkflowHandler) OnPreStream(ctx context.Context, invokeID string, chunk any, needSend bool) error {
 	span := h.getTracerWorkflowSpan(invokeID)
-	// 对齐 Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加
+	// Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加
 	if m, ok := chunk.(map[string]any); ok && len(m) > 0 {
 		span.AppendStreamInputs(m)
 	}
@@ -326,7 +326,7 @@ func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, on
 
 		span.EndTime = &now
 		if span.StartTime != nil {
-			// 对齐 Python: elapsed_time = self._get_elapsed_time(span.start_time, end_time)
+			// Python: elapsed_time = self._get_elapsed_time(span.start_time, end_time)
 			// TraceWorkflowSpan 没有 ElapsedTime 字段，计算仅用于 UpdateSpan 更新
 			elapsed := h.GetElapsedTime(*span.StartTime, now)
 			h.spanManager.UpdateSpan(&span.Span, map[string]any{"elapsed_time": elapsed})
@@ -380,7 +380,7 @@ func (h *TraceWorkflowHandler) OnCallDone(ctx context.Context, invokeID string, 
 	if outputs != nil {
 		span.Outputs = outputs
 	}
-	// 对齐 Python: self._span_manager.update_span(span, update_data)
+	// Python: self._span_manager.update_span(span, update_data)
 	// 空 map 传入用于刷新 span 在 SpanManager 中的记录（确保 sessionSpans 映射存在）
 	h.spanManager.UpdateSpan(&span.Span, map[string]any{})
 	writeErr := h.EmitStreamWriter(ctx, &span.Span)
@@ -700,7 +700,7 @@ func setWorkflowMetadata(span *TraceWorkflowSpan, metadata map[string]any) {
 }
 
 // buildWorkflowPayload 构建工作流 payload，排除 ChildInvokesID 和 LLMInvokeData。
-// 对齐 Python: span.model_dump(exclude_none=True, by_alias=True, exclude={"child_invokes_id", "llm_invoke_data"})
+// Python: span.model_dump(exclude_none=True, by_alias=True, exclude={"child_invokes_id", "llm_invoke_data"})
 // Python 的 exclude_none 只排除 None 值，空字符串 "" 和空列表 [] 会保留。
 // Go 端对齐：nil 指针不输出，字符串/切片始终输出（即使为空/零值）。
 func buildWorkflowPayload(span *TraceWorkflowSpan) map[string]any {

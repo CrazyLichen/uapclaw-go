@@ -32,7 +32,7 @@ type PermissionResult struct {
 // 仅 Approved 则为本次放行；
 // Action=ConfirmActionInterrupt 时回退到内置 ConfirmInterrupt 流程。
 //
-// 对齐 Python: PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
+// Python: PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
 type PermissionConfirmResponse struct {
 	// Action 确认动作类型（默认 ConfirmActionConfirm）
 	Action ConfirmAction `json:"action,omitempty"`
@@ -85,7 +85,7 @@ type PermissionsSection struct {
 
 // PermissionSceneHookInput 传给 PermissionSceneHook 的入参。
 //
-// 对齐 Python: PermissionSceneHookInput (host.py L15-23)
+// Python: PermissionSceneHookInput (host.py L15-23)
 type PermissionSceneHookInput struct {
 	// GoCtx Go 标准上下文（从 BeforeToolCall 的 ctx 参数传入）
 	// Python 端通过 ContextVar 获取权限上下文，Go 端通过 context.WithValue 传递，
@@ -107,7 +107,7 @@ type PermissionSceneHookInput struct {
 
 // PermissionConfirmationRequest 传给 RequestPermissionConfirmationHook 的入参。
 //
-// 对齐 Python: PermissionConfirmationRequest (host.py L36-43)
+// Python: PermissionConfirmationRequest (host.py L36-43)
 type PermissionConfirmationRequest struct {
 	// GoCtx Go 标准上下文（从 BeforeToolCall 的 ctx 参数传入）
 	// 用于从 context 中读取 channelID 等权限上下文信息。
@@ -124,7 +124,7 @@ type PermissionConfirmationRequest struct {
 
 // ToolPermissionHost 由 Agent 服务或 CLI 在构造 DeepAgent / PermissionInterruptRail 时注入。
 //
-// 对齐 Python: ToolPermissionHost (host.py L62-99)
+// Python: ToolPermissionHost (host.py L62-99)
 type ToolPermissionHost struct {
 	// GetPermissionsSnapshot 返回与 config['permissions'] 同结构的 dict
 	GetPermissionsSnapshot func() map[string]any
@@ -147,18 +147,18 @@ type ToolPermissionHost struct {
 // 返回 nil 表示继续走引擎 tiered 判定；
 // 返回 ("approve",) 直接放行；("reject", msg) 拒绝。
 //
-// 对齐 Python: PermissionSceneHook (host.py L26-33)
+// Python: PermissionSceneHook (host.py L26-33)
 type PermissionSceneHookFn func(input PermissionSceneHookInput) ([]string, error)
 
 // RequestPermissionConfirmationHook 对 PermissionLevel.ASK 征求用户确认的钩子。
 //
-// 对齐 Python: RequestPermissionConfirmationHook (host.py L48-51)
+// Python: RequestPermissionConfirmationHook (host.py L48-51)
 type RequestPermissionConfirmationHook func(req PermissionConfirmationRequest) (*PermissionConfirmResponse, error)
 
 // PermissionRailConstructor 权限护栏构造器函数类型。
 // 由调用方传入具体实现，解耦 security 与 rails/security 的循环依赖。
 //
-// 对齐 Python: factory.py 函数内 from...import PermissionInterruptRail
+// Python: factory.py 函数内 from...import PermissionInterruptRail
 type PermissionRailConstructor func(
 	config map[string]any,
 	engine *PermissionEngine,
@@ -175,14 +175,14 @@ type PermissionLevel int
 
 // ConfirmAction 权限确认动作类型
 //
-// 对齐 Python: PermissionConfirmationResult = PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
+// Python: PermissionConfirmationResult = PermissionConfirmResponse | Literal["interrupt"] | None (host.py L46)
 type ConfirmAction int
 
 const (
 	// ConfirmActionConfirm 宿主确认结果（默认）
 	ConfirmActionConfirm ConfirmAction = iota
 	// ConfirmActionInterrupt 回退到内置 ConfirmInterrupt 流程
-	// 对齐 Python: ext_out == "interrupt" → 跳过 hosted 处理，走标准 interrupt
+	// Python: ext_out == "interrupt" → 跳过 hosted 处理，走标准 interrupt
 	ConfirmActionInterrupt
 )
 

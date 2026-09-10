@@ -6,17 +6,17 @@ package callback
 
 // FilterAction 过滤器动作，控制回调是否执行。
 //
-// 对应 Python: openjiuwen/core/runner/callback/enums.py (FilterAction)
+// Python: openjiuwen/core/runner/callback/enums.py (FilterAction)
 type FilterAction string
 
 // ChainAction 链式执行动作，控制回调链流程。
 //
-// 对应 Python: openjiuwen/core/runner/callback/enums.py (ChainAction)
+// Python: openjiuwen/core/runner/callback/enums.py (ChainAction)
 type ChainAction string
 
 // HookType 生命周期钩子类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/enums.py (HookType)
+// Python: openjiuwen/core/runner/callback/enums.py (HookType)
 type HookType string
 
 // ──────────────────────────── 常量 ────────────────────────────

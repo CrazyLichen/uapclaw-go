@@ -22,7 +22,7 @@ import (
 // 当 Token 累积超过阈值时，压缩最新用户边界后的连续消息段，
 // 保留尾部原始消息，将压缩结果写回为协议化的记忆块。
 //
-// 对应 Python: CurrentRoundCompressorConfig (pydantic.BaseModel)
+// Python: CurrentRoundCompressorConfig (pydantic.BaseModel)
 type CurrentRoundCompressorConfig struct {
 	// TokensThreshold Token 数触发阈值
 	TokensThreshold int
@@ -57,7 +57,7 @@ type CurrentRoundCompressorConfig struct {
 //  1. 第一阶段：压缩 selected span 为增量记忆块
 //  2. 第二阶段：当历史记忆块累积到阈值时合并为更短的记忆块
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/compressor/current_round_compressor.py (CurrentRoundCompressor)
+// Python: openjiuwen/core/context_engine/processor/compressor/current_round_compressor.py (CurrentRoundCompressor)
 type CurrentRoundCompressor struct {
 	*processor.BaseProcessor
 	// model 压缩用 LLM 实例
@@ -539,7 +539,7 @@ func (c *CurrentRoundCompressorConfig) GetModel() *llm_schema.ModelRequestConfig
 
 // NewCurrentRoundCompressor 创建当轮增量压缩器实例。
 //
-// 对应 Python: CurrentRoundCompressor.__init__(config)
+// Python: CurrentRoundCompressor.__init__(config)
 func NewCurrentRoundCompressor(config *CurrentRoundCompressorConfig, opts ...CurrentRoundCompressorOption) (*CurrentRoundCompressor, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -596,7 +596,7 @@ func (crc *CurrentRoundCompressor) ProcessorType() string { return "CurrentRound
 // 触发条件：合并后的上下文 Token 数 > TokensThreshold。
 // 前置条件：总消息数 < MessagesToKeep → 直接返回 false。
 //
-// 对应 Python: CurrentRoundCompressor.trigger_add_messages()
+// Python: CurrentRoundCompressor.trigger_add_messages()
 func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	messageSize := mc.Len() + len(messagesToAdd)
 	if messageSize < crc.messagesToKeep {
@@ -624,7 +624,7 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 // 3. 执行两阶段压缩
 // 4. 压缩失败时抛出 CONTEXT_EXECUTION_ERROR
 //
-// 对应 Python: CurrentRoundCompressor.on_add_messages()
+// Python: CurrentRoundCompressor.on_add_messages()
 func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	ctxMsgs, _ := mc.GetMessages(0, true)
 	contextMessages := append(ctxMsgs, messagesToAdd...)
@@ -669,7 +669,7 @@ func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.M
 // 从后往前遍历，找到最后一条 UserMessage 的索引。
 // 如果该索引在保留尾部范围内、或为最后一条消息、或未找到，返回 -1。
 //
-// 对应 Python: CurrentRoundCompressor.get_compress_idx()
+// Python: CurrentRoundCompressor.get_compress_idx()
 func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) int {
 	compressedIdx := -1
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -698,7 +698,7 @@ func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMess
 
 // MultiCompress 两阶段压缩：先压缩选定跨度，再合并旧记忆块。
 //
-// 对应 Python: CurrentRoundCompressor.multi_compress()
+// Python: CurrentRoundCompressor.multi_compress()
 func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.ModelContext, contextMessages []llm_schema.BaseMessage, lastUserIdx int, endIdx int) ([]llm_schema.BaseMessage, []int, string, error) {
 	updated := false
 	var modifiedIndices []int
@@ -769,7 +769,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 //
 // 仅当选定跨度 Token 数 >= minSelectedTokens 且压缩后有收益时才执行压缩。
 //
-// 对应 Python: CurrentRoundCompressor.compress()
+// Python: CurrentRoundCompressor.compress()
 func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelContext, messagesToCompress []llm_schema.BaseMessage, allContextMessages []llm_schema.BaseMessage, compressEndIdx int, currentQueryIdx int) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
 	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
@@ -845,7 +845,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 //
 // 当累积摘要 Token 数超过 accumulatedSummaryTokenLimit 时触发合并。
 //
-// 对应 Python: CurrentRoundCompressor._merge_summary_blocks()
+// Python: CurrentRoundCompressor._merge_summary_blocks()
 func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc iface.ModelContext, oldCompressMessages []llm_schema.BaseMessage) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
 	totalTokens := processor.CountMessagesTokens(mc.TokenCounter(), oldCompressMessages, modelName, crc.ProcessorType())
@@ -865,7 +865,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 	}
 	mergedBlocks := strings.Join(blockParts, "\n\n")
 
-	// 对齐 Python: merged_blocks if merged_blocks else "(none)"
+	// Python: merged_blocks if merged_blocks else "(none)"
 	blocksValue := mergedBlocks
 	if blocksValue == "" {
 		blocksValue = "(none)"
@@ -909,7 +909,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 // 包含 8 个元数据头部：processor、type、scope、type_note、authority、
 // instruction_status（指令状态）、strategy_status（策略状态）、tool_action_state_status（工具动作状态）、conflict_priority（冲突优先级）。
 //
-// 对应 Python: CurrentRoundCompressor._wrap_memory_block()
+// Python: CurrentRoundCompressor._wrap_memory_block()
 func (crc *CurrentRoundCompressor) WrapCurrentRoundMemoryBlock(summary string) string {
 	summary = crc.UnwrapMemoryBlockSummary(summary)
 	return currentRoundMemoryBlockMarker + "\n" +
@@ -940,7 +940,7 @@ func (crc *CurrentRoundCompressor) WrapCurrentRoundMemoryBlock(summary string) s
 
 // UnwrapMemoryBlockSummary 剥离已有的当轮记忆块信封，提取摘要文本。
 //
-// 对应 Python: CurrentRoundCompressor._unwrap_memory_block_summary()
+// Python: CurrentRoundCompressor._unwrap_memory_block_summary()
 func (crc *CurrentRoundCompressor) UnwrapMemoryBlockSummary(summary string) string {
 	text := strings.TrimSpace(summary)
 	if text == "" {
@@ -959,7 +959,7 @@ func (crc *CurrentRoundCompressor) UnwrapMemoryBlockSummary(summary string) stri
 
 // BuildPrompt 填充压缩提示词占位符。
 //
-// 对应 Python: CurrentRoundCompressor._build_prompt()
+// Python: CurrentRoundCompressor._build_prompt()
 func (crc *CurrentRoundCompressor) BuildPrompt(targetTokens int, priorSummaries string, recentContext string, priorContextAndQuery string) string {
 	result := crc.compressedPrompt
 	result = strings.ReplaceAll(result, "{target_tokens}", fmt.Sprintf("%d", targetTokens))
@@ -989,7 +989,7 @@ func (crc *CurrentRoundCompressor) BuildPrompt(targetTokens int, priorSummaries 
 //
 // 排除已有的记忆块消息（避免重复输入）。
 //
-// 对应 Python: CurrentRoundCompressor._format_recent_context()
+// Python: CurrentRoundCompressor._format_recent_context()
 func (crc *CurrentRoundCompressor) FormatRecentContext(allContextMessages []llm_schema.BaseMessage, endIdx int) string {
 	var recentMessages []llm_schema.BaseMessage
 	for _, msg := range allContextMessages[endIdx+1:] {
@@ -1012,7 +1012,7 @@ func (crc *CurrentRoundCompressor) FormatRecentContext(allContextMessages []llm_
 //
 // 仅包含纯 UserMessage（非摘要）和不含 tool_calls 的 AssistantMessage。
 //
-// 对应 Python: CurrentRoundCompressor._format_prior_context_and_query()
+// Python: CurrentRoundCompressor._format_prior_context_and_query()
 func (crc *CurrentRoundCompressor) FormatPriorContextAndQuery(allContextMessages []llm_schema.BaseMessage, currentQueryIdx int) string {
 	var lines []string
 	var priorMessages []llm_schema.BaseMessage

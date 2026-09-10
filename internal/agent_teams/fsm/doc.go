@@ -4,7 +4,7 @@
 // 使 schema、database 等包都可 import 而不产生循环依赖。
 // schema 包通过类型别名（MemberStatus = string）提供类型化包装，
 // database 包直接使用 string 版本。
-// 对齐 Python: is_valid_transition() + MEMBER_TRANSITIONS/EXECUTION_TRANSITIONS/TASK_TRANSITIONS。
+// Python: is_valid_transition() + MEMBER_TRANSITIONS/EXECUTION_TRANSITIONS/TASK_TRANSITIONS。
 //
 // 文件目录：
 //

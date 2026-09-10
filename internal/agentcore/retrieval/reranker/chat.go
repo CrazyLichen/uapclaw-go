@@ -20,7 +20,7 @@ import (
 // 从 logprobs 中提取 P("yes") 作为相关性分数。
 // 每次只能对 1 个文档进行重排序。
 //
-// 对应 Python: openjiuwen/core/retrieval/reranker/chat_reranker.py (ChatReranker)
+// Python: openjiuwen/core/retrieval/reranker/chat_reranker.py (ChatReranker)
 type ChatReranker struct {
 	// StandardReranker 嵌入标准重排序器
 	*StandardReranker
@@ -52,7 +52,7 @@ var _ reranker.BaseReranker = (*ChatReranker)(nil)
 // NewChatReranker 创建 Chat 重排序客户端。
 // 必须提供 config.YesNoIDs（长度为 2 的有效 int 数组）。
 // 记录实验性功能警告日志。
-// 对齐 Python: ChatReranker.__init__
+// Python: ChatReranker.__init__
 func NewChatReranker(config reranker.RerankerConfig, opts ...StandardRerankerOption) (*ChatReranker, error) {
 	// 记录实验性功能警告
 	logger.Warn(logComponent).
@@ -84,7 +84,7 @@ func NewChatReranker(config reranker.RerankerConfig, opts ...StandardRerankerOpt
 }
 
 // TestCompatibility 测试服务是否支持基于 chat completion 的重排序。
-// 对齐 Python: ChatReranker.test_compatibility
+// Python: ChatReranker.test_compatibility
 func (c *ChatReranker) TestCompatibility(ctx context.Context) (bool, error) {
 	disabled := false
 	_, err := c.RerankSync(ctx, "test", []string{"test"}, reranker.RerankOption{InstructEnabled: &disabled})
@@ -138,7 +138,7 @@ func (c *ChatReranker) RerankDocsSync(ctx context.Context, query string, docs []
 
 // assembleParams 组装请求参数，严格限制 size=1。
 // 覆盖 StandardReranker.assembleParams
-// 对齐 Python: ChatReranker._assemble_params
+// Python: ChatReranker._assemble_params
 func (c *ChatReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string) {
 	// 严格限制 size=1，校验在 doRerank 中执行，此处不做额外处理
 
@@ -163,7 +163,7 @@ func (c *ChatReranker) assembleParams(query string, docs []any, opt *reranker.Re
 
 // requestParams 构造 chat completion 格式的请求参数。
 // 覆盖 RerankerBase.requestParams
-// 对齐 Python: ChatReranker._request_params
+// Python: ChatReranker._request_params
 func (c *ChatReranker) requestParams(query string, documents []string, topN int, opt *reranker.RerankOption) map[string]any {
 	doc := ""
 	if len(documents) > 0 {
@@ -212,7 +212,7 @@ func (c *ChatReranker) requestParams(query string, documents []string, topN int,
 
 // parseResponse 解析 chat completion 响应中的 logprobs，计算相关性分数。
 // 覆盖 RerankerBase.parseResponse
-// 对齐 Python: ChatReranker._parse_response
+// Python: ChatReranker._parse_response
 // 修改：当 logprobs 不支持时返回 error，而非静默返回 0.0
 func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []string) (map[string]float64, error) {
 	yesScores := []float64{0}

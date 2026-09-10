@@ -11,7 +11,7 @@ import (
 
 // PermissionEngine 权限引擎 — 负责加载配置、评估权限。
 //
-// 对齐 Python: PermissionEngine (core.py L33-52)
+// Python: PermissionEngine (core.py L33-52)
 type PermissionEngine struct {
 	// config 权限配置（运行时为可变 dict）
 	config map[string]any
@@ -43,7 +43,7 @@ var engineLogComponent = logger.ComponentAgentCore
 
 // NewPermissionEngine 创建权限引擎。
 //
-// 对齐 Python: PermissionEngine.__init__(config, llm, model_name, workspace_root) (core.py L36-52)
+// Python: PermissionEngine.__init__(config, llm, model_name, workspace_root) (core.py L36-52)
 func NewPermissionEngine(config map[string]any, llmModel *llm.Model, modelName string, workspaceRoot string) *PermissionEngine {
 	if config == nil {
 		config = make(map[string]any)
@@ -66,7 +66,7 @@ func NewPermissionEngine(config map[string]any, llmModel *llm.Model, modelName s
 
 // UpdateConfig 热更新配置。
 //
-// 对齐 Python: PermissionEngine.update_config(config) (core.py L56-62)
+// Python: PermissionEngine.update_config(config) (core.py L56-62)
 func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 	if config == nil {
 		config = make(map[string]any)
@@ -83,7 +83,7 @@ func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 }
 
 // UpdateLLM 热更新模型实例。
-// 对齐 Python: PermissionEngine.update_llm(llm, model_name) (core.py L64-67)
+// Python: PermissionEngine.update_llm(llm, model_name) (core.py L64-67)
 func (e *PermissionEngine) UpdateLLM(llmModel *llm.Model, modelName string) {
 	e.llm = llmModel
 	e.modelName = modelName
@@ -96,7 +96,7 @@ func (e *PermissionEngine) Enabled() bool {
 
 // SetPermissionChecksActive 设置权限校验活跃检查函数。
 //
-// 对齐 Python: PermissionEngine.set_permission_checks_active(fn) (core.py L73-75)
+// Python: PermissionEngine.set_permission_checks_active(fn) (core.py L73-75)
 func (e *PermissionEngine) SetPermissionChecksActive(fn func() bool) {
 	e.permissionChecksActive = fn
 }
@@ -109,14 +109,14 @@ func (e *PermissionEngine) SetWorkspaceRoot(root string) {
 
 // SetSceneHook 设置宿主场景钩子。
 //
-// 对齐 Python: PermissionEngine.set_scene_hook(fn)
+// Python: PermissionEngine.set_scene_hook(fn)
 func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
 	e.sceneHook = fn
 }
 
 // CheckPermission 检查工具调用权限。
 //
-// 对齐 Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
+// Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
 func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]any) *PermissionResult {
 	logger.Info(engineLogComponent).
 		Str("tool", toolName).
@@ -190,7 +190,7 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 	// 1. 工具级 + 参数规则 + 默认（分层策略 evaluate_tiered_policy）
 	var externalPaths []string
 	permission, matchedRule := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
-	// 对齐 Python: if permission is None → ASK
+	// Python: if permission is None → ASK
 	if permission == PermissionLevelNone {
 		permission = PermissionLevelAsk
 		matchedRule = "default"
@@ -222,7 +222,7 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 			externalPaths = extResult.ExternalPaths
 		}
 	} else {
-		// 对齐 Python: else 分支日志 — ext_result is None 时也记录
+		// Python: else 分支日志 — ext_result is None 时也记录
 		logger.Info(engineLogComponent).
 			Str("tool", toolName).
 			Bool("checked", true).
@@ -249,14 +249,14 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 
 // CheckToolPermissionDirectly 直接检查工具权限，不受 enabled 开关与宿主「是否校验」短路影响。
 //
-// 对齐 Python: PermissionEngine.check_tool_permission_directly(tool_name, tool_args) (core.py L77-89)
+// Python: PermissionEngine.check_tool_permission_directly(tool_name, tool_args) (core.py L77-89)
 func (e *PermissionEngine) CheckToolPermissionDirectly(toolName string, toolArgs map[string]any) (PermissionLevel, string) {
 	return e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, true)
 }
 
 // EvaluateGlobalPolicyDirectly 直接评估全局权限，不受 enabled 与宿主「是否校验」短路影响。
 //
-// 对齐 Python: PermissionEngine.evaluate_global_policy_directly(tool_name, tool_args, include_external_directory) (core.py L91-124)
+// Python: PermissionEngine.evaluate_global_policy_directly(tool_name, tool_args, include_external_directory) (core.py L91-124)
 func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArgs map[string]any, includeExternalDirectory bool) (PermissionLevel, string) {
 	if toolArgs == nil {
 		toolArgs = make(map[string]any)
@@ -265,7 +265,7 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 	permission, matchedRule := EvaluateTieredPolicy(e.config, toolName, toolArgs)
 
 	// fallback(no_config) → 返回 (None, "")
-	// 对齐 Python: permission = None, matched_rule = None
+	// Python: permission = None, matched_rule = None
 	if matchedRule == mr+":fallback(no_config)" {
 		permission = PermissionLevelNone
 		matchedRule = ""
@@ -301,7 +301,7 @@ func (e *PermissionEngine) Config() map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getReason 根据 permission 和 matchedRule 生成 reason
-// 对齐 Python: PermissionEngine._get_reason(permission, tool_name, matched_rule) (core.py L225-233)
+// Python: PermissionEngine._get_reason(permission, tool_name, matched_rule) (core.py L225-233)
 func getReason(permission PermissionLevel, toolName, matchedRule string) string {
 	switch permission {
 	case PermissionLevelAllow:

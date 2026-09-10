@@ -334,7 +334,7 @@ func TestTaskPlanningRail_Init_非DeepAgent时跳过(t *testing.T) {
 
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	assert.NoError(t, err)
 	assert.Nil(t, r.tools)
 }
@@ -346,7 +346,7 @@ func TestTaskPlanningRail_Init_AbilityManager为nil时跳过(t *testing.T) {
 	r := NewTaskPlanningRail()
 	// fakeDeepAgentForTaskPlanning 的 fakeBaseAgent.AbilityManager() 返回 nil
 	agent := &fakeDeepAgentForTaskPlanning{fakeBaseAgent: *newFakeBaseAgent()}
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	assert.NoError(t, err)
 	assert.Nil(t, r.tools)
 }
@@ -358,7 +358,7 @@ func TestTaskPlanningRail_Init_设置SysOpWorkspace(t *testing.T) {
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
 	// fakeBaseAgent 不实现 DeepAgentInterface，Init 直接返回 nil
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	assert.NoError(t, err)
 }
 
@@ -1401,7 +1401,7 @@ func TestTaskPlanningRail_Init_完整路径(t *testing.T) {
 		am: am,
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 }
 

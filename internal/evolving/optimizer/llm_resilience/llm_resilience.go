@@ -21,7 +21,7 @@ import (
 //
 // 控制单次尝试超时、总预算、最大尝试次数和指数退避参数。
 //
-// 对应 Python: LLMInvokePolicy dataclass
+// Python: LLMInvokePolicy dataclass
 type LLMInvokePolicy struct {
 	// AttemptTimeoutSecs 单次尝试超时（秒）
 	AttemptTimeoutSecs float64
@@ -71,7 +71,7 @@ const (
 //
 // 包装 InvokeTextWithRetryAndPrompt，丢弃使用的 prompt。
 //
-// 对应 Python: invoke_text_with_retry()
+// Python: invoke_text_with_retry()
 func InvokeTextWithRetry(
 	ctx context.Context,
 	model *llm.Model,
@@ -95,7 +95,7 @@ func InvokeTextWithRetry(
 //   - 外层 context.WithTimeout 限制整体时间
 //   - 每次 attempt 前手动检查 remainingBudget > 0
 //
-// 对齐 Python: invoke_text_with_retry_and_prompt()
+// Python: invoke_text_with_retry_and_prompt()
 func InvokeTextWithRetryAndPrompt(
 	ctx context.Context,
 	model *llm.Model,
@@ -110,7 +110,7 @@ func InvokeTextWithRetryAndPrompt(
 		opt(cfg)
 	}
 
-	// 对齐 Python: if policy.total_budget_secs <= 0
+	// Python: if policy.total_budget_secs <= 0
 	if policy.TotalBudgetSecs <= 0 {
 		return "", "", raiseLLMResilienceError(
 			exception.NewStatusCode("TOOLCHAIN_EVOLVING_TOOL_CALL_LLM_CALL_EXECUTION_ERROR", 174031, ""),
@@ -132,12 +132,12 @@ func InvokeTextWithRetryAndPrompt(
 		maxAttempts = 1
 	}
 
-	// 对齐 Python: async with asyncio.timeout(policy.total_budget_secs)
+	// Python: async with asyncio.timeout(policy.total_budget_secs)
 	budgetCtx, cancel := context.WithTimeout(ctx, time.Duration(policy.TotalBudgetSecs*float64(time.Second)))
 	defer cancel()
 
 	defer func() {
-		// 对齐 Python: except TimeoutError
+		// Python: except TimeoutError
 		if r := recover(); r != nil {
 			// 不期望 panic，但做防御性处理
 			err = raiseLLMResilienceError(
@@ -175,7 +175,7 @@ func InvokeTextWithRetryAndPrompt(
 			)
 		}
 
-		// 对齐 Python: remaining_budget = policy.total_budget_secs - elapsed
+		// Python: remaining_budget = policy.total_budget_secs - elapsed
 		elapsed := time.Since(startedAt).Seconds()
 		remainingBudget := policy.TotalBudgetSecs - elapsed
 		if remainingBudget <= 0 {
@@ -198,17 +198,17 @@ func InvokeTextWithRetryAndPrompt(
 			)
 		}
 
-		// 对齐 Python: timeout_secs = min(policy.attempt_timeout_secs, remaining_budget)
+		// Python: timeout_secs = min(policy.attempt_timeout_secs, remaining_budget)
 		timeoutSecs := math.Min(policy.AttemptTimeoutSecs, remainingBudget)
 
-		// 对齐 Python: current_prompt = retry_prompt if use_retry_prompt and retry_prompt is not None else prompt
+		// Python: current_prompt = retry_prompt if use_retry_prompt and retry_prompt is not None else prompt
 		currentPrompt := prompt
 		if useRetryPrompt && cfg.retryPrompt != "" {
 			currentPrompt = cfg.retryPrompt
 		}
 
 		// 构建 LLM 调用参数
-		// 对齐 Python: messages=[{"role": "user", "content": current_prompt}]
+		// Python: messages=[{"role": "user", "content": current_prompt}]
 		messages := model_clients.NewMessagesParam(llmschema.NewUserMessage(currentPrompt))
 		invokeOpts := []model_clients.InvokeOption{
 			model_clients.WithInvokeModel(modelName),
@@ -218,7 +218,7 @@ func InvokeTextWithRetryAndPrompt(
 			invokeOpts = append(invokeOpts, model_clients.WithInvokeTemperature(*cfg.temperature))
 		}
 
-		// 对齐 Python: response = await llm.invoke(...)
+		// Python: response = await llm.invoke(...)
 		var response *llmschema.AssistantMessage
 		response, err = model.Invoke(budgetCtx, messages, invokeOpts...)
 		if err != nil {
@@ -234,7 +234,7 @@ func InvokeTextWithRetryAndPrompt(
 				Str("error", err.Error()).
 				Msg("[llm_resilience] LLM attempt failed")
 
-			// 对齐 Python: if retry_prompt is not None and attempt < policy.max_attempts and _is_timeout_like(exc)
+			// Python: if retry_prompt is not None and attempt < policy.max_attempts and _is_timeout_like(exc)
 			if cfg.retryPrompt != "" && attempt < maxAttempts && isTimeoutLike(err) {
 				useRetryPrompt = true
 				logger.Info(logComponent).
@@ -264,11 +264,11 @@ func InvokeTextWithRetryAndPrompt(
 			)
 		}
 
-		// 对齐 Python: raw = _response_to_text(response)
+		// Python: raw = _response_to_text(response)
 		raw := responseToTextFromAssistantMessage(response)
 		lastResponse = raw
 
-		// 对齐 Python: if policy.retry_empty_response and not raw.strip()
+		// Python: if policy.retry_empty_response and not raw.strip()
 		if policy.RetryEmptyResponse && strings.TrimSpace(raw) == "" {
 			if attempt >= maxAttempts {
 				return "", "", raiseLLMResilienceError(
@@ -299,14 +299,14 @@ func InvokeTextWithRetryAndPrompt(
 			continue
 		}
 
-		// 对齐 Python: if is_result_usable is not None
+		// Python: if is_result_usable is not None
 		if cfg.isResultUsable != nil {
 			usable := false
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
 						usable = false
-						// 对齐 Python: last_error = exc
+						// Python: last_error = exc
 						lastError = fmt.Errorf("isResultUsable panic: %v", r)
 					}
 				}()
@@ -344,11 +344,11 @@ func InvokeTextWithRetryAndPrompt(
 			}
 		}
 
-		// 对齐 Python: return raw, current_prompt
+		// Python: return raw, current_prompt
 		return raw, currentPrompt, nil
 	}
 
-	// 对齐 Python: 兜底 _raise_llm_resilience_error (所有 attempts 耗尽但未返回)
+	// Python: 兜底 _raise_llm_resilience_error (所有 attempts 耗尽但未返回)
 	return "", "", raiseLLMResilienceError(
 		exception.NewStatusCode("TOOLCHAIN_EVOLVING_TOOL_CALL_OUTPUT_PARSE_ERROR", 174034, ""),
 		reasonUnusableResponse,
@@ -361,21 +361,21 @@ func InvokeTextWithRetryAndPrompt(
 
 // WithRetryPrompt 设置超时后切换的短提示词。
 //
-// 对应 Python: invoke_text_with_retry_and_prompt(retry_prompt=...)
+// Python: invoke_text_with_retry_and_prompt(retry_prompt=...)
 func WithRetryPrompt(prompt string) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.retryPrompt = prompt }
 }
 
 // WithTemperature 设置温度参数。
 //
-// 对应 Python: invoke_text_with_retry_and_prompt(temperature=...)
+// Python: invoke_text_with_retry_and_prompt(temperature=...)
 func WithTemperature(t float64) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.temperature = &t }
 }
 
 // WithIsResultUsable 设置结果可用性检查函数。
 //
-// 对应 Python: invoke_text_with_retry_and_prompt(is_result_usable=...)
+// Python: invoke_text_with_retry_and_prompt(is_result_usable=...)
 func WithIsResultUsable(fn func(string) bool) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.isResultUsable = fn }
 }
@@ -389,28 +389,28 @@ func WithIsResultUsable(fn func(string) bool) InvokeRetryOption {
 //  2. 错误类型名包含 "timeout"
 //  3. 错误消息包含 "timeout" 或 "timed out"
 //
-// 对应 Python: _is_timeout_like(exc)
+// Python: _is_timeout_like(exc)
 func isTimeoutLike(err error) bool {
 	if err == nil {
 		return false
 	}
-	// 对齐 Python: isinstance(exc, asyncio.TimeoutError)
+	// Python: isinstance(exc, asyncio.TimeoutError)
 	if err == context.DeadlineExceeded {
 		return true
 	}
-	// 对齐 Python: "timeout" in type(exc).__name__.lower()
+	// Python: "timeout" in type(exc).__name__.lower()
 	typeName := reflect.TypeOf(err).String()
 	if strings.Contains(strings.ToLower(typeName), "timeout") {
 		return true
 	}
-	// 对齐 Python: "timeout" in message or "timed out" in message
+	// Python: "timeout" in message or "timed out" in message
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "timeout") || strings.Contains(msg, "timed out")
 }
 
 // sleepBeforeRetry 指数退避等待。
 //
-// 对齐 Python: _sleep_before_retry()
+// Python: _sleep_before_retry()
 //   - 退避时间 = backoff_base * 2^(attempt-1)
 //   - 取 min(backoff, remaining_budget)
 //   - 如果 backoff_base <= 0 或 remaining_budget <= 0，跳过
@@ -424,7 +424,7 @@ func sleepBeforeRetry(ctx context.Context, policy LLMInvokePolicy, startedAt tim
 		return nil
 	}
 
-	// 对齐 Python: backoff_secs = policy.backoff_base_secs * (2 ** max(attempt - 1, 0))
+	// Python: backoff_secs = policy.backoff_base_secs * (2 ** max(attempt - 1, 0))
 	exp := attempt - 1
 	if exp < 0 {
 		exp = 0
@@ -432,7 +432,7 @@ func sleepBeforeRetry(ctx context.Context, policy LLMInvokePolicy, startedAt tim
 	backoffSecs := policy.BackoffBaseSecs * math.Pow(2, float64(exp))
 	sleepSecs := math.Min(backoffSecs, remainingBudget)
 
-	// 对齐 Python: await asyncio.sleep(min(backoff_secs, remaining_budget))
+	// Python: await asyncio.sleep(min(backoff_secs, remaining_budget))
 	timer := time.NewTimer(time.Duration(sleepSecs * float64(time.Second)))
 	defer timer.Stop()
 
@@ -446,7 +446,7 @@ func sleepBeforeRetry(ctx context.Context, policy LLMInvokePolicy, startedAt tim
 
 // raiseLLMResilienceError 构建 LLM 弹性错误并返回。
 //
-// 对齐 Python: _raise_llm_resilience_error()
+// Python: _raise_llm_resilience_error()
 // 使用 exception.NewBaseError + WithMsg + WithDetails + WithCause 构建错误。
 func raiseLLMResilienceError(
 	status exception.StatusCode,
@@ -456,7 +456,7 @@ func raiseLLMResilienceError(
 	lastResponse string,
 	cause error,
 ) error {
-	// 对齐 Python: cause=cause or last_error
+	// Python: cause=cause or last_error
 	effectiveCause := cause
 	if effectiveCause == nil {
 		effectiveCause = lastError
@@ -479,7 +479,7 @@ func raiseLLMResilienceError(
 
 // responseToTextFromAssistantMessage 从 AssistantMessage 提取文本内容。
 //
-// 对齐 Python: _response_to_text(response)
+// Python: _response_to_text(response)
 // Python 版本检查 hasattr(response, "content")，Go 版本直接使用 GetContent。
 func responseToTextFromAssistantMessage(response *llmschema.AssistantMessage) string {
 	if response == nil {

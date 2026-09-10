@@ -15,7 +15,7 @@ import (
 // Raw 字段使用自定义 JSON marshal：序列化时做 UTF-8 decode 转字符串（对齐 Python Pydantic v2
 // 对 bytes 的默认序列化行为），非 UTF-8 数据将返回错误。
 //
-// 对应 Python: openjiuwen/core/single_agent/schema/agent_result.py (Part)
+// Python: openjiuwen/core/single_agent/schema/agent_result.py (Part)
 type Part struct {
 	// Text 文本内容
 	Text *string `json:"text,omitempty"`
@@ -35,7 +35,7 @@ type Part struct {
 
 // Artifact 内容组，聚合多个 Part 并附带语义名称和元数据。
 //
-// 对应 Python: openjiuwen/core/single_agent/schema/agent_result.py (Artifact)
+// Python: openjiuwen/core/single_agent/schema/agent_result.py (Artifact)
 type Artifact struct {
 	// ArtifactID 产物标识（camelCase，对齐 A2A 协议）
 	ArtifactID *string `json:"artifactId,omitempty"`
@@ -51,7 +51,7 @@ type Artifact struct {
 
 // AgentResult Agent 执行结果，是 Agent.Invoke 的标准返回类型。
 //
-// 对应 Python: openjiuwen/core/single_agent/schema/agent_result.py (AgentResult)
+// Python: openjiuwen/core/single_agent/schema/agent_result.py (AgentResult)
 type AgentResult struct {
 	// TaskID 任务标识（snake_case，对齐 Python）
 	TaskID *string `json:"task_id,omitempty"`

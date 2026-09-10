@@ -70,7 +70,7 @@ func ValidateCodingMemoryPath(path string, ws *workspace.Workspace) (bool, strin
 
 // CodingMemoryReadWithContext 读取 coding_memory 文件。对齐 Python coding_memory_read_with_context
 func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, offset *int, limit *int) (result *CodingReadResult) {
-	// 对齐 Python: try/except 顶层异常保护
+	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryReadWithContext 发生 panic")
@@ -94,7 +94,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		logger.Error(logComponent).Msg("读取记忆失败，无可用 sys_operation")
 		return &CodingReadResult{Success: false, Path: path, Error: "读取失败，无可用 sys_operation"}
 	}
-	// 对齐 Python: 使用 line_range 读取
+	// Python: 使用 line_range 读取
 	fsOpts := []sysop.FsOption{}
 	if offset != nil {
 		if limit != nil {
@@ -155,7 +155,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 //  11. 更新 MEMORY.md 索引 → upsertMemoryIndex
 //  12. 返回 WriteResult
 func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, content string) (result map[string]any) {
-	// 对齐 Python: try/except 顶层异常保护
+	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext 发生 panic")
@@ -177,7 +177,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: 路径校验失败")
 		return map[string]any{"success": false, "path": path, "error": resolved}
 	}
-	// 对齐 Python step 2: frontmatter 解析验证
+	// Python: step 2: frontmatter 解析验证
 	fm := ParseFrontmatter(content)
 	if fm == nil {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter 解析失败")
@@ -187,10 +187,10 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		logger.Warn(logComponent).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter 校验失败")
 		return map[string]any{"success": false, "path": path, "error": err}
 	}
-	// 对齐 Python step 3-4: 丰富 frontmatter 并重建内容
+	// Python: step 3-4: 丰富 frontmatter 并重建内容
 	fm = EnrichFrontmatter(fm, false)
 	content = RebuildContentWithFrontmatter(content, fm)
-	// 对齐 Python step 5: 提取 body
+	// Python: step 5: 提取 body
 	body := ExtractBody(content)
 	if body == "" {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: 无内容体")
@@ -200,15 +200,15 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	basename := filepath.Base(resolved)
 	memoryDir := resolveMemoryDir(toolCtx, resolved)
 
-	// 对齐 Python step 6-9: 乐观并发 — 冲突检测在锁外运行，快照验证在锁内
+	// Python: step 6-9: 乐观并发 — 冲突检测在锁外运行，快照验证在锁内
 	var conflict ConflictResult
 	for attempt := 0; attempt < maxConflictRetries; attempt++ {
-		// 对齐 Python step 6: 快照目录文件列表
+		// Python: step 6: 快照目录文件列表
 		snapshot := snapshotMemoryFiles(toolCtx, memoryDir)
 		fileExists := snapshot[basename]
 
 		if !fileExists {
-			// 对齐 Python step 7a: 创建模式 — 搜索相似文件
+			// Python: step 7a: 创建模式 — 搜索相似文件
 			conflict = ConflictResult{}
 			similarFiles := searchSimilar(toolCtx, body, basename, 5, 0.75)
 
@@ -245,12 +245,12 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 						strings.Join(conflicting, ", "),
 					)
 				}
-				// 对齐 Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
+				// Python: 创建模式无 LLM actions 时不设冲突，直接 result = {}
 			}
 		} else {
-			// 对齐 Python step 7b: 追加模式 — 搜索自身 + 相似文件
+			// Python: step 7b: 追加模式 — 搜索自身 + 相似文件
 			conflict = *prepareAppendMode(ctx, toolCtx, resolved, basename, body, fm)
-			// 对齐 Python: if result.get("mode") == WriteMode.SKIP.value: return result
+			// Python: if result.get("mode") == WriteMode.SKIP.value: return result
 			if conflict.Skip {
 				return (&WriteResult{
 					Success: true,
@@ -262,19 +262,19 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			}
 		}
 
-		// 对齐 Python step 8-9: 文件级锁保护实际写入 + 快照验证
+		// Python: step 8-9: 文件级锁保护实际写入 + 快照验证
 		fileLock := getFileLock(resolved)
 		snapshotStale := false
 		fileLock.Lock()
 		currentSnapshot := snapshotMemoryFiles(toolCtx, memoryDir)
 		if !snapshotEqual(currentSnapshot, snapshot) {
-			// 对齐 Python: 快照过期，并发写入产生了新文件，重试冲突检测
+			// Python: 快照过期，并发写入产生了新文件，重试冲突检测
 			logger.Info(logComponent).
 				Int("attempt", attempt+1).
 				Msg("快照过期，重试冲突检测")
 			snapshotStale = true
 		} else {
-			// 对齐 Python step 10: 实际写入
+			// Python: step 10: 实际写入
 			sysOp := toolCtx.SysOperation
 			if sysOp == nil {
 				fileLock.Unlock()
@@ -298,10 +298,10 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			continue
 		}
 
-		// 对齐 Python step 11: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
+		// Python: step 11: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
 		upsertMemoryIndex(ctx, toolCtx, memoryDir, basename, fm)
 
-		// 对齐 Python step 12: 返回 WriteResult
+		// Python: step 12: 返回 WriteResult
 		writeMode := WriteModeCreate
 		if fileExists {
 			writeMode = WriteModeAppend
@@ -318,7 +318,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		return wr.ToDict()
 	}
 
-	// 对齐 Python: 超过重试次数，降级为无快照验证写入
+	// Python: 超过重试次数，降级为无快照验证写入
 	logger.Warn(logComponent).
 		Int("max_retries", maxConflictRetries).
 		Bool("conflict_detected", conflict.ConflictDetected).
@@ -363,7 +363,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 
 // CodingMemoryEditWithContext 编辑 coding_memory 文件。对齐 Python coding_memory_edit_with_context
 func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolContext, path string, oldText string, newText string) (result *CodingEditResult) {
-	// 对齐 Python: try/except 顶层异常保护
+	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryEditWithContext 发生 panic")
@@ -396,7 +396,7 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		return &CodingEditResult{Error: "无可用 sys_operation"}
 	}
 
-	// 对齐 Python: 文件级锁保护 read-then-write，防止与其他 write/edit 协程竞争
+	// Python: 文件级锁保护 read-then-write，防止与其他 write/edit 协程竞争
 	fileLock := getFileLock(resolved)
 	fileLock.Lock()
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
@@ -425,7 +425,7 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		return &CodingEditResult{Error: err.Error()}
 	}
 
-	// 对齐 Python: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
+	// Python: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
 	fm := ParseFrontmatter(newContent)
 	if fm != nil {
 		if ok, _ := ValidateFrontmatter(fm); ok {
@@ -480,7 +480,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 }
 
 // runChecker 调用 MemUpdateChecker 执行 LLM 冲突检测。
-// 对齐 Python: _run_checker(coding_memory_manager, new_id, new_body, old_memories)
+// Python: _run_checker(coding_memory_manager, new_id, new_body, old_memories)
 // Python 内部从 coding_memory_manager 获取 llm，无 LLM 返回 []，有 LLM 调用 checker.check()
 func runChecker(ctx context.Context, model *llm.Model, newID string, newBody string, oldMemories map[string]string) []*update.MemoryActionItem {
 	if model == nil {
@@ -544,7 +544,7 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 		var conflicting []string
 		for _, a := range actions {
 			if a.ID != basename && a.Status == update.MemoryStatusDelete {
-				// 对齐 Python: basename if a.id == "__self__" else a.id
+				// Python: basename if a.id == "__self__" else a.id
 				if a.ID == "__self__" {
 					conflicting = append(conflicting, basename)
 				} else {
@@ -658,11 +658,11 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 	if err == nil && readResult != nil && readResult.Data != nil {
 		lines = strings.Split(readResult.Data.Content, "\n")
 	} else if err != nil {
-		// 对齐 Python: Failed to read memory index 时记录 warning
+		// Python: Failed to read memory index 时记录 warning
 		logger.Warn(logComponent).Err(err).Str("path", indexPath).Msg("upsertMemoryIndex: 读取 MEMORY.md 索引失败")
 	}
 
-	// 对齐 Python: 如果文件名已存在则更新条目，否则在头部插入新条目
+	// Python: 如果文件名已存在则更新条目，否则在头部插入新条目
 	found := false
 	for i, line := range lines {
 		if strings.Contains(line, fmt.Sprintf("](%s)", filename)) {
@@ -675,7 +675,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 		lines = append([]string{newEntry}, lines...)
 	}
 
-	// 对齐 Python: 限制行数
+	// Python: 限制行数
 	if len(lines) > maxIndexLines {
 		lines = lines[:maxIndexLines]
 	}
@@ -691,7 +691,7 @@ func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext,
 		return
 	}
 
-	// 对齐 Python: 追加 body
+	// Python: 追加 body
 	_, err := sysOp.Fs().WriteFile(ctx, resolved, "\n\n"+body,
 		sysop.WithFsAppend(true),
 		sysop.WithFsCreateIfNotExist(false),
@@ -701,7 +701,7 @@ func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext,
 		return
 	}
 
-	// 对齐 Python: 更新 frontmatter updated_at
+	// Python: 更新 frontmatter updated_at
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
 	if err != nil || readResult == nil || readResult.Data == nil {
 		return

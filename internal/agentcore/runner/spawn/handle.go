@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnedProcessHandle 子进程句柄，管理子进程的生命周期、通信和健康检查。
-// 对齐 Python: SpawnedProcessHandle (process_manager.py)
+// Python: SpawnedProcessHandle (process_manager.py)
 type SpawnedProcessHandle struct {
 	// processID 进程唯一标识
 	processID string
@@ -60,7 +60,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSpawnedProcessHandle 创建子进程句柄。
-// 对齐 Python: SpawnedProcessHandle.__init__()
+// Python: SpawnedProcessHandle.__init__()
 func NewSpawnedProcessHandle(
 	processID string,
 	cmd *exec.Cmd,
@@ -125,7 +125,7 @@ func (h *SpawnedProcessHandle) IsHealthy() bool {
 }
 
 // SendMessage 向子进程发送消息。
-// 对齐 Python: SpawnedProcessHandle.send_message()
+// Python: SpawnedProcessHandle.send_message()
 func (h *SpawnedProcessHandle) SendMessage(ctx context.Context, msg Message) error {
 	if !h.IsAlive() {
 		return fmt.Errorf("子进程 %s 未运行，无法发送消息", h.processID)
@@ -138,7 +138,7 @@ func (h *SpawnedProcessHandle) SendMessage(ctx context.Context, msg Message) err
 }
 
 // ReceiveMessage 从子进程接收消息。
-// 对齐 Python: SpawnedProcessHandle.receive_message()
+// Python: SpawnedProcessHandle.receive_message()
 func (h *SpawnedProcessHandle) ReceiveMessage(ctx context.Context) (Message, error) {
 	msg, err := ReadMessage(h.stdout)
 	if err != nil {
@@ -152,7 +152,7 @@ func (h *SpawnedProcessHandle) ReceiveMessage(ctx context.Context) (Message, err
 }
 
 // StartHealthCheck 启动健康检查后台任务。
-// 对齐 Python: SpawnedProcessHandle.start_health_check()
+// Python: SpawnedProcessHandle.start_health_check()
 func (h *SpawnedProcessHandle) StartHealthCheck(ctx context.Context, interval ...time.Duration) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -193,7 +193,7 @@ func (h *SpawnedProcessHandle) StartHealthCheck(ctx context.Context, interval ..
 }
 
 // StopHealthCheck 停止健康检查后台任务。
-// 对齐 Python: SpawnedProcessHandle.stop_health_check()
+// Python: SpawnedProcessHandle.stop_health_check()
 func (h *SpawnedProcessHandle) StopHealthCheck() error {
 	h.mu.Lock()
 	task := h.healthCheckTask
@@ -213,7 +213,7 @@ func (h *SpawnedProcessHandle) StopHealthCheck() error {
 
 // Shutdown 优雅关闭子进程。
 // 流程：停止健康检查 → 发送 SHUTDOWN → 等待 SHUTDOWN_ACK → 等待进程退出 → 超时回退 forceTerminate。
-// 对齐 Python: SpawnedProcessHandle.shutdown()
+// Python: SpawnedProcessHandle.shutdown()
 func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Duration) (bool, error) {
 	h.mu.Lock()
 	if h.shutdownRequested {
@@ -286,7 +286,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 }
 
 // ForceKill 强制终止子进程（直接 SIGKILL）。
-// 对齐 Python: SpawnedProcessHandle.force_kill()
+// Python: SpawnedProcessHandle.force_kill()
 //
 // 与 forceTerminate 的区别：
 //   - ForceKill：直接 SIGKILL，无宽限期
@@ -327,7 +327,7 @@ func (h *SpawnedProcessHandle) ForceKill() error {
 }
 
 // SetOnUnhealthy 设置不健康回调（构造后注入）。
-// 对齐 Python: SpawnedProcessHandle.on_unhealthy 赋值
+// Python: SpawnedProcessHandle.on_unhealthy 赋值
 func (h *SpawnedProcessHandle) SetOnUnhealthy(fn func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -335,7 +335,7 @@ func (h *SpawnedProcessHandle) SetOnUnhealthy(fn func()) {
 }
 
 // WaitForCompletion 等待子进程完成，返回退出码。
-// 对齐 Python: SpawnedProcessHandle.wait_for_completion()
+// Python: SpawnedProcessHandle.wait_for_completion()
 func (h *SpawnedProcessHandle) WaitForCompletion() (int, error) {
 	if h.stdin != nil {
 		_ = h.stdin.Close()
@@ -353,7 +353,7 @@ func (h *SpawnedProcessHandle) WaitForCompletion() (int, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // performHealthCheck 执行一次健康检查。
-// 对齐 Python: SpawnedProcessHandle._perform_health_check()
+// Python: SpawnedProcessHandle._perform_health_check()
 func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 	if !h.IsAlive() {
 		h.recordHealthFailure()
@@ -409,7 +409,7 @@ func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 }
 
 // recordHealthFailure 记录一次健康检查失败。
-// 对齐 Python: SpawnedProcessHandle._record_health_failure()
+// Python: SpawnedProcessHandle._record_health_failure()
 func (h *SpawnedProcessHandle) recordHealthFailure() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -428,7 +428,7 @@ func (h *SpawnedProcessHandle) recordHealthFailure() {
 }
 
 // waitForHealthCheckResponse 等待健康检查响应（循环读取，跳过非目标消息）。
-// 对齐 Python: SpawnedProcessHandle._wait_for_health_check_response()
+// Python: SpawnedProcessHandle._wait_for_health_check_response()
 //
 // 持续读取 stdout 直到拿到 HEALTH_CHECK_RESPONSE、EOF 或超时。
 // streaming 场景下 STREAM_CHUNK 等消息会被跳过。
@@ -471,7 +471,7 @@ func (h *SpawnedProcessHandle) waitForHealthCheckResponse(ctx context.Context, m
 }
 
 // waitForShutdownAck 等待 SHUTDOWN_ACK 或 DONE 消息（循环读取，跳过非目标消息）。
-// 对齐 Python: SpawnedProcessHandle._wait_for_shutdown_ack()
+// Python: SpawnedProcessHandle._wait_for_shutdown_ack()
 //
 // 持续读取 stdout 直到拿到 SHUTDOWN_ACK 或 DONE（Agent 自然完成也视为可退出）。
 // 其他消息（如 STREAM_CHUNK/OUTPUT/ERROR 等）会被跳过。
@@ -526,7 +526,7 @@ func (h *SpawnedProcessHandle) waitForShutdownAck(ctx context.Context) bool {
 }
 
 // forceTerminate 强制终止子进程（SIGTERM → 3s → SIGKILL）。
-// 对齐 Python: SpawnedProcessHandle._force_terminate()
+// Python: SpawnedProcessHandle._force_terminate()
 //
 // 返回 (graceful, error)：graceful=true 表示优雅退出，false 表示强制终止。
 func (h *SpawnedProcessHandle) forceTerminate() (bool, error) {

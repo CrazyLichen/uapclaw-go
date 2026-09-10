@@ -12,7 +12,7 @@ import (
 
 // CryptoProvider 加密提供者接口，密钥由实现内部持有。
 //
-// 对应 Python: jiuwenswarm/common/security/base_crypto.py CryptoProvider
+// Python: jiuwenswarm/common/security/base_crypto.py CryptoProvider
 //
 // 适用场景：上层业务调用，调用方无需关心密钥管理。
 // 例如：配置文件中的 api_key 解密、Web/TUI 通道敏感参数加解密。
@@ -26,7 +26,7 @@ type CryptoProvider interface {
 // AesGcmProvider 基于 AES-256-GCM 的 CryptoProvider 实现。
 //
 // 持有密钥，将 BaseCrypt（key 外传）封装为 CryptoProvider（key 内持）。
-// 对应 Python: 通过 ExtensionRegistry.get_crypto_provider() 获取的 CryptoProvider 实例。
+// Python: 通过 ExtensionRegistry.get_crypto_provider() 获取的 CryptoProvider 实例。
 type AesGcmProvider struct {
 	key   []byte
 	crypt BaseCrypt
@@ -87,7 +87,7 @@ func (p *AesGcmProvider) Decrypt(ciphertext string) (string, error) {
 
 // SetCryptoProvider 设置全局加密提供者。
 //
-// 对应 Python: set_crypto_provider(provider)
+// Python: set_crypto_provider(provider)
 func SetCryptoProvider(p CryptoProvider) {
 	providerMu.Lock()
 	defer providerMu.Unlock()
@@ -97,7 +97,7 @@ func SetCryptoProvider(p CryptoProvider) {
 // GetCryptoProvider 获取全局加密提供者。
 // 若未设置，返回 nil。
 //
-// 对应 Python: get_crypto_provider()
+// Python: get_crypto_provider()
 func GetCryptoProvider() CryptoProvider {
 	providerMu.RLock()
 	defer providerMu.RUnlock()

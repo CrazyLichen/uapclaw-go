@@ -21,7 +21,7 @@ import (
 // （SqlMessageStore 等）通过统一接口操作数据库，
 // 而非直接编写 GORM 查询。
 //
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/sql_db_store.py (SqlDbStore)
+// Python: openjiuwen/core/memory/manage/mem_model/sql_db_store.py (SqlDbStore)
 type SqlDbStore struct {
 	// dbStore 数据库存储抽象
 	dbStore db.BaseDbStore
@@ -46,7 +46,7 @@ const (
 // NewSqlDbStore 创建 SqlDbStore 实例。
 // 从 BaseDbStore 获取 *gorm.DB，后续所有操作通过此实例执行。
 //
-// 对应 Python: SqlDbStore.__init__(db_store)
+// Python: SqlDbStore.__init__(db_store)
 func NewSqlDbStore(dbStore db.BaseDbStore) *SqlDbStore {
 	return &SqlDbStore{
 		dbStore: dbStore,
@@ -57,7 +57,7 @@ func NewSqlDbStore(dbStore db.BaseDbStore) *SqlDbStore {
 // Write 插入一行数据到指定表。
 // data 为列名到值的映射。
 //
-// 对应 Python: SqlDbStore.write(table, data)
+// Python: SqlDbStore.write(table, data)
 func (s *SqlDbStore) Write(ctx context.Context, table string, data map[string]any) error {
 	if err := s.db.Table(table).Create(data).Error; err != nil {
 		logger.Error(logComponent).
@@ -76,7 +76,7 @@ func (s *SqlDbStore) Write(ctx context.Context, table string, data map[string]an
 // conditions 的值必须为切片类型（对应 Python 的 list），用于 IN 查询。
 // columns 指定需要返回的列，为空时返回所有列。
 //
-// 对应 Python: SqlDbStore.condition_get(table, conditions, columns)
+// Python: SqlDbStore.condition_get(table, conditions, columns)
 func (s *SqlDbStore) ConditionGet(ctx context.Context, table string, conditions map[string]any, columns []string) ([]map[string]any, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(conditions); err != nil {
@@ -124,7 +124,7 @@ func (s *SqlDbStore) ConditionGet(ctx context.Context, table string, conditions 
 // GetWithSort 过滤+排序+分页查询。
 // filters 为等值过滤条件，sortBy 为排序字段，order 为 "ASC" 或 "DESC"，limit 为返回行数上限。
 //
-// 对应 Python: SqlDbStore.get_with_sort(table, filters, sort_by, order, limit)
+// Python: SqlDbStore.get_with_sort(table, filters, sort_by, order, limit)
 func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[string]any, sortBy string, order string, limit int) ([]map[string]any, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(filters); err != nil {
@@ -186,7 +186,7 @@ func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[
 // Update 条件更新。
 // conditions 为 WHERE 条件（支持 IN 子句，值为切片时使用 IN），data 为需要更新的列值。
 //
-// 对应 Python: SqlDbStore.update(table, conditions, data)
+// Python: SqlDbStore.update(table, conditions, data)
 func (s *SqlDbStore) Update(ctx context.Context, table string, conditions map[string]any, data map[string]any) error {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(conditions); err != nil {
@@ -214,7 +214,7 @@ func (s *SqlDbStore) Update(ctx context.Context, table string, conditions map[st
 // Delete 条件删除。
 // conditions 为 WHERE 条件（支持 IN 子句，值为切片时使用 IN）。
 //
-// 对应 Python: SqlDbStore.delete(table, conditions)
+// Python: SqlDbStore.delete(table, conditions)
 func (s *SqlDbStore) Delete(ctx context.Context, table string, conditions map[string]any) error {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(conditions); err != nil {
@@ -241,7 +241,7 @@ func (s *SqlDbStore) Delete(ctx context.Context, table string, conditions map[st
 
 // Exist 检查是否存在满足条件的记录。
 //
-// 对应 Python: SqlDbStore.exist(table, conditions)
+// Python: SqlDbStore.exist(table, conditions)
 func (s *SqlDbStore) Exist(ctx context.Context, table string, conditions map[string]any) (bool, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(conditions); err != nil {
@@ -265,7 +265,7 @@ func (s *SqlDbStore) Exist(ctx context.Context, table string, conditions map[str
 // Count 统计满足条件的记录数。
 // 使用 SQL COUNT 聚合查询，而非取回全部数据后 len()。
 //
-// 对应 Python: Python 中无此方法（count_messages 用 get_with_sort + len 实现）
+// Python: Python 中无此方法（count_messages 用 get_with_sort + len 实现）
 // Go 新增：替代 Python 的低效计数方式
 func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[string]any) (int64, error) {
 	// 校验列名，防止 SQL 注入
@@ -296,7 +296,7 @@ func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[str
 // 在 Count 基础上增加 StartTime/EndTime 范围过滤。
 // 修正 Python 缺陷：Python 的 count_messages 不支持时间范围过滤。
 //
-// 对应 Python: Python 中无此方法（Go 新增）
+// Python: Python 中无此方法（Go 新增）
 func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, conditions map[string]any, startTime *time.Time, endTime *time.Time) (int64, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(conditions); err != nil {
@@ -334,7 +334,7 @@ func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, condi
 // 在 GetWithSort 基础上增加 StartTime/EndTime 范围过滤。
 // 修正 Python 缺陷：Python 定义了 start_time/end_time 但未实现。
 //
-// 对应 Python: SqlDbStore.get_with_sort（Go 扩展了时间范围查询）
+// Python: SqlDbStore.get_with_sort（Go 扩展了时间范围查询）
 func (s *SqlDbStore) GetWithSortAndTimeRange(ctx context.Context, table string, filters map[string]any, sortBy string, order string, limit int, startTime *time.Time, endTime *time.Time) ([]map[string]any, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateConditionColumns(filters); err != nil {
@@ -391,7 +391,7 @@ func (s *SqlDbStore) GetWithSortAndTimeRange(ctx context.Context, table string, 
 // 使用 GORM Create 一次性批量 INSERT，而非循环调用 Write。
 // rows 为空时直接返回 nil。
 //
-// 对应 Python: Go 新增（Python 无对应方法，add_messages 循环调用 write）
+// Python: Go 新增（Python 无对应方法，add_messages 循环调用 write）
 func (s *SqlDbStore) CreateBatch(ctx context.Context, table string, rows []map[string]any) error {
 	if len(rows) == 0 {
 		return nil
@@ -413,7 +413,7 @@ func (s *SqlDbStore) CreateBatch(ctx context.Context, table string, rows []map[s
 // GetTable 获取表的列名列表（带缓存）。
 // 用于列存在性校验，避免重复查询数据库 schema。
 //
-// 对应 Python: SqlDbStore.get_table(table_name)
+// Python: SqlDbStore.get_table(table_name)
 func (s *SqlDbStore) GetTable(ctx context.Context, tableName string) ([]string, error) {
 	// 检查缓存
 	if cached, ok := s.tableCache.Load(tableName); ok {
@@ -441,7 +441,7 @@ func (s *SqlDbStore) GetTable(ctx context.Context, tableName string) ([]string, 
 // InvalidateTableCache 清除指定表的列名缓存。
 // 下次 GetTable 调用会重新查询数据库 schema。
 //
-// 对应 Python: SqlDbStore.invalidate_table_cache(table_name)
+// Python: SqlDbStore.invalidate_table_cache(table_name)
 func (s *SqlDbStore) InvalidateTableCache(tableName string) {
 	s.tableCache.Delete(tableName)
 }
@@ -450,7 +450,7 @@ func (s *SqlDbStore) InvalidateTableCache(tableName string) {
 // conditionsList 中每个 condition 之间用 OR 连接，
 // 单个 condition 内部用 AND 连接。
 //
-// 对应 Python: SqlDbStore.batch_get(table, conditions_list)
+// Python: SqlDbStore.batch_get(table, conditions_list)
 func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList []map[string]any) ([]map[string]any, error) {
 	// 校验列名，防止 SQL 注入
 	for _, cond := range conditionsList {
@@ -501,7 +501,7 @@ func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList 
 // Python 硬编码 WHERE id = record_id，Go 也改为硬编码 id 查询，与 Python 对齐。
 // columns 指定需要返回的列，为空时返回所有列。
 //
-// 对应 Python: SqlDbStore.get(table, record_id, columns)
+// Python: SqlDbStore.get(table, record_id, columns)
 func (s *SqlDbStore) Get(ctx context.Context, table string, recordID string, columns []string) (map[string]any, error) {
 	// 校验列名，防止 SQL 注入
 	if err := validateColumnNames(columns); err != nil {
@@ -536,7 +536,7 @@ func (s *SqlDbStore) Get(ctx context.Context, table string, recordID string, col
 // DeleteTable 删除整张表（DROP TABLE）。
 // 使用 GORM Migrator().DropTable() 替代字符串拼接，防止 SQL 注入。
 //
-// 对应 Python: SqlDbStore.delete_table(table_name)
+// Python: SqlDbStore.delete_table(table_name)
 func (s *SqlDbStore) DeleteTable(ctx context.Context, tableName string) error {
 	if err := s.db.Migrator().DropTable(tableName); err != nil {
 		logger.Error(logComponent).

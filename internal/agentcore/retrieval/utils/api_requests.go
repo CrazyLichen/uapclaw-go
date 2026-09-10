@@ -18,7 +18,7 @@ import (
 
 // RetryConfig 重试配置。
 //
-// 对齐 Python: sync_request_with_retry / async_request_with_retry 的参数
+// Python: sync_request_with_retry / async_request_with_retry 的参数
 type RetryConfig struct {
 	// MaxRetries 最大重试次数，默认 3
 	MaxRetries int
@@ -32,7 +32,7 @@ type RetryConfig struct {
 
 // TaskName 任务类型，决定错误码前缀。
 //
-// 对齐 Python: Literal["Reranker", "Embedding"]
+// Python: Literal["Reranker", "Embedding"]
 type TaskName string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -64,7 +64,7 @@ var (
 
 // RequestWithRetry 发送带重试的 HTTP POST 请求。
 //
-// 对齐 Python: async_request_with_retry。
+// Python: async_request_with_retry。
 // httpClient 由调用方创建和管理，cfg 控制重试行为。
 // 返回响应的 JSON 解析结果 map[string]any。
 func RequestWithRetry(
@@ -80,7 +80,7 @@ func RequestWithRetry(
 
 // RequestWithRetrySync 发送带重试的同步 HTTP POST 请求。
 //
-// 对齐 Python: sync_request_with_retry。
+// Python: sync_request_with_retry。
 // 参数和返回值与 RequestWithRetry 一致。
 func RequestWithRetrySync(
 	ctx context.Context,
@@ -96,7 +96,7 @@ func RequestWithRetrySync(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // doRequestWithRetry 执行带重试的 HTTP POST 请求。
-// 对齐 Python: sync_request_with_retry / async_request_with_retry 的核心逻辑。
+// Python: sync_request_with_retry / async_request_with_retry 的核心逻辑。
 // Go 中同步和异步调用统一使用此函数（Go 的 goroutine 调度由调用方控制）。
 func doRequestWithRetry(
 	ctx context.Context,
@@ -198,7 +198,7 @@ func doRequestWithRetry(
 
 // handleResponseByStatus 按状态码处理 HTTP 响应。
 // 返回 (result, handled)：handled=true 时表示请求成功或失败已确定，不再重试。
-// 对齐 Python: _handle_response_by_status
+// Python: _handle_response_by_status
 func handleResponseByStatus(resp *http.Response, body []byte, task TaskName) (map[string]any, bool) {
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -248,7 +248,7 @@ func handleResponseByStatus(resp *http.Response, body []byte, task TaskName) (ma
 }
 
 // isRetryableStatus 判断 HTTP 状态码是否可重试。
-// 对齐 Python: 429/500/503 触发重试
+// Python: 429/500/503 触发重试
 func isRetryableStatus(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests ||
 		statusCode == http.StatusInternalServerError ||
@@ -267,7 +267,7 @@ func readResponseBody(resp *http.Response) ([]byte, error) {
 }
 
 // raiseErrors 超过最大重试次数后构建错误。
-// 对齐 Python: _raise_errors
+// Python: _raise_errors
 func raiseErrors(task TaskName, maxRetries int, respStr string, resp *http.Response, lastError error) error {
 	logger.Error(logComponent).
 		Str("event_type", "api_request_exhausted").

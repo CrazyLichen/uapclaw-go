@@ -18,7 +18,7 @@ import (
 // 单例模式（对齐 Python: PromptApplier(metaclass=Singleton)），
 // 缓存已加载的 PromptTemplate 实例，避免重复 I/O。
 //
-// 对应 Python: openjiuwen/core/memory/prompts/prompt_applier.py (PromptApplier)
+// Python: openjiuwen/core/memory/prompts/prompt_applier.py (PromptApplier)
 type PromptApplier struct {
 	// cache 已加载的模板缓存：file_prefix → *prompt.PromptTemplate
 	cache sync.Map
@@ -69,7 +69,7 @@ func NewPromptApplier(dir string) *PromptApplier {
 
 // Apply 加载模板并替换变量，返回填充后的字符串。
 //
-// 对齐 Python: PromptApplier.apply(file_prefix, variables)
+// Python: PromptApplier.apply(file_prefix, variables)
 //
 // 流程：
 //  1. 缓存命中 → template.Format(variables) → 返回 Content 字符串
@@ -94,7 +94,7 @@ func (a *PromptApplier) Apply(filePrefix string, variables map[string]any) (stri
 
 // GetTemplate 获取已缓存的 PromptTemplate，未缓存则加载。
 //
-// 对齐 Python: PromptApplier.get_template(file_prefix)
+// Python: PromptApplier.get_template(file_prefix)
 func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, error) {
 	if cached, ok := a.cache.Load(filePrefix); ok {
 		logger.Debug(logComponent).Str("file_prefix", filePrefix).Msg("使用缓存的提示词模板")
@@ -115,7 +115,7 @@ func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, 
 
 // ClearCache 清除缓存。
 //
-// 对齐 Python: PromptApplier.clear_cache(file_prefix=None)
+// Python: PromptApplier.clear_cache(file_prefix=None)
 // 无参数时清除所有缓存；指定 filePrefix 时只清除该条目。
 func (a *PromptApplier) ClearCache(filePrefix ...string) {
 	if len(filePrefix) == 0 {

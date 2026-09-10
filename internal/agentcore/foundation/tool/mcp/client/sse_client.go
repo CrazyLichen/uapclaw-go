@@ -23,7 +23,7 @@ import (
 //
 // 内部组合 mcp-go 的 SSE 客户端，实现 McpClient 接口。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/sse_client.py (SseClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/sse_client.py (SseClient)
 type SseClient struct {
 	// config MCP 服务器配置
 	config *types.McpServerConfig

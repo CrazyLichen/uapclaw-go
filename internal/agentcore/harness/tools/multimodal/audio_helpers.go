@@ -55,7 +55,7 @@ var osStat = os.Stat
 
 // ResolveAudioPath 解析音频路径，URL 下载到临时文件。
 //
-// 对齐 Python: _resolve_audio_path(audio_path_or_url, config)
+// Python: _resolve_audio_path(audio_path_or_url, config)
 // 返回 (localPath, shouldDelete, error)
 func ResolveAudioPath(
 	ctx context.Context,
@@ -91,7 +91,7 @@ func ResolveAudioPath(
 
 // GetAudioDuration 获取音频时长（秒）。
 //
-// 对齐 Python: _get_audio_duration(audio_path)
+// Python: _get_audio_duration(audio_path)
 // WAV → Go 标准库解析 header；非 WAV → ffprobe（如果可用）；
 // 全部失败 → 返回 0（Go 降级策略比 Python ValueError 更友好）
 func GetAudioDuration(audioPath string) (float64, error) {
@@ -115,7 +115,7 @@ func GetAudioDuration(audioPath string) (float64, error) {
 
 // EncodeAudioFile 将音频文件 base64 编码，推断格式。
 //
-// 对齐 Python: _encode_audio_file(audio_path)
+// Python: _encode_audio_file(audio_path)
 // 返回 (encodedString, format)
 func EncodeAudioFile(audioPath string) (string, string, error) {
 	data, err := os.ReadFile(audioPath)
@@ -133,7 +133,7 @@ func EncodeAudioFile(audioPath string) (string, string, error) {
 
 // InvokeACRMetadata 调用 ACRCloud 识别音频元数据。
 //
-// 对齐 Python: _invoke_audio_metadata(config, audio_path)
+// Python: _invoke_audio_metadata(config, audio_path)
 // HMAC-SHA1 签名 + multipart POST
 func InvokeACRMetadata(
 	ctx context.Context,
@@ -141,7 +141,7 @@ func InvokeACRMetadata(
 	config *hschema.AudioModelConfig,
 ) (map[string]any, error) {
 	// 1. 计算 HMAC-SHA1 签名（对齐 Python: hmac.new + base64.b64encode）
-	timestamp := fmt.Sprintf("%.6f", float64(time.Now().UnixNano())/1e9) // 对齐 Python: str(time.time())
+	timestamp := fmt.Sprintf("%.6f", float64(time.Now().UnixNano())/1e9) // Python: str(time.time())
 	stringToSign := "POST\n/v1/identify\n" + config.ACRAccessKey + "\naudio\n1\n" + timestamp
 	mac := hmac.New(sha1.New, []byte(config.ACRAccessSecret))
 	mac.Write([]byte(stringToSign))
@@ -172,7 +172,7 @@ func InvokeACRMetadata(
 	_ = writer.WriteField("signature_version", "1")
 
 	// 添加 sample 字段（音频文件）
-	// 对齐 Python: ("sample", (os.path.basename(audio_path), audio_file, file_format))
+	// Python: ("sample", (os.path.basename(audio_path), audio_file, file_format))
 	// CreateFormFile 使用推断的 MIME 格式作为 Content-Type
 	mimeType := "audio/" + fileFormat
 	h := make(textproto.MIMEHeader)
@@ -266,7 +266,7 @@ func InvokeACRMetadata(
 		}, nil
 	}
 
-	// 对齐 Python: humming → 排序取最佳; music → 取 music[0]
+	// Python: humming → 排序取最佳; music → 取 music[0]
 	result := map[string]any{"identified": false}
 
 	if humming, ok := metadataMap["humming"].([]any); ok && len(humming) > 0 {
@@ -301,7 +301,7 @@ func InvokeACRMetadata(
 
 // downloadAudioToTemp 从 URL 下载音频到临时文件。
 //
-// 对齐 Python: requests.get(stream=True) → tempfile.NamedTemporaryFile
+// Python: requests.get(stream=True) → tempfile.NamedTemporaryFile
 func downloadAudioToTemp(
 	ctx context.Context,
 	audioURL string,
@@ -411,7 +411,7 @@ func downloadAudioToTemp(
 
 // parseWAVDuration 解析 WAV 文件获取时长。
 //
-// 对齐 Python: wave.open → frames/rate = duration
+// Python: wave.open → frames/rate = duration
 func parseWAVDuration(audioPath string) (float64, error) {
 	ext := strings.ToLower(filepath.Ext(audioPath))
 	if ext != ".wav" && ext != ".wave" {
@@ -479,7 +479,7 @@ func parseWAVDuration(audioPath string) (float64, error) {
 
 // ffprobeDuration 使用 ffprobe 获取音频时长。
 //
-// 对齐 Python: 使用 mutagen 降级（Go 用 ffprobe 替代 mutagen）
+// Python: 使用 mutagen 降级（Go 用 ffprobe 替代 mutagen）
 func ffprobeDuration(audioPath string) (float64, error) {
 	// 检查 ffprobe 是否可用
 	_, err := osStat("/usr/bin/ffprobe")
@@ -654,7 +654,7 @@ func callWithRetries(maxRetries int, fn func() error) error {
 			return nil
 		}
 		lastErr = err
-		// 对齐 Python: is_retryable = any(code in error_text for code in ("429", "500", "502", "503", "504"))
+		// Python: is_retryable = any(code in error_text for code in ("429", "500", "502", "503", "504"))
 		errText := err.Error()
 		retryable := false
 		for _, code := range []string{"429", "500", "502", "503", "504"} {
@@ -666,7 +666,7 @@ func callWithRetries(maxRetries int, fn func() error) error {
 		if attempt == maxRetries || !retryable {
 			break
 		}
-		// 对齐 Python: await asyncio.sleep(2 ** (attempt - 1))
+		// Python: await asyncio.sleep(2 ** (attempt - 1))
 		time.Sleep(time.Duration(1<<(attempt-1)) * time.Second)
 	}
 	if lastErr == nil {

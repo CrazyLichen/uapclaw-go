@@ -25,7 +25,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Runner 全局运行器，编排 Agent/Workflow 的执行生命周期。
-// 对齐 Python: _RunnerImpl (runner.py L62-670)
+// Python: _RunnerImpl (runner.py L62-670)
 type Runner struct {
 	// runnerID Runner唯一标识（对齐 Python _runner_id）
 	runnerID string
@@ -86,7 +86,7 @@ func SetGlobalRunner(r *Runner) {
 // --- 生命周期 ---
 
 // Start 启动Runner及其关联组件。
-// 对齐 Python: Runner.start() (runner.py L267-322)
+// Python: Runner.start() (runner.py L267-322)
 func Start(ctx context.Context) error {
 	r := getRunner()
 	logger.Info(logComponent).
@@ -98,7 +98,7 @@ func Start(ctx context.Context) error {
 	// Go 不需要 TaskGroup 作用域：TaskManager 是全局单例（GetTaskManager()），
 	// 不依赖 Python 的 ContextVar 传播机制。
 
-	// 对齐 Python L320-322: start 失败时调用 _close_root_task_group() 清理
+	// Python: L320-322: start 失败时调用 _close_root_task_group() 清理
 	started := false
 	defer func() {
 		if !started {
@@ -157,7 +157,7 @@ func Start(ctx context.Context) error {
 }
 
 // Stop 停止Runner并清理资源。
-// 对齐 Python: Runner.stop() (runner.py L324-348)
+// Python: Runner.stop() (runner.py L324-348)
 // 返回首个遇到的错误（对齐 Python 失败返回 False），用 defer 保证后续清理仍执行。
 func Stop(ctx context.Context) error {
 	r := getRunner()
@@ -168,7 +168,7 @@ func Stop(ctx context.Context) error {
 
 	var firstErr error
 
-	// 对齐 Python L346-348: finally 保证释放资源管理器和取消所有任务
+	// Python: L346-348: finally 保证释放资源管理器和取消所有任务
 	defer func() {
 		// 步骤 3：取消所有运行中任务（对齐 Python L348: await self._close_root_task_group()）
 		// Python 的 _close_root_task_group 首先调用 get_task_manager().cancel_all()
@@ -225,7 +225,7 @@ func Stop(ctx context.Context) error {
 // --- Agent 执行 ---
 
 // RunAgent 执行单个Agent，管理完整的会话生命周期。
-// 对齐 Python: Runner.run_agent() (runner.py L399-427)
+// Python: Runner.run_agent() (runner.py L399-427)
 func RunAgent(
 	ctx context.Context,
 	agentRef AgentRef,
@@ -273,7 +273,7 @@ func RunAgent(
 }
 
 // RunAgentStreaming 流式执行单个Agent。
-// 对齐 Python: Runner.run_agent_streaming() (runner.py L429-463)
+// Python: Runner.run_agent_streaming() (runner.py L429-463)
 func RunAgentStreaming(
 	ctx context.Context,
 	agentRef AgentRef,
@@ -330,7 +330,7 @@ func RunAgentStreaming(
 // --- Workflow 执行 ---
 
 // RunWorkflow 执行单个Workflow。
-// 对齐 Python: Runner.run_workflow() (runner.py L350-369)
+// Python: Runner.run_workflow() (runner.py L350-369)
 func RunWorkflow(
 	ctx context.Context,
 	workflowRef WorkflowRef,
@@ -364,7 +364,7 @@ func RunWorkflow(
 }
 
 // RunWorkflowStreaming 流式执行单个Workflow。
-// 对齐 Python: Runner.run_workflow_streaming() (runner.py L371-397)
+// Python: Runner.run_workflow_streaming() (runner.py L371-397)
 func RunWorkflowStreaming(
 	ctx context.Context,
 	workflowRef WorkflowRef,
@@ -401,7 +401,7 @@ func RunWorkflowStreaming(
 // --- Spawn 子进程 ---
 
 // SpawnAgent 启动子进程运行 Agent。
-// 对齐 Python: Runner.spawn_agent() (runner.py L532-576)
+// Python: Runner.spawn_agent() (runner.py L532-576)
 func SpawnAgent(
 	ctx context.Context,
 	agentConfig spawn.SpawnAgentConfig,
@@ -450,7 +450,7 @@ func SpawnAgent(
 }
 
 // SpawnAgentStreaming 启动子进程运行 Agent（流式）。
-// 对齐 Python: Runner.spawn_agent_streaming() (runner.py L578-640)
+// Python: Runner.spawn_agent_streaming() (runner.py L578-640)
 func SpawnAgentStreaming(
 	ctx context.Context,
 	agentConfig spawn.SpawnAgentConfig,
@@ -524,7 +524,7 @@ func SpawnAgentStreaming(
 // --- 释放 ---
 
 // Release 释放与会话关联的资源。
-// 对齐 Python: Runner.release() (runner.py L465-483)
+// Python: Runner.release() (runner.py L465-483)
 func Release(ctx context.Context, sessionID string, force bool) error {
 	// 步骤 1：尝试释放Team会话（对齐 Python L481: if await self._maybe_release_team_session(...)）
 	// ⤵️ 预留：Team会话释放（依赖 9.85 TeamRunner 实现）
@@ -544,7 +544,7 @@ func Release(ctx context.Context, sessionID string, force bool) error {
 // --- 配置访问 ---
 
 // SetConfig 设置Runner配置。
-// 对齐 Python: Runner.set_config() (runner.py L250-257)
+// Python: Runner.set_config() (runner.py L250-257)
 func SetConfig(cfg *config.RunnerConfig) {
 	r := getRunner()
 	logger.Info(logComponent).
@@ -556,7 +556,7 @@ func SetConfig(cfg *config.RunnerConfig) {
 }
 
 // GetConfig 获取当前Runner配置。
-// 对齐 Python: Runner.get_config() (runner.py L259-265)
+// Python: Runner.get_config() (runner.py L259-265)
 func GetConfig() *config.RunnerConfig {
 	return config.GetRunnerConfig()
 }
@@ -564,32 +564,32 @@ func GetConfig() *config.RunnerConfig {
 // --- 资源访问 ---
 
 // GetResourceMgr 获取全局资源管理器。
-// 对齐 Python: Runner.resource_mgr 属性
+// Python: Runner.resource_mgr 属性
 func GetResourceMgr() *resources_manager.ResourceMgr {
 	return getRunner().resourceMgr
 }
 
 // GetPubSub 获取本地消息队列。
-// 对齐 Python: Runner.pubsub 属性
+// Python: Runner.pubsub 属性
 func GetPubSub() *message_queue.MessageQueueInMemory {
 	return getRunner().messageQueue
 }
 
 // GetCallbackFramework 获取回调框架。
-// 对齐 Python: Runner.callback_framework 属性
+// Python: Runner.callback_framework 属性
 func GetCallbackFramework() *callback.CallbackFramework {
 	return getRunner().callbackFramework
 }
 
 // GetDistPubSub 获取分布式消息队列。
-// 对齐 Python: Runner.dist_pubsub 属性
+// Python: Runner.dist_pubsub 属性
 // ⤵️ 预留：返回类型待分布式消息队列实现后从 any 改为具体类型
 func GetDistPubSub() any {
 	return getRunner().distributeMessageQueue
 }
 
 // IsRemoteAgent 判断Agent是否为远程Agent。
-// 对齐 Python: _RunnerImpl._is_remote_agent() (runner.py L123-131)
+// Python: _RunnerImpl._is_remote_agent() (runner.py L123-131)
 // ⤵️ 预留：远程Agent判断（依赖 RemoteAgent 实现）
 func IsRemoteAgent(agent interfaces.BaseAgent) bool {
 	// ⤵️ 预留：实现远程Agent判断逻辑
@@ -599,11 +599,11 @@ func IsRemoteAgent(agent interfaces.BaseAgent) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // initRunner 初始化全局Runner实例。
-// 对齐 Python: GLOBAL_RUNNER = _RunnerImpl(config=DEFAULT_RUNNER_CONFIG)
+// Python: GLOBAL_RUNNER = _RunnerImpl(config=DEFAULT_RUNNER_CONFIG)
 // 创建 Runner 的同时设置默认配置。
 func initRunner() {
 	runnerOnce.Do(func() {
-		// 对齐 Python __init__: set_runner_config(DEFAULT_RUNNER_CONFIG)
+		// Python: __init__: set_runner_config(DEFAULT_RUNNER_CONFIG)
 		config.SetRunnerConfig(config.GetRunnerConfig())
 
 		globalRunner = &Runner{
@@ -632,7 +632,7 @@ func getRunner() *Runner {
 }
 
 // prepareAgent 准备Agent实例和会话。
-// 对齐 Python: _RunnerImpl._prepare_agent() (runner.py L502-530)
+// Python: _RunnerImpl._prepare_agent() (runner.py L502-530)
 func (r *Runner) prepareAgent(
 	ctx context.Context,
 	agentRef AgentRef,
@@ -646,7 +646,7 @@ func (r *Runner) prepareAgent(
 		agentSess, isAgentSess := sess.(*session.Session)
 
 		if agentRef.IsByID() {
-			// 对齐 Python L505-510: isinstance(agent, str) + isinstance(session, AgentSession)
+			// Python: L505-510: isinstance(agent, str) + isinstance(session, AgentSession)
 			agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
 			if err != nil {
 				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
@@ -662,7 +662,7 @@ func (r *Runner) prepareAgent(
 				)
 			}
 			agentInstance := agents[0]
-			// 对齐 Python L509: await session.pre_run(inputs=inputs)
+			// Python: L509: await session.pre_run(inputs=inputs)
 			if isAgentSess {
 				if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
 					return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
@@ -674,7 +674,7 @@ func (r *Runner) prepareAgent(
 			}
 			return agentInstance, sess, nil
 		}
-		// 对齐 Python L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
+		// Python: L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
 		if isAgentSess {
 			if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
 				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
@@ -703,7 +703,7 @@ func (r *Runner) prepareAgent(
 	}
 
 	if agentRef.IsByID() {
-		// 对齐 Python L515-526: isinstance(agent, str) + not isinstance(session, AgentSession)
+		// Python: L515-526: isinstance(agent, str) + not isinstance(session, AgentSession)
 		agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
 		if err != nil {
 			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
@@ -723,19 +723,19 @@ func (r *Runner) prepareAgent(
 		// 判断是否远程Agent（对齐 Python L519-522: if self._is_remote_agent）
 		// ⤵️ 预留：IsRemoteAgent 当前始终返回 false，等 RemoteAgent 实现后生效
 		if IsRemoteAgent(agentInstance) {
-			// 对齐 Python L520-521: 注入 conversation_id
+			// Python: L520-521: 注入 conversation_id
 			if inputs != nil {
 				if _, ok := inputs[agentConversationIDKey]; !ok {
 					inputs[agentConversationIDKey] = sessionID
 				}
 			}
-			// 对齐 Python L522: 远程Agent 不创建 AgentSession
+			// Python: L522: 远程Agent 不创建 AgentSession
 			return agentInstance, nil, nil
 		}
 
 		// 创建AgentSession（对齐 Python L524: agent_session = self._create_agent_session(...)）
 		agentSession := r.createAgentSession(agentInstance, sessionID)
-		// 对齐 Python L525: await agent_session.pre_run(inputs=inputs)
+		// Python: L525: await agent_session.pre_run(inputs=inputs)
 		if preErr := agentSession.PreRun(ctx, inputs); preErr != nil {
 			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
 				exception.WithParam("agent", agentRef.ID()),
@@ -746,7 +746,7 @@ func (r *Runner) prepareAgent(
 		return agentInstance, agentSession, nil
 	}
 
-	// 对齐 Python L528-530: not isinstance(agent, str) + not isinstance(session, AgentSession)
+	// Python: L528-530: not isinstance(agent, str) + not isinstance(session, AgentSession)
 	agentInstance := agentRef.Agent()
 	agentSession := r.createAgentSession(agentInstance, sessionID)
 	if preErr := agentSession.PreRun(ctx, inputs); preErr != nil {
@@ -759,7 +759,7 @@ func (r *Runner) prepareAgent(
 }
 
 // prepareWorkflow 准备Workflow实例和会话。
-// 对齐 Python: _RunnerImpl._prepare_workflow() (runner.py L642-655)
+// Python: _RunnerImpl._prepare_workflow() (runner.py L642-655)
 func (r *Runner) prepareWorkflow(
 	ctx context.Context,
 	workflowRef WorkflowRef,
@@ -804,12 +804,12 @@ func (r *Runner) prepareWorkflow(
 }
 
 // createAgentSession 创建Agent会话。
-// 对齐 Python: _RunnerImpl._create_agent_session() (runner.py L657-670)
+// Python: _RunnerImpl._create_agent_session() (runner.py L657-670)
 // 从 agent 提取完整 card 和 envs，传给 CreateAgentSession。
 func (r *Runner) createAgentSession(agent interfaces.BaseAgent, sessionID string) *session.Session {
-	// 对齐 Python L658-669: 提取 card 和 envs
+	// Python: L658-669: 提取 card 和 envs
 	card := agent.Card()
-	// 对齐 Python L665-666: if isinstance(config, Config): envs = getattr(config, "_env", None)
+	// Python: L665-666: if isinstance(config, Config): envs = getattr(config, "_env", None)
 	// Go 用类型断言：如果 agent.Config() 满足 SessionConfig 接口，提取 envs；否则 nil
 	var envs map[string]any
 	if cfg := agent.Config(); cfg != nil {
@@ -821,9 +821,9 @@ func (r *Runner) createAgentSession(agent interfaces.BaseAgent, sessionID string
 }
 
 // createWorkflowSession 创建Workflow会话。
-// 对齐 Python: _RunnerImpl._create_workflow_session() (runner.py L489-500)
+// Python: _RunnerImpl._create_workflow_session() (runner.py L489-500)
 func (r *Runner) createWorkflowSession(sess any) *session.WorkflowSession {
-	// 对齐 Python L492-500: 根据 session 类型创建 WorkflowSession
+	// Python: L492-500: 根据 session 类型创建 WorkflowSession
 	if sess == nil {
 		return session.NewWorkflowSession()
 	}
@@ -840,7 +840,7 @@ func (r *Runner) createWorkflowSession(sess any) *session.WorkflowSession {
 }
 
 // generateWorkflowKey 生成Workflow唯一键。
-// 对齐 Python: generate_workflow_key(workflow.card.id, workflow.card.version)
+// Python: generate_workflow_key(workflow.card.id, workflow.card.version)
 func generateWorkflowKey(id, version string) string {
 	if version != "" {
 		return id + ":" + version
@@ -849,7 +849,7 @@ func generateWorkflowKey(id, version string) string {
 }
 
 // resolveSpawnSessionID 解析 Spawn 子进程的 session_id。
-// 对齐 Python: runner.py L559-562
+// Python: runner.py L559-562
 // 优先级：inputs["conversation_id"] > sess.GetSessionID() > defaultAgentSessionID
 func resolveSpawnSessionID(inputs map[string]any, sess sessioninterfaces.SessionFacade) string {
 	if inputs != nil {

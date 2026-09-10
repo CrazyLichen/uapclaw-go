@@ -21,7 +21,7 @@ import (
 
 // E2AToAgentRequest 将规范化成功的 E2A 转为 AgentRequest。
 // 若 envelope 含 Gateway 兜底标记，返回 error，须由调用方先分支处理 legacy。
-// 对应 Python: e2a_to_agent_request(env)
+// Python: e2a_to_agent_request(env)
 func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 	ctx := make(map[string]any)
 	if env.ChannelContext != nil {
@@ -47,7 +47,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		metadata = ctx
 	}
 
-	// 对齐 Python: setup_permission_context — 从 metadata 构建 PermissionContext
+	// Python: setup_permission_context — 从 metadata 构建 PermissionContext
 	var permCtx *schema.PermissionContext
 	if len(metadata) > 0 {
 		permCtx = schema.NewPermissionContextFromDict(metadata)
@@ -112,7 +112,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 
 // e2aTimestampToFloat 将 ISO 8601 时间戳转为 Unix 秒浮点数。
 // 空串 → 0.0，解析失败 → 0.0。
-// 对应 Python: _e2a_timestamp_to_float(ts)
+// Python: _e2a_timestamp_to_float(ts)
 func e2aTimestampToFloat(ts string) float64 {
 	if ts == "" {
 		return 0.0

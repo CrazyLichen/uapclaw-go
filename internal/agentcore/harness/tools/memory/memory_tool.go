@@ -205,7 +205,7 @@ func (t *EditMemoryTool) Stream(_ context.Context, _ map[string]any, _ ...tool.T
 
 // CreateMemoryTools 创建记忆工具集。对齐 Python create_memory_tools(ctx, language, agent_id)
 func CreateMemoryTools(ctx *lite.MemoryToolContext, language string, agentID string) []tool.Tool {
-	// 对齐 Python: Python: if ctx.settings is None and ctx.workspace is not None:
+	// Python: Python: if ctx.settings is None and ctx.workspace is not None:
 	//   Python: memory_dir = str(ctx.workspace.get_node_path("memory") or "")
 	//   Python: ctx.settings = create_memory_settings(memory_dir)
 	if ctx.Settings == nil && ctx.Workspace != nil {
@@ -215,7 +215,7 @@ func CreateMemoryTools(ctx *lite.MemoryToolContext, language string, agentID str
 		}
 		ctx.Settings = lite.CreateMemorySettings(memoryDir, nil)
 	}
-	// 对齐 Python: 设置 NodeName
+	// Python: 设置 NodeName
 	if ctx.NodeName == "" {
 		ctx.NodeName = "memory"
 	}
@@ -238,7 +238,7 @@ func CreateMemoryTools(ctx *lite.MemoryToolContext, language string, agentID str
 	for _, d := range defs {
 		card, err := htools.BuildToolCard(d.name, d.toolID, language, nil, agentID)
 		if err != nil {
-			// 对齐 Python: BuildToolCard 返回错误时用默认卡片
+			// Python: BuildToolCard 返回错误时用默认卡片
 			card = tool.NewToolCardWithID(d.toolID, d.name, d.name, nil, nil)
 		}
 		tools = append(tools, d.build(card))

@@ -11,7 +11,7 @@ import (
 // StatContextWindow 统计 ContextWindow 的完整统计信息。
 //
 // 内部调用 StatMessages + StatTools + 计算对话轮次，填充 window.Statistic 各字段。
-// 对应 Python: Context._stat_context_window(window)
+// Python: Context._stat_context_window(window)
 func StatContextWindow(window *iface.ContextWindow, tokenCounter token.TokenCounter) {
 	window.Statistic.StatMessages(window.GetMessages(), tokenCounter)
 	window.Statistic.StatTools(window.GetTools(), tokenCounter)

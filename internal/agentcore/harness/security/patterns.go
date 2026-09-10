@@ -20,33 +20,33 @@ import (
 
 // PatternMatcher 通配符模式匹配器（仅支持 wildcard 模式 * 和 ?）。
 //
-// 对齐 Python: PatternMatcher (patterns.py L162-173)
+// Python: PatternMatcher (patterns.py L162-173)
 type PatternMatcher struct{}
 
 // PathMatcher 路径匹配器。
 //
-// 对齐 Python: PathMatcher (patterns.py L176-203)
+// Python: PathMatcher (patterns.py L176-203)
 type PathMatcher struct {
 	pm PatternMatcher
 }
 
 // URLMatcher URL 匹配器。
 //
-// 对齐 Python: URLMatcher (patterns.py L206-234)
+// Python: URLMatcher (patterns.py L206-234)
 type URLMatcher struct {
 	pm PatternMatcher
 }
 
 // CommandMatcher 命令匹配器（wildcard 模式，全串锚定防注入）。
 //
-// 对齐 Python: CommandMatcher (patterns.py L237-250)
+// Python: CommandMatcher (patterns.py L237-250)
 type CommandMatcher struct {
 	pm PatternMatcher
 }
 
 // approvalOverrideSignature 审批覆盖签名，用于去重判断。
 //
-// 对齐 Python: _ApprovalOverrideSignature (patterns.py L106-115)
+// Python: _ApprovalOverrideSignature (patterns.py L106-115)
 type approvalOverrideSignature struct {
 	// ToolName 目标工具名
 	ToolName string
@@ -71,26 +71,26 @@ type approvalOverrideSignature struct {
 const (
 	// wildcardChars 限制性字符类：仅允许命令参数和路径常见字符，
 	// 排除 ; | & ` < > $ 等 shell 元字符防注入。
-	// 对齐 Python: _WILDCARD_CHARS (patterns.py L118-119)
+	// Python: _WILDCARD_CHARS (patterns.py L118-119)
 	wildcardChars = `[-a-zA-Z0-9 \._/:"']*`
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 全局 PathMatcher 实例，供 tiered_policy 使用
-// 对齐 Python: _TIERED_PATH_MATCHER = PathMatcher() (tiered_policy.py L26)
+// Python: _TIERED_PATH_MATCHER = PathMatcher() (tiered_policy.py L26)
 var tieredPathMatcher = &PathMatcher{pm: PatternMatcher{}}
 
 var patternsLogComponent = logger.ComponentAgentCore
 
 // shellApprovalTools Shell 审批工具集合
-// 对齐 Python: _SHELL_APPROVAL_TOOLS (patterns.py L92)
+// Python: _SHELL_APPROVAL_TOOLS (patterns.py L92)
 var shellApprovalTools = map[string]bool{
 	"bash": true, "mcp_exec_command": true, "create_terminal": true,
 }
 
 // pathApprovalTools 路径审批工具集合
-// 对齐 Python: _PATH_APPROVAL_TOOLS (patterns.py L93-99)
+// Python: _PATH_APPROVAL_TOOLS (patterns.py L93-99)
 var pathApprovalTools = map[string]bool{
 	"read_file": true, "write_file": true, "edit_file": true,
 	"read_text_file": true, "write_text_file": true,
@@ -100,7 +100,7 @@ var pathApprovalTools = map[string]bool{
 }
 
 // pathApprovalKeys 路径审批参数键
-// 对齐 Python: _PATH_APPROVAL_KEYS (patterns.py L100-103)
+// Python: _PATH_APPROVAL_KEYS (patterns.py L100-103)
 var pathApprovalKeys = map[string]bool{
 	"path": true, "file_path": true, "target_file": true, "file": true,
 	"old_path": true, "new_path": true, "source_path": true, "dest_path": true,
@@ -117,7 +117,7 @@ var pathApprovalKeys = map[string]bool{
 // - " *" 结尾 → ( 字符类*)? 使 "ls *" 可匹配 "ls" 或 "ls -la"
 // - 全串匹配防止 "git status; rm -rf /" 匹配 "git status *"
 //
-// 对齐 Python: match_wildcard(value, pattern) (patterns.py L122-157)
+// Python: match_wildcard(value, pattern) (patterns.py L122-157)
 func MatchWildcard(value, pattern string) bool {
 	if pattern == "" || value == "" {
 		return false
@@ -140,7 +140,7 @@ func MatchWildcard(value, pattern string) bool {
 	}
 
 	// 4. 全串匹配
-	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	// Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
 	prefix := "^"
 	suffix := "$"
 	if runtime.GOOS == "windows" {
@@ -155,7 +155,7 @@ func MatchWildcard(value, pattern string) bool {
 
 // BuildCommandAllowPattern 构建匹配完整命令的通配符模式。
 //
-// 对齐 Python: build_command_allow_pattern(cmd) (patterns.py L253-261)
+// Python: build_command_allow_pattern(cmd) (patterns.py L253-261)
 // "start chrome" → "start chrome *"
 func BuildCommandAllowPattern(cmd string) string {
 	return strings.TrimSpace(cmd) + " *"
@@ -163,7 +163,7 @@ func BuildCommandAllowPattern(cmd string) string {
 
 // ContainsPath 子路径是否在父路径下（含路径穿越防护）。
 //
-// 对齐 Python: contains_path(parent, child) (patterns.py L264-271)
+// Python: contains_path(parent, child) (patterns.py L264-271)
 func ContainsPath(parent, child string) bool {
 	parentPath := filepath.Clean(parent)
 	childPath := filepath.Clean(child)
@@ -191,7 +191,7 @@ func ContainsPath(parent, child string) bool {
 // WritePermissionsSectionToAgentConfigYAML 将 permissions 整段写入 agent YAML
 // （保留其它顶层键；文件不存在则新建仅含 permissions 的根）。
 //
-// 对齐 Python: write_permissions_section_to_agent_config_yaml(config_yaml_path, permissions) (patterns.py L383-412)
+// Python: write_permissions_section_to_agent_config_yaml(config_yaml_path, permissions) (patterns.py L383-412)
 func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions map[string]any) bool {
 	cfgPath := resolveAgentConfigYAMLPath(configYAMLPath)
 	if cfgPath == "" {
@@ -212,7 +212,7 @@ func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions
 // ReadAgentConfigYAML 读取 agent YAML 配置文件，返回顶层 map。
 // 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
 //
-// 对齐 Python: load_yaml_round_trip(CONFIG_YAML_PATH)
+// Python: load_yaml_round_trip(CONFIG_YAML_PATH)
 func ReadAgentConfigYAML(filePath string) map[string]any {
 	cfgPath := filePath
 	if cfgPath == "" {
@@ -238,7 +238,7 @@ func ReadAgentConfigYAML(filePath string) map[string]any {
 // WriteAgentConfigYAML 将顶层 map 写回 agent YAML 配置文件。
 // 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
 //
-// 对齐 Python: dump_yaml_round_trip(CONFIG_YAML_PATH, data)
+// Python: dump_yaml_round_trip(CONFIG_YAML_PATH, data)
 func WriteAgentConfigYAML(filePath string, data map[string]any) error {
 	cfgPath := filePath
 	if cfgPath == "" {
@@ -260,7 +260,7 @@ func WriteAgentConfigYAML(filePath string, data map[string]any) error {
 // MergeExternalDirectoryAllowIntoPermissions 在 permissions 副本上合并外部目录白名单。
 // 返回 (merged, wrote_any)。
 //
-// 对齐 Python: merge_external_directory_allow_into_permissions(permissions, paths) (patterns.py L415-439)
+// Python: merge_external_directory_allow_into_permissions(permissions, paths) (patterns.py L415-439)
 func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, paths []string) (map[string]any, bool) {
 	if len(paths) == 0 {
 		return utils.DeepCopyMap(permissions), false
@@ -298,7 +298,7 @@ func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, path
 // MergePermissionAllowRuleIntoPermissions 在 permissions 副本上合并「始终允许」规则。
 // 返回 (merged, applied)。applied 为假表示未写入任何变更。
 //
-// 对齐 Python: merge_permission_allow_rule_into_permissions(permissions, tool_name, tool_args) (patterns.py L442-493)
+// Python: merge_permission_allow_rule_into_permissions(permissions, tool_name, tool_args) (patterns.py L442-493)
 func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolName string, toolArgs map[string]any) (map[string]any, bool) {
 	perms := utils.DeepCopyMap(permissions)
 
@@ -341,7 +341,7 @@ func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolNam
 
 // PersistCliTrustedDirectory CLI add_dir：全局信任目录子树。
 //
-// 对齐 Python: persist_cli_trusted_directory(raw_path, config_yaml_path, bootstrap_permissions) (patterns.py L496-616)
+// Python: persist_cli_trusted_directory(raw_path, config_yaml_path, bootstrap_permissions) (patterns.py L496-616)
 func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrapPermissions map[string]any) map[string]any {
 	rawPath = strings.TrimSpace(rawPath)
 	if rawPath == "" {
@@ -459,7 +459,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 
 // Match 实现 PatternMatcher 的静态匹配方法。
 //
-// 对齐 Python: PatternMatcher.match(pattern, value) (patterns.py L166-169)
+// Python: PatternMatcher.match(pattern, value) (patterns.py L166-169)
 func (pm *PatternMatcher) Match(pattern, value string) bool {
 	if pattern == "" || value == "" {
 		return false
@@ -469,7 +469,7 @@ func (pm *PatternMatcher) Match(pattern, value string) bool {
 
 // MatchAny 匹配任意一个模式。
 //
-// 对齐 Python: PatternMatcher.match_any(patterns, value) (patterns.py L171-173)
+// Python: PatternMatcher.match_any(patterns, value) (patterns.py L171-173)
 func (pm *PatternMatcher) MatchAny(patterns []string, value string) bool {
 	for _, p := range patterns {
 		if pm.Match(p, value) {
@@ -481,7 +481,7 @@ func (pm *PatternMatcher) MatchAny(patterns []string, value string) bool {
 
 // MatchPath 匹配文件路径（规范化分隔符后再比较）。
 //
-// 对齐 Python: PathMatcher.match_path(pattern, path) (patterns.py L182-200)
+// Python: PathMatcher.match_path(pattern, path) (patterns.py L182-200)
 func (pm *PathMatcher) MatchPath(pattern, path string) bool {
 	normalizedPath := strings.ReplaceAll(path, `\`, "/")
 	normalizedPattern := strings.ReplaceAll(pattern, `\`, "/")
@@ -524,7 +524,7 @@ func (pm *PathMatcher) MatchPathAny(patterns []string, path string) bool {
 
 // MatchURL 匹配 URL（支持 hostname、netloc、full URL）。
 //
-// 对齐 Python: URLMatcher.match_url(pattern, url) (patterns.py L212-231)
+// Python: URLMatcher.match_url(pattern, url) (patterns.py L212-231)
 func (pm *URLMatcher) MatchURL(pattern, url string) bool {
 	if url == "" {
 		return false
@@ -536,7 +536,7 @@ func (pm *URLMatcher) MatchURL(pattern, url string) bool {
 	// 简易 URL 解析
 	scheme, host, path := parseURL(url)
 	if host != "" {
-		// 对齐 Python: parsed.hostname — 去除端口部分的纯域名
+		// Python: parsed.hostname — 去除端口部分的纯域名
 		hostname := host
 		if idx := strings.LastIndex(host, ":"); idx > 0 {
 			// 排除 IPv6 地址中的冒号（如 [::1]）
@@ -547,11 +547,11 @@ func (pm *URLMatcher) MatchURL(pattern, url string) bool {
 		if pm.pm.Match(pattern, hostname) {
 			return true
 		}
-		// 对齐 Python: parsed.netloc — 含端口的完整 netloc
+		// Python: parsed.netloc — 含端口的完整 netloc
 		if pm.pm.Match(pattern, host) {
 			return true
 		}
-		// 对齐 Python: scheme://netloc 和 scheme://netloc/*
+		// Python: scheme://netloc 和 scheme://netloc/*
 		if scheme != "" {
 			if pm.pm.Match(pattern, scheme+"://"+host) {
 				return true
@@ -577,7 +577,7 @@ func (pm *URLMatcher) MatchURLAny(patterns []string, url string) bool {
 
 // MatchCommand 匹配命令字符串（wildcard 模式，全串锚定）。
 //
-// 对齐 Python: CommandMatcher.match_command(pattern, command) (patterns.py L243-247)
+// Python: CommandMatcher.match_command(pattern, command) (patterns.py L243-247)
 func (pm *CommandMatcher) MatchCommand(pattern, command string) bool {
 	if command == "" {
 		return false
@@ -598,7 +598,7 @@ func (pm *CommandMatcher) MatchCommandAny(patterns []string, command string) boo
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveDefaultConfigPath 返回默认的 agent 配置文件路径。
-// 对齐 Python: CONFIG_YAML_PATH = get_config_file()
+// Python: CONFIG_YAML_PATH = get_config_file()
 func resolveDefaultConfigPath() string {
 	return workspace.ConfigFile()
 }
@@ -638,7 +638,7 @@ func parseURL(urlStr string) (scheme, host, path string) {
 
 // resolveAgentConfigYAMLPath 解析落盘用的 agent 配置文件路径。
 //
-// 对齐 Python: _resolve_agent_config_yaml_path(explicit) (patterns.py L38-55)
+// Python: _resolve_agent_config_yaml_path(explicit) (patterns.py L38-55)
 func resolveAgentConfigYAMLPath(explicit string) string {
 	if explicit == "" {
 		return resolveDefaultConfigPath()
@@ -658,7 +658,7 @@ func resolveAgentConfigYAMLPath(explicit string) string {
 
 // persistTieredApprovalOverrideSuggestions 持久化审批覆盖建议。
 //
-// 对齐 Python: _persist_tiered_approval_override_suggestions(permissions, suggestions) (patterns.py L277-299)
+// Python: _persist_tiered_approval_override_suggestions(permissions, suggestions) (patterns.py L277-299)
 func persistTieredApprovalOverrideSuggestions(permissions map[string]any, suggestions []PermissionSuggestion) bool {
 	if len(suggestions) == 0 {
 		return false
@@ -685,7 +685,7 @@ func persistTieredApprovalOverrideSuggestions(permissions map[string]any, sugges
 
 // ensureSingleAllowOverride 确保单个 allow override 条目存在。
 //
-// 对齐 Python: _ensure_single_allow_override(overrides, ...) (patterns.py L302-345)
+// Python: _ensure_single_allow_override(overrides, ...) (patterns.py L302-345)
 func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, action string) bool {
 	for _, existing := range *overrides {
 		m, ok := existing.(map[string]any)
@@ -728,7 +728,7 @@ func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, a
 
 // isSameAllowOverride 判断是否为相同的 allow override。
 //
-// 对齐 Python: _is_same_allow_override(signature) (patterns.py L348-355)
+// Python: _is_same_allow_override(signature) (patterns.py L348-355)
 func isSameAllowOverride(sig approvalOverrideSignature) bool {
 	found := false
 	for _, t := range sig.Tools {
@@ -751,7 +751,7 @@ func isSameAllowOverride(sig approvalOverrideSignature) bool {
 
 // buildApprovalOverrideID 构建 override 条目 ID。
 //
-// 对齐 Python: _build_approval_override_id(tool_name, match_type, pattern) (patterns.py L358-363)
+// Python: _build_approval_override_id(tool_name, match_type, pattern) (patterns.py L358-363)
 func buildApprovalOverrideID(toolName, matchType, pattern string) string {
 	raw := fmt.Sprintf("user_allow_%s_%s_%s", toolName, matchType, pattern)
 	// 非字母数字替换为 _
@@ -769,7 +769,7 @@ func buildApprovalOverrideID(toolName, matchType, pattern string) string {
 
 // persistTieredToolAllow 持久化整工具 allow。
 //
-// 对齐 Python: _persist_tiered_tool_allow(permissions, tool_name) (patterns.py L366-380)
+// Python: _persist_tiered_tool_allow(permissions, tool_name) (patterns.py L366-380)
 func persistTieredToolAllow(permissions map[string]any, toolName string) bool {
 	if toolName == "" {
 		return false
@@ -831,7 +831,7 @@ func sortStrings(s []string) {
 
 // commandText 从 toolArgs 中提取命令文本。
 //
-// 对齐 Python: _command_text(tool_args) (tiered_policy.py L163-164)
+// Python: _command_text(tool_args) (tiered_policy.py L163-164)
 func commandText(toolArgs map[string]any) string {
 	cmd, _ := toolArgs["command"].(string)
 	if cmd == "" {

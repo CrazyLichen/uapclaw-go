@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OperationRegistry 按实体键管理链式升级操作的注册表。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operation_registry.py (OperationRegistry)
+// Python: openjiuwen/core/memory/migration/operation/operation_registry.py (OperationRegistry)
 //
 // 约定：
 //   - entity_key 为字符串，如 "user_messages"、"vector_summary"
@@ -28,7 +28,7 @@ type OperationRegistry struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOperationRegistry 创建空的注册表。
-// 对齐 Python: OperationRegistry()
+// Python: OperationRegistry()
 func NewOperationRegistry() *OperationRegistry {
 	return &OperationRegistry{
 		operations: make(map[string][]Operation),
@@ -36,7 +36,7 @@ func NewOperationRegistry() *OperationRegistry {
 }
 
 // Register 注册一个 Operation，确保 schema_version 单调递增。
-// 对齐 Python: OperationRegistry.register
+// Python: OperationRegistry.register
 // 若违反单调递增约束，返回错误。
 func (r *OperationRegistry) Register(entityKey string, op Operation) error {
 	ops := r.operations[entityKey]
@@ -63,7 +63,7 @@ func (r *OperationRegistry) Register(entityKey string, op Operation) error {
 }
 
 // GetOperations 获取指定实体在 [fromVersion, toVersion] 范围内的所有 Operation。
-// 对齐 Python: OperationRegistry.get_operations
+// Python: OperationRegistry.get_operations
 func (r *OperationRegistry) GetOperations(entityKey string, fromVersion, toVersion int) []Operation {
 	if fromVersion > toVersion {
 		return []Operation{}
@@ -82,7 +82,7 @@ func (r *OperationRegistry) GetOperations(entityKey string, fromVersion, toVersi
 }
 
 // GetCurrentVersion 获取指定实体的最新 schema_version。
-// 对齐 Python: OperationRegistry.get_current_version
+// Python: OperationRegistry.get_current_version
 // 无注册操作时返回 0。
 func (r *OperationRegistry) GetCurrentVersion(entityKey string) int {
 	ops := r.operations[entityKey]
@@ -93,7 +93,7 @@ func (r *OperationRegistry) GetCurrentVersion(entityKey string) int {
 }
 
 // GetAllEntities 获取所有已注册的实体键。
-// 对齐 Python: OperationRegistry.get_all_entities
+// Python: OperationRegistry.get_all_entities
 func (r *OperationRegistry) GetAllEntities() []string {
 	entities := make([]string, 0, len(r.operations))
 	for key := range r.operations {
@@ -103,7 +103,7 @@ func (r *OperationRegistry) GetAllEntities() []string {
 }
 
 // GetAllOperations 获取内部映射的浅拷贝。
-// 对齐 Python: OperationRegistry.get_all_operations
+// Python: OperationRegistry.get_all_operations
 func (r *OperationRegistry) GetAllOperations() map[string][]Operation {
 	result := make(map[string][]Operation, len(r.operations))
 	for key, ops := range r.operations {
@@ -115,13 +115,13 @@ func (r *OperationRegistry) GetAllOperations() map[string][]Operation {
 }
 
 // Clear 清空所有注册的操作（主要用于测试）。
-// 对齐 Python: OperationRegistry.clear
+// Python: OperationRegistry.clear
 func (r *OperationRegistry) Clear() {
 	r.operations = make(map[string][]Operation)
 }
 
 // SetOperations 设置内部映射（主要用于测试恢复状态）。
-// 对齐 Python: OperationRegistry.set_operations
+// Python: OperationRegistry.set_operations
 func (r *OperationRegistry) SetOperations(operations map[string][]Operation) {
 	r.operations = operations
 }

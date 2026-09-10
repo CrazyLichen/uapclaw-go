@@ -53,7 +53,7 @@ var (
 	// historyWorkerOnce 保证 worker 只启动一次。
 	historyWorkerOnce sync.Once
 	// teamRelevantEventTypes team 相关事件类型集合
-	// 对齐 Python _TEAM_RELEVANT_EVENT_TYPES
+	// Python: _TEAM_RELEVANT_EVENT_TYPES
 	teamRelevantEventTypes = map[string]bool{
 		"team.message":      true,
 		"chat.tool_call":    true,
@@ -101,7 +101,7 @@ func ResetHistoryWorker() {
 
 // AppendHistoryRecord 向指定 session 的 history.json 异步追加一条记录。
 //
-// 对齐 Python: append_history_record(session_id, request_id, channel_id, role, content, timestamp, event_type, extra, channel_metadata, mode)
+// Python: append_history_record(session_id, request_id, channel_id, role, content, timestamp, event_type, extra, channel_metadata, mode)
 // 入队成功后联动更新元数据（UpdateSessionMetadata + SetSessionDeliveryContext），联动失败仅 Warn。
 func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 	timestamp float64, eventType string, extra map[string]any,
@@ -155,7 +155,7 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 		writeHistoryItem(sid, item)
 	}
 
-	// 对齐 Python append_history_record 内部的元数据联动（第 176-200 行）
+	// Python: append_history_record 内部的元数据联动（第 176-200 行）
 	// 同步调用，对齐 Python 行为。联动失败仅 log.Warn，不影响主流程
 	func() {
 		defer func() {
@@ -183,7 +183,7 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 
 // AppendCompactHistoryRecords 写入 context compact 的 boundary + summary 记录。
 //
-// 对齐 Python: append_compact_history_records(session_id, request_id, channel_id, summary, timestamp, trigger, stats, mode)
+// Python: append_compact_history_records(session_id, request_id, channel_id, summary, timestamp, trigger, stats, mode)
 func AppendCompactHistoryRecords(sessionID, requestID, channelID, summary string,
 	timestamp float64, trigger string, stats map[string]any, mode string) {
 	// 1. 写入 context.compact_boundary 记录
@@ -220,7 +220,7 @@ func AppendCompactHistoryRecords(sessionID, requestID, channelID, summary string
 
 // AppendCompactHistoryFromPayload 从 payload 中提取 compact 信息并写入 history。
 //
-// 对齐 Python: _append_compact_history_from_payload(payload, session_id, request_id, channel_id, mode)
+// Python: _append_compact_history_from_payload(payload, session_id, request_id, channel_id, mode)
 func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestID, channelID, mode string) {
 	summaryText := ""
 	if s, ok := payload["compact_summary"]; ok {
@@ -236,7 +236,7 @@ func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestI
 
 // ReadHistoryRecords 读取指定 session 的全部 history 记录。
 //
-// 对齐 Python: read_history_records(session_id)
+// Python: read_history_records(session_id)
 func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 	sid := NormalizeSessionID(sessionID)
 	fpath := historyFilePath(sid)
@@ -249,10 +249,10 @@ func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 
 // TruncateHistoryRecords 截断 history 到指定位置索引（rewind 使用）。
 //
-// 对齐 Python: truncate_history_records(session_id, cut_index: int) → dict
+// Python: truncate_history_records(session_id, cut_index: int) → dict
 // 先等异步队列刷盘（FlushHistoryQueue 哨兵机制等价 Python _WRITE_QUEUE.join()），再截断到 cutIndex。
 func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, error) {
-	// 对齐 Python: _WRITE_QUEUE.join()，先等异步队列刷盘再截断
+	// Python: _WRITE_QUEUE.join()，先等异步队列刷盘再截断
 	FlushHistoryQueue()
 
 	sid := NormalizeSessionID(sessionID)
@@ -289,7 +289,7 @@ func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, err
 
 // IsTeamRelevant 判断记录是否为 team 相关事件。
 //
-// 对齐 Python _is_team_relevant(item)
+// Python: _is_team_relevant(item)
 func IsTeamRelevant(item map[string]any) bool {
 	et, ok := item["event_type"].(string)
 	if !ok || !teamRelevantEventTypes[et] {
@@ -311,7 +311,7 @@ func IsTeamRelevant(item map[string]any) bool {
 
 // ReadTeamHistoryRecords 读取指定会话的 team 相关历史记录。
 //
-// 对齐 Python read_team_history_records(session_id)
+// Python: read_team_history_records(session_id)
 // 带 5 次递增间隔重试（0.2s × attempt），防止读到截断窗口空文件。
 func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
 	sid := NormalizeSessionID(sessionID)
@@ -402,7 +402,7 @@ func writeHistoryItem(sessionID string, record map[string]any) {
 }
 
 // historyFilePath 返回 history.json 的完整路径。
-// 对齐 Python: _history_file(session_id) 使用 get_agent_sessions_dir()
+// Python: _history_file(session_id) 使用 get_agent_sessions_dir()
 func historyFilePath(sessionID string) string {
 	dir := filepath.Join(GetSessionsDir(), sessionID)
 	_ = os.MkdirAll(dir, 0o755)
@@ -423,7 +423,7 @@ func readHistoryFile(fpath string) ([]map[string]any, error) {
 	}
 	var records []map[string]any
 	if err := json.Unmarshal(data, &records); err != nil {
-		// 对齐 Python _read_history: 读取失败时 Warn 日志 + 返回空列表，不阻断主流程
+		// Python: _read_history: 读取失败时 Warn 日志 + 返回空列表，不阻断主流程
 		logger.Warn(logComponent).Err(err).Str("path", fpath).Msg("读取 history.json 失败，已忽略并重建")
 		return []map[string]any{}, nil
 	}
@@ -441,7 +441,7 @@ func writeHistoryFile(fpath string, records []map[string]any) error {
 
 // isSuccessfulCompactionPayload 判断 payload 是否表示成功的压缩。
 //
-// 对齐 Python: _is_successful_compaction_payload(payload)
+// Python: _is_successful_compaction_payload(payload)
 func isSuccessfulCompactionPayload(payload map[string]any) bool {
 	if v, ok := payload["error"]; ok && v != nil {
 		return false
@@ -455,7 +455,7 @@ func isSuccessfulCompactionPayload(payload map[string]any) bool {
 
 // compactStatsFromPayload 从 payload 中提取压缩统计字段。
 //
-// 对齐 Python: _compact_stats_from_payload(payload)
+// Python: _compact_stats_from_payload(payload)
 func compactStatsFromPayload(payload map[string]any) map[string]any {
 	stats := make(map[string]any)
 	for _, key := range []string{"status", "phase", "processor", "model", "before", "after", "saved", "duration_ms"} {

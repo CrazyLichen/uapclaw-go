@@ -16,32 +16,32 @@ import (
 // 所有向量存储后端（Chroma、Milvus、Gauss 等）必须实现此接口。
 // 方法全部为同步风格，调用者可按需通过 goroutine 实现并发。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (BaseVectorStore)
+// Python: openjiuwen/core/foundation/store/base_vector_store.py (BaseVectorStore)
 type BaseVectorStore interface {
 	// CreateCollection 创建集合，schema 定义字段结构。
 	//
-	// 对应 Python: BaseVectorStore.create_collection(collection_name, schema, **kwargs)
+	// Python: BaseVectorStore.create_collection(collection_name, schema, **kwargs)
 	CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error
 
 	// DeleteCollection 删除集合。
 	//
-	// 对应 Python: BaseVectorStore.delete_collection(collection_name, **kwargs)
+	// Python: BaseVectorStore.delete_collection(collection_name, **kwargs)
 	DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error
 
 	// CollectionExists 检查集合是否存在。
 	//
-	// 对应 Python: BaseVectorStore.collection_exists(collection_name, **kwargs)
+	// Python: BaseVectorStore.collection_exists(collection_name, **kwargs)
 	CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error)
 
 	// GetSchema 获取集合的 Schema。
 	//
-	// 对应 Python: BaseVectorStore.get_schema(collection_name, **kwargs)
+	// Python: BaseVectorStore.get_schema(collection_name, **kwargs)
 	GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error)
 
 	// AddDocs 添加文档到集合。
 	// 每个文档是包含 id/embedding/text/metadata 等字段的 map。
 	//
-	// 对应 Python: BaseVectorStore.add_docs(collection_name, docs, **kwargs)
+	// Python: BaseVectorStore.add_docs(collection_name, docs, **kwargs)
 	AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error
 
 	// Search 向量相似度搜索。
@@ -50,38 +50,38 @@ type BaseVectorStore interface {
 	// topK: 返回结果数量，0 使用默认值 5
 	// filters: 标量字段过滤条件，nil 表示无过滤
 	//
-	// 对应 Python: BaseVectorStore.search(collection_name, query_vector, vector_field, top_k=5, filters=None, **kwargs)
+	// Python: BaseVectorStore.search(collection_name, query_vector, vector_field, top_k=5, filters=None, **kwargs)
 	Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error)
 
 	// DeleteDocsByIDs 按 ID 删除文档。
 	//
-	// 对应 Python: BaseVectorStore.delete_docs_by_ids(collection_name, ids, **kwargs)
+	// Python: BaseVectorStore.delete_docs_by_ids(collection_name, ids, **kwargs)
 	DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error
 
 	// DeleteDocsByFilters 按标量字段过滤条件删除文档。
 	//
-	// 对应 Python: BaseVectorStore.delete_docs_by_filters(collection_name, filters, **kwargs)
+	// Python: BaseVectorStore.delete_docs_by_filters(collection_name, filters, **kwargs)
 	DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error
 
 	// ListCollectionNames 列出所有集合名称。
 	//
-	// 对应 Python: BaseVectorStore.list_collection_names()
+	// Python: BaseVectorStore.list_collection_names()
 	ListCollectionNames(ctx context.Context) ([]string, error)
 
 	// UpdateSchema 执行 schema 迁移操作。
 	// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 	//
-	// 对应 Python: BaseVectorStore.update_schema(collection_name, operations)
+	// Python: BaseVectorStore.update_schema(collection_name, operations)
 	UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error
 
 	// UpdateCollectionMetadata 更新集合元数据。
 	//
-	// 对应 Python: BaseVectorStore.update_collection_metadata(collection_name, metadata)
+	// Python: BaseVectorStore.update_collection_metadata(collection_name, metadata)
 	UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error
 
 	// GetCollectionMetadata 获取集合元数据。
 	//
-	// 对应 Python: BaseVectorStore.get_collection_metadata(collection_name)
+	// Python: BaseVectorStore.get_collection_metadata(collection_name)
 	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
 }
 
@@ -90,7 +90,7 @@ type BaseVectorStore interface {
 // 类似 Milvus FieldSchema，支持各种数据类型和字段属性。
 // 通过 NewFieldSchema 构造，构造时自动校验字段合法性。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (FieldSchema)
+// Python: openjiuwen/core/foundation/store/base_vector_store.py (FieldSchema)
 type FieldSchema struct {
 	// Name 字段名
 	Name string
@@ -119,7 +119,7 @@ type FieldSchema struct {
 // 类似 Milvus CollectionSchema，支持动态字段。
 // fields 为未导出切片，通过方法访问和修改，保证校验逻辑不被绕过。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (CollectionSchema)
+// Python: openjiuwen/core/foundation/store/base_vector_store.py (CollectionSchema)
 type CollectionSchema struct {
 	// fields 字段定义列表（未导出，通过方法访问）
 	fields []*FieldSchema
@@ -131,7 +131,7 @@ type CollectionSchema struct {
 
 // VectorSearchResult 向量搜索结果。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorSearchResult)
+// Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorSearchResult)
 type VectorSearchResult struct {
 	// Score 相关度分数（越高越相关）
 	Score float64
@@ -168,7 +168,7 @@ type Option func(*Options)
 
 // VectorDataType 向量存储支持的字段数据类型。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorDataType)
+// Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorDataType)
 type VectorDataType int
 
 const (
@@ -317,7 +317,7 @@ func WithNumCandidates(n int) Option {
 //   - DType 为 FloatVector 时 Dim 必须大于 0
 //   - Dim 小于 0 时返回错误
 //
-// 对应 Python: FieldSchema(name=..., dtype=..., ...) 的 Pydantic 校验
+// Python: FieldSchema(name=..., dtype=..., ...) 的 Pydantic 校验
 func NewFieldSchema(name string, dtype VectorDataType, opts ...FieldOption) (*FieldSchema, error) {
 	if name == "" {
 		return nil, exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
@@ -351,7 +351,7 @@ func NewFieldSchema(name string, dtype VectorDataType, opts ...FieldOption) (*Fi
 // 只包含非零值字段。VARCHAR 类型的 MaxLength 未显式设置时输出默认值 65535（对齐 Python 序列化行为）。
 // 字段 type 使用 Python 兼容的字符串值（如 "VARCHAR"、"FLOAT_VECTOR"）。
 //
-// 对应 Python: FieldSchema.to_dict()
+// Python: FieldSchema.to_dict()
 func (f *FieldSchema) ToDict() map[string]any {
 	result := map[string]any{
 		"name": f.Name,
@@ -396,7 +396,7 @@ func (f *FieldSchema) ToDict() map[string]any {
 // 字典中字段类型键名支持 "type" 或 "dtype"（兼容 Python 两种写法）。
 // 枚举值不区分大小写，如 "varchar" 和 "VARCHAR" 均可。
 //
-// 对应 Python: FieldSchema.from_dict()
+// Python: FieldSchema.from_dict()
 func FieldFromDict(data map[string]any) (*FieldSchema, error) {
 	name, _ := data["name"].(string)
 	if name == "" {
@@ -463,7 +463,7 @@ func FieldFromDict(data map[string]any) (*FieldSchema, error) {
 //
 // 校验规则：最多只能有一个主键字段。
 //
-// 对应 Python: CollectionSchema(fields=[], ...)
+// Python: CollectionSchema(fields=[], ...)
 func NewCollectionSchema(opts ...CollectionOption) (*CollectionSchema, error) {
 	s := &CollectionSchema{}
 	for _, opt := range opts {
@@ -476,7 +476,7 @@ func NewCollectionSchema(opts ...CollectionOption) (*CollectionSchema, error) {
 //
 // 逐个添加字段并校验，任一字段冲突则返回错误。
 //
-// 对应 Python: CollectionSchema.from_fields(fields, **kwargs)
+// Python: CollectionSchema.from_fields(fields, **kwargs)
 func NewCollectionSchemaFromFields(fields []*FieldSchema, opts ...CollectionOption) (*CollectionSchema, error) {
 	schema, err := NewCollectionSchema(opts...)
 	if err != nil {
@@ -496,7 +496,7 @@ func NewCollectionSchemaFromFields(fields []*FieldSchema, opts ...CollectionOpti
 //   - 字段名不能重复
 //   - 不能添加第二个主键字段
 //
-// 对应 Python: CollectionSchema.add_field(field)
+// Python: CollectionSchema.add_field(field)
 func (s *CollectionSchema) AddField(field *FieldSchema) (*CollectionSchema, error) {
 	// 检查重名
 	for _, f := range s.fields {
@@ -524,7 +524,7 @@ func (s *CollectionSchema) AddField(field *FieldSchema) (*CollectionSchema, erro
 
 // RemoveField 按名称移除字段（原地修改，返回自身以支持链式调用）。
 //
-// 对应 Python: CollectionSchema.remove_field(field_name)
+// Python: CollectionSchema.remove_field(field_name)
 func (s *CollectionSchema) RemoveField(fieldName string) *CollectionSchema {
 	filtered := make([]*FieldSchema, 0, len(s.fields))
 	for _, f := range s.fields {
@@ -538,7 +538,7 @@ func (s *CollectionSchema) RemoveField(fieldName string) *CollectionSchema {
 
 // GetField 按名称获取字段，不存在返回 nil。
 //
-// 对应 Python: CollectionSchema.get_field(field_name)
+// Python: CollectionSchema.get_field(field_name)
 func (s *CollectionSchema) GetField(fieldName string) *FieldSchema {
 	for _, f := range s.fields {
 		if f.Name == fieldName {
@@ -550,14 +550,14 @@ func (s *CollectionSchema) GetField(fieldName string) *FieldSchema {
 
 // HasField 检查字段是否存在。
 //
-// 对应 Python: CollectionSchema.has_field(field_name)
+// Python: CollectionSchema.has_field(field_name)
 func (s *CollectionSchema) HasField(fieldName string) bool {
 	return s.GetField(fieldName) != nil
 }
 
 // GetPrimaryKeyField 获取主键字段，不存在返回 nil。
 //
-// 对应 Python: CollectionSchema.get_primary_key_field()
+// Python: CollectionSchema.get_primary_key_field()
 func (s *CollectionSchema) GetPrimaryKeyField() *FieldSchema {
 	for _, f := range s.fields {
 		if f.IsPrimary {
@@ -569,7 +569,7 @@ func (s *CollectionSchema) GetPrimaryKeyField() *FieldSchema {
 
 // GetVectorFields 获取所有 FLOAT_VECTOR 类型的字段。
 //
-// 对应 Python: CollectionSchema.get_vector_fields()
+// Python: CollectionSchema.get_vector_fields()
 func (s *CollectionSchema) GetVectorFields() []*FieldSchema {
 	var result []*FieldSchema
 	for _, f := range s.fields {
@@ -589,7 +589,7 @@ func (s *CollectionSchema) Fields() []*FieldSchema {
 
 // ToDict 将 Schema 转为字典格式（序列化用）。
 //
-// 对应 Python: CollectionSchema.to_dict()
+// Python: CollectionSchema.to_dict()
 func (s *CollectionSchema) ToDict() map[string]any {
 	fields := make([]map[string]any, len(s.fields))
 	for i, f := range s.fields {
@@ -604,7 +604,7 @@ func (s *CollectionSchema) ToDict() map[string]any {
 
 // CollectionFromDict 从字典创建 CollectionSchema。
 //
-// 对应 Python: CollectionSchema.from_dict(data)
+// Python: CollectionSchema.from_dict(data)
 func CollectionFromDict(data map[string]any) (*CollectionSchema, error) {
 	opts := make([]CollectionOption, 0)
 	if v, ok := data["description"].(string); ok {

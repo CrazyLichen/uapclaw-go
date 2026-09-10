@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // TestParseShellForPermission_简单命令 测试简单命令解析
-// 对齐 Python: parse_shell_for_permission("ls -la") → Simple, 1 subcommand
+// Python: parse_shell_for_permission("ls -la") → Simple, 1 subcommand
 func TestParseShellForPermission_简单命令(t *testing.T) {
 	result := ParseShellForPermission("ls -la")
 	require.NotNil(t, result)
@@ -24,7 +24,7 @@ func TestParseShellForPermission_简单命令(t *testing.T) {
 }
 
 // TestParseShellForPermission_空命令 测试空命令
-// 对齐 Python: parse_shell_for_permission("") → Simple, 0 subcommands
+// Python: parse_shell_for_permission("") → Simple, 0 subcommands
 func TestParseShellForPermission_空命令(t *testing.T) {
 	result := ParseShellForPermission("")
 	require.NotNil(t, result)
@@ -34,7 +34,7 @@ func TestParseShellForPermission_空命令(t *testing.T) {
 }
 
 // TestParseShellForPermission_管道 测试管道命令
-// 对齐 Python: pipeline → Pipeline=True, Simple（管道不是风险结构）
+// Python: pipeline → Pipeline=True, Simple（管道不是风险结构）
 func TestParseShellForPermission_管道(t *testing.T) {
 	result := ParseShellForPermission("echo hello | grep h")
 	require.NotNil(t, result)
@@ -46,7 +46,7 @@ func TestParseShellForPermission_管道(t *testing.T) {
 }
 
 // TestParseShellForPermission_复合命令 测试复合操作符
-// 对齐 Python: list/compound → CompoundOperators=True, Simple
+// Python: list/compound → CompoundOperators=True, Simple
 func TestParseShellForPermission_复合命令(t *testing.T) {
 	result := ParseShellForPermission("ls && pwd")
 	require.NotNil(t, result)
@@ -56,7 +56,7 @@ func TestParseShellForPermission_复合命令(t *testing.T) {
 }
 
 // TestParseShellForPermission_命令替换 测试命令替换
-// 对齐 Python: command_substitution → TooComplex
+// Python: command_substitution → TooComplex
 func TestParseShellForPermission_命令替换(t *testing.T) {
 	result := ParseShellForPermission("$(whoami)")
 	require.NotNil(t, result)
@@ -65,7 +65,7 @@ func TestParseShellForPermission_命令替换(t *testing.T) {
 }
 
 // TestParseShellForPermission_Heredoc 测试 Here 文档
-// 对齐 Python: heredoc → TooComplex
+// Python: heredoc → TooComplex
 func TestParseShellForPermission_Heredoc(t *testing.T) {
 	result := ParseShellForPermission("cat <<EOF\nhello\nEOF")
 	require.NotNil(t, result)
@@ -74,7 +74,7 @@ func TestParseShellForPermission_Heredoc(t *testing.T) {
 }
 
 // TestParseShellForPermission_分号 测试分号分隔命令
-// 对齐 Python: semicolon → CompoundOperators=True, Simple
+// Python: semicolon → CompoundOperators=True, Simple
 func TestParseShellForPermission_分号(t *testing.T) {
 	result := ParseShellForPermission("ls; pwd")
 	require.NotNil(t, result)
@@ -84,7 +84,7 @@ func TestParseShellForPermission_分号(t *testing.T) {
 }
 
 // TestParseShellForPermission_子Shell 测试子 shell
-// 对齐 Python: subshell → TooComplex
+// Python: subshell → TooComplex
 func TestParseShellForPermission_子Shell(t *testing.T) {
 	result := ParseShellForPermission("(ls && pwd)")
 	require.NotNil(t, result)
@@ -93,7 +93,7 @@ func TestParseShellForPermission_子Shell(t *testing.T) {
 }
 
 // TestParseShellForPermission_参数展开 测试参数展开
-// 对齐 Python: parameter_expansion → TooComplex
+// Python: parameter_expansion → TooComplex
 func TestParseShellForPermission_参数展开(t *testing.T) {
 	result := ParseShellForPermission("echo ${HOME}")
 	require.NotNil(t, result)

@@ -58,7 +58,7 @@ func WorkspaceDir() string {
 //
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/config/，
 // 未初始化时回退到 ResourcesDir()。
-// 对应 Python: get_config_dir()
+// Python: get_config_dir()
 func ConfigDir() string {
 	dir := path.ConfigDir()
 	logFallbackIfNeeded()
@@ -97,7 +97,7 @@ func EnvFile() string {
 }
 
 // 以下路径辅助函数始终基于 WorkspaceDir() 派生，不受回退影响。
-// 对应 Python: 各 get_xxx_dir() 函数
+// Python: 各 get_xxx_dir() 函数
 
 // AgentRootDir 返回 Agent 根目录：WorkspaceDir()/agent
 func AgentRootDir() string {
@@ -175,7 +175,7 @@ func DeepAgentUserMDPath() string {
 }
 
 // AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
-// 对齐 Python: get_agent_teams_home()
+// Python: get_agent_teams_home()
 func AgentTeamsHomeDir() string {
 	return path.AgentTeamsHomeDir()
 }

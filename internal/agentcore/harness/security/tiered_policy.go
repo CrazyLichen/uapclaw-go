@@ -16,7 +16,7 @@ import (
 
 // tieredInvocationContext 分层调用上下文。
 //
-// 对齐 Python: _TieredInvocationContext (tiered_policy.py L53-61)
+// Python: _TieredInvocationContext (tiered_policy.py L53-61)
 type tieredInvocationContext struct {
 	// mode 权限模式（normal 或 strict）
 	Mode string
@@ -53,18 +53,18 @@ type paramRuleHit struct {
 
 const (
 	// mr 模块名前缀
-	// 对齐 Python: _MR = "tiered_policy" (tiered_policy.py L49)
+	// Python: _MR = "tiered_policy" (tiered_policy.py L49)
 	mr = "tiered_policy"
 
 	// approvalOverridesPrefix 审批覆盖前缀
-	// 对齐 Python: _APPROVAL_OVERRIDES_PREFIX (tiered_policy.py L50)
+	// Python: _APPROVAL_OVERRIDES_PREFIX (tiered_policy.py L50)
 	approvalOverridesPrefix = mr + ":approval_overrides"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // strictOrder 权限严格度排序（DENY < ASK < ALLOW）
-// 对齐 Python: _STRICT_ORDER (tiered_policy.py L28)
+// Python: _STRICT_ORDER (tiered_policy.py L28)
 var strictOrder = map[PermissionLevel]int{
 	PermissionLevelDeny:  0,
 	PermissionLevelAsk:   1,
@@ -72,13 +72,13 @@ var strictOrder = map[PermissionLevel]int{
 }
 
 // shellTools Shell 工具集合
-// 对齐 Python: _SHELL_TOOLS (tiered_policy.py L31)
+// Python: _SHELL_TOOLS (tiered_policy.py L31)
 var shellTools = map[string]bool{
 	"bash": true, "mcp_exec_command": true, "create_terminal": true,
 }
 
 // pathTools 路径工具集合
-// 对齐 Python: _PATH_TOOLS (tiered_policy.py L32-38)
+// Python: _PATH_TOOLS (tiered_policy.py L32-38)
 var pathTools = map[string]bool{
 	"read_file": true, "write_file": true, "edit_file": true,
 	"read_text_file": true, "write_text_file": true,
@@ -88,13 +88,13 @@ var pathTools = map[string]bool{
 }
 
 // networkTools 网络工具集合
-// 对齐 Python: _NETWORK_TOOLS (tiered_policy.py L39)
+// Python: _NETWORK_TOOLS (tiered_policy.py L39)
 var networkTools = map[string]bool{
 	"mcp_fetch_webpage": true, "mcp_free_search": true, "mcp_paid_search": true,
 }
 
 // pathArgKeys 路径参数键集合
-// 对齐 Python: _PATH_ARG_KEYS (tiered_policy.py L41-44)
+// Python: _PATH_ARG_KEYS (tiered_policy.py L41-44)
 var pathArgKeys = map[string]bool{
 	"path": true, "file_path": true, "target_file": true, "file": true,
 	"old_path": true, "new_path": true, "source_path": true, "dest_path": true,
@@ -105,7 +105,7 @@ var pathArgKeys = map[string]bool{
 var tieredPolicyLogComponent = logger.ComponentAgentCore
 
 // builtinRulesCache 内置规则缓存
-// 对齐 Python: _BUILTIN_RULES_CACHE (tiered_policy.py L47)
+// Python: _BUILTIN_RULES_CACHE (tiered_policy.py L47)
 // 三元组: (路径字符串, mtime, 规则列表)
 var builtinRulesCache struct {
 	path   string
@@ -129,7 +129,7 @@ var builtinRulesCacheMu sync.Mutex
 // 5. applyShellAstFloor
 // 6. MaybeEscalateShellOperators
 //
-// 对齐 Python: evaluate_tiered_policy(permission_config, tool_name, tool_args) (tiered_policy.py L508-581)
+// Python: evaluate_tiered_policy(permission_config, tool_name, tool_args) (tiered_policy.py L508-581)
 func EvaluateTieredPolicy(permissionConfig map[string]any, toolName string, toolArgs map[string]any) (PermissionLevel, string) {
 	mode := parsePermissionMode(permissionConfig)
 
@@ -187,7 +187,7 @@ func EvaluateTieredPolicy(permissionConfig map[string]any, toolName string, tool
 
 // Strictest 返回最严格的权限级别。
 //
-// 对齐 Python: strictest(*levels) (tiered_policy.py L118-121)
+// Python: strictest(*levels) (tiered_policy.py L118-121)
 func Strictest(levels ...PermissionLevel) PermissionLevel {
 	if len(levels) == 0 {
 		return PermissionLevelAsk
@@ -203,7 +203,7 @@ func Strictest(levels ...PermissionLevel) PermissionLevel {
 
 // SeverityToDecision 将严重级别映射为权限决策。
 //
-// 对齐 Python: severity_to_decision(severity, permission_mode) (tiered_policy.py L124-138)
+// Python: severity_to_decision(severity, permission_mode) (tiered_policy.py L124-138)
 func SeverityToDecision(severity, permissionMode string) PermissionLevel {
 	sev := strings.ToUpper(strings.TrimSpace(severity))
 	mode := strings.ToLower(strings.TrimSpace(permissionMode))
@@ -237,7 +237,7 @@ func SeverityToDecision(severity, permissionMode string) PermissionLevel {
 // MaybeEscalateShellOperators 命令含链式/注入元字符时 ALLOW→ASK。
 // approval_overrides 豁免。
 //
-// 对齐 Python: maybe_escalate_shell_operators(tool_name, tool_args, permission) (tiered_policy.py L584-599)
+// Python: maybe_escalate_shell_operators(tool_name, tool_args, permission) (tiered_policy.py L584-599)
 func MaybeEscalateShellOperators(toolName string, toolArgs map[string]any, permission PermissionLevel, matchedRule string) PermissionLevel {
 	if !shellTools[toolName] {
 		return permission
@@ -258,14 +258,14 @@ func MaybeEscalateShellOperators(toolName string, toolArgs map[string]any, permi
 
 // MatchedRuleUsesApprovalOverride 当前结果是否来自 approval_overrides。
 //
-// 对齐 Python: matched_rule_uses_approval_override(matched_rule) (tiered_policy.py L602-606)
+// Python: matched_rule_uses_approval_override(matched_rule) (tiered_policy.py L602-606)
 func MatchedRuleUsesApprovalOverride(matchedRule string) bool {
 	return strings.HasPrefix(matchedRule, approvalOverridesPrefix)
 }
 
 // RuleToolsCategoryConsistent 检查规则中 tools 是否同类。
 //
-// 对齐 Python: rule_tools_category_consistent(tools) (tiered_policy.py L151-160)
+// Python: rule_tools_category_consistent(tools) (tiered_policy.py L151-160)
 func RuleToolsCategoryConsistent(tools []string) bool {
 	cats := make(map[string]bool)
 	for _, t := range tools {
@@ -283,9 +283,9 @@ func RuleToolsCategoryConsistent(tools []string) bool {
 
 // GetBuiltinSecurityRules 获取内置安全规则列表（进程内缓存）。
 //
-// 对齐 Python: get_builtin_security_rules() (tiered_policy.py L88-110)
+// Python: get_builtin_security_rules() (tiered_policy.py L88-110)
 // GetBuiltinSecurityRules 获取内置安全规则列表（进程内按路径+mtime 缓存）。
-// 对齐 Python: get_builtin_security_rules() (tiered_policy.py L64-90)
+// Python: get_builtin_security_rules() (tiered_policy.py L64-90)
 // 优先从文件系统读取（支持 mtime 自动重载），回退到嵌入资源。
 func GetBuiltinSecurityRules() []map[string]any {
 	builtinRulesCacheMu.Lock()
@@ -360,7 +360,7 @@ func convertBuiltinRules(parsed *resources.BuiltinRules) []map[string]any {
 
 // TieredPolicyRuleMatches 单条 rule 是否对本次调用匹配。
 //
-// 对齐 Python: tiered_policy_rule_matches(tool_name, pattern, tool_args, rule_tools) (tiered_policy.py L325-345)
+// Python: tiered_policy_rule_matches(tool_name, pattern, tool_args, rule_tools) (tiered_policy.py L325-345)
 func TieredPolicyRuleMatches(toolName string, pattern string, toolArgs map[string]any, ruleTools []string) bool {
 	if len(ruleTools) == 0 {
 		return false
@@ -401,7 +401,7 @@ func parsePermissionMode(config map[string]any) string {
 }
 
 // toolCategory 获取工具类别
-// 对齐 Python: _tool_category(tool_name) (tiered_policy.py L141-148)
+// Python: _tool_category(tool_name) (tiered_policy.py L141-148)
 func toolCategory(toolName string) string {
 	if shellTools[toolName] {
 		return "shell"
@@ -416,7 +416,7 @@ func toolCategory(toolName string) string {
 }
 
 // baselineLevel 获取整工具基线权限
-// 对齐 Python: _baseline_level(tools_cfg, tool_name) (tiered_policy.py L348-375)
+// Python: _baseline_level(tools_cfg, tool_name) (tiered_policy.py L348-375)
 func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, string) {
 	if toolsCfg == nil {
 		return PermissionLevelNone, "" // 无配置，对齐 Python baseline_level is None
@@ -460,7 +460,7 @@ func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, s
 }
 
 // parseLevel 解析权限级别字符串
-// 对齐 Python: _parse_level(value) (tiered_policy.py L113-115)
+// Python: _parse_level(value) (tiered_policy.py L113-115)
 func parseLevel(value string) PermissionLevel {
 	level, err := ParsePermissionLevel(strings.TrimSpace(value))
 	if err != nil {
@@ -470,14 +470,14 @@ func parseLevel(value string) PermissionLevel {
 }
 
 // shellPatternMatches Shell 模式匹配
-// 对齐 Python: _shell_pattern_matches(pattern, command) (tiered_policy.py L167-205)
+// Python: _shell_pattern_matches(pattern, command) (tiered_policy.py L167-205)
 func shellPatternMatches(pattern, command string) bool {
 	if pattern == "" || command == "" {
 		return false
 	}
 	p := strings.TrimSpace(pattern)
 
-	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	// Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
 	regexFlags := ""
 	if runtime.GOOS == "windows" {
 		regexFlags = "(?i)"
@@ -529,14 +529,14 @@ func shellPatternMatches(pattern, command string) bool {
 }
 
 // pathPatternMatches 路径模式匹配
-// 对齐 Python: _path_pattern_matches(pattern, value) (tiered_policy.py L208-220)
+// Python: _path_pattern_matches(pattern, value) (tiered_policy.py L208-220)
 func pathPatternMatches(pattern, value string) bool {
 	if pattern == "" || value == "" {
 		return false
 	}
 	p := strings.TrimSpace(pattern)
 
-	// 对齐 Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
+	// Python: flags = re.IGNORECASE if sys.platform == "win32" else 0
 	regexFlags := ""
 	if runtime.GOOS == "windows" {
 		regexFlags = "(?i)"
@@ -557,7 +557,7 @@ func pathPatternMatches(pattern, value string) bool {
 }
 
 // collectParamRuleHits 收集参数级规则命中列表。
-// 对齐 Python: _collect_param_rule_hits(rules, tool_name, tool_args, mode, label_ns) (tiered_policy.py L242-284)
+// Python: _collect_param_rule_hits(rules, tool_name, tool_args, mode, label_ns) (tiered_policy.py L242-284)
 func collectParamRuleHits(rules []map[string]any, toolName string, toolArgs map[string]any, mode, labelNS string) []paramRuleHit {
 	var hits []paramRuleHit
 	for _, rule := range rules {
@@ -616,7 +616,7 @@ func collectParamRuleHits(rules []map[string]any, toolName string, toolArgs map[
 }
 
 // collectApprovalOverrideHits 收集审批覆盖命中列表。
-// 对齐 Python: _collect_approval_override_hits(rules, tool_name, tool_args) (tiered_policy.py L287-322)
+// Python: _collect_approval_override_hits(rules, tool_name, tool_args) (tiered_policy.py L287-322)
 func collectApprovalOverrideHits(rules []map[string]any, toolName string, toolArgs map[string]any) []string {
 	var hits []string
 	for _, rule := range rules {
@@ -666,7 +666,7 @@ func collectApprovalOverrideHits(rules []map[string]any, toolName string, toolAr
 }
 
 // evaluateSingleInvocation 评估单次调用的权限。
-// 对齐 Python: _evaluate_single_invocation(tool_name, tool_args, ctx) (tiered_policy.py L436-485)
+// Python: _evaluate_single_invocation(tool_name, tool_args, ctx) (tiered_policy.py L436-485)
 func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tieredInvocationContext) subcommandResult {
 	// 1. 内置参数规则
 	builtinHits := collectParamRuleHits(ctx.BuiltinRules, toolName, toolArgs, ctx.Mode, "builtin")
@@ -705,7 +705,7 @@ func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tie
 	}
 
 	// 6. 基线
-	// 对齐 Python: if ctx.baseline_level is not None → 使用基线
+	// Python: if ctx.baseline_level is not None → 使用基线
 	// BaselineLevel != PermissionLevelNone 表示 tools 配置中存在该工具名
 	if ctx.BaselineLevel != PermissionLevelNone {
 		return subcommandResult{Permission: ctx.BaselineLevel, MatchedRule: ctx.BaselineRule}
@@ -724,7 +724,7 @@ func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tie
 }
 
 // shellAstFloor Shell AST 地板权限。
-// 对齐 Python: _shell_ast_floor(shell_parse) (tiered_policy.py L388-408)
+// Python: _shell_ast_floor(shell_parse) (tiered_policy.py L388-408)
 func shellAstFloor(shellParse *ShellAstParseResult) (PermissionLevel, string) {
 	if shellParse == nil {
 		return PermissionLevelAllow, "" // nil 表示无 floor
@@ -758,7 +758,7 @@ func shellAstFloor(shellParse *ShellAstParseResult) (PermissionLevel, string) {
 }
 
 // applyShellAstFloor 应用 Shell AST 地板权限。
-// 对齐 Python: _apply_shell_ast_floor(permission, matched_rule, shell_floor, shell_floor_rule) (tiered_policy.py L411-424)
+// Python: _apply_shell_ast_floor(permission, matched_rule, shell_floor, shell_floor_rule) (tiered_policy.py L411-424)
 func applyShellAstFloor(permission PermissionLevel, matchedRule string, shellFloor PermissionLevel, shellFloorRule string) (PermissionLevel, string) {
 	if shellFloor == PermissionLevelAllow && shellFloorRule == "" {
 		return permission, matchedRule
@@ -777,7 +777,7 @@ func applyShellAstFloor(permission PermissionLevel, matchedRule string, shellFlo
 }
 
 // aggregateSubcommandResults 聚合子命令结果。
-// 对齐 Python: _aggregate_subcommand_results(results) (tiered_policy.py L488-505)
+// Python: _aggregate_subcommand_results(results) (tiered_policy.py L488-505)
 func aggregateSubcommandResults(results []subcommandResult) subcommandResult {
 	if len(results) == 0 {
 		return subcommandResult{Permission: PermissionLevelAsk, MatchedRule: mr + ":shell_subcommands:fallback"}
@@ -818,7 +818,7 @@ func hasDenyHit(hits []paramRuleHit) bool {
 }
 
 // finalizeHits 确定命中结果
-// 对齐 Python: _finalize_hits(hits, prefix) (tiered_policy.py L378-385)
+// Python: _finalize_hits(hits, prefix) (tiered_policy.py L378-385)
 func finalizeHits(hits []paramRuleHit, prefix string) (PermissionLevel, string) {
 	if hasDenyHit(hits) {
 		var contributing []string
@@ -856,13 +856,13 @@ func finalizeHits(hits []paramRuleHit, prefix string) (PermissionLevel, string) 
 }
 
 // withShellCommand 替换 toolArgs 中的 command/cmd 为子命令文本
-// 对齐 Python: _with_shell_command(tool_args, command) (tiered_policy.py L427-433)
+// Python: _with_shell_command(tool_args, command) (tiered_policy.py L427-433)
 func withShellCommand(toolArgs map[string]any, command string) map[string]any {
 	subArgs := make(map[string]any, len(toolArgs))
 	for k, v := range toolArgs {
 		subArgs[k] = v
 	}
-	// 对齐 Python: if "command" in sub_args or "cmd" not in sub_args:
+	// Python: if "command" in sub_args or "cmd" not in sub_args:
 	if _, hasCommand := toolArgs["command"]; hasCommand {
 		subArgs["command"] = command
 	} else if _, hasCmd := toolArgs["cmd"]; !hasCmd {

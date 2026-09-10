@@ -24,13 +24,13 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OnInbound 团队→用户通知回调。
-// 对齐 Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]
+// Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]
 // 复用 interaction 包的 OnInbound 类型签名，但 tools 包不 import interaction（避免循环），
 // 因此在此独立定义。
 type OnInbound func(ctx context.Context, memberName string, payload any) error
 
 // TeamBackend 团队后端门面，组合 DB + TaskManager + MessageManager + Messager。
-// 对齐 Python: TeamBackend (openjiuwen/agent_teams/tools/team.py)
+// Python: TeamBackend (openjiuwen/agent_teams/tools/team.py)
 //
 // 提供团队级业务方法：成员生命周期、团队生命周期、HITT 名册、
 // 文件清理、任务操作、跨域组合操作。
@@ -71,7 +71,7 @@ type TeamBackend struct {
 type TeamBackendOption func(*TeamBackend)
 
 // ShutdownOption ShutdownMember 可选参数。
-// 对齐 Python: shutdown_member(force=False)
+// Python: shutdown_member(force=False)
 type ShutdownOption func(*shutdownConfig)
 
 // shutdownConfig ShutdownMember 配置
@@ -81,7 +81,7 @@ type shutdownConfig struct {
 }
 
 // ApprovePlanOption ApprovePlan 可选参数。
-// 对齐 Python: approve_plan(approved=True, feedback=None)
+// Python: approve_plan(approved=True, feedback=None)
 type ApprovePlanOption func(*approvePlanConfig)
 
 // approvePlanConfig ApprovePlan 配置
@@ -93,7 +93,7 @@ type approvePlanConfig struct {
 }
 
 // SpawnMemberOption SpawnMember 可选参数。
-// 对齐 Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)
+// Python: spawn_member(status=UNSTARTED, execution_status=IDLE, mode=BUILD_MODE, allocation=None)
 type SpawnMemberOption func(*spawnMemberConfig)
 
 // spawnMemberConfig SpawnMember 配置
@@ -121,7 +121,7 @@ const (
 
 var (
 	// ErrHITTConfigInvalid build_team(enable_hitt=True) 但 spec_enable_hitt=False 时返回。
-	// 对齐 Python: raise_error(StatusCode.AGENT_TEAM_CONFIG_INVALID, ...)
+	// Python: raise_error(StatusCode.AGENT_TEAM_CONFIG_INVALID, ...)
 	ErrHITTConfigInvalid = errors.New("build_team(enable_hitt=True) 要求 spec_enable_hitt=True；能力天花板被违反")
 )
 
@@ -153,13 +153,13 @@ func WithEnableHITT(enable bool) TeamBackendOption {
 }
 
 // WithOnTeamCleaned 设置团队清理回调。
-// 对齐 Python: on_team_cleaned 参数
+// Python: on_team_cleaned 参数
 func WithOnTeamCleaned(fn func(ctx context.Context) error) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.onTeamCleaned = fn }
 }
 
 // WithOnTeamBuilt 设置团队构建回调。
-// 对齐 Python: on_team_built 参数
+// Python: on_team_built 参数
 func WithOnTeamBuilt(fn func(ctx context.Context) error) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.onTeamBuilt = fn }
 }
@@ -215,7 +215,7 @@ func WithAllocation(a *models.Allocation) SpawnMemberOption {
 }
 
 // NewTeamBackend 创建团队后端门面。
-// 对齐 Python: TeamBackend.__init__(team_name, member_name, is_leader, db, messager, ...)
+// Python: TeamBackend.__init__(team_name, member_name, is_leader, db, messager, ...)
 func NewTeamBackend(
 	teamName, memberName string, isLeader bool,
 	db database.TeamDatabase, msg messager.Messager,
@@ -252,49 +252,49 @@ func NewTeamBackend(
 // ── 属性访问 ──
 
 // TeamName 返回团队名。
-// 对齐 Python: TeamBackend.team_name
+// Python: TeamBackend.team_name
 func (tb *TeamBackend) TeamName() string { return tb.teamName }
 
 // MemberName 返回当前成员名。
-// 对齐 Python: TeamBackend.member_name
+// Python: TeamBackend.member_name
 func (tb *TeamBackend) MemberName() string { return tb.memberName }
 
 // IsLeader 返回是否 Leader。
-// 对齐 Python: TeamBackend.is_leader
+// Python: TeamBackend.is_leader
 func (tb *TeamBackend) IsLeader() bool { return tb.isLeader }
 
 // LeaderMemberName 返回 Leader 成员名。
-// 对齐 Python: TeamBackend.leader_member_name
+// Python: TeamBackend.leader_member_name
 func (tb *TeamBackend) LeaderMemberName() string { return tb.leaderMemberName }
 
 // DB 返回团队数据库实例。
-// 对齐 Python: TeamBackend.db
+// Python: TeamBackend.db
 func (tb *TeamBackend) DB() database.TeamDatabase { return tb.db }
 
 // TaskManager 返回任务管理器。
-// 对齐 Python: TeamBackend.task_manager
+// Python: TeamBackend.task_manager
 func (tb *TeamBackend) TaskManager() *TeamTaskManager { return tb.taskManager }
 
 // MessageManager 返回消息管理器。
-// 对齐 Python: TeamBackend.message_manager
+// Python: TeamBackend.message_manager
 func (tb *TeamBackend) MessageManager() *TeamMessageManager { return tb.messageManager }
 
 // ── 查询方法 ──
 
 // GetMember 获取成员信息。
-// 对齐 Python: TeamBackend.get_member(member_name)
+// Python: TeamBackend.get_member(member_name)
 func (tb *TeamBackend) GetMember(ctx context.Context, memberName string) (*database.TeamMember, error) {
 	return tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 }
 
 // ListMembers 列出团队成员（排除自身）。
-// 对齐 Python: TeamBackend.list_members()
+// Python: TeamBackend.list_members()
 func (tb *TeamBackend) ListMembers(ctx context.Context) ([]*database.TeamMember, error) {
 	members, err := tb.db.Member().GetTeamMembers(ctx, tb.teamName, "")
 	if err != nil {
 		return nil, err
 	}
-	// 对齐 Python: 排除自身
+	// Python: 排除自身
 	filtered := make([]*database.TeamMember, 0, len(members))
 	for _, m := range members {
 		if m.MemberName != tb.memberName {
@@ -305,13 +305,13 @@ func (tb *TeamBackend) ListMembers(ctx context.Context) ([]*database.TeamMember,
 }
 
 // GetTeamInfo 获取团队信息。
-// 对齐 Python: TeamBackend.get_team_info()
+// Python: TeamBackend.get_team_info()
 func (tb *TeamBackend) GetTeamInfo(ctx context.Context) (*database.Team, error) {
 	return tb.db.Team().GetTeam(ctx, tb.teamName)
 }
 
 // IsTeamCompleted 判断团队是否完成（所有任务终态 + 所有成员 settled + 无未读消息）。
-// 对齐 Python: TeamBackend.is_team_completed()
+// Python: TeamBackend.is_team_completed()
 // 返回 TeamCompletionSnapshot 或 nil（未完成）。
 func (tb *TeamBackend) IsTeamCompleted(ctx context.Context) (*atschema.TeamCompletionSnapshot, error) {
 	// 步骤 1: 查团队
@@ -352,13 +352,13 @@ func (tb *TeamBackend) IsTeamCompleted(ctx context.Context) (*atschema.TeamCompl
 }
 
 // GetTeamUpdatedAt 获取团队 updated_at 时间戳。
-// 对齐 Python: TeamBackend.get_team_updated_at()
+// Python: TeamBackend.get_team_updated_at()
 func (tb *TeamBackend) GetTeamUpdatedAt(ctx context.Context) int64 {
 	return tb.db.Team().GetTeamUpdatedAt(ctx, tb.teamName)
 }
 
 // GetMembersMaxUpdatedAt 获取成员 MAX(updated_at)。
-// 对齐 Python: TeamBackend.get_members_max_updated_at()
+// Python: TeamBackend.get_members_max_updated_at()
 func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 	return tb.db.Member().GetMembersMaxUpdatedAt(ctx, tb.teamName)
 }
@@ -366,7 +366,7 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 // ── 成员生命周期 ──
 
 // SpawnMember 创建成员记录。
-// 对齐 Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)
+// Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)
 //
 // Python 步骤：
 //  1. 查已有成员 → 若已存在则 fail
@@ -409,7 +409,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 		}
 	}
 	// 步骤 3: DB 写入（使用 cfg 中的状态值，对齐 Python: create_member(status=cfg.status, ...)）
-	// 对齐 Python: agent_card.model_dump_json() — 将 AgentCard 序列化为 JSON 存入 DB
+	// Python: agent_card.model_dump_json() — 将 AgentCard 序列化为 JSON 存入 DB
 	agentCardJSON := "{}"
 	if agentCard != nil {
 		if data, err := json.Marshal(agentCard); err == nil {
@@ -436,7 +436,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 }
 
 // Startup 启动所有 UNSTARTED 成员。
-// 对齐 Python: TeamBackend.startup(on_created=...)
+// Python: TeamBackend.startup(on_created=...)
 //
 // Python 步骤：
 //  1. 查询所有 UNSTARTED 成员
@@ -467,7 +467,7 @@ func (tb *TeamBackend) Startup(
 }
 
 // StartupMember CAS 启动单个成员（UNSTARTED→STARTING）。
-// 对齐 Python: TeamBackend.startup_member(member_name, on_created=...)
+// Python: TeamBackend.startup_member(member_name, on_created=...)
 //
 // Python 步骤：
 //  1. CAS: UNSTARTED→STARTING（若失败返回 false）
@@ -499,7 +499,7 @@ func (tb *TeamBackend) StartupMember(
 }
 
 // ShutdownMember 关闭成员（FSM + 取消任务 + 事件）。
-// 对齐 Python: TeamBackend.shutdown_member(member_name)
+// Python: TeamBackend.shutdown_member(member_name)
 //
 // Python 步骤：
 //  1. 查成员
@@ -554,7 +554,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 }
 
 // CancelMember 取消成员执行（仅 BUSY 成员，重置 CLAIMED 任务 + 发送取消消息 + 事件）。
-// 对齐 Python: TeamBackend.cancel_member(member_name)
+// Python: TeamBackend.cancel_member(member_name)
 //
 // Python 步骤：
 //  1. 查成员
@@ -577,7 +577,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	}
 	// 步骤 3: 重置该成员的 CLAIMED 任务（通过 taskManager.Reset，对齐 Python）
 	tasks, _ := tb.taskManager.GetTasksByAssignee(ctx, memberName, string(atschema.TaskStatusClaimed))
-	// 对齐 Python: reset_count 统计 + 汇总日志
+	// Python: reset_count 统计 + 汇总日志
 	resetCount := 0
 	for _, t := range tasks {
 		if err := tb.taskManager.Reset(ctx, t.TaskID); err != nil {
@@ -615,7 +615,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 // ── 团队生命周期 ──
 
 // BuildTeam 创建团队 + 注册 leader + 预定义成员 + HITT。
-// 对齐 Python: TeamBackend.build_team(display_name, desc, leader_display_name, leader_desc, enable_hitt)
+// Python: TeamBackend.build_team(display_name, desc, leader_display_name, leader_desc, enable_hitt)
 //
 // Python 步骤：
 //
@@ -650,7 +650,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	}
 
 	// 步骤 2: 注册 Leader（改走 SpawnMember 统一路径，对齐 Python: spawn_member(status=BUSY, execution_status=RUNNING, mode=BUILD_MODE)）
-	// 对齐 Python: leader_card = AgentCard(id=leader_card_id, name=leader_display_name, description=leader_desc)
+	// Python: leader_card = AgentCard(id=leader_card_id, name=leader_display_name, description=leader_desc)
 	leaderCard := agentschema.NewAgentCard(
 		agentschema.WithAgentID(tb.teamName+"_"+tb.memberName),
 		agentschema.WithAgentName(leaderDisplayName),
@@ -673,13 +673,13 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 			continue // 由后续 spawn_human_agent 处理
 		}
 		memberCardID := tb.teamName + "_" + pm.MemberName
-		// 对齐 Python: member_card = AgentCard(id=member_card_id, name=member_spec.display_name, description=member_spec.persona)
+		// Python: member_card = AgentCard(id=member_card_id, name=member_spec.display_name, description=member_spec.persona)
 		memberCard := agentschema.NewAgentCard(
 			agentschema.WithAgentID(memberCardID),
 			agentschema.WithAgentName(pm.DisplayName),
 			agentschema.WithAgentDescription(pm.Persona),
 		)
-		// 对齐 Python: allocation = self._allocate_model_config(member_spec.model_name) if self._allocate_model_config else None
+		// Python: allocation = self._allocate_model_config(member_spec.model_name) if self._allocate_model_config else None
 		var spawnOpts []SpawnMemberOption
 		if tb.modelConfigAllocator != nil {
 			spawnOpts = append(spawnOpts, WithAllocation(tb.modelConfigAllocator(pm.ModelName)))
@@ -723,7 +723,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 }
 
 // CleanTeam 清理团队（全部 SHUTDOWN → 删 DB → 回调 → 清理路径 → 事件）。
-// 对齐 Python: TeamBackend.clean_team()
+// Python: TeamBackend.clean_team()
 // 返回 true 表示成功清理，false 表示仍有活跃成员。
 func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 	// 步骤 1: 查询活跃成员
@@ -736,7 +736,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		if m.MemberName == tb.memberName {
 			continue
 		}
-		// 对齐 Python: 只允许 SHUTDOWN 状态
+		// Python: 只允许 SHUTDOWN 状态
 		if m.Status != string(atschema.MemberStatusShutdown) {
 			logger.Warn(tbLogComponent).Str("team_name", tb.teamName).
 				Str("active_member", m.MemberName).Str("status", m.Status).
@@ -767,7 +767,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 }
 
 // ForceCleanTeam 强制清理团队（shutdown_all + force_delete + 清理路径）。
-// 对齐 Python: TeamBackend.force_clean_team(shutdown_members=force)
+// Python: TeamBackend.force_clean_team(shutdown_members=force)
 func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool) (bool, error) {
 	// 步骤 1: 可选关闭所有成员（对齐 Python: 调用 shutdown_member(force=True)，跳过 self）
 	if shutdownMembers {
@@ -776,7 +776,7 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 			if m.MemberName == tb.memberName {
 				continue // 跳过 leader 自身
 			}
-			// 对齐 Python: 直接调用 shutdown_member(force=True)，不做前置状态检查
+			// Python: 直接调用 shutdown_member(force=True)，不做前置状态检查
 			result := tb.ShutdownMember(ctx, m.MemberName, WithForce(true))
 			if !result.OK {
 				logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
@@ -802,7 +802,7 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 // ── 任务操作 ──
 
 // CancelTask 取消任务 + 通知 assignee。
-// 对齐 Python: TeamBackend.cancel_task(task_id)
+// Python: TeamBackend.cancel_task(task_id)
 func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.MemberOpResult {
 	unblocked, err := tb.taskManager.Cancel(ctx, taskID)
 	if err != nil {
@@ -832,7 +832,7 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 }
 
 // CancelAllTasks 批量取消 + 广播。
-// 对齐 Python: TeamBackend.cancel_all_tasks(skip_assignees)
+// Python: TeamBackend.cancel_all_tasks(skip_assignees)
 func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []string) atschema.MemberOpResult {
 	cancelled, err := tb.taskManager.CancelAllTasks(ctx, skipAssignees)
 	if err != nil {
@@ -848,16 +848,16 @@ func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []strin
 }
 
 // ApprovePlan 审批计划。
-// 对齐 Python: TeamBackend.approve_plan(task_id)
+// Python: TeamBackend.approve_plan(task_id)
 // ApprovePlan 审批计划。
-// 对齐 Python: TeamBackend.approve_plan(plan_id, approved=True, feedback=None)
+// Python: TeamBackend.approve_plan(plan_id, approved=True, feedback=None)
 func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...ApprovePlanOption) atschema.MemberOpResult {
 	// 解析可选参数（对齐 Python: approved=True, feedback=None）
 	cfg := &approvePlanConfig{approved: true}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	// 对齐 Python: 三层前置校验
+	// Python: 三层前置校验
 	// 校验 1: planID 非空（对齐 Python: if not plan_id → return False）
 	if planID == "" {
 		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id 不能为空")
@@ -904,7 +904,7 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 }
 
 // ApproveTool 审批工具调用。
-// 对齐 Python: TeamBackend.approve_tool(member_name, tool_call_id, approved, feedback, auto_confirm)
+// Python: TeamBackend.approve_tool(member_name, tool_call_id, approved, feedback, auto_confirm)
 func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID string, approved bool, feedback string, autoConfirm bool) atschema.MemberOpResult {
 	// 成员存在性检查（对齐 Python: db.member.get_member(member_name)，不存在返回 False）
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
@@ -926,7 +926,7 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 // ── HITT 管理 ──
 
 // SpawnHumanAgent 注册 human-agent 成员。
-// 对齐 Python: TeamBackend.spawn_human_agent(member_name, display_name, desc, prompt)
+// Python: TeamBackend.spawn_human_agent(member_name, display_name, desc, prompt)
 func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayName, desc, prompt string) atschema.MemberOpResult {
 	if !tb.HITTEnabled() {
 		return atschema.NewMemberOpResultFail("hitt_not_enabled")
@@ -948,7 +948,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 			desc = "hitt.human_agent_default_persona"
 		}
 	}
-	// 对齐 Python: member_card = AgentCard(id=f"{self.team_name}_{member_name}", name=resolved_display_name, description=resolved_desc)
+	// Python: member_card = AgentCard(id=f"{self.team_name}_{member_name}", name=resolved_display_name, description=resolved_desc)
 	memberCard := agentschema.NewAgentCard(
 		agentschema.WithAgentID(tb.teamName+"_"+memberName),
 		agentschema.WithAgentName(displayName),
@@ -963,7 +963,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 }
 
 // RefreshHumanAgentRoster 从 DB 重建 HITT 名册缓存。
-// 对齐 Python: TeamBackend.refresh_human_agent_roster()
+// Python: TeamBackend.refresh_human_agent_roster()
 func (tb *TeamBackend) RefreshHumanAgentRoster(ctx context.Context) {
 	// 步骤 0: 对齐 Python — 先初始化 DB（预热 DAO），确保冷恢复路径中 DAO 已就绪
 	if err := tb.db.Initialize(ctx); err != nil {
@@ -985,7 +985,7 @@ func (tb *TeamBackend) RefreshHumanAgentRoster(ctx context.Context) {
 }
 
 // IsHumanAgent 判断是否 human-agent（读缓存）。
-// 对齐 Python: TeamBackend.is_human_agent(member_name)
+// Python: TeamBackend.is_human_agent(member_name)
 func (tb *TeamBackend) IsHumanAgent(memberName string) bool {
 	tb.hittMu.RLock()
 	defer tb.hittMu.RUnlock()
@@ -994,7 +994,7 @@ func (tb *TeamBackend) IsHumanAgent(memberName string) bool {
 }
 
 // RegisterHumanAgentInbound 注册/清除 inbound 回调。
-// 对齐 Python: TeamBackend.register_human_agent_inbound(member_name, callback)
+// Python: TeamBackend.register_human_agent_inbound(member_name, callback)
 // callback 为 nil 时清除。
 func (tb *TeamBackend) RegisterHumanAgentInbound(ctx context.Context, memberName string, callback OnInbound) error {
 	tb.hittMu.Lock()
@@ -1012,7 +1012,7 @@ func (tb *TeamBackend) RegisterHumanAgentInbound(ctx context.Context, memberName
 }
 
 // GetHumanAgentInbound 获取 inbound 回调。
-// 对齐 Python: TeamBackend.get_human_agent_inbound(member_name)
+// Python: TeamBackend.get_human_agent_inbound(member_name)
 func (tb *TeamBackend) GetHumanAgentInbound(memberName string) OnInbound {
 	tb.hittMu.RLock()
 	defer tb.hittMu.RUnlock()
@@ -1020,7 +1020,7 @@ func (tb *TeamBackend) GetHumanAgentInbound(memberName string) OnInbound {
 }
 
 // HumanAgentNames 返回 HITT 名册快照。
-// 对齐 Python: TeamBackend.human_agent_names()
+// Python: TeamBackend.human_agent_names()
 func (tb *TeamBackend) HumanAgentNames() []string {
 	tb.hittMu.RLock()
 	defer tb.hittMu.RUnlock()
@@ -1033,7 +1033,7 @@ func (tb *TeamBackend) HumanAgentNames() []string {
 }
 
 // HITTEnabled 返回 HITT 能力开关。
-// 对齐 Python: TeamBackend.hitt_enabled
+// Python: TeamBackend.hitt_enabled
 func (tb *TeamBackend) HITTEnabled() bool {
 	tb.hittMu.RLock()
 	defer tb.hittMu.RUnlock()
@@ -1043,13 +1043,13 @@ func (tb *TeamBackend) HITTEnabled() bool {
 // ── 文件清理 ──
 
 // RegisterCleanupPath 注册清理路径（去重）。
-// 对齐 Python: TeamBackend.register_cleanup_path(path)
+// Python: TeamBackend.register_cleanup_path(path)
 func (tb *TeamBackend) RegisterCleanupPath(path string) {
 	if path == "" {
 		return
 	}
 	expanded := filepath.Clean(os.ExpandEnv(path))
-	// 对齐 Python: Path.expanduser() — 展开 ~ 为 $HOME
+	// Python: Path.expanduser() — 展开 ~ 为 $HOME
 	if strings.HasPrefix(expanded, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
 			expanded = filepath.Join(home, expanded[2:])
@@ -1059,7 +1059,7 @@ func (tb *TeamBackend) RegisterCleanupPath(path string) {
 }
 
 // RemoveCleanupPaths 串行删除清理路径（按深度排序，失败不中止）。
-// 对齐 Python: TeamBackend._remove_cleanup_paths()
+// Python: TeamBackend._remove_cleanup_paths()
 func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error {
 	if len(tb.cleanupPaths) == 0 {
 		return nil
@@ -1095,7 +1095,7 @@ func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // publishEvent 发布团队事件。
-// 对齐 Python: TeamBackend 中通过 messager.publish 调用
+// Python: TeamBackend 中通过 messager.publish 调用
 func (tb *TeamBackend) publishEvent(ctx context.Context, event atschema.TypedEvent) {
 	if tb.messager == nil {
 		return
@@ -1109,7 +1109,7 @@ func (tb *TeamBackend) publishEvent(ctx context.Context, event atschema.TypedEve
 }
 
 // spawnAndPublish 启动成员 agent 并发布 MemberSpawnedEvent。
-// 对齐 Python: _spawn_and_publish(member_name, on_created)
+// Python: _spawn_and_publish(member_name, on_created)
 //
 // Python 步骤：
 //  1. await on_created(member_name) — 调用回调启动 agent 进程

@@ -24,7 +24,7 @@ var helpersLogComponent = logger.ComponentAgentCore
 // ConvertInteractionsToAskUserQuestion 将 __interaction__ payload 转换为前端
 // chat.ask_user_question 格式。
 //
-// 对齐 Python: convert_interactions_to_ask_user_question(state_outputs)
+// Python: convert_interactions_to_ask_user_question(state_outputs)
 // (interrupt_helpers.py line 285-339)
 //
 // AskUserRail 中断：value 有 questions 字段 → source="ask_user_interrupt"
@@ -45,7 +45,7 @@ func ConvertInteractionsToAskUserQuestion(stateOutputs any) map[string]any {
 		return nil
 	}
 
-	// 对齐 Python: controller output 可以包含 permission interrupt shell 和
+	// Python: controller output 可以包含 permission interrupt shell 和
 	// real ask_user interrupt。优先匹配 AskUserRail 中断（有 questions 字段），
 	// 否则前端可能收到空的 permission prompt。
 	for _, interaction := range interactions {
@@ -94,7 +94,7 @@ func ConvertInteractionsToAskUserQuestion(stateOutputs any) map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractQuestionFromInteraction 从单个 interaction payload 中提取问题信息。
-// 对齐 Python: extract_question_from_interaction(payload) (line 426-475)
+// Python: extract_question_from_interaction(payload) (line 426-475)
 func extractQuestionFromInteraction(payload any) map[string]any {
 	if payload == nil {
 		return nil
@@ -104,7 +104,7 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 	message := ""
 	var uiOptions any
 
-	// 对齐 Python: hasattr(payload, 'value') 分支
+	// Python: hasattr(payload, 'value') 分支
 	// Go 中 payload 通常是 map[string]any
 	if m, ok := payload.(map[string]any); ok {
 		valueObj, hasValue := m["value"]
@@ -157,7 +157,7 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 }
 
 // iterInteractions 递归展开嵌套的 interaction 列表。
-// 对齐 Python: _iter_interactions(state_outputs) (line 342-348)
+// Python: _iter_interactions(state_outputs) (line 342-348)
 func iterInteractions(outputs []any) []any {
 	var result []any
 	for _, item := range outputs {
@@ -171,7 +171,7 @@ func iterInteractions(outputs []any) []any {
 }
 
 // extractInteractionParts 从 interaction 中提取 request_id 和 value。
-// 对齐 Python: _extract_interaction_parts(interaction) (line 351-362)
+// Python: _extract_interaction_parts(interaction) (line 351-362)
 func extractInteractionParts(interaction any) (string, any) {
 	if m, ok := interaction.(map[string]any); ok {
 		requestID := strVal(m, "id")
@@ -183,7 +183,7 @@ func extractInteractionParts(interaction any) (string, any) {
 }
 
 // extractQuestionsFromValue 从 value 对象中提取 questions 列表。
-// 对齐 Python: _extract_questions_from_value(value_obj) (line 365-399)
+// Python: _extract_questions_from_value(value_obj) (line 365-399)
 //
 // AskUserRail 的 value 有 questions 属性 → 返回列表
 // 如果 questions 不存在或为空 → 返回 nil 表示不是 AskUserRail 中断
@@ -228,7 +228,7 @@ func extractQuestionsFromValue(valueObj any) []any {
 }
 
 // buildMultiQuestions 从 questions 数据构建前端 PendingQuestionItem 列表。
-// 对齐 Python: _build_multi_questions(questions_data) (line 402-423)
+// Python: _build_multi_questions(questions_data) (line 402-423)
 //
 // 有选项的问题：保留原始选项 + 追加 Other（自定义输入）
 // 无选项的问题：不追加 Other，前端应直接进入自由输入模式
@@ -310,7 +310,7 @@ func toSlice(v any) ([]any, bool) {
 }
 
 // messageOrDefault 如果 message 为空，返回默认提示文本。
-// 对齐 Python: message or f"工具 `{tool_name}` 需要授权才能执行"
+// Python: message or f"工具 `{tool_name}` 需要授权才能执行"
 func messageOrDefault(message string, toolName string) string {
 	if message != "" {
 		return message
@@ -319,7 +319,7 @@ func messageOrDefault(message string, toolName string) string {
 }
 
 // headerFromToolName 根据 toolName 生成 header 文本。
-// 对齐 Python: f"权限审批: {tool_name}" if tool_name else "权限审批"
+// Python: f"权限审批: {tool_name}" if tool_name else "权限审批"
 func headerFromToolName(toolName string) string {
 	if toolName != "" {
 		return fmt.Sprintf("权限审批: %s", toolName)

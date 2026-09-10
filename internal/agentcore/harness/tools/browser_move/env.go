@@ -11,28 +11,28 @@ import (
 
 const (
 	// DefaultModelName 默认模型名称
-	// 对齐 Python: DEFAULT_MODEL_NAME
+	// Python: DEFAULT_MODEL_NAME
 	DefaultModelName = "anthropic/claude-sonnet-4.5"
 	// DefaultBrowserTimeoutS 默认浏览器超时（秒）
-	// 对齐 Python: DEFAULT_BROWSER_TIMEOUT_S
+	// Python: DEFAULT_BROWSER_TIMEOUT_S
 	DefaultBrowserTimeoutS = 180
 	// DefaultGuardrailMaxSteps 默认守护护栏最大步数
-	// 对齐 Python: DEFAULT_GUARDRAIL_MAX_STEPS
+	// Python: DEFAULT_GUARDRAIL_MAX_STEPS
 	DefaultGuardrailMaxSteps = 20
 	// DefaultGuardrailMaxFailures 默认守护护栏最大失败数
-	// 对齐 Python: DEFAULT_GUARDRAIL_MAX_FAILURES
+	// Python: DEFAULT_GUARDRAIL_MAX_FAILURES
 	DefaultGuardrailMaxFailures = 2
 	// DefaultGuardrailRetryOnce 默认守护护栏是否重试一次
-	// 对齐 Python: DEFAULT_GUARDRAIL_RETRY_ONCE
+	// Python: DEFAULT_GUARDRAIL_RETRY_ONCE
 	DefaultGuardrailRetryOnce = true
 	// DefaultPlaywrightMCPCommand 默认 Playwright MCP 命令
-	// 对齐 Python: DEFAULT_PLAYWRIGHT_MCP_COMMAND
+	// Python: DEFAULT_PLAYWRIGHT_MCP_COMMAND
 	DefaultPlaywrightMCPCommand = "npx"
 	// DefaultPlaywrightMCPArgs 默认 Playwright MCP 参数
-	// 对齐 Python: DEFAULT_PLAYWRIGHT_MCP_ARGS
+	// Python: DEFAULT_PLAYWRIGHT_MCP_ARGS
 	DefaultPlaywrightMCPArgs = "-y @playwright/mcp@latest"
 	// MissingAPIKeyMessage 缺少 API Key 的提示信息
-	// 对齐 Python: MISSING_API_KEY_MESSAGE
+	// Python: MISSING_API_KEY_MESSAGE
 	MissingAPIKeyMessage = "Missing API key. Set API_KEY (or OPENROUTER_API_KEY / SILICONFLOW_API_KEY / OPENAI_API_KEY / DASHSCOPE_API_KEY)."
 )
 
@@ -40,7 +40,7 @@ const (
 
 var (
 	// supportedModelProviders 支持的模型提供者
-	// 对齐 Python: SUPPORTED_MODEL_PROVIDERS
+	// Python: SUPPORTED_MODEL_PROVIDERS
 	supportedModelProviders = map[string]bool{
 		"openai":      true,
 		"openrouter":  true,
@@ -48,12 +48,12 @@ var (
 		"dashscope":   true,
 	}
 	// truthyEnvValues 真值环境变量值
-	// 对齐 Python: TRUTHY_ENV_VALUES
+	// Python: TRUTHY_ENV_VALUES
 	truthyEnvValues = map[string]bool{
 		"1": true, "true": true, "yes": true, "on": true,
 	}
 	// falsyEnvValues 假值环境变量值
-	// 对齐 Python: FALSY_ENV_VALUES
+	// Python: FALSY_ENV_VALUES
 	falsyEnvValues = map[string]bool{
 		"0": true, "false": true, "no": true, "off": true,
 	}
@@ -62,7 +62,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FirstNonEmptyEnv 返回第一个非空的环境变量值。
-// 对齐 Python: first_non_empty_env(*keys)
+// Python: first_non_empty_env(*keys)
 func FirstNonEmptyEnv(keys ...string) string {
 	for _, key := range keys {
 		value := strings.TrimSpace(os.Getenv(key))
@@ -74,7 +74,7 @@ func FirstNonEmptyEnv(keys ...string) string {
 }
 
 // NormalizeProvider 标准化模型提供者名称。
-// 对齐 Python: normalize_provider(provider)
+// Python: normalize_provider(provider)
 func NormalizeProvider(provider string) string {
 	raw := strings.TrimSpace(provider)
 	lowered := strings.ToLower(raw)
@@ -91,21 +91,21 @@ func NormalizeProvider(provider string) string {
 }
 
 // IsTruthyEnv 判断环境变量值是否为真。
-// 对齐 Python: is_truthy_env(value)
+// Python: is_truthy_env(value)
 func IsTruthyEnv(value string) bool {
 	lowered := strings.TrimSpace(strings.ToLower(value))
 	return truthyEnvValues[lowered]
 }
 
 // IsFalsyEnv 判断环境变量值是否为假。
-// 对齐 Python: is_falsy_env(value)
+// Python: is_falsy_env(value)
 func IsFalsyEnv(value string) bool {
 	lowered := strings.TrimSpace(strings.ToLower(value))
 	return falsyEnvValues[lowered]
 }
 
 // ResolveIntEnv 从环境变量解析整数。
-// 对齐 Python: resolve_int_env(*keys, default=..., minimum=...)
+// Python: resolve_int_env(*keys, default=..., minimum=...)
 func ResolveIntEnv(keys []string, defaultVal int, minimum *int) int {
 	for _, key := range keys {
 		raw := strings.TrimSpace(os.Getenv(key))
@@ -125,7 +125,7 @@ func ResolveIntEnv(keys []string, defaultVal int, minimum *int) int {
 }
 
 // ResolveBoolEnv 从环境变量解析布尔值。
-// 对齐 Python: resolve_bool_env(*keys, default=...)
+// Python: resolve_bool_env(*keys, default=...)
 func ResolveBoolEnv(keys []string, defaultVal bool) bool {
 	for _, key := range keys {
 		raw := strings.TrimSpace(os.Getenv(key))
@@ -143,7 +143,7 @@ func ResolveBoolEnv(keys []string, defaultVal bool) bool {
 }
 
 // ResolveModelName 解析模型名称。
-// 对齐 Python: resolve_model_name()
+// Python: resolve_model_name()
 func ResolveModelName() string {
 	if v := FirstNonEmptyEnv("MODEL_NAME"); v != "" {
 		return v
@@ -152,14 +152,14 @@ func ResolveModelName() string {
 }
 
 // ResolveBrowserTimeoutS 解析浏览器超时时间。
-// 对齐 Python: resolve_browser_timeout_s()
+// Python: resolve_browser_timeout_s()
 func ResolveBrowserTimeoutS() int {
 	min := 1
 	return ResolveIntEnv([]string{"BROWSER_TIMEOUT_S", "PLAYWRIGHT_TOOL_TIMEOUT_S"}, DefaultBrowserTimeoutS, &min)
 }
 
 // InferProviderFromAPIBase 从 API Base URL 推断 provider。
-// 对齐 Python: infer_provider_from_api_base(api_base)
+// Python: infer_provider_from_api_base(api_base)
 func InferProviderFromAPIBase(apiBase string) string {
 	base := strings.TrimSpace(strings.ToLower(apiBase))
 	if base == "" {
@@ -178,7 +178,7 @@ func InferProviderFromAPIBase(apiBase string) string {
 }
 
 // ParseCommandArgs 解析命令行参数字符串。
-// 对齐 Python: parse_command_args(value)
+// Python: parse_command_args(value)
 func ParseCommandArgs(value string) []string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -196,7 +196,7 @@ func ParseCommandArgs(value string) []string {
 }
 
 // ResolveModelSettings 解析模型配置（provider, api_key, api_base）。
-// 对齐 Python: resolve_model_settings()
+// Python: resolve_model_settings()
 func ResolveModelSettings() (provider, apiKey, apiBase string) {
 	providerMode := NormalizeProvider(FirstNonEmptyEnv("MODEL_PROVIDER", "MODEL_CLIENT_PROVIDER"))
 	if providerMode != "" && !supportedModelProviders[providerMode] {

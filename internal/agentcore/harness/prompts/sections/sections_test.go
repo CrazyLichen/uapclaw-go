@@ -131,6 +131,9 @@ func TestBuildSkillsSection_所有模式(t *testing.T) {
 	for _, mode := range []string{"all", "auto_list"} {
 		for _, lang := range []string{"cn", "en"} {
 			s := BuildSkillsSection(mode, "1. foo: bar", lang)
+			if s == nil {
+				t.Fatalf("mode=%s lang=%s: section 为 nil", mode, lang)
+			}
 			if s.Name != SectionSkills {
 				t.Errorf("mode=%s lang=%s: Name = %q, want %q", mode, lang, s.Name, SectionSkills)
 			}
@@ -147,6 +150,9 @@ func TestBuildSkillsSection_所有模式(t *testing.T) {
 // TestBuildSkillsSection_all模式带技能 测试 all 模式带技能路径
 func TestBuildSkillsSection_all模式带技能(t *testing.T) {
 	s := BuildSkillsSection("all", "1. foo: bar\n\n2. baz: qux", "cn")
+	if s == nil {
+		t.Fatal("all 模式带技能应返回非 nil")
+	}
 	if !strings.Contains(s.Content["cn"], "foo") {
 		t.Error("all 模式应包含技能名称")
 	}
@@ -155,6 +161,9 @@ func TestBuildSkillsSection_all模式带技能(t *testing.T) {
 // TestBuildSkillsSection_all模式空技能 测试 all 模式空技能列表回退到 no_skill
 func TestBuildSkillsSection_all模式空技能(t *testing.T) {
 	s := BuildSkillsSection("all", "", "cn")
+	if s == nil {
+		t.Fatal("all 模式空技能应返回非 nil")
+	}
 	if !strings.Contains(s.Content["cn"], "没有选择任何技能") {
 		t.Error("all 模式空技能列表应回退到 no_skill 提示")
 	}

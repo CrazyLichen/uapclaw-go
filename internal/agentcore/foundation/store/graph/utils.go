@@ -77,7 +77,7 @@ func LoadStoredTimeFromDB(timestamp int64, offset int8) (*time.Time, error) {
 }
 
 // EnsureUniqueUUIDs 去重UUID：查询集合中已存在的UUID，对重复的UUID重新生成，循环直到全部唯一。
-// 对齐 Python 行为：检测到重复时重新生成 UUID 而非仅过滤。
+// Python: 行为：检测到重复时重新生成 UUID 而非仅过滤。
 func EnsureUniqueUUIDs(ctx context.Context, store BaseGraphStore, ids []string, collection string, skip bool) ([]string, error) {
 	if skip || len(ids) == 0 {
 		return ids, nil

@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskCompletionRail 任务完成护栏，检测 LLM 输出中的完成承诺标签并通知评估器。
-// 对齐 Python: TaskCompletionRail (task_completion_rail.py)
+// Python: TaskCompletionRail (task_completion_rail.py)
 type TaskCompletionRail struct {
 	DeepAgentRail
 	// taskInstruction 带 {query} 占位符的格式模板，首轮迭代时应用到查询
@@ -45,7 +45,7 @@ type TaskCompletionOption func(*TaskCompletionRail)
 
 const (
 	// taskCompletionRailPriority TaskCompletionRail 优先级
-	// 对齐 Python: TaskCompletionRail.priority = 10
+	// Python: TaskCompletionRail.priority = 10
 	taskCompletionRailPriority = 10
 )
 
@@ -100,7 +100,7 @@ func WithExtraEvaluators(evaluators ...task_loop.StopConditionEvaluator) TaskCom
 }
 
 // NewTaskCompletionRail 创建任务完成护栏实例。
-// 对齐 Python: TaskCompletionRail.__init__()
+// Python: TaskCompletionRail.__init__()
 func NewTaskCompletionRail(opts ...TaskCompletionOption) *TaskCompletionRail {
 	r := &TaskCompletionRail{
 		DeepAgentRail:         *NewDeepAgentRail(),
@@ -170,7 +170,7 @@ func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentin
 		return nil
 	}
 
-	// 对齐 Python: inputs.query = self.task_instruction.format(query=query)
+	// Python: inputs.query = self.task_instruction.format(query=query)
 	inputs.Query = strings.ReplaceAll(r.taskInstruction, "{query}", inputs.Query)
 
 	logger.Debug(taskCompLogComponent).
@@ -254,7 +254,7 @@ func PromiseMatches(block string, expected string) bool {
 
 	expectedNorm := normalizePromiseText(expected)
 
-	// 对齐 Python: block_lines = [line.strip() for line in block.splitlines() if line.strip()]
+	// Python: block_lines = [line.strip() for line in block.splitlines() if line.strip()]
 	var blockLines []string
 	for _, line := range strings.Split(block, "\n") {
 		trimmed := strings.TrimSpace(line)

@@ -15,7 +15,7 @@ import (
 //
 // Tool 接口只定义纯业务方法，生命周期回调由 LifecycleTool 包装器处理。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/base.py (Tool)
+// Python: openjiuwen/core/foundation/tool/base.py (Tool)
 type Tool interface {
 	// Card 返回工具的配置卡片
 	Card() *ToolCard
@@ -29,7 +29,7 @@ type Tool interface {
 
 // ToolCard 工具配置卡片，嵌入 BaseCard，增加输入参数定义和扩展属性。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/base.py (ToolCard)
+// Python: openjiuwen/core/foundation/tool/base.py (ToolCard)
 type ToolCard struct {
 	schema.BaseCard
 	// InputParams 输入参数定义，用于校验和生成 ToolInfo 传给 LLM
@@ -40,7 +40,7 @@ type ToolCard struct {
 
 // ToolCallOptions 工具调用的扩展选项。
 //
-// 对应 Python: Tool.invoke/Stream 中的 **kwargs 参数集合
+// Python: Tool.invoke/Stream 中的 **kwargs 参数集合
 type ToolCallOptions struct {
 	// SkipNoneValue 是否跳过 None 值（LocalFunction 使用）
 	SkipNoneValue bool
@@ -146,7 +146,7 @@ func NewToolCallOptions(opts ...ToolOption) *ToolCallOptions {
 
 // NewToolCard 创建 ToolCard 实例，自动生成 BaseCard。
 //
-// 对应 Python: ToolCard(input_params=..., properties=...)
+// Python: ToolCard(input_params=..., properties=...)
 func NewToolCard(name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
 	card := &ToolCard{
 		BaseCard:    *schema.NewBaseCard(schema.WithName(name), schema.WithDescription(description)),
@@ -161,7 +161,7 @@ func NewToolCard(name, description string, inputParams []*schema.Param, properti
 
 // NewToolCardWithID 创建 ToolCard 实例，使用指定 ID。
 //
-// 对齐 Python: build_tool_card 中的 tool_id 生成逻辑。
+// Python: build_tool_card 中的 tool_id 生成逻辑。
 func NewToolCardWithID(id, name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
 	card := &ToolCard{
 		BaseCard:    *schema.NewBaseCard(schema.WithID(id), schema.WithName(name), schema.WithDescription(description)),
@@ -196,7 +196,7 @@ func NewErrInvokeNotSupported(card string) *exception.BaseError {
 //   - card 不能为 nil
 //   - card.ID 不能为空
 //
-// 对应 Python: Tool.__init__ 中的 card 校验
+// Python: Tool.__init__ 中的 card 校验
 func ValidateToolCard(card *ToolCard) error {
 	if card == nil {
 		return exception.BuildError(
@@ -225,7 +225,7 @@ func (c *ToolCard) String() string {
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，构造 ToolInfo 返回。
 // 返回 ToolInfoInterface 接口，统一 ToolInfo 和 McpToolInfo 的访问方式。
 //
-// 对应 Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
+// Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
 func (c *ToolCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewToolInfo(c.Name, c.Description, parameters)

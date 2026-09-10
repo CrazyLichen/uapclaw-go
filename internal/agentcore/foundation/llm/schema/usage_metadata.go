@@ -6,7 +6,7 @@ package schema
 //
 // 所有数值字段默认为零值，保证实例化时无需提供任何参数。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (UsageMetadata)
+// Python: openjiuwen/core/foundation/llm/schema/message.py (UsageMetadata)
 type UsageMetadata struct {
 	// Code 状态码，0 表示成功
 	Code int `json:"code"`
@@ -50,7 +50,7 @@ type UsageMetadata struct {
 
 // NewUsageMetadata 创建 UsageMetadata 实例，所有数值字段默认为零值。
 //
-// 对应 Python: UsageMetadata() — Pydantic BaseModel 默认值即零值
+// Python: UsageMetadata() — Pydantic BaseModel 默认值即零值
 func NewUsageMetadata() *UsageMetadata {
 	return &UsageMetadata{}
 }

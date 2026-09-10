@@ -18,7 +18,7 @@ import (
 // ShellStructureFlags Shell 结构标志。
 // 跟踪命令中出现的各种 shell 结构特征。
 //
-// 对齐 Python: ShellStructureFlags (shell_ast.py L34-61)
+// Python: ShellStructureFlags (shell_ast.py L34-61)
 type ShellStructureFlags struct {
 	// CompoundOperators 复合操作符（&& || ; &）
 	CompoundOperators bool
@@ -49,7 +49,7 @@ type ShellStructureFlags struct {
 // HasRiskyStructure 判断是否为风险结构。
 // 风险结构包括：复合操作符、管道、子 shell、命令组、命令替换、进程替换、参数展开、heredoc、输入/输出重定向。
 //
-// 对齐 Python: ShellStructureFlags.has_risky_structure() (shell_ast.py L49-61)
+// Python: ShellStructureFlags.has_risky_structure() (shell_ast.py L49-61)
 func (f *ShellStructureFlags) HasRiskyStructure() bool {
 	return f.CompoundOperators ||
 		f.Pipeline ||
@@ -65,7 +65,7 @@ func (f *ShellStructureFlags) HasRiskyStructure() bool {
 
 // ShellSubcommand Shell 子命令。
 //
-// 对齐 Python: ShellSubcommand (shell_ast.py L64-70)
+// Python: ShellSubcommand (shell_ast.py L64-70)
 type ShellSubcommand struct {
 	// Text 命令文本
 	Text string
@@ -81,7 +81,7 @@ type ShellSubcommand struct {
 
 // ShellAstParseResult Shell AST 解析结果。
 //
-// 对齐 Python: ShellAstParseResult (shell_ast.py L73-79)
+// Python: ShellAstParseResult (shell_ast.py L73-79)
 type ShellAstParseResult struct {
 	// Kind 解析结果类型
 	Kind ShellAstKind
@@ -99,7 +99,7 @@ type ShellAstParseResult struct {
 
 // ShellAstKind Shell AST 解析结果类型
 //
-// 对齐 Python: ShellAstParseResult.kind (shell_ast.py L74-79)
+// Python: ShellAstParseResult.kind (shell_ast.py L74-79)
 type ShellAstKind int
 
 const (
@@ -116,7 +116,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 保守扫描用的正则表达式
-// 对齐 Python: shell_ast.py L28-31
+// Python: shell_ast.py L28-31
 var (
 	commandSubstitutionRe = regexp.MustCompile("`|\\$\\(")
 	processSubstitutionRe = regexp.MustCompile(`[<>]\(`)
@@ -125,7 +125,7 @@ var (
 )
 
 // 保守扫描检测的操作符标记
-// 对齐 Python: _collect_operator_markers (shell_ast.py L181-186)
+// Python: _collect_operator_markers (shell_ast.py L181-186)
 var operatorMarkers = []string{"&&", "||", ";", "|", ">>", ">", "<", "$(", "`", "<(", ">(", "<<", "<<<"}
 
 // shellAstLogComponent ShellAST 日志组件
@@ -147,7 +147,7 @@ var treeSitterMu sync.Mutex
 
 // ParseShellForPermission 解析 Shell 命令用于权限评估。
 //
-// 对齐 Python: parse_shell_for_permission(command) (shell_ast.py L82-103)
+// Python: parse_shell_for_permission(command) (shell_ast.py L82-103)
 // 返回 ShellAstParseResult，kind 为 Simple/TooComplex/ParseUnavailable 之一。
 func ParseShellForPermission(command string) *ShellAstParseResult {
 	text := strings.TrimSpace(command)
@@ -197,7 +197,7 @@ func (k ShellAstKind) String() string {
 // getTreeSitterBashParser 获取或初始化 tree-sitter bash 解析器。
 // 使用 sync.Once 缓存全局 Parser 实例，避免每次调用重新创建。
 //
-// 对齐 Python: _get_tree_sitter_bash_parser() (shell_ast.py L106-128)
+// Python: _get_tree_sitter_bash_parser() (shell_ast.py L106-128)
 func getTreeSitterBashParser() *tree_sitter.Parser {
 	treeSitterOnce.Do(func() {
 		parser := tree_sitter.NewParser()
@@ -222,7 +222,7 @@ func getTreeSitterBashParser() *tree_sitter.Parser {
 
 // parseWithTreeSitter 使用 tree-sitter 精确解析。
 //
-// 对齐 Python: _parse_with_tree_sitter(command, parser) (shell_ast.py L189-268)
+// Python: _parse_with_tree_sitter(command, parser) (shell_ast.py L189-268)
 func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstParseResult, error) {
 	source := []byte(command)
 	tree := parser.Parse(source, nil)
@@ -244,7 +244,7 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 		}, nil
 	}
 
-	// 对齐 Python: root.has_error → too_complex
+	// Python: root.has_error → too_complex
 	if root.HasError() {
 		return &ShellAstParseResult{
 			Kind:    ShellAstKindTooComplex,
@@ -256,7 +256,7 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 	// 收集结构标志
 	flags := collectTreeSitterFlags(root)
 
-	// 对齐 Python: 风险结构检测 → too_complex
+	// Python: 风险结构检测 → too_complex
 	// (shell_ast.py L207-220)
 	if flags.CommandSubstitution ||
 		flags.ProcessSubstitution ||
@@ -293,10 +293,10 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 			continue
 		}
 
-		// 对齐 Python: shlex.split(text) → Go shlex 分词
+		// Python: shlex.split(text) → Go shlex 分词
 		argv, _ := shlex.Split(text, true)
 
-		// 对齐 Python: 收集重定向
+		// Python: 收集重定向
 		var redirects []string
 		for i := uint(0); i < node.ChildCount(); i++ {
 			child := node.Child(i)
@@ -334,7 +334,7 @@ func parseWithTreeSitter(command string, parser *tree_sitter.Parser) (*ShellAstP
 
 // collectTreeSitterFlags 从 tree-sitter AST 收集结构标志。
 //
-// 对齐 Python: _collect_tree_sitter_flags(root) (shell_ast.py L271-328)
+// Python: _collect_tree_sitter_flags(root) (shell_ast.py L271-328)
 func collectTreeSitterFlags(root *tree_sitter.Node) ShellStructureFlags {
 	var flags ShellStructureFlags
 	var operators []string
@@ -417,7 +417,7 @@ func collectTreeSitterFlags(root *tree_sitter.Node) ShellStructureFlags {
 
 // collectCommandNodes 从 tree-sitter AST 提取所有 command 节点。
 //
-// 对齐 Python: _collect_command_nodes(root) (shell_ast.py L331-342)
+// Python: _collect_command_nodes(root) (shell_ast.py L331-342)
 func collectCommandNodes(root *tree_sitter.Node) []*tree_sitter.Node {
 	var commandNodes []*tree_sitter.Node
 	stack := []*tree_sitter.Node{root}
@@ -446,7 +446,7 @@ func collectCommandNodes(root *tree_sitter.Node) []*tree_sitter.Node {
 
 // parseWithConservativeFallback 使用保守正则扫描 fallback。
 //
-// 对齐 Python: _parse_with_conservative_fallback(command) (shell_ast.py L131-155)
+// Python: _parse_with_conservative_fallback(command) (shell_ast.py L131-155)
 func parseWithConservativeFallback(command string) *ShellAstParseResult {
 	flags := scanShellStructure(command)
 
@@ -459,7 +459,7 @@ func parseWithConservativeFallback(command string) *ShellAstParseResult {
 		}
 	}
 
-	// 对齐 Python: shlex.split(command, posix=True)
+	// Python: shlex.split(command, posix=True)
 	// Python 在未闭合引号时抛 ValueError，被 except 捕获后返回 parse_unavailable
 	argv, err := shlex.Split(command, true)
 	if err != nil {
@@ -487,7 +487,7 @@ func parseWithConservativeFallback(command string) *ShellAstParseResult {
 
 // scanShellStructure 正则扫描 Shell 结构特征。
 //
-// 对齐 Python: _scan_shell_structure(command) (shell_ast.py L158-178)
+// Python: _scan_shell_structure(command) (shell_ast.py L158-178)
 func scanShellStructure(command string) ShellStructureFlags {
 	var flags ShellStructureFlags
 	var operators []string
@@ -506,7 +506,7 @@ func scanShellStructure(command string) ShellStructureFlags {
 	flags.ParameterExpansion = paramExpansionRe.MatchString(command)
 	flags.Heredoc = heredocRe.MatchString(command)
 
-	// 对齐 Python: _collect_operator_markers
+	// Python: _collect_operator_markers
 	for _, token := range operatorMarkers {
 		if strings.Contains(command, token) && !operatorSet[token] {
 			operatorSet[token] = true

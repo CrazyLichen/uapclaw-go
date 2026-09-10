@@ -79,7 +79,7 @@ func TestCreateEmbeddingProvider_无配置无回退(t *testing.T) {
 }
 
 // TestMockEmbeddingProvider_EmbedQuery 测试 MockEmbeddingProvider 的 EmbedQuery
-// 对齐 Python: MockEmbeddingProvider.embed_query — 基于 md5 种子的 128 维确定性随机向量
+// Python: MockEmbeddingProvider.embed_query — 基于 md5 种子的 128 维确定性随机向量
 func TestMockEmbeddingProvider_EmbedQuery(t *testing.T) {
 	mock := NewMockEmbeddingProvider()
 	ctx := context.Background()
@@ -105,7 +105,7 @@ func TestMockEmbeddingProvider_EmbedQuery(t *testing.T) {
 }
 
 // TestMockEmbeddingProvider_EmbedDocuments 测试 MockEmbeddingProvider 的 EmbedDocuments
-// 对齐 Python: MockEmbeddingProvider.embed_documents — 迭代 EmbedQuery 生成向量
+// Python: MockEmbeddingProvider.embed_documents — 迭代 EmbedQuery 生成向量
 func TestMockEmbeddingProvider_EmbedDocuments(t *testing.T) {
 	mock := NewMockEmbeddingProvider()
 	ctx := context.Background()

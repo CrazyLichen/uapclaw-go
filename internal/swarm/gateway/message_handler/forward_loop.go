@@ -31,7 +31,7 @@ type streamFinalState struct {
 // PublishRobotMessages 将 Agent 响应写入出站 channel。
 //
 // 非阻塞写入，channel 满时丢弃并记录警告。
-// 对齐 Python: MessageHandler.publish_robot_messages()
+// Python: MessageHandler.publish_robot_messages()
 func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 	select {
 	case mh.robotMessages <- msg:
@@ -47,7 +47,7 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 
 // forwardLoop 入站转发主循环
 //
-// 对齐 Python _forward_loop (L2163-L2558) 的 11 步骤：
+// Python: _forward_loop (L2163-L2558) 的 11 步骤：
 //
 //	步骤1:  handleChannelControl(msg)
 //	步骤2:  ApplyChannelState(msg)
@@ -73,7 +73,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				continue
 			}
 
-			// 对齐 Python: try/except 包裹所有步骤，异常时构建错误消息发送给用户
+			// Python: try/except 包裹所有步骤，异常时构建错误消息发送给用户
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -95,7 +95,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				mh.ApplyChannelState(msg)
 
 				// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
-				// 对齐 Python: 网关钩子处理器检测
+				// Python: 网关钩子处理器检测
 				//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
 
 				// 步骤4: CHAT_ANSWER 分支
@@ -111,7 +111,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				}
 
 				// TODO(#11.12): 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
-				// 对齐 Python: 入站管道处理
+				// Python: 入站管道处理
 				//     Python: should_forward = await self._inbound_pipeline.apply(msg)
 				//     如果不应转发则跳过
 
@@ -124,7 +124,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
 				// TODO(#11.13): 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
-				// 对齐 Python: 触发聊天前钩子
+				// Python: 触发聊天前钩子
 
 				// 步骤10: chat.send 分发
 				mh.handleChatSend(ctx, msg, agentMsg)
@@ -135,7 +135,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 
 // handleChatSend 处理 chat.send 请求的 stream/non-stream 分发。
 //
-// 对齐 Python _forward_loop 步骤10 (L2496-2558)：
+// Python: _forward_loop 步骤10 (L2496-2558)：
 // 记住用户查询上下文已在 HandleMessage 入队前调过（对齐 Python handle_message），
 // 此处仅做 AgentClient 连接检查 + stream/non-stream 分发。
 func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Message, agentMsg *schema.Message) {
@@ -216,7 +216,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 
 // handleChatUserAnswer 处理 chat.user_answer 请求。
 //
-// 对齐 Python _forward_loop 步骤4 (L2200-2239)：
+// Python: _forward_loop 步骤4 (L2200-2239)：
 // 非流式处理 + evolution 审批判断。
 // **不调 forwardToAgent**，方法内完整处理。
 func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.Message) {
@@ -311,7 +311,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 
 // handleChatCancel 处理 chat.cancel/interrupt 请求。
 //
-// 对齐 Python _forward_loop 步骤5 (L2241-2437)：
+// Python: _forward_loop 步骤5 (L2241-2437)：
 // supplement / pause / resume / cancel 三个子分支。
 func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Message) {
 	logger.Info(logComponent).
@@ -373,7 +373,7 @@ func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Mess
 
 // handleSupplement 处理 supplement 分支（有新输入的 CHAT_CANCEL）。
 //
-// 对齐 Python _forward_loop L2254-2403。
+// Python: _forward_loop L2254-2403。
 func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Message, newInput string, attachments []map[string]any, paramsMap map[string]any) {
 	sessionID := msg.SessionID
 
@@ -480,7 +480,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 
 // handlePauseResume 处理 pause/resume 分支。
 //
-// 对齐 Python _forward_loop L2408-2435。
+// Python: _forward_loop L2408-2435。
 func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Message, intent string) {
 	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
@@ -498,7 +498,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		}
 	}
 
-	// 对齐 Python: env_interrupt = message_to_e2a(agent_msg)
+	// Python: env_interrupt = message_to_e2a(agent_msg)
 	// 将 agentMsg（已注入 mode）转为 E2A 信封后传给 sendInterruptToAgent
 	envInterrupt := e2a.MessageToE2AOrFallback(agentMsg)
 	go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
@@ -510,7 +510,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 
 // resolveInboundReferences 解析入站消息中的 @file/@agent 引用。
 //
-// 对齐 Python _forward_loop 步骤7 (L2450-2495)：
+// Python: _forward_loop 步骤7 (L2450-2495)：
 // 仅对 CHAT_SEND 生效。
 func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 	if msg.ReqMethod != schema.ReqMethodChatSend || len(msg.Params) == 0 {
@@ -608,7 +608,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 
 // processStream 流式处理：发送请求并持续读取响应 chunk。
 //
-// 对齐 Python process_stream (L2559-2648)：
+// Python: process_stream (L2559-2648)：
 // 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
 // evolution chunk 处理、cancelled final、processing_status=false 通知。
 func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
@@ -693,11 +693,11 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 
 // streamFinalCleanup 流式任务结束后执行 finally 清理逻辑。
 //
-// 对齐 Python process_stream finally 块 (L2618-2648)。
+// Python: process_stream finally 块 (L2618-2648)。
 func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
 	// 清理状态
 	mh.streamMu.Lock()
-	// 对齐 Python: asyncio.gather 等待 — 通知 goroutine 已退出
+	// Python: asyncio.gather 等待 — 通知 goroutine 已退出
 	if entry, ok := mh.streamTasks[requestID]; ok {
 		entry.wg.Done()
 	}
@@ -729,7 +729,7 @@ func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitPr
 
 // processNonStreamRequest 非流式处理：发送请求并等待完整响应。
 //
-// 对齐 Python _process_non_stream_request (L2134-2159)：
+// Python: _process_non_stream_request (L2134-2159)：
 // 返回值改为 (*schema.AgentResponse, error)，供 handleChatUserAnswer 使用。
 func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
 	requestID := envelope.RequestID

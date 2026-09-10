@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
@@ -310,11 +312,11 @@ func TestBrowserProfileStore_Save验证JSON内容(t *testing.T) {
 // TestExpandHome 测试路径展开
 func TestExpandHome(t *testing.T) {
 	// 非 ~ 开头路径不变
-	if result := expandHome("/absolute/path"); result != "/absolute/path" {
-		t.Errorf("expandHome(/absolute/path) = %q, want /absolute/path", result)
+	if result := pathutil.ExpandHome("/absolute/path"); result != "/absolute/path" {
+		t.Errorf("ExpandHome(/absolute/path) = %q, want /absolute/path", result)
 	}
 	// ~ 开头应展开
-	if result := expandHome("~/test"); result == "~/test" {
-		t.Error("expandHome(~/test) 应展开 ~")
+	if result := pathutil.ExpandHome("~/test"); result == "~/test" {
+		t.Error("ExpandHome(~/test) 应展开 ~")
 	}
 }

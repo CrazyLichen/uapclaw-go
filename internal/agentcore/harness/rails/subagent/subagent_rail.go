@@ -22,7 +22,7 @@ import (
 // 注册 TaskTool（同步）或 SessionTools（异步）到 Agent，
 // 并在每轮模型调用前注入对应的 prompt section。
 //
-// 对齐 Python: SubagentRail (openjiuwen/harness/rails/subagent/subagent_rail.py)
+// Python: SubagentRail (openjiuwen/harness/rails/subagent/subagent_rail.py)
 type SubagentRail struct {
 	rails.DeepAgentRail
 	// enableAsyncSubagent 是否启用异步子代理
@@ -42,7 +42,7 @@ type SubagentRailOption func(*SubagentRail)
 
 const (
 	// subagentRailPriority SubagentRail 优先级
-	// 对齐 Python: SubagentRail.priority = 95
+	// Python: SubagentRail.priority = 95
 	subagentRailPriority = 95
 )
 
@@ -51,7 +51,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // knownAgentTools 已知代理工具映射
-// 对齐 Python: SubagentRail._KNOWN_AGENT_TOOLS
+// Python: SubagentRail._KNOWN_AGENT_TOOLS
 var knownAgentTools = map[string]string{
 	"explore_agent": "bash, glob, grep, list_files, read_file",
 	"plan_agent":    "bash, glob, grep, list_files, read_file",
@@ -64,7 +64,7 @@ var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)
 
 // NewSubagentRail 创建 SubagentRail 实例。
 //
-// 对齐 Python: SubagentRail(enable_async_subagent=False)
+// Python: SubagentRail(enable_async_subagent=False)
 func NewSubagentRail(opts ...SubagentRailOption) *SubagentRail {
 	r := &SubagentRail{
 		DeepAgentRail:       *rails.NewDeepAgentRail(),
@@ -84,14 +84,14 @@ func WithEnableAsyncSubagent(enabled bool) SubagentRailOption {
 
 // Init 初始化钩子：捕获 system_prompt_builder，注册 TaskTool。
 //
-// 对齐 Python: SubagentRail.init(agent)
-func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: SubagentRail.init(agent)
+func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 捕获 system_prompt_builder
-	// 对齐 Python: self.system_prompt_builder = getattr(agent, "system_prompt_builder", None)
+	// Python: self.system_prompt_builder = getattr(agent, "system_prompt_builder", None)
 	r.promptBuilder = agent.SystemPromptBuilder()
 
 	// 获取 DeepAgentInterface 以读取 subagents
-	// 对齐 Python: if not agent.deep_config.subagents: skip
+	// Python: if not agent.deep_config.subagents: skip
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
 		return nil
@@ -104,18 +104,18 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 构建可用子代理描述
-	// 对齐 Python: available_agents = self._build_available_agents_description(agent.deep_config.subagents)
+	// Python: available_agents = self._build_available_agents_description(agent.deep_config.subagents)
 	availableAgents := r.buildAvailableAgentsDescription(deepCfg.Subagents)
 
 	// 获取语言
-	// 对齐 Python: language=self.system_prompt_builder.language
+	// Python: language=self.system_prompt_builder.language
 	language := "cn"
 	if r.promptBuilder != nil {
 		language = r.promptBuilder.Language()
 	}
 
 	// 获取 agentID
-	// 对齐 Python: agent_id = getattr(getattr(agent, "card", None), "id", None)
+	// Python: agent_id = getattr(getattr(agent, "card", None), "id", None)
 	agentID := ""
 	if card := agent.Card(); card != nil {
 		agentID = card.GetID()
@@ -129,14 +129,14 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 			Msg("[SubagentRail] 异步模式暂未实现")
 	} else {
 		// 同步模式：注册 TaskTool
-		// 对齐 Python: self.tools = create_task_tool(parent_agent=agent, available_agents=..., language=..., agent_id=...)
+		// Python: self.tools = create_task_tool(parent_agent=agent, available_agents=..., language=..., agent_id=...)
 		r.tools = []tool.Tool{
 			hsubagent.NewTaskTool(deepAgent, availableAgents, language, agentID),
 		}
 	}
 
-	// 对齐 Python: Runner.resource_mgr.add_tool(list(self.tools))
-	// 对齐 Python: for tool in self.tools: agent.ability_manager.add(tool.card)
+	// Python: Runner.resource_mgr.add_tool(list(self.tools))
+	// Python: for tool in self.tools: agent.ability_manager.add(tool.card)
 	// 注意：工具注册由 factory.go 的 addToolsToResourceManager 统一处理
 	// 这里仅持有工具引用，供 BeforeModelCall 使用
 
@@ -154,7 +154,7 @@ func (r *SubagentRail) Init(agent agentinterfaces.BaseAgent) error {
 
 // BeforeModelCall 模型调用前注入 prompt section。
 //
-// 对齐 Python: SubagentRail.before_model_call(ctx)
+// Python: SubagentRail.before_model_call(ctx)
 func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if len(r.tools) == 0 || r.promptBuilder == nil {
 		return nil
@@ -162,7 +162,7 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 
 	if !r.enableAsyncSubagent {
 		// 同步模式：注入 task_tool prompt section
-		// 对齐 Python: section = build_task_section(language=self.system_prompt_builder.language)
+		// Python: section = build_task_section(language=self.system_prompt_builder.language)
 		section := hsections.BuildTaskToolSection(r.promptBuilder.Language())
 		r.promptBuilder.RemoveSection(hsections.SectionTaskTool)
 		r.promptBuilder.AddSection(section)
@@ -177,7 +177,7 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 
 // buildAvailableAgentsDescription 构建可用子代理描述字符串。
 //
-// 对齐 Python: SubagentRail._build_available_agents_description(subagents)
+// Python: SubagentRail._build_available_agents_description(subagents)
 func (r *SubagentRail) buildAvailableAgentsDescription(subagents []hschema.SubagentSpec) string {
 	if len(subagents) == 0 {
 		return ""
@@ -194,12 +194,12 @@ func (r *SubagentRail) buildAvailableAgentsDescription(subagents []hschema.Subag
 
 // extractAgentMeta 提取代理名称和描述。
 //
-// 对齐 Python: SubagentRail._extract_agent_meta(spec)
+// Python: SubagentRail._extract_agent_meta(spec)
 func (r *SubagentRail) extractAgentMeta(spec hschema.SubagentSpec) (string, string) {
 	if cfg, ok := spec.(*hschema.SubAgentConfig); ok && cfg.AgentCard != nil {
 		return cfg.AgentCard.GetName(), cfg.AgentCard.GetDescription()
 	}
-	// 对齐 Python: DeepAgent 实例回退
+	// Python: DeepAgent 实例回退
 	// Python: card = getattr(spec, "card", None)
 	// Python: name = getattr(card, "name", None) or "general-purpose"
 	// Python: description = getattr(card, "description", None) or "DeepAgent instance"
@@ -209,10 +209,10 @@ func (r *SubagentRail) extractAgentMeta(spec hschema.SubagentSpec) (string, stri
 // extractAgentTools 提取代理工具列表。
 // 4 级解析：显式 tools → 已注册 tools → 已知默认 → "All tools"
 //
-// 对齐 Python: SubagentRail._extract_agent_tools(spec, agent_name)
+// Python: SubagentRail._extract_agent_tools(spec, agent_name)
 func (r *SubagentRail) extractAgentTools(spec hschema.SubagentSpec, agentName string) string {
 	// 1. SubAgentConfig 有显式 tools
-	// 对齐 Python: if isinstance(spec, SubAgentConfig) and spec.tools:
+	// Python: if isinstance(spec, SubAgentConfig) and spec.tools:
 	if cfg, ok := spec.(*hschema.SubAgentConfig); ok && len(cfg.Tools) > 0 {
 		var names []string
 		for _, t := range cfg.Tools {
@@ -228,12 +228,12 @@ func (r *SubagentRail) extractAgentTools(spec hschema.SubagentSpec, agentName st
 	// 2. DeepAgent 实例的已注册工具 — Go 中暂不实现（需要 ability_manager 访问）
 
 	// 3. 已知默认
-	// 对齐 Python: if agent_name in self._KNOWN_AGENT_TOOLS
+	// Python: if agent_name in self._KNOWN_AGENT_TOOLS
 	if tools, ok := knownAgentTools[agentName]; ok {
 		return tools
 	}
 
 	// 4. 回退
-	// 对齐 Python: return "All tools"
+	// Python: return "All tools"
 	return "All tools"
 }

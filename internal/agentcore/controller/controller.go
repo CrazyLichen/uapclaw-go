@@ -26,7 +26,7 @@ import (
 // Controller 事件驱动任务编排控制器。
 // 它是 ControllerAgent 的核心组件，负责处理事件、管理任务生命周期、
 // 执行意图识别和处理。
-// 对应 Python: openjiuwen/core/controller/base.py::Controller
+// Python: openjiuwen/core/controller/base.py::Controller
 type Controller struct {
 	// card Agent 身份元数据
 	card *agentschema.AgentCard
@@ -67,13 +67,13 @@ var _ ControllerInterface = (*Controller)(nil)
 
 // NewController 创建空壳 Controller。
 // 必须随后调用 Init() 完成初始化。
-// 对应 Python: Controller.__init__()
+// Python: Controller.__init__()
 func NewController() *Controller {
 	return &Controller{}
 }
 
 // Init 两阶段初始化，创建子组件并接线。
-// 对应 Python: Controller.init(card, config, ability_manager, context_engine)
+// Python: Controller.init(card, config, ability_manager, context_engine)
 func (c *Controller) Init(
 	card *agentschema.AgentCard,
 	cfg *config.ControllerConfig,
@@ -103,7 +103,7 @@ func (c *Controller) Init(
 }
 
 // Start 启动控制器（EventQueue + TaskScheduler）。
-// 对应 Python: Controller.start()
+// Python: Controller.start()
 func (c *Controller) Start(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -120,7 +120,7 @@ func (c *Controller) Start(ctx context.Context) error {
 }
 
 // Stop 停止控制器（TaskScheduler + EventQueue）。
-// 对应 Python: Controller.stop()
+// Python: Controller.stop()
 func (c *Controller) Stop(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -139,7 +139,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 }
 
 // SetEventHandler 注入事件处理器并接线依赖。
-// 对应 Python: Controller.set_event_handler(event_handler)
+// Python: Controller.set_event_handler(event_handler)
 // 偏差8 修复：SetEventHandler 立即同步 EventQueue 的 EventHandler，对齐 Python 行为。
 func (c *Controller) SetEventHandler(handler modules.EventHandler) {
 	c.eventHandler = handler
@@ -156,20 +156,20 @@ func (c *Controller) SetEventHandler(handler modules.EventHandler) {
 }
 
 // AddTaskExecutor 注册 TaskExecutor，支持链式调用。
-// 对应 Python: Controller.add_task_executor(task_type, builder)
+// Python: Controller.add_task_executor(task_type, builder)
 func (c *Controller) AddTaskExecutor(taskType string, builder func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor) ControllerInterface {
 	c.taskScheduler.TaskExecutorRegistry().AddTaskExecutor(taskType, builder)
 	return c
 }
 
 // RemoveTaskExecutor 移除 TaskExecutor。
-// 对应 Python: Controller.remove_task_executor(task_type)
+// Python: Controller.remove_task_executor(task_type)
 func (c *Controller) RemoveTaskExecutor(taskType string) {
 	c.taskScheduler.TaskExecutorRegistry().RemoveTaskExecutor(taskType)
 }
 
 // GetTaskExecutor 获取 TaskExecutor。
-// 对应 Python: Controller.get_task_executor(config, ability_manager, context_engine, task_manager)
+// Python: Controller.get_task_executor(config, ability_manager, context_engine, task_manager)
 // 注意：Python 的 Controller.get_task_executor 签名与 TaskExecutorRegistry.get_task_executor(task_type, dependencies) 不匹配
 // Python 传入的 4 个参数被当作 (task_type, dependencies) 的位置参数，实际有 bug
 // Go 保持正确的签名：(taskType, deps)，与 TaskExecutorRegistry.get_task_executor 一致
@@ -178,14 +178,14 @@ func (c *Controller) GetTaskExecutor(taskType string, deps *modules.TaskExecutor
 }
 
 // PublishEventAsync 异步发布事件（fire-and-forget）。
-// 对应 Python: Controller.publish_event_async(session, event)
+// Python: Controller.publish_event_async(session, event)
 func (c *Controller) PublishEventAsync(ctx context.Context, sess *session.Session, event schema.Event) error {
 	return c.eventQueue.PublishEventAsync(ctx, c.card.ID, sess, event)
 }
 
 // BindSession 绑定 session 到 Controller 基础设施。
 // 执行：ensureStarted → 恢复状态 → 注册 session → 订阅事件队列。
-// 对应 Python: Controller.bind_session(session)
+// Python: Controller.bind_session(session)
 func (c *Controller) BindSession(ctx context.Context, sess *session.Session) error {
 	if err := c.ensureStarted(ctx); err != nil {
 		return err
@@ -202,7 +202,7 @@ func (c *Controller) BindSession(ctx context.Context, sess *session.Session) err
 
 // UnbindSession 解绑 session 并执行清理。
 // 执行：保存状态 → 取消订阅 → 移除 session。
-// 对应 Python: Controller.unbind_session(session)
+// Python: Controller.unbind_session(session)
 func (c *Controller) UnbindSession(ctx context.Context, sess *session.Session) error {
 	sessionID := sess.GetSessionID()
 	_ = c.saveTaskManagerState(ctx, sessioninterfaces.SessionFacade(sess))
@@ -215,7 +215,7 @@ func (c *Controller) UnbindSession(ctx context.Context, sess *session.Session) e
 }
 
 // Invoke 批量执行，收集所有 chunk 后返回 ControllerOutput。
-// 对应 Python: Controller.invoke(inputs, session)
+// Python: Controller.invoke(inputs, session)
 // 偏差7 修复：对齐 Python invoke() 的异常包装逻辑
 func (c *Controller) Invoke(
 	ctx context.Context,
@@ -253,7 +253,7 @@ func (c *Controller) Invoke(
 // 内部启动 goroutine 执行完整流程：
 // ensureStarted → 恢复状态 → 注册 session → 订阅 → 发布事件 →
 // 确保完成信号 → 读取 stream（首帧超时） → finally 清理。
-// 对应 Python: Controller.stream(inputs, session, stream_modes)
+// Python: Controller.stream(inputs, session, stream_modes)
 // 偏差7 修复：新增 errCh 返回值，供 Invoke 检测流错误
 func (c *Controller) Stream(
 	ctx context.Context,
@@ -333,7 +333,7 @@ func (c *Controller) Stream(
 				return // stream 已关闭
 			}
 			gotFirst = true
-			// 对齐 Python：首帧支持 OutputSchema 和其他 Schema 类型
+			// Python: 首帧支持 OutputSchema 和其他 Schema 类型
 			if firstChunk, ok := firstSchema.(*stream.OutputSchema); ok {
 				// 检查首帧是否为 all_tasks_processed
 				if !c.isCompletionSignal(firstChunk) {
@@ -381,7 +381,7 @@ func (c *Controller) Stream(
 }
 
 // Config 获取控制器配置。
-// 对应 Python: Controller.config (property getter)
+// Python: Controller.config (property getter)
 func (c *Controller) Config() *config.ControllerConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -389,7 +389,7 @@ func (c *Controller) Config() *config.ControllerConfig {
 }
 
 // SetConfig 设置控制器配置，级联传播到所有子组件。
-// 对应 Python: Controller.config (property setter)
+// Python: Controller.config (property setter)
 func (c *Controller) SetConfig(cfg *config.ControllerConfig) {
 	c.mu.Lock()
 	c.config = cfg
@@ -409,49 +409,49 @@ func (c *Controller) SetConfig(cfg *config.ControllerConfig) {
 }
 
 // EventQueue 获取事件队列。
-// 对应 Python: Controller.event_queue (property)
+// Python: Controller.event_queue (property)
 func (c *Controller) EventQueue() *modules.EventQueue {
 	return c.eventQueue
 }
 
 // TaskManager 获取任务管理器。
-// 对应 Python: Controller.task_manager (property)
+// Python: Controller.task_manager (property)
 func (c *Controller) TaskManager() *modules.TaskManager {
 	return c.taskManager
 }
 
 // TaskScheduler 获取任务调度器。
-// 对应 Python: Controller.task_scheduler (property)
+// Python: Controller.task_scheduler (property)
 func (c *Controller) TaskScheduler() *modules.TaskScheduler {
 	return c.taskScheduler
 }
 
 // EventHandler 获取事件处理器。
-// 对应 Python: Controller.event_handler (property)
+// Python: Controller.event_handler (property)
 func (c *Controller) EventHandler() modules.EventHandler {
 	return c.eventHandler
 }
 
 // ContextEngine 获取上下文引擎。
-// 对应 Python: Controller.context_engine (property getter)
+// Python: Controller.context_engine (property getter)
 func (c *Controller) ContextEngine() iface.ContextEngine {
 	return c.contextEngine
 }
 
 // SetContextEngine 设置上下文引擎。
-// 对应 Python: Controller.context_engine (property setter)
+// Python: Controller.context_engine (property setter)
 func (c *Controller) SetContextEngine(ce iface.ContextEngine) {
 	c.contextEngine = ce
 }
 
 // AbilityManager 获取能力管理器。
-// 对应 Python: Controller.ability_manager (property getter)
+// Python: Controller.ability_manager (property getter)
 func (c *Controller) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return c.abilityMgr
 }
 
 // SetAbilityManager 设置能力管理器。
-// 对应 Python: Controller.ability_manager (property setter)
+// Python: Controller.ability_manager (property setter)
 func (c *Controller) SetAbilityManager(am agentinterfaces.AbilityManagerInterface) {
 	c.abilityMgr = am
 }
@@ -459,7 +459,7 @@ func (c *Controller) SetAbilityManager(am agentinterfaces.AbilityManagerInterfac
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureStarted 懒启动，确保 EventQueue 和 TaskScheduler 已运行。
-// 对应 Python: Controller._ensure_started()
+// Python: Controller._ensure_started()
 // Go 中无需事件循环检测，简化为首次启动检查。
 func (c *Controller) ensureStarted(ctx context.Context) error {
 	if c.started.Load() {
@@ -477,7 +477,7 @@ func (c *Controller) ensureStarted(ctx context.Context) error {
 
 // restoreTaskManagerState 从 session 恢复 TaskManager 状态。
 // 如果恢复失败，清空当前 TaskManager 状态，允许后续新任务不受影响。
-// 对应 Python: Controller._restore_task_manager_state(session)
+// Python: Controller._restore_task_manager_state(session)
 func (c *Controller) restoreTaskManagerState(ctx context.Context, sess sessioninterfaces.SessionFacade) bool {
 	controllerState, err := sess.GetState(state.StringKey("controller"))
 	if err != nil || controllerState == nil {
@@ -533,7 +533,7 @@ func (c *Controller) restoreTaskManagerState(ctx context.Context, sess sessionin
 }
 
 // saveTaskManagerState 保存 TaskManager 状态到 session。
-// 对应 Python: Controller._save_task_manager_state(session)
+// Python: Controller._save_task_manager_state(session)
 func (c *Controller) saveTaskManagerState(ctx context.Context, sess sessioninterfaces.SessionFacade) error {
 	if !c.config.EnableTaskPersistence {
 		logger.Info(logComponent).Msg("任务持久化已禁用，跳过保存 TaskManager 状态")

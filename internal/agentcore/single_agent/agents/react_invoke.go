@@ -31,7 +31,7 @@ import (
 // Invoke 非流式调用，包含回调包装骨架。
 // 执行顺序：① transform_io input → ② emit_before → ③ invokeImpl → ④ transform_io output → ⑤ emit_after
 //
-// 对应 Python: _AgentMeta 元类装饰后的 invoke
+// Python: _AgentMeta 元类装饰后的 invoke
 func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	fw := callback.GetCallbackFramework()
 	agentOpts := interfaces.NewAgentOptions(opts...)
@@ -106,7 +106,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 // Stream 流式调用，包含回调包装骨架。
 // 执行顺序：① transform_io input → ② emit_before → streamImpl → per-item { ③ transform_io output → ④ emit_after }
 //
-// 对应 Python: _AgentMeta 元类装饰后的 stream
+// Python: _AgentMeta 元类装饰后的 stream
 func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	fw := callback.GetCallbackFramework()
 	agentOpts := interfaces.NewAgentOptions(opts...)
@@ -183,7 +183,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 
 // AfterExecuteToolCallForHITL 执行工具后检测 HITL 中断。
 //
-// 对应 Python: ReActAgent._after_execute_tool_call_for_hitl()
+// Python: ReActAgent._after_execute_tool_call_for_hitl()
 func (a *ReActAgent) AfterExecuteToolCallForHITL(
 	results []agentschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
@@ -205,7 +205,7 @@ func (a *ReActAgent) AfterExecuteToolCallForHITL(
 
 // CommitInterrupt 提交中断状态。
 //
-// 对应 Python: ReActAgent._commit_interrupt() 的 HITL 分支
+// Python: ReActAgent._commit_interrupt() 的 HITL 分支
 func (a *ReActAgent) CommitInterrupt(
 	ctx context.Context,
 	intState *agentschema.ToolInterruptionState,
@@ -222,7 +222,7 @@ func (a *ReActAgent) CommitInterrupt(
 
 // ClearContextMessages 清除当前上下文消息（保留历史）。
 //
-// 对应 Python: ReActAgent.clear_context_messages(with_history=False)
+// Python: ReActAgent.clear_context_messages(with_history=False)
 func (a *ReActAgent) ClearContextMessages(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil {
 		return
@@ -238,7 +238,7 @@ func (a *ReActAgent) ClearContextMessages(ctx context.Context, sess sessioninter
 
 // WriteInvokeResultToStream 将 invoke 结果写入会话流。
 //
-// 对应 Python: ReActAgent._write_invoke_result_to_stream()
+// Python: ReActAgent._write_invoke_result_to_stream()
 func (a *ReActAgent) WriteInvokeResultToStream(
 	ctx context.Context,
 	result map[string]any,
@@ -275,16 +275,16 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 
 // invokeImpl 非流式调用的真实逻辑。
 //
-// 对应 Python: ReActAgent.invoke()
+// Python: ReActAgent.invoke()
 func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
 	// 先提取 conversationID，自建 session 时用作 sessionID
-	// 对齐 Python: session_id = conversation_id or "default_session"
+	// Python: session_id = conversation_id or "default_session"
 	conversationID, _ := inputs["conversation_id"].(string)
 
-	needCleanup := false // 对齐 Python: need_cleanup，仅在自建 session 时为 true
+	needCleanup := false // Python: need_cleanup，仅在自建 session 时为 true
 	if sess == nil {
 		sessionID := conversationID
 		if sessionID == "" {
@@ -297,7 +297,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		sess = newSess
 		needCleanup = true
 	}
-	// 对齐 Python: 外部传入 session 时，不调 pre_run（由调用方负责）
+	// Python: 外部传入 session 时，不调 pre_run（由调用方负责）
 
 	invokeQuery := interfaces.QueryFromInputs(inputs)
 	invokeInputs := &interfaces.InvokeInputs{
@@ -327,11 +327,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		}
 	}
 
-	// 对齐 Python try/finally: cleanup 始终执行（无论 FireLifecycle 是否返回错误）
+	// Python: try/finally: cleanup 始终执行（无论 FireLifecycle 是否返回错误）
 	if needCleanup {
 		defer func() {
 			a.saveContexts(ctx, sess)
-			// 对齐 Python: session.close_stream() + session.commit()
+			// Python: session.close_stream() + session.commit()
 			if as, ok := sess.(*session.Session); ok {
 				_ = as.CloseStream()
 				_ = as.Commit(ctx)
@@ -350,7 +350,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			curInputs = ci
 		}
 
-		// 对齐 Python L1301-1302: 空 query 校验
+		// Python: L1301-1302: 空 query 校验
 		// InteractiveInput（中断恢复）不校验 PlainText 是否为空
 		if curInputs.Query.PlainText() == "" && !curInputs.Query.IsInteractiveInput() {
 			return fmt.Errorf("输入必须包含 'query'")
@@ -378,7 +378,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		}
 		cbc.SetModelContext(modelCtx)
 
-		// 对齐 Python L1317-1326: 在 invoke 入口构建 system prompt
+		// Python: L1317-1326: 在 invoke 入口构建 system prompt
 		// 用渲染后的 prompt 更新 identity section（替换 Configure 时的模板名）
 		renderedPrompt := a.promptBuilder.Build()
 		if renderedPrompt != "" {
@@ -414,7 +414,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			}
 		} else {
 			// 正常路径：添加 UserMessage
-			// 对齐 Python: _extract_user_text(user_input)
+			// Python: _extract_user_text(user_input)
 			plainText := curInputs.Query.PlainText()
 			if plainText != "" && modelCtx != nil {
 				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(plainText)})
@@ -436,7 +436,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		return nil, err
 	}
 
-	// 对齐 Python L1434: return ctx.extra.get("invoke_result", invoke_inputs.result)
+	// Python: L1434: return ctx.extra.get("invoke_result", invoke_inputs.result)
 	if invokeResult, ok := cbc.Extra()["invoke_result"]; ok {
 		if r, ok2 := invokeResult.(map[string]any); ok2 {
 			return r, nil
@@ -455,22 +455,22 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 // streamImpl 流式调用的真实逻辑。
 //
-// 对应 Python: ReActAgent.stream()
+// Python: ReActAgent.stream()
 func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
 	// 先提取 conversationID，自建 session 时用作 sessionID
-	// 对齐 Python: session_id = conversation_id or "default_session"
+	// Python: session_id = conversation_id or "default_session"
 	conversationID, _ := inputs["conversation_id"].(string)
 
-	needCleanup := false // 对齐 Python: need_cleanup，仅在自建 session 时为 true
+	needCleanup := false // Python: need_cleanup，仅在自建 session 时为 true
 	if sess == nil {
 		sessionID := conversationID
 		if sessionID == "" {
 			sessionID = "default_session"
 		}
-		// 对齐 Python: stream_modes 传入 StreamWriterManager
+		// Python: stream_modes 传入 StreamWriterManager
 		agentOptsForModes := interfaces.NewAgentOptions(opts...)
 		modes := agentOptsForModes.StreamModes
 
@@ -492,7 +492,7 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 		opts = append(opts, interfaces.WithSession(sess))
 		needCleanup = true
 	}
-	// 对齐 Python: 外部传入 session 时，不调 pre_run（由调用方负责）
+	// Python: 外部传入 session 时，不调 pre_run（由调用方负责）
 
 	inputs["_streaming"] = true
 	outCh := make(chan stream.Schema, 64)
@@ -507,7 +507,7 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 
 // innerStream 内部流式执行。
 //
-// 对应 Python: ReActAgent._inner_stream()
+// Python: ReActAgent._inner_stream()
 func (a *ReActAgent) innerStream(
 	ctx context.Context,
 	sess sessioninterfaces.SessionFacade,
@@ -526,7 +526,7 @@ func (a *ReActAgent) innerStream(
 			if needCleanup {
 				a.saveContexts(ctx, sess)
 			}
-			// 对齐 Python: if self.is_agent_session: session.close_stream() + session.commit()
+			// Python: if self.is_agent_session: session.close_stream() + session.commit()
 			if isAgentSess {
 				_ = agentSess.CloseStream()
 				_ = agentSess.Commit(ctx)
@@ -576,7 +576,7 @@ func (a *ReActAgent) innerStream(
 
 // reactLoop ReAct 循环核心。
 //
-// 对应 Python: ReActAgent._inner_invoke() 中的主循环
+// Python: ReActAgent._inner_invoke() 中的主循环
 // 注意：initContext 和 UserMessage 已在 invokeImpl 中完成，此处不再重复。
 func (a *ReActAgent) reactLoop(
 	ctx context.Context,
@@ -594,7 +594,7 @@ func (a *ReActAgent) reactLoop(
 
 	var iterResult map[string]any
 	for iteration := startIteration; iteration < maxIter; iteration++ {
-		// 对齐 Python L1355: 迭代计数日志
+		// Python: L1355: 迭代计数日志
 		logger.Info(logComponent).
 			Int("iteration", iteration+1).
 			Int("max_iterations", maxIter).
@@ -670,7 +670,7 @@ func (a *ReActAgent) reactLoop(
 	}
 
 	if iterResult == nil {
-		// 对齐 Python for-else: max iterations 时执行 save_contexts
+		// Python: for-else: max iterations 时执行 save_contexts
 		a.saveContexts(ctx, sess)
 		iterResult = map[string]any{"output": "达到最大迭代次数仍未完成", "result_type": "error"}
 	}
@@ -719,7 +719,7 @@ func (a *ReActAgent) executeToolCalls(
 		}
 	}
 
-	// 对齐 Python L866-870: 多模态工具结果写入上下文
+	// Python: L866-870: 多模态工具结果写入上下文
 	multimodalMsg := a.buildMultimodalToolResultsMessage(results)
 	if multimodalMsg != nil && modelCtx != nil {
 		_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{multimodalMsg})
@@ -731,7 +731,7 @@ func (a *ReActAgent) executeToolCalls(
 // buildMultimodalToolResultsMessage 从工具结果中提取多模态图片数据，
 // 构建包含 image_url content blocks 的 UserMessage。
 //
-// 对应 Python: ReActAgent._build_multimodal_tool_results_message()
+// Python: ReActAgent._build_multimodal_tool_results_message()
 func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.ExecuteResult) llmschema.BaseMessage {
 	var parts []llmschema.ContentPart
 	var loadedPaths []string
@@ -780,7 +780,7 @@ func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.Exe
 
 // iterMultimodalImageItems 从工具结果中迭代多模态图片项。
 //
-// 对应 Python: ReActAgent._iter_multimodal_image_items()
+// Python: ReActAgent._iter_multimodal_image_items()
 func iterMultimodalImageItems(toolResult any) []map[string]any {
 	resultMap, ok := toolResult.(map[string]any)
 	if !ok {

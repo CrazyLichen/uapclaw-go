@@ -3,7 +3,7 @@ package result
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExecuteCmdData 执行命令结果数据。
-// 对齐 Python ExecuteCmdData：command, cwd, exit_code, stdout, stderr。
+// Python: ExecuteCmdData：command, cwd, exit_code, stdout, stderr。
 type ExecuteCmdData struct {
 	// Command 执行的命令
 	Command string `json:"command"`
@@ -25,7 +25,7 @@ type ExecuteCmdResult struct {
 }
 
 // ExecuteCmdChunkData 执行命令流式块数据。
-// 对齐 Python ExecuteCmdChunkData：text, type, chunk_index, exit_code, metadata。
+// Python: ExecuteCmdChunkData：text, type, chunk_index, exit_code, metadata。
 type ExecuteCmdChunkData struct {
 	// Text 输出块内容
 	Text string `json:"text"`
@@ -47,7 +47,7 @@ type ExecuteCmdStreamResult struct {
 }
 
 // ExecuteCmdBackgroundData 后台执行命令结果数据。
-// 对齐 Python ExecuteCmdBackgroundData：command, cwd, pid。
+// Python: ExecuteCmdBackgroundData：command, cwd, pid。
 type ExecuteCmdBackgroundData struct {
 	// Command 执行的命令
 	Command string `json:"command"`

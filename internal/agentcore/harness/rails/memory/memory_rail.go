@@ -27,7 +27,7 @@ import (
 //  2. 注入记忆使用提示词到系统提示词
 //  3. 初始化和管理记忆索引管理器
 //
-// 对齐 Python: MemoryRail (openjiuwen/harness/rails/memory/memory_rail.py)
+// Python: MemoryRail (openjiuwen/harness/rails/memory/memory_rail.py)
 type MemoryRail struct {
 	rails.DeepAgentRail
 	// embeddingConfig 嵌入模型配置
@@ -70,7 +70,7 @@ var memoryLogComponent = logger.ComponentAgentCore
 
 // NewMemoryRail 创建 MemoryRail 实例。
 //
-// 对齐 Python: MemoryRail.__init__(embedding_config, is_proactive)
+// Python: MemoryRail.__init__(embedding_config, is_proactive)
 func NewMemoryRail(embeddingConfig *embedding.EmbeddingConfig, isProactive bool) *MemoryRail {
 	r := &MemoryRail{
 		DeepAgentRail:   *rails.NewDeepAgentRail(),
@@ -85,8 +85,8 @@ func NewMemoryRail(embeddingConfig *embedding.EmbeddingConfig, isProactive bool)
 
 // Init 注册记忆工具到 agent。
 //
-// 对齐 Python: MemoryRail.init(agent)
-func (r *MemoryRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: MemoryRail.init(agent)
+func (r *MemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 获取 systemPromptBuilder
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
@@ -98,7 +98,7 @@ func (r *MemoryRail) Init(agent agentinterfaces.BaseAgent) error {
 
 // Uninit 注销记忆工具。
 //
-// 对齐 Python: MemoryRail.uninit(agent)
+// Python: MemoryRail.uninit(agent)
 func (r *MemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// 从 ability_manager 移除工具
 	am := agent.AbilityManager()
@@ -158,7 +158,7 @@ func (r *MemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // BeforeInvoke 初始化记忆管理器并在首次 invoke 时注册工具。
 //
-// 对齐 Python: MemoryRail.before_invoke(ctx)
+// Python: MemoryRail.before_invoke(ctx)
 func (r *MemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 首次初始化
 	if !r.initialized {
@@ -183,7 +183,7 @@ func (r *MemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.Agen
 
 // BeforeModelCall 更新系统提示词中的记忆节。
 //
-// 对齐 Python: MemoryRail.before_model_call(ctx)
+// Python: MemoryRail.before_model_call(ctx)
 func (r *MemoryRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
@@ -221,7 +221,7 @@ func (r *MemoryRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.Agent
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke/BeforeModelCall。
 //
-// 对齐 Python: MemoryRail 隐式覆盖 before_invoke/before_model_call
+// Python: MemoryRail 隐式覆盖 before_invoke/before_model_call
 func (r *MemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -239,7 +239,7 @@ func (r *MemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.Pe
 
 // registerMemoryTools 注册记忆工具到 agent。
 //
-// 对齐 Python: MemoryRail._register_memory_tools(agent)
+// Python: MemoryRail._register_memory_tools(agent)
 func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 	am := agent.AbilityManager()
 	if am == nil {
@@ -351,7 +351,7 @@ func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 
 // initMemoryManager 初始化记忆索引管理器。
 //
-// 对齐 Python: MemoryRail._init_memory_manager(ctx)
+// Python: MemoryRail._init_memory_manager(ctx)
 func (r *MemoryRail) initMemoryManager(ctx context.Context) {
 	agentID := ""
 	if r.toolCtx != nil {

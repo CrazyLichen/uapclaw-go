@@ -22,7 +22,7 @@ import (
 // TaskLoopEventHandler 任务循环事件处理器。
 // 实现 modules.EventHandler 接口，将 Controller 领域的事件
 // 转换为任务循环的轮次提交/完成/中止语义。
-// 对齐 Python: TaskLoopEventHandler
+// Python: TaskLoopEventHandler
 type TaskLoopEventHandler struct {
 	// base 基础依赖容器
 	base modules.EventHandlerBase
@@ -62,7 +62,7 @@ var _ interactionQueuesProvider = (*TaskLoopEventHandler)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskLoopEventHandler 创建任务循环事件处理器。
-// 对齐 Python: TaskLoopEventHandler.__init__
+// Python: TaskLoopEventHandler.__init__
 func NewTaskLoopEventHandler(provider interfaces.DeepAgentInterface) *TaskLoopEventHandler {
 	return &TaskLoopEventHandler{
 		provider: provider,
@@ -77,7 +77,7 @@ func (h *TaskLoopEventHandler) GetBase() *modules.EventHandlerBase {
 }
 
 // PrepareRound 准备新一轮次：关闭旧 channel、递增轮次编号、创建新 channel。
-// 对齐 Python: TaskLoopEventHandler.prepare_round
+// Python: TaskLoopEventHandler.prepare_round
 func (h *TaskLoopEventHandler) PrepareRound() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -98,13 +98,13 @@ func (h *TaskLoopEventHandler) PrepareRound() int {
 }
 
 // WaitCompletion 等待当前轮次完成，支持超时。
-// 对齐 Python: TaskLoopEventHandler.wait_completion
+// Python: TaskLoopEventHandler.wait_completion
 func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.Duration) map[string]any {
 	h.mu.Lock()
 	ch := h.currentCh
 	h.mu.Unlock()
 
-	// 对齐 Python: if self._current_future is None: return {"error": "no active round"}
+	// Python: if self._current_future is None: return {"error": "no active round"}
 	if ch == nil {
 		logger.Warn(logComponent).Msg("等待轮次完成：无活跃轮次")
 		return map[string]any{"error": "no active round"}
@@ -162,7 +162,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 }
 
 // HandleInput 处理输入事件：提取查询 → 确定任务 ID → 提交任务。
-// 对齐 Python: TaskLoopEventHandler.handle_input
+// Python: TaskLoopEventHandler.handle_input
 func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
@@ -210,7 +210,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	}
 
 	// 非 follow-up 且 taskID 为空时，从 TaskPlan 获取下一个任务的 ID
-	// 对齐 Python: if not task_id and not is_follow_up and session is not None
+	// Python: if not task_id and not is_follow_up and session is not None
 	if taskID == "" && !isFollowUp {
 		state := h.provider.LoadState(input.Session)
 		if state != nil && state.TaskPlan != nil {
@@ -235,12 +235,12 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		Status:      cschema.TaskSubmitted,
 		Metadata:    make(map[string]any),
 	}
-	// 对齐 Python: inputs=[event] if isinstance(event, InputEvent) else None
+	// Python: inputs=[event] if isinstance(event, InputEvent) else None
 	// 将原始 InputEvent 携带在 coreTask.Inputs 中，供 executor 提取 InteractiveInput
 	if _, ok := event.(*cschema.InputEvent); ok {
 		coreTask.Inputs = []cschema.Event{event}
 	}
-	// 对齐 Python: task_metadata = {"_handler_round_id": current_round, ...}
+	// Python: task_metadata = {"_handler_round_id": current_round, ...}
 	// 写入轮次编号到 Metadata，供 HandleTaskCompletion/Failed 获取 round_id
 	coreTask.Metadata["_handler_round_id"] = currentRound
 	if runKind != "" {
@@ -261,7 +261,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		Msg("提交深层 Agent 任务")
 
 	// 添加任务到管理器
-	// 对齐 Python: if self._task_manager is not None: add_task else: resolve + return failed
+	// Python: if self._task_manager is not None: add_task else: resolve + return failed
 	if h.base.TaskManager == nil {
 		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -288,7 +288,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 }
 
 // HandleTaskInteraction 处理任务交互事件：提取引导指令 → 推入 steering 队列。
-// 对齐 Python: TaskLoopEventHandler.handle_task_interaction
+// Python: TaskLoopEventHandler.handle_task_interaction
 // Python 无论如何都返回 {"status": "steer_injected", "msg": msg}。
 func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
@@ -309,7 +309,7 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 		h.interactionQueues.PushSteer(steerText)
 	}
 
-	// 对齐 Python: 始终返回 steer_injected + msg，始终打 info 日志
+	// Python: 始终返回 steer_injected + msg，始终打 info 日志
 	steerPreview := steerText
 	if len(steerPreview) > 100 {
 		steerPreview = steerPreview[:100]
@@ -322,7 +322,7 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 }
 
 // HandleTaskCompletion 处理任务完成事件：提取结果 → resolveRound。
-// 对齐 Python: TaskLoopEventHandler.handle_task_completion
+// Python: TaskLoopEventHandler.handle_task_completion
 func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
@@ -346,7 +346,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 	}
 
 	// 从 TaskCompletionEvent 提取结果
-	// 对齐 Python: 同时处理 JsonDataFrame(data=dict) 和 TextDataFrame(text=str)
+	// Python: 同时处理 JsonDataFrame(data=dict) 和 TextDataFrame(text=str)
 	// 注意：TextDataFrame 后不 break，对齐 Python（后续 JsonDataFrame 可覆盖 result）
 	var result map[string]any
 	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
@@ -377,7 +377,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 }
 
 // HandleTaskFailed 处理任务失败事件：resolveRound with error。
-// 对齐 Python: TaskLoopEventHandler.handle_task_failed
+// Python: TaskLoopEventHandler.handle_task_failed
 func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
@@ -393,7 +393,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 	}
 
 	// SessionSpawn 分支：调用 completeSessionSpawn 处理
-	// 对齐 Python: return {"status": "session_spawn_failed", "task_id": task_id, "error": str(error_msg)}
+	// Python: return {"status": "session_spawn_failed", "task_id": task_id, "error": str(error_msg)}
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == hschema.SessionSpawnTaskType {
 			h.completeSessionSpawn(ctx, taskID, input, true)
@@ -416,7 +416,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 		Str("method", "HandleTaskFailed").
 		Msg("任务失败")
 
-	// 对齐 Python: return {"status": "failed", "task_id": task_id, "error": str(error_msg)}
+	// Python: return {"status": "failed", "task_id": task_id, "error": str(error_msg)}
 	result := map[string]any{
 		"status":  "failed",
 		"task_id": taskID,
@@ -427,7 +427,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 }
 
 // HandleFollowUp 处理跟进事件：提取文本 → 推入 follow-up 队列。
-// 对齐 Python: TaskLoopEventHandler.handle_follow_up
+// Python: TaskLoopEventHandler.handle_follow_up
 // Python 无论如何都返回 {"status": "follow_up_queued", "msg": msg}。
 func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
@@ -448,7 +448,7 @@ func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *module
 		h.interactionQueues.PushFollowUp(followUpText)
 	}
 
-	// 对齐 Python: 始终返回 follow_up_queued + msg，始终打 info 日志
+	// Python: 始终返回 follow_up_queued + msg，始终打 info 日志
 	followUpPreview := followUpText
 	if len(followUpPreview) > 100 {
 		followUpPreview = followUpPreview[:100]
@@ -461,7 +461,7 @@ func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *module
 }
 
 // OnAbort 中止回调：resolveRound with aborted。
-// 对齐 Python: TaskLoopEventHandler.on_abort
+// Python: TaskLoopEventHandler.on_abort
 func (h *TaskLoopEventHandler) OnAbort() {
 	h.mu.Lock()
 	rid := h.roundID
@@ -516,7 +516,7 @@ func (h *TaskLoopEventHandler) currentRoundID() int {
 
 // resolveRound 解析轮次：将结果非阻塞写入当前轮次的完成 channel。
 // 若 roundID 不匹配则丢弃（过期轮次的结果）。
-// 对齐 Python: TaskLoopEventHandler._resolve_round
+// Python: TaskLoopEventHandler._resolve_round
 func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -549,7 +549,7 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 //   - 有活跃 invoke：push_steer（注入引导文本到 steering 队列）
 //   - 无活跃 invoke：调度延迟 auto-invoke
 //
-// 对齐 Python: TaskLoopEventHandler._complete_session_spawn
+// Python: TaskLoopEventHandler._complete_session_spawn
 func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID string, input *modules.EventHandlerInput, isError bool) {
 	// 加锁读取 sessionToolkit 和 interactionQueues（对齐 SetSessionToolkit/SetInteractionQueues 的锁模式）
 	h.mu.Lock()
@@ -619,13 +619,13 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID 
 
 // extractResultFromEvent 从完成事件中提取结果字符串。
 // 截断到 500 字符。
-// 对齐 Python: TaskLoopEventHandler._extract_result_from_event
+// Python: TaskLoopEventHandler._extract_result_from_event
 func extractResultFromEvent(input *modules.EventHandlerInput) string {
 	event := input.Event
 	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
 		for _, df := range tce.TaskResult {
 			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
-				// 对齐 Python: output = data.get("output", "")
+				// Python: output = data.get("output", "")
 				// 无 output 键时返回空字符串，不再继续遍历
 				var s string
 				if output, ok := jsonDF.Data["output"]; ok && output != nil {
@@ -651,7 +651,7 @@ func extractResultFromEvent(input *modules.EventHandlerInput) string {
 
 // extractErrorFromEvent 从失败事件中提取错误字符串。
 // 截断到 300 字符。
-// 对齐 Python: TaskLoopEventHandler._extract_error_from_event
+// Python: TaskLoopEventHandler._extract_error_from_event
 func extractErrorFromEvent(input *modules.EventHandlerInput) string {
 	event := input.Event
 	errMsg := "unknown"
@@ -667,10 +667,10 @@ func extractErrorFromEvent(input *modules.EventHandlerInput) string {
 }
 
 // formatSessionSpawnSteer 格式化 SessionSpawn 完成后的引导文本。
-// 对齐 Python: TaskLoopEventHandler._format_session_spawn_steer
+// Python: TaskLoopEventHandler._format_session_spawn_steer
 // 使用模板表结构，新增语言只需添加一个 entry。
 func formatSessionSpawnSteer(taskDescription string, isError bool, result string, err string, language string) string {
-	// 对齐 Python: templates = {"cn": {"error": "...", "success": "..."}, "en": {...}}
+	// Python: templates = {"cn": {"error": "...", "success": "..."}, "en": {...}}
 	steerTemplates := map[string]map[string]string{
 		"cn": {
 			"error":   "[后台任务失败] 任务描述={task_description}, 错误={detail}",
@@ -703,7 +703,7 @@ func formatSessionSpawnSteer(taskDescription string, isError bool, result string
 
 // extractQuery 从事件中提取查询文本。
 // 支持 InputEvent 和 FollowUpEvent 两种事件类型。
-// 对齐 Python: TaskLoopEventHandler._extract_query
+// Python: TaskLoopEventHandler._extract_query
 func extractQuery(event cschema.Event) string {
 	switch evt := event.(type) {
 	case *cschema.InputEvent:
@@ -711,7 +711,7 @@ func extractQuery(event cschema.Event) string {
 			if textDF, ok := df.(*cschema.TextDataFrame); ok {
 				return textDF.Text
 			}
-			// 对齐 Python: data.get("query", data)，从 JsonDataFrame 提取查询
+			// Python: data.get("query", data)，从 JsonDataFrame 提取查询
 			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
 				if q, ok := jsonDF.Data["query"]; ok {
 					return fmt.Sprintf("%v", q)

@@ -302,7 +302,7 @@ func TestResolveOwnerScopeLevel_无匹配返回空(t *testing.T) {
 
 // TestCheckAvatarPermission_空PrincipalUserID 验证无主体用户返回 deny
 func TestCheckAvatarPermission_空PrincipalUserID(t *testing.T) {
-	result, err := CheckAvatarPermission(map[string]any{}, "read_file", map[string]any{}, "ch1", "")
+	result, err := CheckAvatarPermission(map[string]any{}, "read_file", map[string]any{}, "ch1", "", "")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestCheckAvatarPermission_空PrincipalUserID(t *testing.T) {
 
 // TestCheckAvatarPermission_空格PrincipalUserID 验证空格等效空
 func TestCheckAvatarPermission_空格PrincipalUserID(t *testing.T) {
-	result, err := CheckAvatarPermission(map[string]any{}, "read_file", map[string]any{}, "ch1", "  ")
+	result, err := CheckAvatarPermission(map[string]any{}, "read_file", map[string]any{}, "ch1", "", "  ")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestCheckAvatarPermission_空格PrincipalUserID(t *testing.T) {
 
 // TestCheckAvatarPermission_nil配置 验证 nil 配置不会 panic
 func TestCheckAvatarPermission_nil配置(t *testing.T) {
-	result, err := CheckAvatarPermission(nil, "read_file", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(nil, "read_file", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestCheckAvatarPermission_nil配置(t *testing.T) {
 // TestCheckAvatarPermission_无ownerScopes 验证无 owner_scopes 返回 allow
 func TestCheckAvatarPermission_无ownerScopes(t *testing.T) {
 	permCfg := map[string]any{"enabled": true}
-	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestCheckAvatarPermission_ownerScope允许(t *testing.T) {
 			},
 		},
 	}
-	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestCheckAvatarPermission_ownerScope拒绝(t *testing.T) {
 			},
 		},
 	}
-	result, err := CheckAvatarPermission(permCfg, "write_file", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "write_file", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestCheckAvatarPermission_ask降级为deny(t *testing.T) {
 			},
 		},
 	}
-	result, err := CheckAvatarPermission(permCfg, "bash", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "bash", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestCheckAvatarPermission_global更严取严者(t *testing.T) {
 			},
 		},
 	}
-	result, err := CheckAvatarPermission(permCfg, "bash", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "bash", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestCheckAvatarPermission_无ownerScope配置(t *testing.T) {
 	permCfg := map[string]any{
 		"defaults": map[string]any{"*": "allow"},
 	}
-	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "user1")
+	result, err := CheckAvatarPermission(permCfg, "read_file", map[string]any{}, "ch1", "", "user1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}

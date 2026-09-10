@@ -59,7 +59,7 @@ const logComponent = logger.ComponentAgentServer
 
 var (
 	// globalCfg 全局 Config 实例，由 AgentServer 启动时通过 RegisterConfig 注册
-	// 对齐 Python: from jiuwenswarm.common.config import get_config
+	// Python: from jiuwenswarm.common.config import get_config
 	globalCfg   *config.Config
 	globalCfgMu sync.RWMutex
 )
@@ -86,7 +86,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 		return nil
 	}
 
-	// 对齐 Python: 只收集已知类型的 hook，未知类型不加入 tasks（不占用 result 位置）
+	// Python: 只收集已知类型的 hook，未知类型不加入 tasks（不占用 result 位置）
 	type indexedHook struct {
 		idx int
 		cfg map[string]any
@@ -94,7 +94,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 	var validHooks []indexedHook
 	for i, cfg := range hookConfigs {
 		hookType, _ := cfg["type"].(string)
-		// 对齐 Python: hook_type = cfg.get("type", "command")
+		// Python: hook_type = cfg.get("type", "command")
 		// 未知类型跳过，不加入执行列表
 		if hookType == string(hookscfg.HookTypeCommand) || hookType == "" || hookType == string(hookscfg.HookTypePrompt) {
 			validHooks = append(validHooks, indexedHook{idx: i, cfg: cfg})
@@ -112,7 +112,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 		wg.Add(1)
 		go func(resultIdx int, cfg map[string]any) {
 			defer wg.Done()
-			// 对齐 Python asyncio.gather(return_exceptions=True)：
+			// Python: asyncio.gather(return_exceptions=True)：
 			// goroutine 内 panic 等价于 Python coroutine 异常，
 			// 用 defer/recover 捕获，转为 NON_BLOCKING_ERROR
 			defer func() {
@@ -135,7 +135,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 	}
 	wg.Wait()
 
-	// 对齐 Python: r if isinstance(r, HookResult) else HookResult(outcome=NON_BLOCKING_ERROR, error=str(r))
+	// Python: r if isinstance(r, HookResult) else HookResult(outcome=NON_BLOCKING_ERROR, error=str(r))
 	// defer/recover 已在 goroutine 内处理 panic，
 	// 此处检查 outcome 为空的异常情况（不应出现，防御性编程）
 	for i, r := range results {
@@ -147,7 +147,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 }
 
 // ParseCommandOutput 解析 command hook 的 stdout JSON 协议
-// 对齐 Python HookExecutor.parse_command_output（静态方法）
+// Python: HookExecutor.parse_command_output（静态方法）
 func ParseCommandOutput(stdout string) HookResult {
 	if strings.TrimSpace(stdout) == "" {
 		return HookResult{Outcome: HookOutcomeSuccess}
@@ -166,7 +166,7 @@ func ParseCommandOutput(stdout string) HookResult {
 
 	decision, _ := data["decision"].(string)
 	if decision == "block" {
-		// 对齐 Python: decision == "block" → BLOCKING
+		// Python: decision == "block" → BLOCKING
 		reason := "blocked by hook"
 		if v, ok := data["reason"].(string); ok && v != "" {
 			reason = v
@@ -178,7 +178,7 @@ func ParseCommandOutput(stdout string) HookResult {
 		}
 	}
 
-	// 对齐 Python: decision != "block" → SUCCESS + 可能有 modifiedInput/additionalContext/reason
+	// Python: decision != "block" → SUCCESS + 可能有 modifiedInput/additionalContext/reason
 	result := HookResult{Outcome: HookOutcomeSuccess}
 	if v, ok := data["modifiedInput"]; ok {
 		if m, ok := v.(map[string]any); ok {
@@ -190,7 +190,7 @@ func ParseCommandOutput(stdout string) HookResult {
 			result.AdditionalContext = s
 		}
 	}
-	// 对齐 Python: "reason" in data and decision != "block" → additional_context = data["reason"]（无条件覆盖）
+	// Python: "reason" in data and decision != "block" → additional_context = data["reason"]（无条件覆盖）
 	if v, ok := data["reason"].(string); ok && decision != "block" {
 		result.AdditionalContext = v
 	}
@@ -198,7 +198,7 @@ func ParseCommandOutput(stdout string) HookResult {
 }
 
 // ExtractJSONFromResponse 从 LLM 响应中提取 JSON 对象
-// 对齐 Python HookExecutor.extract_json_from_response（静态方法）
+// Python: HookExecutor.extract_json_from_response（静态方法）
 func ExtractJSONFromResponse(text string) map[string]any {
 	if text == "" {
 		return map[string]any{}
@@ -240,11 +240,11 @@ func ExtractJSONFromResponse(text string) map[string]any {
 func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any, hookInput map[string]any) HookResult {
 	command, _ := config["command"].(string)
 	if command == "" {
-		// 对齐 Python: not command → NON_BLOCKING_ERROR("empty command")
+		// Python: not command → NON_BLOCKING_ERROR("empty command")
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: "empty command"}
 	}
 
-	// 对齐 Python: timeout = config.get("timeout", 30)
+	// Python: timeout = config.get("timeout", 30)
 	timeout := 30
 	if v, ok := config["timeout"]; ok {
 		switch n := v.(type) {
@@ -254,13 +254,13 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 			timeout = int(n)
 		}
 	}
-	// 对齐 Python: shell = config.get("shell", "bash")
+	// Python: shell = config.get("shell", "bash")
 	shell := "bash"
 	if v, ok := config["shell"].(string); ok && v != "" {
 		shell = v
 	}
 
-	// 对齐 Python: json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
+	// Python: json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -268,23 +268,23 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("serialize hook input: %v", err)}
 	}
 	hookInputJSON := bytes.TrimSpace(buf.Bytes())
-	// 对齐 Python: tool_name = hook_input.get("tool_name", "")
+	// Python: tool_name = hook_input.get("tool_name", "")
 	toolName, _ := hookInput["tool_name"].(string)
 
-	// 对齐 Python: env = os.environ.copy(); env["ARGUMENTS"] = hook_input_json; env["TOOL_NAME"] = tool_name
+	// Python: env = os.environ.copy(); env["ARGUMENTS"] = hook_input_json; env["TOOL_NAME"] = tool_name
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("ARGUMENTS=%s", string(hookInputJSON)))
 	env = append(env, fmt.Sprintf("TOOL_NAME=%s", toolName))
 
 	// 使用带超时的 context 控制子进程生命周期，避免手动 goroutine + select 的竞态
-	// 对齐 Python: asyncio.wait_for(proc.communicate(...), timeout=timeout)
+	// Python: asyncio.wait_for(proc.communicate(...), timeout=timeout)
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer timeoutCancel()
 
-	// 对齐 Python: proc = await asyncio.create_subprocess_exec(shell, "-c", command, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
+	// Python: proc = await asyncio.create_subprocess_exec(shell, "-c", command, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
 	cmd := exec.CommandContext(timeoutCtx, shell, "-c", command)
 	cmd.Env = env
-	// 对齐 Python: proc.communicate(input=hook_input_json.encode()) — stdin 传入 JSON
+	// Python: proc.communicate(input=hook_input_json.encode()) — stdin 传入 JSON
 	cmd.Stdin = strings.NewReader(string(hookInputJSON))
 
 	var stdoutBuf, stderrBuf strings.Builder
@@ -306,7 +306,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	}
 
 	if runErr != nil {
-		// 对齐 Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
+		// Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
 		if cmd.ProcessState == nil {
 			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: runErr.Error()}
 		}
@@ -315,7 +315,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	stdout := stdoutBuf.String()
 	stderr := stderrBuf.String()
 
-	// 对齐 Python 退出码语义：
+	// Python: 退出码语义：
 	if returnCode == 0 {
 		// 退出码 0 → 解析命令输出
 		return ParseCommandOutput(stdout)
@@ -345,7 +345,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	}
 
 	// 其他退出码 → NON_BLOCKING_ERROR(stderr or f"exit code {returncode}")
-	// 对齐 Python: else → NON_BLOCKING_ERROR(stderr or f"exit code {returncode}")
+	// Python: else → NON_BLOCKING_ERROR(stderr or f"exit code {returncode}")
 	errMsg := strings.TrimSpace(stderr)
 	if errMsg == "" {
 		errMsg = fmt.Sprintf("exit code %d", returnCode)
@@ -358,11 +358,11 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any, hookInput map[string]any) HookResult {
 	promptTemplate, _ := config["prompt"].(string)
 	if promptTemplate == "" {
-		// 对齐 Python: not prompt → NON_BLOCKING_ERROR("empty prompt")
+		// Python: not prompt → NON_BLOCKING_ERROR("empty prompt")
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: "empty prompt"}
 	}
 
-	// 对齐 Python: timeout = config.get("timeout", 15)
+	// Python: timeout = config.get("timeout", 15)
 	timeout := 15
 	if v, ok := config["timeout"]; ok {
 		switch n := v.(type) {
@@ -372,10 +372,10 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 			timeout = int(n)
 		}
 	}
-	// 对齐 Python: model_name = config.get("model", "")
+	// Python: model_name = config.get("model", "")
 	modelName, _ := config["model"].(string)
 
-	// 对齐 Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
+	// Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
 	// Python: final_prompt = prompt_template.replace("$ARGUMENTS", hook_input_json)
 	// Python: final_prompt = final_prompt.replace("$TOOL_NAME", tool_name)
 	var promptBuf bytes.Buffer
@@ -403,16 +403,16 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	var result llmResult
 	select {
 	case <-time.After(time.Duration(timeout) * time.Second):
-		// 对齐 Python: asyncio.TimeoutError → NON_BLOCKING_ERROR(f"prompt hook timeout after {timeout}s")
+		// Python: asyncio.TimeoutError → NON_BLOCKING_ERROR(f"prompt hook timeout after {timeout}s")
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("prompt hook timeout after %ds", timeout)}
 	case result = <-resultCh:
 		if result.err != nil {
-			// 对齐 Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
+			// Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
 			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: result.err.Error()}
 		}
 	}
 
-	// 对齐 Python: data = self.extract_json_from_response(response_text)
+	// Python: data = self.extract_json_from_response(response_text)
 	data := ExtractJSONFromResponse(result.text)
 	decision, _ := data["decision"].(string)
 	if decision == "" {
@@ -420,7 +420,7 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	}
 
 	if decision == "block" {
-		// 对齐 Python: decision == "block" → BLOCKING
+		// Python: decision == "block" → BLOCKING
 		reason, _ := data["reason"].(string)
 		if reason == "" {
 			reason = "blocked by prompt hook"
@@ -432,7 +432,7 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 		}
 	}
 
-	// 对齐 Python: result = HookResult(outcome=SUCCESS) + modifiedInput/additionalContext
+	// Python: result = HookResult(outcome=SUCCESS) + modifiedInput/additionalContext
 	r := HookResult{Outcome: HookOutcomeSuccess}
 	if v, ok := data["modifiedInput"]; ok {
 		if m, ok := v.(map[string]any); ok {
@@ -451,7 +451,7 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 // 运行时从全局 Config 读取 LLM 配置，对齐 Python: config_base = get_config()
 // 集成测试覆盖：由 //go:build llm 标签的 executor_llm_test.go 覆盖，不纳入单元测试覆盖率基线
 func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (string, error) {
-	// 对齐 Python: config_base = get_config()
+	// Python: config_base = get_config()
 	cfg := getGlobalConfig()
 	if cfg == nil {
 		return "", fmt.Errorf("全局 Config 未注册，请先调用 RegisterConfig")
@@ -461,7 +461,7 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 		return "", fmt.Errorf("读取配置失败: %w", err)
 	}
 
-	// 对齐 Python: models_cfg = config_base.get("models", {})
+	// Python: models_cfg = config_base.get("models", {})
 	modelsCfg, _ := configBase["models"].(map[string]any)
 	defaultCfg, _ := modelsCfg["default"].(map[string]any)
 	clientCfg, _ := defaultCfg["model_client_config"].(map[string]any)
@@ -479,13 +479,13 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 		return "", fmt.Errorf("创建 Model 失败: %w", modelErr)
 	}
 
-	// 对齐 Python: model = model_name or default_model
+	// Python: model = model_name or default_model
 	effectiveModel := modelName
 	if effectiveModel == "" {
 		effectiveModel = defaultModel
 	}
 
-	// 对齐 Python: response = await model.invoke(messages=[{"role": "user", "content": prompt}], temperature=0.0, max_tokens=1024, model=model_name)
+	// Python: response = await model.invoke(messages=[{"role": "user", "content": prompt}], temperature=0.0, max_tokens=1024, model=model_name)
 	messages := model_clients.NewMessagesParam(llmschema.NewUserMessage(prompt))
 	opts := []model_clients.InvokeOption{
 		model_clients.WithInvokeTemperature(0.0),
@@ -498,7 +498,7 @@ func (e *HookExecutor) queryLLM(ctx context.Context, prompt, modelName string) (
 		return "", fmt.Errorf("LLM Invoke 失败: %w", invokeErr)
 	}
 
-	// 对齐 Python: content = response.content
+	// Python: content = response.content
 	// isinstance(content, str) → 返回文本内容
 	// isinstance(content, list) → 拼接文本部分
 	content := response.Content

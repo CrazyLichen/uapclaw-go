@@ -38,7 +38,7 @@ func NewUserHookRail(config hookscfg.HooksConfig) *UserHookRail {
 		config:   config,
 		executor: NewHookExecutor(),
 	}
-	// 对齐 Python: priority=60
+	// Python: priority=60
 	base := agentinterfaces.NewBaseRail().WithPriority(60)
 	r.DeepAgentRail = rails.DeepAgentRail{BaseRail: *base}
 	return r
@@ -52,14 +52,14 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	toolName := toolInputs.ToolName
 
-	// 对齐 Python: hook_configs = self._config.match(HookEvent.PRE_TOOL_USE.value, query=tool_name)
+	// Python: hook_configs = self._config.match(HookEvent.PRE_TOOL_USE.value, query=tool_name)
 	hookConfigs := r.config.Match(hookscfg.HookEventPreToolUse, toolName)
 	if len(hookConfigs) == 0 {
 		return nil
 	}
 
 	sessionID := getSessionID(cbc)
-	// 对齐 Python: hook_input={"event": "PreToolUse", "tool_name": tool_name, "tool_input": tool_args, "session_id": ...}
+	// Python: hook_input={"event": "PreToolUse", "tool_name": tool_name, "tool_input": tool_args, "session_id": ...}
 	hookInput := map[string]any{
 		"event":      "PreToolUse",
 		"tool_name":  toolName,
@@ -67,22 +67,22 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 		"session_id": sessionID,
 	}
 
-	// 对齐 Python: results = await self._executor.run_all(hook_configs, hook_input=hook_input)
+	// Python: results = await self._executor.run_all(hook_configs, hook_input=hook_input)
 	results := r.executor.RunAll(ctx, hookConfigs, hookInput, sessionID)
 
 	for _, result := range results {
 		if result.Outcome == HookOutcomeBlocking {
-			// 对齐 Python: ctx.extra["_skip_tool"] = True; ctx.extra["_hook_feedback"] = r.error
+			// Python: ctx.extra["_skip_tool"] = True; ctx.extra["_hook_feedback"] = r.error
 			cbc.Extra()["_skip_tool"] = true
 			cbc.Extra()["_hook_feedback"] = result.Error
 			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PreToolUse 已阻止")
 			return nil
 		}
 		if result.ModifiedInput != nil {
-			// 对齐 Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
+			// Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
 			// ToolArgs 现在是 map[string]any 类型，直接赋值
 			toolInputs.ToolArgs = result.ModifiedInput
-			// 对齐 Python: new_name = r.modified_input.get("_tool_name")
+			// Python: new_name = r.modified_input.get("_tool_name")
 			if newName, ok := result.ModifiedInput["_tool_name"]; ok {
 				if s, ok := newName.(string); ok && s != "" {
 					toolInputs.ToolName = s
@@ -92,7 +92,7 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 			logger.Info(logComponent).Str("tool_name", toolName).Msg("UserHookRail: PreToolUse 修改了输入")
 		}
 		if result.AdditionalContext != "" {
-			// 对齐 Python: existing = ctx.extra.get("_hook_additional_context", "")
+			// Python: existing = ctx.extra.get("_hook_additional_context", "")
 			existing, _ := cbc.Extra()["_hook_additional_context"].(string)
 			if existing != "" {
 				cbc.Extra()["_hook_additional_context"] = existing + "\n" + result.AdditionalContext
@@ -111,14 +111,14 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	toolName := toolInputs.ToolName
 
-	// 对齐 Python: hook_configs = self._config.match(HookEvent.POST_TOOL_USE.value, query=tool_name)
+	// Python: hook_configs = self._config.match(HookEvent.POST_TOOL_USE.value, query=tool_name)
 	hookConfigs := r.config.Match(hookscfg.HookEventPostToolUse, toolName)
 	if len(hookConfigs) == 0 {
 		return nil
 	}
 
 	sessionID := getSessionID(cbc)
-	// 对齐 Python: hook_input={"event": "PostToolUse", "tool_name": ..., "tool_input": ..., "tool_result": ..., "session_id": ...}
+	// Python: hook_input={"event": "PostToolUse", "tool_name": ..., "tool_input": ..., "tool_result": ..., "session_id": ...}
 	hookInput := map[string]any{
 		"event":       "PostToolUse",
 		"tool_name":   toolName,
@@ -131,12 +131,12 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 
 	for _, result := range results {
 		if result.Outcome == HookOutcomeBlocking {
-			// 对齐 Python: ctx.extra["_post_tool_hook_feedback"] = r.error
+			// Python: ctx.extra["_post_tool_hook_feedback"] = r.error
 			cbc.Extra()["_post_tool_hook_feedback"] = result.Error
 			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PostToolUse 已阻止")
 		}
 		if result.AdditionalContext != "" {
-			// 对齐 Python: current = ctx.inputs.tool_result or ""; ctx.inputs.tool_result = current + "\n[Hook 发现]: " + r.additional_context
+			// Python: current = ctx.inputs.tool_result or ""; ctx.inputs.tool_result = current + "\n[Hook 发现]: " + r.additional_context
 			var current string
 			if toolInputs.ToolResult != nil {
 				if s, ok := toolInputs.ToolResult.(string); ok {
@@ -147,7 +147,7 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 					current = string(jsonBytes)
 				}
 			}
-			// 对齐 Python: current + "\n[Hook 发现]: " + r.additional_context（统一拼接，不区分空/非空）
+			// Python: current + "\n[Hook 发现]: " + r.additional_context（统一拼接，不区分空/非空）
 			toolInputs.ToolResult = current + "\n[Hook 发现]: " + result.AdditionalContext
 		}
 	}
@@ -160,14 +160,14 @@ func (r *UserHookRail) OnToolException(ctx context.Context, cbc *agentinterfaces
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	toolName := toolInputs.ToolName
 
-	// 对齐 Python: hook_configs = self._config.match(HookEvent.POST_TOOL_USE_FAILURE.value, query=tool_name)
+	// Python: hook_configs = self._config.match(HookEvent.POST_TOOL_USE_FAILURE.value, query=tool_name)
 	hookConfigs := r.config.Match(hookscfg.HookEventPostToolUseFailure, toolName)
 	if len(hookConfigs) == 0 {
 		return nil
 	}
 
 	sessionID := getSessionID(cbc)
-	// 对齐 Python: hook_input={"event": "PostToolUseFailure", "tool_name": ..., "tool_input": ..., "error": ..., "session_id": ...}
+	// Python: hook_input={"event": "PostToolUseFailure", "tool_name": ..., "tool_input": ..., "error": ..., "session_id": ...}
 	hookInput := map[string]any{
 		"event":      "PostToolUseFailure",
 		"tool_name":  toolName,
@@ -184,14 +184,14 @@ func (r *UserHookRail) OnToolException(ctx context.Context, cbc *agentinterfaces
 // AfterInvoke 对齐 Python after_invoke → HookEvent.STOP
 // 阻塞时 → cbc.Extra()["_stop_hook_feedback"]=error
 func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python: hook_configs = self._config.match(HookEvent.STOP.value)
+	// Python: hook_configs = self._config.match(HookEvent.STOP.value)
 	hookConfigs := r.config.Match(hookscfg.HookEventStop, "")
 	if len(hookConfigs) == 0 {
 		return nil
 	}
 
 	sessionID := getSessionID(cbc)
-	// 对齐 Python: hook_input={"event": "Stop", "final_response": ..., "session_id": ...}
+	// Python: hook_input={"event": "Stop", "final_response": ..., "session_id": ...}
 	var finalResponse any
 	if invokeInputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok {
 		finalResponse = invokeInputs.Result
@@ -207,7 +207,7 @@ func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Age
 
 	for _, result := range results {
 		if result.Outcome == HookOutcomeBlocking {
-			// 对齐 Python: ctx.extra["_stop_hook_feedback"] = r.error
+			// Python: ctx.extra["_stop_hook_feedback"] = r.error
 			cbc.Extra()["_stop_hook_feedback"] = result.Error
 			reason := result.Error
 			if len(reason) > 200 {

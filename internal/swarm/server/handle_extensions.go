@@ -60,10 +60,10 @@ func (s *AgentServer) handleExtensionsToggle(_ context.Context, request *schema.
 }
 
 // handleHooksList 处理 hooks.list 请求。返回 hooks 配置摘要。
-// 对齐 Python: _handle_hooks_list — payload 包含 events、disable_all_hooks、source
-// 对齐 Python: try/except 包裹，失败时返回 ok=False
+// Python: _handle_hooks_list — payload 包含 events、disable_all_hooks、source
+// Python: try/except 包裹，失败时返回 ok=False
 func (s *AgentServer) handleHooksList(_ context.Context, request *schema.AgentRequest) (resp *schema.AgentResponse, err error) {
-	// 对齐 Python: try/except 包裹，失败时返回 ok=False
+	// Python: try/except 包裹，失败时返回 ok=False
 	// 用 defer/recover 捕获 panic，转为 ok=False 响应
 	defer func() {
 		if r := recover(); r != nil {

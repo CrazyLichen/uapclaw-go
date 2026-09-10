@@ -77,7 +77,7 @@ func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
 	if lookedUp != "human_agent" {
 		t.Errorf("lookedUp = %v, want human_agent", lookedUp)
 	}
-	// 对齐 Python: deliver_to_leader 通道不产生 bus message → MessageID 为 nil
+	// Python: deliver_to_leader 通道不产生 bus message → MessageID 为 nil
 	if result.MessageID != nil {
 		t.Errorf("MessageID = %v, want nil (drive avatar)", result.MessageID)
 	}

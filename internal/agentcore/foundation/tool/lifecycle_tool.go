@@ -13,7 +13,7 @@ import (
 // LifecycleTool 实现了 Tool 接口，可以像普通 Tool 一样使用。
 // 注册到 AbilityManager 时自动包装，对调用方透明。
 //
-// 对应 Python: _ToolMeta.__call__ 中的生命周期注入逻辑
+// Python: _ToolMeta.__call__ 中的生命周期注入逻辑
 type LifecycleTool struct {
 	inner Tool
 	fw    *runnnercallback.CallbackFramework
@@ -30,7 +30,7 @@ type LifecycleTool struct {
 // NewLifecycleTool 创建带生命周期回调的工具包装器。
 //
 // fw 参数可选：不传或传 nil 时自动使用全局回调框架 GetCallbackFramework()，
-// 对齐 Python: _ToolMeta.__call__ 中通过 Runner.callback_framework 获取。
+// Python: _ToolMeta.__call__ 中通过 Runner.callback_framework 获取。
 func NewLifecycleTool(inner Tool, fw ...*runnnercallback.CallbackFramework) *LifecycleTool {
 	var f *runnnercallback.CallbackFramework
 	if len(fw) > 0 && fw[0] != nil {
@@ -152,7 +152,7 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 				return
 			}
 			// RESULT_RECEIVED：内层 _lifecycle_stream 触发，拿到原始数据（未变换）
-			// 对齐 Python：_lifecycle_stream 中 async for chunk → trigger(RESULT_RECEIVED, chunk) → yield chunk
+			// Python: _lifecycle_stream 中 async for chunk → trigger(RESULT_RECEIVED, chunk) → yield chunk
 			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
 			// TransformToolIOOutput — per-chunk 输出变换（transform_io 外层处理 yield 出来的 item）
 			transformedData := t.fw.TransformToolIOOutput(ctx, runnnercallback.ToolStreamOutput, chunk.Data)

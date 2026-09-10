@@ -27,7 +27,7 @@ import (
 //
 //	{"type": "req", "id": "<uuid>", "method": "chat.send", "params": {...}}
 //
-// 对应 Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (入站 JSON 解析)
+// Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (入站 JSON 解析)
 type ReqFrame struct {
 	// Type 帧类型，固定为 "req"
 	Type string `json:"type"`
@@ -46,7 +46,7 @@ type ReqFrame struct {
 //	{"type": "res", "id": "<req_id>", "ok": true, "payload": {...}}
 //	{"type": "res", "id": "<req_id>", "ok": false, "payload": {}, "error": "...", "code": "BAD_REQUEST"}
 //
-// 对应 Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (send_response)
+// Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (send_response)
 type ResFrame struct {
 	// Type 帧类型，固定为 "res"
 	Type string `json:"type"`
@@ -68,7 +68,7 @@ type ResFrame struct {
 //
 //	{"type": "event", "event": "chat.chunk", "payload": {...}, "seq": 1, "stream_id": "xxx"}
 //
-// 对应 Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (send_event)
+// Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (send_event)
 type EventFrame struct {
 	// Type 帧类型，固定为 "event"
 	Type string `json:"type"`
@@ -108,7 +108,7 @@ const (
 // DecodeFrame 从 JSON 字节流解码为通用 map，提取帧类型。
 //
 // 不做完整帧解析，仅返回原始 map 供上层按 type 分发。
-// 对齐 Python json.loads(raw) 后 data.get("type") 的两步解析模式。
+// Python: json.loads(raw) 后 data.get("type") 的两步解析模式。
 func DecodeFrame(data []byte) (map[string]any, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("帧数据为空")
@@ -122,7 +122,7 @@ func DecodeFrame(data []byte) (map[string]any, error) {
 
 // DecodeReqFrame 从 JSON 字节流解码为 ReqFrame。
 //
-// 对齐 Python _handle_raw_message 中 json.loads(raw) 后
+// Python: _handle_raw_message 中 json.loads(raw) 后
 // 校验 type=="req"、id 为 str、method 为 str 的解析逻辑。
 func DecodeReqFrame(data []byte) (*ReqFrame, error) {
 	if len(data) == 0 {
@@ -156,7 +156,7 @@ func (f *ReqFrame) Validate() error {
 
 // NewResFrame 构造响应帧。
 //
-// 对齐 Python WebChannel.send_response 中 frame 字典构建逻辑：
+// Python: WebChannel.send_response 中 frame 字典构建逻辑：
 //   - ok=true 时仅设置 payload
 //   - ok=false 时额外设置 error 和可选 code
 func NewResFrame(reqID string, ok bool, payload map[string]any, errMsg string, code string) *ResFrame {
@@ -181,7 +181,7 @@ func NewResFrame(reqID string, ok bool, payload map[string]any, errMsg string, c
 
 // NewEventFrame 构造事件帧。
 //
-// 对齐 Python WebChannel.send_event 中 frame 字典构建逻辑：
+// Python: WebChannel.send_event 中 frame 字典构建逻辑：
 //   - seq 和 stream_id 仅在非零值时序列化（omitempty）
 func NewEventFrame(event string, payload map[string]any, seq int, streamID string) *EventFrame {
 	return &EventFrame{

@@ -26,7 +26,7 @@ import (
 // 当全量上下文 Token 超过触发阈值时，按轮次（ReAct block）渐进式压缩：
 // L0→L1 递归合并 → 激进压缩（保留近期）→ 激进压缩（全量）→ 硬截断。
 //
-// 对应 Python: RoundLevelCompressorConfig (pydantic.BaseModel)
+// Python: RoundLevelCompressorConfig (pydantic.BaseModel)
 type RoundLevelCompressorConfig struct {
 	// TriggerTotalTokens 触发压缩的全量上下文 Token 阈值
 	TriggerTotalTokens int
@@ -86,7 +86,7 @@ type roundCompressTarget struct {
 //  3. 激进压缩（全量）
 //  4. 硬截断
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/compressor/round_level_compressor.py (RoundLevelCompressor)
+// Python: openjiuwen/core/context_engine/processor/compressor/round_level_compressor.py (RoundLevelCompressor)
 type RoundLevelCompressor struct {
 	*processor.BaseProcessor
 	// model 压缩用 LLM 实例
@@ -255,7 +255,7 @@ func (c *RoundLevelCompressorConfig) GetModel() *llm_schema.ModelRequestConfig {
 
 // NewRoundLevelCompressor 创建轮级压缩器实例。
 //
-// 对应 Python: RoundLevelCompressor.__init__(config)
+// Python: RoundLevelCompressor.__init__(config)
 func NewRoundLevelCompressor(config *RoundLevelCompressorConfig, opts ...RoundLevelCompressorOption) (*RoundLevelCompressor, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -317,7 +317,7 @@ func (rlc *RoundLevelCompressor) ProcessorType() string { return "RoundLevelComp
 //
 // 触发条件：合并后的上下文 Token 数 > TriggerTotalTokens。
 //
-// 对应 Python: RoundLevelCompressor.trigger_add_messages()
+// Python: RoundLevelCompressor.trigger_add_messages()
 func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
@@ -335,7 +335,7 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 
 // OnAddMessages 执行轮级压缩。
 //
-// 对应 Python: RoundLevelCompressor.on_add_messages()
+// Python: RoundLevelCompressor.on_add_messages()
 func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
@@ -376,7 +376,7 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 //
 // 触发条件：全量上下文 Token 数 > TriggerTotalTokens。
 //
-// 对应 Python: RoundLevelCompressor.trigger_get_context_window()
+// Python: RoundLevelCompressor.trigger_get_context_window()
 func (rlc *RoundLevelCompressor) TriggerGetContextWindow(ctx context.Context, mc iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	totalTokens := rlc.countContextWindowTokens(cw.SystemMessages, cw.ContextMessages, cw.Tools, mc)
 	return totalTokens > rlc.triggerTotalTokens, nil
@@ -384,7 +384,7 @@ func (rlc *RoundLevelCompressor) TriggerGetContextWindow(ctx context.Context, mc
 
 // OnGetContextWindow 执行轮级压缩并更新上下文窗口。
 //
-// 对应 Python: RoundLevelCompressor.on_get_context_window()
+// Python: RoundLevelCompressor.on_get_context_window()
 func (rlc *RoundLevelCompressor) OnGetContextWindow(ctx context.Context, mc iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (*iface.ContextEvent, iface.ContextWindow, error) {
 	rlc.ResetCompressionUsage()
 	totalTokens := rlc.countContextWindowTokens(cw.SystemMessages, cw.ContextMessages, cw.Tools, mc)
@@ -434,7 +434,7 @@ func (rlc *RoundLevelCompressor) LoadState(_ map[string]any) {}
 
 // compressUntilTarget 核心编排，五级降级链。
 //
-// 对应 Python: RoundLevelCompressor._compress_until_target()
+// Python: RoundLevelCompressor._compress_until_target()
 func (rlc *RoundLevelCompressor) compressUntilTarget(
 	ctx context.Context,
 	contextMessages []llm_schema.BaseMessage,
@@ -496,7 +496,7 @@ func (rlc *RoundLevelCompressor) compressUntilTarget(
 
 // runRecursiveCompression 递归压缩，先压缩 L0 原始块，再逐步合并同级别记忆块。
 //
-// 对应 Python: RoundLevelCompressor._run_recursive_compression()
+// Python: RoundLevelCompressor._run_recursive_compression()
 func (rlc *RoundLevelCompressor) runRecursiveCompression(
 	ctx context.Context,
 	messages []llm_schema.BaseMessage,
@@ -552,7 +552,7 @@ func (rlc *RoundLevelCompressor) runRecursiveCompression(
 
 // runAggressivePhase 激进压缩阶段。
 //
-// 对应 Python: RoundLevelCompressor._run_aggressive_phase()
+// Python: RoundLevelCompressor._run_aggressive_phase()
 func (rlc *RoundLevelCompressor) runAggressivePhase(
 	ctx context.Context,
 	messages []llm_schema.BaseMessage,
@@ -577,7 +577,7 @@ func (rlc *RoundLevelCompressor) runAggressivePhase(
 
 // applyLLMPhase 调用 LLM 执行压缩阶段。
 //
-// 对应 Python: RoundLevelCompressor._apply_llm_phase()
+// Python: RoundLevelCompressor._apply_llm_phase()
 // MODEL_CALL_FAILED 错误直接返回 error，由上层 OnAddMessages 判断是否降级。
 func (rlc *RoundLevelCompressor) applyLLMPhase(
 	ctx context.Context,
@@ -641,7 +641,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 
 // prepareRoundCompressionMessages 构建压缩 LLM 调用的消息列表。
 //
-// 对应 Python: RoundLevelCompressor._prepare_round_compression_messages()
+// Python: RoundLevelCompressor._prepare_round_compression_messages()
 func (rlc *RoundLevelCompressor) prepareRoundCompressionMessages(
 	contextMessages []llm_schema.BaseMessage,
 	targets []roundCompressTarget,
@@ -679,7 +679,7 @@ func (rlc *RoundLevelCompressor) prepareRoundCompressionMessages(
 
 // buildCompressionUserPrompt 构建压缩用户提示词。
 //
-// 对应 Python: RoundLevelCompressor._build_compression_user_prompt()
+// Python: RoundLevelCompressor._build_compression_user_prompt()
 func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 	contextMessages []llm_schema.BaseMessage,
 	targets []roundCompressTarget,
@@ -794,7 +794,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 
 // truncatePromptToBudget 二分截断提示词至压缩调用预算内。
 //
-// 对应 Python: RoundLevelCompressor._truncate_prompt_to_budget()
+// Python: RoundLevelCompressor._truncate_prompt_to_budget()
 func (rlc *RoundLevelCompressor) truncatePromptToBudget(systemPrompt string, promptText string, mc iface.ModelContext) *string {
 	minimumPrompt := "[Compression Task]\n...[TRUNCATED]...\n[Output Contract]\nReturn valid JSON only."
 	if !rlc.isUnderCompressionCallBudget(systemPrompt, minimumPrompt, mc) {
@@ -818,7 +818,7 @@ func (rlc *RoundLevelCompressor) truncatePromptToBudget(systemPrompt string, pro
 
 // buildRawTargets 构建 L0 原始压缩目标列表。
 //
-// 对应 Python: RoundLevelCompressor._build_raw_targets()
+// Python: RoundLevelCompressor._build_raw_targets()
 func (rlc *RoundLevelCompressor) buildRawTargets(messages []llm_schema.BaseMessage, compressEnd int) []roundCompressTarget {
 	var targets []roundCompressTarget
 	blockNo := 1
@@ -864,7 +864,7 @@ func (rlc *RoundLevelCompressor) buildRawTargets(messages []llm_schema.BaseMessa
 
 // buildRecursiveMergeTargets 构建递归合并目标列表。
 //
-// 对应 Python: RoundLevelCompressor._build_recursive_merge_targets()
+// Python: RoundLevelCompressor._build_recursive_merge_targets()
 func (rlc *RoundLevelCompressor) buildRecursiveMergeTargets(messages []llm_schema.BaseMessage, compressEnd int) []roundCompressTarget {
 	memoryTargets := rlc.collectRoundLevelMemoryTargets(messages, compressEnd)
 	if len(memoryTargets) < 2 {
@@ -917,7 +917,7 @@ func (rlc *RoundLevelCompressor) buildRecursiveMergeTargets(messages []llm_schem
 
 // resolveEffectiveMergeLevels 解析有效合并级别。
 //
-// 对应 Python: RoundLevelCompressor._resolve_effective_merge_levels()
+// Python: RoundLevelCompressor._resolve_effective_merge_levels()
 func (rlc *RoundLevelCompressor) resolveEffectiveMergeLevels(memoryTargets []roundCompressTarget) (map[string]int, *int) {
 	effectiveLevels := make(map[string]int)
 	for _, t := range memoryTargets {
@@ -995,7 +995,7 @@ func (rlc *RoundLevelCompressor) resolveEffectiveMergeLevels(memoryTargets []rou
 
 // buildMergeTarget 构建合并目标。
 //
-// 对应 Python: RoundLevelCompressor._build_merge_target()
+// Python: RoundLevelCompressor._build_merge_target()
 func (rlc *RoundLevelCompressor) buildMergeTarget(group []roundCompressTarget, messages []llm_schema.BaseMessage, candidateLevel int, groupNo int) roundCompressTarget {
 	return roundCompressTarget{
 		blockID:          fmt.Sprintf("merge_%d_%d", candidateLevel, groupNo),
@@ -1011,7 +1011,7 @@ func (rlc *RoundLevelCompressor) buildMergeTarget(group []roundCompressTarget, m
 
 // collectRoundLevelMemoryTargets 收集已有轮级记忆块目标。
 //
-// 对应 Python: RoundLevelCompressor._collect_round_level_memory_targets()
+// Python: RoundLevelCompressor._collect_round_level_memory_targets()
 func (rlc *RoundLevelCompressor) collectRoundLevelMemoryTargets(messages []llm_schema.BaseMessage, compressEnd int) []roundCompressTarget {
 	var targets []roundCompressTarget
 	blockNo := 1
@@ -1054,7 +1054,7 @@ func (rlc *RoundLevelCompressor) collectRoundLevelMemoryTargets(messages []llm_s
 
 // buildAggressiveTargets 构建激进压缩目标。
 //
-// 对应 Python: RoundLevelCompressor._build_aggressive_targets()
+// Python: RoundLevelCompressor._build_aggressive_targets()
 func (rlc *RoundLevelCompressor) buildAggressiveTargets(messages []llm_schema.BaseMessage, compressEnd int) []roundCompressTarget {
 	rawTargets := rlc.buildRawTargets(messages, compressEnd)
 	if len(rawTargets) > 0 {
@@ -1066,7 +1066,7 @@ func (rlc *RoundLevelCompressor) buildAggressiveTargets(messages []llm_schema.Ba
 // protectToolCallBoundary 保护工具调用边界，避免截断 AssistantMessage 的 tool_calls
 // 与后续 ToolMessage 的配对关系。
 //
-// 对应 Python: RoundLevelCompressor._protect_tool_call_boundary()
+// Python: RoundLevelCompressor._protect_tool_call_boundary()
 func (rlc *RoundLevelCompressor) protectToolCallBoundary(messages []llm_schema.BaseMessage, startIdx int, endIdx int) int {
 	if endIdx < startIdx {
 		return endIdx
@@ -1117,7 +1117,7 @@ func (rlc *RoundLevelCompressor) protectToolCallBoundary(messages []llm_schema.B
 
 // findL0BlockEnd 查找 L0 原始块的结束索引和范围类型。
 //
-// 对应 Python: RoundLevelCompressor._find_l0_block_end()
+// Python: RoundLevelCompressor._find_l0_block_end()
 func (rlc *RoundLevelCompressor) findL0BlockEnd(messages []llm_schema.BaseMessage, startIdx int, compressEnd int) (int, string) {
 	lastNonRoundLevelIdx := startIdx - 1
 	for idx := startIdx; idx <= compressEnd; idx++ {
@@ -1134,7 +1134,7 @@ func (rlc *RoundLevelCompressor) findL0BlockEnd(messages []llm_schema.BaseMessag
 
 // isRoundLevelFallbackBlock 判断消息是否为轮级记忆块。
 //
-// 对应 Python: RoundLevelCompressor._is_round_level_fallback_block()
+// Python: RoundLevelCompressor._is_round_level_fallback_block()
 func (rlc *RoundLevelCompressor) isRoundLevelFallbackBlock(msg llm_schema.BaseMessage) bool {
 	if _, ok := msg.(*llm_schema.UserMessage); !ok {
 		return false
@@ -1144,7 +1144,7 @@ func (rlc *RoundLevelCompressor) isRoundLevelFallbackBlock(msg llm_schema.BaseMe
 
 // findRoundLevelBlockEnd 查找轮级记忆块结束索引。
 //
-// 对应 Python: RoundLevelCompressor._find_round_level_block_end()
+// Python: RoundLevelCompressor._find_round_level_block_end()
 func (rlc *RoundLevelCompressor) findRoundLevelBlockEnd(messages []llm_schema.BaseMessage, start int, compressEnd int) int {
 	endIdx := start
 	for endIdx+1 <= compressEnd {
@@ -1159,7 +1159,7 @@ func (rlc *RoundLevelCompressor) findRoundLevelBlockEnd(messages []llm_schema.Ba
 
 // looksLikeAck 判断 AssistantMessage 是否为确认回复。
 //
-// 对应 Python: RoundLevelCompressor._looks_like_ack()
+// Python: RoundLevelCompressor._looks_like_ack()
 func (rlc *RoundLevelCompressor) looksLikeAck(msg *llm_schema.AssistantMessage) bool {
 	trimmed := strings.TrimSpace(msg.GetContent().Text())
 	return trimmed == "Understood. I have recorded this compressed context."
@@ -1167,7 +1167,7 @@ func (rlc *RoundLevelCompressor) looksLikeAck(msg *llm_schema.AssistantMessage) 
 
 // getCompressLevel 获取消息的压缩级别。
 //
-// 对应 Python: RoundLevelCompressor._get_compress_level()
+// Python: RoundLevelCompressor._get_compress_level()
 func (rlc *RoundLevelCompressor) getCompressLevel(msg llm_schema.BaseMessage) int {
 	metadata := msg.GetMetadata()
 	if metadata != nil {
@@ -1190,7 +1190,7 @@ func (rlc *RoundLevelCompressor) getCompressLevel(msg llm_schema.BaseMessage) in
 
 // buildJSONReplacements 从 LLM 返回的 ParserContent 解析 JSON 构建替换列表。
 //
-// 对应 Python: RoundLevelCompressor._build_json_replacements()
+// Python: RoundLevelCompressor._build_json_replacements()
 func (rlc *RoundLevelCompressor) buildJSONReplacements(targets []roundCompressTarget, parserContent any, mc iface.ModelContext) []processor.Replacement {
 	if !isValidBlocksPayload(parserContent) {
 		return nil
@@ -1249,7 +1249,7 @@ func (rlc *RoundLevelCompressor) buildJSONReplacements(targets []roundCompressTa
 
 // buildRawFallbackReplacement 构建 JSON 解析失败时的降级替换。
 //
-// 对应 Python: RoundLevelCompressor._build_raw_fallback_replacement()
+// Python: RoundLevelCompressor._build_raw_fallback_replacement()
 func (rlc *RoundLevelCompressor) buildRawFallbackReplacement(targets []roundCompressTarget, summary string, mc iface.ModelContext) *processor.Replacement {
 	if len(targets) == 0 || summary == "" {
 		return nil
@@ -1295,7 +1295,7 @@ func (rlc *RoundLevelCompressor) buildRawFallbackReplacement(targets []roundComp
 
 // isValidBlocksPayload 检查 ParserContent 是否为有效的 blocks JSON。
 //
-// 对应 Python: RoundLevelCompressor._is_valid_blocks_payload()
+// Python: RoundLevelCompressor._is_valid_blocks_payload()
 func isValidBlocksPayload(parserContent any) bool {
 	parserMap, ok := parserContent.(map[string]any)
 	if !ok {
@@ -1311,7 +1311,7 @@ func isValidBlocksPayload(parserContent any) bool {
 
 // buildMemoryMessage 构建轮级记忆块消息。
 //
-// 对应 Python: RoundLevelCompressor._build_memory_message()
+// Python: RoundLevelCompressor._build_memory_message()
 func (rlc *RoundLevelCompressor) buildMemoryMessage(summary string, scope string, nextLevel int) *llm_schema.UserMessage {
 	content := rlc.wrapMemoryBlock(summary, scope)
 	msg := llm_schema.NewUserMessage(content)
@@ -1327,7 +1327,7 @@ func (rlc *RoundLevelCompressor) buildMemoryMessage(summary string, scope string
 
 // wrapMemoryBlock 将摘要包装为轮级记忆块格式。
 //
-// 对应 Python: RoundLevelCompressor._wrap_memory_block()
+// Python: RoundLevelCompressor._wrap_memory_block()
 func (rlc *RoundLevelCompressor) wrapMemoryBlock(summary string, scope string) string {
 	return fmt.Sprintf(
 		"%s\n"+
@@ -1348,7 +1348,7 @@ func (rlc *RoundLevelCompressor) wrapMemoryBlock(summary string, scope string) s
 
 // extractCompactSummary 提取压缩摘要文本。
 //
-// 对应 Python: RoundLevelCompressor._extract_compact_summary()
+// Python: RoundLevelCompressor._extract_compact_summary()
 func (rlc *RoundLevelCompressor) extractCompactSummary(messages []llm_schema.BaseMessage) string {
 	var parts []string
 	for _, msg := range messages {
@@ -1362,7 +1362,7 @@ func (rlc *RoundLevelCompressor) extractCompactSummary(messages []llm_schema.Bas
 
 // buildMinimalTruncatedMessage 构建最小截断消息（含元数据）。
 //
-// 对应 Python: RoundLevelCompressor._build_minimal_truncated_message()
+// Python: RoundLevelCompressor._build_minimal_truncated_message()
 func (rlc *RoundLevelCompressor) buildMinimalTruncatedMessage() *llm_schema.UserMessage {
 	return llm_schema.NewUserMessage(
 		fmt.Sprintf(
@@ -1380,7 +1380,7 @@ func (rlc *RoundLevelCompressor) buildMinimalTruncatedMessage() *llm_schema.User
 
 // buildCompactTruncatedMessage 构建紧凑截断消息（仅标记）。
 //
-// 对应 Python: RoundLevelCompressor._build_compact_truncated_message()
+// Python: RoundLevelCompressor._build_compact_truncated_message()
 func (rlc *RoundLevelCompressor) buildCompactTruncatedMessage() *llm_schema.UserMessage {
 	return llm_schema.NewUserMessage(
 		fmt.Sprintf("%s\n%s", rlc.compressionMarker, rlc.truncatedMarker),
@@ -1389,7 +1389,7 @@ func (rlc *RoundLevelCompressor) buildCompactTruncatedMessage() *llm_schema.User
 
 // truncateToTarget 硬截断至目标 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._truncate_to_target()
+// Python: RoundLevelCompressor._truncate_to_target()
 func (rlc *RoundLevelCompressor) truncateToTarget(
 	contextMessages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
@@ -1448,7 +1448,7 @@ func (rlc *RoundLevelCompressor) truncateToTarget(
 
 // buildHeadTailTruncatedText 构建头尾截断文本。
 //
-// 对应 Python: RoundLevelCompressor._build_head_tail_truncated_text()
+// Python: RoundLevelCompressor._build_head_tail_truncated_text()
 func (rlc *RoundLevelCompressor) buildHeadTailTruncatedText(text string, keptChars int) string {
 	if keptChars <= 0 {
 		return rlc.truncatedMarker
@@ -1491,7 +1491,7 @@ func (rlc *RoundLevelCompressor) buildHeadTailTruncatedText(text string, keptCha
 
 // countContextWindowTokens 计算全量上下文 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._count_context_window_tokens()
+// Python: RoundLevelCompressor._count_context_window_tokens()
 func (rlc *RoundLevelCompressor) countContextWindowTokens(
 	systemMessages []llm_schema.BaseMessage,
 	contextMessages []llm_schema.BaseMessage,
@@ -1538,7 +1538,7 @@ func (rlc *RoundLevelCompressor) countContextWindowTokens(
 
 // countContextWindowFixedTokens 计算固定部分（system + tools）的 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._count_context_window_fixed_tokens()
+// Python: RoundLevelCompressor._count_context_window_fixed_tokens()
 func (rlc *RoundLevelCompressor) countContextWindowFixedTokens(
 	systemMessages []llm_schema.BaseMessage,
 	tools []schema.ToolInfoInterface,
@@ -1549,7 +1549,7 @@ func (rlc *RoundLevelCompressor) countContextWindowFixedTokens(
 
 // countCompressionCallTokens 计算压缩调用 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._count_compression_call_tokens()
+// Python: RoundLevelCompressor._count_compression_call_tokens()
 func (rlc *RoundLevelCompressor) countCompressionCallTokens(systemPrompt string, promptText string, mc iface.ModelContext) int {
 	tokenCounter := mc.TokenCounter()
 	modelName := rlc.getModelName()
@@ -1579,7 +1579,7 @@ func (rlc *RoundLevelCompressor) countCompressionCallTokens(systemPrompt string,
 
 // countMessageTokens 计算消息列表的 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._count_message_tokens()
+// Python: RoundLevelCompressor._count_message_tokens()
 func (rlc *RoundLevelCompressor) countMessageTokens(messages []llm_schema.BaseMessage, mc iface.ModelContext) int {
 	tokenCounter := mc.TokenCounter()
 	modelName := rlc.getModelName()
@@ -1604,7 +1604,7 @@ func (rlc *RoundLevelCompressor) countMessageTokens(messages []llm_schema.BaseMe
 
 // isUnderContextWindowBudget 判断是否在上下文窗口预算内。
 //
-// 对应 Python: RoundLevelCompressor._is_under_context_window_budget()
+// Python: RoundLevelCompressor._is_under_context_window_budget()
 func (rlc *RoundLevelCompressor) isUnderContextWindowBudget(
 	systemMessages []llm_schema.BaseMessage,
 	contextMessages []llm_schema.BaseMessage,
@@ -1617,7 +1617,7 @@ func (rlc *RoundLevelCompressor) isUnderContextWindowBudget(
 
 // isUnderCompressionCallBudget 判断是否在压缩调用预算内。
 //
-// 对应 Python: RoundLevelCompressor._is_under_compression_call_budget()
+// Python: RoundLevelCompressor._is_under_compression_call_budget()
 func (rlc *RoundLevelCompressor) isUnderCompressionCallBudget(systemPrompt string, promptText string, mc iface.ModelContext) bool {
 	totalTokens := rlc.countCompressionCallTokens(systemPrompt, promptText, mc)
 	return totalTokens <= rlc.compressionCallMaxTokens
@@ -1625,7 +1625,7 @@ func (rlc *RoundLevelCompressor) isUnderCompressionCallBudget(systemPrompt strin
 
 // hasCompressionBenefit 判断压缩是否有收益（压缩后 Token 少于原始 Token）。
 //
-// 对应 Python: RoundLevelCompressor._has_compression_benefit()
+// Python: RoundLevelCompressor._has_compression_benefit()
 func (rlc *RoundLevelCompressor) hasCompressionBenefit(originalMessages []llm_schema.BaseMessage, replacementMessages []llm_schema.BaseMessage, mc iface.ModelContext) bool {
 	originalTokens := rlc.countMessageTokens(originalMessages, mc)
 	replacementTokens := rlc.countMessageTokens(replacementMessages, mc)
@@ -1634,14 +1634,14 @@ func (rlc *RoundLevelCompressor) hasCompressionBenefit(originalMessages []llm_sc
 
 // estimateContentTokens 估算内容的 Token 数。
 //
-// 对应 Python: RoundLevelCompressor._estimate_content_tokens()
+// Python: RoundLevelCompressor._estimate_content_tokens()
 func estimateContentTokens(content any) int {
 	return processor.EstimateContentTokens(content)
 }
 
 // serializeMessage 序列化单条消息为文本。
 //
-// 对应 Python: RoundLevelCompressor._serialize_message()
+// Python: RoundLevelCompressor._serialize_message()
 func (rlc *RoundLevelCompressor) serializeMessage(index int, msg llm_schema.BaseMessage) string {
 	var parts []string
 	parts = append(parts, fmt.Sprintf("[%d] role=%s", index, msg.GetRole().String()))
@@ -1669,7 +1669,7 @@ func (rlc *RoundLevelCompressor) serializeMessage(index int, msg llm_schema.Base
 
 // serializeTool 序列化工具定义为 JSON 文本。
 //
-// 对应 Python: RoundLevelCompressor._serialize_tool()
+// Python: RoundLevelCompressor._serialize_tool()
 func (rlc *RoundLevelCompressor) serializeTool(tool schema.ToolInfoInterface) string {
 	data, err := json.Marshal(tool)
 	if err != nil {
@@ -1685,7 +1685,7 @@ func (rlc *RoundLevelCompressor) buildModifyIndices(startIdx int, endIdx int) []
 
 // getModel 获取压缩模型实例（懒初始化）。
 //
-// 对应 Python: RoundLevelCompressor._get_model()
+// Python: RoundLevelCompressor._get_model()
 func (rlc *RoundLevelCompressor) getModel() *llm.Model {
 	return rlc.model
 }
@@ -1700,7 +1700,7 @@ func (rlc *RoundLevelCompressor) getModelName() string {
 
 // messagesEqual 判断两个消息列表是否相等（深度比较消息内容）。
 //
-// 对应 Python: compressed_messages == all_messages（逐条比较消息内容）
+// Python: compressed_messages == all_messages（逐条比较消息内容）
 func (rlc *RoundLevelCompressor) messagesEqual(a, b []llm_schema.BaseMessage) bool {
 	if len(a) != len(b) {
 		return false

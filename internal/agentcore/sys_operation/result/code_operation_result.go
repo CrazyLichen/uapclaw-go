@@ -3,7 +3,7 @@ package result
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExecuteCodeData 代码执行结果数据。
-// 对齐 Python ExecuteCodeData：code_content, language, exit_code, stdout, stderr。
+// Python: ExecuteCodeData：code_content, language, exit_code, stdout, stderr。
 type ExecuteCodeData struct {
 	// CodeContent 执行的代码内容
 	CodeContent string `json:"code_content"`
@@ -25,7 +25,7 @@ type ExecuteCodeResult struct {
 }
 
 // ExecuteCodeChunkData 代码执行流式块数据。
-// 对齐 Python ExecuteCodeChunkData：text, type, chunk_index, exit_code, metadata。
+// Python: ExecuteCodeChunkData：text, type, chunk_index, exit_code, metadata。
 type ExecuteCodeChunkData struct {
 	// Text 输出块内容
 	Text string `json:"text"`

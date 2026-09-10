@@ -55,7 +55,7 @@ type httpResponse struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // httpRequest 统一 HTTP 请求，支持代理、重试、SSL 跳过验证
-// 对齐 Python: _http_request() (web_tools.py L181-200)
+// Python: _http_request() (web_tools.py L181-200)
 func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, error) {
 	cfg := defaultRequestConfig()
 	for _, opt := range opts {
@@ -67,7 +67,7 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
-	// 对齐 Python: _apply_free_search_proxy() (web_tools.py L172-178)
+	// Python: _apply_free_search_proxy() (web_tools.py L172-178)
 	proxyURL := getFreeSearchProxyURL()
 	explicitProxy := false
 	if proxyURL != "" && !shouldBypassFreeSearchProxy(reqURL) {
@@ -102,7 +102,7 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// 对齐 Python: L195-200 — 当代理出错且未显式指定代理时（即使用环境变量代理），
+		// Python: L195-200 — 当代理出错且未显式指定代理时（即使用环境变量代理），
 		// 回退到直连重试；如果用户显式配置了代理则不回退，直接报错
 		if isProxyError(err) && !explicitProxy {
 			transport2 := http.DefaultTransport.(*http.Transport).Clone()
@@ -137,7 +137,7 @@ func httpRequest(method, reqURL string, opts ...RequestOption) (*httpResponse, e
 }
 
 // shouldBypassFreeSearchProxy 判断是否绕过代理
-// 对齐 Python: _should_bypass_free_search_proxy() (web_tools.py L152-169)
+// Python: _should_bypass_free_search_proxy() (web_tools.py L152-169)
 func shouldBypassFreeSearchProxy(reqURL string) bool {
 	proxyURL := getFreeSearchProxyURL()
 	if proxyURL == "" {
@@ -168,7 +168,7 @@ func shouldBypassFreeSearchProxy(reqURL string) bool {
 }
 
 // raiseForStatusWithBody HTTP 错误时包含响应体
-// 对齐 Python: _raise_for_status_with_body() (web_tools.py L203-216)
+// Python: _raise_for_status_with_body() (web_tools.py L203-216)
 func raiseForStatusWithBody(resp *httpResponse) error {
 	if resp.statusCode >= 200 && resp.statusCode < 300 {
 		return nil

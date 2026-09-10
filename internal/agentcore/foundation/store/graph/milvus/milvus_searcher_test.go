@@ -572,7 +572,7 @@ func TestGraphSearcher_SearchSingle_BFS搜索失败返回空结果(t *testing.T)
 
 func TestGraphSearcher_ExpandEntities(t *testing.T) {
 	fake := newFakeSearcherClient()
-	// 对齐 Python: _expand_entities 查询 Relation 集合的 lhs/rhs 字段
+	// Python: _expand_entities 查询 Relation 集合的 lhs/rhs 字段
 	lhsCol := column.NewColumnVarChar("lhs", []string{"e1"})
 	rhsCol := column.NewColumnVarChar("rhs", []string{"e2"})
 	fake.queryResult = milvusclient.ResultSet{
@@ -632,7 +632,7 @@ func TestGraphSearcher_ExpandEntities_Query失败(t *testing.T) {
 
 func TestGraphSearcher_ExpandRelations(t *testing.T) {
 	fake := newFakeSearcherClient()
-	// 对齐 Python: _expand_relations 查询 Entity 集合的 relations 字段
+	// Python: _expand_relations 查询 Entity 集合的 relations 字段
 	relationCol := column.NewColumnVarCharArray("relations", [][]string{{"r1", "r2"}})
 	uuidCol := column.NewColumnVarChar("uuid", []string{"e1"})
 	fake.queryResult = milvusclient.ResultSet{

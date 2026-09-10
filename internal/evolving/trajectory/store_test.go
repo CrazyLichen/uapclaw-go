@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── InMemoryTrajectoryStore 测试 ────────────────────────────
@@ -150,7 +152,7 @@ func TestFileTrajectoryStore_保存和加载(t *testing.T) {
 				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
 					Model:    "qwen-max",
-					Messages: []map[string]any{{"role": "user", "content": "hello"}},
+					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")},
 					Response: map[string]any{"role": "assistant", "content": "hi"},
 				},
 				StartTimeMs: 1000,
@@ -275,7 +277,7 @@ func TestTrajectoryToDict(t *testing.T) {
 				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
 					Model:    "qwen-max",
-					Messages: []map[string]any{{"role": "user", "content": "hello"}},
+					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")},
 				},
 			},
 		},
@@ -537,7 +539,7 @@ func TestRoundTrip(t *testing.T) {
 				EndTimeMs:   2000,
 				Detail: &LLMCallDetail{
 					Model:    "qwen-max",
-					Messages: []map[string]any{{"role": "user", "content": "hello"}},
+					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")},
 					Response: map[string]any{"role": "assistant", "content": "hi"},
 					Tools:    []map[string]any{{"type": "function", "function": map[string]any{"name": "search"}}},
 					Usage:    map[string]any{"prompt_tokens": float64(10), "completion_tokens": float64(5)},
@@ -587,7 +589,7 @@ func TestRoundTrip(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "qwen-max", llmDetail.Model)
 	assert.Len(t, llmDetail.Messages, 1)
-	assert.Equal(t, "user", llmDetail.Messages[0]["role"])
+	assert.Equal(t, "user", llmDetail.Messages[0].GetRole().String())
 	assert.Equal(t, "assistant", llmDetail.Response["role"])
 	assert.NotNil(t, llmDetail.Usage)
 

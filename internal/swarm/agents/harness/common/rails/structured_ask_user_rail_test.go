@@ -248,7 +248,7 @@ func TestResolveStructuredInterrupt_dict输入无answers键(t *testing.T) {
 		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}]}`,
 	}
 
-	// 对齐 Python: Frontend sends answers as {question: selected_option}
+	// Python: Frontend sends answers as {question: selected_option}
 	userInput := map[string]any{
 		"Q1": "选项A",
 	}
@@ -271,7 +271,7 @@ func TestResolveStructuredInterrupt_AskUserPayload输入(t *testing.T) {
 		Arguments: `{"questions": [{"question": "Q1", "header": "H1"}]}`,
 	}
 
-	// 对齐 Python: isinstance(user_input, AskUserPayload)
+	// Python: isinstance(user_input, AskUserPayload)
 	userInput := &interrupt.AskUserPayload{
 		Answers: map[string]string{"Q1": "回答1"},
 	}
@@ -374,7 +374,7 @@ func TestInit_正常注册(t *testing.T) {
 		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	assert.Len(t, r.structuredTools, 1)
 	assert.Equal(t, "ask_user", r.structuredTools[0].Card().Name)
@@ -388,7 +388,7 @@ func TestInit_空语言从Agent获取(t *testing.T) {
 		sb:   &fakeSystemPromptBuilder{language: "en"},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	assert.Len(t, r.structuredTools, 1)
 	// 工具描述应为英文
@@ -402,7 +402,7 @@ func TestInit_空语言无Builder默认中文(t *testing.T) {
 		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	assert.Contains(t, r.structuredTools[0].Card().Description, "结构化选项")
 }
@@ -412,7 +412,7 @@ func TestInit_无AgentID(t *testing.T) {
 	r := NewStructuredAskUserRail("cn")
 	agent := &fakeBaseAgent{}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	// 工具 ID 应包含 "ask_user_"（使用 UUID 代替 agentID）
 	assert.Contains(t, r.structuredTools[0].Card().ID, "ask_user_")
@@ -427,7 +427,7 @@ func TestUninit_正常注销(t *testing.T) {
 		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	assert.Len(t, r.structuredTools, 1)
 
@@ -460,7 +460,7 @@ func TestGetStructuredTools_初始化后(t *testing.T) {
 		card: &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	tools := r.GetStructuredTools()

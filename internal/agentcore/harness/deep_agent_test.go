@@ -2355,7 +2355,7 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRail) Init(_ agentinterfaces.BaseAgent) error {
+func (r *fakeAgentRail) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
 	r.initCalled = true
 	return nil
 }
@@ -2430,7 +2430,7 @@ func (r *fakeAgentRail) OnToolException(_ context.Context, _ *agentinterfaces.Ag
 var _ agentinterfaces.AgentRail = (*fakeAgentRail)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) Init(_ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithType) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
@@ -2497,7 +2497,7 @@ func (r *fakeAgentRailWithType) GetCallbacks() map[agentinterfaces.AgentCallback
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) Init(_ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithType2) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
@@ -2564,7 +2564,7 @@ func (r *fakeAgentRailWithType2) GetCallbacks() map[agentinterfaces.AgentCallbac
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType2)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) Init(_ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithCallbacks) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
@@ -2644,7 +2644,7 @@ func makeTestCard(id, name string) *agentschema.AgentCard {
 }
 
 // TestDeepAgent_hotReloadModel_完整热更新 测试 hotReloadModel 完整路径
-// 对齐 Python: DeepAgent._hot_reload_model(config) (line 291)
+// Python: DeepAgent._hot_reload_model(config) (line 291)
 func TestDeepAgent_hotReloadModel_完整热更新(t *testing.T) {
 	card := makeTestCard("deep-1", "test-deep")
 	agent := NewDeepAgent(card)

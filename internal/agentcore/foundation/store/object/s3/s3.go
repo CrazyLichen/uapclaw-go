@@ -22,12 +22,12 @@ import (
 // S3ClientConfig S3 客户端特定配置
 //
 // 在 ObjectStorageConfig 基础上增加 S3 SDK 特有的配置项。
-// 对应 Python 端 boto3 Config(signature_version="s3v4", s3={"payload_signing_enabled": False})
+// Python: 端 boto3 Config(signature_version="s3v4", s3={"payload_signing_enabled": False})
 type S3ClientConfig struct {
 	// ObjectStorageConfig 基础对象存储配置
 	objectpkg.ObjectStorageConfig
 	// PayloadSigningEnabled 是否签名 payload，默认 false
-	// 对应 Python payload_signing_enabled=False，当为 false 时不签名请求体
+	// Python: payload_signing_enabled=False，当为 false 时不签名请求体
 	PayloadSigningEnabled bool
 }
 
@@ -37,7 +37,7 @@ type S3ClientConfig struct {
 // 客户端为长生命周期，并发安全，底层连接池自动管理。
 // 使用分段上传（Multipart Upload）支持大文件上传。
 //
-// 对应 Python: openjiuwen/core/foundation/store/object/aioboto_storage_client.py
+// Python: openjiuwen/core/foundation/store/object/aioboto_storage_client.py
 type S3Client struct {
 	// client S3 服务客户端
 	client *s3.Client
@@ -119,7 +119,7 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 
 	// G-29: 实现 payload_signing_enabled=False
 	// 当 PayloadSigningEnabled 为 false 时，使用 UNSIGNED-PAYLOAD 签名
-	// 对齐 Python: Config(s3={"payload_signing_enabled": False})
+	// Python: Config(s3={"payload_signing_enabled": False})
 	if !cfg.PayloadSigningEnabled {
 		clientOpts = append(clientOpts, s3.WithAPIOptions(
 			v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware,
@@ -143,7 +143,7 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 
 // CreateBucket 创建新的对象存储桶
 //
-// 对应 Python: AioBotoClient.create_bucket
+// Python: AioBotoClient.create_bucket
 func (c *S3Client) CreateBucket(ctx context.Context, bucketName string, location string) error {
 	input := &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
@@ -178,7 +178,7 @@ func (c *S3Client) CreateBucket(ctx context.Context, bucketName string, location
 
 // DeleteBucket 删除已有的对象存储桶
 //
-// 对应 Python: AioBotoClient.delete_bucket
+// Python: AioBotoClient.delete_bucket
 func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 	_, err := c.client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 		Bucket: aws.String(bucketName),
@@ -205,7 +205,7 @@ func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 //
 // 使用分段上传（Multipart Upload），大文件自动分片，对应 Python upload_fileobj。
 //
-// 对应 Python: AioBotoClient.upload_file
+// Python: AioBotoClient.upload_file
 func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName string, filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -274,7 +274,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 
 // DownloadFile 从对象存储下载文件到本地
 //
-// 对应 Python: AioBotoClient.download_file
+// Python: AioBotoClient.download_file
 func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectName string, filePath string) error {
 	result, err := c.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
@@ -339,7 +339,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 
 // DeleteObject 删除对象存储中的对象
 //
-// 对应 Python: AioBotoClient.delete_object
+// Python: AioBotoClient.delete_object
 func (c *S3Client) DeleteObject(ctx context.Context, bucketName string, objectName string) error {
 	_, err := c.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(bucketName),
@@ -369,7 +369,7 @@ func (c *S3Client) DeleteObject(ctx context.Context, bucketName string, objectNa
 // ListObjects 列出指定前缀的对象
 //
 // 不传 WithMaxObjects 时默认返回最多 100 个对象。
-// 对应 Python: AioBotoClient.list_objects
+// Python: AioBotoClient.list_objects
 func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPrefix string, opts ...objectpkg.ListOption) ([]map[string]any, error) {
 	listOpts := objectpkg.NewListOptions(opts...)
 

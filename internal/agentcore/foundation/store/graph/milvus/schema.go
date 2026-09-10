@@ -42,7 +42,7 @@ const (
 // 如果集合不存在则创建，已存在则跳过。
 // 创建集合时会同时构建索引和加载集合。
 //
-// 对应 Python: generate_milvus_schema.py (ensure_collections)
+// Python: generate_milvus_schema.py (ensure_collections)
 func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) error {
 	collections := []struct {
 		name      string

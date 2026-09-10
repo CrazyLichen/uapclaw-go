@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// 对齐 Python L140-162: exit_plan_mode 中英文消息
+// Python: L140-162: exit_plan_mode 中英文消息
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -33,7 +33,7 @@ var (
 
 // NewExitPlanModeTool 创建 exit_plan_mode 工具实例。
 //
-// 对齐 Python: ExitPlanModeTool.__init__() L326-348 + invoke() L350-378
+// Python: ExitPlanModeTool.__init__() L326-348 + invoke() L350-378
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
@@ -47,7 +47,7 @@ func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID
 			return map[string]any{"error": "exit_plan_mode 需要 session"}, nil
 		}
 
-		// 对齐 Python L363-365: 读取 plan 文件内容
+		// Python: L363-365: 读取 plan 文件内容
 		planPath := agent.GetPlanFilePath(sess)
 		planText := ""
 		if planPath != "" {
@@ -59,13 +59,13 @@ func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID
 
 		planPathStr := formatPlanPath(planPath)
 
-		// 对齐 Python L370-371: 空计划
+		// Python: L370-371: 空计划
 		if strings.TrimSpace(planText) == "" {
 			msg := strings.ReplaceAll(exitPlanEmptyMsg[lang], "{plan_path}", planPathStr)
 			return map[string]any{"plan_path": planPath, "message": msg}, nil
 		}
 
-		// 对齐 Python L373-375: 有内容 → 恢复模式 + 返回前缀 + 计划全文
+		// Python: L373-375: 有内容 → 恢复模式 + 返回前缀 + 计划全文
 		agent.RestoreModeAfterPlanExit(sess)
 		prefix := strings.ReplaceAll(exitPlanWithContentPrefix[lang], "{plan_path}", planPathStr)
 

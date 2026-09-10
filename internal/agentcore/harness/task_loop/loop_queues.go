@@ -9,7 +9,7 @@ import (
 // LoopQueues 双队列缓冲，桥接 EventHandler 与 Executor/Loop。
 // steering: 引导指令队列，由 executor 每次内部 invoke 前排空
 // followUp: 后续消息队列，由外层任务循环每次迭代完成后排空
-// 对齐 Python: LoopQueues
+// Python: LoopQueues
 type LoopQueues struct {
 	// steering 引导指令队列
 	steering chan string
@@ -30,7 +30,7 @@ const defaultQueueCap = 64
 
 // NewLoopQueues 创建双队列缓冲。
 // cap 为各队列缓冲区大小，若 cap <= 0 则使用默认值 64。
-// 对齐 Python: LoopQueues.__init__
+// Python: LoopQueues.__init__
 func NewLoopQueues(cap int) *LoopQueues {
 	if cap <= 0 {
 		cap = defaultQueueCap
@@ -42,7 +42,7 @@ func NewLoopQueues(cap int) *LoopQueues {
 }
 
 // PushSteer 非阻塞推入引导指令。
-// 对齐 Python: LoopQueues.push_steer (put_nowait)
+// Python: LoopQueues.push_steer (put_nowait)
 // 满队列时丢弃并记录日志。
 func (q *LoopQueues) PushSteer(msg string) {
 	select {
@@ -56,7 +56,7 @@ func (q *LoopQueues) PushSteer(msg string) {
 }
 
 // PushFollowUp 非阻塞推入后续消息。
-// 对齐 Python: LoopQueues.push_follow_up (put_nowait)
+// Python: LoopQueues.push_follow_up (put_nowait)
 // 满队列时丢弃并记录日志。
 func (q *LoopQueues) PushFollowUp(msg string) {
 	select {
@@ -70,13 +70,13 @@ func (q *LoopQueues) PushFollowUp(msg string) {
 }
 
 // HasFollowUp 非阻塞检查是否有待处理的后续消息。
-// 对齐 Python: LoopQueues.has_follow_up
+// Python: LoopQueues.has_follow_up
 func (q *LoopQueues) HasFollowUp() bool {
 	return len(q.followUp) > 0
 }
 
 // DrainSteering 非阻塞一次性排空所有引导指令。
-// 对齐 Python: LoopQueues.drain_steering
+// Python: LoopQueues.drain_steering
 func (q *LoopQueues) DrainSteering() []string {
 	msgs := make([]string, 0, len(q.steering))
 	for {
@@ -90,7 +90,7 @@ func (q *LoopQueues) DrainSteering() []string {
 }
 
 // DrainFollowUp 非阻塞一次性排空所有后续消息。
-// 对齐 Python: LoopQueues.drain_follow_up
+// Python: LoopQueues.drain_follow_up
 func (q *LoopQueues) DrainFollowUp() []string {
 	msgs := make([]string, 0, len(q.followUp))
 	for {

@@ -14,7 +14,7 @@ import (
 
 // BaseGraphStore 图存储基础接口
 //
-// 对应 Python: GraphStore Protocol (base_graph_store.py)
+// Python: GraphStore Protocol (base_graph_store.py)
 type BaseGraphStore interface {
 	// Config 获取图存储配置
 	Config() *GraphConfig

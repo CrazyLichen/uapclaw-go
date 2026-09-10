@@ -20,7 +20,7 @@ import (
 
 // SimpleEval 评估包装器，生成函数调用并评估准确性和输出有效性。
 //
-// 对应 Python: SimpleEval
+// Python: SimpleEval
 type SimpleEval struct {
 	// apiWrapper API 调用封装
 	apiWrapper APIWrapperFunc
@@ -36,7 +36,7 @@ type SimpleEval struct {
 
 // EvalResult 评估结果。
 //
-// 对齐 Python: SimpleEval.__call__ 返回值
+// Python: SimpleEval.__call__ 返回值
 type EvalResult struct {
 	// ScoreAvg 平均分
 	ScoreAvg float64 `json:"score_avg"`
@@ -52,7 +52,7 @@ type EvalResult struct {
 
 // EvalItemResult 单个示例评估结果。
 //
-// 对齐 Python: SimpleEval._evaluate_single_example 返回值
+// Python: SimpleEval._evaluate_single_example 返回值
 type EvalItemResult struct {
 	// Instruction 指令
 	Instruction string `json:"instruction"`
@@ -88,7 +88,7 @@ type EvalError struct {
 
 // ExampleTuple 示例元组 (instruction, fn_call, fn_output, answer)。
 //
-// 对齐 Python: examples: List[Tuple[str, Any, str, str]]
+// Python: examples: List[Tuple[str, Any, str, str]]
 type ExampleTuple struct {
 	// Instruction 指令
 	Instruction string
@@ -110,7 +110,7 @@ type ExampleTuple struct {
 
 // NewSimpleEval 创建 SimpleEval 实例。
 //
-// 对齐 Python: SimpleEval.__init__(api_wrapper, config, fn_call_weight, output_effectiveness_weight)
+// Python: SimpleEval.__init__(api_wrapper, config, fn_call_weight, output_effectiveness_weight)
 func NewSimpleEval(
 	apiWrapper APIWrapperFunc,
 	config map[string]any,
@@ -118,7 +118,7 @@ func NewSimpleEval(
 	outputEffectivenessWeight float64,
 	model *llm.Model,
 ) *SimpleEval {
-	// 对齐 Python: if abs(fn_call_weight + output_effectiveness_weight - 1.0) > 1e-6: raise ValueError
+	// Python: if abs(fn_call_weight + output_effectiveness_weight - 1.0) > 1e-6: raise ValueError
 	if math.Abs(fnCallWeight+outputEffectivenessWeight-1.0) > 1e-6 {
 		panic(fmt.Sprintf("fn_call_weight 和 output_effectiveness_weight 之和必须为 1.0，得到 %f+%f=%f",
 			fnCallWeight, outputEffectivenessWeight, fnCallWeight+outputEffectivenessWeight))
@@ -134,7 +134,7 @@ func NewSimpleEval(
 
 // Eval 评估工具描述。
 //
-// 对齐 Python: SimpleEval.__call__(tool, description, examples, runs)
+// Python: SimpleEval.__call__(tool, description, examples, runs)
 //
 //	for run in range(runs):
 //	    for i, (instruction, expected_fn_call, fn_output, answer) in enumerate(examples):
@@ -161,7 +161,7 @@ func (e *SimpleEval) Eval(
 		for i, example := range examples {
 			result, err := e.evaluateSingleExample(ctx, tool, description, example, i)
 			if err != nil {
-				// 对齐 Python: ValueError 传播中断整个评估
+				// Python: ValueError 传播中断整个评估
 				logger.Error(logComponent).
 					Str("method", "Eval").
 					Int("example_id", i).
@@ -174,7 +174,7 @@ func (e *SimpleEval) Eval(
 			totalOutputScore += result.OutputEffectivenessScore
 		}
 
-		// 对齐 Python: avg_fn_call_score = total_fn_call_score / total_count
+		// Python: avg_fn_call_score = total_fn_call_score / total_count
 		avgFnCallScore := 0.0
 		if totalCount > 0 {
 			avgFnCallScore = totalFnCallScore / float64(totalCount)
@@ -184,14 +184,14 @@ func (e *SimpleEval) Eval(
 			avgOutputScore = totalOutputScore / float64(totalCount)
 		}
 
-		// 对齐 Python: total_score = fn_call_weight * avg_fn_call_score + output_effectiveness_weight * avg_output_score
+		// Python: total_score = fn_call_weight * avg_fn_call_score + output_effectiveness_weight * avg_output_score
 		totalScore := e.fnCallWeight*avgFnCallScore + e.outputEffectivenessWeight*avgOutputScore
 		allScores = append(allScores, totalScore)
 		allFnCallScores = append(allFnCallScores, avgFnCallScore)
 		allOutputScores = append(allOutputScores, avgOutputScore)
 	}
 
-	// 对齐 Python: np.mean(all_scores) * 100.0, np.std(all_scores) * 100.0
+	// Python: np.mean(all_scores) * 100.0, np.std(all_scores) * 100.0
 	return &EvalResult{
 		ScoreAvg:            mean(allScores) * 100.0,
 		ScoreStd:            std(allScores) * 100.0,
@@ -205,7 +205,7 @@ func (e *SimpleEval) Eval(
 
 // evaluateFunctionCallAccuracy 评估函数调用准确性。
 //
-// 对齐 Python: SimpleEval._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
+// Python: SimpleEval._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 //
 //   - 函数名匹配权重 0.3
 //   - 参数匹配权重 0.7（按参数数量均分）
@@ -214,18 +214,18 @@ func (e *SimpleEval) evaluateFunctionCallAccuracy(generatedFnCall, expectedFnCal
 	score := 0.0
 	maxScore := 0.0
 
-	// 对齐 Python: 检查函数名（30% 权重）
+	// Python: 检查函数名（30% 权重）
 	maxScore += 0.3
 	if generatedFnCall["name"] == expectedFnCall["name"] {
 		score += 0.3
 	}
 
-	// 对齐 Python: 检查参数（70% 权重）
+	// Python: 检查参数（70% 权重）
 	genParams := getArgsMap(generatedFnCall)
 	expParams := getArgsMap(expectedFnCall)
 
 	if len(expParams) == 0 && len(genParams) == 0 {
-		// 对齐 Python: 两个参数都为空
+		// Python: 两个参数都为空
 		score += 0.7
 		maxScore += 0.7
 	} else if len(expParams) > 0 {
@@ -251,14 +251,14 @@ func (e *SimpleEval) evaluateFunctionCallAccuracy(generatedFnCall, expectedFnCal
 
 // compareParameterValues 比较参数值，支持类型容忍。
 //
-// 对齐 Python: SimpleEval._compare_parameter_values(actual, expected)
+// Python: SimpleEval._compare_parameter_values(actual, expected)
 func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
-	// 对齐 Python: if actual == expected: return True
+	// Python: if actual == expected: return True
 	if actual == expected {
 		return true
 	}
 
-	// 对齐 Python: 尝试数值比较
+	// Python: 尝试数值比较
 	if isNumeric(actual) && isNumeric(expected) {
 		actFloat := toFloat(actual)
 		expFloat := toFloat(expected)
@@ -267,7 +267,7 @@ func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
 		}
 	}
 
-	// 对齐 Python: 尝试字符串比较
+	// Python: 尝试字符串比较
 	actStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", actual)))
 	expStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", expected)))
 	return actStr == expStr
@@ -275,7 +275,7 @@ func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
 
 // simpleOutputComparison 简单输出比较（兜底）。
 //
-// 对齐 Python: SimpleEval._simple_output_comparison(execution_result, expected_answer)
+// Python: SimpleEval._simple_output_comparison(execution_result, expected_answer)
 func (e *SimpleEval) simpleOutputComparison(executionResult any, expectedAnswer string) float64 {
 	if executionResult == nil {
 		return 0.0
@@ -293,21 +293,21 @@ func (e *SimpleEval) simpleOutputComparison(executionResult any, expectedAnswer 
 	resultLower := strings.TrimSpace(strings.ToLower(resultStr))
 	answerLower := strings.TrimSpace(strings.ToLower(expectedAnswer))
 
-	// 对齐 Python: if expected_answer.lower().strip() in result_str.lower().strip(): return 1.0
+	// Python: if expected_answer.lower().strip() in result_str.lower().strip(): return 1.0
 	if strings.Contains(resultLower, answerLower) {
 		return 1.0
 	}
-	// 对齐 Python: elif result_str.lower().strip() in expected_answer.lower().strip(): return 0.8
+	// Python: elif result_str.lower().strip() in expected_answer.lower().strip(): return 0.8
 	if strings.Contains(answerLower, resultLower) {
 		return 0.8
 	}
-	// 对齐 Python: else: return 0.3
+	// Python: else: return 0.3
 	return 0.3
 }
 
 // evaluateSingleExample 评估单个示例。
 //
-// 对齐 Python: SimpleEval._evaluate_single_example(example)
+// Python: SimpleEval._evaluate_single_example(example)
 func (e *SimpleEval) evaluateSingleExample(
 	ctx context.Context,
 	tool map[string]any,
@@ -315,7 +315,7 @@ func (e *SimpleEval) evaluateSingleExample(
 	example ExampleTuple,
 	exampleID int,
 ) (EvalItemResult, error) {
-	// 对齐 Python: generated_fn_call = self._generate_function_call(tool, description, instruction)
+	// Python: generated_fn_call = self._generate_function_call(tool, description, instruction)
 	generatedFnCall, err := e.generateFunctionCall(ctx, tool, description, example.Instruction)
 	if err != nil {
 		logger.Error(logComponent).
@@ -323,14 +323,14 @@ func (e *SimpleEval) evaluateSingleExample(
 			Int("example_id", exampleID).
 			Err(err).
 			Msg("生成函数调用出错")
-		// 对齐 Python: generateFunctionCall 失败时返回 error
+		// Python: generateFunctionCall 失败时返回 error
 		return EvalItemResult{}, fmt.Errorf("生成函数调用出错: %w", err)
 	}
 
-	// 对齐 Python: fn_call_score = self._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
+	// Python: fn_call_score = self._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 	fnCallScore := e.evaluateFunctionCallAccuracy(generatedFnCall, example.FnCall)
 
-	// 对齐 Python: 执行生成的函数调用
+	// Python: 执行生成的函数调用
 	var executionResult any
 	var executionError any
 	var errors []EvalError
@@ -358,19 +358,19 @@ func (e *SimpleEval) evaluateSingleExample(
 			})
 		}
 	} else {
-		// 对齐 Python: raise ValueError("Missing required input: api_wrapper")
+		// Python: raise ValueError("Missing required input: api_wrapper")
 		logger.Error(logComponent).
 			Str("method", "evaluateSingleExample").
 			Msg("缺少必需输入: api_wrapper")
 		return EvalItemResult{}, fmt.Errorf("缺少必需输入: api_wrapper")
 	}
 
-	// 对齐 Python: output_effectiveness_score = self._evaluate_output_effectiveness(...)
+	// Python: output_effectiveness_score = self._evaluate_output_effectiveness(...)
 	outputEffectivenessScore := e.evaluateOutputEffectiveness(
 		ctx, example.Instruction, executionResult, executionError, example.Answer,
 	)
 
-	// 对齐 Python: weighted_score = fn_call_weight * fn_call_score + output_effectiveness_weight * output_effectiveness_score
+	// Python: weighted_score = fn_call_weight * fn_call_score + output_effectiveness_weight * output_effectiveness_score
 	weightedScore := e.fnCallWeight*fnCallScore + e.outputEffectivenessWeight*outputEffectivenessScore
 
 	return EvalItemResult{
@@ -389,7 +389,7 @@ func (e *SimpleEval) evaluateSingleExample(
 
 // generateFunctionCall 使用 LLM Function Calling 模式生成函数调用。
 //
-// 对齐 Python: SimpleEval._generate_function_call(tool, description, instruction)
+// Python: SimpleEval._generate_function_call(tool, description, instruction)
 func (e *SimpleEval) generateFunctionCall(
 	ctx context.Context,
 	tool map[string]any,
@@ -400,13 +400,13 @@ func (e *SimpleEval) generateFunctionCall(
 		return nil, fmt.Errorf("model 为 nil")
 	}
 
-	// 对齐 Python: tool schema 处理
+	// Python: tool schema 处理
 	toolForCall := utils.DeepCopyMap(tool)
 	if _, hasType := toolForCall["type"]; !hasType {
 		toolForCall["type"] = "function"
 	}
 
-	// 对齐 Python: 如果 description 是 JSON 且包含 function 键，提取
+	// Python: 如果 description 是 JSON 且包含 function 键，提取
 	if descStr, ok := toolForCall["description"].(string); ok {
 		var descJSON map[string]any
 		if jsonErr := json.Unmarshal([]byte(descStr), &descJSON); jsonErr == nil {
@@ -430,7 +430,7 @@ func (e *SimpleEval) generateFunctionCall(
 		getToolParameters(toolForCall),
 	)
 
-	// 对齐 Python: 使用 Function Calling
+	// Python: 使用 Function Calling
 	modelName := getConfigString(e.config, "eval_model_id")
 	messages := model_clients.NewMessagesParam(
 		llmschema.NewUserMessage(instruction),
@@ -443,14 +443,14 @@ func (e *SimpleEval) generateFunctionCall(
 		return nil, fmt.Errorf("函数调用失败: %w", err)
 	}
 
-	// 对齐 Python: api_response.tool_calls
+	// Python: api_response.tool_calls
 	toolCalls := response.ToolCalls
 	if len(toolCalls) == 0 {
 		return nil, fmt.Errorf("LLM 未生成任何工具调用")
 	}
 
-	// 对齐 Python: fn_args = api_response.tool_calls[0].arguments
-	// 对齐 Python: function_name = api_response.tool_calls[0].name
+	// Python: fn_args = api_response.tool_calls[0].arguments
+	// Python: function_name = api_response.tool_calls[0].name
 	tc := toolCalls[0]
 	var args map[string]any
 	if tc.Arguments != "" {
@@ -467,7 +467,7 @@ func (e *SimpleEval) generateFunctionCall(
 
 // evaluateOutputEffectiveness 评估输出有效性。
 //
-// 对齐 Python: SimpleEval._evaluate_output_effectiveness(instruction, execution_result, execution_error, expected_answer)
+// Python: SimpleEval._evaluate_output_effectiveness(instruction, execution_result, execution_error, expected_answer)
 func (e *SimpleEval) evaluateOutputEffectiveness(
 	ctx context.Context,
 	instruction string,
@@ -475,12 +475,12 @@ func (e *SimpleEval) evaluateOutputEffectiveness(
 	executionError any,
 	expectedAnswer string,
 ) float64 {
-	// 对齐 Python: if execution_error: return 0.0
+	// Python: if execution_error: return 0.0
 	if executionError != nil {
 		return 0.0
 	}
 
-	// 对齐 Python: prompt 一比一复刻
+	// Python: prompt 一比一复刻
 	execResultJSON, _ := json.MarshalIndent(executionResult, "", "  ")
 	prompt := fmt.Sprintf(`
 Evaluate whether the function execution result effectively solves the user's problem.
@@ -517,14 +517,14 @@ Respond with only a number between 0 and 100. Do not include explainations.
 		return e.simpleOutputComparison(executionResult, expectedAnswer)
 	}
 
-	// 对齐 Python: score = float(response.strip())
+	// Python: score = float(response.strip())
 	score := 0.0
 	response = strings.TrimSpace(response)
 	if _, parseErr := fmt.Sscanf(response, "%f", &score); parseErr != nil {
 		return e.simpleOutputComparison(executionResult, expectedAnswer)
 	}
 
-	// 对齐 Python: min(max(score, 0.0), 100.0) / 100.0
+	// Python: min(max(score, 0.0), 100.0) / 100.0
 	if score < 0 {
 		score = 0
 	}

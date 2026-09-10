@@ -54,7 +54,7 @@ func (b *BaseExtensionImpl) Metadata() *extensions.ExtensionMetadata {
 }
 
 // SetExtensionDir 设置扩展目录，同时清除 metadata 和 config 缓存，
-// 对齐 Python BaseExtension.set_extension_dir(path)
+// Python: BaseExtension.set_extension_dir(path)
 func (b *BaseExtensionImpl) SetExtensionDir(path string) {
 	b.extensionDir = &path
 	b.metadataCache = nil
@@ -62,7 +62,7 @@ func (b *BaseExtensionImpl) SetExtensionDir(path string) {
 }
 
 // LoadMetadataFromYAML 从扩展目录的 extension.yaml 加载元数据，
-// 对齐 Python BaseExtension._load_metadata_from_yaml()
+// Python: BaseExtension._load_metadata_from_yaml()
 func (b *BaseExtensionImpl) LoadMetadataFromYAML() (*extensions.ExtensionMetadata, error) {
 	if b.extensionDir == nil {
 		return nil, fmt.Errorf("无法确定扩展目录，请在子类中设置目录或调用 SetExtensionDir")
@@ -104,7 +104,7 @@ func (b *BaseExtensionImpl) LoadMetadataFromYAML() (*extensions.ExtensionMetadat
 }
 
 // LoadConfigFromYAML 从扩展目录的 config.yaml 加载配置，
-// 对齐 Python BaseExtension._load_config_from_yaml()
+// Python: BaseExtension._load_config_from_yaml()
 // 文件不存在时返回 nil
 func (b *BaseExtensionImpl) LoadConfigFromYAML() map[string]any {
 	if b.configCache != nil {

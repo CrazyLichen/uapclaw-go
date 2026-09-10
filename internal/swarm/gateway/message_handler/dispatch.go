@@ -23,18 +23,18 @@ import (
 
 // prepareAgentDispatchMessage 准备发往 AgentServer 的消息。
 //
-// 对齐 Python _prepare_agent_dispatch_message (L1287-1312)：
+// Python: _prepare_agent_dispatch_message (L1287-1312)：
 // 当前实现为 identity return（直接返回 msg），ACP session alias 处理待后续回填。
 func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
 	// TODO(#ACP): ACP session alias 处理（等 ACP 章节回填）
-	// 对齐 Python: ACP渠道检测
+	// Python: ACP渠道检测
 	//     Python: msg = await self._ensure_acp_agent_session(msg)
 	return msg
 }
 
 // shouldEmitProcessingStatusForStream 判断是否需要为流式请求发送 processing_status 事件。
 //
-// 对齐 Python _should_emit_processing_status_for_stream (L1866-1890)：
+// Python: _should_emit_processing_status_for_stream (L1866-1890)：
 // 仅 chat.send 请求发送 processing_status，其他请求不发送。
 func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Message) bool {
 	return msg.ReqMethod == schema.ReqMethodChatSend
@@ -42,7 +42,7 @@ func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Messag
 
 // nonStreamRPCMayRunParallel 判断非流式 RPC 是否可以并行执行，避免慢 RPC 阻塞队列。
 //
-// 对齐 Python _non_stream_rpc_may_run_parallel (L1837-1865)：
+// Python: _non_stream_rpc_may_run_parallel (L1837-1865)：
 // chat.send / chat.cancel / chat.resume / chat.user_answer 必须串行，其他非流式 RPC 可并行。
 func (mh *MessageHandler) nonStreamRPCMayRunParallel(env *e2a.E2AEnvelope) bool {
 	if env.IsStream {

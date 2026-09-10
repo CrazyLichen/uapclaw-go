@@ -20,7 +20,7 @@ import (
 
 // SubagentSpec 子 Agent 规格接口。
 // 允许 *SubAgentConfig 和 *DeepAgent 以统一类型返回。
-// 对齐 Python: _find_subagent_spec 返回 Optional[SubAgentConfig | DeepAgent]。
+// Python: _find_subagent_spec 返回 Optional[SubAgentConfig | DeepAgent]。
 // 放在 schema 包以避免 schema↔interfaces 循环依赖。
 type SubagentSpec interface {
 	// SpecName 返回规格名称，用于匹配 subagent_type。
@@ -94,7 +94,7 @@ type SubAgentConfig struct {
 	// SystemPrompt 系统提示词
 	SystemPrompt string `json:"system_prompt"`
 	// Tools 工具卡片列表
-	// 对齐 Python: SubAgentConfig.tools 中 List[ToolCard] 部分
+	// Python: SubAgentConfig.tools 中 List[ToolCard] 部分
 	Tools []*tool.ToolCard `json:"tools,omitempty"`
 	// ToolInstances 工具实例列表，对齐 Python: SubAgentConfig.tools 中 List[Tool] 部分
 	// 运行时注入，不从 YAML 反序列化
@@ -132,7 +132,7 @@ type SubAgentConfig struct {
 }
 
 // SubagentCreateParams 子 Agent 创建参数。
-// 对齐 Python: DeepAgent.create_subagent 中 create_kwargs 字典。
+// Python: DeepAgent.create_subagent 中 create_kwargs 字典。
 // 替代 map[string]any，提供类型安全的参数传递。
 type SubagentCreateParams struct {
 	// Model 模型实例
@@ -142,7 +142,7 @@ type SubagentCreateParams struct {
 	// SystemPrompt 系统提示词
 	SystemPrompt string
 	// Tools 工具卡片列表
-	// 对齐 Python: create_kwargs["tools"] 中 List[ToolCard] 部分
+	// Python: create_kwargs["tools"] 中 List[ToolCard] 部分
 	Tools []*tool.ToolCard
 	// ToolInstances 工具实例列表，对齐 Python: create_kwargs["tools"] 中 List[Tool] 部分
 	ToolInstances []tool.Tool
@@ -176,7 +176,7 @@ type SubagentCreateParams struct {
 	EnablePlanMode bool
 	// RestrictToWorkDir 是否限制在工作目录。
 	// 使用 *bool 指针以区分"未设置"(nil)和"显式设为 false"。
-	// 对齐 Python: restrict_to_work_dir 默认 True，但只有显式传参时才覆盖。
+	// Python: restrict_to_work_dir 默认 True，但只有显式传参时才覆盖。
 	RestrictToWorkDir *bool
 }
 
@@ -199,7 +199,7 @@ type DeepAgentConfig struct {
 	// MaxIterations 单次调用最大 ReAct 迭代次数，0 表示使用默认值 15
 	MaxIterations int `json:"max_iterations,omitempty"`
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
-	// 对齐 Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
+	// Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
 	Subagents []SubagentSpec `json:"-"`
 	// Tools 挂载到 Agent 的工具卡片
 	Tools []*tool.ToolCard `json:"tools,omitempty"`
@@ -290,7 +290,7 @@ const (
 
 // SpecName 返回规格名称，用于子 Agent 匹配。
 // 实现 SubagentSpec 接口。
-// 对齐 Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
+// Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
 func (c *SubAgentConfig) SpecName() string {
 	if c.AgentCard == nil {
 		return ""
@@ -423,7 +423,7 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 }
 
 // NewDeepAgentConfig 创建带默认值的 DeepAgent 配置
-// 对齐 Python: DeepAgentConfig 字段默认值（max_iterations=15, completion_timeout=600.0 等）
+// Python: DeepAgentConfig 字段默认值（max_iterations=15, completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
 		AutoCreateWorkspace:           true,

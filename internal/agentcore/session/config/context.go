@@ -22,7 +22,7 @@ var envsContextKey envsContextKeyType
 
 // WithEnvs 将请求级环境变量注入到 context 中。
 // 优先级：os.Getenv > context.Value > 内置默认值。
-// 对应 Python: workflow_session_vars (contextvars.ContextVar)
+// Python: workflow_session_vars (contextvars.ContextVar)
 func WithEnvs(ctx context.Context, envs map[string]any) context.Context {
 	return context.WithValue(ctx, envsContextKey, envs)
 }

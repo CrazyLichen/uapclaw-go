@@ -10,7 +10,7 @@ import (
 
 // Intent 意图，描述用户对任务的操作意图。
 //
-// 对应 Python: openjiuwen/core/controller/schema/intent.py (Intent)
+// Python: openjiuwen/core/controller/schema/intent.py (Intent)
 type Intent struct {
 	// IntentType 意图类型
 	IntentType IntentType `json:"intent_type"`
@@ -41,7 +41,7 @@ type IntentOption func(*Intent)
 
 // IntentType 意图类型枚举，定义所有支持的用户意图。
 //
-// 对应 Python: openjiuwen/core/controller/schema/intent.py (IntentType)
+// Python: openjiuwen/core/controller/schema/intent.py (IntentType)
 type IntentType string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -72,7 +72,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntent 创建意图实例，初始化默认值并校验。
-// 对齐 Python: Intent.__init__ + _post_init + _validate
+// Python: Intent.__init__ + _post_init + _validate
 func NewIntent(intentType IntentType, event Event, opts ...IntentOption) (*Intent, error) {
 	i := &Intent{
 		IntentType: intentType,
@@ -93,7 +93,7 @@ func NewIntent(intentType IntentType, event Event, opts ...IntentOption) (*Inten
 }
 
 // Validate 校验意图字段是否满足类型约束。
-// 对齐 Python: Intent._validate
+// Python: Intent._validate
 func (i *Intent) Validate() error {
 	// 校验置信度范围
 	if i.Confidence < 0.0 || i.Confidence > 1.0 {

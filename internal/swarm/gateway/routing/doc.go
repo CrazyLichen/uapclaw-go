@@ -8,7 +8,7 @@
 //
 // RouteBinding 描述 WS 路径的消息处理策略，预留多路径框架（/ws、/acp、/tui）。
 //
-// 对齐 Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
+// Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
 //
 // 文件目录：
 //

@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelAllocator 模型分配器接口。
-// 对齐 Python: ModelAllocator Protocol
+// Python: ModelAllocator Protocol
 //
 // 实现封装从池中选取下一个条目的策略（轮询/按名/路由）。
 // 返回 nil 表示"无可用条目"——调用者回退到每 Agent 的模型配置。
@@ -25,7 +25,7 @@ type ModelAllocator interface {
 }
 
 // Allocation 模型分配结果。
-// 对齐 Python: Allocation (openjiuwen/agent_teams/models/allocator.py)
+// Python: Allocation (openjiuwen/agent_teams/models/allocator.py)
 //
 // 携带被选中的池条目以及持久化 DB 引用所需的位置信息。
 type Allocation struct {
@@ -36,7 +36,7 @@ type Allocation struct {
 }
 
 // RoundRobinModelAllocator 轮询分配器。
-// 对齐 Python: RoundRobinModelAllocator (allocator.py)
+// Python: RoundRobinModelAllocator (allocator.py)
 //
 // 每次调用 Allocate 返回下一个池条目，循环轮询，忽略 model_name。
 type RoundRobinModelAllocator struct {
@@ -51,7 +51,7 @@ type RoundRobinModelAllocator struct {
 }
 
 // ByModelNameAllocator 按名分配器。
-// 对齐 Python: ByModelNameAllocator (allocator.py)
+// Python: ByModelNameAllocator (allocator.py)
 //
 // 按模型名查找组，组内轮询。model_name 缺失或未知返回 nil。
 type ByModelNameAllocator struct {
@@ -64,7 +64,7 @@ type ByModelNameAllocator struct {
 }
 
 // RouterAllocator 路由分配器。
-// 对齐 Python: RouterAllocator (allocator.py)
+// Python: RouterAllocator (allocator.py)
 //
 // 单端点路由器，每个 model_name 出现一次。
 // Allocate("") → 首条目；Allocate(name) → 精确查找；空池 → 构造时返回 error。
@@ -89,13 +89,13 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ToTeamModelConfig 物化为 TeamModelConfig。
-// 对齐 Python: Allocation.to_team_model_config()
+// Python: Allocation.to_team_model_config()
 func (a Allocation) ToTeamModelConfig() TeamModelConfig {
 	return a.Entry.ToTeamModelConfig()
 }
 
 // ToDBRef 产生轻量级的 {model_name, model_index} 引用用于 DB 持久化。
-// 对齐 Python: Allocation.to_db_ref()
+// Python: Allocation.to_db_ref()
 func (a Allocation) ToDBRef() map[string]any {
 	return map[string]any{
 		"model_name":  a.Entry.ModelName,
@@ -315,7 +315,7 @@ func (a *RouterAllocator) LoadStateDict(state map[string]any) {
 }
 
 // BuildModelAllocatorForPool 根据模型池和策略构建分配器。⤴️ 9.64 回填完成
-// 对齐 Python: build_model_allocator(spec, team_spec)
+// Python: build_model_allocator(spec, team_spec)
 //
 // 此函数接受基本类型参数以避免 import 循环。
 // 调用者应从 TeamAgentSpec/TeamSpec 中提取 pool 和 strategy 传入。
@@ -346,7 +346,7 @@ func BuildModelAllocatorForPool(pool []ModelPoolEntry, strategy string, teamName
 }
 
 // ResolveMemberModelFromPool 从池中按引用解析成员模型。⤴️ 9.64 回填完成
-// 对齐 Python: resolve_member_model(team_spec, model_name, model_index)
+// Python: resolve_member_model(team_spec, model_name, model_index)
 //
 // 纯位置查找，不触碰分配器计数器。
 func ResolveMemberModelFromPool(pool []ModelPoolEntry, modelName string, modelIndex int) *TeamModelConfig {
@@ -368,7 +368,7 @@ func ResolveMemberModelFromPool(pool []ModelPoolEntry, modelName string, modelIn
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // poolDigest 计算池结构形状的稳定摘要。
-// 对齐 Python: _pool_digest(pool)
+// Python: _pool_digest(pool)
 func poolDigest(pool []ModelPoolEntry) string {
 	h := sha1.New()
 	for _, entry := range pool {
@@ -390,7 +390,7 @@ func buildGroups(pool []ModelPoolEntry) map[string][]ModelPoolEntry {
 }
 
 // groupIndexOf 返回 entry 在 group 中的引用位置。
-// 对齐 Python: _group_index_of(entry, group)
+// Python: _group_index_of(entry, group)
 func groupIndexOf(entry ModelPoolEntry, group []ModelPoolEntry) int {
 	for i, candidate := range group {
 		if entrySignature(entry) == entrySignature(candidate) && entry.ModelID == candidate.ModelID {

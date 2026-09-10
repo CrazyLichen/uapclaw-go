@@ -17,7 +17,7 @@ import (
 // APICallToExampleMethod Example Stage 方法。
 // 生成 API 调用示例，形成正负例集。实现 BeamSearchMethod 接口。
 //
-// 对应 Python: APICallToExampleMethod
+// Python: APICallToExampleMethod
 type APICallToExampleMethod struct {
 	BaseMethod
 	// runToolWithAPICall API 调用函数
@@ -40,7 +40,7 @@ type APICallToExampleMethod struct {
 
 // NewAPICallToExampleMethod 创建 APICallToExampleMethod 实例。
 //
-// 对齐 Python: APICallToExampleMethod(config, api_call_fn, eval_fn, api_keys=None, non_opt_params=[])
+// Python: APICallToExampleMethod(config, api_call_fn, eval_fn, api_keys=None, non_opt_params=[])
 //
 // 参数顺序对齐 pipeline.go 调用: NewAPICallToExampleMethod(config, model, callAPIFn, evalFn, nil, nil)
 func NewAPICallToExampleMethod(
@@ -65,7 +65,7 @@ func NewAPICallToExampleMethod(
 
 // Step 执行单步扩展，返回 output/data/score。
 //
-// 对齐 Python: APICallToExampleMethod.step(tool, prev_outputs, it)
+// Python: APICallToExampleMethod.step(tool, prev_outputs, it)
 //
 //  1. 获取原始描述
 //  2. 拒绝采样循环（num_init_loop 次）：生成 API 调用 → 执行 → 批判
@@ -81,17 +81,17 @@ func (m *APICallToExampleMethod) Step(
 ) (output map[string]any, data []string, score float64, err error) {
 	logger.Info(logComponent).Msg("在方法内部，尝试步进")
 
-	// 对齐 Python: prev_outputs = copy.copy(prev_outputs) if prev_outputs is not None else []
+	// Python: prev_outputs = copy.copy(prev_outputs) if prev_outputs is not None else []
 	prevOutputsCopy := make([]map[string]any, len(prevOutputs))
 	copy(prevOutputsCopy, prevOutputs)
 
-	// 对齐 Python: description = self.get_original_description(tool)
+	// Python: description = self.get_original_description(tool)
 	description := m.GetOriginalDescription(tool)
 	logger.Info(logComponent).
 		Str("description", description).
 		Msg("获取原始描述")
 
-	// 对齐 Python: tool_for_opt = copy.deepcopy(tool)
+	// Python: tool_for_opt = copy.deepcopy(tool)
 	toolForOpt := utils.DeepCopyMap(tool)
 	logger.Info(logComponent).
 		Str("tool_for_opt", fmt.Sprintf("%v", toolForOpt)).
@@ -120,7 +120,7 @@ func (m *APICallToExampleMethod) Step(
 			Str("fn_call", fmt.Sprintf("%v", fnCall)).
 			Msg("API 调用参数")
 
-		// 对齐 Python: tool_res, status_code = self.run_tool_with_api_call(tool_for_opt, fn_call)
+		// Python: tool_res, status_code = self.run_tool_with_api_call(tool_for_opt, fn_call)
 		var statusCode int
 		toolRes, statusCode = m.runToolWithAPICall(toolForOpt, fnCall)
 		outputs = map[string]any{
@@ -133,7 +133,7 @@ func (m *APICallToExampleMethod) Step(
 			Int("status_code", statusCode).
 			Msg("工具 API 调用执行完成")
 
-		// 对齐 Python: api_analysis = self.critique_api_call(tool_for_opt, fn_call, tool_res)
+		// Python: api_analysis = self.critique_api_call(tool_for_opt, fn_call, tool_res)
 		apiAnalysis, err := m.CritiqueAPICall(ctx, toolForOpt, fnCall, toolRes)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("CritiqueAPICall 失败")
@@ -143,7 +143,7 @@ func (m *APICallToExampleMethod) Step(
 			Str("results", fmt.Sprintf("%v", apiAnalysis)).
 			Msg("批判 API 调用完成")
 
-		// 对齐 Python: if api_analysis['err_code'] == -1:
+		// Python: if api_analysis['err_code'] == -1:
 		errCode := toIntSafe(apiAnalysis["err_code"])
 		if errCode == -1 {
 			outputs["status_code"] = -1
@@ -184,21 +184,21 @@ func (m *APICallToExampleMethod) Step(
 	var instOutput map[string]any
 
 	for nRefine := 0; nRefine < numRefineSteps; nRefine++ {
-		// 对齐 Python: inst = self.generate_instruction_from_api_call(...)
+		// Python: inst = self.generate_instruction_from_api_call(...)
 		inst, err := m.GenerateInstructionFromAPICall(ctx, toolForOpt, fnCall, toolRes, instOutput)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("GenerateInstructionFromAPICall 失败")
 			continue
 		}
 
-		// 对齐 Python: ans = self.produce_answer_from_api_call(inst, json.dumps(tool_for_opt), tool_res)
+		// Python: ans = self.produce_answer_from_api_call(inst, json.dumps(tool_for_opt), tool_res)
 		docStr := toJSON(toolForOpt)
 		ans, ansErr := m.ProduceAnswerFromAPICall(ctx, inst, docStr, toolRes)
 		if ansErr != nil {
 			ans = ""
 		}
 
-		// 对齐 Python: inst_eval = self.critique_instruction(...)
+		// Python: inst_eval = self.critique_instruction(...)
 		instEval, err := m.CritiqueInstruction(ctx, toolForOpt, inst, fnCall, toolRes, ans)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("CritiqueInstruction 失败")
@@ -212,12 +212,12 @@ func (m *APICallToExampleMethod) Step(
 		scores = append(scores, float64(scoreVal))
 		analyses = append(analyses, fmt.Sprintf("%v", instEval["analysis"]))
 
-		// 对齐 Python: insts[-self.config['num_feedback_steps']:]
+		// Python: insts[-self.config['num_feedback_steps']:]
 		feedbackInsts := lastN(insts, numFeedbackSteps)
 		feedbackScores := lastNFloat(scores, numFeedbackSteps)
 		feedbackAnalyses := lastN(analyses, numFeedbackSteps)
 
-		// 对齐 Python: batch_refl = self.batch_reflection_with_scores(...)
+		// Python: batch_refl = self.batch_reflection_with_scores(...)
 		batchRefl, err := m.BatchReflectionWithScores(ctx, toolForOpt, fnCall, feedbackInsts, feedbackScores, feedbackAnalyses)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("BatchReflectionWithScores 失败")
@@ -231,7 +231,7 @@ func (m *APICallToExampleMethod) Step(
 			"batch_reflection": batchRefl,
 		}
 
-		// 对齐 Python: if inst_eval['score'] == 3: break
+		// Python: if inst_eval['score'] == 3: break
 		if scoreVal == 3 {
 			break
 		}
@@ -248,19 +248,19 @@ func (m *APICallToExampleMethod) Step(
 			lastInst := strings.TrimSpace(insts[len(insts)-1])
 			lastAns := strings.TrimSpace(answers[len(answers)-1])
 			if lastInst != "" && lastAns != "" {
-				// 对齐 Python: examples = [(insts[-1].strip(), fn_call, tool_res, answers[-1].strip())]
+				// Python: examples = [(insts[-1].strip(), fn_call, tool_res, answers[-1].strip())]
 				exampleTuples := []ExampleTuple{{
 					Instruction: lastInst,
 					FnCall:      fnCall,
 					FnOutput:    toolRes,
 					Answer:      lastAns,
 				}}
-				// 对齐 Python: eval_res = self.eval_fn(tool, description, examples, runs=1)
+				// Python: eval_res = self.eval_fn(tool, description, examples, runs=1)
 				evalRes := m.evalFn.Eval(ctx, tool, description, exampleTuples, 1)
 				if evalRes != nil {
 					evalScore = evalRes.ScoreAvg / 100.0
 				} else {
-					// 对齐 Python: ValueError 传播时评估分数为 0
+					// Python: ValueError 传播时评估分数为 0
 					evalScore = 0.0
 				}
 			} else {
@@ -274,7 +274,7 @@ func (m *APICallToExampleMethod) Step(
 		evalScore = 1.0
 	}
 
-	// 对齐 Python: final_score = scores[-1] + self.config['score_eval_weight'] * (1. - eval_score)
+	// Python: final_score = scores[-1] + self.config['score_eval_weight'] * (1. - eval_score)
 	var finalScore float64
 	if len(scores) > 0 {
 		finalScore = scores[len(scores)-1] + scoreEvalWeight*(1.0-evalScore)
@@ -293,14 +293,14 @@ func (m *APICallToExampleMethod) Step(
 // GetExamples BeamSearchMethod 接口实现。
 // APICallToExampleMethod 不需要预加载示例，返回 nil。
 //
-// 对齐 Python: APICallToExampleMethod.get_examples(tool)
+// Python: APICallToExampleMethod.get_examples(tool)
 func (m *APICallToExampleMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	return nil
 }
 
 // GenerateAPICallFromDescription 根据工具描述生成 API 调用。
 //
-// 对齐 Python: APICallToExampleMethod.generate_api_call_from_description(tool, example_calls, num_gen, prev_output)
+// Python: APICallToExampleMethod.generate_api_call_from_description(tool, example_calls, num_gen, prev_output)
 func (m *APICallToExampleMethod) GenerateAPICallFromDescription(
 	ctx context.Context,
 	tool map[string]any,
@@ -311,7 +311,7 @@ func (m *APICallToExampleMethod) GenerateAPICallFromDescription(
 	functionName, _ := tool["name"].(string)
 	docStr := toJSON(tool)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`A tool is an API.
 You are given an API tool with the following
 documentation, which includes the functionality
@@ -410,7 +410,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 	userPrompt += "Do not output anything other than the JSON output. Now you can begin your task."
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output(output)
+	// Python: verify_output(output)
 	verifyFn := func(output string) (any, error) {
 		fn := ParseJSON(output)
 
@@ -461,7 +461,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 
 // CritiqueAPICall 批判 API 调用结果。
 //
-// 对齐 Python: APICallToExampleMethod.critique_api_call(tool, fn_call, fn_response)
+// Python: APICallToExampleMethod.critique_api_call(tool, fn_call, fn_response)
 func (m *APICallToExampleMethod) CritiqueAPICall(
 	ctx context.Context,
 	tool map[string]any,
@@ -472,7 +472,7 @@ func (m *APICallToExampleMethod) CritiqueAPICall(
 	docStr := toJSON(tool)
 	fnCallStr := toJSON(fnCall)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
 You are given an API tool with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -513,7 +513,7 @@ You can begin your task now.`
 
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output(output)
+	// Python: verify_output(output)
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output)
 
@@ -525,11 +525,11 @@ You can begin your task now.`
 			return nil, fmt.Errorf(`输出中未找到 "err_code"`)
 		}
 
-		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
+		// Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
 		analysis := strings.TrimSpace(fmt.Sprintf("%v", outputJSON["analysis"]))
 		outputJSON["analysis"] = analysis
 
-		// 对齐 Python: output_json["err_code"] = int(output_json.get("err_code"))
+		// Python: output_json["err_code"] = int(output_json.get("err_code"))
 		outputJSON["err_code"] = toIntSafe(outputJSON["err_code"])
 
 		return outputJSON, nil
@@ -557,7 +557,7 @@ You can begin your task now.`
 
 // GenerateInstructionFromAPICall 根据 API 调用结果生成指令。
 //
-// 对齐 Python: APICallToExampleMethod.generate_instruction_from_api_call(tool, fn_call, fn_response, prev_output)
+// Python: APICallToExampleMethod.generate_instruction_from_api_call(tool, fn_call, fn_response, prev_output)
 func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
 	ctx context.Context,
 	tool map[string]any,
@@ -569,7 +569,7 @@ func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
 	docStr := toJSON(tool)
 	fnCallStr := toJSON(fnCall)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
         You are given an API tool with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -603,7 +603,7 @@ func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
         }`
 
 	if prevOutput != nil {
-		// 对齐 Python: 格式化之前的指令和分数
+		// Python: 格式化之前的指令和分数
 		formattedLines := []string{}
 
 		if instructions, ok := prevOutput["instructions"].([]string); ok {
@@ -631,7 +631,7 @@ instructions for this function call, which were rated and analyzed:
 	userPrompt += "You must strictly follow the output format. Now you can begin your task."
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output(output)
+	// Python: verify_output(output)
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output, "instruction")
 
@@ -663,7 +663,7 @@ instructions for this function call, which were rated and analyzed:
 
 // CritiqueInstruction 批判生成的指令。
 //
-// 对齐 Python: APICallToExampleMethod.critique_instruction(tool, instruction, fn_call, fn_response, answer)
+// Python: APICallToExampleMethod.critique_instruction(tool, instruction, fn_call, fn_response, answer)
 func (m *APICallToExampleMethod) CritiqueInstruction(
 	ctx context.Context,
 	tool map[string]any,
@@ -674,7 +674,7 @@ func (m *APICallToExampleMethod) CritiqueInstruction(
 ) (map[string]any, error) {
 	fnCallStr := toJSON(fnCall)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
 You are given an instruction "%s",
 function call "%s" and an answer "%s",
@@ -729,7 +729,7 @@ be a number between 1 and 3. You can begin your task now.`
 
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output(output)
+	// Python: verify_output(output)
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output, "analysis")
 
@@ -745,11 +745,11 @@ be a number between 1 and 3. You can begin your task now.`
 			return nil, fmt.Errorf(`输出格式不正确，需要 "score"`)
 		}
 
-		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
+		// Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
 		analysis := strings.TrimSpace(fmt.Sprintf("%v", outputJSON["analysis"]))
 		outputJSON["analysis"] = analysis
 
-		// 对齐 Python: output_json["score"] = int(output_json.get("score"))
+		// Python: output_json["score"] = int(output_json.get("score"))
 		scoreVal := toIntSafe(outputJSON["score"])
 		outputJSON["score"] = float64(scoreVal)
 
@@ -776,7 +776,7 @@ be a number between 1 and 3. You can begin your task now.`
 
 // BatchReflectionWithScores 批量反思，分析指令与分数的关系并给出改进建议。
 //
-// 对齐 Python: APICallToExampleMethod.batch_reflection_with_scores(tool, fn_call, instructions, scores, analyses)
+// Python: APICallToExampleMethod.batch_reflection_with_scores(tool, fn_call, instructions, scores, analyses)
 func (m *APICallToExampleMethod) BatchReflectionWithScores(
 	ctx context.Context,
 	tool map[string]any,
@@ -798,7 +798,7 @@ func (m *APICallToExampleMethod) BatchReflectionWithScores(
 
 	formatted := strings.Join(lines, "\n")
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`You are given an API tool with the
 following documentation, which includes the functionality
 description, required parameters, code snippets for API calls, etc.
@@ -839,7 +839,7 @@ than 500 characters. You can now start your task.`,
 
 	prompt := FormatPromptLlama("", userPrompt)
 
-	// 对齐 Python: verify_output — 仅返回 stripped text
+	// Python: verify_output — 仅返回 stripped text
 	verifyFn := func(output string) (any, error) {
 		return strings.TrimSpace(output), nil
 	}
@@ -865,7 +865,7 @@ than 500 characters. You can now start your task.`,
 // GetOriginalDescription 获取工具的原始描述。
 // 从 ToolBench 格式的 description 中提取原始描述文本。
 //
-// 对齐 Python: APICallToExampleMethod.get_original_description(tool)
+// Python: APICallToExampleMethod.get_original_description(tool)
 func (m *APICallToExampleMethod) GetOriginalDescription(tool map[string]any) string {
 	description, _ := tool["description"].(string)
 	indicator := `The description of this function is: "`
@@ -898,13 +898,13 @@ func lastNFloat(slice []float64, n int) []float64 {
 }
 
 // toInt 将 any 值安全转换为 int。
-// 对齐 Python: int(value) — 无法转换时返回 0
+// Python: int(value) — 无法转换时返回 0
 func toInt(v any) int {
 	return toIntSafe(v)
 }
 
 // formatExampleCalls 格式化示例调用列表。
-// 对齐 Python: os.linesep.join(f'"{api_call}"' for api_call in example_calls)
+// Python: os.linesep.join(f'"{api_call}"' for api_call in example_calls)
 func formatExampleCalls(calls []string) string {
 	var parts []string
 	for _, call := range calls {

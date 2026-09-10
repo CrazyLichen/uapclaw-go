@@ -13,7 +13,7 @@ import (
 // 一轮对话定义为：user 消息 → 下一条不含 tool_calls 的 assistant 消息。
 // 不完整轮次（有 user 无 assistant）的 assistantIdx 为 nil。
 //
-// 对应 Python: ContextUtils.find_all_dialogue_round() 返回的单个 [user_idx, assistant_idx]
+// Python: ContextUtils.find_all_dialogue_round() 返回的单个 [user_idx, assistant_idx]
 type DialogueRound [2]*int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -38,7 +38,7 @@ func GetToolCallID(msg llm_schema.BaseMessage) string {
 //   - 所有 pending tool_call_id 收到回复 → 一轮完成
 //   - 遇到 UserMessage 且无 pending → 开始新轮次
 //
-// 对应 Python: openjiuwen/core/context_engine/context/session_memory_manager.py
+// Python: openjiuwen/core/context_engine/context/session_memory_manager.py
 //
 //	(已完成API轮次分组)
 func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
@@ -99,7 +99,7 @@ func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
 // 从后往前扫描消息列表，识别 user → assistant(无 tool_calls) 的轮次。
 // 返回从新到旧排列的轮次列表。连续的 user 消息被视为同组的起始。
 //
-// 对应 Python: ContextUtils.find_all_dialogue_round()
+// Python: ContextUtils.find_all_dialogue_round()
 func FindAllDialogueRound(messages []llm_schema.BaseMessage) []DialogueRound {
 	var rounds []DialogueRound
 	i := len(messages) - 1

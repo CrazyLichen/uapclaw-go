@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TodoLockManager 待办事项锁管理器，为每个会话分配独立互斥锁。
-// 对齐 Python: TodoLockManager
+// Python: TodoLockManager
 type TodoLockManager struct {
 	// mu 全局读写锁
 	mu sync.RWMutex
@@ -29,7 +29,7 @@ type TodoLockManager struct {
 }
 
 // TodoTool 待办事项工具基类，封装持久化读写逻辑。
-// 对齐 Python: TodoTool
+// Python: TodoTool
 type TodoTool struct {
 	// workspace 工作区根路径
 	workspace string
@@ -105,7 +105,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTodoLockManager 创建待办事项锁管理器。
-// 对齐 Python: TodoLockManager.__init__
+// Python: TodoLockManager.__init__
 func NewTodoLockManager() *TodoLockManager {
 	return &TodoLockManager{
 		locks: make(map[string]*sync.Mutex),
@@ -113,7 +113,7 @@ func NewTodoLockManager() *TodoLockManager {
 }
 
 // Operation 获取指定会话的互斥锁，不存在则创建。
-// 对齐 Python: TodoLockManager.operation
+// Python: TodoLockManager.operation
 func (m *TodoLockManager) Operation(sessionID string) *sync.Mutex {
 	m.mu.RLock()
 	lock, ok := m.locks[sessionID]
@@ -134,7 +134,7 @@ func (m *TodoLockManager) Operation(sessionID string) *sync.Mutex {
 }
 
 // CleanupSession 清除指定会话的互斥锁。
-// 对齐 Python: TodoLockManager.cleanup_session
+// Python: TodoLockManager.cleanup_session
 func (m *TodoLockManager) CleanupSession(sessionID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -142,7 +142,7 @@ func (m *TodoLockManager) CleanupSession(sessionID string) {
 }
 
 // GetFilePath 返回指定会话的待办事项文件绝对路径。
-// 对齐 Python: TodoTool._get_file_path + os.path.abspath
+// Python: TodoTool._get_file_path + os.path.abspath
 func (t *TodoTool) GetFilePath(sessionID string) string {
 	relPath := filepath.Join(t.workspace, sessionID, todoFileName)
 	absPath, err := filepath.Abs(relPath)
@@ -153,13 +153,13 @@ func (t *TodoTool) GetFilePath(sessionID string) string {
 }
 
 // LoadTodos 从文件加载待办事项列表。
-// 对齐 Python: TodoTool.load_todos
+// Python: TodoTool.load_todos
 // 文件不存在或读取失败时返回 error，对齐 Python 抛异常行为。
 func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.TodoItem, error) {
 	filePath := t.GetFilePath(sessionID)
 	result, err := t.fs.ReadFile(ctx, filePath)
 	if err != nil {
-		// 对齐 Python L123-127: 文件不存在时 raise error
+		// Python: L123-127: 文件不存在时 raise error
 		logger.Warn(logComponent).
 			Str("file_path", filePath).
 			Err(err).
@@ -170,7 +170,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 		)
 	}
 	if result == nil || result.Data == nil || result.Data.Content == "" {
-		// 对齐 Python L123-127: 空内容视为文件不存在
+		// Python: L123-127: 空内容视为文件不存在
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
 			exception.WithParam("reason", fmt.Sprintf("待办文件为空: %s", filePath)),
@@ -201,7 +201,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 }
 
 // SaveTodos 将待办事项列表保存到文件。
-// 对齐 Python: TodoTool.save_todos
+// Python: TodoTool.save_todos
 func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hschema.TodoItem) error {
 	filePath := t.GetFilePath(sessionID)
 	dicts := make([]map[string]any, len(todos))
@@ -239,18 +239,18 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 }
 
 // CleanupSession 清除指定会话的锁和持久化文件。
-// 对齐 Python: TodoTool.cleanup_session
+// Python: TodoTool.cleanup_session
 func (t *TodoTool) CleanupSession(sessionID string) {
 	t.lockManager.CleanupSession(sessionID)
 }
 
 // NewTodoCreateTool 创建待办事项创建工具。
-// 对齐 Python: TodoCreateTool.__init__
+// Python: TodoCreateTool.__init__
 func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_create", "TodoCreateTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoCreateInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: TodoCreateTool.invoke 的 try/except 异常包装
+		// Python: TodoCreateTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			sessionID, err := extractSessionID(opts)
 			if err != nil {
@@ -266,7 +266,7 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			}
 
 			// 校验每个 task 的必填字段和 ID 唯一性
-			// 对齐 Python L296-299: 优先使用 model 提供的 id，为空时自动生成 uuid
+			// Python: L296-299: 优先使用 model 提供的 id，为空时自动生成 uuid
 			idSet := make(map[string]struct{})
 			for i := range input.Tasks {
 				task := &input.Tasks[i]
@@ -332,14 +332,14 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 				Msg("TodoCreateTool 创建待办事项成功")
 
 			// 格式化结果字符串
-			// 对齐 Python: TodoCreateTool._format_create_result L250-266
+			// Python: TodoCreateTool._format_create_result L250-266
 			resultStr := formatCreateResult(todoItems)
 			return map[string]any{
 				"message": resultStr,
 			}, nil
 		}()
 		if err != nil {
-			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			// Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").
 				Str("tool_name", "todo_create").
@@ -356,12 +356,12 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 }
 
 // NewTodoListTool 创建待办事项列表工具。
-// 对齐 Python: TodoListTool.__init__
+// Python: TodoListTool.__init__
 func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_list", "TodoListTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, _ TodoListInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: TodoListTool.invoke 的 try/except 异常包装
+		// Python: TodoListTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			sessionID, err := extractSessionID(opts)
 			if err != nil {
@@ -379,7 +379,7 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			}
 
 			// 过滤掉已完成和已取消的任务，返回简化视图
-			// 对齐 Python L362-377: 只包含 id/content/status/depends_on
+			// Python: L362-377: 只包含 id/content/status/depends_on
 			type simplifiedTask struct {
 				ID        string   `json:"id"`
 				Content   string   `json:"content"`
@@ -403,7 +403,7 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			}, nil
 		}()
 		if err != nil {
-			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			// Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").
 				Str("tool_name", "todo_list").
@@ -420,12 +420,12 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 }
 
 // NewTodoGetTool 创建待办事项详情查询工具。
-// 对齐 Python: TodoGetTool.__init__
+// Python: TodoGetTool.__init__
 func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_get", "TodoGetTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoGetInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: TodoGetTool.invoke 的 try/except 异常包装
+		// Python: TodoGetTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			sessionID, err := extractSessionID(opts)
 			if err != nil {
@@ -464,7 +464,7 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			)
 		}()
 		if err != nil {
-			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			// Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").
 				Str("tool_name", "todo_get").
@@ -481,12 +481,12 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 }
 
 // NewTodoModifyTool 创建待办事项修改工具。
-// 对齐 Python: TodoModifyTool.__init__
+// Python: TodoModifyTool.__init__
 func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_modify", "TodoModifyTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoModifyInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: TodoModifyTool.invoke 的 try/except 异常包装
+		// Python: TodoModifyTool.invoke 的 try/except 异常包装
 		result, err := func() (map[string]any, error) {
 			sessionID, err := extractSessionID(opts)
 			if err != nil {
@@ -522,7 +522,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 						exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 					)
 				}
-				// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+				// Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
 				for _, item := range input.TodoData.Items {
 					if err := validateSingleTodoItem(item); err != nil {
 						return nil, err
@@ -536,7 +536,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 						exception.WithParam("reason", "无效的插入操作输入: 'todo_data' 必须为包含 'target_id' 和 'items' 的对象"),
 					)
 				}
-				// 对齐 Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
+				// Python: _validate_todo_data_structure(todo_data) — 先校验每个 item 必填字段
 				for _, item := range input.TodoData.Items {
 					if err := validateSingleTodoItem(item); err != nil {
 						return nil, err
@@ -570,7 +570,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			}, nil
 		}()
 		if err != nil {
-			// 对齐 Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
+			// Python: tool_logger.error(event_type=TOOL_CALL_ERROR) + build_error(TOOL_TODOS_INVOKE_FAILED)
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").
 				Str("tool_name", "todo_modify").
@@ -587,7 +587,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 }
 
 // CreateTodosTool 创建全部待办事项工具集，同时返回 TodoTool 基类供 Rail 调用 LoadTodos/SaveTodos/CleanupSession。
-// 对齐 Python: create_todos_tool
+// Python: create_todos_tool
 func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, agentID string) ([]tool.Tool, TodoTool) {
 	lockManager := NewTodoLockManager()
 	todoTool := newTodoTool(workspace, fs, lockManager)
@@ -603,7 +603,7 @@ func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, a
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTodoTool 创建待办事项工具基类。
-// 对齐 Python: TodoTool.__init__
+// Python: TodoTool.__init__
 func newTodoTool(workspace string, fs sys_operation.FsOperation, lockManager *TodoLockManager) TodoTool {
 	return TodoTool{
 		workspace:   workspace,
@@ -647,7 +647,7 @@ func strValDefault(data map[string]any, key string, defaultVal string) string {
 }
 
 // uniqueIDs 对 ID 列表做去重，返回 map[string]struct{}
-// 对齐 Python: delete_ids = set(ids)
+// Python: delete_ids = set(ids)
 func uniqueIDs(ids []string) map[string]struct{} {
 	result := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
@@ -657,7 +657,7 @@ func uniqueIDs(ids []string) map[string]struct{} {
 }
 
 // formatCreateResult 将创建的待办事项格式化为可读结果字符串。
-// 对齐 Python: TodoCreateTool._format_create_result L250-266
+// Python: TodoCreateTool._format_create_result L250-266
 // 包含 "Successfully created N task(s):" 前缀、状态图标、model 信息、"Next step" 引导提示。
 func formatCreateResult(items []hschema.TodoItem) string {
 	if len(items) == 0 {
@@ -700,7 +700,7 @@ func formatTodoItems(items []hschema.TodoItem) string {
 }
 
 // updateTodos 执行 update 操作
-// 对齐 Python: TodoModifyTool._update_todos L662-691
+// Python: TodoModifyTool._update_todos L662-691
 // 先就地修改 todos，修改完后调用 validateSingleInProgress 校验最终状态
 func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error) {
 	if len(updates) == 0 {
@@ -710,13 +710,13 @@ func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.
 		)
 	}
 
-	// 对齐 Python L663: 构建 todo_map 用于查找
+	// Python: L663: 构建 todo_map 用于查找
 	todoMap := make(map[string]*hschema.TodoItem, len(todos))
 	for i := range todos {
 		todoMap[todos[i].ID] = &todos[i]
 	}
 
-	// 对齐 Python L664-688: 逐个就地修改
+	// Python: L664-688: 逐个就地修改
 	updatedCount := 0
 	for _, todoData := range updates {
 		todoID := strVal(todoData, "id")
@@ -758,7 +758,7 @@ func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.
 		updatedCount++
 	}
 
-	// 对齐 Python L689: 先修改后校验
+	// Python: L689: 先修改后校验
 	if err := validateSingleInProgress(todos); err != nil {
 		return nil, "", err
 	}
@@ -767,7 +767,7 @@ func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.
 }
 
 // deleteTodos 执行 delete 操作
-// 对齐 Python: TodoModifyTool._delete_todos L635-647
+// Python: TodoModifyTool._delete_todos L635-647
 // 入口对 ids 做去重，对齐 Python delete_ids = set(ids)
 func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
 	if len(ids) == 0 {
@@ -776,7 +776,7 @@ func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 			exception.WithParam("reason", "delete 操作的 'ids' 必须为非空的任务 ID 列表"),
 		)
 	}
-	// 对齐 Python L638: 入口去重
+	// Python: L638: 入口去重
 	deleteIDs := uniqueIDs(ids)
 	deletedCount := 0
 	remainingTodos := make([]hschema.TodoItem, 0, len(todos))
@@ -787,11 +787,11 @@ func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 			remainingTodos = append(remainingTodos, item)
 		}
 	}
-	// 对齐 Python L644-645: 全部 ID 都不存在时的提示
+	// Python: L644-645: 全部 ID 都不存在时的提示
 	if deletedCount == 0 {
 		return remainingTodos, fmt.Sprintf("No tasks deleted: None of the provided IDs (%s) were found", strings.Join(ids, ", ")), nil
 	}
-	// 对齐 Python L647: 用 delete_ids(set) 格式化
+	// Python: L647: 用 delete_ids(set) 格式化
 	idStrs := make([]string, 0, len(deleteIDs))
 	for id := range deleteIDs {
 		idStrs = append(idStrs, id)
@@ -800,7 +800,7 @@ func deleteTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 }
 
 // cancelTodos 执行 cancel 操作
-// 对齐 Python: TodoModifyTool._cancel_todos L649-660
+// Python: TodoModifyTool._cancel_todos L649-660
 // 不存在的 ID 静默跳过，全部不存在时返回提示消息。
 func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
 	if len(ids) == 0 {
@@ -811,7 +811,7 @@ func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 	}
 	cancelledCount := 0
 	var cancelledIDs []string
-	// 对齐 Python: 遍历 todos 检查 id 是否在 ids 集合中，避免 ids 重复导致 cancelledIDs 重复
+	// Python: 遍历 todos 检查 id 是否在 ids 集合中，避免 ids 重复导致 cancelledIDs 重复
 	idSet := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		idSet[id] = struct{}{}
@@ -823,7 +823,7 @@ func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 			cancelledIDs = append(cancelledIDs, todos[i].ID)
 		}
 	}
-	// 对齐 Python L657-658: 全部 ID 都不存在时的提示
+	// Python: L657-658: 全部 ID 都不存在时的提示
 	if cancelledCount == 0 {
 		return todos, fmt.Sprintf("No tasks cancelled: None of the provided IDs (%s) were found", strings.Join(ids, ", ")), nil
 	}
@@ -831,7 +831,7 @@ func cancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 }
 
 // appendTodos 执行 append 操作
-// 对齐 Python: TodoModifyTool._append_todos L693-707
+// Python: TodoModifyTool._append_todos L693-707
 // 先校验单项+检查ID唯一性+追加到 todos，追加完后调用 validateSingleInProgress 校验
 func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema.TodoItem, string, error) {
 	if len(newItems) == 0 {
@@ -840,12 +840,12 @@ func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema
 			exception.WithParam("reason", "append 操作需要 'todos' 参数"),
 		)
 	}
-	// 对齐 Python L694: 检查 ID 唯一性
+	// Python: L694: 检查 ID 唯一性
 	todoIDs := make(map[string]struct{}, len(todos))
 	for _, item := range todos {
 		todoIDs[item.ID] = struct{}{}
 	}
-	// 对齐 Python L695-704: 校验单项+检查ID唯一+追加
+	// Python: L695-704: 校验单项+检查ID唯一+追加
 	for _, todoData := range newItems {
 		if err := validateSingleTodoItem(todoData); err != nil {
 			return nil, "", err
@@ -861,7 +861,7 @@ func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema
 		todos = append(todos, todoItem)
 		todoIDs[todoID] = struct{}{}
 	}
-	// 对齐 Python L705: 先追加后校验
+	// Python: L705: 先追加后校验
 	if err := validateSingleInProgress(todos); err != nil {
 		return nil, "", err
 	}
@@ -869,7 +869,7 @@ func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema
 }
 
 // insertAfterTodos 执行 insert_after 操作
-// 对齐 Python: TodoModifyTool._insert_after_todos L709-730
+// Python: TodoModifyTool._insert_after_todos L709-730
 // 先校验目标任务状态+校验新任务+检查ID唯一性+构造结果列表，构造完后调用 validateSingleInProgress 校验
 func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
 	if targetID == "" {
@@ -885,13 +885,13 @@ func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[str
 		)
 	}
 
-	// 对齐 Python L711-713: 校验目标任务状态
+	// Python: L711-713: 校验目标任务状态
 	targetIndex, err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusInProgress, hschema.TodoStatusPending})
 	if err != nil {
 		return nil, "", err
 	}
 
-	// 对齐 Python L714-724: 校验 ID 唯一性+构造插入列表
+	// Python: L714-724: 校验 ID 唯一性+构造插入列表
 	existingIDs := make(map[string]struct{}, len(todos))
 	for _, item := range todos {
 		existingIDs[item.ID] = struct{}{}
@@ -909,13 +909,13 @@ func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[str
 		existingIDs[todoID] = struct{}{}
 	}
 
-	// 对齐 Python L725-727: 构造结果列表
+	// Python: L725-727: 构造结果列表
 	result := make([]hschema.TodoItem, 0, len(todos)+len(items))
 	result = append(result, todos[:targetIndex+1]...)
 	result = append(result, insertTodos...)
 	result = append(result, todos[targetIndex+1:]...)
 
-	// 对齐 Python L728: 先构造后校验
+	// Python: L728: 先构造后校验
 	if err := validateSingleInProgress(result); err != nil {
 		return nil, "", err
 	}
@@ -924,7 +924,7 @@ func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[str
 }
 
 // insertBeforeTodos 执行 insert_before 操作
-// 对齐 Python: TodoModifyTool._insert_before_todos L732-753
+// Python: TodoModifyTool._insert_before_todos L732-753
 // 先校验目标任务状态+校验新任务+检查ID唯一性+构造结果列表，构造完后调用 validateSingleInProgress 校验
 func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[string]any) ([]hschema.TodoItem, string, error) {
 	if targetID == "" {
@@ -940,13 +940,13 @@ func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[st
 		)
 	}
 
-	// 对齐 Python L734-736: 校验目标任务状态（insert_before 只允许 pending）
+	// Python: L734-736: 校验目标任务状态（insert_before 只允许 pending）
 	targetIndex, err := validateTargetTaskStatus(todos, targetID, []hschema.TodoStatus{hschema.TodoStatusPending})
 	if err != nil {
 		return nil, "", err
 	}
 
-	// 对齐 Python L737-747: 校验 ID 唯一性+构造插入列表
+	// Python: L737-747: 校验 ID 唯一性+构造插入列表
 	existingIDs := make(map[string]struct{}, len(todos))
 	for _, item := range todos {
 		existingIDs[item.ID] = struct{}{}
@@ -964,13 +964,13 @@ func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[st
 		existingIDs[todoID] = struct{}{}
 	}
 
-	// 对齐 Python L748-750: 构造结果列表
+	// Python: L748-750: 构造结果列表
 	result := make([]hschema.TodoItem, 0, len(todos)+len(items))
 	result = append(result, todos[:targetIndex]...)
 	result = append(result, insertTodos...)
 	result = append(result, todos[targetIndex:]...)
 
-	// 对齐 Python L751: 先构造后校验
+	// Python: L751: 先构造后校验
 	if err := validateSingleInProgress(result); err != nil {
 		return nil, "", err
 	}
@@ -979,7 +979,7 @@ func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[st
 }
 
 // validateSingleInProgress 校验同一时间只能有一个 in_progress 任务
-// 对齐 Python: TodoModifyTool._validate_single_in_progress L600-606
+// Python: TodoModifyTool._validate_single_in_progress L600-606
 // Python 实现也是简单 sum 计数，Go 与 Python 完全对齐
 func validateSingleInProgress(todos []hschema.TodoItem) error {
 	inProgressCount := 0
@@ -998,7 +998,7 @@ func validateSingleInProgress(todos []hschema.TodoItem) error {
 }
 
 // validateTargetTaskStatus 校验目标任务状态是否在允许列表中，并返回目标索引
-// 对齐 Python: TodoModifyTool._validate_target_task_status L579-598
+// Python: TodoModifyTool._validate_target_task_status L579-598
 // 返回目标在列表中的索引，未找到或状态不允许时返回错误
 func validateTargetTaskStatus(todos []hschema.TodoItem, targetID string, allowedStatuses []hschema.TodoStatus) (int, error) {
 	for idx, item := range todos {
@@ -1021,7 +1021,7 @@ func validateTargetTaskStatus(todos []hschema.TodoItem, targetID string, allowed
 }
 
 // validateSingleTodoItem 校验单个待办事项的必填字段和 status 合法值。
-// 对齐 Python: TodoModifyTool._validate_single_todo_item L608-623
+// Python: TodoModifyTool._validate_single_todo_item L608-623
 // 必填字段: id, content, activeForm, description, status
 func validateSingleTodoItem(item map[string]any) error {
 	var validationErrors []string
@@ -1049,7 +1049,7 @@ func validateSingleTodoItem(item map[string]any) error {
 }
 
 // todoItemFromMap 从 map 构造 TodoItem
-// 对齐 Python: TodoModifyTool._convert_to_todo_item L625-633
+// Python: TodoModifyTool._convert_to_todo_item L625-633
 // 所有字符串字段 TrimSpace，id 为空时自动生成 uuid
 func todoItemFromMap(data map[string]any) hschema.TodoItem {
 	id := strings.TrimSpace(strVal(data, "id"))

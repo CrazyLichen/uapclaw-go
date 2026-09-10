@@ -17,7 +17,7 @@ import (
 // 读取 struct 字段的 json tag（参数名）和 jsonschema tag（描述/必填/默认值/枚举），
 // 递归处理嵌套 struct 和 slice，生成完整的参数定义列表。
 //
-// 对应 Python:
+// Python:
 //   - openjiuwen/core/foundation/tool/utils/callable_schema_extractor.py (CallableSchemaExtractor)
 //   - openjiuwen/core/foundation/tool/utils/type_schema_extractor.py (TypeSchemaExtractor 注册表)
 //
@@ -37,7 +37,7 @@ type schemaTagMap map[string]string
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // commonAbbreviations 常见缩写列表，humanizeName 时转大写处理。
-// 对应 Python: CallableSchemaExtractor._humanize_name() 中的 abbreviations 列表。
+// Python: CallableSchemaExtractor._humanize_name() 中的 abbreviations 列表。
 var commonAbbreviations = map[string]string{
 	"id":    "ID",
 	"url":   "URL",
@@ -82,7 +82,7 @@ var commonAbbreviations = map[string]string{
 //   - *T → 解引用后按 T 处理
 //   - 基本类型 → 直接映射 ParamType
 //
-// 对应 Python:
+// Python:
 //   - CallableSchemaExtractor.generate_schema()（可调用模式提取器的 generate_schema 方法）
 //   - TypeSchemaExtractor 注册表
 func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) {
@@ -215,7 +215,7 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 // 要求通过 jsonschema:"description=..." tag 显式指定描述。当未指定 description tag 时，
 // 本方法使用 humanizeName 从 struct 名生成描述作为回退。
 //
-// 对应 Python: CallableSchemaExtractor.extract_function_description()
+// Python: CallableSchemaExtractor.extract_function_description()
 func (StructSchemaExtractor) ExtractDescription(typ reflect.Type) string {
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
@@ -348,7 +348,7 @@ func convertDefaultValue(val string, typ schema.ParamType) any {
 
 // resolveDescription 确定参数描述。
 // 优先使用 jsonschema:"description=xxx" tag，缺失时使用 humanize 从参数名生成。
-// 对应 Python: CallableSchemaExtractor 中 description = cls._humanize_name(param_name)
+// Python: CallableSchemaExtractor 中 description = cls._humanize_name(param_name)
 func resolveDescription(jsonName string, tags schemaTagMap) string {
 	if desc := tags.get("description"); desc != "" {
 		return desc
@@ -359,7 +359,7 @@ func resolveDescription(jsonName string, tags schemaTagMap) string {
 // humanizeName 将变量名转换为人类可读的描述文本。
 // snake_case → "搜索查询"，camelCase/PascalCase → "用户名"。
 // 对常见缩写（id, url, api 等）转大写，与 Python _humanize_name 行为一致。
-// 对应 Python: CallableSchemaExtractor._humanize_name()
+// Python: CallableSchemaExtractor._humanize_name()
 func humanizeName(name string) string {
 	if name == "" {
 		return ""

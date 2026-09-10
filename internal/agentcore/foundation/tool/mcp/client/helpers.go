@@ -87,7 +87,7 @@ func contentToMap(c mcp.Content) map[string]any {
 }
 
 // resourceToMap 将 mcp.Resource 转为 map[string]any，
-// 对齐 Python: ListMcpResourcesTool.invoke 中 getattr(r, "uri", str(r)) 等属性提取。
+// Python: ListMcpResourcesTool.invoke 中 getattr(r, "uri", str(r)) 等属性提取。
 func resourceToMap(r mcp.Resource) map[string]any {
 	return map[string]any{
 		"uri":         r.URI,
@@ -124,7 +124,7 @@ func resourceContentsToMap(rc mcp.ResourceContents) map[string]any {
 }
 
 // readResourceResultToMap 将 *mcp.ReadResourceResult 转为 []map[string]any，
-// 对齐 Python: ReadMcpResourceTool.invoke 中遍历 contents 提取 uri/mimeType/text。
+// Python: ReadMcpResourceTool.invoke 中遍历 contents 提取 uri/mimeType/text。
 func readResourceResultToMap(result *mcp.ReadResourceResult) []map[string]any {
 	if result == nil {
 		return nil

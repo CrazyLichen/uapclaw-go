@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MountedRails 已挂载的团队侧 Rails 句柄。
-// 对齐 Python: _MountedRails (openjiuwen/agent_teams/harness.py)
+// Python: _MountedRails (openjiuwen/agent_teams/harness.py)
 //
 // 保留为数据类使 Rails 阵容（及哪些是可选的）对读者和测试可见。
 // 字段顺序与 BuildTeamHarness 中 Rails 挂载顺序一致。
@@ -43,13 +43,13 @@ type MountedRails struct {
 }
 
 // AgentCustomizer 用户自定义钩子签名。
-// 对齐 Python: AgentCustomizer = Callable[[DeepAgent, Optional[str], str], None]
+// Python: AgentCustomizer = Callable[[DeepAgent, Optional[str], str], None]
 //
 // 参数：deepAgent, memberName, roleValue
 type AgentCustomizer func(deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string)
 
 // TeamHarness TeamAgent 与底层 DeepAgent 之间的唯一适配器。
-// 对齐 Python: TeamHarness (openjiuwen/agent_teams/harness.py)
+// Python: TeamHarness (openjiuwen/agent_teams/harness.py)
 //
 // 所有对 DeepAgent 的访问（配置、模型、工作空间、Rails、流式）
 // 必须通过此对象。替换 DeepAgent 只需重新实现此模块；
@@ -86,7 +86,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamHarness 创建新的 TeamHarness 实例。
-// 对齐 Python: TeamHarness.__init__(deep_agent, rails, ...)
+// Python: TeamHarness.__init__(deep_agent, rails, ...)
 func NewTeamHarness(
 	deepAgent hinterfaces.DeepAgentInterface,
 	rails *MountedRails,
@@ -104,7 +104,7 @@ func NewTeamHarness(
 }
 
 // BuildTeamHarness 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
-// 对齐 Python: TeamHarness.build(...)
+// Python: TeamHarness.build(...)
 //
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
@@ -140,7 +140,7 @@ func BuildTeamHarness(
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
-// 对齐 Python: TeamHarness.run_agent_customizer(customizer)
+// Python: TeamHarness.run_agent_customizer(customizer)
 //
 // 在 Rail 挂载和依赖绑定（memory_manager 等）之后调用，
 // 使自定义器看到完整准备的环境。吞掉异常以保持团队启动不被破坏；
@@ -149,7 +149,7 @@ func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
 	if customizer == nil {
 		return
 	}
-	// 对齐 Python: try/except Exception — 吞掉 customizer 的 panic
+	// Python: try/except Exception — 吞掉 customizer 的 panic
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).
@@ -162,7 +162,7 @@ func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
 }
 
 // Rails 返回已挂载的团队侧 Rails 句柄。
-// 对齐 Python: TeamHarness.rails property
+// Python: TeamHarness.rails property
 func (h *TeamHarness) Rails() *MountedRails {
 	return h.rails
 }
@@ -178,7 +178,7 @@ func (h *TeamHarness) MemberName() string {
 }
 
 // InnerAgent 返回底层 DeepAgent 实例。
-// 对齐 Python: TeamHarness.inner_agent property
+// Python: TeamHarness.inner_agent property
 //
 // 生产代码不得使用此方法。仅用于测试和少量迁移辅助。
 func (h *TeamHarness) InnerAgent() hinterfaces.DeepAgentInterface {
@@ -186,7 +186,7 @@ func (h *TeamHarness) InnerAgent() hinterfaces.DeepAgentInterface {
 }
 
 // DeepConfig 返回 DeepAgent 配置快照。
-// 对齐 Python: TeamHarness.deep_config property
+// Python: TeamHarness.deep_config property
 func (h *TeamHarness) DeepConfig() *hschema.DeepAgentConfig {
 	if h.deepAgent == nil {
 		return nil
@@ -195,7 +195,7 @@ func (h *TeamHarness) DeepConfig() *hschema.DeepAgentConfig {
 }
 
 // Workspace 返回绑定到底层 Agent 的工作空间。
-// 对齐 Python: TeamHarness.workspace property
+// Python: TeamHarness.workspace property
 func (h *TeamHarness) Workspace() *workspace.Workspace {
 	if h.deepAgent == nil {
 		return nil
@@ -208,7 +208,7 @@ func (h *TeamHarness) Workspace() *workspace.Workspace {
 }
 
 // SysOperation 返回绑定到底层 Agent 的系统操作。
-// 对齐 Python: TeamHarness.sys_operation property
+// Python: TeamHarness.sys_operation property
 func (h *TeamHarness) SysOperation() sysop.SysOperation {
 	if h.deepAgent == nil {
 		return nil
@@ -221,7 +221,7 @@ func (h *TeamHarness) SysOperation() sysop.SysOperation {
 }
 
 // Model 返回底层 Agent 使用的模型。
-// 对齐 Python: TeamHarness.model property
+// Python: TeamHarness.model property
 func (h *TeamHarness) Model() *llm.Model {
 	if h.deepAgent == nil {
 		return nil
@@ -234,12 +234,12 @@ func (h *TeamHarness) Model() *llm.Model {
 }
 
 // HasPendingInterrupt 返回 Agent 是否有待恢复的中断状态。
-// 对齐 Python: TeamHarness.has_pending_interrupt()
+// Python: TeamHarness.has_pending_interrupt()
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) HasPendingInterrupt() bool { return false }
 
 // IsPendingInterruptResumeValid 检查给定用户输入是否为有效中断恢复。
-// 对齐 Python: TeamHarness.is_pending_interrupt_resume_valid(user_input)
+// Python: TeamHarness.is_pending_interrupt_resume_valid(user_input)
 // ⤴️ 9.60 已实现 StreamController，此方法由 StreamController.IsValidInterruptResume 通过 resources.Harness 调用
 // TODO(#9.57): deepAgent 类型升级后实现具体逻辑
 func (h *TeamHarness) IsPendingInterruptResumeValid(userInput any) bool {
@@ -267,27 +267,27 @@ func (h *TeamHarness) RequestCompletionPoll() {}
 func (h *TeamHarness) WakeMailboxIfInterruptCleared() {}
 
 // InitCwdForRound 从工作空间根目录初始化每轮工作目录。
-// 对齐 Python: TeamHarness.init_cwd_for_round()
+// Python: TeamHarness.init_cwd_for_round()
 // TODO(#9.57+9.35): 实现
 func (h *TeamHarness) InitCwdForRound() {}
 
 // Steer 转向指令到底层 Agent。
-// 对齐 Python: TeamHarness.steer(content)
+// Python: TeamHarness.steer(content)
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) Steer(ctx context.Context, content string) error { return nil }
 
 // FollowUp 追加消息到底层 Agent。
-// 对齐 Python: TeamHarness.follow_up(content)
+// Python: TeamHarness.follow_up(content)
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) FollowUp(ctx context.Context, content string) error { return nil }
 
 // Abort 协作中止底层任务循环。
-// 对齐 Python: TeamHarness.abort()
+// Python: TeamHarness.abort()
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) Abort(ctx context.Context) error { return nil }
 
 // RunStreaming 从底层 Agent 流式输出 chunk。
-// 对齐 Python: TeamHarness.run_streaming(inputs, session_id, team_session)
+// Python: TeamHarness.run_streaming(inputs, session_id, team_session)
 //
 // 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接调 runner.RunAgentStreaming。
 // 分支 2（有 teamSession）：⤵️ 待 9.57+ session 层回填。
@@ -301,22 +301,22 @@ func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, s
 }
 
 // FindRails 返回挂载在底层 Agent 上的指定类型 Rails。
-// 对齐 Python: TeamHarness.find_rails(rail_type)
+// Python: TeamHarness.find_rails(rail_type)
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) FindRails(railType any) []any { return nil }
 
 // RegisterRail 在运行中的 Agent 上注册额外 Rail。
-// 对齐 Python: TeamHarness.register_rail(rail)
+// Python: TeamHarness.register_rail(rail)
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) RegisterRail(ctx context.Context, rail any) error { return nil }
 
 // UnregisterRail 注销先前注册的 Rail。
-// 对齐 Python: TeamHarness.unregister_rail(rail)
+// Python: TeamHarness.unregister_rail(rail)
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) UnregisterRail(ctx context.Context, rail any) error { return nil }
 
 // RegisterMemberTools 在底层 Agent 上注册团队记忆工具集。
-// 对齐 Python: TeamHarness.register_member_tools(memory_manager)
+// Python: TeamHarness.register_member_tools(memory_manager)
 // ⤴️ 9.64 回填完成
 func (h *TeamHarness) RegisterMemberTools(memoryManager *memory.TeamMemoryManager) {
 	if memoryManager == nil {
@@ -326,7 +326,7 @@ func (h *TeamHarness) RegisterMemberTools(memoryManager *memory.TeamMemoryManage
 }
 
 // InjectMemberMemory 向 Agent 的系统提示注入加载的记忆。
-// 对齐 Python: TeamHarness.inject_member_memory(memory_manager, query)
+// Python: TeamHarness.inject_member_memory(memory_manager, query)
 // ⤴️ 9.64 回填完成
 func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *memory.TeamMemoryManager, query string) error {
 	if memoryManager == nil {

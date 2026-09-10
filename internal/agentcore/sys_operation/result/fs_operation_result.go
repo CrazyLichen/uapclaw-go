@@ -3,7 +3,7 @@ package result
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReadFileData 读取文件结果数据。
-// 对齐 Python ReadFileData：path, content, mode。
+// Python: ReadFileData：path, content, mode。
 type ReadFileData struct {
 	// Path 文件路径
 	Path string `json:"path"`
@@ -21,7 +21,7 @@ type ReadFileResult struct {
 }
 
 // ReadFileChunkData 读取文件流式块数据。
-// 对齐 Python ReadFileChunkData：path, chunk_content, mode, chunk_size, chunk_index, is_last_chunk。
+// Python: ReadFileChunkData：path, chunk_content, mode, chunk_size, chunk_index, is_last_chunk。
 type ReadFileChunkData struct {
 	// Path 文件路径
 	Path string `json:"path"`
@@ -45,7 +45,7 @@ type ReadFileStreamResult struct {
 }
 
 // WriteFileData 写入文件结果数据。
-// 对齐 Python WriteFileData：path, size, mode。
+// Python: WriteFileData：path, size, mode。
 type WriteFileData struct {
 	// Path 文件路径
 	Path string `json:"path"`
@@ -63,7 +63,7 @@ type WriteFileResult struct {
 }
 
 // UploadFileData 上传文件结果数据。
-// 对齐 Python UploadFileData：local_path, target_path, size。
+// Python: UploadFileData：local_path, target_path, size。
 type UploadFileData struct {
 	// LocalPath 本地源文件路径
 	LocalPath string `json:"local_path"`
@@ -81,7 +81,7 @@ type UploadFileResult struct {
 }
 
 // UploadFileChunkData 上传文件流式块数据。
-// 对齐 Python UploadFileChunkData：local_path, target_path, chunk_size, chunk_index, is_last_chunk。
+// Python: UploadFileChunkData：local_path, target_path, chunk_size, chunk_index, is_last_chunk。
 type UploadFileChunkData struct {
 	// LocalPath 本地源文件路径
 	LocalPath string `json:"local_path"`
@@ -103,7 +103,7 @@ type UploadFileStreamResult struct {
 }
 
 // DownloadFileData 下载文件结果数据。
-// 对齐 Python DownloadFileData：source_path, local_path, size。
+// Python: DownloadFileData：source_path, local_path, size。
 type DownloadFileData struct {
 	// SourcePath 源文件路径
 	SourcePath string `json:"source_path"`
@@ -121,7 +121,7 @@ type DownloadFileResult struct {
 }
 
 // DownloadFileChunkData 下载文件流式块数据。
-// 对齐 Python DownloadFileChunkData：source_path, local_path, chunk_size, chunk_index, is_last_chunk。
+// Python: DownloadFileChunkData：source_path, local_path, chunk_size, chunk_index, is_last_chunk。
 type DownloadFileChunkData struct {
 	// SourcePath 源文件路径
 	SourcePath string `json:"source_path"`
@@ -143,7 +143,7 @@ type DownloadFileStreamResult struct {
 }
 
 // FileSystemItem 文件/目录公共属性。
-// 对齐 Python FileSystemItem：name, path, size, modified_time, is_directory, type。
+// Python: FileSystemItem：name, path, size, modified_time, is_directory, type。
 type FileSystemItem struct {
 	// Name 文件/目录名称
 	Name string `json:"name"`
@@ -160,7 +160,7 @@ type FileSystemItem struct {
 }
 
 // FileSystemData 文件列表/目录列表数据。
-// 对齐 Python FileSystemData：total_count, list_items, root_path, recursive, max_depth。
+// Python: FileSystemData：total_count, list_items, root_path, recursive, max_depth。
 type FileSystemData struct {
 	// TotalCount 总数量
 	TotalCount int `json:"total_count"`
@@ -189,7 +189,7 @@ type ListDirsResult struct {
 }
 
 // SearchFilesData 搜索文件结果数据。
-// 对齐 Python SearchFilesData：total_matches, matching_files, search_path, search_pattern, exclude_patterns。
+// Python: SearchFilesData：total_matches, matching_files, search_path, search_pattern, exclude_patterns。
 type SearchFilesData struct {
 	// TotalMatches 匹配文件总数
 	TotalMatches int `json:"total_matches"`

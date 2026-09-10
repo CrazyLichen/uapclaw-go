@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"maps"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 )
@@ -9,7 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BuiltinConfigLoader 内置配置加载钩子接口。
-// 对应 Python: Config._load_builtin_configs_
+// Python: Config._load_builtin_configs_
 // Go 不支持虚方法分派，通过接口注入实现模板方法模式（同 5.9 EntityHooks 模式）。
 type BuiltinConfigLoader interface {
 	// LoadBuiltinConfigs 加载内置默认配置到 envs 字典
@@ -17,7 +18,7 @@ type BuiltinConfigLoader interface {
 }
 
 // SessionConfig 会话配置接口。
-// 对应 Python: openjiuwen/core/session/config/base.py (Config)
+// Python: openjiuwen/core/session/config/base.py (Config)
 //
 // 定义在 config 包而非 interfaces 包，避免 tracer↔interfaces 循环依赖：
 // interfaces 导入 tracer（InnerSession.Tracer() 返回 *tracer.Tracer），
@@ -39,7 +40,7 @@ type SessionConfig interface {
 }
 
 // MetadataLike 回调元数据结构体。
-// 对应 Python: openjiuwen/core/session/config/base.py (MetadataLike TypedDict)
+// Python: openjiuwen/core/session/config/base.py (MetadataLike TypedDict)
 type MetadataLike struct {
 	// Name 名称
 	Name string
@@ -48,7 +49,7 @@ type MetadataLike struct {
 }
 
 // defaultSessionConfig SessionConfig 的默认实现。
-// 对应 Python: openjiuwen/core/session/config/base.py (Config)
+// Python: openjiuwen/core/session/config/base.py (Config)
 type defaultSessionConfig struct {
 	// env 环境变量字典
 	env map[string]any
@@ -76,7 +77,7 @@ var _ SessionConfig = (*defaultSessionConfig)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionConfig 创建默认 SessionConfig 实例。
-// 对应 Python: Config()
+// Python: Config()
 func NewSessionConfig(ctx context.Context) *defaultSessionConfig {
 	return NewSessionConfigWithLoader(ctx, &defaultBuiltinConfigLoader{})
 }
@@ -94,7 +95,7 @@ func NewSessionConfigWithLoader(ctx context.Context, loader BuiltinConfigLoader)
 }
 
 // GetEnv 获取环境变量值。
-// 对应 Python: Config.get_env(key, default)
+// Python: Config.get_env(key, default)
 func (c *defaultSessionConfig) GetEnv(key string, defaultValue ...any) any {
 	if v, exists := c.env[key]; exists {
 		return v
@@ -106,17 +107,13 @@ func (c *defaultSessionConfig) GetEnv(key string, defaultValue ...any) any {
 }
 
 // GetEnvs 获取所有环境变量（深拷贝）。
-// 对应 Python: Config.get_envs() → deepcopy(self._env)
+// Python: Config.get_envs() → deepcopy(self._env)
 func (c *defaultSessionConfig) GetEnvs() map[string]any {
-	result := make(map[string]any, len(c.env))
-	for k, v := range c.env {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(c.env)
 }
 
 // SetEnvs 合并环境变量。
-// 对应 Python: Config.set_envs(envs)
+// Python: Config.set_envs(envs)
 func (c *defaultSessionConfig) SetEnvs(envs map[string]any) {
 	if envs == nil {
 		return
@@ -127,7 +124,7 @@ func (c *defaultSessionConfig) SetEnvs(envs map[string]any) {
 }
 
 // GetWorkflowConfig 按 workflowID 获取工作流配置。
-// 对应 Python: Config.get_workflow_config(workflow_id)
+// Python: Config.get_workflow_config(workflow_id)
 func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) any {
 	if workflowID == "" {
 		return nil
@@ -136,7 +133,7 @@ func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) any {
 }
 
 // AddWorkflowConfig 添加工作流配置。
-// 对应 Python: Config.add_workflow_config(workflow_id, workflow_config)
+// Python: Config.add_workflow_config(workflow_id, workflow_config)
 func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConfig any) {
 	if workflowID == "" {
 		return
@@ -148,7 +145,7 @@ func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConf
 }
 
 // LoadBuiltinConfigs 默认加载器实现。
-// 对应 Python: Config._load_builtin_configs_
+// Python: Config._load_builtin_configs_
 func (l *defaultBuiltinConfigLoader) LoadBuiltinConfigs(envs map[string]any) {
 	defaults := constants.BuiltinDefaults()
 	for k, v := range defaults {
@@ -159,7 +156,7 @@ func (l *defaultBuiltinConfigLoader) LoadBuiltinConfigs(envs map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadEnvs 加载环境变量配置。
-// 对应 Python: Config._load_envs_()
+// Python: Config._load_envs_()
 // 三层优先级：os.Getenv > context.Value > 内置默认值
 func (c *defaultSessionConfig) loadEnvs(ctx context.Context) {
 	// 1. 加载内置默认值

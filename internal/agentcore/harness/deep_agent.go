@@ -61,7 +61,7 @@ import (
 // 包装 ReActAgent + 任务循环 + Rails + 技能 + 子 Agent，
 // 实现两层架构：外层（DeepAgent）负责多轮任务编排，
 // 内层（ReActAgent）负责单轮 Think-Act-Observe 推理。
-// 对齐 Python: DeepAgent (openjiuwen/harness/deep_agent.py)
+// Python: DeepAgent (openjiuwen/harness/deep_agent.py)
 type DeepAgent struct {
 	// card Agent 身份卡片
 	card *agentschema.AgentCard
@@ -132,7 +132,7 @@ const (
 	logComponent = logger.ComponentAgentCore
 
 	// defaultAutoInvokeDelay 自动 invoke 延迟秒数
-	// 对齐 Python: schedule_auto_invoke_on_spawn_done delay=0.5
+	// Python: schedule_auto_invoke_on_spawn_done delay=0.5
 	defaultAutoInvokeDelay = 0.5
 )
 
@@ -140,7 +140,7 @@ const (
 
 var (
 	// bridgeEvents 桥接到内层 ReActAgent 的事件集合
-	// 对齐 Python: _BRIDGE_EVENTS
+	// Python: _BRIDGE_EVENTS
 	bridgeEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 		agentinterfaces.CallbackBeforeModelCall:  true,
 		agentinterfaces.CallbackAfterModelCall:   true,
@@ -151,14 +151,14 @@ var (
 	}
 
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
-	// 对齐 Python: _OUTER_ONLY_EVENTS
+	// Python: _OUTER_ONLY_EVENTS
 	outerOnlyEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 		agentinterfaces.CallbackBeforeInvoke: true,
 		agentinterfaces.CallbackAfterInvoke:  true,
 	}
 
 	// deepEvents DeepAgent 扩展事件集合
-	// 对齐 Python: _DEEP_EVENTS
+	// Python: _DEEP_EVENTS
 	deepEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 		agentinterfaces.CallbackBeforeTaskIteration: true,
 		agentinterfaces.CallbackAfterTaskIteration:  true,
@@ -172,7 +172,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDeepAgent 创建 DeepAgent 实例。
-// 对齐 Python: DeepAgent.__init__(card) (line 126)
+// Python: DeepAgent.__init__(card) (line 126)
 func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 	return &DeepAgent{
 		card:            card,
@@ -183,7 +183,7 @@ func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 
 // ConfigureDeepConfig 配置 DeepAgent（使用 DeepAgentConfig）。
 // 首次调用执行 initialConfigure，后续调用执行 hotReconfigure。
-// 对齐 Python: DeepAgent.configure(config) (line 150)
+// Python: DeepAgent.configure(config) (line 150)
 func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.DeepAgentConfig) error {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
@@ -205,7 +205,7 @@ func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.De
 // Configure 配置 Agent。满足 BaseAgent 接口。
 // 注意：DeepAgent 的配置必须通过 ConfigureDeepConfig() 传入 DeepAgentConfig。
 // 此方法仅满足接口签名，如果传入非 DeepAgentConfig 将返回错误。
-// 对齐 Python: DeepAgent.configure(config) (line 150)
+// Python: DeepAgent.configure(config) (line 150)
 func (d *DeepAgent) Configure(ctx context.Context, config agentinterfaces.AgentConfig) error {
 	// DeepAgentConfig 不实现 AgentConfig 接口，
 	// 调用方应使用 ConfigureDeepConfig() 代替
@@ -214,7 +214,7 @@ func (d *DeepAgent) Configure(ctx context.Context, config agentinterfaces.AgentC
 }
 
 // Invoke 非流式执行 Agent。
-// 对齐 Python: DeepAgent.invoke(inputs, session) (line 2261)
+// Python: DeepAgent.invoke(inputs, session) (line 2261)
 func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
@@ -246,7 +246,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 	var result map[string]any
 
-	// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
+	// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
 	if err := cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 		if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
@@ -276,7 +276,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 }
 
 // Stream 流式执行 Agent。
-// 对齐 Python: DeepAgent.stream(inputs, session, stream_modes) (line 2302)
+// Python: DeepAgent.stream(inputs, session, stream_modes) (line 2302)
 func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
@@ -316,7 +316,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 		defer d.invokeActive.Store(false)
 		defer close(outCh)
 
-		// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
+		// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
 		_ = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 			var streamResult map[string]any
@@ -350,7 +350,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 				}
 			}
 
-			// 对齐 Python line 2354-2360: stream_result 合并
+			// Python: line 2354-2360: stream_result 合并
 			if streamResult == nil && len(streamOutputParts) > 0 {
 				streamResult = map[string]any{
 					"output":      joinStrings(streamOutputParts),
@@ -373,7 +373,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 }
 
 // Card 返回 Agent 身份卡片。
-// 对齐 Python: BaseAgent.card 属性
+// Python: BaseAgent.card 属性
 func (d *DeepAgent) Card() *agentschema.AgentCard {
 	return d.card
 }
@@ -381,19 +381,19 @@ func (d *DeepAgent) Card() *agentschema.AgentCard {
 // Config 返回 nil。与 Python 对齐，DeepAgent.config 返回 None。
 // 需要 DeepAgent 配置的消费者应使用 DeepConfig()，
 // 需要内层 Agent 配置的消费者应使用 ReactAgent().Config()。
-// 对齐 Python: DeepAgent.config = None (line 474)
+// Python: DeepAgent.config = None (line 474)
 func (d *DeepAgent) Config() agentinterfaces.AgentConfig {
 	return nil
 }
 
 // AbilityManager 返回能力管理器。
-// 对齐 Python: BaseAgent.ability_manager 属性
+// Python: BaseAgent.ability_manager 属性
 func (d *DeepAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return d.abilityManager
 }
 
 // SystemPromptBuilder 返回系统提示词构建器。
-// 对齐 Python: DeepAgent.system_prompt_builder 属性
+// Python: DeepAgent.system_prompt_builder 属性
 func (d *DeepAgent) SystemPromptBuilder() saprompts.SystemPromptBuilderInterface {
 	if d.systemPromptBuilder != nil {
 		return d.systemPromptBuilder.SystemPromptBuilder
@@ -402,20 +402,20 @@ func (d *DeepAgent) SystemPromptBuilder() saprompts.SystemPromptBuilderInterface
 }
 
 // CallbackManager 返回回调管理器。
-// 对齐 Python: BaseAgent.agent_callback_manager 属性
+// Python: BaseAgent.agent_callback_manager 属性
 func (d *DeepAgent) CallbackManager() *agentinterfaces.AgentCallbackManager {
 	return d.callbackManager
 }
 
 // RegisterCallback 注册回调。
-// 对齐 Python: BaseAgent.register_callback(event, callback, priority)
+// Python: BaseAgent.register_callback(event, callback, priority)
 func (d *DeepAgent) RegisterCallback(ctx context.Context, event agentinterfaces.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
 	d.callbackManager.RegisterCallback(ctx, event, fn, opts...)
 	return nil
 }
 
 // RegisterRail 注册 Rail。
-// 对齐 Python: BaseAgent.register_rail(rail) (line 1187)
+// Python: BaseAgent.register_rail(rail) (line 1187)
 func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	d.railsMu.Lock()
 	// 检查是否为 TaskCompletionRail
@@ -424,7 +424,7 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 	}
 	d.railsMu.Unlock()
 
-	if err := r.Init(d); err != nil {
+	if err := r.Init(ctx, d); err != nil {
 		return err
 	}
 	d.registerRailSelective(ctx, r)
@@ -436,7 +436,7 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 }
 
 // UnregisterRail 注销 Rail。
-// 对齐 Python: BaseAgent.unregister_rail(rail) (line 1198)
+// Python: BaseAgent.unregister_rail(rail) (line 1198)
 func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error {
 	d.railsMu.Lock()
 	// 从 pendingRails 中移除
@@ -466,7 +466,7 @@ func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentR
 }
 
 // ReactAgent 返回内层 ReActAgent 实例。
-// 对齐 Python: DeepAgent.react_agent 属性 (line 479)
+// Python: DeepAgent.react_agent 属性 (line 479)
 func (d *DeepAgent) ReactAgent() *agents.ReActAgent {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -474,7 +474,7 @@ func (d *DeepAgent) ReactAgent() *agents.ReActAgent {
 }
 
 // LoopCoordinator 返回循环协调器（可能为 nil）。
-// 对齐 Python: DeepAgent.loop_coordinator 属性 (line 677)
+// Python: DeepAgent.loop_coordinator 属性 (line 677)
 func (d *DeepAgent) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -485,7 +485,7 @@ func (d *DeepAgent) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
 }
 
 // LoopController 返回任务循环控制器。
-// 对齐 Python: DeepAgent.loop_controller 属性 (line 682)
+// Python: DeepAgent.loop_controller 属性 (line 682)
 func (d *DeepAgent) LoopController() controller.ControllerInterface {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -496,7 +496,7 @@ func (d *DeepAgent) LoopController() controller.ControllerInterface {
 }
 
 // EventHandler 返回事件处理器。
-// 对齐 Python: DeepAgent.event_handler 属性 (line 694)
+// Python: DeepAgent.event_handler 属性 (line 694)
 func (d *DeepAgent) EventHandler() ctrlmodules.EventHandler {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -507,7 +507,7 @@ func (d *DeepAgent) EventHandler() ctrlmodules.EventHandler {
 }
 
 // LoadState 从会话加载 DeepAgentState。
-// 对齐 Python: DeepAgent.load_state(session) (line 1790)
+// Python: DeepAgent.load_state(session) (line 1790)
 func (d *DeepAgent) LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	// 两级缓存：runtime attribute → persisted session state
 	state := d.readRuntimeState(sess)
@@ -530,7 +530,7 @@ func (d *DeepAgent) LoadState(sess sessioninterfaces.SessionFacade) *hschema.Dee
 }
 
 // DeepConfig 返回 DeepAgent 配置。
-// 对齐 Python: DeepAgent.deep_config 属性 (line 474)
+// Python: DeepAgent.deep_config 属性 (line 474)
 func (d *DeepAgent) DeepConfig() *hschema.DeepAgentConfig {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -538,25 +538,25 @@ func (d *DeepAgent) DeepConfig() *hschema.DeepAgentConfig {
 }
 
 // IsInvokeActive 判断是否有活跃的 invoke。
-// 对齐 Python: DeepAgent.is_invoke_active 属性 (line 460)
+// Python: DeepAgent.is_invoke_active 属性 (line 460)
 func (d *DeepAgent) IsInvokeActive() bool {
 	return d.invokeActive.Load()
 }
 
 // IsAutoInvokeScheduled 判断是否已调度自动 invoke。
-// 对齐 Python: DeepAgent.is_auto_invoke_scheduled 属性 (line 465)
+// Python: DeepAgent.is_auto_invoke_scheduled 属性 (line 465)
 func (d *DeepAgent) IsAutoInvokeScheduled() bool {
 	return d.autoInvokeScheduled.Load()
 }
 
 // SetAutoInvokeScheduled 设置自动 invoke 调度标记。
-// 对齐 Python: DeepAgent.set_auto_invoke_scheduled(is_scheduled) (line 469)
+// Python: DeepAgent.set_auto_invoke_scheduled(is_scheduled) (line 469)
 func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 	d.autoInvokeScheduled.Store(scheduled)
 }
 
 // ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke。
-// 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
+// Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
 func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
@@ -592,7 +592,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText
 
 // CreateSubagent 创建子 Agent 实例。
 // ⤵️ 9.3 / 9.25-9.27 / 9.31 回填：browser/code/research/mobile_gui 工厂待实现
-// 对齐 Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
+// Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
 func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	spec := d.findSubagentSpec(subagentType)
 	if spec == nil {
@@ -635,7 +635,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 		// 通过 CreateDeepAgent 工厂创建子 Agent 实例
 		createParams := buildCreateParamsFromSubagentKwargs(kwargs)
 		// 子 Agent 创建独立 CwdState，实现 inter-Agent 隔离
-		// 对齐 Python: DeepAgent.create_subagent 中 init_cwd 调用
+		// Python: DeepAgent.create_subagent 中 init_cwd 调用
 		var subWwRootPath string
 		if createParams.Workspace != nil {
 			subWwRootPath = createParams.Workspace.RootPath
@@ -654,7 +654,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 }
 
 // SetSessionToolkit 设置会话工具包。
-// 对齐 Python: DeepAgent.set_session_toolkit(toolkit) (line 146)
+// Python: DeepAgent.set_session_toolkit(toolkit) (line 146)
 func (d *DeepAgent) SetSessionToolkit(toolkit *subagent.SessionToolkit) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
@@ -662,7 +662,7 @@ func (d *DeepAgent) SetSessionToolkit(toolkit *subagent.SessionToolkit) {
 }
 
 // SetReactAgent 注入内层 Agent 实现（用于运行时接线/测试）。
-// 对齐 Python: DeepAgent.set_react_agent(react_agent, initialized) (line 444)
+// Python: DeepAgent.set_react_agent(react_agent, initialized) (line 444)
 func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
@@ -673,7 +673,7 @@ func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
 }
 
 // IsInitialized 返回是否已完成懒初始化。
-// 对齐 Python: DeepAgent.is_initialized 属性 (line 455)
+// Python: DeepAgent.is_initialized 属性 (line 455)
 func (d *DeepAgent) IsInitialized() bool {
 	d.initMu.Lock()
 	v := d.initialized
@@ -682,7 +682,7 @@ func (d *DeepAgent) IsInitialized() bool {
 }
 
 // AddRail 同步排队一个 Rail 以便延迟注册。
-// 对齐 Python: DeepAgent.add_rail(rail) (line 1139)
+// Python: DeepAgent.add_rail(rail) (line 1139)
 func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
@@ -696,7 +696,7 @@ func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
 }
 
 // FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。
-// 对齐 Python: DeepAgent.find_rails_by_type(rail_types) (line 1155)
+// Python: DeepAgent.find_rails_by_type(rail_types) (line 1155)
 func (d *DeepAgent) FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail {
 	if len(railTypes) == 0 {
 		return nil
@@ -719,7 +719,7 @@ func (d *DeepAgent) FindRailsByType(railTypes ...reflect.Type) []agentinterfaces
 }
 
 // StripRailsByType 按类型移除排队 Rail 并将已注册 Rail 标记为废弃。
-// 对齐 Python: DeepAgent.strip_rails_by_type(rail_types) (line 1166)
+// Python: DeepAgent.strip_rails_by_type(rail_types) (line 1166)
 func (d *DeepAgent) StripRailsByType(railTypes ...reflect.Type) int {
 	if len(railTypes) == 0 {
 		return 0
@@ -751,7 +751,7 @@ func (d *DeepAgent) StripRailsByType(railTypes ...reflect.Type) int {
 }
 
 // SwitchMode 切换 Agent 模式，更新会话级 PlanModeState。
-// 对齐 Python: DeepAgent.switch_mode(session, mode) (line 1859)
+// Python: DeepAgent.switch_mode(session, mode) (line 1859)
 func (d *DeepAgent) SwitchMode(sess sessioninterfaces.SessionFacade, mode string) {
 	state := d.LoadState(sess)
 	if state.PlanMode.Mode == mode {
@@ -765,7 +765,7 @@ func (d *DeepAgent) SwitchMode(sess sessioninterfaces.SessionFacade, mode string
 }
 
 // RestoreModeAfterPlanExit 恢复进入规划模式前的模式。
-// 对齐 Python: DeepAgent.restore_mode_after_plan_exit(session) (line 1875)
+// Python: DeepAgent.restore_mode_after_plan_exit(session) (line 1875)
 func (d *DeepAgent) RestoreModeAfterPlanExit(sess sessioninterfaces.SessionFacade) {
 	state := d.LoadState(sess)
 	state.PlanMode.Mode = state.PlanMode.PrePlanMode
@@ -777,7 +777,7 @@ func (d *DeepAgent) RestoreModeAfterPlanExit(sess sessioninterfaces.SessionFacad
 }
 
 // GetPlanFilePath 从会话状态中的 slug 推导计划文件路径。
-// 对齐 Python: DeepAgent.get_plan_file_path(session) (line 1889)
+// Python: DeepAgent.get_plan_file_path(session) (line 1889)
 func (d *DeepAgent) GetPlanFilePath(sess sessioninterfaces.SessionFacade) string {
 	state := d.LoadState(sess)
 	slug := state.PlanMode.PlanSlug
@@ -795,19 +795,19 @@ func (d *DeepAgent) GetPlanFilePath(sess sessioninterfaces.SessionFacade) string
 }
 
 // SaveState 持久化 DeepAgent 状态到会话。
-// 对齐 Python: DeepAgent.save_state(session, state) (line 1815)
+// Python: DeepAgent.save_state(session, state) (line 1815)
 func (d *DeepAgent) SaveState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState) {
 	d.saveState(sess, state)
 }
 
 // ClearState 清除 DeepAgent 运行时缓存。
-// 对齐 Python: DeepAgent.clear_state(session, clear_persisted) (line 1843)
+// Python: DeepAgent.clear_state(session, clear_persisted) (line 1843)
 func (d *DeepAgent) ClearState(sess sessioninterfaces.SessionFacade, clearPersisted bool) {
 	d.clearState(sess, clearPersisted)
 }
 
 // FollowUp 发布 FollowUp 事件到任务循环。
-// 对齐 Python: DeepAgent.follow_up(msg, task_id, session) (line 2368)
+// Python: DeepAgent.follow_up(msg, task_id, session) (line 2368)
 func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, sess *session.Session) {
 	d.configMu.RLock()
 	ctrl := d.loopController
@@ -825,20 +825,20 @@ func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, ses
 		return
 	}
 
-	// 对齐 Python: FollowUpEvent.from_text(msg)
+	// Python: FollowUpEvent.from_text(msg)
 	event := cschema.FromText(msg)
 	if taskID != "" {
 		event.SetMetadata(map[string]any{"task_id": taskID})
 	}
 
-	// 对齐 Python: controller.event_queue.publish_event_async(card.id, sess, event)
+	// Python: controller.event_queue.publish_event_async(card.id, sess, event)
 	if err := ctrl.PublishEventAsync(ctx, sessToUse, event); err != nil {
 		logger.Error(logComponent).Err(err).Str("msg", msg).Msg("FollowUp 发布事件失败")
 	}
 }
 
 // Steer 发布 TaskInteraction 事件到任务循环。
-// 对齐 Python: DeepAgent.steer(msg, session) (line 2400)
+// Python: DeepAgent.steer(msg, session) (line 2400)
 func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session) {
 	d.configMu.RLock()
 	ctrl := d.loopController
@@ -856,8 +856,8 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 		return
 	}
 
-	// 对齐 Python: TaskInteractionEvent(interaction=[TextDataFrame(text=msg)])
-	// 对齐 Python: controller.event_queue.publish_event_async(self.card.id, sess, event)
+	// Python: TaskInteractionEvent(interaction=[TextDataFrame(text=msg)])
+	// Python: controller.event_queue.publish_event_async(self.card.id, sess, event)
 	event := &cschema.TaskInteractionEvent{
 		Interaction: []cschema.DataFrame{&cschema.TextDataFrame{Text: msg}},
 	}
@@ -869,7 +869,7 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 }
 
 // Abort 请求立即中止任务循环。
-// 对齐 Python: DeepAgent.abort(session) (line 2448)
+// Python: DeepAgent.abort(session) (line 2448)
 func (d *DeepAgent) Abort(ctx context.Context) {
 	d.configMu.RLock()
 	coord := d.loopCoordinator
@@ -880,7 +880,7 @@ func (d *DeepAgent) Abort(ctx context.Context) {
 		coord.RequestAbort()
 		handler := ctrl.EventHandler()
 		if handler != nil {
-			// 对齐 Python: handler.on_abort()
+			// Python: handler.on_abort()
 			if loopHandler, ok := handler.(*task_loop.TaskLoopEventHandler); ok {
 				loopHandler.OnAbort()
 			}
@@ -891,7 +891,7 @@ func (d *DeepAgent) Abort(ctx context.Context) {
 }
 
 // EnqueueHarnessConfig 排队一个 harness_config.yaml 在下次 Stream() 时加载。
-// 对齐 Python: DeepAgent.enqueue_harness_config(config_path) (line 1601)
+// Python: DeepAgent.enqueue_harness_config(config_path) (line 1601)
 func (d *DeepAgent) EnqueueHarnessConfig(configPath string) {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
@@ -900,7 +900,7 @@ func (d *DeepAgent) EnqueueHarnessConfig(configPath string) {
 
 // LoadHarnessConfig 热加载 harness_config.yaml 中声明的资源。
 // ⤵️ 9.3 回填：内部调 create_deep_agent，完整实现待工厂补全
-// 对齐 Python: DeepAgent.load_harness_config(config_path) (line 1218)
+// Python: DeepAgent.load_harness_config(config_path) (line 1218)
 func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
 	// ⤵️ 9.3 回填：HarnessConfigLoader.load + 资源注册逻辑
 	return nil, fmt.Errorf("load_harness_config 尚未实现，⤵️ 9.3 回填")
@@ -908,20 +908,20 @@ func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string) ([
 
 // UnloadHarnessConfig 卸载 harness_config.yaml 中声明的资源。
 // ⤵️ 9.3 回填：内部调 create_deep_agent，完整实现待工厂补全
-// 对齐 Python: DeepAgent.unload_harness_config(config_path) (line 1359)
+// Python: DeepAgent.unload_harness_config(config_path) (line 1359)
 func (d *DeepAgent) UnloadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
 	// ⤵️ 9.3 回填：资源卸载逻辑
 	return nil, fmt.Errorf("unload_harness_config 尚未实现，⤵️ 9.3 回填")
 }
 
 // EnsureInitialized 执行懒初始化（仅用于测试）。
-// 对齐 Python: DeepAgent.ensure_initialized() (line 865)
+// Python: DeepAgent.ensure_initialized() (line 865)
 func (d *DeepAgent) EnsureInitialized(ctx context.Context) (context.Context, error) {
 	return d.ensureInitialized(ctx)
 }
 
 // InitWorkspace 初始化工作空间目录结构。
-// 对齐 Python: DeepAgent.init_workspace() (line 869)
+// Python: DeepAgent.init_workspace() (line 869)
 func (d *DeepAgent) InitWorkspace(ctx context.Context) error {
 	d.configMu.RLock()
 	cfg := d.deepConfig
@@ -937,7 +937,7 @@ func (d *DeepAgent) InitWorkspace(ctx context.Context) error {
 }
 
 // GetContextUsage 获取当前上下文占用统计。
-// 对齐 Python: DeepAgent.get_context_usage(session_id, context_id) (line 566)
+// Python: DeepAgent.get_context_usage(session_id, context_id) (line 566)
 func (d *DeepAgent) GetContextUsage(ctx context.Context, sessionID string, contextID string) (map[string]any, error) {
 	modelCtx, err := d.getContextOrError(sessionID, contextID)
 	if err != nil {
@@ -973,19 +973,19 @@ func (d *DeepAgent) GetContextUsage(ctx context.Context, sessionID string, conte
 }
 
 // GetContextOccupancy GetContextUsage 的别名。
-// 对齐 Python: DeepAgent.get_context_occupancy (line 596)
+// Python: DeepAgent.get_context_occupancy (line 596)
 func (d *DeepAgent) GetContextOccupancy(ctx context.Context, sessionID string, contextID string) (map[string]any, error) {
 	return d.GetContextUsage(ctx, sessionID, contextID)
 }
 
 // GetCurrentContext 返回当前上下文消息。
-// 对齐 Python: DeepAgent.get_current_context(session_id, context_id) (line 604)
+// Python: DeepAgent.get_current_context(session_id, context_id) (line 604)
 func (d *DeepAgent) GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error) {
 	modelCtx, err := d.getContextOrError(sessionID, contextID)
 	if err != nil {
 		return nil, err
 	}
-	// 对齐 Python: context.get_messages() → size=0, withHistory=true
+	// Python: context.get_messages() → size=0, withHistory=true
 	messages, err := modelCtx.GetMessages(0, true)
 	if err != nil {
 		return nil, err
@@ -994,7 +994,7 @@ func (d *DeepAgent) GetCurrentContext(ctx context.Context, sessionID string, con
 }
 
 // CreateNewContextEngine 创建新的上下文引擎。
-// 对齐 Python: DeepAgent.create_new_context_engine(session_id, messages) (line 643)
+// Python: DeepAgent.create_new_context_engine(session_id, messages) (line 643)
 func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
@@ -1006,7 +1006,7 @@ func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string
 			exception.WithMsg("DeepAgent 未配置，请先调用 configure()"))
 	}
 
-	// 对齐 Python: new_session_id = session_id or str(uuid.uuid4())
+	// Python: new_session_id = session_id or str(uuid.uuid4())
 	newSessionID := sessionID
 	if newSessionID == "" {
 		newSessionID = uuid.New().String()
@@ -1014,7 +1014,7 @@ func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string
 
 	normalizedMessages := normalizeContextMessages(messages)
 
-	// 对齐 Python: await self._react_agent.context_engine.create_context(
+	// Python: await self._react_agent.context_engine.create_context(
 	//     Python: session=Session(session_id=new_session_id, card=self.card),
 	//     Python: history_messages=normalized_messages,
 	// )
@@ -1028,13 +1028,13 @@ func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string
 }
 
 // NewContextEngine CreateNewContextEngine 的别名。
-// 对齐 Python: DeepAgent.new_context_engine (line 665)
+// Python: DeepAgent.new_context_engine (line 665)
 func (d *DeepAgent) NewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error) {
 	return d.CreateNewContextEngine(ctx, sessionID, messages)
 }
 
 // LoopSession 返回活跃的循环会话。
-// 对齐 Python: DeepAgent.loop_session 属性 (line 888)
+// Python: DeepAgent.loop_session 属性 (line 888)
 func (d *DeepAgent) LoopSession() *session.Session {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -1042,7 +1042,7 @@ func (d *DeepAgent) LoopSession() *session.Session {
 }
 
 // ReactConfig 返回内层 ReActAgent 配置（仅用于测试）。
-// 对齐 Python: DeepAgent.react_config 属性 (line 894)
+// Python: DeepAgent.react_config 属性 (line 894)
 func (d *DeepAgent) ReactConfig() agentinterfaces.AgentConfig {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
@@ -1063,7 +1063,7 @@ func (d *DeepAgent) AgentID() string {
 
 // SpecName 返回规格名称，用于子 Agent 匹配。
 // 实现 SubagentSpec 接口。
-// 对齐 Python: isinstance(spec, DeepAgent) 时通过 spec.card.name 匹配。
+// Python: isinstance(spec, DeepAgent) 时通过 spec.card.name 匹配。
 func (d *DeepAgent) SpecName() string {
 	if d.card == nil {
 		return ""
@@ -1074,7 +1074,7 @@ func (d *DeepAgent) SpecName() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveContextSessionID 解析上下文 API 使用的会话 ID。
-// 对齐 Python: DeepAgent._resolve_context_session_id(session_id) (line 483)
+// Python: DeepAgent._resolve_context_session_id(session_id) (line 483)
 func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
 	if sessionID != "" {
 		return sessionID, nil
@@ -1094,7 +1094,7 @@ func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
 }
 
 // getContextOrError 获取内部 ReAct 上下文，不存在则返回错误。
-// 对齐 Python: DeepAgent._get_context_or_error(session_id, context_id) (line 501)
+// Python: DeepAgent._get_context_or_error(session_id, context_id) (line 501)
 func (d *DeepAgent) getContextOrError(sessionID string, contextID string) (ceinterface.ModelContext, error) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
@@ -1125,7 +1125,7 @@ func (d *DeepAgent) getContextOrError(sessionID string, contextID string) (ceint
 }
 
 // resolveContextWindowTokens 解析配置的模型上下文窗口大小。
-// 对齐 Python: DeepAgent._resolve_context_window_tokens() (line 547)
+// Python: DeepAgent._resolve_context_window_tokens() (line 547)
 func (d *DeepAgent) resolveContextWindowTokens() int {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
@@ -1159,7 +1159,7 @@ func (d *DeepAgent) resolveContextWindowTokens() int {
 }
 
 // normalizeContextMessages 规范化上下文消息输入。
-// 对齐 Python: DeepAgent._normalize_context_messages(messages) (line 614)
+// Python: DeepAgent._normalize_context_messages(messages) (line 614)
 func normalizeContextMessages(messages []llmschema.BaseMessage) []llmschema.BaseMessage {
 	if messages == nil {
 		return nil
@@ -1168,12 +1168,12 @@ func normalizeContextMessages(messages []llmschema.BaseMessage) []llmschema.Base
 }
 
 // filterDisabledTools 过滤掉被禁用的工具。
-// 对齐 Python: DeepAgent._filter_disabled_tools(config) (line 162)
+// Python: DeepAgent._filter_disabled_tools(config) (line 162)
 func (d *DeepAgent) filterDisabledTools(config *hschema.DeepAgentConfig) {
 	if config.Tools == nil {
 		return
 	}
-	// 对齐 Python: disabled_tool_names 集合
+	// Python: disabled_tool_names 集合
 	disabledNames := make(map[string]bool)
 	if !IsFreeSearchEnabled() {
 		disabledNames["free_search"] = true
@@ -1184,7 +1184,7 @@ func (d *DeepAgent) filterDisabledTools(config *hschema.DeepAgentConfig) {
 	if len(disabledNames) == 0 {
 		return
 	}
-	// 对齐 Python: config.tools = [card for card in config.tools if ...]
+	// Python: config.tools = [card for card in config.tools if ...]
 	var filtered []*tool.ToolCard
 	for _, card := range config.Tools {
 		if !disabledNames[card.Name] {
@@ -1195,7 +1195,7 @@ func (d *DeepAgent) filterDisabledTools(config *hschema.DeepAgentConfig) {
 }
 
 // initialConfigure 首次配置：持久化配置、创建内层 ReActAgent、排队 Rails。
-// 对齐 Python: DeepAgent._initial_configure(config) (line 230)
+// Python: DeepAgent._initial_configure(config) (line 230)
 func (d *DeepAgent) initialConfigure(ctx context.Context, config *hschema.DeepAgentConfig) {
 	d.deepConfig = config
 	if config.Card != nil {
@@ -1207,7 +1207,7 @@ func (d *DeepAgent) initialConfigure(ctx context.Context, config *hschema.DeepAg
 }
 
 // hotReconfigure 热重配置：不重启 Agent，更新模型/工具/提示词等。
-// 对齐 Python: DeepAgent._hot_reconfigure(config) (line 239)
+// Python: DeepAgent._hot_reconfigure(config) (line 239)
 func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgentConfig) {
 	previousConfig := d.deepConfig
 	d.deepConfig = config
@@ -1242,7 +1242,7 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 }
 
 // hotReloadRails 热重配置时循环废弃旧 Rail。
-// 对齐 Python: DeepAgent._hot_reload_rails(config) (line 263)
+// Python: DeepAgent._hot_reload_rails(config) (line 263)
 func (d *DeepAgent) hotReloadRails(config *hschema.DeepAgentConfig) {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
@@ -1279,7 +1279,7 @@ func (d *DeepAgent) hotReloadRails(config *hschema.DeepAgentConfig) {
 }
 
 // hotReloadModel 热更新 ReActAgent 模型配置。
-// 对齐 Python: DeepAgent._hot_reload_model(config) (line 291)
+// Python: DeepAgent._hot_reload_model(config) (line 291)
 func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgentConfig) {
 	if d.reactAgent == nil {
 		return
@@ -1326,7 +1326,7 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 }
 
 // hotReloadTools 同步 AbilityManager 工具卡片。
-// 对齐 Python: DeepAgent._hot_reload_tools(config, previous_tools) (line 324)
+// Python: DeepAgent._hot_reload_tools(config, previous_tools) (line 324)
 func (d *DeepAgent) hotReloadTools(config *hschema.DeepAgentConfig, previousTools *[]*tool.ToolCard) {
 	newByName := make(map[string]*tool.ToolCard)
 	for _, card := range config.Tools {
@@ -1393,7 +1393,7 @@ func (d *DeepAgent) hotReloadTools(config *hschema.DeepAgentConfig, previousTool
 }
 
 // hotReloadSystemPrompt 重建 SystemPromptBuilder。
-// 对齐 Python: DeepAgent._hot_reload_system_prompt(config) (line 370)
+// Python: DeepAgent._hot_reload_system_prompt(config) (line 370)
 func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.DeepAgentConfig) {
 	language := hprompts.ResolveLanguage(config.Language)
 	mode := hprompts.ResolveMode(config.PromptMode.String())
@@ -1433,7 +1433,7 @@ func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.D
 }
 
 // queuePendingRails 将配置驱动的 Rail 追加到待注册列表。
-// 对齐 Python: DeepAgent._queue_pending_rails(config) (line 408)
+// Python: DeepAgent._queue_pending_rails(config) (line 408)
 func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
@@ -1457,7 +1457,7 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	}
 
 	if config.Permissions != nil {
-		// 对齐 Python: build_permission_interrupt_rail(permissions=..., llm=..., model_name=..., host=..., workspace_root=...)
+		// Python: build_permission_interrupt_rail(permissions=..., llm=..., model_name=..., host=..., workspace_root=...)
 		permConfig := permissionsSectionToMap(config.Permissions)
 		var host *hsecurity.ToolPermissionHost
 		if config.PermissionHost != nil {
@@ -1483,7 +1483,7 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 }
 
 // createReactAgent 从当前 DeepAgentConfig 构建内层 ReActAgent。
-// 对齐 Python: DeepAgent._create_react_agent() (line 703)
+// Python: DeepAgent._create_react_agent() (line 703)
 func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	cfg := d.deepConfig
 	if cfg == nil {
@@ -1571,7 +1571,7 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 }
 
 // ensureInitialized 执行懒初始化。
-// 对齐 Python: DeepAgent._ensure_initialized() (line 813)
+// Python: DeepAgent._ensure_initialized() (line 813)
 func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, error) {
 	d.initMu.Lock()
 	if d.initialized {
@@ -1586,7 +1586,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	d.configMu.RUnlock()
 
 	// 初始化工作空间 CWD
-	// 对齐 Python: DeepAgent._ensure_initialized() 中 init_cwd 调用 (line 813-828)
+	// Python: DeepAgent._ensure_initialized() 中 init_cwd 调用 (line 813-828)
 	if cfg != nil && cfg.Workspace != nil && cfg.Workspace.RootPath != "" {
 		initRoot := cfg.Workspace.RootPath
 		cwdState := cwd.InitCwd(initRoot, cwd.WithWorkspace(initRoot))
@@ -1642,7 +1642,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 			d.taskCompletionRail = tc
 			d.railsMu.Unlock()
 		}
-		// 对齐 Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace
+		// Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace
 		if provider, ok := r.(rails.DeepAgentRailProvider); ok {
 			d.configMu.RLock()
 			cfg := d.deepConfig
@@ -1652,7 +1652,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 				provider.SetWorkspace(cfg.Workspace)
 			}
 		}
-		if err := r.Init(d); err != nil {
+		if err := r.Init(ctx, d); err != nil {
 			logger.Warn(logComponent).Err(err).Str("rail_type", reflect.TypeOf(r).String()).Msg("Rail 初始化失败")
 			continue
 		}
@@ -1667,7 +1667,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 }
 
 // needsWorkspaceInit 检查是否需要工作空间初始化。
-// 对齐 Python: DeepAgent._needs_workspace_init() (line 854)
+// Python: DeepAgent._needs_workspace_init() (line 854)
 func (d *DeepAgent) needsWorkspaceInit() bool {
 	d.configMu.RLock()
 	cfg := d.deepConfig
@@ -1679,7 +1679,7 @@ func (d *DeepAgent) needsWorkspaceInit() bool {
 }
 
 // registerPendingMCPs 注册配置的 MCP 服务器。
-// 对齐 Python: DeepAgent._register_pending_mcps() (line 773)
+// Python: DeepAgent._register_pending_mcps() (line 773)
 func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 	d.configMu.RLock()
 	cfg := d.deepConfig
@@ -1695,14 +1695,14 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 		existingConfig, getErr := resourceMgr.GetMcpServerConfig(mcpConfig.ServerID)
 
 		if getErr != nil || existingConfig == nil {
-			// 对齐 Python: existing_config is None → add_mcp_server
+			// Python: existing_config is None → add_mcp_server
 			_, addErr := resourceMgr.AddMcpServer(ctx, mcpConfig, resources_manager.WithMcpTag(resources_manager.Tag(d.card.ID)))
 			if addErr != nil {
 				logger.Error(logComponent).Err(addErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 服务器注册失败")
 				continue
 			}
 		} else {
-			// 对齐 Python: existing_config.model_dump() != mcp_config.model_dump() → error
+			// Python: existing_config.model_dump() != mcp_config.model_dump() → error
 			if !mcpConfigEqual(existingConfig, mcpConfig) {
 				logger.Error(logComponent).
 					Str("server_id", mcpConfig.ServerID).
@@ -1710,13 +1710,13 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 				continue
 			}
 
-			// 对齐 Python: add_resource_tag(server_id, self.card.id)
+			// Python: add_resource_tag(server_id, self.card.id)
 			_, tagErr := resourceMgr.AddResourceTag(mcpConfig.ServerID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 			if tagErr != nil {
 				logger.Warn(logComponent).Err(tagErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 资源标签添加失败")
 			}
 
-			// 对齐 Python: for tool_id in get_mcp_tool_ids → add_resource_tag
+			// Python: for tool_id in get_mcp_tool_ids → add_resource_tag
 			for _, toolID := range resourceMgr.GetMcpToolIDs(mcpConfig.ServerID) {
 				_, tagErr := resourceMgr.AddResourceTag(toolID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 				if tagErr != nil {
@@ -1725,14 +1725,14 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 			}
 		}
 
-		// 对齐 Python: self.ability_manager.add(mcp_config)
+		// Python: self.ability_manager.add(mcp_config)
 		d.abilityManager.Add(mcpConfig)
 		logger.Debug(logComponent).Str("server_id", mcpConfig.ServerID).Msg("MCP 配置已注册")
 	}
 }
 
 // mcpConfigEqual 比较两个 McpServerConfig 是否等价。
-// 对齐 Python: existing_config.model_dump() != mcp_config.model_dump()
+// Python: existing_config.model_dump() != mcp_config.model_dump()
 func mcpConfigEqual(a, b *mcptypes.McpServerConfig) bool {
 	aJSON, aErr := json.Marshal(a)
 	bJSON, bErr := json.Marshal(b)
@@ -1743,7 +1743,7 @@ func mcpConfigEqual(a, b *mcptypes.McpServerConfig) bool {
 }
 
 // normalizeInputs 解析用户输入为 InvokeInputs。
-// 对齐 Python: DeepAgent._normalize_inputs(inputs) (line 1056)
+// Python: DeepAgent._normalize_inputs(inputs) (line 1056)
 func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, error) {
 	switch v := inputs.(type) {
 	case map[string]any:
@@ -1771,7 +1771,7 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 				runKind = agentinterfaces.RunKindNormal
 			}
 			if contextData, cOk := run["context"].(map[string]any); cOk {
-				// 对齐 Python: RunContext(**context_data) (line 1069)
+				// Python: RunContext(**context_data) (line 1069)
 				runContext = &agentinterfaces.RunContext{}
 				if reason, ok := contextData["reason"].(string); ok {
 					runContext.Reason = agentinterfaces.HeartbeatReason(reason)
@@ -1796,7 +1796,7 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 	case string:
 		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}, nil
 	case *interaction.InteractiveInput:
-		// 对齐 Python: isinstance(inputs, InteractiveInput) → query = inputs
+		// Python: isinstance(inputs, InteractiveInput) → query = inputs
 		return &agentinterfaces.InvokeInputs{Query: v}, nil
 	default:
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
@@ -1805,7 +1805,7 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 }
 
 // toEffectiveInputs 将 InvokeInputs 转换为 ReAct 输入字典。
-// 对齐 Python: DeepAgent._to_effective_inputs(invoke_inputs) (line 1093)
+// Python: DeepAgent._to_effective_inputs(invoke_inputs) (line 1093)
 func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]any {
 	result := map[string]any{"query": invokeInputs.Query}
 	if invokeInputs.ConversationID != "" {
@@ -1821,14 +1821,14 @@ func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]an
 }
 
 // isResumeInput 判断输入是否为中断恢复。
-// 对齐 Python: DeepAgent._is_resume_input(invoke_inputs) (line 1106)
+// Python: DeepAgent._is_resume_input(invoke_inputs) (line 1106)
 func isResumeInput(invokeInputs *agentinterfaces.InvokeInputs) bool {
-	// 对齐 Python: isinstance(invoke_inputs.query, InteractiveInput)
+	// Python: isinstance(invoke_inputs.query, InteractiveInput)
 	return invokeInputs.Query != nil && invokeInputs.Query.IsInteractiveInput()
 }
 
 // resultFromStreamChunk 从流块构建 invoke 风格的结果。
-// 对齐 Python: DeepAgent._result_from_stream_chunk(chunk, output_parts) (line 1111)
+// Python: DeepAgent._result_from_stream_chunk(chunk, output_parts) (line 1111)
 func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[string]any {
 	// 只处理 OutputSchema 类型
 	outChunk, ok := chunk.(stream.OutputSchema)
@@ -1844,14 +1844,14 @@ func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[strin
 
 	switch chunkType {
 	case "llm_output":
-		// 对齐 Python: llm_output → 追加 content 到 outputParts
+		// Python: llm_output → 追加 content 到 outputParts
 		if content, ok := payload["content"].(string); ok {
 			*outputParts = append(*outputParts, content)
 		}
 		return nil
 
 	case "answer":
-		// 对齐 Python: answer → 从 payload 构建结果 dict
+		// Python: answer → 从 payload 构建结果 dict
 		result := make(map[string]any, len(payload))
 		for k, v := range payload {
 			result[k] = v
@@ -1875,7 +1875,7 @@ func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[strin
 }
 
 // registerRailSelective 选择性路由 Rail 回调到正确的 Agent。
-// 对齐 Python: DeepAgent._register_rail_selective(rail) (line 1626)
+// Python: DeepAgent._register_rail_selective(rail) (line 1626)
 func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces.AgentRail) {
 	callbacks := r.GetCallbacks()
 
@@ -1906,7 +1906,7 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 }
 
 // runSingleRoundInvoke 调用内层 ReActAgent 一次。
-// 对齐 Python: DeepAgent._run_single_round_invoke(ctx, session) (line 1647)
+// Python: DeepAgent._run_single_round_invoke(ctx, session) (line 1647)
 func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	modified, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
@@ -1928,9 +1928,9 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 }
 
 // runTaskLoopInvoke 运行外层任务循环，返回最后一轮结果。
-// 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112)
+// Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112)
 // runTaskLoopInvoke 执行外层任务循环，返回最后一轮结果。
-// 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112-2144)
+// Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112-2144)
 func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	sessConcrete, ok := sess.(*session.Session)
 	if !ok || sessConcrete == nil {
@@ -1943,19 +1943,19 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.
 		return nil, err
 	}
 
-	// 对齐 Python: last_result: Dict[str, Any] = {}
-	// 对齐 Python: 异步迭代任务循环获取最终结果
+	// Python: last_result: Dict[str, Any] = {}
+	// Python: 异步迭代任务循环获取最终结果
 	var lastResult map[string]any
 	for result := range loopCh {
 		lastResult = result
 	}
 
-	// 对齐 Python: return last_result
+	// Python: return last_result
 	return lastResult, nil
 }
 
 // runTaskLoop 任务循环生成器，每轮完成后将 result 发送到 channel。
-// 对齐 Python: DeepAgent._run_task_loop(ctx, session) (line 1991-2110)
+// Python: DeepAgent._run_task_loop(ctx, session) (line 1991-2110)
 // invoke 和 stream 共用此方法：
 //
 //	invoke: 从 channel 读取最后一轮结果
@@ -1992,7 +1992,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 	go func() {
 		defer close(outCh)
 
-		// 对齐 Python: try/finally 确保清理（line 2095-2110）
+		// Python: try/finally 确保清理（line 2095-2110）
 		defer func() {
 			state := d.LoadState(sess)
 			state.StopConditionState = nil
@@ -2099,7 +2099,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 				break
 			}
 
-			// 对齐 Python line 2079-2086: 退出条件检查
+			// Python: line 2079-2086: 退出条件检查
 			st = d.LoadState(sess)
 			if ctrl.HasFollowUp() || len(st.PendingFollowUps) > 0 {
 				continue
@@ -2112,7 +2112,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 			currentQuery = modified.Query
 		}
 
-		// 对齐 Python line 2090-2094: 循环结束后记录 stop_reason
+		// Python: line 2090-2094: 循环结束后记录 stop_reason
 		stopReason := coord.StopReason()
 		if stopReason != "" {
 			logLoop("loop stopped by: %s", "", stopReason)
@@ -2123,7 +2123,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 }
 
 // writeRoundResultToStream 将任务循环轮次结果写入会话流。
-// 对齐 Python: DeepAgent._write_round_result_to_stream(result, session) (line 2214-2232)
+// Python: DeepAgent._write_round_result_to_stream(result, session) (line 2214-2232)
 func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[string]any, sess *session.Session) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
@@ -2135,14 +2135,14 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 }
 
 // runTaskLoopStream 流式执行外层任务循环。
-// 对齐 Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146-2212)
+// Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146-2212)
 //
 // 使用与 ReActAgent.Stream() 相同的"后台+前台"模式：
 //
 //	后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
 //	前台: 从 session.StreamIterator() 读取chunk转发到 outCh
 func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
-	// 对齐 Python: _ = stream_modes（显式丢弃，task-loop stream 从 session.StreamIterator() 读取）
+	// Python: _ = stream_modes（显式丢弃，task-loop stream 从 session.StreamIterator() 读取）
 	_ = streamModes
 
 	if sess == nil {
@@ -2160,7 +2160,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	// 派生子 context，用于取消后台 goroutine
-	// 对齐 Python: asyncio.create_task(_stream_process()) + CancelledError 处理
+	// Python: asyncio.create_task(_stream_process()) + CancelledError 处理
 	streamCtx, streamCancel := context.WithCancel(ctx)
 	d.streamMu.Lock()
 	d.streamCancel = streamCancel
@@ -2169,9 +2169,9 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	outCh := make(chan stream.Schema, 64)
 
 	// 后台 goroutine: 运行任务循环，每轮结果写入session流
-	// 对齐 Python: _stream_process() (line 2182-2194)
+	// Python: _stream_process() (line 2182-2194)
 	go func() {
-		// 对齐 Python line 2190-2194: finally → session.close_stream()
+		// Python: line 2190-2194: finally → session.close_stream()
 		defer func() {
 			d.streamMu.Lock()
 			d.streamCancel = nil
@@ -2181,7 +2181,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 
 		loopCh, loopErr := d.runTaskLoop(streamCtx, cbc, sessConcrete, true)
 		if loopErr != nil {
-			// 对齐 Python line 2187-2189: except → 写入错误结果到流
+			// Python: line 2187-2189: except → 写入错误结果到流
 			d.writeRoundResultToStream(streamCtx, map[string]any{
 				"output":      loopErr.Error(),
 				"result_type": "error",
@@ -2189,15 +2189,15 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 			return
 		}
 
-		// 对齐 Python line 2184-2185:
-		// 对齐 Python: 异步迭代任务循环写入流结果
+		// Python: line 2184-2185:
+		// Python: 异步迭代任务循环写入流结果
 		for result := range loopCh {
 			d.writeRoundResultToStream(streamCtx, result, sessConcrete)
 		}
 	}()
 
 	// 前台: 从 session.StreamIterator() 读取chunk转发到 outCh
-	// 对齐 Python line 2199-2200: async for chunk in session.stream_iterator(): yield chunk
+	// Python: line 2199-2200: async for chunk in session.stream_iterator(): yield chunk
 	go func() {
 		defer close(outCh)
 		defer d.cancelStreamProcess() // 前台退出时取消后台
@@ -2214,7 +2214,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 }
 
 // runSingleRoundStream 流式调用内层 ReActAgent 一次。
-// 对齐 Python: DeepAgent._run_single_round_stream(ctx, session, stream_modes) (line 2234)
+// Python: DeepAgent._run_single_round_stream(ctx, session, stream_modes) (line 2234)
 func (d *DeepAgent) runSingleRoundStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
@@ -2232,7 +2232,7 @@ func (d *DeepAgent) runSingleRoundStream(ctx context.Context, invokeInputs *agen
 }
 
 // setupTaskLoop 创建或复用 Controller 基础设施。
-// 对齐 Python: DeepAgent._setup_task_loop(session) (line 1669)
+// Python: DeepAgent._setup_task_loop(session) (line 1669)
 func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*task_loop.LoopCoordinator, *task_loop.TaskLoopController, error) {
 	sessionID := sess.GetSessionID()
 
@@ -2282,7 +2282,7 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	}
 
 	// 创建 ContextEngine
-	// 对齐 Python: context_engine = ContextEngine() (line 1717)
+	// Python: context_engine = ContextEngine() (line 1717)
 	var ceOpts []ceinterface.ContextEngineOption
 	d.configMu.RLock()
 	if d.deepConfig != nil && d.deepConfig.SysOperation != nil {
@@ -2320,7 +2320,7 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 }
 
 // forceCleanupController 强制清理已有控制器（会话切换时）。
-// 对齐 Python: DeepAgent._force_cleanup_controller() (line 1928)
+// Python: DeepAgent._force_cleanup_controller() (line 1928)
 func (d *DeepAgent) forceCleanupController(ctx context.Context) {
 	d.configMu.RLock()
 	ctrl := d.loopController
@@ -2352,7 +2352,7 @@ func (d *DeepAgent) forceCleanupController(ctx context.Context) {
 }
 
 // hasRemainingTasks 检查任务计划是否还有待执行任务。
-// 对齐 Python: DeepAgent._has_remaining_tasks(session) (line 1909)
+// Python: DeepAgent._has_remaining_tasks(session) (line 1909)
 func (d *DeepAgent) hasRemainingTasks(sess sessioninterfaces.SessionFacade) bool {
 	state := d.LoadState(sess)
 	if state.TaskPlan == nil {
@@ -2362,7 +2362,7 @@ func (d *DeepAgent) hasRemainingTasks(sess sessioninterfaces.SessionFacade) bool
 }
 
 // hasPendingSessionSpawn 检查是否有待处理的 SESSION_SPAWN 任务。
-// 对齐 Python: DeepAgent._has_pending_session_spawn() (line 1916)
+// Python: DeepAgent._has_pending_session_spawn() (line 1916)
 func (d *DeepAgent) hasPendingSessionSpawn() bool {
 	d.configMu.RLock()
 	toolkit := d.sessionToolkit
@@ -2383,7 +2383,7 @@ func (d *DeepAgent) hasPendingSessionSpawn() bool {
 
 // findSubagentSpec 查找匹配 subagentType 的子 Agent 规格。
 // 返回 SubagentSpec 接口，可能是 *SubAgentConfig 或 *DeepAgent。
-// 对齐 Python: DeepAgent._find_subagent_spec(subagent_type) (line 1032)
+// Python: DeepAgent._find_subagent_spec(subagent_type) (line 1032)
 func (d *DeepAgent) findSubagentSpec(subagentType string) hschema.SubagentSpec {
 	d.configMu.RLock()
 	cfg := d.deepConfig
@@ -2402,7 +2402,7 @@ func (d *DeepAgent) findSubagentSpec(subagentType string) hschema.SubagentSpec {
 }
 
 // buildSubagentCreateKwargs 构建子 Agent 创建参数。
-// 对齐 Python: DeepAgent.create_subagent L938-982
+// Python: DeepAgent.create_subagent L938-982
 func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, subSessionID string) *hschema.SubagentCreateParams {
 	d.configMu.RLock()
 	cfg := d.deepConfig
@@ -2488,7 +2488,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 }
 
 // drainPendingHarnessConfigs 在处理查询前加载排队的 harness 配置。
-// 对齐 Python: DeepAgent._drain_pending_harness_configs() (line 1607)
+// Python: DeepAgent._drain_pending_harness_configs() (line 1607)
 func (d *DeepAgent) drainPendingHarnessConfigs(ctx context.Context) error {
 	d.railsMu.Lock()
 	configs := d.pendingHarnessConfigs
@@ -2507,7 +2507,7 @@ func (d *DeepAgent) drainPendingHarnessConfigs(ctx context.Context) error {
 }
 
 // cancelStreamProcess 取消进行中的流处理。
-// 对齐 Python: DeepAgent._cancel_stream_process_task() (line 2432)
+// Python: DeepAgent._cancel_stream_process_task() (line 2432)
 func (d *DeepAgent) cancelStreamProcess() {
 	d.streamMu.Lock()
 	cancel := d.streamCancel
@@ -2520,7 +2520,7 @@ func (d *DeepAgent) cancelStreamProcess() {
 }
 
 // readRuntimeState 从会话读取运行时状态缓存。
-// 对齐 Python: DeepAgent._read_runtime_state(session) (line 1758)
+// Python: DeepAgent._read_runtime_state(session) (line 1758)
 func (d *DeepAgent) readRuntimeState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	// 通过 GetState 读取运行时属性
 	data, err := sess.GetState(sessstate.StringKey(hschema.SessionRuntimeAttr))
@@ -2535,19 +2535,19 @@ func (d *DeepAgent) readRuntimeState(sess sessioninterfaces.SessionFacade) *hsch
 }
 
 // writeRuntimeState 将运行时状态写入会话缓存。
-// 对齐 Python: DeepAgent._write_runtime_state(session, state) (line 1776)
+// Python: DeepAgent._write_runtime_state(session, state) (line 1776)
 func (d *DeepAgent) writeRuntimeState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState) {
 	sess.UpdateState(map[string]any{hschema.SessionRuntimeAttr: state})
 }
 
 // clearRuntimeState 从会话清除运行时状态缓存。
-// 对齐 Python: DeepAgent._clear_runtime_state(session) (line 1784)
+// Python: DeepAgent._clear_runtime_state(session) (line 1784)
 func (d *DeepAgent) clearRuntimeState(sess sessioninterfaces.SessionFacade) {
 	sess.UpdateState(map[string]any{hschema.SessionRuntimeAttr: nil})
 }
 
 // saveState 持久化 DeepAgent 状态到会话。
-// 对齐 Python: DeepAgent.save_state(session, state) (line 1815)
+// Python: DeepAgent.save_state(session, state) (line 1815)
 func (d *DeepAgent) saveState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState) {
 	target := state
 	if target == nil {
@@ -2561,7 +2561,7 @@ func (d *DeepAgent) saveState(sess sessioninterfaces.SessionFacade, state *hsche
 }
 
 // clearState 清除 DeepAgent 运行时缓存。
-// 对齐 Python: DeepAgent.clear_state(session, clear_persisted) (line 1843)
+// Python: DeepAgent.clear_state(session, clear_persisted) (line 1843)
 func (d *DeepAgent) clearState(sess sessioninterfaces.SessionFacade, clearPersisted bool) {
 	d.clearRuntimeState(sess)
 	if clearPersisted {
@@ -2570,29 +2570,29 @@ func (d *DeepAgent) clearState(sess sessioninterfaces.SessionFacade, clearPersis
 }
 
 // unregisterToolResource 注销工具资源。
-// 对齐 Python: DeepAgent._unregister_tool_resource(card) (line 178)
+// Python: DeepAgent._unregister_tool_resource(card) (line 178)
 func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
-	// 对齐 Python: card.name not in {"free_search", "paid_search"} → return
+	// Python: card.name not in {"free_search", "paid_search"} → return
 	if card.Name != "free_search" && card.Name != "paid_search" {
 		return
 	}
-	// 对齐 Python: if not getattr(card, "id", None) → return
+	// Python: if not getattr(card, "id", None) → return
 	if card.ID == "" {
 		return
 	}
 
 	resourceMgr := runner.GetResourceMgr()
 
-	// 对齐 Python: if Runner.resource_mgr.get_tool(card.id) is None → return
+	// Python: if Runner.resource_mgr.get_tool(card.id) is None → return
 	tools, getErr := resourceMgr.GetTool([]string{card.ID})
 	if getErr != nil || len(tools) == 0 {
 		return
 	}
 
-	// 对齐 Python: tags = Runner.resource_mgr.get_resource_tag(card.id) or []
+	// Python: tags = Runner.resource_mgr.get_resource_tag(card.id) or []
 	tags := resourceMgr.GetResourceTag(card.ID)
 
-	// 对齐 Python: if self.card.id in tags and len(tags) > 1
+	// Python: if self.card.id in tags and len(tags) > 1
 	agentTag := resources_manager.Tag(d.card.ID)
 	agentInTags := false
 	for _, t := range tags {
@@ -2602,7 +2602,7 @@ func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
 		}
 	}
 	if agentInTags && len(tags) > 1 {
-		// 对齐 Python: remove_resource_tag(card.id, self.card.id, skip_if_tag_not_exists=True)
+		// Python: remove_resource_tag(card.id, self.card.id, skip_if_tag_not_exists=True)
 		_, err := resourceMgr.RemoveResourceTag(card.ID, []resources_manager.Tag{agentTag}, resources_manager.WithTagSkipIfNotExists())
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("移除工具标签失败")
@@ -2610,7 +2610,7 @@ func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
 		return
 	}
 
-	// 对齐 Python: if self.card.id in tags or not tags
+	// Python: if self.card.id in tags or not tags
 	if agentInTags || len(tags) == 0 {
 		_, err := resourceMgr.RemoveTool([]string{card.ID})
 		if err != nil {
@@ -2620,19 +2620,19 @@ func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
 }
 
 // ensureBuiltinToolResource 确保内置工具资源已注册。
-// 对齐 Python: DeepAgent._ensure_builtin_tool_resource(card, config) (line 206)
+// Python: DeepAgent._ensure_builtin_tool_resource(card, config) (line 206)
 func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hschema.DeepAgentConfig) {
-	// 对齐 Python: card.name not in {"free_search", "paid_search"} → return
+	// Python: card.name not in {"free_search", "paid_search"} → return
 	if card.Name != "free_search" && card.Name != "paid_search" {
 		return
 	}
 
 	resourceMgr := runner.GetResourceMgr()
 
-	// 对齐 Python: existing_tool = Runner.resource_mgr.get_tool(card.id)
+	// Python: existing_tool = Runner.resource_mgr.get_tool(card.id)
 	tools, getErr := resourceMgr.GetTool([]string{card.ID})
 	if getErr == nil && len(tools) > 0 {
-		// 对齐 Python: add_resource_tag(card.id, self.card.id)
+		// Python: add_resource_tag(card.id, self.card.id)
 		_, tagErr := resourceMgr.AddResourceTag(card.ID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 		if tagErr != nil {
 			logger.Warn(logComponent).Err(tagErr).Str("tool_id", card.ID).Msg("标记已存在的搜索工具失败")
@@ -2640,9 +2640,9 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 		return
 	}
 
-	// 对齐 Python: tool_cls = WebPaidSearchTool if card.name == "paid_search" else WebFreeSearchTool
-	// 对齐 Python: tool = tool_cls(language=resolve_language(config.language), card=card)
-	// 对齐 Python: Runner.resource_mgr.add_tool(tool, tag=self.card.id)
+	// Python: tool_cls = WebPaidSearchTool if card.name == "paid_search" else WebFreeSearchTool
+	// Python: tool = tool_cls(language=resolve_language(config.language), card=card)
+	// Python: Runner.resource_mgr.add_tool(tool, tag=self.card.id)
 	language := hprompts.ResolveLanguage(config.Language)
 	var webTool tool.Tool
 	if card.Name == "paid_search" {
@@ -2656,7 +2656,7 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 }
 
 // logLoop 记录外层循环日志。
-// 对齐 Python: DeepAgent._log_loop(msg, detail) (line 1951)
+// Python: DeepAgent._log_loop(msg, detail) (line 1951)
 func logLoop(format string, detail string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if detail != "" {
@@ -2731,7 +2731,7 @@ func matchType(r agentinterfaces.AgentRail, types []reflect.Type) bool {
 }
 
 // permissionsSectionToMap 将 PermissionsSection 转换为 map[string]any 供 PermissionEngine 使用。
-// 对齐 Python: config = cast(dict[str, Any], config)
+// Python: config = cast(dict[str, Any], config)
 func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any {
 	if perm == nil {
 		return make(map[string]any)

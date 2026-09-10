@@ -13,7 +13,7 @@ import (
 
 // ConfirmPayload 用户确认载荷。
 //
-// 对齐 Python: ConfirmPayload
+// Python: ConfirmPayload
 type ConfirmPayload struct {
 	// Approved 是否批准
 	Approved bool `json:"approved"`
@@ -25,7 +25,7 @@ type ConfirmPayload struct {
 
 // ConfirmRequest 确认请求配置。
 //
-// 对齐 Python: ConfirmRequest
+// Python: ConfirmRequest
 type ConfirmRequest struct {
 	// Message 向用户展示的确认消息
 	Message string `json:"message"`
@@ -37,7 +37,7 @@ type ConfirmRequest struct {
 // 仅当 ConfirmPayload.Approved 为 true 时放行工具执行。
 // 支持 auto_confirm 机制：当 session 状态中对应 key 为 true 时自动放行。
 //
-// 对齐 Python: ConfirmInterruptRail(BaseInterruptRail) — openjiuwen/harness/rails/interrupt/confirm_rail.py
+// Python: ConfirmInterruptRail(BaseInterruptRail) — openjiuwen/harness/rails/interrupt/confirm_rail.py
 type ConfirmInterruptRail struct {
 	BaseInterruptRail
 	// request 确认请求配置
@@ -58,7 +58,7 @@ var _ agentinterfaces.AgentRail = (*ConfirmInterruptRail)(nil)
 // NewConfirmInterruptRail 创建 ConfirmInterruptRail 实例。
 // toolNames 为需确认拦截的工具名列表。
 //
-// 对齐 Python: ConfirmInterruptRail.__init__(tool_names)
+// Python: ConfirmInterruptRail.__init__(tool_names)
 func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 	r := &ConfirmInterruptRail{
 		BaseInterruptRail: *NewBaseInterruptRail(toolNames...),
@@ -79,7 +79,7 @@ func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 // auto_confirm → Approve（自动批准）；无输入 → Interrupt（中断）；
 // approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）。
 //
-// 对齐 Python: ConfirmInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
+// Python: ConfirmInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 	_ context.Context,
 	_ *agentinterfaces.AgentCallbackContext,
@@ -126,7 +126,7 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 // getAutoConfirmKey 返回 auto_confirm 配置键。
 // 默认使用 toolCall.Name 作为 key。
 //
-// 对齐 Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+// Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
 func (r *ConfirmInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
 		return ""
@@ -169,7 +169,7 @@ func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload
 }
 
 // isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
-// 对齐 Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
+// Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
 // Python 的 config.get(key, False) 使用宽松真值判断：
 // True/1/"yes"/"true"/非空字符串都视为 truthy。
 func isAutoConfirmed(config map[string]any, key string) bool {

@@ -8,7 +8,7 @@ import (
 
 // ResourceRegistry 资源注册表，聚合 7 个子管理器，提供统一资源管理入口。
 //
-// 对应 Python: ResourceRegistry (openjiuwen/core/runner/resources_manager/resource_registry.py)
+// Python: ResourceRegistry (openjiuwen/core/runner/resources_manager/resource_registry.py)
 type ResourceRegistry struct {
 	// toolMgr 工具管理器
 	toolMgr *ToolMgr
@@ -36,7 +36,7 @@ type ResourceRegistry struct {
 
 // NewResourceRegistry 创建资源注册表，初始化所有子管理器。
 //
-// 对应 Python: ResourceRegistry.__init__()
+// Python: ResourceRegistry.__init__()
 func NewResourceRegistry() *ResourceRegistry {
 	registry := &ResourceRegistry{
 		toolMgr:         NewToolMgr(),
@@ -93,7 +93,7 @@ func (r *ResourceRegistry) SysOperation() *SysOperationMgr {
 // RemoveByID 按资源 ID 依次在各子管理器中尝试移除，成功则返回。
 // 移除顺序与 Python remove_by_id 一致：Tool → Workflow → Agent → AgentTeam → Prompt → Model → SysOperation。
 //
-// 对应 Python: ResourceRegistry.remove_by_id(resource_id)
+// Python: ResourceRegistry.remove_by_id(resource_id)
 func (r *ResourceRegistry) RemoveByID(resourceID string) {
 	// 1. 尝试工具
 	if _, err := r.toolMgr.RemoveTool(resourceID); err == nil {

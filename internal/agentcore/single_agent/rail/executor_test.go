@@ -222,7 +222,7 @@ func TestRailExecutor_Execute_全部事件为空(t *testing.T) {
 }
 
 // TestRailExecutor_Execute_before出错时走OnException和After 验证 before 钩子出错时走 on_exception → after(finally)
-// 对齐 Python: before 和 fn 在同一 try 块中，before 异常也走 except → finally
+// Python: before 和 fn 在同一 try 块中，before 异常也走 except → finally
 func TestRailExecutor_Execute_before出错时走OnException和After(t *testing.T) {
 	mgr := interfaces.NewAgentCallbackManager("test_before_err_exc")
 	defer mgr.Clear()

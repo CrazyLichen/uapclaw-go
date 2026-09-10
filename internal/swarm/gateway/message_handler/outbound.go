@@ -11,7 +11,7 @@ import (
 
 // handleAgentServerPush 处理 AgentServer 主动推送的消息。
 //
-// 对齐 Python _handle_agent_server_push (L1610-L1672)：
+// Python: _handle_agent_server_push (L1610-L1672)：
 //  1. 解析 wire → AgentResponseChunk
 //  2. session_id 回退：优先 wire["session_id"]，否则 streamSessions[requestID]
 //  3. metadata 合并：requestMetadata + 响应 metadata（过滤内部键）
@@ -73,7 +73,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	busMetadata := MergeAgentMetadata(requestMetadata, respMetadata)
 
 	// TODO(#ACP): ACP session_id 解析（等 ACP 章节回填）
-	// 对齐 Python: ACP渠道检测
+	// Python: ACP渠道检测
 	//     Python: session_id = self._resolve_acp_external_session_id(session_id, bus_metadata)
 
 	// cron 判断：chunk.Payload["event_type"] == "cron.response"
@@ -109,7 +109,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 
 // handleCronPushPayload 处理 cron 推送消息。
 //
-// 对齐 Python _handle_cron_push_payload (L1677-L1737)：
+// Python: _handle_cron_push_payload (L1677-L1737)：
 // 路由 cron action 到 CronController（当前 CronController 为 stub，直接返回空结果）。
 // 依赖：11.10 Cron 调度服务实现后对接。
 func (mh *MessageHandler) handleCronPushPayload(payload map[string]any) {

@@ -11,7 +11,7 @@ import (
 
 // SectionInfo 单个节的轻量快照，用于诊断报告。
 //
-// 对应 Python: SectionInfo (openjiuwen/harness/prompts/report.py)
+// Python: SectionInfo (openjiuwen/harness/prompts/report.py)
 type SectionInfo struct {
 	// Name 节名称
 	Name string `json:"name"`
@@ -23,7 +23,7 @@ type SectionInfo struct {
 
 // PromptReport 系统提示词诊断报告，统计节信息和 token 估算。
 //
-// 对应 Python: PromptReport (openjiuwen/harness/prompts/report.py)
+// Python: PromptReport (openjiuwen/harness/prompts/report.py)
 type PromptReport struct {
 	// TotalChars 总字符数
 	TotalChars int `json:"total_chars"`
@@ -45,10 +45,10 @@ type PromptReport struct {
 
 const (
 	// cnCharsPerToken 中文每 token 约对应 2.5 字符
-	// 对应 Python: _CN_CHARS_PER_TOKEN = 2.5
+	// Python: _CN_CHARS_PER_TOKEN = 2.5
 	cnCharsPerToken = 2.5
 	// enCharsPerToken 英文每 token 约对应 4.0 字符
-	// 对应 Python: _EN_CHARS_PER_TOKEN = 4.0
+	// Python: _EN_CHARS_PER_TOKEN = 4.0
 	enCharsPerToken = 4.0
 )
 
@@ -58,7 +58,7 @@ const (
 
 // NewPromptReport 从构建器当前状态创建诊断报告。
 //
-// 对应 Python: PromptReport.from_builder(builder)
+// Python: PromptReport.from_builder(builder)
 func NewPromptReport(builder *SystemPromptBuilder) *PromptReport {
 	language := builder.Language()
 	mode := builder.mode.String()
@@ -108,7 +108,7 @@ func NewPromptReport(builder *SystemPromptBuilder) *PromptReport {
 
 // ToDict 将报告序列化为字典。
 //
-// 对应 Python: PromptReport.to_dict()
+// Python: PromptReport.to_dict()
 func (r *PromptReport) ToDict() map[string]any {
 	sections := make([]map[string]any, 0, len(r.Sections))
 	for _, s := range r.Sections {
@@ -130,7 +130,7 @@ func (r *PromptReport) ToDict() map[string]any {
 
 // Summary 返回人类可读的单行摘要。
 //
-// 对应 Python: PromptReport.summary()
+// Python: PromptReport.summary()
 func (r *PromptReport) Summary() string {
 	return "[PromptReport] mode=" + r.Mode + " lang=" + r.Language +
 		" sections=" + strconv.Itoa(r.SectionCount) +

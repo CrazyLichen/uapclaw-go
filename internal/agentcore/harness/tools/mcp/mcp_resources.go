@@ -12,14 +12,14 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ListMcpResourcesInput list_mcp_resources 工具的输入参数。
-// 对齐 Python: ListMcpResourcesTool.invoke inputs
+// Python: ListMcpResourcesTool.invoke inputs
 type ListMcpResourcesInput struct {
 	// ServerID MCP 服务器的 server_id
 	ServerID string `json:"server_id"`
 }
 
 // ReadMcpResourceInput read_mcp_resource 工具的输入参数。
-// 对齐 Python: ReadMcpResourceTool.invoke inputs
+// Python: ReadMcpResourceTool.invoke inputs
 type ReadMcpResourceInput struct {
 	// ServerID MCP 服务器的 server_id
 	ServerID string `json:"server_id"`
@@ -40,17 +40,17 @@ var mcpResourcesLogComponent = logger.ComponentAgentCore
 
 // NewListMcpResourcesTool 创建列出 MCP 服务器资源工具。
 //
-// 对齐 Python: ListMcpResourcesTool (openjiuwen/harness/tools/mcp_tools.py L18-39)
+// Python: ListMcpResourcesTool (openjiuwen/harness/tools/mcp_tools.py L18-39)
 func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("list_mcp_resources", "ListMcpResourcesTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input ListMcpResourcesInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python L24-25: server_id = inputs.get("server_id"); if not server_id
+		// Python: L24-25: server_id = inputs.get("server_id"); if not server_id
 		if input.ServerID == "" {
 			return map[string]any{"success": false, "error": "server_id is required"}, nil
 		}
 
-		// 对齐 Python L27-38: resources = await Runner.resource_mgr.list_mcp_resources(server_id)
+		// Python: L27-38: resources = await Runner.resource_mgr.list_mcp_resources(server_id)
 		resourceMgr := runner.GetResourceMgr()
 		if resourceMgr == nil {
 			return map[string]any{"success": false, "error": "resource manager not available"}, nil
@@ -66,7 +66,7 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
-		// 对齐 Python L28-36: resources 类型为 []map[string]any，直接透传给 LLM。
+		// Python: L28-36: resources 类型为 []map[string]any，直接透传给 LLM。
 
 		logger.Info(mcpResourcesLogComponent).
 			Str("tool_name", "list_mcp_resources").
@@ -83,21 +83,21 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 
 // NewReadMcpResourceTool 创建读取 MCP 服务器资源工具。
 //
-// 对齐 Python: ReadMcpResourceTool (openjiuwen/harness/tools/mcp_tools.py L42-67)
+// Python: ReadMcpResourceTool (openjiuwen/harness/tools/mcp_tools.py L42-67)
 func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("read_mcp_resource", "ReadMcpResourceTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input ReadMcpResourceInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python L49-50: server_id = inputs.get("server_id"); if not server_id
+		// Python: L49-50: server_id = inputs.get("server_id"); if not server_id
 		if input.ServerID == "" {
 			return map[string]any{"success": false, "error": "server_id is required"}, nil
 		}
-		// 对齐 Python L51-52: uri = inputs.get("uri"); if not uri
+		// Python: L51-52: uri = inputs.get("uri"); if not uri
 		if input.URI == "" {
 			return map[string]any{"success": false, "error": "uri is required"}, nil
 		}
 
-		// 对齐 Python L54-65: contents = await Runner.resource_mgr.read_mcp_resource(server_id, uri)
+		// Python: L54-65: contents = await Runner.resource_mgr.read_mcp_resource(server_id, uri)
 		resourceMgr := runner.GetResourceMgr()
 		if resourceMgr == nil {
 			return map[string]any{"success": false, "error": "resource manager not available"}, nil
@@ -114,7 +114,7 @@ func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
-		// 对齐 Python L55-63: contents 类型为 []map[string]any，直接透传给 LLM。
+		// Python: L55-63: contents 类型为 []map[string]any，直接透传给 LLM。
 
 		logger.Info(mcpResourcesLogComponent).
 			Str("tool_name", "read_mcp_resource").

@@ -4,7 +4,7 @@
 // 待办事项按会话隔离，持久化到 {workspace}/{sessionID}/todo.json 文件，
 // 通过 TodoLockManager 为每个会话分配独立互斥锁，保证并发安全。
 //
-// 对齐 Python: openjiuwen/harness/tools/todo/todo.py
+// Python: openjiuwen/harness/tools/todo/todo.py
 //
 // 文件目录：
 //

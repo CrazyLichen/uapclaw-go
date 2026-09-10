@@ -19,7 +19,7 @@ import (
 // 通过 BaseMemoryIndex 存取摘要记忆，支持语义搜索。
 // 摘要记忆用于存储对话的关键信息和主题概括。
 //
-// 对应 Python: openjiuwen/core/memory/manage/index/summary_manager.py (SummaryManager)
+// Python: openjiuwen/core/memory/manage/index/summary_manager.py (SummaryManager)
 type SummaryManager struct {
 	// memoryManagerBase 嵌入基类（依赖 BaseMemoryIndex）
 	memoryManagerBase
@@ -35,7 +35,7 @@ type SummaryManager struct {
 
 // NewSummaryManager 创建摘要记忆管理器。
 //
-// 对齐 Python: SummaryManager.__init__(memory_index, crypto_key)
+// Python: SummaryManager.__init__(memory_index, crypto_key)
 func NewSummaryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *SummaryManager {
 	return &SummaryManager{
 		memoryManagerBase: memoryManagerBase{
@@ -51,7 +51,7 @@ func NewSummaryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *Sum
 // 从 memories map 中过滤 mem_type=="summary" 的 SummaryUnit，
 // 转换为 MemoryDoc 后写入索引。空结果记 Warn 日志并返回空切片。
 //
-// 对齐 Python: SummaryManager.add_memories
+// Python: SummaryManager.add_memories
 func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, _ ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
@@ -61,8 +61,8 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 	}
 
 	// 过滤 summary 类型的 SummaryUnit
-	// 对齐 Python: if mem_type != self.mem_type: continue
-	// 对齐 Python: if not isinstance(mem_unit, SummaryUnit): continue
+	// Python: if mem_type != self.mem_type: continue
+	// Python: if not isinstance(mem_unit, SummaryUnit): continue
 	var summaryUnits []*mem_model.SummaryUnit
 	for memType, units := range memories {
 		if memType != m.memType {
@@ -83,7 +83,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 		}
 	}
 
-	// 对齐 Python: if not memory_docs: memory_logger.warning("No valid summary docs to add"); return []
+	// Python: if not memory_docs: memory_logger.warning("No valid summary docs to add"); return []
 	if len(summaryUnits) == 0 {
 		logger.Warn(logComponent).
 			Str("event_type", "MEMORY_STORE").
@@ -99,7 +99,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 		return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 	}
 
-	// 对齐 Python: return memories[self.mem_type]
+	// Python: return memories[self.mem_type]
 	// 将 summaryUnits 转为 []MemoryUnit 返回
 	result := make([]mem_model.MemoryUnit, len(summaryUnits))
 	for i, u := range summaryUnits {
@@ -112,7 +112,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 //
 // 先获取旧文档，替换 text 后更新索引。
 //
-// 对齐 Python: SummaryManager.update
+// Python: SummaryManager.update
 func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryUpdateMemoryExecutionError, m.memType); err != nil {
@@ -127,7 +127,7 @@ func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID stri
 		return false, nil
 	}
 
-	// 对齐 Python: updated_doc = MemoryDoc(id=mem_id, text=new_memory, type=self.mem_type, timestamp=..., fields=memory_doc.fields)
+	// Python: updated_doc = MemoryDoc(id=mem_id, text=new_memory, type=self.mem_type, timestamp=..., fields=memory_doc.fields)
 	updatedDoc := &index.MemoryDoc{
 		ID:        memID,
 		Text:      newMemory,
@@ -143,7 +143,7 @@ func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID stri
 
 // Delete 按 ID 删除摘要记忆。
 //
-// 对齐 Python: SummaryManager.delete
+// Python: SummaryManager.delete
 func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
@@ -158,7 +158,7 @@ func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID stri
 
 // DeleteByUserID 删除用户+scope 下所有摘要记忆。
 //
-// 对齐 Python: SummaryManager.delete_by_user_id
+// Python: SummaryManager.delete_by_user_id
 func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
@@ -173,7 +173,7 @@ func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scop
 
 // Get 按 ID 获取单条摘要记忆。
 //
-// 对齐 Python: SummaryManager.get
+// Python: SummaryManager.get
 func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
@@ -191,14 +191,14 @@ func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string,
 //
 // memTypes 参数被忽略，硬编码为 [m.memType]。
 //
-// 对齐 Python: SummaryManager.search
+// Python: SummaryManager.search
 func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, _ []string) ([]*index.MemorySearchResult, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
 		return nil, err
 	}
 
-	// 对齐 Python: search_results = await self.memory_index.search(user_id, scope_id, query, mem_types=[self.mem_type], top_k=top_k)
+	// Python: search_results = await self.memory_index.search(user_id, scope_id, query, mem_types=[self.mem_type], top_k=top_k)
 	results, err := m.memoryIndex.Search(ctx, userID, scopeID, query, []string{m.memType}, topK)
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryGetMemoryExecutionError, m.memType)
@@ -208,14 +208,14 @@ func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID stri
 
 // ListUserSummary 分页列出用户摘要记忆，按 timestamp 降序排列。
 //
-// 对齐 Python: SummaryManager.list_user_summary
+// Python: SummaryManager.list_user_summary
 func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, scopeID string, offset int, batchSize int) ([]*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
 		return nil, err
 	}
 
-	// 对齐 Python: summary_memories = await self.memory_index.list_memories(user_id, scope_id, offset, batch_size, [self.mem_type])
+	// Python: summary_memories = await self.memory_index.list_memories(user_id, scope_id, offset, batch_size, [self.mem_type])
 	docs, err := m.memoryIndex.ListMemories(ctx, userID, scopeID, offset, batchSize, []string{m.memType})
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryGetMemoryExecutionError, m.memType)
@@ -224,7 +224,7 @@ func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, sco
 		return nil, nil
 	}
 
-	// 对齐 Python: result.sort(key=lambda x: x['timestamp'], reverse=True)
+	// Python: result.sort(key=lambda x: x['timestamp'], reverse=True)
 	sort.Slice(docs, func(i, j int) bool {
 		return docs[i].Timestamp.After(docs[j].Timestamp)
 	})
@@ -235,7 +235,7 @@ func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, sco
 
 // convertToMemoryDocs 将 SummaryUnit 列表转换为 MemoryDoc 列表。
 //
-// 对齐 Python: SummaryManager._convert_to_memory_docs
+// Python: SummaryManager._convert_to_memory_docs
 // 文本取 mem_unit.summary，字段含 source_id=mem_unit.message_mem_id, metadata={}
 func (m *SummaryManager) convertToMemoryDocs(units []*mem_model.SummaryUnit) []*index.MemoryDoc {
 	docs := make([]*index.MemoryDoc, 0, len(units))

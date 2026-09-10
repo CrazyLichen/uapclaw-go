@@ -16,7 +16,7 @@ import (
 
 // SessionMetadataUpdate 会话元数据增量更新参数。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/session/session_metadata.py update_session_metadata()
+// Python: jiuwenswarm/server/runtime/session/session_metadata.py update_session_metadata()
 type SessionMetadataUpdate struct {
 	// SessionID 会话标识（必填）
 	SessionID string
@@ -69,10 +69,10 @@ const (
 
 var (
 	// deliveryContextCache 内存缓存，解决异步写入时读取到陈旧数据的竞态
-	// 对齐 Python: _METADATA_CACHE
+	// Python: _METADATA_CACHE
 	deliveryContextCache = make(map[string]map[string]any)
 	// deliveryContextMu 保护缓存的读写锁
-	// 对齐 Python: _CACHE_LOCK
+	// Python: _CACHE_LOCK
 	deliveryContextMu sync.RWMutex
 	// metadataQueue 异步写入队列，对齐 Python _METADATA_QUEUE
 	metadataQueue chan metadataWriteItem
@@ -85,7 +85,7 @@ var (
 // SetSessionDeliveryContext 刷新 session 级 delivery context，
 // 供异步 server_push 恢复路由上下文。
 //
-// 对齐 Python: set_session_delivery_context()
+// Python: set_session_delivery_context()
 func SetSessionDeliveryContext(
 	sessionID string,
 	channelID *string,
@@ -127,7 +127,7 @@ func SetSessionDeliveryContext(
 		normalizedRouteMetadata = DeepCopyMap(previousRouteMetadata)
 	}
 
-	// 对齐 Python: channel_metadata 仅在首次为空时补充写入（不覆盖）
+	// Python: channel_metadata 仅在首次为空时补充写入（不覆盖）
 	channelMetadata, _ := routeMetadata["channel_metadata"].(map[string]any)
 	if channelMetadata != nil && meta["channel_metadata"] == nil {
 		meta["channel_metadata"] = DeepCopyMap(channelMetadata)
@@ -177,7 +177,7 @@ func SetSessionDeliveryContext(
 	deliveryContextCache[sessionID] = DeepCopyMap(meta)
 	deliveryContextMu.Unlock()
 
-	// 对齐 Python: _enqueue_write(metadata) — 异步写入队列
+	// Python: _enqueue_write(metadata) — 异步写入队列
 	EnqueueMetadataWrite(sessionID, meta)
 
 	return DeepCopyMap(deliveryContext)
@@ -185,7 +185,7 @@ func SetSessionDeliveryContext(
 
 // GetSessionDeliveryContext 读取 session 级 delivery context。
 //
-// 对齐 Python: get_session_delivery_context()
+// Python: get_session_delivery_context()
 func GetSessionDeliveryContext(sessionID string) map[string]any {
 	// 优先从内存缓存读取
 	deliveryContextMu.RLock()
@@ -213,7 +213,7 @@ func GetSessionDeliveryContext(sessionID string) map[string]any {
 
 // BuildServerPushMessage 基于 session delivery context 构造 server_push 消息。
 //
-// 对齐 Python: build_server_push_message()
+// Python: build_server_push_message()
 // 被 evolution_helpers 和其他推送场景调用。
 func BuildServerPushMessage(
 	sessionID, requestID string,
@@ -252,7 +252,7 @@ func GetSessionsDir() string {
 
 // InitSessionMetadata 初始化会话元数据（同步写，确保创建后立即可读）。
 //
-// 对齐 Python: init_session_metadata(session_id, channel_id, user_id, title, mode, team_name)
+// Python: init_session_metadata(session_id, channel_id, user_id, title, mode, team_name)
 func InitSessionMetadata(sessionID, channelID, userID, title, mode, teamName string) {
 	metadata := map[string]any{
 		"session_id":      sessionID,
@@ -271,14 +271,14 @@ func InitSessionMetadata(sessionID, channelID, userID, title, mode, teamName str
 
 // GetSessionMetadata 获取会话元数据（优先缓存）。
 //
-// 对齐 Python: get_session_metadata(session_id)
+// Python: get_session_metadata(session_id)
 func GetSessionMetadata(sessionID string) map[string]any {
 	return ReadSessionMetadataWithCache(sessionID)
 }
 
 // UpdateSessionMetadata 更新会话元数据（异步写入，不阻塞调用方）。
 //
-// 对齐 Python: update_session_metadata()
+// Python: update_session_metadata()
 // title 语义（保持历史防御契约）：
 //   - title=nil  → 不修改（默认）
 //   - title="x"  → 设置为 "x"
@@ -371,14 +371,14 @@ func UpdateSessionMetadata(update SessionMetadataUpdate) {
 
 // IncrementSessionRoundCount 递增并持久化 session 的 round_id，返回递增后的值。
 //
-// 对齐 Python: increment_session_round_count()
+// Python: increment_session_round_count()
 func IncrementSessionRoundCount(sessionID string) (int, error) {
 	return IncrementSessionRoundCountWithDir(GetSessionsDir(), sessionID)
 }
 
 // RemoveSessionMetadataCache 清除指定会话的内存缓存。
 //
-// 对齐 Python: remove_session_metadata_cache(session_id)
+// Python: remove_session_metadata_cache(session_id)
 func RemoveSessionMetadataCache(sessionID string) {
 	deliveryContextMu.Lock()
 	delete(deliveryContextCache, sessionID)
@@ -411,7 +411,7 @@ func FlushMetadataQueue() {
 // ReadSessionMetadata 读取会话元数据文件。
 //
 // 不产生副作用：session 目录不存在时返回 nil 而非创建目录，
-// 对齐 Python _read_metadata 的"读路径不应产生副作用"原则。
+// Python: _read_metadata 的"读路径不应产生副作用"原则。
 func ReadSessionMetadata(sessionsDir, sessionID string) map[string]any {
 	metaPath := filepath.Join(sessionsDir, sessionID, metadataFileName)
 	data, err := os.ReadFile(metaPath)
@@ -444,7 +444,7 @@ func WriteSessionMetadata(sessionsDir, sessionID string, meta map[string]any) er
 }
 
 // ReadSessionMetadataWithCache 优先从内存缓存读取 metadata，否则从磁盘读取。
-// 对齐 Python _read_metadata 的缓存优先策略。
+// Python: _read_metadata 的缓存优先策略。
 func ReadSessionMetadataWithCache(sessionID string) map[string]any {
 	deliveryContextMu.RLock()
 	if cached, ok := deliveryContextCache[sessionID]; ok {
@@ -491,7 +491,7 @@ func IncrementSessionRoundCountWithDir(sessionsDir, sessionID string) (int, erro
 }
 
 // EnqueueMetadataWrite 将写入操作放入异步队列，队列满时退化为同步写。
-// 对齐 Python: _enqueue_write()
+// Python: _enqueue_write()
 func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 	// 先更新缓存，确保后续读取能看到最新状态
 	deliveryContextMu.Lock()
@@ -513,7 +513,7 @@ func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureMetadataWorker 确保 metadata 异步写入 worker 已启动。
-// 对齐 Python: _ensure_worker_started()，懒启动后台 goroutine
+// Python: _ensure_worker_started()，懒启动后台 goroutine
 func ensureMetadataWorker() {
 	metadataQueueOnce.Do(func() {
 		metadataQueue = make(chan metadataWriteItem, metadataQueueSize)
@@ -522,7 +522,7 @@ func ensureMetadataWorker() {
 }
 
 // metadataWriteWorker 异步写入 worker，消费队列并写入磁盘。
-// 对齐 Python: _worker() 后台线程
+// Python: _worker() 后台线程
 func metadataWriteWorker() {
 	for item := range metadataQueue {
 		// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置

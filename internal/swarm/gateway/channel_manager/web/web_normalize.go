@@ -13,7 +13,7 @@ import (
 
 // NormAndForwardFunc 标准化并转发消息的回调函数类型。
 //
-// 对齐 Python _normalize_and_forward_message：先 normalize 再 deliver_to_message_handler。
+// Python: _normalize_and_forward_message：先 normalize 再 deliver_to_message_handler。
 // 返回 true 表示短路后续本地 handler，false 表示本地 handler 继续执行。
 type NormAndForwardFunc func(msg *schema.Message) bool
 
@@ -28,7 +28,7 @@ type NormAndForwardFunc func(msg *schema.Message) bool
 // 这些方法的消息会通过 _on_message_cb 转发到 MessageHandler，
 // 同时本地 handler 也会执行返回 ack 响应。
 //
-// 对齐 Python _FORWARD_REQ_METHODS
+// Python: _FORWARD_REQ_METHODS
 var ForwardReqMethods = map[string]bool{
 	"initialize":                     true,
 	"session.create":                 true,
@@ -108,7 +108,7 @@ var ForwardReqMethods = map[string]bool{
 // 与 ForwardReqMethods 的差集即为"既有转发又有本地 handler"的方法
 // （如 chat.send、chat.interrupt 等）。
 //
-// 对齐 Python _FORWARD_NO_LOCAL_HANDLER_METHODS
+// Python: _FORWARD_NO_LOCAL_HANDLER_METHODS
 var ForwardNoLocalHandlerMethods = map[string]bool{
 	"initialize":                     true,
 	"session.create":                 true,
@@ -232,7 +232,7 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 
 // MakeNormAndForward 创建标准化+转发回调函数。
 //
-// 对齐 Python _make_norm_and_forward (app_gateway.py)：
+// Python: _make_norm_and_forward (app_gateway.py)：
 // 三层路由逻辑：
 //   - 非 forwardMethods → 不转发，返回 false（让本地 handler 处理）
 //   - forwardMethods 中且有本地 handler → 转发 + 返回 false（本地 handler 继续执行）
@@ -277,7 +277,7 @@ func MakeNormAndForward(
 
 // BuildUserMessage 从 RPC 请求参数构建入站 Message。
 //
-// 对齐 Python WebChannel._handle_raw_message 中构建 user_message 的逻辑。
+// Python: WebChannel._handle_raw_message 中构建 user_message 的逻辑。
 func BuildUserMessage(reqID, method string, params map[string]any, sessionID string, query map[string][]string) *schema.Message {
 	reqMethod, _ := schema.ParseReqMethod(method)
 	paramsJSON, _ := json.Marshal(params)
@@ -300,7 +300,7 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 
 // parseMode 从 params 解析运行模式。
 //
-// 对齐 Python WebChannel._parse_mode，默认 Mode.AGENT_PLAN。
+// Python: WebChannel._parse_mode，默认 Mode.AGENT_PLAN。
 func parseMode(params map[string]any) schema.Mode {
 	if params != nil {
 		if mode, ok := params["mode"].(string); ok && mode != "" {

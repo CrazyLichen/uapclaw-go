@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ActiveTeam 活跃团队条目。
-// 对齐 Python: ActiveTeam (openjiuwen/agent_teams/runtime/pool.py)
+// Python: ActiveTeam (openjiuwen/agent_teams/runtime/pool.py)
 //
 // 每个 ActiveTeam 持有一个 TeamAgent Leader 实例、绑定的 session ID、
 // 生命周期状态和 InteractGate 门控。
@@ -28,7 +28,7 @@ type ActiveTeam struct {
 }
 
 // ActiveTeamInfo 活跃团队信息（只读视图）。
-// 对齐 Python: ActiveTeamInfo (openjiuwen/agent_teams/runtime/pool.py)
+// Python: ActiveTeamInfo (openjiuwen/agent_teams/runtime/pool.py)
 //
 // 排除 TeamAgent 引用和 InteractGate，供外部消费者安全读取。
 type ActiveTeamInfo struct {
@@ -43,7 +43,7 @@ type ActiveTeamInfo struct {
 }
 
 // TeamRuntimePool 进程内活跃 TeamAgent 运行时池。
-// 对齐 Python: TeamRuntimePool (openjiuwen/agent_teams/runtime/pool.py)
+// Python: TeamRuntimePool (openjiuwen/agent_teams/runtime/pool.py)
 //
 // 按 team_name 索引，同一团队同时绑定最多一个 session。
 // 切换 session 是硬边界：activate 先 stop_team 旧条目，
@@ -58,15 +58,15 @@ type TeamRuntimePool struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RuntimeState 运行时状态。
-// 对齐 Python: RuntimeState (openjiuwen/agent_teams/runtime/pool.py)
+// Python: RuntimeState (openjiuwen/agent_teams/runtime/pool.py)
 type RuntimeState int
 
 const (
 	// RuntimeStateRunning 运行中
-	// 对齐 Python: RuntimeState.RUNNING
+	// Python: RuntimeState.RUNNING
 	RuntimeStateRunning RuntimeState = iota
 	// RuntimeStatePaused 已暂停
-	// 对齐 Python: RuntimeState.PAUSED
+	// Python: RuntimeState.PAUSED
 	RuntimeStatePaused
 )
 
@@ -77,7 +77,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamRuntimePool 创建运行时池。
-// 对齐 Python: TeamRuntimePool.__init__()
+// Python: TeamRuntimePool.__init__()
 func NewTeamRuntimePool() *TeamRuntimePool {
 	return &TeamRuntimePool{
 		entries: make(map[string]*ActiveTeam),
@@ -85,7 +85,7 @@ func NewTeamRuntimePool() *TeamRuntimePool {
 }
 
 // Get 获取活跃团队。
-// 对齐 Python: TeamRuntimePool.get(team_name)
+// Python: TeamRuntimePool.get(team_name)
 func (p *TeamRuntimePool) Get(teamName string) *ActiveTeam {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -93,7 +93,7 @@ func (p *TeamRuntimePool) Get(teamName string) *ActiveTeam {
 }
 
 // HasActive 检查是否有活跃团队。
-// 对齐 Python: TeamRuntimePool.has_active(team_name)
+// Python: TeamRuntimePool.has_active(team_name)
 func (p *TeamRuntimePool) HasActive(teamName string) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -102,7 +102,7 @@ func (p *TeamRuntimePool) HasActive(teamName string) bool {
 }
 
 // Add 注册活跃团队（覆盖同名的已有条目）。
-// 对齐 Python: TeamRuntimePool.add(entry)
+// Python: TeamRuntimePool.add(entry)
 func (p *TeamRuntimePool) Add(entry *ActiveTeam) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -110,7 +110,7 @@ func (p *TeamRuntimePool) Add(entry *ActiveTeam) {
 }
 
 // Remove 移除活跃团队并返回条目。
-// 对齐 Python: TeamRuntimePool.remove(team_name)
+// Python: TeamRuntimePool.remove(team_name)
 func (p *TeamRuntimePool) Remove(teamName string) *ActiveTeam {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -120,7 +120,7 @@ func (p *TeamRuntimePool) Remove(teamName string) *ActiveTeam {
 }
 
 // ListTeamNames 返回所有团队名的快照。
-// 对齐 Python: TeamRuntimePool.list_team_names()
+// Python: TeamRuntimePool.list_team_names()
 func (p *TeamRuntimePool) ListTeamNames() []string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -132,7 +132,7 @@ func (p *TeamRuntimePool) ListTeamNames() []string {
 }
 
 // TeamsForSession 返回绑定到指定 session 的所有活跃团队。
-// 对齐 Python: TeamRuntimePool.teams_for_session(session_id)
+// Python: TeamRuntimePool.teams_for_session(session_id)
 func (p *TeamRuntimePool) TeamsForSession(sessionID string) []*ActiveTeam {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -146,7 +146,7 @@ func (p *TeamRuntimePool) TeamsForSession(sessionID string) []*ActiveTeam {
 }
 
 // ListAllInfo 返回所有活跃团队的只读快照。
-// 对齐 Python: TeamRuntimePool.list_all_info()
+// Python: TeamRuntimePool.list_all_info()
 //
 // 排除 TeamAgent 引用，外部消费者不能通过返回条目意外修改运行时状态。
 func (p *TeamRuntimePool) ListAllInfo() []ActiveTeamInfo {

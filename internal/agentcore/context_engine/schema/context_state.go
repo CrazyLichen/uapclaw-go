@@ -8,7 +8,7 @@ import (
 
 // ContextCompressionMetric 上下文压缩前后指标快照。
 //
-// 对应 Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionMetric)
+// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionMetric)
 type ContextCompressionMetric struct {
 	// Time 观测时间（ISO 8601 毫秒精度），空串表示未记录
 	Time string `json:"time,omitempty"`
@@ -22,7 +22,7 @@ type ContextCompressionMetric struct {
 
 // ContextCompressionSaved 上下文压缩节省量。
 //
-// 对应 Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionSaved)
+// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionSaved)
 type ContextCompressionSaved struct {
 	// Messages 节省的消息数
 	Messages int `json:"messages"`
@@ -34,7 +34,7 @@ type ContextCompressionSaved struct {
 
 // ContextCompressionUsage 上下文压缩 LLM 调用用量。
 //
-// 对应 Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionUsage)
+// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionUsage)
 type ContextCompressionUsage struct {
 	// Calls LLM 调用次数
 	Calls int `json:"calls"`
@@ -63,7 +63,7 @@ type ContextCompressionUsage struct {
 // 由 ProcessorStateRecorder.BuildState() 构建，记录一次压缩操作的完整生命周期。
 // 通过回调框架和 session stream 发射，供外部系统观测上下文引擎行为。
 //
-// 对应 Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
+// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
 type ContextCompressionState struct {
 	// Type 事件类型标识，固定为 ContextCompressionStateType
 	Type string `json:"type"`
@@ -101,12 +101,12 @@ type ContextCompressionState struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 //
-// 对应 Python: Literal["started", "completed", "noop", "skipped", "failed"]
+// Python: Literal["started", "completed", "noop", "skipped", "failed"]
 type CompressionStatus string
 
 // CompressionPhase 压缩操作阶段字面量类型。
 //
-// 对应 Python: Literal["add_messages", "get_context_window", "active_compress"]
+// Python: Literal["add_messages", "get_context_window", "active_compress"]
 type CompressionPhase string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -138,7 +138,7 @@ const (
 // ContextCompressionStateType 压缩状态事件类型标识。
 // 用于回调事件名和 session stream 的 OutputSchema.Type 字段。
 //
-// 对应 Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
+// Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
 const ContextCompressionStateType = "context.compression_state"
 
 // ──────────────────────────── 导出函数 ────────────────────────────

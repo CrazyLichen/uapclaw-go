@@ -2700,7 +2700,7 @@ func TestMatchHost(t *testing.T) {
 	}{
 		{"example.com", "example.com", true},
 		{"foo.example.com", "*.example.com", true},
-		// 对齐 Python: *.example.com 不匹配裸域名 example.com（段数不同）
+		// Python: *.example.com 不匹配裸域名 example.com（段数不同）
 		{"example.com", "*.example.com", false},
 		{"evil.com", "example.com", false},
 		{"evil.com", "*.example.com", false},

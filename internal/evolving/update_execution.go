@@ -23,7 +23,7 @@ import (
 // 2. 归一化后逐一应用到对应 operator
 // 3. operator 不存在时生成完整 ApplyResult（含 ChangeType 和 Metadata）
 //
-// 对应 Python: openjiuwen/agent_evolving/update_execution.py execute_updates
+// Python: openjiuwen/agent_evolving/update_execution.py execute_updates
 func ExecuteUpdates(
 	operators map[string]operator.Operator,
 	updates map[schema.UpdateKey]any,
@@ -80,7 +80,7 @@ func ExecuteUpdates(
 
 // ApplyUpdates ExecuteUpdates 的兼容别名。
 //
-// 对应 Python: openjiuwen/agent_evolving/update_execution.py apply_updates
+// Python: openjiuwen/agent_evolving/update_execution.py apply_updates
 func ApplyUpdates(
 	operators map[string]operator.Operator,
 	updates map[schema.UpdateKey]any,
@@ -90,7 +90,7 @@ func ApplyUpdates(
 
 // SummarizeApplyResults 返回更新执行的聚合统计。
 //
-// 对应 Python: openjiuwen/agent_evolving/update_execution.py summarize_apply_results
+// Python: openjiuwen/agent_evolving/update_execution.py summarize_apply_results
 func SummarizeApplyResults(results []schema.ApplyResult) map[string]int {
 	applied := 0
 	for _, r := range results {

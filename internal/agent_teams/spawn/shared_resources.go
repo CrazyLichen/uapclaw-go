@@ -35,7 +35,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetSharedRuntime 返回进程级 TeamRuntime 单例，首次调用时创建。
-// 对齐 Python: get_shared_runtime()
+// Python: get_shared_runtime()
 // ⤵️ 预留：TeamRuntime（9.85）实现后回填
 func GetSharedRuntime() any {
 	resourcesMu.Lock()
@@ -49,7 +49,7 @@ func GetSharedRuntime() any {
 }
 
 // GetSharedDB 返回进程级数据库实例。
-// 对齐 Python: get_shared_db(config)
+// Python: get_shared_db(config)
 //
 // db_type == "memory" → 全局唯一 InMemoryTeamDatabase 单例。
 // db_type != "memory" → 按 db_type::connection_string 去重。
@@ -59,7 +59,7 @@ func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 	defer resourcesMu.Unlock()
 
 	// TODO(#9.64): 解析 config.db_type
-	// 对齐 Python: if dbType == "memory" { return _getSharedMemoryDB() }
+	// Python: if dbType == "memory" { return _getSharedMemoryDB() }
 	// return _getSharedDBInstance(config)
 
 	logger.Debug(sharedLogComponent).Msg("GetSharedDB 当前返回 nil（TODO #9.64）")
@@ -67,7 +67,7 @@ func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 }
 
 // CleanupSharedResources 重置所有进程级全局单例。
-// 对齐 Python: cleanup_shared_resources()
+// Python: cleanup_shared_resources()
 // 用于测试间重置。
 func CleanupSharedResources() {
 	resourcesMu.Lock()

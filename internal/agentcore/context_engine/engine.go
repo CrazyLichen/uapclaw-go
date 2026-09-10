@@ -23,7 +23,7 @@ import (
 
 // contextEngine 上下文引擎门面，管理上下文池、处理器创建和会话状态持久化。
 //
-// 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
+// Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type contextEngine struct {
 	// config 全局引擎配置
 	config schema.ContextEngineConfig
@@ -68,7 +68,7 @@ var ()
 //   - WithWorkspace(w) 设置工作空间
 //   - WithEngineSysOperation(op) 设置系统操作接口
 //
-// 对应 Python: ContextEngine(config, workspace=, sys_operation=)
+// Python: ContextEngine(config, workspace=, sys_operation=)
 func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEngineOption) iface.ContextEngine {
 	opt := iface.NewContextEngineOptions(opts...)
 	return &contextEngine{
@@ -84,7 +84,7 @@ func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEn
 // 若 fullContextID 已在池中，返回已有实例并刷新会话引用和状态。
 // 否则创建新实例（⤵️ 5.31 回填 SessionModelContext 构造），存入池。
 //
-// 对应 Python: ContextEngine.create_context()
+// Python: ContextEngine.create_context()
 func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CreateContextOption) (iface.ModelContext, error) {
 	if contextID == "" {
 		contextID = defaultContextID
@@ -166,7 +166,7 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 
 // GetContext 获取上下文（不存在返回 nil）。
 //
-// 对应 Python: ContextEngine.get_context()
+// Python: ContextEngine.get_context()
 func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.ModelContext {
 	contextID = processContextID(contextID)
 	fullContextID := sessionID + "_" + contextID
@@ -179,7 +179,7 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 //
 // 返回值："busy"（被动压缩进行中）、"compressed"（压缩成功）、"noop"（无变化）。
 //
-// 对应 Python: ContextEngine.compress_context()
+// Python: ContextEngine.compress_context()
 // Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
 // Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
 func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
@@ -201,7 +201,7 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 		)
 	}
 
-	// 对齐 Python: context.compress_context(processor_types=, sys_operation=self._sys_operation, **kwargs)
+	// Python: context.compress_context(processor_types=, sys_operation=self._sys_operation, **kwargs)
 	// 若调用方未通过 WithCompressSysOperation 指定，自动注入 ce.sysOperation
 	compressOpts := make([]iface.CompressContextOption, 0, len(opts)+1)
 	if opt.SysOperation == nil && ce.sysOperation != nil {
@@ -219,7 +219,7 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 //   - 仅 WithSessionID → 清除该 session 下所有上下文
 //   - WithSessionID + WithContextID → 清除指定上下文
 //
-// 对应 Python: ContextEngine.clear_context()
+// Python: ContextEngine.clear_context()
 func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearContextOption) error {
 	opt := iface.NewClearContextOptions(opts...)
 
@@ -298,7 +298,7 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 // 遍历目标上下文，调用 mc.SaveState() 收集状态，
 // 通过 saveStateToSession 写入 Session。
 //
-// 对应 Python: ContextEngine.save_contexts()
+// Python: ContextEngine.save_contexts()
 func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error) {
 	if sess == nil {
 		logger.Warn(logComponent).
@@ -348,7 +348,7 @@ func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterface
 
 // createProcessor 通过工厂创建处理器实例。
 //
-// 对应 Python: ContextEngine._create_processor()
+// Python: ContextEngine._create_processor()
 func (ce *contextEngine) createProcessor(processorType string, config iface.ProcessorConfig) (iface.ContextProcessor, error) {
 	factory, ok := GetProcessorFactory(processorType)
 	if !ok {
@@ -370,14 +370,14 @@ func (ce *contextEngine) createProcessor(processorType string, config iface.Proc
 
 // processContextID 处理上下文 ID，将点号替换为下划线。
 //
-// 对应 Python: ContextEngine._process_context_id()
+// Python: ContextEngine._process_context_id()
 func processContextID(contextID string) string {
 	return strings.ReplaceAll(contextID, ".", "_")
 }
 
 // loadStateFromSession 从 Session 中加载上下文状态到 ModelContext。
 //
-// 对应 Python: ContextEngine._load_state_from_session()
+// Python: ContextEngine._load_state_from_session()
 func loadStateFromSession(mc iface.ModelContext, sess sessioninterfaces.SessionFacade, historyMessages []llm_schema.BaseMessage) {
 	if sess == nil {
 		return
@@ -405,7 +405,7 @@ func loadStateFromSession(mc iface.ModelContext, sess sessioninterfaces.SessionF
 
 // saveStateToSession 将上下文状态写入 Session。
 //
-// 对应 Python: ContextEngine._save_state_to_session()
+// Python: ContextEngine._save_state_to_session()
 func saveStateToSession(sess sessioninterfaces.SessionFacade, states map[string]any) {
 	if sess == nil {
 		return

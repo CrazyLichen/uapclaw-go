@@ -19,7 +19,7 @@ import (
 
 // WebChannelConfig Web 通道配置。
 //
-// 对齐 Python WebChannelConfig 中各字段和默认值。
+// Python: WebChannelConfig 中各字段和默认值。
 type WebChannelConfig struct {
 	// Enabled 是否启用
 	Enabled bool
@@ -35,14 +35,14 @@ type WebChannelConfig struct {
 
 // ConnectHook 连接建立钩子函数。
 //
-// 对齐 Python WebChannel._connect_hooks 中的 ConnectHook 签名。
+// Python: WebChannel._connect_hooks 中的 ConnectHook 签名。
 type ConnectHook func(conn *websocket.Conn) error
 
 // WebChannel Web 通道，实现 BaseChannel 接口。
 //
 // 管理 WebSocket 连接生命周期、RPC 请求分发和事件推送。
 //
-// 对应 Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (WebChannel)
+// Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (WebChannel)
 type WebChannel struct {
 	// config 通道配置
 	config WebChannelConfig
@@ -95,7 +95,7 @@ const (
 //
 // 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
 // onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入。
-// 对齐 Python: WebChannel.__init__ + _register_web_handlers(bind)。
+// Python: WebChannel.__init__ + _register_web_handlers(bind)。
 func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfigSaved OnConfigSavedFunc) *WebChannel {
 	// 填充默认值
 	if cfg.Host == "" {
@@ -124,7 +124,7 @@ func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfig
 // HandleWebSocket 处理 WebSocket 连接。
 //
 // 升级 HTTP 连接为 WebSocket，触发 onConnect 钩子，进入消息读取循环。
-// 对齐 Python WebChannel._connection_handler 逻辑。
+// Python: WebChannel._connection_handler 逻辑。
 func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// path 校验（对齐 Python _connection_handler 中 URL path 检查）
 	if r.URL.Path != wc.config.Path {
@@ -244,7 +244,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		if handledByCallback {
 			// handledByCallback=true 时短路后续本地 handler
-			// 对齐 Python: if handled_by_callback: return
+			// Python: if handled_by_callback: return
 			continue
 		}
 
@@ -274,7 +274,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // OnConnect 注册连接建立钩子。
 //
-// 对齐 Python WebChannel.on_connect(callback)，
+// Python: WebChannel.on_connect(callback)，
 // 新客户端接入时依次调用所有已注册的钩子。
 func (wc *WebChannel) OnConnect(callback ConnectHook) {
 	wc.connectHooksMu.Lock()
@@ -323,7 +323,7 @@ func (wc *WebChannel) Stop(_ context.Context) error {
 
 // Send 向所有客户端广播消息，根据事件类型选择 full-payload 或 pure-text 路由。
 //
-// 对齐 Python web_connect.py send() (L313-L414)：
+// Python: web_connect.py send() (L313-L414)：
 //   - msg.type == "res" → 构造 res 帧
 //   - 确定事件名（默认 chat.final，优先 msg.EventType，fallback payload.event_type）
 //   - full-payload 事件：透传完整 payload
@@ -396,7 +396,7 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 
 // OnMessage 注册入站消息回调。
 //
-// 对齐 Python BaseChannel.on_message，返回 true 表示已处理。
+// Python: BaseChannel.on_message，返回 true 表示已处理。
 func (wc *WebChannel) OnMessage(callback func(*schema.Message) bool) {
 	wc.onMessageCb = callback
 }
@@ -496,7 +496,7 @@ func determineEventName(msg *schema.Message) string {
 
 // isFullPayloadEvent 判断事件是否需要透传完整 payload
 //
-// 对齐 Python web_connect.py send() 中的 full-payload 事件列表
+// Python: web_connect.py send() 中的 full-payload 事件列表
 func isFullPayloadEvent(eventName string) bool {
 	// full-payload 事件白名单
 	fullPayloadEvents := map[string]bool{
@@ -534,7 +534,7 @@ func isFullPayloadEvent(eventName string) bool {
 
 // extractPureTextPayload 提取纯文本事件的核心字段
 //
-// 对齐 Python web_connect.py send() 中的 pure-text 路径：
+// Python: web_connect.py send() 中的 pure-text 路径：
 // 仅提取 content + session_id + role + member_name + cron(error fallback)
 func extractPureTextPayload(msg *schema.Message, eventName string) map[string]any {
 	payload := map[string]any{
@@ -587,7 +587,7 @@ func extractPureTextPayload(msg *schema.Message, eventName string) map[string]an
 // broadcastInterruptSideEffect interrupt_result 事件的副作用：
 // 自动广播 processing_status 事件
 //
-// 对齐 Python web_connect.py send() 中 interrupt_result 后的处理：
+// Python: web_connect.py send() 中 interrupt_result 后的处理：
 //   - intent=pause/supplement/resume → is_processing=true
 //   - intent=cancel → is_processing=false
 func (wc *WebChannel) broadcastInterruptSideEffect(msg *schema.Message) {

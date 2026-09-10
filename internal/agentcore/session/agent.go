@@ -25,7 +25,7 @@ import (
 // 组合内部层 AgentSession，实现 PreRun→Invoke/Stream→PostRun 完整生命周期。
 // 负责：状态读写、流写入、交互、回调触发、检查点持久化。
 //
-// 对应 Python: openjiuwen/core/session/agent.py (Session)
+// Python: openjiuwen/core/session/agent.py (Session)
 type Session struct {
 	// sessionID 会话唯一标识，Session 自身持有，不依赖 inner
 	sessionID string
@@ -34,12 +34,12 @@ type Session struct {
 	// card Agent 身份元数据
 	card *agentschema.AgentCard
 	// envs 环境变量（通过 WithEnvs 设置）
-	// 对齐 Python: Session.__init__(envs=dict)
+	// Python: Session.__init__(envs=dict)
 	envs map[string]any
 	// checkpointer 检查点器（通过 WithCheckpointer option 设置）
 	checkpointer interfaces.Checkpointer
 	// streamWriterManager 流写入管理器（通过 WithStreamWriterManager 设置）
-	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
+	// Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
 	streamWriterManager *stream.StreamWriterManager
 	// preRunDone PreRun 是否已执行
@@ -83,7 +83,7 @@ var _ interfaces.SessionFacade = (*Session)(nil)
 //   - closeStreamOnPostRun: 默认 true
 //   - sourceMetadata: 默认空 map
 //
-// 对应 Python: openjiuwen/core/session/agent.py create_agent_session()
+// Python: openjiuwen/core/session/agent.py create_agent_session()
 func NewSession(opts ...SessionOption) *Session {
 	s := &Session{
 		sessionID:            uuid.New().String(),
@@ -147,7 +147,7 @@ func WithCard(card *agentschema.AgentCard) SessionOption {
 
 // WithEnvs 设置环境变量的选项。
 // 外层 NewSession 会创建默认 Config 并将 envs 写入，再传给 inner。
-// 对齐 Python: Session.__init__(envs=dict[str, Any]=None) → config.set_envs(envs)
+// Python: Session.__init__(envs=dict[str, Any]=None) → config.set_envs(envs)
 func WithEnvs(envs map[string]any) SessionOption {
 	return func(s *Session) {
 		s.envs = envs
@@ -165,7 +165,7 @@ func WithCheckpointer(cp interfaces.Checkpointer) SessionOption {
 
 // WithStreamWriterManager 设置流写入管理器的选项。
 // 外层透传给 inner，由 inner 自动创建默认实例。
-// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
+// Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
 // ✅ 5.10 已回填：参数类型从 any 改为 *stream.StreamWriterManager
 func WithStreamWriterManager(mgr *stream.StreamWriterManager) SessionOption {
 	return func(s *Session) {
@@ -193,7 +193,7 @@ func (s *Session) GetSessionID() string {
 }
 
 // GetEnv 获取环境变量值。
-// 对应 Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
+// Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
 func (s *Session) GetEnv(key string, defaultValue ...any) any {
 	cfg := s.inner.Config()
 	if cfg == nil {
@@ -203,7 +203,7 @@ func (s *Session) GetEnv(key string, defaultValue ...any) any {
 }
 
 // GetEnvs 获取所有环境变量。
-// 对应 Python: Session.get_envs() → self._inner.config().get_envs()
+// Python: Session.get_envs() → self._inner.config().get_envs()
 func (s *Session) GetEnvs() map[string]any {
 	cfg := s.inner.Config()
 	if cfg == nil {
@@ -213,7 +213,7 @@ func (s *Session) GetEnvs() map[string]any {
 }
 
 // GetAgentID 返回 Agent ID
-// 对应 Python: AgentSession.agent_id()
+// Python: AgentSession.agent_id()
 func (s *Session) GetAgentID() string {
 	if s.card != nil {
 		return s.card.AbilityID()
@@ -263,7 +263,7 @@ func (s *Session) DumpState() map[string]any {
 // WriteStream 写入标准输出流。
 //
 // SessionFacade 接口实现。
-// 对应 Python: Session.write_stream(data)
+// Python: Session.write_stream(data)
 func (s *Session) WriteStream(ctx context.Context, data any) error {
 	return s.writeStream(data)
 }
@@ -271,13 +271,13 @@ func (s *Session) WriteStream(ctx context.Context, data any) error {
 // WriteCustomStream 写入自定义流。
 //
 // SessionFacade 接口实现。
-// 对应 Python: Session.write_custom_stream(data)
+// Python: Session.write_custom_stream(data)
 func (s *Session) WriteCustomStream(ctx context.Context, data any) error {
 	return s.writeCustomStream(data)
 }
 
 // StreamIterator 返回流迭代 channel。
-// 对应 Python: Session.stream_iterator()
+// Python: Session.stream_iterator()
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 func (s *Session) StreamIterator() <-chan stream.Schema {
 	mgr := s.inner.StreamWriterManager()
@@ -290,7 +290,7 @@ func (s *Session) StreamIterator() <-chan stream.Schema {
 }
 
 // CloseStream 关闭流发射器。
-// 对应 Python: Session.close_stream()
+// Python: Session.close_stream()
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 // ✅ SW-33 已回填：注销该 session 的 StreamWrite 全部回调
 func (s *Session) CloseStream() error {
@@ -303,7 +303,7 @@ func (s *Session) CloseStream() error {
 	_ = mgr.StreamEmitter().Close(ctx)
 
 	// ⤴️ SW-33 回填：注销该 session 的 StreamWrite 全部回调
-	// 对应 Python: await Runner.callback_framework.unregister_event(event=self._session_id + "write_stream")
+	// Python: await Runner.callback_framework.unregister_event(event=self._session_id + "write_stream")
 	callback.GetCallbackFramework().OffAllCustom(s.GetSessionID() + "write_stream")
 	return nil
 }
@@ -312,7 +312,7 @@ func (s *Session) CloseStream() error {
 //
 // 幂等：多次调用只执行一次。
 //
-// 对应 Python: Session.pre_run()
+// Python: Session.pre_run()
 func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	if s.preRunDone {
 		return nil
@@ -354,7 +354,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 //
 // 幂等：多次调用只执行一次。
 //
-// 对应 Python: Session.post_run()
+// Python: Session.post_run()
 // Python 中 commit() 内部 post_agent_execute 抛异常时会向上传播，Go 同样返回 Commit 错误。
 func (s *Session) PostRun(ctx context.Context) error {
 	if s.postRunDone {
@@ -385,7 +385,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 }
 
 // Commit 提交当前状态到检查点（不关闭流）。
-// 对应 Python: Session.commit()
+// Python: Session.commit()
 func (s *Session) Commit(ctx context.Context) error {
 	if cp := s.inner.Checkpointer(); cp != nil {
 		return cp.PostAgentExecute(ctx, s.inner)
@@ -395,7 +395,7 @@ func (s *Session) Commit(ctx context.Context) error {
 
 // Interact 请求用户输入。
 // ✅ 5.7 已回填：SimpleAgentInteraction 实现后填充真实逻辑
-// 对应 Python: Session.interact(value)
+// Python: Session.interact(value)
 func (s *Session) Interact(ctx context.Context, value any) error {
 	if s.interaction == nil {
 		s.interaction = interaction.NewSimpleAgentInteraction(s.inner)
@@ -409,7 +409,7 @@ func (s *Session) Interact(ctx context.Context, value any) error {
 // 包装为 WorkflowCommitState 与 AgentSession 共享全局状态。
 // WorkflowSession 的 globalState 更新 commit 后 AgentSession 也能读到。
 //
-// 对应 Python: Session.create_workflow_session()
+// Python: Session.create_workflow_session()
 func (s *Session) CreateWorkflowSession() *WorkflowSession {
 	// 取出 AgentStateCollection 的 globalState（*InMemoryStateLike 实例）
 	var workflowState *state.WorkflowCommitState
@@ -435,7 +435,7 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 }
 
 // CreateAgentSession 创建 Agent 会话实例。
-// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session(session_id, envs, card)
+// Python: openjiuwen/core/session/agent.py create_agent_session(session_id, envs, card)
 // 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
 func CreateAgentSession(sessionID string, card *agentschema.AgentCard, envs map[string]any) *Session {
 	opts := []SessionOption{WithSessionID(sessionID)}
@@ -451,14 +451,14 @@ func CreateAgentSession(sessionID string, card *agentschema.AgentCard, envs map[
 // ──────────────────────────── 非导出函数 ────────────────────────────
 func init() {
 	// 注册 Session 创建函数到 controller 包，解决循环依赖
-	// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+	// Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
 	controller.RegisterSessionCreator(func(sessionID string, card *agentschema.AgentCard, envs map[string]any) controller.StateAccessor {
 		return CreateAgentSession(sessionID, card, envs)
 	})
 }
 
 // writeStream 写入标准输出流（内部实现）。
-// 对应 Python: Session.write_stream(data)
+// Python: Session.write_stream(data)
 // data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 // ✅ SW-31 已回填：触发自定义 StreamWrite 回调
@@ -467,7 +467,7 @@ func (s *Session) writeStream(data any) error {
 	streamData := normalizeOutputStream(s.tagStreamPayload(data))
 
 	// ⤴️ SW-31 回填：触发自定义 StreamWrite 事件
-	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	// Python: await trigger(self._session_id + "write_stream", data=stream_data)
 	callback.GetCallbackFramework().TriggerCustom(ctx,
 		s.GetSessionID()+"write_stream",
 		map[string]any{"data": streamData},
@@ -485,7 +485,7 @@ func (s *Session) writeStream(data any) error {
 }
 
 // writeCustomStream 写入自定义流（内部实现）。
-// 对应 Python: Session.write_custom_stream(data)
+// Python: Session.write_custom_stream(data)
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 // ✅ SW-32 已回填：触发自定义 StreamWrite 回调
 func (s *Session) writeCustomStream(data any) error {
@@ -493,7 +493,7 @@ func (s *Session) writeCustomStream(data any) error {
 	streamData := s.tagStreamPayload(data)
 
 	// ⤴️ SW-32 回填：触发自定义 StreamWrite 事件
-	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	// Python: await trigger(self._session_id + "write_stream", data=stream_data)
 	callback.GetCallbackFramework().TriggerCustom(ctx,
 		s.GetSessionID()+"write_stream",
 		map[string]any{"data": streamData},
@@ -512,7 +512,7 @@ func (s *Session) writeCustomStream(data any) error {
 }
 
 // tagStreamPayload 为流数据添加来源元数据。
-// 对应 Python: Session._tag_stream_payload(data)
+// Python: Session._tag_stream_payload(data)
 // ✅ 5.10 已回填：支持 map[string]any、OutputSchema 和 CustomSchema
 func (s *Session) tagStreamPayload(data any) any {
 	if len(s.sourceMetadata) == 0 {
@@ -570,7 +570,7 @@ func (s *Session) tagStreamPayload(data any) any {
 		}
 		return stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload, IsLastSchema: v.IsLastSchema}
 	case stream.CustomSchema:
-		// 对齐 Python：CustomSchema 的 extra="allow" 语义下，metadata 合并进 Data 字段
+		// Python: CustomSchema 的 extra="allow" 语义下，metadata 合并进 Data 字段
 		newData := make(map[string]any, len(v.Data)+len(s.sourceMetadata))
 		for k, val := range v.Data {
 			newData[k] = val
@@ -585,7 +585,7 @@ func (s *Session) tagStreamPayload(data any) any {
 }
 
 // normalizeOutputStream 将流数据统一转为 OutputSchema。
-// 对应 Python: Session._normalize_output_stream(data)
+// Python: Session._normalize_output_stream(data)
 // ✅ 5.10 已回填：R1 回填
 //
 // 转换逻辑对齐 Python:
@@ -627,7 +627,7 @@ func normalizeOutputStream(data any) stream.OutputSchema {
 }
 
 // normalizeCustomStream 将流数据统一转为 CustomSchema。
-// 对应 Python: CustomStreamWriter.write(data) → CustomSchema.model_validate(data)
+// Python: CustomStreamWriter.write(data) → CustomSchema.model_validate(data)
 //
 // 转换逻辑对齐 Python:
 //   - CustomSchema → 直接返回

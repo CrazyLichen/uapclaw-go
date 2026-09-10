@@ -113,7 +113,7 @@ func writeStream(emitter *StreamEmitter, ctx context.Context, schema Schema) err
 		)
 	}
 
-	// 对齐 Python: validated_data = self._schema_type.model_validate(stream_data)
+	// Python: validated_data = self._schema_type.model_validate(stream_data)
 	if err := schema.Validate(); err != nil {
 		return err
 	}

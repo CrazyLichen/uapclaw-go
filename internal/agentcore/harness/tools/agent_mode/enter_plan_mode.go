@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// 对齐 Python L114-138: enter_plan_mode 中英文消息
+// Python: L114-138: enter_plan_mode 中英文消息
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -37,7 +37,7 @@ var (
 
 // NewEnterPlanModeTool 创建 enter_plan_mode 工具实例。
 //
-// 对齐 Python: EnterPlanModeTool.__init__() L262-286 + invoke() L288-320
+// Python: EnterPlanModeTool.__init__() L262-286 + invoke() L288-320
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
@@ -51,7 +51,7 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 			return map[string]any{"error": "enter_plan_mode 需要 session"}, nil
 		}
 
-		// 对齐 Python L299-309: 若已有 plan_slug 且文件存在 → 返回已存在消息
+		// Python: L299-309: 若已有 plan_slug 且文件存在 → 返回已存在消息
 		state := agent.LoadState(sess)
 		if state.PlanMode.PlanSlug != "" {
 			workspaceRoot := getWorkspaceRoot(agent)
@@ -62,7 +62,7 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 			}
 		}
 
-		// 对齐 Python L311-319: 生成 slug → 解析路径 → 保存 slug 到 state
+		// Python: L311-319: 生成 slug → 解析路径 → 保存 slug 到 state
 		workspaceRoot := getWorkspaceRoot(agent)
 		slug := GetOrCreatePlanSlug(workspaceRoot)
 		planPath := ResolvePlanFilePath(workspaceRoot, slug)

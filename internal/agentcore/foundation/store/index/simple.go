@@ -23,7 +23,7 @@ import (
 // 搜索时先通过向量相似度检索命中 ID，再从 KV Store 获取完整内容。
 // 支持 StorageCodec 对记忆文本进行加解密。
 //
-// 对应 Python: openjiuwen/core/foundation/store/index/simple_memory_index.py (SimpleMemoryIndex)
+// Python: openjiuwen/core/foundation/store/index/simple_memory_index.py (SimpleMemoryIndex)
 type SimpleMemoryIndex struct {
 	// MemoryIndexBase 嵌入基类，提供 7 个默认方法
 	*MemoryIndexBase
@@ -80,7 +80,7 @@ func (s *SimpleMemoryIndex) SetEmbeddingModel(model embedding.BaseEmbedding) {
 }
 
 // SetStorageCodec 设置存储编解码器。
-// 对齐 Python set_storage_codec。加写锁保护并发安全。
+// Python: set_storage_codec。加写锁保护并发安全。
 func (s *SimpleMemoryIndex) SetStorageCodec(codec StorageCodec) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,7 +88,7 @@ func (s *SimpleMemoryIndex) SetStorageCodec(codec StorageCodec) {
 }
 
 // AddMemories 添加新的记忆文档。
-// 对齐 Python add_memories：按类型分组 → 嵌入 → 写入 Vector → 写入 KV → ID 追踪。
+// Python: add_memories：按类型分组 → 嵌入 → 写入 Vector → 写入 KV → ID 追踪。
 func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scopeID string, memories []*MemoryDoc) error {
 	if len(memories) == 0 {
 		return nil
@@ -195,7 +195,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 }
 
 // Search 语义搜索记忆文档，返回最相关的结果及相关度分数。
-// 对齐 Python search：嵌入查询 → 逐类型向量搜索 → KV 获取 → 解码 → 排序截取。
+// Python: search：嵌入查询 → 逐类型向量搜索 → KV 获取 → 解码 → 排序截取。
 func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID string, query string, memTypes []string, topK int) ([]*MemorySearchResult, error) {
 	if s.embeddingModel == nil {
 		logger.Error(logComponent).
@@ -327,7 +327,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 }
 
 // UpdateMemories 更新记忆文档。
-// 对齐 Python update_memories：先删后加策略。
+// Python: update_memories：先删后加策略。
 func (s *SimpleMemoryIndex) UpdateMemories(ctx context.Context, userID string, scopeID string, memories []*MemoryDoc) error {
 	if len(memories) == 0 {
 		return nil
@@ -343,7 +343,7 @@ func (s *SimpleMemoryIndex) UpdateMemories(ctx context.Context, userID string, s
 }
 
 // DeleteMemories 按 ID 删除记忆文档。
-// 对齐 Python delete_memories：KV 删除 + ID 追踪清理 + Vector 删除。
+// Python: delete_memories：KV 删除 + ID 追踪清理 + Vector 删除。
 func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, scopeID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
@@ -390,7 +390,7 @@ func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, s
 }
 
 // DeleteByUser 删除指定用户的所有记忆（跨所有 scope）。
-// 对齐 Python delete_by_user。
+// Python: delete_by_user。
 func (s *SimpleMemoryIndex) DeleteByUser(ctx context.Context, userID string) error {
 	// KV 前缀删除
 	kvKey := kvPrefix + kvSep + userID + kvSep
@@ -420,7 +420,7 @@ func (s *SimpleMemoryIndex) DeleteByUser(ctx context.Context, userID string) err
 }
 
 // DeleteByScope 删除指定 scope 的所有记忆（跨所有 user）。
-// 对齐 Python delete_by_scope。
+// Python: delete_by_scope。
 func (s *SimpleMemoryIndex) DeleteByScope(ctx context.Context, scopeID string) error {
 	// KV 扫描删除
 	kvKey := kvPrefix + kvSep
@@ -463,7 +463,7 @@ func (s *SimpleMemoryIndex) DeleteByScope(ctx context.Context, scopeID string) e
 }
 
 // DeleteByUserAndScope 删除指定用户和 scope 组合的所有记忆。
-// 对齐 Python delete_by_user_and_scope。
+// Python: delete_by_user_and_scope。
 func (s *SimpleMemoryIndex) DeleteByUserAndScope(ctx context.Context, userID string, scopeID string) error {
 	// KV 前缀删除
 	kvKey := kvPrefix + kvSep + userID + kvSep + scopeID + kvSep
@@ -490,7 +490,7 @@ func (s *SimpleMemoryIndex) DeleteByUserAndScope(ctx context.Context, userID str
 }
 
 // GetByID 按 ID 获取单条记忆文档，不存在时返回 nil, nil。
-// 对齐 Python get_by_id。
+// Python: get_by_id。
 func (s *SimpleMemoryIndex) GetByID(ctx context.Context, userID string, scopeID string, memID string) (*MemoryDoc, error) {
 	raw, err := s.kvStore.Get(ctx, kvMemKey(userID, scopeID, memID))
 	if err != nil {
@@ -520,7 +520,7 @@ func (s *SimpleMemoryIndex) GetByID(ctx context.Context, userID string, scopeID 
 
 // ListMemories 分页获取记忆文档列表。
 // 覆盖 MemoryIndexBase 的空实现。
-// 对齐 Python list_memories：ID 追踪 → KV 批量获取 → 过滤 → 排序 → 分页。
+// Python: list_memories：ID 追踪 → KV 批量获取 → 过滤 → 排序 → 分页。
 func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, scopeID string, offset int, limit int, memTypes []string) ([]*MemoryDoc, error) {
 	// 缓存 codec，避免并发读写竞争
 	s.mu.RLock()
@@ -606,7 +606,7 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 
 // ListUserScopes 列出索引中所有 (userID, scopeID) 对。
 // 覆盖 MemoryIndexBase 的空实现。
-// 对齐 Python list_user_scopes。
+// Python: list_user_scopes。
 func (s *SimpleMemoryIndex) ListUserScopes(ctx context.Context) ([]UserScope, error) {
 	kvKey := kvPrefix + kvSep
 	allKV, err := s.kvStore.GetByPrefix(ctx, kvKey)
@@ -688,7 +688,7 @@ func removeID(raw string, memID string) string {
 
 // readKVValue 将 KV 存储的 []byte 值解码为字符串。
 // 返回 (值, 是否存在)：raw 为 nil 时返回 ("", false)，否则返回 (string(raw), true)。
-// 对齐 Python _read_kv_value 中 raw is None → None 的语义区分。
+// Python: _read_kv_value 中 raw is None → None 的语义区分。
 func readKVValue(raw []byte) (string, bool) {
 	if raw == nil {
 		return "", false
@@ -702,7 +702,7 @@ func writeKVValue(text string) []byte {
 }
 
 // addIDToTracking 将 ID 添加到全局和类型追踪键中。
-// 对齐 Python _add_id_to_tracking。
+// Python: _add_id_to_tracking。
 func (s *SimpleMemoryIndex) addIDToTracking(ctx context.Context, userID, scopeID, memID, memType string) error {
 	// 全局 ID 追踪
 	key := kvIDsKey(userID, scopeID, "")
@@ -751,7 +751,7 @@ func (s *SimpleMemoryIndex) addIDToTracking(ctx context.Context, userID, scopeID
 
 // removeIDFromTracking 从全局和类型追踪键中移除 ID。
 // 移除后键为空时删除该键。
-// 对齐 Python _remove_id_from_tracking。
+// Python: _remove_id_from_tracking。
 func (s *SimpleMemoryIndex) removeIDFromTracking(ctx context.Context, userID, scopeID, memID string, memType string) error {
 	// 全局 ID 追踪
 	key := kvIDsKey(userID, scopeID, "")
@@ -797,7 +797,7 @@ func (s *SimpleMemoryIndex) removeIDFromTracking(ctx context.Context, userID, sc
 }
 
 // kvDataToMemoryDoc 将 KV 存储的 JSON 数据转换为 MemoryDoc。
-// 对齐 Python _kv_data_to_memory_doc，支持多种时间戳格式解析：
+// Python: _kv_data_to_memory_doc，支持多种时间戳格式解析：
 //   - 字符串格式："2006-01-02 15-04-05"（旧格式）和 "2006-01-02 15:04:05"（标准格式）
 //   - Unix 时间戳（int64/float64）
 //   - ISO 8601 格式
@@ -872,7 +872,7 @@ func kvDataToMemoryDoc(data map[string]any, memID string) *MemoryDoc {
 }
 
 // memoryDocToKVData 将 MemoryDoc 转换为 KV 存储的 JSON 数据。
-// 对齐 Python _memory_doc_to_kv_data：
+// Python: _memory_doc_to_kv_data：
 //   - KV 字段名对齐 Python：id, user_id, scope_id, mem, mem_type, timestamp
 //   - timestamp 格式使用旧兼容格式 "2006-01-02 15-04-05"
 //   - doc.Fields 合并到输出字典中
@@ -897,13 +897,13 @@ func memoryDocToKVData(doc *MemoryDoc, userID, scopeID string) map[string]any {
 }
 
 // getCollectionName 构建向量集合名称：uid_{userID}_gid_{scopeID}_mtype_{memType}
-// 对齐 Python _get_collection_name。
+// Python: _get_collection_name。
 func getCollectionName(userID, scopeID, memType string) string {
 	return fmt.Sprintf("uid_%s_gid_%s_mtype_%s", userID, scopeID, memType)
 }
 
 // parseMemTypeFromCollection 从集合名称中提取 memType。
-// 对齐 Python _parse_mem_type_from_collection。
+// Python: _parse_mem_type_from_collection。
 func parseMemTypeFromCollection(name string) string {
 	if !strings.Contains(name, "_mtype_") {
 		return ""
@@ -916,7 +916,7 @@ func parseMemTypeFromCollection(name string) string {
 }
 
 // ensureCollection 懒创建向量集合，已创建则跳过。
-// 对齐 Python _ensure_collection，集合 Schema 包含：
+// Python: _ensure_collection，集合 Schema 包含：
 //   - id: VARCHAR(256), 主键
 //   - embedding（嵌入向量）: FLOAT_VECTOR(dim)
 func (s *SimpleMemoryIndex) ensureCollection(ctx context.Context, name string, dim int) error {
@@ -971,7 +971,7 @@ func (s *SimpleMemoryIndex) ensureCollection(ctx context.Context, name string, d
 }
 
 // collectionsFor 列出匹配 userID+scopeID 前缀的所有向量集合。
-// 对齐 Python _collections_for。
+// Python: _collections_for。
 func (s *SimpleMemoryIndex) collectionsFor(ctx context.Context, userID, scopeID string) ([]string, error) {
 	prefix := fmt.Sprintf("uid_%s_gid_%s_mtype_", userID, scopeID)
 	names, err := s.vectorStore.ListCollectionNames(ctx)

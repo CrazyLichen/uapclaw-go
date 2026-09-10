@@ -18,7 +18,7 @@ type CodeExecutorFunc func(ctx context.Context, jsCode string) (any, error)
 
 // BrowserAgentRuntime 浏览器运行时内核，管理浏览器生命周期和确定性辅助动作。
 //
-// 对齐 Python: openjiuwen/harness/tools/browser_move/playwright_runtime/runtime.py (BrowserAgentRuntime L56-537)
+// Python: openjiuwen/harness/tools/browser_move/playwright_runtime/runtime.py (BrowserAgentRuntime L56-537)
 type BrowserAgentRuntime struct {
 	// service 浏览器后端服务
 	service *BrowserService
@@ -51,7 +51,7 @@ const ()
 
 // NewBrowserAgentRuntime 创建新的浏览器运行时内核。
 //
-// 对齐 Python: BrowserAgentRuntime.__init__
+// Python: BrowserAgentRuntime.__init__
 func NewBrowserAgentRuntime(
 	provider, apiKey, apiBase, modelName string,
 	mcpCfg *mcptypes.McpServerConfig,
@@ -74,7 +74,7 @@ func NewBrowserAgentRuntime(
 
 // Service 返回浏览器后端服务实例。
 //
-// 对齐 Python: BrowserAgentRuntime.service 属性
+// Python: BrowserAgentRuntime.service 属性
 func (r *BrowserAgentRuntime) Service() *BrowserService {
 	return r.service
 }
@@ -116,7 +116,7 @@ func (r *BrowserAgentRuntime) SetCodeExecutor(fn CodeExecutorFunc) {
 
 // CancelRun 请求取消指定会话/请求的浏览器执行。
 //
-// 对齐 Python: BrowserAgentRuntime.cancel_run
+// Python: BrowserAgentRuntime.cancel_run
 func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.RequestCancel(ctx, sessionID, requestID); err != nil {
 		logger.Warn(logComponentBR).
@@ -136,7 +136,7 @@ func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestI
 
 // ClearCancel 清除指定会话/请求的取消标记。
 //
-// 对齐 Python: BrowserAgentRuntime.clear_cancel
+// Python: BrowserAgentRuntime.clear_cancel
 func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.ClearCancel(ctx, sessionID, requestID); err != nil {
 		logger.Warn(logComponentBR).
@@ -156,7 +156,7 @@ func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, reques
 
 // EnsureRuntimeReady 确保浏览器运行时已就绪。
 //
-// 对齐 Python: BrowserAgentRuntime.ensure_runtime_ready
+// Python: BrowserAgentRuntime.ensure_runtime_ready
 // ⤵️ 9.38-49 回填：ensureBrowserRuntimeClientPatch + code executor 初始化
 func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 	if err := r.service.EnsureRuntimeReady(ctx); err != nil {
@@ -167,7 +167,7 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 	}
 
 	// TODO(#9.38-49): ⤵️ 回填 _callPlaywrightRunCodeUnsafe 初始化
-	// 对齐 Python:
+	// Python:
 	//   async def _direct_code_executor(js_code):
 	//       return await self._call_playwright_run_code_unsafe(js_code)
 	//   self._code_executor = _direct_code_executor
@@ -183,7 +183,7 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 
 // EnsureStarted 确保浏览器服务已启动（运行时就绪 + 运行时工具已注册）。
 //
-// 对齐 Python: BrowserAgentRuntime.ensure_started
+// Python: BrowserAgentRuntime.ensure_started
 // ⤵️ 9.38-49 回填：runtime tools 注册
 func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	if err := r.EnsureRuntimeReady(ctx); err != nil {
@@ -196,7 +196,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 		return nil
 	}
 
-	// 对齐 Python:
+	// Python:
 	//   Python: from .runtime_tools import (
 	//       Python: BrowserCustomActionTool, BrowserListActionsTool,
 	//       Python: BrowserProbeCardsTool, BrowserProbeInteractivesTool,
@@ -211,7 +211,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	r.browserProbeCardsTool = NewBrowserProbeCardsTool(r)
 
 	// TODO(#9.38-49): ⤵️ 回填 _register_runtime_tool + ability_manager.add
-	// 对齐 Python:
+	// Python:
 	//   self._register_runtime_tool(self._browser_custom_action_tool, tool_name="browser_custom_action")
 	//   self._register_runtime_tool(self._browser_list_actions_tool, tool_name="browser_list_custom_actions")
 	//   self._register_runtime_tool(self._browser_probe_interactives_tool, tool_name="browser_probe_interactives")
@@ -231,7 +231,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 
 // RunBrowserTask 执行浏览器任务。
 //
-// 对齐 Python: BrowserAgentRuntime.run_browser_task
+// Python: BrowserAgentRuntime.run_browser_task
 func (r *BrowserAgentRuntime) RunBrowserTask(
 	ctx context.Context,
 	task, sessionID, requestID string,
@@ -245,14 +245,14 @@ func (r *BrowserAgentRuntime) RunBrowserTask(
 
 // RunCustomAction 运行自定义浏览器动作。
 //
-// 对齐 Python: BrowserAgentRuntime.run_custom_action
+// Python: BrowserAgentRuntime.run_custom_action
 // ⤵️ 9.38-49 回填：controller 实际调用
 func (r *BrowserAgentRuntime) RunCustomAction(
 	_ context.Context,
 	action, sessionID, requestID string,
 	params map[string]any,
 ) map[string]any {
-	// 对齐 Python:
+	// Python:
 	//   await self.ensure_runtime_ready()
 	//   self._controller.bind_runtime(self)
 	//   if self._code_executor is not None:
@@ -277,7 +277,7 @@ func (r *BrowserAgentRuntime) RunCustomAction(
 
 // ProbeInteractives 返回当前页面上可见/高价值交互元素的紧凑信息。
 //
-// 对齐 Python: BrowserAgentRuntime.probe_interactives
+// Python: BrowserAgentRuntime.probe_interactives
 func (r *BrowserAgentRuntime) ProbeInteractives(
 	ctx context.Context,
 	maxItems int,
@@ -301,7 +301,7 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 	}
 
 	// TODO(#9.38-49): ⤵️ 回填 buildInteractiveProbeJS
-	// 对齐 Python:
+	// Python:
 	//   Python: js_code = build_interactive_probe_js(max_items=max_items, viewport_only=viewport_only, query=query)
 	//   Python: raw = await self._code_executor(js_code)
 	//   Python: raw = self._unwrap_mcp_text_result(raw)
@@ -341,7 +341,7 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 
 // ProbeCards 返回当前页面上紧凑的重复卡片/列表结构信息。
 //
-// 对齐 Python: BrowserAgentRuntime.probe_cards
+// Python: BrowserAgentRuntime.probe_cards
 func (r *BrowserAgentRuntime) ProbeCards(
 	ctx context.Context,
 	maxCards int,
@@ -365,7 +365,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 	}
 
 	// TODO(#9.38-49): ⤵️ 回填 buildCardProbeJS + builtinSiteProfiles + getSelectorCache
-	// 对齐 Python:
+	// Python:
 	//   Python: site_profiles = builtin_site_profiles()
 	//   Python: selector_cache = get_selector_cache()
 	//   Python: selector_cache_records = selector_cache.export_for_probe()
@@ -405,7 +405,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 	}
 
 	// TODO(#9.38-49): ⤵️ 回填 selector cache 记录
-	// 对齐 Python:
+	// Python:
 	//   Python: if parsed.get("ok") and parsed.get("cards"):
 	//       Python: try:
 	//           Python: selector_cache.record_card_probe_result(parsed)
@@ -417,7 +417,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 
 // ListActions 列出所有可用的自定义浏览器动作。
 //
-// 对齐 Python: BrowserAgentRuntime.list_actions
+// Python: BrowserAgentRuntime.list_actions
 func (r *BrowserAgentRuntime) ListActions() map[string]any {
 	if r.controller != nil {
 		return map[string]any{
@@ -435,7 +435,7 @@ func (r *BrowserAgentRuntime) ListActions() map[string]any {
 
 // RuntimeHealth 返回浏览器运行时健康状态。
 //
-// 对齐 Python: BrowserAgentRuntime.runtime_health
+// Python: BrowserAgentRuntime.runtime_health
 func (r *BrowserAgentRuntime) RuntimeHealth() map[string]any {
 	return map[string]any{
 		"ok":                r.service.connectionHealthy,
@@ -449,14 +449,14 @@ func (r *BrowserAgentRuntime) RuntimeHealth() map[string]any {
 
 // Shutdown 关闭浏览器运行时。
 //
-// 对齐 Python: BrowserAgentRuntime.shutdown
+// Python: BrowserAgentRuntime.shutdown
 func (r *BrowserAgentRuntime) Shutdown(ctx context.Context) error {
 	return r.service.Shutdown(ctx)
 }
 
 // PlaywrightClientLookupKeys 返回 Playwright MCP 客户端的候选查找键。
 //
-// 对齐 Python: BrowserAgentRuntime._playwright_client_lookup_keys
+// Python: BrowserAgentRuntime._playwright_client_lookup_keys
 func (r *BrowserAgentRuntime) PlaywrightClientLookupKeys() []string {
 	serverID := strings.TrimSpace(fmt.Sprintf("%v", r.service.MCPCfg.ServerID))
 	serverName := strings.TrimSpace(fmt.Sprintf("%v", r.service.MCPCfg.ServerName))
@@ -489,7 +489,7 @@ func (r *BrowserAgentRuntime) PlaywrightClientLookupKeys() []string {
 
 // unwrapMCPTextResult 从 MCP 工具结果中提取文本负载。
 //
-// 对齐 Python: BrowserAgentRuntime._unwrap_mcp_text_result
+// Python: BrowserAgentRuntime._unwrap_mcp_text_result
 func unwrapMCPTextResult(raw any) any {
 	if raw == nil {
 		return raw

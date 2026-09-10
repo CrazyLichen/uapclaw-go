@@ -26,7 +26,7 @@ type GlobalSessionConfig struct {
 // GlobalSessionController 全局会话控制器（sync.Once 单例）。
 // 作为系统统一入口，管理所有 Agent SessionController 实例，
 // 提供跨 Agent 批量异步加载/刷盘操作。
-// 对应 Python: openjiuwen/core/session/session_controller/global_controller.py (GlobalSessionController)
+// Python: openjiuwen/core/session/session_controller/global_controller.py (GlobalSessionController)
 type GlobalSessionController struct {
 	// mu 并发互斥锁
 	mu sync.Mutex
@@ -72,7 +72,7 @@ func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
 }
 
 // SetEnabled 设置是否启用 Session 控制器。
-// 对齐 Python: runner_config.enable_session_controller 开关。
+// Python: runner_config.enable_session_controller 开关。
 // 默认 true（启用），设为 false 后 onAgentSessionCreated 回调不再注册 session。
 func (g *GlobalSessionController) SetEnabled(enabled bool) {
 	g.mu.Lock()

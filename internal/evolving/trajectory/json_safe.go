@@ -25,7 +25,7 @@ import (
 //   - 其他类型 → json.Marshal→json.Unmarshal 到 any（兜底，利用 Go JSON 序列化链）
 //   - Marshal 失败 → fmt.Sprint(value) 转字符串
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if value is None or isinstance(value, (str, int, float, bool)):
 //	    Python: return value
@@ -40,7 +40,7 @@ import (
 //	        Python: return _json_safe(dumped)
 //	Python: return str(value)
 //
-// 对应 Python: _json_safe(value)
+// Python: _json_safe(value)
 func JSONSafe(value any) any {
 	if value == nil {
 		return nil
@@ -82,7 +82,7 @@ func JSONSafe(value any) any {
 //  2. 尝试 json.Marshal→json.Unmarshal 到 map[string]any → JSONSafe
 //  3. 兜底 → {"role": "unknown", "content": fmt.Sprint(msg)}
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if isinstance(message, dict):
 //	    Python: return _json_safe(message)
@@ -98,7 +98,7 @@ func JSONSafe(value any) any {
 //	        Python: return _json_safe(dumped)
 //	Python: return {"role": "unknown", "content": str(message)}
 //
-// 对应 Python: Trajectory._message_to_dict(message)
+// Python: Trajectory._message_to_dict(message)
 func MessageToDict(msg any) map[string]any {
 	if msg == nil {
 		return map[string]any{"role": "unknown", "content": ""}
@@ -128,7 +128,7 @@ func MessageToDict(msg any) map[string]any {
 //  2. map[string]any → 取 "content" 或 "text" 键
 //  3. 兜底 → fmt.Sprint(response)
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if hasattr(response, "content"):
 //	    Python: return str(response.content or "")
@@ -136,7 +136,7 @@ func MessageToDict(msg any) map[string]any {
 //	    Python: return str(response.get("content", "") or response.get("text", "") or "")
 //	Python: return str(response or "")
 //
-// 对应 Python: _response_to_text(response)
+// Python: _response_to_text(response)
 func responseToText(response any) string {
 	if response == nil {
 		return ""

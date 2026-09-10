@@ -30,7 +30,7 @@ type SearchResult struct {
 }
 
 // SemanticStore 语义向量存储，使用嵌入模型和向量存储实现语义搜索。
-// 对齐 Python: openjiuwen/core/memory/manage/mem_model/semantic_store.py (SemanticStore)
+// Python: openjiuwen/core/memory/manage/mem_model/semantic_store.py (SemanticStore)
 type SemanticStore struct {
 	// embeddingModel 嵌入模型（可选，可通过 InitializeEmbeddingModel 延迟设置）
 	embeddingModel embedding.BaseEmbedding
@@ -49,7 +49,7 @@ type SemanticStore struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSemanticStore 创建语义向量存储。embeddingModel 可为 nil。
-// 对齐 Python: SemanticStore.__init__
+// Python: SemanticStore.__init__
 func NewSemanticStore(vectorStore vector.BaseVectorStore, embeddingModel embedding.BaseEmbedding) *SemanticStore {
 	return &SemanticStore{
 		embeddingModel:     embeddingModel,
@@ -59,13 +59,13 @@ func NewSemanticStore(vectorStore vector.BaseVectorStore, embeddingModel embeddi
 }
 
 // InitializeEmbeddingModel 初始化或更新嵌入模型。
-// 对齐 Python: SemanticStore.initialize_embedding_model
+// Python: SemanticStore.initialize_embedding_model
 func (s *SemanticStore) InitializeEmbeddingModel(embeddingModel embedding.BaseEmbedding) {
 	s.embeddingModel = embeddingModel
 }
 
 // AddDocs 将文档添加到指定集合（先嵌入再存储向量）。
-// 对齐 Python: SemanticStore.add_docs
+// Python: SemanticStore.add_docs
 func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName string, scopeID string) (bool, error) {
 	if s.embeddingModel == nil {
 		logger.Error(logComponent).
@@ -143,7 +143,7 @@ func (s *SemanticStore) AddDocs(ctx context.Context, docs []DocTuple, tableName 
 }
 
 // DeleteDocs 从指定集合删除文档。
-// 对齐 Python: SemanticStore.delete_docs
+// Python: SemanticStore.delete_docs
 func (s *SemanticStore) DeleteDocs(ctx context.Context, ids []string, tableName string) error {
 	exists, err := s.vectorStore.CollectionExists(ctx, tableName)
 	if err != nil {
@@ -174,7 +174,7 @@ func (s *SemanticStore) DeleteDocs(ctx context.Context, ids []string, tableName 
 }
 
 // Search 搜索与查询最相似的文档。返回 (id, score) 列表。
-// 对齐 Python: SemanticStore.search
+// Python: SemanticStore.search
 func (s *SemanticStore) Search(ctx context.Context, query, tableName string, scopeID string, topK int) ([]SearchResult, error) {
 	if s.embeddingModel == nil {
 		logger.Error(logComponent).
@@ -186,7 +186,7 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 	}
 
 	// 生成查询嵌入
-	// 对齐 Python: query_embeddings = await self.embedding_model.embed_documents(texts=[query])
+	// Python: query_embeddings = await self.embedding_model.embed_documents(texts=[query])
 	queryEmbeddings, err := s.embeddingModel.EmbedDocuments(ctx, []string{query})
 	if err != nil {
 		logger.Error(logComponent).
@@ -241,7 +241,7 @@ func (s *SemanticStore) Search(ctx context.Context, query, tableName string, sco
 }
 
 // DeleteTable 删除整个集合。
-// 对齐 Python: SemanticStore.delete_table
+// Python: SemanticStore.delete_table
 func (s *SemanticStore) DeleteTable(ctx context.Context, tableName string) error {
 	err := s.vectorStore.DeleteCollection(ctx, tableName)
 	if err != nil {
@@ -260,7 +260,7 @@ func (s *SemanticStore) DeleteTable(ctx context.Context, tableName string) error
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createCollectionIfNotExists 若集合不存在则创建。
-// 对齐 Python: SemanticStore._create_collection_if_not_exists
+// Python: SemanticStore._create_collection_if_not_exists
 func (s *SemanticStore) createCollectionIfNotExists(ctx context.Context, collectionName string, embeddingDim int) error {
 	// 检查内存缓存
 	if _, ok := s.createdCollections[collectionName]; ok {

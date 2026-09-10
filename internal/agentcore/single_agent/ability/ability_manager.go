@@ -35,7 +35,7 @@ import (
 //   - 将 Card 转为 ToolInfo 供 LLM 使用
 //   - 执行 Ability 调用（从 ResourceManager 获取实例）
 //
-// 对应 Python: openjiuwen/core/single_agent/ability_manager.py (AbilityManager)
+// Python: openjiuwen/core/single_agent/ability_manager.py (AbilityManager)
 type AbilityManager struct {
 	// mu 读写锁
 	mu sync.RWMutex
@@ -350,7 +350,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 
 	// 4. MCP 懒加载：遍历 mcpServers，通过 ResourceMgr 获取 MCP 工具信息，
 	//    重命名为 mcp_{serverName}_{toolName}，注册到 am.tools 并追加到结果。
-	// 对齐 Python: AbilityManager.list_tool_info() L506-518
+	// Python: AbilityManager.list_tool_info() L506-518
 	if am.resourceMgr != nil && len(am.mcpServers) > 0 {
 		for mcpServerName, mcpServer := range am.mcpServers {
 			mcpServerID := mcpServer.ServerID
@@ -398,7 +398,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 //   - 为每个 tool_call 创建隔离子上下文（ForkForToolCall）
 //   - 传播子上下文的 force-finish 信号回父 cbc
 //
-// 对应 Python: AbilityManager.execute(ctx, tool_call, session, tag)
+// Python: AbilityManager.execute(ctx, tool_call, session, tag)
 func (am *AbilityManager) Execute(
 	ctx context.Context,
 	cbc *interfaces.AgentCallbackContext,
@@ -436,7 +436,7 @@ func (am *AbilityManager) Execute(
 	results := make([]agentschema.ExecuteResult, len(toolCalls))
 
 	// 为每个 tool_call 创建隔离子上下文
-	// 对应 Python: tool_ctx = AgentCallbackContext(agent=ctx.agent, inputs=ToolCallInputs(...), extra=ctx.extra, ...)
+	// Python: tool_ctx = AgentCallbackContext(agent=ctx.agent, inputs=ToolCallInputs(...), extra=ctx.extra, ...)
 	toolCtxs := make([]*interfaces.AgentCallbackContext, len(toolCalls))
 	for i, tc := range toolCalls {
 		toolCtxs[i] = cbc.ForkForToolCall(tc)
@@ -455,7 +455,7 @@ func (am *AbilityManager) Execute(
 	wg.Wait()
 
 	// force-finish 信号传播：子 toolCtx → 父 cbc
-	// 对应 Python: Python: for tool_ctx in tool_contexts:
+	// Python: Python: for tool_ctx in tool_contexts:
 	//   Python: ff = tool_ctx.consume_force_finish()
 	//   Python: if ff is not None: ctx.request_force_finish(ff.result); break
 	for _, toolCtx := range toolCtxs {
@@ -479,7 +479,7 @@ func (am *AbilityManager) Execute(
 //   - 异常 → fire(ON_TOOL_EXCEPTION) → 可 request_retry() 重试
 //   - fire(AFTER_TOOL_CALL) → after 钩子
 //
-// 对应 Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
+// Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
 //
 //	async def _railed_execute_single_tool_call(self, ctx, tool_call, session, tag=None): ...
 func (am *AbilityManager) railedExecuteSingleToolCall(
@@ -493,7 +493,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 
 	railErr := rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
 		// _skip_tool 门控：before hook 可通过设置 extra["_skip_tool"] = true 来跳过工具执行
-		// 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
+		// Python: L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
 		// before hook 在设置 _skip_tool 的同时，会在 inputs 中预设 tool_result 和 tool_msg
 		// 注意：_skip_tool 判断必须在 toolName/toolArgs 回写之前，skip 时不需要回写
 		if skipVal, exists := toolCtx.Extra()["_skip_tool"]; exists {
@@ -507,8 +507,8 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		}
 
 		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
-		// 对齐 Python L669-673: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
-		// 对齐 Python L669-673: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
+		// Python: L669-673: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
+		// Python: L669-673: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
 		if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 			if inputs.ToolName != "" {
 				toolCall.Name = inputs.ToolName
@@ -524,7 +524,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		result, err = am.executeSingleToolCall(ctx, toolCall, sess, tag)
 
 		// 仅 err == nil 时回填结果到 inputs（D6）
-		// 对齐 Python L681-686：after 钩子触发时可通过 inputs 访问执行结果，也可改写
+		// Python: L681-686：after 钩子触发时可通过 inputs 访问执行结果，也可改写
 		if err == nil {
 			if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 				inputs.ToolCall = toolCall
@@ -547,7 +547,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	}
 
 	// railErr == nil，从 inputs 读取 after 钩子可能改写的值（D4）
-	// 对齐 Python L625-638：AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs
+	// Python: L625-638：AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs
 	if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 		if inputs.ToolResult != nil {
 			result.Result = inputs.ToolResult
@@ -603,7 +603,7 @@ func (am *AbilityManager) executeSingleToolCall(
 		// MCP 工具正常走 tools 路径（通过懒加载重命名后注册），
 		// 命中此分支说明 toolName 恰好等于 serverName（非 mcp_ 前缀），
 		// 记录 warning 后走 fallback 尝试查找。
-		// 对齐 Python: AbilityManager._execute_single_tool_call L815-824
+		// Python: AbilityManager._execute_single_tool_call L815-824
 		logger.Warn(logComponent).
 			Str("event_type", "mcp_tool_direct_server_name_call").
 			Str("tool_name", toolName).
@@ -660,7 +660,7 @@ func (am *AbilityManager) executeTool(
 
 	// 用 LifecycleTool 包装，使 Tool 调用走完整回调链
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
-	// 对齐 Python: _ToolMeta.__call__ 中的自动生命周期注入
+	// Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
 	result, err := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if err != nil {
@@ -690,8 +690,8 @@ func (am *AbilityManager) executeTool(
 
 // executeWorkflow 执行 Workflow 类型能力。
 //
-// 对齐 Python: AbilityManager._execute_single_tool_call (workflow 分支 L760-775)
-// 对齐 Python: AbilityManager._run_workflow (L690-726)
+// Python: AbilityManager._execute_single_tool_call (workflow 分支 L760-775)
+// Python: AbilityManager._run_workflow (L690-726)
 // 完整步骤：
 //  1. 获取 WorkflowCard（L761-762）
 //  2. 从 ResourceManager 获取 workflow 实例（L763-764）
@@ -797,7 +797,7 @@ func (am *AbilityManager) executeWorkflow(
 
 // executeAgent 执行 Agent 类型能力。
 //
-// 对齐 Python: AbilityManager._execute_single_tool_call (agent 分支 L776-807)
+// Python: AbilityManager._execute_single_tool_call (agent 分支 L776-807)
 // 完整步骤：
 //  1. 获取 AgentCard（L777-778）
 //  2. 解析 agent_id（L779）
@@ -939,7 +939,7 @@ func (am *AbilityManager) executeFallbackTool(
 
 	// 用 LifecycleTool 包装，使 fallback 路径走完整回调链
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
-	// 对齐 Python: _ToolMeta.__call__ 中的自动生命周期注入
+	// Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
 	result, invokeErr := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if invokeErr != nil {

@@ -14,7 +14,7 @@ import (
 // AskUserTool 向用户提问的空壳工具。
 // invoke/stream 返回空 map{}，真正逻辑在 AskUserRail 中通过中断机制完成。
 //
-// 对齐 Python: AskUserTool(Tool) — openjiuwen/harness/tools/ask_user.py
+// Python: AskUserTool(Tool) — openjiuwen/harness/tools/ask_user.py
 // Python 中 AskUserTool.invoke(query, **kwargs) return {} / stream(query, **kwargs) yield {}
 type AskUserTool struct{}
 
@@ -34,7 +34,7 @@ const (
 // NewAskUserTool 创建 AskUserTool 空壳实例。
 // 从 prompts/tools 注册表获取 ToolCard，用 MapFunction 包装空壳 invoke 函数。
 //
-// 对齐 Python: AskUserTool.__init__(language, agent_id)
+// Python: AskUserTool.__init__(language, agent_id)
 //
 //	super().__init__(build_tool_card(name="ask_user", tool_id="ask_user", language=language, agent_id=agent_id))
 func NewAskUserTool(language, agentID string) (tool.Tool, error) {

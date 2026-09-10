@@ -27,7 +27,7 @@ var skillsUseRegex = regexp.MustCompile(`^/skills use\s+(?P<skill_names>[^,]+)\s
 //
 // 返回格式: interactionPrefix + promptPrefix + json.dumps(userMessageContext)
 //
-// 对齐 Python: build_user_prompt(content, files, channel, language, *, trusted_dirs, metadata)
+// Python: build_user_prompt(content, files, channel, language, *, trusted_dirs, metadata)
 func BuildUserPrompt(content string, files map[string]any, channel string, language string,
 	trustedDirs []string, metadata map[string]any) string {
 	// 1. interaction_context 前缀
@@ -107,7 +107,7 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 
 	finalPrompt := interactionPrefix + prompt + string(contextJSON)
 
-	// 对齐 Python：interaction_prefix 存在时记录 debug 日志
+	// Python: interaction_prefix 存在时记录 debug 日志
 	if interactionPrefix != "" {
 		logger.Info(logComponent).
 			Str("event_type", "build_user_prompt_debug").
@@ -122,7 +122,7 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 
 // handleSkillsUseSlashCommand 解析 /skills use 斜杠命令。
 //
-// 对齐 Python: _handle_skills_use_slash_command(query)
+// Python: _handle_skills_use_slash_command(query)
 func handleSkillsUseSlashCommand(query string) (skillsToUse []string, newQuery string) {
 	stripped := strings.TrimSpace(query)
 	if !strings.HasPrefix(stripped, "/skills use") {

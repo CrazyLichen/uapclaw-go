@@ -8,7 +8,7 @@ import (
 
 // InvokeParams 非流式调用的完整参数。
 //
-// 对应 Python: BaseModelClient.invoke() 的关键字参数
+// Python: BaseModelClient.invoke() 的关键字参数
 type InvokeParams struct {
 	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
 	Tools []commonschema.ToolInfoInterface
@@ -36,7 +36,7 @@ type InvokeParams struct {
 
 // StreamParams 流式调用的完整参数。
 //
-// 对应 Python: BaseModelClient.stream() 的关键字参数
+// Python: BaseModelClient.stream() 的关键字参数
 type StreamParams struct {
 	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
 	Tools []commonschema.ToolInfoInterface
@@ -64,7 +64,7 @@ type StreamParams struct {
 
 // GenerateImageParams 图片生成参数。
 //
-// 对应 Python: BaseModelClient.generate_image() 的关键字参数
+// Python: BaseModelClient.generate_image() 的关键字参数
 type GenerateImageParams struct {
 	// Model 模型名称
 	Model string
@@ -88,7 +88,7 @@ type GenerateImageParams struct {
 
 // GenerateSpeechParams 语音生成参数。
 //
-// 对应 Python: BaseModelClient.generate_speech() 的关键字参数
+// Python: BaseModelClient.generate_speech() 的关键字参数
 type GenerateSpeechParams struct {
 	// Model 模型名称
 	Model string
@@ -104,7 +104,7 @@ type GenerateSpeechParams struct {
 
 // GenerateVideoParams 视频生成参数。
 //
-// 对应 Python: BaseModelClient.generate_video() 的关键字参数
+// Python: BaseModelClient.generate_video() 的关键字参数
 type GenerateVideoParams struct {
 	// ImgURL 首帧图片 URL
 	ImgURL string
@@ -134,7 +134,7 @@ type GenerateVideoParams struct {
 
 // ReleaseParams 释放模型缓存参数（如 vLLM KV Cache）。
 //
-// 对应 Python: InferenceAffinityModelClient.release() 的关键字参数
+// Python: InferenceAffinityModelClient.release() 的关键字参数
 type ReleaseParams struct {
 	// SessionID 缓存盐值，标识特定的缓存
 	SessionID string

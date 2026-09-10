@@ -2,7 +2,7 @@
 //
 // 包含 HTTP 头清洗、大小写不敏感合并、配置级/请求级 headers 组装等功能。
 //
-// 对应 Python:
+// Python:
 //   - openjiuwen/core/common/utils/header_utils.py (sanitize_headers, PROTECTED_HEADERS)
 //   - openjiuwen/core/foundation/llm/headers_helper.py (merge/build 函数)
 package headers_helper
@@ -22,7 +22,7 @@ import (
 // ProtectedHeaders 受保护的 HTTP 头名称（小写）。
 //
 // 这些头部由 HTTP 客户端/传输层自动管理，不应由用户手动设置。
-// 对应 Python: openjiuwen/core/common/utils/header_utils.py (PROTECTED_HEADERS)
+// Python: openjiuwen/core/common/utils/header_utils.py (PROTECTED_HEADERS)
 
 var ProtectedHeaders = map[string]bool{
 	"host":              true,
@@ -47,7 +47,7 @@ var ProtectedHeaders = map[string]bool{
 // 空输入或全部被过滤时返回空 map（map[string]string{}），不返回 nil。
 // 这与 Python 的行为一致（返回空 dict），也避免调用方 nil 检查。
 //
-// 对应 Python: openjiuwen/core/common/utils/header_utils.py (sanitize_headers)
+// Python: openjiuwen/core/common/utils/header_utils.py (sanitize_headers)
 func SanitizeHeaders(headers map[string]string) map[string]string {
 	if len(headers) == 0 {
 		return map[string]string{}
@@ -84,7 +84,7 @@ func SanitizeHeaders(headers map[string]string) map[string]string {
 
 // IsProtectedHeader 判断给定 header 名称是否属于受保护头部（大小写不敏感）。
 //
-// 对应 Python: `key.lower() in PROTECTED_HEADERS` 检查
+// Python: `key.lower() in PROTECTED_HEADERS` 检查
 func IsProtectedHeader(name string) bool {
 	return ProtectedHeaders[strings.ToLower(name)]
 }
@@ -94,7 +94,7 @@ func IsProtectedHeader(name string) bool {
 // 是 SanitizeHeaders 的薄包装，语义更清晰：
 // 在客户端构造时调用，将用户配置的 CustomHeaders 清洗后作为 baseHeaders 存储。
 //
-// 对应 Python: build_base_headers()
+// Python: build_base_headers()
 func BuildBaseHeaders(customHeaders map[string]string) map[string]string {
 	return SanitizeHeaders(customHeaders)
 }
@@ -108,7 +108,7 @@ func BuildBaseHeaders(customHeaders map[string]string) map[string]string {
 // 注意：本函数会修改 baseHeaders（原地合并），与 Python 行为一致。
 // 如果需要保留 baseHeaders 原始数据，调用前需自行拷贝。
 //
-// 对应 Python: merge_headers_case_insensitive()
+// Python: merge_headers_case_insensitive()
 func MergeHeadersCaseInsensitive(baseHeaders map[string]string, newHeaders map[string]string) {
 	if len(newHeaders) == 0 {
 		return
@@ -138,7 +138,7 @@ func MergeHeadersCaseInsensitive(baseHeaders map[string]string, newHeaders map[s
 // 拷贝 baseHeaders 后，将 requestCustomHeaders 清洗并合并到拷贝上。
 // 请求级优先，同名 key 大小写不敏感匹配，保留首次出现的 key 大小写。
 //
-// 对应 Python: merge_request_headers()
+// Python: merge_request_headers()
 func MergeRequestHeaders(baseHeaders map[string]string, requestCustomHeaders map[string]string) map[string]string {
 	// 拷贝 base
 	result := make(map[string]string, len(baseHeaders))

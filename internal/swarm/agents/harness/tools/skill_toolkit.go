@@ -19,14 +19,14 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillToolkit 把 SkillManager 暴露成模型友好的工具集合。
-// 对应 Python: SkillToolkit (jiuwenswarm/agents/harness/common/tools/skill_toolkits.py)
+// Python: SkillToolkit (jiuwenswarm/agents/harness/common/tools/skill_toolkits.py)
 type SkillToolkit struct {
 	// manager 技能管理器实例
 	manager *skillpkg.SkillManager
 }
 
 // SkillSearchItem 搜索结果归一化项，替代 map[string]any 的动态结构。
-// 对应 Python: SkillToolkit._normalize_search_item 返回的字典
+// Python: SkillToolkit._normalize_search_item 返回的字典
 type SkillSearchItem struct {
 	// Name 技能名称
 	Name string `json:"name"`
@@ -47,7 +47,7 @@ type SkillSearchItem struct {
 }
 
 // InstalledItem 已安装技能展示信息，替代 map[string]any 的动态结构。
-// 对应 Python: SkillToolkit._build_installed_item 返回的字典
+// Python: SkillToolkit._build_installed_item 返回的字典
 type InstalledItem struct {
 	// Name 技能名称
 	Name string `json:"name"`
@@ -104,7 +104,7 @@ var supportedSources = map[string]bool{
 }
 
 // installSourceByTarget 根据标识符形态推断安装来源
-// 对应 Python: _INSTALL_SOURCE_BY_TARGET
+// Python: _INSTALL_SOURCE_BY_TARGET
 var installSourceByTarget = []struct {
 	pattern *regexp.Regexp
 	source  string
@@ -155,13 +155,13 @@ func (r *ListInstalledResult) ToMap() map[string]any {
 }
 
 // NewSkillToolkit 创建 SkillToolkit 实例。
-// 对应 Python: SkillToolkit.__init__(manager)
+// Python: SkillToolkit.__init__(manager)
 func NewSkillToolkit(manager *skillpkg.SkillManager) *SkillToolkit {
 	return &SkillToolkit{manager: manager}
 }
 
 // GetTools 返回技能管理工具列表，供 agent 注册。
-// 对应 Python: SkillToolkit.get_tools()
+// Python: SkillToolkit.get_tools()
 func (tk *SkillToolkit) GetTools() []tool.Tool {
 	return []tool.Tool{
 		tk.newSearchSkillTool(),
@@ -171,7 +171,7 @@ func (tk *SkillToolkit) GetTools() []tool.Tool {
 }
 
 // SearchSkill 搜索技能，统一查询 SkillNet、ClawHub、TeamSkillsHub。
-// 对应 Python: SkillToolkit.search_skill(query, source, limit)
+// Python: SkillToolkit.search_skill(query, source, limit)
 func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
@@ -213,7 +213,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 	// 确定搜索来源列表
 	var sources []string
 	if normalizedSource == autoSource {
-		// 对齐 Python: sorted(_SUPPORTED_SOURCES)，动态从 supportedSources 构建
+		// Python: sorted(_SUPPORTED_SOURCES)，动态从 supportedSources 构建
 		for src := range supportedSources {
 			sources = append(sources, src)
 		}
@@ -303,7 +303,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 }
 
 // InstallSkill 安装技能，需要显式指定来源。
-// 对应 Python: SkillToolkit.install_skill(identifier, source, timeout_sec)
+// Python: SkillToolkit.install_skill(identifier, source, timeout_sec)
 func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
@@ -398,7 +398,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	skill, _ := payload["skill"].(map[string]any)
 	name := strings.TrimSpace(toString(skill["name"]))
 	if name == "" {
-		// 对齐 Python: Path(target).name if resolved_source == "skillnet" else target
+		// Python: Path(target).name if resolved_source == "skillnet" else target
 		if normalizedSource == "skillnet" {
 			name = path.Base(identifier)
 		} else {
@@ -435,7 +435,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 }
 
 // UninstallSkill 卸载技能。
-// 对应 Python: SkillToolkit.uninstall_skill(name)
+// Python: SkillToolkit.uninstall_skill(name)
 func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
@@ -517,7 +517,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeSource 规范化来源字符串。
-// 对应 Python: SkillToolkit._normalize_source(source)
+// Python: SkillToolkit._normalize_source(source)
 func normalizeSource(source string) (string, error) {
 	value := strings.TrimSpace(strings.ToLower(source))
 	if value == "" {
@@ -530,7 +530,7 @@ func normalizeSource(source string) (string, error) {
 }
 
 // detectSource 根据标识符形态推断来源。
-// 对应 Python: SkillToolkit._detect_source(target)
+// Python: SkillToolkit._detect_source(target)
 func detectSource(target string) (string, error) {
 	raw := strings.TrimSpace(target)
 	if raw == "" {
@@ -545,7 +545,7 @@ func detectSource(target string) (string, error) {
 }
 
 // safeInt 安全地转换为整数，失败时返回默认值。
-// 对应 Python: SkillToolkit._safe_int(value, default)
+// Python: SkillToolkit._safe_int(value, default)
 func safeInt(value any, defaultVal int) int {
 	switch v := value.(type) {
 	case int:
@@ -571,7 +571,7 @@ func safeInt(value any, defaultVal int) int {
 }
 
 // getInstalledNames 返回已安装技能名称集合。
-// 对应 Python: SkillToolkit._get_installed_names()
+// Python: SkillToolkit._get_installed_names()
 func (tk *SkillToolkit) getInstalledNames() map[string]bool {
 	names := make(map[string]bool)
 	for _, m := range tk.manager.GetInstalledPlugins() {
@@ -584,7 +584,7 @@ func (tk *SkillToolkit) getInstalledNames() map[string]bool {
 }
 
 // findInstalledByTarget 按统一 identifier 反查是否已安装。
-// 对应 Python: SkillToolkit._find_installed_by_target(identifier, source)
+// Python: SkillToolkit._find_installed_by_target(identifier, source)
 func (tk *SkillToolkit) findInstalledByTarget(identifier, source string) *InstalledItem {
 	target := strings.TrimSpace(identifier)
 	if target == "" {
@@ -637,7 +637,7 @@ func (tk *SkillToolkit) findInstalledByTarget(identifier, source string) *Instal
 }
 
 // buildInstalledItem 补齐已安装技能的展示信息。
-// 对应 Python: SkillToolkit._build_installed_item(name, source)
+// Python: SkillToolkit._build_installed_item(name, source)
 func (tk *SkillToolkit) buildInstalledItem(name, source string) *InstalledItem {
 	meta := tk.manager.GetSkillMeta(name)
 	if meta == nil {
@@ -682,7 +682,7 @@ func (tk *SkillToolkit) buildInstalledItem(name, source string) *InstalledItem {
 }
 
 // normalizeSearchItem 将不同来源的搜索结果归一化。
-// 对应 Python: SkillToolkit._normalize_search_item(item, source, installed_names)
+// Python: SkillToolkit._normalize_search_item(item, source, installed_names)
 func normalizeSearchItem(item map[string]any, source string, installedNames map[string]bool) *SkillSearchItem {
 	var name, description, identifier, version, author string
 	var score *int
@@ -734,7 +734,7 @@ func normalizeSearchItem(item map[string]any, source string, installedNames map[
 }
 
 // summarizeSearchPayload 提取搜索结果摘要，便于日志排查。
-// 对应 Python: SkillToolkit._summarize_search_payload(source, query, payload)
+// Python: SkillToolkit._summarize_search_payload(source, query, payload)
 func summarizeSearchPayload(source, query string, payload map[string]any) map[string]any {
 	skills, _ := toSliceOfAny(payload["skills"])
 	var first map[string]any
@@ -768,7 +768,7 @@ func summarizeSearchPayload(source, query string, payload map[string]any) map[st
 }
 
 // listInstalledSkills 列出已安装技能，供 toolkit 内部逻辑复用。
-// 对应 Python: SkillToolkit._list_installed_skills()
+// Python: SkillToolkit._list_installed_skills()
 func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) *ListInstalledResult {
 	logger.Info(logComponent).Msg("SkillToolkit: list_installed_skills 调用")
 
@@ -818,7 +818,7 @@ func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) *ListInstalledR
 }
 
 // installSkillnetSyncWait 在单次 tool 调用内轮询 SkillNet 安装状态，直到完成或超时。
-// 对应 Python: SkillToolkit._install_skillnet_sync_wait(identifier, timeout_sec)
+// Python: SkillToolkit._install_skillnet_sync_wait(identifier, timeout_sec)
 func (tk *SkillToolkit) installSkillnetSyncWait(ctx context.Context, identifier string, timeoutSec int) map[string]any {
 	// 1. 发起安装
 	payload, _ := tk.manager.HandleSkillsSkillnetInstall(ctx, map[string]any{"url": identifier, "force": false})

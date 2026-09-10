@@ -768,7 +768,7 @@ func TestTraceWorkflowHandler_OnPreStream(t *testing.T) {
 }
 
 // TestTraceWorkflowHandler_OnPreStream_空Dict不追加 测试空 dict 不追加到 StreamInputs
-// 对齐 Python: if chunk and isinstance(chunk, dict) — 空 dict 为 falsy，不追加
+// Python: if chunk and isinstance(chunk, dict) — 空 dict 为 falsy，不追加
 func TestTraceWorkflowHandler_OnPreStream_空Dict不追加(t *testing.T) {
 	h, _ := newTestWorkflowHandler()
 

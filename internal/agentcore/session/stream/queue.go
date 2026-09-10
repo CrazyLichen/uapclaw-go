@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamQueue 流队列，封装 buffered channel + 超时控制。
-// 对应 Python: AsyncStreamQueue
+// Python: AsyncStreamQueue
 //
 // 与 Python 的关键设计差异：
 // Python 使用 END_FRAME 哨兵通知消费端流结束，Go 直接使用 close(ch) 信号。
@@ -24,7 +24,7 @@ type StreamQueue struct {
 	// ch 内部缓冲 channel，只传输 Schema 数据
 	ch chan Schema
 	// closed 队列是否已关闭（原子操作，读多写少场景替代 RWMutex）
-	// 对齐 Python AsyncStreamQueue._closed，closed=true 后不再接受新 Send
+	// Python: AsyncStreamQueue._closed，closed=true 后不再接受新 Send
 	closed atomic.Bool
 	// chCloseOnce 保证 channel 只 close 一次
 	chCloseOnce sync.Once
@@ -58,7 +58,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamQueue 创建流队列，maxSize 为缓冲区大小（0 为无缓冲）。
-// 对应 Python: AsyncStreamQueue(maxsize=0)
+// Python: AsyncStreamQueue(maxsize=0)
 // maxSize 为负数时 panic，对齐 Python asyncio.Queue 负数 maxsize 抛 ValueError。
 func NewStreamQueue(maxSize int) *StreamQueue {
 	if maxSize < 0 {
@@ -193,7 +193,7 @@ func (q *StreamQueue) IsClosed() bool {
 }
 
 // IsEndOfStream 判断 Receive 返回的错误是否表示流正常结束。
-// 对应 Python: data == StreamEmitter.END_FRAME
+// Python: data == StreamEmitter.END_FRAME
 // Go 用 close(ch) 替代 END_FRAME 哨兵，流结束通过 ErrQueueClosed 标识。
 func IsEndOfStream(err error) bool {
 	return errors.Is(err, ErrQueueClosed)

@@ -6,7 +6,7 @@ import "context"
 
 // AgentTransport Gateway ↔ AgentServer 的传输抽象。
 //
-// 对齐 Python WebSocket 单连接模型：send(json_str) / recv() → json_str。
+// Python: WebSocket 单连接模型：send(json_str) / recv() → json_str。
 // 不感知 E2A 协议语义，只负责 JSON 字节传输。
 // 所有服务端→客户端消息（普通响应、server_push、connection.ack）统一走 Recv 通道，
 // 由 AgentClient 的 receiverLoop 做应用层区分。
@@ -15,7 +15,7 @@ import "context"
 //   - 进程内：ChannelTransport（Go channel，在本包实现）
 //   - 跨进程：WebSocketTransport（WebSocket，后续实现）
 //
-// 对应 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
+// Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
 type AgentTransport interface {
 	// Send 发送 JSON 字节到对端（对齐 Python ws.send(json_str)）
 	Send(ctx context.Context, data []byte) error

@@ -9,7 +9,7 @@ import (
 
 // LocalApplyPreview 本地应用预览合约（frozen，Go 用值语义）。
 //
-// 对应 Python: LocalApplyPreview
+// Python: LocalApplyPreview
 type LocalApplyPreview struct {
 	// SkillName 技能名称
 	SkillName string
@@ -25,7 +25,7 @@ type LocalApplyPreview struct {
 
 // PendingCommitResult 暂存变更提交结果。
 //
-// 对应 Python: PendingCommitResult
+// Python: PendingCommitResult
 type PendingCommitResult struct {
 	// AppliedCount 已应用数量
 	AppliedCount int
@@ -35,7 +35,7 @@ type PendingCommitResult struct {
 
 // HostFacingExperienceResult host-facing 稳定形态结果合约。
 //
-// 对应 Python: HostFacingExperienceResult
+// Python: HostFacingExperienceResult
 type HostFacingExperienceResult struct {
 	// SkillName 技能名称
 	SkillName string
@@ -61,7 +61,7 @@ type HostFacingExperienceResult struct {
 
 // RebuildRequest 技能重建请求参数。
 //
-// 对应 Python: RebuildRequest
+// Python: RebuildRequest
 type RebuildRequest struct {
 	// SkillName 技能名称
 	SkillName string
@@ -82,7 +82,7 @@ type RebuildRequest struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HostFacingExperienceResultPendingApproval 创建 pending_approval 状态的 HostFacingExperienceResult。
-// 对应 Python: HostFacingExperienceResult.pending_approval()
+// Python: HostFacingExperienceResult.pending_approval()
 func HostFacingExperienceResultPendingApproval(
 	skillName string, requestID string, changeType string, pendingCount int,
 ) HostFacingExperienceResult {
@@ -97,7 +97,7 @@ func HostFacingExperienceResultPendingApproval(
 }
 
 // HostFacingExperienceResultPersisted 创建 persisted/partial 状态的 HostFacingExperienceResult。
-// 对应 Python: HostFacingExperienceResult.persisted()
+// Python: HostFacingExperienceResult.persisted()
 func HostFacingExperienceResultPersisted(
 	skillName string, requestID string, changeType string,
 	appliedCount int, pendingCount int, errors []string,
@@ -123,7 +123,7 @@ func HostFacingExperienceResultPersisted(
 }
 
 // HostFacingExperienceResultRejected 创建 rejected 状态的 HostFacingExperienceResult。
-// 对应 Python: HostFacingExperienceResult.rejected()
+// Python: HostFacingExperienceResult.rejected()
 func HostFacingExperienceResultRejected(
 	skillName string, requestID string, changeType string, rejectedCount int,
 ) HostFacingExperienceResult {

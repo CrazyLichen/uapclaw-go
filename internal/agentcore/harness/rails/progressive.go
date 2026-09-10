@@ -28,7 +28,7 @@ import (
 //   - BeforeInvoke：缓存全量工具清单 + 初始化会话可见工具
 //   - BeforeModelCall：注入导航节+规则节到系统提示词，并过滤 inputs.Tools 为仅可见工具
 //
-// 对齐 Python: ProgressiveToolRail (openjiuwen/harness/rails/progressive_tool_rail.py)
+// Python: ProgressiveToolRail (openjiuwen/harness/rails/progressive_tool_rail.py)
 type ProgressiveToolRail struct {
 	DeepAgentRail
 	// config DeepAgent 运行时配置
@@ -107,7 +107,7 @@ var toolGroupCN = map[string]string{
 
 // NewProgressiveToolRail 创建 ProgressiveToolRail 实例。
 //
-// 对齐 Python: ProgressiveToolRail.__init__(config)
+// Python: ProgressiveToolRail.__init__(config)
 func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail {
 	r := &ProgressiveToolRail{
 		DeepAgentRail:  *NewDeepAgentRail(),
@@ -126,8 +126,8 @@ func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail
 
 // Init 注册渐进式元工具到 resource_mgr 和 ability_manager。
 //
-// 对齐 Python: ProgressiveToolRail.init(agent)
-func (r *ProgressiveToolRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: ProgressiveToolRail.init(agent)
+func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	language := r.config.EffectiveLanguage()
 	agentID := ""
 	if card := agent.Card(); card != nil {
@@ -213,7 +213,7 @@ func (r *ProgressiveToolRail) Init(agent agentinterfaces.BaseAgent) error {
 
 // Uninit 移除本 Rail 注册的元工具。
 //
-// 对齐 Python: ProgressiveToolRail.uninit(agent)
+// Python: ProgressiveToolRail.uninit(agent)
 func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
 	if am != nil {
@@ -232,7 +232,7 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 对齐 Python: 从 ResourceMgr 移除已注册工具
+	// Python: 从 ResourceMgr 移除已注册工具
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr != nil {
 		for toolID := range r.ownedToolIDs {
@@ -264,7 +264,7 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // BeforeInvoke 缓存全量工具清单并初始化会话可见工具。
 //
-// 对齐 Python: ProgressiveToolRail.before_invoke(ctx)
+// Python: ProgressiveToolRail.before_invoke(ctx)
 func (r *ProgressiveToolRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 步骤 1：缓存全量工具清单
 	infos, err := r.listToolInfos(ctx, cbc.Agent())
@@ -290,7 +290,7 @@ func (r *ProgressiveToolRail) BeforeInvoke(ctx context.Context, cbc *agentinterf
 
 // BeforeModelCall 注入导航+规则节到系统提示词，并过滤可调用工具。
 //
-// 对齐 Python: ProgressiveToolRail.before_model_call(ctx)
+// Python: ProgressiveToolRail.before_model_call(ctx)
 func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
 
@@ -360,7 +360,7 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke + BeforeModelCall。
 //
-// 对齐 Python: ProgressiveToolRail 隐式覆盖 before_invoke + before_model_call
+// Python: ProgressiveToolRail 隐式覆盖 before_invoke + before_model_call
 func (r *ProgressiveToolRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -378,7 +378,7 @@ func (r *ProgressiveToolRail) GetCallbacks() map[agentinterfaces.AgentCallbackEv
 
 // searchTools 搜索缓存工具清单，按名称/描述/参数文本模糊匹配。
 //
-// 对齐 Python: ProgressiveToolRail._search_tools(query, limit, detail_level)
+// Python: ProgressiveToolRail._search_tools(query, limit, detail_level)
 func (r *ProgressiveToolRail) searchTools(_ context.Context, query string, limit int, detailLevel int) ([]map[string]any, error) {
 	query = strings.TrimSpace(strings.ToLower(query))
 	if query == "" {
@@ -460,7 +460,7 @@ func (r *ProgressiveToolRail) searchTools(_ context.Context, query string, limit
 
 // loadTools 将指定工具标记为当前会话可调用。
 //
-// 对齐 Python: ProgressiveToolRail._load_tools(session, tool_names, replace)
+// Python: ProgressiveToolRail._load_tools(session, tool_names, replace)
 func (r *ProgressiveToolRail) loadTools(_ context.Context, sess sessioninterfaces.SessionFacade, toolNames []string, replace bool) (map[string]any, error) {
 	if sess == nil {
 		return map[string]any{
@@ -545,7 +545,7 @@ func (r *ProgressiveToolRail) loadTools(_ context.Context, sess sessioninterface
 
 // listToolInfos 获取 Agent 上注册的所有工具信息。
 //
-// 对齐 Python: ProgressiveToolRail._list_tool_infos(agent)
+// Python: ProgressiveToolRail._list_tool_infos(agent)
 func (r *ProgressiveToolRail) listToolInfos(ctx context.Context, agent agentinterfaces.BaseAgent) ([]cschema.ToolInfoInterface, error) {
 	am := agent.AbilityManager()
 	if am == nil {
@@ -564,7 +564,7 @@ func (r *ProgressiveToolRail) listToolInfos(ctx context.Context, agent agentinte
 
 // getRealToolInfos 返回缓存中非元工具的工具清单。
 //
-// 对齐 Python: ProgressiveToolRail._get_real_tool_infos()
+// Python: ProgressiveToolRail._get_real_tool_infos()
 func (r *ProgressiveToolRail) getRealToolInfos() []cschema.ToolInfoInterface {
 	var result []cschema.ToolInfoInterface
 	for _, t := range r.cachedAllTools {
@@ -577,7 +577,7 @@ func (r *ProgressiveToolRail) getRealToolInfos() []cschema.ToolInfoInterface {
 
 // buildNavigationSection 构建工具导航节。
 //
-// 对齐 Python: ProgressiveToolRail._build_navigation_section(session)
+// Python: ProgressiveToolRail._build_navigation_section(session)
 func (r *ProgressiveToolRail) buildNavigationSection(_ context.Context, sess sessioninterfaces.SessionFacade) saprompt.PromptSection {
 	language := r.config.EffectiveLanguage()
 	entriesCN := r.buildNavigationEntries(sess, "cn")
@@ -614,7 +614,7 @@ func (r *ProgressiveToolRail) buildNavigationSection(_ context.Context, sess ses
 
 // buildProgressiveToolRulesSection 构建渐进式工具规则节。
 //
-// 对齐 Python: ProgressiveToolRail._build_progressive_tool_rules_section()
+// Python: ProgressiveToolRail._build_progressive_tool_rules_section()
 func (r *ProgressiveToolRail) buildProgressiveToolRulesSection() saprompt.PromptSection {
 	language := r.config.EffectiveLanguage()
 	sectionCN := sections.BuildProgressiveToolRulesSection("cn")
@@ -646,7 +646,7 @@ func (r *ProgressiveToolRail) buildProgressiveToolRulesSection() saprompt.Prompt
 
 // buildNavigationEntries 构建导航条目列表。
 //
-// 对齐 Python: ProgressiveToolRail._build_navigation_entries(session, language)
+// Python: ProgressiveToolRail._build_navigation_entries(session, language)
 func (r *ProgressiveToolRail) buildNavigationEntries(sess sessioninterfaces.SessionFacade, language string) []string {
 	allTools := r.getRealToolInfos()
 	loaded := toSet(r.getVisibleTools(sess))
@@ -724,7 +724,7 @@ func (r *ProgressiveToolRail) buildNavigationEntries(sess sessioninterfaces.Sess
 
 // getVisibleTools 读取当前会话可见工具名称列表。
 //
-// 对齐 Python: ProgressiveToolRail._get_visible_tools(session)
+// Python: ProgressiveToolRail._get_visible_tools(session)
 func (r *ProgressiveToolRail) getVisibleTools(sess sessioninterfaces.SessionFacade) []string {
 	if sess == nil {
 		return nil
@@ -765,7 +765,7 @@ func (r *ProgressiveToolRail) getVisibleTools(sess sessioninterfaces.SessionFaca
 
 // setVisibleTools 持久化当前会话可见工具名称列表。
 //
-// 对齐 Python: ProgressiveToolRail._set_visible_tools(session, names)
+// Python: ProgressiveToolRail._set_visible_tools(session, names)
 func (r *ProgressiveToolRail) setVisibleTools(sess sessioninterfaces.SessionFacade, names []string) {
 	if sess == nil {
 		return
@@ -776,7 +776,7 @@ func (r *ProgressiveToolRail) setVisibleTools(sess sessioninterfaces.SessionFaca
 
 // initVisibleTools 初始化会话可见工具状态（仅执行一次）。
 //
-// 对齐 Python: ProgressiveToolRail._init_visible_tools(session, default_visible_tools)
+// Python: ProgressiveToolRail._init_visible_tools(session, default_visible_tools)
 func (r *ProgressiveToolRail) initVisibleTools(sess sessioninterfaces.SessionFacade, defaultVisible map[string]struct{}) {
 	if sess == nil {
 		return
@@ -814,7 +814,7 @@ func (r *ProgressiveToolRail) initVisibleTools(sess sessioninterfaces.SessionFac
 
 // appendTrace 追加工具发现轨迹到会话状态。
 //
-// 对齐 Python: ProgressiveToolRail._append_trace(session, event)
+// Python: ProgressiveToolRail._append_trace(session, event)
 func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, event map[string]any) {
 	if sess == nil {
 		return
@@ -832,7 +832,7 @@ func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, 
 
 // getPromptBuilder 获取 SystemPromptBuilder。
 //
-// 对齐 Python: ProgressiveToolRail._get_prompt_builder(ctx)
+// Python: ProgressiveToolRail._get_prompt_builder(ctx)
 func (r *ProgressiveToolRail) getPromptBuilder(cbc *agentinterfaces.AgentCallbackContext) saprompt.SystemPromptBuilderInterface {
 	agent := cbc.Agent()
 	if agent == nil {
@@ -890,7 +890,7 @@ func dedupPreserveOrder(names []string) []string {
 
 // toolSummaryForNavigation 返回工具的导航摘要行。
 //
-// 对齐 Python: ProgressiveToolRail._tool_summary_for_navigation(tool)
+// Python: ProgressiveToolRail._tool_summary_for_navigation(tool)
 func toolSummaryForNavigation(t cschema.ToolInfoInterface) string {
 	description := strings.TrimSpace(t.GetDescription())
 	if description == "" {
@@ -909,7 +909,7 @@ func toolSummaryForNavigation(t cschema.ToolInfoInterface) string {
 
 // toolGroupForNavigation 推断工具的导航分组。
 //
-// 对齐 Python: ProgressiveToolRail._tool_group_for_navigation(tool)
+// Python: ProgressiveToolRail._tool_group_for_navigation(tool)
 func toolGroupForNavigation(t cschema.ToolInfoInterface) string {
 	name := strings.ToLower(t.GetName())
 	desc := strings.ToLower(t.GetDescription())
@@ -937,7 +937,7 @@ func toolGroupForNavigation(t cschema.ToolInfoInterface) string {
 
 // toolGroupToCN 将分组标签翻译为中文。
 //
-// 对齐 Python: ProgressiveToolRail._tool_group_to_cn(group)
+// Python: ProgressiveToolRail._tool_group_to_cn(group)
 func toolGroupToCN(group string) string {
 	if cn, ok := toolGroupCN[group]; ok {
 		return cn
@@ -947,7 +947,7 @@ func toolGroupToCN(group string) string {
 
 // toolGroupRank 返回工具分组的排序权重。
 //
-// 对齐 Python: ProgressiveToolRail._tool_group_rank(tool)
+// Python: ProgressiveToolRail._tool_group_rank(tool)
 func toolGroupRank(t cschema.ToolInfoInterface) int {
 	group := toolGroupForNavigation(t)
 	if rank, ok := toolGroupOrder[group]; ok {
@@ -968,7 +968,7 @@ func containsAny(s string, keywords ...string) bool {
 
 // parametersToText 将参数摘要和原始 schema 拼接为可搜索文本。
 //
-// 对齐 Python: ProgressiveToolRail._parameters_to_text(parameters)
+// Python: ProgressiveToolRail._parameters_to_text(parameters)
 func parametersToText(parameters map[string]any) string {
 	summary := parametersSummary(parameters)
 	raw := safeSerializeParameters(parameters)
@@ -977,7 +977,7 @@ func parametersToText(parameters map[string]any) string {
 
 // parametersSummary 构建参数的简短文本摘要。
 //
-// 对齐 Python: ProgressiveToolRail._parameters_summary(parameters)
+// Python: ProgressiveToolRail._parameters_summary(parameters)
 func parametersSummary(parameters map[string]any) string {
 	if parameters == nil {
 		return "no parameters"
@@ -1006,7 +1006,7 @@ func parametersSummary(parameters map[string]any) string {
 
 // safeSerializeParameters 安全地将参数 schema 序列化为字符串。
 //
-// 对齐 Python: ProgressiveToolRail._safe_serialize_parameters(parameters)
+// Python: ProgressiveToolRail._safe_serialize_parameters(parameters)
 func safeSerializeParameters(parameters map[string]any) string {
 	if parameters == nil {
 		return ""
@@ -1016,7 +1016,7 @@ func safeSerializeParameters(parameters map[string]any) string {
 
 // buildToolSummary 构建结构化工具摘要。
 //
-// 对齐 Python: ProgressiveToolRail._build_tool_summary(tool, detail_level)
+// Python: ProgressiveToolRail._build_tool_summary(tool, detail_level)
 func buildToolSummary(t cschema.ToolInfoInterface, detailLevel int) map[string]any {
 	name := t.GetName()
 	description := t.GetDescription()

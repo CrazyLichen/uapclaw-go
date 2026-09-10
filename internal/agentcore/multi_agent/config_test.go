@@ -11,7 +11,7 @@ import (
 
 // TestNewTeamConfig_默认值 验证默认值 MaxAgents=10, MaxConcurrentMessages=100, MessageTimeout=30.0。
 //
-// 对应 Python: TeamConfig() 默认值
+// Python: TeamConfig() 默认值
 func TestNewTeamConfig_默认值(t *testing.T) {
 	cfg := schema.NewTeamConfig()
 	if cfg.MaxAgents != 10 {
@@ -27,7 +27,7 @@ func TestNewTeamConfig_默认值(t *testing.T) {
 
 // TestTeamConfig_链式配置 验证 ConfigureMaxAgents/ConfigureTimeout/ConfigureConcurrency 链式调用。
 //
-// 对应 Python: TeamConfig().configure_max_agents(5).configure_timeout(60.0).configure_concurrency(200)
+// Python: TeamConfig().configure_max_agents(5).configure_timeout(60.0).configure_concurrency(200)
 func TestTeamConfig_链式配置(t *testing.T) {
 	cfg := schema.NewTeamConfig().
 		ConfigureMaxAgents(5).
@@ -47,7 +47,7 @@ func TestTeamConfig_链式配置(t *testing.T) {
 
 // TestTeamConfig_链式配置_返回自身 验证链式方法返回 *TeamConfig 指针。
 //
-// 对应 Python: configure_xxx() -> self 的链式语义
+// Python: configure_xxx() -> self 的链式语义
 func TestTeamConfig_链式配置_返回自身(t *testing.T) {
 	cfg := schema.NewTeamConfig()
 	ptr1 := cfg.ConfigureMaxAgents(3)
@@ -66,7 +66,7 @@ func TestTeamConfig_链式配置_返回自身(t *testing.T) {
 
 // TestTeamConfig_Extra 验证 SetExtra/GetExtra 读写。
 //
-// 对应 Python: model_config={"extra": "allow"} 允许动态额外字段
+// Python: model_config={"extra": "allow"} 允许动态额外字段
 func TestTeamConfig_Extra(t *testing.T) {
 	cfg := schema.NewTeamConfig()
 

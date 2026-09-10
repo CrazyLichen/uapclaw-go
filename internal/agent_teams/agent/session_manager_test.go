@@ -19,7 +19,7 @@ func (m *mockSession) GetSessionID() string {
 }
 
 // TestNewSessionManager_基本构造 测试构造函数
-// 对齐 Python: SessionManager.__init__(state, configurator, recovery_manager)
+// Python: SessionManager.__init__(state, configurator, recovery_manager)
 func TestNewSessionManager_基本构造(t *testing.T) {
 	state := NewTeamAgentState()
 	configurator := NewAgentConfigurator(nil)
@@ -29,7 +29,7 @@ func TestNewSessionManager_基本构造(t *testing.T) {
 }
 
 // TestSessionManager_TeamSession 测试 TeamSession getter/setter
-// 对齐 Python: SessionManager.team_session (property)
+// Python: SessionManager.team_session (property)
 func TestSessionManager_TeamSession(t *testing.T) {
 	state := NewTeamAgentState()
 	configurator := NewAgentConfigurator(nil)
@@ -42,7 +42,7 @@ func TestSessionManager_TeamSession(t *testing.T) {
 }
 
 // TestBindSession_基本绑定 测试 sessionID 设置 + ctx 注入 + teamSession 存储
-// 对齐 Python: SessionManager.bind_session(session)
+// Python: SessionManager.bind_session(session)
 //   - set_session_id(session.get_session_id())  → SessionState.SetSessionID
 //   - state.team_session = session              → state.TeamSession = session
 func TestBindSession_基本绑定(t *testing.T) {
@@ -61,7 +61,7 @@ func TestBindSession_基本绑定(t *testing.T) {
 }
 
 // TestBindSession_返回新Ctx 测试返回的 ctx 含 SessionState
-// 对齐 Python: set_session_id() 后全局生效
+// Python: set_session_id() 后全局生效
 // Go: BindSession 返回新 ctx，调用方必须用于后续传播
 func TestBindSession_返回新Ctx(t *testing.T) {
 	state := NewTeamAgentState()
@@ -80,7 +80,7 @@ func TestBindSession_返回新Ctx(t *testing.T) {
 }
 
 // TestBindSession_重复绑定 测试两次 bind 覆盖前一次
-// 对齐 Python: bind_session 中 _reset_session_id_token() → set_session_id()
+// Python: bind_session 中 _reset_session_id_token() → set_session_id()
 // Go: 重复 BindSession 直接 SetSessionID 覆盖旧值
 func TestBindSession_重复绑定(t *testing.T) {
 	state := NewTeamAgentState()
@@ -101,7 +101,7 @@ func TestBindSession_重复绑定(t *testing.T) {
 }
 
 // TestReleaseSession_释放 测试 sessionID 清空 + teamSession 置 nil
-// 对齐 Python: SessionManager.release_session()
+// Python: SessionManager.release_session()
 //   - _reset_session_id_token()  → SessionState.SetSessionID("")
 //   - state.team_session = None   → state.TeamSession = nil
 func TestReleaseSession_释放(t *testing.T) {
@@ -119,7 +119,7 @@ func TestReleaseSession_释放(t *testing.T) {
 }
 
 // TestReleaseSession_幂等 测试多次 release 不 panic
-// 对齐 Python: release_session 幂等（对已释放状态再次调用为 no-op）
+// Python: release_session 幂等（对已释放状态再次调用为 no-op）
 func TestReleaseSession_幂等(t *testing.T) {
 	state := NewTeamAgentState()
 	configurator := NewAgentConfigurator(nil)
@@ -132,7 +132,7 @@ func TestReleaseSession_幂等(t *testing.T) {
 }
 
 // TestSessionManager_三态转换 测试 Unbound → Fully-bound → Unbound
-// 对齐 Python: SessionManager 三态模型
+// Python: SessionManager 三态模型
 //
 //	Unbound     — sessionID="" teamSession=nil  从未绑定或显式解绑
 //	Fully-bound — sessionID="X" teamSession=ses 活跃会话
@@ -166,7 +166,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 }
 
 // TestResumeForNewSession_基本流程 测试返回新 ctx
-// 对齐 Python: SessionManager.resume_for_new_session(session)
+// Python: SessionManager.resume_for_new_session(session)
 // TODO(#9.61): RecoveryManager 回填后补充完整逻辑测试
 func TestResumeForNewSession_基本流程(t *testing.T) {
 	state := NewTeamAgentState()
@@ -182,7 +182,7 @@ func TestResumeForNewSession_基本流程(t *testing.T) {
 }
 
 // TestRecoverForExistingSession_基本流程 测试返回新 ctx
-// 对齐 Python: SessionManager.recover_for_existing_session(session)
+// Python: SessionManager.recover_for_existing_session(session)
 // TODO(#9.61): RecoveryManager 回填后补充完整逻辑测试
 func TestRecoverForExistingSession_基本流程(t *testing.T) {
 	state := NewTeamAgentState()
@@ -203,7 +203,7 @@ func TestExtractSessionID_空session(t *testing.T) {
 }
 
 // TestExtractSessionID_有GetSessionID 测试含 GetSessionID 方法的对象
-// 对齐 Python: session.get_session_id()
+// Python: session.get_session_id()
 func TestExtractSessionID_有GetSessionID(t *testing.T) {
 	sess := &mockSession{sessionID: "extracted-123"}
 	assert.Equal(t, "extracted-123", extractSessionID(sess))

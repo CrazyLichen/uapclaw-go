@@ -25,7 +25,7 @@ type ShellProcessRegistry struct {
 }
 
 // shellSessionIDKey context key 用于传递 Shell session ID。
-// 对齐 Python _shell_session_id: contextvars.ContextVar。
+// Python: _shell_session_id: contextvars.ContextVar。
 type shellSessionIDKey struct{}
 
 // ProcessInfo 进程信息
@@ -96,7 +96,7 @@ func (r *ShellProcessRegistry) Unregister(sessionID string, proc *os.Process) {
 }
 
 // RegisterWithStdin 注册进程同时保存 stdin pipe 引用。
-// 对齐 Python ShellProcessRegistry.track + stdin pipe 追踪。
+// Python: ShellProcessRegistry.track + stdin pipe 追踪。
 func (r *ShellProcessRegistry) RegisterWithStdin(sessionID string, proc *os.Process, stdin io.Writer) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || proc == nil {
@@ -136,7 +136,7 @@ func (r *ShellProcessRegistry) GetStdinPipe(sessionID string, proc *os.Process) 
 }
 
 // ListProcesses 返回所有已注册进程信息。
-// 对齐 Python ShellProcessRegistry.list_processes。
+// Python: ShellProcessRegistry.list_processes。
 func (r *ShellProcessRegistry) ListProcesses() []ProcessInfo {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -153,7 +153,7 @@ func (r *ShellProcessRegistry) ListProcesses() []ProcessInfo {
 }
 
 // WriteStdinForSession 向指定 session 的所有进程写入 stdin。
-// 对齐 Python ShellProcessRegistry.write_stdin：遍历 stdinPipes 写入。
+// Python: ShellProcessRegistry.write_stdin：遍历 stdinPipes 写入。
 // 返回成功写入的进程数和第一个遇到的错误。
 func (r *ShellProcessRegistry) WriteStdinForSession(sessionID string, data []byte) (int, error) {
 	sid := strings.TrimSpace(sessionID)
@@ -277,7 +277,7 @@ func (r *ShellProcessRegistry) ConsumeCancelled(sessionID string) bool {
 // Windows：先 proc.Signal(os.Interrupt) → 等待 3s → 再 proc.Kill()
 //
 // 返回 true 表示成功终止，false 表示进程已退出或终止失败。
-// 对齐 Python: openjiuwen/core/sys_operation/shell_process_registry.py:terminate_shell_process
+// Python: openjiuwen/core/sys_operation/shell_process_registry.py:terminate_shell_process
 func TerminateShellProcess(proc *os.Process) bool {
 	if proc == nil {
 		return false
@@ -312,7 +312,7 @@ func ConsumeShellSessionCancelled(sessionID string) bool {
 }
 
 // SetShellSessionID 将 session ID 绑定到 context。
-// 对齐 Python set_shell_session_id。
+// Python: set_shell_session_id。
 func SetShellSessionID(ctx context.Context, sessionID string) context.Context {
 	return context.WithValue(ctx, shellSessionIDKey{}, sessionID)
 }
@@ -325,14 +325,14 @@ func GetShellSessionID(ctx context.Context) string {
 }
 
 // ClearShellSessionID 清除 context 中的 session ID，设为空字符串。
-// 对齐 Python reset_shell_session_id：Go 中无 Token 回退机制，
+// Python: reset_shell_session_id：Go 中无 Token 回退机制，
 // 调用方如需恢复旧值，应保存旧 context 后恢复。
 func ClearShellSessionID(ctx context.Context) context.Context {
 	return context.WithValue(ctx, shellSessionIDKey{}, "")
 }
 
 // ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到 trace_id。
-// 对齐 Python resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
+// Python: resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
 //
 // TODO(#通用): 补充 fallback 到 trace_id 的逻辑。Python 在 shell_session_id 为空时，
 // 会从 logging.utils.get_session_id() 获取 trace_id 并排除 "default_trace_id" 哨兵值。

@@ -7,14 +7,14 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SecurityCheckResult 安全检查结果
-// 对齐 Python: SecurityCheck (bash/_security.py / powershell/_security.py)
+// Python: SecurityCheck (bash/_security.py / powershell/_security.py)
 type SecurityCheckResult struct {
 	// Blocked 是否被拦截
 	Blocked bool
 	// Reason 拦截原因
 	Reason string
 	// Warning 警告信息（破坏性命令警告，不阻止执行）
-	// 对齐 Python: SecurityCheck.warning: str | None = None
+	// Python: SecurityCheck.warning: str | None = None
 	Warning string
 }
 
@@ -38,7 +38,7 @@ var (
 	psScriptBlockRe = regexp.MustCompile(`(?i)\[scriptblock\]::create\s*\(`)
 
 	// bash 破坏性命令正则
-	// 对齐 Python: _DESTRUCTIVE_PATTERNS (bash/_security.py L54-68)
+	// Python: _DESTRUCTIVE_PATTERNS (bash/_security.py L54-68)
 	bashDestructivePatterns = []struct {
 		pattern *regexp.Regexp // 正则表达式
 		warning string         // 警告信息
@@ -59,7 +59,7 @@ var (
 	}
 
 	// powershell 破坏性命令正则
-	// 对齐 Python: _DESTRUCTIVE_PATTERNS (powershell/_security.py L36-45)
+	// Python: _DESTRUCTIVE_PATTERNS (powershell/_security.py L36-45)
 	psDestructivePatterns = []struct {
 		pattern *regexp.Regexp // 正则表达式
 		warning string         // 警告信息
@@ -78,7 +78,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CheckBashInjection 检测 bash shell 注入。
-// 对齐 Python: check_injection (bash/_security.py L40-49)
+// Python: check_injection (bash/_security.py L40-49)
 // 检测 3 种模式:
 // 1. 反引号命令替换 `...` (排除被单引号包裹的)
 // 2. $() 命令替换
@@ -97,7 +97,7 @@ func CheckBashInjection(command string) (bool, string) {
 }
 
 // CheckPowerShellInjection 检测 PowerShell 注入。
-// 对齐 Python: check_injection (powershell/_security.py L28-33)
+// Python: check_injection (powershell/_security.py L28-33)
 // 检测 4 种模式:
 // 1. Invoke-Expression / iex（调用表达式）
 // 2. powershell/pwsh -EncodedCommand（编码命令执行）
@@ -120,7 +120,7 @@ func CheckPowerShellInjection(command string) (bool, string) {
 }
 
 // GetBashDestructiveWarning 返回 bash 破坏性命令警告。
-// 对齐 Python: get_destructive_warning (bash/_security.py L71-81)
+// Python: get_destructive_warning (bash/_security.py L71-81)
 // 纯信息性，不阻止执行。
 func GetBashDestructiveWarning(command string) string {
 	for _, dp := range bashDestructivePatterns {
@@ -132,7 +132,7 @@ func GetBashDestructiveWarning(command string) string {
 }
 
 // GetPSDestructiveWarning 返回 PowerShell 破坏性命令警告。
-// 对齐 Python: get_destructive_warning (powershell/_security.py L48-53)
+// Python: get_destructive_warning (powershell/_security.py L48-53)
 // 纯信息性，不阻止执行。
 func GetPSDestructiveWarning(command string) string {
 	for _, dp := range psDestructivePatterns {
@@ -146,7 +146,7 @@ func GetPSDestructiveWarning(command string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hasBacktickSubstitution 检测反引号命令替换，排除被单引号包裹的
-// 对齐 Python: _BACKTICK_RE = re.compile(r"(?<!')`[^`]+`")
+// Python: _BACKTICK_RE = re.compile(r"(?<!')`[^`]+`")
 // 由于 Go RE2 不支持 lookbehind，手动实现：遍历命令，跟踪单引号状态
 func hasBacktickSubstitution(command string) bool {
 	inSingleQuote := false

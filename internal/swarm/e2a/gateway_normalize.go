@@ -3,6 +3,7 @@ package e2a
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -549,7 +550,7 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 //
 // 覆盖：流式 e2a.chunk、终止 e2a.complete / e2a.error、cron、acp.output_request。
 //
-// 对应 Python: e2a_response_to_agent_chunk(e2a)
+// Python: e2a_response_to_agent_chunk(e2a)
 func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, error) {
 	rid := e2a.RequestID
 	ch := e2a.Channel
@@ -777,11 +778,7 @@ func emptyCompleteMarker(body map[string]any, res any) bool {
 }
 
 func copyMap(m map[string]any) map[string]any {
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(m)
 }
 
 func toBool(v any) bool {

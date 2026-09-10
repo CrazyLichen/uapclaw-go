@@ -21,7 +21,7 @@ import (
 const defaultInlineFileSizeLimit = 128 * 1024
 
 // atFilePattern 匹配 @path 或 @"quoted path" 的正则
-// 对齐 Python re.compile(r'(?P<prefix>(?:^|(?<=\s)))@(?:"(?P<quoted>[^"]+)"|(?P<plain>[^\s#]+))(?:#[^#\s]*)?')
+// Python: re.compile(r'(?P<prefix>(?:^|(?<=\s)))@(?:"(?P<quoted>[^"]+)"|(?P<plain>[^\s#]+))(?:#[^#\s]*)?')
 // 使用 regexp2 支持 lookbehind (?<=\s)，命名组用 .NET 语法 (?<name>...) 而非 Python (?P<name>...)
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -42,7 +42,7 @@ var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<
 //   - @"path with spaces" — 引号路径
 //   - @path#L10-20 — 行范围后缀（当前忽略，读取整个文件）
 //
-// 对齐 Python resolve_at_file_references
+// Python: resolve_at_file_references
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveAtFileReferences 解析内容中的 @文件 引用，替换为文件内容
@@ -139,7 +139,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 //
 // 返回智能体类型名称列表（不含 "agent-" 前缀），去重保序。
 //
-// 对齐 Python extract_agent_mentions
+// Python: extract_agent_mentions
 func ExtractAgentMentions(content string) []string {
 	if content == "" {
 		return nil
@@ -180,7 +180,7 @@ func ExtractAgentMentions(content string) []string {
 
 // ResolveStructuredAttachments 解析结构化附件并内联文件内容。
 //
-// 对齐 Python _resolve_structured_attachments (L1513-1526)：
+// Python: _resolve_structured_attachments (L1513-1526)：
 //  1. 归一化结构化附件
 //  2. 构建文件引用前缀
 //  3. 清除内容中的附件引用
@@ -213,7 +213,7 @@ func ResolveStructuredAttachments(content string, attachments []map[string]any, 
 
 // resolveReferencePath 解析引用路径（相对/绝对/~/）
 //
-// 对齐 Python _resolve_reference_path (L1438-1444)。
+// Python: _resolve_reference_path (L1438-1444)。
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func resolveReferencePath(rawPath, cwd string) string {
@@ -229,7 +229,7 @@ func resolveReferencePath(rawPath, cwd string) string {
 
 // normalizeStructuredAttachments 规范化结构化附件列表（非导出版本）。
 //
-// 对齐 Python _normalize_structured_attachments (L1447-1474)：
+// Python: _normalize_structured_attachments (L1447-1474)：
 // 去重（按 resolved path），填充默认 type/filename。
 // 逻辑与原 NormalizeStructuredAttachments 完全相同，但改为非导出。
 func normalizeStructuredAttachments(attachments []map[string]any, cwd string) []map[string]any {
@@ -285,7 +285,7 @@ func normalizeStructuredAttachments(attachments []map[string]any, cwd string) []
 
 // stripAttachedMentions 从 content 中移除已被 attachments 覆盖的 @ 引用。
 //
-// 对齐 Python strip_attached_mentions (L1477-1510)：
+// Python: strip_attached_mentions (L1477-1510)：
 // 对于 content 中匹配到 attachments 已包含路径的 @path 引用，
 // 将 @path 替换为 path（去掉 @ 前缀），保留 prefix（行首/空格）。
 // @agent-xxx 提及不受影响。
@@ -338,7 +338,7 @@ func stripAttachedMentions(content string, attachments []map[string]any, cwd str
 			return m.String()
 		}
 
-		// 对齐 Python：将 @path 替换为 prefix + path（去掉 @）
+		// Python: 将 @path 替换为 prefix + path（去掉 @）
 		prefix := ""
 		if g := m.GroupByName("prefix"); g != nil {
 			prefix = g.String()

@@ -16,7 +16,7 @@ import (
 // 在每次模型调用前注入安全原则到 system prompt，引导模型自律。
 // priority=85，事件集={BeforeModelCall}。
 //
-// 对齐 Python: SafetyPromptRail(BaseSecurityRail) — prompt_security_rail.py L16-46
+// Python: SafetyPromptRail(BaseSecurityRail) — prompt_security_rail.py L16-46
 type SafetyPromptRail struct {
 	BaseSecurityRail
 	// systemPromptBuilder 系统提示词构建器（init 时获取）
@@ -32,7 +32,7 @@ type SecurityRail = SafetyPromptRail
 
 const (
 	// safetyPromptRailPriority 安全提示词 Rail 优先级
-	// 对齐 Python: SafetyPromptRail.priority = 85
+	// Python: SafetyPromptRail.priority = 85
 	safetyPromptRailPriority = 85
 )
 
@@ -42,7 +42,7 @@ const (
 
 // NewSafetyPromptRail 创建安全提示词 Rail。
 //
-// 对齐 Python: SafetyPromptRail.__init__()
+// Python: SafetyPromptRail.__init__()
 func NewSafetyPromptRail() *SafetyPromptRail {
 	r := &SafetyPromptRail{
 		BaseSecurityRail: *NewBaseSecurityRail(
@@ -55,15 +55,15 @@ func NewSafetyPromptRail() *SafetyPromptRail {
 
 // Init 初始化钩子，获取 systemPromptBuilder 引用。
 //
-// 对齐 Python: SafetyPromptRail.init(agent) (prompt_security_rail.py L30-31)
-func (r *SafetyPromptRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: SafetyPromptRail.init(agent) (prompt_security_rail.py L30-31)
+func (r *SafetyPromptRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	return nil
 }
 
 // Uninit 反初始化钩子，移除 safety section。
 //
-// 对齐 Python: SafetyPromptRail.uninit(agent) (prompt_security_rail.py L33-36)
+// Python: SafetyPromptRail.uninit(agent) (prompt_security_rail.py L33-36)
 func (r *SafetyPromptRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionSafety)
@@ -76,14 +76,14 @@ func (r *SafetyPromptRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // runSecurityCheck 注入安全提示词 section，始终返回 Allow。
 //
-// 对齐 Python: SafetyPromptRail.run_security_check(security_ctx) (prompt_security_rail.py L38-46)
+// Python: SafetyPromptRail.run_security_check(security_ctx) (prompt_security_rail.py L38-46)
 func (r *SafetyPromptRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
 	if r.systemPromptBuilder == nil {
-		// 对齐 Python: if self.system_prompt_builder is None: return self.allow()
+		// Python: if self.system_prompt_builder is None: return self.allow()
 		return r.Allow(nil), nil
 	}
 
-	// 对齐 Python: safety_section = build_safety_section(self.system_prompt_builder.language)
+	// Python: safety_section = build_safety_section(self.system_prompt_builder.language)
 	// Go 侧 BuildSafetySection() 始终返回非 nil（包含 cn/en 双语），无需 nil 检查
 	section := sections.BuildSafetySection()
 	r.systemPromptBuilder.AddSection(section)

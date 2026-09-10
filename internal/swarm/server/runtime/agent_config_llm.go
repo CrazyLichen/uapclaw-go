@@ -16,7 +16,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LLMGenerationResult LLM 生成结果。
-// 对齐 Python: _generate_agent_with_llm 返回 (when_to_use, system_prompt)
+// Python: _generate_agent_with_llm 返回 (when_to_use, system_prompt)
 type LLMGenerationResult struct {
 	// WhenToUse 调度描述（告诉 LLM 何时调度此 agent）
 	WhenToUse string
@@ -30,7 +30,7 @@ type LLMGenerationResult struct {
 
 const (
 	// agentCreationSystemPrompt LLM 生成 agent 配置的系统提示词。
-	// 对齐 Python: _AGENT_CREATION_SYSTEM_PROMPT
+	// Python: _AGENT_CREATION_SYSTEM_PROMPT
 	agentCreationSystemPrompt = `You are an elite AI agent architect. When given an agent name and description, your job is to design a high-performance agent that EXECUTES tasks to completion — not just analyzes and reports.
 
 The agent will have access to tools (Read, Write, Edit, Bash, etc.) to complete tasks. Design it as an autonomous expert capable of handling its designated tasks with minimal additional guidance. The system prompt you write is the agent's complete operational manual.
@@ -70,7 +70,7 @@ var jsonBlockPattern = regexp.MustCompile(`\{[\s\S]*\}`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GenerateAgentWithLLM 调用 LLM 生成 agent 的 whenToUse 和 systemPrompt。
-// 对齐 Python: _generate_agent_with_llm(name, description)
+// Python: _generate_agent_with_llm(name, description)
 //
 // 返回 (when_to_use, system_prompt) 或 nil（生成失败时回退到模板）。
 func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, description string) *LLMGenerationResult {
@@ -85,7 +85,7 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 	}
 
 	// 步骤 2: 构建完整 prompt
-	// 对齐 Python: full_prompt = f"{_AGENT_CREATION_SYSTEM_PROMPT}\n---\n请为以下 agent 生成配置：\n名称: {name}\n描述: {description}\n..."
+	// Python: full_prompt = f"{_AGENT_CREATION_SYSTEM_PROMPT}\n---\n请为以下 agent 生成配置：\n名称: {name}\n描述: {description}\n..."
 	fullPrompt := fmt.Sprintf(`%s
 
 ---
@@ -97,7 +97,7 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 返回 JSON 对象，包含 whenToUse 和 systemPrompt 两个字段。不要返回其他内容。`, agentCreationSystemPrompt, name, description)
 
 	// 步骤 3: 调用 LLM
-	// 对齐 Python: result = await model.invoke([UserMessage(content=full_prompt)], max_tokens=2000, temperature=0.3)
+	// Python: result = await model.invoke([UserMessage(content=full_prompt)], max_tokens=2000, temperature=0.3)
 	messages := model_clients.NewMessagesParam(llmschema.NewUserMessage(fullPrompt))
 	result, err := model.Invoke(ctx, messages,
 		model_clients.WithInvokeMaxTokens(2000),
@@ -109,7 +109,7 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 	}
 
 	// 步骤 4: 提取文本内容
-	// 对齐 Python: text = getattr(result, "content", None) or str(result)
+	// Python: text = getattr(result, "content", None) or str(result)
 	text := ""
 	if result != nil {
 		text = result.Content.Text()
@@ -120,14 +120,14 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 	}
 
 	// 步骤 5: 解析 JSON 响应
-	// 对齐 Python: data = _json.loads(text.strip()) / match = _re.search(r"\{[\s\S]*\}", text)
+	// Python: data = _json.loads(text.strip()) / match = _re.search(r"\{[\s\S]*\}", text)
 	return parseLLMGenerationResponse(text)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseLLMGenerationResponse 从 LLM 响应文本中解析 whenToUse 和 systemPrompt。
-// 对齐 Python: _generate_agent_with_llm 中 JSON 解析逻辑
+// Python: _generate_agent_with_llm 中 JSON 解析逻辑
 func parseLLMGenerationResponse(text string) *LLMGenerationResult {
 	text = strings.TrimSpace(text)
 
@@ -147,7 +147,7 @@ func parseLLMGenerationResponse(text string) *LLMGenerationResult {
 	}
 
 	// 步骤 3: 提取字段
-	// 对齐 Python: when_to_use = (data.get("whenToUse") or "").strip()
+	// Python: when_to_use = (data.get("whenToUse") or "").strip()
 	whenToUse, _ := data["whenToUse"].(string)
 	whenToUse = strings.TrimSpace(whenToUse)
 	systemPrompt, _ := data["systemPrompt"].(string)

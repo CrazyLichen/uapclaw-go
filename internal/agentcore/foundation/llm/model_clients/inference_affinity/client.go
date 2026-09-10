@@ -37,7 +37,7 @@ import (
 //   - 支持 cache_sharing/cache_salt 参数，用于 vLLM KV Cache 共享
 //   - 支持 Release() 方法，释放 vLLM KV Cache
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/inference_affinity_model_client.py (InferenceAffinityModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/inference_affinity_model_client.py (InferenceAffinityModelClient)
 type InferenceAffinityModelClient struct {
 	openai.OpenAIModelClient
 }
@@ -62,7 +62,7 @@ const releaseKVCachePath = "/release_kv_cache"
 //  1. 先构造 OpenAI 客户端（复用 baseHeaders 初始化等）
 //  2. 覆盖 clientName 为 "InferenceAffinity client"
 //
-// 对应 Python: InferenceAffinityModelClient.__init__(model_config, model_client_config)
+// Python: InferenceAffinityModelClient.__init__(model_config, model_client_config)
 func NewInferenceAffinityModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -94,7 +94,7 @@ func NewInferenceAffinityModelClient(
 // 覆写 OpenAI 客户端的 Invoke，在委托前对消息中的 tool_calls 做清洗，
 // 并注入 cache_sharing/cache_salt 参数。
 //
-// 对应 Python: InferenceAffinityModelClient.invoke()
+// Python: InferenceAffinityModelClient.invoke()
 func (c *InferenceAffinityModelClient) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -118,7 +118,7 @@ func (c *InferenceAffinityModelClient) Invoke(
 // Stream 流式调用 InferenceAffinity API。
 //
 // 独立实现 Stream，不委托给 OpenAI 客户端。
-// 对齐 Python InferenceAffinityModelClient._astream_with_parser：
+// Python: InferenceAffinityModelClient._astream_with_parser：
 // 使用自己的 parseStreamChunk 解析流式块。
 //
 // 与 OpenAI 的行为差异（对齐 Python）：
@@ -128,7 +128,7 @@ func (c *InferenceAffinityModelClient) Invoke(
 //   - usage 不包含费用信息（对齐 Python InferenceAffinity 不调用 _extract_cost_info）
 //   - 空 content + 空 reasoning_content + 空 tool_calls 时返回 nil（丢弃）
 //
-// 对应 Python: InferenceAffinityModelClient.stream() + InferenceAffinityModelClient._astream_with_parser()
+// Python: InferenceAffinityModelClient.stream() + InferenceAffinityModelClient._astream_with_parser()
 func (c *InferenceAffinityModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -234,11 +234,11 @@ func (c *InferenceAffinityModelClient) Stream(
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
-				// 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
+				// Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
 				if params.TracerRecordData != nil {
 					params.TracerRecordData(map[string]any{"llm_response": finalMessage})
 				}
-				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				// Python: 流结束时触发 LLMOutput 回调
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
 					ModelName:     modelName,
@@ -260,7 +260,7 @@ func (c *InferenceAffinityModelClient) Stream(
 
 			var chunkResp openai.ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				// 对齐 Python: JSON 解析错误走日志，非回调
+				// Python: JSON 解析错误走日志，非回调
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -274,7 +274,7 @@ func (c *InferenceAffinityModelClient) Stream(
 				continue
 			}
 
-			// 对齐 Python _astream_with_parser: 应用 output_parser
+			// Python: _astream_with_parser: 应用 output_parser
 			if params.OutputParser != nil {
 				if chunk.Content.Text() != "" {
 					accumulatedContent += chunk.Content.Text()
@@ -285,7 +285,7 @@ func (c *InferenceAffinityModelClient) Stream(
 						chunk.ParserContent = parsed
 						accumulatedContent = "" // 清空缓冲区，增量输出
 					} else if parseErr != nil {
-						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						// Python: parser 错误走 llm_logger.debug，非回调
 						logger.Error(logComponent).
 							Str("model_name", modelName).
 							Str("model_provider", c.ClientConfig.ClientProvider).
@@ -302,7 +302,7 @@ func (c *InferenceAffinityModelClient) Stream(
 				ModelProvider: c.ClientConfig.ClientProvider,
 				IsStream:      true,
 			})
-			// 对齐 Python: final_message = final_message + parsed_chunk
+			// Python: final_message = final_message + parsed_chunk
 			if finalMessage == nil {
 				finalMessage = chunk
 			} else {
@@ -329,9 +329,9 @@ func (c *InferenceAffinityModelClient) Stream(
 // Release 释放 vLLM KV Cache。
 //
 // 调用 {api_base}/release_kv_cache 接口，释放指定会话的 KV Cache。
-// 对齐 Python: 200 响应即使非 JSON 也返回 true；非 200 返回 false；异常返回 error。
+// Python: 200 响应即使非 JSON 也返回 true；非 200 返回 false；异常返回 error。
 //
-// 对应 Python: InferenceAffinityModelClient.release()
+// Python: InferenceAffinityModelClient.release()
 func (c *InferenceAffinityModelClient) Release(
 	ctx context.Context,
 	opts ...model_clients.ReleaseOption,
@@ -485,7 +485,7 @@ func init() {
 
 // parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
 //
-// 对齐 Python InferenceAffinityModelClient._parse_stream_chunk()，
+// Python: InferenceAffinityModelClient._parse_stream_chunk()，
 // 与 OpenAI 的 ParseStreamChunk 有以下差异：
 //   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
 //   - 不提取 prompt_token_ids / completion_token_ids / logprobs
@@ -494,7 +494,7 @@ func init() {
 func (c *InferenceAffinityModelClient) parseStreamChunk(
 	chunkResp *openai.ChatCompletionChunkResponse,
 ) *llmschema.AssistantMessageChunk {
-	// 对齐 Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
+	// Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
 	if len(chunkResp.Choices) == 0 {
 		return nil
 	}
@@ -538,7 +538,7 @@ func (c *InferenceAffinityModelClient) parseStreamChunk(
 		finishReason = *choice.FinishReason
 	}
 
-	// 对齐 Python InferenceAffinity: 空 content + 空 reasoning + 空 tool_calls → 丢弃
+	// Python: InferenceAffinity: 空 content + 空 reasoning + 空 tool_calls → 丢弃
 	// 但如果有 finish_reason，仍需保留（Python 丢弃是已知行为，Go 保留 finish_reason）
 	if content == "" && reasoningContent == "" && len(toolCalls) == 0 && finishReason == llmschema.FinishReasonNull {
 		return nil
@@ -568,7 +568,7 @@ func (c *InferenceAffinityModelClient) parseStreamChunk(
 
 // buildInferenceAffinityUsageMetadata 构建 InferenceAffinity 的 usage 元数据。
 //
-// 对齐 Python InferenceAffinityModelClient: 仅包含 token 数，不包含费用信息，
+// Python: InferenceAffinityModelClient: 仅包含 token 数，不包含费用信息，
 // 不包含 cache_tokens（对齐 Python InferenceAffinity._parse_stream_chunk 中的 usage 构建）。
 func buildInferenceAffinityUsageMetadata(
 	usage *openai.ResponseUsage,
@@ -589,7 +589,7 @@ func buildInferenceAffinityUsageMetadata(
 //  2. 对转换后的消息做 sanitizeToolCalls（只保留标准字段，强制 type="function"）
 //  3. 包装为 Dicts 模式回传（Dicts 模式直接透传，零转换开销）
 //
-// 对应 Python: InferenceAffinityModelClient._build_and_sanitize_params()
+// Python: InferenceAffinityModelClient._build_and_sanitize_params()
 func (c *InferenceAffinityModelClient) sanitizeMessages(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {
@@ -611,7 +611,7 @@ func (c *InferenceAffinityModelClient) sanitizeMessages(
 // 从 Extra 中读取 session_id 和 enable_cache_sharing，
 // 满足条件时注入 cache_sharing=true 和 cache_salt=session_id。
 //
-// 对应 Python: InferenceAffinityModelClient._build_and_sanitize_params() 中的 cache 逻辑
+// Python: InferenceAffinityModelClient._build_and_sanitize_params() 中的 cache 逻辑
 func (c *InferenceAffinityModelClient) injectCacheOptions(
 	extra map[string]any,
 	originalOpts []model_clients.InvokeOption,
@@ -669,7 +669,7 @@ func (c *InferenceAffinityModelClient) injectCacheStreamOptions(
 
 // buildReleaseRequestBody 构建 Release 请求体。
 //
-// 对应 Python: InferenceAffinityModelClient.release() 中的 release_params 构建
+// Python: InferenceAffinityModelClient.release() 中的 release_params 构建
 func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 	params *model_clients.ReleaseParams,
 ) (map[string]any, error) {
@@ -767,7 +767,7 @@ func (c *InferenceAffinityModelClient) buildReleaseHTTPClient(
 //
 // 原地修改 messages 中的 tool_calls 字段。
 //
-// 对应 Python: InferenceAffinityModelClient._sanitize_tool_calls()
+// Python: InferenceAffinityModelClient._sanitize_tool_calls()
 func (c *InferenceAffinityModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {
 		// 仅处理 assistant 消息

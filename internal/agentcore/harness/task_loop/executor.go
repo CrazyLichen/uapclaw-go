@@ -22,7 +22,7 @@ import (
 // TaskLoopEventExecutor 任务循环事件执行器。
 // 实现 modules.TaskExecutor 接口，将深层 Agent 的 ReAct 循环
 // 封装为 Controller 领域的标准任务执行流程。
-// 对齐 Python: TaskLoopEventExecutor
+// Python: TaskLoopEventExecutor
 type TaskLoopEventExecutor struct {
 	// deps 任务执行器依赖
 	deps *modules.TaskExecutorDependencies
@@ -42,7 +42,7 @@ var _ modules.TaskExecutor = (*TaskLoopEventExecutor)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskLoopEventExecutor 创建任务循环事件执行器。
-// 对齐 Python: TaskLoopEventExecutor.__init__
+// Python: TaskLoopEventExecutor.__init__
 func NewTaskLoopEventExecutor(deps *modules.TaskExecutorDependencies, provider interfaces.DeepAgentInterface) *TaskLoopEventExecutor {
 	return &TaskLoopEventExecutor{
 		deps:     deps,
@@ -53,7 +53,7 @@ func NewTaskLoopEventExecutor(deps *modules.TaskExecutorDependencies, provider i
 // ExecuteAbility 执行任务，返回输出分片 channel。
 // 17 步流程：获取 Agent → 查询任务 → 构建查询 → 加载状态/计划 →
 // 构建迭代输入 → 触发前置回调 → 注入 steering 队列 → 调用 ReActAgent → 触发后置回调 → 发送结果。
-// 对齐 Python: TaskLoopEventExecutor.execute_ability
+// Python: TaskLoopEventExecutor.execute_ability
 func (e *TaskLoopEventExecutor) ExecuteAbility(
 	ctx context.Context,
 	taskID string,
@@ -119,7 +119,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 5：获取 conversationID
-	// 对齐 Python: cid = session.get_session_id() (line 119，在 is_follow_up 之前)
+	// Python: cid = session.get_session_id() (line 119，在 is_follow_up 之前)
 	cid := sess.GetSessionID()
 
 	// 步骤 6：判断是否为 follow-up
@@ -163,7 +163,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	loopEvent, _ := cschema.FromUserInput(query)
 
 	// 步骤 10：构建迭代输入和回调上下文
-	// 对齐 Python: iter_inputs = TaskIterationInputs(query=query, ...)
+	// Python: iter_inputs = TaskIterationInputs(query=query, ...)
 	iterInputs := &agentinterfaces.TaskIterationInputs{
 		Iteration:      iteration,
 		LoopEvent:      loopEvent,
@@ -171,7 +171,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		Query:          query,
 		IsFollowUp:     isFollowUp,
 	}
-	// 对齐 Python: AgentCallbackContext(agent=agent, inputs=iter_inputs, session=session)
+	// Python: AgentCallbackContext(agent=agent, inputs=iter_inputs, session=session)
 	// 运行时 provider 为 *DeepAgent，满足 BaseAgent 接口
 	var baseAgent agentinterfaces.BaseAgent
 	if ba, ok := e.provider.(agentinterfaces.BaseAgent); ok {
@@ -200,7 +200,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 13：确定有效查询
-	// 对齐 Python: effective_query = raw_input or iter_inputs.query or query
+	// Python: effective_query = raw_input or iter_inputs.query or query
 	var effectiveQuery any = query
 	if rawInput != nil {
 		effectiveQuery = rawInput
@@ -212,7 +212,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	effective := map[string]any{
 		"query": effectiveQuery,
 	}
-	// 对齐 Python: if cid: effective["conversation_id"] = cid
+	// Python: if cid: effective["conversation_id"] = cid
 	if cid != "" {
 		effective["conversation_id"] = cid
 	}
@@ -223,7 +223,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		if rc, ok := task.Metadata["run_context"]; ok {
 			effective["run_context"] = rc
 		}
-		// 对齐 Python: _streaming=True 传递给 ReActAgent.invoke
+		// Python: _streaming=True 传递给 ReActAgent.invoke
 		// Python 中 task_loop_event_executor 始终传 _streaming=True，
 		// [Go 扩展] Go 特有 isStreaming 参数，用于区分 invoke/stream 调用模式，
 		if sv, ok := task.Metadata["_streaming"]; ok {
@@ -284,7 +284,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 
 		// 检查是否被中断（interrupt），中断时跳过 MarkCompleted
-		// 对齐 Python: result.get("result_type") != "interrupt"
+		// Python: result.get("result_type") != "interrupt"
 		resultType := resultMap["result_type"]
 		if resultType != "interrupt" {
 			if e.getPlanTask(state, taskID) != nil {
@@ -351,25 +351,25 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 }
 
 // CanPause 检查任务是否可暂停。深层 Agent 任务不支持暂停。
-// 对齐 Python: TaskLoopEventExecutor.can_pause
+// Python: TaskLoopEventExecutor.can_pause
 func (e *TaskLoopEventExecutor) CanPause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, string, error) {
 	return false, "深层 Agent 任务不支持暂停", nil
 }
 
 // Pause 暂停任务。深层 Agent 任务不支持暂停，始终返回 false。
-// 对齐 Python: TaskLoopEventExecutor.pause
+// Python: TaskLoopEventExecutor.pause
 func (e *TaskLoopEventExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
 	return false, nil
 }
 
 // CanCancel 检查任务是否可取消。深层 Agent 任务始终可取消。
-// 对齐 Python: TaskLoopEventExecutor.can_cancel
+// Python: TaskLoopEventExecutor.can_cancel
 func (e *TaskLoopEventExecutor) CanCancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, string, error) {
 	return true, "", nil
 }
 
 // Cancel 取消任务：标记计划任务为已取消 + 请求中止循环。
-// 对齐 Python: TaskLoopEventExecutor.cancel
+// Python: TaskLoopEventExecutor.cancel
 func (e *TaskLoopEventExecutor) Cancel(_ context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error) {
 	state := e.getState(sess)
 	if e.getPlanTask(state, taskID) != nil {
@@ -395,14 +395,14 @@ func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *module
 
 // ExtractInteractiveInput 从 InputEvent 提取交互式输入。
 // 仅从 JsonDataFrame.data["query"] 中提取 *InteractiveInput（中断恢复路径）。
-// 对齐 Python: TaskLoopEventExecutor._extract_interactive_input
+// Python: TaskLoopEventExecutor._extract_interactive_input
 // Python 不从 TextDataFrame 构造 InteractiveInput，TextDataFrame 走纯字符串路径。
 func ExtractInteractiveInput(event *cschema.InputEvent) *interaction.InteractiveInput {
 	if event == nil || len(event.InputData) == 0 {
 		return nil
 	}
 	for _, df := range event.InputData {
-		// 对齐 Python: data.get("query"), isinstance(query, InteractiveInput)
+		// Python: data.get("query"), isinstance(query, InteractiveInput)
 		if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
 			if q, ok := jsonDF.Data["query"]; ok {
 				if ii, ok := q.(*interaction.InteractiveInput); ok {
@@ -417,7 +417,7 @@ func ExtractInteractiveInput(event *cschema.InputEvent) *interaction.Interactive
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getState 从会话加载 DeepAgentState。
-// 对齐 Python: TaskLoopEventExecutor._get_state
+// Python: TaskLoopEventExecutor._get_state
 func (e *TaskLoopEventExecutor) getState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return e.provider.LoadState(sess)
 }
@@ -432,7 +432,7 @@ func (e *TaskLoopEventExecutor) getPlanTask(state *hschema.DeepAgentState, taskI
 
 // isSensitive 读取 IS_SENSITIVE 环境变量，判断是否为敏感模式。
 // 默认为敏感模式（true），IS_SENSITIVE=false 时为非敏感模式。
-// 对齐 Python: UserConfig.is_sensitive() + base_client.go 已有模式
+// Python: UserConfig.is_sensitive() + base_client.go 已有模式
 func isSensitive() bool {
 	if v := os.Getenv("IS_SENSITIVE"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {

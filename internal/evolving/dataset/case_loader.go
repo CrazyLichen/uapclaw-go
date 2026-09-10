@@ -9,7 +9,7 @@ import (
 
 // CaseLoader Case 容器，支持拆分和打乱。
 //
-// 对应 Python: openjiuwen/agent_evolving/dataset/case_loader.py CaseLoader
+// Python: openjiuwen/agent_evolving/dataset/case_loader.py CaseLoader
 type CaseLoader struct {
 	// cases 内部样本列表
 	cases []Case
@@ -47,7 +47,7 @@ func (cl *CaseLoader) Len() int {
 //
 // ratio 为训练集占比（0.0-1.0），seed 为随机种子（默认 0），
 // 返回 (trainLoader, valLoader)。
-// 对齐 Python: CaseLoader.split(ratio, seed=0) — 内部先 shuffle_cases 再分割。
+// Python: CaseLoader.split(ratio, seed=0) — 内部先 shuffle_cases 再分割。
 func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoader, error) {
 	if ratio < 0.0 || ratio > 1.0 {
 		return nil, nil, fmt.Errorf("ratio 必须在 [0.0, 1.0] 范围内，当前值: %f", ratio)
@@ -56,7 +56,7 @@ func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoa
 		return NewCaseLoader(nil), NewCaseLoader(nil), nil
 	}
 
-	// 对齐 Python: shuffle_cases(self._cases, seed) — 先打乱再分割
+	// Python: shuffle_cases(self._cases, seed) — 先打乱再分割
 	s := int64(0)
 	if len(seed) > 0 {
 		s = seed[0]
@@ -74,7 +74,7 @@ func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoa
 //
 // seed 为随机种子，传入则可复现（对齐 Python shuffle_cases(cases, seed)），
 // 不传则使用全局随机源（不可复现）。
-// 对应 Python: shuffle_cases(cases, seed=0)
+// Python: shuffle_cases(cases, seed=0)
 func (cl *CaseLoader) ShuffleCases(seed ...int64) {
 	if len(seed) > 0 {
 		rng := rand.New(rand.NewPCG(uint64(seed[0]), uint64(seed[0])))
@@ -90,7 +90,7 @@ func (cl *CaseLoader) ShuffleCases(seed ...int64) {
 
 // ShuffledCopy 返回打乱后的副本（不修改原列表），使用指定种子保证可复现。
 //
-// 对齐 Python: shuffle_cases(cases, seed=0) — random.Random(seed).shuffle(copy)
+// Python: shuffle_cases(cases, seed=0) — random.Random(seed).shuffle(copy)
 func (cl *CaseLoader) ShuffledCopy(seed int64) []Case {
 	shuffled := make([]Case, len(cl.cases))
 	copy(shuffled, cl.cases)

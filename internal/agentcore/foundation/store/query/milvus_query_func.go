@@ -15,7 +15,7 @@ import (
 
 // milvusDef Milvus 查询语言定义
 //
-// 对应 Python: milvus_def
+// Python: milvus_def
 var milvusDef = QueryLanguageDefinition{
 	Comparison: milvusComparisonFilter,
 	Range:      milvusRangeFilter,
@@ -33,7 +33,7 @@ var milvusDef = QueryLanguageDefinition{
 
 // milvusComparisonFilter 将比较表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_comparison_filter()
+// Python: milvus_comparison_filter()
 func milvusComparisonFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ComparisonExpr)
 	if _, ok := e.Value.(string); ok {
@@ -44,7 +44,7 @@ func milvusComparisonFilter(expr QueryExpr) (any, error) {
 
 // milvusRangeFilter 将范围表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_range_filter()
+// Python: milvus_range_filter()
 func milvusRangeFilter(expr QueryExpr) (any, error) {
 	e := expr.(*RangeExpr)
 	switch strings.ToLower(e.Operator) {
@@ -90,7 +90,7 @@ func milvusRangeFilter(expr QueryExpr) (any, error) {
 
 // milvusArithmeticFilter 将算术表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_arithmetic_filter()
+// Python: milvus_arithmetic_filter()
 func milvusArithmeticFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ArithmeticExpr)
 	return fmt.Sprintf("%s %s %v %s %v",
@@ -100,7 +100,7 @@ func milvusArithmeticFilter(expr QueryExpr) (any, error) {
 
 // milvusNullFilter 将空值表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_null_filter()
+// Python: milvus_null_filter()
 func milvusNullFilter(expr QueryExpr) (any, error) {
 	e := expr.(*NullExpr)
 	if e.IsNull {
@@ -111,7 +111,7 @@ func milvusNullFilter(expr QueryExpr) (any, error) {
 
 // milvusJSONFilter 将 JSON 表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_json_filter()
+// Python: milvus_json_filter()
 func milvusJSONFilter(expr QueryExpr) (any, error) {
 	e := expr.(*JSONExpr)
 	if _, ok := e.Value.(string); ok {
@@ -124,7 +124,7 @@ func milvusJSONFilter(expr QueryExpr) (any, error) {
 
 // milvusArrayFilter 将数组表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_array_filter()
+// Python: milvus_array_filter()
 func milvusArrayFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ArrayExpr)
 	if e.Index != nil {
@@ -145,7 +145,7 @@ func milvusArrayFilter(expr QueryExpr) (any, error) {
 
 // milvusLogicalFilter 将逻辑表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_logical_filter()
+// Python: milvus_logical_filter()
 func milvusLogicalFilter(expr QueryExpr) (any, error) {
 	e := expr.(*LogicalExpr)
 	switch strings.ToLower(e.Operator) {
@@ -178,7 +178,7 @@ func milvusLogicalFilter(expr QueryExpr) (any, error) {
 
 // milvusTextMatchFilter 将文本匹配表达式转换为 Milvus 过滤字符串
 //
-// 对应 Python: milvus_text_match_filter()
+// Python: milvus_text_match_filter()
 func milvusTextMatchFilter(expr QueryExpr) (any, error) {
 	e := expr.(*MatchExpr)
 	pattern := e.Value

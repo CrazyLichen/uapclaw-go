@@ -19,7 +19,7 @@ import (
 
 // ExperienceScorer LLM 驱动的经验评分和整理器。
 //
-// 对应 Python: ExperienceScorer
+// Python: ExperienceScorer
 type ExperienceScorer struct {
 	llm            *llm.Model
 	model          string
@@ -51,13 +51,13 @@ const (
 
 var (
 	// EvaluateLLMPolicy 评估 LLM 调用策略默认值
-	// 对应 Python: EVALUATE_LLM_POLICY
+	// Python: EVALUATE_LLM_POLICY
 	EvaluateLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 60, TotalBudgetSecs: 120, MaxAttempts: 2,
 		BackoffBaseSecs: 1.0, RetryEmptyResponse: true,
 	}
 	// SimplifyLLMPolicy 整理 LLM 调用策略默认值
-	// 对应 Python: SIMPLIFY_LLM_POLICY
+	// Python: SIMPLIFY_LLM_POLICY
 	SimplifyLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 150, TotalBudgetSecs: 300, MaxAttempts: 2,
 		BackoffBaseSecs: 1.0, RetryEmptyResponse: true,
@@ -73,7 +73,7 @@ var (
 // Go raw string 不能包含反引号字符，提示词中的 ```json 代码块标记用 bt 常量拼接
 
 // ExperienceEvalPromptCN 中文经验评估提示词
-// 对应 Python: EXPERIENCE_EVAL_PROMPT_CN
+// Python: EXPERIENCE_EVAL_PROMPT_CN
 // 注意：Python 中 {{ 在 .format() 表示 literal {，Go 中直接用 {；
 // Python 中 ```json 的反引号在 Go raw string 中不可表示，用常量拼接
 var ExperienceEvalPromptCN = `你是一个经验评估专家。根据对话片段，评估之前展示给 Agent 的经验是否被有效使用。
@@ -107,7 +107,7 @@ var ExperienceEvalPromptCN = `你是一个经验评估专家。根据对话片�
 只输出 JSON，不要其他内容。`
 
 // ExperienceEvalPromptEN 英文经验评估提示词
-// 对应 Python: EXPERIENCE_EVAL_PROMPT_EN
+// Python: EXPERIENCE_EVAL_PROMPT_EN
 var ExperienceEvalPromptEN = `You are an experience evaluation expert. Based on the conversation snippet, evaluate whether the previously presented experiences were effectively used by the Agent.
 
 ## Experiences Presented to Agent
@@ -139,11 +139,11 @@ Output a JSON array, one object per experience:
 Output only JSON, no other content.`
 
 // ExperienceEvalPrompt 双语经验评估提示词映射
-// 对应 Python: EXPERIENCE_EVAL_PROMPT
+// Python: EXPERIENCE_EVAL_PROMPT
 var ExperienceEvalPrompt = map[string]string{"cn": ExperienceEvalPromptCN, "en": ExperienceEvalPromptEN}
 
 // SimplifyPromptCN 中文经验整理提示词
-// 对应 Python: SIMPLIFY_PROMPT_CN
+// Python: SIMPLIFY_PROMPT_CN
 var SimplifyPromptCN = `你是一个经验库维护专家。根据当前经验的评分和使用情况，生成整理建议。
 
 ## Skill 名称
@@ -184,7 +184,7 @@ var SimplifyPromptCN = `你是一个经验库维护专家。根据当前经验�
 只输出 JSON，不要其他内容。`
 
 // SimplifyPromptEN 英文经验整理提示词
-// 对应 Python: SIMPLIFY_PROMPT_EN
+// Python: SIMPLIFY_PROMPT_EN
 var SimplifyPromptEN = `You are an experience library maintenance expert. Based on current experience scores and usage, generate organization suggestions.
 
 ## Skill Name
@@ -225,7 +225,7 @@ Output a JSON array:
 Output only JSON, no other content.`
 
 // SimplifyPrompt 双语经验整理提示词映射
-// 对应 Python: SIMPLIFY_PROMPT
+// Python: SIMPLIFY_PROMPT
 var SimplifyPrompt = map[string]string{"cn": SimplifyPromptCN, "en": SimplifyPromptEN}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -234,7 +234,7 @@ var SimplifyPrompt = map[string]string{"cn": SimplifyPromptCN, "en": SimplifyPro
 //
 // llmModel 不能为 nil（对应 Python 中 Model 为必填参数，非 Optional），
 // 若传入 nil 则返回错误。
-// 对应 Python: ExperienceScorer.__init__()
+// Python: ExperienceScorer.__init__()
 func NewExperienceScorer(
 	llmModel *llm.Model,
 	model string,
@@ -266,7 +266,7 @@ func NewExperienceScorer(
 //
 // stats 为 nil → 返回 0.5；total == 0 → 返回 0.5；
 // 否则 (TimesPositive + 1) / (total + 2)。
-// 对应 Python: calc_effectiveness()
+// Python: calc_effectiveness()
 func CalcEffectiveness(stats *checkpointing.UsageStats) float64 {
 	if stats == nil {
 		return 0.5
@@ -282,7 +282,7 @@ func CalcEffectiveness(stats *checkpointing.UsageStats) float64 {
 //
 // stats 为 nil → 返回 0.5；TimesPresented == 0 → 返回 0.5；
 // 否则 TimesUsed / TimesPresented。
-// 对应 Python: calc_utilization()
+// Python: calc_utilization()
 func CalcUtilization(stats *checkpointing.UsageStats) float64 {
 	if stats == nil {
 		return 0.5
@@ -298,7 +298,7 @@ func CalcUtilization(stats *checkpointing.UsageStats) float64 {
 // timestamp 空 → 返回 0.5；解析失败 → 返回 0.5；
 // 衰减 = 0.5 * 2^(-daysOld/90)，新鲜度 = 0.5 + 衰减；
 // 版本不匹配 → *= 0.7；clamp 到 [0,1]。
-// 对应 Python: calc_freshness()
+// Python: calc_freshness()
 func CalcFreshness(record *checkpointing.EvolutionRecord, currentSkillVersion *string) float64 {
 	if record.Timestamp == "" {
 		return 0.5
@@ -312,11 +312,11 @@ func CalcFreshness(record *checkpointing.EvolutionRecord, currentSkillVersion *s
 	now := time.Now().UTC()
 	daysOld := int(now.Sub(recordTime).Hours() / 24)
 
-	// 对齐 Python: decay_factor = 0.5 * 2^(-days_old / half_life)
+	// Python: decay_factor = 0.5 * 2^(-days_old / half_life)
 	decayFactor := 0.5 * math.Pow(2, -float64(daysOld)/FreshnessHalfLifeDays)
 	freshness := 0.5 + decayFactor // 范围: 0.5 ~ 1.0
 
-	// 对齐 Python: version staleness penalty
+	// Python: version staleness penalty
 	if currentSkillVersion != nil && *currentSkillVersion != "" &&
 		record.SkillVersion != nil && *record.SkillVersion != "" {
 		if *record.SkillVersion != *currentSkillVersion {
@@ -330,7 +330,7 @@ func CalcFreshness(record *checkpointing.EvolutionRecord, currentSkillVersion *s
 // CalcScore 计算综合评分 WE*e + WU*u + WF*f。
 //
 // stats 为 nil → 初始化零值；然后分别计算 e/u/f。
-// 对应 Python: calc_score()
+// Python: calc_score()
 func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *string) float64 {
 	stats := record.UsageStats
 	if stats == nil {
@@ -349,8 +349,8 @@ func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *strin
 // 如果 record.UsageStats == nil → 初始化零值；
 // 按 evalResult["used/positive/negative"] 更新 TimesUsed/TimesPositive/TimesNegative（bool 类型断言）；
 // 设置 LastEvaluatedAt = time.Now().UTC().Format(time.RFC3339Nano)；
-// 对应 Python: record.Score = CalcScore(record, currentSkillVersion)
-// 对应 Python: update_score()
+// Python: record.Score = CalcScore(record, currentSkillVersion)
+// Python: update_score()
 func UpdateScore(
 	record *checkpointing.EvolutionRecord,
 	evalResult map[string]any,
@@ -382,13 +382,13 @@ func UpdateScore(
 // Evaluate 评估展示经验是否被有效使用。
 //
 // 空 records → 返回空 slice, nil；
-// 对应 Python: formatted = formatPresentedExperiences(presentedRecords)
+// Python: formatted = formatPresentedExperiences(presentedRecords)
 // 选择语言模板，替换 {presented_experiences} 和 {conversation_snippet}（snippet 限制 4000 字符）；
 // 调用 llm_resilience.InvokeTextWithRetry + WithIsResultUsable(parseLLMJSON != nil)；
 // err != nil → logger.Error 并返回空 slice, nil；
 // parseLLMJSON nil → logger.Warn 并返回空 slice, nil；
 // 返回 results, nil。
-// 对应 Python: ExperienceScorer.evaluate()
+// Python: ExperienceScorer.evaluate()
 func (s *ExperienceScorer) Evaluate(
 	ctx context.Context,
 	conversationSnippet string,
@@ -400,7 +400,7 @@ func (s *ExperienceScorer) Evaluate(
 
 	formatted := formatPresentedExperiences(presentedRecords)
 
-	// 对齐 Python: 选择语言模板，替换占位符
+	// Python: 选择语言模板，替换占位符
 	template, ok := ExperienceEvalPrompt[s.language]
 	if !ok {
 		template = ExperienceEvalPrompt["cn"]
@@ -408,7 +408,7 @@ func (s *ExperienceScorer) Evaluate(
 	prompt := strings.ReplaceAll(template, "{presented_experiences}", formatted)
 	prompt = strings.ReplaceAll(prompt, "{conversation_snippet}", truncateString(conversationSnippet, 4000))
 
-	// 对齐 Python: invoke_text_with_retry + is_result_usable
+	// Python: invoke_text_with_retry + is_result_usable
 	raw, err := llm_resilience.InvokeTextWithRetry(
 		ctx, s.llm, s.model, prompt, s.evaluatePolicy,
 		llm_resilience.WithIsResultUsable(func(text string) bool {
@@ -437,7 +437,7 @@ func (s *ExperienceScorer) Evaluate(
 // Simplify 生成经验库整理建议。
 //
 // 空 records → logger.Info 并返回空 slice, nil；
-// 对应 Python: formatted = formatScoredExperiences(records)
+// Python: formatted = formatScoredExperiences(records)
 // 选择语言模板，替换 {skill_name}/{skill_summary}(限1000)/{scored_experiences}；
 // userIntent != nil → prompt += "\n\n**用户意图**: " + *userIntent；
 // 记录 simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）；
@@ -445,9 +445,9 @@ func (s *ExperienceScorer) Evaluate(
 // err != nil → logger.Error（elapsed, skill, records, prompt_chars, error）并返回空 slice, nil；
 // 记录 simplify 完成日志（elapsed, skill, response_chars）；
 // parseLLMJSON nil → logger.Warn 并返回空 slice, nil；
-// 对应 Python: logger.Info(skill, actions_count)
+// Python: logger.Info(skill, actions_count)
 // 返回 actions, nil。
-// 对应 Python: ExperienceScorer.simplify()
+// Python: ExperienceScorer.simplify()
 func (s *ExperienceScorer) Simplify(
 	ctx context.Context,
 	skillName string,
@@ -464,7 +464,7 @@ func (s *ExperienceScorer) Simplify(
 
 	formatted := formatScoredExperiences(records)
 
-	// 对齐 Python: 选择语言模板，替换占位符
+	// Python: 选择语言模板，替换占位符
 	template, ok := SimplifyPrompt[s.language]
 	if !ok {
 		template = SimplifyPrompt["cn"]
@@ -473,12 +473,12 @@ func (s *ExperienceScorer) Simplify(
 	prompt = strings.ReplaceAll(prompt, "{skill_summary}", truncateString(skillSummary, 1000))
 	prompt = strings.ReplaceAll(prompt, "{scored_experiences}", formatted)
 
-	// 对齐 Python: if user_intent: prompt += f"\n\n**用户意图**: {user_intent}"
+	// Python: if user_intent: prompt += f"\n\n**用户意图**: {user_intent}"
 	if userIntent != nil && *userIntent != "" {
 		prompt += fmt.Sprintf("\n\n**用户意图**: %s", *userIntent)
 	}
 
-	// 对齐 Python: simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）
+	// Python: simplify 开始日志（skill_name, records_count, prompt_chars, attempt_timeout, total_budget, max_attempts）
 	logger.Info(logComponent).
 		Str("skill_name", skillName).
 		Int("records_count", len(records)).
@@ -536,7 +536,7 @@ func (s *ExperienceScorer) Simplify(
 //
 // llmModel 不能为 nil（与 NewExperienceScorer 一致），若传入 nil 则直接返回不更新，
 // 避免 scorer 进入不可用状态。
-// 对应 Python: ExperienceScorer.update_llm()
+// Python: ExperienceScorer.update_llm()
 func (s *ExperienceScorer) UpdateLLM(llmModel *llm.Model, model string) {
 	if llmModel == nil {
 		return
@@ -550,7 +550,7 @@ func (s *ExperienceScorer) UpdateLLM(llmModel *llm.Model, model string) {
 // formatPresentedExperiences 格式化展示经验用于提示词。
 //
 // 遍历 records，每条 "[record.ID] record.Change.Content[:200]"，用 "\n" 连接。
-// 对应 Python: ExperienceScorer._format_presented_experiences()
+// Python: ExperienceScorer._format_presented_experiences()
 func formatPresentedExperiences(records []checkpointing.EvolutionRecord) string {
 	lines := make([]string, 0, len(records))
 	for _, record := range records {
@@ -565,7 +565,7 @@ func formatPresentedExperiences(records []checkpointing.EvolutionRecord) string 
 // 遍历 records，stats = record.UsageStats（nil → 零值）；
 // 每条 "[record.ID] score=%.2f | presented=stats.TimesPresented used=stats.TimesUsed | record.Change.Content[:150]"；
 // 用 "\n" 连接。
-// 对应 Python: ExperienceScorer._format_scored_experiences()
+// Python: ExperienceScorer._format_scored_experiences()
 func formatScoredExperiences(records []checkpointing.EvolutionRecord) string {
 	lines := make([]string, 0, len(records))
 	for _, record := range records {
@@ -592,7 +592,7 @@ func formatScoredExperiences(records []checkpointing.EvolutionRecord) string {
 // 步骤 5: strip（去除前后空白）
 // 6. json.Unmarshal → []map → 返回；单个 map → 包装为 slice；否则 nil
 // 7. 失败 → regexp 提取 [\s\S]* → 再次 json.Unmarshal → list 返回
-// 对应 Python: ExperienceScorer._parse_llm_json()
+// Python: ExperienceScorer._parse_llm_json()
 func parseLLMJSON(raw string) []map[string]any {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -656,8 +656,8 @@ func convertSliceToMapSlice(slice []any) []map[string]any {
 
 // parseTimestamp 解析 UTC ISO 时间戳，对齐 Python 的 datetime.fromisoformat。
 //
-// 对齐 Python: record_time = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
-// 对齐 Python: if record_time.tzinfo is None: record_time = record_time.replace(tzinfo=timezone.utc)
+// Python: record_time = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
+// Python: if record_time.tzinfo is None: record_time = record_time.replace(tzinfo=timezone.utc)
 func parseTimestamp(ts string) (time.Time, error) {
 	s := strings.ReplaceAll(ts, "Z", "+00:00")
 	// 先尝试标准格式（含时区）

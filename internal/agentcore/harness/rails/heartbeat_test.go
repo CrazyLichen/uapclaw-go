@@ -164,7 +164,7 @@ func TestHeartbeatRail_Init(t *testing.T) {
 		deepConfig:    deepConfig,
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	// 验证 workspace 已设置
@@ -181,7 +181,7 @@ func TestHeartbeatRail_Init_无DeepConfig(t *testing.T) {
 	agent := newFakeDeepAgentForHeartbeat()
 	// deepConfig 默认为 nil
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	// workspace 未设置
@@ -195,7 +195,7 @@ func TestHeartbeatRail_Init_非DeepAgent时跳过(t *testing.T) {
 	r := NewHeartbeatRail()
 	agent := newFakeBaseAgent() // 不实现 DeepAgentInterface
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 }
 

@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AddColumnOperation 添加列操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (AddColumnOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (AddColumnOperation)
 type AddColumnOperation struct {
 	BaseOperation
 	// Table 目标表名
@@ -26,7 +26,7 @@ type AddColumnOperation struct {
 }
 
 // RenameColumnOperation 重命名列操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (RenameColumnOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (RenameColumnOperation)
 type RenameColumnOperation struct {
 	BaseOperation
 	// Table 目标表名
@@ -41,7 +41,7 @@ type RenameColumnOperation struct {
 func (op *RenameColumnOperation) TypeName() string { return "RenameColumnOperation" }
 
 // UpdateColumnTypeOperation 修改列类型操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateColumnTypeOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateColumnTypeOperation)
 type UpdateColumnTypeOperation struct {
 	BaseOperation
 	// Table 目标表名
@@ -58,7 +58,7 @@ func (op *UpdateColumnTypeOperation) TypeName() string { return "UpdateColumnTyp
 // ==================== 向量操作 ====================
 
 // AddScalarFieldOperation 添加向量标量字段操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (AddScalarFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (AddScalarFieldOperation)
 type AddScalarFieldOperation struct {
 	BaseOperation
 	// DataType 向量数据类型名
@@ -75,7 +75,7 @@ type AddScalarFieldOperation struct {
 func (op *AddScalarFieldOperation) TypeName() string { return "AddScalarFieldOperation" }
 
 // RenameScalarFieldOperation 重命名向量标量字段操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (RenameScalarFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (RenameScalarFieldOperation)
 type RenameScalarFieldOperation struct {
 	BaseOperation
 	// DataType 向量数据类型名
@@ -90,7 +90,7 @@ type RenameScalarFieldOperation struct {
 func (op *RenameScalarFieldOperation) TypeName() string { return "RenameScalarFieldOperation" }
 
 // UpdateScalarFieldTypeOperation 修改向量标量字段类型操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateScalarFieldTypeOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateScalarFieldTypeOperation)
 type UpdateScalarFieldTypeOperation struct {
 	BaseOperation
 	// DataType 向量数据类型名
@@ -105,7 +105,7 @@ type UpdateScalarFieldTypeOperation struct {
 func (op *UpdateScalarFieldTypeOperation) TypeName() string { return "UpdateScalarFieldTypeOperation" }
 
 // UpdateEmbeddingDimensionOperation 更新嵌入维度操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateEmbeddingDimensionOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateEmbeddingDimensionOperation)
 type UpdateEmbeddingDimensionOperation struct {
 	BaseOperation
 	// DataType 向量数据类型名
@@ -127,7 +127,7 @@ func (op *UpdateEmbeddingDimensionOperation) TypeName() string {
 }
 
 // NewUpdateEmbeddingDimensionOperation 创建更新嵌入维度操作，BatchSize 默认 1000 对齐 Python。
-// 对齐 Python: UpdateEmbeddingDimensionOperation(batch_size=1000)
+// Python: UpdateEmbeddingDimensionOperation(batch_size=1000)
 func NewUpdateEmbeddingDimensionOperation(schemaVersion int, dataType, fieldName string, newDimension int) *UpdateEmbeddingDimensionOperation {
 	return &UpdateEmbeddingDimensionOperation{
 		BaseOperation: BaseOperation{Metadata: OperationMetadata{SchemaVersion: schemaVersion}},
@@ -141,11 +141,11 @@ func NewUpdateEmbeddingDimensionOperation(schemaVersion int, dataType, fieldName
 // ==================== KV 操作 ====================
 
 // UpdateKVCallable KV 更新回调函数类型。
-// 对齐 Python: UpdateKVCallable = Callable[[BaseKVStore], Awaitable[None]]
+// Python: UpdateKVCallable = Callable[[BaseKVStore], Awaitable[None]]
 type UpdateKVCallable func(ctx context.Context, kvStore kv.BaseKVStore) error
 
 // UpdateKVOperation KV 更新操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateKVOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateKVOperation)
 type UpdateKVOperation struct {
 	BaseOperation
 	// UpdateFunc 执行 KV 更新的回调函数
@@ -158,11 +158,11 @@ func (op *UpdateKVOperation) TypeName() string { return "UpdateKVOperation" }
 // ==================== 消息操作 ====================
 
 // MessageUpdateCallable 消息更新回调函数类型。
-// 对齐 Python: MessageUpdateCallable = Callable[[BaseMessageStore], Awaitable[None]]
+// Python: MessageUpdateCallable = Callable[[BaseMessageStore], Awaitable[None]]
 type MessageUpdateCallable func(ctx context.Context, store db.BaseMessageStore) error
 
 // UpdateMessageOperation 消息更新操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateMessageOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (UpdateMessageOperation)
 type UpdateMessageOperation struct {
 	BaseOperation
 	// UpdateFunc 执行消息更新的回调函数
@@ -175,7 +175,7 @@ func (op *UpdateMessageOperation) TypeName() string { return "UpdateMessageOpera
 // ==================== 索引操作 ====================
 
 // RenameMemoryDocFieldOperation 索引文档字段重命名操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (RenameMemoryDocFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (RenameMemoryDocFieldOperation)
 type RenameMemoryDocFieldOperation struct {
 	BaseOperation
 	// OldFieldName 原字段名
@@ -188,14 +188,14 @@ type RenameMemoryDocFieldOperation struct {
 func (op *RenameMemoryDocFieldOperation) TypeName() string { return "RenameMemoryDocFieldOperation" }
 
 // TransformMemoryDocFieldOperation 索引文档字段变换操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (TransformMemoryDocFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (TransformMemoryDocFieldOperation)
 type TransformMemoryDocFieldOperation struct {
 	BaseOperation
 	// FieldName 目标字段名
 	FieldName string
 	// TransformFunc 字段值变换函数
 	// 输入输出类型取决于目标字段（如 int→int、float→string），调用方负责类型安全
-	// 对齐 Python: Callable[[Any], Any] — Python 同样不约束输入输出类型
+	// Python: Callable[[Any], Any] — Python 同样不约束输入输出类型
 	TransformFunc func(any) any
 }
 
@@ -205,7 +205,7 @@ func (op *TransformMemoryDocFieldOperation) TypeName() string {
 }
 
 // AddMemoryDocFieldOperation 索引文档字段添加操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (AddMemoryDocFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (AddMemoryDocFieldOperation)
 type AddMemoryDocFieldOperation struct {
 	BaseOperation
 	// FieldName 新字段名
@@ -218,7 +218,7 @@ type AddMemoryDocFieldOperation struct {
 func (op *AddMemoryDocFieldOperation) TypeName() string { return "AddMemoryDocFieldOperation" }
 
 // RemoveMemoryDocFieldOperation 索引文档字段删除操作。
-// 对齐 Python: openjiuwen/core/memory/migration/operation/operations.py (RemoveMemoryDocFieldOperation)
+// Python: openjiuwen/core/memory/migration/operation/operations.py (RemoveMemoryDocFieldOperation)
 type RemoveMemoryDocFieldOperation struct {
 	BaseOperation
 	// FieldName 要删除的字段名
@@ -234,7 +234,7 @@ func (op *RemoveMemoryDocFieldOperation) TypeName() string { return "RemoveMemor
 func (op *AddColumnOperation) TypeName() string { return "AddColumnOperation" }
 
 // NewAddColumnOperation 创建添加列操作，Nullable 默认 true 对齐 Python。
-// 对齐 Python: AddColumnOperation(nullable=True)
+// Python: AddColumnOperation(nullable=True)
 func NewAddColumnOperation(schemaVersion int, table, columnName, columnType string) *AddColumnOperation {
 	return &AddColumnOperation{
 		BaseOperation: BaseOperation{Metadata: OperationMetadata{SchemaVersion: schemaVersion}},

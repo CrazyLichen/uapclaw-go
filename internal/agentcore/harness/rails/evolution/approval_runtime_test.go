@@ -40,7 +40,7 @@ func (f *fakeApprovalManager) RejectRequest(_ context.Context, _ string) (experi
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func TestLookupPendingApprovalSnapshot_Found(t *testing.T) {
-	// 对齐 Python: lookup_pending_approval_snapshot(request_id="req_1", rail_name="skill", action_name="approve")
+	// Python: lookup_pending_approval_snapshot(request_id="req_1", rail_name="skill", action_name="approve")
 	snapshots := PendingApprovalSnapshotStore{
 		"req_1": &experience.PendingChange{SkillName: "my_skill"},
 	}
@@ -55,7 +55,7 @@ func TestLookupPendingApprovalSnapshot_Found(t *testing.T) {
 }
 
 func TestLookupPendingApprovalSnapshot_NotFound(t *testing.T) {
-	// 对齐 Python: lookup_pending_approval_snapshot(request_id="nonexistent", ...) → None
+	// Python: lookup_pending_approval_snapshot(request_id="nonexistent", ...) → None
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
 	pending := rt.LookupPendingApprovalSnapshot("nonexistent", "skill", "approve")
 	if pending != nil {
@@ -64,7 +64,7 @@ func TestLookupPendingApprovalSnapshot_NotFound(t *testing.T) {
 }
 
 func TestApprovePendingRequest_Success(t *testing.T) {
-	// 对齐 Python: approve_pending_request(request_id="req_1", rail_name="skill", action_name="approve") → (pending, result)
+	// Python: approve_pending_request(request_id="req_1", rail_name="skill", action_name="approve") → (pending, result)
 	pendingChange := &experience.PendingChange{SkillName: "my_skill"}
 	snapshots := PendingApprovalSnapshotStore{"req_1": pendingChange}
 	mgr := &fakeApprovalManager{
@@ -88,7 +88,7 @@ func TestApprovePendingRequest_Success(t *testing.T) {
 }
 
 func TestApprovePendingRequest_PartialFailure(t *testing.T) {
-	// 对齐 Python: pending_count > 0 时记录 Warn 日志
+	// Python: pending_count > 0 时记录 Warn 日志
 	pendingChange := &experience.PendingChange{SkillName: "my_skill"}
 	snapshots := PendingApprovalSnapshotStore{"req_1": pendingChange}
 	mgr := &fakeApprovalManager{
@@ -109,7 +109,7 @@ func TestApprovePendingRequest_PartialFailure(t *testing.T) {
 }
 
 func TestApprovePendingRequest_NotFound(t *testing.T) {
-	// 对齐 Python: pending 为 None 时返回 (None, None)
+	// Python: pending 为 None 时返回 (None, None)
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
 	pending, result, err := rt.ApprovePendingRequest(context.Background(), "nonexistent", "skill", "approve")
 	if err != nil {
@@ -144,7 +144,7 @@ func TestApprovePendingRequest_ManagerError(t *testing.T) {
 }
 
 func TestRejectPendingRequest_Success(t *testing.T) {
-	// 对齐 Python: reject_pending_request(request_id="req_1", ...) → (pending, result)
+	// Python: reject_pending_request(request_id="req_1", ...) → (pending, result)
 	pendingChange := &experience.PendingChange{SkillName: "my_skill"}
 	snapshots := PendingApprovalSnapshotStore{"req_1": pendingChange}
 	mgr := &fakeApprovalManager{
@@ -168,7 +168,7 @@ func TestRejectPendingRequest_Success(t *testing.T) {
 }
 
 func TestRejectPendingRequest_NotFound(t *testing.T) {
-	// 对齐 Python: pending 为 None 时返回 (None, None)
+	// Python: pending 为 None 时返回 (None, None)
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
 	pending, result, err := rt.RejectPendingRequest(context.Background(), "nonexistent", "skill", "reject")
 	if err != nil {
@@ -183,7 +183,7 @@ func TestRejectPendingRequest_NotFound(t *testing.T) {
 }
 
 func TestFinalizeStagedEvolutionRequest_RequiresApproval(t *testing.T) {
-	// 对齐 Python: finalize_staged_evolution_request(request, requires_approval=True, emit_approval_request=fn)
+	// Python: finalize_staged_evolution_request(request, requires_approval=True, emit_approval_request=fn)
 	var called bool
 	emitFn := func(_ any) error {
 		called = true
@@ -200,7 +200,7 @@ func TestFinalizeStagedEvolutionRequest_RequiresApproval(t *testing.T) {
 }
 
 func TestFinalizeStagedEvolutionRequest_AutoApproved(t *testing.T) {
-	// 对齐 Python: finalize_staged_evolution_request(request, requires_approval=False, on_auto_approved=fn)
+	// Python: finalize_staged_evolution_request(request, requires_approval=False, on_auto_approved=fn)
 	var called bool
 	autoFn := func(_ any) error {
 		called = true
@@ -217,7 +217,7 @@ func TestFinalizeStagedEvolutionRequest_AutoApproved(t *testing.T) {
 }
 
 func TestFinalizeStagedEvolutionRequest_NilRequest(t *testing.T) {
-	// 对齐 Python L102: if request is None: return None
+	// Python: L102: if request is None: return None
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
 	err := rt.FinalizeStagedEvolutionRequest(nil, true, nil, nil)
 	if err != nil {
@@ -226,7 +226,7 @@ func TestFinalizeStagedEvolutionRequest_NilRequest(t *testing.T) {
 }
 
 func TestFinalizeStagedEvolutionRequest_NoAutoApprovedCallback(t *testing.T) {
-	// 对齐 Python L111: if on_auto_approved is not None → on_auto_approved 为 None 时跳过
+	// Python: L111: if on_auto_approved is not None → on_auto_approved 为 None 时跳过
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
 	err := rt.FinalizeStagedEvolutionRequest("some_request", false, nil, nil)
 	if err != nil {

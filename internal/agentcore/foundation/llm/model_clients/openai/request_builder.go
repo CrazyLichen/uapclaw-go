@@ -33,7 +33,7 @@ const chatCompletionsPath = "/chat/completions"
 //   - 如果同时存在，删除 top_p
 //   - 如果只有 top_p，保留 top_p
 //
-// 对应 Python: OpenAIModelClient._build_request_params() 中的 OpenAI 特有逻辑
+// Python: OpenAIModelClient._build_request_params() 中的 OpenAI 特有逻辑
 func AdjustParamsForOpenAI(params map[string]any, apiBase string) {
 	apiBaseLower := strings.ToLower(apiBase)
 	if !strings.Contains(apiBaseLower, "openai.com") {
@@ -100,7 +100,7 @@ func BuildHTTPRequest(
 // OpenAI SDK 会丢弃未知的顶级参数，vLLM 需要 return_token_ids 在 JSON body 中，
 // 因此将其移入 extra_body 字段。
 //
-// 对应 Python: OpenAIModelClient.invoke() 中的 return_token_ids 处理
+// Python: OpenAIModelClient.invoke() 中的 return_token_ids 处理
 func HandleExtraBody(params map[string]any) {
 	tokenIDs, ok := params["return_token_ids"]
 	if !ok {

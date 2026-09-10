@@ -13,7 +13,7 @@ import (
 
 // Message 消息结构体，描述一次请求/响应/事件的完整信息。
 //
-// 对齐 Python: Message dataclass (message.py)，
+// Python: Message dataclass (message.py)，
 // 核心字段与 Python 一一对应，可选字段按类别分组。
 type Message struct {
 	// ─── 必填字段 ───

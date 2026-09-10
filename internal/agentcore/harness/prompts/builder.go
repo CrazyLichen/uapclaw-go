@@ -24,7 +24,7 @@ type SystemPromptBuilder struct {
 
 const (
 	// DefaultLanguage 默认提示词语言
-	// 对应 Python: DEFAULT_LANGUAGE = "cn"
+	// Python: DEFAULT_LANGUAGE = "cn"
 	DefaultLanguage = "cn"
 )
 
@@ -32,11 +32,11 @@ const (
 
 var (
 	// SupportedLanguages 支持的语言列表
-	// 对应 Python: SUPPORTED_LANGUAGES = ("cn", "en")
+	// Python: SUPPORTED_LANGUAGES = ("cn", "en")
 	SupportedLanguages = []string{"cn", "en"}
 
 	// MinimalSections 精简模式下保留的节名称集合
-	// 对应 Python: SystemPromptBuilder._MINIMAL_SECTIONS
+	// Python: SystemPromptBuilder._MINIMAL_SECTIONS
 	MinimalSections = map[string]bool{
 		sections.SectionIdentity: true,
 		sections.SectionSafety:   true,
@@ -114,7 +114,7 @@ func ResolveLanguage(configLanguage string) string {
 
 // ResolveMode 从配置字符串解析 PromptMode，空串默认为 PromptModeFull。
 //
-// 对应 Python: resolve_mode()
+// Python: resolve_mode()
 func ResolveMode(configMode string) hschema.PromptMode {
 	if configMode == "" {
 		return hschema.PromptModeFull
@@ -130,7 +130,7 @@ func ResolveMode(configMode string) hschema.PromptMode {
 
 // isSupportedLanguage 检查语言是否在支持列表中。
 //
-// 对应 Python: config_language in SUPPORTED_LANGUAGES
+// Python: config_language in SUPPORTED_LANGUAGES
 func isSupportedLanguage(lang string) bool {
 	for _, supported := range SupportedLanguages {
 		if lang == supported {

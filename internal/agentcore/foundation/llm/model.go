@@ -15,7 +15,7 @@ import (
 
 // SessionLike 会话最小接口，用于 BuildKVCacheInvokeKwargs 获取 session_id。
 //
-// 对应 Python: Model.build_kv_cache_invoke_kwargs() 中 session.get_session_id()
+// Python: Model.build_kv_cache_invoke_kwargs() 中 session.get_session_id()
 type SessionLike interface {
 	// GetSessionID 返回会话唯一标识。
 	GetSessionID() string
@@ -28,7 +28,7 @@ type SessionLike interface {
 //  2. 在 Invoke/Stream 前后触发 CallbackFramework 回调事件
 //  3. 对外暴露统一的 LLM 调用接口
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model.py (Model)
+// Python: openjiuwen/core/foundation/llm/model.py (Model)
 //
 // 使用方式：
 //
@@ -61,7 +61,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewModel 创建 Model 实例。
 //
-// 对应 Python: Model.__init__(model_client_config, model_config)
+// Python: Model.__init__(model_client_config, model_config)
 //
 // 创建流程：
 //  1. 校验 clientConfig 非空
@@ -107,7 +107,7 @@ func WithCallbackFramework(fw *callback.CallbackFramework) ModelOption {
 
 // Invoke 非流式调用 LLM。
 //
-// 对应 Python: Model.invoke()
+// Python: Model.invoke()
 // 执行顺序：① transform_io input → ② emit_before → client.Invoke → ③ transform_io output → ④ emit_after
 func (m *Model) Invoke(
 	ctx context.Context,
@@ -199,10 +199,10 @@ func (m *Model) Invoke(
 
 // Stream 流式调用 LLM。
 //
-// 对应 Python: Model.stream()
+// Python: Model.stream()
 // 执行顺序：① transform_io input → ② emit_before → client.Stream → per-item { ③ transform_io output → ④ emit_after }
 //
-// 对齐 Python 装饰器链：
+// Python: 装饰器链：
 //
 //	Python: fn = _fw.emit_before(LLM_STREAM_INPUT)(fn)
 //	Python: fn = _fw.transform_io(LLM_STREAM_INPUT, LLM_STREAM_OUTPUT)(fn)
@@ -309,7 +309,7 @@ func (m *Model) Stream(
 //
 // 仅 InferenceAffinity 客户端支持 KV Cache 释放，其他客户端返回不支持错误。
 //
-// 对应 Python: Model.release()
+// Python: Model.release()
 func (m *Model) Release(ctx context.Context, opts ...model_clients.ReleaseOption) (bool, error) {
 	return m.client.Release(ctx, opts...)
 }
@@ -319,7 +319,7 @@ func (m *Model) Release(ctx context.Context, opts ...model_clients.ReleaseOption
 // 零副作用判断：委托给底层 client 的 SupportsKVCacheRelease 方法，
 // 仅 InferenceAffinity 返回 true，其他客户端返回 false。
 //
-// 对应 Python: Model.supports_kv_cache_release()
+// Python: Model.supports_kv_cache_release()
 //
 //	Python 使用 isinstance(self._client, InferenceAffinityModelClient) 判断，
 //	Go 通过接口方法实现等价语义。
@@ -336,9 +336,9 @@ func (m *Model) SupportsKVCacheRelease() bool {
 //   - session_id: 使用 session.GetSessionID()
 //   - enable_cache_sharing: 跟随 enableKVCacheRelease 参数
 //
-// 对应 Python: Model.build_kv_cache_invoke_kwargs()
+// Python: Model.build_kv_cache_invoke_kwargs()
 func (m *Model) BuildKVCacheInvokeKwargs(session SessionLike, enableKVCacheRelease bool) map[string]any {
-	// 对齐 Python: 仅 InferenceAffinity 客户端需要构建 KV cache kwargs
+	// Python: 仅 InferenceAffinity 客户端需要构建 KV cache kwargs
 	if !m.SupportsKVCacheRelease() {
 		return map[string]any{}
 	}
@@ -357,7 +357,7 @@ func (m *Model) BuildKVCacheInvokeKwargs(session SessionLike, enableKVCacheRelea
 
 // GenerateImage 生成图片。
 //
-// 对应 Python: Model.generate_image()
+// Python: Model.generate_image()
 func (m *Model) GenerateImage(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
@@ -368,7 +368,7 @@ func (m *Model) GenerateImage(
 
 // GenerateSpeech 生成语音。
 //
-// 对应 Python: Model.generate_speech()
+// Python: Model.generate_speech()
 func (m *Model) GenerateSpeech(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
@@ -379,7 +379,7 @@ func (m *Model) GenerateSpeech(
 
 // GenerateVideo 生成视频。
 //
-// 对应 Python: Model.generate_video()
+// Python: Model.generate_video()
 func (m *Model) GenerateVideo(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,

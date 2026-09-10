@@ -2,6 +2,7 @@ package optimizer
 
 import (
 	"context"
+	"maps"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -21,7 +22,7 @@ import (
 //  3. Backward() — 从信号计算梯度
 //  4. Step() — 从梯度生成更新映射，由 Trainer.apply_updates 统一应用
 //
-// 对应 Python: BaseOptimizer
+// Python: BaseOptimizer
 type BaseOptimizer interface {
 	// Domain 返回优化器域（llm/tool/memory/skill_experience）。
 	Domain() string
@@ -63,7 +64,7 @@ type BaseOptimizer interface {
 // TextualParameter operator_id 的梯度容器，存储 target→梯度值和可选描述。
 // 不再持有 Operator 引用。
 //
-// 对应 Python: TextualParameter
+// Python: TextualParameter
 type TextualParameter struct {
 	// OperatorID 所属 Operator 标识
 	OperatorID string
@@ -115,7 +116,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewTextualParameter 创建 TextualParameter 实例。
 //
-// 对应 Python: TextualParameter(operator_id=op_id)
+// Python: TextualParameter(operator_id=op_id)
 func NewTextualParameter(operatorID string) *TextualParameter {
 	return &TextualParameter{
 		OperatorID: operatorID,
@@ -125,35 +126,35 @@ func NewTextualParameter(operatorID string) *TextualParameter {
 
 // SetGradient 设置目标梯度值。nil 表示未设置/已清除（对齐 Python None）。
 //
-// 对应 Python: TextualParameter.set_gradient(name, gradient)
+// Python: TextualParameter.set_gradient(name, gradient)
 func (p *TextualParameter) SetGradient(name string, gradient any) {
 	p.Gradients[name] = gradient
 }
 
 // GetGradient 获取目标梯度值。返回 nil 表示未设置。
 //
-// 对应 Python: TextualParameter.get_gradient(name)
+// Python: TextualParameter.get_gradient(name)
 func (p *TextualParameter) GetGradient(name string) any {
 	return p.Gradients[name]
 }
 
 // SetDescription 设置描述。
 //
-// 对应 Python: TextualParameter.set_description(description)
+// Python: TextualParameter.set_description(description)
 func (p *TextualParameter) SetDescription(description string) {
 	p.Description = description
 }
 
 // GetDescription 获取描述。
 //
-// 对应 Python: TextualParameter.get_description()
+// Python: TextualParameter.get_description()
 func (p *TextualParameter) GetDescription() string {
 	return p.Description
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
 //
-// 对齐 Python:
+// Python:
 //
 //	if operators is None: operators = {}
 //	self._targets = list(targets or self.default_targets())
@@ -165,9 +166,9 @@ func (p *TextualParameter) GetDescription() string {
 //	    Python: logger.error("[optimizer] no operator matches targets=%s; will soft-exit", self._targets)
 //	return len(self._operators)
 //
-// 对应 Python: BaseOptimizer.bind()
+// Python: BaseOptimizer.bind()
 func (m *BaseOptimizerMixin) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	// 对齐 Python: self._targets = list(targets or self.default_targets())
+	// Python: self._targets = list(targets or self.default_targets())
 	// 注意：具体优化器在调用此方法前通常已处理默认 targets，此处为防御性回退
 	if len(targets) == 0 {
 		targets = m.defaultTargets
@@ -191,20 +192,20 @@ func (m *BaseOptimizerMixin) Bind(operators map[string]operator.Operator, target
 
 // AddTrajectory 缓存 Trajectory 供 backward 阶段查询。
 //
-// 对应 Python: BaseOptimizer.add_trajectory(trajectory)
+// Python: BaseOptimizer.add_trajectory(trajectory)
 func (m *BaseOptimizerMixin) AddTrajectory(traj *trajectory.Trajectory) {
 	m.trajectories = append(m.trajectories, traj)
 }
 
 // SetDefaultTargets 设置默认目标列表。
-// 对齐 Python: 具体优化器在 __init__ 中设置 self.default_targets
+// Python: 具体优化器在 __init__ 中设置 self.default_targets
 func (m *BaseOptimizerMixin) SetDefaultTargets(targets []string) {
 	m.defaultTargets = targets
 }
 
 // GetTrajectories 返回当前缓存的轨迹列表（副本）。
 //
-// 对应 Python: BaseOptimizer.get_trajectories()
+// Python: BaseOptimizer.get_trajectories()
 func (m *BaseOptimizerMixin) GetTrajectories() []*trajectory.Trajectory {
 	result := make([]*trajectory.Trajectory, len(m.trajectories))
 	copy(result, m.trajectories)
@@ -213,29 +214,27 @@ func (m *BaseOptimizerMixin) GetTrajectories() []*trajectory.Trajectory {
 
 // ClearTrajectories 清空轨迹缓存。
 //
-// 对应 Python: BaseOptimizer.clear_trajectories()
+// Python: BaseOptimizer.clear_trajectories()
 func (m *BaseOptimizerMixin) ClearTrajectories() {
 	m.trajectories = nil
 }
 
 // Parameters 返回梯度容器的副本。
 //
-// 对应 Python: BaseOptimizer.parameters()
+// Python: BaseOptimizer.parameters()
 func (m *BaseOptimizerMixin) Parameters() map[string]*TextualParameter {
-	result := make(map[string]*TextualParameter, len(m.parameters))
-	for k, v := range m.parameters {
-		result[k] = v
+	if m.parameters == nil {
+		return map[string]*TextualParameter{}
 	}
-	return result
+	return maps.Clone(m.parameters)
 }
 
 // Operators 返回绑定的 Operator 映射（副本）。
 func (m *BaseOptimizerMixin) Operators() map[string]operator.Operator {
-	result := make(map[string]operator.Operator, len(m.operators))
-	for k, v := range m.operators {
-		result[k] = v
+	if m.operators == nil {
+		return map[string]operator.Operator{}
 	}
-	return result
+	return maps.Clone(m.operators)
 }
 
 // Targets 返回优化目标列表（副本）。
@@ -259,11 +258,11 @@ func (m *BaseOptimizerMixin) SetSelectedSignals(signals []*signal.EvolutionSigna
 
 // SelectSignals 选择此优化器可消费的信号。默认保留全部信号。
 //
-// 对齐 Python:
+// Python:
 //
 //	return list(signals)
 //
-// 对应 Python: BaseOptimizer._select_signals(signals)
+// Python: BaseOptimizer._select_signals(signals)
 func (m *BaseOptimizerMixin) SelectSignals(signals []*signal.EvolutionSignal) []*signal.EvolutionSignal {
 	result := make([]*signal.EvolutionSignal, len(signals))
 	copy(result, signals)
@@ -272,12 +271,12 @@ func (m *BaseOptimizerMixin) SelectSignals(signals []*signal.EvolutionSignal) []
 
 // ValidateParameters 空参数校验，参数为空时抛异常。
 //
-// 对齐 Python:
+// Python:
 //
 //	if not self._parameters:
 //	    raise build_error(StatusCode.TOOLCHAIN_AGENT_PARAM_ERROR, error_msg="cannot optimize empty parameters")
 //
-// 对应 Python: BaseOptimizer._validate_parameters()
+// Python: BaseOptimizer._validate_parameters()
 func (m *BaseOptimizerMixin) ValidateParameters() {
 	if len(m.parameters) == 0 {
 		panic(exception.NewBaseError(
@@ -289,14 +288,14 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 
 // BackwardTemplate 模板方法，统一 ValidateParameters + SelectSignals + _backward + 错误包装。
 //
-// 对齐 Python: BaseOptimizer.backward(signals)
+// Python: BaseOptimizer.backward(signals)
 //
 //	self._validate_parameters()
 //	self._selected_signals = self._select_signals(signals)
 //	try: await self._backward(signals)
 //	except: raise build_error(StatusCode.TOOLCHAIN_OPTIMIZER_BACKWARD_EXECUTION_ERROR, ...)
 //
-// 对应 Python: BaseOptimizer.backward()
+// Python: BaseOptimizer.backward()
 func (m *BaseOptimizerMixin) BackwardTemplate(
 	ctx context.Context,
 	signals []*signal.EvolutionSignal,
@@ -314,14 +313,14 @@ func (m *BaseOptimizerMixin) BackwardTemplate(
 
 // StepTemplate 模板方法，统一 ValidateParameters + _step + ClearTrajectories + 错误包装。
 //
-// 对齐 Python: BaseOptimizer.step()
+// Python: BaseOptimizer.step()
 //
 //	self._validate_parameters()
 //	try: updates = self._step()
 //	finally: self.clear_trajectories()
 //	return updates or {}
 //
-// 对应 Python: BaseOptimizer.step()
+// Python: BaseOptimizer.step()
 func (m *BaseOptimizerMixin) StepTemplate(
 	stepFn func() map[schema.UpdateKey]any,
 ) map[schema.UpdateKey]any {
@@ -336,7 +335,7 @@ func (m *BaseOptimizerMixin) StepTemplate(
 
 // FilterOperators 过滤暴露任何 target 的 Operator。对不匹配的记录警告，不中断。
 //
-// 对齐 Python:
+// Python:
 //
 //	for op_id, op in (operators or {}).items():
 //	    Python: tunables = op.get_tunables()
@@ -346,7 +345,7 @@ func (m *BaseOptimizerMixin) StepTemplate(
 //	        continue
 //	    Python: out[op_id] = op
 //
-// 对应 Python: BaseOptimizer.filter_operators()
+// Python: BaseOptimizer.filter_operators()
 func FilterOperators(operators map[string]operator.Operator, targets []string) map[string]operator.Operator {
 	out := make(map[string]operator.Operator)
 	for opID, op := range operators {

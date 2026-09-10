@@ -11,7 +11,7 @@ package evolving
 // trainer.Progress 实现此接口，通过方法暴露 CurrentEpoch/BestScore 等字段。
 // Seed 方法返回 *int，对齐 Python getattr(progress, "seed", None) 行为。
 //
-// 对应 Python: DefaultCheckpointManager.build_checkpoint 中
+// Python: DefaultCheckpointManager.build_checkpoint 中
 //
 //	int(getattr(progress, "current_epoch", 0))
 //	float(getattr(progress, "best_score", 0.0))

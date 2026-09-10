@@ -13,7 +13,7 @@ import (
 // VerifyFunc 验证+解析函数类型。
 // 接收 LLM 输出文本，返回解析后的对象；验证失败时返回 error 触发重试。
 //
-// 对齐 Python: verify_fn(output) — 成功返回解析后对象，失败抛异常触发 tenacity 重试
+// Python: verify_fn(output) — 成功返回解析后对象，失败抛异常触发 tenacity 重试
 type VerifyFunc func(string) (any, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -39,7 +39,7 @@ var invokeWithVerifyImpl func(
 // 复用 llm_resilience.InvokeTextWithRetry，将 Python 的 verify_fn 适配为
 // isResultUsable（验证文本合法性）+ parseResult（解析验证后的结果）两步。
 //
-// 对齐 Python: get_rits_response(model_id, prompt, api_key, verify_fn, max_attempts, ...)
+// Python: get_rits_response(model_id, prompt, api_key, verify_fn, max_attempts, ...)
 //
 // 适配逻辑：
 //
@@ -47,7 +47,7 @@ var invokeWithVerifyImpl func(
 //	verifyFn 成功 → 缓存 parsedResult → isResultUsable 返回 true
 //	最终返回缓存的 parsedResult
 //
-// 对齐 Python get_rits_response 的异常吞没行为：
+// Python: get_rits_response 的异常吞没行为：
 // 所有 LLM 调用失败都返回 {'error': '...'} 字典，不抛异常
 func InvokeWithVerify(
 	ctx context.Context,
@@ -90,7 +90,7 @@ func invokeWithVerifyDefault(
 		llm_resilience.WithIsResultUsable(isResultUsable),
 	)
 	if err != nil {
-		// 对齐 Python get_rits_response: return {'error': f"Cannot complete LLM call. Error: {e}"}
+		// Python: get_rits_response: return {'error': f"Cannot complete LLM call. Error: {e}"}
 		return map[string]any{
 			"error": fmt.Sprintf("无法完成 LLM 调用，错误: %v", err),
 		}, nil

@@ -16,7 +16,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskExecutor 任务执行器接口。
-// 对应 Python: TaskExecutor(ABC)
+// Python: TaskExecutor(ABC)
 type TaskExecutor interface {
 	// ExecuteAbility 执行任务，返回输出分片 channel。
 	// channel 关闭表示执行结束。
@@ -32,7 +32,7 @@ type TaskExecutor interface {
 }
 
 // TaskExecutorDependencies 任务执行器依赖。
-// 对齐 Python: TaskExecutorDependencies
+// Python: TaskExecutorDependencies
 type TaskExecutorDependencies struct {
 	// Config 配置
 	Config *config.ControllerConfig
@@ -47,7 +47,7 @@ type TaskExecutorDependencies struct {
 }
 
 // TaskExecutorRegistry 任务执行器注册表。
-// 对齐 Python: TaskExecutorRegistry
+// Python: TaskExecutorRegistry
 type TaskExecutorRegistry struct {
 	// builders 任务执行器构建函数映射
 	builders map[string]func(deps *TaskExecutorDependencies) TaskExecutor

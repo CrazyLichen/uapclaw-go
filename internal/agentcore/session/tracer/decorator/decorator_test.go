@@ -695,7 +695,7 @@ func (c *tracerRecordDataCapturingClient) SupportsKVCacheRelease() bool {
 }
 
 // TestTracedModelClient_Invoke_注入TracerRecordData 测试 Invoke 将 tracer_record_data 回调注入到 opts
-// 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
+// Python: call_kwargs["tracer_record_data"] = tracer_record_data
 func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 	tr := tracer.NewTracer()
 	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
@@ -728,7 +728,7 @@ func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 }
 
 // TestTracedModelClient_Stream_注入TracerRecordData 测试 Stream 将 tracer_record_data 回调注入到 opts
-// 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
+// Python: call_kwargs["tracer_record_data"] = tracer_record_data
 func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 	tr := tracer.NewTracer()
 	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
@@ -767,7 +767,7 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 }
 
 // TestTracedModelClient_Invoke_回调触发TraceLLMRequest 测试底层客户端调用回调时 TraceLLMRequest 事件被触发
-// 对齐 Python: tracer.trigger("tracer_agent", "on_llm_request", span=span, **kw)
+// Python: tracer.trigger("tracer_agent", "on_llm_request", span=span, **kw)
 func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 	tr := tracer.NewTracer()
 	agentSpan := tr.AgentSpanManager.CreateAgentSpan()

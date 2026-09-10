@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestCreateCronTools_不含遗留 测试 includeLegacyCompat=false → 仅 1 个工具
-// 对齐 Python: include_legacy_compat=False → [cron_tool]
+// Python: include_legacy_compat=False → [cron_tool]
 func TestCreateCronTools_不含遗留(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -30,7 +30,7 @@ func TestCreateCronTools_不含遗留(t *testing.T) {
 }
 
 // TestCreateCronTools_含遗留 测试 includeLegacyCompat=true → 8 个工具
-// 对齐 Python: include_legacy_compat=True → [cron + 7 legacy tools]
+// Python: include_legacy_compat=True → [cron + 7 legacy tools]
 func TestCreateCronTools_含遗留(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -52,7 +52,7 @@ func TestCreateCronTools_含遗留(t *testing.T) {
 }
 
 // TestCreateCronTools_agentID为空 测试 agentID="" → 用 scope 作为 finalAgentID
-// 对齐 Python: final_agent_id = agent_id or scope
+// Python: final_agent_id = agent_id or scope
 func TestCreateCronTools_agentID为空(t *testing.T) {
 	backend := newFakeCronBackend()
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
@@ -139,7 +139,7 @@ func TestCreateCronTools_遗留工具cronToggleJob(t *testing.T) {
 }
 
 // TestTargetSchema_有枚举 测试 targetChannels 非空 → enum 值
-// 对齐 Python: _target_schema(target_channels=["wechat", "dingtalk"], ...)
+// Python: _target_schema(target_channels=["wechat", "dingtalk"], ...)
 func TestTargetSchema_有枚举(t *testing.T) {
 	schema := targetSchema([]string{"wechat", "dingtalk"}, "")
 	enumVals, ok := schema["enum"]
@@ -156,7 +156,7 @@ func TestTargetSchema_有枚举(t *testing.T) {
 }
 
 // TestTargetSchema_有默认值 测试 defaultTargetChannel 非空 → default
-// 对齐 Python: _target_schema(..., default_target_channel="wechat")
+// Python: _target_schema(..., default_target_channel="wechat")
 func TestTargetSchema_有默认值(t *testing.T) {
 	schema := targetSchema(nil, "wechat")
 	if schema["default"] != "wechat" {
@@ -165,7 +165,7 @@ func TestTargetSchema_有默认值(t *testing.T) {
 }
 
 // TestTargetSchema_空值 测试无 targetChannels 和 defaultTargetChannel
-// 对齐 Python: _target_schema(None, None) → 仅 type + description
+// Python: _target_schema(None, None) → 仅 type + description
 func TestTargetSchema_空值(t *testing.T) {
 	schema := targetSchema(nil, "")
 	if _, ok := schema["enum"]; ok {
@@ -180,7 +180,7 @@ func TestTargetSchema_空值(t *testing.T) {
 }
 
 // TestTargetSchema_空格过滤 测试 targetChannels 中有前后空格
-// 对齐 Python: enum_values = [str(item).strip() for item in list(...) if str(item).strip()]
+// Python: enum_values = [str(item).strip() for item in list(...) if str(item).strip()]
 func TestTargetSchema_空格过滤(t *testing.T) {
 	schema := targetSchema([]string{"  wechat  ", "  ", ""}, "  dingtalk  ")
 	enumVals, ok := schema["enum"].([]string)

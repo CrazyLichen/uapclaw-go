@@ -9,7 +9,7 @@ import "context"
 // 所有 KV 存储后端（内存、文件、数据库、Redis 等）必须实现此接口。
 // 插件开发者可直接实现此接口，调用方通过直接导入和实例化使用。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_kv_store.py (BaseKVStore)
+// Python: openjiuwen/core/foundation/store/base_kv_store.py (BaseKVStore)
 type BaseKVStore interface {
 	// Set 存储或覆盖一个键值对。
 	Set(ctx context.Context, key string, value []byte) error
@@ -58,12 +58,12 @@ type BaseKVStore interface {
 //	示例: p.Exists(ctx, "k3")
 //	示例: results, err := p.Execute(ctx)
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_kv_store.py (BasedKVStorePipeline)
+// Python: openjiuwen/core/foundation/store/base_kv_store.py (BasedKVStorePipeline)
 type KVPipeline interface {
 	// Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
 	// expiry 为过期秒数，0 表示不过期。当前 expiry 未实际生效，与 Python 行为一致。
 	// 注意：此方法永远返回 nil error，因为仅做 append 操作。
-	// 对应 Python: BasedKVStorePipeline.set(key, value, ttl=None)
+	// Python: BasedKVStorePipeline.set(key, value, ttl=None)
 	Set(ctx context.Context, key string, value []byte, expiry int) error
 
 	// Get 向管道中添加一个 Get 操作（仅记录，不立即执行）。

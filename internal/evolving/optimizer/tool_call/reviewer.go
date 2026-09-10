@@ -16,7 +16,7 @@ import (
 
 // ToolDescriptionReviewer 工具描述审查器，通过 LLM 对工具描述进行格式化、清洗、交叉检查和翻译。
 //
-// 对齐 Python: ToolDescriptionReviewer
+// Python: ToolDescriptionReviewer
 type ToolDescriptionReviewer struct {
 	// evalModelID 评估模型 ID
 	evalModelID string
@@ -36,7 +36,7 @@ type ToolDescriptionReviewer struct {
 
 // NewToolDescriptionReviewer 创建 ToolDescriptionReviewer 实例。
 //
-// 对齐 Python: ToolDescriptionReviewer.__init__(eval_model_id, llm_api_key)
+// Python: ToolDescriptionReviewer.__init__(eval_model_id, llm_api_key)
 func NewToolDescriptionReviewer(evalModelID string, llmAPIKey string, model *llm.Model) *ToolDescriptionReviewer {
 	return &ToolDescriptionReviewer{
 		evalModelID: evalModelID,
@@ -49,14 +49,14 @@ func NewToolDescriptionReviewer(evalModelID string, llmAPIKey string, model *llm
 // 定义 4 个 prompt 变体（promptOriginal/prompt1/prompt2/中文prompt），一比一复刻 Python 原文。
 // 最终只使用中文 prompt 传给 LLM，与 Python 行为一致。
 //
-// 对齐 Python: ToolDescriptionReviewer.format(json_schema, description, example)
+// Python: ToolDescriptionReviewer.format(json_schema, description, example)
 func (r *ToolDescriptionReviewer) Format(
 	ctx context.Context,
 	jsonSchema map[string]any,
 	description string,
 	example string,
 ) (map[string]any, error) {
-	// 对齐 Python: prompt_original — 一比一复刻，定义后未使用
+	// Python: prompt_original — 一比一复刻，定义后未使用
 	schemaJSON, _ := json.MarshalIndent(jsonSchema, "", "  ")
 	promptOriginal := fmt.Sprintf(`You will receive an input that contains a textual description.
 The input may be free-form text, bullet points, or JSON in any structure.
@@ -73,9 +73,9 @@ Now convert my following input to desired JSON format:
 Input to be converted:
 %s
 `, string(schemaJSON), description)
-	_ = promptOriginal // 对齐 Python：定义后未使用
+	_ = promptOriginal // Python: 定义后未使用
 
-	// 对齐 Python: prompt_1 — 一比一复刻，定义后未使用
+	// Python: prompt_1 — 一比一复刻，定义后未使用
 	prompt1 := fmt.Sprintf(`You will receive an input that contains a textual description.
 Your task is to convert it into the target JSON format below.
 
@@ -96,9 +96,9 @@ No explanations or extra text.
 Input:
 %s
 `, string(schemaJSON), description)
-	_ = prompt1 // 对齐 Python：定义后未使用
+	_ = prompt1 // Python: 定义后未使用
 
-	// 对齐 Python: prompt_2 — 一比一复刻，定义后未使用
+	// Python: prompt_2 — 一比一复刻，定义后未使用
 	prompt2 := fmt.Sprintf(`You will receive an input that contains a textual description.
 Your task is to convert it into the target JSON format below.
 
@@ -119,9 +119,9 @@ No explanations or extra text.
 Input:
 %s
 `, string(schemaJSON), description)
-	_ = prompt2 // 对齐 Python：定义后未使用
+	_ = prompt2 // Python: 定义后未使用
 
-	// 对齐 Python: prompt（中文版）— 实际使用的版本
+	// Python: prompt（中文版）— 实际使用的版本
 	prompt := fmt.Sprintf(`将下面输入转换为目标 JSON 结构。必须满足：
 
 - 输出只允许是有效 JSON，且严格匹配目标结构的键路径与层级（不多不少）。
@@ -147,7 +147,7 @@ Input:
 %s
 `, string(schemaJSON), description)
 
-	// 对齐 Python: verify_output = lambda output: json.loads(output)
+	// Python: verify_output = lambda output: json.loads(output)
 	verifyFn := func(output string) (any, error) {
 		var result map[string]any
 		if err := json.Unmarshal([]byte(output), &result); err != nil {
@@ -156,7 +156,7 @@ Input:
 		return result, nil
 	}
 
-	// 对齐 Python: get_rits_response('gpt-5.2', prompt, self.llm_api_key, verify_output=verify_output, max_attempts=5, ...)
+	// Python: get_rits_response('gpt-5.2', prompt, self.llm_api_key, verify_output=verify_output, max_attempts=5, ...)
 	policy := llm_resilience.LLMInvokePolicy{
 		MaxAttempts:        5,
 		TotalBudgetSecs:    120,
@@ -187,12 +187,12 @@ Input:
 // CleanAndDeduplicate 清洗并去重工具描述 JSON。
 // 提示词一比一复刻 Python 原文（英文）。
 //
-// 对齐 Python: ToolDescriptionReviewer.clean_and_deduplicate(data)
+// Python: ToolDescriptionReviewer.clean_and_deduplicate(data)
 func (r *ToolDescriptionReviewer) CleanAndDeduplicate(
 	ctx context.Context,
 	data map[string]any,
 ) (map[string]any, error) {
-	// 对齐 Python: prompt — 一比一复刻
+	// Python: prompt — 一比一复刻
 	dataJSON, _ := json.MarshalIndent(data, "", "  ")
 	prompt := fmt.Sprintf(`
 Given a tool description JSON, go throught the content sentence
@@ -259,13 +259,13 @@ Input JSON:
 // CrossCheck 交叉检查修改后的描述与原始描述，补充丢失信息并整理位置。
 // 提示词一比一复刻 Python 原文（中文）。
 //
-// 对齐 Python: ToolDescriptionReviewer.cross_check(data, ori_tool)
+// Python: ToolDescriptionReviewer.cross_check(data, ori_tool)
 func (r *ToolDescriptionReviewer) CrossCheck(
 	ctx context.Context,
 	data map[string]any,
 	oriTool string,
 ) (map[string]any, error) {
-	// 对齐 Python: prompt（中文版）— 一比一复刻
+	// Python: prompt（中文版）— 一比一复刻
 	dataJSON, _ := json.MarshalIndent(data, "", "  ")
 	prompt := fmt.Sprintf(`比较原始描述和修改后的描述，按照以下要求整理修改后的描述：
 1. 补充修改后的描述丢失的信息：例如，参数可选值列表丢失，需把原始描述中的列表补充道修改后的对应位置。
@@ -315,20 +315,20 @@ func (r *ToolDescriptionReviewer) CrossCheck(
 // 如果文本主要是中文则直接返回，不调用 LLM。
 // 提示词一比一复刻 Python 原文（英文）。
 //
-// 对齐 Python: ToolDescriptionReviewer.translate_to_chinese(data)
+// Python: ToolDescriptionReviewer.translate_to_chinese(data)
 func (r *ToolDescriptionReviewer) TranslateToChinese(
 	ctx context.Context,
 	data map[string]any,
 ) (map[string]any, error) {
-	// 对齐 Python: json_str = json.dumps(data, ensure_ascii=False)
+	// Python: json_str = json.dumps(data, ensure_ascii=False)
 	jsonStr, _ := json.Marshal(data)
 
-	// 对齐 Python: if not self._is_mostly_english(json_str): return data
+	// Python: if not self._is_mostly_english(json_str): return data
 	if !isMostlyEnglish(string(jsonStr)) {
 		return data, nil
 	}
 
-	// 对齐 Python: prompt — 一比一复刻
+	// Python: prompt — 一比一复刻
 	dataJSON, _ := json.MarshalIndent(data, "", "  ")
 	prompt := fmt.Sprintf(`Translate all English text in the following JSON to Chinese.
 Keep JSON structure unchanged. Keep technical terms and code examples as-is.
@@ -372,29 +372,29 @@ Input JSON:
 // Process 按步骤顺序执行描述处理流程。
 // 步骤顺序：clean → cross_check → translate
 //
-// 对齐 Python: ToolDescriptionReviewer.process(data, ori_tool, steps)
+// Python: ToolDescriptionReviewer.process(data, ori_tool, steps)
 func (r *ToolDescriptionReviewer) Process(
 	ctx context.Context,
 	data map[string]any,
 	oriTool string,
 	steps []string,
 ) (map[string]any, error) {
-	// 对齐 Python: result = data
+	// Python: result = data
 	result := data
 
 	for _, step := range steps {
 		var err error
 		switch step {
-		// 对齐 Python: if step == "cross_check": result = self.cross_check(data=data, ori_tool=ori_tool)
+		// Python: if step == "cross_check": result = self.cross_check(data=data, ori_tool=ori_tool)
 		case "cross_check":
 			result, err = r.CrossCheck(ctx, data, oriTool)
-		// 对齐 Python: elif step == "clean": result = self.clean_and_deduplicate(result)
+		// Python: elif step == "clean": result = self.clean_and_deduplicate(result)
 		case "clean":
 			result, err = r.CleanAndDeduplicate(ctx, result)
-		// 对齐 Python: elif step == "translate": result = self.translate_to_chinese(result)
+		// Python: elif step == "translate": result = self.translate_to_chinese(result)
 		case "translate":
 			result, err = r.TranslateToChinese(ctx, result)
-		// 对齐 Python: else: raise ValueError(f"Unknown processing step: {step}")
+		// Python: else: raise ValueError(f"Unknown processing step: {step}")
 		default:
 			return nil, fmt.Errorf("未知的处理步骤: %s", step)
 		}
@@ -410,23 +410,23 @@ func (r *ToolDescriptionReviewer) Process(
 // isMostlyEnglish 判断文本是否主要由英文字符组成。
 // 计算英文字符占比，超过 0.7 则判断为英文。
 //
-// 对齐 Python: ToolDescriptionReviewer._is_mostly_english(text)
+// Python: ToolDescriptionReviewer._is_mostly_english(text)
 func isMostlyEnglish(text string) bool {
-	// 对齐 Python: text_no_space = re.sub(r'\s+', '', text)
+	// Python: text_no_space = re.sub(r'\s+', '', text)
 	re := regexp.MustCompile(`\s+`)
 	textNoSpace := re.ReplaceAllString(text, "")
 
-	// 对齐 Python: if len(text_no_space) == 0: return False
+	// Python: if len(text_no_space) == 0: return False
 	if len(textNoSpace) == 0 {
 		return false
 	}
 
-	// 对齐 Python: english_chars = len(re.findall(r'[a-zA-Z]', text_no_space))
+	// Python: english_chars = len(re.findall(r'[a-zA-Z]', text_no_space))
 	englishRe := regexp.MustCompile(`[a-zA-Z]`)
 	englishChars := len(englishRe.FindAllString(textNoSpace, -1))
 
-	// 对齐 Python: english_ratio = english_chars / len(text_no_space)
-	// 对齐 Python: return english_ratio > 0.7
+	// Python: english_ratio = english_chars / len(text_no_space)
+	// Python: return english_ratio > 0.7
 	englishRatio := float64(englishChars) / float64(utf8.RuneCountInString(textNoSpace))
 	return englishRatio > 0.7
 }

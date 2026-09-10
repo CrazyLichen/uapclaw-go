@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LoggingLevels 各输出通道的日志级别配置。
-// 对应 Python: LoggingLevels 数据类
+// Python: LoggingLevels 数据类
 type LoggingLevels struct {
 	// Logger 根 Logger 级别（取各文件级别的最小值）
 	Logger LogLevel
@@ -35,7 +35,7 @@ type LoggingLevels struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LogLevel 日志级别枚举，与 zerolog.Level 对应。
-// 对应 Python: logging.DEBUG / INFO / WARNING / ERROR / CRITICAL
+// Python: logging.DEBUG / INFO / WARNING / ERROR / CRITICAL
 type LogLevel int
 
 const (
@@ -102,7 +102,7 @@ func (l LogLevel) ToZerologLevel() zerolog.Level {
 // ParseLogLevel 将字符串解析为 LogLevel。
 // 支持大小写不敏感的 "debug"/"info"/"warn"/"error"/"fatal"。
 // 空字符串或无法识别时返回 defaultLevel。
-// 对应 Python: _parse_log_level
+// Python: _parse_log_level
 func ParseLogLevel(name string, defaultLevel LogLevel) LogLevel {
 	if name == "" {
 		return defaultLevel
@@ -124,7 +124,7 @@ func ParseLogLevel(name string, defaultLevel LogLevel) LogLevel {
 }
 
 // ResolveLoggingLevels 从配置解析各级别。
-// 对应 Python: _resolve_logging_levels
+// Python: _resolve_logging_levels
 //
 // 解析优先级：
 //  1. cfg.Level 作为基础级别（默认 INFO）

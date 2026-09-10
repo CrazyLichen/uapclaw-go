@@ -13,7 +13,7 @@ import (
 
 // SessionManager 会话任务队列管理器，提供按 session 序列化执行、优先级排序和取消能力。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/session/session_manager.py
+// Python: jiuwenswarm/server/runtime/session/session_manager.py
 type SessionManager struct {
 	// mu 保护以下所有 map 的并发访问
 	mu sync.Mutex
@@ -69,14 +69,14 @@ func NewSessionManager() *SessionManager {
 
 // GetSessionID 获取 session_id，空串返回 "default"。
 //
-// 对齐 Python: SessionManager.get_session_id(session_id)
+// Python: SessionManager.get_session_id(session_id)
 func GetSessionID(sessionID string) string {
 	return NormalizeSessionID(sessionID)
 }
 
 // CancelSessionTask 取消指定 session 的非流式任务。
 //
-// 对齐 Python: SessionManager.cancel_session_task(session_id, log_msg_prefix, wait_timeout)
+// Python: SessionManager.cancel_session_task(session_id, log_msg_prefix, wait_timeout)
 func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID string, logPrefix string, waitTimeout *time.Duration) error {
 	sm.mu.Lock()
 	cancelFn, ok := sm.sessionTasks[sessionID]
@@ -108,7 +108,7 @@ func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID strin
 
 // CancelAllSessionTasks 取消所有 session 的非流式任务。
 //
-// 对齐 Python: SessionManager.cancel_all_session_tasks(log_msg_prefix)
+// Python: SessionManager.cancel_all_session_tasks(log_msg_prefix)
 func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix string) error {
 	sm.mu.Lock()
 	sessionIDs := make([]string, 0, len(sm.sessionTasks))
@@ -125,7 +125,7 @@ func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix s
 
 // EnsureSessionProcessor 确保 session 的任务处理器在运行。
 //
-// 对齐 Python: SessionManager.ensure_session_processor(session_id)
+// Python: SessionManager.ensure_session_processor(session_id)
 func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -154,7 +154,7 @@ func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID st
 
 // SubmitTask 提交任务到 session 队列（异步）。
 //
-// 对齐 Python: SessionManager.submit_task(session_id, task_func)
+// Python: SessionManager.submit_task(session_id, task_func)
 func (sm *SessionManager) SubmitTask(ctx context.Context, sessionID string, taskFunc func(context.Context) (any, error)) error {
 	if err := sm.EnsureSessionProcessor(ctx, sessionID); err != nil {
 		return err
@@ -177,7 +177,7 @@ func (sm *SessionManager) SubmitTask(ctx context.Context, sessionID string, task
 
 // SubmitAndWait 提交任务到 session 队列并等待结果。
 //
-// 对齐 Python: SessionManager.submit_and_wait(session_id, task_func)
+// Python: SessionManager.submit_and_wait(session_id, task_func)
 func (sm *SessionManager) SubmitAndWait(ctx context.Context, sessionID string, taskFunc func(context.Context) (any, error)) (any, error) {
 	if err := sm.EnsureSessionProcessor(ctx, sessionID); err != nil {
 		return nil, err

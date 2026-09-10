@@ -18,7 +18,7 @@ import (
 //
 //	(trajectories, evaluated_cases) → 更新映射或候选集
 //
-// 对应 Python: openjiuwen/agent_evolving/updater/protocol.py Updater(Protocol)
+// Python: openjiuwen/agent_evolving/updater/protocol.py Updater(Protocol)
 type Updater interface {
 	// Bind 绑定 Operator 注册表并过滤可优化的 Operator。
 	// 返回匹配数量；0 触发 Trainer 软退出。
@@ -32,13 +32,13 @@ type Updater interface {
 	// Update 离线兼容入口，将 evaluated_cases 转换为 signals 后调用 Process。
 	// 返回更新映射切片：单映射场景返回长度为 1 的切片，多候选集场景返回多元素切片。
 	//
-	// 对应 Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
+	// Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
 	Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error)
 
 	// Process 信号优先入口，直接消费 EvolutionSignal 列表。
 	// 返回更新映射切片：单映射场景返回长度为 1 的切片，多候选集场景返回多元素切片。
 	//
-	// 对应 Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
+	// Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
 	Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error)
 
 	// GetState 获取 Updater 可序列化状态（用于检查点保存）。

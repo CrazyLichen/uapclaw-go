@@ -30,7 +30,7 @@ import (
 
 // callModel 调用 LLM 模型（经 Rail 钩子包装）。
 //
-// 对应 Python: ReActAgent._call_model()
+// Python: ReActAgent._call_model()
 func (a *ReActAgent) callModel(
 	ctx context.Context,
 	cbc *interfaces.AgentCallbackContext,
@@ -38,7 +38,7 @@ func (a *ReActAgent) callModel(
 	tools []cschema.ToolInfoInterface,
 	sess sessioninterfaces.SessionFacade,
 ) (*llmschema.AssistantMessage, error) {
-	// 对齐 Python L619-625: preview messages 包含 system prompt 前缀
+	// Python: L619-625: preview messages 包含 system prompt 前缀
 	previewMsgs := make([]llmschema.BaseMessage, 0)
 	previewPrompt := a.promptBuilder.Build()
 	if previewPrompt != "" {
@@ -48,7 +48,7 @@ func (a *ReActAgent) callModel(
 		msgs, _ := modelCtx.GetMessages(0, true)
 		previewMsgs = append(previewMsgs, msgs...)
 	}
-	// 对齐 Python L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
+	// Python: L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
 	cbc.SetInputs(&interfaces.ModelCallInputs{
 		Messages:     previewMsgs,
 		Tools:        tools,
@@ -62,7 +62,7 @@ func (a *ReActAgent) callModel(
 		return e
 	})
 
-	// 对齐 Python L659: log_llm_response
+	// Python: L659: log_llm_response
 	if result != nil {
 		logLLMResponse(result)
 	}
@@ -128,7 +128,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		inputs.Tools = contextTools
 	}
 
-	// 对齐 Python L730: log_llm_request
+	// Python: L730: log_llm_request
 	logLLMRequest(messages, contextTools)
 
 	// 构建 KV Cache extra kwargs（对应 Python L736-742）
@@ -291,7 +291,7 @@ func (a *ReActAgent) callLLMStream(
 
 // logLLMRequest 记录 LLM 请求诊断日志。
 //
-// 对应 Python: log_llm_request()
+// Python: log_llm_request()
 func logLLMRequest(messages []llmschema.BaseMessage, tools []cschema.ToolInfoInterface) {
 	msgCount := len(messages)
 	toolCount := len(tools)
@@ -318,7 +318,7 @@ func logLLMRequest(messages []llmschema.BaseMessage, tools []cschema.ToolInfoInt
 
 // logLLMResponse 记录 LLM 响应诊断日志。
 //
-// 对应 Python: log_llm_response()
+// Python: log_llm_response()
 func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	if aiMsg == nil {
 		return

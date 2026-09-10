@@ -605,7 +605,7 @@ func TestAgentModeRail_Init_非DeepAgent时跳过(t *testing.T) {
 
 	r := NewAgentModeRail(nil)
 	agent := newFakeBaseAgent()
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	assert.NoError(t, err)
 	assert.Nil(t, r.tools)
 }
@@ -627,7 +627,7 @@ func TestAgentModeRail_Init_正常初始化(t *testing.T) {
 		fakeDeepAgentForAgentMode: *agent,
 		am:                        am,
 	}
-	err := r.Init(wrapper)
+	err := r.Init(context.Background(), wrapper)
 	assert.NoError(t, err)
 	assert.Len(t, r.tools, 3)
 }
@@ -1027,7 +1027,7 @@ func TestAgentModeRail_Uninit_移除工具(t *testing.T) {
 	}
 
 	// 先 Init 注册工具
-	err := r.Init(wrapper)
+	err := r.Init(context.Background(), wrapper)
 	require.NoError(t, err)
 	require.Len(t, r.tools, 3)
 

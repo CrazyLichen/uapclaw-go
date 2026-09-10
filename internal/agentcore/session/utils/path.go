@@ -194,7 +194,7 @@ func RootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 }
 
 // RootToIndex 通过纯索引路径导航嵌套列表结构。
-// 对齐 Python root_to_index。
+// Python: root_to_index。
 // 返回 (调整后的最终索引, 最终容器列表)。
 // 嵌套深度上限 10，索引范围 [0,10000]，支持负索引自动调整。
 func RootToIndex(indexes []int, source []any, createIfAbsent bool) (int, []any) {

@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamOutputSchema 带有来源成员身份和角色的输出流数据。
-// 对齐 Python: TeamOutputSchema (openjiuwen/agent_teams/schema/stream.py)
+// Python: TeamOutputSchema (openjiuwen/agent_teams/schema/stream.py)
 //
 // 继承 OutputSchema 并添加 source_member 和 role 字段，
 // 使团队层消费者能够将每个 chunk 归属到产生它的成员（leader 或 teammate）。
@@ -24,7 +24,7 @@ type TeamOutputSchema struct {
 }
 
 // ChunkObserver 分块观察者回调。
-// 对齐 Python: ChunkObserver = Callable[[OutputSchema], Awaitable[None]]
+// Python: ChunkObserver = Callable[[OutputSchema], Awaitable[None]]
 // 每个分块标注来源成员后触发，用于 SpawnManager 将 Teammate chunk 转发到 Leader 的 streamQueue。
 type ChunkObserver func(ctx context.Context, chunk stream.Schema) error
 
@@ -37,7 +37,7 @@ type ChunkObserver func(ctx context.Context, chunk stream.Schema) error
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamOutputSchema 从普通 OutputSchema 构建带标签的团队 chunk。
-// 对齐 Python: TeamOutputSchema.from_output(base, source_member=..., role=...)
+// Python: TeamOutputSchema.from_output(base, source_member=..., role=...)
 //
 // 返回新实例指针；原始 base 不会被修改，DeepAgent 内部保留其对象标识。
 func NewTeamOutputSchema(base stream.OutputSchema, sourceMember *string, role *TeamRole) *TeamOutputSchema {

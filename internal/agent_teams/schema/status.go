@@ -7,20 +7,20 @@ import "github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MemberStatus 成员状态枚举。
-// 对齐 Python: MemberStatus (openjiuwen/agent_teams/schema/status.py)
+// Python: MemberStatus (openjiuwen/agent_teams/schema/status.py)
 // 类型底层为 string，值来自 fsm 包常量，提供类型安全的 API。
 type MemberStatus string
 
 // ExecutionStatus 任务执行状态枚举。
-// 对齐 Python: ExecutionStatus
+// Python: ExecutionStatus
 type ExecutionStatus string
 
 // MemberMode 成员与任务交互模式。
-// 对齐 Python: MemberMode
+// Python: MemberMode
 type MemberMode string
 
 // TaskStatus 团队任务状态枚举。
-// 对齐 Python: TaskStatus
+// Python: TaskStatus
 type TaskStatus string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -96,7 +96,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // MemberTransitions MemberStatus 状态转换表。
-// 对齐 Python: MEMBER_TRANSITIONS
+// Python: MEMBER_TRANSITIONS
 // 底层数据来自 fsm 包，通过类型化 wrapper 提供类型安全的 API。
 var MemberTransitions = map[MemberStatus][]MemberStatus{
 	MemberStatusUnstarted: {
@@ -137,7 +137,7 @@ var MemberTransitions = map[MemberStatus][]MemberStatus{
 }
 
 // MemberSettledStatuses 成员可以处于空闲时的状态集合（团队完成检查使用）。
-// 对齐 Python: MEMBER_SETTLED_STATUSES
+// Python: MEMBER_SETTLED_STATUSES
 var MemberSettledStatuses = map[MemberStatus]bool{
 	MemberStatusReady:    true,
 	MemberStatusPaused:   true,
@@ -146,7 +146,7 @@ var MemberSettledStatuses = map[MemberStatus]bool{
 }
 
 // ExecutionTransitions ExecutionStatus 状态转换表。
-// 对齐 Python: EXECUTION_TRANSITIONS
+// Python: EXECUTION_TRANSITIONS
 var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 	ExecutionStatusIdle: {ExecutionStatusStarting},
 	ExecutionStatusStarting: {
@@ -172,7 +172,7 @@ var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 }
 
 // TaskTransitions TaskStatus 状态转换表。
-// 对齐 Python: TASK_TRANSITIONS
+// Python: TASK_TRANSITIONS
 var TaskTransitions = map[TaskStatus][]TaskStatus{
 	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
 	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
@@ -185,7 +185,7 @@ var TaskTransitions = map[TaskStatus][]TaskStatus{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsValidMemberTransition 检查 MemberStatus 状态转换是否合法。
-// 对齐 Python: is_valid_transition(current_status, new_status, MEMBER_TRANSITIONS)
+// Python: is_valid_transition(current_status, new_status, MEMBER_TRANSITIONS)
 // 委托 fsm 包实现，提供类型化 wrapper。
 func IsValidMemberTransition(current, target MemberStatus) bool {
 	return fsm.IsValidMemberTransition(string(current), string(target))

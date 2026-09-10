@@ -23,7 +23,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentTool 自定义 Agent 调度工具。
-// 对齐 Python: AgentTool(Tool) (code_agent_rail.py L170-348)
+// Python: AgentTool(Tool) (code_agent_rail.py L170-348)
 //
 // 直接使用 create_deep_agent() 创建子 agent，不依赖 deep_config.subagents。
 // 实现 tool.Tool 接口，invoke 时创建子 DeepAgent 执行任务。
@@ -33,7 +33,7 @@ type AgentTool struct {
 	// parentAgent 父 Agent 接口（用于获取 AbilityManager、DeepConfig 等）
 	parentAgent sainterfaces.BaseAgent
 	// customAgents 自定义 Agent 定义映射（name → AgentDefinition）
-	// 对齐 Python: self._custom_agents: dict[str, object] = {a.name: a for a in custom_agents}
+	// Python: self._custom_agents: dict[str, object] = {a.name: a for a in custom_agents}
 	customAgents map[string]*types.AgentDefinition
 }
 
@@ -46,7 +46,7 @@ type AgentTool struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentTool 创建 AgentTool 实例。
-// 对齐 Python: AgentTool.__init__(card, parent_agent, custom_agents) (code_agent_rail.py L176-179)
+// Python: AgentTool.__init__(card, parent_agent, custom_agents) (code_agent_rail.py L176-179)
 func NewAgentTool(
 	card *tool.ToolCard,
 	parentAgent sainterfaces.BaseAgent,
@@ -64,13 +64,13 @@ func NewAgentTool(
 }
 
 // Card 返回工具卡片。
-// 对齐 Python: Tool.card 属性
+// Python: Tool.card 属性
 func (t *AgentTool) Card() *tool.ToolCard {
 	return t.card
 }
 
 // Invoke 执行自定义 Agent 调度。
-// 对齐 Python: AgentTool.invoke(inputs, **kwargs) (code_agent_rail.py L260-331)
+// Python: AgentTool.invoke(inputs, **kwargs) (code_agent_rail.py L260-331)
 //
 // 步骤：
 //  1. 从 kwargs 提取 SessionFacade（对齐 Python kwargs["session"]）
@@ -84,11 +84,11 @@ func (t *AgentTool) Card() *tool.ToolCard {
 //     - true（异步）：go subAgent.Invoke → 立即返回 {"status": "async_launched", "agent_id": ..., "prompt": ...}
 func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	// 步骤 1: 从 opts 提取 SessionFacade
-	// 对齐 Python: parent_session = kwargs.get("session") (code_agent_rail.py L263)
+	// Python: parent_session = kwargs.get("session") (code_agent_rail.py L263)
 	callOpts := tool.NewToolCallOptions(opts...)
 
 	// 步骤 2: 解析输入参数
-	// 对齐 Python: subagent_type = inputs.get("subagent_type"); prompt = inputs.get("prompt"); background = inputs.get("background", False)
+	// Python: subagent_type = inputs.get("subagent_type"); prompt = inputs.get("prompt"); background = inputs.get("background", False)
 	var subagentType, prompt string
 	var background bool
 	if inputs != nil {
@@ -100,7 +100,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 
 	// 步骤 3: 校验必填参数
-	// 对齐 Python: if not subagent_type or not prompt: raise build_error(...)
+	// Python: if not subagent_type or not prompt: raise build_error(...)
 	if subagentType == "" || prompt == "" {
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
@@ -108,7 +108,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		)
 	}
 
-	// 对齐 Python: if not isinstance(parent_session, Session): raise build_error(TOOL_TASK_TOOL_INVOKED)
+	// Python: if not isinstance(parent_session, Session): raise build_error(TOOL_TASK_TOOL_INVOKED)
 	if callOpts.Session == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolTaskToolInvoked,
@@ -117,7 +117,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 
 	// 步骤 4: 查找自定义 Agent 定义
-	// 对齐 Python: agent_def = self._custom_agents.get(subagent_type) (code_agent_rail.py L285)
+	// Python: agent_def = self._custom_agents.get(subagent_type) (code_agent_rail.py L285)
 	agentDef, ok := t.customAgents[subagentType]
 	if !ok {
 		available := sortedKeys(t.customAgents)
@@ -128,10 +128,10 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 
 	// 步骤 5: 构建 subSessionID
-	// 对齐 Python: parent_session_id = parent_session.get_session_id(); sub_session_id = self._build_sub_session_id(parent_session_id, subagent_type)
+	// Python: parent_session_id = parent_session.get_session_id(); sub_session_id = self._build_sub_session_id(parent_session_id, subagent_type)
 	parentSessionID := "default"
 	if callOpts.Session != nil {
-		// 对齐 Python: parent_session.get_session_id()
+		// Python: parent_session.get_session_id()
 		if sess, ok := callOpts.Session.(interface{ GetSessionID() string }); ok {
 			parentSessionID = sess.GetSessionID()
 		}
@@ -139,7 +139,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	subSessionID := buildSubSessionID(parentSessionID, subagentType)
 
 	// 步骤 6: 创建子 Agent
-	// 对齐 Python: subagent = self._create_sub_agent(agent_def, sub_session_id) (code_agent_rail.py L297)
+	// Python: subagent = self._create_sub_agent(agent_def, sub_session_id) (code_agent_rail.py L297)
 	subAgent, err := t.createSubAgent(agentDef, subSessionID)
 	if err != nil {
 		logger.Error(logComponent).
@@ -156,7 +156,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	// 步骤 7: 根据 background 标志执行
 	if background {
 		// 异步执行
-		// 对齐 Python: asyncio.create_task(self._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session))
+		// Python: asyncio.create_task(self._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session))
 		// 返回: {"status": "async_launched", "agent_id": subagent_type, "prompt": prompt}
 		var parentSess sessioninterfaces.SessionFacade
 		if callOpts.Session != nil {
@@ -171,7 +171,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 
 	// 同步执行
-	// 对齐 Python: result = await subagent.invoke({"query": prompt, "conversation_id": sub_session_id}, session=parent_session)
+	// Python: result = await subagent.invoke({"query": prompt, "conversation_id": sub_session_id}, session=parent_session)
 	var invokeOpts []sainterfaces.AgentOption
 	if callOpts.Session != nil {
 		invokeOpts = append(invokeOpts, sainterfaces.WithSession(callOpts.Session))
@@ -192,7 +192,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		)
 	}
 
-	// 对齐 Python: output = result.get("output", ""); return ToolOutput(success=True, data={"output": output, "agent_id": subagent_type})
+	// Python: output = result.get("output", ""); return ToolOutput(success=True, data={"output": output, "agent_id": subagent_type})
 	output := ""
 	if result != nil {
 		if s, ok := result["output"].(string); ok {
@@ -207,7 +207,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 }
 
 // Stream 流式执行（不支持）。
-// 对齐 Python: AgentTool.stream(inputs, **kwargs): pass (code_agent_rail.py L347-348)
+// Python: AgentTool.stream(inputs, **kwargs): pass (code_agent_rail.py L347-348)
 func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.Name)
 }
@@ -215,7 +215,7 @@ func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...t
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createSubAgent 从 AgentDefinition 创建子 DeepAgent。
-// 对齐 Python: AgentTool._create_sub_agent(agent_def, sub_session_id) (code_agent_rail.py L184-258)
+// Python: AgentTool._create_sub_agent(agent_def, sub_session_id) (code_agent_rail.py L184-258)
 //
 // 步骤：
 //  1. agentDefToSubagentConfig() 转换 AgentDefinition → SubAgentConfig
@@ -226,9 +226,9 @@ func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...t
 //  6. 调用 CreateDeepAgent(ctx, params)
 func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	// 步骤 1: 将 AgentDefinition 转换为 SubAgentConfig
-	// 对齐 Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
+	// Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
 	var model *llm.Model
-	// 对齐 Python: getattr(self._parent_agent, "_model_cache", None)
+	// Python: getattr(self._parent_agent, "_model_cache", None)
 	// 通过匿名接口类型断言获取 modelCache，拿不到则 fallback nil
 	var modelCache map[string]*llm.Model
 	if t.parentAgent != nil {
@@ -254,7 +254,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	spec := agentDefToSubagentConfig(agentDef, model, modelCache, nil)
 
 	// 步骤 2: 从 parentAgent.ability_manager 获取 ToolCard 列表，过滤 disallowedForSubagents
-	// 对齐 Python: all_tool_cards = [tc for tc in self._parent_agent.ability_manager.list()
+	// Python: all_tool_cards = [tc for tc in self._parent_agent.ability_manager.list()
 	//             if isinstance(tc, ToolCard) and tc.name not in DISALLOWED_FOR_SUBAGENTS]
 	var allToolCards []*tool.ToolCard
 	if t.parentAgent != nil {
@@ -269,7 +269,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 
 	// 步骤 3: 按 Agent 定义的 tools 字段进一步过滤
-	// 对齐 Python: Python: parent_tool_cards = _filter_tool_cards(all_tool_cards,
+	// Python: Python: parent_tool_cards = _filter_tool_cards(all_tool_cards,
 	//             Python: allowed_tools=list(spec.tools) if spec.tools else ["*"], disallowed_tools=None)
 	// 注意：_agent_def_to_subagent_config() 已将 disallowed_tools 合并进 spec.tools（Python 中是 []string），
 	// 所以这里的 disallowed_tools 传 nil。
@@ -279,7 +279,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		allowedTools = []string{"*"}
 	}
 	// 如果有 disallowed_tools 且 allowedTools 不是 ["*"]，先过滤掉 disallowed
-	// 对齐 Python: if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
+	// Python: if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
 	if len(agentDef.DisallowedTools) > 0 && (len(allowedTools) != 1 || allowedTools[0] != "*") {
 		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
 		for _, t := range agentDef.DisallowedTools {
@@ -296,28 +296,28 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	parentToolCards := filterToolCards(allToolCards, allowedTools, nil)
 
 	// 步骤 4: 构建 CreateDeepAgentParams 前置字段（language/model/backend/prompt_mode/max_iterations）
-	// 对齐 Python: create_kwargs = {"model": spec.model or parent_config.model, ...} (code_agent_rail.py L234-252)
+	// Python: create_kwargs = {"model": spec.model or parent_config.model, ...} (code_agent_rail.py L234-252)
 	resolvedModel := spec.Model
 	if resolvedModel == nil {
 		resolvedModel = model
 	}
 
-	// 对齐 Python: language=spec.language if spec.language is not None else parent_config.language
+	// Python: language=spec.language if spec.language is not None else parent_config.language
 	resolvedLanguage := language
 	if spec.Language != "" {
 		resolvedLanguage = spec.Language
 	}
 
-	// 对齐 Python: mcps=spec.mcps
-	// 对齐 Python: backend=spec.backend if spec.backend is not None else parent_config.backend
-	// 对齐 Python: prompt_mode=spec.prompt_mode if spec.prompt_mode is not None else parent_config.prompt_mode
+	// Python: mcps=spec.mcps
+	// Python: backend=spec.backend if spec.backend is not None else parent_config.backend
+	// Python: prompt_mode=spec.prompt_mode if spec.prompt_mode is not None else parent_config.prompt_mode
 	resolvedBackend := spec.Backend
 	var resolvedPromptMode hschema.PromptMode
 	if spec.PromptMode != hschema.PromptModeFull { // PromptModeFull 是零值，表示未设置
 		resolvedPromptMode = spec.PromptMode
 	}
 
-	// 对齐 Python: max_iterations=spec.max_iterations if spec.max_iterations is not None else parent_config.max_iterations
+	// Python: max_iterations=spec.max_iterations if spec.max_iterations is not None else parent_config.max_iterations
 	// 三级 fallback：spec.MaxIterations → parent MaxIterations → 默认 15
 	maxIter := 15 // 全局默认值
 	if spec.MaxIterations > 0 {
@@ -327,7 +327,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 
 	// 步骤 5: 构建 Workspace
-	// 对齐 Python: workspace 两分支逻辑 (code_agent_rail.py L219-231)
+	// Python: workspace 两分支逻辑 (code_agent_rail.py L219-231)
 	// 分支1: parent_config.workspace 是 Workspace 对象 → 复用 root_path + language
 	// 分支2: parent_config.workspace 是字符串 → parentWorkspacePath + "/" + subSessionID
 	// 分支3: 无 workspace 信息 → "./" + subSessionID
@@ -362,7 +362,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 
 	// 步骤 6: 创建子 Agent
-	// 对齐 Python: sub_agent = create_deep_agent(**create_kwargs, **factory_kwargs)
+	// Python: sub_agent = create_deep_agent(**create_kwargs, **factory_kwargs)
 	subAgent, err := harness.CreateDeepAgent(context.Background(), params)
 	if err != nil {
 		return nil, fmt.Errorf("create_deep_agent 失败: %w", err)
@@ -377,7 +377,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 }
 
 // runAsync 后台异步执行子 Agent。
-// 对齐 Python: AgentTool._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session) (code_agent_rail.py L333-345)
+// Python: AgentTool._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session) (code_agent_rail.py L333-345)
 //
 // 关键决策：不是 fire-and-forget。子 Agent 的流式输出通过 parentSession 的
 // delivery 机制（GatewayPushTransport）推送至前端，用户可以看到实时输出。
@@ -399,7 +399,7 @@ func (t *AgentTool) runAsync(
 
 	var opts []sainterfaces.AgentOption
 	if parentSession != nil {
-		// 对齐 Python: session=parent_session
+		// Python: session=parent_session
 		// 将 parentSession 传递给子 Agent，使其流式输出能通过 GatewayPushTransport 推送
 		opts = append(opts, sainterfaces.WithSession(parentSession))
 	}
@@ -418,7 +418,7 @@ func (t *AgentTool) runAsync(
 }
 
 // buildSubSessionID 构建 sub session ID。
-// 对齐 Python: AgentTool._build_sub_session_id(parent_session_id, subagent_type) (code_agent_rail.py L181-182)
+// Python: AgentTool._build_sub_session_id(parent_session_id, subagent_type) (code_agent_rail.py L181-182)
 // 格式: "{parent_session_id}_custom_{subagent_type}_{random_hex_8chars}"
 func buildSubSessionID(parentSessionID, subagentType string) string {
 	b := make([]byte, 4)

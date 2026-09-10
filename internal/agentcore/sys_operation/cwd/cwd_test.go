@@ -11,7 +11,7 @@ import (
 )
 
 // TestInitCwd_基本初始化 测试 InitCwd 创建 CwdState
-// 对齐 Python: init_cwd(cwd) → CwdState(cwd=resolved, original_cwd=resolved, project_root=resolved)
+// Python: init_cwd(cwd) → CwdState(cwd=resolved, original_cwd=resolved, project_root=resolved)
 func TestInitCwd_基本初始化(t *testing.T) {
 	state := InitCwd("/project", WithWorkspace("/project/ws"))
 	assert.Equal(t, resolve("/project"), state.GetCwd())
@@ -21,7 +21,7 @@ func TestInitCwd_基本初始化(t *testing.T) {
 }
 
 // TestInitCwd_自定义ProjectRoot 测试显式设置 project_root
-// 对齐 Python: init_cwd(cwd, project_root="/project")
+// Python: init_cwd(cwd, project_root="/project")
 func TestInitCwd_自定义ProjectRoot(t *testing.T) {
 	state := InitCwd("/workspace", WithProjectRoot("/project"))
 	assert.Equal(t, resolve("/workspace"), state.GetCwd())
@@ -43,7 +43,7 @@ func TestInitCwd_全选项(t *testing.T) {
 }
 
 // TestCwdState_SetCwd 测试运行时修改 CWD
-// 对齐 Python: set_cwd(cwd) → _state().cwd = _resolve(cwd)
+// Python: set_cwd(cwd) → _state().cwd = _resolve(cwd)
 func TestCwdState_SetCwd(t *testing.T) {
 	state := InitCwd("/project")
 	state.SetCwd("/project/worktree")
@@ -54,7 +54,7 @@ func TestCwdState_SetCwd(t *testing.T) {
 }
 
 // TestCwdState_SetOriginalCwd 测试修改会话起始点
-// 对齐 Python: set_original_cwd(cwd)
+// Python: set_original_cwd(cwd)
 func TestCwdState_SetOriginalCwd(t *testing.T) {
 	state := InitCwd("/project")
 	state.SetOriginalCwd("/project/worktree")
@@ -62,7 +62,7 @@ func TestCwdState_SetOriginalCwd(t *testing.T) {
 }
 
 // TestCwdState_读取优先级 测试 cwd -> originalCwd -> os.Getwd() 优先级
-// 对齐 Python: get_cwd() → s.cwd or s.original_cwd or os.getcwd()
+// Python: get_cwd() → s.cwd or s.original_cwd or os.getcwd()
 func TestCwdState_读取优先级(t *testing.T) {
 	state := InitCwd("/project")
 	// 正常：返回 cwd
@@ -83,7 +83,7 @@ func TestCwdState_读取优先级(t *testing.T) {
 }
 
 // TestCwdState_GetProjectRoot优先级 测试 projectRoot -> originalCwd -> os.Getwd()
-// 对齐 Python: get_project_root() → s.project_root or get_original_cwd()
+// Python: get_project_root() → s.project_root or get_original_cwd()
 func TestCwdState_GetProjectRoot优先级(t *testing.T) {
 	state := InitCwd("/project")
 	// 正常：返回 projectRoot
@@ -115,7 +115,7 @@ func TestCwdState_并发安全(t *testing.T) {
 }
 
 // TestWithCwdState_上下文传播 测试 CwdState 通过 context 传播
-// 对齐 Python: _cwd_state.set(state) → _cwd_state.get() == state
+// Python: _cwd_state.set(state) → _cwd_state.get() == state
 func TestWithCwdState_上下文传播(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -130,7 +130,7 @@ func TestWithCwdState_上下文无CwdState(t *testing.T) {
 }
 
 // TestGetCwd_从上下文获取 测试 GetCwd(ctx) 全局函数
-// 对齐 Python: get_cwd()
+// Python: get_cwd()
 func TestGetCwd_从上下文获取(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -145,7 +145,7 @@ func TestGetCwd_上下文无CwdState回退(t *testing.T) {
 }
 
 // TestGetWorkspace_从上下文获取 测试 GetWorkspace(ctx)
-// 对齐 Python: get_workspace()
+// Python: get_workspace()
 func TestGetWorkspace_从上下文获取(t *testing.T) {
 	state := InitCwd("/project", WithWorkspace("/workspace"))
 	ctx := WithCwdState(context.Background(), state)
@@ -153,7 +153,7 @@ func TestGetWorkspace_从上下文获取(t *testing.T) {
 }
 
 // TestGetWorkspace_未设置返回空 测试 workspace 未设置时返回空字符串
-// 对齐 Python: get_workspace() → None
+// Python: get_workspace() → None
 func TestGetWorkspace_未设置返回空(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -161,7 +161,7 @@ func TestGetWorkspace_未设置返回空(t *testing.T) {
 }
 
 // TestResolveCwd_显式绝对路径 测试显式绝对路径直接使用
-// 对齐 Python: ShellOperation._resolve_cwd(cwd) — 绝对路径直接 resolve
+// Python: ShellOperation._resolve_cwd(cwd) — 绝对路径直接 resolve
 func TestResolveCwd_显式绝对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -169,7 +169,7 @@ func TestResolveCwd_显式绝对路径(t *testing.T) {
 }
 
 // TestResolveCwd_显式相对路径 测试相对路径基于 GetCwd 解析
-// 对齐 Python: target = pathlib.Path(get_cwd()) / target
+// Python: target = pathlib.Path(get_cwd()) / target
 func TestResolveCwd_显式相对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -185,7 +185,7 @@ func TestResolveCwd_空值回退(t *testing.T) {
 }
 
 // TestResolvePath_相对路径 测试相对路径基于 GetCwd 解析
-// 对齐 Python: base = pathlib.Path(get_cwd()); raw = base / path
+// Python: base = pathlib.Path(get_cwd()); raw = base / path
 func TestResolvePath_相对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -201,7 +201,7 @@ func TestResolvePath_绝对路径(t *testing.T) {
 }
 
 // Test子Agent隔离 测试子 Agent 创建独立 CwdState 不影响父
-// 对齐 Python: init_cwd() 创建新 CwdState，_cwd_state.set() 只影响当前 Task
+// Python: init_cwd() 创建新 CwdState，_cwd_state.set() 只影响当前 Task
 func Test子Agent隔离(t *testing.T) {
 	parentState := InitCwd("/project", WithWorkspace("/project"))
 	parentCtx := WithCwdState(context.Background(), parentState)
@@ -220,7 +220,7 @@ func Test子Agent隔离(t *testing.T) {
 }
 
 // Test父改子可见 测试父修改 CWD 后同一 ctx 下的子 goroutine 可见
-// 对齐 Python: 同 Task 内共享 CwdState 引用，set_cwd 后立即可见
+// Python: 同 Task 内共享 CwdState 引用，set_cwd 后立即可见
 func Test父改子可见(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
@@ -275,7 +275,7 @@ func TestGetTeamWorkspace_未设置返回空(t *testing.T) {
 }
 
 // TestCwdState_SetProjectRoot 测试设置项目根目录
-// 对齐 Python: set_project_root(root)
+// Python: set_project_root(root)
 func TestCwdState_SetProjectRoot(t *testing.T) {
 	state := InitCwd("/project")
 	state.SetProjectRoot("/newroot")
@@ -283,7 +283,7 @@ func TestCwdState_SetProjectRoot(t *testing.T) {
 }
 
 // TestCwdState_SetWorkspace 测试设置 workspace
-// 对齐 Python: set_workspace(path)
+// Python: set_workspace(path)
 func TestCwdState_SetWorkspace(t *testing.T) {
 	state := InitCwd("/project")
 	assert.Equal(t, "", state.GetWorkspace())
@@ -292,7 +292,7 @@ func TestCwdState_SetWorkspace(t *testing.T) {
 }
 
 // TestCwdState_SetTeamWorkspace 测试设置团队 workspace
-// 对齐 Python: set_team_workspace(path)
+// Python: set_team_workspace(path)
 func TestCwdState_SetTeamWorkspace(t *testing.T) {
 	state := InitCwd("/project")
 	assert.Equal(t, "", state.GetTeamWorkspace())

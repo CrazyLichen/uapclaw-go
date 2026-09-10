@@ -17,7 +17,7 @@ import (
 
 // BrowserService 浏览器后端服务，提供粘性会话和守护护栏。
 //
-// 对齐 Python: openjiuwen/harness/tools/browser_move/playwright_runtime/service.py (BrowserService)
+// Python: openjiuwen/harness/tools/browser_move/playwright_runtime/service.py (BrowserService)
 type BrowserService struct {
 	// Provider 模型提供者
 	Provider string
@@ -63,7 +63,7 @@ type BrowserService struct {
 
 const (
 	// MaxIterationMessage 最大迭代次数未完成消息
-	// 对齐 Python: MAX_ITERATION_MESSAGE
+	// Python: MAX_ITERATION_MESSAGE
 	MaxIterationMessage = "Max iterations reached without completion"
 )
 
@@ -73,7 +73,7 @@ const (
 
 // NewBrowserService 创建新的浏览器后端服务实例。
 //
-// 对齐 Python: BrowserService.__init__
+// Python: BrowserService.__init__
 func NewBrowserService(
 	provider, apiKey, apiBase, modelName string,
 	mcpCfg *mcptypes.McpServerConfig,
@@ -101,7 +101,7 @@ func NewBrowserService(
 // SessionNew 创建新的浏览器会话，返回会话标识。
 // 如果 sessionID 为空则自动生成。
 //
-// 对齐 Python: BrowserService.session_new
+// Python: BrowserService.session_new
 func (s *BrowserService) SessionNew(sessionID string) string {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -118,7 +118,7 @@ func (s *BrowserService) SessionNew(sessionID string) string {
 
 // RequestCancel 请求取消指定会话/请求的执行。
 //
-// 对齐 Python: BrowserService.request_cancel
+// Python: BrowserService.request_cancel
 func (s *BrowserService) RequestCancel(ctx context.Context, sessionID, requestID string) error {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -130,7 +130,7 @@ func (s *BrowserService) RequestCancel(ctx context.Context, sessionID, requestID
 
 // ClearCancel 清除指定会话/请求的取消标记。
 //
-// 对齐 Python: BrowserService.clear_cancel
+// Python: BrowserService.clear_cancel
 func (s *BrowserService) ClearCancel(ctx context.Context, sessionID, requestID string) error {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -145,7 +145,7 @@ func (s *BrowserService) ClearCancel(ctx context.Context, sessionID, requestID s
 
 // IsCancelled 检查指定会话/请求是否已被取消。
 //
-// 对齐 Python: BrowserService.is_cancelled
+// Python: BrowserService.is_cancelled
 func (s *BrowserService) IsCancelled(ctx context.Context, sessionID, requestID string) (bool, error) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -170,21 +170,21 @@ func (s *BrowserService) IsCancelled(ctx context.Context, sessionID, requestID s
 
 // RecordToolProgress 记录工具执行的进度信息。
 //
-// 对齐 Python: BrowserService.record_tool_progress
+// Python: BrowserService.record_tool_progress
 func (s *BrowserService) RecordToolProgress(sessionID, requestID, toolName string, toolResult any) {
 	updateProgressFromToolObservation(s, sessionID, requestID, toolName, toolResult)
 }
 
 // RecordWorkerProgress 记录 Worker 执行结果的进度信息。
 //
-// 对齐 Python: BrowserService.record_worker_progress
+// Python: BrowserService.record_worker_progress
 func (s *BrowserService) RecordWorkerProgress(sessionID, requestID string, parsed map[string]any) {
 	updateProgressFromWorkerResult(s, sessionID, requestID, parsed)
 }
 
 // GetProgressState 获取指定会话的进度状态。
 //
-// 对齐 Python: BrowserService.get_progress_state
+// Python: BrowserService.get_progress_state
 func (s *BrowserService) GetProgressState(sessionID string) *BrowserTaskProgressState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -193,7 +193,7 @@ func (s *BrowserService) GetProgressState(sessionID string) *BrowserTaskProgress
 
 // ExportProgressState 导出指定会话的进度状态为字典，空状态返回 nil。
 //
-// 对齐 Python: BrowserService.export_progress_state
+// Python: BrowserService.export_progress_state
 func (s *BrowserService) ExportProgressState(sessionID string) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -209,7 +209,7 @@ func (s *BrowserService) ExportProgressState(sessionID string) map[string]any {
 
 // SetProgressState 设置指定会话的进度状态。空状态时移除。
 //
-// 对齐 Python: BrowserService.set_progress_state
+// Python: BrowserService.set_progress_state
 func (s *BrowserService) SetProgressState(sessionID string, state *BrowserTaskProgressState) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -226,7 +226,7 @@ func (s *BrowserService) SetProgressState(sessionID string, state *BrowserTaskPr
 
 // ClearProgressState 清除指定会话的进度状态。
 //
-// 对齐 Python: BrowserService.clear_progress_state
+// Python: BrowserService.clear_progress_state
 func (s *BrowserService) ClearProgressState(sessionID string) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -239,14 +239,14 @@ func (s *BrowserService) ClearProgressState(sessionID string) {
 
 // BuildProgressContext 根据进度状态构建上下文文本。
 //
-// 对齐 Python: BrowserService.build_progress_context
+// Python: BrowserService.build_progress_context
 func BuildProgressContext(state *BrowserTaskProgressState) string {
 	return buildProgressContext(state)
 }
 
 // BuildFailureSummary 构建失败摘要，供后续重试时使用。
 //
-// 对齐 Python: BrowserService.build_failure_summary
+// Python: BrowserService.build_failure_summary
 func (s *BrowserService) BuildFailureSummary(
 	task, errStr, pageURL, pageTitle, final string,
 	screenshot any,
@@ -258,16 +258,16 @@ func (s *BrowserService) BuildFailureSummary(
 
 // ShouldTreatAsCompleted 判断是否应将结果视为已完成。
 //
-// 对齐 Python: BrowserService.should_treat_as_completed
+// Python: BrowserService.should_treat_as_completed
 func ShouldTreatAsCompleted(parsed map[string]any) bool {
 	return shouldTreatAsCompleted(parsed)
 }
 
 // NormalizeProgressStatus 规范化进度状态字符串。
-// complete/completed/done → completed，partial/in_progress/in-progress → partial，
-// blocked → 阻塞，failed → 失败。
+// complete/completed/done 映射为 completed，partial/in_progress/in-progress 映射为 partial，
+// blocked 映射为 阻塞，failed 映射为 失败。
 //
-// 对齐 Python: BrowserService._normalize_progress_status
+// Python: BrowserService._normalize_progress_status
 func NormalizeProgressStatus(value any) string {
 	normalized := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", value)))
 	aliases := map[string]string{
@@ -288,7 +288,7 @@ func NormalizeProgressStatus(value any) string {
 
 // NormalizeScreenshotValue 规范化截图值，本地路径 → data URL。
 //
-// 对齐 Python: BrowserService._normalize_screenshot_value
+// Python: BrowserService._normalize_screenshot_value
 // ⤵️ 9.38-49 回填：本地路径转 data URL 的文件系统逻辑
 func NormalizeScreenshotValue(screenshot any) any {
 	if screenshot == nil {
@@ -314,7 +314,7 @@ func NormalizeScreenshotValue(screenshot any) any {
 
 // IsRetryableTransportMessage 判断是否为可重试的传输层错误消息。
 //
-// 对齐 Python: BrowserService._is_retryable_transport_message
+// Python: BrowserService._is_retryable_transport_message
 func IsRetryableTransportMessage(text string) bool {
 	lowered := strings.ToLower(text)
 	markers := []string{
@@ -340,7 +340,7 @@ func IsRetryableTransportMessage(text string) bool {
 
 // IsRetryableRuntimeResult 判断运行时结果是否为可重试错误。
 //
-// 对齐 Python: BrowserService._is_retryable_runtime_result
+// Python: BrowserService._is_retryable_runtime_result
 func IsRetryableRuntimeResult(parsed map[string]any) bool {
 	if parsed == nil {
 		return false
@@ -372,7 +372,7 @@ func IsRetryableRuntimeResult(parsed map[string]any) bool {
 
 // EnsureRuntimeReady 确保浏览器运行时已就绪。
 //
-// 对齐 Python: BrowserService.ensure_runtime_ready
+// Python: BrowserService.ensure_runtime_ready
 // TODO(#9.38-49): ⤵️ 回填 ManagedBrowserDriver 逻辑
 func (s *BrowserService) EnsureRuntimeReady(_ context.Context) error {
 	// TODO(#9.38-49): ⤵️ 回填 ManagedBrowserDriver 逻辑
@@ -381,7 +381,7 @@ func (s *BrowserService) EnsureRuntimeReady(_ context.Context) error {
 
 // EnsureStarted 确保浏览器服务已启动（运行时就绪 + Worker Agent 已构建）。
 //
-// 对齐 Python: BrowserService.ensure_started
+// Python: BrowserService.ensure_started
 // TODO(#9.38-49): ⤵️ 回填 BuildBrowserWorkerAgent
 func (s *BrowserService) EnsureStarted(ctx context.Context) error {
 	if err := s.EnsureRuntimeReady(ctx); err != nil {
@@ -393,7 +393,7 @@ func (s *BrowserService) EnsureStarted(ctx context.Context) error {
 
 // Shutdown 关闭浏览器服务。
 //
-// 对齐 Python: BrowserService.shutdown
+// Python: BrowserService.shutdown
 func (s *BrowserService) Shutdown(_ context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -406,7 +406,7 @@ func (s *BrowserService) Shutdown(_ context.Context) error {
 
 // RunTask 执行浏览器任务，支持 retry_once + resume_on_max_iterations + transport error 重启。
 //
-// 对齐 Python: BrowserService.run_task (service.py:1263-1494)
+// Python: BrowserService.run_task (service.py:1263-1494)
 func (s *BrowserService) RunTask(
 	ctx context.Context,
 	task, sessionID, requestID string,
@@ -703,7 +703,7 @@ func (s *BrowserService) RunTask(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // cancelKey 生成取消标记的键。
-// 对齐 Python: BrowserService._cancel_key
+// Python: BrowserService._cancel_key
 func cancelKey(sessionID, requestID string) string {
 	rid := strings.TrimSpace(requestID)
 	if rid == "" {
@@ -725,7 +725,7 @@ func (s *BrowserService) getLock(sid string) *sync.Mutex {
 }
 
 // getProgressState 获取或创建指定会话的进度状态。
-// 对齐 Python: BrowserService._get_progress_state
+// Python: BrowserService._get_progress_state
 func (s *BrowserService) getProgressState(sid string) *BrowserTaskProgressState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -745,14 +745,14 @@ func (s *BrowserService) getProgressState(sid string) *BrowserTaskProgressState 
 }
 
 // runTaskOnceWithTimeout 带超时执行单次任务。
-// 对齐 Python: BrowserService._run_task_once（占位，待 Worker Agent 回填）
+// Python: BrowserService._run_task_once（占位，待 Worker Agent 回填）
 func (s *BrowserService) runTaskOnceWithTimeout(
 	ctx context.Context,
 	task, sessionID, requestID string,
 	timeoutS int,
 ) (map[string]any, error) {
 	// TODO(#9.38-49): ⤵️ 回填 Worker Agent 执行逻辑
-	// 对齐 Python: _run_task_once → Runner.run_agent
+	// Python: _run_task_once → Runner.run_agent
 	if s.browserAgent == nil {
 		return nil, fmt.Errorf("BrowserService 未启动")
 	}
@@ -772,7 +772,7 @@ func (s *BrowserService) runTaskOnceWithTimeout(
 }
 
 // restart 重启浏览器服务。
-// 对齐 Python: BrowserService._restart
+// Python: BrowserService._restart
 // TODO(#9.38-49): ⤵️ 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
 func (s *BrowserService) restart(_ context.Context) error {
 	// TODO(#9.38-49): ⤵️ 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
@@ -780,7 +780,7 @@ func (s *BrowserService) restart(_ context.Context) error {
 }
 
 // updateProgressFromToolObservation 从工具执行结果更新进度状态。
-// 对齐 Python: BrowserService._update_progress_from_tool_observation
+// Python: BrowserService._update_progress_from_tool_observation
 func updateProgressFromToolObservation(
 	s *BrowserService,
 	sessionID, requestID, toolName string,
@@ -816,7 +816,7 @@ func updateProgressFromToolObservation(
 }
 
 // updateProgressFromWorkerResult 从 Worker 执行结果更新进度状态。
-// 对齐 Python: BrowserService._update_progress_from_worker_result
+// Python: BrowserService._update_progress_from_worker_result
 func updateProgressFromWorkerResult(
 	s *BrowserService,
 	sessionID, requestID string,
@@ -913,7 +913,7 @@ func updateProgressFromWorkerResult(
 }
 
 // buildProgressContext 根据进度状态构建上下文文本。
-// 对齐 Python: BrowserService._build_progress_context
+// Python: BrowserService._build_progress_context
 func buildProgressContext(state *BrowserTaskProgressState) string {
 	if state == nil {
 		return ""
@@ -954,7 +954,7 @@ func buildProgressContext(state *BrowserTaskProgressState) string {
 }
 
 // buildFailureSummary 构建失败摘要。
-// 对齐 Python: BrowserService._build_failure_summary
+// Python: BrowserService._build_failure_summary
 func buildFailureSummary(
 	task, errStr, pageURL, pageTitle, final string,
 	screenshot any,
@@ -991,7 +991,7 @@ func buildFailureSummary(
 }
 
 // shouldTreatAsCompleted 判断是否应将结果视为已完成。
-// 对齐 Python: BrowserService._should_treat_as_completed
+// Python: BrowserService._should_treat_as_completed
 func shouldTreatAsCompleted(parsed map[string]any) bool {
 	status := NormalizeProgressStatus(
 		firstNonEmpty(parsed["status"], parsed["task_status"]),
@@ -1019,7 +1019,7 @@ func shouldTreatAsCompleted(parsed map[string]any) bool {
 }
 
 // isEmptyProgressState 判断进度状态是否为空。
-// 对齐 Python: BrowserService._is_empty_progress_state
+// Python: BrowserService._is_empty_progress_state
 func isEmptyProgressState(state *BrowserTaskProgressState) bool {
 	return state.Status == "unknown" &&
 		len(state.CompletedSteps) == 0 &&
@@ -1035,7 +1035,7 @@ func isEmptyProgressState(state *BrowserTaskProgressState) bool {
 }
 
 // isMaxIterationResult 判断是否为最大迭代次数结果。
-// 对齐 Python: BrowserService._is_max_iteration_result
+// Python: BrowserService._is_max_iteration_result
 func isMaxIterationResult(parsed map[string]any) bool {
 	if parsed == nil {
 		return false
@@ -1058,7 +1058,7 @@ func isMaxIterationResult(parsed map[string]any) bool {
 }
 
 // buildResumeTask 构建续行任务提示词。
-// 对齐 Python: BrowserService._build_resume_task
+// Python: BrowserService._build_resume_task
 func buildResumeTask(task, previousFinal, progressContext string) string {
 	base := strings.TrimSpace(task)
 	previous := strings.TrimSpace(previousFinal)
@@ -1084,7 +1084,7 @@ func buildResumeTask(task, previousFinal, progressContext string) string {
 }
 
 // buildTaskWithFailureContext 构建带失败上下文的任务提示词。
-// 对齐 Python: BrowserService._build_task_with_failure_context
+// Python: BrowserService._build_task_with_failure_context
 func buildTaskWithFailureContext(task, failureSummary string) string {
 	base := strings.TrimSpace(task)
 	summary := strings.TrimSpace(failureSummary)
@@ -1101,7 +1101,7 @@ func buildTaskWithFailureContext(task, failureSummary string) string {
 }
 
 // cleanProgressItems 清理和去重进度项列表。
-// 对齐 Python: BrowserService._clean_progress_items
+// Python: BrowserService._clean_progress_items
 func cleanProgressItems(value any, limit int) []string {
 	if value == nil {
 		return []string{}
@@ -1139,7 +1139,7 @@ func cleanProgressItems(value any, limit int) []string {
 }
 
 // pushRecentToolStep 追加最近工具步骤，去重并限制数量，返回新切片。
-// 对齐 Python: BrowserService._push_recent_tool_step
+// Python: BrowserService._push_recent_tool_step
 func pushRecentToolStep(existing []string, step string, limit ...int) []string {
 	maxLen := 8
 	if len(limit) > 0 {
@@ -1163,7 +1163,7 @@ func pushRecentToolStep(existing []string, step string, limit ...int) []string {
 }
 
 // extractPageSnapshot 从值中提取页面快照（URL 和标题）。
-// 对齐 Python: BrowserService._extract_page_snapshot
+// Python: BrowserService._extract_page_snapshot
 func extractPageSnapshot(value any) (string, string) {
 	m, ok := value.(map[string]any)
 	if !ok {
@@ -1179,7 +1179,7 @@ func extractPageSnapshot(value any) (string, string) {
 }
 
 // extractScreenshotSnapshot 从值中提取截图。
-// 对齐 Python: BrowserService._extract_screenshot_snapshot
+// Python: BrowserService._extract_screenshot_snapshot
 func extractScreenshotSnapshot(value any) any {
 	m, ok := value.(map[string]any)
 	if !ok {
@@ -1193,7 +1193,7 @@ func extractScreenshotSnapshot(value any) any {
 }
 
 // summarizeObservationPayload 汇总观测负载信息。
-// 对齐 Python: BrowserService._summarize_observation_payload
+// Python: BrowserService._summarize_observation_payload
 func summarizeObservationPayload(value any) string {
 	switch v := value.(type) {
 	case map[string]any:
@@ -1255,7 +1255,7 @@ func summarizeObservationPayload(value any) string {
 }
 
 // summarizeToolResult 汇总工具执行结果。
-// 对齐 Python: BrowserService._summarize_tool_result
+// Python: BrowserService._summarize_tool_result
 func summarizeToolResult(toolName string, toolResult any) string {
 	payloadSummary := summarizeObservationPayload(toolResult)
 	if payloadSummary == "" {
@@ -1268,7 +1268,7 @@ func summarizeToolResult(toolName string, toolResult any) string {
 }
 
 // shouldRestartAfterRuntimeResult 判断是否应在运行时结果后重启。
-// 对齐 Python: BrowserService._should_restart_after_runtime_result
+// Python: BrowserService._should_restart_after_runtime_result
 func shouldRestartAfterRuntimeResult(parsed map[string]any) bool {
 	if parsed == nil {
 		return false
@@ -1292,7 +1292,7 @@ func shouldRestartAfterRuntimeResult(parsed map[string]any) bool {
 }
 
 // trimText 截断文本到指定长度。
-// 对齐 Python: BrowserService._trim_text
+// Python: BrowserService._trim_text
 func trimText(value any, limit int) string {
 	text := strings.TrimSpace(fmt.Sprintf("%v", value))
 	if len(text) > limit {
@@ -1349,7 +1349,7 @@ func orUnknown(s string) string {
 }
 
 // buildWorkerConversationID 构建Worker会话标识。
-// 对齐 Python: BrowserService._build_worker_conversation_id
+// Python: BrowserService._build_worker_conversation_id
 func buildWorkerConversationID(sessionID, requestID string) string {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {

@@ -26,7 +26,7 @@ import (
 
 // handleChannelControl 处理 slash 命令，返回 true 表示已处理
 //
-// 对齐 Python _handle_channel_control (L615-883)：
+// Python: _handle_channel_control (L615-883)：
 // 调用 command_parser.ParseChannelControlText，按 action 分发处理。
 // Web 渠道不在受控类型中，直接返回 false。
 func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
@@ -99,7 +99,7 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 
 // newSessionCancelAndNotice 处理 /new_session 命令。
 //
-// 对齐 Python _new_session_cancel_and_notice (L575-591)：
+// Python: _new_session_cancel_and_notice (L575-591)：
 // 先更新 state 再异步取消旧会话（publishInterruptResult=false），最后发通知。
 func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
@@ -123,7 +123,7 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ comma
 
 // modeChangeCancelAndNotice 处理 /mode 和 /switch 命令。
 //
-// 对齐 Python _mode_change_cancel_and_notice (L593-613)：
+// Python: _mode_change_cancel_and_notice (L593-613)：
 // 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
 func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	// 提前获取渠道状态（/switch 需要读取当前 mode）
@@ -135,7 +135,7 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 	case command_parser.ActionModeOK:
 		newMode = ParseChannelMode(parsed.ModeSubcommand)
 	case command_parser.ActionSwitchOK:
-		// 对齐 Python：根据当前 state.Mode 判断模式家族，再决定目标模式
+		// Python: 根据当前 state.Mode 判断模式家族，再决定目标模式
 		currentMode := state.Mode
 		switch parsed.SwitchSubcommand {
 		case "plan":
@@ -202,7 +202,7 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 
 // sendChannelNotice 发送渠道通知消息。
 //
-// 对齐 Python _send_channel_notice (L347-379)：
+// Python: _send_channel_notice (L347-379)：
 // event_type 为 CHAT_FINAL，payload 确保补齐 is_complete: true。
 // 传 string 时调用方应包装为 {"content": text}，此处仅接受 map[string]any。
 func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[string]any) {
@@ -228,7 +228,7 @@ func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[str
 
 // skillsSlashNotice 处理 /skills list 命令。
 //
-// 对齐 Python _skills_slash_notice (L885-937)：
+// Python: _skills_slash_notice (L885-937)：
 // 构造 SKILLS_LIST E2A → AgentClient.SendRequest → 格式化通知。
 func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
@@ -295,7 +295,7 @@ func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 
 // branchSlashNotice 处理 /branch 命令。
 //
-// 对齐 Python _branch_slash_notice (L939-1015)：
+// Python: _branch_slash_notice (L939-1015)：
 // 构造 SESSION_FORK E2A → AgentClient.SendRequest → 格式化通知。
 func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
@@ -376,7 +376,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 
 // rewindSlashConfirmPrompt 发送 /rewind 确认提示。
 //
-// 对齐 Python _rewind_slash_confirm_prompt (L1017-1045)：
+// Python: _rewind_slash_confirm_prompt (L1017-1045)：
 // 两步确认：先发送确认提示，不立即执行。
 func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	turn := parsed.RewindTurn
@@ -388,7 +388,7 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 
 // rewindSlashNotice 处理 /rewind 命令（用户已确认）。
 //
-// 对齐 Python _rewind_slash_notice (L1047-1142)：
+// Python: _rewind_slash_notice (L1047-1142)：
 // E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest。
 func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
@@ -472,7 +472,7 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 
 // extractTextFromParams 从消息 params 中提取文本内容。
 //
-// 对齐 Python：params.get("query") or params.get("content") or ""
+// Python: params.get("query") or params.get("content") or ""
 func extractTextFromParams(params json.RawMessage) string {
 	if len(params) == 0 {
 		return ""

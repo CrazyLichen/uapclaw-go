@@ -11,7 +11,7 @@ import (
 
 // WorkflowNodeSession 工作流节点会话接口，TracerWorkflowUtils 方法的 session 参数类型。
 //
-// 对应 Python TracerWorkflowUtils 中 session 参数的隐式接口（duck typing），
+// Python: TracerWorkflowUtils 中 session 参数的隐式接口（duck typing），
 // Python 不定义接口，Go 必须显式定义。
 //
 // 仅 *internal.NodeSession（及嵌入它的 *SubWorkflowSession）满足此接口，
@@ -186,7 +186,7 @@ func (TracerWorkflowUtils) TraceComponentDone(ctx context.Context, session Workf
 		InvokeID: executableID,
 	})
 
-	// 对齐 Python: loop_id = state.get_global(LOOP_ID); if loop_id is None: return
+	// Python: loop_id = state.get_global(LOOP_ID); if loop_id is None: return
 	// 循环组件未实现前（8.20），state.GetGlobal(loopID) 返回 nil，不执行 PopWorkflowSpan。
 	// 8.20 实现后，循环组件在 state 中写入 loopID，此处读取到非空值后执行 PopWorkflowSpan。
 	// ⤵️ 8.20 回填：从 state.GetGlobal(loopID) 获取 loop_id，
@@ -265,7 +265,7 @@ func getWorkflowMetadata(session WorkflowNodeSession) map[string]any {
 // getComponentMetadata 获取组件元数据，对应 Python TracerWorkflowUtils._get_component_metadata。
 // 返回 component_id/component_name/component_type/workflow_id。
 // 当循环组件写入 LOOP_ID 后，额外返回 loop_node_id/loop_index。
-// 对齐 Python:
+// Python:
 //
 //	Python: loop_id = state.get_global(LOOP_ID) — 获取循环标识
 //	Python: if loop_id is None: return component_metadata — 无循环则直接返回
@@ -279,12 +279,12 @@ func getComponentMetadata(session WorkflowNodeSession) map[string]any {
 		"workflow_id":    session.WorkflowID(),
 	}
 
-	// 对齐 Python: loop_id = state.get_global(LOOP_ID)
+	// Python: loop_id = state.get_global(LOOP_ID)
 	if session.State() != nil {
 		loopIDVal := session.State().GetGlobal(state.StringKey(loopID))
 		if loopIDVal != nil {
 			if loopIDStr, ok := loopIDVal.(string); ok && loopIDStr != "" {
-				// 对齐 Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
+				// Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
 				indexKey := loopIDStr + loopIndexSuffix
 				indexVal := session.State().GetGlobal(state.StringKey(indexKey))
 				metadata["loop_node_id"] = loopIDStr

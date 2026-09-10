@@ -16,7 +16,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ImageExtensions 图片文件扩展名集合
-// 对齐 Python: ReadFileTool._IMAGE_EXTENSIONS (filesystem.py L279)
+// Python: ReadFileTool._IMAGE_EXTENSIONS (filesystem.py L279)
 
 var ImageExtensions = map[string]bool{
 	".png":  true,
@@ -40,7 +40,7 @@ var NotebookExtensions = map[string]bool{
 }
 
 // blockedDevicePaths 被阻止的设备路径集合。
-// 对齐 Python: _BLOCKED_DEVICE_PATHS (filesystem.py L32-37)
+// Python: _BLOCKED_DEVICE_PATHS (filesystem.py L32-37)
 var blockedDevicePaths = map[string]bool{
 	"/dev/zero":    true,
 	"/dev/random":  true,
@@ -57,7 +57,7 @@ var blockedDevicePaths = map[string]bool{
 }
 
 // binaryExtensions 二进制文件扩展名集合。
-// 对齐 Python: _BINARY_EXTENSIONS (filesystem.py L41-46)
+// Python: _BINARY_EXTENSIONS (filesystem.py L41-46)
 var binaryExtensions = map[string]bool{
 	".exe": true, ".dll": true, ".so": true, ".dylib": true,
 	".bin": true, ".obj": true, ".o": true, ".a": true, ".lib": true,
@@ -67,14 +67,14 @@ var binaryExtensions = map[string]bool{
 }
 
 // mdExtensions Markdown 文件扩展名集合。
-// 对齐 Python: EditFileTool._MD_EXTENSIONS (filesystem.py L1006)
+// Python: EditFileTool._MD_EXTENSIONS (filesystem.py L1006)
 var mdExtensions = map[string]bool{
 	".md":  true,
 	".mdx": true,
 }
 
 // destructivePatterns 破坏性命令正则模式及警告。
-// 对齐 Python: get_destructive_warning (bash/_security.py L54-68)
+// Python: get_destructive_warning (bash/_security.py L54-68)
 var destructivePatterns = []struct {
 	pattern *regexp.Regexp
 	warning string
@@ -100,7 +100,7 @@ var braceRe = regexp.MustCompile(`\{([^{}]*)\}`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExpandBracePattern 展开花括号模式。
-// 对齐 Python: GlobTool._expand_brace_pattern (filesystem.py L1428-1444)
+// Python: GlobTool._expand_brace_pattern (filesystem.py L1428-1444)
 // 例如: "*.{py,js}" → ["*.py", "*.js"]
 func ExpandBracePattern(pattern string) []string {
 	if !strings.ContainsRune(pattern, '{') || !strings.ContainsRune(pattern, '}') {
@@ -110,7 +110,7 @@ func ExpandBracePattern(pattern string) []string {
 }
 
 // CatN 添加行号格式化（cat -n 风格）。
-// 对齐 Python: ReadFileTool._cat_n (filesystem.py L386-391)
+// Python: ReadFileTool._cat_n (filesystem.py L386-391)
 func CatN(content string) string {
 	if content == "" {
 		return ""
@@ -127,7 +127,7 @@ func CatN(content string) string {
 }
 
 // IsBlockedDevice 检查是否为设备路径。
-// 对齐 Python: ReadFileTool._is_blocked_device (filesystem.py L311-317)
+// Python: ReadFileTool._is_blocked_device (filesystem.py L311-317)
 func IsBlockedDevice(path string) bool {
 	if blockedDevicePaths[path] {
 		return true
@@ -144,7 +144,7 @@ func IsBlockedDevice(path string) bool {
 }
 
 // IsBinaryCandidate 检查是否为二进制文件扩展名。
-// 对齐 Python: ReadFileTool._is_binary (filesystem.py L320-322)
+// Python: ReadFileTool._is_binary (filesystem.py L320-322)
 // 以及 _is_plain_text_candidate (filesystem.py L408-412)
 // 排除图片、PDF、Notebook 后，判断是否为二进制扩展名。
 func IsBinaryCandidate(path string) bool {
@@ -153,7 +153,7 @@ func IsBinaryCandidate(path string) bool {
 }
 
 // StripTrailingWhitespace 去除行尾空白（Markdown 文件除外）。
-// 对齐 Python: EditFileTool._strip_trailing_whitespace (filesystem.py L1057-1074)
+// Python: EditFileTool._strip_trailing_whitespace (filesystem.py L1057-1074)
 func StripTrailingWhitespace(content string, isMarkdown bool) string {
 	if isMarkdown {
 		return content
@@ -202,7 +202,7 @@ func StripTrailingWhitespace(content string, isMarkdown bool) string {
 }
 
 // DetectEOL 检测文件的行尾风格。
-// 对齐 Python: EditFileTool._detect_eol (filesystem.py L1043-1044)
+// Python: EditFileTool._detect_eol (filesystem.py L1043-1044)
 func DetectEOL(content string) string {
 	if strings.Contains(content, "\r\n") {
 		return "\r\n"
@@ -211,7 +211,7 @@ func DetectEOL(content string) string {
 }
 
 // RelativizePaths 将绝对路径列表转为相对于 base 的相对路径。
-// 对齐 Python: GlobTool._relativize_paths (filesystem.py L1413-1425)
+// Python: GlobTool._relativize_paths (filesystem.py L1413-1425)
 func RelativizePaths(base string, paths []string) []string {
 	// 解析 base 以处理符号链接（如 macOS 的 /var → /private/var）
 	resolvedBase, err := filepath.EvalSymlinks(base)
@@ -232,7 +232,7 @@ func RelativizePaths(base string, paths []string) []string {
 }
 
 // GetDestructiveWarning 检测破坏性命令并返回警告。
-// 对齐 Python: get_destructive_warning (bash/_security.py L71-81)
+// Python: get_destructive_warning (bash/_security.py L71-81)
 // 纯信息性质，不阻止执行。
 func GetDestructiveWarning(command string) string {
 	for _, dp := range destructivePatterns {
@@ -246,7 +246,7 @@ func GetDestructiveWarning(command string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // expandGroup 递归展开花括号组。
-// 对齐 Python: GlobTool._expand_brace_pattern 内的 expand_group (filesystem.py L1433-1443)
+// Python: GlobTool._expand_brace_pattern 内的 expand_group (filesystem.py L1433-1443)
 func expandGroup(s string) []string {
 	match := braceRe.FindStringSubmatchIndex(s)
 	if match == nil {

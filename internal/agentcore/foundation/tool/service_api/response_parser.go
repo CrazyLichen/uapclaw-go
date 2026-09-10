@@ -26,7 +26,7 @@ import (
 
 // BaseResponseParser HTTP 响应解析器接口。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/response_parser.py (BaseResponseParser)
+// Python: openjiuwen/core/foundation/tool/service_api/response_parser.py (BaseResponseParser)
 type BaseResponseParser interface {
 	// CanParse 判断是否能解析此 content-type 的响应
 	CanParse(contentType string, statusCode int, headers map[string]string) bool
@@ -36,7 +36,7 @@ type BaseResponseParser interface {
 
 // BaseResponseDecompressor HTTP 响应解压器接口。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/response_parser.py (BaseResponseDecompressor)
+// Python: openjiuwen/core/foundation/tool/service_api/response_parser.py (BaseResponseDecompressor)
 type BaseResponseDecompressor interface {
 	// CanDecompress 判断是否能解压此编码
 	CanDecompress(encoding string) bool
@@ -49,24 +49,24 @@ type BaseResponseDecompressor interface {
 // 识别标准 JSON content-type（application/json、text/json）
 // 和 RFC 6839 +json 后缀类型（如 application/video+json、application/hal+json）。
 //
-// 对应 Python: JsonResponseParser
+// Python: JsonResponseParser
 type JsonResponseParser struct{}
 
 // TextResponseParser 文本响应解析器。
 //
 // 识别 text/*、application/xml 等 content-type。
 //
-// 对应 Python: TextResponseParser
+// Python: TextResponseParser
 type TextResponseParser struct{}
 
 // GzipDecompressor GZIP 解压器。
 //
-// 对应 Python: GzipDecompressor
+// Python: GzipDecompressor
 type GzipDecompressor struct{}
 
 // DeflateDecompressor Deflate 解压器。
 //
-// 对应 Python: DeflateDecompressor
+// Python: DeflateDecompressor
 type DeflateDecompressor struct{}
 
 // ParserRegistry 响应解析器注册表，单例模式。
@@ -74,7 +74,7 @@ type DeflateDecompressor struct{}
 // 注册解析器和解压器，根据 content-type 选择解析器，
 // 根据 content-encoding 解压响应数据。
 //
-// 对应 Python: ParserRegistry（Singleton 元类）
+// Python: ParserRegistry（Singleton 元类）
 type ParserRegistry struct {
 	parsers       []BaseResponseParser
 	decompressors map[string]BaseResponseDecompressor
@@ -118,7 +118,7 @@ func (r *ParserRegistry) RegisterDecompressor(encoding string, decompressor Base
 //  2. 按 content-type 选择解析器
 //  3. 调用解析器解析数据
 //
-// 对应 Python: ParserRegistry.parse()
+// Python: ParserRegistry.parse()
 func (r *ParserRegistry) Parse(headers map[string]string, data []byte, statusCode int) (any, error) {
 	lowerHeaders := toLowerHeaders(headers)
 	contentType := lowerHeaders["content-type"]
@@ -370,7 +370,7 @@ func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
 
 // decompressRawDeflate 解压 raw deflate 数据（无 zlib header）。
 //
-// 对应 Python: zlib.decompress(data, -zlib.MAX_WBITS)
+// Python: zlib.decompress(data, -zlib.MAX_WBITS)
 //
 // Go 标准库的 compress/flate.NewReader 创建的读取器就是 raw deflate 模式
 // （与 Python 的 zlib.decompress(data, -zlib.MAX_WBITS) 等价），

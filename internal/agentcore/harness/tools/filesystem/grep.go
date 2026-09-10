@@ -19,7 +19,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GrepInput grep 工具的输入参数。
-// 对齐 Python: GrepTool inputs (filesystem.py L1534)
+// Python: GrepTool inputs (filesystem.py L1534)
 type GrepInput struct {
 	// Pattern 正则表达式（必需）
 	Pattern string `json:"pattern"`
@@ -59,18 +59,18 @@ type GrepInput struct {
 
 const (
 	// grepDefaultHeadLimit 默认 head_limit。
-	// 对齐 Python: GrepTool.DEFAULT_HEAD_LIMIT (filesystem.py L1535)
+	// Python: GrepTool.DEFAULT_HEAD_LIMIT (filesystem.py L1535)
 	grepDefaultHeadLimit = 250
 
 	// grepMaxColumns rg 最大列数。
-	// 对齐 Python: GrepTool.MAX_COLUMNS (filesystem.py L1536)
+	// Python: GrepTool.MAX_COLUMNS (filesystem.py L1536)
 	grepMaxColumns = 500
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // vcsDirectoriesToExclude 版本控制目录排除列表。
-// 对齐 Python: GrepTool.VCS_DIRECTORIES_TO_EXCLUDE (filesystem.py L1537)
+// Python: GrepTool.VCS_DIRECTORIES_TO_EXCLUDE (filesystem.py L1537)
 
 var vcsDirectoriesToExclude = []string{".git", ".svn", ".hg", ".bzr", ".jj", ".sl"}
 
@@ -83,13 +83,13 @@ var braceGlobRe = regexp.MustCompile(`^(.*)\{([^}]+)\}(.*)$`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGrepTool 创建 GrepTool 实例。
-// 对齐 Python: GrepTool (filesystem.py L1534)
+// Python: GrepTool (filesystem.py L1534)
 func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("grep", "GrepTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input GrepInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 校验 pattern 必需
-		// 对齐 Python L1897-1899
+		// Python: L1897-1899
 		if input.Pattern == "" {
 			return map[string]any{
 				"success": false,
@@ -98,7 +98,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 解析搜索路径
-		// 对齐 Python L1901-1904
+		// Python: L1901-1904
 		searchPath, err := resolveSearchPath(ctx, input.Path)
 		if err != nil {
 			return map[string]any{
@@ -108,7 +108,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 解析 output_mode
-		// 对齐 Python L1906-1908
+		// Python: L1906-1908
 		outputMode := input.OutputMode
 		if outputMode == "" {
 			outputMode = "content"
@@ -122,18 +122,18 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 合并 -i 和 ignore_case
-		// 对齐 Python L1910
+		// Python: L1910
 		caseInsensitive := input.I || input.IgnoreCase
 
 		// 解析 -n，默认 true
-		// 对齐 Python L1911
+		// Python: L1911
 		showLineNumbers := true
 		if input.N != nil {
 			showLineNumbers = *input.N
 		}
 
 		// 解析上下文参数
-		// 对齐 Python L1912-1915
+		// Python: L1912-1915
 		contextBefore := intPtrOrNil(input.B)
 		contextAfter := intPtrOrNil(input.A)
 		contextC := intPtrOrNil(input.C)
@@ -147,7 +147,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		fileType := input.Type
 
 		// 非 content 模式时清零上下文参数
-		// 对齐 Python L1922-1929
+		// Python: L1922-1929
 		if outputMode != "content" {
 			if contextBefore != nil || contextAfter != nil || contextC != nil || context != nil {
 				contextBefore = nil
@@ -158,7 +158,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 检测 rg 可用性，构建命令
-		// 对齐 Python L1931-1979
+		// Python: L1931-1979
 		var cmd string
 		isWindows := runtime.GOOS == "windows"
 
@@ -207,7 +207,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 执行命令
-		// 对齐 Python L1981-1982
+		// Python: L1981-1982
 		shellType := sys_operation.ShellTypeAuto
 		if isWindows {
 			shellType = sys_operation.ShellTypePowerShell
@@ -239,7 +239,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 解析执行结果
-		// 对齐 Python L1987-1990
+		// Python: L1987-1990
 		stdout := ""
 		stderr := ""
 		exitCode := -1
@@ -252,11 +252,11 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// exit_code ∈ {0, 1} 视为成功
-		// 对齐 Python L1990
+		// Python: L1990
 		success := exitCode == 0 || exitCode == 1
 
 		// 计算 base_path 用于相对路径转换
-		// 对齐 Python L2001
+		// Python: L2001
 		basePath := searchPath
 		if fi, statErr := os.Stat(searchPath); statErr == nil && !fi.IsDir() {
 			dir := filepath.Dir(searchPath)
@@ -268,7 +268,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 
 		// 构建结构化输出
-		// 对齐 Python L1992-2003
+		// Python: L1992-2003
 		data := buildStructuredOutput(
 			stdout, stderr, exitCode, outputMode,
 			headLimit, offset, basePath,
@@ -293,14 +293,14 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rgAvailable 检测 rg 命令是否可用。
-// 对齐 Python: shutil.which("rg") (filesystem.py L1931)
+// Python: shutil.which("rg") (filesystem.py L1931)
 func rgAvailable() bool {
 	_, err := exec.LookPath("rg")
 	return err == nil
 }
 
 // shellQuote 对值进行 Shell 引号包裹。
-// 对齐 Python: GrepTool._shell_quote (filesystem.py L1544-1549)
+// Python: GrepTool._shell_quote (filesystem.py L1544-1549)
 func shellQuote(value string) string {
 	if runtime.GOOS == "windows" {
 		return "'" + strings.ReplaceAll(value, "'", "''") + "'"
@@ -310,7 +310,7 @@ func shellQuote(value string) string {
 }
 
 // splitGlobPatterns 拆分 glob 模式字符串。
-// 对齐 Python: GrepTool._split_glob_patterns (filesystem.py L1588-1599)
+// Python: GrepTool._split_glob_patterns (filesystem.py L1588-1599)
 func splitGlobPatterns(globValue string) []string {
 	if globValue == "" {
 		return nil
@@ -331,7 +331,7 @@ func splitGlobPatterns(globValue string) []string {
 }
 
 // intPtrOrNil 将零值 int 转为 nil，非零值转为 *int。
-// 对齐 Python: GrepTool._as_int — None/空 对应 nil
+// Python: GrepTool._as_int — None/空 对应 nil
 func intPtrOrNil(v int) *int {
 	if v == 0 {
 		return nil
@@ -340,7 +340,7 @@ func intPtrOrNil(v int) *int {
 }
 
 // buildRgCommand 构建 ripgrep 命令。
-// 对齐 Python: GrepTool._build_rg_command (filesystem.py L1606-1668)
+// Python: GrepTool._build_rg_command (filesystem.py L1606-1668)
 func buildRgCommand(
 	pattern, path, globVal, outputMode string,
 	contextBefore, contextAfter, contextC, context *int,
@@ -411,7 +411,7 @@ func buildRgCommand(
 }
 
 // buildGrepCommand 构建 grep 命令。
-// 对齐 Python: GrepTool._build_grep_command (filesystem.py L1748-1796)
+// Python: GrepTool._build_grep_command (filesystem.py L1748-1796)
 // 返回空字符串表示不支持（如 multiline 模式）。
 func buildGrepCommand(
 	pattern, path, globVal, outputMode string,
@@ -468,7 +468,7 @@ func buildGrepCommand(
 }
 
 // buildSelectStringCommand 构建 PowerShell Select-String 命令。
-// 对齐 Python: GrepTool._build_select_string_command (filesystem.py L1670-1746)
+// Python: GrepTool._build_select_string_command (filesystem.py L1670-1746)
 // 仅在 Windows 且无 rg 时使用。
 func buildSelectStringCommand(
 	pattern, path, globVal, outputMode string,
@@ -572,7 +572,7 @@ func buildSelectStringCommand(
 }
 
 // applyHeadLimit 应用 head_limit 和 offset 分页。
-// 对齐 Python: GrepTool._apply_head_limit (filesystem.py L1575-1586)
+// Python: GrepTool._apply_head_limit (filesystem.py L1575-1586)
 func applyHeadLimit(items []string, limit *int, offset int) ([]string, *int) {
 	if offset < 0 {
 		offset = 0
@@ -599,7 +599,7 @@ func applyHeadLimit(items []string, limit *int, offset int) ([]string, *int) {
 }
 
 // extractFilePathFromLine 从输出行提取文件路径。
-// 对齐 Python: GrepTool._extract_file_path_from_line (filesystem.py L1798-1812)
+// Python: GrepTool._extract_file_path_from_line (filesystem.py L1798-1812)
 func extractFilePathFromLine(line, mode string) string {
 	if line == "" {
 		return ""
@@ -627,7 +627,7 @@ func extractFilePathFromLine(line, mode string) string {
 }
 
 // relativizeLine 将输出行中的绝对路径转为相对路径。
-// 对齐 Python: GrepTool._relativize_line (filesystem.py L1814-1831)
+// Python: GrepTool._relativize_line (filesystem.py L1814-1831)
 func relativizeLine(line, basePath, mode string) string {
 	filePath := extractFilePathFromLine(line, mode)
 	if filePath == "" {
@@ -651,7 +651,7 @@ func relativizeLine(line, basePath, mode string) string {
 }
 
 // buildStructuredOutput 构建结构化输出。
-// 对齐 Python: GrepTool._build_structured_output (filesystem.py L1833-1894)
+// Python: GrepTool._build_structured_output (filesystem.py L1833-1894)
 func buildStructuredOutput(
 	stdout, stderr string,
 	exitCode int,

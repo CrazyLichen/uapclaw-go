@@ -16,7 +16,7 @@ import (
 // 默认提供 requestHeaders / requestParams / parseResponse / assembleParams 等通用方法，
 // 子类可按需覆盖。
 //
-// 对应 Python: Reranker ABC 中的 _request_headers / _request_params / _parse_response
+// Python: Reranker ABC 中的 _request_headers / _request_params / _parse_response
 type RerankerBase struct {
 	// config 重排序模型配置
 	config reranker.RerankerConfig

@@ -5,7 +5,7 @@
 // 通过 lite.CodingMemoryToolContext 提供上下文（工作空间、系统操作、索引管理器等），
 // 底层调用 lite.CodingMemoryReadWithContext / CodingMemoryWriteWithContext / CodingMemoryEditWithContext。
 //
-// 对齐 Python: openjiuwen/harness/tools/coding_memory.py
+// Python: openjiuwen/harness/tools/coding_memory.py
 //
 // 文件目录：
 //

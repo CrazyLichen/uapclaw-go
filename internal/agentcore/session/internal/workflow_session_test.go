@@ -554,7 +554,7 @@ func TestSubWorkflowSession_MainWorkflowID(t *testing.T) {
 // ──────────────────────────── 类型断言 panic 路径测试 ────────────────────────────
 
 // TestNewNodeSession_StateNotWorkflowState_Panics 测试 parent.State() 不实现 WorkflowState 时 panic
-// 对齐 Python：session.state().create_node_state() 在非 WorkflowState 上调用时抛 AttributeError
+// Python: session.state().create_node_state() 在非 WorkflowState 上调用时抛 AttributeError
 func TestNewNodeSession_StateNotWorkflowState_Panics(t *testing.T) {
 	// AgentSession.State() 返回 AgentStateCollection，不实现 WorkflowState
 	agentSession := NewAgentSession("agent-123")

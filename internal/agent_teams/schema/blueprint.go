@@ -171,7 +171,7 @@ func (s *TeamAgentSpec) Validate() error {
 	if err := s.validatePoolRouterExclusive(); err != nil {
 		return err
 	}
-	// 对齐 Python: TeamAgentSpec.build() 中调用 _validate_reserved_names() 和 _validate_hitt_consistency()
+	// Python: TeamAgentSpec.build() 中调用 _validate_reserved_names() 和 _validate_hitt_consistency()
 	if err := s.validateReservedNames(); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (s *TeamAgentSpec) Validate() error {
 }
 
 // ResolveDBConfig 解析数据库配置。
-// 对齐 Python: resolve_db_config()，当 db_type 为 sqlite 且 connection_string 为空时，
+// Python: resolve_db_config()，当 db_type 为 sqlite 且 connection_string 为空时，
 // 自动填充为 getAgentTeamsHome()/team.db。
 func (s *TeamAgentSpec) ResolveDBConfig() any {
 	var dbCfg database.DatabaseConfig

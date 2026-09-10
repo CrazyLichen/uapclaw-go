@@ -11,7 +11,7 @@ import (
 
 // Event 事件接口，所有事件类型的公共契约。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (Event)
+// Python: openjiuwen/core/controller/schema/event.py (Event)
 type Event interface {
 	// GetEventType 返回事件类型
 	GetEventType() EventType
@@ -25,7 +25,7 @@ type Event interface {
 
 // BaseEvent 事件基类，包含事件类型、事件 ID 和元数据。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (Event)
+// Python: openjiuwen/core/controller/schema/event.py (Event)
 type BaseEvent struct {
 	// EventTypeField 事件类型
 	EventTypeField EventType `json:"event_type"`
@@ -37,7 +37,7 @@ type BaseEvent struct {
 
 // InputEvent 输入事件，承载用户输入数据。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (InputEvent)
+// Python: openjiuwen/core/controller/schema/event.py (InputEvent)
 type InputEvent struct {
 	// BaseEvent 嵌入事件基类
 	BaseEvent
@@ -47,7 +47,7 @@ type InputEvent struct {
 
 // TaskInteractionEvent 任务交互事件，任务执行中需要用户交互时触发。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (TaskInteractionEvent)
+// Python: openjiuwen/core/controller/schema/event.py (TaskInteractionEvent)
 type TaskInteractionEvent struct {
 	// BaseEvent 嵌入事件基类
 	BaseEvent
@@ -59,7 +59,7 @@ type TaskInteractionEvent struct {
 
 // TaskCompletionEvent 任务完成事件，包含任务输出结果。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (TaskCompletionEvent)
+// Python: openjiuwen/core/controller/schema/event.py (TaskCompletionEvent)
 type TaskCompletionEvent struct {
 	// BaseEvent 嵌入事件基类
 	BaseEvent
@@ -71,7 +71,7 @@ type TaskCompletionEvent struct {
 
 // TaskFailedEvent 任务失败事件，包含错误信息。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (TaskFailedEvent)
+// Python: openjiuwen/core/controller/schema/event.py (TaskFailedEvent)
 type TaskFailedEvent struct {
 	// BaseEvent 嵌入事件基类
 	BaseEvent
@@ -83,7 +83,7 @@ type TaskFailedEvent struct {
 
 // FollowUpEvent 后续事件，用于继续任务循环的新输入。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (FollowUpEvent)
+// Python: openjiuwen/core/controller/schema/event.py (FollowUpEvent)
 type FollowUpEvent struct {
 	// BaseEvent 嵌入事件基类
 	BaseEvent
@@ -147,7 +147,7 @@ type followUpEventJSON struct {
 
 // EventType 事件类型枚举，定义所有支持的事件类型。
 //
-// 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
+// Python: openjiuwen/core/controller/schema/event.py (EventType)
 type EventType string
 
 // eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
@@ -190,7 +190,7 @@ func (e *BaseEvent) SetMetadata(meta map[string]any) { e.Metadata = meta }
 
 // NewBaseEvent 创建事件基类实例，自动生成事件 ID。
 //
-// 对应 Python: Event.event_id = Field(default_factory=lambda: str(uuid.uuid4()))
+// Python: Event.event_id = Field(default_factory=lambda: str(uuid.uuid4()))
 func NewBaseEvent(eventType EventType) *BaseEvent {
 	return &BaseEvent{
 		EventTypeField: eventType,
@@ -201,7 +201,7 @@ func NewBaseEvent(eventType EventType) *BaseEvent {
 
 // FromUserInput 从用户输入创建 InputEvent 工厂方法，支持 string→TextDataFrame, map→JsonDataFrame, *InputEvent→原样返回。
 //
-// 对应 Python: InputEvent.from_user_input
+// Python: InputEvent.from_user_input
 func FromUserInput(userInput any) (*InputEvent, error) {
 	switch v := userInput.(type) {
 	case *InputEvent:
@@ -223,7 +223,7 @@ func FromUserInput(userInput any) (*InputEvent, error) {
 
 // FromText 从文本创建 FollowUpEvent 工厂方法。
 //
-// 对应 Python: FollowUpEvent.from_text
+// Python: FollowUpEvent.from_text
 func FromText(text string) *FollowUpEvent {
 	return &FollowUpEvent{
 		BaseEvent: *NewBaseEvent(EventFollowUp),

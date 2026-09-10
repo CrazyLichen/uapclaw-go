@@ -18,7 +18,7 @@ import (
 //   - Properties 字段仅在 Type 为 Object 时使用
 //   - 其他类型这两个字段必须为 nil
 //
-// 对应 Python: openjiuwen/core/common/schema/param.py (Param)
+// Python: openjiuwen/core/common/schema/param.py (Param)
 type Param struct {
 	// Name 参数名
 	Name string `json:"name"`
@@ -70,7 +70,7 @@ type Param struct {
 
 // ParamType 参数类型枚举，对应 JSON Schema 的基本类型。
 //
-// 对应 Python: openjiuwen/core/common/schema/param.py (ParamType)
+// Python: openjiuwen/core/common/schema/param.py (ParamType)
 type ParamType int
 
 const (
@@ -109,7 +109,7 @@ var paramTypeMap map[string]ParamType
 
 // NewStringParam 创建字符串类型参数。
 //
-// 对应 Python: Param.string(name, description, required, default)
+// Python: Param.string(name, description, required, default)
 func NewStringParam(name, description string, required bool, defaultVal ...string) *Param {
 	p := &Param{
 		Name:        name,
@@ -171,7 +171,7 @@ func NewNumberParam(name, description string, required bool, defaultVal ...float
 
 // NewArrayParam 创建数组类型参数，items 定义数组元素的类型。
 //
-// 对应 Python: Param.array(name, description, required, items, default)
+// Python: Param.array(name, description, required, items, default)
 func NewArrayParam(name, description string, required bool, items *Param, defaultVal ...[]any) *Param {
 	p := &Param{
 		Name:        name,
@@ -188,7 +188,7 @@ func NewArrayParam(name, description string, required bool, items *Param, defaul
 
 // NewObjectParam 创建对象类型参数，properties 定义对象的属性列表。
 //
-// 对应 Python: Param.object(name, description, required, properties, default)
+// Python: Param.object(name, description, required, properties, default)
 func NewObjectParam(name, description string, required bool, properties []*Param, defaultVal ...map[string]any) *Param {
 	p := &Param{
 		Name:        name,
@@ -239,7 +239,7 @@ func (t *ParamType) UnmarshalJSON(data []byte) error {
 //   - 其他类型不能有 Items 或 Properties
 //   - AnyOf/AllOf/OneOf 可与任意类型共存（JSON Schema 标准）
 //
-// 对应 Python: Param.validate_type_specific_fields()
+// Python: Param.validate_type_specific_fields()
 func (p *Param) Validate() error {
 	switch p.Type {
 	case ParamTypeArray:
@@ -325,7 +325,7 @@ func (p *Param) Validate() error {
 //	  "required": [ <必填参数名列表> ]
 //	}
 //
-// 对应 Python: ToolInfo.parameters 从 ToolCard.input_params 自动生成的逻辑
+// Python: ToolInfo.parameters 从 ToolCard.input_params 自动生成的逻辑
 func ToJSONSchemaMap(params []*Param) map[string]any {
 	if len(params) == 0 {
 		return map[string]any{
@@ -364,7 +364,7 @@ func (p *Param) String() string {
 // 输入格式为 MetadataProvider.GetInputParams() 返回的 map[string]any，
 // 即标准 JSON Schema object 定义。
 //
-// 对应 Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
+// Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
 // Go 因 ToolCard.InputParams 类型为 []*Param 需要此转换。
 func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
 	// 1. 校验顶层 type == "object"

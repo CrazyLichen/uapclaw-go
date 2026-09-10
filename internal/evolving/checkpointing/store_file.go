@@ -15,7 +15,7 @@ import (
 // 不依赖核心检查点模块（避免污染核心生命周期语义），
 // 可以在任何环境运行，方便调试和审计。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/store_file.py FileCheckpointStore
+// Python: openjiuwen/agent_evolving/checkpointing/store_file.py FileCheckpointStore
 type FileCheckpointStore struct {
 	// baseDir 检查点文件存储目录
 	baseDir string
@@ -32,7 +32,7 @@ type FileCheckpointStore struct {
 // NewFileCheckpointStore 创建本地 JSON 检查点存储。
 //
 // 构造并确保目录存在。
-// 对应 Python: FileCheckpointStore.__init__(base_dir)
+// Python: FileCheckpointStore.__init__(base_dir)
 func NewFileCheckpointStore(baseDir string) *FileCheckpointStore {
 	ensureDir(baseDir)
 	return &FileCheckpointStore{baseDir: baseDir}
@@ -40,7 +40,7 @@ func NewFileCheckpointStore(baseDir string) *FileCheckpointStore {
 
 // SaveCheckpoint 保存检查点到 JSON 文件。
 //
-// 对应 Python: FileCheckpointStore.save_checkpoint(ckpt, filename="latest.json")
+// Python: FileCheckpointStore.save_checkpoint(ckpt, filename="latest.json")
 func (s *FileCheckpointStore) SaveCheckpoint(ckpt *EvolveCheckpoint, filename string) (string, error) {
 	if s.baseDir == "" {
 		return "", nil
@@ -62,7 +62,7 @@ func (s *FileCheckpointStore) SaveCheckpoint(ckpt *EvolveCheckpoint, filename st
 
 // LoadCheckpoint 从 JSON 文件加载检查点。
 //
-// 对应 Python: FileCheckpointStore.load_checkpoint(path)
+// Python: FileCheckpointStore.load_checkpoint(path)
 func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, error) {
 	if s.baseDir == "" {
 		return nil, nil
@@ -105,7 +105,7 @@ func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, er
 //		Python: state = store.load_state_dict(path)
 //	   加载操作状态（op.load_state）
 //
-// 对应 Python: FileCheckpointStore.load_state_dict(path)
+// Python: FileCheckpointStore.load_state_dict(path)
 func (s *FileCheckpointStore) LoadStateDict(path string) (map[string]map[string]any, error) {
 	if s.baseDir == "" {
 		return nil, nil
@@ -142,7 +142,7 @@ func ensureDir(dir string) {
 
 // toJSONCompatible 递归将对象转换为 JSON 兼容类型。
 //
-// 对应 Python: _to_json_compatible(obj)
+// Python: _to_json_compatible(obj)
 func toJSONCompatible(obj any) any {
 	if obj == nil {
 		return nil
@@ -185,7 +185,7 @@ func toJSONCompatible(obj any) any {
 	}
 
 	// 处理 struct（通过反射转为 map）
-	// 对齐 Python: hasattr(obj, "__dataclass_fields__") → asdict(obj)
+	// Python: hasattr(obj, "__dataclass_fields__") → asdict(obj)
 
 	// 原始类型直接返回
 	return obj

@@ -8,7 +8,7 @@ import (
 
 // GaussMigrator GaussDB 迁移器，基于 PostgreSQL 迁移器扩展。
 //
-// 对应 Python: GaussDialectAsyncpg._domain_query / _enum_query / _patch_gaussdb_reflection_sql
+// Python: GaussDialectAsyncpg._domain_query / _enum_query / _patch_gaussdb_reflection_sql
 //
 // Python 的 GaussDB 方言需要覆写以下 SQLAlchemy 特有的内省行为：
 //   - _patch_gaussdb_reflection_sql: 拦截含 pg_type.typcollation 的子查询并替换为 NULL

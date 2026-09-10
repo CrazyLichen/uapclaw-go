@@ -760,7 +760,7 @@ func TestSystemPrompts非空(t *testing.T) {
 // ──────────────────────────── CalcStats 对齐测试 ────────────────────────────
 
 func TestCalcStats_对齐Python(t *testing.T) {
-	// 对齐 Python _calc_stats: sample stddev (n-1)
+	// Python: _calc_stats: sample stddev (n-1)
 	values := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
 	stats := skilldev.CalcStats(values)
 	if stats.Min != 1.0 {

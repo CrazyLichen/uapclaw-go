@@ -18,7 +18,7 @@ import (
 
 // StoreProjectionHelper Markdown 投影和待定记录格式化辅助。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/store_projection.py StoreProjectionHelper
+// Python: openjiuwen/agent_evolving/checkpointing/store_projection.py StoreProjectionHelper
 type StoreProjectionHelper struct {
 	// store 所属的 EvolutionStore 实例
 	store *EvolutionStore
@@ -33,7 +33,7 @@ type StoreProjectionHelper struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RenderEvolutionMarkdown 渲染演进 Markdown。
-// 对应 Python: StoreProjectionHelper.render_evolution_markdown(name)
+// Python: StoreProjectionHelper.render_evolution_markdown(name)
 func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, name string) error {
 	skillDir := h.store.ResolveSkillDir(ctx, name)
 	if skillDir == "" {
@@ -45,7 +45,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[StoreProjection] 加载演进日志失败")
 		return err
 	}
-	// 对齐 Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
+	// Python: active_entries = [r for r in evo_log.entries if not r.change.skip_reason]
 	activeEntries := make([]EvolutionRecord, 0)
 	for _, r := range evoLog.Entries {
 		if r.Change.SkipReason == nil || *r.Change.SkipReason == "" {
@@ -59,7 +59,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 	evoDir := filepath.Join(skillDir, "evolution")
 	_ = os.MkdirAll(evoDir, 0755)
 
-	// 对齐 Python: section_groups / script_entries 分组
+	// Python: section_groups / script_entries 分组
 	sectionGroups := map[string][]EvolutionRecord{}
 	scriptEntries := []EvolutionRecord{}
 	for _, record := range activeEntries {
@@ -95,7 +95,7 @@ func (h *StoreProjectionHelper) RenderEvolutionMarkdown(ctx context.Context, nam
 }
 
 // ClearRenderedOutputs 清除生成的投影文件和 SKILL.md index 块。
-// 对应 Python: StoreProjectionHelper.clear_rendered_outputs(skill_dir)
+// Python: StoreProjectionHelper.clear_rendered_outputs(skill_dir)
 func (h *StoreProjectionHelper) ClearRenderedOutputs(ctx context.Context, skillDir string) error {
 	evoDir := filepath.Join(skillDir, "evolution")
 	if isDir(evoDir) {
@@ -119,7 +119,7 @@ func (h *StoreProjectionHelper) ClearRenderedOutputs(ctx context.Context, skillD
 }
 
 // RenderSectionFile 渲染单个 section 的 Markdown 文件。
-// 对应 Python: StoreProjectionHelper.render_section_file(evo_dir, section, records)
+// Python: StoreProjectionHelper.render_section_file(evo_dir, section, records)
 func (h *StoreProjectionHelper) RenderSectionFile(ctx context.Context, evoDir string, section string, records []EvolutionRecord) error {
 	lines := []string{
 		fmt.Sprintf("# %s", section),
@@ -153,7 +153,7 @@ func (h *StoreProjectionHelper) RenderSectionFile(ctx context.Context, evoDir st
 }
 
 // RenderScriptIndex 渲染脚本索引文件。
-// 对应 Python: StoreProjectionHelper.render_script_index(scripts_dir, entries)
+// Python: StoreProjectionHelper.render_script_index(scripts_dir, entries)
 func (h *StoreProjectionHelper) RenderScriptIndex(ctx context.Context, scriptsDir string, entries []EvolutionRecord) error {
 	lines := []string{
 		"# Script Index",
@@ -187,7 +187,7 @@ func (h *StoreProjectionHelper) RenderScriptIndex(ctx context.Context, scriptsDi
 }
 
 // UpdateSkillMDIndex 更新 SKILL.md 的 evolution-index 块。
-// 对应 Python: StoreProjectionHelper.update_skill_md_index(skill_dir, entries)
+// Python: StoreProjectionHelper.update_skill_md_index(skill_dir, entries)
 func (h *StoreProjectionHelper) UpdateSkillMDIndex(ctx context.Context, skillDir string, entries []EvolutionRecord) error {
 	skillMDPath := h.store.FindSkillMD(ctx, skillDir)
 	if skillMDPath == "" {
@@ -209,7 +209,7 @@ func (h *StoreProjectionHelper) UpdateSkillMDIndex(ctx context.Context, skillDir
 	}
 
 	total := len(entries)
-	// 对齐 Python: parts = ", ".join(f"{v} {k}" for k, v in ... if v)
+	// Python: parts = ", ".join(f"{v} {k}" for k, v in ... if v)
 	var partStrs []string
 	if bodyCount > 0 {
 		partStrs = append(partStrs, fmt.Sprintf("%d body", bodyCount))
@@ -269,7 +269,7 @@ func (h *StoreProjectionHelper) UpdateSkillMDIndex(ctx context.Context, skillDir
 }
 
 // FormatDescExperienceText 格式化描述层经验文本。
-// 对应 Python: StoreProjectionHelper.format_desc_experience_text(name, max_items)
+// Python: StoreProjectionHelper.format_desc_experience_text(name, max_items)
 func (h *StoreProjectionHelper) FormatDescExperienceText(ctx context.Context, name string, maxItems int) string {
 	pending := h.store.GetPendingRecords(ctx, name, func() *signal.EvolutionTarget {
 		t := signal.EvolutionTargetDescription
@@ -278,7 +278,7 @@ func (h *StoreProjectionHelper) FormatDescExperienceText(ctx context.Context, na
 	if len(pending) == 0 {
 		return ""
 	}
-	// 对齐 Python: pending.sort(key=lambda r: r.score, reverse=True)
+	// Python: pending.sort(key=lambda r: r.score, reverse=True)
 	sort.Slice(pending, func(i, j int) bool { return pending[i].Score > pending[j].Score })
 	limit := maxItems
 	if limit <= 0 {
@@ -387,7 +387,7 @@ func (h *StoreProjectionHelper) ListPendingSummary(ctx context.Context, names []
 }
 
 // StoreProjectionHelperExtractDescriptionFromSkillMD 从 SKILL.md 内容提取 description。
-// 对应 Python: StoreProjectionHelper.extract_description_from_skill_md(content)
+// Python: StoreProjectionHelper.extract_description_from_skill_md(content)
 func StoreProjectionHelperExtractDescriptionFromSkillMD(content string) string {
 	if !strings.HasPrefix(content, "---") {
 		return ""
@@ -411,13 +411,13 @@ func StoreProjectionHelperExtractDescriptionFromSkillMD(content string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sectionFilename 根据 section 名生成文件名。
-// 对应 Python: StoreProjectionHelper._section_filename(section)
+// Python: StoreProjectionHelper._section_filename(section)
 func sectionFilename(section string) string {
 	return strings.ToLower(strings.ReplaceAll(section, " ", "_")) + ".md"
 }
 
 // recordSummary 生成记录摘要。
-// 对应 Python: StoreProjectionHelper._record_summary(record)
+// Python: StoreProjectionHelper._record_summary(record)
 func recordSummary(record *EvolutionRecord) string {
 	if record.Summary != nil && *record.Summary != "" {
 		return normalizeSummaryText(*record.Summary, 96)
@@ -440,14 +440,14 @@ func recordSummary(record *EvolutionRecord) string {
 }
 
 // normalizeSummaryText 规范化摘要文本。
-// 对应 Python: StoreProjectionHelper._normalize_summary_text(text, max_chars=96)
+// Python: StoreProjectionHelper._normalize_summary_text(text, max_chars=96)
 func normalizeSummaryText(text string, maxChars int) string {
 	value := strings.TrimSpace(text)
-	// 对齐 Python: value = re.sub(r"^#{1,6}\s*", "", value)
+	// Python: value = re.sub(r"^#{1,6}\s*", "", value)
 	headerRe := regexp.MustCompile(`^#{1,6}\s*`)
 	value = headerRe.ReplaceAllString(value, "")
 	value = strings.ReplaceAll(value, "|", " ")
-	// 对齐 Python: value = re.sub(r"\s+", " ", value).strip()
+	// Python: value = re.sub(r"\s+", " ", value).strip()
 	spaceRe := regexp.MustCompile(`\s+`)
 	value = spaceRe.ReplaceAllString(value, " ")
 	value = strings.TrimSpace(value)
@@ -461,12 +461,12 @@ func normalizeSummaryText(text string, maxChars int) string {
 }
 
 // formatExperienceIndexTable 格式化经验索引表。
-// 对应 Python: StoreProjectionHelper._format_experience_index_table(records)
+// Python: StoreProjectionHelper._format_experience_index_table(records)
 func formatExperienceIndexTable(records []EvolutionRecord) []string {
 	if len(records) == 0 {
 		return nil
 	}
-	// 对齐 Python: sorted by timestamp desc, then score desc, then section
+	// Python: sorted by timestamp desc, then score desc, then section
 	ordered := make([]EvolutionRecord, len(records))
 	copy(ordered, records)
 	sort.SliceStable(ordered, func(i, j int) bool {
@@ -496,7 +496,7 @@ func formatExperienceIndexTable(records []EvolutionRecord) []string {
 }
 
 // formatScriptAssetsTable 格式化脚本资产表。
-// 对应 Python: StoreProjectionHelper._format_script_assets_table(records)
+// Python: StoreProjectionHelper._format_script_assets_table(records)
 func formatScriptAssetsTable(records []EvolutionRecord) []string {
 	if len(records) == 0 {
 		return nil

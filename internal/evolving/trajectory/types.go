@@ -1,5 +1,9 @@
 package trajectory
 
+import (
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StepDetail 执行步骤的详细数据接口。
@@ -7,7 +11,7 @@ package trajectory
 // LLM 步骤由 LLMCallDetail 实现，工具步骤由 ToolCallDetail 实现。
 // StepKind() 方法提供类型判别，也可通过 Go 类型断言 switch d.(type) 判别。
 //
-// 对应 Python: StepDetail = Union[LLMCallDetail, ToolCallDetail]
+// Python: StepDetail = Union[LLMCallDetail, ToolCallDetail]
 type StepDetail interface {
 	// StepKind 返回步骤类型（llm 或 tool）。
 	StepKind() StepKind
@@ -15,12 +19,12 @@ type StepDetail interface {
 
 // LLMCallDetail LLM 调用完整执行数据。
 //
-// 对应 Python: LLMCallDetail dataclass
+// Python: LLMCallDetail dataclass
 type LLMCallDetail struct {
 	// Model 模型名称
 	Model string `json:"model"`
-	// Messages 消息列表（字典形式，外部存入时通过 MessageToDict 转换）
-	Messages []map[string]any `json:"messages"`
+	// Messages 消息列表（存储原始 BaseMessage 对象，与 Python List[Any] 对齐）
+	Messages []llmschema.BaseMessage `json:"messages"`
 	// Response 模型响应（字典形式，nil 表示无响应）
 	Response map[string]any `json:"response"`
 	// Tools 工具定义列表（可选）
@@ -33,7 +37,7 @@ type LLMCallDetail struct {
 
 // ToolCallDetail 工具调用完整执行数据。
 //
-// 对应 Python: ToolCallDetail dataclass
+// Python: ToolCallDetail dataclass
 type ToolCallDetail struct {
 	// ToolName 工具名称
 	ToolName string `json:"tool_name"`
@@ -57,7 +61,7 @@ type ToolCallDetail struct {
 //   - 后注入字段：Reward, PromptTokenIDs, CompletionTokenIDs, Logprobs
 //   - 扩展元数据：Meta
 //
-// 对应 Python: TrajectoryStep dataclass
+// Python: TrajectoryStep dataclass
 type TrajectoryStep struct {
 	// Kind 步骤类型（llm/tool）
 	Kind StepKind `json:"kind"`
@@ -84,7 +88,7 @@ type TrajectoryStep struct {
 
 // Trajectory 完整执行轨迹。
 //
-// 对应 Python: Trajectory dataclass
+// Python: Trajectory dataclass
 type Trajectory struct {
 	// ExecutionID 唯一执行标识符
 	ExecutionID string `json:"execution_id"`
@@ -106,12 +110,12 @@ type Trajectory struct {
 
 // CostInfo 聚合成本指标。
 //
-// 对应 Python: CostInfo = Dict[str, int]  # {"input_tokens": N, "output_tokens": M}
+// Python: CostInfo = Dict[str, int]  # {"input_tokens": N, "output_tokens": M}
 type CostInfo map[string]int
 
 // StepKind 执行步骤类型。
 //
-// 对应 Python: StepKind = Literal["llm", "tool", "workflow", "memory", "agent"]
+// Python: StepKind = Literal["llm", "tool", "workflow", "memory", "agent"]
 type StepKind string
 
 const (
@@ -135,7 +139,7 @@ var (
 	// CrossMemberMetaKeys 跨成员元数据键集合。
 	// 用于判断 Trajectory 是否处于团队协作成员上下文。
 	//
-	// 对应 Python: openjiuwen/agent_evolving/trajectory/aggregator.py
+	// Python: openjiuwen/agent_evolving/trajectory/aggregator.py
 	// Python: CROSS_MEMBER_META_KEYS = frozenset({"invoke_id", "parent_invoke_id", "child_invokes"})
 	CrossMemberMetaKeys = map[string]bool{
 		"invoke_id":        true,
@@ -156,10 +160,10 @@ func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 //
 // 遍历所有 kind=llm 且 detail 为 LLMCallDetail 的步骤，
 // 提取 messages 和 response。
-// Messages 已是字典形式（外部存入时已转换），直接追加；
+// Messages 是 BaseMessage 对象，通过 baseMessageToMap 转换后追加；
 // Response 同为字典形式，检查是否含 role 或 content 键后追加。
 //
-// 对齐 Python:
+// Python:
 //
 //		Python: for step in self.steps:
 //		    Python: if step.kind != "llm" or not isinstance(step.detail, LLMCallDetail):
@@ -169,7 +173,7 @@ func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 //	   如果 response_message 包含 role 或 content 字段
 //		        Python: messages.append(response_message)
 //
-// 对应 Python: Trajectory.to_messages()
+// Python: Trajectory.to_messages()
 func (t *Trajectory) ToMessages() []map[string]any {
 	messages := make([]map[string]any, 0)
 	for _, step := range t.Steps {
@@ -180,8 +184,10 @@ func (t *Trajectory) ToMessages() []map[string]any {
 		if !ok {
 			continue
 		}
-		// Messages 已是 []map[string]any，直接追加
-		messages = append(messages, llmDetail.Messages...)
+		// Messages 是 []llmschema.BaseMessage，需要逐个转换
+		for _, msg := range llmDetail.Messages {
+			messages = append(messages, baseMessageToMap(msg))
+		}
 		// Response 已是 map[string]any，检查是否含 role 或 content 键
 		if llmDetail.Response != nil {
 			if _, hasRole := llmDetail.Response["role"]; hasRole {
@@ -195,3 +201,45 @@ func (t *Trajectory) ToMessages() []map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。
+//
+// BaseMessage 接口没有 ToMap/ToDict 方法，需要从接口字段手动构建。
+// Python: BaseMessage.model_dump() 或 OpenAI dict 格式。
+func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
+	if msg == nil {
+		return map[string]any{}
+	}
+	result := map[string]any{
+		"role":    msg.GetRole().String(),
+		"content": msg.GetContent().String(),
+	}
+	if name := msg.GetName(); name != "" {
+		result["name"] = name
+	}
+	if meta := msg.GetMetadata(); len(meta) > 0 {
+		result["metadata"] = meta
+	}
+	// AssistantMessage 特有字段：tool_calls（使用内部扁平格式）
+	if am, ok := msg.(*llmschema.AssistantMessage); ok && len(am.ToolCalls) > 0 {
+		calls := make([]map[string]any, 0, len(am.ToolCalls))
+		for _, tc := range am.ToolCalls {
+			tcMap := map[string]any{
+				"name":      tc.Name,
+				"arguments": tc.Arguments,
+			}
+			if tc.ID != "" {
+				tcMap["id"] = tc.ID
+			}
+			if tc.Type != "" {
+				tcMap["type"] = tc.Type
+			}
+			if tc.Index > 0 {
+				tcMap["index"] = tc.Index
+			}
+			calls = append(calls, tcMap)
+		}
+		result["tool_calls"] = calls
+	}
+	return result
+}

@@ -1,7 +1,7 @@
 // utils 包提供通用工具函数。
 //
 // net.go 实现网络相关工具：本机 IP 获取、URL 密码脱敏。
-// 对应 Python：
+// Python:
 //   - openjiuwen/core/common/utils/ip_utils.py
 //   - openjiuwen/core/common/utils/url_utils.py
 //
@@ -26,14 +26,14 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // urlPattern 匹配以 scheme:// 开头的 URL 字符串。
-// 对应 Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+// Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
 var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
-// 对应 Python: get_local_ip()
+// Python: get_local_ip()
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
 // 不实际发送数据，仅利用 socket 获取本地地址。
 // 如果检测失败，回退到 "127.0.0.1"。
@@ -54,7 +54,7 @@ func GetLocalIP() string {
 
 // RedactURLPassword 对 URL 中的密码进行脱敏，用于安全日志。
 //
-// 对应 Python: redact_url_password()
+// Python: redact_url_password()
 // 将 URL 中的密码替换为 "***"，不包含密码的 URL 原样返回。
 // 解析失败时返回原始字符串。
 //
@@ -122,7 +122,7 @@ func RedactURLPassword(rawURL string) string {
 
 // RedactURLInValue 递归脱敏值中的 URL 密码，用于安全日志输出。
 //
-// 对应 Python: _redact_url_in_value(value)
+// Python: _redact_url_in_value(value)
 // 递归遍历 map[string]any、[]any 和 string 类型：
 //   - string: 若匹配 URL 模式则脱敏密码
 //   - map: 递归处理每个值

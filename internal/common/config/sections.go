@@ -27,7 +27,7 @@ type ServerConfig struct {
 }
 
 // LoggingConfig 日志配置，各通道可独立设置级别。
-// 对应 Python: config.yaml 的 logging 段
+// Python: config.yaml 的 logging 段
 type LoggingConfig struct {
 	Level        string `yaml:"level"`         // 基础级别，默认 INFO
 	Format       string `yaml:"format"`        // 输出格式：json / text

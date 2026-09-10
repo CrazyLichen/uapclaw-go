@@ -30,7 +30,7 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseHTML 使用 goquery 解析 HTML
-// 对齐 Python: _parse_html() (web_tools.py L295-302)
+// Python: _parse_html() (web_tools.py L295-302)
 func parseHTML(htmlStr string) *goquery.Document {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
 	if err != nil {
@@ -41,7 +41,7 @@ func parseHTML(htmlStr string) *goquery.Document {
 }
 
 // stripTags 移除 HTML 标签并规范化空白
-// 对齐 Python: _strip_tags() (web_tools.py L219-222)
+// Python: _strip_tags() (web_tools.py L219-222)
 func stripTags(value string) string {
 	value = stripTagsRe.ReplaceAllString(value, " ")
 	value = html.UnescapeString(value)
@@ -50,23 +50,23 @@ func stripTags(value string) string {
 }
 
 // extractMainTextFromHTML 从 HTML 中提取正文和标题
-// 对齐 Python: WebFetchWebpageTool._extract_main_text_from_html() (web_tools.py L1483-1552)
+// Python: WebFetchWebpageTool._extract_main_text_from_html() (web_tools.py L1483-1552)
 func extractMainTextFromHTML(text string) (title, content string) {
 	soup := parseHTML(text)
 
 	// 提取标题
-	// 对齐 Python: L1486-1487
+	// Python: L1486-1487
 	title = strings.TrimSpace(soup.Find("title").Text())
 
 	// 移除不需要的标签
-	// 对齐 Python: L1489-1491
+	// Python: L1489-1491
 	removeSelectors := []string{"script", "style", "noscript", "svg", "canvas", "iframe"}
 	for _, sel := range removeSelectors {
 		soup.Find(sel).Remove()
 	}
 
 	// 移除导航/装饰性标签
-	// 对齐 Python: L1493-1515
+	// Python: L1493-1515
 	decorSelectors := []string{
 		"nav", "header", "footer", "aside", "form", "button",
 		"[role='navigation']", ".nav", ".navbar", ".header",
@@ -78,7 +78,7 @@ func extractMainTextFromHTML(text string) (title, content string) {
 	}
 
 	// 候选正文选择器
-	// 对齐 Python: L1517-1532
+	// Python: L1517-1532
 	candidateSelectors := []string{
 		"main", "[role='main']", "article", ".article",
 		".article-content", ".article-body", ".post", ".post-content",
@@ -98,7 +98,7 @@ func extractMainTextFromHTML(text string) (title, content string) {
 	}
 
 	// 降级：从 body 提取段落
-	// 对齐 Python: L1542-1549
+	// Python: L1542-1549
 	if bestText == "" {
 		body := soup.Find("body")
 		if body.Length() == 0 {
@@ -119,7 +119,7 @@ func extractMainTextFromHTML(text string) (title, content string) {
 	}
 
 	// 多换行压缩
-	// 对齐 Python: L1551
+	// Python: L1551
 	bestText = multiNewlineRe3.ReplaceAllString(strings.TrimSpace(bestText), "\n\n")
 
 	return title, bestText

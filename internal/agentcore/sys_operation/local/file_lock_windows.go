@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // acquireFileLockPlatform Windows 平台文件锁实现。
-// 对齐 Python msvcrt.locking + 轮询超时。
+// Python: msvcrt.locking + 轮询超时。
 func acquireFileLockPlatform(filePath string, timeout time.Duration) (*FileLock, error) {
 	lockPath := filePath + ".lock"
 	fd, err := syscall.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR, 0644)

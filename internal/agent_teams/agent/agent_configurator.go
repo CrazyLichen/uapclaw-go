@@ -22,7 +22,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentConfigurator Agent 配置器，负责配置、设置和初始化。
-// 对齐 Python: AgentConfigurator (openjiuwen/agent_teams/agent/agent_configurator.py)
+// Python: AgentConfigurator (openjiuwen/agent_teams/agent/agent_configurator.py)
 //
 // 职责：
 //   - Spec 和上下文管理
@@ -86,7 +86,7 @@ type SetupTeamBackendOption func(*setupTeamBackendConfig)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentConfigurator 创建新的 AgentConfigurator 实例。
-// 对齐 Python: AgentConfigurator.__init__(card)
+// Python: AgentConfigurator.__init__(card)
 func NewAgentConfigurator(card *agentschema.AgentCard) *AgentConfigurator {
 	return &AgentConfigurator{
 		card:      card,
@@ -96,7 +96,7 @@ func NewAgentConfigurator(card *agentschema.AgentCard) *AgentConfigurator {
 }
 
 // ResolveAgentSpec 按角色和成员名解析 AgentSpec。
-// 对齐 Python: AgentConfigurator.resolve_agent_spec(spec, role, member_name)
+// Python: AgentConfigurator.resolve_agent_spec(spec, role, member_name)
 //
 // 优先级：memberName 精确匹配 → role 值匹配 → "teammate" → "leader"
 func ResolveAgentSpec(spec atschema.TeamAgentSpec, role atschema.TeamRole, memberName string) atschema.DeepAgentSpec {
@@ -155,14 +155,14 @@ func WithBackendLeaderAllocation(a *models.Allocation) SetupTeamBackendOption {
 }
 
 // Configure 主入口：配置基础设施并构建 Harness。
-// 对齐 Python: AgentConfigurator.configure(spec, ctx)
+// Python: AgentConfigurator.configure(spec, ctx)
 func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
 	c.SetupInfra(spec, ctx)
 	return c.SetupAgent(spec, ctx)
 }
 
 // SetupInfra Phase 1：设置 spec/context，创建 messager、workspace manager、准备 team backend。
-// 对齐 Python: AgentConfigurator.setup_infra(spec, ctx, ...)
+// Python: AgentConfigurator.setup_infra(spec, ctx, ...)
 func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, opts ...SetupInfraOption) {
 	// 应用可选参数
 	cfg := &setupInfraConfig{}
@@ -219,7 +219,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 }
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
-// 对齐 Python: AgentConfigurator.setup_agent(spec, ctx)
+// Python: AgentConfigurator.setup_agent(spec, ctx)
 func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
 	// 1. 解析 AgentSpec
 	_ = ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
@@ -260,7 +260,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// ⚠️ 回填时必须调用 resolveTeamMode(spec)：
 	//   - 构造 TeamToolRail 时: exclude_tools = {"spawn_member"} if resolveTeamMode(spec) == "predefined" else None
 	//   - 构造 TeamPolicyRail 时: team_mode = resolveTeamMode(spec)
-	// 对齐 Python: agent_configurator.py 第 354 行和第 378 行
+	// Python: agent_configurator.py 第 354 行和第 378 行
 
 	// 15. 构建团队线束
 	harness := agentteams.BuildTeamHarness(
@@ -287,7 +287,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 }
 
 // SetupTeamBackend 构造 TeamBackend 并注册 cleanup 路径。
-// 对齐 Python: AgentConfigurator.setup_team_backend(spec, ctx, messager, ...)
+// Python: AgentConfigurator.setup_team_backend(spec, ctx, messager, ...)
 //
 // Python 步骤：
 //
@@ -309,13 +309,13 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 		opt(cfg)
 	}
 
-	// 对齐 Python 步骤 1: team_name
+	// Python 步骤 1: team_name
 	teamName := "default"
 	if ctx.TeamSpec != nil && ctx.TeamSpec.TeamName != "" {
 		teamName = ctx.TeamSpec.TeamName
 	}
 
-	// 对齐 Python 步骤 2: db = get_shared_db(ctx.db_config)
+	// Python 步骤 2: db = get_shared_db(ctx.db_config)
 	db := cfg.db
 	if db == nil {
 		// 尝试从 spawn.GetSharedDB 获取，若为 nil 则降级为内存数据库
@@ -329,14 +329,14 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 		}
 	}
 
-	// 对齐 Python 步骤 3-4: is_leader + current_member_name
+	// Python 步骤 3-4: is_leader + current_member_name
 	isLeader := ctx.Role == atschema.TeamRoleLeader
 	currentMemberName := ctx.MemberName
 	if currentMemberName == "" && ctx.TeamSpec != nil {
 		currentMemberName = ctx.TeamSpec.LeaderMemberName
 	}
 
-	// 对齐 Python 步骤 5: 构造 TeamBackend
+	// Python 步骤 5: 构造 TeamBackend
 	tbOpts := []tools.TeamBackendOption{
 		tools.WithTeammateMode(string(spec.TeammateMode)),
 	}
@@ -364,18 +364,18 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 
 	tb := tools.NewTeamBackend(teamName, currentMemberName, isLeader, db, msg, tbOpts...)
 
-	// 对齐 Python 步骤 6-8: 设置到 infra
+	// Python 步骤 6-8: 设置到 infra
 	c.SetTeamBackend(tb)
 	c.SetTaskManager(tb.TaskManager())
 	c.SetMessageManager(tb.MessageManager())
 
-	// 对齐 Python 步骤 9: workspace_manager cleanup path
+	// Python 步骤 9: workspace_manager cleanup path
 	// ⤴️ 9.66 回填完成
 	if ws := c.WorkspaceManager(); ws != nil {
 		tb.RegisterCleanupPath(ws.WorkspacePath())
 	}
 
-	// 对齐 Python 步骤 10: team_home cleanup path
+	// Python 步骤 10: team_home cleanup path
 	tb.RegisterCleanupPath(agentteams.TeamHome(teamName))
 
 	logger.Info(logComponent).Str("team_name", teamName).Str("member_name", currentMemberName).
@@ -385,7 +385,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 }
 
 // CreateWorkspaceManager 创建团队工作空间管理器。
-// 对齐 Python: AgentConfigurator.create_workspace_manager(spec, ctx)
+// Python: AgentConfigurator.create_workspace_manager(spec, ctx)
 //
 // ⤴️ 9.66 回填完成
 func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *team_workspace.TeamWorkspaceManager {
@@ -398,20 +398,20 @@ func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, 
 		teamName = ctx.TeamSpec.TeamName
 	}
 
-	// 对齐 Python: ws_path = ws_config.root_path or str(team_home(team_name) / "team-workspace")
+	// Python: ws_path = ws_config.root_path or str(team_home(team_name) / "team-workspace")
 	wsPath := wsConfig.RootPath
 	if wsPath == "" {
 		wsPath = filepath.Join(agentteams.TeamHome(teamName), "team-workspace")
 	}
 
-	// 对齐 Python: os.makedirs(ws_path, exist_ok=True)
+	// Python: os.makedirs(ws_path, exist_ok=True)
 	if err := os.MkdirAll(wsPath, 0o755); err != nil {
 		logger.Error(logComponent).Err(err).Str("ws_path", wsPath).Msg("创建工作空间目录失败")
 		return nil
 	}
 	logger.Info(logComponent).Str("ws_path", wsPath).Msg("工作空间目录已确认")
 
-	// 对齐 Python: TeamWorkspaceManager(config=ws_config, workspace_path=ws_path, team_name=team_name)
+	// Python: TeamWorkspaceManager(config=ws_config, workspace_path=ws_path, team_name=team_name)
 	return team_workspace.NewTeamWorkspaceManager(
 		*wsConfig,
 		wsPath,
@@ -421,7 +421,7 @@ func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, 
 }
 
 // CreateWorktreeManager 创建工作树管理器。
-// 对齐 Python: AgentConfigurator.create_worktree_manager(spec)
+// Python: AgentConfigurator.create_worktree_manager(spec)
 //
 // ⤴️ 9.66 回填：框架就绪，WorktreeManager 具体实现待 #9.68
 func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) {
@@ -429,22 +429,22 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) {
 }
 
 // BuildMemoryManager 构建团队共享记忆管理器。
-// 对齐 Python: AgentConfigurator._build_memory_manager(spec, ctx, ...)
+// Python: AgentConfigurator._build_memory_manager(spec, ctx, ...)
 // ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, agentSpec atschema.DeepAgentSpec, language string, memberName string) *memory.TeamMemoryManager {
 	// 记忆配置从 spec 中获取，当前为默认配置
 	memCfg := atschema.NewTeamMemoryConfig()
 
-	// 对齐 Python: team_memory_dir = team_memory_dir(team_name)
+	// Python: team_memory_dir = team_memory_dir(team_name)
 	teamMemoryDir := agentteams.DefaultTeamMemoryDir(c.TeamName())
 
-	// 对齐 Python: read_only_source = ctx.get("read_only_source_workspace")
+	// Python: read_only_source = ctx.get("read_only_source_workspace")
 	var readOnlySource *string
 
-	// 对齐 Python: enable_auto_extract = (spec.memory.auto_extract and spec.lifecycle == "persistent")
+	// Python: enable_auto_extract = (spec.memory.auto_extract and spec.lifecycle == "persistent")
 	autoExtract := memCfg.AutoExtract && c.Lifecycle() == string(memory.TeamLifecyclePersistent)
 
-	// 对齐 Python: db = self.team_backend.db if self.team_backend else None
+	// Python: db = self.team_backend.db if self.team_backend else None
 	var db database.TeamDatabase
 	if c.TeamBackend() != nil {
 		db = c.TeamBackend().DB()
@@ -474,7 +474,7 @@ func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx 
 }
 
 // UpdateModelPool 更新模型池。
-// 对齐 Python: AgentConfigurator.update_model_pool(new_pool)
+// Python: AgentConfigurator.update_model_pool(new_pool)
 // ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) UpdateModelPool(newPool []models.ModelPoolEntry) {
 	if c.resources == nil {
@@ -493,14 +493,14 @@ func (c *AgentConfigurator) UpdateModelPool(newPool []models.ModelPoolEntry) {
 }
 
 // AttachModelAllocator 附加模型分配器。
-// 对齐 Python: AgentConfigurator.attach_model_allocator(allocator, leader_allocation)
+// Python: AgentConfigurator.attach_model_allocator(allocator, leader_allocation)
 func (c *AgentConfigurator) AttachModelAllocator(allocator models.ModelAllocator, leaderAllocation *models.Allocation) {
 	c.SetModelAllocator(allocator)
 	c.leaderAllocation = leaderAllocation
 }
 
 // RestoreAllocatorState 恢复分配器状态。
-// 对齐 Python: AgentConfigurator.restore_allocator_state(state)
+// Python: AgentConfigurator.restore_allocator_state(state)
 // ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) RestoreAllocatorState(state map[string]any) {
 	if c.resources == nil || c.resources.ModelAllocator == nil {
@@ -510,7 +510,7 @@ func (c *AgentConfigurator) RestoreAllocatorState(state map[string]any) {
 }
 
 // BuildSpawnPayload 构建生成载荷（代理到 SpawnPayloadBuilder）。
-// 对齐 Python: AgentConfigurator.build_spawn_payload(ctx, initial_message)
+// Python: AgentConfigurator.build_spawn_payload(ctx, initial_message)
 func (c *AgentConfigurator) BuildSpawnPayload(ctx atschema.TeamRuntimeContext, initialMessage string) map[string]any {
 	if c.spawnPayloadBuilder == nil {
 		return nil
@@ -519,7 +519,7 @@ func (c *AgentConfigurator) BuildSpawnPayload(ctx atschema.TeamRuntimeContext, i
 }
 
 // BuildMemberContext 构建成员上下文（代理到 SpawnPayloadBuilder）。
-// 对齐 Python: AgentConfigurator.build_member_context(member_spec)
+// Python: AgentConfigurator.build_member_context(member_spec)
 func (c *AgentConfigurator) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
 	if c.spawnPayloadBuilder == nil {
 		return atschema.TeamRuntimeContext{}
@@ -528,7 +528,7 @@ func (c *AgentConfigurator) BuildMemberContext(memberSpec atschema.TeamMemberSpe
 }
 
 // BuildMemberMessagerConfig 构建成员消息配置（代理到 SpawnPayloadBuilder）。
-// 对齐 Python: AgentConfigurator.build_member_messager_config(member_name)
+// Python: AgentConfigurator.build_member_messager_config(member_name)
 func (c *AgentConfigurator) BuildMemberMessagerConfig(memberName string) any {
 	if c.spawnPayloadBuilder == nil {
 		return nil
@@ -537,7 +537,7 @@ func (c *AgentConfigurator) BuildMemberMessagerConfig(memberName string) any {
 }
 
 // BuildSpawnConfig 构建生成配置（代理到 SpawnPayloadBuilder）。
-// 对齐 Python: AgentConfigurator.build_spawn_config(ctx)
+// Python: AgentConfigurator.build_spawn_config(ctx)
 func (c *AgentConfigurator) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	if c.spawnPayloadBuilder == nil {
 		return runnerspawn.SpawnAgentConfig{}
@@ -546,33 +546,33 @@ func (c *AgentConfigurator) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) ru
 }
 
 // Infra 返回每进程团队基础设施容器。
-// 对齐 Python: AgentConfigurator.infra property
+// Python: AgentConfigurator.infra property
 func (c *AgentConfigurator) Infra() *TeamInfra { return c.infra }
 
 // Resources 返回每实例运行时资源容器。
-// 对齐 Python: AgentConfigurator.resources property
+// Python: AgentConfigurator.resources property
 func (c *AgentConfigurator) Resources() *PrivateAgentResources { return c.resources }
 
 // Blueprint 返回静态装配蓝图，configure() 前为 nil。
-// 对齐 Python: AgentConfigurator.blueprint property
+// Python: AgentConfigurator.blueprint property
 func (c *AgentConfigurator) Blueprint() *TeamAgentBlueprint { return c.blueprint }
 
 // Messager 返回消息总线。
-// 对齐 Python: AgentConfigurator.messager property
+// Python: AgentConfigurator.messager property
 func (c *AgentConfigurator) Messager() messager.Messager { return c.infra.Messager }
 
 // SetMessager 设置消息总线。
 func (c *AgentConfigurator) SetMessager(v messager.Messager) { c.infra.Messager = v }
 
 // TeamBackend 返回团队后端。
-// 对齐 Python: AgentConfigurator.team_backend property
+// Python: AgentConfigurator.team_backend property
 func (c *AgentConfigurator) TeamBackend() *tools.TeamBackend { return c.infra.TeamBackend }
 
 // SetTeamBackend 设置团队后端。
 func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.TeamBackend = v }
 
 // WorkspaceManager 返回工作空间管理器。
-// 对齐 Python: AgentConfigurator.workspace_manager property
+// Python: AgentConfigurator.workspace_manager property
 // ⤴️ 9.66 回填完成
 func (c *AgentConfigurator) WorkspaceManager() *team_workspace.TeamWorkspaceManager {
 	return c.infra.WorkspaceManager
@@ -591,14 +591,14 @@ func (c *AgentConfigurator) WorkspaceInitialized() bool { return c.infra.Workspa
 func (c *AgentConfigurator) SetWorkspaceInitialized(v bool) { c.infra.WorkspaceInitialized = v }
 
 // TaskManager 返回任务管理器。
-// 对齐 Python: AgentConfigurator.task_manager property
+// Python: AgentConfigurator.task_manager property
 func (c *AgentConfigurator) TaskManager() *tools.TeamTaskManager { return c.infra.TaskManager }
 
 // SetTaskManager 设置任务管理器。
 func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.TaskManager = v }
 
 // MessageManager 返回消息管理器。
-// 对齐 Python: AgentConfigurator.message_manager property
+// Python: AgentConfigurator.message_manager property
 func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager }
 
 // SetMessageManager 设置消息管理器。
@@ -607,7 +607,7 @@ func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) {
 }
 
 // Harness 返回 TeamHarness。
-// 对齐 Python: AgentConfigurator.harness property
+// Python: AgentConfigurator.harness property
 func (c *AgentConfigurator) Harness() *agentteams.TeamHarness {
 	return c.resources.Harness
 }
@@ -616,14 +616,14 @@ func (c *AgentConfigurator) Harness() *agentteams.TeamHarness {
 func (c *AgentConfigurator) SetHarness(v *agentteams.TeamHarness) { c.resources.Harness = v }
 
 // WorktreeManager 返回工作树管理器。
-// 对齐 Python: AgentConfigurator.worktree_manager property
+// Python: AgentConfigurator.worktree_manager property
 func (c *AgentConfigurator) WorktreeManager() any { return c.resources.WorktreeManager }
 
 // SetWorktreeManager 设置工作树管理器。
 func (c *AgentConfigurator) SetWorktreeManager(v any) { c.resources.WorktreeManager = v }
 
 // MemoryManager 返回团队记忆管理器。⤴️ 9.64 回填完成
-// 对齐 Python: AgentConfigurator.memory_manager property
+// Python: AgentConfigurator.memory_manager property
 func (c *AgentConfigurator) MemoryManager() *memory.TeamMemoryManager {
 	return c.resources.MemoryManager
 }
@@ -634,14 +634,14 @@ func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
 }
 
 // FirstIterGate 返回首轮迭代门控。
-// 对齐 Python: AgentConfigurator.first_iter_gate property
+// Python: AgentConfigurator.first_iter_gate property
 func (c *AgentConfigurator) FirstIterGate() any { return c.resources.FirstIterGate }
 
 // SetFirstIterGate 设置首轮迭代门控。
 func (c *AgentConfigurator) SetFirstIterGate(v any) { c.resources.FirstIterGate = v }
 
 // ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成
-// 对齐 Python: AgentConfigurator.model_allocator property
+// Python: AgentConfigurator.model_allocator property
 func (c *AgentConfigurator) ModelAllocator() models.ModelAllocator { return c.resources.ModelAllocator }
 
 // SetModelAllocator 设置模型分配器。
@@ -650,7 +650,7 @@ func (c *AgentConfigurator) SetModelAllocator(v models.ModelAllocator) {
 }
 
 // Spec 返回 TeamAgentSpec。
-// 对齐 Python: AgentConfigurator.spec property
+// Python: AgentConfigurator.spec property
 func (c *AgentConfigurator) Spec() *atschema.TeamAgentSpec {
 	if c.blueprint == nil {
 		return nil
@@ -659,7 +659,7 @@ func (c *AgentConfigurator) Spec() *atschema.TeamAgentSpec {
 }
 
 // RuntimeContext 返回 TeamRuntimeContext。
-// 对齐 Python: AgentConfigurator.ctx property
+// Python: AgentConfigurator.ctx property
 func (c *AgentConfigurator) RuntimeContext() *atschema.TeamRuntimeContext {
 	if c.blueprint == nil {
 		return nil
@@ -668,7 +668,7 @@ func (c *AgentConfigurator) RuntimeContext() *atschema.TeamRuntimeContext {
 }
 
 // RolePolicy 返回角色策略。
-// 对齐 Python: AgentConfigurator.role_policy property
+// Python: AgentConfigurator.role_policy property
 func (c *AgentConfigurator) RolePolicy() string {
 	if c.blueprint == nil {
 		return ""
@@ -677,7 +677,7 @@ func (c *AgentConfigurator) RolePolicy() string {
 }
 
 // TeamSpec 返回 TeamSpec。
-// 对齐 Python: AgentConfigurator.team_spec property
+// Python: AgentConfigurator.team_spec property
 func (c *AgentConfigurator) TeamSpec() *atschema.TeamSpec {
 	if c.blueprint == nil {
 		return nil
@@ -686,7 +686,7 @@ func (c *AgentConfigurator) TeamSpec() *atschema.TeamSpec {
 }
 
 // Role 返回团队角色。
-// 对齐 Python: AgentConfigurator.role property
+// Python: AgentConfigurator.role property
 func (c *AgentConfigurator) Role() atschema.TeamRole {
 	if c.blueprint == nil {
 		return atschema.TeamRoleLeader
@@ -695,7 +695,7 @@ func (c *AgentConfigurator) Role() atschema.TeamRole {
 }
 
 // Lifecycle 返回生命周期模式。
-// 对齐 Python: AgentConfigurator.lifecycle property
+// Python: AgentConfigurator.lifecycle property
 func (c *AgentConfigurator) Lifecycle() string {
 	if c.blueprint == nil {
 		return "temporary"
@@ -704,7 +704,7 @@ func (c *AgentConfigurator) Lifecycle() string {
 }
 
 // MemberName 返回成员名。
-// 对齐 Python: AgentConfigurator.member_name property
+// Python: AgentConfigurator.member_name property
 func (c *AgentConfigurator) MemberName() string {
 	if c.blueprint == nil {
 		return ""
@@ -713,7 +713,7 @@ func (c *AgentConfigurator) MemberName() string {
 }
 
 // TeamName 返回团队名。
-// 对齐 Python: AgentConfigurator.team_name property
+// Python: AgentConfigurator.team_name property
 func (c *AgentConfigurator) TeamName() string {
 	if c.blueprint == nil || c.blueprint.Ctx.TeamSpec == nil {
 		return ""
@@ -724,7 +724,7 @@ func (c *AgentConfigurator) TeamName() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveTeamMode 解析团队模式。
-// 对齐 Python: _resolve_team_mode(spec)
+// Python: _resolve_team_mode(spec)
 //
 // 如果 spec.TeamMode 已设置则直接返回；
 // 否则检查非人类预定义成员，存在时返回 "hybrid"，否则 "default"。

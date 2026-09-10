@@ -48,7 +48,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // MemberTransitions MemberStatus 状态转换表。
-// 对齐 Python: MEMBER_TRANSITIONS (openjiuwen/agent_teams/schema/status.py)
+// Python: MEMBER_TRANSITIONS (openjiuwen/agent_teams/schema/status.py)
 var MemberTransitions = map[string][]string{
 	MemberStatusUnstarted: {
 		MemberStatusStarting, MemberStatusReady, MemberStatusShutdown, MemberStatusError,
@@ -88,7 +88,7 @@ var MemberTransitions = map[string][]string{
 }
 
 // MemberSettledStatuses 成员可以处于空闲时的状态集合（团队完成检查使用）。
-// 对齐 Python: MEMBER_SETTLED_STATUSES
+// Python: MEMBER_SETTLED_STATUSES
 var MemberSettledStatuses = map[string]bool{
 	MemberStatusReady:    true,
 	MemberStatusPaused:   true,
@@ -97,7 +97,7 @@ var MemberSettledStatuses = map[string]bool{
 }
 
 // ExecutionTransitions ExecutionStatus 状态转换表。
-// 对齐 Python: EXECUTION_TRANSITIONS
+// Python: EXECUTION_TRANSITIONS
 var ExecutionTransitions = map[string][]string{
 	ExecutionStatusIdle: {ExecutionStatusStarting},
 	ExecutionStatusStarting: {
@@ -123,7 +123,7 @@ var ExecutionTransitions = map[string][]string{
 }
 
 // TaskTransitions TaskStatus 状态转换表。
-// 对齐 Python: TASK_TRANSITIONS
+// Python: TASK_TRANSITIONS
 var TaskTransitions = map[string][]string{
 	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
 	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
@@ -136,7 +136,7 @@ var TaskTransitions = map[string][]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsValidMemberTransition 检查 MemberStatus 状态转换是否合法。
-// 对齐 Python: is_valid_transition(current_status, new_status, MEMBER_TRANSITIONS)
+// Python: is_valid_transition(current_status, new_status, MEMBER_TRANSITIONS)
 func IsValidMemberTransition(current, target string) bool {
 	allowed, ok := MemberTransitions[current]
 	if !ok {
@@ -151,7 +151,7 @@ func IsValidMemberTransition(current, target string) bool {
 }
 
 // IsValidExecutionTransition 检查 ExecutionStatus 状态转换是否合法。
-// 对齐 Python: is_valid_transition(current, new_status, EXECUTION_TRANSITIONS)
+// Python: is_valid_transition(current, new_status, EXECUTION_TRANSITIONS)
 func IsValidExecutionTransition(current, target string) bool {
 	allowed, ok := ExecutionTransitions[current]
 	if !ok {
@@ -166,7 +166,7 @@ func IsValidExecutionTransition(current, target string) bool {
 }
 
 // IsValidTaskTransition 检查 TaskStatus 状态转换是否合法。
-// 对齐 Python: is_valid_transition(current, new_status, TASK_TRANSITIONS)
+// Python: is_valid_transition(current, new_status, TASK_TRANSITIONS)
 func IsValidTaskTransition(current, target string) bool {
 	allowed, ok := TaskTransitions[current]
 	if !ok {
@@ -181,7 +181,7 @@ func IsValidTaskTransition(current, target string) bool {
 }
 
 // IsTaskTerminal 判断任务状态是否为终态。
-// 对齐 Python: TASK_TERMINAL_STATUSES = {COMPLETED, CANCELLED}
+// Python: TASK_TERMINAL_STATUSES = {COMPLETED, CANCELLED}
 func IsTaskTerminal(status string) bool {
 	return status == TaskStatusCompleted || status == TaskStatusCancelled
 }

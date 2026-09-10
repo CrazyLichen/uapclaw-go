@@ -19,7 +19,7 @@ import (
 //  1. 先尝试从 markdown 代码块（```json ... ```）中提取
 //  2. 未找到代码块则直接解析文本
 //
-// 对应 Python: openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py (JsonOutputParser)
+// Python: openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py (JsonOutputParser)
 type JsonOutputParser struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -32,7 +32,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // jsonCodeBlockRegexp 匹配 markdown 代码块中的 JSON。
-// 对齐 Python: re.search(r"```json\n(.*?)```", text, re.DOTALL)
+// Python: re.search(r"```json\n(.*?)```", text, re.DOTALL)
 
 var jsonCodeBlockRegexp = regexp.MustCompile("(?s)```json\n(.*?)```")
 
@@ -49,7 +49,7 @@ func NewJsonOutputParser() *JsonOutputParser {
 // 解析成功返回 map/slice/基础类型，解析失败返回 nil, error。
 // 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
 //
-// 对应 Python: JsonOutputParser.parse()
+// Python: JsonOutputParser.parse()
 func (p *JsonOutputParser) Parse(input any) (any, error) {
 	text, modelName := ExtractText(input)
 	if text == "" {
@@ -81,7 +81,7 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 
 // StreamParse 流式解析 LLM 输出中的 JSON。
 //
-// 对齐 Python: JsonOutputParser.stream_parse()。
+// Python: JsonOutputParser.stream_parse()。
 // chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 // 策略：
 //  1. 逐 chunk 累积 content 到 buffer

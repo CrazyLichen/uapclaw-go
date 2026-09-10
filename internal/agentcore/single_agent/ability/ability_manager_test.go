@@ -1035,7 +1035,7 @@ func TestAbilityManager_Execute_Rail包装(t *testing.T) {
 }
 
 // TestAbilityManager_Execute_skipTool before hook 通过 _skip_tool 跳过工具执行
-// 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
+// Python: L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
 func TestAbilityManager_Execute_skipTool(t *testing.T) {
 	mgr := interfaces.NewAgentCallbackManager("test_skip_tool")
 	defer mgr.Clear()

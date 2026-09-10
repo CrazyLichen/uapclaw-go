@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CodeAgentRail Code 模式下的自定义 Agent 护栏。
-// 对齐 Python: CodeAgentRail(DeepAgentRail) priority=90 (code_agent_rail.py L351-425)
+// Python: CodeAgentRail(DeepAgentRail) priority=90 (code_agent_rail.py L351-425)
 //
 // 管理 /agents 创建的自定义 Agent，通过 AgentTool 注册为统一 "Agent" 工具。
 // 与 SubagentRail 共存，只管理自定义 Agent，不触碰内置 Agent。
@@ -37,19 +38,19 @@ type CodeAgentRail struct {
 
 const (
 	// codeAgentRailPriority CodeAgentRail 优先级。
-	// 对齐 Python: CodeAgentRail.priority = 90 (code_agent_rail.py L358)
+	// Python: CodeAgentRail.priority = 90 (code_agent_rail.py L358)
 	codeAgentRailPriority = 90
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // disallowedForSubagents 禁止传递给子 Agent 的工具名集合。
-// 对齐 Python: DISALLOWED_FOR_SUBAGENTS (code_agent_rail.py L28-31)
+// Python: DISALLOWED_FOR_SUBAGENTS (code_agent_rail.py L28-31)
 
 var disallowedForSubagents map[string]bool
 
 // displayToInternal 显示名→内部名映射。
-// 对齐 Python: _DISPLAY_TO_INTERNAL (code_agent_rail.py L48-66)
+// Python: _DISPLAY_TO_INTERNAL (code_agent_rail.py L48-66)
 //
 // 定义在本地而非导入 cli.ui.tool_display，避免触发 prompt_toolkit 导入。
 var displayToInternal = map[string]string{
@@ -65,7 +66,7 @@ var displayToInternal = map[string]string{
 }
 
 // toolGroups 工具分组（用于 Agent 定义 UI）。
-// 对齐 Python: TOOL_GROUPS (code_agent_rail.py L34-41)
+// Python: TOOL_GROUPS (code_agent_rail.py L34-41)
 var toolGroups = types.ToolGroups
 
 // 编译时验证 CodeAgentRail 满足 AgentRail 接口
@@ -74,7 +75,7 @@ var _ sainterfaces.AgentRail = (*CodeAgentRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodeAgentRail 创建 CodeAgentRail 实例。
-// 对齐 Python: CodeAgentRail.__init__(workspace_dir=workspace_dir) (code_agent_rail.py L360-364)
+// Python: CodeAgentRail.__init__(workspace_dir=workspace_dir) (code_agent_rail.py L360-364)
 func NewCodeAgentRail(workspaceDir string, configLister AgentConfigLister) *CodeAgentRail {
 	r := &CodeAgentRail{
 		DeepAgentRail: *rails.NewDeepAgentRail(),
@@ -86,7 +87,7 @@ func NewCodeAgentRail(workspaceDir string, configLister AgentConfigLister) *Code
 }
 
 // Init 初始化 CodeAgentRail，从 AgentConfigService 加载自定义 Agent 并注册 AgentTool。
-// 对齐 Python: CodeAgentRail.init(agent) (code_agent_rail.py L366-368)
+// Python: CodeAgentRail.init(agent) (code_agent_rail.py L366-368)
 //
 // 步骤：
 //  1. loadCustomAgents() 从 AgentConfigService 加载 enabled 的非 builtin Agent
@@ -95,7 +96,7 @@ func NewCodeAgentRail(workspaceDir string, configLister AgentConfigLister) *Code
 //  4. NewAgentTool(card, parentAgent, customAgents)
 //  5. ResourceMgr.AddTool(agentTool) — 幂等注册
 //  6. AbilityManager.Add(agentTool.Card())
-func (r *CodeAgentRail) Init(agent sainterfaces.BaseAgent) error {
+func (r *CodeAgentRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	// 步骤 1: 加载自定义 Agent
 	customAgents := r.loadCustomAgents()
 	if len(customAgents) == 0 {
@@ -118,7 +119,7 @@ func (r *CodeAgentRail) Init(agent sainterfaces.BaseAgent) error {
 	r.agentTool = NewAgentTool(card, agent, customAgents)
 
 	// 步骤 5: 幂等注册到 ResourceMgr
-	// 对齐 Python: Runner.resource_mgr.add_tool([self._agent_tool]) (code_agent_rail.py L387)
+	// Python: Runner.resource_mgr.add_tool([self._agent_tool]) (code_agent_rail.py L387)
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr != nil {
 		toolID := r.agentTool.Card().ID
@@ -132,7 +133,7 @@ func (r *CodeAgentRail) Init(agent sainterfaces.BaseAgent) error {
 	}
 
 	// 步骤 6: 注册到 AbilityManager
-	// 对齐 Python: self._agent.ability_manager.add(self._agent_tool.card) (code_agent_rail.py L388)
+	// Python: self._agent.ability_manager.add(self._agent_tool.card) (code_agent_rail.py L388)
 	am := agent.AbilityManager()
 	if am != nil {
 		am.Add(r.agentTool.Card())
@@ -152,7 +153,7 @@ func (r *CodeAgentRail) Init(agent sainterfaces.BaseAgent) error {
 }
 
 // Uninit 注销 CodeAgentRail，移除已注册的 AgentTool。
-// 对齐 Python: CodeAgentRail.uninit(agent) (code_agent_rail.py L370-372)
+// Python: CodeAgentRail.uninit(agent) (code_agent_rail.py L370-372)
 //
 // 步骤：
 //  1. agentTool == nil → 直接返回
@@ -168,7 +169,7 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 	resourceMgr := runner.GetResourceMgr()
 
 	// 步骤 2: 从 AbilityManager 移除
-	// 对齐 Python: agent.ability_manager.remove(name) (code_agent_rail.py L400-404)
+	// Python: agent.ability_manager.remove(name) (code_agent_rail.py L400-404)
 	name := r.agentTool.Card().Name
 	if name != "" && am != nil {
 		func() {
@@ -184,7 +185,7 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 	}
 
 	// 步骤 3: 从 ResourceMgr 移除
-	// 对齐 Python: Runner.resource_mgr.remove_tool(tool_id) (code_agent_rail.py L405-410)
+	// Python: Runner.resource_mgr.remove_tool(tool_id) (code_agent_rail.py L405-410)
 	toolID := r.agentTool.Card().ID
 	if toolID != "" && resourceMgr != nil {
 		func() {
@@ -208,14 +209,14 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 }
 
 // Reload 热重载自定义 Agent 定义。
-// 对齐 Python: _get_current_agent_rails() 覆写 (interface_code.py L839-848)
+// Python: _get_current_agent_rails() 覆写 (interface_code.py L839-848)
 //
 // 逻辑：Uninit → Init，先注销旧 AgentTool，再重新加载并注册新 AgentTool。
 func (r *CodeAgentRail) Reload(agent sainterfaces.BaseAgent) error {
 	if err := r.Uninit(agent); err != nil {
 		return fmt.Errorf("CodeAgentRail Reload Uninit 失败: %w", err)
 	}
-	if err := r.Init(agent); err != nil {
+	if err := r.Init(context.Background(), agent); err != nil {
 		return fmt.Errorf("CodeAgentRail Reload Init 失败: %w", err)
 	}
 	return nil
@@ -232,7 +233,7 @@ func init() {
 }
 
 // loadCustomAgents 从 AgentConfigService 加载启用的自定义 Agent。
-// 对齐 Python: CodeAgentRail._load_custom_agents() (code_agent_rail.py L413-425)
+// Python: CodeAgentRail._load_custom_agents() (code_agent_rail.py L413-425)
 //
 // 步骤：
 //  1. 通过 configLister 获取自定义 agent 列表
@@ -253,7 +254,7 @@ func (r *CodeAgentRail) loadCustomAgents() []*types.AgentDefinition {
 
 	var result []*types.AgentDefinition
 	for _, a := range r.configLister.ListCustomAgents() {
-		// 对齐 Python: if a.source != "builtin" and a.enabled == True
+		// Python: if a.source != "builtin" and a.enabled == True
 		// ListCustomAgents 已过滤 builtin，只需检查 enabled
 		if a.Enabled != nil && *a.Enabled {
 			result = append(result, a)
@@ -263,7 +264,7 @@ func (r *CodeAgentRail) loadCustomAgents() []*types.AgentDefinition {
 }
 
 // filterToolCards 按允许/禁止列表过滤 ToolCard。
-// 对齐 Python: _filter_tool_cards(all_tool_cards, allowed_tools, disallowed_tools) (code_agent_rail.py L78-112)
+// Python: _filter_tool_cards(all_tool_cards, allowed_tools, disallowed_tools) (code_agent_rail.py L78-112)
 //
 // 步骤：
 //  1. allowedTools == ["*"] → 返回全部（浅拷贝）
@@ -277,13 +278,13 @@ func filterToolCards(
 	var result []*tool.ToolCard
 
 	// 步骤 1: allowedTools == ["*"] → 返回全部
-	// 对齐 Python: if allowed_tools == ["*"]: result = list(all_tool_cards)
+	// Python: if allowed_tools == ["*"]: result = list(all_tool_cards)
 	if len(allowedTools) == 1 && allowedTools[0] == "*" {
 		result = make([]*tool.ToolCard, len(allToolCards))
 		copy(result, allToolCards)
 	} else {
 		// 步骤 2: 按显示名和内部名双匹配过滤
-		// 对齐 Python: target_names = set(); for name in allowed_tools: target_names.add(display_to_internal.get(name, name)); target_names.add(name)
+		// Python: target_names = set(); for name in allowed_tools: target_names.add(display_to_internal.get(name, name)); target_names.add(name)
 		targetNames := make(map[string]bool, len(allowedTools)*2)
 		for _, name := range allowedTools {
 			targetNames[name] = true
@@ -299,7 +300,7 @@ func filterToolCards(
 	}
 
 	// 步骤 3: disallowedTools 再从结果中移除
-	// 对齐 Python: if disallowed_tools: ... result = [tc for tc in result if tc.name not in disallowed_internal]
+	// Python: if disallowed_tools: ... result = [tc for tc in result if tc.name not in disallowed_internal]
 	if len(disallowedTools) > 0 {
 		disallowedSet := make(map[string]bool, len(disallowedTools)*2)
 		for _, name := range disallowedTools {
@@ -321,7 +322,7 @@ func filterToolCards(
 }
 
 // buildAgentToolCard 动态构建 Agent 工具的 ToolCard。
-// 对齐 Python: _build_agent_tool_card(custom_agents, agent_id) (code_agent_rail.py L115-167)
+// Python: _build_agent_tool_card(custom_agents, agent_id) (code_agent_rail.py L115-167)
 //
 // 步骤：
 //  1. 遍历 customAgents，生成描述行 "- name: when_to_use (Tools: ...)"
@@ -330,19 +331,19 @@ func filterToolCards(
 //  4. required: ["description", "prompt", "subagent_type"]
 func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *tool.ToolCard {
 	// 步骤 1: 构建描述行
-	// 对齐 Python: lines = ["Launch a new agent to handle complex, multi-step tasks autonomously.", ...]
+	// Python: lines = ["Launch a new agent to handle complex, multi-step tasks autonomously.", ...]
 	lines := []string{
 		"Launch a new agent to handle complex, multi-step tasks autonomously.",
 		"",
 		"Available custom agents (created via /agents):",
 	}
 	for _, agentDef := range customAgents {
-		// 对齐 Python: desc = agent_def.when_to_use or agent_def.description
+		// Python: desc = agent_def.when_to_use or agent_def.description
 		desc := agentDef.WhenToUse
 		if desc == "" {
 			desc = agentDef.Description
 		}
-		// 对齐 Python: tools_desc = ", ".join(agent_def.tools) if agent_def.tools else "*"
+		// Python: tools_desc = ", ".join(agent_def.tools) if agent_def.tools else "*"
 		toolsDesc := "*"
 		if len(agentDef.Tools) > 0 {
 			toolsDesc = strings.Join(agentDef.Tools, ", ")
@@ -351,7 +352,7 @@ func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *
 	}
 
 	// 步骤 2: 追加 Usage notes
-	// 对齐 Python: lines.append("") + lines.append("Usage notes:") + ...
+	// Python: lines.append("") + lines.append("Usage notes:") + ...
 	lines = append(lines,
 		"",
 		"Usage notes:",
@@ -364,7 +365,7 @@ func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *
 	)
 
 	// 步骤 3: 构建 ToolCard
-	// 对齐 Python: tool_id = f"agent_tool_{agent_id}" if agent_id else f"agent_tool_{uuid.uuid4().hex}"
+	// Python: tool_id = f"agent_tool_{agent_id}" if agent_id else f"agent_tool_{uuid.uuid4().hex}"
 	toolID := fmt.Sprintf("agent_tool_%s", agentID)
 
 	description := strings.Join(lines, "\n")
@@ -385,7 +386,7 @@ func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *
 }
 
 // sortedKeys 返回 map 的排序键。
-// 对齐 Python: ", ".join(sorted(self._custom_agents.keys()))
+// Python: ", ".join(sorted(self._custom_agents.keys()))
 func sortedKeys(m map[string]*types.AgentDefinition) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

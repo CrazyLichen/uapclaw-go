@@ -35,7 +35,7 @@ type FsProvider interface {
 // 技能从包含 SKILL.md 文件的目录加载，SKILL.md 的 YAML front matter 中
 // 提取 name 和 description 元数据。
 //
-// 对应 Python: SkillManager
+// Python: SkillManager
 type SkillManager struct {
 	// registry 技能注册表，name → Skill
 	registry map[string]*Skill
@@ -74,7 +74,7 @@ type osFsProvider struct{}
 
 // SkillFileName 技能文件名（SKILL.md）。
 //
-// 对应 Python: SKILL_FILE_NAME = "SKILL.md"
+// Python: SKILL_FILE_NAME = "SKILL.md"
 const SkillFileName = "SKILL.md"
 
 // yamlFrontMatterSeparator YAML front matter 分隔符
@@ -86,7 +86,7 @@ const yamlFrontMatterSeparator = "---"
 
 // NewSkillManager 创建 SkillManager 实例。
 //
-// 对应 Python: SkillManager.__init__(sys_operation_id)
+// Python: SkillManager.__init__(sys_operation_id)
 func NewSkillManager(sysOperationID string) *SkillManager {
 	return &SkillManager{
 		registry:       make(map[string]*Skill),
@@ -108,7 +108,7 @@ func NewSkillManagerWithProvider(sysOperationID string, provider FsProvider) *Sk
 
 // SetSysOperationID 更新系统操作 ID。
 //
-// 对应 Python: SkillManager.set_sys_operation_id(sys_operation_id)
+// Python: SkillManager.set_sys_operation_id(sys_operation_id)
 func (sm *SkillManager) SetSysOperationID(sysOperationID string) {
 	sm.sysOperationID = sysOperationID
 }
@@ -129,7 +129,7 @@ func (sm *SkillManager) SetFsProvider(provider FsProvider) {
 //     b. 否则遍历子目录逐一尝试注册
 //  2. ListDirectories 失败 → 当作 SKILL.md 文件路径直接注册
 //
-// 对应 Python: SkillManager.register(skill_path, session_id, overwrite)
+// Python: SkillManager.register(skill_path, session_id, overwrite)
 func (sm *SkillManager) Register(skillPaths []string, overwrite bool) error {
 	var allErrs []error
 	for _, path := range skillPaths {
@@ -145,21 +145,21 @@ func (sm *SkillManager) Register(skillPaths []string, overwrite bool) error {
 
 // Unregister 注销技能。
 //
-// 对应 Python: SkillManager.unregister(name)
+// Python: SkillManager.unregister(name)
 func (sm *SkillManager) Unregister(name string) {
 	delete(sm.registry, name)
 }
 
 // Get 按名称获取技能。
 //
-// 对应 Python: SkillManager.get(name)
+// Python: SkillManager.get(name)
 func (sm *SkillManager) Get(name string) *Skill {
 	return sm.registry[name]
 }
 
 // GetAll 获取所有已注册技能。
 //
-// 对应 Python: SkillManager.get_all()
+// Python: SkillManager.get_all()
 func (sm *SkillManager) GetAll() []*Skill {
 	result := make([]*Skill, 0, len(sm.registry))
 	for _, skill := range sm.registry {
@@ -174,7 +174,7 @@ func (sm *SkillManager) GetAll() []*Skill {
 
 // GetNames 获取所有技能名称。
 //
-// 对应 Python: SkillManager.get_names()
+// Python: SkillManager.get_names()
 func (sm *SkillManager) GetNames() []string {
 	result := make([]string, 0, len(sm.registry))
 	for name := range sm.registry {
@@ -186,7 +186,7 @@ func (sm *SkillManager) GetNames() []string {
 
 // Has 检查技能是否存在。
 //
-// 对应 Python: SkillManager.has(name)
+// Python: SkillManager.has(name)
 func (sm *SkillManager) Has(name string) bool {
 	_, ok := sm.registry[name]
 	return ok
@@ -194,14 +194,14 @@ func (sm *SkillManager) Has(name string) bool {
 
 // Clear 清空注册表。
 //
-// 对应 Python: SkillManager.clear()
+// Python: SkillManager.clear()
 func (sm *SkillManager) Clear() {
 	sm.registry = make(map[string]*Skill)
 }
 
 // Count 返回已注册技能数量。
 //
-// 对应 Python: SkillManager.count()
+// Python: SkillManager.count()
 func (sm *SkillManager) Count() int {
 	return len(sm.registry)
 }
@@ -273,7 +273,7 @@ func (p *osFsProvider) WriteFile(path string, data []byte) error {
 //
 // 如果不以 "---" 开头，返回 (nil, text, nil)。
 //
-// 对应 Python: SkillManager._load_yaml(path, session_id)
+// Python: SkillManager._load_yaml(path, session_id)
 func (sm *SkillManager) loadYAML(path string) (map[string]any, string, error) {
 	text, err := sm.fsProvider.ReadFile(path)
 	if err != nil {
@@ -300,7 +300,7 @@ func (sm *SkillManager) loadYAML(path string) (map[string]any, string, error) {
 
 // loadDescription 从 SKILL.md 的 YAML front-matter 提取 description 字段。
 //
-// 对应 Python: SkillManager._load_description(path, session_id)
+// Python: SkillManager._load_description(path, session_id)
 func (sm *SkillManager) loadDescription(path string) (string, error) {
 	sm.description = ""
 	yamlData, _, err := sm.loadYAML(path)
@@ -326,7 +326,7 @@ func (sm *SkillManager) loadDescription(path string) (string, error) {
 //
 // 目录名为技能名称，SKILL.md 所在目录为技能目录。
 //
-// 对应 Python: SkillManager._create_skill_from_path(path, session_id)
+// Python: SkillManager._create_skill_from_path(path, session_id)
 func (sm *SkillManager) createSkillFromPath(skillMDPath string) (*Skill, error) {
 	description, err := sm.loadDescription(skillMDPath)
 	if err != nil {
@@ -344,7 +344,7 @@ func (sm *SkillManager) createSkillFromPath(skillMDPath string) (*Skill, error) 
 
 // findSkillMD 在文件列表中查找 SKILL.md（不区分大小写）。
 //
-// 对应 Python: SkillManager._find_skill_md(file_items)
+// Python: SkillManager._find_skill_md(file_items)
 func findSkillMD(files []FileInfo) (bool, string) {
 	for _, f := range files {
 		if strings.EqualFold(f.Name, "skill.md") {
@@ -358,7 +358,7 @@ func findSkillMD(files []FileInfo) (bool, string) {
 //
 // overwrite 为 false 时，如果技能已存在则返回 error。
 //
-// 对应 Python: SkillManager._add_to_registry(skill, overwrite)
+// Python: SkillManager._add_to_registry(skill, overwrite)
 func (sm *SkillManager) addToRegistry(skill *Skill, overwrite bool) error {
 	if !overwrite {
 		if _, exists := sm.registry[skill.Name]; exists {
@@ -373,7 +373,7 @@ func (sm *SkillManager) addToRegistry(skill *Skill, overwrite bool) error {
 //
 // 路径为空时 no-op。
 //
-// 对应 Python: SkillManager._register_skill_from_md(skill_md_path, session_id, overwrite)
+// Python: SkillManager._register_skill_from_md(skill_md_path, session_id, overwrite)
 func (sm *SkillManager) registerSkillFromMD(mdPath string, overwrite bool) error {
 	if mdPath == "" {
 		return nil
@@ -393,7 +393,7 @@ func (sm *SkillManager) registerSkillFromMD(mdPath string, overwrite bool) error
 // 列出目录文件 → 查找 SKILL.md → 注册。
 // 返回 (found, error)：found 表示是否找到 SKILL.md。
 //
-// 对应 Python: SkillManager._try_register_dir_as_skill(fs, dir_path, session_id, overwrite)
+// Python: SkillManager._try_register_dir_as_skill(fs, dir_path, session_id, overwrite)
 func (sm *SkillManager) tryRegisterDirAsSkill(dirPath string, overwrite bool) (bool, error) {
 	files, err := sm.fsProvider.ListFiles(dirPath)
 	if err != nil {
@@ -414,7 +414,7 @@ func (sm *SkillManager) tryRegisterDirAsSkill(dirPath string, overwrite bool) (b
 
 // registerRoot 对单个根路径执行注册逻辑。
 //
-// 对应 Python: SkillManager.register() 中的 _register_root(root) 内部函数
+// Python: SkillManager.register() 中的 _register_root(root) 内部函数
 func (sm *SkillManager) registerRoot(root string, overwrite bool) error {
 	// 尝试列出子目录
 	dirs, dirErr := sm.fsProvider.ListDirectories(root)

@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // responsePriority 响应节优先级
-// 对齐 Python: PromptPriority.RESPONSE = 60 (prompt_builder.py L29)
+// Python: PromptPriority.RESPONSE = 60 (prompt_builder.py L29)
 const responsePriority = 60
 
 // logComponent 日志组件标识
@@ -29,12 +29,12 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildResponseSection 构建响应节（消息格式说明）。
-// 对齐 Python: _response_prompt(language) (prompt_builder.py L36-105)
+// Python: _response_prompt(language) (prompt_builder.py L36-105)
 //
 // 描述用户消息和系统消息的 JSON 格式，告知 LLM 如何按来源和类型分别处理消息。
 // 此节由 ResponsePromptRail 在 BeforeModelCall 中动态注入（10.6.3-10 实现）。
 func BuildResponseSection(language string) saprompt.PromptSection {
-	// 对齐 Python L37-67: if language == "cn"
+	// Python: L37-67: if language == "cn"
 	// 提示词文本从 Python 源码逐行复制，禁止自己翻译
 	responseCN := "# 消息说明\n\n" +
 		"你会收到用户消息和系统消息，需按来源和类型分别处理。\n\n" +
@@ -60,7 +60,7 @@ func BuildResponseSection(language string) saprompt.PromptSection {
 		"- **heartbeat**：心跳任务，如「检查待办」「同步状态」。\n\n" +
 		"系统任务完成后，以回复形式通知用户。"
 
-	// 对齐 Python L70-99: else (english)
+	// Python: L70-99: else (english)
 	responseEN := "# Message Format\n\n" +
 		"You receive user messages and system messages; handle each by source and type.\n\n" +
 		"## User Message\n\n" +
@@ -93,7 +93,7 @@ func BuildResponseSection(language string) saprompt.PromptSection {
 }
 
 // BuildAgentIdentityPrompt 构建 Agent 身份提示词。
-// 对齐 Python: build_agent_identity_prompt(language) (prompt_builder.py L248-259)
+// Python: build_agent_identity_prompt(language) (prompt_builder.py L248-259)
 //
 // Python 执行步骤：
 //
@@ -119,7 +119,7 @@ func BuildAgentIdentityPrompt(language string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readWorkspaceFile 读取工作空间文件内容。
-// 对齐 Python: _read_file(file_path) (prompt_builder.py L265-281)
+// Python: _read_file(file_path) (prompt_builder.py L265-281)
 //
 // 当前 BuildAgentIdentityPrompt 未使用此函数，但为与 Python 对齐保留。
 func readWorkspaceFile(filePath string) string {

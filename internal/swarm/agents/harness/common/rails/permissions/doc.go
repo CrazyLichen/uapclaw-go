@@ -9,7 +9,8 @@
 //	permissions/
 //	├── doc.go                     # 包文档
 //	├── owner_scopes.go            # OwnerScopesPermissionContext + CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope
-//	└── permissions_config_rpc.go  # 10 个权限配置 RPC 分发 + config CRUD 辅助函数
+//	├── permissions_config_rpc.go  # 10 个权限配置 RPC 分发 + config CRUD 辅助函数
+//	└── permissions_persist.go     # 权限配置落盘 helper（PersistPermissionAllowRule/PersistExternalDirectoryAllow/PersistCliTrustedDirectoryWithOverrides）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/ + jiuwenswarm/common/config.py（CRUD 部分）
 package permissions

@@ -36,7 +36,7 @@ const (
 
 // IsHTTPDownloadTarget 检查 URL 是否为 HTTP(S) 下载目标。
 // URL 必须以 http:// 或 https:// 开头，且以 .zip、.tar.gz、.tgz 或 .tar.bz2 结尾。
-// 对应 Python: SkillManager._is_http_download_target(url)
+// Python: SkillManager._is_http_download_target(url)
 func IsHTTPDownloadTarget(url string) bool {
 	return isHTTPDownloadTarget(url)
 }
@@ -44,7 +44,7 @@ func IsHTTPDownloadTarget(url string) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isHTTPDownloadTarget 检查 URL 是否为 HTTP(S) 下载目标。
-// 对齐 Python: _is_http_download_target(value) (skill_manager.py L2904-2906)
+// Python: _is_http_download_target(value) (skill_manager.py L2904-2906)
 // 只检查 scheme 为 http/https 且 netloc 非空，不检查 URL 后缀
 func isHTTPDownloadTarget(downloadURL string) bool {
 	u, err := url.Parse(strings.TrimSpace(downloadURL))
@@ -56,7 +56,7 @@ func isHTTPDownloadTarget(downloadURL string) bool {
 
 // importSkillFromRemoteArchive 从远程 URL 下载技能归档并导入。
 // 步骤：创建临时目录 → 下载 → SHA256 校验 → 解压 → 查找 SKILL.md → 调用本地导入逻辑。
-// 对应 Python: SkillManager._import_skill_from_remote_archive(ctx, sm, download_url, force, checksum_sha256)
+// Python: SkillManager._import_skill_from_remote_archive(ctx, sm, download_url, force, checksum_sha256)
 func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloadURL string, force bool, checksumSHA256 string) (map[string]any, error) {
 	// 创建临时目录
 	tmpDir, err := os.MkdirTemp("", "jiuwenswarm_remote_import_")

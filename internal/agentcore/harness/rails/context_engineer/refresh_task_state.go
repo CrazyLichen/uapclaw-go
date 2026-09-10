@@ -21,7 +21,7 @@ import (
 // 从 session 的 _deepagent_runtime_state 属性中读取 DeepAgentState，
 // 序列化为字典后回写到 session 的顶层状态（task_state/iteration/pending_follow_ups/plan_mode）。
 //
-// 对齐 Python: ContextProcessorRail._refresh_task_state_runtime(ctx)
+// Python: ContextProcessorRail._refresh_task_state_runtime(ctx)
 // 调用时机：beforeModelCall / afterModelCall / afterToolCall / onModelException
 func RefreshTaskStateRuntime(ctx *sainterfaces.AgentCallbackContext) {
 	sess := ctx.Session()

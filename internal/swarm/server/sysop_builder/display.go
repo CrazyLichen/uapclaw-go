@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ListAutoManagedSandboxPaths 列出自动管理的沙箱路径。
-// 对齐 Python: list_auto_managed_sandbox_paths(project_dir, *, is_code_agent)
+// Python: list_auto_managed_sandbox_paths(project_dir, *, is_code_agent)
 // 返回 {"allow_write": [...], "deny_write": [...]}，每项为 {"path": str, "permissions": str, "kind": str}
 func ListAutoManagedSandboxPaths(
 	projectDir string,
@@ -107,7 +107,7 @@ func ListAutoManagedSandboxPaths(
 }
 
 // ListEffectiveSandboxFiles 只读视图：auto + 用户条目合并。
-// 对齐 Python: list_effective_sandbox_files(files_runtime, *, project_dir, is_code_agent)
+// Python: list_effective_sandbox_files(files_runtime, *, project_dir, is_code_agent)
 func ListEffectiveSandboxFiles(
 	filesRuntime map[string]any,
 	projectDir string,
@@ -188,7 +188,7 @@ func ListEffectiveSandboxFiles(
 }
 
 // FindAutoManagedMatch 判断路径是否已被 auto 管理。
-// 对齐 Python: find_auto_managed_match(path, *, project_dir, is_code_agent)
+// Python: find_auto_managed_match(path, *, project_dir, is_code_agent)
 // 返回 (bucket, canonicalPath, found)
 func FindAutoManagedMatch(
 	path string,
@@ -218,7 +218,7 @@ func FindAutoManagedMatch(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // appendUnique 去重追加（按 path 比较）。
-// 对齐 Python: _append_unique(target, entry)
+// Python: _append_unique(target, entry)
 func appendUnique(target []map[string]string, entry map[string]string) []map[string]string {
 	for _, item := range target {
 		if item["path"] == entry["path"] {
@@ -229,7 +229,7 @@ func appendUnique(target []map[string]string, entry map[string]string) []map[str
 }
 
 // classifyHostKind 判定 path 是 "directory" 还是 "file"。
-// 对齐 Python: _classify_host_kind(path)
+// Python: _classify_host_kind(path)
 func classifyHostKind(path string) string {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -242,7 +242,7 @@ func classifyHostKind(path string) string {
 }
 
 // resolveDisplayPath 解析为绝对路径用于展示/比较。
-// 对齐 Python: _resolve_display_path(raw)
+// Python: _resolve_display_path(raw)
 func resolveDisplayPath(raw string) string {
 	text := strings.TrimSpace(raw)
 	if text == "" {

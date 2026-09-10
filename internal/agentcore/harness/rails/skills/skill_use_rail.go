@@ -25,13 +25,14 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillUseRail 技能使用护栏，管理 skill 提示词注入和工具注册。
-// 对齐 Python: SkillUseRail (openjiuwen/harness/rails/skills/skill_use_rail.py)
+// Python: SkillUseRail (openjiuwen/harness/rails/skills/skill_use_rail.py)
 type SkillUseRail struct {
 	rails.DeepAgentRail
 
@@ -92,7 +93,7 @@ const (
 	SkillModeAutoList = "auto_list"
 
 	// skillUseRailPriority SkillUseRail 优先级
-	// 对齐 Python: SkillUseRail.priority = 100
+	// Python: SkillUseRail.priority = 100
 	skillUseRailPriority = 100
 )
 
@@ -110,7 +111,7 @@ var _ agentinterfaces.AgentRail = (*SkillUseRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillUseRail 创建 SkillUseRail 实例。
-// 对齐 Python: SkillUseRail.__init__()
+// Python: SkillUseRail.__init__()
 func NewSkillUseRail(skillsDir []string, opts ...SkillUseRailOption) *SkillUseRail {
 	r := &SkillUseRail{
 		DeepAgentRail:  *rails.NewDeepAgentRail(),
@@ -185,7 +186,7 @@ func WithEnableImageMultimodal(enabled bool) SkillUseRailOption {
 }
 
 // SkillsMeta 返回当前技能列表深拷贝。
-// 对齐 Python: SkillUseRail.skills_meta property
+// Python: SkillUseRail.skills_meta property
 func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 	result := make([]*skillpkg.Skill, len(r.skills))
 	for i, s := range r.skills {
@@ -196,7 +197,7 @@ func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 }
 
 // ReloadSkills 重新加载技能 + 演化经验。
-// 对齐 Python: SkillUseRail.reload_skills()
+// Python: SkillUseRail.reload_skills()
 func (r *SkillUseRail) ReloadSkills(ctx context.Context) error {
 	if err := r.prepareSkills(); err != nil {
 		return err
@@ -206,7 +207,7 @@ func (r *SkillUseRail) ReloadSkills(ctx context.Context) error {
 }
 
 // ClearSkills 清空缓存。
-// 对齐 Python: SkillUseRail.clear_skills()
+// Python: SkillUseRail.clear_skills()
 func (r *SkillUseRail) ClearSkills() {
 	r.skillCache = make(map[string]*skillpkg.Skill)
 	r.skillUpdateAt = make(map[string]time.Time)
@@ -221,8 +222,8 @@ func (r *SkillUseRail) Priority() int {
 }
 
 // Init 注册工具到 ResourceMgr + AbilityManager。
-// 对齐 Python: SkillUseRail.init() L237-306
-func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: SkillUseRail.init() L237-306
+func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	var language string
@@ -241,7 +242,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 
 	var tools []tool.Tool
 
-	// 对齐 Python L246-253: 始终注册 SkillTool
+	// Python: L246-253: 始终注册 SkillTool
 	tools = append(tools, skilltools.NewSkillTool(
 		op,
 		func() []*skillpkg.Skill { return r.skills },
@@ -249,7 +250,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		agentID,
 	))
 
-	// 对齐 Python L255-271: includeTools 时注册 ReadFileTool/CodeTool/BashTool
+	// Python: L255-271: includeTools 时注册 ReadFileTool/CodeTool/BashTool
 	if r.includeTools {
 		enableImageMultimodal := true
 		if r.enableImageMultimodal != nil {
@@ -262,7 +263,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		)
 	}
 
-	// 对齐 Python L273-281: auto_list 模式注册 ListSkillTool
+	// Python: L273-281: auto_list 模式注册 ListSkillTool
 	if r.skillMode == SkillModeAutoList {
 		tools = append(tools, skilltools.NewListSkillTool(
 			func() []*skillpkg.Skill { return r.skills },
@@ -272,7 +273,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		))
 	}
 
-	// 对齐 Python L283-294: 幂等注册到 ResourceMgr
+	// Python: L283-294: 幂等注册到 ResourceMgr
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range tools {
 		toolID := t.Card().ID
@@ -296,7 +297,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 对齐 Python L296-306: 注册到 AbilityManager
+	// Python: L296-306: 注册到 AbilityManager
 	am := agent.AbilityManager()
 	if am != nil {
 		for _, t := range tools {
@@ -321,7 +322,7 @@ func (r *SkillUseRail) Init(agent agentinterfaces.BaseAgent) error {
 }
 
 // Uninit 从 AbilityManager 注销工具。
-// 对齐 Python: SkillUseRail.uninit() L308-321
+// Python: SkillUseRail.uninit() L308-321
 func (r *SkillUseRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
 	if am != nil {
@@ -342,14 +343,14 @@ func (r *SkillUseRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // BeforeInvoke 调用 refreshSkillPrompt。
-// 对齐 Python: SkillUseRail.before_invoke()
-func (r *SkillUseRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	r.refreshSkillPrompt(context.Background())
+// Python: SkillUseRail.before_invoke()
+func (r *SkillUseRail) BeforeInvoke(ctx context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	r.refreshSkillPrompt(ctx)
 	return nil
 }
 
 // BeforeModelCall 构建 skills section 并注入 systemPromptBuilder。
-// 对齐 Python: SkillUseRail.before_model_call() L359-372
+// Python: SkillUseRail.before_model_call() L359-372
 func (r *SkillUseRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
@@ -364,17 +365,17 @@ func (r *SkillUseRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.Age
 }
 
 // AfterInvoke 空操作。
-// 对齐 Python: SkillUseRail.after_invoke()
+// Python: SkillUseRail.after_invoke()
 func (r *SkillUseRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // LoadSkillsFromDir 类方法：静态加载技能。
-// 对齐 Python: SkillUseRail.load_skills_from_dir()
+// Python: SkillUseRail.load_skills_from_dir()
 func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Skill, error) {
 	roots := normalizeSkillDirs(skillsDir)
 	if len(roots) == 0 {
-		return nil, errors.New("skills_dir 为空")
+		return nil, errors.New("skills_dir is empty")
 	}
 
 	skillMap := make(map[string]*skillpkg.Skill)
@@ -443,14 +444,14 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshSkillPrompt 重新加载技能 + 演化经验。
-// 对齐 Python: SkillUseRail.refresh_skill_prompt()
+// Python: SkillUseRail.refresh_skill_prompt()
 func (r *SkillUseRail) refreshSkillPrompt(ctx context.Context) {
 	_ = r.prepareSkills()
 	r.fetchEvolutionTexts(ctx)
 }
 
 // prepareSkills 增量刷新 + 过滤。
-// 对齐 Python: SkillUseRail._prepare_skills()
+// Python: SkillUseRail._prepare_skills()
 func (r *SkillUseRail) prepareSkills() error {
 	if !r.enableCache {
 		r.skillCache = make(map[string]*skillpkg.Skill)
@@ -466,7 +467,7 @@ func (r *SkillUseRail) prepareSkills() error {
 }
 
 // refreshSkillsIncrementally 遍历 skillsDir，mtime 增量比对。
-// 对齐 Python: SkillUseRail._refresh_skills_incrementally() L123-175
+// Python: SkillUseRail._refresh_skills_incrementally() L123-175
 func (r *SkillUseRail) refreshSkillsIncrementally() error {
 	roots := r.normalizeSkillDirs()
 	if len(roots) == 0 {
@@ -553,7 +554,7 @@ func (r *SkillUseRail) refreshSkillsIncrementally() error {
 }
 
 // loadSkill 加载单个 SKILL.md。
-// 对齐 Python: SkillUseRail._load_skill()
+// Python: SkillUseRail._load_skill()
 func (r *SkillUseRail) loadSkill(dir string, modTime time.Time) (*skillpkg.Skill, error) {
 	skillMDPath := filepath.Join(dir, "SKILL.md")
 
@@ -567,27 +568,45 @@ func (r *SkillUseRail) loadSkill(dir string, modTime time.Time) (*skillpkg.Skill
 	} else {
 		description = desc
 	}
-	// 对齐 Python: description or f"Skill located in {skill_dir}"，空串也走 fallback
+	// Python: description or f"Skill located in {skill_dir}"，空串也走 fallback
 	if description == "" {
 		description = fmt.Sprintf("Skill located in %s", dir)
 	}
 
 	skill := skillpkg.NewSkill(filepath.Base(dir), description, dir)
-	// 对齐 Python: setattr(skill, "update_at", update_at)
+	// Python: setattr(skill, "update_at", update_at)
 	skill.UpdateAt = modTime
 
 	return skill, nil
 }
 
 // loadYAML 从文件读取 YAML front matter。
-// 对齐 Python: SkillUseRail._load_yaml()
+// Python: SkillUseRail._load_yaml()
 func (r *SkillUseRail) loadYAML(path string) (map[string]any, string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, "", fmt.Errorf("读取文件失败 %s: %w", path, err)
-	}
+	var text string
 
-	text := string(data)
+	// 优先使用 SysOperation.Fs().ReadFile()
+	if r.SysOperation() != nil {
+		fsOp := r.SysOperation().Fs()
+		if fsOp != nil {
+			readRes, err := fsOp.ReadFile(context.Background(), path)
+			if err != nil {
+				return nil, "", fmt.Errorf("读取文件失败 %s: %w", path, err)
+			}
+			if readRes == nil || readRes.Data == nil {
+				return nil, "", fmt.Errorf("读取文件失败 %s: 返回结果为空", path)
+			}
+			text = readRes.Data.Content
+		}
+	}
+	// SysOperation 不可用时回退到 os.ReadFile（测试场景）
+	if text == "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, "", fmt.Errorf("读取文件失败 %s: %w", path, err)
+		}
+		text = string(data)
+	}
 	if strings.HasPrefix(text, "---") {
 		parts := strings.SplitN(text, "---", 3)
 		if len(parts) >= 3 {
@@ -605,7 +624,7 @@ func (r *SkillUseRail) loadYAML(path string) (map[string]any, string, error) {
 }
 
 // loadDescription 从 SKILL.md 的 YAML front matter 提取 description 字段。
-// 对齐 Python: SkillUseRail._load_description()
+// Python: SkillUseRail._load_description()
 func (r *SkillUseRail) loadDescription(path string) (string, error) {
 	yamlData, _, err := r.loadYAML(path)
 	if err != nil {
@@ -626,7 +645,7 @@ func (r *SkillUseRail) loadDescription(path string) (string, error) {
 }
 
 // collectSkillsInOrder 按序收集 + 去重。
-// 对齐 Python: SkillUseRail._collect_skills_in_order()
+// Python: SkillUseRail._collect_skills_in_order()
 func (r *SkillUseRail) collectSkillsInOrder() []*skillpkg.Skill {
 	var collected []*skillpkg.Skill
 	seenNames := make(map[string]struct{})
@@ -651,7 +670,7 @@ func (r *SkillUseRail) collectSkillsInOrder() []*skillpkg.Skill {
 }
 
 // filterSkills enabled/disabled 过滤。
-// 对齐 Python: SkillUseRail._filter_skills()
+// Python: SkillUseRail._filter_skills()
 func (r *SkillUseRail) filterSkills(skills []*skillpkg.Skill) []*skillpkg.Skill {
 	var filtered []*skillpkg.Skill
 
@@ -671,29 +690,19 @@ func (r *SkillUseRail) filterSkills(skills []*skillpkg.Skill) []*skillpkg.Skill 
 }
 
 // fetchEvolutionTexts 从 EvolutionStore 读取演化经验文本。
-// 对齐 Python: SkillUseRail._fetch_evolution_texts() L333-346
+// Python: SkillUseRail._fetch_evolution_texts() L333-346
 func (r *SkillUseRail) fetchEvolutionTexts(ctx context.Context) {
 	if r.evolutionStore == nil {
 		return
 	}
 	for _, skill := range r.skills {
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Warn(logger.ComponentAgentCore).
-						Str("skill", skill.Name).
-						Any("recover", rec).
-						Msg("获取演进经验文本失败")
-				}
-			}()
-			text := r.evolutionStore.FormatDescExperienceText(ctx, skill.Name, 5)
-			r.evolutionTexts[skill.Name] = text
-		}()
+		text := r.evolutionStore.FormatDescExperienceText(ctx, skill.Name, 5)
+		r.evolutionTexts[skill.Name] = text
 	}
 }
 
 // getSkillDescription 返回附加演化经验文本的描述。
-// 对齐 Python: SkillUseRail._get_skill_description() L348-354
+// Python: SkillUseRail._get_skill_description() L348-354
 func (r *SkillUseRail) getSkillDescription(skill *skillpkg.Skill) string {
 	desc := skill.Description
 	if evoText, ok := r.evolutionTexts[skill.Name]; ok && evoText != "" {
@@ -703,18 +712,18 @@ func (r *SkillUseRail) getSkillDescription(skill *skillpkg.Skill) string {
 }
 
 // buildSkillsSection 构建 PromptSection。
-// 对齐 Python: SkillUseRail._build_skills_section()
+// Python: SkillUseRail._build_skills_section()
 func (r *SkillUseRail) buildSkillsSection() *saprompt.PromptSection {
 	if r.skillMode == SkillModeAll {
 		return r.buildAllModeSection()
 	}
 	// auto_list 模式
 	section := sections.BuildSkillsSection("auto_list", "", r.language())
-	return &section
+	return section
 }
 
 // buildAllModeSection 构建 all 模式 PromptSection。
-// 对齐 Python: SkillUseRail._build_skills_section() all 分支
+// Python: SkillUseRail._build_skills_section() all 分支
 func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
 	var bodyLines []string
 	for idx, skill := range r.skills {
@@ -722,12 +731,12 @@ func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
 			idx,
 			skill.Name,
 			r.getSkillDescription(skill),
-			skill.MDPath,
+			"", // Python: skill_md_path 已注释掉 (# No longer needed with SkillTool)
 		))
 	}
 	skillLines := sections.BuildSkillLines(bodyLines)
 	section := sections.BuildSkillsSection("all", skillLines, r.language())
-	return &section
+	return section
 }
 
 // language 获取当前语言
@@ -739,13 +748,13 @@ func (r *SkillUseRail) language() string {
 }
 
 // skillMDPath 返回 SKILL.md 路径。
-// 对齐 Python: SkillUseRail._skill_md_path()
+// Python: SkillUseRail._skill_md_path()
 func skillMDPath(skill *skillpkg.Skill) string {
 	return filepath.Join(skill.Directory, "SKILL.md")
 }
 
 // normalizeNameList 规范化名称列表（支持逗号/分号分隔）。
-// 对齐 Python: SkillUseRail._normalize_name_list()，但仅接受 []string
+// Python: SkillUseRail._normalize_name_list()，但仅接受 []string
 // （字符串输入场景由 parseSkillDirs 单独处理）。
 func normalizeNameList(names []string) []string {
 	if len(names) == 0 {
@@ -769,7 +778,7 @@ func normalizeNameList(names []string) []string {
 }
 
 // normalizeNameSet 规范化名称集合。
-// 对齐 Python: SkillUseRail._normalize_name_set()
+// Python: SkillUseRail._normalize_name_set()
 func normalizeNameSet(names []string) map[string]struct{} {
 	normalized := normalizeNameList(names)
 	result := make(map[string]struct{}, len(normalized))
@@ -780,7 +789,7 @@ func normalizeNameSet(names []string) map[string]struct{} {
 }
 
 // parseSkillDirs 解析分号/逗号分隔字符串。
-// 对齐 Python: SkillUseRail._parse_skill_dirs()
+// Python: SkillUseRail._parse_skill_dirs()
 func parseSkillDirs(raw string) []string {
 	if raw == "" || strings.TrimSpace(raw) == "" {
 		return nil
@@ -797,13 +806,13 @@ func parseSkillDirs(raw string) []string {
 }
 
 // normalizeSkillDirs 将 skillsDir 规范化为绝对路径列表。
-// 对齐 Python: SkillUseRail._normalize_skill_dirs()
+// Python: SkillUseRail._normalize_skill_dirs()
 func (r *SkillUseRail) normalizeSkillDirs() []string {
 	return normalizeSkillDirs(r.skillsDir)
 }
 
 // normalizeSkillDirs 将 skillsDir 规范化为绝对路径列表。
-// 对齐 Python: SkillUseRail._normalize_skill_dirs()
+// Python: SkillUseRail._normalize_skill_dirs()
 func normalizeSkillDirs(skillsDir []string) []string {
 	var rawDirs []string
 	for _, item := range skillsDir {
@@ -820,9 +829,10 @@ func normalizeSkillDirs(skillsDir []string) []string {
 		if raw == "" || strings.TrimSpace(raw) == "" {
 			continue
 		}
-		abs, err := filepath.Abs(raw)
+		expanded := pathutil.ExpandHome(raw)
+		abs, err := filepath.Abs(expanded)
 		if err != nil {
-			abs = raw
+			abs = expanded
 		}
 		normalized = append(normalized, abs)
 	}

@@ -214,23 +214,23 @@ func TestIntentToolkits_GetOpenAIToolSchemas_全量(t *testing.T) {
 }
 
 // TestIntentToolkits_GetOpenAIToolSchemas_过滤 测试获取指定 Schema
-// 对齐 Python Bug: choices 参数被忽略，始终返回 toolSchemaChoices 全量
+// Python: Bug: choices 参数被忽略，始终返回 toolSchemaChoices 全量
 func TestIntentToolkits_GetOpenAIToolSchemas_过滤(t *testing.T) {
 	event, _ := schema.FromUserInput("hello")
 	toolkits := NewIntentToolkits(event, 0.7)
 
-	// 对齐 Python Bug: 传入 choices 参数不起过滤作用，返回全量
+	// Python: Bug: 传入 choices 参数不起过滤作用，返回全量
 	schemas := toolkits.GetOpenAIToolSchemas("create_task", "pause_task")
 	assert.Len(t, schemas, 8)
 }
 
 // TestIntentToolkits_GetOpenAIToolSchemas_空选择 测试传入不存在的名称
-// 对齐 Python Bug: choices 参数被忽略，即使传入不存在的名称也返回全量
+// Python: Bug: choices 参数被忽略，即使传入不存在的名称也返回全量
 func TestIntentToolkits_GetOpenAIToolSchemas_空选择(t *testing.T) {
 	event, _ := schema.FromUserInput("hello")
 	toolkits := NewIntentToolkits(event, 0.7)
 
-	// 对齐 Python Bug: 传入不存在的名称仍返回全量
+	// Python: Bug: 传入不存在的名称仍返回全量
 	schemas := toolkits.GetOpenAIToolSchemas("nonexistent")
 	assert.Len(t, schemas, 8)
 }

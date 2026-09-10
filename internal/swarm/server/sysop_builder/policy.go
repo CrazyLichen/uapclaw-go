@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // policyBuilder filesystem policy 构建器，封装可变状态。
-// 对齐 Python: build_filesystem_policy 内部的闭包状态
+// Python: build_filesystem_policy 内部的闭包状态
 type policyBuilder struct {
 	allowFiles       []map[string]any
 	allowDirs        []map[string]any
@@ -29,13 +30,13 @@ type policyBuilder struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // envSandboxProjectDir 沙箱项目目录环境变量。
-// 对齐 Python: JIUSWARM_SANDBOX_PROJECT_DIR
+// Python: JIUSWARM_SANDBOX_PROJECT_DIR
 const envSandboxProjectDir = "UAPCLAW_SANDBOX_PROJECT_DIR"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // intrinsicRWFilePathFuncs 固有 rw 文件路径函数列表。
-// 对齐 Python: _INTRINSIC_RW_FILE_PATH_FUNCS
+// Python: _INTRINSIC_RW_FILE_PATH_FUNCS
 var intrinsicRWFilePathFuncs = []func() string{
 	workspace.DeepAgentAgentMDPath,
 	workspace.DeepAgentHeartbeatPath,
@@ -45,7 +46,7 @@ var intrinsicRWFilePathFuncs = []func() string{
 }
 
 // intrinsicROFilePathFuncs 固有 ro 文件路径函数列表。
-// 对齐 Python: _INTRINSIC_RO_FILE_PATH_FUNCS
+// Python: _INTRINSIC_RO_FILE_PATH_FUNCS
 var intrinsicROFilePathFuncs = []func() string{
 	workspace.ConfigFile,
 }
@@ -53,7 +54,7 @@ var intrinsicROFilePathFuncs = []func() string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildFilesystemPolicy 组装沙箱 filesystem policy。
-// 对齐 Python: build_filesystem_policy(files_runtime, *, project_dir=None, is_code_agent=False)
+// Python: build_filesystem_policy(files_runtime, *, project_dir=None, is_code_agent=False)
 //
 // 参数：
 //   - filesRuntime: config.yaml::sandbox.files 字典，含 allow/deny 列表
@@ -108,7 +109,7 @@ func BuildFilesystemPolicy(
 	}
 
 	// 仅 code-agent 才挂用户工程目录
-	// 对齐 Python: if is_code_agent: resolved_project = _resolve_project_dir(project_dir)
+	// Python: if is_code_agent: resolved_project = _resolve_project_dir(project_dir)
 	if isCodeAgent {
 		resolvedProject := resolveProjectDir(projectDir)
 		if resolvedProject != "" {
@@ -117,7 +118,7 @@ func BuildFilesystemPolicy(
 	}
 
 	// 处理 files.allow
-	// 对齐 Python: for entry in files_runtime.get("allow") or []:
+	// Python: for entry in files_runtime.get("allow") or []:
 	allowEntries := filesRuntime["allow"]
 	if allowList, ok := toSlice(allowEntries); ok {
 		for _, entry := range allowList {
@@ -152,7 +153,7 @@ func BuildFilesystemPolicy(
 	}
 
 	// 处理 files.deny
-	// 对齐 Python: for entry in files_runtime.get("deny") or []:
+	// Python: for entry in files_runtime.get("deny") or []:
 	denyEntries := filesRuntime["deny"]
 	if denyList, ok := toSlice(denyEntries); ok {
 		for _, entry := range denyList {
@@ -183,7 +184,7 @@ func BuildFilesystemPolicy(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // recordRWBind 注册 rw bind mount。
-// 对齐 Python: _record_rw_bind(host_path, sandbox_path, *, is_dir, permissions)
+// Python: _record_rw_bind(host_path, sandbox_path, *, is_dir, permissions)
 func (b *policyBuilder) recordRWBind(hostPath, sandboxPath string, isDir bool, permissions string) {
 	b.bindMounts = append(b.bindMounts, map[string]any{
 		"host_path":    hostPath,
@@ -196,7 +197,7 @@ func (b *policyBuilder) recordRWBind(hostPath, sandboxPath string, isDir bool, p
 }
 
 // recordUserDenyBind 注册 deny_write bind：bind_mount mode=rw + read_only patch。
-// 对齐 Python: _record_user_deny_bind(host_path, sandbox_path)
+// Python: _record_user_deny_bind(host_path, sandbox_path)
 func (b *policyBuilder) recordUserDenyBind(hostPath, sandboxPath string) {
 	b.bindMounts = append(b.bindMounts, map[string]any{
 		"host_path":    hostPath,
@@ -209,7 +210,7 @@ func (b *policyBuilder) recordUserDenyBind(hostPath, sandboxPath string) {
 }
 
 // recordROResourceBind 注册内置只读资源 bind（mode=ro + read_only promote）。
-// 对齐 Python: _record_ro_resource_bind(host_path, sandbox_path)
+// Python: _record_ro_resource_bind(host_path, sandbox_path)
 func (b *policyBuilder) recordROResourceBind(hostPath, sandboxPath string) {
 	b.bindMounts = append(b.bindMounts, map[string]any{
 		"host_path":    hostPath,
@@ -222,7 +223,7 @@ func (b *policyBuilder) recordROResourceBind(hostPath, sandboxPath string) {
 }
 
 // build 组装最终 filesystem policy dict。
-// 对齐 Python: build_filesystem_policy 末尾组装逻辑
+// Python: build_filesystem_policy 末尾组装逻辑
 func (b *policyBuilder) build() (map[string]any, []map[string]string) {
 	fsPolicy := map[string]any{
 		"files":       b.allowFiles,
@@ -242,7 +243,7 @@ func (b *policyBuilder) build() (map[string]any, []map[string]string) {
 }
 
 // collectIntrinsicTargets 收集 deep agent 固有路径，分 rw/ro 两类返回。
-// 对齐 Python: _collect_intrinsic_targets() → (rw_files, rw_dirs, ro_files)
+// Python: _collect_intrinsic_targets() → (rw_files, rw_dirs, ro_files)
 func collectIntrinsicTargets() (rwFiles, rwDirs, roFiles []string) {
 	rwFiles = make([]string, 0)
 	rwDirs = make([]string, 0)
@@ -296,7 +297,7 @@ func collectIntrinsicTargets() (rwFiles, rwDirs, roFiles []string) {
 }
 
 // resolveProjectDir 解析挂入沙箱的主写入根目录。
-// 对齐 Python: _resolve_project_dir(override)
+// Python: _resolve_project_dir(override)
 // 优先级：override → UAPCLAW_SANDBOX_PROJECT_DIR 环境变量 → os.Getwd()
 // 拒绝挂载文件系统根 "/"。
 func resolveProjectDir(override string) string {
@@ -340,7 +341,7 @@ func resolveProjectDir(override string) string {
 }
 
 // resolveAgentSkillsDir 解析内置技能目录。
-// 对齐 Python: _resolve_agent_skills_dir()
+// Python: _resolve_agent_skills_dir()
 func resolveAgentSkillsDir() string {
 	raw := workspace.AgentSkillsDir()
 	if raw == "" {
@@ -365,7 +366,7 @@ func resolveAgentSkillsDir() string {
 }
 
 // ensureIntrinsicFile 确保固有文件存在，不存在则 touch 空文件。
-// 对齐 Python: _ensure_intrinsic_file(path) → bool
+// Python: _ensure_intrinsic_file(path) → bool
 func ensureIntrinsicFile(path string) bool {
 	if _, err := os.Stat(path); err == nil {
 		return true
@@ -396,7 +397,7 @@ func ensureIntrinsicFile(path string) bool {
 }
 
 // normalizeFSEntry 归一化 {path, permissions} 项，接受 string 或 map[string]any。
-// 对齐 Python: _normalize_fs_entry(entry, default_permissions)
+// Python: _normalize_fs_entry(entry, default_permissions)
 func normalizeFSEntry(entry any, defaultPermissions string) map[string]any {
 	if entry == nil {
 		return nil
@@ -460,20 +461,13 @@ func toSlice(v any) ([]any, bool) {
 }
 
 // expandHome 展开 ~ 为用户 home 目录。
-// 对齐 Python: Path.expanduser()
+// Python: Path.expanduser()
 func expandHome(path string) (string, error) {
-	if !strings.HasPrefix(path, "~/") && path != "~" {
-		return path, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, path[1:]), nil
+	return pathutil.ExpandHome(path), nil
 }
 
 // resolveSymlinkAbs 解析路径：展开 ~ → 绝对路径 → 解析符号链接。
-// 对齐 Python: Path.expanduser().resolve()
+// Python: Path.expanduser().resolve()
 // EvalSymlinks 失败时 fallback 到 Abs 结果。
 func resolveSymlinkAbs(path string) (string, error) {
 	expanded, err := expandHome(path)

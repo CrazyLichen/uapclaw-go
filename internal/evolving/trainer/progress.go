@@ -13,14 +13,14 @@ import (
 //
 // 提供 RunEpoch 和 RunBatch 迭代方法，用于驱动 Trainer 的训练循环。
 //
-// 对应 Python: openjiuwen/agent_evolving/trainer/progress.py Progress
+// Python: openjiuwen/agent_evolving/trainer/progress.py Progress
 type Progress struct {
 	// StartEpoch 起始 epoch（用于断点续训）
 	StartEpoch int
 	// CurrentEpoch 当前 epoch
 	CurrentEpoch int
 	// MaxEpoch 最大 epoch 数
-	// 对应 Python: max_epoch, 默认 TuneConstant.default_iteration_num=3
+	// Python: max_epoch, 默认 TuneConstant.default_iteration_num=3
 	MaxEpoch int
 	// CurrentBatchIter 当前 batch 迭代步
 	CurrentBatchIter int
@@ -39,32 +39,32 @@ type Progress struct {
 // 子类可覆盖各方法，集成日志记录、早停判断、指标上报等功能。
 // 回调字段使用具体函数类型，对齐 Python Callbacks 的方法签名。
 //
-// 对应 Python: openjiuwen/agent_evolving/trainer/progress.py Callbacks
+// Python: openjiuwen/agent_evolving/trainer/progress.py Callbacks
 type Callbacks struct {
 	// OnTrainBegin 训练开始回调（验证基线评估完成后）。
 	//
-	// 对齐 Python:
+	// Python:
 	//
 	//	def on_train_begin(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
 	//	    pass
 	OnTrainBegin TrainCallbackFunc
 	// OnTrainEnd 训练结束回调。
 	//
-	// 对齐 Python:
+	// Python:
 	//
 	//	def on_train_end(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
 	//	    pass
 	OnTrainEnd TrainCallbackFunc
 	// OnTrainEpochBegin 单 epoch 训练开始回调。
 	//
-	// 对齐 Python:
+	// Python:
 	//
 	//	def on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None:
 	//	    pass
 	OnTrainEpochBegin TrainEpochBeginFunc
 	// OnTrainEpochEnd 单 epoch 训练结束回调（best_score 更新/参数写回后）。
 	//
-	// 对齐 Python:
+	// Python:
 	//
 	//	def on_train_epoch_end(self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None:
 	//	    pass
@@ -73,7 +73,7 @@ type Callbacks struct {
 
 // TrainCallbackFunc 训练回调函数类型（含评估信息）。
 //
-// 对齐 Python:
+// Python:
 //
 //	   训练开始/结束/每轮结束时回调
 //	Python: (self, agent: BaseAgent, progress: Progress, eval_info: List[EvaluatedCase]) -> None
@@ -81,7 +81,7 @@ type TrainCallbackFunc func(agent evolving.TrainableAgent, progress *Progress, e
 
 // TrainEpochBeginFunc epoch 开始回调函数类型（无评估信息）。
 //
-// 对齐 Python:
+// Python:
 //
 //	on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None
 type TrainEpochBeginFunc func(agent evolving.TrainableAgent, progress *Progress)
@@ -101,7 +101,7 @@ const (
 
 // NewProgress 创建默认 Progress 实例。
 //
-// 对应 Python: Progress() 默认构造（max_epoch=TuneConstant.default_iteration_num=3）
+// Python: Progress() 默认构造（max_epoch=TuneConstant.default_iteration_num=3）
 func NewProgress() *Progress {
 	return &Progress{
 		StartEpoch:   0,
@@ -137,7 +137,7 @@ func (p *Progress) GetCurrentEpochScore() float64 { return p.CurrentEpochScore }
 
 // GetSeed 返回种子值（nil，Progress 不含 Seed 字段），
 // 实现 evolving.CheckpointProgress 接口。
-// 对齐 Python: getattr(progress, "seed", None) → None。
+// Python: getattr(progress, "seed", None) → None。
 func (p *Progress) GetSeed() *int { return nil }
 
 // RunEpoch 迭代 epoch 编号，从 StartEpoch+1 到 MaxEpoch。
@@ -146,7 +146,7 @@ func (p *Progress) GetSeed() *int { return nil }
 // 若迭代中断（break/return），CurrentEpoch 保持最后设置的值；
 // 若自然结束但 CurrentEpoch < MaxEpoch，强制设为 MaxEpoch。
 //
-// 对应 Python: Progress.run_epoch() -> Generator[int, None, None]
+// Python: Progress.run_epoch() -> Generator[int, None, None]
 func (p *Progress) RunEpoch() iter.Seq[int] {
 	return func(yield func(int) bool) {
 		start := p.StartEpoch + 1
@@ -167,7 +167,7 @@ func (p *Progress) RunEpoch() iter.Seq[int] {
 // 每步更新 CurrentBatchIter 并 yield 当前步编号。
 // 开始前重置 BestBatchScore 为 0。
 //
-// 对应 Python: Progress.run_batch() -> Generator[int, None, None]
+// Python: Progress.run_batch() -> Generator[int, None, None]
 func (p *Progress) RunBatch() iter.Seq[int] {
 	return func(yield func(int) bool) {
 		p.BestBatchScore = 0

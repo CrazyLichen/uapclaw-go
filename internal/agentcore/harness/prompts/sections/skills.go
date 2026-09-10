@@ -74,15 +74,17 @@ No skill was selected for this task. When skill information is available, read t
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildSkillLine 生成单行技能描述行。
-// 对齐 Python: build_skill_line(index, skill_name, description, skill_md_path)
+// Python: build_skill_line(index, skill_name, description, skill_md_path)
 func BuildSkillLine(index int, skillName, description string, skillMDPath string) string {
-	// skillMDPath 当前未使用，保留参数以对齐 Python 接口
-	_ = skillMDPath
-	return fmt.Sprintf("%d. %s: %s", index, skillName, description)
+	line := fmt.Sprintf("%d. %s: %s", index, skillName, description)
+	if skillMDPath != "" {
+		line += fmt.Sprintf("\n   Path: %s", skillMDPath)
+	}
+	return line
 }
 
 // BuildSkillLines 拼接多行技能描述行（用 "\n\n" 分隔）。
-// 对齐 Python: build_skill_lines(lines)
+// Python: build_skill_lines(lines)
 func BuildSkillLines(lines []string) string {
 	var filtered []string
 	for _, line := range lines {
@@ -94,7 +96,7 @@ func BuildSkillLines(lines []string) string {
 }
 
 // BuildAllModeSkillPrompt 构建 all 模式技能提示词。
-// 对齐 Python: build_all_mode_skill_prompt(skill_lines, language)
+// Python: build_all_mode_skill_prompt(skill_lines, language)
 func BuildAllModeSkillPrompt(skillLines, lang string) string {
 	text := strings.TrimSpace(skillLines)
 	if text == "" {
@@ -110,7 +112,7 @@ func BuildAllModeSkillPrompt(skillLines, lang string) string {
 }
 
 // BuildAutoListModeSkillPrompt 构建 auto_list 模式技能提示词。
-// 对齐 Python: build_auto_list_mode_skill_prompt(language)
+// Python: build_auto_list_mode_skill_prompt(language)
 func BuildAutoListModeSkillPrompt(lang string) string {
 	if lang == "en" {
 		return skillRailAutoListModePromptEN
@@ -119,8 +121,8 @@ func BuildAutoListModeSkillPrompt(lang string) string {
 }
 
 // BuildSkillsSection 构建技能节。
-// 对齐 Python: build_skills_section(skill_lines, language, mode)
-func BuildSkillsSection(mode string, skillLines string, lang string) saprompt.PromptSection {
+// Python: build_skills_section(skill_lines, language, mode)
+func BuildSkillsSection(mode string, skillLines string, lang string) *saprompt.PromptSection {
 	var content string
 
 	switch mode {
@@ -129,14 +131,10 @@ func BuildSkillsSection(mode string, skillLines string, lang string) saprompt.Pr
 	case "auto_list":
 		content = BuildAutoListModeSkillPrompt(lang)
 	default:
-		if lang == "en" {
-			content = skillRailNoSkillPromptEN
-		} else {
-			content = skillRailNoSkillPromptCN
-		}
+		return nil
 	}
 
-	return saprompt.PromptSection{
+	return &saprompt.PromptSection{
 		Name:     SectionSkills,
 		Content:  map[string]string{lang: content},
 		Priority: 40,

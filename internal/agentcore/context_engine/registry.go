@@ -29,7 +29,7 @@ var (
 // 各处理器在 init() 函数中调用此函数将自己注册到全局注册表，
 // 5.30 ContextEngine 门面实现时通过 GetProcessorFactory 获取工厂创建实例。
 //
-// 对应 Python: @ContextEngine.register_processor() 装饰器
+// Python: @ContextEngine.register_processor() 装饰器
 func RegisterProcessorFactory(processorType string, factory iface.ProcessorFactory) {
 	processorFactoriesMu.Lock()
 	defer processorFactoriesMu.Unlock()
@@ -40,7 +40,7 @@ func RegisterProcessorFactory(processorType string, factory iface.ProcessorFacto
 //
 // 返回工厂函数和是否找到的标志。5.30 ContextEngine._create_processor 对应使用。
 //
-// 对应 Python: ContextEngine._PROCESSOR_MAP.get(processor_type)
+// Python: ContextEngine._PROCESSOR_MAP.get(processor_type)
 func GetProcessorFactory(processorType string) (iface.ProcessorFactory, bool) {
 	processorFactoriesMu.RLock()
 	defer processorFactoriesMu.RUnlock()

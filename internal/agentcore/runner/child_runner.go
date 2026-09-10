@@ -27,7 +27,7 @@ var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetConfig 设置 Runner 配置。
-// 对齐 Python: Runner.set_config(config)
+// Python: Runner.set_config(config)
 func (c *ChildRunnerImpl) SetConfig(runnerConfig map[string]any) error {
 	cfg, err := spawn.DeserializeRunnerConfig(runnerConfig)
 	if err != nil {
@@ -38,20 +38,20 @@ func (c *ChildRunnerImpl) SetConfig(runnerConfig map[string]any) error {
 }
 
 // Start 启动 Runner。
-// 对齐 Python: await Runner.start()
+// Python: await Runner.start()
 func (c *ChildRunnerImpl) Start(ctx context.Context) error {
 	return Start(ctx)
 }
 
 // Stop 停止 Runner。
-// 对齐 Python: await Runner.stop()
+// Python: await Runner.stop()
 func (c *ChildRunnerImpl) Stop(ctx context.Context) error {
 	return Stop(ctx)
 }
 
 // RunAgent 执行 Agent（非流式）。
 // 将 BaseAgent 转为 AgentRef，sessionID 转为 SessionRef，后调用 runner.RunAgent。
-// 对齐 Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
+// Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
 func (c *ChildRunnerImpl) RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (map[string]any, error) {
 	agentRef := ByAgent(agent)
 	sessionRef := SessionRef{}
@@ -63,7 +63,7 @@ func (c *ChildRunnerImpl) RunAgent(ctx context.Context, agent interfaces.BaseAge
 
 // RunAgentStreaming 执行 Agent（流式）。
 // 将 BaseAgent 转为 AgentRef，sessionID 转为 SessionRef，后调用 runner.RunAgentStreaming。
-// 对齐 Python: Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes)
+// Python: Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes)
 func (c *ChildRunnerImpl) RunAgentStreaming(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string, streamModes any) (<-chan stream.Schema, error) {
 	agentRef := ByAgent(agent)
 	sessionRef := SessionRef{}

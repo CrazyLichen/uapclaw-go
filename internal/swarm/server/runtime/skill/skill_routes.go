@@ -19,7 +19,7 @@ type SkillHandler func(sm *SkillManager, ctx context.Context, params map[string]
 
 var (
 	// skillRoutes skills.* 请求方法 → handler 方法名映射
-	// 对应 Python: _SKILL_ROUTES (interface.py)
+	// Python: _SKILL_ROUTES (interface.py)
 	skillRoutes = map[schema.ReqMethod]string{
 		schema.ReqMethodSkillsList:                  "HandleSkillsList",
 		schema.ReqMethodSkillsInstalled:             "HandleSkillsInstalled",
@@ -54,7 +54,7 @@ var (
 	}
 
 	// pluginRoutes plugins.* 请求方法 → handler 方法名映射
-	// 对应 Python: _PLUGIN_ROUTES (interface.py)
+	// Python: _PLUGIN_ROUTES (interface.py)
 	pluginRoutes = map[schema.ReqMethod]string{
 		schema.ReqMethodPluginsList:      "HandlePluginsList",
 		schema.ReqMethodPluginsInstall:   "HandlePluginsInstall",
@@ -65,7 +65,7 @@ var (
 	}
 
 	// needsRebuildMethods 触发 Agent rebuild 的请求方法集合
-	// 对应 Python: needs_rebuild 判断逻辑
+	// Python: needs_rebuild 判断逻辑
 	needsRebuildMethods = map[schema.ReqMethod]bool{
 		schema.ReqMethodSkillsInstall:              true,
 		schema.ReqMethodSkillsUninstall:            true,
@@ -138,21 +138,21 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SkillRouteHandler 返回 skills.* 请求方法对应的 handler 方法名
-// 对应 Python: _SKILL_ROUTES[request.req_method]
+// Python: _SKILL_ROUTES[request.req_method]
 func SkillRouteHandler(method schema.ReqMethod) (string, bool) {
 	handler, ok := skillRoutes[method]
 	return handler, ok
 }
 
 // PluginRouteHandler 返回 plugins.* 请求方法对应的 handler 方法名
-// 对应 Python: _PLUGIN_ROUTES[request.req_method]
+// Python: _PLUGIN_ROUTES[request.req_method]
 func PluginRouteHandler(method schema.ReqMethod) (string, bool) {
 	handler, ok := pluginRoutes[method]
 	return handler, ok
 }
 
 // NeedsRebuild 判断请求方法是否触发 Agent rebuild
-// 对应 Python: needs_rebuild 判断
+// Python: needs_rebuild 判断
 func NeedsRebuild(method schema.ReqMethod) bool {
 	return needsRebuildMethods[method]
 }

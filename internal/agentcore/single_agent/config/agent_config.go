@@ -14,7 +14,7 @@ import (
 
 // ReActAgentConfig ReAct Agent 配置，聚合模型、上下文、提示词等子配置。
 //
-// 对应 Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
+// Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
 type ReActAgentConfig struct {
 	// MemScopeIDVal 内存作用域标识
 	MemScopeIDVal string `json:"mem_scope_id"`
@@ -87,7 +87,7 @@ var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
 //   - LLMTopLogprobs: 1（LLM 返回 top logprobs 数量）
 //   - ContextEngineConfig: ceschema.NewContextEngineConfig() 并设置 MaxContextMessageNum=200, DefaultWindowRoundNum=10
 //
-// 对应 Python: ReActAgentConfig()
+// Python: ReActAgentConfig()
 func NewReActAgentConfig(opts ...ReActAgentConfigOption) *ReActAgentConfig {
 	defaultCECfg := ceschema.NewContextEngineConfig()
 	defaultCECfg.MaxContextMessageNum = 200
@@ -198,7 +198,7 @@ func WithWorkspace(ws *hworkspace.Workspace) ReActAgentConfigOption {
 // WithModelClient 设置模型客户端（复合 Option）。
 // 同时设置 ModelProvider/APIKey/APIBase/ModelName，
 // 并创建 ModelClientConfig + ModelRequestConfig。
-// 对应 Python: ReActAgentConfig.configure_model_client()
+// Python: ReActAgentConfig.configure_model_client()
 func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelClientExtraOption) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
 		c.ModelProvider = provider
@@ -243,7 +243,7 @@ func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelC
 
 // WithModelProviderDetails 设置模型提供商详情（复合 Option）。
 // 同时设置 ModelProvider/APIKey/APIBase，不创建子配置。
-// 对应 Python: ReActAgentConfig.configure_model_provider()
+// Python: ReActAgentConfig.configure_model_provider()
 func WithModelProviderDetails(provider, apiKey, apiBase string) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
 		c.ModelProvider = provider
@@ -253,7 +253,7 @@ func WithModelProviderDetails(provider, apiKey, apiBase string) ReActAgentConfig
 }
 
 // WithContextEngine 构建并设置上下文引擎配置（复合 Option）。
-// 对应 Python: ReActAgentConfig.configure_context_engine()
+// Python: ReActAgentConfig.configure_context_engine()
 func WithContextEngine(maxMsgNum, windowRoundNum int, enableReload, enableKVCacheRelease bool) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
 		c.ContextEngineConfig = ceschema.ContextEngineConfig{
@@ -267,7 +267,7 @@ func WithContextEngine(maxMsgNum, windowRoundNum int, enableReload, enableKVCach
 }
 
 // WithCustomHeadersSync 设置自定义请求头并同步到已有 ModelClientConfig（复合 Option）。
-// 对应 Python: ReActAgentConfig.configure_custom_headers()
+// Python: ReActAgentConfig.configure_custom_headers()
 func WithCustomHeadersSync(headers map[string]string) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
 		c.CustomHeaders = headers

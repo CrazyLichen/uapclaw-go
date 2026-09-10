@@ -833,7 +833,7 @@ func TestConvertChunk_基本内容(t *testing.T) {
 
 // TestConvertChunk_只提取Content 测试只提取 content，不提取其他字段。
 func TestConvertChunk_只提取Content(t *testing.T) {
-	// 对齐 Python IntelliRouter._convert_chunk: 只提取 content
+	// Python: IntelliRouter._convert_chunk: 只提取 content
 	client := createTestClientWithServer(t,
 		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -919,7 +919,7 @@ func TestConvertChunk_无Choices返回Nil(t *testing.T) {
 
 // TestConvertChunk_空Content 测试空 content 的 chunk。
 func TestConvertChunk_空Content(t *testing.T) {
-	// 对齐 Python: 空 content 也返回 chunk
+	// Python: 空 content 也返回 chunk
 	client := createTestClientWithServer(t,
 		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

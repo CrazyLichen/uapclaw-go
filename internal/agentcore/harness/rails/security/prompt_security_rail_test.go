@@ -67,7 +67,7 @@ func TestSafetyPromptRail_InitUninit(t *testing.T) {
 }
 
 // TestSafetyPromptRail_RunSecurityCheck_注入测试 测试注入安全提示词
-// 对齐 Python: SafetyPromptRail.run_security_check — add_section(safety_section)
+// Python: SafetyPromptRail.run_security_check — add_section(safety_section)
 func TestSafetyPromptRail_RunSecurityCheck_注入测试(t *testing.T) {
 	r := NewSafetyPromptRail()
 	builder := newMockSystemPromptBuilder()
@@ -87,7 +87,7 @@ func TestSafetyPromptRail_RunSecurityCheck_注入测试(t *testing.T) {
 }
 
 // TestSafetyPromptRail_RunSecurityCheck_无Builder 测试无 systemPromptBuilder 时返回 Allow
-// 对齐 Python: if self.system_prompt_builder is None: return self.allow()
+// Python: if self.system_prompt_builder is None: return self.allow()
 func TestSafetyPromptRail_RunSecurityCheck_无Builder(t *testing.T) {
 	r := NewSafetyPromptRail()
 	r.systemPromptBuilder = nil
@@ -99,7 +99,7 @@ func TestSafetyPromptRail_RunSecurityCheck_无Builder(t *testing.T) {
 }
 
 // TestSafetyPromptRail_SecurityRailAlias 测试 SecurityRail 类型别名
-// 对齐 Python: SecurityRail = SafetyPromptRail
+// Python: SecurityRail = SafetyPromptRail
 func TestSafetyPromptRail_SecurityRailAlias(t *testing.T) {
 	// SecurityRail = SafetyPromptRail 类型别名
 	// 编译时验证：NewSafetyPromptRail 返回的 *SafetyPromptRail 可赋值给 AgentRail

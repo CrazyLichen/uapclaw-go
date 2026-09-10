@@ -304,7 +304,7 @@ func TestCheckpointerFactoryConfig(t *testing.T) {
 }
 
 // TestCheckpointerFactory_Create_空配置默认值 测试空配置时默认回退到 in_memory
-// 对应 Python: CheckpointerConfig(type="in_memory", conf={}) 默认值
+// Python: CheckpointerConfig(type="in_memory", conf={}) 默认值
 func TestCheckpointerFactory_Create_空配置默认值(t *testing.T) {
 	f := NewCheckpointerFactory()
 	ctx := context.Background()

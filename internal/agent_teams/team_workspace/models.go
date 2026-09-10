@@ -5,7 +5,7 @@ import "time"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamWorkspaceConfig 团队共享工作空间配置。
-// 对齐 Python: TeamWorkspaceConfig
+// Python: TeamWorkspaceConfig
 type TeamWorkspaceConfig struct {
 	// Enabled 是否启用团队工作空间
 	Enabled bool `json:"enabled"`
@@ -22,7 +22,7 @@ type TeamWorkspaceConfig struct {
 }
 
 // WorkspaceFileLock 文件级锁条目。
-// 对齐 Python: WorkspaceFileLock
+// Python: WorkspaceFileLock
 type WorkspaceFileLock struct {
 	// FilePath 文件路径
 	FilePath string `json:"file_path"`
@@ -37,7 +37,7 @@ type WorkspaceFileLock struct {
 }
 
 // HistoryEntry 版本历史条目。
-// 对齐 Python: get_history() 返回的 dict
+// Python: get_history() 返回的 dict
 type HistoryEntry struct {
 	// Commit 提交哈希
 	Commit string `json:"commit"`
@@ -52,11 +52,11 @@ type HistoryEntry struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // WorkspaceMode 工作空间操作模式。
-// 对齐 Python: WorkspaceMode
+// Python: WorkspaceMode
 type WorkspaceMode string
 
 // ConflictStrategy 并发修改冲突策略。
-// 对齐 Python: ConflictStrategy
+// Python: ConflictStrategy
 type ConflictStrategy string
 
 const (
@@ -82,7 +82,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamWorkspaceConfig 创建默认 TeamWorkspaceConfig。
-// 对齐 Python: TeamWorkspaceConfig()
+// Python: TeamWorkspaceConfig()
 func NewTeamWorkspaceConfig() TeamWorkspaceConfig {
 	return TeamWorkspaceConfig{
 		ArtifactDirs: []string{
@@ -108,7 +108,7 @@ func NewWorkspaceFileLock(filePath, holderID, holderName string) WorkspaceFileLo
 }
 
 // IsExpired 检查锁是否已超时。
-// 对齐 Python: WorkspaceFileLock.is_expired()
+// Python: WorkspaceFileLock.is_expired()
 func (l WorkspaceFileLock) IsExpired() bool {
 	acquired, err := time.Parse(time.RFC3339, l.AcquiredAt)
 	if err != nil {

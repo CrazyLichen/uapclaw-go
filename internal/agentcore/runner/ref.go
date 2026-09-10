@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentRef Agent引用，支持按ID查找或直接传入实例。
-// 对齐 Python: agent: str | BaseAgent | LegacyBaseAgent
+// Python: agent: str | BaseAgent | LegacyBaseAgent
 type AgentRef struct {
 	// id Agent ID（按ID查找时设置）
 	id string
@@ -17,7 +17,7 @@ type AgentRef struct {
 }
 
 // WorkflowRef 工作流引用，支持按ID查找或直接传入实例。
-// 对齐 Python: workflow: str | Workflow
+// Python: workflow: str | Workflow
 type WorkflowRef struct {
 	// id 工作流ID（按ID查找时设置）
 	id string
@@ -26,7 +26,7 @@ type WorkflowRef struct {
 }
 
 // SessionRef 会话引用，支持按ID查找或直接传入实例。
-// 对齐 Python: session: Optional[str | AgentSession] = None
+// Python: session: Optional[str | AgentSession] = None
 type SessionRef struct {
 	// id 会话 ID（按ID查找时设置）
 	id string

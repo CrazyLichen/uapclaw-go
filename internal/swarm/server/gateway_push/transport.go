@@ -12,7 +12,7 @@ import (
 
 // GatewayPushTransport AgentServer → Gateway 的推送传输协议。
 //
-// 对齐 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
+// Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
 // 所有 server_push 场景统一通过此接口推送，不直接操作底层 Transport。
 type GatewayPushTransport interface {
 	// SendPush 向 Gateway 发送一条 server_push 语义的消息。
@@ -25,7 +25,7 @@ type GatewayPushTransport interface {
 
 // ChannelPushTransport 进程内推送实现，通过 AgentServer 单例发送。
 //
-// 对齐 Python: jiuwenswarm/server/gateway_push/transport.py
+// Python: jiuwenswarm/server/gateway_push/transport.py
 // （WebSocket 网关推送传输）
 //
 // Python 通过 AgentWebSocketServer.get_instance().send_push(msg) 推送，

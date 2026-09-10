@@ -27,7 +27,7 @@ import (
 //
 // 对外只暴露一个入口：Handle(request) → (<-chan *AgentResponseChunk, error)
 //
-// 对应 Python: jiuwenswarm/server/runtime/skill/skilldev/service.py (SkillDevService)
+// Python: jiuwenswarm/server/runtime/skill/skilldev/service.py (SkillDevService)
 type SkillDevService struct {
 	// deps 外部依赖（懒初始化）
 	deps *SkillDevDeps
@@ -37,7 +37,7 @@ type SkillDevService struct {
 	skilldevDeps *SkillDevDeps
 	// methodDispatch method → handler 映射，避免 if/elif 链。
 	//
-	// 对齐 Python: _METHOD_DISPATCH
+	// Python: _METHOD_DISPATCH
 	methodDispatch map[schema.ReqMethod]methodHandler
 }
 
@@ -95,7 +95,7 @@ func (s *SkillDevService) SetSkillDevDeps(deps *SkillDevDeps) {
 //
 // 返回 chunk channel，调用方逐个读取，channel 关闭表示结束。
 //
-// 对齐 Python: SkillDevService.handle(request) → AsyncIterator[AgentResponseChunk]
+// Python: SkillDevService.handle(request) → AsyncIterator[AgentResponseChunk]
 func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	handler, ok := s.methodDispatch[request.ReqMethod]
 	if !ok {
@@ -128,7 +128,7 @@ func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentReque
 
 // handleStart 发起新任务。
 //
-// 对齐 Python: SkillDevService._handle_start()
+// Python: SkillDevService._handle_start()
 func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID := GenerateTaskID()
@@ -166,7 +166,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 			chunkCh <- eventToChunk(evt, requestID, channelID)
 		}
 
-		// 对齐 Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		// Python: UapClaw._handle_skilldev_request 的 try/except 兜底
 		// Pipeline goroutine 内的 fatal error 通过 runErr 传播到此处
 		if pipeline.runErr != nil {
 			logger.Error(logComponent).
@@ -192,7 +192,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 //
 // 前端只管发 {task_id, action, ...}，后端根据当前阶段自动路由。
 //
-// 对齐 Python: SkillDevService._handle_respond()
+// Python: SkillDevService._handle_respond()
 func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID, _ := params["task_id"].(string)
@@ -232,7 +232,7 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 			chunkCh <- eventToChunk(evt, requestID, channelID)
 		}
 
-		// 对齐 Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		// Python: UapClaw._handle_skilldev_request 的 try/except 兜底
 		if pipeline.runErr != nil {
 			logger.Error(logComponent).
 				Str("task_id", taskID).
@@ -262,7 +262,7 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 //
 // 传 task_id → 返回单个任务状态；不传 → 返回任务列表。
 //
-// 对齐 Python: SkillDevService._handle_status()
+// Python: SkillDevService._handle_status()
 func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID, _ := params["task_id"].(string)
@@ -306,7 +306,7 @@ func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any,
 
 // handleDownload 下载产物。
 //
-// 对齐 Python: SkillDevService._handle_download()
+// Python: SkillDevService._handle_download()
 func (s *SkillDevService) handleDownload(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID, _ := params["task_id"].(string)
@@ -358,7 +358,7 @@ func (s *SkillDevService) handleDownload(_ context.Context, params map[string]an
 
 // handleCancel 取消任务。
 //
-// 对齐 Python: SkillDevService._handle_cancel()
+// Python: SkillDevService._handle_cancel()
 func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	taskID, _ := params["task_id"].(string)
 	// 待实现: 实现取消逻辑（中断正在运行的 Pipeline）
@@ -373,7 +373,7 @@ func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any,
 
 // handleFileList 获取工作区文件树（供产物弹窗浏览）。
 //
-// 对齐 Python: SkillDevService._handle_file_list()
+// Python: SkillDevService._handle_file_list()
 func (s *SkillDevService) handleFileList(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID, _ := params["task_id"].(string)
@@ -403,7 +403,7 @@ func (s *SkillDevService) handleFileList(_ context.Context, params map[string]an
 
 // handleFileRead 读取工作区文件内容。
 //
-// 对齐 Python: SkillDevService._handle_file_read()
+// Python: SkillDevService._handle_file_read()
 func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
 	taskID, _ := params["task_id"].(string)
@@ -472,7 +472,7 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 
 // eventToChunk 将 SkillDevEvent 转换为 AgentResponseChunk。
 //
-// 对齐 Python: SkillDevService._event_to_chunk()
+// Python: SkillDevService._event_to_chunk()
 func eventToChunk(evt SkillDevEvent, requestID, channelID string) *schema.AgentResponseChunk {
 	payload := map[string]any{"event_type": string(evt.EventType)}
 	for k, v := range evt.Payload {
@@ -483,7 +483,7 @@ func eventToChunk(evt SkillDevEvent, requestID, channelID string) *schema.AgentR
 
 // errorChunk 构造错误 AgentResponseChunk。
 //
-// 对齐 Python: SkillDevService._error_chunk()
+// Python: SkillDevService._error_chunk()
 func errorChunk(requestID, channelID, message string) *schema.AgentResponseChunk {
 	return schema.NewAgentResponseChunk(requestID, channelID, map[string]any{
 		"event_type": "skilldev.error",
@@ -503,7 +503,7 @@ func singleChunkChannel(chunk *schema.AgentResponseChunk) <-chan *schema.AgentRe
 
 // buildFileTree 递归构建文件树。
 //
-// 对齐 Python: SkillDevService._build_file_tree()
+// Python: SkillDevService._build_file_tree()
 func buildFileTree(directory string, root string) []map[string]any {
 	result := make([]map[string]any, 0)
 

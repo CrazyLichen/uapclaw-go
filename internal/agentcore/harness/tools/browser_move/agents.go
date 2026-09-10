@@ -15,7 +15,7 @@ import (
 
 // BrowserWorkerConfig 浏览器 Worker Agent 配置。
 //
-// 对齐 Python: build_browser_worker_agent 参数 (agents.py L301-312)
+// Python: build_browser_worker_agent 参数 (agents.py L301-312)
 type BrowserWorkerConfig struct {
 	// Provider 模型提供商
 	Provider string
@@ -38,7 +38,7 @@ type BrowserWorkerConfig struct {
 }
 
 // ToolResultObserverFunc 工具结果观察者回调函数类型。
-// 对齐 Python: ToolResultObserver callback
+// Python: ToolResultObserver callback
 type ToolResultObserverFunc func(ctx context.Context, toolName string, result any) error
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -51,10 +51,10 @@ type ToolResultObserverFunc func(ctx context.Context, toolName string, result an
 
 // BuildBrowserWorkerSystemPrompt 构建浏览器 Worker Agent 系统提示词。
 //
-// 对齐 Python: build_browser_worker_system_prompt (agents.py L169-225)
+// Python: build_browser_worker_system_prompt (agents.py L169-225)
 // 提示词逐字符复制 Python 原文，不做自行翻译
 func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir string) string {
-	// 对齐 Python: 截图和产物子目录规范化
+	// Python: 截图和产物子目录规范化
 	screenshotSubdir = strings.TrimSpace(screenshotSubdir)
 	screenshotSubdir = strings.ReplaceAll(screenshotSubdir, "\\", "/")
 	screenshotSubdir = strings.TrimRight(screenshotSubdir, "/")
@@ -69,7 +69,7 @@ func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir str
 		artifactsSubdir = "artifacts"
 	}
 
-	// 对齐 Python: agents.py L173-225
+	// Python: agents.py L173-225
 	// 提示词逐字符复制 Python 原文
 	return "You are a browser worker agent.\n" +
 		"Execute browser tasks step-by-step with Playwright MCP tools and approved runtime helper tools only.\n" +
@@ -127,7 +127,7 @@ func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir str
 
 // BuildBrowserWorkerAgent 构建浏览器 Worker Agent。
 //
-// 对齐 Python: build_browser_worker_agent (agents.py L301-355)
+// Python: build_browser_worker_agent (agents.py L301-355)
 // 当前为占位实现，⤵️ 9.38-49 完整实现 ReActAgent 配置
 func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, error) {
 	if config == nil {
@@ -141,7 +141,7 @@ func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, e
 
 	// ⤵️ 9.38-49 完整实现 ReActAgent 配置
 	// 当前仅返回 nil，待后续章节回填完整的 ReActAgent 构建逻辑
-	// 对齐 Python:
+	// Python:
 	//   Python: agent = ReActAgent(
 	//       Python: model_client=model_client,
 	//       Python: system_prompt=system_prompt,
@@ -154,7 +154,7 @@ func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, e
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveToolTimeoutS 解析工具超时时间。
-// 对齐 Python: _resolve_tool_timeout_s (agents.py L52-65)
+// Python: _resolve_tool_timeout_s (agents.py L52-65)
 func resolveToolTimeoutS(defaultS float64) float64 {
 	raw := ""
 	for _, key := range []string{"PLAYWRIGHT_TOOL_TIMEOUT_S", "PLAYWRIGHT_MCP_TIMEOUT_S", "BROWSER_TIMEOUT_S"} {
@@ -173,7 +173,7 @@ func resolveToolTimeoutS(defaultS float64) float64 {
 }
 
 // resolveSamplingValue 解析采样参数值。
-// 对齐 Python: _resolve_sampling_value (agents.py L68-85)
+// Python: _resolve_sampling_value (agents.py L68-85)
 func resolveSamplingValue(keys []string, defaultVal float64, minValue float64, maxValue float64) float64 {
 	for _, key := range keys {
 		raw := strings.TrimSpace(os.Getenv(key))
@@ -192,7 +192,7 @@ func resolveSamplingValue(keys []string, defaultVal float64, minValue float64, m
 }
 
 // resolveSamplingParams 解析采样参数。
-// 对齐 Python: _resolve_sampling_params (agents.py L88-107)
+// Python: _resolve_sampling_params (agents.py L88-107)
 func resolveSamplingParams(temperatureKeys []string, topPKeys []string, defaultTemperature float64, defaultTopP float64) (float64, float64) {
 	temperature := resolveSamplingValue(temperatureKeys, defaultTemperature, 0.0, 2.0)
 	topP := resolveSamplingValue(topPKeys, defaultTopP, 0.0, 1.0)

@@ -5,7 +5,7 @@ import "os"
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // configSetEnvMap 配置键到环境变量的映射。
-// 对齐 Python: _CONFIG_SET_ENV_MAP (app_web_handlers.py L310-367)
+// Python: _CONFIG_SET_ENV_MAP (app_web_handlers.py L310-367)
 // 启动时和热重载时，收集这些环境变量的当前值传给 AgentServer。
 var configSetEnvMap = map[string]string{
 	// 默认模型（主对话）
@@ -66,7 +66,7 @@ var configSetEnvMap = map[string]string{
 }
 
 // browserRuntimeKeys 触发 browser.runtime_restart 的环境变量集合。
-// 对齐 Python: browser_runtime_keys (app_gateway.py L920-935)。
+// Python: browser_runtime_keys (app_gateway.py L920-935)。
 var browserRuntimeKeys = map[string]bool{
 	"MODEL_PROVIDER":    true,
 	"MODEL_NAME":        true,
@@ -87,7 +87,7 @@ var browserRuntimeKeys = map[string]bool{
 }
 
 // BuildEnvMap 收集 configSetEnvMap 中各环境变量的当前值。
-// 对齐 Python: {env_key: os.getenv(env_key) for env_key in _CONFIG_SET_ENV_MAP.values()}
+// Python: {env_key: os.getenv(env_key) for env_key in _CONFIG_SET_ENV_MAP.values()}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func BuildEnvMap() map[string]any {
@@ -99,7 +99,7 @@ func BuildEnvMap() map[string]any {
 }
 
 // ShouldBrowserRestart 判断变更的环境变量是否需要触发 browser.runtime_restart。
-// 对齐 Python: browser_runtime_keys & set(updated_env_keys)。
+// Python: browser_runtime_keys & set(updated_env_keys)。
 func ShouldBrowserRestart(updatedKeys []string) bool {
 	for _, k := range updatedKeys {
 		if browserRuntimeKeys[k] {

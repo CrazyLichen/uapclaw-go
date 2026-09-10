@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInfo 工具信息。
-// 对齐 Python: list_available_tools() 返回的 tools 列表项
+// Python: list_available_tools() 返回的 tools 列表项
 type ToolInfo struct {
 	// Name 显示名称
 	Name string `json:"name"`
@@ -31,19 +31,19 @@ type ToolInfo struct {
 }
 
 // AvailableToolsResult 可用工具查询结果。
-// 对齐 Python: AgentConfigService.list_available_tools() 返回值
+// Python: AgentConfigService.list_available_tools() 返回值
 type AvailableToolsResult struct {
 	// Tools 工具信息列表
 	Tools []ToolInfo `json:"tools"`
 	// Groups 分组名称列表
 	Groups []string `json:"groups"`
 	// DisallowedForSubagents 子 agent 禁止使用的工具列表
-	// 对齐 Python: DISALLOWED_FOR_SUBAGENTS
+	// Python: DISALLOWED_FOR_SUBAGENTS
 	DisallowedForSubagents []string `json:"disallowed_for_subagents"`
 }
 
 // AgentConfigService Agent 配置管理服务。
-// 对齐 Python: AgentConfigService
+// Python: AgentConfigService
 //
 // 管理内置和自定义 agent 定义的 CRUD 操作。
 // 支持四个来源的 agent 定义：内置、用户级、项目级、本地级。
@@ -54,7 +54,7 @@ type AgentConfigService struct {
 }
 
 // CreateAgentParams 创建 Agent 请求参数。
-// 对齐 Python: CreateAgentParams dataclass
+// Python: CreateAgentParams dataclass
 type CreateAgentParams struct {
 	// Name 名称
 	Name string `json:"name" yaml:"name"`
@@ -85,7 +85,7 @@ type CreateAgentParams struct {
 }
 
 // UpdateAgentParams 更新 Agent 请求参数（指针字段，nil 表示不修改）。
-// 对齐 Python: UpdateAgentParams dataclass（所有字段可选，None 表示不修改）
+// Python: UpdateAgentParams dataclass（所有字段可选，None 表示不修改）
 type UpdateAgentParams struct {
 	// Description 描述（nil=不修改）
 	Description *string `json:"description,omitempty"`
@@ -121,11 +121,11 @@ type UpdateAgentParams struct {
 
 var (
 	// agentNamePattern Agent 名称校验正则
-	// 对齐 Python: re.match(r'^[a-zA-Z0-9_-]{3,50}$', name)
+	// Python: re.match(r'^[a-zA-Z0-9_-]{3,50}$', name)
 	agentNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,50}$`)
 
 	// sourceSortOrder 来源排序优先级（数值越小优先级越低）
-	// 对齐 Python: _SOURCE_SORT_ORDER
+	// Python: _SOURCE_SORT_ORDER
 	sourceSortOrder = map[string]int{
 		types.AgentSourceBuiltin: 0,
 		types.AgentSourceLocal:   1,
@@ -134,7 +134,7 @@ var (
 	}
 
 	// internalToDisplay 内部名→显示名映射。
-	// 对齐 Python: _TOOL_DISPLAY_NAMES (tool_display.py L19-40)
+	// Python: _TOOL_DISPLAY_NAMES (tool_display.py L19-40)
 	// 与 adapter 包中的 displayToInternal 方向相反，但因 adapter↔runtime 循环依赖无法共享。
 	// ListAvailableTools() 动态构建工具列表时使用此映射。
 	internalToDisplay = map[string]string{
@@ -154,20 +154,20 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentConfigService 创建 AgentConfigService 实例。
-// 对齐 Python: AgentConfigService.__init__(workspace_dir)
+// Python: AgentConfigService.__init__(workspace_dir)
 func NewAgentConfigService(workspaceDir string) *AgentConfigService {
 	return &AgentConfigService{workspaceDir: workspaceDir}
 }
 
 // ListAgents 列出所有 agent（内置 + 自定义），按优先级合并。
-// 对齐 Python: AgentConfigService.list_agents()
+// Python: AgentConfigService.list_agents()
 //
 // 加载顺序决定优先级：后加载的覆盖先加载的，因此
 // project > user > local > builtin。被覆盖的同名 agent 标记 shadowed_by。
 // 同时从 config.yaml 的 react.subagents 读取 enabled 状态。
 func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 	// 步骤 1: 按 builtin → local → user → project 顺序加载
-	// 对齐 Python: sources = [(BUILTIN_AGENTS, "builtin"), (...)]
+	// Python: sources = [(BUILTIN_AGENTS, "builtin"), (...)]
 	sources := []struct {
 		agents []*types.AgentDefinition
 		source string
@@ -179,11 +179,11 @@ func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 	}
 
 	// 步骤 2: 读取 config.yaml 的 react.subagents enabled 状态
-	// 对齐 Python: subagent_states = {}; try: config = get_config(); ...
+	// Python: subagent_states = {}; try: config = get_config(); ...
 	subagentStates := s.loadSubagentStates()
 
 	// 步骤 3: 按名字分组，保持所有来源的 agent（包括被 shadow 的）
-	// 对齐 Python: grouped = {}; for agents, _ in sources: for agent in agents: ...
+	// Python: grouped = {}; for agents, _ in sources: for agent in agents: ...
 	grouped := make(map[string][]*types.AgentDefinition)
 	for _, src := range sources {
 		for _, agent := range src.agents {
@@ -192,7 +192,7 @@ func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 	}
 
 	// 步骤 4: 每组的最后一个为 active（最高优先级），之前的标记 shadowed_by
-	// 对齐 Python: for name, group in grouped.items(): active = group[-1]; ...
+	// Python: for name, group in grouped.items(): active = group[-1]; ...
 	var result []*types.AgentDefinition
 	for _, group := range grouped {
 		active := group[len(group)-1]
@@ -205,7 +205,7 @@ func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 	}
 
 	// 步骤 5: 注入 enabled 状态
-	// 对齐 Python: for agent in result: if agent.name in subagent_states: agent.enabled = ...
+	// Python: for agent in result: if agent.name in subagent_states: agent.enabled = ...
 	for _, agent := range result {
 		if enabled, ok := subagentStates[agent.Name]; ok {
 			agent.Enabled = &enabled
@@ -213,7 +213,7 @@ func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 	}
 
 	// 步骤 6: 按 source 排序
-	// 对齐 Python: return sorted(result, key=_source_sort_key)
+	// Python: return sorted(result, key=_source_sort_key)
 	sort.Slice(result, func(i, j int) bool {
 		return sourceSortOrder[result[i].Source] < sourceSortOrder[result[j].Source]
 	})
@@ -222,11 +222,11 @@ func (s *AgentConfigService) ListAgents() []*types.AgentDefinition {
 }
 
 // GetAgent 获取单个 agent 完整定义（含 system prompt 正文）。
-// 对齐 Python: AgentConfigService.get_agent(name)
+// Python: AgentConfigService.get_agent(name)
 //
 // 返回活跃版本（未被 shadow 的），与 ListAgents 保持一致的优先级语义。
 func (s *AgentConfigService) GetAgent(name string) *types.AgentDefinition {
-	// 对齐 Python: agents = self.list_agents(); for a in agents: if a.name == name and a.shadowed_by is None: return a
+	// Python: agents = self.list_agents(); for a in agents: if a.name == name and a.shadowed_by is None: return a
 	for _, agent := range s.ListAgents() {
 		if agent.Name == name && agent.ShadowedBy == "" {
 			return agent
@@ -250,24 +250,24 @@ func (s *AgentConfigService) ListCustomAgents() []*types.AgentDefinition {
 }
 
 // CreateAgent 创建新的自定义 agent，写入 markdown 文件。
-// 对齐 Python: AgentConfigService.create_agent(params)
+// Python: AgentConfigService.create_agent(params)
 func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.AgentDefinition, error) {
 	// 步骤 1: 名称校验
-	// 对齐 Python: name = params.name.strip(); if not re.match(r'^[a-zA-Z0-9_-]{3,50}$', name): raise ValueError(...)
+	// Python: name = params.name.strip(); if not re.match(r'^[a-zA-Z0-9_-]{3,50}$', name): raise ValueError(...)
 	name := strings.TrimSpace(params.Name)
 	if !agentNamePattern.MatchString(name) {
 		return nil, fmt.Errorf("agent 名称格式无效: '%s'。要求 3-50 字符，仅允许字母、数字、连字符、下划线", name)
 	}
 
 	// 步骤 2: 检查是否覆盖内置 agent
-	// 对齐 Python: existing = self.get_agent(params.name); if existing is not None and existing.source == "builtin": raise ValueError(...)
+	// Python: existing = self.get_agent(params.name); if existing is not None and existing.source == "builtin": raise ValueError(...)
 	existing := s.GetAgent(name)
 	if existing != nil && existing.Source == types.AgentSourceBuiltin {
 		return nil, fmt.Errorf("不能覆盖内置 agent: %s", name)
 	}
 
 	// 步骤 3: 确定目标目录并创建
-	// 对齐 Python: target_dir = self._resolve_location_dir(params.location); target_dir.mkdir(parents=True, exist_ok=True)
+	// Python: target_dir = self._resolve_location_dir(params.location); target_dir.mkdir(parents=True, exist_ok=True)
 	targetDir, err := s.resolveLocationDir(params.Location)
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 	filePath := filepath.Join(targetDir, name+".md")
 
 	// 步骤 4: 构造 AgentDefinition（提前到写文件之前）
-	// 对齐 Python: return AgentDefinition(name=..., tools=params.tools or ["*"], ...)
+	// Python: return AgentDefinition(name=..., tools=params.tools or ["*"], ...)
 	tools := params.Tools
 	if len(tools) == 0 {
 		tools = []string{"*"}
@@ -301,14 +301,14 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 	}
 
 	// 步骤 5: 生成文件内容并写入
-	// 对齐 Python: content = _format_agent_file(agent); file_path.write_text(content, encoding="utf-8")
+	// Python: content = _format_agent_file(agent); file_path.write_text(content, encoding="utf-8")
 	content := formatAgentFile(def)
 	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		return nil, fmt.Errorf("写入文件失败: %w", err)
 	}
 
 	// 步骤 6: 记录日志
-	// 对齐 Python: logger.info("Created agent '%s' at %s", params.name, file_path)
+	// Python: logger.info("Created agent '%s' at %s", params.name, file_path)
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", filePath).
@@ -318,10 +318,10 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 }
 
 // UpdateAgent 更新自定义 agent 定义，覆盖写入文件。
-// 对齐 Python: AgentConfigService.update_agent(name, params)
+// Python: AgentConfigService.update_agent(name, params)
 func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams) (*types.AgentDefinition, error) {
 	// 步骤 1: 查找 agent
-	// 对齐 Python: agent = self.get_agent(name)
+	// Python: agent = self.get_agent(name)
 	agent := s.GetAgent(name)
 	if agent == nil {
 		return nil, fmt.Errorf("agent 不存在: %s", name)
@@ -334,18 +334,18 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 	}
 
 	// 步骤 2: 应用更新参数
-	// 对齐 Python: _apply_update_params(agent, params)
+	// Python: _apply_update_params(agent, params)
 	applyUpdateParams(agent, params)
 
 	// 步骤 3: 生成文件内容并覆盖写入
-	// 对齐 Python: content = _format_agent_file(agent); Path(agent.file_path).write_text(content, encoding="utf-8")
+	// Python: content = _format_agent_file(agent); Path(agent.file_path).write_text(content, encoding="utf-8")
 	content := formatAgentFile(agent)
 	if err := os.WriteFile(agent.FilePath, []byte(content), 0o644); err != nil {
 		return nil, fmt.Errorf("写入文件失败: %w", err)
 	}
 
 	// 步骤 4: 记录日志
-	// 对齐 Python: logger.info("Updated agent '%s' at %s", name, agent.file_path)
+	// Python: logger.info("Updated agent '%s' at %s", name, agent.file_path)
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", agent.FilePath).
@@ -355,10 +355,10 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 }
 
 // DeleteAgent 删除自定义 agent 定义文件。
-// 对齐 Python: AgentConfigService.delete_agent(name)
+// Python: AgentConfigService.delete_agent(name)
 func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 	// 步骤 1: 查找 agent
-	// 对齐 Python: agent = self.get_agent(name)
+	// Python: agent = self.get_agent(name)
 	agent := s.GetAgent(name)
 	if agent == nil {
 		return false, nil
@@ -368,13 +368,13 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 	}
 
 	// 步骤 2: 删除文件
-	// 对齐 Python: if agent.file_path: p = Path(agent.file_path); if p.exists(): p.unlink()
+	// Python: if agent.file_path: p = Path(agent.file_path); if p.exists(): p.unlink()
 	if agent.FilePath != "" {
 		if err := os.Remove(agent.FilePath); err != nil && !os.IsNotExist(err) {
 			return false, fmt.Errorf("删除文件失败: %w", err)
 		}
 		// 步骤 3: 记录日志
-		// 对齐 Python: logger.info("Deleted agent '%s' at %s", name, agent.file_path)
+		// Python: logger.info("Deleted agent '%s' at %s", name, agent.file_path)
 		logger.Info(logComponent).
 			Str("agent_name", name).
 			Str("file_path", agent.FilePath).
@@ -384,7 +384,7 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 }
 
 // ListAvailableTools 返回可用工具及其分组信息。
-// 对齐 Python: AgentConfigService.list_available_tools() (agent_config_service.py L351-401)
+// Python: AgentConfigService.list_available_tools() (agent_config_service.py L351-401)
 //
 // 从 3 个共享数据源动态构建：
 //   - internalToDisplay（internal→display，对齐 Python _TOOL_DISPLAY_NAMES）
@@ -392,13 +392,13 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 //   - types.ToolDescriptions（display→description）
 func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	// 步骤 1: 从 internalToDisplay 构建 internal→display 映射（去重）
-	// 对齐 Python: internal_to_display = {}; for internal_name, display_name in _TOOL_DISPLAY_NAMES.items()
+	// Python: internal_to_display = {}; for internal_name, display_name in _TOOL_DISPLAY_NAMES.items()
 	//   if internal_name not in internal_to_display: internal_to_display[internal_name] = display_name
 	// Go 中 internalToDisplay 本身就是 internal→display 映射，无需额外去重
 	// （Python 的去重是因为 dict 是有序的，同一 internal_name 可能出现多次，Go map 无此问题）
 
 	// 步骤 2: 从 ToolGroups 构建 display→group 映射
-	// 对齐 Python: display_to_group = {}; for group_name, display_names in TOOL_GROUPS.items()
+	// Python: display_to_group = {}; for group_name, display_names in TOOL_GROUPS.items()
 	displayToGroup := make(map[string]string)
 	for group, displayNames := range types.ToolGroups {
 		for _, dn := range displayNames {
@@ -407,7 +407,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	}
 
 	// 步骤 3: 从 internalToDisplay 构建工具列表（按 display_name 去重）
-	// 对齐 Python: for internal_name, display_name in internal_to_display.items()
+	// Python: for internal_name, display_name in internal_to_display.items()
 	tools := make([]ToolInfo, 0, len(internalToDisplay))
 	seenDisplay := make(map[string]bool)
 	for internalName, displayName := range internalToDisplay {
@@ -432,7 +432,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	}
 
 	// 步骤 4: 补充 ToolGroups 中有但 internalToDisplay 中没有的工具
-	// 对齐 Python: for group_name, display_names in TOOL_GROUPS.items(): if dn not in seen_display
+	// Python: for group_name, display_names in TOOL_GROUPS.items(): if dn not in seen_display
 	for group, displayNames := range types.ToolGroups {
 		for _, dn := range displayNames {
 			if seenDisplay[dn] {
@@ -453,7 +453,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	}
 
 	// 步骤 5: 构建分组列表
-	// 对齐 Python: groups = list(TOOL_GROUPS.keys())
+	// Python: groups = list(TOOL_GROUPS.keys())
 	groups := make([]string, 0, len(types.ToolGroups))
 	for group := range types.ToolGroups {
 		groups = append(groups, group)
@@ -461,7 +461,7 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	sort.Strings(groups)
 
 	// 步骤 6: 子 agent 禁用工具列表
-	// 对齐 Python: disallowed_for_subagents = list(DISALLOWED_FOR_SUBAGENTS)
+	// Python: disallowed_for_subagents = list(DISALLOWED_FOR_SUBAGENTS)
 	disallowedForSubagents := types.DisallowedForSubagents
 
 	return &AvailableToolsResult{
@@ -474,25 +474,25 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // userAgentsDir 返回用户级 agent 目录：~/.uapclaw/agents/
-// 对齐 Python: _get_user_agents_dir() → get_user_workspace_dir() / "agents"
+// Python: _get_user_agents_dir() → get_user_workspace_dir() / "agents"
 func (s *AgentConfigService) userAgentsDir() string {
 	return filepath.Join(pathutil.UserHomeDir(), pathutil.DefaultDir, "agents")
 }
 
 // projectAgentsDir 返回项目级 agent 目录：<workspace>/.uapclaw/agents/
-// 对齐 Python: _get_project_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents"
+// Python: _get_project_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents"
 func (s *AgentConfigService) projectAgentsDir() string {
 	return filepath.Join(s.workspaceDir, pathutil.DefaultDir, "agents")
 }
 
 // localAgentsDir 返回本地级 agent 目录：<workspace>/.uapclaw/agents-local/
-// 对齐 Python: _get_local_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents-local"
+// Python: _get_local_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents-local"
 func (s *AgentConfigService) localAgentsDir() string {
 	return filepath.Join(s.workspaceDir, pathutil.DefaultDir, "agents-local")
 }
 
 // resolveLocationDir 根据位置参数返回对应目录。
-// 对齐 Python: _resolve_location_dir(location) — 无效 location 抛 ValueError
+// Python: _resolve_location_dir(location) — 无效 location 抛 ValueError
 func (s *AgentConfigService) resolveLocationDir(location string) (string, error) {
 	switch location {
 	case types.AgentSourceUser:
@@ -507,14 +507,14 @@ func (s *AgentConfigService) resolveLocationDir(location string) (string, error)
 }
 
 // loadFromDir 从目录加载所有 .md agent 定义文件。
-// 对齐 Python: _load_from_dir(dir_path, source)
+// Python: _load_from_dir(dir_path, source)
 func (s *AgentConfigService) loadFromDir(dirPath string, source string) []*types.AgentDefinition {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil
 	}
 	var agents []*types.AgentDefinition
-	// 对齐 Python: for md_file in sorted(dir_path.glob("*.md"))
+	// Python: for md_file in sorted(dir_path.glob("*.md"))
 	// Go 的 os.ReadDir 已按文件名排序
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
@@ -523,7 +523,7 @@ func (s *AgentConfigService) loadFromDir(dirPath string, source string) []*types
 		filePath := filepath.Join(dirPath, entry.Name())
 		agent, err := parseAgentFile(filePath, source)
 		if err != nil {
-			// 对齐 Python: except Exception: logger.warning("Failed to parse agent file: %s", md_file, exc_info=True)
+			// Python: except Exception: logger.warning("Failed to parse agent file: %s", md_file, exc_info=True)
 			logger.Warn(logComponent).
 				Str("file_path", filePath).
 				Err(err).
@@ -538,12 +538,12 @@ func (s *AgentConfigService) loadFromDir(dirPath string, source string) []*types
 }
 
 // loadSubagentStates 从 config.yaml 的 react.subagents 读取 enabled 状态。
-// 对齐 Python: list_agents() 中读取 subagent_states 的逻辑
+// Python: list_agents() 中读取 subagent_states 的逻辑
 func (s *AgentConfigService) loadSubagentStates() map[string]bool {
 	states := make(map[string]bool)
 	cfg, err := config.New("")
 	if err != nil {
-		// 对齐 Python: except Exception as e: logger.debug("Failed to load subagent states from config: %s", e)
+		// Python: except Exception as e: logger.debug("Failed to load subagent states from config: %s", e)
 		logger.Debug(logComponent).Err(err).Msg("创建配置管理器失败")
 		return states
 	}
@@ -560,7 +560,7 @@ func (s *AgentConfigService) loadSubagentStates() map[string]bool {
 	if subagentsCfg == nil {
 		return states
 	}
-	// 对齐 Python: for name, cfg in subagents_cfg.items(): if isinstance(cfg, dict) and "enabled" in cfg: states[name] = bool(cfg["enabled"])
+	// Python: for name, cfg in subagents_cfg.items(): if isinstance(cfg, dict) and "enabled" in cfg: states[name] = bool(cfg["enabled"])
 	for name, cfg := range subagentsCfg {
 		if m, ok := cfg.(map[string]any); ok {
 			if enabled, ok := m["enabled"]; ok {
@@ -572,7 +572,7 @@ func (s *AgentConfigService) loadSubagentStates() map[string]bool {
 }
 
 // copyBuiltinAgents 深拷贝内置 agent 列表（避免修改原始定义）。
-// 对齐 Python: list(BUILTIN_AGENTS)
+// Python: list(BUILTIN_AGENTS)
 func copyBuiltinAgents() []*types.AgentDefinition {
 	result := make([]*types.AgentDefinition, len(types.BuiltinAgents))
 	for i, a := range types.BuiltinAgents {
@@ -586,7 +586,7 @@ func copyBuiltinAgents() []*types.AgentDefinition {
 }
 
 // parseAgentFile 解析 YAML frontmatter + Markdown body 格式的 agent 文件。
-// 对齐 Python: _parse_agent_file(file_path, source)
+// Python: _parse_agent_file(file_path, source)
 func parseAgentFile(filePath string, source string) (*types.AgentDefinition, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -595,13 +595,13 @@ func parseAgentFile(filePath string, source string) (*types.AgentDefinition, err
 	text := string(content)
 
 	// 步骤 1: 检查 frontmatter 开头
-	// 对齐 Python: if not content.startswith("---"): return None
+	// Python: if not content.startswith("---"): return None
 	if !strings.HasPrefix(text, "---") {
 		return nil, nil
 	}
 
 	// 步骤 2: 分割 frontmatter 和 body
-	// 对齐 Python: parts = content.split("---", 2); if len(parts) < 3: return None
+	// Python: parts = content.split("---", 2); if len(parts) < 3: return None
 	parts := strings.SplitN(text, "---", 3)
 	if len(parts) < 3 {
 		return nil, nil
@@ -610,7 +610,7 @@ func parseAgentFile(filePath string, source string) (*types.AgentDefinition, err
 	prompt := strings.TrimSpace(parts[2])
 
 	// 步骤 3: 解析 YAML frontmatter
-	// 对齐 Python: frontmatter = yaml.safe_load(parts[1])
+	// Python: frontmatter = yaml.safe_load(parts[1])
 	var frontmatter map[string]any
 	if err := yaml.Unmarshal([]byte(frontmatterStr), &frontmatter); err != nil {
 		return nil, fmt.Errorf("解析 frontmatter 失败: %w", err)
@@ -620,14 +620,14 @@ func parseAgentFile(filePath string, source string) (*types.AgentDefinition, err
 	}
 
 	// 步骤 4: 校验 name 字段
-	// 对齐 Python: if not frontmatter or "name" not in frontmatter: return None
+	// Python: if not frontmatter or "name" not in frontmatter: return None
 	name, _ := frontmatter["name"].(string)
 	if name == "" {
 		return nil, nil
 	}
 
 	// 步骤 5: 提取各字段
-	// 对齐 Python: return AgentDefinition(name=..., description=frontmatter.get("description", ""), ...)
+	// Python: return AgentDefinition(name=..., description=frontmatter.get("description", ""), ...)
 	description, _ := frontmatter["description"].(string)
 	model, _ := frontmatter["model"].(string)
 	whenToUse, _ := frontmatter["when_to_use"].(string)
@@ -677,7 +677,7 @@ func parseAgentFile(filePath string, source string) (*types.AgentDefinition, err
 		MaxIterations:   maxIterations,
 		Skills:          skills,
 	}
-	// 对齐 Python: tools=frontmatter.get("tools", ["*"])
+	// Python: tools=frontmatter.get("tools", ["*"])
 	if len(def.Tools) == 0 {
 		def.Tools = []string{"*"}
 	}
@@ -685,7 +685,7 @@ func parseAgentFile(filePath string, source string) (*types.AgentDefinition, err
 }
 
 // formatAgentFile 生成 YAML frontmatter + Markdown body 格式的 agent 文件内容。
-// 对齐 Python: _format_agent_file(agent) — 只接受 *AgentDefinition
+// Python: _format_agent_file(agent) — 只接受 *AgentDefinition
 func formatAgentFile(def *types.AgentDefinition) string {
 	frontmatter := make(map[string]any)
 	frontmatter["name"] = def.Name
@@ -696,7 +696,7 @@ func formatAgentFile(def *types.AgentDefinition) string {
 	if def.Model != "" {
 		frontmatter["model"] = def.Model
 	}
-	// 对齐 Python: if agent.tools and agent.tools != ["*"]: frontmatter["tools"] = agent.tools
+	// Python: if agent.tools and agent.tools != ["*"]: frontmatter["tools"] = agent.tools
 	if len(def.Tools) > 0 && (len(def.Tools) != 1 || def.Tools[0] != "*") {
 		frontmatter["tools"] = def.Tools
 	}
@@ -719,16 +719,16 @@ func formatAgentFile(def *types.AgentDefinition) string {
 		frontmatter["skills"] = def.Skills
 	}
 
-	// 对齐 Python: yaml_str = yaml.dump(frontmatter, allow_unicode=True, default_flow_style=False).strip()
+	// Python: yaml_str = yaml.dump(frontmatter, allow_unicode=True, default_flow_style=False).strip()
 	yamlBytes, _ := yaml.Marshal(frontmatter)
-	// 对齐 Python: return f"---\n{yaml_str}\n---\n\n{prompt}\n"
+	// Python: return f"---\n{yaml_str}\n---\n\n{prompt}\n"
 	return fmt.Sprintf("---\n%s---\n\n%s\n", string(yamlBytes), def.Prompt)
 }
 
 // applyUpdateParams 将 UpdateAgentParams 的非 nil 字段应用到 AgentDefinition。
-// 对齐 Python: _apply_update_params(agent, params)
+// Python: _apply_update_params(agent, params)
 func applyUpdateParams(agent *types.AgentDefinition, params *UpdateAgentParams) {
-	// 对齐 Python: if params.description is not None: agent.description = params.description
+	// Python: if params.description is not None: agent.description = params.description
 	if params.Description != nil {
 		agent.Description = *params.Description
 	}

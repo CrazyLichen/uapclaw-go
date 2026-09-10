@@ -20,7 +20,7 @@ import (
 
 // ProcessorStateInput 处理器状态输入数据，记录一次处理器执行的关键信息。
 //
-// 对应 Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateInput)
+// Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateInput)
 type ProcessorStateInput struct {
 	// OperationID 操作唯一标识
 	OperationID string
@@ -68,7 +68,7 @@ type summaryInput struct {
 
 // ProcessorStateRecorder 记录上下文处理器状态变化，包括日志、回调触发、流式推送和历史记录。
 //
-// 对应 Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateRecorder)
+// Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateRecorder)
 type ProcessorStateRecorder struct {
 	// sessionID 会话 ID
 	sessionID string
@@ -94,7 +94,7 @@ type ProcessorStateRecorder struct {
 
 // NewProcessorStateRecorder 创建处理器状态记录器实例。
 //
-// 对应 Python: ContextProcessorStateRecorder.__init__()
+// Python: ContextProcessorStateRecorder.__init__()
 func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func() sessioninterfaces.SessionFacade, tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
 	return &ProcessorStateRecorder{
 		sessionID:     sessionID,
@@ -108,7 +108,7 @@ func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func()
 
 // History 返回历史记录副本。
 //
-// 对应 Python: ContextProcessorStateRecorder.history 属性
+// Python: ContextProcessorStateRecorder.history 属性
 func (r *ProcessorStateRecorder) History() []map[string]any {
 	result := make([]map[string]any, len(r.history))
 	copy(result, r.history)
@@ -117,7 +117,7 @@ func (r *ProcessorStateRecorder) History() []map[string]any {
 
 // LoadHistory 加载外部历史记录，截取最后 historyLimit 条。
 //
-// 对应 Python: ContextProcessorStateRecorder._load_history()
+// Python: ContextProcessorStateRecorder._load_history()
 func (r *ProcessorStateRecorder) LoadHistory(history []map[string]any) {
 	if len(history) == 0 {
 		r.history = make([]map[string]any, 0)
@@ -134,7 +134,7 @@ func (r *ProcessorStateRecorder) LoadHistory(history []map[string]any) {
 //
 // 流程：record(state) → logger.Info → callback.TriggerContext → sessionRef.WriteStream
 //
-// 对应 Python: ContextProcessorStateRecorder.emit()
+// Python: ContextProcessorStateRecorder.emit()
 func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.ContextCompressionState) {
 	// 1. 追加到历史记录
 	r.record(state)
@@ -169,7 +169,7 @@ func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.Context
 
 // BuildState 构建压缩状态对象。
 //
-// 对应 Python: ContextProcessorStateRecorder.build_state()
+// Python: ContextProcessorStateRecorder.build_state()
 func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.ContextCompressionState {
 	// a. 构建 before 指标
 	before := r.buildMetric(input.BeforeMessages, input.ContextMax, input.StartedAt)
@@ -234,7 +234,7 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 
 // buildMetric 构建压缩指标快照。
 //
-// 对应 Python: ContextProcessorStateRecorder._build_metric()
+// Python: ContextProcessorStateRecorder._build_metric()
 func (r *ProcessorStateRecorder) buildMetric(messages []llm_schema.BaseMessage, contextMax int, observedAt time.Time) schema.ContextCompressionMetric {
 	tokens := r.measureMessages(messages)
 	return schema.ContextCompressionMetric{
@@ -249,7 +249,7 @@ func (r *ProcessorStateRecorder) buildMetric(messages []llm_schema.BaseMessage, 
 //
 // 优先使用 tokenCounter，失败时降级为字符数/4 向上取整。
 //
-// 对应 Python: ContextProcessorStateRecorder._measure_messages()
+// Python: ContextProcessorStateRecorder._measure_messages()
 func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessage) int {
 	if r.tokenCounter != nil {
 		count, err := r.tokenCounter.CountMessages(messages, "")
@@ -270,7 +270,7 @@ func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessa
 
 // buildStatistic 构建上下文统计快照。
 //
-// 对应 Python: ContextProcessorStateRecorder._build_statistic()
+// Python: ContextProcessorStateRecorder._build_statistic()
 func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessage) iface.ContextStats {
 	stat := iface.ContextStats{}
 	for _, msg := range messages {
@@ -297,7 +297,7 @@ func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessag
 
 // countMessageForStatistic 统计单条消息的 token 数，用于构建 statistic。
 //
-// 对应 Python: ContextProcessorStateRecorder._count_message_for_statistic()
+// Python: ContextProcessorStateRecorder._count_message_for_statistic()
 func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMessage) int {
 	if r.tokenCounter != nil {
 		count, err := r.tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
@@ -310,7 +310,7 @@ func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMes
 
 // buildSaved 构建压缩节省量指标。
 //
-// 对应 Python: ContextProcessorStateRecorder._build_saved()
+// Python: ContextProcessorStateRecorder._build_saved()
 func (r *ProcessorStateRecorder) buildSaved(before schema.ContextCompressionMetric, after *schema.ContextCompressionMetric) *schema.ContextCompressionSaved {
 	if after == nil {
 		return nil
@@ -330,7 +330,7 @@ func (r *ProcessorStateRecorder) buildSaved(before schema.ContextCompressionMetr
 
 // buildSummary 构建人类可读的操作摘要。
 //
-// 对应 Python: ContextProcessorStateRecorder._build_summary()
+// Python: ContextProcessorStateRecorder._build_summary()
 func (r *ProcessorStateRecorder) buildSummary(input summaryInput) string {
 	var summary string
 
@@ -368,7 +368,7 @@ func (r *ProcessorStateRecorder) buildSummary(input summaryInput) string {
 
 // record 追加状态到历史记录，超过 historyLimit 时截取。
 //
-// 对应 Python: ContextProcessorStateRecorder._record()
+// Python: ContextProcessorStateRecorder._record()
 func (r *ProcessorStateRecorder) record(state *schema.ContextCompressionState) {
 	stateMap := r.stateToMap(state)
 	r.history = append(r.history, stateMap)
@@ -381,7 +381,7 @@ func (r *ProcessorStateRecorder) record(state *schema.ContextCompressionState) {
 //
 // >=1M → "X.Xm"，>=1K → "X.Xk"，否则原样。
 //
-// 对应 Python: ContextProcessorStateRecorder._compact_number()
+// Python: ContextProcessorStateRecorder._compact_number()
 func compactNumber(value int) string {
 	if value >= 1_000_000 {
 		return fmt.Sprintf("%.1fm", float64(value)/1_000_000)
@@ -394,7 +394,7 @@ func compactNumber(value int) string {
 
 // formatTime 将时间格式化为 ISO 8601 毫秒精度字符串。
 //
-// 对应 Python: ContextProcessorStateRecorder._format_time()
+// Python: ContextProcessorStateRecorder._format_time()
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02T15:04:05.000Z07:00")
 }
@@ -403,7 +403,7 @@ func formatTime(t time.Time) string {
 //
 // contextMax <= 0 返回 0；否则 clamp 到 [0, 100]。
 //
-// 对应 Python: ContextProcessorStateRecorder._context_percent()
+// Python: ContextProcessorStateRecorder._context_percent()
 func contextPercent(tokens, contextMax int) int {
 	if contextMax <= 0 {
 		return 0
@@ -424,7 +424,7 @@ func contextPercent(tokens, contextMax int) int {
 // Go 无反射 getattr，通过 ProcessorConfig 接口的可选 ModelName() 方法获取，
 // 若 config 未实现该方法则回退到 BaseProcessor.Config() 上继续尝试。
 //
-// 对应 Python: ContextProcessorStateRecorder._resolve_model_name()
+// Python: ContextProcessorStateRecorder._resolve_model_name()
 func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) string {
 	_ = trigger
 	_ = force
@@ -446,7 +446,7 @@ func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) s
 	}
 
 	// 1. 尝试从 config.Model 上获取 model_name
-	// 对齐 Python: model_config = getattr(config, "model", None)
+	// Python: model_config = getattr(config, "model", None)
 	modelCfg := cfg.GetModel()
 	if modelCfg != nil {
 		if modelCfg.ModelName != "" {
@@ -455,7 +455,7 @@ func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) s
 	}
 
 	// 2. 回退：尝试 config 上的 ModelName() 方法
-	// 对齐 Python: for key in ("model_name", "model"): getattr(config, key, None)
+	// Python: for key in ("model_name", "model"): getattr(config, key, None)
 	type modelNameProvider interface {
 		ModelName() string
 	}

@@ -182,9 +182,10 @@ func TestAfterToolCall_写操作后发布事件(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, eventWorkspaceArtifactUpdated, capturedEvent)
 
-	payload, ok := capturedPayload.(map[string]any)
+	payload, ok := capturedPayload.(WorkspaceArtifactEventData)
 	require.True(t, ok)
-	assert.Equal(t, "test-team", payload["team_name"])
-	assert.Equal(t, "member-1", payload["member_name"])
-	assert.Equal(t, "artifacts/report.md", payload["artifact_path"])
+	assert.Equal(t, "test-team", payload.TeamName)
+	assert.Equal(t, "member-1", payload.MemberName)
+	assert.Equal(t, "artifacts/report.md", payload.ArtifactPath)
+	assert.Equal(t, "", payload.CommitSHA) // VersionControl=false 时不提交
 }

@@ -21,7 +21,7 @@ import (
 
 // SecurityDecision 安全决策接口，所有决策类型实现此接口。
 //
-// 对齐 Python: SecurityDecision (base_security_rail.py L47-49)
+// Python: SecurityDecision (base_security_rail.py L47-49)
 type SecurityDecision interface {
 	isSecurityDecision()
 }
@@ -29,7 +29,7 @@ type SecurityDecision interface {
 // SecurityCheckContext 安全检查上下文。
 // 传递给子类的 runSecurityCheck 方法。
 //
-// 对齐 Python: SecurityCheckContext (base_security_rail.py L36-44)
+// Python: SecurityCheckContext (base_security_rail.py L36-44)
 type SecurityCheckContext struct {
 	// CallbackCtx 回调上下文
 	CallbackCtx *agentinterfaces.AgentCallbackContext
@@ -45,7 +45,7 @@ type SecurityCheckContext struct {
 
 // SecurityAllow 允许执行。
 //
-// 对齐 Python: SecurityAllow(SecurityDecision) (base_security_rail.py L51-55)
+// Python: SecurityAllow(SecurityDecision) (base_security_rail.py L51-55)
 type SecurityAllow struct {
 	// NewArgs 可选，替换后的参数（nil=不替换，对齐 Python new_args: dict | None）
 	NewArgs *map[string]any
@@ -53,7 +53,7 @@ type SecurityAllow struct {
 
 // SecurityReject 拒绝执行。
 //
-// 对齐 Python: SecurityReject(SecurityDecision) (base_security_rail.py L58-64)
+// Python: SecurityReject(SecurityDecision) (base_security_rail.py L58-64)
 type SecurityReject struct {
 	// Message 拒绝消息
 	Message string
@@ -65,7 +65,7 @@ type SecurityReject struct {
 
 // SecurityInterrupt 中断等待用户输入。
 //
-// 对齐 Python: SecurityInterrupt(SecurityDecision) (base_security_rail.py L67-72)
+// Python: SecurityInterrupt(SecurityDecision) (base_security_rail.py L67-72)
 type SecurityInterrupt struct {
 	// Request 中断请求
 	Request saschema.InterruptRequester
@@ -75,7 +75,7 @@ type SecurityInterrupt struct {
 
 // SecurityAlert 允许执行但告警。
 //
-// 对齐 Python: SecurityAlert(SecurityDecision) (base_security_rail.py L84-102)
+// Python: SecurityAlert(SecurityDecision) (base_security_rail.py L84-102)
 type SecurityAlert struct {
 	// Message 告警消息
 	Message string
@@ -96,7 +96,7 @@ type SecurityAlert struct {
 //
 // 子类只需实现 runSecurityCheck 返回具体决策即可。
 //
-// 对齐 Python: BaseSecurityRail(AgentRail) (base_security_rail.py L105-748)
+// Python: BaseSecurityRail(AgentRail) (base_security_rail.py L105-748)
 type BaseSecurityRail struct {
 	rails.DeepAgentRail
 	// supportedEvents 支持的事件集合
@@ -112,7 +112,7 @@ type SecurityRailOption func(*BaseSecurityRail)
 
 // SecurityAlertLevel 告警级别枚举。
 //
-// 对齐 Python: SecurityAlertLevel(str, Enum) (base_security_rail.py L75-83)
+// Python: SecurityAlertLevel(str, Enum) (base_security_rail.py L75-83)
 type SecurityAlertLevel int
 
 const (
@@ -130,7 +130,7 @@ const (
 
 const (
 	// baseSecurityRailPriority BaseSecurityRail 默认优先级
-	// 对齐 Python: BaseSecurityRail.priority = 90
+	// Python: BaseSecurityRail.priority = 90
 	baseSecurityRailPriority = 90
 )
 
@@ -142,7 +142,7 @@ var _ agentinterfaces.AgentRail = (*BaseSecurityRail)(nil)
 var securityLogComponent = logger.ComponentAgentCore
 
 // modelEvents 模型调用事件集合
-// 对齐 Python: _MODEL_EVENTS (base_security_rail.py L30-33)
+// Python: _MODEL_EVENTS (base_security_rail.py L30-33)
 var modelEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 	agentinterfaces.CallbackBeforeModelCall: true,
 	agentinterfaces.CallbackAfterModelCall:  true,
@@ -153,14 +153,14 @@ var modelEvents = map[agentinterfaces.AgentCallbackEvent]bool{
 // TypeName 返回 Rail 类型名称，用于日志和 metadata 标识。
 // 子类应 override 返回自己的类型名。
 //
-// 对齐 Python: self.__class__.__name__
+// Python: self.__class__.__name__
 func (r *BaseSecurityRail) TypeName() string {
 	return "BaseSecurityRail"
 }
 
 // NewBaseSecurityRail 创建安全 Rail 基类实例。
 //
-// 对齐 Python: BaseSecurityRail.__init__(tool_names)
+// Python: BaseSecurityRail.__init__(tool_names)
 func NewBaseSecurityRail(opts ...SecurityRailOption) *BaseSecurityRail {
 	r := &BaseSecurityRail{
 		DeepAgentRail:   *rails.NewDeepAgentRail(),
@@ -194,14 +194,14 @@ func WithSecurityToolNames(names ...string) SecurityRailOption {
 
 // Allow 返回允许决策。
 //
-// 对齐 Python: BaseSecurityRail.allow(new_args=None)
+// Python: BaseSecurityRail.allow(new_args=None)
 func (r *BaseSecurityRail) Allow(newArgs *map[string]any) *SecurityAllow {
 	return &SecurityAllow{NewArgs: newArgs}
 }
 
 // Approve 返回允许决策（Allow 别名，兼容从 InterruptRail 迁移的子类）。
 //
-// 对齐 Python: BaseSecurityRail.approve(new_args=None)
+// Python: BaseSecurityRail.approve(new_args=None)
 func (r *BaseSecurityRail) Approve(newArgs *map[string]any) *SecurityAllow {
 	return r.Allow(newArgs)
 }
@@ -210,13 +210,13 @@ func (r *BaseSecurityRail) Approve(newArgs *map[string]any) *SecurityAllow {
 // toolResult: 兼容 Python reject(tool_result=...) 的参数，result 为 nil 时自动赋值。
 // message 为空且 result 非 nil 时，自动从 result 推导 message。
 //
-// 对齐 Python: BaseSecurityRail.reject(message, result, tool_result, tool_message)
+// Python: BaseSecurityRail.reject(message, result, tool_result, tool_message)
 func (r *BaseSecurityRail) Reject(message string, result any, toolResult any, toolMessage *llmschema.ToolMessage) *SecurityReject {
-	// 对齐 Python: if result is None and tool_result is not None: result = tool_result
+	// Python: if result is None and tool_result is not None: result = tool_result
 	if result == nil && toolResult != nil {
 		result = toolResult
 	}
-	// 对齐 Python: if not message and result is not None: message = str(result)
+	// Python: if not message and result is not None: message = str(result)
 	if message == "" && result != nil {
 		message = fmt.Sprintf("%v", result)
 	}
@@ -229,7 +229,7 @@ func (r *BaseSecurityRail) Reject(message string, result any, toolResult any, to
 
 // Interrupt 返回中断决策。
 //
-// 对齐 Python: BaseSecurityRail.interrupt(request, subject_id)
+// Python: BaseSecurityRail.interrupt(request, subject_id)
 func (r *BaseSecurityRail) Interrupt(request saschema.InterruptRequester, subjectID string) *SecurityInterrupt {
 	return &SecurityInterrupt{
 		Request:   request,
@@ -239,7 +239,7 @@ func (r *BaseSecurityRail) Interrupt(request saschema.InterruptRequester, subjec
 
 // Alert 返回告警决策。
 //
-// 对齐 Python: BaseSecurityRail.alert(message, level, alert_type, display_mode)
+// Python: BaseSecurityRail.alert(message, level, alert_type, display_mode)
 func (r *BaseSecurityRail) Alert(message string, level SecurityAlertLevel, alertType string, displayMode string) *SecurityAlert {
 	return &SecurityAlert{
 		Message:     message,
@@ -251,14 +251,14 @@ func (r *BaseSecurityRail) Alert(message string, level SecurityAlertLevel, alert
 
 // AddTool 添加关联的工具名。
 //
-// 对齐 Python: BaseSecurityRail.add_tool(tool_name)
+// Python: BaseSecurityRail.add_tool(tool_name)
 func (r *BaseSecurityRail) AddTool(toolName string) {
 	r.toolNames[toolName] = struct{}{}
 }
 
 // AddTools 批量添加关联的工具名。
 //
-// 对齐 Python: BaseSecurityRail.add_tools(tool_names)
+// Python: BaseSecurityRail.add_tools(tool_names)
 func (r *BaseSecurityRail) AddTools(toolNames []string) {
 	for _, n := range toolNames {
 		r.toolNames[n] = struct{}{}
@@ -267,18 +267,18 @@ func (r *BaseSecurityRail) AddTools(toolNames []string) {
 
 // GetTools 返回所有关联的工具名集合。
 //
-// 对齐 Python: BaseSecurityRail.get_tools()
+// Python: BaseSecurityRail.get_tools()
 func (r *BaseSecurityRail) GetTools() map[string]struct{} {
 	return r.toolNames
 }
 
 // GetCallbacks 覆盖基类回调映射，根据 supportedEvents 自动注册钩子。
 //
-// 对齐 Python: BaseSecurityRail.get_callbacks() (base_security_rail.py L189-198)
+// Python: BaseSecurityRail.get_callbacks() (base_security_rail.py L189-198)
 func (r *BaseSecurityRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
-	// 对齐 Python: EVENT_METHOD_MAP 映射
+	// Python: EVENT_METHOD_MAP 映射
 	eventMethodMap := map[agentinterfaces.AgentCallbackEvent]func(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error{
 		agentinterfaces.CallbackBeforeInvoke:    r.BeforeInvoke,
 		agentinterfaces.CallbackAfterInvoke:     r.AfterInvoke,
@@ -301,7 +301,7 @@ func (r *BaseSecurityRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 
 // BeforeInvoke 调用前钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.before_invoke(ctx) (base_security_rail.py L200-201)
+// Python: BaseSecurityRail.before_invoke(ctx) (base_security_rail.py L200-201)
 func (r *BaseSecurityRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackBeforeInvoke] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackBeforeInvoke)
@@ -311,7 +311,7 @@ func (r *BaseSecurityRail) BeforeInvoke(ctx context.Context, cbc *agentinterface
 
 // AfterInvoke 调用后钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.after_invoke(ctx) (base_security_rail.py L203-204)
+// Python: BaseSecurityRail.after_invoke(ctx) (base_security_rail.py L203-204)
 func (r *BaseSecurityRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackAfterInvoke] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackAfterInvoke)
@@ -321,7 +321,7 @@ func (r *BaseSecurityRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces
 
 // BeforeToolCall 工具调用前钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.before_tool_call(ctx) (base_security_rail.py L206-207)
+// Python: BaseSecurityRail.before_tool_call(ctx) (base_security_rail.py L206-207)
 func (r *BaseSecurityRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackBeforeToolCall] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackBeforeToolCall)
@@ -331,7 +331,7 @@ func (r *BaseSecurityRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 
 // AfterToolCall 工具调用后钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.after_tool_call(ctx) (base_security_rail.py L209-210)
+// Python: BaseSecurityRail.after_tool_call(ctx) (base_security_rail.py L209-210)
 func (r *BaseSecurityRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackAfterToolCall] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackAfterToolCall)
@@ -341,7 +341,7 @@ func (r *BaseSecurityRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 
 // BeforeModelCall 模型调用前钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.before_model_call(ctx) (base_security_rail.py L212-213)
+// Python: BaseSecurityRail.before_model_call(ctx) (base_security_rail.py L212-213)
 func (r *BaseSecurityRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackBeforeModelCall] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackBeforeModelCall)
@@ -351,7 +351,7 @@ func (r *BaseSecurityRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 // AfterModelCall 模型调用后钩子（路由到 runAndApply）。
 //
-// 对齐 Python: BaseSecurityRail.after_model_call(ctx) (base_security_rail.py L215-216)
+// Python: BaseSecurityRail.after_model_call(ctx) (base_security_rail.py L215-216)
 func (r *BaseSecurityRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.supportedEvents[agentinterfaces.CallbackAfterModelCall] {
 		return r.runAndApply(ctx, cbc, agentinterfaces.CallbackAfterModelCall)
@@ -376,7 +376,7 @@ func (l SecurityAlertLevel) String() string {
 }
 
 // PopLastUserMessage 从当前 turn 移除最后一条用户消息并返回。
-// 对齐 Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
+// Python: BaseSecurityRail._pop_last_user_message(ctx) (base_security_rail.py L545-562)
 func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallbackContext) []llmschema.BaseMessage {
 	mc := cbc.ModelContext()
 	if mc == nil {
@@ -397,7 +397,7 @@ func (r *BaseSecurityRail) PopLastUserMessage(cbc *agentinterfaces.AgentCallback
 }
 
 // PopMatchingMessages 移除匹配正则的消息并返回。
-// 对齐 Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L567-602)
+// Python: BaseSecurityRail._pop_matching_messages(ctx, patterns, with_history) (base_security_rail.py L567-602)
 func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, withHistory bool) []llmschema.BaseMessage {
 	mc := cbc.ModelContext()
 	if mc == nil {
@@ -427,7 +427,7 @@ func (r *BaseSecurityRail) PopMatchingMessages(cbc *agentinterfaces.AgentCallbac
 }
 
 // ExtractMessageContent 从消息对象提取文本内容。
-// 对齐 Python: BaseSecurityRail._extract_message_content(msg) (base_security_rail.py L587-601)
+// Python: BaseSecurityRail._extract_message_content(msg) (base_security_rail.py L587-601)
 func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
 	if msg == nil {
 		return ""
@@ -450,7 +450,7 @@ func (r *BaseSecurityRail) ExtractMessageContent(msg any) string {
 }
 
 // ContainsAnyPattern 检查文本是否匹配任一正则。
-// 对齐 Python: BaseSecurityRail._contains_any_pattern(text, patterns) (base_security_rail.py L603-613)
+// Python: BaseSecurityRail._contains_any_pattern(text, patterns) (base_security_rail.py L603-613)
 func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bool {
 	for _, p := range patterns {
 		if matched, err := regexp.MatchString(p, text); err == nil && matched {
@@ -461,7 +461,7 @@ func (r *BaseSecurityRail) ContainsAnyPattern(text string, patterns []string) bo
 }
 
 // SanitizeMatchingMessages 脱敏替换匹配正则的消息内容。
-// 对齐 Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L648-689)
+// Python: BaseSecurityRail._sanitize_matching_messages(ctx, patterns, replacement, with_history) (base_security_rail.py L648-689)
 func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCallbackContext, patterns []string, replacement string, withHistory bool) []llmschema.BaseMessage {
 	mc := cbc.ModelContext()
 	if mc == nil {
@@ -504,7 +504,7 @@ func (a *SecurityAlert) isSecurityDecision()     {}
 
 // runAndApply 执行安全检查并应用决策。
 //
-// 对齐 Python: BaseSecurityRail._run_and_apply(ctx, event) (base_security_rail.py L225-252)
+// Python: BaseSecurityRail._run_and_apply(ctx, event) (base_security_rail.py L225-252)
 // 1. 从 cbc 构造 SecurityCheckContext
 // 2. 调用子类 runSecurityCheck → SecurityDecision
 // 3. Interrupt + MODEL事件 → 自动转为 Reject（Python 在此步骤处理，而非 applySecurityDecision 中）
@@ -534,7 +534,7 @@ func (r *BaseSecurityRail) runAndApply(
 		return err
 	}
 
-	// 对齐 Python: Interrupt + MODEL事件 → 自动转为 Reject
+	// Python: Interrupt + MODEL事件 → 自动转为 Reject
 	// (base_security_rail.py L241-249)
 	if _, ok := decision.(*SecurityInterrupt); ok && modelEvents[event] {
 		logger.Warn(securityLogComponent).
@@ -548,7 +548,7 @@ func (r *BaseSecurityRail) runAndApply(
 		decision = r.Reject(msg, nil, nil, nil)
 	}
 
-	// 对齐 Python: ctx.extra["_interrupt_decision"] = decision
+	// Python: ctx.extra["_interrupt_decision"] = decision
 	cbc.Extra()["_interrupt_decision"] = decision
 
 	return r.applySecurityDecision(ctx, securityCtx, decision)
@@ -556,16 +556,16 @@ func (r *BaseSecurityRail) runAndApply(
 
 // runSecurityCheck 执行安全检查（抽象，子类实现）。
 //
-// 对齐 Python: BaseSecurityRail.run_security_check(security_ctx) (base_security_rail.py L218-223)
+// Python: BaseSecurityRail.run_security_check(security_ctx) (base_security_rail.py L218-223)
 // 默认实现返回 Allow。
 func (r *BaseSecurityRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
-	// 对齐 Python: raise NotImplementedError — 强制子类必须实现
+	// Python: raise NotImplementedError — 强制子类必须实现
 	return nil, fmt.Errorf("BaseSecurityRail.runSecurityCheck 必须由子类实现")
 }
 
 // applySecurityDecision 应用安全决策。
 //
-// 对齐 Python: BaseSecurityRail.apply_security_decision(security_ctx, decision) (base_security_rail.py L302-340)
+// Python: BaseSecurityRail.apply_security_decision(security_ctx, decision) (base_security_rail.py L302-340)
 // - Allow: return (continue)
 // - Alert: log + stream, then continue
 // - Reject: MODEL→forceFinish, BEFORE_TOOL_CALL→skipTool, AFTER_TOOL_CALL→forceFinish+toolResult
@@ -600,13 +600,13 @@ func (r *BaseSecurityRail) applySecurityDecision(
 
 // applyReject 拒绝分支处理。
 //
-// 对齐 Python: BaseSecurityRail._apply_reject(security_ctx, decision) (base_security_rail.py L342-390)
+// Python: BaseSecurityRail._apply_reject(security_ctx, decision) (base_security_rail.py L342-390)
 // MODEL事件 → forceFinish; BEFORE_TOOL_CALL → skipTool; AFTER_TOOL_CALL → forceFinish + toolResult
 func (r *BaseSecurityRail) applyReject(securityCtx *SecurityCheckContext, decision *SecurityReject) {
 	cbc := securityCtx.CallbackCtx
 	event := securityCtx.Event
 
-	// 对齐 Python: 确定 error_msg
+	// Python: 确定 error_msg
 	var errorMsg string
 	if event == agentinterfaces.CallbackBeforeToolCall {
 		errorMsg = decision.Message
@@ -635,7 +635,7 @@ func (r *BaseSecurityRail) applyReject(securityCtx *SecurityCheckContext, decisi
 		}
 	}
 
-	// BEFORE_TOOL_CALL: skipTool
+	// 工具调用前：skipTool
 	if event == agentinterfaces.CallbackBeforeToolCall {
 		var toolMsg *llmschema.ToolMessage
 		if decision.ToolMessage != nil {
@@ -661,7 +661,7 @@ func (r *BaseSecurityRail) applyReject(securityCtx *SecurityCheckContext, decisi
 
 // applyInterrupt 中断分支处理。
 //
-// 对齐 Python: BaseSecurityRail._apply_interrupt(security_ctx, decision) (base_security_rail.py L392-417)
+// Python: BaseSecurityRail._apply_interrupt(security_ctx, decision) (base_security_rail.py L392-417)
 // MODEL 事件: 不应到达此处（已在 runAndApply 中转为 Reject）
 // TOOL 事件: 仅在 user_input 为 nil 时 raiseInterrupt
 func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, decision *SecurityInterrupt) {
@@ -669,14 +669,14 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 	event := securityCtx.Event
 
 	if modelEvents[event] {
-		// 对齐 Python: MODEL 事件不应到达此处
+		// Python: MODEL 事件不应到达此处
 		logger.Warn(securityLogComponent).
 			Str("event", string(event)).
 			Msg("SecurityInterrupt 在 MODEL 事件中不应到达此处")
 		return
 	}
 
-	// 对齐 Python: 仅在 user_input 为 nil 时 raise
+	// Python: 仅在 user_input 为 nil 时 raise
 	if securityCtx.UserInput == nil {
 		var toolName string
 		var toolCall *llmschema.ToolCall
@@ -690,11 +690,11 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 
 // applyAlert 告警分支处理。
 //
-// 对齐 Python: BaseSecurityRail._apply_alert(security_ctx, decision) (base_security_rail.py L419-466)
+// Python: BaseSecurityRail._apply_alert(security_ctx, decision) (base_security_rail.py L419-466)
 // 记录日志 + WriteStream OutputSchema with is_security_alert=true → 继续执行
 func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decision *SecurityAlert) {
-	// 对齐 Python: log_method = getattr(logger, decision.level.value, logger.warning)
-	// 对齐 Python: log_method("[SecurityAlert] rail=%s message=%s ...", self.__class__.__name__, ...)
+	// Python: log_method = getattr(logger, decision.level.value, logger.warning)
+	// Python: log_method("[SecurityAlert] rail=%s message=%s ...", self.__class__.__name__, ...)
 	logMsg := fmt.Sprintf("[SecurityAlert] rail=%s message=%s alert_type=%s level=%s display_mode=%s",
 		r.TypeName(), decision.Message, decision.AlertType, decision.Level.String(), decision.DisplayMode)
 
@@ -711,7 +711,7 @@ func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decisio
 		logger.Warn(securityLogComponent).Msg(logMsg)
 	}
 
-	// 对齐 Python: stream OutputSchema to frontend
+	// Python: stream OutputSchema to frontend
 	cbc := securityCtx.CallbackCtx
 	if sess := cbc.Session(); sess != nil {
 		_ = sess.WriteStream(context.Background(), map[string]any{
@@ -734,15 +734,15 @@ func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decisio
 
 // buildForceFinishResult 构建 forceFinish 结果。
 //
-// 对齐 Python: BaseSecurityRail._build_force_finish_result(decision) (base_security_rail.py L468-475)
+// Python: BaseSecurityRail._build_force_finish_result(decision) (base_security_rail.py L468-475)
 func (r *BaseSecurityRail) buildForceFinishResult(decision *SecurityReject) map[string]any {
-	// 对齐 Python: if isinstance(decision.result, dict): return decision.result
+	// Python: if isinstance(decision.result, dict): return decision.result
 	if decision.Result != nil {
 		if m, ok := decision.Result.(map[string]any); ok {
 			return m
 		}
 	}
-	// 对齐 Python: return {"output": message, "result_type": "error"}
+	// Python: return {"output": message, "result_type": "error"}
 	msg := decision.Message
 	if msg == "" && decision.Result != nil {
 		msg = fmt.Sprintf("%v", decision.Result)
@@ -758,7 +758,7 @@ func (r *BaseSecurityRail) buildForceFinishResult(decision *SecurityReject) map[
 
 // raiseToolInterrupt 抛出工具中断异常。
 //
-// 对齐 Python: BaseSecurityRail._raise_tool_interrupt(tool_name, tool_call, request) (base_security_rail.py L477-486)
+// Python: BaseSecurityRail._raise_tool_interrupt(tool_name, tool_call, request) (base_security_rail.py L477-486)
 func (r *BaseSecurityRail) raiseToolInterrupt(
 	toolName string,
 	toolCall *llmschema.ToolCall,
@@ -776,7 +776,7 @@ func (r *BaseSecurityRail) raiseToolInterrupt(
 
 // skipTool 跳过工具执行。
 //
-// 对齐 Python: BaseSecurityRail._skip_tool(ctx, tool_call, tool_result, tool_message) (base_security_rail.py L488-502)
+// Python: BaseSecurityRail._skip_tool(ctx, tool_call, tool_result, tool_message) (base_security_rail.py L488-502)
 func (r *BaseSecurityRail) skipTool(
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolResult any,
@@ -791,7 +791,7 @@ func (r *BaseSecurityRail) skipTool(
 
 // handleInterruptResume 中断恢复通用逻辑。
 //
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume(security_ctx, auto_confirm_key) (base_security_rail.py L691-735)
+// Python: BaseSecurityRail._handle_interrupt_resume(security_ctx, auto_confirm_key) (base_security_rail.py L691-735)
 // 返回 nil 表示首次调用（走 Interrupt），非 nil 表示恢复决策。
 func (r *BaseSecurityRail) handleInterruptResume(
 	securityCtx *SecurityCheckContext,
@@ -809,14 +809,14 @@ func (r *BaseSecurityRail) handleInterruptResume(
 	}
 
 	// 3. 解析 userInput
-	// 对齐 Python: isinstance(user_input, dict) → .get("approved"), .get("auto_confirm")
+	// Python: isinstance(user_input, dict) → .get("approved"), .get("auto_confirm")
 	var approved, autoConfirm bool
 	switch input := userInput.(type) {
 	case map[string]any:
 		approved, _ = input["approved"].(bool)
 		autoConfirm, _ = input["auto_confirm"].(bool)
 	default:
-		// 对齐 Python: hasattr(user_input, "approved")
+		// Python: hasattr(user_input, "approved")
 		// 尝试通过反射访问 approved 字段（ConfirmPayload 等）
 		if hasApproved, ok := tryGetApproved(userInput); ok {
 			approved = hasApproved
@@ -838,7 +838,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 
 // isAutoConfirmed 检查 auto_confirm 配置。
 //
-// 对齐 Python: BaseSecurityRail._is_auto_confirmed(auto_confirm_config, auto_confirm_key) (base_security_rail.py L504-520)
+// Python: BaseSecurityRail._is_auto_confirmed(auto_confirm_config, auto_confirm_key) (base_security_rail.py L504-520)
 func (r *BaseSecurityRail) isAutoConfirmed(config map[string]any, key string) bool {
 	if config == nil || key == "" {
 		return false
@@ -847,20 +847,20 @@ func (r *BaseSecurityRail) isAutoConfirmed(config map[string]any, key string) bo
 	if !ok {
 		return false
 	}
-	// 对齐 Python: bool(auto_confirm_config.get(auto_confirm_key, False))
+	// Python: bool(auto_confirm_config.get(auto_confirm_key, False))
 	return isSecurityTruthy(val)
 }
 
 // storeAutoConfirm 写入 auto_confirm 到 session 状态。
 //
-// 对齐 Python: BaseSecurityRail._store_auto_confirm(ctx, auto_confirm_key) (base_security_rail.py L522-543)
+// Python: BaseSecurityRail._store_auto_confirm(ctx, auto_confirm_key) (base_security_rail.py L522-543)
 func (r *BaseSecurityRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackContext, autoConfirmKey string) {
 	sess := cbc.Session()
 	if sess == nil || autoConfirmKey == "" {
 		return
 	}
 
-	// 对齐 Python: config = ctx.session.get_state(INTERRUPT_AUTO_CONFIRM_KEY) or {}
+	// Python: config = ctx.session.get_state(INTERRUPT_AUTO_CONFIRM_KEY) or {}
 	var config map[string]any
 	if val, err := sess.GetState(state.StringKey(saschema.InterruptAutoConfirmKey)); err == nil && val != nil {
 		if m, ok := val.(map[string]any); ok {
@@ -883,33 +883,33 @@ func (r *BaseSecurityRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackCo
 
 // resolveSubjectID 解析 subject_id（用于中断恢复匹配）。
 //
-// 对齐 Python: BaseSecurityRail._resolve_subject_id(ctx, event) (base_security_rail.py L260-269)
+// Python: BaseSecurityRail._resolve_subject_id(ctx, event) (base_security_rail.py L260-269)
 func (r *BaseSecurityRail) resolveSubjectID(cbc *agentinterfaces.AgentCallbackContext, event agentinterfaces.AgentCallbackEvent) string {
 	if event == agentinterfaces.CallbackBeforeToolCall || event == agentinterfaces.CallbackAfterToolCall {
 		if toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs); ok && toolInputs.ToolCall != nil {
 			return toolInputs.ToolCall.ID
 		}
 	}
-	// 对齐 Python: f"{self.__class__.__name__}:{event.value}"
+	// Python: f"{self.__class__.__name__}:{event.value}"
 	return r.TypeName() + ":" + string(event)
 }
 
 // getUserInput 从 session 获取用户输入。
 //
-// 对齐 Python: BaseSecurityRail._get_user_input(ctx, subject_id) (base_security_rail.py L276-300)
+// Python: BaseSecurityRail._get_user_input(ctx, subject_id) (base_security_rail.py L276-300)
 func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, subjectID string) any {
 	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
 	if !exists || rawInput == nil {
 		return nil
 	}
 
-	// 对齐 Python: logger.info
+	// Python: logger.info
 	logger.Info(securityLogComponent).
 		Str("subject_id", subjectID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
 		Msg("get_user_input")
 
-	// 对齐 Python: isinstance(raw_input, InteractiveInput)
+	// Python: isinstance(raw_input, InteractiveInput)
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
 		if val, found := interactive.UserInputs[subjectID]; found {
 			return val
@@ -917,7 +917,7 @@ func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContex
 		return nil
 	}
 
-	// 对齐 Python: isinstance(raw_input, dict)
+	// Python: isinstance(raw_input, dict)
 	if m, ok := rawInput.(map[string]any); ok {
 		if val, found := m[subjectID]; found {
 			return val
@@ -925,13 +925,13 @@ func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContex
 		return m
 	}
 
-	// 对齐 Python: return raw_input
+	// Python: return raw_input
 	return rawInput
 }
 
 // getAutoConfirmConfig 从 session 获取 auto_confirm 配置。
 //
-// 对齐 Python: BaseSecurityRail._get_auto_confirm_config(ctx) (base_security_rail.py L254-258)
+// Python: BaseSecurityRail._get_auto_confirm_config(ctx) (base_security_rail.py L254-258)
 func (r *BaseSecurityRail) getAutoConfirmConfig(cbc *agentinterfaces.AgentCallbackContext) map[string]any {
 	sess := cbc.Session()
 	if sess == nil {

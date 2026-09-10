@@ -23,7 +23,7 @@ func GetCurrentTime() int64 {
 }
 
 // SanitizeSessionIDForTable 将 session_id 转为 SQL-safe 的固定长度 hex 后缀。
-// 对齐 Python: _sanitize_session_id_for_table(session_id)
+// Python: _sanitize_session_id_for_table(session_id)
 // 使用 BLAKE2s XOF(size=8) → 16 hex chars（精确对齐 Python digest_size=8）
 func SanitizeSessionIDForTable(sessionID string) string {
 	xof, err := blake2s.NewXOF(8, nil)

@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionMeta 单会话元数据，存储在 sessions.json 中。
-// 对应 Python: openjiuwen/core/session/session_controller/schema.py (SessionMeta)
+// Python: openjiuwen/core/session/session_controller/schema.py (SessionMeta)
 type SessionMeta struct {
 	// SessionID 会话唯一标识（UUID）
 	SessionID string `json:"session_id"`
@@ -25,7 +25,7 @@ type SessionMeta struct {
 }
 
 // ScopeSessionsMeta 单个 SessionScope 下所有会话的元数据集合。
-// 对应 Python: openjiuwen/core/session/session_controller/schema.py (ScopeSessionsMeta)
+// Python: openjiuwen/core/session/session_controller/schema.py (ScopeSessionsMeta)
 type ScopeSessionsMeta struct {
 	// SessionScopeKey 对应的 SessionScopeKey 字符串表示
 	SessionScopeKey string `json:"session_scope_key"`

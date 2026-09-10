@@ -10,7 +10,7 @@ import (
 
 // SessionFacade 门面会话共有接口。
 //
-// 对应 Python agent.Session 和 node.Session 的共有方法集。
+// Python: agent.Session 和 node.Session 的共有方法集。
 // ReActAgent 的 invoke/stream 签名使用此接口，而非具体类型。
 // 需要特定门面独有方法时，直接断言具体类型：
 //   - Agent 生命周期：sess.(*session.Session) 获取 PreRun/CloseStream/Commit/StreamIterator
@@ -41,7 +41,7 @@ type SessionFacade interface {
 	GetEnv(key string, defaultValue ...any) any
 	// Interact 交互（等待用户输入）。
 	// value 通常传 string；内部序列化为 InteractionOutput.Value (any)。
-	// 对齐 Python Session.interact(value) 的任意类型签名。
+	// Python: Session.interact(value) 的任意类型签名。
 	Interact(ctx context.Context, value any) error
 }
 

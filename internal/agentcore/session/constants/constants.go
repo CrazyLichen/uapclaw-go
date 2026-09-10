@@ -91,14 +91,14 @@ const (
 // 交互输入在 session state 中的键（从 checkpointer/base.go 迁移）
 const (
 	// InteractiveInputKey 交互输入在 session state 中的键。
-	// 对应 Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
+	// Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
 	InteractiveInputKey = "__interactive_input__"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// EnvConfigKeys 环境变量键到配置键的映射表。
-	// 对应 Python: _ENV_CONFIG_KEYS
+	// Python: _ENV_CONFIG_KEYS
 	EnvConfigKeys = []EnvConfigEntry{
 		{WorkflowExecuteTimeoutEnvKey, WorkflowExecuteTimeoutKey},
 		{WorkflowStreamFrameTimeoutEnvKey, WorkflowStreamFrameTimeoutKey},
@@ -110,7 +110,7 @@ var (
 	}
 
 	// EnvConfigTypes 环境变量键到值类型的映射表。
-	// 对应 Python: _ENV_CONFIG_TYPES
+	// Python: _ENV_CONFIG_TYPES
 	EnvConfigTypes = map[string]EnvConfigType{
 		WorkflowExecuteTimeoutEnvKey:          EnvConfigTypeFloat,
 		WorkflowStreamFrameTimeoutEnvKey:      EnvConfigTypeFloat,
@@ -125,7 +125,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuiltinDefaults 返回内置默认配置的完整字典。
-// 对应 Python: Config._load_builtin_configs_ 中的 builtin_configs 字典
+// Python: Config._load_builtin_configs_ 中的 builtin_configs 字典
 func BuiltinDefaults() map[string]any {
 	return map[string]any{
 		CompStreamCallTimeoutKey:                CompStreamCallTimeoutDefault,

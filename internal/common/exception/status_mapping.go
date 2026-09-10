@@ -29,7 +29,7 @@ type rangeRule struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // manualOverrides 手动覆盖表：StatusCode.Name → ErrorCategory。
-// 对应 Python: _MANUAL_OVERRIDES_RAW
+// Python: _MANUAL_OVERRIDES_RAW
 var manualOverrides = map[string]ErrorCategory{
 	"CONTROLLER_INVOKE_LLM_FAILED":         ErrorCategoryFramework,
 	"TOOL_EXECUTION_ERROR":                 ErrorCategoryExecution,
@@ -46,7 +46,7 @@ var manualOverrides = map[string]ErrorCategory{
 }
 
 // keywordRules 关键字匹配规则（按优先级排列）。
-// 对应 Python: KEYWORD_RULES
+// Python: KEYWORD_RULES
 var keywordRules = []keywordRule{
 	// Validation 语义
 	{keywords: []string{"INVALID", "VALIDATE", "NOT_SUPPORTED", "PARAM", "MISSING", "DUPLICATED"}, category: ErrorCategoryValidation},
@@ -59,7 +59,7 @@ var keywordRules = []keywordRule{
 }
 
 // rangeRules 数值区间匹配规则。
-// 对应 Python: RANGE_RULES
+// Python: RANGE_RULES
 var rangeRules = []rangeRule{
 	{start: 100000, end: 119999, category: ErrorCategoryExecution}, // Workflow + Component 域
 	{start: 120000, end: 139999, category: ErrorCategoryExecution}, // Agent + Runner 域
@@ -81,7 +81,7 @@ var rangeRules = []rangeRule{
 //  3. RANGE_RULES — 按 StatusCode.Code 数值区间
 //  4. 兜底 ExecutionError
 //
-// 对应 Python: resolve_exception_class()
+// Python: resolve_exception_class()
 func ResolveCategory(status StatusCode) ErrorCategory {
 	name := status.Name()
 	code := status.Code()

@@ -511,7 +511,7 @@ func TestTodoModifyCancel(t *testing.T) {
 }
 
 // TestTodoModifyCancel_不存在的ID 测试 cancel 操作不存在的 ID
-// 对齐 Python: 不存在的 ID 静默跳过，返回提示消息而非错误
+// Python: 不存在的 ID 静默跳过，返回提示消息而非错误
 func TestTodoModifyCancel_不存在的ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
 	result, msg, err := cancelTodos(todos, []string{"nonexistent"})

@@ -6,7 +6,7 @@ import "encoding/json"
 
 // HookEventBase 钩子事件基类，提供作用域和事件名构建功能。
 //
-// 对应 Python: jiuwenswarm/common/schema/event_base.py (HookEventBase)
+// Python: jiuwenswarm/common/schema/event_base.py (HookEventBase)
 type HookEventBase struct {
 	// Scope 事件作用域，默认为 DefaultScope ("_framework")
 	Scope string `json:"scope"`

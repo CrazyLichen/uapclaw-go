@@ -15,14 +15,14 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // BrowserAgentFactoryName browser 子代理工厂名称
-// 对齐 Python: BROWSER_AGENT_FACTORY_NAME
+// Python: BROWSER_AGENT_FACTORY_NAME
 const BrowserAgentFactoryName = "browser_agent"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// defaultBrowserAgentSystemPrompt 默认系统提示词（中/英双语）
-	// 对齐 Python: DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT
+	// Python: DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT
 	// 提示词逐字符复制 Python 原文
 	defaultBrowserAgentSystemPrompt = map[string]string{
 		"cn": "你是浏览器自动化代理，负责直接执行网页任务。" +
@@ -82,7 +82,7 @@ var (
 			"requested browser outcome is actually evidenced.",
 	}
 	// defaultBrowserAgentDescription 默认描述（中/英双语）
-	// 对齐 Python: DEFAULT_BROWSER_AGENT_DESCRIPTION
+	// Python: DEFAULT_BROWSER_AGENT_DESCRIPTION
 	// 描述逐字符复制 Python 原文
 	defaultBrowserAgentDescription = map[string]string{
 		"cn": "专用浏览器子代理，直接使用 Playwright MCP 工具执行网页任务。",
@@ -93,7 +93,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildBrowserAgentConfig 构建 browser 子代理配置（延迟实例化）。
-// 对齐 Python: build_browser_agent_config(model, card=..., system_prompt=..., ...)
+// Python: build_browser_agent_config(model, card=..., system_prompt=..., ...)
 //
 // 参数通过 SubagentCreateParams 传入，对齐 Python 的具名参数风格。
 // adapter 层负责从 map[string]any 解析出 SubagentCreateParams。
@@ -139,7 +139,7 @@ func BuildBrowserAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	cfg.EnableTaskLoop = params.EnableTaskLoop
 
 	// MaxIterations：用户未提供（0）时默认 25
-	// 对齐 Python: max_iterations=25
+	// Python: max_iterations=25
 	cfg.MaxIterations = params.MaxIterations
 	if cfg.MaxIterations == 0 {
 		cfg.MaxIterations = 25
@@ -148,7 +148,7 @@ func BuildBrowserAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 	cfg.FactoryName = BrowserAgentFactoryName
 
 	// FactoryKwargs：包含 settings key，指向 ResolveRuntimeSettings 返回值
-	// 对齐 Python: factory_kwargs={"settings": resolved_settings}
+	// Python: factory_kwargs={"settings": resolved_settings}
 	resolvedSettings := bm.ResolveRuntimeSettings(model, nil)
 	cfg.FactoryKwargs = map[string]any{"settings": resolvedSettings}
 
@@ -163,7 +163,7 @@ func BuildBrowserAgentConfig(model *llm.Model, params *hschema.SubagentCreatePar
 }
 
 // DefaultBrowserAgentSystemPrompt 返回指定语言的默认系统提示词。
-// 对齐 Python: DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT.get(resolved_language, ...)
+// Python: DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT.get(resolved_language, ...)
 func DefaultBrowserAgentSystemPrompt(language string) string {
 	if s, ok := defaultBrowserAgentSystemPrompt[language]; ok && s != "" {
 		return s
@@ -172,7 +172,7 @@ func DefaultBrowserAgentSystemPrompt(language string) string {
 }
 
 // DefaultBrowserAgentDescription 返回指定语言的默认描述。
-// 对齐 Python: DEFAULT_BROWSER_AGENT_DESCRIPTION.get(resolved_language, ...)
+// Python: DEFAULT_BROWSER_AGENT_DESCRIPTION.get(resolved_language, ...)
 func DefaultBrowserAgentDescription(language string) string {
 	if s, ok := defaultBrowserAgentDescription[language]; ok && s != "" {
 		return s

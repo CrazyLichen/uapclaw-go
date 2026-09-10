@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
-// 对齐 Python model.config.model_config.model_name 访问方式。
+// Python: model.config.model_config.model_name 访问方式。
 // 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
 type ModelConfigProvider interface {
 	// GetModelName 获取模型名称
@@ -36,7 +36,7 @@ type TracerSession interface {
 // TracedModelClient 追踪装饰的模型客户端，包装 BaseModelClient 并在 Invoke/Stream 调用时触发追踪事件。
 // 实现 model_clients.BaseModelClient 接口。
 //
-// 对应 Python: TracedModelClient (openjiuwen/core/session/tracer/decorator.py)
+// Python: TracedModelClient (openjiuwen/core/session/tracer/decorator.py)
 type TracedModelClient struct {
 	// inner 被装饰的原始模型客户端
 	inner model_clients.BaseModelClient
@@ -51,7 +51,7 @@ type TracedModelClient struct {
 // TracedTool 追踪装饰的工具，包装 tool.Tool 并在 Invoke 调用时触发追踪事件。
 // 实现 tool.Tool 接口。
 //
-// 对应 Python: TracedTool (openjiuwen/core/session/tracer/decorator.py)
+// Python: TracedTool (openjiuwen/core/session/tracer/decorator.py)
 type TracedTool struct {
 	// inner 被装饰的原始工具
 	inner tool.Tool
@@ -66,7 +66,7 @@ type TracedTool struct {
 // TracedWorkflow 追踪装饰的工作流，包装 Workflow 并在 Invoke/Stream 调用时触发追踪事件。
 // 实现 sainterfaces.Workflow 接口。
 //
-// 对应 Python: decorate_workflow_with_trace 返回的 _TraceProxy (openjiuwen/core/session/tracer/decorator.py)
+// Python: decorate_workflow_with_trace 返回的 _TraceProxy (openjiuwen/core/session/tracer/decorator.py)
 // Python 同时包装 invoke 和 stream，Go 当前包装 Invoke，Stream 在领域八扩展时回填。
 type TracedWorkflow struct {
 	// inner 被装饰的原始工作流实例
@@ -89,7 +89,7 @@ type TracedWorkflow struct {
 
 // Invoke 非流式调用 LLM，在调用前后触发追踪事件，并通过 tracer_record_data 回调记录中间过程。
 // 流程：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Invoke → TriggerAgent(TraceLLMEnd/Error)
-// 对齐 Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
+// Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
 func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
 	c.tracer.TriggerAgent(ctx, tracer.TraceLLMStart, &tracer.TriggerParams{
@@ -131,7 +131,7 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 
 // Stream 流式调用 LLM，在调用前后触发追踪事件，并通过 tracer_record_data 回调记录中间过程。
 // 执行顺序：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Stream → 逐 chunk 透传 → TriggerAgent(TraceLLMEnd/Error)
-// 对齐 Python: _make_trace_stream_wrap_handler 中 async for item in call_next(...): yield item
+// Python: _make_trace_stream_wrap_handler 中 async for item in call_next(...): yield item
 func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
 	c.tracer.TriggerAgent(ctx, tracer.TraceLLMStart, &tracer.TriggerParams{
@@ -244,7 +244,7 @@ func (t *TracedTool) Card() *tool.ToolCard {
 // Invoke 非流式执行工作流，在调用前后触发追踪事件。
 // 流程：CreateAgentSpan → TriggerAgent(TraceWorkflowStart) → inner.Invoke → TriggerAgent(TraceWorkflowEnd/Error)
 //
-// 对应 Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
+// Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
 func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (any, error) {
 	span := w.tracer.AgentSpanManager.CreateAgentSpan(w.agentSpan)
 	w.tracer.TriggerAgent(ctx, tracer.TraceWorkflowStart, &tracer.TriggerParams{
@@ -277,7 +277,7 @@ func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts
 
 // Card 返回工作流配置卡片，直接委托 inner。
 //
-// 对应 Python: workflow.card 属性
+// Python: workflow.card 属性
 func (w *TracedWorkflow) Card() *schema.WorkflowCard {
 	return w.inner.Card()
 }

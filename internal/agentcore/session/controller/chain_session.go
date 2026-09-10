@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,7 +16,7 @@ import (
 
 // ChainSession 链式会话，持有 DataContainer + 下游关系 + 持久化能力。
 // 每个实例代表一个具体的对话会话，维护与其他会话的下游调用关系以实现单向数据可见性。
-// 对应 Python: openjiuwen/core/session/session_controller/chain_session.py (ChainSession)
+// Python: openjiuwen/core/session/session_controller/chain_session.py (ChainSession)
 type ChainSession struct {
 	// mu 并发互斥锁
 	mu sync.Mutex
@@ -371,11 +372,7 @@ func (cs *ChainSession) HasDownstream(targetAgent, targetSession string) bool {
 func (cs *ChainSession) GetDownstreams() map[[2]string]SharingPolicy {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	result := make(map[[2]string]SharingPolicy, len(cs.downstreamPolicies))
-	for k, v := range cs.downstreamPolicies {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(cs.downstreamPolicies)
 }
 
 // GetDownstreamPolicy 获取指定下游关系的共享策略，不存在返回 nil

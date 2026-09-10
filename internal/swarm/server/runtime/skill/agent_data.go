@@ -30,7 +30,7 @@ type agentDataEntry struct {
 // 遍历 skillsDir 的 parent 目录 + getMirrorSkillsDirs() 的 parent 目录，
 // 收集技能信息并生成 agent-data.json。
 //
-// 对齐 Python: refresh_agent_data_indexes
+// Python: refresh_agent_data_indexes
 func (sm *SkillManager) refreshAgentDataIndexes() {
 	// 收集需要生成索引的目录
 	dirs := []string{filepath.Dir(sm.skillsDir)}
@@ -45,7 +45,7 @@ func (sm *SkillManager) refreshAgentDataIndexes() {
 
 // generateAgentDataForWorkspace 遍历工作区目录收集技能信息并生成 agent-data.json。
 //
-// 对齐 Python: generate_agent_data_for_workspace
+// Python: generate_agent_data_for_workspace
 func generateAgentDataForWorkspace(workspaceRoot string) {
 	skillsDir := filepath.Join(workspaceRoot, "skills")
 	entries, err := os.ReadDir(skillsDir)

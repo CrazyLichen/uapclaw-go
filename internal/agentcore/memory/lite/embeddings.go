@@ -63,7 +63,7 @@ func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 
 // EmbedQuery 返回基于文本 hash 的 128 维确定性随机向量。
 //
-// 对齐 Python: MockEmbeddingProvider.embed_query — random.seed(md5(text).hexdigest()), [random.uniform(-1,1) for _ in range(128)]
+// Python: MockEmbeddingProvider.embed_query — random.seed(md5(text).hexdigest()), [random.uniform(-1,1) for _ in range(128)]
 func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]float64, error) {
 	h := md5.Sum([]byte(text))
 	seed := int64(binary.BigEndian.Uint64(h[:8]))
@@ -77,7 +77,7 @@ func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]fl
 
 // EmbedDocuments 批量嵌入文档。
 //
-// 对齐 Python: MockEmbeddingProvider.embed_documents
+// Python: MockEmbeddingProvider.embed_documents
 func (m *MockEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
 	result := make([][]float64, len(texts))
 	for i, text := range texts {
@@ -119,7 +119,7 @@ func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey st
 	if apiKey == "" {
 		apiKey = fallbackAPIKey
 	}
-	// 对齐 Python: if model_name and base_url and api_key → 返回配置，否则返回 None
+	// Python: if model_name and base_url and api_key → 返回配置，否则返回 None
 	if envModelName == "" || baseURL == "" || apiKey == "" {
 		return nil
 	}
@@ -138,14 +138,14 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 
 	// 优先使用 embeddingConfig
 	if embeddingConfig != nil && embeddingConfig.APIKey != "" {
-		// 对齐 Python: base_url 以 /embeddings 结尾时裁剪
+		// Python: base_url 以 /embeddings 结尾时裁剪
 		embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
 		base := apiEmbedding.NewAPIEmbedding(*embeddingConfig)
 		return &baseEmbeddingAdapter{base: base, prov: provider, model: model, dims: 1024}, nil
 	}
 
 	// fallback 到 mock
-	// 对齐 Python: logger.warning("Embedding API key not found, using mock provider")
+	// Python: logger.warning("Embedding API key not found, using mock provider")
 	if fallback == "mock" || fallback == "" {
 		logger.Warn(logComponent).Msg("未找到 Embedding API 密钥，使用模拟提供者")
 		return NewMockEmbeddingProvider(), nil

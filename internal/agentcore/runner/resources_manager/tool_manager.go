@@ -18,7 +18,7 @@ import (
 
 // McpServerResource MCP 服务器资源，记录单个 MCP 服务器的配置、客户端和工具列表。
 //
-// 对应 Python: McpServerResource (openjiuwen/core/runner/resources_manager/tool_manager.py)
+// Python: McpServerResource (openjiuwen/core/runner/resources_manager/tool_manager.py)
 type McpServerResource struct {
 	// Config MCP 服务器配置
 	Config *mcptypes.McpServerConfig
@@ -34,7 +34,7 @@ type McpServerResource struct {
 
 // SysOpToolResource 系统操作工具资源，记录系统操作与其关联的工具 ID。
 //
-// 对应 Python: SysOpToolResource (openjiuwen/core/runner/resources_manager/tool_manager.py)
+// Python: SysOpToolResource (openjiuwen/core/runner/resources_manager/tool_manager.py)
 type SysOpToolResource struct {
 	// SysOpID 系统操作标识
 	SysOpID string
@@ -46,7 +46,7 @@ type SysOpToolResource struct {
 
 // ToolMgr 工具管理器，管理工具注册/获取/注销，以及 MCP 服务器工具的生命周期。
 //
-// 对应 Python: ToolMgr (openjiuwen/core/runner/resources_manager/tool_manager.py)
+// Python: ToolMgr (openjiuwen/core/runner/resources_manager/tool_manager.py)
 type ToolMgr struct {
 	// tools 工具注册表
 	tools *ThreadSafeDict[string, tool.Tool]
@@ -75,7 +75,7 @@ const (
 
 // NewToolMgr 创建工具管理器。
 //
-// 对应 Python: ToolMgr.__init__()
+// Python: ToolMgr.__init__()
 func NewToolMgr() *ToolMgr {
 	return &ToolMgr{
 		tools:              NewThreadSafeDict[string, tool.Tool](),
@@ -88,7 +88,7 @@ func NewToolMgr() *ToolMgr {
 
 // AddTool 注册工具，重复添加返回错误。
 //
-// 对应 Python: ToolMgr.add_tool(tool_id, tool)
+// Python: ToolMgr.add_tool(tool_id, tool)
 func (m *ToolMgr) AddTool(toolID string, t tool.Tool) error {
 	if m.tools.Contains(toolID) {
 		return exception.BuildError(
@@ -103,7 +103,7 @@ func (m *ToolMgr) AddTool(toolID string, t tool.Tool) error {
 
 // GetTool 获取工具，如果 session 非 nil 则通过 DecorateToolWithTrace 添加追踪装饰。
 //
-// 对应 Python: ToolMgr.get_tool(tool_id, session)
+// Python: ToolMgr.get_tool(tool_id, session)
 func (m *ToolMgr) GetTool(toolID string, session decorator.TracerSession) (tool.Tool, error) {
 	t := m.tools.Get(toolID)
 	if t == nil {
@@ -122,7 +122,7 @@ func (m *ToolMgr) GetTool(toolID string, session decorator.TracerSession) (tool.
 
 // GetMcpTool 通过工具名和服务器 ID 获取 MCP 工具。
 //
-// 对应 Python: ToolMgr.get_mcp_tool(tool_name, server_id, session)
+// Python: ToolMgr.get_mcp_tool(tool_name, server_id, session)
 func (m *ToolMgr) GetMcpTool(ctx context.Context, toolName, serverID string, session decorator.TracerSession) (tool.Tool, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -141,7 +141,7 @@ func (m *ToolMgr) GetMcpTool(ctx context.Context, toolName, serverID string, ses
 
 // GetMcpTools 获取指定 MCP 服务器下的所有工具。
 //
-// 对应 Python: ToolMgr.get_mcp_tools(server_id, session)
+// Python: ToolMgr.get_mcp_tools(server_id, session)
 func (m *ToolMgr) GetMcpTools(ctx context.Context, serverID string, session decorator.TracerSession) ([]tool.Tool, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -162,7 +162,7 @@ func (m *ToolMgr) GetMcpTools(ctx context.Context, serverID string, session deco
 
 // GetMcpToolID 获取 MCP 工具 ID。toolName 为空时返回该服务器下所有工具 ID。
 //
-// 对应 Python: ToolMgr.get_mcp_tool_id(server_id, tool_name)
+// Python: ToolMgr.get_mcp_tool_id(server_id, tool_name)
 func (m *ToolMgr) GetMcpToolID(serverID, toolName string) []string {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -181,7 +181,7 @@ func (m *ToolMgr) GetMcpToolID(serverID, toolName string) []string {
 
 // RemoveTool 移除并返回工具。
 //
-// 对应 Python: ToolMgr.remove_tool(tool_id)
+// Python: ToolMgr.remove_tool(tool_id)
 func (m *ToolMgr) RemoveTool(toolID string) (tool.Tool, error) {
 	t := m.tools.Pop(toolID)
 	if t == nil {
@@ -197,7 +197,7 @@ func (m *ToolMgr) RemoveTool(toolID string) (tool.Tool, error) {
 
 // GenerateMcpToolID 生成 MCP 工具 ID，格式为 {serverID}.{serverName}.{toolName}。
 //
-// 对应 Python: ToolMgr.generate_mcp_tool_id(server_id, server_name, tool_name)
+// Python: ToolMgr.generate_mcp_tool_id(server_id, server_name, tool_name)
 func (m *ToolMgr) GenerateMcpToolID(serverID, serverName, toolName string) string {
 	return fmt.Sprintf("%s.%s.%s", serverID, serverName, toolName)
 }
@@ -205,7 +205,7 @@ func (m *ToolMgr) GenerateMcpToolID(serverID, serverName, toolName string) strin
 // AddToolServer 添加 MCP 工具服务器，建立连接并注册工具。
 // 获取 server_id 粒度锁 → 检查重复 → 创建客户端 → 连接 → 刷新工具 → 更新映射。
 //
-// 对应 Python: ToolMgr.add_tool_server(server_config, expiry_time)
+// Python: ToolMgr.add_tool_server(server_config, expiry_time)
 func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpServerConfig, expiryTime *float64) ([]*mcptypes.McpToolCard, error) {
 	serverID := serverConfig.ServerID
 	lock := m.mcpServerLock(serverID)
@@ -302,7 +302,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpS
 
 // RemoveToolServer 移除 MCP 工具服务器，断开连接并清理映射。
 //
-// 对应 Python: ToolMgr.remove_tool_server(server_id, ignore_not_exist)
+// Python: ToolMgr.remove_tool_server(server_id, ignore_not_exist)
 func (m *ToolMgr) RemoveToolServer(ctx context.Context, serverID string, ignoreNotExist bool) ([]string, error) {
 	m.mu.Lock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -362,7 +362,7 @@ func (m *ToolMgr) RemoveToolServer(ctx context.Context, serverID string, ignoreN
 
 // AddSysOperationTools 注册系统操作关联工具。
 //
-// 对应 Python: ToolMgr.add_sys_operation_tools(sys_op_id, tool_ids)
+// Python: ToolMgr.add_sys_operation_tools(sys_op_id, tool_ids)
 func (m *ToolMgr) AddSysOperationTools(sysOpID string, toolIDs []string) {
 	if len(toolIDs) == 0 {
 		return
@@ -380,7 +380,7 @@ func (m *ToolMgr) AddSysOperationTools(sysOpID string, toolIDs []string) {
 
 // RemoveSysOperationTools 注销系统操作关联工具，返回被注销的工具 ID 列表。
 //
-// 对应 Python: ToolMgr.remove_sys_operation_tools(sys_op_id)
+// Python: ToolMgr.remove_sys_operation_tools(sys_op_id)
 func (m *ToolMgr) RemoveSysOperationTools(sysOpID string) []string {
 	m.mu.Lock()
 	resource, ok := m.sysOpResources[sysOpID]
@@ -396,7 +396,7 @@ func (m *ToolMgr) RemoveSysOperationTools(sysOpID string) []string {
 
 // GetSysOperationToolIDs 获取系统操作关联的工具 ID 列表。
 //
-// 对应 Python: ToolMgr.get_sys_operation_tool_ids(sys_op_id)
+// Python: ToolMgr.get_sys_operation_tool_ids(sys_op_id)
 func (m *ToolMgr) GetSysOperationToolIDs(sysOpID string) []string {
 	m.mu.RLock()
 	resource, ok := m.sysOpResources[sysOpID]
@@ -409,7 +409,7 @@ func (m *ToolMgr) GetSysOperationToolIDs(sysOpID string) []string {
 
 // RefreshToolServer 刷新 MCP 工具服务器，检查过期后刷新。
 //
-// 对应 Python: ToolMgr.refresh_tool_server(server_id, skip_not_exist, force)
+// Python: ToolMgr.refresh_tool_server(server_id, skip_not_exist, force)
 func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNotExist, force bool) ([]*mcptypes.McpToolCard, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -456,7 +456,7 @@ func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNo
 
 // GetMcpServerIDs 按名称获取 MCP 服务器 ID 列表。
 //
-// 对应 Python: ToolMgr.get_mcp_server_ids(server_name)
+// Python: ToolMgr.get_mcp_server_ids(server_name)
 func (m *ToolMgr) GetMcpServerIDs(serverName string) []string {
 	m.mu.RLock()
 	ids, ok := m.mcpServerNameToIDs[serverName]
@@ -471,7 +471,7 @@ func (m *ToolMgr) GetMcpServerIDs(serverName string) []string {
 
 // GetMcpClient 获取 MCP 客户端。
 //
-// 对应 Python: ToolMgr.get_mcp_client(server_id)
+// Python: ToolMgr.get_mcp_client(server_id)
 func (m *ToolMgr) GetMcpClient(serverID string) (mcptypes.McpClient, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -489,7 +489,7 @@ func (m *ToolMgr) GetMcpClient(serverID string) (mcptypes.McpClient, error) {
 
 // GetMcpServerConfig 深拷贝配置返回。
 //
-// 对应 Python: ToolMgr.get_mcp_server_config(server_id)
+// Python: ToolMgr.get_mcp_server_config(server_id)
 func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerConfig, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -532,7 +532,7 @@ func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerConfig
 
 // GetMcpToolIDs 获取指定服务器下所有工具 ID。
 //
-// 对应 Python: ToolMgr.get_mcp_tool_ids(server_id)
+// Python: ToolMgr.get_mcp_tool_ids(server_id)
 func (m *ToolMgr) GetMcpToolIDs(serverID string) []string {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
@@ -547,7 +547,7 @@ func (m *ToolMgr) GetMcpToolIDs(serverID string) []string {
 
 // Release 释放所有 MCP 连接，遍历所有 MCP 服务器调用 Disconnect，忽略单个错误。
 //
-// 对应 Python: ToolMgr.release()
+// Python: ToolMgr.release()
 func (m *ToolMgr) Release(ctx context.Context) error {
 	m.mu.RLock()
 	resources := make([]*McpServerResource, 0, len(m.mcpServerResources))
@@ -578,14 +578,14 @@ func (m *ToolMgr) Release(ctx context.Context) error {
 
 // createClient 调用 mcp.NewMcpClient 创建 MCP 客户端。
 //
-// 对应 Python: ToolMgr._create_client(config)
+// Python: ToolMgr._create_client(config)
 func (m *ToolMgr) createClient(config *mcptypes.McpServerConfig) (mcptypes.McpClient, error) {
 	return mcp.NewMcpClient(config)
 }
 
 // innerRefreshMcpTools 刷新 MCP 工具：list_tools → 注册 MCPTool → 更新 mcpServerResources。
 //
-// 对应 Python: ToolMgr._inner_refresh_mcp_tools(client, server_config, expiry_time)
+// Python: ToolMgr._inner_refresh_mcp_tools(client, server_config, expiry_time)
 func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpClient, serverConfig *mcptypes.McpServerConfig, expiryTime *float64) ([]*mcptypes.McpToolCard, error) {
 	mcpCards, err := client.ListTools(ctx)
 	if err != nil {
@@ -641,7 +641,7 @@ func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpC
 
 // innerRemoveMcpTools 逐个移除工具，忽略错误。
 //
-// 对应 Python: ToolMgr._inner_remove_mcp_tools(tools)
+// Python: ToolMgr._inner_remove_mcp_tools(tools)
 func (m *ToolMgr) innerRemoveMcpTools(toolIDs []string) {
 	if len(toolIDs) == 0 {
 		return
@@ -656,7 +656,7 @@ func (m *ToolMgr) innerRemoveMcpTools(toolIDs []string) {
 
 // mcpServerLock 获取或创建 server_id 粒度锁。
 //
-// 对应 Python: ToolMgr._mcp_server_lock(server_id)
+// Python: ToolMgr._mcp_server_lock(server_id)
 func (m *ToolMgr) mcpServerLock(serverID string) *sync.Mutex {
 	m.mu.Lock()
 	lock, ok := m.mcpServerLocks[serverID]

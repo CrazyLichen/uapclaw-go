@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InnerSession 会话基类接口，定义所有会话类型共有的核心能力。
-// 对应 Python: openjiuwen/core/session/session.py BaseSession(ABC)
+// Python: openjiuwen/core/session/session.py BaseSession(ABC)
 //
 // AgentSession、WorkflowSession、NodeSession、SubWorkflowSession 均实现此接口。
 // ProxySession 通过委托模式实现此接口。
@@ -22,7 +22,7 @@ import (
 // 不再需要独立的 CheckpointerSession 子集接口（循环依赖已通过 interfaces 包解决）。
 //
 // 子类型独有的方法通过 *Provider 接口 + 类型断言获取，
-// 对齐 Python hasattr/isinstance 运行时探测模式：
+// Python: hasattr/isinstance 运行时探测模式：
 //
 //	接口映射：AgentID      → AgentIDProvider       (Python: hasattr(session, "agent_id"))
 //	接口映射：TeamID       → TeamIDProvider         (Python: hasattr(session, "team_id"))
@@ -51,11 +51,11 @@ type InnerSession interface {
 }
 
 // Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
-// 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
+// Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
 //
 // Python 中所有方法签名接受 BaseSession，Go 同样使用 InnerSession。
 // AgentID/TeamID/WorkflowID/Parent 等通过 *Provider 类型断言获取，
-// 对齐 Python hasattr/isinstance 运行时探测模式。
+// Python: hasattr/isinstance 运行时探测模式。
 type Checkpointer interface {
 	// PreWorkflowExecute 工作流执行前
 	PreWorkflowExecute(ctx context.Context, session InnerSession, inputs any) error
@@ -75,7 +75,7 @@ type Checkpointer interface {
 	SessionExists(ctx context.Context, sessionID string) (bool, error)
 	// Release 释放会话资源。
 	// agentID 可选参数：提供时仅释放指定 Agent 的检查点（支持多个，循环清除），否则释放整个 session。
-	// 对齐 Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
+	// Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
 	Release(ctx context.Context, sessionID string, agentID ...string) error
 	// GraphStore 获取图状态存储
 	// ⤵️ 8.7 回填：Graph Store 实现后返回 Store 实例
@@ -83,7 +83,7 @@ type Checkpointer interface {
 }
 
 // Storage 状态存储接口，负责单个实体的状态保存/恢复/清除。
-// 对应 Python: openjiuwen/core/session/checkpointer/base.py (Storage)
+// Python: openjiuwen/core/session/checkpointer/base.py (Storage)
 //
 // Python 中所有方法签名接受 BaseSession，Go 同样使用 InnerSession。
 type Storage interface {
@@ -101,28 +101,28 @@ type Storage interface {
 
 // AgentIDProvider 提供 Agent ID 的接口（通过类型断言获取）。
 // AgentSession 天然满足此接口。
-// 对应 Python: hasattr(session, "agent_id") 检测。
+// Python: hasattr(session, "agent_id") 检测。
 type AgentIDProvider interface {
 	AgentID() string
 }
 
 // TeamIDProvider 提供 Team ID 的接口（通过类型断言获取）。
 // AgentTeamSession 天然满足此接口。
-// 对应 Python: hasattr(session, "team_id") 检测。
+// Python: hasattr(session, "team_id") 检测。
 type TeamIDProvider interface {
 	TeamID() string
 }
 
 // WorkflowIDProvider 提供 WorkflowID 的接口（通过类型断言获取）。
 // WorkflowSession/NodeSession 天然满足此接口。
-// 对应 Python: hasattr(session, "workflow_id") 检测。
+// Python: hasattr(session, "workflow_id") 检测。
 type WorkflowIDProvider interface {
 	WorkflowID() string
 }
 
 // ParentProvider 提供 Parent 的接口（通过类型断言获取）。
 // WorkflowSession/NodeSession 天然满足此接口，AgentSession 不满足。
-// 对应 Python: isinstance(session.parent(), AgentSession) 检测。
+// Python: isinstance(session.parent(), AgentSession) 检测。
 type ParentProvider interface {
 	Parent() InnerSession
 }
@@ -130,7 +130,7 @@ type ParentProvider interface {
 // ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
 // NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
 // 通过类型断言延迟绑定：WorkflowInteraction/AgentInteraction 运行时断言获取 nodeID。
-// 对应 Python: hasattr(session, "executable_id") 检测。
+// Python: hasattr(session, "executable_id") 检测。
 type ExecutableIDProvider interface {
 	ExecutableID() string
 }

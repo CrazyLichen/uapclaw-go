@@ -4,7 +4,7 @@ package output_parsers
 
 // MarkdownElement 单个 Markdown 元素。
 //
-// 对应 Python: MarkdownElement (dataclass)
+// Python: MarkdownElement (dataclass)
 type MarkdownElement struct {
 	// Type 元素类型
 	Type MarkdownElementType `json:"type"`
@@ -20,7 +20,7 @@ type MarkdownElement struct {
 
 // MarkdownContent 结构化的 Markdown 内容表示。
 //
-// 对应 Python: MarkdownContent (dataclass)
+// Python: MarkdownContent (dataclass)
 type MarkdownContent struct {
 	// RawContent 原始文本内容
 	RawContent string `json:"raw_content"`
@@ -44,7 +44,7 @@ type MarkdownContent struct {
 
 // MarkdownElementType Markdown 元素类型常量。
 //
-// 对应 Python: MarkdownElementType
+// Python: MarkdownElementType
 type MarkdownElementType string
 
 // ──────────────────────────── 常量 ────────────────────────────

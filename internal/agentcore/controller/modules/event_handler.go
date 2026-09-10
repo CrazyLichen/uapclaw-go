@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventHandler 事件处理器接口。
-// 对齐 Python EventHandler ABC 的抽象方法。
+// Python: EventHandler ABC 的抽象方法。
 type EventHandler interface {
 	// HandleInput 处理输入事件
 	HandleInput(ctx context.Context, input *EventHandlerInput) (map[string]any, error)
@@ -37,7 +37,7 @@ type EventHandler interface {
 }
 
 // EventHandlerBase 依赖容器 + 默认实现。
-// 对齐 Python EventHandler ABC 的 self._config 等属性 + 非抽象方法的默认实现。
+// Python: EventHandler ABC 的 self._config 等属性 + 非抽象方法的默认实现。
 type EventHandlerBase struct {
 	// Config 配置
 	Config *config.ControllerConfig
@@ -68,7 +68,7 @@ type EventHandlerInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HandleFollowUp 默认实现：返回 not_supported 状态。
-// 对齐 Python EventHandler.HandleFollowUp 默认实现。
+// Python: EventHandler.HandleFollowUp 默认实现。
 func (b *EventHandlerBase) HandleFollowUp(_ context.Context, _ *EventHandlerInput) (map[string]any, error) {
 	return map[string]any{"status": "not_supported"}, nil
 }
@@ -79,17 +79,17 @@ func (b *EventHandlerBase) GetBase() *EventHandlerBase {
 }
 
 // PrepareRound 默认实现：返回 0。
-// 对齐 Python EventHandler.PrepareRound 默认实现。
+// Python: EventHandler.PrepareRound 默认实现。
 func (b *EventHandlerBase) PrepareRound() int {
 	return 0
 }
 
 // WaitCompletion 默认实现：直接返回 completed 状态。
-// 对齐 Python EventHandler.WaitCompletion 默认实现。
+// Python: EventHandler.WaitCompletion 默认实现。
 func (b *EventHandlerBase) WaitCompletion(_ context.Context, _ time.Duration) map[string]any {
 	return map[string]any{"status": "completed"}
 }
 
 // OnAbort 默认实现：空操作。
-// 对齐 Python EventHandler.OnAbort 默认实现。
+// Python: EventHandler.OnAbort 默认实现。
 func (b *EventHandlerBase) OnAbort() {}

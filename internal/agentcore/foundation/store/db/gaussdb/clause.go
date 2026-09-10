@@ -18,7 +18,7 @@ import (
 
 // gaussLockingClauseBuilder GaussDB LOCKING 子句构建器。
 //
-// 对应 Python: GaussCompiler.for_update_clause()
+// Python: GaussCompiler.for_update_clause()
 //
 // GaussDB 不支持 NOWAIT / SKIP LOCKED 锁选项和 OF table 语法，
 // 也不支持 FOR SHARE 等锁类型，仅支持 FOR UPDATE。

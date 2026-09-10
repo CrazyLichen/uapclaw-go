@@ -149,7 +149,7 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 	}
 
 	// 写入 README.md（如果存在）
-	readmePath := filepath.Join(originalDir, "README.md") // 对齐 Python: root / "README.md"
+	readmePath := filepath.Join(originalDir, "README.md") // Python: root / "README.md"
 	if data, err := os.ReadFile(readmePath); err == nil {
 		w, err := zipWriter.Create(fmt.Sprintf("%s/README.md", skillName))
 		if err == nil {
@@ -197,7 +197,7 @@ func buildTeamskillsPublishZip(skillDir string, pluginVersion string) ([]byte, s
 }
 
 // buildTeamskillsPublishZipFromPath 从 path 或 file 参数构建发布 ZIP。
-// 对齐 Python: _prepare_teamskills_publish_zip
+// Python: _prepare_teamskills_publish_zip
 func buildTeamskillsPublishZipFromPath(pathRaw, fileRaw, pluginVersion string) ([]byte, string, error) {
 	if fileRaw != "" {
 		// 从现有 ZIP 解压再规范化

@@ -10,7 +10,7 @@ import "fmt"
 //   - P2P 模式：Recipient 非空，指定接收者 Agent ID
 //   - Pub-Sub 模式：TopicID 非空，指定发布主题
 //
-// 对应 Python: MessageEnvelope (openjiuwen/core/multi_agent/team_runtime/envelope.py)
+// Python: MessageEnvelope (openjiuwen/core/multi_agent/team_runtime/envelope.py)
 type MessageEnvelope struct {
 	// MessageID 唯一消息标识
 	MessageID string

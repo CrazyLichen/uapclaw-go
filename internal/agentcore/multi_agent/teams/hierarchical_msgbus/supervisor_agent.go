@@ -23,7 +23,7 @@ import (
 // 通过 ReActAgent 获得 ReAct 循环执行能力，
 // 内部使用 P2PAbilityManager 将 AgentCard 类型的 tool_call 转为 P2P 消息派发。
 //
-// 对应 Python: SupervisorAgent(CommunicableAgent, ReActAgent)
+// Python: SupervisorAgent(CommunicableAgent, ReActAgent)
 type SupervisorAgent struct {
 	// CommunicableAgent 嵌入：Send/Publish/Subscribe/Unsubscribe/Runtime/BindRuntime
 	team_runtime.CommunicableAgent
@@ -51,16 +51,16 @@ var _ team_runtime.Communicable = (*SupervisorAgent)(nil)
 
 // NewSupervisorAgent 创建 SupervisorAgent 实例。
 //
-// 对应 Python: SupervisorAgent(card, config, max_parallel_sub_agents)
+// Python: SupervisorAgent(card, config, max_parallel_sub_agents)
 func NewSupervisorAgent(
 	card *agentschema.AgentCard,
 	config *saconfig.ReActAgentConfig,
 	maxParallelSubAgents int,
 ) *SupervisorAgent {
-	// 对齐 Python: super().__init__(card=card)，先创建默认实例
+	// Python: super().__init__(card=card)，先创建默认实例
 	react := agents.NewReActAgent(card, nil)
 
-	// 对齐 Python: if config is not None: ReActAgent.configure(self, config)
+	// Python: if config is not None: ReActAgent.configure(self, config)
 	if config != nil {
 		_ = react.Configure(context.Background(), config)
 	}
@@ -84,7 +84,7 @@ func NewSupervisorAgent(
 // NewSupervisorAgentCard 创建预加载子 Agent 卡片的 SupervisorAgent。
 // 返回 (AgentCard, AgentProvider) 元组，兼容 HierarchicalTeam.AddAgent()。
 //
-// 对应 Python: SupervisorAgent.create()
+// Python: SupervisorAgent.create()
 func NewSupervisorAgentCard(
 	agentsList []*agentschema.AgentCard,
 	modelClientConfig *llmschema.ModelClientConfig,
@@ -163,7 +163,7 @@ func NewSupervisorAgentCard(
 // RegisterSubAgentCard 将子 Agent 卡片注册到 P2PAbilityManager。
 // 使 LLM 可将子 Agent 视为可调用的工具。
 //
-// 对应 Python: SupervisorAgent.register_sub_agent_card(card)
+// Python: SupervisorAgent.register_sub_agent_card(card)
 func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
 	am := s.AbilityManager()
 	if am != nil {
@@ -178,7 +178,7 @@ func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
 
 // Configure 配置 SupervisorAgent。
 //
-// 对齐 Python: SupervisorAgent.configure(config) — 只对 ReActAgentConfig 类型执行配置，其他类型 no-op。
+// Python: SupervisorAgent.configure(config) — 只对 ReActAgentConfig 类型执行配置，其他类型 no-op。
 func (s *SupervisorAgent) Configure(ctx context.Context, config agentinterfaces.AgentConfig) error {
 	if reactCfg, ok := config.(*saconfig.ReActAgentConfig); ok {
 		return s.ReActAgent.Configure(ctx, reactCfg)

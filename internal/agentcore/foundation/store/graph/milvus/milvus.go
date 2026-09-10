@@ -19,7 +19,7 @@ import (
 // 通过嵌入 graphWriter 和 graphSearcher 拆分读写/搜索职责，
 // 实现 graph.BaseGraphStore 接口。
 //
-// 对应 Python: MilvusGraphStore
+// Python: MilvusGraphStore
 type MilvusGraphStore struct {
 	*graphWriter
 	*graphSearcher
@@ -62,7 +62,7 @@ func (s *MilvusGraphStore) Config() *graph.GraphConfig {
 }
 
 // Rebuild 重建所有集合和索引。
-// 对齐 Python: 先尝试 LoadCollection，加载成功则直接返回；加载失败则删数据库再重建。
+// Python: 先尝试 LoadCollection，加载成功则直接返回；加载失败则删数据库再重建。
 //
 // 注意（T-20）：此操作先删除旧数据再重建，如果重建失败旧数据已丢失。
 // Milvus 不支持集合原子重命名，无法实现"备份旧集合 → 建新集合 → 删备份"的事务性回滚。
@@ -73,7 +73,7 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 		return err
 	}
 
-	// 对齐 Python: 先尝试 load_collection，如果成功则不需要 rebuild
+	// Python: 先尝试 load_collection，如果成功则不需要 rebuild
 	loadOK := true
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 		if err := client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(coll)); err != nil {
@@ -122,7 +122,7 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 }
 
 // Refresh 刷新数据（flush + 可选 compact）。
-// 对齐 Python: flush + 可选 compact。
+// Python: flush + 可选 compact。
 func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) error {
 	client, err := s.getClient(ctx)
 	if err != nil {
@@ -135,7 +135,7 @@ func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) er
 		}
 	}
 
-	// 对齐 Python: 可选 compact 操作
+	// Python: 可选 compact 操作
 	if s.config.EnableCompact {
 		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 			if _, err := client.Compact(ctx, milvusclient.NewCompactOption(coll)); err != nil {
@@ -189,7 +189,7 @@ func (s *MilvusGraphStore) AddEpisode(ctx context.Context, episodes []*graph.Epi
 }
 
 // Query 按ID或过滤表达式查询数据。
-// 对齐 Python: IDs 和 Expr 都为空且无 limit 时报错。
+// Python: IDs 和 Expr 都为空且无 limit 时报错。
 func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ...graph.Option) ([]map[string]any, error) {
 	if err := s.ensureInit(ctx); err != nil {
 		return nil, err
@@ -215,7 +215,7 @@ func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ..
 		expr = strExpr
 	}
 
-	// 对齐 Python: expr 和 ids 都为 None 且没有 limit 时报错
+	// Python: expr 和 ids 都为 None 且没有 limit 时报错
 	if expr == "" && o.K == 0 {
 		return nil, fmt.Errorf("查询必须提供 IDs 或过滤表达式")
 	}
@@ -268,7 +268,7 @@ func (s *MilvusGraphStore) Search(ctx context.Context, query string, opts ...gra
 }
 
 // AttachEmbedder 绑定嵌入模型。
-// 对齐 Python: 校验 embed_dim 与 embedder.dimension 是否一致，不一致则返回错误。
+// Python: 校验 embed_dim 与 embedder.dimension 是否一致，不一致则返回错误。
 func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

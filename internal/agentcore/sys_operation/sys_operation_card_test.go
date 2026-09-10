@@ -10,7 +10,7 @@ import (
 // ──────────────────────────── NewLocalWorkConfig ────────────────────────────
 
 // TestNewLocalWorkConfig 测试本地工作目录配置默认值
-// 对齐 Python LocalWorkConfig：shell_allowlist 有默认列表，restrict_to_sandbox=False。
+// Python: LocalWorkConfig：shell_allowlist 有默认列表，restrict_to_sandbox=False。
 func TestNewLocalWorkConfig(t *testing.T) {
 	cfg := NewLocalWorkConfig()
 	assert.False(t, cfg.RestrictToSandbox, "RestrictToSandbox 默认应为 false，对齐 Python")
@@ -24,7 +24,7 @@ func TestNewLocalWorkConfig(t *testing.T) {
 // ──────────────────────────── NewSandboxGatewayConfig ────────────────────────────
 
 // TestNewSandboxGatewayConfig 测试沙箱网关配置默认值
-// 对齐 Python SandboxGatewayConfig：isolation, launcher_config, timeout_seconds。
+// Python: SandboxGatewayConfig：isolation, launcher_config, timeout_seconds。
 func TestNewSandboxGatewayConfig(t *testing.T) {
 	cfg := NewSandboxGatewayConfig()
 	require.NotNil(t, cfg.LauncherConfig, "LauncherConfig 不应为 nil")
@@ -173,7 +173,7 @@ func TestGenerateIsolationKeyTemplate_CUSTOM(t *testing.T) {
 }
 
 // TestGenerateIsolationKeyTemplate_CUSTOM空customID 测试自定义容器作用域空 customID 返回错误
-// 对齐 Python: container_scope is CUSTOM but custom_id is None → raise ValueError
+// Python: container_scope is CUSTOM but custom_id is None → raise ValueError
 func TestGenerateIsolationKeyTemplate_CUSTOM空customID(t *testing.T) {
 	_, err := generateIsolationKeyTemplate("prefix3", ContainerScopeCustom, "", "docker", "go")
 	assert.Error(t, err)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -18,7 +19,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // parsedDotenv 记录已加载的 .env 文件路径。
-// 对应 Python: _parsed_dotenv
+// Python: _parsed_dotenv
 var parsedDotenv string
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -36,7 +37,7 @@ var parsedDotenv string
 //  2. instanceName 不为空：按实例名加载 bootstrap .env
 //  3. 两者为空：不做任何操作
 //
-// 对应 Python: parse_dotenv_early(component_name)
+// Python: parse_dotenv_early(component_name)
 func ParseEarly(dotenvPath string, instanceName string) (string, error) {
 	// 优先级 1：--dotenv <path>
 	if dotenvPath != "" {
@@ -55,7 +56,7 @@ func ParseEarly(dotenvPath string, instanceName string) (string, error) {
 // ParsedDotenv 返回已加载的 .env 文件路径。
 //
 // 如果 ParseEarly 尚未被调用或未加载任何 .env，返回空字符串。
-// 对应 Python: get_parsed_dotenv()
+// Python: get_parsed_dotenv()
 func ParsedDotenv() string {
 	return parsedDotenv
 }
@@ -64,10 +65,10 @@ func ParsedDotenv() string {
 
 // loadDotenvByPath 加载指定路径的 .env 文件。
 //
-// 对应 Python: parse_dotenv_early() 中 --dotenv 分支
+// Python: parse_dotenv_early() 中 --dotenv 分支
 func loadDotenvByPath(dotenvPath string) (string, error) {
 	// 展开路径（~ → 用户主目录）
-	expanded := expandHome(dotenvPath)
+	expanded := pathutil.ExpandHome(dotenvPath)
 
 	// 解析为绝对路径
 	absPath, err := filepath.Abs(expanded)
@@ -98,7 +99,7 @@ func loadDotenvByPath(dotenvPath string) (string, error) {
 // workspace 包的函数，因为 Go 不存在 Python 的 import 时序问题。
 // workspace 包已实现了完整的实例名称验证、配置加载和 bootstrap 创建。
 //
-// 对应 Python: _load_bootstrap_by_name_early(name, component_name)
+// Python: _load_bootstrap_by_name_early(name, component_name)
 func loadBootstrapByName(name string) (string, error) {
 	// 验证实例名称
 	if err := workspace.ValidateInstanceName(name); err != nil {
@@ -144,26 +145,4 @@ func loadBootstrapByName(name string) (string, error) {
 	parsedDotenv = envPath
 	logger.Info(logComponent).Str("name", name).Str("path", envPath).Msg("已加载实例 bootstrap .env")
 	return envPath, nil
-}
-
-// expandHome 将路径中的 ~ 展开为用户主目录。
-func expandHome(path string) string {
-	if len(path) == 0 {
-		return path
-	}
-	if path[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		if len(path) == 1 {
-			return home
-		}
-		// 路径展开: ~/xxx → /home/user/xxx
-		if path[1] == '/' || path[1] == '\\' {
-			return filepath.Join(home, path[2:])
-		}
-		// ~user/xxx 不处理，返回原值
-	}
-	return path
 }

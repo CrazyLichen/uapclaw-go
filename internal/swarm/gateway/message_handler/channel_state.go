@@ -120,7 +120,7 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 
 // GetOrCreateChannelState 获取或创建消息对应 channel 状态。
 //
-// 对齐 Python _get_or_create_channel_state (L278-299)：
+// Python: _get_or_create_channel_state (L278-299)：
 // 使用复合键 channelID:sessionID（对齐 Python _get_channel_state_key）。
 // TODO(#11.7): SessionMap 集成（等 11.7 回填）。
 func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelControlState {
@@ -161,7 +161,7 @@ func GenerateChannelSessionID(channelID string) string {
 
 // resolveControlChannelType 解析消息对应的受控渠道类型。
 //
-// 对齐 Python: _resolve_control_channel_type — 优先 msg.provider，fallback msg.channel_id。
+// Python: _resolve_control_channel_type — 优先 msg.provider，fallback msg.channel_id。
 // Python 不查 ChannelManager，直接从消息字段推断。
 func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel_manager.ChannelType {
 	// 优先 msg.Provider（对齐 Python: msg.provider）
@@ -174,7 +174,7 @@ func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel
 
 // getChannelDefaultState 从默认配置创建渠道状态。
 //
-// 对齐 Python _get_channel_default_state (L247-270)：
+// Python: _get_channel_default_state (L247-270)：
 // 如果 getConfigRaw 不为 nil，从 config 中读取 channels[channelID] 的 default_session_id 和 default_mode；
 // 否则默认 mode 为 agent.plan，默认 session_id 为新生成的 ID。
 func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelControlState {
@@ -218,7 +218,7 @@ func getChannelStateKey(channelID, sessionID string) string {
 
 // saveChannelStateToConfig 保存渠道状态到 config。
 //
-// 对齐 Python _save_channel_state_to_config (L301-312)：
+// Python: _save_channel_state_to_config (L301-312)：
 // 调用 updateChannelInConfig 注入 default_session_id 和 default_mode。
 // 注：Python 中此方法当前未被调用（dead code），但补定义以对齐。
 func (mh *MessageHandler) saveChannelStateToConfig(channelID string) {
@@ -281,7 +281,7 @@ func init() {
 	}
 
 	// 构建受控渠道类型集合
-	// 对齐 Python _control_channel_types：feishu, xiaoyi, dingtalk, whatsapp, wecom, wechat
+	// Python: _control_channel_types：feishu, xiaoyi, dingtalk, whatsapp, wecom, wechat
 	controlChannelTypes = map[string]bool{
 		string(channel_manager.ChannelTypeFeishu):   true,
 		string(channel_manager.ChannelTypeXiaoyi):   true,

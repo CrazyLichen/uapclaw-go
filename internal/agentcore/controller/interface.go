@@ -17,7 +17,7 @@ import (
 
 // ControllerInterface 控制器接口，定义事件驱动任务编排的核心能力。
 // Controller 和 TaskLoopController 均实现此接口。
-// 对齐 Python: openjiuwen/core/controller/base.py::Controller 的公开方法
+// Python: openjiuwen/core/controller/base.py::Controller 的公开方法
 type ControllerInterface interface {
 	// Init 两阶段初始化
 	Init(card *agentschema.AgentCard, cfg *config.ControllerConfig,
@@ -47,10 +47,10 @@ type ControllerInterface interface {
 	// EventHandler 获取事件处理器
 	EventHandler() modules.EventHandler
 	// TaskScheduler 获取任务调度器
-	// 对齐 Python: Controller.task_scheduler
+	// Python: Controller.task_scheduler
 	TaskScheduler() *modules.TaskScheduler
 	// TaskManager 获取任务管理器
-	// 对齐 Python: Controller.task_manager
+	// Python: Controller.task_manager
 	TaskManager() *modules.TaskManager
 }
 

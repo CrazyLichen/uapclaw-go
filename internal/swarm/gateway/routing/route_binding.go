@@ -3,7 +3,7 @@ package routing
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RouteBinding 描述一个 WS 路径的完整消息处理策略。
-// 对齐 Python: GatewayRouteBinding (routing/route_binding.py)。
+// Python: GatewayRouteBinding (routing/route_binding.py)。
 // 预留多路径 WS 框架（/ws、/acp、/tui），当前仅实现 /ws（web 通道）。
 // 注意：ForwardMethods/ForwardNoLocalHandler 已删除，运行时路由使用
 // web_normalize.go 中的包级变量 web.ForwardReqMethods/web.ForwardNoLocalHandlerMethods。

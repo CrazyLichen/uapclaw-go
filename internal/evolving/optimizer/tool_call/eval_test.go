@@ -196,7 +196,7 @@ func TestGetArgsMap_无参数(t *testing.T) {
 }
 
 // TestEvaluateSingleExample_ApiWrapperNil 测试 apiWrapper 为 nil 时返回 error
-// 对齐 Python: _evaluate_single_example 中 api_wrapper 为 None 时 raise ValueError
+// Python: _evaluate_single_example 中 api_wrapper 为 None 时 raise ValueError
 //
 // 注意：由于 generateFunctionCall 在 apiWrapper 检查之前执行且需要 model，
 // 当 model 也为 nil 时会先返回 "model 为 nil" 错误。
@@ -220,7 +220,7 @@ func TestEvaluateSingleExample_ApiWrapperNil(t *testing.T) {
 }
 
 // TestEvaluateSingleExample_ReturnsError 测试 evaluateSingleExample 在失败时返回 error
-// 对齐 Python: _evaluate_single_example 在失败时 raise ValueError
+// Python: _evaluate_single_example 在失败时 raise ValueError
 func TestEvaluateSingleExample_ReturnsError(t *testing.T) {
 	// model 为 nil → generateFunctionCall 失败 → 返回 error
 	e := NewSimpleEval(nil, map[string]any{}, 0.4, 0.6, nil)

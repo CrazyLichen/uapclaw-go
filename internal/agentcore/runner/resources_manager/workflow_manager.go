@@ -15,7 +15,7 @@ import (
 // WorkflowMgr 工作流资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
 // GetWorkflow 支持可选的 tracer 装饰：当 session 非 nil 时，返回装饰后的工作流实例。
 //
-// 对应 Python: WorkflowMgr (openjiuwen/core/runner/resources_manager/workflow_manager.py)
+// Python: WorkflowMgr (openjiuwen/core/runner/resources_manager/workflow_manager.py)
 type WorkflowMgr struct {
 	AbstractManager[interfaces.Workflow]
 }
@@ -37,7 +37,7 @@ func NewWorkflowMgr() WorkflowMgr {
 
 // AddWorkflow 注册工作流提供者。
 //
-// 对应 Python: WorkflowMgr.add_workflow(workflow_id, provider)
+// Python: WorkflowMgr.add_workflow(workflow_id, provider)
 func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) error {
 	if workflowID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -79,7 +79,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 
 // AddWorkflows 批量注册工作流提供者。
 //
-// 对应 Python: WorkflowMgr.add_workflows(workflows)
+// Python: WorkflowMgr.add_workflows(workflows)
 func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 	for _, entry := range workflows {
 		if entry.ID == "" || entry.Provider == nil {
@@ -101,7 +101,7 @@ func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 
 // RemoveWorkflow 注销工作流提供者，返回被注销的 provider。
 //
-// 对应 Python: WorkflowMgr.remove_workflow(workflow_id)
+// Python: WorkflowMgr.remove_workflow(workflow_id)
 func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error) {
 	unwrapped, err := m.unregisterProvider(workflowID)
 	if err != nil {
@@ -133,7 +133,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 // 先调用 GetResource 获取工作流，如果 session 非 nil 则调用 decorator.DecorateWorkflowWithTrace 进行追踪装饰。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_workflow 返回 None 行为。
 //
-// 对应 Python: WorkflowMgr.get_workflow(workflow_id, session)
+// Python: WorkflowMgr.get_workflow(workflow_id, session)
 func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, session decorator.TracerSession) (interfaces.Workflow, error) {
 	w, err := m.getResource(ctx, workflowID)
 	if err != nil {

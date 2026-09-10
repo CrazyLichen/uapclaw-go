@@ -36,7 +36,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseRmTargets 解析 Unix rm 命令中的删除目标。
-// 对齐 Python: _parse_rm_targets (filesystem.py L106-129)
+// Python: _parse_rm_targets (filesystem.py L106-129)
 // 从简单的 rm 命令中提取显式的、非通配符的文件路径。
 // 对于复合命令、通配符模式或递归标志，返回空切片。
 func ParseRmTargets(command string) []string {
@@ -83,7 +83,7 @@ func ParseRmTargets(command string) []string {
 }
 
 // ParsePSRemoveTargets 解析 PowerShell Remove-Item 命令中的删除目标。
-// 对齐 Python: _parse_ps_remove_targets (filesystem.py L132-177)
+// Python: _parse_ps_remove_targets (filesystem.py L132-177)
 // 处理 Remove-Item 及其别名 (rm, del, ri, erase)。
 // 对于递归删除、通配符或复合命令，返回空切片。
 func ParsePSRemoveTargets(command string) []string {
@@ -200,7 +200,7 @@ func stripErrorAction(rest string) string {
 }
 
 // buildHistoryPathFromOpts 从 ToolOption 列表中提取 session 信息，构建 history path。
-// 对齐 Python: _build_history_path(session)
+// Python: _build_history_path(session)
 func buildHistoryPathFromOpts(opts []tool.ToolOption, agentID string) string {
 	callOpts := &tool.ToolCallOptions{}
 	for _, opt := range opts {
@@ -226,7 +226,7 @@ func buildHistoryPathFromOpts(opts []tool.ToolOption, agentID string) string {
 }
 
 // recordRmTargetsBeforeDeletion 在执行 rm 前记录被删除文件的内容到历史。
-// 对齐 Python: _record_rm_targets_before_deletion(history_path, file_paths, operation)
+// Python: _record_rm_targets_before_deletion(history_path, file_paths, operation)
 // (filesystem.py line 180-202)
 func recordRmTargetsBeforeDeletion(historyPath string, targets []string, cwdPath string) {
 	if len(targets) == 0 {

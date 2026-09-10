@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,15 +21,15 @@ import (
 // 合并原 InboundMessageHandler + RobotMessageConsumer，对齐 Python 单个 message_handler 参数。
 // ChannelManager 通过此接口同时处理入站转发和出站消费，避免拆分成两个接口。
 //
-// 对齐 Python MessageHandler（同时提供 handle_message + consume_robot_messages）
+// Python: MessageHandler（同时提供 handle_message + consume_robot_messages）
 type MessageHandlerInterface interface {
 	// HandleMessage 处理入站消息（写入 userMessages 队列）。
 	//
-	// 对齐 Python MessageHandler.handle_message
+	// Python: MessageHandler.handle_message
 	HandleMessage(msg *schema.Message)
 	// ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
 	//
-	// 对齐 Python MessageHandler.consume_robot_messages
+	// Python: MessageHandler.consume_robot_messages
 	ConsumeRobotMessages(timeout time.Duration) *schema.Message
 }
 
@@ -40,7 +41,7 @@ type MessageHandlerInterface interface {
 //  3. 运行出站派发循环：从 MessageHandler 取出 AgentServer 响应并投递到对应 Channel
 //  4. 配置热更新回调
 //
-// 对应 Python: jiuwenswarm/gateway/channel_manager/channel_manager.py (ChannelManager)
+// Python: jiuwenswarm/gateway/channel_manager/channel_manager.py (ChannelManager)
 type ChannelManager struct {
 	// channels 已注册的 Channel 实例映射（channelID → BaseChannel）
 	channels map[string]BaseChannel
@@ -83,7 +84,7 @@ const logComponent = logger.ComponentChannel
 //   - config：初始 Channel 配置（channelID → 配置 dict），可为 nil
 //   - onConfigUpdated：配置更新回调，可为 nil
 //
-// 对齐 Python: ChannelManager(message_handler, config=None, on_config_updated=None)
+// Python: ChannelManager(message_handler, config=None, on_config_updated=None)
 func NewChannelManager(
 	messageHandler MessageHandlerInterface,
 	config map[string]map[string]any,
@@ -106,7 +107,7 @@ func NewChannelManager(
 //
 // 注册后 Channel 收到的消息将通过 onChannelMessage 转发到 MessageHandler。
 //
-// 对齐 Python: ChannelManager.register_channel()
+// Python: ChannelManager.register_channel()
 func (cm *ChannelManager) RegisterChannel(ch BaseChannel) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -126,7 +127,7 @@ func (cm *ChannelManager) RegisterChannel(ch BaseChannel) {
 // 不替换为默认 onChannelMessage，由调用方决定消息处理路径。
 // 回调返回 true 表示已处理（短路后续 method handler），返回 false 继续默认处理。
 //
-// 对齐 Python: ChannelManager.register_channel_with_inbound()
+// Python: ChannelManager.register_channel_with_inbound()
 func (cm *ChannelManager) RegisterChannelWithInbound(ch BaseChannel, onMessage func(*schema.Message) bool) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -144,7 +145,7 @@ func (cm *ChannelManager) RegisterChannelWithInbound(ch BaseChannel, onMessage f
 //
 // 供自定义入站路径使用，不做存活检查。
 //
-// 对齐 Python: ChannelManager.deliver_to_message_handler()
+// Python: ChannelManager.deliver_to_message_handler()
 func (cm *ChannelManager) DeliverToMessageHandler(msg *schema.Message) {
 	if cm.messageHandler == nil {
 		logger.Warn(logComponent).Str("msg_id", msg.ID).Msg("messageHandler 为空，无法转发消息")
@@ -155,7 +156,7 @@ func (cm *ChannelManager) DeliverToMessageHandler(msg *schema.Message) {
 
 // UnregisterChannel 注销指定 Channel。
 //
-// 对齐 Python: ChannelManager.unregister_channel()
+// Python: ChannelManager.unregister_channel()
 func (cm *ChannelManager) UnregisterChannel(channelID string) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -169,7 +170,7 @@ func (cm *ChannelManager) UnregisterChannel(channelID string) {
 
 // GetChannel 根据 channelID 获取 Channel，不存在返回 nil。
 //
-// 对齐 Python: ChannelManager.get_channel()
+// Python: ChannelManager.get_channel()
 func (cm *ChannelManager) GetChannel(channelID string) BaseChannel {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -179,7 +180,7 @@ func (cm *ChannelManager) GetChannel(channelID string) BaseChannel {
 
 // GetEnabledChannels 返回当前已注册的 Channel 标识列表。
 //
-// 对齐 Python: ChannelManager.enabled_channels
+// Python: ChannelManager.enabled_channels
 func (cm *ChannelManager) GetEnabledChannels() []string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -193,7 +194,7 @@ func (cm *ChannelManager) GetEnabledChannels() []string {
 
 // MarkChannelRestartPending 请求在下次配置应用时强制重启该 Channel。
 //
-// 对齐 Python: ChannelManager.mark_channel_restart_pending()
+// Python: ChannelManager.mark_channel_restart_pending()
 func (cm *ChannelManager) MarkChannelRestartPending(channelID string) {
 	if channelID == "" {
 		return
@@ -206,7 +207,7 @@ func (cm *ChannelManager) MarkChannelRestartPending(channelID string) {
 
 // PopChannelRestartPending 取出并重置待强制重启集合。
 //
-// 对齐 Python: ChannelManager.pop_channel_restart_pending()
+// Python: ChannelManager.pop_channel_restart_pending()
 func (cm *ChannelManager) PopChannelRestartPending() []string {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -221,7 +222,7 @@ func (cm *ChannelManager) PopChannelRestartPending() []string {
 
 // GetConf 返回指定 channelID 的配置浅拷贝；不存在则返回空 map。
 //
-// 对齐 Python: ChannelManager.get_conf()
+// Python: ChannelManager.get_conf()
 func (cm *ChannelManager) GetConf(channelID string) map[string]any {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -230,16 +231,12 @@ func (cm *ChannelManager) GetConf(channelID string) map[string]any {
 	if !ok {
 		return make(map[string]any)
 	}
-	result := make(map[string]any, len(conf))
-	for k, v := range conf {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(conf)
 }
 
 // SetConf 更新指定 channelID 的配置，并触发 onConfigUpdated 回调。
 //
-// 对齐 Python: ChannelManager.set_conf()
+// Python: ChannelManager.set_conf()
 func (cm *ChannelManager) SetConf(channelID string, newConf map[string]any) {
 	cm.mu.Lock()
 	merged := make(map[string]map[string]any, len(cm.config))
@@ -262,7 +259,7 @@ func (cm *ChannelManager) SetConf(channelID string, newConf map[string]any) {
 
 // SetConfig 整体替换配置并触发 onConfigUpdated 回调。
 //
-// 对齐 Python: ChannelManager.set_config()
+// Python: ChannelManager.set_config()
 func (cm *ChannelManager) SetConfig(newConf map[string]map[string]any) {
 	cm.mu.Lock()
 	cfg := make(map[string]map[string]any, len(newConf))
@@ -280,7 +277,7 @@ func (cm *ChannelManager) SetConfig(newConf map[string]map[string]any) {
 
 // SetConfigCallback 设置配置更新回调。
 //
-// 对齐 Python: ChannelManager.set_config_callback()
+// Python: ChannelManager.set_config_callback()
 func (cm *ChannelManager) SetConfigCallback(callback OnConfigUpdatedFunc) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -290,7 +287,7 @@ func (cm *ChannelManager) SetConfigCallback(callback OnConfigUpdatedFunc) {
 
 // StartDispatch 启动出站派发循环（消费 MessageHandler.robot_messages 并发送到各 Channel）。
 //
-// 对齐 Python: ChannelManager.start_dispatch()
+// Python: ChannelManager.start_dispatch()
 func (cm *ChannelManager) StartDispatch(ctx context.Context) error {
 	if cm.running.Load() {
 		return nil
@@ -307,7 +304,7 @@ func (cm *ChannelManager) StartDispatch(ctx context.Context) error {
 //
 // 先设 running=false，让 dispatchRobotMessages 循环在当前迭代完成后自然退出。
 // 不使用 cancel() 中断 context，保证进行中的 channel.Send 完整执行。
-// 对齐 Python: ChannelManager.stop_dispatch()（先设 _running=False，再 await task）
+// Python: ChannelManager.stop_dispatch()（先设 _running=False，再 await task）
 func (cm *ChannelManager) StopDispatch() error {
 	if !cm.running.Load() {
 		return nil
@@ -325,7 +322,7 @@ func (cm *ChannelManager) StopDispatch() error {
 // onChannelMessage 默认入站回调：存活检查 + 转发到 MessageHandler。
 // 返回 true 表示已处理，返回 false 表示 Channel 已注销或处理器为空。
 //
-// 对齐 Python: ChannelManager._on_channel_message()
+// Python: ChannelManager._on_channel_message()
 func (cm *ChannelManager) onChannelMessage(msg *schema.Message) bool {
 	logger.Info(logComponent).
 		Str("msg_id", msg.ID).
@@ -354,7 +351,7 @@ func (cm *ChannelManager) onChannelMessage(msg *schema.Message) bool {
 
 // dispatchRobotMessages 出站派发循环：从 MessageHandler 消费 robot_messages，按 channel_id 投递到对应 Channel。
 //
-// 对齐 Python: ChannelManager._dispatch_robot_messages()
+// Python: ChannelManager._dispatch_robot_messages()
 func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 	if cm.messageHandler == nil {
 		logger.Warn(logComponent).Msg("messageHandler 为空，出站派发跳过")
@@ -391,7 +388,7 @@ func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 
 // notifyCronDeliveryError 推送失败时，通过 web channel 发送 chat.error 通知前端。
 //
-// 对齐 Python: ChannelManager._notify_cron_delivery_error()
+// Python: ChannelManager._notify_cron_delivery_error()
 func (cm *ChannelManager) notifyCronDeliveryError(originalMsg *schema.Message, deliveryErr error) {
 	cronInfo, _ := originalMsg.Payload["cron"].(map[string]any)
 	jobName := ""

@@ -12,7 +12,7 @@ import (
 
 // CopyDiffResult 记录文件复制操作的变更差异。
 //
-// 对应 Python: jiuwenswarm/common/utils.py CopyDiffResult
+// Python: jiuwenswarm/common/utils.py CopyDiffResult
 //
 // 追踪三类变更：
 //   - AddedDirs: 新增的目录
@@ -44,7 +44,7 @@ func (r *CopyDiffResult) Merge(other CopyDiffResult) {
 // PrintSummary 打印文件变更统计摘要。
 //
 // overwrite 为 true 时不打印（强制覆盖模式下差异无意义），
-// 对应 Python: jiuwenswarm/common/utils.py _print_diff_summary()
+// Python: jiuwenswarm/common/utils.py _print_diff_summary()
 func (r *CopyDiffResult) PrintSummary(overwrite bool) {
 	if overwrite {
 		return
@@ -129,7 +129,7 @@ func copyFileWithDiff(src, dst string, diff *CopyDiffResult) error {
 // copyDirWithDiff 递归复制目录并记录差异到 diff。
 //
 // 跳过 _ZH.md 和 _EN.md 后缀的文件（多语言文件由单独逻辑处理）。
-// 对应 Python: jiuwenswarm/common/utils.py _copy_dir()
+// Python: jiuwenswarm/common/utils.py _copy_dir()
 func copyDirWithDiff(src, dst string, diff *CopyDiffResult, ignorePatterns []string) error {
 	// 确保目标目录存在
 	if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -169,7 +169,7 @@ func copyDirWithDiff(src, dst string, diff *CopyDiffResult, ignorePatterns []str
 
 // copyDirWithDiffIncremental 增量复制目录：目标已存在的文件跳过，只复制缺失文件。
 //
-// 对应 Python: jiuwenswarm/common/utils.py _copy_dir() 的 copy_if_missing 模式
+// Python: jiuwenswarm/common/utils.py _copy_dir() 的 copy_if_missing 模式
 func copyDirWithDiffIncremental(src, dst string, diff *CopyDiffResult, ignorePatterns []string) error {
 	// 确保目标目录存在
 	if err := os.MkdirAll(dst, 0o755); err != nil {

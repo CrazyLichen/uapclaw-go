@@ -11,7 +11,7 @@ import (
 // PromptMgr Prompt 资源管理器，使用 ThreadSafeDict 存储 PromptTemplate。
 // 不继承 AbstractManager，因为 PromptTemplate 不需要 provider 延迟加载模式。
 //
-// 对应 Python: PromptMgr (openjiuwen/core/runner/resources_manager/prompt_manager.py)
+// Python: PromptMgr (openjiuwen/core/runner/resources_manager/prompt_manager.py)
 type PromptMgr struct {
 	// repo Prompt 模板存储
 	repo *ThreadSafeDict[string, *prompt.PromptTemplate]
@@ -35,7 +35,7 @@ func NewPromptMgr() *PromptMgr {
 // AddPrompt 添加 Prompt 模板。
 // 验证 templateID 和 template 非空后存入 repo。
 //
-// 对应 Python: PromptMgr.add_prompt(template_id, template)
+// Python: PromptMgr.add_prompt(template_id, template)
 func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate) error {
 	if templateID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -61,7 +61,7 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 
 // AddPrompts 批量添加 Prompt 模板。
 //
-// 对应 Python: PromptMgr.add_prompts(templates)
+// Python: PromptMgr.add_prompts(templates)
 func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 	for _, entry := range templates {
 		if entry.ID == "" || entry.Template == nil {
@@ -82,7 +82,7 @@ func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 // RemovePrompt 移除 Prompt 模板，返回被移除的模板。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 remove_prompt 返回 None 行为。
 //
-// 对应 Python: PromptMgr.remove_prompt(template_id)
+// Python: PromptMgr.remove_prompt(template_id)
 func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, error) {
 	if templateID == "" {
 		return nil, exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -107,7 +107,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 // 验证 templateID 非空后从 repo 读取。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_prompt 返回 None 行为。
 //
-// 对应 Python: PromptMgr.get_prompt(template_id)
+// Python: PromptMgr.get_prompt(template_id)
 func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error) {
 	if templateID == "" {
 		return nil, exception.BuildError(exception.StatusResourceIDValueInvalid,

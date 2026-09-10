@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // desanitizations 压缩标记 → 原始标记映射表。
-// 对齐 Python: EditFileTool._DESANITIZATIONS (filesystem.py L1021-1040)
+// Python: EditFileTool._DESANITIZATIONS (filesystem.py L1021-1040)
 
 var desanitizations = map[string]string{
 	"<fnr>":          "<function_results>",
@@ -41,7 +41,7 @@ var desanitizations = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Desanitize 反转 HTML 实体编码 + Claude 压缩的 XML 标记。
-// 对齐 Python: EditFileTool._desanitize (filesystem.py L1050-1055)
+// Python: EditFileTool._desanitize (filesystem.py L1050-1055)
 func Desanitize(value string) string {
 	result := html.UnescapeString(value)
 	for source, target := range desanitizations {
@@ -51,7 +51,7 @@ func Desanitize(value string) string {
 }
 
 // NormalizeQuotes 将所有弯引号（curly quotes）转换为直引号。
-// 对齐 Python: EditFileTool._normalize_quotes (filesystem.py L1094-1101)
+// Python: EditFileTool._normalize_quotes (filesystem.py L1094-1101)
 func NormalizeQuotes(s string) string {
 	return strings.NewReplacer(
 		"\u2018", "'",
@@ -62,7 +62,7 @@ func NormalizeQuotes(s string) string {
 }
 
 // ApplyCurlyDoubleQuotes 上下文感知弯双引号替换。
-// 对齐 Python: EditFileTool._apply_curly_double_quotes (filesystem.py L1109-1118)
+// Python: EditFileTool._apply_curly_double_quotes (filesystem.py L1109-1118)
 func ApplyCurlyDoubleQuotes(s string) string {
 	chars := []rune(s)
 	var result []rune
@@ -81,7 +81,7 @@ func ApplyCurlyDoubleQuotes(s string) string {
 }
 
 // ApplyCurlySingleQuotes 上下文感知弯单引号替换。
-// 对齐 Python: EditFileTool._apply_curly_single_quotes (filesystem.py L1120-1134)
+// Python: EditFileTool._apply_curly_single_quotes (filesystem.py L1120-1134)
 func ApplyCurlySingleQuotes(s string) string {
 	chars := []rune(s)
 	var result []rune
@@ -109,7 +109,7 @@ func ApplyCurlySingleQuotes(s string) string {
 }
 
 // PreserveQuoteStyle 如果匹配的 actualOldStr 含弯引号，对 newStr 也应用弯引号转换。
-// 对齐 Python: EditFileTool._preserve_quote_style (filesystem.py L1136-1146)
+// Python: EditFileTool._preserve_quote_style (filesystem.py L1136-1146)
 func PreserveQuoteStyle(oldStr, actualOldStr, newStr string) string {
 	if oldStr == actualOldStr {
 		return newStr
@@ -126,7 +126,7 @@ func PreserveQuoteStyle(oldStr, actualOldStr, newStr string) string {
 }
 
 // TryQuoteVariants 尝试引号变体匹配。
-// 对齐 Python: EditFileTool._try_quote_variants (filesystem.py L1148-1155)
+// Python: EditFileTool._try_quote_variants (filesystem.py L1148-1155)
 // 返回 (matchedOriginalString, found)
 func TryQuoteVariants(oldStr, content string) (string, bool) {
 	normalizedContent := NormalizeQuotes(content)
@@ -148,7 +148,7 @@ func TryQuoteVariants(oldStr, content string) (string, bool) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isOpeningQuoteContext 判断给定位置的引号是否处于开引号上下文。
-// 对齐 Python: EditFileTool._is_opening_quote_context (filesystem.py L1104-1107)
+// Python: EditFileTool._is_opening_quote_context (filesystem.py L1104-1107)
 func isOpeningQuoteContext(chars []rune, index int) bool {
 	if index == 0 {
 		return true

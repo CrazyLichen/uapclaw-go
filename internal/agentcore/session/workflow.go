@@ -14,7 +14,7 @@ import (
 // 组合内部层 WorkflowSession，实现状态读写、环境变量管理、工作流卡片等业务功能。
 // 生命周期比 Agent Session 更简单：仅 Close（无 PreRun/PostRun）。
 //
-// 对应 Python: openjiuwen/core/session/workflow.py (Session)
+// Python: openjiuwen/core/session/workflow.py (Session)
 type WorkflowSession struct {
 	// inner 内部 WorkflowSession 实例
 	inner *internal.WorkflowSession
@@ -37,7 +37,7 @@ type WorkflowSessionOption func(*WorkflowSession)
 
 // NewWorkflowSession 创建公开层 WorkflowSession 实例。
 //
-// 对应 Python: openjiuwen/core/session/workflow.py create_workflow_session()
+// Python: openjiuwen/core/session/workflow.py create_workflow_session()
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 	logger.Info(logComponent).
 		Str("action", "new_workflow_session_facade").

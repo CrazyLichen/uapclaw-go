@@ -137,7 +137,7 @@ func TestAesStorageCodec_满足StorageCodec接口(t *testing.T) {
 }
 
 // TestAesStorageCodec_Encode_每次产生不同输出 验证 GCM 随机 nonce 导致相同明文加密两次产生不同密文
-// 对齐 Python: test_encode_produces_different_output
+// Python: test_encode_produces_different_output
 func TestAesStorageCodec_Encode_每次产生不同输出(t *testing.T) {
 	key := make([]byte, 32)
 	for i := range key {

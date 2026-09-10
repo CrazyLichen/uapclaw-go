@@ -14,7 +14,7 @@ import (
 // 所有重排序模型实现必须满足此接口。给定查询和一组文档，
 // 返回文档到相关性分数的映射，分数越高表示越相关。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (Reranker)
+// Python: openjiuwen/core/foundation/store/base_reranker.py (Reranker)
 type BaseReranker interface {
 	// Rerank 对字符串文档列表进行异步重排序，返回文档到相关性分数的映射。
 	Rerank(ctx context.Context, query string, docs []string, opts ...RerankOption) (map[string]float64, error)
@@ -31,7 +31,7 @@ type BaseReranker interface {
 
 // Document 文档数据模型，表示待重排序的文档。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (Document)
+// Python: openjiuwen/core/foundation/store/base_reranker.py (Document)
 type Document struct {
 	// ID 唯一标识，未设置时自动生成 UUID
 	ID string `json:"id"`
@@ -43,7 +43,7 @@ type Document struct {
 
 // RerankerConfig 重排序模型配置。
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (RerankerConfig)
+// Python: openjiuwen/core/foundation/store/base_reranker.py (RerankerConfig)
 type RerankerConfig struct {
 	// APIKey API 密钥
 	APIKey string

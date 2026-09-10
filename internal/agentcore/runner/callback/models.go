@@ -17,7 +17,7 @@ import (
 // CallbackMetrics 回调执行指标，记录调用次数、耗时、错误率。
 // 并发安全：内部使用 sync.Mutex 保护所有字段。
 //
-// 对应 Python: openjiuwen/core/runner/callback/models.py (CallbackMetrics)
+// Python: openjiuwen/core/runner/callback/models.py (CallbackMetrics)
 type CallbackMetrics struct {
 	mu sync.Mutex
 	// CallCount 调用次数
@@ -36,7 +36,7 @@ type CallbackMetrics struct {
 
 // FilterResult 过滤器返回结果。
 //
-// 对应 Python: openjiuwen/core/runner/callback/models.py (FilterResult)
+// Python: openjiuwen/core/runner/callback/models.py (FilterResult)
 type FilterResult struct {
 	// Action 过滤器动作
 	Action FilterAction
@@ -48,7 +48,7 @@ type FilterResult struct {
 
 // ChainContext 链式执行上下文。
 //
-// 对应 Python: openjiuwen/core/runner/callback/models.py (ChainContext)
+// Python: openjiuwen/core/runner/callback/models.py (ChainContext)
 type ChainContext struct {
 	// Event 事件名
 	Event string
@@ -70,7 +70,7 @@ type ChainContext struct {
 
 // ChainResult 链式执行结果。
 //
-// 对应 Python: openjiuwen/core/runner/callback/models.py (ChainResult)
+// Python: openjiuwen/core/runner/callback/models.py (ChainResult)
 type ChainResult struct {
 	// Action 链执行动作
 	Action ChainAction
@@ -84,7 +84,7 @@ type ChainResult struct {
 
 // CallbackInfo 回调注册信息，包装回调函数及其元数据。
 //
-// 对应 Python: CallbackInfo (openjiuwen/core/runner/callback/models.py)
+// Python: CallbackInfo (openjiuwen/core/runner/callback/models.py)
 // 回调按 Priority 降序排列（数值越大越先执行），
 // 相同 Priority 按 CreatedAt 升序排列（先注册的先执行）。
 type CallbackInfo[F any] struct {
@@ -118,7 +118,7 @@ type CallbackInfo[F any] struct {
 
 // Update 记录一次回调执行。
 //
-// 对应 Python: CallbackMetrics.update(execution_time, is_error)
+// Python: CallbackMetrics.update(execution_time, is_error)
 func (m *CallbackMetrics) Update(executionTime float64, isError bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -138,7 +138,7 @@ func (m *CallbackMetrics) Update(executionTime float64, isError bool) {
 
 // AvgTime 平均执行时间（秒）。
 //
-// 对应 Python: CallbackMetrics.avg_time
+// Python: CallbackMetrics.avg_time
 func (m *CallbackMetrics) AvgTime() float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -150,7 +150,7 @@ func (m *CallbackMetrics) AvgTime() float64 {
 
 // ToDict 序列化为 map。
 //
-// 对应 Python: CallbackMetrics.to_dict()
+// Python: CallbackMetrics.to_dict()
 func (m *CallbackMetrics) ToDict() map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -203,7 +203,7 @@ func (c *ChainContext) GetMetadata(key string) (any, bool) {
 
 // sortCallbacks 按 Priority 降序排列，相同 Priority 按 CreatedAt 升序排列（先注册的先执行）。
 //
-// 对应 Python: self._callbacks[event].sort(key=lambda x: x.priority, reverse=True)
+// Python: self._callbacks[event].sort(key=lambda x: x.priority, reverse=True)
 func sortCallbacks[F any](callbacks []*CallbackInfo[F]) {
 	sort.SliceStable(callbacks, func(i, j int) bool {
 		if callbacks[i].Priority != callbacks[j].Priority {

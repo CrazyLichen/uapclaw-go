@@ -31,7 +31,7 @@ func (a *ReActAgent) SetAbilityManager(am interfaces.AbilityManagerInterface) {
 }
 
 // SetPromptBuilder 设置系统提示词构建器（由 DeepAgent 注入共享实例）。
-// 对齐 Python: agent.prompt_builder = prompt_builder / agent.system_prompt_builder = prompt_builder
+// Python: agent.prompt_builder = prompt_builder / agent.system_prompt_builder = prompt_builder
 // 注意：Configure() 会覆盖此字段（新建 SystemPromptBuilder），
 // DeepAgent 需在每次调用 Configure 后重新调用此方法覆盖回共享实例。
 func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
@@ -39,7 +39,7 @@ func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
 }
 
 // SetLLM 设置预构建的 LLM 模型实例并同步配置字段。
-// 对齐 Python: agent.set_llm(model) + config.model_name/model_client_config/model_config_obj 同步。
+// Python: agent.set_llm(model) + config.model_name/model_client_config/model_config_obj 同步。
 // 注意：Configure() 会重置 llmOnce，
 // DeepAgent 需在每次调用 Configure 后重新调用此方法确保注入生效。
 func (a *ReActAgent) SetLLM(m *llm.Model) {
@@ -56,7 +56,7 @@ func (a *ReActAgent) SetLLM(m *llm.Model) {
 }
 
 // GetLLM 返回 LLM 模型实例（延迟初始化）。
-// 对齐 Python: ReActAgent.get_llm()
+// Python: ReActAgent.get_llm()
 // 导出版本，供 DeepAgent 等外部消费者调用。
 func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 	return a.getLLM()
@@ -84,13 +84,13 @@ func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.Ses
 	am := a.getAbilityManager()
 	if a.config != nil && a.config.ContextEngineConfig.EnableReload {
 		if am != nil && reloaderTool != nil {
-			// 对齐 Python: self.ability_manager.add(context_reloader.card)
+			// Python: self.ability_manager.add(context_reloader.card)
 			am.Add(reloaderTool.Card())
 		}
 		// ⤵️ Runner.resource_mgr 注册（需要 Runner 集成）
 	} else {
 		if am != nil && reloaderTool != nil {
-			// 对齐 Python: self.ability_manager.remove(context_reloader.card.name)
+			// Python: self.ability_manager.remove(context_reloader.card.name)
 			am.Remove(reloaderTool.Card().Name)
 		}
 	}

@@ -21,7 +21,7 @@ import (
 //   - SetParameter(): 演化更新（检查冻结标记）
 //   - LoadState(): 检查点恢复（不检查冻结标记）
 //
-// 对应 Python: openjiuwen/core/operator/llm_call/base.py LLMCallOperator
+// Python: openjiuwen/core/operator/llm_call/base.py LLMCallOperator
 type LLMCallOperator struct {
 	// systemPrompt 系统 prompt 模板
 	systemPrompt *prompt.PromptTemplate
@@ -46,13 +46,13 @@ type LLMCallOperatorOption func(*LLMCallOperator)
 
 const (
 	// TargetSystemPrompt 系统 prompt 目标名。
-	// 对应 Python: "system_prompt"
+	// Python: "system_prompt"
 	TargetSystemPrompt = "system_prompt"
 	// TargetUserPrompt 用户 prompt 目标名。
-	// 对应 Python: "user_prompt"
+	// Python: "user_prompt"
 	TargetUserPrompt = "user_prompt"
 	// defaultUserPrompt 默认用户 prompt 模板。
-	// 对应 Python: DEFAULT_USER_PROMPT = "{{query}}"
+	// Python: DEFAULT_USER_PROMPT = "{{query}}"
 	defaultUserPrompt = "{{query}}"
 	// defaultOperatorID 默认操作器标识。
 	defaultOperatorID = "llm_call"
@@ -65,7 +65,7 @@ const (
 // NewLLMCallOperator 创建 LLMCallOperator 实例。
 //
 // systemPrompt 和 userPrompt 为消息列表，支持多消息格式 prompt。
-// 对应 Python: LLMCallOperator.__init__(system_prompt: str | List[Dict], user_prompt: str | List[Dict], ...)
+// Python: LLMCallOperator.__init__(system_prompt: str | List[Dict], user_prompt: str | List[Dict], ...)
 func NewLLMCallOperator(systemPrompt, userPrompt []llmschema.BaseMessage, opts ...LLMCallOperatorOption) *LLMCallOperator {
 	// userPrompt 为空时使用默认模板
 	if len(userPrompt) == 0 {
@@ -91,7 +91,7 @@ func NewLLMCallOperator(systemPrompt, userPrompt []llmschema.BaseMessage, opts .
 
 // OperatorID 返回操作器标识。
 //
-// 对应 Python: LLMCallOperator.operator_id (property)
+// Python: LLMCallOperator.operator_id (property)
 func (op *LLMCallOperator) OperatorID() string {
 	return op.operatorID
 }
@@ -99,7 +99,7 @@ func (op *LLMCallOperator) OperatorID() string {
 // GetTunables 获取可调参数。
 // 冻结的参数不会包含在返回结果中。
 //
-// 对应 Python: LLMCallOperator.get_tunables()
+// Python: LLMCallOperator.get_tunables()
 func (op *LLMCallOperator) GetTunables() map[string]operator.TunableSpec {
 	tunables := make(map[string]operator.TunableSpec)
 	if !op.freezeSystemPrompt {
@@ -122,7 +122,7 @@ func (op *LLMCallOperator) GetTunables() map[string]operator.TunableSpec {
 // SetParameter 设置可调参数值（演化更新）。
 // 仅更新未冻结的参数，并触发 onParameterUpdated 回调。
 //
-// 对应 Python: LLMCallOperator.set_parameter(target, value)
+// Python: LLMCallOperator.set_parameter(target, value)
 func (op *LLMCallOperator) SetParameter(target string, value any) {
 	content := promptContent(value)
 	if target == TargetSystemPrompt && !op.freezeSystemPrompt {
@@ -140,7 +140,7 @@ func (op *LLMCallOperator) SetParameter(target string, value any) {
 
 // GetState 获取当前 prompt 状态，用于检查点。
 //
-// 对应 Python: LLMCallOperator.get_state()
+// Python: LLMCallOperator.get_state()
 func (op *LLMCallOperator) GetState() map[string]any {
 	return map[string]any{
 		TargetSystemPrompt: op.systemPrompt.Content,
@@ -152,7 +152,7 @@ func (op *LLMCallOperator) GetState() map[string]any {
 // 不检查冻结标记（检查点恢复必须恢复完整状态）。
 // 逐字段更新并触发回调。
 //
-// 对应 Python: LLMCallOperator.load_state(state)
+// Python: LLMCallOperator.load_state(state)
 func (op *LLMCallOperator) LoadState(state map[string]any) {
 	if sp, ok := state[TargetSystemPrompt]; ok {
 		content := promptContent(sp)
@@ -173,35 +173,35 @@ func (op *LLMCallOperator) LoadState(state map[string]any) {
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
 //
-// 对应 Python: Operator.apply_update 默认实现
+// Python: Operator.apply_update 默认实现
 func (op *LLMCallOperator) ApplyUpdate(target string, update evolvingschema.UpdateValue) evolvingschema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)
 }
 
 // SetFreezeSystemPrompt 设置系统 prompt 冻结状态。
 //
-// 对应 Python: LLMCallOperator.set_freeze_system_prompt(switch)
+// Python: LLMCallOperator.set_freeze_system_prompt(switch)
 func (op *LLMCallOperator) SetFreezeSystemPrompt(freeze bool) {
 	op.freezeSystemPrompt = freeze
 }
 
 // GetFreezeSystemPrompt 获取系统 prompt 冻结状态。
 //
-// 对应 Python: LLMCallOperator.get_freeze_system_prompt()
+// Python: LLMCallOperator.get_freeze_system_prompt()
 func (op *LLMCallOperator) GetFreezeSystemPrompt() bool {
 	return op.freezeSystemPrompt
 }
 
 // SetFreezeUserPrompt 设置用户 prompt 冻结状态。
 //
-// 对应 Python: LLMCallOperator.set_freeze_user_prompt(switch)
+// Python: LLMCallOperator.set_freeze_user_prompt(switch)
 func (op *LLMCallOperator) SetFreezeUserPrompt(freeze bool) {
 	op.freezeUserPrompt = freeze
 }
 
 // GetFreezeUserPrompt 获取用户 prompt 冻结状态。
 //
-// 对应 Python: LLMCallOperator.get_freeze_user_prompt()
+// Python: LLMCallOperator.get_freeze_user_prompt()
 func (op *LLMCallOperator) GetFreezeUserPrompt() bool {
 	return op.freezeUserPrompt
 }
@@ -230,7 +230,7 @@ func WithLLMCallOnParameterUpdated(cb operator.ParameterUpdatedCallback) LLMCall
 
 // promptContent 将任意值转为 PromptTemplate 可接受的内容。
 // string 直接返回，[]any/[]map[string]any 保留原始结构，其他类型 JSON 序列化。
-// 对应 Python: content = value if isinstance(value, (str, list)) else str(value)
+// Python: content = value if isinstance(value, (str, list)) else str(value)
 func promptContent(value any) any {
 	switch v := value.(type) {
 	case string:

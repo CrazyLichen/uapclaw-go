@@ -125,7 +125,7 @@ func TestResolveEvolutionEventTimeoutSec_emptyMap(t *testing.T) {
 }
 
 // TestResolveEvolutionEventTimeoutSec_fallbackZero 测试 fallback=0.0 不被忽略。
-// 对齐 Python: fallback_sec is not None → 使用传入值（含 0.0）
+// Python: fallback_sec is not None → 使用传入值（含 0.0）
 func TestResolveEvolutionEventTimeoutSec_fallbackZero(t *testing.T) {
 	result := ResolveEvolutionEventTimeoutSec(nil, 0.0)
 	if result != 0.0 {
@@ -630,7 +630,7 @@ func TestGroupEvolutionApprovals_missingRequestID(t *testing.T) {
 	if len(grouped) != 0 {
 		t.Errorf("GroupEvolutionApprovals() grouped = %d, 期望 0", len(grouped))
 	}
-	// 对齐 Python: 第二项始终为 nil/空列表
+	// Python: 第二项始终为 nil/空列表
 	if len(missing) != 0 {
 		t.Errorf("missing = %d, 期望 0", len(missing))
 	}

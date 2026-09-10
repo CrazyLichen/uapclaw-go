@@ -104,7 +104,7 @@ func TestJSONSerializer_往返测试(t *testing.T) {
 }
 
 // TestJSONSerializer_LoadsTyped_nil输入 测试 nil 输入返回 nil
-// 对应 Python: JsonSerializer.loads_typed() 中 if data is None: return None
+// Python: JsonSerializer.loads_typed() 中 if data is None: return None
 func TestJSONSerializer_LoadsTyped_nil输入(t *testing.T) {
 	s := NewJSONSerializer()
 	result, err := s.LoadsTyped("json", nil)

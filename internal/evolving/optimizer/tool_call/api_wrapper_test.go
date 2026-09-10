@@ -32,7 +32,7 @@ func TestNewSimpleAPIWrapperFromCallable(t *testing.T) {
 
 // TestSimpleAPIWrapperFromCallable_Call_成功 测试成功调用场景
 func TestSimpleAPIWrapperFromCallable_Call_成功(t *testing.T) {
-	// 对齐 Python: fn(params) → output = fn(params); return json.dumps({'response': output}), 0
+	// Python: fn(params) → output = fn(params); return json.dumps({'response': output}), 0
 	callable := func(tool map[string]any, toolInput map[string]any) (string, int) {
 		output := fmt.Sprintf("result for %v", toolInput["query"])
 		result, _ := json.Marshal(map[string]any{"response": output})
@@ -59,7 +59,7 @@ func TestSimpleAPIWrapperFromCallable_Call_成功(t *testing.T) {
 
 // TestSimpleAPIWrapperFromCallable_Call_失败 测试调用失败场景
 func TestSimpleAPIWrapperFromCallable_Call_失败(t *testing.T) {
-	// 对齐 Python: except Exception as e: return json.dumps({"error": ..., "response": ""}), 12
+	// Python: except Exception as e: return json.dumps({"error": ..., "response": ""}), 12
 	callable := func(tool map[string]any, toolInput map[string]any) (string, int) {
 		result, _ := json.Marshal(map[string]string{
 			"error":    "request invalid, error: something went wrong",
@@ -91,7 +91,7 @@ func TestSimpleAPIWrapperFromCallable_Call_失败(t *testing.T) {
 
 // TestSimpleAPIWrapperFromCallable_Call_无Callable 测试无注册函数时的错误返回
 func TestSimpleAPIWrapperFromCallable_Call_无Callable(t *testing.T) {
-	// 对齐 Python: fn = self.functions.get(self.fn_call_name) → None → error
+	// Python: fn = self.functions.get(self.fn_call_name) → None → error
 	wrapper := NewSimpleAPIWrapperFromCallable(nil, "missing_fn")
 
 	tool := map[string]any{"name": "test_tool"}

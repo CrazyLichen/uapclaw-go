@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AvatarPromptRail 数字分身 Rail — 处理所有 per-request 的 avatar 逻辑。
-// 对齐 Python: AvatarPromptRail(DeepAgentRail)
+// Python: AvatarPromptRail(DeepAgentRail)
 //
 // 职责:
 // 1. BeforeModelCall: 根据 PermissionContext 动态注入/移除 avatar 相关 PromptSection
@@ -34,18 +34,18 @@ type AvatarPromptRail struct {
 
 const (
 	// avatarPromptPriority 数字分身提示词基础优先级
-	// 对齐 Python: _AVATAR_PROMPT_PRIORITY = 110
+	// Python: _AVATAR_PROMPT_PRIORITY = 110
 	avatarPromptPriority = 110
 
 	// avatarPromptRailPriority AvatarPromptRail 优先级
-	// 对齐 Python: AvatarPromptRail.priority = 85
+	// Python: AvatarPromptRail.priority = 85
 	avatarPromptRailPriority = 85
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // memoryWriteTools 记忆写入工具集合
-// 对齐 Python: _MEMORY_WRITE_TOOLS = frozenset({"write_memory", "edit_memory"})
+// Python: _MEMORY_WRITE_TOOLS = frozenset({"write_memory", "edit_memory"})
 var memoryWriteTools = map[string]struct{}{
 	"write_memory": {},
 	"edit_memory":  {},
@@ -69,7 +69,7 @@ var _ agentinterfaces.AgentRail = (*AvatarPromptRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAvatarPromptRail 创建 AvatarPromptRail 实例。
-// 对齐 Python: AvatarPromptRail.__init__()
+// Python: AvatarPromptRail.__init__()
 func NewAvatarPromptRail() *AvatarPromptRail {
 	r := &AvatarPromptRail{
 		injectedSections: make(map[string]struct{}),
@@ -79,46 +79,46 @@ func NewAvatarPromptRail() *AvatarPromptRail {
 }
 
 // BeforeModelCall 模型调用前动态注入/移除 avatar 相关 PromptSection。
-// 对齐 Python: AvatarPromptRail.before_model_call()
+// Python: AvatarPromptRail.before_model_call()
 func (r *AvatarPromptRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 获取 SystemPromptBuilder
-	// 对齐 Python L45-48: builder = getattr(getattr(self, "_deep_agent", None) or ctx.agent, "system_prompt_builder", None)
+	// Python: L45-48: builder = getattr(getattr(self, "_deep_agent", None) or ctx.agent, "system_prompt_builder", None)
 	builder := cbc.Agent().SystemPromptBuilder()
 	if builder == nil {
 		return nil
 	}
 
 	// 清除上次注入的 sections
-	// 对齐 Python L53-55: for name in list(self._injected_sections): builder.remove_section(name)
+	// Python: L53-55: for name in list(self._injected_sections): builder.remove_section(name)
 	for name := range r.injectedSections {
 		builder.RemoveSection(name)
 	}
 	r.injectedSections = make(map[string]struct{})
 
 	// 读取语言
-	// 对齐 Python L57: language = getattr(builder, "language", "cn") or "cn"
+	// Python: L57: language = getattr(builder, "language", "cn") or "cn"
 	language := builder.Language()
 	if language == "" {
 		language = "cn"
 	}
 
 	// 1. 注入 forbidden_memory（优先级 113）
-	// 对齐 Python L59-69: 尝试加载 forbidden_memory
+	// Python: L59-69: 尝试加载 forbidden_memory
 	r.injectForbiddenMemory(builder, language)
 
 	// 2. 从 context 获取 PermissionContext
-	// 对齐 Python L73: perm_ctx = TOOL_PERMISSION_CONTEXT.get()
+	// Python: L73: perm_ctx = TOOL_PERMISSION_CONTEXT.get()
 	permCtx := sschema.PermissionContextFromCtx(ctx)
 	if permCtx == nil {
 		return nil
 	}
 
 	// 3. 判断数字分身模式
-	// 对齐 Python L78: perm_ctx.group_digital_avatar and perm_ctx.avatar_mode
+	// Python: L78: perm_ctx.group_digital_avatar and perm_ctx.avatar_mode
 	isGroupDigitalAvatar := permCtx.GroupDigitalAvatar && permCtx.AvatarMode
 
 	// 4. 数字分身身份提示词
-	// 对齐 Python L78-87: avatar_identity section
+	// Python: L78-87: avatar_identity section
 	if isGroupDigitalAvatar {
 		displayName := permCtx.AvatarPrincipalName
 		if displayName == "" {
@@ -134,7 +134,7 @@ func (r *AvatarPromptRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	}
 
 	// 5. 群聊记忆禁写通知
-	// 对齐 Python L89-108: group_chat_memory_notice section
+	// Python: L89-108: group_chat_memory_notice section
 	if isGroupDigitalAvatar {
 		notice := buildGroupChatMemoryNotice(language)
 		builder.AddSection(saprompt.PromptSection{
@@ -146,7 +146,7 @@ func (r *AvatarPromptRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	}
 
 	// 6. 记忆完全禁用
-	// 对齐 Python L110-124: memory_fully_disabled section
+	// Python: L110-124: memory_fully_disabled section
 	shouldDisableMemory := !permCtx.EnableMemory && permCtx.GroupDigitalAvatar && permCtx.AvatarMode
 	if shouldDisableMemory {
 		content := buildMemoryFullyDisabledPrompt(language)
@@ -159,7 +159,7 @@ func (r *AvatarPromptRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	}
 
 	// 7. 多轮交互指引
-	// 对齐 Python L126-134: interaction_guidance section
+	// Python: L126-134: interaction_guidance section
 	if isGroupDigitalAvatar {
 		content := buildInteractionPrompt(language)
 		builder.AddSection(saprompt.PromptSection{
@@ -174,9 +174,9 @@ func (r *AvatarPromptRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 }
 
 // BeforeToolCall 工具调用前拦截记忆工具。
-// 对齐 Python: AvatarPromptRail.before_tool_call()
+// Python: AvatarPromptRail.before_tool_call()
 func (r *AvatarPromptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python L146-149: tool_name = ctx.inputs.tool_name; perm_ctx = TOOL_PERMISSION_CONTEXT.get()
+	// Python: L146-149: tool_name = ctx.inputs.tool_name; perm_ctx = TOOL_PERMISSION_CONTEXT.get()
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok {
 		return nil
@@ -187,11 +187,11 @@ func (r *AvatarPromptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 		return nil
 	}
 
-	// 对齐 Python L157-162: should_disable_memory 判断
+	// Python: L157-162: should_disable_memory 判断
 	shouldDisableMemory := !permCtx.EnableMemory && permCtx.GroupDigitalAvatar && permCtx.AvatarMode
 
 	// 场景2：记忆完全禁用 — 拒绝所有记忆工具
-	// 对齐 Python L164-171
+	// Python: L164-171
 	if shouldDisableMemory {
 		if _, exists := memoryAllTools[toolInputs.ToolName]; exists {
 			r.rejectTool(cbc, toolInputs, "[PERMISSION_DENIED] 记忆系统已禁用，禁止访问")
@@ -200,7 +200,7 @@ func (r *AvatarPromptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 	}
 
 	// 场景1：群聊数字分身 — 只拒绝写入
-	// 对齐 Python L173-176
+	// Python: L173-176
 	isGroupDigitalAvatar := permCtx.GroupDigitalAvatar && permCtx.AvatarMode
 	if isGroupDigitalAvatar {
 		if _, exists := memoryWriteTools[toolInputs.ToolName]; exists {
@@ -227,9 +227,9 @@ func (r *AvatarPromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // injectForbiddenMemory 注入 forbidden_memory PromptSection。
-// 对齐 Python L59-69: 尝试加载 forbidden_memory
+// Python: L59-69: 尝试加载 forbidden_memory
 func (r *AvatarPromptRail) injectForbiddenMemory(builder saprompt.SystemPromptBuilderInterface, language string) {
-	// 对齐 Python: try/except 包裹 get_forbidden_memory_prompt，失败时不中断
+	// Python: try/except 包裹 get_forbidden_memory_prompt，失败时不中断
 	forbidden, err := commmem.GetForbiddenMemoryPrompt(language)
 	if err != nil {
 		logger.Debug(avatarLogComponent).Err(err).Str("language", language).Msg("获取禁止记忆提示词失败，跳过注入")
@@ -247,7 +247,7 @@ func (r *AvatarPromptRail) injectForbiddenMemory(builder saprompt.SystemPromptBu
 }
 
 // rejectTool 跳过工具执行，设置拒绝消息。
-// 对齐 Python L178-185: AvatarPromptRail._reject_tool()
+// Python: L178-185: AvatarPromptRail._reject_tool()
 func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, toolInputs *agentinterfaces.ToolCallInputs, message string) {
 	toolCallID := ""
 	if toolInputs.ToolCall != nil {
@@ -263,7 +263,7 @@ func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 }
 
 // buildAvatarPrompt 构建数字分身身份提示词。
-// 对齐 Python: _build_avatar_prompt(principal_user_id, language)
+// Python: _build_avatar_prompt(principal_user_id, language)
 func buildAvatarPrompt(principalName string, language string) string {
 	if language == "cn" {
 		var identity, perspective, boundary string
@@ -293,7 +293,7 @@ func buildAvatarPrompt(principalName string, language string) string {
 }
 
 // buildGroupChatMemoryNotice 构建群聊记忆禁写通知。
-// 对齐 Python L96-108: 内联构建 group_chat_memory_notice
+// Python: L96-108: 内联构建 group_chat_memory_notice
 func buildGroupChatMemoryNotice(language string) string {
 	if language == "cn" {
 		return "\n[群聊模式：禁止调用 write_memory/edit_memory]\n"
@@ -302,7 +302,7 @@ func buildGroupChatMemoryNotice(language string) string {
 }
 
 // buildMemoryFullyDisabledPrompt 构建记忆完全禁用提示词。
-// 对齐 Python: _build_memory_fully_disabled_prompt(language)
+// Python: _build_memory_fully_disabled_prompt(language)
 func buildMemoryFullyDisabledPrompt(language string) string {
 	if language == "cn" {
 		return "## 记忆系统 - 已完全禁用\n\n**记忆系统当前已完全禁用。**\n\n- **禁止** 使用任何记忆工具：\n  - 写入工具：write_memory、edit_memory\n  - 读取工具：read_memory、memory_search、memory_get\n- 如果用户询问历史信息或要求记住某些内容，回复：\"记忆系统当前已禁用，我无法访问历史记录或保存新信息。\"\n"
@@ -311,7 +311,7 @@ func buildMemoryFullyDisabledPrompt(language string) string {
 }
 
 // buildInteractionPrompt 构建多轮交互追问指引提示词。
-// 对齐 Python: _build_interaction_prompt(language)
+// Python: _build_interaction_prompt(language)
 func buildInteractionPrompt(language string) string {
 	if language == "cn" {
 		return "## 多轮交互指引\n\n在以下情况，你必须通过追问来明确需求，不要自行假设或跳过：\n\n### 何时必须追问\n1. **缺少关键参数**：任务需要具体参数但用户未提供（如订会议室但没说楼层、时间）\n2. **需求模糊或宽泛**：用户请求范围太大或方向不明确，直接执行可能偏离意图（如\"帮我写个报告\"\"做个调研\"\"整理一下\"）\n3. **存在多种理解**：请求可以有多种解读方式，不同理解会导致完全不同的执行结果\n4. **需要确认授权**：需要 principal（你代替的人）确认或授权才能执行\n\n### 群聊追问\n如果缺少的信息可以由群聊中的某位用户提供，在回复开头加上 `[群聊追问@用户名]`：\n- 例：`[群聊追问@张三] 请问需要预约哪个楼层的会议室？`\n- 系统会自动在群聊中 @张三 并追踪回复\n\n如果缺少的信息由发送请求的人自己补充即可，在回复开头加上 `[群聊追问]`（不带@）：\n- 例：`[群聊追问] 请问会议主题是什么？`\n- 例：`[群聊追问] 你说的调研报告是关于哪个方向的？需要覆盖哪些内容？`\n- 系统会自动追踪发送者的回复\n\n### 私聊追问\n如果需要 principal（你代替的人）确认或授权，在回复开头加上 `[私聊追问]`：\n- 例：`[私聊追问] 张三要订会议室，你确认吗？`\n- 系统会自动私聊 principal 并在群聊中发送简短确认\n\n### 注意事项\n- 需求模糊时**必须追问**，不要自行猜测用户意图后直接执行，否则很可能白做\n- 追问时给出具体选项或方向提示，帮助用户快速回复（如\"是A方向还是B方向？\"而非\"你要什么？\"）\n- 追问前缀必须放在回复的最开头\n- 收到追问的回答后，继续完成任务即可，不需要再加前缀\n- 收到追问回答后，只针对当前追问的任务继续处理，不要与之前的其他任务混淆\n- 如果群聊历史中存在多个不同的任务，务必根据追问上下文区分，只处理当前任务\n"

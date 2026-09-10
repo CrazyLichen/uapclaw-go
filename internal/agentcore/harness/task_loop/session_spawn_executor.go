@@ -19,7 +19,7 @@ import (
 // SessionSpawnExecutor 会话子进程执行器，执行 SESSION_SPAWN_TASK_TYPE 类型任务。
 // 从 TaskManager 获取任务元数据，提取 subagent_type/sub_session_id，
 // 通过 DeepAgent.create_subagent 创建子 Agent 并 invoke。
-// 对齐 Python: SessionSpawnExecutor
+// Python: SessionSpawnExecutor
 type SessionSpawnExecutor struct {
 	// deps 任务执行器依赖
 	deps *modules.TaskExecutorDependencies
@@ -39,7 +39,7 @@ var _ modules.TaskExecutor = (*SessionSpawnExecutor)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionSpawnExecutor 创建会话子进程执行器。
-// 对齐 Python: SessionSpawnExecutor.__init__
+// Python: SessionSpawnExecutor.__init__
 func NewSessionSpawnExecutor(deps *modules.TaskExecutorDependencies, provider interfaces.DeepAgentInterface) *SessionSpawnExecutor {
 	return &SessionSpawnExecutor{
 		deps:     deps,
@@ -49,7 +49,7 @@ func NewSessionSpawnExecutor(deps *modules.TaskExecutorDependencies, provider in
 
 // ExecuteAbility 执行子 Agent 任务。
 // 获取任务元数据 → 创建子 Agent → invoke → 发送完成/失败事件。
-// 对齐 Python: SessionSpawnExecutor.execute_ability
+// Python: SessionSpawnExecutor.execute_ability
 func (e *SessionSpawnExecutor) ExecuteAbility(
 	ctx context.Context,
 	taskID string,
@@ -73,7 +73,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Msg("未找到任务")
-		// 对齐 Python：通过 channel 发送 TaskFailed，而非返回 error
+		// Python: 通过 channel 发送 TaskFailed，而非返回 error
 		ch <- e.buildErrorChunk(taskID, fmt.Sprintf("task %s not found", taskID))
 		close(ch)
 		return ch, nil
@@ -118,7 +118,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		}
 
 		// 步骤 5：调用子 Agent
-		// 对齐 Python: result = await subagent.invoke({"query": query, "conversation_id": cid})
+		// Python: result = await subagent.invoke({"query": query, "conversation_id": cid})
 		// 使用 subAgent.Invoke 而非 ReactAgent().Invoke，使子 Agent
 		// 在 enable_task_loop=True 时走完整多轮循环（对齐 Python）。
 		effective := map[string]any{
@@ -171,25 +171,25 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 }
 
 // CanPause 检查任务是否可暂停。SessionSpawn 任务不支持暂停。
-// 对齐 Python: SessionSpawnExecutor.can_pause
+// Python: SessionSpawnExecutor.can_pause
 func (e *SessionSpawnExecutor) CanPause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, string, error) {
 	return false, "Session spawn 任务不支持暂停", nil
 }
 
 // Pause 暂停任务。SessionSpawn 任务不支持暂停，始终返回 false。
-// 对齐 Python: SessionSpawnExecutor.pause
+// Python: SessionSpawnExecutor.pause
 func (e *SessionSpawnExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
 	return false, nil
 }
 
 // CanCancel 检查任务是否可取消。SessionSpawn 任务始终可取消。
-// 对齐 Python: SessionSpawnExecutor.can_cancel
+// Python: SessionSpawnExecutor.can_cancel
 func (e *SessionSpawnExecutor) CanCancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, string, error) {
 	return true, "", nil
 }
 
 // Cancel 取消任务。已在 TaskScheduler 中取消，此处直接返回 true。
-// 对齐 Python: SessionSpawnExecutor.cancel
+// Python: SessionSpawnExecutor.cancel
 func (e *SessionSpawnExecutor) Cancel(_ context.Context, taskID string, _ sessioninterfaces.SessionFacade) (bool, error) {
 	logger.Info(logComponent).
 		Str("task_id", taskID).
@@ -199,7 +199,7 @@ func (e *SessionSpawnExecutor) Cancel(_ context.Context, taskID string, _ sessio
 
 // BuildSessionSpawnExecutor 构建 hschema.SessionSpawnTaskType 执行器的工厂闭包。
 // 返回的闭包捕获 provider，供 TaskExecutorRegistry 注册。
-// 对齐 Python: build_session_spawn_executor
+// Python: build_session_spawn_executor
 func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 	return func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 		return NewSessionSpawnExecutor(deps, provider)
@@ -209,7 +209,7 @@ func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildErrorChunk 构建错误输出分片。
-// 对齐 Python: SessionSpawnExecutor._build_error_chunk
+// Python: SessionSpawnExecutor._build_error_chunk
 func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *stream.OutputSchema {
 	return &stream.OutputSchema{
 		Type: string(cschema.EventTaskFailed),

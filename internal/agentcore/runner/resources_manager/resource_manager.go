@@ -36,7 +36,7 @@ type Result struct {
 // ResourceMgr 资源管理器门面，聚合 ResourceRegistry、TagMgr 和 idToCard 三大核心组件，
 // 提供统一的资源增删查改入口，是 Runner 依赖的最核心管理类。
 //
-// 对应 Python: ResourceManager (openjiuwen/core/runner/resources_manager/resource_manager.py)
+// Python: ResourceManager (openjiuwen/core/runner/resources_manager/resource_manager.py)
 type ResourceMgr struct {
 	// registry 资源注册表，聚合 7 个子管理器
 	registry *ResourceRegistry
@@ -48,7 +48,7 @@ type ResourceMgr struct {
 
 // resourceOptions 资源操作选项，通过 ResourceOption 函数式选项模式设置。
 //
-// 对应 Python: _ResourceOptions (resource_manager.py)
+// Python: _ResourceOptions (resource_manager.py)
 type resourceOptions struct {
 	// Tag 资源标签
 	Tag Tag
@@ -66,7 +66,7 @@ type resourceOptions struct {
 
 // mcpOptions MCP 操作选项，通过 McpOption 函数式选项模式设置。
 //
-// 对应 Python: _McpOptions (resource_manager.py)
+// Python: _McpOptions (resource_manager.py)
 type mcpOptions struct {
 	// ServerName MCP 服务器名称
 	ServerName string
@@ -84,7 +84,7 @@ type mcpOptions struct {
 
 // tagOptions 标签操作选项，通过 TagOption 函数式选项模式设置。
 //
-// 对应 Python: _TagOptions (resource_manager.py)
+// Python: _TagOptions (resource_manager.py)
 type tagOptions struct {
 	// SkipIfNotExists 标签不存在时是否跳过
 	SkipIfNotExists bool
@@ -107,7 +107,7 @@ type TagOption func(*tagOptions)
 var (
 	// registryAccessors 资源类型 → 子管理器访问器名称的映射
 	//
-	// 对应 Python: _REGISTRY_ACCESSORS (resource_manager.py)
+	// Python: _REGISTRY_ACCESSORS (resource_manager.py)
 	registryAccessors = map[string]string{
 		"workflow":      "workflow",
 		"agent":         "agent",
@@ -119,7 +119,7 @@ var (
 	}
 	// asyncGetTypes 需要异步获取的资源类型集合
 	//
-	// 对应 Python: _ASYNC_GET_TYPES (resource_manager.py)
+	// Python: _ASYNC_GET_TYPES (resource_manager.py)
 	asyncGetTypes = map[string]bool{
 		"workflow": true,
 		"agent":    true,
@@ -128,7 +128,7 @@ var (
 	}
 	// sessionGetTypes 需要追踪会话的资源类型集合
 	//
-	// 对应 Python: _SESSION_GET_TYPES (resource_manager.py)
+	// Python: _SESSION_GET_TYPES (resource_manager.py)
 	sessionGetTypes = map[string]bool{
 		"workflow": true,
 		"model":    true,
@@ -136,7 +136,7 @@ var (
 	}
 	// idReturnTypes 返回 ID 而非实例的资源类型集合
 	//
-	// 对应 Python: _ID_RETURN_TYPES (resource_manager.py)
+	// Python: _ID_RETURN_TYPES (resource_manager.py)
 	idReturnTypes = map[string]bool{
 		"tool":   true,
 		"prompt": true,
@@ -147,7 +147,7 @@ var (
 
 // NewResourceMgr 创建资源管理器门面实例，初始化 registry、tagMgr 和 idToCard。
 //
-// 对应 Python: ResourceManager.__init__()
+// Python: ResourceManager.__init__()
 func NewResourceMgr() *ResourceMgr {
 	mgr := &ResourceMgr{
 		registry: NewResourceRegistry(),
@@ -237,7 +237,7 @@ func WithTagSkipIfNotExists() TagOption {
 
 // AddAgent 注册 Agent，将 provider 存入 agentMgr，缓存 card 到 idToCard，标记 tag。
 //
-// 对应 Python: ResourceManager.add_agent(agent_card, provider, **kwargs)
+// Python: ResourceManager.add_agent(agent_card, provider, **kwargs)
 func (m *ResourceMgr) AddAgent(card *agentschema.AgentCard, provider AgentProvider, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(card.ID, "agent"); err != nil {
@@ -251,7 +251,7 @@ func (m *ResourceMgr) AddAgent(card *agentschema.AgentCard, provider AgentProvid
 
 // AddAgents 批量注册 Agent。
 //
-// 对应 Python: ResourceManager.add_agents(agents, **kwargs)
+// Python: ResourceManager.add_agents(agents, **kwargs)
 // S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
 func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) []Result {
 	results := make([]Result, 0, len(agents))
@@ -272,7 +272,7 @@ func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) []R
 
 // RemoveAgent 注销 Agent，返回被注销的 AgentCard 列表。
 //
-// 对应 Python: ResourceManager.remove_agent(agent_id, **kwargs)
+// Python: ResourceManager.remove_agent(agent_id, **kwargs)
 func (m *ResourceMgr) RemoveAgent(agentIDs []string, opts ...ResourceOption) ([]*agentschema.AgentCard, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(agentIDs, "agent", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -294,7 +294,7 @@ func (m *ResourceMgr) RemoveAgent(agentIDs []string, opts ...ResourceOption) ([]
 
 // GetAgent 获取 Agent 实例列表。
 //
-// 对应 Python: ResourceManager.get_agent(agent_id, **kwargs)
+// Python: ResourceManager.get_agent(agent_id, **kwargs)
 func (m *ResourceMgr) GetAgent(ctx context.Context, agentIDs []string, opts ...ResourceOption) ([]interfaces.BaseAgent, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(ctx, agentIDs, "agent", o.Tag, o.TagMatchStrategy, o.Session)
@@ -314,7 +314,7 @@ func (m *ResourceMgr) GetAgent(ctx context.Context, agentIDs []string, opts ...R
 
 // AddWorkflow 注册 Workflow，将 provider 存入 workflowMgr，缓存 card，标记 tag。
 //
-// 对应 Python: ResourceManager.add_workflow(workflow_card, provider, **kwargs)
+// Python: ResourceManager.add_workflow(workflow_card, provider, **kwargs)
 func (m *ResourceMgr) AddWorkflow(card *schema.WorkflowCard, provider WorkflowProvider, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(card.ID, "workflow"); err != nil {
@@ -328,7 +328,7 @@ func (m *ResourceMgr) AddWorkflow(card *schema.WorkflowCard, provider WorkflowPr
 
 // AddWorkflows 批量注册 Workflow。
 //
-// 对应 Python: ResourceManager.add_workflows(workflows, **kwargs)
+// Python: ResourceManager.add_workflows(workflows, **kwargs)
 // S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
 func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOption) []Result {
 	results := make([]Result, 0, len(workflows))
@@ -350,7 +350,7 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 
 // RemoveWorkflow 注销 Workflow，返回被注销的 WorkflowCard 列表。
 //
-// 对应 Python: ResourceManager.remove_workflow(workflow_id, **kwargs)
+// Python: ResourceManager.remove_workflow(workflow_id, **kwargs)
 func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOption) ([]*schema.WorkflowCard, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(workflowIDs, "workflow", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -372,7 +372,7 @@ func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOptio
 
 // GetWorkflow 获取 Workflow 实例列表。
 //
-// 对应 Python: ResourceManager.get_workflow(workflow_id, **kwargs)
+// Python: ResourceManager.get_workflow(workflow_id, **kwargs)
 func (m *ResourceMgr) GetWorkflow(ctx context.Context, workflowIDs []string, opts ...ResourceOption) ([]interfaces.Workflow, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(ctx, workflowIDs, "workflow", o.Tag, o.TagMatchStrategy, o.Session)
@@ -392,7 +392,7 @@ func (m *ResourceMgr) GetWorkflow(ctx context.Context, workflowIDs []string, opt
 
 // AddTool 注册 Tool，缓存 card，标记 tag。
 //
-// 对应 Python: ResourceManager.add_tool(tool, **kwargs)
+// Python: ResourceManager.add_tool(tool, **kwargs)
 func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	toolCard := t.Card()
@@ -415,7 +415,7 @@ func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 
 // GetTool 获取 Tool 实例列表。
 //
-// 对应 Python: ResourceManager.get_tool(tool_id, **kwargs)
+// Python: ResourceManager.get_tool(tool_id, **kwargs)
 func (m *ResourceMgr) GetTool(toolIDs []string, opts ...ResourceOption) ([]tool.Tool, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(context.Background(), toolIDs, "tool", o.Tag, o.TagMatchStrategy, o.Session)
@@ -433,7 +433,7 @@ func (m *ResourceMgr) GetTool(toolIDs []string, opts ...ResourceOption) ([]tool.
 
 // RemoveTool 注销 Tool，返回被注销的工具 ID 列表。
 //
-// 对应 Python: ResourceManager.remove_tool(tool_id, **kwargs)
+// Python: ResourceManager.remove_tool(tool_id, **kwargs)
 func (m *ResourceMgr) RemoveTool(toolIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(toolIDs, "tool", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -456,7 +456,7 @@ func (m *ResourceMgr) RemoveTool(toolIDs []string, opts ...ResourceOption) ([]st
 
 // AddModel 注册 Model，将 provider 存入 modelMgr，标记 tag。
 //
-// 对应 Python: ResourceManager.add_model(model_id, provider, **kwargs)
+// Python: ResourceManager.add_model(model_id, provider, **kwargs)
 func (m *ResourceMgr) AddModel(modelID string, provider ModelProvider, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(modelID, "model"); err != nil {
@@ -470,7 +470,7 @@ func (m *ResourceMgr) AddModel(modelID string, provider ModelProvider, opts ...R
 
 // AddModels 批量注册 Model。
 //
-// 对应 Python: ResourceManager.add_models(models, **kwargs)
+// Python: ResourceManager.add_models(models, **kwargs)
 // S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
 func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) []Result {
 	results := make([]Result, 0, len(models))
@@ -491,7 +491,7 @@ func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) []R
 
 // RemoveModel 注销 Model，返回被注销的模型 ID 列表。
 //
-// 对应 Python: ResourceManager.remove_model(model_id, **kwargs)
+// Python: ResourceManager.remove_model(model_id, **kwargs)
 func (m *ResourceMgr) RemoveModel(modelIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(modelIDs, "model", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -512,7 +512,7 @@ func (m *ResourceMgr) RemoveModel(modelIDs []string, opts ...ResourceOption) ([]
 
 // GetModel 获取 Model 实例列表。
 //
-// 对应 Python: ResourceManager.get_model(model_id, **kwargs)
+// Python: ResourceManager.get_model(model_id, **kwargs)
 func (m *ResourceMgr) GetModel(ctx context.Context, modelIDs []string, opts ...ResourceOption) ([]model_clients.BaseModelClient, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(ctx, modelIDs, "model", o.Tag, o.TagMatchStrategy, o.Session)
@@ -532,7 +532,7 @@ func (m *ResourceMgr) GetModel(ctx context.Context, modelIDs []string, opts ...R
 
 // AddPrompt 注册 Prompt，标记 tag。
 //
-// 对应 Python: ResourceManager.add_prompt(prompt_id, template, **kwargs)
+// Python: ResourceManager.add_prompt(prompt_id, template, **kwargs)
 func (m *ResourceMgr) AddPrompt(promptID string, template *prompt.PromptTemplate, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(promptID, "prompt"); err != nil {
@@ -543,7 +543,7 @@ func (m *ResourceMgr) AddPrompt(promptID string, template *prompt.PromptTemplate
 
 // AddPrompts 批量注册 Prompt。
 //
-// 对应 Python: ResourceManager.add_prompts(prompts, **kwargs)
+// Python: ResourceManager.add_prompts(prompts, **kwargs)
 // S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
 func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) []Result {
 	results := make([]Result, 0, len(prompts))
@@ -564,7 +564,7 @@ func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) 
 
 // RemovePrompt 注销 Prompt，返回被注销的 ID 列表。
 //
-// 对应 Python: ResourceManager.remove_prompt(prompt_id, **kwargs)
+// Python: ResourceManager.remove_prompt(prompt_id, **kwargs)
 func (m *ResourceMgr) RemovePrompt(promptIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(promptIDs, "prompt", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -585,7 +585,7 @@ func (m *ResourceMgr) RemovePrompt(promptIDs []string, opts ...ResourceOption) (
 
 // GetPrompt 获取 Prompt 模板列表。
 //
-// 对应 Python: ResourceManager.get_prompt(prompt_id, **kwargs)
+// Python: ResourceManager.get_prompt(prompt_id, **kwargs)
 func (m *ResourceMgr) GetPrompt(promptIDs []string, opts ...ResourceOption) ([]*prompt.PromptTemplate, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(context.Background(), promptIDs, "prompt", o.Tag, o.TagMatchStrategy, o.Session)
@@ -605,7 +605,7 @@ func (m *ResourceMgr) GetPrompt(promptIDs []string, opts ...ResourceOption) ([]*
 
 // AddSysOperation 注册系统操作，并自动注册关联工具。
 //
-// 对应 Python: ResourceManager.add_sys_operation(card, *, tag=None)
+// Python: ResourceManager.add_sys_operation(card, *, tag=None)
 func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(sysOperationID, "sys_operation"); err != nil {
@@ -621,7 +621,7 @@ func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysO
 
 // RemoveSysOperation 注销系统操作，并清理关联工具。
 //
-// 对应 Python: ResourceManager.remove_sys_operation(sys_operation_id, **kwargs)
+// Python: ResourceManager.remove_sys_operation(sys_operation_id, **kwargs)
 func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	// 先删除 sys_operation 本身
@@ -651,7 +651,7 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...Resou
 
 // GetSysOperation 获取系统操作实例列表。
 //
-// 对应 Python: ResourceManager.get_sys_operation(sys_operation_id, **kwargs)
+// Python: ResourceManager.get_sys_operation(sys_operation_id, **kwargs)
 func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...ResourceOption) ([]sysop.SysOperation, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(context.Background(), sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy, o.Session)
@@ -670,14 +670,14 @@ func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...Resource
 }
 
 // GetSysOperationByIsolationKey 按隔离键模板查找已注册的 SysOperation。
-// 对齐 Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
+// Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
 func (m *ResourceMgr) GetSysOperationByIsolationKey(key string) (sysop.SysOperation, error) {
 	return m.registry.SysOperation().GetSysOperationByIsolationKey(key)
 }
 
 // GetSysOpToolCards 获取系统操作的工具卡片。
 //
-// 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
+// Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
 func (m *ResourceMgr) GetSysOpToolCards(sysOperationID string, operationName string, toolName string) ([]schema.CardInterface, error) {
 	// 获取已注册的工具 ID 列表
 	toolIDs := m.registry.Tool().GetSysOperationToolIDs(sysOperationID)
@@ -725,7 +725,7 @@ func (m *ResourceMgr) GetSysOpToolCards(sysOperationID string, operationName str
 
 // AddMcpServer 添加 MCP 工具服务器。
 //
-// 对应 Python: ResourceManager.add_mcp_server(server_config, **kwargs)
+// Python: ResourceManager.add_mcp_server(server_config, **kwargs)
 func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcptypes.McpServerConfig, opts ...McpOption) ([]*mcptypes.McpToolCard, error) {
 	o := applyMcpOptions(opts...)
 
@@ -767,7 +767,7 @@ func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcptypes.M
 
 // RefreshMcpServer 刷新 MCP 工具服务器。
 //
-// 对应 Python: ResourceManager.refresh_mcp_server(server_id, **kwargs)
+// Python: ResourceManager.refresh_mcp_server(server_id, **kwargs)
 func (m *ResourceMgr) RefreshMcpServer(ctx context.Context, serverID string, opts ...McpOption) ([]*mcptypes.McpToolCard, error) {
 	o := applyMcpOptions(opts...)
 	return m.registry.Tool().RefreshToolServer(ctx, serverID, o.SkipIfNotExists, o.Force)
@@ -775,7 +775,7 @@ func (m *ResourceMgr) RefreshMcpServer(ctx context.Context, serverID string, opt
 
 // RemoveMcpServer 移除 MCP 工具服务器，返回被移除的服务器 ID 列表。
 //
-// 对应 Python: ResourceManager.remove_mcp_server(server_id, **kwargs)
+// Python: ResourceManager.remove_mcp_server(server_id, **kwargs)
 // Python 返回 Result[str, Exception] | list[Result[str, Exception]]，Go 返回 ([]string, error)
 func (m *ResourceMgr) RemoveMcpServer(ctx context.Context, serverID string, opts ...McpOption) ([]string, error) {
 	o := applyMcpOptions(opts...)
@@ -796,7 +796,7 @@ func (m *ResourceMgr) RemoveMcpServer(ctx context.Context, serverID string, opts
 
 // GetMcpTool 通过工具名和服务器 ID 获取 MCP 工具。
 //
-// 对应 Python: ResourceManager.get_mcp_tool(name, server_id, **kwargs)
+// Python: ResourceManager.get_mcp_tool(name, server_id, **kwargs)
 func (m *ResourceMgr) GetMcpTool(ctx context.Context, name, serverID string, opts ...McpOption) ([]tool.Tool, error) {
 	o := applyMcpOptions(opts...)
 	t, err := m.registry.Tool().GetMcpTool(ctx, name, serverID, o.Session)
@@ -808,7 +808,7 @@ func (m *ResourceMgr) GetMcpTool(ctx context.Context, name, serverID string, opt
 
 // GetMcpToolInfos 通过工具名和服务器 ID 获取 MCP 工具信息。
 //
-// 对应 Python: ResourceManager.get_mcp_tool_infos(name, server_id, **kwargs)
+// Python: ResourceManager.get_mcp_tool_infos(name, server_id, **kwargs)
 func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string, opts ...McpOption) ([]schema.ToolInfoInterface, error) {
 	tools, err := m.GetMcpTool(ctx, name, serverID, opts...)
 	if err != nil {
@@ -824,21 +824,21 @@ func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string
 
 // GetMcpServerConfig 获取 MCP 服务器配置。
 //
-// 对应 Python: ResourceManager.get_mcp_server_config(server_id)
+// Python: ResourceManager.get_mcp_server_config(server_id)
 func (m *ResourceMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerConfig, error) {
 	return m.registry.Tool().GetMcpServerConfig(serverID)
 }
 
 // GetMcpToolIDs 获取指定服务器下所有工具 ID。
 //
-// 对应 Python: ResourceManager.get_mcp_tool_ids(server_id)
+// Python: ResourceManager.get_mcp_tool_ids(server_id)
 func (m *ResourceMgr) GetMcpToolIDs(serverID string) []string {
 	return m.registry.Tool().GetMcpToolIDs(serverID)
 }
 
 // ListMcpResources 列出 MCP 服务器资源。
 //
-// 对应 Python: ResourceManager.list_mcp_resources(server_id)
+// Python: ResourceManager.list_mcp_resources(server_id)
 func (m *ResourceMgr) ListMcpResources(ctx context.Context, serverID string) ([]map[string]any, error) {
 	client, err := m.registry.Tool().GetMcpClient(serverID)
 	if err != nil {
@@ -849,7 +849,7 @@ func (m *ResourceMgr) ListMcpResources(ctx context.Context, serverID string) ([]
 
 // ReadMcpResource 读取 MCP 服务器资源。
 //
-// 对应 Python: ResourceManager.read_mcp_resource(server_id, uri)
+// Python: ResourceManager.read_mcp_resource(server_id, uri)
 func (m *ResourceMgr) ReadMcpResource(ctx context.Context, serverID, uri string) ([]map[string]any, error) {
 	client, err := m.registry.Tool().GetMcpClient(serverID)
 	if err != nil {
@@ -862,7 +862,7 @@ func (m *ResourceMgr) ReadMcpResource(ctx context.Context, serverID, uri string)
 
 // GetResourceByTag 根据标签获取资源卡片列表。
 //
-// 对应 Python: ResourceManager.get_resource_by_tag(tag)
+// Python: ResourceManager.get_resource_by_tag(tag)
 func (m *ResourceMgr) GetResourceByTag(tag Tag) []schema.CardInterface {
 	resourceIDs := m.tagMgr.GetTagResources(tag)
 	results := make([]schema.CardInterface, 0, len(resourceIDs))
@@ -876,21 +876,21 @@ func (m *ResourceMgr) GetResourceByTag(tag Tag) []schema.CardInterface {
 
 // ListTags 获取所有标签。
 //
-// 对应 Python: ResourceManager.list_tags()
+// Python: ResourceManager.list_tags()
 func (m *ResourceMgr) ListTags() []Tag {
 	return m.tagMgr.ListTags()
 }
 
 // HasTag 检查标签是否存在。
 //
-// 对应 Python: ResourceManager.has_tag(tag)
+// Python: ResourceManager.has_tag(tag)
 func (m *ResourceMgr) HasTag(tag Tag) bool {
 	return m.tagMgr.HasTag(tag)
 }
 
 // RemoveTag 完全移除标签及其所有关联资源。
 //
-// 对应 Python: ResourceManager.remove_tag(tag, **kwargs)
+// Python: ResourceManager.remove_tag(tag, **kwargs)
 // Python 逻辑：对每个受影响的 resource_id 调用 self._resource_registry.remove_by_id(resource_id)，
 // 即标签移除会同时清理注册表中的资源。
 func (m *ResourceMgr) RemoveTag(tag Tag, opts ...TagOption) ([]string, error) {
@@ -917,21 +917,21 @@ func (m *ResourceMgr) RemoveTag(tag Tag, opts ...TagOption) ([]string, error) {
 
 // UpdateResourceTag 更新资源标签。
 //
-// 对应 Python: ResourceManager.update_resource_tag(resource_id, tags)
+// Python: ResourceManager.update_resource_tag(resource_id, tags)
 func (m *ResourceMgr) UpdateResourceTag(resourceID string, tags []Tag) ([]Tag, error) {
 	return m.tagMgr.UpdateResourceTags(resourceID, tags, TagUpdateReplace)
 }
 
 // AddResourceTag 为资源添加标签。
 //
-// 对应 Python: ResourceManager.add_resource_tag(resource_id, tags)
+// Python: ResourceManager.add_resource_tag(resource_id, tags)
 func (m *ResourceMgr) AddResourceTag(resourceID string, tags []Tag) ([]Tag, error) {
 	return m.tagMgr.UpdateResourceTags(resourceID, tags, TagUpdateMerge)
 }
 
 // RemoveResourceTag 移除资源的指定标签。
 //
-// 对应 Python: ResourceManager.remove_resource_tag(resource_id, tags, **kwargs)
+// Python: ResourceManager.remove_resource_tag(resource_id, tags, **kwargs)
 func (m *ResourceMgr) RemoveResourceTag(resourceID string, tags []Tag, opts ...TagOption) ([]Tag, error) {
 	o := applyTagOptions(opts...)
 	return m.tagMgr.RemoveResourceTags(resourceID, tags, o.SkipIfNotExists)
@@ -939,14 +939,14 @@ func (m *ResourceMgr) RemoveResourceTag(resourceID string, tags []Tag, opts ...T
 
 // GetResourceTag 获取资源的所有标签。
 //
-// 对应 Python: ResourceManager.get_resource_tag(resource_id)
+// Python: ResourceManager.get_resource_tag(resource_id)
 func (m *ResourceMgr) GetResourceTag(resourceID string) []Tag {
 	return m.tagMgr.GetResourcesTags(resourceID)
 }
 
 // ResourceHasTag 检查资源是否拥有指定标签。
 //
-// 对应 Python: ResourceManager.resource_has_tag(resource_id, tag)
+// Python: ResourceManager.resource_has_tag(resource_id, tag)
 func (m *ResourceMgr) ResourceHasTag(resourceID string, tag Tag) bool {
 	return m.tagMgr.HasResourceTag(resourceID, tag)
 }
@@ -955,10 +955,10 @@ func (m *ResourceMgr) ResourceHasTag(resourceID string, tag Tag) bool {
 
 // GetToolInfos 获取工具描述信息列表，支持按 toolType 过滤。
 //
-// 对应 Python: ResourceManager.get_tool_infos(tool_id, *, tool_type=None, tag=, ...)
+// Python: ResourceManager.get_tool_infos(tool_id, *, tool_type=None, tag=, ...)
 // Python 用 _get_card_type(card) 和 tool_type 列表做过滤，Go 用 getCardType + toolTypes 参数对齐。
 // 从 idToCard 缓存直接读取 Card，通过匿名接口断言判断是否支持 ToolInfo() 方法，
-// 对齐 Python 的 hasattr(card, "tool_info") 语义。
+// Python: 的 hasattr(card, "tool_info") 语义。
 func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ...ResourceOption) ([]schema.ToolInfoInterface, error) {
 	results := make([]schema.ToolInfoInterface, 0, len(toolIDs))
 	for _, id := range toolIDs {
@@ -996,7 +996,7 @@ func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ..
 
 // Release 释放资源管理器，调用 registry.Tool().Release(ctx) + 重建 registry/tagMgr/idToCard。
 //
-// 对应 Python: ResourceManager.release()
+// Python: ResourceManager.release()
 func (m *ResourceMgr) Release(ctx context.Context) error {
 	err := m.registry.Tool().Release(ctx)
 
@@ -1016,7 +1016,7 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 
 // AddAgentTeam 注册 Agent 团队。
 //
-// 对应 Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
+// Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
 func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider maschema.AgentTeamProvider, opts ...ResourceOption) error {
 	// G15 修复：校验 card.GetID() 有效性，对齐 Python _inner_validate_resource_id
 	if err := m.innerValidateResourceID(card.GetID(), "team"); err != nil {
@@ -1030,7 +1030,7 @@ func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider mas
 
 // RemoveAgentTeam 注销 Agent 团队。
 //
-// 对应 Python: ResourceManager.remove_agent_team(agent_team_id, **kwargs)
+// Python: ResourceManager.remove_agent_team(agent_team_id, **kwargs)
 func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) ([]maschema.AgentTeamProvider, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(agentTeamIDs, "team", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
@@ -1051,7 +1051,7 @@ func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOpt
 
 // GetAgentTeam 获取 Agent 团队。
 //
-// 对应 Python: ResourceManager.get_agent_team(agent_team_id, **kwargs)
+// Python: ResourceManager.get_agent_team(agent_team_id, **kwargs)
 func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, opts ...ResourceOption) ([]maschema.BaseTeam, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(ctx, agentTeamIDs, "team", o.Tag, o.TagMatchStrategy, o.Session)
@@ -1071,7 +1071,7 @@ func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, o
 
 // registerSysOperationTools 自动注册系统操作的方法为工具。
 //
-// 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
+// Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
 func (m *ResourceMgr) registerSysOperationTools(sysOperationID string, instance sysop.SysOperation, tag Tag) {
 	// 获取 SysOperation 的 Card
 	card := instance.Card()
@@ -1139,7 +1139,7 @@ func applyTagOptions(opts ...TagOption) tagOptions {
 // 如果 resourceIDs 非空且无 tag（或 TagGlobal），直接返回 resourceIDs；
 // 如果 resourceIDs 为空且指定了 tag，按 tag 查找所有匹配资源。
 //
-// 对应 Python: ResourceManager._inner_find_resource_ids(resource_id, resource_type, tag, tag_match_strategy)
+// Python: ResourceManager._inner_find_resource_ids(resource_id, resource_type, tag, tag_match_strategy)
 func (m *ResourceMgr) innerFindResourceIDs(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy) ([]string, bool, error) {
 	// 如果指定了 resourceIDs，按标签过滤或直接返回
 	if len(resourceIDs) > 0 {
@@ -1179,7 +1179,7 @@ func (m *ResourceMgr) innerFindResourceIDs(resourceIDs []string, resourceType st
 
 // innerValidateResourceID 验证资源 ID 非空、非纯空白。
 //
-// 对应 Python: ResourceManager._inner_validate_resource_id(resource_id, resource_type)
+// Python: ResourceManager._inner_validate_resource_id(resource_id, resource_type)
 func (m *ResourceMgr) innerValidateResourceID(resourceID, resourceType string) error {
 	if resourceID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -1198,10 +1198,10 @@ func (m *ResourceMgr) innerValidateResourceID(resourceID, resourceType string) e
 
 // innerValidateProvider 验证 provider 非空。
 //
-// 对应 Python: ResourceManager._inner_validate_provider(provider, resource_type)
+// Python: ResourceManager._inner_validate_provider(provider, resource_type)
 // innerValidateProvider 校验 provider 非空。
 //
-// 对应 Python: ResourceManager._inner_validate_provider(provider, resource_type)
+// Python: ResourceManager._inner_validate_provider(provider, resource_type)
 // ⤵️ 预留：Python 还校验 provider 可调用性和 RemoteAgent 特殊处理（9.84 实现后回填）。
 func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) error {
 	if provider == nil {
@@ -1215,7 +1215,7 @@ func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) e
 
 // innerValidateServerConfig 校验 MCP 服务器配置。
 //
-// 对应 Python: ResourceManager._inner_validate_server_config(server_config)
+// Python: ResourceManager._inner_validate_server_config(server_config)
 // ⤵️ 预留：Python 支持列表校验（检查 server_id 类型/空白/列表内重复 ID），Go 当前仅校验单个。
 // 批量场景出现时扩展为 innerValidateServerConfigs([]*McpServerConfig)。
 func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcptypes.McpServerConfig) error {
@@ -1242,7 +1242,7 @@ func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcptypes.McpServer
 // dispatchAdd 分发到子管理器的 add 方法。
 // resource 为资源实例或 provider，interfaceURL 仅 agent 类型使用。
 //
-// 对应 Python: ResourceManager._dispatch_add(resource_type, resource_id, resource, interface_url=None)
+// Python: ResourceManager._dispatch_add(resource_type, resource_id, resource, interface_url=None)
 func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any, interfaceURL string) error {
 	switch resourceType {
 	case "workflow":
@@ -1327,7 +1327,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 
 // dispatchRemove 分发到子管理器的 remove 方法，返回被移除的资源。
 //
-// 对应 Python: ResourceManager._dispatch_remove(resource_type, resource_id)
+// Python: ResourceManager._dispatch_remove(resource_type, resource_id)
 func (m *ResourceMgr) dispatchRemove(resourceType, resourceID string) (any, error) {
 	switch resourceType {
 	case "workflow":
@@ -1356,7 +1356,7 @@ func (m *ResourceMgr) dispatchRemove(resourceType, resourceID string) (any, erro
 // dispatchGet 分发到子管理器的 get 方法。
 // 仅 workflow/model/tool 类型传 session。
 //
-// 对应 Python: ResourceManager._dispatch_get(resource_type, resource_id, session=None)
+// Python: ResourceManager._dispatch_get(resource_type, resource_id, session=None)
 func (m *ResourceMgr) dispatchGet(ctx context.Context, resourceType, resourceID string, session decorator.TracerSession) (any, error) {
 	switch resourceType {
 	case "workflow":
@@ -1386,7 +1386,7 @@ func (m *ResourceMgr) dispatchGet(ctx context.Context, resourceType, resourceID 
 
 // innerAddResource 核心添加逻辑：检查重复 → 分发 add → 缓存 card → 标记 tag → 日志。
 //
-// 对应 Python: ResourceManager._inner_add_resource(resource_id, resource_type, resource, resource_card=None, tag=None, interface_url=None)
+// Python: ResourceManager._inner_add_resource(resource_id, resource_type, resource, resource_card=None, tag=None, interface_url=None)
 func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource any, resourceCard schema.CardInterface, tag Tag, interfaceURL string) error {
 	// 1. 检查资源是否已存在
 	if m.tagMgr.HasResource(resourceID) {
@@ -1427,7 +1427,7 @@ func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource
 
 // innerRemoveResources 核心移除逻辑：按 tag 查找或直接按 ID → 遍历移除 → 分发 remove → Pop card → 日志。
 //
-// 对应 Python: ResourceManager._inner_remove_resources(resource_id, resource_type, tag, tag_match_strategy, skip_if_tag_not_exists)
+// Python: ResourceManager._inner_remove_resources(resource_id, resource_type, tag, tag_match_strategy, skip_if_tag_not_exists)
 // S9 修复：按 tag 批量移除时容错继续，单个失败不中断，返回 Result 列表
 func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfTagNotExists bool) ([]Result, error) {
 	idsToRemove := resourceIDs
@@ -1499,7 +1499,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 
 // innerGetResources 同步获取资源：查找 ID → 遍历 dispatchGet → 日志。
 //
-// 对应 Python: ResourceManager._inner_get_resources(resource_id, resource_type, tag, tag_match_strategy, session)
+// Python: ResourceManager._inner_get_resources(resource_id, resource_type, tag, tag_match_strategy, session)
 func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session decorator.TracerSession) ([]any, error) {
 	ids, _, err := m.innerFindResourceIDs(resourceIDs, resourceType, tag, tagMatchStrategy)
 	if err != nil {
@@ -1538,10 +1538,10 @@ func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceIDs []strin
 // innerValidateTag 验证标签：空值、GLOBAL 与其他 tag 混用、空元素、重复 tag。
 // Go 中 tag 是单个 Tag (string)，验证单个 tag 非空即可。
 //
-// 对应 Python: ResourceManager._inner_validate_tag(tag)
+// Python: ResourceManager._inner_validate_tag(tag)
 // innerValidateTag 校验标签列表。
 //
-// 对应 Python: ResourceManager._inner_validate_tag(tag)
+// Python: ResourceManager._inner_validate_tag(tag)
 // Python 校验：(1) 空值 (2) GLOBAL 与其他标签混用 (3) 空元素 (4) 重复元素
 func innerValidateTag(tags []Tag) error {
 	if len(tags) == 0 {
@@ -1586,7 +1586,7 @@ func innerValidateTag(tags []Tag) error {
 
 // innerValidateResourceCard 验证 Card 类型：使用 reflect 检查 card 是否为 cardClassType 实例。
 //
-// 对应 Python: ResourceManager._inner_validate_resource_card(card, resource_type, card_class_type)
+// Python: ResourceManager._inner_validate_resource_card(card, resource_type, card_class_type)
 func innerValidateResourceCard(card schema.CardInterface, resourceType string, cardClassType reflect.Type) error {
 	if card == nil {
 		return exception.BuildError(exception.StatusResourceCardValueInvalid,
@@ -1606,7 +1606,7 @@ func innerValidateResourceCard(card schema.CardInterface, resourceType string, c
 
 // innerValidateResourceIDs 批量 ID 校验：列表非空、每个 ID 有效、无重复。
 //
-// 对应 Python: ResourceManager._inner_validate_resource_ids(resource_id, resource_type)
+// Python: ResourceManager._inner_validate_resource_ids(resource_id, resource_type)
 func innerValidateResourceIDs(resourceIDs []string, resourceType string) error {
 	if len(resourceIDs) == 0 {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -1643,7 +1643,7 @@ func innerValidateResourceIDs(resourceIDs []string, resourceType string) error {
 // innerValidateProviders 批量 Provider 校验：列表非空、每个 provider 非 nil。
 // Go 静态类型语言中，provider 类型由编译器保证，此处仅校验空值。
 //
-// 对应 Python: ResourceManager._inner_validate_providers(providers, resource_type, card_class_type=None)
+// Python: ResourceManager._inner_validate_providers(providers, resource_type, card_class_type=None)
 func innerValidateProviders(providers []any, resourceType string, cardClassType reflect.Type) error {
 	if len(providers) == 0 {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
@@ -1669,7 +1669,7 @@ func innerValidateProviders(providers []any, resourceType string, cardClassType 
 
 // innerValidateResource 资源实例类型校验：非 nil，且 reflect 类型匹配。
 //
-// 对应 Python: ResourceManager._inner_validate_resource(instance, resource_type, resource_class_type)
+// Python: ResourceManager._inner_validate_resource(instance, resource_type, resource_class_type)
 func innerValidateResource(instance any, resourceType string, resourceClassType reflect.Type) error {
 	if instance == nil {
 		return exception.BuildError(exception.StatusResourceValueInvalid,
@@ -1691,7 +1691,7 @@ func innerValidateResource(instance any, resourceType string, resourceClassType 
 // getCardType 从 Card 推断资源类型。
 // 判断 card 的实际类型，返回 "mcp"/"function"/"team"/"workflow"/"agent" 或空字符串。
 //
-// 对应 Python: ResourceManager._get_card_type(card)
+// Python: ResourceManager._get_card_type(card)
 func getCardType(card schema.CardInterface) string {
 	if card == nil {
 		return ""
@@ -1717,7 +1717,7 @@ func getCardType(card schema.CardInterface) string {
 // innerGetServerIDs 按 serverID/serverName/tag 查找服务器 ID 列表。
 // 返回: (server_id 列表, 是否精确匹配)。
 //
-// 对应 Python: ResourceManager._inner_get_server_ids(server_id, server_name, tag, tag_match_strategy, skip_if_tag_not_exists, error_code)
+// Python: ResourceManager._inner_get_server_ids(server_id, server_name, tag, tag_match_strategy, skip_if_tag_not_exists, error_code)
 func (m *ResourceMgr) innerGetServerIDs(serverID, serverName string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfNotExists bool, errorCode exception.StatusCode) ([]string, bool, error) {
 	serverIDs := make([]string, 0)
 	exactMatch := false

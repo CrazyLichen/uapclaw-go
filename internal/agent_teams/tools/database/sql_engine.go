@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SqlTeamDatabase SQL 数据库门面。
-// 对齐 Python: TeamDatabase (openjiuwen/agent_teams/tools/database/__init__.py)
+// Python: TeamDatabase (openjiuwen/agent_teams/tools/database/__init__.py)
 // 拥有 *gorm.DB 生命周期和跨表事务，单表操作通过 DAO 属性调用。
 type SqlTeamDatabase struct {
 	// db GORM 数据库实例
@@ -46,7 +46,7 @@ type SqlTeamDatabase struct {
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentCommon
-	// 对齐 Python: TeamTaskBase (team_task_{suffix})
+	// Python: TeamTaskBase (team_task_{suffix})
 	createTaskTableDDL = `CREATE TABLE IF NOT EXISTS team_task_%s (
     task_id      TEXT PRIMARY KEY,
     team_name    TEXT NOT NULL DEFAULT '',
@@ -56,7 +56,7 @@ const (
     assignee     TEXT,
     updated_at   INTEGER NOT NULL DEFAULT 0
 )`
-	// 对齐 Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
+	// Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
 	// 复合主键 (task_id, depends_on_task_id)，task_id 和 depends_on_task_id 引用同 suffix 的 team_task
 	createDepTableDDL = `CREATE TABLE IF NOT EXISTS team_task_dependency_%s (
     task_id            TEXT NOT NULL DEFAULT '',
@@ -65,7 +65,7 @@ const (
     resolved           INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (task_id, depends_on_task_id)
 )`
-	// 对齐 Python: TeamMessageBase (team_message_{suffix})
+	// Python: TeamMessageBase (team_message_{suffix})
 	createMessageTableDDL = `CREATE TABLE IF NOT EXISTS team_message_%s (
     message_id       TEXT PRIMARY KEY,
     team_name        TEXT NOT NULL DEFAULT '',
@@ -76,7 +76,7 @@ const (
     broadcast        INTEGER NOT NULL DEFAULT 0,
     is_read          INTEGER DEFAULT NULL
 )`
-	// 对齐 Python: MessageReadStatusBase (message_read_status_{suffix})
+	// Python: MessageReadStatusBase (message_read_status_{suffix})
 	createReadStatusTableDDL = `CREATE TABLE IF NOT EXISTS message_read_status_%s (
     member_name TEXT NOT NULL DEFAULT '',
     team_name   TEXT NOT NULL DEFAULT '',
@@ -90,7 +90,7 @@ const (
 var (
 	_ TeamDatabase = (*SqlTeamDatabase)(nil) // SqlTeamDatabase 必须满足 TeamDatabase 接口
 
-	// 对齐 Python: TeamTaskBase index=True 字段
+	// Python: TeamTaskBase index=True 字段
 	// 列: team_name, status, assignee, updated_at
 	createTaskIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_task_team_name ON team_task_%s (team_name)`,
@@ -98,13 +98,13 @@ var (
 		`CREATE INDEX IF NOT EXISTS idx_task_assignee ON team_task_%s (assignee)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_updated_at ON team_task_%s (updated_at)`,
 	}
-	// 对齐 Python: TeamTaskDependencyBase index=True 字段
-	// team_name, resolved
+	// Python: TeamTaskDependencyBase index=True 字段
+	// 索引列: team_name, resolved
 	createDepIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_dep_team_name ON team_task_dependency_%s (team_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_dep_resolved ON team_task_dependency_%s (resolved)`,
 	}
-	// 对齐 Python: TeamMessageBase index=True 字段
+	// Python: TeamMessageBase index=True 字段
 	// 列: team_name, to_member_name, timestamp, broadcast, is_read
 	createMessageIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_msg_team_name ON team_message_%s (team_name)`,
@@ -113,8 +113,8 @@ var (
 		`CREATE INDEX IF NOT EXISTS idx_msg_broadcast ON team_message_%s (broadcast)`,
 		`CREATE INDEX IF NOT EXISTS idx_msg_is_read ON team_message_%s (is_read)`,
 	}
-	// 对齐 Python: MessageReadStatusBase index=True 字段
-	// read_at
+	// Python: MessageReadStatusBase index=True 字段
+	// 索引列: read_at
 	createReadStatusIndexesDDL = []string{
 		`CREATE INDEX IF NOT EXISTS idx_readstat_read_at ON message_read_status_%s (read_at)`,
 	}
@@ -128,7 +128,7 @@ func NewSqlTeamDatabase(config DatabaseConfig) *SqlTeamDatabase {
 }
 
 // Initialize 初始化数据库引擎、创建表、接入 DAO。
-// 对齐 Python: TeamDatabase.initialize() — 带双重检查锁的惰性初始化
+// Python: TeamDatabase.initialize() — 带双重检查锁的惰性初始化
 func (s *SqlTeamDatabase) Initialize(ctx context.Context) error {
 	if s.initialized {
 		return nil
@@ -150,19 +150,19 @@ func (s *SqlTeamDatabase) Initialize(ctx context.Context) error {
 	s.messageDao = &SQLMessageDao{db: db}
 	s.initialized = true
 
-	// 对齐 Python: 初始化后执行 create_cur_session_tables
+	// Python: 初始化后执行 create_cur_session_tables
 	return s.CreateCurSessionTables(ctx)
 }
 
 // CreateCurSessionTables 创建当前会话动态表。
-// 对齐 Python: create_cur_session_tables(engine)
+// Python: create_cur_session_tables(engine)
 func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
 	if s.db == nil {
 		return nil
 	}
 	sessionID := sessionctx.GetSessionID(ctx)
 	if sessionID == "" {
-		// 对齐 Python: team_logger.warning("No session_id in context, cannot create session tables")
+		// Python: team_logger.warning("No session_id in context, cannot create session tables")
 		logger.Warn(logComponent).Msg("上下文中无 session_id，无法创建会话表")
 		return nil
 	}
@@ -176,7 +176,7 @@ func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
 }
 
 // DropCurSessionTables 删除当前会话动态表。
-// 对齐 Python: drop_cur_session_tables(engine)
+// Python: drop_cur_session_tables(engine)
 func (s *SqlTeamDatabase) DropCurSessionTables(ctx context.Context) error {
 	if s.db == nil {
 		return nil
@@ -193,7 +193,7 @@ func (s *SqlTeamDatabase) DropCurSessionTables(ctx context.Context) error {
 }
 
 // CleanupAllRuntimeState 清理所有运行时状态（删除动态表 + 清空静态表）。
-// 对齐 Python: cleanup_all_runtime_state(engine) -> (deleted_tables, cleared_tables)
+// Python: cleanup_all_runtime_state(engine) -> (deleted_tables, cleared_tables)
 func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string, []string, error) {
 	if s.db == nil {
 		return nil, nil, nil
@@ -202,13 +202,13 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 	var droppedTables []string
 	var clearedTables []string
 
-	// 对齐 Python: _get_table_names(sync_conn)
+	// Python: _get_table_names(sync_conn)
 	tableNames, err := s.db.Migrator().GetTables()
 	if err != nil {
 		return nil, nil, fmt.Errorf("获取表名列表失败: %w", err)
 	}
 
-	// 对齐 Python: 匹配 TEAM_DYNAMIC_TABLE_PREFIXES → DROP
+	// Python: 匹配 TEAM_DYNAMIC_TABLE_PREFIXES → DROP
 	for _, name := range tableNames {
 		if isDynamicTable(name) {
 			if dropErr := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(name))).Error; dropErr != nil {
@@ -219,7 +219,7 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 		}
 	}
 
-	// 对齐 Python: 匹配 TEAM_STATIC_TABLES_TO_CLEAR → DELETE FROM
+	// Python: 匹配 TEAM_STATIC_TABLES_TO_CLEAR → DELETE FROM
 	for _, name := range TeamStaticTablesToClear {
 		if containsString(tableNames, name) {
 			if clearErr := s.db.Exec(fmt.Sprintf("DELETE FROM %s", quoteTableName(name))).Error; clearErr != nil {
@@ -238,14 +238,14 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 }
 
 // DropSessionTablesByID 按 sessionID 删除动态表。
-// 对齐 Python: drop_session_tables_by_id(engine, session_id) -> dropped
+// Python: drop_session_tables_by_id(engine, session_id) -> dropped
 func (s *SqlTeamDatabase) DropSessionTablesByID(ctx context.Context, sessionID string) ([]string, error) {
 	if s.db == nil || sessionID == "" {
 		return nil, nil
 	}
 	suffix := SanitizeSessionIDForTable(sessionID)
 
-	// 对齐 Python: 遍历 TEAM_DYNAMIC_TABLE_PREFIXES，检查表是否存在，DROP
+	// Python: 遍历 TEAM_DYNAMIC_TABLE_PREFIXES，检查表是否存在，DROP
 	var dropped []string
 	tableNames, _ := s.db.Migrator().GetTables()
 	for _, prefix := range TeamDynamicTablePrefixes {
@@ -266,18 +266,18 @@ func (s *SqlTeamDatabase) DropSessionTablesByID(ctx context.Context, sessionID s
 }
 
 // ForceDeleteTeamSession 跨表拆卸：删 team_info 行 + 删成员 + drop 会话动态表。
-// 对齐 Python: force_delete_team_session(team_name) -> bool
+// Python: force_delete_team_session(team_name) -> bool
 func (s *SqlTeamDatabase) ForceDeleteTeamSession(ctx context.Context, teamName string) bool {
 	if !s.initialized {
 		return false
 	}
-	// 对齐 Python: await self.team.delete_team(team_name)
+	// Python: await self.team.delete_team(team_name)
 	s.teamDao.DeleteTeam(ctx, teamName)
 
-	// 对齐 Python: 删除该团队所有成员
+	// Python: 删除该团队所有成员
 	s.db.WithContext(ctx).Table("team_member").Where("team_name = ?", teamName).Delete(nil)
 
-	// 对齐 Python: try: await _drop_cur_session_tables(self.engine)
+	// Python: try: await _drop_cur_session_tables(self.engine)
 	if err := s.DropCurSessionTables(ctx); err != nil {
 		logger.Error(logComponent).Str("team_name", teamName).Err(err).Msg("强制删除团队会话动态表失败")
 		return false
@@ -288,7 +288,7 @@ func (s *SqlTeamDatabase) ForceDeleteTeamSession(ctx context.Context, teamName s
 }
 
 // Close 关闭数据库引擎并释放连接。
-// 对齐 Python: TeamDatabase.close()
+// Python: TeamDatabase.close()
 func (s *SqlTeamDatabase) Close() error {
 	if s.db != nil {
 		sqlDB, err := s.db.DB()
@@ -329,7 +329,7 @@ func (s *SqlTeamDatabase) WithTx(tx *gorm.DB) (TeamDao, MemberDao, TaskDao, Mess
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newGormDB 根据 config 创建配置好的 *gorm.DB。
-// 对齐 Python: initialize_engine(config) -> (AsyncEngine, async_sessionmaker)
+// Python: initialize_engine(config) -> (AsyncEngine, async_sessionmaker)
 func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
@@ -342,29 +342,29 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	case DatabaseTypeSQLite:
 		connStr := s.config.ConnectionString
 		if connStr == "" || connStr == ":memory:" {
-			// 对齐 Python: :memory: 用 StaticPool
+			// Python: :memory: 用 StaticPool
 			db, err = gorm.Open(sqlite.Open(":memory:"), gormConfig)
 		} else {
-			// 对齐 Python: 文件模式，确保父目录存在
+			// Python: 文件模式，确保父目录存在
 			dbPath := filepath.FromSlash(connStr)
 			if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
 				_ = os.MkdirAll(dir, 0o755)
 			}
-			// 对齐 Python: WAL + busy_timeout
+			// Python: WAL + busy_timeout
 			dsn := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=%d", dbPath, s.config.DBTimeout*1000)
 			db, err = gorm.Open(sqlite.Open(dsn), gormConfig)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("SQLite 引擎创建失败: %w", err)
 		}
-		// 对齐 Python: PRAGMA foreign_keys=ON
+		// Python: PRAGMA foreign_keys=ON
 		sqlDB, _ := db.DB()
 		if sqlDB != nil {
 			_, _ = sqlDB.Exec("PRAGMA foreign_keys=ON")
 			if s.config.DBEnableWAL && connStr != ":memory:" && connStr != "" {
 				_, _ = sqlDB.Exec("PRAGMA journal_mode=WAL")
 			}
-			// 对齐 Python: AsyncAdaptedQueuePool(pool_size=5, max_overflow=0)
+			// Python: AsyncAdaptedQueuePool(pool_size=5, max_overflow=0)
 			if connStr != "" && connStr != ":memory:" {
 				sqlDB.SetMaxOpenConns(5)
 				sqlDB.SetMaxIdleConns(5)
@@ -380,7 +380,7 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("PostgreSQL 引擎创建失败: %w", err)
 		}
-		// 对齐 Python: pool_size=10, max_overflow=20, pool_recycle=1800
+		// Python: pool_size=10, max_overflow=20, pool_recycle=1800
 		sqlDB, _ := db.DB()
 		if sqlDB != nil {
 			sqlDB.SetMaxOpenConns(10)
@@ -396,12 +396,12 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 		return nil, fmt.Errorf("不支持的数据库类型: %s", s.config.DBType)
 	}
 
-	// 对齐 Python: await conn.run_sync(SQLModel.metadata.create_all) — 建静态表
+	// Python: await conn.run_sync(SQLModel.metadata.create_all) — 建静态表
 	if autoErr := db.AutoMigrate(&Team{}, &TeamMember{}); autoErr != nil {
 		return nil, fmt.Errorf("静态表迁移失败: %w", autoErr)
 	}
 
-	// 对齐 Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
+	// Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
 	ensureTeamMemberRoleColumn(db)
 
 	logger.Info(logComponent).Str("db_type", string(s.config.DBType)).Msg("SQL 数据库引擎初始化完成")
@@ -409,7 +409,7 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 }
 
 // ensureTeamMemberRoleColumn 检查并补充 team_member 表的 role 列。
-// 对齐 Python: _ensure_team_member_role_column(sync_conn)
+// Python: _ensure_team_member_role_column(sync_conn)
 // SQLModel.metadata.create_all 只创建不存在的表，不会 ALTER 已有表。
 // 旧版 DB 缺 role 列时，INSERT 会失败，因此需要探测并补列。
 func ensureTeamMemberRoleColumn(db *gorm.DB) {
@@ -428,7 +428,7 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 }
 
 // createSessionTablesDDL 用手写 DDL 创建4张动态表并建立索引。
-// 对齐 Python: create_cur_session_tables(engine) — 逐模型调用 __table__.create(checkfirst=True)
+// Python: create_cur_session_tables(engine) — 逐模型调用 __table__.create(checkfirst=True)
 // 索引对齐 Python SQLModel 的 index=True 声明。
 func createSessionTablesDDL(db *gorm.DB, suffix string) error {
 	// 建表
@@ -463,7 +463,7 @@ func createSessionTablesDDL(db *gorm.DB, suffix string) error {
 }
 
 // dropSessionTablesDDL 用 DDL 删除4张动态表。
-// 对齐 Python: drop_cur_session_tables(engine) — 逐模型调用 __table__.drop(checkfirst=True)
+// Python: drop_cur_session_tables(engine) — 逐模型调用 __table__.drop(checkfirst=True)
 func dropSessionTablesDDL(db *gorm.DB, suffix string) {
 	tables := []string{
 		"team_task_dependency_" + suffix,
@@ -479,7 +479,7 @@ func dropSessionTablesDDL(db *gorm.DB, suffix string) {
 }
 
 // isDynamicTable 判断表名是否为动态表（按前缀匹配）。
-// 对齐 Python: table_name.startswith(TEAM_DYNAMIC_TABLE_PREFIXES)
+// Python: table_name.startswith(TEAM_DYNAMIC_TABLE_PREFIXES)
 func isDynamicTable(tableName string) bool {
 	for _, prefix := range TeamDynamicTablePrefixes {
 		if len(tableName) > len(prefix) && tableName[:len(prefix)] == prefix {
@@ -490,7 +490,7 @@ func isDynamicTable(tableName string) bool {
 }
 
 // quoteTableName 给表名加引号（SQLite/PostgreSQL 通用）。
-// 对齐 Python: quoted_name = table_name.replace('"', '""')
+// Python: quoted_name = table_name.replace('"', '""')
 func quoteTableName(name string) string {
 	return `"` + name + `"`
 }

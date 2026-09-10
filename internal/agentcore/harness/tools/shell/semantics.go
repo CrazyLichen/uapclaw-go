@@ -39,14 +39,14 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // bash 命令集
-// 对齐 Python: _SEARCH_COMMANDS (bash/_semantics.py L33-36)
+// Python: _SEARCH_COMMANDS (bash/_semantics.py L33-36)
 
 var bashSearchCommands = map[string]bool{
 	"find": true, "grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true, "ack": true,
 	"locate": true, "which": true, "whereis": true, "type": true, "command": true, "findstr": true,
 }
 
-// 对齐 Python: _READ_COMMANDS (bash/_semantics.py L38-44)
+// Python: _READ_COMMANDS (bash/_semantics.py L38-44)
 var bashReadCommands = map[string]bool{
 	"cat": true, "head": true, "tail": true, "less": true, "more": true, "wc": true, "stat": true,
 	"file": true, "strings": true, "jq": true, "yq": true, "awk": true, "gawk": true, "cut": true,
@@ -55,17 +55,17 @@ var bashReadCommands = map[string]bool{
 	"get-content": true, "get-item": true, "test-path": true, "select-object": true, "where-object": true,
 }
 
-// 对齐 Python: _LIST_COMMANDS (bash/_semantics.py L46-48)
+// Python: _LIST_COMMANDS (bash/_semantics.py L46-48)
 var bashListCommands = map[string]bool{
 	"ls": true, "dir": true, "tree": true, "du": true, "df": true, "lsof": true, "lsblk": true, "get-childitem": true,
 }
 
-// 对齐 Python: _NEUTRAL_COMMANDS (bash/_semantics.py L50-52)
+// Python: _NEUTRAL_COMMANDS (bash/_semantics.py L50-52)
 var bashNeutralCommands = map[string]bool{
 	"echo": true, "printf": true, "true": true, "false": true, ":": true, "test": true, "[": true,
 }
 
-// 对齐 Python: _SILENT_COMMANDS (bash/_semantics.py L54-58)
+// Python: _SILENT_COMMANDS (bash/_semantics.py L54-58)
 var bashSilentCommands = map[string]bool{
 	"mv": true, "cp": true, "rm": true, "mkdir": true, "rmdir": true, "chmod": true, "chown": true,
 	"chgrp": true, "touch": true, "ln": true, "cd": true, "export": true, "unset": true,
@@ -73,29 +73,29 @@ var bashSilentCommands = map[string]bool{
 }
 
 // powershell 命令集
-// 对齐 Python: _SEARCH_COMMANDS (powershell/_semantics.py L30-32)
+// Python: _SEARCH_COMMANDS (powershell/_semantics.py L30-32)
 var psSearchCommands = map[string]bool{
 	"select-string": true, "sls": true, "findstr": true, "get-command": true, "where-object": true, "where": true,
 }
 
-// 对齐 Python: _READ_COMMANDS (powershell/_semantics.py L34-38)
+// Python: _READ_COMMANDS (powershell/_semantics.py L34-38)
 var psReadCommands = map[string]bool{
 	"get-content": true, "gc": true, "type": true, "get-item": true, "gi": true, "test-path": true, "resolve-path": true, "get-filehash": true,
 	"select-object": true, "select": true, "sort-object": true, "sort": true, "format-table": true, "ft": true, "format-list": true, "fl": true,
 	"format-wide": true, "fw": true, "foreach-object": true, "foreach": true, "measure-object": true,
 }
 
-// 对齐 Python: _LIST_COMMANDS (powershell/_semantics.py L40-42)
+// Python: _LIST_COMMANDS (powershell/_semantics.py L40-42)
 var psListCommands = map[string]bool{
 	"get-childitem": true, "gci": true, "dir": true, "ls": true,
 }
 
-// 对齐 Python: _NEUTRAL_COMMANDS (powershell/_semantics.py L44-46)
+// Python: _NEUTRAL_COMMANDS (powershell/_semantics.py L44-46)
 var psNeutralCommands = map[string]bool{
 	"write-output": true, "echo": true, "write-host": true, "out-host": true,
 }
 
-// 对齐 Python: _SILENT_COMMANDS (powershell/_semantics.py L48-54)
+// Python: _SILENT_COMMANDS (powershell/_semantics.py L48-54)
 var psSilentCommands = map[string]bool{
 	"set-location": true, "cd": true, "sl": true, "push-location": true, "pop-location": true,
 	"new-item": true, "ni": true, "remove-item": true, "ri": true, "rm": true,
@@ -104,12 +104,12 @@ var psSilentCommands = map[string]bool{
 	"clear-content": true, "clc": true,
 }
 
-// 对齐 Python: _GET_CHILD_ITEM_COMMANDS (powershell/_semantics.py L56-58)
+// Python: _GET_CHILD_ITEM_COMMANDS (powershell/_semantics.py L56-58)
 var psGetChildItemCommands = map[string]bool{
 	"get-childitem": true, "gci": true, "dir": true, "ls": true,
 }
 
-// 对齐 Python: _SEARCH_EXIT_ONE_COMMANDS (powershell/_semantics.py L60-62)
+// Python: _SEARCH_EXIT_ONE_COMMANDS (powershell/_semantics.py L60-62)
 var psSearchExitOneCommands = map[string]bool{
 	"select-string": true, "sls": true, "findstr": true,
 }
@@ -130,7 +130,7 @@ var readKinds = map[CommandKind]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InterpretBashExitCode 解释 bash 命令退出码。
-// 对齐 Python: interpret_exit_code (bash/_semantics.py L210-230)
+// Python: interpret_exit_code (bash/_semantics.py L210-230)
 func InterpretBashExitCode(command string, exitCode int, stdout, stderr string) ExitCodeMeaning {
 	if exitCode == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -145,7 +145,7 @@ func InterpretBashExitCode(command string, exitCode int, stdout, stderr string) 
 }
 
 // InterpretPowerShellExitCode 解释 PowerShell 命令退出码。
-// 对齐 Python: interpret_exit_code (powershell/_semantics.py L188-214)
+// Python: interpret_exit_code (powershell/_semantics.py L188-214)
 func InterpretPowerShellExitCode(command string, exitCode int, stdout, stderr string) ExitCodeMeaning {
 	if exitCode == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -180,7 +180,7 @@ func InterpretPowerShellExitCode(command string, exitCode int, stdout, stderr st
 }
 
 // ClassifyCommand 分类命令
-// 对齐 Python: classify_command (bash/_semantics.py L102-112)
+// Python: classify_command (bash/_semantics.py L102-112)
 func ClassifyCommand(command string, isPowerShell bool) CommandKind {
 	var parts []string
 	var lookup map[string]CommandKind
@@ -202,7 +202,7 @@ func ClassifyCommand(command string, isPowerShell bool) CommandKind {
 }
 
 // IsSilent 判断命令是否为静默命令
-// 对齐 Python: is_silent (bash/_semantics.py L133-145 / powershell/_semantics.py L173-185)
+// Python: is_silent (bash/_semantics.py L133-145 / powershell/_semantics.py L173-185)
 func IsSilent(command string, isPowerShell bool) bool {
 	var parts []string
 	var lookup map[string]CommandKind
@@ -235,7 +235,7 @@ func IsSilent(command string, isPowerShell bool) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isReadOnly 判断命令是否为只读命令
-// 对齐 Python: is_read_only (bash/_semantics.py L118-130 / powershell/_semantics.py L158-170)
+// Python: is_read_only (bash/_semantics.py L118-130 / powershell/_semantics.py L158-170)
 func isReadOnly(command string, isPowerShell bool) bool {
 	var parts []string
 	var lookup map[string]CommandKind
@@ -266,7 +266,7 @@ func isReadOnly(command string, isPowerShell bool) bool {
 }
 
 // interpretBashBase 根据 base 命令解释 bash 退出码
-// 对齐 Python: _SEMANTICS_TABLE (bash/_semantics.py L190-207)
+// Python: _SEMANTICS_TABLE (bash/_semantics.py L190-207)
 func interpretBashBase(base string, exitCode int, stdout, stderr string) ExitCodeMeaning {
 	switch base {
 	case "grep", "egrep", "fgrep", "rg", "ag", "ack", "findstr":
@@ -285,7 +285,7 @@ func interpretBashBase(base string, exitCode int, stdout, stderr string) ExitCod
 }
 
 // grepSemantics grep 族退出码语义
-// 对齐 Python: _grep_semantics (bash/_semantics.py L150-155)
+// Python: _grep_semantics (bash/_semantics.py L150-155)
 func grepSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -297,7 +297,7 @@ func grepSemantics(code int) ExitCodeMeaning {
 }
 
 // findSemantics find 命令退出码语义
-// 对齐 Python: _find_semantics (bash/_semantics.py L158-163)
+// Python: _find_semantics (bash/_semantics.py L158-163)
 func findSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -309,7 +309,7 @@ func findSemantics(code int) ExitCodeMeaning {
 }
 
 // diffSemantics diff 命令退出码语义
-// 对齐 Python: _diff_semantics (bash/_semantics.py L166-171)
+// Python: _diff_semantics (bash/_semantics.py L166-171)
 func diffSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false, Message: "文件相同"}
@@ -321,7 +321,7 @@ func diffSemantics(code int) ExitCodeMeaning {
 }
 
 // testSemantics test/[ 命令退出码语义
-// 对齐 Python: _test_semantics (bash/_semantics.py L174-179)
+// Python: _test_semantics (bash/_semantics.py L174-179)
 func testSemantics(code int) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false, Message: "条件为真"}
@@ -333,7 +333,7 @@ func testSemantics(code int) ExitCodeMeaning {
 }
 
 // psReadSemantics PowerShell 读取命令退出码语义
-// 对齐 Python: _powershell_read_semantics (bash/_semantics.py L182-187)
+// Python: _powershell_read_semantics (bash/_semantics.py L182-187)
 func psReadSemantics(code int, stderr string) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -345,7 +345,7 @@ func psReadSemantics(code int, stderr string) ExitCodeMeaning {
 }
 
 // psGetChildItemSemantics Get-ChildItem 命令退出码语义
-// 对齐 Python: _get_child_item_semantics (powershell/_semantics.py L217-222)
+// Python: _get_child_item_semantics (powershell/_semantics.py L217-222)
 func psGetChildItemSemantics(code int, stdout, stderr string) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false}
@@ -357,7 +357,7 @@ func psGetChildItemSemantics(code int, stdout, stderr string) ExitCodeMeaning {
 }
 
 // psSearchSemantics 搜索命令退出码语义
-// 对齐 Python: _search_semantics (powershell/_semantics.py L225-230)
+// Python: _search_semantics (powershell/_semantics.py L225-230)
 func psSearchSemantics(code int, stdout, stderr string) ExitCodeMeaning {
 	if code == 0 {
 		return ExitCodeMeaning{IsError: false}

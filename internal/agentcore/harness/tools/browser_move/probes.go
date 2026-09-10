@@ -11,7 +11,7 @@ import (
 // BuildInteractiveProbeJS 构建交互元素探测的 JavaScript 代码。
 // 供 browser_run_code 调用，返回紧凑可见交互元素列表。
 //
-// 对齐 Python: build_interactive_probe_js (probes.py L18-281)
+// Python: build_interactive_probe_js (probes.py L18-281)
 // JS 代码逐字符复制 Python 原文，不做自行翻译
 // JS 反引号在 Go 反引号字符串中用 JS_BACKTICK 占位，运行时替换
 func BuildInteractiveProbeJS(maxItems int, viewportOnly bool, query string) string {
@@ -22,7 +22,7 @@ func BuildInteractiveProbeJS(maxItems int, viewportOnly bool, query string) stri
 	}
 	paramsJSON, _ := json.Marshal(params)
 
-	// 对齐 Python: probes.py L33-281 的 f-string 模板
+	// Python: probes.py L33-281 的 f-string 模板
 	// JS 代码逐字符复制 Python 原文，JS_BACKTICK 运行时替换为反引号
 	js := fmt.Sprintf(`async (page) => {{
   const params = %s;
@@ -278,7 +278,7 @@ func BuildInteractiveProbeJS(maxItems int, viewportOnly bool, query string) stri
 // BuildCardProbeJS 构建卡片/列表结构探测的 JavaScript 代码。
 // 供 browser_run_code_unsafe 调用，返回紧凑重复卡片结构列表。
 //
-// 对齐 Python: build_card_probe_js (probes.py L284-1251)
+// Python: build_card_probe_js (probes.py L284-1251)
 // JS 代码逐字符复制 Python 原文，不做自行翻译
 // JS 反引号在 Go 反引号字符串中用 JS_BACKTICK 占位，运行时替换
 func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, query string, siteProfiles []map[string]any, selectorCacheRecords []map[string]any) string {
@@ -292,7 +292,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
 	}
 	paramsJSON, _ := json.Marshal(params)
 
-	// 对齐 Python: probes.py L305-1251 的 template 字符串
+	// Python: probes.py L305-1251 的 template 字符串
 	// JS 代码逐字符复制 Python 原文，JS_BACKTICK 运行时替换为反引号
 	template := `async (page) => {
   const params = __PARAMS__;

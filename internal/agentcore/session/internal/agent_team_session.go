@@ -17,7 +17,7 @@ import (
 // 持有 AgentTeam 会话运行所需的基础设施组件（配置、状态、追踪器、流写入管理器、检查点器），
 // 是纯粹的组件容器，不包含业务逻辑。业务逻辑由公开层 Session 负责。
 //
-// 对应 Python: openjiuwen/core/session/internal/agent_team.py (AgentTeamSession)
+// Python: openjiuwen/core/session/internal/agent_team.py (AgentTeamSession)
 type AgentTeamSession struct {
 	// sessionID 会话唯一标识
 	sessionID string
@@ -82,26 +82,26 @@ func NewAgentTeamSession(sessionID, teamID string, opts ...AgentTeamSessionOptio
 	// 默认值处理（对齐 Python AgentTeamSession.__init__）：
 
 	// checkpointer: nil 时从全局工厂获取
-	// 对齐 Python：self._checkpointer = CheckpointerFactory.get_checkpointer() if checkpointer is None else checkpointer
+	// Python: self._checkpointer = CheckpointerFactory.get_checkpointer() if checkpointer is None else checkpointer
 	if s.checkpointer == nil {
 		s.checkpointer = checkpointer.GetCheckpointer()
 	}
 
 	// streamWriterManager: nil 时自动创建默认实例
-	// 对齐 Python：self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
+	// Python: self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
 	if s.streamWriterManager == nil {
 		s.streamWriterManager = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	}
 
 	// tracer: nil 时自动创建并初始化
-	// 对齐 Python：tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
+	// Python: tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
 	if s.tracer == nil {
 		s.tracer = tracer.NewTracer()
 		s.tracer.Init(s.streamWriterManager)
 	}
 
 	// teamSpan: 从 tracer 创建
-	// 对齐 Python：self._team_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
+	// Python: self._team_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
 	if s.teamSpan == nil && s.tracer != nil {
 		s.teamSpan = s.tracer.AgentSpanManager.CreateAgentSpan()
 	}
@@ -193,7 +193,7 @@ func (s *AgentTeamSession) Close() error {
 
 // TeamID 获取团队唯一标识，满足 TeamIDProvider 接口。
 //
-// 对齐 Python AgentTeamSession.team_id()
+// Python: AgentTeamSession.team_id()
 func (s *AgentTeamSession) TeamID() string {
 	return s.teamID
 }

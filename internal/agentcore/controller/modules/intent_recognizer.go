@@ -28,7 +28,7 @@ type ModelProvider interface {
 }
 
 // IntentRecognizer 意图识别器，负责识别用户输入中的意图，将事件转换为 Intent 对象。
-// 对应 Python: openjiuwen/core/controller/modules/intent_recognizer.py::IntentRecognizer
+// Python: openjiuwen/core/controller/modules/intent_recognizer.py::IntentRecognizer
 type IntentRecognizer struct {
 	// config 控制器配置
 	config *config.ControllerConfig
@@ -46,7 +46,7 @@ type IntentRecognizer struct {
 
 // EventHandlerWithIntentRecognition 基于意图识别的事件处理器。
 // 在 EventHandler 的基础上增加意图识别功能，根据识别出的意图调用相应的处理方法。
-// 对应 Python: openjiuwen/core/controller/modules/intent_recognizer.py::EventHandlerWithIntentRecognition
+// Python: openjiuwen/core/controller/modules/intent_recognizer.py::EventHandlerWithIntentRecognition
 type EventHandlerWithIntentRecognition struct {
 	EventHandlerBase
 	// recognizer 意图识别器
@@ -65,7 +65,7 @@ const logComponentIntent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntentRecognizer 创建意图识别器。
-// 对应 Python: IntentRecognizer.__init__(config, task_manager, ability_manager, context_engine)
+// Python: IntentRecognizer.__init__(config, task_manager, ability_manager, context_engine)
 // 偏差15 修复：对齐 Python，Python 未将 ability_manager 赋值给 self，Go 同步删除
 func NewIntentRecognizer(
 	cfg *config.ControllerConfig,
@@ -105,7 +105,7 @@ func NewIntentRecognizer(
 }
 
 // Recognize 识别意图。
-// 对应 Python: IntentRecognizer.recognize(event, session)
+// Python: IntentRecognizer.recognize(event, session)
 func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, sess sessioninterfaces.SessionFacade) ([]*schema.Intent, error) {
 	// Step 0: 校验 ModelProvider
 	if r.modelProvider == nil {
@@ -252,13 +252,13 @@ func (r *IntentRecognizer) SetModelProvider(provider ModelProvider) {
 }
 
 // NewEventHandlerWithIntentRecognition 创建基于意图识别的事件处理器。
-// 对应 Python: EventHandlerWithIntentRecognition.__init__()
+// Python: EventHandlerWithIntentRecognition.__init__()
 func NewEventHandlerWithIntentRecognition() *EventHandlerWithIntentRecognition {
 	return &EventHandlerWithIntentRecognition{}
 }
 
 // InitRecognizer 初始化意图识别器（在 EventHandlerBase 依赖注入完成后调用）。
-// 对应 Python: EventHandlerWithIntentRecognition.__init__ 中 self.recognizer = IntentRecognizer(...)
+// Python: EventHandlerWithIntentRecognition.__init__ 中 self.recognizer = IntentRecognizer(...)
 func (h *EventHandlerWithIntentRecognition) InitRecognizer() {
 	h.recognizer = NewIntentRecognizer(
 		h.Config,
@@ -268,7 +268,7 @@ func (h *EventHandlerWithIntentRecognition) InitRecognizer() {
 }
 
 // HandleInput 处理输入事件，识别意图并分发。
-// 对应 Python: EventHandlerWithIntentRecognition.handle_input(inputs)
+// Python: EventHandlerWithIntentRecognition.handle_input(inputs)
 // 偏差11 修复：对齐 Python，用 errgroup 并发处理意图（对应 asyncio.create_task + gather）
 // 偏差12 修复：对齐 Python，返回 gather 结果列表
 func (h *EventHandlerWithIntentRecognition) HandleInput(ctx context.Context, input *EventHandlerInput) (map[string]any, error) {
@@ -281,7 +281,7 @@ func (h *EventHandlerWithIntentRecognition) HandleInput(ctx context.Context, inp
 		return nil, err
 	}
 
-	// 对齐 Python: asyncio.create_task + asyncio.gather 并发处理意图
+	// Python: asyncio.create_task + asyncio.gather 并发处理意图
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	// 收集并发执行的结果（对应 Python gather 的返回列表）
@@ -334,7 +334,7 @@ func (h *EventHandlerWithIntentRecognition) HandleInput(ctx context.Context, inp
 }
 
 // HandleTaskInteraction 处理任务交互事件，将 interaction 直接抛出给用户。
-// 对应 Python: EventHandlerWithIntentRecognition.handle_task_interaction(inputs)
+// Python: EventHandlerWithIntentRecognition.handle_task_interaction(inputs)
 func (h *EventHandlerWithIntentRecognition) HandleTaskInteraction(ctx context.Context, input *EventHandlerInput) (map[string]any, error) {
 	taskInteractionEvent, ok := input.Event.(*schema.TaskInteractionEvent)
 	if !ok {
@@ -350,7 +350,7 @@ func (h *EventHandlerWithIntentRecognition) HandleTaskInteraction(ctx context.Co
 }
 
 // HandleTaskCompletion 处理任务完成事件，将结果抛出给用户。
-// 对应 Python: EventHandlerWithIntentRecognition.handle_task_completion(inputs)
+// Python: EventHandlerWithIntentRecognition.handle_task_completion(inputs)
 func (h *EventHandlerWithIntentRecognition) HandleTaskCompletion(ctx context.Context, input *EventHandlerInput) (map[string]any, error) {
 	taskCompletionEvent, ok := input.Event.(*schema.TaskCompletionEvent)
 	if !ok {
@@ -366,7 +366,7 @@ func (h *EventHandlerWithIntentRecognition) HandleTaskCompletion(ctx context.Con
 }
 
 // HandleTaskFailed 处理任务失败事件，将错误信息抛出给用户。
-// 对应 Python: EventHandlerWithIntentRecognition.handle_task_failed(inputs)
+// Python: EventHandlerWithIntentRecognition.handle_task_failed(inputs)
 func (h *EventHandlerWithIntentRecognition) HandleTaskFailed(ctx context.Context, input *EventHandlerInput) (map[string]any, error) {
 	taskFailedEvent, ok := input.Event.(*schema.TaskFailedEvent)
 	if !ok {
@@ -384,7 +384,7 @@ func (h *EventHandlerWithIntentRecognition) HandleTaskFailed(ctx context.Context
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // prepareUserMessage 构建用户消息。
-// 对应 Python: IntentRecognizer._prepare_user_message(query)
+// Python: IntentRecognizer._prepare_user_message(query)
 func (r *IntentRecognizer) prepareUserMessage(ctx context.Context, query string) (string, error) {
 	tasks, err := r.taskManager.GetTask(ctx, &TaskFilter{})
 	if err != nil {
@@ -406,7 +406,7 @@ func (r *IntentRecognizer) prepareUserMessage(ctx context.Context, query string)
 }
 
 // processCreateTaskIntent 处理创建任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_create_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_create_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processCreateTaskIntent(ctx context.Context, intent *schema.Intent, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	task := schema.NewTask(sess.GetSessionID(), "default_task_type")
 	task.TaskID = intent.TargetTaskID
@@ -427,14 +427,14 @@ func (h *EventHandlerWithIntentRecognition) processCreateTaskIntent(ctx context.
 }
 
 // processPauseTaskIntent 处理暂停任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_pause_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_pause_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processPauseTaskIntent(ctx context.Context, intent *schema.Intent, _ sessioninterfaces.SessionFacade) (map[string]any, error) {
 	_, err := h.TaskScheduler.PauseTask(ctx, intent.TargetTaskID)
 	return nil, err
 }
 
 // processResumeTaskIntent 处理恢复任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_resume_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_resume_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processResumeTaskIntent(ctx context.Context, intent *schema.Intent, _ sessioninterfaces.SessionFacade) (map[string]any, error) {
 	tasks, err := h.TaskManager.GetTask(ctx, &TaskFilter{TaskID: intent.TargetTaskID})
 	if err != nil {
@@ -448,7 +448,7 @@ func (h *EventHandlerWithIntentRecognition) processResumeTaskIntent(ctx context.
 }
 
 // processContinueTaskIntent 处理接续任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_continue_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_continue_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx context.Context, intent *schema.Intent, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	inputEvent, ok := intent.Event.(*schema.InputEvent)
 	if !ok {
@@ -471,8 +471,8 @@ func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx contex
 		}
 	}
 
-	// 对齐 Python: 通过 ContextEngine 获取依赖任务的上下文消息并附加到 InputEvent
-	// 对应 Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages()}))
+	// Python: 通过 ContextEngine 获取依赖任务的上下文消息并附加到 InputEvent
+	// Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages()}))
 	for _, contextID := range contextIDs {
 		ctxMC := h.ContextEngine.GetContext(contextID, contextID)
 		if ctxMC != nil {
@@ -501,7 +501,7 @@ func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx contex
 }
 
 // processSupplementTaskIntent 处理补充任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_supplement_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_supplement_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processSupplementTaskIntent(ctx context.Context, intent *schema.Intent, _ sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if intent.IntentType != schema.IntentSupplementTask {
 		return nil, exception.NewBaseError(
@@ -521,7 +521,7 @@ func (h *EventHandlerWithIntentRecognition) processSupplementTaskIntent(ctx cont
 		)
 	}
 
-	// 对齐 Python：pause_task 失败时抛异常中断流程，Go 改为返回 error
+	// Python: pause_task 失败时抛异常中断流程，Go 改为返回 error
 	if _, err := h.TaskScheduler.PauseTask(ctx, intent.TargetTaskID); err != nil {
 		return nil, fmt.Errorf("暂停任务 %s 失败: %w", intent.TargetTaskID, err)
 	}
@@ -534,7 +534,7 @@ func (h *EventHandlerWithIntentRecognition) processSupplementTaskIntent(ctx cont
 }
 
 // processCancelTaskIntent 处理取消任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_cancel_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_cancel_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processCancelTaskIntent(ctx context.Context, intent *schema.Intent, _ sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if intent.IntentType != schema.IntentCancelTask {
 		return nil, exception.NewBaseError(
@@ -547,7 +547,7 @@ func (h *EventHandlerWithIntentRecognition) processCancelTaskIntent(ctx context.
 }
 
 // processModifyTaskIntent 处理修改任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_modify_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_modify_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.Context, intent *schema.Intent, _ sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if intent.IntentType != schema.IntentModifyTask {
 		return nil, exception.NewBaseError(
@@ -586,7 +586,7 @@ func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.
 }
 
 // processUnknownTaskIntent 处理未知任务意图。
-// 对应 Python: EventHandlerWithIntentRecognition._process_unknown_task_intent(intent, session)
+// Python: EventHandlerWithIntentRecognition._process_unknown_task_intent(intent, session)
 func (h *EventHandlerWithIntentRecognition) processUnknownTaskIntent(ctx context.Context, intent *schema.Intent, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	if intent.IntentType != schema.IntentUnknownTask {
 		return nil, exception.NewBaseError(
@@ -613,7 +613,7 @@ func joinStrings(parts []string, sep string) string {
 }
 
 // invokeToolkitMethod 根据工具名称分发到 IntentToolkits 对应方法。
-// 对应 Python: getattr(toolkits, tool_call.name)(**json.loads(tool_call.arguments))
+// Python: getattr(toolkits, tool_call.name)(**json.loads(tool_call.arguments))
 func (r *IntentRecognizer) invokeToolkitMethod(toolkits *IntentToolkits, name, arguments string) (*schema.Intent, string, error) {
 	var args map[string]any
 	if err := json.Unmarshal([]byte(arguments), &args); err != nil {

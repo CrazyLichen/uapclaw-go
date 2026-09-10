@@ -14,7 +14,7 @@ import (
 
 // SchemaUtils 工具参数 Schema 工具类，提供校验、格式化、类型转换能力。
 //
-// 对应 Python: openjiuwen/core/common/utils/schema_utils.py (SchemaUtils)
+// Python: openjiuwen/core/common/utils/schema_utils.py (SchemaUtils)
 type SchemaUtils struct{}
 
 // formatOptions 格式化选项。
@@ -48,7 +48,7 @@ func WithFormatSkipValidate(skip bool) FormatOption {
 //
 // 流程：RemoveNoneValues（可选）→ Validate（可选）→ 填充默认值
 //
-// 对应 Python: SchemaUtils.format_with_schema()
+// Python: SchemaUtils.format_with_schema()
 func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Param, opts ...FormatOption) (map[string]any, error) {
 	o := &formatOptions{}
 	for _, opt := range opts {
@@ -104,7 +104,7 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 //
 // 流程：RemoveNoneValues（可选）→ 校验必填字段（可选）→ 填充默认值
 //
-// 对应 Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
+// Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
 func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[string]any, opts ...FormatOption) (map[string]any, error) {
 	o := &formatOptions{}
 	for _, opt := range opts {
@@ -178,7 +178,7 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 //
 // 检查必填字段是否存在、类型是否匹配。
 //
-// 对应 Python: SchemaUtils.validate_with_schema()
+// Python: SchemaUtils.validate_with_schema()
 func (su SchemaUtils) Validate(data map[string]any, params []*schema.Param) error {
 	if data == nil {
 		data = make(map[string]any)
@@ -222,7 +222,7 @@ func (su SchemaUtils) Validate(data map[string]any, params []*schema.Param) erro
 
 // RemoveNoneValues 递归移除 map 中的 nil 值。
 //
-// 对应 Python: SchemaUtils.remove_none_values()
+// Python: SchemaUtils.remove_none_values()
 func (su SchemaUtils) RemoveNoneValues(data map[string]any) map[string]any {
 	if data == nil {
 		return nil

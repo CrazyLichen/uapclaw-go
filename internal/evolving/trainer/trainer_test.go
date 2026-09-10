@@ -305,7 +305,7 @@ func TestMeanScore_空列表(t *testing.T) {
 }
 
 // TestApplyUpdates 测试应用更新到 Operator
-// 对齐 Python: Trainer.apply_updates 直接调用 set_parameter，无返回值
+// Python: Trainer.apply_updates 直接调用 set_parameter，无返回值
 func TestApplyUpdates(t *testing.T) {
 	op1 := &fakeOperator{id: "op1", params: make(map[string]any)}
 	ops := map[string]operator.Operator{
@@ -324,7 +324,7 @@ func TestApplyUpdates(t *testing.T) {
 }
 
 // TestApplyUpdates_operator不存在 测试应用更新时 Operator 不存在
-// 对齐 Python: op is not found 时跳过，不报错
+// Python: op is not found 时跳过，不报错
 func TestApplyUpdates_operator不存在(t *testing.T) {
 	ops := map[string]operator.Operator{}
 
@@ -338,7 +338,7 @@ func TestApplyUpdates_operator不存在(t *testing.T) {
 }
 
 // TestApplyUpdates_payload为nil 测试应用更新时 payload 为 nil
-// 对齐 Python: value is not None 时才调用 set_parameter
+// Python: value is not None 时才调用 set_parameter
 func TestApplyUpdates_payload为nil(t *testing.T) {
 	op1 := &fakeOperator{id: "op1", params: make(map[string]any)}
 	ops := map[string]operator.Operator{

@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExamplesObtained 包含正例和负例的完整传递结构。
-// 对齐 Python: examples_obtained = {"neg_examples": ..., "examples": ...}
+// Python: examples_obtained = {"neg_examples": ..., "examples": ...}
 type ExamplesObtained struct {
 	// Examples 正例列表
 	Examples []ExampleTuple
@@ -26,7 +26,7 @@ type ExamplesObtained struct {
 // ToolDescriptionMethod 基于正负例对比的工具描述优化方法。
 // 通过批判描述、对比正负例、生成增强描述来迭代优化工具描述。
 //
-// 对应 Python: ToolDescriptionMethod
+// Python: ToolDescriptionMethod
 type ToolDescriptionMethod struct {
 	BaseMethod
 	// evalFn 评估函数
@@ -54,7 +54,7 @@ const (
 
 // NewToolDescriptionMethod 创建 ToolDescriptionMethod 实例。
 //
-// 对齐 Python: ToolDescriptionMethod.__init__(self, config, eval_fn)
+// Python: ToolDescriptionMethod.__init__(self, config, eval_fn)
 func NewToolDescriptionMethod(config map[string]any, model *llm.Model, evalFn *SimpleEval) *ToolDescriptionMethod {
 	return &ToolDescriptionMethod{
 		BaseMethod: *NewBaseMethod(config, model),
@@ -65,7 +65,7 @@ func NewToolDescriptionMethod(config map[string]any, model *llm.Model, evalFn *S
 // Step 执行单步扩展。
 // it==0 时返回原始描述，it>0 时加载负例并生成增强描述。
 //
-// 对齐 Python: ToolDescriptionMethod.step(tool, examples, prev_outputs, it)
+// Python: ToolDescriptionMethod.step(tool, examples, prev_outputs, it)
 func (m *ToolDescriptionMethod) Step(
 	ctx context.Context,
 	tool map[string]any,
@@ -85,9 +85,9 @@ func (m *ToolDescriptionMethod) Step(
 			Str("output", fmt.Sprintf("%v", outputMap)).
 			Msg("当前描述——原始描述")
 	} else {
-		// 对齐 Python: 用负例改进描述
-		// 对齐 Python: neg_examples = self.get_negative_examples(function_name)
-		// 对齐 Python: examples_obtained = {"neg_examples": neg_examples, "examples": examples}
+		// Python: 用负例改进描述
+		// Python: neg_examples = self.get_negative_examples(function_name)
+		// Python: examples_obtained = {"neg_examples": neg_examples, "examples": examples}
 		negExamples := m.GetNegativeExamples(getToolName(tool))
 		examplesObtained := ExamplesObtained{
 			Examples:    examples,
@@ -99,10 +99,10 @@ func (m *ToolDescriptionMethod) Step(
 			Msg("当前描述——生成的描述")
 	}
 
-	// 对齐 Python: 用正例评估
+	// Python: 用正例评估
 	results := m.EvalLoop(ctx, tool, toString(outputMap["description"]), examples, 1)
 
-	// 对齐 Python: output = output | results
+	// Python: output = output | results
 	for k, v := range descResultsToMap(results) {
 		outputMap[k] = v
 	}
@@ -114,7 +114,7 @@ func (m *ToolDescriptionMethod) Step(
 
 // Generate 生成增强描述。
 //
-// 对齐 Python: ToolDescriptionMethod.generate(tool, examples, prev_outputs, it)
+// Python: ToolDescriptionMethod.generate(tool, examples, prev_outputs, it)
 func (m *ToolDescriptionMethod) Generate(
 	ctx context.Context,
 	tool map[string]any,
@@ -131,7 +131,7 @@ func (m *ToolDescriptionMethod) Generate(
 
 // EvalLoop 评估循环。
 //
-// 对齐 Python: ToolDescriptionMethod.eval_loop(tool, description, examples, runs)
+// Python: ToolDescriptionMethod.eval_loop(tool, description, examples, runs)
 func (m *ToolDescriptionMethod) EvalLoop(
 	ctx context.Context,
 	tool map[string]any,
@@ -141,7 +141,7 @@ func (m *ToolDescriptionMethod) EvalLoop(
 ) *EvalResult {
 	result := m.evalFn.Eval(ctx, tool, description, examples, runs)
 	if result == nil {
-		// 对齐 Python: ValueError 传播时返回默认 0 分
+		// Python: ValueError 传播时返回默认 0 分
 		return &EvalResult{ScoreAvg: 0, ScoreStd: 0, FnCallAccuracy: 0, OutputEffectiveness: 0}
 	}
 	return result
@@ -150,7 +150,7 @@ func (m *ToolDescriptionMethod) EvalLoop(
 // CritiqueDescriptions 批判描述（正负例对比版）。
 // Python 中有两个同名方法，后者覆盖前者，此处实现后者（正负例对比版）。
 //
-// 对齐 Python: ToolDescriptionMethod.critique_descriptions（第二个定义，204-311 行）
+// Python: ToolDescriptionMethod.critique_descriptions（第二个定义，204-311 行）
 func (m *ToolDescriptionMethod) CritiqueDescriptions(
 	ctx context.Context,
 	tool map[string]any,
@@ -160,7 +160,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 	functionName := getToolName(tool)
 	docStr := toJSON(tool)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
         You are given a function %s with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -170,11 +170,11 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
         `, functionName, docStr)
 
 	if len(examples) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
-		// 对齐 Python: 根据性能阈值区分正负例
+		// Python: 根据性能阈值区分正负例
 		positiveExamples := []map[string]any{}
 		negativeExamples := []map[string]any{}
 
-		// 对齐 Python: prev_outputs[::-1][:self.config['num_feedback_steps']][::-1]
+		// Python: prev_outputs[::-1][:self.config['num_feedback_steps']][::-1]
 		numFeedbackSteps := getConfigInt(m.config, "num_feedback_steps")
 		reversedOutputs := descReverseSlice(prevOutputs)
 		if numFeedbackSteps > 0 && len(reversedOutputs) > numFeedbackSteps {
@@ -191,7 +191,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 			}
 		}
 
-		// 对齐 Python: 添加正例部分
+		// Python: 添加正例部分
 		if len(positiveExamples) > 0 {
 			userPrompt += "\n=== POSITIVE EXAMPLES (Good Performance) ===\n"
 			userPrompt += "The following tool descriptions achieved good performance:\n\n"
@@ -229,7 +229,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 			}
 		}
 
-		// 对齐 Python: 添加负例部分
+		// Python: 添加负例部分
 		if len(negativeExamples) > 0 {
 			userPrompt += "\n=== NEGATIVE EXAMPLES (Poor Performance) ===\n"
 			userPrompt += "The following tool descriptions had poor performance:\n\n"
@@ -267,7 +267,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 			}
 		}
 
-		// 对齐 Python: critique prompt 一比一复刻
+		// Python: critique prompt 一比一复刻
 		userPrompt += fmt.Sprintf(`
             Now your task is to critique the descriptions by comparing positive and negative examples. A good description maximizes the score, minimizes the stdev, and helps the assistant correctly use the function without errors. In your analysis:
 
@@ -293,7 +293,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 
 // CritiqueAllDescriptions 批判所有描述（正负例对比）。
 //
-// 对齐 Python: ToolDescriptionMethod.critique_all_descriptions
+// Python: ToolDescriptionMethod.critique_all_descriptions
 func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	ctx context.Context,
 	tool map[string]any,
@@ -303,14 +303,14 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	functionName := getToolName(tool)
 	docStr := toJSON(tool)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
         You are given a function %s with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
         Documentation:
         %s`, functionName, docStr)
 
-	// 对齐 Python: 守卫条件——正例和 prevOutputs 都非空
+	// Python: 守卫条件——正例和 prevOutputs 都非空
 	// S06: 增加 prevOutputs 检查，对齐 Python 的完整守卫条件
 	if len(examplesObtained.Examples) == 0 || prevOutputs == nil || len(prevOutputs) == 0 {
 		prompt := FormatPromptLlama("", userPrompt)
@@ -322,10 +322,10 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	}
 
 	positiveExamples := examplesObtained.Examples
-	// 对齐 Python: 直接使用传递的 neg_examples，而非重新获取
+	// Python: 直接使用传递的 neg_examples，而非重新获取
 	negExamples := examplesObtained.NegExamples
 
-	// 对齐 Python: 添加正例部分
+	// Python: 添加正例部分
 	if len(positiveExamples) > 0 {
 		userPrompt += "\n=== POSITIVE EXAMPLES (Good Performance) ===\n"
 		userPrompt += "The following examples achieved good performance:\n\n"
@@ -342,7 +342,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 		}
 	}
 
-	// 对齐 Python: 添加负例部分
+	// Python: 添加负例部分
 	if len(negExamples) > 0 {
 		userPrompt += "\n=== NEGATIVE EXAMPLES (Poor Performance) ===\n"
 		userPrompt += "The following tool descriptions had poor performance:\n\n"
@@ -360,7 +360,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 		}
 	}
 
-	// 对齐 Python: critique prompt 一比一复刻
+	// Python: critique prompt 一比一复刻
 	userPrompt += `
             Now your task is to critique the descriptions by comparing positive and negative examples. In your analysis:
 
@@ -385,7 +385,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 
 // CritiqueNegativeExamples 批判负例。
 //
-// 对齐 Python: ToolDescriptionMethod.critique_negative_examples
+// Python: ToolDescriptionMethod.critique_negative_examples
 func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 	ctx context.Context,
 	tool map[string]any,
@@ -394,7 +394,7 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 	functionName := getToolName(tool)
 	docStr := toJSON(tool)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
         You are given a function %s with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -404,11 +404,11 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 
 	if len(examples) > 0 {
 		userPrompt += (
-		// 对齐 Python: 一比一复刻
+		// Python: 一比一复刻
 		"\nPreviously, the given tool was used in solving instructions " +
 			"by a tool assistant with the following function descriptions:\n")
 		userPrompt += (
-		// 对齐 Python: 一比一复刻
+		// Python: 一比一复刻
 		"Here are the instructions the assistant " +
 			"tried to solve with this tool description, with " +
 			"their corresponding answers and errors produced by the assistant: ")
@@ -429,7 +429,7 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 			userPrompt += fmt.Sprintf("And thus result to answer=\"%s\"", ex.Answer)
 		}
 
-		// 对齐 Python: critique prompt 一比一复刻
+		// Python: critique prompt 一比一复刻
 		userPrompt += `
 
             Now your task is to critique the descriptions based on these results. In your analysis:
@@ -452,14 +452,14 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 
 // GenerateDescriptionFromDocumentation 从文档生成增强描述。
 //
-// 对齐 Python: ToolDescriptionMethod.generate_description_from_documentation
+// Python: ToolDescriptionMethod.generate_description_from_documentation
 func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	ctx context.Context,
 	tool map[string]any,
 	examplesObtained ExamplesObtained,
 	prevOutputs []map[string]any,
 ) map[string]any {
-	// 对齐 Python: td - 修改提示词以分析负例
+	// Python: td - 修改提示词以分析负例
 	pos := examplesObtained.Examples
 
 	typedPrevOutputs := prevOutputs
@@ -471,7 +471,7 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	functionName := getToolName(tool)
 	docStr := toJSON(tool)
 
-	// 对齐 Python: user_prompt 一比一复刻
+	// Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
         You are given an API tool with the following documentation, which includes the functionality description, required parameters, code snippets for API calls, etc.
 
@@ -482,7 +482,7 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 
 	if len(pos) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
 		userPrompt += (
-		// 对齐 Python: 一比一复刻
+		// Python: 一比一复刻
 		"\nPreviously, the given tool was used in solving instructions " +
 			"by a tool assistant with the following function descriptions:\n")
 
@@ -504,13 +504,13 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 			userPrompt += "Performance of this description is: "
 			userPrompt += fmt.Sprintf(" score=%v%%, stdev=%v.\n", output["score_avg"], output["score_std"])
 		}
-		// 对齐 Python: analysis 拼接一比一复刻
+		// Python: analysis 拼接一比一复刻
 		userPrompt += fmt.Sprintf("\nFurthermore, an analysis was performed on the "+
 			"descriptions for the previous iterations: \"%s\". An "+
 			"analysis was performed on the negative cases for the cons"+
 			"trains and ability limits of the function: \"%s\"", analysis, analysisContrast)
 
-		// 对齐 Python: enhancement prompt 一比一复刻
+		// Python: enhancement prompt 一比一复刻
 		userPrompt += fmt.Sprintf(`
 Your task is to further enhance the description for the function %s to MODIFY THE TOOL DESCRIPTION and PARAMETER DESCRIPTION part, with the objective of maximizing the score, minimizing the stdev, and help the assistant correctly use the function without errors.
 
@@ -520,10 +520,10 @@ The enhanced description should not be longer than 1000 characters, do not viola
 `, functionName)
 	}
 
-	// 对齐 Python: desired_desc_schema 一比一复刻
+	// Python: desired_desc_schema 一比一复刻
 	desiredDescSchema := `{"type":"","name":"","description":"","parameters":{"type":"","properties":{"<PARAMETER_NAME_0>":{"type":"","description":""},"<PARAMETER_NAME_1>":{"type":"","description":""}},"required":["<PARAMETER_NAME>"]}}`
 
-	// 对齐 Python: IMPORTANT output format 一比一复刻
+	// Python: IMPORTANT output format 一比一复刻
 	userPrompt += fmt.Sprintf(`
 **IMPORTANT**: You must preserve the exact JSON schema structure provided below. Only modify the text content - do not change schema structure.
 
@@ -562,7 +562,7 @@ Return JSON following this exact schema structure (modify only description texts
 
 // LoadExamples 从 JSON 文件加载示例。
 //
-// 对齐 Python: ToolDescriptionMethod.load_examples(examples_dir, function_name, max_num_examples)
+// Python: ToolDescriptionMethod.load_examples(examples_dir, function_name, max_num_examples)
 func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, maxNumExamples int) ([]ExampleTuple, error) {
 	examplesPath := examplesDir + "/" + functionName + ".json"
 	logger.Info(logComponent).
@@ -588,7 +588,7 @@ func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, m
 // GetNegativeExamples 获取负例。
 // 如果配置路径不存在，回退到从示例目录加载。
 //
-// 对齐 Python: ToolDescriptionMethod.get_negative_examples(function_name)
+// Python: ToolDescriptionMethod.get_negative_examples(function_name)
 func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []ExampleTuple {
 	examplesPath := getConfigString(m.config, "neg_ex_input_path")
 	maxNumExamples := getConfigInt(m.config, "num_examples_for_desc")
@@ -596,7 +596,7 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 	var allOutputs []any
 
 	if _, err := os.Stat(examplesPath); err == nil {
-		// 对齐 Python: 从提供的路径加载
+		// Python: 从提供的路径加载
 		data, err := os.ReadFile(examplesPath)
 		if err != nil {
 			logger.Error(logComponent).Err(err).
@@ -611,7 +611,7 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 			return nil
 		}
 	} else {
-		// 对齐 Python: 如果未找到，回退到从自对弈示例加载
+		// Python: 如果未找到，回退到从自对弈示例加载
 		logger.Warn(logComponent).
 			Str("examples_path", examplesPath).
 			Msg("未找到负例文件，回退到加载生成的示例")
@@ -642,14 +642,14 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 // GetOriginalDescription 获取工具的原始描述。
 // 如果描述中包含 'The description of this function is: "' 前缀，则提取其中的内容。
 //
-// 对齐 Python: ToolDescriptionMethod.get_original_description(tool)
+// Python: ToolDescriptionMethod.get_original_description(tool)
 func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) string {
 	description := toString(tool["description"])
 	indicator := "The description of this function is: \""
 	found := strings.Index(description, indicator)
 	if found != -1 {
 		description = description[found+len(indicator):]
-		// 对齐 Python: 截取 indicator 之后到倒数第一个字符的内容
+		// Python: 截取 indicator 之后到倒数第一个字符的内容
 		if len(description) > 0 {
 			description = description[:len(description)-1]
 		}
@@ -659,7 +659,7 @@ func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) stri
 
 // GetExamples 获取工具的示例数据（BeamSearchMethod 接口方法）。
 //
-// 对齐 Python: ToolDescriptionMethod.get_examples(tool)
+// Python: ToolDescriptionMethod.get_examples(tool)
 func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	functionName := getToolName(tool)
 	var examples []ExampleTuple
@@ -910,7 +910,7 @@ func descSelectExamples(allOutputs []any, maxNumExamples int, breakOnFirst bool)
 		if !ok {
 			continue
 		}
-		// 对齐 Python: node_history[::-1]
+		// Python: node_history[::-1]
 		for i := len(nodeHistory) - 1; i >= 0; i-- {
 			stepOutput := descToMap(nodeHistory[i])
 			if stepOutput == nil {
@@ -965,7 +965,7 @@ func descSelectNegativeExamples(allOutputs []any, maxNumExamples int) []ExampleT
 			if stepOutput == nil {
 				continue
 			}
-			// 对齐 Python: 检查所有变量是否存在
+			// Python: 检查所有变量是否存在
 			requiredKeys := []string{"instructions", "fn_call", "tool_results", "answers"}
 			allExist := true
 			for _, k := range requiredKeys {
@@ -992,7 +992,7 @@ func descSelectNegativeExamples(allOutputs []any, maxNumExamples int) []ExampleT
 				scoreSlice := descToSliceAny(scores)
 				if len(scoreSlice) > 0 {
 					score := descToFloat64(scoreSlice[len(scoreSlice)-1])
-					// 对齐 Python: 分数阈值 1. <= score < 3.
+					// Python: 分数阈值 1. <= score < 3.
 					if score >= 1.0 && score < 3.0 && descIsString(inst) && descIsString(ans) {
 						selectedExamples = append(selectedExamples, ExampleTuple{
 							Instruction: strings.TrimSpace(inst),

@@ -15,7 +15,7 @@ import (
 // 反序列化时自动将 OpenAI 嵌套格式转为扁平格式（UnmarshalJSON）。
 // 序列化时输出内部扁平格式（MarshalJSON），如需 OpenAI 格式请调用 ToOpenAIFormat()。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/tool_call.py (ToolCall)
+// Python: openjiuwen/core/foundation/llm/schema/tool_call.py (ToolCall)
 type ToolCall struct {
 	// ID 工具调用 ID
 	ID string `json:"id,omitempty"`
@@ -52,7 +52,7 @@ func WithToolCallType(typ string) ToolCallOption {
 
 // NewToolCall 创建 ToolCall 实例，Type 默认为 "function"。
 //
-// 对应 Python: ToolCall(id=..., type="function", name=..., arguments=..., index=None)
+// Python: ToolCall(id=..., type="function", name=..., arguments=..., index=None)
 func NewToolCall(id, name, arguments string, opts ...ToolCallOption) *ToolCall {
 	tc := &ToolCall{
 		ID:        id,
@@ -70,7 +70,7 @@ func NewToolCall(id, name, arguments string, opts ...ToolCallOption) *ToolCall {
 //
 // 输出格式：{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}
 //
-// 对应 Python: AssistantMessage.model_dump() 中 tool_calls 的序列化逻辑
+// Python: AssistantMessage.model_dump() 中 tool_calls 的序列化逻辑
 func (tc *ToolCall) ToOpenAIFormat() map[string]any {
 	result := map[string]any{
 		"type": tc.Type,
@@ -107,7 +107,7 @@ func (tc *ToolCall) MarshalJSON() ([]byte, error) {
 // 如果输入数据包含 "function" 键（OpenAI 格式），自动提取 function.name 和 function.arguments
 // 填入 Name 和 Arguments 字段。
 //
-// 对应 Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
+// Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
 func (tc *ToolCall) UnmarshalJSON(data []byte) error {
 	// 先解析为通用 map，检测是否为 OpenAI 嵌套格式
 	var raw map[string]any

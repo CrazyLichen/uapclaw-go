@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"math/rand"
 	"net/http"
@@ -336,11 +337,7 @@ func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	// 返回副本
-	result := make(map[string]HealthCheckResult, len(h.lastCheckResults))
-	for k, v := range h.lastCheckResults {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(h.lastCheckResults)
 }
 
 func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
@@ -411,7 +408,7 @@ func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *Rout
 	}
 
 	// 筛选可用端点（健康 + 冷却期已过）
-	// 对应 Python: Deployment.is_available(now) + COOLDOWN 超时恢复
+	// Python: Deployment.is_available(now) + COOLDOWN 超时恢复
 	var available []*Deployment
 	for _, dep := range candidates {
 		dep.mu.RLock()
@@ -441,7 +438,7 @@ func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *Rout
 	}
 
 	// Session 亲和性检查（软亲和性）
-	// 对应 Python: AdaptiveStrategy._get_session_affinity_deployment()
+	// Python: AdaptiveStrategy._get_session_affinity_deployment()
 	if ctx != nil && ctx.SessionID != "" {
 		affinityDep := r.getSessionAffinityDeployment(ctx.SessionID, available)
 		if affinityDep != nil {
@@ -882,7 +879,7 @@ func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	}
 
 	// Token 评分：剩余越多越好（归一化到 0-1）
-	// 对应 Python: token_remaining / token_threshold
+	// Python: token_remaining / token_threshold
 	tokenScore := 1.0
 	if dep.TPM > 0 && s.TokenThreshold > 0 {
 		remaining := float64(dep.TPM) - float64(dep.totalCalls)
@@ -893,7 +890,7 @@ func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	}
 
 	// RPM 评分：剩余越多越好
-	// 对应 Python: rpm_remaining / rpm_threshold
+	// Python: rpm_remaining / rpm_threshold
 	rpmScore := 1.0
 	if dep.RPM > 0 && s.RPMThreshold > 0 {
 		remaining := float64(dep.RPM) - float64(dep.totalCalls)
@@ -904,7 +901,7 @@ func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	}
 
 	// 延迟评分：延迟越低分数越高
-	// 对应 Python: latency_score = max(0, 1 - avg_latency)
+	// Python: latency_score = max(0, 1 - avg_latency)
 	// avgLatency=+inf（无数据）→ latencyScore=0.0
 	latencyScore := 0.0
 	if !math.IsInf(dep.avgLatency, 1) && dep.avgLatency >= 0 {

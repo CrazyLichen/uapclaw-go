@@ -16,7 +16,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EditFileInput 编辑文件工具的输入参数。
-// 对齐 Python: EditFileTool invoke inputs (filesystem.py L1185)
+// Python: EditFileTool invoke inputs (filesystem.py L1185)
 type EditFileInput struct {
 	// FilePath 文件路径（必需）
 	FilePath string `json:"file_path"`
@@ -37,13 +37,13 @@ type EditFileInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEditFileTool 创建 EditFileTool 实例。
-// 对齐 Python: EditFileTool (filesystem.py L987)
+// Python: EditFileTool (filesystem.py L987)
 func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("edit_file", "EditFileTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input EditFileInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 参数校验
-		// 对齐 Python L1186-1194
+		// Python: L1186-1194
 		if input.FilePath == "" {
 			return map[string]any{
 				"success": false,
@@ -63,11 +63,11 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		replaceAll := input.ReplaceAll
 
 		// 路径解析
-		// 对齐 Python L1196-1199
+		// Python: L1196-1199
 		filePath := ResolveToolFilePath(ctx, input.FilePath)
 
 		// 拒绝 Jupyter Notebook
-		// 对齐 Python L1202-1207
+		// Python: L1202-1207
 		if strings.ToLower(filepath.Ext(filePath)) == ".ipynb" {
 			return map[string]any{
 				"success": false,
@@ -76,7 +76,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// 拒绝无操作编辑
-		// 对齐 Python L1209-1214
+		// Python: L1209-1214
 		if oldStr == newStr {
 			return map[string]any{
 				"success": false,
@@ -93,7 +93,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 新文件创建分支 (old_str == "") ----
-		// 对齐 Python L1219-1247
+		// Python: L1219-1247
 		if oldStr == "" {
 			if fileExists && !isUNC {
 				existingContent, _ := readExistingText(ctx, op, filePath)
@@ -135,7 +135,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 			}
 
 			// 追加文件操作历史（创建新文件）
-			// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+			// Python: _session = get_current_session(); if _session: _append_op_history(...)
 			_ = appendHistoryFromOpts(opts, agentID, filePath, "write", nil, &newStr)
 
 			return map[string]any{
@@ -149,7 +149,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 文件必须存在 ----
-		// 对齐 Python L1249-1256
+		// Python: L1249-1256
 		if !fileExists {
 			similar := findSimilarPaths(filePath)
 			hint := ""
@@ -163,7 +163,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 文件大小检查 ----
-		// 对齐 Python L1258-1278
+		// Python: L1258-1278
 		var currentMtimeNS int64
 		var currentSize int64
 		if !isUNC {
@@ -190,7 +190,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- Pre-read 校验 ----
-		// 对齐 Python L1280-1289
+		// Python: L1280-1289
 		readState, hasReadState := GetFileReadState(filePath)
 		if !hasReadState || readState.IsPartial {
 			return map[string]any{
@@ -200,7 +200,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 外部修改检测 ----
-		// 对齐 Python L1291-1310
+		// Python: L1291-1310
 		if !isUNC && (readState.MtimeNS != currentMtimeNS || readState.SizeBytes != currentSize) {
 			contentUnchanged := false
 			if readState.Content != "" {
@@ -219,19 +219,19 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 读取原始文件 ----
-		// 对齐 Python L1312-1316
+		// Python: L1312-1316
 		content, _ := readExistingText(ctx, op, filePath)
 
 		// EOL 检测
-		// 对齐 Python L1318
+		// Python: L1318
 		eol := DetectEOL(content)
 
 		// CRLF → LF 归一化
-		// 对齐 Python L1321
+		// Python: L1321
 		contentLF := strings.ReplaceAll(content, "\r\n", "\n")
 
 		// ---- XML desanitize + 行尾空白处理 ----
-		// 对齐 Python L1323-1329
+		// Python: L1323-1329
 		oldStrClean := Desanitize(oldStr)
 		oldStrClean = strings.ReplaceAll(oldStrClean, "\r\n", "\n")
 
@@ -245,7 +245,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 匹配 + 引号容错 ----
-		// 对齐 Python L1331-1341
+		// Python: L1331-1341
 		matchStr := oldStrClean
 		if !strings.Contains(contentLF, matchStr) {
 			variant, found := TryQuoteVariants(oldStrClean, contentLF)
@@ -260,7 +260,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 唯一性校验 ----
-		// 对齐 Python L1343-1353
+		// Python: L1343-1353
 		count := strings.Count(contentLF, matchStr)
 		if !replaceAll && count > 1 {
 			return map[string]any{
@@ -273,7 +273,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 执行替换 ----
-		// 对齐 Python L1355-1361
+		// Python: L1355-1361
 		var newContentLF string
 		replaced := count
 		if replaceAll {
@@ -284,7 +284,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// 还原 EOL 风格
-		// 对齐 Python L1363-1364
+		// Python: L1363-1364
 		var newContent string
 		if eol == "\r\n" {
 			newContent = strings.ReplaceAll(newContentLF, "\n", "\r\n")
@@ -293,7 +293,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// ---- 写回 ----
-		// 对齐 Python L1366-1371
+		// Python: L1366-1371
 		writeRes, writeErr := op.Fs().WriteFile(ctx, filePath, newContent,
 			sys_operation.WithFsPrependNewline(false),
 		)
@@ -311,7 +311,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 		}
 
 		// 更新读取状态注册表
-		// 对齐 Python L1373-1383
+		// Python: L1373-1383
 		if st2, err := os.Stat(filePath); err == nil {
 			SetFileReadState(filePath, &FileReadState{
 				MtimeNS:   st2.ModTime().UnixNano(),
@@ -331,11 +331,11 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 			Msg("EditFileTool 编辑成功")
 
 		// 追加文件操作历史（编辑已有文件）
-		// 对齐 Python: _session = get_current_session(); if _session: _append_op_history(...)
+		// Python: _session = get_current_session(); if _session: _append_op_history(...)
 		_ = appendHistoryFromOpts(opts, agentID, filePath, "edit", &contentLF, &newContentLF)
 
 		// 构建返回值
-		// 对齐 Python L1390-1393
+		// Python: L1390-1393
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
@@ -358,7 +358,7 @@ func fileExistsCheck(path string) bool {
 }
 
 // findSimilarPaths 查找相似路径。
-// 对齐 Python: EditFileTool._find_similar_paths (filesystem.py L1077-1092)
+// Python: EditFileTool._find_similar_paths (filesystem.py L1077-1092)
 func findSimilarPaths(filePath string) []string {
 	directory := filepath.Dir(filePath)
 	if directory == "" {

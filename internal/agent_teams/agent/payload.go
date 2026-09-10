@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnPayloadBuilder 跨进程 spawn 载荷构造器。
-// 对齐 Python: SpawnPayloadBuilder (openjiuwen/agent_teams/agent/payload.py)
+// Python: SpawnPayloadBuilder (openjiuwen/agent_teams/agent/payload.py)
 //
 // 集中管理 spawn teammate 时的跨进程 wire 格式。
 // 输出键是 TeamAgent.FromSpawnPayload 的公共契约——
@@ -36,7 +36,7 @@ type SpawnPayloadBuilder struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSpawnPayloadBuilder 创建新的 SpawnPayloadBuilder 实例。
-// 对齐 Python: SpawnPayloadBuilder.__init__(spec, ctx)
+// Python: SpawnPayloadBuilder.__init__(spec, ctx)
 func NewSpawnPayloadBuilder(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *SpawnPayloadBuilder {
 	return &SpawnPayloadBuilder{
 		spec:          spec,
@@ -46,7 +46,7 @@ func NewSpawnPayloadBuilder(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntim
 }
 
 // BuildSpawnPayload 构建跨进程 spawn 载荷。
-// 对齐 Python: SpawnPayloadBuilder.build_spawn_payload(ctx, initial_message)
+// Python: SpawnPayloadBuilder.build_spawn_payload(ctx, initial_message)
 //
 // 输出 schema 是公共 wire 契约——必须保留每个键。
 func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext, initialMessage string) map[string]any {
@@ -86,7 +86,7 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 }
 
 // BuildMemberContext 构造成员运行时上下文。
-// 对齐 Python: SpawnPayloadBuilder.build_member_context(member_spec)
+// Python: SpawnPayloadBuilder.build_member_context(member_spec)
 func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
 	return atschema.TeamRuntimeContext{
 		Role:       memberSpec.RoleType,
@@ -106,7 +106,7 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 }
 
 // BuildMemberMessagerConfig 为指定成员分配稳定的传输配置。
-// 对齐 Python: SpawnPayloadBuilder.build_member_messager_config(member_name)
+// Python: SpawnPayloadBuilder.build_member_messager_config(member_name)
 //
 // TODO(#9.65): MessagerTransportConfig 深拷贝和端口分配实现后替换
 func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) any {
@@ -114,7 +114,7 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) any {
 }
 
 // BuildSpawnConfig 构建 SpawnAgentConfig。
-// 对齐 Python: SpawnPayloadBuilder.build_spawn_config(ctx)
+// Python: SpawnPayloadBuilder.build_spawn_config(ctx)
 func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	return runnerspawn.SpawnAgentConfig{
 		AgentKind: runnerspawn.SpawnAgentKindTeamAgent,

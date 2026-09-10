@@ -70,7 +70,7 @@ func getValueByNestedPathMap(nestedKey string, source map[string]any) map[string
 }
 
 // getBySchemaMap 处理 map schema 的递归读取
-// 对应 Python: get_by_schema 中 dict 分支
+// Python: get_by_schema 中 dict 分支
 // 只有引用路径（${...}）才从 data 取值，普通字符串保留为默认值
 func getBySchemaMap(schema map[string]any, data map[string]any) map[string]any {
 	result := map[string]any{}
@@ -96,7 +96,7 @@ func getBySchemaMap(schema map[string]any, data map[string]any) map[string]any {
 }
 
 // getBySchemaList 处理 list schema 的递归读取
-// 对应 Python: get_by_schema 中 list 分支
+// Python: get_by_schema 中 list 分支
 func getBySchemaList(schema []any, data map[string]any) []any {
 	result := make([]any, len(schema))
 	for i, item := range schema {

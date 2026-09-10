@@ -22,7 +22,7 @@ import (
 // 直接持有基础字段（card/abilityManager/callbackManager），
 // 自行实现 Invoke/Stream，在方法体内显式调用回调骨架。
 //
-// 对应 Python: ReActAgent (openjiuwen/core/single_agent/agents/react_agent.py)
+// Python: ReActAgent (openjiuwen/core/single_agent/agents/react_agent.py)
 type ReActAgent struct {
 	// card Agent 身份卡片
 	card *agentschema.AgentCard
@@ -37,7 +37,7 @@ type ReActAgent struct {
 	// llm LLM 模型实例（延迟初始化）
 	llm *llm.Model
 	// promptBuilder 系统提示词构建器
-	// 对应 Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
+	// Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
 	promptBuilder *prompts.SystemPromptBuilder
 	// llmOnce LLM 初始化同步原语
 	llmOnce sync.Once
@@ -46,7 +46,7 @@ type ReActAgent struct {
 	// hitlHandler HITL 中断处理器
 	hitlHandler *interrupt.ToolInterruptHandler
 	// skillUtil 技能工具（延迟初始化，Configure 时根据 sysOperationID 创建）
-	// 对应 Python: self._skill_util
+	// Python: self._skill_util
 	skillUtil *skills.SkillUtil
 }
 
@@ -59,16 +59,16 @@ const (
 	// defaultMaxIterations 默认最大迭代次数
 	defaultMaxIterations = 5
 	// identitySection identity 区段名称
-	// 对应 Python: _IDENTITY_SECTION = "identity"
+	// Python: _IDENTITY_SECTION = "identity"
 	identitySection = "identity"
 	// identitySectionPriority identity 区段优先级
-	// 对应 Python: _IDENTITY_SECTION_PRIORITY = 10
+	// Python: _IDENTITY_SECTION_PRIORITY = 10
 	identitySectionPriority = 10
 	// skillsSection skills 区段名称
-	// 对应 Python: _SKILLS_SECTION = "skills"
+	// Python: _SKILLS_SECTION = "skills"
 	skillsSection = "skills"
 	// skillsSectionPriority skills 区段优先级
-	// 对应 Python: _SKILLS_SECTION_PRIORITY = 90
+	// Python: _SKILLS_SECTION_PRIORITY = 90
 	skillsSectionPriority = 90
 )
 
@@ -78,7 +78,7 @@ const (
 
 // NewReActAgent 创建 ReActAgent 实例。
 //
-// 对应 Python: ReActAgent.__init__(card)
+// Python: ReActAgent.__init__(card)
 func NewReActAgent(
 	card *agentschema.AgentCard,
 	config *saconfig.ReActAgentConfig,

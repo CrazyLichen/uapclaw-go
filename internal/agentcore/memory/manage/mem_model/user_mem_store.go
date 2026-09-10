@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UserMemStore 基于 KV 存储的用户记忆 CRUD。
-// 对齐 Python: openjiuwen/core/memory/manage/mem_model/user_mem_store.py (UserMemStore)
+// Python: openjiuwen/core/memory/manage/mem_model/user_mem_store.py (UserMemStore)
 //
 // 键格式:
 //
@@ -50,7 +50,7 @@ const (
 
 var (
 	// fragmentMemoryTypes 片段记忆类型列表
-	// 对齐 Python: FRAGMENT_MEMORY_TYPE = [MemoryType.USER_PROFILE.value, ...]
+	// Python: FRAGMENT_MEMORY_TYPE = [MemoryType.USER_PROFILE.value, ...]
 	fragmentMemoryTypes = []string{
 		MemoryTypeUserProfile.String(),
 		MemoryTypeSemanticMemory.String(),
@@ -63,7 +63,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewUserMemStore 创建用户记忆 KV 存储。
-// 对齐 Python: UserMemStore.__init__
+// Python: UserMemStore.__init__
 func NewUserMemStore(kvStore kv.BaseKVStore) (*UserMemStore, error) {
 	if kvStore == nil {
 		return nil, exception.BuildError(
@@ -81,7 +81,7 @@ func NewUserMemStore(kvStore kv.BaseKVStore) (*UserMemStore, error) {
 }
 
 // Write 写入记忆数据。若 mem_id 已存在返回 false。
-// 对齐 Python: UserMemStore.write
+// Python: UserMemStore.write
 func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string, data map[string]any) (bool, error) {
 	if len(data) == 0 {
 		logger.Error(logComponent).
@@ -119,7 +119,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 
 	// 更新 mem_type ids 和 user profile topic ids
 	if memType, ok := data[memTypeFieldKey]; ok {
-		// 对齐 Python: mem_type 始终是字符串，非 string 视为异常
+		// Python: mem_type 始终是字符串，非 string 视为异常
 		memTypeStr, ok := memType.(string)
 		if !ok {
 			logger.Error(logComponent).Str("memory_id", memID).
@@ -168,7 +168,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 }
 
 // Update 更新记忆数据（合并字段）。若 mem_id 不存在返回 false。
-// 对齐 Python: UserMemStore.update
+// Python: UserMemStore.update
 func (s *UserMemStore) Update(ctx context.Context, userID, scopeID, memID string, data map[string]any) (bool, error) {
 	userMemKey := s.getUserMemKey(userID, scopeID, memID)
 	exists, err := s.kvStore.Exists(ctx, userMemKey)
@@ -215,13 +215,13 @@ func (s *UserMemStore) Update(ctx context.Context, userID, scopeID, memID string
 }
 
 // Delete 删除指定记忆。
-// 对齐 Python: UserMemStore.delete
+// Python: UserMemStore.delete
 func (s *UserMemStore) Delete(ctx context.Context, userID, scopeID, memID string) error {
 	return s.innerDelete(ctx, userID, scopeID, memID)
 }
 
 // BatchDelete 批量删除记忆。
-// 对齐 Python: UserMemStore.batch_delete
+// Python: UserMemStore.batch_delete
 func (s *UserMemStore) BatchDelete(ctx context.Context, userID, scopeID string, memIDs []string) error {
 	for _, memID := range memIDs {
 		if err := s.innerDelete(ctx, userID, scopeID, memID); err != nil {
@@ -232,14 +232,14 @@ func (s *UserMemStore) BatchDelete(ctx context.Context, userID, scopeID string, 
 }
 
 // Get 获取指定记忆数据。
-// 对齐 Python: UserMemStore.get
+// Python: UserMemStore.get
 func (s *UserMemStore) Get(ctx context.Context, userID, scopeID, memID string) (map[string]any, error) {
 	userMemKey := s.getUserMemKey(userID, scopeID, memID)
 	return s.get(ctx, userMemKey)
 }
 
 // BatchGet 批量获取记忆数据。
-// 对齐 Python: UserMemStore.batch_get
+// Python: UserMemStore.batch_get
 func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, memIDs []string) ([]map[string]any, error) {
 	keysList := make([]string, len(memIDs))
 	for i, memID := range memIDs {
@@ -267,7 +267,7 @@ func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, mem
 }
 
 // GetAll 获取用户指定类型（或全部）记忆。memType 为空时获取全部类型。
-// 对齐 Python: UserMemStore.get_all
+// Python: UserMemStore.get_all
 func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType string) ([]map[string]any, error) {
 	userIDsKey := s.getUserIDsKey(userID, scopeID, memType)
 	exists, err := s.kvStore.Exists(ctx, userIDsKey)
@@ -288,7 +288,7 @@ func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType stri
 }
 
 // GetByTopic 按主题获取记忆。
-// 对齐 Python: UserMemStore.get_by_topic
+// Python: UserMemStore.get_by_topic
 func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic string) ([]map[string]any, error) {
 	userMemTopicKey := s.getConcatenationKey([]string{userID, scopeID, userProfileTopicStr, topic, idsStr})
 	exists, err := s.kvStore.Exists(ctx, userMemTopicKey)
@@ -309,7 +309,7 @@ func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic st
 }
 
 // GetInRange 按范围获取记忆（分页）。
-// 对齐 Python: UserMemStore.get_in_range
+// Python: UserMemStore.get_in_range
 func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, startIdx, endIdx int, memType string) ([]map[string]any, error) {
 	userIDsKey := s.getUserIDsKey(userID, scopeID, memType)
 	exists, err := s.kvStore.Exists(ctx, userIDsKey)
@@ -330,7 +330,7 @@ func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, s
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getUserIDsKey 获取用户 ID 列表键。
-// 对齐 Python: UserMemStore.__get_user_ids_key
+// Python: UserMemStore.__get_user_ids_key
 func (s *UserMemStore) getUserIDsKey(userID, scopeID string, memType ...string) string {
 	if len(memType) > 0 && memType[0] != "" {
 		return s.getConcatenationKey([]string{userID, scopeID, memType[0], idsStr})
@@ -339,13 +339,13 @@ func (s *UserMemStore) getUserIDsKey(userID, scopeID string, memType ...string) 
 }
 
 // getUserMemKey 获取用户记忆数据键。
-// 对齐 Python: UserMemStore.__get_user_mem_key
+// Python: UserMemStore.__get_user_mem_key
 func (s *UserMemStore) getUserMemKey(userID, scopeID, memID string) string {
 	return s.getConcatenationKey([]string{userID, scopeID, memID})
 }
 
 // getConcatenationKey 拼接 KV 键。
-// 对齐 Python: UserMemStore.__get_concatenation_key
+// Python: UserMemStore.__get_concatenation_key
 func (s *UserMemStore) getConcatenationKey(fields []string) string {
 	keyStr := keyPrefixStr
 	for _, field := range fields {
@@ -355,7 +355,7 @@ func (s *UserMemStore) getConcatenationKey(fields []string) string {
 }
 
 // innerDelete 内部删除方法。
-// 对齐 Python: UserMemStore.__inner_delete
+// Python: UserMemStore.__inner_delete
 func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID string) error {
 	userMemKey := s.getUserMemKey(userID, scopeID, memID)
 	exists, err := s.kvStore.Exists(ctx, userMemKey)
@@ -377,7 +377,7 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 		var dictValue map[string]any
 		if err := json.Unmarshal(data, &dictValue); err == nil {
 			if memType, ok := dictValue[memTypeFieldKey]; ok {
-				// 对齐 Python: mem_type 始终是字符串，非 string 视为异常
+				// Python: mem_type 始终是字符串，非 string 视为异常
 				memTypeStr, ok := memType.(string)
 				if !ok {
 					logger.Error(logComponent).Str("memory_id", memID).
@@ -414,7 +414,7 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 }
 
 // deleteMemID 从 ID 列表中删除指定 ID。
-// 对齐 Python: UserMemStore.__delete_mem_id
+// Python: UserMemStore.__delete_mem_id
 func (s *UserMemStore) deleteMemID(ctx context.Context, idsKey, memID string) error {
 	exists, err := s.kvStore.Exists(ctx, idsKey)
 	if err != nil {
@@ -435,7 +435,7 @@ func (s *UserMemStore) deleteMemID(ctx context.Context, idsKey, memID string) er
 }
 
 // get 内部获取方法。
-// 对齐 Python: UserMemStore.__get
+// Python: UserMemStore.__get
 func (s *UserMemStore) get(ctx context.Context, memKey string) (map[string]any, error) {
 	memValue, err := s.kvStore.Get(ctx, memKey)
 	if err != nil {
@@ -452,13 +452,13 @@ func (s *UserMemStore) get(ctx context.Context, memKey string) (map[string]any, 
 }
 
 // writeID 将 ID 追加到 ID 列表。
-// 对齐 Python: UserMemStore.__write_id
+// Python: UserMemStore.__write_id
 func writeID(dataList, id string) string {
 	return dataList + id
 }
 
 // deleteIDByValue 从 ID 列表中删除指定 ID。
-// 对齐 Python: UserMemStore.__delete_id_by_value
+// Python: UserMemStore.__delete_id_by_value
 func deleteIDByValue(dataList, idStr string) string {
 	total := len(dataList) / byteNumPerID
 	for i := 0; i < total; i++ {
@@ -471,7 +471,7 @@ func deleteIDByValue(dataList, idStr string) string {
 }
 
 // getAllIDs 返回 ID 列表中的所有 ID。
-// 对齐 Python: UserMemStore.__get_all_ids
+// Python: UserMemStore.__get_all_ids
 func getAllIDs(dataList string) []string {
 	total := len(dataList) / byteNumPerID
 	result := make([]string, total)
@@ -482,7 +482,7 @@ func getAllIDs(dataList string) []string {
 }
 
 // getIDsInRange 返回指定范围内的 ID 列表。
-// 对齐 Python: UserMemStore.__get_ids_in_range
+// Python: UserMemStore.__get_ids_in_range
 func getIDsInRange(dataList string, startIdx, endIdx int) []string {
 	total := len(dataList) / byteNumPerID
 	startIdx = max(startIdx, 0)

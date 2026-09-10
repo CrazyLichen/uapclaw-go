@@ -147,7 +147,7 @@ func TestNewCodeAgentRail(t *testing.T) {
 func TestCodeAgentRail_Init_无配置列表器(t *testing.T) {
 	rail := NewCodeAgentRail("/tmp/workspace", nil)
 	// 不应 panic，无自定义 Agent 应正常返回
-	err := rail.Init(nil)
+	err := rail.Init(context.Background(), nil)
 	assert.NoError(t, err)
 }
 

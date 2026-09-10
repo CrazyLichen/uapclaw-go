@@ -12,7 +12,7 @@ import (
 
 // CancelAgentSessionsOnDisconnect 断连时取消指定会话的所有 Agent 任务。
 //
-// 对齐 Python _cancel_agent_sessions_on_disconnect (L530-573)：
+// Python: _cancel_agent_sessions_on_disconnect (L530-573)：
 // 遍历 sessionKeys（每项为 [channelID, sessionID]），
 // 构造 cancel 消息并调 CancelAgentWorkForSession。
 func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, sessionKeys [][2]string) {
@@ -20,7 +20,7 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 		return
 	}
 
-	// 对齐 Python cancel_agent_sessions_on_disconnect (L530-573):
+	// Python: cancel_agent_sessions_on_disconnect (L530-573):
 	// seen set 去重，避免重复取消同一 session
 	seen := make(map[string]struct{})
 	for _, key := range sessionKeys {
@@ -31,7 +31,7 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 			continue
 		}
 		if _, ok := seen[sid]; ok {
-			continue // 对齐 Python: sid in seen → continue
+			continue // Python: sid in seen → continue
 		}
 		seen[sid] = struct{}{}
 

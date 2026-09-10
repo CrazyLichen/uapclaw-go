@@ -16,7 +16,7 @@ import (
 // 调用后返回包含 HandoffTargetKey/HandoffMessageKey/HandoffReasonKey 的 map，
 // 由 ExtractHandoffSignal 解析为 HandoffSignal。
 //
-// 对应 Python: HandoffTool(Tool)
+// Python: HandoffTool(Tool)
 type HandoffTool struct {
 	// card 工具配置卡片
 	card *tool.ToolCard
@@ -41,7 +41,7 @@ var _ tool.Tool = (*HandoffTool)(nil)
 //   - targetID：目标 Agent ID，工具名称为 transfer_to_{targetID}
 //   - targetDescription：目标描述，追加到工具描述末尾（可选）
 //
-// 对应 Python: HandoffTool(target_id, target_description="")
+// Python: HandoffTool(target_id, target_description="")
 func NewHandoffTool(targetID, targetDescription string) *HandoffTool {
 	toolName := fmt.Sprintf("transfer_to_%s", targetID)
 	description := fmt.Sprintf("Transfer the current task to %s for processing.", targetID)
@@ -80,7 +80,7 @@ func (h *HandoffTool) Card() *tool.ToolCard {
 // inputs 中可包含 reason 和 message 字段。
 // 若 inputs 缺少 reason 或 message，对应字段返回空字符串。
 //
-// 对应 Python: HandoffTool.invoke(inputs, **kwargs)
+// Python: HandoffTool.invoke(inputs, **kwargs)
 func (h *HandoffTool) Invoke(_ context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	reason := ""
 	if r, ok := inputs["reason"]; ok {
@@ -105,7 +105,7 @@ func (h *HandoffTool) Invoke(_ context.Context, inputs map[string]any, _ ...tool
 
 // Stream 流式执行交接工具，一次性 yield 完整结果后关闭。
 //
-// 对应 Python: HandoffTool.stream(inputs, **kwargs) → yield await self.invoke(inputs, **kwargs)
+// Python: HandoffTool.stream(inputs, **kwargs) → yield await self.invoke(inputs, **kwargs)
 func (h *HandoffTool) Stream(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	result, err := h.Invoke(ctx, inputs, opts...)
 	if err != nil {

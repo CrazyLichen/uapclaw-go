@@ -24,7 +24,7 @@ type OutboundPipeline interface {
 }
 
 // streamTaskEntry 流式任务条目，包含取消函数和退出等待。
-// 对齐 Python: asyncio.Task 的 cancel + gather 等待语义
+// Python: asyncio.Task 的 cancel + gather 等待语义
 type streamTaskEntry struct {
 	// cancel 取消流式任务的 context.CancelFunc
 	cancel context.CancelFunc
@@ -71,23 +71,23 @@ type MessageHandler struct {
 	// evolutionMu evolution 审批状态锁
 	evolutionMu sync.RWMutex
 	// pendingEvolutionApproval evolution 待审批映射：sessionID → approvalRequestID
-	// 对齐 Python _pending_evolution_approval
+	// Python: _pending_evolution_approval
 	pendingEvolutionApproval map[string]string
 	// queuedSupplementInput 排队的补充输入：sessionID → {new_input, attachments}
-	// 对齐 Python _queued_supplement_input
+	// Python: _queued_supplement_input
 	queuedSupplementInput map[string]map[string]any
 	// sessionEvolutionInProgress 正在演进审批的 session 集合
-	// 对齐 Python _session_evolution_in_progress
+	// Python: _session_evolution_in_progress
 	sessionEvolutionInProgress map[string]bool
 
 	// streamEmitsProcessingStatus 流式 processing_status 追踪：requestID → should emit
-	// 对齐 Python _stream_emits_processing_status
+	// Python: _stream_emits_processing_status
 	streamEmitsProcessingStatus map[string]bool
 
 	// queryMu 用户查询上下文锁
 	queryMu sync.RWMutex
 	// sessionLastUserQuery 用户最近查询：sessionID → last query
-	// 对齐 Python _session_last_user_query
+	// Python: _session_last_user_query
 	sessionLastUserQuery map[string]string
 
 	// getConfigRaw 读取 config 原始数据回调（对齐 Python _get_config_raw，由外部注入）
@@ -113,7 +113,7 @@ const logComponent = logger.ComponentGateway
 
 // NewMessageHandler 创建消息处理器。
 //
-// 对齐 Python: MessageHandler(agent_client) — 只需 1 个参数。
+// Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	return &MessageHandler{
 		agentClient:                 agentClient,
@@ -135,14 +135,14 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 // HandleMessage 处理入站消息（用户→Agent）。
 //
 // 将消息写入 userMessages channel，由 forwardLoop 异步消费。
-// 对齐 Python handle_message：非阻塞写入，channel 满时丢弃并记录警告。
+// Python: handle_message：非阻塞写入，channel 满时丢弃并记录警告。
 //
-// 对齐 Python: MessageHandler.handle_message()
+// Python: MessageHandler.handle_message()
 func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	if msg == nil {
 		return
 	}
-	// 对齐 Python handle_message：入队前记录用户查询上下文
+	// Python: handle_message：入队前记录用户查询上下文
 	mh.rememberUserQueryContext(msg)
 	select {
 	case mh.userMessages <- msg:
@@ -163,7 +163,7 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 // ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
 //
 // 供 ChannelManager 的出站派发循环调用。
-// 对齐 Python: MessageHandler.consume_robot_messages()
+// Python: MessageHandler.consume_robot_messages()
 func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Message {
 	select {
 	case msg := <-mh.robotMessages:
@@ -175,7 +175,7 @@ func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Me
 
 // ConsumeUserMessages 从入站队列消费一条消息，超时返回 nil。
 //
-// 对齐 Python: MessageHandler.consume_user_messages()
+// Python: MessageHandler.consume_user_messages()
 func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Message {
 	select {
 	case msg := <-mh.userMessages:
@@ -187,7 +187,7 @@ func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Mes
 
 // PublishUserMessagesNowait 将消息同步写入入站队列，满时丢弃。
 //
-// 对齐 Python: MessageHandler.publish_user_messages_nowait()
+// Python: MessageHandler.publish_user_messages_nowait()
 func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 	if msg == nil {
 		return
@@ -204,7 +204,7 @@ func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 
 // StartForwarding 启动入站转发循环。
 //
-// 对齐 Python start_forwarding：启动 forwardLoop，
+// Python: start_forwarding：启动 forwardLoop，
 // 并通过 SetServerPushHandler 注册 push 回调（对齐 Python set_server_push_handler）。
 // 出站派发循环由 ChannelManager.StartDispatch 启动。
 func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
@@ -235,7 +235,7 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 
 // StopForwarding 停止转发循环
 //
-// 对齐 Python stop_forwarding：取消所有流式任务 + 取消上下文。
+// Python: stop_forwarding：取消所有流式任务 + 取消上下文。
 func (mh *MessageHandler) StopForwarding() error {
 	if !mh.running.Load() {
 		return nil
@@ -260,7 +260,7 @@ func (mh *MessageHandler) StopForwarding() error {
 
 // cancelAllStreamTasks 取消所有流式任务
 //
-// 对齐 Python stop_forwarding (L2851-2883)：
+// Python: stop_forwarding (L2851-2883)：
 // 清理所有流式任务映射 + evolution/query/processing_status 状态。
 func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamMu.Lock()
@@ -296,14 +296,14 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 
 // rememberUserQueryContext 记录用户查询上下文。
 //
-// 对齐 Python _remember_user_query_context (L223-235)：
+// Python: _remember_user_query_context (L223-235)：
 // 记录 chat.send 的 query 上下文，供 supplement 构造 continuation query 使用。
 // 仅记录 chat.send 消息，跳过 is_supplement=True 的消息，query 截断到 8000 字符。
 func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 	if msg == nil {
 		return
 	}
-	// 对齐 Python _is_chat_send_message：仅记录 chat.send 消息
+	// Python: _is_chat_send_message：仅记录 chat.send 消息
 	if msg.ReqMethod != schema.ReqMethodChatSend {
 		return
 	}
@@ -318,7 +318,7 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 	if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
 		return
 	}
-	// 对齐 Python：跳过 is_supplement=True 的消息
+	// Python: 跳过 is_supplement=True 的消息
 	if isSupplement, _ := paramsMap["is_supplement"].(bool); isSupplement {
 		return
 	}
@@ -338,7 +338,7 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 	if query == "" {
 		return
 	}
-	// 对齐 Python：截断到 8000 字符
+	// Python: 截断到 8000 字符
 	if len(query) > 8000 {
 		query = query[:8000]
 	}
@@ -349,7 +349,7 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 
 // getSessionLastUserQuery 获取指定 session 的最近一次用户查询。
 //
-// 对齐 Python _get_session_last_user_query (L236-237)。
+// Python: _get_session_last_user_query (L236-237)。
 func (mh *MessageHandler) getSessionLastUserQuery(sessionID string) string {
 	mh.queryMu.RLock()
 	defer mh.queryMu.RUnlock()

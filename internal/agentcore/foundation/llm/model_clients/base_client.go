@@ -18,7 +18,7 @@ import (
 //
 // 2.6 节定义最小接口，2.16 节扩展完整方法（StreamParse + Parse 签名改为 any）。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/output_parsers/output_parser.py (BaseOutputParser)
+// Python: openjiuwen/core/foundation/llm/output_parsers/output_parser.py (BaseOutputParser)
 type BaseOutputParser interface {
 	// Parse 解析 LLM 输出，返回结构化结果。
 	//
@@ -28,7 +28,7 @@ type BaseOutputParser interface {
 
 	// StreamParse 流式解析 LLM 输出。
 	//
-	// 对应 Python: BaseOutputParser.stream_parse()。
+	// Python: BaseOutputParser.stream_parse()。
 	// chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 	// 注意：当前 model client 的 _astream_with_parser 路径不调用此方法，
 	// 而是反复调用 Parse()。此方法为独立流式解析场景预留。
@@ -37,7 +37,7 @@ type BaseOutputParser interface {
 
 // BaseModelClient LLM 模型客户端接口，所有模型客户端实现必须满足此接口。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/base_model_client.py (BaseModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/base_model_client.py (BaseModelClient)
 type BaseModelClient interface {
 	// Invoke 非流式调用 LLM，返回完整的助手消息。
 	Invoke(ctx context.Context, messages MessagesParam, opts ...InvokeOption) (*llmschema.AssistantMessage, error)
@@ -59,14 +59,14 @@ type BaseModelClient interface {
 
 	// Release 释放模型缓存或资源（如 vLLM KV Cache）。
 	//
-	// 对应 Python: InferenceAffinityModelClient.release()
+	// Python: InferenceAffinityModelClient.release()
 	// 仅 InferenceAffinity 客户端有实际实现，其他客户端返回不支持错误。
 	Release(ctx context.Context, opts ...ReleaseOption) (bool, error)
 
 	// SupportsKVCacheRelease 检查客户端是否支持 KV Cache 释放。
 	//
 	// 零副作用判断：仅 InferenceAffinity 返回 true，其他客户端返回 false。
-	// 对应 Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
+	// Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
 	SupportsKVCacheRelease() bool
 }
 
@@ -80,7 +80,7 @@ type StreamParsedResult struct {
 
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。
 //
-// 对应 Python: BaseModelClient 中的具体方法（非抽象方法）
+// Python: BaseModelClient 中的具体方法（非抽象方法）
 //
 // 使用方式：
 //
@@ -124,14 +124,14 @@ func WithClientName(name string) BaseClientEmbedOption {
 // （在 deployment 级别配置，而非 ModelClientConfig 级别），
 // 使用此选项跳过 BaseClientEmbed 的标准校验。
 //
-// 对应 Python: IntelliRouterModelClient._validate_config() 覆写为空
+// Python: IntelliRouterModelClient._validate_config() 覆写为空
 func WithSkipValidate() BaseClientEmbedOption {
 	return func(e *BaseClientEmbed) { e.skipValidate = true }
 }
 
 // NewBaseClientEmbed 创建 BaseClientEmbed 实例，并校验配置。
 //
-// 对应 Python: BaseModelClient.__init__(model_config, model_client_config)
+// Python: BaseModelClient.__init__(model_config, model_client_config)
 func NewBaseClientEmbed(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -159,7 +159,7 @@ func NewBaseClientEmbed(
 //   - api_base: 必填
 //   - verify_ssl 为 true 时 ssl_cert 必填
 //
-// 对应 Python: BaseModelClient._validate_config()
+// Python: BaseModelClient._validate_config()
 func (e *BaseClientEmbed) ValidateConfig() error {
 	// 跳过校验（IntelliRouter 等客户端不需要 api_key/api_base）
 	if e.skipValidate {
@@ -191,7 +191,7 @@ func (e *BaseClientEmbed) ValidateConfig() error {
 
 // GetClientName 返回客户端名称（用于错误消息和日志）。
 //
-// 对应 Python: BaseModelClient._get_client_name()
+// Python: BaseModelClient._get_client_name()
 func (e *BaseClientEmbed) GetClientName() string {
 	return e.clientName
 }
@@ -210,7 +210,7 @@ func (e *BaseClientEmbed) GetModelName() string {
 
 // ConvertMessagesToDict 将消息参数转换为 OpenAI API 格式的 dict 列表。
 //
-// 对应 Python: BaseModelClient._convert_messages_to_dict()
+// Python: BaseModelClient._convert_messages_to_dict()
 //
 // 转换规则：
 //   - IsText（纯文本） → [{"role":"user","content":text}]
@@ -254,7 +254,7 @@ func (e *BaseClientEmbed) ConvertMessagesToDict(messages MessagesParam) ([]map[s
 
 // ConvertToolsToDict 将工具信息列表转换为 OpenAI API 格式。
 //
-// 对应 Python: BaseModelClient._convert_tools_to_dict()
+// Python: BaseModelClient._convert_tools_to_dict()
 // 与 Python 一致：只提取 ToolInfo 公共字段（type/name/description/parameters），
 // McpToolInfo 的 ServerName 字段不发送给 LLM。
 //
@@ -285,7 +285,7 @@ func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoInterf
 
 // BuildRequestParams 构建完整的 OpenAI 兼容请求参数。
 //
-// 对应 Python: BaseModelClient._build_request_params()
+// Python: BaseModelClient._build_request_params()
 //
 // 优先级：方法参数 > model_config 默认值
 // 合并顺序：基础参数 → model_config.Extra → params.Extra
@@ -367,7 +367,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	}
 
 	// 6. 日志记录
-	// 对齐 Python: 敏感模式（默认）不记录 messages/tools；非敏感模式记录。
+	// Python: 敏感模式（默认）不记录 messages/tools；非敏感模式记录。
 	// 环境变量 IS_SENSITIVE=false 时为非敏感模式，默认为敏感模式。
 	isSensitive := true
 	if v := os.Getenv("IS_SENSITIVE"); v != "" {
@@ -399,7 +399,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 		}
 	}
 
-	// 对齐 Python: _build_request_params 中使用 llm_logger.info（LogEventType.LLM_CALL_START），非回调
+	// Python: _build_request_params 中使用 llm_logger.info（LogEventType.LLM_CALL_START），非回调
 	if isSensitive {
 		// 敏感模式：不记录 messages/tools
 		evt := logger.Info(logComponent).
@@ -453,7 +453,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 
 // ExtractCostInfo 从响应对象提取费用信息。
 //
-// 对应 Python: BaseModelClient._extract_cost_info()
+// Python: BaseModelClient._extract_cost_info()
 //
 // 支持三种格式：
 //  1. cost 为简单数值（int/float）

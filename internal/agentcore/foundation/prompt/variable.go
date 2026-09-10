@@ -10,7 +10,7 @@ import (
 
 // Variable 模板变量接口，定义占位符变量的求值协议。
 //
-// 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/variable.py (Variable)
+// Python: openjiuwen/core/foundation/prompt/assemble/variables/variable.py (Variable)
 //
 // 实现类型：
 //   - TextableVariable — 字符串模板变量
@@ -26,11 +26,11 @@ type Variable interface {
 	Value() any
 
 	// Eval 求值：按 InputKeys 过滤 kwargs → 调用 Update → 返回 Value。
-	// 对应 Python: Variable.eval()
+	// Python: Variable.eval()
 	Eval(kwargs map[string]any) any
 
 	// Update 根据传入的键值对更新变量值。
-	// 对应 Python: Variable.update()
+	// Python: Variable.update()
 	Update(kwargs map[string]any) error
 }
 
@@ -67,7 +67,7 @@ func (b *baseVariable) Value() any {
 
 // Eval 实现 Variable.Eval：模板方法，先过滤无关参数，再调 Update，最后返回 Value。
 //
-// 对应 Python: Variable.eval()
+// Python: Variable.eval()
 //
 // 注意：由于 Go 嵌入结构体不支持多态调用子类方法，
 // Eval 的实现需要放在各子类型中（调用自身的 Update），
@@ -81,7 +81,7 @@ func (b *baseVariable) Eval(kwargs map[string]any) any {
 }
 
 // PrepareInputs 按 inputKeys 过滤无关参数，仅保留键名匹配的键值对。
-// 对应 Python: Variable.prepare_inputs()（公开方法，测试可用）
+// Python: Variable.prepare_inputs()（公开方法，测试可用）
 func PrepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
 	return prepareInputs(inputKeys, kwargs)
 }
@@ -97,7 +97,7 @@ func evalBase(b *baseVariable, v Variable, kwargs map[string]any) any {
 }
 
 // prepareInputs 按 inputKeys 过滤无关参数。
-// 对应 Python: Variable._prepare_inputs()
+// Python: Variable._prepare_inputs()
 func prepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
 	if len(inputKeys) == 0 || len(kwargs) == 0 {
 		return map[string]any{}
@@ -116,7 +116,7 @@ func prepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
 }
 
 // extractInputKeys 从占位符列表中提取 inputKeys（点号前第一段，去重保序）。
-// 对应 Python: TextableVariable / DictableVariable 构造函数中的 input_keys 提取逻辑。
+// Python: TextableVariable / DictableVariable 构造函数中的 input_keys 提取逻辑。
 func extractInputKeys(placeholders []string) []string {
 	seen := make(map[string]struct{}, len(placeholders))
 	keys := make([]string, 0, len(placeholders))
@@ -146,7 +146,7 @@ func findDotIndex(s string) int {
 // resolveNestedValue 解析 "user.profile.name" 形式的嵌套路径。
 // 第一段从 root map 取值，后续段逐层 map 查找或 reflect struct field 访问。
 //
-// 对应 Python: TextableVariable.update() / DictableVariable._recursive_format() 中的嵌套属性解析逻辑。
+// Python: TextableVariable.update() / DictableVariable._recursive_format() 中的嵌套属性解析逻辑。
 func resolveNestedValue(path string, root map[string]any) (any, error) {
 	nodes := splitDotPath(path)
 	if len(nodes) == 0 {
@@ -201,7 +201,7 @@ func splitDotPath(path string) []string {
 }
 
 // accessField 从一个值中按名称访问字段，优先 map 查找，fallback reflect struct field。
-// 对应 Python: isinstance(value, dict) → value.get(node) else → getattr(value, node)
+// Python: isinstance(value, dict) → value.get(node) else → getattr(value, node)
 func accessField(current any, field string) (any, error) {
 	// 优先 map 查找
 	if m, ok := current.(map[string]any); ok {

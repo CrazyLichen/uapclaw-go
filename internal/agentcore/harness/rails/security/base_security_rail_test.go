@@ -77,7 +77,7 @@ func TestSecurityReject(t *testing.T) {
 	assert.Equal(t, "危险操作", reject.Message)
 	assert.Equal(t, "已拒绝", reject.Result)
 
-	// 对齐 Python: tool_result 参数兼容
+	// Python: tool_result 参数兼容
 	rejectWithMsg := r.Reject("消息", nil, nil, llmschema.NewToolMessage("tc-1", "拒绝"))
 	assert.Equal(t, "消息", rejectWithMsg.Message)
 	assert.NotNil(t, rejectWithMsg.ToolMessage)
@@ -111,16 +111,16 @@ func TestSecurityAlertLevel_String(t *testing.T) {
 }
 
 // TestBuildForceFinishResult 测试构建 forceFinish 结果
-// 对齐 Python: BaseSecurityRail._build_force_finish_result
+// Python: BaseSecurityRail._build_force_finish_result
 func TestBuildForceFinishResult(t *testing.T) {
 	r := NewBaseSecurityRail()
 
-	// 对齐 Python: isinstance(decision.result, dict) → 直接返回
+	// Python: isinstance(decision.result, dict) → 直接返回
 	reject := r.Reject("", map[string]any{"status": "denied"}, nil, nil)
 	result := r.buildForceFinishResult(reject)
 	assert.Equal(t, map[string]any{"status": "denied"}, result)
 
-	// 对齐 Python: {"output": message, "result_type": "error"}
+	// Python: {"output": message, "result_type": "error"}
 	rejectNoResult := r.Reject("操作被拒绝", nil, nil, nil)
 	result2 := r.buildForceFinishResult(rejectNoResult)
 	assert.Equal(t, "操作被拒绝", result2["output"])
@@ -133,7 +133,7 @@ func TestBuildForceFinishResult(t *testing.T) {
 }
 
 // TestHandleInterruptResume_首次调用 测试中断恢复首次调用
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume — user_input is None → return None
+// Python: BaseSecurityRail._handle_interrupt_resume — user_input is None → return None
 func TestHandleInterruptResume_首次调用(t *testing.T) {
 	r := NewBaseSecurityRail()
 	ctx := &SecurityCheckContext{
@@ -145,7 +145,7 @@ func TestHandleInterruptResume_首次调用(t *testing.T) {
 }
 
 // TestHandleInterruptResume_autoConfirm 测试中断恢复已自动确认
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume — auto_confirm → Allow
+// Python: BaseSecurityRail._handle_interrupt_resume — auto_confirm → Allow
 func TestHandleInterruptResume_autoConfirm(t *testing.T) {
 	r := NewBaseSecurityRail()
 	ctx := &SecurityCheckContext{
@@ -161,7 +161,7 @@ func TestHandleInterruptResume_autoConfirm(t *testing.T) {
 }
 
 // TestHandleInterruptResume_用户批准 测试中断恢复用户批准
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume — approved=True → Allow
+// Python: BaseSecurityRail._handle_interrupt_resume — approved=True → Allow
 func TestHandleInterruptResume_用户批准(t *testing.T) {
 	r := NewBaseSecurityRail()
 	ctx := &SecurityCheckContext{
@@ -179,7 +179,7 @@ func TestHandleInterruptResume_用户批准(t *testing.T) {
 }
 
 // TestHandleInterruptResume_用户批准加AutoConfirm 测试中断恢复用户批准+记住
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume — approved=True + auto_confirm=True → store + Allow
+// Python: BaseSecurityRail._handle_interrupt_resume — approved=True + auto_confirm=True → store + Allow
 func TestHandleInterruptResume_用户批准加AutoConfirm(t *testing.T) {
 	r := NewBaseSecurityRail()
 	ctx := &SecurityCheckContext{
@@ -197,7 +197,7 @@ func TestHandleInterruptResume_用户批准加AutoConfirm(t *testing.T) {
 }
 
 // TestHandleInterruptResume_用户拒绝 测试中断恢复用户拒绝
-// 对齐 Python: BaseSecurityRail._handle_interrupt_resume — approved=False → Reject
+// Python: BaseSecurityRail._handle_interrupt_resume — approved=False → Reject
 func TestHandleInterruptResume_用户拒绝(t *testing.T) {
 	r := NewBaseSecurityRail()
 	ctx := &SecurityCheckContext{
@@ -214,7 +214,7 @@ func TestHandleInterruptResume_用户拒绝(t *testing.T) {
 }
 
 // TestIsAutoConfirmed 测试自动确认检查
-// 对齐 Python: BaseSecurityRail._is_auto_confirmed
+// Python: BaseSecurityRail._is_auto_confirmed
 func TestIsAutoConfirmed(t *testing.T) {
 	r := NewBaseSecurityRail()
 
@@ -245,7 +245,7 @@ func TestSecurityDecisionInterface(t *testing.T) {
 }
 
 // TestIsSecurityTruthy 测试安全语义真值判断
-// 对齐 Python: bool() 语义扩展，支持 bool/int/float/string
+// Python: bool() 语义扩展，支持 bool/int/float/string
 func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy(nil))
 	assert.False(t, isSecurityTruthy(false))

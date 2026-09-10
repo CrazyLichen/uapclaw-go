@@ -27,7 +27,7 @@ import (
 //   - ChannelContext：可选溢出；主路径上通道侧信息应在网关入口映射为规范化字段。
 //   - A2AMetadata / ACPMeta：与 A2A/ACP 互操作时使用。
 //
-// 对应 Python: jiuwenswarm/common/e2a/models.py (E2AEnvelope)
+// Python: jiuwenswarm/common/e2a/models.py (E2AEnvelope)
 type E2AEnvelope struct {
 	// ─── 基础 / 关联 ───
 	// ProtocolVersion E2A 载荷版本（默认 "1.0"）
@@ -102,7 +102,7 @@ const E2AProtocolVersion = "1.0"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UTCNowISO 返回当前 UTC 时刻的 RFC 3339 字符串。
-// 对应 Python: utc_now_iso()
+// Python: utc_now_iso()
 func UTCNowISO() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
@@ -118,7 +118,7 @@ func NewE2AEnvelope() *E2AEnvelope {
 }
 
 // EnsureTimestamp 若未设置 Timestamp，则填当前 UTC ISO8601。
-// 对应 Python: E2AEnvelope.ensure_timestamp()
+// Python: E2AEnvelope.ensure_timestamp()
 func (e *E2AEnvelope) EnsureTimestamp() {
 	if e.Timestamp == "" {
 		e.Timestamp = UTCNowISO()
@@ -126,13 +126,13 @@ func (e *E2AEnvelope) EnsureTimestamp() {
 }
 
 // ToMap 序列化为 JSON 友好 map（枚举转为值）。
-// 对应 Python: E2AEnvelope.to_dict() → _dataclass_to_json_dict()
+// Python: E2AEnvelope.to_dict() → _dataclass_to_json_dict()
 func (e *E2AEnvelope) ToMap() map[string]any {
 	return structToMap(e)
 }
 
 // EnvelopeFromMap 从 map 反序列化为 E2AEnvelope。
-// 对应 Python: E2AEnvelope.from_dict(data) → _envelope_from_dict(data)
+// Python: E2AEnvelope.from_dict(data) → _envelope_from_dict(data)
 func EnvelopeFromMap(data map[string]any) *E2AEnvelope {
 	// 1. provenance 解析 + legacy binding 迁移
 	prov := provenanceFromMap(data["provenance"])
@@ -233,7 +233,7 @@ func EnvelopeFromMap(data map[string]any) *E2AEnvelope {
 //
 // 随后按需补 session_id、params._meta（来自 ACPMeta）。
 //
-// 对应 Python: merge_params_to_acp_prompt(envelope)
+// Python: merge_params_to_acp_prompt(envelope)
 func MergeParamsToACPPrompt(env *E2AEnvelope) map[string]any {
 	p := make(map[string]any)
 	for k, v := range env.Params {
@@ -311,7 +311,7 @@ func MergeParamsToACPPrompt(env *E2AEnvelope) map[string]any {
 
 // structToMap 将结构体递归转换为 map[string]any（枚举转为值）。
 // 使用 json.Marshal → json.Unmarshal 中转，比反射递归更简洁可靠。
-// 对应 Python: _dataclass_to_json_dict(obj)
+// Python: _dataclass_to_json_dict(obj)
 func structToMap(v any) map[string]any {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -325,7 +325,7 @@ func structToMap(v any) map[string]any {
 }
 
 // provenanceFromMap 从 raw 解析 E2AProvenance。
-// 对应 Python: _provenance_from_dict(raw)
+// Python: _provenance_from_dict(raw)
 func provenanceFromMap(raw any) E2AProvenance {
 	if raw == nil {
 		return *NewE2AProvenance()
@@ -346,7 +346,7 @@ func provenanceFromMap(raw any) E2AProvenance {
 }
 
 // normalizeTimestampValue 规范为 RFC 3339 UTC 字符串；接受 str 或历史 float/int 纪元秒。
-// 对应 Python: _normalize_timestamp_value(raw)
+// Python: _normalize_timestamp_value(raw)
 func normalizeTimestampValue(raw any) string {
 	if raw == nil {
 		return ""
@@ -366,7 +366,7 @@ func normalizeTimestampValue(raw any) string {
 }
 
 // migrateLegacyBinding 旧版 binding 字段迁入 provenance.details，避免丢失信息。
-// 对应 Python: _migrate_legacy_binding(data, prov)
+// Python: _migrate_legacy_binding(data, prov)
 func migrateLegacyBinding(data map[string]any, prov E2AProvenance) E2AProvenance {
 	legacy, exists := data["binding"]
 	if !exists || legacy == nil {
@@ -411,7 +411,7 @@ func migrateLegacyBinding(data map[string]any, prov E2AProvenance) E2AProvenance
 }
 
 // paramsWithOptionalLegacyPayload 以 params 为真源；若存在顶层 payload 对象，将其键合并进 params（不覆盖已有键）。
-// 对应 Python: _params_with_optional_legacy_payload(data)
+// Python: _params_with_optional_legacy_payload(data)
 func paramsWithOptionalLegacyPayload(data map[string]any) map[string]any {
 	p := getMapAny(data, "params")
 	raw, exists := data["payload"]

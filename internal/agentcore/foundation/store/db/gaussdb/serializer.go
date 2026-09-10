@@ -13,7 +13,7 @@ import (
 
 // gaussStringSerializer GaussDB 字符串序列化器。
 //
-// 对应 Python: GaussString.bind_processor()
+// Python: GaussString.bind_processor()
 //
 // 确保所有绑定到 string 列的非 string 值在进入驱动前被转换为 string。
 // 特别处理 time.Time → "2006-01-02 15:04:05.000000" 格式，

@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UserInbox 用户侧收件箱，将外部输入路由到团队运行时。
-// 对齐 Python: UserInbox (openjiuwen/agent_teams/interaction/user_inbox.py)
+// Python: UserInbox (openjiuwen/agent_teams/interaction/user_inbox.py)
 //
 // 三种入口：
 //   - DeliverToLeader — 纯文本直达 Leader DeepAgent（保留历史 invoke 语义）
@@ -39,13 +39,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewUserInbox 创建用户收件箱。
-// 对齐 Python: UserInbox.__init__(message_manager)
+// Python: UserInbox.__init__(message_manager)
 func NewUserInbox(messageManager *tools.TeamMessageManager) *UserInbox {
 	return &UserInbox{messageManager: messageManager}
 }
 
 // Direct 发送 @target body 点对点消息。
-// 对齐 Python: UserInbox.direct(target, body)
+// Python: UserInbox.direct(target, body)
 //
 // Python 执行步骤：
 //  1. msg_id = await self._mm.send_message(content=body, to_member_name=target, from_member_name=USER_PSEUDO_MEMBER_NAME)
@@ -56,7 +56,7 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 		Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("UserInbox: 点对点发送")
-	// 对齐 Python 步骤 1-3
+	// Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.SendMessage(ctx, body, target, agentteams.UserPseudoMemberName)
 	if err != nil {
@@ -67,7 +67,7 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 }
 
 // Broadcast 广播用户侧公告。
-// 对齐 Python: UserInbox.broadcast(body)
+// Python: UserInbox.broadcast(body)
 //
 // Python 执行步骤：
 //  1. msg_id = await self._mm.broadcast_message(content=body, from_member_name=USER_PSEUDO_MEMBER_NAME)
@@ -77,7 +77,7 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 	logger.Debug(inboxLogComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("UserInbox: 广播")
-	// 对齐 Python 步骤 1-3
+	// Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.BroadcastMessage(ctx, body, agentteams.UserPseudoMemberName)
 	if err != nil {
@@ -87,7 +87,7 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 }
 
 // DeliverToLeader 将输入投递到 Leader DeepAgent。
-// 对齐 Python: UserInbox.deliver_to_leader(deliver_input, body) (staticmethod)
+// Python: UserInbox.deliver_to_leader(deliver_input, body) (staticmethod)
 //
 // Python 执行步骤：
 //  1. team_logger.debug: UserInbox 向 Leader DeepAgent 交付输入
@@ -97,7 +97,7 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 //
 // 此通道不产生 bus message ID，成功时 MessageID 为 nil。
 func DeliverToLeader(deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {
-	// 对齐 Python 步骤 1
+	// Python 步骤 1
 	logger.Debug(inboxLogComponent).Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("向 Leader 投递")
 
@@ -106,14 +106,14 @@ func DeliverToLeader(deliverInput func(ctx context.Context, content string) erro
 		return NewDeliverResultFailure(reason)
 	}
 
-	// 对齐 Python 步骤 2-4
+	// Python 步骤 2-4
 	ctx := context.Background()
 	if err := deliverInput(ctx, body); err != nil {
-		// 对齐 Python 步骤 3: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
+		// Python 步骤 3: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
 		reason := "deliver_to_leader_failed:" + err.Error()
 		return NewDeliverResultFailure(reason)
 	}
-	// 对齐 Python 步骤 4: return DeliverResult.success(message_id=None)
+	// Python 步骤 4: return DeliverResult.success(message_id=None)
 	return NewDeliverResultSuccess(nil)
 }
 

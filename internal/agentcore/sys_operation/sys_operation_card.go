@@ -11,7 +11,7 @@ import (
 
 // SysOperationCard 系统操作配置卡片，嵌入 BaseCard 提供身份标识，
 // 并携带操作模式、工作目录配置和沙箱网关配置。
-// 对齐 Python SysOperationCard：mode, work_config(local_work_config), gateway_config(sandbox_gateway_config)。
+// Python: SysOperationCard：mode, work_config(local_work_config), gateway_config(sandbox_gateway_config)。
 // 隔离相关字段（isolation_prefix, container_scope, custom_id）已移入 GatewayConfig.Isolation 嵌套结构。
 type SysOperationCard struct {
 	schema.BaseCard
@@ -67,7 +67,7 @@ func (c *SysOperationCard) GenerateToolID(opType, methodName string) string {
 }
 
 // GenerateStaticToolID 生成工具标识的包级函数，无需 SysOperationCard 实例。
-// 对齐 Python SysOperationCard.generate_tool_id(sys_op_id, op_type, tool_name) 静态方法。
+// Python: SysOperationCard.generate_tool_id(sys_op_id, op_type, tool_name) 静态方法。
 func GenerateStaticToolID(sysOpID, opType, methodName string) string {
 	return fmt.Sprintf("%s.%s.%s", sysOpID, opType, methodName)
 }
@@ -108,7 +108,7 @@ func WithSysOpMode(mode OperationMode) SysOperationCardOption {
 }
 
 // WithSysOpIsolationPrefix 设置隔离键前缀。
-// 对齐 Python SysOperationCard.isolation_prefix → GatewayConfig.Isolation.Prefix。
+// Python: SysOperationCard.isolation_prefix → GatewayConfig.Isolation.Prefix。
 func WithSysOpIsolationPrefix(prefix string) SysOperationCardOption {
 	return func(c *SysOperationCard) {
 		if c.GatewayConfig == nil {
@@ -119,7 +119,7 @@ func WithSysOpIsolationPrefix(prefix string) SysOperationCardOption {
 }
 
 // WithSysOpContainerScope 设置容器作用域。
-// 对齐 Python SysOperationCard.container_scope → GatewayConfig.Isolation.ContainerScope。
+// Python: SysOperationCard.container_scope → GatewayConfig.Isolation.ContainerScope。
 func WithSysOpContainerScope(scope ContainerScope) SysOperationCardOption {
 	return func(c *SysOperationCard) {
 		if c.GatewayConfig == nil {
@@ -130,7 +130,7 @@ func WithSysOpContainerScope(scope ContainerScope) SysOperationCardOption {
 }
 
 // WithSysOpCustomID 设置自定义容器标识。
-// 对齐 Python SysOperationCard.custom_id → GatewayConfig.Isolation.CustomID。
+// Python: SysOperationCard.custom_id → GatewayConfig.Isolation.CustomID。
 func WithSysOpCustomID(id string) SysOperationCardOption {
 	return func(c *SysOperationCard) {
 		if c.GatewayConfig == nil {
@@ -183,7 +183,7 @@ func generateIsolationKeyTemplate(isolationPrefix string, containerScope Contain
 		isolationPrefix,
 		identity,
 	}
-	// 对齐 Python: 过滤空部分，避免连续下划线
+	// Python: 过滤空部分，避免连续下划线
 	var filtered []string
 	for _, p := range parts {
 		if p != "" {

@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateMemberHandle 创建 TeamMember 句柄，当 backend 缺失时返回 nil。
-// 对齐 Python: create_member_handle(member_name, blueprint, infra, agent_card)
+// Python: create_member_handle(member_name, blueprint, infra, agent_card)
 //
 // 纯构造函数：仅需已绑定的 team_backend（setup_infra 为所有角色提供了它），
 // 从不触碰数据库。因此在 configure() 期间每个 Agent 调用一次——

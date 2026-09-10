@@ -23,7 +23,7 @@ import (
 // 父代理拥有门控——它不能自行指定判决，
 // 必须循环（修复→重验）直到验证代理发出 VERDICT: PASS。
 //
-// 对齐 Python: VerificationContractRail (openjiuwen/harness/rails/subagent/verification_contract_rail.py)
+// Python: VerificationContractRail (openjiuwen/harness/rails/subagent/verification_contract_rail.py)
 type VerificationContractRail struct {
 	rails.DeepAgentRail
 	// promptBuilder 系统提示词构建器引用
@@ -38,13 +38,13 @@ type VerificationContractRail struct {
 
 const (
 	// verificationContractRailPriority VerificationContractRail 优先级
-	// 对齐 Python: VerificationContractRail.priority = 88
+	// Python: VerificationContractRail.priority = 88
 	// Priority 88: 在 PlanModeRail(85) 之后、TodoRail(90) 之前，
 	// 位于组装提示词末尾附近，作为"最后提醒"
 	verificationContractRailPriority = 88
 
 	// contractSectionPriority 契约节优先级
-	// 对齐 Python: _CONTRACT_PRIORITY = 88
+	// Python: _CONTRACT_PRIORITY = 88
 	contractSectionPriority = 88
 )
 
@@ -54,7 +54,7 @@ var (
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 
 	// contractEN 英文验证门控契约
-	// 对齐 Python: _CONTRACT_EN
+	// Python: _CONTRACT_EN
 	contractEN = "## Verification Gate\n\n" +
 		"After any non-trivial implementation turn, you MUST spawn the verification " +
 		"agent before reporting completion to the user.\n\n" +
@@ -85,7 +85,7 @@ var (
 		"PASS, FAIL, or PARTIAL. Your own checks and caveats do not substitute."
 
 	// contractCN 中文验证门控契约
-	// 对齐 Python: _CONTRACT_CN
+	// Python: _CONTRACT_CN
 	contractCN = "## 验证门控\n\n" +
 		"在任何非平凡实现轮次之后，你必须在向用户汇报完成之前启动验证代理。\n\n" +
 		"**非平凡指以下任意情况：**\n" +
@@ -118,7 +118,7 @@ var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)
 
 // NewVerificationContractRail 创建 VerificationContractRail 实例。
 //
-// 对齐 Python: VerificationContractRail()
+// Python: VerificationContractRail()
 func NewVerificationContractRail() *VerificationContractRail {
 	r := &VerificationContractRail{
 		DeepAgentRail: *rails.NewDeepAgentRail(),
@@ -129,13 +129,13 @@ func NewVerificationContractRail() *VerificationContractRail {
 
 // Init 初始化钩子：捕获 system_prompt_builder，预构建契约 section。
 //
-// 对齐 Python: VerificationContractRail.init(agent)
-// 对齐 Python L140-153
-func (r *VerificationContractRail) Init(agent agentinterfaces.BaseAgent) error {
+// Python: VerificationContractRail.init(agent)
+// Python: L140-153
+func (r *VerificationContractRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.promptBuilder = agent.SystemPromptBuilder()
 
 	// 预构建契约 section
-	// 对齐 Python L148-152:
+	// Python: L148-152:
 	//   Python: self._section = PromptSection(
 	//       Python: name=SectionName.VERIFICATION_CONTRACT,
 	//       Python: content={"en": _CONTRACT_EN, "cn": _CONTRACT_CN},
@@ -156,14 +156,14 @@ func (r *VerificationContractRail) Init(agent agentinterfaces.BaseAgent) error {
 //
 // 先移除再添加，避免跨轮次累积重复。
 //
-// 对齐 Python: VerificationContractRail.before_model_call(ctx)
-// 对齐 Python L155-169
+// Python: VerificationContractRail.before_model_call(ctx)
+// Python: L155-169
 func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.promptBuilder == nil || r.section == nil {
 		return nil
 	}
 
-	// 对齐 Python L167-168:
+	// Python: L167-168:
 	//   self.system_prompt_builder.remove_section(SectionName.VERIFICATION_CONTRACT)
 	//   self.system_prompt_builder.add_section(self._section)
 	r.promptBuilder.RemoveSection(hsections.SectionVerificationContract)

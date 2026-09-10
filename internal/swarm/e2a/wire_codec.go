@@ -19,7 +19,7 @@ import (
 
 // IsE2AResponseWireDict 判别 JSON 对象是否为 E2A 响应线格式。
 // 须含非空 response_kind 且 protocol_version=="1.0" 且 type!="event"。
-// 对应 Python: is_e2a_response_wire_dict(data)
+// Python: is_e2a_response_wire_dict(data)
 func IsE2AResponseWireDict(data map[string]any) bool {
 	if data == nil {
 		return false
@@ -45,7 +45,7 @@ func IsE2AResponseWireDict(data map[string]any) bool {
 }
 
 // ParseAgentServerWireUnary 将一条非流式 WebSocket JSON 解析为 AgentResponse。
-// 对应 Python: parse_agent_server_wire_unary(data)（精简版，无 deprecated 形状判别）
+// Python: parse_agent_server_wire_unary(data)（精简版，无 deprecated 形状判别）
 func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, error) {
 	rid := getString(data, "request_id")
 
@@ -104,7 +104,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 }
 
 // ParseAgentServerWireChunk 将一条流式 WebSocket JSON 解析为 AgentResponseChunk。
-// 对应 Python: parse_agent_server_wire_chunk(data)（精简版，无 deprecated 形状判别）
+// Python: parse_agent_server_wire_chunk(data)（精简版，无 deprecated 形状判别）
 func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk, error) {
 	rid := getString(data, "request_id")
 
@@ -164,7 +164,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 
 // EncodeAgentResponseForWire 将 AgentResponse 编码为 E2A 线 dict。
 // 失败时 metadata 塞入整包 legacy 并记日志。
-// 对应 Python: encode_agent_response_for_wire(resp, ...)
+// Python: encode_agent_response_for_wire(resp, ...)
 func EncodeAgentResponseForWire(resp *schema.AgentResponse, responseID string, sequence int) map[string]any {
 	rid := resp.RequestID
 	e2a := E2AResponseFromAgentResponse(resp, responseID, sequence)
@@ -192,7 +192,7 @@ func EncodeAgentResponseForWire(resp *schema.AgentResponse, responseID string, s
 
 // EncodeAgentChunkForWire 将 AgentResponseChunk 编码为 E2A 线 dict。
 // 失败时 metadata 塞入整包 legacy。
-// 对应 Python: encode_agent_chunk_for_wire(chunk, ...)
+// Python: encode_agent_chunk_for_wire(chunk, ...)
 func EncodeAgentChunkForWire(chunk *schema.AgentResponseChunk, responseID string, sequence int, isStream bool) map[string]any {
 	rid := chunk.RequestID
 	e2a := E2AResponseFromAgentChunk(chunk, responseID, sequence, isStream)
@@ -213,7 +213,7 @@ func EncodeAgentChunkForWire(chunk *schema.AgentResponseChunk, responseID string
 }
 
 // EncodeJSONParseErrorWire 入站 JSON 无法解析时发送的单帧 E2A 形错误（无 legacy blob）。
-// 对应 Python: encode_json_parse_error_wire(...)
+// Python: encode_json_parse_error_wire(...)
 func EncodeJSONParseErrorWire(requestID, channelID, message string, responseID ...string) map[string]any {
 	ts := UTCNowISO()
 	ridOut := ""
@@ -269,7 +269,7 @@ func EncodeJSONParseErrorWire(requestID, channelID, message string, responseID .
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rawDictToAgentResponse 从原始 dict 构造 AgentResponse（legacy fallback 辅助）。
-// 对应 Python: _raw_dict_to_agent_response(data)
+// Python: _raw_dict_to_agent_response(data)
 func rawDictToAgentResponse(data map[string]any) *schema.AgentResponse {
 	return &schema.AgentResponse{
 		RequestID: getString(data, "request_id"),
@@ -281,7 +281,7 @@ func rawDictToAgentResponse(data map[string]any) *schema.AgentResponse {
 }
 
 // rawDictToAgentChunk 从原始 dict 构造 AgentResponseChunk（legacy fallback 辅助）。
-// 对应 Python: _raw_dict_to_agent_chunk(data)
+// Python: _raw_dict_to_agent_chunk(data)
 func rawDictToAgentChunk(data map[string]any) *schema.AgentResponseChunk {
 	return &schema.AgentResponseChunk{
 		RequestID:  getString(data, "request_id"),
@@ -292,7 +292,7 @@ func rawDictToAgentChunk(data map[string]any) *schema.AgentResponseChunk {
 }
 
 // fallbackWireUnaryFromLegacy 构造含 legacy 的 E2AResponse error 帧（unary）。
-// 对应 Python: _fallback_wire_unary_from_legacy(legacy, ...)
+// Python: _fallback_wire_unary_from_legacy(legacy, ...)
 func fallbackWireUnaryFromLegacy(legacy map[string]any, responseID string, sequence int, exc error) map[string]any {
 	ts := UTCNowISO()
 	prov := E2AProvenance{
@@ -333,7 +333,7 @@ func fallbackWireUnaryFromLegacy(legacy map[string]any, responseID string, seque
 }
 
 // fallbackWireChunkFromLegacy 构造含 legacy 的 E2AResponse error 帧（chunk）。
-// 对应 Python: _fallback_wire_chunk_from_legacy(legacy, ...)
+// Python: _fallback_wire_chunk_from_legacy(legacy, ...)
 func fallbackWireChunkFromLegacy(legacy map[string]any, responseID string, sequence int, exc error, isStream bool) map[string]any {
 	ts := UTCNowISO()
 	prov := E2AProvenance{
@@ -376,7 +376,7 @@ func fallbackWireChunkFromLegacy(legacy map[string]any, responseID string, seque
 }
 
 // agentResponseToMap 将 AgentResponse 转为 map[string]any（用于 legacy fallback）。
-// 对应 Python: asdict(resp)
+// Python: asdict(resp)
 func agentResponseToMap(resp *schema.AgentResponse) map[string]any {
 	return map[string]any{
 		"request_id": resp.RequestID,
@@ -388,7 +388,7 @@ func agentResponseToMap(resp *schema.AgentResponse) map[string]any {
 }
 
 // agentChunkToMap 将 AgentResponseChunk 转为 map[string]any（用于 legacy fallback）。
-// 对应 Python: asdict(chunk)
+// Python: asdict(chunk)
 func agentChunkToMap(chunk *schema.AgentResponseChunk) map[string]any {
 	return map[string]any{
 		"request_id":  chunk.RequestID,

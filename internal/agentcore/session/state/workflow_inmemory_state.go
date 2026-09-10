@@ -9,7 +9,7 @@ package state
 //   - 传入 globalState → workflowOnly=false（global_state 由外部管理）
 //   - 未传 globalState → workflowOnly=true（所有状态独立）
 //
-// 对应 Python: openjiuwen/core/session/state/workflow_state.py (InMemoryState)
+// Python: openjiuwen/core/session/state/workflow_state.py (InMemoryState)
 func NewInMemoryWorkflowState(globalState ...CommitStateLike) *WorkflowCommitState {
 	var gs CommitStateLike
 	if len(globalState) > 0 && globalState[0] != nil {

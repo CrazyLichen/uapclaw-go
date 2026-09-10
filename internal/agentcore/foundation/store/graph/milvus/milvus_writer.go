@@ -19,7 +19,7 @@ import (
 
 // graphWriter 图存储写入器，负责图对象的嵌入、截断、序列化和写入。
 //
-// 对应 Python: MilvusGraphStore._add_data / add_entity / add_relation / add_episode
+// Python: MilvusGraphStore._add_data / add_entity / add_relation / add_episode
 type graphWriter struct {
 	// client Milvus 客户端
 	client milvusClient
@@ -72,27 +72,27 @@ func newGraphWriter(client milvusClient, storageCfg *graph.GraphStoreStorageConf
 // addEntity 添加实体到 Entity 集合。
 // 自动嵌入向量（除非 opts.NoEmbed=true），截断超长字段，批量写入。
 //
-// 对应 Python: MilvusGraphStore.add_entity
+// Python: MilvusGraphStore.add_entity
 func (w *graphWriter) addEntity(ctx context.Context, entities []*graph.Entity, opts ...graph.Option) error {
 	return w.addData(ctx, CollectionEntity, toAnySlice(entities), opts...)
 }
 
 // addRelation 添加关系到 Relation 集合。
 //
-// 对应 Python: MilvusGraphStore.add_relation
+// Python: MilvusGraphStore.add_relation
 func (w *graphWriter) addRelation(ctx context.Context, relations []*graph.Relation, opts ...graph.Option) error {
 	return w.addData(ctx, CollectionRelation, toAnySlice(relations), opts...)
 }
 
 // addEpisode 添加片段到 Episode 集合。
 //
-// 对应 Python: MilvusGraphStore.add_episode
+// Python: MilvusGraphStore.add_episode
 func (w *graphWriter) addEpisode(ctx context.Context, episodes []*graph.Episode, opts ...graph.Option) error {
 	return w.addData(ctx, CollectionEpisode, toAnySlice(episodes), opts...)
 }
 
 // delete 按条件删除图数据。
-// 对齐 Python: ids 和 expr 都为 None 时报错。
+// Python: ids 和 expr 都为 None 时报错。
 func (w *graphWriter) delete(ctx context.Context, collection string, opts ...graph.Option) error {
 	o := applyGraphOptions(opts...)
 	if len(o.IDs) == 0 && o.Expr == nil {
@@ -144,7 +144,7 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 // addData 通用写入流程：
 // 1. 收集 EmbedTasks → 2. 批量嵌入 → 3. 截断字段 → 4. 序列化 → 5. 写入 → 6. Flush
 //
-// 对应 Python: MilvusGraphStore._add_data
+// Python: MilvusGraphStore._add_data
 func (w *graphWriter) addData(ctx context.Context, collection string, objects []any, opts ...graph.Option) error {
 	start := time.Now()
 	if len(objects) == 0 {
@@ -211,7 +211,7 @@ func (w *graphWriter) addData(ctx context.Context, collection string, objects []
 
 // fetchAndEmbed 批量调用嵌入模型，回填向量到图对象。
 //
-// 对应 Python: MilvusGraphStore._fetch_and_embed
+// Python: MilvusGraphStore._fetch_and_embed
 func (w *graphWriter) fetchAndEmbed(ctx context.Context, tasks []graph.EmbedTask) error {
 	// 按 EmbedBatchSize 分批嵌入
 	batches := graph.Batched(tasks, defaultEmbedBatchSize)
@@ -238,7 +238,7 @@ func (w *graphWriter) fetchAndEmbed(ctx context.Context, tasks []graph.EmbedTask
 
 // truncateFields 按 storageConfig 截断超长字段。
 //
-// 对应 Python: MilvusGraphStore._truncate_fields
+// Python: MilvusGraphStore._truncate_fields
 func (w *graphWriter) truncateFields(objMap map[string]any, collection string) map[string]any {
 	result := make(map[string]any, len(objMap))
 	for k, v := range objMap {

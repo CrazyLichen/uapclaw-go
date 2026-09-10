@@ -20,7 +20,7 @@ import (
 // 组合 OpenAIEmbedding 实例，添加多模态指令注入。
 // vLLM 兼容 OpenAI API 格式，但多模态嵌入需要通过 extra_body.messages 传入内容。
 //
-// 对应 Python: openjiuwen/core/retrieval/embedding/vllm_embedding.py
+// Python: openjiuwen/core/retrieval/embedding/vllm_embedding.py
 type VLLMEmbedding struct {
 	// openAI 委托的 OpenAI 客户端实例
 	openAI *OpenAIEmbedding
@@ -58,7 +58,7 @@ func (v *VLLMEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts
 // EmbedMultimodal 将多模态文档转换为向量。
 //
 // 注入 instruction → 构造 messages → 委托 OpenAI SDK 调用。
-// 对应 Python: VLLMEmbedding.embed_multimodal
+// Python: VLLMEmbedding.embed_multimodal
 func (v *VLLMEmbedding) EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
 	if doc == nil {
 		return nil, exception.BuildError(
@@ -114,7 +114,7 @@ func (v *VLLMEmbedding) callWithMessages(ctx context.Context, messages []map[str
 		params := openai.EmbeddingNewParams{
 			Model: v.openAI.config.ModelName,
 			Input: openai.EmbeddingNewParamsInputUnion{
-				OfString: param.Null[string](), // 对齐 Python input=None，vLLM 多模态模式下 input 由 messages 提供
+				OfString: param.Null[string](), // Python: input=None，vLLM 多模态模式下 input 由 messages 提供
 			},
 		}
 
@@ -165,7 +165,7 @@ func (v *VLLMEmbedding) callWithMessages(ctx context.Context, messages []map[str
 }
 
 // retryVLLMWithBackoff VLLM 专用重试 + 指数退避（返回单条向量）。
-// 对齐 Python: 只重试可恢复错误（5xx/网络错误/429），不重试客户端错误（4xx）。
+// Python: 只重试可恢复错误（5xx/网络错误/429），不重试客户端错误（4xx）。
 func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt int) ([]float64, error)) ([]float64, error) {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {

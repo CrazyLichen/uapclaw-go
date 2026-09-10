@@ -25,7 +25,7 @@ import (
 // 与 Agent Session 不同：Interact 返回错误（team session 不支持交互），
 // 不注册到 controller（无需从磁盘恢复）。
 //
-// 对应 Python: openjiuwen/core/session/agent_team.py (Session)
+// Python: openjiuwen/core/session/agent_team.py (Session)
 type AgentTeamSession struct {
 	// sessionID 会话唯一标识
 	sessionID string
@@ -148,7 +148,7 @@ func WithAgentTeamStreamWriterManager(mgr *stream.StreamWriterManager) AgentTeam
 
 // CreateAgentTeamSession 通过指定参数创建 AgentTeamSession 的工厂函数。
 //
-// 对齐 Python: Session(session_id, envs, team_id)
+// Python: Session(session_id, envs, team_id)
 func CreateAgentTeamSession(sessionID string, envs map[string]any, teamID string) *AgentTeamSession {
 	opts := []AgentTeamSessionOption{WithAgentTeamSessionID(sessionID)}
 	if teamID != "" {
@@ -188,7 +188,7 @@ func (s *AgentTeamSession) DumpState() map[string]any {
 // WriteStream 写入标准输出流。
 //
 // SessionFacade 接口实现。
-// 对应 Python: Session.write_stream(data)
+// Python: Session.write_stream(data)
 func (s *AgentTeamSession) WriteStream(ctx context.Context, data any) error {
 	return s.writeStream(data)
 }
@@ -196,13 +196,13 @@ func (s *AgentTeamSession) WriteStream(ctx context.Context, data any) error {
 // WriteCustomStream 写入自定义流。
 //
 // SessionFacade 接口实现。
-// 对应 Python: Session.write_custom_stream(data)
+// Python: Session.write_custom_stream(data)
 func (s *AgentTeamSession) WriteCustomStream(ctx context.Context, data any) error {
 	return s.writeCustomStream(data)
 }
 
 // GetEnv 获取环境变量值。
-// 对应 Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
+// Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
 func (s *AgentTeamSession) GetEnv(key string, defaultValue ...any) any {
 	cfg := s.inner.Config()
 	if cfg == nil {
@@ -212,7 +212,7 @@ func (s *AgentTeamSession) GetEnv(key string, defaultValue ...any) any {
 }
 
 // GetEnvs 获取所有环境变量。
-// 对应 Python: Session.get_envs() → self._inner.config().get_envs()
+// Python: Session.get_envs() → self._inner.config().get_envs()
 func (s *AgentTeamSession) GetEnvs() map[string]any {
 	cfg := s.inner.Config()
 	if cfg == nil {
@@ -222,7 +222,7 @@ func (s *AgentTeamSession) GetEnvs() map[string]any {
 }
 
 // Interact 团队会话不支持交互，始终返回错误。
-// 对应 Python: raise ValueError("team session does not support interact")
+// Python: raise ValueError("team session does not support interact")
 func (s *AgentTeamSession) Interact(ctx context.Context, value any) error {
 	return fmt.Errorf("团队会话不支持交互")
 }
@@ -231,7 +231,7 @@ func (s *AgentTeamSession) Interact(ctx context.Context, value any) error {
 //
 // 幂等：多次调用只执行一次。
 //
-// 对应 Python: Session.pre_run()
+// Python: Session.pre_run()
 func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	if s.preRunDone {
 		return nil
@@ -267,7 +267,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 //
 // 幂等：多次调用只执行一次。
 //
-// 对应 Python: Session.post_run()
+// Python: Session.post_run()
 func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 	if s.postRunDone {
 		return nil
@@ -298,7 +298,7 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 }
 
 // Commit 提交当前状态到检查点（不关闭流）。
-// 对应 Python: Session.commit()
+// Python: Session.commit()
 func (s *AgentTeamSession) Commit(ctx context.Context) error {
 	if cp := s.inner.Checkpointer(); cp != nil {
 		return cp.PostAgentTeamExecute(ctx, s.inner)
@@ -307,13 +307,13 @@ func (s *AgentTeamSession) Commit(ctx context.Context) error {
 }
 
 // FlushCheckpoint 等价 Commit，刷新检查点到存储。
-// 对应 Python: Session.flush_checkpoint() → Session.commit()
+// Python: Session.flush_checkpoint() → Session.commit()
 func (s *AgentTeamSession) FlushCheckpoint(ctx context.Context) error {
 	return s.Commit(ctx)
 }
 
 // CloseStream 关闭流发射器。
-// 对应 Python: Session.close_stream()
+// Python: Session.close_stream()
 func (s *AgentTeamSession) CloseStream() error {
 	ctx := context.Background()
 	mgr := s.inner.StreamWriterManager()
@@ -339,14 +339,14 @@ func (s *AgentTeamSession) CloseStream() error {
 //   - agentID: Agent 标识
 //   - shareStreamWriter: 是否共享父会话的 StreamWriterManager（默认 Python 为 True）
 //
-// 对应 Python: Session.create_agent_session(card, agent_id, *, share_stream_writer=True)
+// Python: Session.create_agent_session(card, agent_id, *, share_stream_writer=True)
 func (s *AgentTeamSession) CreateAgentSession(
 	card *agentschema.AgentCard,
 	agentID string,
 	shareStreamWriter bool,
 ) *Session {
 	// card 为 nil 时用 agentID 构造默认 AgentCard
-	// 对齐 Python: card = AgentCard(id=agent_id or "team_agent", name=agent_id or "team_agent")
+	// Python: card = AgentCard(id=agent_id or "team_agent", name=agent_id or "team_agent")
 	if card == nil {
 		id := agentID
 		if id == "" {
@@ -359,7 +359,7 @@ func (s *AgentTeamSession) CreateAgentSession(
 	}
 
 	// 注入来源元数据
-	// 对齐 Python: source_metadata={"source_agent_id": card.id, "source_team_id": team_id}
+	// Python: source_metadata={"source_agent_id": card.id, "source_team_id": team_id}
 	sourceMetadata := map[string]any{
 		"source_agent_id": card.GetID(),
 		"source_team_id":  s.teamID,
@@ -388,7 +388,7 @@ func (s *AgentTeamSession) Inner() *internal.AgentTeamSession {
 
 // StreamIterator 返回流迭代 channel。
 //
-// 对应 Python: Session.stream_iterator() → stream_writer_manager().stream_output()
+// Python: Session.stream_iterator() → stream_writer_manager().stream_output()
 func (s *AgentTeamSession) StreamIterator() <-chan stream.Schema {
 	mgr := s.inner.StreamWriterManager()
 	if mgr == nil {
@@ -402,7 +402,7 @@ func (s *AgentTeamSession) StreamIterator() <-chan stream.Schema {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // writeStream 写入标准输出流（内部实现）。
-// 对应 Python: Session.write_stream(data)
+// Python: Session.write_stream(data)
 // data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
 func (s *AgentTeamSession) writeStream(data any) error {
 	ctx := context.Background()
@@ -426,7 +426,7 @@ func (s *AgentTeamSession) writeStream(data any) error {
 }
 
 // writeCustomStream 写入自定义流（内部实现）。
-// 对应 Python: Session.write_custom_stream(data)
+// Python: Session.write_custom_stream(data)
 func (s *AgentTeamSession) writeCustomStream(data any) error {
 	ctx := context.Background()
 	streamData := s.tagStreamPayload(data)
@@ -450,7 +450,7 @@ func (s *AgentTeamSession) writeCustomStream(data any) error {
 }
 
 // tagStreamPayload 为流数据添加来源元数据。
-// 对应 Python: Session._tag_stream_payload(data)
+// Python: Session._tag_stream_payload(data)
 func (s *AgentTeamSession) tagStreamPayload(data any) any {
 	// AgentTeamSession 当前不持有 sourceMetadata，直接返回
 	return data

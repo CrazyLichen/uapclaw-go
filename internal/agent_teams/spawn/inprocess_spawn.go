@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentFactory 创建并配置 Agent 的工厂函数。
-// 对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)
+// Python: _TeamAgent(card) + teammate.configure(spec, ctx)
 // 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
 type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
 
@@ -21,7 +21,7 @@ type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, 
 
 const (
 	// defaultInitialMessage 默认初始消息
-	// 对齐 Python: "Join the team and wait for your first assignment."
+	// Python: "Join the team and wait for your first assignment."
 	defaultInitialMessage = "Join the team and wait for your first assignment."
 )
 
@@ -30,7 +30,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。
-// 对齐 Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
+// Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
 //
 // 核心逻辑：
 //  1. 调用工厂创建并配置 teammate
@@ -63,14 +63,14 @@ func InProcessSpawn(
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		// 对齐 Python: set_session_id(session_id)
+		// Python: set_session_id(session_id)
 		// Go: sessionID 通过参数传递，无需 contextvars
 
 		logger.Info(inprocessLogComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Msg("[inprocess] teammate started")
 
-		// 对齐 Python: await Runner.run_agent_team(teammate, inputs, member=True, session=session_id)
+		// Python: await Runner.run_agent_team(teammate, inputs, member=True, session=session_id)
 		// ⤵️ 预留：TeamRunner（9.85）实现后回填
 		// Python: _, err := runner.RunAgentTeam(runCtx, teammate, inputs, true, sessionID)
 		_ = runCtx    // 同上

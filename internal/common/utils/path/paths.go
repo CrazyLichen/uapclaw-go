@@ -11,7 +11,7 @@ import (
 
 // ResolvedPaths 缓存已解析的 ConfigDir 和 AgentWorkspaceDir。
 //
-// 对应 Python: jiuwenswarm/common/utils.py 中的 _config_dir / _workspace_dir 全局变量。
+// Python: jiuwenswarm/common/utils.py 中的 _config_dir / _workspace_dir 全局变量。
 // 未初始化时（~/.uapclaw/config/ 不存在）回退到 resources 目录，
 // 与 Python _resolve_paths() 行为对齐。
 type ResolvedPaths struct {
@@ -29,11 +29,11 @@ type ResolvedPaths struct {
 
 const (
 	// EnvHome 自定义用户主目录环境变量。
-	// 对应 Python: JIUWENSWARM_HOME
+	// Python: JIUWENSWARM_HOME
 	EnvHome = "UAPCLAW_HOME"
 
 	// EnvDataDir 自定义数据根目录环境变量。
-	// 对应 Python: JIUWENSWARM_DATA_DIR
+	// Python: JIUWENSWARM_DATA_DIR
 	EnvDataDir = "UAPCLAW_DATA_DIR"
 
 	// EnvResourcesDir 自定义资源目录环境变量。
@@ -41,11 +41,11 @@ const (
 	EnvResourcesDir = "UAPCLAW_RESOURCES_DIR"
 
 	// DefaultDir 默认工作区目录名。
-	// 对应 Python: ".jiuwenswarm"
+	// Python: ".jiuwenswarm"
 	DefaultDir = ".uapclaw"
 
 	// DefaultInstancesDir 默认命名实例根目录名。
-	// 对应 Python: ".jiuwenswarm-instances"
+	// Python: ".jiuwenswarm-instances"
 	DefaultInstancesDir = ".uapclaw-instances"
 )
 
@@ -90,10 +90,33 @@ func UserHomeDir() string {
 	return userHomeVal
 }
 
+// ExpandHome 将路径中的 ~ 展开为用户主目录。
+// Python: Path.expanduser()
+//
+// 支持：
+//   - "~" → UserHomeDir()
+//   - "~/foo" → UserHomeDir()/foo
+//   - "~/" → UserHomeDir()/
+//   - 其他路径原样返回
+func ExpandHome(path string) string {
+	if len(path) == 0 || path[0] != '~' {
+		return path
+	}
+	home := UserHomeDir()
+	if len(path) == 1 {
+		return home
+	}
+	if path[1] == '/' || path[1] == '\\' {
+		return filepath.Join(home, path[2:])
+	}
+	// ~user/ 格式不支持，返回原路径
+	return path
+}
+
 // SetUserHome 设置自定义主目录并重置所有缓存。
 //
 // 调用后 WorkspaceDir()、ConfigDir()、AgentWorkspaceDir() 都会重新解析。
-// 对应 Python: set_user_home(path)
+// Python: set_user_home(path)
 func SetUserHome(p string) {
 	userHomeVal = p
 	// 重置所有缓存
@@ -121,7 +144,7 @@ func ResetCache() {
 // WorkspaceDir 获取数据根目录（~/.uapclaw/）。
 //
 // 此函数不受未初始化回退影响，始终返回用户目录下的路径。
-// 对应 Python: get_user_workspace_dir()
+// Python: get_user_workspace_dir()
 //
 // 优先级：
 //  1. 缓存值
@@ -142,7 +165,7 @@ func WorkspaceDir() string {
 //
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/config/，
 // 未初始化时回退到 ResourcesDir()。
-// 对应 Python: get_config_dir()
+// Python: get_config_dir()
 func ConfigDir() string {
 	paths := getResolvedPaths()
 	return paths.ConfigDir
@@ -152,7 +175,7 @@ func ConfigDir() string {
 //
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/agent/workspace/，
 // 未初始化时回退到 ResourcesDir()/agent/workspace。
-// 对应 Python: get_workspace_dir()
+// Python: get_workspace_dir()
 func AgentWorkspaceDir() string {
 	paths := getResolvedPaths()
 	return paths.WorkspaceDir
@@ -161,7 +184,7 @@ func AgentWorkspaceDir() string {
 // IsInitialized 检查工作区是否已初始化。
 //
 // 判断依据：WorkspaceDir()/config/ 目录是否存在。
-// 对应 Python: _resolve_paths() 中 user_config_dir.exists() 判断
+// Python: _resolve_paths() 中 user_config_dir.exists() 判断
 func IsInitialized() bool {
 	configDir := filepath.Join(WorkspaceDir(), "config")
 	return dirExists(configDir)
@@ -219,7 +242,7 @@ func EnvFile() string {
 }
 
 // 以下路径辅助函数始终基于 WorkspaceDir() 派生，不受回退影响。
-// 对应 Python: 各 get_xxx_dir() 函数
+// Python: 各 get_xxx_dir() 函数
 
 // AgentRootDir 返回 Agent 根目录：WorkspaceDir()/agent
 func AgentRootDir() string {
@@ -297,7 +320,7 @@ func DeepAgentUserMDPath() string {
 }
 
 // AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
-// 对齐 Python: get_agent_teams_home()
+// Python: get_agent_teams_home()
 func AgentTeamsHomeDir() string {
 	return filepath.Join(WorkspaceDir(), "agent_teams")
 }
@@ -306,7 +329,7 @@ func AgentTeamsHomeDir() string {
 
 // getResolvedPaths 获取已解析的路径（带回退逻辑）。
 //
-// 对应 Python: _resolve_paths()，核心逻辑：
+// Python: _resolve_paths()，核心逻辑：
 //   - ~/.uapclaw/config/ 存在 → 已初始化模式，指向用户目录
 //   - 不存在 → 未初始化模式，回退到 resources 目录
 //

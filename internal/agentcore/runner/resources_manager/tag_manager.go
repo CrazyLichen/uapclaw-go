@@ -14,7 +14,7 @@ import (
 
 // TagMgr 标签管理器，维护资源与标签的双向映射关系。
 //
-// 对应 Python: TagMgr (openjiuwen/core/runner/resources_manager/tag_manager.py)
+// Python: TagMgr (openjiuwen/core/runner/resources_manager/tag_manager.py)
 // 两个索引：
 //   - resourceTags: 资源ID → 标签集合（正向索引）
 //   - tagToResource: 标签 → 资源ID集合（反向索引）
@@ -39,7 +39,7 @@ type TagMgr struct {
 
 // NewTagMgr 创建标签管理器，初始化 TagGlobal 对应空集合。
 //
-// 对应 Python: TagMgr.__init__()
+// Python: TagMgr.__init__()
 func NewTagMgr() *TagMgr {
 	return &TagMgr{
 		resourceTags:  make(map[string]map[Tag]struct{}),
@@ -49,7 +49,7 @@ func NewTagMgr() *TagMgr {
 
 // HasTag 检查标签是否存在。
 //
-// 对应 Python: TagMgr.has_tag(tag)
+// Python: TagMgr.has_tag(tag)
 func (m *TagMgr) HasTag(tag Tag) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -59,7 +59,7 @@ func (m *TagMgr) HasTag(tag Tag) bool {
 
 // ListTags 获取所有标签（排除空标签）。
 //
-// 对应 Python: TagMgr.list_tags()
+// Python: TagMgr.list_tags()
 func (m *TagMgr) ListTags() []Tag {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -74,7 +74,7 @@ func (m *TagMgr) ListTags() []Tag {
 
 // HasResource 检查资源是否存在。
 //
-// 对应 Python: TagMgr.has_resource(resource_id)
+// Python: TagMgr.has_resource(resource_id)
 func (m *TagMgr) HasResource(resourceID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -85,7 +85,7 @@ func (m *TagMgr) HasResource(resourceID string) bool {
 // TagResource 为资源添加标签（原子操作）。
 // 如果包含 TagGlobal，则执行 GLOBAL 特殊逻辑：GLOBAL 资源不能有其他标签。
 //
-// 对应 Python: TagMgr.tag_resource(resource_id, tags)
+// Python: TagMgr.tag_resource(resource_id, tags)
 func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 	tagsToAdd := normalizeTags(tags)
 
@@ -120,7 +120,7 @@ func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 
 // RemoveResource 完全移除资源及其所有标签。
 //
-// 对应 Python: TagMgr.remove_resource(resource_id)
+// Python: TagMgr.remove_resource(resource_id)
 func (m *TagMgr) RemoveResource(resourceID string) []Tag {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -141,7 +141,7 @@ func (m *TagMgr) RemoveResource(resourceID string) []Tag {
 // RemoveResourceTags 移除资源的指定标签。
 // skipIfNotExists 为 true 时跳过不存在的标签，否则返回错误。
 //
-// 对应 Python: TagMgr.remove_resource_tags(resource_id, tags, skip_if_not_exists)
+// Python: TagMgr.remove_resource_tags(resource_id, tags, skip_if_not_exists)
 func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExists bool) ([]Tag, error) {
 	tagsToRemove := normalizeTags(tags)
 
@@ -188,7 +188,7 @@ func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExis
 // UpdateResourceTags 更新资源标签。
 // 如果包含 TagGlobal，则执行 GLOBAL 特殊逻辑。
 //
-// 对应 Python: TagMgr.update_resource_tags(resource_id, tags, tag_update_strategy)
+// Python: TagMgr.update_resource_tags(resource_id, tags, tag_update_strategy)
 func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagUpdateStrategy) ([]Tag, error) {
 	newTags := normalizeTags(tags)
 
@@ -243,7 +243,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 // RemoveTag 完全移除标签及其所有关联。
 // skipIfNotExists 为 true 时跳过不存在的标签，否则返回错误。
 //
-// 对应 Python: TagMgr.remove_tag(tag, skip_if_not_exists)
+// Python: TagMgr.remove_tag(tag, skip_if_not_exists)
 func (m *TagMgr) RemoveTag(tag Tag, skipIfNotExists bool) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -269,7 +269,7 @@ func (m *TagMgr) RemoveTag(tag Tag, skipIfNotExists bool) ([]string, error) {
 
 // GetTagResources 获取指定标签的所有资源。
 //
-// 对应 Python: TagMgr.get_tag_resources(tag)
+// Python: TagMgr.get_tag_resources(tag)
 func (m *TagMgr) GetTagResources(tag Tag) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -289,7 +289,7 @@ func (m *TagMgr) GetTagResources(tag Tag) []string {
 // strategy 为 TagMatchAny 时，资源包含任一指定标签即可。
 // skipIfNotExists 为 true 时跳过不存在的标签，否则返回错误。
 //
-// 对应 Python: TagMgr.find_resources_by_tags(tags, tag_match_strategy, skip_if_not_exists)
+// Python: TagMgr.find_resources_by_tags(tags, tag_match_strategy, skip_if_not_exists)
 func (m *TagMgr) FindResourcesByTags(tags []Tag, strategy TagMatchStrategy, skipIfNotExists bool) ([]string, error) {
 	tagsToSearch := normalizeTags(tags)
 
@@ -336,7 +336,7 @@ func (m *TagMgr) FindResourcesByTags(tags []Tag, strategy TagMatchStrategy, skip
 
 // HasResourceTag 检查资源是否拥有指定标签。
 //
-// 对应 Python: TagMgr.has_resource_tag(resource_id, tag)
+// Python: TagMgr.has_resource_tag(resource_id, tag)
 func (m *TagMgr) HasResourceTag(resourceID string, tag Tag) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -350,7 +350,7 @@ func (m *TagMgr) HasResourceTag(resourceID string, tag Tag) bool {
 
 // GetResourcesTags 获取资源的所有标签。
 //
-// 对应 Python: TagMgr.get_resources_tags(resource_id)
+// Python: TagMgr.get_resources_tags(resource_id)
 func (m *TagMgr) GetResourcesTags(resourceID string) []Tag {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -368,7 +368,7 @@ func (m *TagMgr) GetResourcesTags(resourceID string) []Tag {
 // Display 显示当前状态，返回格式化字符串。
 // enableLog 为 true 时同时输出日志。
 //
-// 对应 Python: TagMgr.display(enable_log)
+// Python: TagMgr.display(enable_log)
 func (m *TagMgr) Display(enableLog bool) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -459,7 +459,7 @@ func (s TagMatchStrategy) String() string {
 // setGlobalResource 将资源设置为 GLOBAL 标签，GLOBAL 资源不能有其他标签。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._set_global_resource(resource_id)
+// Python: TagMgr._set_global_resource(resource_id)
 func (m *TagMgr) setGlobalResource(resourceID string) []Tag {
 	// 获取旧标签
 	oldTags := m.resourceTags[resourceID]
@@ -494,7 +494,7 @@ func (m *TagMgr) setGlobalResource(resourceID string) []Tag {
 // addResourceTags 为资源添加多个标签。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._add_resource_tags(resource_id, tags_to_add)
+// Python: TagMgr._add_resource_tags(resource_id, tags_to_add)
 func (m *TagMgr) addResourceTags(resourceID string, tagsToAdd map[Tag]struct{}) []Tag {
 	// 确保资源存在
 	if _, ok := m.resourceTags[resourceID]; !ok {
@@ -530,7 +530,7 @@ func (m *TagMgr) addResourceTags(resourceID string, tagsToAdd map[Tag]struct{}) 
 // removeResource 完全移除资源。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._remove_resource(resource_id)
+// Python: TagMgr._remove_resource(resource_id)
 func (m *TagMgr) removeResource(resourceID string) []Tag {
 	if _, ok := m.resourceTags[resourceID]; !ok {
 		return []Tag{}
@@ -563,7 +563,7 @@ func (m *TagMgr) removeResource(resourceID string) []Tag {
 // removeResourceTagsInternal 移除资源的指定标签（内部实现）。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._remove_resource_tags(resource_id, tags_to_remove)
+// Python: TagMgr._remove_resource_tags(resource_id, tags_to_remove)
 func (m *TagMgr) removeResourceTagsInternal(resourceID string, tagsToRemove map[Tag]struct{}) []Tag {
 	if _, ok := m.resourceTags[resourceID]; !ok {
 		return []Tag{}
@@ -601,7 +601,7 @@ func (m *TagMgr) removeResourceTagsInternal(resourceID string, tagsToRemove map[
 // replaceResourceTags 替换资源的所有标签。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._replace_resource_tags(resource_id, new_tags)
+// Python: TagMgr._replace_resource_tags(resource_id, new_tags)
 func (m *TagMgr) replaceResourceTags(resourceID string, newTags map[Tag]struct{}) []Tag {
 	if _, ok := m.resourceTags[resourceID]; !ok {
 		return []Tag{}
@@ -646,7 +646,7 @@ func (m *TagMgr) replaceResourceTags(resourceID string, newTags map[Tag]struct{}
 // removeTagInternal 完全移除标签（内部实现）。
 // 调用方必须持有写锁。
 //
-// 对应 Python: TagMgr._remove_tag(tag)
+// Python: TagMgr._remove_tag(tag)
 func (m *TagMgr) removeTagInternal(tag Tag) []string {
 	if _, ok := m.tagToResource[tag]; !ok {
 		return []string{}
@@ -679,7 +679,7 @@ func (m *TagMgr) removeTagInternal(tag Tag) []string {
 // findResourcesWithAllTags 查找拥有所有指定标签的资源。
 // 调用方必须持有读锁。
 //
-// 对应 Python: TagMgr._find_resources_with_all_tags(required_tags, skip_if_not_exists)
+// Python: TagMgr._find_resources_with_all_tags(required_tags, skip_if_not_exists)
 func (m *TagMgr) findResourcesWithAllTags(requiredTags map[Tag]struct{}, skipIfNotExists bool) ([]string, error) {
 	if len(requiredTags) == 0 {
 		return []string{}, nil
@@ -736,7 +736,7 @@ func (m *TagMgr) findResourcesWithAllTags(requiredTags map[Tag]struct{}, skipIfN
 
 // normalizeTags 将标签切片归一化为集合。
 //
-// 对应 Python: TagMgr._normalize_tags(tags)
+// Python: TagMgr._normalize_tags(tags)
 func normalizeTags(tags []Tag) map[Tag]struct{} {
 	result := make(map[Tag]struct{}, len(tags))
 	for _, tag := range tags {
@@ -747,7 +747,7 @@ func normalizeTags(tags []Tag) map[Tag]struct{} {
 
 // isBuiltinTag 检查是否为内置标签（仅 TagGlobal）。
 //
-// 对应 Python: TagMgr._is_builtin_tag(tag)
+// Python: TagMgr._is_builtin_tag(tag)
 func isBuiltinTag(tag Tag) bool {
 	return tag == TagGlobal
 }

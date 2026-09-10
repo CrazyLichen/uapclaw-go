@@ -7,7 +7,7 @@ import "fmt"
 // ESVectorField Elasticsearch 向量索引配置。
 // ES 8.x 使用 dense_vector 字段的 HNSW 算法实现 k-NN 搜索。
 //
-// 对应 Python: es_vector_store.py 中的 k-NN 索引参数
+// Python: es_vector_store.py 中的 k-NN 索引参数
 type ESVectorField struct {
 	VectorField
 	// NumCandidates k-NN 搜索候选集大小（search 阶段）

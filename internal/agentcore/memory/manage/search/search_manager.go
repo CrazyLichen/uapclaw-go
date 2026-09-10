@@ -16,7 +16,7 @@ import (
 
 // SearchParams 搜索参数。
 //
-// 对应 Python: openjiuwen/core/memory/manage/search/search_manager.py (SearchParams)
+// Python: openjiuwen/core/memory/manage/search/search_manager.py (SearchParams)
 type SearchParams struct {
 	// UserID 用户 ID
 	UserID string
@@ -47,7 +47,7 @@ type ListUserMemResult struct {
 // 语义搜索按 search_type 分发到各 Manager；列表/分页直接走 memory_index。
 // 三种 Fragment 类型共享同一个 FragmentMemoryManager 实例，需去重（对齐 Python: set(self.managers.values())）。
 //
-// 对应 Python: openjiuwen/core/memory/manage/search/search_manager.py (SearchManager)
+// Python: openjiuwen/core/memory/manage/search/search_manager.py (SearchManager)
 type SearchManager struct {
 	// managers 记忆类型 → Manager 实例映射
 	managers map[string]index.BaseMemoryManager
@@ -79,7 +79,7 @@ var allMemManagerList = mem_model.AllMemoryTypeValues()
 
 // NewSearchManager 创建搜索管理器。
 //
-// 对齐 Python: SearchManager.__init__(managers, crypto_key, memory_index)
+// Python: SearchManager.__init__(managers, crypto_key, memory_index)
 func NewSearchManager(managers map[string]index.BaseMemoryManager, cryptoKey []byte, memoryIndex storeindex.BaseMemoryIndex) *SearchManager {
 	return &SearchManager{
 		managers:    managers,
@@ -105,7 +105,7 @@ func NewSearchParams(userID, scopeID, query string) *SearchParams {
 // 按 search_type 分发到对应 Manager 的 Search()；无类型时遍历所有 Manager；
 // 结果按 score 降序截断 top_k，过滤 threshold。
 //
-// 对齐 Python: SearchManager.search(params, **kwargs)
+// Python: SearchManager.search(params, **kwargs)
 func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*storeindex.MemorySearchResult, error) {
 	userID := params.UserID
 	scopeID := params.ScopeID
@@ -126,7 +126,7 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 	}
 
 	// 校验 search_type 对应 Manager 是否已初始化
-	// 对齐 Python: if st and not self.managers.get(st)
+	// Python: if st and not self.managers.get(st)
 	usedTypes := make(map[index.BaseMemoryManager][]string)
 	for _, st := range searchType {
 		manager, ok := s.managers[st]
@@ -187,7 +187,7 @@ func (s *SearchManager) Search(ctx context.Context, params *SearchParams) ([]*st
 
 // ListUserMem 分页列出用户记忆。
 //
-// 对齐 Python: SearchManager.list_user_mem(user_id, scope_id, nums, pages, mem_type)
+// Python: SearchManager.list_user_mem(user_id, scope_id, nums, pages, mem_type)
 func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID string, nums int, pages int, memType string) ([]*ListUserMemResult, error) {
 	if s.memoryIndex == nil {
 		return nil, exception.NewBaseError(
@@ -218,7 +218,7 @@ func (s *SearchManager) ListUserMem(ctx context.Context, userID string, scopeID 
 
 // ListUserProfile 列出用户画像记忆。
 //
-// 对齐 Python: SearchManager.list_user_profile(user_id, scope_id)
+// Python: SearchManager.list_user_profile(user_id, scope_id)
 func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scopeID string) ([]*storeindex.MemoryDoc, error) {
 	// 检查 Fragment 类型管理器是否已初始化（对齐 Python: if any item not in managers for item in FRAGMENT_MEMORY_TYPE）
 	for _, fragType := range index.FragmentMemoryTypes {
@@ -252,7 +252,7 @@ func (s *SearchManager) ListUserProfile(ctx context.Context, userID string, scop
 
 // ListUserSummary 列出用户摘要记忆。
 //
-// 对齐 Python: SearchManager.list_user_summary(user_id, scope_id)
+// Python: SearchManager.list_user_summary(user_id, scope_id)
 func (s *SearchManager) ListUserSummary(ctx context.Context, userID string, scopeID string) ([]*storeindex.MemoryDoc, error) {
 	manager, ok := s.managers[mem_model.MemoryTypeSummary.String()]
 	if !ok {
@@ -275,7 +275,7 @@ func (s *SearchManager) ListUserSummary(ctx context.Context, userID string, scop
 
 // GetUserVariable 获取用户变量。
 //
-// 对齐 Python: SearchManager.get_user_variable(user_id, scope_id, var_name)
+// Python: SearchManager.get_user_variable(user_id, scope_id, var_name)
 func (s *SearchManager) GetUserVariable(ctx context.Context, userID string, scopeID string, varName string) (string, error) {
 	manager, ok := s.managers[mem_model.MemoryTypeVariable.String()]
 	if !ok {
@@ -293,7 +293,7 @@ func (s *SearchManager) GetUserVariable(ctx context.Context, userID string, scop
 			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 VariableManager", mem_model.MemoryTypeVariable.String())),
 		)
 	}
-	// 对齐 Python: query_variable(user_id, scope_id, name=var_name)
+	// Python: query_variable(user_id, scope_id, name=var_name)
 	// Go 中 QueryVariable(userID, scopeID, name, sessionID)，sessionID 为空表示用户级
 	res, err := vm.QueryVariable(ctx, userID, scopeID, varName, "")
 	if err != nil {
@@ -310,7 +310,7 @@ func (s *SearchManager) GetUserVariable(ctx context.Context, userID string, scop
 
 // GetAllUserVariable 获取用户所有变量。
 //
-// 对齐 Python: SearchManager.get_all_user_variable(user_id, scope_id)
+// Python: SearchManager.get_all_user_variable(user_id, scope_id)
 func (s *SearchManager) GetAllUserVariable(ctx context.Context, userID string, scopeID string) (map[string]string, error) {
 	manager, ok := s.managers[mem_model.MemoryTypeVariable.String()]
 	if !ok {
@@ -328,7 +328,7 @@ func (s *SearchManager) GetAllUserVariable(ctx context.Context, userID string, s
 			exception.WithMsg(fmt.Sprintf("%s 管理器类型不是 VariableManager", mem_model.MemoryTypeVariable.String())),
 		)
 	}
-	// 对齐 Python: query_variable(user_id, scope_id) — name 为空表示查询所有
+	// Python: query_variable(user_id, scope_id) — name 为空表示查询所有
 	return vm.QueryVariable(ctx, userID, scopeID, "", "")
 }
 

@@ -13,7 +13,7 @@ import (
 
 // Case 单个训练/评估样本。
 //
-// 对应 Python: openjiuwen/agent_evolving/dataset/case.py Case
+// Python: openjiuwen/agent_evolving/dataset/case.py Case
 type Case struct {
 	// Inputs 输入数据（如查询或对话内容）
 	Inputs map[string]any `json:"inputs"`
@@ -29,7 +29,7 @@ type Case struct {
 //
 // score 通过 SetScore 设置时自动钳位到 [0, 1] 范围，外部必须通过 GetScore/SetScore 访问。
 // 自定义 MarshalJSON/UnmarshalJSON 确保 score 在 JSON 中以 "score" 键序列化。
-// 对应 Python: openjiuwen/agent_evolving/dataset/case.py EvaluatedCase
+// Python: openjiuwen/agent_evolving/dataset/case.py EvaluatedCase
 type EvaluatedCase struct {
 	// Case 原始样本
 	Case Case `json:"case"`
@@ -57,7 +57,7 @@ type CaseOption func(*Case)
 // NewCase 创建 Case 实例，默认自动生成 CaseID。
 //
 // inputs 和 label 不能为空 map，否则返回 error。
-// 对应 Python: Case(inputs=..., label=..., tools=..., case_id=uuid...) 中 Field(min_length=1) 验证
+// Python: Case(inputs=..., label=..., tools=..., case_id=uuid...) 中 Field(min_length=1) 验证
 func NewCase(inputs, label map[string]any, opts ...CaseOption) (*Case, error) {
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("inputs 不能为空 map（对应 Python Field(min_length=1)）")
@@ -78,7 +78,7 @@ func NewCase(inputs, label map[string]any, opts ...CaseOption) (*Case, error) {
 
 // NewEvaluatedCase 创建 EvaluatedCase 实例，Score 默认 0.0。
 //
-// 对应 Python: EvaluatedCase(case=..., answer=...)
+// Python: EvaluatedCase(case=..., answer=...)
 func NewEvaluatedCase(case_ Case, answer map[string]any) *EvaluatedCase {
 	return &EvaluatedCase{
 		Case:   case_,
@@ -89,14 +89,14 @@ func NewEvaluatedCase(case_ Case, answer map[string]any) *EvaluatedCase {
 
 // GetScore 返回综合评分（范围 [0, 1]）。
 //
-// 对应 Python: EvaluatedCase.score 属性
+// Python: EvaluatedCase.score 属性
 func (ec *EvaluatedCase) GetScore() float64 {
 	return ec.score
 }
 
 // SetScore 设置评分，自动钳位到 [0, 1]。
 //
-// 对应 Python: EvaluatedCase 的 field_validator("score") clamp_score
+// Python: EvaluatedCase 的 field_validator("score") clamp_score
 func (ec *EvaluatedCase) SetScore(score float64) {
 	if score > 1.0 {
 		score = 1.0
@@ -108,25 +108,25 @@ func (ec *EvaluatedCase) SetScore(score float64) {
 }
 
 // GetInputs 返回原始样本的输入数据。
-// 对应 Python: EvaluatedCase.inputs 属性
+// Python: EvaluatedCase.inputs 属性
 func (ec *EvaluatedCase) GetInputs() map[string]any {
 	return ec.Case.Inputs
 }
 
 // GetLabel 返回原始样本的期望答案。
-// 对应 Python: EvaluatedCase.label 属性
+// Python: EvaluatedCase.label 属性
 func (ec *EvaluatedCase) GetLabel() map[string]any {
 	return ec.Case.Label
 }
 
 // GetTools 返回原始样本的工具列表。
-// 对应 Python: EvaluatedCase.tools 属性
+// Python: EvaluatedCase.tools 属性
 func (ec *EvaluatedCase) GetTools() []schema.ToolInfo {
 	return ec.Case.Tools
 }
 
 // GetCaseID 返回原始样本的唯一标识。
-// 对应 Python: EvaluatedCase.case_id 属性
+// Python: EvaluatedCase.case_id 属性
 func (ec *EvaluatedCase) GetCaseID() string {
 	return ec.Case.CaseID
 }

@@ -9,7 +9,7 @@ package types
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // DisallowedForSubagents 禁止传递给子 Agent 的工具名切片。
-// 对齐 Python: DISALLOWED_FOR_SUBAGENTS (code_agent_rail.py L28-31)
+// Python: DISALLOWED_FOR_SUBAGENTS (code_agent_rail.py L28-31)
 //
 // adapter 和 runtime 共享此常量，避免硬编码重复。
 // adapter 层通过 init() 转为 map[string]bool 加速查找。
@@ -19,7 +19,7 @@ var DisallowedForSubagents = []string{
 }
 
 // ToolGroups 工具分组（用于 Agent 定义 UI）。
-// 对齐 Python: TOOL_GROUPS (code_agent_rail.py L34-41)
+// Python: TOOL_GROUPS (code_agent_rail.py L34-41)
 var ToolGroups = map[string][]string{
 	"核心":   {"Read", "Write", "Edit", "Bash", "LS"},
 	"搜索":   {"Grep", "Glob", "WebSearch", "WebFetch"},
@@ -29,7 +29,7 @@ var ToolGroups = map[string][]string{
 }
 
 // ToolDescriptions 工具描述映射（显示名→描述）。
-// 对齐 Python: _TOOL_DESCRIPTIONS (agent_config_service.py L28-52)
+// Python: _TOOL_DESCRIPTIONS (agent_config_service.py L28-52)
 // ListAvailableTools() 动态构建工具列表时使用此映射。
 var ToolDescriptions = map[string]string{
 	"Read":            "读取文件内容",

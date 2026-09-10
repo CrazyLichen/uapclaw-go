@@ -147,7 +147,7 @@ func (t *CodingMemoryEditTool) Stream(_ context.Context, _ map[string]any, _ ...
 
 // CreateCodingMemoryTools 创建编程记忆工具集。对齐 Python create_coding_memory_tools
 func CreateCodingMemoryTools(ctx *lite.CodingMemoryToolContext, language string, agentID string) []tool.Tool {
-	// 对齐 Python: if ctx.workspace is not None: coding_memory_dir = str(ctx.workspace.get_node_path("coding_memory") or "")
+	// Python: if ctx.workspace is not None: coding_memory_dir = str(ctx.workspace.get_node_path("coding_memory") or "")
 	if ctx.Workspace != nil {
 		if nodePath := ctx.Workspace.GetNodePath("coding_memory"); nodePath != nil {
 			ctx.CodingMemoryDir = *nodePath
@@ -155,7 +155,7 @@ func CreateCodingMemoryTools(ctx *lite.CodingMemoryToolContext, language string,
 		ctx.NodeName = "coding_memory"
 	}
 
-	// 对齐 Python: build_tool_card("coding_memory_read", "CodingMemoryReadTool", language, agent_id=agent_id)
+	// Python: build_tool_card("coding_memory_read", "CodingMemoryReadTool", language, agent_id=agent_id)
 	readCard, readErr := htools.BuildToolCard("coding_memory_read", "CodingMemoryReadTool", language, nil, agentID)
 	if readErr != nil {
 		readCard = tool.NewToolCardWithID("CodingMemoryReadTool", "coding_memory_read", "coding_memory_read", nil, nil)

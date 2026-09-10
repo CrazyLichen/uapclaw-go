@@ -19,7 +19,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BashInput BashTool 输入参数。
-// 对齐 Python: _BashInputs (bash/_tool.py L61-70)
+// Python: _BashInputs (bash/_tool.py L61-70)
 type BashInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
@@ -46,11 +46,11 @@ const logComponent = logger.ComponentAgentCore
 
 const (
 	// bashDefaultTimeout 默认超时秒数。
-	// 对齐 Python: BashTool._resolve_timeout default=300
+	// Python: BashTool._resolve_timeout default=300
 	bashDefaultTimeout = 300
 
 	// bashDefaultMaxOutputChars 默认最大输出字符数，0=无限制。
-	// 对齐 Python: BashTool._resolve_max_output_chars default=0
+	// Python: BashTool._resolve_max_output_chars default=0
 	bashDefaultMaxOutputChars = 0
 )
 
@@ -59,13 +59,13 @@ const (
 var (
 
 	// validShellTypes 合法的 shell 类型集合。
-	// 对齐 Python: _VALID_SHELL_TYPES (bash/_tool.py L57)
+	// Python: _VALID_SHELL_TYPES (bash/_tool.py L57)
 	validShellTypes = map[string]bool{
 		"auto": true, "cmd": true, "powershell": true, "bash": true, "sh": true,
 	}
 
 	// sudoNeedsNRe 匹配需要注入 -n 的 sudo。
-	// 对齐 Python: _SUDO_NEEDS_N_RE (bash/_tool.py L47-49)
+	// Python: _SUDO_NEEDS_N_RE (bash/_tool.py L47-49)
 	// 使用 regexp2 支持 Perl lookahead 语法 (?!...) 和 (?=...)
 	sudoNeedsNRe = regexp2.MustCompile(`\bsudo\b(?!(?:\s+-[a-zA-Z]*n|\s+--non-interactive))(?=\s)`, 0)
 )
@@ -73,13 +73,13 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBashTool 创建 BashTool 实例。
-// 对齐 Python: BashTool (bash/_tool.py L73-95)
+// Python: BashTool (bash/_tool.py L73-95)
 func NewBashTool(op sys_operation.SysOperation, language, agentID string, permConfig PermissionConfig) tool.Tool {
 	card, _ := tools.BuildToolCard("bash", "BashTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input BashInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// ── 参数解析 ──
-		// 对齐 Python: _parse_inputs (bash/_tool.py L129-142)
+		// Python: _parse_inputs (bash/_tool.py L129-142)
 		command := makeSudoNoninteractive(strings.TrimSpace(input.Command))
 		timeout := resolveBashTimeout(input.Timeout)
 		workdir := input.Workdir
@@ -92,7 +92,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		description := input.Description
 
 		// ── 空命令检查 ──
-		// 对齐 Python L164-165
+		// Python: L164-165
 		if command == "" {
 			return map[string]any{
 				"success": false,
@@ -101,7 +101,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── 安全守卫 (OPENJIUWEN_BASH_STRICT=1) ──
-		// 对齐 Python L167-170
+		// Python: L167-170
 		if os.Getenv("OPENJIUWEN_BASH_STRICT") == "1" {
 			blocked, reason := CheckBashInjection(command)
 			if blocked {
@@ -120,7 +120,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── cwd 解析 ──
-		// 对齐 Python L172-176
+		// Python: L172-176
 		currentCwd := cwd.GetCwd(ctx)
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
@@ -136,11 +136,11 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── 破坏性命令警告 ──
-		// 对齐 Python L178
+		// Python: L178
 		warning := GetBashDestructiveWarning(command)
 
 		// ── description 日志 ──
-		// 对齐 Python L180-181
+		// Python: L180-181
 		if description != "" {
 			logger.Debug(logComponent).
 				Str("description", description).
@@ -149,7 +149,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── 后台执行 ──
-		// 对齐 Python L184-190
+		// Python: L184-190
 		if runInBackground {
 			bgRes, err := op.Shell().ExecuteCmdBackground(
 				ctx, command,
@@ -182,7 +182,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── rm 目标记录（执行前）──
-		// 对齐 Python L192-199: 执行前记录 rm 目标
+		// Python: L192-199: 执行前记录 rm 目标
 		var historyPath string
 		callOpts := tool.NewToolCallOptions(opts...)
 		session := callOpts.Session
@@ -195,7 +195,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// ── 前台执行 ──
-		// 对齐 Python L202-248
+		// Python: L202-248
 		res, err := op.Shell().ExecuteCmd(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -210,7 +210,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// 失败路径：部分输出渲染
-		// 对齐 Python L205-222
+		// Python: L205-222
 		if !res.IsSuccess() {
 			var partial string
 			if res.Data != nil {
@@ -243,7 +243,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}
 
 		// 成功路径
-		// 对齐 Python L224-248
+		// Python: L224-248
 		exitCode := -1
 		stdout := ""
 		stderr := ""
@@ -258,7 +258,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		meaning := InterpretBashExitCode(command, exitCode, stdout, stderr)
 
 		// ── rm 目标记录（执行后）──
-		// 对齐 Python L230-232: 执行后检测并记录删除
+		// Python: L230-232: 执行后检测并记录删除
 		if historyPath != "" && !meaning.IsError {
 			filesystem.DetectAndRecordDeletions(historyPath)
 		}
@@ -295,7 +295,7 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // makeSudoNoninteractive 注入 sudo -n 标志，让 sudo 非交互失败而非挂起等密码。
-// 对齐 Python: _make_sudo_noninteractive (bash/_tool.py L52-54)
+// Python: _make_sudo_noninteractive (bash/_tool.py L52-54)
 func makeSudoNoninteractive(command string) string {
 	result, err := sudoNeedsNRe.Replace(command, "sudo -n", 0, -1)
 	if err != nil {
@@ -305,7 +305,7 @@ func makeSudoNoninteractive(command string) string {
 }
 
 // resolveBashTimeout 解析并钳制超时值。
-// 对齐 Python: BashTool._resolve_timeout (bash/_tool.py L99-110)
+// Python: BashTool._resolve_timeout (bash/_tool.py L99-110)
 func resolveBashTimeout(rawValue int) int {
 	timeout := rawValue
 	maxTimeout := 3600
@@ -327,7 +327,7 @@ func resolveBashTimeout(rawValue int) int {
 }
 
 // resolveBashMaxOutputChars 解析并钳制最大输出字符数。0 表示无限制。
-// 对齐 Python: BashTool._resolve_max_output_chars (bash/_tool.py L113-126)
+// Python: BashTool._resolve_max_output_chars (bash/_tool.py L113-126)
 func resolveBashMaxOutputChars(rawValue int) int {
 	value := rawValue
 	if value == 0 {

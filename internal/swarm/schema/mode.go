@@ -16,7 +16,7 @@ import (
 //   - code 族：code.plan（代码规划）、code.normal（代码常态）、code.team（代码团队）
 //   - team 族：team（团队运行时）
 //
-// 对应 Python: jiuwenswarm/common/schema/message.py (Mode)
+// Python: jiuwenswarm/common/schema/message.py (Mode)
 type Mode string
 
 const (
@@ -68,7 +68,7 @@ func AllModes() []Mode {
 }
 
 // ParseMode 从字符串解析 Mode，非法值回退到 default。
-// 对齐 Python Mode.from_raw(raw_mode, default) 语义：
+// Python: Mode.from_raw(raw_mode, default) 语义：
 // 先对输入做 strip + lower 标准化，再查找合法值；
 // 空字符串或未识别值均返回 default。
 func ParseMode(s string, defaultVal Mode) Mode {
@@ -99,7 +99,7 @@ func (m Mode) GoString() string {
 }
 
 // ToRuntimeMode 返回模式的运行时字符串值。
-// 对齐 Python Mode.to_runtime_mode()，返回枚举的字符串值本身。
+// Python: Mode.to_runtime_mode()，返回枚举的字符串值本身。
 func (m Mode) ToRuntimeMode() string {
 	return string(m)
 }

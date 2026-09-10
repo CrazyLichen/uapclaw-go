@@ -26,7 +26,7 @@ func TestNewPermissionContext(t *testing.T) {
 	if pc.WebUserID != "" {
 		t.Errorf("WebUserID 应为空，实际 %q", pc.WebUserID)
 	}
-	// 对齐 Python: enable_memory 默认 true
+	// Python: enable_memory 默认 true
 	if !pc.EnableMemory {
 		t.Error("EnableMemory 应为 true（默认值）")
 	}
@@ -106,7 +106,7 @@ func TestPermissionContext_Scene_normalIM(t *testing.T) {
 }
 
 // TestPermissionContext_Scene_数字分身优先级高于web 验证 group_digital_avatar 优先级高于 web
-// 对齐 Python owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
+// Python: owner_scopes.PermissionContext.scene：先检查 group_digital_avatar，再检查 web
 func TestPermissionContext_Scene_数字分身优先级高于web(t *testing.T) {
 	pc := NewPermissionContext(
 		WithPermissionChannelID("web"),
@@ -244,7 +244,7 @@ func TestNewPermissionContextFromDict_缺失字段用零值(t *testing.T) {
 	if pc.GroupDigitalAvatar {
 		t.Error("GroupDigitalAvatar 应为 false（零值）")
 	}
-	// 对齐 Python: meta.get("enable_memory", True) — 缺失时默认 true
+	// Python: meta.get("enable_memory", True) — 缺失时默认 true
 	if !pc.EnableMemory {
 		t.Error("EnableMemory 缺失时应为 true（默认值）")
 	}

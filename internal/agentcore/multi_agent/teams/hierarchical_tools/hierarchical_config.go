@@ -9,7 +9,7 @@ import (
 
 // HierarchicalToolsTeamConfig 工具委托层级团队配置。
 //
-// 对应 Python: HierarchicalTeamConfig (hierarchical_tools/hierarchical_config.py)
+// Python: HierarchicalTeamConfig (hierarchical_tools/hierarchical_config.py)
 type HierarchicalToolsTeamConfig struct {
 	// TeamConfig 嵌入基础团队配置
 	TeamConfig maschema.TeamConfig

@@ -26,7 +26,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReadFileInput 读取文件工具的输入参数。
-// 对齐 Python: ReadFileTool invoke inputs (filesystem.py L282)
+// Python: ReadFileTool invoke inputs (filesystem.py L282)
 type ReadFileInput struct {
 	// FilePath 文件路径（必需）
 	FilePath string `json:"file_path"`
@@ -52,23 +52,23 @@ type rawTextState struct {
 
 const (
 	// maxLinesToRead 最多读取行数。
-	// 对齐 Python: ReadFileTool.MAX_LINES_TO_READ (filesystem.py L274)
+	// Python: ReadFileTool.MAX_LINES_TO_READ (filesystem.py L274)
 	maxLinesToRead = 2000
 
 	// maxSizeBytes 文件内容大小上限 (256KB)。
-	// 对齐 Python: ReadFileTool.MAX_SIZE_BYTES (filesystem.py L275)
+	// Python: ReadFileTool.MAX_SIZE_BYTES (filesystem.py L275)
 	maxSizeBytes = 256 * 1024
 
 	// maxTokens token 估算上限。
-	// 对齐 Python: ReadFileTool.MAX_TOKENS (filesystem.py L276)
+	// Python: ReadFileTool.MAX_TOKENS (filesystem.py L276)
 	maxTokens = 25000
 
 	// pdfMaxPagesPerRead PDF 每次最多读取页数。
-	// 对齐 Python: ReadFileTool.PDF_MAX_PAGES_PER_READ (filesystem.py L277)
+	// Python: ReadFileTool.PDF_MAX_PAGES_PER_READ (filesystem.py L277)
 	pdfMaxPagesPerRead = 20
 
 	// pdfAtMentionInlineThreshold PDF 内联页数阈值。
-	// 对齐 Python: ReadFileTool.PDF_AT_MENTION_INLINE_THRESHOLD (filesystem.py L278)
+	// Python: ReadFileTool.PDF_AT_MENTION_INLINE_THRESHOLD (filesystem.py L278)
 	pdfAtMentionInlineThreshold = 100
 )
 
@@ -81,7 +81,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 
 	fn := func(ctx context.Context, input ReadFileInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 参数校验: file_path 必需
-		// 对齐 Python L699-701
+		// Python: L699-701
 		if input.FilePath == "" {
 			return map[string]any{
 				"success": false,
@@ -90,11 +90,11 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 路径解析
-		// 对齐 Python L704-706
+		// Python: L704-706
 		filePath := ResolveToolFilePath(ctx, input.FilePath)
 
 		// 设备路径检查
-		// 对齐 Python L709-713
+		// Python: L709-713
 		if IsBlockedDevice(filePath) {
 			return map[string]any{
 				"success": false,
@@ -103,7 +103,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 二进制文件检测（PDF/图片/Notebook 除外）
-		// 对齐 Python L716-724
+		// Python: L716-724
 		ext := strings.ToLower(filepath.Ext(filePath))
 		isPDF := ext == ".pdf"
 		isImage := ImageExtensions[ext]
@@ -116,7 +116,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// PDF pages 校验
-		// 对齐 Python L729-747
+		// Python: L729-747
 		pages := input.Pages
 		if pages != "" && isPDF {
 			parsed := parsePDFPageRange(pages, math.MaxInt)
@@ -136,7 +136,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// offset/limit 参数处理
-		// 对齐 Python L749-756
+		// Python: L749-756
 		offset := input.Offset
 		userSuppliedLimit := input.Limit != 0
 		var limit int
@@ -150,7 +150,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 获取文件 mtime/size
-		// 对齐 Python L759-766
+		// Python: L759-766
 		var mtimeNS int64
 		var sizeBytes int64
 		if st, err := os.Stat(filePath); err == nil {
@@ -159,7 +159,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 文件类型分派
-		// 对齐 Python L768-784
+		// Python: L768-784
 		var rendered map[string]any
 		var renderErr error
 
@@ -181,7 +181,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 提取 content 字段
-		// 对齐 Python L786-793
+		// Python: L786-793
 		content, _ := rendered["content"].(string)
 		if content == "" {
 			// rendered 可能本身就是 content 字符串
@@ -195,12 +195,12 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		}
 
 		// 更新读取状态注册表
-		// 对齐 Python L796-802
+		// Python: L796-802
 		isPartial := userSuppliedLimit || offset > 0
 		recordReadState(ctx, op, filePath, mtimeNS, sizeBytes, isPartial, lineCount)
 
 		// 构建返回值
-		// 对齐 Python L804-812
+		// Python: L804-812
 		resultData := make(map[string]any)
 		for k, v := range rendered {
 			resultData[k] = v
@@ -223,7 +223,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 
 func readText(ctx context.Context, op sys_operation.SysOperation, filePath string, offset, limit int, applySizeCap bool) (map[string]any, error) {
 	// 将 offset/limit 转为行号 start/end
-	// 对齐 Python L460-461
+	// Python: L460-461
 	start := max(0, offset) + 1 // 0 基偏移 → 1 索引起始
 	end := start + max(0, limit) - 1
 
@@ -242,7 +242,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	}
 
 	// 大小检查
-	// 对齐 Python L469-476
+	// Python: L469-476
 	if applySizeCap {
 		byteLen := len([]byte(content))
 		if byteLen > maxSizeBytes {
@@ -254,7 +254,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	}
 
 	// token 估算检查
-	// 对齐 Python L478-480
+	// Python: L478-480
 	tokens := estimateTokens(content)
 	if tokens > maxTokens {
 		return nil, fmt.Errorf(
@@ -264,11 +264,11 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	}
 
 	// CatN 添加行号
-	// 对齐 Python L482
+	// Python: L482
 	rendered := CatN(content)
 
 	// 空文件或 offset 超出文件末尾
-	// 对齐 Python L484-495
+	// Python: L484-495
 	if strings.TrimSpace(content) == "" {
 		if offset == 0 {
 			rendered = "Warning: the file exists but the contents are empty."
@@ -299,7 +299,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	}
 
 	// 大小检查
-	// 对齐 Python L505-513
+	// Python: L505-513
 	byteLen := len([]byte(rawText))
 	if byteLen > maxSizeBytes {
 		return nil, fmt.Errorf(
@@ -309,7 +309,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	}
 
 	// token 估算检查
-	// 对齐 Python L515-517
+	// Python: L515-517
 	tokens := estimateTokens(rawText)
 	if tokens > maxTokens {
 		return nil, fmt.Errorf(
@@ -319,7 +319,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	}
 
 	// 解析 Notebook JSON
-	// 对齐 Python L519-545
+	// Python: L519-545
 	var notebook map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawText), &notebook); err != nil {
 		return nil, fmt.Errorf("解析笔记本 JSON 失败: %w", err)
@@ -402,7 +402,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	totalPages := reader.NumPage()
 
 	// 当文档过长时要求指定页码范围
-	// 对齐 Python L558-564
+	// Python: L558-564
 	if pages == "" && totalPages > pdfAtMentionInlineThreshold {
 		return nil, fmt.Errorf(
 			"this PDF has %d pages, which is too many to read at once. "+
@@ -413,7 +413,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	}
 
 	// 解析页码范围
-	// 对齐 Python L566-569
+	// Python: L566-569
 	parsed := parsePDFPageRange(pages, totalPages)
 	if parsed == nil {
 		return nil, fmt.Errorf("无效或空的 PDF 页范围: '%s'", pages)
@@ -421,7 +421,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	startPg, endPg := parsed[0], parsed[1]
 
 	// 每次最多读取页数检查
-	// 对齐 Python L571-577
+	// Python: L571-577
 	pageCount := endPg - startPg + 1
 	if pageCount > pdfMaxPagesPerRead {
 		return nil, fmt.Errorf(
@@ -434,7 +434,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	fonts := make(map[string]*pdf.Font)
 
 	// 按页提取文本
-	// 对齐 Python L579-583
+	// Python: L579-583
 	var parts []string
 	for pageNo := startPg; pageNo <= endPg; pageNo++ {
 		page := reader.Page(pageNo)
@@ -461,7 +461,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 			pageText = ""
 		}
 
-		// 对齐 Python: parts.append(f"## Page {page_no}\n{page_text}".rstrip())
+		// Python: parts.append(f"## Page {page_no}\n{page_text}".rstrip())
 		block := fmt.Sprintf("## Page %d\n%s", pageNo, pageText)
 		parts = append(parts, strings.TrimRight(block, " \t\n\r"))
 	}
@@ -511,7 +511,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	var dimensions string
 
 	// 步骤 1：标准缩略图 (thumbnail to 1536×1536)
-	// 对齐 Python L619-638
+	// Python: L619-638
 	resized := raw
 	img, detectedFmt, decodeErr := image.Decode(bytes.NewReader(raw))
 	if decodeErr != nil {
@@ -540,7 +540,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 
 	// 步骤 2：token 预算检查 — base64 byte count × 0.125 ≈ tokens
-	// 对齐 Python L640-654
+	// Python: L640-654
 	estimatedTokens := estimateImageTokens(resized)
 	if estimatedTokens > maxTokens {
 		// 激进压缩 (800×800, quality=40)
@@ -704,7 +704,7 @@ func isTextReadForEdit(filePath string) bool {
 }
 
 // readRawTextForEditState 读取原始文本内容，用于 EditFileTool 过时写入检查。
-// 对齐 Python: ReadFileTool._read_raw_text_for_edit_state (filesystem.py L414-426)
+// Python: ReadFileTool._read_raw_text_for_edit_state (filesystem.py L414-426)
 func readRawTextForEditState(ctx context.Context, op sys_operation.SysOperation, filePath string) *rawTextState {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil || !res.IsSuccess() {

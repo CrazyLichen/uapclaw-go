@@ -14,7 +14,7 @@ import (
 // 当函数参数无法用 struct 描述时（如动态参数），使用 MapFunction 代替 InvokeFunction/StreamFunction。
 // 用户需手动提供 InputParams。
 //
-// 对应 Python: LocalFunction(func=None) 的降级场景
+// Python: LocalFunction(func=None) 的降级场景
 type MapFunction struct {
 	card     *ToolCard
 	invokeFn func(ctx context.Context, inputs map[string]any) (map[string]any, error)

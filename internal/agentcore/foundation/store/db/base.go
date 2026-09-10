@@ -17,11 +17,11 @@ import (
 //   - BaseVectorStore 负责向量存储与检索
 //   - BaseDbStore 负责提供数据库连接
 //
-// 对应 Python: openjiuwen/core/foundation/store/base_db_store.py (BaseDbStore)
+// Python: openjiuwen/core/foundation/store/base_db_store.py (BaseDbStore)
 type BaseDbStore interface {
 	// GetDB 返回 GORM 数据库实例，调用者可使用返回值执行数据库操作。
 	//
-	// 对应 Python: BaseDbStore.get_async_engine() -> AsyncEngine
+	// Python: BaseDbStore.get_async_engine() -> AsyncEngine
 	GetDB(ctx context.Context) *gorm.DB
 }
 

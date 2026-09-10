@@ -14,7 +14,7 @@ import (
 // 提供三级回退查询（global_state → io_state[parentID] → io_state[nodeID]）。
 // 实现 SessionState 接口。
 //
-// 对应 Python: openjiuwen/core/session/state/workflow_state.py (StateCollection)
+// Python: openjiuwen/core/session/state/workflow_state.py (StateCollection)
 type WorkflowStateCollection struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -97,7 +97,7 @@ func (s *WorkflowStateCollection) UpdateGlobal(data map[string]any) {
 }
 
 // SetGlobal 从快照恢复全局状态。
-// 对齐 Python: session.state().global_state.set_state(state)
+// Python: session.state().global_state.set_state(state)
 func (s *WorkflowStateCollection) SetGlobal(st map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

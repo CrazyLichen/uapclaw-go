@@ -82,7 +82,7 @@ func TestUserHookRail_BeforeToolCall_无匹配(t *testing.T) {
 }
 
 // TestUserHookRail_BeforeToolCall_修改输入 测试 modifiedInput 修改 ToolArgs
-// 对齐 Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
+// Python: ctx.inputs.tool_args = r.modified_input（整个 dict 赋值给 tool_args）
 func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {
@@ -100,7 +100,7 @@ func TestUserHookRail_BeforeToolCall_修改输入(t *testing.T) {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
 	inputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
-	// 对齐 Python: ctx.inputs.tool_args = r.modified_input — 整个 dict 赋值给 tool_args
+	// Python: ctx.inputs.tool_args = r.modified_input — 整个 dict 赋值给 tool_args
 	// ToolArgs 现在是 map[string]any，modifiedInput 的 dict 直接赋值
 	expected := map[string]any{"tool_args": `{"path": "/safe"}`}
 	if fmt.Sprintf("%v", inputs.ToolArgs) != fmt.Sprintf("%v", expected) {
@@ -246,7 +246,7 @@ func TestUserHookRail_AfterInvoke_无匹配(t *testing.T) {
 }
 
 // TestUserHookRail_BeforeToolCall_带SessionID 测试 Session 存在时 session_id 传递到 hookInput
-// 对齐 Python: hook_input={"event": ..., "session_id": getattr(ctx, "session_id", "")}
+// Python: hook_input={"event": ..., "session_id": getattr(ctx, "session_id", "")}
 func TestUserHookRail_BeforeToolCall_带SessionID(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {
@@ -272,7 +272,7 @@ func TestUserHookRail_BeforeToolCall_带SessionID(t *testing.T) {
 }
 
 // TestUserHookRail_BeforeToolCall_修改工具名 测试 modifiedInput 含 _tool_name 时修改 ToolName
-// 对齐 Python: new_name = r.modified_input.get("_tool_name"); ctx.inputs.tool_name = new_name
+// Python: new_name = r.modified_input.get("_tool_name"); ctx.inputs.tool_name = new_name
 func TestUserHookRail_BeforeToolCall_修改工具名(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
 		hookscfg.HookEventPreToolUse: {
@@ -300,7 +300,7 @@ func TestUserHookRail_BeforeToolCall_修改工具名(t *testing.T) {
 }
 
 // TestUserHookRail_BeforeToolCall_多次附加上下文 测试多个 hook 返回 additionalContext 时换行拼接
-// 对齐 Python: existing = ctx.extra.get("_hook_additional_context", "")
+// Python: existing = ctx.extra.get("_hook_additional_context", "")
 //
 //	ctx.extra["_hook_additional_context"] = existing + "\n" + r.additional_context
 func TestUserHookRail_BeforeToolCall_多次附加上下文(t *testing.T) {
@@ -329,7 +329,7 @@ func TestUserHookRail_BeforeToolCall_多次附加上下文(t *testing.T) {
 }
 
 // TestUserHookRail_AfterToolCall_非string结果 测试 ToolResult 为非 string 类型时 JSON 序列化保底
-// 对齐 Python: current = ctx.inputs.tool_result or ""（Python 中 tool_result 通常是 string，
+// Python: current = ctx.inputs.tool_result or ""（Python 中 tool_result 通常是 string，
 // Go 中 ToolResult 为 any 类型，非 string 时需 JSON 序列化保底）
 func TestUserHookRail_AfterToolCall_非string结果(t *testing.T) {
 	cfg := hookscfg.HooksConfig{Events: map[string][]hookscfg.HookMatcher{
@@ -366,7 +366,7 @@ func TestUserHookRail_AfterToolCall_非string结果(t *testing.T) {
 }
 
 // TestUserHookRail_AfterInvoke_超长reason截断 测试 reason 超过 200 字符时日志截断但 _stop_hook_feedback 存完整值
-// 对齐 Python: ctx.extra["_stop_hook_feedback"] = r.error（存完整值）
+// Python: ctx.extra["_stop_hook_feedback"] = r.error（存完整值）
 //
 //	logger.info("UserHookRail: Stop hook feedback: %s", r.error[:200])（日志截断）
 func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
@@ -398,7 +398,7 @@ func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 	if !ok {
 		t.Fatalf("_stop_hook_feedback should be string, got %T", feedback)
 	}
-	// 对齐 Python: _stop_hook_feedback 存完整值（不截断），截断仅用于日志
+	// Python: _stop_hook_feedback 存完整值（不截断），截断仅用于日志
 	if len(feedbackStr) != len(longReason) {
 		t.Errorf("_stop_hook_feedback length = %d, want %d (full reason, no truncation)", len(feedbackStr), len(longReason))
 	}

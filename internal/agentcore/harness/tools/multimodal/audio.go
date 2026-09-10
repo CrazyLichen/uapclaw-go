@@ -46,7 +46,7 @@ type AudioMetadataInput struct {
 
 // NewAudioTranscriptionTool 创建音频转写工具。
 //
-// 对齐 Python: AudioTranscriptionTool.__init__ + AudioTranscriptionTool.invoke
+// Python: AudioTranscriptionTool.__init__ + AudioTranscriptionTool.invoke
 // 使用 TranscribeAudio 接口调用 /audio/transcriptions
 func NewAudioTranscriptionTool(
 	client modelclients.BaseModelClient,
@@ -56,7 +56,7 @@ func NewAudioTranscriptionTool(
 	card, _ := tools.BuildToolCard("audio_transcription", "AudioTranscriptionTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input AudioTranscriptionInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: AudioTranscriptionTool.invoke 的 try/except + finally 清理
+		// Python: AudioTranscriptionTool.invoke 的 try/except + finally 清理
 		result, err := func() (map[string]any, error) {
 			// 校验配置（对齐 Python: _require_audio_model_config + _build_openai_client）
 			if config == nil || config.BaseURL == "" {
@@ -119,7 +119,7 @@ func NewAudioTranscriptionTool(
 
 // NewAudioQATool 创建音频问答工具。
 //
-// 对齐 Python: AudioQuestionAnsweringTool.__init__ + AudioQuestionAnsweringTool.invoke
+// Python: AudioQuestionAnsweringTool.__init__ + AudioQuestionAnsweringTool.invoke
 // 使用 input_audio content block + chat.completions
 func NewAudioQATool(
 	client modelclients.BaseModelClient,
@@ -215,7 +215,7 @@ func NewAudioQATool(
 
 // NewAudioMetadataTool 创建音频元数据工具。
 //
-// 对齐 Python: AudioMetadataTool.__init__ + AudioMetadataTool.invoke
+// Python: AudioMetadataTool.__init__ + AudioMetadataTool.invoke
 // 获取时长 + ACRCloud 识别
 func NewAudioMetadataTool(
 	client modelclients.BaseModelClient,
@@ -261,13 +261,13 @@ func NewAudioMetadataTool(
 
 			// ACR 识别（对齐 Python: _invoke_audio_metadata 的条件判断）
 			if config.ACRAccessKey == "" || config.ACRAccessSecret == "" {
-				// 对齐 Python: "Title and artist identification is disabled because ACR credentials are not configured."
+				// Python: "Title and artist identification is disabled because ACR credentials are not configured."
 				metadata["note"] = "Title and artist identification is disabled because ACR credentials are not configured."
 				return metadata, nil
 			}
 
 			if duration > 15.0 {
-				// 对齐 Python: "Audio metadata identification works best for clips shorter than 15 seconds."
+				// Python: "Audio metadata identification works best for clips shorter than 15 seconds."
 				metadata["note"] = "Audio metadata identification works best for clips shorter than 15 seconds."
 				return metadata, nil
 			}
@@ -313,7 +313,7 @@ func NewAudioMetadataTool(
 
 // CreateAudioTools 创建音频工具集。
 //
-// 对齐 Python: create_audio_tools(language, audio_model_config, agent_id) -> list[Tool]
+// Python: create_audio_tools(language, audio_model_config, agent_id) -> list[Tool]
 func CreateAudioTools(
 	client modelclients.BaseModelClient,
 	config *hschema.AudioModelConfig,

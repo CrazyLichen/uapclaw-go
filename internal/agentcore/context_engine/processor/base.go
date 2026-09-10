@@ -12,7 +12,7 @@ import (
 // 默认行为：Trigger* 返回 false（不触发），On* 透传输入，
 // SaveState/LoadState 空操作。
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/base.py (ContextProcessor)
+// Python: openjiuwen/core/context_engine/processor/base.py (ContextProcessor)
 type BaseProcessor struct {
 	// config 处理器配置，各子类实现 iface.ProcessorConfig 接口
 	config iface.ProcessorConfig

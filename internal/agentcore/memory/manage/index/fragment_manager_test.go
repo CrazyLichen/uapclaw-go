@@ -871,7 +871,7 @@ func TestFragmentMemoryManager_AddMemories_WithCryptoKey(t *testing.T) {
 }
 
 func TestFragmentMemoryManager_ListFragmentMemories_Sorted(t *testing.T) {
-	// 对齐 Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
+	// Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
 	fakeIdx := newFakeMemoryIndex()
 	baseTime := time.Now()
 	_ = fakeIdx.AddMemories(context.Background(), "user-1", "scope-1", []*index.MemoryDoc{

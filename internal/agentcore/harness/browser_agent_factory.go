@@ -25,8 +25,8 @@ import (
 
 // CreateBrowserAgent 创建并配置 BrowserAgent DeepAgent 实例。
 //
-// 对齐 Python: create_browser_agent(model, card=..., system_prompt=..., ...)
-// 对齐 Python: openjiuwen/harness/subagents/browser_agent.py (L195-262)
+// Python: create_browser_agent(model, card=..., system_prompt=..., ...)
+// Python: openjiuwen/harness/subagents/browser_agent.py (L195-262)
 //
 // 预定义 BrowserAgent 配备 BrowserRuntimeRail + 运行时工具集，用户可自由覆盖配置。
 // 完整覆盖规则：如果用户传了 rails，则使用用户的，否则默认注入 [BrowserRuntimeRail()]。
@@ -34,7 +34,7 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 	language := hpromts.ResolveLanguage(params.Language)
 
 	// 从 model 参数推断 RuntimeSettings
-	// 对齐 Python: settings = resolve_runtime_settings(model, factory_kwargs.get("settings"))
+	// Python: settings = resolve_runtime_settings(model, factory_kwargs.get("settings"))
 	settings := bm.ResolveRuntimeSettings(params.Model, nil)
 
 	// 创建 BrowserAgentRuntime
@@ -51,21 +51,21 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 	runtimeTools := bm.BuildBrowserRuntimeTools(runtime)
 
 	// 合并用户工具 + 运行时工具
-	// 对齐 Python: tools = list(tools or []) + runtime_tools
+	// Python: tools = list(tools or []) + runtime_tools
 	allToolInstances := runtimeTools
 	if params.ToolInstances != nil {
 		allToolInstances = append(allToolInstances, params.ToolInstances...)
 	}
 
 	// 完整覆盖规则：用户传了 rails 就用用户的，否则默认注入 BrowserRuntimeRail
-	// 对齐 Python: final_rails = rails if rails is not None else [BrowserRuntimeRail(runtime)]
+	// Python: final_rails = rails if rails is not None else [BrowserRuntimeRail(runtime)]
 	finalRails := params.Rails
 	if finalRails == nil {
 		finalRails = []sainterfaces.AgentRail{bm.NewBrowserRuntimeRail(runtime)}
 	}
 
 	// 默认 AgentCard
-	// 对齐 Python: final_card = card or AgentCard(name="browser_agent", description=...)
+	// Python: final_card = card or AgentCard(name="browser_agent", description=...)
 	card := params.Card
 	if card == nil {
 		desc := subagents.DefaultBrowserAgentDescription(language)
@@ -76,28 +76,28 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 	}
 
 	// 默认 SystemPrompt
-	// 对齐 Python: final_prompt = system_prompt or DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT.get(...)
+	// Python: final_prompt = system_prompt or DEFAULT_BROWSER_AGENT_SYSTEM_PROMPT.get(...)
 	systemPrompt := params.SystemPrompt
 	if systemPrompt == "" {
 		systemPrompt = subagents.DefaultBrowserAgentSystemPrompt(language)
 	}
 
 	// 默认 MaxIterations
-	// 对齐 Python: max_iterations=25（browser_agent 比 research_agent 需要更多迭代）
+	// Python: max_iterations=25（browser_agent 比 research_agent 需要更多迭代）
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
 		maxIterations = 25
 	}
 
 	// RestrictToWorkDir：browser agent 默认 false（浏览器操作不限制工作目录）
-	// 对齐 Python: browser_agent 不传 restrict_to_work_dir
+	// Python: browser_agent 不传 restrict_to_work_dir
 	restrictToWorkDir := false
 	if params.RestrictToWorkDir != nil {
 		restrictToWorkDir = *params.RestrictToWorkDir
 	}
 
 	// 合并 MCP 服务器配置：用户配置 + runtime MCP
-	// 对齐 Python: mcps = list(mcps or []) + [runtime.service.mcp_cfg]（如果未包含）
+	// Python: mcps = list(mcps or []) + [runtime.service.mcp_cfg]（如果未包含）
 	var mcps []*mcptypes.McpServerConfig
 	if params.Mcps != nil {
 		mcps = append(mcps, params.Mcps...)

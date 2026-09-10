@@ -21,7 +21,7 @@ import (
 // 持有工作流运行所需的基础设施组件，支持延迟注入 StreamWriterManager 和 ActorManager。
 // Checkpointer 委托给 parent（通常是 AgentSession），确保父子会话共享持久化机制。
 //
-// 对应 Python: openjiuwen/core/session/internal/workflow.py (WorkflowSession)
+// Python: openjiuwen/core/session/internal/workflow.py (WorkflowSession)
 type WorkflowSession struct {
 	// sessionID 会话唯一标识（从 parent 继承或自动生成）
 	sessionID string
@@ -49,7 +49,7 @@ type WorkflowSession struct {
 // 包装一个 InnerSession（通常是 WorkflowSession），通过 CreateNodeState 创建节点专属的状态视图。
 // 大部分方法委托给被包装的 session，但 State() 返回节点专属视图，Close() 为空实现。
 //
-// 对应 Python: openjiuwen/core/session/internal/workflow.py (NodeSession)
+// Python: openjiuwen/core/session/internal/workflow.py (NodeSession)
 type NodeSession struct {
 	// delegate 被包装的会话（通常是 WorkflowSession）
 	delegate interfaces.InnerSession
@@ -78,7 +78,7 @@ type NodeSession struct {
 // 在 NodeSession 基础上增加自己的 ActorManager 和嵌套深度管理。
 // Close() 时关闭自己的 ActorManager。
 //
-// 对应 Python: openjiuwen/core/session/internal/workflow.py (SubWorkflowSession)
+// Python: openjiuwen/core/session/internal/workflow.py (SubWorkflowSession)
 type SubWorkflowSession struct {
 	// NodeSession 嵌入节点会话
 	NodeSession
@@ -128,7 +128,7 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 		if s.sessionID == "" {
 			s.sessionID = uuid.New().String()
 		}
-		// 对齐 Python：self._config = Config()
+		// Python: self._config = Config()
 		if s.config == nil {
 			s.config = config.NewSessionConfig(context.Background())
 		}
@@ -405,7 +405,7 @@ func (n *NodeSession) Parent() interfaces.InnerSession {
 }
 
 // NodeConfig 获取节点级配置。
-// 对应 Python: NodeSession.node_config() → config.get_workflow_config(workflow_id).spec.comp_configs.get(node_id)
+// Python: NodeSession.node_config() → config.get_workflow_config(workflow_id).spec.comp_configs.get(node_id)
 func (n *NodeSession) NodeConfig() any {
 	cfg := n.delegate.Config()
 	if cfg == nil {

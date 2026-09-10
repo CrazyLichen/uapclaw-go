@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamRuntimeManager 团队运行时管理器。
-// 对齐 Python: TeamRuntimeManager (openjiuwen/agent_teams/runtime/manager.py)
+// Python: TeamRuntimeManager (openjiuwen/agent_teams/runtime/manager.py)
 //
 // 持有进程内 TeamRuntimePool，分发每个 run_agent_team_streaming 调用
 // 到四条恢复路径之一（或拒绝）。池条目是"哪些团队当前活跃"的唯一事实来源。
@@ -49,7 +49,7 @@ func (m *TeamRuntimeManager) Pool() *TeamRuntimePool {
 }
 
 // Interact 路由交互载荷通过活跃团队的门控。
-// 对齐 Python: TeamRuntimeManager.interact(payload, *, team_name, session_id)
+// Python: TeamRuntimeManager.interact(payload, *, team_name, session_id)
 //
 // Python 执行步骤：
 //  1. entry = await self._resolve_entry(team_name=team_name, session_id=session_id)
@@ -80,18 +80,18 @@ func (m *TeamRuntimeManager) Interact(
 	teamName string,
 	sessionID string,
 ) (*interaction.DeliverResult, error) {
-	// 对齐 Python 步骤 1-2
+	// Python 步骤 1-2
 	entry := m.resolveEntry(teamName, sessionID)
 	if entry == nil {
 		return interaction.NewDeliverResultFailure("not_active"), nil
 	}
 
-	// 对齐 Python 步骤 3: InteractiveInput → 恢复中断
+	// Python 步骤 3: InteractiveInput → 恢复中断
 	if interactiveInput, ok := payload.(*sessioninteraction.InteractiveInput); ok {
 		return m.handleInteractiveInput(entry, interactiveInput)
 	}
 
-	// 对齐 Python 步骤 4-5: 解析 payloads
+	// Python 步骤 4-5: 解析 payloads
 	var payloads []interaction.InteractPayload
 	if strPayload, ok := payload.(string); ok {
 		parsed := interaction.ParseInteractStr(strPayload)
@@ -106,22 +106,22 @@ func (m *TeamRuntimeManager) Interact(
 		return interaction.NewDeliverResultFailure("unsupported_payload_type"), nil
 	}
 
-	// 对齐 Python 步骤 6-7: admit
+	// Python 步骤 6-7: admit
 	ticket := entry.InteractGate.Admit()
 	if ticket == nil {
 		return interaction.NewDeliverResultFailure("gate_closed"), nil
 	}
 
-	// 对齐 Python 步骤 9: finally consume_done
+	// Python 步骤 9: finally consume_done
 	defer entry.InteractGate.ConsumeDone(ticket)
 
-	// 对齐 Python 步骤 8a: resolve_recipients
+	// Python 步骤 8a: resolve_recipients
 	resolved, err := m.resolveRecipients(entry, payloads)
 	if err != nil {
 		return nil, err
 	}
 
-	// 对齐 Python 步骤 8b-8d: 逐个分发
+	// Python 步骤 8b-8d: 逐个分发
 	var lastResult *interaction.DeliverResult
 	for _, p := range resolved {
 		lastResult, err = m.dispatchPayload(ctx, entry, p)
@@ -180,7 +180,7 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 }
 
 // RegisterHumanAgentInbound 注册团队→用户通知回调。
-// 对齐 Python: team_backend.register_human_agent_inbound(member_name, callback)
+// Python: team_backend.register_human_agent_inbound(member_name, callback)
 func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, teamName string, sessionID string, memberName string, callback any) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Str("member_name", memberName).Msg("注册 HumanAgent 入站")
@@ -209,7 +209,7 @@ func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, team
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveEntry 查找活跃团队条目。
-// 对齐 Python: TeamRuntimeManager._resolve_entry(team_name, session_id)
+// Python: TeamRuntimeManager._resolve_entry(team_name, session_id)
 func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *ActiveTeam {
 	entry := m.pool.Get(teamName)
 	if entry == nil {
@@ -222,7 +222,7 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 }
 
 // handleInteractiveInput 处理 InteractiveInput（恢复中断）。
-// 对齐 Python: TeamRuntimeManager.interact() 中的 InteractiveInput 分支
+// Python: TeamRuntimeManager.interact() 中的 InteractiveInput 分支
 //
 // Python 步骤：
 //  1. if entry.agent.has_pending_interrupt():
@@ -237,7 +237,7 @@ func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *se
 }
 
 // resolveRecipients 校验 @<member> 接收者是否在花名册中。
-// 对齐 Python: TeamRuntimeManager._resolve_recipients(agent, payloads)
+// Python: TeamRuntimeManager._resolve_recipients(agent, payloads)
 //
 // Python 步骤：
 //  1. backend = agent.team_backend
@@ -245,23 +245,23 @@ func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *se
 //  3. async def _member_exists(name): return await backend.get_member(name) is not None
 //  4. return await resolve_targets(payloads, member_exists=_member_exists)
 func (m *TeamRuntimeManager) resolveRecipients(entry *ActiveTeam, payloads []interaction.InteractPayload) ([]interaction.InteractPayload, error) {
-	// 对齐 Python 步骤 1-2: backend = agent.team_backend; if backend is None: return payloads
+	// Python 步骤 1-2: backend = agent.team_backend; if backend is None: return payloads
 	backend := getTeamBackend(entry.Agent)
 	if backend == nil {
 		return payloads, nil
 	}
-	// 对齐 Python 步骤 3: async def _member_exists(name): return await backend.get_member(name) is not None
+	// Python 步骤 3: async def _member_exists(name): return await backend.get_member(name) is not None
 	ctx := context.Background()
 	memberExists := func(name string) (bool, error) {
 		member, _ := backend.GetMember(ctx, name)
 		return member != nil, nil
 	}
-	// 对齐 Python 步骤 4: return await resolve_targets(payloads, member_exists=_member_exists)
+	// Python 步骤 4: return await resolve_targets(payloads, member_exists=_member_exists)
 	return interaction.ResolveTargets(payloads, memberExists)
 }
 
 // dispatchPayload 按载荷类型分发。
-// 对齐 Python: TeamRuntimeManager._dispatch_payload(agent, payload)
+// Python: TeamRuntimeManager._dispatch_payload(agent, payload)
 //
 // Python 步骤：
 //  1. backend = agent.team_backend
@@ -285,7 +285,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 ) (*interaction.DeliverResult, error) {
 	switch p := payload.(type) {
 	case *interaction.GodViewMessage:
-		// 对齐 Python 步骤 3: return await UserInbox.deliver_to_leader(agent.deliver_input, payload.body)
+		// Python 步骤 3: return await UserInbox.deliver_to_leader(agent.deliver_input, payload.body)
 		deliverInput := func(ctx context.Context, content string) error {
 			logger.Debug(mgrLogComponent).Str("body_len", fmt.Sprintf("%d", len(content))).
 				Msg("deliverInput (stub)")
@@ -295,7 +295,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		return interaction.DeliverToLeader(deliverInput, p.Body()), nil
 
 	case *interaction.OperatorMessage:
-		// 对齐 Python 步骤 4: inbox = UserInbox(backend.message_manager)
+		// Python 步骤 4: inbox = UserInbox(backend.message_manager)
 		backend := getTeamBackend(entry.Agent)
 		var msgManager *tools.TeamMessageManager
 		if backend != nil {
@@ -306,16 +306,16 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		}
 		inbox := interaction.NewUserInbox(msgManager)
 		if p.Target() == nil {
-			// 对齐 Python 步骤 4b: 广播前先自动启动所有未启动成员
+			// Python 步骤 4b: 广播前先自动启动所有未启动成员
 			// ⤵️ 待 9.55 回填: agent.AutoStartAll()
 			return inbox.Broadcast(p.Body())
 		}
-		// 对齐 Python 步骤 4c: 点对点前先启动目标成员
+		// Python 步骤 4c: 点对点前先启动目标成员
 		// ⤵️ 待 9.55 回填: agent.AutoStartMember(*p.Target())
 		return inbox.Direct(*p.Target(), p.Body())
 
 	case *interaction.HumanAgentMessage:
-		// 对齐 Python 步骤 5: inbox = HumanAgentInbox(...)
+		// Python 步骤 5: inbox = HumanAgentInbox(...)
 		backend := getTeamBackend(entry.Agent)
 		if backend == nil {
 			return interaction.NewDeliverResultFailure("no_team_backend"), nil
@@ -328,7 +328,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		)
 		result, err := hInbox.Send(p.Body(), p.Target(), strPtr(p.Sender()))
 		if err != nil {
-			// 对齐 Python 步骤 5c-5d
+			// Python 步骤 5c-5d
 			if _, ok := err.(*interaction.HumanAgentNotEnabledError); ok {
 				return interaction.NewDeliverResultFailure("human_agent_not_enabled"), nil
 			}
@@ -340,7 +340,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		return result, nil
 
 	default:
-		// 对齐 Python 步骤 6: return failure(f"unknown_payload:{type(payload).__name__}")
+		// Python 步骤 6: return failure(f"unknown_payload:{type(payload).__name__}")
 		return interaction.NewDeliverResultFailure("unknown_payload:" + payload.Kind().String()), nil
 	}
 }

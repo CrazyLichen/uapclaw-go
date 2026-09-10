@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OperationDef 操作定义，包含类型信息和工厂方法。
-// 对齐 Python OperationDef：cls, description, name, mode, create_instance。
+// Python: OperationDef：cls, description, name, mode, create_instance。
 type OperationDef struct {
 	// NewFunc 工厂函数：从 runConfig 创建子操作实例
 	NewFunc func(runConfig any) SysSubOperation
@@ -21,7 +21,7 @@ type OperationDef struct {
 }
 
 // OperationRegistry 操作注册表。
-// 对齐 Python OperationRegistry：_repository mode → name → OperationDef。
+// Python: OperationRegistry：_repository mode → name → OperationDef。
 // Go 不做包扫描（Python 的 _discover_package），改用 init() 显式注册。
 type OperationRegistry struct {
 	// mu 保护 repository
@@ -49,7 +49,7 @@ func NewOperationRegistry() *OperationRegistry {
 }
 
 // Register 注册操作定义。
-// 对齐 Python OperationRegistry.register：幂等性检查（相同定义跳过）。
+// Python: OperationRegistry.register：幂等性检查（相同定义跳过）。
 func (r *OperationRegistry) Register(def OperationDef) error {
 	if def.Name == "" {
 		return fmt.Errorf("操作名称不能为空")
@@ -72,7 +72,7 @@ func (r *OperationRegistry) Register(def OperationDef) error {
 }
 
 // GetOperationInfo 获取操作定义。
-// 对齐 Python OperationRegistry.get_operation_info。
+// Python: OperationRegistry.get_operation_info。
 func (r *OperationRegistry) GetOperationInfo(name string, mode OperationMode) (OperationDef, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -86,7 +86,7 @@ func (r *OperationRegistry) GetOperationInfo(name string, mode OperationMode) (O
 }
 
 // GetSupportedOperations 获取指定模式下所有已注册操作名称。
-// 对齐 Python OperationRegistry.get_supported_operations：返回排序后的名称列表。
+// Python: OperationRegistry.get_supported_operations：返回排序后的名称列表。
 func (r *OperationRegistry) GetSupportedOperations(mode OperationMode) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

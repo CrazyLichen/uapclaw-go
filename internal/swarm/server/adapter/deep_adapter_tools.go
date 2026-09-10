@@ -68,7 +68,7 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // syncToolGroup 同步工具组。
-// 对齐 Python: _sync_tool_group() (line 1319-1350)
+// Python: _sync_tool_group() (line 1319-1350)
 //
 // 双重操作：调用 AbilityManager.Add/Remove 同步工具到 Agent，
 // 同时调用 ResourceMgr.AddTool/RemoveTool 同步到资源管理器。
@@ -120,7 +120,7 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 }
 
 // removeRegisteredTools 移除已注册的工具。
-// 对齐 Python: _remove_registered_tools() (line 1351-1380)
+// Python: _remove_registered_tools() (line 1351-1380)
 //
 // 接收工具实例列表，从实例上分别取 card.id 和 card.name，
 // 传给 ResourceMgr.remove_tool(card.id) 和 AbilityManager.remove(card.name)。
@@ -134,13 +134,13 @@ func (d *DeepAdapter) removeRegisteredTools(tools []tool.Tool) {
 
 	for _, t := range tools {
 		card := t.Card()
-		// 对齐 Python: Runner.resource_mgr.remove_tool(tool.card.id)
+		// Python: Runner.resource_mgr.remove_tool(tool.card.id)
 		if rm != nil {
 			if _, err := rm.RemoveTool([]string{card.ID}); err != nil {
 				logger.Warn(logComponent).Err(err).Str("card_id", card.ID).Msg("RemoveTool 从 ResourceMgr 失败")
 			}
 		}
-		// 对齐 Python: self._instance.ability_manager.remove(tool.card.name)
+		// Python: self._instance.ability_manager.remove(tool.card.name)
 		if am != nil {
 			am.Remove(card.Name)
 		}
@@ -150,7 +150,7 @@ func (d *DeepAdapter) removeRegisteredTools(tools []tool.Tool) {
 }
 
 // appendToolCard 追加工具卡片。
-// 对齐 Python: _append_tool_card() (line 1381-1410)
+// Python: _append_tool_card() (line 1381-1410)
 //
 // 去重追加到 d.toolCards：若已有同名 ToolCard 则跳过。
 func (d *DeepAdapter) appendToolCard(cards []*tool.ToolCard) {
@@ -180,7 +180,7 @@ func (d *DeepAdapter) appendToolCard(cards []*tool.ToolCard) {
 }
 
 // prioritizePaidSearchToolCard 优先付费搜索工具卡片。
-// 对齐 Python: _prioritize_paid_search_tool_card() (line 1411-1440)
+// Python: _prioritize_paid_search_tool_card() (line 1411-1440)
 //
 // 将 paid_search 工具排在 free_search 工具之前。
 // 若付费搜索已注册，则将 free_search 降权排后。
@@ -226,7 +226,7 @@ func (d *DeepAdapter) prioritizePaidSearchToolCard(cards []*tool.ToolCard) []*to
 }
 
 // pruneToolCards 裁剪工具卡片。
-// 对齐 Python: _prune_tool_cards() (line 1441-1476)
+// Python: _prune_tool_cards() (line 1441-1476)
 //
 // 按名称集合移除指定的工具卡片。
 func (d *DeepAdapter) pruneToolCards(cards []*tool.ToolCard, namesToRemove map[string]bool) []*tool.ToolCard {
@@ -244,7 +244,7 @@ func (d *DeepAdapter) pruneToolCards(cards []*tool.ToolCard, namesToRemove map[s
 }
 
 // syncMultimodalToolsForRuntime 热同步多模态工具。
-// 对齐 Python: _sync_multimodal_tools_for_runtime() (line 1170-1238)
+// Python: _sync_multimodal_tools_for_runtime() (line 1170-1238)
 // 视觉/音频/视频 注册/注销已回填，image_gen 待后续回填
 func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	if d.instance == nil {
@@ -256,7 +256,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	}
 
 	// ── 视觉工具同步 ──
-	// 对齐 Python: Python: self._vision_tools, self._vision_tools_registered = self._sync_tool_group(
+	// Python: Python: self._vision_tools, self._vision_tools_registered = self._sync_tool_group(
 	//   Python: current_tools=self._vision_tools, registered=self._vision_tools_registered,
 	//   Python: enabled=self._vision_model_config is not None, create_fn=..., warn_label="vision tools")
 	if d.visionModelConfig != nil && !d.visionToolsRegistered {
@@ -267,12 +267,12 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 			cards[i] = t.Card()
 		}
 		d.syncToolsToManager(ctx, cards, visionTools, nil, "vision")
-		d.visionTools = visionTools // 对齐 Python: self._vision_tools = tools
+		d.visionTools = visionTools // Python: self._vision_tools = tools
 		d.visionToolsRegistered = true
 	}
 	if d.visionModelConfig == nil && d.visionToolsRegistered {
-		d.removeRegisteredTools(d.visionTools) // 对齐 Python: 传完整工具实例列表
-		// 对齐 Python: self._prune_tool_cards({t.card.name for t in current_tools})
+		d.removeRegisteredTools(d.visionTools) // Python: 传完整工具实例列表
+		// Python: self._prune_tool_cards({t.card.name for t in current_tools})
 		namesToRemove := make(map[string]bool, len(d.visionTools))
 		for _, t := range d.visionTools {
 			namesToRemove[t.Card().Name] = true
@@ -283,7 +283,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	}
 
 	// ── 音频工具同步 ──
-	// 对齐 Python: _iter_runtime_audio_tools 三种情况:
+	// Python: _iter_runtime_audio_tools 三种情况:
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
@@ -302,10 +302,10 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 		}
 	} else if d.audioModelConfig == nil {
 		// 情况2: 有独立 key 但无 model config → 仅注册 audio_metadata（metadata-only）
-		// 对齐 Python: _iter_runtime_audio_tools 在 audio_model_config=None 时
+		// Python: _iter_runtime_audio_tools 在 audio_model_config=None 时
 		// 调用 create_audio_tools(audio_model_config=None) 然后过滤出 audio_metadata
 		if !d.audioToolsRegistered {
-			// 对齐 Python: create_audio_tools(audio_model_config=None) → 过滤 audio_metadata
+			// Python: create_audio_tools(audio_model_config=None) → 过滤 audio_metadata
 			// 注意：Python 此模式下 audio_metadata 调用时 config=None 会报错，
 			// Go 保持一致行为：创建工具但 config 不完整时调用会返回错误
 			metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), "")
@@ -324,7 +324,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 				cards[i] = t.Card()
 			}
 			d.syncToolsToManager(ctx, cards, audioTools, nil, "audio")
-			d.audioTools = audioTools // 对齐 Python: self._audio_tools = tools
+			d.audioTools = audioTools // Python: self._audio_tools = tools
 			d.audioToolsRegistered = true
 		}
 	}
@@ -334,11 +334,11 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 		client := d.resolveVideoModelClient()
 		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), "")
 		d.syncToolsToManager(ctx, []*tool.ToolCard{videoTool.Card()}, []tool.Tool{videoTool}, nil, "video")
-		d.videoTool = videoTool // 对齐 Python: self._video_tools = [video_understanding]
+		d.videoTool = videoTool // Python: self._video_tools = [video_understanding]
 		d.videoToolRegistered = true
 	}
 	if d.videoModelConfig == nil && d.videoToolRegistered {
-		d.removeRegisteredTools([]tool.Tool{d.videoTool}) // 对齐 Python: 传完整工具实例列表
+		d.removeRegisteredTools([]tool.Tool{d.videoTool}) // Python: 传完整工具实例列表
 		d.toolCards = d.pruneToolCards(d.toolCards, map[string]bool{d.videoTool.Card().Name: true})
 		d.videoTool = nil
 		d.videoToolRegistered = false
@@ -352,7 +352,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 }
 
 // syncPaidSearchToolForRuntime 热同步付费搜索工具。
-// 对齐 Python: _sync_paid_search_tool_for_runtime() (line 1240-1270)
+// Python: _sync_paid_search_tool_for_runtime() (line 1240-1270)
 func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 	if d.instance == nil {
 		return
@@ -383,15 +383,15 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 }
 
 // refreshMultimodalConfigs 刷新多模态配置。
-// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1304-1317)
+// Python: _refresh_multimodal_configs(config_base) (line 1304-1317)
 // 注意：Python 不在此方法中设置 _video_tool_registered / _vision_tools_registered / _audio_tools_registered，
 // 注册状态由 _sync_multimodal_tools_for_runtime 管理。
 func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 	d.visionModelConfig = d.buildVisionModelConfig(configBase)
 	d.audioModelConfig = d.buildAudioModelConfig(configBase)
 	d.videoModelConfig = d.buildVideoModelConfig(configBase)
-	// 对齐 Python: 不在此处设置 registered 标志，由 syncMultimodalToolsForRuntime 管理
-	// 对齐 Python: 将 config 同步到已有工具实例
+	// Python: 不在此处设置 registered 标志，由 syncMultimodalToolsForRuntime 管理
+	// Python: 将 config 同步到已有工具实例
 	for _, t := range d.visionTools {
 		if setter, ok := t.(interface {
 			SetVisionModelConfig(*schema.VisionModelConfig)
@@ -409,7 +409,7 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 }
 
 // buildVisionModelConfig 从配置构建视觉模型配置。
-// 对齐 Python: _build_vision_model_config(config_base) (line 1171-1193)
+// Python: _build_vision_model_config(config_base) (line 1171-1193)
 //
 // 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_vision_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.VisionModelConfig {
@@ -432,7 +432,7 @@ func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.
 }
 
 // buildAudioModelConfig 从配置构建音频模型配置。
-// 对齐 Python: _build_audio_model_config(config_base) (line 1196-1241)
+// Python: _build_audio_model_config(config_base) (line 1196-1241)
 //
 // 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_audio_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.AudioModelConfig {
@@ -455,7 +455,7 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 }
 
 // buildVideoModelConfig 构建视频模型配置。
-// 对齐 Python: _build_video_model_config(config_base) (line 1244-1260)
+// Python: _build_video_model_config(config_base) (line 1244-1260)
 //
 // 注意：此处 Apply 先于 Dedicated 检查，与 vision/audio 的 Dedicated 先于 Apply 不同。
 // 这是 Python 本身的设计差异（Go 忠实复刻），Apply 先执行意味着即使 Dedicated 检查失败，
@@ -480,7 +480,7 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.V
 }
 
 // buildImageGenModelConfig 构建图片生成模型配置。
-// 对齐 Python: _build_image_gen_model_config(config_base) (line 1261-1270)
+// Python: _build_image_gen_model_config(config_base) (line 1261-1270)
 // 返回 bool 表示图片生成工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
 // ⤵️ 10.6.24 Swarm 内置工具集: apply_image_gen_model_config_from_yaml
 func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
@@ -495,7 +495,7 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 }
 
 // getToolCards 获取工具卡片列表。
-// 对齐 Python: _get_tool_cards(agent_id) (interface_deep.py L2355-2512)
+// Python: _get_tool_cards(agent_id) (interface_deep.py L2355-2512)
 //
 // 注意：此方法只负责非 SysOperation 工具（wiki/web_search/vision/audio/video/image_gen/xiaoyi/skill/acp_chat）。
 // fs/shell/code 工具由 SysOperationRail 在 CreateDeepAgent 内部自动注册。
@@ -516,7 +516,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	var toolCards []*tool.ToolCard
 
 	// ── 步骤 1: wiki 工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: for wtool in [wiki_ingest, wiki_query, wiki_lint]:
 	//       Python: if not Runner.resource_mgr.get_tool(wtool.card.id):
 	//           Python: Runner.resource_mgr.add_tool(wtool)
@@ -530,7 +530,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// }
 
 	// ── 步骤 2: 付费搜索工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: if is_paid_search_enabled():
 	//       Python: self._paid_search_tool = WebPaidSearchTool(language=..., agent_id=agent_id)
 	//       Python: Runner.resource_mgr.add_tool(self._paid_search_tool)
@@ -547,7 +547,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 3: 免费搜索工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: for tool_cls in [WebFreeSearchTool, WebFetchWebpageTool]:
 	//       Python: tool_instance = tool_cls(agent_id=agent_id)
 	//       Python: Runner.resource_mgr.add_tool(tool_instance)
@@ -564,7 +564,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 4: 视觉工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: if self._vision_model_config is not None:
 	//       Python: for tool in create_vision_tools(language=..., vision_model_config=..., agent_id=...):
 	//           Python: Runner.resource_mgr.add_tool(tool)
@@ -580,12 +580,12 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			}
 			toolCards = append(toolCards, t.Card())
 		}
-		d.visionTools = visionTools // 对齐 Python: self._vision_tools = tools
+		d.visionTools = visionTools // Python: self._vision_tools = tools
 		d.visionToolsRegistered = len(visionTools) > 0
 	}
 
 	// ── 步骤 5: 音频工具 ──
-	// 对齐 Python: _iter_runtime_audio_tools 三种情况:
+	// Python: _iter_runtime_audio_tools 三种情况:
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
@@ -612,12 +612,12 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			}
 			toolCards = append(toolCards, t.Card())
 		}
-		d.audioTools = audioTools // 对齐 Python: self._audio_tools = tools
+		d.audioTools = audioTools // Python: self._audio_tools = tools
 		d.audioToolsRegistered = len(audioTools) > 0
 	}
 
 	// ── 步骤 6: 视频工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: if self._video_model_config:
 	//       Python: Runner.resource_mgr.add_tool(video_understanding)
 	//       Python: tool_cards.append(video_understanding.card)
@@ -629,12 +629,12 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			logger.Warn(logComponent).Err(err).Msg("注册 video_understanding 到 ResourceMgr 失败")
 		}
 		toolCards = append(toolCards, videoTool.Card())
-		d.videoTool = videoTool // 对齐 Python: self._video_tools = [video_understanding]
+		d.videoTool = videoTool // Python: self._video_tools = [video_understanding]
 		d.videoToolRegistered = true
 	}
 
 	// ── 步骤 7: 图片生成工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: if self._image_gen_model_config:
 	//       Python: Runner.resource_mgr.add_tool(generate_image)
 	//       Python: tool_cards.append(generate_image.card)
@@ -647,7 +647,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 8: 小艺手机端工具 ──
-	// 对齐 Python:
+	// Python:
 	//   Python: xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
 	//   Python: if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
 	//    Python: _xiaoyi_tools 工具列表（get_user_location, create_note, search_notes 等）
@@ -674,7 +674,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// }
 
 	// ── 步骤 9: SkillToolkit ──
-	// 对齐 Python:
+	// Python:
 	//   Python: skill_toolkit = SkillToolkit(manager=self._skill_manager)
 	//   Python: for tool in skill_toolkit.get_tools():
 	//       Python: if not Runner.resource_mgr.get_tool(tool.card.id):
@@ -695,7 +695,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 10: acp_chat ──
-	// 对齐 Python:
+	// Python:
 	//   Python: acp_cfg = get_config().get("acp_agents")
 	//   Python: if isinstance(acp_cfg, dict) and acp_cfg:
 	//       Python: if not Runner.resource_mgr.get_tool(acp_chat.card.id):

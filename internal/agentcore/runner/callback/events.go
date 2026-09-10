@@ -12,7 +12,7 @@ import (
 
 // EventBase 事件基类，提供 scope 支持。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (EventBase)
+// Python: openjiuwen/core/runner/callback/events.py (EventBase)
 type EventBase struct {
 	// Scope 作用域
 	Scope string
@@ -20,7 +20,7 @@ type EventBase struct {
 
 // LLMCallEventData LLM 调用事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
+// Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
 type LLMCallEventData struct {
 	// Event 事件类型
 	Event LLMCallEventType
@@ -52,7 +52,7 @@ type LLMCallEventData struct {
 
 // ToolCallEventData 工具调用事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: _ToolMeta.__call__ 中 trigger 调用时的 kwargs 参数集合
+// Python: _ToolMeta.__call__ 中 trigger 调用时的 kwargs 参数集合
 type ToolCallEventData struct {
 	// Event 事件类型
 	Event ToolCallEventType
@@ -72,7 +72,7 @@ type ToolCallEventData struct {
 
 // SessionCallEventData Session 调用事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
+// Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
 type SessionCallEventData struct {
 	// Event 事件类型
 	Event SessionCallEventType
@@ -88,7 +88,7 @@ type SessionCallEventData struct {
 
 // ContextCallEventData 上下文调用事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (ContextEvents) +
+// Python: openjiuwen/core/runner/callback/events.py (ContextEvents) +
 //
 //	openjiuwen/core/runner/callback/framework.py (trigger kwargs)
 type ContextCallEventData struct {
@@ -108,7 +108,7 @@ type ContextCallEventData struct {
 
 // WorkflowEventData Workflow 事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
+// Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
 type WorkflowEventData struct {
 	// Event 事件类型
 	Event WorkflowEventType
@@ -128,7 +128,7 @@ type WorkflowEventData struct {
 
 // AgentTeamEventData Agent 协作事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
+// Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
 type AgentTeamEventData struct {
 	// Event 事件类型
 	Event AgentTeamEventType
@@ -142,7 +142,7 @@ type AgentTeamEventData struct {
 
 // RetrievalEventData 检索事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
+// Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
 type RetrievalEventData struct {
 	// Event 事件类型
 	Event RetrievalEventType
@@ -156,7 +156,7 @@ type RetrievalEventData struct {
 
 // MemoryEventData 记忆事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
+// Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
 type MemoryEventData struct {
 	// Event 事件类型
 	Event MemoryEventType
@@ -170,7 +170,7 @@ type MemoryEventData struct {
 
 // TaskManagerEventData 任务管理事件数据，回调函数接收此结构获取上下文信息。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
+// Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventData struct {
 	// Event 事件类型
 	Event TaskManagerEventType
@@ -208,30 +208,30 @@ type GlobalAgentEventData struct {
 
 // TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
-// 对齐 Python: transform_io 的 input_fn（LLM_STREAM_INPUT / LLM_INVOKE_INPUT）
+// Python: transform_io 的 input_fn（LLM_STREAM_INPUT / LLM_INVOKE_INPUT）
 type TransformLLMIOInputFunc func(ctx context.Context, event LLMCallEventType, input any) any
 
 // TransformLLMIOOutputFunc LLM 层输出变换回调函数类型。
 // 接收事件名和原始输出，返回变换后的输出。
-// 对齐 Python: transform_io 的 output_fn（LLM_STREAM_OUTPUT / LLM_INVOKE_OUTPUT）
+// Python: transform_io 的 output_fn（LLM_STREAM_OUTPUT / LLM_INVOKE_OUTPUT）
 type TransformLLMIOOutputFunc func(ctx context.Context, event LLMCallEventType, output any) any
 
 // TransformAgentIOInputFunc Agent 层输入变换回调函数类型。
-// 对齐 Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
+// Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
 type TransformAgentIOInputFunc func(ctx context.Context, event GlobalAgentEventType, input any) any
 
 // TransformAgentIOOutputFunc Agent 层输出变换回调函数类型。
-// 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
+// Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
 type TransformAgentIOOutputFunc func(ctx context.Context, event GlobalAgentEventType, output any) any
 
 // TransformToolIOInputFunc Tool 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
-// 对齐 Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
+// Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
 type TransformToolIOInputFunc func(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any
 
 // TransformToolIOOutputFunc Tool 层输出变换回调函数类型。
 // 接收事件名和原始输出，返回变换后的输出。
-// 对齐 Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
+// Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
 type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any
 
 // GlobalAgentCallbackFunc Agent 回调函数类型。
@@ -244,7 +244,7 @@ type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventDat
 // (callback → agentinterfaces → callback) 无法直接引用。
 // 可能的解决方案：(A) 定义回调上下文接口于底层包 (B) 抽取共享类型包
 //
-// 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
+// Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
 type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
 
 // WorkflowCallbackFunc Workflow 回调函数类型。
@@ -269,24 +269,24 @@ type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventDat
 // 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。
 // 默认作用域为 "_framework"。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (LLMCallEvents)
+// Python: openjiuwen/core/runner/callback/events.py (LLMCallEvents)
 type LLMCallEventType string
 
 // ToolCallEventType 工具调用事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (ToolCallEvents)
+// Python: openjiuwen/core/runner/callback/events.py (ToolCallEvents)
 type ToolCallEventType string
 
 // SessionCallEventType Session 调用事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (SessionEvents)
+// Python: openjiuwen/core/runner/callback/events.py (SessionEvents)
 type SessionCallEventType string
 
 // ContextCallEventType 上下文调用事件类型。
 //
 // 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (ContextEvents)
+// Python: openjiuwen/core/runner/callback/events.py (ContextEvents)
 type ContextCallEventType string
 
 // GlobalAgentEventType Agent 调用全局事件类型。
@@ -295,32 +295,32 @@ type ContextCallEventType string
 //   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
 //   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
+// Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
 type GlobalAgentEventType string
 
 // WorkflowEventType Workflow 事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
+// Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
 type WorkflowEventType string
 
 // AgentTeamEventType Agent 协作事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
+// Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
 type AgentTeamEventType string
 
 // RetrievalEventType 检索事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
+// Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
 type RetrievalEventType string
 
 // MemoryEventType 记忆事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
+// Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
 type MemoryEventType string
 
 // TaskManagerEventType 任务管理事件类型。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
+// Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventType string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -487,14 +487,14 @@ const DefaultScope = "_framework"
 
 // BuildEventName 构建带 scope 的事件名。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py build_event_name(scope, event_name)
+// Python: openjiuwen/core/runner/callback/events.py build_event_name(scope, event_name)
 func BuildEventName(scope, eventName string) string {
 	return scope + ":" + eventName
 }
 
 // ParseEventName 解析带 scope 的事件名，返回 (scope, eventName)。
 //
-// 对应 Python: openjiuwen/core/runner/callback/events.py parse_event_name(scoped_event)
+// Python: openjiuwen/core/runner/callback/events.py parse_event_name(scoped_event)
 func ParseEventName(scopedEvent string) (scope, eventName string) {
 	for i := 0; i < len(scopedEvent); i++ {
 		if scopedEvent[i] == ':' {
@@ -506,7 +506,7 @@ func ParseEventName(scopedEvent string) (scope, eventName string) {
 
 // GetEvent 获取带 scope 的完整事件名。
 //
-// 对应 Python: EventBase.get_event(event_name)
+// Python: EventBase.get_event(event_name)
 func (e *EventBase) GetEvent(eventName string) string {
 	return BuildEventName(e.Scope, eventName)
 }

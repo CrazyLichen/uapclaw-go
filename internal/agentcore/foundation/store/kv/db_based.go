@@ -19,7 +19,7 @@ import (
 
 // KVStoreRow kv_store 表的 GORM 模型。
 //
-// 对应 Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (KVStoreTable)
+// Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (KVStoreTable)
 type KVStoreRow struct {
 	// Key 键，主键
 	Key string `gorm:"column:key;type:varchar(255);primaryKey"`
@@ -29,7 +29,7 @@ type KVStoreRow struct {
 
 // exclusiveValue ExclusiveSet 的 JSON 包装格式。
 //
-// 对应 Python: {EXCLUSIVE_VALUE_KEY: value, EXCLUSIVE_EXPIRY_KEY: expire_at}
+// Python: {EXCLUSIVE_VALUE_KEY: value, EXCLUSIVE_EXPIRY_KEY: expire_at}
 type exclusiveValue struct {
 	// ExclusiveValue Base64 编码的原始 []byte
 	ExclusiveValue string `json:"exclusive_value"`
@@ -42,7 +42,7 @@ type exclusiveValue struct {
 // 支持 SQLite、MySQL、PostgreSQL 三种方言，通过 GORM clause.OnConflict
 // 自动处理方言差异。构造函数接受已初始化的 *gorm.DB，调用方负责配置方言和连接池。
 //
-// 对应 Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (DbBasedKVStore)
+// Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (DbBasedKVStore)
 type DbBasedKVStore struct {
 	// db GORM 数据库实例
 	db *gorm.DB
@@ -81,7 +81,7 @@ const (
 // NewDbBasedKVStore 创建基于 GORM 的数据库 KV 存储。
 //
 // db: 已初始化的 GORM 数据库实例（调用方负责配置方言和连接池）。
-// 对齐 Python: DbBasedKVStore(engine: AsyncEngine)
+// Python: DbBasedKVStore(engine: AsyncEngine)
 func NewDbBasedKVStore(db *gorm.DB) *DbBasedKVStore {
 	return &DbBasedKVStore{
 		db:         db,
@@ -90,7 +90,7 @@ func NewDbBasedKVStore(db *gorm.DB) *DbBasedKVStore {
 }
 
 // Set 存储或覆盖一个键值对。
-// 对齐 Python: DbBasedKVStore.set(key, value)
+// Python: DbBasedKVStore.set(key, value)
 func (s *DbBasedKVStore) Set(ctx context.Context, key string, value []byte) error {
 	s.ensureTable()
 	row := &KVStoreRow{
@@ -102,7 +102,7 @@ func (s *DbBasedKVStore) Set(ctx context.Context, key string, value []byte) erro
 
 // Get 根据 key 获取值，key 不存在时返回 nil, nil。
 // 尝试 JSON 解析，如果含 exclusive_expiry 字段则解包返回实际值。
-// 对齐 Python: DbBasedKVStore.get(key) — 解包 exclusive dict
+// Python: DbBasedKVStore.get(key) — 解包 exclusive dict
 func (s *DbBasedKVStore) Get(ctx context.Context, key string) ([]byte, error) {
 	s.ensureTable()
 	var row KVStoreRow
@@ -121,7 +121,7 @@ func (s *DbBasedKVStore) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Exists 检查 key 是否存在。
-// 对齐 Python: DbBasedKVStore.exists(key)
+// Python: DbBasedKVStore.exists(key)
 func (s *DbBasedKVStore) Exists(ctx context.Context, key string) (bool, error) {
 	s.ensureTable()
 	var count int64
@@ -133,7 +133,7 @@ func (s *DbBasedKVStore) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 // Delete 删除指定 key，key 不存在时不执行操作。
-// 对齐 Python: DbBasedKVStore.delete(key)
+// Python: DbBasedKVStore.delete(key)
 func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 	s.ensureTable()
 	return s.db.WithContext(ctx).Where("key = ?", key).Delete(&KVStoreRow{}).Error
@@ -143,7 +143,7 @@ func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 // expiry 为过期秒数，0 表示不过期。
 // 返回 true 表示设置成功，false 表示 key 已存在且未过期。
 // 在同一个数据库事务中完成查询和写入，避免 TOCTOU 竞态条件。
-// 对齐 Python: DbBasedKVStore.exclusive_set(key, value, expiry)
+// Python: DbBasedKVStore.exclusive_set(key, value, expiry)
 func (s *DbBasedKVStore) ExclusiveSet(ctx context.Context, key string, value []byte, expiry int) (bool, error) {
 	s.ensureTable()
 	now := time.Now().Unix()
@@ -203,7 +203,7 @@ func (s *DbBasedKVStore) ExclusiveSet(ctx context.Context, key string, value []b
 }
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。
-// 对齐 Python: DbBasedKVStore.get_by_prefix(prefix) — 解码 _decode_value
+// Python: DbBasedKVStore.get_by_prefix(prefix) — 解码 _decode_value
 func (s *DbBasedKVStore) GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error) {
 	s.ensureTable()
 	var rows []KVStoreRow
@@ -225,7 +225,7 @@ func (s *DbBasedKVStore) GetByPrefix(ctx context.Context, prefix string) (map[st
 
 // DeleteByPrefix 删除所有以 prefix 开头的键值对。
 // batchSize 为每批删除的数量，0 表示一次性删除。
-// 对齐 Python: DbBasedKVStore.delete_by_prefix(prefix, batch_size)
+// Python: DbBasedKVStore.delete_by_prefix(prefix, batch_size)
 func (s *DbBasedKVStore) DeleteByPrefix(ctx context.Context, prefix string, batchSize int) error {
 	s.ensureTable()
 	db := s.db.WithContext(ctx)
@@ -254,7 +254,7 @@ func (s *DbBasedKVStore) DeleteByPrefix(ctx context.Context, prefix string, batc
 
 // MGet 批量获取多个 key 的值。
 // 返回值与输入 keys 顺序对应，不存在的 key 对应位置为 nil。
-// 对齐 Python: DbBasedKVStore.mget(keys)
+// Python: DbBasedKVStore.mget(keys)
 func (s *DbBasedKVStore) MGet(ctx context.Context, keys []string) ([][]byte, error) {
 	s.ensureTable()
 	if len(keys) == 0 {
@@ -287,7 +287,7 @@ func (s *DbBasedKVStore) MGet(ctx context.Context, keys []string) ([][]byte, err
 
 // BatchDelete 批量删除多个 key，返回成功删除的数量。
 // batchSize 为每批删除的数量，0 表示一次性删除。
-// 对齐 Python: DbBasedKVStore.batch_delete(keys, batch_size)
+// Python: DbBasedKVStore.batch_delete(keys, batch_size)
 func (s *DbBasedKVStore) BatchDelete(ctx context.Context, keys []string, batchSize int) (int, error) {
 	s.ensureTable()
 	if len(keys) == 0 {
@@ -321,7 +321,7 @@ func (s *DbBasedKVStore) BatchDelete(ctx context.Context, keys []string, batchSi
 }
 
 // Pipeline 创建批量操作管道。
-// 对齐 Python: DbBasedKVStore.pipeline()
+// Python: DbBasedKVStore.pipeline()
 func (s *DbBasedKVStore) Pipeline(_ context.Context) KVPipeline {
 	return &dbBasedPipeline{
 		ops:   make([]operation, 0),
@@ -351,7 +351,7 @@ func (p *dbBasedPipeline) Exists(_ context.Context, key string) error {
 // Execute 提交并执行管道中的所有操作，返回各操作的结果。
 // 操作按类型分组（set/get/exists），在一个事务内批量执行。
 // 执行后管道被清空，可复用。
-// 对齐 Python: DbBasedKVStore.pipeline().execute()
+// Python: DbBasedKVStore.pipeline().execute()
 func (p *dbBasedPipeline) Execute(ctx context.Context) ([]PipelineResult, error) {
 	// 拷贝操作列表并清空，允许 Pipeline 复用
 	ops := p.ops
@@ -469,7 +469,7 @@ func (KVStoreRow) TableName() string {
 // ensureTable 惰性建表。
 // 快速路径：atomic.Bool 无锁检查；慢路径：sync.Once 保证只建一次。
 // tableReady channel 保证建表完成后其他 goroutine 才继续。
-// 对齐 Python: _create_table_if_not_exist()
+// Python: _create_table_if_not_exist()
 func (s *DbBasedKVStore) ensureTable() {
 	if s.tableCreated.Load() {
 		return
@@ -494,7 +494,7 @@ func (s *DbBasedKVStore) ensureTable() {
 }
 
 // encodeExclusiveValue 将 value 和 expireAt 编码为 exclusive JSON 格式的 []byte。
-// 对齐 Python: json.dumps({EXCLUSIVE_VALUE_KEY: encoded_value, EXCLUSIVE_EXPIRY_KEY: expire_at})
+// Python: json.dumps({EXCLUSIVE_VALUE_KEY: encoded_value, EXCLUSIVE_EXPIRY_KEY: expire_at})
 func encodeExclusiveValue(value []byte, expireAt int64) ([]byte, error) {
 	ev := exclusiveValue{
 		ExclusiveValue:  base64.StdEncoding.EncodeToString(value),
@@ -506,7 +506,7 @@ func encodeExclusiveValue(value []byte, expireAt int64) ([]byte, error) {
 // decodeExclusiveValue 尝试从 BLOB 解码 exclusive JSON 格式。
 // 如果数据是 exclusive JSON（含 exclusive_expiry 字段），返回解码后的值和 true。
 // 否则返回 nil 和 false。
-// 对齐 Python: get() 中的 json.loads + EXCLUSIVE_EXPIRY_KEY 检查
+// Python: get() 中的 json.loads + EXCLUSIVE_EXPIRY_KEY 检查
 func decodeExclusiveValue(data []byte) ([]byte, bool) {
 	var ev exclusiveValue
 	if err := json.Unmarshal(data, &ev); err != nil {
@@ -524,7 +524,7 @@ func decodeExclusiveValue(data []byte) ([]byte, bool) {
 }
 
 // upsertStatement 构造 GORM upsert 语句，自动处理方言差异。
-// 对齐 Python: _get_upsert_stmt() — 区分 MySQL/SQLite 方言
+// Python: _get_upsert_stmt() — 区分 MySQL/SQLite 方言
 // Go 版本通过 GORM clause.OnConflict 统一处理
 func upsertStatement(db *gorm.DB, row *KVStoreRow) *gorm.DB {
 	return db.Clauses(clause.OnConflict{
@@ -535,7 +535,7 @@ func upsertStatement(db *gorm.DB, row *KVStoreRow) *gorm.DB {
 
 // escapeLikePrefix 转义 LIKE 模式中的通配符（%、_、\），
 // 防止 prefix 参数中的特殊字符产生非预期匹配。
-// 对齐 Python: startswith() 不存在通配符问题。
+// Python: startswith() 不存在通配符问题。
 func escapeLikePrefix(prefix string) string {
 	s := strings.ReplaceAll(prefix, `\`, `\\`)
 	s = strings.ReplaceAll(s, `%`, `\%`)

@@ -208,7 +208,7 @@ func (m *SpanManager) UpdateSpan(span *Span, data map[string]any) {
 }
 
 // GetAllSpans 获取所有 Span，按插入顺序返回。
-// 对应 Python: SpanManager.get_all_spans()
+// Python: SpanManager.get_all_spans()
 func (m *SpanManager) GetAllSpans() []*Span {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -222,7 +222,7 @@ func (m *SpanManager) GetAllSpans() []*Span {
 }
 
 // GetAllAgentSpans 获取所有 TraceAgentSpan，按插入顺序返回。
-// 对应 Python: tracer.tracer_agent_span_manager.get_all_spans()
+// Python: tracer.tracer_agent_span_manager.get_all_spans()
 // 与 GetAllSpans 不同，此方法保留 InvokeType/Name/MetaData 等扩展字段。
 func (m *SpanManager) GetAllAgentSpans() []*TraceAgentSpan {
 	m.mu.RLock()

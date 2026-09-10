@@ -223,7 +223,7 @@ func TestSubagentRail_Init_无子代理跳过(t *testing.T) {
 	agent := newFakeDeepAgentForTest()
 	agent.deepConfig = &hschema.DeepAgentConfig{} // 空 subagents
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 
 	require.NoError(t, err)
 	assert.Empty(t, r.tools, "无子代理时不应注册工具")
@@ -243,7 +243,7 @@ func TestSubagentRail_Init_有子代理注册TaskTool(t *testing.T) {
 		},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 
 	require.NoError(t, err)
 	assert.Len(t, r.tools, 1, "有子代理时应注册 1 个 TaskTool")
@@ -261,7 +261,7 @@ func TestSubagentRail_BeforeModelCall_注入Section(t *testing.T) {
 		},
 	}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)

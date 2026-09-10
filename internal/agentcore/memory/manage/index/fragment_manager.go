@@ -24,7 +24,7 @@ import (
 // 所有实际存储操作委托给 BaseMemoryIndex，FragmentMemoryManager 只负责业务逻辑
 // （冲突检查、操作分发、数据转换）。
 //
-// 对应 Python: openjiuwen/core/memory/manage/index/fragment_memory_manager.py (FragmentMemoryManager)
+// Python: openjiuwen/core/memory/manage/index/fragment_memory_manager.py (FragmentMemoryManager)
 type FragmentMemoryManager struct {
 	// memoryManagerBase 嵌入公共基类
 	memoryManagerBase
@@ -47,7 +47,7 @@ const (
 
 // NewFragmentMemoryManager 创建碎片记忆管理器。
 //
-// 对齐 Python: FragmentMemoryManager.__init__(memory_index, crypto_key)
+// Python: FragmentMemoryManager.__init__(memory_index, crypto_key)
 func NewFragmentMemoryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *FragmentMemoryManager {
 	return &FragmentMemoryManager{
 		memoryManagerBase: memoryManagerBase{
@@ -67,7 +67,7 @@ func NewFragmentMemoryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byt
 //  4. MemUpdateChecker 冲突检查（LLM 驱动）
 //  5. 执行删除 + 添加
 //
-// 对齐 Python: FragmentMemoryManager.add_memories
+// Python: FragmentMemoryManager.add_memories
 // llm 可选参数用于 LLM 驱动冲突检查（对齐 Python: add_memories(llm=None)）
 func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
@@ -84,7 +84,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		for _, unit := range units {
 			frag, ok := unit.(*mem_model.FragmentMemoryUnit)
 			if !ok {
-				// 对齐 Python: memory_logger.warning("mem_unit is not a FragmentMemoryUnit", memory_type=..., user_id=..., scope_id=...)
+				// Python: memory_logger.warning("mem_unit is not a FragmentMemoryUnit", memory_type=..., user_id=..., scope_id=...)
 				logger.Warn(logComponent).Str("memory_type", m.memType).
 					Str("user_id", userID).Str("scope_id", scopeID).
 					Msg("mem_unit is not a FragmentMemoryUnit")
@@ -99,7 +99,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	processResult := make(map[string]*mem_model.FragmentMemoryUnit)
 
 	// 步骤 1：分离 ADD/UPDATE/DELETE 操作
-	// 对齐 Python: _get_new_mem_units_and_update_memories
+	// Python: _get_new_mem_units_and_update_memories
 	newMemUnits, err := m.getNewMemUnitsAndUpdateMemories(ctx, userID, scopeID, fragmentMemories, deleteSet, processResult)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	}
 
 	// 步骤 2：搜索相关旧记忆
-	// 对齐 Python: _get_related_old_memories
+	// Python: _get_related_old_memories
 	oldMemories, err := m.getRelatedOldMemories(ctx, newMemContent, userID, scopeID)
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
@@ -147,7 +147,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	}
 
 	// 步骤 3：MemUpdateChecker 冲突检查
-	// 对齐 Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
+	// Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
 	checker := &update.MemUpdateChecker{}
 	// 提取 llmModel 参数（对齐 Python: base_chat_model=llm）
 	var model *llm.Model
@@ -196,7 +196,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 
 // Update 按 ID 更新记忆内容。
 //
-// 对齐 Python: FragmentMemoryManager.update
+// Python: FragmentMemoryManager.update
 func (m *FragmentMemoryManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryUpdateMemoryExecutionError, m.memType); err != nil {
@@ -226,7 +226,7 @@ func (m *FragmentMemoryManager) Update(ctx context.Context, userID string, scope
 
 // Search 语义搜索记忆。
 //
-// 对齐 Python: FragmentMemoryManager.search
+// Python: FragmentMemoryManager.search
 func (m *FragmentMemoryManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string) ([]*index.MemorySearchResult, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
@@ -253,7 +253,7 @@ func (m *FragmentMemoryManager) Search(ctx context.Context, userID string, scope
 
 // Get 按 ID 获取单条记忆。
 //
-// 对齐 Python: FragmentMemoryManager.get
+// Python: FragmentMemoryManager.get
 func (m *FragmentMemoryManager) Get(ctx context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
@@ -269,7 +269,7 @@ func (m *FragmentMemoryManager) Get(ctx context.Context, userID string, scopeID 
 
 // Delete 按 ID 删除记忆。
 //
-// 对齐 Python: FragmentMemoryManager.delete
+// Python: FragmentMemoryManager.delete
 func (m *FragmentMemoryManager) Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
@@ -297,7 +297,7 @@ func (m *FragmentMemoryManager) Delete(ctx context.Context, userID string, scope
 
 // DeleteByUserID 删除用户+scope 下所有记忆。
 //
-// 对齐 Python: FragmentMemoryManager.delete_by_user_id
+// Python: FragmentMemoryManager.delete_by_user_id
 func (m *FragmentMemoryManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
@@ -312,7 +312,7 @@ func (m *FragmentMemoryManager) DeleteByUserID(ctx context.Context, userID strin
 
 // ListFragmentMemories 分页列出碎片记忆。
 //
-// 对齐 Python: FragmentMemoryManager.list_fragment_memories
+// Python: FragmentMemoryManager.list_fragment_memories
 func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID string, scopeID string, offset int, batchSize int, memType string) ([]*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
@@ -338,7 +338,7 @@ func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID
 	if err != nil {
 		return nil, m.wrapException(err, exception.StatusMemoryGetMemoryExecutionError, m.memType)
 	}
-	// 对齐 Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
+	// Python: result.sort(key=lambda x: (x['mem'], str(x.get('timestamp') or '')), reverse=True)
 	sort.Slice(docs, func(i, j int) bool {
 		if docs[i].Text != docs[j].Text {
 			return docs[i].Text > docs[j].Text
@@ -363,7 +363,7 @@ func fragmentUnitsToMemoryUnits(units []*mem_model.FragmentMemoryUnit) []mem_mod
 
 // getNewMemUnitsAndUpdateMemories 分离 ADD/UPDATE/DELETE 操作，执行 UPDATE 和 DELETE。
 //
-// 对齐 Python: FragmentMemoryManager._get_new_mem_units_and_update_memories
+// Python: FragmentMemoryManager._get_new_mem_units_and_update_memories
 func (m *FragmentMemoryManager) getNewMemUnitsAndUpdateMemories(
 	ctx context.Context,
 	userID string, scopeID string,
@@ -417,7 +417,7 @@ func (m *FragmentMemoryManager) getNewMemUnitsAndUpdateMemories(
 
 // getRelatedOldMemories 搜索相关旧记忆用于冲突检查。
 //
-// 对齐 Python: FragmentMemoryManager._get_related_old_memories
+// Python: FragmentMemoryManager._get_related_old_memories
 func (m *FragmentMemoryManager) getRelatedOldMemories(
 	ctx context.Context,
 	newMemContent *orderedmap.OrderedMap[string, string],
@@ -445,7 +445,7 @@ func (m *FragmentMemoryManager) getRelatedOldMemories(
 
 // convertToMemoryDoc 将 FragmentMemoryUnit 转换为 MemoryDoc。
 //
-// 对齐 Python: FragmentMemoryManager._convert_to_memory_doc
+// Python: FragmentMemoryManager._convert_to_memory_doc
 //
 // 设计决策：Fields 保持 map[string]any，对齐 Python fields=dict 设计。
 // 写入时硬编码 key 字符串（如 "source_id"），读取时需类型断言。
@@ -471,7 +471,7 @@ func (m *FragmentMemoryManager) convertToMemoryDocs(units []*mem_model.FragmentM
 
 // parseTimestamp 解析多种时间格式为 time.Time。
 //
-// 对齐 Python: FragmentMemoryManager._parse_timestamp
+// Python: FragmentMemoryManager._parse_timestamp
 func parseTimestamp(ts string) time.Time {
 	if ts == "" {
 		return time.Now()
@@ -504,7 +504,7 @@ func isFragmentMemoryType(memType string) bool {
 
 // removeUpdateEntriesFromProcessResult 从结果中移除被删除的 UPDATE 条目。
 //
-// 对齐 Python: _remove_update_entries_from_process_result
+// Python: _remove_update_entries_from_process_result
 func removeUpdateEntriesFromProcessResult(deleteSet map[string]bool, processResult map[string]*mem_model.FragmentMemoryUnit) {
 	for memID := range deleteSet {
 		if unit, ok := processResult[memID]; ok && unit.OperationType == mem_model.OperationTypeUpdate {
@@ -515,7 +515,7 @@ func removeUpdateEntriesFromProcessResult(deleteSet map[string]bool, processResu
 
 // appendMemUnitListToDict 将列表追加到字典（去重 + 覆盖）。
 //
-// 对齐 Python: _append_mem_unit_list_to_dict
+// Python: _append_mem_unit_list_to_dict
 func appendMemUnitListToDict(dict map[string]*mem_model.FragmentMemoryUnit, list []*mem_model.FragmentMemoryUnit) {
 	for _, unit := range list {
 		if _, exists := dict[unit.MemID]; exists {

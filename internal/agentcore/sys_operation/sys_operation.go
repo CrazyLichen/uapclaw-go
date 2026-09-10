@@ -16,7 +16,7 @@ type SysSubOperation interface {
 }
 
 // SysOperation 系统操作主接口，编排文件系统、Shell、代码执行等子操作。
-// 对齐 Python SysOperation：card, fs(), shell(), code(), isolation_key_template。
+// Python: SysOperation：card, fs(), shell(), code(), isolation_key_template。
 type SysOperation interface {
 	// Card 返回系统操作配置卡片
 	Card() *SysOperationCard
@@ -34,7 +34,7 @@ type SysOperation interface {
 type BaseSysOperation struct{}
 
 // LocalSysOperation 本地系统操作实现。
-// 对齐 Python SysOperation 的 __getattr__ 动态调度逻辑，
+// Python: SysOperation 的 __getattr__ 动态调度逻辑，
 // 使用 OperationRegistry + instances map 实现 lazy 实例化。
 type LocalSysOperation struct {
 	// card 配置卡片
@@ -59,7 +59,7 @@ var _ SysOperation = (*LocalSysOperation)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSysOperation 系统操作工厂函数，根据 card.Mode 决定构造类型。
-// 对齐 Python SysOperation(card) 构造函数的 mode 分支：
+// Python: SysOperation(card) 构造函数的 mode 分支：
 //   - OperationModeLocal → NewLocalSysOperation
 //   - OperationModeSandbox → 校验 GatewayConfig 后 NewLocalSysOperation（sandbox 预留，当前 fallback）
 func NewSysOperation(card *SysOperationCard) (SysOperation, error) {
@@ -67,7 +67,7 @@ func NewSysOperation(card *SysOperationCard) (SysOperation, error) {
 		card = NewSysOperationCard()
 	}
 	if card.Mode == OperationModeSandbox {
-		// 对齐 Python _validate_sandbox_gateway_config：校验 launcher_config 必填字段
+		// Python: _validate_sandbox_gateway_config：校验 launcher_config 必填字段
 		if err := validateSandboxGatewayConfig(card.GatewayConfig); err != nil {
 			return nil, fmt.Errorf("sandbox 模式配置校验失败: %w", err)
 		}
@@ -78,7 +78,7 @@ func NewSysOperation(card *SysOperationCard) (SysOperation, error) {
 }
 
 // NewLocalSysOperation 创建本地系统操作实例。
-// 对齐 Python SysOperation.__init__：根据 mode 初始化 runConfig。
+// Python: SysOperation.__init__：根据 mode 初始化 runConfig。
 func NewLocalSysOperation(card *SysOperationCard) *LocalSysOperation {
 	if card == nil {
 		card = NewSysOperationCard()
@@ -93,7 +93,7 @@ func NewLocalSysOperation(card *SysOperationCard) *LocalSysOperation {
 func (s *LocalSysOperation) Card() *SysOperationCard { return s.card }
 
 // Fs 返回文件系统操作实例（lazy 实例化）。
-// 对齐 Python SysOperation.fs()：通过 _get_operation("fs") 获取实例。
+// Python: SysOperation.fs()：通过 _get_operation("fs") 获取实例。
 func (s *LocalSysOperation) Fs() FsOperation {
 	op := s.getOperation("fs")
 	if op == nil {
@@ -106,7 +106,7 @@ func (s *LocalSysOperation) Fs() FsOperation {
 }
 
 // Shell 返回 Shell 操作实例（lazy 实例化）。
-// 对齐 Python SysOperation.shell()：通过 _get_operation("shell") 获取实例。
+// Python: SysOperation.shell()：通过 _get_operation("shell") 获取实例。
 func (s *LocalSysOperation) Shell() ShellOperation {
 	op := s.getOperation("shell")
 	if op == nil {
@@ -119,7 +119,7 @@ func (s *LocalSysOperation) Shell() ShellOperation {
 }
 
 // Code 返回代码执行实例（lazy 实例化）。
-// 对齐 Python SysOperation.code()：通过 _get_operation("code") 获取实例。
+// Python: SysOperation.code()：通过 _get_operation("code") 获取实例。
 func (s *LocalSysOperation) Code() CodeOperation {
 	op := s.getOperation("code")
 	if op == nil {
@@ -132,7 +132,7 @@ func (s *LocalSysOperation) Code() CodeOperation {
 }
 
 // IsolationKeyTemplate 返回隔离键模板。
-// 对齐 Python SysOperation.isolation_key_template：sandbox 模式返回模板，local 模式返回空。
+// Python: SysOperation.isolation_key_template：sandbox 模式返回模板，local 模式返回空。
 func (s *LocalSysOperation) IsolationKeyTemplate() string {
 	return s.card.IsolationKeyTemplate()
 }
@@ -155,7 +155,7 @@ func (b *BaseSysOperation) IsolationKeyTemplate() string { return "" }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateSandboxGatewayConfig 校验沙箱网关配置。
-// 对齐 Python SysOperation._validate_sandbox_gateway_config：
+// Python: SysOperation._validate_sandbox_gateway_config：
 //   - launcher_config 不能为 nil
 //   - launcher_type 不能为空
 //   - sandbox_type 不能为空
@@ -176,7 +176,7 @@ func validateSandboxGatewayConfig(config *SandboxGatewayConfig) error {
 }
 
 // getOperation 通用 lazy 实例化，从 OperationRegistry 查 OperationDef，调用 NewFunc 创建实例。
-// 对齐 Python SysOperation._get_operation：
+// Python: SysOperation._get_operation：
 //  1. 查缓存 instances[name]
 //  2. 从 GlobalRegistry 获取 OperationDef
 //  3. 根据 card.Mode 构造 runConfig

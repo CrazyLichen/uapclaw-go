@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolTranslator 工具翻译器闭包。
-// 对齐 Python: Translator = Callable[..., str]
+// Python: Translator = Callable[..., str]
 //
 // 因 team_workspace 包不能导入 tools/locales 包（循环依赖：
 // team_workspace → tools/locales → schema → team_workspace），
@@ -25,7 +25,7 @@ import (
 type ToolTranslator func(tool string, key ...string) string
 
 // WorkspaceMetaTool 工作空间元数据工具。
-// 对齐 Python: WorkspaceMetaTool (team_workspace/tools.py)
+// Python: WorkspaceMetaTool (team_workspace/tools.py)
 //
 // 文件 I/O 通过标准 read_file/write_file/glob 工具经 .team/ 挂载点完成。
 // 本工具仅处理没有文件系统等价物的锁管理和版本历史查询。
@@ -60,7 +60,7 @@ const (
 	// actionHistory 查看版本历史操作
 	actionHistory = "history"
 	// toolIDWorkspaceMeta 工具 ID
-	// 对齐 Python: "team.workspace_meta"
+	// Python: "team.workspace_meta"
 	toolIDWorkspaceMeta = "team.workspace_meta"
 	// toolNameWorkspaceMeta 工具名
 	toolNameWorkspaceMeta = "workspace_meta"
@@ -71,7 +71,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkspaceMetaTool 创建 WorkspaceMetaTool 实例。
-// 对齐 Python: WorkspaceMetaTool.__init__(workspace, t)
+// Python: WorkspaceMetaTool.__init__(workspace, t)
 //
 // 参数:
 //   - ws: 团队工作空间管理器
@@ -80,7 +80,7 @@ const (
 //   - displayName: 调用者显示名（对齐 Python kwargs.display_name）
 func NewWorkspaceMetaTool(ws *TeamWorkspaceManager, t ToolTranslator, memberName, displayName string) *WorkspaceMetaTool {
 	// 构建 InputParams
-	// 对齐 Python: self.card.input_params = {"type": "object", "properties": {...}, "required": ["action"]}
+	// Python: self.card.input_params = {"type": "object", "properties": {...}, "required": ["action"]}
 	actionParam := &schema.Param{
 		Name:        "action",
 		Description: t(toolNameWorkspaceMeta, "action"),
@@ -112,7 +112,7 @@ func (t *WorkspaceMetaTool) Card() *tool.ToolCard {
 }
 
 // Invoke 执行工作空间元数据操作。
-// 对齐 Python: WorkspaceMetaTool.invoke(inputs, **kwargs)
+// Python: WorkspaceMetaTool.invoke(inputs, **kwargs)
 //
 // 根据 action 分发到 lock/unlock/locks/history 四个分支。
 // 返回 map[string]any 遵循项目约定格式: {"success": bool, "data": ..., "error": ...}
@@ -149,7 +149,7 @@ func (t *WorkspaceMetaTool) Stream(_ context.Context, _ map[string]any, _ ...too
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleLock 处理 lock 操作。
-// 对齐 Python: action == "lock"
+// Python: action == "lock"
 func (t *WorkspaceMetaTool) handleLock(ctx context.Context, path string) map[string]any {
 	if path == "" {
 		return map[string]any{
@@ -189,7 +189,7 @@ func (t *WorkspaceMetaTool) handleLock(ctx context.Context, path string) map[str
 }
 
 // handleUnlock 处理 unlock 操作。
-// 对齐 Python: action == "unlock"
+// Python: action == "unlock"
 func (t *WorkspaceMetaTool) handleUnlock(ctx context.Context, path string) map[string]any {
 	if path == "" {
 		return map[string]any{
@@ -217,7 +217,7 @@ func (t *WorkspaceMetaTool) handleUnlock(ctx context.Context, path string) map[s
 }
 
 // handleLocks 处理 locks 操作。
-// 对齐 Python: action == "locks"
+// Python: action == "locks"
 func (t *WorkspaceMetaTool) handleLocks() map[string]any {
 	locks := t.ws.ListLocks()
 	lockMaps := make([]map[string]any, 0, len(locks))
@@ -240,7 +240,7 @@ func (t *WorkspaceMetaTool) handleLocks() map[string]any {
 }
 
 // handleHistory 处理 history 操作。
-// 对齐 Python: action == "history"
+// Python: action == "history"
 func (t *WorkspaceMetaTool) handleHistory(ctx context.Context, path string) map[string]any {
 	if path == "" {
 		return map[string]any{
@@ -283,7 +283,7 @@ func (t *WorkspaceMetaTool) handleHistory(ctx context.Context, path string) map[
 }
 
 // lockToMap 将 WorkspaceFileLock 转为 map[string]any。
-// 对齐 Python: lock.model_dump()
+// Python: lock.model_dump()
 func lockToMap(lock WorkspaceFileLock) (map[string]any, error) {
 	jsonBytes, err := json.Marshal(lock)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 // 定义检查点保存时机判断、构建和恢复的核心协议。
 // DefaultCheckpointManager 是默认实现。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/manager.py CheckpointManager(Protocol)
+// Python: openjiuwen/agent_evolving/checkpointing/manager.py CheckpointManager(Protocol)
 type CheckpointManager interface {
 	// ShouldSave 判断是否应保存检查点。
 	ShouldSave(epoch int, improved bool) bool
@@ -32,7 +32,7 @@ type CheckpointManager interface {
 // 恢复内容：operators_state + progress best/epoch。
 // 待定变更管理：内存中的 pending map。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/manager.py DefaultCheckpointManager
+// Python: openjiuwen/agent_evolving/checkpointing/manager.py DefaultCheckpointManager
 type DefaultCheckpointManager struct {
 	runID            string
 	ckptVersion      string
@@ -51,7 +51,7 @@ type DefaultCheckpointManager struct {
 
 // NewDefaultCheckpointManager 创建默认检查点管理器。
 //
-// 对应 Python: DefaultCheckpointManager.__init__(run_id, checkpoint_version, save_every_n_epochs, save_on_improve)
+// Python: DefaultCheckpointManager.__init__(run_id, checkpoint_version, save_every_n_epochs, save_on_improve)
 func NewDefaultCheckpointManager(
 	runID string,
 	ckptVersion string,
@@ -74,7 +74,7 @@ func NewDefaultCheckpointManager(
 }
 
 // RunID 返回运行标识。
-// 对应 Python: DefaultCheckpointManager.run_id (property)
+// Python: DefaultCheckpointManager.run_id (property)
 func (m *DefaultCheckpointManager) RunID() string {
 	return m.runID
 }
@@ -82,7 +82,7 @@ func (m *DefaultCheckpointManager) RunID() string {
 // ShouldSave 判断是否应保存检查点。
 //
 // 逻辑：saveOnImprove && improved → true 或 epoch % saveEveryNEpochs == 0 → true
-// 对应 Python: DefaultCheckpointManager.should_save(epoch, improved)
+// Python: DefaultCheckpointManager.should_save(epoch, improved)
 func (m *DefaultCheckpointManager) ShouldSave(epoch int, improved bool) bool {
 	if m.saveOnImprove && improved {
 		return true
@@ -94,7 +94,7 @@ func (m *DefaultCheckpointManager) ShouldSave(epoch int, improved bool) bool {
 //
 // progress 参数使用 evolving.CheckpointProgress 接口方法提取字段，
 // 避免了 any + reflect 方案，获得编译时类型安全。
-// 对应 Python: DefaultCheckpointManager.build_checkpoint(agent, progress, updater_state)
+// Python: DefaultCheckpointManager.build_checkpoint(agent, progress, updater_state)
 func (m *DefaultCheckpointManager) BuildCheckpoint(
 	agent evolving.TrainableAgent,
 	progress evolving.CheckpointProgress,
@@ -103,7 +103,7 @@ func (m *DefaultCheckpointManager) BuildCheckpoint(
 	operatorsState := snapshotOperatorsState(agent)
 
 	// 从 progress 接口提取字段
-	// 对齐 Python: step = {"epoch": int(getattr(progress, "current_epoch", 0)), ...}
+	// Python: step = {"epoch": int(getattr(progress, "current_epoch", 0)), ...}
 	epoch := progress.GetEpoch()
 	batch := progress.GetBatchIter()
 	bestScore := progress.GetBestScore()
@@ -126,7 +126,7 @@ func (m *DefaultCheckpointManager) BuildCheckpoint(
 // Restore 从检查点恢复 agent 状态，返回 progress 恢复信息。
 //
 // 恢复所有 Operator 状态，返回 {"start_epoch", "best_score", "run_id"}。
-// 对应 Python: DefaultCheckpointManager.restore(agent, checkpoint)
+// Python: DefaultCheckpointManager.restore(agent, checkpoint)
 func (m *DefaultCheckpointManager) Restore(
 	agent evolving.TrainableAgent,
 	checkpoint *EvolveCheckpoint,
@@ -140,13 +140,13 @@ func (m *DefaultCheckpointManager) Restore(
 }
 
 // AddPending 添加待定变更到内存存储。
-// 对应 Python: DefaultCheckpointManager.add_pending(operator_id, change)
+// Python: DefaultCheckpointManager.add_pending(operator_id, change)
 func (m *DefaultCheckpointManager) AddPending(operatorID string, change *PendingChange) {
 	m.pending[operatorID] = append(m.pending[operatorID], change)
 }
 
 // GetPending 获取某 Operator 的待定变更列表（返回副本）。
-// 对应 Python: DefaultCheckpointManager.get_pending(operator_id)
+// Python: DefaultCheckpointManager.get_pending(operator_id)
 func (m *DefaultCheckpointManager) GetPending(operatorID string) []*PendingChange {
 	list := m.pending[operatorID]
 	result := make([]*PendingChange, len(list))
@@ -158,7 +158,7 @@ func (m *DefaultCheckpointManager) GetPending(operatorID string) []*PendingChang
 //
 // 只清空内存中的待定状态并返回记录计数，不负责写磁盘。
 // store 参数当前未使用，预留对齐 Python commit_pending(operator_id, store) 签名。
-// 对应 Python: DefaultCheckpointManager.commit_pending(operator_id, store)
+// Python: DefaultCheckpointManager.commit_pending(operator_id, store)
 func (m *DefaultCheckpointManager) CommitPending(operatorID string, store *EvolutionStore) int {
 	pendingList := m.pending[operatorID]
 	delete(m.pending, operatorID)
@@ -170,7 +170,7 @@ func (m *DefaultCheckpointManager) CommitPending(operatorID string, store *Evolu
 }
 
 // DiscardPending 按 changeID 丢弃特定的待定变更。
-// 对应 Python: DefaultCheckpointManager.discard_pending(operator_id, change_id)
+// Python: DefaultCheckpointManager.discard_pending(operator_id, change_id)
 func (m *DefaultCheckpointManager) DiscardPending(operatorID, changeID string) {
 	list := m.pending[operatorID]
 	filtered := make([]*PendingChange, 0, len(list))
@@ -185,7 +185,7 @@ func (m *DefaultCheckpointManager) DiscardPending(operatorID, changeID string) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // snapshotOperatorsState 快照所有 Operator 的状态。
-// 对应 Python: DefaultCheckpointManager._snapshot_operators_state(agent)
+// Python: DefaultCheckpointManager._snapshot_operators_state(agent)
 func snapshotOperatorsState(agent evolving.TrainableAgent) map[string]map[string]any {
 	ops := agent.GetOperators()
 	if ops == nil {
@@ -199,7 +199,7 @@ func snapshotOperatorsState(agent evolving.TrainableAgent) map[string]map[string
 }
 
 // restoreOperatorsState 恢复所有 Operator 的状态。
-// 对应 Python: DefaultCheckpointManager._restore_operators_state(agent, operators_state)
+// Python: DefaultCheckpointManager._restore_operators_state(agent, operators_state)
 func restoreOperatorsState(agent evolving.TrainableAgent, operatorsState map[string]map[string]any) {
 	ops := agent.GetOperators()
 	if ops == nil || operatorsState == nil {

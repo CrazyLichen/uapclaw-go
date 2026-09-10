@@ -14,7 +14,7 @@ import (
 //
 // 提供 Agent 级别的技能注册、提示词生成等高层接口。
 //
-// 对应 Python: SkillUtil
+// Python: SkillUtil
 type SkillUtil struct {
 	// skillManager 技能管理器
 	skillManager *SkillManager
@@ -34,7 +34,7 @@ type SkillUtil struct {
 //	{{skills}}
 //	你可以使用 read_file 工具读取对应的 SKILL.md 文件来获取相关技能。
 //
-// 对应 Python: SKILL_PROMPT_CONTENT
+// Python: SKILL_PROMPT_CONTENT
 const skillPromptContent = `
 为了帮助你更好地完成任务，已装备以下技能知识：
 {{skills}}
@@ -43,7 +43,7 @@ You can use the read_file tool to read the corresponding SKILL.md file to obtain
 
 // skillSystemPrefix 技能提示词系统前缀。
 //
-// 对应 Python: SkillUtil.get_skill_prompt() 中的 system_prompt
+// Python: SkillUtil.get_skill_prompt() 中的 system_prompt
 const skillSystemPrefix = "You are an agent equipped with various skills to solve problems.\n" +
 	"Before attempting any task, read the relevant skill document (SKILL.md) " +
 	"using read_file and follow its workflow.\n"
@@ -54,7 +54,7 @@ const skillSystemPrefix = "You are an agent equipped with various skills to solv
 
 // NewSkillUtil 创建 SkillUtil 实例。
 //
-// 对应 Python: SkillUtil.__init__(sys_operation_id)
+// Python: SkillUtil.__init__(sys_operation_id)
 func NewSkillUtil(sysOperationID string) *SkillUtil {
 	return &SkillUtil{
 		skillManager:    NewSkillManager(sysOperationID),
@@ -72,7 +72,7 @@ func NewSkillUtilWithProvider(sysOperationID string, provider FsProvider) *Skill
 
 // SetSysOperationID 更新系统操作 ID。
 //
-// 对应 Python: SkillUtil.set_sys_operation_id(sys_operation_id)
+// Python: SkillUtil.set_sys_operation_id(sys_operation_id)
 func (su *SkillUtil) SetSysOperationID(sysOperationID string) {
 	su.skillManager.SetSysOperationID(sysOperationID)
 	su.remoteSkillUtil.SetSysOperationID(sysOperationID)
@@ -80,14 +80,14 @@ func (su *SkillUtil) SetSysOperationID(sysOperationID string) {
 
 // SkillManager 返回内部 SkillManager 实例。
 //
-// 对应 Python: SkillUtil.skill_manager (property)
+// Python: SkillUtil.skill_manager (property)
 func (su *SkillUtil) SkillManager() *SkillManager {
 	return su.skillManager
 }
 
 // RemoteSkillUtil 返回内部 RemoteSkillUtil 实例。
 //
-// 对应 Python: SkillUtil.remote_skill_util (property)
+// Python: SkillUtil.remote_skill_util (property)
 func (su *SkillUtil) RemoteSkillUtil() *RemoteSkillUtil {
 	return su.remoteSkillUtil
 }
@@ -96,21 +96,21 @@ func (su *SkillUtil) RemoteSkillUtil() *RemoteSkillUtil {
 //
 // 将路径列表委托给 SkillManager.Register()。
 //
-// 对应 Python: SkillUtil.register_skills(skill_path, agent, session_id)
+// Python: SkillUtil.register_skills(skill_path, agent, session_id)
 func (su *SkillUtil) RegisterSkills(skillPaths []string, overwrite bool) error {
 	return su.skillManager.Register(skillPaths, overwrite)
 }
 
 // RegisterRemoteSkills 从 GitHub 下载并注册远程技能。
 //
-// 对应 Python: SkillUtil.register_remote_skills(skills_dir, github_tree, token)
+// Python: SkillUtil.register_remote_skills(skills_dir, github_tree, token)
 func (su *SkillUtil) RegisterRemoteSkills(skillsDir string, tree *GitHubTree, token string) ([]string, error) {
 	return su.remoteSkillUtil.UploadSkillFromGitHub(tree, skillsDir, token)
 }
 
 // HasSkill 检查是否有已注册技能。
 //
-// 对应 Python: SkillUtil.has_skill()
+// Python: SkillUtil.has_skill()
 func (su *SkillUtil) HasSkill() bool {
 	return su.skillManager.Count() > 0
 }
@@ -122,7 +122,7 @@ func (su *SkillUtil) HasSkill() bool {
 //	system_prompt（固定前缀）
 //	+ skill_prompt 模板渲染（包含技能列表）
 //
-// 对应 Python: SkillUtil.get_skill_prompt()
+// Python: SkillUtil.get_skill_prompt()
 func (su *SkillUtil) GetSkillPrompt() string {
 	skills := su.skillManager.GetAll()
 	skillsInfo := make([]string, 0, len(skills))

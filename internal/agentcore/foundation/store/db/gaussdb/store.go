@@ -12,7 +12,7 @@ import (
 
 // GaussDbStore GaussDB 数据库存储，实现 db.BaseDbStore 接口。
 //
-// 对应 Python: openjiuwen/extensions/store/db/gauss_db_store.py
+// Python: openjiuwen/extensions/store/db/gauss_db_store.py
 //
 // 本实现通过 GaussDialector 创建 *gorm.DB 实例，
 // 并提供 GaussDB 特有的方言适配（LOCKING 子句简化、

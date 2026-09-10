@@ -25,7 +25,7 @@ func TestVerificationContractRail_Init_预构建Section(t *testing.T) {
 	r := NewVerificationContractRail()
 	agent := newFakeBaseAgentForTest()
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 
 	require.NoError(t, err)
 	require.NotNil(t, r.section, "Init 应预构建 section")
@@ -40,7 +40,7 @@ func TestVerificationContractRail_BeforeModelCall_注入契约(t *testing.T) {
 	r := NewVerificationContractRail()
 	agent := newFakeBaseAgentForTest()
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)

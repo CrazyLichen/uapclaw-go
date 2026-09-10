@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DeepAgentRailProvider DeepAgentRail 提供者接口。
-// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
+// Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
 // 嵌入 DeepAgentRail 的子类自动满足此接口。
 type DeepAgentRailProvider interface {
 	SetSysOperation(op sys_operation.SysOperation)
@@ -30,7 +30,7 @@ type DeepAgentRailProvider interface {
 // 子类嵌入 DeepAgentRail 后覆盖关心的钩子方法，
 // 并在 GetCallbacks() 中通过 CallbackFrom + BuildCallbacks 声明映射。
 //
-// 对应 Python: DeepAgentRail (openjiuwen/harness/rails/base.py L28-107)
+// Python: DeepAgentRail (openjiuwen/harness/rails/base.py L28-107)
 type DeepAgentRail struct {
 	agentinterfaces.BaseRail
 	// workspace 工作空间引用
@@ -49,7 +49,7 @@ type DeepAgentRail struct {
 
 // NewDeepAgentRail 创建 DeepAgentRail 实例（默认优先级 50）。
 //
-// 对应 Python: DeepAgentRail.__init__()
+// Python: DeepAgentRail.__init__()
 func NewDeepAgentRail() *DeepAgentRail {
 	return &DeepAgentRail{
 		BaseRail: *agentinterfaces.NewBaseRail(),
@@ -58,7 +58,7 @@ func NewDeepAgentRail() *DeepAgentRail {
 
 // SetWorkspace 设置工作空间引用。
 //
-// 对应 Python: DeepAgentRail.set_workspace(workspace)
+// Python: DeepAgentRail.set_workspace(workspace)
 func (d *DeepAgentRail) SetWorkspace(w *workspace.Workspace) {
 	d.workspace = w
 }
@@ -70,7 +70,7 @@ func (d *DeepAgentRail) Workspace() *workspace.Workspace {
 
 // SetSysOperation 设置系统操作引用。
 //
-// 对应 Python: DeepAgentRail.set_sys_operation(sys_operation)
+// Python: DeepAgentRail.set_sys_operation(sys_operation)
 func (d *DeepAgentRail) SetSysOperation(op sys_operation.SysOperation) {
 	d.sysOperation = op
 }
@@ -84,7 +84,7 @@ func (d *DeepAgentRail) SysOperation() sys_operation.SysOperation {
 //
 // 先获取 BaseRail 的基础回调（8 个核心事件），
 // 再遍历 DeepEventMethodMap 检查子类是否覆盖了 task-iteration 钩子。
-// 对齐 Python: DeepAgentRail.get_callbacks() = super().get_callbacks() + DEEP_EVENT_METHOD_MAP
+// Python: DeepAgentRail.get_callbacks() = super().get_callbacks() + DEEP_EVENT_METHOD_MAP
 func (d *DeepAgentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := d.BaseRail.GetCallbacks()
 

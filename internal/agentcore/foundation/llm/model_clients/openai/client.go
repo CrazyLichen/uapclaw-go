@@ -22,7 +22,7 @@ import (
 // 支持所有兼容 OpenAI Chat Completion API 的服务提供商，
 // 包括 OpenAI 官方 API 和 OpenRouter 等第三方代理。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/openai_model_client.py (OpenAIModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/openai_model_client.py (OpenAIModelClient)
 type OpenAIModelClient struct {
 	model_clients.BaseClientEmbed
 	// baseHeaders 预构建的配置级请求头
@@ -42,7 +42,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewOpenAIModelClient 创建 OpenAI 兼容客户端。
 //
-// 对应 Python: OpenAIModelClient.__init__(model_config, model_client_config)
+// Python: OpenAIModelClient.__init__(model_config, model_client_config)
 func NewOpenAIModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -59,7 +59,7 @@ func NewOpenAIModelClient(
 	// 预构建配置级 headers
 	baseHeaders := headers_helper.BuildBaseHeaders(clientConfig.CustomHeaders)
 
-	// 对齐 Python: 创建客户端前记录配置参数（Python 使用 llm_logger.info，非回调）
+	// Python: 创建客户端前记录配置参数（Python 使用 llm_logger.info，非回调）
 	finalTimeout := clientConfig.Timeout
 	if finalTimeout <= 0 {
 		finalTimeout = 60.0
@@ -78,7 +78,7 @@ func NewOpenAIModelClient(
 
 // Invoke 非流式调用 LLM，返回完整的助手消息。
 //
-// 对应 Python: OpenAIModelClient.invoke()
+// Python: OpenAIModelClient.invoke()
 func (c *OpenAIModelClient) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -142,7 +142,7 @@ func (c *OpenAIModelClient) Invoke(
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// 对齐 Python P4: Invoke 错误记录完整上下文
+		// Python: P4: Invoke 错误记录完整上下文
 		_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
@@ -165,14 +165,14 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, c.WrapError("invoke", fmt.Errorf("解析响应失败: %w", err))
 	}
 
-	// 对齐 Python: 收到响应记录完整上下文（Python 使用 llm_logger.info，非回调）
+	// Python: 收到响应记录完整上下文（Python 使用 llm_logger.info，非回调）
 	logger.Info(logComponent).
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
 		Bool("is_stream", false).
 		Msg("OpenAI API response received.")
 
-	// 对齐 Python: 解析响应前记录 output_parser（Python 使用 llm_logger.info，非回调）
+	// Python: 解析响应前记录 output_parser（Python 使用 llm_logger.info，非回调）
 	logger.Info(logComponent).
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -214,7 +214,7 @@ func (c *OpenAIModelClient) Invoke(
 // goroutine 内部累积 final_message，流结束时通过
 // tracer_record_data(llm_response=finalMessage) 传出。
 //
-// 对应 Python: OpenAIModelClient.stream()
+// Python: OpenAIModelClient.stream()
 func (c *OpenAIModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -287,7 +287,7 @@ func (c *OpenAIModelClient) Stream(
 	// 8. 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
-		// 对齐 Python P5: Stream 错误记录完整上下文
+		// Python: P5: Stream 错误记录完整上下文
 		_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
@@ -314,19 +314,19 @@ func (c *OpenAIModelClient) Stream(
 		defer close(chunkChan)
 		defer func() { _ = resp.Body.Close() }()
 
-		// 对齐 Python _astream_with_parser: 累积内容缓冲区
+		// Python: _astream_with_parser: 累积内容缓冲区
 		accumulatedContent := ""
-		// 对齐 Python _astream_with_parser: final_message 累积
+		// Python: _astream_with_parser: final_message 累积
 		var finalMessage *llmschema.AssistantMessageChunk
 
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
-				// 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
+				// Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
 				if params.TracerRecordData != nil {
 					params.TracerRecordData(map[string]any{"llm_response": finalMessage})
 				}
-				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				// Python: 流结束时触发 LLMOutput 回调
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
 					ModelName:     modelName,
@@ -336,7 +336,7 @@ func (c *OpenAIModelClient) Stream(
 				return
 			}
 			if err != nil {
-				// 对齐 Python P5: Stream 错误记录完整上下文
+				// Python: P5: Stream 错误记录完整上下文
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
 					ModelName:     modelName,
@@ -350,7 +350,7 @@ func (c *OpenAIModelClient) Stream(
 			// 解析 JSON
 			var chunkResp ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				// 对齐 Python: JSON 解析错误走日志，非回调
+				// Python: JSON 解析错误走日志，非回调
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -365,7 +365,7 @@ func (c *OpenAIModelClient) Stream(
 				continue
 			}
 
-			// 对齐 Python _astream_with_parser: 应用 output_parser
+			// Python: _astream_with_parser: 应用 output_parser
 			if params.OutputParser != nil {
 				if chunk.Content.Text() != "" {
 					accumulatedContent += chunk.Content.Text()
@@ -376,7 +376,7 @@ func (c *OpenAIModelClient) Stream(
 						chunk.ParserContent = parsed
 						accumulatedContent = "" // 清空缓冲区，增量输出
 					} else if parseErr != nil {
-						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						// Python: parser 错误走 llm_logger.debug，非回调
 						logger.Error(logComponent).
 							Str("model_name", modelName).
 							Str("model_provider", c.ClientConfig.ClientProvider).
@@ -386,7 +386,7 @@ func (c *OpenAIModelClient) Stream(
 				}
 			}
 
-			// 对齐 Python: 逐 chunk 触发 LLMResponseReceived 回调
+			// Python: 逐 chunk 触发 LLMResponseReceived 回调
 			_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 				Event:         callback.LLMResponseReceived,
 				ModelName:     modelName,
@@ -394,7 +394,7 @@ func (c *OpenAIModelClient) Stream(
 				IsStream:      true,
 			})
 
-			// 对齐 Python: final_message = final_message + parsed_chunk
+			// Python: final_message = final_message + parsed_chunk
 			if finalMessage == nil {
 				finalMessage = chunk
 			} else {
@@ -542,7 +542,7 @@ func ExtractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
 
 // init 注册 OpenAI 和 OpenRouter 客户端到全局注册表。
 //
-// 对应 Python: OpenAIModelClient.__client_name__ = ["OpenAI", "OpenRouter"]
+// Python: OpenAIModelClient.__client_name__ = ["OpenAI", "OpenRouter"]
 // 通过 __init_subclass__ 自动注册。
 func init() {
 	registry := model_clients.GetClientRegistry()

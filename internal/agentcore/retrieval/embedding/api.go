@@ -23,7 +23,7 @@ import (
 // 支持 OpenAI 兼容的三种响应格式：embedding/embeddings/data[]。
 // 使用 net/http 标准库，无第三方依赖。
 //
-// 对应 Python: openjiuwen/core/retrieval/embedding/api_embedding.py
+// Python: openjiuwen/core/retrieval/embedding/api_embedding.py
 type APIEmbedding struct {
 	// config 嵌入配置
 	config EmbeddingConfig
@@ -38,7 +38,7 @@ type APIEmbedding struct {
 	// headers 请求头
 	headers map[string]string
 	// extraParams 额外请求参数，合并到 API payload 中。
-	// 对齐 Python **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
+	// Python: **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
 	extraParams map[string]any
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
@@ -96,7 +96,7 @@ func WithAPIHTTPClient(client *http.Client) APIEmbeddingOption {
 }
 
 // WithAPIExtraParams 设置额外请求参数，合并到 API payload 中。
-// 对齐 Python **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
+// Python: **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
 func WithAPIExtraParams(params map[string]any) APIEmbeddingOption {
 	return func(a *APIEmbedding) {
 		if a.extraParams == nil {

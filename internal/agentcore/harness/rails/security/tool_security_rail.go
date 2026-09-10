@@ -35,7 +35,7 @@ import (
 // Auto-confirm 存储在 session 状态 (INTERRUPT_AUTO_CONFIRM_KEY)。
 // 支持 bash 类工具的细粒度 auto-confirm key（如 bash:ls）。
 //
-// 对齐 Python: PermissionInterruptRail(ConfirmInterruptRail) — tool_security_rail.py L52-666
+// Python: PermissionInterruptRail(ConfirmInterruptRail) — tool_security_rail.py L52-666
 type PermissionInterruptRail struct {
 	interrupt.BaseInterruptRail
 	// staticConfig 静态权限配置
@@ -52,7 +52,7 @@ type PermissionInterruptRail struct {
 
 const (
 	// permissionInterruptRailPriority 权限中断 Rail 优先级
-	// 对齐 Python: PermissionInterruptRail.priority = 90
+	// Python: PermissionInterruptRail.priority = 90
 	permissionInterruptRailPriority = 90
 )
 
@@ -62,7 +62,7 @@ const (
 var _ agentinterfaces.AgentRail = (*PermissionInterruptRail)(nil)
 
 // toolNameAliases 工具名别名映射
-// 对齐 Python: TOOL_NAME_ALIASES (tool_security_rail.py L44-49)
+// Python: TOOL_NAME_ALIASES (tool_security_rail.py L44-49)
 var toolNameAliases = map[string]string{
 	"free_search":   "mcp_free_search",
 	"paid_search":   "mcp_paid_search",
@@ -76,7 +76,7 @@ var permRailLogComponent = logger.ComponentAgentCore
 
 // NewPermissionInterruptRail 创建权限中断护栏实例。
 //
-// 对齐 Python: PermissionInterruptRail.__init__(config, engine, tool_names, llm, model_name, host)
+// Python: PermissionInterruptRail.__init__(config, engine, tool_names, llm, model_name, host)
 func NewPermissionInterruptRail(
 	config map[string]any,
 	engine *harnesssecurity.PermissionEngine,
@@ -130,7 +130,7 @@ func NewPermissionInterruptRail(
 
 	r.WithPriority(permissionInterruptRailPriority)
 
-	// 对齐 Python: logger.info
+	// Python: logger.info
 	toolsKeys := make([]string, 0)
 	if tools, ok := r.staticConfig["tools"]; ok {
 		if m, ok := tools.(map[string]any); ok {
@@ -153,10 +153,10 @@ func NewPermissionInterruptRail(
 }
 
 // BeforeToolCall 工具调用前拦截。
-// 对齐 Python: PermissionInterruptRail.before_tool_call — 对**任意**工具名执行权限判定，
+// Python: PermissionInterruptRail.before_tool_call — 对**任意**工具名执行权限判定，
 // 不再按工具名子集短路跳过（与基类 BaseInterruptRail 不同）。
 //
-// 对齐 Python: PermissionInterruptRail.before_tool_call(ctx) (tool_security_rail.py L159-186)
+// Python: PermissionInterruptRail.before_tool_call(ctx) (tool_security_rail.py L159-186)
 func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok {
@@ -203,7 +203,7 @@ func (r *PermissionInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallba
 
 // UpdateConfig 热更新静态权限配置；可选 toolNames 仅更新基类标签集合。
 //
-// 对齐 Python: PermissionInterruptRail.update_config(config, tool_names) (tool_security_rail.py L188-204)
+// Python: PermissionInterruptRail.update_config(config, tool_names) (tool_security_rail.py L188-204)
 func (r *PermissionInterruptRail) UpdateConfig(config map[string]any, toolNames []string) {
 	if config == nil {
 		config = make(map[string]any)
@@ -244,7 +244,7 @@ func (r *PermissionInterruptRail) Engine() *harnesssecurity.PermissionEngine {
 
 // normalizeToolName 归一化工具名，使用别名映射。
 //
-// 对齐 Python: PermissionInterruptRail._normalize_tool_name(tool_name) (tool_security_rail.py L109-114)
+// Python: PermissionInterruptRail._normalize_tool_name(tool_name) (tool_security_rail.py L109-114)
 func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 	if alias, ok := toolNameAliases[toolName]; ok {
 		return alias
@@ -255,7 +255,7 @@ func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 // getAutoConfirmKey 生成保守的 session auto-confirm key。
 // 对于 bash/mcp_exec_command/create_terminal，使用 Shell AST 解析获取细粒度 key。
 //
-// 对齐 Python: PermissionInterruptRail._get_auto_confirm_key(tool_call) (tool_security_rail.py L116-128)
+// Python: PermissionInterruptRail._get_auto_confirm_key(tool_call) (tool_security_rail.py L116-128)
 func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
 		return ""
@@ -281,7 +281,7 @@ func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall
 
 // buildShellAutoConfirmKey 通过 Shell AST 解析构建细粒度 auto-confirm key。
 //
-// 对齐 Python: PermissionInterruptRail._build_shell_auto_confirm_key(tool_name, command) (tool_security_rail.py L130-147)
+// Python: PermissionInterruptRail._build_shell_auto_confirm_key(tool_name, command) (tool_security_rail.py L130-147)
 func buildShellAutoConfirmKey(toolName string, command string) string {
 	text := strings.TrimSpace(command)
 	if text == "" {
@@ -308,14 +308,14 @@ func buildShellAutoConfirmKey(toolName string, command string) string {
 
 // shouldStoreAutoConfirm 判断是否应存储 auto-confirm key 到 session。
 //
-// 对齐 Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
+// Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
 func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
 	return autoConfirm && session != nil && autoConfirmKey != "" && !persisted
 }
 
 // resolvePermissionInterrupt 权限中断解析核心逻辑。
 //
-// 对齐 Python: PermissionInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config) (tool_security_rail.py L288-504)
+// Python: PermissionInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config) (tool_security_rail.py L288-504)
 func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -442,7 +442,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				return r.Reject(fmt.Sprintf("[权限拒绝] %s（托管权限请求失败）", reason))
 			}
 
-			// 对齐 Python: if ext_out == "interrupt" → 回退到标准 interrupt 流程
+			// Python: if ext_out == "interrupt" → 回退到标准 interrupt 流程
 			if extOut.Action == harnesssecurity.ConfirmActionInterrupt {
 				logger.Info(permRailLogComponent).
 					Str("tool", toolName).
@@ -565,7 +565,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 // parseToolArgs 从 ToolCall 中提取参数字典。
 //
-// 对齐 Python: PermissionInterruptRail._parse_tool_args(tool_call) (tool_security_rail.py L506-519)
+// Python: PermissionInterruptRail._parse_tool_args(tool_call) (tool_security_rail.py L506-519)
 func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 	if toolCall == nil {
 		return map[string]any{}
@@ -585,7 +585,7 @@ func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 
 // parseConfirmPayload 解析用户输入为 PermissionConfirmResponse。
 //
-// 对齐 Python: PermissionInterruptRail._parse_confirm_payload(user_input) (tool_security_rail.py L521-549)
+// Python: PermissionInterruptRail._parse_confirm_payload(user_input) (tool_security_rail.py L521-549)
 func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmResponse {
 	switch input := userInput.(type) {
 	case *harnesssecurity.PermissionConfirmResponse:
@@ -624,7 +624,7 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 
 // confirmPathLabel 返回确认路径标签。
 //
-// 对齐 Python: PermissionInterruptRail._confirm_path_label() (tool_security_rail.py L551-552)
+// Python: PermissionInterruptRail._confirm_path_label() (tool_security_rail.py L551-552)
 func (r *PermissionInterruptRail) confirmPathLabel() string {
 	if r.host.RequestPermissionConfirmation != nil {
 		return "hosted"
@@ -634,7 +634,7 @@ func (r *PermissionInterruptRail) confirmPathLabel() string {
 
 // isPermissionAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
 //
-// 对齐 Python: PermissionInterruptRail._is_auto_confirmed(auto_confirm_config, key) (tool_security_rail.py L554-558)
+// Python: PermissionInterruptRail._is_auto_confirmed(auto_confirm_config, key) (tool_security_rail.py L554-558)
 func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 	if config == nil || key == "" {
 		return false
@@ -648,7 +648,7 @@ func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 
 // storeAutoConfirm 写入 auto_confirm 到 session 状态。
 //
-// 对齐 Python: PermissionInterruptRail._store_auto_confirm(ctx, auto_confirm_key) (tool_security_rail.py L560-567)
+// Python: PermissionInterruptRail._store_auto_confirm(ctx, auto_confirm_key) (tool_security_rail.py L560-567)
 func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackContext, autoConfirmKey string) {
 	sess := cbc.Session()
 	if sess == nil || autoConfirmKey == "" {
@@ -677,7 +677,7 @@ func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCal
 
 // resolveSession 从 cbc 中解析 session 对象。
 //
-// 对齐 Python: PermissionInterruptRail._resolve_session_id(ctx) (tool_security_rail.py L584-594)
+// Python: PermissionInterruptRail._resolve_session_id(ctx) (tool_security_rail.py L584-594)
 func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces.SessionFacade {
 	if cbc == nil {
 		return nil
@@ -687,7 +687,7 @@ func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces
 
 // collectExternalDirectoryPersistPaths 收集外部目录白名单路径。
 //
-// 对齐 Python: PermissionInterruptRail._collect_external_directory_persist_paths(...) (tool_security_rail.py L206-239)
+// Python: PermissionInterruptRail._collect_external_directory_persist_paths(...) (tool_security_rail.py L206-239)
 func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 	normalizedName string,
 	toolArgs map[string]any,
@@ -698,7 +698,7 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 	}
 
 	var workspace string
-	// 对齐 Python: try workspace resolve
+	// Python: try workspace resolve
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -727,7 +727,7 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 
 // persistAllowAlways 工具级「始终允许」与 external_directory 白名单持久化。
 //
-// 对齐 Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args) (tool_security_rail.py L241-286)
+// Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args) (tool_security_rail.py L241-286)
 func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
 	// 深拷贝当前配置
 	cfg := utils.DeepCopyMap(r.engine.Config())
@@ -774,7 +774,7 @@ func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, tool
 
 // buildMessage 构建中断消息。
 //
-// 对齐 Python: PermissionInterruptRail._build_message(tool_call, result) (tool_security_rail.py L603-628)
+// Python: PermissionInterruptRail._build_message(tool_call, result) (tool_security_rail.py L603-628)
 func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, result *harnesssecurity.PermissionResult) string {
 	toolName := ""
 	if toolCall != nil {
@@ -808,7 +808,7 @@ func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, res
 
 // buildAlwaysAllowHint 构建自动确认提示。
 //
-// 对齐 Python: PermissionInterruptRail._build_always_allow_hint(tool_call) (tool_security_rail.py L630-665)
+// Python: PermissionInterruptRail._build_always_allow_hint(tool_call) (tool_security_rail.py L630-665)
 func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
 		return ""
@@ -847,7 +847,7 @@ func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolC
 
 // formatArgsPreview 格式化工具参数预览。
 //
-// 对齐 Python: PermissionInterruptRail._format_args_preview(tool_args) (tool_security_rail.py L597-601)
+// Python: PermissionInterruptRail._format_args_preview(tool_args) (tool_security_rail.py L597-601)
 func formatArgsPreview(toolArgs map[string]any) string {
 	if toolArgs == nil {
 		return ""
@@ -889,7 +889,7 @@ func confirmPayloadSchemaForPermission() map[string]any {
 }
 
 // applyDecision 根据中断决策类型执行对应的处理逻辑。
-// 对齐 Python: BaseInterruptRail._apply_decision — 复用基类逻辑。
+// Python: BaseInterruptRail._apply_decision — 复用基类逻辑。
 func (r *PermissionInterruptRail) applyDecision(
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolInputs *agentinterfaces.ToolCallInputs,
@@ -948,7 +948,7 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 }
 
 // getUserInput 从回调上下文中提取用户输入。
-// 对齐 Python: BaseInterruptRail._get_user_input
+// Python: BaseInterruptRail._get_user_input
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
 	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
 	if !exists || rawInput == nil {

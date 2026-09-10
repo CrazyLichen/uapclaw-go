@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EntityHooks 单实体状态存储的钩子接口。
-// 对应 Python: BaseSingleStateStorage 的 _get_entity_id/_get_state_to_save/_restore_state
+// Python: BaseSingleStateStorage 的 _get_entity_id/_get_state_to_save/_restore_state
 // Go 不支持虚方法分派，通过接口注入实现模板方法模式。
 type EntityHooks interface {
 	// GetEntityID 获取实体 ID（Agent 返回 agentID，AgentTeam 返回 teamID）
@@ -36,7 +36,7 @@ type EntityHooks interface {
 // 通过 EntityHooks 注入实现 Python 模板方法模式。
 // Save/Recover/Clear/Exists 为固定骨架，通过 hooks 调用子类逻辑。
 //
-// 对应 Python: persistence.py (BaseSingleStateStorage)
+// Python: persistence.py (BaseSingleStateStorage)
 type basePersistenceStorage struct {
 	// kvStore KV 存储后端
 	kvStore kv.BaseKVStore
@@ -61,20 +61,20 @@ type agentEntityHooks struct{}
 type agentTeamEntityHooks struct{}
 
 // PersistenceAgentStorage Agent 持久化状态存储。
-// 对应 Python: persistence.py (AgentStorage)
+// Python: persistence.py (AgentStorage)
 type PersistenceAgentStorage struct {
 	basePersistenceStorage
 }
 
 // PersistenceAgentTeamStorage AgentTeam 持久化状态存储。
-// 对应 Python: persistence.py (AgentTeamStorage)
+// Python: persistence.py (AgentTeamStorage)
 type PersistenceAgentTeamStorage struct {
 	basePersistenceStorage
 }
 
 // PersistenceWorkflowStorage Workflow 持久化状态存储。
 // 独立于 basePersistenceStorage，因为需要同时保存 state + updates 两类数据（4 个 key）。
-// 对应 Python: persistence.py (WorkflowStorage)
+// Python: persistence.py (WorkflowStorage)
 type PersistenceWorkflowStorage struct {
 	// kvStore KV 存储后端
 	kvStore kv.BaseKVStore
@@ -83,7 +83,7 @@ type PersistenceWorkflowStorage struct {
 }
 
 // PersistenceCheckpointer 持久化检查点器，所有状态存储在 BaseKVStore 中。
-// 对应 Python: persistence.py (PersistenceCheckpointer)
+// Python: persistence.py (PersistenceCheckpointer)
 type PersistenceCheckpointer struct {
 	// kvStore KV 存储后端
 	kvStore kv.BaseKVStore
@@ -99,7 +99,7 @@ type PersistenceCheckpointer struct {
 }
 
 // persistenceProvider Persistence 检查点器提供者。
-// 对应 Python: PersistenceCheckpointerProvider
+// Python: PersistenceCheckpointerProvider
 type persistenceProvider struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -154,7 +154,7 @@ func (h *agentEntityHooks) GetStateToSave(session interfaces.InnerSession) any {
 }
 
 // RestoreState 实现 EntityHooks 接口。
-// 对齐 Python: AgentStorage._restore_state → session.state().set_state(state)
+// Python: AgentStorage._restore_state → session.state().set_state(state)
 // 返回 error 对齐 Python 的 try/except + raise 异常传播
 func (h *agentEntityHooks) RestoreState(session interfaces.InnerSession, savedState any) error {
 	if session.State() == nil || savedState == nil {
@@ -174,7 +174,7 @@ func (h *agentTeamEntityHooks) GetEntityID(session interfaces.InnerSession) stri
 }
 
 // GetStateToSave 实现 EntityHooks 接口。
-// 对齐 Python: AgentTeamStorage._get_state_to_save → session.state().get_global(None)
+// Python: AgentTeamStorage._get_state_to_save → session.state().get_global(None)
 func (h *agentTeamEntityHooks) GetStateToSave(session interfaces.InnerSession) any {
 	if session.State() == nil {
 		return nil
@@ -183,7 +183,7 @@ func (h *agentTeamEntityHooks) GetStateToSave(session interfaces.InnerSession) a
 }
 
 // RestoreState 实现 EntityHooks 接口。
-// 对齐 Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
+// Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
 // 返回 error 对齐 Python 的 try/except + raise 异常传播
 func (h *agentTeamEntityHooks) RestoreState(session interfaces.InnerSession, savedState any) error {
 	if session.State() == nil || savedState == nil {
@@ -198,7 +198,7 @@ func (h *agentTeamEntityHooks) RestoreState(session interfaces.InnerSession, sav
 }
 
 // Save 保存会话状态到 KVStore。
-// 对应 Python: BaseSingleStateStorage.save()
+// Python: BaseSingleStateStorage.save()
 func (s *basePersistenceStorage) Save(ctx context.Context, session interfaces.InnerSession) error {
 	savedState := s.hooks.GetStateToSave(session)
 	sessionID := session.SessionID()
@@ -241,7 +241,7 @@ func (s *basePersistenceStorage) Save(ctx context.Context, session interfaces.In
 }
 
 // Recover 从 KVStore 恢复会话状态。
-// 对应 Python: BaseSingleStateStorage.recover()
+// Python: BaseSingleStateStorage.recover()
 func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces.InnerSession, _ any) error {
 	sessionID := session.SessionID()
 	entityID := s.hooks.GetEntityID(session)
@@ -280,7 +280,7 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 	}
 
 	if err := s.hooks.RestoreState(session, loadedState); err != nil {
-		// 对齐 Python: except Exception as e: session_logger.error(...) + raise
+		// Python: except Exception as e: session_logger.error(...) + raise
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "checkpoint_restore").
 			Str("session_id", sessionID).
@@ -339,7 +339,7 @@ func (s *basePersistenceStorage) Exists(ctx context.Context, session interfaces.
 }
 
 // Save 保存工作流状态到 KVStore。
-// 对应 Python: WorkflowStorage.save()
+// Python: WorkflowStorage.save()
 func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfaces.InnerSession) error {
 	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
@@ -409,7 +409,7 @@ func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfac
 }
 
 // Recover 从 KVStore 恢复工作流状态。
-// 对应 Python: WorkflowStorage.recover()
+// Python: WorkflowStorage.recover()
 func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
@@ -460,7 +460,7 @@ func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session inter
 	}
 
 	// 处理交互输入
-	// 对齐 Python: if inputs is not None: self._process_interactive_inputs(session, inputs)
+	// Python: if inputs is not None: self._process_interactive_inputs(session, inputs)
 	if ii, ok := inputs.(*interaction.InteractiveInput); ok {
 		ws.processInteractiveInputs(session, ii)
 	}
@@ -530,7 +530,7 @@ func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session interf
 		return false, err
 	}
 
-	// 对齐 Python _KEY_NUMS = 4（state×2 + updates×2）
+	// Python: _KEY_NUMS = 4（state×2 + updates×2）
 	if len(results) != wfKeyNums {
 		return false, nil
 	}
@@ -541,7 +541,7 @@ func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session interf
 }
 
 // PreAgentExecute Agent 执行前恢复状态。
-// 对应 Python: PersistenceCheckpointer.pre_agent_execute()
+// Python: PersistenceCheckpointer.pre_agent_execute()
 func (cp *PersistenceCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -576,7 +576,7 @@ func (cp *PersistenceCheckpointer) PreAgentExecute(ctx context.Context, session 
 }
 
 // PreAgentTeamExecute AgentTeam 执行前恢复状态。
-// 对应 Python: PersistenceCheckpointer.pre_agent_team_execute()
+// Python: PersistenceCheckpointer.pre_agent_team_execute()
 func (cp *PersistenceCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
@@ -607,7 +607,7 @@ func (cp *PersistenceCheckpointer) PreAgentTeamExecute(ctx context.Context, sess
 }
 
 // InterruptAgentExecute Agent 中断时保存检查点。
-// 对应 Python: PersistenceCheckpointer.interrupt_agent_execute()
+// Python: PersistenceCheckpointer.interrupt_agent_execute()
 func (cp *PersistenceCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -635,7 +635,7 @@ func (cp *PersistenceCheckpointer) InterruptAgentExecute(ctx context.Context, se
 }
 
 // PostAgentExecute Agent 执行后保存检查点。
-// 对应 Python: PersistenceCheckpointer.post_agent_execute()
+// Python: PersistenceCheckpointer.post_agent_execute()
 func (cp *PersistenceCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -663,7 +663,7 @@ func (cp *PersistenceCheckpointer) PostAgentExecute(ctx context.Context, session
 }
 
 // PostAgentTeamExecute AgentTeam 执行后保存检查点。
-// 对应 Python: PersistenceCheckpointer.post_agent_team_execute()
+// Python: PersistenceCheckpointer.post_agent_team_execute()
 func (cp *PersistenceCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
@@ -691,7 +691,7 @@ func (cp *PersistenceCheckpointer) PostAgentTeamExecute(ctx context.Context, ses
 }
 
 // PreWorkflowExecute 工作流执行前处理检查点。
-// 对应 Python: PersistenceCheckpointer.pre_workflow_execute()
+// Python: PersistenceCheckpointer.pre_workflow_execute()
 func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
@@ -732,7 +732,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 					Str("storage_type", "persistence").
 					Msg("强制清除当前工作流所有检查点")
 
-				// 对齐 Python: if workflow_id is None: logger.warning(...) return
+				// Python: if workflow_id is None: logger.warning(...) return
 				if workflowID == "" {
 					logger.Warn(logComponent).
 						Str("event_type", "checkpoint_error").
@@ -757,7 +757,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 }
 
 // PostWorkflowExecute 工作流执行后处理检查点。
-// 对应 Python: PersistenceCheckpointer.post_workflow_execute()
+// Python: PersistenceCheckpointer.post_workflow_execute()
 func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
@@ -814,7 +814,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 }
 
 // SessionExists 检查会话是否存在。
-// 对应 Python: PersistenceCheckpointer.session_exists()
+// Python: PersistenceCheckpointer.session_exists()
 func (cp *PersistenceCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	if cp.kvStore == nil {
 		return false, nil
@@ -829,7 +829,7 @@ func (cp *PersistenceCheckpointer) SessionExists(ctx context.Context, sessionID 
 }
 
 // Release 释放会话资源。
-// 对应 Python: PersistenceCheckpointer.release()
+// Python: PersistenceCheckpointer.release()
 // agentID 非空时仅释放指定 Agent 的持久化检查点（支持多个，循环清除）；为空时释放整个会话。
 func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	if len(agentID) > 0 {
@@ -886,7 +886,7 @@ func (cp *PersistenceCheckpointer) GraphStore() any {
 }
 
 // Create 创建 Persistence 检查点器。
-// 对应 Python: PersistenceCheckpointerProvider.create()
+// Python: PersistenceCheckpointerProvider.create()
 //
 // 配置项（对齐 Python conf 字典）：
 //   - db_type:   存储后端类型，当前仅支持 "sqlite"（默认 "sqlite"），Python 额外支持 "shelve"

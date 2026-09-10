@@ -19,7 +19,7 @@ import (
 // 提供文本、消息列表和工具定义的 Token 计数能力。
 // 初始化时按模型名称选定 encoding，初始化失败时降级为 len(text)//4。
 //
-// 对应 Python: openjiuwen/core/context_engine/token/tiktoken_counter.py (TiktokenCounter)
+// Python: openjiuwen/core/context_engine/token/tiktoken_counter.py (TiktokenCounter)
 type TiktokenCounter struct {
 	// enc tiktoken 编码器实例，初始化失败时为 nil
 	enc tokenizer.Codec
@@ -45,7 +45,7 @@ const logComponent = logger.ComponentAgentCore
 
 // model2enc 模型名称到 tiktoken 编码名称的映射表。
 //
-// 对齐 Python: TiktokenCounter._MODEL2ENC。
+// Python: TiktokenCounter._MODEL2ENC。
 // tokenizer.ForModel() 内置了更完整的映射，此表用于明确对齐 Python 端的映射关系，
 // 以及覆盖 ForModel 不支持的模型名（如 "text-embedding-3-small"/"text-embedding-3-large"）。
 var model2enc = map[string]tokenizer.Encoding{
@@ -66,7 +66,7 @@ var model2enc = map[string]tokenizer.Encoding{
 // model 为模型名称，用于选择对应的 encoding；空字符串默认使用 "gpt-4"。
 // 初始化失败时 enc 为 nil，后续计数降级为 len(text)//4。
 //
-// 对应 Python: TiktokenCounter(model="gpt-4")
+// Python: TiktokenCounter(model="gpt-4")
 func NewTiktokenCounter(model string) *TiktokenCounter {
 	if model == "" {
 		model = defaultModel
@@ -120,7 +120,7 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 // 返回 (count, error)：计数成功时 error 为 nil，count 为 token 数；
 // 编码器不可用（enc 为 nil）时返回 (0, error)，由调用方决定是否降级。
 //
-// 对应 Python: TiktokenCounter.count(text, model="")
+// Python: TiktokenCounter.count(text, model="")
 func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
 	if tc.enc == nil {
 		return 0, fmt.Errorf("tiktoken 编码器未初始化（模型: %s），无法计算 token", tc.model)
@@ -145,7 +145,7 @@ func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
 // AssistantMessage 额外序列化 ToolCalls 计入 token，末尾 +3 tokens。
 // 内部调用 Count，若编码器不可用则返回 (0, error)。
 //
-// 对应 Python: TiktokenCounter.count_messages(messages, model="")
+// Python: TiktokenCounter.count_messages(messages, model="")
 func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, model string) (int, error) {
 	if len(messages) == 0 {
 		return 0, nil
@@ -181,7 +181,7 @@ func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, mode
 // 按格式 <|start|>functions.{name}:{idx}\n{json}<|end|> 计数，末尾 +3 tokens。
 // 内部调用 Count，若编码器不可用则返回 (0, error)。
 //
-// 对应 Python: TiktokenCounter.count_tools(tools, model="")
+// Python: TiktokenCounter.count_tools(tools, model="")
 func (tc *TiktokenCounter) CountTools(tools []common_schema.ToolInfoInterface, model string) (int, error) {
 	if len(tools) == 0 {
 		return 0, nil
@@ -214,7 +214,7 @@ func (tc *TiktokenCounter) CountTools(tools []common_schema.ToolInfoInterface, m
 // fallbackCount 降级 token 计算：len(text)//4。
 //
 // 只在首次调用时输出警告日志（通过 fallbackWarned 标志控制），
-// 对齐 Python: TiktokenCounter.count() 中的 fallback 逻辑。
+// Python: TiktokenCounter.count() 中的 fallback 逻辑。
 func (tc *TiktokenCounter) fallbackCount(text string) int {
 	tc.mu.Lock()
 	if !tc.fallbackWarned {

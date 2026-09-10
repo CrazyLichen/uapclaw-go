@@ -28,7 +28,7 @@ import (
 // 提供：SDK 适配器路由、统一对外 API、公共编排
 // （session 队列、Skills 路由、heartbeat、流式包装）。
 //
-// 对齐 Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
+// Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
 type UapClaw struct {
 	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
 	adapter adapter.AgentAdapter
@@ -99,7 +99,7 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 
 // NewUapClaw 创建 UapClaw 实例。
 //
-// 对齐 Python: JiuWenClaw.__init__()
+// Python: JiuWenClaw.__init__()
 func NewUapClaw() *UapClaw {
 	return &UapClaw{
 		sessionManager:     session.NewSessionManager(),
@@ -110,9 +110,9 @@ func NewUapClaw() *UapClaw {
 
 // ProcessMessage 处理非流式 Agent 请求。
 //
-// 对齐 Python: JiuWenClaw.process_message(request)
+// Python: JiuWenClaw.process_message(request)
 func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// 对齐 Python logger.info：请求日志
+	// Python: logger.info：请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
 		sessionIDForLog = *request.SessionID
@@ -223,7 +223,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	// 记录 assistant 历史
 	if resp.OK {
 		content := uc.extractResponseContent(resp)
-		// 对齐 Python：补传 extra 和 mode
+		// Python: 补传 extra 和 mode
 		assistantMode := ""
 		if p := parseRequestParams(request); p != nil {
 			if m, ok := p["mode"].(string); ok {
@@ -266,9 +266,9 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 
 // ProcessMessageStream 处理流式 Agent 请求。
 //
-// 对齐 Python: JiuWenClaw.process_message_stream(request)
+// Python: JiuWenClaw.process_message_stream(request)
 func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
-	// 对齐 Python logger.info：流式请求日志
+	// Python: logger.info：流式请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
 		sessionIDForLog = *request.SessionID
@@ -362,11 +362,11 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		defer close(streamDone)
 		chunkCh, streamErr := a.ProcessMessageStreamImpl(ctx, request, inputs)
 		if streamErr != nil {
-			// 对齐 Python except asyncio.CancelledError：取消不作为错误
+			// Python: except asyncio.CancelledError：取消不作为错误
 			if streamErr == context.Canceled || streamErr == context.DeadlineExceeded {
 				return
 			}
-			// 对齐 Python: append_history_record(event_type="chat.error", ...)
+			// Python: append_history_record(event_type="chat.error", ...)
 			errMode := ""
 			if p := parseRequestParams(request); p != nil {
 				if m, ok := p["mode"].(string); ok {
@@ -405,7 +405,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 				if payload := chunk.Payload; payload != nil {
 					if eventType, _ := payload["event_type"].(string); eventType != "" {
 						if shouldRecordHistory(eventType) {
-							// 对齐 Python：补传 mode
+							// Python: 补传 mode
 							streamMode := ""
 							if p := parseRequestParams(request); p != nil {
 								if m, ok := p["mode"].(string); ok {
@@ -415,7 +415,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 							if streamMode == "" {
 								streamMode = "unknown"
 							}
-							// 对齐 Python: team.message 展开 event 字段到 extra
+							// Python: team.message 展开 event 字段到 extra
 							var extraFields map[string]any
 							if eventType == "team.message" {
 								if event, ok := payload["event"]; ok {
@@ -433,7 +433,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
 								eventType, extraFields, nil, streamMode)
 						}
-						// 对齐 Python: context_compression_state 事件写入 compact history
+						// Python: context_compression_state 事件写入 compact history
 						if eventType == "context_compression_state" {
 							compMode := ""
 							if p := parseRequestParams(request); p != nil {
@@ -517,7 +517,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 
 // ProcessInterrupt 处理中断请求。
 //
-// 对齐 Python: JiuWenClaw._process_interrupt(request)
+// Python: JiuWenClaw._process_interrupt(request)
 func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	intent := uc.extractIntent(request)
 	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
@@ -554,7 +554,7 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 }
 
 // GetContextUsage 获取上下文使用量。
-// 对齐 Python: JiuWenClaw.get_context_usage(session_id) → adapter.GetContextUsage
+// Python: JiuWenClaw.get_context_usage(session_id) → adapter.GetContextUsage
 func (uc *UapClaw) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
@@ -568,7 +568,7 @@ func (uc *UapClaw) GetContextUsage(ctx context.Context, sessionID string) (map[s
 }
 
 // CompressContext 压缩上下文。
-// 对齐 Python: JiuWenClaw.compress_context(session_id, return_state=True) → adapter.CompressContext
+// Python: JiuWenClaw.compress_context(session_id, return_state=True) → adapter.CompressContext
 func (uc *UapClaw) CompressContext(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
@@ -584,7 +584,7 @@ func (uc *UapClaw) CompressContext(ctx context.Context, sessionID string) (map[s
 }
 
 // GenerateRecap 生成会话回顾。
-// 对齐 Python: JiuWenClaw.generate_recap(session_id) → adapter.GenerateRecap
+// Python: JiuWenClaw.generate_recap(session_id) → adapter.GenerateRecap
 func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
@@ -600,7 +600,7 @@ func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[str
 // SwitchMode 切换运行模式，执行完整的 session 生命周期。
 // 流程：preRun → switchMode → loadState → updateState → postRun
 //
-// 对应 Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
+// Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) error {
 	if uc.adapter == nil {
 		return nil
@@ -610,7 +610,7 @@ func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) er
 
 // CreateInstance 创建 Agent 实例。
 //
-// 对齐 Python: JiuWenClaw.create_instance(config=None, *, mode="agent", sub_mode=None)
+// Python: JiuWenClaw.create_instance(config=None, *, mode="agent", sub_mode=None)
 func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 	cfg := defaultCreateInstanceConfig()
 	for _, o := range opts {
@@ -642,7 +642,7 @@ func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 
 // ReloadAgentConfig 重载 Agent 配置。
 //
-// 对齐 Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
+// Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
 func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
 	uc.adapterMu.Lock()
 	a := uc.adapter
@@ -670,7 +670,7 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 
 // CancelInflightWork 取消在途任务。
 //
-// 对齐 Python: JiuWenClaw.cancel_inflight_work(log_prefix)
+// Python: JiuWenClaw.cancel_inflight_work(log_prefix)
 func (uc *UapClaw) CancelInflightWork(reason string) error {
 	_ = uc.sessionManager.CancelAllSessionTasks(context.Background(), reason)
 	uc.adapterMu.Lock()
@@ -679,7 +679,7 @@ func (uc *UapClaw) CancelInflightWork(reason string) error {
 	if a == nil {
 		return nil
 	}
-	// 对齐 Python: abort_fn = getattr(adapter, "abort_on_gateway_disconnect", None)
+	// Python: abort_fn = getattr(adapter, "abort_on_gateway_disconnect", None)
 	if aborter, ok := a.(interface {
 		AbortOnGatewayDisconnect(ctx context.Context) error
 	}); ok {
@@ -694,7 +694,7 @@ func (uc *UapClaw) CancelInflightWork(reason string) error {
 
 // Cleanup 清理资源。
 //
-// 对齐 Python: JiuWenClaw.cleanup()
+// Python: JiuWenClaw.cleanup()
 func (uc *UapClaw) Cleanup() error {
 	uc.adapterMu.Lock()
 	a := uc.adapter
@@ -708,7 +708,7 @@ func (uc *UapClaw) Cleanup() error {
 
 // GetInstance 获取底层 DeepAgent 实例。
 //
-// 对齐 Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
+// Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
 func (uc *UapClaw) GetInstance() *harness.DeepAgent { return nil }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
@@ -724,7 +724,7 @@ func defaultCreateInstanceConfig() createInstanceConfig {
 }
 
 // isTeamMode 判断请求是否为 Team 模式。
-// 对齐 Python: is_team_mode = team_flag or (mode in {"team", "team.plan", "code.team"})
+// Python: is_team_mode = team_flag or (mode in {"team", "team.plan", "code.team"})
 func isTeamMode(request *schema.AgentRequest) bool {
 	params := parseRequestParams(request)
 	if teamFlag, ok := params["team"].(bool); ok && teamFlag {
@@ -738,7 +738,7 @@ func isTeamMode(request *schema.AgentRequest) bool {
 }
 
 // isAutoHarnessResume 判断请求是否为 Auto-Harness resume。
-// 对齐 Python: is_auto_harness_resume = mode == "auto_harness" and isinstance(activate_response, dict)
+// Python: is_auto_harness_resume = mode == "auto_harness" and isinstance(activate_response, dict)
 func isAutoHarnessResume(request *schema.AgentRequest) bool {
 	params := parseRequestParams(request)
 	if mode, ok := params["mode"].(string); ok {
@@ -752,7 +752,7 @@ func isAutoHarnessResume(request *schema.AgentRequest) bool {
 }
 
 // processTeamInterrupt 处理 Team 模式中断请求。
-// 对齐 Python: JiuWenClaw._process_team_interrupt()
+// Python: JiuWenClaw._process_team_interrupt()
 func (uc *UapClaw) processTeamInterrupt(
 	ctx context.Context,
 	request *schema.AgentRequest,
@@ -761,7 +761,7 @@ func (uc *UapClaw) processTeamInterrupt(
 ) (*schema.AgentResponse, error) {
 	switch intent {
 	case "resume":
-		// 对齐 Python: resume 直接返回提示信息
+		// Python: resume 直接返回提示信息
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(true),
 			schema.WithResponsePayload(map[string]any{
@@ -826,7 +826,7 @@ func (uc *UapClaw) processTeamInterrupt(
 }
 
 // cancelTeamWorkForSession 终止当前 session 的 Team runtime（若存在）。
-// 对齐 Python: JiuWenClaw._cancel_team_work_for_session()
+// Python: JiuWenClaw._cancel_team_work_for_session()
 func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
 	// ⤵️ 10.6.19-23: get_team_manager + terminate_session_runtime
 	// T09: CodeAdapter 缺少 configure_team_member_agent，Team 模式下 code 成员 Agent 无法正确配置
@@ -874,7 +874,7 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 
 // ensureSkillDevService 确保 SkillDevService 已初始化，幂等。
 //
-// 对齐 Python：JiuWenClaw 中 _skilldev_service 在首次使用时懒初始化。
+// Python: JiuWenClaw 中 _skilldev_service 在首次使用时懒初始化。
 func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	uc.skilldevMu.Lock()
 	defer uc.skilldevMu.Unlock()
@@ -891,7 +891,7 @@ func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 }
 
 // adapterModeForRequest 从请求参数中提取 adapter mode。
-// 对齐 Python _adapter_mode_for_request：strip+lower + team.plan→code + code.*→code。
+// Python: _adapter_mode_for_request：strip+lower + team.plan→code + code.*→code。
 func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if modeVal, ok := params["mode"]; ok {
@@ -966,12 +966,12 @@ func extractChunkContent(payload map[string]any) string {
 }
 
 // shouldRecordHistory 判断 event_type 是否需要记录到 history。
-// 对齐 Python: should_record = et.startswith("chat.") or et == "team.message"
+// Python: should_record = et.startswith("chat.") or et == "team.message"
 func shouldRecordHistory(eventType string) bool {
 	if strings.HasPrefix(eventType, "chat.") {
 		return true
 	}
-	// 对齐 Python: team.message 也记录 history
+	// Python: team.message 也记录 history
 	return eventType == "team.message"
 }
 
@@ -980,7 +980,7 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 	if uc.skillManager == nil {
 		return nil, nil
 	}
-	// 对齐 Python：有 pending 的 skillnet_install 时，阻止其他 skills 操作
+	// Python: 有 pending 的 skillnet_install 时，阻止其他 skills 操作
 	if uc.skillManager.HasPendingSkillnetInstall() {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
@@ -1002,7 +1002,7 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 		return nil, err
 	}
 	// 若方法需要重建 Agent 实例
-	// 对齐 Python: skillnet_install 且 pending 时不重建，等安装完成回调触发
+	// Python: skillnet_install 且 pending 时不重建，等安装完成回调触发
 	if skill.NeedsRebuild(request.ReqMethod) {
 		if request.ReqMethod == schema.ReqMethodSkillsSkillnetInstall {
 			if pending, _ := result["pending"].(bool); pending {

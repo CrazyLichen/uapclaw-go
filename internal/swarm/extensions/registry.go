@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentServerClientExtension AgentServerClient 扩展本地接口
-// 对齐 Python AgentServerClientExtension（在 sdk 包定义），此处为打破循环依赖的等价接口
+// Python: AgentServerClientExtension（在 sdk 包定义），此处为打破循环依赖的等价接口
 // 与 sdk.AgentServerClientExtension 方法签名完全一致，任何实现 sdk 接口的类型也满足此接口
 type AgentServerClientExtension interface {
 	// Initialize 扩展初始化，对齐 Python initialize(config: ExtensionConfig)
@@ -28,7 +28,7 @@ type AgentServerClientExtension interface {
 }
 
 // CryptoUtilityExtension CryptoUtility 扩展本地接口
-// 对齐 Python CryptoUtility（在 sdk 包定义），此处为打破循环依赖的等价接口
+// Python: CryptoUtility（在 sdk 包定义），此处为打破循环依赖的等价接口
 // ⤵️ 10.5.10 延后：GetCrypto 返回类型待定为 CryptoProvider 接口
 type CryptoUtilityExtension interface {
 	Initialize(ctx context.Context, config *ExtensionConfig) error
@@ -71,7 +71,7 @@ func GetInstance() *ExtensionRegistry {
 }
 
 // GetInstanceErr 获取 ExtensionRegistry 单例，带错误返回
-// 对齐 Python ExtensionRegistry.get_instance() 的 RuntimeError 行为
+// Python: ExtensionRegistry.get_instance() 的 RuntimeError 行为
 func GetInstanceErr() (*ExtensionRegistry, error) {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
@@ -119,7 +119,7 @@ func (r *ExtensionRegistry) RegisterCryptoUtility(ext CryptoUtilityExtension) {
 }
 
 // GetAgentServerClientExtension 获取 AgentServerClient 扩展实例，
-// 对齐 Python get_agent_server_client_extension()
+// Python: get_agent_server_client_extension()
 func (r *ExtensionRegistry) GetAgentServerClientExtension() AgentServerClientExtension {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -127,7 +127,7 @@ func (r *ExtensionRegistry) GetAgentServerClientExtension() AgentServerClientExt
 }
 
 // GetAgentServerClient 获取底层 AgentTransport 客户端，
-// 对齐 Python get_agent_server_client()
+// Python: get_agent_server_client()
 // Python 返回 AgentServerClient，Go 返回 transport.AgentTransport（对齐规则 6）
 func (r *ExtensionRegistry) GetAgentServerClient() transport.AgentTransport {
 	r.mu.RLock()
@@ -139,7 +139,7 @@ func (r *ExtensionRegistry) GetAgentServerClient() transport.AgentTransport {
 }
 
 // GetCryptoUtilityExtension 获取 CryptoUtility 扩展实例，
-// 对齐 Python get_crypto_utility_extension()
+// Python: get_crypto_utility_extension()
 // ⤵️ 10.5.10 延后：当前始终返回 nil
 func (r *ExtensionRegistry) GetCryptoUtilityExtension() CryptoUtilityExtension {
 	r.mu.RLock()

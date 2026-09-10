@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PresentedRecordEntry 展示记录条目。
-// 对应 Python: tuple[str, EvolutionRecord, str]
+// Python: tuple[str, EvolutionRecord, str]
 type PresentedRecordEntry struct {
 	// SkillName 技能名称
 	SkillName string
@@ -24,7 +24,7 @@ type PresentedRecordEntry struct {
 }
 
 // ExperienceTracker 展示经验追踪器。
-// 对应 Python: ExperienceTracker
+// Python: ExperienceTracker
 type ExperienceTracker struct {
 	// store 所属的 EvolutionStore
 	store *checkpointing.EvolutionStore
@@ -36,7 +36,7 @@ type ExperienceTracker struct {
 
 // RecordScoreUpdate 单条记录的评分更新数据。
 //
-// 对应 Python: update_record_scores 中内层 dict {"score": ..., "usage_stats": ...}
+// Python: update_record_scores 中内层 dict {"score": ..., "usage_stats": ...}
 type RecordScoreUpdate struct {
 	// Score 新评分
 	Score float64
@@ -51,11 +51,11 @@ type RecordScoreUpdate struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // sessionPresentedRecords 包级 map，sessionID → 展示记录条目列表。
-// 对应 Python: session._experience_tracker_presented_records
+// Python: session._experience_tracker_presented_records
 var sessionPresentedRecords = map[string][]PresentedRecordEntry{}
 
 // sessionEvalCounter 包级 map，sessionID → 评估计数器。
-// 对应 Python: session._experience_tracker_eval_counter
+// Python: session._experience_tracker_eval_counter
 var sessionEvalCounter = map[string]int{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -74,7 +74,7 @@ func NewExperienceTracker(
 }
 
 // RecordPresented 记录展示的 BODY 经验。
-// 对应 Python: ExperienceTracker.record_presented()
+// Python: ExperienceTracker.record_presented()
 func (t *ExperienceTracker) RecordPresented(
 	ctx context.Context,
 	sessionID string,
@@ -151,7 +151,7 @@ func (t *ExperienceTracker) RecordPresented(
 }
 
 // RecordPresentedRecords 记录显式展示的经验记录。
-// 对应 Python: ExperienceTracker.record_presented_records()
+// Python: ExperienceTracker.record_presented_records()
 func (t *ExperienceTracker) RecordPresentedRecords(
 	ctx context.Context,
 	sessionID string,
@@ -230,7 +230,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 }
 
 // ConsumeEvalState 消费评估状态（达到评估间隔时返回记录列表）。
-// 对应 Python: ExperienceTracker.consume_eval_state()
+// Python: ExperienceTracker.consume_eval_state()
 func (t *ExperienceTracker) ConsumeEvalState(sessionID string) []PresentedRecordEntry {
 	counter := sessionEvalCounter[sessionID]
 	counter++
@@ -247,7 +247,7 @@ func (t *ExperienceTracker) ConsumeEvalState(sessionID string) []PresentedRecord
 }
 
 // EvaluatePresented 评估展示的经验并更新评分。
-// 对应 Python: ExperienceTracker.evaluate_presented()
+// Python: ExperienceTracker.evaluate_presented()
 func (t *ExperienceTracker) EvaluatePresented(
 	ctx context.Context,
 	presentedEntries []PresentedRecordEntry,
@@ -256,7 +256,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 		return nil
 	}
 
-	// 对齐 Python: 按 (skill_name, snippet) 分组
+	// Python: 按 (skill_name, snippet) 分组
 	bySkillSnippet := map[string]map[string][]checkpointing.EvolutionRecord{} // 技能名 → 片段 → 记录
 	for _, entry := range presentedEntries {
 		snippets, ok := bySkillSnippet[entry.SkillName]
@@ -350,7 +350,7 @@ func filterBodyRecords(records []checkpointing.EvolutionRecord) []checkpointing.
 }
 
 // isBodyRecord 判断是否为 BODY 类型记录。
-// 对应 Python: ExperienceTracker._is_body_record()
+// Python: ExperienceTracker._is_body_record()
 func isBodyRecord(record *checkpointing.EvolutionRecord) bool {
 	return record.Change.Target == signal.EvolutionTargetBody
 }

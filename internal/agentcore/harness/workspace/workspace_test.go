@@ -885,7 +885,7 @@ func TestListTeamLinks_多个链接(t *testing.T) {
 }
 
 // TestResolveCodingMemoryDir 测试从 workspace 解析 coding_memory 目录路径。
-// 对齐 Python _resolve_coding_memory_dir(workspace) (code_agent.py)
+// Python: _resolve_coding_memory_dir(workspace) (code_agent.py)
 func TestResolveCodingMemoryDir(t *testing.T) {
 	t.Parallel()
 

@@ -13,7 +13,7 @@ import (
 // 本实现适用于所有 GORM 支持的数据库（SQLite、PostgreSQL、MySQL 等），
 // 调用方负责创建和管理 *gorm.DB 的生命周期，DefaultDbStore 不提供 Close 方法。
 //
-// 对应 Python: openjiuwen/core/foundation/store/db/default_db_store.py
+// Python: openjiuwen/core/foundation/store/db/default_db_store.py
 type DefaultDbStore struct {
 	// db GORM 数据库实例
 	db *gorm.DB

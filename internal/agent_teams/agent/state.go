@@ -4,7 +4,7 @@ package agent
 
 // TeamAgentState TeamAgent 可变运行时状态。
 // 四象限分解的第二象限：运行时可变值，跨 Manager 共享。
-// 对齐 Python: TeamAgentState (openjiuwen/agent_teams/agent/state.py)
+// Python: TeamAgentState (openjiuwen/agent_teams/agent/state.py)
 //
 // 注意：session_id 不在此处保存。
 // session_id 的唯一真实来源是 agent_teams contextvar

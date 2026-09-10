@@ -21,7 +21,7 @@ import (
 
 // StreamableHttpClient Streamable HTTP 传输的 MCP 客户端。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/streamable_http_client.py (StreamableHttpClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/streamable_http_client.py (StreamableHttpClient)
 type StreamableHttpClient struct {
 	// config MCP 服务器配置
 	config *types.McpServerConfig

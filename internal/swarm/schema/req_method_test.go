@@ -154,7 +154,7 @@ func TestReqMethodJSON序列化往返(t *testing.T) {
 
 // TestReqMethod常量值与Python对齐 验证核心常量字符串值与 Python ReqMethod 完全对齐
 func TestReqMethod常量值与Python对齐(t *testing.T) {
-	// 对应 Python: jiuwenswarm/common/schema/message.py (ReqMethod)
+	// Python: jiuwenswarm/common/schema/message.py (ReqMethod)
 	tests := []struct {
 		got  ReqMethod
 		want string

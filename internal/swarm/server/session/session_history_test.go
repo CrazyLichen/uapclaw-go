@@ -237,7 +237,7 @@ func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
 	sessionsDir := GetSessionsDir()
 	os.MkdirAll(filepath.Join(sessionsDir, "sess-compact-test2"), 0o755)
 
-	// 对齐 Python payload 结构：需要 compact_summary 和 status=success
+	// Python: payload 结构：需要 compact_summary 和 status=success
 	payload := map[string]any{
 		"event_type":      "context_compression_state",
 		"compact_summary": "自动压缩结果",
@@ -257,7 +257,7 @@ func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
 }
 
 // TestReadHistoryRecords_损坏JSON返回空列表 验证损坏的 history.json 不返回 error，
-// 对齐 Python _read_history: 读取失败时 log.Warn + 返回空列表
+// Python: _read_history: 读取失败时 log.Warn + 返回空列表
 func TestReadHistoryRecords_损坏JSON返回空列表(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
@@ -278,7 +278,7 @@ func TestReadHistoryRecords_损坏JSON返回空列表(t *testing.T) {
 }
 
 // TestTruncateHistoryRecords_异步写入后截断不被覆盖 验证截断前先刷盘，
-// 对齐 Python truncate_history_records: _WRITE_QUEUE.join() 后再截断
+// Python: truncate_history_records: _WRITE_QUEUE.join() 后再截断
 func TestTruncateHistoryRecords_异步写入后截断不被覆盖(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
@@ -293,7 +293,7 @@ func TestTruncateHistoryRecords_异步写入后截断不被覆盖(t *testing.T) 
 	AppendHistoryRecord(sessionID, "r2", "web", "user", "第二条", 2.0, "", nil, nil, "")
 
 	// 截断到索引 1，保留第一条
-	// 对齐 Python: truncate_history_records 先 _WRITE_QUEUE.join() 刷盘再截断
+	// Python: truncate_history_records 先 _WRITE_QUEUE.join() 刷盘再截断
 	result, err := TruncateHistoryRecords(sessionID, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.RemainingRecords)

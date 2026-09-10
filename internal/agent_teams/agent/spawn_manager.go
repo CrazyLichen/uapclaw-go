@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnManager 管理 teammate 进程生命周期和健康监控。
-// 对齐 Python: SpawnManager (openjiuwen/agent_teams/agent/spawn_manager.py)
+// Python: SpawnManager (openjiuwen/agent_teams/agent/spawn_manager.py)
 //
 // 职责：
 //   - 双模式进程生成（inprocess / subprocess）
@@ -50,7 +50,7 @@ const (
 	// spawnLogComponent 日志组件
 	spawnLogComponent = logger.ComponentAgentCore
 	// defaultMaxRetries 默认最大重启重试次数
-	// 对齐 Python: restart_teammate(max_retries=3)
+	// Python: restart_teammate(max_retries=3)
 	defaultMaxRetries = 3
 )
 
@@ -59,7 +59,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSpawnManager 创建新的 SpawnManager。
-// 对齐 Python: SpawnManager.__init__(state, configurator, team_agent_getter)
+// Python: SpawnManager.__init__(state, configurator, team_agent_getter)
 func NewSpawnManager(
 	state *TeamAgentState,
 	configurator *AgentConfigurator,
@@ -75,7 +75,7 @@ func NewSpawnManager(
 }
 
 // SpawnTeammate 生成 teammate，根据 spawn_mode 选择 inprocess 或 subprocess。
-// 对齐 Python: SpawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)
+// Python: SpawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)
 func (m *SpawnManager) SpawnTeammate(
 	ctx context.Context,
 	runtimeCtx atschema.TeamRuntimeContext,
@@ -125,7 +125,7 @@ func (m *SpawnManager) SpawnTeammate(
 }
 
 // LookupInprocessAgent 查找进程内 agent 引用。
-// 对齐 Python: SpawnManager.lookup_inprocess_agent(member_name)
+// Python: SpawnManager.lookup_inprocess_agent(member_name)
 //
 // 返回 nil 如果该成员不是 inprocess 模式或不存在。
 func (m *SpawnManager) LookupInprocessAgent(memberName string) spawn.SpawnableAgent {
@@ -146,7 +146,7 @@ func (m *SpawnManager) LookupInprocessAgent(memberName string) spawn.SpawnableAg
 }
 
 // CleanupTeammate 清理单个 teammate。
-// 对齐 Python: SpawnManager.cleanup_teammate(member_name)
+// Python: SpawnManager.cleanup_teammate(member_name)
 //
 // 先移除 chunk_forward 观察者，再断开 chunk_forward 引用，最后 force_kill。
 func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
@@ -161,7 +161,7 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		return
 	}
 
-	// 对齐 Python: agent_ref.stream_controller.remove_chunk_observer(forward)
+	// Python: agent_ref.stream_controller.remove_chunk_observer(forward)
 	// 先移除观察者，再断开引用
 	if inproc, ok := handle.(*spawn.InProcessSpawnHandle); ok {
 		forwardCb := inproc.ChunkForward()
@@ -177,7 +177,7 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		inproc.SetChunkForward(nil)
 	}
 
-	// 对齐 Python: try: await handle.stop_health_check(); if handle.is_alive: await handle.force_kill()
+	// Python: try: await handle.stop_health_check(); if handle.is_alive: await handle.force_kill()
 	// 1. 停止健康检查（InProcessSpawnHandle 为 no-op，对齐 Python）
 	_ = handle.StopHealthCheck()
 	// 2. 仅在 alive 时才 force_kill（对齐 Python: if handle.is_alive: await handle.force_kill()）
@@ -191,13 +191,13 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 }
 
 // RestartTeammate 重启 teammate，指数退避重试。
-// 对齐 Python: SpawnManager.restart_teammate(member_name, max_retries=3)
+// Python: SpawnManager.restart_teammate(member_name, max_retries=3)
 func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, maxRetries int) error {
 	if maxRetries <= 0 {
 		maxRetries = defaultMaxRetries
 	}
 
-	// 对齐 Python: team_backend nil 检查，提前返回错误
+	// Python: team_backend nil 检查，提前返回错误
 	if m.configurator == nil || m.configurator.TeamBackend() == nil {
 		return fmt.Errorf("TeamBackend 未配置，无法重启 %s", memberName)
 	}
@@ -212,7 +212,7 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	}
 
 	// 指数退避重试
-	// 对齐 Python: spawn_config = SpawnConfig(health_check_timeout=30, health_check_interval=50)
+	// Python: spawn_config = SpawnConfig(health_check_timeout=30, health_check_interval=50)
 	spawnCfg := &runnerspawn.SpawnConfig{
 		HealthCheckTimeout:  30 * time.Second,
 		HealthCheckInterval: 50 * time.Second,
@@ -220,8 +220,8 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	}
 
 	// ⤵️ 待 #9.64 BuildContextFromDB 实现后回填：从 teammate 获取原始 prompt
-	// 对齐 Python: initial_message = teammate.prompt if teammate else None
-	// 对齐 Python: session = get_session_id() or None
+	// Python: initial_message = teammate.prompt if teammate else None
+	// Python: session = get_session_id() or None
 	initialMessage := "" // ⤵️ 待回填：应传入 teammate.prompt
 	sessionID := ""      // ⤵️ 待回填：应传入 get_session_id()
 
@@ -257,16 +257,16 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 }
 
 // OnTeammateUnhealthy 不健康回调，标记 RESTARTING 并尝试重启。
-// 对齐 Python: SpawnManager.on_teammate_unhealthy(member_name)
+// Python: SpawnManager.on_teammate_unhealthy(member_name)
 func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 	logger.Warn(spawnLogComponent).
 		Str("member_name", memberName).
 		Msg("teammate 不健康，尝试重启")
 
-	// 对齐 Python: await self.cleanup_teammate(member_name)
+	// Python: await self.cleanup_teammate(member_name)
 	m.CleanupTeammate(context.Background(), memberName)
 
-	// 对齐 Python: await db.update_member_status(member_name, MemberStatus.RESTARTING)
+	// Python: await db.update_member_status(member_name, MemberStatus.RESTARTING)
 	backend := m.configurator.TeamBackend()
 	if backend != nil {
 		backend.DB().Member().UpdateMemberStatus(context.Background(), memberName, backend.TeamName(),
@@ -300,7 +300,7 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 }
 
 // BuildContextFromDB 从 DB 恢复 TeamRuntimeContext。
-// 对齐 Python: SpawnManager.build_context_from_db(member_name)
+// Python: SpawnManager.build_context_from_db(member_name)
 // ⤵️ 预留：TeamDatabase（9.65a-4）实现后回填
 func (m *SpawnManager) BuildContextFromDB(memberName string) (atschema.TeamRuntimeContext, error) {
 	// TODO(#9.64): 从 TeamDatabase 读取 teammate 行
@@ -313,7 +313,7 @@ func (m *SpawnManager) BuildContextFromDB(memberName string) (atschema.TeamRunti
 }
 
 // PublishRestartEvent 发布重启事件。
-// 对齐 Python: SpawnManager.publish_restart_event(member_name, restart_count)
+// Python: SpawnManager.publish_restart_event(member_name, restart_count)
 // ⤵️ 预留：Messager（9.65）实现后回填
 func (m *SpawnManager) PublishRestartEvent(memberName string, restartCount int) {
 	// TODO(#9.65): 通过 Messager 发布 MemberRestartedEvent
@@ -324,8 +324,8 @@ func (m *SpawnManager) PublishRestartEvent(memberName string, restartCount int) 
 }
 
 // ShutdownAllHandles 关闭所有已生成的句柄。
-// 对齐 Python: SpawnManager.shutdown_all_handles()
-// 对齐 Python: 通过 cleanup_teammate 统一清理，保证 chunk_forward 观察者正确移除
+// Python: SpawnManager.shutdown_all_handles()
+// Python: 通过 cleanup_teammate 统一清理，保证 chunk_forward 观察者正确移除
 func (m *SpawnManager) ShutdownAllHandles(ctx context.Context) {
 	m.mu.Lock()
 	memberNames := make([]string, 0, len(m.spawnedHandles))
@@ -340,7 +340,7 @@ func (m *SpawnManager) ShutdownAllHandles(ctx context.Context) {
 }
 
 // CancelRecoveryTasks 取消所有恢复任务。
-// 对齐 Python: SpawnManager.cancel_recovery_tasks()
+// Python: SpawnManager.cancel_recovery_tasks()
 func (m *SpawnManager) CancelRecoveryTasks() {
 	m.mu.Lock()
 	cancels := make(map[string]context.CancelFunc)
@@ -353,14 +353,14 @@ func (m *SpawnManager) CancelRecoveryTasks() {
 	for _, cancel := range cancels {
 		cancel()
 	}
-	// 对齐 Python: await task — 等待所有恢复 goroutine 退出
+	// Python: await task — 等待所有恢复 goroutine 退出
 	m.recoveryWg.Wait()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // spawnInprocess 以 inprocess 模式生成 teammate。
-// 对齐 Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
+// Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
 func (m *SpawnManager) spawnInprocess(
 	ctx context.Context,
 	runtimeCtx atschema.TeamRuntimeContext,
@@ -369,11 +369,11 @@ func (m *SpawnManager) spawnInprocess(
 ) (*spawn.InProcessSpawnHandle, error) {
 	// 构建工厂函数（对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)）
 	factory := func(ctx atschema.TeamRuntimeContext) (spawn.SpawnableAgent, error) {
-		// 对齐 Python: agent_spec = spec.agents.get(ctx.role.value) or spec.agents["leader"]
+		// Python: agent_spec = spec.agents.get(ctx.role.value) or spec.agents["leader"]
 		spec := m.configurator.Spec()
 		agentSpec := ResolveAgentSpec(*spec, ctx.Role, ctx.MemberName)
 
-		// 对齐 Python: card = agent_spec.card or AgentCard(...)
+		// Python: card = agent_spec.card or AgentCard(...)
 		card := agentSpec.Card
 		if card == nil {
 			card = agentschema.NewAgentCard(
@@ -383,10 +383,10 @@ func (m *SpawnManager) spawnInprocess(
 			)
 		}
 
-		// 对齐 Python: teammate = _TeamAgent(card)
+		// Python: teammate = _TeamAgent(card)
 		teammate := NewTeamAgent(card)
 
-		// 对齐 Python: teammate.configure(spec, ctx)
+		// Python: teammate.configure(spec, ctx)
 		teammate.Configure(context.Background(), *spec, ctx)
 
 		return teammate, nil
@@ -404,7 +404,7 @@ func (m *SpawnManager) spawnInprocess(
 }
 
 // spawnSubprocess 以 subprocess 模式生成 teammate。
-// 对齐 Python: Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(ctx), session, spawn_config)
+// Python: Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(ctx), session, spawn_config)
 func (m *SpawnManager) spawnSubprocess(
 	ctx context.Context,
 	runtimeCtx atschema.TeamRuntimeContext,
@@ -415,7 +415,7 @@ func (m *SpawnManager) spawnSubprocess(
 	// 构建配置
 	agentConfig := m.configurator.BuildSpawnConfig(runtimeCtx)
 
-	// 对齐 Python: payload = build_spawn_payload(ctx, initial_message=initial_message)
+	// Python: payload = build_spawn_payload(ctx, initial_message=initial_message)
 	// 用带 initialMessage 的 payload 覆盖 BuildSpawnConfig 中构建的空 payload
 	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
 	if payload != nil {
@@ -428,7 +428,7 @@ func (m *SpawnManager) spawnSubprocess(
 	}
 
 	// 调用 Runner.SpawnAgent
-	// 对齐 Python: Runner.spawn_agent()
+	// Python: Runner.spawn_agent()
 	var spawnOpts []runnerspawn.SpawnConfig
 	if spawnCfg != nil {
 		spawnOpts = append(spawnOpts, *spawnCfg)
@@ -442,7 +442,7 @@ func (m *SpawnManager) spawnSubprocess(
 }
 
 // wireInprocessChunkForward 接入 chunk 转发观察者。
-// 对齐 Python: SpawnManager._wire_inprocess_chunk_forward(handle)
+// Python: SpawnManager._wire_inprocess_chunk_forward(handle)
 func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHandle) {
 	agentRef := handle.AgentRef()
 	ta, ok := agentRef.(*TeamAgent)
@@ -457,7 +457,7 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 	if leaderSC == nil {
 		return
 	}
-	// 对齐 Python: 创建转发回调 teammate chunk → leader streamQueue
+	// Python: 创建转发回调 teammate chunk → leader streamQueue
 	// Python 的 put_nowait 满时抛 QueueFull 异常（被上层捕获），Go 的 select default 静默丢弃
 	forwardCb := func(ctx context.Context, chunk streambase.Schema) error {
 		if leaderSC.streamQueue != nil {

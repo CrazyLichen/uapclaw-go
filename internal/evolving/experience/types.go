@@ -11,7 +11,7 @@ import (
 
 // EvolutionContext 在线/离线演进输入上下文。
 //
-// 对应 Python: EvolutionContext / OnlineEvolutionContext
+// Python: EvolutionContext / OnlineEvolutionContext
 type EvolutionContext struct {
 	// SkillName 技能名称
 	SkillName string
@@ -37,7 +37,7 @@ type EvolutionContext struct {
 
 // ExperienceProposal 经验提案（审批前）。
 //
-// 对应 Python: ExperienceProposal
+// Python: ExperienceProposal
 type ExperienceProposal struct {
 	// SkillName 技能名称
 	SkillName string
@@ -57,7 +57,7 @@ type ExperienceProposal struct {
 
 // ExperienceApprovalRequest 审批面向视图。
 //
-// 对应 Python: ExperienceApprovalRequest
+// Python: ExperienceApprovalRequest
 type ExperienceApprovalRequest struct {
 	// SkillName 技能名称
 	SkillName string
@@ -73,7 +73,7 @@ type ExperienceApprovalRequest struct {
 
 // OnlineEvolutionResult 在线演进编排器返回的结构化结果。
 //
-// 对应 Python: OnlineEvolutionResult
+// Python: OnlineEvolutionResult
 type OnlineEvolutionResult struct {
 	// SkillName 技能名称
 	SkillName string
@@ -87,7 +87,7 @@ type OnlineEvolutionResult struct {
 
 // ExperienceApplyResult 经验变更应用结果。
 //
-// 对应 Python: ExperienceApplyResult
+// Python: ExperienceApplyResult
 type ExperienceApplyResult struct {
 	// SkillName 技能名称
 	SkillName string
@@ -106,11 +106,11 @@ type ExperienceApplyResult struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // OnlineEvolutionContext 类型别名，对齐 Python。
-// 对应 Python: OnlineEvolutionContext = EvolutionContext
+// Python: OnlineEvolutionContext = EvolutionContext
 type OnlineEvolutionContext = EvolutionContext
 
 // OnlineEvolutionStatus 在线演进结果状态（string 常量而非 iota 枚举）。
-// 对应 Python: Literal["staged", "auto_approved", ...]
+// Python: Literal["staged", "auto_approved", ...]
 type OnlineEvolutionStatus = string
 
 // PendingChange 等待审批的暂存演进记录快照。
@@ -120,7 +120,7 @@ type OnlineEvolutionStatus = string
 // 因此 PendingChange 的实际定义在 checkpointing 包中，
 // experience 包通过类型别名提供等效访问。
 //
-// 对应 Python: openjiuwen/agent_evolving/experience/types.py PendingChange
+// Python: openjiuwen/agent_evolving/experience/types.py PendingChange
 type PendingChange = checkpointing.PendingChange
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -143,19 +143,19 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RecordCount 返回提案中的记录数量。
-// 对应 Python: ExperienceProposal.record_count
+// Python: ExperienceProposal.record_count
 func (p *ExperienceProposal) RecordCount() int {
 	return len(p.Records)
 }
 
 // Ok 判断应用结果是否成功。
-// 对应 Python: ExperienceApplyResult.ok
+// Python: ExperienceApplyResult.ok
 func (r *ExperienceApplyResult) Ok() bool {
 	return len(r.Errors) == 0 && r.PendingCount == 0
 }
 
 // ToHostResult 返回 host-facing 稳定形态。
-// 对应 Python: ExperienceApprovalRequest.to_host_result()
+// Python: ExperienceApprovalRequest.to_host_result()
 func (r *ExperienceApprovalRequest) ToHostResult() HostFacingExperienceResult {
 	pendingCount := 0
 	changeType := schema.SkillExperienceEntry
@@ -169,7 +169,7 @@ func (r *ExperienceApprovalRequest) ToHostResult() HostFacingExperienceResult {
 }
 
 // ToHostResult 返回 host-facing 稳定形态。
-// 对应 Python: ExperienceApplyResult.to_host_result()
+// Python: ExperienceApplyResult.to_host_result()
 func (r *ExperienceApplyResult) ToHostResult(requestID string, changeType string) HostFacingExperienceResult {
 	if r.RejectedCount > 0 {
 		return HostFacingExperienceResultRejected(r.SkillName, requestID, changeType, r.RejectedCount)

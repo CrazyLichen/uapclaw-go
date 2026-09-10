@@ -13,7 +13,7 @@ import (
 // 作为 Gateway 向 AgentServer 发起的标准化请求模型，承载 RPC 方法名、
 // 请求参数、流式标识、权限上下文等。E2A 协议解码后交由 AgentServer 处理。
 //
-// 对应 Python: jiuwenswarm/common/schema/agent.py (AgentRequest)
+// Python: jiuwenswarm/common/schema/agent.py (AgentRequest)
 type AgentRequest struct {
 	// ─── 必填字段 ───
 
@@ -52,7 +52,7 @@ type AgentRequest struct {
 // 作为 AgentServer 向 Gateway 返回的完整响应模型，承载执行结果、
 // 响应负载、元数据等。
 //
-// 对应 Python: jiuwenswarm/common/schema/agent.py (AgentResponse)
+// Python: jiuwenswarm/common/schema/agent.py (AgentResponse)
 type AgentResponse struct {
 	// RequestID 对应请求的唯一标识
 	RequestID string `json:"request_id"`
@@ -79,7 +79,7 @@ type AgentResponse struct {
 //
 // 终止哨兵推荐使用 NewTerminalChunk() 工厂创建，避免手动构造出错。
 //
-// 对应 Python: jiuwenswarm/common/schema/agent.py (AgentResponseChunk)
+// Python: jiuwenswarm/common/schema/agent.py (AgentResponseChunk)
 type AgentResponseChunk struct {
 	// RequestID 对应请求的唯一标识
 	RequestID string `json:"request_id"`
@@ -163,7 +163,7 @@ func NewAgentResponseChunk(requestID, channelID string, payload map[string]any, 
 // 终止哨兵是流结束标记：is_complete=true，payload 为 {"is_complete":true}。
 // 消费侧通过 IsTerminal() 识别终止哨兵，不再下发业务事件。
 //
-// 对齐 Python 中两处终止哨兵形态：
+// Python: 中两处终止哨兵形态：
 //   - payload=None, is_complete=True（interface_deep / team_helpers / auto_harness）
 //   - payload={"is_complete": True}, is_complete=True（gateway_normalize / interface）
 //

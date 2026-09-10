@@ -24,7 +24,7 @@ import (
 //     供 foundation 层资源管理器去重/缓存底层 HTTP 客户端。不持久化到 DB。
 //   - (model_name, group_index)：语义持久身份，存储在 DB 中作为成员的池引用。
 //
-// 对应 Python: ModelPoolEntry (openjiuwen/agent_teams/models/pool.py)
+// Python: ModelPoolEntry (openjiuwen/agent_teams/models/pool.py)
 type ModelPoolEntry struct {
 	// ModelName 模型名称
 	ModelName string `json:"model_name"`
@@ -54,7 +54,7 @@ type ModelPoolEntry struct {
 // 当路由式后端（OpenRouter、LiteLLM proxy 等）通过一个 URL 和一个 API Key
 // 服务多个模型名时使用。在 TeamAgentSpec.build() 时展平为 ModelPoolEntry 列表。
 //
-// 对应 Python: ModelRouterConfig (openjiuwen/agent_teams/models/pool.py)
+// Python: ModelRouterConfig (openjiuwen/agent_teams/models/pool.py)
 type ModelRouterConfig struct {
 	// APIBaseURL API 基础 URL
 	APIBaseURL string `json:"api_base_url"`
@@ -83,7 +83,7 @@ type ModelPoolEntryOption func(*ModelPoolEntry)
 //
 // ModelID 自动生成 UUID。可通过选项函数设置 Description、Metadata 等可选字段。
 //
-// 对应 Python: ModelPoolEntry(model_name=..., api_key=..., api_base_url=..., api_provider=...)
+// Python: ModelPoolEntry(model_name=..., api_key=..., api_base_url=..., api_provider=...)
 func NewModelPoolEntry(modelName, apiKey, apiBaseURL, apiProvider string, opts ...ModelPoolEntryOption) *ModelPoolEntry {
 	entry := &ModelPoolEntry{
 		ModelName:   modelName,
@@ -119,7 +119,7 @@ func WithMetadata(metadata map[string]any) ModelPoolEntryOption {
 // ModelClientConfig 和 ModelRequestConfig。池条目的显式字段
 // 始终覆盖 metadata 中同名键。
 //
-// 对应 Python: ModelPoolEntry.to_team_model_config()
+// Python: ModelPoolEntry.to_team_model_config()
 func (e *ModelPoolEntry) ToTeamModelConfig() TeamModelConfig {
 	// 提取 metadata 子字典
 	var clientExtra map[string]any
@@ -159,7 +159,7 @@ func (e *ModelPoolEntry) ToTeamModelConfig() TeamModelConfig {
 //   - 必须包含非空字符串（拒绝空白或纯空格条目）
 //   - 条目必须唯一（拒绝重复）
 //
-// 对应 Python: ModelRouterConfig._validate_model_names()
+// Python: ModelRouterConfig._validate_model_names()
 func (r *ModelRouterConfig) Validate() error {
 	if len(r.ModelNames) == 0 {
 		return fmt.Errorf("model_names 不能为空")
@@ -202,7 +202,7 @@ func (r *ModelRouterConfig) Validate() error {
 // 每个展开条目共享 api_key/api_base_url/api_provider，
 // metadata 深拷贝以避免调用者意外交叉污染。
 //
-// 对应 Python: ModelRouterConfig.to_pool_entries()
+// Python: ModelRouterConfig.to_pool_entries()
 func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 	entries := make([]ModelPoolEntry, 0, len(r.ModelNames))
 	for _, name := range r.ModelNames {
@@ -229,7 +229,7 @@ func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 // 按位精确签名匹配：除 model_id 外的每个字段必须相同。
 // 多个同签名条目按池顺序一对一配对。无匹配的新条目保留自己的 model_id。
 //
-// 对应 Python: inherit_pool_ids()
+// Python: inherit_pool_ids()
 func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 	// 构建旧池签名→条目桶
 	oldBySig := make(map[string][]ModelPoolEntry)
@@ -264,7 +264,7 @@ func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 // 两个具有相同签名的条目描述相同的逻辑端点、相同的认证和请求参数。
 // 任何差异（包括 api_key 轮换）产生不同签名，强制生成新的 model_id。
 //
-// 对应 Python: _entry_signature()
+// Python: _entry_signature()
 func entrySignature(entry ModelPoolEntry) string {
 	// 构建排除 model_id 的 map
 	sig := map[string]any{

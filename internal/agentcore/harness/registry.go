@@ -32,7 +32,7 @@ type HarnessConfigInfo struct {
 //
 // 注意：本类型从 harness_config 子包移到 harness 包，
 // 因为 Load() 需要返回 *DeepAgent，而 harness_config 不能导入 harness（循环依赖）。
-// 对齐 Python: openjiuwen/harness/harness_config/registry.py
+// Python: openjiuwen/harness/harness_config/registry.py
 type HarnessConfigRegistry struct {
 	// registry 注册表
 	registry map[string]HarnessConfigInfo
@@ -74,7 +74,7 @@ func GetConfig(configID string) *HarnessConfigInfo {
 // LoadConfig 便捷方法：按 ID 加载、构建并创建 DeepAgent。
 // 调用链：Get → Loader.Load → Builder.Build → CreateDeepAgent。
 //
-// 对齐 Python: HarnessConfigRegistry.load() → DeepAgent
+// Python: HarnessConfigRegistry.load() → DeepAgent
 func LoadConfig(configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
 	return getGlobalRegistry().Load(configID, model, params, workspaceRoot...)
 }
@@ -134,7 +134,7 @@ func (r *HarnessConfigRegistry) Get(configID string) *HarnessConfigInfo {
 
 // Load 便捷方法：按 ID 查找 → Loader.Load → Builder.Build → CreateDeepAgent
 //
-// 对齐 Python: HarnessConfigRegistry.load() → DeepAgent
+// Python: HarnessConfigRegistry.load() → DeepAgent
 func (r *HarnessConfigRegistry) Load(configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
 	info := r.Get(configID)
 	if info == nil {

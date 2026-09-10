@@ -16,7 +16,7 @@ import (
 const logComponent = logger.ComponentAgentServer
 
 // preserveFileSharingMode 固有文件共享模式，当前只支持 "mount"。
-// 对齐 Python: PreserveFileSharingMode = Literal["mount"]
+// Python: PreserveFileSharingMode = Literal["mount"]
 const preserveFileSharingMode = "mount"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -24,7 +24,7 @@ const preserveFileSharingMode = "mount"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateLocalSysOpCard 创建本地模式 SysOperationCard。
-// 对齐 Python: create_local_sysop_card() (sysop_builder.py L770-776)
+// Python: create_local_sysop_card() (sysop_builder.py L770-776)
 //
 // Python 实现：
 //
@@ -38,7 +38,7 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 	card := sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeLocal),
 		sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{
-			ShellAllowlist: nil, // 对齐 Python: shell_allowlist=None，允许所有命令
+			ShellAllowlist: nil, // Python: shell_allowlist=None，允许所有命令
 		}),
 	)
 
@@ -48,7 +48,7 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 }
 
 // CreateSandboxSysOpCard 创建沙箱模式 SysOperationCard。
-// 对齐 Python: create_sandbox_sysop_card(sandbox_url, sandbox_type, *, files_runtime,
+// Python: create_sandbox_sysop_card(sandbox_url, sandbox_type, *, files_runtime,
 //
 //	excluded_commands/idle_ttl_seconds 等参数列表
 //
@@ -105,7 +105,7 @@ func CreateSandboxSysOpCard(
 	card := sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeSandbox),
 		sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{
-			ShellAllowlist: nil, // 对齐 Python: shell_allowlist=None，安全边界由沙箱保证
+			ShellAllowlist: nil, // Python: shell_allowlist=None，安全边界由沙箱保证
 		}),
 		sysop.WithSysOpGatewayConfig(gatewayConfig),
 	)
@@ -178,7 +178,7 @@ func CreateSandboxSysOpCard(
 }
 
 // CreateSysOperationFromCard 从 SysOperationCard 创建 SysOperation 实例并注册到 ResourceMgr。
-// 对齐 Python: Runner.resource_mgr.add_sys_operation(card)
+// Python: Runner.resource_mgr.add_sys_operation(card)
 // 包含隔离键复用检查、注册、并发重试逻辑。
 func CreateSysOperationFromCard(card *sysop.SysOperationCard) sysop.SysOperation {
 	if card == nil {
@@ -236,7 +236,7 @@ func CreateSysOperationFromCard(card *sysop.SysOperationCard) sysop.SysOperation
 }
 
 // ResolveOperationMode 从配置解析操作模式。
-// 对齐 Python: _resolve_operation_mode(config_base) — 从 configBase["sys_operation"]["mode"] 解析
+// Python: _resolve_operation_mode(config_base) — 从 configBase["sys_operation"]["mode"] 解析
 func ResolveOperationMode(configBase map[string]any) sysop.OperationMode {
 	if configBase == nil {
 		return sysop.OperationModeLocal
@@ -252,7 +252,7 @@ func ResolveOperationMode(configBase map[string]any) sysop.OperationMode {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getRegisteredSysOpByIsolationKey 按隔离键模板查找已注册的 SysOperation。
-// 对齐 Python: _get_registered_sys_operation_by_isolation_key()
+// Python: _get_registered_sys_operation_by_isolation_key()
 func getRegisteredSysOpByIsolationKey(key string) sysop.SysOperation {
 	if key == "" {
 		return nil

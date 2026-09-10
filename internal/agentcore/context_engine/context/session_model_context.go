@@ -30,7 +30,7 @@ import (
 
 // SessionModelContext 上下文引擎的核心运行时实现，管理对话消息和上下文窗口。
 //
-// 对应 Python: openjiuwen/core/context_engine/context/context.py (SessionModelContext)
+// Python: openjiuwen/core/context_engine/context/context.py (SessionModelContext)
 type SessionModelContext struct {
 	// contextID 上下文唯一标识
 	contextID string
@@ -87,7 +87,7 @@ type reloaderToolInput struct {
 
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
 //
-// 对应 Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
+// Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -112,7 +112,7 @@ Storage types: "in_memory" (session cache), "filesystem" (disk file).`
 //  5. 条件创建 KVCacheManager
 //  6. 创建卸载缓冲区
 //
-// 对应 Python: SessionModelContext.__init__
+// Python: SessionModelContext.__init__
 func NewSessionModelContext(
 	contextID string,
 	sessionID string,
@@ -197,7 +197,7 @@ func NewSessionModelContext(
 
 // Len 返回上下文消息数量。
 //
-// 对应 Python: SessionModelContext.len()
+// Python: SessionModelContext.len()
 func (mc *SessionModelContext) Len() int {
 	return mc.messageBuffer.Size()
 }
@@ -205,7 +205,7 @@ func (mc *SessionModelContext) Len() int {
 // GetMessages 获取消息列表。
 //
 // size ≤ 0 表示不限制；size < 0 返回错误；withHistory 控制是否包含历史消息。
-// 对应 Python: SessionModelContext.get_messages()
+// Python: SessionModelContext.get_messages()
 func (mc *SessionModelContext) GetMessages(size int, withHistory bool) ([]llm_schema.BaseMessage, error) {
 	if size < 0 {
 		return nil, fmt.Errorf("get messages size 应大于等于 0，当前值: %d", size)
@@ -215,7 +215,7 @@ func (mc *SessionModelContext) GetMessages(size int, withHistory bool) ([]llm_sc
 
 // SetMessages 替换消息列表。
 //
-// 对应 Python: SessionModelContext.set_messages()
+// Python: SessionModelContext.set_messages()
 func (mc *SessionModelContext) SetMessages(messages []llm_schema.BaseMessage, withHistory bool) {
 	if err := ValidateMessages(messages); err != nil {
 		logger.Error(logComponent).
@@ -232,7 +232,7 @@ func (mc *SessionModelContext) SetMessages(messages []llm_schema.BaseMessage, wi
 // PopMessages 从尾部弹出消息。
 //
 // size < 0 返回错误；withHistory 控制是否从历史消息中弹出。
-// 对应 Python: SessionModelContext.pop_messages()
+// Python: SessionModelContext.pop_messages()
 func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_schema.BaseMessage {
 	if size < 0 {
 		logger.Warn(logComponent).
@@ -247,7 +247,7 @@ func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_sch
 
 // ClearMessages 清空消息，重置卸载缓冲区，触发 ContextCleared 事件。
 //
-// 对应 Python: SessionModelContext.clear_messages()
+// Python: SessionModelContext.clear_messages()
 func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bool, opts ...iface.Option) error {
 	// 弹出全部消息
 	totalSize := mc.messageBuffer.Size()
@@ -287,7 +287,7 @@ func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bo
 //   - 快速路径：activeCompressionInProgress && !processorLock.TryLock() → 仅入队
 //   - 正常路径：processorLock.Lock() → runAddProcessors → 入队 → Unlock
 //
-// 对应 Python: SessionModelContext.add_messages()
+// Python: SessionModelContext.add_messages()
 func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_schema.BaseMessage, opts ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	EnsureContextMessageIDs(messages)
 
@@ -342,7 +342,7 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_s
 //  8. 统计上下文窗口
 //  9. 触发 ContextRetrieved 事件
 //
-// 对应 Python: SessionModelContext.get_context_window()
+// Python: SessionModelContext.get_context_window()
 func (mc *SessionModelContext) GetContextWindow(
 	ctx context.Context,
 	systemMessages []llm_schema.BaseMessage,
@@ -390,7 +390,7 @@ func (mc *SessionModelContext) GetContextWindow(
 	window.Tools = tools
 
 	// 5. 遍历处理器：trigger + on_get_context_window
-	// 对齐 Python: get_context_window 中处理器循环的状态事件发射
+	// Python: get_context_window 中处理器循环的状态事件发射
 	for _, proc := range mc.processors {
 		triggered, err := proc.TriggerGetContextWindow(ctx, mc, *window, opts...)
 		if err != nil {
@@ -413,7 +413,7 @@ func (mc *SessionModelContext) GetContextWindow(
 		contextMax := mc.resolveContextMax(opts...)
 
 		// ① 发射 started 状态
-		// 对齐 Python: status="started", phase="get_context_window", trigger="passive"
+		// Python: status="started", phase="get_context_window", trigger="passive"
 		mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
 			OperationID:    operationID,
 			Status:         ceschema.CompressionStarted,
@@ -457,7 +457,7 @@ func (mc *SessionModelContext) GetContextWindow(
 		window = &newWindow
 
 		// ③ 发射 completed 或 noop 状态
-		// 对齐 Python: status = "completed" if event is not None else "noop"
+		// Python: status = "completed" if event is not None else "noop"
 		if event != nil {
 			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
 				OperationID:      operationID,
@@ -523,7 +523,7 @@ func (mc *SessionModelContext) GetContextWindow(
 
 // Statistic 计算上下文统计信息。
 //
-// 对应 Python: SessionModelContext.statistic()
+// Python: SessionModelContext.statistic()
 func (mc *SessionModelContext) Statistic() *iface.ContextStats {
 	messages := mc.messageBuffer.GetBack(0, true)
 	stat := &iface.ContextStats{}
@@ -550,7 +550,7 @@ func (mc *SessionModelContext) TokenCounter() token.TokenCounter {
 //
 // NewTool 从 reloaderToolInput 的 jsonschema tag 反射提取 input schema，
 // 内部自动生成 ToolCard，无需手动构造。
-// 对应 Python: SessionModelContext.reloader_tool()
+// Python: SessionModelContext.reloader_tool()
 func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 	// 闭包捕获 offloadMessageBuffer 引用，对齐 Python @tool 装饰器
 	reloadFn := func(ctx context.Context, input reloaderToolInput, _ ...tool.ToolOption) (string, error) {
@@ -581,7 +581,7 @@ func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 
 // WorkspaceDir 返回工作目录路径。
 //
-// 对应 Python: SessionModelContext.workspace_dir()
+// Python: SessionModelContext.workspace_dir()
 func (mc *SessionModelContext) WorkspaceDir() string {
 	if mc.workspace == nil {
 		return ""
@@ -591,28 +591,28 @@ func (mc *SessionModelContext) WorkspaceDir() string {
 
 // SetSessionRef 设置会话引用。
 //
-// 对应 Python: SessionModelContext.set_session_ref()
+// Python: SessionModelContext.set_session_ref()
 func (mc *SessionModelContext) SetSessionRef(sess sessioninterfaces.SessionFacade) {
 	mc.sessionRef = sess
 }
 
 // GetSessionRef 获取会话引用。
 //
-// 对应 Python: SessionModelContext.get_session_ref()
+// Python: SessionModelContext.get_session_ref()
 func (mc *SessionModelContext) GetSessionRef() sessioninterfaces.SessionFacade {
 	return mc.sessionRef
 }
 
 // OffloadMessages 将消息卸载到内存缓冲区。
 //
-// 对应 Python: SessionModelContext.offload_messages()
+// Python: SessionModelContext.offload_messages()
 func (mc *SessionModelContext) OffloadMessages(handle string, messages []llm_schema.BaseMessage) {
 	mc.offloadMessageBuffer.Offload(handle, offloadTypeInMemory, messages)
 }
 
 // SaveState 保存上下文状态为 map。
 //
-// 对齐 Python: SessionModelContext.save_state() 返回扁平字典
+// Python: SessionModelContext.save_state() 返回扁平字典
 // 格式: {"messages": ..., "offload_messages": ..., "processor_states": ..., "compression_history": ...}
 func (mc *SessionModelContext) SaveState() map[string]any {
 	allMessages := mc.messageBuffer.GetBack(0, true)
@@ -632,7 +632,7 @@ func (mc *SessionModelContext) SaveState() map[string]any {
 
 // LoadState 从 map 恢复上下文状态。
 //
-// 对齐 Python: SessionModelContext.load_state()，接收扁平字典
+// Python: SessionModelContext.load_state()，接收扁平字典
 func (mc *SessionModelContext) LoadState(state map[string]any) {
 	// 兼容旧格式：如果 state 仍含 contextID 嵌套键，先解嵌套
 	stateMap := state
@@ -699,7 +699,7 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 // CompressContext 主动压缩上下文。
 //
 // 返回 "busy"/"compressed"/"noop"。
-// 对应 Python: SessionModelContext.compress_context()
+// Python: SessionModelContext.compress_context()
 func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
 	// 尝试非阻塞获取锁
 	if !mc.processorLock.TryLock() {
@@ -799,7 +799,7 @@ func (mc *SessionModelContext) runAddProcessors(
 		startTime := time.Now()
 
 		// ① 发射 started 状态
-		// 对齐 Python: status="started", 在处理器执行前发射
+		// Python: status="started", 在处理器执行前发射
 		mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
 			OperationID:    operationID,
 			Status:         ceschema.CompressionStarted,
@@ -926,7 +926,7 @@ func (mc *SessionModelContext) selectProcessors(processorTypes []string, compres
 
 // getWindowMessages 先按 dialogueRound 截取 contextMessages，再按 windowSize 同时截断 systemMessages 和 contextMessages。
 //
-// 对齐 Python: _get_window_messages(self, system_messages, window_size, dialogue_round) -> (system_messages, context_messages)
+// Python: _get_window_messages(self, system_messages, window_size, dialogue_round) -> (system_messages, context_messages)
 // 双截断逻辑：systemSize = min(len(system), windowSize)，contextSize = windowSize - systemSize
 func (mc *SessionModelContext) getWindowMessages(systemMessages []llm_schema.BaseMessage, windowSize, dialogueRound int) ([]llm_schema.BaseMessage, []llm_schema.BaseMessage) {
 	// 获取全部消息（含历史）
@@ -941,7 +941,7 @@ func (mc *SessionModelContext) getWindowMessages(systemMessages []llm_schema.Bas
 	}
 
 	// 按 windowSize 同时截断 systemMessages 和 contextMessages
-	// 对齐 Python: system_messages_size = min(len(system_messages), window_size)
+	// Python: system_messages_size = min(len(system_messages), window_size)
 	if windowSize > 0 {
 		systemSize := len(systemMessages)
 		if systemSize > windowSize {
@@ -974,18 +974,18 @@ func (mc *SessionModelContext) statContextWindow(window *iface.ContextWindow) {
 }
 
 // statMessages 按角色统计消息数量和 token 数。//
-// 对齐 Python: _stat_messages(stat, messages)
+// Python: _stat_messages(stat, messages)
 func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages []llm_schema.BaseMessage) {
 	stat.TotalMessages = len(messages)
-	// 对齐 Python: stat.total_dialogues = len(ContextUtils.find_all_dialogue_round(messages))
+	// Python: stat.total_dialogues = len(ContextUtils.find_all_dialogue_round(messages))
 	stat.TotalDialogues = len(processor.FindAllDialogueRound(messages))
 
 	// 按角色计数消息数量
 	mc.countMessagesByRole(stat, messages)
 
 	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
-	// 对齐 Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
-	// 对齐 Python: 如果usage_tokens不为空则直接设置总Token数
+	// Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
+	// Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {
 		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
 			if am.UsageMetadata != nil && am.UsageMetadata.TotalTokens > 0 {
@@ -1053,7 +1053,7 @@ func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []schem
 
 // countSingleMessageTokens 计算单条消息的 token 数。
 //
-// 对应 Python: SessionModelContext._count_single_message_tokens()
+// Python: SessionModelContext._count_single_message_tokens()
 // tokenCounter 返回结果（含 0）直接使用，不再降级估算。
 // fallback 使用 len/4 向下取整，对齐 Python len//4。
 func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessage) int {
@@ -1072,7 +1072,7 @@ func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessa
 
 // countToolTokens 计算单工具的 token 数。
 //
-// 对应 Python: SessionModelContext._count_tool_tokens()
+// Python: SessionModelContext._count_tool_tokens()
 // fallback 使用 json.Marshal 序列化整个 parameters dict + len/4 向下取整，对齐 Python json.dumps + len//4。
 func (mc *SessionModelContext) countToolTokens(toolInfo schema.ToolInfoInterface) int {
 	if mc.tokenCounter != nil {
@@ -1103,7 +1103,7 @@ func (mc *SessionModelContext) countDialogueRounds(messages []llm_schema.BaseMes
 
 // resolveContextModelName 从实例或选项解析模型名称。
 //
-// 对齐 Python: _resolve_context_model_name(self, kwargs) -> kwargs.get("model_name") or self._model_name
+// Python: _resolve_context_model_name(self, kwargs) -> kwargs.get("model_name") or self._model_name
 // 优先使用 opts 中的 ModelName，回退到实例字段 mc.modelName
 func (mc *SessionModelContext) resolveContextModelName(opts ...iface.Option) string {
 	o := iface.NewProcessorOption(opts...)
@@ -1140,7 +1140,7 @@ func (mc *SessionModelContext) buildActiveCompressionResult(result string, opts 
 	r := &iface.CompressContextResult{Result: result}
 
 	if compOpts.ReturnState {
-		// 对齐 Python: _select_active_compression_result_state
+		// Python: _select_active_compression_result_state
 		// 从历史记录中选取最后一个 status=completed 且有 compact_summary 的状态
 		history := mc.stateRecorder.History()
 		for i := len(history) - 1; i >= 0; i-- {

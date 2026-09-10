@@ -9,11 +9,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessagerHandler 消息处理回调函数类型。
-// 对齐 Python: MessagerHandler = Callable[[EventMessage], Awaitable[None]]
+// Python: MessagerHandler = Callable[[EventMessage], Awaitable[None]]
 type MessagerHandler func(ctx context.Context, msg *schema.EventMessage) error
 
 // Messager 团队事件消息通信接口。
-// 对齐 Python: Messager (openjiuwen/agent_teams/messager/messager.py)
+// Python: Messager (openjiuwen/agent_teams/messager/messager.py)
 // 解耦工具层与消息传输实现，使 TaskManager 和 MessageManager 能通过接口发布团队事件。
 type Messager interface {
 	// Start 启动消息传输层

@@ -21,7 +21,7 @@ import (
 // 通过模板生成评估 prompt，调用 LLM 判断 prediction 与 label 的语义一致性，
 // 返回 {"llm_as_judge": 1.0}（通过）或 {"llm_as_judge": 0.0}（失败）。
 //
-// 对应 Python: openjiuwen/agent_evolving/evaluator/metrics/llm_as_judge.py LLMAsJudgeMetric
+// Python: openjiuwen/agent_evolving/evaluator/metrics/llm_as_judge.py LLMAsJudgeMetric
 type LLMAsJudgeMetric struct {
 	// model LLM 模型实例
 	model *llm.Model
@@ -49,7 +49,7 @@ const (
 // 传入 ModelClientConfig + ModelRequestConfig，内部创建 llm.Model。
 // userMetrics 为自定义验证规则，会注入到评估模板中。
 //
-// 对应 Python: LLMAsJudgeMetric(model_config, model_client_config, user_metrics)
+// Python: LLMAsJudgeMetric(model_config, model_client_config, user_metrics)
 func NewLLMAsJudgeMetric(
 	clientConfig llmschema.ModelClientConfig,
 	requestConfig llmschema.ModelRequestConfig,
@@ -84,7 +84,7 @@ func (m *LLMAsJudgeMetric) HigherIsBetter() bool { return true }
 
 // Compute 使用 LLM-as-Judge 计算语义一致性分数。
 //
-// 对应 Python: LLMAsJudgeMetric.compute(prediction, label, question=None)
+// Python: LLMAsJudgeMetric.compute(prediction, label, question=None)
 func (m *LLMAsJudgeMetric) Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	mc := applyMetricOptions(opts...)
 
@@ -128,7 +128,7 @@ func (m *LLMAsJudgeMetric) ComputeBatch(ctx context.Context, predictions, labels
 
 // IsPassResult 判断评估结果是否通过。
 //
-// 对应 Python: DefaultEvaluator._is_pass_result(result)
+// Python: DefaultEvaluator._is_pass_result(result)
 func IsPassResult(result any) bool {
 	if result == true {
 		return true
@@ -143,7 +143,7 @@ func IsPassResult(result any) bool {
 
 // parseResult 解析 LLM 评估结果，返回 1.0（通过）或 0.0（失败）。
 //
-// 对应 Python: LLMAsJudgeMetric._parse_result(response)
+// Python: LLMAsJudgeMetric._parse_result(response)
 func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) MetricResult {
 	text := response.Content.Text()
 
@@ -176,7 +176,7 @@ func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) Met
 
 // formatValue 将任意值序列化为字符串，用于 LLM 模板填充。
 // nil 或零值 → 空字符串，非空 → JSON 序列化。
-// 对齐 Python 的 str(value or "") 语义。
+// Python: 的 str(value or "") 语义。
 func formatValue(v any) string {
 	if v == nil {
 		return ""

@@ -11,7 +11,7 @@ import (
 
 // PromptTemplate 可插值替换的 Prompt 模板，支持字符串和消息列表两种内容格式。
 //
-// 对应 Python: openjiuwen/core/foundation/prompt/template.py (PromptTemplate)
+// Python: openjiuwen/core/foundation/prompt/template.py (PromptTemplate)
 //
 // 支持的操作：
 //   - Format(keywords) — 非原地修改，返回新实例，替换占位符
@@ -72,7 +72,7 @@ func NewPromptTemplate(name string, content any, opts ...TemplateOption) *Prompt
 
 // Format 替换模板中的占位符，返回新的 PromptTemplate 实例。
 //
-// 对应 Python: PromptTemplate.format(keywords)
+// Python: PromptTemplate.format(keywords)
 //
 // 逻辑：
 //  1. keywords 为空 → 返回深拷贝
@@ -124,7 +124,7 @@ func (t *PromptTemplate) Format(keywords map[string]any) (*PromptTemplate, error
 
 // ToMessages 将模板内容转为消息列表。
 //
-// 对应 Python: PromptTemplate.to_messages()
+// Python: PromptTemplate.to_messages()
 //
 // 逻辑：
 //   - 空内容 → []

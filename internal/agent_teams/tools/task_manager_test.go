@@ -701,7 +701,7 @@ func TestTaskManager_AddBatch_跳过无效规格(t *testing.T) {
 	tm, _ := setupTestTaskManager()
 	ctx := context.Background()
 
-	// 对齐 Python: 缺 title 或 content 的规格应被跳过
+	// Python: 缺 title 或 content 的规格应被跳过
 	specs := []TaskCreateSpec{
 		{Title: "有效任务", Content: "内容"},
 		{Title: "", Content: "缺标题"}, // 应跳过
@@ -730,7 +730,7 @@ func TestTaskManager_AddBatch_跳过创建失败(t *testing.T) {
 	tm, _ := setupTestTaskManager()
 	ctx := context.Background()
 
-	// 对齐 Python: 创建失败的规格应跳过，不影响后续
+	// Python: 创建失败的规格应跳过，不影响后续
 	// 依赖不存在的任务会走 MutateDependencyGraph 原子路径失败
 	specs := []TaskCreateSpec{
 		{Title: "正常任务", Content: "内容"},

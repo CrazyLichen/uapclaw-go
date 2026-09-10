@@ -1,7 +1,7 @@
 // utils 包提供通用工具函数。
 //
 // background.go 实现后台任务和任务管理器。
-// 对应 Python：
+// Python:
 //   - openjiuwen/core/common/background_tasks.py（轻量后台任务句柄）
 //   - openjiuwen/core/common/task_manager/task.py（Task 数据模型 + 状态机）
 //   - openjiuwen/core/common/task_manager/manager.py（TaskManager 单例）
@@ -23,7 +23,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BackgroundTask 轻量后台任务句柄，管理 goroutine 生命周期。
-// 对齐 Python: BackgroundTask — 优先走 TaskManager（_manager_task），fallback 到 goroutine（_asyncio_task）
+// Python: BackgroundTask — 优先走 TaskManager（_manager_task），fallback 到 goroutine（_asyncio_task）
 type BackgroundTask struct {
 	// name 任务名称
 	name string
@@ -40,7 +40,7 @@ type BackgroundTask struct {
 	// mu 互斥锁
 	mu sync.Mutex
 	// managerTask 关联的 TaskManager Task（如果通过 TaskManager 创建）
-	// 对齐 Python: self._manager_task
+	// Python: self._manager_task
 	managerTask *Task
 	// ready 就绪信号通道，对齐 Python: self._ready = asyncio.Event()
 	// close(t.ready) 等价于 _ready.set()，表示任务已就绪（managerTask 已设置或 goroutine 已启动）
@@ -48,7 +48,7 @@ type BackgroundTask struct {
 }
 
 // Task 任务数据模型，包含状态机和完整生命周期信息。
-// 对应 Python: Task 数据模型 + 状态机
+// Python: Task 数据模型 + 状态机
 type Task struct {
 	// ID 任务唯一标识
 	ID string
@@ -88,14 +88,14 @@ type Task struct {
 }
 
 // TaskManager 任务管理器单例，提供任务的创建、取消、查询等操作。
-// 对应 Python: TaskManager 单例
+// Python: TaskManager 单例
 type TaskManager struct {
 	// registry 任务注册表
 	registry map[string]*Task
 	// mu 读写锁
 	mu sync.RWMutex
 	// cancelWaitTimeout 取消任务后等待函数完成的超时时间，默认 1s
-	// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
+	// Python: BackgroundTask.cancel(timeout=1.0)
 	cancelWaitTimeout time.Duration
 }
 
@@ -147,7 +147,7 @@ const (
 	// TaskTimeout 超时。
 	TaskTimeout
 	// defaultCancelWaitTimeout 取消任务后等待函数完成的默认超时时间。
-	// 对齐 Python: BackgroundTask.cancel(timeout=1.0)
+	// Python: BackgroundTask.cancel(timeout=1.0)
 	defaultCancelWaitTimeout = 1 * time.Second
 )
 
@@ -168,7 +168,7 @@ func (s TaskStatus) IsTerminal() bool {
 }
 
 // String 返回任务状态的字符串表示。
-// 对齐 Python: 小写值（pending/running/completed/failed/cancelled/timeout）
+// Python: 小写值（pending/running/completed/failed/cancelled/timeout）
 func (s TaskStatus) String() string {
 	switch s {
 	case TaskPending:
@@ -209,7 +209,7 @@ func WithTaskParentID(id string) TaskOption {
 }
 
 // NewBackgroundTask 创建轻量后台任务句柄。
-// 对齐 Python: BackgroundTask(group=group) — _ready 初始未设置
+// Python: BackgroundTask(group=group) — _ready 初始未设置
 func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *BackgroundTask {
 	return &BackgroundTask{
 		name:  name,
@@ -221,7 +221,7 @@ func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *
 }
 
 // CreateBackgroundTask 创建后台任务，优先通过 TaskManager 注册，fallback 到直接 goroutine。
-// 对齐 Python: create_background_task(coro, name, group, fallback_to_asyncio=True)
+// Python: create_background_task(coro, name, group, fallback_to_asyncio=True)
 func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) error, name string, group string) (*BackgroundTask, error) {
 	manager := GetTaskManager()
 	if manager != nil {
@@ -231,7 +231,7 @@ func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) erro
 		if err == nil {
 			handle := NewBackgroundTask(name, group, fn)
 			handle.managerTask = task
-			// 对齐 Python: handle.set_manager_task(task) → _ready.set()
+			// Python: handle.set_manager_task(task) → _ready.set()
 			// TaskManager 路径下 managerTask 已同步设置，立即就绪
 			close(handle.ready)
 			return handle, nil
@@ -244,7 +244,7 @@ func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) erro
 }
 
 // StartBackgroundTask 从同步生命周期方法中创建后台任务。
-// 对齐 Python: start_background_task(coro, name, group, fallback_to_asyncio=True)
+// Python: start_background_task(coro, name, group, fallback_to_asyncio=True)
 // 同步版本：不等待 TaskManager 注册完成，直接 fallback 到 goroutine。
 func StartBackgroundTask(fn func(ctx context.Context) error, name string, group string) *BackgroundTask {
 	// 同步方法无法等待 async 的 TaskManager.CreateTask，直接 goroutine
@@ -254,7 +254,7 @@ func StartBackgroundTask(fn func(ctx context.Context) error, name string, group 
 }
 
 // Start 启动后台任务 goroutine。
-// 对齐 Python: BackgroundTask.from_asyncio_task → _ready.set() 立即就绪
+// Python: BackgroundTask.from_asyncio_task → _ready.set() 立即就绪
 func (t *BackgroundTask) Start(ctx context.Context) {
 	ctx, t.cancel = context.WithCancel(ctx)
 
@@ -272,7 +272,7 @@ func (t *BackgroundTask) Start(ctx context.Context) {
 }
 
 // Stop 停止后台任务，等待完成或超时。
-// 对齐 Python: BackgroundTask.cancel(reason, timeout) — 先等 _ready，再委托 _manager_task.cancel 或 asyncio_task.cancel
+// Python: BackgroundTask.cancel(reason, timeout) — 先等 _ready，再委托 _manager_task.cancel 或 asyncio_task.cancel
 func (t *BackgroundTask) Stop(timeout time.Duration) error {
 	// 先等就绪信号，对齐 Python: await self._ready.wait()
 	select {
@@ -288,9 +288,9 @@ func (t *BackgroundTask) Stop(timeout time.Duration) error {
 	t.mu.Unlock()
 
 	if mgrTask != nil {
-		// 对齐 Python: await self._manager_task.cancel(reason=reason)
+		// Python: await self._manager_task.cancel(reason=reason)
 		GetTaskManager().Cancel(mgrTask.ID, "background_task_stop", "")
-		// 对齐 Python: with anyio.move_on_after(timeout): await self._manager_task.wait()
+		// Python: with anyio.move_on_after(timeout): await self._manager_task.wait()
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
 		select {
@@ -321,7 +321,7 @@ func (t *BackgroundTask) Stop(timeout time.Duration) error {
 }
 
 // Wait 等待后台任务完成，返回执行错误。
-// 对齐 Python: BackgroundTask.wait() — 先等 _ready，再委托 _manager_task 或等 asyncio_task
+// Python: BackgroundTask.wait() — 先等 _ready，再委托 _manager_task 或等 asyncio_task
 func (t *BackgroundTask) Wait() error {
 	// 先等就绪信号，对齐 Python: await self._ready.wait()
 	<-t.ready
@@ -332,7 +332,7 @@ func (t *BackgroundTask) Wait() error {
 	t.mu.Unlock()
 
 	if mgrTask != nil {
-		// 对齐 Python: return await self._manager_task.wait()
+		// Python: return await self._manager_task.wait()
 		_, err := mgrTask.Wait()
 		return err
 	}
@@ -579,13 +579,13 @@ func (m *TaskManager) RemoveCompleted() int {
 }
 
 // SetCancelWaitTimeout 设置取消任务后等待函数完成的超时时间。
-// 对齐 Python: BackgroundTask.cancel(timeout=...) 的可配置超时参数。
+// Python: BackgroundTask.cancel(timeout=...) 的可配置超时参数。
 func (m *TaskManager) SetCancelWaitTimeout(timeout time.Duration) {
 	m.cancelWaitTimeout = timeout
 }
 
 // CascadeCancel 级联取消目标任务及其所有子任务。
-// 对齐 Python: TaskManager._cascade_cancel(parent_id)，子任务 cancelledBy 为父任务 ID。
+// Python: TaskManager._cascade_cancel(parent_id)，子任务 cancelledBy 为父任务 ID。
 func (m *TaskManager) CascadeCancel(taskID string, reason string, cancelledBy string) int {
 	m.mu.RLock()
 	var children []*Task

@@ -38,7 +38,7 @@ type esClientWrapper struct {
 // 元数据通过 ES _meta 文档持久化，同时维护内存缓存加速读取，
 // 缓存未命中或进程重启时从 ES _meta 文档回查。
 //
-// 对应 Python: vector/es_vector_store.py (ESVectorStore)
+// Python: vector/es_vector_store.py (ESVectorStore)
 type ESVectorStore struct {
 	// client ES 客户端实例
 	client esClient
@@ -132,7 +132,7 @@ func (s *ESVectorStore) Close() {
 // CreateCollection 创建集合（ES 索引）。
 // 从 schema 构建 ES mapping，包含 dynamic:strict 和向量字段的 dense_vector 配置。
 //
-// 对应 Python: ESVectorStore.create_collection()
+// Python: ESVectorStore.create_collection()
 func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
 
@@ -256,7 +256,7 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 // DeleteCollection 删除集合（ES 索引）。
 // 先检查索引是否存在，不存在时记录 Warn 日志并返回 nil（对齐 Python 实现）。
 //
-// 对应 Python: ESVectorStore.delete_collection()
+// Python: ESVectorStore.delete_collection()
 func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	c, err := s.getClient()
 	if err != nil {
@@ -316,7 +316,7 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 
 // CollectionExists 检查集合是否存在。
 //
-// 对应 Python: ESVectorStore.collection_exists()
+// Python: ESVectorStore.collection_exists()
 func (s *ESVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -330,7 +330,7 @@ func (s *ESVectorStore) CollectionExists(ctx context.Context, collectionName str
 // GetSchema 获取集合的 Schema。
 // 先尝试从 _meta 文档的 schema 字段获取，失败则从 ES mapping 反射构建。
 //
-// 对应 Python: ESVectorStore.get_schema()
+// Python: ESVectorStore.get_schema()
 func (s *ESVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *ESVectorStore) GetSchema(ctx context.Context, collectionName string, op
 // AddDocs 添加文档到集合。
 // 按 BatchSize 构建 NDJSON bulk 请求分批插入。
 //
-// 对应 Python: ESVectorStore.add_docs()
+// Python: ESVectorStore.add_docs()
 func (s *ESVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
 		return nil
@@ -437,7 +437,7 @@ func (s *ESVectorStore) AddDocs(ctx context.Context, collectionName string, docs
 // Search 向量相似度搜索。
 // 使用 ES k-NN 搜索，构建 knn 查询子句。
 //
-// 对应 Python: ESVectorStore.search()
+// Python: ESVectorStore.search()
 func (s *ESVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	o := newOptions(opts...)
 	if topK <= 0 {
@@ -589,7 +589,7 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 // DeleteDocsByIDs 按 ID 删除文档。
 // 构建 NDJSON bulk delete 请求，按 batch_size 分批删除。
 //
-// 对应 Python: ESVectorStore.delete_docs_by_ids()
+// Python: ESVectorStore.delete_docs_by_ids()
 func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
 		return nil
@@ -661,7 +661,7 @@ func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName stri
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
 // 使用 ES delete_by_query API。
 //
-// 对应 Python: ESVectorStore.delete_docs_by_filters()
+// Python: ESVectorStore.delete_docs_by_filters()
 func (s *ESVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
 		return nil
@@ -714,7 +714,7 @@ func (s *ESVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName 
 // ListCollectionNames 列出所有集合名称。
 // 通过 ES indices.get API 获取匹配 indexPrefix 的索引列表。
 //
-// 对应 Python: ESVectorStore.list_collection_names()
+// Python: ESVectorStore.list_collection_names()
 //
 // 注意：Python 异常时返回空列表 []，Go 返回 error。Go 更严格但行为不同，
 // 此处保持 Go 返回 error 的方式，调用方必须处理异常情况。
@@ -734,7 +734,7 @@ func (s *ESVectorStore) ListCollectionNames(ctx context.Context) ([]string, erro
 // UpdateSchema 执行 Schema 迁移操作。
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
-// 对应 Python: ESVectorStore.update_schema()
+// Python: ESVectorStore.update_schema()
 func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
@@ -744,7 +744,7 @@ func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string,
 // UpdateCollectionMetadata 更新集合元数据。
 // 将元数据持久化到 ES _meta 文档。
 //
-// 对应 Python: ESVectorStore.update_collection_metadata()
+// Python: ESVectorStore.update_collection_metadata()
 func (s *ESVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	if len(metadata) == 0 {
 		return nil
@@ -799,7 +799,7 @@ func (s *ESVectorStore) UpdateCollectionMetadata(ctx context.Context, collection
 // GetCollectionMetadata 获取集合元数据。
 // 从 ES _meta 文档加载。
 //
-// 对应 Python: ESVectorStore.get_collection_metadata()
+// Python: ESVectorStore.get_collection_metadata()
 func (s *ESVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -1381,7 +1381,7 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 }
 
 // esListIndices 通过 ES indices.get API 列出匹配前缀的索引，并提取集合名称。
-// 对齐 Python 实现使用 indices.get 而非 _cat/indices。
+// Python: 实现使用 indices.get 而非 _cat/indices。
 func esListIndices(ctx context.Context, c esClient, indexPrefix string) ([]string, error) {
 	req := esapi.IndicesGetRequest{
 		Index: []string{indexPrefix + "__*"},

@@ -45,7 +45,7 @@ var allStateKeySentinel = struct{}{}
 
 // AllStateKey 表示获取全部全局状态的哨兵 StateKey。
 // 用于 AgentStateCollection.GetGlobal / GetAgent 和 WorkflowStateCollection.GetGlobal。
-// 对齐 Python 中 key=None 返回完整全局状态的语义。
+// Python: 中 key=None 返回完整全局状态的语义。
 var AllStateKey = StateKey{keyType: StateKeyAll, value: allStateKeySentinel}
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -18,7 +20,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PublishEventFunc 事件发布回调函数类型。
-// 对齐 Python: Callable[[str, BaseEventMessage], Awaitable[None]]
+// Python: Callable[[str, BaseEventMessage], Awaitable[None]]
 type PublishEventFunc func(eventType string, event any)
 
 // managerConfig ManagerOption 配置
@@ -30,7 +32,7 @@ type managerConfig struct {
 type ManagerOption func(*managerConfig)
 
 // TeamWorkspaceManager 团队工作空间管理器。
-// 对齐 Python: TeamWorkspaceManager
+// Python: TeamWorkspaceManager
 //
 // 处理团队共享工作空间的锁定、版本控制、同步和冲突检测。
 // 文件 I/O 由 SysOperation 工具通过 .team/ 符号链接挂载处理，
@@ -84,7 +86,7 @@ func WithPublishEvent(fn PublishEventFunc) ManagerOption {
 }
 
 // NewTeamWorkspaceManager 创建 TeamWorkspaceManager。
-// 对齐 Python: TeamWorkspaceManager.__init__
+// Python: TeamWorkspaceManager.__init__
 func NewTeamWorkspaceManager(config TeamWorkspaceConfig, workspacePath, teamName string, mode WorkspaceMode, opts ...ManagerOption) *TeamWorkspaceManager {
 	cfg := managerConfig{}
 	for _, opt := range opts {
@@ -101,7 +103,7 @@ func NewTeamWorkspaceManager(config TeamWorkspaceConfig, workspacePath, teamName
 }
 
 // Initialize 初始化工作空间目录和 git 仓库。
-// 对齐 Python: TeamWorkspaceManager.initialize
+// Python: TeamWorkspaceManager.initialize
 //
 // 当 config.VersionControl 为 false 时，仅创建工作空间和产物目录，
 // 不初始化 git 仓库，工作空间作为普通共享目录使用。
@@ -193,7 +195,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 }
 
 // MountIntoWorkspace 在 agent 工作区创建 .team/{teamName} 符号链接。
-// 对齐 Python: TeamWorkspaceManager.mount_into_workspace
+// Python: TeamWorkspaceManager.mount_into_workspace
 func (m *TeamWorkspaceManager) MountIntoWorkspace(workspaceRoot string) error {
 	teamDir := filepath.Join(workspaceRoot, ".team")
 	if err := os.MkdirAll(teamDir, 0o755); err != nil {
@@ -213,7 +215,7 @@ func (m *TeamWorkspaceManager) MountIntoWorkspace(workspaceRoot string) error {
 }
 
 // MountWorktree 在团队工作空间暴露 worktree 符号链接。
-// 对齐 Python: TeamWorkspaceManager.mount_worktree
+// Python: TeamWorkspaceManager.mount_worktree
 func (m *TeamWorkspaceManager) MountWorktree(slug, worktreePath string) error {
 	wtDir := filepath.Join(m.workspacePath, ".worktree")
 	if err := os.MkdirAll(wtDir, 0o755); err != nil {
@@ -245,7 +247,7 @@ func (m *TeamWorkspaceManager) MountWorktree(slug, worktreePath string) error {
 }
 
 // UnmountWorktree 移除 worktree 符号链接。
-// 对齐 Python: TeamWorkspaceManager.unmount_worktree
+// Python: TeamWorkspaceManager.unmount_worktree
 func (m *TeamWorkspaceManager) UnmountWorktree(slug string) error {
 	linkPath := filepath.Join(m.workspacePath, ".worktree", slug)
 	info, err := os.Lstat(linkPath)
@@ -265,7 +267,7 @@ func (m *TeamWorkspaceManager) UnmountWorktree(slug string) error {
 }
 
 // MountIntoWorktree 在 worktree 内创建 .team 符号链接并更新 .gitignore。
-// 对齐 Python: TeamWorkspaceManager.mount_into_worktree
+// Python: TeamWorkspaceManager.mount_into_worktree
 func (m *TeamWorkspaceManager) MountIntoWorktree(worktreePath string) error {
 	linkPath := filepath.Join(worktreePath, ".team")
 	if m.prepareMountPath(linkPath) {
@@ -316,7 +318,7 @@ func (m *TeamWorkspaceManager) MountIntoWorktree(worktreePath string) error {
 }
 
 // AutoCommit 自动提交文件变更。
-// 对齐 Python: TeamWorkspaceManager.auto_commit
+// Python: TeamWorkspaceManager.auto_commit
 //
 // LOCAL 模式下：git add + diff --cached + commit。
 // DISTRIBUTED 模式下额外执行 push，失败时 pull 后重试一次。
@@ -360,7 +362,7 @@ func (m *TeamWorkspaceManager) AutoCommit(ctx context.Context, relativePath, mem
 }
 
 // GetHistory 获取文件版本历史。
-// 对齐 Python: TeamWorkspaceManager.get_history
+// Python: TeamWorkspaceManager.get_history
 func (m *TeamWorkspaceManager) GetHistory(ctx context.Context, relativePath string, limit int) ([]HistoryEntry, error) {
 	if !m.config.VersionControl {
 		return nil, nil
@@ -407,7 +409,7 @@ func (m *TeamWorkspaceManager) GetHistory(ctx context.Context, relativePath stri
 }
 
 // GetLock 获取文件锁状态。
-// 对齐 Python: TeamWorkspaceManager.get_lock
+// Python: TeamWorkspaceManager.get_lock
 //
 // 无网络请求，仅返回缓存锁状态。
 func (m *TeamWorkspaceManager) GetLock(filePath string) *WorkspaceFileLock {
@@ -426,7 +428,7 @@ func (m *TeamWorkspaceManager) GetLock(filePath string) *WorkspaceFileLock {
 }
 
 // AcquireLock 获取文件锁。
-// 对齐 Python: TeamWorkspaceManager.acquire_lock
+// Python: TeamWorkspaceManager.acquire_lock
 //
 // LOCAL 模式或 Leader 节点：内存锁 + sync.Mutex 保护，可重入，过期锁可回收。
 // DISTRIBUTED 非 Leader：委托 RemoteAcquireLock（Phase 3）。
@@ -461,7 +463,7 @@ func (m *TeamWorkspaceManager) AcquireLock(ctx context.Context, filePath, member
 }
 
 // ReleaseLock 释放文件锁。
-// 对齐 Python: TeamWorkspaceManager.release_lock
+// Python: TeamWorkspaceManager.release_lock
 func (m *TeamWorkspaceManager) ReleaseLock(ctx context.Context, filePath, memberName string) (bool, error) {
 	if m.mode == WorkspaceModeDistributed {
 		return m.RemoteReleaseLock(ctx, filePath, memberName)
@@ -480,7 +482,7 @@ func (m *TeamWorkspaceManager) ReleaseLock(ctx context.Context, filePath, member
 }
 
 // ListLocks 列出所有活跃锁。
-// 对齐 Python: TeamWorkspaceManager.list_locks
+// Python: TeamWorkspaceManager.list_locks
 func (m *TeamWorkspaceManager) ListLocks() []WorkspaceFileLock {
 	m.lockMu.Lock()
 	defer m.lockMu.Unlock()
@@ -504,7 +506,7 @@ func (m *TeamWorkspaceManager) ListLocks() []WorkspaceFileLock {
 }
 
 // Pull 拉取远程变更（LOCAL 模式下 no-op）。
-// 对齐 Python: TeamWorkspaceManager.pull
+// Python: TeamWorkspaceManager.pull
 func (m *TeamWorkspaceManager) Pull(ctx context.Context) (bool, error) {
 	if !m.config.VersionControl {
 		return false, nil
@@ -521,7 +523,7 @@ func (m *TeamWorkspaceManager) Pull(ctx context.Context) (bool, error) {
 }
 
 // Push 推送本地提交（LOCAL 模式下 no-op）。
-// 对齐 Python: TeamWorkspaceManager.push
+// Python: TeamWorkspaceManager.push
 func (m *TeamWorkspaceManager) Push(ctx context.Context) (bool, error) {
 	if !m.config.VersionControl {
 		return true, nil
@@ -541,19 +543,19 @@ func (m *TeamWorkspaceManager) Push(ctx context.Context) (bool, error) {
 }
 
 // RemoteAcquireLock 分布式远程获取锁（占位）。
-// 对齐 Python: TeamWorkspaceManager._remote_acquire_lock
+// Python: TeamWorkspaceManager._remote_acquire_lock
 func (m *TeamWorkspaceManager) RemoteAcquireLock(ctx context.Context, filePath, memberName, displayName string, timeoutSeconds ...int) (bool, error) {
 	return false, ErrDistributedNotImplemented
 }
 
 // RemoteReleaseLock 分布式远程释放锁（占位）。
-// 对齐 Python: TeamWorkspaceManager._remote_release_lock
+// Python: TeamWorkspaceManager._remote_release_lock
 func (m *TeamWorkspaceManager) RemoteReleaseLock(ctx context.Context, filePath, memberName string) (bool, error) {
 	return false, ErrDistributedNotImplemented
 }
 
 // HandleLockRequest 处理锁请求（占位，仅 Leader 调用）。
-// 对齐 Python: TeamWorkspaceManager.handle_lock_request
+// Python: TeamWorkspaceManager.handle_lock_request
 //
 // 参数 request 须为 schema.WorkspaceLockRequestEvent 类型，
 // 返回 *schema.WorkspaceLockResponseEvent。因避免循环依赖，
@@ -563,7 +565,7 @@ func (m *TeamWorkspaceManager) HandleLockRequest(request any) (any, error) {
 }
 
 // HandleLockResponse 处理锁响应（占位，仅 Remote 调用）。
-// 对齐 Python: TeamWorkspaceManager.handle_lock_response
+// Python: TeamWorkspaceManager.handle_lock_response
 //
 // 参数 response 须为 schema.WorkspaceLockResponseEvent 类型。
 func (m *TeamWorkspaceManager) HandleLockResponse(response any) error {
@@ -585,7 +587,7 @@ func (m *TeamWorkspaceManager) Mode() WorkspaceMode { return m.mode }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runGit 执行 git 命令。
-// 对齐 Python: _run_git
+// Python: _run_git
 func runGit(ctx context.Context, args []string, cwd string) gitResult {
 	timeoutCtx, cancel := context.WithTimeout(ctx, gitTimeoutSeconds*time.Second)
 	defer cancel()
@@ -606,7 +608,7 @@ func runGit(ctx context.Context, args []string, cwd string) gitResult {
 }
 
 // revParse 执行 git rev-parse。
-// 对齐 Python: rev_parse
+// Python: rev_parse
 func revParse(ctx context.Context, ref, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", ref}, cwd)
 	if !r.OK {
@@ -615,16 +617,56 @@ func revParse(ctx context.Context, ref, cwd string) (string, error) {
 	return r.Stdout, nil
 }
 
-// mountDirectory 创建目录符号链接。
-// 对齐 Python: TeamWorkspaceManager._mount_directory
-//
-// TODO: Windows junction 回退方案
+// mountDirectory 创建目录链接，Windows 下符号链接权限不足时回退到 junction。
+// Python: TeamWorkspaceManager._mount_directory
 func mountDirectory(targetPath, linkPath string) error {
-	return os.Symlink(targetPath, linkPath)
+	err := os.Symlink(targetPath, linkPath)
+	if err == nil {
+		return nil
+	}
+	// Windows 下符号链接权限不足时回退到 junction
+	if runtime.GOOS == "windows" {
+		if isSymlinkPrivilegeNotHeld(err) {
+			if jErr := createWindowsJunction(targetPath, linkPath); jErr != nil {
+				return fmt.Errorf("符号链接和 junction 均失败: symlink: %w, junction: %v", err, jErr)
+			}
+			logger.Info(logComponent).
+				Str("target", targetPath).
+				Str("link", linkPath).
+				Msg("Windows 符号链接权限不足，已使用 junction 挂载")
+			return nil
+		}
+	}
+	return err
+}
+
+// isSymlinkPrivilegeNotHeld 检查是否为 Windows 符号链接权限不足错误。
+// Python: ERROR_PRIVILEGE_NOT_HELD = 1314
+func isSymlinkPrivilegeNotHeld(err error) bool {
+	if pathErr, ok := err.(*os.PathError); ok {
+		if errno, ok := pathErr.Err.(syscall.Errno); ok {
+			return errno == 1314 // ERROR_PRIVILEGE_NOT_HELD
+		}
+	}
+	return false
+}
+
+// createWindowsJunction 使用 cmd /c mklink /J 创建目录 junction。
+// Python: TeamWorkspaceManager._create_windows_junction
+func createWindowsJunction(targetPath, linkPath string) error {
+	cmdPath := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+	if cmdPath == "" {
+		cmdPath = `C:\Windows\System32\cmd.exe`
+	}
+	result, err := exec.Command(cmdPath, "/c", "mklink", "/J", linkPath, targetPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mklink /J 失败: %w, output: %s", err, strings.TrimSpace(string(result)))
+	}
+	return nil
 }
 
 // prepareMountPath 准备挂载路径。
-// 对齐 Python: TeamWorkspaceManager._prepare_mount_path
+// Python: TeamWorkspaceManager._prepare_mount_path
 //
 // 返回 true 表示需要在 linkPath 创建挂载，false 表示已正确挂载。
 func (m *TeamWorkspaceManager) prepareMountPath(linkPath string) bool {
@@ -654,7 +696,7 @@ func (m *TeamWorkspaceManager) prepareMountPath(linkPath string) bool {
 }
 
 // mergeExistingMountContents 合并旧挂载目录内容。
-// 对齐 Python: TeamWorkspaceManager._merge_existing_mount_contents
+// Python: TeamWorkspaceManager._merge_existing_mount_contents
 //
 // 当 .team/<team_name> 是一个真实目录（而非符号链接）时，
 // 将其内容合并到工作空间中，避免用户产物丢失。
@@ -694,7 +736,7 @@ func (m *TeamWorkspaceManager) mergeExistingMountContents(linkPath string, info 
 }
 
 // backupExistingMountPath 备份旧挂载路径。
-// 对齐 Python: TeamWorkspaceManager._backup_existing_mount_path
+// Python: TeamWorkspaceManager._backup_existing_mount_path
 func backupExistingMountPath(linkPath string) string {
 	stamp := time.Now().UTC().Format("20060102150405")
 	backupPath := fmt.Sprintf("%s.stale-%s", linkPath, stamp)
@@ -711,7 +753,7 @@ func backupExistingMountPath(linkPath string) string {
 }
 
 // isMountedToWorkspace 检查链接是否已指向工作空间。
-// 对齐 Python: TeamWorkspaceManager._is_mounted_to_workspace
+// Python: TeamWorkspaceManager._is_mounted_to_workspace
 func (m *TeamWorkspaceManager) isMountedToWorkspace(linkPath string) bool {
 	linkInfo, err := os.Stat(linkPath)
 	if err != nil {
@@ -724,12 +766,8 @@ func (m *TeamWorkspaceManager) isMountedToWorkspace(linkPath string) bool {
 	return os.SameFile(linkInfo, wsInfo)
 }
 
-// maybePull 节流拉取（LOCAL 模式下 no-op）。
-// 对齐 Python: TeamWorkspaceRail._maybe_pull
-func (m *TeamWorkspaceManager) maybePull() {} // LOCAL 模式下无需操作
-
 // resolveWorkspaceRelative 从 .team/ 前缀路径提取工作空间相对路径。
-// 对齐 Python: TeamWorkspaceRail._resolve_workspace_relative
+// Python: TeamWorkspaceRail._resolve_workspace_relative
 //
 // 处理两种布局：
 //   - Hub:   .team/{team_name}/artifacts/report.md → artifacts/report.md

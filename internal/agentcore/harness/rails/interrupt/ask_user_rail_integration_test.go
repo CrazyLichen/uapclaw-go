@@ -24,7 +24,7 @@ func TestAskUserRail_Init_Integration(t *testing.T) {
 	r := NewAskUserRail()
 	agent := &mockBaseAgent{card: &agentschema.AgentCard{ID: "test_agent"}}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	assert.NoError(t, err)
 	assert.Len(t, r.tools, 1)
 	assert.Equal(t, "ask_user", r.tools[0].Card().Name)
@@ -39,7 +39,7 @@ func TestAskUserRail_Uninit_Integration(t *testing.T) {
 	r := NewAskUserRail()
 	agent := &mockBaseAgent{card: &agentschema.AgentCard{ID: "test_agent"}}
 
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 
 	err = r.Uninit(agent)

@@ -16,13 +16,14 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SelectorCacheRecord 选择器缓存记录。
 //
-// 对齐 Python: BrowserSelectorCache._load() 返回的 records 中每一条记录
+// Python: BrowserSelectorCache._load() 返回的 records 中每一条记录
 type SelectorCacheRecord struct {
 	// Domain 域名
 	Domain string `json:"domain"`
@@ -46,7 +47,7 @@ type SelectorCacheRecord struct {
 
 // BrowserSelectorCache 小型 JSON 选择器缓存，用于重复的浏览器探测发现结果。
 //
-// 对齐 Python: BrowserSelectorCache (site_profiles.py L237-435)
+// Python: BrowserSelectorCache (site_profiles.py L237-435)
 type BrowserSelectorCache struct {
 	// path 缓存文件路径
 	path string
@@ -79,7 +80,7 @@ const (
 
 // builtinSiteProfiles 内置浏览器站点配置文件。
 //
-// 对齐 Python: BUILTIN_SITE_PROFILES (site_profiles.py L16-57)
+// Python: BUILTIN_SITE_PROFILES (site_profiles.py L16-57)
 
 var builtinSiteProfiles = []map[string]any{
 	{
@@ -128,7 +129,7 @@ var builtinSiteProfiles = []map[string]any{
 }
 
 // chromeSelectorFragments 页面 chrome 选择器片段。
-// 对齐 Python: _CHROME_SELECTOR_FRAGMENTS (site_profiles.py L60-69)
+// Python: _CHROME_SELECTOR_FRAGMENTS (site_profiles.py L60-69)
 var chromeSelectorFragments = []string{
 	"#nav",
 	"nav-",
@@ -141,7 +142,7 @@ var chromeSelectorFragments = []string{
 }
 
 // chromeTitles 页面 chrome 标题集合。
-// 对齐 Python: _CHROME_TITLES (site_profiles.py L71-81)
+// Python: _CHROME_TITLES (site_profiles.py L71-81)
 var chromeTitles = map[string]bool{
 	"fresh & fast":     true,
 	"sell":             true,
@@ -155,7 +156,7 @@ var chromeTitles = map[string]bool{
 }
 
 // selectorCacheSingleton 全局选择器缓存单例
-// 对齐 Python: _SELECTOR_CACHE (site_profiles.py L438)
+// Python: _SELECTOR_CACHE (site_profiles.py L438)
 var selectorCacheSingleton *BrowserSelectorCache
 
 // selectorCacheOnce 单例初始化控制
@@ -174,14 +175,14 @@ var multiSlashRe = regexp.MustCompile(`/+`)
 
 // BuiltinSiteProfiles 返回内置浏览器站点配置文件的深拷贝。
 //
-// 对齐 Python: builtin_site_profiles() (site_profiles.py L84-86)
+// Python: builtin_site_profiles() (site_profiles.py L84-86)
 func BuiltinSiteProfiles() []map[string]any {
 	return deepCopyProfiles(builtinSiteProfiles)
 }
 
 // NormalizeRouteSignature 返回用于选择器缓存键的粗粒度路由签名。
 //
-// 对齐 Python: normalize_route_signature() (site_profiles.py L89-101)
+// Python: normalize_route_signature() (site_profiles.py L89-101)
 func NormalizeRouteSignature(rawURL string) string {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed == nil {
@@ -208,7 +209,7 @@ func NormalizeRouteSignature(rawURL string) string {
 
 // DomainFromURL 从 URL 中提取域名。
 //
-// 对齐 Python: domain_from_url() (site_profiles.py L104-106)
+// Python: domain_from_url() (site_profiles.py L104-106)
 func DomainFromURL(rawURL string) string {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed == nil {
@@ -219,7 +220,7 @@ func DomainFromURL(rawURL string) string {
 
 // GetSelectorCache 返回全局选择器缓存单例。
 //
-// 对齐 Python: get_selector_cache() (site_profiles.py L441-445)
+// Python: get_selector_cache() (site_profiles.py L441-445)
 func GetSelectorCache() *BrowserSelectorCache {
 	selectorCacheOnce.Do(func() {
 		selectorCacheSingleton = NewBrowserSelectorCache("")
@@ -229,7 +230,7 @@ func GetSelectorCache() *BrowserSelectorCache {
 
 // NewBrowserSelectorCache 创建新的选择器缓存实例。
 //
-// 对齐 Python: BrowserSelectorCache.__init__
+// Python: BrowserSelectorCache.__init__
 func NewBrowserSelectorCache(path string) *BrowserSelectorCache {
 	if path == "" {
 		path = defaultCachePath()
@@ -239,7 +240,7 @@ func NewBrowserSelectorCache(path string) *BrowserSelectorCache {
 
 // ExportForProbe 导出可用于嵌入探测 JS 的紧凑缓存记录。
 //
-// 对齐 Python: BrowserSelectorCache.export_for_probe (site_profiles.py L272-290)
+// Python: BrowserSelectorCache.export_for_probe (site_profiles.py L272-290)
 func (c *BrowserSelectorCache) ExportForProbe(maxRecords ...int) []map[string]any {
 	limit := selectorCacheExportMaxRecords
 	if len(maxRecords) > 0 && maxRecords[0] > 0 {
@@ -290,7 +291,7 @@ func (c *BrowserSelectorCache) ExportForProbe(maxRecords ...int) []map[string]an
 
 // RecordCardProbeResult 从成功的卡片探测结果中记录可复用的选择器。
 //
-// 对齐 Python: BrowserSelectorCache.record_card_probe_result (site_profiles.py L292-435)
+// Python: BrowserSelectorCache.record_card_probe_result (site_profiles.py L292-435)
 func (c *BrowserSelectorCache) RecordCardProbeResult(result map[string]any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -482,13 +483,13 @@ func (c *BrowserSelectorCache) RecordCardProbeResult(result map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultCachePath 返回默认缓存文件路径。
-// 对齐 Python: _default_cache_path (site_profiles.py L109-114)
+// Python: _default_cache_path (site_profiles.py L109-114)
 func defaultCachePath() string {
 	raw := strings.TrimSpace(os.Getenv("OPENJIUWEN_BROWSER_SELECTOR_CACHE"))
 	if raw != "" {
 		expanded := os.ExpandEnv(raw)
-		// 对齐 Python: Path(raw).expanduser() — os.ExpandEnv 不展开 ~，需要 expandHome 补充
-		return expandHome(expanded)
+		// Python: Path(raw).expanduser() — os.ExpandEnv 不展开 ~，需要 ExpandHome 补充
+		return pathutil.ExpandHome(expanded)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -498,7 +499,7 @@ func defaultCachePath() string {
 }
 
 // unique 字符串列表去重，限制数量。
-// 对齐 Python: _unique (site_profiles.py L117-128)
+// Python: _unique (site_profiles.py L117-128)
 func unique(items []string, limit int) []string {
 	var result []string
 	seen := make(map[string]bool)
@@ -517,7 +518,7 @@ func unique(items []string, limit int) []string {
 }
 
 // selectorIsTooBroad 检查选择器是否过于宽泛。
-// 对齐 Python: _selector_is_too_broad (site_profiles.py L131-142)
+// Python: _selector_is_too_broad (site_profiles.py L131-142)
 func selectorIsTooBroad(selector string) bool {
 	value := strings.TrimSpace(strings.ToLower(selector))
 	if value == "" {
@@ -539,7 +540,7 @@ func selectorIsTooBroad(selector string) bool {
 }
 
 // looksLikePageChrome 检测导航/chrome 卡片。
-// 对齐 Python: _looks_like_page_chrome (site_profiles.py L145-156)
+// Python: _looks_like_page_chrome (site_profiles.py L145-156)
 func looksLikePageChrome(card map[string]any) bool {
 	selector := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", card["selector_hint"])))
 	title := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", card["title"])))
@@ -559,7 +560,7 @@ func looksLikePageChrome(card map[string]any) bool {
 }
 
 // cardQualityScore 计算卡片的质量评分。
-// 对齐 Python: _card_quality_score (site_profiles.py L159-188)
+// Python: _card_quality_score (site_profiles.py L159-188)
 func cardQualityScore(card map[string]any) int {
 	if looksLikePageChrome(card) {
 		return 0
@@ -603,7 +604,7 @@ func cardQualityScore(card map[string]any) int {
 }
 
 // isCacheableCard 判断卡片是否值得缓存。
-// 对齐 Python: _is_cacheable_card (site_profiles.py L191-203)
+// Python: _is_cacheable_card (site_profiles.py L191-203)
 func isCacheableCard(card map[string]any) bool {
 	score := cardQualityScore(card)
 	if score >= 42 {
@@ -619,7 +620,7 @@ func isCacheableCard(card map[string]any) bool {
 }
 
 // generalizeSelector 从 selector_hint 创建可复用的选择器变体。
-// 对齐 Python: _generalize_selector (site_profiles.py L206-234)
+// Python: _generalize_selector (site_profiles.py L206-234)
 func generalizeSelector(selector string) []string {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
@@ -675,7 +676,7 @@ func generalizeSelector(selector string) []string {
 }
 
 // load 加载缓存数据。
-// 对齐 Python: BrowserSelectorCache._load (site_profiles.py L243-261)
+// Python: BrowserSelectorCache._load (site_profiles.py L243-261)
 func (c *BrowserSelectorCache) load() map[string]any {
 	data := map[string]any{
 		"version": selectorCacheVersion,
@@ -706,7 +707,7 @@ func (c *BrowserSelectorCache) load() map[string]any {
 }
 
 // save 保存缓存数据。
-// 对齐 Python: BrowserSelectorCache._save (site_profiles.py L263-270)
+// Python: BrowserSelectorCache._save (site_profiles.py L263-270)
 func (c *BrowserSelectorCache) save(data map[string]any) {
 	dir := filepath.Dir(c.path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

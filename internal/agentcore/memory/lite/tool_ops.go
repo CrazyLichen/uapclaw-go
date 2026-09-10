@@ -157,7 +157,7 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		logger.Error(logComponent).Msg("读取记忆失败，无可用的系统操作接口")
 		return &ReadMemoryResult{Success: false, Path: path, Error: "读取失败，无可用的系统操作接口"}
 	}
-	// 对齐 Python: 使用 line_range 读取
+	// Python: 使用 line_range 读取
 	fsOpts := []sysop.FsOption{}
 	if offset != nil {
 		if limit != nil {

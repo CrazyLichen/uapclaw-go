@@ -8,7 +8,7 @@ import (
 
 // BaseInterruptionState 中断状态基类。
 //
-// 对应 Python: BaseInterruptionState(ai_message, iteration, original_query)
+// Python: BaseInterruptionState(ai_message, iteration, original_query)
 type BaseInterruptionState struct {
 	// AIMessage 中断时的 AI 消息
 	AIMessage *llmschema.AssistantMessage
@@ -20,14 +20,14 @@ type BaseInterruptionState struct {
 
 // ToolInterruptEntry 工具中断条目。
 //
-// 对应 Python: ToolInterruptEntry(tool_call, interrupt_requests, is_sub_agent)
+// Python: ToolInterruptEntry(tool_call, interrupt_requests, is_sub_agent)
 // Python 中 interrupt_requests 类型为 Dict[str, InterruptRequest]，但实际可存 InterruptRequest 子类
 // （如 ToolCallInterruptRequest）。Go 中用 InterruptRequester 接口实现多态。
 type ToolInterruptEntry struct {
 	// ToolCall 触发中断的工具调用
 	ToolCall *llmschema.ToolCall
 	// InterruptRequests 中断请求映射 (interrupt_id → InterruptRequester)
-	// 对齐 Python: Dict[str, InterruptRequest] — 实际可存 InterruptRequest 或 ToolCallInterruptRequest
+	// Python: Dict[str, InterruptRequest] — 实际可存 InterruptRequest 或 ToolCallInterruptRequest
 	InterruptRequests map[string]InterruptRequester
 	// IsSubAgent 是否来自子 Agent
 	IsSubAgent bool
@@ -35,7 +35,7 @@ type ToolInterruptEntry struct {
 
 // ToolInterruptionState 工具中断状态（HITL 中断）。
 //
-// 对应 Python: ToolInterruptionState(BaseInterruptionState)
+// Python: ToolInterruptionState(BaseInterruptionState)
 type ToolInterruptionState struct {
 	// BaseInterruptionState 嵌入基类
 	BaseInterruptionState
@@ -47,7 +47,7 @@ type ToolInterruptionState struct {
 
 // WorkflowInterruptEntry 工作流中断条目。
 //
-// 对应 Python: react_agent.py L406 WorkflowInterruptEntry(tool_call, component_ids, workflow_execution_state, collected_input)
+// Python: react_agent.py L406 WorkflowInterruptEntry(tool_call, component_ids, workflow_execution_state, collected_input)
 type WorkflowInterruptEntry struct {
 	// ToolCall 触发中断的工具调用
 	ToolCall *llmschema.ToolCall
@@ -61,7 +61,7 @@ type WorkflowInterruptEntry struct {
 
 // InterruptionState 工作流中断状态。
 //
-// 对应 Python: react_agent.py L414 InterruptionState(BaseInterruptionState)
+// Python: react_agent.py L414 InterruptionState(BaseInterruptionState)
 type InterruptionState struct {
 	// BaseInterruptionState 嵌入基类
 	BaseInterruptionState

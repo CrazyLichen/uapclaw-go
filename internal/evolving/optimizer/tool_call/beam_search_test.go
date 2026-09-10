@@ -243,7 +243,7 @@ func TestSearch_基本流程(t *testing.T) {
 }
 
 // TestSearch_早停 测试早停机制
-// 对齐 Python：当 top-k 节点分数均达到 maxScore 时触发早停
+// Python: 当 top-k 节点分数均达到 maxScore 时触发早停
 // 注意：早停发生在 expand 之前，首次触发时若 root 已达 maxScore，则无 depth>0 节点，结果为空
 func TestSearch_早停(t *testing.T) {
 	t.Run("根节点即达满分_结果为空", func(t *testing.T) {

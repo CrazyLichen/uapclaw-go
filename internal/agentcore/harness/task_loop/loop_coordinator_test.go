@@ -490,7 +490,7 @@ func TestLoopCoordinator_ShouldContinue_评估器panic不崩溃(t *testing.T) {
 }
 
 // TestLoopCoordinator_CustomPredicate_返回true停止循环 验证自定义谓词返回 true 时停止循环。
-// 对齐 Python: test_custom_predicate_stop
+// Python: test_custom_predicate_stop
 func TestLoopCoordinator_CustomPredicate_返回true停止循环(t *testing.T) {
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewCustomPredicateEvaluator("always_stop", func(_ StopEvaluationContext) bool {
@@ -506,7 +506,7 @@ func TestLoopCoordinator_CustomPredicate_返回true停止循环(t *testing.T) {
 }
 
 // TestLoopCoordinator_CustomPredicate_返回false继续循环 验证自定义谓词返回 false 时继续循环。
-// 对齐 Python: test_custom_predicate_continue
+// Python: test_custom_predicate_continue
 func TestLoopCoordinator_CustomPredicate_返回false继续循环(t *testing.T) {
 	lc := NewLoopCoordinator([]StopConditionEvaluator{
 		NewCustomPredicateEvaluator("never_stop", func(_ StopEvaluationContext) bool {

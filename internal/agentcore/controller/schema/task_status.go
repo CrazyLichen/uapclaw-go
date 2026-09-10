@@ -8,7 +8,7 @@ package schema
 //
 // 状态流转：submitted → working → (completed | failed | paused | canceled | input-required | waiting)
 //
-// 对应 Python: openjiuwen/core/controller/schema/task.py (TaskStatus)
+// Python: openjiuwen/core/controller/schema/task.py (TaskStatus)
 type TaskStatus string
 
 // ──────────────────────────── 常量 ────────────────────────────

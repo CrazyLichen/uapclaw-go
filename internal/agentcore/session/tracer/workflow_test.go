@@ -198,7 +198,7 @@ func TestTracerWorkflowUtils_TraceComponentDone(t *testing.T) {
 	utils.TraceComponentDone(context.Background(), session)
 
 	// 当前循环组件（8.20）未实现，loop_id 为空，
-	// 对齐 Python：非循环组件不执行 PopWorkflowSpan，span 仍保留在缓存中。
+	// Python: 非循环组件不执行 PopWorkflowSpan，span 仍保留在缓存中。
 	// 8.20 实现后，循环组件在 state 中写入 LOOP_ID，
 	// TraceComponentDone 读取到非空 loop_id 后才执行 PopWorkflowSpan。
 	span = session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -379,7 +379,7 @@ func TestGetComponentMetadata_无循环信息(t *testing.T) {
 }
 
 // TestGetComponentMetadata_有循环信息 测试在循环中时额外返回 loop_node_id/loop_index
-// 对齐 Python: loop_id = state.get_global(LOOP_ID); index = state.get_global(loop_id + "." + "index")
+// Python: loop_id = state.get_global(LOOP_ID); index = state.get_global(loop_id + "." + "index")
 func TestGetComponentMetadata_有循环信息(t *testing.T) {
 	session := &fakeWorkflowSession{
 		workflowID: "wf-001",

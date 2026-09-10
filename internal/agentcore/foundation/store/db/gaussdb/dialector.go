@@ -15,7 +15,7 @@ import (
 
 // GaussDialector GaussDB 数据库方言，基于 PostgreSQL 方言扩展。
 //
-// 对应 Python: openjiuwen/extensions/store/db/gauss_dialect.py (GaussDialectAsyncpg)
+// Python: openjiuwen/extensions/store/db/gauss_dialect.py (GaussDialectAsyncpg)
 //
 // GaussDB 与 PostgreSQL 的主要差异：
 //   - 不支持 NOWAIT / SKIP LOCKED 锁选项

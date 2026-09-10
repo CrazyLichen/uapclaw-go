@@ -11,12 +11,12 @@ import (
 
 // SysOperationMgr 系统操作资源管理器。
 //
-// 对应 Python: SysOperationMgr (openjiuwen/core/runner/resources_manager/sys_operation_manager.py)
+// Python: SysOperationMgr (openjiuwen/core/runner/resources_manager/sys_operation_manager.py)
 type SysOperationMgr struct {
 	// sysOperations 系统操作实例注册表
 	sysOperations *ThreadSafeDict[string, sysop.SysOperation]
 	// sandboxKeyOwnerMap 沙箱键模板到所有者 SysOperationID 的映射
-	// 对齐 Python: 沙箱密钥归属映射
+	// Python: 沙箱密钥归属映射
 	sandboxKeyOwnerMap map[string]string
 	// mu 读写锁
 	mu sync.RWMutex
@@ -46,7 +46,7 @@ func NewSysOperationMgr() *SysOperationMgr {
 //  3. 校验 isolation_key_template 唯一性（sandboxKeyOwnerMap 查重）
 //  4. 写入 sysOperations 和 sandboxKeyOwnerMap
 //
-// 对应 Python: SysOperationMgr.add_sys_operation(sys_operation_id, sys_operation_instance)
+// Python: SysOperationMgr.add_sys_operation(sys_operation_id, sys_operation_instance)
 func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation) error {
 	if sysOperationID == "" {
 		return fmt.Errorf("sys_operation_id 不能为空")
@@ -82,7 +82,7 @@ func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance sysop.
 //  2. 从 sysOperations 弹出实例
 //  3. 清理 sandboxKeyOwnerMap 中该实例的 isolation_key_template
 //
-// 对应 Python: SysOperationMgr.remove_sys_operation(sys_operation_id)
+// Python: SysOperationMgr.remove_sys_operation(sys_operation_id)
 func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (sysop.SysOperation, error) {
 	if sysOperationID == "" {
 		return nil, fmt.Errorf("sys_operation_id 不能为空")
@@ -110,7 +110,7 @@ func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (sysop.SysOp
 //  1. 校验 sysOperationID 非空
 //  2. 从 sysOperations 查询并返回
 //
-// 对应 Python: SysOperationMgr.get_sys_operation(sys_operation_id)
+// Python: SysOperationMgr.get_sys_operation(sys_operation_id)
 func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (sysop.SysOperation, error) {
 	if sysOperationID == "" {
 		return nil, fmt.Errorf("sys_operation_id 不能为空")
@@ -131,7 +131,7 @@ func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (sysop.SysOpera
 }
 
 // GetSysOperationByIsolationKey 按隔离键模板查找已注册的 SysOperation。
-// 对齐 Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
+// Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
 func (m *SysOperationMgr) GetSysOperationByIsolationKey(key string) (sysop.SysOperation, error) {
 	if key == "" {
 		return nil, fmt.Errorf("隔离键模板为空")

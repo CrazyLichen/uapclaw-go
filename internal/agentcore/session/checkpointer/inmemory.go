@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InMemoryCheckpointer 内存检查点器，所有状态存储在进程内存中。
-// 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (InMemoryCheckpointer)
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (InMemoryCheckpointer)
 type InMemoryCheckpointer struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -33,7 +33,7 @@ type InMemoryCheckpointer struct {
 }
 
 // baseSingleStateStorage 单实体状态存储基类，提供基于 serde 的序列化存储。
-// 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (BaseSingleStateStorage)
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (BaseSingleStateStorage)
 //
 // 设计说明：Python 中 BaseSingleStateStorage 定义了 save/recover/clear/exists 固定骨架，
 // 子类只需实现 _get_entity_id/_get_state_to_save/_restore_state 三个钩子方法。
@@ -52,20 +52,20 @@ type baseSingleStateStorage struct {
 }
 
 // AgentStorage Agent 状态存储。
-// 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (AgentStorage)
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (AgentStorage)
 type AgentStorage struct {
 	baseSingleStateStorage
 }
 
 // AgentTeamStorage AgentTeam 状态存储。
-// 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (AgentTeamStorage)
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (AgentTeamStorage)
 type AgentTeamStorage struct {
 	baseSingleStateStorage
 }
 
 // WorkflowStorage Workflow 状态存储，独立于 baseSingleStateStorage，
 // 因为需要同时保存 state 和 updates 两类数据。
-// 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (WorkflowStorage)
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (WorkflowStorage)
 type WorkflowStorage struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -106,7 +106,7 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 }
 
 // PreWorkflowExecute 工作流执行前保存检查点。
-// 对应 Python: InMemoryCheckpointer.pre_workflow_execute()
+// Python: InMemoryCheckpointer.pre_workflow_execute()
 func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
@@ -200,7 +200,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 }
 
 // PostWorkflowExecute 工作流执行后处理检查点。
-// 对应 Python: InMemoryCheckpointer.post_workflow_execute()
+// Python: InMemoryCheckpointer.post_workflow_execute()
 func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
@@ -220,7 +220,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 	}
 
 	// 检查结果中是否有中断标记
-	// 对齐 Python：result.get(TASK_STATUS_INTERRUPT) is None
+	// Python: result.get(TASK_STATUS_INTERRUPT) is None
 	isInterrupted := isWorkflowInterrupted(result)
 
 	if !isInterrupted {
@@ -236,7 +236,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 		}
 
 		// 如果没有父会话，移除 workflow store
-		// 对齐 Python: if not isinstance(session.parent(), AgentSession)
+		// Python: if not isinstance(session.parent(), AgentSession)
 		// 有 parent → 保留 store；无 parent → 删除 store
 		hasParent := false
 		if pp, ok := session.(interfaces.ParentProvider); ok && pp.Parent() != nil {
@@ -267,7 +267,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 }
 
 // PreAgentExecute Agent 执行前恢复状态。
-// 对应 Python: InMemoryCheckpointer.pre_agent_execute()
+// Python: InMemoryCheckpointer.pre_agent_execute()
 func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -329,7 +329,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 }
 
 // PreAgentTeamExecute AgentTeam 执行前恢复状态。
-// 对应 Python: InMemoryCheckpointer.pre_agent_team_execute()
+// Python: InMemoryCheckpointer.pre_agent_team_execute()
 func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
@@ -387,7 +387,7 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 }
 
 // InterruptAgentExecute Agent 中断时保存检查点。
-// 对应 Python: InMemoryCheckpointer.interrupt_agent_execute()
+// Python: InMemoryCheckpointer.interrupt_agent_execute()
 func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -430,7 +430,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 }
 
 // PostAgentExecute Agent 执行后保存检查点。
-// 对应 Python: InMemoryCheckpointer.post_agent_execute()
+// Python: InMemoryCheckpointer.post_agent_execute()
 func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
@@ -473,7 +473,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session in
 }
 
 // PostAgentTeamExecute AgentTeam 执行后保存检查点。
-// 对应 Python: InMemoryCheckpointer.post_agent_team_execute()
+// Python: InMemoryCheckpointer.post_agent_team_execute()
 func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
@@ -516,7 +516,7 @@ func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, sessio
 }
 
 // SessionExists 检查会话是否存在。
-// 对应 Python: InMemoryCheckpointer.session_exists()
+// Python: InMemoryCheckpointer.session_exists()
 func (cp *InMemoryCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
@@ -527,7 +527,7 @@ func (cp *InMemoryCheckpointer) SessionExists(ctx context.Context, sessionID str
 }
 
 // Release 释放会话资源。
-// 对应 Python: InMemoryCheckpointer.release()
+// Python: InMemoryCheckpointer.release()
 // agentID 非空时仅释放指定 Agent 的状态（支持多个，循环清除）；为空时释放整个会话的全部状态。
 func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	if len(agentID) > 0 {
@@ -625,7 +625,7 @@ func (cp *InMemoryCheckpointer) GraphStore() any {
 }
 
 // Save 保存 Agent 状态。
-// 对应 Python: AgentStorage.save() → BaseSingleStateStorage.save()
+// Python: AgentStorage.save() → BaseSingleStateStorage.save()
 func (s *AgentStorage) Save(ctx context.Context, session interfaces.InnerSession) error {
 	entityID := GetAgentID(session)
 	if session.State() == nil {
@@ -644,7 +644,7 @@ func (s *AgentStorage) Save(ctx context.Context, session interfaces.InnerSession
 }
 
 // Recover 恢复 Agent 状态。
-// 对应 Python: AgentStorage.recover() → BaseSingleStateStorage.recover()
+// Python: AgentStorage.recover() → BaseSingleStateStorage.recover()
 func (s *AgentStorage) Recover(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	entityID := GetAgentID(session)
 	stateBlob, exists := s.getBlob(entityID)
@@ -677,13 +677,13 @@ func (s *AgentStorage) Exists(ctx context.Context, session interfaces.InnerSessi
 }
 
 // Save 保存 AgentTeam 状态。
-// 对应 Python: AgentTeamStorage.save() → BaseSingleStateStorage.save()
+// Python: AgentTeamStorage.save() → BaseSingleStateStorage.save()
 func (s *AgentTeamStorage) Save(ctx context.Context, session interfaces.InnerSession) error {
 	entityID := GetTeamID(session)
 	if session.State() == nil {
 		return nil
 	}
-	// 对齐 Python: session.state().get_global(None) → 只保存 globalState
+	// Python: session.state().get_global(None) → 只保存 globalState
 	stateToSave := session.State().GetGlobal(state.AllStateKey)
 	if stateToSave == nil {
 		return nil
@@ -697,7 +697,7 @@ func (s *AgentTeamStorage) Save(ctx context.Context, session interfaces.InnerSes
 }
 
 // Recover 恢复 AgentTeam 状态。
-// 对应 Python: AgentTeamStorage.recover() → BaseSingleStateStorage.recover()
+// Python: AgentTeamStorage.recover() → BaseSingleStateStorage.recover()
 func (s *AgentTeamStorage) Recover(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	entityID := GetTeamID(session)
 	stateBlob, exists := s.getBlob(entityID)
@@ -711,7 +711,7 @@ func (s *AgentTeamStorage) Recover(ctx context.Context, session interfaces.Inner
 	if session.State() == nil || loadedState == nil {
 		return nil
 	}
-	// 对齐 Python: session.state().global_state.set_state(state) → 只恢复 globalState
+	// Python: session.state().global_state.set_state(state) → 只恢复 globalState
 	if st, ok := loadedState.(map[string]any); ok {
 		session.State().SetGlobal(st)
 	}
@@ -731,7 +731,7 @@ func (s *AgentTeamStorage) Exists(ctx context.Context, session interfaces.InnerS
 }
 
 // Save 保存工作流状态和更新。
-// 对应 Python: WorkflowStorage.save()
+// Python: WorkflowStorage.save()
 func (ws *WorkflowStorage) Save(ctx context.Context, session interfaces.InnerSession) error {
 	workflowID := getWorkflowID(session)
 
@@ -742,7 +742,7 @@ func (ws *WorkflowStorage) Save(ctx context.Context, session interfaces.InnerSes
 	}
 
 	// 保存主状态
-	// 对齐 Python: state = session.state().get_state()
+	// Python: state = session.state().get_state()
 	// WorkflowState 接口没有 GetState，但 session.State() 返回 SessionState，
 	// 而 SessionState 嵌入了 RecoverableStateLike（包含 GetState）
 	mainState := session.State().GetState()
@@ -757,7 +757,7 @@ func (ws *WorkflowStorage) Save(ctx context.Context, session interfaces.InnerSes
 	}
 
 	// 保存状态更新
-	// 对齐 Python: updates = session.state().get_updates()
+	// Python: updates = session.state().get_updates()
 	// GetUpdates/SetUpdates 在 WorkflowCommitState 上，不在 WorkflowState 接口上，
 	// 需要类型断言为 *state.WorkflowCommitState
 	if commitState, ok := session.State().(*state.WorkflowCommitState); ok {
@@ -776,7 +776,7 @@ func (ws *WorkflowStorage) Save(ctx context.Context, session interfaces.InnerSes
 }
 
 // Recover 恢复工作流状态。
-// 对应 Python: WorkflowStorage.recover()
+// Python: WorkflowStorage.recover()
 func (ws *WorkflowStorage) Recover(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	workflowID := getWorkflowID(session)
 
@@ -796,14 +796,14 @@ func (ws *WorkflowStorage) Recover(ctx context.Context, session interfaces.Inner
 	}
 
 	// 处理交互输入
-	// 对齐 Python: if inputs is not None: self._process_interactive_inputs(session, inputs)
+	// Python: if inputs is not None: self._process_interactive_inputs(session, inputs)
 	if ii, ok := inputs.(*interaction.InteractiveInput); ok {
 		ws.processInteractiveInputs(session, ii)
 	}
 
 	// 恢复状态更新
 	// GetUpdates/SetUpdates 在 WorkflowCommitState 上，需要类型断言
-	// 对齐 Python: session.state().set_updates(state_updates) 后无需额外 commit，
+	// Python: session.state().set_updates(state_updates) 后无需额外 commit，
 	// updates 会在下次 workflow 执行时通过 commit 合并到 state。
 	if commitState, ok := session.State().(*state.WorkflowCommitState); ok {
 		ws.mu.RLock()
@@ -824,7 +824,7 @@ func (ws *WorkflowStorage) Recover(ctx context.Context, session interfaces.Inner
 }
 
 // Clear 清除工作流状态。
-// 对应 Python: WorkflowStorage.clear()
+// Python: WorkflowStorage.clear()
 func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID, _ string) error {
 	ws.mu.Lock()
 	delete(ws.stateBlobs, workflowID)
@@ -834,7 +834,7 @@ func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID, _ string) erro
 }
 
 // Exists 检查工作流状态是否存在。
-// 对应 Python: WorkflowStorage.exists()
+// Python: WorkflowStorage.exists()
 func (ws *WorkflowStorage) Exists(ctx context.Context, session interfaces.InnerSession) (bool, error) {
 	workflowID := getWorkflowID(session)
 	ws.mu.RLock()
@@ -878,7 +878,7 @@ func newWorkflowStorage() *WorkflowStorage {
 }
 
 // innerSaveWorkflowCheckpoint 内部方法：保存工作流检查点。
-// 对应 Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
+// Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
 func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context, workflowID, sessionID string, session interfaces.InnerSession, reason string) error {
 	cp.mu.RLock()
 	workflowStore := cp.workflowStores[sessionID]
@@ -921,7 +921,7 @@ func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context,
 }
 
 // innerClearWorkflowSession 内部方法：清除工作流会话。
-// 对应 Python: InMemoryCheckpointer._inner_clear_workflow_session()
+// Python: InMemoryCheckpointer._inner_clear_workflow_session()
 func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, workflowID, sessionID string, reason string) error {
 	cp.mu.RLock()
 	workflowStore := cp.workflowStores[sessionID]
@@ -1068,7 +1068,7 @@ func (ws *WorkflowStorage) processInteractiveInputs(session interfaces.InnerSess
 }
 
 // isInteractiveInput 判断输入是否为交互输入。
-// 对齐 Python: isinstance(inputs, InteractiveInput)
+// Python: isinstance(inputs, InteractiveInput)
 func isInteractiveInput(inputs any) bool {
 	if inputs == nil {
 		return false
@@ -1078,14 +1078,14 @@ func isInteractiveInput(inputs any) bool {
 }
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。
-// 对齐 Python：result.get(TASK_STATUS_INTERRUPT) is None
+// Python: result.get(TASK_STATUS_INTERRUPT) is None
 // Go 版本简化处理：检查 result 中的 interrupt 标记。
 func isWorkflowInterrupted(result any) bool {
 	if result == nil {
 		return false
 	}
 	if m, ok := result.(map[string]any); ok {
-		// 对齐 Python: TASK_STATUS_INTERRUPT 键
+		// Python: TASK_STATUS_INTERRUPT 键
 		if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
 			return true
 		}

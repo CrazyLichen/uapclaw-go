@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -14,7 +16,7 @@ import (
 //
 // 提供 save/load/query 三个核心操作，支持可选的 version 隔离。
 //
-// 对应 Python: TrajectoryStore(Protocol)
+// Python: TrajectoryStore(Protocol)
 type TrajectoryStore interface {
 	// Save 保存轨迹。version 用于实验隔离。
 	Save(trajectory *Trajectory, version string)
@@ -26,7 +28,7 @@ type TrajectoryStore interface {
 
 // InMemoryTrajectoryStore 内存轨迹存储，用于测试和开发。
 //
-// 对应 Python: InMemoryTrajectoryStore
+// Python: InMemoryTrajectoryStore
 type InMemoryTrajectoryStore struct {
 	// data 版本 → executionID → Trajectory
 	data map[string]map[string]*Trajectory
@@ -34,7 +36,7 @@ type InMemoryTrajectoryStore struct {
 
 // FileTrajectoryStore 基于 JSONL 文件的轨迹存储。
 //
-// 对应 Python: FileTrajectoryStore
+// Python: FileTrajectoryStore
 type FileTrajectoryStore struct {
 	// baseDir 存储目录
 	baseDir string
@@ -55,7 +57,7 @@ const (
 
 // NewInMemoryTrajectoryStore 创建内存轨迹存储。
 //
-// 对应 Python: InMemoryTrajectoryStore()
+// Python: InMemoryTrajectoryStore()
 func NewInMemoryTrajectoryStore() *InMemoryTrajectoryStore {
 	return &InMemoryTrajectoryStore{
 		data: make(map[string]map[string]*Trajectory),
@@ -64,7 +66,7 @@ func NewInMemoryTrajectoryStore() *InMemoryTrajectoryStore {
 
 // Save 保存轨迹到内存。
 //
-// 对应 Python: InMemoryTrajectoryStore.save()
+// Python: InMemoryTrajectoryStore.save()
 func (s *InMemoryTrajectoryStore) Save(trajectory *Trajectory, version string) {
 	ver := version
 	if ver == "" {
@@ -78,7 +80,7 @@ func (s *InMemoryTrajectoryStore) Save(trajectory *Trajectory, version string) {
 
 // Load 从内存加载轨迹。
 //
-// 对应 Python: InMemoryTrajectoryStore.load()
+// Python: InMemoryTrajectoryStore.load()
 func (s *InMemoryTrajectoryStore) Load(executionID string, version string) *Trajectory {
 	ver := version
 	if ver == "" {
@@ -92,7 +94,7 @@ func (s *InMemoryTrajectoryStore) Load(executionID string, version string) *Traj
 
 // Query 从内存查询轨迹列表。
 //
-// 对应 Python: InMemoryTrajectoryStore.query()
+// Python: InMemoryTrajectoryStore.query()
 func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) []*Trajectory {
 	ver := version
 	if ver == "" {
@@ -107,7 +109,7 @@ func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) 
 		trajectories = append(trajectories, t)
 	}
 	// 应用过滤器
-	// 对齐 Python: Python: for key, value in filters.items():
+	// Python: Python: for key, value in filters.items():
 	//     Python: trajectories = [t for t in trajectories if getattr(t, key, None) == value]
 	for key, value := range filters {
 		filtered := make([]*Trajectory, 0, len(trajectories))
@@ -123,16 +125,16 @@ func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) 
 
 // NewFileTrajectoryStore 创建文件轨迹存储。
 //
-// 对应 Python: FileTrajectoryStore(base_dir)
+// Python: FileTrajectoryStore(base_dir)
 func NewFileTrajectoryStore(baseDir string) *FileTrajectoryStore {
-	// 对齐 Python: self._base_dir.mkdir(parents=True, exist_ok=True)
+	// Python: self._base_dir.mkdir(parents=True, exist_ok=True)
 	_ = os.MkdirAll(baseDir, 0o755)
 	return &FileTrajectoryStore{baseDir: baseDir}
 }
 
 // Save 追加轨迹到 JSONL 文件。
 //
-// 对应 Python: FileTrajectoryStore.save()
+// Python: FileTrajectoryStore.save()
 func (s *FileTrajectoryStore) Save(trajectory *Trajectory, version string) {
 	filePath := s.getFilePath(version)
 	data := trajectoryToDict(trajectory)
@@ -152,7 +154,7 @@ func (s *FileTrajectoryStore) Save(trajectory *Trajectory, version string) {
 
 // Load 按 execution_id 从 JSONL 文件加载轨迹。
 //
-// 对应 Python: FileTrajectoryStore.load()
+// Python: FileTrajectoryStore.load()
 func (s *FileTrajectoryStore) Load(executionID string, version string) *Trajectory {
 	filePath := s.getFilePath(version)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -180,7 +182,7 @@ func (s *FileTrajectoryStore) Load(executionID string, version string) *Trajecto
 
 // Query 从 JSONL 文件查询匹配的轨迹列表。
 //
-// 对应 Python: FileTrajectoryStore.query()
+// Python: FileTrajectoryStore.query()
 func (s *FileTrajectoryStore) Query(version string, filters map[string]any) []*Trajectory {
 	filePath := s.getFilePath(version)
 	results := make([]*Trajectory, 0)
@@ -222,7 +224,7 @@ func (s *FileTrajectoryStore) Query(version string, filters map[string]any) []*T
 
 // getFilePath 获取版本对应的 JSONL 文件路径。
 //
-// 对应 Python: FileTrajectoryStore._get_file_path()
+// Python: FileTrajectoryStore._get_file_path()
 func (s *FileTrajectoryStore) getFilePath(version string) string {
 	ver := version
 	if ver == "" {
@@ -234,7 +236,7 @@ func (s *FileTrajectoryStore) getFilePath(version string) string {
 
 // trajectoryToDict 将 Trajectory 转换为可 JSON 序列化的字典。
 //
-// 对应 Python: FileTrajectoryStore._trajectory_to_dict()
+// Python: FileTrajectoryStore._trajectory_to_dict()
 func trajectoryToDict(trajectory *Trajectory) map[string]any {
 	result := toJSONCompatible(trajectory)
 	if m, ok := result.(map[string]any); ok {
@@ -245,7 +247,7 @@ func trajectoryToDict(trajectory *Trajectory) map[string]any {
 
 // toJSONCompatible 递归转换值到 JSON 兼容数据。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if hasattr(obj, "model_dump") and callable(obj.model_dump):
 //	    Python: return _to_json_compatible(obj.model_dump())
@@ -259,7 +261,7 @@ func trajectoryToDict(trajectory *Trajectory) map[string]any {
 //	    Python: return obj
 //	Python: return str(obj)
 //
-// 对应 Python: FileTrajectoryStore._to_json_compatible()
+// Python: FileTrajectoryStore._to_json_compatible()
 func toJSONCompatible(obj any) any {
 	if obj == nil {
 		return nil
@@ -301,7 +303,7 @@ func jsonSafeRecursive(v any) any {
 
 // dictToTrajectory 将字典转换为 Trajectory。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: steps_data = data.get("steps", [])
 //	Python: steps = []
@@ -318,10 +320,10 @@ func jsonSafeRecursive(v any) any {
 //	Python: data["steps"] = steps
 //	Python: return Trajectory(**data)
 //
-// 对应 Python: FileTrajectoryStore._dict_to_trajectory()
+// Python: FileTrajectoryStore._dict_to_trajectory()
 func dictToTrajectory(data map[string]any) *Trajectory {
 	defer func() {
-		// 对齐 Python: except (KeyError, TypeError, ValueError): return None
+		// Python: except (KeyError, TypeError, ValueError): return None
 		_ = recover()
 	}()
 
@@ -361,7 +363,7 @@ func dictToTrajectory(data map[string]any) *Trajectory {
 func mapToLLMCallDetail(data map[string]any) *LLMCallDetail {
 	return &LLMCallDetail{
 		Model:    toString(data["model"]),
-		Messages: toSliceOfMapAny(data["messages"]),
+		Messages: toSliceOfBaseMessage(data["messages"]),
 		Response: toMapAny(data["response"]),
 		Tools:    toSliceOfMapAny(data["tools"]),
 		Usage:    toMapAny(data["usage"]),
@@ -480,6 +482,129 @@ func toSliceOfMapAny(v any) []map[string]any {
 	return nil
 }
 
+// toSliceOfBaseMessage 将消息列表转换为 []llmschema.BaseMessage。
+// 从 JSON 反序列化的消息为 []map[string]any 格式，需要逐个重建为 BaseMessage。
+func toSliceOfBaseMessage(v any) []llmschema.BaseMessage {
+	if slice, ok := v.([]any); ok {
+		result := make([]llmschema.BaseMessage, 0, len(slice))
+		for _, item := range slice {
+			if m, ok := item.(map[string]any); ok {
+				msg := mapToBaseMessage(m)
+				if msg != nil {
+					result = append(result, msg)
+				}
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// mapToBaseMessage 从字典构造 BaseMessage。
+// 根据 role 字段判断消息类型，构建对应的具体消息实例。
+func mapToBaseMessage(m map[string]any) llmschema.BaseMessage {
+	if m == nil {
+		return nil
+	}
+	role, _ := m["role"].(string)
+	content := m["content"]
+
+	switch parseRoleType(role) {
+	case llmschema.RoleTypeUser:
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		}
+		return llmschema.NewUserMessage(contentStr)
+	case llmschema.RoleTypeAssistant:
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		}
+		opts := []llmschema.AssistantMessageOption{}
+		// 解析 tool_calls
+		if tcRaw, ok := m["tool_calls"]; ok {
+			if tcSlice, ok := tcRaw.([]any); ok {
+				var toolCalls []*llmschema.ToolCall
+				for _, tcItem := range tcSlice {
+					if tcMap, ok := tcItem.(map[string]any); ok {
+						tc := mapToToolCall(tcMap)
+						if tc != nil {
+							toolCalls = append(toolCalls, tc)
+						}
+					}
+				}
+				if len(toolCalls) > 0 {
+					opts = append(opts, llmschema.WithToolCalls(toolCalls))
+				}
+			}
+		}
+		// 解析 finish_reason
+		if fr, ok := m["finish_reason"].(string); ok && fr != "" {
+			opts = append(opts, llmschema.WithFinishReason(fr))
+		}
+		return llmschema.NewAssistantMessage(contentStr, opts...)
+	case llmschema.RoleTypeTool:
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		}
+		toolCallID, _ := m["tool_call_id"].(string)
+		name, _ := m["name"].(string)
+		var msgOpts []llmschema.MessageOption
+		if name != "" {
+			msgOpts = append(msgOpts, llmschema.WithMessageName(name))
+		}
+		return llmschema.NewToolMessage(toolCallID, contentStr, msgOpts...)
+	case llmschema.RoleTypeSystem:
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		}
+		return llmschema.NewSystemMessage(contentStr)
+	default:
+		// 未知角色，构建基础消息
+		contentStr := ""
+		if s, ok := content.(string); ok {
+			contentStr = s
+		}
+		msg := &llmschema.DefaultMessage{
+			Role:    parseRoleType(role),
+			Content: llmschema.NewTextContent(contentStr),
+		}
+		if name, ok := m["name"].(string); ok && name != "" {
+			msg.Name = name
+		}
+		return msg
+	}
+}
+
+// mapToToolCall 从字典构造 ToolCall。
+func mapToToolCall(m map[string]any) *llmschema.ToolCall {
+	if m == nil {
+		return nil
+	}
+	id, _ := m["id"].(string)
+	name, _ := m["name"].(string)
+	args, _ := m["arguments"].(string)
+	if name == "" {
+		// 尝试从 function 嵌套格式提取
+		if fn, ok := m["function"].(map[string]any); ok {
+			if n, ok := fn["name"].(string); ok {
+				name = n
+			}
+			if a, ok := fn["arguments"].(string); ok {
+				args = a
+			}
+		}
+	}
+	tc := llmschema.NewToolCall(id, name, args)
+	if idx, ok := m["index"].(float64); ok {
+		tc.Index = int(idx)
+	}
+	return tc
+}
+
 // toIntSlice 安全转换为 []int。
 func toIntSlice(v any) []int {
 	if slice, ok := v.([]any); ok {
@@ -515,7 +640,7 @@ func readLines(path string) ([]string, error) {
 
 // matchTrajectoryField 按 key 匹配 Trajectory 字段值。
 //
-// 对齐 Python: getattr(t, key, None) == value
+// Python: getattr(t, key, None) == value
 func matchTrajectoryField(t *Trajectory, key string, value any) bool {
 	switch key {
 	case "execution_id":

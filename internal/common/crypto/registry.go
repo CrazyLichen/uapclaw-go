@@ -11,7 +11,7 @@ import (
 
 // BaseCrypt 加密算法抽象接口，密钥由调用方传入。
 //
-// 对应 Python: openjiuwen/core/common/security/crypt_utils.py BaseCrypt
+// Python: openjiuwen/core/common/security/crypt_utils.py BaseCrypt
 //
 // 适用场景：底层加密操作，密钥由调用方管理（如存储层编解码）。
 type BaseCrypt interface {
@@ -23,7 +23,7 @@ type BaseCrypt interface {
 
 // CryptRegistry 加密算法注册表（并发安全）。
 //
-// 对应 Python: openjiuwen/core/common/security/crypt_utils.py CryptUtils
+// Python: openjiuwen/core/common/security/crypt_utils.py CryptUtils
 //
 // 提供按名称注册、获取、注销加密算法的能力。
 // 内部使用 sync.RWMutex 保护，支持多 goroutine 并发访问。
@@ -98,7 +98,7 @@ func Get(name string) (BaseCrypt, bool) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 自动注册内置的 AES-256-GCM 算法到全局注册表。
-// 对应 Python: AesGcmCrypt() 在模块加载时自动注册。
+// Python: AesGcmCrypt() 在模块加载时自动注册。
 func init() {
 	_ = Register(AesGcmName, &AesGcmCrypt{})
 }

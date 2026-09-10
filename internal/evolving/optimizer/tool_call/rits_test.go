@@ -20,7 +20,7 @@ func TestInvokeWithVerify_无VerifyFunc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// 对齐 Python get_rits_response: 吞异常返回 error 字典
+	// Python: get_rits_response: 吞异常返回 error 字典
 	errMap, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", result)

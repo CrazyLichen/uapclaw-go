@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InMemoryStateLike StateLike 接口的内存实现
-// 对应 Python: InMemoryStateLike(StateLike)
+// Python: InMemoryStateLike(StateLike)
 type InMemoryStateLike struct {
 	// mu 并发读写锁
 	mu sync.RWMutex

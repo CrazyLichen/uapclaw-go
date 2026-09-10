@@ -30,7 +30,7 @@ import (
 // 消息阈值、令牌阈值、保留消息数、保留最后轮次
 // 为兼容字段，自适应压缩不使用这些参数进行触发或候选选择。
 //
-// 对应 Python: MessageSummaryOffloaderConfig (pydantic.BaseModel)
+// Python: MessageSummaryOffloaderConfig (pydantic.BaseModel)
 type MessageSummaryOffloaderConfig struct {
 	// MessagesThreshold 兼容字段；自适应压缩不用于触发
 	MessagesThreshold *int
@@ -66,7 +66,7 @@ type MessageSummaryOffloaderConfig struct {
 //   - 任务感知压缩：摘要时考虑当前任务上下文
 //   - 降级机制：LLM 上下文溢出时用截断内容重试
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/offloader/message_summary_offloader.py
+// Python: openjiuwen/core/context_engine/processor/offloader/message_summary_offloader.py
 type MessageSummaryOffloader struct {
 	*processor.BaseProcessor
 	// config 具体配置（类型断言获取）
@@ -100,7 +100,7 @@ const truncatedMarker = "...[TRUNCATED]..."
 
 // adaptiveOffloadPromptTemplate 自适应压缩提示词模板
 //
-// 对应 Python: ADAPTIVE_OFFLOAD_PROMPT_TEMPLATE
+// Python: ADAPTIVE_OFFLOAD_PROMPT_TEMPLATE
 const adaptiveOffloadPromptTemplate = `# Adaptive Information Compression Expert
 
 ## Core Role
@@ -170,7 +170,7 @@ Return JSON with this schema:
 
 // outputJSONSchema 输出 JSON Schema 模板
 //
-// 对应 Python: OUTPUT_JSON_SCHEMA
+// Python: OUTPUT_JSON_SCHEMA
 const outputJSONSchema = `{
   "compression_strategy": "extractive" | "abstractive",
   "summary": "A compact result generated based on the selected strategy (within {summary_max_tokens} tokens). If using extractive strategy, directly concatenate key original text; if using abstractive strategy, provide a condensed summary. Ensure it contains all key information needed for the step, with clear structure and appropriate length.",
@@ -183,7 +183,7 @@ const outputJSONSchema = `{
 
 // stepSummaryPrompt 任务提取提示词模板
 //
-// 对应 Python: STEP_SUMMARY_PROMPT
+// Python: STEP_SUMMARY_PROMPT
 const stepSummaryPrompt = `Summarize the current user task in one concise sentence.
 Return the task only.
 
@@ -192,7 +192,7 @@ Conversation context:
 
 // defaultOffloadSummaryPrompt 旧版摘要提示词（兼容旧序列化引用）
 //
-// 对应 Python: DEFAULT_OFFLOAD_SUMMARY_PROMPT
+// Python: DEFAULT_OFFLOAD_SUMMARY_PROMPT
 const defaultOffloadSummaryPrompt = `
     You are a "high-density summarizer".
     Your task is to shrink the overly long message below into 2–4 concise sentences that:
@@ -218,7 +218,7 @@ var contextOverflowKeywords = []string{
 
 // NewMessageSummaryOffloader 创建消息摘要卸载器实例。
 //
-// 对应 Python: MessageSummaryOffloader.__init__(config)
+// Python: MessageSummaryOffloader.__init__(config)
 func NewMessageSummaryOffloader(config *MessageSummaryOffloaderConfig, opts ...MessageSummaryOffloaderOption) (*MessageSummaryOffloader, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func WithMessageSummaryModel(model *llm.Model) MessageSummaryOffloaderOption {
 
 // Validate 校验消息摘要卸载器配置。
 //
-// 对应 Python: MessageSummaryOffloader._validate_config()
+// Python: MessageSummaryOffloader._validate_config()
 func (c *MessageSummaryOffloaderConfig) Validate() error {
 	c.applyMSODefaults()
 	if c.MessagesThreshold != nil && c.MessagesToKeep != nil {
@@ -290,7 +290,7 @@ func (mso *MessageSummaryOffloader) ProcessorType() string { return "MessageSumm
 //
 // 触发条件：新添加的消息中，是否存在符合条件的消息（角色匹配 + 大小超阈值 + 非已卸载 + 非受保护工具）。
 //
-// 对应 Python: MessageSummaryOffloader.trigger_add_messages()
+// Python: MessageSummaryOffloader.trigger_add_messages()
 func (mso *MessageSummaryOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	contextMessages, _ := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
@@ -306,7 +306,7 @@ func (mso *MessageSummaryOffloader) TriggerAddMessages(_ context.Context, mc ifa
 //
 // 只处理新添加的消息，不处理已有上下文。
 //
-// 对应 Python: MessageSummaryOffloader.on_add_messages()
+// Python: MessageSummaryOffloader.on_add_messages()
 func (mso *MessageSummaryOffloader) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	processedMessages := make([]llm_schema.BaseMessage, len(messagesToAdd))
 	copy(processedMessages, messagesToAdd)
@@ -388,7 +388,7 @@ func (c *MessageSummaryOffloaderConfig) applyMSODefaults() {
 //  3. 不是受保护工具的结果
 //  4. 大小超过 LargeMessageThreshold（优先 token 计数，回退 字符数//3）
 //
-// 对应 Python: MessageSummaryOffloader._should_offload_message()
+// Python: MessageSummaryOffloader._should_offload_message()
 func (mso *MessageSummaryOffloader) shouldOffloadMessage(message llm_schema.BaseMessage, mc iface.ModelContext, contextMessages []llm_schema.BaseMessage) bool {
 	cfg := mso.config
 
@@ -424,7 +424,7 @@ func (mso *MessageSummaryOffloader) shouldOffloadMessage(message llm_schema.Base
 //
 // 优先使用 TokenCounter，回退到 字符数//3。
 //
-// 对应 Python: MessageSummaryOffloader._message_size()
+// Python: MessageSummaryOffloader._message_size()
 func (mso *MessageSummaryOffloader) messageSize(message llm_schema.BaseMessage, mc iface.ModelContext) int {
 	tokenCounter := mc.TokenCounter()
 	if tokenCounter != nil {
@@ -449,7 +449,7 @@ func (mso *MessageSummaryOffloader) messageSize(message llm_schema.BaseMessage, 
 //
 // 支持 "tool_name" 和 "tool_name:pattern" 两种格式。
 //
-// 对应 Python: MessageSummaryOffloader._is_protected_tool_message()
+// Python: MessageSummaryOffloader._is_protected_tool_message()
 func (mso *MessageSummaryOffloader) isProtectedToolMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage) bool {
 	if message.GetRole() != llm_schema.RoleTypeTool {
 		return false
@@ -479,7 +479,7 @@ func (mso *MessageSummaryOffloader) isProtectedToolMessage(message llm_schema.Ba
 
 // msoExtractToolArgs 从 ToolCall 提取参数字典。
 //
-// 对应 Python: MessageOffloader._extract_tool_args()
+// Python: MessageOffloader._extract_tool_args()
 func msoExtractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 	if toolCall == nil {
 		return map[string]any{}
@@ -495,7 +495,7 @@ func msoExtractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 
 // msoMatchPattern 检查参数值是否匹配通配符模式。
 //
-// 对应 Python: MessageOffloader._match_pattern()
+// Python: MessageOffloader._match_pattern()
 func msoMatchPattern(args map[string]any, pattern string) bool {
 	for _, value := range args {
 		if strVal, ok := value.(string); ok {
@@ -510,7 +510,7 @@ func msoMatchPattern(args map[string]any, pattern string) bool {
 
 // newOffloadHandleAndPath 生成卸载句柄和文件路径。
 //
-// 对应 Python: MessageSummaryOffloader._new_offload_handle_and_path()
+// Python: MessageSummaryOffloader._new_offload_handle_and_path()
 //
 // ⤵️ 5.31 回填：mc.WorkspaceDir() 方法
 func (mso *MessageSummaryOffloader) newOffloadHandleAndPath(mc iface.ModelContext) (string, string) {
@@ -535,7 +535,7 @@ func (mso *MessageSummaryOffloader) newOffloadHandleAndPath(mc iface.ModelContex
 //  3. 执行 LLM 压缩（含降级重试）
 //  4. 构建卸载消息
 //
-// 对应 Python: MessageSummaryOffloader._offload_message_adaptive()
+// Python: MessageSummaryOffloader._offload_message_adaptive()
 func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext) (llm_schema.BaseMessage, error) {
 	contextMessages, _ := mc.GetMessages(0, true)
 	functionCall := mso.getFunctionCallFromChain(message, contextMessages)
@@ -614,14 +614,14 @@ func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, 
 //
 // 回溯上下文查找匹配的 AssistantMessage，通过 ToolCallID 关联。
 //
-// 对应 Python: MessageSummaryOffloader._get_function_call_from_chain()
+// Python: MessageSummaryOffloader._get_function_call_from_chain()
 func (mso *MessageSummaryOffloader) getFunctionCallFromChain(toolMessage llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage) *llm_schema.ToolCall {
 	return processor.ResolveToolCallFromMessage(toolMessage, contextMessages)
 }
 
 // getStepFromChainDefault 启发式提取当前任务（最后一条 UserMessage）。
 //
-// 对应 Python: MessageSummaryOffloader._get_step_from_chain_default()
+// Python: MessageSummaryOffloader._get_step_from_chain_default()
 func (mso *MessageSummaryOffloader) getStepFromChainDefault(contextMessages []llm_schema.BaseMessage) string {
 	for i := len(contextMessages) - 1; i >= 0; i-- {
 		if contextMessages[i].GetRole() == llm_schema.RoleTypeUser {
@@ -646,7 +646,7 @@ func (mso *MessageSummaryOffloader) getStepFromChainDefault(contextMessages []ll
 //
 // 包含降级逻辑：LLM 上下文溢出时缩减上下文重试。
 //
-// 对应 Python: MessageSummaryOffloader._get_step_from_chain_precise()
+// Python: MessageSummaryOffloader._get_step_from_chain_precise()
 func (mso *MessageSummaryOffloader) getStepFromChainPrecise(ctx context.Context, contextMessages []llm_schema.BaseMessage) (string, error) {
 	messagesToUse := mso.selectMessagesForStepSummary(contextMessages)
 	if messagesToUse == nil {
@@ -696,7 +696,7 @@ func (mso *MessageSummaryOffloader) getStepFromChainPrecise(ctx context.Context,
 // 过滤规则：仅保留 user 消息和 assistant 消息（无 tool_calls）。
 // 过滤后消息数 <= 1 时返回 nil（跳过精确提取，回退到默认方式）。
 //
-// 对应 Python: MessageSummaryOffloader._select_messages_for_step_summary()
+// Python: MessageSummaryOffloader._select_messages_for_step_summary()
 func (mso *MessageSummaryOffloader) selectMessagesForStepSummary(contextMessages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	filtered := make([]llm_schema.BaseMessage, 0, len(contextMessages))
 	for _, msg := range contextMessages {
@@ -718,7 +718,7 @@ func (mso *MessageSummaryOffloader) selectMessagesForStepSummary(contextMessages
 //
 // 有效消息：user 消息 或 assistant 消息（无 tool_calls）。
 //
-// 对应 Python: MessageSummaryOffloader._is_valid_for_step_summary()
+// Python: MessageSummaryOffloader._is_valid_for_step_summary()
 func (mso *MessageSummaryOffloader) isValidForStepSummary(msg llm_schema.BaseMessage) bool {
 	if msg.GetRole() == llm_schema.RoleTypeUser {
 		return true
@@ -756,7 +756,7 @@ func (mso *MessageSummaryOffloader) buildStepContextText(messages []llm_schema.B
 //
 // 构建多级内容（全文→截断→半截断），上下文溢出时自动降级重试。
 //
-// 对应 Python: MessageSummaryOffloader._compress_with_fallback()
+// Python: MessageSummaryOffloader._compress_with_fallback()
 func (mso *MessageSummaryOffloader) compressWithFallback(ctx context.Context, step string, functionCall *llm_schema.ToolCall, toolContent string) (map[string]any, error) {
 	attempts := mso.buildCompressionAttempts(toolContent)
 
@@ -810,7 +810,7 @@ func (mso *MessageSummaryOffloader) compressWithFallback(ctx context.Context, st
 //
 // 尝试 1：全文 → 尝试 2：截断到 ContentMaxCharsForCompression → 尝试 3：半截断
 //
-// 对应 Python: MessageSummaryOffloader._build_compression_attempts()
+// Python: MessageSummaryOffloader._build_compression_attempts()
 func (mso *MessageSummaryOffloader) buildCompressionAttempts(toolContent string) []string {
 	attempts := []string{toolContent}
 	maxChars := mso.config.ContentMaxCharsForCompression
@@ -831,7 +831,7 @@ func (mso *MessageSummaryOffloader) buildCompressionAttempts(toolContent string)
 
 // smartTruncateContent 智能截断内容，保留头/中/尾各约 33%。
 //
-// 对应 Python: MessageSummaryOffloader._smart_truncate_content()
+// Python: MessageSummaryOffloader._smart_truncate_content()
 func (mso *MessageSummaryOffloader) smartTruncateContent(content string, maxChars int) string {
 	if len(content) <= maxChars {
 		return content
@@ -878,7 +878,7 @@ func (mso *MessageSummaryOffloader) smartTruncateContent(content string, maxChar
 
 // buildCompressionPrompt 构建自适应压缩提示词。
 //
-// 对应 Python: MessageSummaryOffloader._build_compression_prompt()
+// Python: MessageSummaryOffloader._build_compression_prompt()
 func (mso *MessageSummaryOffloader) buildCompressionPrompt(step string, functionCall *llm_schema.ToolCall, toolContent string) string {
 	var functionCallText string
 	if functionCall == nil {
@@ -909,7 +909,7 @@ func (mso *MessageSummaryOffloader) buildCompressionPrompt(step string, function
 //
 // 支持从 Markdown 代码块中提取 JSON。
 //
-// 对应 Python: MessageSummaryOffloader._parse_compression_result()
+// Python: MessageSummaryOffloader._parse_compression_result()
 func (mso *MessageSummaryOffloader) parseCompressionResult(responseContent string) (map[string]any, error) {
 	var result map[string]any
 
@@ -947,7 +947,7 @@ func (mso *MessageSummaryOffloader) parseCompressionResult(responseContent strin
 //
 // 不同模型服务商的错误报告格式不同，使用关键词匹配进行检测。
 //
-// 对应 Python: MessageSummaryOffloader._is_context_overflow_error()
+// Python: MessageSummaryOffloader._is_context_overflow_error()
 func (mso *MessageSummaryOffloader) isContextOverflowError(err error) bool {
 	if err == nil {
 		return false

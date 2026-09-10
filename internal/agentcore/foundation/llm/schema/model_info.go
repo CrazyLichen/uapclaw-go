@@ -17,7 +17,7 @@ import (
 //   - 序列化时：标准字段与 Extra 合并输出为平级 JSON 对象
 //   - 反序列化时：已知 key 映射到标准字段，未知 key 存入 Extra
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/mode_info.py (BaseModelInfo)
+// Python: openjiuwen/core/foundation/llm/schema/mode_info.py (BaseModelInfo)
 type BaseModelInfo struct {
 	// APIKey API 密钥，默认空
 	APIKey string `json:"api_key"`
@@ -41,7 +41,7 @@ type BaseModelInfo struct {
 
 // ModelConfig 模型配置，组合 provider 名称和模型信息。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/mode_info.py (ModelConfig)
+// Python: openjiuwen/core/foundation/llm/schema/mode_info.py (ModelConfig)
 type ModelConfig struct {
 	// ModelProvider 模型服务提供商标识
 	ModelProvider string `json:"model_provider"`
@@ -113,7 +113,7 @@ func WithInfoExtra(extra map[string]any) BaseModelInfoOption {
 //   - Streaming 默认 false
 //   - Timeout 默认 60秒
 //
-// 对应 Python: BaseModelInfo(api_base=..., model=..., temperature=..., ...)
+// Python: BaseModelInfo(api_base=..., model=..., temperature=..., ...)
 func NewBaseModelInfo(apiBase string, opts ...BaseModelInfoOption) *BaseModelInfo {
 	info := &BaseModelInfo{
 		APIBase:     apiBase,
@@ -206,7 +206,7 @@ func (info *BaseModelInfo) UnmarshalJSON(data []byte) error {
 
 // NewModelConfig 创建 ModelConfig 实例。
 //
-// 对应 Python: ModelConfig(model_provider=..., model_info=...)
+// Python: ModelConfig(model_provider=..., model_info=...)
 func NewModelConfig(provider string, info BaseModelInfo) *ModelConfig {
 	return &ModelConfig{
 		ModelProvider: provider,

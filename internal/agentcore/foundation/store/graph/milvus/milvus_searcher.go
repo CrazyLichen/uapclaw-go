@@ -21,7 +21,7 @@ import (
 
 // graphSearcher 图存储搜索器，负责混合搜索、BFS 扩展和重排序。
 //
-// 对应 Python: MilvusGraphStore.search / search_all / _search_single / _raw_hybrid_search
+// Python: MilvusGraphStore.search / search_all / _search_single / _raw_hybrid_search
 type graphSearcher struct {
 	// client Milvus 客户端
 	client milvusClient
@@ -70,7 +70,7 @@ func newGraphSearcher(client milvusClient, embedder embedding.BaseEmbedding, ind
 // - "all"：并发搜索三集合 + combinedRerank
 // - 单集合名：searchSingle（可选 BFS）
 //
-// 对应 Python: MilvusGraphStore.search
+// Python: MilvusGraphStore.search
 func (s *graphSearcher) search(ctx context.Context, query string, opts ...graph.Option) (map[string][]map[string]any, error) {
 	o := applyGraphOptions(opts...)
 
@@ -85,10 +85,10 @@ func (s *graphSearcher) search(ctx context.Context, query string, opts ...graph.
 }
 
 // searchAll 并发搜索三集合，然后合并结果。
-// 对齐 Python: asyncio.create_task + as_completed 并发搜索三集合。
+// Python: asyncio.create_task + as_completed 并发搜索三集合。
 // 搜索失败的集合仍会在 results 中初始化空切片，与 Python 对齐。
 //
-// 对应 Python: MilvusGraphStore._search_all
+// Python: MilvusGraphStore._search_all
 func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Options) (map[string][]map[string]any, error) {
 	collections := []string{CollectionEntity, CollectionRelation, CollectionEpisode}
 	results := make(map[string][]map[string]any)
@@ -137,7 +137,7 @@ func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Opt
 
 // searchSingle 搜索单个集合，可选 BFS 扩展。
 //
-// 对应 Python: MilvusGraphStore._search_single
+// Python: MilvusGraphStore._search_single
 func (s *graphSearcher) searchSingle(ctx context.Context, query, collection string, o graph.Options) ([]map[string]any, error) {
 	k := o.K
 	if k <= 0 {
@@ -169,7 +169,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 	bfsOpts.QueryEmbedding = queryEmb
 
 	// 当前轮的搜索过滤表达式
-	// 对齐 Python: expr 初始为 filter_expr，后续由扩展 UUID 构建
+	// Python: expr 初始为 filter_expr，后续由扩展 UUID 构建
 	var currentExpr querypkg.QueryExpr
 	if o.FilterExpr != nil {
 		currentExpr = o.FilterExpr
@@ -240,7 +240,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 				newExpanded = s.topKByDistance(newExpanded, newResults, bfsK, isSimilarity)
 			}
 
-			// 对齐 Python: 下一轮的 expr 由扩展后的 UUID 构建（而非所有累积 UUID）
+			// Python: 下一轮的 expr 由扩展后的 UUID 构建（而非所有累积 UUID）
 			expandedSlice := uuidSetToSlice(newExpanded)
 			expandedAny := stringsToAny(expandedSlice)
 			if collection == CollectionEntity {
@@ -292,7 +292,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 
 // rawHybridSearch 原始混合搜索（3通道：name_embedding + content_embedding + content_bm25）。
 //
-// 对应 Python: MilvusGraphStore._raw_hybrid_search
+// Python: MilvusGraphStore._raw_hybrid_search
 func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection string, k int, o graph.Options) ([]map[string]any, error) {
 	// 获取查询向量
 	queryEmb, err := s.queryEmbedding(ctx, query, o)
@@ -335,7 +335,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	}
 
 	// 构建 3 路 AnnRequest
-	// 对齐 Python: 每个 AnnSearchRequest 的 limit=min(k*3, 20)
+	// Python: 每个 AnnSearchRequest 的 limit=min(k*3, 20)
 	searchLimit := k * 3
 	if searchLimit > 20 {
 		searchLimit = 20
@@ -365,7 +365,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 
 	// 通道3: content_bm25 (sparse, 使用查询文本)
 	// BM25 搜索：使用查询文本作为输入，Milvus BM25 Function 需要文本输入来生成分词稀疏向量
-	// 对齐 Python: sparse_req = AnnRequest("content_bm25", limit, [query])
+	// Python: sparse_req = AnnRequest("content_bm25", limit, [query])
 	sparseReq := milvusclient.NewAnnRequest("content_bm25", searchLimit, entity.Text(query))
 	if expr != "" {
 		sparseReq = sparseReq.WithFilter(expr)
@@ -463,7 +463,7 @@ func autoBalanceWeights(numChannels int) []float64 {
 }
 
 // expandEntities 通过 BFS 扩展实体 UUID 集合。
-// 对齐 Python: _expand_entities — 通过 Relation 集合的 lhs/rhs 字段扩展。
+// Python: _expand_entities — 通过 Relation 集合的 lhs/rhs 字段扩展。
 // filterExpr 用于将原始过滤条件与扩展表达式合并。
 func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]struct{}, filterExpr querypkg.QueryExpr) (map[string]struct{}, error) {
 	if len(uuidSet) == 0 {
@@ -473,12 +473,12 @@ func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]s
 	expanded := make(map[string]struct{})
 	ids := uuidSetToSlice(uuidSet)
 
-	// 对齐 Python: 在 Relation 集合中按 lhs/rhs 查找关联实体
+	// Python: 在 Relation 集合中按 lhs/rhs 查找关联实体
 	lhsExpr := buildIDFilterExprWithField(ids, "lhs")
 	rhsExpr := buildIDFilterExprWithField(ids, "rhs")
 	combinedExpr := fmt.Sprintf("(%s) or (%s)", lhsExpr, rhsExpr)
 
-	// 对齐 Python: 如果有 filterExpr，将原始过滤条件合并
+	// Python: 如果有 filterExpr，将原始过滤条件合并
 	if filterExpr != nil {
 		exprVal, err := filterExpr.ToExpr("milvus")
 		if err == nil {
@@ -510,7 +510,7 @@ func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]s
 }
 
 // expandRelations 通过 BFS 扩展关系 UUID 集合。
-// 对齐 Python: _expand_relations — 先从 lookup 取 lhs/rhs 实体 UUID，
+// Python: _expand_relations — 先从 lookup 取 lhs/rhs 实体 UUID，
 // 再查 Entity 集合的 relations 字段获取关联的关系 UUID。
 // filterExpr 用于将原始过滤条件与扩展表达式合并。
 func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]struct{}, lookup map[string]map[string]any, filterExpr querypkg.QueryExpr) (map[string]struct{}, error) {
@@ -539,7 +539,7 @@ func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]
 	ids := uuidSetToSlice(nodeUUIDs)
 	expr := buildIDFilterExpr(ids)
 
-	// 对齐 Python: 如果有 filterExpr，将原始过滤条件合并
+	// Python: 如果有 filterExpr，将原始过滤条件合并
 	if filterExpr != nil {
 		exprVal, err := filterExpr.ToExpr("milvus")
 		if err == nil {
@@ -633,7 +633,7 @@ func buildIDFilterExprWithField(ids []string, field string) string {
 }
 
 // combinedRerank 跨集合增强重排序。
-// 对齐 Python: MilvusGraphStore._combined_rerank
+// Python: MilvusGraphStore._combined_rerank
 // 核心逻辑：利用关系信息增强实体排序 — 遍历每个 Entity 的 relations，
 // 将关联 Relation 的 content 拼接到 Entity 的 content 中再 rerank。
 // 注意：Python 只对 Entity 做增强 + rerank，不对其余集合做 rerank。
@@ -659,7 +659,7 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 	}
 
 	// 遍历每个 Entity，将关联 Relation 的 content 拼接到 Entity 的 content 中
-	// 对齐 Python: 对每个 entity 保存 original_content，拼接关联 Relation 的 content
+	// Python: 对每个 entity 保存 original_content，拼接关联 Relation 的 content
 	for _, ent := range entities {
 		// 保存原始 content，对齐 Python: ent["original_content"] = ent.get("content", "")
 		originalContent, _ := ent["content"].(string)
@@ -690,8 +690,8 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 		})
 
 		// 拼接内容，对齐 Python: [原始content, 分隔线, ...关联Relation的content]
-		// 对齐 Python: 拼接原始内容和分隔线
-		// 对齐 Python: 换行拼接内容行
+		// Python: 拼接原始内容和分隔线
+		// Python: 换行拼接内容行
 		mentions := len(relatedContent)
 		if mentions > 0 {
 			var parts []string
@@ -704,7 +704,7 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 		}
 	}
 
-	// 对齐 Python: 只对 Entity 做 rerank，不对其余集合做 rerank
+	// Python: 只对 Entity 做 rerank，不对其余集合做 rerank
 	documents := make([]string, len(entities))
 	for i, ent := range entities {
 		if content, ok := ent["content"].(string); ok {
@@ -733,7 +733,7 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 }
 
 // filterByScore 按分数过滤和排序结果。
-// 对齐 Python: 使用 uuid 字段作为 scoreMap 的 key，避免相同 content 导致冲突。
+// Python: 使用 uuid 字段作为 scoreMap 的 key，避免相同 content 导致冲突。
 func filterByScore(items []map[string]any, scoreMap map[string]float64, minScore float64) []map[string]any {
 	type scoredItem struct {
 		item  map[string]any

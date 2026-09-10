@@ -19,7 +19,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskCreateSpec 批量创建任务的输入规范。
-// 对齐 Python: add_batch(tasks: List[dict]) 中每个 dict 的字段。
+// Python: add_batch(tasks: List[dict]) 中每个 dict 的字段。
 type TaskCreateSpec struct {
 	// TaskID 可选自定义任务 ID，空则自动生成。对齐 Python: task_spec.get("task_id")
 	TaskID string
@@ -46,12 +46,12 @@ type TaskAddWithPriorityOption func(*taskAddWithPriorityConfig)
 // taskAddWithPriorityConfig AddWithPriority 的可选配置
 type taskAddWithPriorityConfig struct {
 	taskID           string
-	dependencies     []string // 对齐 Python: dependencies
-	dependentTaskIDs []string // 对齐 Python: dependent_task_ids
+	dependencies     []string // Python: dependencies
+	dependentTaskIDs []string // Python: dependent_task_ids
 }
 
 // TaskCreateResult 任务创建结果，对齐 Python TaskCreateResult。
-// 对齐 Python: openjiuwen/agent_teams/schema/task.py (TaskCreateResult)
+// Python: openjiuwen/agent_teams/schema/task.py (TaskCreateResult)
 type TaskCreateResult struct {
 	// Task 成功时为创建的任务，失败时为 nil
 	Task *database.TeamTaskBase
@@ -81,7 +81,7 @@ type TaskSummary struct {
 }
 
 // PlanRecord 计划记录（index.json 中的一条）。
-// 对齐 Python: _write_task_plan_index 写入的完整字段集
+// Python: _write_task_plan_index 写入的完整字段集
 type PlanRecord struct {
 	PlanID          string `json:"plan_id"`
 	TaskID          string `json:"task_id"`
@@ -116,7 +116,7 @@ type TaskPlanIndex struct {
 }
 
 // TeamTaskManager 团队任务管理器。
-// 对齐 Python: TeamTaskManager (openjiuwen/agent_teams/tools/task_manager.py)
+// Python: TeamTaskManager (openjiuwen/agent_teams/tools/task_manager.py)
 type TeamTaskManager struct {
 	// db 团队数据库实例（内含 TaskDao）
 	db database.TeamDatabase
@@ -263,11 +263,11 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 
 // AddBatch 批量创建任务。对齐 Python: TeamTaskManager.add_batch()
 // 跳过无效规格（缺 title/content）和创建失败的任务，返回 TaskCreateResult 列表。
-// 对齐 Python: created_tasks 遇错不中断，继续处理后续规格。
+// Python: created_tasks 遇错不中断，继续处理后续规格。
 func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec) ([]*TaskCreateResult, error) {
 	var results []*TaskCreateResult
 	for _, spec := range specs {
-		// 对齐 Python: if not title or not content → skip
+		// Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
 			logger.Warn(logComponentChannel).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
 			results = append(results, &TaskCreateResult{Reason: "invalid spec: missing title or content"})
@@ -278,14 +278,14 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 			WithDependencies(spec.Dependencies),
 		)
 		if err != nil {
-			// 对齐 Python: if not result.ok → warning + skip
+			// Python: if not result.ok → warning + skip
 			logger.Warn(logComponentChannel).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
 			results = append(results, &TaskCreateResult{Reason: err.Error()})
 			continue
 		}
 		results = append(results, &TaskCreateResult{Task: task})
 	}
-	// 对齐 Python: team_logger.info(f"Batch added {len(created_tasks)} tasks")
+	// Python: team_logger.info(f"Batch added {len(created_tasks)} tasks")
 	created := 0
 	for _, r := range results {
 		if r.Ok() {
@@ -307,7 +307,7 @@ func (tm *TeamTaskManager) ListTasks(ctx context.Context, status string) ([]*dat
 }
 
 // GetClaimableTasks 获取可认领任务（PENDING + 无未解决依赖）。
-// 对齐 Python: TeamTaskManager.get_claimable_tasks()
+// Python: TeamTaskManager.get_claimable_tasks()
 func (tm *TeamTaskManager) GetClaimableTasks(ctx context.Context) ([]*database.TeamTaskBase, error) {
 	pendingTasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, fsm.TaskStatusPending)
 	if err != nil {
@@ -457,7 +457,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
 		}
 
-		// 对齐 Python: PLAN_MODE 下更新 plan index 的完成状态
+		// Python: PLAN_MODE 下更新 plan index 的完成状态
 		planIndex, err := tm.loadPlanIndex()
 		if err == nil && planIndex != nil {
 			taskIdx, ok := planIndex.Tasks[taskID]
@@ -467,7 +467,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 					latestPlanID = taskIdx.PlanIDs[len(taskIdx.PlanIDs)-1]
 				}
 				nowISO := time.Now().Format(time.RFC3339)
-				// 对齐 Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
+				// Python: _write_task_plan_index(task_id, {task_id, plan_id, team_plan_id, member_name, status, completed_at, updated_at})
 				assigneeName := ""
 				if task.Assignee != nil {
 					assigneeName = *task.Assignee
@@ -551,7 +551,7 @@ func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []s
 			TaskID:           task.TaskID,
 		})
 	}
-	// 对齐 Python: await self._publish_unblocked_events(unblocked_tasks)
+	// Python: await self._publish_unblocked_events(unblocked_tasks)
 	tm.publishUnblockedEvents(ctx, result.Unblocked)
 	tm.maybePublishTaskListDrained(ctx)
 	return result.Cancelled, nil
@@ -691,7 +691,7 @@ func (tm *TeamTaskManager) AddDependencies(ctx context.Context, taskID string, d
 }
 
 // GetTaskDetail 详细视图（含 blocked_by + blocks）。
-// 对齐 Python: TeamTaskManager.get_task_detail()
+// Python: TeamTaskManager.get_task_detail()
 func (tm *TeamTaskManager) GetTaskDetail(ctx context.Context, taskID string) (*TaskDetail, error) {
 	task, err := tm.db.Task().GetTask(ctx, taskID)
 	if err != nil {
@@ -731,7 +731,7 @@ func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context) ([]*TaskSummar
 		deps, _ := tm.db.Task().GetTaskDependencies(ctx, task.TaskID)
 		var blockedBy []string
 		for _, dep := range deps {
-			// 对齐 Python: [d.depends_on_task_id for d in deps if not d.resolved]
+			// Python: [d.depends_on_task_id for d in deps if not d.resolved]
 			if !dep.Resolved {
 				blockedBy = append(blockedBy, dep.DependsOnID)
 			}
@@ -917,7 +917,7 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // notifyLeaderOfPlan 通过 P2P 消息直接通知 leader 审批计划。
-// 对齐 Python: TeamTaskManager._notify_leader_of_plan()
+// Python: TeamTaskManager._notify_leader_of_plan()
 func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) {
 	if tm.messager == nil {
 		return
@@ -931,7 +931,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 			Msg("notifyLeaderOfPlan: 无法通知 leader，leader_member_name 为空")
 		return
 	}
-	// 对齐 Python: leader_member_name == self.member_name → 跳过
+	// Python: leader_member_name == self.member_name → 跳过
 	if leaderName == tm.memberName {
 		return
 	}
@@ -959,12 +959,12 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 }
 
 // resolveLeaderMemberName 解析 leader 成员名。
-// 对齐 Python: TeamTaskManager._resolve_leader_member_name()
+// Python: TeamTaskManager._resolve_leader_member_name()
 func (tm *TeamTaskManager) resolveLeaderMemberName() string {
 	if tm.leaderMemberName != "" {
 		return tm.leaderMemberName
 	}
-	// 对齐 Python: 从 db.team.get_team 获取 leader_member_name
+	// Python: 从 db.team.get_team 获取 leader_member_name
 	team, err := tm.db.Team().GetTeam(context.Background(), tm.teamName)
 	if err != nil || team == nil {
 		return ""
@@ -977,7 +977,7 @@ func (tm *TeamTaskManager) resolveLeaderMemberName() string {
 }
 
 // renderPlanReviewMessage 渲染计划审批消息。
-// 对齐 Python: TeamTaskManager._render_plan_review_message()
+// Python: TeamTaskManager._render_plan_review_message()
 func renderPlanReviewMessage(memberName, taskID, planID, planFilePath, toolCallID string) string {
 	lines := []string{
 		"Member task plan approval request.",
@@ -994,7 +994,7 @@ func renderPlanReviewMessage(memberName, taskID, planID, planFilePath, toolCallI
 }
 
 // publishTaskEvent 发布任务事件到 TeamTopic。
-// 对齐 Python: TeamTaskManager._publish_task_event()
+// Python: TeamTaskManager._publish_task_event()
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），对齐 Python: get_session_id()。
 func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.TypedEvent) {
 	if tm.messager == nil {
@@ -1010,7 +1010,7 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event schema.Ty
 }
 
 // publishUnblockedEvents 逐条发布 TaskUnblockedEvent。
-// 对齐 Python: TeamTaskManager._publish_unblocked_events()
+// Python: TeamTaskManager._publish_unblocked_events()
 func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblockedTasks []*database.TeamTaskBase) {
 	for _, t := range unblockedTasks {
 		tm.publishTaskEvent(ctx, schema.TaskUnblockedEvent{
@@ -1021,7 +1021,7 @@ func (tm *TeamTaskManager) publishUnblockedEvents(ctx context.Context, unblocked
 }
 
 // maybePublishTaskListDrained 检查是否所有任务已终态，如果是则发布 TaskListDrainedEvent。
-// 对齐 Python: TeamTaskManager._maybe_publish_task_list_drained()
+// Python: TeamTaskManager._maybe_publish_task_list_drained()
 func (tm *TeamTaskManager) maybePublishTaskListDrained(ctx context.Context) {
 	tasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, "")
 	if err != nil || len(tasks) == 0 {
@@ -1043,7 +1043,7 @@ func (tm *TeamTaskManager) maybePublishTaskListDrained(ctx context.Context) {
 }
 
 // checkTaskListDrained 检查所有任务是否均处于终态。
-// 对齐 Python: TeamTaskManager._check_task_list_drained()
+// Python: TeamTaskManager._check_task_list_drained()
 func (tm *TeamTaskManager) checkTaskListDrained(ctx context.Context) bool {
 	tasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, "")
 	if err != nil || len(tasks) == 0 {
@@ -1127,7 +1127,7 @@ func (tm *TeamTaskManager) loadPlanIndex() (*PlanIndex, error) {
 }
 
 // findRefreshedTask 从 refreshedTasks 列表中按 taskID 查找任务。
-// 对齐 Python: for refreshed in mutation.refreshed_tasks: if refreshed.task_id == task_id
+// Python: for refreshed in mutation.refreshed_tasks: if refreshed.task_id == task_id
 func findRefreshedTask(refreshed []*database.TeamTaskBase, taskID string) *database.TeamTaskBase {
 	for _, t := range refreshed {
 		if t.TaskID == taskID {

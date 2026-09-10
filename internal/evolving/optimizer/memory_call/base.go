@@ -18,7 +18,7 @@ import (
 // 子优化器嵌入此结构体，获得记忆维度的公共字段和辅助方法，
 // 然后自己实现 optimizer.BaseOptimizer 接口的全部方法。
 //
-// 对应 Python: openjiuwen/agent_evolving/optimizer/memory_call/base.py MemoryOptimizerBase
+// Python: openjiuwen/agent_evolving/optimizer/memory_call/base.py MemoryOptimizerBase
 type MemoryOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
 }
@@ -33,47 +33,47 @@ type MemoryOptimizerBase struct {
 
 // Domain 返回优化器域 "memory"。
 //
-// 对应 Python: MemoryOptimizerBase.domain = "memory"
+// Python: MemoryOptimizerBase.domain = "memory"
 func (b *MemoryOptimizerBase) Domain() string {
 	return "memory"
 }
 
 // DefaultTargets 返回默认优化目标列表。
 //
-// 对齐 Python:
+// Python:
 //
 //	def default_targets(self) -> List[str]:
 //	    返回 ["enabled", "max_retries"]
 //
-// 对应 Python: MemoryOptimizerBase.default_targets()
+// Python: MemoryOptimizerBase.default_targets()
 func (b *MemoryOptimizerBase) DefaultTargets() []string {
 	return []string{"enabled", "max_retries"}
 }
 
 // RequiresForwardData 返回 true，记忆优化器需要框架执行前向推理。
 //
-// 对齐 Python:
+// Python:
 //
 //	@staticmethod
 //	def requires_forward_data() -> bool:
 //	    返回 True
 //
-// 对应 Python: BaseOptimizer.requires_forward_data() → True
+// Python: BaseOptimizer.requires_forward_data() → True
 func (b *MemoryOptimizerBase) RequiresForwardData() bool {
 	return true
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
 //
-// 对齐 Python:
+// Python:
 //
 //	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
 //	MemoryOptimizerBase.filter_operators() 委托 super().filter_operators()，
 //	仅为文档目的显式声明，Go 中 Mixin.Bind 内部已调用 FilterOperators。
 //
-// 对应 Python: BaseOptimizer.bind()
+// Python: BaseOptimizer.bind()
 func (b *MemoryOptimizerBase) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	// 对齐 Python: targets or self.default_targets()
+	// Python: targets or self.default_targets()
 	if len(targets) == 0 {
 		targets = b.DefaultTargets()
 	}
@@ -97,12 +97,12 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 
 // Backward 反向传播：从信号计算梯度。
 //
-// 对齐 Python: BaseOptimizer.backward() 模板方法流程：
+// Python: BaseOptimizer.backward() 模板方法流程：
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 //	MemoryOptimizerBase _backward 为 pass
 //
-// 对应 Python: MemoryOptimizerBase._backward(signals) → pass
+// Python: MemoryOptimizerBase._backward(signals) → pass
 func (b *MemoryOptimizerBase) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	return b.BackwardTemplate(ctx, signals, func(_ context.Context, _ []*signal.EvolutionSignal) error {
 		// MemoryOptimizer _backward 为 pass
@@ -112,12 +112,12 @@ func (b *MemoryOptimizerBase) Backward(ctx context.Context, signals []*signal.Ev
 
 // Step 生成更新映射。
 //
-// 对齐 Python: BaseOptimizer.step() 模板方法流程：
+// Python: BaseOptimizer.step() 模板方法流程：
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 //	MemoryOptimizerBase 为空实现，返回空映射。
 //
-// 对应 Python: BaseOptimizer.step() → _step()
+// Python: BaseOptimizer.step() → _step()
 func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
 	return b.StepTemplate(b.step)
 }
@@ -125,7 +125,7 @@ func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
 // step 子类逻辑，对齐 Python _step()。
 // MemoryOptimizerBase 为空实现，返回空映射。
 //
-// 对应 Python: BaseOptimizer._step() → 抽象（子类实现）
+// Python: BaseOptimizer._step() → 抽象（子类实现）
 func (b *MemoryOptimizerBase) step() map[cschema.UpdateKey]any {
 	return map[cschema.UpdateKey]any{}
 }

@@ -494,7 +494,7 @@ func TestGetDefaultCmdLimit(t *testing.T) {
 // ──────────────────────────── G12 递归 glob 测试 ────────────────────────────
 
 // TestSearchFiles_递归Glob 测试 *.py 递归匹配所有子目录
-// 对齐 Python: pathlib.Path.rglob("*.py")
+// Python: pathlib.Path.rglob("*.py")
 func TestSearchFiles_递归Glob(t *testing.T) {
 	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
@@ -521,7 +521,7 @@ func TestSearchFiles_递归Glob(t *testing.T) {
 }
 
 // TestSearchFiles_排除模式 测试 exclude 递归 glob
-// 对齐 Python: base.rglob(pat) 用于 exclude_patterns
+// Python: base.rglob(pat) 用于 exclude_patterns
 func TestSearchFiles_排除模式(t *testing.T) {
 	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()

@@ -23,7 +23,7 @@ var (
 	// distributed_mode=false，消息队列类型=FAKE。
 	// InstanceID 自动生成 UUID，对齐 Python DEFAULT_RUNNER_CONFIG。
 	//
-	// 对应 Python: DEFAULT_RUNNER_CONFIG
+	// Python: DEFAULT_RUNNER_CONFIG
 	DEFAULT_RUNNER_CONFIG = &RunnerConfig{
 		DistributedMode: false,
 		DistributedConfig: &DistributedConfig{
@@ -50,7 +50,7 @@ var (
 
 // SetRunnerConfig 设置全局 Runner 配置。
 //
-// 对应 Python: set_runner_config(cfg)
+// Python: set_runner_config(cfg)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func SetRunnerConfig(cfg *RunnerConfig) {
@@ -69,7 +69,7 @@ func SetRunnerConfig(cfg *RunnerConfig) {
 // GetRunnerConfig 获取全局 Runner 配置。
 // 若尚未设置，则返回 DEFAULT_RUNNER_CONFIG 的深拷贝。
 //
-// 对应 Python: get_runner_config()
+// Python: get_runner_config()
 func GetRunnerConfig() *RunnerConfig {
 	globalConfigMu.RLock()
 	if globalConfig != nil {
@@ -94,7 +94,7 @@ func GetRunnerConfig() *RunnerConfig {
 
 // cloneDefaultConfig 深拷贝 DEFAULT_RUNNER_CONFIG。
 //
-// 对应 Python: DEFAULT_RUNNER_CONFIG.model_copy(deep=True)
+// Python: DEFAULT_RUNNER_CONFIG.model_copy(deep=True)
 // InstanceID 保留原值（深拷贝语义，非重新生成）。
 // 使用 deepcopy 库确保 CheckpointerConfig.Conf 等 map[string]any 字段也被深拷贝。
 // ──────────────────────────── 非导出函数 ────────────────────────────

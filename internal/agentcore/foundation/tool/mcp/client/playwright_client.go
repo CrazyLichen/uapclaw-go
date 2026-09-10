@@ -17,7 +17,7 @@ import (
 //   - http:// 或 https:// 开头 → SseClient
 //   - 其他 → StdioClient
 //
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/playwright_client.py (PlaywrightClient)
+// Python: openjiuwen/core/foundation/tool/mcp/client/playwright_client.py (PlaywrightClient)
 type PlaywrightClient struct {
 	config     *types.McpServerConfig
 	serverName string

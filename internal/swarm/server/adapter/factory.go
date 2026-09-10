@@ -30,7 +30,7 @@ const logComponent = logger.ComponentAgentServer
 
 // ResolveSDKChoice 从环境变量解析 SDK 选择。
 //
-// 对应 Python: resolve_sdk_choice()
+// Python: resolve_sdk_choice()
 //
 // 行为：
 //   - 未设置或空 → "harness"（默认）
@@ -56,7 +56,7 @@ func ResolveSDKChoice() string {
 
 // CreateAdapter 工厂函数，创建 SDK 适配器实例。
 //
-// 对应 Python: create_adapter(sdk, *, mode)
+// Python: create_adapter(sdk, *, mode)
 //
 // 参数：
 //   - sdk: SDK 名称，若为空则从环境变量解析

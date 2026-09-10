@@ -15,18 +15,18 @@ import (
 // 各具体处理器定义自己的 Config 结构体并实现此接口，
 // 基类通过接口持有配置，子类通过类型断言获取具体配置。
 //
-// 对应 Python: pydantic.BaseModel（作为处理器配置基类）
+// Python: pydantic.BaseModel（作为处理器配置基类）
 type ProcessorConfig interface {
 	// Validate 校验配置参数
 	Validate() error
 	// SetModelDefaults 设置模型配置默认值。
 	// 当 Config 的 Model/ModelClient 字段为 nil 时，用传入的参数回填。
 	// 无 Model/ModelClient 字段的 Config 实现空方法。
-	// 对齐 Python: hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None
+	// Python: hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None
 	SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig)
 	// GetModel 返回 Config 的 Model 字段。
 	// 无 Model 字段的 Config 返回 nil。
-	// 对齐 Python: getattr(config, "model", None)
+	// Python: getattr(config, "model", None)
 	GetModel() *llm_schema.ModelRequestConfig
 }
 
@@ -40,7 +40,7 @@ type ProcessorConfig interface {
 // 才调用对应的 On* 方法执行实际处理。实现必须是无状态的，
 // 或通过 SaveState/LoadState 支持跨会话恢复。
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/base.py (ContextProcessor)
+// Python: openjiuwen/core/context_engine/processor/base.py (ContextProcessor)
 type ContextProcessor interface {
 	// OnAddMessages 处理即将添加的消息，返回 ContextEvent 和变换后的消息列表。
 	// 仅在 TriggerAddMessages 返回 true 时调用。
@@ -72,7 +72,7 @@ type ContextProcessor interface {
 // 压缩摘要和压缩用量信息。Context 实例读取这些字段构建 ContextCompressionState。
 // 处理器未触发（noop）时返回 nil。
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/base.py (ContextEvent)
+// Python: openjiuwen/core/context_engine/processor/base.py (ContextEvent)
 type ContextEvent struct {
 	// EventType 处理器类型标识（如 "DialogueCompressor"、"MessageOffloader"）
 	EventType string `json:"event_type"`
@@ -86,7 +86,7 @@ type ContextEvent struct {
 
 // ProcessorOption 处理器可选参数，替代 Python **kwargs。
 //
-// 对应 Python: ContextProcessor.offload_messages(**kwargs) 中的关键字参数
+// Python: ContextProcessor.offload_messages(**kwargs) 中的关键字参数
 type ProcessorOption struct {
 	// SysOperation 系统操作接口
 	SysOperation sysop.SysOperation
@@ -143,21 +143,21 @@ func WithOffloadPath(path string) Option {
 
 // WithToolCallID 设置工具调用 ID
 //
-// 对应 Python: offload_messages(tool_call_id=...)
+// Python: offload_messages(tool_call_id=...)
 func WithToolCallID(toolCallID string) Option {
 	return func(o *ProcessorOption) { o.ToolCallID = toolCallID }
 }
 
 // WithName 设置消息发送者名称
 //
-// 对应 Python: offload_messages(name=...)
+// Python: offload_messages(name=...)
 func WithName(name string) Option {
 	return func(o *ProcessorOption) { o.Name = name }
 }
 
 // WithMetadata 设置附加元数据
 //
-// 对应 Python: offload_messages(metadata=...)
+// Python: offload_messages(metadata=...)
 func WithMetadata(metadata map[string]any) Option {
 	return func(o *ProcessorOption) { o.Metadata = metadata }
 }

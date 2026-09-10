@@ -141,7 +141,7 @@ func MergeProcessors(
 
 // buildMergedConfig 构建单个 processor 的合并配置。
 //
-// 对齐 Python: _build_merged_cfg(key, override_cfg, base_cfg, model_config, model_client_config)
+// Python: _build_merged_cfg(key, override_cfg, base_cfg, model_config, model_client_config)
 func buildMergedConfig(
 	key string,
 	baseCfg iface.ProcessorConfig,
@@ -184,7 +184,7 @@ func buildMergedConfig(
 
 // fillModelDefaults 对合并后的 Config 回填 Model/ModelClient 字段。
 //
-// 对齐 Python:
+// Python:
 //
 //	Python: if hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None:
 //	    Python: merged_cfg.model = model_config

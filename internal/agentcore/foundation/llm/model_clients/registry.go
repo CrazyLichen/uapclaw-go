@@ -14,7 +14,7 @@ import (
 
 // ClientRegistry 模型客户端注册表，管理客户端类型的注册和创建。
 //
-// 对应 Python: openjiuwen/core/common/clients/client_registry.py (ClientRegistry)
+// Python: openjiuwen/core/common/clients/client_registry.py (ClientRegistry)
 // 线程安全，使用 RWMutex 保护内部 map。
 type ClientRegistry struct {
 	mu        sync.RWMutex
@@ -29,7 +29,7 @@ type registryProviderValidator struct{}
 // ClientFactory 客户端工厂函数类型。
 //
 // 工厂函数接收 ModelRequestConfig 和 ModelClientConfig，返回 BaseModelClient 实例。
-// 对齐 Python：factory 可以抛异常，Go 通过 error 返回值表达创建失败。
+// Python: factory 可以抛异常，Go 通过 error 返回值表达创建失败。
 type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -146,7 +146,7 @@ func (r *ClientRegistry) ListClients() []string {
 
 // CreateModelClient 根据配置创建对应的模型客户端实例。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/__init__.py (create_model_client)
+// Python: openjiuwen/core/foundation/llm/model_clients/__init__.py (create_model_client)
 //
 // ⚠️ 后续注册点（2.7-2.12 节实现时修改）：
 //   - 2.7 OpenAI 客户端：注册 "llm_OpenAI" + "llm_OpenRouter"
@@ -175,7 +175,7 @@ func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *l
 
 // ValidateProvider 验证 provider 是否已在注册表中注册。
 //
-// 对应 Python: ModelClientConfig.validate_client_provider() 通过 ClientRegistry 查询。
+// Python: ModelClientConfig.validate_client_provider() 通过 ClientRegistry 查询。
 func (v *registryProviderValidator) ValidateProvider(provider string) string {
 	names := GetClientRegistry().ListClients()
 	prefix := clientTypeLLM + "_"

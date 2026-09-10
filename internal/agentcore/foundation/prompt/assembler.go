@@ -12,7 +12,7 @@ import (
 
 // PromptAssembler 模板装配器，负责编排变量求值和模板渲染。
 //
-// 对应 Python: openjiuwen/core/foundation/prompt/assemble/assembler.py (PromptAssembler)
+// Python: openjiuwen/core/foundation/prompt/assemble/assembler.py (PromptAssembler)
 //
 // 职责：
 //   - 解析模板内容，为每个片段创建 Variable 对象
@@ -59,7 +59,7 @@ func WithAssemblerVariable(name string, variable Variable) AssemblerOption {
 //   - content: 模板内容，string 或 []schema.BaseMessage
 //   - opts: 可选配置
 //
-// 对应 Python: PromptAssembler(prompt_template_content=..., placeholder_prefix=..., placeholder_suffix=..., **variables)
+// Python: PromptAssembler(prompt_template_content=..., placeholder_prefix=..., placeholder_suffix=..., **variables)
 func NewPromptAssembler(content any, opts ...AssemblerOption) (*PromptAssembler, error) {
 	a := &PromptAssembler{
 		templateContent: content,
@@ -87,14 +87,14 @@ func NewPromptAssembler(content any, opts ...AssemblerOption) (*PromptAssembler,
 }
 
 // InputKeys 返回所有需要外部传入的键名。
-// 对应 Python: PromptAssembler.input_keys (property)
+// Python: PromptAssembler.input_keys (property)
 func (a *PromptAssembler) InputKeys() []string {
 	return a.inputKeys
 }
 
 // Assemble 执行模板装配：更新变量值，渲染模板，返回结果。
 //
-// 对应 Python: PromptAssembler.prompt_assemble()
+// Python: PromptAssembler.prompt_assemble()
 //
 // 逻辑：
 //  1. 过滤 nil 值和无关 key
@@ -138,7 +138,7 @@ func (a *PromptAssembler) Assemble(kwargs map[string]any) (any, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildFormatterList 根据内容类型创建 Variable 列表。
-// 对应 Python: PromptAssembler._get_formatter_list()
+// Python: PromptAssembler._get_formatter_list()
 func (a *PromptAssembler) buildFormatterList() error {
 	switch content := a.templateContent.(type) {
 	case string:
@@ -188,7 +188,7 @@ func (a *PromptAssembler) buildFormatterList() error {
 }
 
 // verifyAndCompleteVariables 验证外部变量定义并补全未提供的变量。
-// 对应 Python: PromptAssembler._get_variables_with_verify()
+// Python: PromptAssembler._get_variables_with_verify()
 func (a *PromptAssembler) verifyAndCompleteVariables() error {
 	// 收集 formatter 的 inputKeys，用于验证传入变量名的合法性
 	formatterKeySet := make(map[string]struct{})
@@ -231,7 +231,7 @@ func (a *PromptAssembler) verifyAndCompleteVariables() error {
 	}
 
 	// inputKeys 从所有 variables 的 inputKeys 收集（包含嵌套依赖）
-	// 对应 Python: PromptAssembler.input_keys property
+	// Python: PromptAssembler.input_keys property
 	keySet := make(map[string]struct{})
 	var allKeys []string
 	for _, variable := range a.variables {
@@ -258,7 +258,7 @@ func (a *PromptAssembler) isInputKey(key string) bool {
 }
 
 // updateVariables 更新所有变量。
-// 对应 Python: PromptAssembler._update()
+// Python: PromptAssembler._update()
 func (a *PromptAssembler) updateVariables(kwargs map[string]any) error {
 	// 检查 missing keys
 	kwargSet := make(map[string]struct{}, len(kwargs))
@@ -294,7 +294,7 @@ func (a *PromptAssembler) updateVariables(kwargs map[string]any) error {
 }
 
 // format 将 Variable 求值结果回填到 templateContent。
-// 对应 Python: PromptAssembler._format()
+// Python: PromptAssembler._format()
 func (a *PromptAssembler) format() any {
 	// 构建格式化参数：变量名 → 变量值
 	formatKwargs := make(map[string]any, len(a.variables))

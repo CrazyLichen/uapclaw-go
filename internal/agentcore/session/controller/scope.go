@@ -9,7 +9,7 @@ import (
 
 // Scope 隔离边界接口，定义数据隔离的基本边界。
 // 每个 Scope 对应独立的存储命名空间，用于区分不同隔离策略。
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (Scope)
+// Python: openjiuwen/core/session/session_controller/scope.py (Scope)
 type Scope interface {
 	// String 转为字符串表示，用于序列化和存储键生成
 	fmt.Stringer
@@ -17,7 +17,7 @@ type Scope interface {
 
 // Subject 会话参与者接口，在 Scope 内进一步细分数据隔离。
 // 不同 Subject 类型对应不同的会话场景（私聊、群聊、群内用户）。
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (Subject)
+// Python: openjiuwen/core/session/session_controller/scope.py (Subject)
 type Subject interface {
 	// String 转为字符串表示
 	fmt.Stringer
@@ -25,12 +25,12 @@ type Subject interface {
 
 // MainScope 主域，系统内置默认域。
 // 用于不涉及额外租户或应用级隔离的通用场景，字符串表示为固定值 "main"。
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (MainScope)
+// Python: openjiuwen/core/session/session_controller/scope.py (MainScope)
 type MainScope struct{}
 
 // DirectSubject 私聊参与者，用于一对一私聊场景，数据隔离到特定用户。
 // 字符串格式："direct:{user_id}"
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (DirectSubject)
+// Python: openjiuwen/core/session/session_controller/scope.py (DirectSubject)
 type DirectSubject struct {
 	// UserID 用户唯一标识
 	UserID string
@@ -38,7 +38,7 @@ type DirectSubject struct {
 
 // GroupSubject 群聊参与者，用于群聊场景，群成员共享会话上下文。
 // 字符串格式："group:{group_id}"
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (GroupSubject)
+// Python: openjiuwen/core/session/session_controller/scope.py (GroupSubject)
 type GroupSubject struct {
 	// GroupID 群组唯一标识
 	GroupID string
@@ -46,7 +46,7 @@ type GroupSubject struct {
 
 // GroupUserSubject 群内用户参与者，用于群聊中特定用户的隔离视角。
 // 字符串格式："group:{group_id}:user:{user_id}"
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (GroupUserSubject)
+// Python: openjiuwen/core/session/session_controller/scope.py (GroupUserSubject)
 type GroupUserSubject struct {
 	// GroupID 群组标识
 	GroupID string
@@ -56,7 +56,7 @@ type GroupUserSubject struct {
 
 // SessionScope 会话作用域，由 Scope 和可选 Subject 组成，定义数据隔离的边界。
 // 同一 Agent 下不同 SessionScope 的数据完全隔离。
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (SessionScope)
+// Python: openjiuwen/core/session/session_controller/scope.py (SessionScope)
 type SessionScope struct {
 	// Scope 隔离边界对象
 	Scope Scope
@@ -66,7 +66,7 @@ type SessionScope struct {
 
 // SessionScopeKey 全局唯一键，标识特定 Agent 下特定 SessionScope 的会话集合。
 // 格式："agent:{agent_id}:{session_scope}"
-// 对应 Python: openjiuwen/core/session/session_controller/scope.py (SessionScopeKey)
+// Python: openjiuwen/core/session/session_controller/scope.py (SessionScopeKey)
 type SessionScopeKey struct {
 	// AgentID Agent 唯一标识
 	AgentID string
@@ -116,7 +116,7 @@ func (k SessionScopeKey) String() string {
 
 // ParseSessionScope 从字符串解析 SessionScope。
 // 解析规则：不含 ":" 则整个字符串作为 scope；含 ":" 则第一段为 scope，其余为 subject。
-// 对应 Python: SessionScope.from_string()
+// Python: SessionScope.from_string()
 func ParseSessionScope(keyStr string) (SessionScope, error) {
 	parts := strings.SplitN(keyStr, ":", 2)
 	scopeStr := parts[0]
@@ -168,7 +168,7 @@ func ParseSessionScope(keyStr string) (SessionScope, error) {
 
 // ParseSessionScopeKey 从字符串解析 SessionScopeKey。
 // 字符串必须以 "agent:" 开头，后跟 agentID 和 SessionScope 字符串。
-// 对应 Python: SessionScopeKey.from_string()
+// Python: SessionScopeKey.from_string()
 func ParseSessionScopeKey(keyStr string) (SessionScopeKey, error) {
 	if !strings.HasPrefix(keyStr, "agent:") {
 		return SessionScopeKey{}, fmt.Errorf("SessionScopeKey 必须以 'agent:' 开头")

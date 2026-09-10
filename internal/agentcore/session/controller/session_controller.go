@@ -17,7 +17,7 @@ import (
 // SessionController 单 Agent 会话管理器。
 // 负责管理该 Agent 下所有会话的生命周期，包括创建、查询、激活、删除，
 // 以及维护 sessions.json 元数据文件和会话对象缓存。
-// 对应 Python: openjiuwen/core/session/session_controller/session_controller.py (SessionController)
+// Python: openjiuwen/core/session/session_controller/session_controller.py (SessionController)
 type SessionController struct {
 	// mu 并发互斥锁
 	mu sync.Mutex
@@ -70,13 +70,13 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 }
 
 // Flush 持久化所有变更到磁盘。
-// 对齐 Python asyncio.gather：在锁内并发 Flush 所有 session，
+// Python: asyncio.gather：在锁内并发 Flush 所有 session，
 // 每个 ChainSession 有自己的 mu 保护，并发安全。
 func (sc *SessionController) Flush() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	// 对齐 Python asyncio.gather：并发 Flush 所有 session
+	// Python: asyncio.gather：并发 Flush 所有 session
 	eg := &errgroup.Group{}
 	for _, s := range sc.SessionCache {
 		s := s
@@ -101,7 +101,7 @@ func (sc *SessionController) Flush() error {
 }
 
 // FlushSession 持久化指定会话到磁盘
-// 对齐 Python：整个 flush 过程持锁
+// Python: 整个 flush 过程持锁
 func (sc *SessionController) FlushSession(sessionID string) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -119,7 +119,7 @@ func (sc *SessionController) FlushSession(sessionID string) error {
 }
 
 // FlushScope 持久化指定作用域的会话到磁盘。
-// 对齐 Python asyncio.gather：在锁内并发 Flush 匹配 scope 的 session。
+// Python: asyncio.gather：在锁内并发 Flush 匹配 scope 的 session。
 // T-08 修复：scope 不存在时快速返回，对齐 Python flush_scope 的快速返回检查。
 func (sc *SessionController) FlushScope(sessionScope SessionScope) error {
 	sc.mu.Lock()
@@ -130,7 +130,7 @@ func (sc *SessionController) FlushScope(sessionScope SessionScope) error {
 		return nil
 	}
 
-	// 对齐 Python asyncio.gather：并发 Flush 匹配 scope 的 session
+	// Python: asyncio.gather：并发 Flush 匹配 scope 的 session
 	eg := &errgroup.Group{}
 	for _, s := range sc.SessionCache {
 		s := s

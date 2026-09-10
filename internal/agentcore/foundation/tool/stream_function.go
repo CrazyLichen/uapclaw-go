@@ -16,7 +16,7 @@ import (
 //
 // 用户函数签名：func(ctx context.Context, input I, opts ...ToolOption) (<-chan O, error)
 //
-// 对应 Python: openjiuwen/core/foundation/tool/function/function.py (LocalFunction.stream)
+// Python: openjiuwen/core/foundation/tool/function/function.py (LocalFunction.stream)
 type StreamFunction[I any, O any] struct {
 	card *ToolCard
 	fn   func(context.Context, I, ...ToolOption) (<-chan O, error)

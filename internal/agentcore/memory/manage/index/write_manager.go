@@ -16,7 +16,7 @@ import (
 // 根据记忆类型分发到对应子 Manager；按 ID 操作时先从 memory_index 查类型再路由。
 // 去重机制：三种 Fragment 类型共享同一个 FragmentMemoryManager 实例（对齐 Python: set(self.managers.values())）。
 //
-// 对应 Python: openjiuwen/core/memory/manage/index/write_manager.py (WriteManager)
+// Python: openjiuwen/core/memory/manage/index/write_manager.py (WriteManager)
 type WriteManager struct {
 	// managers 记忆类型 → Manager 实例映射
 	managers map[string]BaseMemoryManager
@@ -37,7 +37,7 @@ const writeLogComponent = logger.ComponentAgentCore
 
 // NewWriteManager 创建写入管理器。
 //
-// 对齐 Python: WriteManager.__init__(managers, memory_index)
+// Python: WriteManager.__init__(managers, memory_index)
 func NewWriteManager(managers map[string]BaseMemoryManager, memoryIndex index.BaseMemoryIndex) *WriteManager {
 	return &WriteManager{
 		managers:    managers,
@@ -50,7 +50,7 @@ func NewWriteManager(managers map[string]BaseMemoryManager, memoryIndex index.Ba
 // 遍历 managers 去重后调用各 Manager 的 AddMemories。
 // 去重是因为三种 Fragment 类型共享同一个 FragmentMemoryManager 实例（对齐 Python: set(self.managers.values())）。
 //
-// 对齐 Python: WriteManager.add_memories(user_id, scope_id, memories, llm)
+// Python: WriteManager.add_memories(user_id, scope_id, memories, llm)
 func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
 
@@ -88,7 +88,7 @@ func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID s
 //
 // 先从 memory_index 查 mem_type，再路由到对应 Manager 的 Update。
 //
-// 对齐 Python: WriteManager.update_mem_by_id(user_id, scope_id, mem_id, memory)
+// Python: WriteManager.update_mem_by_id(user_id, scope_id, mem_id, memory)
 func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID string, memID string, newMemory string) error {
 	memType, err := w.getMemTypeFromIndex(ctx, userID, scopeID, memID)
 	if err != nil || memType == "" {
@@ -118,7 +118,7 @@ func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID
 //
 // 先从 memory_index 查 mem_type，再路由到对应 Manager 的 Delete。
 //
-// 对齐 Python: WriteManager.delete_mem_by_id(user_id, scope_id, mem_id)
+// Python: WriteManager.delete_mem_by_id(user_id, scope_id, mem_id)
 func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID string, memID string) error {
 	memType, err := w.getMemTypeFromIndex(ctx, userID, scopeID, memID)
 	if err != nil || memType == "" {
@@ -148,7 +148,7 @@ func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID
 //
 // 遍历所有 Manager 调用 DeleteByUserID（对齐 Python: set(self.managers.values()) 去重）。
 //
-// 对齐 Python: WriteManager.delete_mem_by_user_id(user_id, scope_id)
+// Python: WriteManager.delete_mem_by_user_id(user_id, scope_id)
 func (w *WriteManager) DeleteMemByUserID(ctx context.Context, userID string, scopeID string) error {
 	seen := make(map[BaseMemoryManager]bool)
 	for _, manager := range w.managers {
@@ -168,7 +168,7 @@ func (w *WriteManager) DeleteMemByUserID(ctx context.Context, userID string, sco
 
 // getMemTypeFromIndex 从 memory_index 查询记忆类型。
 //
-// 对齐 Python: WriteManager.__get_mem_type_from_index(user_id, scope_id, mem_id)
+// Python: WriteManager.__get_mem_type_from_index(user_id, scope_id, mem_id)
 func (w *WriteManager) getMemTypeFromIndex(ctx context.Context, userID string, scopeID string, memID string) (string, error) {
 	doc, err := w.memoryIndex.GetByID(ctx, userID, scopeID, memID)
 	if err != nil {

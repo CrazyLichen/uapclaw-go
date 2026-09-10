@@ -1,6 +1,10 @@
 package trajectory
 
-import "testing"
+import (
+	"testing"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+)
 
 // TestStepKind_常量值 验证 StepKind 常量对齐 Python Literal
 func TestStepKind_常量值(t *testing.T) {
@@ -54,7 +58,7 @@ func TestTrajectoryStep_字段(t *testing.T) {
 func TestTrajectory_默认Source(t *testing.T) {
 	traj := &Trajectory{ExecutionID: "test-001", Steps: []*TrajectoryStep{}}
 	// Go 中 struct 无默认值机制，Source 默认为空字符串
-	// 对齐 Python: source: str = "offline" 需在构造时显式设置
+	// Python: source: str = "offline" 需在构造时显式设置
 	if traj.Source != "" {
 		t.Errorf("default Source = %q, want empty string", traj.Source)
 	}
@@ -77,8 +81,8 @@ func TestTrajectory_ToMessages_只有LLM步骤(t *testing.T) {
 			{
 				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
-					Messages: []map[string]any{
-						map[string]any{"role": "user", "content": "hello"},
+					Messages: []llmschema.BaseMessage{
+						llmschema.NewUserMessage("hello"),
 					},
 					Response: map[string]any{"role": "assistant", "content": "hi"},
 				},
@@ -104,7 +108,7 @@ func TestTrajectory_ToMessages_跳过工具步骤(t *testing.T) {
 		Steps: []*TrajectoryStep{
 			{Kind: StepKindTool, Detail: &ToolCallDetail{ToolName: "search"}},
 			{Kind: StepKindLLM, Detail: &LLMCallDetail{
-				Messages: []map[string]any{map[string]any{"role": "user", "content": "hi"}},
+				Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
 			}},
 		},
 	}
@@ -121,7 +125,7 @@ func TestTrajectory_ToMessages_nilResponse(t *testing.T) {
 		Steps: []*TrajectoryStep{
 			{
 				Kind:   StepKindLLM,
-				Detail: &LLMCallDetail{Messages: []map[string]any{map[string]any{"role": "user", "content": "hi"}}, Response: nil},
+				Detail: &LLMCallDetail{Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")}, Response: nil},
 			},
 		},
 	}

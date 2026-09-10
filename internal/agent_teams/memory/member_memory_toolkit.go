@@ -23,7 +23,7 @@ type liteToolCtx interface {
 }
 
 // MemberMemoryToolkit 成员记忆工具集。
-// 对齐 Python MemberMemoryToolkit (member_memory_toolkit.py)
+// Python: MemberMemoryToolkit (member_memory_toolkit.py)
 type MemberMemoryToolkit struct {
 	// memberName 成员名称
 	memberName string
@@ -216,7 +216,7 @@ func (t *MemberMemoryToolkit) MemberName() string { return t.memberName }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createCodingMemoryToolsForTeam 创建编程记忆工具集（带 team 前缀）。
-// 对齐 Python _create_coding_tools
+// Python: _create_coding_tools
 func createCodingMemoryToolsForTeam(ctx *lite.CodingMemoryToolContext, readOnly bool, teamName string, memberName string) []tool.Tool {
 	// 使用工厂函数创建工具，然后根据 readOnly 裁剪
 	allTools := cmt.CreateCodingMemoryTools(ctx, "cn", fmt.Sprintf("%s.%s", teamName, memberName))
@@ -234,7 +234,7 @@ func createCodingMemoryToolsForTeam(ctx *lite.CodingMemoryToolContext, readOnly 
 }
 
 // createGeneralMemoryToolsForTeam 创建通用记忆工具集（带 team 前缀）。
-// 对齐 Python _create_general_tools
+// Python: _create_general_tools
 func createGeneralMemoryToolsForTeam(ctx *lite.MemoryToolContext, readOnly bool, teamName string, memberName string) []tool.Tool {
 	// 使用工厂函数创建全部 5 个工具
 	allTools := gmt.CreateMemoryTools(ctx, "cn", fmt.Sprintf("%s.%s", teamName, memberName))

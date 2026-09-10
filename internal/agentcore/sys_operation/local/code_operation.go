@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalCodeOperation 本地代码执行。
-// 对齐 Python local/code_operation.py CodeOperation。
+// Python: local/code_operation.py CodeOperation。
 type LocalCodeOperation struct {
 	sysop.BaseCodeOperation
 }
@@ -32,10 +32,10 @@ type LocalCodeOperation struct {
 const (
 	codeLogComponent = logger.ComponentAgentCore
 	// windowsCmdLimit Windows 命令行长度限制。
-	// 对齐 Python _WINDOWS_CMD_LIMIT = 8000。
+	// Python: _WINDOWS_CMD_LIMIT = 8000。
 	windowsCmdLimit = 8000
 	// unixCmdLimit Unix 命令行长度限制。
-	// 对齐 Python _UNIX_CMD_LIMIT = 100000。
+	// Python: _UNIX_CMD_LIMIT = 100000。
 	unixCmdLimit = 100000
 )
 
@@ -51,14 +51,14 @@ func NewLocalCodeOperation(runConfig any) sysop.SysSubOperation {
 }
 
 // ExecuteCode 执行代码。
-// 对齐 Python CodeOperation.execute_code：参数校验 → 语言支持检查 →
+// Python: CodeOperation.execute_code：参数校验 → 语言支持检查 →
 // buildSubprocessCmd → 环境变量 → 子进程执行 → FileNotFoundError 处理 → 结果构造 → 日志记录。
 func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sysop.CodeOption) (*result.ExecuteCodeResult, error) {
 	o := sysop.NewCodeOptions(opts...)
 	methodName := "execute_code"
 
 	startTime := time.Now()
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
 	logger.Info(codeLogComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
@@ -147,7 +147,7 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 		},
 	}
 
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
 	logger.Info(codeLogComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
@@ -159,7 +159,7 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 }
 
 // ExecuteCodeStream 流式执行代码。
-// 对齐 Python CodeOperation.execute_code_stream。
+// Python: CodeOperation.execute_code_stream。
 func (c *LocalCodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts ...sysop.CodeOption) (<-chan result.ExecuteCodeStreamResult, error) {
 	ch := make(chan result.ExecuteCodeStreamResult, 64)
 
@@ -229,7 +229,7 @@ func (c *LocalCodeOperation) ExecuteCodeStream(ctx context.Context, code string,
 
 // ListTools 返回代码执行的工具卡片列表（硬编码）。
 // description 严格使用 Python 方法英文 docstring 原文，不翻译。
-// 对齐 Python BaseCodeOperation.list_tools：execute_code, execute_code_stream。
+// Python: BaseCodeOperation.list_tools：execute_code, execute_code_stream。
 func (c *LocalCodeOperation) ListTools() []*tool.ToolCard {
 	executeCodeParams := []*schema.Param{
 		{Name: "code", Description: "Non-empty string containing the source code to execute (required positional argument).", Type: schema.ParamTypeString, Required: true},
@@ -264,7 +264,7 @@ func (c *LocalCodeOperation) ListTools() []*tool.ToolCard {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolvePythonExecutable 解析 Python 可执行文件路径。
-// 对齐 Python sys.executable：优先读取 PYTHON_EXECUTABLE 环境变量，fallback 到 python3。
+// Python: sys.executable：优先读取 PYTHON_EXECUTABLE 环境变量，fallback 到 python3。
 func resolvePythonExecutable() string {
 	if exe := os.Getenv("PYTHON_EXECUTABLE"); exe != "" {
 		return exe
@@ -273,7 +273,7 @@ func resolvePythonExecutable() string {
 }
 
 // buildSubprocessCmd 构建代码执行子进程命令。
-// 对齐 Python CodeOperation 的 supportLanguageConfigDict + buildSubprocessCmd。
+// Python: CodeOperation 的 supportLanguageConfigDict + buildSubprocessCmd。
 // 修改点：命令长度限制对齐 Python（8000/100000），Python 加 -u 参数，force_file 支持。
 func (c *LocalCodeOperation) buildSubprocessCmd(code string, language string, forceFile bool) ([]string, string, error) {
 	cmdLimit := getDefaultCmdLimit()
@@ -305,7 +305,7 @@ func (c *LocalCodeOperation) buildSubprocessCmd(code string, language string, fo
 }
 
 // prepareCodeEnv 准备代码执行环境变量。
-// 对齐 Python 中的 PYTHONIOENCODING/PYTHONUTF8/NODE_DISABLE_COLORS。
+// Python: 中的 PYTHONIOENCODING/PYTHONUTF8/NODE_DISABLE_COLORS。
 func (c *LocalCodeOperation) prepareCodeEnv(customEnv map[string]string, language string) []string {
 	env := os.Environ()
 
@@ -327,7 +327,7 @@ func (c *LocalCodeOperation) prepareCodeEnv(customEnv map[string]string, languag
 }
 
 // getDefaultCmdLimit 获取当前平台的命令行长度限制。
-// 对齐 Python：Windows = 8000，Unix = 100000。
+// Python: Windows = 8000，Unix = 100000。
 func getDefaultCmdLimit() int {
 	if runtime.GOOS == "windows" {
 		return windowsCmdLimit

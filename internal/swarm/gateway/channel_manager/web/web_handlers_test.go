@@ -584,7 +584,7 @@ func TestFlattenTeamConfig_无team(t *testing.T) {
 func TestFlattenTeamConfig_有team(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			// 对齐 Python: modes.team 为 dict（key=team_name, value=team_spec）
+			// Python: modes.team 为 dict（key=team_name, value=team_spec）
 			"team": map[string]any{
 				"my_team": map[string]any{
 					"team_name":     "team1",
@@ -631,7 +631,7 @@ func TestFlattenTeamConfig_有team(t *testing.T) {
 func TestFlattenTeamConfig_predefinedMembers(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			// 对齐 Python: modes.team 为 dict
+			// Python: modes.team 为 dict
 			"team": map[string]any{
 				"my_team": map[string]any{
 					"team_name": "team1",

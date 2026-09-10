@@ -18,7 +18,7 @@ import (
 // P2P 模式：触发 AgentP2PReceived 回调 → 构建 Agent 会话 → runner.RunAgent → 返回响应。
 // Pub-Sub 模式：查询订阅者 → 并发触发各订阅者的 AgentPubsubReceived 回调 → 并发执行各 Agent。
 //
-// 对应 Python: MessageRouter (openjiuwen/core/multi_agent/team_runtime/message_router.py)
+// Python: MessageRouter (openjiuwen/core/multi_agent/team_runtime/message_router.py)
 type MessageRouter struct {
 	// subscriptionManager 订阅管理器
 	subscriptionManager *SubscriptionManager
@@ -36,7 +36,7 @@ type MessageRouter struct {
 
 // NewMessageRouter 创建消息路由器实例。
 //
-// 对应 Python: MessageRouter.__init__(subscription_manager, runtime)
+// Python: MessageRouter.__init__(subscription_manager, runtime)
 func NewMessageRouter(sm *SubscriptionManager, runtime *TeamRuntime) *MessageRouter {
 	return &MessageRouter{
 		subscriptionManager: sm,
@@ -48,7 +48,7 @@ func NewMessageRouter(sm *SubscriptionManager, runtime *TeamRuntime) *MessageRou
 //
 // 流程：触发 AgentP2PReceived 回调 → 构建 Agent 会话 → runner.RunAgent → 返回响应。
 //
-// 对应 Python: MessageRouter.route_p2p_message(envelope)
+// Python: MessageRouter.route_p2p_message(envelope)
 func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEnvelope) (map[string]any, error) {
 	// 触发 AgentP2PReceived 回调
 	callback.GetCallbackFramework().TriggerAgentTeam(ctx, &callback.AgentTeamEventData{
@@ -75,7 +75,7 @@ func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEn
 	inputs := toInputsMap(envelope.Message)
 	result, err := runner.RunAgent(ctx, runner.ByAgentID(envelope.Recipient), inputs, sessionRef, nil, nil)
 	if err != nil {
-		// 对齐 Python: raise build_error(StatusCode.RUNNER_RUN_AGENT_ERROR, agent=..., reason=...)
+		// Python: raise build_error(StatusCode.RUNNER_RUN_AGENT_ERROR, agent=..., reason=...)
 		return nil, exception.BuildError(
 			exception.StatusRunnerRunAgentError,
 			exception.WithCause(err),
@@ -101,7 +101,7 @@ func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEn
 // 使用 sync.WaitGroup 等待所有订阅者完成，对齐 Python asyncio.gather(return_exceptions=True)。
 // 通过 context 取消传播，当 ctx 被取消时 goroutine 快速退出。
 //
-// 对应 Python: MessageRouter.route_pubsub_message(envelope)
+// Python: MessageRouter.route_pubsub_message(envelope)
 func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *MessageEnvelope) error {
 	subscribers := r.subscriptionManager.GetSubscribers(envelope.TopicID)
 	if len(subscribers) == 0 {
@@ -121,7 +121,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 		Msg("开始路由 Pub-Sub 消息到订阅者")
 
 	// 并发执行各订阅者，WaitGroup 等待所有完成
-	// 对齐 Python: asyncio.gather(*tasks, return_exceptions=True)
+	// Python: asyncio.gather(*tasks, return_exceptions=True)
 	var wg sync.WaitGroup
 	for _, agentID := range subscribers {
 		wg.Add(1)
@@ -197,7 +197,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 // 流程对齐 Python MessageRouter._build_agent_session:
 //  1. 获取 TeamSession → 2. 获取 AgentCard → 3. 创建 Agent 子会话
 //
-// 对应 Python: MessageRouter._build_agent_session(session_id, agent_id)
+// Python: MessageRouter._build_agent_session(session_id, agent_id)
 func (r *MessageRouter) buildAgentSession(sessionID, agentID string) *session.Session {
 	if sessionID == "" {
 		return nil
@@ -219,7 +219,7 @@ func (r *MessageRouter) buildAgentSession(sessionID, agentID string) *session.Se
 
 // toInputsMap 将消息内容转换为 map[string]any 类型以匹配 runner.RunAgent 签名。
 //
-// 对齐 Python: Runner.run_agent(agent=..., inputs=envelope.message, ...) 中 inputs 的类型转换。
+// Python: Runner.run_agent(agent=..., inputs=envelope.message, ...) 中 inputs 的类型转换。
 func toInputsMap(message any) map[string]any {
 	if m, ok := message.(map[string]any); ok {
 		return m

@@ -88,11 +88,11 @@ Please verify and return the result:
 var (
 	// LLMMetricTemplate LLM-as-Judge 评估提示词模板。
 	//
-	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_TEMPLATE
+	// Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_TEMPLATE
 	LLMMetricTemplate = prompt.NewPromptTemplate("llm_metric", llmMetricTemplateContent)
 
 	// LLMMetricRetryTemplate 评估结果解析失败时的重试模板。
 	//
-	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_RETRY_TEMPLATE
+	// Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_RETRY_TEMPLATE
 	LLMMetricRetryTemplate = prompt.NewPromptTemplate("llm_metric_retry", llmMetricRetryTemplateContent)
 )

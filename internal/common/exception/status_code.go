@@ -15,7 +15,7 @@ import (
 //
 // 字段不导出，保证创建后不可修改，与 Python Enum 不可变语义一致。
 //
-// 对应 Python: openjiuwen/core/common/exception/codes.py (StatusCode)
+// Python: openjiuwen/core/common/exception/codes.py (StatusCode)
 type StatusCode struct {
 	// code 整数错误码
 	code int
@@ -41,28 +41,28 @@ const missingKeyPlaceholder = "<missing:%s>"
 // name 为枚举名称（如 "WORKFLOW_EXECUTION_ERROR"），
 // code 为整数编码，msg 为消息模板。
 //
-// 对应 Python: StatusCode.NAME = (code, msg)
+// Python: StatusCode.NAME = (code, msg)
 func NewStatusCode(name string, code int, msg string) StatusCode {
 	return StatusCode{code: code, message: msg, name: name}
 }
 
 // Code 返回整数错误码。
 //
-// 对应 Python: StatusCode.XXX.code
+// Python: StatusCode.XXX.code
 func (s StatusCode) Code() int {
 	return s.code
 }
 
 // Message 返回消息模板（未渲染）。
 //
-// 对应 Python: StatusCode.XXX.errmsg
+// Python: StatusCode.XXX.errmsg
 func (s StatusCode) Message() string {
 	return s.message
 }
 
 // Name 返回枚举名称。
 //
-// 对应 Python: StatusCode.XXX.name
+// Python: StatusCode.XXX.name
 func (s StatusCode) Name() string {
 	return s.name
 }
@@ -107,7 +107,7 @@ func (s *StatusCode) UnmarshalJSON(data []byte) error {
 // 缺失的 key 不报错，显示为 <missing:key>。
 // 渲染过程不会产生异常，保证错误路径安全。
 //
-// 对应 Python: _format_template(status.errmsg, params)
+// Python: _format_template(status.errmsg, params)
 func (s StatusCode) RenderMessage(params map[string]any) string {
 	return renderTemplate(s.message, params)
 }
@@ -116,7 +116,7 @@ func (s StatusCode) RenderMessage(params map[string]any) string {
 
 // renderTemplate 安全渲染消息模板，缺失 key 显示 <missing:key>。
 //
-// 对应 Python: _format_template() + _SafeDict
+// Python: _format_template() + _SafeDict
 func renderTemplate(template string, params map[string]any) string {
 	if template == "" {
 		return ""

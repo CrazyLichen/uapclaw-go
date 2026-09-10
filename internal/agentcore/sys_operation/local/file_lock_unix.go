@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // acquireFileLockPlatform Unix 平台文件锁实现。
-// 对齐 Python fcntl.flock(fd, LOCK_EX|LOCK_NB) + 轮询超时。
+// Python: fcntl.flock(fd, LOCK_EX|LOCK_NB) + 轮询超时。
 func acquireFileLockPlatform(filePath string, timeout time.Duration) (*FileLock, error) {
 	lockPath := filePath + ".lock"
 	fd, err := syscall.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR, 0644)

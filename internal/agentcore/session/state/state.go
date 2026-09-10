@@ -3,7 +3,7 @@ package state
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReadableStateLike 只读状态访问接口
-// 对应 Python: ReadableStateLike
+// Python: ReadableStateLike
 type ReadableStateLike interface {
 	// Get 根据 key 获取状态值
 	Get(key StateKey) any
@@ -12,7 +12,7 @@ type ReadableStateLike interface {
 }
 
 // RecoverableStateLike 可恢复状态接口，支持快照保存和恢复
-// 对应 Python: RecoverableStateLike
+// Python: RecoverableStateLike
 type RecoverableStateLike interface {
 	// GetState 获取完整状态快照
 	GetState() map[string]any
@@ -21,7 +21,7 @@ type RecoverableStateLike interface {
 }
 
 // StateLike 可读写状态接口，组合只读和可恢复能力
-// 对应 Python: StateLike(ReadableStateLike, RecoverableStateLike)
+// Python: StateLike(ReadableStateLike, RecoverableStateLike)
 type StateLike interface {
 	ReadableStateLike
 	RecoverableStateLike
@@ -32,7 +32,7 @@ type StateLike interface {
 }
 
 // CommitStateLike 事务性状态接口，支持按节点 ID 的提交/回滚
-// 对应 Python: CommitStateLike(StateLike)
+// Python: CommitStateLike(StateLike)
 type CommitStateLike interface {
 	StateLike
 	// UpdateByID 按节点 ID 暂存更新
@@ -50,7 +50,7 @@ type CommitStateLike interface {
 }
 
 // SessionState 会话状态接口，面向会话调用方的统一抽象
-// 对应 Python: State(RecoverableStateLike)
+// Python: State(RecoverableStateLike)
 //
 // 提供基础的状态读写能力：GetGlobal/UpdateGlobal/UpdateTrace/Update/Get/Dump。
 // Workflow 专属方法（CommitCmp/CreateNodeState/Rollback 等）定义在独立的 WorkflowState
@@ -61,7 +61,7 @@ type SessionState interface {
 	// GetGlobal 从全局状态获取值
 	GetGlobal(key StateKey) any
 	// SetGlobal 从快照恢复全局状态
-	// 对齐 Python: session.state().global_state.set_state(state)
+	// Python: session.state().global_state.set_state(state)
 	SetGlobal(state map[string]any)
 	// UpdateGlobal 更新全局状态
 	UpdateGlobal(data map[string]any)
@@ -76,46 +76,46 @@ type SessionState interface {
 }
 
 // WorkflowState 工作流状态接口，定义 Workflow 专属的提交/回滚/IO 操作。
-// 对应 Python: CommitState（继承自 StateCollection 继承自 State）。
+// Python: CommitState（继承自 StateCollection 继承自 State）。
 //
 // Python 中通过继承链直接调用，Go 中通过类型断言获取：
 //
 //	示例: if ws, ok := session.State().(state.WorkflowState); ok {
 //	    示例: ws.CommitCmp()
 //	示例: } else {
-//	    // 对齐 Python AttributeError — Log Error + Panic
+//	    // Python: AttributeError — Log Error + Panic
 //	}
 //
 // 只有 WorkflowCommitState 实现此接口；
 // AgentStateCollection/InMemoryStateLike/InMemoryCommitState/WorkflowStateCollection 不实现。
 type WorkflowState interface {
 	// CommitCmp 提交当前节点的 comp_state 和 io_state 暂存更新
-	// 对齐 Python StateCollection.commit_cmp()
+	// Python: StateCollection.commit_cmp()
 	CommitCmp()
 	// CreateNodeState 创建节点专属状态视图
-	// 对齐 Python CommitState.create_node_state()
+	// Python: CommitState.create_node_state()
 	CreateNodeState(executableID, parentID string) SessionState
 	// GetWorkflowState 从工作流状态获取值
-	// 对齐 Python CommitState.get_workflow_state()
+	// Python: CommitState.get_workflow_state()
 	GetWorkflowState(key StateKey) any
 	// UpdateAndCommitWorkflowState 立即更新并提交工作流状态
-	// 对齐 Python CommitState.update_and_commit_workflow_state()
+	// Python: CommitState.update_and_commit_workflow_state()
 	UpdateAndCommitWorkflowState(data map[string]any)
 	// Commit 提交所有子状态的全部暂存（无参数，对齐 Python CommitState.commit()）
 	Commit()
 	// Rollback 回滚当前节点的暂存更新（无参数，对齐 Python CommitState.rollback()）
 	Rollback()
 	// GetInputs 从 io_state 查询输入
-	// 对齐 Python CommitState.get_inputs()
+	// Python: CommitState.get_inputs()
 	GetInputs(schema StateKey) any
 	// GetInputsByTransformer 通过转换函数获取输入
-	// 对齐 Python CommitState.get_inputs_by_transformer()
+	// Python: CommitState.get_inputs_by_transformer()
 	GetInputsByTransformer(transformer Transformer) any
 	// SetOutputs 向 io_state 写入当前节点的输出
-	// 对齐 Python CommitState.set_outputs()
+	// Python: CommitState.set_outputs()
 	SetOutputs(data map[string]any)
 	// GetOutputs 从 io_state 查询指定节点的输出
-	// 对齐 Python CommitState.get_outputs()
+	// Python: CommitState.get_outputs()
 	GetOutputs(nodeID ...string) any
 }
 

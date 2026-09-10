@@ -58,7 +58,7 @@ type collMeta struct {
 // 实现 BaseVectorStore 接口，使用 milvus/client/v2 作为客户端。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
 //
-// 对应 Python: vector/milvus_vector_store.py (MilvusVectorStore)
+// Python: vector/milvus_vector_store.py (MilvusVectorStore)
 type MilvusVectorStore struct {
 	// client Milvus 客户端实例
 	client milvusClient
@@ -97,7 +97,7 @@ const (
 // NewMilvusVectorStore 创建 MilvusVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
 //
-// 对应 Python: MilvusVectorStore.__init__(milvus_uri, milvus_token, database_name)
+// Python: MilvusVectorStore.__init__(milvus_uri, milvus_token, database_name)
 func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorStore {
 	if dbName == "" {
 		dbName = "default"
@@ -114,7 +114,7 @@ func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorSt
 
 // Close 关闭 Milvus 客户端连接。
 //
-// 对应 Python: MilvusVectorStore.close()
+// Python: MilvusVectorStore.close()
 func (s *MilvusVectorStore) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -128,7 +128,7 @@ func (s *MilvusVectorStore) Close() {
 // CreateCollection 创建集合。
 // 如果集合已存在则跳过创建。schema 定义字段结构，opts 可指定 DistanceMetric 和 VectorField 索引配置。
 //
-// 对应 Python: MilvusVectorStore.create_collection(collection_name, schema, **kwargs)
+// Python: MilvusVectorStore.create_collection(collection_name, schema, **kwargs)
 func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
 	c, err := s.getClient(ctx)
@@ -270,7 +270,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 
 // DeleteCollection 删除集合。
 //
-// 对应 Python: MilvusVectorStore.delete_collection(collection_name)
+// Python: MilvusVectorStore.delete_collection(collection_name)
 func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -303,7 +303,7 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 
 // CollectionExists 检查集合是否存在。
 //
-// 对应 Python: MilvusVectorStore.collection_exists(collection_name)
+// Python: MilvusVectorStore.collection_exists(collection_name)
 func (s *MilvusVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -314,7 +314,7 @@ func (s *MilvusVectorStore) CollectionExists(ctx context.Context, collectionName
 
 // GetSchema 获取集合的 Schema。
 //
-// 对应 Python: MilvusVectorStore.get_schema(collection_name)
+// Python: MilvusVectorStore.get_schema(collection_name)
 func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -381,7 +381,7 @@ func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string
 
 // AddDocs 添加文档到集合。支持批量插入，通过 BatchSize 控制批次大小。
 //
-// 对应 Python: MilvusVectorStore.add_docs(collection_name, docs, **kwargs)
+// Python: MilvusVectorStore.add_docs(collection_name, docs, **kwargs)
 func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
 		return nil
@@ -425,7 +425,7 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 				Int("batch_start", i).Int("batch_size", len(batch)).Msg("插入文档批次失败")
 			return err
 		}
-		// 对齐 Python: logger.debug(f"Added {processed}/{total} documents")
+		// Python: logger.debug(f"Added {processed}/{total} documents")
 		logger.Debug(logComponent).Str("collection_name", collectionName).
 			Int("added", end).Int("total", total).
 			Msg("添加文档进度")
@@ -443,7 +443,7 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 
 // Search 向量相似度搜索。
 //
-// 对应 Python: MilvusVectorStore.search(collection_name, query_vector, vector_field, top_k, filters, **kwargs)
+// Python: MilvusVectorStore.search(collection_name, query_vector, vector_field, top_k, filters, **kwargs)
 func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	o := newOptions(opts...)
 	if topK <= 0 {
@@ -472,7 +472,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 	vectors := []entity.Vector{entity.FloatVector(vecFloat32)}
 
 	// 确定输出字段：未指定时从集合元数据自动推断
-	// 对齐 Python: if not search_output_fields: describe_collection 获取字段列表
+	// Python: if not search_output_fields: describe_collection 获取字段列表
 	outputFields := o.OutputFields
 	if len(outputFields) == 0 {
 		outputFields = s.getOutputFields(collectionName)
@@ -542,7 +542,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 
 // DeleteDocsByIDs 按 ID 删除文档。
 //
-// 对应 Python: MilvusVectorStore.delete_docs_by_ids(collection_name, ids)
+// Python: MilvusVectorStore.delete_docs_by_ids(collection_name, ids)
 func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
 		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("未提供删除 ID")
@@ -592,7 +592,7 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
 //
-// 对应 Python: MilvusVectorStore.delete_docs_by_filters(collection_name, filters)
+// Python: MilvusVectorStore.delete_docs_by_filters(collection_name, filters)
 func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
 		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("未提供过滤条件")
@@ -631,7 +631,7 @@ func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 
 // ListCollectionNames 列出所有集合名称。
 //
-// 对应 Python: MilvusVectorStore.list_collection_names()
+// Python: MilvusVectorStore.list_collection_names()
 func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -647,7 +647,7 @@ func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 // UpdateSchema 执行 schema 迁移操作。
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
-// 对应 Python: MilvusVectorStore.update_schema(collection_name, operations)
+// Python: MilvusVectorStore.update_schema(collection_name, operations)
 func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
 	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
 	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
@@ -659,7 +659,7 @@ func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName str
 // UpdateCollectionMetadata 更新集合元数据。
 // 同时更新 Milvus 集合属性和本地缓存。
 //
-// 对应 Python: MilvusVectorStore.update_collection_metadata(collection_name, metadata)
+// Python: MilvusVectorStore.update_collection_metadata(collection_name, metadata)
 func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	if len(metadata) == 0 {
 		return nil
@@ -682,7 +682,7 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	}
 
 	// 校验 schema_version：必须是数字类型且 >= 0
-	// 对齐 Python: if not isinstance(version, int) or version < 0: raise error
+	// Python: if not isinstance(version, int) or version < 0: raise error
 	if v, ok := metadata["schema_version"]; ok {
 		var version int
 		switch sv := v.(type) {
@@ -738,7 +738,7 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 // GetCollectionMetadata 获取集合元数据。
 // 优先从缓存获取，缓存未命中则从 Milvus 获取。
 //
-// 对应 Python: MilvusVectorStore.get_collection_metadata(collection_name)
+// Python: MilvusVectorStore.get_collection_metadata(collection_name)
 func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	s.mu.RLock()
 	if meta, ok := s.collectionMetadata[collectionName]; ok {
@@ -754,7 +754,7 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 	s.mu.RUnlock()
 
 	// 缓存未命中，从 Milvus 获取
-	// 对齐 Python: logger.debug(f"Cache miss for '{collection_name}' metadata")
+	// Python: logger.debug(f"Cache miss for '{collection_name}' metadata")
 	logger.Debug(logComponent).Str("collection_name", collectionName).Msg("集合元数据缓存未命中")
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -869,7 +869,7 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (milvusClient, error)
 
 // ensureLoaded 确保集合已加载到内存，使用缓存避免重复加载。
 //
-// 对应 Python: MilvusVectorStore._ensure_loaded(collection)
+// Python: MilvusVectorStore._ensure_loaded(collection)
 func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName string) error {
 	s.mu.RLock()
 	loaded := s.collectionsLoaded[collectionName]
@@ -907,7 +907,7 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 
 // buildFilterExpr 从过滤条件字典构建 Milvus 过滤表达式（仅支持等值过滤）。
 //
-// 对应 Python: MilvusVectorStore._build_filter_expr(filters)
+// Python: MilvusVectorStore._build_filter_expr(filters)
 func buildFilterExpr(filters map[string]any) string {
 	if len(filters) == 0 {
 		return ""
@@ -940,7 +940,7 @@ func joinIDsNoQuote(ids []string) string {
 
 // buildDeleteExpr 根据主键类型构建删除表达式。
 // INT64 主键生成 id in [1, 2, 3]，VARCHAR 主键生成 id in ["a", "b", "c"]。
-// 对齐 Python: SDK PKs2Expr 自动根据主键类型选择格式。
+// Python: SDK PKs2Expr 自动根据主键类型选择格式。
 func buildDeleteExpr(ids []string, pkType entity.FieldType) string {
 	switch pkType {
 	case entity.FieldTypeInt64, entity.FieldTypeInt32, entity.FieldTypeInt16, entity.FieldTypeInt8:
@@ -964,7 +964,7 @@ func (s *MilvusVectorStore) getPKType(collectionName string) entity.FieldType {
 }
 
 // getOutputFields 获取集合的输出字段列表，用于 Search 时自动推断 outputFields。
-// 对齐 Python: describe_collection 获取字段名列表。
+// Python: describe_collection 获取字段名列表。
 func (s *MilvusVectorStore) getOutputFields(collectionName string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -978,7 +978,7 @@ func (s *MilvusVectorStore) getOutputFields(collectionName string) []string {
 
 // mapFieldType 将 VectorDataType 映射为 Milvus DataType。
 //
-// 对应 Python: MilvusVectorStore._map_field_type(field_type)
+// Python: MilvusVectorStore._map_field_type(field_type)
 func mapFieldType(dt VectorDataType) (entity.FieldType, error) {
 	mapping := map[VectorDataType]entity.FieldType{
 		VectorDataTypeVarchar:     entity.FieldTypeVarChar,
@@ -1001,7 +1001,7 @@ func mapFieldType(dt VectorDataType) (entity.FieldType, error) {
 
 // mapMilvusTypeToOurType 将 Milvus DataType 映射回 VectorDataType。
 //
-// 对应 Python: MilvusVectorStore._map_milvus_type_to_our_type(milvus_type)
+// Python: MilvusVectorStore._map_milvus_type_to_our_type(milvus_type)
 func mapMilvusTypeToOurType(milvusType entity.FieldType) VectorDataType {
 	mapping := map[entity.FieldType]VectorDataType{
 		entity.FieldTypeVarChar:     VectorDataTypeVarchar,

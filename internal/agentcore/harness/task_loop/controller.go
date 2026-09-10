@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // interactionQueuesProvider 类型断言接口，用于从 EventHandler 获取 LoopQueues。
-// 对齐 Python: getattr(handler, "interaction_queues", None)
+// Python: getattr(handler, "interaction_queues", None)
 // ⤴️ 9.6 回填：TaskLoopEventHandler 已实现此接口。
 type interactionQueuesProvider interface {
 	InteractionQueues() *LoopQueues
@@ -23,7 +23,7 @@ type interactionQueuesProvider interface {
 // TaskLoopController 任务循环控制器，嵌入 Controller 并扩展轮次管理能力。
 // 封装轮次提交/等待/完成、follow-up 队列操作和循环退出逻辑，
 // 是 DeepAgent 外层循环的"方向盘"。
-// 对齐 Python: TaskLoopController(Controller)
+// Python: TaskLoopController(Controller)
 type TaskLoopController struct {
 	*controller.Controller
 }
@@ -41,7 +41,7 @@ var _ controller.ControllerInterface = (*TaskLoopController)(nil)
 
 // NewTaskLoopController 创建任务循环控制器。
 // 必须随后调用 Init() 完成初始化（与 Controller 相同）。
-// 对齐 Python: TaskLoopController.__init__
+// Python: TaskLoopController.__init__
 func NewTaskLoopController() *TaskLoopController {
 	return &TaskLoopController{
 		Controller: controller.NewController(),
@@ -51,7 +51,7 @@ func NewTaskLoopController() *TaskLoopController {
 // SubmitRound 提交一轮任务：prepare_round → 构建 InputEvent → 注入元数据 → 发布。
 // runKind 为运行模式（normal/heartbeat/cron），零值空串表示未设置。
 // runContext 为结构化运行时上下文（心跳等场景），nil 表示无上下文。
-// 对齐 Python: TaskLoopController.submit_round
+// Python: TaskLoopController.submit_round
 // [Go 扩展] isStreaming 参数：Python 中 _streaming=True 在 executor 内硬编码，
 // Go 特有此参数用于区分 invoke(非流式) / stream(流式) 调用模式，
 // 因为 Go 的 buffered channel 需要显式区分以避免阻塞。
@@ -86,7 +86,7 @@ func (tc *TaskLoopController) SubmitRound(
 	if isFollowUp {
 		meta["is_follow_up"] = true
 	}
-	// 对齐 Python: _streaming=True 传递给 executor
+	// Python: _streaming=True 传递给 executor
 	// Python 中始终为 True（unbounded queue 不阻塞），
 	// Go 中按需区分（buffered channel 需要区分以避免阻塞）
 	meta["_streaming"] = isStreaming
@@ -110,7 +110,7 @@ func (tc *TaskLoopController) SubmitRound(
 
 // WaitRoundCompletion 等待当前轮次完成。
 // timeout 为超时时间（秒），nil 表示不超时。
-// 对齐 Python: TaskLoopController.wait_round_completion
+// Python: TaskLoopController.wait_round_completion
 func (tc *TaskLoopController) WaitRoundCompletion(ctx context.Context, timeout *float64) map[string]any {
 	handler := tc.EventHandler()
 	if handler == nil {
@@ -127,7 +127,7 @@ func (tc *TaskLoopController) WaitRoundCompletion(ctx context.Context, timeout *
 }
 
 // DrainFollowUp 排空 follow-up 消息。
-// 对齐 Python: TaskLoopController.drain_follow_up
+// Python: TaskLoopController.drain_follow_up
 func (tc *TaskLoopController) DrainFollowUp() []string {
 	queues := tc.getInteractionQueues()
 	if queues != nil {
@@ -137,7 +137,7 @@ func (tc *TaskLoopController) DrainFollowUp() []string {
 }
 
 // EnqueueFollowUp 入队 follow-up 消息（Rails 用于请求继续/确认轮次）。
-// 对齐 Python: TaskLoopController.enqueue_follow_up
+// Python: TaskLoopController.enqueue_follow_up
 func (tc *TaskLoopController) EnqueueFollowUp(msg string) {
 	queues := tc.getInteractionQueues()
 	if queues != nil {
@@ -148,7 +148,7 @@ func (tc *TaskLoopController) EnqueueFollowUp(msg string) {
 }
 
 // HasFollowUp 检查是否有待处理的 follow-up 消息。
-// 对齐 Python: TaskLoopController.has_follow_up
+// Python: TaskLoopController.has_follow_up
 func (tc *TaskLoopController) HasFollowUp() bool {
 	queues := tc.getInteractionQueues()
 	if queues != nil {
@@ -162,7 +162,7 @@ func (tc *TaskLoopController) HasFollowUp() bool {
 // getInteractionQueues 从 EventHandler 防御性获取 LoopQueues。
 // 使用类型断言对齐 Python getattr(handler, "interaction_queues", None) 语义。
 // 只有实现了 interactionQueuesProvider 接口的 EventHandler 才能返回非 nil。
-// 对齐 Python: TaskLoopController._get_interaction_queues
+// Python: TaskLoopController._get_interaction_queues
 func (tc *TaskLoopController) getInteractionQueues() *LoopQueues {
 	handler := tc.EventHandler()
 	if handler == nil {

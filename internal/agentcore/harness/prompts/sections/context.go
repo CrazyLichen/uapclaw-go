@@ -438,7 +438,7 @@ func BuildContextSection(files map[string]string, lang string) saprompt.PromptSe
 // 对 MEMORY.md 特殊处理：从 WorkspaceNodeMemory 目录下读取。
 // 过滤掉空模板文件（IsUnfilledTemplate）。
 //
-// 对齐 Python: _read_context_file(sys_operation, workspace, file_key)
+// Python: _read_context_file(sys_operation, workspace, file_key)
 func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace) map[string]string {
 	if fsOp == nil || ws == nil {
 		return nil
@@ -448,8 +448,8 @@ func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspac
 	for _, fileKey := range wscontent.ContextFiles {
 		var fullPath string
 		if fileKey == "MEMORY.md" {
-			// 对齐 Python: memory_dir = workspace.get_node_path(WorkspaceNode.MEMORY)
-			// 对应 Python: full_path = memory_dir / WorkspaceNode.MEMORY_MD.value
+			// Python: memory_dir = workspace.get_node_path(WorkspaceNode.MEMORY)
+			// Python: full_path = memory_dir / WorkspaceNode.MEMORY_MD.value
 			memoryDir := ws.GetNodePath(hworkspace.WorkspaceNodeMemory)
 			if memoryDir == nil {
 				continue
@@ -479,7 +479,7 @@ func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspac
 //
 // 返回 (content, dateStr)，如果当日文件不存在则返回 ("", "")。
 //
-// 对齐 Python: _read_daily_memory(sys_operation, workspace, timezone)
+// Python: _read_daily_memory(sys_operation, workspace, timezone)
 func ReadDailyMemory(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace, timezone string) (string, string) {
 	if fsOp == nil || ws == nil {
 		return "", ""

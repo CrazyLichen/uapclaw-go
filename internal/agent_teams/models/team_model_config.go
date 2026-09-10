@@ -7,7 +7,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamModelConfig 可序列化的团队模型配置。
-// 对齐 Python: TeamModelConfig (openjiuwen/agent_teams/schema/deep_agent_spec.py)
+// Python: TeamModelConfig (openjiuwen/agent_teams/schema/deep_agent_spec.py)
 //
 // 用于团队角色级别的模型配置，包含客户端配置和请求配置。
 type TeamModelConfig struct {
@@ -26,7 +26,7 @@ type TeamModelConfig struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamModelConfig 创建默认 TeamModelConfig。
-// 对齐 Python: TeamModelConfig()
+// Python: TeamModelConfig()
 func NewTeamModelConfig() TeamModelConfig {
 	return TeamModelConfig{
 		ModelClientConfig:  llmschema.ModelClientConfig{Timeout: 60, MaxRetries: 3, VerifySSL: true},

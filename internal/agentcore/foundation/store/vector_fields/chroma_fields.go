@@ -7,7 +7,7 @@ import "fmt"
 // ChromaVectorField ChromaDB HNSW 索引配置。
 // ChromaDB 仅支持 HNSW 索引，database_type 和 index_type 自动设为 chroma/hnsw。
 //
-// 对应 Python: vector_fields/chroma_fields.py (ChromaVectorField)
+// Python: vector_fields/chroma_fields.py (ChromaVectorField)
 type ChromaVectorField struct {
 	VectorField
 	// MaxNeighbors HNSW 图中每个节点的最大边数

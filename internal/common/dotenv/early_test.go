@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -214,7 +215,7 @@ func TestExpandHome(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := expandHome(tt.input)
+			result := pathutil.ExpandHome(tt.input)
 			if tt.wantHome {
 				if len(result) < len(home) || result[:len(home)] != home {
 					t.Errorf("期望路径以 %s 开头，实际: %s", home, result)

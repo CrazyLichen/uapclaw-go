@@ -7,7 +7,7 @@ package schema
 // 仅包含一个 Model 字段，表示用于生成的模型名称。
 // 本身不直接使用，而是通过嵌入到具体的子类型中来提供公共字段。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/generation_response.py (GenerationResponse)
+// Python: openjiuwen/core/foundation/llm/schema/generation_response.py (GenerationResponse)
 type GenerationResponse struct {
 	// Model 用于生成的模型名称
 	Model string `json:"model,omitempty"`
@@ -15,7 +15,7 @@ type GenerationResponse struct {
 
 // ImageGenerationResponse 图片生成响应，包含生成的图片 URL 列表或 Base64 编码数据。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/generation_response.py (ImageGenerationResponse)
+// Python: openjiuwen/core/foundation/llm/schema/generation_response.py (ImageGenerationResponse)
 type ImageGenerationResponse struct {
 	GenerationResponse
 	// Images 生成的图片 URL 列表
@@ -28,7 +28,7 @@ type ImageGenerationResponse struct {
 
 // AudioGenerationResponse 音频/语音生成响应，包含生成的音频 URL 或二进制数据。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/generation_response.py (AudioGenerationResponse)
+// Python: openjiuwen/core/foundation/llm/schema/generation_response.py (AudioGenerationResponse)
 type AudioGenerationResponse struct {
 	GenerationResponse
 	// AudioURL 生成的音频 URL
@@ -43,7 +43,7 @@ type AudioGenerationResponse struct {
 
 // VideoGenerationResponse 视频生成响应，包含生成的视频 URL 或二进制数据。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/generation_response.py (VideoGenerationResponse)
+// Python: openjiuwen/core/foundation/llm/schema/generation_response.py (VideoGenerationResponse)
 type VideoGenerationResponse struct {
 	GenerationResponse
 	// VideoURL 生成的视频 URL
@@ -192,7 +192,7 @@ func WithVideoModel(model string) VideoGenerationResponseOption {
 
 // NewGenerationResponse 创建多模态生成响应基类实例。
 //
-// 对应 Python: GenerationResponse(model=...)
+// Python: GenerationResponse(model=...)
 func NewGenerationResponse(opts ...GenerationResponseOption) *GenerationResponse {
 	resp := &GenerationResponse{}
 	for _, opt := range opts {
@@ -204,7 +204,7 @@ func NewGenerationResponse(opts ...GenerationResponseOption) *GenerationResponse
 // NewImageGenerationResponse 创建图片生成响应实例。
 // Model 字段通过 WithImageModel 选项设置。
 //
-// 对应 Python: ImageGenerationResponse(model=..., images=..., images_base64=..., created=...)
+// Python: ImageGenerationResponse(model=..., images=..., images_base64=..., created=...)
 func NewImageGenerationResponse(opts ...ImageGenerationResponseOption) *ImageGenerationResponse {
 	resp := &ImageGenerationResponse{}
 	for _, opt := range opts {
@@ -216,7 +216,7 @@ func NewImageGenerationResponse(opts ...ImageGenerationResponseOption) *ImageGen
 // NewAudioGenerationResponse 创建音频生成响应实例。
 // Format 默认为 "mp3"，Model 字段通过 WithAudioModel 选项设置。
 //
-// 对应 Python: AudioGenerationResponse(model=..., audio_url=..., audio_data=..., format="mp3")
+// Python: AudioGenerationResponse(model=..., audio_url=..., audio_data=..., format="mp3")
 func NewAudioGenerationResponse(opts ...AudioGenerationResponseOption) *AudioGenerationResponse {
 	resp := &AudioGenerationResponse{
 		Format: "mp3",
@@ -230,7 +230,7 @@ func NewAudioGenerationResponse(opts ...AudioGenerationResponseOption) *AudioGen
 // NewVideoGenerationResponse 创建视频生成响应实例。
 // Format 默认为 "mp4"，Model 字段通过 WithVideoModel 选项设置。
 //
-// 对应 Python: VideoGenerationResponse(model=..., video_url=..., duration=..., resolution=..., format="mp4")
+// Python: VideoGenerationResponse(model=..., video_url=..., duration=..., resolution=..., format="mp4")
 func NewVideoGenerationResponse(opts ...VideoGenerationResponseOption) *VideoGenerationResponse {
 	resp := &VideoGenerationResponse{
 		Format: "mp4",

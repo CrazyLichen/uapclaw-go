@@ -171,7 +171,7 @@ func TestBuild_基本组装(t *testing.T) {
 
 // TestBuild_Cost为零时为nil 验证 cost 为零时设为 nil
 func TestBuild_Cost为零时为nil(t *testing.T) {
-	// 对齐 Python: cost=self.cost if self.cost["input_tokens"] > 0 else None
+	// Python: cost=self.cost if self.cost["input_tokens"] > 0 else None
 	b := NewTrajectoryBuilder("sess", "online")
 	s1 := &TrajectoryStep{Kind: StepKindTool, Meta: map[string]any{}}
 	b.RecordStep(s1)
@@ -203,7 +203,7 @@ func TestBuild_Cost非零时保留(t *testing.T) {
 
 // TestBuild_MemberID写入Meta 验证 MemberID 写入 Meta
 func TestBuild_MemberID写入Meta(t *testing.T) {
-	// 对齐 Python: if self.member_id: meta["member_id"] = self.member_id
+	// Python: if self.member_id: meta["member_id"] = self.member_id
 	b := NewTrajectoryBuilder("sess", "online", WithMemberID("leader"))
 	traj := b.Build()
 	assert.Equal(t, "leader", traj.Meta["member_id"])
@@ -211,7 +211,7 @@ func TestBuild_MemberID写入Meta(t *testing.T) {
 
 // TestBuild_Meta合并 验证 Meta 合并逻辑
 func TestBuild_Meta合并(t *testing.T) {
-	// 对齐 Python: meta=dict(self.meta)
+	// Python: meta=dict(self.meta)
 	b := NewTrajectoryBuilder("sess", "online",
 		WithMeta(map[string]any{"custom_key": "custom_value"}),
 		WithMemberID("member_1"),

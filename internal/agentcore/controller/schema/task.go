@@ -14,7 +14,7 @@ import (
 
 // Task 任务实体，Controller 领域的核心执行单元。
 //
-// 对应 Python: openjiuwen/core/controller/schema/task.py (Task)
+// Python: openjiuwen/core/controller/schema/task.py (Task)
 type Task struct {
 	// SessionID 会话ID
 	SessionID string `json:"session_id"`
@@ -74,7 +74,7 @@ type taskJSON struct {
 
 // NewTask 创建新的 Task 实例，自动生成 TaskID。
 //
-// 对应 Python: Task.task_id = Field(default_factory=lambda: str(uuid.uuid4()))
+// Python: Task.task_id = Field(default_factory=lambda: str(uuid.uuid4()))
 func NewTask(sessionID, taskType string) *Task {
 	return &Task{
 		SessionID: sessionID,

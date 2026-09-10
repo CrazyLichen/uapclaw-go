@@ -9,7 +9,7 @@
 //   - onConfigSavedImpl 构造 agent.reload_config E2A 请求 → AgentServer 热更新
 //   - 条件触发 browser.runtime_restart（browserRuntimeKeys 匹配）
 //
-// 对齐 Python: jiuwenswarm/gateway/app_gateway.py (_on_config_saved)
+// Python: jiuwenswarm/gateway/app_gateway.py (_on_config_saved)
 //
 // 文件目录：
 //

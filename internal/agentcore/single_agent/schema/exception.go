@@ -15,7 +15,7 @@ import (
 //   - before hook 可通过 Fire() 返回 error
 //   - railedExecuteSingleToolCall 通过 errors.As 识别
 //
-// 对应 Python: ToolInterruptException(AgentInterrupt)
+// Python: ToolInterruptException(AgentInterrupt)
 //
 // Request 字段使用 InterruptRequester 接口，支持存储 InterruptRequest 子类
 // （如 AskUserRequest），对齐 Python request: InterruptRequest 的多态语义。
@@ -35,7 +35,7 @@ type ToolInterruptException struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Error 实现 error 接口。
-// 对齐 Python: super().__init__(str(request.message))
+// Python: super().__init__(str(request.message))
 func (e *ToolInterruptException) Error() string {
 	if e.Request != nil {
 		return e.Request.GetMessage()

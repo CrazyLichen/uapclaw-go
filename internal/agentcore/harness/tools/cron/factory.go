@@ -12,18 +12,18 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CronListJobsInput cron_list_jobs 工具输入参数（无参数）
-// 对齐 Python: cron_list_jobs wrapper (cron.py L222-224)
+// Python: cron_list_jobs wrapper (cron.py L222-224)
 type CronListJobsInput struct{}
 
 // CronGetJobInput cron_get_job 工具输入参数
-// 对齐 Python: cron_get_job wrapper (cron.py L225-227)
+// Python: cron_get_job wrapper (cron.py L225-227)
 type CronGetJobInput struct {
 	// JobID 要查询的任务 ID
 	JobID string `json:"job_id"`
 }
 
 // CronCreateJobInput cron_create_job 工具输入参数
-// 对齐 Python: cron_create_job wrapper (cron.py L228-230)
+// Python: cron_create_job wrapper (cron.py L228-230)
 type CronCreateJobInput struct {
 	// Name 任务名称
 	Name string `json:"name"`
@@ -42,7 +42,7 @@ type CronCreateJobInput struct {
 }
 
 // CronUpdateJobInput cron_update_job 工具输入参数
-// 对齐 Python: cron_update_job wrapper (cron.py L231-233)
+// Python: cron_update_job wrapper (cron.py L231-233)
 type CronUpdateJobInput struct {
 	// JobID 要更新的任务 ID
 	JobID string `json:"job_id"`
@@ -51,14 +51,14 @@ type CronUpdateJobInput struct {
 }
 
 // CronDeleteJobInput cron_delete_job 工具输入参数
-// 对齐 Python: cron_delete_job wrapper (cron.py L234-236)
+// Python: cron_delete_job wrapper (cron.py L234-236)
 type CronDeleteJobInput struct {
 	// JobID 要删除的任务 ID
 	JobID string `json:"job_id"`
 }
 
 // CronToggleJobInput cron_toggle_job 工具输入参数
-// 对齐 Python: cron_toggle_job wrapper (cron.py L237-239)
+// Python: cron_toggle_job wrapper (cron.py L237-239)
 type CronToggleJobInput struct {
 	// JobID 要启用/禁用的任务 ID
 	JobID string `json:"job_id"`
@@ -67,7 +67,7 @@ type CronToggleJobInput struct {
 }
 
 // CronPreviewJobInput cron_preview_job 工具输入参数
-// 对齐 Python: cron_preview_job wrapper (cron.py L240-242)
+// Python: cron_preview_job wrapper (cron.py L240-242)
 type CronPreviewJobInput struct {
 	// JobID 要预览的任务 ID
 	JobID string `json:"job_id"`
@@ -84,7 +84,7 @@ type CronPreviewJobInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateCronTools 创建 cron 统一工具 + 可选的遗留兼容工具。
-// 对齐 Python: create_cron_tools (cron.py L204-308)
+// Python: create_cron_tools (cron.py L204-308)
 //
 // 统一 cron 工具使用 MapFunction（保留 kwargs），遗留兼容工具使用 InvokeFunction（明确 struct）。
 func CreateCronTools(
@@ -103,7 +103,7 @@ func CreateCronTools(
 	}
 
 	// 1. 统一 cron 工具（使用 MapFunction）
-	// 对齐 Python L243-248: LocalFunction(card=build_tool_card("cron", ...), func=cron_tool_wrapper)
+	// Python: L243-248: LocalFunction(card=build_tool_card("cron", ...), func=cron_tool_wrapper)
 	cronCard, _ := ptools.BuildToolCard("cron", "cron_"+scope, language, nil, finalAgentID)
 	cronFn := func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
 		return dispatchCronAction(ctx, backend, inputs, cronCtx)
@@ -116,7 +116,7 @@ func CreateCronTools(
 	}
 
 	// 2. 遗留兼容工具（使用 InvokeFunction + struct）
-	// 对齐 Python L252-306: 7 个 _make_tool 调用
+	// Python: L252-306: 7 个 _make_tool 调用
 	tgtSchema := targetSchema(targetChannels, defaultTargetChannel)
 
 	// cron_list_jobs — 对齐 Python L222-224: list_jobs_wrapper()
@@ -209,7 +209,7 @@ func CreateCronTools(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // makeLegacyTool 遗留兼容工具的辅助建卡函数。
-// 对齐 Python: _make_tool (cron.py L96-116)
+// Python: _make_tool (cron.py L96-116)
 //
 // Python 逻辑：
 // 1. build_tool_card(name, f"{name}_{scope}", language, agent_id=agent_id) 获取 ToolCard
@@ -225,7 +225,7 @@ func makeLegacyTool[I any](
 ) tool.Tool {
 	card, _ := ptools.BuildToolCard(name, name+"_"+scope, language, nil, agentID)
 
-	// 对齐 Python L106-115: Python: if target_schema is not None:
+	// Python: L106-115: Python: if target_schema is not None:
 	// Python: input_params = get_tool_input_params(name, language)
 	// Python: if "properties" in input_params and "targets" in input_params["properties"]:
 	//     Python: input_params["properties"]["targets"] = target_schema
@@ -251,7 +251,7 @@ func makeLegacyTool[I any](
 }
 
 // targetSchema 构造 targets 字段的 JSON Schema。
-// 对齐 Python: _target_schema (cron.py L119-132)
+// Python: _target_schema (cron.py L119-132)
 //
 // Python 逻辑：
 // Python: schema = {"type": "string", "description": "Legacy compatibility target channel"}

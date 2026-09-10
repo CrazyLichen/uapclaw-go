@@ -4,7 +4,7 @@
 //   - SearchToolsTool 调用 searchToolsFn 执行搜索，再调用 appendTraceFn 记录搜索轨迹
 //   - LoadToolsTool 调用 loadToolsFn 执行工具加载
 //
-// 对齐 Python: openjiuwen/harness/tools/tool_discovery/
+// Python: openjiuwen/harness/tools/tool_discovery/
 //
 // 文件目录：
 //

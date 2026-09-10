@@ -22,7 +22,7 @@ import (
 // 支持纯文本和多模态文档输入。instruct 作为 parameters.instruct 字段传递，
 // 而非像 StandardReranker 那样拼入 query 模板。
 //
-// 对应 Python: openjiuwen/core/retrieval/reranker/dashscope_reranker.py
+// Python: openjiuwen/core/retrieval/reranker/dashscope_reranker.py
 type DashScopeReranker struct {
 	// RerankerBase 嵌入基类
 	*RerankerBase
@@ -224,7 +224,7 @@ func (r *DashScopeReranker) doRerankSync(ctx context.Context, query string, docs
 
 // assembleParams 组装请求参数，将文档和查询合并为 DashScope 格式的请求参数。
 // 覆盖基类方法，增加多模态文档支持和类型校验。
-// 对齐 Python: DashscopeReranker._assemble_params
+// Python: DashscopeReranker._assemble_params
 func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string, error) {
 	docIDs := make([]string, len(docs))
 	texts := make([]string, 0, len(docs))
@@ -314,7 +314,7 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 // requestParams 构造 DashScope 专用请求参数。
 // 覆盖基类方法，使用 DashScope 的 {model, input, parameters} 格式。
 // query 参数支持 string 和 map[string]any（多模态查询），对齐 Python。
-// 对齐 Python: DashscopeReranker._request_params
+// Python: DashscopeReranker._request_params
 func (r *DashScopeReranker) requestParams(query any, documents any, topN int, opt *reranker.RerankOption) map[string]any {
 	parameters := map[string]any{
 		"return_documents": false,

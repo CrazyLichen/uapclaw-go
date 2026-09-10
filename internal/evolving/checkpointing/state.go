@@ -9,7 +9,7 @@ package checkpointing
 // Trainer 通过 FileCheckpointStore 持久化此数据，
 // 并在 ResumeIfNeeded 时恢复。
 //
-// 对应 Python: openjiuwen/agent_evolving/checkpointing/state.py EvolveCheckpoint
+// Python: openjiuwen/agent_evolving/checkpointing/state.py EvolveCheckpoint
 type EvolveCheckpoint struct {
 	// Version 检查点版本标签，默认 "v1"
 	Version string

@@ -25,7 +25,7 @@ import (
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
 // 支持 ChannelTransport（进程内）和将来的 WebSocketTransport（跨进程）。
 //
-// 对齐 Python: jiuwenswarm/server/agent_server.py (AgentWebSocketServer)
+// Python: jiuwenswarm/server/agent_server.py (AgentWebSocketServer)
 type AgentServer struct {
 	// config 配置实例
 	config *config.Config
@@ -34,7 +34,7 @@ type AgentServer struct {
 	// agentManager Agent 实例管理器
 	agentManager *runtime.AgentManager
 	// agentConfigService Agent 配置 CRUD 服务
-	// 对齐 Python: self._agent_config_service = AgentConfigService(workspace_dir)
+	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
 	// sessionStreamTasks 流式任务的取消函数映射（sessionID → CancelFunc）
 	sessionStreamTasks map[string]context.CancelFunc
@@ -76,7 +76,7 @@ var (
 
 // NewAgentServer 创建 AgentServer 实例。
 func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *AgentServer {
-	// 对齐 Python: AgentConfigService(workspace_dir)
+	// Python: AgentConfigService(workspace_dir)
 	// Python 默认 Path.cwd()，Go 使用 workspace.WorkspaceDir()
 	agentConfigService := runtime.NewAgentConfigService(workspace.WorkspaceDir())
 	return &AgentServer{
@@ -95,7 +95,7 @@ func (s *AgentServer) SetAgentFactoryForTest(factory runtime.AgentFactory) {
 }
 
 // Start 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）。
-// 对齐 Python: AgentWebSocketServer.start() 风格——调用方无需 go 包一层。
+// Python: AgentWebSocketServer.start() 风格——调用方无需 go 包一层。
 func (s *AgentServer) Start(ctx context.Context) error {
 	s.runningMu.Lock()
 	if s.running {
@@ -107,7 +107,7 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	s.runningMu.Unlock()
 
 	// 注册全局 Config，供 HookExecutor.queryLLM 运行时读取
-	// 对齐 Python: from jiuwenswarm.common.config import get_config
+	// Python: from jiuwenswarm.common.config import get_config
 	serverhooks.RegisterConfig(s.config)
 
 	ctx, s.cancel = context.WithCancel(ctx)
@@ -172,11 +172,11 @@ func (s *AgentServer) Transport() transport.AgentTransport {
 }
 
 // GetInstance 返回 AgentServer 单例实例。
-// 对齐 Python: AgentWebSocketServer.get_instance()
+// Python: AgentWebSocketServer.get_instance()
 func GetInstance() *AgentServer { return agentServerInstance }
 
 // ResetInstance 重置单例（仅用于测试）。
-// 对齐 Python: AgentWebSocketServer.reset_instance()
+// Python: AgentWebSocketServer.reset_instance()
 func ResetInstance() {
 	agentServerInstance = nil
 	agentServerOnce = sync.Once{}
@@ -184,17 +184,17 @@ func ResetInstance() {
 
 // SendPush AgentServer 主动向 Gateway 推送消息（高层方法）。
 //
-// 对齐 Python: AgentWebSocketServer.send_push(msg)
+// Python: AgentWebSocketServer.send_push(msg)
 // 内部流程：BuildServerPushWire(msg) → json.Marshal → sendToGateway(data)
 // 这是所有 server_push 场景的统一入口。
 // Python 中所有异常仅 warn 不上抛（返回 None），Go 对齐此行为统一返回 nil。
 func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
-	// 对齐 Python: if self._current_ws is None or self._current_send_lock is None
+	// Python: if self._current_ws is None or self._current_send_lock is None
 	if s.transport == nil {
 		logger.Warn(logComponent).Msg("SendPush 失败: 无活跃 Gateway 连接")
 		return nil
 	}
-	// 对齐 Python: try/except Exception — 捕获 panic 防止整个 goroutine 崩溃
+	// Python: try/except Exception — 捕获 panic 防止整个 goroutine 崩溃
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("error", r).Msg("SendPush 失败")
@@ -204,7 +204,7 @@ func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
 	wire := transport.BuildServerPushWire(msg)
 	data, err := json.Marshal(wire)
 	if err != nil {
-		// 对齐 Python: except Exception → warn + 静默返回
+		// Python: except Exception → warn + 静默返回
 		logger.Warn(logComponent).Err(err).Msg("SendPush: wire 编码失败")
 		return nil
 	}
@@ -221,7 +221,7 @@ func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
 			Str("response_kind", responseKind).
 			Msg("SendPush response_kind wire 已发送")
 	} else {
-		// 对齐 Python: logger.info("send_push 已发送(E2A wire): channel_id=%s", ...)
+		// Python: logger.info("send_push 已发送(E2A wire): channel_id=%s", ...)
 		channelID, _ := msg["channel_id"].(string)
 		logger.Info(logComponent).
 			Str("channel_id", channelID).
@@ -251,7 +251,7 @@ func (s *AgentServer) run(ctx context.Context) error {
 	// 2. 确保持久化检查点器就绪（对齐 Python agent_ws_server.py L443）
 	if err := adapter.EnsurePersistentCheckpointer(); err != nil {
 		logger.Error(logComponent).Err(err).Msg("持久化检查点器初始化失败")
-		// 对齐 Python：raise RuntimeError，Go 侧记录错误但继续启动（best-effort）
+		// Python: raise RuntimeError，Go 侧记录错误但继续启动（best-effort）
 	}
 
 	// 3. 初始化 AgentManager
@@ -375,7 +375,7 @@ func (s *AgentServer) cancelAllStreamTasks() {
 }
 
 // sendToGateway 通过传输通道发送数据到 Gateway 侧。
-// 对齐 Python AgentWebSocketServer 中 ws.send(json_str) 写响应。
+// Python: AgentWebSocketServer 中 ws.send(json_str) 写响应。
 //
 // 同 startConsumeLoop，AgentServer 需要反方向使用通道：
 //   - 写入响应：向 recvCh 写入（通过 ChannelTransport.RecvCh()）
@@ -399,38 +399,38 @@ func (s *AgentServer) sendToGateway(data []byte) {
 // TODO(#stub): stub 方法（对齐 Python）
 
 // resetHarnessPackagesState 重置 harness 包状态到 native。
-// 对齐 Python: jiuwenswarm/agents/harness/common/auto_harness/service.py reset_harness_packages_state()
+// Python: jiuwenswarm/agents/harness/common/auto_harness/service.py reset_harness_packages_state()
 // TODO(⤵️ AutoHarness): 清空 harness-packages.json 中的 active_package_ids
 func (s *AgentServer) resetHarnessPackagesState() {
 	// 未实现：等 AutoHarness 包管理系统实现后回填
 }
 
 // bootstrapInternalJiuwenbox 沙箱自动启动。
-// 对齐 Python: jiuwenswarm/server/agent_ws_server.py _bootstrap_internal_jiuwenbox()
+// Python: jiuwenswarm/server/agent_ws_server.py _bootstrap_internal_jiuwenbox()
 // TODO(⤵️ JiuwenBox): 按 config.yaml::sandbox.startup_mode 决定是否自动拉起 jiuwenbox
 func (s *AgentServer) bootstrapInternalJiuwenbox() {
 	// 未实现：等 JiuwenBox 沙箱系统实现后回填
 }
 
 // startTeammateBootstrapDaemon 启动队友 bootstrap 守护进程。
-// 对齐 Python: jiuwenswarm/agents/harness/team/remote_member_bootstrap.py run_teammate_bootstrap_daemon()
+// Python: jiuwenswarm/agents/harness/team/remote_member_bootstrap.py run_teammate_bootstrap_daemon()
 // TODO(⤵️ Team): 启动守护 goroutine 消费远程队友 bootstrap
 func (s *AgentServer) startTeammateBootstrapDaemon(ctx context.Context) {
 	// 未实现：等 Team 功能实现后回填
 }
 
 // cancelAllInflightWork 取消所有进行中的任务。
-// 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work(reason)
+// Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work(reason)
 func (s *AgentServer) cancelAllInflightWork() {
 	if s.agentManager == nil {
 		return
 	}
-	// 对齐 Python agent_ws_server.py L726-727: reason="[gateway ws closed {remote}] "
+	// Python: agent_ws_server.py L726-727: reason="[gateway ws closed {remote}] "
 	_ = s.agentManager.CancelAllInflightWork(context.Background(), "[gateway ws disconnect] ")
 }
 
 // stopScheduler 停止调度器。
-// 对齐 Python: jiuwenswarm/server/agent_ws_server.py _stop_scheduler()
+// Python: jiuwenswarm/server/agent_ws_server.py _stop_scheduler()
 // TODO(⤵️ Scheduler): 等调度器实现后回填
 //
 // Python 实现逻辑（agent_ws_server.py _stop_scheduler）：
@@ -442,7 +442,7 @@ func (s *AgentServer) stopScheduler() {
 }
 
 // cancelAllTeamStreamTasks 取消所有 team 流式任务。
-// 对齐 Python: jiuwenswarm/agents/harness/team/ cancel_all_team_stream_tasks_across_managers()
+// Python: jiuwenswarm/agents/harness/team/ cancel_all_team_stream_tasks_across_managers()
 // TODO(⤵️ Team): 等 Team 流式任务管理实现后回填
 //
 // Python 实现逻辑（team/ cancel_all_team_stream_tasks_across_managers）：

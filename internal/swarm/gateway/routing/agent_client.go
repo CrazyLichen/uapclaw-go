@@ -18,7 +18,7 @@ import (
 
 // AgentClient AgentServer 客户端，通过 AgentTransport 与 AgentServer 通信。
 //
-// 对齐 Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
+// Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
 // 核心流程：
 //   - Connect: 启动 receiverLoop，等待 connection.ack 就绪通知
 //   - SendRequest: 非流式请求，等单个完整响应
@@ -88,13 +88,13 @@ func NewAgentClient(transport transport.AgentTransport) *AgentClient {
 
 // Connect 启动接收循环，等待 AgentServer 发送 connection.ack。
 //
-// 对齐 Python: WebSocketAgentServerClient.connect(uri)
+// Python: WebSocketAgentServerClient.connect(uri)
 // 超时不报错仅 warn，继续运行。
 func (ac *AgentClient) Connect(ctx context.Context) error {
 	ac.runningMu.RLock()
 	if ac.running {
 		ac.runningMu.RUnlock()
-		// 对齐 Python: if self._ws is not None: await self.disconnect()
+		// Python: if self._ws is not None: await self.disconnect()
 		ac.Disconnect()
 	} else {
 		ac.runningMu.RUnlock()
@@ -142,7 +142,7 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 
 // Disconnect 停止接收循环，清理所有队列和状态。
 //
-// 对齐 Python: WebSocketAgentServerClient.disconnect()
+// Python: WebSocketAgentServerClient.disconnect()
 func (ac *AgentClient) Disconnect() {
 	ac.runningMu.Lock()
 	if !ac.running {
@@ -181,7 +181,7 @@ func (ac *AgentClient) Disconnect() {
 
 // ServerReady 检查 AgentServer 是否已发送 connection.ack 确认就绪。
 //
-// 对齐 Python: WebSocketAgentServerClient.server_ready (property)
+// Python: WebSocketAgentServerClient.server_ready (property)
 func (ac *AgentClient) ServerReady() bool {
 	ac.serverReadyMu.RLock()
 	defer ac.serverReadyMu.RUnlock()
@@ -220,7 +220,7 @@ func (ac *AgentClient) WaitServerReady(ctx context.Context) bool {
 
 // SendRequest 发送非流式请求并等待完整响应。
 //
-// 对齐 Python: WebSocketAgentServerClient.send_request(envelope)
+// Python: WebSocketAgentServerClient.send_request(envelope)
 func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
 	if err := ac.ensureConnected(); err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		Bool("is_stream", envelope.IsStream).
 		Msg("发送非流式请求")
 
-	// 对齐 Python: logger.debug("发送请求(非流式) E2A: %s", _to_json(envelope.to_dict()))
+	// Python: logger.debug("发送请求(非流式) E2A: %s", _to_json(envelope.to_dict()))
 	logger.Debug(logComponentRouting).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
@@ -269,7 +269,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
 
-	// 对齐 Python: logger.info("发送请求(非流式) payload: %s", _to_json(payload))
+	// Python: logger.info("发送请求(非流式) payload: %s", _to_json(payload))
 	logger.Debug(logComponentRouting).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
@@ -297,7 +297,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 
 // SendRequestStream 发送流式请求，返回 chunk 通道。
 //
-// 对齐 Python: WebSocketAgentServerClient.send_request_stream(envelope)
+// Python: WebSocketAgentServerClient.send_request_stream(envelope)
 func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AEnvelope) (<-chan *schema.AgentResponseChunk, error) {
 	if err := ac.ensureConnected(); err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 		Bool("is_stream", envelope.IsStream).
 		Msg("发送流式请求")
 
-	// 对齐 Python: logger.debug("发送请求(流式) E2A: %s", _to_json(envelope.to_dict()))
+	// Python: logger.debug("发送请求(流式) E2A: %s", _to_json(envelope.to_dict()))
 	logger.Debug(logComponentRouting).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
@@ -346,7 +346,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
 
-	// 对齐 Python: logger.info("发送请求(流式) payload: %s", _to_json(payload))
+	// Python: logger.info("发送请求(流式) payload: %s", _to_json(payload))
 	logger.Debug(logComponentRouting).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
@@ -362,14 +362,14 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 
 // SetServerPushHandler 注册 Agent 主动推送回调。
 //
-// 对齐 Python: WebSocketAgentServerClient.set_server_push_handler(handler)
+// Python: WebSocketAgentServerClient.set_server_push_handler(handler)
 func (ac *AgentClient) SetServerPushHandler(handler func(msg map[string]any)) {
 	ac.onServerPush = handler
 }
 
 // SetOrUpdateServerConfig 缓存或更新服务端配置快照（当前为 no-op）。
 //
-// 对齐 Python: WebSocketAgentServerClient.set_or_update_server_config(config, env)
+// Python: WebSocketAgentServerClient.set_or_update_server_config(config, env)
 // 默认 WebSocket client 不处理服务端配置缓存，留给扩展 client 自行实现。
 func (ac *AgentClient) SetOrUpdateServerConfig(config map[string]any, env map[string]string) {
 	// no-op，对齐 Python 默认实现
@@ -379,7 +379,7 @@ func (ac *AgentClient) SetOrUpdateServerConfig(config map[string]any, env map[st
 
 // receiverLoop 统一消费 transport.Recv()，区分事件帧/server_push/正常响应。
 //
-// 对齐 Python: WebSocketAgentServerClient._message_receiver_loop()
+// Python: WebSocketAgentServerClient._message_receiver_loop()
 func (ac *AgentClient) receiverLoop(ctx context.Context) {
 	defer ac.receiverWg.Done()
 
@@ -414,7 +414,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 					Err(err).
 					Int("bytes", len(data)).
 					Msg("接收消息 JSON 解码失败")
-				// 对齐 Python: await asyncio.sleep(0.1) 避免快速循环
+				// Python: await asyncio.sleep(0.1) 避免快速循环
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -429,7 +429,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 			if meta, ok := msg["metadata"].(map[string]any); ok {
 				if _, has := meta[e2a.E2AWireServerPushKey]; has {
 					if ac.onServerPush != nil {
-						go ac.onServerPush(msg) // 对齐 Python asyncio.create_task
+						go ac.onServerPush(msg) // Python: asyncio.create_task
 					} else {
 						logger.Warn(logComponentRouting).
 							Str("event_type", "agent_client_server_push_no_handler").
@@ -474,7 +474,7 @@ func (ac *AgentClient) handleEventFrame(msg map[string]any) {
 
 // routeToQueue 按 request_id 路由消息到对应的等待队列。
 //
-// 对齐 Python: _message_receiver_loop 中的 request_id 路由逻辑
+// Python: _message_receiver_loop 中的 request_id 路由逻辑
 func (ac *AgentClient) routeToQueue(msg map[string]any) {
 	rid := transport.WireRequestIDKey(msg["request_id"])
 
@@ -511,7 +511,7 @@ func (ac *AgentClient) routeToQueue(msg map[string]any) {
 
 // drainAndRemoveQueue 清空队列中的残余消息并移除队列，同时标记 request_id 为已取消状态。
 //
-// 对齐 Python: WebSocketAgentServerClient._drain_and_remove_queue(rid)
+// Python: WebSocketAgentServerClient._drain_and_remove_queue(rid)
 func (ac *AgentClient) drainAndRemoveQueue(rid string) {
 	ac.messageQueuesMu.Lock()
 	q, exists := ac.messageQueues[rid]
@@ -548,7 +548,7 @@ done:
 
 // delayedCleanupCancelledRequestID 延迟清理已取消的 request_id 标记。
 //
-// 对齐 Python: WebSocketAgentServerClient._delayed_cleanup_cancelled_request_id(rid)
+// Python: WebSocketAgentServerClient._delayed_cleanup_cancelled_request_id(rid)
 func (ac *AgentClient) delayedCleanupCancelledRequestID(rid string) {
 	time.Sleep(delayedCleanupSeconds * time.Second)
 	ac.messageQueuesMu.Lock()
@@ -563,7 +563,7 @@ func (ac *AgentClient) delayedCleanupCancelledRequestID(rid string) {
 
 // ensureConnected 检查是否已连接。
 //
-// 对齐 Python: WebSocketAgentServerClient._ensure_connected()
+// Python: WebSocketAgentServerClient._ensure_connected()
 func (ac *AgentClient) ensureConnected() error {
 	ac.runningMu.RLock()
 	r := ac.running
@@ -577,7 +577,7 @@ func (ac *AgentClient) ensureConnected() error {
 // streamReceiver 流式响应接收 goroutine。
 //
 // 从 messageQueue 读取消息，解析为 AgentResponseChunk 写入 chunkCh。
-// 对齐 Python: send_request_stream 中的 while True 循环。
+// Python: send_request_stream 中的 while True 循环。
 func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue chan map[string]any, chunkCh chan *schema.AgentResponseChunk) {
 	defer close(chunkCh)
 	defer ac.drainAndRemoveQueue(rid)
@@ -591,7 +591,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 		shouldBreak := false
 
 		if sawComplete {
-			// 对齐 Python: saw_complete → wait queue.get(timeout=0.7s)
+			// Python: saw_complete → wait queue.get(timeout=0.7s)
 			select {
 			case msg, ok = <-queue:
 				if !ok {
@@ -652,7 +652,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 
 // parseAgentServerWireUnary 从 wire map 解析非流式响应。
 //
-// 对齐 Python: parse_agent_server_wire_unary(data)
+// Python: parse_agent_server_wire_unary(data)
 // 复用 e2a.ParseAgentServerWireUnary，包含 E2A 格式判别 + legacy fallback + deprecated 兜底。
 func parseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, error) {
 	return e2a.ParseAgentServerWireUnary(data)
@@ -660,7 +660,7 @@ func parseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 
 // parseAgentServerWireChunk 从 wire map 解析流式 chunk。
 //
-// 对齐 Python: parse_agent_server_wire_chunk(data)
+// Python: parse_agent_server_wire_chunk(data)
 // 复用 e2a.ParseAgentServerWireChunk，包含 E2A 格式判别 + legacy fallback + deprecated 兜底。
 func parseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk, error) {
 	return e2a.ParseAgentServerWireChunk(data)

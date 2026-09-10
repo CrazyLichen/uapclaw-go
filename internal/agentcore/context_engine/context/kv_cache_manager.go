@@ -14,7 +14,7 @@ import (
 
 // KVCacheManager 管理 KV 缓存的释放逻辑，通过比较前后两次 ContextWindow 的差异来决定是否释放缓存。
 //
-// 对应 Python: openjiuwen/core/context_engine/context/kv_cache_manager.py (KVCacheManager)
+// Python: openjiuwen/core/context_engine/context/kv_cache_manager.py (KVCacheManager)
 type KVCacheManager struct {
 	// sessionID 会话标识
 	sessionID string
@@ -35,7 +35,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewKVCacheManager 创建 KVCacheManager 实例。
 //
-// 对应 Python: KVCacheManager.__init__(session_id)
+// Python: KVCacheManager.__init__(session_id)
 func NewKVCacheManager(sessionID string) *KVCacheManager {
 	return &KVCacheManager{
 		sessionID:         sessionID,
@@ -51,7 +51,7 @@ func NewKVCacheManager(sessionID string) *KVCacheManager {
 //  3. 前缀对比检测差异 → 无差异则更新快照返回
 //  4. 有差异 → 构建 ReleaseOption 调用 model.Release
 //
-// 对应 Python: KVCacheManager.release()
+// Python: KVCacheManager.release()
 func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.ContextWindow, opts ...iface.Option) error {
 	// 从 Option 中提取 model
 	po := iface.NewProcessorOption(opts...)
@@ -142,7 +142,7 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 //   - msgIdx: 消息首个差异位置（-1 表示消息无差异）
 //   - toolIdx: 工具首个差异位置（-1 表示工具无差异）
 //
-// 对应 Python: KVCacheManager._check_release_needed()
+// Python: KVCacheManager._check_release_needed()
 func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) (bool, int, int) {
 	msgIdx := -1
 	toolIdx := -1

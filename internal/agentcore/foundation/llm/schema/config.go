@@ -157,7 +157,7 @@ func ParseProviderType(s string) (ProviderType, bool) {
 }
 
 // ValidateAndNormalizeProvider 验证并规范化服务商名称，依次尝试枚举匹配、大小写不敏感匹配和全局验证器。
-// 对齐 Python: validate_client_provider — 未知 provider 返回 MODEL_PROVIDER_INVALID 错误。
+// Python: validate_client_provider — 未知 provider 返回 MODEL_PROVIDER_INVALID 错误。
 func ValidateAndNormalizeProvider(provider string) (string, error) {
 	provider = strings.TrimSpace(provider)
 

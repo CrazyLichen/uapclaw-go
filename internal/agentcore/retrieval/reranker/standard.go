@@ -18,7 +18,7 @@ import (
 
 // StandardReranker 标准重排序客户端，支持 vLLM 风格的 /rerank API。
 //
-// 对应 Python: openjiuwen/core/retrieval/reranker/standard_reranker.py (StandardReranker)
+// Python: openjiuwen/core/retrieval/reranker/standard_reranker.py (StandardReranker)
 type StandardReranker struct {
 	// RerankerBase 嵌入基类
 	*RerankerBase
@@ -155,7 +155,7 @@ func (r *StandardReranker) RerankDocsSync(ctx context.Context, query string, doc
 
 // assembleParams 组装请求参数，将文档和查询合并为完整的请求参数。
 // 覆盖基类方法，增加输入类型校验。
-// 对齐 Python: StandardReranker._assemble_params
+// Python: StandardReranker._assemble_params
 func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string, error) {
 	// 校验输入类型：必须是 []string 或 []*Document
 	docIDs := make([]string, len(docs))

@@ -80,7 +80,7 @@ func TestSQLTaskDao_ClaimTask(t *testing.T) {
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 
-	// 对齐 Python: pending → claimed
+	// Python: pending → claimed
 	ok, err := dao.ClaimTask(ctx, "t1", "member1")
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -100,7 +100,7 @@ func TestSQLTaskDao_ResetTask(t *testing.T) {
 	// 先认领
 	dao.ClaimTask(ctx, "t1", "member1")
 
-	// 对齐 Python: claimed → pending
+	// Python: claimed → pending
 	ok, err := dao.ResetTask(ctx, "t1")
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -118,7 +118,7 @@ func TestSQLTaskDao_ApprovePlanTask(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 	dao.ClaimTask(ctx, "t1", "member1")
 
-	// 对齐 Python: claimed → plan_approved
+	// Python: claimed → plan_approved
 	ok, err := dao.ApprovePlanTask(ctx, "t1")
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -134,7 +134,7 @@ func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed})
 
-	// 对齐 Python: claimed → completed
+	// Python: claimed → completed
 	refreshed, err := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusCompleted)
 	require.NoError(t, err)
 	_ = refreshed
@@ -150,7 +150,7 @@ func TestSQLTaskDao_UpdateTask(t *testing.T) {
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Content: "C1", Status: fsm.TaskStatusPending})
 
-	// 对齐 Python: pending 状态下可编辑
+	// Python: pending 状态下可编辑
 	ok, err := dao.UpdateTask(ctx, "t1", "New Title", "New Content")
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -159,7 +159,7 @@ func TestSQLTaskDao_UpdateTask(t *testing.T) {
 	assert.Equal(t, "New Title", got.Title)
 	assert.Equal(t, "New Content", got.Content)
 
-	// 对齐 Python: claimed 状态下禁止编辑
+	// Python: claimed 状态下禁止编辑
 	dao.ClaimTask(ctx, "t1", "m1")
 	ok, err = dao.UpdateTask(ctx, "t1", "Should Fail", "")
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestSQLTaskDao_MutateDependencyGraph_成功(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending})
 
-	// 对齐 Python: t1 依赖 t2
+	// Python: t1 依赖 t2
 	result := dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "t1", DependsOnID: "t2"}})
 	assert.True(t, result.Ok)
 
@@ -194,7 +194,7 @@ func TestSQLTaskDao_MutateDependencyGraph_环检测(t *testing.T) {
 	dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "a", DependsOnID: "b"}})
 	dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "b", DependsOnID: "c"}})
 
-	// 对齐 Python: a→b, b→c, c→a 构成环
+	// Python: a→b, b→c, c→a 构成环
 	result := dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "c", DependsOnID: "a"}})
 	assert.False(t, result.Ok)
 	assert.Contains(t, result.Reason, "循环依赖")
@@ -206,7 +206,7 @@ func TestSQLTaskDao_MutateDependencyGraph_新增任务(t *testing.T) {
 
 	dao := db.Task()
 
-	// 对齐 Python: mutate_dependency_graph(team_name, new_tasks=[...], add_edges=[...])
+	// Python: mutate_dependency_graph(team_name, new_tasks=[...], add_edges=[...])
 	result := dao.MutateDependencyGraph(ctx, "team1",
 		[]NewTaskSpec{
 			{TaskID: "t1", Title: "T1", Content: "C1", InitialStatus: fsm.TaskStatusPending},
@@ -228,7 +228,7 @@ func TestSQLTaskDao_AddTaskWithBidirectionalDependencies(t *testing.T) {
 	dao := db.Task()
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending})
 
-	// 对齐 Python: 带依赖创建任务
+	// Python: 带依赖创建任务
 	result := dao.AddTaskWithBidirectionalDependencies(ctx, "team1",
 		&TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusPending},
 		[]string{"t1"},
@@ -252,7 +252,7 @@ func TestSQLTaskDao_CancelTask_终止传播(t *testing.T) {
 	// t2 依赖 t1
 	dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
 
-	// 对齐 Python: cancel_task(t1) → t2 解除阻塞
+	// Python: cancel_task(t1) → t2 解除阻塞
 	task, unblocked, err := dao.CancelTask(ctx, "t1")
 	require.NoError(t, err)
 	require.NotNil(t, task)
@@ -293,7 +293,7 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusPending, Assignee: StringPtr("m1")})
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "team1", Title: "T2", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m2")})
 
-	// 对齐 Python: cancel_all_tasks(team_name, skip_assignees=[])
+	// Python: cancel_all_tasks(team_name, skip_assignees=[])
 	result, err := dao.CancelAllTasks(ctx, "team1", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(result.Cancelled))
@@ -302,7 +302,7 @@ func TestSQLTaskDao_CancelAllTasks(t *testing.T) {
 	got1, _ := dao.GetTask(ctx, "t1")
 	assert.Equal(t, fsm.TaskStatusCancelled, got1.Status)
 
-	// 对齐 Python: skip_assignees 过滤
+	// Python: skip_assignees 过滤
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t3", TeamName: "team1", Title: "T3", Status: fsm.TaskStatusPending, Assignee: StringPtr("m3")})
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t4", TeamName: "team1", Title: "T4", Status: fsm.TaskStatusPending, Assignee: StringPtr("m4")})
 	result2, err := dao.CancelAllTasks(ctx, "team1", []string{"m3"})
@@ -371,7 +371,7 @@ func TestSQLTaskDao_VerifyAndFixTaskConsistency(t *testing.T) {
 	// t2 依赖 t1
 	dao.MutateDependencyGraph(ctx, "team1", nil, []EdgeSpec{{TaskID: "t2", DependsOnID: "t1"}})
 
-	// 对齐 Python: verify_and_fix_task_consistency
+	// Python: verify_and_fix_task_consistency
 	refreshed, err := dao.VerifyAndFixTaskConsistency(ctx, "team1")
 	require.NoError(t, err)
 	_ = refreshed

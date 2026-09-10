@@ -35,7 +35,7 @@ type CallbackFramework struct {
 	sessionCallbacks map[SessionCallEventType][]*CallbackInfo[SessionCallbackFunc]
 	// customCallbacks 自定义事件回调函数注册表
 	//
-	// 对应 Python: AsyncCallbackFramework._callbacks 中的动态事件名条目。
+	// Python: AsyncCallbackFramework._callbacks 中的动态事件名条目。
 	// Python 用 session_id + "write_stream" 构造 per-session 事件名，
 	// Go 在此 map 中以相同方式存储，实现 per-session 隔离。
 	customCallbacks map[string][]*CallbackInfo[CustomCallbackFunc]

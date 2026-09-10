@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryForbiddenConfig 记忆禁止配置。
-// 对齐 Python: _get_memory_forbidden_config() 返回的 dict
+// Python: _get_memory_forbidden_config() 返回的 dict
 type MemoryForbiddenConfig struct {
 	// Enabled 是否启用禁止记忆规则
 	Enabled bool `json:"enabled"`
@@ -32,7 +32,7 @@ var forbiddenLogComponent = logger.ComponentAgentServer
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetForbiddenMemoryPrompt 格式化禁止记忆提示词。enabled=false 时返回空串。
-// 对齐 Python: get_forbidden_memory_prompt(language)
+// Python: get_forbidden_memory_prompt(language)
 func GetForbiddenMemoryPrompt(language string) (string, error) {
 	cfg, err := getMemoryForbiddenConfigSafe()
 	if err != nil {
@@ -62,7 +62,7 @@ func GetForbiddenMemoryPrompt(language string) (string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getMemoryForbiddenConfig 从 config 读取 memory.forbidden_memory_definition。
-// 对齐 Python: _get_memory_forbidden_config()
+// Python: _get_memory_forbidden_config()
 // 错误时返回 Enabled=false 的默认配置（不中断调用方）。
 func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
 	cfg, _ := getMemoryForbiddenConfigSafe()
@@ -70,7 +70,7 @@ func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
 }
 
 // getMemoryForbiddenConfigSafe 从 config 读取 memory.forbidden_memory_definition。
-// 对齐 Python: get_forbidden_memory_prompt 中的 try/except 防御性编程。
+// Python: get_forbidden_memory_prompt 中的 try/except 防御性编程。
 // 返回配置和可能的错误，便于调用方决定是否中断。
 func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
 	cfg, err := config.New("")
@@ -124,7 +124,7 @@ func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
 		}
 	}
 
-	// 对齐 Python: description 为空时提供默认值
+	// Python: description 为空时提供默认值
 	if len(result.Description) == 0 {
 		result.Description = map[string]string{
 			"zh": "以下内容禁止记忆：密码、API密钥、Secret、Token、信用卡号、身份证号、手机号等敏感信息",
@@ -136,7 +136,7 @@ func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
 }
 
 // buildForbiddenPromptCN 构建中文禁止记忆提示词。
-// 对齐 Python: get_forbidden_memory_prompt("zh") 的格式化输出
+// Python: get_forbidden_memory_prompt("zh") 的格式化输出
 func buildForbiddenPromptCN(descText string, patterns []string) string {
 	parts := []string{"### 记忆限制规则", ""}
 	if descText != "" {
@@ -158,7 +158,7 @@ func buildForbiddenPromptCN(descText string, patterns []string) string {
 }
 
 // buildForbiddenPromptEN 构建英文禁止记忆提示词。
-// 对齐 Python: get_forbidden_memory_prompt("en") 的格式化输出
+// Python: get_forbidden_memory_prompt("en") 的格式化输出
 func buildForbiddenPromptEN(descText string, patterns []string) string {
 	parts := []string{"### Memory Restriction Rules", ""}
 	if descText != "" {

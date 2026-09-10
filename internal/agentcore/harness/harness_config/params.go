@@ -16,7 +16,7 @@ import (
 
 // CreateDeepAgentParams 创建 DeepAgent 的参数集。
 //
-// 对应 Python: create_deep_agent() 的全部关键字参数。
+// Python: create_deep_agent() 的全部关键字参数。
 // 定义在 harness_config 包而非 harness 包，以避免 harness_config → harness 循环依赖。
 // harness 包的 CreateDeepAgent() 接收此类型作为入参。
 type CreateDeepAgentParams struct {
@@ -29,7 +29,7 @@ type CreateDeepAgentParams struct {
 	// ToolInstances Tool 实例列表，从中提取 ToolCard + 注册到 resource_mgr
 	ToolInstances []tool.Tool
 	// ToolCards 纯 ToolCard 列表（不含 Tool 实例），注册到 AbilityManager 提供 schema
-	// 对齐 Python: _normalize_tools 返回的 normalized_cards 中来自纯 ToolCard 的部分
+	// Python: _normalize_tools 返回的 normalized_cards 中来自纯 ToolCard 的部分
 	ToolCards []*tool.ToolCard
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig
@@ -83,6 +83,6 @@ type CreateDeepAgentParams struct {
 	// CompletionTimeout 完成超时时间（秒）
 	CompletionTimeout float64
 	// ContextEngineConfig 上下文引擎配置
-	// 对齐 Python: context_engine_config=_deep_agent_context_engine_config(config)
+	// Python: context_engine_config=_deep_agent_context_engine_config(config)
 	ContextEngineConfig *schema.ContextEngineConfig
 }

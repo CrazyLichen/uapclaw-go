@@ -14,7 +14,7 @@ import (
 // CommitState 继承 StateCollection 继承 State，不是 CommitStateLike 的子类），
 // GetUpdates/SetUpdates 返回聚合视图 map[string]any 而非 map[string][]map[string]any。
 //
-// 对应 Python: openjiuwen/core/session/state/workflow_state.py (CommitState)
+// Python: openjiuwen/core/session/state/workflow_state.py (CommitState)
 type WorkflowCommitState struct {
 	// WorkflowStateCollection 嵌入基础四区状态
 	WorkflowStateCollection

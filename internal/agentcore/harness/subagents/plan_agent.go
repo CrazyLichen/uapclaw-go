@@ -14,7 +14,7 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // PlanAgentFactoryName plan 子代理工厂名称
-// 对齐 Python: PLAN_AGENT_FACTORY_NAME (隐含于 agent_card.name="plan_agent")
+// Python: PLAN_AGENT_FACTORY_NAME (隐含于 agent_card.name="plan_agent")
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -22,7 +22,7 @@ const PlanAgentFactoryName = "plan_agent"
 
 var (
 	// defaultPlanAgentSystemPrompt 默认系统提示词
-	// 对齐 Python: PLAN_AGENT_SYSTEM_PROMPT_CN / PLAN_AGENT_SYSTEM_PROMPT_EN
+	// Python: PLAN_AGENT_SYSTEM_PROMPT_CN / PLAN_AGENT_SYSTEM_PROMPT_EN
 	// 提示词一比一复刻 Python 原文，不做自行翻译
 	defaultPlanAgentSystemPrompt = map[string]string{
 		"cn": "你是架构设计与规划专家，基于提供的代码探索背景和用户需求，设计清晰、可执行的实现方案。" +
@@ -71,7 +71,7 @@ var (
 			"list 3-5 most critical file paths.",
 	}
 	// defaultPlanAgentDescription 默认描述
-	// 对齐 Python: PLAN_AGENT_DESC
+	// Python: PLAN_AGENT_DESC
 	defaultPlanAgentDescription = map[string]string{
 		"cn": "架构设计专家。基于代码探索结果设计实现方案，生成详细的实现计划。",
 		"en": "Architecture design specialist. Designs implementation approaches based on " +
@@ -82,7 +82,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildPlanAgentConfig 构建 plan 子代理配置（延迟实例化）。
-// 对齐 Python: build_plan_agent_config(card=..., system_prompt=..., tools=..., ...)
+// Python: build_plan_agent_config(card=..., system_prompt=..., tools=..., ...)
 //
 // 参数通过 SubagentCreateParams 传入，对齐 Python 的具名参数风格。
 // adapter 层负责从 map[string]any 解析出 SubagentCreateParams。
@@ -92,7 +92,7 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 	cfg := hschema.NewSubAgentConfig()
 
 	// AgentCard：用户未提供时使用默认
-	// 对齐 Python: card or AgentCard(name="plan_agent", description=PLAN_AGENT_DESC.get(...))
+	// Python: card or AgentCard(name="plan_agent", description=PLAN_AGENT_DESC.get(...))
 	cfg.AgentCard = params.Card
 	if cfg.AgentCard == nil {
 		desc := defaultPlanAgentDescription[language]
@@ -106,7 +106,7 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 	}
 
 	// SystemPrompt：用户未提供时使用默认
-	// 对齐 Python: system_prompt or (PLAN_AGENT_SYSTEM_PROMPT_CN if cn else PLAN_AGENT_SYSTEM_PROMPT_EN)
+	// Python: system_prompt or (PLAN_AGENT_SYSTEM_PROMPT_CN if cn else PLAN_AGENT_SYSTEM_PROMPT_EN)
 	cfg.SystemPrompt = params.SystemPrompt
 	if cfg.SystemPrompt == "" {
 		prompt := defaultPlanAgentSystemPrompt[language]
@@ -130,7 +130,7 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 	cfg.EnableTaskLoop = params.EnableTaskLoop
 
 	// MaxIterations：用户未提供（0）时默认 25
-	// 对齐 Python: max_iterations=25
+	// Python: max_iterations=25
 	cfg.MaxIterations = params.MaxIterations
 	if cfg.MaxIterations == 0 {
 		cfg.MaxIterations = 25
@@ -142,7 +142,7 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 	cfg.EnablePlanMode = params.EnablePlanMode
 
 	// RestrictToWorkDir：PlanAgent 默认 false（区别于 ResearchAgent 的 true）
-	// 对齐 Python: restrict_to_work_dir=False
+	// Python: restrict_to_work_dir=False
 	// params 为 *bool 指针，nil 表示未设置（使用 PlanAgent 默认 false），非 nil 则使用用户显式指定的值
 	if params.RestrictToWorkDir != nil {
 		cfg.RestrictToWorkDir = *params.RestrictToWorkDir
@@ -154,7 +154,7 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 }
 
 // DefaultPlanAgentSystemPrompt 返回指定语言的默认系统提示词。
-// 对齐 Python: DEFAULT_PLAN_AGENT_SYSTEM_PROMPT.get(resolved_language, ...)
+// Python: DEFAULT_PLAN_AGENT_SYSTEM_PROMPT.get(resolved_language, ...)
 func DefaultPlanAgentSystemPrompt(language string) string {
 	if s, ok := defaultPlanAgentSystemPrompt[language]; ok && s != "" {
 		return s
@@ -163,7 +163,7 @@ func DefaultPlanAgentSystemPrompt(language string) string {
 }
 
 // DefaultPlanAgentDescription 返回指定语言的默认描述。
-// 对齐 Python: PLAN_AGENT_DESC.get(resolved_language, ...)
+// Python: PLAN_AGENT_DESC.get(resolved_language, ...)
 func DefaultPlanAgentDescription(language string) string {
 	if s, ok := defaultPlanAgentDescription[language]; ok && s != "" {
 		return s

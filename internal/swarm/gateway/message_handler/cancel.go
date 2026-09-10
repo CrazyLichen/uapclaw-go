@@ -23,7 +23,7 @@ import (
 
 // CancelAgentWorkForSession 取消指定会话的所有流式任务并发送中断请求到 AgentServer。
 //
-// 对齐 Python _cancel_agent_work_for_session (L381-L528)：
+// Python: _cancel_agent_work_for_session (L381-L528)：
 //  1. 清除 evolution 状态
 //  2. 收集该 session 关联的流式任务
 //  3. 构造 cancel 请求（注入 mode + trusted_dirs）
@@ -45,7 +45,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 	cancelMsg := mh.buildCancelMessage(msg, oldSessionID)
 
 	// 4. 发送中断请求到 AgentServer，等待响应
-	// 对齐 Python: 即使网关侧已无活跃流式拉取任务，也必须通知 AgentServer
+	// Python: 即使网关侧已无活跃流式拉取任务，也必须通知 AgentServer
 	// 否则仅断开 CLI WebSocket 无法停止已派发的工作
 	var resp *schema.AgentResponse
 	var respErr error
@@ -60,7 +60,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				Str("session_id", oldSessionID).
 				Msg("AgentServer 中断请求失败")
 
-			// 对齐 Python: SendRequest 异常时发送 success=false 并返回
+			// Python: SendRequest 异常时发送 success=false 并返回
 			if publishInterruptResult {
 				hasActiveTask := len(requestIDs) > 0
 				mh.sendInterruptResultNotification(
@@ -95,7 +95,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				Msg("取消完成，静默模式不发布 interrupt_result")
 		} else {
 			// 非预期响应，发送失败通知
-			// 对齐 Python: 从 payload 中提取 error 或 message 字段
+			// Python: 从 payload 中提取 error 或 message 字段
 			errorMsg := "任务终止失败"
 			if errFromPayload, ok := resp.Payload["error"]; ok {
 				if s, isStr := errFromPayload.(string); isStr && s != "" {
@@ -120,7 +120,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 
 // SendProcessingStatus 发送 processing_status 事件消息（向后兼容包装）。
 //
-// 对齐 Python _send_processing_status，保留旧签名供过渡期使用。
+// Python: _send_processing_status，保留旧签名供过渡期使用。
 func (mh *MessageHandler) SendProcessingStatus(sessionID string, isProcessing bool) {
 	mh.sendProcessingStatus("", sessionID, "", isProcessing)
 }
@@ -155,7 +155,7 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 
 	if exists && entry != nil && entry.cancel != nil {
 		entry.cancel()
-		// 对齐 Python: await asyncio.gather(*tasks) — 等待 goroutine 完全退出
+		// Python: await asyncio.gather(*tasks) — 等待 goroutine 完全退出
 		entry.wg.Wait()
 		logger.Debug(logComponent).
 			Str("event_type", "stream_task_cancelled").
@@ -166,7 +166,7 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 
 // buildCancelMessage 构造 chat.cancel 请求消息，注入 mode 和 trusted_dirs。
 //
-// 对齐 Python _cancel_agent_work_for_session 中构造 cancel 请求的逻辑：
+// Python: _cancel_agent_work_for_session 中构造 cancel 请求的逻辑：
 // 从 msg.Params 或 channelStates 中提取 mode 和 trusted_dirs 注入 params。
 func (mh *MessageHandler) buildCancelMessage(msg *schema.Message, sessionID string) *schema.Message {
 	// 基础参数
@@ -215,7 +215,7 @@ func (mh *MessageHandler) buildCancelMessage(msg *schema.Message, sessionID stri
 
 // sendInterruptToAgent 发送中断请求到 AgentServer，等响应后丢弃。
 //
-// 对齐 Python _send_interrupt_to_agent (L2654-2691)：
+// Python: _send_interrupt_to_agent (L2654-2691)：
 // 从 msg 中提取 mode/trusted_dirs 注入 cancel 请求参数。
 func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.Message, intent string) {
 	// 构造 chat.cancel 消息，注入 mode + trusted_dirs
@@ -252,7 +252,7 @@ func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.
 }
 
 // sendInterruptToAgentWithEnvelope 使用预构建的 E2A 信封发送中断请求。
-// 对齐 Python: _send_interrupt_to_agent(env_interrupt) — 接收已包含 mode 注入的信封
+// Python: _send_interrupt_to_agent(env_interrupt) — 接收已包含 mode 注入的信封
 func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, envelope *e2a.E2AEnvelope, intent string) {
 	// 在 params 中注入 intent
 	if envelope.Params != nil {
@@ -279,7 +279,7 @@ func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, 
 
 // sendInterruptResultNotification 发送 interrupt_result 事件通知。
 //
-// 对齐 Python _send_interrupt_result_notification (L2693-L2748)：
+// Python: _send_interrupt_result_notification (L2693-L2748)：
 // 根据 intent 和 hasActiveTask 选择成功/失败消息模板，
 // 构造 CHAT_INTERRUPT_RESULT 事件发送到客户端。
 func (mh *MessageHandler) sendInterruptResultNotification(requestID, channelID, sessionID, intent string, message string, success bool, hasActiveTask bool) {
@@ -308,7 +308,7 @@ func (mh *MessageHandler) sendInterruptResultNotification(requestID, channelID, 
 
 // sendProcessingStatus 发送 processing_status 事件消息。
 //
-// 对齐 Python _send_processing_status：
+// Python: _send_processing_status：
 // payload 包含 is_processing 和 is_complete，消息 ID 使用 requestID。
 func (mh *MessageHandler) sendProcessingStatus(requestID, sessionID, channelID string, isProcessing bool) {
 	msg := &schema.Message{
@@ -331,7 +331,7 @@ func (mh *MessageHandler) sendProcessingStatus(requestID, sessionID, channelID s
 
 // sendStreamCancelledNotification 发送流式取消通知。
 //
-// 对齐 Python: 构造 CHAT_INTERRUPT_RESULT 事件，payload 含 intent=cancel, success=true。
+// Python: 构造 CHAT_INTERRUPT_RESULT 事件，payload 含 intent=cancel, success=true。
 func (mh *MessageHandler) sendStreamCancelledNotification(requestID, channelID, sessionID string) {
 	msg := &schema.Message{
 		ID:        requestID,
@@ -355,7 +355,7 @@ func (mh *MessageHandler) sendStreamCancelledNotification(requestID, channelID, 
 
 // publishStreamCancelledFinal 发布流式取消的最终消息。
 //
-// 对齐 Python: type=event, payload 包含 event_type=chat.final + is_complete=True
+// Python: type=event, payload 包含 event_type=chat.final + is_complete=True
 func (mh *MessageHandler) publishStreamCancelledFinal(requestID, channelID, sessionID string, requestMetadata map[string]any) {
 	msg := &schema.Message{
 		ID:        requestID,
@@ -378,7 +378,7 @@ func (mh *MessageHandler) publishStreamCancelledFinal(requestID, channelID, sess
 
 // buildErrorOutMessage 构造错误响应消息。
 //
-// 对齐 Python: 使用原始消息的 ID/ChannelID/SessionID/Metadata 构造错误响应。
+// Python: 使用原始消息的 ID/ChannelID/SessionID/Metadata 构造错误响应。
 func (mh *MessageHandler) buildErrorOutMessage(msg *schema.Message, err error) *schema.Message {
 	return &schema.Message{
 		ID:              msg.ID,
@@ -395,7 +395,7 @@ func (mh *MessageHandler) buildErrorOutMessage(msg *schema.Message, err error) *
 
 // buildToolResultMessage 构造工具结果消息。
 //
-// 对齐 Python _build_tool_result_message (L2790-L2818)：
+// Python: _build_tool_result_message (L2790-L2818)：
 // id 格式: tool_result_{timestamp:x}_{random_hex}，
 // type=event, event_type=CHAT_TOOL_RESULT（聊天工具结果），
 // payload 含 tool_result 字典（tool_name/tool_call_id/result/status）。
@@ -433,7 +433,7 @@ func (mh *MessageHandler) buildToolResultMessage(channelID, sessionID string, to
 
 // sendCancelledToolResults 发送已取消的工具结果消息。
 //
-// 对齐 Python _send_cancelled_tool_results (L2820-L2841)：
+// Python: _send_cancelled_tool_results (L2820-L2841)：
 // 从 payload 中提取 cancelled_tools 列表，
 // 为每个工具构造 tool_result 消息并发布。
 func (mh *MessageHandler) sendCancelledToolResults(channelID, sessionID string, payload map[string]any, metadata map[string]any) {

@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InteractPayload 交互载荷接口。
-// 对齐 Python: InteractPayload = Union[GodViewMessage, OperatorMessage, HumanAgentMessage]
+// Python: InteractPayload = Union[GodViewMessage, OperatorMessage, HumanAgentMessage]
 //
 // 三种载荷类型通过 Kind() 区分，分发时用类型断言获取具体字段：
 //
@@ -26,7 +26,7 @@ type InteractPayload interface {
 }
 
 // GodViewMessage 直达 Leader DeepAgent 的消息。
-// 对齐 Python: GodViewMessage(body: str) (openjiuwen/agent_teams/interaction/payload.py)
+// Python: GodViewMessage(body: str) (openjiuwen/agent_teams/interaction/payload.py)
 //
 // 通道语义：`# body` 或裸文本 → 消息直送 Leader 的 DeepAgent，
 // 等价于历史 invoke / deliver_to_leader 通道。
@@ -36,7 +36,7 @@ type GodViewMessage struct {
 }
 
 // OperatorMessage 操作者视角消息（@成员/广播）。
-// 对齐 Python: OperatorMessage(body: str, target: Optional[str])
+// Python: OperatorMessage(body: str, target: Optional[str])
 //
 // 通道语义：`@member body` → 点对点消息（target 为成员名）；
 // `@all body` / `@* body` → 广播（target 为 nil）。
@@ -48,7 +48,7 @@ type OperatorMessage struct {
 }
 
 // HumanAgentMessage Human-Agent 成员消息。
-// 对齐 Python: HumanAgentMessage(body: str, sender: str, target: Optional[str])
+// Python: HumanAgentMessage(body: str, sender: str, target: Optional[str])
 //
 // 通道语义：`$name body` → 驱动 avatar（target 为 nil）；
 // `$name @member body` → 点对点或广播。
@@ -62,7 +62,7 @@ type HumanAgentMessage struct {
 }
 
 // DeliverResult 投递结果。
-// 对齐 Python: DeliverResult(ok, message_id, reason)
+// Python: DeliverResult(ok, message_id, reason)
 //
 // 成功时 OK 为 true 且 MessageID 携带消息 ID
 // （deliver_to_leader 通道不产生 bus message，MessageID 为 nil）。
@@ -77,7 +77,7 @@ type DeliverResult struct {
 }
 
 // HumanAgentInboundEvent 团队→用户通知事件。
-// 对齐 Python: HumanAgentInboundEvent (openjiuwen/agent_teams/interaction/payload.py)
+// Python: HumanAgentInboundEvent (openjiuwen/agent_teams/interaction/payload.py)
 //
 // Phase-2 HITT 不会让 human-agent 的 LLM 自动消费入站消息——
 // 消息直接透传给对应的外部用户。此结构体是运行时喂给
@@ -100,7 +100,7 @@ type HumanAgentInboundEvent struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // PayloadKind 载荷类型枚举。
-// 对齐 Python: isinstance(payload, GodViewMessage/OperatorMessage/HumanAgentMessage)
+// Python: isinstance(payload, GodViewMessage/OperatorMessage/HumanAgentMessage)
 type PayloadKind int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -136,13 +136,13 @@ func NewHumanAgentMessage(body string, sender string, target *string) *HumanAgen
 }
 
 // NewDeliverResultSuccess 创建成功的投递结果。
-// 对齐 Python: DeliverResult.success(message_id)
+// Python: DeliverResult.success(message_id)
 func NewDeliverResultSuccess(messageID *string) *DeliverResult {
 	return &DeliverResult{OK: true, MessageID: messageID}
 }
 
 // NewDeliverResultFailure 创建失败的投递结果。
-// 对齐 Python: DeliverResult.failure(reason)
+// Python: DeliverResult.failure(reason)
 func NewDeliverResultFailure(reason string) *DeliverResult {
 	return &DeliverResult{OK: false, Reason: &reason}
 }
@@ -175,7 +175,7 @@ func (h *HumanAgentMessage) Sender() string { return h.sender }
 func (h *HumanAgentMessage) Target() *string { return h.target }
 
 // IsOK 判断投递是否成功。
-// 对齐 Python: DeliverResult.__bool__
+// Python: DeliverResult.__bool__
 func (d *DeliverResult) IsOK() bool { return d.OK }
 
 // String 返回可读描述。
@@ -214,7 +214,7 @@ func payloadKindName(kind PayloadKind) string {
 }
 
 // isReservedMemberName 检查是否为运行时保留成员名。
-// 对齐 Python: is_reserved_name(name) (openjiuwen/agent_teams/interaction/router.py)
+// Python: is_reserved_name(name) (openjiuwen/agent_teams/interaction/router.py)
 func isReservedMemberName(name string) bool {
 	return agentteams.ReservedMemberNames[name]
 }

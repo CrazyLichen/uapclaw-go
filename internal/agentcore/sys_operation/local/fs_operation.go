@@ -27,7 +27,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalFsOperation 本地文件系统操作。
-// 对齐 Python local/fs_operation.py FsOperation。
+// Python: local/fs_operation.py FsOperation。
 type LocalFsOperation struct {
 	sysop.BaseFsOperation
 	// runConfig 本地工作配置，对齐 Python self._run_config。
@@ -49,7 +49,7 @@ var _ sysop.FsOperation = (*LocalFsOperation)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLocalFsOperation 创建本地文件系统操作实例（工厂函数，供 OperationRegistry 调用）。
-// 对齐 Python：run_config 传递到实例，用于 restrict_to_sandbox 和 sandbox_root。
+// Python: run_config 传递到实例，用于 restrict_to_sandbox 和 sandbox_root。
 func NewLocalFsOperation(runConfig any) sysop.SysSubOperation {
 	op := &LocalFsOperation{}
 	if rc, ok := runConfig.(*sysop.LocalWorkConfig); ok && rc != nil {
@@ -61,7 +61,7 @@ func NewLocalFsOperation(runConfig any) sysop.SysSubOperation {
 }
 
 // ReadFile 读取文件。
-// 对齐 Python FsOperation.read_file。
+// Python: FsOperation.read_file。
 func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ReadFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	methodName := "read_file"
@@ -93,7 +93,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	}
 
 	startTime := time.Now()
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
@@ -135,7 +135,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 			}
 			textContent = strings.Join(lines, "\n")
 		} else if o.Tail > 0 {
-			// 对齐 Python _read_tail: 反向 seek 读取，避免大文件 OOM
+			// Python: _read_tail: 反向 seek 读取，避免大文件 OOM
 			tailLines, tailErr := readTail(resolvedPath, o.Tail)
 			if tailErr != nil {
 				return f.createErrorResult(methodName, fmt.Sprintf("tail read failed: %s", tailErr), startTime), nil
@@ -170,7 +170,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 		},
 	}
 
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
@@ -182,7 +182,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 }
 
 // ReadFileStream 流式读取文件。
-// 对齐 Python FsOperation.read_file_stream。
+// Python: FsOperation.read_file_stream。
 func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts ...sysop.FsOption) (<-chan result.ReadFileStreamResult, error) {
 	ch := make(chan result.ReadFileStreamResult, 64)
 
@@ -235,7 +235,7 @@ func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts
 }
 
 // WriteFile 写入文件。
-// 对齐 Python FsOperation.write_file：prepend_newline/append_newline/encoding/permissions。
+// Python: FsOperation.write_file：prepend_newline/append_newline/encoding/permissions。
 func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content string, opts ...sysop.FsOption) (*result.WriteFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	methodName := "write_file"
@@ -371,7 +371,7 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 }
 
 // UploadFile 上传文件（本地模式 = 文件拷贝）。
-// 对齐 Python FsOperation.upload_file。
+// Python: FsOperation.upload_file。
 func (f *LocalFsOperation) UploadFile(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (*result.UploadFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
@@ -406,7 +406,7 @@ func (f *LocalFsOperation) UploadFile(ctx context.Context, localPath string, tar
 }
 
 // UploadFileStream 流式上传文件（本地模式 = 分块拷贝）。
-// 对齐 Python FsOperation.upload_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
+// Python: FsOperation.upload_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
 func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (<-chan result.UploadFileStreamResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	ch := make(chan result.UploadFileStreamResult, 16)
@@ -531,7 +531,7 @@ func (f *LocalFsOperation) DownloadFile(ctx context.Context, sourcePath string, 
 }
 
 // DownloadFileStream 流式下载文件（本地模式 = 分块拷贝）。
-// 对齐 Python FsOperation.download_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
+// Python: FsOperation.download_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
 func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	ch := make(chan result.DownloadFileStreamResult, 16)
@@ -634,14 +634,14 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 }
 
 // ListFiles 列出目录下文件。
-// 对齐 Python FsOperation.list_files。
+// Python: FsOperation.list_files。
 func (f *LocalFsOperation) ListFiles(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListFilesResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	return f.listItems(ctx, path, false, o)
 }
 
 // ListDirectories 列出目录下子目录。
-// 对齐 Python FsOperation.list_directories。
+// Python: FsOperation.list_directories。
 func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListDirsResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
@@ -664,11 +664,11 @@ func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opt
 }
 
 // SearchFiles 搜索文件。
-// 对齐 Python FsOperation.search_files — 使用 rglob 支持递归 glob 模式。
+// Python: FsOperation.search_files — 使用 rglob 支持递归 glob 模式。
 func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern string, opts ...sysop.FsOption) (*result.SearchFilesResult, error) {
 	methodName := "search_files"
 	startTime := time.Now()
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
@@ -680,7 +680,7 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		return nil, err
 	}
 
-	// 对齐 Python: rglob(pattern) — 不含 "/" 的 pattern 自动加 "**/" 前缀以递归匹配
+	// Python: rglob(pattern) — 不含 "/" 的 pattern 自动加 "**/" 前缀以递归匹配
 	// Python pathlib.Path.rglob("*.py") 等价于 glob("**/*.py")
 	globPattern := pattern
 	if !strings.Contains(pattern, "/") {
@@ -710,7 +710,7 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		return nil, err
 	}
 
-	// 对齐 Python: exclude_set = set(); for pat in exclude_patterns: exclude_set.update(set(base.rglob(pat)))
+	// Python: exclude_set = set(); for pat in exclude_patterns: exclude_set.update(set(base.rglob(pat)))
 	o := sysop.NewFsOptions(opts...)
 	if len(o.ExcludePatterns) > 0 {
 		filtered := matched[:0]
@@ -735,7 +735,7 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		matched = filtered
 	}
 
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
@@ -756,8 +756,8 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 
 // ListTools 返回文件系统操作的工具卡片列表（硬编码）。
 // description 严格使用 Python 方法英文 docstring 原文，不翻译。
-// 对齐 Python BaseFsOperation.list_tools：read_file, read_file_stream, write_file,
-// 对齐 Python 方法：upload_file, upload_file_stream, download_file, download_file_stream,
+// Python: BaseFsOperation.list_tools：read_file, read_file_stream, write_file,
+// Python: 方法：upload_file, upload_file_stream, download_file, download_file_stream,
 // list_files, list_directories, search_files 等工具方法。
 func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 	readFileParams := []*schema.Param{
@@ -906,7 +906,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getEncoder 根据编码名称获取 encoder。
-// 对齐 Python codecs.lookup(encoding)。
+// Python: codecs.lookup(encoding)。
 func getEncoder(encName string) *encoding.Encoder {
 	e, err := textencoding.MIME.Encoding(encName)
 	if err != nil || e == nil {
@@ -916,7 +916,7 @@ func getEncoder(encName string) *encoding.Encoder {
 }
 
 // readTail 从文件末尾反向读取最后 tail 行。
-// 对齐 Python _read_tail(file_path, tail, encoding) (L1461-1532):
+// Python: _read_tail(file_path, tail, encoding) (L1461-1532):
 // 从文件末尾反向 seek 读取，避免大文件全文加载导致 OOM
 func readTail(filePath string, tail int) ([]string, error) {
 	f, err := os.Open(filePath)
@@ -925,7 +925,7 @@ func readTail(filePath string, tail int) ([]string, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	const chunkSize = 8192 // 对齐 Python TAIL_CHUNK_SIZE
+	const chunkSize = 8192 // Python: TAIL_CHUNK_SIZE
 
 	// 获取文件大小
 	fi, err := f.Stat()
@@ -993,8 +993,8 @@ func readTail(filePath string, tail int) ([]string, error) {
 }
 
 // resolvePath 解析路径，基于 CWD 解析相对路径。
-// 对齐 Python FsOperation._resolve_path。
-// 对齐 Python：restrict_to_sandbox=True 时校验路径是否在 sandbox_root 范围内。
+// Python: FsOperation._resolve_path。
+// Python: restrict_to_sandbox=True 时校验路径是否在 sandbox_root 范围内。
 func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path 不能为空")
@@ -1019,7 +1019,7 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 	if f.runConfig != nil && f.runConfig.RestrictToSandbox {
 		sandboxRoots := f.runConfig.SandboxRoot
 		if len(sandboxRoots) == 0 {
-			// 对齐 Python: roots = [p for p in (get_workspace(), get_project_root()) if p]
+			// Python: roots = [p for p in (get_workspace(), get_project_root()) if p]
 			sandboxRoots = []string{}
 			ctx := context.Background()
 			if ws := cwd.GetWorkspace(ctx); ws != "" {
@@ -1059,7 +1059,7 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 		methodName = "list_directories"
 	}
 	startTime := time.Now()
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
@@ -1073,7 +1073,7 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 
 	items := f.walkDir(resolvedPath, dirsOnly, o, 1)
 
-	// 对齐 Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
+	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
 	logger.Info(fsLogComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
@@ -1096,7 +1096,7 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 func (f *LocalFsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions, depth int) []result.FileSystemItem {
 	var items []result.FileSystemItem
 
-	// 对齐 Python: max_depth 递归深度限制
+	// Python: max_depth 递归深度限制
 	if o.MaxDepth > 0 && depth > o.MaxDepth {
 		return items
 	}
@@ -1190,7 +1190,7 @@ func (f *LocalFsOperation) sortItems(items []result.FileSystemItem, sortBy strin
 
 // createErrorResult 创建错误结果
 func (f *LocalFsOperation) createErrorResult(methodName string, errMsg string, startTime time.Time) *result.ReadFileResult {
-	// 对齐 Python: sys_operation_logger.error(event_type=SYS_OP_ERROR, method_name, method_params, method_exec_time_ms)
+	// Python: sys_operation_logger.error(event_type=SYS_OP_ERROR, method_name, method_params, method_exec_time_ms)
 	logger.Error(fsLogComponent).
 		Str("event_type", "SYS_OP_ERROR").
 		Str("method_name", methodName).
@@ -1218,7 +1218,7 @@ func expandUser(path string) string {
 }
 
 // parsePermissions 将权限字符串（如 "644"）解析为 os.FileMode。
-// 对齐 Python _apply_permissions：int(permissions, 8) → os.chmod。
+// Python: _apply_permissions：int(permissions, 8) → os.chmod。
 func parsePermissions(perm string) os.FileMode {
 	if perm == "" {
 		return 0644

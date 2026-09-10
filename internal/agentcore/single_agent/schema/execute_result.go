@@ -6,7 +6,7 @@ import llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/ll
 
 // AddAbilityResult 添加能力的返回结果。
 //
-// 对应 Python: AddAbilityResult
+// Python: AddAbilityResult
 type AddAbilityResult struct {
 	// Name 能力名称
 	Name string

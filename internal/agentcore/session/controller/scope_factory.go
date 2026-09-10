@@ -4,7 +4,7 @@ package controller
 
 // SessionScopeFactory 会话作用域工厂，提供创建常见 SessionScope 实例的静态方法。
 // 简化内置 scope 和 subject 组合的创建，同时支持自定义扩展。
-// 对应 Python: openjiuwen/core/session/session_controller/scope_factory.py (SessionScopeFactory)
+// Python: openjiuwen/core/session/session_controller/scope_factory.py (SessionScopeFactory)
 type SessionScopeFactory struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────

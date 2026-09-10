@@ -17,7 +17,7 @@ import (
 
 // TeamSignalDetector 团队域信号检测器，从用户输入和轨迹中检测演化信号。
 //
-// 对应 Python: openjiuwen/agent_evolving/signal/team.py TeamSignalDetector
+// Python: openjiuwen/agent_evolving/signal/team.py TeamSignalDetector
 type TeamSignalDetector struct {
 	// llm LLM 模型实例
 	llm *llm.Model
@@ -33,7 +33,7 @@ type TeamSignalDetector struct {
 
 // UserIntent 解析后的用户改进意图。
 //
-// 对应 Python: openjiuwen/agent_evolving/signal/team.py UserIntent(frozen dataclass)
+// Python: openjiuwen/agent_evolving/signal/team.py UserIntent(frozen dataclass)
 type UserIntent struct {
 	// IsImprovement 是否包含改进意图
 	IsImprovement bool
@@ -43,7 +43,7 @@ type UserIntent struct {
 
 // TrajectoryIssue 规范化的轨迹问题。
 //
-// 对应 Python: openjiuwen/agent_evolving/signal/team.py TrajectoryIssue(frozen dataclass)
+// Python: openjiuwen/agent_evolving/signal/team.py TrajectoryIssue(frozen dataclass)
 type TrajectoryIssue struct {
 	// IssueType 问题类型
 	IssueType string
@@ -60,7 +60,7 @@ type TrajectoryIssue struct {
 // TeamSignalType 团队域信号类型枚举。
 // UserRequest 保留为向后兼容别名。
 //
-// 对应 Python: TeamSignalType(str, Enum)
+// Python: TeamSignalType(str, Enum)
 type TeamSignalType string
 
 const (
@@ -82,7 +82,7 @@ const teamSkillContentKey = "skill_content"
 
 // teamUserRequestPromptCN 中文团队用户请求检测提示词。
 //
-// 对应 Python: _TEAM_USER_REQUEST_PROMPT_CN（原文复刻，不翻译）
+// Python: _TEAM_USER_REQUEST_PROMPT_CN（原文复刻，不翻译）
 const teamUserRequestPromptCN = "判断以下用户输入是否包含对当前团队任务或团队协作方式的改进意见。\n" +
 	"如果是，提取改进意图的摘要。\n\n" +
 	"团队技能描述：{team_skill_description}\n" +
@@ -92,7 +92,7 @@ const teamUserRequestPromptCN = "判断以下用户输入是否包含对当前�
 
 // teamUserRequestPromptEN 英文团队用户请求检测提示词。
 //
-// 对应 Python: _TEAM_USER_REQUEST_PROMPT_EN（原文复刻，不翻译）
+// Python: _TEAM_USER_REQUEST_PROMPT_EN（原文复刻，不翻译）
 const teamUserRequestPromptEN = "Determine if the following user input contains improvement suggestions " +
 	"for the current team task or collaboration approach.\n" +
 	"If yes, extract a summary of the improvement intent.\n\n" +
@@ -103,7 +103,7 @@ const teamUserRequestPromptEN = "Determine if the following user input contains 
 
 // teamTrajectoryIssuePromptCN 中文团队轨迹问题检测提示词。
 //
-// 对应 Python: _TEAM_TRAJECTORY_ISSUE_PROMPT_CN（原文复刻，不翻译）
+// Python: _TEAM_TRAJECTORY_ISSUE_PROMPT_CN（原文复刻，不翻译）
 const teamTrajectoryIssuePromptCN = "分析以下执行轨迹，判断团队技能是否存在不足需要演进。\n\n" +
 	"当前团队技能：\n{skill_content}\n\n" +
 	"执行轨迹摘要：\n{trajectory_summary}\n\n" +
@@ -118,7 +118,7 @@ const teamTrajectoryIssuePromptCN = "分析以下执行轨迹，判断团队技�
 
 // teamTrajectoryIssuePromptEN 英文团队轨迹问题检测提示词。
 //
-// 对应 Python: _TEAM_TRAJECTORY_ISSUE_PROMPT_EN（原文复刻，不翻译）
+// Python: _TEAM_TRAJECTORY_ISSUE_PROMPT_EN（原文复刻，不翻译）
 const teamTrajectoryIssuePromptEN = "Analyze the following execution trajectory and determine whether the team skill has deficiencies.\n\n" +
 	"Current team skill:\n{skill_content}\n\n" +
 	"Trajectory summary:\n{trajectory_summary}\n\n" +
@@ -147,7 +147,7 @@ var keyTools = map[string]bool{
 // NewTeamSignalDetector 创建 TeamSignalDetector 实例。
 // 必须至少传入一个 LLMInvokePolicy，否则 panic。
 //
-// 对应 Python: TeamSignalDetector(llm, model, language, llm_policy, ...)
+// Python: TeamSignalDetector(llm, model, language, llm_policy, ...)
 func NewTeamSignalDetector(
 	llmModel *llm.Model,
 	model string,
@@ -186,7 +186,7 @@ func NewTeamSignalDetector(
 // ParseTeamModelJSON 健壮的 JSON 解析器，从团队技能 LLM 输出中解析 dict/list JSON。
 // 支持代码块提取、平衡括号提取、格式修复（去除注释/尾逗号）。
 //
-// 对应 Python: parse_team_model_json(raw)
+// Python: parse_team_model_json(raw)
 func ParseTeamModelJSON(raw string) any {
 	if raw == "" {
 		return nil
@@ -244,7 +244,7 @@ func ParseTeamModelJSON(raw string) any {
 
 // BuildTeamTrajectorySummary 将轨迹步骤摘要为文本，对关键协作工具保留更多细节。
 //
-// 对应 Python: build_team_trajectory_summary(trajectory)
+// Python: build_team_trajectory_summary(trajectory)
 func BuildTeamTrajectorySummary(traj *trajectory.Trajectory) string {
 	toolBudget := 20000
 	llmBudget := 10000
@@ -310,7 +310,7 @@ func BuildTeamTrajectorySummary(traj *trajectory.Trajectory) string {
 
 // MakeTeamUserIntentSignal 构建团队用户意图信号。
 //
-// 对应 Python: make_team_user_intent_signal(skill_name, user_intent)
+// Python: make_team_user_intent_signal(skill_name, user_intent)
 func MakeTeamUserIntentSignal(skillName, userIntent string) *EvolutionSignal {
 	return MakeEvolutionSignal(
 		string(TeamSignalTypeUserIntent),
@@ -323,7 +323,7 @@ func MakeTeamUserIntentSignal(skillName, userIntent string) *EvolutionSignal {
 
 // MakeTeamTrajectorySignal 构建团队轨迹问题信号。
 //
-// 对应 Python: make_team_trajectory_signal(skill_name, skill_content, trajectory_issues)
+// Python: make_team_trajectory_signal(skill_name, skill_content, trajectory_issues)
 func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues []map[string]string) *EvolutionSignal {
 	return MakeEvolutionSignal(
 		string(TeamSignalTypeTrajectoryIssue),
@@ -340,7 +340,7 @@ func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues [
 
 // GetTeamTrajectoryIssues 从信号中读取轨迹问题列表。
 //
-// 对应 Python: get_team_trajectory_issues(signal)
+// Python: get_team_trajectory_issues(signal)
 func GetTeamTrajectoryIssues(sig *EvolutionSignal) []map[string]string {
 	ctx := sig.Context
 	if ctx == nil {
@@ -359,7 +359,7 @@ func GetTeamTrajectoryIssues(sig *EvolutionSignal) []map[string]string {
 
 // GetTeamSignalSkillContent 从信号中读取关联的团队技能内容。
 //
-// 对应 Python: get_team_signal_skill_content(signal)
+// Python: get_team_signal_skill_content(signal)
 func GetTeamSignalSkillContent(sig *EvolutionSignal) string {
 	ctx := sig.Context
 	if ctx == nil {
@@ -374,7 +374,7 @@ func GetTeamSignalSkillContent(sig *EvolutionSignal) string {
 
 // DetectUserIntent 检测用户消息是否包含团队技能改进意图。
 //
-// 对应 Python: TeamSignalDetector.detect_user_intent(messages, team_skill_content)
+// Python: TeamSignalDetector.detect_user_intent(messages, team_skill_content)
 func (d *TeamSignalDetector) DetectUserIntent(
 	ctx context.Context,
 	messages []map[string]any,
@@ -453,7 +453,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 
 // DetectTrajectorySignals 分析团队轨迹，返回标准被动演化信号。
 //
-// 对应 Python: TeamSignalDetector.detect_trajectory_signals(trajectory, skill_name, skill_content)
+// Python: TeamSignalDetector.detect_trajectory_signals(trajectory, skill_name, skill_content)
 func (d *TeamSignalDetector) DetectTrajectorySignals(
 	ctx context.Context,
 	traj *trajectory.Trajectory,
@@ -473,7 +473,7 @@ func (d *TeamSignalDetector) DetectTrajectorySignals(
 
 // DetectTrajectoryIssues 返回规范化的 medium/high 严重度轨迹问题。
 //
-// 对应 Python: TeamSignalDetector.detect_trajectory_issues(trajectory, skill_content)
+// Python: TeamSignalDetector.detect_trajectory_issues(trajectory, skill_content)
 func (d *TeamSignalDetector) DetectTrajectoryIssues(
 	ctx context.Context,
 	traj *trajectory.Trajectory,
@@ -532,7 +532,7 @@ func (d *TeamSignalDetector) DetectTrajectoryIssues(
 
 // fixJSONText 对常见 LLM JSON 格式问题做轻量修复。
 //
-// 对应 Python: _fix_json_text(text)
+// Python: _fix_json_text(text)
 func fixJSONText(text string) string {
 	// S1007: 使用 raw string 避免双重转义，但正则含反引号时仍用解释字符串
 	text = regexp.MustCompile("(?m)^```(?:json)?\\s*").ReplaceAllString(strings.TrimSpace(text), "")
@@ -544,7 +544,7 @@ func fixJSONText(text string) string {
 
 // extractBalancedJSON 提取第一个平衡的 JSON 子串。
 //
-// 对应 Python: _extract_balanced_json(text, opener, closer)
+// Python: _extract_balanced_json(text, opener, closer)
 func extractBalancedJSON(text string, opener, closer rune) string {
 	start := strings.IndexRune(text, opener)
 	if start == -1 {
@@ -584,7 +584,7 @@ func extractBalancedJSON(text string, opener, closer rune) string {
 
 // extractRolesSummary 从团队技能内容中提取紧凑的角色摘要。
 //
-// 对应 Python: _extract_roles_summary(team_skill_content)
+// Python: _extract_roles_summary(team_skill_content)
 func extractRolesSummary(teamSkillContent string) string {
 	if teamSkillContent == "" {
 		return ""
@@ -641,7 +641,7 @@ func extractRolesSummary(teamSkillContent string) string {
 
 // normalizeIssue 规范化轨迹问题项。
 //
-// 对应 Python: TeamSignalDetector._normalize_issue(item)
+// Python: TeamSignalDetector._normalize_issue(item)
 func normalizeIssue(item map[string]any) map[string]string {
 	severity := "medium"
 	if v, exists := item["severity"]; exists && v != nil {
@@ -659,7 +659,7 @@ func normalizeIssue(item map[string]any) map[string]string {
 }
 
 // parseTeamModelJSONAsDict 解析 JSON 并严格检查返回值为 dict 类型。
-// 对齐 Python: isinstance(parse_team_model_json(text), dict)
+// Python: isinstance(parse_team_model_json(text), dict)
 func parseTeamModelJSONAsDict(text string) (map[string]any, bool) {
 	parsed := ParseTeamModelJSON(text)
 	m, ok := parsed.(map[string]any)
@@ -667,7 +667,7 @@ func parseTeamModelJSONAsDict(text string) (map[string]any, bool) {
 }
 
 // parseTeamModelJSONAsList 解析 JSON 并严格检查返回值为 list 类型。
-// 对齐 Python: isinstance(parse_team_model_json(text), list)
+// Python: isinstance(parse_team_model_json(text), list)
 func parseTeamModelJSONAsList(text string) ([]any, bool) {
 	parsed := ParseTeamModelJSON(text)
 	s, ok := parsed.([]any)

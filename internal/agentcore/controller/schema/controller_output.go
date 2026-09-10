@@ -4,7 +4,7 @@ package schema
 
 // ControllerOutputPayload 输出载荷，包含输出类型、数据和元数据。
 //
-// 对应 Python: openjiuwen/core/controller/schema/controller_output.py (ControllerOutputPayload)
+// Python: openjiuwen/core/controller/schema/controller_output.py (ControllerOutputPayload)
 type ControllerOutputPayload struct {
 	// Type 输出类型
 	Type string `json:"type"`
@@ -16,7 +16,7 @@ type ControllerOutputPayload struct {
 
 // ControllerOutput 批量输出。
 //
-// 对应 Python: openjiuwen/core/controller/schema/controller_output.py (ControllerOutput)
+// Python: openjiuwen/core/controller/schema/controller_output.py (ControllerOutput)
 type ControllerOutput struct {
 	// Type 输出类型
 	Type string `json:"type"`

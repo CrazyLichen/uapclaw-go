@@ -60,7 +60,7 @@ type OperationUtils struct{}
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // StreamEventType 流式事件类型枚举。
-// 对齐 Python StreamEventType：STDOUT, STDERR, EXIT, ERROR。
+// Python: StreamEventType：STDOUT, STDERR, EXIT, ERROR。
 type StreamEventType int
 
 const (
@@ -221,7 +221,7 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 }
 
 // Stream 流式执行，通过 channel 逐块返回。
-// 对齐 Python AsyncProcessHandler.stream：reader 协程 + queue 逻辑，支持超时控制。
+// Python: AsyncProcessHandler.stream：reader 协程 + queue 逻辑，支持超时控制。
 func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

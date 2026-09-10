@@ -25,7 +25,7 @@ import (
 // 当 query 为空时返回所有技能；当 query 非空且 listSkillModel 可用时，
 // 使用 LLM 路由筛选与任务相关的技能；当 listSkillModel 不可用时回退返回全部技能。
 //
-// 对应 Python: ListSkillTool (openjiuwen/harness/tools/skills/list_skill.py)
+// Python: ListSkillTool (openjiuwen/harness/tools/skills/list_skill.py)
 type ListSkillTool struct {
 	// card 工具配置卡片
 	card *tool.ToolCard
@@ -47,7 +47,7 @@ type ListSkillTool struct {
 
 // NewListSkillTool 创建 ListSkillTool 实例。
 //
-// 对应 Python: ListSkillTool.__init__(get_skills, list_skill_model, language, agent_id)
+// Python: ListSkillTool.__init__(get_skills, list_skill_model, language, agent_id)
 func NewListSkillTool(
 	getSkills func() []*skillpkg.Skill,
 	listSkillModel *llm.Model,
@@ -72,7 +72,7 @@ func NewListSkillTool(
 //  3. query 非空 + listSkillModel 可用 → routeSkills 路由筛选（mode="filtered"）
 //  4. routeSkills 失败 → success=false, error=err.Error()
 //
-// 对应 Python: ListSkillTool.invoke(inputs, **kwargs)
+// Python: ListSkillTool.invoke(inputs, **kwargs)
 func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	query := ""
 	if v, ok := inputs["query"]; ok {
@@ -149,7 +149,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 
 // Stream ListSkillTool 不支持流式调用。
 //
-// 对应 Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
+// Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
 func (t *ListSkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.ID)
 }

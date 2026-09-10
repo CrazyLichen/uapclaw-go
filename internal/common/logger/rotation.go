@@ -12,13 +12,13 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RotationConfig 日志轮转配置。
-// 对应 Python: _LOG_FILE_MAX_BYTES + _LOG_FILE_BACKUP_COUNT
+// Python: _LOG_FILE_MAX_BYTES + _LOG_FILE_BACKUP_COUNT
 type RotationConfig struct {
 	// MaxSize 单文件最大字节数，默认 20MB。
-	// 对应 Python: _LOG_FILE_MAX_BYTES = 20 * 1024 * 1024
+	// Python: _LOG_FILE_MAX_BYTES = 20 * 1024 * 1024
 	MaxSize int
 	// MaxBackups 最大备份数，默认 20。
-	// 对应 Python: _LOG_FILE_BACKUP_COUNT = 20
+	// Python: _LOG_FILE_BACKUP_COUNT = 20
 	MaxBackups int
 	// MaxAge 最大保留天数，0 表示不按天数清理。
 	MaxAge int
@@ -39,10 +39,10 @@ type mutexWriter struct {
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultMaxSizeBytes 单文件最大字节数，20 MB。
-	// 对应 Python: _LOG_FILE_MAX_BYTES
+	// Python: _LOG_FILE_MAX_BYTES
 	defaultMaxSizeBytes = 20 * 1024 * 1024
 	// defaultMaxBackups 最大备份数。
-	// 对应 Python: _LOG_FILE_BACKUP_COUNT
+	// Python: _LOG_FILE_BACKUP_COUNT
 	defaultMaxBackups = 20
 )
 
@@ -62,7 +62,7 @@ func NewRotationConfig() RotationConfig {
 
 // NewRotatingWriter 创建轮转写入器。
 // 内部使用 lumberjack.Logger，在 Linux 上使用 rename 策略轮转（安全且高效）。
-// 对应 Python: SafeRotatingFileHandler
+// Python: SafeRotatingFileHandler
 func NewRotatingWriter(filePath string, cfg RotationConfig) *lumberjack.Logger {
 	maxSize := cfg.MaxSize
 	if maxSize <= 0 {

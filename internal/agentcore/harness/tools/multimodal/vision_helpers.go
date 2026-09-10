@@ -59,7 +59,7 @@ const logComponent = logger.ComponentAgentCore
 
 // BuildImageContent 构建图片内容块。
 //
-// 对齐 Python: _build_image_content(image_path_or_url)
+// Python: _build_image_content(image_path_or_url)
 // HTTP URL → image_url block；本地文件 → base64 → data:URI → image_url block；
 // sandbox 路径 → 返回错误
 func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
@@ -92,7 +92,7 @@ func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
 				"image path does not exist or is not a file: %s", imagePath)),
 		)
 	}
-	// 对齐 Python: Path.is_file() — 传入目录时返回明确错误
+	// Python: Path.is_file() — 传入目录时返回明确错误
 	if info.IsDir() {
 		return llmschema.ContentPart{}, exception.NewBaseError(
 			exception.StatusToolMultimodalVisionInvokeFailed,
@@ -136,7 +136,7 @@ func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
 
 // CallVisionModel 调用视觉模型，带指数退避重试。
 //
-// 对齐 Python: _call_vision_model(config, image_content, prompt)
+// Python: _call_vision_model(config, image_content, prompt)
 // 返回 (text, model, error)
 func CallVisionModel(
 	ctx context.Context,
@@ -225,7 +225,7 @@ func isHTTPURL(value string) bool {
 
 // extractResponseText 从 AssistantMessage 提取文本内容。
 //
-// 对齐 Python: _extract_response_text(response)
+// Python: _extract_response_text(response)
 // 支持纯文本和多模态 content parts
 func extractResponseText(msg *llmschema.AssistantMessage) string {
 	if msg == nil {
@@ -242,7 +242,7 @@ func extractResponseText(msg *llmschema.AssistantMessage) string {
 		if part.Type == "text" && part.Text != "" {
 			chunks = append(chunks, strings.TrimSpace(part.Text))
 		} else {
-			// 对齐 Python: getattr(item, "text", None)
+			// Python: getattr(item, "text", None)
 			if part.Text != "" {
 				chunks = append(chunks, strings.TrimSpace(part.Text))
 			}

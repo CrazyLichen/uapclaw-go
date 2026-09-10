@@ -16,7 +16,7 @@ import (
 // AesGcmCrypt AES-256-GCM 加密实现。
 //
 // 密文格式：hex(nonce) + hex(tag) + hex(ciphertext)，与 Python 完全兼容。
-// 对应 Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
+// Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
 type AesGcmCrypt struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -24,19 +24,19 @@ type AesGcmCrypt struct{}
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// NonceLength GCM nonce 长度（字节）。
-	// 对应 Python: NONCE_LENGTH = 12
+	// Python: NONCE_LENGTH = 12
 	NonceLength = 12
 
 	// KeyLength AES-256 密钥长度（字节）。
-	// 对应 Python: AES_KEY_LENGTH = 32
+	// Python: AES_KEY_LENGTH = 32
 	KeyLength = 32
 
 	// TagLength GCM 认证标签长度（字节）。
-	// 对应 Python: TAG_LENGTH = 16
+	// Python: TAG_LENGTH = 16
 	TagLength = 16
 
 	// AesGcmName 注册表中的 AES-GCM 算法名称。
-	// 对应 Python: CryptUtils.AES_GCM_CRYPT_NAME = "aes_gcm"
+	// Python: CryptUtils.AES_GCM_CRYPT_NAME = "aes_gcm"
 	AesGcmName = "aes_gcm"
 )
 

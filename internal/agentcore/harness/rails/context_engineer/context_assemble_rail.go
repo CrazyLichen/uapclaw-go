@@ -19,7 +19,7 @@ import (
 // 在 Init 中捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
 // 在 BeforeModelCall 中构建并注入 workspace/context/tools 节到系统提示词构建器。
 //
-// 对齐 Python: ContextAssembleRail (openjiuwen/harness/rails/context_engineer/context_assemble_rail.py)
+// Python: ContextAssembleRail (openjiuwen/harness/rails/context_engineer/context_assemble_rail.py)
 type ContextAssembleRail struct {
 	rails.DeepAgentRail
 	// systemPromptBuilder 系统提示词构建器引用
@@ -34,7 +34,7 @@ type ContextAssembleRail struct {
 
 const (
 	// contextAssembleRailPriority ContextAssembleRail 优先级
-	// 对齐 Python: ContextAssembleRail.priority = 85
+	// Python: ContextAssembleRail.priority = 85
 	contextAssembleRailPriority = 85
 )
 
@@ -46,7 +46,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewContextAssembleRail 创建 ContextAssembleRail 实例。
 //
-// 对齐 Python: ContextAssembleRail()
+// Python: ContextAssembleRail()
 func NewContextAssembleRail() *ContextAssembleRail {
 	r := &ContextAssembleRail{}
 	r.WithPriority(contextAssembleRailPriority)
@@ -55,12 +55,12 @@ func NewContextAssembleRail() *ContextAssembleRail {
 
 // Init Rail 初始化钩子：捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
 //
-// 对齐 Python: ContextAssembleRail.init(agent)
-func (r *ContextAssembleRail) Init(agent sainterfaces.BaseAgent) error {
+// Python: ContextAssembleRail.init(agent)
+func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	r.abilityManager = agent.AbilityManager()
 
-	// 对齐 Python: DeepAgentRail.set_sys_operation / set_workspace
+	// Python: DeepAgentRail.set_sys_operation / set_workspace
 	// 同 HeartbeatRail 模式：类型断言到 DeepAgentInterface
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if ok && deepAgent.DeepConfig() != nil {
@@ -81,7 +81,7 @@ func (r *ContextAssembleRail) Init(agent sainterfaces.BaseAgent) error {
 
 // Uninit Rail 注销钩子：移除 workspace、context 节。
 //
-// 对齐 Python: ContextAssembleRail.uninit(agent)
+// Python: ContextAssembleRail.uninit(agent)
 func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionWorkspace)
@@ -98,7 +98,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 
 // BeforeModelCall LLM 调用前：注入工作空间目录结构和上下文文件到系统提示词。
 //
-// 对齐 Python: ContextAssembleRail.before_model_call(ctx)
+// Python: ContextAssembleRail.before_model_call(ctx)
 func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
@@ -114,7 +114,7 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 	lang := r.systemPromptBuilder.Language()
 
 	// 构建工作空间节
-	// 对齐 Python: workspace_section = await _build_workspace(self.sys_operation, workspace, lang)
+	// Python: workspace_section = await _build_workspace(self.sys_operation, workspace, lang)
 	// Go 的 BuildWorkspaceSection 是同步的，需要先获取目录树
 	rootPath := ws.RootPath
 	dirTree := ""
@@ -125,7 +125,7 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 	workspaceSection := sections.BuildWorkspaceSection(rootPath, dirTree, lang)
 
 	// 构建工具节
-	// 对齐 Python: tools_section = build_tools_section(self._ability_manager, lang)
+	// Python: tools_section = build_tools_section(self._ability_manager, lang)
 	// Python 遍历 ability_manager.list() 获取 ToolCard 的 name/description
 	var toolsSection *saprompt.PromptSection
 	if r.abilityManager != nil {
@@ -149,8 +149,8 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 	}
 
 	// 构建上下文节
-	// 对齐 Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
-	// 对齐 Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
+	// Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
+	// Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
 	isHeartbeat := false
 	if cbc != nil && cbc.Extra() != nil {
 		if runKind, ok := cbc.Extra()["run_kind"].(string); ok {

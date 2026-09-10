@@ -38,7 +38,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // bash 文件操作命令集
-// 对齐 Python: _FILE_OP_COMMANDS (bash/_permission.py L43-46)
+// Python: _FILE_OP_COMMANDS (bash/_permission.py L43-46)
 
 var bashFileOpCommands = map[string]bool{
 	"mkdir": true, "touch": true, "rm": true, "rmdir": true, "mv": true, "cp": true,
@@ -46,7 +46,7 @@ var bashFileOpCommands = map[string]bool{
 }
 
 // bash 已知安全命令集
-// 对齐 Python: _KNOWN_SAFE_COMMANDS (bash/_permission.py L49-75)
+// Python: _KNOWN_SAFE_COMMANDS (bash/_permission.py L49-75)
 var bashKnownSafeCommands = map[string]bool{
 	// 搜索命令
 	"find": true, "grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true, "ack": true,
@@ -76,7 +76,7 @@ var bashKnownSafeCommands = map[string]bool{
 }
 
 // powershell 文件操作命令集
-// 对齐 Python: _FILE_OP_COMMANDS (powershell/_permission.py L34-39)
+// Python: _FILE_OP_COMMANDS (powershell/_permission.py L34-39)
 var psFileOpCommands = map[string]bool{
 	"new-item": true, "ni": true, "remove-item": true, "ri": true, "rm": true,
 	"move-item": true, "mi": true, "mv": true, "copy-item": true, "cp": true, "cpi": true,
@@ -85,7 +85,7 @@ var psFileOpCommands = map[string]bool{
 }
 
 // powershell 已知安全命令集
-// 对齐 Python: _KNOWN_SAFE_COMMANDS (powershell/_permission.py L41-56)
+// Python: _KNOWN_SAFE_COMMANDS (powershell/_permission.py L41-56)
 var psKnownSafeCommands = map[string]bool{
 	"get-childitem": true, "gci": true, "dir": true, "ls": true,
 	"get-content": true, "gc": true, "type": true, "get-item": true, "gi": true, "test-path": true, "resolve-path": true, "get-filehash": true,
@@ -115,7 +115,7 @@ func NewPermissionConfig(mode PermissionMode, denyPatterns, allowPatterns []stri
 }
 
 // CheckPermission 5层权限检查管道。
-// 对齐 Python: check_permission (bash/_permission.py L94-155)
+// Python: check_permission (bash/_permission.py L94-155)
 // 第一层: BYPASS → 直接放行
 // 第二层: denyPatterns → 任一 segment 命中任一 pattern → 拒绝
 // 第三层: allowPatterns → 任一 pattern 命中整个命令 → 放行
@@ -185,13 +185,13 @@ func CheckPermission(command string, config PermissionConfig, isPowerShell bool)
 }
 
 // IsReadOnlyCommand 判断命令是否为只读命令
-// 对齐 Python: is_read_only (bash/_semantics.py L118-130 / powershell/_semantics.py L158-170)
+// Python: is_read_only (bash/_semantics.py L118-130 / powershell/_semantics.py L158-170)
 func IsReadOnlyCommand(command string, isPowerShell bool) bool {
 	return isReadOnly(command, isPowerShell)
 }
 
 // SplitPipeline 拆分管道命令
-// 对齐 Python: _split_pipeline (bash/_semantics.py L76-79 / powershell/_semantics.py L76-124)
+// Python: _split_pipeline (bash/_semantics.py L76-79 / powershell/_semantics.py L76-124)
 func SplitPipeline(command string, isPowerShell bool) []string {
 	if isPowerShell {
 		return splitPSPipeline(command)
@@ -200,7 +200,7 @@ func SplitPipeline(command string, isPowerShell bool) []string {
 }
 
 // CompilePatterns 将字符串列表编译为正则表达式列表
-// 对齐 Python: PermissionConfig.compile_patterns (bash/_permission.py L86-91)
+// Python: PermissionConfig.compile_patterns (bash/_permission.py L86-91)
 func CompilePatterns(raw []string) []*regexp.Regexp {
 	if len(raw) == 0 {
 		return nil
@@ -219,7 +219,7 @@ func CompilePatterns(raw []string) []*regexp.Regexp {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // splitBashPipeline 拆分 bash 管道命令
-// 对齐 Python: _split_pipeline (bash/_semantics.py L76-79)
+// Python: _split_pipeline (bash/_semantics.py L76-79)
 func splitBashPipeline(command string) []string {
 	operatorRe := regexp.MustCompile(`\s*(?:\|\||&&|[;|])\s*`)
 	parts := operatorRe.Split(command, -1)
@@ -234,13 +234,13 @@ func splitBashPipeline(command string) []string {
 }
 
 // splitPSPipeline 拆分 PowerShell 管道命令
-// 对齐 Python: _split_pipeline (powershell/_semantics.py L76-124)
+// Python: _split_pipeline (powershell/_semantics.py L76-124)
 func splitPSPipeline(command string) []string {
 	return splitPSPipelineImpl(command)
 }
 
 // psOperatorLengthAt 返回指定位置的操作符长度
-// 对齐 Python: _operator_length_at (powershell/_semantics.py L127-135)
+// Python: _operator_length_at (powershell/_semantics.py L127-135)
 func psOperatorLengthAt(command string, index int) int {
 	char := command[index]
 	nextChar := byte(0)
@@ -308,7 +308,7 @@ func splitPSPipelineImpl(command string) []string {
 }
 
 // extractBaseCommand 提取命令段的基础命令名
-// 对齐 Python: _extract_base_command (bash/_semantics.py L82-97 / powershell/_semantics.py L138-152)
+// Python: _extract_base_command (bash/_semantics.py L82-97 / powershell/_semantics.py L138-152)
 func extractBaseCommand(segment string, isPowerShell bool) string {
 	if isPowerShell {
 		return extractPSBaseCommand(segment)
@@ -317,7 +317,7 @@ func extractBaseCommand(segment string, isPowerShell bool) string {
 }
 
 // extractBashBaseCommand 提取 bash 命令段的基础命令名
-// 对齐 Python: _extract_base_command (bash/_semantics.py L82-97)
+// Python: _extract_base_command (bash/_semantics.py L82-97)
 func extractBashBaseCommand(segment string) string {
 	tokens := strings.Fields(segment)
 	for _, token := range tokens {
@@ -342,7 +342,7 @@ func extractBashBaseCommand(segment string) string {
 }
 
 // extractPSBaseCommand 提取 PowerShell 命令段的基础命令名
-// 对齐 Python: _extract_base_command (powershell/_semantics.py L138-152)
+// Python: _extract_base_command (powershell/_semantics.py L138-152)
 func extractPSBaseCommand(segment string) string {
 	tokens := strings.Fields(segment)
 	for _, token := range tokens {

@@ -21,7 +21,7 @@ import (
 
 // ParseResponse 将 OpenAI ChatCompletionResponse 转换为 schema.AssistantMessage。
 //
-// 对应 Python: OpenAIModelClient._parse_response()
+// Python: OpenAIModelClient._parse_response()
 //
 // 处理逻辑：
 //  1. 提取 choices[0].message → content, reasoning_content, tool_calls
@@ -82,7 +82,7 @@ func ParseResponse(
 	// 应用 output_parser
 	var parserContent any
 
-	// 对齐 Python: 解析内容前记录（Python 使用 llm_logger.info，非回调）
+	// Python: 解析内容前记录（Python 使用 llm_logger.info，非回调）
 	modelName := ""
 	if modelConfig != nil {
 		modelName = modelConfig.ModelName
@@ -103,14 +103,14 @@ func ParseResponse(
 		parsed, err := parser.Parse(content)
 		if err == nil && parsed != nil {
 			parserContent = parsed
-			// 对齐 Python: 解析成功记录（Python 使用 llm_logger.info，非回调）
+			// Python: 解析成功记录（Python 使用 llm_logger.info，非回调）
 			logger.Info(logComponent).
 				Str("model_name", modelName).
 				Str("event_type", "llm_call_end").
 				Any("parser_content", parserContent).
 				Msg("Parser parse success.")
 		} else if err != nil {
-			// 对齐 Python: 解析错误记录（Python 使用 llm_logger.warning，非回调）
+			// Python: 解析错误记录（Python 使用 llm_logger.warning，非回调）
 			logger.Error(logComponent).
 				Str("model_name", modelName).
 				Str("event_type", "llm_call_error").
@@ -195,7 +195,7 @@ func extractCostFromUsage(usage *ResponseUsage) (inputCost, outputCost, totalCos
 
 // normalizeLogprobs 将 provider 的 logprobs 对象转为可 JSON 序列化的形式。
 //
-// 对应 Python: OpenAIModelClient._normalize_logprobs()
+// Python: OpenAIModelClient._normalize_logprobs()
 func normalizeLogprobs(logprobs any) any {
 	if logprobs == nil {
 		return nil

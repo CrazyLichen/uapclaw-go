@@ -1,7 +1,7 @@
 // 集中导入所有内置 model_client 子包，触发 init() 注册到 ClientRegistry。
 //
 // 使用方只需 import llm 包，即可通过 InitModel 使用所有已注册的 provider。
-// 对应 Python: _builtin_model_client() 中局部 import 触发 __init_subclass__ 注册。
+// Python: _builtin_model_client() 中局部 import 触发 __init_subclass__ 注册。
 //
 // 2.14/2.15 回填点：blank import 各 model_client 包触发 init() 注册。
 //

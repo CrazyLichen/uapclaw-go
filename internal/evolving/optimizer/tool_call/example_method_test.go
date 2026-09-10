@@ -21,7 +21,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // testExampleConfig 创建测试用配置。
-// 对齐 Python: _config()
+// Python: _config()
 func testExampleConfig() map[string]any {
 	return map[string]any{
 		"gen_model_id":       "gpt-gen",
@@ -36,7 +36,7 @@ func testExampleConfig() map[string]any {
 }
 
 // testExampleTool 创建测试用工具。
-// 对齐 Python: _tool()
+// Python: _tool()
 func testExampleTool() map[string]any {
 	return map[string]any{
 		"name":        "search",
@@ -45,7 +45,7 @@ func testExampleTool() map[string]any {
 }
 
 // TestGetOriginalDescription_ToolBench格式 测试 ToolBench 格式描述提取。
-// 对齐 Python: test_get_original_description - toolbench 格式
+// Python: test_get_original_description - toolbench 格式
 func TestGetOriginalDescription_ToolBench格式(t *testing.T) {
 	m := &APICallToExampleMethod{}
 	result := m.GetOriginalDescription(testExampleTool())
@@ -55,7 +55,7 @@ func TestGetOriginalDescription_ToolBench格式(t *testing.T) {
 }
 
 // TestGetOriginalDescription_普通描述 测试普通描述直接返回。
-// 对齐 Python: test_get_original_description - plain 格式
+// Python: test_get_original_description - plain 格式
 func TestGetOriginalDescription_普通描述(t *testing.T) {
 	m := &APICallToExampleMethod{}
 	tool := map[string]any{"name": "x", "description": "plain"}
@@ -146,7 +146,7 @@ func TestAPICallToExampleMethod_GetExamples(t *testing.T) {
 }
 
 // TestGenerateAPICallFromDescription_Mock 测试 API 调用生成。
-// 对齐 Python: test_generate_api_call_from_description
+// Python: test_generate_api_call_from_description
 func TestGenerateAPICallFromDescription_Mock(t *testing.T) {
 	config := testExampleConfig()
 	method := NewAPICallToExampleMethod(config, (*llm.Model)(nil), nil, nil, nil, nil)
@@ -232,7 +232,7 @@ func TestGenerateAPICallFromDescription_有前驱输出(t *testing.T) {
 }
 
 // TestGenerateAPICallFromDescription_函数名不匹配 测试验证错误。
-// 对齐 Python: test_generate_api_call_from_description_validation_error
+// Python: test_generate_api_call_from_description_validation_error
 func TestGenerateAPICallFromDescription_函数名不匹配(t *testing.T) {
 	config := testExampleConfig()
 	method := NewAPICallToExampleMethod(config, (*llm.Model)(nil), nil, nil, nil, nil)
@@ -361,7 +361,7 @@ func TestCritiqueAPICall_长响应截断(t *testing.T) {
 }
 
 // TestGenerateInstructionFromAPICall_Mock 测试指令生成。
-// 对齐 Python: test_critique_and_instruction_and_batch_methods
+// Python: test_critique_and_instruction_and_batch_methods
 func TestGenerateInstructionFromAPICall_Mock(t *testing.T) {
 	config := testExampleConfig()
 	method := NewAPICallToExampleMethod(config, (*llm.Model)(nil), nil, nil, nil, nil)
@@ -437,7 +437,7 @@ func TestGenerateInstructionFromAPICall_有前驱输出(t *testing.T) {
 }
 
 // TestCritiqueInstruction_Mock 测试指令批判。
-// 对齐 Python: test_critique_and_instruction_and_batch_methods
+// Python: test_critique_and_instruction_and_batch_methods
 func TestCritiqueInstruction_Mock(t *testing.T) {
 	config := testExampleConfig()
 	method := NewAPICallToExampleMethod(config, (*llm.Model)(nil), nil, nil, nil, nil)
@@ -485,7 +485,7 @@ func TestCritiqueInstruction_Mock(t *testing.T) {
 }
 
 // TestBatchReflectionWithScores_Mock 测试批量反思。
-// 对齐 Python: test_critique_and_instruction_and_batch_methods
+// Python: test_critique_and_instruction_and_batch_methods
 func TestBatchReflectionWithScores_Mock(t *testing.T) {
 	config := testExampleConfig()
 	method := NewAPICallToExampleMethod(config, (*llm.Model)(nil), nil, nil, nil, nil)
@@ -648,7 +648,7 @@ func TestToJSON(t *testing.T) {
 func TestStep_通过MockRits(t *testing.T) {
 	config := testExampleConfig()
 
-	// 对齐 Python: api_call_fn=lambda tool, fn_call: ('{"response":"ok"}', 0)
+	// Python: api_call_fn=lambda tool, fn_call: ('{"response":"ok"}', 0)
 	callAPIFn := func(tool map[string]any, toolInput map[string]any) (string, int) {
 		return `{"response": "ok"}`, 0
 	}

@@ -23,7 +23,7 @@ import (
 // 不依赖 dashscope-go SDK，自行实现 DashScope 原生 API 的 HTTP 调用
 // （与 OpenAI 客户端不依赖 openai-go SDK 的设计一致）。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py (DashScopeModelClient)
+// Python: openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py (DashScopeModelClient)
 type DashScopeModelClient struct {
 	openai.OpenAIModelClient
 }
@@ -44,7 +44,7 @@ const logComponent = logger.ComponentAgentCore
 // 构造流程与 OpenAI 客户端一致，仅覆盖 clientName 为 "DashScope client"。
 // 使用 NewOpenAIModelClient 构造嵌入实例，确保 baseHeaders 等私有字段正确初始化。
 //
-// 对应 Python: DashScopeModelClient.__init__(model_config, model_client_config)
+// Python: DashScopeModelClient.__init__(model_config, model_client_config)
 func NewDashScopeModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
@@ -79,7 +79,7 @@ func NewDashScopeModelClient(
 //   - content 中 text_count ≥ 1
 //   - content 中 image_count ≤ 3
 //
-// 对应 Python: DashScopeModelClient.generate_image()
+// Python: DashScopeModelClient.generate_image()
 func (c *DashScopeModelClient) GenerateImage(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
@@ -169,7 +169,7 @@ func (c *DashScopeModelClient) GenerateImage(
 //   - 恰好 1 条 UserMessage
 //   - content 非空
 //
-// 对应 Python: DashScopeModelClient.generate_speech()
+// Python: DashScopeModelClient.generate_speech()
 func (c *DashScopeModelClient) GenerateSpeech(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
@@ -281,7 +281,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 //   - content 非空
 //   - ImgURL 存在时为图生视频 (i2v)，否则为文生视频 (t2v)
 //
-// 对应 Python: DashScopeModelClient.generate_video()
+// Python: DashScopeModelClient.generate_video()
 func (c *DashScopeModelClient) GenerateVideo(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
@@ -412,7 +412,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 		return nil, err
 	}
 
-	// 对齐 Python: 成功日志记录 video_url 前 100 字符
+	// Python: 成功日志记录 video_url 前 100 字符
 	videoURLSummary := videoURL
 	if len(videoURLSummary) > 100 {
 		videoURLSummary = videoURLSummary[:100] + "..."

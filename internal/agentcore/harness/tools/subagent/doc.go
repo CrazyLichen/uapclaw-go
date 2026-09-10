@@ -1,9 +1,9 @@
 // Package subagent 提供子代理会话工具集，包含异步子任务派生（SessionsSpawnTool）、
 // 任务状态跟踪（SessionToolkit）和任务列表/取消操作。
 // 工具通过 interfaces.DeepAgentInterface 访问 LoopController 获取 TaskManager/TaskScheduler，
-// 对齐 Python: loop_controller.task_manager / loop_controller.task_scheduler。
+// Python: loop_controller.task_manager / loop_controller.task_scheduler。
 //
-// 对齐 Python: openjiuwen/harness/tools/subagent/
+// Python: openjiuwen/harness/tools/subagent/
 //
 // 文件目录：
 //

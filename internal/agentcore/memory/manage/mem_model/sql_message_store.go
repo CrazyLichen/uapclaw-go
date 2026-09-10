@@ -22,7 +22,7 @@ import (
 //
 // 基于 SqlDbStore 执行数据库操作，使用 AesStorageCodec 加密消息内容。
 // 容错模式：key 为空时 passthrough 不加密，key 非空时加解密失败返回原文（对齐 Python 行为）。
-// 对应 Python: openjiuwen/core/memory/manage/mem_model/sql_message_store.py (SqlMessageStore)
+// Python: openjiuwen/core/memory/manage/mem_model/sql_message_store.py (SqlMessageStore)
 type SqlMessageStore struct {
 	// codec 存储编解码器（接口类型，支持注入 mock 或其他实现）
 	codec index.StorageCodec
@@ -49,7 +49,7 @@ const (
 // NewSqlMessageStore 创建 SqlMessageStore 实例。
 // cryptoKey 为空时 passthrough 模式，非空时必须为 32 字节。
 //
-// 对应 Python: SqlMessageStore.__init__(crypto_key, sql_db_store, table_name)
+// Python: SqlMessageStore.__init__(crypto_key, sql_db_store, table_name)
 func NewSqlMessageStore(cryptoKey []byte, sqlDbStore *SqlDbStore, tableName string) (*SqlMessageStore, error) {
 	if tableName == "" {
 		tableName = DefaultTableName
@@ -72,7 +72,7 @@ func NewSqlMessageStore(cryptoKey []byte, sqlDbStore *SqlDbStore, tableName stri
 
 // AddMessage 添加单条消息，返回 message_id。
 //
-// 对应 Python: SqlMessageStore.add_message(message_add)
+// Python: SqlMessageStore.add_message(message_add)
 func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.MessageAdd) (string, error) {
 	message := messageAdd.Message
 	timestamp := messageAdd.Timestamp
@@ -115,7 +115,7 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 // Go 方式更优（原子性更好、性能更高）：要么全写入要么全不写。
 // Python 逐条方式可能导致部分成功部分失败，Go 不存在此问题。
 //
-// 对应 Python: SqlMessageStore.add_messages(message_adds)
+// Python: SqlMessageStore.add_messages(message_adds)
 func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*storedb.MessageAdd) ([]string, error) {
 	messageIDs := make([]string, 0, len(messageAdds))
 	rows := make([]map[string]any, 0, len(messageAdds))
@@ -161,7 +161,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 
 // GetMessageByID 按 ID 获取消息，不存在时返回错误。
 //
-// 对应 Python: SqlMessageStore.get_message_by_id(message_id)
+// Python: SqlMessageStore.get_message_by_id(message_id)
 func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) (schema.BaseMessage, *storedb.MessageMetadata, error) {
 	results, err := s.sqlDbStore.ConditionGet(ctx, s.tableName,
 		map[string]any{"message_id": []string{messageID}}, nil)
@@ -181,7 +181,7 @@ func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) 
 // GetMessages 按条件过滤查询消息。
 // 实现 StartTime/EndTime 范围查询（Python 定义了但未实现）。
 //
-// 对应 Python: SqlMessageStore.get_messages(message_filter, limit, order_by, order_direction)
+// Python: SqlMessageStore.get_messages(message_filter, limit, order_by, order_direction)
 func (s *SqlMessageStore) GetMessages(ctx context.Context, filter *storedb.MessageFilter, limit int, orderBy string, orderDirection string) ([]*storedb.MessageAndMeta, error) {
 	if limit <= 0 {
 		limit = storedb.DefaultMessageLimit
@@ -241,7 +241,7 @@ func (s *SqlMessageStore) GetMessages(ctx context.Context, filter *storedb.Messa
 
 // UpdateMessage 更新消息内容。
 //
-// 对应 Python: SqlMessageStore.update_message(message_id, content)
+// Python: SqlMessageStore.update_message(message_id, content)
 func (s *SqlMessageStore) UpdateMessage(ctx context.Context, messageID string, content schema.MessageContent) error {
 	contentStr, err := marshalContent(content)
 	if err != nil {
@@ -258,7 +258,7 @@ func (s *SqlMessageStore) UpdateMessage(ctx context.Context, messageID string, c
 
 // DeleteMessageByID 按 ID 删除单条消息。
 //
-// 对应 Python: SqlMessageStore.delete_message_by_id(message_id)
+// Python: SqlMessageStore.delete_message_by_id(message_id)
 func (s *SqlMessageStore) DeleteMessageByID(ctx context.Context, messageID string) error {
 	return s.sqlDbStore.Delete(ctx, s.tableName,
 		map[string]any{"message_id": messageID})
@@ -266,7 +266,7 @@ func (s *SqlMessageStore) DeleteMessageByID(ctx context.Context, messageID strin
 
 // DeleteMessages 按条件删除消息，返回删除数量。
 //
-// 对应 Python: SqlMessageStore.delete_messages(message_filter)
+// Python: SqlMessageStore.delete_messages(message_filter)
 func (s *SqlMessageStore) DeleteMessages(ctx context.Context, filter *storedb.MessageFilter) (int64, error) {
 	// 先获取数量
 	count, err := s.CountMessages(ctx, filter)
@@ -301,7 +301,7 @@ func (s *SqlMessageStore) DeleteMessages(ctx context.Context, filter *storedb.Me
 // CountMessages 统计匹配消息数量。
 // 修正 Python 缺陷：支持 StartTime/EndTime 时间范围过滤（Python 定义了但未实现）。
 //
-// 对应 Python: SqlMessageStore.count_messages(message_filter)
+// Python: SqlMessageStore.count_messages(message_filter)
 func (s *SqlMessageStore) CountMessages(ctx context.Context, filter *storedb.MessageFilter) (int64, error) {
 	conditions := map[string]any{}
 	if filter.UserID != "" {
@@ -330,7 +330,7 @@ func (s *SqlMessageStore) CountMessages(ctx context.Context, filter *storedb.Mes
 // 返回 -1 表示版本未设置（对齐 Python 返回 None 的语义），
 // 0 表示无迁移操作，1+ 表示实际版本号。
 //
-// 对应 Python: SqlMessageStore.get_schema_version() -> int | None
+// Python: SqlMessageStore.get_schema_version() -> int | None
 func (s *SqlMessageStore) GetSchemaVersion(ctx context.Context) (int32, error) {
 	results, err := s.metaMgr.GetByTableName(ctx, s.tableName)
 	if err != nil {
@@ -351,7 +351,7 @@ func (s *SqlMessageStore) GetSchemaVersion(ctx context.Context) (int32, error) {
 // SetSchemaVersion 设置 schema 版本号。
 // 先删除旧版本记录再插入新版本（upsert 语义），避免 UNIQUE 约束冲突。
 //
-// 对应 Python: SqlMessageStore.set_schema_version(version)
+// Python: SqlMessageStore.set_schema_version(version)
 func (s *SqlMessageStore) SetSchemaVersion(ctx context.Context, version int32) error {
 	// 先删除旧版本记录，再插入新版本（对齐 Python 的 upsert 行为）
 	_ = s.metaMgr.DeleteByTableName(ctx, s.tableName)
@@ -363,7 +363,7 @@ func (s *SqlMessageStore) SetSchemaVersion(ctx context.Context, version int32) e
 // generateMessageID 基于 content + timestamp 生成消息 ID。
 // 格式: msg_{sha256(content_json+timestamp)[:16]}_{timestamp_ms}
 //
-// 对应 Python: SqlMessageStore._generate_message_id(message, timestamp)
+// Python: SqlMessageStore._generate_message_id(message, timestamp)
 // 时间格式使用 "2006-01-02 15:04:05-07:00" 与 Python 的 timestamp.__str__() 对齐，
 // 确保相同数据在 Go/Python 生成相同的 message_id。
 func generateMessageID(content string, timestamp time.Time) string {

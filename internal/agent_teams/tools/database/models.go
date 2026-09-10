@@ -3,7 +3,7 @@ package database
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Team 团队信息模型。
-// 对齐 Python: Team (openjiuwen/agent_teams/tools/models.py)
+// Python: Team (openjiuwen/agent_teams/tools/models.py)
 // 静态表 team_info 的行模型。
 type Team struct {
 	// TeamName 团队名称（主键）
@@ -26,7 +26,7 @@ type Team struct {
 func (Team) TableName() string { return "team_info" }
 
 // TeamMember 团队成员模型。
-// 对齐 Python: TeamMember (openjiuwen/agent_teams/tools/models.py)
+// Python: TeamMember (openjiuwen/agent_teams/tools/models.py)
 // 静态表 team_member 的行模型，复合主键 (member_name, team_name)。
 type TeamMember struct {
 	// MemberName 成员名称（主键）
@@ -59,7 +59,7 @@ type TeamMember struct {
 func (TeamMember) TableName() string { return "team_member" }
 
 // TeamTaskBase 任务行模型。
-// 对齐 Python: TeamTaskBase (openjiuwen/agent_teams/tools/database/task_dao.py)
+// Python: TeamTaskBase (openjiuwen/agent_teams/tools/database/task_dao.py)
 // 动态表 team_task_<session_suffix> 的行模型。
 type TeamTaskBase struct {
 	// TaskID 任务唯一标识
@@ -79,7 +79,7 @@ type TeamTaskBase struct {
 }
 
 // TeamTaskDependencyBase 依赖边模型。
-// 对齐 Python: TeamTaskDependencyBase (openjiuwen/agent_teams/tools/database/task_dao.py)
+// Python: TeamTaskDependencyBase (openjiuwen/agent_teams/tools/database/task_dao.py)
 // 动态表 team_task_dependency_<session_suffix> 的行模型。
 type TeamTaskDependencyBase struct {
 	// TaskID 下游任务ID（被阻塞的任务）
@@ -93,7 +93,7 @@ type TeamTaskDependencyBase struct {
 }
 
 // NewTaskSpec 图变更管线中待插入的新任务规范。
-// 对齐 Python: NewTaskSpec (openjiuwen/agent_teams/tools/database/task_dao.py)
+// Python: NewTaskSpec (openjiuwen/agent_teams/tools/database/task_dao.py)
 type NewTaskSpec struct {
 	// TaskID 任务唯一标识
 	TaskID string
@@ -107,7 +107,7 @@ type NewTaskSpec struct {
 
 // EdgeSpec 依赖边规范（管线输入）。
 // 方向语义：TaskID 依赖 DependsOnID（TaskID 被 DependsOnID 阻塞）。
-// 对齐 Python 的 (task_id, depends_on_task_id) 边方向。
+// Python: 的 (task_id, depends_on_task_id) 边方向。
 type EdgeSpec struct {
 	// TaskID 下游任务ID（被阻塞的任务）
 	TaskID string
@@ -116,7 +116,7 @@ type EdgeSpec struct {
 }
 
 // TeamMessageBase 消息行模型。
-// 对齐 Python: TeamMessageBase (openjiuwen/agent_teams/tools/models.py)
+// Python: TeamMessageBase (openjiuwen/agent_teams/tools/models.py)
 // 动态表 team_message_<session_suffix> 的行模型。
 type TeamMessageBase struct {
 	// MessageID 消息唯一标识（主键）
@@ -134,14 +134,14 @@ type TeamMessageBase struct {
 	// Broadcast 是否广播消息
 	Broadcast bool `json:"broadcast" gorm:"column:broadcast"`
 	// IsRead 直发消息的已读标记。广播消息为 nil（广播已读状态由 MessageReadStatusBase 管理）。
-	// 对齐 Python: is_read = None if broadcast else is_read
+	// Python: is_read = None if broadcast else is_read
 	// nil = 广播消息（不参与直发已读判定）
 	// *false = 直发未读, *true = 直发已读
 	IsRead *bool `json:"is_read" gorm:"column:is_read"`
 }
 
 // MessageReadStatusBase 广播已读水位模型。
-// 对齐 Python: MessageReadStatusBase (openjiuwen/agent_teams/tools/models.py)
+// Python: MessageReadStatusBase (openjiuwen/agent_teams/tools/models.py)
 // 动态表 message_read_status_<session_suffix> 的行模型。
 // 每个 member 每个团队一条记录，存储已读的最新广播消息的 timestamp。
 type MessageReadStatusBase struct {
@@ -154,7 +154,7 @@ type MessageReadStatusBase struct {
 }
 
 // GraphMutationResult 图变更操作结果。
-// 对齐 Python: GraphMutationResult (openjiuwen/agent_teams/tools/database/task_dao.py)
+// Python: GraphMutationResult (openjiuwen/agent_teams/tools/database/task_dao.py)
 type GraphMutationResult struct {
 	// Ok 操作是否成功
 	Ok bool
@@ -165,7 +165,7 @@ type GraphMutationResult struct {
 }
 
 // CancelAllTasksResult 批量取消任务的返回结果。
-// 对齐 Python: cancel_all_tasks() → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
+// Python: cancel_all_tasks() → {"cancelled_tasks": [...], "unblocked_tasks": [...]}
 type CancelAllTasksResult struct {
 	// Cancelled 被取消的任务列表
 	Cancelled []*TeamTaskBase
@@ -181,7 +181,7 @@ type CancelAllTasksResult struct {
 
 var (
 	// TeamDynamicTablePrefixes 动态表名前缀（用于识别和清理）。
-	// 对齐 Python: TEAM_DYNAMIC_TABLE_PREFIXES
+	// Python: TEAM_DYNAMIC_TABLE_PREFIXES
 	TeamDynamicTablePrefixes = [...]string{
 		"team_task_dependency_",
 		"team_task_",
@@ -189,7 +189,7 @@ var (
 		"message_read_status_",
 	}
 	// TeamStaticTablesToClear 需要清空的静态表名。
-	// 对齐 Python: TEAM_STATIC_TABLES_TO_CLEAR
+	// Python: TEAM_STATIC_TABLES_TO_CLEAR
 	TeamStaticTablesToClear = [...]string{
 		"team_info",
 		"team_member",

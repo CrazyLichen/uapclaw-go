@@ -32,7 +32,7 @@ import (
 // 因为 properties 中的每个参数可带 location 扩展属性（path/query/header/body/form），
 // 这在 Go 的 []*Param 结构化列表中无法表达。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApiCard)
+// Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApiCard)
 type RestfulApiCard struct {
 	tool.ToolCard
 	// URL RESTful API 路径，如 /api/v1/users 或 https://api.example.com/users/{id}
@@ -56,7 +56,7 @@ type RestfulApiCard struct {
 
 // RestfulApi HTTP REST 工具，将参数映射到 HTTP 请求的各位置并发送请求。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApi)
+// Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApi)
 type RestfulApi struct {
 	card           *RestfulApiCard
 	apiParamMapper *APIParamMapper
@@ -126,7 +126,7 @@ func WithRestfulApiCardMaxResponseByteSize(size int) RestfulApiCardOption {
 //   - URL 有效性校验（简化版，SSRF 防护 ⤵️ 预留回填点）
 //   - URL 中的 {param} 路径占位符必须在 InputSchema 中有 location:path 定义
 //
-// 对应 Python: RestfulApiCard(url=..., method=..., ...)
+// Python: RestfulApiCard(url=..., method=..., ...)
 func NewRestfulApiCard(
 	name, description, apiURL, method string,
 	inputSchema map[string]any,
@@ -188,7 +188,7 @@ func (c *RestfulApiCard) ToolInfo() schema.ToolInfoInterface {
 
 // NewRestfulApi 创建 RestfulApi 工具实例。
 //
-// 对应 Python: RestfulApi(card)
+// Python: RestfulApi(card)
 func NewRestfulApi(card *RestfulApiCard) (*RestfulApi, error) {
 	if err := tool.ValidateToolCard(&card.ToolCard); err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (r *RestfulApi) Card() *tool.ToolCard {
 //  6. ParserRegistry 解析响应
 //  7. 返回 {code, data, url, headers, reason, message} 结构
 //
-// 对应 Python: RestfulApi.invoke()
+// Python: RestfulApi.invoke()
 func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	callOpts := tool.NewToolCallOptions(opts...)
 
@@ -263,14 +263,14 @@ func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...
 
 // Stream RestfulApi 不支持流式调用，返回 ErrStreamNotSupported。
 //
-// 对应 Python: RestfulApi.stream() → raise TOOL_STREAM_NOT_SUPPORTED
+// Python: RestfulApi.stream() → raise TOOL_STREAM_NOT_SUPPORTED
 func (r *RestfulApi) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(r.card.String())
 }
 
 // GetParametersByLocation 按 location 分组展示参数，供 GUI 使用。
 //
-// 对应 Python: RestfulApi.get_parameters_by_location()
+// Python: RestfulApi.get_parameters_by_location()
 func GetParametersByLocation(card *RestfulApiCard) map[string][]map[string]any {
 	result := map[string][]map[string]any{
 		"path":   {},
@@ -327,7 +327,7 @@ func GetParametersByLocation(card *RestfulApiCard) map[string][]map[string]any {
 
 // doRequest 构建并发送 HTTP 请求。
 //
-// 对应 Python: RestfulApi._async_request()
+// Python: RestfulApi._async_request()
 func (r *RestfulApi) doRequest(
 	ctx context.Context,
 	mapResults map[APIParamLocation]map[string]any,
@@ -517,7 +517,7 @@ func (r *RestfulApi) doRequest(
 
 // formatResponse 格式化 HTTP 响应。
 //
-// 对应 Python: RestfulApi._format_response()
+// Python: RestfulApi._format_response()
 func (r *RestfulApi) formatResponse(resp *http.Response, maxResponseBytes int) (map[string]any, error) {
 	// 读取响应体（限制大小）
 	limitedReader := io.LimitReader(resp.Body, int64(maxResponseBytes)+1)
@@ -585,7 +585,7 @@ func (r *RestfulApi) formatResponse(resp *http.Response, maxResponseBytes int) (
 //
 // TODO(#通用): 后续需添加 SSRF 防护，包括：私有 IP 过滤（127.0.0.0/8、10.0.0.0/8、
 // 172.16.0.0/12、192.168.0.0/16）、域名白名单、DNS 重绑定防护等。
-// 对应 Python: UrlUtils.check_url_is_valid() 中的 SSRF 检查逻辑。
+// Python: UrlUtils.check_url_is_valid() 中的 SSRF 检查逻辑。
 func validateURL(rawURL string) error {
 	if rawURL == "" {
 		return exception.BuildError(
@@ -616,7 +616,7 @@ func validateURL(rawURL string) error {
 //  1. URL 中的 {param} 占位符必须在 InputSchema 中有 location:path 定义
 //  2. InputSchema 中标记为 location:path 的参数必须在 URL 中有对应占位符
 //
-// 对应 Python: RestfulApiCard.model_post_init()
+// Python: RestfulApiCard.model_post_init()
 func validatePathParams(apiURL string, inputSchema map[string]any) error {
 	// 提取 URL 中的路径参数名
 	urlPathParams := pathParamPattern.FindAllStringSubmatch(apiURL, -1)
@@ -701,7 +701,7 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 //  4. 遍历 bodyParams，非 nil 值以 application/json content_type 写入
 //  5. 关闭 Writer，返回 buffer 字节和 multipart content-type（含 boundary）
 //
-// 对应 Python: RestfulApi._process_form_data()
+// Python: RestfulApi._process_form_data()
 func (r *RestfulApi) processFormData(
 	ctx context.Context,
 	formParams map[string]any,
@@ -766,7 +766,7 @@ func (r *RestfulApi) processFormData(
 // 移除手动设置的 Content-Type，因为 multipart.Writer 会自动生成
 // 包含 boundary 的正确 Content-Type。手动设置会导致请求失败。
 //
-// 对应 Python: RestfulApi._prepare_headers_for_form_data()
+// Python: RestfulApi._prepare_headers_for_form_data()
 func prepareHeadersForFormData(headers map[string]string) map[string]string {
 	if len(headers) == 0 {
 		return make(map[string]string)

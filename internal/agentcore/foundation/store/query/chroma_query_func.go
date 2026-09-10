@@ -15,7 +15,7 @@ import (
 
 // chromaOperatorMap Chroma 比较运算符映射
 //
-// 对应 Python: OPERATOR_MAP
+// Python: OPERATOR_MAP
 var chromaOperatorMap = map[string]string{
 	"==": "$eq",
 	"!=": "$nin",
@@ -27,7 +27,7 @@ var chromaOperatorMap = map[string]string{
 
 // chromaDef Chroma 查询语言定义
 //
-// 对应 Python: chroma_def
+// Python: chroma_def
 var chromaDef = QueryLanguageDefinition{
 	Comparison: chromaComparisonFilter,
 	Range:      chromaRangeFilter,
@@ -45,7 +45,7 @@ var chromaDef = QueryLanguageDefinition{
 
 // chromaComparisonFilter 将比较表达式转换为 Chroma where 过滤字典
 //
-// 对应 Python: chroma_comparison_filter()
+// Python: chroma_comparison_filter()
 func chromaComparisonFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ComparisonExpr)
 	chromaOp, ok := chromaOperatorMap[e.Operator]
@@ -71,7 +71,7 @@ func chromaComparisonFilter(expr QueryExpr) (any, error) {
 
 // chromaRangeFilter 将范围表达式转换为 Chroma where 过滤字典
 //
-// 对应 Python: chroma_range_filter()
+// Python: chroma_range_filter()
 func chromaRangeFilter(expr QueryExpr) (any, error) {
 	e := expr.(*RangeExpr)
 	whereFilter := make(map[string]any)
@@ -95,7 +95,7 @@ func chromaRangeFilter(expr QueryExpr) (any, error) {
 
 // chromaArithmeticFilter Chroma 不支持算术操作
 //
-// 对应 Python: chroma_arithmetic_filter()
+// Python: chroma_arithmetic_filter()
 func chromaArithmeticFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
 		"Chroma 不支持元数据过滤中的算术操作。" +
@@ -104,7 +104,7 @@ func chromaArithmeticFilter(_ QueryExpr) (any, error) {
 
 // chromaNullFilter Chroma 不支持 null 操作
 //
-// 对应 Python: chroma_null_filter()
+// Python: chroma_null_filter()
 func chromaNullFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
 		"Chroma 不支持元数据中的嵌套 JSON 字段。" +
@@ -114,7 +114,7 @@ func chromaNullFilter(_ QueryExpr) (any, error) {
 
 // chromaJSONFilter Chroma 不支持 JSON 字段操作
 //
-// 对应 Python: chroma_json_filter()
+// Python: chroma_json_filter()
 func chromaJSONFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
 		"Chroma 不支持元数据中的嵌套 JSON 字段。" +
@@ -124,7 +124,7 @@ func chromaJSONFilter(_ QueryExpr) (any, error) {
 
 // chromaArrayFilter Chroma 不支持数组索引操作
 //
-// 对应 Python: chroma_array_filter()
+// Python: chroma_array_filter()
 func chromaArrayFilter(_ QueryExpr) (any, error) {
 	return nil, raiseQueryError(
 		"Chroma 不支持元数据中的数组索引。" +
@@ -134,11 +134,11 @@ func chromaArrayFilter(_ QueryExpr) (any, error) {
 
 // chromaLogicalFilter 将逻辑表达式转换为 Chroma where/where_document 过滤字典
 //
-// 对应 Python: chroma_logical_filter()
+// Python: chroma_logical_filter()
 func chromaLogicalFilter(expr QueryExpr) (any, error) {
 	e := expr.(*LogicalExpr)
 
-	// 对齐 Python: "not" 操作符不被 Chroma 支持
+	// Python: "not" 操作符不被 Chroma 支持
 	if strings.ToLower(e.Operator) == "not" {
 		return nil, raiseQueryError("不支持逻辑操作符: not")
 	}
@@ -185,7 +185,7 @@ func chromaLogicalFilter(expr QueryExpr) (any, error) {
 
 // chromaTextMatchFilter 将文本匹配表达式转换为 Chroma where_document 过滤字典
 //
-// 对应 Python: chroma_text_match_filter()
+// Python: chroma_text_match_filter()
 func chromaTextMatchFilter(expr QueryExpr) (any, error) {
 	e := expr.(*MatchExpr)
 	whereDocFilter := make(map[string]any)

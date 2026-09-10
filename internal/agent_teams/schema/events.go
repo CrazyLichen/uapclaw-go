@@ -3,7 +3,7 @@ package schema
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseEventMessage 所有团队事件消息的基类。
-// 对齐 Python: BaseEventMessage
+// Python: BaseEventMessage
 type BaseEventMessage struct {
 	// TeamName 团队名（事件路由用）
 	TeamName string
@@ -12,7 +12,7 @@ type BaseEventMessage struct {
 }
 
 // TeamCreatedEvent 团队创建事件。
-// 对齐 Python: TeamCreatedEvent
+// Python: TeamCreatedEvent
 type TeamCreatedEvent struct {
 	BaseEventMessage
 	// DisplayName 团队显示标签
@@ -24,19 +24,19 @@ type TeamCreatedEvent struct {
 }
 
 // TeamCleanedEvent 团队清理事件。
-// 对齐 Python: TeamCleanedEvent
+// Python: TeamCleanedEvent
 type TeamCleanedEvent struct {
 	BaseEventMessage
 }
 
 // TeamStandbyEvent 持久团队进入待机事件。
-// 对齐 Python: TeamStandbyEvent
+// Python: TeamStandbyEvent
 type TeamStandbyEvent struct {
 	BaseEventMessage
 }
 
 // TeamCompletedEvent 团队完成事件。
-// 对齐 Python: TeamCompletedEvent
+// Python: TeamCompletedEvent
 type TeamCompletedEvent struct {
 	BaseEventMessage
 	// MemberCount 完成时的成员数
@@ -46,13 +46,13 @@ type TeamCompletedEvent struct {
 }
 
 // MemberSpawnedEvent 成员生成事件。
-// 对齐 Python: MemberSpawnedEvent
+// Python: MemberSpawnedEvent
 type MemberSpawnedEvent struct {
 	BaseEventMessage
 }
 
 // MemberRestartedEvent 成员重启事件。
-// 对齐 Python: MemberRestartedEvent
+// Python: MemberRestartedEvent
 type MemberRestartedEvent struct {
 	BaseEventMessage
 	// Reason 重启原因
@@ -62,7 +62,7 @@ type MemberRestartedEvent struct {
 }
 
 // MemberStatusChangedEvent 成员状态变更事件。
-// 对齐 Python: MemberStatusChangedEvent
+// Python: MemberStatusChangedEvent
 type MemberStatusChangedEvent struct {
 	BaseEventMessage
 	// OldStatus 之前状态
@@ -72,7 +72,7 @@ type MemberStatusChangedEvent struct {
 }
 
 // MemberExecutionChangedEvent 成员执行状态变更事件。
-// 对齐 Python: MemberExecutionChangedEvent
+// Python: MemberExecutionChangedEvent
 type MemberExecutionChangedEvent struct {
 	BaseEventMessage
 	// OldStatus 之前执行状态
@@ -82,7 +82,7 @@ type MemberExecutionChangedEvent struct {
 }
 
 // MemberShutdownEvent 成员关闭事件。
-// 对齐 Python: MemberShutdownEvent
+// Python: MemberShutdownEvent
 type MemberShutdownEvent struct {
 	BaseEventMessage
 	// Force 是否强制关闭
@@ -90,13 +90,13 @@ type MemberShutdownEvent struct {
 }
 
 // MemberCanceledEvent 成员取消事件。
-// 对齐 Python: MemberCanceledEvent
+// Python: MemberCanceledEvent
 type MemberCanceledEvent struct {
 	BaseEventMessage
 }
 
 // PlanApprovalEvent 计划审批事件。
-// 对齐 Python: PlanApprovalEvent
+// Python: PlanApprovalEvent
 type PlanApprovalEvent struct {
 	BaseEventMessage
 	// Approved 是否批准
@@ -104,7 +104,7 @@ type PlanApprovalEvent struct {
 }
 
 // ToolApprovalResultEvent 工具调用审批结果事件。
-// 对齐 Python: ToolApprovalResultEvent
+// Python: ToolApprovalResultEvent
 type ToolApprovalResultEvent struct {
 	BaseEventMessage
 	// ToolCallID 被中断的工具调用 ID
@@ -118,7 +118,7 @@ type ToolApprovalResultEvent struct {
 }
 
 // MessageEvent 点对点消息事件。
-// 对齐 Python: MessageEvent
+// Python: MessageEvent
 type MessageEvent struct {
 	BaseEventMessage
 	// MessageID 消息唯一标识
@@ -130,7 +130,7 @@ type MessageEvent struct {
 }
 
 // BroadcastEvent 广播消息事件。
-// 对齐 Python: BroadcastEvent
+// Python: BroadcastEvent
 type BroadcastEvent struct {
 	BaseEventMessage
 	// MessageID 消息唯一标识
@@ -140,7 +140,7 @@ type BroadcastEvent struct {
 }
 
 // TaskCreatedEvent 任务创建事件。
-// 对齐 Python: TaskCreatedEvent
+// Python: TaskCreatedEvent
 type TaskCreatedEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -150,7 +150,7 @@ type TaskCreatedEvent struct {
 }
 
 // TaskPlanRequestEvent 成员提交执行计划审批事件。
-// 对齐 Python: TaskPlanRequestEvent
+// Python: TaskPlanRequestEvent
 type TaskPlanRequestEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -166,7 +166,7 @@ type TaskPlanRequestEvent struct {
 }
 
 // TaskPlanResponseEvent Leader 审批/驳回成员执行计划事件。
-// 对齐 Python: TaskPlanResponseEvent
+// Python: TaskPlanResponseEvent
 type TaskPlanResponseEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -184,7 +184,7 @@ type TaskPlanResponseEvent struct {
 }
 
 // TaskUpdatedEvent 任务更新事件。
-// 对齐 Python: TaskUpdatedEvent
+// Python: TaskUpdatedEvent
 type TaskUpdatedEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -192,7 +192,7 @@ type TaskUpdatedEvent struct {
 }
 
 // TaskClaimedEvent 任务认领事件。
-// 对齐 Python: TaskClaimedEvent
+// Python: TaskClaimedEvent
 type TaskClaimedEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -200,7 +200,7 @@ type TaskClaimedEvent struct {
 }
 
 // TaskCompletedEvent 任务完成事件。
-// 对齐 Python: TaskCompletedEvent
+// Python: TaskCompletedEvent
 type TaskCompletedEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -208,7 +208,7 @@ type TaskCompletedEvent struct {
 }
 
 // TaskCancelledEvent 任务取消事件。
-// 对齐 Python: TaskCancelledEvent
+// Python: TaskCancelledEvent
 type TaskCancelledEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -216,7 +216,7 @@ type TaskCancelledEvent struct {
 }
 
 // TaskUnblockedEvent 任务解除阻塞事件。
-// 对齐 Python: TaskUnblockedEvent
+// Python: TaskUnblockedEvent
 type TaskUnblockedEvent struct {
 	BaseEventMessage
 	// TaskID 任务唯一标识
@@ -224,7 +224,7 @@ type TaskUnblockedEvent struct {
 }
 
 // TaskListDrainedEvent 任务列表清空（全部终态）事件。
-// 对齐 Python: TaskListDrainedEvent
+// Python: TaskListDrainedEvent
 type TaskListDrainedEvent struct {
 	BaseEventMessage
 	// TaskCount 终态任务数
@@ -232,7 +232,7 @@ type TaskListDrainedEvent struct {
 }
 
 // WorktreeCreatedEvent Worktree 创建/恢复事件。
-// 对齐 Python: WorktreeCreatedEvent
+// Python: WorktreeCreatedEvent
 type WorktreeCreatedEvent struct {
 	BaseEventMessage
 	// WorktreeName worktree 名
@@ -244,7 +244,7 @@ type WorktreeCreatedEvent struct {
 }
 
 // WorktreeRemovedEvent Worktree 移除事件。
-// 对齐 Python: WorktreeRemovedEvent
+// Python: WorktreeRemovedEvent
 type WorktreeRemovedEvent struct {
 	BaseEventMessage
 	// WorktreeName worktree 名
@@ -254,7 +254,7 @@ type WorktreeRemovedEvent struct {
 }
 
 // WorkspaceArtifactEvent 工件创建/更新事件。
-// 对齐 Python: WorkspaceArtifactEvent
+// Python: WorkspaceArtifactEvent
 type WorkspaceArtifactEvent struct {
 	BaseEventMessage
 	// ArtifactPath 工件在工作空间内的相对路径
@@ -264,7 +264,7 @@ type WorkspaceArtifactEvent struct {
 }
 
 // WorkspaceConflictEvent 合并冲突/推送失败事件。
-// 对齐 Python: WorkspaceConflictEvent
+// Python: WorkspaceConflictEvent
 type WorkspaceConflictEvent struct {
 	BaseEventMessage
 	// FilePath 冲突文件路径
@@ -274,7 +274,7 @@ type WorkspaceConflictEvent struct {
 }
 
 // WorkspaceLockRequestEvent 锁请求事件。
-// 对齐 Python: WorkspaceLockRequestEvent
+// Python: WorkspaceLockRequestEvent
 type WorkspaceLockRequestEvent struct {
 	BaseEventMessage
 	// Action 锁操作：acquire 或 release
@@ -288,7 +288,7 @@ type WorkspaceLockRequestEvent struct {
 }
 
 // WorkspaceLockResponseEvent 锁响应事件。
-// 对齐 Python: WorkspaceLockResponseEvent
+// Python: WorkspaceLockResponseEvent
 type WorkspaceLockResponseEvent struct {
 	BaseEventMessage
 	// FilePath 锁定/解锁的文件
@@ -300,7 +300,7 @@ type WorkspaceLockResponseEvent struct {
 }
 
 // TypedEvent 带类型标识的团队事件接口。
-// 对齐 Python: BaseEventMessage + EventMessage.from_event() 的自动映射
+// Python: BaseEventMessage + EventMessage.from_event() 的自动映射
 type TypedEvent interface {
 	// EventTypeName 返回 TeamEvent 常量
 	EventTypeName() string
@@ -309,7 +309,7 @@ type TypedEvent interface {
 }
 
 // EventMessage 事件消息包装，将事件类型与载荷配对。
-// 对齐 Python: EventMessage
+// Python: EventMessage
 type EventMessage struct {
 	// EventType 事件类型（TeamEvent 常量）
 	EventType string
@@ -322,7 +322,7 @@ type EventMessage struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TeamTopic 团队事件路由的 topic 类别。
-// 对齐 Python: TeamTopic (openjiuwen/agent_teams/schema/events.py)
+// Python: TeamTopic (openjiuwen/agent_teams/schema/events.py)
 type TeamTopic string
 
 const (
@@ -337,7 +337,7 @@ const (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // TeamEvent 团队事件类型常量，用于跨进程通信。
-// 对齐 Python: TeamEvent
+// Python: TeamEvent
 const (
 	// 团队生命周期事件
 	TeamEventCreated       = "team_created"
@@ -388,13 +388,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildTopic 构建 topic 字符串。
-// 对齐 Python: TeamTopic.build(session_id, team_name)
+// Python: TeamTopic.build(session_id, team_name)
 func (t TeamTopic) Build(sessionID, teamName string) string {
 	return "session:" + sessionID + ":team:" + teamName + ":" + string(t)
 }
 
 // NewEventMessage 从具体事件创建 EventMessage 指针。
-// 对齐 Python: EventMessage.from_event(event)
+// Python: EventMessage.from_event(event)
 func NewEventMessage(eventType string, payload map[string]any, senderID string) *EventMessage {
 	return &EventMessage{
 		EventType: eventType,
@@ -404,7 +404,7 @@ func NewEventMessage(eventType string, payload map[string]any, senderID string) 
 }
 
 // EventMessageFromEvent 从具体事件创建 EventMessage 指针。
-// 对齐 Python: EventMessage.from_event(event)
+// Python: EventMessage.from_event(event)
 // 返回指针以适配 Messager.Publish(ctx, topicID, *EventMessage) 签名。
 func EventMessageFromEvent(e TypedEvent) *EventMessage {
 	return &EventMessage{

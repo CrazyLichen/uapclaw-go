@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BashStreamInput BashStreamTool 输入参数。
-// 对齐 Python: _BashInputs (bash/_tool.py L61-70)，与 BashInput 一致
+// Python: _BashInputs (bash/_tool.py L61-70)，与 BashInput 一致
 type BashStreamInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
@@ -43,7 +43,7 @@ type BashStreamInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBashStreamTool 创建 BashStreamTool 实例（流式执行）。
-// 对齐 Python: BashTool.stream (bash/_tool.py L250-340)
+// Python: BashTool.stream (bash/_tool.py L250-340)
 // 流式返回命令输出块，并在流结束后返回汇总渲染内容。
 func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, permConfig PermissionConfig) tool.Tool {
 	card, _ := tools.BuildToolCard("bash", "BashStreamTool", language, nil, agentID)
@@ -75,7 +75,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 安全守卫 (OPENJIUWEN_BASH_STRICT=1) ──
-		// 对齐 Python L264-268
+		// Python: L264-268
 		if os.Getenv("OPENJIUWEN_BASH_STRICT") == "1" {
 			blocked, reason := CheckBashInjection(command)
 			if blocked {
@@ -124,7 +124,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		warning := GetBashDestructiveWarning(command)
 
 		// ── description 日志 ──
-		// 对齐 Python L273-274
+		// Python: L273-274
 		if description != "" {
 			logger.Debug(logComponent).
 				Str("description", description).
@@ -133,7 +133,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── rm 目标记录（执行前）──
-		// 对齐 Python L275-282
+		// Python: L275-282
 		historyPath := buildHistoryPathFromOpts(opts, agentID)
 		if historyPath != "" {
 			rmTargets := ParseRmTargets(command)
@@ -141,7 +141,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── 流式执行 ──
-		// 对齐 Python L289-318: async for chunk in execute_cmd_stream(...)
+		// Python: L289-318: async for chunk in execute_cmd_stream(...)
 		streamCh, err := op.Shell().ExecuteCmdStream(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -168,7 +168,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 			finalExitCode := -1
 
 			// 遍历流式输出块
-			// 对齐 Python L289-318
+			// Python: L289-318
 			for chunk := range streamCh {
 				if !chunk.IsSuccess() {
 					// 流错误：直接返回错误块
@@ -202,7 +202,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 					}
 
 					// 发送流式输出块
-					// 对齐 Python L309-318: yield ToolOutput(success=True, data={...})
+					// Python: L309-318: yield ToolOutput(success=True, data={...})
 					ch <- map[string]any{
 						"success":              true,
 						"text":                 text,
@@ -215,13 +215,13 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 			}
 
 			// ── 流结束：后处理 ──
-			// 对齐 Python L320-340
+			// Python: L320-340
 
 			// 退出码语义解释
 			meaning := InterpretBashExitCode(command, finalExitCode, accumulatedStdout, accumulatedStderr)
 
 			// ── rm 目标记录（执行后）──
-			// 对齐 Python L322-323
+			// Python: L322-323
 			if historyPath != "" && !meaning.IsError {
 				filesystem.DetectAndRecordDeletions(historyPath)
 			}
@@ -239,7 +239,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 			)
 
 			// 发送最终汇总块
-			// 对齐 Python L335-339: yield ToolOutput(success=not is_error, data={"content": content})
+			// Python: L335-339: yield ToolOutput(success=not is_error, data={"content": content})
 			if isError {
 				ch <- map[string]any{
 					"success": false,
@@ -264,7 +264,7 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // roundElapsed 将秒数保留两位小数。
-// 对齐 Python: round(time.monotonic() - start, 2)
+// Python: round(time.monotonic() - start, 2)
 func roundElapsed(seconds float64) float64 {
 	return float64(int(seconds*100+0.5)) / 100
 }

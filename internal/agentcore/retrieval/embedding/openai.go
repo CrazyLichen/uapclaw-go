@@ -24,7 +24,7 @@ import (
 //
 // 使用 openai-go SDK，支持 Matryoshka 维度截断和多模态嵌入。
 //
-// 对应 Python: openjiuwen/core/retrieval/embedding/openai_embedding.py
+// Python: openjiuwen/core/retrieval/embedding/openai_embedding.py
 type OpenAIEmbedding struct {
 	// config 嵌入配置
 	config EmbeddingConfig
@@ -47,7 +47,7 @@ type OpenAIEmbedding struct {
 	// extraHeaders 额外请求头，透传给 OpenAI SDK
 	extraHeaders map[string]string
 	// extraParams 额外请求参数，通过 option.WithJSONSet 透传给 SDK
-	// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数
+	// Python: **kwargs 透传机制，支持 encoding_format、user 等参数
 	extraParams map[string]any
 	// httpClient 自定义 HTTP 客户端（可选）
 	httpClient *http.Client
@@ -93,7 +93,7 @@ func WithOpenAIDimension(dim int) OpenAIEmbeddingOption {
 }
 
 // WithOpenAIExtraHeaders 设置额外请求头，透传给 OpenAI SDK。
-// 对齐 Python OpenAIEmbedding 中的 default_headers=self._headers。
+// Python: OpenAIEmbedding 中的 default_headers=self._headers。
 func WithOpenAIExtraHeaders(headers map[string]string) OpenAIEmbeddingOption {
 	return func(o *OpenAIEmbedding) {
 		if o.extraHeaders == nil {
@@ -113,7 +113,7 @@ func WithOpenAIHTTPClient(client *http.Client) OpenAIEmbeddingOption {
 }
 
 // WithOpenAIExtraParams 设置额外请求参数，通过 option.WithJSONSet 透传给 SDK。
-// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数。
+// Python: **kwargs 透传机制，支持 encoding_format、user 等参数。
 func WithOpenAIExtraParams(params map[string]any) OpenAIEmbeddingOption {
 	return func(o *OpenAIEmbedding) {
 		if o.extraParams == nil {
@@ -431,7 +431,7 @@ func parseOpenAIResponse(data []openai.Embedding) ([][]float64, error) {
 }
 
 // decodeBase64FromRawJSON 从 JSON 原始数据中提取 base64 编码的嵌入向量并解码。
-// 对齐 Python: encoding_format=base64 时 API 返回 embedding 为 base64 字符串。
+// Python: encoding_format=base64 时 API 返回 embedding 为 base64 字符串。
 func decodeBase64FromRawJSON(rawJSON string) ([]float64, error) {
 	var raw struct {
 		Embedding json.RawMessage `json:"embedding"`

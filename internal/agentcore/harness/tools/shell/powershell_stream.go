@@ -17,7 +17,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PowerShellStreamInput PowerShellStreamTool 输入参数。
-// 对齐 Python: _PowerShellInputs (powershell/_tool.py L47-55)，与 PowerShellInput 一致
+// Python: _PowerShellInputs (powershell/_tool.py L47-55)，与 PowerShellInput 一致
 type PowerShellStreamInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
@@ -40,14 +40,14 @@ type PowerShellStreamInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPowerShellStreamTool 创建 PowerShellStreamTool 实例（流式执行）。
-// 对齐 Python: PowerShellTool.stream (powershell/_tool.py L221-311)
+// Python: PowerShellTool.stream (powershell/_tool.py L221-311)
 // 流式返回命令输出块，并在流结束后返回汇总渲染内容。
 func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID string, permConfig PermissionConfig) tool.Tool {
 	card, _ := tools.BuildToolCard("powershell", "PowerShellStreamTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input PowerShellStreamInput, opts ...tool.ToolOption) (<-chan map[string]any, error) {
 		// ── 参数解析 ──
-		// 对齐 Python: _parse_inputs (powershell/_tool.py L111-120)
+		// Python: _parse_inputs (powershell/_tool.py L111-120)
 		command := strings.TrimSpace(input.Command)
 		timeout := resolvePSTimeout(input.Timeout)
 		workdir := input.Workdir
@@ -57,7 +57,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		ch := make(chan map[string]any, 64)
 
 		// ── 空命令检查 ──
-		// 对齐 Python L226-228
+		// Python: L226-228
 		if command == "" {
 			go func() {
 				defer close(ch)
@@ -70,7 +70,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		}
 
 		// ── 安全守卫 (OPENJIUWEN_BASH_STRICT=1) ──
-		// 对齐 Python L233-237
+		// Python: L233-237
 		if os.Getenv("OPENJIUWEN_BASH_STRICT") == "1" {
 			blocked, reason := CheckPowerShellInjection(command)
 			if blocked {
@@ -98,7 +98,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		}
 
 		// ── cwd 解析 ──
-		// 对齐 Python L230-231
+		// Python: L230-231
 		currentCwd := cwd.GetCwd(ctx)
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
@@ -106,11 +106,11 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		}
 
 		// ── 破坏性命令警告 ──
-		// 对齐 Python L239
+		// Python: L239
 		warning := GetPSDestructiveWarning(command)
 
 		// ── description 日志 ──
-		// 对齐 Python L241-242
+		// Python: L241-242
 		if description != "" {
 			logger.Debug(logComponent).
 				Str("description", description).
@@ -119,7 +119,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		}
 
 		// ── rm 目标记录（执行前）──
-		// 对齐 Python L244-251: 执行前记录 PowerShell Remove-Item 目标
+		// Python: L244-251: 执行前记录 PowerShell Remove-Item 目标
 		historyPath := buildHistoryPathFromOpts(opts, agentID)
 		if historyPath != "" {
 			rmTargets := ParsePSRemoveTargets(command)
@@ -127,7 +127,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		}
 
 		// ── 流式执行 ──
-		// 对齐 Python L258-290: async for chunk in execute_cmd_stream(...)
+		// Python: L258-290: async for chunk in execute_cmd_stream(...)
 		streamCh, err := op.Shell().ExecuteCmdStream(
 			ctx, command,
 			sys_operation.WithShellCwd(resolvedCwd),
@@ -154,7 +154,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 			finalExitCode := -1
 
 			// 遍历流式输出块
-			// 对齐 Python L258-290
+			// Python: L258-290
 			for chunk := range streamCh {
 				if !chunk.IsSuccess() {
 					// 流错误：直接返回错误块
@@ -188,7 +188,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 					}
 
 					// 发送流式输出块
-					// 对齐 Python L281-290: yield ToolOutput(success=True, data={...})
+					// Python: L281-290: yield ToolOutput(success=True, data={...})
 					ch <- map[string]any{
 						"success":              true,
 						"text":                 text,
@@ -201,13 +201,13 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 			}
 
 			// ── 流结束：后处理 ──
-			// 对齐 Python L292-311
+			// Python: L292-311
 
 			// 退出码语义解释（PowerShell）
 			meaning := InterpretPowerShellExitCode(command, finalExitCode, accumulatedStdout, accumulatedStderr)
 
 			// ── rm 目标记录（执行后）──
-			// 对齐 Python L294-295
+			// Python: L294-295
 			if historyPath != "" && !meaning.IsError {
 				filesystem.DetectAndRecordDeletions(historyPath)
 			}
@@ -226,7 +226,7 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 			)
 
 			// 发送最终汇总块
-			// 对齐 Python L307-311: yield ToolOutput(success=not is_error, data={"content": content})
+			// Python: L307-311: yield ToolOutput(success=not is_error, data={"content": content})
 			if isError {
 				ch <- map[string]any{
 					"success": false,

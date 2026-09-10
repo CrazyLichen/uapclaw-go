@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskFilter 任务过滤器。
-// 对应 Python: TaskFilter(BaseModel)
+// Python: TaskFilter(BaseModel)
 type TaskFilter struct {
 	// TaskID 任务ID，支持单个或多个
 	TaskID any // string 或 []string
@@ -34,7 +34,7 @@ type TaskFilter struct {
 }
 
 // TaskManagerState 任务管理器可序列化状态。
-// 对应 Python: TaskManagerState(BaseModel)
+// Python: TaskManagerState(BaseModel)
 type TaskManagerState struct {
 	// Tasks 任务字典
 	Tasks map[string]*schema.Task `json:"tasks"`
@@ -49,7 +49,7 @@ type TaskManagerState struct {
 }
 
 // TaskManager 任务管理器。
-// 对应 Python: TaskManager
+// Python: TaskManager
 type TaskManager struct {
 	// config 配置
 	config *config.ControllerConfig
@@ -136,7 +136,7 @@ func TaskManagerStateFromMap(data map[string]any) (*TaskManagerState, error) {
 }
 
 // NewTaskManager 创建新的 TaskManager 实例。
-// 对应 Python: TaskManager.__init__
+// Python: TaskManager.__init__
 func NewTaskManager(cfg *config.ControllerConfig) *TaskManager {
 	return &TaskManager{
 		config:           cfg,
@@ -174,7 +174,7 @@ func WithErrorMessage(msg string) TaskStatusOption {
 }
 
 // AddTask 添加任务，更新索引，触发 onTaskSubmitted 回调。
-// 对应 Python: TaskManager.add_task
+// Python: TaskManager.add_task
 func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -223,7 +223,7 @@ func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 }
 
 // GetTask 按条件查询任务，返回深拷贝。filter 为 nil 时返回全部。
-// 对应 Python: TaskManager.get_task
+// Python: TaskManager.get_task
 func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema.Task, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -279,7 +279,7 @@ func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema
 }
 
 // PopTask 查询并移除任务。filter 不能为 nil。
-// 对应 Python: TaskManager.pop_task
+// Python: TaskManager.pop_task
 func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*schema.Task, error) {
 	if filter == nil {
 		logger.Error(logComponent).
@@ -332,7 +332,7 @@ func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*sche
 }
 
 // UpdateTask 更新任务，同步更新索引。返回任务是否存在。
-// 对应 Python: TaskManager.update_task
+// Python: TaskManager.update_task
 func (tm *TaskManager) UpdateTask(_ context.Context, task *schema.Task) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -392,7 +392,7 @@ func (tm *TaskManager) UpdateTask(_ context.Context, task *schema.Task) bool {
 }
 
 // RemoveTask 按条件删除任务。
-// 对应 Python: TaskManager.remove_task
+// Python: TaskManager.remove_task
 // 删除父任务时，未被删除的子任务提升为根任务。
 func (tm *TaskManager) RemoveTask(ctx context.Context, filter *TaskFilter) error {
 	// 先查询要删除的任务
@@ -416,7 +416,7 @@ func (tm *TaskManager) RemoveTask(ctx context.Context, filter *TaskFilter) error
 }
 
 // UpdateTaskStatus 更新任务状态。
-// 对应 Python: TaskManager.update_task_status
+// Python: TaskManager.update_task_status
 func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newStatus schema.TaskStatus, opts ...TaskStatusOption) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -495,7 +495,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 }
 
 // SetPriority 设置任务优先级。
-// 对应 Python: TaskManager.set_priority
+// Python: TaskManager.set_priority
 func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority int, opts ...TaskPriorityOption) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -566,7 +566,7 @@ func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority
 }
 
 // GetChildTask 获取子任务列表。
-// 对应 Python: TaskManager.get_child_task
+// Python: TaskManager.get_child_task
 func (tm *TaskManager) GetChildTask(_ context.Context, taskID string, isRecursive bool) ([]*schema.Task, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -609,7 +609,7 @@ func (tm *TaskManager) GetChildTask(_ context.Context, taskID string, isRecursiv
 }
 
 // GetState 获取可序列化状态快照。
-// 对应 Python: TaskManager.get_state
+// Python: TaskManager.get_state
 func (tm *TaskManager) GetState(_ context.Context) (*TaskManagerState, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -664,7 +664,7 @@ func (tm *TaskManager) GetState(_ context.Context) (*TaskManagerState, error) {
 }
 
 // LoadState 从快照恢复状态。
-// 对应 Python: TaskManager.load_state
+// Python: TaskManager.load_state
 func (tm *TaskManager) LoadState(_ context.Context, state *TaskManagerState) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -722,7 +722,7 @@ func (tm *TaskManager) LoadState(_ context.Context, state *TaskManagerState) err
 }
 
 // ClearState 清空所有状态。
-// 对应 Python: TaskManager.clear_state
+// Python: TaskManager.clear_state
 func (tm *TaskManager) ClearState(_ context.Context) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -739,7 +739,7 @@ func (tm *TaskManager) ClearState(_ context.Context) error {
 }
 
 // SetOnTaskSubmitted 注册 SUBMITTED 状态通知回调。
-// 对应 Python: TaskManager.set_on_task_submitted
+// Python: TaskManager.set_on_task_submitted
 func (tm *TaskManager) SetOnTaskSubmitted(callback func()) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -763,7 +763,7 @@ func (tm *TaskManager) SetConfig(cfg *config.ControllerConfig) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // notifyIfSubmitted 有 SUBMITTED 任务时触发回调。
-// 对应 Python: TaskManager._notify_if_submitted
+// Python: TaskManager._notify_if_submitted
 // 调用方必须持有 tm.mu 锁。
 func (tm *TaskManager) notifyIfSubmitted(tasks []*schema.Task) {
 	for _, task := range tasks {
@@ -971,7 +971,7 @@ func (tm *TaskManager) collectDirectChildren(parentID string) []string {
 }
 
 // deepCopyTask 深拷贝任务对象。
-// 对应 Python: copy.deepcopy(task)
+// Python: copy.deepcopy(task)
 func (tm *TaskManager) deepCopyTask(task *schema.Task) *schema.Task {
 	if task == nil {
 		return nil

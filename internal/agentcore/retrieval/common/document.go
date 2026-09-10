@@ -28,7 +28,7 @@ type ModalityField struct {
 
 // MultimodalDocument 多模态文档，支持文本+图片+音频+视频混合输入。
 //
-// 对应 Python: openjiuwen/core/retrieval/common/document.py (MultimodalDocument)
+// Python: openjiuwen/core/retrieval/common/document.py (MultimodalDocument)
 type MultimodalDocument struct {
 	// Text 文本回退字段，供不支持多模态的服务使用
 	Text string
@@ -108,7 +108,7 @@ func FieldDataID(id string) AddFieldOption {
 // kind: 模态类型；data: 文本内容/URL/base64（kind 为 text 时必传）；
 // opts: 可选参数，支持 FieldFilePath(string) 和 FieldDataID(string)。
 //
-// 对应 Python: MultimodalDocument.add_field()
+// Python: MultimodalDocument.add_field()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 // 注意：与 Python 对齐，add_field 不会更新 text 字段，text 始终保持默认空字符串。
 func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...AddFieldOption) (*MultimodalDocument, error) {
@@ -147,7 +147,7 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...Ad
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
 // 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
 //
-// 对应 Python: MultimodalDocument.content
+// Python: MultimodalDocument.content
 func (d *MultimodalDocument) Content() []map[string]any {
 	d.contentOnce.Do(func() {
 		var content []map[string]any
@@ -190,7 +190,7 @@ func (d *MultimodalDocument) Content() []map[string]any {
 // DashscopeInput 返回 DashScope 格式的输入字典。
 // 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
 //
-// 对应 Python: MultimodalDocument.dashscope_input
+// Python: MultimodalDocument.dashscope_input
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
 	var cacheErr error
@@ -246,7 +246,7 @@ func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
 
 // Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
 //
-// 对应 Python: MultimodalDocument.strip()
+// Python: MultimodalDocument.strip()
 func (d *MultimodalDocument) Strip() *MultimodalDocument {
 	if len(d.fields) == 0 {
 		return nil
@@ -270,7 +270,7 @@ func defaultAddFieldOptions() addFieldOptions {
 
 // loadMultimodalData 加载多模态数据。
 //
-// 对应 Python: _load_multimodal_data()
+// Python: _load_multimodal_data()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func loadMultimodalData(kind ModalityKind, data string, filePath string) (ModalityKind, string, error) {
 	validKinds := map[ModalityKind]bool{

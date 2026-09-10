@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -33,7 +34,7 @@ func TestNoOpExtension_SnapshotForEvolution(t *testing.T) {
 			{
 				Kind: trajectory.StepKindLLM,
 				Detail: &trajectory.LLMCallDetail{
-					Messages: []map[string]any{{"role": "user", "content": "hi"}},
+					Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hi")},
 				},
 			},
 		},

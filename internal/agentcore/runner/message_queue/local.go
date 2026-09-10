@@ -11,7 +11,7 @@ import (
 // LocalMessageQueue 本地消息队列 no-op 实现。
 // start/stop 均返回成功，不做任何实际操作。
 //
-// 对应 Python: LocalMessageQueue
+// Python: LocalMessageQueue
 // Python 中 LocalMessageQueue 是 Runner._message_queue 的默认实现，
 // 仅提供 start()/stop() 返回 True 的空操作，使得 Runner.start 在非分布式模式下正常启动。
 type LocalMessageQueue struct{}
@@ -19,7 +19,7 @@ type LocalMessageQueue struct{}
 // LocalSubscription 本地订阅 no-op 实现。
 // 所有方法均为空操作，满足 SubscriptionBase 接口。
 //
-// 对应 Python: SubscriptionBase 的 no-op 默认实现
+// Python: SubscriptionBase 的 no-op 默认实现
 type LocalSubscription struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -35,7 +35,7 @@ const logComponent = logger.ComponentAgentCore
 
 // Start 启动本地消息队列（no-op，返回 nil 表示成功）。
 //
-// 对应 Python: LocalMessageQueue.start() → True
+// Python: LocalMessageQueue.start() → True
 func (q *LocalMessageQueue) Start() {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_started").
@@ -44,7 +44,7 @@ func (q *LocalMessageQueue) Start() {
 
 // Stop 停止本地消息队列（no-op，返回 nil 表示成功）。
 //
-// 对应 Python: LocalMessageQueue.stop() → True
+// Python: LocalMessageQueue.stop() → True
 func (q *LocalMessageQueue) Stop(_ context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_stopped").
@@ -54,7 +54,7 @@ func (q *LocalMessageQueue) Stop(_ context.Context) error {
 
 // Subscribe 创建 topic 订阅（返回 no-op LocalSubscription）。
 //
-// 对应 Python: MessageQueueBase.subscribe() 的本地 no-op 实现
+// Python: MessageQueueBase.subscribe() 的本地 no-op 实现
 func (q *LocalMessageQueue) Subscribe(topic string) (SubscriptionBase, error) {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_subscribed").
@@ -65,7 +65,7 @@ func (q *LocalMessageQueue) Subscribe(topic string) (SubscriptionBase, error) {
 
 // Unsubscribe 取消 topic 订阅（no-op）。
 //
-// 对应 Python: MessageQueueBase.unsubscribe() 的本地 no-op 实现
+// Python: MessageQueueBase.unsubscribe() 的本地 no-op 实现
 func (q *LocalMessageQueue) Unsubscribe(_ context.Context, topic string) error {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_unsubscribed").
@@ -77,7 +77,7 @@ func (q *LocalMessageQueue) Unsubscribe(_ context.Context, topic string) error {
 // Produce 发布消息（no-op，消息被丢弃）。
 // 接受 QueueMessageBase 接口，对齐 Python produce_message(topic, message) 签名。
 //
-// 对应 Python: MessageQueueBase.produce_message() 的本地 no-op 实现
+// Python: MessageQueueBase.produce_message() 的本地 no-op 实现
 func (q *LocalMessageQueue) Produce(_ context.Context, topic string, _ QueueMessageBase) error {
 	logger.Debug(logComponent).
 		Str("event_type", "local_message_queue_produce").

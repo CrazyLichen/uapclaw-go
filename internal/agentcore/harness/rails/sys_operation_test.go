@@ -70,7 +70,7 @@ func TestSysOperationRail_Init注册工具(t *testing.T) {
 	t.Parallel()
 	agent := newFakeDeepAgentForSysOperation()
 	r := NewSysOperationRail()
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	// 非 readOnly 模式: read + write + edit + glob + listDir + grep + bash = 7
 	// Windows 额外 +1 powershell
@@ -86,7 +86,7 @@ func TestSysOperationRail_InitReadOnly(t *testing.T) {
 	t.Parallel()
 	agent := newFakeDeepAgentForSysOperation()
 	r := NewSysOperationRail(WithReadOnly(true))
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	// readOnly 模式: read + glob + listDir + grep + bash = 5
 	expectedCount := 5
@@ -101,7 +101,7 @@ func TestSysOperationRail_InitWithCodeTool(t *testing.T) {
 	t.Parallel()
 	agent := newFakeDeepAgentForSysOperation()
 	r := NewSysOperationRail(WithCodeTool(true))
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	// 非 readOnly + codeTool: read + write + edit + glob + listDir + grep + bash + code = 8
 	expectedCount := 8
@@ -116,7 +116,7 @@ func TestSysOperationRail_InitWithCodeToolReadOnly(t *testing.T) {
 	t.Parallel()
 	agent := newFakeDeepAgentForSysOperation()
 	r := NewSysOperationRail(WithCodeTool(true), WithReadOnly(true))
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	// readOnly 时 codeTool 不注册，同 TestSysOperationRail_InitReadOnly
 	expectedCount := 5
@@ -131,7 +131,7 @@ func TestSysOperationRail_Uninit(t *testing.T) {
 	t.Parallel()
 	agent := newFakeDeepAgentForSysOperation()
 	r := NewSysOperationRail()
-	err := r.Init(agent)
+	err := r.Init(context.Background(), agent)
 	require.NoError(t, err)
 	assert.NotEmpty(t, r.tools)
 

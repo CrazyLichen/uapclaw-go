@@ -3,6 +3,7 @@ package harness_config
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 	"text/template"
@@ -154,11 +155,7 @@ func normalizeContent(content any) map[string]string {
 	case string:
 		return map[string]string{"cn": v, "en": v}
 	case map[string]string:
-		result := make(map[string]string, len(v))
-		for k, val := range v {
-			result[k] = val
-		}
-		return result
+		return maps.Clone(v)
 	case map[string]any:
 		result := make(map[string]string, len(v))
 		for k, val := range v {

@@ -30,7 +30,7 @@ type MultimodalEmbedder interface {
 
 // EmbeddingConfig 嵌入模型配置。
 //
-// 对应 Python: EmbeddingConfig
+// Python: EmbeddingConfig
 type EmbeddingConfig struct {
 	// ModelName 模型名称
 	ModelName string
@@ -77,7 +77,7 @@ const (
 
 // ValidateEmbedDocs 校验输入文本列表，返回非空文档。
 //
-// 对齐 Python: APIEmbedding.validate_embed_docs
+// Python: APIEmbedding.validate_embed_docs
 func ValidateEmbedDocs(texts []string) ([]string, error) {
 	if len(texts) == 0 {
 		return nil, exception.BuildError(
@@ -299,7 +299,7 @@ func ParseEmbeddingResponse(body []byte) ([][]float64, error) {
 //
 // fn 参数 attempt 从 0 开始。maxRetries 为最大重试次数（即最多调用 fn maxRetries 次）。
 // 如果 fn 返回的 error 是 *exception.BaseError 且 IsRecoverable() == false，则立即退出不重试。
-// 对齐 Python 行为：只重试可恢复错误（网络错误/5xx），不重试客户端错误（4xx/输入错误）。
+// Python: 行为：只重试可恢复错误（网络错误/5xx），不重试客户端错误（4xx/输入错误）。
 func RetryWithBackoff(
 	ctx context.Context,
 	maxRetries int,

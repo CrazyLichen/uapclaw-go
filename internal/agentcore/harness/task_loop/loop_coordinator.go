@@ -12,7 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LoopCoordinatorState 循环协调器可序列化状态。
-// 对齐 Python: LoopCoordinator.get_state() 返回值
+// Python: LoopCoordinator.get_state() 返回值
 type LoopCoordinatorState struct {
 	// Iteration 迭代次数
 	Iteration int `json:"iteration"`
@@ -27,7 +27,7 @@ type LoopCoordinatorState struct {
 // LoopCoordinator 外层任务循环协调器。
 // 追踪迭代次数、token 用量、耗时和中止标记，
 // 每轮迭代前通过评估器链（OR 语义）决定是否继续循环。
-// 对齐 Python: LoopCoordinator
+// Python: LoopCoordinator
 type LoopCoordinator struct {
 	mu         sync.Mutex
 	iteration  int
@@ -51,7 +51,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLoopCoordinator 创建循环协调器。
-// 对齐 Python: LoopCoordinator.__init__
+// Python: LoopCoordinator.__init__
 func NewLoopCoordinator(evaluators []StopConditionEvaluator) *LoopCoordinator {
 	if evaluators == nil {
 		evaluators = []StopConditionEvaluator{}
@@ -64,7 +64,7 @@ func NewLoopCoordinator(evaluators []StopConditionEvaluator) *LoopCoordinator {
 
 // ShouldContinue 评估是否应该继续循环。
 // 先检查中止标记，再遍历评估器（OR 语义：第一个 ShouldStop=true 即停止）。
-// 对齐 Python: LoopCoordinator.should_continue
+// Python: LoopCoordinator.should_continue
 func (lc *LoopCoordinator) ShouldContinue() bool {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -103,7 +103,7 @@ func (lc *LoopCoordinator) ShouldContinue() bool {
 }
 
 // IncrementIteration 递增迭代次数。
-// 对齐 Python: LoopCoordinator.increment_iteration
+// Python: LoopCoordinator.increment_iteration
 func (lc *LoopCoordinator) IncrementIteration() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -111,7 +111,7 @@ func (lc *LoopCoordinator) IncrementIteration() {
 }
 
 // AddTokenUsage 累加 token 用量（仅正数有效）。
-// 对齐 Python: LoopCoordinator.add_token_usage
+// Python: LoopCoordinator.add_token_usage
 func (lc *LoopCoordinator) AddTokenUsage(tokens int) {
 	if tokens <= 0 {
 		return
@@ -122,7 +122,7 @@ func (lc *LoopCoordinator) AddTokenUsage(tokens int) {
 }
 
 // SetLastResult 设置上一轮结果。
-// 对齐 Python: LoopCoordinator.set_last_result
+// Python: LoopCoordinator.set_last_result
 func (lc *LoopCoordinator) SetLastResult(result map[string]any) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -130,7 +130,7 @@ func (lc *LoopCoordinator) SetLastResult(result map[string]any) {
 }
 
 // RequestAbort 请求中止循环。
-// 对齐 Python: LoopCoordinator.request_abort
+// Python: LoopCoordinator.request_abort
 func (lc *LoopCoordinator) RequestAbort() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -138,7 +138,7 @@ func (lc *LoopCoordinator) RequestAbort() {
 }
 
 // Reset 重置所有状态，用于新的 invoke 周期。
-// 对齐 Python: LoopCoordinator.reset
+// Python: LoopCoordinator.reset
 func (lc *LoopCoordinator) Reset() {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -194,7 +194,7 @@ func (lc *LoopCoordinator) ElapsedSeconds() float64 {
 }
 
 // ExportState 导出状态用于持久化。
-// 对齐 Python: LoopCoordinator.get_state
+// Python: LoopCoordinator.get_state
 func (lc *LoopCoordinator) ExportState() LoopCoordinatorState {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -217,7 +217,7 @@ func (lc *LoopCoordinator) ExportState() LoopCoordinatorState {
 
 // ImportState 从持久化状态恢复。
 // startTime 重置为当前时间，使 TimeoutEvaluator 从恢复点开始计时。
-// 对齐 Python: LoopCoordinator.load_state
+// Python: LoopCoordinator.load_state
 func (lc *LoopCoordinator) ImportState(state LoopCoordinatorState) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -238,7 +238,7 @@ func (lc *LoopCoordinator) ImportState(state LoopCoordinatorState) {
 
 // GetCompletionPromiseEvaluator 返回第一个 CompletionPromiseEvaluator（如有）。
 // 返回接口类型以满足 LoopCoordinatorInterface 约束。
-// 对齐 Python: LoopCoordinator.get_completion_promise_evaluator
+// Python: LoopCoordinator.get_completion_promise_evaluator
 func (lc *LoopCoordinator) GetCompletionPromiseEvaluator() hinterfaces.CompletionPromiseEvaluatorInterface {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
@@ -263,7 +263,7 @@ func (lc *LoopCoordinator) Evaluators() []StopConditionEvaluator {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildEvalContext 构建评估上下文（调用者需持有锁）。
-// 对齐 Python: LoopCoordinator._build_eval_context
+// Python: LoopCoordinator._build_eval_context
 func (lc *LoopCoordinator) buildEvalContext() StopEvaluationContext {
 	elapsed := 0.0
 	if !lc.startTime.IsZero() {

@@ -13,7 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ListDirInput 列出目录工具的输入参数。
-// 对齐 Python: ListDirTool inputs (filesystem.py L1500)
+// Python: ListDirTool inputs (filesystem.py L1500)
 type ListDirInput struct {
 	// Path 目录路径，默认 "."
 	Path string `json:"path"`
@@ -30,19 +30,19 @@ type ListDirInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewListDirTool 创建 ListDirTool 实例。
-// 对齐 Python: ListDirTool (filesystem.py L1493)
+// Python: ListDirTool (filesystem.py L1493)
 func NewListDirTool(op sys_operation.SysOperation, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("list_files", "ListDirTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input ListDirInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// path 默认 "."
-		// 对齐 Python L1501
+		// Python: L1501
 		path := input.Path
 		if path == "" {
 			path = "."
 		}
 
-		// 对齐 Python L1504-1505
+		// Python: L1504-1505
 		filesRes, filesErr := op.Fs().ListFiles(ctx, path)
 		dirsRes, dirsErr := op.Fs().ListDirectories(ctx, path)
 
@@ -68,7 +68,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 		}
 
 		// 检查返回结果 Code
-		// 对齐 Python L1507-1510
+		// Python: L1507-1510
 		if !filesRes.IsSuccess() {
 			logger.Error(logComponent).
 				Str("path", path).
@@ -91,7 +91,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 		}
 
 		// 提取文件名和目录名
-		// 对齐 Python L1512-1513
+		// Python: L1512-1513
 		var files []string
 		if filesRes.Data != nil {
 			for _, item := range filesRes.Data.ListItems {
@@ -106,7 +106,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 		}
 
 		// show_hidden=false 时过滤 . 开头
-		// 对齐 Python L1515-1517
+		// Python: L1515-1517
 		if !input.ShowHidden {
 			filteredFiles := make([]string, 0, len(files))
 			for _, f := range files {
@@ -126,7 +126,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 		}
 
 		// 排序
-		// 对齐 Python L1519-1520
+		// Python: L1519-1520
 		sort.Strings(files)
 		sort.Strings(dirs)
 
@@ -136,7 +136,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			Int("dir_count", len(dirs)).
 			Msg("ListDirTool 列出目录成功")
 
-		// 对齐 Python L1522-1528
+		// Python: L1522-1528
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{

@@ -23,7 +23,7 @@ import (
 
 // BuildInputs 构建 adapter 所需的 inputs 字典。
 //
-// 对齐 Python: JiuWenClaw._build_inputs(request) -> (inputs, memoryMode, rawQuery)
+// Python: JiuWenClaw._build_inputs(request) -> (inputs, memoryMode, rawQuery)
 //
 // 返回: inputs 字典、memoryMode 字符串、原始 query。
 func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, string, string) {
@@ -50,7 +50,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 	// 3. 提取基础字段
 	query, _ := params["query"].(string)
 	channel := extractChannelFromSessionID(request)
-	// 对齐 Python: language = resolve_language(config_base.get("preferred_language", "zh"))
+	// Python: language = resolve_language(config_base.get("preferred_language", "zh"))
 	// 使用 prompts.ResolveLanguage 标准化，对齐 DeepAdapter.resolveRuntimeLanguage
 	rawLang := "zh"
 	if configBase != nil {
@@ -110,7 +110,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 		}
 	}
 
-	// 对齐 Python：interaction_context 存在时记录 debug 日志
+	// Python: interaction_context 存在时记录 debug 日志
 	if metadata != nil {
 		if ctx, ok := metadata["interaction_context"]; ok {
 			if ctxStr, ok := ctx.(string); ok && strings.TrimSpace(ctxStr) != "" {
@@ -179,7 +179,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildInteractiveInputFromAnswers 从用户答案构建 InteractiveInput。
-// 对齐 Python: JiuWenClaw._build_interactive_input_from_answers()
+// Python: JiuWenClaw._build_interactive_input_from_answers()
 func buildInteractiveInputFromAnswers(requestID string, answers []any, source string) *interaction.InteractiveInput {
 	ii, err := interaction.NewInteractiveInput()
 	if err != nil {

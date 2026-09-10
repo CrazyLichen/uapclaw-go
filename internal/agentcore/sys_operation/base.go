@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOperation 操作基类，所有子操作（fs/shell/code）的公共父类。
-// 对齐 Python BaseOperation：name, mode, description, _run_config。
+// Python: BaseOperation：name, mode, description, _run_config。
 type BaseOperation struct {
 	// name 操作名称（如 "fs", "shell", "code"）
 	name string
@@ -125,7 +125,7 @@ func FromOperationModeString(s string) OperationMode {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createSysOperationEvent 创建系统操作日志事件。
-// 对齐 Python BaseOperation._create_sys_operation_event。
+// Python: BaseOperation._create_sys_operation_event。
 func (b *BaseOperation) createSysOperationEvent(
 	ctx context.Context,
 	eventType string,

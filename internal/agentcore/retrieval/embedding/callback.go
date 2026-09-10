@@ -6,7 +6,7 @@ import "sync"
 
 // NoopCallback 空回调，不做任何操作。
 //
-// 对齐 Python: BaseCallback（空操作基类）
+// Python: BaseCallback（空操作基类）
 type NoopCallback struct {
 	// callCounter 调用计数
 	callCounter int

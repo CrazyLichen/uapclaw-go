@@ -17,7 +17,7 @@ import (
 
 // BrowserRuntime 浏览器运行时接口，提供 RunBrowserTask 方法。
 //
-// 对齐 Python: ActionController.bind_runtime 中隐含的运行时协议
+// Python: ActionController.bind_runtime 中隐含的运行时协议
 type BrowserRuntime interface {
 	// RunBrowserTask 执行浏览器任务
 	RunBrowserTask(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) (map[string]any, error)
@@ -25,52 +25,52 @@ type BrowserRuntime interface {
 
 // BaseController 基础控制器接口，定义动作调度器的抽象契约。
 //
-// 对齐 Python: BaseController (controllers/base.py L11-69)
+// Python: BaseController (controllers/base.py L11-69)
 type BaseController interface {
 	// BindRuntime 绑定运行时对象，供运行时支持的动作使用。
-	// 对齐 Python: BaseController.bind_runtime
+	// Python: BaseController.bind_runtime
 	BindRuntime(runtime BrowserRuntime) error
 
 	// BindRuntimeRunner 绑定运行时运行器。
-	// 对齐 Python: BaseController.bind_runtime_runner
+	// Python: BaseController.bind_runtime_runner
 	BindRuntimeRunner(runner RuntimeRunner)
 
 	// ClearRuntimeRunner 清除已绑定的运行时运行器。
-	// 对齐 Python: BaseController.clear_runtime_runner
+	// Python: BaseController.clear_runtime_runner
 	ClearRuntimeRunner()
 
 	// BindCodeExecutor 绑定直接代码执行器。
-	// 对齐 Python: BaseController.bind_code_executor
+	// Python: BaseController.bind_code_executor
 	BindCodeExecutor(executor CodeExecutorFunc)
 
 	// ClearCodeExecutor 清除已绑定的代码执行器。
-	// 对齐 Python: BaseController.clear_code_executor
+	// Python: BaseController.clear_code_executor
 	ClearCodeExecutor()
 
 	// RegisterAction 注册动作处理器。
-	// 对齐 Python: BaseController.register_action
+	// Python: BaseController.register_action
 	RegisterAction(name string, handler ActionHandler, overwrite bool) error
 
 	// RegisterActionSpec 注册动作元数据。
-	// 对齐 Python: BaseController.register_action_spec
+	// Python: BaseController.register_action_spec
 	RegisterActionSpec(name string, spec ActionSpec)
 
 	// ListActions 列出已注册的动作名称。
-	// 对齐 Python: BaseController.list_actions
+	// Python: BaseController.list_actions
 	ListActions() []string
 
 	// DescribeActions 返回已注册动作的元数据。
-	// 对齐 Python: BaseController.describe_actions
+	// Python: BaseController.describe_actions
 	DescribeActions() map[string]ActionSpec
 
 	// RunAction 执行已注册的动作。
-	// 对齐 Python: BaseController.run_action
+	// Python: BaseController.run_action
 	RunAction(ctx context.Context, action string, sessionID string, requestID string, kwargs map[string]any) ActionResult
 }
 
 // ActionController 实例级动作注册和调度器。
 //
-// 对齐 Python: ActionController (controllers/action.py L70-268)
+// Python: ActionController (controllers/action.py L70-268)
 type ActionController struct {
 	// actions 动作处理器映射
 	actions map[string]ActionHandler
@@ -85,16 +85,16 @@ type ActionController struct {
 }
 
 // ActionHandler 动作处理器函数类型。
-// 对齐 Python: ActionHandler = Callable[..., Awaitable[Any] | Any]
+// Python: ActionHandler = Callable[..., Awaitable[Any] | Any]
 type ActionHandler func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult
 
 // RuntimeRunner 运行时运行器函数类型。
-// 对齐 Python: RuntimeRunner
+// Python: RuntimeRunner
 type RuntimeRunner func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult
 
 // ActionSpec 动作元数据。
 //
-// 对齐 Python: register_action_spec 参数
+// Python: register_action_spec 参数
 type ActionSpec struct {
 	// Summary 动作摘要
 	Summary string `json:"summary"`
@@ -110,7 +110,7 @@ type browserWorkerActionKey struct{}
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ActionResult 动作执行结果。
-// 对齐 Python: ActionResult = dict[str, Any]
+// Python: ActionResult = dict[str, Any]
 type ActionResult = map[string]any
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -118,7 +118,7 @@ type ActionResult = map[string]any
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // recursiveBrowserActions 禁止递归调用的浏览器动作集合。
-// 对齐 Python: _RECURSIVE_BROWSER_ACTIONS
+// Python: _RECURSIVE_BROWSER_ACTIONS
 var recursiveBrowserActions = map[string]bool{
 	"browser_task":     true,
 	"run_browser_task": true,
@@ -128,7 +128,7 @@ var recursiveBrowserActions = map[string]bool{
 
 // NewActionController 创建动作控制器实例。
 //
-// 对齐 Python: ActionController.__init__
+// Python: ActionController.__init__
 func NewActionController() *ActionController {
 	return &ActionController{
 		actions:     make(map[string]ActionHandler),
@@ -148,7 +148,7 @@ func (c *ActionController) CodeExecutor() CodeExecutorFunc {
 
 // BindRuntime 绑定运行时对象。
 //
-// 对齐 Python: ActionController.bind_runtime
+// Python: ActionController.bind_runtime
 func (c *ActionController) BindRuntime(runtime BrowserRuntime) error {
 	runner := func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult {
 		result, err := runtime.RunBrowserTask(ctx, task, sessionID, requestID, timeoutS)
@@ -169,35 +169,35 @@ func (c *ActionController) BindRuntime(runtime BrowserRuntime) error {
 
 // BindRuntimeRunner 绑定运行时运行器。
 //
-// 对齐 Python: ActionController.bind_runtime_runner
+// Python: ActionController.bind_runtime_runner
 func (c *ActionController) BindRuntimeRunner(runner RuntimeRunner) {
 	c.runtimeRunner = runner
 }
 
 // ClearRuntimeRunner 清除运行时运行器。
 //
-// 对齐 Python: ActionController.clear_runtime_runner
+// Python: ActionController.clear_runtime_runner
 func (c *ActionController) ClearRuntimeRunner() {
 	c.BindRuntimeRunner(nil)
 }
 
 // BindCodeExecutor 绑定代码执行器。
 //
-// 对齐 Python: ActionController.bind_code_executor
+// Python: ActionController.bind_code_executor
 func (c *ActionController) BindCodeExecutor(executor CodeExecutorFunc) {
 	c.codeExecutor = executor
 }
 
 // ClearCodeExecutor 清除代码执行器。
 //
-// 对齐 Python: ActionController.clear_code_executor
+// Python: ActionController.clear_code_executor
 func (c *ActionController) ClearCodeExecutor() {
 	c.codeExecutor = nil
 }
 
 // RegisterAction 注册动作处理器。
 //
-// 对齐 Python: ActionController.register_action
+// Python: ActionController.register_action
 func (c *ActionController) RegisterAction(name string, handler ActionHandler, overwrite bool) error {
 	actionName := normalizeActionName(name)
 	if actionName == "" {
@@ -219,7 +219,7 @@ func (c *ActionController) RegisterAction(name string, handler ActionHandler, ov
 
 // RegisterActionSpec 注册动作元数据。
 //
-// 对齐 Python: ActionController.register_action_spec
+// Python: ActionController.register_action_spec
 func (c *ActionController) RegisterActionSpec(name string, spec ActionSpec) {
 	actionName := normalizeActionName(name)
 	if actionName == "" {
@@ -237,7 +237,7 @@ func (c *ActionController) RegisterActionSpec(name string, spec ActionSpec) {
 
 // ListActions 列出已注册的动作名称。
 //
-// 对齐 Python: ActionController.list_actions
+// Python: ActionController.list_actions
 func (c *ActionController) ListActions() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -251,7 +251,7 @@ func (c *ActionController) ListActions() []string {
 
 // DescribeActions 返回已注册动作的元数据。
 //
-// 对齐 Python: ActionController.describe_actions
+// Python: ActionController.describe_actions
 func (c *ActionController) DescribeActions() map[string]ActionSpec {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -269,7 +269,7 @@ func (c *ActionController) DescribeActions() map[string]ActionSpec {
 
 // RunAction 执行已注册的动作。
 //
-// 对齐 Python: ActionController.run_action
+// Python: ActionController.run_action
 func (c *ActionController) RunAction(ctx context.Context, action string, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 	actionName := normalizeActionName(action)
 	sid := strings.TrimSpace(sessionID)
@@ -384,7 +384,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 }
 
 // Snapshot 返回控制器快照。
-// 对齐 Python: ActionController.snapshot
+// Python: ActionController.snapshot
 // actionSpecs 进行深拷贝，保护内部状态不被外部修改，对齐 Python 的 copy.deepcopy。
 func (c *ActionController) Snapshot() map[string]any {
 	c.mu.Lock()
@@ -412,7 +412,7 @@ func (c *ActionController) Snapshot() map[string]any {
 }
 
 // Restore 从快照恢复控制器状态。
-// 对齐 Python: ActionController.restore
+// Python: ActionController.restore
 func (c *ActionController) Restore(snapshot map[string]any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -446,7 +446,7 @@ func (c *ActionController) Restore(snapshot map[string]any) {
 
 // RegisterBuiltinActions 注册所有内置动作。
 //
-// 对齐 Python: register_builtin_actions (controllers/action.py L691-1237)
+// Python: register_builtin_actions (controllers/action.py L691-1237)
 func (c *ActionController) RegisterBuiltinActions() {
 	c.registerPingAction()
 	c.registerEchoAction()
@@ -458,7 +458,7 @@ func (c *ActionController) RegisterBuiltinActions() {
 }
 
 // IsBrowserWorkerAction 检查上下文中是否在 browser worker 动作中执行。
-// 对齐 Python: _ctx_browser_worker_action.get()
+// Python: _ctx_browser_worker_action.get()
 func IsBrowserWorkerAction(ctx context.Context) bool {
 	if ctx == nil {
 		return false
@@ -468,7 +468,7 @@ func IsBrowserWorkerAction(ctx context.Context) bool {
 }
 
 // WithBrowserWorkerAction 设置上下文标记，表示在 browser worker 动作中执行。
-// 对齐 Python: browser_worker_action_context
+// Python: browser_worker_action_context
 func WithBrowserWorkerAction(ctx context.Context) context.Context {
 	return context.WithValue(ctx, browserWorkerActionKey{}, true)
 }
@@ -476,13 +476,13 @@ func WithBrowserWorkerAction(ctx context.Context) context.Context {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeActionName 规范化动作名称。
-// 对齐 Python: _normalize_action_name
+// Python: _normalize_action_name
 func normalizeActionName(name string) string {
 	return strings.TrimSpace(strings.ToLower(name))
 }
 
 // registerPingAction 注册 ping 动作。
-// 对齐 Python: register_builtin_actions 中 ping (L694-701)
+// Python: register_builtin_actions 中 ping (L694-701)
 func (c *ActionController) registerPingAction() {
 	_ = c.RegisterAction("ping", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		return ActionResult{
@@ -493,7 +493,7 @@ func (c *ActionController) registerPingAction() {
 			"meta":       kwargs,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("ping", ActionSpec{
 		Summary:   "Health check action.",
 		WhenToUse: "Use to verify controller dispatch and session/request threading.",
@@ -501,7 +501,7 @@ func (c *ActionController) registerPingAction() {
 }
 
 // registerEchoAction 注册 echo 动作。
-// 对齐 Python: register_builtin_actions 中 echo (L703-715)
+// Python: register_builtin_actions 中 echo (L703-715)
 func (c *ActionController) registerEchoAction() {
 	_ = c.RegisterAction("echo", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		text := ""
@@ -516,7 +516,7 @@ func (c *ActionController) registerEchoAction() {
 			"meta":       kwargs,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("echo", ActionSpec{
 		Summary:   "Echoes provided text and metadata.",
 		WhenToUse: "Use for debugging payload passthrough through browser_custom_action.",
@@ -525,7 +525,7 @@ func (c *ActionController) registerEchoAction() {
 }
 
 // registerBrowserTaskAction 注册 browser_task 和 run_browser_task 动作。
-// 对齐 Python: register_builtin_actions 中 browser_task (L717-756)
+// Python: register_builtin_actions 中 browser_task (L717-756)
 func (c *ActionController) registerBrowserTaskAction() {
 	handler := func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		runner := c.runtimeRunner
@@ -562,7 +562,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 	}
 
 	_ = c.RegisterAction("browser_task", handler, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("browser_task", ActionSpec{
 		Summary:   "Runs a free-form browser task through runtime.run_browser_task.",
 		WhenToUse: "Use for generic website tasks when no specialized custom action applies.",
@@ -573,7 +573,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 	})
 
 	_ = c.RegisterAction("run_browser_task", handler, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("run_browser_task", ActionSpec{
 		Summary:   "Alias of browser_task.",
 		WhenToUse: "Same behavior as browser_task.",
@@ -585,7 +585,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 }
 
 // registerBrowserGetElementCoordinatesAction 注册坐标解析动作。
-// 对齐 Python: register_builtin_actions 中 browser_get_element_coordinates (L758-869)
+// Python: register_builtin_actions 中 browser_get_element_coordinates (L758-869)
 func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 	_ = c.RegisterAction("browser_get_element_coordinates", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		payload := buildDragPayload(kwargs)
@@ -679,7 +679,7 @@ func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 			"runtime": runtimeResult,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("browser_get_element_coordinates", ActionSpec{
 		Summary:   "Resolves source/target screen coordinates by selectors or explicit coordinates.",
 		WhenToUse: "Use when you need coordinates for one element (element_source only) or two (source + target). element_target is optional.",
@@ -698,7 +698,7 @@ func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 }
 
 // registerBrowserDragAndDropAction 注册拖拽动作。
-// 对齐 Python: register_builtin_actions 中 browser_drag_and_drop (L907-1029)
+// Python: register_builtin_actions 中 browser_drag_and_drop (L907-1029)
 func (c *ActionController) registerBrowserDragAndDropAction() {
 	_ = c.RegisterAction("browser_drag_and_drop", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		payload := buildDragPayload(kwargs)
@@ -799,7 +799,7 @@ func (c *ActionController) registerBrowserDragAndDropAction() {
 			"runtime":  runtimeResult,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("browser_drag_and_drop", ActionSpec{
 		Summary:   "Performs drag-and-drop using selectors or explicit coordinates.",
 		WhenToUse: "Use for drag-and-drop tasks instead of generic browser_run_task text-only instructions.",
@@ -820,7 +820,7 @@ func (c *ActionController) registerBrowserDragAndDropAction() {
 }
 
 // registerBrowserSetInputFilesAction 注册文件上传动作。
-// 对齐 Python: register_builtin_actions 中 browser_set_input_files (L1031-1109)
+// Python: register_builtin_actions 中 browser_set_input_files (L1031-1109)
 func (c *ActionController) registerBrowserSetInputFilesAction() {
 	_ = c.RegisterAction("browser_set_input_files", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		effectiveSelector := `input[type="file"]`
@@ -959,7 +959,7 @@ func (c *ActionController) registerBrowserSetInputFilesAction() {
 			"runtime":  runtimeResult,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("browser_set_input_files", ActionSpec{
 		Summary: "Sets files on an <input type='file'> element. Requires prior page inspection " +
 			"to select the correct input — do not call this without first reading the page snapshot.",
@@ -980,7 +980,7 @@ func (c *ActionController) registerBrowserSetInputFilesAction() {
 }
 
 // registerListUploadFilesAction 注册列出上传文件动作。
-// 对齐 Python: register_builtin_actions 中 list_upload_files (L871-905)
+// Python: register_builtin_actions 中 list_upload_files (L871-905)
 func (c *ActionController) registerListUploadFilesAction() {
 	_ = c.RegisterAction("list_upload_files", func(_ context.Context, sessionID string, requestID string, _ map[string]any) ActionResult {
 		uploadRoot := resolveUploadRoot()
@@ -1015,7 +1015,7 @@ func (c *ActionController) registerListUploadFilesAction() {
 			"request_id":  requestID,
 		}
 	}, true)
-	// 对齐 Python: 提示词逐字符复制
+	// Python: 提示词逐字符复制
 	c.RegisterActionSpec("list_upload_files", ActionSpec{
 		Summary:   "Lists files available for upload from the configured BROWSER_UPLOAD_ROOT directory.",
 		WhenToUse: "Call this to discover what files are available and get their exact absolute paths before calling browser_set_input_files to attach them to a file input. Returns a list of {name, path, size_bytes} entries.",
@@ -1023,10 +1023,10 @@ func (c *ActionController) registerListUploadFilesAction() {
 }
 
 // ─── JavaScript 脚本构建辅助函数 ───
-// 对齐 Python: controllers/action.py L297-562
+// Python: controllers/action.py L297-562
 
 // buildRunCodeTask 构建 run_code 任务提示。
-// 对齐 Python: _build_run_code_task (L297-305)
+// Python: _build_run_code_task (L297-305)
 // 提示词逐字符复制 Python 原文
 func buildRunCodeTask(jsCode string, purpose string) string {
 	toolInput := map[string]any{"code": jsCode}
@@ -1040,7 +1040,7 @@ func buildRunCodeTask(jsCode string, purpose string) string {
 }
 
 // buildDragPayload 构建拖拽参数载荷。
-// 对齐 Python: _build_drag_payload (L510-562)
+// Python: _build_drag_payload (L510-562)
 func buildDragPayload(kwargs map[string]any) map[string]any {
 	sourceSelector := getStr(kwargs, "element_source")
 	targetSelector := getStr(kwargs, "element_target")
@@ -1086,7 +1086,7 @@ func buildDragPayload(kwargs map[string]any) map[string]any {
 }
 
 // hasSelectorInputs 检查是否有选择器输入。
-// 对齐 Python: _has_selector_inputs
+// Python: _has_selector_inputs
 func hasSelectorInputs(payload map[string]any) bool {
 	s, _ := payload["element_source"].(string)
 	t, _ := payload["element_target"].(string)
@@ -1094,14 +1094,14 @@ func hasSelectorInputs(payload map[string]any) bool {
 }
 
 // hasSourceSelector 检查是否有源选择器。
-// 对齐 Python: _has_source_selector
+// Python: _has_source_selector
 func hasSourceSelector(payload map[string]any) bool {
 	s, _ := payload["element_source"].(string)
 	return strings.TrimSpace(s) != ""
 }
 
 // hasCoordinateInputs 检查是否有坐标输入。
-// 对齐 Python: _has_coordinate_inputs
+// Python: _has_coordinate_inputs
 func hasCoordinateInputs(payload map[string]any) bool {
 	for _, k := range []string{"coord_source_x", "coord_source_y", "coord_target_x", "coord_target_y"} {
 		if payload[k] == nil {
@@ -1112,7 +1112,7 @@ func hasCoordinateInputs(payload map[string]any) bool {
 }
 
 // buildCoordinateScript 构建坐标解析脚本。
-// 对齐 Python: _build_coordinate_script (L473-478)
+// Python: _build_coordinate_script (L473-478)
 func buildCoordinateScript(payload map[string]any) string {
 	payloadJSON, _ := json.Marshal(payload)
 	return wrapPageScript(
@@ -1122,7 +1122,7 @@ func buildCoordinateScript(payload map[string]any) string {
 }
 
 // buildDragScript 构建拖拽操作脚本。
-// 对齐 Python: _build_drag_script (L481-486)
+// Python: _build_drag_script (L481-486)
 func buildDragScript(payload map[string]any) string {
 	payloadJSON, _ := json.Marshal(payload)
 	return wrapPageScript(
@@ -1132,7 +1132,7 @@ func buildDragScript(payload map[string]any) string {
 }
 
 // buildSetInputFilesScript 构建文件设置脚本。
-// 对齐 Python: _build_set_input_files_script (L489-507)
+// Python: _build_set_input_files_script (L489-507)
 func buildSetInputFilesScript(selector string, paths []string) string {
 	selectorJS := "'" + strings.ReplaceAll(strings.ReplaceAll(selector, "\\", "\\\\"), "'", "\\'") + "'"
 	pathsJSON, _ := json.Marshal(paths)
@@ -1153,13 +1153,13 @@ func buildSetInputFilesScript(selector string, paths []string) string {
 }
 
 // wrapPageScript 包装页面脚本。
-// 对齐 Python: _wrap_page_script (L308-309)
+// Python: _wrap_page_script (L308-309)
 func wrapPageScript(parts ...string) string {
 	return "async (page) => {\n" + strings.Join(parts, "") + "}"
 }
 
 // buildSelectorResolutionHelpers 构建选择器解析辅助函数。
-// 对齐 Python: _build_selector_resolution_helpers (L312-379)
+// Python: _build_selector_resolution_helpers (L312-379)
 func buildSelectorResolutionHelpers(payloadJSON string) string {
 	return fmt.Sprintf("  const params = %s;\n", payloadJSON) +
 		"  if (params.url && String(params.url).trim()) {\n" +
@@ -1229,7 +1229,7 @@ func buildSelectorResolutionHelpers(payloadJSON string) string {
 }
 
 // buildCoordinateResolutionBody 构建坐标解析主体。
-// 对齐 Python: _build_coordinate_resolution_body (L382-414)
+// Python: _build_coordinate_resolution_body (L382-414)
 // 提示词逐字符复制 Python 原文
 func buildCoordinateResolutionBody() string {
 	return "  let source = null;\n" +
@@ -1265,7 +1265,7 @@ func buildCoordinateResolutionBody() string {
 }
 
 // buildDragOperationBody 构建拖拽操作主体。
-// 对齐 Python: _build_drag_operation_body (L417-470)
+// Python: _build_drag_operation_body (L417-470)
 // 提示词逐字符复制 Python 原文
 func buildDragOperationBody() string {
 	return "  let source = null;\n" +
@@ -1324,7 +1324,7 @@ func buildDragOperationBody() string {
 // ─── 通用辅助函数 ───
 
 // toIntOrNone 尝试将 any 转为 *int。
-// 对齐 Python: _to_int_or_none
+// Python: _to_int_or_none
 func toIntOrNone(v any) (*int, error) {
 	if v == nil {
 		return nil, nil
@@ -1364,7 +1364,7 @@ func getStr(m map[string]any, key string) string {
 }
 
 // normalizeOffset 将 offset 值规范化为 {x: int, y: int} 格式。
-// 对齐 Python: _normalize_offset (controllers/action.py L283-294)
+// Python: _normalize_offset (controllers/action.py L283-294)
 // 输入为 nil/非 map/x 或 y 无法解析时返回 nil，对齐 Python 的 None 返回。
 func normalizeOffset(value any) *map[string]int {
 	if value == nil {
@@ -1392,7 +1392,7 @@ func offsetToAny(offset *map[string]int) any {
 }
 
 // resolveUploadRoot 解析上传根目录。
-// 对齐 Python: resolve_upload_root (utils/env.py)
+// Python: resolve_upload_root (utils/env.py)
 func resolveUploadRoot() string {
 	for _, envKey := range []string{"BROWSER_UPLOAD_ROOT", "PLAYWRIGHT_UPLOAD_ROOT"} {
 		if v := strings.TrimSpace(os.Getenv(envKey)); v != "" {
@@ -1403,7 +1403,7 @@ func resolveUploadRoot() string {
 }
 
 // listDirFiles 列出目录下的文件。
-// 对齐 Python: _list_dir_files (L588-601)
+// Python: _list_dir_files (L588-601)
 func listDirFiles(root string) []map[string]any {
 	entries := []map[string]any{}
 	items, err := os.ReadDir(root)

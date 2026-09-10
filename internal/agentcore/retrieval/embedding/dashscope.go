@@ -24,7 +24,7 @@ import (
 // 使用 HTTP 直接调用 DashScope 多模态嵌入 API，
 // 支持文本+图片+视频多模态嵌入。
 //
-// 对应 Python: openjiuwen/core/retrieval/embedding/dashscope_embedding.py
+// Python: openjiuwen/core/retrieval/embedding/dashscope_embedding.py
 type DashscopeEmbedding struct {
 	// config 嵌入配置
 	config EmbeddingConfig
@@ -43,7 +43,7 @@ type DashscopeEmbedding struct {
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
 	// extraHeaders 额外请求头，合并到 HTTP 请求中
-	// 对齐 Python DashScopeEmbedding 构造函数的 extra_headers 参数
+	// Python: DashScopeEmbedding 构造函数的 extra_headers 参数
 	extraHeaders map[string]string
 	// httpClient HTTP 客户端
 	httpClient *http.Client
@@ -130,7 +130,7 @@ func WithDashscopeHTTPClient(client *http.Client) DashscopeEmbeddingOption {
 }
 
 // WithDashscopeExtraHeaders 设置额外请求头，合并到 HTTP 请求中。
-// 对齐 Python DashScopeEmbedding 构造函数的 extra_headers 参数。
+// Python: DashScopeEmbedding 构造函数的 extra_headers 参数。
 func WithDashscopeExtraHeaders(headers map[string]string) DashscopeEmbeddingOption {
 	return func(ds *DashscopeEmbedding) {
 		if ds.extraHeaders == nil {
@@ -390,7 +390,7 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input interface{}, mo
 			)
 		}
 
-		// 对齐 Python: 所有 HTTP 错误（含 5xx）都可重试
+		// Python: 所有 HTTP 错误（含 5xx）都可重试
 		if resp.StatusCode != http.StatusOK {
 			// 4xx 客户端错误（不含 429）不可重试
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
@@ -451,7 +451,7 @@ func (ds *DashscopeEmbedding) handleDashscopeAPIResp(body []byte, attempt int) (
 			Str("error_msg", errMsg).
 			Msg("DashScope 嵌入请求失败")
 		// 返回可重试错误，让 RetryWithBackoff 正确重试
-		// 对齐 Python: 所有 DashScope API 错误都可重试
+		// Python: 所有 DashScope API 错误都可重试
 		err := exception.BuildError(
 			exception.StatusRetrievalEmbeddingRequestCallFailed,
 			exception.WithParam("error_msg", errMsg),

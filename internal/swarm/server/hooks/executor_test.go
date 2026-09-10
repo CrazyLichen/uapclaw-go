@@ -274,7 +274,7 @@ func TestHookExecutor_RunAll_prompt空模板(t *testing.T) {
 }
 
 // TestHookExecutor_RunAll_未知类型 测试未知 hook 类型
-// 对齐 Python: 未知 hook 类型不加入 tasks 列表，不占用 result 位置
+// Python: 未知 hook 类型不加入 tasks 列表，不占用 result 位置
 func TestHookExecutor_RunAll_未知类型(t *testing.T) {
 	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
@@ -418,7 +418,7 @@ func TestHookExecutor_RunAll_command阻塞stderrFallback(t *testing.T) {
 }
 
 // TestHookExecutor_RunAll_command序列化失败 测试 hookInput 含不可序列化值时返回 NON_BLOCKING_ERROR
-// 对齐 Python: json.dumps(hook_input) 失败时不会发生（Python json.dumps 支持所有基本类型），
+// Python: json.dumps(hook_input) 失败时不会发生（Python json.dumps 支持所有基本类型），
 // Go 中 chan/func 等类型不可序列化，需返回 NON_BLOCKING_ERROR 保护
 func TestHookExecutor_RunAll_command序列化失败(t *testing.T) {
 	exec := NewHookExecutor()
@@ -440,7 +440,7 @@ func TestHookExecutor_RunAll_command序列化失败(t *testing.T) {
 }
 
 // TestHookExecutor_RunAll_commandFloat64Timeout 测试 timeout 为 float64 类型时正确转换
-// 对齐 Python: config.get("timeout", 30) 从 YAML 加载时 timeout 可能是 float 类型
+// Python: config.get("timeout", 30) 从 YAML 加载时 timeout 可能是 float 类型
 func TestHookExecutor_RunAll_commandFloat64Timeout(t *testing.T) {
 	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{
@@ -457,7 +457,7 @@ func TestHookExecutor_RunAll_commandFloat64Timeout(t *testing.T) {
 }
 
 // TestHookExecutor_RunAll_command进程被杀 测试 context cancel 导致进程被 kill（非 timeout）
-// 对齐 Python: proc.returncode is None → NON_BLOCKING_ERROR("hook process killed")
+// Python: proc.returncode is None → NON_BLOCKING_ERROR("hook process killed")
 func TestHookExecutor_RunAll_command进程被杀(t *testing.T) {
 	exec := NewHookExecutor()
 	hookConfigs := []map[string]any{

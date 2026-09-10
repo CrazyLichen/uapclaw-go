@@ -66,7 +66,7 @@ const (
 
 // NewVideoUnderstandingTool 创建视频理解工具。
 //
-// 对齐 Python: VideoUnderstandingTool.__init__ + VideoUnderstandingTool.invoke
+// Python: VideoUnderstandingTool.__init__ + VideoUnderstandingTool.invoke
 // 使用 VideoModelConfig 配置（独立于 VisionModelConfig），通过 BaseModelClient.Invoke 调用 video_url 消息
 // 支持 ThinkingEnabled 参数，通过 WithInvokeExtra 传递 thinking payload
 func NewVideoUnderstandingTool(

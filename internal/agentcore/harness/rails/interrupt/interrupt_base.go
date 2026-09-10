@@ -23,7 +23,7 @@ type InterruptDecision interface {
 
 // ApproveResult 允许继续执行决策。
 //
-// 对齐 Python: ApproveResult(InterruptDecision)
+// Python: ApproveResult(InterruptDecision)
 type ApproveResult struct {
 	// NewArgs 可选，替换工具参数（nil=不替换，对齐 Python new_args: dict | None）
 	NewArgs *map[string]any
@@ -70,7 +70,7 @@ type ResolveInterruptFn func(
 
 const (
 	// baseInterruptRailPriority BaseInterruptRail 默认优先级
-	// 对齐 Python: BaseInterruptRail.priority = 90
+	// Python: BaseInterruptRail.priority = 90
 	baseInterruptRailPriority = 90
 )
 
@@ -110,7 +110,7 @@ func (r *BaseInterruptRail) Reject(toolResult any) *RejectResult {
 
 // Interrupt 创建中断决策。
 //
-// 对齐 Python: BaseInterruptRail.interrupt(request)
+// Python: BaseInterruptRail.interrupt(request)
 func (r *BaseInterruptRail) Interrupt(request saschema.InterruptRequester) *InterruptResult {
 	return &InterruptResult{Request: request}
 }
@@ -218,7 +218,7 @@ func (r *BaseInterruptRail) applyDecision(
 ) {
 	switch d := decision.(type) {
 	case *ApproveResult:
-		// 对齐 Python: new_args is not None
+		// Python: new_args is not None
 		if d.NewArgs != nil {
 			toolInputs.ToolArgs = *d.NewArgs
 		}
@@ -276,7 +276,7 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 		return nil
 	}
 
-	// 对齐 Python logger.info：提取用户输入日志
+	// Python: logger.info：提取用户输入日志
 	logger.Info(interruptLogComponent).
 		Str("tool_call_id", toolCallID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
@@ -284,7 +284,7 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 
 	// InteractiveInput 格式
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
-		// 对齐 Python logger.info：记录 keys 列表
+		// Python: logger.info：记录 keys 列表
 		keys := make([]string, 0, len(interactive.UserInputs))
 		for k := range interactive.UserInputs {
 			keys = append(keys, k)
@@ -295,7 +295,7 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 			Msg("InteractiveInput.user_inputs")
 
 		if val, found := interactive.UserInputs[toolCallID]; found {
-			// 对齐 Python logger.info：匹配成功，记录 value 截断
+			// Python: logger.info：匹配成功，记录 value 截断
 			valRepr := fmt.Sprintf("%v", val)
 			if len(valRepr) > 200 {
 				valRepr = valRepr[:200]

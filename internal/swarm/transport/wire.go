@@ -24,7 +24,7 @@ const logComponentWire = logger.ComponentAgentServer
 
 // BuildServerPushWire 将 send_push 入参编码为 E2A 响应线 dict。
 //
-// 对齐 Python: jiuwenswarm/server/gateway_push/wire.py (build_server_push_wire)。
+// Python: jiuwenswarm/server/gateway_push/wire.py (build_server_push_wire)。
 // 编码后的 dict 带有 metadata[E2A_WIRE_SERVER_PUSH_KEY] = True 标记，
 // 使 AgentClient 的 receiverLoop 能识别此帧为 server_push 并调回调投递。
 func BuildServerPushWire(msg map[string]any) map[string]any {
@@ -43,7 +43,7 @@ func BuildServerPushWire(msg map[string]any) map[string]any {
 
 // BuildConnectionAckFrame 构建 connection.ack 事件帧 dict。
 //
-// 对齐 Python: jiuwenswarm/server/agent_ws_server.py (_connection_handler 首帧)。
+// Python: jiuwenswarm/server/agent_ws_server.py (_connection_handler 首帧)。
 // 此帧通过 RecvCh 发送到 AgentClient，在 receiverLoop 中被识别为事件帧。
 func BuildConnectionAckFrame() map[string]any {
 	return map[string]any{
@@ -55,7 +55,7 @@ func BuildConnectionAckFrame() map[string]any {
 
 // WireRequestIDKey 统一 request_id 为字符串。
 //
-// 对齐 Python: jiuwenswarm/gateway/routing/agent_client.py (_wire_request_id_key)。
+// Python: jiuwenswarm/gateway/routing/agent_client.py (_wire_request_id_key)。
 // 将任意 request_id 值转为字符串，避免 JSON 数字/字符串导致队列键不一致。
 func WireRequestIDKey(v any) string {
 	if v == nil {
@@ -72,7 +72,7 @@ func WireRequestIDKey(v any) string {
 
 // buildServerPushWireWithResponseKind 有 response_kind 的 server_push 编码。
 //
-// 对齐 Python: wire.py build_server_push_wire 中 response_kind 非空分支。
+// Python: wire.py build_server_push_wire 中 response_kind 非空分支。
 func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string) map[string]any {
 	requestID := WireRequestIDKey(msg["request_id"])
 
@@ -85,7 +85,7 @@ func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string
 	e2aResp.ResponseKind = responseKind
 	e2aResp.EnsureTimestamp()
 
-	// 对齐 Python: Provenance(converter, converted_at, details)
+	// Python: Provenance(converter, converted_at, details)
 	e2aResp.Provenance = e2a.E2AProvenance{
 		SourceProtocol: e2a.E2ASourceProtocolE2A,
 		Converter:      "uapclaw-go/internal/swarm/transport/wire:BuildServerPushWire",
@@ -93,18 +93,18 @@ func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string
 		Details:        map[string]any{"kind": "server_push"},
 	}
 
-	// 对齐 Python: identity_origin=AGENT
+	// Python: identity_origin=AGENT
 	e2aResp.IdentityOrigin = e2a.IdentityOriginAgent
 
-	// 对齐 Python: is_stream=False
+	// Python: is_stream=False
 	e2aResp.IsStream = false
 
-	// 对齐 Python: channel=str(msg.get("channel_id", "")) or None → 空串不设置
+	// Python: channel=str(msg.get("channel_id", "")) or None → 空串不设置
 	if channel, ok := msg["channel_id"].(string); ok && channel != "" {
 		e2aResp.Channel = channel
 	}
 
-	// 对齐 Python: session_id 非空时才设置（合并 Issue 20）
+	// Python: session_id 非空时才设置（合并 Issue 20）
 	if sessionID, ok := msg["session_id"].(string); ok && sessionID != "" {
 		e2aResp.SessionID = sessionID
 	}
@@ -128,7 +128,7 @@ func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string
 
 // buildServerPushWireChunk 无 response_kind 的 server_push 编码（chunk 形）。
 //
-// 对齐 Python: wire.py build_server_push_wire 中 response_kind 为空分支。
+// Python: wire.py build_server_push_wire 中 response_kind 为空分支。
 func buildServerPushWireChunk(msg map[string]any) map[string]any {
 	requestID := WireRequestIDKey(msg["request_id"])
 	channelID := ""
@@ -143,7 +143,7 @@ func buildServerPushWireChunk(msg map[string]any) map[string]any {
 	// 使用 EncodeAgentChunkForWire 编码
 	chunk := schema.NewAgentResponseChunk(requestID, channelID, payload)
 
-	// 对齐 Python: is_complete=bool(msg.get("is_complete", False))
+	// Python: is_complete=bool(msg.get("is_complete", False))
 	if isComplete, ok := msg["is_complete"].(bool); ok {
 		schema.WithChunkIsComplete(isComplete)(chunk)
 	}

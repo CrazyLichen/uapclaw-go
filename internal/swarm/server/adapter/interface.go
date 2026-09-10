@@ -14,7 +14,7 @@ import (
 // 最小能力集，UapClaw 门面仅依赖此接口驱动任意 SDK 后端，
 // 不耦合其内部结构。
 //
-// 对应 Python: jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py (AgentAdapter)
+// Python: jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py (AgentAdapter)
 type AgentAdapter interface {
 	// CreateInstance 初始化底层 SDK Agent。
 	// 启动时调用一次，skill install/uninstall 后再次调用。
@@ -51,46 +51,46 @@ type AgentAdapter interface {
 
 	// SwitchMode 切换运行模式，执行完整的 session 生命周期。
 	// 流程：preRun → switchMode → loadState → updateState → postRun
-	// 对应 Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
+	// Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 	SwitchMode(ctx context.Context, sessionID, subMode string) error
 }
 
 // ContextCompressor 上下文压缩可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
 //
-// 对应 Python: JiuWenClawDeepAdapter.compress_context / get_context_usage / generate_recap
+// Python: JiuWenClawDeepAdapter.compress_context / get_context_usage / generate_recap
 type ContextCompressor interface {
 	// CompressContext 触发上下文压缩。
-	// 对应 Python: JiuWenClawDeepAdapter.compress_context() (line 5380-5570)
+	// Python: JiuWenClawDeepAdapter.compress_context() (line 5380-5570)
 	CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error)
 	// GetContextUsage 获取上下文窗口占用率。
-	// 对应 Python: JiuWenClawDeepAdapter.get_context_usage() (line 5572-5588)
+	// Python: JiuWenClawDeepAdapter.get_context_usage() (line 5572-5588)
 	GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error)
 	// GenerateRecap 生成会话回顾摘要。
-	// 对应 Python: JiuWenClawDeepAdapter.generate_recap() (line 5590-5663)
+	// Python: JiuWenClawDeepAdapter.generate_recap() (line 5590-5663)
 	GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error)
 }
 
 // DreamingController Dreaming 启停可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
 //
-// 对应 Python: JiuWenClawDeepAdapter.try_start_dreaming / try_stop_dreaming
+// Python: JiuWenClawDeepAdapter.try_start_dreaming / try_stop_dreaming
 type DreamingController interface {
 	// TryStartDreaming 尝试启动 dreaming 进程。
-	// 对应 Python: JiuWenClawDeepAdapter.try_start_dreaming() (line 5935-5954)
+	// Python: JiuWenClawDeepAdapter.try_start_dreaming() (line 5935-5954)
 	TryStartDreaming(ctx context.Context, busyChecker func() bool) error
 	// TryStopDreaming 停止 dreaming 进程。
-	// 对应 Python: JiuWenClawDeepAdapter.try_stop_dreaming() (line 5956-5965)
+	// Python: JiuWenClawDeepAdapter.try_stop_dreaming() (line 5956-5965)
 	TryStopDreaming(ctx context.Context) error
 }
 
 // GatewayDisconnectHandler Gateway 断连处理可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
 //
-// 对应 Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect
+// Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect
 type GatewayDisconnectHandler interface {
 	// AbortOnGatewayDisconnect Gateway 断连时全局中止。
-	// 对应 Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3539-3578)
+	// Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3539-3578)
 	AbortOnGatewayDisconnect(ctx context.Context)
 }
 

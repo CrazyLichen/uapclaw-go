@@ -18,7 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Logger 日志管理器（全局单例）。
-// 对应 Python: setup_logger() 返回的根 Logger
+// Python: setup_logger() 返回的根 Logger
 //
 // 每个组件（Common/Gateway/Channel/AgentServer/Permissions）创建独立的 zerolog.Logger 实例，
 // 通过 Info/Warn/Error/Debug/Fatal 等组件级日志函数使用。每个 Logger 实例的 writer 同时写入：
@@ -86,7 +86,7 @@ func WithConfig(cfg *config.Config) Option {
 // 日志可以在 config.New()/config.Load() 之前初始化，和 Python 的
 // configure_log() / setup_logger() 行为一致。
 //
-// 对应 Python: _load_logging_config_from_yaml() + _resolve_logging_levels()
+// Python: _load_logging_config_from_yaml() + _resolve_logging_levels()
 func WithConfigFile() Option {
 	return func(l *Logger) {
 		loggingCfg := loadLoggingConfigFromYAML()
@@ -96,7 +96,7 @@ func WithConfigFile() Option {
 }
 
 // WithLogLevel 统一覆盖所有通道级别。
-// 对应 Python: setup_logger(log_level="DEBUG")
+// Python: setup_logger(log_level="DEBUG")
 func WithLogLevel(level string) Option {
 	return func(l *Logger) {
 		l.levels = ResolveLoggingLevels(nil, "", level)
@@ -104,7 +104,7 @@ func WithLogLevel(level string) Option {
 }
 
 // WithOutputDir 自定义日志输出目录。
-// 对应 Python: get_logs_dir()
+// Python: get_logs_dir()
 func WithOutputDir(dir string) Option {
 	return func(l *Logger) {
 		l.outputDir = dir
@@ -127,7 +127,7 @@ func WithLoggingLevels(levels LoggingLevels) Option {
 }
 
 // Setup 初始化日志系统（全局单例）。
-// 对应 Python: setup_logger()
+// Python: setup_logger()
 //
 // 多次调用是安全的（由 sync.Once 保护），后续调用不会重复初始化。
 func Setup(opts ...Option) error {
@@ -227,7 +227,7 @@ func Fatal(component Component) *zerolog.Event {
 }
 
 // Close 关闭所有日志 writer，释放文件句柄。
-// 对应 Python: _close_log_handlers
+// Python: _close_log_handlers
 func Close() error {
 	globalMu.Lock()
 	defer globalMu.Unlock()
@@ -264,7 +264,7 @@ func Close() error {
 }
 
 // Reconfigure 运行时重新配置日志系统（如更新日志级别）。
-// 对齐 Python: configure_log_config()
+// Python: configure_log_config()
 //
 // 仅更新 levels 并重建各组件的 zerolog.Logger 实例，
 // 不改变输出目录、轮转配置和 writer 链。
@@ -322,7 +322,7 @@ func OutputDir() string {
 }
 
 // GetLogConfigSnapshot 返回当前日志配置的深拷贝快照。
-// 对应 Python: get_log_config_snapshot() (log_config.py L164-166)
+// Python: get_log_config_snapshot() (log_config.py L164-166)
 // 用于 Spawn 子进程时将主进程的日志配置传递给子进程，确保日志行为一致。
 func GetLogConfigSnapshot() map[string]any {
 	globalMu.RLock()
@@ -355,7 +355,7 @@ func GetLogConfigSnapshot() map[string]any {
 //
 // 不做 ${VAR:-default} 解析，仅取字面量值。
 // 通过 utils/path 包获取配置文件路径，对齐 Python: get_config_file()。
-// 对应 Python: _load_logging_config_from_yaml()
+// Python: _load_logging_config_from_yaml()
 func loadLoggingConfigFromYAML() *config.LoggingConfig {
 	configPath := pathutil.ConfigFile()
 	if configPath == "" {
@@ -391,7 +391,7 @@ func loadLoggingConfigFromYAML() *config.LoggingConfig {
 }
 
 // getLogger 获取指定组件的 Logger 实例指针（非导出）。
-// 对应 Python: logging.getLogger(__name__)
+// Python: logging.getLogger(__name__)
 //
 // 外部包应使用 Info/Warn/Error/Debug/Fatal 等组件级日志函数，
 // 传入 Component 参数即可，无需直接获取 Logger 实例。

@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamEmitter 流发射器，持有 StreamQueue，负责数据写入和生命周期管理。
-// 对应 Python: StreamEmitter
+// Python: StreamEmitter
 type StreamEmitter struct {
 	// queue 内部流队列
 	queue *StreamQueue
@@ -30,7 +30,7 @@ type StreamEmitter struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamEmitter 创建流发射器。
-// 对应 Python: StreamEmitter()
+// Python: StreamEmitter()
 // 内部队列使用缓冲区大小 1024，与 Python asyncio.Queue(maxsize=0) 对齐（Python 0 表示无限大小）。
 func NewStreamEmitter() *StreamEmitter {
 	return &StreamEmitter{
@@ -55,7 +55,7 @@ func (e *StreamEmitter) Emit(ctx context.Context, data Schema) error {
 }
 
 // Close 关闭发射器，单阶段关闭语义。
-// 对应 Python: StreamEmitter.close()
+// Python: StreamEmitter.close()
 //
 // 与 Python 的差异：
 // Python: emitter._closed=True + queue.send(END_FRAME)，消费端收到 END_FRAME 后调 queue.close()
@@ -89,7 +89,7 @@ func (e *StreamEmitter) IsClosed() bool {
 }
 
 // StreamQueue 返回内部队列，供 Manager 读取。
-// 对应 Python: StreamEmitter.stream_queue
+// Python: StreamEmitter.stream_queue
 func (e *StreamEmitter) StreamQueue() *StreamQueue {
 	return e.queue
 }

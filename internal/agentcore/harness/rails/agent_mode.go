@@ -34,7 +34,7 @@ import (
 // 优先级 85 确保 TaskPlanningRail(90)/SubagentRail(95) 先运行，
 // 本 Rail 后运行可以移除它们注入的节。
 //
-// 对齐 Python: AgentModeRail (openjiuwen/harness/rails/agent_mode_rail.py)
+// Python: AgentModeRail (openjiuwen/harness/rails/agent_mode_rail.py)
 type AgentModeRail struct {
 	DeepAgentRail
 	// allowedTools plan 模式允许的工具名称集合
@@ -63,7 +63,7 @@ type AgentModeRail struct {
 
 const (
 	// agentModeRailPriority AgentModeRail 优先级
-	// 对齐 Python: AgentModeRail.priority = 85
+	// Python: AgentModeRail.priority = 85
 	agentModeRailPriority = 85
 
 	// extraSkipToolKey extra 字典中跳过工具的键名
@@ -78,35 +78,35 @@ var _ agentinterfaces.AgentRail = (*AgentModeRail)(nil)
 var agentModeLogComponent = logger.ComponentAgentCore
 
 // todoToolNames todo 工具名称集合
-// 对齐 Python L44: _TODO_TOOL_NAMES
+// Python: L44: _TODO_TOOL_NAMES
 var todoToolNames = map[string]struct{}{
 	"todo_create": {}, "todo_list": {}, "todo_modify": {},
 }
 
 // sessionToolNames session 工具名称集合
-// 对齐 Python L45: _SESSION_TOOL_NAMES
+// Python: L45: _SESSION_TOOL_NAMES
 var sessionToolNames = map[string]struct{}{
 	"sessions_list": {}, "sessions_cancel": {}, "sessions_spawn": {},
 }
 
 // hiddenInPlan plan 模式下隐藏的工具名称集合
-// 对齐 Python L46: _HIDDEN_IN_PLAN = _TODO_TOOL_NAMES | _SESSION_TOOL_NAMES
+// Python: L46: _HIDDEN_IN_PLAN = _TODO_TOOL_NAMES | _SESSION_TOOL_NAMES
 var hiddenInPlan map[string]struct{}
 
 // hiddenInNormal 普通模式下隐藏的工具名称集合
-// 对齐 Python L47: _HIDDEN_IN_NORMAL
+// Python: L47: _HIDDEN_IN_NORMAL
 var hiddenInNormal = map[string]struct{}{
 	"enter_plan_mode": {}, "exit_plan_mode": {},
 }
 
 // planFileWriteTools plan 文件写入工具名称集合
-// 对齐 Python L49: _PLAN_FILE_WRITE_TOOLS
+// Python: L49: _PLAN_FILE_WRITE_TOOLS
 var planFileWriteTools = map[string]struct{}{
 	"write_file": {}, "edit_file": {},
 }
 
 // gitWriteRE 匹配 git 写操作的编译正则表达式
-// 对齐 Python L53-56: _GIT_WRITE_RE
+// Python: L53-56: _GIT_WRITE_RE
 //
 //nolint:lll
 var gitWriteRE = regexp.MustCompile(
@@ -114,7 +114,7 @@ var gitWriteRE = regexp.MustCompile(
 		`stash\s+(drop|clear)|branch\s+-D|merge|tag|amend|rebase)\b`)
 
 // defaultPlanModeAllowedTools plan 模式默认允许的工具名称集合
-// 对齐 Python L58-71: DEFAULT_PLAN_MODE_ALLOWED_TOOLS
+// Python: L58-71: DEFAULT_PLAN_MODE_ALLOWED_TOOLS
 var defaultPlanModeAllowedTools = map[string]struct{}{
 	"switch_mode": {}, "enter_plan_mode": {}, "exit_plan_mode": {},
 	"ask_user": {}, "task_tool": {}, "read_file": {}, "grep": {},
@@ -126,7 +126,7 @@ var defaultPlanModeAllowedTools = map[string]struct{}{
 // NewAgentModeRail 创建 AgentModeRail 实例。
 //
 // allowedTools 为 nil 时使用 defaultPlanModeAllowedTools。
-// 对齐 Python: AgentModeRail.__init__(allowed_tools)
+// Python: AgentModeRail.__init__(allowed_tools)
 func NewAgentModeRail(allowedTools []string) *AgentModeRail {
 	r := &AgentModeRail{
 		DeepAgentRail:      *NewDeepAgentRail(),
@@ -151,9 +151,9 @@ func NewAgentModeRail(allowedTools []string) *AgentModeRail {
 
 // Init 注册 switch_mode / enter_plan_mode / exit_plan_mode 工具。
 //
-// 对齐 Python: AgentModeRail.init() L105-124
-func (r *AgentModeRail) Init(agent agentinterfaces.BaseAgent) error {
-	// 对齐 Python L111: self._agent = agent
+// Python: AgentModeRail.init() L105-124
+func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
+	// Python: L111: self._agent = agent
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
 		logger.Warn(agentModeLogComponent).
@@ -164,7 +164,7 @@ func (r *AgentModeRail) Init(agent agentinterfaces.BaseAgent) error {
 	}
 	r.agent = deepAgent
 
-	// 对齐 Python L112-113: system_prompt_builder 和 language
+	// Python: L112-113: system_prompt_builder 和 language
 	sb := agent.SystemPromptBuilder()
 	r.systemPromptBuilder = sb
 	if sb != nil {
@@ -173,19 +173,19 @@ func (r *AgentModeRail) Init(agent agentinterfaces.BaseAgent) error {
 		r.language = "cn"
 	}
 
-	// 对齐 Python L102: agent_id
+	// Python: L102: agent_id
 	if card := agent.Card(); card != nil {
 		r.agentID = card.ID
 	}
 
-	// 对齐 Python L115-119: 创建 3 个模式切换工具
+	// Python: L115-119: 创建 3 个模式切换工具
 	r.tools = []tool.Tool{
 		agent_mode.NewSwitchModeTool(deepAgent, r.language, r.agentID),
 		agent_mode.NewEnterPlanModeTool(deepAgent, r.language, r.agentID),
 		agent_mode.NewExitPlanModeTool(deepAgent, r.language, r.agentID),
 	}
 
-	// 对齐 Python L120-122: 注册每个工具的 Card 到 AbilityManager 和 ResourceMgr
+	// Python: L120-122: 注册每个工具的 Card 到 AbilityManager 和 ResourceMgr
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range r.tools {
@@ -206,12 +206,12 @@ func (r *AgentModeRail) Init(agent agentinterfaces.BaseAgent) error {
 
 // Uninit 移除本 Rail 注册的所有工具。
 //
-// 对齐 Python: AgentModeRail.uninit() L132-150
+// Python: AgentModeRail.uninit() L132-150
 func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 
-	// 对齐 Python L138-145: 移除 3 个模式切换工具
+	// Python: L138-145: 移除 3 个模式切换工具
 	for _, t := range r.tools {
 		func(t tool.Tool) {
 			defer func() {
@@ -232,7 +232,7 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 	r.tools = nil
 
-	// 对齐 Python L148-149: 如果持有 task_tool 则注销
+	// Python: L148-149: 如果持有 task_tool 则注销
 	if r.ownsTaskTool && len(r.taskTools) > 0 {
 		r.unregisterTaskTool(agent)
 	}
@@ -246,7 +246,7 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // BeforeModelCall 注入 MODE_INSTRUCTIONS 并在 plan 模式下过滤隐藏工具。
 //
-// 对齐 Python: AgentModeRail.before_model_call() L151-196
+// Python: AgentModeRail.before_model_call() L151-196
 func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	agent := r.agent
 	sess := cbc.Session()
@@ -254,22 +254,22 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 
 	if planState.Mode != hschema.AgentModePlan.String() {
 		// 非 plan 模式
-		// 对齐 Python L162: 移除 MODE_INSTRUCTIONS 节
+		// Python: L162: 移除 MODE_INSTRUCTIONS 节
 		if r.systemPromptBuilder != nil {
 			r.systemPromptBuilder.RemoveSection(sections.SectionModeInstructions)
 		}
 
-		// 对齐 Python L163: 同步 task_tool 可见性
+		// Python: L163: 同步 task_tool 可见性
 		r.syncTaskToolForModelToolInputs(cbc)
 
-		// 对齐 Python L164-168: 过滤 hiddenInNormal 工具
+		// Python: L164-168: 过滤 hiddenInNormal 工具
 		r.filterHiddenTools(cbc, hiddenInNormal)
 
 		return nil
 	}
 
 	// plan 模式
-	// 对齐 Python L172-174: 获取 plan 文件路径和存在状态
+	// Python: L172-174: 获取 plan 文件路径和存在状态
 	planFilePath := agent.GetPlanFilePath(sess)
 	planExists := false
 	if planFilePath != "" {
@@ -278,24 +278,24 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 		}
 	}
 
-	// 对齐 Python L176-182: 构建 plan 模式提示词节
+	// Python: L176-182: 构建 plan 模式提示词节
 	section := sections.BuildPlanModeSection(planFilePath, planExists, r.language)
 
-	// 对齐 Python L183: 添加节
+	// Python: L183: 添加节
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.AddSection(section)
 	}
 
-	// 对齐 Python L186-187: 移除 Todo 和 SessionTools 节
+	// Python: L186-187: 移除 Todo 和 SessionTools 节
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionTodo)
 		r.systemPromptBuilder.RemoveSection(sections.SectionSessionTools)
 	}
 
-	// 对齐 Python L190-194: 过滤 hiddenInPlan 工具
+	// Python: L190-194: 过滤 hiddenInPlan 工具
 	r.filterHiddenTools(cbc, hiddenInPlan)
 
-	// 对齐 Python L196: 同步 task_tool 可见性
+	// Python: L196: 同步 task_tool 可见性
 	r.syncTaskToolForModelToolInputs(cbc)
 
 	return nil
@@ -308,7 +308,7 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 //  2. 非 plan 模式 → 无条件放行
 //  3. plan 模式 → 白名单 + 路径校验 + 硬性隐藏
 //
-// 对齐 Python: AgentModeRail.before_tool_call() L232-329
+// Python: AgentModeRail.before_tool_call() L232-329
 func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
@@ -317,7 +317,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	toolName := inputs.ToolName
 
 	// ─── 段 1: enter/exit_plan_mode — 模式校验 + 放行 ───
-	// 对齐 Python L250-255
+	// Python: L250-255
 	if toolName == "enter_plan_mode" {
 		r.handleEnter(cbc)
 		return nil
@@ -328,7 +328,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	}
 
 	// ─── 段 2: 非 plan 模式 → 无条件放行 ───
-	// 对齐 Python L260-262
+	// Python: L260-262
 	agent := r.agent
 	sess := cbc.Session()
 	planState := agent.LoadState(sess).PlanMode
@@ -338,13 +338,13 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 
 	// ─── 段 3: plan 模式 → 白名单 + 路径校验 + 硬性隐藏 ───
 
-	// 对齐 Python L267-268: 已被跳过则放行
+	// Python: L267-268: 已被跳过则放行
 	if skipVal, exists := cbc.Extra()[extraSkipToolKey]; exists && skipVal == true {
 		return nil
 	}
 
 	// 3a. 硬性屏蔽 todo/session 工具
-	// 对齐 Python L270-279
+	// Python: L270-279
 	if _, hidden := hiddenInPlan[toolName]; hidden {
 		var msg string
 		if r.languageIsCN() {
@@ -357,7 +357,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	}
 
 	// 3b. 不在白名单 → 拒绝
-	// 对齐 Python L282-293
+	// Python: L282-293
 	if len(r.allowedTools) > 0 {
 		if _, allowed := r.allowedTools[toolName]; !allowed {
 			logger.Info(agentModeLogComponent).
@@ -376,7 +376,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	}
 
 	// 3c. bash → 阻止 git 写操作
-	// 对齐 Python L296-310
+	// Python: L296-310
 	if toolName == "bash" {
 		command := r.extractBashCommand(cbc)
 		if gitWriteRE.MatchString(command) {
@@ -396,7 +396,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	}
 
 	// 3d. write_file / edit_file → 仅允许目标为 plan 文件
-	// 对齐 Python L313-329
+	// Python: L313-329
 	if _, isWriteTool := planFileWriteTools[toolName]; isWriteTool {
 		filePath := r.extractFilePath(cbc)
 		planPath := agent.GetPlanFilePath(sess)
@@ -423,7 +423,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 
 // AfterToolCall enter_plan_mode 成功时注册 task_tool，exit_plan_mode 成功时注销。
 //
-// 对齐 Python: AgentModeRail.after_tool_call() L331-344
+// Python: AgentModeRail.after_tool_call() L331-344
 func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
@@ -431,14 +431,14 @@ func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.Ag
 	}
 	toolName := inputs.ToolName
 
-	// 对齐 Python L340-341
+	// Python: L340-341
 	if toolName == "enter_plan_mode" {
 		if skipVal, exists := cbc.Extra()[extraSkipToolKey]; !exists || skipVal != true {
 			r.registerTaskTool(cbc.Agent())
 		}
 	}
 
-	// 对齐 Python L343-344
+	// Python: L343-344
 	if toolName == "exit_plan_mode" {
 		if skipVal, exists := cbc.Extra()[extraSkipToolKey]; !exists || skipVal != true {
 			r.unregisterTaskTool(cbc.Agent())
@@ -450,7 +450,7 @@ func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.Ag
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall + BeforeToolCall + AfterToolCall。
 //
-// 对齐 Python: AgentModeRail 隐式覆盖 before_model_call/before_tool_call/after_tool_call
+// Python: AgentModeRail 隐式覆盖 before_model_call/before_tool_call/after_tool_call
 func (r *AgentModeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -482,11 +482,11 @@ func init() {
 
 // rejectTool 轻量级工具拒绝——设置 _skip_tool 并注入错误结果。
 //
-// 对齐 Python: AgentModeRail._reject_tool() L476-488
+// Python: AgentModeRail._reject_tool() L476-488
 func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, errorMsg string) {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
-		// 对齐 Python: Python 不检查 inputs 类型，直接设置所有字段
+		// Python: Python 不检查 inputs 类型，直接设置所有字段
 		// Go 类型系统中 inputs 可能不是 ToolCallInputs，设置 skip 标记并记录警告
 		cbc.Extra()[extraSkipToolKey] = true
 		logger.Warn(agentModeLogComponent).
@@ -509,13 +509,13 @@ func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, er
 
 // handleEnter 验证 enter_plan_mode 的模式前提。
 //
-// 对齐 Python: AgentModeRail._handle_enter() L434-457
+// Python: AgentModeRail._handle_enter() L434-457
 func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 	agent := r.agent
 	sess := cbc.Session()
 	planState := agent.LoadState(sess).PlanMode
 
-	// 对齐 Python L445-446: 不在 plan 模式则拒绝
+	// Python: L445-446: 不在 plan 模式则拒绝
 	if planState.Mode != hschema.AgentModePlan.String() {
 		logger.Info(agentModeLogComponent).
 			Str("event_type", "reject_enter_not_plan_mode").
@@ -532,13 +532,13 @@ func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 
 // handleExit 验证 exit_plan_mode 的模式前提。
 //
-// 对齐 Python: AgentModeRail._handle_exit() L459-474
+// Python: AgentModeRail._handle_exit() L459-474
 func (r *AgentModeRail) handleExit(cbc *agentinterfaces.AgentCallbackContext) {
 	agent := r.agent
 	sess := cbc.Session()
 	planState := agent.LoadState(sess).PlanMode
 
-	// 对齐 Python L469-470: 不在 plan 模式则拒绝
+	// Python: L469-470: 不在 plan 模式则拒绝
 	if planState.Mode != hschema.AgentModePlan.String() {
 		var msg string
 		if r.languageIsCN() {
@@ -552,12 +552,12 @@ func (r *AgentModeRail) handleExit(cbc *agentinterfaces.AgentCallbackContext) {
 
 // isPlanFile 检查给定文件路径是否解析到 plan 文件。
 //
-// 对齐 Python: AgentModeRail._is_plan_file() L490-506
+// Python: AgentModeRail._is_plan_file() L490-506
 func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 	if planPath == "" || filePath == "" {
 		return false
 	}
-	// 对齐 Python L503-505: Path(file_path).resolve() == Path(plan_path).resolve()
+	// Python: L503-505: Path(file_path).resolve() == Path(plan_path).resolve()
 	// resolve = Abs + EvalSymlinks（与 Python Path.resolve() 行为一致）
 	tryResolve := func(p string) string {
 		abs, err := filepath.Abs(p)
@@ -575,7 +575,7 @@ func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 
 // extractFilePath 从 ToolCallInputs.ToolArgs 中提取 file_path 参数。
 //
-// 对齐 Python: AgentModeRail._extract_file_path() L508-523
+// Python: AgentModeRail._extract_file_path() L508-523
 func (r *AgentModeRail) extractFilePath(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
@@ -591,7 +591,7 @@ func (r *AgentModeRail) extractFilePath(cbc *agentinterfaces.AgentCallbackContex
 
 // extractBashCommand 从 ToolCallInputs.ToolArgs 中提取 command 参数。
 //
-// 对齐 Python: AgentModeRail._extract_bash_command() L525-548
+// Python: AgentModeRail._extract_bash_command() L525-548
 func (r *AgentModeRail) extractBashCommand(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if !ok || inputs == nil {
@@ -607,7 +607,7 @@ func (r *AgentModeRail) extractBashCommand(cbc *agentinterfaces.AgentCallbackCon
 
 // registerTaskTool 在 enter_plan_mode 成功后注册 task_tool。
 //
-// 对齐 Python: AgentModeRail._register_task_tool() L358-387
+// Python: AgentModeRail._register_task_tool() L358-387
 func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 	if r.ownsTaskTool {
 		return
@@ -621,16 +621,16 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 		return
 	}
 
-	// 对齐 Python L370-371: 无 subagents 则跳过
+	// Python: L370-371: 无 subagents 则跳过
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok || deepAgent.DeepConfig() == nil || len(deepAgent.DeepConfig().Subagents) == 0 {
 		return
 	}
 
-	// 对齐 Python L373-378: 构建 available_agents 并创建 task_tool
+	// Python: L373-378: 构建 available_agents 并创建 task_tool
 	availableAgents := r.buildAvailableAgents(deepAgent.DeepConfig().Subagents)
 
-	// 对齐 Python: create_task_tool(parent_agent, available_agents, language)
+	// Python: create_task_tool(parent_agent, available_agents, language)
 	taskTools := agent_mode.CreateTaskTool(deepAgent, availableAgents, r.language)
 	if len(taskTools) == 0 {
 		return
@@ -642,7 +642,7 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 		r.ownedTaskToolNames[t.Card().Name] = struct{}{}
 	}
 
-	// 对齐 Python L383-385: 注册到 ResourceMgr 和 AbilityManager
+	// Python: L383-385: 注册到 ResourceMgr 和 AbilityManager
 	resourceMgr := runner.GetResourceMgr()
 	am := agent.AbilityManager()
 	for _, t := range taskTools {
@@ -663,7 +663,7 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 
 // unregisterTaskTool 注销本 Rail 持有的 task_tool。
 //
-// 对齐 Python: AgentModeRail._unregister_task_tool() L389-408
+// Python: AgentModeRail._unregister_task_tool() L389-408
 func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 	if !r.ownsTaskTool || len(r.taskTools) == 0 {
 		logger.Info(agentModeLogComponent).
@@ -704,13 +704,13 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 
 // isTaskToolRegistered 检查 task_tool 是否已在 AbilityManager 中注册。
 //
-// 对齐 Python: AgentModeRail._is_task_tool_registered() L346-356
+// Python: AgentModeRail._is_task_tool_registered() L346-356
 func (r *AgentModeRail) isTaskToolRegistered() bool {
-	// 对齐 Python L348-356: Runner.resource_mgr.get_tool() → 查找 "task_tool"
+	// Python: L348-356: Runner.resource_mgr.get_tool() → 查找 "task_tool"
 	if r.ownsTaskTool {
 		return true
 	}
-	// 对齐 Python: Runner.resource_mgr.get_tool()
+	// Python: Runner.resource_mgr.get_tool()
 	// 通过 ResourceMgr 查找，与 Python 的查找路径一致
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr == nil {
@@ -730,7 +730,7 @@ func (r *AgentModeRail) isTaskToolRegistered() bool {
 //   - 持有+已注册 → 确保存在
 //   - 未持有 → 确保不存在
 //
-// 对齐 Python: AgentModeRail._sync_task_tool_for_model_tool_inputs() L198-230
+// Python: AgentModeRail._sync_task_tool_for_model_tool_inputs() L198-230
 func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.AgentCallbackContext) {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs)
 	if !ok || inputs == nil {
@@ -740,7 +740,7 @@ func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.Agen
 		return
 	}
 
-	// 对齐 Python L211-219: 持有 task_tool → 确保在 tools 列表中
+	// Python: L211-219: 持有 task_tool → 确保在 tools 列表中
 	if r.ownsTaskTool && len(r.taskTools) > 0 {
 		existingNames := make(map[string]struct{}, len(inputs.Tools))
 		for _, t := range inputs.Tools {
@@ -757,7 +757,7 @@ func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.Agen
 		return
 	}
 
-	// 对齐 Python L223-228: 未持有 → 从 tools 列表中移除已知的 task_tool 名称
+	// Python: L223-228: 未持有 → 从 tools 列表中移除已知的 task_tool 名称
 	if !r.ownsTaskTool && len(r.ownedTaskToolNames) > 0 {
 		var filtered []cschema.ToolInfoInterface
 		for _, t := range inputs.Tools {
@@ -773,13 +773,13 @@ func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.Agen
 
 // buildAvailableAgents 构建格式化的子 Agent 描述。
 //
-// 对齐 Python: AgentModeRail._build_available_agents() L410-432
+// Python: AgentModeRail._build_available_agents() L410-432
 func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) string {
 	var lines []string
 	for _, spec := range subagents {
-		// 对齐 Python L424: isinstance(spec, SubAgentConfig)
+		// Python: L424: isinstance(spec, SubAgentConfig)
 		if saConfig, ok := spec.(*hschema.SubAgentConfig); ok && saConfig != nil {
-			// 对齐 Python L425-426: spec.agent_card.name / spec.agent_card.description
+			// Python: L425-426: spec.agent_card.name / spec.agent_card.description
 			// Python 不防御 nil agent_card，Go 需防御
 			name := "general-purpose"
 			desc := "DeepAgent instance"
@@ -789,7 +789,7 @@ func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) s
 			}
 			lines = append(lines, fmt.Sprintf("%q: %s", name, desc))
 		} else {
-			// 对齐 Python L427-430: getattr(spec, "card", None) → getattr(card, "name", None) or "general-purpose"
+			// Python: L427-430: getattr(spec, "card", None) → getattr(card, "name", None) or "general-purpose"
 			name := "general-purpose"
 			desc := "DeepAgent instance"
 			if baseAgent, ok := spec.(agentinterfaces.BaseAgent); ok {
@@ -826,7 +826,7 @@ func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) s
 
 // languageIsCN 检查当前语言是否为中文。
 //
-// 对齐 Python: AgentModeRail._language_is_cn() L126-130
+// Python: AgentModeRail._language_is_cn() L126-130
 func (r *AgentModeRail) languageIsCN() bool {
 	if r.systemPromptBuilder == nil {
 		return true

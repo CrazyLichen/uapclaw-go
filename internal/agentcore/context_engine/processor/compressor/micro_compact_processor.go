@@ -17,7 +17,7 @@ import (
 //
 // 清除旧工具结果内容以减少 Token 消耗，保留每个工具最近的若干条结果。
 //
-// 对应 Python: MicroCompactProcessorConfig (pydantic.BaseModel)
+// Python: MicroCompactProcessorConfig (pydantic.BaseModel)
 type MicroCompactProcessorConfig struct {
 	// TriggerThreshold 触发阈值，可清除结果数超出保留尾部的数量阈值
 	TriggerThreshold int
@@ -37,7 +37,7 @@ type MicroCompactProcessorConfig struct {
 //
 // 不需要调用 LLM，是处理器链中最轻量的压缩手段。
 //
-// 对应 Python: openjiuwen/core/context_engine/processor/compressor/micro_compact_processor.py (MicroCompactProcessor)
+// Python: openjiuwen/core/context_engine/processor/compressor/micro_compact_processor.py (MicroCompactProcessor)
 type MicroCompactProcessor struct {
 	*processor.BaseProcessor
 	// mcpConfig 微压缩处理器具体配置
@@ -116,7 +116,7 @@ func (mcp *MicroCompactProcessor) ProcessorType() string {
 //  1. 消息列表构成一个完整的 API 轮次
 //  2. 某个可压缩工具的 ToolMessage 数量超过 triggerThreshold + keepRecentPerTool
 //
-// 对应 Python: MicroCompactProcessor.trigger_add_messages()
+// Python: MicroCompactProcessor.trigger_add_messages()
 func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
@@ -128,7 +128,7 @@ func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface
 
 // OnAddMessages 执行微压缩，将旧 ToolMessage 内容替换为清除标记。
 //
-// 对应 Python: MicroCompactProcessor.on_add_messages()
+// Python: MicroCompactProcessor.on_add_messages()
 func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
@@ -205,7 +205,7 @@ func (mcp *MicroCompactProcessor) LoadState(_ map[string]any) {}
 
 // collectCompactableIndicesByTool 遍历消息，按工具名分组收集可压缩 ToolMessage 索引。
 //
-// 对应 Python: MicroCompactProcessor._collect_compactable_indices_by_tool()
+// Python: MicroCompactProcessor._collect_compactable_indices_by_tool()
 func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm_schema.BaseMessage) map[string][]int {
 	allowedNames := make(map[string]bool, len(mcp.mcpConfig.CompactableToolNames))
 	for _, name := range mcp.mcpConfig.CompactableToolNames {
@@ -234,7 +234,7 @@ func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm
 
 // hasAnyToolExceedThreshold 判断任一工具的 ToolMessage 数量是否超过触发阈值。
 //
-// 对应 Python: MicroCompactProcessor._has_any_tool_exceed_threshold()
+// Python: MicroCompactProcessor._has_any_tool_exceed_threshold()
 func (mcp *MicroCompactProcessor) hasAnyToolExceedThreshold(messages []llm_schema.BaseMessage) bool {
 	groupedIndices := mcp.collectCompactableIndicesByTool(messages)
 	threshold := mcp.mcpConfig.TriggerThreshold + mcp.mcpConfig.KeepRecentPerTool
@@ -251,7 +251,7 @@ func (mcp *MicroCompactProcessor) hasAnyToolExceedThreshold(messages []llm_schem
 // force=true 时阈值降为 KeepRecentPerTool；超过阈值的工具，保留尾部 KeepRecentPerTool 条，
 // 其余加入清除列表。
 //
-// 对应 Python: MicroCompactProcessor._collect_flat_indices_for_compact()
+// Python: MicroCompactProcessor._collect_flat_indices_for_compact()
 func (mcp *MicroCompactProcessor) collectFlatIndicesForCompact(messages []llm_schema.BaseMessage, force bool) []int {
 	grouped := mcp.collectCompactableIndicesByTool(messages)
 	var result []int

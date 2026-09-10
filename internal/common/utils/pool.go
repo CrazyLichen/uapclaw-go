@@ -1,7 +1,7 @@
 // utils 包提供通用工具函数。
 //
 // pool.go 实现引用计数资源池和 HTTP Transport 连接池管理。
-// 对应 Python：
+// Python:
 //   - openjiuwen/core/common/clients/ref_counted.py（RefCountedResource）
 //   - openjiuwen/core/common/clients/connector_pool.py（ConnectorPoolManager + ConnectorPoolConfig + TcpConnectorPool）
 //
@@ -27,7 +27,7 @@ import (
 
 // RefCountedResource 引用计数资源基类。
 //
-// 对应 Python: RefCountedResource
+// Python: RefCountedResource
 // 跟踪 ref_count/created_at/last_used/closed 状态。
 type RefCountedResource struct {
 	refCount  atomic.Int64
@@ -38,7 +38,7 @@ type RefCountedResource struct {
 
 // TransportConfig HTTP Transport 连接池配置。
 //
-// 对应 Python: ConnectorPoolConfig
+// Python: ConnectorPoolConfig
 type TransportConfig struct {
 	MaxIdleConns        int           // 总最大空闲连接（默认 100）
 	MaxIdleConnsPerHost int           // 每主机最大空闲连接（默认 30）
@@ -53,7 +53,7 @@ type TransportConfig struct {
 
 // RefCountedTransport 引用计数的 HTTP Transport。
 //
-// 对应 Python: TcpConnectorPool (ConnectorPool)
+// Python: TcpConnectorPool (ConnectorPool)
 type RefCountedTransport struct {
 	RefCountedResource
 	config    TransportConfig
@@ -62,7 +62,7 @@ type RefCountedTransport struct {
 
 // TransportPool Transport 连接池管理器。
 //
-// 对应 Python: ConnectorPoolManager
+// Python: ConnectorPoolManager
 // 按配置 key 复用 Transport 实例，超限时淘汰最久未用的。
 type TransportPool struct {
 	transports map[string]*RefCountedTransport
@@ -72,7 +72,7 @@ type TransportPool struct {
 
 // ResourcePool 泛型资源池，按配置 key 复用资源实例。
 //
-// 对应 Python: BaseRefResourceMgr
+// Python: BaseRefResourceMgr
 // 通用版本，供未来其他资源（如 Redis 连接池）复用。
 type ResourcePool[T any] struct {
 	resources map[string]*refCountedEntry[T]
@@ -111,7 +111,7 @@ func (r *RefCountedResource) InitRefCount() {
 }
 
 // IncRef 增加引用计数，返回新的计数。
-// 对应 Python: increment_ref()
+// Python: increment_ref()
 func (r *RefCountedResource) IncRef() int64 {
 	if r.closed.Load() {
 		return 0
@@ -121,7 +121,7 @@ func (r *RefCountedResource) IncRef() int64 {
 }
 
 // DecRef 减少引用计数，返回 true 表示计数降至 0。
-// 对应 Python: decrement_ref()
+// Python: decrement_ref()
 func (r *RefCountedResource) DecRef() bool {
 	if r.closed.Load() {
 		return false
@@ -155,7 +155,7 @@ func (r *RefCountedResource) LastUsed() time.Time {
 }
 
 // IsExpired 检查资源是否过期。
-// 对应 Python: is_expired()
+// Python: is_expired()
 func (r *RefCountedResource) IsExpired(ttl, maxIdle time.Duration) bool {
 	now := time.Now()
 	if ttl > 0 && now.Sub(r.createdAt) > ttl {
@@ -188,7 +188,7 @@ func DefaultTransportConfig() TransportConfig {
 }
 
 // GenerateKey 根据配置生成唯一键（MD5 哈希）。
-// 对应 Python: ConnectorPoolConfig.generate_key()
+// Python: ConnectorPoolConfig.generate_key()
 func (c TransportConfig) GenerateKey() string {
 	// 按字段名排序拼接
 	type kv struct {
@@ -283,7 +283,7 @@ func GetTransportPool() *TransportPool {
 }
 
 // Acquire 获取或创建 Transport，返回 *RefCountedTransport。
-// 对应 Python: ConnectorPoolManager.get_connector_pool()
+// Python: ConnectorPoolManager.get_connector_pool()
 func (p *TransportPool) Acquire(config TransportConfig) (*RefCountedTransport, error) {
 	key := config.GenerateKey()
 
@@ -312,7 +312,7 @@ func (p *TransportPool) Acquire(config TransportConfig) (*RefCountedTransport, e
 }
 
 // Release 释放 Transport 引用。
-// 对应 Python: ConnectorPoolManager.release_connector_pool()
+// Python: ConnectorPoolManager.release_connector_pool()
 func (p *TransportPool) Release(config TransportConfig) {
 	key := config.GenerateKey()
 
@@ -331,7 +331,7 @@ func (p *TransportPool) Release(config TransportConfig) {
 }
 
 // CloseAll 关闭所有 Transport。
-// 对应 Python: ConnectorPoolManager.close_all()
+// Python: ConnectorPoolManager.close_all()
 func (p *TransportPool) CloseAll() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -344,7 +344,7 @@ func (p *TransportPool) CloseAll() error {
 }
 
 // Stats 获取连接池统计信息。
-// 对应 Python: ConnectorPoolManager.get_stats()
+// Python: ConnectorPoolManager.get_stats()
 func (p *TransportPool) Stats() map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -377,7 +377,7 @@ func NewResourcePool[T any](maxPool int, factory func(key string, config any) (*
 }
 
 // Acquire 获取或创建资源。
-// 对应 Python: BaseRefResourceMgr.acquire()
+// Python: BaseRefResourceMgr.acquire()
 func (p *ResourcePool[T]) Acquire(config any) (*T, error) {
 	key := p.keyFunc(config)
 
@@ -410,7 +410,7 @@ func (p *ResourcePool[T]) Acquire(config any) (*T, error) {
 }
 
 // Release 释放资源引用。
-// 对应 Python: BaseRefResourceMgr.release()
+// Python: BaseRefResourceMgr.release()
 func (p *ResourcePool[T]) Release(config any) {
 	key := p.keyFunc(config)
 
@@ -431,7 +431,7 @@ func (p *ResourcePool[T]) Release(config any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // evictOldest 淘汰最久未用的空闲 Transport。
-// 对应 Python: _evict_oldest_pool()
+// Python: _evict_oldest_pool()
 func (p *TransportPool) evictOldest() {
 	var oldestKey string
 	var oldestTime time.Time

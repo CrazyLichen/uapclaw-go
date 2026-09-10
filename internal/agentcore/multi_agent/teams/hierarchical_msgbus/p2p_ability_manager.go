@@ -25,7 +25,7 @@ import (
 // 其他能力类型转发给嵌入的 AbilityManager 执行。
 // AgentCard 派发受 maxParallel 限流。
 //
-// 对应 Python: P2PAbilityManager(AbilityManager)
+// Python: P2PAbilityManager(AbilityManager)
 type P2PAbilityManager struct {
 	// AbilityManager 嵌入：Add/Remove/Get/List/ListToolInfo 等
 	ability.AbilityManager
@@ -72,7 +72,7 @@ func NewP2PAbilityManager(supervisor team_runtime.Communicable, maxParallel int,
 
 // Execute 覆写：AgentCard 类型的 tool_call 通过 P2P 派发，其他委托基类执行。
 //
-// 对齐 Python: P2PAbilityManager.execute()
+// Python: P2PAbilityManager.execute()
 func (m *P2PAbilityManager) Execute(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -177,7 +177,7 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 //  4. supervisor.Send(ctx, toolArgs, agentCard.ID)
 //  5. 成功/失败处理
 //
-// 对应 Python: P2PAbilityManager._execute_single_tool_call()
+// Python: P2PAbilityManager._execute_single_tool_call()
 func (m *P2PAbilityManager) executeSingleP2P(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -187,7 +187,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	toolName := toolCall.Name
 
 	// 非 Agent 调用 fallback：委托基类
-	// 对齐 Python: if tool_name not in self._agents: return await super()._execute_single_tool_call(...)
+	// Python: if tool_name not in self._agents: return await super()._execute_single_tool_call(...)
 	if !m.IsAgent(toolName) {
 		singleResults := m.AbilityManager.Execute(ctx, cbc, []*llmschema.ToolCall{toolCall}, sess, "")
 		if len(singleResults) > 0 {

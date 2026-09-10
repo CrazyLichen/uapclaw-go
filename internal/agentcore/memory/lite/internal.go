@@ -24,7 +24,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EstimateTokens 估算 token 数（~4字符/token）。
-// 对齐 Python estimate_tokens — 真实实现
+// Python: estimate_tokens — 真实实现
 func EstimateTokens(text string) int {
 	return len(text) / 4
 }
@@ -53,7 +53,7 @@ func CosineSimilarity(vec1, vec2 []float64) float64 {
 }
 
 // ChunkMarkdown 按 token 切分 Markdown。
-// 对齐 Python chunk_markdown — 真实实现
+// Python: chunk_markdown — 真实实现
 func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 	if maxTokens <= 0 {
 		maxTokens = 256
@@ -68,7 +68,7 @@ func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 	startLine := 1
 
 	for i, line := range lines {
-		lineNum := i + 1 // 对齐 Python: 1-based 行号
+		lineNum := i + 1 // Python: 1-based 行号
 		lineTokens := EstimateTokens(line)
 		if currentTokens+lineTokens > maxTokens && len(currentLines) > 0 {
 			chunks = append(chunks, MemoryChunk{
@@ -94,7 +94,7 @@ func ChunkMarkdown(content string, maxTokens int, overlap int) []MemoryChunk {
 		chunks = append(chunks, MemoryChunk{
 			Text:      strings.Join(currentLines, "\n"),
 			StartLine: startLine,
-			EndLine:   len(lines), // 对齐 Python: 1-based 最后一行
+			EndLine:   len(lines), // Python: 1-based 最后一行
 		})
 	}
 	return chunks

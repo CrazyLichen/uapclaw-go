@@ -40,7 +40,7 @@ func IsVec0Available() bool {
 }
 
 // LoadVec0Extension 加载 vec0.so 扩展到 SQLite 连接。
-// 对齐 Python sqlite_vec.load(self.db)
+// Python: sqlite_vec.load(self.db)
 func LoadVec0Extension(conn *sqlite3.SQLiteConn, vecPath string) error {
 	if conn == nil {
 		return fmt.Errorf("conn 为 nil")

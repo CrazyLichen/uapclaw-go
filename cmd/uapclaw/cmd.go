@@ -347,7 +347,7 @@ func newAcpCmd() *cobra.Command {
 // 仅在运行服务的子命令（chat/serve/app/agentserver/gateway/web/acp）中使用，
 // init 子命令不走此钩子（init 的 --name 语义是"创建实例"，不是"选择实例"）。
 //
-// 对应 Python: 各 app_*.py 入口中的 parse_dotenv_early() 调用
+// Python: 各 app_*.py 入口中的 parse_dotenv_early() 调用
 func makeDotenvPreRunE() func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		dotenvPath, _ := cmd.Flags().GetString("dotenv")

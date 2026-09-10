@@ -32,7 +32,7 @@ import (
 //   - 执行交接链路（创建协调器 → 发布 → 等待 → 清理）
 //   - 委托 TeamRuntime 进行消息通信
 //
-// 对应 Python: HandoffTeam (handoff_team.py)
+// Python: HandoffTeam (handoff_team.py)
 type HandoffTeam struct {
 	// card 团队身份卡片
 	card maschema.TeamCardInterface
@@ -79,7 +79,7 @@ var _ maschema.BaseTeam = (*HandoffTeam)(nil)
 //   - config：完整配置，nil 时使用默认值
 //   - runtime：团队运行时，nil 时自动创建
 //
-// 对应 Python: HandoffTeam(card, config=None)
+// Python: HandoffTeam(card, config=None)
 func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, runtime *team_runtime.TeamRuntime) *HandoffTeam {
 	if config == nil {
 		defaultCfg := NewHandoffTeamConfig()
@@ -91,7 +91,7 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 	if runtime != nil {
 		tr = runtime
 	} else {
-		// 对齐 Python: BaseTeam._create_default_runtime()
+		// Python: BaseTeam._create_default_runtime()
 		// 字段映射：TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
 		// 字段映射：TeamConfig.message_timeout → MessageBusConfig.process_timeout
 		busCfg := team_runtime.NewMessageBusConfig(
@@ -128,7 +128,7 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 // 使用 StandaloneInvokeContext 管理会话生命周期（创建/PreRun/Bind/Unbind/Cleanup/Close/Commit），
 // 在上下文内执行 runChain 完成交接编排。
 //
-// 对应 Python: HandoffTeam.invoke(message, session=None)
+// Python: HandoffTeam.invoke(message, session=None)
 func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (any, error) {
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sess := teamOpts.Session
@@ -148,7 +148,7 @@ func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ..
 // Stream 流式调用团队，通过 standalone_stream_context 实现。
 // 后台 goroutine 运行 runChain，前台从 session.StreamIterator() 消费流式输出。
 //
-// 对齐 Python: HandoffTeam.stream(message, session=None)
+// Python: HandoffTeam.stream(message, session=None)
 // Python 使用 standalone_stream_context，Go 使用 StandaloneStreamContext 对齐。
 func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (<-chan stream.Schema, error) {
 	teamOpts := maschema.NewTeamOptions(opts...)
@@ -166,7 +166,7 @@ func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ..
 //
 // 如果 Agent 已存在则跳过，否则注册到运行时并标记内部 Agent 需要重新初始化。
 //
-// 对应 Python: HandoffTeam.add_agent(card, provider) -> self
+// Python: HandoffTeam.add_agent(card, provider) -> self
 func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
 		logger.Warn(logComponent).
@@ -177,7 +177,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 		return nil
 	}
 
-	// 对齐 Python: if self.runtime.get_agent_count() >= self.config.max_agents
+	// Python: if self.runtime.get_agent_count() >= self.config.max_agents
 	if t.config.MaxAgents > 0 && t.runtime.GetAgentCount() >= t.config.MaxAgents {
 		return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
 			exception.WithParam("error_msg", fmt.Sprintf(
@@ -197,7 +197,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 		return err
 	}
 
-	// 对齐 Python: self.card.agent_cards.append(card)
+	// Python: self.card.agent_cards.append(card)
 	t.card.AddAgentCard(card)
 
 	// 存储原始 TeamAgentProvider（ContainerAgent 创建时使用）
@@ -219,7 +219,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 
 // RemoveAgent 从团队注销 Agent。
 //
-// 对应 Python: BaseTeam.remove_agent(agent)
+// Python: BaseTeam.remove_agent(agent)
 func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	_, err := t.runtime.UnregisterAgent(ctx, agentID)
 	if err != nil {
@@ -234,7 +234,7 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	// 从 agentProviders 中移除
 	delete(t.agentProviders, agentID)
 
-	// 对齐 Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
+	// Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
 	t.card.RemoveAgentCard(agentID)
 
 	// 标记内部 Agent 需要重新初始化（在锁保护下重置，确保与 ensureInternalAgents 互斥）
@@ -253,35 +253,35 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 
 // Send P2P 发送消息，委托运行时。
 //
-// 对应 Python: BaseTeam.send(message, recipient, sender, session_id, timeout)
+// Python: BaseTeam.send(message, recipient, sender, session_id, timeout)
 func (t *HandoffTeam) Send(ctx context.Context, message map[string]any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	return t.runtime.Send(ctx, message, recipient, sender, opts...)
 }
 
 // Publish Pub-Sub 发布消息，委托运行时。
 //
-// 对应 Python: BaseTeam.publish(message, topic_id, sender, session_id)
+// Python: BaseTeam.publish(message, topic_id, sender, session_id)
 func (t *HandoffTeam) Publish(ctx context.Context, message map[string]any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	return t.runtime.Publish(ctx, message, topicID, sender, opts...)
 }
 
 // Subscribe 订阅主题，委托运行时。
 //
-// 对应 Python: BaseTeam.subscribe(agent_id, topic)
+// Python: BaseTeam.subscribe(agent_id, topic)
 func (t *HandoffTeam) Subscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Subscribe(ctx, agentID, topic)
 }
 
 // Unsubscribe 取消订阅，委托运行时。
 //
-// 对应 Python: BaseTeam.unsubscribe(agent_id, topic)
+// Python: BaseTeam.unsubscribe(agent_id, topic)
 func (t *HandoffTeam) Unsubscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Unsubscribe(ctx, agentID, topic)
 }
 
 // Configure 配置团队。
 //
-// 对应 Python: BaseTeam.configure(config) -> self
+// Python: BaseTeam.configure(config) -> self
 func (t *HandoffTeam) Configure(_ context.Context, config maschema.TeamConfig) error {
 	t.config.TeamConfig = config
 	logger.Info(logComponent).
@@ -293,35 +293,35 @@ func (t *HandoffTeam) Configure(_ context.Context, config maschema.TeamConfig) e
 
 // GetAgentCard 获取 Agent 卡片，委托运行时。
 //
-// 对应 Python: BaseTeam.get_agent_card(agent_id)
+// Python: BaseTeam.get_agent_card(agent_id)
 func (t *HandoffTeam) GetAgentCard(agentID string) (*agentschema.AgentCard, error) {
 	return t.runtime.GetAgentCard(agentID)
 }
 
 // GetAgentCount 获取 Agent 数量，委托运行时。
 //
-// 对应 Python: BaseTeam.get_agent_count()
+// Python: BaseTeam.get_agent_count()
 func (t *HandoffTeam) GetAgentCount() int {
 	return t.runtime.GetAgentCount()
 }
 
 // ListAgents 列出所有 Agent ID，委托运行时。
 //
-// 对应 Python: BaseTeam.list_agents()
+// Python: BaseTeam.list_agents()
 func (t *HandoffTeam) ListAgents() []string {
 	return t.runtime.ListAgents()
 }
 
 // Card 返回团队身份卡片。
 //
-// 对应 Python: BaseTeam.card 属性
+// Python: BaseTeam.card 属性
 func (t *HandoffTeam) Card() maschema.TeamCardInterface {
 	return t.card
 }
 
 // Config 返回团队配置。
 //
-// 对应 Python: BaseTeam.config 属性
+// Python: BaseTeam.config 属性
 func (t *HandoffTeam) Config() *maschema.TeamConfig {
 	return &t.config.TeamConfig
 }
@@ -330,7 +330,7 @@ func (t *HandoffTeam) Config() *maschema.TeamConfig {
 
 // lookupCoordinator 查找会话协调器。
 //
-// 对应 Python: HandoffTeam._lookup_coordinator(session_id)
+// Python: HandoffTeam._lookup_coordinator(session_id)
 func (t *HandoffTeam) lookupCoordinator(sessionID string) *HandoffOrchestrator {
 	t.registryMu.RLock()
 	defer t.registryMu.RUnlock()
@@ -341,7 +341,7 @@ func (t *HandoffTeam) lookupCoordinator(sessionID string) *HandoffOrchestrator {
 //
 // 配置了 StartAgent 时返回其 ID，否则返回第一个 Agent 的 ID。
 //
-// 对应 Python: HandoffTeam._get_start_agent_id()
+// Python: HandoffTeam._get_start_agent_id()
 func (t *HandoffTeam) getStartAgentID() string {
 	cfg := t.config.Handoff
 	if cfg.StartAgent != nil {
@@ -368,7 +368,7 @@ func (t *HandoffTeam) getStartAgentID() string {
 //     - runtime.RegisterAgent(endpointCard, containerProvider)
 //     - runtime.Subscribe(endpointID, container_{agentID})
 //
-// 对应 Python: HandoffTeam._ensure_internal_agents()
+// Python: HandoffTeam._ensure_internal_agents()
 func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
 	t.initLock.Lock()
 	defer t.initLock.Unlock()
@@ -475,7 +475,7 @@ func (t *HandoffTeam) resetInternalAgents() {
 // 返回的 provider 每次调用时创建新的 ContainerAgent 实例，
 // 注入目标 Agent 的卡片、provider、允许目标和协调器查找函数。
 //
-// 对应 Python: HandoffTeam._make_container_provider(card, agent_id, allowed_targets)
+// Python: HandoffTeam._make_container_provider(card, agent_id, allowed_targets)
 func (t *HandoffTeam) makeContainerProvider(
 	card *agentschema.AgentCard,
 	agentID string,
@@ -505,7 +505,7 @@ func (t *HandoffTeam) makeContainerProvider(
 //  6. 等待 coordinator.DoneCh()（带超时：select + time.After）
 //  7. 清理：移除 coordinator、CleanupSession
 //
-// 对应 Python: HandoffTeam._run_chain(message, session)
+// Python: HandoffTeam._run_chain(message, session)
 func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess *session.AgentTeamSession) (map[string]any, error) {
 	sessionID := sess.GetSessionID()
 
@@ -649,7 +649,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 	t.registryMu.Unlock()
 	_ = t.runtime.CleanupSession(ctx, sessionID)
 
-	// 对齐 Python: await coordinator.done_future — 若有异常则传播
+	// Python: await coordinator.done_future — 若有异常则传播
 	if coordErr != nil {
 		logger.Error(logComponent).Err(coordErr).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -680,7 +680,7 @@ func (t *HandoffTeam) wrapTeamAgentProvider(provider maschema.TeamAgentProvider)
 
 // filterInterruptHistory 过滤交接历史中的中断项。
 //
-// 对应 Python: filtered = [h for h in history if not (isinstance(h.get("output"), dict) and h.get("output", {}).get("result_type") == "interrupt")]
+// Python: filtered = [h for h in history if not (isinstance(h.get("output"), dict) and h.get("output", {}).get("result_type") == "interrupt")]
 func filterInterruptHistory(history []HandoffHistoryEntry) []HandoffHistoryEntry {
 	var filtered []HandoffHistoryEntry
 	for _, h := range history {

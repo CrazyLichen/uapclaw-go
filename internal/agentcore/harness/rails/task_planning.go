@@ -34,7 +34,7 @@ type deepStateLoader interface {
 }
 
 // TaskPlanningRail 任务规划护栏，管理 todo 工具、进度提醒和模型切换。
-// 对齐 Python: TaskPlanningRail (task_planning_rail.py)
+// Python: TaskPlanningRail (task_planning_rail.py)
 type TaskPlanningRail struct {
 	DeepAgentRail
 	// tools 已注册的 todo 工具列表
@@ -72,7 +72,7 @@ type TaskPlanningOption func(*TaskPlanningRail)
 
 const (
 	// taskPlanningRailPriority TaskPlanningRail 优先级
-	// 对齐 Python: TaskPlanningRail.priority = 90
+	// Python: TaskPlanningRail.priority = 90
 	taskPlanningRailPriority = 90
 )
 
@@ -115,7 +115,7 @@ func WithAgentID(id string) TaskPlanningOption {
 }
 
 // NewTaskPlanningRail 创建任务规划护栏实例。
-// 对齐 Python: TaskPlanningRail.__init__()
+// Python: TaskPlanningRail.__init__()
 func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	r := &TaskPlanningRail{
 		DeepAgentRail:        *NewDeepAgentRail(),
@@ -130,7 +130,7 @@ func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 		opt(r)
 	}
 	// 构造 modelIDToModel 映射
-	// 对齐 Python L70-73: for model, desc in model_selection.items()
+	// Python: L70-73: for model, desc in model_selection.items()
 	for model, desc := range r.modelSelection {
 		_ = desc // 描述在 buildModelSelectionString 时使用
 		if model != nil && model.ClientConfig != nil && model.ClientConfig.ClientID != "" {
@@ -141,8 +141,8 @@ func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	return r
 }
 
-func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
-	// 对齐 Python L87-92: 检查 agent 是 DeepAgent 且有 ability_manager
+func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
+	// Python: L87-92: 检查 agent 是 DeepAgent 且有 ability_manager
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
 		return nil
@@ -154,20 +154,20 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 
 	// 设置 sysOperation 和 workspace
 	if r.SysOperation() == nil {
-		// 对齐 Python L96-97: self.set_sys_operation(agent.deep_config.sys_operation)
+		// Python: L96-97: self.set_sys_operation(agent.deep_config.sys_operation)
 		if deepAgent.DeepConfig() != nil && deepAgent.DeepConfig().SysOperation != nil {
 			r.SetSysOperation(deepAgent.DeepConfig().SysOperation)
 		}
 	}
 	if r.Workspace() == nil {
-		// 对齐 Python L98-99: self.set_workspace(agent.deep_config.workspace)
+		// Python: L98-99: self.set_workspace(agent.deep_config.workspace)
 		if deepAgent.DeepConfig() != nil && deepAgent.DeepConfig().Workspace != nil {
 			r.SetWorkspace(deepAgent.DeepConfig().Workspace)
 		}
 	}
 
 	// 计算 workspaceDir 和 agentID
-	// 对齐 Python L101: workspace_dir = str(self.workspace.get_node_path(WorkspaceNode.TODO))
+	// Python: L101: workspace_dir = str(self.workspace.get_node_path(WorkspaceNode.TODO))
 	var workspaceDir string
 	if r.Workspace() != nil {
 		todoPath := r.Workspace().GetNodePath(workspace.WorkspaceNodeTODO)
@@ -175,14 +175,14 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 			workspaceDir = *todoPath
 		}
 	}
-	// 对齐 Python L102: agent_id = getattr(getattr(agent, "card", None), "id", None)
+	// Python: L102: agent_id = getattr(getattr(agent, "card", None), "id", None)
 	agentID := r.agentID
 	if agentID == "" {
 		if card := agent.Card(); card != nil {
 			agentID = card.ID
 		}
 	}
-	// 对齐 Python L103: language = self.system_prompt_builder.language if self.system_prompt_builder else "cn"
+	// Python: L103: language = self.system_prompt_builder.language if self.system_prompt_builder else "cn"
 	language := r.language
 	if language == "" {
 		if sb := agent.SystemPromptBuilder(); sb != nil {
@@ -192,7 +192,7 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 对齐 Python L105-131: 检查已有 todo 工具，已有的保留，缺失的创建
+	// Python: L105-131: 检查已有 todo 工具，已有的保留，缺失的创建
 	todoToolNames := []string{"todo_create", "todo_list", "todo_get", "todo_modify"}
 	foundTools := make(map[string]bool, 4)
 	for _, ability := range am.List() {
@@ -219,7 +219,7 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 
 	resourceMgr := runner.GetResourceMgr()
 
-	// 对齐 Python L124-131: 只注册尚未存在的工具，已有的保留
+	// Python: L124-131: 只注册尚未存在的工具，已有的保留
 	var registeredTools []tool.Tool
 	for i, t := range allTools {
 		if t == nil {
@@ -248,13 +248,13 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 }
 
 func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
-	// 对齐 Python L138-139: 移除 todo 提示词节
+	// Python: L138-139: 移除 todo 提示词节
 	if sb := agent.SystemPromptBuilder(); sb != nil {
 		sb.RemoveSection(sections.SectionTodo)
 	}
 
-	// 对齐 Python L140-148: 从 ability_manager 和 resource_mgr 移除工具
-	// 对齐 Python try/except：添加 recover 保护，防止注销工具时 panic
+	// Python: L140-148: 从 ability_manager 和 resource_mgr 移除工具
+	// Python: try/except：添加 recover 保护，防止注销工具时 panic
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	if am != nil && len(r.tools) > 0 {
@@ -289,29 +289,29 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python L155-156: system_prompt_builder 为 nil 时整体 return
+	// Python: L155-156: system_prompt_builder 为 nil 时整体 return
 	sb := cbc.Agent().SystemPromptBuilder()
 	if sb == nil {
 		return nil
 	}
 
-	// 对齐 Python L157-165: 注入 todo 提示词节
+	// Python: L157-165: 注入 todo 提示词节
 	lang := sb.Language()
 	modelSelStr := r.buildModelSelectionString()
 	section := sections.BuildTodoSection(modelSelStr, lang)
 	if section != nil {
 		sb.AddSection(*section)
 	} else {
-		// 对齐 Python L165: section 为 nil 时移除旧 todo 节
+		// Python: L165: section 为 nil 时移除旧 todo 节
 		sb.RemoveSection(sections.SectionTodo)
 	}
 
-	// 对齐 Python L167-168: 若无模型选择配置则跳过模型切换
+	// Python: L167-168: 若无模型选择配置则跳过模型切换
 	if len(r.modelSelection) == 0 {
 		return nil
 	}
 
-	// 对齐 Python L170-171: 首次调用时捕获 defaultLLM
+	// Python: L170-171: 首次调用时捕获 defaultLLM
 	switcher, ok := cbc.Agent().(modelSwitcher)
 	if !ok {
 		logger.Warn(taskPlanLogComponent).
@@ -328,10 +328,10 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		}
 	}
 
-	// 对齐 Python L173: 获取 in_progress 任务的 selected_model_id
+	// Python: L173: 获取 in_progress 任务的 selected_model_id
 	selectedModelID := r.getInProgressModelID(ctx, cbc)
 
-	// 对齐 Python L175-178: 根据 selected_model_id 查找目标模型
+	// Python: L175-178: 根据 selected_model_id 查找目标模型
 	var targetModel *llm.Model
 	if selectedModelID != "" {
 		if m, found := r.modelIDToModel[selectedModelID]; found {
@@ -342,7 +342,7 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		targetModel = r.defaultLLM
 	}
 
-	// 对齐 Python L180-185: 切换模型
+	// Python: L180-185: 切换模型
 	if targetModel != nil {
 		switcher.SetLLM(targetModel)
 		logger.Debug(taskPlanLogComponent).
@@ -359,7 +359,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 		return nil
 	}
 
-	// 对齐 Python L203-212: 刷新 todos 缓存
+	// Python: L203-212: 刷新 todos 缓存
 	sess := cbc.Session()
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	if ok && inputs != nil && sess != nil {
@@ -377,7 +377,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 		}
 	}
 
-	// 对齐 Python L214-215: 若未启用进度提醒或缺少 session/context 则跳过
+	// Python: L214-215: 若未启用进度提醒或缺少 session/context 则跳过
 	if !r.enableProgressRepeat || sess == nil {
 		return nil
 	}
@@ -388,13 +388,13 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 
 	sessionID := sess.GetSessionID()
 
-	// 对齐 Python L218-223: 累计工具调用次数，每 N 次注入进度提醒
+	// Python: L218-223: 累计工具调用次数，每 N 次注入进度提醒
 	r.toolCallCounts[sessionID]++
 	if r.toolCallCounts[sessionID]%r.listToolCallInterval != 0 {
 		return nil
 	}
 
-	// 对齐 Python L225-229: 加载当前 todos
+	// Python: L225-229: 加载当前 todos
 	todos, err := r.todoTool.LoadTodos(ctx, sessionID)
 	if err != nil {
 		logger.Debug(taskPlanLogComponent).
@@ -406,7 +406,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 		return nil
 	}
 
-	// 对齐 Python L234-241: 构造进度提醒并注入消息
+	// Python: L234-241: 构造进度提醒并注入消息
 	tasksStr, inProgressTask := r.formatTaskContent(todos)
 	var lang string
 	if sb := cbc.Agent().SystemPromptBuilder(); sb != nil {
@@ -416,8 +416,8 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	}
 	prompt := sections.BuildProgressReminderUserPrompt(tasksStr, inProgressTask, lang)
 
-	// 对齐 Python L240-242: 向上下文注入 UserMessage
-	// 对齐 Python: 获取消息列表并追加用户消息
+	// Python: L240-242: 向上下文注入 UserMessage
+	// Python: 获取消息列表并追加用户消息
 	// 使用 GetMessages+append+SetMessages 而非 AddMessages，对齐 Python 纯数据操作不触发处理器链
 	userMsg := llmschema.NewUserMessage(prompt)
 	messages, _ := modelCtx.GetMessages(0, true)
@@ -428,7 +428,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 }
 
 func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python L246-249: 获取当前模型
+	// Python: L246-249: 获取当前模型
 	switcher, ok := cbc.Agent().(modelSwitcher)
 	if !ok {
 		return nil
@@ -438,13 +438,13 @@ func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterface
 		return nil
 	}
 
-	// 对齐 Python L249: model_id = use_model.model_client_config.client_id
+	// Python: L249: model_id = use_model.model_client_config.client_id
 	var modelID string
 	if llmModel.ClientConfig != nil {
 		modelID = llmModel.ClientConfig.ClientID
 	}
 
-	// 对齐 Python L250-253: 从响应中获取 UsageMetadata
+	// Python: L250-253: 从响应中获取 UsageMetadata
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs)
 	if !ok || inputs == nil || inputs.Response == nil {
 		return nil
@@ -454,14 +454,14 @@ func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterface
 		return nil
 	}
 
-	// 对齐 Python L255-258: 提取 token 数
+	// Python: L255-258: 提取 token 数
 	inputTokens := usage.InputTokens
 	outputTokens := usage.OutputTokens
 	if inputTokens == 0 && outputTokens == 0 {
 		return nil
 	}
 
-	// 对齐 Python L260-262: 累加到 usageRecords
+	// Python: L260-262: 累加到 usageRecords
 	if _, exists := r.usageRecords[modelID]; !exists {
 		r.usageRecords[modelID] = &hschema.ModelUsageRecord{ModelID: modelID}
 	}
@@ -476,7 +476,7 @@ func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentint
 }
 
 func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python L266-269: 日志汇总 token 使用量
+	// Python: L266-269: 日志汇总 token 使用量
 	for modelID, record := range r.usageRecords {
 		logger.Info(taskPlanLogComponent).
 			Str("event_type", "task_planning_token_usage").
@@ -487,20 +487,20 @@ func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.A
 	}
 	r.usageRecords = make(map[string]*hschema.ModelUsageRecord)
 
-	// 对齐 Python L271-273: 获取 sessionID
+	// Python: L271-273: 获取 sessionID
 	sess := cbc.Session()
 	if sess == nil {
 		return nil
 	}
 	sessionID := sess.GetSessionID()
 
-	// 对齐 Python L275-278: 清理 todos 缓存
+	// Python: L275-278: 清理 todos 缓存
 	delete(r.todosCache, sessionID)
 
-	// 对齐 Python L279-281: 清理工具调用计数
+	// Python: L279-281: 清理工具调用计数
 	delete(r.toolCallCounts, sessionID)
 
-	// 对齐 Python L283-286: 清理会话资源
+	// Python: L283-286: 清理会话资源
 	if r.todoTool != nil {
 		r.todoTool.CleanupSession(sessionID)
 	}
@@ -555,7 +555,7 @@ func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agenti
 		r.todosCache[sessionID] = todos
 	}
 
-	// 对齐 Python L314-317: 查找 in_progress 任务
+	// Python: L314-317: 查找 in_progress 任务
 	for _, item := range todos {
 		if item.Status == hschema.TodoStatusInProgress {
 			return item.SelectedModelID
@@ -583,7 +583,7 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 		return
 	}
 
-	// 对齐 Python L330-331: 获取 TaskPlan
+	// Python: L330-331: 获取 TaskPlan
 	loader, ok := cbc.Agent().(deepStateLoader)
 	if !ok {
 		logger.Debug(taskPlanLogComponent).
@@ -602,7 +602,7 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 	}
 	sessionID := sess.GetSessionID()
 
-	// 对齐 Python L341-345: 加载当前 todos
+	// Python: L341-345: 加载当前 todos
 	todos, err := r.todoTool.LoadTodos(ctx, sessionID)
 	if err != nil {
 		logger.Debug(taskPlanLogComponent).
@@ -614,13 +614,13 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 		return
 	}
 
-	// 对齐 Python L350-353: 构建状态映射
+	// Python: L350-353: 构建状态映射
 	statusByTaskID := make(map[string]hschema.TodoStatus, len(state.TaskPlan.Tasks))
 	for _, task := range state.TaskPlan.Tasks {
 		statusByTaskID[task.ID] = task.Status
 	}
 
-	// 对齐 Python L354-363: 比较并更新状态
+	// Python: L354-363: 比较并更新状态
 	changed := false
 	for i := range todos {
 		desired, exists := statusByTaskID[todos[i].ID]
@@ -636,7 +636,7 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 		return
 	}
 
-	// 对齐 Python L367-371: 保存更新后的 todos
+	// Python: L367-371: 保存更新后的 todos
 	if err := r.todoTool.SaveTodos(ctx, sessionID, todos); err != nil {
 		logger.Warn(taskPlanLogComponent).
 			Str("event_type", "task_planning_sync_todo_save_failed").

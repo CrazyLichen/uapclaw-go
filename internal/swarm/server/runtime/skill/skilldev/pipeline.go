@@ -20,7 +20,7 @@ import (
 // Pipeline 不关心"怎么做"，只关心"做什么顺序"。
 // 具体逻辑全部委托给各阶段的 StageHandler.Execute()。
 //
-// 对应 Python: jiuwenswarm/server/runtime/skill/skilldev/pipeline.py (SkillDevPipeline)
+// Python: jiuwenswarm/server/runtime/skill/skilldev/pipeline.py (SkillDevPipeline)
 type SkillDevPipeline struct {
 	// TaskID 任务标识
 	TaskID string
@@ -29,7 +29,7 @@ type SkillDevPipeline struct {
 	// deps 外部依赖
 	deps *SkillDevDeps
 	// runErr goroutine 内设置的错误，调用方在 channel close 后读取。
-	// 对齐 Python: raise RuntimeError → 穿过 Service → UapClaw try/except 兜底。
+	// Python: raise RuntimeError → 穿过 Service → UapClaw try/except 兜底。
 	// channel close 保证 happens-before，无数据竞争。
 	runErr error
 }
@@ -74,7 +74,7 @@ func NewSkillDevPipeline(taskID string, state *SkillDevState, deps *SkillDevDeps
 // 返回只读事件 channel，调用方逐个读取事件。
 // Pipeline goroutine 结束后自动 close channel。
 //
-// 对齐 Python: SkillDevPipeline.run() → AsyncIterator[SkillDevEvent]
+// Python: SkillDevPipeline.run() → AsyncIterator[SkillDevEvent]
 func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error) {
 	eventCh := make(chan SkillDevEvent, 64)
 
@@ -116,7 +116,7 @@ func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error
 			// 执行当前阶段
 			handler, ok := stageHandlers[p.State.Stage]
 			if !ok {
-				// 对齐 Python: raise RuntimeError("阶段 X 没有对应的处理器")
+				// Python: raise RuntimeError("阶段 X 没有对应的处理器")
 				// Python 中异常穿过 Pipeline→Service，由 UapClaw 的 try/except 兜底。
 				// Go 等价：赋值 runErr 后退出 goroutine，上层 Service range 完后检查兜底。
 				logger.Error(logComponent).
@@ -194,7 +194,7 @@ func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error
 //
 // 返回只读事件 channel，调用方逐个读取事件。
 //
-// 对齐 Python: SkillDevPipeline.resume(data) → AsyncIterator[SkillDevEvent]
+// Python: SkillDevPipeline.resume(data) → AsyncIterator[SkillDevEvent]
 func (p *SkillDevPipeline) Resume(ctx context.Context, data map[string]any) (<-chan SkillDevEvent, error) {
 	currentStage := p.State.Stage
 	suspension, ok := SuspensionPoints[currentStage]
@@ -217,7 +217,7 @@ func (p *SkillDevPipeline) Resume(ctx context.Context, data map[string]any) (<-c
 
 // emit 向事件 channel 发送一个事件。
 //
-// 对齐 Python: SkillDevPipeline._emit()
+// Python: SkillDevPipeline._emit()
 func (p *SkillDevPipeline) emit(eventCh chan<- SkillDevEvent, eventType SkillDevEventType, payload map[string]any) {
 	merged := make(map[string]any, len(payload)+1)
 	merged["task_id"] = p.TaskID
@@ -233,7 +233,7 @@ func (p *SkillDevPipeline) emit(eventCh chan<- SkillDevEvent, eventType SkillDev
 
 // checkpoint 阶段边界：持久化状态 + 同步工作区文件。
 //
-// 对齐 Python: SkillDevPipeline._checkpoint()
+// Python: SkillDevPipeline._checkpoint()
 func (p *SkillDevPipeline) checkpoint() error {
 	if err := p.deps.StateStore.SaveState(p.TaskID, p.State); err != nil {
 		logger.Error(logComponent).

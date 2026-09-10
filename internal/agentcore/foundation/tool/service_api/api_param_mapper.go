@@ -13,7 +13,7 @@ import (
 // 根据 JSON Schema 中每个参数的 location 字段决定其目标位置，
 // 并合并 Card 上预设的默认参数（queries/headers/paths）。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamMapper)
+// Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamMapper)
 type APIParamMapper struct {
 	// schema 原始 JSON Schema map（从 RestfulApiCard.InputSchema 传入）
 	schema map[string]any
@@ -29,7 +29,7 @@ type APIParamMapper struct {
 
 // APIParamLocation API 参数位置枚举，基于 OpenAPI 规范定义参数在 HTTP 请求中的位置。
 //
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamLocation)
+// Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamLocation)
 type APIParamLocation int
 
 const (
@@ -107,7 +107,7 @@ func NewAPIParamMapper(
 //  3. FORM 类型参数 → 存储 {form_handler_type, value}
 //  4. 合并 defaults：defaults 为基础，inputs 中非 nil/非空字符串的值覆盖 defaults
 //
-// 对应 Python: APIParamMapper.map()
+// Python: APIParamMapper.map()
 func (m *APIParamMapper) Map(inputs map[string]any, defaultLocation APIParamLocation) map[APIParamLocation]map[string]any {
 	// 初始化各位置的结果桶
 	result := map[APIParamLocation]map[string]any{

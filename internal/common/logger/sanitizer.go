@@ -8,22 +8,22 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Sanitizer 敏感数据脱敏器，对日志文本进行 4 层正则 + 7 种模式的脱敏。
-// 对应 Python: _sanitize_log_text + SensitiveDataFilter
+// Python: _sanitize_log_text + SensitiveDataFilter
 type Sanitizer struct {
 	// kvPattern 匹配常见敏感字段键值对（key=value / key: value）
-	// 对应 Python: _KV_SENSITIVE_PATTERN
+	// Python: _KV_SENSITIVE_PATTERN
 	kvPattern *regexp.Regexp
 	// namedKVPatternDQ 匹配键名包含敏感关键词且值被双引号包裹的场景
-	// 对应 Python: _NAMED_SENSITIVE_KV_PATTERN（双引号版本）
+	// Python: _NAMED_SENSITIVE_KV_PATTERN（双引号版本）
 	namedKVPatternDQ *regexp.Regexp
 	// namedKVPatternSQ 匹配键名包含敏感关键词且值被单引号包裹的场景
-	// 对应 Python: _NAMED_SENSITIVE_KV_PATTERN（单引号版本）
+	// Python: _NAMED_SENSITIVE_KV_PATTERN（单引号版本）
 	namedKVPatternSQ *regexp.Regexp
 	// bearerPattern 匹配 Authorization Bearer 令牌，保留 "Bearer " 前缀
-	// 对应 Python: _BEARER_SENSITIVE_PATTERN
+	// Python: _BEARER_SENSITIVE_PATTERN
 	bearerPattern *regexp.Regexp
 	// specificPatterns 特定格式的敏感数据模式列表
-	// 对应 Python: _SENSITIVE_PATTERNS
+	// Python: _SENSITIVE_PATTERNS
 	specificPatterns []*regexp.Regexp
 }
 
@@ -40,7 +40,7 @@ type sanitizerWriter struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // SensitiveMask 敏感信息统一掩码值。
-// 对应 Python: _SENSITIVE_MASK
+// Python: _SENSITIVE_MASK
 const SensitiveMask = "******"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -101,7 +101,7 @@ func NewSanitizer() *Sanitizer {
 }
 
 // Sanitize 对文本进行脱敏，脱敏失败时返回原文。
-// 对应 Python: _sanitize_log_text
+// Python: _sanitize_log_text
 // 脱敏失败时静默返回原文，绝不因脱敏异常而阻止日志输出。
 func (s *Sanitizer) Sanitize(text string) string {
 	if text == "" {

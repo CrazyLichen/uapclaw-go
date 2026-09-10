@@ -21,7 +21,7 @@ type Interrupt struct {
 }
 
 // GraphInterrupt 图级中断异常，通过 panic 传播。
-// 对应 Python: openjiuwen/core/graph/pregel/base.py (GraphInterrupt)
+// Python: openjiuwen/core/graph/pregel/base.py (GraphInterrupt)
 // 暂放 interaction 包，8.7 实现 graph/pregel 包时可迁移。
 type GraphInterrupt struct {
 	// Interrupts 中断信号列表
@@ -29,7 +29,7 @@ type GraphInterrupt struct {
 }
 
 // AgentInterrupt Agent 中断异常，通过 panic 传播。
-// 对应 Python: openjiuwen/core/session/interaction/base.py (AgentInterrupt)
+// Python: openjiuwen/core/session/interaction/base.py (AgentInterrupt)
 // Message 类型为 any（对齐 Python AgentInterrupt(message) 不限制参数类型）。
 type AgentInterrupt struct {
 	// Message 中断消息（可以是 string、dict 等任意类型，对齐 Python 行为）
@@ -37,7 +37,7 @@ type AgentInterrupt struct {
 }
 
 // BaseInteraction 交互基类，管理交互输入队列。
-// 对应 Python: openjiuwen/core/session/interaction/base.py (BaseInteraction)
+// Python: openjiuwen/core/session/interaction/base.py (BaseInteraction)
 type BaseInteraction struct {
 	// interactiveInputs 交互输入队列
 	interactiveInputs []any
@@ -54,10 +54,10 @@ type BaseInteraction struct {
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// InteractionType 交互事件类型标识
-	// 对应 Python: INTERACTION = "__interaction__"
+	// Python: INTERACTION = "__interaction__"
 	InteractionType = "__interaction__"
 	// InteractiveInputKey 交互输入在 session state 中的键
-	// 对应 Python: INTERACTIVE_INPUT = "__interactive_input__"
+	// Python: INTERACTIVE_INPUT = "__interactive_input__"
 	InteractiveInputKey = "__interactive_input__"
 )
 
@@ -74,7 +74,7 @@ func (e *AgentInterrupt) Error() string {
 
 // NewBaseInteraction 创建交互基类实例。
 // defaultInput 为可选的默认输入，会被追加到从 session state 读取的输入队列之后。
-// 对应 Python: BaseInteraction.__init__(session, default_input)
+// Python: BaseInteraction.__init__(session, default_input)
 func NewBaseInteraction(session interfaces.InnerSession, defaultInput ...any) *BaseInteraction {
 	bi := &BaseInteraction{
 		session: session,
@@ -87,13 +87,13 @@ func NewBaseInteraction(session interfaces.InnerSession, defaultInput ...any) *B
 }
 
 // PanicGraphInterrupt 触发图级中断 panic。
-// 对应 Python: raise GraphInterrupt(...)
+// Python: raise GraphInterrupt(...)
 func PanicGraphInterrupt(interrupts ...Interrupt) {
 	panic(&GraphInterrupt{Interrupts: interrupts})
 }
 
 // PanicAgentInterrupt 触发 Agent 中断 panic。
-// 对应 Python: raise AgentInterrupt(message)
+// Python: raise AgentInterrupt(message)
 func PanicAgentInterrupt(msg any) {
 	panic(&AgentInterrupt{Message: msg})
 }
@@ -101,7 +101,7 @@ func PanicAgentInterrupt(msg any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // initInteractiveInputs 从 session state 读取已有的交互输入，合并到输入队列。
-// 对应 Python: BaseInteraction._init_interactive_inputs()
+// Python: BaseInteraction._init_interactive_inputs()
 // Python 中 session.state().get(INTERACTIVE_INPUT) 查询的是 agent_state，
 // Go 侧对应 SessionState.Get()（AgentStateCollection 中委托到 agentState，
 // WorkflowStateCollection 中委托到 compState）。
@@ -149,7 +149,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 }
 
 // getNextInteractiveInput 从输入队列获取下一个输入。
-// 对应 Python: BaseInteraction._get_next_interactive_input()
+// Python: BaseInteraction._get_next_interactive_input()
 func (b *BaseInteraction) getNextInteractiveInput() any {
 	if b.interactiveInputs != nil && b.idx < len(b.interactiveInputs) {
 		res := b.interactiveInputs[b.idx]
@@ -185,7 +185,7 @@ func writeInteractionOutput(session interfaces.InnerSession, outputType string, 
 }
 
 // commitCMP 提交检查点状态。
-// 对应 Python: session.state().commit_cmp()
+// Python: session.state().commit_cmp()
 // Python 中通过继承链直接调用，Go 中通过类型断言 WorkflowState 获取。
 // 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
 func commitCMP(session interfaces.InnerSession) {

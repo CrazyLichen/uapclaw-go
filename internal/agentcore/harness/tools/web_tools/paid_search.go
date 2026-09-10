@@ -15,7 +15,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PaidSearchInput paid_search 工具的输入参数
-// 对齐 Python: WebPaidSearchTool.invoke inputs (web_tools.py L1300-1313)
+// Python: WebPaidSearchTool.invoke inputs (web_tools.py L1300-1313)
 type PaidSearchInput struct {
 	// Query 搜索查询文本
 	Query string `json:"query"`
@@ -46,12 +46,12 @@ type paidSearchResult struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebPaidSearchTool 创建付费搜索工具
-// 对齐 Python: WebPaidSearchTool.__init__ + invoke (web_tools.py L1091-1381)
+// Python: WebPaidSearchTool.__init__ + invoke (web_tools.py L1091-1381)
 func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 	card, _ := hprompts.BuildToolCard("paid_search", "WebPaidSearchTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input PaidSearchInput, opts ...tool.ToolOption) (map[string]any, error) {
-		// 对齐 Python: WebPaidSearchTool.invoke (web_tools.py L1298-1376)
+		// Python: WebPaidSearchTool.invoke (web_tools.py L1298-1376)
 		query := strings.TrimSpace(input.Query)
 		provider := strings.ToLower(strings.TrimSpace(input.Provider))
 		maxResults := input.MaxResults
@@ -61,7 +61,7 @@ func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 			return map[string]any{"result": "[ERROR]: query cannot be empty."}, nil
 		}
 
-		// 对齐 Python: L1302-1308 — 环境变量覆盖 provider
+		// Python: L1302-1308 — 环境变量覆盖 provider
 		envProvider := strings.ToLower(strings.TrimSpace(os.Getenv(paidSearchProviderEnv)))
 		if envProvider == "" {
 			envProvider = strings.ToLower(strings.TrimSpace(os.Getenv(paidSearchProviderAltEnv)))
@@ -70,7 +70,7 @@ func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 			provider = envProvider
 		}
 
-		// 对齐 Python: L1309-1313 — 默认值
+		// Python: L1309-1313 — 默认值
 		if maxResults <= 0 {
 			maxResults = 8
 		}
@@ -78,17 +78,17 @@ func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 			timeoutSeconds = paidSearchDefaultTimeoutSeconds
 		}
 
-		// 对齐 Python: L1318-1319 — provider 校验
+		// Python: L1318-1319 — provider 校验
 		validProviders := map[string]bool{"auto": true, "bocha": true, "jina": true, "serper": true, "perplexity": true}
 		if !validProviders[provider] {
 			return map[string]any{"result": "[ERROR]: provider must be one of auto|bocha|jina|serper|perplexity."}, nil
 		}
 
-		// 对齐 Python: L1321-1325 — 参数钳位
+		// Python: L1321-1325 — 参数钳位
 		timeoutSeconds = max(paidSearchMinTimeoutSeconds, min(timeoutSeconds, paidSearchMaxTimeoutSeconds))
 		maxResults = max(1, min(maxResults, 20))
 
-		// 对齐 Python: L1327-1348 — 确定搜索顺序
+		// Python: L1327-1348 — 确定搜索顺序
 		var order []string
 		if provider == "auto" {
 			order = configuredPaidSearchProviders()
@@ -99,7 +99,7 @@ func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 			order = []string{provider}
 		}
 
-		// 对齐 Python: L1349-1376 — 逐 provider 尝试
+		// Python: L1349-1376 — 逐 provider 尝试
 		var errors []string
 		for _, name := range order {
 			result, err := runPaidSearchProvider(name, query, maxResults, timeoutSeconds)
@@ -114,7 +114,7 @@ func NewWebPaidSearchTool(language, agentID string) tool.Tool {
 				urls = urls[:maxResults]
 			}
 
-			// 对齐 Python: L1361-1374 — 格式化输出
+			// Python: L1361-1374 — 格式化输出
 			if answer == "" && len(urls) == 0 {
 				errors = append(errors, fmt.Sprintf("%s: no usable result payload", name))
 				continue
@@ -162,7 +162,7 @@ func runPaidSearchProvider(name, query string, maxResults, timeoutSeconds int) (
 }
 
 // jinaSearch 使用 Jina DeepSearch API 搜索
-// 对齐 Python: WebPaidSearchTool._jina_search_sync() (web_tools.py L1103-1130)
+// Python: WebPaidSearchTool._jina_search_sync() (web_tools.py L1103-1130)
 func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 	jinaKey := strings.TrimSpace(os.Getenv("JINA_API_KEY"))
 	if jinaKey == "" {
@@ -170,7 +170,7 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 		return nil, fmt.Errorf("JINA_API_KEY not set")
 	}
 
-	// 对齐 Python: L1110-1114
+	// Python: L1110-1114
 	model := safeEnvChoice("JINA_MODEL", jinaDefaultModel, jinaAllowedModels)
 	payload := map[string]any{
 		"model":            model,
@@ -203,7 +203,7 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 		return nil, fmt.Errorf("jina 搜索解析响应失败: %w", err)
 	}
 
-	// 对齐 Python: L1126-1128
+	// Python: L1126-1128
 	answer := ""
 	if choices, ok := data["choices"].([]any); ok && len(choices) > 0 {
 		if choice, ok := choices[0].(map[string]any); ok {
@@ -215,13 +215,13 @@ func jinaSearch(query string, timeoutSeconds int) (*paidSearchResult, error) {
 		}
 	}
 
-	// 对齐 Python: L1129
+	// Python: L1129
 	urls := urlExtractRe.FindAllString(answer, -1)
 	return &paidSearchResult{Provider: "jina", Answer: strings.TrimSpace(answer), URLs: urls}, nil
 }
 
 // bochaSearch 使用 Bocha Web Search API 搜索
-// 对齐 Python: WebPaidSearchTool._bocha_search_sync() (web_tools.py L1187-1206)
+// Python: WebPaidSearchTool._bocha_search_sync() (web_tools.py L1187-1206)
 func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	bochaKey := strings.TrimSpace(os.Getenv("BOCHA_API_KEY"))
 	if bochaKey == "" {
@@ -229,7 +229,7 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 		return nil, fmt.Errorf("BOCHA_API_KEY not set")
 	}
 
-	// 对齐 Python: L1193-1195
+	// Python: L1193-1195
 	apiURL := os.Getenv("BOCHA_API_URL")
 	if apiURL == "" {
 		apiURL = "https://api.bocha.cn/v1/web-search"
@@ -269,7 +269,7 @@ func bochaSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResul
 }
 
 // serperSearch 使用 Serper (Google Search API) 搜索
-// 对齐 Python: WebPaidSearchTool._serper_search_sync() (web_tools.py L1209-1239)
+// Python: WebPaidSearchTool._serper_search_sync() (web_tools.py L1209-1239)
 func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	serperKey := strings.TrimSpace(os.Getenv("SERPER_API_KEY"))
 	if serperKey == "" {
@@ -295,7 +295,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 		return nil, fmt.Errorf("serper 搜索请求失败: %w", err)
 	}
 
-	// 对齐 Python: L1223-1230 — 400 时重试不带 num
+	// Python: L1223-1230 — 400 时重试不带 num
 	if resp.statusCode == 400 {
 		payload2 := map[string]any{"q": query}
 		payloadBytes2, _ := json.Marshal(payload2)
@@ -321,7 +321,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 		return nil, fmt.Errorf("serper 搜索解析响应失败: %w", err)
 	}
 
-	// 对齐 Python: L1233-1238
+	// Python: L1233-1238
 	var urls []string
 	if organic, ok := data["organic"].([]any); ok {
 		for i, item := range organic {
@@ -340,7 +340,7 @@ func serperSearch(query string, maxResults, timeoutSeconds int) (*paidSearchResu
 }
 
 // perplexitySearch 使用 Perplexity AI 搜索
-// 对齐 Python: WebPaidSearchTool._perplexity_search_sync() (web_tools.py L1261-1296)
+// Python: WebPaidSearchTool._perplexity_search_sync() (web_tools.py L1261-1296)
 func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearchResult, error) {
 	perplexityKey := strings.TrimSpace(os.Getenv("PERPLEXITY_API_KEY"))
 	if perplexityKey == "" {
@@ -348,14 +348,14 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 		return nil, fmt.Errorf("PERPLEXITY_API_KEY not set")
 	}
 
-	// 对齐 Python: L1268-1269
+	// Python: L1268-1269
 	model := safeEnvChoice("PPLX_MODEL", pplxDefaultModel, pplxAllowedModels)
 	apiURL := os.Getenv("PPLX_API_URL")
 	if apiURL == "" {
 		apiURL = "https://api.perplexity.ai/chat/completions"
 	}
 
-	// 对齐 Python: L1270-1276
+	// Python: L1270-1276
 	payload := map[string]any{
 		"model": model,
 		"messages": []map[string]string{
@@ -391,7 +391,7 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 		return nil, fmt.Errorf("perplexity 搜索解析响应失败: %w", err)
 	}
 
-	// 对齐 Python: L1288-1290
+	// Python: L1288-1290
 	answer := ""
 	if choices, ok := data["choices"].([]any); ok && len(choices) > 0 {
 		if choice, ok := choices[0].(map[string]any); ok {
@@ -403,7 +403,7 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 		}
 	}
 
-	// 对齐 Python: L1292-1295
+	// Python: L1292-1295
 	urls := parsePerplexityCitations(data)
 	if maxResults > 0 && len(urls) > maxResults {
 		urls = urls[:maxResults]
@@ -413,10 +413,10 @@ func perplexitySearch(query string, maxResults, timeoutSeconds int) (*paidSearch
 }
 
 // extractBochaURLs 从 Bocha 响应中提取 URL
-// 对齐 Python: WebPaidSearchTool._extract_bocha_urls() (web_tools.py L1133-1155)
+// Python: WebPaidSearchTool._extract_bocha_urls() (web_tools.py L1133-1155)
 func extractBochaURLs(data map[string]any, maxResults int) []string {
 	var candidates []any
-	// 对齐 Python: L1136-1145 — 多容器路径
+	// Python: L1136-1145 — 多容器路径
 	paths := []string{"data.webPages.value", "webPages.value", "data.webPages", "webPages", "data.results", "results"}
 	for _, path := range paths {
 		if container := getNestedValue(data, path); container != nil {
@@ -444,9 +444,9 @@ func extractBochaURLs(data map[string]any, maxResults int) []string {
 }
 
 // extractBochaAnswer 从 Bocha 响应中提取答案
-// 对齐 Python: WebPaidSearchTool._extract_bocha_answer() (web_tools.py L1158-1184)
+// Python: WebPaidSearchTool._extract_bocha_answer() (web_tools.py L1158-1184)
 func extractBochaAnswer(data map[string]any) string {
-	// 对齐 Python: L1160-1169 — 直接字段
+	// Python: L1160-1169 — 直接字段
 	candidates := []string{"summary", "answer", "data.summary", "data.answer", "data.message"}
 	for _, path := range candidates {
 		if v := getNestedValue(data, path); v != nil {
@@ -456,7 +456,7 @@ func extractBochaAnswer(data map[string]any) string {
 		}
 	}
 
-	// 对齐 Python: L1171-1183 — 从 webPages.value 中提取
+	// Python: L1171-1183 — 从 webPages.value 中提取
 	if webPages, ok := getNestedValue(data, "data.webPages").(map[string]any); ok {
 		if value, ok := webPages["value"].([]any); ok {
 			var snippets []string
@@ -481,9 +481,9 @@ func extractBochaAnswer(data map[string]any) string {
 }
 
 // parsePerplexityCitations 从 Perplexity 响应中提取引用 URL
-// 对齐 Python: WebPaidSearchTool._parse_perplexity_citations() (web_tools.py L1242-1258)
+// Python: WebPaidSearchTool._parse_perplexity_citations() (web_tools.py L1242-1258)
 func parsePerplexityCitations(data map[string]any) []string {
-	// 对齐 Python: L1244-1257
+	// Python: L1244-1257
 	keys := []string{"citations", "search_results", "web_search_results", "sources"}
 	for _, key := range keys {
 		if entries, ok := data[key].([]any); ok {

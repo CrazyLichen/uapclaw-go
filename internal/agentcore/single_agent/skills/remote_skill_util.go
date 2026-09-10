@@ -18,7 +18,7 @@ import (
 
 // GitHubTree 表示 GitHub 目录树的元数据。
 //
-// 对应 Python: GitHubTree
+// Python: GitHubTree
 type GitHubTree struct {
 	// RepoOwner GitHub 仓库所有者
 	RepoOwner string
@@ -32,7 +32,7 @@ type GitHubTree struct {
 
 // GitHubError GitHub API 异常。
 //
-// 对应 Python: GitHubError(Exception)
+// Python: GitHubError(Exception)
 type GitHubError struct {
 	// Message 错误信息
 	Message string
@@ -40,7 +40,7 @@ type GitHubError struct {
 
 // RemoteSkillUtil 远程技能工具类，从 GitHub 下载技能文件。
 //
-// 对应 Python: RemoteSkillUtil
+// Python: RemoteSkillUtil
 type RemoteSkillUtil struct {
 	// sysOperationID 系统操作 ID
 	sysOperationID string
@@ -107,7 +107,7 @@ var _ bytes.Buffer
 
 // NewGitHubTree 创建 GitHubTree 实例。
 //
-// 对应 Python: GitHubTree.__init__(repo_owner, repo_name, tree_ref="HEAD", directory=Path(""))
+// Python: GitHubTree.__init__(repo_owner, repo_name, tree_ref="HEAD", directory=Path(""))
 func NewGitHubTree(repoOwner, repoName, treeRef, directory string) *GitHubTree {
 	if treeRef == "" {
 		treeRef = "HEAD"
@@ -122,7 +122,7 @@ func NewGitHubTree(repoOwner, repoName, treeRef, directory string) *GitHubTree {
 
 // Clone 克隆 GitHubTree 实例。
 //
-// 对应 Python: GitHubTree.clone()
+// Python: GitHubTree.clone()
 func (t *GitHubTree) Clone() *GitHubTree {
 	return &GitHubTree{
 		RepoOwner: t.RepoOwner,
@@ -139,7 +139,7 @@ func (e *GitHubError) Error() string {
 
 // NewRemoteSkillUtil 创建 RemoteSkillUtil 实例。
 //
-// 对应 Python: RemoteSkillUtil.__init__(sys_operation_id)
+// Python: RemoteSkillUtil.__init__(sys_operation_id)
 func NewRemoteSkillUtil(sysOperationID string) *RemoteSkillUtil {
 	return &RemoteSkillUtil{
 		sysOperationID: sysOperationID,
@@ -159,7 +159,7 @@ func NewRemoteSkillUtilWithProvider(sysOperationID string, provider FsProvider) 
 
 // SetSysOperationID 更新系统操作 ID。
 //
-// 对应 Python: RemoteSkillUtil.set_sys_operation_id(sys_operation_id)
+// Python: RemoteSkillUtil.set_sys_operation_id(sys_operation_id)
 func (r *RemoteSkillUtil) SetSysOperationID(sysOperationID string) {
 	r.sysOperationID = sysOperationID
 }
@@ -181,7 +181,7 @@ func (r *RemoteSkillUtil) SetFsProvider(provider FsProvider) {
 // 返回 (fileList, skillPaths, error)：fileList 为带相对路径的文件列表，
 // skillPaths 为技能目录名列表。
 //
-// 对应 Python: RemoteSkillUtil.search_github_for_skills(tree, token)
+// Python: RemoteSkillUtil.search_github_for_skills(tree, token)
 func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) ([]gitHubFileItem, []string, error) {
 	files, truncated, err := r.listGitHubFiles(tree, token)
 	if err != nil {
@@ -265,7 +265,7 @@ func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) 
 
 // UploadSkillFromGitHub 从 GitHub 下载技能文件并写入文件系统。
 //
-// 对应 Python: RemoteSkillUtil.upload_skill_from_github(tree, skills_dir, token)
+// Python: RemoteSkillUtil.upload_skill_from_github(tree, skills_dir, token)
 func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir string, token string) ([]string, error) {
 	fileList, skillPaths, err := r.SearchGitHubForSkills(tree, token)
 	if err != nil {
@@ -297,7 +297,7 @@ func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir stri
 //
 // 静态方法，使用 GitHub Contents API（Accept: application/vnd.github.raw）。
 //
-// 对应 Python: RemoteSkillUtil.download_file_from_github(tree, file_path, token)
+// Python: RemoteSkillUtil.download_file_from_github(tree, file_path, token)
 func DownloadFileFromGitHub(tree *GitHubTree, filePath string, token string) ([]byte, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s", githubAPI, tree.RepoOwner, tree.RepoName, filePath)
 
@@ -343,7 +343,7 @@ func DownloadFileFromGitHub(tree *GitHubTree, filePath string, token string) ([]
 // 如果 directory 非空，则逐层递归：先获取当前 tree ref 的顶层，
 // 找匹配 directory 第一段的子树（type == "tree"），用其 sha 作为新的 tree_ref 继续递归。
 //
-// 对应 Python: RemoteSkillUtil._recursively_list_github_files(tree, current_directory, token)
+// Python: RemoteSkillUtil._recursively_list_github_files(tree, current_directory, token)
 func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDirectory string, token string) ([]gitHubTreeItem, bool, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s", githubAPI, tree.RepoOwner, tree.RepoName, tree.TreeRef)
 
@@ -412,7 +412,7 @@ func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDi
 //
 // 如果 directory 是绝对路径，去掉根前缀。
 //
-// 对应 Python: RemoteSkillUtil._list_github_files(tree, token)
+// Python: RemoteSkillUtil._list_github_files(tree, token)
 func (r *RemoteSkillUtil) listGitHubFiles(tree *GitHubTree, token string) ([]gitHubTreeItem, bool, error) {
 	// 处理绝对路径：去掉根前缀
 	dir := tree.Directory
@@ -475,7 +475,7 @@ func (r *RemoteSkillUtil) fetchGitHubTree(url string, token string, recursive bo
 
 // isRelativeTo 判断 path 是否相对于 baseDir（即 path 以 baseDir 为前缀）。
 //
-// 对应 Python: Path.is_relative_to(parent_directory)
+// Python: Path.is_relative_to(parent_directory)
 func isRelativeTo(path, baseDir string) bool {
 	normalizedPath := strings.ReplaceAll(path, "\\", "/")
 	normalizedBase := strings.ReplaceAll(baseDir, "\\", "/")

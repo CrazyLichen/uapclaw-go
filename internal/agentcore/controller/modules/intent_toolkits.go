@@ -11,7 +11,7 @@ import (
 
 // IntentToolkits 意图识别工具集，提供 8 个 OpenAI Tool Schema 和对应方法。
 // 低置信度时自动转为 unknown_task 意图。
-// 对应 Python: openjiuwen/core/controller/modules/intent_toolkits.py::IntentToolkits
+// Python: openjiuwen/core/controller/modules/intent_toolkits.py::IntentToolkits
 type IntentToolkits struct {
 	// event 关联的输入事件
 	event schema.Event
@@ -30,7 +30,7 @@ type IntentToolkits struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntentToolkits 创建意图工具集。
-// 对应 Python: IntentToolkits.__init__(event, confidence_threshold)
+// Python: IntentToolkits.__init__(event, confidence_threshold)
 func NewIntentToolkits(event schema.Event, confidenceThreshold float64) *IntentToolkits {
 	t := &IntentToolkits{
 		event:               event,
@@ -42,7 +42,7 @@ func NewIntentToolkits(event schema.Event, confidenceThreshold float64) *IntentT
 }
 
 // CreateTask 创建任务意图。
-// 对应 Python: IntentToolkits.create_task(confidence, task_description)
+// Python: IntentToolkits.create_task(confidence, task_description)
 func (t *IntentToolkits) CreateTask(confidence float64, taskDescription string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -65,7 +65,7 @@ func (t *IntentToolkits) CreateTask(confidence float64, taskDescription string) 
 }
 
 // PauseTask 暂停任务意图。
-// 对应 Python: IntentToolkits.pause_task(confidence, task_id)
+// Python: IntentToolkits.pause_task(confidence, task_id)
 func (t *IntentToolkits) PauseTask(confidence float64, taskID string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -85,7 +85,7 @@ func (t *IntentToolkits) PauseTask(confidence float64, taskID string) (*schema.I
 }
 
 // CancelTask 取消任务意图。
-// 对应 Python: IntentToolkits.cancel_task(confidence, task_id)
+// Python: IntentToolkits.cancel_task(confidence, task_id)
 func (t *IntentToolkits) CancelTask(confidence float64, taskID string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -105,7 +105,7 @@ func (t *IntentToolkits) CancelTask(confidence float64, taskID string) (*schema.
 }
 
 // ResumeTask 恢复任务意图。
-// 对应 Python: IntentToolkits.resume_task(confidence, task_id)
+// Python: IntentToolkits.resume_task(confidence, task_id)
 func (t *IntentToolkits) ResumeTask(confidence float64, taskID string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -125,7 +125,7 @@ func (t *IntentToolkits) ResumeTask(confidence float64, taskID string) (*schema.
 }
 
 // UnknownTask 未知任务意图。
-// 对应 Python: IntentToolkits.unknown_task(confidence, question_for_user)
+// Python: IntentToolkits.unknown_task(confidence, question_for_user)
 func (t *IntentToolkits) UnknownTask(confidence float64, questionForUser string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -145,7 +145,7 @@ func (t *IntentToolkits) UnknownTask(confidence float64, questionForUser string)
 }
 
 // CreateDependentTask 创建依赖任务意图。
-// 对应 Python: IntentToolkits.create_dependent_task(confidence, task_description, dependent_task_ids)
+// Python: IntentToolkits.create_dependent_task(confidence, task_description, dependent_task_ids)
 func (t *IntentToolkits) CreateDependentTask(confidence float64, taskDescription string, dependentTaskIDs []string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -168,7 +168,7 @@ func (t *IntentToolkits) CreateDependentTask(confidence float64, taskDescription
 }
 
 // ModifyTask 修改任务意图。
-// 对应 Python: IntentToolkits.modify_task(confidence, task_id, new_task_description)
+// Python: IntentToolkits.modify_task(confidence, task_id, new_task_description)
 func (t *IntentToolkits) ModifyTask(confidence float64, taskID string, newTaskDescription string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -192,7 +192,7 @@ func (t *IntentToolkits) ModifyTask(confidence float64, taskID string, newTaskDe
 }
 
 // SupplementTask 补充任务意图。
-// 对应 Python: IntentToolkits.supplement_task(confidence, task_id, supplement_info)
+// Python: IntentToolkits.supplement_task(confidence, task_id, supplement_info)
 func (t *IntentToolkits) SupplementTask(confidence float64, taskID string, supplementInfo string) (*schema.Intent, string, error) {
 	if confidence < t.confidenceThreshold {
 		intent, result := t.lowConfidenceIntent(confidence)
@@ -213,7 +213,7 @@ func (t *IntentToolkits) SupplementTask(confidence float64, taskID string, suppl
 }
 
 // GetOpenAIToolSchemas 获取 OpenAI Tool Schema 列表。
-// 对应 Python: IntentToolkits.get_openai_tool_schemas(choices)
+// Python: IntentToolkits.get_openai_tool_schemas(choices)
 func (t *IntentToolkits) GetOpenAIToolSchemas(choices ...string) []map[string]any {
 	if len(choices) == 0 {
 		result := make([]map[string]any, 0, len(t.toolSchemaChoices))
@@ -223,7 +223,7 @@ func (t *IntentToolkits) GetOpenAIToolSchemas(choices ...string) []map[string]an
 		return result
 	}
 	result := make([]map[string]any, 0, len(t.toolSchemaChoices))
-	// 对齐 Python Bug: choices 非空时遍历 self._tool_schema_choices.keys() 而非 choices
+	// Python: Bug: choices 非空时遍历 self._tool_schema_choices.keys() 而非 choices
 	for _, v := range t.toolSchemaChoices {
 		result = append(result, v)
 	}
@@ -233,7 +233,7 @@ func (t *IntentToolkits) GetOpenAIToolSchemas(choices ...string) []map[string]an
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // lowConfidenceIntent 低置信度自动转 unknown_task 意图。
-// 对应 Python: IntentToolkits._low_confidence_intent(confidence)
+// Python: IntentToolkits._low_confidence_intent(confidence)
 func (t *IntentToolkits) lowConfidenceIntent(confidence float64) (*schema.Intent, string) {
 	intent, _ := schema.NewIntent(
 		schema.IntentUnknownTask,
@@ -250,7 +250,7 @@ func (t *IntentToolkits) lowConfidenceIntent(confidence float64) (*schema.Intent
 }
 
 // initToolSchemaChoices 初始化 8 个 OpenAI Tool Schema。
-// 对应 Python: IntentToolkits.__init__ 中 self._tool_schema_choices 赋值
+// Python: IntentToolkits.__init__ 中 self._tool_schema_choices 赋值
 func (t *IntentToolkits) initToolSchemaChoices() {
 	t.toolSchemaChoices = map[string]map[string]any{
 		"create_task": {

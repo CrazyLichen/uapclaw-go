@@ -9,7 +9,7 @@ import (
 
 // HierarchicalTeamConfig 层级团队（消息总线模式）配置。
 //
-// 对应 Python: HierarchicalTeamConfig (hierarchical_msgbus/hierarchical_config.py)
+// Python: HierarchicalTeamConfig (hierarchical_msgbus/hierarchical_config.py)
 type HierarchicalTeamConfig struct {
 	// TeamConfig 嵌入基础团队配置
 	TeamConfig maschema.TeamConfig

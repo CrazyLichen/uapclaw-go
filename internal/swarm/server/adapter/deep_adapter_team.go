@@ -20,7 +20,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // findTeamSkillRail 查找 TeamSkillEvolutionRail。
-// 对齐 Python: _find_team_skill_rail() (line 3651-3670)
+// Python: _find_team_skill_rail() (line 3651-3670)
 // ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
 func (d *DeepAdapter) findTeamSkillRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 在 instance.rails 中查找 TeamSkillEvolutionRail
@@ -28,7 +28,7 @@ func (d *DeepAdapter) findTeamSkillRail() sainterfaces.AgentRail {
 }
 
 // handleTeamSkillEvolveApproval 处理 team skill 演进审批。
-// 对齐 Python: handle_team_skill_evolve_approval() (line 3651-3767)
+// Python: handle_team_skill_evolve_approval() (line 3651-3767)
 // ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
 func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, requestID string, answers any, sessionID string, channelID string) bool {
 	// ⤵️ 10.6.3-10: 实现 team skill 审批
@@ -40,7 +40,7 @@ func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, request
 }
 
 // pushTeamSkillEvolveResolutionStatus 推送 team skill 演进解决状态。
-// 对齐 Python: _push_team_skill_evolve_resolution_status() (line 3768-3790)
+// Python: _push_team_skill_evolve_resolution_status() (line 3768-3790)
 // ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
 func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, requestID string, status string) error {
 	// ⤵️ 10.6.3-10: 推送演进审批结果
@@ -52,7 +52,7 @@ func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, r
 }
 
 // optionMatches 检查选项是否匹配用户选择。
-// 对齐 Python: _option_matches() (line 3769-3790)
+// Python: _option_matches() (line 3769-3790)
 func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 	if option == nil || answers == nil {
 		return false
@@ -84,7 +84,7 @@ func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 }
 
 // processTeamMessageStream team 模式流式消息处理。
-// 对齐 Python: process_team_message_stream()
+// Python: process_team_message_stream()
 // ⤵️ 10.3.7-11: 依赖 TeamHelpers
 func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inputs map[string]any) error {
 	// ⤵️ 10.3.7-11: team 模式分流，调用 team_helpers.process_team_message_stream

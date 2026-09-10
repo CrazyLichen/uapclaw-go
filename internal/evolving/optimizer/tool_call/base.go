@@ -22,7 +22,7 @@ import (
 // 固定 domain="tool"，默认优化目标为 ["tool_description"]。
 // 核心入口是 OptimizeTool()，Backward/Step 对齐 Python 空实现。
 //
-// 对应 Python: ToolOptimizerBase
+// Python: ToolOptimizerBase
 type ToolOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
 	// maxTurns 最大迭代轮数
@@ -54,7 +54,7 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 
 // NewToolOptimizerBase 创建 ToolOptimizerBase 实例。
 //
-// 对齐 Python: ToolOptimizerBase.__init__(self, **kwargs)
+// Python: ToolOptimizerBase.__init__(self, **kwargs)
 //
 //	self.max_turns = kwargs.get("max_turns", 5) — 最大迭代轮数
 //	self.llm_api_key = kwargs.get("llm_api_key", "") — LLM API 密钥
@@ -66,7 +66,7 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 //	self.config_desc['examples_dir'] = self.config_eg['save_dir'] — 描述配置引用示例路径
 //	self.config_desc['neg_ex_input_path'] = os.path.join(self.path_save_dir, f"{kwargs.get('tool_name','tool')}.json") — 负例输入路径
 func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *ToolOptimizerBase {
-	// 对齐 Python: 使用默认配置
+	// Python: 使用默认配置
 	configEg := utils.DeepCopyMap(DefaultConfigEg)
 	configDesc := utils.DeepCopyMap(DefaultConfigDesc)
 
@@ -80,22 +80,22 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 		model:       model,
 	}
 
-	// 对齐 Python: default_targets 在 BaseOptimizerMixin 中设置
+	// Python: default_targets 在 BaseOptimizerMixin 中设置
 	o.BaseOptimizerMixin.SetDefaultTargets(o.DefaultTargets())
 
 	for _, opt := range opts {
 		opt(o)
 	}
 
-	// 对齐 Python: 路径拼接
+	// Python: 路径拼接
 	o.configEg["save_dir"] = filepath.Join(o.pathSaveDir, "examples")
 	o.configDesc["save_dir"] = filepath.Join(o.pathSaveDir, "descriptions")
 	o.configDesc["examples_dir"] = o.configEg["save_dir"]
 
-	// 对齐 Python: kwargs.get('tool_name','tool')
+	// Python: kwargs.get('tool_name','tool')
 	o.configDesc["neg_ex_input_path"] = filepath.Join(o.pathSaveDir, o.toolName+".json")
 
-	// 对齐 Python: llm_api_key 传递给 config
+	// Python: llm_api_key 传递给 config
 	o.configEg["llm_api_key"] = o.llmAPIKey
 	o.configDesc["llm_api_key"] = o.llmAPIKey
 
@@ -104,14 +104,14 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 
 // Domain 返回优化器域 "tool"。
 //
-// 对齐 Python: ToolOptimizerBase.domain = "tool"
+// Python: ToolOptimizerBase.domain = "tool"
 func (b *ToolOptimizerBase) Domain() string {
 	return "tool"
 }
 
 // DefaultTargets 返回默认优化目标列表。
 //
-// 对齐 Python: ToolOptimizerBase.default_targets() → ["tool_description"]
+// Python: ToolOptimizerBase.default_targets() → ["tool_description"]
 func (b *ToolOptimizerBase) DefaultTargets() []string {
 	return []string{"tool_description"}
 }
@@ -124,7 +124,7 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 
 // OptimizeTool 核心入口：两阶段迭代优化工具描述。
 //
-// 对齐 Python: ToolOptimizerBase.optimize_tool(tool, tool_callable)
+// Python: ToolOptimizerBase.optimize_tool(tool, tool_callable)
 //
 //  1. 保存原始描述 original_desc = tool["description"]
 //  2. for i in range(self.max_turns):
@@ -141,21 +141,21 @@ func (b *ToolOptimizerBase) OptimizeTool(
 	tool map[string]any,
 	toolCallable APIWrapperFunc,
 ) (map[string]any, error) {
-	// 对齐 Python: original_desc = tool["description"]
+	// Python: original_desc = tool["description"]
 	originalDesc, _ := tool["description"].(string)
 
 	var resultExamples [][]map[string]any
 	var resultDescs [][][]map[string]any
 
-	// 对齐 Python: for i in range(self.max_turns):
+	// Python: for i in range(self.max_turns):
 	for i := 0; i < b.maxTurns; i++ {
-		// 对齐 Python: if i > 0: latest_description = result_descs[-1][-1][0]["description"]
+		// Python: if i > 0: latest_description = result_descs[-1][-1][0]["description"]
 		if i > 0 && len(resultDescs) > 0 && len(resultDescs[len(resultDescs)-1]) > 0 {
 			lastDescBatch := resultDescs[len(resultDescs)-1]
 			if len(lastDescBatch) > 0 {
 				lastNode := lastDescBatch[len(lastDescBatch)-1]
 				if len(lastNode) > 0 {
-					// 对齐 Python: result_descs[-1][-1][0]["description"]
+					// Python: result_descs[-1][-1][0]["description"]
 					// 循环更新时取 [0]（首轮结果）作为下一轮的输入描述，
 					// 与最终输出 extractLastDescription 取 [len-1]（末轮结果）用途不同
 					lastStep := lastNode[0]
@@ -166,9 +166,9 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			}
 		}
 
-		// 对齐 Python: Stage 1 - 示例生成
-		// 对应 Python: default_config_desc['llm_api_key'] = self.llm_api_key
-		// 对应 Python: default_config_eg['llm_api_key'] = self.llm_api_key
+		// Python: Stage 1 - 示例生成
+		// Python: default_config_desc['llm_api_key'] = self.llm_api_key
+		// Python: default_config_eg['llm_api_key'] = self.llm_api_key
 		b.configEg["llm_api_key"] = b.llmAPIKey
 		b.configDesc["llm_api_key"] = b.llmAPIKey
 
@@ -180,17 +180,17 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Str("stage", "example").
 				Err(err).
 				Msg("示例阶段失败")
-			// 对齐 Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
+			// Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
 			return nil, err
 		}
 		resultExamples = append(resultExamples, resultExample...)
-		_ = resultExamples // 对齐 Python：结果记录用于调试，暂不消费
+		_ = resultExamples // Python: 结果记录用于调试，暂不消费
 		logger.Info(logComponent).
 			Str("method", "OptimizeTool").
 			Int("iteration", i).
 			Msg("=== 示例阶段完成 ===")
 
-		// 对齐 Python: Stage 2 - Description
+		// Python: Stage 2 - Description
 		resultDesc, err := CustomizedPipeline(ctx, "description", tool, b.configDesc, toolCallable, b.model)
 		if err != nil {
 			logger.Error(logComponent).
@@ -199,30 +199,30 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Str("stage", "description").
 				Err(err).
 				Msg("描述阶段失败")
-			// 对齐 Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
+			// Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
 			return nil, err
 		}
 		resultDescs = append(resultDescs, resultDesc)
 	}
 
-	// 对齐 Python: description final reviewer
+	// Python: description final reviewer
 	if len(resultDescs) == 0 {
 		return nil, fmt.Errorf("未生成描述结果")
 	}
 
-	// 对齐 Python: output_desc = result_descs[-1][-1][-1]["description"]
+	// Python: output_desc = result_descs[-1][-1][-1]["description"]
 	outputDesc := extractLastDescription(resultDescs)
 
-	// 对齐 Python: eval_model_id = self.config_desc.get("eval_model_id")
+	// Python: eval_model_id = self.config_desc.get("eval_model_id")
 	evalModelID := getConfigString(b.configDesc, "eval_model_id")
 
-	// 对齐 Python: processor = ToolDescriptionReviewer(eval_model_id=eval_model_id, llm_api_key=self.llm_api_key)
+	// Python: processor = ToolDescriptionReviewer(eval_model_id=eval_model_id, llm_api_key=self.llm_api_key)
 	processor := NewToolDescriptionReviewer(evalModelID, b.llmAPIKey, b.model)
 
-	// 对齐 Python: schema = extract_schema(original_desc)
+	// Python: schema = extract_schema(original_desc)
 	schema := ExtractSchemaFromJSON(originalDesc)
 
-	// 对齐 Python: processed = processor.process(data=output_desc, ori_tool=tool["description"], steps=["clean", "cross_check", "translate"])
+	// Python: processed = processor.process(data=output_desc, ori_tool=tool["description"], steps=["clean", "cross_check", "translate"])
 	// Python 的 process 接受 dict，但 output_desc 是 string。
 	// 尝试将 outputDesc 解析为 JSON dict；如果失败则包装为 {"description": outputDesc}
 	var dataForProcess map[string]any
@@ -240,7 +240,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		return nil, err
 	}
 
-	// 对齐 Python: final_desc = processor.format(schema, processed, example=None)
+	// Python: final_desc = processor.format(schema, processed, example=None)
 	// Python 的 format 第二个参数是 description: str，但 processed 是 dict。
 	// 将 processed 序列化为 JSON 字符串作为 description 参数
 	processedDesc := toJSON(processed)
@@ -258,12 +258,12 @@ func (b *ToolOptimizerBase) OptimizeTool(
 
 // Backward 反向传播：从信号计算梯度。
 //
-// 对齐 Python: BaseOptimizer.backward() 模板方法流程：
+// Python: BaseOptimizer.backward() 模板方法流程：
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
 //	ToolOptimizer 是黑盒优化器，_backward 为 pass
 //
-// 对应 Python: async def _backward(self, signals): pass
+// Python: async def _backward(self, signals): pass
 func (b *ToolOptimizerBase) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	return b.BackwardTemplate(ctx, signals, func(_ context.Context, _ []*signal.EvolutionSignal) error {
 		// ToolOptimizer 是黑盒优化器，_backward 为 pass
@@ -273,12 +273,12 @@ func (b *ToolOptimizerBase) Backward(ctx context.Context, signals []*signal.Evol
 
 // Step 生成更新映射。
 //
-// 对齐 Python: BaseOptimizer.step() 模板方法流程：
+// Python: BaseOptimizer.step() 模板方法流程：
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
 //	ToolOptimizer 为空实现，返回空映射。
 //
-// 对应 Python: BaseOptimizer.step() → _step() → return
+// Python: BaseOptimizer.step() → _step() → return
 func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
 	return b.StepTemplate(b.step)
 }
@@ -287,13 +287,13 @@ func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
 //
 // ✅ 9.70 已回填：Operator 接口已实现，委托 BaseOptimizerMixin.Bind()。
 //
-// 对齐 Python:
+// Python:
 //
 //	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
 //
-// 对应 Python: ToolOptimizerBase.bind() → BaseOptimizer.bind()
+// Python: ToolOptimizerBase.bind() → BaseOptimizer.bind()
 func (b *ToolOptimizerBase) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
-	// 对齐 Python: targets or self.default_targets()
+	// Python: targets or self.default_targets()
 	if len(targets) == 0 {
 		targets = b.DefaultTargets()
 	}
@@ -360,14 +360,14 @@ func WithToolName(name string) ToolOptimizerBaseOption {
 // step 子类逻辑，对齐 Python _step()。
 // ToolOptimizer 为空实现，返回空映射。
 //
-// 对应 Python: def _step(self): updates = {}; return
+// Python: def _step(self): updates = {}; return
 func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
 	return map[cschema.UpdateKey]any{}
 }
 
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。
 //
-// 对齐 Python: output_desc = result_descs[-1][-1][-1]["description"]
+// Python: output_desc = result_descs[-1][-1][-1]["description"]
 // 最终输出取 [len-1]（末轮结果），与循环更新时取 [0]（首轮结果）用途不同
 func extractLastDescription(resultDescs [][][]map[string]any) string {
 	if len(resultDescs) == 0 {

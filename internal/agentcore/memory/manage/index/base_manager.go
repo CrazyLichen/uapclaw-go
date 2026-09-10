@@ -19,7 +19,7 @@ import (
 // 定义了记忆管理器的 6 个核心操作：AddMemories、Update、Search、Get、Delete、DeleteByUserID。
 // 所有记忆管理器实现（FragmentMemoryManager、SummaryManager、VariableManager）必须实现此接口。
 //
-// 对应 Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager)
+// Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager)
 type BaseMemoryManager interface {
 	// AddMemories 批量添加记忆（含冲突检查和冗余消除）。
 	// memories 的 key 为 mem_type 字符串（如 "user_profile"），value 为该类型的记忆列表。
@@ -43,7 +43,7 @@ type BaseMemoryManager interface {
 // 嵌入此结构体后，实现类只需实现 BaseMemoryManager 接口即可。
 // 提供 validateParams / wrapException / encryptMemoryIfNeeded / decryptMemoryIfNeeded 公共逻辑。
 //
-// 对应 Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager 非抽象方法)
+// Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager 非抽象方法)
 type memoryManagerBase struct {
 	// memoryIndex 记忆索引（KV + 向量库）
 	memoryIndex index.BaseMemoryIndex
@@ -85,13 +85,13 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getMemType 返回管理器类型（供 WriteManager 等外部路由使用）。
-// 对齐 Python: BaseMemoryManager.mem_type 属性
+// Python: BaseMemoryManager.mem_type 属性
 func (b *memoryManagerBase) getMemType() string {
 	return b.memType
 }
 
 // validateParams 校验必填参数，缺少时返回 *BaseError。
-// 对齐 Python: BaseMemoryManager._validate_required_params
+// Python: BaseMemoryManager._validate_required_params
 func (b *memoryManagerBase) validateParams(userID, scopeID string, statusCode exception.StatusCode, memType string) error {
 	if userID == "" {
 		return exception.BuildError(statusCode,
@@ -116,7 +116,7 @@ func (b *memoryManagerBase) validateParams(userID, scopeID string, statusCode ex
 
 // wrapException 包装异常为统一 *BaseError。
 // 如果原始错误已经是 *BaseError，原样返回；否则包装为新的 *BaseError。
-// 对齐 Python: BaseMemoryManager._wrap_exception
+// Python: BaseMemoryManager._wrap_exception
 func (b *memoryManagerBase) wrapException(e error, statusCode exception.StatusCode, memType string) error {
 	var baseErr *exception.BaseError
 	if errors.As(e, &baseErr) {
@@ -131,7 +131,7 @@ func (b *memoryManagerBase) wrapException(e error, statusCode exception.StatusCo
 
 // encryptMemoryIfNeeded 如果 key 非空且 plaintext 非空，使用 AES 加密；否则返回原文。
 // 加密失败时返回原文并记录 Warn 日志（对齐 Python 容错行为）。
-// 对齐 Python: BaseMemoryManager.encrypt_memory_if_needed
+// Python: BaseMemoryManager.encrypt_memory_if_needed
 func encryptMemoryIfNeeded(key []byte, plaintext string) string {
 	if len(key) == 0 || plaintext == "" {
 		return plaintext
@@ -148,7 +148,7 @@ func encryptMemoryIfNeeded(key []byte, plaintext string) string {
 
 // decryptMemoryIfNeeded 如果 key 非空且 ciphertext 非空，使用 AES 解密；否则返回原文。
 // 解密失败时返回原文并记录 Warn 日志（对齐 Python 容错行为）。
-// 对齐 Python: BaseMemoryManager.decrypt_memory_if_needed
+// Python: BaseMemoryManager.decrypt_memory_if_needed
 func decryptMemoryIfNeeded(key []byte, ciphertext string) string {
 	if len(key) == 0 || ciphertext == "" {
 		return ciphertext

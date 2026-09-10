@@ -17,7 +17,7 @@ import (
 // 当传入 *redis.ClusterClient 时，自动启用 Cluster 模式，
 // GetByPrefix/DeleteByPrefix 会使用 ForEachMaster 遍历所有 master 节点。
 //
-// 对应 Python: openjiuwen/extensions/store/kv/redis_store.py
+// Python: openjiuwen/extensions/store/kv/redis_store.py
 type RedisStore struct {
 	// client Redis 命令接口（Standalone 和 Cluster 均满足）
 	client redis.Cmdable
@@ -71,7 +71,7 @@ var _ BaseKVStore = (*RedisStore)(nil)
 // client: Redis 客户端，支持 *redis.Client（Standalone）和 *redis.ClusterClient（Cluster）。
 // 构造函数自动通过类型断言检测 Cluster 模式，无需手动配置。
 //
-// 对齐 Python: RedisStore(redis: Redis | RedisCluster)
+// Python: RedisStore(redis: Redis | RedisCluster)
 func NewRedisStore(client redis.Cmdable, opts ...Option) *RedisStore {
 	s := &RedisStore{client: client}
 
@@ -98,7 +98,7 @@ func WithClusterClient(cc *redis.ClusterClient) Option {
 }
 
 // Set 存储或覆盖一个键值对。
-// 对齐 Python: RedisStore.set(key, value)
+// Python: RedisStore.set(key, value)
 func (s *RedisStore) Set(ctx context.Context, key string, value []byte) error {
 	err := s.client.Set(ctx, key, value, 0).Err()
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *RedisStore) Set(ctx context.Context, key string, value []byte) error {
 // ExclusiveSet 原子性地设置键值对，仅当 key 不存在时成功。
 // expiry 为过期秒数，0 表示不过期。
 // 返回 true 表示设置成功，false 表示 key 已存在。
-// 对齐 Python: RedisStore.exclusive_set(key, value, expiry)
+// Python: RedisStore.exclusive_set(key, value, expiry)
 func (s *RedisStore) ExclusiveSet(ctx context.Context, key string, value []byte, expiry int) (bool, error) {
 	var ttl time.Duration
 	if expiry > 0 {
@@ -140,7 +140,7 @@ func (s *RedisStore) ExclusiveSet(ctx context.Context, key string, value []byte,
 }
 
 // Get 根据 key 获取值，key 不存在时返回 nil, nil。
-// 对齐 Python: RedisStore.get(key)
+// Python: RedisStore.get(key)
 func (s *RedisStore) Get(ctx context.Context, key string) ([]byte, error) {
 	val, err := s.client.Get(ctx, key).Bytes()
 	if err == redis.Nil {
@@ -163,7 +163,7 @@ func (s *RedisStore) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Exists 检查 key 是否存在。
-// 对齐 Python: RedisStore.exists(key)
+// Python: RedisStore.exists(key)
 func (s *RedisStore) Exists(ctx context.Context, key string) (bool, error) {
 	n, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -177,7 +177,7 @@ func (s *RedisStore) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 // Delete 删除指定 key。key 不存在时返回 nil（不报错），与 Python 行为一致。
-// 对齐 Python: RedisStore.delete(key)
+// Python: RedisStore.delete(key)
 func (s *RedisStore) Delete(ctx context.Context, key string) error {
 	n, err := s.client.Del(ctx, key).Result()
 	if err != nil {
@@ -196,7 +196,7 @@ func (s *RedisStore) Delete(ctx context.Context, key string) error {
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。
 // Standalone 模式使用 SCAN 迭代；Cluster 模式使用 ForEachMaster 遍历所有 master 节点。
-// 对齐 Python: RedisStore.get_by_prefix(prefix)
+// Python: RedisStore.get_by_prefix(prefix)
 func (s *RedisStore) GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error) {
 	if s.isCluster() {
 		return s.getByPrefixCluster(ctx, prefix)
@@ -207,7 +207,7 @@ func (s *RedisStore) GetByPrefix(ctx context.Context, prefix string) (map[string
 // DeleteByPrefix 删除所有以 prefix 开头的键值对。
 // batchSize 为每批删除的数量，0 或负数表示一次性删除。
 // Standalone 模式使用 SCAN 迭代；Cluster 模式使用 ForEachMaster 遍历所有 master 节点。
-// 对齐 Python: RedisStore.delete_by_prefix(prefix, batch_size)
+// Python: RedisStore.delete_by_prefix(prefix, batch_size)
 func (s *RedisStore) DeleteByPrefix(ctx context.Context, prefix string, batchSize int) error {
 	if s.isCluster() {
 		return s.deleteByPrefixCluster(ctx, prefix, batchSize)
@@ -218,7 +218,7 @@ func (s *RedisStore) DeleteByPrefix(ctx context.Context, prefix string, batchSiz
 // MGet 批量获取多个 key 的值。
 // 返回值与输入 keys 顺序对应，不存在的 key 对应位置为 nil。
 // MGET 失败时（如 Cluster CROSSSLOT），回退到 Pipeline+逐个 GET。
-// 对齐 Python: RedisStore.mget(keys)
+// Python: RedisStore.mget(keys)
 func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) {
 	if len(keys) == 0 {
 		return [][]byte{}, nil
@@ -228,7 +228,7 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 	vals, err := s.client.MGet(ctx, keys...).Result()
 	if err != nil {
 		// MGET 失败（可能是 Cluster CROSSSLOT 或其他原因），回退到 Pipeline+逐个 GET
-		// 对齐 Python: try MGET → except → fallback to individual GETs
+		// Python: try MGET → except → fallback to individual GETs
 		logger.Warn(logComponent).
 			Err(err).
 			Int("key_count", len(keys)).
@@ -260,7 +260,7 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 
 // BatchDelete 批量删除多个 key，返回成功删除的数量。
 // batchSize 为每批删除的数量，0 或负数表示一次性删除。
-// 对齐 Python: RedisStore.batch_delete(keys, batch_size)
+// Python: RedisStore.batch_delete(keys, batch_size)
 func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize int) (int, error) {
 	if len(keys) == 0 {
 		return 0, nil
@@ -310,7 +310,7 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 
 // Pipeline 创建批量操作管道，用于减少网络往返。
 // 包装 go-redis 原生 Pipeliner 为 KVPipeline 接口。
-// 对齐 Python: RedisStore.pipeline()
+// Python: RedisStore.pipeline()
 // Pipeline 创建批量操作管道。Pipeline 为一次性使用，Execute 后不可再次调用。
 func (s *RedisStore) Pipeline(_ context.Context) KVPipeline {
 	return &redisPipeline{
@@ -324,7 +324,7 @@ func (s *RedisStore) Pipeline(_ context.Context) KVPipeline {
 // ttlSeconds <= 0 或 keys 为空时直接返回 nil。
 // 失败时静默忽略（仅记录 Warn 日志），对齐 Python 行为。
 //
-// 对齐 Python: RedisStore.refresh_ttl(keys, ttl_seconds)
+// Python: RedisStore.refresh_ttl(keys, ttl_seconds)
 // RefreshTTL 批量刷新键的 TTL。
 // 注意：与 GetByPrefix/DeleteByPrefix 不同，此方法不使用 ForEachMaster，
 // 因为 keys 是用户显式传入的，Pipeline 会根据 key 的 hash slot 自动路由到对应节点。
@@ -509,7 +509,7 @@ func (s *RedisStore) getByPrefixCluster(ctx context.Context, prefix string) (map
 
 // deleteByPrefixStandalone Standalone 模式下按前缀删除键值对。
 // 流式分批：SCAN 过程中边收集边删除，避免大量 key 占用内存。
-// 对齐 Python: scan_iter 边收集边删除的行为。
+// Python: scan_iter 边收集边删除的行为。
 func (s *RedisStore) deleteByPrefixStandalone(ctx context.Context, prefix string, batchSize int) error {
 	pattern := prefix + "*"
 	var keys []string
@@ -597,7 +597,7 @@ func (s *RedisStore) deleteByPrefixCluster(ctx context.Context, prefix string, b
 }
 
 // mGetFallback 使用 Pipeline 逐个 GET 的回退方案。
-// 对齐 Python: MGET failed, falling back to individual GETs
+// Python: MGET failed, falling back to individual GETs
 func (s *RedisStore) mGetFallback(ctx context.Context, keys []string) ([][]byte, error) {
 	pipe := s.client.Pipeline()
 	cmds := make([]*redis.StringCmd, len(keys))
@@ -613,7 +613,7 @@ func (s *RedisStore) mGetFallback(ctx context.Context, keys []string) ([][]byte,
 			continue
 		}
 		if err != nil {
-			continue // 对齐 Python：单个 key 失败时对应位置为 nil
+			continue // Python: 单个 key 失败时对应位置为 nil
 		}
 		result[i] = val
 	}
