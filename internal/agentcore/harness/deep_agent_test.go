@@ -2430,7 +2430,9 @@ func (r *fakeAgentRail) OnToolException(_ context.Context, _ *agentinterfaces.Ag
 var _ agentinterfaces.AgentRail = (*fakeAgentRail)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithType) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
+	return nil
+}
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
@@ -2497,7 +2499,9 @@ func (r *fakeAgentRailWithType) GetCallbacks() map[agentinterfaces.AgentCallback
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithType2) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
+	return nil
+}
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
@@ -2564,7 +2568,9 @@ func (r *fakeAgentRailWithType2) GetCallbacks() map[agentinterfaces.AgentCallbac
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType2)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) Init(_ context.Context, _ agentinterfaces.BaseAgent) error { return nil }
+func (r *fakeAgentRailWithCallbacks) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
+	return nil
+}
 
 // Uninit 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) Uninit(_ agentinterfaces.BaseAgent) error { return nil }

@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

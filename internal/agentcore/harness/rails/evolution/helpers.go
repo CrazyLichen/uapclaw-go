@@ -229,4 +229,3 @@ func toolInfoToMap(tool cschema.ToolInfoInterface) map[string]any {
 		"parameters":  tool.GetParameters(),
 	}
 }
-

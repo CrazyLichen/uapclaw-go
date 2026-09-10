@@ -850,4 +850,3 @@ func formatTimeoutSecs(secs float64) string {
 	s = strings.TrimRight(s, ".")
 	return s
 }
-
