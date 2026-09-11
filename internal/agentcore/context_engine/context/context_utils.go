@@ -56,6 +56,7 @@ var ModelDefaultContextWindowTokens = map[string]int{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ValidateMessages 校验消息列表中是否存在 nil 元素。
 func ValidateMessages(messages []llm_schema.BaseMessage) error {
 	for i, msg := range messages {
 		if msg == nil {
@@ -67,6 +68,7 @@ func ValidateMessages(messages []llm_schema.BaseMessage) error {
 	return nil
 }
 
+// EnsureContextMessageIDs 为缺少 context_message_id 的消息补充唯一 ID。
 func EnsureContextMessageIDs(messages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	for _, msg := range messages {
 		metadata := msg.GetMetadata()
@@ -81,6 +83,7 @@ func EnsureContextMessageIDs(messages []llm_schema.BaseMessage) []llm_schema.Bas
 	return messages
 }
 
+// ValidateAndFixContextWindow 校验并修复上下文窗口中开头连续 ToolMessage 的问题。
 func ValidateAndFixContextWindow(window *iface.ContextWindow) {
 	messages := window.ContextMessages
 	if len(messages) == 0 {
@@ -105,6 +108,7 @@ func ValidateAndFixContextWindow(window *iface.ContextWindow) {
 	}
 }
 
+// ResolveContextMax 按优先级解析最大上下文 token 数：fallback > 自定义映射 > 内置映射 > 默认值。
 func ResolveContextMax(modelName string, fallbackContextWindowTokens int, modelContextWindowTokens map[string]int) int {
 	// 优先级 1：fallback > 0 直接返回
 	if fallbackContextWindowTokens > 0 {
@@ -129,11 +133,13 @@ func ResolveContextMax(modelName string, fallbackContextWindowTokens int, modelC
 	return DefaultContextMaxTokens
 }
 
+// IsCompressionProcessor 判断处理器是否为压缩类处理器（类型名含 compressor 或 compact）。
 func IsCompressionProcessor(p iface.ContextProcessor) bool {
 	processorType := strings.ToLower(p.ProcessorType())
 	return strings.Contains(processorType, "compressor") || strings.Contains(processorType, "compact")
 }
 
+// FormatReloadedMessages 将重新加载的消息格式化为可读字符串，用于日志输出。
 func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMessage) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "reload messages with handle=%s:\n", offloadHandle)
@@ -212,6 +218,7 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// messageToMap 将 BaseMessage 转换为 map 结构，用于序列化和日志输出。
 func messageToMap(msg llm_schema.BaseMessage) map[string]any {
 	result := map[string]any{
 		"role":    msg.GetRole().String(),

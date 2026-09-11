@@ -194,7 +194,7 @@ type DeepAdapter struct {
 	skillManager *skill.SkillManager
 	// a2xClient A2X 客户端
 	// ⤵️ A2X / 11.10
-	a2xClient interface{}
+	a2xClient any
 	// a2xConfig A2X 配置
 	// ⤵️ A2X / 11.10
 	a2xConfig map[string]any
@@ -206,10 +206,10 @@ type DeepAdapter struct {
 	a2xBlankDataset string
 	// cronRuntime Cron 运行时桥接
 	// ⤵️ 11.10
-	cronRuntime interface{}
+	cronRuntime any
 	// evolutionWatchers evolution 观察任务集合
-	// EvolutionHelpers 已实现，watcher 字段类型待具体化（当前 interface{}）
-	evolutionWatchers interface{}
+	// EvolutionHelpers 已实现，watcher 字段类型待具体化（当前 any）
+	evolutionWatchers any
 	// dreamingMode dreaming 模式
 	dreamingMode string
 	// dreamingStarted dreaming 是否已启动
@@ -221,10 +221,10 @@ type DeepAdapter struct {
 	registeredMCPServers map[string]any
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11-12
-	autoHarnessService interface{}
+	autoHarnessService any
 	// sendFileToolkit 发送文件工具包
 	// ⤵️ agentcore.DeepAgent
-	sendFileToolkit interface{}
+	sendFileToolkit any
 	// isProactiveMemory 是否主动记忆
 	isProactiveMemory *bool
 	// paidSearchRegistered 付费搜索是否已注册

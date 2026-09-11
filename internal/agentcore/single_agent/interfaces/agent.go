@@ -104,14 +104,17 @@ type AgentOption func(*AgentOptions)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithSession 设置会话选项。
 func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
 	return func(o *AgentOptions) { o.Session = sess }
 }
 
+// WithStreamModes 设置流式模式选项。
 func WithStreamModes(modes []stream.StreamMode) AgentOption {
 	return func(o *AgentOptions) { o.StreamModes = modes }
 }
 
+// NewAgentOptions 创建 Agent 选项，应用所有选项函数。
 func NewAgentOptions(opts ...AgentOption) *AgentOptions {
 	o := &AgentOptions{}
 	for _, opt := range opts {

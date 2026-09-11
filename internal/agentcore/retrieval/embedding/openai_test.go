@@ -265,7 +265,7 @@ func TestOpenAIEmbedding_ExtraHeaders(t *testing.T) {
 
 // TestOpenAIEmbedding_ExtraParams 验证额外参数透传给 SDK
 func TestOpenAIEmbedding_ExtraParams(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")

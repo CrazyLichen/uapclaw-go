@@ -12,6 +12,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// localFuncConfig 本地函数配置，用于构造 InvokeFunction 时的内部参数。
 type localFuncConfig struct {
 	description string
 	inputParams []*schema.Param
@@ -20,11 +21,13 @@ type localFuncConfig struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// InvokeFunction 泛型本地函数工具，将 Go 函数包装为 Tool 接口实现。
 type InvokeFunction[I any, O any] struct {
 	card *ToolCard
 	fn   func(context.Context, I, ...ToolOption) (O, error)
 }
 
+// LocalFuncOption 本地函数构造选项函数。
 type LocalFuncOption func(*localFuncConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -33,18 +36,22 @@ type LocalFuncOption func(*localFuncConfig)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithDescription 设置函数描述选项。
 func WithDescription(desc string) LocalFuncOption {
 	return func(c *localFuncConfig) { c.description = desc }
 }
 
+// WithInputParams 设置输入参数列表选项。
 func WithInputParams(params []*schema.Param) LocalFuncOption {
 	return func(c *localFuncConfig) { c.inputParams = params }
 }
 
+// WithCard 设置工具卡片选项。
 func WithCard(card *ToolCard) LocalFuncOption {
 	return func(c *localFuncConfig) { c.card = card }
 }
 
+// NewInvokeFunction 创建泛型本地函数工具，将 Go 函数包装为 Tool 接口实现。
 func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I, ...ToolOption) (O, error), opts ...LocalFuncOption) (*InvokeFunction[I, O], error) {
 	cfg := &localFuncConfig{}
 	for _, opt := range opts {

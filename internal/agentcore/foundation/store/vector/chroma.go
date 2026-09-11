@@ -207,7 +207,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 		)
 	}
 
-	metadataMap := map[string]interface{}{
+	metadataMap := map[string]any{
 		chromaMetadataKeySchema:         string(schemaJSON),
 		chromaMetadataKeyFieldMapping:   string(fmJSON),
 		chromaMetadataKeyDistanceMetric: distanceMetric,
@@ -389,7 +389,7 @@ func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, 
 			texts = append(texts, strings.Join(textParts, " "))
 
 			// 提取 metadata（除主键、向量、文本字段外的所有字段）
-			metaMap := make(map[string]interface{})
+			metaMap := make(map[string]any)
 			for k, v := range doc {
 				if k == fm.PKField || k == fm.VectorField || fm.TextFieldMapping[k] {
 					continue
@@ -674,7 +674,7 @@ func (s *ChromaVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	}
 
 	// 构建新的 CollectionMetadata
-	newMetaMap := make(map[string]interface{})
+	newMetaMap := make(map[string]any)
 	// 保留原有 metadata
 	existingMeta := collection.Metadata()
 	if existingMeta != nil {

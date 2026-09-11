@@ -182,7 +182,7 @@ func TestAPIEmbedding_请求头(t *testing.T) {
 }
 
 func TestAPIEmbedding_请求Payload(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")
@@ -277,7 +277,7 @@ func TestAPIEmbedding_EmbedDocuments_含空文本(t *testing.T) {
 
 // TestAPIEmbedding_ExtraParams 验证额外参数透传到 API payload
 func TestAPIEmbedding_ExtraParams(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")
@@ -391,7 +391,7 @@ func TestAPIEmbedding_响应格式_data_base64(t *testing.T) {
 
 // TestAPIEmbedding_ExtraParams覆盖 确保多次调用 WithAPIExtraParams 合并参数
 func TestAPIEmbedding_ExtraParams覆盖(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")

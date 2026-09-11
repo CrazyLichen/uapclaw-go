@@ -49,7 +49,6 @@ var (
 )
 
 // SetRunnerConfig 设置全局 Runner 配置。
-//
 // Python: set_runner_config(cfg)
 // ──────────────────────────── 导出函数 ────────────────────────────
 

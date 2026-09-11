@@ -25,6 +25,7 @@ var (
 //
 // Python: sanitize_path(path)
 
+// SanitizePath 清除路径中的注入模式，防止路径遍历攻击。
 func SanitizePath(path string) string {
 	return injectionPattern.ReplaceAllString(path, "")
 }

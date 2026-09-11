@@ -304,10 +304,10 @@ func (ds *DashscopeEmbedding) DimensionWithContext(ctx context.Context) (int, er
 // callAPI 调用 DashScope Embeddings API。
 // textInput 用于纯文本模式，multimodalInput 用于多模态模式。
 // mode 决定 input 字段的格式：纯文本用 {"texts": [...]}，多模态用 [{...}]。
-func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input interface{}, mode dashscopeInputMode) ([][]float64, error) {
+func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input any, mode dashscopeInputMode) ([][]float64, error) {
 	return RetryWithBackoff(ctx, ds.maxRetries, func(attempt int) ([][]float64, error) {
 		// 根据 mode 构造 input 字段
-		var payloadInput interface{}
+		var payloadInput any
 		switch mode {
 		case dashscopeInputTexts:
 			// 纯文本模式：input 使用 {"texts": [...]} 格式

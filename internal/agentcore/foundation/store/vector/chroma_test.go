@@ -1329,7 +1329,7 @@ func TestToFloat32Slice(t *testing.T) {
 // TestMetaKeys 测试 metaKeys 函数
 func TestMetaKeys(t *testing.T) {
 	// 使用 DocumentMetadataImpl
-	meta := chromav2.NewMetadataFromMap(map[string]interface{}{
+	meta := chromav2.NewMetadataFromMap(map[string]any{
 		"key1": "value1",
 		"key2": 42,
 	})
@@ -1597,7 +1597,7 @@ func TestChromaVectorStore_Search_有结果有Metadata(t *testing.T) {
 	_ = s.CreateCollection(ctx, "test_coll", schema)
 
 	// 构造带 metadata 的搜索结果
-	meta := chromav2.NewMetadataFromMap(map[string]interface{}{"category": "test"})
+	meta := chromav2.NewMetadataFromMap(map[string]any{"category": "test"})
 	queryResult := &chromav2.QueryResultImpl{
 		IDLists: []chromav2.DocumentIDs{
 			{chromav2.DocumentID("doc1")},

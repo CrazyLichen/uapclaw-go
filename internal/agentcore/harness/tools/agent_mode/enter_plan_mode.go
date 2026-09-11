@@ -40,6 +40,7 @@ var (
 // Python: EnterPlanModeTool.__init__() L262-286 + invoke() L288-320
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewEnterPlanModeTool 创建进入计划模式工具。
 func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)
 	card, _ := tools.BuildToolCard("enter_plan_mode", "enter_plan_mode", lang, nil, agentID)

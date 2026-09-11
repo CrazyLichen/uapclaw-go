@@ -17,6 +17,7 @@ var globalCallbackFramework = NewCallbackFramework()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GetCallbackFramework 获取全局回调框架单例。
 func GetCallbackFramework() *CallbackFramework {
 	return globalCallbackFramework
 }

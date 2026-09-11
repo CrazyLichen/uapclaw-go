@@ -39,7 +39,7 @@ type gaussStringSerializer struct{}
 //   - time.Time → "2006-01-02 15:04:05.000000"
 //   - nil → nil
 //   - 其他 → fmt.Sprintf("%v", v)
-func (s gaussStringSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Value, fieldValue interface{}) (interface{}, error) {
+func (s gaussStringSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Value, fieldValue any) (any, error) {
 	switch v := fieldValue.(type) {
 	case string:
 		return v, nil
@@ -58,7 +58,7 @@ func (s gaussStringSerializer) Value(_ context.Context, _ *schema.Field, _ refle
 //   - []byte → string(v) 后通过 field.Set 设置
 //   - nil → 不设置
 //   - 其他 → fmt.Sprintf("%v", v) 后通过 field.Set 设置
-func (s gaussStringSerializer) Scan(ctx context.Context, field *schema.Field, dst reflect.Value, dbValue interface{}) error {
+func (s gaussStringSerializer) Scan(ctx context.Context, field *schema.Field, dst reflect.Value, dbValue any) error {
 	if dbValue == nil {
 		return nil
 	}

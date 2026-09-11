@@ -169,6 +169,7 @@ var routerCacheLock sync.RWMutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewDeployment 从配置创建部署端点实例。
 func NewDeployment(config DeploymentConfig) *Deployment {
 	return &Deployment{
 		ID:         config.ID,
@@ -265,6 +266,7 @@ func (d *Deployment) IsCoolingDown() bool {
 	return time.Now().Before(d.cooldownUntil)
 }
 
+// NewHealthChecker 创建健康检查器，定期探测各部署端点的可用性。
 func NewHealthChecker(deployments []*Deployment, checkInterval, checkTimeout float64) *HealthChecker {
 	if checkInterval <= 0 {
 		checkInterval = 300.0 // 默认 5 分钟
@@ -340,6 +342,7 @@ func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	return maps.Clone(h.lastCheckResults)
 }
 
+// NewReliableRouter 创建可靠路由器，包含部署列表、健康检查器和路由策略。
 func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	// 创建 Deployment 运行时实例
 	deployments := make([]*Deployment, 0, len(config.Deployments))
@@ -527,6 +530,7 @@ func (r *ReliableRouter) StopHealthChecker() {
 	}
 }
 
+// GetOrCreateRouter 获取或创建全局缓存的可靠路由器（按 APIKey 索引）。
 func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	key := makeRouterKey(config)
 
@@ -619,6 +623,7 @@ func (s *LowestLatencyStrategy) Select(deployments []*Deployment, _ string, _ *R
 	return best, nil
 }
 
+// NewAdaptiveStrategy 创建自适应路由策略，根据 kwargs 配置降级和权重参数。
 func NewAdaptiveStrategy(kwargs map[string]any) *AdaptiveStrategy {
 	s := &AdaptiveStrategy{
 		TokenThreshold:         defaultTokenThreshold,

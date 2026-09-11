@@ -281,12 +281,11 @@ func RuleToolsCategoryConsistent(tools []string) bool {
 	return len(cats) > 0
 }
 
-// GetBuiltinSecurityRules 获取内置安全规则列表（进程内缓存）。
-//
-// Python: get_builtin_security_rules() (tiered_policy.py L88-110)
 // GetBuiltinSecurityRules 获取内置安全规则列表（进程内按路径+mtime 缓存）。
-// Python: get_builtin_security_rules() (tiered_policy.py L64-90)
+//
 // 优先从文件系统读取（支持 mtime 自动重载），回退到嵌入资源。
+//
+// Python: get_builtin_security_rules() (tiered_policy.py L64-90)
 func GetBuiltinSecurityRules() []map[string]any {
 	builtinRulesCacheMu.Lock()
 	defer builtinRulesCacheMu.Unlock()
@@ -337,27 +336,6 @@ func GetBuiltinSecurityRules() []map[string]any {
 	return rules
 }
 
-// convertBuiltinRules 将 BuiltinRules 转换为 []map[string]any
-func convertBuiltinRules(parsed *resources.BuiltinRules) []map[string]any {
-	rules := make([]map[string]any, 0, len(parsed.Rules))
-	for _, r := range parsed.Rules {
-		tools := make([]string, len(r.TargetTools))
-		copy(tools, r.TargetTools)
-		entry := map[string]any{
-			"id":         r.ID,
-			"tools":      tools,
-			"match_type": r.MatchType,
-			"pattern":    r.Pattern,
-			"severity":   r.Severity,
-		}
-		if r.Action != "" {
-			entry["action"] = r.Action
-		}
-		rules = append(rules, entry)
-	}
-	return rules
-}
-
 // TieredPolicyRuleMatches 单条 rule 是否对本次调用匹配。
 //
 // Python: tiered_policy_rule_matches(tool_name, pattern, tool_args, rule_tools) (tiered_policy.py L325-345)
@@ -389,6 +367,27 @@ func TieredPolicyRuleMatches(toolName string, pattern string, toolArgs map[strin
 // getBuiltinSecurityRules 别名（内部用）
 func getBuiltinSecurityRules() []map[string]any {
 	return GetBuiltinSecurityRules()
+}
+
+// convertBuiltinRules 将 BuiltinRules 转换为 []map[string]any
+func convertBuiltinRules(parsed *resources.BuiltinRules) []map[string]any {
+	rules := make([]map[string]any, 0, len(parsed.Rules))
+	for _, r := range parsed.Rules {
+		tools := make([]string, len(r.TargetTools))
+		copy(tools, r.TargetTools)
+		entry := map[string]any{
+			"id":         r.ID,
+			"tools":      tools,
+			"match_type": r.MatchType,
+			"pattern":    r.Pattern,
+			"severity":   r.Severity,
+		}
+		if r.Action != "" {
+			entry["action"] = r.Action
+		}
+		rules = append(rules, entry)
+	}
+	return rules
 }
 
 // parsePermissionMode 从配置中解析权限模式

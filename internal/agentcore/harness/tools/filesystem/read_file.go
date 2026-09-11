@@ -76,6 +76,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewReadFileTool 创建文件读取工具。
 func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, enableImageMultimodal bool) tool.Tool {
 	card, _ := tools.BuildToolCard("read_file", "ReadFileTool", language, nil, agentID)
 

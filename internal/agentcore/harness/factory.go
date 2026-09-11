@@ -77,6 +77,7 @@ var (
 //
 // Python: openjiuwen/harness/factory.py create_deep_agent()
 
+// CreateDeepAgent 创建深度 Agent 实例，完成卡片、模型、工具、轨道等全部初始化。
 func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) (*DeepAgent, error) {
 	// ── 步骤 1：默认 AgentCard ──
 	// Python: factory.py L219-223

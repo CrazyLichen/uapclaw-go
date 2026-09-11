@@ -49,6 +49,7 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewSystemPromptBuilder 创建系统提示词构建器。
 func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPromptBuilder {
 	// 按 PromptMode 创建基础构建器（对齐 Python: harness/prompts/builder.py）
 	var base *saprompt.SystemPromptBuilder
@@ -102,6 +103,7 @@ func (b *SystemPromptBuilder) BuildReport() *PromptReport {
 	return NewPromptReport(b)
 }
 
+// ResolveLanguage 解析语言配置，返回合法的语言代码或默认值 "cn"。
 func ResolveLanguage(configLanguage string) string {
 	if configLanguage != "" && isSupportedLanguage(configLanguage) {
 		return configLanguage

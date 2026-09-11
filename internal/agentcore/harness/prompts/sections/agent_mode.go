@@ -178,6 +178,7 @@ IMPORTANT: PLEASE STRICTLY FOLLOW THE PLAN WORKFLOW.
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildPlanModeSection 构建计划模式的提示词段落。
 func BuildPlanModeSection(planFilePath string, planExists bool, lang string) saprompt.PromptSection {
 	enterStatus := buildEnterPlanModeStatus(planFilePath, lang)
 	planFileInfo := buildPlanFileInfo(planFilePath, planExists, lang)

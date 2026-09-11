@@ -85,7 +85,7 @@ type InvokeQuery interface {
 // railConfig Rail 包所需的最小 Config 接口。
 //
 // 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法。
-type railConfig interface{}
+type railConfig any
 
 // AgentCallbackContext Rail 系统与 Agent 运行时之间的核心中介对象。
 //

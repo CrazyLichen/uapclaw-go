@@ -724,7 +724,7 @@ func (m *memoryIndexManager) loadVectorExtension() error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	err = conn.Raw(func(driverConn interface{}) error {
+	err = conn.Raw(func(driverConn any) error {
 		dc, ok := driverConn.(*sqlite3.SQLiteConn)
 		if !ok {
 			return fmt.Errorf("不支持 LoadExtension 的驱动类型")

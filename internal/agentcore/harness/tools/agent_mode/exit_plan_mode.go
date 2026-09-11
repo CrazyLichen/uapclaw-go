@@ -36,6 +36,7 @@ var (
 // Python: ExitPlanModeTool.__init__() L326-348 + invoke() L350-378
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewExitPlanModeTool 创建退出计划模式工具。
 func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)
 	card, _ := tools.BuildToolCard("exit_plan_mode", "exit_plan_mode", lang, nil, agentID)

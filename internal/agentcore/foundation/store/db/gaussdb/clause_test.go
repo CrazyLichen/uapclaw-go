@@ -152,13 +152,13 @@ func (b *testBuilder) WriteString(s string) (int, error) {
 	return b.writer.WriteString(s)
 }
 
-func (b *testBuilder) WriteQuoted(field interface{}) {
+func (b *testBuilder) WriteQuoted(field any) {
 	_, _ = b.writer.WriteString(`"`)
 	_, _ = b.writer.WriteString(field.(string))
 	_, _ = b.writer.WriteString(`"`)
 }
 
-func (b *testBuilder) AddVar(writer clause.Writer, vars ...interface{}) {
+func (b *testBuilder) AddVar(writer clause.Writer, vars ...any) {
 	for i, v := range vars {
 		if i > 0 {
 			_ = writer.WriteByte(',')

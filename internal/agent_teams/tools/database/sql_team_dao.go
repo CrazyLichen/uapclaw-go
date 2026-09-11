@@ -26,13 +26,6 @@ type SQLTeamDao struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// withTx 返回绑定指定事务的 DAO 实例。
-func (d *SQLTeamDao) withTx(tx *gorm.DB) *SQLTeamDao {
-	return &SQLTeamDao{db: tx}
-}
-
 // CreateTeam 创建团队。返回 true 表示成功，false 表示团队已存在。
 // Python: create_team() → bool（IntegrityError → False）
 func (d *SQLTeamDao) CreateTeam(ctx context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool {
@@ -97,4 +90,11 @@ func (d *SQLTeamDao) GetTeamUpdatedAt(ctx context.Context, teamName string) int6
 		return 0
 	}
 	return team.UpdatedAt
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// withTx 返回绑定指定事务的 DAO 实例。
+func (d *SQLTeamDao) withTx(tx *gorm.DB) *SQLTeamDao {
+	return &SQLTeamDao{db: tx}
 }

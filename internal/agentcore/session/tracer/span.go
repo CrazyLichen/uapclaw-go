@@ -288,7 +288,7 @@ func (s *TraceWorkflowSpan) AppendStreamInputs(chunk any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshSpanRecordLocked 刷新 Span 记录（调用方已持锁）
-func (m *SpanManager) refreshSpanRecordLocked(invokeID string, baseSpan interface{}) {
+func (m *SpanManager) refreshSpanRecordLocked(invokeID string, baseSpan any) {
 	span := extractBaseSpan(baseSpan)
 	if span == nil {
 		return
@@ -311,7 +311,7 @@ func (m *SpanManager) refreshSpanRecordLocked(invokeID string, baseSpan interfac
 }
 
 // extractBaseSpan 从 TraceAgentSpan/TraceWorkflowSpan 提取 *Span 指针
-func extractBaseSpan(v interface{}) *Span {
+func extractBaseSpan(v any) *Span {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()

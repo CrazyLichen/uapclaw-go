@@ -35,6 +35,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// SpawnProcess 启动一个新的子进程 Agent。
 func SpawnProcess(
 	ctx context.Context,
 	agentConfig SpawnAgentConfig,

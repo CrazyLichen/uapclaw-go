@@ -54,14 +54,14 @@ func TestNewGitHubReleasesSource_WithOptions(t *testing.T) {
 // TestGitHubReleasesSource_FetchLatest 验证正常获取最新版本
 func TestGitHubReleasesSource_FetchLatest(t *testing.T) {
 	// 构造 mock 响应
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":     "v0.2.0",
 		"published_at": "2025-07-12T00:00:00Z",
 		"body":         "修复若干问题",
 		"prerelease":   false,
 		"draft":        false,
-		"assets": []interface{}{
-			map[string]interface{}{
+		"assets": []any{
+			map[string]any{
 				"name":                 "uapclaw-0.2.0-linux-amd64.tar.gz",
 				"browser_download_url": "https://github.com/openJiuwen/uapclaw/releases/download/v0.2.0/uapclaw-0.2.0-linux-amd64.tar.gz",
 				"size":                 float64(1024000),
@@ -114,11 +114,11 @@ func TestGitHubReleasesSource_FetchLatest(t *testing.T) {
 
 // TestGitHubReleasesSource_FetchLatest_Prerelease 验证预发布版本标记
 func TestGitHubReleasesSource_FetchLatest_Prerelease(t *testing.T) {
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":   "v0.2.0-beta1",
 		"prerelease": true,
 		"draft":      false,
-		"assets":     []interface{}{},
+		"assets":     []any{},
 	}
 	body, _ := json.Marshal(response)
 
@@ -144,11 +144,11 @@ func TestGitHubReleasesSource_FetchLatest_Prerelease(t *testing.T) {
 
 // TestGitHubReleasesSource_FetchLatest_Draft 验证 Draft 标记为预发布
 func TestGitHubReleasesSource_FetchLatest_Draft(t *testing.T) {
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":   "v0.2.0",
 		"prerelease": false,
 		"draft":      true,
-		"assets":     []interface{}{},
+		"assets":     []any{},
 	}
 	body, _ := json.Marshal(response)
 
@@ -171,10 +171,10 @@ func TestGitHubReleasesSource_FetchLatest_Draft(t *testing.T) {
 
 // TestGitHubReleasesSource_FetchLatest_EmptyTag 验证 tag_name 为空时报错
 func TestGitHubReleasesSource_FetchLatest_EmptyTag(t *testing.T) {
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":   "",
 		"prerelease": false,
-		"assets":     []interface{}{},
+		"assets":     []any{},
 	}
 	body, _ := json.Marshal(response)
 
@@ -227,16 +227,16 @@ func TestGitHubReleasesSource_FetchLatest_ContextCancelled(t *testing.T) {
 
 // TestGitHubReleasesSource_FetchAssets 验证获取资产列表
 func TestGitHubReleasesSource_FetchAssets(t *testing.T) {
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":   "v0.2.0",
 		"prerelease": false,
-		"assets": []interface{}{
-			map[string]interface{}{
+		"assets": []any{
+			map[string]any{
 				"name":                 "uapclaw-linux.tar.gz",
 				"browser_download_url": "https://example.com/linux",
 				"size":                 float64(100),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name":                 "uapclaw-darwin.tar.gz",
 				"browser_download_url": "https://example.com/darwin",
 				"size":                 float64(200),
@@ -269,10 +269,10 @@ func TestGitHubReleasesSource_FetchAssets(t *testing.T) {
 
 // TestGitHubReleasesSource_WithToken 验证 Token 注入到请求头
 func TestGitHubReleasesSource_WithToken(t *testing.T) {
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tag_name":   "v0.1.0",
 		"prerelease": false,
-		"assets":     []interface{}{},
+		"assets":     []any{},
 	}
 	body, _ := json.Marshal(response)
 

@@ -97,6 +97,7 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GetFactory 获取数据容器工厂单例。
 func GetFactory() *DataContainerFactory {
 	factoryOnce.Do(func() {
 		factoryInstance = &DataContainerFactory{
@@ -106,14 +107,17 @@ func GetFactory() *DataContainerFactory {
 	return factoryInstance
 }
 
+// RegisterSessionCreator 注册会话创建函数。
 func RegisterSessionCreator(creator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor) {
 	sessionCreator = creator
 }
 
+// NewAgentSessionContainer 创建空的 Agent 会话容器。
 func NewAgentSessionContainer() *AgentSessionContainer {
 	return &AgentSessionContainer{}
 }
 
+// LoadAgentSessionContainer 从序列化数据恢复 Agent 会话容器。
 func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
 	container := NewAgentSessionContainer()
 	if sessionCreator != nil {

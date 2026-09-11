@@ -26,13 +26,6 @@ type SQLMemberDao struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// withTx 返回绑定指定事务的 DAO 实例。
-func (d *SQLMemberDao) withTx(tx *gorm.DB) *SQLMemberDao {
-	return &SQLMemberDao{db: tx}
-}
-
 // CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在。
 // Python: create_member() → bool（IntegrityError → False）
 func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
@@ -177,4 +170,11 @@ func (d *SQLMemberDao) UpdateMemberExecutionStatus(ctx context.Context, memberNa
 		Where("member_name = ? AND team_name = ?", memberName, teamName).
 		Update("execution_status", executionStatus)
 	return true
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// withTx 返回绑定指定事务的 DAO 实例。
+func (d *SQLMemberDao) withTx(tx *gorm.DB) *SQLMemberDao {
+	return &SQLMemberDao{db: tx}
 }

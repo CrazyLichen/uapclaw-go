@@ -122,14 +122,6 @@ func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
 	return b.StepTemplate(b.step)
 }
 
-// step 子类逻辑，对齐 Python _step()。
-// MemoryOptimizerBase 为空实现，返回空映射。
-//
-// Python: BaseOptimizer._step() → 抽象（子类实现）
-func (b *MemoryOptimizerBase) step() map[cschema.UpdateKey]any {
-	return map[cschema.UpdateKey]any{}
-}
-
 // Parameters 返回梯度容器的副本。
 func (b *MemoryOptimizerBase) Parameters() map[string]*optimizer.TextualParameter {
 	return b.BaseOptimizerMixin.Parameters()
@@ -141,3 +133,11 @@ func (b *MemoryOptimizerBase) SelectSignals(signals []*signal.EvolutionSignal) [
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// step 子类逻辑，对齐 Python _step()。
+// MemoryOptimizerBase 为空实现，返回空映射。
+//
+// Python: BaseOptimizer._step() → 抽象（子类实现）
+func (b *MemoryOptimizerBase) step() map[cschema.UpdateKey]any {
+	return map[cschema.UpdateKey]any{}
+}

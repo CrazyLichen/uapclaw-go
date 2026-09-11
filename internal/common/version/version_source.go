@@ -126,7 +126,7 @@ func (s *GitHubReleasesSource) FetchAssets(ctx context.Context) ([]ReleaseAsset,
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // fetchJSON 从 GitHub API 获取 JSON 数据
-func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]interface{}, error) {
+func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -156,7 +156,7 @@ func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]interf
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal(body, &data); err != nil {
 		return nil, fmt.Errorf("解析 JSON 失败: %w", err)
 	}
@@ -165,7 +165,7 @@ func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]interf
 }
 
 // parseRelease 解析 GitHub API 返回的发布信息
-func (s *GitHubReleasesSource) parseRelease(data map[string]interface{}) (*ReleaseInfo, error) {
+func (s *GitHubReleasesSource) parseRelease(data map[string]any) (*ReleaseInfo, error) {
 	// 提取 tag_name
 	tagName, _ := data["tag_name"].(string)
 	ver := cleanVersion(tagName)
@@ -181,9 +181,9 @@ func (s *GitHubReleasesSource) parseRelease(data map[string]interface{}) (*Relea
 
 	// 提取资产列表
 	var assets []ReleaseAsset
-	if rawAssets, ok := data["assets"].([]interface{}); ok {
+	if rawAssets, ok := data["assets"].([]any); ok {
 		for _, item := range rawAssets {
-			assetMap, ok := item.(map[string]interface{})
+			assetMap, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}

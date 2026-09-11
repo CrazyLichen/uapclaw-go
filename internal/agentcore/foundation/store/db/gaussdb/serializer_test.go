@@ -90,7 +90,7 @@ func TestGaussStringSerializer_Scan_String(t *testing.T) {
 	s := gaussStringSerializer{}
 	var captured string
 	field := &schema.Field{}
-	field.Set = func(_ context.Context, _ reflect.Value, v interface{}) error {
+	field.Set = func(_ context.Context, _ reflect.Value, v any) error {
 		captured = v.(string)
 		return nil
 	}
@@ -109,7 +109,7 @@ func TestGaussStringSerializer_Scan_Bytes(t *testing.T) {
 	s := gaussStringSerializer{}
 	var captured string
 	field := &schema.Field{}
-	field.Set = func(_ context.Context, _ reflect.Value, v interface{}) error {
+	field.Set = func(_ context.Context, _ reflect.Value, v any) error {
 		captured = v.(string)
 		return nil
 	}
@@ -128,7 +128,7 @@ func TestGaussStringSerializer_Scan_Nil(t *testing.T) {
 	s := gaussStringSerializer{}
 	setCalled := false
 	field := &schema.Field{}
-	field.Set = func(_ context.Context, _ reflect.Value, _ interface{}) error {
+	field.Set = func(_ context.Context, _ reflect.Value, _ any) error {
 		setCalled = true
 		return nil
 	}
@@ -147,7 +147,7 @@ func TestGaussStringSerializer_Scan_Int(t *testing.T) {
 	s := gaussStringSerializer{}
 	var captured string
 	field := &schema.Field{}
-	field.Set = func(_ context.Context, _ reflect.Value, v interface{}) error {
+	field.Set = func(_ context.Context, _ reflect.Value, v any) error {
 		captured = v.(string)
 		return nil
 	}

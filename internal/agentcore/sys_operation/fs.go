@@ -122,6 +122,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewFsOptions 创建文件系统操作选项。
 func NewFsOptions(opts ...FsOption) *FsOptions {
 	o := &FsOptions{
 		Mode:             "text",
@@ -138,86 +139,107 @@ func NewFsOptions(opts ...FsOption) *FsOptions {
 	return o
 }
 
+// WithFsMode 设置文件系统模式选项。
 func WithFsMode(mode string) FsOption {
 	return func(o *FsOptions) { o.Mode = mode }
 }
 
+// WithFsHead 设置读取头部行数选项。
 func WithFsHead(head int) FsOption {
 	return func(o *FsOptions) { o.Head = head }
 }
 
+// WithFsTail 设置读取尾部行数选项。
 func WithFsTail(tail int) FsOption {
 	return func(o *FsOptions) { o.Tail = tail }
 }
 
+// WithFsEncoding 设置文件编码选项。
 func WithFsEncoding(encoding string) FsOption {
 	return func(o *FsOptions) { o.Encoding = encoding }
 }
 
+// WithFsChunkSize 设置分块大小选项。
 func WithFsChunkSize(chunkSize int) FsOption {
 	return func(o *FsOptions) { o.ChunkSize = chunkSize }
 }
 
+// WithFsLineRange 设置行范围选项。
 func WithFsLineRange(start, end int) FsOption {
 	return func(o *FsOptions) { o.LineRange = [2]int{start, end} }
 }
 
+// WithFsPrependNewline 设置前置换行选项。
 func WithFsPrependNewline(v bool) FsOption {
 	return func(o *FsOptions) { o.PrependNewline = &v }
 }
 
+// WithFsAppendNewline 设置后置换行选项。
 func WithFsAppendNewline(v bool) FsOption {
 	return func(o *FsOptions) { o.AppendNewline = &v }
 }
 
+// WithFsAppend 设置追加写入选项。
 func WithFsAppend(append bool) FsOption {
 	return func(o *FsOptions) { o.Append = append }
 }
 
+// WithFsCreateIfNotExist 设置不存在时创建选项。
 func WithFsCreateIfNotExist(create bool) FsOption {
 	return func(o *FsOptions) { o.CreateIfNotExist = create }
 }
 
+// WithFsPermissions 设置权限选项。
 func WithFsPermissions(perm string) FsOption {
 	return func(o *FsOptions) { o.Permissions = perm }
 }
 
+// WithFsOverwrite 设置覆盖写入选项。
 func WithFsOverwrite(overwrite bool) FsOption {
 	return func(o *FsOptions) { o.Overwrite = overwrite }
 }
 
+// WithFsCreateParentDirs 设置创建父目录选项。
 func WithFsCreateParentDirs(create bool) FsOption {
 	return func(o *FsOptions) { o.CreateParentDirs = create }
 }
 
+// WithFsPreservePerms 设置保留权限选项。
 func WithFsPreservePerms(preserve bool) FsOption {
 	return func(o *FsOptions) { o.PreservePerms = preserve }
 }
 
+// WithFsRecursive 设置递归操作选项。
 func WithFsRecursive(recursive bool) FsOption {
 	return func(o *FsOptions) { o.Recursive = recursive }
 }
 
+// WithFsMaxDepth 设置最大深度选项。
 func WithFsMaxDepth(maxDepth int) FsOption {
 	return func(o *FsOptions) { o.MaxDepth = maxDepth }
 }
 
+// WithFsSortBy 设置排序字段选项。
 func WithFsSortBy(sortBy string) FsOption {
 	return func(o *FsOptions) { o.SortBy = sortBy }
 }
 
+// WithFsSortDescending 设置降序排序选项。
 func WithFsSortDescending(desc bool) FsOption {
 	return func(o *FsOptions) { o.SortDescending = desc }
 }
 
+// WithFsFileTypes 设置文件类型过滤选项。
 func WithFsFileTypes(fileTypes []string) FsOption {
 	return func(o *FsOptions) { o.FileTypes = fileTypes }
 }
 
+// WithFsExcludePatterns 设置排除模式选项。
 func WithFsExcludePatterns(patterns []string) FsOption {
 	return func(o *FsOptions) { o.ExcludePatterns = patterns }
 }
 
+// WithFsOptions 设置通用选项映射。
 func WithFsOptions(options map[string]any) FsOption {
 	return func(o *FsOptions) { o.Options = options }
 }
