@@ -383,7 +383,7 @@ func TestLoadYAML_有FrontMatter(t *testing.T) {
 	}
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	yamlData, body, err := r.loadYAML(path)
+	yamlData, body, err := r.loadYAML(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadYAML 错误: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestLoadYAML_无FrontMatter(t *testing.T) {
 	}
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	yamlData, body, err := r.loadYAML(path)
+	yamlData, body, err := r.loadYAML(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadYAML 错误: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestLoadDescription(t *testing.T) {
 	}
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	desc, err := r.loadDescription(path)
+	desc, err := r.loadDescription(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadDescription 错误: %v", err)
 	}
@@ -449,7 +449,7 @@ func TestLoadDescription_缺少字段(t *testing.T) {
 	}
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	_, err := r.loadDescription(path)
+	_, err := r.loadDescription(context.Background(), path)
 	if err == nil {
 		t.Error("期望错误，但返回 nil")
 	}
@@ -463,7 +463,7 @@ func TestRefreshSkillsIncrementally(t *testing.T) {
 	})
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("refreshSkillsIncrementally 错误: %v", err)
 	}
 
@@ -482,14 +482,14 @@ func TestRefreshSkillsIncrementally_缓存未变化(t *testing.T) {
 	})
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("第一次 refresh 错误: %v", err)
 	}
 
 	// 修改缓存中的技能内容，第二次加载如果缓存命中应该保持旧值
 	r.skillCache[filepath.Join(dir, "skill_a")].Description = "旧描述"
 
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("第二次 refresh 错误: %v", err)
 	}
 
@@ -506,7 +506,7 @@ func TestRefreshSkillsIncrementally_缓存失效(t *testing.T) {
 	})
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("第一次 refresh 错误: %v", err)
 	}
 
@@ -518,7 +518,7 @@ func TestRefreshSkillsIncrementally_缓存失效(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("第二次 refresh 错误: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestCollectSkillsInOrder(t *testing.T) {
 	})
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false))
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(context.Background()); err != nil {
 		t.Fatalf("refresh 错误: %v", err)
 	}
 
@@ -566,7 +566,7 @@ func TestPrepareSkills(t *testing.T) {
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false),
 		WithDisabledSkills([]string{"beta"}),
 	)
-	if err := r.prepareSkills(); err != nil {
+	if err := r.prepareSkills(context.Background()); err != nil {
 		t.Fatalf("prepareSkills 错误: %v", err)
 	}
 
@@ -585,7 +585,7 @@ func TestPrepareSkills_禁用缓存(t *testing.T) {
 	})
 
 	r := NewSkillUseRail([]string{dir}, WithIncludeTools(false), WithEnableCache(false))
-	if err := r.prepareSkills(); err != nil {
+	if err := r.prepareSkills(context.Background()); err != nil {
 		t.Fatalf("第一次 prepareSkills 错误: %v", err)
 	}
 	// enableCache=false 时，prepareSkills 先清空缓存再重新加载，
@@ -596,7 +596,7 @@ func TestPrepareSkills_禁用缓存(t *testing.T) {
 
 	// 验证每次调用都重新加载：先手动修改缓存内容，再次调用后应被覆盖
 	r.skillCache[filepath.Join(dir, "alpha")].Description = "旧描述"
-	if err := r.prepareSkills(); err != nil {
+	if err := r.prepareSkills(context.Background()); err != nil {
 		t.Fatalf("第二次 prepareSkills 错误: %v", err)
 	}
 	key := ""

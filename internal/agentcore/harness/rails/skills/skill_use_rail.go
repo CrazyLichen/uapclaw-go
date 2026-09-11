@@ -199,7 +199,7 @@ func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
 // ReloadSkills 重新加载技能 + 演化经验。
 // Python: SkillUseRail.reload_skills()
 func (r *SkillUseRail) ReloadSkills(ctx context.Context) error {
-	if err := r.prepareSkills(); err != nil {
+	if err := r.prepareSkills(ctx); err != nil {
 		return err
 	}
 	r.fetchEvolutionTexts(ctx)
@@ -416,7 +416,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 			if err != nil {
 				continue
 			}
-			skill, err := loader.loadSkill(filepath.Join(root, entry.Name()), fileInfo.ModTime())
+			skill, err := loader.loadSkill(ctx, filepath.Join(root, entry.Name()), fileInfo.ModTime())
 			if err != nil {
 				continue
 			}
@@ -446,20 +446,20 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 // refreshSkillPrompt 重新加载技能 + 演化经验。
 // Python: SkillUseRail.refresh_skill_prompt()
 func (r *SkillUseRail) refreshSkillPrompt(ctx context.Context) {
-	_ = r.prepareSkills()
+	_ = r.prepareSkills(ctx)
 	r.fetchEvolutionTexts(ctx)
 }
 
 // prepareSkills 增量刷新 + 过滤。
 // Python: SkillUseRail._prepare_skills()
-func (r *SkillUseRail) prepareSkills() error {
+func (r *SkillUseRail) prepareSkills(ctx context.Context) error {
 	if !r.enableCache {
 		r.skillCache = make(map[string]*skillpkg.Skill)
 		r.skillUpdateAt = make(map[string]time.Time)
 		r.skillOrder = make([]string, 0)
 	}
 
-	if err := r.refreshSkillsIncrementally(); err != nil {
+	if err := r.refreshSkillsIncrementally(ctx); err != nil {
 		return err
 	}
 	r.skills = r.filterSkills(r.collectSkillsInOrder())
@@ -468,7 +468,7 @@ func (r *SkillUseRail) prepareSkills() error {
 
 // refreshSkillsIncrementally 遍历 skillsDir，mtime 增量比对。
 // Python: SkillUseRail._refresh_skills_incrementally() L123-175
-func (r *SkillUseRail) refreshSkillsIncrementally() error {
+func (r *SkillUseRail) refreshSkillsIncrementally(ctx context.Context) error {
 	roots := r.normalizeSkillDirs()
 	if len(roots) == 0 {
 		return errors.New("skills_dir is empty")
@@ -525,7 +525,7 @@ func (r *SkillUseRail) refreshSkillsIncrementally() error {
 			cachedUpdateAt := r.skillUpdateAt[key]
 
 			if cachedSkill == nil || !cachedUpdateAt.Equal(updateAt) {
-				skill, err := r.loadSkill(filepath.Join(root, entry.Name()), updateAt)
+				skill, err := r.loadSkill(ctx, filepath.Join(root, entry.Name()), updateAt)
 				if err == nil {
 					r.skillCache[key] = skill
 					r.skillUpdateAt[key] = updateAt
@@ -555,11 +555,11 @@ func (r *SkillUseRail) refreshSkillsIncrementally() error {
 
 // loadSkill 加载单个 SKILL.md。
 // Python: SkillUseRail._load_skill()
-func (r *SkillUseRail) loadSkill(dir string, modTime time.Time) (*skillpkg.Skill, error) {
+func (r *SkillUseRail) loadSkill(ctx context.Context, dir string, modTime time.Time) (*skillpkg.Skill, error) {
 	skillMDPath := filepath.Join(dir, "SKILL.md")
 
 	description := ""
-	desc, err := r.loadDescription(skillMDPath)
+	desc, err := r.loadDescription(ctx, skillMDPath)
 	if err != nil {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("path", skillMDPath).
@@ -582,14 +582,14 @@ func (r *SkillUseRail) loadSkill(dir string, modTime time.Time) (*skillpkg.Skill
 
 // loadYAML 从文件读取 YAML front matter。
 // Python: SkillUseRail._load_yaml()
-func (r *SkillUseRail) loadYAML(path string) (map[string]any, string, error) {
+func (r *SkillUseRail) loadYAML(ctx context.Context, path string) (map[string]any, string, error) {
 	var text string
 
 	// 优先使用 SysOperation.Fs().ReadFile()
 	if r.SysOperation() != nil {
 		fsOp := r.SysOperation().Fs()
 		if fsOp != nil {
-			readRes, err := fsOp.ReadFile(context.Background(), path)
+			readRes, err := fsOp.ReadFile(ctx, path)
 			if err != nil {
 				return nil, "", fmt.Errorf("读取文件失败 %s: %w", path, err)
 			}
@@ -625,8 +625,8 @@ func (r *SkillUseRail) loadYAML(path string) (map[string]any, string, error) {
 
 // loadDescription 从 SKILL.md 的 YAML front matter 提取 description 字段。
 // Python: SkillUseRail._load_description()
-func (r *SkillUseRail) loadDescription(path string) (string, error) {
-	yamlData, _, err := r.loadYAML(path)
+func (r *SkillUseRail) loadDescription(ctx context.Context, path string) (string, error) {
+	yamlData, _, err := r.loadYAML(ctx, path)
 	if err != nil {
 		return "", err
 	}
