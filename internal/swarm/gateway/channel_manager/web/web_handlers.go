@@ -1720,6 +1720,10 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 		// Python: get_permissions_owner_scopes() — 从 config.yaml 读取
 		cfgPath := workspace.ConfigFile()
 		cfg, err := config.New(cfgPath)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 加载配置失败")
+			return map[string]any{}, nil
+		}
 		raw, err := cfg.Raw()
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 读取配置失败")
