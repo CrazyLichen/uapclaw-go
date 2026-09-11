@@ -43,7 +43,7 @@ func newFakeGraphStoreClient() *fakeGraphStoreClient {
 	}
 }
 
-func (f *fakeGraphStoreClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
 	if f.createCollErr != nil {
 		return f.createCollErr
 	}
@@ -54,7 +54,7 @@ func (f *fakeGraphStoreClient) CreateCollection(ctx context.Context, option milv
 	return nil
 }
 
-func (f *fakeGraphStoreClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
 	if f.dropCollErr != nil {
 		return f.dropCollErr
 	}
@@ -65,7 +65,7 @@ func (f *fakeGraphStoreClient) DropCollection(ctx context.Context, option milvus
 	return nil
 }
 
-func (f *fakeGraphStoreClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error) {
+func (f *fakeGraphStoreClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
 	if f.hasCollErr != nil {
 		return false, f.hasCollErr
 	}
@@ -75,44 +75,44 @@ func (f *fakeGraphStoreClient) HasCollection(ctx context.Context, option milvusc
 	return f.collections[name], nil
 }
 
-func (f *fakeGraphStoreClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error) {
+func (f *fakeGraphStoreClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (f *fakeGraphStoreClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+func (f *fakeGraphStoreClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
 	f.mu.Lock()
 	f.insertCount++
 	f.mu.Unlock()
 	return milvusclient.InsertResult{}, nil
 }
 
-func (f *fakeGraphStoreClient) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...interface{}) (milvusclient.UpsertResult, error) {
+func (f *fakeGraphStoreClient) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...any) (milvusclient.UpsertResult, error) {
 	f.mu.Lock()
 	f.upsertCount++
 	f.mu.Unlock()
 	return milvusclient.UpsertResult{}, nil
 }
 
-func (f *fakeGraphStoreClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (f *fakeGraphStoreClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return f.searchResults, f.searchErr
 }
 
-func (f *fakeGraphStoreClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (f *fakeGraphStoreClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return f.searchResults, f.searchErr
 }
 
-func (f *fakeGraphStoreClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...interface{}) (milvusclient.ResultSet, error) {
+func (f *fakeGraphStoreClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
 	return f.queryResult, f.queryErr
 }
 
-func (f *fakeGraphStoreClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error) {
+func (f *fakeGraphStoreClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
 	f.mu.Lock()
 	f.deleteCount++
 	f.mu.Unlock()
 	return milvusclient.DeleteResult{}, nil
 }
 
-func (f *fakeGraphStoreClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error) {
+func (f *fakeGraphStoreClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	names := make([]string, 0, len(f.collections))
@@ -122,23 +122,23 @@ func (f *fakeGraphStoreClient) ListCollections(ctx context.Context, option milvu
 	return names, nil
 }
 
-func (f *fakeGraphStoreClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
 	return f.loadErr
 }
 
-func (f *fakeGraphStoreClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
 	return f.flushErr
 }
 
-func (f *fakeGraphStoreClient) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error {
 	return nil
 }
 
-func (f *fakeGraphStoreClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+func (f *fakeGraphStoreClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...any) error {
 	return f.dropDBErr
 }
 
-func (f *fakeGraphStoreClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+func (f *fakeGraphStoreClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...any) (int64, error) {
 	if f.compactErr != nil {
 		return 0, f.compactErr
 	}

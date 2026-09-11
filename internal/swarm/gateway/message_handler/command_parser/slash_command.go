@@ -71,8 +71,6 @@ const (
 	SlashRewind
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// ModeAgent 代理模式
 	ModeAgent ModeSubcommand = iota
@@ -131,6 +129,8 @@ const (
 	// ActionRewindCancel rewind cancel 取消
 	ActionRewindCancel
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashNewSession: "/new_session",

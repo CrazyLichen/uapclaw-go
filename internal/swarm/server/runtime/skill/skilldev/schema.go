@@ -278,8 +278,6 @@ const (
 	SkillDevStageError SkillDevStage = "error"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// SkillDevTaskModeCreate 纯 query 创建
 	SkillDevTaskModeCreate SkillDevTaskMode = "create"
@@ -320,6 +318,8 @@ const (
 	// SkillDescMaxLen SKILL 描述最大长度
 	SkillDescMaxLen = 1024
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// AllowedFrontmatterKeys SKILL.md 允许的 frontmatter 键集合

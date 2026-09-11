@@ -29,11 +29,11 @@ func newFakeSearcherClient() *fakeSearcherClient {
 	}
 }
 
-func (f *fakeSearcherClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (f *fakeSearcherClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return f.searchResults, f.searchErr
 }
 
-func (f *fakeSearcherClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...interface{}) (milvusclient.ResultSet, error) {
+func (f *fakeSearcherClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
 	return f.queryResult, f.queryErr
 }
 

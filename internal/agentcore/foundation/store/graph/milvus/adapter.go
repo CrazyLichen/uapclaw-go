@@ -25,62 +25,62 @@ type milvusClientGraphAdapter struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateCollection 创建集合
-func (a *milvusClientGraphAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
 	return a.client.CreateCollection(ctx, option)
 }
 
 // DropCollection 删除集合
-func (a *milvusClientGraphAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
 	return a.client.DropCollection(ctx, option)
 }
 
 // HasCollection 检查集合是否存在
-func (a *milvusClientGraphAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error) {
+func (a *milvusClientGraphAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
 	return a.client.HasCollection(ctx, option)
 }
 
 // DescribeCollection 获取集合描述信息
-func (a *milvusClientGraphAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error) {
+func (a *milvusClientGraphAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
 	return a.client.DescribeCollection(ctx, option)
 }
 
 // Insert 插入数据
-func (a *milvusClientGraphAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+func (a *milvusClientGraphAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
 	return a.client.Insert(ctx, option)
 }
 
 // Upsert 更新或插入数据
-func (a *milvusClientGraphAdapter) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...interface{}) (milvusclient.UpsertResult, error) {
+func (a *milvusClientGraphAdapter) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...any) (milvusclient.UpsertResult, error) {
 	return a.client.Upsert(ctx, option)
 }
 
 // Search 向量搜索
-func (a *milvusClientGraphAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (a *milvusClientGraphAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return a.client.Search(ctx, option)
 }
 
 // HybridSearch 混合搜索
-func (a *milvusClientGraphAdapter) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (a *milvusClientGraphAdapter) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return a.client.HybridSearch(ctx, option)
 }
 
 // Query 查询数据
-func (a *milvusClientGraphAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...interface{}) (milvusclient.ResultSet, error) {
+func (a *milvusClientGraphAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
 	return a.client.Query(ctx, option)
 }
 
 // Delete 删除数据
-func (a *milvusClientGraphAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error) {
+func (a *milvusClientGraphAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
 	return a.client.Delete(ctx, option)
 }
 
 // ListCollections 列出所有集合
-func (a *milvusClientGraphAdapter) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error) {
+func (a *milvusClientGraphAdapter) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
 	return a.client.ListCollections(ctx, option)
 }
 
 // LoadCollection 加载集合到内存
-func (a *milvusClientGraphAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
 	task, err := a.client.LoadCollection(ctx, option)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (a *milvusClientGraphAdapter) LoadCollection(ctx context.Context, option mi
 }
 
 // Flush 刷写数据到存储
-func (a *milvusClientGraphAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
 	task, err := a.client.Flush(ctx, option)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (a *milvusClientGraphAdapter) Flush(ctx context.Context, option milvusclien
 }
 
 // CreateIndex 创建索引
-func (a *milvusClientGraphAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error {
 	task, err := a.client.CreateIndex(ctx, option)
 	if err != nil {
 		return err
@@ -113,12 +113,12 @@ func (a *milvusClientGraphAdapter) CreateIndex(ctx context.Context, option milvu
 }
 
 // DropDatabase 删除数据库
-func (a *milvusClientGraphAdapter) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+func (a *milvusClientGraphAdapter) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...any) error {
 	return a.client.DropDatabase(ctx, option)
 }
 
 // Compact 压缩集合数据
-func (a *milvusClientGraphAdapter) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+func (a *milvusClientGraphAdapter) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...any) (int64, error) {
 	return a.client.Compact(ctx, option)
 }
 

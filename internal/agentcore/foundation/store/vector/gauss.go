@@ -69,14 +69,14 @@ const (
 	gaussMetricL2     gaussDistanceMetric = "l2"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// gaussDefaultDistanceMetric GaussDB 默认距离度量
 	gaussDefaultDistanceMetric = "COSINE"
 	// gaussDefaultBatchSize GaussDB 默认批量插入大小
 	gaussDefaultBatchSize = 128
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // gaussLogComponent 日志组件
 var gaussLogComponent = logger.ComponentAgentCore

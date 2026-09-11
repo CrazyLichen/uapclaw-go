@@ -25,53 +25,53 @@ func newFakeMilvusClient() *fakeMilvusClient {
 	}
 }
 
-func (f *fakeMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
 	name := option.Request().GetCollectionName()
 	f.collections[name] = true
 	f.createdColl = append(f.createdColl, name)
 	return nil
 }
 
-func (f *fakeMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
 	name := option.Request().GetCollectionName()
 	delete(f.collections, name)
 	return nil
 }
 
-func (f *fakeMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error) {
+func (f *fakeMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
 	name := option.Request().GetCollectionName()
 	return f.collections[name], nil
 }
 
-func (f *fakeMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error) {
+func (f *fakeMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (f *fakeMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+func (f *fakeMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
 	return milvusclient.InsertResult{}, nil
 }
 
-func (f *fakeMilvusClient) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...interface{}) (milvusclient.UpsertResult, error) {
+func (f *fakeMilvusClient) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...any) (milvusclient.UpsertResult, error) {
 	return milvusclient.UpsertResult{}, nil
 }
 
-func (f *fakeMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (f *fakeMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return nil, nil
 }
 
-func (f *fakeMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+func (f *fakeMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
 	return nil, nil
 }
 
-func (f *fakeMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...interface{}) (milvusclient.ResultSet, error) {
+func (f *fakeMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
 	return milvusclient.ResultSet{}, nil
 }
 
-func (f *fakeMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error) {
+func (f *fakeMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
 	return milvusclient.DeleteResult{}, nil
 }
 
-func (f *fakeMilvusClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error) {
+func (f *fakeMilvusClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
 	names := make([]string, 0, len(f.collections))
 	for name := range f.collections {
 		names = append(names, name)
@@ -79,23 +79,23 @@ func (f *fakeMilvusClient) ListCollections(ctx context.Context, option milvuscli
 	return names, nil
 }
 
-func (f *fakeMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
 	return nil
 }
 
-func (f *fakeMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
 	return nil
 }
 
-func (f *fakeMilvusClient) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error {
 	return nil
 }
 
-func (f *fakeMilvusClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+func (f *fakeMilvusClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...any) error {
 	return nil
 }
 
-func (f *fakeMilvusClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+func (f *fakeMilvusClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...any) (int64, error) {
 	return 1, nil
 }
 

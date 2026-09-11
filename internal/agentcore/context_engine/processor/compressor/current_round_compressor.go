@@ -96,8 +96,9 @@ const (
 	currentRoundMemoryBlockMarker = "[CURRENT_ROUND_MEMORY_BLOCK]"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
+// defaultCurrentRoundCompressionPrompt 内置压缩提示词，与 Python COMPRESSION_PROMPT 完全对齐
+//
+//nolint:goconst // 提示词模板必须逐字符对齐 Python 原文
 const defaultCurrentRoundCompressionPrompt = `You are a **Task Data Preservation Expert**.
 
 Your role is to produce a **high-fidelity incremental memory block** for long-running agent tasks.
@@ -470,6 +471,8 @@ Output plain text only.
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

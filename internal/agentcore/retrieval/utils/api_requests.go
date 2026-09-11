@@ -44,16 +44,13 @@ const (
 	TaskReranker TaskName = "Reranker"
 	// TaskEmbedding 嵌入任务
 	TaskEmbedding TaskName = "Embedding"
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-const (
 	// defaultMaxRetries 默认最大重试次数
 	defaultMaxRetries = 3
 	// defaultRetryWait 默认重试等待基数
 	defaultRetryWait = 100 * time.Millisecond
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// censorshipKeywords 审查内容检测关键词，对齐 Python

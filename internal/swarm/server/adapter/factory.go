@@ -19,12 +19,11 @@ const (
 	sdkEnvVar = "JIUWENSWARM_AGENT_SDK"
 	// defaultSDK 默认 SDK 名称
 	defaultSDK = "harness"
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件
-const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

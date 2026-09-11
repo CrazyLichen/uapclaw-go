@@ -94,8 +94,7 @@ const (
 	msoDefaultContentMaxCharsForCompression = 200000
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
+// truncatedMarker 截断标记
 const truncatedMarker = "...[TRUNCATED]..."
 
 // adaptiveOffloadPromptTemplate 自适应压缩提示词模板
@@ -203,6 +202,8 @@ const defaultOffloadSummaryPrompt = `
     Do NOT explain, comment, or add extra information—output the summary only.
     Begin:
     `
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
 var contextOverflowKeywords = []string{

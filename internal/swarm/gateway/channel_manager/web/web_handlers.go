@@ -21,10 +21,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
-	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -1735,7 +1735,7 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 		}
 		denyGuidance, _ := permCfg["deny_guidance_message"].(string)
 		return map[string]any{
-			"owner_scopes":         ownerScopes,
+			"owner_scopes":          ownerScopes,
 			"deny_guidance_message": denyGuidance,
 		}, nil
 	}

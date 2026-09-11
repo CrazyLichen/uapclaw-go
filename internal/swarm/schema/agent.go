@@ -164,8 +164,8 @@ func NewAgentResponseChunk(requestID, channelID string, payload map[string]any, 
 // 消费侧通过 IsTerminal() 识别终止哨兵，不再下发业务事件。
 //
 // Python: 中两处终止哨兵形态：
-//   - payload=None, is_complete=True（interface_deep / team_helpers / auto_harness）
-//   - payload={"is_complete": True}, is_complete=True（gateway_normalize / interface）
+//   - payload=None, is_complete=True（接口深度 / 团队辅助 / 自动编配）
+//   - payload={"is_complete": True}, is_complete=True（网关标准化 / 接口）
 //
 // Go 统一使用形态 B（payload={"is_complete":true}），因为：
 //   - 形态 B 信息自包含，消费侧无需额外判断

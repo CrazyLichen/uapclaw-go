@@ -69,7 +69,7 @@ func newFakeWriterClient() *fakeWriterClient {
 	}
 }
 
-func (f *fakeWriterClient) Insert(ctx context.Context, option interface{}, callOptions ...interface{}) (interface{}, error) {
+func (f *fakeWriterClient) Insert(ctx context.Context, option any, callOptions ...any) (any, error) {
 	if f.insertErr != nil {
 		return nil, f.insertErr
 	}
@@ -77,7 +77,7 @@ func (f *fakeWriterClient) Insert(ctx context.Context, option interface{}, callO
 	return nil, nil
 }
 
-func (f *fakeWriterClient) Upsert(ctx context.Context, option interface{}, callOptions ...interface{}) (interface{}, error) {
+func (f *fakeWriterClient) Upsert(ctx context.Context, option any, callOptions ...any) (any, error) {
 	if f.upsertErr != nil {
 		return nil, f.upsertErr
 	}
@@ -85,7 +85,7 @@ func (f *fakeWriterClient) Upsert(ctx context.Context, option interface{}, callO
 	return nil, nil
 }
 
-func (f *fakeWriterClient) Delete(ctx context.Context, option interface{}, callOptions ...interface{}) (interface{}, error) {
+func (f *fakeWriterClient) Delete(ctx context.Context, option any, callOptions ...any) (any, error) {
 	if f.deleteErr != nil {
 		return nil, f.deleteErr
 	}
@@ -572,7 +572,7 @@ type insertFailClient struct {
 	batchInsertErr error
 }
 
-func (f *insertFailClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+func (f *insertFailClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
 	if f.batchInsertErr != nil {
 		f.batchInsertErr = nil // 第二次调用成功
 		return milvusclient.InsertResult{}, f.batchInsertErr

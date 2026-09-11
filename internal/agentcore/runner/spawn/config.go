@@ -69,8 +69,6 @@ const (
 	SpawnAgentKindTeamAgent SpawnAgentKind = "team_agent"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// DefaultHealthCheckInterval 默认健康检查间隔
 	DefaultHealthCheckInterval = 5 * time.Second
@@ -85,6 +83,8 @@ const (
 	// ShutdownWaitPeriod 关闭后等待进程退出的宽限期
 	ShutdownWaitPeriod = 2 * time.Second
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

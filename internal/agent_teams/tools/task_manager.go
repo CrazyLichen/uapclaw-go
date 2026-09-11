@@ -46,8 +46,8 @@ type TaskAddWithPriorityOption func(*taskAddWithPriorityConfig)
 // taskAddWithPriorityConfig AddWithPriority 的可选配置
 type taskAddWithPriorityConfig struct {
 	taskID           string
-	dependencies     []string // Python: dependencies
-	dependentTaskIDs []string // Python: dependent_task_ids
+	dependencies     []string // 依赖列表
+	dependentTaskIDs []string // 被依赖任务 ID 列表
 }
 
 // TaskCreateResult 任务创建结果，对齐 Python TaskCreateResult。

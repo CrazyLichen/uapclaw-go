@@ -588,8 +588,8 @@ func extractPureTextPayload(msg *schema.Message, eventName string) map[string]an
 // 自动广播 processing_status 事件
 //
 // Python: web_connect.py send() 中 interrupt_result 后的处理：
-//   - intent=pause/supplement/resume → is_processing=true
-//   - intent=cancel → is_processing=false
+//   - intent=pause/supplement/resume → is_processing=true（暂停/补充/恢复 → 处理中）
+//   - intent=cancel → is_processing=false（取消 → 非处理中）
 func (wc *WebChannel) broadcastInterruptSideEffect(msg *schema.Message) {
 	isProcessing := true // 默认 true（pause/supplement/resume）
 	if msg.Payload != nil {

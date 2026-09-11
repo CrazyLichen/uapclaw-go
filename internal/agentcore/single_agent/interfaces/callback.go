@@ -307,8 +307,6 @@ const (
 	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// RunKindNormal 正常运行
 	RunKindNormal RunKind = "normal"
@@ -331,6 +329,8 @@ const (
 	// steeringQueueSize steering 队列缓冲区大小
 	steeringQueueSize = 4096
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ErrSteeringQueueFull steering 队列已满
 var ErrSteeringQueueFull = errors.New("steering 队列已满")

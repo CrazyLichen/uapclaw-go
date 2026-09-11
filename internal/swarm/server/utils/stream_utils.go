@@ -49,7 +49,7 @@ type FindOption struct {
 
 // ParseStreamChunk 解析流式 chunk。
 // Python: interface_deep._parse_stream_chunk(chunk, _has_streamed_content, _stage)
-// (interface_deep.py L4982-5276)
+// 对应 Python 源码：interface_deep.py L4982-5276
 //
 // 处理 15+ 种 chunk.Type，返回 payload dict。
 // converter 参数用于自定义 __interaction__ 类型的交互转换逻辑，
@@ -338,15 +338,15 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		// S-04: 对齐 Python — harness.extension_ready 事件
 		// Python: interface_deep._parse_stream_chunk L5230-5243
 		return map[string]any{
-			"event_type":            "harness.extension_ready",
-			"extension_name":        ExtractStringFromPayload(payload, "extension_name"),
-			"runtime_path":          ExtractStringFromPayload(payload, "runtime_path"),
-			"session_runtime_path":  ExtractStringFromPayload(payload, "session_runtime_path"),
+			"event_type":             "harness.extension_ready",
+			"extension_name":         ExtractStringFromPayload(payload, "extension_name"),
+			"runtime_path":           ExtractStringFromPayload(payload, "runtime_path"),
+			"session_runtime_path":   ExtractStringFromPayload(payload, "session_runtime_path"),
 			"extension_runtime_path": ExtractStringFromPayload(payload, "extension_runtime_path"),
-			"config_path":           ExtractStringFromPayload(payload, "config_path"),
-			"runtime_extensions":    payload["runtime_extensions"],
-			"verify_report":         payload["verify_report"],
-			"components_summary":    payload["components_summary"],
+			"config_path":            ExtractStringFromPayload(payload, "config_path"),
+			"runtime_extensions":     payload["runtime_extensions"],
+			"verify_report":          payload["verify_report"],
+			"components_summary":     payload["components_summary"],
 		}
 
 	case "harness_session_finished":
@@ -443,14 +443,14 @@ func ParseInteractionPayload(payload map[string]any, converter InteractionConver
 			}
 		}
 		return map[string]any{
-			"event_type":            "harness.activate_interaction",
-			"interaction_type":      "activate_confirm",
-			"interaction_id":        ExtractStringFromPayload(payload, "interaction_id"),
-			"extension_name":        ExtractStringFromPayload(payload, "extension_name"),
-			"runtime_path":          ExtractStringFromPayload(payload, "runtime_path"),
-			"session_runtime_path":  ExtractStringFromPayload(payload, "session_runtime_path"),
+			"event_type":             "harness.activate_interaction",
+			"interaction_type":       "activate_confirm",
+			"interaction_id":         ExtractStringFromPayload(payload, "interaction_id"),
+			"extension_name":         ExtractStringFromPayload(payload, "extension_name"),
+			"runtime_path":           ExtractStringFromPayload(payload, "runtime_path"),
+			"session_runtime_path":   ExtractStringFromPayload(payload, "session_runtime_path"),
 			"extension_runtime_path": extRuntimePath,
-			"options":               options,
+			"options":                options,
 		}
 	}
 	if converter != nil {

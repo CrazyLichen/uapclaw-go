@@ -22,18 +22,18 @@ import (
 // milvusClient Milvus 客户端操作接口（用于解耦和测试）。
 // 生产代码使用真实 milvusclient.Client，测试代码注入 fakeMilvusClient。
 type milvusClient interface {
-	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error
-	DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error
-	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error)
-	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error)
-	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error)
-	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error)
-	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error)
-	ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error)
-	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error
-	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error
-	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error
-	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...interface{}) (milvusclient.IndexDescription, error)
+	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error
+	DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error
+	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error)
+	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error)
+	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error)
+	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error)
+	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error)
+	ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error)
+	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error
+	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error
+	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error
+	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error)
 	Close(ctx context.Context) error
 }
 

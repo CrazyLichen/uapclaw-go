@@ -77,12 +77,12 @@ const (
 	PermissionRead Permission = iota + 1
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// DefaultDataContainerType 默认数据容器类型
 	DefaultDataContainerType = "agent"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	factoryOnce     sync.Once

@@ -88,9 +88,6 @@ type reloaderToolInput struct {
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
 //
 // Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const reloaderSystemPrompt = `You may see offloaded content markers in your context: [[OFFLOAD: handle=<id>, type=<type>]].
 
 When you see an offloaded-content marker and believe retrieving it will help your answer, 
@@ -99,6 +96,8 @@ feel free to call reload_original_context_messages:
 - Do not guess or make up the missing content
 
 Storage types: "in_memory" (session cache), "filesystem" (disk file).`
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -87,14 +87,14 @@ const (
 	UpdateModeMerge UpdateMode = MergeMode // "merge"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// UpdateEffectState 直接状态更新效果。
 	UpdateEffectState UpdateEffect = StateEffect // "state"
 	// UpdateEffectPendingChange 暂存变更效果。
 	UpdateEffectPendingChange UpdateEffect = PendingChangeEffect // "pending_change"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

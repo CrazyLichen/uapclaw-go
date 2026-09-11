@@ -117,7 +117,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 		return false, err
 	}
 
-	// 更新 mem_type ids 和 user profile topic ids
+	// 更新 mem_type ID 和用户画像主题 ID
 	if memType, ok := data[memTypeFieldKey]; ok {
 		// Python: mem_type 始终是字符串，非 string 视为异常
 		memTypeStr, ok := memType.(string)
@@ -139,7 +139,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 			return false, err
 		}
 
-		// user profile topic ids（仅片段记忆类型）
+		// 用户画像主题 ID（仅片段记忆类型）
 		if isFragmentMemoryType(memTypeStr) {
 			userMemTopicKey := s.getConcatenationKey([]string{userID, scopeID, userProfileTopicStr, idsStr})
 			userMemTopicValue, _ := s.kvStore.Get(ctx, userMemTopicKey)
@@ -392,7 +392,7 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 					return err
 				}
 
-				// 删除 user profile topic ids（仅片段记忆类型）
+				// 删除用户画像主题 ID（仅片段记忆类型）
 				if isFragmentMemoryType(memTypeStr) {
 					userMemTopicKey := s.getConcatenationKey([]string{userID, scopeID, userProfileTopicStr, idsStr})
 					if err := s.deleteMemID(ctx, userMemTopicKey, memID); err != nil {

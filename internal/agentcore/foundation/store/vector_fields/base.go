@@ -41,8 +41,6 @@ const (
 	DatabaseTypeES
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 const (
 	// IndexTypeAUTO 自动选择索引类型
 	IndexTypeAUTO IndexType = iota
@@ -64,6 +62,8 @@ const (
 	// StageSearch 搜索阶段（查询时的参数）
 	StageSearch = "search"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// databaseTypeStrings DatabaseType 枚举值对应的字符串表示，与 Python 枚举值保持一致。

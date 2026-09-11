@@ -392,8 +392,8 @@ func TestParseStreamChunk_interaction_activateConfirm(t *testing.T) {
 	output := makeOutput("__interaction__", map[string]any{
 		"interaction_type": "activate_confirm",
 		"interaction_id":   "int-123",
-		"extension_name":  "test_ext",
-		"runtime_path":    "/tmp/runtime",
+		"extension_name":   "test_ext",
+		"runtime_path":     "/tmp/runtime",
 	})
 	result := ParseStreamChunk(output, nil, nil, converter)
 	if result["event_type"] != "harness.activate_interaction" {
@@ -418,9 +418,9 @@ func TestParseStreamChunk_interaction_无converter(t *testing.T) {
 func TestParseStreamChunk_specialTypes(t *testing.T) {
 	// S-04: 五种 harness 类型各有独立的 event_type 和结构
 	tests := []struct {
-		chunkType  string
-		payload    map[string]any
-		wantEvent  string
+		chunkType string
+		payload   map[string]any
+		wantEvent string
 	}{
 		{"message", map[string]any{"content": "hello", "stage": "test"}, "harness.message"},
 		{"stage_result", map[string]any{"stage": "build", "status": "success"}, "harness.stage_result"},

@@ -216,6 +216,20 @@
       ],
       "latest_plan_id": "plan_task_test-team_1788804782437_213_1788804782437_293",
       "status": "plan_approved"
+    },
+    "task_test-team_1789143126262_444": {
+      "plan_ids": [
+        "plan_task_test-team_1789143126262_444_1789143126263_160"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789143126262_444_1789143126263_160",
+      "status": "plan_approved"
+    },
+    "task_test-team_1789143271457_663": {
+      "plan_ids": [
+        "plan_task_test-team_1789143271457_663_1789143271457_801"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789143271457_663_1789143271457_801",
+      "status": "plan_approved"
     }
   },
   "task_plans": {
@@ -503,6 +517,28 @@
       "submitted_at": "2026-09-08T02:13:02+08:00",
       "decided_at": "2026-09-08T02:13:02+08:00",
       "updated_at": "2026-09-08T02:13:02+08:00"
+    },
+    "plan_task_test-team_1789143126262_444_1789143126263_160": {
+      "plan_id": "plan_task_test-team_1789143126262_444_1789143126263_160",
+      "task_id": "task_test-team_1789143126262_444",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789143126262_444/plans/plan_task_test-team_1789143126262_444_1789143126263_160.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-12T00:12:06+08:00",
+      "decided_at": "2026-09-12T00:12:06+08:00",
+      "updated_at": "2026-09-12T00:12:06+08:00"
+    },
+    "plan_task_test-team_1789143271457_663_1789143271457_801": {
+      "plan_id": "plan_task_test-team_1789143271457_663_1789143271457_801",
+      "task_id": "task_test-team_1789143271457_663",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789143271457_663/plans/plan_task_test-team_1789143271457_663_1789143271457_801.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-12T00:14:31+08:00",
+      "decided_at": "2026-09-12T00:14:31+08:00",
+      "updated_at": "2026-09-12T00:14:31+08:00"
     }
   }
 }
