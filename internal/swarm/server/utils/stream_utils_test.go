@@ -61,6 +61,8 @@ func TestParseStreamChunk_controllerOutput_taskFailed_无data(t *testing.T) {
 }
 
 func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
+	// M-05: 对齐 interface_deep._parse_stream_chunk，controller_output 不搜索 __interaction__
+	// 只有 task_completion/task_failed 两种 inner type
 	output := makeOutput("controller_output", map[string]any{
 		"type":    "__interaction__",
 		"payload": map[string]any{"request_id": "req-1"},
@@ -69,8 +71,9 @@ func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
 		return map[string]any{"event_type": "chat.ask_user_question", "data": payload}
 	}
 	result := ParseStreamChunk(output, nil, nil, converter)
-	if result["event_type"] != "chat.ask_user_question" {
-		t.Errorf("期望 chat.ask_user_question, 实际 %v", result["event_type"])
+	// controller_output 不搜索 __interaction__，type 不匹配 task_completion/task_failed → 走 default
+	if result["event_type"] != "chat.delta" {
+		t.Errorf("controller_output 不搜索 __interaction__，期望 chat.delta, 实际 %v", result["event_type"])
 	}
 }
 
@@ -312,10 +315,31 @@ func TestParseStreamChunk_contextUsage(t *testing.T) {
 }
 
 func TestParseStreamChunk_contextCompressionState(t *testing.T) {
-	output := makeOutput("context.compression_state", map[string]any{"state": "compressed"})
+	output := makeOutput("context.compression_state", map[string]any{
+		"status":       "in_progress",
+		"phase":        "compressing",
+		"processor":    "test_processor",
+		"summary":      "test summary",
+		"operation_id": "op-123",
+	})
 	result := ParseStreamChunk(output, nil, nil, nil)
-	if result["event_type"] != "chat.context_compression_state" {
-		t.Errorf("期望 chat.context_compression_state, 实际 %v", result["event_type"])
+	if result["event_type"] != "context.compression_state" {
+		t.Errorf("期望 context.compression_state, 实际 %v", result["event_type"])
+	}
+	if result["status"] != "in_progress" {
+		t.Errorf("期望 status=in_progress, 实际 %v", result["status"])
+	}
+	if result["phase"] != "compressing" {
+		t.Errorf("期望 phase=compressing, 实际 %v", result["phase"])
+	}
+	if result["processor"] != "test_processor" {
+		t.Errorf("期望 processor=test_processor, 实际 %v", result["processor"])
+	}
+	if result["summary"] != "test summary" {
+		t.Errorf("期望 summary=test summary, 实际 %v", result["summary"])
+	}
+	if result["operation_id"] != "op-123" {
+		t.Errorf("期望 operation_id=op-123, 实际 %v", result["operation_id"])
 	}
 }
 
@@ -348,14 +372,38 @@ func TestParseStreamChunk_askUserQuestion_无RequestID不去重(t *testing.T) {
 func TestParseStreamChunk_interaction_有converter(t *testing.T) {
 	converter := func(payload any) map[string]any {
 		return map[string]any{
-			"event_type": "harness.activate_interaction",
+			"event_type": "chat.ask_user_question",
 			"payload":    payload,
 		}
 	}
-	output := makeOutput("__interaction__", map[string]any{"type": "activate_confirm"})
+	// 非 activate_confirm 类型 → 走 converter
+	output := makeOutput("__interaction__", map[string]any{"type": "ask_user"})
+	result := ParseStreamChunk(output, nil, nil, converter)
+	if result["event_type"] != "chat.ask_user_question" {
+		t.Errorf("有 converter 且非 activate_confirm 时应委托转换, 实际 %v", result["event_type"])
+	}
+}
+
+func TestParseStreamChunk_interaction_activateConfirm(t *testing.T) {
+	// S-03: activate_confirm 先于 converter 检查
+	converter := func(payload any) map[string]any {
+		return map[string]any{"event_type": "chat.ask_user_question"}
+	}
+	output := makeOutput("__interaction__", map[string]any{
+		"interaction_type": "activate_confirm",
+		"interaction_id":   "int-123",
+		"extension_name":  "test_ext",
+		"runtime_path":    "/tmp/runtime",
+	})
 	result := ParseStreamChunk(output, nil, nil, converter)
 	if result["event_type"] != "harness.activate_interaction" {
-		t.Errorf("有 converter 时应委托转换, 实际 %v", result["event_type"])
+		t.Errorf("activate_confirm 应返回 harness.activate_interaction, 实际 %v", result["event_type"])
+	}
+	if result["interaction_type"] != "activate_confirm" {
+		t.Errorf("期望 interaction_type=activate_confirm, 实际 %v", result["interaction_type"])
+	}
+	if result["interaction_id"] != "int-123" {
+		t.Errorf("期望 interaction_id=int-123, 实际 %v", result["interaction_id"])
 	}
 }
 
@@ -368,25 +416,42 @@ func TestParseStreamChunk_interaction_无converter(t *testing.T) {
 }
 
 func TestParseStreamChunk_specialTypes(t *testing.T) {
-	specialTypes := []string{"message", "stage_result", "extension_ready", "harness_session_finished", "activate_testing_guide"}
-	for _, st := range specialTypes {
-		output := makeOutput(st, map[string]any{"data": "test"})
+	// S-04: 五种 harness 类型各有独立的 event_type 和结构
+	tests := []struct {
+		chunkType  string
+		payload    map[string]any
+		wantEvent  string
+	}{
+		{"message", map[string]any{"content": "hello", "stage": "test"}, "harness.message"},
+		{"stage_result", map[string]any{"stage": "build", "status": "success"}, "harness.stage_result"},
+		{"extension_ready", map[string]any{"extension_name": "ext1"}, "harness.extension_ready"},
+		{"harness_session_finished", map[string]any{"pipeline": "p1", "status": "success"}, "harness.session_finished"},
+	}
+	for _, tt := range tests {
+		output := makeOutput(tt.chunkType, tt.payload)
 		result := ParseStreamChunk(output, nil, nil, nil)
-		expected := "chat." + st
-		if result["event_type"] != expected {
-			t.Errorf("类型 %s 期望 %s, 实际 %v", st, expected, result["event_type"])
+		if result["event_type"] != tt.wantEvent {
+			t.Errorf("类型 %s 期望 %s, 实际 %v", tt.chunkType, tt.wantEvent, result["event_type"])
 		}
+	}
+
+	// activate_testing_guide 特殊：返回 chat.delta
+	output := makeOutput("activate_testing_guide", map[string]any{"text": "guide text"})
+	result := ParseStreamChunk(output, nil, nil, nil)
+	if result["event_type"] != "chat.delta" {
+		t.Errorf("activate_testing_guide 期望 chat.delta, 实际 %v", result["event_type"])
 	}
 }
 
 func TestParseStreamChunk_defaultFallback(t *testing.T) {
-	output := makeOutput("custom_event", map[string]any{"key": "value"})
+	// Python: default 分支对 payload dict 提取 content/output 字段
+	output := makeOutput("custom_event", map[string]any{"content": "value"})
 	result := ParseStreamChunk(output, nil, nil, nil)
-	if result["event_type"] != "chat.custom_event" {
-		t.Errorf("未知类型期望 chat.{chunkType}, 实际 %v", result["event_type"])
+	if result["event_type"] != "chat.delta" {
+		t.Errorf("默认类型期望 chat.delta, 实际 %v", result["event_type"])
 	}
-	if result["key"] != "value" {
-		t.Errorf("期望展开 payload 字段 key=value, 实际 %v", result["key"])
+	if result["content"] != "value" {
+		t.Errorf("期望 content=value, 实际 %v", result["content"])
 	}
 }
 

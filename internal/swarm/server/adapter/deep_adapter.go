@@ -919,6 +919,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		usage := &utils.UsageAccumulator{}
 		// askUser 去重集合
 		emittedAskUserIDs := make(map[string]bool)
+		// Python: has_streamed_content = False
+		hasStreamedContent := false
 		// 累积文本/reasoning
 		accumulatedText := ""
 		accumulatedReasoning := ""
@@ -963,10 +965,34 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				}
 				textContent := extractTextContent(payload)
 				accumulatedText += textContent
+				// Python: has_streamed_content = True
+				hasStreamedContent = true
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 					"event_type": "chat.delta",
 					"content":    textContent,
 				})
+
+			case "answer":
+				// Python: if chunk_type == "answer": 先 flush 累积，再调用 _parse_stream_chunk
+				if accumulatedText != "" {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+						"event_type": "chat.delta",
+						"content":    accumulatedText,
+					})
+					accumulatedText = ""
+				}
+				if accumulatedReasoning != "" {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+						"event_type": "chat.reasoning",
+						"content":    accumulatedReasoning,
+					})
+					accumulatedReasoning = ""
+				}
+				// Python: if has_streamed_content: parsed = self._parse_stream_chunk(chunk, _has_streamed_content=True)
+				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
+				if parsed != nil {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
+				}
 
 			default:
 				// flush 累积
@@ -978,7 +1004,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				}
 				// ParseStreamChunk 处理其他类型
 				// Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
-				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, accumulatedText != "")
+				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
 				if parsed != nil {
 					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
 				}

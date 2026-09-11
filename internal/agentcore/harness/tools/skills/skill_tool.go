@@ -167,7 +167,7 @@ func (t *SkillTool) Card() *tool.ToolCard { return t.card }
 // getSkillByName 按名称查找技能。
 //
 // Python: SkillTool._get_skill_by_name(skill_name)
-// 一比一复刻: name 为空返回 None；遍历 get_skills() 构建 name→skill 映射
+// 线性遍历 get_skills() 列表查找匹配名称的技能（技能列表较小，O(n) 可接受）
 func (t *SkillTool) getSkillByName(name string) *skillpkg.Skill {
 	if name == "" {
 		return nil

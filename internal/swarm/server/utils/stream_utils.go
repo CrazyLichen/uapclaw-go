@@ -48,8 +48,8 @@ type FindOption struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseStreamChunk 解析流式 chunk。
-// Python: _parse_stream_chunk(chunk) (stream_utils.py L10-44)
-// 及 _parse_typed_chunk(chunk) (stream_utils.py L107-353)
+// Python: interface_deep._parse_stream_chunk(chunk, _has_streamed_content, _stage)
+// (interface_deep.py L4982-5276)
 //
 // 处理 15+ 种 chunk.Type，返回 payload dict。
 // converter 参数用于自定义 __interaction__ 类型的交互转换逻辑，
@@ -73,14 +73,8 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 
 	switch chunkType {
 	case "controller_output":
-		// Python: L150-170: 先搜索 __interaction__ 载荷
-		interactions := FindInteractionPayloads(payload)
-		if len(interactions) > 0 {
-			if p, ok := interactions[0].(map[string]any); ok {
-				return ParseInteractionPayload(p, converter)
-			}
-		}
-		// 未找到 __interaction__，检查内部 type
+		// Python: interface_deep._parse_stream_chunk 中 controller_output
+		// 不搜索 __interaction__，只检查 inner type (task_completion/task_failed)
 		innerType, _ := payload["type"].(string)
 		switch innerType {
 		case "task_completion":
@@ -110,7 +104,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "content_chunk":
-		// Python: L192-200: 空内容返回 nil
+		// Python: L5033-5039: 空内容返回 nil
 		content := ExtractStringFromPayload(payload, "content")
 		if content == "" || strings.TrimSpace(content) == "" {
 			return nil
@@ -118,11 +112,16 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return map[string]any{"event_type": "chat.delta", "content": content}
 
 	case "answer":
-		// Python: L202-231
+		// Python: interface_deep._parse_stream_chunk L5041-5066
 		if payload["result_type"] == "error" {
+			// M-02: 默认消息对齐 Python "未知错误"
+			errorMsg := ExtractStringFromPayload(payload, "output")
+			if errorMsg == "" {
+				errorMsg = "未知错误"
+			}
 			return map[string]any{
 				"event_type": "chat.error",
-				"error":      ExtractStringFromPayload(payload, "output"),
+				"error":      errorMsg,
 			}
 		}
 		var content string
@@ -145,7 +144,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return map[string]any{"event_type": "chat.final", "content": content}
 
 	case "tool_call":
-		// Python: L233-239
+		// Python: L5068-5072
 		toolInfo := payload
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
@@ -156,7 +155,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "tool_update":
-		// Python: L241-250: 提取 tool_update 子对象
+		// Python: L5074-5087: 提取 tool_update 子对象
 		var updatePayload map[string]any
 		if sub, ok := payload["tool_update"].(map[string]any); ok {
 			updatePayload = sub
@@ -170,13 +169,18 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return ret
 
 	case "tool_result":
-		// Python: L252-282: 提取 tool_result 子对象 + 字段映射
+		// Python: L5089-5116: 提取 tool_result 子对象 + 字段映射
 		resultInfo := payload
 		if sub, ok := payload["tool_result"].(map[string]any); ok {
 			resultInfo = sub
 		}
+		// M-01: 对齐 Python result_info.get("result", str(result_info)) fallback
+		resultVal := ExtractStringFromPayload(resultInfo, "result")
+		if resultVal == "" {
+			resultVal = fmt.Sprintf("%v", resultInfo)
+		}
 		result := map[string]any{
-			"result": ExtractStringFromPayload(resultInfo, "result"),
+			"result": resultVal,
 		}
 		// tool_name: 优先 tool_name，回退 name
 		if tn, ok := resultInfo["tool_name"].(string); ok && tn != "" {
@@ -209,7 +213,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		return ret
 
 	case "error":
-		// Python: L284-290
+		// Python: L5118-5124
 		errorMsg := ExtractStringFromPayload(payload, "error")
 		if errorMsg == "" {
 			errorMsg = fmt.Sprintf("%v", payload)
@@ -220,7 +224,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "thinking":
-		// Python: L292-297: processing_status 而非 thinking
+		// Python: L5126-5131: processing_status 而非 thinking
 		return map[string]any{
 			"event_type":    "chat.processing_status",
 			"is_processing": true,
@@ -228,7 +232,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "todo.updated":
-		// Python: L299-305: 提取 todos 列表
+		// Python: L5133-5135: 提取 todos 列表
 		todos, _ := payload["todos"].([]any)
 		if todos == nil {
 			todos = []any{}
@@ -239,7 +243,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.usage":
-		// Python: L307-314: 透传 rate/context_max/tokens_used
+		// Python: L5137-5145: 透传 rate/context_max/tokens_used
 		return map[string]any{
 			"event_type":  "context.usage",
 			"rate":        ExtractFloatFromPayload(payload, "rate"),
@@ -248,14 +252,20 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.compression_state":
-		// Python: L112-131: dot-namespace 类型
+		// S-02: 对齐 Python — event_type 无 chat. 前缀，6 个字段展开到顶层
+		// Python: interface_deep._parse_stream_chunk L5147-5157
 		return map[string]any{
-			"event_type":        "chat.context_compression_state",
-			"compression_state": payload,
+			"event_type":   "context.compression_state",
+			"status":       ExtractStringFromPayload(payload, "status"),
+			"phase":        ExtractStringFromPayload(payload, "phase"),
+			"processor":    ExtractStringFromPayload(payload, "processor"),
+			"summary":      ExtractStringFromPayload(payload, "summary"),
+			"operation_id": ExtractStringFromPayload(payload, "operation_id"),
 		}
 
 	case "ask_user_question":
-		// Python: L316-320: ask_user_question 去重
+		// S-05: 对齐 Python — payload 展开到顶层而非嵌套
+		// Python: interface_deep._parse_stream_chunk L5159-5163
 		requestID, _ := payload["request_id"].(string)
 		if requestID != "" && emittedAskUserIDs[requestID] {
 			return nil // 去重：已发送过的 ask_user
@@ -263,44 +273,144 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if requestID != "" {
 			emittedAskUserIDs[requestID] = true
 		}
-		return map[string]any{
-			"event_type":        "chat.ask_user_question",
-			"ask_user_question": payload,
+		result := map[string]any{
+			"event_type": "chat.ask_user_question",
 		}
+		for k, v := range payload {
+			result[k] = SerializeValue(v)
+		}
+		return result
 
 	case "__interaction__":
+		// S-03: 对齐 Python — 先检查 activate_confirm，再走 converter
+		// Python: interface_deep._parse_stream_chunk L5165-5179
 		return ParseInteractionPayload(payload, converter)
 
-	case "message", "stage_result", "extension_ready", "harness_session_finished", "activate_testing_guide":
-		// Python: 各特殊类型的处理
+	case "message":
+		// S-04: 对齐 Python — harness.message 事件
+		// Python: interface_deep._parse_stream_chunk L5182-5208
+		content := ExtractStringFromPayload(payload, "content")
+		if content == "" {
+			content = fmt.Sprintf("%v", payload["content"])
+		}
+		if content == "" {
+			content = fmt.Sprintf("%v", payload)
+		}
+		stage := ExtractStringFromPayload(payload, "stage")
+		result := map[string]any{
+			"event_type": "harness.message",
+			"content":    content,
+			"stage":      stage,
+		}
+		// 透传 stages/pipeline/metadata
+		if stages, ok := payload["stages"]; ok {
+			result["stages"] = stages
+		}
+		if pipeline, ok := payload["pipeline"]; ok {
+			result["pipeline"] = pipeline
+		}
+		if metadata, ok := payload["metadata"]; ok {
+			result["metadata"] = metadata
+		}
+		return result
+
+	case "stage_result":
+		// S-04: 对齐 Python — harness.stage_result 事件
+		// Python: interface_deep._parse_stream_chunk L5211-5227
+		if _, ok := payload["stage"]; !ok && len(payload) == 0 {
+			return nil
+		}
 		return map[string]any{
-			"event_type": "chat." + chunkType,
-			"content":    payload,
+			"event_type":      "harness.stage_result",
+			"stage":           ExtractStringFromPayload(payload, "stage"),
+			"status":          ExtractStringFromPayload(payload, "status"),
+			"error":           ExtractStringFromPayload(payload, "error"),
+			"messages":        payload["messages"],
+			"metrics":         payload["metrics"],
+			"scope":           ExtractStringFromPayload(payload, "scope"),
+			"parent_stage":    ExtractStringFromPayload(payload, "parent_stage"),
+			"extension_stage": ExtractStringFromPayload(payload, "extension_stage"),
+			"extension_name":  ExtractStringFromPayload(payload, "extension_name"),
+			"task_id":         ExtractStringFromPayload(payload, "task_id"),
 		}
 
-	default:
-		// Python: L325-353: 保留原始类型名 + team.* 直传
-		if innerEventType, ok := payload["event_type"].(string); ok {
-			if strings.HasPrefix(innerEventType, "team.") {
-				// team 命名空间事件直传
-				result := map[string]any{}
-				for k, v := range payload {
-					result[k] = SerializeValue(v)
-				}
-				return result
+	case "extension_ready":
+		// S-04: 对齐 Python — harness.extension_ready 事件
+		// Python: interface_deep._parse_stream_chunk L5230-5243
+		return map[string]any{
+			"event_type":            "harness.extension_ready",
+			"extension_name":        ExtractStringFromPayload(payload, "extension_name"),
+			"runtime_path":          ExtractStringFromPayload(payload, "runtime_path"),
+			"session_runtime_path":  ExtractStringFromPayload(payload, "session_runtime_path"),
+			"extension_runtime_path": ExtractStringFromPayload(payload, "extension_runtime_path"),
+			"config_path":           ExtractStringFromPayload(payload, "config_path"),
+			"runtime_extensions":    payload["runtime_extensions"],
+			"verify_report":         payload["verify_report"],
+			"components_summary":    payload["components_summary"],
+		}
+
+	case "harness_session_finished":
+		// S-04: 对齐 Python — harness.session_finished 事件
+		// Python: interface_deep._parse_stream_chunk L5245-5258
+		if len(payload) > 0 {
+			isTerminal := true
+			if v, ok := payload["is_terminal"].(bool); ok {
+				isTerminal = v
+			}
+			return map[string]any{
+				"event_type":    "harness.session_finished",
+				"pipeline":      ExtractStringFromPayload(payload, "pipeline"),
+				"status":        ExtractStringFromPayload(payload, "status"),
+				"results_count": ExtractIntFromPayload(payload, "results_count"),
+				"is_terminal":   isTerminal,
 			}
 		}
-		// payload 有内容 → 展开
+		return map[string]any{
+			"event_type":  "harness.session_finished",
+			"status":      "success",
+			"is_terminal": true,
+		}
+
+	case "activate_testing_guide":
+		// S-04: 对齐 Python — chat.delta 事件
+		// Python: interface_deep._parse_stream_chunk L5261-5266
+		text := ExtractStringFromPayload(payload, "text")
+		if text == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.delta", "content": text}
+
+	default:
+		// Python: L5268-5276: payload 是 dict 时检查 traceId/invokeId
 		if len(payload) > 0 {
-			result := map[string]any{
-				"event_type": "chat." + chunkType,
+			// 跳过含 traceId/invokeId 的内部帧
+			if _, ok := payload["traceId"]; ok {
+				return nil
 			}
-			for k, v := range payload {
-				if k != "event_type" {
-					result[k] = SerializeValue(v)
+			if _, ok := payload["invokeId"]; ok {
+				return nil
+			}
+			// team 命名空间事件直传
+			if innerEventType, ok := payload["event_type"].(string); ok {
+				if strings.HasPrefix(innerEventType, "team.") {
+					result := map[string]any{}
+					for k, v := range payload {
+						result[k] = SerializeValue(v)
+					}
+					return result
 				}
 			}
-			return result
+			// 尝试提取 content/output 字段
+			content := ""
+			if c, ok := payload["content"].(string); ok && c != "" {
+				content = c
+			} else if o, ok := payload["output"].(string); ok && o != "" {
+				content = o
+			}
+			if content == "" || strings.TrimSpace(content) == "" {
+				return nil
+			}
+			return map[string]any{"event_type": "chat.delta", "content": content}
 		}
 		// payload 为空 → 作为 content
 		return map[string]any{
@@ -311,10 +421,38 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 }
 
 // ParseInteractionPayload 解析 __interaction__ 类型的 payload。
-// Python: _parse_interaction_payload(payload) (stream_utils.py L356-375)
-// 若 converter 不为 nil，委托 converter 进行交互转换；
-// 否则回退为默认行为，直接返回 chat.interaction 事件。
+// Python: interface_deep._parse_stream_chunk L5165-5179
+// 先检查 activate_confirm 交互类型（返回 harness.activate_interaction 事件），
+// 否则委托 converter 进行交互转换；
+// 若 converter 为 nil，回退为默认行为，直接返回 chat.interaction 事件。
 func ParseInteractionPayload(payload map[string]any, converter InteractionConverterFunc) map[string]any {
+	// S-03: 先检查 activate_confirm
+	// Python: if isinstance(payload, dict) and payload.get("interaction_type") == "activate_confirm"
+	if payload["interaction_type"] == "activate_confirm" {
+		extRuntimePath := ExtractStringFromPayload(payload, "extension_runtime_path")
+		if extRuntimePath == "" {
+			extRuntimePath = ExtractStringFromPayload(payload, "runtime_path")
+		}
+		options := []string{"accept", "reject"}
+		if opts, ok := payload["options"].([]any); ok && len(opts) > 0 {
+			options = make([]string, 0, len(opts))
+			for _, o := range opts {
+				if s, ok := o.(string); ok {
+					options = append(options, s)
+				}
+			}
+		}
+		return map[string]any{
+			"event_type":            "harness.activate_interaction",
+			"interaction_type":      "activate_confirm",
+			"interaction_id":        ExtractStringFromPayload(payload, "interaction_id"),
+			"extension_name":        ExtractStringFromPayload(payload, "extension_name"),
+			"runtime_path":          ExtractStringFromPayload(payload, "runtime_path"),
+			"session_runtime_path":  ExtractStringFromPayload(payload, "session_runtime_path"),
+			"extension_runtime_path": extRuntimePath,
+			"options":               options,
+		}
+	}
 	if converter != nil {
 		return converter(payload)
 	}

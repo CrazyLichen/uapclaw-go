@@ -498,12 +498,12 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 		{"thinking", "thinking", map[string]any{"content": "think"}, false, "chat.processing_status"},
 		{"todo_updated", "todo.updated", map[string]any{"todos": []any{}}, false, "todo.updated"},
 		{"context_usage", "context.usage", map[string]any{"percent": 0.5}, false, "context.usage"},
-		{"context_compression_state", "context.compression_state", map[string]any{"state": "done"}, false, "chat.context_compression_state"},
+		{"context_compression_state", "context.compression_state", map[string]any{"status": "done", "phase": "test", "processor": "p", "summary": "s", "operation_id": "o"}, false, "context.compression_state"},
 		{"ask_user_question", "ask_user_question", map[string]any{"request_id": "ask1"}, false, "chat.ask_user_question"},
 		{"interaction", "__interaction__", map[string]any{"type": "confirm"}, false, "chat.interaction"},
-		{"message", "message", map[string]any{}, false, "chat.message"},
-		{"stage_result", "stage_result", map[string]any{}, false, "chat.stage_result"},
-		{"未知类型", "unknown_type", map[string]any{}, false, "chat.unknown_type"},
+		{"message", "message", map[string]any{"content": "hello", "stage": "test"}, false, "harness.message"},
+		{"stage_result", "stage_result", map[string]any{"stage": "build", "status": "success"}, false, "harness.stage_result"},
+		{"未知类型", "unknown_type", map[string]any{"content": "test"}, false, "chat.delta"},
 	}
 
 	for _, tt := range tests {

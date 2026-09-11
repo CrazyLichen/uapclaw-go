@@ -24,6 +24,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -294,14 +295,20 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("hooks.list", stubHandler("hooks.list", map[string]any{"hooks": []any{}}))
 
 	// ─── 权限 ───
-	permStub := stubHandler("permissions", map[string]any{})
-	d.Register("permissions.owner_scopes.get", permStub)
-	d.Register("permissions.owner_scopes.set", permStub)
-	d.Register("permissions.tools.get", permStub)
-	d.Register("permissions.tools.set", permStub)
-	d.Register("permissions.rules.get", permStub)
-	d.Register("permissions.rules.set", permStub)
-	d.Register("permissions.approval_overrides.get", permStub)
+	// Python: owner_scopes.get/set 在 web_handlers 中直接处理（不经 E2A / config_rpc）
+	// Python: tools/rules/approval_overrides 通过 _forward_permissions_to_agent 转发到 AgentServer
+	d.Register("permissions.owner_scopes.get", handlePermissionsOwnerScopesGet())
+	d.Register("permissions.owner_scopes.set", handlePermissionsOwnerScopesSet())
+	d.Register("permissions.tools.get", handlePermissionsForwardToAgent(agentClient, "permissions.tools.get"))
+	d.Register("permissions.tools.set", handlePermissionsForwardToAgent(agentClient, "permissions.tools.set"))
+	d.Register("permissions.tools.update", handlePermissionsForwardToAgent(agentClient, "permissions.tools.update"))
+	d.Register("permissions.tools.delete", handlePermissionsForwardToAgent(agentClient, "permissions.tools.delete"))
+	d.Register("permissions.rules.get", handlePermissionsForwardToAgent(agentClient, "permissions.rules.get"))
+	d.Register("permissions.rules.create", handlePermissionsForwardToAgent(agentClient, "permissions.rules.create"))
+	d.Register("permissions.rules.update", handlePermissionsForwardToAgent(agentClient, "permissions.rules.update"))
+	d.Register("permissions.rules.delete", handlePermissionsForwardToAgent(agentClient, "permissions.rules.delete"))
+	d.Register("permissions.approval_overrides.get", handlePermissionsForwardToAgent(agentClient, "permissions.approval_overrides.get"))
+	d.Register("permissions.approval_overrides.delete", handlePermissionsForwardToAgent(agentClient, "permissions.approval_overrides.delete"))
 
 	// ─── 禁止记忆 ───
 	d.Register("memory.forbidden.get", handleMemoryForbiddenGet())
@@ -1701,4 +1708,119 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ──────────────────────────── 权限 RPC 处理函数 ────────────────────────────
+
+// handlePermissionsOwnerScopesGet 处理 permissions.owner_scopes.get 请求。
+// Python: _permissions_owner_scopes_get (app_web_handlers.py L2275-2283)
+// 直接从配置读取 owner_scopes，不经 E2A / config_rpc。
+func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		// Python: get_permissions_owner_scopes() — 从 config.yaml 读取
+		cfgPath := workspace.ConfigFile()
+		cfg, err := config.New(cfgPath)
+		raw, err := cfg.Raw()
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 读取配置失败")
+			return map[string]any{}, nil
+		}
+		permCfg, _ := raw["permissions"].(map[string]any)
+		if permCfg == nil {
+			permCfg = map[string]any{}
+		}
+		ownerScopes, _ := permCfg["owner_scopes"].(map[string]any)
+		if ownerScopes == nil {
+			ownerScopes = map[string]any{}
+		}
+		denyGuidance, _ := permCfg["deny_guidance_message"].(string)
+		return map[string]any{
+			"owner_scopes":         ownerScopes,
+			"deny_guidance_message": denyGuidance,
+		}, nil
+	}
+}
+
+// handlePermissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
+// Python: _permissions_owner_scopes_set (app_web_handlers.py L2285-2298)
+// 直接更新配置中的 owner_scopes，不经 E2A / config_rpc。
+func handlePermissionsOwnerScopesSet() RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return nil, fmt.Errorf("params must be object")
+		}
+		ownerScopes, _ := params["owner_scopes"].(map[string]any)
+		if ownerScopes == nil {
+			ownerScopes = map[string]any{}
+		}
+		denyGuidance, _ := params["deny_guidance_message"].(string)
+
+		// Python: update_permissions_owner_scopes_in_config — 读取→修改→写回
+		cfgPath := workspace.ConfigFile()
+		cfg, err := config.New(cfgPath)
+		if err != nil {
+			return nil, fmt.Errorf("创建配置管理器失败: %w", err)
+		}
+		raw, err := cfg.Raw()
+		if err != nil {
+			return nil, fmt.Errorf("读取配置失败: %w", err)
+		}
+		permCfg, _ := raw["permissions"].(map[string]any)
+		if permCfg == nil {
+			permCfg = map[string]any{}
+			raw["permissions"] = permCfg
+		}
+		permCfg["owner_scopes"] = ownerScopes
+		if denyGuidance != "" {
+			permCfg["deny_guidance_message"] = denyGuidance
+		}
+		if err := cfg.Save(raw); err != nil {
+			return nil, fmt.Errorf("写回配置失败: %w", err)
+		}
+		return map[string]any{"ok": true}, nil
+	}
+}
+
+// handlePermissionsForwardToAgent 处理权限 RPC 请求，优先经 E2A 转发到 AgentServer；
+// AgentServer 未就绪时本地执行（与 config_rpc 同源）。
+// Python: _forward_permissions_to_agent (app_web_handlers.py L2303-2365)
+func handlePermissionsForwardToAgent(ac *routing.AgentClient, method string) RPCHandlerFunc {
+	return func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error) {
+		// AgentServer 已就绪 → E2A 转发
+		if ac != nil && ac.ServerReady() {
+			env := e2a.E2AFromAgentFields("",
+				e2a.WithFieldChannelID(""),
+				e2a.WithFieldSessionID(sessionID),
+				e2a.WithFieldReqMethod(method),
+				e2a.WithFieldParams(params),
+			)
+			resp, err := ac.SendRequest(ctx, env)
+			if err != nil {
+				logger.Error(logComponent).Err(err).Str("method", method).Msg("权限 RPC 转发到 AgentServer 失败")
+				// 转发失败，回退到本地 dispatch
+			} else if resp != nil {
+				if resp.OK {
+					return resp.Payload, nil
+				}
+				errPayload := resp.Payload
+				if errPayload == nil {
+					errPayload = map[string]any{"error": "request failed"}
+				}
+				return nil, fmt.Errorf("权限 RPC 失败: %v", errPayload)
+			}
+		}
+
+		// AgentServer 未就绪或转发失败 → 本地 dispatch（对齐 Python: dispatch_permissions_config_request）
+		ok, payload := permrpc.DispatchPermissionsConfigRequest(method, params)
+		if ok {
+			return payload, nil
+		}
+		errMsg := "request failed"
+		if payload != nil {
+			if e, ok := payload["error"].(string); ok && e != "" {
+				errMsg = e
+			}
+		}
+		return nil, fmt.Errorf("权限 RPC 本地 dispatch 失败: %s", errMsg)
+	}
 }
