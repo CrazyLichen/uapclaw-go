@@ -7,9 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
-)
-
-// ──────────────────────────── 结构体 ────────────────────────────
+)// ──────────────────────────── 结构体 ────────────────────────────
 
 // ApprovalManager 审批管理器窄接口。
 //
@@ -51,6 +49,15 @@ type EvolutionSnapshot struct {
 	Messages []map[string]any
 	// SkillName 技能名称（可选）
 	SkillName *string
+	// PresentedEntries 评估状态条目（可选，用于异步演进后消费）
+	// Python: snapshot["presented_entries"]
+	PresentedEntries []experience.PresentedRecordEntry
+	// SessionID 会话标识（可选）
+	// Python: snapshot["session_id"]
+	SessionID string
+	// IncrementalMessages 增量消息（可选，用于 sharing download）
+	// Python: snapshot["incremental_messages"]
+	IncrementalMessages []map[string]any
 }
 
 // EvolutionRequestResult 主动用户触发的演化 API 返回的结构化结果。
@@ -155,6 +162,15 @@ func (s EvolutionSnapshot) ToLegacyDict() map[string]any {
 	}
 	if s.SkillName != nil {
 		snapshot["skill_name"] = *s.SkillName
+	}
+	if s.SessionID != "" {
+		snapshot["session_id"] = s.SessionID
+	}
+	if s.PresentedEntries != nil {
+		snapshot["presented_entries"] = s.PresentedEntries
+	}
+	if s.IncrementalMessages != nil {
+		snapshot["incremental_messages"] = s.IncrementalMessages
 	}
 	return snapshot
 }

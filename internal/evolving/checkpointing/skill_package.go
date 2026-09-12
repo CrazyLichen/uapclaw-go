@@ -311,6 +311,12 @@ func isSafePath(baseDir, targetPath string) bool {
 	return strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) || absTarget == absBase
 }
 
+// ParseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段（导出版本）。
+// Python: parse_top_level_frontmatter(content)
+func ParseTopLevelFrontmatter(content string) map[string]string {
+	return parseTopLevelFrontmatter(content)
+}
+
 // parseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段。
 // Python: parse_top_level_frontmatter(content)
 func parseTopLevelFrontmatter(content string) map[string]string {

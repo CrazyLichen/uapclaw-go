@@ -1,13 +1,16 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
@@ -98,8 +101,11 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// 步骤 8: skillEvolutionRail
 	evolve := d.buildSkillEvolutionRail()
 	if evolve != nil {
-		d.skillEvolutionRail = evolve
-		railsList = append(railsList, evolve)
+		var ok bool
+		d.skillEvolutionRail, ok = evolve.(*evolution.SkillEvolutionRail)
+		if ok {
+			railsList = append(railsList, d.skillEvolutionRail)
+		}
 	}
 
 	// 步骤 9: skillCreateRail
@@ -320,13 +326,76 @@ func (d *DeepAdapter) resolveSkillMode() string {
 }
 
 // buildSkillEvolutionRail 构建技能演进护栏。
-// ⤵️ 10.6.3-10: SkillEvolutionRail
-// Python: _build_skill_evolution_rail() (line 1961-2010)
+// ✅ 已回填：SkillEvolutionRail（对齐 Python: _build_skill_evolution_rail()）
 func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 SkillEvolutionRail
-	// Python: disabled_skills=self._skill_manager.list_execution_disabled_skills()
-	// 待 Rail 类型实现后: d.skillManager.ListExecutionDisabledSkills()
-	return nil
+	if d.model == nil {
+		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model 为空，跳过")
+		return nil
+	}
+
+	// 读取 evolution 配置
+	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	enabled, _ := evolutionConfig["enabled"].(bool)
+	if !enabled {
+		return nil
+	}
+
+	// 读取 auto_scan
+	autoScan := true
+	if as, ok := evolutionConfig["auto_scan"].(bool); ok {
+		autoScan = as
+	}
+	// 环境变量覆盖
+	if envAS := os.Getenv("EVOLUTION_AUTO_SCAN"); envAS != "" {
+		autoScan = strings.ToLower(envAS) == "true"
+	}
+
+	// auto_save 默认 false（需要审批）
+	autoSave := false
+	if as, ok := evolutionConfig["auto_save"].(bool); ok {
+		autoSave = as
+	}
+
+	// 禁用技能列表
+	var disabledSkills []string
+	if d.skillManager != nil {
+		disabledSkills = d.skillManager.ListExecutionDisabledSkills()
+	}
+
+	// skills 目录
+	skillsDir := workspace.AgentSkillsDir()
+	if skillsDir == "" {
+		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: skills 目录为空，跳过")
+		return nil
+	}
+
+	modelName := d.defaultModelName
+	if modelName == "" {
+		modelName = "qwen-max"
+	}
+
+	opts := []evolution.SkillEvolutionRailOption{
+		evolution.WithAutoScan(autoScan),
+		evolution.WithAutoSave(autoSave),
+		evolution.WithDisabledSkillsSet(disabledSkills),
+	}
+
+	// sharing 配置
+	sharingConfig, _ := evolutionConfig["sharing"].(map[string]any)
+	if sharingConfig != nil {
+		opts = append(opts, evolution.WithSharingConfig(sharingConfig))
+	}
+
+	rail := evolution.NewSkillEvolutionRail(
+		[]string{skillsDir},
+		d.model,
+		modelName,
+		"cn",
+		opts...,
+	)
+
+	logger.Info(logComponent).Msg("SkillEvolutionRail 创建成功")
+	return rail
 }
 
 // buildSkillCreateRail 构建技能创建护栏。
@@ -477,13 +546,31 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 // updateRailsForMode 按模式注册/注销 Rail。
 // Python: _update_rails_for_mode() (line 2754-2896)
 //
-// ⤵️ 10.6.3-10: 依赖未实现 Rail
+// ✅ 部分已回填：evolution 分支
 func (d *DeepAdapter) updateRailsForMode(mode string) {
-	// ⤵️ 10.6.3-10: 按 mode 分支注册/注销 Rail
-	// agent.plan → 启用 AgentModeRail（只读模式）
-	// agent.fast → 禁用 AgentModeRail
-	// code → 启用 LspRail/CodeAgentRail 等
-	logger.Info(logComponent).Str("mode", mode).Msg("updateRailsForMode 等待 10.6.3-10 回填")
+	// evolution 分支：检查 evolution 配置，动态注册/注销 SkillEvolutionRail
+	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	evolutionEnabled, _ := evolutionConfig["enabled"].(bool)
+	if evolutionEnabled {
+		if d.skillEvolutionRail == nil {
+			rail := d.buildSkillEvolutionRail()
+			if rail != nil {
+				var ok bool
+				d.skillEvolutionRail, ok = rail.(*evolution.SkillEvolutionRail)
+				if ok && d.skillEvolutionRail != nil && d.instance != nil {
+					d.instance.RegisterRail(context.Background(), d.skillEvolutionRail)
+				}
+			}
+		}
+	} else {
+		if d.skillEvolutionRail != nil {
+			if d.instance != nil {
+				d.instance.UnregisterRail(context.Background(), d.skillEvolutionRail)
+			}
+			d.skillEvolutionRail = nil
+		}
+	}
+	logger.Info(logComponent).Str("mode", mode).Msg("updateRailsForMode 执行完成")
 }
 
 // updatePromptForMode 按模式更新系统提示词语言。

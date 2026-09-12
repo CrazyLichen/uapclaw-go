@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
@@ -150,8 +151,8 @@ type DeepAdapter struct {
 	// heartbeatRail 心跳护栏
 	heartbeatRail *rails.HeartbeatRail
 	// skillEvolutionRail 技能演进护栏
-	// ⤵️ 10.6.3-10: SkillEvolutionRail
-	skillEvolutionRail sainterfaces.AgentRail
+	// ✅ 已回填：SkillEvolutionRail（对齐 Python: _skill_evolution_rail: SkillEvolutionRail | None）
+	skillEvolutionRail *evolution.SkillEvolutionRail
 	// skillCreateRail 技能创建护栏
 	// ⤵️ 10.6.3-10: SkillCreateRail
 	skillCreateRail sainterfaces.AgentRail
@@ -1162,6 +1163,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	// 步骤 1-2: 解析 request_id 和 answers
 	params := parseParams(req.Params)
 	requestID := paramsString(params, "request_id", "")
+	answers := params["answers"]
 
 	// 步骤 4: resolved 默认 false
 	resolved := false
@@ -1169,14 +1171,19 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	// 步骤 5-7: 按 request_id 前缀分发
 	switch {
 	case strings.HasPrefix(requestID, "team_skill_evolve_"):
-		// ⤵️ 10.6.3-10: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
+		// ⤵️ 10.6.3-10: handle_team_skill_evolve_approval 依赖 P4 TeamSkillEvolutionRail
 		resolved = false
 	case strings.HasPrefix(requestID, "evolve_simplify_"):
-		// ⤵️ 10.6.3-10: _handle_governance_approval(requestID, answers, "simplify")
-		resolved = false
+		// ✅ 已回填：_handle_governance_approval(requestID, answers, approvalType)
+		// Python 中 approvalType 从 answers 推断：approve → "approve", reject → "reject"
+		approvalType := "reject"
+		if parseApprovalAnswers(answers) {
+			approvalType = "approve"
+		}
+		resolved = d.handleGovernanceApproval(requestID, answers, approvalType)
 	case strings.HasPrefix(requestID, "skill_evolve_"):
-		// ⤵️ 10.6.3-10: _handle_evolution_approval(requestID, answers)
-		resolved = false
+		// ✅ 已回填：_handle_evolution_approval(requestID, answers)
+		resolved = d.handleEvolutionApproval(requestID, answers)
 	}
 
 	// 步骤 8: 构造响应
