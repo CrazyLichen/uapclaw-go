@@ -434,6 +434,16 @@ func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajector
 	return messages
 }
 
+// MatchFailureKeywords 检查 content 是否包含失败关键词。
+//
+// 导出此函数供 sharing 包的 ShareStager 使用，
+// 因为 Go 无法跨包访问非导出变量 failureKeywords。
+//
+// Python: openjiuwen/agent_evolving/signal/from_conv._FAILURE_KEYWORDS.search(content)
+func MatchFailureKeywords(content string) bool {
+	return failureKeywords.MatchString(content)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。

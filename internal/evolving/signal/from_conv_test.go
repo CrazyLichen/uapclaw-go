@@ -1165,6 +1165,38 @@ func TestFailureKeywords_匹配(t *testing.T) {
 	}
 }
 
+func TestMatchFailureKeywords_匹配(t *testing.T) {
+	testCases := []string{
+		"Error: something went wrong",
+		"Exception in thread main",
+		"Operation failed",
+		"Connection timeout",
+		"错误：参数不正确",
+		"异常发生",
+		"执行失败",
+		"请求超时",
+	}
+	for _, tc := range testCases {
+		if !MatchFailureKeywords(tc) {
+			t.Errorf("MatchFailureKeywords should match %q", tc)
+		}
+	}
+}
+
+func TestMatchFailureKeywords_不匹配(t *testing.T) {
+	testCases := []string{
+		"success",
+		"completed",
+		"正常完成",
+		"ok",
+	}
+	for _, tc := range testCases {
+		if MatchFailureKeywords(tc) {
+			t.Errorf("MatchFailureKeywords should not match %q", tc)
+		}
+	}
+}
+
 func TestCorrectionPattern_匹配(t *testing.T) {
 	testCases := []string{
 		"不对，应该这样做",
