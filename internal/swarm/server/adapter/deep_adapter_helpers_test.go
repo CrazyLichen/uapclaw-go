@@ -10,8 +10,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -415,6 +417,33 @@ func TestMakeDeepAgentConfig(t *testing.T) {
 	}
 	if cfg.MaxIterations != 20 {
 		t.Errorf("MaxIterations = %d, want 20", cfg.MaxIterations)
+	}
+}
+
+// TestMakeDeepAgentConfig_Rails赋值 验证 railsList 参数被正确赋值到 DeepAgentConfig.Rails。
+// 对齐 Python: _make_deep_agent_config(rails=rails_list) (interface_deep.py L2280)
+func TestMakeDeepAgentConfig_Rails赋值(t *testing.T) {
+	d := NewDeepAdapter()
+	d.configCache = map[string]any{"language": "cn"}
+	model := &llm.Model{}
+	card := agentschema.NewAgentCard()
+
+	// 传入 nil railsList
+	cfgNil := d.makeDeepAgentConfig(model, map[string]any{}, card, nil, nil)
+	if cfgNil.Rails != nil {
+		t.Errorf("railsList=nil 时 Rails 应为 nil，实际长度=%d", len(cfgNil.Rails))
+	}
+
+	// 传入非 nil railsList（使用已有的 HeartbeatRail 作为测试实例）
+	rail1 := rails.NewHeartbeatRail()
+	rail2 := rails.NewHeartbeatRail()
+	railsList := []sainterfaces.AgentRail{rail1, rail2}
+	cfgWithRails := d.makeDeepAgentConfig(model, map[string]any{}, card, nil, railsList)
+	if cfgWithRails.Rails == nil {
+		t.Fatal("railsList 非空时 Rails 不应为 nil")
+	}
+	if len(cfgWithRails.Rails) != 2 {
+		t.Errorf("Rails 长度=%d, want 2", len(cfgWithRails.Rails))
 	}
 }
 

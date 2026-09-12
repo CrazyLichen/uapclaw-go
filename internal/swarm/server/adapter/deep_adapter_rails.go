@@ -555,7 +555,17 @@ func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.Permissi
 		}, nil
 	}
 	// ⤵️ ACP: ACP output manager 尚未实现，降级为 ConfirmActionInterrupt
-	logger.Info(logComponent).Str("channel_id", channelID).Msg("ACP 通道权限确认尚未实现，降级为 interrupt")
+	toolName := ""
+	if req.ToolCall != nil {
+		toolName = req.ToolCall.Name
+	}
+	if toolName == "" {
+		toolName = "unknown"
+	}
+	logger.Warn(logComponent).
+		Str("channel_id", channelID).
+		Str("tool_name", toolName).
+		Msg("ACP 通道权限确认尚未实现，降级为 interrupt")
 	return &harnesssecurity.PermissionConfirmResponse{
 		Action: harnesssecurity.ConfirmActionInterrupt,
 	}, nil

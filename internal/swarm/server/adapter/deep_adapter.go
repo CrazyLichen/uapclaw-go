@@ -1981,6 +1981,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 		MaxIterations:  paramsInt(config, "max_iterations", 15),
 		Language:       d.resolveRuntimeLanguage(),
 		PromptMode:     d.resolvePromptMode(nil),
+		Rails:          railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
 	}
 }
 
