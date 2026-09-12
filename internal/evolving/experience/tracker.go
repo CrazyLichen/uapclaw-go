@@ -2,7 +2,7 @@ package experience
 
 import (
 	"context"
-	"fmt"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -50,13 +50,13 @@ type RecordScoreUpdate struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// sessionPresentedRecords 包级 map，sessionID → 展示记录条目列表。
+// sessionPresentedRecords 包级并发安全 map，sessionID → 展示记录条目列表。
 // Python: session._experience_tracker_presented_records
-var sessionPresentedRecords = map[string][]PresentedRecordEntry{}
+var sessionPresentedRecords sync.Map // key: string, value: []PresentedRecordEntry
 
-// sessionEvalCounter 包级 map，sessionID → 评估计数器。
+// sessionEvalCounter 包级并发安全 map，sessionID → 评估计数器。
 // Python: session._experience_tracker_eval_counter
-var sessionEvalCounter = map[string]int{}
+var sessionEvalCounter sync.Map // key: string, value: int
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -80,15 +80,21 @@ func (t *ExperienceTracker) RecordPresented(
 	sessionID string,
 	skillName string,
 	presentationSnippet string,
-) error {
+) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresented panic 降级")
+		}
+	}()
+
 	records := t.store.GetRecordsByScore(ctx, skillName, func() *float64 { f := 0.5; return &f }())
 	if len(records) == 0 {
-		return nil
+		return
 	}
 
 	bodyRecords := filterBodyRecords(records)
 	if len(bodyRecords) == 0 {
-		return nil
+		return
 	}
 
 	updates := map[string]*RecordScoreUpdate{}
@@ -119,11 +125,11 @@ func (t *ExperienceTracker) RecordPresented(
 	}
 
 	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
-		logger.Error(logComponent).
+		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceTracker] update_record_scores 失败")
-		return err
+		return
 	}
 
 	presentedEntries := []PresentedRecordEntry{}
@@ -139,15 +145,14 @@ func (t *ExperienceTracker) RecordPresented(
 		}
 	}
 
-	existing := sessionPresentedRecords[sessionID]
-	sessionPresentedRecords[sessionID] = append(existing, presentedEntries...)
+	existing, _ := sessionPresentedRecords.LoadOrStore(sessionID, []PresentedRecordEntry{})
+	existingList := existing.([]PresentedRecordEntry)
+	sessionPresentedRecords.Store(sessionID, append(existingList, presentedEntries...))
 
 	logger.Debug(logComponent).
 		Int("presented_count", len(presentedEntries)).
 		Str("skill", skillName).
 		Msg("[ExperienceTracker] tracked presented records")
-
-	return nil
 }
 
 // RecordPresentedRecords 记录显式展示的经验记录。
@@ -158,14 +163,24 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 	skillName string,
 	presentationSnippet string,
 	recordIDs []string,
-) error {
+) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresentedRecords panic 降级")
+		}
+	}()
+
 	if len(recordIDs) == 0 {
-		return nil
+		return
 	}
 
 	evoLog, err := t.store.LoadFullEvolutionLog(ctx, skillName)
 	if err != nil {
-		return fmt.Errorf("load evolution log for record_presented_records: %w", err)
+		logger.Warn(logComponent).
+			Str("skill", skillName).
+			Err(err).
+			Msg("[ExperienceTracker] load evolution log for record_presented_records 失败")
+		return
 	}
 	requestedIDs := map[string]bool{}
 	for _, id := range recordIDs {
@@ -179,7 +194,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		}
 	}
 	if len(bodyRecords) == 0 {
-		return nil
+		return
 	}
 
 	updates := map[string]*RecordScoreUpdate{}
@@ -204,11 +219,11 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 	}
 
 	if _, err := t.store.UpdateRecordScores(ctx, skillName, updatesToMap(updates)); err != nil {
-		logger.Error(logComponent).
+		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceTracker] update_record_scores 失败")
-		return err
+		return
 	}
 
 	presentedEntries := []PresentedRecordEntry{}
@@ -223,25 +238,29 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		}
 	}
 
-	existing := sessionPresentedRecords[sessionID]
-	sessionPresentedRecords[sessionID] = append(existing, presentedEntries...)
-
-	return nil
+	existing, _ := sessionPresentedRecords.LoadOrStore(sessionID, []PresentedRecordEntry{})
+	existingList := existing.([]PresentedRecordEntry)
+	sessionPresentedRecords.Store(sessionID, append(existingList, presentedEntries...))
 }
 
 // ConsumeEvalState 消费评估状态（达到评估间隔时返回记录列表）。
 // Python: ExperienceTracker.consume_eval_state()
 func (t *ExperienceTracker) ConsumeEvalState(sessionID string) []PresentedRecordEntry {
-	counter := sessionEvalCounter[sessionID]
+	counter := 0
+	if v, ok := sessionEvalCounter.Load(sessionID); ok {
+		counter = v.(int)
+	}
 	counter++
 
 	var presentedEntries []PresentedRecordEntry
 	if counter >= t.evalInterval {
-		presentedEntries = sessionPresentedRecords[sessionID]
-		sessionPresentedRecords[sessionID] = nil
-		sessionEvalCounter[sessionID] = 0
+		if v, ok := sessionPresentedRecords.Load(sessionID); ok {
+			presentedEntries = v.([]PresentedRecordEntry)
+		}
+		sessionPresentedRecords.Store(sessionID, []PresentedRecordEntry(nil))
+		sessionEvalCounter.Store(sessionID, 0)
 	} else {
-		sessionEvalCounter[sessionID] = counter
+		sessionEvalCounter.Store(sessionID, counter)
 	}
 	return presentedEntries
 }
@@ -251,9 +270,15 @@ func (t *ExperienceTracker) ConsumeEvalState(sessionID string) []PresentedRecord
 func (t *ExperienceTracker) EvaluatePresented(
 	ctx context.Context,
 	presentedEntries []PresentedRecordEntry,
-) error {
+) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] EvaluatePresented panic 降级")
+		}
+	}()
+
 	if len(presentedEntries) == 0 {
-		return nil
+		return
 	}
 
 	// Python: 按 (skill_name, snippet) 分组
@@ -310,13 +335,12 @@ func (t *ExperienceTracker) EvaluatePresented(
 			}
 		}
 	}
-	return nil
 }
 
 // ClearSession 清理指定 session 的追踪数据。
 func (t *ExperienceTracker) ClearSession(sessionID string) {
-	sessionPresentedRecords[sessionID] = nil
-	sessionEvalCounter[sessionID] = 0
+	sessionPresentedRecords.Store(sessionID, []PresentedRecordEntry(nil))
+	sessionEvalCounter.Store(sessionID, 0)
 }
 
 // ToMap 转换为 map[string]any，用于调用 EvolutionStore.UpdateRecordScores。

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
@@ -390,12 +389,3 @@ func findBestIteration(history []skilldev.DescOptimizeIteration, hasTestSet bool
 	return best
 }
 
-// sortedStringKeys 返回 map 的已排序键列表。
-func sortedStringKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}

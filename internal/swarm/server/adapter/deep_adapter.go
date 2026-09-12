@@ -80,6 +80,9 @@ type DeepAdapter struct {
 	subMode string
 	// configCache 配置缓存（react 配置段）
 	configCache map[string]any
+	// configBase 配置缓存（完整配置，非 react 子段）
+	// Python: config_base = get_config()，用于 DedicatedMultimodalModelConfigured 等需访问根级 models 段的场景
+	configBase map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
 	// interactionConverter 交互 payload 转换函数，注入到 utils.ParseStreamChunk。
@@ -350,6 +353,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 6: _refresh_multimodal_configs(configBase)
+	d.configBase = configBase
 	d.refreshMultimodalConfigs(configBase)
 
 	// 步骤 7-8: 读取 react 配置段，缓存到 configCache
@@ -434,7 +438,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 步骤 17: sys_operation = _create_sys_operation()
 	// Python: sys_operation = self._create_sys_operation()
 	// Python: if sys_operation is None: raise RuntimeError (G7: nil 检查)
-	sysOpInstance, _ := d.createSysOperation(configBase)
+	sysOpInstance := d.createSysOperation(configBase)
 	if sysOpInstance == nil {
 		return fmt.Errorf("sys_operation 不可用，可能任务未在运行")
 	}
@@ -597,6 +601,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// 步骤 5: _refresh_multimodal_configs(configBase)
+	d.configBase = configBase
 	d.refreshMultimodalConfigs(configBase)
 
 	// 步骤 6-7: 重建模型
@@ -964,8 +969,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					accumulatedReasoning = ""
 				}
 				textContent := extractTextContent(payload)
-				accumulatedText += textContent
-				// Python: has_streamed_content = True
+				// M-02: 对齐 Python — llm_output 直接 yield + continue，不累加 accumulated_text
+				// Python: if chunk_type == "llm_output": yield ... ; continue
 				hasStreamedContent = true
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 					"event_type": "chat.delta",

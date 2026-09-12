@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -1575,8 +1576,8 @@ func TestNormalizeSummaryText(t *testing.T) {
 	if normalizeSummaryText("内容|分隔", 96) != "内容 分隔" {
 		t.Errorf("应替换管道符为空格")
 	}
-	// 截断
-	if len(normalizeSummaryText("很长的摘要内容需要截断处理测试", 10)) > 10 {
+	// 截断（按 rune 计数）
+	if utf8.RuneCountInString(normalizeSummaryText("很长的摘要内容需要截断处理测试", 10)) > 10 {
 		t.Errorf("应截断到指定长度")
 	}
 	// 空输入

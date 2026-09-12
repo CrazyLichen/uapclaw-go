@@ -285,7 +285,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 17: sys_operation = _create_sys_operation()
 	// Python: sys_operation = self._create_sys_operation()
-	sysOpInstance, _ := c.deep.createSysOperation(configBase)
+	sysOpInstance := c.deep.createSysOperation(configBase)
 	if sysOpInstance == nil {
 		return fmt.Errorf("sys_operation 不可用，可能任务未在运行")
 	}

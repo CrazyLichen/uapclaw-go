@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -73,8 +74,15 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 
 	switch chunkType {
 	case "controller_output":
-		// Python: interface_deep._parse_stream_chunk 中 controller_output
-		// 不搜索 __interaction__，只检查 inner type (task_completion/task_failed)
+		// S-04: 对齐 Python — 先搜索 __interaction__，找到则解析
+		// Python: stream_utils._parse_typed_chunk controller_output 分支
+		// Python: interactions = _find_interaction_payloads(payload)
+		// Python: if interactions: return _parse_interaction_payload(interactions)
+		interactions := FindInteractionPayloads(payload)
+		if len(interactions) > 0 {
+			return parseControllerOutputInteractions(interactions, converter)
+		}
+		// 未找到 interaction，走 inner type 判断
 		innerType, _ := payload["type"].(string)
 		switch innerType {
 		case "task_completion":
@@ -501,6 +509,10 @@ func ExtractIntFromPayload(payload map[string]any, key string) int {
 	case int:
 		return n
 	default:
+		logger.Warn(logComponent).
+			Str("key", key).
+			Str("actual_type", fmt.Sprintf("%T", v)).
+			Msg("ExtractIntFromPayload 类型断言失败，使用默认值 0")
 		return 0
 	}
 }
@@ -517,6 +529,10 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 	case int:
 		return float64(f)
 	default:
+		logger.Warn(logComponent).
+			Str("key", key).
+			Str("actual_type", fmt.Sprintf("%T", v)).
+			Msg("ExtractFloatFromPayload 类型断言失败，使用默认值 0")
 		return 0
 	}
 }
@@ -593,5 +609,56 @@ func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool)
 		return found
 	default:
 		return nil
+	}
+}
+
+// parseControllerOutputInteractions 解析 controller_output 中发现的 __interaction__ 载荷列表。
+// Python: stream_utils._parse_interaction_payload(interactions)
+//
+// 先检查是否存在 activate_confirm 类型（返回 interaction.activate_confirm 事件），
+// 否则委托 converter 进行交互转换；若 converter 为 nil，回退为默认行为。
+func parseControllerOutputInteractions(interactions []any, converter InteractionConverterFunc) map[string]any {
+	// S-04: 对齐 Python _parse_interaction_payload — 遍历 interactions 检查 activate_confirm
+	// Python: for interaction in interactions:
+	// Python:     interaction_type = interaction.get("__interaction__")
+	// Python:     if interaction_type == "activate_confirm": return {...}
+	for _, interaction := range interactions {
+		if m, ok := interaction.(map[string]any); ok {
+			if m["__interaction__"] == "activate_confirm" {
+				extRuntimePath := ExtractStringFromPayload(m, "extension_runtime_path")
+				if extRuntimePath == "" {
+					extRuntimePath = ExtractStringFromPayload(m, "runtime_path")
+				}
+				options := []string{"accept", "reject"}
+				if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
+					options = make([]string, 0, len(opts))
+					for _, o := range opts {
+						if s, ok := o.(string); ok {
+							options = append(options, s)
+						}
+					}
+				}
+				return map[string]any{
+					"event_type":             "interaction.activate_confirm",
+					"interaction":            m,
+					"interaction_type":       "activate_confirm",
+					"interaction_id":         ExtractStringFromPayload(m, "interaction_id"),
+					"extension_name":         ExtractStringFromPayload(m, "extension_name"),
+					"runtime_path":           ExtractStringFromPayload(m, "runtime_path"),
+					"session_runtime_path":   ExtractStringFromPayload(m, "session_runtime_path"),
+					"extension_runtime_path": extRuntimePath,
+					"options":                options,
+				}
+			}
+		}
+	}
+	// 默认：委托 converter 转为 ask_user_question
+	// Python: return convert_interactions_to_ask_user_question(interactions)
+	if converter != nil {
+		return converter(interactions)
+	}
+	return map[string]any{
+		"event_type":  "chat.interaction",
+		"interaction": interactions,
 	}
 }

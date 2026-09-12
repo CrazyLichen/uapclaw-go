@@ -261,7 +261,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 		}()
 		workspaceRoot := workspace.WorkspaceDir()
 		engine := harnesssecurity.NewPermissionEngine(permCfg, nil, "", workspaceRoot)
-		globalLevel, _ := engine.EvaluateGlobalPolicyDirectly(toolName, toolArgs, true)
+		globalLevel, _, _ := engine.EvaluateGlobalPolicyDirectly(toolName, toolArgs, true)
 		globalLevelStr = globalLevel.String()
 	}()
 

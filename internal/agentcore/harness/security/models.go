@@ -207,8 +207,6 @@ const (
 // ParsePermissionLevel 从字符串解析 PermissionLevel
 func ParsePermissionLevel(s string) (PermissionLevel, error) {
 	switch strings.ToLower(s) {
-	case "none":
-		return PermissionLevelNone, nil
 	case "allow":
 		return PermissionLevelAllow, nil
 	case "ask":
@@ -216,7 +214,7 @@ func ParsePermissionLevel(s string) (PermissionLevel, error) {
 	case "deny":
 		return PermissionLevelDeny, nil
 	default:
-		return PermissionLevelAllow, fmt.Errorf("未知的 PermissionLevel: %q", s)
+		return PermissionLevelNone, fmt.Errorf("无效的权限级别: %q", s)
 	}
 }
 

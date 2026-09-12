@@ -61,8 +61,7 @@ func TestParseStreamChunk_controllerOutput_taskFailed_无data(t *testing.T) {
 }
 
 func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
-	// M-05: 对齐 interface_deep._parse_stream_chunk，controller_output 不搜索 __interaction__
-	// 只有 task_completion/task_failed 两种 inner type
+	// S-04: 对齐 Python — controller_output 先搜索 __interaction__，找到则委托 converter 解析
 	output := makeOutput("controller_output", map[string]any{
 		"type":    "__interaction__",
 		"payload": map[string]any{"request_id": "req-1"},
@@ -71,9 +70,9 @@ func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
 		return map[string]any{"event_type": "chat.ask_user_question", "data": payload}
 	}
 	result := ParseStreamChunk(output, nil, nil, converter)
-	// controller_output 不搜索 __interaction__，type 不匹配 task_completion/task_failed → 走 default
-	if result["event_type"] != "chat.delta" {
-		t.Errorf("controller_output 不搜索 __interaction__，期望 chat.delta, 实际 %v", result["event_type"])
+	// controller_output 搜索到 __interaction__ 后委托 converter，返回 chat.ask_user_question
+	if result["event_type"] != "chat.ask_user_question" {
+		t.Errorf("controller_output 发现 __interaction__ 后应委托 converter, 期望 chat.ask_user_question, 实际 %v", result["event_type"])
 	}
 }
 

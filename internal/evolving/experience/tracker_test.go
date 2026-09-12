@@ -9,43 +9,43 @@ import (
 // TestExperienceTracker_ConsumeEvalState 测试评估状态消费
 func TestExperienceTracker_ConsumeEvalState(t *testing.T) {
 	t.Run("达到间隔返回记录", func(t *testing.T) {
-		sessionPresentedRecords["test_sess1"] = []PresentedRecordEntry{{SkillName: "skill1", Snippet: "snippet1"}}
-		sessionEvalCounter["test_sess1"] = 2
+		sessionPresentedRecords.Store("test_sess1", []PresentedRecordEntry{{SkillName: "skill1", Snippet: "snippet1"}})
+		sessionEvalCounter.Store("test_sess1", 2)
 		tracker := &ExperienceTracker{evalInterval: 3}
 		result := tracker.ConsumeEvalState("test_sess1")
 		if len(result) != 1 {
 			t.Errorf("ConsumeEvalState 镀度 = %d, 期望 1", len(result))
 		}
-		if sessionEvalCounter["test_sess1"] != 0 {
-			t.Errorf("counter 应被重置为 0, 实际 %d", sessionEvalCounter["test_sess1"])
+		if v, _ := sessionEvalCounter.Load("test_sess1"); v.(int) != 0 {
+			t.Errorf("counter 应被重置为 0, 实际 %d", v.(int))
 		}
-		delete(sessionPresentedRecords, "test_sess1")
-		delete(sessionEvalCounter, "test_sess1")
+		sessionPresentedRecords.Delete("test_sess1")
+		sessionEvalCounter.Delete("test_sess1")
 	})
 	t.Run("未达间隔返回空", func(t *testing.T) {
-		sessionEvalCounter["test_sess2"] = 0
+		sessionEvalCounter.Store("test_sess2", 0)
 		tracker := &ExperienceTracker{evalInterval: 3}
 		result := tracker.ConsumeEvalState("test_sess2")
 		if len(result) != 0 {
 			t.Errorf("ConsumeEvalState 镀度 = %d, 期望 0", len(result))
 		}
-		if sessionEvalCounter["test_sess2"] != 1 {
-			t.Errorf("counter 应为 1, 实际 %d", sessionEvalCounter["test_sess2"])
+		if v, _ := sessionEvalCounter.Load("test_sess2"); v.(int) != 1 {
+			t.Errorf("counter 应为 1, 实际 %d", v.(int))
 		}
-		delete(sessionEvalCounter, "test_sess2")
+		sessionEvalCounter.Delete("test_sess2")
 	})
 }
 
 // TestExperienceTracker_ClearSession 测试会话清理
 func TestExperienceTracker_ClearSession(t *testing.T) {
-	sessionPresentedRecords["test_sess3"] = []PresentedRecordEntry{{SkillName: "skill1"}}
-	sessionEvalCounter["test_sess3"] = 5
+	sessionPresentedRecords.Store("test_sess3", []PresentedRecordEntry{{SkillName: "skill1"}})
+	sessionEvalCounter.Store("test_sess3", 5)
 	tracker := &ExperienceTracker{}
 	tracker.ClearSession("test_sess3")
-	if sessionPresentedRecords["test_sess3"] != nil {
+	if v, ok := sessionPresentedRecords.Load("test_sess3"); !ok || v.([]PresentedRecordEntry) != nil {
 		t.Errorf("sessionPresentedRecords 应被清理")
 	}
-	if sessionEvalCounter["test_sess3"] != 0 {
+	if v, _ := sessionEvalCounter.Load("test_sess3"); v.(int) != 0 {
 		t.Errorf("sessionEvalCounter 应为 0")
 	}
 }

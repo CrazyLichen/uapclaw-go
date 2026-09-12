@@ -858,7 +858,10 @@ func TestStateJSONRoundtrip(t *testing.T) {
 		t.Error("enabled 应为 false")
 	}
 
-	plugins, _ := toSliceOfAny(sm2.state["installed_plugins"])
+	plugins, ok := sm2.state["installed_plugins"].([]map[string]any)
+	if !ok {
+		t.Fatal("installed_plugins 应为 []map[string]any")
+	}
 	if len(plugins) != 1 {
 		t.Fatalf("期望 1 个插件，实际 %d", len(plugins))
 	}
@@ -1630,13 +1633,25 @@ func TestAddLocalSkill(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
+	// 创建磁盘上的技能目录和 SKILL.md，使 normalizeState 保留该本地技能
+	skillDir := filepath.Join(sm.skillsDir, "local1")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("创建技能目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: local1\n---\n"), 0o644); err != nil {
+		t.Fatalf("写入 SKILL.md 失败: %v", err)
+	}
+
 	sm.AddLocalSkill(map[string]any{"name": "local1", "source": "local"})
 	sm.mu.Lock()
 	sm.saveState()
 	sm.mu.Unlock()
 
 	sm2 := NewSkillManager(tmpDir)
-	list, _ := toSliceOfAny(sm2.state["local_skills"])
+	list, ok := sm2.state["local_skills"].([]map[string]any)
+	if !ok {
+		t.Fatal("local_skills 应为 []map[string]any")
+	}
 	if len(list) != 1 {
 		t.Fatalf("期望 1 个本地技能，实际 %d", len(list))
 	}
@@ -2917,6 +2932,14 @@ func TestHandleSkillsTeamSkillsHubDelete_正常(t *testing.T) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("应使用 DELETE 方法, got %s", r.Method)
 		}
+		// 验证 URL 路径包含 skill_id 和 version
+		if !strings.Contains(r.URL.Path, "/api/v1/plugins/test-skill/versions/1.0") {
+			t.Errorf("URL 路径应包含 /api/v1/plugins/test-skill/versions/1.0, got %s", r.URL.Path)
+		}
+		// 验证认证头
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("应包含 Bearer 认证头, got %s", r.Header.Get("Authorization"))
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -2925,7 +2948,9 @@ func TestHandleSkillsTeamSkillsHubDelete_正常(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	result, err := sm.HandleSkillsTeamSkillsHubDelete(context.Background(), map[string]any{
-		"asset_id":   "test-asset",
+		"skill_id":   "test-skill",
+		"version":    "1.0",
+		"token":      "test-token",
 		"market_url": server.URL,
 	})
 	if err != nil {
@@ -2933,6 +2958,12 @@ func TestHandleSkillsTeamSkillsHubDelete_正常(t *testing.T) {
 	}
 	if toBool(result["success"]) != true {
 		t.Errorf("应返回 success=true, got %v", result)
+	}
+	if result["skill_id"] != "test-skill" {
+		t.Errorf("skill_id = %v, want test-skill", result["skill_id"])
+	}
+	if result["version"] != "1.0" {
+		t.Errorf("version = %v, want 1.0", result["version"])
 	}
 }
 
@@ -2950,8 +2981,8 @@ func TestHandleSkillsTeamSkillsHubInstall_缺assetId(t *testing.T) {
 	}
 }
 
-// TestHandleSkillsTeamSkillsHubPublish_缺path 验证缺少 path
-func TestHandleSkillsTeamSkillsHubPublish_缺path(t *testing.T) {
+// TestHandleSkillsTeamSkillsHubPublish_缺参数 验证缺少必要参数
+func TestHandleSkillsTeamSkillsHubPublish_缺参数(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
 
@@ -2960,7 +2991,7 @@ func TestHandleSkillsTeamSkillsHubPublish_缺path(t *testing.T) {
 		t.Fatalf("不应返回错误: %v", err)
 	}
 	if toBool(result["success"]) != false {
-		t.Error("缺少 path 应返回 success=false")
+		t.Error("缺少参数应返回 success=false")
 	}
 }
 
@@ -3035,6 +3066,10 @@ func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
 		if r.Header.Get("X-Checksum-SHA256") == "" {
 			t.Error("应包含 X-Checksum-SHA256 header")
 		}
+		// 验证认证头
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("应包含 Bearer 认证头, got %s", r.Header.Get("Authorization"))
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
@@ -3047,6 +3082,8 @@ func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
 
 	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{
 		"path":       skillDir,
+		"version":    "1.0",
+		"token":      "test-token",
 		"market_url": uploadServer.URL,
 	})
 	if err != nil {
@@ -3055,8 +3092,15 @@ func TestHandleSkillsTeamSkillsHubPublish_正常(t *testing.T) {
 	if toBool(result["success"]) != true {
 		t.Errorf("应返回 success=true, got %v", result)
 	}
-	if result["asset_id"] != "new-asset-123" {
-		t.Errorf("asset_id = %v, want new-asset-123", result["asset_id"])
+	// 现在返回 skill_id 而非 asset_id，值从响应 data.asset_id 提取
+	if result["skill_id"] != "new-asset-123" {
+		t.Errorf("skill_id = %v, want new-asset-123", result["skill_id"])
+	}
+	if result["version"] != "1.0" {
+		t.Errorf("version = %v, want 1.0", result["version"])
+	}
+	if result["checksum_sha256"] == "" {
+		t.Error("应返回 checksum_sha256")
 	}
 }
 
@@ -3066,7 +3110,9 @@ func TestHandleSkillsTeamSkillsHubPublish_文件不存在(t *testing.T) {
 	sm := NewSkillManager(tmpDir)
 
 	result, err := sm.HandleSkillsTeamSkillsHubPublish(context.Background(), map[string]any{
-		"path": filepath.Join(tmpDir, "nonexistent.zip"),
+		"path":    filepath.Join(tmpDir, "nonexistent.zip"),
+		"version": "1.0",
+		"token":   "test-token",
 	})
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)

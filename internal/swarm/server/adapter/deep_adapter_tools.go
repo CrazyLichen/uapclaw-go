@@ -287,7 +287,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configCache, "audio")
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configBase, "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 		if d.audioToolsRegistered {
@@ -589,7 +589,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configCache, "audio")
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configBase, "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 	} else if d.audioModelConfig == nil {

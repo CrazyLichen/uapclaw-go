@@ -253,13 +253,13 @@ func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, mem
 		return []map[string]any{}, nil
 	}
 	result := make([]map[string]any, 0, len(valueList))
-	for _, value := range valueList {
+	for i, value := range valueList {
 		if value == nil {
 			continue
 		}
 		var m map[string]any
 		if err := json.Unmarshal(value, &m); err != nil {
-			continue
+			return nil, fmt.Errorf("BatchGet 反序列化失败 (key=%s): %w", keysList[i], err)
 		}
 		result = append(result, m)
 	}

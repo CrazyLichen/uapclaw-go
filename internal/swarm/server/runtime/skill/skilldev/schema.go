@@ -747,14 +747,22 @@ func CalcStats(values []float64) MetricStats {
 		d := v - mean
 		variance += d * d
 	}
-	variance /= float64(n)
-	stddev := math.Sqrt(variance)
+	var stddev float64
+	if n > 1 {
+		variance /= float64(n - 1)
+		stddev = math.Sqrt(variance)
+	}
+	// 四舍五入到 4 位小数，对齐 Python round(x, 4)
+	mean = math.Round(mean*10000) / 10000
+	stddev = math.Round(stddev*10000) / 10000
+	minVal := math.Round(sorted[0]*10000) / 10000
+	maxVal := math.Round(sorted[n-1]*10000) / 10000
 
 	return MetricStats{
 		Mean:   mean,
 		Stddev: stddev,
-		Min:    sorted[0],
-		Max:    sorted[n-1],
+		Min:    minVal,
+		Max:    maxVal,
 	}
 }
 

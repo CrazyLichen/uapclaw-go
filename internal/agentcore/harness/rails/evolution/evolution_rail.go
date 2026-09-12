@@ -167,17 +167,23 @@ func (r *EvolutionRail) Builder() *trajectory.TrajectoryBuilder {
 //
 // Python: EvolutionRail.set_trajectory_sink(sink, *, team_id, member_role)
 // Python 在 sink 非 nil 且 team_id 为空时抛出 ValueError。
+// Python 在 member_role=None 时回退：role = self._DEFAULT_MEMBER_ROLE if member_role is None else member_role
 func (r *EvolutionRail) SetTrajectorySink(sink trajectory.TrajectorySink, teamID string, memberRole ...string) error {
 	if sink != nil && teamID == "" {
 		return fmt.Errorf("team_id is required when binding a trajectory sink")
 	}
 	r.trajectorySink = sink
 	r.teamID = teamID
+	// Python: role = self._DEFAULT_MEMBER_ROLE if member_role is None else member_role
+	var role string
 	if len(memberRole) > 0 && memberRole[0] != "" {
-		role := normalizeMemberRole(memberRole[0])
-		if role != nil {
-			r.memberRole = *role
-		}
+		role = memberRole[0]
+	} else {
+		role = r.defaultMemberRole
+	}
+	normalized := normalizeMemberRole(role)
+	if normalized != nil {
+		r.memberRole = *normalized
 	}
 	return nil
 }
@@ -193,9 +199,10 @@ func (r *EvolutionRail) EmitHostEvent(event *stream.OutputSchema) {
 // DrainPendingHostEvents 返回并清空主机事件缓冲。
 //
 // 如果 wait=true，先等待所有未完成的后台任务；timeout 控制最大等待时间。
-// timeout <= 0 表示不限制等待时间；timeout > 0 时精确超时，超时后返回已收集的事件。
+// timeout=nil 时自动回退到 GetEvolutionTotalTimeoutSecs；timeout > 0 时精确超时，超时后返回已收集的事件。
 //
 // Python: EvolutionRail.drain_pending_host_events(wait, timeout)
+// Python 在 timeout=None 时回退：timeout = self._get_evolution_total_timeout_secs()
 func (r *EvolutionRail) DrainPendingHostEvents(wait bool, timeout *time.Duration) []*stream.OutputSchema {
 	if wait && len(r.bgTasks) > 0 {
 		// 筛选未完成的任务
@@ -211,9 +218,19 @@ func (r *EvolutionRail) DrainPendingHostEvents(wait bool, timeout *time.Duration
 		}
 
 		if len(pending) > 0 {
-			if timeout != nil && *timeout > 0 {
+			// Python: if timeout is None: timeout = self._get_evolution_total_timeout_secs()
+			effectiveTimeout := timeout
+			if effectiveTimeout == nil {
+				timeoutSecs := r.ext.GetEvolutionTotalTimeoutSecs()
+				if timeoutSecs > 0 {
+					d := time.Duration(timeoutSecs * float64(time.Second))
+					effectiveTimeout = &d
+				}
+			}
+
+			if effectiveTimeout != nil && *effectiveTimeout > 0 {
 				// 精确超时等待
-				ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+				ctx, cancel := context.WithTimeout(context.Background(), *effectiveTimeout)
 				defer cancel()
 				for _, task := range pending {
 					select {

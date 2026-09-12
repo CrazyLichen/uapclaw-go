@@ -2,6 +2,7 @@ package skill
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,6 +33,37 @@ const (
 // Python: state_utils.get_state_file()
 func GetStateFile() string {
 	return filepath.Join(getAgentSkillsDir(), stateFileName)
+}
+
+// NormalizeMarketplaces 规范化 marketplace 列表：过滤非 dict 项、过滤 name/url 为空的项、补全 enabled 默认值。
+// Python: SkillManager.normalize_marketplaces(raw_marketplaces) (skill_manager.py)
+func NormalizeMarketplaces(rawMarketplaces any) []map[string]any {
+	if rawMarketplaces == nil {
+		return nil
+	}
+	rawList, ok := toSliceOfAny(rawMarketplaces)
+	if !ok {
+		return nil
+	}
+
+	var normalized []map[string]any
+	for _, item := range rawList {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := trimSpace(toString(itemMap["name"]))
+		url := trimSpace(toString(itemMap["url"]))
+		if name == "" || url == "" {
+			continue
+		}
+		// Python: bool(item.get("enabled", True))
+		if _, exists := itemMap["enabled"]; !exists {
+			itemMap["enabled"] = true
+		}
+		normalized = append(normalized, itemMap)
+	}
+	return normalized
 }
 
 // NormalizeSkillConfigs 规范化每个技能的配置记录
@@ -73,18 +105,25 @@ func GetRegisteredSkillNames(state map[string]any) map[string]bool {
 		if !ok {
 			continue
 		}
-		itemsList, ok := toSliceOfAny(items)
-		if !ok {
-			continue
-		}
-		for _, item := range itemsList {
-			itemMap, ok := item.(map[string]any)
-			if !ok {
-				continue
+		// 兼容 normalizeState 前后：normalizeState 后是 []map[string]any，之前是 []any
+		switch v := items.(type) {
+		case []map[string]any:
+			for _, item := range v {
+				name := trimSpace(toString(item["name"]))
+				if name != "" {
+					names[name] = true
+				}
 			}
-			name := trimSpace(toString(itemMap["name"]))
-			if name != "" {
-				names[name] = true
+		case []any:
+			for _, item := range v {
+				itemMap, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				name := trimSpace(toString(itemMap["name"]))
+				if name != "" {
+					names[name] = true
+				}
 			}
 		}
 	}
@@ -257,6 +296,33 @@ func FilterVisibleSkillNames(names []string) []string {
 	return visible
 }
 
+// NormalizeState 规范化状态，确保所有 key 有默认值且类型正确。
+// JSON 反序列化后 []map[string]any 会变成 []any，此函数将 installed_plugins 和 local_skills
+// 转为 []map[string]any 存回 state，使后续方法可以直接断言 .([]map[string]any)。
+// Python: SkillManager._normalize_state(state) (skill_manager.py)
+func NormalizeState(state map[string]any, existingLocalSkillNames map[string]bool) {
+	// Python: state.setdefault(...)
+	setStateDefault(state, "marketplaces", []any{})
+	setStateDefault(state, "installed_plugins", []any{})
+	setStateDefault(state, "local_skills", []any{})
+	setStateDefault(state, "skill_configs", map[string]any{})
+
+	// 规范化 marketplaces
+	state["marketplaces"] = NormalizeMarketplaces(state["marketplaces"])
+
+	// 规范化 local_skills（过滤磁盘上已不存在的记录）
+	state["local_skills"] = NormalizeLocalSkills(state["local_skills"], existingLocalSkillNames)
+
+	// 规范化 skill_configs
+	state["skill_configs"] = normalizeSkillConfigsForState(state["skill_configs"])
+
+	// 将 installed_plugins 从 []any 转为 []map[string]any
+	state["installed_plugins"] = anySliceToMapSlice(state["installed_plugins"])
+
+	// 将 local_skills 从 []any 转为 []map[string]any（NormalizeLocalSkills 返回的已经是 []map[string]any，但需兜底）
+	state["local_skills"] = anySliceToMapSlice(state["local_skills"])
+}
+
 // getAgentSkillsDir 返回 Agent 技能目录路径
 // Python: jiuwenswarm.common.utils.get_agent_skills_dir()
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -311,4 +377,92 @@ func toSliceOfAny(v any) ([]any, bool) {
 		return nil, false
 	}
 	return slice, true
+}
+
+// anySliceToMapSlice 将 any（[]any 或 []map[string]any）转为 []map[string]any。
+// JSON 反序列化后数组中的对象是 map[string]any 包在 []any 中，此函数统一转换为 []map[string]any。
+func anySliceToMapSlice(v any) []map[string]any {
+	if v == nil {
+		return nil
+	}
+	// 已经是 []map[string]any 的情况
+	if slice, ok := v.([]map[string]any); ok {
+		return slice
+	}
+	// []any 中每个元素断言为 map[string]any
+	rawList, ok := toSliceOfAny(v)
+	if !ok {
+		return nil
+	}
+	var result []map[string]any
+	for _, item := range rawList {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		result = append(result, itemMap)
+	}
+	return result
+}
+
+// normalizeSkillConfigsForState 规范化 skill_configs 并以 map[string]any 形式返回（存入 state）。
+// 与 NormalizeSkillConfigs 不同，此函数返回 map[string]any 以兼容 state 存储格式。
+// Python: normalize_skill_configs 返回 dict[str, dict[str, bool]]，存入 state 后仍为 dict。
+func normalizeSkillConfigsForState(rawConfigs any) map[string]any {
+	if rawConfigs == nil {
+		return make(map[string]any)
+	}
+	configs, ok := rawConfigs.(map[string]any)
+	if !ok {
+		return make(map[string]any)
+	}
+
+	normalized := make(map[string]any, len(configs))
+	for rawName, rawCfg := range configs {
+		name := trimSpace(rawName)
+		if name == "" {
+			continue
+		}
+		enabled := true
+		if cfg, ok := rawCfg.(map[string]any); ok {
+			if v, exists := cfg["enabled"]; exists {
+				enabled = toBool(v)
+			}
+		}
+		normalized[name] = map[string]any{"enabled": enabled}
+	}
+	return normalized
+}
+
+// setStateDefault 如果 state 中不存在 key 则设置默认值
+// Python: dict.setdefault(key, default)
+func setStateDefault(state map[string]any, key string, defaultVal any) {
+	if _, exists := state[key]; !exists {
+		state[key] = defaultVal
+	}
+}
+
+// safeChildPath 构建安全的子路径，防止路径遍历攻击。
+// Python: _safe_child_path (skill_manager.py)
+// 先调用 safePathName 规范化名称，再检查解析后的路径在 base 目录内。
+func safeChildPath(base string, name string, label string) (string, error) {
+	safeName, err := safePathName(name, label)
+	if err != nil {
+		return "", err
+	}
+	baseResolved, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", fmt.Errorf("解析基础路径失败: %w", err)
+	}
+	candidate := filepath.Join(base, safeName)
+	candidateResolved, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		// 路径不存在时，用 filepath.Join 结果做前缀检查
+		candidateResolved = filepath.Clean(candidate)
+	}
+	// 对齐 Python: candidate.resolve().relative_to(base_resolved) 失败则 ValueError
+	if !strings.HasPrefix(candidateResolved, baseResolved+string(filepath.Separator)) && candidateResolved != baseResolved {
+		return "", fmt.Errorf("无效的 %s 路径: %s", label, safeName)
+	}
+	return candidate, nil
 }

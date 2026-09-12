@@ -394,7 +394,14 @@ func (d *DeepAdapter) getAgentWorkspaceDir() string {
 //
 // 根据配置决定使用 local 或 sandbox 模式，
 // 通过 sysop_builder 构建卡片和实例。
-func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOperation, *sysop.SysOperationCard) {
+func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result sysop.SysOperation) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("recover", rec).Msg("[DeepAdapter] createSysOperation panic 降级")
+			result = nil
+		}
+	}()
+
 	mode := sysop_builder.ResolveOperationMode(configBase)
 
 	var card *sysop.SysOperationCard
@@ -463,14 +470,21 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOp
 		Str("mode", mode.String()).
 		Msg("createSysOperation 完成")
 
-	return instance, card
+	return instance
 }
 
 // resolveProjectDirForSandbox 解析沙箱挂载用的项目目录。
 // Python: _resolve_project_dir_for_sandbox()
+// 回退链：self._project_dir → self._instance_overrides["project_dir"] → ""
 func (d *DeepAdapter) resolveProjectDirForSandbox() string {
 	if d.projectDir != "" {
 		return d.projectDir
+	}
+	// 回退到 instance_overrides["project_dir"]
+	if d.instanceOverrides != nil {
+		if v, ok := d.instanceOverrides["project_dir"].(string); ok && v != "" {
+			return v
+		}
 	}
 	return ""
 }

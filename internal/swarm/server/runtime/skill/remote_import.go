@@ -28,9 +28,19 @@ import (
 const (
 	// remoteDownloadTimeout 远程归档下载超时（秒）
 	remoteDownloadTimeout = 120
+	// importLocalAllowedDownloadHostsEnv 远程导入白名单环境变量
+	importLocalAllowedDownloadHostsEnv = "IMPORT_LOCAL_ALLOWED_DOWNLOAD_HOSTS"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// importLocalAllowedDownloadHostDefaults 远程导入下载白名单默认值
+	// Python: _IMPORT_LOCAL_DEFAULT_ALLOWED_DOWNLOAD_HOSTS = ("*.obs.*.myhuaweicloud.com",)
+	importLocalAllowedDownloadHostDefaults = []string{
+		"*.obs.*.myhuaweicloud.com",
+	}
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -55,9 +65,14 @@ func isHTTPDownloadTarget(downloadURL string) bool {
 }
 
 // importSkillFromRemoteArchive 从远程 URL 下载技能归档并导入。
-// 步骤：创建临时目录 → 下载 → SHA256 校验 → 解压 → 查找 SKILL.md → 调用本地导入逻辑。
+// 步骤：创建临时目录 → 白名单校验 → 下载 → SHA256 校验 → 解压 → 查找 SKILL.md → 调用本地导入逻辑。
 // Python: SkillManager._import_skill_from_remote_archive(ctx, sm, download_url, force, checksum_sha256)
 func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloadURL string, force bool, checksumSHA256 string) (map[string]any, error) {
+	// 白名单校验（对齐 Python: _assert_import_local_download_url_allowed）
+	if err := assertImportLocalDownloadURLAllowed(downloadURL); err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+
 	// 创建临时目录
 	tmpDir, err := os.MkdirTemp("", "jiuwenswarm_remote_import_")
 	if err != nil {
@@ -344,4 +359,74 @@ func extractTar(r io.Reader, destDir string) error {
 		}
 	}
 	return nil
+}
+
+// assertImportLocalDownloadURLAllowed 校验远程导入下载 URL 是否在白名单中。
+// Python: _assert_import_local_download_url_allowed (skill_manager.py)
+func assertImportLocalDownloadURLAllowed(downloadURL string) error {
+	u, err := url.Parse(downloadURL)
+	if err != nil {
+		return fmt.Errorf("无效的下载 URL: %s", downloadURL)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("远程导入 URL 必须使用 HTTPS，当前 scheme: %s", u.Scheme)
+	}
+	hostname := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	if hostname == "" {
+		return fmt.Errorf("远程导入 URL 缺少主机名")
+	}
+
+	// 获取白名单（对齐 Python: _get_import_local_allowed_download_hosts）
+	allowedHosts := importLocalAllowedDownloadHostDefaults
+	if envHosts := os.Getenv(importLocalAllowedDownloadHostsEnv); envHosts != "" {
+		var parsed []string
+		for _, token := range strings.Split(envHosts, ",") {
+			h := strings.ToLower(strings.TrimSpace(token))
+			if h != "" {
+				parsed = append(parsed, h)
+			}
+		}
+		if len(parsed) > 0 {
+			allowedHosts = parsed
+		}
+	}
+
+	for _, pattern := range allowedHosts {
+		if hostMatchesPattern(hostname, pattern) {
+			return nil
+		}
+	}
+	return fmt.Errorf("远程导入 URL 主机名不在白名单中: %s", hostname)
+}
+
+// hostMatchesPattern 实现通配符匹配（对齐 Python fnmatch / _team_skills_hub_host_matches_rule）。
+// 支持后缀匹配（.example.com）、前缀通配（*.example.com）、逐段通配（a.*.c.com）。
+// 例如 *.obs.*.myhuaweicloud.com 匹配 openjiuwen-market.obs.cn-north-4.myhuaweicloud.com
+func hostMatchesPattern(host, pattern string) bool {
+	// 后缀匹配（对齐 Python: rule.startswith(".")）
+	if strings.HasPrefix(pattern, ".") {
+		return strings.HasSuffix(host, pattern)
+	}
+	// 前缀通配 *.example.com → 只匹配子域名
+	if strings.HasPrefix(pattern, "*.") {
+		suffix := pattern[2:]
+		if strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	// 按段逐段匹配（对齐 Python：段数必须相同，* 匹配任意单段）
+	hostParts := strings.Split(host, ".")
+	patternParts := strings.Split(pattern, ".")
+	if len(hostParts) != len(patternParts) {
+		return false
+	}
+	for i := range hostParts {
+		if patternParts[i] == "*" {
+			continue
+		}
+		if hostParts[i] != patternParts[i] {
+			return false
+		}
+	}
+	return true
 }

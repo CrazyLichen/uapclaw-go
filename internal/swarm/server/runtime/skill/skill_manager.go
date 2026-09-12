@@ -116,6 +116,8 @@ func NewSkillManager(workspaceDir string) *SkillManager {
 	}
 
 	sm.state = sm.loadState()
+	// Python: self._normalize_state(state) — 规范化 state，确保类型正确
+	sm.normalizeState()
 	return sm
 }
 
@@ -574,8 +576,11 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 		return map[string]any{"success": false, "detail": fmt.Sprintf("plugin %s 缺少 SKILL.md", safePlugin)}, nil
 	}
 
-	// 复制到本地 skills 目录
-	dest := filepath.Join(sm.skillsDir, safePlugin)
+	// 复制到本地 skills 目录（使用 safeChildPath 防止路径遍历）
+	dest, err := safeChildPath(sm.skillsDir, safePlugin, "skill")
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
 	if dirExists(dest) {
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("skill %s 已存在", safePlugin)}, nil
@@ -628,7 +633,10 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到内置技能: %s", safeName)}, nil
 	}
 
-	dest := filepath.Join(sm.skillsDir, safeName)
+	dest, err := safeChildPath(sm.skillsDir, safeName, "skill")
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
 	if dirExists(dest) {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已经安装", safeName)}, nil
 	}
@@ -671,7 +679,10 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	dest := filepath.Join(sm.skillsDir, safeName)
+	dest, err := safeChildPath(sm.skillsDir, safeName, "skill")
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
 	if !dirExists(dest) {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到技能: %s", safeName)}, nil
 	}
@@ -694,8 +705,8 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 	}
 
 	sm.removeInstalledPlugin(safeName)
+	sm.removeLocalSkill(safeName)
 	sm.refreshAgentDataIndexes()
-	sm.saveState()
 
 	return map[string]any{"success": true, "name": safeName}, nil
 }
@@ -726,8 +737,59 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		return map[string]any{"success": false, "detail": fmt.Sprintf("路径无效: %s", path)}, nil
 	}
 
+	// 单文件导入分支（对齐 Python: _import_local_from_path is_file 分支）
+	if !dirExists(absPath) && fileExists(absPath) {
+		meta := sm.parseSkillMD(absPath)
+		if meta == nil {
+			return map[string]any{"success": false, "detail": "无法解析 skill 文件"}, nil
+		}
+		rawSkillName := toString(meta["name"])
+		if rawSkillName == "" {
+			rawSkillName = strings.TrimSuffix(filepath.Base(absPath), filepath.Ext(absPath))
+		}
+		safeSkillName, err := safePathName(rawSkillName, "skill")
+		if err != nil {
+			logRejectedName("skills.import_local", "skill", rawSkillName, err)
+			return map[string]any{"success": false, "detail": err.Error()}, nil
+		}
+
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+
+		dest, err := safeChildPath(sm.skillsDir, safeSkillName, "skill")
+		if err != nil {
+			return map[string]any{"success": false, "detail": err.Error()}, nil
+		}
+		if dirExists(dest) {
+			if !force {
+				return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
+			}
+			if err := safeRmtree(dest); err != nil {
+				logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+			}
+		}
+		// 创建目标目录并复制文件
+		if err := os.MkdirAll(dest, 0o755); err != nil {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("创建目录失败: %s", err)}, nil
+		}
+		destFile := filepath.Join(dest, filepath.Base(absPath))
+		if err := copyFile(absPath, destFile); err != nil {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("复制文件失败: %s", err)}, nil
+		}
+
+		sm.addLocalSkill(map[string]any{
+			"name":         safeSkillName,
+			"origin":       absPath,
+			"source":       "local",
+			"installed_at": time.Now().UTC().Format(time.RFC3339),
+		})
+		sm.refreshAgentDataIndexes()
+
+		return map[string]any{"success": true, "skill": map[string]any{"name": safeSkillName}}, nil
+	}
+
 	if !dirExists(absPath) {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("目录不存在: %s", absPath)}, nil
+		return map[string]any{"success": false, "detail": fmt.Sprintf("路径不存在: %s", absPath)}, nil
 	}
 
 	mdPath := sm.tryFindSkillFile(absPath)
@@ -752,7 +814,10 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	dest := filepath.Join(sm.skillsDir, safeSkillName)
+	dest, err := safeChildPath(sm.skillsDir, safeSkillName, "skill")
+	if err != nil {
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
 	if dirExists(dest) {
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
@@ -773,7 +838,6 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()
-	sm.saveState()
 
 	return map[string]any{"success": true, "name": safeSkillName}, nil
 }
@@ -802,12 +866,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params m
 		"url":     url,
 		"enabled": false, // 新增源默认禁用（对齐 Python: enabled=False，避免未经确认就触发远程同步）
 	})
-	// 转为 []any 以保持 state 的 JSON 兼容性
-	anyList := make([]any, len(marketplaces))
-	for i, m := range marketplaces {
-		anyList[i] = m
-	}
-	sm.state["marketplaces"] = anyList
+	sm.state["marketplaces"] = marketplaces
 	sm.saveState()
 
 	return map[string]any{"success": true, "name": name}, nil
@@ -838,11 +897,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, param
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", name)}, nil
 	}
 
-	anyList := make([]any, len(filtered))
-	for i, m := range filtered {
-		anyList[i] = m
-	}
-	sm.state["marketplaces"] = anyList
+	sm.state["marketplaces"] = filtered
 	sm.saveState()
 
 	// 删除本地缓存目录（对齐 Python: safeRmtree(repo_dir)）
@@ -879,11 +934,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", name)}, nil
 	}
 
-	anyList := make([]any, len(marketplaces))
-	for i, m := range marketplaces {
-		anyList[i] = m
-	}
-	sm.state["marketplaces"] = anyList
+	sm.state["marketplaces"] = marketplaces
 	sm.saveState()
 
 	// 启用/禁用时处理本地缓存
@@ -1103,7 +1154,7 @@ func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params ma
 
 	token := sm.getClawhubToken()
 	if token == "" {
-		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.noToken"}, nil
+		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.tokenNotConfigured"}, nil
 	}
 
 	limit := 10
@@ -1130,17 +1181,17 @@ func (sm *SkillManager) HandleSkillsClawhubSearch(ctx context.Context, params ma
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error()}, nil
+		return map[string]any{"success": false, "detail": "网络请求失败: " + err.Error(), "detail_key": "skills.clawhub.errors.searchFailed"}, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode)}, nil
+		return map[string]any{"success": false, "detail": fmt.Sprintf("ClawHub API 返回状态码: %d", resp.StatusCode), "detail_key": "skills.clawhub.errors.httpError"}, nil
 	}
 
 	var data map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return map[string]any{"success": false, "detail": "JSON 解析失败: " + err.Error()}, nil
+		return map[string]any{"success": false, "detail": "JSON 解析失败: " + err.Error(), "detail_key": "skills.clawhub.errors.searchFailed"}, nil
 	}
 
 	// 映射结果字段
@@ -1175,7 +1226,7 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 
 	token := sm.getClawhubToken()
 	if token == "" {
-		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.noToken"}, nil
+		return map[string]any{"success": false, "detail": "ClawHub token 未配置", "detail_key": "skills.clawhub.errors.tokenNotConfigured"}, nil
 	}
 
 	force := toBoolWithDefault(params["force"], false)
@@ -1731,17 +1782,28 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 // Python: SkillManager.handle_skills_team_skills_hub_publish(params)
 //
 // 步骤（对齐 Python: _prepare_teamskills_publish_zip 规范化后上传）：
-//  1. 从 path/file 构建 plugin.yaml + 规范化 ZIP
-//  2. 计算 SHA256 校验和
-//  3. 上传到 TeamSkills Hub
+//  1. 认证校验（token 或 system_token，二选一）
+//  2. 从 path/file 构建 plugin.yaml + 规范化 ZIP
+//  3. 计算 SHA256 校验和
+//  4. 上传到 TeamSkills Hub
 func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, params map[string]any) (map[string]any, error) {
-	pathRaw := trimSpace(toString(params["path"]))
-	fileRaw := trimSpace(toString(params["file"]))
-	pluginVersion := trimSpace(toString(params["version"]))
-	if pluginVersion == "" {
-		pluginVersion = "1.0.0"
+	// 认证（对齐 Python: _resolve_teamskills_hub_auth）
+	auth, authErr := resolveTeamSkillsHubAuth(params)
+	if authErr != "" {
+		return map[string]any{"success": false, "detail": authErr}, nil
 	}
 
+	pluginVersion := trimSpace(toString(params["version"]))
+	if pluginVersion == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: version"}, nil
+	}
+
+	pluginID := trimSpace(toString(params["skill_id"]))
+	versionDesc := trimSpace(toString(params["version_desc"]))
+	force := toBool(params["force"])
+
+	pathRaw := trimSpace(toString(params["path"]))
+	fileRaw := trimSpace(toString(params["file"]))
 	if pathRaw == "" && fileRaw == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: path 或 file"}, nil
 	}
@@ -1767,14 +1829,30 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 	if _, err := part.Write(zipData); err != nil {
 		return map[string]any{"success": false, "detail": "写入上传数据失败: " + err.Error()}, nil
 	}
+
+	// 补全 form 字段（对齐 Python: _teamskills_hub_publish_request data 参数）
+	_ = writer.WriteField("force", fmt.Sprintf("%t", force))
+	_ = writer.WriteField("version_desc", versionDesc)
+	_ = writer.WriteField("plugin_version", pluginVersion)
+	if pluginID != "" {
+		_ = writer.WriteField("plugin_id", pluginID)
+	}
+
 	_ = writer.Close()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/artifacts", body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/plugins", body)
 	if err != nil {
 		return map[string]any{"success": false, "detail": "构建请求失败: " + err.Error()}, nil
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-Checksum-SHA256", checksumSHA256)
+
+	// 设置认证头（对齐 Python: _teamskills_hub_publish_request headers）
+	if token, ok := auth["system_token"]; ok {
+		req.Header.Set("X-System-Token", token)
+	} else if token, ok := auth["token"]; ok {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
@@ -1792,28 +1870,62 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubPublish(ctx context.Context, pa
 		return map[string]any{"success": false, "detail": "JSON 解析失败: " + err.Error()}, nil
 	}
 
-	assetID := ""
-	if data, ok := result["data"].(map[string]any); ok {
-		assetID = toString(data["asset_id"])
+	// 对齐 Python: 返回 skill_id、name、version
+	var responseData map[string]any
+	if d, ok := result["data"].(map[string]any); ok {
+		responseData = d
 	}
-	return map[string]any{"success": true, "asset_id": assetID, "checksum_sha256": checksumSHA256}, nil
+	skillID := toString(responseData["asset_id"])
+	if skillID == "" {
+		skillID = toString(responseData["plugin_id"])
+	}
+	if skillID == "" {
+		skillID = pluginID
+	}
+	name := toString(responseData["name"])
+	version := toString(responseData["version"])
+	if version == "" {
+		version = pluginVersion
+	}
+
+	return map[string]any{"success": true, "skill_id": skillID, "name": name, "version": version, "checksum_sha256": checksumSHA256}, nil
 }
 
 // HandleSkillsTeamSkillsHubDelete 删除 TeamSkills
 // Python: SkillManager.handle_skills_team_skills_hub_delete(params)
 func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, params map[string]any) (map[string]any, error) {
-	assetID := trimSpace(toString(params["asset_id"]))
-	if assetID == "" {
-		return map[string]any{"success": false, "detail": "缺少参数: asset_id"}, nil
+	skillID := trimSpace(toString(params["skill_id"]))
+	if skillID == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: skill_id"}, nil
 	}
+
+	// 认证（对齐 Python: _resolve_teamskills_hub_auth）
+	auth, authErr := resolveTeamSkillsHubAuth(params)
+	if authErr != "" {
+		return map[string]any{"success": false, "detail": authErr}, nil
+	}
+
+	version := trimSpace(toString(params["version"]))
+	if version == "" {
+		version = "all"
+	}
+
 	baseURL := trimSpace(toString(params["market_url"]))
 	if baseURL == "" {
 		baseURL = envString(teamSkillsHubBaseURLEnv, teamSkillsHubDefaultBaseURL)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, baseURL+"/api/v1/artifacts/"+assetID, nil)
+	reqURL := baseURL + "/api/v1/plugins/" + url.PathEscape(skillID) + "/versions/" + url.PathEscape(version)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
 	if err != nil {
 		return map[string]any{"success": false, "detail": "构建请求失败: " + err.Error()}, nil
+	}
+
+	// 设置认证头（对齐 Python: _teamskills_hub_delete_request）
+	if token, ok := auth["system_token"]; ok {
+		req.Header.Set("X-System-Token", token)
+	} else if token, ok := auth["token"]; ok {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -1827,7 +1939,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubDelete(ctx context.Context, par
 		return map[string]any{"success": false, "detail": fmt.Sprintf("API 返回状态码: %d", resp.StatusCode)}, nil
 	}
 
-	return map[string]any{"success": true}, nil
+	return map[string]any{"success": true, "skill_id": skillID, "version": version}, nil
 }
 
 // HandlePluginsList 列出已安装的插件
@@ -1861,7 +1973,6 @@ func (sm *SkillManager) HandlePluginsEnable(ctx context.Context, params map[stri
 	if !ok {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到插件: %s", name)}, nil
 	}
-	sm.saveState()
 	return map[string]any{"success": true, "detail": fmt.Sprintf("插件 %s 已启用，请执行 /reload-plugins 使其生效", name)}, nil
 }
 
@@ -1878,7 +1989,6 @@ func (sm *SkillManager) HandlePluginsDisable(ctx context.Context, params map[str
 	if !ok {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到插件: %s", name)}, nil
 	}
-	sm.saveState()
 	return map[string]any{"success": true, "detail": fmt.Sprintf("插件 %s 已禁用，请执行 /reload-plugins 使其生效", name)}, nil
 }
 
@@ -1986,17 +2096,8 @@ func (sm *SkillManager) GetInstalledPlugins() []map[string]any {
 	if !ok {
 		return nil
 	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
-		return nil
-	}
-	var result []map[string]any
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
+	// normalizeState 后 state 中 installed_plugins 类型为 []map[string]any
+	return anySliceToMapSlice(raw)
 }
 
 // AddInstalledPlugin 添加已安装插件记录
@@ -2010,14 +2111,14 @@ func (sm *SkillManager) AddInstalledPlugin(plugin map[string]any) {
 	for i, p := range plugins {
 		if toString(p["name"]) == name {
 			plugins[i] = plugin
-			sm.state["installed_plugins"] = mapSliceToAny(plugins)
+			sm.state["installed_plugins"] = plugins
 			// Python: self._save_state()
 			sm.saveState()
 			return
 		}
 	}
 	plugins = append(plugins, plugin)
-	sm.state["installed_plugins"] = mapSliceToAny(plugins)
+	sm.state["installed_plugins"] = plugins
 	// Python: self._save_state()
 	sm.saveState()
 }
@@ -2038,15 +2139,9 @@ func (sm *SkillManager) GetLocalSkills() []map[string]any {
 	if !ok {
 		return []map[string]any{}
 	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
+	result := anySliceToMapSlice(raw)
+	if result == nil {
 		return []map[string]any{}
-	}
-	var result []map[string]any
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
 	}
 	return result
 }
@@ -2142,8 +2237,67 @@ func (sm *SkillManager) ListExecutionDisabledSkills() []string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// resolveTeamSkillsHubAuth 从 params 解析 TeamSkillsHub 认证信息。
+// 返回认证 map（含 token 或 system_token）和错误字符串。
+// Python: SkillManager._resolve_teamskills_hub_auth(params)
+func resolveTeamSkillsHubAuth(params map[string]any) (map[string]string, string) {
+	token := trimSpace(toString(params["token"]))
+	systemToken := trimSpace(toString(params["system_token"]))
+	hasUser := token != ""
+	hasSystem := systemToken != ""
+	if hasUser == hasSystem {
+		return nil, "请且仅请提供一种鉴权：token 或 system_token"
+	}
+	if hasSystem {
+		return map[string]string{"system_token": systemToken}, ""
+	}
+	return map[string]string{"token": token}, ""
+}
+
+// normalizeState 规范化状态，确保所有 key 有默认值且类型正确。
+// Python: SkillManager._normalize_state(state) (skill_manager.py)
+func (sm *SkillManager) normalizeState() {
+	existing := sm.collectExistingLocalSkillNames()
+	NormalizeState(sm.state, existing)
+}
+
+// collectExistingLocalSkillNames 扫描 skillsDir 下所有非 _ 开头的子目录，
+// 在每个子目录中查找 skill 文件并解析 name 字段，返回 name 集合。
+// Python: SkillManager._collect_existing_local_skill_names() (skill_manager.py)
+func (sm *SkillManager) collectExistingLocalSkillNames() map[string]bool {
+	names := make(map[string]bool)
+	entries, err := os.ReadDir(sm.skillsDir)
+	if err != nil {
+		return names
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
+			continue
+		}
+		childDir := filepath.Join(sm.skillsDir, entry.Name())
+		mdPath := sm.tryFindSkillFile(childDir)
+		if mdPath == "" {
+			continue
+		}
+		meta := sm.parseSkillMD(mdPath)
+		if meta == nil {
+			continue
+		}
+		// Python: name = str(meta.get("name") or child.name).strip()
+		name := trimSpace(toString(meta["name"]))
+		if name == "" {
+			name = entry.Name()
+		}
+		if name != "" {
+			names[name] = true
+		}
+	}
+	return names
+}
+
 // setPluginEnabled 设置插件的启用/禁用状态。
 // Python: _set_plugin_enabled(name, enabled) (skill_manager.py L3778-3790)
+// 修改后立即 _save_state（对齐 Python）
 func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
 	plugins, _ := sm.state["installed_plugins"].([]map[string]any)
 	if plugins == nil {
@@ -2152,6 +2306,7 @@ func (sm *SkillManager) setPluginEnabled(name string, enabled bool) bool {
 	for _, p := range plugins {
 		if toString(p["name"]) == name {
 			p["enabled"] = enabled
+			sm.saveState()
 			return true
 		}
 	}
@@ -2260,20 +2415,12 @@ func (sm *SkillManager) getMarketplaces() []map[string]any {
 	if !ok {
 		return nil
 	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
-		return nil
-	}
-	var result []map[string]any
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
+	return anySliceToMapSlice(raw)
 }
 
 // removeInstalledPlugin 移除已安装插件记录
+// Python: SkillManager._remove_installed_plugin(name)
+// 修改后 _save_state
 func (sm *SkillManager) removeInstalledPlugin(name string) {
 	plugins := sm.GetInstalledPlugins()
 	var filtered []map[string]any
@@ -2282,22 +2429,48 @@ func (sm *SkillManager) removeInstalledPlugin(name string) {
 			filtered = append(filtered, p)
 		}
 	}
-	sm.state["installed_plugins"] = mapSliceToAny(filtered)
+	sm.state["installed_plugins"] = filtered
+	sm.saveState()
+}
+
+// removeLocalSkill 移除本地技能记录
+// Python: SkillManager._remove_local_skill(name)
+// 修改后 _save_state
+func (sm *SkillManager) removeLocalSkill(name string) {
+	local, ok := sm.state["local_skills"].([]map[string]any)
+	if !ok {
+		return
+	}
+	var filtered []map[string]any
+	for _, s := range local {
+		if toString(s["name"]) != name {
+			filtered = append(filtered, s)
+		}
+	}
+	sm.state["local_skills"] = filtered
+	sm.saveState()
 }
 
 // addLocalSkill 添加本地技能记录（内部方法，调用者需持有锁）
 // Python: SkillManager._add_local_skill(skill)
+// 同名技能替换而非追加，修改后 _save_state
 func (sm *SkillManager) addLocalSkill(skill map[string]any) {
-	raw, ok := sm.state["local_skills"]
-	if !ok {
-		raw = []any{}
+	local, _ := sm.state["local_skills"].([]map[string]any)
+	if local == nil {
+		local = []map[string]any{}
 	}
-	list, ok := toSliceOfAny(raw)
-	if !ok {
-		list = []any{}
+	skillName := toString(skill["name"])
+	for i, s := range local {
+		if toString(s["name"]) == skillName {
+			local[i] = skill
+			sm.state["local_skills"] = local
+			sm.saveState()
+			return
+		}
 	}
-	list = append(list, skill)
-	sm.state["local_skills"] = list
+	local = append(local, skill)
+	sm.state["local_skills"] = local
+	sm.saveState()
 }
 
 // normalizePlugin 规范化插件记录
@@ -2734,6 +2907,15 @@ func copyDir(src, dst string) error {
 		}
 		return os.WriteFile(target, data, info.Mode())
 	})
+}
+
+// copyFile 复制单个文件
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
 }
 
 // generateUUID 生成 UUID

@@ -385,7 +385,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		}
 
 		// 执行权限检查
-		result := r.engine.CheckPermission(normalizedName, toolArgs)
+		result := r.engine.CheckPermission(ctx, normalizedName, toolArgs)
 
 		// ALLOW → 放行
 		if result.Permission == harnesssecurity.PermissionLevelAllow {

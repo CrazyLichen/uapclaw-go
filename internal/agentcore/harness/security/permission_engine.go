@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -117,7 +118,7 @@ func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
 // CheckPermission 检查工具调用权限。
 //
 // Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
-func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]any) *PermissionResult {
+func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string, toolArgs map[string]any) *PermissionResult {
 	logger.Info(engineLogComponent).
 		Str("tool", toolName).
 		Bool("enabled", e.enabled).
@@ -151,6 +152,7 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 			NormalizedToolName: toolName,
 			ToolArgs:           toolArgs,
 			Engine:             e,
+			GoCtx:              ctx,
 		})
 		if err != nil {
 			logger.Warn(engineLogComponent).
@@ -189,7 +191,16 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 
 	// 1. 工具级 + 参数规则 + 默认（分层策略 evaluate_tiered_policy）
 	var externalPaths []string
-	permission, matchedRule := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
+	permission, matchedRule, evalErr := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
+	if evalErr != nil {
+		// 对齐 Python except 行为：error 时将 globalLevel 视为 PermissionLevelNone（不参与后续比较）
+		logger.Warn(engineLogComponent).
+			Str("tool", toolName).
+			Err(evalErr).
+			Msg("permission.evaluate_global_policy.failed")
+		permission = PermissionLevelNone
+		matchedRule = ""
+	}
 	// Python: if permission is None → ASK
 	if permission == PermissionLevelNone {
 		permission = PermissionLevelAsk
@@ -250,14 +261,14 @@ func (e *PermissionEngine) CheckPermission(toolName string, toolArgs map[string]
 // CheckToolPermissionDirectly 直接检查工具权限，不受 enabled 开关与宿主「是否校验」短路影响。
 //
 // Python: PermissionEngine.check_tool_permission_directly(tool_name, tool_args) (core.py L77-89)
-func (e *PermissionEngine) CheckToolPermissionDirectly(toolName string, toolArgs map[string]any) (PermissionLevel, string) {
+func (e *PermissionEngine) CheckToolPermissionDirectly(toolName string, toolArgs map[string]any) (PermissionLevel, string, error) {
 	return e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, true)
 }
 
 // EvaluateGlobalPolicyDirectly 直接评估全局权限，不受 enabled 与宿主「是否校验」短路影响。
 //
 // Python: PermissionEngine.evaluate_global_policy_directly(tool_name, tool_args, include_external_directory) (core.py L91-124)
-func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArgs map[string]any, includeExternalDirectory bool) (PermissionLevel, string) {
+func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArgs map[string]any, includeExternalDirectory bool) (PermissionLevel, string, error) {
 	if toolArgs == nil {
 		toolArgs = make(map[string]any)
 	}
@@ -290,7 +301,7 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 		}
 	}
 
-	return permission, matchedRule
+	return permission, matchedRule, nil
 }
 
 // Config 返回当前配置

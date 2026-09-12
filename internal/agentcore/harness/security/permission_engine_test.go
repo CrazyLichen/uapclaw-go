@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,7 @@ func TestPermissionEngine_UpdateConfig(t *testing.T) {
 // TestPermissionEngine_EnabledFalse 允许 系统禁用时 → 允许
 func TestPermissionEngine_EnabledFalse(t *testing.T) {
 	engine := NewPermissionEngine(map[string]any{"enabled": false}, nil, "", "")
-	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
+	result := engine.CheckPermission(context.Background(), "bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
 	assert.Contains(t, result.Reason, "已禁用")
@@ -49,7 +50,7 @@ func TestPermissionEngine_ChecksInactive(t *testing.T) {
 	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "/workspace")
 	engine.SetPermissionChecksActive(func() bool { return false })
 
-	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
+	result := engine.CheckPermission(context.Background(), "bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
 	assert.Contains(t, result.Reason, "未启用")
@@ -65,7 +66,7 @@ func TestPermissionEngine_TieredPolicyDeny(t *testing.T) {
 	}
 	engine := NewPermissionEngine(config, nil, "", "")
 
-	result := engine.CheckPermission("bash", map[string]any{"command": "ls"})
+	result := engine.CheckPermission(context.Background(), "bash", map[string]any{"command": "ls"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelDeny, result.Permission)
 }
@@ -80,7 +81,7 @@ func TestPermissionEngine_DefaultsAllow(t *testing.T) {
 	}
 	engine := NewPermissionEngine(config, nil, "", "")
 
-	result := engine.CheckPermission("read_file", map[string]any{"path": "/home/user/file.txt"})
+	result := engine.CheckPermission(context.Background(), "read_file", map[string]any{"path": "/home/user/file.txt"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAllow, result.Permission)
 }
@@ -89,7 +90,7 @@ func TestPermissionEngine_DefaultsAllow(t *testing.T) {
 func TestPermissionEngine_NoConfig(t *testing.T) {
 	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "")
 
-	result := engine.CheckPermission("read_file", map[string]any{"path": "/home/user/file.txt"})
+	result := engine.CheckPermission(context.Background(), "read_file", map[string]any{"path": "/home/user/file.txt"})
 	require.NotNil(t, result)
 	assert.Equal(t, PermissionLevelAsk, result.Permission)
 }
@@ -104,7 +105,8 @@ func TestPermissionEngine_EvaluateGlobalPolicyDirectly(t *testing.T) {
 	}
 	engine := NewPermissionEngine(config, nil, "", "")
 
-	permission, matchedRule := engine.EvaluateGlobalPolicyDirectly("bash", map[string]any{"command": "ls"}, false)
+	permission, matchedRule, err := engine.EvaluateGlobalPolicyDirectly("bash", map[string]any{"command": "ls"}, false)
+	assert.NoError(t, err)
 	assert.Equal(t, PermissionLevelDeny, permission)
 	assert.Contains(t, matchedRule, "tools.bash")
 }
@@ -119,7 +121,8 @@ func TestPermissionEngine_CheckToolPermissionDirectly(t *testing.T) {
 	}
 	engine := NewPermissionEngine(config, nil, "", "")
 
-	permission, matchedRule := engine.CheckToolPermissionDirectly("read_file", map[string]any{"path": "/home/user/file.txt"})
+	permission, matchedRule, err := engine.CheckToolPermissionDirectly("read_file", map[string]any{"path": "/home/user/file.txt"})
+	assert.NoError(t, err)
 	assert.Equal(t, PermissionLevelAllow, permission)
 	assert.Contains(t, matchedRule, "defaults")
 }

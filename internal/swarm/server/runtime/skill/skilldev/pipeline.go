@@ -116,14 +116,17 @@ func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error
 			// 执行当前阶段
 			handler, ok := stageHandlers[p.State.Stage]
 			if !ok {
-				// Python: raise RuntimeError("阶段 X 没有对应的处理器")
-				// Python 中异常穿过 Pipeline→Service，由 UapClaw 的 try/except 兜底。
-				// Go 等价：赋值 runErr 后退出 goroutine，上层 Service range 完后检查兜底。
+				// Python: raise RuntimeError → 对齐 Python except 行为，设置 ERROR 状态 + emit + checkpoint
+				errMsg := fmt.Sprintf("阶段 %s 没有对应的处理器", p.State.Stage)
 				logger.Error(logComponent).
 					Str("task_id", p.TaskID).
 					Str("stage", string(p.State.Stage)).
-					Msg("[Pipeline] 阶段没有对应的处理器")
-				p.runErr = fmt.Errorf("阶段 %s 没有对应的处理器", p.State.Stage)
+					Msg("[Pipeline] " + errMsg)
+				p.State.Stage = SkillDevStageError
+				p.State.Error = &errMsg
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{"message": errMsg})
+				_ = p.checkpoint()
+				p.runErr = fmt.Errorf("%s", errMsg)
 				return
 			}
 

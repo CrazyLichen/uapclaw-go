@@ -122,8 +122,9 @@ func TestParsePermissionLevel(t *testing.T) {
 		{"ALLOW", PermissionLevelAllow, false},
 		{"Ask", PermissionLevelAsk, false},
 		{"DENY", PermissionLevelDeny, false},
-		{"invalid", PermissionLevelAllow, true},
-		{"", PermissionLevelAllow, true},
+		{"none", PermissionLevelNone, true},
+		{"invalid", PermissionLevelNone, true},
+		{"", PermissionLevelNone, true},
 	}
 	for _, tt := range tests {
 		got, err := ParsePermissionLevel(tt.input)

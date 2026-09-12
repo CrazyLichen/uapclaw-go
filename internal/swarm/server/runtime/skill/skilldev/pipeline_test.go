@@ -252,13 +252,17 @@ func TestPipeline_Run_UnknownHandler(t *testing.T) {
 		t.Fatalf("Run 返回错误: %v", err)
 	}
 
-	// 未知阶段：goroutine 应 close channel，不 emit ERROR 事件，
-	// 而是通过 pipeline.runErr 传播（对齐 Python raise RuntimeError）
+	// 未知阶段：goroutine 应 close channel，
+	// 同时 emit ERROR 事件 + 设置 ERROR 状态 + 通过 pipeline.runErr 传播（对齐 Python raise RuntimeError）
 	events := collectEvents(eventCh)
+	foundError := false
 	for _, evt := range events {
 		if evt.EventType == SkillDevEventTypeError {
-			t.Error("不应收到 ERROR 事件（应通过 runErr 传播，对齐 Python raise）")
+			foundError = true
 		}
+	}
+	if !foundError {
+		t.Error("应收到 ERROR 事件（对齐 M-39 修复：未知阶段 emit ERROR + 设置 ERROR 状态）")
 	}
 	if pipeline.runErr == nil {
 		t.Error("期望 pipeline.runErr 非 nil（未知阶段）")

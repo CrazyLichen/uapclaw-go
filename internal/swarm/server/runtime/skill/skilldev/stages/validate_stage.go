@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -21,7 +22,7 @@ type ValidateStageHandler struct{}
 
 // Execute 执行 VALIDATE 阶段逻辑。
 func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
-	skillMDPath := fmt.Sprintf("%s/skill/SKILL.md", sctx.Workspace)
+	skillMDPath := filepath.Join(sctx.Workspace, "skill", "SKILL.md")
 
 	if _, err := os.Stat(skillMDPath); os.IsNotExist(err) {
 		sctx.Emit(skilldev.SkillDevEventTypeValidateResult, map[string]any{
