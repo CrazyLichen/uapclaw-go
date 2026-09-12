@@ -2,6 +2,7 @@ package mem_model
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
@@ -92,6 +93,84 @@ func TestGetIDsInRange_越界(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── UserMemoryRecord 测试 ────────────────────────────
+
+// TestUserMemoryRecord_JSON序列化 测试 UserMemoryRecord JSON 序列化/反序列化
+func TestUserMemoryRecord_JSON序列化(t *testing.T) {
+	record := &UserMemoryRecord{
+		ID:        testID1,
+		Mem:       "测试内容",
+		MemType:   "user_profile",
+		Timestamp: "2025-07-15",
+		Score:     0.95,
+		SourceID:  "src-001",
+		Metadata:  "meta-info",
+	}
+
+	// 序列化
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	// 反序列化
+	var restored UserMemoryRecord
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if restored.ID != record.ID {
+		t.Errorf("ID = %q, want %q", restored.ID, record.ID)
+	}
+	if restored.Mem != record.Mem {
+		t.Errorf("Mem = %q, want %q", restored.Mem, record.Mem)
+	}
+	if restored.MemType != record.MemType {
+		t.Errorf("MemType = %q, want %q", restored.MemType, record.MemType)
+	}
+	if restored.Timestamp != record.Timestamp {
+		t.Errorf("Timestamp = %q, want %q", restored.Timestamp, record.Timestamp)
+	}
+	if restored.Score != record.Score {
+		t.Errorf("Score = %v, want %v", restored.Score, record.Score)
+	}
+	if restored.SourceID != record.SourceID {
+		t.Errorf("SourceID = %q, want %q", restored.SourceID, record.SourceID)
+	}
+	if restored.Metadata != record.Metadata {
+		t.Errorf("Metadata = %q, want %q", restored.Metadata, record.Metadata)
+	}
+}
+
+// TestUserMemoryRecord_omitempty 测试 omitempty 字段
+func TestUserMemoryRecord_omitempty(t *testing.T) {
+	record := &UserMemoryRecord{
+		ID:      testID1,
+		Mem:     "测试",
+		MemType: "user_profile",
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	// omitempty 字段不应出现在 JSON 中
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if _, ok := m["timestamp"]; ok {
+		t.Error("空 Timestamp 不应出现在 JSON 中")
+	}
+	if _, ok := m["score"]; ok {
+		t.Error("零值 Score 不应出现在 JSON 中")
+	}
+	if _, ok := m["source_id"]; ok {
+		t.Error("空 SourceID 不应出现在 JSON 中")
+	}
+	if _, ok := m["metadata"]; ok {
+		t.Error("空 Metadata 不应出现在 JSON 中")
+	}
+}
+
 // ──────────────────────────── UserMemStore 测试 ────────────────────────────
 
 // newTestUserMemStore 创建测试用 UserMemStore
@@ -127,8 +206,8 @@ func TestNewUserMemStore_nilKVStore(t *testing.T) {
 func TestUserMemStore_Write(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	ok, err := store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	ok, err := store.Write(ctx, "user1", "scope1", testID1, record)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
@@ -141,9 +220,9 @@ func TestUserMemStore_Write(t *testing.T) {
 func TestUserMemStore_Write_已存在(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, data)
-	ok, err := store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, record)
+	ok, err := store.Write(ctx, "user1", "scope1", testID1, record)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
@@ -152,16 +231,16 @@ func TestUserMemStore_Write_已存在(t *testing.T) {
 	}
 }
 
-// TestUserMemStore_Write_空数据 测试空数据返回 false
-func TestUserMemStore_Write_空数据(t *testing.T) {
+// TestUserMemStore_Write_nilRecord 测试 nil record 返回 false
+func TestUserMemStore_Write_nilRecord(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	ok, err := store.Write(ctx, "user1", "scope1", testID1, map[string]any{})
+	ok, err := store.Write(ctx, "user1", "scope1", testID1, nil)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 	if ok {
-		t.Error("Write() 空数据应返回 false")
+		t.Error("Write() nil record 应返回 false")
 	}
 }
 
@@ -169,8 +248,8 @@ func TestUserMemStore_Write_空数据(t *testing.T) {
 func TestUserMemStore_Write_索引更新(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, record)
 
 	// 验证 getAll 能读取
 	result, err := store.GetAll(ctx, "user1", "scope1", "user_profile")
@@ -186,10 +265,10 @@ func TestUserMemStore_Write_索引更新(t *testing.T) {
 func TestUserMemStore_Update(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, record)
 
-	ok, err := store.Update(ctx, "user1", "scope1", testID1, map[string]any{"content": "updated"})
+	ok, err := store.Update(ctx, "user1", "scope1", testID1, map[string]any{"mem": "updated"})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -198,8 +277,11 @@ func TestUserMemStore_Update(t *testing.T) {
 	}
 
 	result, _ := store.Get(ctx, "user1", "scope1", testID1)
-	if result["content"] != "updated" {
-		t.Errorf("Update 后 content = %v, want %q", result["content"], "updated")
+	if result == nil {
+		t.Fatal("Update 后 Get 返回 nil")
+	}
+	if result.Mem != "updated" {
+		t.Errorf("Update 后 Mem = %q, want %q", result.Mem, "updated")
 	}
 }
 
@@ -207,7 +289,7 @@ func TestUserMemStore_Update(t *testing.T) {
 func TestUserMemStore_Update_不存在(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	ok, err := store.Update(ctx, "user1", "scope1", testID4, map[string]any{"content": "test"})
+	ok, err := store.Update(ctx, "user1", "scope1", testID4, map[string]any{"mem": "test"})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -220,8 +302,8 @@ func TestUserMemStore_Update_不存在(t *testing.T) {
 func TestUserMemStore_Delete(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, record)
 
 	err := store.Delete(ctx, "user1", "scope1", testID1)
 	if err != nil {
@@ -248,8 +330,8 @@ func TestUserMemStore_Delete_不存在(t *testing.T) {
 func TestUserMemStore_BatchDelete(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, map[string]any{"mem_type": "user_profile", "content": "test1"})
-	_, _ = store.Write(ctx, "user1", "scope1", testID2, map[string]any{"mem_type": "user_profile", "content": "test2"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, &UserMemoryRecord{MemType: "user_profile", Mem: "test1"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID2, &UserMemoryRecord{MemType: "user_profile", Mem: "test2"})
 
 	err := store.BatchDelete(ctx, "user1", "scope1", []string{testID1, testID2})
 	if err != nil {
@@ -261,8 +343,8 @@ func TestUserMemStore_BatchDelete(t *testing.T) {
 func TestUserMemStore_Get(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	data := map[string]any{"mem_type": "user_profile", "content": "test"}
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, data)
+	record := &UserMemoryRecord{MemType: "user_profile", Mem: "test"}
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, record)
 
 	result, err := store.Get(ctx, "user1", "scope1", testID1)
 	if err != nil {
@@ -271,8 +353,11 @@ func TestUserMemStore_Get(t *testing.T) {
 	if result == nil {
 		t.Fatal("Get() 返回 nil")
 	}
-	if result["content"] != "test" {
-		t.Errorf("Get() content = %v, want %q", result["content"], "test")
+	if result.Mem != "test" {
+		t.Errorf("Get() Mem = %q, want %q", result.Mem, "test")
+	}
+	if result.MemType != "user_profile" {
+		t.Errorf("Get() MemType = %q, want %q", result.MemType, "user_profile")
 	}
 }
 
@@ -293,8 +378,8 @@ func TestUserMemStore_Get_不存在(t *testing.T) {
 func TestUserMemStore_BatchGet(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, map[string]any{"content": "test1"})
-	_, _ = store.Write(ctx, "user1", "scope1", testID2, map[string]any{"content": "test2"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, &UserMemoryRecord{Mem: "test1"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID2, &UserMemoryRecord{Mem: "test2"})
 
 	result, err := store.BatchGet(ctx, "user1", "scope1", []string{testID1, testID2})
 	if err != nil {
@@ -309,8 +394,8 @@ func TestUserMemStore_BatchGet(t *testing.T) {
 func TestUserMemStore_GetAll(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, map[string]any{"mem_type": "user_profile", "content": "test1"})
-	_, _ = store.Write(ctx, "user1", "scope1", testID2, map[string]any{"mem_type": "summary", "content": "test2"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, &UserMemoryRecord{MemType: "user_profile", Mem: "test1"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID2, &UserMemoryRecord{MemType: "summary", Mem: "test2"})
 
 	// 获取全部
 	result, err := store.GetAll(ctx, "user1", "scope1", "")
@@ -348,9 +433,9 @@ func TestUserMemStore_GetAll_空结果(t *testing.T) {
 func TestUserMemStore_GetInRange(t *testing.T) {
 	store := newTestUserMemStore(t)
 	ctx := context.Background()
-	_, _ = store.Write(ctx, "user1", "scope1", testID1, map[string]any{"content": "test1"})
-	_, _ = store.Write(ctx, "user1", "scope1", testID2, map[string]any{"content": "test2"})
-	_, _ = store.Write(ctx, "user1", "scope1", testID3, map[string]any{"content": "test3"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID1, &UserMemoryRecord{Mem: "test1"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID2, &UserMemoryRecord{Mem: "test2"})
+	_, _ = store.Write(ctx, "user1", "scope1", testID3, &UserMemoryRecord{Mem: "test3"})
 
 	result, err := store.GetInRange(ctx, "user1", "scope1", 1, 3, "")
 	if err != nil {

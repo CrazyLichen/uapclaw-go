@@ -8,7 +8,7 @@
 //
 //	lite/
 //	├── doc.go                       # 包文档
-//	├── config.go                    # MemorySettings + IsMemoryEnabled + CreateMemorySettings
+//	├── config.go                    # MemorySettings + 子配置 struct (ChunkingConfig/QueryConfig 等) + IsMemoryEnabled
 //	├── types.go                     # MemoryChunk 数据类
 //	├── internal.go                  # 纯计算工具函数（FTS5 查询构建、BM25 分数转换等）
 //	├── frontmatter.go               # frontmatter 解析/验证/重建

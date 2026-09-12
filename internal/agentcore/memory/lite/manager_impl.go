@@ -155,7 +155,7 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	}
 
 	// 文件监听
-	if syncWatch, _ := m.settings.Sync["watch"].(bool); syncWatch {
+	if m.settings.Sync.Watch {
 		m.setupFileWatcher()
 	}
 
@@ -207,10 +207,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 
 	// 搜索前同步
-	onSearch := true
-	if v, ok := m.settings.Sync["onSearch"].(bool); ok {
-		onSearch = v
-	}
+	onSearch := m.settings.Sync.OnSearch
 	if onSearch && m.dirty {
 		if err := m.Sync(ctx, "search", false); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("搜索前同步失败")
@@ -225,24 +222,25 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	minScore := 0.7
 	if v, ok := opts["min_score"].(float64); ok {
 		minScore = v
-	} else if v, ok := m.settings.Query["min_score"].(float64); ok {
-		minScore = v
+	} else {
+		minScore = m.settings.Query.MinScore
 	}
 
 	maxResults := 10
 	if v, ok := opts["max_results"].(float64); ok {
 		maxResults = int(v)
-	} else if v, ok := m.settings.Query["max_results"].(float64); ok {
-		maxResults = int(v)
+	} else {
+		maxResults = int(m.settings.Query.MaxResults)
 	}
 
-	hybrid := make(map[string]any)
-	if v, ok := m.settings.Query["hybrid"].(map[string]any); ok {
-		hybrid = v
+	candidateMultiplier := m.settings.Query.Hybrid.CandidateMultiplier
+	if candidateMultiplier == 0 {
+		candidateMultiplier = 2.0
 	}
-	candidateMultiplier := 2.0
-	if v, ok := hybrid["candidateMultiplier"].(float64); ok {
-		candidateMultiplier = v
+	if v, ok := opts["hybrid"].(map[string]any); ok {
+		if v2, ok := v["candidateMultiplier"].(float64); ok {
+			candidateMultiplier = v2
+		}
 	}
 	candidates := int(float64(maxResults) * candidateMultiplier)
 	if candidates < 1 {
@@ -254,9 +252,11 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 
 	// FTS5 关键词搜索
 	var keywordResults []SearchResult
-	hybridEnabled := true
-	if v, ok := hybrid["enabled"].(bool); ok {
-		hybridEnabled = v
+	hybridEnabled := m.settings.Query.Hybrid.Enabled
+	if v, ok := opts["hybrid"].(map[string]any); ok {
+		if v2, ok := v["enabled"].(bool); ok {
+			hybridEnabled = v2
+		}
 	}
 	if hybridEnabled && m.ftsAvailable {
 		var err error
@@ -313,13 +313,15 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	}
 
 	// 混合合并
-	vectorWeight := 0.7
-	if v, ok := hybrid["vectorWeight"].(float64); ok {
-		vectorWeight = v
-	}
-	textWeight := 0.3
-	if v, ok := hybrid["textWeight"].(float64); ok {
-		textWeight = v
+	vectorWeight := m.settings.Query.Hybrid.VectorWeight
+	textWeight := m.settings.Query.Hybrid.TextWeight
+	if v, ok := opts["hybrid"].(map[string]any); ok {
+		if v2, ok := v["vectorWeight"].(float64); ok {
+			vectorWeight = v2
+		}
+		if v2, ok := v["textWeight"].(float64); ok {
+			textWeight = v2
+		}
 	}
 	merged := mergeHybridResults(vectorResults, keywordResults, vectorWeight, textWeight)
 
@@ -425,22 +427,9 @@ func (m *memoryIndexManager) Status() *StatusResult {
 	var cacheEntries int
 	_ = m.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", embeddingCacheTable)).Scan(&cacheEntries)
 
-	ftsEnabled := true
-	if v, ok := m.settings.Store["fts"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			ftsEnabled = v2
-		}
-	}
-	vecEnabled := true
-	if v, ok := m.settings.Store["vector"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			vecEnabled = v2
-		}
-	}
-	cacheEnabled := true
-	if v, ok := m.settings.Cache["enabled"].(bool); ok {
-		cacheEnabled = v
-	}
+	ftsEnabled := m.settings.Store.Fts.Enabled
+	vecEnabled := m.settings.Store.Vector.Enabled
+	cacheEnabled := m.settings.Cache.Enabled
 
 	return &StatusResult{
 		Available:    true,
@@ -622,8 +611,8 @@ func clearMemoryManagerCache() {
 // resolveDBPath 解析数据库路径。对齐 Python _resolve_db_path
 func (m *memoryIndexManager) resolveDBPath() string {
 	storePath := "memory.db"
-	if v, ok := m.settings.Store["path"].(string); ok && v != "" {
-		storePath = v
+	if m.settings.Store.Path != "" {
+		storePath = m.settings.Store.Path
 	}
 	if filepath.IsAbs(storePath) {
 		return storePath
@@ -661,12 +650,7 @@ func (m *memoryIndexManager) ensureSchema() error {
 		return fmt.Errorf("建 embedding_cache 表失败: %w", err)
 	}
 	// FTS5 虚拟表
-	ftsEnabled := true
-	if v, ok := m.settings.Store["fts"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			ftsEnabled = v2
-		}
-	}
+	ftsEnabled := m.settings.Store.Fts.Enabled
 	if ftsEnabled {
 		_, err := m.db.Exec(fmt.Sprintf(
 			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1)",
@@ -703,12 +687,7 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 
 // loadVectorExtension 加载 vec0.so 扩展。对齐 Python _load_vector_extension
 func (m *memoryIndexManager) loadVectorExtension() error {
-	vecEnabled := true
-	if v, ok := m.settings.Store["vector"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			vecEnabled = v2
-		}
-	}
+	vecEnabled := m.settings.Store.Vector.Enabled
 	if !vecEnabled || m.db == nil {
 		return nil
 	}
@@ -758,7 +737,7 @@ func (m *memoryIndexManager) shouldFullReindex() bool {
 	if meta["model"] != m.settings.Model {
 		return true
 	}
-	if meta["chunkTokens"] != m.settings.Chunking["tokens"] {
+	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
 		return true
 	}
 	return false
@@ -781,8 +760,8 @@ func (m *memoryIndexManager) runReindex(ctx context.Context) error {
 		"provider":     m.settings.Provider,
 		"model":        m.settings.Model,
 		"providerKey":  m.providerKey,
-		"chunkTokens":  m.settings.Chunking["tokens"],
-		"chunkOverlap": m.settings.Chunking["overlap"],
+		"chunkTokens":  m.settings.Chunking.Tokens,
+		"chunkOverlap": m.settings.Chunking.Overlap,
 	}
 	if m.vectorAvailable && m.vectorDims != nil {
 		meta["vectorDims"] = *m.vectorDims
@@ -921,8 +900,8 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 		content = string(data)
 	}
 
-	chunkTokens, _ := m.settings.Chunking["tokens"].(int)
-	chunkOverlap, _ := m.settings.Chunking["overlap"].(int)
+	chunkTokens := int(m.settings.Chunking.Tokens)
+	chunkOverlap := int(m.settings.Chunking.Overlap)
 	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
 
 	// 清除旧索引
@@ -1071,10 +1050,7 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 	}
 
 	// 查缓存
-	cacheEnabled := true
-	if v, ok := m.settings.Cache["enabled"].(bool); ok {
-		cacheEnabled = v
-	}
+	cacheEnabled := m.settings.Cache.Enabled
 	if cacheEnabled {
 		row := tx.QueryRow(
 			fmt.Sprintf("SELECT embedding FROM %s WHERE provider = ? AND model = ? AND provider_key = ? AND hash = ?", embeddingCacheTable),
@@ -1454,10 +1430,7 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
 
-	debounceMs := 2000
-	if v, ok := m.settings.Sync["watchDebounceMs"].(int); ok {
-		debounceMs = v
-	}
+	debounceMs := m.settings.Sync.WatchDebounceMs
 
 	if m.watchTimer != nil {
 		m.watchTimer.Stop()
@@ -1474,10 +1447,7 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 
 // ensureIntervalSync 设置定时同步。对齐 Python _ensure_interval_sync
 func (m *memoryIndexManager) ensureIntervalSync() {
-	minutes := 0
-	if v, ok := m.settings.Sync["intervalMinutes"].(int); ok {
-		minutes = v
-	}
+	minutes := m.settings.Sync.IntervalMinutes
 	if minutes <= 0 {
 		return
 	}

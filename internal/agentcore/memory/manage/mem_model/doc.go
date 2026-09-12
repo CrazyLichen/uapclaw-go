@@ -46,6 +46,7 @@
 //	ScopeUserMappingManager   — 作用域用户映射管理器
 //	DataIdManager             — 唯一 ID 生成器，12字节=6时间+3随机+3哈希
 //	UserMemStore              — 基于 KV 存储的用户记忆 CRUD
+//	UserMemoryRecord         — 用户记忆记录结构体（对齐 Python dict 的 typed 替代）
 //	SemanticStore             — 向量语义检索存储
 //	DocTuple                  — 文档元组 (id, text)
 //	SearchResult              — 语义搜索结果 (id, score)

@@ -13,6 +13,26 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// UserMemoryRecord 用户记忆记录。对齐 Python UserMemStore 中 dict 的结构化表示。
+// Python 端 UserMemStore 使用 dict[str, Any] 读写，Go 端用 typed struct 替代。
+// 上游实际字段来源：FragmentMemoryManager._doc_to_dict / SummaryManager.get
+type UserMemoryRecord struct {
+	// ID 记忆唯一标识，对齐 Python dict["id"]
+	ID string `json:"id"`
+	// Mem 记忆内容，对齐 Python dict["mem"]
+	Mem string `json:"mem"`
+	// MemType 记忆类型，对齐 Python dict["mem_type"]
+	MemType string `json:"mem_type"`
+	// Timestamp 时间戳，对齐 Python dict["timestamp"]
+	Timestamp string `json:"timestamp,omitempty"`
+	// Score 搜索相关度分数，对齐 Python dict["score"]（仅搜索结果）
+	Score float64 `json:"score,omitempty"`
+	// SourceID 来源消息 ID，对齐 Python dict["source_id"]
+	SourceID string `json:"source_id,omitempty"`
+	// Metadata 元数据，对齐 Python dict["metadata"]（仅 summary 类型）
+	Metadata string `json:"metadata,omitempty"`
+}
+
 // UserMemStore 基于 KV 存储的用户记忆 CRUD。
 // Python: openjiuwen/core/memory/manage/mem_model/user_mem_store.py (UserMemStore)
 //
@@ -82,14 +102,14 @@ func NewUserMemStore(kvStore kv.BaseKVStore) (*UserMemStore, error) {
 
 // Write 写入记忆数据。若 mem_id 已存在返回 false。
 // Python: UserMemStore.write
-func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string, data map[string]any) (bool, error) {
-	if len(data) == 0 {
+func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string, record *UserMemoryRecord) (bool, error) {
+	if record == nil {
 		logger.Error(logComponent).
 			Str("memory_id", memID).
 			Str("event_type", "MEMORY_STORE").
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("Write failed, because data is empty")
+			Msg("Write failed, because record is nil")
 		return false, nil
 	}
 
@@ -108,8 +128,8 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 		return false, nil
 	}
 
-	// 存入记忆数据
-	jsonData, err := json.Marshal(data)
+	// 将 record 序列化为 JSON 存储
+	jsonData, err := json.Marshal(record)
 	if err != nil {
 		return false, err
 	}
@@ -118,16 +138,8 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 	}
 
 	// 更新 mem_type ID 和用户画像主题 ID
-	if memType, ok := data[memTypeFieldKey]; ok {
-		// Python: mem_type 始终是字符串，非 string 视为异常
-		memTypeStr, ok := memType.(string)
-		if !ok {
-			logger.Error(logComponent).Str("memory_id", memID).
-				Str("event_type", "MEMORY_STORE").
-				Str("field", memTypeFieldKey).
-				Msg("mem_type 字段不是字符串类型")
-			return false, fmt.Errorf("mem_type 字段不是字符串类型，实际类型: %T", memType)
-		}
+	memTypeStr := record.MemType
+	if memTypeStr != "" {
 		// 按 mem_type 查询 ID 列表
 		userMemIDsKey := s.getUserIDsKey(userID, scopeID, memTypeStr)
 		userMemIDsValue, _ := s.kvStore.Get(ctx, userMemIDsKey)
@@ -169,6 +181,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 
 // Update 更新记忆数据（合并字段）。若 mem_id 不存在返回 false。
 // Python: UserMemStore.update
+// 参数 data 保持 map[string]any 以支持字段级合并（无法区分零值与未设置）。
 func (s *UserMemStore) Update(ctx context.Context, userID, scopeID, memID string, data map[string]any) (bool, error) {
 	userMemKey := s.getUserMemKey(userID, scopeID, memID)
 	exists, err := s.kvStore.Exists(ctx, userMemKey)
@@ -197,6 +210,7 @@ func (s *UserMemStore) Update(ctx context.Context, userID, scopeID, memID string
 		return true, nil
 	}
 
+	// 将旧数据反序列化为 map 做字段级合并（保持 Python dict merge 语义）
 	var dictValue map[string]any
 	if err := json.Unmarshal(oldData, &dictValue); err != nil {
 		return false, err
@@ -233,14 +247,14 @@ func (s *UserMemStore) BatchDelete(ctx context.Context, userID, scopeID string, 
 
 // Get 获取指定记忆数据。
 // Python: UserMemStore.get
-func (s *UserMemStore) Get(ctx context.Context, userID, scopeID, memID string) (map[string]any, error) {
+func (s *UserMemStore) Get(ctx context.Context, userID, scopeID, memID string) (*UserMemoryRecord, error) {
 	userMemKey := s.getUserMemKey(userID, scopeID, memID)
 	return s.get(ctx, userMemKey)
 }
 
 // BatchGet 批量获取记忆数据。
 // Python: UserMemStore.batch_get
-func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, memIDs []string) ([]map[string]any, error) {
+func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, memIDs []string) ([]*UserMemoryRecord, error) {
 	keysList := make([]string, len(memIDs))
 	for i, memID := range memIDs {
 		keysList[i] = s.getUserMemKey(userID, scopeID, memID)
@@ -250,25 +264,25 @@ func (s *UserMemStore) BatchGet(ctx context.Context, userID, scopeID string, mem
 		return nil, err
 	}
 	if len(valueList) == 0 {
-		return []map[string]any{}, nil
+		return []*UserMemoryRecord{}, nil
 	}
-	result := make([]map[string]any, 0, len(valueList))
+	result := make([]*UserMemoryRecord, 0, len(valueList))
 	for i, value := range valueList {
 		if value == nil {
 			continue
 		}
-		var m map[string]any
-		if err := json.Unmarshal(value, &m); err != nil {
+		var record UserMemoryRecord
+		if err := json.Unmarshal(value, &record); err != nil {
 			return nil, fmt.Errorf("BatchGet 反序列化失败 (key=%s): %w", keysList[i], err)
 		}
-		result = append(result, m)
+		result = append(result, &record)
 	}
 	return result, nil
 }
 
 // GetAll 获取用户指定类型（或全部）记忆。memType 为空时获取全部类型。
 // Python: UserMemStore.get_all
-func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType string) ([]map[string]any, error) {
+func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType string) ([]*UserMemoryRecord, error) {
 	userIDsKey := s.getUserIDsKey(userID, scopeID, memType)
 	exists, err := s.kvStore.Exists(ctx, userIDsKey)
 	if err != nil {
@@ -289,7 +303,7 @@ func (s *UserMemStore) GetAll(ctx context.Context, userID, scopeID, memType stri
 
 // GetByTopic 按主题获取记忆。
 // Python: UserMemStore.get_by_topic
-func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic string) ([]map[string]any, error) {
+func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic string) ([]*UserMemoryRecord, error) {
 	userMemTopicKey := s.getConcatenationKey([]string{userID, scopeID, userProfileTopicStr, topic, idsStr})
 	exists, err := s.kvStore.Exists(ctx, userMemTopicKey)
 	if err != nil {
@@ -310,7 +324,7 @@ func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic st
 
 // GetInRange 按范围获取记忆（分页）。
 // Python: UserMemStore.get_in_range
-func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, startIdx, endIdx int, memType string) ([]map[string]any, error) {
+func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, startIdx, endIdx int, memType string) ([]*UserMemoryRecord, error) {
 	userIDsKey := s.getUserIDsKey(userID, scopeID, memType)
 	exists, err := s.kvStore.Exists(ctx, userIDsKey)
 	if err != nil {
@@ -374,18 +388,10 @@ func (s *UserMemStore) innerDelete(ctx context.Context, userID, scopeID, memID s
 
 	data, _ := s.kvStore.Get(ctx, userMemKey)
 	if len(data) > 0 {
-		var dictValue map[string]any
-		if err := json.Unmarshal(data, &dictValue); err == nil {
-			if memType, ok := dictValue[memTypeFieldKey]; ok {
-				// Python: mem_type 始终是字符串，非 string 视为异常
-				memTypeStr, ok := memType.(string)
-				if !ok {
-					logger.Error(logComponent).Str("memory_id", memID).
-						Str("event_type", "MEMORY_STORE").
-						Str("field", memTypeFieldKey).
-						Msg("mem_type 字段不是字符串类型")
-					return fmt.Errorf("mem_type 字段不是字符串类型，实际类型: %T", memType)
-				}
+		var record UserMemoryRecord
+		if err := json.Unmarshal(data, &record); err == nil {
+			memTypeStr := record.MemType
+			if memTypeStr != "" {
 				// 删除 mem_type ids
 				userMemIDsKey := s.getUserIDsKey(userID, scopeID, memTypeStr)
 				if err := s.deleteMemID(ctx, userMemIDsKey, memID); err != nil {
@@ -436,7 +442,7 @@ func (s *UserMemStore) deleteMemID(ctx context.Context, idsKey, memID string) er
 
 // get 内部获取方法。
 // Python: UserMemStore.__get
-func (s *UserMemStore) get(ctx context.Context, memKey string) (map[string]any, error) {
+func (s *UserMemStore) get(ctx context.Context, memKey string) (*UserMemoryRecord, error) {
 	memValue, err := s.kvStore.Get(ctx, memKey)
 	if err != nil {
 		return nil, err
@@ -444,11 +450,11 @@ func (s *UserMemStore) get(ctx context.Context, memKey string) (map[string]any, 
 	if len(memValue) == 0 {
 		return nil, nil
 	}
-	var result map[string]any
-	if err := json.Unmarshal(memValue, &result); err != nil {
+	var record UserMemoryRecord
+	if err := json.Unmarshal(memValue, &record); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return &record, nil
 }
 
 // writeID 将 ID 追加到 ID 列表。
