@@ -189,7 +189,9 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
 	}
 	if _, err := fmt.Fprintf(indexFile, "%s\n", indexLine); err != nil {
-		indexFile.Close()
+		if closeErr := indexFile.Close(); closeErr != nil {
+			logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close 失败")
+		}
 		logger.Warn(logComponent).
 			Str("skill_id", skillID).
 			Str("bundle_id", bundle.BundleID).
@@ -198,7 +200,9 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 		b.spoolToOutbox(bundle)
 		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
 	}
-	indexFile.Close()
+	if closeErr := indexFile.Close(); closeErr != nil {
+		logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close 失败")
+	}
 
 	// 更新全局索引
 	b.upsertGlobalIndex(skillID, bundle)

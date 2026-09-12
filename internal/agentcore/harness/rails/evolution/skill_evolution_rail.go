@@ -869,29 +869,41 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 
 	// 先归档当前状态
 	// Python: await store.archive_skill_body(skill_name); await store.archive_evolutions(skill_name)
-	store.ArchiveSkillBody(ctx, skillName)
-	store.ArchiveEvolutions(ctx, skillName)
+	if _, err := store.ArchiveSkillBody(ctx, skillName); err != nil {
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("归档 skill body 失败")
+	}
+	if _, err := store.ArchiveEvolutions(ctx, skillName); err != nil {
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("归档 evolutions 失败")
+	}
 
 	// 恢复旧 body
 	oldBody, err := store.ReadFileText(ctx, bodyArchivePath)
 	if err != nil {
 		return false, fmt.Errorf("read archived body: %w", err)
 	}
-	store.WriteSkillContent(ctx, skillName, oldBody)
+	if _, err := store.WriteSkillContent(ctx, skillName, oldBody); err != nil {
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("恢复 skill body 失败")
+	}
 
 	// 恢复旧 evolutions.json
 	if _, statErr := os.Stat(evoArchivePath); statErr == nil {
 		evoContent, readErr := store.ReadFileText(ctx, evoArchivePath)
 		if readErr == nil {
 			evoPath := filepath.Join(skillDir, "evolutions.json")
-			store.WriteFileText(ctx, evoPath, evoContent)
+			if writeErr := store.WriteFileText(ctx, evoPath, evoContent); writeErr != nil {
+				logger.Error(logComponent).Err(writeErr).Str("skill", skillName).Msg("恢复 evolutions.json 失败")
+			}
 		}
 	} else {
-		store.ClearEvolutions(ctx, skillName)
+		if err := store.ClearEvolutions(ctx, skillName); err != nil {
+			logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("清除 evolutions 失败")
+		}
 	}
 
 	// Python: await store.render_evolution_markdown(skill_name)
-	store.RenderEvolutionMarkdown(ctx, skillName)
+	if err := store.RenderEvolutionMarkdown(ctx, skillName); err != nil {
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("渲染 evolution markdown 失败")
+	}
 
 	logger.Info(logComponent).Str("skill", skillName).Str("archive", filepath.Base(bodyArchivePath)).Msg("[SkillEvolutionRail] rollback completed")
 	return true, nil
@@ -1232,10 +1244,14 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 	if r.autoSave {
 		// 自动保存：先持久化共享记录，再正常演化
 		for _, record := range sharedRecords {
-			r.evolutionStore.AppendRecord(ctx, skillName, record)
+			if err := r.evolutionStore.AppendRecord(ctx, skillName, record); err != nil {
+				logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("持久化共享记录失败")
+			}
 		}
 		logger.Info(logComponent).Int("records", len(sharedRecords)).Str("skill", skillName).Msg("[SkillEvolutionRail] persisted shared records")
-		r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", false, true)
+		if _, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", false, true); err != nil {
+			logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("[SkillEvolutionRail] evolve after shared records failed")
+		}
 		return
 	}
 

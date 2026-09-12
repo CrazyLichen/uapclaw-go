@@ -436,8 +436,9 @@ func TestVariableManager_AddMemories_NonVariableUnitTypeIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddMemories 返回 error: %v", err)
 	}
-	if len(result) != 0 {
-		t.Errorf("非 VariableUnit 类型应被忽略，得到 %d", len(result))
+	// 非 VariableUnit 类型不写入 KV，但返回值仍包含原始列表（对齐 Python: return memories[self.mem_type]）
+	if len(result) != 1 {
+		t.Errorf("期望返回 1 个结果（原始列表），得到 %d", len(result))
 	}
 }
 
