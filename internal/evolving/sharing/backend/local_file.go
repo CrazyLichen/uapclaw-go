@@ -59,7 +59,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent 日志组件常量
+// logComponent 日志组件常量（与 sharing 包的 interface.go 中声明同值，
+// backend 是独立 Go 包，无法跨包引用 sharing.logComponent）
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

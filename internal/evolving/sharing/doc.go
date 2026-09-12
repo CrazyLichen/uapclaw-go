@@ -13,14 +13,14 @@
 //
 //	sharing/
 //	├── doc.go                  # 包文档
+//	├── interface.go            # SharingBackend 接口 + logComponent 声明
 //	├── types.go                # 共享数据类型（SharingMeta/SharedExperience/SharedSkillBundle 等）
 //	├── keyword_extractor.go    # 关键词提取器（上传解析 + 下载 LLM 提取）
 //	├── experience_sharer.go    # 上传/下载门面 + 待上传队列
 //	├── share_stager.go         # QC 筛选 + 入队
 //	├── hub_client.go           # 搜索 + 安装高层封装
-//	└── backend/                # 后端接口和实现
+//	└── backend/                # 后端实现
 //	    ├── doc.go              # 子包文档
-//	    ├── interface.go        # SharingBackend 抽象接口
 //	    └── local_file.go       # LocalFileBackend 本地文件实现
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/sharing/

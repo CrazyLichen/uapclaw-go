@@ -17,29 +17,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SharingBackend 经验共享后端接口。
-//
-// 与 backend.SharingBackend 方法签名等价，定义在 sharing 包中避免循环依赖。
-// backend.LocalFileBackend 隐式实现此接口。
-//
-// Python: openjiuwen/agent_evolving/sharing/backends/base.py SharingBackend
-type SharingBackend interface {
-	// UploadBundle 上传经验 bundle，返回上传结果。
-	UploadBundle(ctx context.Context, bundle SharedSkillBundle) UploadResult
-	// DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。
-	DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) []SharedSkillBundle
-	// HasSkillPackage Hub 是否已有该技能包。
-	HasSkillPackage(ctx context.Context, skillID string) bool
-	// UploadSkillPackage 上传初始技能包（不可变，重复上传为 no-op）。
-	UploadSkillPackage(ctx context.Context, skillID string, packageBytes []byte, meta SkillPackageMeta) error
-	// DownloadSkillPackage 下载技能包字节。
-	DownloadSkillPackage(ctx context.Context, skillID string) ([]byte, error)
-	// GetSkillPackageMeta 获取技能包元数据。
-	GetSkillPackageMeta(ctx context.Context, skillID string) (*SkillPackageMeta, error)
-	// SearchSkills 全局关键词搜索技能。
-	SearchSkills(ctx context.Context, query QueryKeywords, topK int) []SkillSearchResult
-}
-
 // SkillSharingContextProvider 技能共享上下文提供者函数类型。
 //
 // 根据技能名称返回 skill_id、技能包字节、解析后名称和描述。
@@ -91,8 +68,7 @@ const (
 	defaultBackoffSecs = 0.5
 )
 
-// logComponent 日志组件常量（同 keyword_extractor.go 中声明，包内共享）
-// 不再重复声明
+// logComponent 声明在 interface.go 中，包内共享
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -278,7 +254,12 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 		attempt++
 		result := es.backend.UploadBundle(ctx, *bundle)
 		if result.OK {
-			es.mirrorBundle(bundle, "uploaded")
+			if err := es.mirrorBundle(bundle, "uploaded"); err != nil {
+				logger.Warn(logComponent).
+					Str("bundle_id", bundle.BundleID).
+					Err(err).
+					Msg("[ExperienceSharer] mirror uploaded failed")
+			}
 			logger.Info(logComponent).
 				Str("bundle_id", firstNonEmpty(result.BundleID, bundle.BundleID)).
 				Str("skill", skillName).
@@ -345,7 +326,12 @@ func (es *ExperienceSharer) DownloadRelevant(
 	}()
 
 	for i := range bundles {
-		es.mirrorBundle(&bundles[i], "downloaded")
+		if err := es.mirrorBundle(&bundles[i], "downloaded"); err != nil {
+			logger.Warn(logComponent).
+				Str("bundle_id", bundles[i].BundleID).
+				Err(err).
+				Msg("[ExperienceSharer] mirror downloaded failed")
+		}
 	}
 	if len(bundles) > 0 {
 		logger.Info(logComponent).
@@ -545,17 +531,17 @@ func (es *ExperienceSharer) syncSkillPackage(ctx context.Context, bundle *Shared
 
 // mirrorBundle 将 bundle 写入本地缓存目录。
 //
-// kind 只允许 "uploaded" 或 "downloaded"。
+// kind 只允许 "uploaded" 或 "downloaded"，否则返回 error。
 // 路径: local_cache_dir/{kind}/{skill_id}/{bundle_id}.json
 //
 // Python: ExperienceSharer._mirror_bundle()
-func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string) {
+func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string) error {
 	skillID := strings.TrimSpace(bundle.SkillID)
 	if es.localCacheDir == nil || bundle.BundleID == "" || skillID == "" {
-		return
+		return nil
 	}
 	if kind != "uploaded" && kind != "downloaded" {
-		panic(fmt.Sprintf("unsupported mirror kind: %s", kind))
+		return fmt.Errorf("unsupported mirror kind: %s", kind)
 	}
 
 	targetDir := filepath.Join(*es.localCacheDir, kind, skillID)
@@ -565,7 +551,7 @@ func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string)
 			Str("bundle_id", bundle.BundleID).
 			Err(err).
 			Msg("[ExperienceSharer] mirror failed")
-		return
+		return err
 	}
 	data, err := json.MarshalIndent(bundle.ToDict(), "", "  ")
 	if err != nil {
@@ -574,7 +560,7 @@ func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string)
 			Str("bundle_id", bundle.BundleID).
 			Err(err).
 			Msg("[ExperienceSharer] mirror failed")
-		return
+		return err
 	}
 	targetFile := filepath.Join(targetDir, bundle.BundleID+".json")
 	if err := os.WriteFile(targetFile, data, 0o644); err != nil {
@@ -583,7 +569,9 @@ func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string)
 			Str("bundle_id", bundle.BundleID).
 			Err(err).
 			Msg("[ExperienceSharer] mirror failed")
+		return err
 	}
+	return nil
 }
 
 // firstNonEmpty 返回第一个非空字符串，都为空则返回空。

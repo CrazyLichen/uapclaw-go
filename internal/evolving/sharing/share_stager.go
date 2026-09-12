@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
@@ -181,6 +182,7 @@ func (s *ShareStager) wrap(
 	meta := &SharingMeta{
 		SkillName:     skillName,
 		SkillVersion:  skillVersion,
+		UploadAt:      time.Now().Format(time.RFC3339),
 		UploadTrigger: "user_approval",
 		SourceUserID:  s.sourceUserID,
 		Confidence:    confidence,

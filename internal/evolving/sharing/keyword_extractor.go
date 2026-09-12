@@ -40,8 +40,7 @@ type KeywordExtractor struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent 日志组件常量
-const logComponent = logger.ComponentAgentCore
+// logComponent 声明在 interface.go 中，包内共享
 
 // QUERY_KEYWORDS_LLM_POLICY 关键词提取 LLM 调用策略。
 //

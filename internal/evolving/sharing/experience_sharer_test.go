@@ -554,18 +554,18 @@ func TestExperienceSharer_GetSkillPackageMeta(t *testing.T) {
 
 // ──────────────────────────── mirrorBundle 测试 ────────────────────────────
 
-// TestExperienceSharer_MirrorBundle_InvalidKind 无效 kind 触发 panic
+// TestExperienceSharer_MirrorBundle_InvalidKind 无效 kind 返回 error
 func TestExperienceSharer_MirrorBundle_InvalidKind(t *testing.T) {
 	es, _, _ := newTestSharer(t)
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("无效 kind 应触发 panic")
-		}
-	}()
-
 	bundle := &SharedSkillBundle{BundleID: "sb_test", SkillID: "sk_test"}
-	es.mirrorBundle(bundle, "invalid")
+	err := es.mirrorBundle(bundle, "invalid")
+	if err == nil {
+		t.Error("无效 kind 应返回 error")
+	}
+	if err.Error() != "unsupported mirror kind: invalid" {
+		t.Errorf("error = %q, 期望 %q", err.Error(), "unsupported mirror kind: invalid")
+	}
 }
 
 // ──────────────────────────── Backend / LocalCacheDir 属性测试 ────────────────────────────
