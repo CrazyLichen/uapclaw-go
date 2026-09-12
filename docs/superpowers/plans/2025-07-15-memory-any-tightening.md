@@ -38,7 +38,7 @@
 **Files:**
 - Modify: `internal/agentcore/memory/lite/config.go`
 
-- [ ] **Step 1: 在 config.go 结构体区块新增 8 个子配置 struct**
+- [x] **Step 1: 在 config.go 结构体区块新增 8 个子配置 struct**
 
 在 `MemorySettings` 结构体定义之前插入：
 
@@ -118,7 +118,7 @@ type CacheConfig struct {
 }
 ```
 
-- [ ] **Step 2: 修改 MemorySettings 字段类型**
+- [x] **Step 2: 修改 MemorySettings 字段类型**
 
 将 `MemorySettings` 中 5 个 `map[string]any` 字段替换：
 
@@ -152,7 +152,7 @@ type MemorySettings struct {
 }
 ```
 
-- [ ] **Step 3: 重写 CreateMemorySettings 默认值构造**
+- [x] **Step 3: 重写 CreateMemorySettings 默认值构造**
 
 将默认值从 map 构造改为 struct 字段赋值：
 
@@ -196,7 +196,7 @@ s := &MemorySettings{
 }
 ```
 
-- [ ] **Step 4: 重写 CreateMemorySettings overrides 合并逻辑**
+- [x] **Step 4: 重写 CreateMemorySettings overrides 合并逻辑**
 
 将 switch 中 5 个子配置的 `map[string]any` 整体替换改为逐字段解析：
 
@@ -286,7 +286,7 @@ s := &MemorySettings{
 		}
 ```
 
-- [ ] **Step 5: 编译验证**
+- [x] **Step 5: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && pgrep -f 'go (build|test)' && pkill -f 'go (build|test)'; go build ./internal/agentcore/memory/lite/... 2>&1 | head -30`
 Expected: 编译错误，manager_impl.go 中对 map 的索引访问报错（类型已改为 struct）
@@ -298,7 +298,7 @@ Expected: 编译错误，manager_impl.go 中对 map 的索引访问报错（类�
 **Files:**
 - Modify: `internal/agentcore/memory/lite/manager_impl.go`
 
-- [ ] **Step 1: 替换 Sync 字段访问（3 处）**
+- [x] **Step 1: 替换 Sync 字段访问（3 处）**
 
 第 158 行：
 ```go
@@ -338,7 +338,7 @@ if v, ok := m.settings.Sync["intervalMinutes"].(int); ok {
 minutes = m.settings.Sync.IntervalMinutes
 ```
 
-- [ ] **Step 2: 替换 Query 字段访问（3 处）**
+- [x] **Step 2: 替换 Query 字段访问（3 处）**
 
 第 228 行：
 ```go
@@ -403,7 +403,7 @@ if v, ok := opts["hybrid"].(map[string]any); ok {
 }
 ```
 
-- [ ] **Step 3: 替换 Store 字段访问（5 处）**
+- [x] **Step 3: 替换 Store 字段访问（5 处）**
 
 第 429 行（Status 方法）：
 ```go
@@ -465,7 +465,7 @@ if v, ok := m.settings.Store["vector"].(map[string]any); ok {
 vecEnabled = m.settings.Store.Vector.Enabled
 ```
 
-- [ ] **Step 4: 替换 Chunking 字段访问（4 处）**
+- [x] **Step 4: 替换 Chunking 字段访问（4 处）**
 
 第 761 行（shouldFullReindex）：
 ```go
@@ -495,7 +495,7 @@ chunkTokens := int(m.settings.Chunking.Tokens)
 chunkOverlap := int(m.settings.Chunking.Overlap)
 ```
 
-- [ ] **Step 5: 替换 Cache 字段访问（2 处）**
+- [x] **Step 5: 替换 Cache 字段访问（2 处）**
 
 第 441 行（Status 方法）：
 ```go
@@ -517,7 +517,7 @@ if v, ok := m.settings.Cache["enabled"].(bool); ok {
 cacheEnabled = m.settings.Cache.Enabled
 ```
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go build ./internal/agentcore/memory/lite/...`
 Expected: 编译通过
@@ -529,7 +529,7 @@ Expected: 编译通过
 **Files:**
 - Modify: `internal/agentcore/memory/lite/config_test.go`
 
-- [ ] **Step 1: 替换 TestCreateMemorySettings_分块配置 中的 map 访问**
+- [x] **Step 1: 替换 TestCreateMemorySettings_分块配置 中的 map 访问**
 
 ```go
 // 修改前
@@ -557,7 +557,7 @@ func TestCreateMemorySettings_分块配置(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 替换 TestCreateMemorySettings_混合搜索配置 中的 map 访问**
+- [x] **Step 2: 替换 TestCreateMemorySettings_混合搜索配置 中的 map 访问**
 
 ```go
 // 修改前
@@ -593,12 +593,12 @@ func TestCreateMemorySettings_混合搜索配置(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行测试验证**
+- [x] **Step 3: 运行测试验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/memory/lite/... -count=1 2>&1 | tail -20`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/memory/lite/
@@ -619,7 +619,7 @@ git commit -m "refactor(memory): MemorySettings 子配置 map[string]any 替换�
 **Files:**
 - Modify: `internal/agentcore/memory/manage/mem_model/user_mem_store.go`
 
-- [ ] **Step 1: 在 user_mem_store.go 结构体区块新增 UserMemoryRecord**
+- [x] **Step 1: 在 user_mem_store.go 结构体区块新增 UserMemoryRecord**
 
 在 `UserMemStore` 结构体之前插入：
 
@@ -639,7 +639,7 @@ type UserMemoryRecord struct {
 }
 ```
 
-- [ ] **Step 2: 修改 Write 方法签名和实现**
+- [x] **Step 2: 修改 Write 方法签名和实现**
 
 ```go
 // 修改前
@@ -684,7 +684,7 @@ func (s *UserMemStore) Write(ctx context.Context, userID, scopeID, memID string,
 
 注意：`len(data) == 0` 改为 `data == nil`（struct 无法用 len 判空）。
 
-- [ ] **Step 3: 修改 get 内部方法返回类型**
+- [x] **Step 3: 修改 get 内部方法返回类型**
 
 ```go
 // 修改前
@@ -708,7 +708,7 @@ func (s *UserMemStore) get(ctx context.Context, memKey string) (*UserMemoryRecor
 }
 ```
 
-- [ ] **Step 4: 修改 Get/BatchGet/GetAll/GetByTopic/GetInRange 方法签名和实现**
+- [x] **Step 4: 修改 Get/BatchGet/GetAll/GetByTopic/GetInRange 方法签名和实现**
 
 ```go
 // Get
@@ -741,7 +741,7 @@ func (s *UserMemStore) GetByTopic(ctx context.Context, userID, scopeID, topic st
 func (s *UserMemStore) GetInRange(ctx context.Context, userID, scopeID string, startIdx, endIdx int, memType string) ([]*UserMemoryRecord, error) {
 ```
 
-- [ ] **Step 5: 修改 innerDelete 中的 map 反序列化**
+- [x] **Step 5: 修改 innerDelete 中的 map 反序列化**
 
 ```go
 // 修改前
@@ -766,7 +766,7 @@ if err := json.Unmarshal(data, &record); err == nil {
 }
 ```
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go build ./internal/agentcore/memory/manage/mem_model/...`
 Expected: 编译错误，测试文件中 map 调用不匹配
@@ -778,7 +778,7 @@ Expected: 编译错误，测试文件中 map 调用不匹配
 **Files:**
 - Modify: `internal/agentcore/memory/manage/mem_model/user_mem_store_test.go`
 
-- [ ] **Step 1: 替换所有 Write 调用中的 map 为 UserMemoryRecord**
+- [x] **Step 1: 替换所有 Write 调用中的 map 为 UserMemoryRecord**
 
 ```go
 // 修改前
@@ -800,7 +800,7 @@ _, _ = store.Write(ctx, "user1", "scope1", testID1, map[string]any{"content": "t
 _, _ = store.Write(ctx, "user1", "scope1", testID1, &UserMemoryRecord{Content: "test1"})
 ```
 
-- [ ] **Step 2: 替换所有 Get 返回值断言**
+- [x] **Step 2: 替换所有 Get 返回值断言**
 
 ```go
 // 修改前
@@ -814,7 +814,7 @@ if result.MemType != "user_profile" { ... }
 if result.Content != "test" { ... }
 ```
 
-- [ ] **Step 3: 替换 GetAll/GetInRange 返回值断言**
+- [x] **Step 3: 替换 GetAll/GetInRange 返回值断言**
 
 ```go
 // 修改前
@@ -826,7 +826,7 @@ result, err := store.GetAll(ctx, "user1", "scope1", "user_profile")
 if len(result) != 1 { ... }
 ```
 
-- [ ] **Step 4: 替换 BatchGet 返回值断言**
+- [x] **Step 4: 替换 BatchGet 返回值断言**
 
 ```go
 // 修改前
@@ -836,7 +836,7 @@ if len(result) != 2 { ... }
 // 修改后 — 同上，长度断言不变
 ```
 
-- [ ] **Step 5: 替换空数据 Write 测试**
+- [x] **Step 5: 替换空数据 Write 测试**
 
 ```go
 // 修改前
@@ -860,12 +860,12 @@ if data == nil || data.Content == "" {
 
 **推荐选项 A**，对齐 Python `if not data: return False` 语义。
 
-- [ ] **Step 6: 运行测试验证**
+- [x] **Step 6: 运行测试验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/memory/manage/mem_model/... -count=1 -v 2>&1 | tail -30`
 Expected: PASS
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/agentcore/memory/manage/mem_model/
@@ -886,15 +886,15 @@ git commit -m "refactor(memory): UserMemStore CRUD 返回 typed struct 替代 ma
 - Modify: `internal/agentcore/memory/lite/doc.go`
 - Modify: `internal/agentcore/memory/manage/mem_model/doc.go`
 
-- [ ] **Step 1: 更新 lite/doc.go**
+- [x] **Step 1: 更新 lite/doc.go**
 
 在包文档中补充新增的子配置 struct 说明，更新核心类型索引。
 
-- [ ] **Step 2: 更新 mem_model/doc.go**
+- [x] **Step 2: 更新 mem_model/doc.go**
 
 在包文档中补充 UserMemoryRecord 说明，更新核心类型索引。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agentcore/memory/lite/doc.go internal/agentcore/memory/manage/mem_model/doc.go
@@ -907,26 +907,26 @@ git commit -m "docs(memory): 更新包文档反映 typed struct 变更"
 
 **Files:** 无代码变更
 
-- [ ] **Step 1: 检查残留 go 进程**
+- [x] **Step 1: 检查残留 go 进程**
 
 Run: `pgrep -f 'go (build|test)' && pkill -f 'go (build|test)' || echo "无残留进程"`
 
-- [ ] **Step 2: 全量编译**
+- [x] **Step 2: 全量编译**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go build ./...`
 Expected: 编译通过
 
-- [ ] **Step 3: 运行 memory 包测试**
+- [x] **Step 3: 运行 memory 包测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/memory/... -count=1 2>&1 | tail -30`
 Expected: PASS
 
-- [ ] **Step 4: 检查是否有其他包引用 MemorySettings 子配置 map 字段**
+- [x] **Step 4: 检查是否有其他包引用 MemorySettings 子配置 map 字段**
 
 Run: `cd /home/opensource/uapclaw-gateway && grep -rn '\.Chunking\[' internal/ --include='*.go' && grep -rn '\.Query\[' internal/ --include='*.go' && grep -rn '\.Store\[' internal/ --include='*.go' && grep -rn '\.Sync\[' internal/ --include='*.go' && grep -rn '\.Cache\[' internal/ --include='*.go'`
 Expected: 无结果（所有 map 索引访问已替换为 struct 字段）
 
-- [ ] **Step 5: 推送**
+- [x] **Step 5: 推送**
 
 ```bash
 git push
