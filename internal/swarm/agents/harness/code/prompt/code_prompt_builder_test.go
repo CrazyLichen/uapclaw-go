@@ -12,6 +12,33 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+func TestCodeSectionGenerators_数量与顺序(t *testing.T) {
+	// 对齐 Python: _CODE_SECTION_GENERATORS 列表应有 8 个生成函数
+	if len(codeSectionGenerators) != 8 {
+		t.Errorf("codeSectionGenerators 长度 = %d, want 8", len(codeSectionGenerators))
+	}
+
+	// 验证列表顺序与 Python _CODE_SECTION_GENERATORS 一致
+	// Python 顺序: intro → system → session_guidance → doing_tasks → using_tools → actions_with_care → tone_and_style → output_efficiency
+	expectedNames := []string{
+		"code_intro",
+		"code_system",
+		"code_session_guidance",
+		"code_doing_tasks",
+		"code_using_your_tools",
+		"code_actions_with_care",
+		"code_tone_and_style",
+		"code_output_efficiency",
+	}
+	for i, generator := range codeSectionGenerators {
+		section := generator()
+		if section.Name != expectedNames[i] {
+			t.Errorf("codeSectionGenerators[%d].Name = %q, want %q (对齐 Python 列表顺序)",
+				i, section.Name, expectedNames[i])
+		}
+	}
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -145,6 +172,11 @@ func TestBuildCodeSessionGuidanceSection(t *testing.T) {
 	}
 	if section.Priority != 55 {
 		t.Errorf("Priority = %d, want %d", section.Priority, 55)
+	}
+	// 对齐 Python: 末尾应有 \n (code_prompt_builder.py L158)
+	content := section.Content["en"]
+	if len(content) == 0 || content[len(content)-1] != '\n' {
+		t.Error("code_session_guidance 内容末尾缺少 \\n（应对齐 Python）")
 	}
 }
 

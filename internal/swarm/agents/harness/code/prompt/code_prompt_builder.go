@@ -37,6 +37,22 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// codeSectionGenerators Code 模式提示词节生成函数列表。
+// Python: _CODE_SECTION_GENERATORS (code_prompt_builder.py L599-608)
+//
+// 列表顺序与 Python 一致。Build() 按 Priority 排序渲染，
+// 故运行时输出不受添加顺序影响，但此处对齐 Python 列表便于后续维护对照。
+var codeSectionGenerators = []func() saprompt.PromptSection{
+	BuildCodeIntroSection,
+	BuildCodeSystemSection,
+	BuildCodeSessionGuidanceSection,
+	BuildCodeDoingTasksSection,
+	BuildCodeUsingYourToolsSection,
+	BuildCodeActionsWithCareSection,
+	BuildCodeToneAndStyleSection,
+	BuildCodeOutputEfficiencySection,
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildCodeSystemPrompt 构建 Code 模式系统提示词。
@@ -52,14 +68,9 @@ func BuildCodeSystemPrompt() string {
 	builder := prompts.NewSystemPromptBuilder("en", hschema.PromptModeFull)
 
 	// 步骤 2: 对齐 Python: for generator in _CODE_SECTION_GENERATORS: builder.add_section(generator())
-	builder.AddSection(BuildCodeIntroSection())
-	builder.AddSection(BuildCodeSystemSection())
-	builder.AddSection(BuildCodeDoingTasksSection())
-	builder.AddSection(BuildCodeUsingYourToolsSection())
-	builder.AddSection(BuildCodeActionsWithCareSection())
-	builder.AddSection(BuildCodeToneAndStyleSection())
-	builder.AddSection(BuildCodeOutputEfficiencySection())
-	builder.AddSection(BuildCodeSessionGuidanceSection())
+	for _, generator := range codeSectionGenerators {
+		builder.AddSection(generator())
+	}
 
 	// 步骤 3: 对齐 Python: return builder.build()
 	return builder.Build()
@@ -610,7 +621,7 @@ func BuildCodeSessionGuidanceSection() saprompt.PromptSection {
 		"For testing tasks, understand the test framework's CLI, " +
 		"assertion APIs, and terminal interaction mechanisms. " +
 		"Extra exploration rounds before coding " +
-		"will reduce fix rounds after."
+		"will reduce fix rounds after.\n"
 
 	return saprompt.PromptSection{
 		Name:     "code_session_guidance",
