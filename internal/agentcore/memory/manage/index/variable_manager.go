@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/codec"
@@ -102,7 +101,7 @@ func NewVariableManager(kvStore kv.BaseKVStore, cryptoKey []byte) (*VariableMana
 //
 // Python: VariableManager.add_memories
 func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]mem_model.MemoryUnit, _ ...*llm.Model) ([]mem_model.MemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
 
 	// Python: for mem_type, memory in memories.items():
 	//               if mem_type != self.mem_type: 跳过
@@ -147,22 +146,18 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 		}
 	}
 
-	// Python: return memories.get(self.mem_type, [])
-	var result []mem_model.MemoryUnit
+	// 对齐 Python: return memories.get(self.mem_type, [])（返回原始列表）
+	var originalUnits []mem_model.MemoryUnit
 	if units, ok := memories[m.memType]; ok {
-		for _, u := range units {
-			if _, ok := u.(*mem_model.VariableUnit); ok {
-				result = append(result, u)
-			}
-		}
+		originalUnits = units
 	}
-	return result, nil
+	return originalUnits, nil
 }
 
 // Update 按 ID 更新变量记忆。
 //
 // 未实现 — 对齐 Python: memory_logger.warning("Not implemented method update"); pass
-func (m *VariableManager) Update(_ context.Context, userID string, scopeID string, memID string, _ string) (bool, error) {
+func (m *VariableManager) Update(_ context.Context, userID string, scopeID string, memID string, _ string, opts ...MemoryOption) (bool, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
 		Str("memory_type", m.memType).
@@ -176,7 +171,7 @@ func (m *VariableManager) Update(_ context.Context, userID string, scopeID strin
 // Search 语义搜索变量记忆。
 //
 // 未实现 — 对齐 Python: memory_logger.warning("Not implemented method search"); pass
-func (m *VariableManager) Search(_ context.Context, userID string, scopeID string, query string, _ int, _ []string) ([]*index.MemorySearchResult, error) {
+func (m *VariableManager) Search(_ context.Context, userID string, scopeID string, query string, _ int, _ []string, opts ...MemoryOption) ([]*index.MemorySearchResult, error) {
 	logger.Warn(logComponent).
 		Str("event_type", "MEMORY_STORE").
 		Str("memory_type", m.memType).
@@ -190,12 +185,13 @@ func (m *VariableManager) Search(_ context.Context, userID string, scopeID strin
 // Get 按 ID 获取变量记忆。
 //
 // 未实现 — 对齐 Python: memory_logger.warning("Not implemented method get"); pass
-func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
+func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (*index.MemoryDoc, error) {
 	logger.Warn(logComponent).
 		Strs("memory_id", []string{memID}).
 		Str("memory_type", m.memType).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
+		Str("event_type", "MEMORY_STORE").
 		Msg("未实现方法 get")
 	return nil, nil
 }
@@ -203,7 +199,7 @@ func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, 
 // Delete 按 ID 删除变量记忆。
 //
 // 未实现 — 对齐 Python: memory_logger.error("Not implemented method delete"); pass
-func (m *VariableManager) Delete(_ context.Context, userID string, scopeID string, memID string) (bool, error) {
+func (m *VariableManager) Delete(_ context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (bool, error) {
 	logger.Error(logComponent).
 		Str("event_type", "MEMORY_STORE").
 		Strs("memory_id", []string{memID}).
@@ -219,7 +215,7 @@ func (m *VariableManager) Delete(_ context.Context, userID string, scopeID strin
 // 按 user_var/session_var 前缀批量删除。
 //
 // Python: VariableManager.delete_by_user_id
-func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
+func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, scopeID string, opts ...MemoryOption) (bool, error) {
 	if m.kvStore == nil {
 		// Python: memory_logger.error("kv_store cannot be None", ...); return
 		logger.Error(logComponent).

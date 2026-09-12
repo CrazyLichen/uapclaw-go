@@ -3,7 +3,6 @@ package index
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -50,9 +49,9 @@ func NewWriteManager(managers map[string]BaseMemoryManager, memoryIndex index.Ba
 // 遍历 managers 去重后调用各 Manager 的 AddMemories。
 // 去重是因为三种 Fragment 类型共享同一个 FragmentMemoryManager 实例（对齐 Python: set(self.managers.values())）。
 //
-// Python: WriteManager.add_memories(user_id, scope_id, memories, llm)
+// Python: WriteManager.add_memories(user_id, scope_id, memories, llm, **kwargs)
 func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
 
 	if len(memories) == 0 {
 		logger.Debug(writeLogComponent).
@@ -70,7 +69,8 @@ func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID s
 		}
 		seen[manager] = true
 
-		memUnits, err := manager.AddMemories(ctx, userID, scopeID, memories, llmModel...)
+		// 透传 opts（对齐 Python: **kwargs 透传）
+		memUnits, err := manager.AddMemories(ctx, userID, scopeID, memories, opts...)
 		if err != nil {
 			logger.Error(writeLogComponent).
 				Str("memory_type", w.getManagerMemType(manager)).
@@ -88,17 +88,20 @@ func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID s
 //
 // 先从 memory_index 查 mem_type，再路由到对应 Manager 的 Update。
 //
-// Python: WriteManager.update_mem_by_id(user_id, scope_id, mem_id, memory)
-func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID string, memID string, newMemory string) error {
+// Python: WriteManager.update_mem_by_id(user_id, scope_id, mem_id, memory, **kwargs)
+func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID string, memID string, newMemory string, opts ...MemoryOption) error {
 	memType, err := w.getMemTypeFromIndex(ctx, userID, scopeID, memID)
-	if err != nil || memType == "" {
+	if err != nil {
+		// 传播底层错误（对齐 Python 异常向上传播，M3 修复）
+		return err
+	}
+	if memType == "" {
 		logger.Warn(writeLogComponent).
 			Str("memory_id", memID).
-			Str("memory_type", memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("获取记忆类型失败，跳过本次更新")
+			Msg("记忆类型未知，跳过本次更新")
 		return nil
 	}
 	manager, ok := w.managers[memType]
@@ -110,7 +113,7 @@ func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID
 			Msg("不支持的记忆类型")
 		return nil
 	}
-	_, err = manager.Update(ctx, userID, scopeID, memID, newMemory)
+	_, err = manager.Update(ctx, userID, scopeID, memID, newMemory, opts...)
 	return err
 }
 
@@ -118,17 +121,20 @@ func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID
 //
 // 先从 memory_index 查 mem_type，再路由到对应 Manager 的 Delete。
 //
-// Python: WriteManager.delete_mem_by_id(user_id, scope_id, mem_id)
-func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID string, memID string) error {
+// Python: WriteManager.delete_mem_by_id(user_id, scope_id, mem_id, **kwargs)
+func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) error {
 	memType, err := w.getMemTypeFromIndex(ctx, userID, scopeID, memID)
-	if err != nil || memType == "" {
+	if err != nil {
+		// 传播底层错误（对齐 Python 异常向上传播，M3 修复）
+		return err
+	}
+	if memType == "" {
 		logger.Warn(writeLogComponent).
 			Str("memory_id", memID).
-			Str("memory_type", memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("获取记忆类型失败，跳过本次删除")
+			Msg("记忆类型未知，跳过本次删除")
 		return nil
 	}
 	manager, ok := w.managers[memType]
@@ -140,7 +146,7 @@ func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID
 			Msg("不支持的记忆类型")
 		return nil
 	}
-	_, err = manager.Delete(ctx, userID, scopeID, memID)
+	_, err = manager.Delete(ctx, userID, scopeID, memID, opts...)
 	return err
 }
 
@@ -148,15 +154,15 @@ func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID
 //
 // 遍历所有 Manager 调用 DeleteByUserID（对齐 Python: set(self.managers.values()) 去重）。
 //
-// Python: WriteManager.delete_mem_by_user_id(user_id, scope_id)
-func (w *WriteManager) DeleteMemByUserID(ctx context.Context, userID string, scopeID string) error {
+// Python: WriteManager.delete_mem_by_user_id(user_id, scope_id, **kwargs)
+func (w *WriteManager) DeleteMemByUserID(ctx context.Context, userID string, scopeID string, opts ...MemoryOption) error {
 	seen := make(map[BaseMemoryManager]bool)
 	for _, manager := range w.managers {
 		if seen[manager] {
 			continue
 		}
 		seen[manager] = true
-		_, err := manager.DeleteByUserID(ctx, userID, scopeID)
+		_, err := manager.DeleteByUserID(ctx, userID, scopeID, opts...)
 		if err != nil {
 			return err
 		}

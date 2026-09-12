@@ -3,9 +3,9 @@ package index
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 )
@@ -163,6 +163,19 @@ func TestWriteManager_UpdateMemByID_类型不存在(t *testing.T) {
 	}
 }
 
+// TestWriteManager_UpdateMemByID_GetByIDError 测试 GetByID 错误向上传播 (M3)
+func TestWriteManager_UpdateMemByID_GetByIDError(t *testing.T) {
+	idx := &errorMemoryIndex{}
+	managers := map[string]BaseMemoryManager{
+		"fragment": NewFragmentMemoryManager(idx, nil),
+	}
+	wm := NewWriteManager(managers, idx)
+	err := wm.UpdateMemByID(context.Background(), "user-1", "scope-1", "mem-1", "new text")
+	if err == nil {
+		t.Fatal("期望 GetByID error 向上传播，但得到 nil")
+	}
+}
+
 // TestWriteManager_DeleteMemByID_路由 测试删除路由
 func TestWriteManager_DeleteMemByID_路由(t *testing.T) {
 	varMgr := &stubWriteManagerManager{memTypeStr: "variable"}
@@ -179,6 +192,19 @@ func TestWriteManager_DeleteMemByID_路由(t *testing.T) {
 	err := wm.DeleteMemByID(context.Background(), "user1", "scope1", "mem1")
 	if err != nil {
 		t.Fatalf("DeleteMemByID 返回错误: %v", err)
+	}
+}
+
+// TestWriteManager_DeleteMemByID_GetByIDError 测试 GetByID 错误向上传播 (M3)
+func TestWriteManager_DeleteMemByID_GetByIDError(t *testing.T) {
+	idx := &errorMemoryIndex{}
+	managers := map[string]BaseMemoryManager{
+		"fragment": NewFragmentMemoryManager(idx, nil),
+	}
+	wm := NewWriteManager(managers, idx)
+	err := wm.DeleteMemByID(context.Background(), "user-1", "scope-1", "mem-1")
+	if err == nil {
+		t.Fatal("期望 GetByID error 向上传播，但得到 nil")
 	}
 }
 
@@ -274,34 +300,34 @@ func TestWriteManager_getMemTypeFromIndex_正常(t *testing.T) {
 
 // AddMemories 实现 BaseMemoryManager 接口
 func (s *stubWriteManagerManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
 	s.addCalled++
 	return s.addResult, s.addErr
 }
 
 // Update 实现 BaseMemoryManager 接口
-func (s *stubWriteManagerManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error) {
+func (s *stubWriteManagerManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string, opts ...MemoryOption) (bool, error) {
 	s.updateCalled++
 	return true, s.updateErr
 }
 
 // Search 实现 BaseMemoryManager 接口
-func (s *stubWriteManagerManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string) ([]*index.MemorySearchResult, error) {
+func (s *stubWriteManagerManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string, opts ...MemoryOption) ([]*index.MemorySearchResult, error) {
 	return nil, nil
 }
 
 // Get 实现 BaseMemoryManager 接口
-func (s *stubWriteManagerManager) Get(ctx context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
+func (s *stubWriteManagerManager) Get(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (*index.MemoryDoc, error) {
 	return nil, nil
 }
 
 // Delete 实现 BaseMemoryManager 接口
-func (s *stubWriteManagerManager) Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error) {
+func (s *stubWriteManagerManager) Delete(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (bool, error) {
 	return true, s.deleteErr
 }
 
 // DeleteByUserID 实现 BaseMemoryManager 接口
-func (s *stubWriteManagerManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
+func (s *stubWriteManagerManager) DeleteByUserID(ctx context.Context, userID string, scopeID string, opts ...MemoryOption) (bool, error) {
 	s.deleteByUserIDCalled++
 	return true, s.deleteByUserIDErr
 }
@@ -309,4 +335,26 @@ func (s *stubWriteManagerManager) DeleteByUserID(ctx context.Context, userID str
 // getMemType 实现 getMemType 接口
 func (s *stubWriteManagerManager) getMemType() string {
 	return s.memTypeStr
+}
+
+// errorMemoryIndex GetByID 返回 error 的假实现（用于 M3 测试）
+type errorMemoryIndex struct {
+	index.MemoryIndexBase
+}
+
+func (e *errorMemoryIndex) SetStorageCodec(_ index.StorageCodec)                                         {}
+func (e *errorMemoryIndex) AddMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error        { return nil }
+func (e *errorMemoryIndex) UpdateMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error     { return nil }
+func (e *errorMemoryIndex) DeleteMemories(_ context.Context, _, _ string, _ []string) error               { return nil }
+func (e *errorMemoryIndex) DeleteByUser(_ context.Context, _ string) error                               { return nil }
+func (e *errorMemoryIndex) DeleteByScope(_ context.Context, _ string) error                              { return nil }
+func (e *errorMemoryIndex) DeleteByUserAndScope(_ context.Context, _, _ string) error                     { return nil }
+func (e *errorMemoryIndex) Search(_ context.Context, _, _, _ string, _ []string, _ int) ([]*index.MemorySearchResult, error) {
+	return nil, nil
+}
+func (e *errorMemoryIndex) GetByID(_ context.Context, _, _, _ string) (*index.MemoryDoc, error) {
+	return nil, fmt.Errorf("模拟数据库连接断开")
+}
+func (e *errorMemoryIndex) ListMemories(_ context.Context, _, _ string, _, _ int, _ []string) ([]*index.MemoryDoc, error) {
+	return nil, nil
 }

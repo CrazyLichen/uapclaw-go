@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -201,17 +202,18 @@ func TestWrapException_OtherErrorWrapped(t *testing.T) {
 }
 
 func TestEncryptDecryptMemoryIfNeeded(t *testing.T) {
+	base := &memoryManagerBase{memType: "test"}
 	// 空 key → passthrough
-	result := encryptMemoryIfNeeded(nil, "hello")
+	result := base.encryptMemoryIfNeeded(nil, "hello")
 	if result != "hello" {
 		t.Errorf("空 key 时应返回原文，得到 %q", result)
 	}
-	result = decryptMemoryIfNeeded(nil, "hello")
+	result = base.decryptMemoryIfNeeded(nil, "hello")
 	if result != "hello" {
 		t.Errorf("空 key 时应返回原文，得到 %q", result)
 	}
 	// 空字符串 → passthrough
-	result = encryptMemoryIfNeeded([]byte{1, 2, 3}, "")
+	result = base.encryptMemoryIfNeeded([]byte{1, 2, 3}, "")
 	if result != "" {
 		t.Errorf("空字符串时应返回原文，得到 %q", result)
 	}
@@ -226,5 +228,30 @@ func TestFragmentMemoryTypes(t *testing.T) {
 	}
 	if mem_model.MemoryTypeUserProfile.String() != "user_profile" {
 		t.Errorf("MemoryTypeUserProfile.String() = %q, want %q", mem_model.MemoryTypeUserProfile.String(), "user_profile")
+	}
+}
+
+func TestMemoryOption_WithLLMModel(t *testing.T) {
+	model := &llm.Model{}
+	cfg := ApplyMemoryOptions(WithLLMModel(model))
+	if cfg.llmModel != model {
+		t.Error("WithLLMModel 未正确设置 llmModel")
+	}
+}
+
+func TestMemoryOption_Empty(t *testing.T) {
+	cfg := ApplyMemoryOptions()
+	if cfg.llmModel != nil {
+		t.Error("空 opts 时 llmModel 应为 nil")
+	}
+}
+
+func TestMemoryOption_Multiple(t *testing.T) {
+	model1 := &llm.Model{}
+	model2 := &llm.Model{}
+	cfg := ApplyMemoryOptions(WithLLMModel(model1), WithLLMModel(model2))
+	// 后一个 WithLLMModel 覆盖前一个
+	if cfg.llmModel != model2 {
+		t.Error("多个 WithLLMModel 应以后者为准")
 	}
 }

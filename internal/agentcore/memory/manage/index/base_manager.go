@@ -18,30 +18,36 @@ import (
 //
 // 定义了记忆管理器的 6 个核心操作：AddMemories、Update、Search、Get、Delete、DeleteByUserID。
 // 所有记忆管理器实现（FragmentMemoryManager、SummaryManager、VariableManager）必须实现此接口。
+// opts ...MemoryOption 对齐 Python 的 **kwargs 扩展机制，llm 参数通过 WithLLMModel(opts) 传入。
 //
 // Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager)
 type BaseMemoryManager interface {
 	// AddMemories 批量添加记忆（含冲突检查和冗余消除）。
 	// memories 的 key 为 mem_type 字符串（如 "user_profile"），value 为该类型的记忆列表。
-	// llmModel 可选参数用于 LLM 驱动的冲突检查（对齐 Python: add_memories(llm=None)）。
+	// 通过 WithLLMModel 选项传入 LLM 模型用于冲突检查（对齐 Python: add_memories(llm=None)）。
 	AddMemories(ctx context.Context, userID string, scopeID string,
-		memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error)
+		memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error)
 	// Update 按 ID 更新记忆内容
-	Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error)
+	Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string,
+		opts ...MemoryOption) (bool, error)
 	// Search 语义搜索记忆
-	Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string) ([]*index.MemorySearchResult, error)
+	Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string,
+		opts ...MemoryOption) ([]*index.MemorySearchResult, error)
 	// Get 按 ID 获取单条记忆
-	Get(ctx context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error)
+	Get(ctx context.Context, userID string, scopeID string, memID string,
+		opts ...MemoryOption) (*index.MemoryDoc, error)
 	// Delete 按 ID 删除记忆
-	Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error)
+	Delete(ctx context.Context, userID string, scopeID string, memID string,
+		opts ...MemoryOption) (bool, error)
 	// DeleteByUserID 删除用户+scope 下所有记忆
-	DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error)
+	DeleteByUserID(ctx context.Context, userID string, scopeID string,
+		opts ...MemoryOption) (bool, error)
 }
 
 // memoryManagerBase 记忆管理器公共基类。
 //
 // 嵌入此结构体后，实现类只需实现 BaseMemoryManager 接口即可。
-// 提供 validateParams / wrapException / encryptMemoryIfNeeded / decryptMemoryIfNeeded 公共逻辑。
+// 提供 validateParams / wrapException / encryptMemoryIfNeeded / decryptMemoryIfNeeded 公共方法。
 //
 // Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager 非抽象方法)
 type memoryManagerBase struct {
@@ -51,6 +57,33 @@ type memoryManagerBase struct {
 	cryptoKey []byte
 	// memType 类型标识（如 "fragment"）
 	memType string
+}
+
+// MemoryOptionConfig 记忆操作选项配置（对齐 Python **kwargs 扩展点）。
+// 对齐 Python: BaseMemoryManager 各方法的 **kwargs 参数
+type MemoryOptionConfig struct {
+	// llmModel LLM 模型实例，用于冲突检查（对齐 Python: add_memories(llm=None)）
+	llmModel *llm.Model
+}
+
+// MemoryOption 记忆操作选项函数。
+// 使用 Functional Options 模式，对齐 Python 的 **kwargs 扩展机制。
+type MemoryOption func(*MemoryOptionConfig)
+
+// WithLLMModel 设置 LLM 模型（对齐 Python: llm 参数）。
+func WithLLMModel(model *llm.Model) MemoryOption {
+	return func(cfg *MemoryOptionConfig) {
+		cfg.llmModel = model
+	}
+}
+
+// ApplyMemoryOptions 应用选项列表到配置。
+func ApplyMemoryOptions(opts ...MemoryOption) *MemoryOptionConfig {
+	cfg := &MemoryOptionConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -132,7 +165,7 @@ func (b *memoryManagerBase) wrapException(e error, statusCode exception.StatusCo
 // encryptMemoryIfNeeded 如果 key 非空且 plaintext 非空，使用 AES 加密；否则返回原文。
 // 加密失败时返回原文并记录 Warn 日志（对齐 Python 容错行为）。
 // Python: BaseMemoryManager.encrypt_memory_if_needed
-func encryptMemoryIfNeeded(key []byte, plaintext string) string {
+func (b *memoryManagerBase) encryptMemoryIfNeeded(key []byte, plaintext string) string {
 	if len(key) == 0 || plaintext == "" {
 		return plaintext
 	}
@@ -149,7 +182,7 @@ func encryptMemoryIfNeeded(key []byte, plaintext string) string {
 // decryptMemoryIfNeeded 如果 key 非空且 ciphertext 非空，使用 AES 解密；否则返回原文。
 // 解密失败时返回原文并记录 Warn 日志（对齐 Python 容错行为）。
 // Python: BaseMemoryManager.decrypt_memory_if_needed
-func decryptMemoryIfNeeded(key []byte, ciphertext string) string {
+func (b *memoryManagerBase) decryptMemoryIfNeeded(key []byte, ciphertext string) string {
 	if len(key) == 0 || ciphertext == "" {
 		return ciphertext
 	}

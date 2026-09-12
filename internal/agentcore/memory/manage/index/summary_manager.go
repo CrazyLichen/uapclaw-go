@@ -5,7 +5,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -53,11 +52,17 @@ func NewSummaryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *Sum
 //
 // Python: SummaryManager.add_memories
 func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]mem_model.MemoryUnit, _ ...*llm.Model) ([]mem_model.MemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
 
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryAddMemoryExecutionError, m.memType); err != nil {
 		return nil, err
+	}
+
+	// 保存原始列表（对齐 Python: return memories[self.mem_type]）
+	var originalUnits []mem_model.MemoryUnit
+	if units, ok := memories[m.memType]; ok {
+		originalUnits = units
 	}
 
 	// 过滤 summary 类型的 SummaryUnit
@@ -91,7 +96,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Msg("无有效摘要文档可添加")
-		return nil, nil
+		return originalUnits, nil
 	}
 
 	docs := m.convertToMemoryDocs(summaryUnits)
@@ -99,13 +104,8 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 		return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 	}
 
-	// Python: return memories[self.mem_type]
-	// 将 summaryUnits 转为 []MemoryUnit 返回
-	result := make([]mem_model.MemoryUnit, len(summaryUnits))
-	for i, u := range summaryUnits {
-		result[i] = u
-	}
-	return result, nil
+	// 对齐 Python: return memories[self.mem_type]（返回原始列表）
+	return originalUnits, nil
 }
 
 // Update 按 ID 更新摘要记忆内容。
@@ -113,7 +113,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 // 先获取旧文档，替换 text 后更新索引。
 //
 // Python: SummaryManager.update
-func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error) {
+func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryUpdateMemoryExecutionError, m.memType); err != nil {
 		return false, err
@@ -132,7 +132,7 @@ func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID stri
 		ID:        memID,
 		Text:      newMemory,
 		Type:      m.memType,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Fields:    memoryDoc.Fields,
 	}
 	if err := m.memoryIndex.UpdateMemories(ctx, userID, scopeID, []*index.MemoryDoc{updatedDoc}); err != nil {
@@ -144,7 +144,7 @@ func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID stri
 // Delete 按 ID 删除摘要记忆。
 //
 // Python: SummaryManager.delete
-func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error) {
+func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
 		return false, err
@@ -159,7 +159,7 @@ func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID stri
 // DeleteByUserID 删除用户+scope 下所有摘要记忆。
 //
 // Python: SummaryManager.delete_by_user_id
-func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
+func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scopeID string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryDeleteMemoryExecutionError, m.memType); err != nil {
 		return false, err
@@ -174,7 +174,7 @@ func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scop
 // Get 按 ID 获取单条摘要记忆。
 //
 // Python: SummaryManager.get
-func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string, memID string) (*index.MemoryDoc, error) {
+func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string,
 // memTypes 参数被忽略，硬编码为 [m.memType]。
 //
 // Python: SummaryManager.search
-func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, _ []string) ([]*index.MemorySearchResult, error) {
+func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, _ []string, opts ...MemoryOption) ([]*index.MemorySearchResult, error) {
 	if err := m.validateParams(userID, scopeID,
 		exception.StatusMemoryGetMemoryExecutionError, m.memType); err != nil {
 		return nil, err

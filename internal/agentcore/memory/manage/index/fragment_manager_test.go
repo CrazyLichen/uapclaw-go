@@ -449,9 +449,9 @@ func TestFragmentMemoryManager_AddMemories_EmptyContentIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddMemories 返回 error: %v", err)
 	}
-	// 空内容被忽略
-	if len(result) != 0 {
-		t.Errorf("期望返回 0 个结果（空内容被忽略），得到 %d", len(result))
+	// 对齐 Python: return memories[self.mem_type]（返回原始列表，包含空内容项）
+	if len(result) != 1 {
+		t.Errorf("期望返回 1 个结果（原始列表，空内容项也包含），得到 %d", len(result))
 	}
 }
 
@@ -566,11 +566,12 @@ func TestEncryptDecryptMemoryIfNeeded_WithKey(t *testing.T) {
 	for i := range key {
 		key[i] = byte(i)
 	}
-	encrypted := encryptMemoryIfNeeded(key, "hello world")
+	base := &memoryManagerBase{memType: "fragment"}
+	encrypted := base.encryptMemoryIfNeeded(key, "hello world")
 	if encrypted == "" {
 		t.Error("加密后不应为空")
 	}
-	decrypted := decryptMemoryIfNeeded(key, encrypted)
+	decrypted := base.decryptMemoryIfNeeded(key, encrypted)
 	if decrypted != "hello world" {
 		t.Errorf("解密后应返回原文，得到 %q", decrypted)
 	}
@@ -579,7 +580,8 @@ func TestEncryptDecryptMemoryIfNeeded_WithKey(t *testing.T) {
 func TestEncryptMemoryIfNeeded_InvalidKey(t *testing.T) {
 	// 测试 key 长度不正确时的容错行为
 	key := []byte{1, 2, 3} // 不是 32 字节
-	result := encryptMemoryIfNeeded(key, "hello")
+	base := &memoryManagerBase{memType: "fragment"}
+	result := base.encryptMemoryIfNeeded(key, "hello")
 	if result != "hello" {
 		t.Errorf("key 长度不正确时应返回原文，得到 %q", result)
 	}
@@ -588,7 +590,8 @@ func TestEncryptMemoryIfNeeded_InvalidKey(t *testing.T) {
 func TestDecryptMemoryIfNeeded_InvalidKey(t *testing.T) {
 	// 测试 key 长度不正确时的容错行为
 	key := []byte{1, 2, 3} // 不是 32 字节
-	result := decryptMemoryIfNeeded(key, "hello")
+	base := &memoryManagerBase{memType: "fragment"}
+	result := base.decryptMemoryIfNeeded(key, "hello")
 	if result != "hello" {
 		t.Errorf("key 长度不正确时应返回原文，得到 %q", result)
 	}
