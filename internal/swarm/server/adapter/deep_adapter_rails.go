@@ -558,14 +558,18 @@ func (d *DeepAdapter) updateRailsForMode(mode string) {
 				var ok bool
 				d.skillEvolutionRail, ok = rail.(*evolution.SkillEvolutionRail)
 				if ok && d.skillEvolutionRail != nil && d.instance != nil {
-					d.instance.RegisterRail(context.Background(), d.skillEvolutionRail)
+					if err := d.instance.RegisterRail(context.Background(), d.skillEvolutionRail); err != nil {
+						logger.Error(logComponent).Err(err).Msg("注册 SkillEvolutionRail 失败")
+					}
 				}
 			}
 		}
 	} else {
 		if d.skillEvolutionRail != nil {
 			if d.instance != nil {
-				d.instance.UnregisterRail(context.Background(), d.skillEvolutionRail)
+				if err := d.instance.UnregisterRail(context.Background(), d.skillEvolutionRail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("注销 SkillEvolutionRail 失败")
+				}
 			}
 			d.skillEvolutionRail = nil
 		}

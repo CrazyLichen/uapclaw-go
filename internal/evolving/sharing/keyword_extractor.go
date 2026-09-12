@@ -289,8 +289,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 		keywords = keywords[:20]
 	}
 
-	intentVal, _ := data["intent"]
-	intent := strings.TrimSpace(fmt.Sprintf("%v", intentVal))
+	intent := strings.TrimSpace(fmt.Sprintf("%v", data["intent"]))
 	intentRunes := []rune(intent)
 	if len(intentRunes) > 80 {
 		intent = string(intentRunes[:80])

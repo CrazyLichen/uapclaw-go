@@ -1390,10 +1390,11 @@ func (r *SkillEvolutionRail) inferPrimarySkill(messages []map[string]any, skillN
 
 	for _, msg := range messages {
 		role, _ := msg["role"].(string)
-		if role == "tool" || role == "function" {
+		switch role {
+		case "tool", "function":
 			content, _ := msg["content"].(string)
 			texts = append(texts, content)
-		} else if role == "assistant" {
+		case "assistant":
 			if tcSlice, ok := msg["tool_calls"].([]any); ok {
 				for _, tc := range tcSlice {
 					if tcDict, ok := tc.(map[string]any); ok {
@@ -1878,12 +1879,13 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 
 	for _, msg := range messages {
 		role, _ := msg["role"].(string)
-		if role == "user" {
+		switch role {
+		case "user":
 			content, _ := msg["content"].(string)
 			if strings.TrimSpace(content) != "" {
 				userQueries = append(userQueries, truncateString(content, mc))
 			}
-		} else if role == "assistant" {
+		case "assistant":
 			if tcSlice, ok := msg["tool_calls"].([]any); ok {
 				for _, tc := range tcSlice {
 					if tcDict, ok := tc.(map[string]any); ok {
@@ -1898,7 +1900,7 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 					}
 				}
 			}
-		} else if role == "tool" || role == "function" {
+		case "tool", "function":
 			contentStr, _ := msg["content"].(string)
 			toolName, _ := msg["name"].(string)
 			if toolName == "" {
