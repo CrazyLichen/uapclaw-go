@@ -240,6 +240,12 @@ func ListPackableFiles(skillDir string) ([]string, error) {
 	return listPackableFilePaths(root), nil
 }
 
+// ParseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段（导出版本）。
+// Python: parse_top_level_frontmatter(content)
+func ParseTopLevelFrontmatter(content string) map[string]string {
+	return parseTopLevelFrontmatter(content)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // shouldPackRelative 判断相对路径是否应该打包。
@@ -309,12 +315,6 @@ func isSafePath(baseDir, targetPath string) bool {
 		return false
 	}
 	return strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) || absTarget == absBase
-}
-
-// ParseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段（导出版本）。
-// Python: parse_top_level_frontmatter(content)
-func ParseTopLevelFrontmatter(content string) map[string]string {
-	return parseTopLevelFrontmatter(content)
 }
 
 // parseTopLevelFrontmatter 解析 Markdown frontmatter 中的顶层标量字段。

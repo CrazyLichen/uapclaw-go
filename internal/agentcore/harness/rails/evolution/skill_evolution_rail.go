@@ -416,9 +416,9 @@ func (r *SkillEvolutionRail) KeywordExtractor() *sharing.KeywordExtractor {
 // Python: SkillEvolutionRail.evolution_config
 func (r *SkillEvolutionRail) EvolutionConfig() map[string]any {
 	return map[string]any{
-		"generate_records_llm_policy": r.generateRecordsLLMPolicy,
-		"evaluate_llm_policy":         r.evaluateLLMPolicy,
-		"simplify_llm_policy":         r.simplifyLLMPolicy,
+		"generate_records_llm_policy":  r.generateRecordsLLMPolicy,
+		"evaluate_llm_policy":          r.evaluateLLMPolicy,
+		"simplify_llm_policy":          r.simplifyLLMPolicy,
 		"evolution_total_timeout_secs": r.evolutionTimeoutSec,
 	}
 }
@@ -527,11 +527,11 @@ func (r *SkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *tra
 
 	skillName := "skill-evolution"
 	return &EvolutionSnapshot{
-		Trajectory:         traj,
-		Messages:           snapshot,
-		SkillName:          &skillName,
-		PresentedEntries:   presentedEntries,
-		SessionID:          sessionID,
+		Trajectory:          traj,
+		Messages:            snapshot,
+		SkillName:           &skillName,
+		PresentedEntries:    presentedEntries,
+		SessionID:           sessionID,
 		IncrementalMessages: incrementalMessages,
 	}
 }
@@ -927,7 +927,12 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 
 	if pending != nil {
 		logger.Info(logComponent).
-			Int("applied_count", func() int { if result != nil { return result.AppliedCount }; return 0 }()).
+			Int("applied_count", func() int {
+				if result != nil {
+					return result.AppliedCount
+				}
+				return 0
+			}()).
 			Str("skill", pending.SkillName).
 			Str("request_id", requestID).
 			Bool("is_shared", isShared).
@@ -1069,7 +1074,7 @@ func (r *SkillEvolutionRail) buildExperienceSharer() *sharing.ExperienceSharer {
 	// Python: return ExperienceSharer(backend=backend, local_cache_dir=..., max_upload_retries=...)
 	return sharing.NewExperienceSharer(
 		backendInstance,
-		"",  // local_cache_dir
+		"", // local_cache_dir
 		defaultSharingMaxUploadRetries,
 		0,   // backoff_base_secs
 		nil, // provider 在 initSharing 中设置
@@ -1252,14 +1257,14 @@ func (r *SkillEvolutionRail) emitSharedRecordsApproval(
 	// Python: request = self._manager.stage_records(skill_name, records, source="experience_sharing", messages=..., is_shared_records=True)
 	request, _ := r.manager.StageRecords(
 		context.Background(), skillName, records,
-		true,                 // requiresApproval
-		"experience_sharing", // source
-		"",                   // userQuery
-		nil,                  // signalType
-		nil,                  // signalSource
+		true,                        // requiresApproval
+		"experience_sharing",        // source
+		"",                          // userQuery
+		nil,                         // signalType
+		nil,                         // signalSource
 		schema.SkillExperienceEntry, // changeType
-		"skill_evolve_",     // requestIDPrefix
-		nil,                  // trajectory
+		"skill_evolve_",             // requestIDPrefix
+		nil,                         // trajectory
 		messages,
 		true, // isSharedRecords
 	)

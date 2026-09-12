@@ -13,12 +13,12 @@ import (
 
 // mockBackend 内存模拟 SharingBackend，用于单元测试。
 type mockBackend struct {
-	mu             sync.RWMutex
-	bundles        map[string][]SharedSkillBundle  // skillID → bundles
-	skillPackages  map[string][]byte               // skillID → packageBytes
-	skillMetas     map[string]SkillPackageMeta      // skillID → meta
-	uploadResults  []UploadResult                   // 每次 UploadBundle 返回的结果队列
-	uploadCallIdx  int
+	mu            sync.RWMutex
+	bundles       map[string][]SharedSkillBundle // skillID → bundles
+	skillPackages map[string][]byte              // skillID → packageBytes
+	skillMetas    map[string]SkillPackageMeta    // skillID → meta
+	uploadResults []UploadResult                 // 每次 UploadBundle 返回的结果队列
+	uploadCallIdx int
 }
 
 func newMockBackend() *mockBackend {

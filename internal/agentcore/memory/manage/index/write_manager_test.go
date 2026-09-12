@@ -342,13 +342,19 @@ type errorMemoryIndex struct {
 	index.MemoryIndexBase
 }
 
-func (e *errorMemoryIndex) SetStorageCodec(_ index.StorageCodec)                                         {}
-func (e *errorMemoryIndex) AddMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error        { return nil }
-func (e *errorMemoryIndex) UpdateMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error     { return nil }
-func (e *errorMemoryIndex) DeleteMemories(_ context.Context, _, _ string, _ []string) error               { return nil }
-func (e *errorMemoryIndex) DeleteByUser(_ context.Context, _ string) error                               { return nil }
-func (e *errorMemoryIndex) DeleteByScope(_ context.Context, _ string) error                              { return nil }
-func (e *errorMemoryIndex) DeleteByUserAndScope(_ context.Context, _, _ string) error                     { return nil }
+func (e *errorMemoryIndex) SetStorageCodec(_ index.StorageCodec) {}
+func (e *errorMemoryIndex) AddMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error {
+	return nil
+}
+func (e *errorMemoryIndex) UpdateMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error {
+	return nil
+}
+func (e *errorMemoryIndex) DeleteMemories(_ context.Context, _, _ string, _ []string) error {
+	return nil
+}
+func (e *errorMemoryIndex) DeleteByUser(_ context.Context, _ string) error            { return nil }
+func (e *errorMemoryIndex) DeleteByScope(_ context.Context, _ string) error           { return nil }
+func (e *errorMemoryIndex) DeleteByUserAndScope(_ context.Context, _, _ string) error { return nil }
 func (e *errorMemoryIndex) Search(_ context.Context, _, _, _ string, _ []string, _ int) ([]*index.MemorySearchResult, error) {
 	return nil, nil
 }

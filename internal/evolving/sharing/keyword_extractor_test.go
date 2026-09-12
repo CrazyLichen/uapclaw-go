@@ -57,12 +57,12 @@ var _ model_clients.BaseModelClient = (*mockBaseModelClient)(nil)
 func TestParseFromOptimizerOutput_FromPatch(t *testing.T) {
 	summary := "这是一个测试摘要"
 	patch := checkpointing.EvolutionPatch{
-		Section:   "Instructions",
-		Action:    "append",
-		Content:   "测试内容",
-		Target:    signal.EvolutionTargetBody,
-		Keywords:  []string{"IndexError", "索引错误", "Python"},
-		Summary:   &summary,
+		Section:  "Instructions",
+		Action:   "append",
+		Content:  "测试内容",
+		Target:   signal.EvolutionTargetBody,
+		Keywords: []string{"IndexError", "索引错误", "Python"},
+		Summary:  &summary,
 	}
 
 	keywords, summary := ParseFromOptimizerOutput(patch)
@@ -74,12 +74,12 @@ func TestParseFromOptimizerOutput_FromPatch(t *testing.T) {
 func TestParseFromOptimizerOutput_FromPatchPtr(t *testing.T) {
 	summary := "指针摘要"
 	patch := &checkpointing.EvolutionPatch{
-		Section:   "Instructions",
-		Action:    "append",
-		Content:   "内容",
-		Target:    signal.EvolutionTargetBody,
-		Keywords:  []string{"TypeError"},
-		Summary:   &summary,
+		Section:  "Instructions",
+		Action:   "append",
+		Content:  "内容",
+		Target:   signal.EvolutionTargetBody,
+		Keywords: []string{"TypeError"},
+		Summary:  &summary,
 	}
 
 	keywords, s := ParseFromOptimizerOutput(patch)

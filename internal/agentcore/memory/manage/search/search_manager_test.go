@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	storeindex "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	manageindex "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
@@ -251,33 +250,38 @@ func TestContainsString(t *testing.T) {
 
 // AddMemories 实现 BaseMemoryManager 接口
 func (s *stubSearchManager) AddMemories(ctx context.Context, userID string, scopeID string,
-	memories map[string][]mem_model.MemoryUnit, llmModel ...*llm.Model) ([]mem_model.MemoryUnit, error) {
+	memories map[string][]mem_model.MemoryUnit, opts ...manageindex.MemoryOption) ([]mem_model.MemoryUnit, error) {
 	return nil, nil
 }
 
 // Update 实现 BaseMemoryManager 接口
-func (s *stubSearchManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string) (bool, error) {
+func (s *stubSearchManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string,
+	opts ...manageindex.MemoryOption) (bool, error) {
 	return true, nil
 }
 
 // Search 实现 BaseMemoryManager 接口
-func (s *stubSearchManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string) ([]*storeindex.MemorySearchResult, error) {
+func (s *stubSearchManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, memTypes []string,
+	opts ...manageindex.MemoryOption) ([]*storeindex.MemorySearchResult, error) {
 	s.searchCalled++
 	s.lastSearchTypes = memTypes
 	return s.searchResult, s.searchErr
 }
 
 // Get 实现 BaseMemoryManager 接口
-func (s *stubSearchManager) Get(ctx context.Context, userID string, scopeID string, memID string) (*storeindex.MemoryDoc, error) {
+func (s *stubSearchManager) Get(ctx context.Context, userID string, scopeID string, memID string,
+	opts ...manageindex.MemoryOption) (*storeindex.MemoryDoc, error) {
 	return nil, nil
 }
 
 // Delete 实现 BaseMemoryManager 接口
-func (s *stubSearchManager) Delete(ctx context.Context, userID string, scopeID string, memID string) (bool, error) {
+func (s *stubSearchManager) Delete(ctx context.Context, userID string, scopeID string, memID string,
+	opts ...manageindex.MemoryOption) (bool, error) {
 	return true, nil
 }
 
 // DeleteByUserID 实现 BaseMemoryManager 接口
-func (s *stubSearchManager) DeleteByUserID(ctx context.Context, userID string, scopeID string) (bool, error) {
+func (s *stubSearchManager) DeleteByUserID(ctx context.Context, userID string, scopeID string,
+	opts ...manageindex.MemoryOption) (bool, error) {
 	return true, nil
 }

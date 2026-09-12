@@ -91,7 +91,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		for _, unit := range units {
 			frag, ok := unit.(*mem_model.FragmentMemoryUnit)
 			if !ok {
-			// Python: memory_logger.warning("mem_unit is not a FragmentMemoryUnit", memory_type=..., user_id=..., scope_id=...)
+				// Python: memory_logger.warning("mem_unit is not a FragmentMemoryUnit", memory_type=..., user_id=..., scope_id=...)
 				logger.Warn(logComponent).Str("memory_type", key).
 					Str("user_id", userID).Str("scope_id", scopeID).
 					Msg("mem_unit is not a FragmentMemoryUnit")

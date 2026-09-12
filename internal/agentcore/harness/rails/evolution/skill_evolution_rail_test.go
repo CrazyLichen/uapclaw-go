@@ -3,9 +3,9 @@ package evolution
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
-	"github.com/stretchr/testify/assert"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -275,10 +275,10 @@ func TestIsRegularSkill_非常规技能(t *testing.T) {
 func TestEvolutionSnapshot_扩展字段(t *testing.T) {
 	skillName := "test-skill"
 	snapshot := EvolutionSnapshot{
-		SessionID:          "session-123",
-		PresentedEntries:   []experience.PresentedRecordEntry{},
+		SessionID:           "session-123",
+		PresentedEntries:    []experience.PresentedRecordEntry{},
 		IncrementalMessages: []map[string]any{{"role": "user", "content": "test"}},
-		SkillName:          &skillName,
+		SkillName:           &skillName,
 	}
 
 	// ToLegacyDict 应包含扩展字段

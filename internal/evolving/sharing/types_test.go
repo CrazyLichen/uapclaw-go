@@ -52,14 +52,14 @@ func TestSharingMeta_ToDict_FromDict_往返(t *testing.T) {
 	uid := "user123"
 	obid := "sb_abc123"
 	original := &SharingMeta{
-		SkillName:        "python-debug",
-		SkillVersion:     "1.0",
-		UploadTrigger:    "auto",
-		UploadAt:         "2027-01-01T00:00:00Z",
-		FeedbackExcerpt:  &fb,
-		SourceUserID:     &uid,
-		Confidence:       0.9,
-		OriginBundleID:   &obid,
+		SkillName:       "python-debug",
+		SkillVersion:    "1.0",
+		UploadTrigger:   "auto",
+		UploadAt:        "2027-01-01T00:00:00Z",
+		FeedbackExcerpt: &fb,
+		SourceUserID:    &uid,
+		Confidence:      0.9,
+		OriginBundleID:  &obid,
 	}
 	dict := original.ToDict()
 	restored := FromDictSharingMeta(dict)

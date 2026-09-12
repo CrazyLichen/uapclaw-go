@@ -17,11 +17,11 @@ import (
 // fakeHubBackend 测试用的内存 SharingBackend 实现。
 // 支持技能包上传/下载/搜索，经验 bundle 上传/下载。
 type fakeHubBackend struct {
-	mu             sync.RWMutex
-	packages       map[string][]byte             // skillID → packageBytes
-	packageMetas   map[string]*SkillPackageMeta  // skillID → meta
-	bundles        map[string][]SharedSkillBundle // skillID → bundles
-	searchIndex    []SkillSearchResult
+	mu           sync.RWMutex
+	packages     map[string][]byte              // skillID → packageBytes
+	packageMetas map[string]*SkillPackageMeta   // skillID → meta
+	bundles      map[string][]SharedSkillBundle // skillID → bundles
+	searchIndex  []SkillSearchResult
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

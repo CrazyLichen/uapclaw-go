@@ -121,7 +121,7 @@ type QueryKeywords struct {
 type UploadResult struct {
 	// OK 是否成功
 	OK bool
-	// BundleID Bundle ID
+	// BundleID Bundle 唯一标识
 	BundleID string
 	// Reason 失败原因
 	Reason string

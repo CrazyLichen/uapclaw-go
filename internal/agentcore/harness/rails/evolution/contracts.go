@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
-)// ──────────────────────────── 结构体 ────────────────────────────
+) // ──────────────────────────── 结构体 ────────────────────────────
 
 // ApprovalManager 审批管理器窄接口。
 //

@@ -113,9 +113,9 @@ func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, sessionID str
 	skills := make([]map[string]any, 0, len(skillNames))
 	for _, name := range skillNames {
 		skill := map[string]any{
-			"name":            name,
-			"has_evolution":   store.SkillExists(ctx, name),
-			"hint_simplify":   d.skillEvolutionRail.ShouldHintSimplifyOrRebuild(name),
+			"name":          name,
+			"has_evolution": store.SkillExists(ctx, name),
+			"hint_simplify": d.skillEvolutionRail.ShouldHintSimplifyOrRebuild(name),
 		}
 		skills = append(skills, skill)
 	}
@@ -208,9 +208,9 @@ func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query stri
 
 	// Python: return {"action": "run_rebuild_followup", "followup_prompt": followup_prompt}
 	return map[string]any{
-		"action":         "run_rebuild_followup",
+		"action":          "run_rebuild_followup",
 		"followup_prompt": followupPrompt,
-		"skill_name":     skillName,
+		"skill_name":      skillName,
 	}, nil
 }
 
