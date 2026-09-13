@@ -606,6 +606,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65-1 | ✅ | Messager 接口 + InProcess | Messager接口（8方法）+InProcessMessager+全局Bus+CreateMessager工厂+TaskManager事件发布回填（9处）；循环依赖重构完成：配置搬入schema打断schema→messager/memory循环链，Messager接口改回*schema.EventMessage，删除SenderIDStamper，tools包改用schema.TypedEvent，删除sessionID字段改用schema.GetSessionID(ctx)，MessageID改用UUID v4 | `openjiuwen/agent_teams/messager/messager.py` · `messager/inprocess.py` |
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
 | 9.66 | ✅ | Team Workspace | 团队工作空间（TeamWorkspaceManager + TeamWorkspaceRail + WorkspaceMetaTool + ToolTranslator + i18n + locales + 回填 agent/harness） | `openjiuwen/agent_teams/team_workspace/` |
+| 9.66a | ☐ | WorktreeManager | Worktree 完整实现（manager + tools + rails + git + cleanup + session + backend + notice + slug；⤴️ 9.38-49 仅完成 models；⤴️ 回填 agent/resources.go WorktreeManager any 类型 + agent_configurator.go CreateWorktreeManager + 事件镜像回调） | `openjiuwen/harness/tools/worktree/` |
 | 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |
 | 9.68-69 | ☐ | Team Rails / Prompts | 团队级 Rails / 提示词 | `openjiuwen/agent_teams/rails/` · `prompts/` |
 | **9.x 自演化系统** | — | | | |

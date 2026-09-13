@@ -212,7 +212,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 9. 工作树管理器（仅非 leader）
 	// ⤴️ 9.66 回填：工作树管理器初始化
-	// TODO(#9.68): WorktreeManager 实现后替换为具体类型
+	// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
 	if ctx.Role != atschema.TeamRoleLeader {
 		c.CreateWorktreeManager(spec)
 	}
@@ -425,7 +425,7 @@ func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, 
 //
 // ⤴️ 9.66 回填：框架就绪，WorktreeManager 具体实现待 #9.68
 func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) {
-	// TODO(#9.68): WorktreeManager 实现 + 事件镜像回调
+	// TODO(#9.66a): WorktreeManager 实现 + 事件镜像回调
 }
 
 // BuildMemoryManager 构建团队共享记忆管理器。

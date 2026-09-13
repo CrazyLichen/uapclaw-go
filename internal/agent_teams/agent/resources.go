@@ -16,7 +16,7 @@ type PrivateAgentResources struct {
 	// Harness 底层 DeepAgent 运行时的 Harness
 	Harness *agentteams.TeamHarness
 	// WorktreeManager Worktree 管理器
-	// TODO(#9.68): WorktreeManager 实现后替换为具体类型
+	// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
 	WorktreeManager any
 	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成
 	MemoryManager *memory.TeamMemoryManager

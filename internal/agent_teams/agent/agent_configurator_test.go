@@ -459,7 +459,7 @@ func TestAgentConfigurator_CreateWorkspaceManager(t *testing.T) {
 func TestAgentConfigurator_CreateWorktreeManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	c := NewAgentConfigurator(card)
-	// CreateWorktreeManager 不返回值（WorktreeManager 待 #9.68 实现）
+	// CreateWorktreeManager 不返回值（WorktreeManager 待 #9.66a 实现）
 	c.CreateWorktreeManager(atschema.NewTeamAgentSpec())
 }
 
