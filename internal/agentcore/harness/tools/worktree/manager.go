@@ -202,7 +202,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 		}, nil
 	}
 
-	// action == "remove"
+	// action 为 "remove"
 	if repoRoot != "" {
 		m.removeWorktreeInternal(ctx, session.WorktreePath, repoRoot)
 	}

@@ -145,7 +145,7 @@ var (
 	// Python: _TEAM_USER_REQUEST_LLM_POLICY
 	teamUserRequestLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 60,
-		TotalBudgetSecs:   120,
+		TotalBudgetSecs:    120,
 		MaxAttempts:        2,
 	}
 
@@ -153,7 +153,7 @@ var (
 	// Python: _TEAM_TRAJECTORY_ISSUE_LLM_POLICY
 	teamTrajectoryIssueLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 150,
-		TotalBudgetSecs:   300,
+		TotalBudgetSecs:    300,
 		MaxAttempts:        2,
 	}
 
@@ -161,7 +161,7 @@ var (
 	// Python: _TEAM_RECORD_LLM_POLICY
 	teamRecordLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 150,
-		TotalBudgetSecs:   300,
+		TotalBudgetSecs:    300,
 		MaxAttempts:        2,
 	}
 
@@ -1004,8 +1004,8 @@ func (r *TeamSkillEvolutionRail) ClearProcessedSignals() {
 // Python: TeamSkillEvolutionRail.evolution_config (property)
 func (r *TeamSkillEvolutionRail) EvolutionConfig() map[string]any {
 	return map[string]any{
-		"user_request_llm_policy":       r.userRequestLLMPolicy,
-		"trajectory_issue_llm_policy":   r.trajectoryIssueLLMPolicy,
+		"user_request_llm_policy":      r.userRequestLLMPolicy,
+		"trajectory_issue_llm_policy":  r.trajectoryIssueLLMPolicy,
 		"record_llm_policy":            r.recordLLMPolicy,
 		"evaluate_llm_policy":          r.evaluateLLMPolicy,
 		"simplify_llm_policy":          r.simplifyLLMPolicy,
@@ -1599,12 +1599,12 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 	path := filepath.Join(debugDir, fmt.Sprintf("trajectory_%s_%s.json", ts, execID))
 
 	type stepEntry struct {
-		Kind           string         `json:"kind"`
-		ToolName       string         `json:"tool_name,omitempty"`
-		CallArgs       string         `json:"call_args,omitempty"`
-		CallResult     string         `json:"call_result,omitempty"`
-		ResponsePreview string        `json:"response_preview,omitempty"`
-		Meta           map[string]any `json:"meta,omitempty"`
+		Kind            string         `json:"kind"`
+		ToolName        string         `json:"tool_name,omitempty"`
+		CallArgs        string         `json:"call_args,omitempty"`
+		CallResult      string         `json:"call_result,omitempty"`
+		ResponsePreview string         `json:"response_preview,omitempty"`
+		Meta            map[string]any `json:"meta,omitempty"`
 	}
 
 	stepsData := make([]stepEntry, 0, len(traj.Steps))

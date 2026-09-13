@@ -40,6 +40,29 @@ type WorktreeLifecycleRail interface {
 	AfterWorktreeExit(ctx context.Context, session *WorktreeSession, action string) error
 }
 
+// WorktreeBackend worktree 后端接口。
+// Python: WorktreeBackend(Protocol)
+type WorktreeBackend interface {
+	// Create 创建或恢复 worktree。
+	// Python: WorktreeBackend.create(slug, repo_root, target_path)
+	Create(ctx context.Context, slug, repoRoot, targetPath string) (*WorktreeCreateResult, error)
+	// Remove 删除 worktree。
+	// Python: WorktreeBackend.remove(worktree_path, repo_root)
+	Remove(ctx context.Context, worktreePath, repoRoot string) bool
+	// Exists 检查 worktree 是否存在。
+	// Python: WorktreeBackend.exists(worktree_path)
+	Exists(ctx context.Context, worktreePath string) bool
+}
+
+// ManagerOption WorktreeManager 构造选项。
+type ManagerOption func(*managerOptions)
+
+// managerOptions WorktreeManager 内部构造选项。
+type managerOptions struct {
+	eventHandler   WorktreeEventHandler
+	lifecycleRails []WorktreeLifecycleRail
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -61,20 +84,6 @@ var backendRegistry = struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WorktreeBackend worktree 后端接口。
-// Python: WorktreeBackend(Protocol)
-type WorktreeBackend interface {
-	// Create 创建或恢复 worktree。
-	// Python: WorktreeBackend.create(slug, repo_root, target_path)
-	Create(ctx context.Context, slug, repoRoot, targetPath string) (*WorktreeCreateResult, error)
-	// Remove 删除 worktree。
-	// Python: WorktreeBackend.remove(worktree_path, repo_root)
-	Remove(ctx context.Context, worktreePath, repoRoot string) bool
-	// Exists 检查 worktree 是否存在。
-	// Python: WorktreeBackend.exists(worktree_path)
-	Exists(ctx context.Context, worktreePath string) bool
-}
-
 // RegisterWorktreeBackend 注册自定义 worktree 后端。
 // Python: register_worktree_backend(name, factory)
 func RegisterWorktreeBackend(name string, factory func(WorktreeConfig) WorktreeBackend) {
@@ -93,14 +102,6 @@ func CreateBackend(name string, config WorktreeConfig) (WorktreeBackend, error) 
 		return nil, fmt.Errorf("unknown worktree backend '%s'. Available: %v", name, availableBackends())
 	}
 	return factory(config), nil
-}
-
-// ManagerOption WorktreeManager 构造选项。
-type ManagerOption func(*managerOptions)
-
-type managerOptions struct {
-	eventHandler   WorktreeEventHandler
-	lifecycleRails []WorktreeLifecycleRail
 }
 
 // WithEventHandler 设置事件处理器。

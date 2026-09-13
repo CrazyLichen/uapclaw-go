@@ -32,9 +32,9 @@ func TestTeamSkillEvolutionRail_Priority(t *testing.T) {
 func TestTeamSkillEvolutionRail_AllowEvolutionTrigger(t *testing.T) {
 	// autoScan=true + passiveEvolutionPending=true → 允许触发
 	r := &TeamSkillEvolutionRail{
-		autoScan:                 true,
-		passiveEvolutionPending:  true,
-		EvolutionRail:            &EvolutionRail{},
+		autoScan:                true,
+		passiveEvolutionPending: true,
+		EvolutionRail:           &EvolutionRail{},
 	}
 	assert.True(t, r.AllowEvolutionTrigger(TriggerAfterInvoke, nil))
 

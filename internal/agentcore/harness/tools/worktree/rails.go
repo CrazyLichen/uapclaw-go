@@ -38,6 +38,16 @@ type WorktreeRail struct {
 	tools []tool.Tool
 }
 
+// WorktreeRailOption WorktreeRail 构造选项
+type WorktreeRailOption func(*worktreeRailOptions)
+
+// worktreeRailOptions WorktreeRail 内部构造选项
+type worktreeRailOptions struct {
+	config         *WorktreeConfig
+	eventHandler   WorktreeEventHandler
+	lifecycleRails []WorktreeLifecycleRail
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -76,15 +86,6 @@ func NewWorktreeRail(opts ...WorktreeRailOption) *WorktreeRail {
 		eventHandler:   o.eventHandler,
 		lifecycleRails: o.lifecycleRails,
 	}
-}
-
-// WorktreeRailOption WorktreeRail 构造选项
-type WorktreeRailOption func(*worktreeRailOptions)
-
-type worktreeRailOptions struct {
-	config         *WorktreeConfig
-	eventHandler   WorktreeEventHandler
-	lifecycleRails []WorktreeLifecycleRail
 }
 
 // WithWorktreeRailConfig 设置配置。
@@ -235,7 +236,7 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 	}
 
 	session.UpdateState(map[string]any{
-		sessionStateKey:       payload,
+		sessionStateKey:        payload,
 		defaultWorktreeNameKey: GetDefaultWorktreeName(ctx),
 	})
 
@@ -265,11 +266,15 @@ func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *Worktree
 	}
 	return nil
 }
-func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) { return "", nil }
+func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
 func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
 	return "", nil
 }
-func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error { return nil }
+func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
 
 // DiffSummaryRail action=keep 时记录 git diff --stat 的 LifecycleRail。
 // Python: DiffSummaryRail
@@ -291,9 +296,15 @@ func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *Workt
 	}
 	return "", nil
 }
-func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) { return "", nil }
-func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error     { return nil }
-func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error { return nil }
+func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error {
+	return nil
+}
+func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
 
 // detectSetup 检测项目类型并返回 setup 命令。
 // Python: AutoSetupRail._detect_setup(path)

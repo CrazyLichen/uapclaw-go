@@ -20,7 +20,7 @@ import (
 // ephemeralPatterns 临时 worktree slug 匹配模式。
 // Python: EPHEMERAL_PATTERNS
 var ephemeralPatterns = []*regexp.Regexp{
-	// teammate-<member_name first 8 hex chars>
+	// teammate-<成员名前8位hex字符>
 	regexp.MustCompile(`^teammate-[0-9a-f]{8}$`),
 	// agent-<7hex>（向后兼容）
 	regexp.MustCompile(`^agent-[0-9a-f]{7}$`),

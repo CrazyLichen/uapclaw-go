@@ -400,7 +400,7 @@ func TestWithEvalInterval_小于1调整为1(t *testing.T) {
 func TestOnApprove_OnReject_兼容别名(t *testing.T) {
 	// 验证 OnApprove 和 OnReject 是 ApproveRecord/RejectRecord 的别名
 	r := &SkillEvolutionRail{
-		approvalRuntime: NewEvolutionApprovalRuntime(nil, map[string]*experience.PendingChange{}),
+		approvalRuntime:          NewEvolutionApprovalRuntime(nil, map[string]*experience.PendingChange{}),
 		pendingApprovalSnapshots: map[string]*experience.PendingChange{},
 	}
 

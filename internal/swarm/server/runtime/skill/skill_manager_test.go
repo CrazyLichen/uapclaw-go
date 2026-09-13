@@ -2821,6 +2821,7 @@ func TestHandleSkillsTeamSkillsHubInfo_正常(t *testing.T) {
 
 	result, err := sm.HandleSkillsTeamSkillsHubInfo(context.Background(), map[string]any{
 		"asset_id":   "test-asset",
+		"version":    "1.0.0",
 		"market_url": server.URL,
 	})
 	if err != nil {

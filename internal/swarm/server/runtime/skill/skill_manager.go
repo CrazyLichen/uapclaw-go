@@ -1381,7 +1381,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, param
 	if err != nil {
 		return map[string]any{"success": false, "detail": err.Error()}, nil
 	}
-	return map[string]any{"success": true, "data": data}, nil
+	return map[string]any{"success": true, "asset_id": assetID, "version": version, "data": data}, nil
 }
 
 // HandleSkillsTeamSkillsHubInit 初始化 TeamSkills 模板目录

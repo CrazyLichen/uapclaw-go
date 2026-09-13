@@ -1141,7 +1141,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usageSummary)
 		}
 
-		// evolution watcher 启动
+		// 演化监视器启动
 		// Python: if self._skill_evolution_rail is not None:
 		//   task = asyncio.create_task(self._watch_evolution_and_push(rid, cid, session_id))
 		//   task.add_done_callback(self._on_evolution_watcher_done)
