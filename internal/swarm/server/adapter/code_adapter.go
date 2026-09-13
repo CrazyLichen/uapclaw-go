@@ -65,8 +65,8 @@ type CodeAdapter struct {
 	// ⤵️ 10.6.3-10: LspRail
 	lspRail sainterfaces.AgentRail
 	// projectMemoryRail 项目记忆护栏
-	// ⤵️ 10.6.3-10: ProjectMemoryRail
-	projectMemoryRail sainterfaces.AgentRail
+	// ⤴️ 10.6.7: ProjectMemoryRail 回填实现
+	projectMemoryRail *commonrails.ProjectMemoryRail
 	// codingMemoryRail 编码记忆护栏
 	codingMemoryRail sainterfaces.AgentRail
 	// worktreeRail 工作树护栏
@@ -585,8 +585,19 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
 	c.deep.updateRailsForMode(config.Mode)
 
+	// ⤴️ 10.6.7: ProjectMemoryRail 语言同步 + trusted_dirs 注入
+	// Python: if self._project_memory_rail is not None:
+	//   self._project_memory_rail.set_language(resolved_language)
+	//   if runtime_config.trusted_dirs:
+	//     self._project_memory_rail.set_additional_directories(runtime_config.trusted_dirs)
+	if c.projectMemoryRail != nil {
+		c.projectMemoryRail.SetLanguage(resolvedLanguage)
+		if len(config.TrustedDirs) > 0 {
+			c.projectMemoryRail.SetAdditionalDirectories(config.TrustedDirs)
+		}
+	}
+
 	// ⤵️ 待后续章节回填:
-	// - ProjectMemoryRail 语言同步 + trusted_dirs 注入
 	// - _update_tools_for_mode
 	// - _update_session_tools
 
@@ -872,9 +883,9 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 6: ProjectMemoryRail（项目记忆护栏）
-	// ⤵️ 10.6.3-10: ProjectMemoryRail 尚未实现
+	// ⤴️ 10.6.7: ProjectMemoryRail 实现
 	if pm := c.buildProjectMemoryRail(); pm != nil {
-		c.projectMemoryRail = pm
+		c.projectMemoryRail = pm.(*commonrails.ProjectMemoryRail)
 		railsList = append(railsList, pm)
 	}
 
@@ -1025,10 +1036,43 @@ func (c *CodeAdapter) buildLspRail() sainterfaces.AgentRail {
 
 // buildProjectMemoryRail 构建项目记忆护栏。
 // Python: JiuwenClawCodeAdapter._build_project_memory_rail() (interface_code.py)
-// ⤵️ 10.6.3-10: ProjectMemoryRail 尚未实现
+// ⤴️ 10.6.7: ProjectMemoryRail 实现
 func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ProjectMemoryRail
-	return nil
+	// Python: workspace = self._project_dir or self._workspace_dir or "./"
+	ws := c.deep.projectDir
+	if ws == "" {
+		ws = c.deep.workspaceDir
+	}
+	if ws == "" {
+		ws = "./"
+	}
+
+	// Python: language = self._resolve_runtime_language()
+	language := c.resolveRuntimeLanguage()
+
+	// Python: raw_additional_dirs = self._instance_overrides.get("project_memory_additional_directories", ...)
+	// 从环境变量 UAPCLAWSWARM_ADDITIONAL_DIRECTORIES 读取额外目录
+	var additionalDirs []string
+	rawEnv := os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES")
+	if rawEnv != "" {
+		for _, item := range filepath.SplitList(rawEnv) {
+			item = strings.TrimSpace(item)
+			if item != "" {
+				additionalDirs = append(additionalDirs, item)
+			}
+		}
+	}
+
+	rail := commonrails.NewProjectMemoryRail(ws, language, 0, additionalDirs)
+
+	logger.Info(logComponent).
+		Str("event_type", "ProjectMemoryRail_create").
+		Str("workspace", ws).
+		Str("language", language).
+		Int("additional_dirs", len(additionalDirs)).
+		Msg("ProjectMemoryRail 创建成功")
+
+	return rail
 }
 
 // buildCodingMemoryRail 构建编码记忆护栏。
