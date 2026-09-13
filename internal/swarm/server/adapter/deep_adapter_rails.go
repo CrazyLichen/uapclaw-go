@@ -716,15 +716,13 @@ func (d *DeepAdapter) updatePlanModeRails() {
 	// 9. SubagentRail — plan 模式下注册
 	if d.subagentRail == nil {
 		rail := d.buildSubagentRail()
-		if rail != nil {
-			var ok bool
-			d.subagentRail, ok = rail.(*subagent.SubagentRail)
-			if ok && d.subagentRail != nil && d.instance != nil {
-				if err := d.instance.RegisterRail(ctx, d.subagentRail); err != nil {
-					logger.Error(logComponent).Err(err).Msg("注册 SubagentRail 失败")
-				} else {
-					logger.Info(logComponent).Msg("SubagentRail 注册成功（plan 模式）")
-				}
+		var ok bool
+		d.subagentRail, ok = rail.(*subagent.SubagentRail)
+		if ok && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, d.subagentRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注册 SubagentRail 失败")
+			} else {
+				logger.Info(logComponent).Msg("SubagentRail 注册成功（plan 模式）")
 			}
 		}
 	}

@@ -129,7 +129,7 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 
 	// 提前创建 session container
 	state := InitWorktreeSessionState()
-	ctx = WithWorktreeSessionState(ctx, state)
+	_ = WithWorktreeSessionState(ctx, state)
 
 	enterTool, err := NewEnterWorktreeTool(r.manager, lang, agentID)
 	if err != nil {

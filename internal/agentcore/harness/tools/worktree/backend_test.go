@@ -37,7 +37,7 @@ func TestGitBackend_Exists_不存在(t *testing.T) {
 	cfg := NewWorktreeConfig()
 	backend := &GitBackend{config: cfg}
 	// 不存在的路径
-	if backend.Exists(nil, "/nonexistent/path/abc") {
+	if backend.Exists(context.TODO(), "/nonexistent/path/abc") {
 		t.Error("不存在的 worktree 路径应返回 false")
 	}
 }

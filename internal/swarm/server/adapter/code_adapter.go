@@ -1416,10 +1416,8 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 	// Python: if getattr(deep_config, "subagents", None): subagent_rail = self._build_subagent_rail()
 	if deepConfig != nil && len(deepConfig.Subagents) > 0 {
 		subagentRail := c.deep.buildSubagentRail()
-		if subagentRail != nil {
-			if queueRailIfMissing(agent, subagentRail) {
-				addedRails++
-			}
+		if queueRailIfMissing(agent, subagentRail) {
+			addedRails++
 		}
 	}
 
