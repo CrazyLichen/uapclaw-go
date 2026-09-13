@@ -10,6 +10,7 @@
 //	├── structured_ask_user_rail.go    # StructuredAskUserRail + StructuredAskUserPayload
 //	├── structured_ask_user_tool.go    # StructuredAskUserTool + 扩展 schema
 //	├── avatar_rail.go                # AvatarPromptRail 数字分身 Rail
+//	├── runtime_prompt_rail.go        # RuntimePromptRail 运行时提示词护栏
 //	└── permissions/
 //	    ├── doc.go                    # 包文档
 //	    └── owner_scopes.go           # OwnerScopesPermissionContext 权限上下文
