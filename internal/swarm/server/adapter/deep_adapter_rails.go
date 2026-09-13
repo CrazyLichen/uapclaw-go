@@ -474,6 +474,10 @@ func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 	defaultChannel := "web"
 	if d.isAcpToolProfile(d.instanceOverrides) {
 		defaultChannel = "acp"
+	} else {
+		// Python: self._resolve_prompt_channel() 读 self._session_id
+		// Go: CreateInstance 时无 sessionID，等价于 Python 调用 _resolve_prompt_channel("") → "web"
+		defaultChannel = resolvePromptChannel("")
 	}
 	// Python: rail = RuntimePromptRail(language=self._resolve_runtime_language(), channel=default_channel)
 	rail := commrails.NewRuntimePromptRail(d.resolveRuntimeLanguage(), defaultChannel)

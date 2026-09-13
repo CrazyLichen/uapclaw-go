@@ -524,6 +524,81 @@ func (c *CodeAdapter) resolveOutputLanguage() string {
 	return c.deep.resolveRuntimeLanguage()
 }
 
+// updateRuntimeConfig 覆写 DeepAdapter，Code 模式 runtime config。
+// Python: JiuwenClawCodeAdapter._update_runtime_config() — 完全覆写（不调 super）
+//
+// 与 DeepAdapter.updateRuntimeConfig 的关键差异：
+//  1. SetForceEnglish(c.forceEnglishRuntimePrompt) — Code 模式强制英文 section
+//  2. writeRuntimeStateYAML 用 resolveOutputLanguage() 而非 resolvedLanguage
+//  3. ⤵️ 待后续章节回填: ProjectMemoryRail / _update_tools_for_mode / _update_session_tools
+func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeConfig) {
+	if config == nil {
+		return
+	}
+
+	// 步骤 1: CWD 种子
+	// Python: self._seed_runtime_cwd(runtime_config.cwd or ...)
+	if config.CWD != "" {
+		c.deep.seedRuntimeCwd(ctx, config.CWD)
+	}
+
+	// 步骤 2: language — CodeAdapter 自己的 resolveRuntimeLanguage
+	// Python: resolved_language = self._resolve_runtime_language()
+	resolvedLanguage := c.resolveRuntimeLanguage()
+
+	// 步骤 3: channel 解析
+	// Python: resolved_channel = str(runtime_config.channel_id or self._resolve_prompt_channel(session_id) or "web").strip() or "web"
+	resolvedChannel := commonrails.FirstNonEmpty(
+		config.ChannelID,
+		resolvePromptChannel(config.SessionID),
+		"web",
+	)
+
+	// 步骤 4: 写 runtime_state.yaml
+	// Python CodeAdapter 差异: self._write_runtime_state(language=self._resolve_output_language(), ...)
+	outputLanguage := c.resolveOutputLanguage()
+	c.deep.writeRuntimeStateYAML(
+		config.Mode,
+		outputLanguage,
+		resolvedChannel,
+		config.ProjectDir,
+	)
+
+	// 步骤 5: RuntimePromptRail 7 个 setter
+	// Python: if self._runtime_prompt_rail: self._runtime_prompt_rail.set_language(resolved_language) ...
+	if c.deep.runtimePromptRail != nil {
+		c.deep.runtimePromptRail.SetLanguage(resolvedLanguage)
+		c.deep.runtimePromptRail.SetForceEnglish(c.forceEnglishRuntimePrompt)
+		c.deep.runtimePromptRail.SetChannel(resolvedChannel)
+		c.deep.runtimePromptRail.SetTrustedDirs(config.TrustedDirs)
+		c.deep.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir)
+		c.deep.runtimePromptRail.SetModelName(c.deep.resolveModelName())
+		c.deep.runtimePromptRail.SetMode(config.Mode)
+	}
+
+	// 步骤 6: updatePromptForMode
+	// Python: self._update_prompt_for_mode(runtime_config.mode, resolved_language)
+	c.deep.updatePromptForMode(config.Mode)
+
+	// 步骤 7: rail 模式切换
+	// Python: await self._update_rails_for_mode(runtime_config.mode)
+	c.deep.updateRailsForMode(config.Mode)
+
+	// ⤵️ 待后续章节回填:
+	// - ProjectMemoryRail 语言同步 + trusted_dirs 注入
+	// - _update_tools_for_mode
+	// - _update_session_tools
+
+	logger.Info(logComponent).
+		Str("cwd", config.CWD).
+		Str("language", resolvedLanguage).
+		Str("output_language", outputLanguage).
+		Str("channel", resolvedChannel).
+		Str("mode", config.Mode).
+		Bool("force_english", c.forceEnglishRuntimePrompt).
+		Msg("CodeAdapter.updateRuntimeConfig 完成")
+}
+
 // buildConfiguredSubagents 覆写 DeepAdapter，code 模式固定挂载 explore/plan/code 子代理。
 // Python: JiuwenClawCodeAdapter._build_configured_subagents()
 func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {

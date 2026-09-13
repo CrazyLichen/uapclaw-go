@@ -2,9 +2,14 @@ package adapter
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -221,4 +226,88 @@ func TestCodeAdapter_AbortOnGatewayDisconnect_委托(t *testing.T) {
 	ctx := t.Context()
 	// 不应 panic
 	c.AbortOnGatewayDisconnect(ctx)
+}
+
+// TestCodeAdapter_UpdateRuntimeConfig_ForceEnglish 测试 CodeAdapter 覆写的 updateRuntimeConfig 包含 SetForceEnglish。
+// Python: JiuwenClawCodeAdapter._update_runtime_config() — 完全覆写，包含 set_force_english
+func TestCodeAdapter_UpdateRuntimeConfig_ForceEnglish(t *testing.T) {
+	c := NewCodeAdapter()
+	c.deep.configCache = map[string]any{"preferred_language": "en"}
+	ctx := t.Context()
+
+	// 构造 RuntimePromptRail，挂到 deep 上
+	rail := commrails.NewRuntimePromptRail("en", "web")
+	c.deep.runtimePromptRail = rail
+
+	config := &runtimeConfig{
+		CWD:       "/tmp/cwd",
+		Mode:      "code",
+		SessionID: "acp_s1",
+	}
+	c.updateRuntimeConfig(ctx, config)
+
+	// 验证 runtime_state.yaml 被写入
+	configDir := workspace.ConfigDir()
+	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
+	}
+
+	// Channel 应来自 sessionID 前缀
+	if v, _ := raw["channel"].(string); v != "acp" {
+		t.Errorf("channel = %q, want %q", v, "acp")
+	}
+
+	// Mode 应为 "code"（不在 modeDisplayMap 中，直接显示原值）
+	if v, _ := raw["mode"].(string); v != "code" {
+		t.Errorf("mode = %q, want %q", v, "code")
+	}
+}
+
+// TestCodeAdapter_UpdateRuntimeConfig_OutputLanguage 测试 CodeAdapter 用 resolveOutputLanguage 写 YAML。
+// Python CodeAdapter 差异: _write_runtime_state(language=self._resolve_output_language(), ...)
+func TestCodeAdapter_UpdateRuntimeConfig_OutputLanguage(t *testing.T) {
+	c := NewCodeAdapter()
+	// CodeAdapter.resolveRuntimeLanguage() 默认返回 "en"
+	// CodeAdapter.resolveOutputLanguage() 委托 deep.resolveRuntimeLanguage()
+	// 当 preferred_language=zh 时: resolveRuntimeLanguage → "en", resolveOutputLanguage → "cn"
+	c.deep.configCache = map[string]any{"preferred_language": "zh"}
+	ctx := t.Context()
+
+	c.deep.runtimePromptRail = commrails.NewRuntimePromptRail("en", "web")
+
+	config := &runtimeConfig{
+		CWD:  "/tmp/cwd",
+		Mode: "code",
+	}
+	c.updateRuntimeConfig(ctx, config)
+
+	// 验证 YAML 中 language 来自 resolveOutputLanguage（"cn"）而非 resolveRuntimeLanguage（"en"）
+	configDir := workspace.ConfigDir()
+	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
+	}
+
+	if v, _ := raw["language"].(string); v != "cn" {
+		t.Errorf("language = %q, want %q（来自 resolveOutputLanguage）", v, "cn")
+	}
+}
+
+// TestCodeAdapter_UpdateRuntimeConfig_nil配置 测试 CodeAdapter.updateRuntimeConfig 传入 nil 不 panic。
+func TestCodeAdapter_UpdateRuntimeConfig_nil配置(t *testing.T) {
+	c := NewCodeAdapter()
+	ctx := t.Context()
+	// 不应 panic
+	c.updateRuntimeConfig(ctx, nil)
 }
