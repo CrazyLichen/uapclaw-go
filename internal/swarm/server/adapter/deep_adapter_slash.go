@@ -253,7 +253,7 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 // ✅ 已回填（对齐 Python: _handle_governance_approval()）
 //
 // 根据 request_id 前缀路由到 OnApproveSimplify / OnRejectSimplify
-func (d *DeepAdapter) handleGovernanceApproval(requestID string, answers any, approvalType string) bool {
+func (d *DeepAdapter) handleGovernanceApproval(requestID string, answers []ApprovalAnswer, approvalType string) bool {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleGovernanceApproval: SkillEvolutionRail 未初始化")
 		return false

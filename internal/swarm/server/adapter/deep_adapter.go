@@ -238,6 +238,15 @@ type DeepAdapter struct {
 	paidSearchTool tool.Tool
 }
 
+// ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
+//
+// Python: answers 参数为 list[dict]，每个 dict 包含 selected_options 字段。
+// 对齐 Python: JiuWenClawDeepAdapter._handle_evolution_approval(answers: list)
+type ApprovalAnswer struct {
+	// SelectedOptions 已选项标签列表
+	SelectedOptions []string `json:"selected_options"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -252,7 +261,18 @@ var persistentCheckpointerReady bool
 // Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_LOCK)
 var persistentCheckpointerLock sync.Mutex
 
+// globalSendPushFunc 全局推送函数，由 AgentServer 初始化时通过 SetGlobalSendPushFunc 设置。
+// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包，
+// server 包在初始化时调用 SetGlobalSendPushFunc 注入 SendPush 能力。
+var globalSendPushFunc func(ctx context.Context, msg map[string]any) error
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetGlobalSendPushFunc 设置全局推送函数。
+// 由 server 包在初始化时调用，注入 AgentServer.SendPush，避免 adapter→server 循环依赖。
+func SetGlobalSendPushFunc(fn func(ctx context.Context, msg map[string]any) error) {
+	globalSendPushFunc = fn
+}
 
 // SetSkillManager 设置技能管理器。
 // Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
@@ -1125,7 +1145,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		//   self._evolution_watcher_tasks.add(task)
 		if d.skillEvolutionRail != nil {
 			go func() {
-				_ = d.watchEvolutionAndPush(ctx, sessionID, req.RequestID)
+				_ = d.watchEvolutionAndPush(ctx, sessionID, req.ChannelID, req.RequestID)
 				d.onEvolutionWatcherDone(sessionID)
 			}()
 		}
@@ -1255,6 +1275,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	params := parseParams(req.Params)
 	requestID := paramsString(params, "request_id", "")
 	answers := params["answers"]
+	parsedAnswers := parseApprovalAnswersFromAny(answers)
 
 	// 步骤 4: resolved 默认 false
 	resolved := false
@@ -1268,13 +1289,13 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 		// ✅ 已回填：_handle_governance_approval(requestID, answers, approvalType)
 		// Python 中 approvalType 从 answers 推断：approve → "approve", reject → "reject"
 		approvalType := "reject"
-		if parseApprovalAnswers(answers) {
+		if parseApprovalAnswers(parsedAnswers) {
 			approvalType = "approve"
 		}
-		resolved = d.handleGovernanceApproval(requestID, answers, approvalType)
+		resolved = d.handleGovernanceApproval(requestID, parsedAnswers, approvalType)
 	case strings.HasPrefix(requestID, "skill_evolve_"):
 		// ✅ 已回填：_handle_evolution_approval(requestID, answers)
-		resolved = d.handleEvolutionApproval(requestID, answers)
+		resolved = d.handleEvolutionApproval(requestID, parsedAnswers)
 	}
 
 	// 步骤 8: 构造响应
@@ -1486,6 +1507,36 @@ func EnsurePersistentCheckpointer() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// parseApprovalAnswersFromAny 从 any 类型解析为 []ApprovalAnswer。
+// answers 来自 req.Params 的 JSON 反序列化，可能是 []any 或 []map[string]any。
+// 对齐 Python: answers 为 list[dict]，每个 dict 包含 selected_options。
+func parseApprovalAnswersFromAny(answers any) []ApprovalAnswer {
+	if answers == nil {
+		return nil
+	}
+	// 尝试 []any（JSON 反序列化默认）
+	if slice, ok := answers.([]any); ok {
+		var result []ApprovalAnswer
+		for _, item := range slice {
+			if m, ok := item.(map[string]any); ok {
+				var opts []string
+				if raw, ok := m["selected_options"]; ok {
+					if optSlice, ok := raw.([]any); ok {
+						for _, o := range optSlice {
+							if s, ok := o.(string); ok {
+								opts = append(opts, s)
+							}
+						}
+					}
+				}
+				result = append(result, ApprovalAnswer{SelectedOptions: opts})
+			}
+		}
+		return result
+	}
+	return nil
+}
 
 // resolveVisionModelClient 基于 visionModelConfig 构建 BaseModelClient。
 func (d *DeepAdapter) resolveVisionModelClient() modelclients.BaseModelClient {

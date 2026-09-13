@@ -8,9 +8,11 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -159,15 +161,10 @@ func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[
 // ✅ 已回填（对齐 Python: _watch_evolution_and_push()）
 //
 // 轮询 SkillEvolutionRail.DrainPendingApprovalEvents → 推送到前端
-func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID string, requestID string) error {
+func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID string, channelID string, requestID string) error {
 	if d.skillEvolutionRail == nil {
 		return nil
 	}
-
-	// Python: while True: events = await self._skill_evolution_rail.drain_pending_approval_events(wait=True, timeout=...)
-	//   for event in events: await self._push_event_to_frontend(event)
-	//   if events and any(e for e in events if is_outcome_event(e)): break
-	//   await asyncio.sleep(2)
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -178,15 +175,43 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 			return ctx.Err()
 		case <-ticker.C:
 			events := d.skillEvolutionRail.DrainPendingApprovalEvents(true, nil)
-			if len(events) > 0 {
-				for _, event := range events {
-					d.pushEventToFrontend(event, sessionID)
+			if len(events) == 0 {
+				continue
+			}
+
+			// 将 []*stream.OutputSchema 转为 []map[string]any
+			dicts := make([]map[string]any, 0, len(events))
+			for _, e := range events {
+				dict := outputSchemaToDict(e)
+				if dict != nil {
+					dicts = append(dicts, dict)
+				}
+			}
+
+			// Python: await push_evolution_progress(push_context, rid, events, ...)
+			// 通过 globalSendPushFunc 推送进度事件，避免循环依赖
+			if globalSendPushFunc != nil {
+				for _, evt := range dicts {
+					if isEvolutionApprovalEventLocal(evt) || isEvolutionOutcomeEventLocal(evt) {
+						continue
+					}
+					msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
+					_ = globalSendPushFunc(ctx, msg)
+				}
+			}
+
+			// 逐个处理审批/结果事件
+			for _, event := range events {
+				evt := outputSchemaToDict(event)
+				if evt == nil {
+					continue
+				}
+				if isEvolutionApprovalEventLocal(evt) || isEvolutionOutcomeEventLocal(evt) {
+					d.pushEventToFrontend(event, sessionID, channelID, requestID)
 				}
 				// 检查是否包含 outcome 事件（完成/失败/超时）
-				for _, event := range events {
-					if isOutcomeEvent(event) {
-						return nil
-					}
+				if isOutcomeEvent(event) {
+					return nil
 				}
 			}
 		}
@@ -219,7 +244,7 @@ func buildRecapPrompt(memory string) string {
 // ✅ 已回填（对齐 Python: _handle_evolution_approval()）
 //
 // 根据 request_id 前缀路由到 SkillEvolutionRail.ApproveRecord / RejectRecord
-func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers any) bool {
+func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers []ApprovalAnswer) bool {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: SkillEvolutionRail 未初始化")
 		return false
@@ -458,50 +483,174 @@ func (d *DeepAdapter) countFullContextTokens(ctx context.Context, sessionID stri
 	return totalTokens, nil
 }
 
+// outputSchemaToDict 将 OutputSchema 转为 helpers 期望的 map[string]any 格式。
+// helpers 函数（PushEvolutionProgress 等）全部基于 map[string]any，
+// 而 DrainPendingApprovalEvents 返回 []*stream.OutputSchema。
+func outputSchemaToDict(schema *stream.OutputSchema) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	if payload, ok := schema.Payload.(map[string]any); ok {
+		return payload
+	}
+	// fallback：将 OutputSchema 整体转为 dict
+	return map[string]any{
+		"type":    schema.Type,
+		"index":   schema.Index,
+		"payload": schema.Payload,
+	}
+}
+
 // pushEventToFrontend 将演进事件推送到前端。
 // Python: _push_event_to_frontend(event)
-func (d *DeepAdapter) pushEventToFrontend(event any, sessionID string) {
-	// 通过 session stream 推送事件
-	// 当前为日志记录实现，后续接入 stream 时替换
-	logger.Info(logComponent).Str("session_id", sessionID).Any("event_type", "evolution_event").Msg("推送演进事件到前端")
+// ✅ 已回填：通过 globalSendPushFunc 推送，避免 adapter→server 循环依赖
+func (d *DeepAdapter) pushEventToFrontend(event *stream.OutputSchema, sessionID string, channelID string, requestID string) {
+	evt := outputSchemaToDict(event)
+	if evt == nil {
+		return
+	}
+	if globalSendPushFunc == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("pushEventToFrontend: globalSendPushFunc 未注入")
+		return
+	}
+
+	evtKind := evolutionEventKindLocal(evt)
+	switch evtKind {
+	case "approval":
+		// Python: await push_evolution_event(push_context, rid, evt, build_server_push_message)
+		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
+		if err := globalSendPushFunc(context.Background(), msg); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送审批事件失败")
+		}
+	case "outcome":
+		// Python: await push_evolution_status(push_context, update, build_server_push_message)
+		outcome := evolutionOutcomeFromEventLocal(evt)
+		payload := map[string]any{
+			"event_type": "chat.evolution_status",
+			"status":     outcome["status"],
+			"stage":      outcome["status"],
+			"message":    outcome["message"],
+			"request_id": requestID,
+		}
+		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
+		if err := globalSendPushFunc(context.Background(), msg); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送结果状态失败")
+		}
+	default:
+		logger.Debug(logComponent).Str("session_id", sessionID).Str("event_kind", evtKind).Msg("演进进度事件已在批量推送中处理")
+	}
 }
 
 // isOutcomeEvent 判断是否为结果事件（完成/失败/超时）。
-func isOutcomeEvent(event any) bool {
+func isOutcomeEvent(event *stream.OutputSchema) bool {
 	if event == nil {
 		return false
 	}
-	if outputSchema, ok := event.(*struct {
-		Payload map[string]any
-	}); ok {
-		if meta, ok := outputSchema.Payload["_evolution_meta"].(map[string]string); ok {
-			return meta["event_kind"] == "outcome"
-		}
+	payload, ok := event.Payload.(map[string]any)
+	if !ok {
+		return false
 	}
-	return false
+	meta, ok := payload["_evolution_meta"].(map[string]string)
+	if !ok {
+		return false
+	}
+	return meta["event_kind"] == "outcome"
 }
 
 // parseApprovalAnswers 解析审批答案为 bool。
 // Python 中 answers 为 list[dict]，每个 dict 包含 label 字段
-func parseApprovalAnswers(answers any) bool {
-	if answers == nil {
-		return false
-	}
-	// 尝试解析为 []map[string]any
-	if answerList, ok := answers.([]any); ok {
-		for _, a := range answerList {
-			if m, ok := a.(map[string]any); ok {
-				label, _ := m["label"].(string)
-				if label == "接收" || label == "Accept" || label == "approve" {
-					return true
-				}
+func parseApprovalAnswers(answers []ApprovalAnswer) bool {
+	for _, ans := range answers {
+		for _, opt := range ans.SelectedOptions {
+			if opt == "接收" || opt == "Accept" || opt == "approve" || opt == "执行" {
+				return true
 			}
 		}
-		return false
-	}
-	// 尝试解析为单个 string
-	if label, ok := answers.(string); ok {
-		return label == "接收" || label == "Accept" || label == "approve"
 	}
 	return false
+}
+
+// isEvolutionApprovalEventLocal 判断是否为演进审批事件（内联，避免循环导入 helpers）。
+// 对齐 Python: is_evolution_approval_event()
+func isEvolutionApprovalEventLocal(evt map[string]any) bool {
+	return eventTypeLocal(evt) == "chat.ask_user_question"
+}
+
+// isEvolutionOutcomeEventLocal 判断是否为演进结果事件（内联）。
+// 对齐 Python: is_evolution_outcome_event()
+func isEvolutionOutcomeEventLocal(evt map[string]any) bool {
+	return evolutionEventKindLocal(evt) == "outcome"
+}
+
+// eventTypeLocal 从事件中提取 event_type（内联）。
+func eventTypeLocal(evt map[string]any) string {
+	payload := eventPayloadDictLocal(evt)
+	if payload == nil {
+		return ""
+	}
+	if t, ok := payload["event_type"].(string); ok {
+		return t
+	}
+	return ""
+}
+
+// eventPayloadDictLocal 从事件提取 payload dict（内联）。
+func eventPayloadDictLocal(evt map[string]any) map[string]any {
+	if evt == nil {
+		return nil
+	}
+	if payload, ok := evt["payload"].(map[string]any); ok {
+		return payload
+	}
+	// evt 本身可能就是 payload（从 OutputSchema.Payload 提取）
+	return evt
+}
+
+// evolutionEventKindLocal 判断事件类别（内联）。
+// 对齐 Python: evolution_event_kind()
+func evolutionEventKindLocal(evt map[string]any) string {
+	payload := eventPayloadDictLocal(evt)
+	if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
+		if kind, ok := meta["event_kind"].(string); ok && strings.TrimSpace(kind) != "" {
+			return kind
+		}
+	}
+	if isEvolutionApprovalEventLocal(evt) {
+		return "approval"
+	}
+	return "progress"
+}
+
+// evolutionOutcomeFromEventLocal 提取演进结果（内联）。
+// 对齐 Python: evolution_outcome_from_event()
+func evolutionOutcomeFromEventLocal(evt map[string]any) map[string]string {
+	payload := eventPayloadDictLocal(evt)
+	if payload == nil {
+		return map[string]string{"status": "completed", "message": ""}
+	}
+
+	meta, _ := evt["_evolution_meta"].(map[string]any)
+	var metaStatus any
+	if meta != nil {
+		metaStatus = meta["status"]
+	}
+
+	status := "completed"
+	if s, ok := evt["status"].(string); ok && strings.TrimSpace(s) != "" {
+		status = strings.TrimSpace(strings.ToLower(s))
+	} else if ms, ok := metaStatus.(string); ok && strings.TrimSpace(ms) != "" {
+		status = strings.TrimSpace(strings.ToLower(ms))
+	}
+	if status == "" {
+		status = "completed"
+	}
+
+	message := ""
+	if m, ok := evt["message"].(string); ok {
+		message = m
+	} else if c, ok := evt["content"].(string); ok {
+		message = c
+	}
+
+	return map[string]string{"status": status, "message": message}
 }
