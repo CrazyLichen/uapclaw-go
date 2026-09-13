@@ -1,6 +1,6 @@
 # 9.24 P3 SkillEvolutionRail 实现偏差修复计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 修复 SkillEvolutionRail P3 实现中的 6 项偏差：空实现补全、类型断言修正、推送流程对齐 Python、FromLegacyDict 补全、ApprovalAnswer 具体类型。
 
@@ -30,7 +30,7 @@
 **Files:**
 - Modify: `internal/agentcore/harness/rails/evolution/skill_evolution_rail.go`
 
-- [ ] **Step 1: 在结构体中添加 disabledSkills 字段**
+- [x] **Step 1: 在结构体中添加 disabledSkills 字段**
 
 在 `SkillEvolutionRail` 结构体的 `// ─── 配置` 区块中，`autoSave bool` 之后添加：
 
@@ -41,7 +41,7 @@
 	disabledSkills []string
 ```
 
-- [ ] **Step 2: 补全 WithDisabledSkillsSet 函数体**
+- [x] **Step 2: 补全 WithDisabledSkillsSet 函数体**
 
 将当前的空实现：
 ```go
@@ -61,7 +61,7 @@ func WithDisabledSkillsSet(names []string) SkillEvolutionRailOption {
 }
 ```
 
-- [ ] **Step 3: 补全 normalizeNameSet 函数体**
+- [x] **Step 3: 补全 normalizeNameSet 函数体**
 
 将当前的空实现：
 ```go
@@ -78,7 +78,7 @@ func (r *SkillEvolutionRail) normalizeNameSet() []string {
 }
 ```
 
-- [ ] **Step 4: 补充单元测试**
+- [x] **Step 4: 补充单元测试**
 
 在 `skill_evolution_rail_test.go` 中添加：
 
@@ -100,17 +100,17 @@ func TestNormalizeNameSet_空(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: 编译验证**
+- [x] **Step 5: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/agentcore/harness/rails/evolution/...`
 Expected: 编译通过
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/harness/rails/evolution/... -run "TestWithDisabledSkillsSet|TestNormalizeNameSet"`
 Expected: 3 个测试通过
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/agentcore/harness/rails/evolution/skill_evolution_rail.go internal/agentcore/harness/rails/evolution/skill_evolution_rail_test.go
@@ -124,7 +124,7 @@ git commit -m "fix(evolution): 补全 WithDisabledSkillsSet 和 normalizeNameSet
 **Files:**
 - Modify: `internal/agentcore/harness/rails/evolution/skill_evolution_rail.go`
 
-- [ ] **Step 1: 替换 ShouldHintSimplifyOrRebuild 实现**
+- [x] **Step 1: 替换 ShouldHintSimplifyOrRebuild 实现**
 
 将当前实现（约第 972-993 行）：
 ```go
@@ -164,7 +164,7 @@ func (r *SkillEvolutionRail) ShouldHintSimplifyOrRebuild(skillName string) bool 
 }
 ```
 
-- [ ] **Step 2: 清理无用 import**
+- [x] **Step 2: 清理无用 import**
 
 检查 `os` 和 `encoding/json` 是否还有其他引用。如果 `os` 仅在 `WithSharingConfig` 中用于 `os.Getenv` 则保留；`encoding/json` 如果无其他引用则删除 import。
 
@@ -173,7 +173,7 @@ Run: `cd /home/opensource/uap-claw-go && grep -n 'json\.' internal/agentcore/har
 
 如 `json` 无引用，从 import 块删除 `"encoding/json"`。
 
-- [ ] **Step 3: 补充单元测试**
+- [x] **Step 3: 补充单元测试**
 
 在 `skill_evolution_rail_test.go` 中添加（需 mock EvolutionStore）：
 
@@ -186,12 +186,12 @@ func TestShouldHintSimplifyOrRebuild_走Store(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/agentcore/harness/rails/evolution/...`
 Expected: 编译通过
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/harness/rails/evolution/skill_evolution_rail.go internal/agentcore/harness/rails/evolution/skill_evolution_rail_test.go
@@ -205,7 +205,7 @@ git commit -m "fix(evolution): ShouldHintSimplifyOrRebuild 走 EvolutionStore �
 **Files:**
 - Modify: `internal/swarm/server/adapter/deep_adapter_evolution.go`
 
-- [ ] **Step 1: 修改 isOutcomeEvent 函数签名和实现**
+- [x] **Step 1: 修改 isOutcomeEvent 函数签名和实现**
 
 将当前实现（约第 470-482 行）：
 ```go
@@ -244,7 +244,7 @@ func isOutcomeEvent(event *stream.OutputSchema) bool {
 
 需要在文件 import 中添加：`"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"`
 
-- [ ] **Step 2: 更新 watchEvolutionAndPush 中的调用**
+- [x] **Step 2: 更新 watchEvolutionAndPush 中的调用**
 
 将 `watchEvolutionAndPush` 中（约第 186 行）：
 ```go
@@ -254,12 +254,12 @@ func isOutcomeEvent(event *stream.OutputSchema) bool {
 
 `DrainPendingApprovalEvents` 返回 `[]*stream.OutputSchema`，遍历时 `event` 类型已是 `*stream.OutputSchema`，调用 `isOutcomeEvent(event)` 自动匹配新签名。**无需改动调用点。**
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/swarm/server/adapter/...`
 Expected: 编译通过
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/swarm/server/adapter/deep_adapter_evolution.go
@@ -274,7 +274,7 @@ git commit -m "fix(adapter): 修复 isOutcomeEvent 类型断言与 DrainPendingA
 - Modify: `internal/swarm/server/adapter/deep_adapter_evolution.go`
 - Modify: `internal/swarm/server/adapter/deep_adapter.go`
 
-- [ ] **Step 1: 添加 outputSchemaToDict 薄适配函数**
+- [x] **Step 1: 添加 outputSchemaToDict 薄适配函数**
 
 在 `deep_adapter_evolution.go` 的非导出函数区添加：
 
@@ -298,7 +298,7 @@ func outputSchemaToDict(schema *stream.OutputSchema) map[string]any {
 }
 ```
 
-- [ ] **Step 2: 修改 pushEventToFrontend 签名和实现**
+- [x] **Step 2: 修改 pushEventToFrontend 签名和实现**
 
 将当前桩实现（约第 463-467 行）：
 ```go
@@ -356,7 +356,7 @@ func (d *DeepAdapter) pushEventToFrontend(event *stream.OutputSchema, sessionID 
 	session "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 ```
 
-- [ ] **Step 3: 重写 watchEvolutionAndPush 完整推送逻辑**
+- [x] **Step 3: 重写 watchEvolutionAndPush 完整推送逻辑**
 
 将当前实现（约第 162-194 行）：
 ```go
@@ -426,7 +426,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 }
 ```
 
-- [ ] **Step 4: 更新 deep_adapter.go 中的调用点**
+- [x] **Step 4: 更新 deep_adapter.go 中的调用点**
 
 将约第 1088 行：
 ```go
@@ -437,7 +437,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 				_ = d.watchEvolutionAndPush(ctx, sessionID, req.ChannelID, req.RequestID)
 ```
 
-- [ ] **Step 5: 更新 deep_adapter_helpers_test.go 中的测试调用**
+- [x] **Step 5: 更新 deep_adapter_helpers_test.go 中的测试调用**
 
 搜索测试中 `watchEvolutionAndPush` 的调用，添加 channelID 参数：
 ```go
@@ -445,17 +445,17 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 // 新：d.watchEvolutionAndPush(ctx, "s1", "ch1", "req1")
 ```
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/swarm/server/adapter/...`
 Expected: 编译通过
 
-- [ ] **Step 7: 运行 adapter 测试**
+- [x] **Step 7: 运行 adapter 测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/swarm/server/adapter/...`
 Expected: 测试通过
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/swarm/server/adapter/deep_adapter_evolution.go internal/swarm/server/adapter/deep_adapter.go
@@ -470,7 +470,7 @@ git commit -m "fix(adapter): watchEvolutionAndPush 对齐 Python 推送流程 (9
 - Modify: `internal/agentcore/harness/rails/evolution/contracts.go`
 - Modify: `internal/agentcore/harness/rails/evolution/contracts_test.go`
 
-- [ ] **Step 1: 补全 FromLegacyDict 解析逻辑**
+- [x] **Step 1: 补全 FromLegacyDict 解析逻辑**
 
 将当前实现（约第 179-206 行）：
 ```go
@@ -560,7 +560,7 @@ func FromLegacyDict(snapshot map[string]any) EvolutionSnapshot {
 }
 ```
 
-- [ ] **Step 2: 更新测试**
+- [x] **Step 2: 更新测试**
 
 在 `contracts_test.go` 中更新 `TestEvolutionSnapshot_FromLegacyDict_全字段` 测试，验证新增 3 个字段的恢复：
 
@@ -591,17 +591,17 @@ func TestEvolutionSnapshot_FromLegacyDict_全字段含扩展(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/agentcore/harness/rails/evolution/...`
 Expected: 编译通过
 
-- [ ] **Step 4: 运行测试**
+- [x] **Step 4: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/harness/rails/evolution/... -run "TestEvolutionSnapshot_FromLegacyDict"`
 Expected: 测试通过
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/harness/rails/evolution/contracts.go internal/agentcore/harness/rails/evolution/contracts_test.go
@@ -617,7 +617,7 @@ git commit -m "fix(evolution): 补全 FromLegacyDict 解析新增字段 (9.24 P3
 - Modify: `internal/swarm/server/adapter/deep_adapter_evolution.go`
 - Modify: `internal/swarm/server/adapter/deep_adapter_slash.go`
 
-- [ ] **Step 1: 在 deep_adapter.go 中定义 ApprovalAnswer 结构体和解析函数**
+- [x] **Step 1: 在 deep_adapter.go 中定义 ApprovalAnswer 结构体和解析函数**
 
 在结构体区块之后添加：
 
@@ -661,7 +661,7 @@ func parseApprovalAnswersFromAny(answers any) []ApprovalAnswer {
 }
 ```
 
-- [ ] **Step 2: 修改 HandleUserAnswer 中的 answers 处理**
+- [x] **Step 2: 修改 HandleUserAnswer 中的 answers 处理**
 
 将约第 1166 行：
 ```go
@@ -696,7 +696,7 @@ func parseApprovalAnswersFromAny(answers any) []ApprovalAnswer {
 		resolved = d.handleEvolutionApproval(requestID, parsedAnswers)
 ```
 
-- [ ] **Step 3: 修改 handleEvolutionApproval 签名**
+- [x] **Step 3: 修改 handleEvolutionApproval 签名**
 
 在 `deep_adapter_evolution.go` 中，将：
 ```go
@@ -717,7 +717,7 @@ func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers []Approv
 ```
 （调用语法不变，但参数类型变了）
 
-- [ ] **Step 4: 修改 handleGovernanceApproval 签名**
+- [x] **Step 4: 修改 handleGovernanceApproval 签名**
 
 在 `deep_adapter_slash.go` 中，将：
 ```go
@@ -728,7 +728,7 @@ func (d *DeepAdapter) handleGovernanceApproval(requestID string, answers any, ap
 func (d *DeepAdapter) handleGovernanceApproval(requestID string, answers []ApprovalAnswer, approvalType string) bool {
 ```
 
-- [ ] **Step 5: 修改 parseApprovalAnswers 签名**
+- [x] **Step 5: 修改 parseApprovalAnswers 签名**
 
 在 `deep_adapter_evolution.go` 中，将：
 ```go
@@ -772,17 +772,17 @@ func parseApprovalAnswers(answers []ApprovalAnswer) bool {
 
 注意：Python 中 evolution approval 检查 `"接收" in ans.get("selected_options", [])`，governance approval 检查 `accept_labels & set(ans.get("selected_options", []))`（simplify 为 `"执行"`）。Go 版统一检查 `SelectedOptions` 字段，覆盖所有关键词。
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/swarm/server/adapter/...`
 Expected: 编译通过
 
-- [ ] **Step 7: 运行测试**
+- [x] **Step 7: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/swarm/server/adapter/...`
 Expected: 测试通过
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/swarm/server/adapter/deep_adapter.go internal/swarm/server/adapter/deep_adapter_evolution.go internal/swarm/server/adapter/deep_adapter_slash.go
@@ -796,7 +796,7 @@ git commit -m "fix(adapter): 定义 ApprovalAnswer 结构体替换 answers any (
 **Files:**
 - Modify: `internal/evolving/experience/manager.go`
 
-- [ ] **Step 1: 更新 PendingGovernance.Actions 注释**
+- [x] **Step 1: 更新 PendingGovernance.Actions 注释**
 
 将：
 ```go
@@ -813,12 +813,12 @@ git commit -m "fix(adapter): 定义 ApprovalAnswer 结构体替换 answers any (
 	Actions []map[string]any
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./internal/evolving/experience/...`
 Expected: 编译通过
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/evolving/experience/manager.go
@@ -832,22 +832,22 @@ git commit -m "docs(experience): 补充 PendingGovernance.Actions 字段约定�
 **Files:**
 - 无新增修改
 
-- [ ] **Step 1: 全量编译**
+- [x] **Step 1: 全量编译**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go build ./...`
 Expected: 编译通过
 
-- [ ] **Step 2: 运行 evolution 包测试**
+- [x] **Step 2: 运行 evolution 包测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/agentcore/harness/rails/evolution/...`
 Expected: 测试通过
 
-- [ ] **Step 3: 运行 adapter 包测试**
+- [x] **Step 3: 运行 adapter 包测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/swarm/server/adapter/...`
 Expected: 测试通过
 
-- [ ] **Step 4: 运行 experience 包测试**
+- [x] **Step 4: 运行 experience 包测试**
 
 Run: `cd /home/opensource/uap-claw-go && export GOPROXY=https://goproxy.cn,direct && go test ./internal/evolving/experience/...`
 Expected: 测试通过
