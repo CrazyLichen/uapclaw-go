@@ -3,14 +3,14 @@ package messager
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessagerHandler 消息处理回调函数类型。
 // Python: MessagerHandler = Callable[[EventMessage], Awaitable[None]]
-type MessagerHandler func(ctx context.Context, msg *schema.EventMessage) error
+type MessagerHandler func(ctx context.Context, msg *events.EventMessage) error
 
 // Messager 团队事件消息通信接口。
 // Python: Messager (openjiuwen/agent_teams/messager/messager.py)
@@ -21,13 +21,13 @@ type Messager interface {
 	// Stop 停止消息传输层
 	Stop(ctx context.Context) error
 	// Publish 向主题发布事件消息
-	Publish(ctx context.Context, topicID string, message *schema.EventMessage) error
+	Publish(ctx context.Context, topicID string, message *events.EventMessage) error
 	// Subscribe 订阅主题，注册回调
 	Subscribe(ctx context.Context, topicID string, handler MessagerHandler) error
 	// Unsubscribe 取消订阅
 	Unsubscribe(ctx context.Context, topicID string) error
 	// Send 点对点发送消息给指定 agent
-	Send(ctx context.Context, agentID string, message *schema.EventMessage) error
+	Send(ctx context.Context, agentID string, message *events.EventMessage) error
 	// RegisterDirectMessageHandler 注册点对点消息回调
 	RegisterDirectMessageHandler(ctx context.Context, handler MessagerHandler) error
 	// UnregisterDirectMessageHandler 取消注册点对点消息回调

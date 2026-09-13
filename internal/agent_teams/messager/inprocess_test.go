@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 )
 
 // newMsg 创建测试用 EventMessage 指针。
-func newMsg() *schema.EventMessage {
-	return schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
+func newMsg() *events.EventMessage {
+	return events.NewEventMessage(events.TeamEventTaskCreated, nil, "")
 }
 
 // TestInProcessMessager_Publish_Subscribe 测试发布订阅基本功能
@@ -21,7 +22,7 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -31,7 +32,7 @@ func TestInProcessMessager_Publish_Subscribe(t *testing.T) {
 		t.Fatalf("Subscribe 失败: %v", err)
 	}
 
-	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{"team_name": "t1"}, "")
+	msg := events.NewEventMessage(events.TeamEventTaskCreated, map[string]any{"team_name": "t1"}, "")
 	if err := m.Publish(ctx, "topic1", msg); err != nil {
 		t.Fatalf("Publish 失败: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	receiver := NewInProcessMessager(cfg2)
 
 	var gotSenderID string
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		gotSenderID = msg.SenderID
 		return nil
 	}
@@ -61,7 +62,7 @@ func TestInProcessMessager_Publish_SenderID(t *testing.T) {
 	ctx := context.Background()
 	_ = receiver.Subscribe(ctx, "topic1", handler)
 
-	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, map[string]any{}, "")
+	msg := events.NewEventMessage(events.TeamEventTaskCreated, map[string]any{}, "")
 	_ = sender.Publish(ctx, "topic1", msg)
 
 	if gotSenderID != "agent-sender" {
@@ -77,7 +78,7 @@ func TestInProcessMessager_Unsubscribe(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -108,7 +109,7 @@ func TestInProcessMessager_Send(t *testing.T) {
 	receiver := NewInProcessMessager(cfg2)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -130,7 +131,7 @@ func TestInProcessMessager_UnregisterDirectMessageHandler(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -157,7 +158,7 @@ func TestCleanupInProcessBus(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	var received atomic.Int32
-	handler := func(ctx context.Context, msg *schema.EventMessage) error {
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
 		received.Add(1)
 		return nil
 	}
@@ -199,7 +200,7 @@ func TestInProcessMessager_Publish_SenderIDStamper(t *testing.T) {
 	m := NewInProcessMessager(cfg)
 
 	ctx := context.Background()
-	msg := schema.NewEventMessage(schema.TeamEventTaskCreated, nil, "")
+	msg := events.NewEventMessage(events.TeamEventTaskCreated, nil, "")
 	// Python: model_copy 创建副本，原始消息不受影响
 	_ = m.Publish(ctx, "topic1", msg)
 	if msg.SenderID != "" {

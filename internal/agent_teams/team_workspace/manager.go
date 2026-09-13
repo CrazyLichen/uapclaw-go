@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -21,7 +22,8 @@ import (
 
 // PublishEventFunc 事件发布回调函数类型。
 // Python: Callable[[str, BaseEventMessage], Awaitable[None]]
-type PublishEventFunc func(eventType string, event any)
+// ⤴️ schema/events 子包提取后：event 参数从 any 升级为 events.TypedEvent
+type PublishEventFunc func(eventType string, event events.TypedEvent)
 
 // managerConfig ManagerOption 配置
 type managerConfig struct {
@@ -557,18 +559,16 @@ func (m *TeamWorkspaceManager) RemoteReleaseLock(ctx context.Context, filePath, 
 // HandleLockRequest 处理锁请求（占位，仅 Leader 调用）。
 // Python: TeamWorkspaceManager.handle_lock_request
 //
-// 参数 request 须为 schema.WorkspaceLockRequestEvent 类型，
-// 返回 *schema.WorkspaceLockResponseEvent。因避免循环依赖，
-// 此处使用 any 类型占位，待 Phase 3 实现时由上层强转。
-func (m *TeamWorkspaceManager) HandleLockRequest(request any) (any, error) {
-	return nil, ErrDistributedNotImplemented
+// ⤴️ schema/events 子包提取后：request/response 从 any 升级为具体事件类型
+func (m *TeamWorkspaceManager) HandleLockRequest(request events.WorkspaceLockRequestEvent) (events.WorkspaceLockResponseEvent, error) {
+	return events.WorkspaceLockResponseEvent{}, ErrDistributedNotImplemented
 }
 
 // HandleLockResponse 处理锁响应（占位，仅 Remote 调用）。
 // Python: TeamWorkspaceManager.handle_lock_response
 //
-// 参数 response 须为 schema.WorkspaceLockResponseEvent 类型。
-func (m *TeamWorkspaceManager) HandleLockResponse(response any) error {
+// ⤴️ schema/events 子包提取后：response 从 any 升级为具体事件类型
+func (m *TeamWorkspaceManager) HandleLockResponse(response events.WorkspaceLockResponseEvent) error {
 	return ErrDistributedNotImplemented
 }
 

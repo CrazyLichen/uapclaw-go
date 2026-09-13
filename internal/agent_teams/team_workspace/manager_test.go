@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -104,7 +106,7 @@ func TestNewTeamWorkspaceManager(t *testing.T) {
 // TestNewTeamWorkspaceManager_带选项 测试带 WithPublishEvent 选项的构造
 func TestNewTeamWorkspaceManager_带选项(t *testing.T) {
 	called := false
-	fn := func(eventType string, event any) { called = true }
+	fn := func(eventType string, event events.TypedEvent) { called = true }
 	m := NewTeamWorkspaceManager(
 		TeamWorkspaceConfig{VersionControl: true},
 		"/tmp/ws", "team", WorkspaceModeLocal,
@@ -765,17 +767,14 @@ func TestDistributed_占位方法(t *testing.T) {
 	})
 
 	t.Run("HandleLockRequest", func(t *testing.T) {
-		resp, err := (&TeamWorkspaceManager{}).HandleLockRequest(nil)
+		_, err := (&TeamWorkspaceManager{}).HandleLockRequest(events.WorkspaceLockRequestEvent{})
 		if !errors.Is(err, ErrDistributedNotImplemented) {
 			t.Errorf("期望 ErrDistributedNotImplemented，实际 %v", err)
-		}
-		if resp != nil {
-			t.Error("不应返回非 nil 响应")
 		}
 	})
 
 	t.Run("HandleLockResponse", func(t *testing.T) {
-		err := (&TeamWorkspaceManager{}).HandleLockResponse(nil)
+		err := (&TeamWorkspaceManager{}).HandleLockResponse(events.WorkspaceLockResponseEvent{})
 		if !errors.Is(err, ErrDistributedNotImplemented) {
 			t.Errorf("期望 ErrDistributedNotImplemented，实际 %v", err)
 		}

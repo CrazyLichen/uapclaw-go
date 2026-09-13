@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -76,8 +77,8 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 	}
 
 	// 发布 MessageEvent
-	tm.publishMessageEvent(ctx, schema.MessageEvent{
-		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+	tm.publishMessageEvent(ctx, events.MessageEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		MessageID:        messageID,
 		FromMemberName:   sender,
 		ToMemberName:     toMemberName,
@@ -111,8 +112,8 @@ func (tm *TeamMessageManager) BroadcastMessage(ctx context.Context, content stri
 	}
 
 	// 发布 BroadcastEvent
-	tm.publishMessageEvent(ctx, schema.BroadcastEvent{
-		BaseEventMessage: schema.BaseEventMessage{TeamName: tm.teamName},
+	tm.publishMessageEvent(ctx, events.BroadcastEvent{
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		MessageID:        messageID,
 		FromMemberName:   sender,
 	})
@@ -162,12 +163,12 @@ func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, me
 
 // publishMessageEvent 发布消息事件到 TeamTopic。
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），对齐 Python: get_session_id()。
-func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event schema.TypedEvent) {
+func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event events.TypedEvent) {
 	if tm.messager == nil {
 		return
 	}
-	msg := schema.EventMessageFromEvent(event)
-	topicID := schema.TeamTopicMessage.Build(schema.GetSessionID(ctx), tm.teamName)
+	msg := events.EventMessageFromEvent(event)
+	topicID := events.TeamTopicMessage.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", event.EventTypeName()).

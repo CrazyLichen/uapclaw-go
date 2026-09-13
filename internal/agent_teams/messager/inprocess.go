@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -85,7 +86,7 @@ func (m *InProcessMessager) Stop(_ context.Context) error {
 
 // Publish 向主题发布事件消息。
 // 自动设置 SenderID 过滤自发布（对齐 Python message.model_copy(update={"sender_id": self._agent_id})）。
-func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message *schema.EventMessage) error {
+func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message *events.EventMessage) error {
 	agentID := m.agentID()
 	// Python: message.model_copy(update={"sender_id": self._agent_id}) — 创建副本再修改
 	if message.SenderID == "" {
@@ -156,7 +157,7 @@ func (m *InProcessMessager) Unsubscribe(_ context.Context, topicID string) error
 }
 
 // Send 点对点发送消息给指定 agent。
-func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *schema.EventMessage) error {
+func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *events.EventMessage) error {
 	b := getBus()
 	b.mu.Lock()
 	handler, ok := b.p2p[agentID]

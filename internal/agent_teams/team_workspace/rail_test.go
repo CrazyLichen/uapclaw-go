@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -156,7 +157,7 @@ func TestAfterToolCall_写操作后AutoCommit(t *testing.T) {
 // TestAfterToolCall_写操作后发布事件
 func TestAfterToolCall_写操作后发布事件(t *testing.T) {
 	var capturedEvent string
-	var capturedPayload any
+	var capturedPayload events.TypedEvent
 
 	m := newTestManager(t, false)
 	m = NewTeamWorkspaceManager(
@@ -169,7 +170,7 @@ func TestAfterToolCall_写操作后发布事件(t *testing.T) {
 		m.WorkspacePath(),
 		m.TeamName(),
 		WorkspaceModeLocal,
-		WithPublishEvent(func(eventType string, event any) {
+		WithPublishEvent(func(eventType string, event events.TypedEvent) {
 			capturedEvent = eventType
 			capturedPayload = event
 		}),
@@ -180,9 +181,9 @@ func TestAfterToolCall_写操作后发布事件(t *testing.T) {
 	err := r.AfterToolCall(context.Background(), cbc)
 
 	assert.NoError(t, err)
-	assert.Equal(t, eventWorkspaceArtifactUpdated, capturedEvent)
+	assert.Equal(t, events.TeamEventWorkspaceArtifactUpdated, capturedEvent)
 
-	payload, ok := capturedPayload.(WorkspaceArtifactEventData)
+	payload, ok := capturedPayload.(events.WorkspaceArtifactEvent)
 	require.True(t, ok)
 	assert.Equal(t, "test-team", payload.TeamName)
 	assert.Equal(t, "member-1", payload.MemberName)

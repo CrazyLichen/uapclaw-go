@@ -5,7 +5,7 @@
 // TeamBackend 组合 DB + TaskManager + MessageManager + Messager，提供团队级业务门面（30+ 方法）。
 // Functional Options 构造模式，独立 RWMutex 仅保护 HITT 缓存，串行文件清理。
 // TeamTaskManager 为具体 struct 实现（含 PLAN_MODE + 事件发布），messager 已类型化为 messager.Messager。
-// 事件发布改用 schema.TypedEvent + schema.EventMessageFromEvent，sessionID 从 context 获取（schema.GetSessionID(ctx)）。
+// 事件发布改用 events.TypedEvent + events.EventMessageFromEvent，sessionID 从 context 获取（schema.GetSessionID(ctx)）。
 // TeamMessageManager 为具体 struct 实现（7 方法薄门面），委托 db.Message() 执行 DAO 操作。
 //
 // 文件目录：

@@ -8,6 +8,7 @@ import (
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
@@ -33,21 +34,6 @@ type TeamWorkspaceRail struct {
 	pullInterval time.Duration
 }
 
-// WorkspaceArtifactEventData 工件更新事件数据。
-// 因 team_workspace 和 schema 之间存在循环依赖（schema 导入 TeamWorkspaceConfig），
-// 无法直接引用 schema.WorkspaceArtifactEvent，故在本包定义等价结构体，
-// 由上层调用方转换为 schema.WorkspaceArtifactEvent。
-type WorkspaceArtifactEventData struct {
-	// TeamName 团队名
-	TeamName string
-	// MemberName 成员名
-	MemberName string
-	// ArtifactPath 工件在工作空间内的相对路径
-	ArtifactPath string
-	// CommitSHA Git 提交 SHA（如已版本化）
-	CommitSHA string
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -57,9 +43,6 @@ const (
 	teamPrefix = ".team/"
 	// pullIntervalDefault 默认拉取间隔
 	pullIntervalDefault = 5 * time.Second
-	// eventWorkspaceArtifactUpdated 工件更新事件类型
-	// Python: TeamEvent.WORKSPACE_ARTIFACT_UPDATED（因循环依赖不导入 schema 包）
-	eventWorkspaceArtifactUpdated = "workspace_artifact_updated"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -188,15 +171,14 @@ func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.A
 		}
 	}
 
-	// 通过回调发布事件
+	// 通过回调发布事件（⤴️ schema/events 子包提取后：使用强类型事件）
 	if r.ws.publishEvent != nil {
 		r.ws.publishEvent(
-			eventWorkspaceArtifactUpdated,
-			WorkspaceArtifactEventData{
-				TeamName:     r.ws.TeamName(),
-				MemberName:   r.memberName,
-				ArtifactPath: realPath,
-				CommitSHA:    commitSHA,
+			events.TeamEventWorkspaceArtifactUpdated,
+			events.WorkspaceArtifactEvent{
+				BaseEventMessage: events.BaseEventMessage{TeamName: r.ws.TeamName(), MemberName: r.memberName},
+				ArtifactPath:     realPath,
+				CommitSHA:        commitSHA,
 			},
 		)
 	}

@@ -1,4 +1,4 @@
-package schema
+package events
 
 import "testing"
 
@@ -116,13 +116,13 @@ func TestNewEventMessage_空SenderID(t *testing.T) {
 
 // TestNewEventMessage_各事件类型 测试不同事件类型常量
 func TestNewEventMessage_各事件类型(t *testing.T) {
-	events := []string{
+	evts := []string{
 		TeamEventCreated, TeamEventCleaned, TeamEventStandby, TeamEventTeamCompleted,
 		TeamEventMemberSpawned, TeamEventMemberRestarted, TeamEventMemberStatusChanged,
 		TeamEventMessage, TeamEventBroadcast,
 		TeamEventTaskCreated, TeamEventTaskClaimed, TeamEventTaskCompleted, TeamEventTaskCancelled,
 	}
-	for _, eventType := range events {
+	for _, eventType := range evts {
 		msg := NewEventMessage(eventType, nil, "")
 		if msg.EventType != eventType {
 			t.Errorf("期望 EventType=%q, 实际=%q", eventType, msg.EventType)
@@ -210,6 +210,22 @@ func TestEventMessageFromEvent_消息事件(t *testing.T) {
 	}
 	if msg.Payload["to_member_name"] != "bob" {
 		t.Errorf("Payload[to_member_name] = %v, want bob", msg.Payload["to_member_name"])
+	}
+}
+
+// TestEventMessageFromEvent_广播事件 测试 BroadcastEvent 转换
+func TestEventMessageFromEvent_广播事件(t *testing.T) {
+	e := BroadcastEvent{
+		BaseEventMessage: BaseEventMessage{TeamName: "team1", MemberName: "leader"},
+		MessageID:        "msg_2",
+		FromMemberName:   "leader",
+	}
+	msg := EventMessageFromEvent(e)
+	if msg.EventType != TeamEventBroadcast {
+		t.Errorf("EventType = %q, want %q", msg.EventType, TeamEventBroadcast)
+	}
+	if msg.Payload["from_member_name"] != "leader" {
+		t.Errorf("Payload[from_member_name] = %v, want leader", msg.Payload["from_member_name"])
 	}
 }
 
@@ -554,20 +570,4 @@ func TestToPayload_Workspace事件(t *testing.T) {
 			t.Errorf("file_path = %v, want g.go", p["file_path"])
 		}
 	})
-}
-
-// TestEventMessageFromEvent_广播事件 测试 BroadcastEvent 转换
-func TestEventMessageFromEvent_广播事件(t *testing.T) {
-	e := BroadcastEvent{
-		BaseEventMessage: BaseEventMessage{TeamName: "team1", MemberName: "leader"},
-		MessageID:        "msg_2",
-		FromMemberName:   "leader",
-	}
-	msg := EventMessageFromEvent(e)
-	if msg.EventType != TeamEventBroadcast {
-		t.Errorf("EventType = %q, want %q", msg.EventType, TeamEventBroadcast)
-	}
-	if msg.Payload["from_member_name"] != "leader" {
-		t.Errorf("Payload[from_member_name] = %v, want leader", msg.Payload["from_member_name"])
-	}
 }
