@@ -1,6 +1,7 @@
 package evolution
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,26 +83,26 @@ func TestTeamSkillEvolutionRail_ClearProcessedSignals(t *testing.T) {
 func TestTeamSkillEvolutionRail_OnBeforeInvoke(t *testing.T) {
 	// OnBeforeInvoke 重置 passiveEvolutionPending
 	r := &TeamSkillEvolutionRail{passiveEvolutionPending: true}
-	err := r.OnBeforeInvoke(nil, nil)
+	err := r.OnBeforeInvoke(context.TODO(), nil)
 	assert.NoError(t, err)
 	assert.False(t, r.passiveEvolutionPending)
 }
 
 func TestTeamSkillEvolutionRail_OnAfterModelCall(t *testing.T) {
 	r := &TeamSkillEvolutionRail{}
-	err := r.OnAfterModelCall(nil, nil)
+	err := r.OnAfterModelCall(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 
 func TestTeamSkillEvolutionRail_OnAfterInvoke(t *testing.T) {
 	r := &TeamSkillEvolutionRail{}
-	err := r.OnAfterInvoke(nil, nil)
+	err := r.OnAfterInvoke(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 
 func TestTeamSkillEvolutionRail_OnAfterTaskIteration(t *testing.T) {
 	r := &TeamSkillEvolutionRail{}
-	err := r.OnAfterTaskIteration(nil, nil)
+	err := r.OnAfterTaskIteration(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 
@@ -110,7 +111,7 @@ func TestTeamSkillEvolutionRail_OnAfterEvolutionTriggered(t *testing.T) {
 	sessionID := "sess-1"
 	r := &TeamSkillEvolutionRail{hostCompletionPendingSessionID: &sessionID}
 	traj := &trajectory.Trajectory{SessionID: "sess-1"}
-	err := r.OnAfterEvolutionTriggered(nil, traj, nil)
+	err := r.OnAfterEvolutionTriggered(context.TODO(), traj, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, r.hostCompletionPendingSessionID)
 
@@ -158,9 +159,9 @@ func TestTeamSkillEvolutionRail_ConsumePresentedEntries(t *testing.T) {
 func TestTeamSkillEvolutionRail_EvaluatePresentedEntries(t *testing.T) {
 	// 无 tracker → 不 panic
 	r := &TeamSkillEvolutionRail{}
-	r.evaluatePresentedEntries(nil, nil)
+	r.evaluatePresentedEntries(context.TODO(), nil)
 
-	r.evaluatePresentedEntries(nil, []experience.PresentedRecordEntry{})
+	r.evaluatePresentedEntries(context.TODO(), []experience.PresentedRecordEntry{})
 }
 
 func TestTeamSkillEvolutionRail_BuildTrajectory(t *testing.T) {

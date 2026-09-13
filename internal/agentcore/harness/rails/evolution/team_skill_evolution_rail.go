@@ -1026,9 +1026,7 @@ func (r *TeamSkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 	if r.generator != nil {
 		r.generator.UpdateLLM(llmModel, model)
 	}
-	if r.scorer != nil {
-		// ExperienceScorer 的 LLM 更新需通过重建
-	}
+	// ExperienceScorer 的 LLM 更新需通过重建，此处无需操作
 	if r.teamSignalDetector != nil {
 		r.teamSignalDetector = signal.NewTeamSignalDetector(
 			llmModel, model, r.language,

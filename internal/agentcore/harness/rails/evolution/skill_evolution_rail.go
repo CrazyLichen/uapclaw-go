@@ -2060,7 +2060,6 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 	var userQueries []string
 	var failedToolResults []string
 	var toolCallsSummary []string
-	var assistantResponses []string
 	toolCallIDToName := map[string]string{}
 
 	for _, msg := range messages {
@@ -2085,11 +2084,6 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 						}
 					}
 				}
-			}
-			// Python: content = msg.get("content", ""); if isinstance(content, str) and content.strip(): assistant_responses.append(...)
-			content, _ := msg["content"].(string)
-			if strings.TrimSpace(content) != "" {
-				assistantResponses = append(assistantResponses, truncateString(content, mc))
 			}
 		case "tool", "function":
 			contentStr, _ := msg["content"].(string)
