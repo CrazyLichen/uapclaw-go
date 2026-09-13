@@ -118,7 +118,7 @@ func TestTeamSkillEvolutionRail_OnAfterEvolutionTriggered(t *testing.T) {
 	// 不匹配 → 保留
 	sessionID2 := "sess-2"
 	r.hostCompletionPendingSessionID = &sessionID2
-	err = r.OnAfterEvolutionTriggered(nil, traj, nil)
+	err = r.OnAfterEvolutionTriggered(context.TODO(), traj, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, r.hostCompletionPendingSessionID)
 }
@@ -332,21 +332,21 @@ func TestTeamExperienceRecordHeadingRE_匹配(t *testing.T) {
 func TestTeamSkillEvolutionRail_SnapshotForEvolution_禁用AutoScan(t *testing.T) {
 	// autoScan=false → 返回 nil
 	r := &TeamSkillEvolutionRail{autoScan: false}
-	snapshot := r.SnapshotForEvolution(nil, nil, nil)
+	snapshot := r.SnapshotForEvolution(context.TODO(), nil, nil)
 	assert.Nil(t, snapshot)
 }
 
 func TestTeamSkillEvolutionRail_RecordPresentedExperiences_无Tracker(t *testing.T) {
 	// 无 tracker → 不 panic
 	r := &TeamSkillEvolutionRail{}
-	r.RecordPresentedExperiences(nil, "test-skill", "snippet", "sess-1", nil)
+	r.RecordPresentedExperiences(context.TODO(), "test-skill", "snippet", "sess-1", nil)
 }
 
 func TestTeamSkillEvolutionRail_RecordPresentedExperiences_有RecordIDs(t *testing.T) {
 	// 有 recordIDs → 走 RecordPresentedRecords 路径
 	// 无 tracker → 不 panic
 	r := &TeamSkillEvolutionRail{}
-	r.RecordPresentedExperiences(nil, "test-skill", "snippet", "sess-1", []string{"rec_001"})
+	r.RecordPresentedExperiences(context.TODO(), "test-skill", "snippet", "sess-1", []string{"rec_001"})
 }
 
 func TestTeamExtractToolContent_各种输入(t *testing.T) {
@@ -488,7 +488,7 @@ func TestTeamSkillEvolutionRail_RunEvolution_DeferRecover(t *testing.T) {
 	}
 	// 使用一个会 panic 的场景——这里通过构造特殊的 trajectory 验证不传播
 	// 实际测试：autoScan=true 但无 store → 不会 panic，只是正常完成
-	err := r.RunEvolution(nil, &trajectory.Trajectory{}, nil)
+	err := r.RunEvolution(context.TODO(), &trajectory.Trajectory{}, nil)
 	assert.NoError(t, err)
 }
 
@@ -498,7 +498,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_非ToolCallInputs(t *testing.T) 
 	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
 	// 空的 AgentCallbackContext，Inputs() 返回 nil
 	cbc := &agentinterfaces.AgentCallbackContext{}
-	err := r.OnAfterToolCall(nil, cbc)
+	err := r.OnAfterToolCall(context.TODO(), cbc)
 	assert.NoError(t, err)
 }
 
@@ -506,7 +506,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_非ViewTask(t *testing.T) {
 	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{ToolName: "read_file"})
-	err := r.OnAfterToolCall(nil, cbc)
+	err := r.OnAfterToolCall(context.TODO(), cbc)
 	assert.NoError(t, err)
 	// 不应标记 passiveEvolutionPending
 	assert.False(t, r.passiveEvolutionPending)
@@ -519,7 +519,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask未完成(t *testing.T) 
 		ToolName:   "view_task",
 		ToolResult: "status: in_progress",
 	})
-	err := r.OnAfterToolCall(nil, cbc)
+	err := r.OnAfterToolCall(context.TODO(), cbc)
 	assert.NoError(t, err)
 	assert.False(t, r.passiveEvolutionPending)
 }
@@ -531,7 +531,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_ViewTask已完成(t *testing.T) 
 		ToolName:   "view_task",
 		ToolResult: "status: completed, all done",
 	})
-	err := r.OnAfterToolCall(nil, cbc)
+	err := r.OnAfterToolCall(context.TODO(), cbc)
 	assert.NoError(t, err)
 	assert.True(t, r.passiveEvolutionPending)
 }
@@ -543,7 +543,7 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_禁用AutoScan(t *testing.T) {
 		ToolName:   "view_task",
 		ToolResult: "status: completed",
 	})
-	err := r.OnAfterToolCall(nil, cbc)
+	err := r.OnAfterToolCall(context.TODO(), cbc)
 	assert.NoError(t, err)
 	assert.False(t, r.passiveEvolutionPending)
 }
@@ -552,14 +552,14 @@ func TestTeamSkillEvolutionRail_OnAfterToolCall_禁用AutoScan(t *testing.T) {
 
 func TestTeamSkillEvolutionRail_NotifyTeamCompleted_禁用AutoScan(t *testing.T) {
 	r := &TeamSkillEvolutionRail{autoScan: false, EvolutionRail: &EvolutionRail{}}
-	ok, err := r.NotifyTeamCompleted(nil)
+	ok, err := r.NotifyTeamCompleted(context.TODO())
 	assert.NoError(t, err)
 	assert.False(t, ok)
 }
 
 func TestTeamSkillEvolutionRail_NotifyTeamCompleted_无SessionID(t *testing.T) {
 	r := &TeamSkillEvolutionRail{autoScan: true, EvolutionRail: &EvolutionRail{}}
-	ok, err := r.NotifyTeamCompleted(nil)
+	ok, err := r.NotifyTeamCompleted(context.TODO())
 	assert.NoError(t, err)
 	assert.False(t, ok)
 }
@@ -573,7 +573,7 @@ func TestTeamSkillEvolutionRail_NotifyTeamCompleted_正常(t *testing.T) {
 	sessionID := "sess-1"
 	r.hostCompletionPendingSessionID = &sessionID
 	// 由于无 Builder，currentBuilderSessionID 返回空串
-	ok, err := r.NotifyTeamCompleted(nil)
+	ok, err := r.NotifyTeamCompleted(context.TODO())
 	assert.NoError(t, err)
 	assert.False(t, ok) // 无 sessionID 可用
 }
@@ -582,7 +582,7 @@ func TestTeamSkillEvolutionRail_NotifyTeamCompleted_正常(t *testing.T) {
 
 func TestTeamSkillEvolutionRail_RunEvolution_禁用AutoScan(t *testing.T) {
 	r := &TeamSkillEvolutionRail{autoScan: false, EvolutionRail: &EvolutionRail{}}
-	err := r.RunEvolution(nil, &trajectory.Trajectory{}, nil)
+	err := r.RunEvolution(context.TODO(), &trajectory.Trajectory{}, nil)
 	assert.NoError(t, err)
 }
 
