@@ -23,6 +23,8 @@ type SystemPromptBuilderInterface interface {
 	RemoveSection(name string) *SystemPromptBuilder
 	// Language 返回当前语言
 	Language() string
+	// SetLanguage 设置当前语言
+	SetLanguage(lang string)
 	// GetSection 按名称获取单个节
 	GetSection(name string) *PromptSection
 	// HasSection 检查节是否存在

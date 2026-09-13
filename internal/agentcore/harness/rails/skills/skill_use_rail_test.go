@@ -50,6 +50,8 @@ func (m *mockSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPro
 
 func (m *mockSystemPromptBuilder) Language() string { return m.language }
 
+func (m *mockSystemPromptBuilder) SetLanguage(lang string) { m.language = lang }
+
 func (m *mockSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection {
 	s, ok := m.sections[name]
 	if !ok {

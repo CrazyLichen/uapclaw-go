@@ -65,6 +65,7 @@ func (f *fakeSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPro
 	return nil
 }
 func (f *fakeSystemPromptBuilder) Language() string                               { return f.language }
+func (f *fakeSystemPromptBuilder) SetLanguage(lang string)                        { f.language = lang }
 func (f *fakeSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection { return nil }
 func (f *fakeSystemPromptBuilder) HasSection(name string) bool                    { return false }
 
