@@ -617,9 +617,12 @@ func (c *AgentConfigurator) SetHarness(v *agentteams.TeamHarness) { c.resources.
 
 // WorktreeManager 返回工作树管理器。
 // Python: AgentConfigurator.worktree_manager property
+// WorktreeManager 返回工作树管理器。
+// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
 func (c *AgentConfigurator) WorktreeManager() any { return c.resources.WorktreeManager }
 
 // SetWorktreeManager 设置工作树管理器。
+// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
 func (c *AgentConfigurator) SetWorktreeManager(v any) { c.resources.WorktreeManager = v }
 
 // MemoryManager 返回团队记忆管理器。⤴️ 9.64 回填完成
@@ -635,9 +638,11 @@ func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
 
 // FirstIterGate 返回首轮迭代门控。
 // Python: AgentConfigurator.first_iter_gate property
+// TODO(#9.68): FirstIterationGate 实现后替换为具体类型
 func (c *AgentConfigurator) FirstIterGate() any { return c.resources.FirstIterGate }
 
 // SetFirstIterGate 设置首轮迭代门控。
+// TODO(#9.68): FirstIterationGate 实现后替换为具体类型
 func (c *AgentConfigurator) SetFirstIterGate(v any) { c.resources.FirstIterGate = v }
 
 // ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成
