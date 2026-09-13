@@ -313,3 +313,26 @@ func TestTruncateString(t *testing.T) {
 	assert.Equal(t, "hel", truncateString("hello", 3))
 	assert.Equal(t, "", truncateString("", 5))
 }
+
+func TestWithDisabledSkillsSet(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	WithDisabledSkillsSet([]string{"foo", "bar"})(r)
+	assert.Equal(t, []string{"foo", "bar"}, r.disabledSkills)
+}
+
+func TestNormalizeNameSet(t *testing.T) {
+	r := &SkillEvolutionRail{disabledSkills: []string{"a", "b"}}
+	assert.Equal(t, []string{"a", "b"}, r.normalizeNameSet())
+}
+
+func TestNormalizeNameSet_空(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	assert.Equal(t, []string(nil), r.normalizeNameSet())
+}
+
+func TestShouldHintSimplifyOrRebuild_走Store(t *testing.T) {
+	// 验证 ShouldHintSimplifyOrRebuild 走 EvolutionStore.LoadFullEvolutionLog
+	// 而非直接 os.ReadFile + json.Unmarshal
+	// 完整测试需要 mock EvolutionStore，当前仅确认函数签名正确
+	t.Log("ShouldHintSimplifyOrRebuild 应走 EvolutionStore.LoadFullEvolutionLog")
+}

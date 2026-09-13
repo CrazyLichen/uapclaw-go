@@ -66,6 +66,8 @@ type SkillEvolutionRail struct {
 	autoScan bool
 	// autoSave 是否自动保存（跳过审批）
 	autoSave bool
+	// disabledSkills 禁用的技能名称列表
+	disabledSkills []string
 	// language 语言（"cn" 或 "en"）
 	language string
 	// evalInterval 评估间隔
@@ -321,7 +323,7 @@ func WithSharingConfig(config map[string]any) SkillEvolutionRailOption {
 // WithDisabledSkillsSet 设置禁用的技能名称列表。
 func WithDisabledSkillsSet(names []string) SkillEvolutionRailOption {
 	return func(r *SkillEvolutionRail) {
-		// 委托给基类的 WithDisabledSkills，通过 normalizeNameSet 在构造时应用
+		r.disabledSkills = names
 	}
 }
 
@@ -987,26 +989,12 @@ func (r *SkillEvolutionRail) RejectRecord(ctx context.Context, requestID string)
 //
 // 对齐 Python: SkillEvolutionRail.should_hint_simplify_or_rebuild(skill_name)
 func (r *SkillEvolutionRail) ShouldHintSimplifyOrRebuild(skillName string) bool {
-	store := r.evolutionStore
-	skillDir := store.ResolveSkillDir(context.Background(), skillName)
-	if skillDir == "" {
-		return false
-	}
-	evoPath := filepath.Join(skillDir, "evolutions.json")
-	data, err := os.ReadFile(evoPath)
-	if err != nil {
-		return false
-	}
-	var evoData map[string]any
-	if err := json.Unmarshal(data, &evoData); err != nil {
-		return false
-	}
-	entries, ok := evoData["entries"].([]any)
-	if !ok {
+	evoLog, err := r.evolutionStore.LoadFullEvolutionLog(context.Background(), skillName)
+	if err != nil || evoLog == nil {
 		return false
 	}
 	// Python: return len(entries) >= 10
-	return len(entries) >= 10
+	return len(evoLog.Entries) >= 10
 }
 
 // UpdateLLM 热更新 LLM 客户端和模型。
@@ -1720,8 +1708,7 @@ func (r *SkillEvolutionRail) skillForExperienceDetailFile(filePath string) strin
 // normalizeNameSet 规范化技能名称列表。
 // Python: disabled_skills 参数处理
 func (r *SkillEvolutionRail) normalizeNameSet() []string {
-	// 从 skillsDir 列出已有技能名称
-	return []string{}
+	return r.disabledSkills
 }
 
 // ─── 包级辅助函数 ───

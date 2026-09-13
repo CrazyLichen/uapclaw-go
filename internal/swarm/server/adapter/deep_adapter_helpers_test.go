@@ -1193,7 +1193,7 @@ func TestDeepAdapter_Evolution占位函数(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 
-	if err := d.watchEvolutionAndPush(ctx, "s1", "req1"); err != nil {
+	if err := d.watchEvolutionAndPush(ctx, "s1", "ch1", "req1"); err != nil {
 		t.Errorf("watchEvolutionAndPush error: %v", err)
 	}
 	d.onEvolutionWatcherDone("s1")
