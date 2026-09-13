@@ -36,7 +36,7 @@ func TestMessageOffloaderConfig_Validate_正常配置(t *testing.T) {
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
 		MessagesToKeep:        &keep,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("期望验证通过，实际错误: %v", err)
@@ -74,7 +74,7 @@ func TestMessageOffloaderConfig_Validate_默认值(t *testing.T) {
 		TokensThreshold:       20000,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("期望验证通过，实际错误: %v", err)
@@ -164,7 +164,7 @@ func TestMessageOffloader_isProtectedToolMessage_通配符匹配(t *testing.T) {
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
 		ProtectedToolNames:    []string{"read_file:*.md"},
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate()
 	bp := processor.NewBaseProcessor(cfg)
@@ -186,7 +186,7 @@ func TestMessageOffloader_isProtectedToolMessage_通配符不匹配(t *testing.T
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
 		ProtectedToolNames:    []string{"read_file:*.md"},
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate()
 	bp := processor.NewBaseProcessor(cfg)
@@ -237,7 +237,7 @@ func TestMessageOffloader_getOffloadRange_不保留最后一轮(t *testing.T) {
 		TokensThreshold:       20000,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         false,
+		KeepLastRound:         ptrBool(false),
 	}
 	_ = cfg.Validate()
 	bp := processor.NewBaseProcessor(cfg)
@@ -260,7 +260,7 @@ func TestMessageOffloader_getOffloadRange_MessagesToKeep(t *testing.T) {
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
 		MessagesToKeep:        &keep,
-		KeepLastRound:         false,
+		KeepLastRound:         ptrBool(false),
 	}
 	_ = cfg.Validate()
 	bp := processor.NewBaseProcessor(cfg)
@@ -339,7 +339,7 @@ func TestMessageOffloader_TriggerAddMessages_消息数超阈值(t *testing.T) {
 		TokensThreshold:       999999,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate()
 	mo, _ := NewMessageOffloader(cfg)
@@ -377,7 +377,7 @@ func TestMessageOffloader_TriggerAddMessages_未达阈值(t *testing.T) {
 		TokensThreshold:       999999,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate()
 	mo, _ := NewMessageOffloader(cfg)
@@ -401,7 +401,7 @@ func TestMessageOffloader_TriggerAddMessages_Token数超阈值(t *testing.T) {
 		TokensThreshold:       100,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate()
 	mo, _ := NewMessageOffloader(cfg)
@@ -432,7 +432,7 @@ func TestMessageOffloader_OnAddMessages_卸载大消息(t *testing.T) {
 		TokensThreshold:       999999,
 		LargeMessageThreshold: 100,
 		TrimSize:              10,
-		KeepLastRound:         false,
+		KeepLastRound:         ptrBool(false),
 	}
 	_ = cfg.Validate()
 	mo, _ := NewMessageOffloader(cfg)
@@ -481,7 +481,7 @@ func TestMessageOffloader_OnAddMessages_无需卸载(t *testing.T) {
 		TokensThreshold:       999999,
 		LargeMessageThreshold: 10000, // 很高，不会有消息超限
 		TrimSize:              100,
-		KeepLastRound:         false,
+		KeepLastRound:         ptrBool(false),
 	}
 	_ = cfg.Validate()
 	mo, _ := NewMessageOffloader(cfg)
@@ -510,7 +510,7 @@ func newTestMessageOffloader() *MessageOffloader {
 		TokensThreshold:       20000,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	_ = cfg.Validate() // 应用默认值
 	bp := processor.NewBaseProcessor(cfg)
@@ -572,7 +572,7 @@ func TestMessageOffloaderConfig_SetModelDefaults(t *testing.T) {
 		TokensThreshold:       20000,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	// MessageOffloaderConfig 无 Model/ModelClient 字段，空实现
 	cfg.SetModelDefaults(nil, nil)
@@ -584,7 +584,7 @@ func TestMessageOffloaderConfig_GetModel(t *testing.T) {
 		TokensThreshold:       20000,
 		LargeMessageThreshold: 1000,
 		TrimSize:              100,
-		KeepLastRound:         true,
+		KeepLastRound:         ptrBool(true),
 	}
 	if cfg.GetModel() != nil {
 		t.Errorf("MessageOffloaderConfig.GetModel() 应始终返回 nil")

@@ -47,7 +47,8 @@ type MessageOffloaderConfig struct {
 	// MessagesToKeep 保留最近 N 条消息，nil 表示不保留
 	MessagesToKeep *int
 	// KeepLastRound 保留最后一轮完整对话（默认 true）
-	KeepLastRound bool
+	// 使用 *bool 区分"未设置"和"显式设为 false"，对齐 Python keep_last_round=True
+	KeepLastRound *bool
 }
 
 // MessageOffloader 消息卸载器，基于消息数/Token 数阈值触发卸载。
@@ -233,9 +234,10 @@ func (c *MessageOffloaderConfig) applyDefaults() {
 	if c.TrimSize == 0 {
 		c.TrimSize = defaultTrimSize
 	}
-	// KeepLastRound 默认 true（零值为 false，需显式设置）
-	// 注意：Go 零值为 false，但 Python 默认 true
-	// 调用方应显式设置；此处不强制覆盖
+	// 对齐 Python: keep_last_round 默认 True
+	if c.KeepLastRound == nil {
+		c.KeepLastRound = ptrBool(true)
+	}
 }
 
 // offloadLargeMessages 遍历卸载范围，逐条卸载大消息。
@@ -339,7 +341,7 @@ func (mo *MessageOffloader) getOffloadRange(messages []llm_schema.BaseMessage) i
 		keepIndex = len(messages) - *mo.config.MessagesToKeep
 	}
 
-	if mo.config.KeepLastRound {
+	if mo.config.KeepLastRound != nil && *mo.config.KeepLastRound {
 		lastAIMsgIdx := processor.FindLastFinalAssistantIdx(messages)
 		if lastAIMsgIdx != -1 && lastAIMsgIdx < keepIndex {
 			return lastAIMsgIdx
@@ -484,6 +486,9 @@ func matchPattern(args map[string]any, pattern string) bool {
 	}
 	return false
 }
+
+// ptrBool 返回 bool 值的指针。
+func ptrBool(v bool) *bool { return &v }
 
 // init 自动注册到 context_engine 注册表
 func init() {

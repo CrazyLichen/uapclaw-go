@@ -846,9 +846,15 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 // Python: SkillManager.handle_skills_marketplace_add(params)
 func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params map[string]any) (map[string]any, error) {
 	name := toString(params["name"])
-	url := toString(params["url"])
-	if name == "" || url == "" {
+	rawURL := toString(params["url"])
+	if name == "" || rawURL == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: name 或 url"}, nil
+	}
+
+	safeName, err := safePathName(name, "marketplace")
+	if err != nil {
+		logRejectedName("skills.marketplace.add", "marketplace", name, err)
+		return map[string]any{"success": false, "detail": err.Error()}, nil
 	}
 
 	sm.mu.Lock()
@@ -856,20 +862,20 @@ func (sm *SkillManager) HandleSkillsMarketplaceAdd(ctx context.Context, params m
 
 	marketplaces := sm.getMarketplaces()
 	for _, m := range marketplaces {
-		if toString(m["name"]) == name {
-			return map[string]any{"success": false, "detail": fmt.Sprintf("marketplace %s 已存在", name)}, nil
+		if toString(m["name"]) == safeName {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("marketplace %s 已存在", safeName)}, nil
 		}
 	}
 
 	marketplaces = append(marketplaces, map[string]any{
-		"name":    name,
-		"url":     url,
+		"name":    safeName,
+		"url":     rawURL,
 		"enabled": false, // 新增源默认禁用（对齐 Python: enabled=False，避免未经确认就触发远程同步）
 	})
 	sm.state["marketplaces"] = marketplaces
 	sm.saveState()
 
-	return map[string]any{"success": true, "name": name}, nil
+	return map[string]any{"success": true, "name": safeName}, nil
 }
 
 // HandleSkillsMarketplaceRemove 移除 marketplace
@@ -880,6 +886,12 @@ func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, param
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
 
+	safeName, err := safePathName(name, "marketplace")
+	if err != nil {
+		logRejectedName("skills.marketplace.remove", "marketplace", name, err)
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -887,26 +899,26 @@ func (sm *SkillManager) HandleSkillsMarketplaceRemove(ctx context.Context, param
 	var filtered []map[string]any
 	found := false
 	for _, m := range marketplaces {
-		if toString(m["name"]) == name {
+		if toString(m["name"]) == safeName {
 			found = true
 			continue
 		}
 		filtered = append(filtered, m)
 	}
 	if !found {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", name)}, nil
+		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", safeName)}, nil
 	}
 
 	sm.state["marketplaces"] = filtered
 	sm.saveState()
 
 	// 删除本地缓存目录（对齐 Python: safeRmtree(repo_dir)）
-	repoDir := filepath.Join(sm.marketplaceDir, name)
+	repoDir := filepath.Join(sm.marketplaceDir, safeName)
 	if dirExists(repoDir) {
 		_ = safeRmtree(repoDir)
 	}
 
-	return map[string]any{"success": true, "name": name}, nil
+	return map[string]any{"success": true, "name": safeName}, nil
 }
 
 // HandleSkillsMarketplaceToggle 切换 marketplace 的 enabled 状态
@@ -918,27 +930,35 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
 
+	safeName, err := safePathName(name, "marketplace")
+	if err != nil {
+		logRejectedName("skills.marketplace.toggle", "marketplace", name, err)
+		return map[string]any{"success": false, "detail": err.Error()}, nil
+	}
+
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	marketplaces := sm.getMarketplaces()
 	found := false
 	for _, m := range marketplaces {
-		if toString(m["name"]) == name {
+		if toString(m["name"]) == safeName {
 			m["enabled"] = enabled
 			found = true
 			break
 		}
 	}
 	if !found {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", name)}, nil
+		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到 marketplace: %s", safeName)}, nil
 	}
 
 	sm.state["marketplaces"] = marketplaces
+	// 操作成功后，更新 marketplace_last_updated（对齐 Python: _set_marketplace_last_updated）
+	sm.setMarketplaceLastUpdated()
 	sm.saveState()
 
 	// 启用/禁用时处理本地缓存
-	repoDir := filepath.Join(sm.marketplaceDir, name)
+	repoDir := filepath.Join(sm.marketplaceDir, safeName)
 	if enabled {
 		// 启用时：同步远程仓库（对齐 Python: git pull 或 git clone）
 		if dirExists(repoDir) {
@@ -947,7 +967,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 			// 查找 marketplace URL
 			var repoURL string
 			for _, m := range marketplaces {
-				if toString(m["name"]) == name {
+				if toString(m["name"]) == safeName {
 					repoURL = toString(m["url"])
 					break
 				}
@@ -963,7 +983,7 @@ func (sm *SkillManager) HandleSkillsMarketplaceToggle(ctx context.Context, param
 		}
 	}
 
-	return map[string]any{"success": true, "name": name, "enabled": enabled}, nil
+	return map[string]any{"success": true, "name": safeName, "enabled": enabled}, nil
 }
 
 // HandleSkillsSkillnetSearch 在线搜索 SkillNet 技能
@@ -1348,6 +1368,9 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, param
 	}
 	baseURL := trimSpace(toString(params["market_url"]))
 	version := trimSpace(toString(params["version"]))
+	if version == "" {
+		return map[string]any{"success": false, "detail": "缺少参数: version"}, nil
+	}
 
 	queryParams := url.Values{}
 	if version != "" {
@@ -2416,6 +2439,12 @@ func (sm *SkillManager) getMarketplaces() []map[string]any {
 		return nil
 	}
 	return anySliceToMapSlice(raw)
+}
+
+// setMarketplaceLastUpdated 更新 marketplace_last_updated 为当前 Unix 时间戳
+// Python: SkillManager._set_marketplace_last_updated()
+func (sm *SkillManager) setMarketplaceLastUpdated() {
+	sm.state["marketplace_last_updated"] = time.Now().Unix()
 }
 
 // removeInstalledPlugin 移除已安装插件记录

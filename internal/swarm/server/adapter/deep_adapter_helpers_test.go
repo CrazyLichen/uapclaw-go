@@ -532,7 +532,7 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 		{"interaction", "__interaction__", map[string]any{"type": "confirm"}, false, "chat.interaction"},
 		{"message", "message", map[string]any{"content": "hello", "stage": "test"}, false, "harness.message"},
 		{"stage_result", "stage_result", map[string]any{"stage": "build", "status": "success"}, false, "harness.stage_result"},
-		{"未知类型", "unknown_type", map[string]any{"content": "test"}, false, "chat.delta"},
+		{"未知类型", "unknown_type", map[string]any{"content": "test"}, false, "chat.unknown_type"},
 	}
 
 	for _, tt := range tests {
@@ -544,7 +544,7 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 			if tt.payload == nil {
 				output = nil
 			}
-			result := utils.ParseStreamChunk(output, &utils.UsageAccumulator{}, emittedIDs, nil)
+			result := utils.ParseStreamChunk(output, &utils.UsageAccumulator{}, emittedIDs, nil, false)
 			if tt.wantNil {
 				if result != nil {
 					t.Errorf("parseStreamChunk() 应返回 nil，got %v", result)
@@ -571,7 +571,7 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 		Payload: map[string]any{"request_id": "ask1"},
 	}
 	// 第一次应返回
-	result1 := utils.ParseStreamChunk(output1, usage, emittedIDs, nil)
+	result1 := utils.ParseStreamChunk(output1, usage, emittedIDs, nil, false)
 	if result1 == nil {
 		t.Error("首次 ask_user_question 不应被去重")
 	}
@@ -581,7 +581,7 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 		Type:    "ask_user_question",
 		Payload: map[string]any{"request_id": "ask1"},
 	}
-	result2 := utils.ParseStreamChunk(output2, usage, emittedIDs, nil)
+	result2 := utils.ParseStreamChunk(output2, usage, emittedIDs, nil, false)
 	if result2 != nil {
 		t.Error("重复 request_id 应被去重")
 	}

@@ -58,13 +58,18 @@ var permRpcLogComponent = logger.ComponentPermissions
 //
 // 入参 params 为已解析的请求参数字典（从 json.RawMessage 解析而来）。
 // 返回 (ok, payload)：ok=true 时 payload 为响应数据，ok=false 时 payload 含 error/code。
-func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (bool, map[string]any) {
+func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (ok bool, payload map[string]any) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Error(permRpcLogComponent).
 				Any("recover", rec).
 				Str("req_method", reqMethod).
 				Msg("[permissions_config_rpc] dispatch 异常恢复")
+			ok = false
+			payload = map[string]any{
+				"error": fmt.Sprintf("internal error: %v", rec),
+				"code":  "INTERNAL_ERROR",
+			}
 		}
 	}()
 
@@ -193,20 +198,6 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 			return false, errPayload("approval_override not found", "NOT_FOUND")
 		}
 		return true, map[string]any{"ok": true}
-
-	case "permissions.owner_scopes.get":
-		result := GetPermissionsOwnerScopes()
-		return true, map[string]any{"owner_scopes": result["owner_scopes"], "deny_guidance_message": result["deny_guidance_message"]}
-
-	case "permissions.owner_scopes.set":
-		if params == nil {
-			return false, errPayload("params must be object", "BAD_REQUEST")
-		}
-		ok, err := UpdatePermissionsOwnerScopesInConfig(params)
-		if err != nil {
-			return false, errPayload(err.Error(), "BAD_REQUEST")
-		}
-		return true, map[string]any{"ok": ok}
 
 	default:
 		return false, errPayload("unknown permissions req_method", "BAD_REQUEST")

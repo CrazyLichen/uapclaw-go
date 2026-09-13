@@ -192,7 +192,7 @@ func (c *Controller) BindSession(ctx context.Context, sess *session.Session) err
 	}
 	sessionID := sess.GetSessionID()
 	c.restoreTaskManagerState(ctx, sessioninterfaces.SessionFacade(sess))
-	c.taskScheduler.Sessions()[sessionID] = sess
+	c.taskScheduler.AddSession(sessionID, sess)
 	if err := c.eventQueue.Subscribe(ctx, c.card.ID, sessionID); err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func (c *Controller) UnbindSession(ctx context.Context, sess *session.Session) e
 	if err := c.eventQueue.Unsubscribe(ctx, c.card.ID, sessionID); err != nil {
 		return err
 	}
-	delete(c.taskScheduler.Sessions(), sessionID)
+	c.taskScheduler.RemoveSession(sessionID)
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("session 已解绑")
 	return nil
 }
@@ -285,7 +285,7 @@ func (c *Controller) Stream(
 		}
 
 		// 2. 注册 session
-		c.taskScheduler.Sessions()[sessionID] = sess
+		c.taskScheduler.AddSession(sessionID, sess)
 
 		// finally 清理（对应 Python finally 块）
 		defer func() {
@@ -294,7 +294,7 @@ func (c *Controller) Stream(
 			// 8. 取消订阅
 			_ = c.eventQueue.Unsubscribe(ctx, agentID, sessionID)
 			// 9. 移除 session
-			delete(c.taskScheduler.Sessions(), sessionID)
+			c.taskScheduler.RemoveSession(sessionID)
 			logger.Info(logComponent).Str("session_id", sessionID).
 				Int("active_sessions", len(c.taskScheduler.Sessions())).
 				Msg("session 完成")
@@ -340,10 +340,12 @@ func (c *Controller) Stream(
 					out <- firstChunk
 				}
 			} else {
-				// 非 OutputSchema 类型（如 TraceSchema），对齐 Python：直接 yield
-				logger.Warn(logComponent).Str("session_id", sessionID).
-					Str("schema_type", firstSchema.SchemaType()).
-					Msg("首帧类型不是 OutputSchema，跳过")
+				// 非 OutputSchema 类型（如 TraceSchema/CustomSchema）：包装为 OutputSchema 透传
+				// 对齐 Python: yield 所有 chunk 类型
+				out <- &stream.OutputSchema{
+					Type:    firstSchema.SchemaType(),
+					Payload: firstSchema,
+				}
 			}
 		case <-time.After(time.Duration(firstFrameTimeout * float64(time.Second))):
 			logger.Error(logComponent).Float64("timeout", firstFrameTimeout).Str("session_id", sessionID).Msg("首帧超时")
@@ -363,10 +365,13 @@ func (c *Controller) Stream(
 		for schemaItem := range iter {
 			chunk, ok := schemaItem.(*stream.OutputSchema)
 			if !ok {
-				// 非 OutputSchema 类型，对齐 Python：仍 yield
-				logger.Warn(logComponent).Str("session_id", sessionID).
-					Str("schema_type", schemaItem.SchemaType()).
-					Msg("chunk 类型不是 OutputSchema，跳过")
+				// 非 OutputSchema 类型（如 TraceSchema/CustomSchema）：包装为 OutputSchema 透传
+				// 对齐 Python: yield 所有 chunk 类型
+				chunk = &stream.OutputSchema{
+					Type:    schemaItem.SchemaType(),
+					Payload: schemaItem,
+				}
+				out <- chunk
 				continue
 			}
 			if c.isCompletionSignal(chunk) {

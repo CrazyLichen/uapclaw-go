@@ -106,6 +106,8 @@ type ProcessorOption struct {
 	Model *llm.Model
 	// ModelName 模型名称，对齐 Python: kwargs.get("model_name") or self._model_name
 	ModelName string
+	// WindowSize 上下文窗口大小，对齐 Python: kwargs.get("window_size")
+	WindowSize int
 	// Extra 额外参数
 	Extra map[string]any
 }
@@ -170,6 +172,11 @@ func WithModel(m *llm.Model) Option {
 // WithProcessorModelName 设置处理器模型名称，对齐 Python: kwargs.get("model_name")
 func WithProcessorModelName(name string) Option {
 	return func(o *ProcessorOption) { o.ModelName = name }
+}
+
+// WithWindowSize 设置上下文窗口大小，对齐 Python: kwargs.update({"window_size": window_size})
+func WithWindowSize(windowSize int) Option {
+	return func(o *ProcessorOption) { o.WindowSize = windowSize }
 }
 
 // WithExtra 设置额外参数

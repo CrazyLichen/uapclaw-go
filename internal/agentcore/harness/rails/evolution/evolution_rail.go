@@ -753,8 +753,13 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 	}
 
 	// Python: async with self._evolution_sem
-	r.evolutionSem <- struct{}{}
-	defer func() { <-r.evolutionSem }()
+	select {
+	case r.evolutionSem <- struct{}{}:
+		defer func() { <-r.evolutionSem }()
+	case <-ctx.Done():
+		logger.Warn(logComponent).Err(ctx.Err()).Msg("safeRunEvolution: 获取信号量被取消")
+		return ctx.Err()
+	}
 
 	traj := snapshot.Trajectory
 	err := r.ext.RunEvolution(ctx, traj, snapshot)

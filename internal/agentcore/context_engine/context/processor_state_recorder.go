@@ -298,6 +298,7 @@ func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessag
 // countMessageForStatistic 统计单条消息的 token 数，用于构建 statistic。
 //
 // Python: ContextProcessorStateRecorder._count_message_for_statistic()
+// 无 tokenCounter 时返回 0，对齐 Python: 无计数器时不估算。
 func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMessage) int {
 	if r.tokenCounter != nil {
 		count, err := r.tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
@@ -305,7 +306,8 @@ func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMes
 			return count
 		}
 	}
-	return len(msg.GetContent().Text()) / 4
+	// 对齐 Python: 无 tokenCounter 时返回 0
+	return 0
 }
 
 // buildSaved 构建压缩节省量指标。

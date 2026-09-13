@@ -118,7 +118,7 @@ var pathApprovalKeys = map[string]bool{
 // - 全串匹配防止 "git status; rm -rf /" 匹配 "git status *"
 //
 // Python: match_wildcard(value, pattern) (patterns.py L122-157)
-func MatchWildcard(value, pattern string) bool {
+func MatchWildcard(pattern, value string) bool {
 	if pattern == "" || value == "" {
 		return false
 	}
@@ -464,7 +464,7 @@ func (pm *PatternMatcher) Match(pattern, value string) bool {
 	if pattern == "" || value == "" {
 		return false
 	}
-	return MatchWildcard(value, pattern)
+	return MatchWildcard(pattern, value)
 }
 
 // MatchAny 匹配任意一个模式。

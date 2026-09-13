@@ -89,9 +89,8 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	}
 
 	// 步骤 6: rail/tool 模式切换
-	// ⤵️ 10.6.3-10: updateRailsForMode + updatePromptForMode
-	// 待实现：按模式更新Rails d.updateRailsForMode(d.mode)
-	// 待实现：按模式更新提示词 d.updatePromptForMode(d.mode)
+	d.updateRailsForMode(d.mode)
+	d.updatePromptForMode(d.mode)
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).

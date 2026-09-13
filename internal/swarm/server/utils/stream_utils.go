@@ -40,6 +40,12 @@ type FindOption struct {
 	MaxDepth int
 }
 
+// ParseStreamChunkOption ParseStreamChunk 的可选参数。
+type ParseStreamChunkOption struct {
+	// Stage 当 payload 中无 stage 字段时的回退值（对应 Python _stage）
+	Stage string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -56,12 +62,15 @@ type FindOption struct {
 // converter 参数用于自定义 __interaction__ 类型的交互转换逻辑，
 // 若 converter 为 nil，则 ParseInteractionPayload 回退为默认行为。
 // hasStreamedContent 对齐 Python 的 _has_streamed_content，用于 answer 分支判断 chat.delta/chat.final。
-func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emittedAskUserIDs map[string]bool, converter InteractionConverterFunc, hasStreamedContent ...bool) map[string]any {
+func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emittedAskUserIDs map[string]bool, converter InteractionConverterFunc, hasStreamedContent bool, opts ...ParseStreamChunkOption) map[string]any {
 	if output == nil {
 		return nil
 	}
 
-	hsc := len(hasStreamedContent) > 0 && hasStreamedContent[0]
+	var fallbackStage string
+	if len(opts) > 0 {
+		fallbackStage = opts[0].Stage
+	}
 
 	chunkType := output.Type
 	payload, _ := output.Payload.(map[string]any)
@@ -143,7 +152,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if content == "" || strings.TrimSpace(content) == "" {
 			return nil
 		}
-		if hsc && !isChunked {
+		if hasStreamedContent && !isChunked {
 			return map[string]any{"event_type": "chat.final", "content": content}
 		}
 		if isChunked {
@@ -260,16 +269,16 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.compression_state":
-		// S-02: 对齐 Python — event_type 无 chat. 前缀，6 个字段展开到顶层
+		// M-01: 对齐 Python — payload 所有键展开到顶层（不再只提取 5 个固定字段）
 		// Python: interface_deep._parse_stream_chunk L5147-5157
-		return map[string]any{
-			"event_type":   "context.compression_state",
-			"status":       ExtractStringFromPayload(payload, "status"),
-			"phase":        ExtractStringFromPayload(payload, "phase"),
-			"processor":    ExtractStringFromPayload(payload, "processor"),
-			"summary":      ExtractStringFromPayload(payload, "summary"),
-			"operation_id": ExtractStringFromPayload(payload, "operation_id"),
+		result := map[string]any{"event_type": "context.compression_state"}
+		if payloadMap, ok := output.Payload.(map[string]any); ok {
+			for k, v := range payloadMap {
+				result[k] = SerializeValue(v)
+			}
 		}
+		result["event_type"] = "context.compression_state" // 确保 event_type 正确
+		return result
 
 	case "ask_user_question":
 		// S-05: 对齐 Python — payload 展开到顶层而非嵌套
@@ -305,6 +314,9 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 			content = fmt.Sprintf("%v", payload)
 		}
 		stage := ExtractStringFromPayload(payload, "stage")
+		if stage == "" {
+			stage = fallbackStage
+		}
 		result := map[string]any{
 			"event_type": "harness.message",
 			"content":    content,
@@ -328,9 +340,13 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if _, ok := payload["stage"]; !ok && len(payload) == 0 {
 			return nil
 		}
+		stage := ExtractStringFromPayload(payload, "stage")
+		if stage == "" {
+			stage = fallbackStage
+		}
 		return map[string]any{
 			"event_type":      "harness.stage_result",
-			"stage":           ExtractStringFromPayload(payload, "stage"),
+			"stage":           stage,
 			"status":          ExtractStringFromPayload(payload, "status"),
 			"error":           ExtractStringFromPayload(payload, "error"),
 			"messages":        payload["messages"],
@@ -407,18 +423,34 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 					}
 					return result
 				}
+				// chat.tracer_agent 特殊处理（对齐 Python: _serialize_chunk_recursive 递归序列化）
+				if innerEventType == "chat.tracer_agent" {
+					result := map[string]any{"event_type": "chat." + chunkType}
+					for k, v := range payload {
+						result[k] = serializeChunkRecursive(v)
+					}
+					return result
+				}
 			}
-			// 尝试提取 content/output 字段
+			// 其他事件：透传所有键（对齐 Python: **{k: _serialize_value(v) for k, v in payload.items()}）
+			result := map[string]any{"event_type": "chat." + chunkType}
+			for k, v := range payload {
+				result[k] = SerializeValue(v)
+			}
+			// 保留空白内容过滤
 			content := ""
-			if c, ok := payload["content"].(string); ok && c != "" {
+			if c, ok := result["content"].(string); ok && c != "" {
 				content = c
-			} else if o, ok := payload["output"].(string); ok && o != "" {
-				content = o
+			}
+			if content == "" {
+				if o, ok := result["output"].(string); ok && o != "" {
+					content = o
+				}
 			}
 			if content == "" || strings.TrimSpace(content) == "" {
 				return nil
 			}
-			return map[string]any{"event_type": "chat.delta", "content": content}
+			return result
 		}
 		// payload 为空 → 作为 content
 		return map[string]any{
@@ -565,6 +597,27 @@ func FindInteractionPayload(obj any, opts ...FindOption) any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// serializeChunkRecursive 递归序列化嵌套 dict/list（对齐 Python: _serialize_chunk_recursive）。
+// Python: stream_utils._serialize_chunk_recursive(v) — 对 dict/list 递归调用 _serialize_value
+func serializeChunkRecursive(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, v2 := range val {
+			result[k] = serializeChunkRecursive(v2)
+		}
+		return result
+	case []any:
+		result := make([]any, len(val))
+		for i, v2 := range val {
+			result[i] = serializeChunkRecursive(v2)
+		}
+		return result
+	default:
+		return SerializeValue(val)
+	}
+}
 
 // findInteractionPayloadsRecursive 递归搜索 __interaction__ 载荷。
 // Python: _find_interaction_payloads 内部递归逻辑 (stream_utils.py L378-432)

@@ -123,7 +123,7 @@ func MatchArgs(pattern string, toolArgs map[string]any) (result bool) {
 		if (key == "path" || key == "file_path") && matchers.path.MatchPath(pattern, s) {
 			return true
 		}
-		if harnesssecurity.MatchWildcard(s, pattern) {
+		if harnesssecurity.MatchWildcard(pattern, s) {
 			return true
 		}
 	}
@@ -278,7 +278,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	// Python: 取 owner_level 和 global_level 中更严者
 	globalSeverity, globalOk := severityMap[globalLevelStr]
 
-	if globalOk && globalSeverity > severityMap[level] {
+	if globalOk && globalSeverity > severityOf(level) {
 		finalLevel = globalLevelStr
 	}
 
@@ -301,15 +301,22 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 	persistLock.Lock()
 	defer persistLock.Unlock()
 
-	if permCfg == nil {
-		permCfg = map[string]any{}
+	// 读取最新配置，避免覆盖并发修改
+	data := readYAMLData()
+	if data["permissions"] == nil {
+		data["permissions"] = map[string]any{}
+	}
+	perm, _ := data["permissions"].(map[string]any)
+	if perm == nil {
+		perm = map[string]any{}
+		data["permissions"] = perm
 	}
 
 	// Python: scopes = perm_cfg.setdefault("owner_scopes", {})
-	scopes, _ := permCfg["owner_scopes"].(map[string]any)
+	scopes, _ := perm["owner_scopes"].(map[string]any)
 	if scopes == nil {
 		scopes = map[string]any{}
-		permCfg["owner_scopes"] = scopes
+		perm["owner_scopes"] = scopes
 	}
 
 	// Python: ch = scopes.setdefault(channel_id, {})
@@ -341,13 +348,9 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 	}
 
 	// 写盘
-	if configPath == "" {
-		configPath = workspace.ConfigFile()
-	}
-	ok := harnesssecurity.WritePermissionsSectionToAgentConfigYAML(configPath, permCfg)
-	if !ok {
+	if err := writeYAMLData(data); err != nil {
 		logger.Warn(logComponent).
-			Str("config_path", configPath).
+			Err(err).
 			Msg("persistToOwnerScope 写盘失败")
 		return false
 	}
@@ -379,3 +382,12 @@ func (p *OwnerScopesPermissionContext) OwnerScopeKey() [2]string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// severityOf 返回 severity 等级，未知 key 默认返回 2（deny，最严格）。
+// 对齐 Python: _severity.get(level, 2)
+func severityOf(s string) int {
+	if v, ok := severityMap[s]; ok {
+		return v
+	}
+	return 2
+}

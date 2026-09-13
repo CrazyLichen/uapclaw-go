@@ -1722,12 +1722,12 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 		cfg, err := config.New(cfgPath)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 加载配置失败")
-			return map[string]any{}, nil
+			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
 		}
 		raw, err := cfg.Raw()
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 读取配置失败")
-			return map[string]any{}, nil
+			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
 		}
 		permCfg, _ := raw["permissions"].(map[string]any)
 		if permCfg == nil {
@@ -1747,39 +1747,15 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 
 // handlePermissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
 // Python: _permissions_owner_scopes_set (app_web_handlers.py L2285-2298)
-// 直接更新配置中的 owner_scopes，不经 E2A / config_rpc。
+// 直接调用 UpdatePermissionsOwnerScopesInConfig 统一写路径，不经 E2A / config_rpc。
 func handlePermissionsOwnerScopesSet() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params must be object")
 		}
-		ownerScopes, _ := params["owner_scopes"].(map[string]any)
-		if ownerScopes == nil {
-			ownerScopes = map[string]any{}
-		}
-		denyGuidance, _ := params["deny_guidance_message"].(string)
-
-		// Python: update_permissions_owner_scopes_in_config — 读取→修改→写回
-		cfgPath := workspace.ConfigFile()
-		cfg, err := config.New(cfgPath)
+		_, err := permrpc.UpdatePermissionsOwnerScopesInConfig(params)
 		if err != nil {
-			return nil, fmt.Errorf("创建配置管理器失败: %w", err)
-		}
-		raw, err := cfg.Raw()
-		if err != nil {
-			return nil, fmt.Errorf("读取配置失败: %w", err)
-		}
-		permCfg, _ := raw["permissions"].(map[string]any)
-		if permCfg == nil {
-			permCfg = map[string]any{}
-			raw["permissions"] = permCfg
-		}
-		permCfg["owner_scopes"] = ownerScopes
-		if denyGuidance != "" {
-			permCfg["deny_guidance_message"] = denyGuidance
-		}
-		if err := cfg.Save(raw); err != nil {
-			return nil, fmt.Errorf("写回配置失败: %w", err)
+			return nil, fmt.Errorf("更新 owner_scopes 配置失败: %w", err)
 		}
 		return map[string]any{"ok": true}, nil
 	}

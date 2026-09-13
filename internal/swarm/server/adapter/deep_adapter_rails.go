@@ -545,10 +545,102 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 
 // updateRailsForMode 按模式注册/注销 Rail。
 // Python: _update_rails_for_mode() (line 2754-2896)
-//
-// ✅ 部分已回填：evolution 分支
 func (d *DeepAdapter) updateRailsForMode(mode string) {
-	// evolution 分支：检查 evolution 配置，动态注册/注销 SkillEvolutionRail
+	// Python: if mode == "agent.plan": await self._update_plan_mode_rails()
+	// Python: else: await self._update_agent_mode_rails(mode)
+	if mode == "agent.plan" {
+		d.updatePlanModeRails()
+	} else {
+		d.updateAgentModeRails(mode)
+	}
+}
+
+// updatePlanModeRails plan 模式：注册 plan 专属 rails。
+// Python: _update_plan_mode_rails() (line 2761-2852)
+func (d *DeepAdapter) updatePlanModeRails() {
+	ctx := context.Background()
+
+	// 1. TaskPlanningRail — plan 模式下注册
+	if d.taskPlanningRail == nil {
+		rail := d.buildTaskPlanningRail(d.configCache, d.resolveRuntimeLanguage())
+		if rail != nil && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, rail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注册 TaskPlanningRail 失败")
+			} else {
+				d.taskPlanningRail = rail
+				logger.Info(logComponent).Msg("TaskPlanningRail 注册成功（plan 模式）")
+			}
+		}
+	}
+
+	// 2. 卸载 multi-session 工具
+	// Python: for existing in list(self._instance.ability_manager.list() or []):
+	//   if getattr(existing, "name", "").startswith(("session_new", "session_cancel", "session_list")):
+	//     self._instance.ability_manager.remove(existing.name)
+	if d.instance != nil {
+		tools := d.instance.AbilityManager().List()
+		for _, t := range tools {
+			name := t.AbilityName()
+			if strings.HasPrefix(name, "session_new") ||
+				strings.HasPrefix(name, "session_cancel") ||
+				strings.HasPrefix(name, "session_list") {
+				d.instance.AbilityManager().Remove(name)
+			}
+		}
+	}
+
+	// 3. 记忆 rail 处理
+	// Python: await self._handle_memory_rail_by_config("plan")
+	// ⤵️ 待回填: handleMemoryRailByConfig
+
+	// 4. 外接记忆 rail
+	// Python: await self._handle_external_memory_rail_by_config()
+	// ⤵️ 待回填: handleExternalMemoryRailByConfig
+
+	// 5. ContextAssembleRail — plan 模式专属实例
+	if d.contextAssembleRail == nil || d.contextAssembleMode != "agent.plan" {
+		if d.contextAssembleRail != nil && d.instance != nil {
+			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注销 ContextAssembleRail 失败")
+			}
+			d.contextAssembleRail = nil
+		}
+		d.contextAssembleRail = d.buildContextAssembleRail("agent.plan")
+		d.contextAssembleMode = "agent.plan"
+		if d.contextAssembleRail != nil && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注册 ContextAssembleRail 失败")
+			} else {
+				logger.Info(logComponent).Msg("ContextAssembleRail 注册成功（plan 模式）")
+			}
+		}
+	}
+
+	// 6. ContextProcessorRail — 按配置启用/禁用
+	contextEngineConfig, _ := d.configCache["context_engine_config"].(map[string]any)
+	contextEnabled, _ := contextEngineConfig["enabled"].(bool)
+	if contextEnabled {
+		if d.contextProcessorRail == nil {
+			d.contextProcessorRail = d.buildContextProcessorRail()
+			if d.contextProcessorRail != nil && d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("注册 ContextProcessorRail 失败")
+				} else {
+					logger.Info(logComponent).Msg("ContextProcessorRail 注册成功（plan 模式）")
+				}
+			}
+		}
+	} else {
+		if d.contextProcessorRail != nil && d.instance != nil {
+			if err := d.instance.UnregisterRail(ctx, d.contextProcessorRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注销 ContextProcessorRail 失败")
+			}
+			d.contextProcessorRail = nil
+			logger.Info(logComponent).Msg("ContextProcessorRail 已注销（plan 模式，配置禁用）")
+		}
+	}
+
+	// 7. SkillEvolutionRail — 按 evolution 配置注册/注销
 	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
 	evolutionEnabled, _ := evolutionConfig["enabled"].(bool)
 	if evolutionEnabled {
@@ -558,8 +650,10 @@ func (d *DeepAdapter) updateRailsForMode(mode string) {
 				var ok bool
 				d.skillEvolutionRail, ok = rail.(*evolution.SkillEvolutionRail)
 				if ok && d.skillEvolutionRail != nil && d.instance != nil {
-					if err := d.instance.RegisterRail(context.Background(), d.skillEvolutionRail); err != nil {
+					if err := d.instance.RegisterRail(ctx, d.skillEvolutionRail); err != nil {
 						logger.Error(logComponent).Err(err).Msg("注册 SkillEvolutionRail 失败")
+					} else {
+						logger.Info(logComponent).Msg("SkillEvolutionRail 注册成功（plan 模式）")
 					}
 				}
 			}
@@ -567,14 +661,116 @@ func (d *DeepAdapter) updateRailsForMode(mode string) {
 	} else {
 		if d.skillEvolutionRail != nil {
 			if d.instance != nil {
-				if err := d.instance.UnregisterRail(context.Background(), d.skillEvolutionRail); err != nil {
+				if err := d.instance.UnregisterRail(ctx, d.skillEvolutionRail); err != nil {
 					logger.Error(logComponent).Err(err).Msg("注销 SkillEvolutionRail 失败")
 				}
 			}
 			d.skillEvolutionRail = nil
+			logger.Info(logComponent).Msg("SkillEvolutionRail 已注销（evolution.enabled=false）")
 		}
 	}
-	logger.Info(logComponent).Str("mode", mode).Msg("updateRailsForMode 执行完成")
+
+	// 8. SkillCreateRail
+	// Python: skill_create_enabled = _get_skill_create_enabled(self._config_cache)
+	// ⤵️ 待回填: SkillCreateRail 处理
+
+	// 9. SubagentRail — plan 模式下注册
+	if d.subagentRail == nil {
+		rail := d.buildSubagentRail()
+		if rail != nil {
+			var ok bool
+			d.subagentRail, ok = rail.(*subagent.SubagentRail)
+			if ok && d.subagentRail != nil && d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, d.subagentRail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("注册 SubagentRail 失败")
+				} else {
+					logger.Info(logComponent).Msg("SubagentRail 注册成功（plan 模式）")
+				}
+			}
+		}
+	}
+
+	logger.Info(logComponent).Msg("updatePlanModeRails 执行完成")
+}
+
+// updateAgentModeRails agent 模式：卸载 plan 专属 rails，按需注册 agent 专属 rails。
+// Python: _update_agent_mode_rails() (line 2854-2895)
+func (d *DeepAdapter) updateAgentModeRails(mode string) {
+	ctx := context.Background()
+
+	// 1. 卸载 plan 专属 rails
+	// Python: rail_specs = (("_task_planning_rail", "TaskPlanningRail"), ...)
+	if d.taskPlanningRail != nil && d.instance != nil {
+		if err := d.instance.UnregisterRail(ctx, d.taskPlanningRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail 已注销")
+		}
+		d.taskPlanningRail = nil
+	}
+	if d.skillEvolutionRail != nil && d.instance != nil {
+		if err := d.instance.UnregisterRail(ctx, d.skillEvolutionRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail 已注销")
+		}
+		d.skillEvolutionRail = nil
+	}
+	if d.skillCreateRail != nil && d.instance != nil {
+		if err := d.instance.UnregisterRail(ctx, d.skillCreateRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "SkillCreateRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillCreateRail").Msg("Rail 已注销")
+		}
+		d.skillCreateRail = nil
+	}
+	if d.subagentRail != nil && d.instance != nil {
+		if err := d.instance.UnregisterRail(ctx, d.subagentRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("Rail 已注销")
+		}
+		d.subagentRail = nil
+	}
+
+	// 2. 记忆 rail 处理
+	// Python: await self._handle_memory_rail_by_config("fast")
+	// ⤵️ 待回填: handleMemoryRailByConfig
+
+	// 3. 外接记忆 rail
+	// Python: await self._handle_external_memory_rail_by_config()
+	// ⤵️ 待回填: handleExternalMemoryRailByConfig
+
+	// 4. ContextAssembleRail — agent.fast 模式专属实例
+	if d.contextAssembleRail == nil || d.contextAssembleMode == "agent.plan" {
+		if d.contextAssembleRail != nil && d.instance != nil {
+			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注销 ContextAssembleRail 失败")
+			}
+			d.contextAssembleRail = nil
+		}
+		d.contextAssembleRail = d.buildContextAssembleRail("agent.fast")
+		d.contextAssembleMode = "agent.fast"
+		if d.contextAssembleRail != nil && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注册 ContextAssembleRail 失败")
+			}
+		}
+	}
+
+	// 5. ContextProcessorRail — agent 模式下按需注册
+	if d.contextProcessorRail == nil {
+		d.contextProcessorRail = d.buildContextProcessorRail()
+		if d.contextProcessorRail != nil && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("注册 ContextProcessorRail 失败")
+			} else {
+				logger.Info(logComponent).Str("mode", mode).Msg("ContextProcessorRail 注册成功")
+			}
+		}
+	}
+
+	logger.Info(logComponent).Str("mode", mode).Msg("updateAgentModeRails 执行完成")
 }
 
 // updatePromptForMode 按模式更新系统提示词语言。

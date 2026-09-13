@@ -18,7 +18,7 @@ func makeOutput(chunkType string, payload map[string]any) *stream.OutputSchema {
 }
 
 func TestParseStreamChunk_nil(t *testing.T) {
-	result := ParseStreamChunk(nil, nil, nil, nil)
+	result := ParseStreamChunk(nil, nil, nil, nil, false)
 	if result != nil {
 		t.Errorf("nil input 应返回 nil, 实际 %v", result)
 	}
@@ -26,7 +26,7 @@ func TestParseStreamChunk_nil(t *testing.T) {
 
 func TestParseStreamChunk_controllerOutput_taskCompletion(t *testing.T) {
 	output := makeOutput("controller_output", map[string]any{"type": "task_completion"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result != nil {
 		t.Errorf("task_completion 应返回 nil, 实际 %v", result)
 	}
@@ -40,7 +40,7 @@ func TestParseStreamChunk_controllerOutput_taskFailed(t *testing.T) {
 			map[string]any{"code": 500},
 		},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.error" {
 		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
 	}
@@ -51,7 +51,7 @@ func TestParseStreamChunk_controllerOutput_taskFailed(t *testing.T) {
 
 func TestParseStreamChunk_controllerOutput_taskFailed_无data(t *testing.T) {
 	output := makeOutput("controller_output", map[string]any{"type": "task_failed"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.error" {
 		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
 	}
@@ -69,7 +69,7 @@ func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
 	converter := func(payload any) map[string]any {
 		return map[string]any{"event_type": "chat.ask_user_question", "data": payload}
 	}
-	result := ParseStreamChunk(output, nil, nil, converter)
+	result := ParseStreamChunk(output, nil, nil, converter, false)
 	// controller_output 搜索到 __interaction__ 后委托 converter，返回 chat.ask_user_question
 	if result["event_type"] != "chat.ask_user_question" {
 		t.Errorf("controller_output 发现 __interaction__ 后应委托 converter, 期望 chat.ask_user_question, 实际 %v", result["event_type"])
@@ -78,7 +78,7 @@ func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
 
 func TestParseStreamChunk_controllerOutput_default(t *testing.T) {
 	output := makeOutput("controller_output", map[string]any{"type": "other", "data": "hello"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.delta" {
 		t.Errorf("期望 chat.delta, 实际 %v", result["event_type"])
 	}
@@ -86,7 +86,7 @@ func TestParseStreamChunk_controllerOutput_default(t *testing.T) {
 
 func TestParseStreamChunk_contentChunk(t *testing.T) {
 	output := makeOutput("content_chunk", map[string]any{"content": "hello"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.delta" {
 		t.Errorf("期望 chat.delta, 实际 %v", result["event_type"])
 	}
@@ -97,7 +97,7 @@ func TestParseStreamChunk_contentChunk(t *testing.T) {
 
 func TestParseStreamChunk_contentChunk_空内容(t *testing.T) {
 	output := makeOutput("content_chunk", map[string]any{"content": ""})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result != nil {
 		t.Errorf("空内容应返回 nil, 实际 %v", result)
 	}
@@ -105,7 +105,7 @@ func TestParseStreamChunk_contentChunk_空内容(t *testing.T) {
 
 func TestParseStreamChunk_contentChunk_空白内容(t *testing.T) {
 	output := makeOutput("content_chunk", map[string]any{"content": "   "})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result != nil {
 		t.Errorf("空白内容应返回 nil, 实际 %v", result)
 	}
@@ -113,7 +113,7 @@ func TestParseStreamChunk_contentChunk_空白内容(t *testing.T) {
 
 func TestParseStreamChunk_answer_默认(t *testing.T) {
 	output := makeOutput("answer", map[string]any{"content": "最终答案"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.final" {
 		t.Errorf("期望 chat.final, 实际 %v", result["event_type"])
 	}
@@ -124,7 +124,7 @@ func TestParseStreamChunk_answer_resultTypeError(t *testing.T) {
 		"result_type": "error",
 		"output":      "未知错误",
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.error" {
 		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
 	}
@@ -137,7 +137,7 @@ func TestParseStreamChunk_answer_chunked(t *testing.T) {
 	output := makeOutput("answer", map[string]any{
 		"output": map[string]any{"output": "部分内容", "chunked": true},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.delta" {
 		t.Errorf("is_chunked=true 期望 chat.delta, 实际 %v", result["event_type"])
 	}
@@ -155,7 +155,7 @@ func TestParseStreamChunk_answer_hasStreamedContent(t *testing.T) {
 
 func TestParseStreamChunk_toolCall(t *testing.T) {
 	output := makeOutput("tool_call", map[string]any{"name": "read_file"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.tool_call" {
 		t.Errorf("期望 chat.tool_call, 实际 %v", result["event_type"])
 	}
@@ -165,7 +165,7 @@ func TestParseStreamChunk_toolUpdate(t *testing.T) {
 	output := makeOutput("tool_update", map[string]any{
 		"tool_update": map[string]any{"progress": "50%", "status": "running"},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.tool_update" {
 		t.Errorf("期望 chat.tool_update, 实际 %v", result["event_type"])
 	}
@@ -186,7 +186,7 @@ func TestParseStreamChunk_toolResult(t *testing.T) {
 			"success":      true,
 		},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.tool_result" {
 		t.Errorf("期望 chat.tool_result, 实际 %v", result["event_type"])
 	}
@@ -211,7 +211,7 @@ func TestParseStreamChunk_toolResult_toolName回退(t *testing.T) {
 			"name":   "legacy_name",
 		},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["tool_name"] != "legacy_name" {
 		t.Errorf("tool_name 应回退到 name, 实际 %v", result["tool_name"])
 	}
@@ -224,7 +224,7 @@ func TestParseStreamChunk_toolResult_toolCallId回退(t *testing.T) {
 			"toolCallId": "tc-123",
 		},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["tool_call_id"] != "tc-123" {
 		t.Errorf("tool_call_id 应回退到 toolCallId, 实际 %v", result["tool_call_id"])
 	}
@@ -237,7 +237,7 @@ func TestParseStreamChunk_toolResult_rawOutput回退(t *testing.T) {
 			"rawOutput": "raw data",
 		},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["raw_output"] != "raw data" {
 		t.Errorf("raw_output 应回退到 rawOutput, 实际 %v", result["raw_output"])
 	}
@@ -245,7 +245,7 @@ func TestParseStreamChunk_toolResult_rawOutput回退(t *testing.T) {
 
 func TestParseStreamChunk_error(t *testing.T) {
 	output := makeOutput("error", map[string]any{"error": "something broke"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.error" {
 		t.Errorf("期望 chat.error, 实际 %v", result["event_type"])
 	}
@@ -253,7 +253,7 @@ func TestParseStreamChunk_error(t *testing.T) {
 
 func TestParseStreamChunk_thinking(t *testing.T) {
 	output := makeOutput("thinking", map[string]any{"content": "思考中"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.processing_status" {
 		t.Errorf("期望 chat.processing_status, 实际 %v", result["event_type"])
 	}
@@ -269,7 +269,7 @@ func TestParseStreamChunk_todoUpdated(t *testing.T) {
 	output := makeOutput("todo.updated", map[string]any{
 		"todos": []any{map[string]any{"id": "1", "text": "任务1"}},
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "todo.updated" {
 		t.Errorf("期望 todo.updated, 实际 %v", result["event_type"])
 	}
@@ -281,7 +281,7 @@ func TestParseStreamChunk_todoUpdated(t *testing.T) {
 
 func TestParseStreamChunk_todoUpdated_无todos(t *testing.T) {
 	output := makeOutput("todo.updated", map[string]any{})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "todo.updated" {
 		t.Errorf("期望 todo.updated, 实际 %v", result["event_type"])
 	}
@@ -298,7 +298,7 @@ func TestParseStreamChunk_contextUsage(t *testing.T) {
 		"context_max": 128000,
 		"tokens_used": 64000,
 	})
-	result := ParseStreamChunk(output, usage, nil, nil)
+	result := ParseStreamChunk(output, usage, nil, nil, false)
 	if result["event_type"] != "context.usage" {
 		t.Errorf("期望 context.usage, 实际 %v", result["event_type"])
 	}
@@ -321,7 +321,7 @@ func TestParseStreamChunk_contextCompressionState(t *testing.T) {
 		"summary":      "test summary",
 		"operation_id": "op-123",
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "context.compression_state" {
 		t.Errorf("期望 context.compression_state, 实际 %v", result["event_type"])
 	}
@@ -347,13 +347,13 @@ func TestParseStreamChunk_askUserQuestion_去重(t *testing.T) {
 	output := makeOutput("ask_user_question", map[string]any{"request_id": "req-1", "questions": []any{}})
 
 	// 第一次应返回事件
-	result1 := ParseStreamChunk(output, nil, emittedIDs, nil)
+	result1 := ParseStreamChunk(output, nil, emittedIDs, nil, false)
 	if result1["event_type"] != "chat.ask_user_question" {
 		t.Errorf("第一次应返回 ask_user_question, 实际 %v", result1["event_type"])
 	}
 
 	// 第二次相同 requestID 应返回 nil（去重）
-	result2 := ParseStreamChunk(output, nil, emittedIDs, nil)
+	result2 := ParseStreamChunk(output, nil, emittedIDs, nil, false)
 	if result2 != nil {
 		t.Errorf("去重后应返回 nil, 实际 %v", result2)
 	}
@@ -362,7 +362,7 @@ func TestParseStreamChunk_askUserQuestion_去重(t *testing.T) {
 func TestParseStreamChunk_askUserQuestion_无RequestID不去重(t *testing.T) {
 	emittedIDs := map[string]bool{}
 	output := makeOutput("ask_user_question", map[string]any{"questions": []any{}})
-	result := ParseStreamChunk(output, nil, emittedIDs, nil)
+	result := ParseStreamChunk(output, nil, emittedIDs, nil, false)
 	if result["event_type"] != "chat.ask_user_question" {
 		t.Errorf("无 requestID 不去重, 期望 ask_user_question, 实际 %v", result["event_type"])
 	}
@@ -377,7 +377,7 @@ func TestParseStreamChunk_interaction_有converter(t *testing.T) {
 	}
 	// 非 activate_confirm 类型 → 走 converter
 	output := makeOutput("__interaction__", map[string]any{"type": "ask_user"})
-	result := ParseStreamChunk(output, nil, nil, converter)
+	result := ParseStreamChunk(output, nil, nil, converter, false)
 	if result["event_type"] != "chat.ask_user_question" {
 		t.Errorf("有 converter 且非 activate_confirm 时应委托转换, 实际 %v", result["event_type"])
 	}
@@ -394,7 +394,7 @@ func TestParseStreamChunk_interaction_activateConfirm(t *testing.T) {
 		"extension_name":   "test_ext",
 		"runtime_path":     "/tmp/runtime",
 	})
-	result := ParseStreamChunk(output, nil, nil, converter)
+	result := ParseStreamChunk(output, nil, nil, converter, false)
 	if result["event_type"] != "harness.activate_interaction" {
 		t.Errorf("activate_confirm 应返回 harness.activate_interaction, 实际 %v", result["event_type"])
 	}
@@ -408,7 +408,7 @@ func TestParseStreamChunk_interaction_activateConfirm(t *testing.T) {
 
 func TestParseStreamChunk_interaction_无converter(t *testing.T) {
 	output := makeOutput("__interaction__", map[string]any{"type": "ask_user"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.interaction" {
 		t.Errorf("无 converter 时应回退为 chat.interaction, 实际 %v", result["event_type"])
 	}
@@ -428,7 +428,7 @@ func TestParseStreamChunk_specialTypes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		output := makeOutput(tt.chunkType, tt.payload)
-		result := ParseStreamChunk(output, nil, nil, nil)
+		result := ParseStreamChunk(output, nil, nil, nil, false)
 		if result["event_type"] != tt.wantEvent {
 			t.Errorf("类型 %s 期望 %s, 实际 %v", tt.chunkType, tt.wantEvent, result["event_type"])
 		}
@@ -436,18 +436,18 @@ func TestParseStreamChunk_specialTypes(t *testing.T) {
 
 	// activate_testing_guide 特殊：返回 chat.delta
 	output := makeOutput("activate_testing_guide", map[string]any{"text": "guide text"})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.delta" {
 		t.Errorf("activate_testing_guide 期望 chat.delta, 实际 %v", result["event_type"])
 	}
 }
 
 func TestParseStreamChunk_defaultFallback(t *testing.T) {
-	// Python: default 分支对 payload dict 提取 content/output 字段
+	// M-04: default 分支对非 team 事件透传所有键，event_type = "chat." + chunkType
 	output := makeOutput("custom_event", map[string]any{"content": "value"})
-	result := ParseStreamChunk(output, nil, nil, nil)
-	if result["event_type"] != "chat.delta" {
-		t.Errorf("默认类型期望 chat.delta, 实际 %v", result["event_type"])
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	if result["event_type"] != "chat.custom_event" {
+		t.Errorf("默认类型期望 chat.custom_event, 实际 %v", result["event_type"])
 	}
 	if result["content"] != "value" {
 		t.Errorf("期望 content=value, 实际 %v", result["content"])
@@ -459,7 +459,7 @@ func TestParseStreamChunk_defaultFallback_team(t *testing.T) {
 		"event_type": "team.runtime_ready",
 		"status":     "ok",
 	})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "team.runtime_ready" {
 		t.Errorf("team 命名空间应直传, 实际 %v", result["event_type"])
 	}
@@ -467,7 +467,7 @@ func TestParseStreamChunk_defaultFallback_team(t *testing.T) {
 
 func TestParseStreamChunk_defaultFallback_空payload(t *testing.T) {
 	output := makeOutput("custom_empty", map[string]any{})
-	result := ParseStreamChunk(output, nil, nil, nil)
+	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.custom_empty" {
 		t.Errorf("空 payload 期望 chat.{chunkType}, 实际 %v", result["event_type"])
 	}

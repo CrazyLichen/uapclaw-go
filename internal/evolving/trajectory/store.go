@@ -373,10 +373,17 @@ func mapToLLMCallDetail(data map[string]any) *LLMCallDetail {
 
 // mapToToolCallDetail 从字典构造 ToolCallDetail。
 func mapToToolCallDetail(data map[string]any) *ToolCallDetail {
+	callResult := toMapAny(data["call_result"])
+	// 容错：JSON 中 call_result 为字符串时包装为 map，避免数据丢失
+	if callResult == nil {
+		if s, ok := data["call_result"].(string); ok && s != "" {
+			callResult = map[string]any{"output": s}
+		}
+	}
 	return &ToolCallDetail{
 		ToolName:        toString(data["tool_name"]),
 		CallArgs:        toMapAny(data["call_args"]),
-		CallResult:      toMapAny(data["call_result"]),
+		CallResult:      callResult,
 		ToolDescription: toString(data["tool_description"]),
 		ToolSchema:      toMapAny(data["tool_schema"]),
 		ToolCallID:      toString(data["tool_call_id"]),

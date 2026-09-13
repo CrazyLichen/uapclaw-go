@@ -176,11 +176,13 @@ func WithErrorMessage(msg string) TaskStatusOption {
 // AddTask 添加任务，更新索引，触发 onTaskSubmitted 回调。
 // Python: TaskManager.add_task
 func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
+	var toNotify []*schema.Task
+
 	tm.mu.Lock()
-	defer tm.mu.Unlock()
 
 	// 检查任务ID是否已存在
 	if _, exists := tm.tasks[task.TaskID]; exists {
+		tm.mu.Unlock()
 		logger.Error(logComponent).
 			Str("task_id", task.TaskID).
 			Str("event_type", "TASK_ADD_ERROR").
@@ -216,8 +218,15 @@ func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 		Str("status", string(task.Status)).
 		Msg("任务添加成功")
 
-	// 触发 SUBMITTED 通知
-	tm.notifyIfSubmitted([]*schema.Task{task})
+	// 收集需要通知的任务
+	if task.Status == schema.TaskSubmitted {
+		toNotify = append(toNotify, task)
+	}
+
+	tm.mu.Unlock()
+
+	// 锁外通知（对齐 Python: Notify outside lock）
+	tm.notifyIfSubmitted(toNotify)
 
 	return nil
 }
@@ -418,8 +427,9 @@ func (tm *TaskManager) RemoveTask(ctx context.Context, filter *TaskFilter) error
 // UpdateTaskStatus 更新任务状态。
 // Python: TaskManager.update_task_status
 func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newStatus schema.TaskStatus, opts ...TaskStatusOption) error {
+	var toNotify []*schema.Task
+
 	tm.mu.Lock()
-	defer tm.mu.Unlock()
 
 	// 解析选项
 	cfg := &taskStatusConfig{}
@@ -429,6 +439,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 
 	task, exists := tm.tasks[taskID]
 	if !exists {
+		tm.mu.Unlock()
 		logger.Error(logComponent).
 			Str("task_id", taskID).
 			Str("event_type", "TASK_STATUS_UPDATE_ERROR").
@@ -488,8 +499,15 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 		}
 	}
 
-	// 触发 SUBMITTED 通知
-	tm.notifyIfSubmitted([]*schema.Task{task})
+	// 收集需要通知的任务
+	if task.Status == schema.TaskSubmitted {
+		toNotify = append(toNotify, task)
+	}
+
+	tm.mu.Unlock()
+
+	// 锁外通知（对齐 Python: Notify outside lock）
+	tm.notifyIfSubmitted(toNotify)
 
 	return nil
 }
@@ -764,18 +782,18 @@ func (tm *TaskManager) SetConfig(cfg *config.ControllerConfig) {
 
 // notifyIfSubmitted 有 SUBMITTED 任务时触发回调。
 // Python: TaskManager._notify_if_submitted
-// 调用方必须持有 tm.mu 锁。
+// 调用方不得持有 tm.mu 锁（对齐 Python: 在锁外调用通知）。
 func (tm *TaskManager) notifyIfSubmitted(tasks []*schema.Task) {
 	for _, task := range tasks {
 		if task.Status == schema.TaskSubmitted {
-			if tm.onTaskSubmitted != nil {
+			tm.mu.RLock()
+			callback := tm.onTaskSubmitted
+			tm.mu.RUnlock()
+			if callback != nil {
 				logger.Info(logComponent).
 					Str("task_id", task.TaskID).
 					Msg("触发 SUBMITTED 通知回调")
-				// 在回调中释放锁再获取，避免死锁
-				// 但由于 notifyIfSubmitted 在锁内调用，
-				// 回调不应再访问 TaskManager 的锁保护字段
-				tm.onTaskSubmitted()
+				callback()
 			}
 			return
 		}

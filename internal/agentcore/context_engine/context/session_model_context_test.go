@@ -676,8 +676,10 @@ func TestSessionModelContext_CompressContext(t *testing.T) {
 
 	t.Run("有压缩处理器返回 compressed", func(t *testing.T) {
 		proc := newSMCMockCompressionProcessor()
-		proc.onAddResult = nil
-		proc.onAddMessages = nil
+		// S-19: runAddProcessors 返回 changed=true 时 CompressContext 返回 "compressed"
+		// mock 需要返回 event（非 nil）来使 changed=true
+		proc.onAddResult = &iface.ContextEvent{}
+		proc.onAddMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("compressed message")}
 		mc := newTestSessionModelContext(func(o *testContextOpts) {
 			o.processors = []iface.ContextProcessor{proc}
 		})
@@ -1035,7 +1037,7 @@ func TestRunAddProcessors_处理器触发判断失败(t *testing.T) {
 		o.processors = []iface.ContextProcessor{proc}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
-	result, err := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages)
+	_, result, err := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages, "passive")
 	if err != nil {
 		t.Errorf("触发判断失败不应返回错误，实际: %v", err)
 	}
@@ -1057,7 +1059,7 @@ func TestRunAddProcessors_处理器执行失败(t *testing.T) {
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("history")}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
-	result, err := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages)
+	_, result, err := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages, "passive")
 	if err != nil {
 		t.Errorf("处理器执行失败不应返回错误，实际: %v", err)
 	}
@@ -1081,7 +1083,7 @@ func TestRunAddProcessors_处理器返回新消息(t *testing.T) {
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("history")}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("original")}
-	result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages)
+	_, result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages, "passive")
 	if len(result) != 1 {
 		t.Fatalf("期望返回 1 条消息，实际 %d", len(result))
 	}
@@ -1100,7 +1102,7 @@ func TestRunAddProcessors_处理器触发判断未触发(t *testing.T) {
 		o.processors = []iface.ContextProcessor{proc}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
-	result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages)
+	_, result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages, "passive")
 	if len(result) != 1 {
 		t.Errorf("未触发时返回原始消息，期望 1 条，实际 %d", len(result))
 	}
@@ -1118,7 +1120,7 @@ func TestRunAddProcessors_force为true跳过触发判断(t *testing.T) {
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("history")}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
-	result, _ := mc.runAddProcessors(context.Background(), messages, true, nil, false, ceschema.PhaseActiveCompress)
+	_, result, _ := mc.runAddProcessors(context.Background(), messages, true, nil, false, ceschema.PhaseActiveCompress, "manual")
 	if len(result) != 1 {
 		t.Fatalf("force 模式应执行处理器，期望 1 条消息，实际 %d", len(result))
 	}
@@ -1144,7 +1146,7 @@ func TestRunAddProcessors_带事件记录(t *testing.T) {
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("history")}
 	})
 	messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
-	result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages)
+	_, result, _ := mc.runAddProcessors(context.Background(), messages, false, nil, false, ceschema.PhaseAddMessages, "passive")
 	if len(result) != 1 {
 		t.Errorf("期望返回 1 条消息，实际 %d", len(result))
 	}
@@ -1448,7 +1450,7 @@ func TestAddMessages_压缩进行中获取锁(t *testing.T) {
 // TestCountSingleMessageTokens_tokenCounter失败降级 测试 tokenCounter 失败时降级
 func TestCountSingleMessageTokens_tokenCounter失败降级(t *testing.T) {
 	tc := &mockTokenCounter{
-		countFn: func(text string, model string) (int, error) {
+		countMessagesFn: func(messages []llm_schema.BaseMessage, model string) (int, error) {
 			return 0, fmt.Errorf("counter error")
 		},
 	}
@@ -1465,7 +1467,7 @@ func TestCountSingleMessageTokens_tokenCounter失败降级(t *testing.T) {
 // TestCountSingleMessageTokens_tokenCounter返回0 测试 tokenCounter 返回 0 时直接使用 0（对齐 Python）
 func TestCountSingleMessageTokens_tokenCounter返回0(t *testing.T) {
 	tc := &mockTokenCounter{
-		countFn: func(text string, model string) (int, error) {
+		countMessagesFn: func(messages []llm_schema.BaseMessage, model string) (int, error) {
 			return 0, nil
 		},
 	}

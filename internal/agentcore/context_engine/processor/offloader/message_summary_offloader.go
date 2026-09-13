@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/danwakefield/fnmatch"
 	"github.com/google/uuid"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
@@ -500,8 +501,8 @@ func msoExtractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 func msoMatchPattern(args map[string]any, pattern string) bool {
 	for _, value := range args {
 		if strVal, ok := value.(string); ok {
-			matched, _ := filepath.Match(pattern, strVal)
-			if matched {
+			// 对齐 Python: 使用 fnmatch 支持通配符 ** 模式（filepath.Match 不支持 **）
+			if fnmatch.Match(pattern, strVal, 0) {
 				return true
 			}
 		}

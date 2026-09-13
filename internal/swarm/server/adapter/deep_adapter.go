@@ -621,6 +621,17 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	d.syncMultimodalToolsForRuntime(ctx)
 	d.syncPaidSearchToolForRuntime()
 
+	// 步骤 8.6: ACP filesystem rail 注销
+	// Python: if not self._filesystem_rail_enabled_for_profile() and self._filesystem_rail is not None:
+	//   await self._instance.unregister_rail(self._filesystem_rail)
+	//   self._filesystem_rail = None
+	if !d.filesystemRailEnabledForProfile(d.instanceOverrides) && d.filesystemRail != nil {
+		if err := d.instance.UnregisterRail(ctx, d.filesystemRail); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("ACP filesystem rail 注销失败")
+		}
+		d.filesystemRail = nil
+	}
+
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
@@ -918,6 +929,11 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	outCh := make(chan *schema.AgentResponseChunk, 64)
 
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error(logComponent).Any("recover", rec).Msg("ProcessMessageStreamImpl panic 恢复")
+			}
+		}()
 		defer close(outCh)
 		defer d.unmarkSessionActive(sessionID)
 
@@ -945,7 +961,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			case "llm_usage":
 				// 累加 usage → yield chat.usage_metadata
 				utils.AccumulateUsage(usage, payload)
-				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+				usagePayload := map[string]any{
 					"event_type":    "chat.usage_metadata",
 					"input_tokens":  usage.InputTokens,
 					"output_tokens": usage.OutputTokens,
@@ -953,7 +969,15 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					"input_cost":    usage.InputCost,
 					"output_cost":   usage.OutputCost,
 					"total_cost":    usage.TotalCost,
-				})
+				}
+				// Python: metadata 和 session_id 字段
+				if metadata, ok := payload["metadata"]; ok {
+					usagePayload["metadata"] = metadata
+				}
+				if sessionID != "" {
+					usagePayload["session_id"] = sessionID
+				}
+				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usagePayload)
 
 			case "llm_reasoning":
 				// 待实现：产出推理内容 yield chat.reasoning
@@ -1001,11 +1025,19 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				}
 
 			default:
-				// flush 累积
+				// flush 累积（对齐 Python: 先 emit 再置空）
 				if accumulatedText != "" {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+						"event_type": "chat.delta",
+						"content":    accumulatedText,
+					})
 					accumulatedText = ""
 				}
 				if accumulatedReasoning != "" {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+						"event_type": "chat.reasoning",
+						"content":    accumulatedReasoning,
+					})
 					accumulatedReasoning = ""
 				}
 				// ParseStreamChunk 处理其他类型
@@ -1020,23 +1052,81 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// flush 残留 accumulatedText/accumulatedReasoning
 		if accumulatedText != "" {
 			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-				"event_type": "chat.delta",
+				"event_type": "chat.final",
 				"content":    accumulatedText,
 			})
 		}
 
 		// 用量摘要
+		// Python: interface_deep._parse_stream_chunk L4906-4972
 		if usage.TotalTokens > 0 {
-			usageSummary := map[string]any{
-				"event_type":    "chat.usage_summary",
+			// 对齐 Python: usage 子对象（仅 token 字段 + 条件 cost 字段）
+			usageSubObj := map[string]any{
 				"input_tokens":  usage.InputTokens,
 				"output_tokens": usage.OutputTokens,
 				"total_tokens":  usage.TotalTokens,
-				"input_cost":    usage.InputCost,
-				"output_cost":   usage.OutputCost,
-				"total_cost":    usage.TotalCost,
+			}
+			if usage.InputCost > 0 {
+				usageSubObj["input_cost"] = usage.InputCost
+			}
+			if usage.OutputCost > 0 {
+				usageSubObj["output_cost"] = usage.OutputCost
+			}
+			if usage.TotalCost > 0 {
+				usageSubObj["total_cost"] = usage.TotalCost
+			}
+
+			usageSummary := map[string]any{
+				"event_type": "chat.usage_summary",
+				"session_id": sessionID,
+				"usage":      usageSubObj,
+				"model":      d.defaultModelName,
+			}
+			// 对齐 Python: 从 DeepAgent.get_context_usage 获取 usage_percent/context_window_tokens
+			if d.instance != nil {
+				daUsage, daErr := d.instance.GetContextUsage(ctx, sessionID, "")
+				if daErr == nil && daUsage != nil {
+					if rawPct, ok := daUsage["usage_percent"]; ok && rawPct != nil {
+						switch v := rawPct.(type) {
+						case float64:
+							usageSummary["usage_percent"] = v
+						case int:
+							usageSummary["usage_percent"] = float64(v)
+						case int64:
+							usageSummary["usage_percent"] = float64(v)
+						}
+					}
+					if rawCW, ok := daUsage["context_window_tokens"]; ok && rawCW != nil {
+						switch v := rawCW.(type) {
+						case int:
+							if v > 0 {
+								usageSummary["context_window_tokens"] = v
+							}
+						case int64:
+							if v > 0 {
+								usageSummary["context_window_tokens"] = int(v)
+							}
+						case float64:
+							if v > 0 {
+								usageSummary["context_window_tokens"] = int(v)
+							}
+						}
+					}
+				}
 			}
 			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usageSummary)
+		}
+
+		// evolution watcher 启动
+		// Python: if self._skill_evolution_rail is not None:
+		//   task = asyncio.create_task(self._watch_evolution_and_push(rid, cid, session_id))
+		//   task.add_done_callback(self._on_evolution_watcher_done)
+		//   self._evolution_watcher_tasks.add(task)
+		if d.skillEvolutionRail != nil {
+			go func() {
+				_ = d.watchEvolutionAndPush(ctx, sessionID, req.RequestID)
+				d.onEvolutionWatcherDone(sessionID)
+			}()
 		}
 
 		// 终止哨兵
@@ -2023,6 +2113,9 @@ func extractReasoningContent(payload map[string]any) string {
 		return ""
 	}
 	if v, ok := payload["content"].(string); ok {
+		return v
+	}
+	if v, ok := payload["output"].(string); ok {
 		return v
 	}
 	if v, ok := payload["reasoning"].(string); ok {

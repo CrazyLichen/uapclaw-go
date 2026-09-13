@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
@@ -32,6 +35,7 @@ import (
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
 
@@ -127,6 +131,9 @@ var codeRailBuildNames = map[string]string{
 	"SkillEvolutionRail":   "buildSkillEvolutionRail",
 	"WorktreeRail":         "buildWorktreeRail",
 	"CodeAgentRail":        "buildCodeAgentRail",
+	"LspRail":              "buildLspRail",
+	"ProjectMemoryRail":    "buildProjectMemoryRail",
+	"CodingMemoryRail":     "buildCodingMemoryRail",
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -1060,4 +1067,378 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 WorktreeRail
 	return nil
+}
+
+// MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
+// Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
+func (c *CodeAdapter) MergeMemberMcpConfigs(agent *harness.DeepAgent, configBase map[string]any) int {
+	deepConfig := agent.DeepConfig()
+	if deepConfig == nil {
+		return 0
+	}
+
+	configuredMcps := deepConfig.Mcps
+	if configuredMcps == nil {
+		configuredMcps = make([]*mcptypes.McpServerConfig, 0)
+	}
+	// 构建已配置 ID 集合用于去重
+	configuredIDs := make(map[string]struct{}, len(configuredMcps))
+	for _, cfg := range configuredMcps {
+		id := cfg.ServerID
+		if id == "" {
+			id = cfg.ServerName
+		}
+		if id != "" {
+			configuredIDs[id] = struct{}{}
+		}
+	}
+
+	added := 0
+	for _, entry := range c.deep.extractEnabledMcpServerEntries(configBase) {
+		cfg := c.deep.buildMcpServerConfig(entry)
+		if cfg == nil {
+			logger.Warn(logComponent).
+				Str("name", toStringAny(entry["name"])).
+				Msg("跳过无效的成员 MCP 服务器条目")
+			continue
+		}
+		serverID := cfg.ServerID
+		if serverID == "" {
+			serverID = cfg.ServerName
+		}
+		if serverID == "" {
+			continue
+		}
+		if _, exists := configuredIDs[serverID]; exists {
+			continue
+		}
+		configuredMcps = append(configuredMcps, cfg)
+		configuredIDs[serverID] = struct{}{}
+		added++
+	}
+	deepConfig.Mcps = configuredMcps
+	return added
+}
+
+// ConfigureTeamMemberAgent 将 code 运行时配置应用到团队成员 DeepAgent。
+// Python: JiuwenClawCodeAdapter.configure_team_member_agent() (interface_code.py L1074-1171)
+func (c *CodeAdapter) ConfigureTeamMemberAgent(
+	ctx context.Context,
+	agent *harness.DeepAgent,
+	parentAgent *harness.DeepAgent,
+	skillMgr *skill.SkillManager,
+	memberName string,
+	role string,
+	sessionID string,
+	channelID string,
+	projectDir string,
+	runtimeLanguage string,
+	forceEnglishRuntimePrompt bool,
+) {
+	// Python: if skill_manager is not None and hasattr(self, "set_skill_manager"):
+	//   self.set_skill_manager(skill_manager)
+	if skillMgr != nil {
+		c.deep.SetSkillManager(skillMgr)
+	}
+
+	// Python: normalized_runtime_language → resolve_language
+	normalizedLang := strings.TrimSpace(strings.ToLower(runtimeLanguage))
+	if normalizedLang == "zh" {
+		normalizedLang = "cn"
+	}
+	if normalizedLang != "" {
+		c.runtimeLanguageOverride = normalizedLang
+	}
+	c.forceEnglishRuntimePrompt = forceEnglishRuntimePrompt
+
+	// Python: config_base = get_config()
+	cfg, cfgErr := cfgPkg.New("")
+	if cfgErr != nil {
+		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: 获取配置失败")
+		return
+	}
+	configBase, cfgErr := cfg.Load()
+	if cfgErr != nil {
+		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: 加载配置失败")
+		return
+	}
+
+	// Python: self._refresh_multimodal_configs(config_base)
+	c.deep.refreshMultimodalConfigs(configBase)
+
+	// Python: react_config = (config_base.get("react") or {}).copy()
+	// Python: self._config_cache = react_config.copy()
+	reactConfig, _ := configBase["react"].(map[string]any)
+	if reactConfig == nil {
+		reactConfig = make(map[string]any)
+	}
+	c.deep.configCache = make(map[string]any, len(reactConfig))
+	for k, v := range reactConfig {
+		c.deep.configCache[k] = v
+	}
+
+	// Python: self._instance = agent
+	c.deep.instance = agent
+
+	// Python: agent_id = str(getattr(card, "id", "") or member_name or "team_member")
+	card := agent.Card()
+	agentID := memberName
+	if card != nil && card.ID != "" {
+		agentID = card.ID
+	}
+	if agentID == "" {
+		agentID = "team_member"
+	}
+
+	// Python: self._agent_name = str(getattr(card, "name", "") or member_name or role or "team_member")
+	agentName := memberName
+	if card != nil && card.Name != "" {
+		agentName = card.Name
+	}
+	if agentName == "" && role != "" {
+		agentName = role
+	}
+	if agentName == "" {
+		agentName = "team_member"
+	}
+	c.deep.agentName = agentName
+
+	// Python: parent_project_dir = project_dir or parent._jiuwenswarm_code_project_dir or _resolve_member_workspace_root(parent)
+	parentProjectDir := projectDir
+	if parentProjectDir == "" {
+		parentProjectDir = c.uapswarmCodeProjectDir
+	}
+	memberWorkspaceRoot := ""
+	if agent != nil {
+		memberWorkspaceRoot = workspace.AgentWorkspaceDir()
+	}
+	// Python: self._project_dir = parent_project_dir or member_workspace_root or react_config.get("project_dir")
+	c.deep.projectDir = parentProjectDir
+	if c.deep.projectDir == "" {
+		c.deep.projectDir = memberWorkspaceRoot
+	}
+	if c.deep.projectDir == "" {
+		if pd, ok := reactConfig["project_dir"].(string); ok {
+			c.deep.projectDir = pd
+		}
+	}
+
+	// Python: self._workspace_dir = self._project_dir or member_workspace_root or react_config.get("workspace_dir") or get_agent_workspace_dir()
+	c.deep.workspaceDir = c.deep.projectDir
+	if c.deep.workspaceDir == "" {
+		c.deep.workspaceDir = memberWorkspaceRoot
+	}
+	if c.deep.workspaceDir == "" {
+		if wd, ok := reactConfig["workspace_dir"].(string); ok {
+			c.deep.workspaceDir = wd
+		}
+	}
+	if c.deep.workspaceDir == "" {
+		c.deep.workspaceDir = workspace.AgentWorkspaceDir()
+	}
+
+	// Python: self._agent_workspace_dir = member_workspace_root or get_agent_workspace_dir()
+	c.deep.agentWorkspaceDir = memberWorkspaceRoot
+	if c.deep.agentWorkspaceDir == "" {
+		c.deep.agentWorkspaceDir = workspace.AgentWorkspaceDir()
+	}
+
+	// Python: self._instance_overrides = {"agent_name": ..., "project_dir": ..., "channel_id": ...}
+	c.deep.instanceOverrides = map[string]any{
+		"agent_name": c.deep.agentName,
+		"project_dir": c.deep.projectDir,
+		"channel_id": channelID,
+	}
+
+	// Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
+	cwdSeed := c.deep.projectDir
+	if cwdSeed == "" {
+		cwdSeed = c.deep.workspaceDir
+	}
+	c.deep.seedRuntimeCwd(ctx, cwdSeed)
+
+	// Python: model = self._create_model(config_base)
+	model := c.deep.createModel(configBase)
+
+	// Python: deep_config = getattr(agent, "deep_config", None)
+	//   if deep_config is not None and getattr(deep_config, "model", None) is None: deep_config.model = model
+	//   if deep_config is not None and getattr(deep_config, "sys_operation", None) is None: deep_config.sys_operation = self._create_sys_operation()
+	deepConfig := agent.DeepConfig()
+	if deepConfig != nil {
+		if deepConfig.Model == nil {
+			deepConfig.Model = model
+		}
+		if deepConfig.SysOperation == nil {
+			deepConfig.SysOperation = c.deep.createSysOperation(configBase)
+		}
+	}
+
+	// Python: tool_cards = self.build_code_tool_cards(agent_id)
+	// Python: added_tools = _merge_tool_cards(agent, tool_cards)
+	toolCards := c.getToolCards(agentID)
+	addedTools := mergeToolCards(agent, toolCards)
+
+	// Python: rails = self._build_agent_rails(react_config, config_base, mode="code")
+	// Python: added_rails = sum(1 for rail in rails if _queue_rail_if_missing(agent, rail))
+	rails := c.buildCodeAgentRails(reactConfig, configBase)
+	addedRails := queueRailsIfMissing(agent, rails)
+
+	// Python: subagents, _should_add_general = self._build_configured_subagents(model, react_config, config_base)
+	// Python: added_subagents = _merge_subagents(agent, subagents)
+	subagents, _ := c.buildConfiguredSubagents(reactConfig, configBase)
+	addedSubagents := mergeSubagents(agent, subagents)
+
+	// Python: added_mcps = self.merge_member_mcp_configs(agent, config_base)
+	addedMcps := c.MergeMemberMcpConfigs(agent, configBase)
+
+	// Python: if getattr(deep_config, "subagents", None): subagent_rail = self._build_subagent_rail()
+	if deepConfig != nil && len(deepConfig.Subagents) > 0 {
+		subagentRail := c.deep.buildSubagentRail()
+		if subagentRail != nil {
+			if queueRailIfMissing(agent, subagentRail) {
+				addedRails++
+			}
+		}
+	}
+
+	// Python: _set_coding_memory_directory(agent, self._project_dir)
+	// ⤵️ 待回填: setCodingMemoryDirectory
+
+	// Python: setattr(agent, "_jiuwenswarm_adapter_mode", "code")
+	c.uapswarmAdapterMode = "code"
+	// Python: setattr(agent, "_jiuwenswarm_code_project_dir", self._project_dir or self._workspace_dir)
+	c.uapswarmCodeProjectDir = c.deep.projectDir
+	if c.uapswarmCodeProjectDir == "" {
+		c.uapswarmCodeProjectDir = c.deep.workspaceDir
+	}
+	// Python: setattr(agent, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)
+	c.uapswarmProjectDir = c.deep.projectDir
+	if c.uapswarmProjectDir == "" {
+		c.uapswarmProjectDir = c.deep.workspaceDir
+	}
+
+	logger.Info(logComponent).
+		Str("member_name", memberName).
+		Str("role", role).
+		Str("session_id", sessionID).
+		Str("channel_id", channelID).
+		Int("tools", addedTools).
+		Int("rails", addedRails).
+		Int("subagents", addedSubagents).
+		Int("mcps", addedMcps).
+		Str("project_dir", c.deep.projectDir).
+		Msg("配置团队成员为 code 配置")
+}
+
+// ──────────────────────────── 辅助函数（对齐 Python interface_code.py 模块级） ────────────────────────────
+
+// mergeToolCards 将 tool_cards 合并到 agent 的 AbilityManager（去重）。
+// Python: _merge_tool_cards() (interface_code.py)
+func mergeToolCards(agent *harness.DeepAgent, toolCards []*tool.ToolCard) int {
+	if agent == nil || len(toolCards) == 0 {
+		return 0
+	}
+	am := agent.AbilityManager()
+	existingKeys := make(map[[2]string]struct{})
+	for _, a := range am.List() {
+		existingKeys[[2]string{a.AbilityID(), a.AbilityName()}] = struct{}{}
+	}
+	added := 0
+	for _, card := range toolCards {
+		key := [2]string{card.AbilityID(), card.AbilityName()}
+		if _, exists := existingKeys[key]; exists {
+			continue
+		}
+		am.Add(card)
+		existingKeys[key] = struct{}{}
+		added++
+	}
+	return added
+}
+
+// agentHasRailType 检查 agent 是否已有同类型的 rail。
+// Python: _agent_has_rail_type() (interface_code.py)
+func agentHasRailType(agent *harness.DeepAgent, rail sainterfaces.AgentRail) bool {
+	if agent == nil || rail == nil {
+		return false
+	}
+	found := agent.FindRailsByType(reflect.TypeOf(rail))
+	return len(found) > 0
+}
+
+// queueRailIfMissing 如果 agent 没有同类型 rail，则加入。
+// Python: _queue_rail_if_missing() (interface_code.py)
+func queueRailIfMissing(agent *harness.DeepAgent, rail sainterfaces.AgentRail) bool {
+	if rail == nil || agentHasRailType(agent, rail) {
+		return false
+	}
+	agent.AddRail(rail)
+	return true
+}
+
+// queueRailsIfMissing 批量加入缺失的 rails，返回成功加入数量。
+// Python: sum(1 for rail in rails if _queue_rail_if_missing(agent, rail))
+func queueRailsIfMissing(agent *harness.DeepAgent, rails []sainterfaces.AgentRail) int {
+	added := 0
+	for _, rail := range rails {
+		if queueRailIfMissing(agent, rail) {
+			added++
+		}
+	}
+	return added
+}
+
+// mergeSubagents 将子代理规格合并到 deepConfig（去重）。
+// Python: _merge_subagents() (interface_code.py)
+func mergeSubagents(agent *harness.DeepAgent, subagents []hschema.SubagentSpec) int {
+	if agent == nil || len(subagents) == 0 {
+		return 0
+	}
+	deepConfig := agent.DeepConfig()
+	if deepConfig == nil {
+		return 0
+	}
+	configured := deepConfig.Subagents
+	if configured == nil {
+		configured = make([]hschema.SubagentSpec, 0)
+	}
+	configuredNames := make(map[string]struct{}, len(configured))
+	for _, spec := range configured {
+		name := subagentSpecName(spec)
+		if name != "" {
+			configuredNames[name] = struct{}{}
+		}
+	}
+	added := 0
+	for _, spec := range subagents {
+		name := subagentSpecName(spec)
+		if name == "" {
+			continue
+		}
+		if _, exists := configuredNames[name]; exists {
+			continue
+		}
+		configured = append(configured, spec)
+		configuredNames[name] = struct{}{}
+		added++
+	}
+	deepConfig.Subagents = configured
+	return added
+}
+
+// subagentSpecName 提取子代理规格名称。
+// Python: _subagent_name() (interface_code.py)
+func subagentSpecName(spec hschema.SubagentSpec) string {
+	return spec.SpecName()
+}
+
+// toStringAny 安全地将 any 转为字符串（用于日志）。
+func toStringAny(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
 }

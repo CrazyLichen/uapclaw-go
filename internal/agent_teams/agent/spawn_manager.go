@@ -7,6 +7,7 @@ import (
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -219,11 +220,20 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 		ShutdownTimeout:     runnerspawn.DefaultShutdownTimeout,
 	}
 
-	// ⤵️ 待 #9.64 BuildContextFromDB 实现后回填：从 teammate 获取原始 prompt
-	// Python: initial_message = teammate.prompt if teammate else None
-	// Python: session = get_session_id() or None
-	initialMessage := "" // ⤵️ 待回填：应传入 teammate.prompt
-	sessionID := ""      // ⤵️ 待回填：应传入 get_session_id()
+	// 从 TeamBackend 获取 teammate 的 prompt（对齐 Python: initial_message = teammate.prompt if teammate else None）
+	initialMessage := ""
+	teamBackend := m.configurator.TeamBackend()
+	if teamBackend != nil {
+		teammate, memberErr := teamBackend.GetMember(ctx, memberName)
+		if memberErr == nil && teammate != nil {
+			initialMessage = teammate.Prompt
+		} else if memberErr != nil {
+			logger.Warn(spawnLogComponent).Err(memberErr).Str("member_name", memberName).
+				Msg("获取 teammate prompt 失败，使用空 initialMessage")
+		}
+	}
+	// 从上下文获取 sessionID（对齐 Python: session = get_session_id() or None）
+	sessionID := sessionctx.GetSessionID(ctx)
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)

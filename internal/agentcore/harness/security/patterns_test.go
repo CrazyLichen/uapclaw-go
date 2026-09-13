@@ -12,55 +12,55 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestMatchWildcard_基本匹配(t *testing.T) {
-	assert.True(t, MatchWildcard("ls -la", "ls *"))
-	assert.True(t, MatchWildcard("git status", "git *"))
-	assert.True(t, MatchWildcard("cat file.txt", "cat *"))
+	assert.True(t, MatchWildcard("ls *", "ls -la"))
+	assert.True(t, MatchWildcard("git *", "git status"))
+	assert.True(t, MatchWildcard("cat *", "cat file.txt"))
 }
 
 func TestMatchWildcard_注入防护(t *testing.T) {
 	// shell 元字符 ; | & ` < > $ 不在 wildcardChars 中，防命令拼接
-	assert.False(t, MatchWildcard("git status; rm -rf /", "git status *"))
-	assert.False(t, MatchWildcard("ls && cat /etc/passwd", "ls *"))
-	assert.False(t, MatchWildcard("echo `whoami`", "echo *"))
-	assert.False(t, MatchWildcard("ls | grep secret", "ls *"))
+	assert.False(t, MatchWildcard("git status *", "git status; rm -rf /"))
+	assert.False(t, MatchWildcard("ls *", "ls && cat /etc/passwd"))
+	assert.False(t, MatchWildcard("echo *", "echo `whoami`"))
+	assert.False(t, MatchWildcard("ls *", "ls | grep secret"))
 }
 
 func TestMatchWildcard_尾部空格星号(t *testing.T) {
 	// "ls *" 末尾 " *" → ( wildcardChars*)? 使 "ls *" 可匹配 "ls" 或 "ls -la"
-	assert.True(t, MatchWildcard("ls", "ls *"))
-	assert.True(t, MatchWildcard("ls -la", "ls *"))
-	assert.True(t, MatchWildcard("ls ", "ls *")) // 尾部空格也可匹配
+	assert.True(t, MatchWildcard("ls *", "ls"))
+	assert.True(t, MatchWildcard("ls *", "ls -la"))
+	assert.True(t, MatchWildcard("ls *", "ls ")) // 尾部空格也可匹配
 }
 
 func TestMatchWildcard_问号(t *testing.T) {
-	assert.True(t, MatchWildcard("abc", "a?c"))
-	assert.True(t, MatchWildcard("axc", "a?c"))
-	assert.False(t, MatchWildcard("ac", "a?c"))   // ? 恰好一个字符
-	assert.False(t, MatchWildcard("abbc", "a?c")) // ? 恰好一个字符
+	assert.True(t, MatchWildcard("a?c", "abc"))
+	assert.True(t, MatchWildcard("a?c", "axc"))
+	assert.False(t, MatchWildcard("a?c", "ac"))   // ? 恰好一个字符
+	assert.False(t, MatchWildcard("a?c", "abbc")) // ? 恰好一个字符
 }
 
 func TestMatchWildcard_空值(t *testing.T) {
-	assert.False(t, MatchWildcard("", "ls *"))
-	assert.False(t, MatchWildcard("ls", ""))
+	assert.False(t, MatchWildcard("ls *", ""))
+	assert.False(t, MatchWildcard("", "ls"))
 	assert.False(t, MatchWildcard("", ""))
 }
 
 func TestMatchWildcard_反斜杠规范化(t *testing.T) {
 	// 反斜杠统一替换为 /
-	assert.True(t, MatchWildcard(`C:\Users\test`, `C:/Users/*`))
-	assert.True(t, MatchWildcard(`C:/Users/test`, `C:\Users\*`))
+	assert.True(t, MatchWildcard(`C:/Users/*`, `C:\Users\test`))
+	assert.True(t, MatchWildcard(`C:\Users\*`, `C:/Users/test`))
 }
 
 func TestMatchWildcard_正则特殊字符转义(t *testing.T) {
 	// 正则特殊字符 .+^${}()|[] 应被转义，不被解释为正则
 	assert.True(t, MatchWildcard("v1.0", "v1.0"))
-	assert.False(t, MatchWildcard("v1X0", "v1.0")) // . 应被转义，不匹配任意字符
+	assert.False(t, MatchWildcard("v1.0", "v1X0")) // . 应被转义，不匹配任意字符
 }
 
 func TestMatchWildcard_中间星号(t *testing.T) {
 	// 中间位置的 * → 限制性字符类
-	assert.True(t, MatchWildcard("foo bar baz", "foo * baz"))
-	assert.False(t, MatchWildcard("foo; baz", "foo * baz")) // ; 不在 wildcardChars
+	assert.True(t, MatchWildcard("foo * baz", "foo bar baz"))
+	assert.False(t, MatchWildcard("foo * baz", "foo; baz")) // ; 不在 wildcardChars
 }
 
 // ──────────────────────────── PathMatcher ────────────────────────────

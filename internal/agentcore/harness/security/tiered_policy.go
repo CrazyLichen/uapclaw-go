@@ -522,7 +522,7 @@ func shellPatternMatches(pattern, command string) bool {
 
 	// 通配符
 	if strings.ContainsAny(p, "*?[") {
-		return MatchWildcard(command, p)
+		return MatchWildcard(p, command)
 	}
 	return command == p
 }

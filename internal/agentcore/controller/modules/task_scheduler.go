@@ -3,6 +3,8 @@ package modules
 import (
 	"context"
 	"fmt"
+	"maps"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -167,11 +169,33 @@ func (s *TaskScheduler) NotifyTaskSubmitted() {
 	}
 }
 
-// Sessions 返回会话字典（供 Controller 读写）。
+// AddSession 添加 session（线程安全）。
+func (s *TaskScheduler) AddSession(sessionID string, sess sessioninterfaces.SessionFacade) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions[sessionID] = sess
+}
+
+// RemoveSession 移除 session（线程安全）。
+func (s *TaskScheduler) RemoveSession(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, sessionID)
+}
+
+// GetSession 获取指定 session（线程安全）。
+func (s *TaskScheduler) GetSession(sessionID string) (sessioninterfaces.SessionFacade, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionID]
+	return sess, ok
+}
+
+// Sessions 返回 sessions 的副本（对齐 Python: asyncio 单线程无需锁，Go 返回副本避免数据竞争）。
 func (s *TaskScheduler) Sessions() map[string]sessioninterfaces.SessionFacade {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.sessions
+	return maps.Clone(s.sessions)
 }
 
 // TaskExecutorRegistry 返回任务执行器注册表。
@@ -788,12 +812,16 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 	// 捕获异常
 	defer func() {
 		if r := recover(); r != nil {
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
 			logger.Error(logComponent).
+				Any("recover", r).
+				Str("stack", string(buf[:n])).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
 				Str("method", "executeTaskWrapper").
 				Str("model_provider", "task_scheduler").
-				Msg(fmt.Sprintf("任务执行异常: %v", r))
+				Msg("executeTaskWrapper panic 恢复")
 			// Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
 			s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务执行异常: %v", r))
 		}
