@@ -4,6 +4,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -15,9 +16,8 @@ import (
 type PrivateAgentResources struct {
 	// Harness 底层 DeepAgent 运行时的 Harness
 	Harness *agentteams.TeamHarness
-	// WorktreeManager Worktree 管理器
-	// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
-	WorktreeManager any
+	// WorktreeManager Worktree 管理器。⤴️ 9.66a 回填完成
+	WorktreeManager *worktree.WorktreeManager
 	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成
 	MemoryManager *memory.TeamMemoryManager
 	// FirstIterGate 首轮迭代门控

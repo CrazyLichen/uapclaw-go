@@ -11,6 +11,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -307,8 +308,9 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("WorktreeManager设置后获取", func(t *testing.T) {
-		c.SetWorktreeManager("wt_manager")
-		assert.Equal(t, "wt_manager", c.WorktreeManager())
+		wtMgr := worktree.NewWorktreeManager(worktree.NewWorktreeConfig(), nil)
+		c.SetWorktreeManager(wtMgr)
+		assert.Equal(t, wtMgr, c.WorktreeManager())
 	})
 
 	t.Run("FirstIterGate设置后获取", func(t *testing.T) {

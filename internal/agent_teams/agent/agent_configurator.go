@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -211,10 +212,10 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
 
 	// 9. 工作树管理器（仅非 leader）
-	// ⤴️ 9.66 回填：工作树管理器初始化
-	// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
+	// ⤴️ 9.66a 回填完成：工作树管理器初始化 + 事件镜像回调
 	if ctx.Role != atschema.TeamRoleLeader {
-		c.CreateWorktreeManager(spec)
+		wtMgr := c.CreateWorktreeManager(spec)
+		c.SetWorktreeManager(wtMgr)
 	}
 }
 
@@ -423,9 +424,34 @@ func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, 
 // CreateWorktreeManager 创建工作树管理器。
 // Python: AgentConfigurator.create_worktree_manager(spec)
 //
-// ⤴️ 9.66 回填：框架就绪，WorktreeManager 具体实现待 #9.68
-func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) {
-	// TODO(#9.66a): WorktreeManager 实现 + 事件镜像回调
+// ⤴️ 9.66a 回填完成：构造 NewWorktreeManager + 事件镜像回调
+func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) *worktree.WorktreeManager {
+	cfg := worktree.NewWorktreeConfig()
+	if spec.Worktree != nil {
+		cfg = *spec.Worktree
+	}
+	cfg.Enabled = true
+
+	// 事件镜像回调：harness 层 WorktreeEvent → agent_teams 层 schema.TypedEvent
+	var eventHandler worktree.WorktreeEventHandler
+	if c.WorkspaceManager() != nil {
+		wsMgr := c.WorkspaceManager()
+		eventHandler = func(ctx context.Context, event worktree.WorktreeEvent) error {
+			switch e := event.(type) {
+			case *worktree.WorktreeCreatedEvent:
+				// 挂载 worktree symlink
+				_ = wsMgr.MountWorktree(e.WorktreeName, e.WorktreePath)
+				// TODO(#9.58): TeamBackend.publishEvent 导出后补充 schema 层事件发布
+			case *worktree.WorktreeRemovedEvent:
+				// 卸载 worktree symlink
+				_ = wsMgr.UnmountWorktree(e.WorktreeName)
+				// TODO(#9.58): TeamBackend.publishEvent 导出后补充 schema 层事件发布
+			}
+			return nil
+		}
+	}
+
+	return worktree.NewWorktreeManager(cfg, nil, worktree.WithEventHandler(eventHandler))
 }
 
 // BuildMemoryManager 构建团队共享记忆管理器。
@@ -617,13 +643,21 @@ func (c *AgentConfigurator) SetHarness(v *agentteams.TeamHarness) { c.resources.
 
 // WorktreeManager 返回工作树管理器。
 // Python: AgentConfigurator.worktree_manager property
-// WorktreeManager 返回工作树管理器。
-// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
-func (c *AgentConfigurator) WorktreeManager() any { return c.resources.WorktreeManager }
+// ⤴️ 9.66a 回填完成
+func (c *AgentConfigurator) WorktreeManager() *worktree.WorktreeManager {
+	if c.resources == nil {
+		return nil
+	}
+	return c.resources.WorktreeManager
+}
 
 // SetWorktreeManager 设置工作树管理器。
-// TODO(#9.66a): WorktreeManager 实现后替换为具体类型
-func (c *AgentConfigurator) SetWorktreeManager(v any) { c.resources.WorktreeManager = v }
+// ⤴️ 9.66a 回填完成
+func (c *AgentConfigurator) SetWorktreeManager(v *worktree.WorktreeManager) {
+	if c.resources != nil {
+		c.resources.WorktreeManager = v
+	}
+}
 
 // MemoryManager 返回团队记忆管理器。⤴️ 9.64 回填完成
 // Python: AgentConfigurator.memory_manager property
