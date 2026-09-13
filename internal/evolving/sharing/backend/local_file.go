@@ -222,10 +222,10 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 // 读操作，不加锁。
 //
 // Python: LocalFileBackend.download_bundles()
-func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, query sharing.QueryKeywords, topK int) []sharing.SharedSkillBundle {
+func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, query sharing.QueryKeywords, topK int) ([]sharing.SharedSkillBundle, error) {
 	resolvedID := strings.TrimSpace(skillID)
 	if resolvedID == "" {
-		return nil
+		return nil, nil
 	}
 
 	indexEntries := b.readIndex(resolvedID)
@@ -233,7 +233,7 @@ func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, 
 		logger.Info(logComponent).
 			Str("skill_id", resolvedID).
 			Msg("[LocalFileBackend] download_bundles: no index entries")
-		return nil
+		return nil, nil
 	}
 
 	type scored struct {
@@ -273,7 +273,7 @@ func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, 
 			results = append(results, *bundle)
 		}
 	}
-	return results
+	return results, nil
 }
 
 // HasSkillPackage Hub 是否已有该技能包。
@@ -393,10 +393,10 @@ func (b *LocalFileBackend) GetSkillPackageMeta(ctx context.Context, skillID stri
 // 读操作，不加锁。
 //
 // Python: LocalFileBackend.search_skills()
-func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.QueryKeywords, topK int) []sharing.SkillSearchResult {
+func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.QueryKeywords, topK int) ([]sharing.SkillSearchResult, error) {
 	entries := b.readGlobalIndex()
 	if len(entries) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	type scored struct {
@@ -408,7 +408,9 @@ func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.Query
 		keywords := toStringSliceFromAny(entry["keywords"])
 		skillName, _ := entry["skill_name"].(string)
 		description, _ := entry["description"].(string)
-		searchTerms := append(keywords, skillName, description)
+		searchTerms := make([]string, 0, len(keywords)+2)
+		searchTerms = append(searchTerms, keywords...)
+		searchTerms = append(searchTerms, skillName, description)
 		score := jaccard(query.Keywords, searchTerms)
 		ranked = append(ranked, scored{score: score, entry: entry})
 	}
@@ -443,7 +445,7 @@ func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.Query
 			Score:           ranked[i].score,
 		})
 	}
-	return results
+	return results, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -789,7 +791,13 @@ func (b *LocalFileBackend) readGlobalIndex() []map[string]any {
 //
 // Python: LocalFileBackend._write_global_index()
 func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
-	_ = os.MkdirAll(b.indexDir, 0o755)
+	if err := os.MkdirAll(b.indexDir, 0o755); err != nil {
+		logger.Error(logComponent).
+			Str("path", b.indexDir).
+			Err(err).
+			Msg("[LocalFileBackend] writeGlobalIndex MkdirAll 失败")
+		return
+	}
 	var lines []string
 	for _, entry := range entries {
 		line, _ := json.Marshal(entry)
@@ -799,7 +807,12 @@ func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
 	if len(lines) > 0 {
 		content += "\n"
 	}
-	_ = os.WriteFile(b.globalIndexPath(), []byte(content), 0o644)
+	if err := os.WriteFile(b.globalIndexPath(), []byte(content), 0o644); err != nil {
+		logger.Error(logComponent).
+			Str("path", b.globalIndexPath()).
+			Err(err).
+			Msg("[LocalFileBackend] writeGlobalIndex WriteFile 失败")
+	}
 }
 
 // loadBundle 从文件加载 bundle。

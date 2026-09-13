@@ -2,6 +2,30 @@ package lite
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// HybridSearchOpts 混合搜索选项。对齐 Python MemoryIndexManager.search 的 opts["hybrid"]
+type HybridSearchOpts struct {
+	// Enabled 是否启用混合搜索（向量 + FTS5 关键词）
+	Enabled bool
+	// VectorWeight 向量搜索权重
+	VectorWeight float64
+	// TextWeight 文本搜索权重
+	TextWeight float64
+	// CandidateMultiplier 候选倍数
+	CandidateMultiplier float64
+}
+
+// SearchOpts 搜索选项。对齐 Python MemoryIndexManager.search 的 opts 参数
+type SearchOpts struct {
+	// MinScore 最小相关度分数
+	MinScore float64
+	// MaxResults 最大结果数
+	MaxResults int
+	// SessionKey 会话键
+	SessionKey string
+	// Hybrid 混合搜索选项
+	Hybrid HybridSearchOpts
+}
+
 // MemoryChunk 记忆分块。对齐 Python MemoryChunk
 type MemoryChunk struct {
 	// Text 分块文本内容

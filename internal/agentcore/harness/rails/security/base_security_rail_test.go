@@ -257,7 +257,7 @@ func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy(0))
 	assert.False(t, isSecurityTruthy(int64(0)))
 	assert.False(t, isSecurityTruthy(0.0))
-	// string：安全语义（true/1/yes 为真，其余为假）
+	// string：Python bool() 语义（空字符串/"false"/"0"/"no" 为假，其他非空字符串为真）
 	assert.True(t, isSecurityTruthy("true"))
 	assert.True(t, isSecurityTruthy("1"))
 	assert.True(t, isSecurityTruthy("yes"))
@@ -266,7 +266,13 @@ func TestIsSecurityTruthy(t *testing.T) {
 	assert.False(t, isSecurityTruthy("false"))
 	assert.False(t, isSecurityTruthy("0"))
 	assert.False(t, isSecurityTruthy("no"))
-	assert.False(t, isSecurityTruthy("random"))
+	assert.True(t, isSecurityTruthy("random"))
+	assert.False(t, isSecurityTruthy(""))
+	assert.False(t, isSecurityTruthy("  "))
+	assert.False(t, isSecurityTruthy("No"))
+	assert.False(t, isSecurityTruthy("FALSE"))
+	assert.False(t, isSecurityTruthy("  false  "))
+	assert.True(t, isSecurityTruthy("anything_else"))
 }
 
 // TestBaseSecurityRail_TypeName 测试类型名称

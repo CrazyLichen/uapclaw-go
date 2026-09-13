@@ -44,14 +44,14 @@ func (m *mockBackend) UploadBundle(_ context.Context, bundle SharedSkillBundle) 
 	return UploadResult{OK: true, BundleID: bundle.BundleID}
 }
 
-func (m *mockBackend) DownloadBundles(_ context.Context, skillID string, query QueryKeywords, topK int) []SharedSkillBundle {
+func (m *mockBackend) DownloadBundles(_ context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	bundles := m.bundles[skillID]
 	if topK < len(bundles) {
-		return bundles[:topK]
+		return bundles[:topK], nil
 	}
-	return bundles
+	return bundles, nil
 }
 
 func (m *mockBackend) HasSkillPackage(_ context.Context, skillID string) bool {
@@ -92,7 +92,7 @@ func (m *mockBackend) GetSkillPackageMeta(_ context.Context, skillID string) (*S
 	return &meta, nil
 }
 
-func (m *mockBackend) SearchSkills(_ context.Context, query QueryKeywords, topK int) []SkillSearchResult {
+func (m *mockBackend) SearchSkills(_ context.Context, query QueryKeywords, topK int) ([]SkillSearchResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var results []SkillSearchResult
@@ -107,7 +107,7 @@ func (m *mockBackend) SearchSkills(_ context.Context, query QueryKeywords, topK 
 			break
 		}
 	}
-	return results
+	return results, nil
 }
 
 // newTestSharer 创建使用 mockBackend 的 ExperienceSharer。
@@ -271,7 +271,7 @@ func TestExperienceSharer_FlushPendingUploads_Success(t *testing.T) {
 
 	// bundle 应已在 Hub 中
 	query := QueryKeywords{Keywords: []string{"python"}}
-	downloaded := bk.DownloadBundles(ctx, "sk_ok", query, 3)
+	downloaded, _ := bk.DownloadBundles(ctx, "sk_ok", query, 3)
 	if len(downloaded) == 0 {
 		t.Error("Hub 中应有 bundle")
 	}

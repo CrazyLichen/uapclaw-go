@@ -159,33 +159,33 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext 发生 panic")
-			result = map[string]any{"success": false, "path": path, "error": fmt.Sprintf("内部错误: %v", r)}
+			result = map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": fmt.Sprintf("内部错误: %v", r)}
 		}
 	}()
 
 	if toolCtx == nil {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: toolCtx 为 nil")
-		return map[string]any{"success": false, "path": path, "error": "Workspace 未初始化"}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: Workspace 未初始化")
-		return map[string]any{"success": false, "path": path, "error": "Workspace 未初始化"}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
 		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: 路径校验失败")
-		return map[string]any{"success": false, "path": path, "error": resolved}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": resolved}
 	}
 	// Python: step 2: frontmatter 解析验证
 	fm := ParseFrontmatter(content)
 	if fm == nil {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter 解析失败")
-		return map[string]any{"success": false, "path": path, "error": "必须包含 frontmatter(name/description/type)"}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "必须包含 frontmatter(name/description/type)"}
 	}
 	if ok, err := ValidateFrontmatter(fm); !ok {
 		logger.Warn(logComponent).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter 校验失败")
-		return map[string]any{"success": false, "path": path, "error": err}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err}
 	}
 	// Python: step 3-4: 丰富 frontmatter 并重建内容
 	fm = EnrichFrontmatter(fm, false)
@@ -194,7 +194,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	body := ExtractBody(content)
 	if body == "" {
 		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: 无内容体")
-		return map[string]any{"success": false, "path": path, "error": "无内容体"}
+		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": "无内容体"}
 	}
 
 	basename := filepath.Base(resolved)
@@ -278,14 +278,14 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			sysOp := toolCtx.SysOperation
 			if sysOp == nil {
 				fileLock.Unlock()
-				return map[string]any{"success": false, "path": path, "error": "无可用 sys_operation"}
+				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": "无可用 sys_operation"}
 			}
 			if !fileExists {
 				// 创建新文件
 				_, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
 				if err != nil {
 					fileLock.Unlock()
-					return map[string]any{"success": false, "path": path, "error": err.Error()}
+					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err.Error()}
 				}
 			} else {
 				// 追加到已有文件
@@ -335,7 +335,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			// T07: 对齐 Python — 降级写入时也检查错误
 			if _, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true)); err != nil {
 				logger.Error(logComponent).Err(err).Str("path", resolved).Msg("降级写入失败")
-				return map[string]any{"success": false, "path": path, "error": err.Error()}
+				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err.Error()}
 			}
 		} else {
 			appendToExistingFile(ctx, toolCtx, resolved, body, fm)
@@ -452,7 +452,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 	if toolCtx == nil || toolCtx.Manager == nil {
 		return oldMemories
 	}
-	results, err := toolCtx.Manager.Search(context.Background(), body, map[string]any{"max_results": topK})
+	results, err := toolCtx.Manager.Search(context.Background(), body, SearchOpts{MaxResults: topK})
 	if err != nil {
 		return oldMemories
 	}

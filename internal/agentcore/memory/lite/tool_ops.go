@@ -77,15 +77,15 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	if toolCtx.Manager == nil {
 		return &MemorySearchResult{Disabled: true, Error: "记忆管理器未初始化"}
 	}
-	opts := make(map[string]any)
+	opts := SearchOpts{}
 	if maxResults != nil {
-		opts["max_results"] = *maxResults
+		opts.MaxResults = *maxResults
 	}
 	if minScore != nil {
-		opts["min_score"] = *minScore
+		opts.MinScore = *minScore
 	}
 	if sessionKey != "" {
-		opts["session_key"] = sessionKey
+		opts.SessionKey = sessionKey
 	}
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {

@@ -201,11 +201,7 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 }
 
 // Search 混合搜索。对齐 Python MemoryIndexManager.search
-func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[string]any) ([]SearchResult, error) {
-	if opts == nil {
-		opts = make(map[string]any)
-	}
-
+func (m *memoryIndexManager) Search(ctx context.Context, query string, opts SearchOpts) ([]SearchResult, error) {
 	// 搜索前同步
 	onSearch := m.settings.Sync.OnSearch
 	if onSearch && m.dirty {
@@ -219,17 +215,13 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 		return nil, nil
 	}
 
-	minScore := 0.7
-	if v, ok := opts["min_score"].(float64); ok {
-		minScore = v
-	} else {
+	minScore := opts.MinScore
+	if minScore == 0 {
 		minScore = m.settings.Query.MinScore
 	}
 
-	maxResults := 10
-	if v, ok := opts["max_results"].(float64); ok {
-		maxResults = int(v)
-	} else {
+	maxResults := opts.MaxResults
+	if maxResults <= 0 {
 		maxResults = int(m.settings.Query.MaxResults)
 	}
 
@@ -237,10 +229,8 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	if candidateMultiplier == 0 {
 		candidateMultiplier = 2.0
 	}
-	if v, ok := opts["hybrid"].(map[string]any); ok {
-		if v2, ok := v["candidateMultiplier"].(float64); ok {
-			candidateMultiplier = v2
-		}
+	if opts.Hybrid.CandidateMultiplier != 0 {
+		candidateMultiplier = opts.Hybrid.CandidateMultiplier
 	}
 	candidates := int(float64(maxResults) * candidateMultiplier)
 	if candidates < 1 {
@@ -253,10 +243,8 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	// FTS5 关键词搜索
 	var keywordResults []SearchResult
 	hybridEnabled := m.settings.Query.Hybrid.Enabled
-	if v, ok := opts["hybrid"].(map[string]any); ok {
-		if v2, ok := v["enabled"].(bool); ok {
-			hybridEnabled = v2
-		}
+	if opts.Hybrid.Enabled {
+		hybridEnabled = true
 	}
 	if hybridEnabled && m.ftsAvailable {
 		var err error
@@ -315,13 +303,11 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts map[
 	// 混合合并
 	vectorWeight := m.settings.Query.Hybrid.VectorWeight
 	textWeight := m.settings.Query.Hybrid.TextWeight
-	if v, ok := opts["hybrid"].(map[string]any); ok {
-		if v2, ok := v["vectorWeight"].(float64); ok {
-			vectorWeight = v2
-		}
-		if v2, ok := v["textWeight"].(float64); ok {
-			textWeight = v2
-		}
+	if opts.Hybrid.VectorWeight != 0 {
+		vectorWeight = opts.Hybrid.VectorWeight
+	}
+	if opts.Hybrid.TextWeight != 0 {
+		textWeight = opts.Hybrid.TextWeight
 	}
 	merged := mergeHybridResults(vectorResults, keywordResults, vectorWeight, textWeight)
 

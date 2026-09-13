@@ -1,9 +1,11 @@
 package evolution
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 )
@@ -335,4 +337,110 @@ func TestShouldHintSimplifyOrRebuild_走Store(t *testing.T) {
 	// 而非直接 os.ReadFile + json.Unmarshal
 	// 完整测试需要 mock EvolutionStore，当前仅确认函数签名正确
 	t.Log("ShouldHintSimplifyOrRebuild 应走 EvolutionStore.LoadFullEvolutionLog")
+}
+
+// ──────────────────────────── S-02: filterDuplicateSharedRecords / parseDuplicateCheckResponse ────────────────────────────
+
+func TestParseDuplicateCheckResponse_正常去重(t *testing.T) {
+	shared := []checkpointing.EvolutionRecord{
+		{ID: "rec_001", Change: checkpointing.EvolutionPatch{Target: signal.EvolutionTargetDescription, Section: "Instructions", Content: "keep this"}},
+		{ID: "rec_002", Change: checkpointing.EvolutionPatch{Target: signal.EvolutionTargetBody, Section: "Examples", Content: "duplicate this"}},
+		{ID: "rec_003", Change: checkpointing.EvolutionPatch{Target: signal.EvolutionTargetDescription, Section: "Troubleshooting", Content: "also keep"}},
+	}
+
+	rawResponse := `[{"record_id": "rec_001", "decision": "keep", "reason": "unique"}, {"record_id": "rec_002", "decision": "duplicate", "reason": "same content"}]`
+	result := parseDuplicateCheckResponse(shared, rawResponse)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "rec_001", result[0].ID)
+	assert.Equal(t, "rec_003", result[1].ID)
+}
+
+func TestParseDuplicateCheckResponse_无JSON(t *testing.T) {
+	shared := []checkpointing.EvolutionRecord{{ID: "rec_001"}}
+	result := parseDuplicateCheckResponse(shared, "no json here")
+	assert.Len(t, result, 1)
+}
+
+func TestParseDuplicateCheckResponse_无效JSON(t *testing.T) {
+	shared := []checkpointing.EvolutionRecord{{ID: "rec_001"}}
+	result := parseDuplicateCheckResponse(shared, `[{"record_id": broken]`)
+	assert.Len(t, result, 1)
+}
+
+func TestFilterDuplicateSharedRecords_无记录(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	result := r.filterDuplicateSharedRecords(context.Background(), "skill", nil)
+	assert.Nil(t, result)
+}
+
+// ──────────────────────────── M-10: WithEvalInterval 验证 ────────────────────────────
+
+func TestWithEvalInterval_小于1调整为1(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	WithEvalInterval(0)(r)
+	assert.Equal(t, 1, r.evalInterval)
+
+	WithEvalInterval(-5)(r)
+	assert.Equal(t, 1, r.evalInterval)
+
+	WithEvalInterval(3)(r)
+	assert.Equal(t, 3, r.evalInterval)
+}
+
+// ──────────────────────────── T-06: OnApprove/OnReject 兼容别名 ────────────────────────────
+
+func TestOnApprove_OnReject_兼容别名(t *testing.T) {
+	// 验证 OnApprove 和 OnReject 是 ApproveRecord/RejectRecord 的别名
+	r := &SkillEvolutionRail{
+		approvalRuntime: NewEvolutionApprovalRuntime(nil, map[string]*experience.PendingChange{}),
+		pendingApprovalSnapshots: map[string]*experience.PendingChange{},
+	}
+
+	// 不存在的 requestID 应返回 nil（无 pending）
+	err := r.OnApprove(context.Background(), "nonexistent")
+	assert.NoError(t, err)
+
+	err = r.OnReject(context.Background(), "nonexistent")
+	assert.NoError(t, err)
+}
+
+// ──────────────────────────── S-05: isErrorNonePattern ────────────────────────────
+
+func TestIsErrorNonePattern(t *testing.T) {
+	assert.True(t, isErrorNonePattern("error = None"))
+	assert.True(t, isErrorNonePattern("error=None"))
+	assert.True(t, isErrorNonePattern("error  =  None"))
+	assert.True(t, isErrorNonePattern("ERROR = None"))
+	assert.False(t, isErrorNonePattern("Error: connection refused"))
+	assert.False(t, isErrorNonePattern("failed to connect"))
+}
+
+// ──────────────────────────── S-05/T-08: extractConversationExcerpt 增强 ────────────────────────────
+
+func TestExtractConversationExcerpt_排除ErrorNone(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "tool", "content": "error = None, result = ok", "name": "run_tool"},
+	}
+	excerpt := extractConversationExcerpt(messages)
+	// error = None 不应标记为失败
+	assert.NotContains(t, excerpt, "FAILED TOOL EXECUTIONS")
+}
+
+func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "assistant", "content": "I will help you with that."},
+	}
+	// assistant_responses 被收集（当前版本未输出到摘要，但确保不会 panic）
+	excerpt := extractConversationExcerpt(messages)
+	// 纯 assistant 消息不产生任何 section，返回空字符串
+	assert.Empty(t, excerpt)
+}
+
+func TestExtractConversationExcerpt_toolName回退(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "user", "content": "test query"},
+		{"role": "tool", "content": "Error: something failed", "tool_name": "my_tool"},
+	}
+	excerpt := extractConversationExcerpt(messages)
+	assert.Contains(t, excerpt, "my_tool")
 }

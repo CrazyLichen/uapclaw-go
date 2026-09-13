@@ -530,9 +530,7 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 	}
 
 	// 执行混合检索
-	opts := map[string]any{
-		"max_results": maxRecallResults,
-	}
+	opts := lite.SearchOpts{MaxResults: maxRecallResults}
 	results, err := r.manager.Search(ctx, query, opts)
 	if err != nil {
 		logger.Warn(codingMemoryLogComponent).

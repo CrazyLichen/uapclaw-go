@@ -385,8 +385,8 @@ func TestSummaryManager_AddMemories_NonSummaryUnitTypeIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddMemories 返回 error: %v", err)
 	}
-	// 非 SummaryUnit 类型不写入索引，但返回值仍包含原始列表（对齐 Python: return memories[self.mem_type]）
-	if len(result) != 1 {
-		t.Errorf("期望返回 1 个结果（原始列表），得到 %d", len(result))
+	// 非 SummaryUnit 类型不写入索引，空结果返回空切片（对齐 Python: return []）
+	if len(result) != 0 {
+		t.Errorf("期望返回 0 个结果（空切片），得到 %d", len(result))
 	}
 }

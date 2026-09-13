@@ -182,7 +182,7 @@ func (s *ShareStager) wrap(
 	meta := &SharingMeta{
 		SkillName:     skillName,
 		SkillVersion:  skillVersion,
-		UploadAt:      time.Now().Format(time.RFC3339),
+		UploadAt:      time.Now().UTC().Format(time.RFC3339Nano),
 		UploadTrigger: "user_approval",
 		SourceUserID:  s.sourceUserID,
 		Confidence:    confidence,

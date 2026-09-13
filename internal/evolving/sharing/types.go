@@ -1,10 +1,13 @@
 package sharing
 
 import (
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 )
 
@@ -194,12 +197,7 @@ func MakeSharedSkillBundle(
 			}
 		}
 		// Python: "; ".join(...)
-		for i, p := range parts {
-			if i > 0 {
-				summaryAggregate += "; "
-			}
-			summaryAggregate += p
-		}
+		summaryAggregate = strings.Join(parts, "; ")
 	}
 	return &SharedSkillBundle{
 		BundleID:          newBundleID(),
@@ -370,6 +368,9 @@ func FromDictSharedSkillBundle(data map[string]any) (*SharedSkillBundle, error) 
 		if m, ok := item.(map[string]any); ok {
 			exp, err := FromDictSharedExperience(m)
 			if err != nil {
+				logger.Warn(logComponent).
+					Err(err).
+					Msg("[FromDictSharedSkillBundle] 解析 experience 失败，跳过")
 				continue
 			}
 			experiences = append(experiences, *exp)
@@ -485,7 +486,9 @@ func (r UploadResult) MarshalJSON() ([]byte, error) {
 // newBundleID 生成 bundle ID，格式: sb_{uuid10hex}。
 // Python: _new_bundle_id()
 func newBundleID() string {
-	return fmt.Sprintf("sb_%010x", time.Now().UnixNano()&0x3FFFFFFFFF)
+	var buf [5]byte
+	_, _ = cryptorand.Read(buf[:])
+	return fmt.Sprintf("sb_%010x", buf)
 }
 
 // getStr 从 map 安全提取 string。
@@ -538,9 +541,7 @@ func toStringSlice(v any) []string {
 	result := make([]string, 0, len(slice))
 	for _, item := range slice {
 		s := fmt.Sprintf("%v", item)
-		if s != "" {
-			result = append(result, s)
-		}
+		result = append(result, s)
 	}
 	return result
 }

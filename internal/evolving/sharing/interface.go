@@ -20,7 +20,7 @@ type SharingBackend interface {
 	// UploadBundle 上传经验 bundle，返回上传结果。
 	UploadBundle(ctx context.Context, bundle SharedSkillBundle) UploadResult
 	// DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。
-	DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) []SharedSkillBundle
+	DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error)
 	// HasSkillPackage Hub 是否已有该技能包。
 	HasSkillPackage(ctx context.Context, skillID string) bool
 	// UploadSkillPackage 上传初始技能包（不可变，重复上传为 no-op）。
@@ -30,7 +30,7 @@ type SharingBackend interface {
 	// GetSkillPackageMeta 获取技能包元数据。
 	GetSkillPackageMeta(ctx context.Context, skillID string) (*SkillPackageMeta, error)
 	// SearchSkills 全局关键词搜索技能。
-	SearchSkills(ctx context.Context, query QueryKeywords, topK int) []SkillSearchResult
+	SearchSkills(ctx context.Context, query QueryKeywords, topK int) ([]SkillSearchResult, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

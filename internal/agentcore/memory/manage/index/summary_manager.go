@@ -96,7 +96,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Msg("无有效摘要文档可添加")
-		return originalUnits, nil
+		return []mem_model.MemoryUnit{}, nil
 	}
 
 	docs := m.convertToMemoryDocs(summaryUnits)

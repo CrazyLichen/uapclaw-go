@@ -951,15 +951,48 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 // Python: BaseInterruptRail._get_user_input
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
 	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
+	// Python: logger.info("[_get_user_input] tool_call_id=%r raw_input_type=%s", ...)
 	if !exists || rawInput == nil {
+		logger.Info(permRailLogComponent).
+			Str("tool_call_id", toolCallID).
+			Str("raw_input_type", "None").
+			Msg("提取用户输入")
 		return nil
 	}
+	logger.Info(permRailLogComponent).
+		Str("tool_call_id", toolCallID).
+		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
+		Msg("提取用户输入")
 
 	// InteractiveInput 格式
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
+		// Python: logger.info("[_get_user_input] InteractiveInput.user_inputs keys=%r", ...)
+		keys := make([]string, 0, len(interactive.UserInputs))
+		for k := range interactive.UserInputs {
+			keys = append(keys, k)
+		}
+		logger.Info(permRailLogComponent).
+			Str("tool_call_id", toolCallID).
+			Strs("keys", keys).
+			Msg("InteractiveInput.user_inputs")
+
 		if val, found := interactive.UserInputs[toolCallID]; found {
+			// Python: logger.info("[_get_user_input] MATCHED! tool_call_id=%r value=%r", ...)
+			valRepr := fmt.Sprintf("%v", val)
+			if len(valRepr) > 200 {
+				valRepr = valRepr[:200]
+			}
+			logger.Info(permRailLogComponent).
+				Str("tool_call_id", toolCallID).
+				Str("value", valRepr).
+				Msg("InteractiveInput 匹配成功")
 			return val
 		}
+		// Python: logger.warning("[_get_user_input] NO MATCH! tool_call_id=%r not in keys=%r", ...)
+		logger.Warn(permRailLogComponent).
+			Str("tool_call_id", toolCallID).
+			Strs("keys", keys).
+			Msg("InteractiveInput 中未找到匹配的 tool_call_id")
 		return nil
 	}
 

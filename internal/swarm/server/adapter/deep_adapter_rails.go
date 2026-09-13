@@ -428,6 +428,7 @@ func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
 // Python: _build_security_rail() (line 2033-2042)
 // Python: try/except 包裹创建过程，失败时 warning 并返回 nil
 func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.AgentRail {
+	var rail sainterfaces.AgentRail
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -435,9 +436,11 @@ func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.
 					Msg("SafetyPromptRail 创建失败，跳过")
 			}
 		}()
+		rail = secrail.NewSafetyPromptRail()
 	}()
-	rail := secrail.NewSafetyPromptRail()
-	logger.Info(logComponent).Msg("SafetyPromptRail 创建成功")
+	if rail != nil {
+		logger.Info(logComponent).Msg("SafetyPromptRail 创建成功")
+	}
 	return rail
 }
 
@@ -513,6 +516,10 @@ func (d *DeepAdapter) buildContextProcessorRail() sainterfaces.AgentRail {
 // Python: _build_permission_rail() (interface_deep.py L2213-2250)
 func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterfaces.AgentRail {
 	permissionConfig, _ := configBase["permissions"].(map[string]any)
+	// Python: logger.info("[InterruptHelpers] build_permission_rail called: enabled=%s", ...)
+	logger.Info(logComponent).
+		Bool("enabled", permissionConfig != nil && isPermissionEnabled(permissionConfig)).
+		Msg("build_permission_rail called")
 	if permissionConfig == nil {
 		return nil
 	}
@@ -524,6 +531,26 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 
 	toolNames := collectOptionalToolTags(permissionConfig)
 	modelName := extractModelName(configBase)
+
+	// Python: logger.info("[InterruptHelpers] tools_config keys: %s, rail tool_names (with rules): %s", ...)
+	var toolsConfigKeys []string
+	if toolsCfg, ok := permissionConfig["tools"].(map[string]any); ok {
+		for k := range toolsCfg {
+			toolsConfigKeys = append(toolsConfigKeys, k)
+		}
+	}
+	sort.Strings(toolsConfigKeys)
+	logger.Info(logComponent).
+		Strs("tools_config_keys", toolsConfigKeys).
+		Strs("tool_names", toolNames).
+		Msg("permission rail tools_config keys 和 rail tool_names")
+
+	// Python: logger.info("[InterruptHelpers] Building PermissionInterruptRail with tool_names=%s llm=%s model_name=%s", ...)
+	logger.Info(logComponent).
+		Strs("tool_names", toolNames).
+		Bool("llm", d.model != nil).
+		Str("model_name", modelName).
+		Msg("Building PermissionInterruptRail")
 
 	host := &harnesssecurity.ToolPermissionHost{
 		GetPermissionsSnapshot:        d.getPermissionsSnapshot,
@@ -949,6 +976,18 @@ func (d *DeepAdapter) permissionSceneHook(input harnesssecurity.PermissionSceneH
 }
 
 // ──────────────────────────── 辅助函数 ────────────────────────────
+
+// isPermissionEnabled 检查 permissions 配置中 enabled 字段是否为真值。
+func isPermissionEnabled(permissionConfig map[string]any) bool {
+	enabled, ok := permissionConfig["enabled"]
+	if !ok {
+		return false
+	}
+	if b, ok := enabled.(bool); ok {
+		return b
+	}
+	return false
+}
 
 // collectOptionalToolTags 从 permissions 配置中收集工具名标签（仅作展示/日志用）。
 // Python: _collect_optional_tool_tags() (interrupt_helpers.py L56-80)

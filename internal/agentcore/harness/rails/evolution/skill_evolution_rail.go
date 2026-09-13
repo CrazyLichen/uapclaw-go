@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -101,6 +102,8 @@ type SkillEvolutionRail struct {
 	sharingEnabled bool
 	// sharingDownloadTopK 共享下载 topK
 	sharingDownloadTopK int
+	// sharingConfig 共享配置（延迟使用）
+	sharingConfig map[string]any
 	// excerptOffsets 增量消息偏移量
 	excerptOffsets map[string]int
 
@@ -252,6 +255,7 @@ func NewSkillEvolutionRail(
 
 	// ─── 构造 EvolutionRail 基类 ───
 	railOpts := []EvolutionRailOption{
+		WithDefaultMemberRole("teammate"),
 		WithDisabledSkills(r.normalizeNameSet()),
 	}
 	if r.evolutionTimeoutSec > 0 {
@@ -274,7 +278,12 @@ func WithAutoSave(autoSave bool) SkillEvolutionRailOption {
 
 // WithEvalInterval 设置评估间隔。
 func WithEvalInterval(interval int) SkillEvolutionRailOption {
-	return func(r *SkillEvolutionRail) { r.evalInterval = interval }
+	return func(r *SkillEvolutionRail) {
+		if interval < 1 {
+			interval = 1
+		}
+		r.evalInterval = interval
+	}
 }
 
 // WithEvolutionTimeout 设置后台演化超时秒数。
@@ -315,8 +324,9 @@ func WithSharingConfig(config map[string]any) SkillEvolutionRailOption {
 			r.sharingEnabled = false
 			return
 		}
-		// 标记 sharing 为启用状态，实际构建在 initSharing 中延迟执行
+		// 标记 sharing 为启用状态，保存配置供 initSharing 延迟使用
 		r.sharingEnabled = true
+		r.sharingConfig = config
 	}
 }
 
@@ -861,10 +871,11 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 			logger.Warn(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] no archived body")
 			return false, nil
 		}
-		// 按名称排序（最新在后），取最后一个
-		for _, f := range bodyFiles {
-			bodyArchivePath = filepath.Join(archiveDir, f.Name())
-		}
+		// 按文件名降序排序，取最新版本
+		sort.Slice(bodyFiles, func(i, j int) bool {
+			return bodyFiles[i].Name() > bodyFiles[j].Name()
+		})
+		bodyArchivePath = filepath.Join(archiveDir, bodyFiles[0].Name())
 		evoVersion := strings.ReplaceAll(strings.ReplaceAll(filepath.Base(bodyArchivePath), "SKILL.", "evolutions."), ".md", ".json")
 		evoArchivePath = filepath.Join(archiveDir, evoVersion)
 	}
@@ -985,6 +996,18 @@ func (r *SkillEvolutionRail) RejectRecord(ctx context.Context, requestID string)
 	return nil
 }
 
+// OnApprove ApproveRecord 的兼容别名。
+// 对齐 Python: SkillEvolutionRail.on_approve
+func (r *SkillEvolutionRail) OnApprove(ctx context.Context, requestID string) error {
+	return r.ApproveRecord(ctx, requestID)
+}
+
+// OnReject RejectRecord 的兼容别名。
+// 对齐 Python: SkillEvolutionRail.on_reject
+func (r *SkillEvolutionRail) OnReject(ctx context.Context, requestID string) error {
+	return r.RejectRecord(ctx, requestID)
+}
+
 // ShouldHintSimplifyOrRebuild 检查技能是否有足够经验来建议精简/重建。
 //
 // 对齐 Python: SkillEvolutionRail.should_hint_simplify_or_rebuild(skill_name)
@@ -1054,7 +1077,7 @@ func (r *SkillEvolutionRail) initSharing(llmModel *llm.Model, model string, lang
 	r.keywordExtractor = sharing.NewKeywordExtractor(llmModel, model, language, skillopt.GenerateRecordsLLMPolicy)
 
 	// Python: self._share_stager = ShareStager(keyword_extractor=..., sharer=...)
-	r.shareStager = sharing.NewShareStager(r.keywordExtractor, r.experienceSharer, 0, nil)
+	r.shareStager = sharing.NewShareStager(r.keywordExtractor, r.experienceSharer, 0.6, nil)
 
 	// Python: self._experience_sharer.set_skill_sharing_context_provider(self._make_sharing_context_provider(evolution_store))
 	r.experienceSharer.SetSkillSharingContextProvider(r.makeSharingContextProvider())
@@ -1062,10 +1085,54 @@ func (r *SkillEvolutionRail) initSharing(llmModel *llm.Model, model string, lang
 
 // buildExperienceSharer 构建 ExperienceSharer。
 // 对齐 Python: SkillEvolutionSharingMixin._build_experience_sharer(sharing_config)
-func (r *SkillEvolutionRail) buildExperienceSharer() *sharing.ExperienceSharer {
+func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.ExperienceSharer) {
+	config := r.sharingConfig
+	if config == nil {
+		config = map[string]any{}
+	}
+
+	// Python: try: ... except Exception: logger.warning(...); return None
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] 构建 ExperienceSharer 失败，共享功能已禁用")
+			sharer = nil
+		}
+	}()
+
 	hubPath := os.Getenv("EVOLUTION_SHARING_HUB_PATH")
 	if hubPath == "" {
-		hubPath = ""
+		// Python: hub_path = os.getenv("EVOLUTION_SHARING_HUB_PATH") or str(config.get("hub_path") or "").strip() or None
+		if hp, ok := config["hub_path"].(string); ok {
+			hp = strings.TrimSpace(hp)
+			if hp != "" {
+				hubPath = hp
+			}
+		}
+	}
+
+	localCacheDir := ""
+	if lcd, ok := config["local_cache_dir"].(string); ok {
+		lcd = strings.TrimSpace(lcd)
+		if lcd != "" {
+			localCacheDir = lcd
+		}
+	}
+
+	maxUploadRetries := defaultSharingMaxUploadRetries
+	if raw, ok := config["max_upload_retries"]; ok {
+		switch v := raw.(type) {
+		case int:
+			maxUploadRetries = v
+		case float64:
+			maxUploadRetries = int(v)
+		case string:
+			if n, err := fmt.Sscanf(v, "%d", &maxUploadRetries); err != nil || n != 1 {
+				maxUploadRetries = defaultSharingMaxUploadRetries
+			}
+		}
+		if maxUploadRetries < 1 {
+			maxUploadRetries = 1
+		}
 	}
 
 	// Python: backend = LocalFileBackend(hub_path=hub_path)
@@ -1074,8 +1141,8 @@ func (r *SkillEvolutionRail) buildExperienceSharer() *sharing.ExperienceSharer {
 	// Python: return ExperienceSharer(backend=backend, local_cache_dir=..., max_upload_retries=...)
 	return sharing.NewExperienceSharer(
 		backendInstance,
-		"", // local_cache_dir
-		defaultSharingMaxUploadRetries,
+		localCacheDir,
+		maxUploadRetries,
 		0,   // backoff_base_secs
 		nil, // provider 在 initSharing 中设置
 	)
@@ -1175,27 +1242,34 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 
 	result := map[string][]checkpointing.EvolutionRecord{}
 	for _, skillName := range involvedSkills {
-		if r.experienceSharer == nil {
-			continue
-		}
-		skillID := r.experienceSharer.ResolveSkillID(ctx, skillName)
-		if skillID == "" {
-			logger.Debug(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] skip shared download: skill_id unavailable")
-			continue
-		}
-		bundles := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
-
-		var records []checkpointing.EvolutionRecord
-		for _, bundle := range bundles {
-			for _, sharedExp := range bundle.Experiences {
-				marker := fmt.Sprintf("\n[shared origin=%s skill_id=%s]", bundle.BundleID, bundle.SkillID)
-				sharedExp.Record.Context = (sharedExp.Record.Context) + marker
-				records = append(records, sharedExp.Record)
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] download_shared_experiences 单技能失败")
+				}
+			}()
+			if r.experienceSharer == nil {
+				return
 			}
-		}
-		if len(records) > 0 {
-			result[skillName] = records
-		}
+			skillID := r.experienceSharer.ResolveSkillID(ctx, skillName)
+			if skillID == "" {
+				logger.Debug(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] skip shared download: skill_id unavailable")
+				return
+			}
+			bundles := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
+
+			var records []checkpointing.EvolutionRecord
+			for _, bundle := range bundles {
+				for _, sharedExp := range bundle.Experiences {
+					marker := fmt.Sprintf("\n[shared origin=%s skill_id=%s]", bundle.BundleID, bundle.SkillID)
+					sharedExp.Record.Context = (sharedExp.Record.Context) + marker
+					records = append(records, sharedExp.Record)
+				}
+			}
+			if len(records) > 0 {
+				result[skillName] = records
+			}
+		}()
 	}
 	return result
 }
@@ -1284,11 +1358,17 @@ func (r *SkillEvolutionRail) stageRecordsForShare(
 	skillName string,
 	messages []map[string]any,
 	records []checkpointing.EvolutionRecord,
-) *sharing.StagingResult {
+) (result *sharing.StagingResult) {
 	if !r.IsSharingEnabled() || r.shareStager == nil || len(records) == 0 {
 		return nil
 	}
-	result := r.shareStager.ScreenAndStage(ctx, skillName, records, messages)
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] share staging failed")
+			result = nil
+		}
+	}()
+	result = r.shareStager.ScreenAndStage(ctx, skillName, records, messages)
 	return result
 }
 
@@ -1298,6 +1378,11 @@ func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName st
 	if r.experienceSharer == nil || !r.experienceSharer.HasPending(skillName) {
 		return
 	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] flush_pending_uploads failed")
+		}
+	}()
 	result := r.experienceSharer.FlushPendingUploads(ctx, skillName)
 	if !result.OK && result.Reason != "" {
 		logger.Warn(logComponent).Str("skill", skillName).Str("reason", result.Reason).Msg("[SkillEvolutionRail] share upload rejected")
@@ -1314,8 +1399,117 @@ func (r *SkillEvolutionRail) filterDuplicateSharedRecords(
 	if len(sharedRecords) == 0 {
 		return nil
 	}
-	// 简化实现：直接返回共享记录（LLM 去重为可选增强）
-	return sharedRecords
+
+	// Python: existing_desc = await self._evolution_store.get_pending_records(skill_name, EvolutionTarget.DESCRIPTION)
+	// Python: existing_body = await self._evolution_store.get_pending_records(skill_name, EvolutionTarget.BODY)
+	descTarget := signal.EvolutionTargetDescription
+	bodyTarget := signal.EvolutionTargetBody
+	existingDesc := r.evolutionStore.GetPendingRecords(ctx, skillName, &descTarget)
+	existingBody := r.evolutionStore.GetPendingRecords(ctx, skillName, &bodyTarget)
+	existingRecords := append(existingDesc, existingBody...)
+	if len(existingRecords) == 0 {
+		return sharedRecords
+	}
+
+	return r.llmCheckDuplicates(ctx, skillName, sharedRecords, existingRecords)
+}
+
+// llmCheckDuplicates 调用 LLM 判断共享记录与已有记录是否重复。
+// 对齐 Python: SkillEvolutionSharingMixin._llm_check_duplicates(skill_name, shared_records, existing_records)
+func (r *SkillEvolutionRail) llmCheckDuplicates(
+	ctx context.Context,
+	skillName string,
+	sharedRecords []checkpointing.EvolutionRecord,
+	existingRecords []checkpointing.EvolutionRecord,
+) []checkpointing.EvolutionRecord {
+	llmModel := r.evolver.LLM()
+	modelName := r.evolver.ModelName()
+	if llmModel == nil || modelName == "" {
+		return sharedRecords
+	}
+
+	prompt := r.buildDuplicateCheckPrompt(skillName, sharedRecords, existingRecords)
+	rawResponse, err := llm_resilience.InvokeTextWithRetry(ctx, llmModel, modelName, prompt, r.generateRecordsLLMPolicy,
+		llm_resilience.WithRetryPrompt(prompt),
+	)
+	if err != nil {
+		logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] LLM 去重检查失败")
+		return sharedRecords
+	}
+	return parseDuplicateCheckResponse(sharedRecords, rawResponse)
+}
+
+// buildDuplicateCheckPrompt 构建去重提示词。
+// 对齐 Python: SkillEvolutionSharingMixin._build_duplicate_check_prompt(skill_name, shared_records, existing_records)
+func (r *SkillEvolutionRail) buildDuplicateCheckPrompt(
+	_ string,
+	sharedRecords []checkpointing.EvolutionRecord,
+	existingRecords []checkpointing.EvolutionRecord,
+) string {
+	var existingSummary []string
+	for _, record := range existingRecords {
+		content := record.Change.Content
+		if len(content) > 500 {
+			content = content[:500]
+		}
+		existingSummary = append(existingSummary,
+			fmt.Sprintf("- [%s] [%s] [%s]\n  %s", record.ID, record.Change.Target, record.Change.Section, content))
+	}
+	var sharedSummary []string
+	for _, record := range sharedRecords {
+		content := record.Change.Content
+		if len(content) > 500 {
+			content = content[:500]
+		}
+		sharedSummary = append(sharedSummary,
+			fmt.Sprintf("- [%s] [%s] [%s]\n  %s", record.ID, record.Change.Target, record.Change.Section, content))
+	}
+
+	if (r.language != "" && r.language != "en") || r.language == "" {
+		return "你是一个经验去重专家。判断下载的共享经验是否与本地已有经验重复。\n\n" +
+			"## 本地已有经验\n" + strings.Join(existingSummary, "\n") + "\n\n" +
+			"## 下载的共享经验\n" + strings.Join(sharedSummary, "\n") + "\n\n" +
+			`输出 JSON 数组：[{"record_id": "...", "decision": "keep|duplicate", "reason": "..."}]`
+	}
+	return "You are an experience deduplication expert.\n\n" +
+		"## Existing Local Experiences\n" + strings.Join(existingSummary, "\n") + "\n\n" +
+		"## Downloaded Shared Experiences\n" + strings.Join(sharedSummary, "\n") + "\n\n" +
+		`Output JSON array: [{"record_id": "...", "decision": "keep|duplicate", "reason": "..."}]`
+}
+
+// parseDuplicateCheckResponse 解析 LLM 返回的去重 JSON。
+// 对齐 Python: SkillEvolutionSharingMixin._parse_duplicate_check_response(shared_records, raw_response)
+func parseDuplicateCheckResponse(
+	sharedRecords []checkpointing.EvolutionRecord,
+	rawResponse string,
+) []checkpointing.EvolutionRecord {
+	re := regexp.MustCompile(`\[\s*\{.*?\}\s*\]`)
+	jsonMatch := re.FindString(rawResponse)
+	if jsonMatch == "" {
+		return sharedRecords
+	}
+
+	var decisions []struct {
+		RecordID string `json:"record_id"`
+		Decision string `json:"decision"`
+	}
+	if err := json.Unmarshal([]byte(jsonMatch), &decisions); err != nil {
+		return sharedRecords
+	}
+
+	decisionMap := make(map[string]string, len(decisions))
+	for _, item := range decisions {
+		decisionMap[item.RecordID] = item.Decision
+	}
+
+	var result []checkpointing.EvolutionRecord
+	for _, record := range sharedRecords {
+		if decisionMap[record.ID] == "duplicate" {
+			continue
+		}
+		result = append(result, record)
+	}
+	return result
 }
 
 // emitProgress 发送进度事件。
@@ -1855,13 +2049,14 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 		mc = maxChars[0]
 	}
 
-	// Go regexp 不支持 (?!...) 负向前瞻，将 "error" 单独匹配然后排除 "error = None"
+	// Go regexp 不支持 (?!...) 负向前瞻，先匹配 "error" 然后手动排除 "error = None" / "error=None"
 	// 对齐 Python: _FAILURE_KEYWORDS
 	failureRe := regexp.MustCompile(`(?i)error|exception|traceback|failed|failure|timeout|timed out|errno|connectionerror|oserror|valueerror|typeerror|错误|异常|失败|超时|no such file|permission denied|access denied|command not found|not recognized|module not found|econnrefused|econnreset|enoent|enotfound|npm err!`)
 
 	var userQueries []string
 	var failedToolResults []string
 	var toolCallsSummary []string
+	var assistantResponses []string
 	toolCallIDToName := map[string]string{}
 
 	for _, msg := range messages {
@@ -1887,15 +2082,25 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 					}
 				}
 			}
+			// Python: content = msg.get("content", ""); if isinstance(content, str) and content.strip(): assistant_responses.append(...)
+			content, _ := msg["content"].(string)
+			if strings.TrimSpace(content) != "" {
+				assistantResponses = append(assistantResponses, truncateString(content, mc))
+			}
 		case "tool", "function":
 			contentStr, _ := msg["content"].(string)
 			toolName, _ := msg["name"].(string)
+			// T-08: 先查 msg["name"]，为空时回退查 msg["tool_name"]
+			if toolName == "" {
+				toolName, _ = msg["tool_name"].(string)
+			}
 			if toolName == "" {
 				if tcID, ok := msg["tool_call_id"].(string); ok {
 					toolName = toolCallIDToName[tcID]
 				}
 			}
-			if failureRe.MatchString(contentStr) && strings.TrimSpace(contentStr) != "" {
+			// S-05: 匹配到 "error" 关键词后，排除 "error = None" / "error=None" 形式
+			if failureRe.MatchString(contentStr) && !isErrorNonePattern(contentStr) && strings.TrimSpace(contentStr) != "" {
 				prefix := "[ERROR]: "
 				if toolName != "" {
 					prefix = fmt.Sprintf("[ERROR in %s]: ", toolName)
@@ -1943,4 +2148,13 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen]
+}
+
+// isErrorNonePattern 判断内容中的 "error" 是否为 "error = None" / "error=None" 正常状态。
+// Python 的 _FAILURE_KEYWORDS 使用负向前瞻 `error(?!\s*=\s*None)` 排除正常状态，
+// Go regexp 不支持负向前瞻，因此单独检查。
+func isErrorNonePattern(content string) bool {
+	// 检查 content 中是否包含 error = None 或 error=None 形式
+	re := regexp.MustCompile(`(?i)error\s*=\s*None`)
+	return re.MatchString(content)
 }

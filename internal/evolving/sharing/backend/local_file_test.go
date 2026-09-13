@@ -55,7 +55,7 @@ func TestLocalFileBackend_UploadAndDownload(t *testing.T) {
 	}
 
 	query := sharing.QueryKeywords{Keywords: []string{"IndexError"}}
-	downloaded := b.DownloadBundles(ctx, "sk_py", query, 3)
+	downloaded, _ := b.DownloadBundles(ctx, "sk_py", query, 3)
 	if len(downloaded) != 1 {
 		t.Fatalf("DownloadBundles 返回 %d 个, 期望 1", len(downloaded))
 	}
@@ -82,7 +82,7 @@ func TestLocalFileBackend_DifferentSkillIDsNoCollide(t *testing.T) {
 
 	// 搜索 sk_a 索引不应返回 sk_b 的 bundle
 	query := sharing.QueryKeywords{Keywords: []string{"python"}}
-	results := b.DownloadBundles(ctx, "sk_a", query, 10)
+	results, _ := b.DownloadBundles(ctx, "sk_a", query, 10)
 	for _, r := range results {
 		if r.SkillID != "sk_a" {
 			t.Errorf("下载到错误 skill_id 的 bundle: %s", r.SkillID)
@@ -166,7 +166,7 @@ func TestLocalFileBackend_SearchSkills(t *testing.T) {
 	}
 
 	query := sharing.QueryKeywords{Keywords: []string{"python"}}
-	results := b.SearchSkills(ctx, query, 5)
+	results, _ := b.SearchSkills(ctx, query, 5)
 	if len(results) == 0 {
 		t.Fatal("SearchSkills 应返回结果")
 	}
@@ -413,7 +413,7 @@ func TestLocalFileBackend_DownloadBundles_EmptyIndex(t *testing.T) {
 	ctx := context.Background()
 
 	query := sharing.QueryKeywords{Keywords: []string{"test"}}
-	results := b.DownloadBundles(ctx, "sk_empty", query, 3)
+	results, _ := b.DownloadBundles(ctx, "sk_empty", query, 3)
 	if len(results) != 0 {
 		t.Errorf("空索引应返回 0 个结果, 得到 %d", len(results))
 	}
@@ -430,7 +430,7 @@ func TestLocalFileBackend_DownloadBundles_ZeroScoreFiltered(t *testing.T) {
 	_ = b.UploadBundle(ctx, bundle)
 
 	query := sharing.QueryKeywords{Keywords: []string{"nonexistent"}}
-	results := b.DownloadBundles(ctx, "sk_zero", query, 3)
+	results, _ := b.DownloadBundles(ctx, "sk_zero", query, 3)
 	if len(results) != 0 {
 		t.Errorf("零分 bundle 应被过滤, 得到 %d", len(results))
 	}
@@ -444,7 +444,7 @@ func TestLocalFileBackend_SearchSkills_EmptyGlobalIndex(t *testing.T) {
 	ctx := context.Background()
 
 	query := sharing.QueryKeywords{Keywords: []string{"test"}}
-	results := b.SearchSkills(ctx, query, 5)
+	results, _ := b.SearchSkills(ctx, query, 5)
 	if len(results) != 0 {
 		t.Errorf("空全局索引应返回 0 个结果, 得到 %d", len(results))
 	}
@@ -463,7 +463,7 @@ func TestLocalFileBackend_SearchSkills_ZeroScoreFiltered(t *testing.T) {
 	})
 
 	query := sharing.QueryKeywords{Keywords: []string{"completely-different"}}
-	results := b.SearchSkills(ctx, query, 5)
+	results, _ := b.SearchSkills(ctx, query, 5)
 	if len(results) != 0 {
 		t.Errorf("零分搜索结果应被过滤, 得到 %d", len(results))
 	}
@@ -559,7 +559,7 @@ func TestLocalFileBackend_ReadIndex_CorruptLine(t *testing.T) {
 	f.Close()
 
 	query := sharing.QueryKeywords{Keywords: []string{"test"}}
-	results := b.DownloadBundles(ctx, "sk_idxc", query, 3)
+	results, _ := b.DownloadBundles(ctx, "sk_idxc", query, 3)
 	if len(results) != 1 {
 		t.Errorf("应返回 1 个结果（跳过损坏行）, 得到 %d", len(results))
 	}
@@ -595,7 +595,7 @@ func TestLocalFileBackend_LoadBundle_CorruptJSON(t *testing.T) {
 
 	ctx := context.Background()
 	query := sharing.QueryKeywords{Keywords: []string{"test"}}
-	results := b.DownloadBundles(ctx, "sk_bad", query, 3)
+	results, _ := b.DownloadBundles(ctx, "sk_bad", query, 3)
 	if len(results) != 0 {
 		t.Errorf("损坏 bundle 应返回 0 个结果, 得到 %d", len(results))
 	}
@@ -624,7 +624,7 @@ func TestLocalFileBackend_ReadGlobalIndex_CorruptLine(t *testing.T) {
 
 	ctx := context.Background()
 	query := sharing.QueryKeywords{Keywords: []string{"a"}}
-	results := b.SearchSkills(ctx, query, 5)
+	results, _ := b.SearchSkills(ctx, query, 5)
 	if len(results) != 1 {
 		t.Errorf("应返回 1 个结果（跳过损坏行）, 得到 %d", len(results))
 	}
@@ -801,7 +801,7 @@ func TestLocalFileBackend_EnsureGlobalIndexEntry_NewEntry(t *testing.T) {
 
 	// 搜索应能找到两个
 	query := sharing.QueryKeywords{Keywords: []string{"new"}}
-	results := b.SearchSkills(ctx, query, 10)
+	results, _ := b.SearchSkills(ctx, query, 10)
 	if len(results) < 2 {
 		t.Errorf("应找到至少 2 个技能, 得到 %d", len(results))
 	}
@@ -829,7 +829,7 @@ func TestLocalFileBackend_EnsureGlobalIndexEntry_UpdateWithEmptyFields(t *testin
 
 	// 搜索验证名称和描述保留原值
 	query := sharing.QueryKeywords{Keywords: []string{"original"}}
-	results := b.SearchSkills(ctx, query, 5)
+	results, _ := b.SearchSkills(ctx, query, 5)
 	found := false
 	for _, sr := range results {
 		if sr.SkillID == "sk_emptupd" {

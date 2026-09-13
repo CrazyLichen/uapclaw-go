@@ -76,13 +76,8 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		return nil, err
 	}
 
-	// 保存原始列表（对齐 Python: return memories[self.mem_type]）
-	var originalFragmentUnits []mem_model.MemoryUnit
-	for key, units := range memories {
-		if isFragmentMemoryType(key) {
-			originalFragmentUnits = append(originalFragmentUnits, units...)
-		}
-	}
+	// processResult 收集所有处理后的记忆（对齐 Python: return list(process_result_dict.values())）
+	processResult := make(map[string]*mem_model.FragmentMemoryUnit)
 
 	// 类型断言：将基类型转为碎片记忆类型（对齐 Python: isinstance(mem_unit, FragmentMemoryUnit)）
 	fragmentMemories := make(map[string][]*mem_model.FragmentMemoryUnit, len(memories))
@@ -103,7 +98,6 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	}
 
 	deleteSet := make(map[string]bool)
-	processResult := make(map[string]*mem_model.FragmentMemoryUnit)
 
 	// 步骤 1：分离 ADD/UPDATE/DELETE 操作
 	// Python: _get_new_mem_units_and_update_memories
@@ -125,7 +119,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			}
 			removeUpdateEntriesFromProcessResult(deleteSet, processResult)
 		}
-		return originalFragmentUnits, nil
+		return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 	}
 
 	// 步骤 2：搜索相关旧记忆
@@ -158,7 +152,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 		}
 		appendMemUnitListToDict(processResult, addList)
-		return originalFragmentUnits, nil
+		return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 	}
 
 	// 步骤 3：MemUpdateChecker 冲突检查
@@ -212,7 +206,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 		appendMemUnitListToDict(processResult, addUnitList)
 	}
 
-	return originalFragmentUnits, nil
+	return fragmentUnitsToMemoryUnits(mapValues(processResult)), nil
 }
 
 // Update 按 ID 更新记忆内容。

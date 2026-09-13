@@ -449,9 +449,9 @@ func TestFragmentMemoryManager_AddMemories_EmptyContentIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddMemories 返回 error: %v", err)
 	}
-	// 对齐 Python: return memories[self.mem_type]（返回原始列表，包含空内容项）
-	if len(result) != 1 {
-		t.Errorf("期望返回 1 个结果（原始列表，空内容项也包含），得到 %d", len(result))
+	// 对齐 Python: return list(process_result_dict.values())（空内容项未加入 processResult，返回 0 个）
+	if len(result) != 0 {
+		t.Errorf("期望返回 0 个结果（空内容项未加入 processResult），得到 %d", len(result))
 	}
 }
 

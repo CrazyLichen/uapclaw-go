@@ -54,14 +54,14 @@ func (f *fakeHubBackend) UploadBundle(ctx context.Context, bundle SharedSkillBun
 }
 
 // DownloadBundles 下载经验 bundle
-func (f *fakeHubBackend) DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) []SharedSkillBundle {
+func (f *fakeHubBackend) DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	bundles := f.bundles[skillID]
 	if len(bundles) > topK {
-		return bundles[:topK]
+		return bundles[:topK], nil
 	}
-	return bundles
+	return bundles, nil
 }
 
 // HasSkillPackage Hub 是否已有该技能包
@@ -116,14 +116,14 @@ func (f *fakeHubBackend) GetSkillPackageMeta(ctx context.Context, skillID string
 }
 
 // SearchSkills 全局搜索技能
-func (f *fakeHubBackend) SearchSkills(ctx context.Context, query QueryKeywords, topK int) []SkillSearchResult {
+func (f *fakeHubBackend) SearchSkills(ctx context.Context, query QueryKeywords, topK int) ([]SkillSearchResult, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	if topK > len(f.searchIndex) {
 		topK = len(f.searchIndex)
 	}
 	if topK <= 0 {
-		return nil
+		return nil, nil
 	}
 	// 简单关键字匹配
 	var results []SkillSearchResult
@@ -140,9 +140,9 @@ func (f *fakeHubBackend) SearchSkills(ctx context.Context, query QueryKeywords, 
 		}
 	}
 	if len(results) > topK {
-		return results[:topK]
+		return results[:topK], nil
 	}
-	return results
+	return results, nil
 }
 
 // TestNewExperienceHubClient 测试构造函数

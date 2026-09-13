@@ -283,7 +283,11 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 		}
 		if attempt < es.maxUploadRetries && es.backoffBaseSecs > 0 {
 			delay := es.backoffBaseSecs * math.Pow(2, float64(attempt-1))
-			time.Sleep(time.Duration(delay * float64(time.Second)))
+			select {
+			case <-time.After(time.Duration(delay * float64(time.Second))):
+			case <-ctx.Done():
+				return UploadResult{OK: false, Reason: ctx.Err().Error()}
+			}
 		}
 	}
 
@@ -311,19 +315,15 @@ func (es *ExperienceSharer) DownloadRelevant(
 		return nil
 	}
 
-	var bundles []SharedSkillBundle
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Warn(logComponent).
-					Str("skill", skillName).
-					Str("skill_id", resolvedID).
-					Any("panic", r).
-					Msg("[ExperienceSharer] backend download failed")
-			}
-		}()
-		bundles = es.backend.DownloadBundles(ctx, resolvedID, query, topK)
-	}()
+	bundles, err := es.backend.DownloadBundles(ctx, resolvedID, query, topK)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("skill", skillName).
+			Str("skill_id", resolvedID).
+			Err(err).
+			Msg("[ExperienceSharer] backend download failed")
+		return nil
+	}
 
 	for i := range bundles {
 		if err := es.mirrorBundle(&bundles[i], "downloaded"); err != nil {
@@ -348,14 +348,14 @@ func (es *ExperienceSharer) DownloadRelevant(
 //
 // Python: ExperienceSharer.search_skills()
 func (es *ExperienceSharer) SearchSkills(ctx context.Context, query QueryKeywords, topK int) []SkillSearchResult {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn(logComponent).
-				Any("panic", r).
-				Msg("[ExperienceSharer] search_skills failed")
-		}
-	}()
-	return es.backend.SearchSkills(ctx, query, topK)
+	results, err := es.backend.SearchSkills(ctx, query, topK)
+	if err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("[ExperienceSharer] search_skills failed")
+		return nil
+	}
+	return results
 }
 
 // DownloadSkillPackage 下载技能包字节。

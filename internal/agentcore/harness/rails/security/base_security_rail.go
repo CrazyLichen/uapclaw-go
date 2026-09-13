@@ -949,7 +949,7 @@ func (r *BaseSecurityRail) getAutoConfirmConfig(cbc *agentinterfaces.AgentCallba
 
 // isSecurityTruthy 宽松真值判断（对齐 Python bool(val)）。
 // bool → 直接判断；int/int64/float64 → 非0为true；
-// string → "true"/"1"/"yes" 为 true（安全语义，非 Python 全非空字符串为 true）；
+// string → 空字符串→false，"false"/"0"/"no"→false，其他非空字符串→true；
 // 其余 → false
 func isSecurityTruthy(val any) bool {
 	if val == nil {
@@ -965,7 +965,8 @@ func isSecurityTruthy(val any) bool {
 	case float64:
 		return v != 0
 	case string:
-		return strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
+		s := strings.TrimSpace(strings.ToLower(v))
+		return s != "" && s != "false" && s != "no" && s != "0"
 	default:
 		return false
 	}
