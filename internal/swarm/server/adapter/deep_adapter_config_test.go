@@ -112,7 +112,7 @@ func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 
 	config := &runtimeConfig{
 		CWD:       "/tmp/cwd",
-		SessionID: "acp_s1",  // 前缀为 acp
+		SessionID: "acp_s1", // 前缀为 acp
 		Mode:      "agent.fast",
 	}
 	d.updateRuntimeConfig(ctx, config)

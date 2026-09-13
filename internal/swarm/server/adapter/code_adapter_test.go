@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"gopkg.in/yaml.v3"
 )

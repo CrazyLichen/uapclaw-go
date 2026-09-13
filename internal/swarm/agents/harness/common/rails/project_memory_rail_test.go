@@ -611,14 +611,16 @@ func TestProjectMemoryRail_Uninit_panicRecover(t *testing.T) {
 // panicRemoveBuilder 在 RemoveSection 时 panic 的 mock builder
 type panicRemoveBuilder struct{}
 
-func (p *panicRemoveBuilder) AddSection(_ saprompt.PromptSection) *saprompt.SystemPromptBuilder { return nil }
+func (p *panicRemoveBuilder) AddSection(_ saprompt.PromptSection) *saprompt.SystemPromptBuilder {
+	return nil
+}
 func (p *panicRemoveBuilder) RemoveSection(_ string) *saprompt.SystemPromptBuilder {
 	panic("intentional panic for test")
 }
-func (p *panicRemoveBuilder) Language() string        { return "cn" }
-func (p *panicRemoveBuilder) SetLanguage(_ string)    {}
+func (p *panicRemoveBuilder) Language() string                            { return "cn" }
+func (p *panicRemoveBuilder) SetLanguage(_ string)                        {}
 func (p *panicRemoveBuilder) GetSection(_ string) *saprompt.PromptSection { return nil }
-func (p *panicRemoveBuilder) HasSection(_ string) bool { return false }
+func (p *panicRemoveBuilder) HasSection(_ string) bool                    { return false }
 
 // TestProjectMemoryRail_SetAdditionalDirectories_空白路径 验证空白路径跳过
 func TestProjectMemoryRail_SetAdditionalDirectories_空白路径(t *testing.T) {

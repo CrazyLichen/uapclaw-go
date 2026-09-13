@@ -20,8 +20,8 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -36,8 +36,8 @@ import (
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1367,9 +1367,9 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 
 	// Python: self._instance_overrides = {"agent_name": ..., "project_dir": ..., "channel_id": ...}
 	c.deep.instanceOverrides = map[string]any{
-		"agent_name": c.deep.agentName,
+		"agent_name":  c.deep.agentName,
 		"project_dir": c.deep.projectDir,
-		"channel_id": channelID,
+		"channel_id":  channelID,
 	}
 
 	// Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir)

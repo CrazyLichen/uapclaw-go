@@ -64,14 +64,14 @@ const (
 // writeLikeTools 写操作工具名称集合。
 // Python: ProjectMemoryRail.WRITE_LIKE_TOOLS (frozenset)
 var writeLikeTools = map[string]struct{}{
-	"write_file":    {},
-	"edit_file":     {},
+	"write_file":      {},
+	"edit_file":       {},
 	"write_text_file": {},
-	"write":         {},
-	"delete_file":   {},
-	"delete":        {},
-	"move_file":     {},
-	"rename_file":   {},
+	"write":           {},
+	"delete_file":     {},
+	"delete":          {},
+	"move_file":       {},
+	"rename_file":     {},
 }
 
 // pmrLogComponent 日志组件标识
