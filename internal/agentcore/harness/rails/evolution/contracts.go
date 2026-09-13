@@ -198,10 +198,34 @@ func FromLegacyDict(snapshot map[string]any) EvolutionSnapshot {
 		}
 	}
 
+	sessionID := ""
+	if sid, ok := snapshot["session_id"]; ok {
+		if typed, ok := sid.(string); ok {
+			sessionID = typed
+		}
+	}
+
+	var presentedEntries []experience.PresentedRecordEntry
+	if pe, ok := snapshot["presented_entries"]; ok {
+		if typed, ok := pe.([]experience.PresentedRecordEntry); ok {
+			presentedEntries = typed
+		}
+	}
+
+	var incrementalMessages []map[string]any
+	if im, ok := snapshot["incremental_messages"]; ok {
+		if typed, ok := im.([]map[string]any); ok {
+			incrementalMessages = typed
+		}
+	}
+
 	return EvolutionSnapshot{
-		Trajectory: traj,
-		Messages:   messages,
-		SkillName:  skillName,
+		Trajectory:          traj,
+		Messages:            messages,
+		SkillName:           skillName,
+		SessionID:           sessionID,
+		PresentedEntries:    presentedEntries,
+		IncrementalMessages: incrementalMessages,
 	}
 }
 

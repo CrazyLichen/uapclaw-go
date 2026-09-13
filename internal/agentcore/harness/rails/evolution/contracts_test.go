@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
@@ -141,6 +142,41 @@ func TestEvolutionSnapshot_FromLegacyDict_全字段(t *testing.T) {
 	}
 }
 
+func TestEvolutionSnapshot_FromLegacyDict_全字段含扩展(t *testing.T) {
+	traj := &trajectory.Trajectory{}
+	skillName := "test-skill"
+	entries := []experience.PresentedRecordEntry{
+		{SkillName: "s1", Snippet: "snippet1"},
+	}
+	incremental := []map[string]any{{"role": "user", "content": "hi"}}
+
+	dict := map[string]any{
+		"trajectory":           traj,
+		"messages":             []map[string]any{{"role": "user"}},
+		"skill_name":           skillName,
+		"session_id":           "sess-123",
+		"presented_entries":    entries,
+		"incremental_messages": incremental,
+	}
+
+	snap := FromLegacyDict(dict)
+	if snap.Trajectory != traj {
+		t.Error("Trajectory 未正确恢复")
+	}
+	if snap.SkillName == nil || *snap.SkillName != skillName {
+		t.Error("SkillName 未正确恢复")
+	}
+	if snap.SessionID != "sess-123" {
+		t.Errorf("SessionID = %q, want %q", snap.SessionID, "sess-123")
+	}
+	if len(snap.PresentedEntries) != 1 || snap.PresentedEntries[0].SkillName != "s1" {
+		t.Error("PresentedEntries 未正确恢复")
+	}
+	if len(snap.IncrementalMessages) != 1 {
+		t.Errorf("IncrementalMessages 长度 = %d, want 1", len(snap.IncrementalMessages))
+	}
+}
+
 func TestEvolutionSnapshot_FromLegacyDict_缺失字段(t *testing.T) {
 	dict := map[string]any{
 		"trajectory": &trajectory.Trajectory{},
@@ -151,6 +187,15 @@ func TestEvolutionSnapshot_FromLegacyDict_缺失字段(t *testing.T) {
 	}
 	if snap.SkillName != nil {
 		t.Error("SkillName 应为 nil")
+	}
+	if snap.SessionID != "" {
+		t.Errorf("SessionID 应为空字符串，实际 %q", snap.SessionID)
+	}
+	if snap.PresentedEntries != nil {
+		t.Error("PresentedEntries 应为 nil")
+	}
+	if snap.IncrementalMessages != nil {
+		t.Error("IncrementalMessages 应为 nil")
 	}
 }
 
