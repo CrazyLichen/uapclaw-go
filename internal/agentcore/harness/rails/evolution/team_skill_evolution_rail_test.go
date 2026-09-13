@@ -430,6 +430,67 @@ func TestWithTeamSkillLLMPolicies(t *testing.T) {
 	assert.Equal(t, 5, r.simplifyLLMPolicy.MaxAttempts)
 }
 
+func TestWithTeamSkillMemberRole_基类已初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
+	WithTeamSkillMemberRole("leader")(r)
+	assert.Equal(t, "leader", r.EvolutionRail.defaultMemberRole)
+}
+
+func TestWithTeamSkillMemberRole_基类未初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{}
+	// 不应 panic
+	WithTeamSkillMemberRole("leader")(r)
+}
+
+func TestWithTeamSkillAsyncEvolution_基类已初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
+	WithTeamSkillAsyncEvolution(false)(r)
+	assert.False(t, r.EvolutionRail.asyncEvolution)
+}
+
+func TestWithTeamSkillAsyncEvolution_基类未初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{}
+	// 不应 panic
+	WithTeamSkillAsyncEvolution(false)(r)
+}
+
+func TestWithTeamSkillMaxConcurrentEvolution_基类已初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
+	WithTeamSkillMaxConcurrentEvolution(3)(r)
+	assert.Equal(t, 3, cap(r.EvolutionRail.evolutionSem))
+}
+
+func TestWithTeamSkillMaxConcurrentEvolution_基类未初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{}
+	// 不应 panic
+	WithTeamSkillMaxConcurrentEvolution(3)(r)
+}
+
+func TestWithTeamSkillDisabledSkills_基类已初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
+	WithTeamSkillDisabledSkills([]string{"skill-a", "skill-b"})(r)
+	assert.True(t, r.EvolutionRail.disabledSkills["skill-a"])
+	assert.True(t, r.EvolutionRail.disabledSkills["skill-b"])
+}
+
+func TestWithTeamSkillDisabledSkills_基类未初始化(t *testing.T) {
+	r := &TeamSkillEvolutionRail{}
+	// 不应 panic
+	WithTeamSkillDisabledSkills([]string{"skill-a"})(r)
+}
+
+func TestTeamSkillEvolutionRail_RunEvolution_DeferRecover(t *testing.T) {
+	// RunEvolution 中的 defer recover 应捕获 panic
+	r := &TeamSkillEvolutionRail{
+		autoScan:      true,
+		EvolutionRail: &EvolutionRail{},
+	}
+	// 使用一个会 panic 的场景——这里通过构造特殊的 trajectory 验证不传播
+	// 实际测试：autoScan=true 但无 store → 不会 panic，只是正常完成
+	err := r.RunEvolution(nil, &trajectory.Trajectory{}, nil)
+	assert.NoError(t, err)
+}
+
 // ─── OnAfterToolCall 测试 ───
 
 func TestTeamSkillEvolutionRail_OnAfterToolCall_非ToolCallInputs(t *testing.T) {

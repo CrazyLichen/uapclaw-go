@@ -145,14 +145,14 @@ var (
 	// Python: _TEAM_USER_REQUEST_LLM_POLICY
 	teamUserRequestLLMPolicy = llm_resilience.LLMInvokePolicy{
 		AttemptTimeoutSecs: 60,
-		TotalBudgetSecs:   300,
+		TotalBudgetSecs:   120,
 		MaxAttempts:        2,
 	}
 
 	// teamTrajectoryIssueLLMPolicy 轨迹问题检测 LLM 策略
 	// Python: _TEAM_TRAJECTORY_ISSUE_LLM_POLICY
 	teamTrajectoryIssueLLMPolicy = llm_resilience.LLMInvokePolicy{
-		AttemptTimeoutSecs: 60,
+		AttemptTimeoutSecs: 150,
 		TotalBudgetSecs:   300,
 		MaxAttempts:        2,
 	}
@@ -216,7 +216,14 @@ func NewTeamSkillEvolutionRail(
 		simplifyLLMPolicy:        experience.SimplifyLLMPolicy,
 	}
 
-	// 应用选项
+	// 初始化 EvolutionRail 基类（先于 Options，确保 Option 可安全访问基类字段）
+	// Python: super().__init__(evolution_trigger=AFTER_INVOKE, async_evolution=True, ...)
+	r.EvolutionRail = NewEvolutionRail(r,
+		WithDefaultMemberRole("leader"),
+		WithEvolutionTrigger(TriggerAfterInvoke),
+	)
+
+	// 应用选项（此时基类已初始化，Option 可安全设置基类字段）
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -302,14 +309,6 @@ func NewTeamSkillEvolutionRail(
 		r.evolutionStore, r.scorer, r.evalInterval,
 	)
 
-	// 初始化 EvolutionRail 基类
-	// Python: super().__init__(evolution_trigger=AFTER_INVOKE, async_evolution=True, ...)
-	railOpts := []EvolutionRailOption{
-		WithDefaultMemberRole("leader"),
-		WithEvolutionTrigger(TriggerAfterInvoke),
-	}
-	r.EvolutionRail = NewEvolutionRail(r, railOpts...)
-
 	logger.Info(logComponent).
 		Str("skills_dir", fmt.Sprintf("%v", r.skillsDir)).
 		Str("model", model).
@@ -359,9 +358,12 @@ func WithTeamSkillTrajectorySink(sink trajectory.TrajectorySink, teamID string, 
 }
 
 // WithTeamSkillMemberRole 设置成员角色。
+// 基类已初始化后，直接修改基类 defaultMemberRole 字段。
 func WithTeamSkillMemberRole(role string) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) {
-		// 通过基类 option 在基类初始化后设置
+		if r.EvolutionRail != nil {
+			r.EvolutionRail.defaultMemberRole = role
+		}
 	}
 }
 
@@ -391,26 +393,32 @@ func WithTeamSkillSimplifyLLMPolicy(p llm_resilience.LLMInvokePolicy) TeamSkillE
 }
 
 // WithTeamSkillAsyncEvolution 设置是否异步执行演化。
+// 基类已初始化后，直接修改基类 asyncEvolution 字段。
 func WithTeamSkillAsyncEvolution(v bool) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) {
-		// 通过基类设置
+		if r.EvolutionRail != nil {
+			r.EvolutionRail.asyncEvolution = v
+		}
 	}
 }
 
 // WithTeamSkillMaxConcurrentEvolution 设置最大并发演化数。
+// 基类已初始化后，重建 evolutionSem 通道容量。
 func WithTeamSkillMaxConcurrentEvolution(v int) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) {
-		// 通过基类设置
+		if r.EvolutionRail != nil {
+			r.EvolutionRail.evolutionSem = make(chan struct{}, v)
+		}
 	}
 }
 
 // WithTeamSkillDisabledSkills 设置禁用的技能名称列表。
+// 基类已初始化后，直接修改基类 disabledSkills 字段。
 func WithTeamSkillDisabledSkills(names []string) TeamSkillEvolutionRailOption {
 	return func(r *TeamSkillEvolutionRail) {
 		if r.EvolutionRail != nil {
-			r.DisabledSkills()["__team_disabled"] = true // 占位，实际在基类设置
+			r.EvolutionRail.disabledSkills = normalizeSkillNames(names)
 		}
-		_ = names
 	}
 }
 
@@ -577,6 +585,16 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan 已禁用，跳过")
 		return nil
 	}
+
+	// 对齐 Python: try: ... except Exception as exc: logger.error(...); _emit_progress("failed", ...)
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Error(logComponent).
+				Any("panic", rec).
+				Msg("[TeamSkillEvolutionRail] run_evolution 全局异常捕获")
+			r.emitProgress("failed", fmt.Sprintf("team skill evolution failed with unexpected error: %v", rec))
+		}
+	}()
 
 	t0 := time.Now()
 	defer func() {
@@ -1454,34 +1472,32 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 	}
 
 	// Python: def _emit_approval_request(staged_request)
-	emitApprovalRequest := func(req any) error {
-		stagedReq, ok := req.(*experience.ExperienceApprovalRequest)
-		if !ok || stagedReq == nil {
-			return nil
-		}
-		if emitHostEvents {
+	// Python: emit_host_events=False 时 _emit_approval_request = lambda: None（no-op）
+	var emitApprovalRequest func(*experience.ExperienceApprovalRequest) error
+	if emitHostEvents {
+		emitApprovalRequest = func(stagedReq *experience.ExperienceApprovalRequest) error {
+			if stagedReq == nil {
+				return nil
+			}
 			r.emitRecordApprovalEvent(skillName, stagedReq)
-		}
-		logger.Info(logComponent).
-			Str("change_id", stagedReq.RequestID).
-			Msg("[TeamSkillEvolutionRail] signal consumed and records staged for approval")
-		if emitHostEvents {
+			logger.Info(logComponent).
+				Str("change_id", stagedReq.RequestID).
+				Msg("[TeamSkillEvolutionRail] signal consumed and records staged for approval")
 			r.emitProgress("approval_required",
 				fmt.Sprintf("experience records for '%s' ready, awaiting approval", skillName),
 				WithSkillName(skillName),
 				WithRequestID(stagedReq.RequestID),
 			)
+			return nil
 		}
-		return nil
 	}
 
 	// Python: def _on_auto_approved(staged_request)
-	onAutoApproved := func(req any) error {
+	onAutoApproved := func(stagedReq *experience.ExperienceApprovalRequest) error {
 		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] signal consumed and records auto-approved")
 		if emitHostEvents {
-			stagedReq, ok := req.(*experience.ExperienceApprovalRequest)
 			requestID := ""
-			if ok && stagedReq != nil {
+			if stagedReq != nil {
 				requestID = stagedReq.RequestID
 			}
 			r.emitProgress("auto_approved",

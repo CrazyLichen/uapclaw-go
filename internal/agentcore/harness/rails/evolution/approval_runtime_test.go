@@ -185,12 +185,12 @@ func TestRejectPendingRequest_NotFound(t *testing.T) {
 func TestFinalizeStagedEvolutionRequest_RequiresApproval(t *testing.T) {
 	// Python: finalize_staged_evolution_request(request, requires_approval=True, emit_approval_request=fn)
 	var called bool
-	emitFn := func(_ any) error {
+	emitFn := func(_ *experience.ExperienceApprovalRequest) error {
 		called = true
 		return nil
 	}
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
-	err := rt.FinalizeStagedEvolutionRequest("some_request", true, emitFn, nil)
+	err := rt.FinalizeStagedEvolutionRequest(&experience.ExperienceApprovalRequest{RequestID: "req_1"}, true, emitFn, nil)
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -202,12 +202,12 @@ func TestFinalizeStagedEvolutionRequest_RequiresApproval(t *testing.T) {
 func TestFinalizeStagedEvolutionRequest_AutoApproved(t *testing.T) {
 	// Python: finalize_staged_evolution_request(request, requires_approval=False, on_auto_approved=fn)
 	var called bool
-	autoFn := func(_ any) error {
+	autoFn := func(_ *experience.ExperienceApprovalRequest) error {
 		called = true
 		return nil
 	}
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
-	err := rt.FinalizeStagedEvolutionRequest("some_request", false, nil, autoFn)
+	err := rt.FinalizeStagedEvolutionRequest(&experience.ExperienceApprovalRequest{RequestID: "req_1"}, false, nil, autoFn)
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestFinalizeStagedEvolutionRequest_NilRequest(t *testing.T) {
 func TestFinalizeStagedEvolutionRequest_NoAutoApprovedCallback(t *testing.T) {
 	// Python: L111: if on_auto_approved is not None → on_auto_approved 为 None 时跳过
 	rt := NewEvolutionApprovalRuntime(&fakeApprovalManager{}, PendingApprovalSnapshotStore{})
-	err := rt.FinalizeStagedEvolutionRequest("some_request", false, nil, nil)
+	err := rt.FinalizeStagedEvolutionRequest(&experience.ExperienceApprovalRequest{RequestID: "req_1"}, false, nil, nil)
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}

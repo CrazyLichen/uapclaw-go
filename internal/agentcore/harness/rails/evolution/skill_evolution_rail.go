@@ -189,7 +189,17 @@ func NewSkillEvolutionRail(
 		excerptOffsets:           make(map[string]int),
 	}
 
-	// 应用可选参数
+	// 初始化 EvolutionRail 基类（先于 Options，确保 Option 可安全访问基类字段）
+	// Python: super().__init__(default_member_role="teammate", ...)
+	railOpts := []EvolutionRailOption{
+		WithDefaultMemberRole("teammate"),
+	}
+	if r.evolutionTimeoutSec > 0 {
+		railOpts = append(railOpts, WithMaxConcurrentEvolution(1))
+	}
+	r.EvolutionRail = NewEvolutionRail(r, railOpts...)
+
+	// 应用可选参数（此时基类已初始化，Option 可安全设置基类字段）
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -252,16 +262,6 @@ func NewSkillEvolutionRail(
 	// ─── 初始化 Sharing ───
 	// Python: self._init_sharing(sharing_config, llm=llm, model=model, language=language, evolution_store=self._evolution_store)
 	r.initSharing(llmModel, model, language)
-
-	// ─── 构造 EvolutionRail 基类 ───
-	railOpts := []EvolutionRailOption{
-		WithDefaultMemberRole("teammate"),
-		WithDisabledSkills(r.normalizeNameSet()),
-	}
-	if r.evolutionTimeoutSec > 0 {
-		railOpts = append(railOpts, WithMaxConcurrentEvolution(1))
-	}
-	r.EvolutionRail = NewEvolutionRail(r, railOpts...)
 
 	return r
 }
@@ -331,9 +331,13 @@ func WithSharingConfig(config map[string]any) SkillEvolutionRailOption {
 }
 
 // WithDisabledSkillsSet 设置禁用的技能名称列表。
+// 基类已初始化后，同时修改子类和基类的 disabledSkills。
 func WithDisabledSkillsSet(names []string) SkillEvolutionRailOption {
 	return func(r *SkillEvolutionRail) {
 		r.disabledSkills = names
+		if r.EvolutionRail != nil {
+			r.EvolutionRail.disabledSkills = normalizeSkillNames(names)
+		}
 	}
 }
 

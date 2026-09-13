@@ -322,6 +322,14 @@ func TestWithDisabledSkillsSet(t *testing.T) {
 	assert.Equal(t, []string{"foo", "bar"}, r.disabledSkills)
 }
 
+func TestWithDisabledSkillsSet_基类已初始化(t *testing.T) {
+	r := &SkillEvolutionRail{EvolutionRail: &EvolutionRail{}}
+	WithDisabledSkillsSet([]string{"foo", "bar"})(r)
+	assert.Equal(t, []string{"foo", "bar"}, r.disabledSkills)
+	assert.True(t, r.EvolutionRail.disabledSkills["foo"])
+	assert.True(t, r.EvolutionRail.disabledSkills["bar"])
+}
+
 func TestNormalizeNameSet(t *testing.T) {
 	r := &SkillEvolutionRail{disabledSkills: []string{"a", "b"}}
 	assert.Equal(t, []string{"a", "b"}, r.normalizeNameSet())

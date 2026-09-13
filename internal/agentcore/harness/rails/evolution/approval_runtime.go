@@ -96,15 +96,12 @@ func (r *EvolutionApprovalRuntime) RejectPendingRequest(
 // FinalizeStagedEvolutionRequest 将暂存请求路由到审批缓冲或自动审批副作用。
 //
 // Python 中使用 inspect.isawaitable 判断回调是否需要 await，
-// Go 中回调统一为 func(any) error，调用方在闭包内自行处理异步。
-//
-// TODO: P2/P4 实现后根据实际传入类型（EvolutionRequestResult / SimplifyRequestResult）
-// 可将 request any 和回调参数收敛为具体类型或接口。
+// Go 中回调统一为 func(*experience.ExperienceApprovalRequest) error。
 func (r *EvolutionApprovalRuntime) FinalizeStagedEvolutionRequest(
-	request any,
+	request *experience.ExperienceApprovalRequest,
 	requiresApproval bool,
-	emitApprovalRequest func(any) error,
-	onAutoApproved func(any) error,
+	emitApprovalRequest func(*experience.ExperienceApprovalRequest) error,
+	onAutoApproved func(*experience.ExperienceApprovalRequest) error,
 ) error {
 	if request == nil {
 		return nil
