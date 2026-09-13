@@ -157,6 +157,9 @@ type DeepAdapter struct {
 	// skillCreateRail 技能创建护栏
 	// ⤵️ 10.6.3-10: SkillCreateRail
 	skillCreateRail sainterfaces.AgentRail
+	// teamSkillEvolutionRail 团队技能演进护栏
+	// ✅ P4 已回填：TeamSkillEvolutionRail（对齐 Python: _team_skill_evolution_rail: TeamSkillEvolutionRail | None）
+	teamSkillEvolutionRail *evolution.TeamSkillEvolutionRail
 	// subagentRail 子代理护栏
 	// ✅ 已回填：SubagentRail（对齐 Python: _subagent_rail: SubagentRail | None）
 	subagentRail *subagent.SubagentRail
@@ -1283,8 +1286,12 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	// 步骤 5-7: 按 request_id 前缀分发
 	switch {
 	case strings.HasPrefix(requestID, "team_skill_evolve_"):
-		// ⤵️ 10.6.3-10: handle_team_skill_evolve_approval 依赖 P4 TeamSkillEvolutionRail
-		resolved = false
+		// ✅ P4 已回填：handle_team_skill_evolve_approval 依赖 TeamSkillEvolutionRail
+		sid := ""
+		if req.SessionID != nil {
+			sid = *req.SessionID
+		}
+		resolved = d.handleTeamSkillEvolveApproval(ctx, requestID, answers, sid, req.ChannelID)
 	case strings.HasPrefix(requestID, "evolve_simplify_"):
 		// ✅ 已回填：_handle_governance_approval(requestID, answers, approvalType)
 		// Python 中 approvalType 从 answers 推断：approve → "approve", reject → "reject"

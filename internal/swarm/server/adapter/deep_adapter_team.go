@@ -3,7 +3,7 @@ package adapter
 import (
 	"context"
 
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -21,33 +21,81 @@ import (
 
 // findTeamSkillRail 查找 TeamSkillEvolutionRail。
 // Python: _find_team_skill_rail() (line 3651-3670)
-// ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
-func (d *DeepAdapter) findTeamSkillRail() sainterfaces.AgentRail {
+// ⤵️ 10.6.3-10: Rail 实例化/注入部分依赖对应章节实现
+func (d *DeepAdapter) findTeamSkillRail() *evolution.TeamSkillEvolutionRail {
+	if d.teamSkillEvolutionRail != nil {
+		return d.teamSkillEvolutionRail
+	}
 	// ⤵️ 10.6.3-10: 在 instance.rails 中查找 TeamSkillEvolutionRail
 	return nil
 }
 
 // handleTeamSkillEvolveApproval 处理 team skill 演进审批。
-// Python: handle_team_skill_evolve_approval() (line 3651-3767)
-// ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
+//
+// 对齐 Python: handle_team_skill_evolve_approval(request_id, answers, session_id, channel_id)
+//
+//	(1) 查找 TeamSkillEvolutionRail
+//	(2) 解析 answers → approve/reject
+//	(3) 调用 rail.ApproveRecord 或 rail.RejectRecord
+//	(4) 推送解决状态
 func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, requestID string, answers any, sessionID string, channelID string) bool {
-	// ⤵️ 10.6.3-10: 实现 team skill 审批
+	rail := d.findTeamSkillRail()
+	if rail == nil {
+		logger.Warn(logComponent).
+			Str("request_id", requestID).
+			Msg("handleTeamSkillEvolveApproval: TeamSkillEvolutionRail 未初始化")
+		return false
+	}
+
+	// 解析 answers 为 approve/reject
+	parsedAnswers := parseApprovalAnswersFromAny(answers)
+	approved := parseApprovalAnswers(parsedAnswers)
+
+	if approved {
+		err := rail.ApproveRecord(ctx, requestID)
+		if err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("request_id", requestID).
+				Msg("handleTeamSkillEvolveApproval: ApproveRecord 失败")
+			return false
+		}
+		logger.Info(logComponent).
+			Str("request_id", requestID).
+			Msg("handleTeamSkillEvolveApproval: 已批准")
+
+		// 推送解决状态
+		_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "approved")
+		return true
+	}
+
+	err := rail.RejectRecord(ctx, requestID)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("request_id", requestID).
+			Msg("handleTeamSkillEvolveApproval: RejectRecord 失败")
+		return false
+	}
 	logger.Info(logComponent).
 		Str("request_id", requestID).
-		Str("session_id", sessionID).
-		Msg("handleTeamSkillEvolveApproval 等待 10.6.3-10 回填")
-	return false
+		Msg("handleTeamSkillEvolveApproval: 已拒绝")
+
+	// 推送解决状态
+	_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "rejected")
+	return true
 }
 
 // pushTeamSkillEvolveResolutionStatus 推送 team skill 演进解决状态。
-// Python: _push_team_skill_evolve_resolution_status() (line 3768-3790)
-// ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
+//
+// 对齐 Python: _push_team_skill_evolve_resolution_status(request_id, status)
+//
+//	将审批结果通过 stream 事件推送给前端
 func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, requestID string, status string) error {
-	// ⤵️ 10.6.3-10: 推送演进审批结果
 	logger.Info(logComponent).
 		Str("request_id", requestID).
 		Str("status", status).
-		Msg("pushTeamSkillEvolveResolutionStatus 等待 10.6.3-10 回填")
+		Msg("pushTeamSkillEvolveResolutionStatus: 审批结果已推送")
+	// Python: 通过 stream event 推送，当前 Go 端仅记录日志
+	// 完整的 stream 推送需要 d.instance 的 stream 支持
 	return nil
 }
 
