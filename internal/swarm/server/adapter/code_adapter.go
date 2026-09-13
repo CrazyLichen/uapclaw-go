@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -1138,10 +1139,12 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 
 // buildWorktreeRail 构建工作树护栏。
 // Python: JiuwenClawCodeAdapter._build_worktree_rail_via_config() (interface_code.py)
-// ⤵️ 10.6.3-10: WorktreeRail 尚未实现
+// ⤴️ 9.66a 回填完成：构造 WorktreeRail
 func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 WorktreeRail
-	return nil
+	cfg := worktree.NewWorktreeConfig()
+	cfg.Enabled = true
+	rail := worktree.NewWorktreeRail(worktree.WithWorktreeRailConfig(cfg))
+	return rail
 }
 
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
