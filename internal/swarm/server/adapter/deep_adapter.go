@@ -37,6 +37,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -131,8 +132,8 @@ type DeepAdapter struct {
 	// contextProcessorRail 上下文处理护栏
 	contextProcessorRail sainterfaces.AgentRail
 	// runtimePromptRail 运行时提示词护栏
-	// ⤵️ 10.6.3-10: RuntimePromptRail
-	runtimePromptRail sainterfaces.AgentRail
+	// ✅ 已回填：RuntimePromptRail（对齐 Python: _runtime_prompt_rail: RuntimePromptRail | None）
+	runtimePromptRail *commrails.RuntimePromptRail
 	// responsePromptRail 响应提示词护栏
 	// ⤵️ 10.6.3-10: ResponsePromptRail
 	responsePromptRail sainterfaces.AgentRail

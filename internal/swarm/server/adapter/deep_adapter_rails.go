@@ -466,11 +466,19 @@ func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
 }
 
 // buildRuntimePromptRail 构建运行时提示词护栏。
-// ⤵️ 10.6.3-10: RuntimePromptRail
+// ✅ 已回填：RuntimePromptRail（对齐 Python: _build_runtime_prompt_rail() — RuntimePromptRail(language, channel)）
+//
 // Python: _build_runtime_prompt_rail() (line 2156-2170)
-func (d *DeepAdapter) buildRuntimePromptRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 RuntimePromptRail
-	return nil
+func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
+	// Python: default_channel = "acp" if self._is_acp_tool_profile(self._instance_overrides) else self._resolve_prompt_channel()
+	defaultChannel := "web"
+	if d.isAcpToolProfile(d.instanceOverrides) {
+		defaultChannel = "acp"
+	}
+	// Python: rail = RuntimePromptRail(language=self._resolve_runtime_language(), channel=default_channel)
+	rail := commrails.NewRuntimePromptRail(d.resolveRuntimeLanguage(), defaultChannel)
+	logger.Info(logComponent).Msg("RuntimePromptRail 创建成功")
+	return rail
 }
 
 // buildResponsePromptRail 构建响应提示词护栏。
@@ -774,12 +782,29 @@ func (d *DeepAdapter) updateAgentModeRails(mode string) {
 }
 
 // updatePromptForMode 按模式更新系统提示词语言。
-// Python: _update_prompt_for_mode() (line 3091-3097)
+// ✅ 已回填：对齐 Python _update_prompt_for_mode() (line 3091-3097)
 //
-// ⤵️ 10.6.3-10: 依赖 RuntimePromptRail
+// Python: _update_prompt_for_mode(mode, resolved_language)
+//   - if self._instance.system_prompt_builder is not None: system_prompt_builder.language = resolved_language
+//   - if self._instance.deep_config is not None: deep_config.language = resolved_language
 func (d *DeepAdapter) updatePromptForMode(mode string) {
-	// ⤵️ 10.6.3-10: 同步 system_prompt_builder 语言
-	logger.Info(logComponent).Str("mode", mode).Msg("updatePromptForMode 等待 10.6.3-10 回填")
+	resolvedLanguage := d.resolveRuntimeLanguage()
+
+	// Python: if self._instance.system_prompt_builder is not None: builder.language = resolved_language
+	if d.instance != nil {
+		if spb := d.instance.SystemPromptBuilder(); spb != nil {
+			spb.SetLanguage(resolvedLanguage)
+		}
+		// Python: if self._instance.deep_config is not None: deep_config.language = resolved_language
+		if deepCfg := d.instance.DeepConfig(); deepCfg != nil {
+			deepCfg.Language = resolvedLanguage
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("mode", mode).
+		Str("language", resolvedLanguage).
+		Msg("updatePromptForMode 完成")
 }
 
 // ──────────────────────────── ToolPermissionHost 回调方法 ────────────────────────────

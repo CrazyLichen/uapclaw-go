@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -15,6 +14,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
@@ -30,7 +30,7 @@ type AgentConfigLister interface {
 }
 
 // runtimeConfig 运行时配置。
-// Python: _RuntimeConfig (line 3098-3106)
+// Python: _RuntimeConfig (interface_deep.py L3108-3119)
 type runtimeConfig struct {
 	// CWD 当前工作目录
 	CWD string
@@ -42,6 +42,27 @@ type runtimeConfig struct {
 	ProjectDir string
 	// WorkspaceDir 工作区目录
 	WorkspaceDir string
+	// SessionID 会话标识
+	// Python: session_id
+	SessionID string
+	// Mode 运行模式，默认 "agent.plan"
+	// Python: mode
+	Mode string
+	// RequestID 请求标识
+	// Python: request_id
+	RequestID string
+	// ChannelID 渠道标识
+	// Python: channel_id
+	ChannelID string
+	// RequestMetadata 请求元数据
+	// Python: request_metadata，⤵️ 具体类型待 10.4 定义
+	RequestMetadata map[string]any
+	// TrustedDirs 可信目录列表
+	// Python: trusted_dirs
+	TrustedDirs []string
+	// ForceEnglish 强制英文 section（code 模式）
+	// Python: force_english_runtime_prompt（CodeAdapter 默认 True，DeepAdapter 默认 False）
+	ForceEnglish bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -55,46 +76,66 @@ type runtimeConfig struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateRuntimeConfig 更新运行时配置。
-// Python: _update_runtime_config() (line 3098-3266)
+// Python: _update_runtime_config() (interface_deep.py L3121-3176)
 //
-// 包含 CWD 种子、language/channel 解析、runtime state 写入、rail/tool 模式切换。
+// 包含 CWD 种子、language/channel 解析、runtime state YAML 写入、RuntimePromptRail setter、prompt 模式切换。
 func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeConfig) {
 	if config == nil {
 		return
 	}
 
 	// 步骤 1: CWD 种子
+	// Python: self._seed_runtime_cwd(runtime_config.cwd or ...)
 	if config.CWD != "" {
 		d.seedRuntimeCwd(ctx, config.CWD)
 	}
 
 	// 步骤 2: language 解析
-	if config.Language != "" {
-		d.writeRuntimeState("language", config.Language)
-	}
+	// Python: resolved_language = self._resolve_runtime_language()
+	resolvedLanguage := d.resolveRuntimeLanguage()
 
 	// 步骤 3: channel 解析
-	if config.Channel != "" {
-		d.writeRuntimeState("channel", config.Channel)
+	// Python: resolved_channel = str(runtime_config.channel_id or self._resolve_prompt_channel(session_id) or "web").strip() or "web"
+	resolvedChannel := commrails.FirstNonEmpty(
+		config.ChannelID,
+		resolvePromptChannel(config.SessionID),
+		"web",
+	)
+
+	// 步骤 4: 写 runtime_state.yaml（替代旧的环境变量写入）
+	// Python: self._write_runtime_state(mode=..., language=..., channel=..., project_dir=...)
+	d.writeRuntimeStateYAML(
+		config.Mode,
+		resolvedLanguage,
+		resolvedChannel,
+		config.ProjectDir,
+	)
+
+	// 步骤 5: RuntimePromptRail 7 个 setter
+	// Python: if self._runtime_prompt_rail: self._runtime_prompt_rail.set_language(resolved_language) ...
+	if d.runtimePromptRail != nil {
+		d.runtimePromptRail.SetLanguage(resolvedLanguage)
+		d.runtimePromptRail.SetForceEnglish(config.ForceEnglish)
+		d.runtimePromptRail.SetChannel(resolvedChannel)
+		d.runtimePromptRail.SetTrustedDirs(config.TrustedDirs)
+		d.runtimePromptRail.SetRuntimePaths(config.CWD, config.ProjectDir)
+		d.runtimePromptRail.SetModelName(d.resolveModelName())
+		d.runtimePromptRail.SetMode(config.Mode)
 	}
 
-	// 步骤 4: project_dir 写入
-	if config.ProjectDir != "" {
-		d.writeRuntimeState("project_dir", config.ProjectDir)
-	}
+	// 步骤 6: updatePromptForMode
+	// Python: self._update_prompt_for_mode(runtime_config.mode, resolved_language)
+	d.updatePromptForMode(config.Mode)
 
-	// 步骤 5: workspace_dir 写入
-	if config.WorkspaceDir != "" {
-		d.writeRuntimeState("workspace_dir", config.WorkspaceDir)
-	}
-
-	// 步骤 6: rail/tool 模式切换
-	d.updateRailsForMode(d.mode)
-	d.updatePromptForMode(d.mode)
+	// 步骤 7: rail/tool 模式切换（仅 evolution 分支已实现）
+	// Python: await self._update_rails_for_mode(runtime_config.mode)
+	d.updateRailsForMode(config.Mode)
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
-		Str("language", config.Language).
+		Str("language", resolvedLanguage).
+		Str("channel", resolvedChannel).
+		Str("mode", config.Mode).
 		Msg("updateRuntimeConfig 完成")
 }
 
@@ -276,12 +317,17 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 	}
 }
 
-// writeRuntimeState 将键值对写入运行时状态。
-// Python: _write_runtime_state(key, value)
-func (d *DeepAdapter) writeRuntimeState(key string, value string) {
-	// Python: os.environ[f"JCLAW_RUNTIME_{key.upper()}"] = value
-	envKey := "JCLAW_RUNTIME_" + strings.ToUpper(key)
-	_ = os.Setenv(envKey, value)
+// writeRuntimeStateYAML 将运行时状态写入 config 目录下的 runtime_state.yaml。
+// Python: _write_runtime_state() (interface_deep.py L756-821)
+func (d *DeepAdapter) writeRuntimeStateYAML(mode, language, channel, projectDir string) {
+	commrails.WriteRuntimeStateYAML(
+		d.resolveModelName(),
+		mode,
+		language,
+		channel,
+		d.agentName,
+		projectDir,
+	)
 }
 
 // skillIncludeToolsForProfile 检查当前 profile 下 skill 是否包含工具。
