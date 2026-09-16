@@ -60,11 +60,6 @@ type TaskCreateResult struct {
 	Reason string
 }
 
-// Ok 返回创建是否成功。
-func (r *TaskCreateResult) Ok() bool {
-	return r.Task != nil
-}
-
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
 	Task      *database.TeamTaskBase
@@ -145,6 +140,11 @@ const logComponentChannel = logger.ComponentChannel
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// Ok 返回创建是否成功。
+func (r *TaskCreateResult) Ok() bool {
+	return r.Task != nil
+}
 
 // WithTaskID 设置自定义任务 ID，对齐 Python: add(task_id=...)
 func WithTaskID(taskID string) TaskAddOption {

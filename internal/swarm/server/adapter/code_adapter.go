@@ -213,7 +213,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 3.5: load_dotenv（对齐 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
 	if err := dotenv.Load(workspace.EnvFile()); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("load_dotenv failed, continuing with current env vars")
+		logger.Warn(logComponent).Err(err).Msg("load_dotenv 失败，继续使用当前环境变量")
 	}
 
 	// 步骤 4: 多模态工具 _refresh_multimodal_configs(configBase)

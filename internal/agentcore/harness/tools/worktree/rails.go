@@ -48,6 +48,14 @@ type worktreeRailOptions struct {
 	lifecycleRails []WorktreeLifecycleRail
 }
 
+// AutoSetupRail 自动检测项目类型并运行 setup 的 LifecycleRail。
+// Python: AutoSetupRail
+type AutoSetupRail struct{}
+
+// DiffSummaryRail action=keep 时记录 git diff --stat 的 LifecycleRail。
+// Python: DiffSummaryRail
+type DiffSummaryRail struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -245,10 +253,6 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// AutoSetupRail 自动检测项目类型并运行 setup 的 LifecycleRail。
-// Python: AutoSetupRail
-type AutoSetupRail struct{}
-
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)
 func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *WorktreeSession) error {
@@ -260,7 +264,7 @@ func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *Worktree
 		cmdObj.Stdout = nil
 		cmdObj.Stderr = nil
 		if err := cmdObj.Run(); err != nil {
-			logger.Warn(logComponent).Str("cmd", cmd).Err(err).Msg("Setup command failed")
+			logger.Warn(logComponent).Str("cmd", cmd).Err(err).Msg("Setup 命令执行失败")
 		}
 		cancel()
 	}
@@ -276,10 +280,6 @@ func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession,
 	return nil
 }
 
-// DiffSummaryRail action=keep 时记录 git diff --stat 的 LifecycleRail。
-// Python: DiffSummaryRail
-type DiffSummaryRail struct{}
-
 // BeforeWorktreeExit DiffSummaryRail 的 hook 实现。
 // Python: DiffSummaryRail.before_worktree_exit(ctx, session, action)
 func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (string, error) {
@@ -292,7 +292,7 @@ func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *Workt
 	r := runGit(ctx, []string{"diff", "--stat", session.OriginalHeadCommit + "..HEAD"}, session.WorktreePath)
 	if r.OK() && r.Stdout != "" {
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-			Str("diff_stat", r.Stdout).Msg("Worktree diff summary")
+			Str("diff_stat", r.Stdout).Msg("Worktree 变更摘要")
 	}
 	return "", nil
 }

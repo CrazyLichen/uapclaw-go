@@ -116,7 +116,7 @@ func TestShareStager_ScreenAndStage_ExecutionFailure无成功工具(t *testing.T
 	if len(result.DroppedForShare) != 1 {
 		t.Fatalf("期望 1 条丢弃，实际 %d", len(result.DroppedForShare))
 	}
-	if result.DroppedForShare[0].Reason != "execution failure without successful follow-up tool call" {
+	if result.DroppedForShare[0].Reason != "执行失败且无成功的后续工具调用" {
 		t.Fatalf("丢弃原因不匹配: %s", result.DroppedForShare[0].Reason)
 	}
 }
@@ -156,7 +156,7 @@ func TestShareStager_ScreenAndStage_ScoreBelowThreshold(t *testing.T) {
 	if len(result.DroppedForShare) != 1 {
 		t.Fatalf("期望 1 条丢弃，实际 %d", len(result.DroppedForShare))
 	}
-	if result.DroppedForShare[0].Reason != "score 0.30 below threshold 0.60" {
+	if result.DroppedForShare[0].Reason != "分数 0.30 低于阈值 0.60" {
 		t.Fatalf("丢弃原因不匹配: %s", result.DroppedForShare[0].Reason)
 	}
 }

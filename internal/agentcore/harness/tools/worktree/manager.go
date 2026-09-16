@@ -136,7 +136,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 			}
 			return "created"
 		}()).Float64("duration_ms", durationMs).
-		Msg("Entered worktree")
+		Msg("已进入 worktree")
 
 	if m.eventHandler != nil {
 		_ = m.eventHandler(ctx, &WorktreeCreatedEvent{
@@ -161,7 +161,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 
 	if action == "remove" && !discardChanges {
 		summary := m.CountChanges(ctx, session)
-		// Fail-closed：无法确定状态时拒绝删除
+		// 失败即关闭：无法确定状态时拒绝删除
 		if summary == nil {
 			return nil, exception.BuildError(exception.StatusToolWorktreeExitInvalid,
 				exception.WithParam("reason", fmt.Sprintf(
@@ -193,7 +193,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	if action == "keep" {
 		SetCurrentSession(ctx, nil)
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-			Str("worktree_path", session.WorktreePath).Msg("Kept worktree")
+			Str("worktree_path", session.WorktreePath).Msg("已保留 worktree")
 		return map[string]string{
 			"action":          "keep",
 			"original_cwd":    session.OriginalCWD,
@@ -219,7 +219,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	}
 
 	logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-		Str("worktree_path", session.WorktreePath).Msg("Removed worktree")
+		Str("worktree_path", session.WorktreePath).Msg("已移除 worktree")
 	return map[string]string{
 		"action":          "remove",
 		"original_cwd":    session.OriginalCWD,
@@ -254,7 +254,7 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 				Msg("post-creation setup 部分失败")
 		}
 	} else {
-		// Touch mtime 防止 cleanup
+		// 更新 mtime 防止清理
 		now := time.Now()
 		_ = os.Chtimes(result.WorktreePath, now, now)
 	}
@@ -334,7 +334,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 	policy := m.resolvePolicy()
 	if policy == WorktreeLifecyclePolicyDurable && !force {
 		logger.Info(logComponent).Str("slug_prefix", slugPrefix).
-			Msg("Skipping worktree cleanup: durable policy active")
+			Msg("跳过 worktree 清理：持久策略已激活")
 		return nil, nil
 	}
 
@@ -346,7 +346,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 	workspace := cwd.GetWorkspace(ctx)
 	if workspace == "" {
 		logger.Info(logComponent).Str("slug_prefix", slugPrefix).
-			Msg("Skipping worktree cleanup: agent workspace not set")
+			Msg("跳过 worktree 清理：Agent 工作区未设置")
 		return nil, nil
 	}
 
@@ -368,7 +368,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 			summary := m.checkChanges(ctx, wtPath)
 			if summary != nil && (summary.ChangedFiles > 0 || summary.Commits > 0) {
 				logger.Warn(logComponent).Str("slug", slug).
-					Msg("Skipping worktree: has uncommitted changes")
+					Msg("跳过 worktree：存在未提交变更")
 				continue
 			}
 		}
@@ -475,14 +475,14 @@ func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, workt
 	dirs := m.config.SymlinkDirectories
 	for _, d := range dirs {
 		if strings.Contains(d, "..") || strings.HasPrefix(d, "/") {
-			logger.Warn(logComponent).Str("dir", d).Msg("Skipping symlink: path traversal detected")
+			logger.Warn(logComponent).Str("dir", d).Msg("跳过符号链接：检测到路径穿越")
 			continue
 		}
 		src := filepath.Join(repoRoot, d)
 		dst := filepath.Join(worktreePath, d)
 		if err := os.Symlink(src, dst); err != nil {
 			if !os.IsExist(err) && !os.IsNotExist(err) {
-				logger.Warn(logComponent).Str("dir", d).Err(err).Msg("Failed to symlink")
+				logger.Warn(logComponent).Str("dir", d).Err(err).Msg("创建符号链接失败")
 			}
 		}
 	}
@@ -528,11 +528,11 @@ func (m *WorktreeManager) copyIncludeFiles(ctx context.Context, repoRoot, worktr
 		src := filepath.Join(repoRoot, entry)
 		dst := filepath.Join(worktreePath, entry)
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("Failed to create dir for include file")
+			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("为 include 文件创建目录失败")
 			continue
 		}
 		if err := copyFile(src, dst); err != nil {
-			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("Failed to copy include file")
+			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("拷贝 include 文件失败")
 			continue
 		}
 		copied = append(copied, entry)
@@ -550,7 +550,7 @@ func (m *WorktreeManager) configureHooksPath(ctx context.Context, repoRoot, work
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
 			_ = runGit(ctx, []string{"config", "core.hooksPath", candidate}, worktreePath)
-			logger.Debug(logComponent).Str("hooks_path", candidate).Msg("Configured worktree hooks path")
+			logger.Debug(logComponent).Str("hooks_path", candidate).Msg("已配置 worktree hooks 路径")
 			return
 		}
 	}

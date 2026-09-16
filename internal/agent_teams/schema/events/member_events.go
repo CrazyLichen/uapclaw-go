@@ -60,34 +60,52 @@ type MemberCanceledEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回成员生成事件类型名。
 func (e MemberSpawnedEvent) EventTypeName() string { return TeamEventMemberSpawned }
+
+// ToPayload 转换为事件载荷。
 func (e MemberSpawnedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
 }
 
+// EventTypeName 返回成员重启事件类型名。
 func (e MemberRestartedEvent) EventTypeName() string { return TeamEventMemberRestarted }
+
+// ToPayload 转换为事件载荷。
 func (e MemberRestartedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "reason": e.Reason, "restart_count": e.RestartCount}
 }
 
+// EventTypeName 返回成员状态变更事件类型名。
 func (e MemberStatusChangedEvent) EventTypeName() string { return TeamEventMemberStatusChanged }
+
+// ToPayload 转换为事件载荷。
 func (e MemberStatusChangedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "old_status": e.OldStatus, "new_status": e.NewStatus}
 }
 
+// EventTypeName 返回成员执行状态变更事件类型名。
 func (e MemberExecutionChangedEvent) EventTypeName() string { return TeamEventMemberExecutionChanged }
+
+// ToPayload 转换为事件载荷。
 func (e MemberExecutionChangedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "old_status": e.OldStatus, "new_status": e.NewStatus}
 }
 
+// EventTypeName 返回成员关闭事件类型名。
 func (e MemberShutdownEvent) EventTypeName() string { return TeamEventMemberShutdown }
+
+// ToPayload 转换为事件载荷。
 func (e MemberShutdownEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "force": e.Force}
 }
 
+// EventTypeName 返回成员取消事件类型名。
 func (e MemberCanceledEvent) EventTypeName() string { return TeamEventMemberCanceled }
+
+// ToPayload 转换为事件载荷。
 func (e MemberCanceledEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

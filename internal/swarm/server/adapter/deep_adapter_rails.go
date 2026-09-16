@@ -300,7 +300,7 @@ func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
 		Bool("include_tools", includeTools).
 		Bool("enable_image_multimodal", enableImageMultimodal).
 		Int("disabled_count", len(disabled)).
-		Msg("SkillUseRail create success")
+		Msg("SkillUseRail 创建成功")
 	return rail
 }
 
@@ -321,7 +321,7 @@ func (d *DeepAdapter) resolveSkillMode() string {
 	logger.Warn(logComponent).
 		Str("raw_skill_mode", rawSkillMode).
 		Str("fallback", skillrails.SkillModeAll).
-		Msg("invalid skill_mode, fallback to all")
+		Msg("无效的 skill_mode，回退到 all")
 	return skillrails.SkillModeAll
 }
 

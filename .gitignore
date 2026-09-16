@@ -25,3 +25,6 @@ vendor/
 
 # 日志文件
 *.log
+
+# 运行时 task 目录
+internal/agent_teams/tools/tasks/task_test-*/

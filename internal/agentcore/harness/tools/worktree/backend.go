@@ -125,7 +125,7 @@ func WithLifecycleRails(rails ...WorktreeLifecycleRail) ManagerOption {
 func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath string) (*WorktreeCreateResult, error) {
 	wtBranch := WorktreeBranchName(slug)
 
-	// Phase 1: 快速恢复 —— worktree 已存在
+	// 阶段 1: 快速恢复 —— worktree 已存在
 	existingHead, err := ReadWorktreeHeadSHA(targetPath)
 	if err == nil && existingHead != "" {
 		return &WorktreeCreateResult{
@@ -136,19 +136,19 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 		}, nil
 	}
 
-	// Phase 2: 解析基准分支
+	// 阶段 2: 解析基准分支
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return nil, fmt.Errorf("create worktree parent dir: %w", err)
 	}
 	baseBranch, baseSHA := g.resolveBase(ctx, repoRoot)
 
-	// Phase 3: 创建 worktree
+	// 阶段 3: 创建 worktree
 	sparse := g.config.SparsePaths
 	if err := WorktreeAdd(ctx, repoRoot, targetPath, wtBranch, baseBranch, len(sparse) > 0); err != nil {
 		return nil, err
 	}
 
-	// Phase 4: 稀疏检出（可选，失败回滚）
+	// 阶段 4: 稀疏检出（可选，失败回滚）
 	if len(sparse) > 0 {
 		if err := SparseCheckoutSet(ctx, targetPath, sparse); err != nil {
 			// 回滚：移除刚创建的 worktree

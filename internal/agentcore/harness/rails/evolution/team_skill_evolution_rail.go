@@ -1480,7 +1480,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 			r.emitRecordApprovalEvent(skillName, stagedReq)
 			logger.Info(logComponent).
 				Str("change_id", stagedReq.RequestID).
-				Msg("[TeamSkillEvolutionRail] signal consumed and records staged for approval")
+				Msg("[TeamSkillEvolutionRail] 信号已消费，记录已暂存待审批")
 			r.emitProgress("approval_required",
 				fmt.Sprintf("experience records for '%s' ready, awaiting approval", skillName),
 				WithSkillName(skillName),
@@ -1492,7 +1492,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 
 	// Python: def _on_auto_approved(staged_request)
 	onAutoApproved := func(stagedReq *experience.ExperienceApprovalRequest) error {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] signal consumed and records auto-approved")
+		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] 信号已消费，记录已自动批准")
 		if emitHostEvents {
 			requestID := ""
 			if stagedReq != nil {

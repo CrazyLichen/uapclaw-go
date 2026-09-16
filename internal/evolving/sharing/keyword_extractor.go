@@ -213,7 +213,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 	if e.llm == nil || e.model == "" {
 		logger.Debug(logComponent).
 			Str("method", "KeywordExtractor.ExtractQueryKeywords").
-			Msg("[KeywordExtractor] no LLM bound, skipping query keyword extraction")
+			Msg("[KeywordExtractor] 无 LLM 绑定，跳过查询关键词提取")
 		return QueryKeywords{
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),
@@ -224,7 +224,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 	logger.Info(logComponent).
 		Str("method", "KeywordExtractor.ExtractQueryKeywords").
 		Str("excerpt", excerpt).
-		Msg("[KeywordExtractor] query before keyword extraction")
+		Msg("[KeywordExtractor] 关键词提取前的查询")
 
 	hint := ""
 	if len(skillHint) > 0 {
@@ -253,7 +253,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 		logger.Warn(logComponent).
 			Str("method", "KeywordExtractor.ExtractQueryKeywords").
 			Err(err).
-			Msg("[KeywordExtractor] LLM call failed")
+			Msg("[KeywordExtractor] LLM 调用失败")
 		return QueryKeywords{
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),
@@ -265,7 +265,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 	if data == nil {
 		logger.Warn(logComponent).
 			Str("method", "KeywordExtractor.ExtractQueryKeywords").
-			Msg("[KeywordExtractor] LLM JSON parse failed")
+			Msg("[KeywordExtractor] LLM JSON 解析失败")
 		return QueryKeywords{
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),

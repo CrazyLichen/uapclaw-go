@@ -32,14 +32,20 @@ type ToolApprovalResultEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回计划审批事件类型名。
 func (e PlanApprovalEvent) EventTypeName() string { return TeamEventPlanApproval }
+
+// ToPayload 转换为事件载荷。
 func (e PlanApprovalEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "approved": e.Approved}
 }
 
+// EventTypeName 返回工具审批结果事件类型名。
 func (e ToolApprovalResultEvent) EventTypeName() string { return TeamEventToolApprovalResult }
+
+// ToPayload 转换为事件载荷。
 func (e ToolApprovalResultEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "tool_call_id": e.ToolCallID, "approved": e.Approved, "feedback": e.Feedback, "auto_confirm": e.AutoConfirm}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

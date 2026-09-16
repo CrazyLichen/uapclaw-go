@@ -590,7 +590,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	}
 	if resetCount > 0 {
 		logger.Info(tbLogComponent).Str("member_name", memberName).
-			Int("reset_count", resetCount).Msg("CancelMember: reset tasks from member")
+			Int("reset_count", resetCount).Msg("CancelMember: 已重置成员任务")
 	}
 	// 步骤 4: 发送取消消息（对齐 Python: success = send_message; if not success → return False）
 	cancelMsg, cancelI18nErr := atschema.T("team.cancel_request_content")

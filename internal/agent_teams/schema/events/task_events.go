@@ -102,49 +102,76 @@ type TaskListDrainedEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回任务创建事件类型名。
 func (e TaskCreatedEvent) EventTypeName() string { return TeamEventTaskCreated }
+
+// ToPayload 转换为事件载荷。
 func (e TaskCreatedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "status": e.Status}
 }
 
+// EventTypeName 返回计划提交事件类型名。
 func (e TaskPlanRequestEvent) EventTypeName() string { return TeamEventTaskPlanRequest }
+
+// ToPayload 转换为事件载荷。
 func (e TaskPlanRequestEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "status": e.Status, "plan_id": e.PlanID, "member_plan_md": e.MemberPlanMD, "tool_call_id": e.ToolCallID}
 }
 
+// EventTypeName 返回计划审批响应事件类型名。
 func (e TaskPlanResponseEvent) EventTypeName() string { return TeamEventTaskPlanResponse }
+
+// ToPayload 转换为事件载荷。
 func (e TaskPlanResponseEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "approved": e.Approved, "status": e.Status, "plan_id": e.PlanID, "feedback": e.Feedback, "tool_call_id": e.ToolCallID}
 }
 
+// EventTypeName 返回任务更新事件类型名。
 func (e TaskUpdatedEvent) EventTypeName() string { return TeamEventTaskUpdated }
+
+// ToPayload 转换为事件载荷。
 func (e TaskUpdatedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
 }
 
+// EventTypeName 返回任务认领事件类型名。
 func (e TaskClaimedEvent) EventTypeName() string { return TeamEventTaskClaimed }
+
+// ToPayload 转换为事件载荷。
 func (e TaskClaimedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
 }
 
+// EventTypeName 返回任务完成事件类型名。
 func (e TaskCompletedEvent) EventTypeName() string { return TeamEventTaskCompleted }
+
+// ToPayload 转换为事件载荷。
 func (e TaskCompletedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
 }
 
+// EventTypeName 返回任务取消事件类型名。
 func (e TaskCancelledEvent) EventTypeName() string { return TeamEventTaskCancelled }
+
+// ToPayload 转换为事件载荷。
 func (e TaskCancelledEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
 }
 
+// EventTypeName 返回任务解除阻塞事件类型名。
 func (e TaskUnblockedEvent) EventTypeName() string { return TeamEventTaskUnblocked }
+
+// ToPayload 转换为事件载荷。
 func (e TaskUnblockedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID}
 }
 
+// EventTypeName 返回任务列表清空事件类型名。
 func (e TaskListDrainedEvent) EventTypeName() string { return TeamEventTaskListDrained }
+
+// ToPayload 转换为事件载荷。
 func (e TaskListDrainedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_count": e.TaskCount}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

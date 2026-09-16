@@ -99,7 +99,7 @@ func (s *ShareStager) ScreenAndStage(
 				Str("record_id", record.ID).
 				Str("reason", dropReason).
 				Str("skill", skillName).
-				Msg("[ShareStager] share-QC dropped record")
+				Msg("[ShareStager] 共享 QC 丢弃记录")
 			continue
 		}
 		wrapped := s.wrap(record, keywords, summary, skillName)
@@ -120,12 +120,12 @@ func (s *ShareStager) ScreenAndStage(
 // Python: ShareStager._qc()
 func (s *ShareStager) qc(record checkpointing.EvolutionRecord, messages []map[string]any) string {
 	if record.Source == "execution_failure" && !messagesHasSuccessfulTool(messages) {
-		return "execution failure without successful follow-up tool call"
+		return "执行失败且无成功的后续工具调用"
 	}
 
 	score := record.Score
 	if score < s.qcScoreThreshold {
-		return fmt.Sprintf("score %.2f below threshold %.2f", score, s.qcScoreThreshold)
+		return fmt.Sprintf("分数 %.2f 低于阈值 %.2f", score, s.qcScoreThreshold)
 	}
 
 	return ""

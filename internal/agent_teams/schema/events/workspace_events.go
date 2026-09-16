@@ -56,24 +56,36 @@ type WorkspaceLockResponseEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回工件更新事件类型名。
 func (e WorkspaceArtifactEvent) EventTypeName() string { return TeamEventWorkspaceArtifactUpdated }
+
+// ToPayload 转换为事件载荷。
 func (e WorkspaceArtifactEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "artifact_path": e.ArtifactPath, "commit_sha": e.CommitSHA}
 }
 
+// EventTypeName 返回工作空间冲突事件类型名。
 func (e WorkspaceConflictEvent) EventTypeName() string { return TeamEventWorkspaceConflict }
+
+// ToPayload 转换为事件载荷。
 func (e WorkspaceConflictEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "file_path": e.FilePath, "conflicting_commit": e.ConflictingCommit}
 }
 
+// EventTypeName 返回锁请求事件类型名。
 func (e WorkspaceLockRequestEvent) EventTypeName() string { return TeamEventWorkspaceLockRequest }
+
+// ToPayload 转换为事件载荷。
 func (e WorkspaceLockRequestEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "action": e.Action, "file_path": e.FilePath, "holder_name": e.HolderName, "timeout_seconds": e.TimeoutSeconds}
 }
 
+// EventTypeName 返回锁响应事件类型名。
 func (e WorkspaceLockResponseEvent) EventTypeName() string { return TeamEventWorkspaceLockResponse }
+
+// ToPayload 转换为事件载荷。
 func (e WorkspaceLockResponseEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "file_path": e.FilePath, "granted": e.Granted, "holder": e.Holder}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

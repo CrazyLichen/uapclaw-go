@@ -32,14 +32,20 @@ type BroadcastEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回消息事件类型名。
 func (e MessageEvent) EventTypeName() string { return TeamEventMessage }
+
+// ToPayload 转换为事件载荷。
 func (e MessageEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "message_id": e.MessageID, "from_member_name": e.FromMemberName, "to_member_name": e.ToMemberName}
 }
 
+// EventTypeName 返回广播事件类型名。
 func (e BroadcastEvent) EventTypeName() string { return TeamEventBroadcast }
+
+// ToPayload 转换为事件载荷。
 func (e BroadcastEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "message_id": e.MessageID, "from_member_name": e.FromMemberName}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

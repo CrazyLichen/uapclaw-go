@@ -44,24 +44,36 @@ type TeamCompletedEvent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// EventTypeName 返回团队创建事件类型名。
 func (e TeamCreatedEvent) EventTypeName() string { return TeamEventCreated }
+
+// ToPayload 转换为事件载荷。
 func (e TeamCreatedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "display_name": e.DisplayName, "leader_member_name": e.LeaderMemberName, "created": e.Created}
 }
 
+// EventTypeName 返回团队清理事件类型名。
 func (e TeamCleanedEvent) EventTypeName() string { return TeamEventCleaned }
+
+// ToPayload 转换为事件载荷。
 func (e TeamCleanedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName}
 }
 
+// EventTypeName 返回团队待机事件类型名。
 func (e TeamStandbyEvent) EventTypeName() string { return TeamEventStandby }
+
+// ToPayload 转换为事件载荷。
 func (e TeamStandbyEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName}
 }
 
+// EventTypeName 返回团队完成事件类型名。
 func (e TeamCompletedEvent) EventTypeName() string { return TeamEventTeamCompleted }
+
+// ToPayload 转换为事件载荷。
 func (e TeamCompletedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_count": e.MemberCount, "task_count": e.TaskCount}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
