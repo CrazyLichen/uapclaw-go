@@ -154,23 +154,23 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 	return nil, fmt.Errorf("嵌入提供者未配置: provider=%s, model=%s", provider, model)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
-// EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base
+// EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base。
 func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
 	return a.base.EmbedQuery(ctx, text)
 }
 
-// EmbedDocuments baseEmbeddingAdapter 的 EmbedDocuments 实现，委托给 base
+// EmbedDocuments baseEmbeddingAdapter 的 EmbedDocuments 实现，委托给 base。
 func (a *baseEmbeddingAdapter) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
 	return a.base.EmbedDocuments(ctx, texts)
 }
 
-// ID 返回提供者标识
+// ID 返回提供者标识。
 func (a *baseEmbeddingAdapter) ID() string { return a.prov }
 
-// Model 返回提供者模型名
+// Model 返回提供者模型名。
 func (a *baseEmbeddingAdapter) Model() string { return a.model }
 
-// Dims 返回嵌入向量维度
+// Dims 返回嵌入向量维度。
 func (a *baseEmbeddingAdapter) Dims() int { return a.dims }

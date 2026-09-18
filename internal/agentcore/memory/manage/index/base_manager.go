@@ -70,22 +70,6 @@ type MemoryOptionConfig struct {
 // 使用 Functional Options 模式，对齐 Python 的 **kwargs 扩展机制。
 type MemoryOption func(*MemoryOptionConfig)
 
-// WithLLMModel 设置 LLM 模型（对齐 Python: llm 参数）。
-func WithLLMModel(model *llm.Model) MemoryOption {
-	return func(cfg *MemoryOptionConfig) {
-		cfg.llmModel = model
-	}
-}
-
-// ApplyMemoryOptions 应用选项列表到配置。
-func ApplyMemoryOptions(opts ...MemoryOption) *MemoryOptionConfig {
-	cfg := &MemoryOptionConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-	return cfg
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -114,6 +98,22 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithLLMModel 设置 LLM 模型（对齐 Python: llm 参数）。
+func WithLLMModel(model *llm.Model) MemoryOption {
+	return func(cfg *MemoryOptionConfig) {
+		cfg.llmModel = model
+	}
+}
+
+// ApplyMemoryOptions 应用选项列表到配置。
+func ApplyMemoryOptions(opts ...MemoryOption) *MemoryOptionConfig {
+	cfg := &MemoryOptionConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

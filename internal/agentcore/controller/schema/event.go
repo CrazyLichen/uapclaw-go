@@ -341,7 +341,7 @@ func (e *FollowUpEvent) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 Event 按具体类型序列化。
 func (es eventSlice) MarshalJSON() ([]byte, error) {

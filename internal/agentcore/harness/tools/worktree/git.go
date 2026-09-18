@@ -51,7 +51,7 @@ const gitCommandTimeout = 30 * time.Second
 func FindGitRoot(ctx context.Context, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", "--show-toplevel"}, cwd)
 	if !r.OK() {
-		return "", fmt.Errorf("not in a git repository: %s", r.Stderr)
+		return "", fmt.Errorf("不在 git 仓库中: %s", r.Stderr)
 	}
 	return r.Stdout, nil
 }
@@ -93,7 +93,7 @@ func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
 func GetCurrentBranch(ctx context.Context, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", "--abbrev-ref", "HEAD"}, cwd)
 	if !r.OK() || r.Stdout == "HEAD" {
-		return "", fmt.Errorf("detached HEAD or not in a repo")
+		return "", fmt.Errorf("HEAD 处于分离状态或不在仓库中")
 	}
 	return r.Stdout, nil
 }
@@ -127,7 +127,7 @@ func GetDefaultBranch(ctx context.Context, cwd string) string {
 func RevParse(ctx context.Context, ref, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", ref}, cwd)
 	if !r.OK() {
-		return "", fmt.Errorf("rev-parse %s failed: %s", ref, r.Stderr)
+		return "", fmt.Errorf("rev-parse %s 失败: %s", ref, r.Stderr)
 	}
 	return r.Stdout, nil
 }
@@ -206,7 +206,7 @@ func SparseCheckoutSet(ctx context.Context, wtPath string, paths []string) error
 func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
 	r := runGit(ctx, []string{"status", "--porcelain"}, cwd)
 	if !r.OK() {
-		return nil, fmt.Errorf("git status failed: %s", r.Stderr)
+		return nil, fmt.Errorf("git status 失败: %s", r.Stderr)
 	}
 	var result []string
 	for _, line := range strings.Split(r.Stdout, "\n") {
@@ -259,7 +259,7 @@ func ReadWorktreeHeadSHA(wtPath string) (string, error) {
 	}
 	content := strings.TrimSpace(string(data))
 	if !strings.HasPrefix(content, "gitdir:") {
-		return "", fmt.Errorf("invalid .git file format in %s", wtPath)
+		return "", fmt.Errorf("无效的 .git 文件格式: %s", wtPath)
 	}
 
 	gitDir := filepath.Clean(filepath.Join(wtPath, strings.TrimSpace(strings.TrimPrefix(content, "gitdir:"))))
@@ -275,7 +275,7 @@ func ReadWorktreeHeadSHA(wtPath string) (string, error) {
 		if len(head) == 40 {
 			return head, nil
 		}
-		return "", fmt.Errorf("invalid HEAD SHA length in %s", headFile)
+		return "", fmt.Errorf("无效的 HEAD SHA 长度: %s", headFile)
 	}
 
 	// 分支引用：解析到 SHA
@@ -303,15 +303,17 @@ func ReadWorktreeHeadSHA(wtPath string) (string, error) {
 	return strings.TrimSpace(string(sha)), nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // OK 检查 GitResult 是否成功。
 func (r GitResult) OK() bool { return r.ReturnCode == 0 }
 
 // Error 返回 GitError 的错误描述。
 func (e *GitError) Error() string {
-	return fmt.Sprintf("git %s failed (rc=%d): %s", e.Command, e.ReturnCode, e.Stderr)
+	return fmt.Sprintf("git %s 失败 (rc=%d): %s", e.Command, e.ReturnCode, e.Stderr)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runGit 核心 Git 命令执行器。
 // Python: _run_git(args, *, cwd, check)
@@ -362,7 +364,7 @@ func gitEnv() []string {
 func resolveGitDir(ctx context.Context, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", "--git-dir"}, cwd)
 	if !r.OK() {
-		return "", fmt.Errorf("not in a git repository")
+		return "", fmt.Errorf("不在 git 仓库中")
 	}
 	gitDir := r.Stdout
 	if !filepath.IsAbs(gitDir) {

@@ -91,7 +91,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 
 	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
-		return nil, fmt.Errorf("cannot create worktree: not in a git repository")
+		return nil, fmt.Errorf("无法创建 worktree: 不在 git 仓库中")
 	}
 
 	originalCwd := cwd.GetCwd(ctx)
@@ -101,7 +101,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 	start := time.Now()
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+		return nil, fmt.Errorf("创建 worktree 失败: %w", err)
 	}
 	durationMs := time.Since(start).Seconds() * 1000
 
@@ -165,26 +165,26 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 		if summary == nil {
 			return nil, exception.BuildError(exception.StatusToolWorktreeExitInvalid,
 				exception.WithParam("reason", fmt.Sprintf(
-					"Could not verify worktree state at %s. "+
-						"Refusing to remove without explicit confirmation. "+
-						"Set discard_changes=True to proceed, or use action='keep' "+
-						"to preserve the worktree.", session.WorktreePath)))
+					"无法确认 %s 处的 worktree 状态。"+
+						"拒绝在未显式确认的情况下删除。"+
+						"设置 discard_changes=True 继续，或使用 action='keep' "+
+						"保留 worktree。", session.WorktreePath)))
 		}
 		if summary.ChangedFiles > 0 || summary.Commits > 0 {
 			parts := []string{}
 			if summary.ChangedFiles > 0 {
-				parts = append(parts, fmt.Sprintf("%d uncommitted files", summary.ChangedFiles))
+				parts = append(parts, fmt.Sprintf("%d 个未提交文件", summary.ChangedFiles))
 			}
 			if summary.Commits > 0 {
-				parts = append(parts, fmt.Sprintf("%d commits on %s", summary.Commits, session.WorktreeBranch))
+				parts = append(parts, fmt.Sprintf("%d 个提交在 %s 上", summary.Commits, session.WorktreeBranch))
 			}
 			return nil, exception.BuildError(exception.StatusToolWorktreeExitInvalid,
 				exception.WithParam("reason", fmt.Sprintf(
-					"Worktree has %s. "+
-						"Removing will discard this work permanently. "+
-						"Confirm with the user, then set discard_changes=True to proceed, "+
-						"or use action='keep' to preserve the worktree.",
-					strings.Join(parts, " and "))))
+					"Worktree 存在 %s。"+
+						"删除将永久丢弃此工作。"+
+						"请与用户确认，然后设置 discard_changes=True 继续，"+
+						"或使用 action='keep' 保留 worktree。",
+					strings.Join(parts, " 和 "))))
 		}
 	}
 
@@ -239,7 +239,7 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 
 	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
-		return nil, fmt.Errorf("cannot create owner worktree: not in a git repository")
+		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
 	}
 
 	targetPath := m.resolveTargetPath(ctx, slug)
@@ -568,7 +568,7 @@ func simpleMatch(name, pattern string) bool {
 	return name == pattern
 }
 
-// copyFile 拷贝单个文件
+// copyFile 拷贝单个文件。
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {

@@ -566,9 +566,9 @@ func (r *BaseSecurityRail) runSecurityCheck(_ context.Context, _ *SecurityCheckC
 // applySecurityDecision 应用安全决策。
 //
 // Python: BaseSecurityRail.apply_security_decision(security_ctx, decision) (base_security_rail.py L302-340)
-// - Allow: return (continue)
-// - Alert: log + stream, then continue
-// - Reject: MODEL→forceFinish, BEFORE_TOOL_CALL→skipTool, AFTER_TOOL_CALL→forceFinish+toolResult
+// - Allow: 返回（继续执行）
+// - Alert: 记录日志 + 流推送，然后继续
+// - Reject: MODEL→forceFinish，BEFORE_TOOL_CALL→skipTool，AFTER_TOOL_CALL→forceFinish+toolResult
 // - Interrupt: MODEL→已由 runAndApply 转为 Reject; TOOL→raiseInterrupt
 func (r *BaseSecurityRail) applySecurityDecision(
 	_ context.Context,

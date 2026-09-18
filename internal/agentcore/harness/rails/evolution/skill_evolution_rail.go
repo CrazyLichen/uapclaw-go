@@ -584,11 +584,11 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 
 	logger.Info(logComponent).Int("messages", len(messages)).Msg("[SkillEvolutionRail] 已收集消息")
 
-	r.emitProgress("started", "starting regular skill evolution analysis for completed conversation")
+	r.emitProgress("started", "开始常规技能演进分析")
 
 	if len(messages) == 0 {
 		logger.Info(logComponent).Msg("[SkillEvolutionRail] 无消息，跳过")
-		r.emitProgress("cancelled", "no conversation messages available; cancelling regular skill evolution analysis")
+		r.emitProgress("cancelled", "无对话消息，取消常规技能演进分析")
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
 		return nil
 	}
@@ -598,7 +598,7 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	allSkillNames := r.evolutionStore.ListSkillNames(ctx)
 	skillNames := r.filterRegularSkills(ctx, allSkillNames)
 
-	r.emitProgress("detecting_signals", fmt.Sprintf("checking %d regular skill(s) for evolution signals (filtered from %d local skill(s))", len(skillNames), len(allSkillNames)))
+	r.emitProgress("detecting_signals", fmt.Sprintf("检查 %d 个常规技能的演进信号（从 %d 个本地技能中筛选）", len(skillNames), len(allSkillNames)))
 
 	// 信号检测
 	// Python: detector = SignalDetector(existing_skills=...).bind_llm(llm=..., model=..., language=...)
@@ -665,9 +665,9 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	skillGroups := r.attributeSignalsToSkills(signals)
 
 	if len(skillGroups) == 0 {
-		msg := "no skill usage of a regular skill or actionable evolution signal detected; cancelling regular skill evolution analysis"
+		msg := "未检测到常规技能使用或可操作的演进信号，取消常规技能演进分析"
 		if len(signals) > 0 {
-			msg = "detected evolution signals but no regular skill could be attributed; cancelling regular skill evolution analysis"
+			msg = "检测到演进信号但无法归属到常规技能，取消常规技能演进分析"
 		}
 		r.emitProgress("cancelled", msg)
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
@@ -896,7 +896,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 	// 恢复旧 body
 	oldBody, err := store.ReadFileText(ctx, bodyArchivePath)
 	if err != nil {
-		return false, fmt.Errorf("read archived body: %w", err)
+		return false, fmt.Errorf("读取归档 body 失败: %w", err)
 	}
 	if _, err := store.WriteSkillContent(ctx, skillName, oldBody); err != nil {
 		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("恢复 skill body 失败")
@@ -1293,15 +1293,15 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 
 	if len(sharedRecords) == 0 {
 		// 无共享记录：走正常演化流程
-		r.emitProgress("generating_updates", fmt.Sprintf("generating evolution records for '%s'", skillName), WithSkillName(skillName))
+		r.emitProgress("generating_updates", fmt.Sprintf("为 '%s' 生成演进记录", skillName), WithSkillName(skillName))
 		request, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", !r.autoSave, true)
 		if err != nil {
 			logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] evolve_skill 失败")
-			r.emitProgress("failed", fmt.Sprintf("evolution failed for '%s': %s", skillName, err.Error()), WithSkillName(skillName))
+			r.emitProgress("failed", fmt.Sprintf("'%s' 演进失败: %s", skillName, err.Error()), WithSkillName(skillName))
 			return
 		}
 		if request == nil {
-			r.emitProgress("completed", fmt.Sprintf("no evolution records generated for '%s'", skillName), WithSkillName(skillName))
+			r.emitProgress("completed", fmt.Sprintf("'%s' 未生成演进记录", skillName), WithSkillName(skillName))
 		}
 		return
 	}
@@ -1649,7 +1649,7 @@ func (r *SkillEvolutionRail) handleEvolutionFromSignals(
 	emitHostEvents bool,
 ) (*experience.ExperienceApprovalRequest, error) {
 	if emitHostEvents {
-		r.emitProgress("generating_updates", fmt.Sprintf("generating evolution records for '%s'", skillName), WithSkillName(skillName))
+		r.emitProgress("generating_updates", fmt.Sprintf("为 '%s' 生成演进记录", skillName), WithSkillName(skillName))
 	}
 
 	// Python: result = await self._stage_evolution_from_signals(skill_name=..., signals=..., messages=..., user_query=..., requires_approval=...)
@@ -1686,7 +1686,7 @@ func (r *SkillEvolutionRail) handleEvolutionFromSignals(
 	// 自动审批回调
 	if !requiresApproval {
 		if emitHostEvents {
-			r.emitProgress("auto_approved", fmt.Sprintf("experience records auto-saved to '%s'", skillName), WithSkillName(skillName), WithRequestID(request.RequestID))
+			r.emitProgress("auto_approved", fmt.Sprintf("'%s' 的经验记录已自动保存", skillName), WithSkillName(skillName), WithRequestID(request.RequestID))
 		}
 		// Sharing: auto-approve 后上传
 		r.sharingAfterAutoApproved(ctx, skillName, request)
@@ -1724,7 +1724,7 @@ func (r *SkillEvolutionRail) emitGeneratedRecords(cbc *agentinterfaces.AgentCall
 		return
 	}
 	r.EmitHostEvent(event)
-	r.emitProgress("approval_required", fmt.Sprintf("experience records for '%s' ready, awaiting approval", skillName), WithSkillName(skillName))
+	r.emitProgress("approval_required", fmt.Sprintf("'%s' 的经验记录已就绪，等待审批", skillName), WithSkillName(skillName))
 	if approvalRequest != nil {
 		logger.Info(logComponent).
 			Str("request_id", approvalRequest.RequestID).

@@ -251,7 +251,7 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 	return nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)
@@ -270,12 +270,18 @@ func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *Worktree
 	}
 	return nil
 }
+
+// BeforeWorktreeCreate AutoSetupRail 的空实现，不干预 slug。
 func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
 	return "", nil
 }
+
+// BeforeWorktreeExit AutoSetupRail 的空实现，不干预 action。
 func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
 	return "", nil
 }
+
+// AfterWorktreeExit AutoSetupRail 的空实现。
 func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
@@ -296,15 +302,23 @@ func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *Workt
 	}
 	return "", nil
 }
+
+// BeforeWorktreeCreate DiffSummaryRail 的空实现，不干预 slug。
 func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
 	return "", nil
 }
+
+// AfterWorktreeCreate DiffSummaryRail 的空实现。
 func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error {
 	return nil
 }
+
+// AfterWorktreeExit DiffSummaryRail 的空实现。
 func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // detectSetup 检测项目类型并返回 setup 命令。
 // Python: AutoSetupRail._detect_setup(path)

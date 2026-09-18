@@ -118,7 +118,7 @@ func TestEnterWorktreeTool_Invoke_Enter失败(t *testing.T) {
 type failingBackend struct{}
 
 func (f *failingBackend) Create(_ context.Context, _, _, _ string) (*WorktreeCreateResult, error) {
-	return nil, fmt.Errorf("simulated failure")
+	return nil, fmt.Errorf("模拟失败")
 }
 func (f *failingBackend) Remove(_ context.Context, _, _ string) bool { return false }
 func (f *failingBackend) Exists(_ context.Context, _ string) bool    { return false }

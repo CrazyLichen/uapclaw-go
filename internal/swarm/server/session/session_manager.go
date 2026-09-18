@@ -238,7 +238,7 @@ func (sm *SessionManager) HasActiveTasks() bool {
 	return false
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // Len 实现 heap.Interface。
 func (h priorityHeap) Len() int { return len(h) }
@@ -263,6 +263,8 @@ func (h *priorityHeap) Pop() any {
 	*h = old[:n-1]
 	return item
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // processSessionQueue 处理 session 任务队列（先进后出执行，新任务优先）。
 func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID string, sigCh chan struct{}) {

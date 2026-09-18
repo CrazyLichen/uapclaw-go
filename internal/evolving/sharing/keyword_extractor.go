@@ -42,21 +42,6 @@ type KeywordExtractor struct {
 
 // logComponent 声明在 interface.go 中，包内共享
 
-// QUERY_KEYWORDS_LLM_POLICY 关键词提取 LLM 调用策略。
-//
-// Python: QUERY_KEYWORDS_LLM_POLICY = LLMInvokePolicy(
-//
-//	attempt_timeout_secs=1500,
-//	total_budget_secs=4000,
-//	max_attempts=5,
-//
-// )
-var QUERY_KEYWORDS_LLM_POLICY = llm_resilience.LLMInvokePolicy{
-	AttemptTimeoutSecs: 1500,
-	TotalBudgetSecs:    4000,
-	MaxAttempts:        5,
-}
-
 // queryKeywordsPromptCN 中文检索关键词提取提示词。
 //
 // 一比一复刻 Python: _QUERY_KEYWORDS_PROMPT_CN
@@ -103,6 +88,23 @@ Extract keywords useful for *cross-user experience retrieval*.
   "intent": "..."
 }}`
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// QUERY_KEYWORDS_LLM_POLICY 关键词提取 LLM 调用策略。
+//
+// Python: QUERY_KEYWORDS_LLM_POLICY = LLMInvokePolicy(
+//
+//	attempt_timeout_secs=1500,
+//	total_budget_secs=4000,
+//	max_attempts=5,
+//
+// )
+var QUERY_KEYWORDS_LLM_POLICY = llm_resilience.LLMInvokePolicy{
+	AttemptTimeoutSecs: 1500,
+	TotalBudgetSecs:    4000,
+	MaxAttempts:        5,
+}
+
 // prompts 语言→提示词模板映射。
 //
 // Python: _PROMPTS = {"cn": ..., "en": ...}
@@ -110,8 +112,6 @@ var prompts = map[string]string{
 	"cn": queryKeywordsPromptCN,
 	"en": queryKeywordsPromptEN,
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // extractQueryJSONRe 提取 JSON 对象的正则表达式。
 var extractQueryJSONRe = regexp.MustCompile(`\{[\s\S]*\}`)

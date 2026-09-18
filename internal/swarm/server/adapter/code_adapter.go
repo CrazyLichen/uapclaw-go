@@ -1191,6 +1191,8 @@ func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
 	return rail
 }
 
+// ──────────────────────────── 导出函数（续）────────────────────────────
+
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
 // Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
 func (c *CodeAdapter) MergeMemberMcpConfigs(agent *harness.DeepAgent, configBase map[string]any) int {

@@ -55,7 +55,7 @@ type UpdateColumnTypeOperation struct {
 // TypeName 返回操作类型名 "UpdateColumnTypeOperation"。
 func (op *UpdateColumnTypeOperation) TypeName() string { return "UpdateColumnTypeOperation" }
 
-// ==================== 向量操作 ====================
+// ──────────────────────────── 向量操作 ────────────────────────────
 
 // AddScalarFieldOperation 添加向量标量字段操作。
 // Python: openjiuwen/core/memory/migration/operation/operations.py (AddScalarFieldOperation)
@@ -138,7 +138,7 @@ func NewUpdateEmbeddingDimensionOperation(schemaVersion int, dataType, fieldName
 	}
 }
 
-// ==================== KV 操作 ====================
+// ──────────────────────────── KV 操作 ────────────────────────────
 
 // UpdateKVCallable KV 更新回调函数类型。
 // Python: UpdateKVCallable = Callable[[BaseKVStore], Awaitable[None]]
@@ -155,7 +155,7 @@ type UpdateKVOperation struct {
 // TypeName 返回操作类型名 "UpdateKVOperation"。
 func (op *UpdateKVOperation) TypeName() string { return "UpdateKVOperation" }
 
-// ==================== 消息操作 ====================
+// ──────────────────────────── 消息操作 ────────────────────────────
 
 // MessageUpdateCallable 消息更新回调函数类型。
 // Python: MessageUpdateCallable = Callable[[BaseMessageStore], Awaitable[None]]
@@ -172,7 +172,7 @@ type UpdateMessageOperation struct {
 // TypeName 返回操作类型名 "UpdateMessageOperation"。
 func (op *UpdateMessageOperation) TypeName() string { return "UpdateMessageOperation" }
 
-// ==================== 索引操作 ====================
+// ──────────────────────────── 索引操作 ────────────────────────────
 
 // RenameMemoryDocFieldOperation 索引文档字段重命名操作。
 // Python: openjiuwen/core/memory/migration/operation/operations.py (RenameMemoryDocFieldOperation)

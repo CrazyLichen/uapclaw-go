@@ -31,14 +31,14 @@ var validSlugSegment = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 // 拒绝路径遍历、绝对路径、shell 元字符和超长名称。
 func ValidateSlug(slug string) error {
 	if len(slug) > MaxSlugLength {
-		return fmt.Errorf("invalid worktree name: must be %d characters or fewer (got %d)", MaxSlugLength, len(slug))
+		return fmt.Errorf("无效的 worktree 名称：长度不得超过 %d 个字符（当前 %d）", MaxSlugLength, len(slug))
 	}
 	for _, segment := range strings.Split(slug, "/") {
 		if segment == "." || segment == ".." {
-			return fmt.Errorf("invalid worktree name %q: must not contain \".\" or \"..\" path segments", slug)
+			return fmt.Errorf("无效的 worktree 名称 %q：不得包含 \".\" 或 \"..\" 路径段", slug)
 		}
 		if !validSlugSegment.MatchString(segment) {
-			return fmt.Errorf("invalid worktree name %q: each segment must be non-empty and contain only letters, digits, dots, underscores, and dashes", slug)
+			return fmt.Errorf("无效的 worktree 名称 %q：每段须非空且仅含字母、数字、点、下划线和连字符", slug)
 		}
 	}
 	return nil

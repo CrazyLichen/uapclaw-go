@@ -74,7 +74,7 @@ func NewMessagerTransportConfig() MessagerTransportConfig {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // BroadcastTopic 返回广播主题名称，格式为 "team:{team_name}:broadcast"。
 func (c MessagerTransportConfig) BroadcastTopic() string {

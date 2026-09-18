@@ -96,12 +96,12 @@ func SetDefaultWorktreeName(ctx context.Context, name string) {
 func RequireCurrentSession(ctx context.Context) (*WorktreeSession, error) {
 	session := GetCurrentSession(ctx)
 	if session == nil {
-		return nil, fmt.Errorf("not in a worktree session")
+		return nil, fmt.Errorf("不在 worktree 会话中")
 	}
 	return session, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // GetCurrentSession 获取当前 worktree 会话。
 func (s *WorktreeSessionState) GetCurrentSession() *WorktreeSession {

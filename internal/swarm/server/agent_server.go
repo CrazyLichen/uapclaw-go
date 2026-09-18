@@ -48,8 +48,6 @@ type AgentServer struct {
 	cancel context.CancelFunc
 	// stopCh run() 退出时关闭的信号通道
 	stopCh chan struct{}
-	// runErr run() 的返回错误
-	runErr error
 	// agentFactoryOverride Agent 创建工厂覆盖（测试注入 mock，避免 createAgent 触发真实 LLM 初始化）
 	agentFactoryOverride runtime.AgentFactory
 }
@@ -114,13 +112,7 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	adapter.SetGlobalSendPushFunc(s.SendPush)
 
 	ctx, s.cancel = context.WithCancel(ctx)
-	go func() {
-		err := s.run(ctx)
-		s.runningMu.Lock()
-		s.runErr = err
-		s.running = false
-		s.runningMu.Unlock()
-	}()
+	go s.run(ctx)
 
 	return nil
 }
@@ -158,10 +150,7 @@ func (s *AgentServer) Stop() error {
 	<-s.stopCh
 
 	logger.Info(logComponent).Msg("AgentServer 已停止")
-	s.runningMu.RLock()
-	err := s.runErr
-	s.runningMu.RUnlock()
-	return err
+	return nil
 }
 
 // AgentManager 返回 AgentManager 实例，供 handler 使用。
@@ -237,8 +226,15 @@ func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
 
 // run 执行 AgentServer 主循环（阻塞直到 ctx 取消）。
 // 按 Python AgentWebSocketServer.start() + app_agentserver.py _run() 顺序初始化。
-func (s *AgentServer) run(ctx context.Context) error {
-	defer close(s.stopCh)
+func (s *AgentServer) run(ctx context.Context) {
+	// 先设置 runErr 和 running=false，再 close(stopCh)，
+	// 保证 Stop() 中 <-s.stopCh 返回时 running 已为 false、runErr 已就绪。
+	defer func() {
+		s.runningMu.Lock()
+		s.running = false
+		s.runningMu.Unlock()
+		close(s.stopCh)
+	}()
 
 	// 设置单例
 	agentServerOnce.Do(func() {
@@ -283,8 +279,6 @@ func (s *AgentServer) run(ctx context.Context) error {
 
 	// 7. 进入消费循环（阻塞直到 ctx 取消）
 	s.startConsumeLoop(ctx)
-
-	return nil
 }
 
 // startConsumeLoop 从传输通道持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。

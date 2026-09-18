@@ -422,8 +422,8 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 		cfg.executionStatus, cfg.mode, prompt, modelRefJSON)
 	if !ok {
 		logger.Warn(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
-			Msg("SpawnMember: DB 拒绝创建")
-		return atschema.NewMemberOpResultFail("database rejected create_member for " + memberName + " in team " + tb.teamName)
+			Msg("SpawnMember: 数据库拒绝创建")
+		return atschema.NewMemberOpResultFail("数据库拒绝创建成员 " + memberName + " 在团队 " + tb.teamName)
 	}
 	// 步骤 4: HITT 缓存写透
 	if role == string(atschema.TeamRoleHumanAgent) {
@@ -583,7 +583,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	for _, t := range tasks {
 		if err := tb.taskManager.Reset(ctx, t.TaskID); err != nil {
 			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Err(err).
-				Msg("CancelMember: reset task failed")
+				Msg("CancelMember: 重置任务失败")
 		} else {
 			resetCount++
 		}
@@ -807,7 +807,7 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.MemberOpResult {
 	unblocked, err := tb.taskManager.Cancel(ctx, taskID)
 	if err != nil {
-		return atschema.NewMemberOpResultFail("cancel_task failed: " + err.Error())
+		return atschema.NewMemberOpResultFail("取消任务失败: " + err.Error())
 	}
 	// 通知 assignee（如果有）
 	task, _ := tb.taskManager.Get(ctx, taskID)
@@ -837,19 +837,17 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []string) atschema.MemberOpResult {
 	cancelled, err := tb.taskManager.CancelAllTasks(ctx, skipAssignees)
 	if err != nil {
-		return atschema.NewMemberOpResultFail("cancel_all_tasks failed: " + err.Error())
+		return atschema.NewMemberOpResultFail("批量取消任务失败: " + err.Error())
 	}
 	// 广播取消消息（对齐 Python: message_manager.broadcast_message）
 	if len(cancelled) > 0 {
-		content := fmt.Sprintf("All tasks (%d) have been cancelled by team leader.", len(cancelled))
+		content := fmt.Sprintf("所有任务（%d 个）已被团队负责人取消。", len(cancelled))
 		_, _ = tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
 	}
 	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CancelAllTasks: 所有任务已取消")
 	return atschema.NewMemberOpResultSuccess()
 }
 
-// ApprovePlan 审批计划。
-// Python: TeamBackend.approve_plan(task_id)
 // ApprovePlan 审批计划。
 // Python: TeamBackend.approve_plan(plan_id, approved=True, feedback=None)
 func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...ApprovePlanOption) atschema.MemberOpResult {
@@ -891,7 +889,7 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 	// 执行审批
 	err = tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
 	if err != nil {
-		return atschema.NewMemberOpResultFail("approve_plan failed: " + err.Error())
+		return atschema.NewMemberOpResultFail("审批计划失败: " + err.Error())
 	}
 	tb.publishEvent(ctx, events.TaskPlanResponseEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},

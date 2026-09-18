@@ -79,7 +79,7 @@ func UnmarshalDataFrames(data []byte) ([]DataFrame, error) {
 	return []DataFrame(ds), nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 DataFrame 按具体类型序列化。
 func (ds dataFrameSlice) MarshalJSON() ([]byte, error) {
@@ -135,6 +135,8 @@ func (ds *dataFrameSlice) UnmarshalJSON(data []byte) error {
 	*ds = result
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hasKey 检查 JSON 探测结果中是否包含指定字段。
 func hasKey(probe map[string]json.RawMessage, key string) bool {

@@ -162,16 +162,16 @@ func (r *RuntimePromptRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 		return nil
 	}
 
-	// ── time section ──
+	// ── time 节 ──
 	r.injectTimeSection(builder)
 
 	// ── runtime section（读 YAML fallback setter）──
 	r.injectRuntimeSection(builder)
 
-	// ── language_output section ──
+	// ── language_output 节 ──
 	r.injectLanguageOutputSection(builder)
 
-	// ── env section ──
+	// ── env 节 ──
 	r.injectEnvSection(builder)
 
 	// ── git_status section（条件）──

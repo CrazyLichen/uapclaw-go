@@ -361,7 +361,7 @@ func TestExit_Remove有变更拒绝(t *testing.T) {
 	if err == nil {
 		t.Error("有变更时 Exit(remove, discard=false) 应返回错误")
 	}
-	if !strings.Contains(err.Error(), "WORKTREE_EXIT_INVALID") && !strings.Contains(err.Error(), "uncommitted") {
+	if !strings.Contains(err.Error(), "WORKTREE_EXIT_INVALID") && !strings.Contains(err.Error(), "未提交文件") {
 		t.Errorf("错误应包含变更信息: %v", err)
 	}
 }

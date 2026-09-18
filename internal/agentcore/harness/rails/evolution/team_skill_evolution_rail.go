@@ -592,7 +592,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 			logger.Error(logComponent).
 				Any("panic", rec).
 				Msg("[TeamSkillEvolutionRail] run_evolution 全局异常捕获")
-			r.emitProgress("failed", fmt.Sprintf("team skill evolution failed with unexpected error: %v", rec))
+			r.emitProgress("failed", fmt.Sprintf("团队技能演进因意外错误失败: %v", rec))
 		}
 	}()
 
@@ -603,7 +603,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	}()
 
 	// Python: emit_progress("started", "team tasks completed; starting team skill evolution analysis")
-	r.emitProgress("started", "team tasks completed; starting team skill evolution analysis")
+	r.emitProgress("started", "团队任务已完成，开始团队技能演进分析")
 
 	// Python: 从 snapshot 或 ctx 获取数据
 	var messages []map[string]any
@@ -629,7 +629,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	usedSkill := r.detectUsedTeamSkill(ctx, traj)
 	if usedSkill == "" {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] 未检测到现有技能，跳过")
-		r.emitProgress("cancelled", "no skill usage of a team/swarm skill detected in trajectory; cancelling team skill evolution analysis")
+		r.emitProgress("cancelled", "轨迹中未检测到团队/集群技能使用，取消团队技能演进分析")
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
 	}
@@ -661,7 +661,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 
 	if len(signals) == 0 {
 		logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] 未检测到信号")
-		r.emitProgress("cancelled", fmt.Sprintf("no actionable evolution signals detected for '%s'; cancelling team skill evolution analysis", usedSkill), WithSkillName(usedSkill))
+		r.emitProgress("cancelled", fmt.Sprintf("未检测到 '%s' 的可操作演进信号，取消团队技能演进分析", usedSkill), WithSkillName(usedSkill))
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
 	}
@@ -674,7 +674,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		}
 	}
 	userIntentSignals := len(signals) - trajectoryIssueSignals
-	r.emitProgress("detecting_signals", fmt.Sprintf("evolution signals detected: %d trajectory issues, %d user intents", trajectoryIssueSignals, userIntentSignals))
+	r.emitProgress("detecting_signals", fmt.Sprintf("检测到演进信号: %d 个轨迹问题, %d 个用户意图", trajectoryIssueSignals, userIntentSignals))
 
 	// Python: request = await self._handle_evolution_from_signals(...)
 	userQuery := ""
@@ -690,13 +690,13 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	}
 
 	if request == nil {
-		r.emitProgress("completed", "no evolution records generated")
+		r.emitProgress("completed", "未生成演进记录")
 	} else {
 		requestID := ""
 		if request.RequestID != "" {
 			requestID = request.RequestID
 		}
-		r.emitProgress("completed", fmt.Sprintf("evolution request ready for '%s'", usedSkill), WithSkillName(usedSkill), WithRequestID(requestID))
+		r.emitProgress("completed", fmt.Sprintf("'%s' 的演进请求已就绪", usedSkill), WithSkillName(usedSkill), WithRequestID(requestID))
 	}
 
 	// Python: await self._evaluate_presented_entries(presented_entries)
@@ -1157,7 +1157,7 @@ func (r *TeamSkillEvolutionRail) aggregateTeamTrajectory(traj *trajectory.Trajec
 			memberCount = mc
 		}
 	}
-	r.emitProgress("detecting_signals", fmt.Sprintf("aggregated %d members, %d collaborative steps", memberCount, len(teamTraj.Steps)))
+	r.emitProgress("detecting_signals", fmt.Sprintf("聚合 %d 个成员，%d 个协作步骤", memberCount, len(teamTraj.Steps)))
 	return teamTraj
 }
 
@@ -1412,7 +1412,7 @@ func (r *TeamSkillEvolutionRail) emitRecordApprovalEvent(skillName string, reque
 			}
 		}
 		r.emitProgress("approval_required",
-			fmt.Sprintf("TEAM SKILL EVOLUTION PROPOSED: '%s'\n  sections: %s\n  record_count: %d\n  change_id: %s\n  ACTION: an approval dialog should pop up; if not visible, check approval panel or rerun task",
+			fmt.Sprintf("团队技能演进提议: '%s'\n  章节: %s\n  记录数: %d\n  变更 ID: %s\n  操作: 审批对话框应已弹出；如不可见，请检查审批面板或重新运行任务",
 				skillName,
 				strings.Join(sections, ", "),
 				len(pending.Payload),
@@ -1482,7 +1482,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 				Str("change_id", stagedReq.RequestID).
 				Msg("[TeamSkillEvolutionRail] 信号已消费，记录已暂存待审批")
 			r.emitProgress("approval_required",
-				fmt.Sprintf("experience records for '%s' ready, awaiting approval", skillName),
+				fmt.Sprintf("'%s' 的经验记录已就绪，等待审批", skillName),
 				WithSkillName(skillName),
 				WithRequestID(stagedReq.RequestID),
 			)
@@ -1499,7 +1499,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 				requestID = stagedReq.RequestID
 			}
 			r.emitProgress("auto_approved",
-				fmt.Sprintf("experience records auto-saved to '%s'", skillName),
+				fmt.Sprintf("'%s' 的经验记录已自动保存", skillName),
 				WithSkillName(skillName),
 				WithRequestID(requestID),
 			)
@@ -1531,7 +1531,7 @@ func (r *TeamSkillEvolutionRail) stageEvolutionFromSignals(
 	userQuery string,
 	messages []map[string]any,
 ) (*experience.OnlineEvolutionResult, error) {
-	r.emitProgress("staging", fmt.Sprintf("staging evolution request for '%s'", skillName), WithSkillName(skillName))
+	r.emitProgress("staging", fmt.Sprintf("暂存 '%s' 的演进请求", skillName), WithSkillName(skillName))
 
 	// 转换信号类型
 	signalValues := make([]signal.EvolutionSignal, len(signals))
@@ -1681,7 +1681,7 @@ func (r *TeamSkillEvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]s
 
 	message := outcome["message"]
 	if message == "" {
-		message = "background evolution completed with unknown outcome"
+		message = "后台演进以未知结果完成"
 	}
 
 	r.EmitHostEvent(&stream.OutputSchema{

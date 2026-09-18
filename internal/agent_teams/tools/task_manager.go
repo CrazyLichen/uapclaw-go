@@ -134,8 +134,8 @@ type TeamTaskManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponentChannel 日志组件标识
-const logComponentChannel = logger.ComponentChannel
+// taskLogComponent 日志组件标识（包内 logComponent 已被 message_manager 使用）
+const taskLogComponent = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -270,7 +270,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 	for _, spec := range specs {
 		// Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
-			logger.Warn(logComponentChannel).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
+			logger.Warn(taskLogComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
 			results = append(results, &TaskCreateResult{Reason: "invalid spec: missing title or content"})
 			continue
 		}
@@ -280,7 +280,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 		)
 		if err != nil {
 			// Python: if not result.ok → warning + skip
-			logger.Warn(logComponentChannel).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
+			logger.Warn(taskLogComponent).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
 			results = append(results, &TaskCreateResult{Reason: err.Error()})
 			continue
 		}
@@ -293,7 +293,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 			created++
 		}
 	}
-	logger.Info(logComponentChannel).Int("count", created).Int("total", len(results)).Msg("批量创建完成")
+	logger.Info(taskLogComponent).Int("count", created).Int("total", len(results)).Msg("批量创建完成")
 	return results, nil
 }
 
@@ -483,7 +483,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 					UpdatedAt:   nowISO,
 				}
 				if err := tm.writePlanIndex(planRecord); err != nil {
-					logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
+					logger.Warn(taskLogComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
 				}
 			}
 		}
@@ -925,7 +925,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	}
 	leaderName := tm.resolveLeaderMemberName()
 	if leaderName == "" {
-		logger.Warn(logComponentChannel).
+		logger.Warn(taskLogComponent).
 			Str("team", tm.teamName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
@@ -950,7 +950,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	}
 	msg.Payload["content"] = content
 	if err := tm.messager.Send(ctx, leaderName, msg); err != nil {
-		logger.Warn(logComponentChannel).
+		logger.Warn(taskLogComponent).
 			Str("leader", leaderName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
@@ -1004,7 +1004,7 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event events.Ty
 	msg := events.EventMessageFromEvent(event)
 	topicID := events.TeamTopicTask.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
-		logger.Error(logComponent).Err(err).
+		logger.Error(taskLogComponent).Err(err).
 			Str("event_type", event.EventTypeName()).
 			Msg("发布任务事件失败")
 	}

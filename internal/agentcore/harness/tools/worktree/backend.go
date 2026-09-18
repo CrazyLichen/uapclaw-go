@@ -99,7 +99,7 @@ func CreateBackend(name string, config WorktreeConfig) (WorktreeBackend, error) 
 	defer backendRegistry.RUnlock()
 	factory, ok := backendRegistry.m[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown worktree backend '%s'. Available: %v", name, availableBackends())
+		return nil, fmt.Errorf("未知的 worktree 后端 '%s'，可用: %v", name, availableBackends())
 	}
 	return factory(config), nil
 }
@@ -138,7 +138,7 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 
 	// 阶段 2: 解析基准分支
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create worktree parent dir: %w", err)
+		return nil, fmt.Errorf("创建 worktree 父目录失败: %w", err)
 	}
 	baseBranch, baseSHA := g.resolveBase(ctx, repoRoot)
 
@@ -153,7 +153,7 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 		if err := SparseCheckoutSet(ctx, targetPath, sparse); err != nil {
 			// 回滚：移除刚创建的 worktree
 			_ = WorktreeRemove(ctx, targetPath, repoRoot, true)
-			return nil, fmt.Errorf("failed sparse checkout, worktree cleaned up: %w", err)
+			return nil, fmt.Errorf("稀疏检出失败，worktree 已清理: %w", err)
 		}
 	}
 

@@ -217,7 +217,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	return railsList
 }
 
-// ──────────────────────────── 已实现 Rail Builder ────────────────────────────
+// ──────────────────────────── 已实现 Rail 构建器 ────────────────────────────
 
 // buildHeartbeatRail 构建心跳护栏。
 // Python: _build_heartbeat_rail() (line 1632-1648)
@@ -257,7 +257,7 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	return nil
 }
 
-// ──────────────────────────── 未实现 Rail Builder（⤵️ 10.6.3-10） ────────────────────────────
+// ──────────────────────────── 未实现 Rail 构建器（⤵️ 10.6.3-10） ────────────────────────────
 
 // buildSkillRail 构建技能使用护栏。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
@@ -836,7 +836,7 @@ func (d *DeepAdapter) updatePromptForMode(mode string) {
 		Msg("updatePromptForMode 完成")
 }
 
-// ──────────────────────────── ToolPermissionHost 回调方法 ────────────────────────────
+// ──────────────────────────── 工具权限宿主回调方法 ────────────────────────────
 
 // getPermissionsSnapshot 返回当前权限配置快照。
 // Python: get_permissions_snapshot = lambda: get_config().get("permissions", {}) (interrupt_helpers.py L215)
