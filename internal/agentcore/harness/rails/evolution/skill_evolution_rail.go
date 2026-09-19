@@ -1109,6 +1109,18 @@ func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.Experience
 		}
 	}()
 
+	// Python: backend_name = str(config.get("backend", "local_file") or "local_file").lower()
+	// Python: if backend_name != "local_file": logger.warning(...)
+	backendName := "local_file"
+	if v, ok := config["backend"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			backendName = strings.ToLower(s)
+		}
+	}
+	if backendName != "local_file" {
+		logger.Warn(logComponent).Str("backend", backendName).Msg("[SkillEvolutionRail] 不支持的后端，回退到 local_file")
+	}
+
 	hubPath := os.Getenv("EVOLUTION_SHARING_HUB_PATH")
 	if hubPath == "" {
 		// Python: hub_path = os.getenv("EVOLUTION_SHARING_HUB_PATH") or str(config.get("hub_path") or "").strip() or None
