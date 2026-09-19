@@ -412,15 +412,26 @@ func TestOnApprove_OnReject_兼容别名(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// ──────────────────────────── S-05: isErrorNonePattern ────────────────────────────
+// ──────────────────────────── S-05: hasRealError（替换 isErrorNonePattern）────────────────────────────
 
-func TestIsErrorNonePattern(t *testing.T) {
-	assert.True(t, isErrorNonePattern("error = None"))
-	assert.True(t, isErrorNonePattern("error=None"))
-	assert.True(t, isErrorNonePattern("error  =  None"))
-	assert.True(t, isErrorNonePattern("ERROR = None"))
-	assert.False(t, isErrorNonePattern("Error: connection refused"))
-	assert.False(t, isErrorNonePattern("failed to connect"))
+func TestHasRealError(t *testing.T) {
+	// 只有 error = None → 无真实错误
+	assert.False(t, hasRealError("error = None"))
+	assert.False(t, hasRealError("error=None"))
+	assert.False(t, hasRealError("ERROR = None"))
+
+	// 真实错误 → 有真实错误
+	assert.True(t, hasRealError("Error: connection refused"))
+	assert.True(t, hasRealError("error = timeout"))
+
+	// 混合场景：error = None 和真实 error 共存（对齐 Python 负向前瞻）
+	assert.True(t, hasRealError("error = None\nError: timeout"))
+
+	// 无 error 关键词
+	assert.False(t, hasRealError("everything is fine"))
+
+	// 空字符串
+	assert.False(t, hasRealError(""))
 }
 
 // ──────────────────────────── S-05/T-08: extractConversationExcerpt 增强 ────────────────────────────
@@ -432,6 +443,15 @@ func TestExtractConversationExcerpt_排除ErrorNone(t *testing.T) {
 	excerpt := extractConversationExcerpt(messages)
 	// error = None 不应标记为失败
 	assert.NotContains(t, excerpt, "FAILED TOOL EXECUTIONS")
+}
+
+func TestExtractConversationExcerpt_混合ErrorNone与真实错误(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "tool", "content": "error = None\nException: connection refused", "name": "run_tool"},
+	}
+	excerpt := extractConversationExcerpt(messages)
+	// 混合场景：error=None + Exception 应标记为失败（对齐 Python 负向前瞻行为）
+	assert.Contains(t, excerpt, "FAILED TOOL EXECUTIONS")
 }
 
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {

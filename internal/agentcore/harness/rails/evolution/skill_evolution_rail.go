@@ -149,6 +149,15 @@ const (
 // Python: SkillEvolutionRail._EXPERIENCE_RECORD_HEADING_RE
 var experienceRecordHeadingRE = regexp.MustCompile(`#+\s*\[([A-Za-z0-9_-]+)\]`)
 
+// failureRe 匹配 "error" 关键词，对齐 Python _FAILURE_KEYWORDS 中的 error 部分。
+// 其他失败关键词用 otherFailureRe 匹配（它们不需要负向前瞻）。
+// 对齐 Python: _FAILURE_KEYWORDS = re.compile(r"error(?!\s*=\s*None)|exception|...", re.IGNORECASE)
+var (
+	failureRe         = regexp.MustCompile(`(?i)\berror\b`)
+	otherFailureRe    = regexp.MustCompile(`(?i)\bexception\b|\btraceback\b|\bfailed\b|\bfailure\b|\btimeout\b|\btimed out\b|\berrno\b|\bconnectionerror\b|\boserror\b|\bvalueerror\b|\btypeerror\b|错误|异常|失败|超时|\bno such file\b|\bpermission denied\b|\baccess denied\b|\bcommand not found\b|\bnot recognized\b|\bmodule not found\b|\beconnrefused\b|\beconnreset\b|\benoent\b|\benotfound\b|\bnpm err!`)
+	errorNoneSuffixRe = regexp.MustCompile(`^\s*=\s*[Nn]one\b`)
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillEvolutionRail 创建 SkillEvolutionRail 实例。
@@ -2053,9 +2062,9 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 		mc = maxChars[0]
 	}
 
-	// Go regexp 不支持 (?!...) 负向前瞻，先匹配 "error" 然后手动排除 "error = None" / "error=None"
-	// 对齐 Python: _FAILURE_KEYWORDS
-	failureRe := regexp.MustCompile(`(?i)error|exception|traceback|failed|failure|timeout|timed out|errno|connectionerror|oserror|valueerror|typeerror|错误|异常|失败|超时|no such file|permission denied|access denied|command not found|not recognized|module not found|econnrefused|econnreset|enoent|enotfound|npm err!`)
+	// 失败关键词检测：error 词用 hasRealError（模拟负向前瞻排除 "error = None"），
+	// 其他关键词用 otherFailureRe（不需要负向前瞻）。
+	// 对齐 Python: _FAILURE_KEYWORDS = re.compile(r"error(?!\s*=\s*None)|exception|...", re.IGNORECASE)
 
 	var userQueries []string
 	var failedToolResults []string
@@ -2097,8 +2106,9 @@ func extractConversationExcerpt(messages []map[string]any, maxChars ...int) stri
 					toolName = toolCallIDToName[tcID]
 				}
 			}
-			// S-05: 匹配到 "error" 关键词后，排除 "error = None" / "error=None" 形式
-			if failureRe.MatchString(contentStr) && !isErrorNonePattern(contentStr) && strings.TrimSpace(contentStr) != "" {
+			// S-05: 失败关键词检测：error 词用 hasRealError（排除 "error = None"），其他用 otherFailureRe
+			// 对齐 Python: _FAILURE_KEYWORDS.search(content_str)
+			if (hasRealError(contentStr) || otherFailureRe.MatchString(contentStr)) && strings.TrimSpace(contentStr) != "" {
 				prefix := "[ERROR]: "
 				if toolName != "" {
 					prefix = fmt.Sprintf("[ERROR in %s]: ", toolName)
@@ -2148,11 +2158,19 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen]
 }
 
-// isErrorNonePattern 判断内容中的 "error" 是否为 "error = None" / "error=None" 正常状态。
-// Python 的 _FAILURE_KEYWORDS 使用负向前瞻 `error(?!\s*=\s*None)` 排除正常状态，
-// Go regexp 不支持负向前瞻，因此单独检查。
-func isErrorNonePattern(content string) bool {
-	// 检查 content 中是否包含 error = None 或 error=None 形式
-	re := regexp.MustCompile(`(?i)error\s*=\s*None`)
-	return re.MatchString(content)
+// hasRealError 判断内容中是否包含"真实的" error 关键词（排除 "error = None" 模式）。
+// 对齐 Python: _FAILURE_KEYWORDS 中的负向前瞻 error(?!\s*=\s*None)。
+// Go regexp 不支持负向前瞻，因此用 FindAllStringIndex 逐匹配点检查后缀。
+func hasRealError(content string) bool {
+	matches := failureRe.FindAllStringIndex(content, -1)
+	if len(matches) == 0 {
+		return false
+	}
+	for _, loc := range matches {
+		after := content[loc[1]:]
+		if !errorNoneSuffixRe.MatchString(after) {
+			return true
+		}
+	}
+	return false
 }
