@@ -10,7 +10,7 @@
 //
 //	hooks/
 //	├── doc.go            # 包文档
-//	├── executor.go       # HookOutcome/HookResult/LLMConfig + HookExecutor + ParseCommandOutput + ExtractJSONFromResponse
+//	├── executor.go       # HookOutcome/HookResult + HookExecutor + RegisterConfig + ParseCommandOutput + ExtractJSONFromResponse
 //	└── user_hook_rail.go # UserHookRail(embed DeepAgentRail) 4 个钩子方法
 //
 // 对应 Python 代码：jiuwenswarm/server/hooks/executor.py + user_hook_rail.py

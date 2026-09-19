@@ -254,7 +254,7 @@ func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 		toolCallID = toolInputs.ToolCall.ID
 	}
 	cbc.Extra()["_skip_tool"] = true
-	toolInputs.ToolResult = map[string]any{"error": message}
+	toolInputs.ToolResult = message // 对齐 Python: ctx.inputs.tool_result = message（字符串）
 	toolInputs.ToolMsg = llmschema.NewToolMessage(toolCallID, message)
 	logger.Info(avatarLogComponent).
 		Str("tool_name", toolInputs.ToolName).

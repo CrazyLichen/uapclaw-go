@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/wk8/go-ordered-map/v2"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/update"
 )
@@ -222,7 +224,9 @@ func TestSnapshotMemoryFiles_空目录(t *testing.T) {
 
 // TestRunChecker_无LLM 测试无 LLM 模型时返回空切片
 func TestRunChecker_无LLM(t *testing.T) {
-	items := runChecker(context.Background(), nil, "test.md", "body", map[string]string{"old.md": "old body"})
+	oldMem := orderedmap.New[string, string]()
+	oldMem.Set("old.md", "old body")
+	items := runChecker(context.Background(), nil, "test.md", "body", oldMem)
 	if len(items) != 0 {
 		t.Errorf("期望空切片，实际 %v", items)
 	}

@@ -303,12 +303,13 @@ func TestAvatarPromptRail_rejectTool(t *testing.T) {
 	if cbc.Extra()["_skip_tool"] != true {
 		t.Error("_skip_tool 应为 true")
 	}
-	toolResultMap, ok := toolInputs.ToolResult.(map[string]any)
+	// 对齐 Python: ctx.inputs.tool_result = message（字符串）
+	toolResultStr, ok := toolInputs.ToolResult.(string)
 	if !ok {
-		t.Fatalf("ToolResult 应为 map[string]any 类型，实际 %T", toolInputs.ToolResult)
+		t.Fatalf("ToolResult 应为 string 类型，实际 %T", toolInputs.ToolResult)
 	}
-	if toolResultMap["error"] != "[PERMISSION_DENIED] test" {
-		t.Errorf("ToolResult[\"error\"] = %q, 期望拒绝消息", toolResultMap["error"])
+	if toolResultStr != "[PERMISSION_DENIED] test" {
+		t.Errorf("ToolResult = %q, 期望拒绝消息", toolResultStr)
 	}
 	if toolInputs.ToolMsg == nil {
 		t.Fatal("ToolMsg 不应为 nil")

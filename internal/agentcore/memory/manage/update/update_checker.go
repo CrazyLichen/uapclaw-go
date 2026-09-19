@@ -127,6 +127,7 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.Or
 	// 无 LLM 模型 → 直接返回所有新记忆为 ADD（对齐 Python: if not base_chat_model）
 	if cfg.model == nil {
 		logger.Debug(logComponent).
+			Str("event_type", "MEMORY_PROCESS").
 			Int("new_count", newMemories.Len()).
 			Int("old_count", oldMemories.Len()).
 			Msg("无 LLM 模型，跳过记忆冲突检查")
@@ -137,6 +138,7 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.Or
 	duplicateIDs := checkDuplicateIDs(newMemories, oldMemories)
 	if len(duplicateIDs) > 0 {
 		logger.Debug(logComponent).
+			Str("event_type", "MEMORY_PROCESS").
 			Int("duplicate_count", len(duplicateIDs)).
 			Msg("发现重复记忆 ID")
 	}
@@ -161,7 +163,7 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.Or
 	}
 	msgsParam := model_clients.NewMessagesParam(messages...)
 
-	logger.Debug(logComponent).Msg("开始记忆冲突检查")
+	logger.Debug(logComponent).Str("event_type", "MEMORY_PROCESS").Msg("开始记忆冲突检查")
 
 	// 步骤 4：LLM 调用 + JSON 解析（对齐 Python: for attempt in range(retries)）
 	parser := output_parsers.NewJsonOutputParser()
@@ -171,47 +173,55 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.Or
 		response, invokeErr := cfg.model.Invoke(ctx, msgsParam,
 			model_clients.WithInvokeOutputParser(parser))
 		if invokeErr != nil {
-			if attempt < cfg.retries-1 {
-				logger.Warn(logComponent).
-					Int("attempt", attempt+1).
-					Int("retries", cfg.retries).
-					Err(invokeErr).
-					Msg("记忆冲突检查 LLM 调用失败，重试中")
-				continue
-			}
-			logger.Error(logComponent).Err(invokeErr).Msg("记忆冲突检查 LLM 调用全部失败")
-			return allAddItems(newMemories), nil
+			// 对齐 Python: Invoke 错误向上传播（不重试）。
+			// Python 中 base_chat_model.invoke() 的异常不在 except (KeyError, ValueError) 内，
+			// 会直接向上传播给调用方处理。Go 同样返回 error 让调用方决定。
+			logger.Error(logComponent).
+				Str("event_type", "MEMORY_PROCESS").
+				Err(invokeErr).
+				Msg("记忆冲突检查 LLM 调用失败")
+			return nil, fmt.Errorf("记忆冲突检查 LLM 调用失败: %w", invokeErr)
 		}
 
 		parsedResult := response.ParserContent
 		if parsedResult == nil {
 			if attempt < cfg.retries-1 {
 				logger.Warn(logComponent).
+					Str("event_type", "MEMORY_PROCESS").
 					Int("attempt", attempt+1).
 					Int("retries", cfg.retries).
 					Msg("记忆冲突检查解析结果为 nil，重试中")
 				continue
 			}
-			logger.Error(logComponent).Msg("记忆冲突检查解析结果为 nil，全部重试失败")
+			logger.Error(logComponent).
+				Str("event_type", "MEMORY_PROCESS").
+				Msg("记忆冲突检查解析结果为 nil，全部重试失败")
 			return allAddItems(newMemories), nil
 		}
 
 		items, parseErr := parseCheckItems(parsedResult)
 		if parseErr != nil {
+			// 对齐 Python: except (KeyError, ValueError) → 重试 + fallback
+			// 只有解析阶段的 KeyError/ValueError 才重试，重试全部失败后返回 allAddItems
 			if attempt < cfg.retries-1 {
 				logger.Warn(logComponent).
+					Str("event_type", "MEMORY_PROCESS").
 					Int("attempt", attempt+1).
 					Int("retries", cfg.retries).
 					Err(parseErr).
 					Msg("记忆冲突检查解析错误，重试中")
 				continue
 			}
-			logger.Error(logComponent).Err(parseErr).Msg("记忆冲突检查重试全部失败")
+			logger.Error(logComponent).
+				Str("event_type", "MEMORY_PROCESS").
+				Err(parseErr).
+				Msg("记忆冲突检查重试全部失败")
 			return allAddItems(newMemories), nil
 		}
 
 		checkItems = items
 		logger.Debug(logComponent).
+			Str("event_type", "MEMORY_PROCESS").
 			Int("result_count", len(checkItems)).
 			Msg("记忆冲突检查 LLM 返回成功")
 		break
@@ -221,6 +231,7 @@ func (c *MemUpdateChecker) Check(ctx context.Context, newMemories *orderedmap.Or
 	actionItems := mapCheckItemsToActionItems(checkItems, newMemories, oldMemories)
 
 	logger.Debug(logComponent).
+		Str("event_type", "MEMORY_PROCESS").
 		Int("action_count", len(actionItems)).
 		Msg("记忆冲突检查完成")
 
@@ -303,6 +314,7 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories *ordered
 		case CheckResultRedundant:
 			// 冗余 → 跳过（对齐 Python: if check_item.result == CheckResult.REDUNDANT）
 			logger.Debug(logComponent).
+				Str("event_type", "MEMORY_PROCESS").
 				Str("mem_id", item.InfoID).
 				Msg("记忆冗余，跳过")
 			continue

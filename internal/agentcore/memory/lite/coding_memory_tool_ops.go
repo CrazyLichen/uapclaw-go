@@ -214,7 +214,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 
 			// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
 			var actions []*update.MemoryActionItem
-			if len(similarFiles) > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+			if similarFiles.Len() > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
 				actions = runChecker(ctx, toolCtx.Manager.LLM(), basename, body, similarFiles)
 			}
 
@@ -447,8 +447,9 @@ func resolveMemoryDir(ctx *CodingMemoryToolContext, resolvedPath string) string 
 }
 
 // searchSimilar 语义搜索相似记忆。对齐 Python _search_similar
-func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) map[string]string {
-	oldMemories := make(map[string]string)
+// 返回 orderedmap 保留搜索结果的插入顺序，对齐 Python dict 的插入顺序语义。
+func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) *orderedmap.OrderedMap[string, string] {
+	oldMemories := orderedmap.New[string, string]()
 	if toolCtx == nil || toolCtx.Manager == nil {
 		return oldMemories
 	}
@@ -473,7 +474,7 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 		}
 		oldBody := ExtractBody(readResult.Data.Content)
 		if oldBody != "" {
-			oldMemories[r.Path] = oldBody
+			oldMemories.Set(r.Path, oldBody)
 		}
 	}
 	return oldMemories
@@ -482,19 +483,15 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 // runChecker 调用 MemUpdateChecker 执行 LLM 冲突检测。
 // Python: _run_checker(coding_memory_manager, new_id, new_body, old_memories)
 // Python 内部从 coding_memory_manager 获取 llm，无 LLM 返回 []，有 LLM 调用 checker.check()
-func runChecker(ctx context.Context, model *llm.Model, newID string, newBody string, oldMemories map[string]string) []*update.MemoryActionItem {
+func runChecker(ctx context.Context, model *llm.Model, newID string, newBody string, oldMemories *orderedmap.OrderedMap[string, string]) []*update.MemoryActionItem {
 	if model == nil {
 		return []*update.MemoryActionItem{}
 	}
-	// 将 map 转为有序 map（对齐 Python dict 插入顺序）
+	// 构建有序 map（对齐 Python dict 插入顺序）
 	newMemOrdered := orderedmap.New[string, string]()
 	newMemOrdered.Set(newID, newBody)
-	oldMemOrdered := orderedmap.New[string, string]()
-	for k, v := range oldMemories {
-		oldMemOrdered.Set(k, v)
-	}
 	checker := &update.MemUpdateChecker{}
-	items, err := checker.Check(ctx, newMemOrdered, oldMemOrdered, update.WithModel(model))
+	items, err := checker.Check(ctx, newMemOrdered, oldMemories, update.WithModel(model))
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker 冲突检查失败")
 		return []*update.MemoryActionItem{}
@@ -507,7 +504,8 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 	result := &ConflictResult{}
 
 	// 构建旧记忆：自身文件 + 其他相似文件（对齐 Python: old_memories）
-	oldMemories := make(map[string]string)
+	// 使用 orderedmap 保留插入顺序，对齐 Python dict 的插入顺序语义
+	oldMemories := orderedmap.New[string, string]()
 
 	// 读取自身文件（对齐 Python: existing_body → old_memories["__self__"]）
 	sysOp := toolCtx.SysOperation
@@ -516,20 +514,21 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 		if err == nil && readResult != nil && readResult.Data != nil {
 			existingBody := ExtractBody(readResult.Data.Content)
 			if existingBody != "" {
-				oldMemories["__self__"] = existingBody
+				oldMemories.Set("__self__", existingBody)
 			}
 		}
 	}
 
 	// 其他相似文件（对齐 Python: other = await _search_similar(...)）
+	// searchSimilar 返回 orderedmap，直接合并保留插入顺序
 	other := searchSimilar(toolCtx, body, basename, 5, 0.75)
-	for k, v := range other {
-		oldMemories[k] = v
+	for pair := other.Oldest(); pair != nil; pair = pair.Next() {
+		oldMemories.Set(pair.Key, pair.Value)
 	}
 
 	// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
 	var actions []*update.MemoryActionItem
-	if len(oldMemories) > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
+	if oldMemories.Len() > 0 && toolCtx.Manager != nil && toolCtx.Manager.LLM() != nil {
 		actions = runChecker(ctx, toolCtx.Manager.LLM(), basename, body, oldMemories)
 	}
 
@@ -560,11 +559,11 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 				strings.Join(conflicting, ", "),
 			)
 		}
-	} else if len(other) > 0 {
+	} else if other.Len() > 0 {
 		// 无 LLM 结果时，基于 searchSimilar 结果判断冲突
-		conflicting := make([]string, 0, len(other))
-		for name := range other {
-			conflicting = append(conflicting, name)
+		conflicting := make([]string, 0, other.Len())
+		for pair := other.Oldest(); pair != nil; pair = pair.Next() {
+			conflicting = append(conflicting, pair.Key)
 		}
 		result.ConflictDetected = true
 		result.ConflictingFiles = conflicting

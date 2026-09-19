@@ -85,8 +85,14 @@ func (d *SQLTaskDao) GetTeamTasks(ctx context.Context, teamName, status string) 
 // Python: get_tasks_by_assignee(team_name, assignee_id, status=None)
 func (d *SQLTaskDao) GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	table := d.taskTableName(ctx)
-	query := d.db.WithContext(ctx).Table(table).
-		Where("team_name = ? AND assignee = ?", teamName, assignee)
+	// 防御性处理：assignee 为 nullable 字段，空字符串查询应翻译为 IS NULL
+	// 对齐 Python SQLAlchemy: model.assignee == None → IS NULL
+	query := d.db.WithContext(ctx).Table(table).Where("team_name = ?", teamName)
+	if assignee == "" {
+		query = query.Where("assignee IS NULL")
+	} else {
+		query = query.Where("assignee = ?", assignee)
+	}
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -112,11 +118,7 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 		}
 		// Python: if task.assignee → warning + return False
 		if task.Assignee != nil && *task.Assignee != "" {
-			assigneeStr := ""
-			if task.Assignee != nil {
-				assigneeStr = *task.Assignee
-			}
-			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", assigneeStr).Msg("任务已被认领")
+			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("任务已被认领")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {

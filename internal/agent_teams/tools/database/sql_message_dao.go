@@ -82,8 +82,15 @@ func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase)
 // Python: get_messages(team_name, to_member_name, unread_only, from_member_name)
 func (d *SQLMessageDao) GetMessages(ctx context.Context, teamName, toMemberName string, unreadOnly bool, fromMemberName string) ([]*TeamMessageBase, error) {
 	msgTable := d.msgTableName(ctx)
-	query := d.db.WithContext(ctx).Table(msgTable).
-		Where("team_name = ? AND to_member_name = ? AND broadcast = 0", teamName, toMemberName)
+	// 防御性处理：to_member_name 为 nullable 字段，空字符串查询应翻译为 IS NULL
+	// 对齐 Python SQLAlchemy: model.to_member_name == None → IS NULL
+	query := d.db.WithContext(ctx).Table(msgTable).Where("team_name = ?", teamName)
+	if toMemberName == "" {
+		query = query.Where("to_member_name IS NULL")
+	} else {
+		query = query.Where("to_member_name = ?", toMemberName)
+	}
+	query = query.Where("broadcast = 0")
 	if unreadOnly {
 		// Python: filter by is_read = False
 		query = query.Where("is_read = 0")

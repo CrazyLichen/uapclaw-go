@@ -470,6 +470,11 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 	if !exists {
 		return false, nil
 	}
+	// 对齐 Python: if task.assignee → warning + return False
+	if task.Assignee != nil && *task.Assignee != "" {
+		logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("任务已被认领")
+		return false, nil
+	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
 		return false, nil // Python: invalid transition → False
 	}

@@ -93,10 +93,17 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 	}
 	var validHooks []indexedHook
 	for i, cfg := range hookConfigs {
-		hookType, _ := cfg["type"].(string)
+		hookType, hasType := cfg["type"].(string)
 		// Python: hook_type = cfg.get("type", "command")
+		// Python 的 cfg.get("type", "command") 只在 key 缺失时返回默认值 "command"，
+		// 显式设置 type: "" 时返回 ""，不匹配任何分支被跳过。
+		// Go 的 type assertion 零值为 ""，无法区分 key 缺失和显式 ""，
+		// 因此用 comma-ok idiom 区分：key 缺失 → 默认 command，显式 "" → 跳过。
+		if !hasType {
+			hookType = "command"
+		}
 		// 未知类型跳过，不加入执行列表
-		if hookType == string(hookscfg.HookTypeCommand) || hookType == "" || hookType == string(hookscfg.HookTypePrompt) {
+		if hookType == string(hookscfg.HookTypeCommand) || hookType == string(hookscfg.HookTypePrompt) {
 			validHooks = append(validHooks, indexedHook{idx: i, cfg: cfg})
 		}
 	}
@@ -124,9 +131,12 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 				}
 			}()
 
-			hookType, _ := cfg["type"].(string)
-			if hookType == string(hookscfg.HookTypeCommand) || hookType == "" {
-				// 默认类型为 command，对齐 Python: hook_type = cfg.get("type", "command")
+			hookType, hasType := cfg["type"].(string)
+			// 对齐 Python: cfg.get("type", "command") — key 缺失默认 command，显式 "" 跳过
+			if !hasType {
+				hookType = "command"
+			}
+			if hookType == string(hookscfg.HookTypeCommand) {
 				results[resultIdx] = e.runCommandHook(ctx, cfg, hookInput)
 			} else if hookType == string(hookscfg.HookTypePrompt) {
 				results[resultIdx] = e.runPromptHook(ctx, cfg, hookInput)
@@ -316,6 +326,12 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	stderr := stderrBuf.String()
 
 	// Python: 退出码语义：
+	// 对齐 Python: if returncode is None → "hook process killed"
+	// Go 中被 signal kill 的进程 ExitCode() 返回 -1，等价于 Python 的 returncode is None
+	if returnCode == -1 {
+		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: "hook process killed"}
+	}
+
 	if returnCode == 0 {
 		// 退出码 0 → 解析命令输出
 		return ParseCommandOutput(stdout)
