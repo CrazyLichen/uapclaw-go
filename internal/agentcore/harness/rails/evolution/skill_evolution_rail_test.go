@@ -520,6 +520,18 @@ func TestSetExcerptOffsetByKey(t *testing.T) {
 	assert.False(t, exists)
 }
 
+// ──────────────────────────── G8: ExtractQueryKeywords 错误恢复 ────────────────────────────
+
+func TestDownloadSharedExperiences_关键词提取失败降级(t *testing.T) {
+	// 验证 keywordExtractor 为 nil 时 downloadSharedExperiences 不 panic
+	r := &SkillEvolutionRail{
+		excerptOffsets: make(map[string]int),
+	}
+	// keywordExtractor 为 nil → IsSharingEnabled 返回 false → 返回空 map
+	result := r.downloadSharedExperiences(context.Background(), nil, []string{}, nil)
+	assert.Empty(t, result)
+}
+
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
 	messages := []map[string]any{
 		{"role": "assistant", "content": "I will help you with that."},

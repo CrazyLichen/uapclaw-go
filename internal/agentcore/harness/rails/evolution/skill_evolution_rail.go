@@ -1272,8 +1272,18 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 		return map[string][]checkpointing.EvolutionRecord{}
 	}
 
-	// Python: query = await self._keyword_extractor.extract_query_keywords(feedback_excerpt=excerpt)
-	query := r.keywordExtractor.ExtractQueryKeywords(ctx, excerpt)
+	// Python: try: query = await self._keyword_extractor.extract_query_keywords(feedback_excerpt=excerpt)
+	// Python: except Exception as exc: logger.warning(...); return {}
+	var query sharing.QueryKeywords
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] keyword extraction failed")
+				query = sharing.QueryKeywords{}
+			}
+		}()
+		query = r.keywordExtractor.ExtractQueryKeywords(ctx, excerpt)
+	}()
 	if len(query.Keywords) == 0 {
 		return map[string][]checkpointing.EvolutionRecord{}
 	}
