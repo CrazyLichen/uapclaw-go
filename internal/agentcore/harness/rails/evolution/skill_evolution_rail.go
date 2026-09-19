@@ -141,6 +141,9 @@ const (
 	// defaultSharingMaxUploadRetries 默认共享上传重试次数
 	// Python: _DEFAULT_SHARING_MAX_UPLOAD_RETRIES = 3
 	defaultSharingMaxUploadRetries = 3
+	// sharedRecordContextMarker 共享记录上下文标记前缀。
+	// 对齐 Python: _SHARED_RECORD_CONTEXT_MARKER = "[shared origin="
+	sharedRecordContextMarker = "[shared origin="
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -1274,7 +1277,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 			var records []checkpointing.EvolutionRecord
 			for _, bundle := range bundles {
 				for _, sharedExp := range bundle.Experiences {
-					marker := fmt.Sprintf("\n[shared origin=%s skill_id=%s]", bundle.BundleID, bundle.SkillID)
+					marker := "\n" + sharedRecordContextMarker + bundle.BundleID + " skill_id=" + bundle.SkillID + "]"
 					sharedExp.Record.Context = (sharedExp.Record.Context) + marker
 					records = append(records, sharedExp.Record)
 				}

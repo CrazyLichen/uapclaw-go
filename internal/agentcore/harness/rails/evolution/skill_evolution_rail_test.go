@@ -454,6 +454,12 @@ func TestExtractConversationExcerpt_混合ErrorNone与真实错误(t *testing.T)
 	assert.Contains(t, excerpt, "FAILED TOOL EXECUTIONS")
 }
 
+// ──────────────────────────── G6: sharedRecordContextMarker ────────────────────────────
+
+func TestSharedRecordContextMarker(t *testing.T) {
+	assert.Equal(t, "[shared origin=", sharedRecordContextMarker)
+}
+
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
 	messages := []map[string]any{
 		{"role": "assistant", "content": "I will help you with that."},
