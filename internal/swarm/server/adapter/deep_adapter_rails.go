@@ -383,7 +383,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 	// sharing 配置
 	sharingConfig, _ := evolutionConfig["sharing"].(map[string]any)
 	if sharingConfig != nil {
-		opts = append(opts, evolution.WithSharingConfig(sharingConfig))
+		opts = append(opts, evolution.WithSharingConfigMap(sharingConfig))
 	}
 
 	rail := evolution.NewSkillEvolutionRail(

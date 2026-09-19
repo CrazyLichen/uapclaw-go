@@ -460,6 +460,27 @@ func TestSharedRecordContextMarker(t *testing.T) {
 	assert.Equal(t, "[shared origin=", sharedRecordContextMarker)
 }
 
+// ──────────────────────────── G1: resolveDownloadTopK ────────────────────────────
+
+func TestResolveDownloadTopK(t *testing.T) {
+	// 默认值
+	assert.Equal(t, 3, resolveDownloadTopK(nil))
+	assert.Equal(t, 3, resolveDownloadTopK(map[string]any{}))
+
+	// 配置覆盖
+	assert.Equal(t, 5, resolveDownloadTopK(map[string]any{"download_top_k": 5}))
+	assert.Equal(t, 10, resolveDownloadTopK(map[string]any{"download_top_k": float64(10)}))
+	assert.Equal(t, 7, resolveDownloadTopK(map[string]any{"download_top_k": "7"}))
+
+	// 类型容错
+	assert.Equal(t, 3, resolveDownloadTopK(map[string]any{"download_top_k": "invalid"}))
+	assert.Equal(t, 3, resolveDownloadTopK(map[string]any{"download_top_k": nil}))
+
+	// 下界保护
+	assert.Equal(t, 1, resolveDownloadTopK(map[string]any{"download_top_k": 0}))
+	assert.Equal(t, 1, resolveDownloadTopK(map[string]any{"download_top_k": -3}))
+}
+
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
 	messages := []map[string]any{
 		{"role": "assistant", "content": "I will help you with that."},

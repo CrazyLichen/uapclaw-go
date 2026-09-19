@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -197,8 +198,6 @@ func NewSkillEvolutionRail(
 		generateRecordsLLMPolicy: skillopt.GenerateRecordsLLMPolicy,
 		evaluateLLMPolicy:        experience.EvaluateLLMPolicy,
 		simplifyLLMPolicy:        experience.SimplifyLLMPolicy,
-		sharingDownloadTopK:      defaultSharingDownloadTopK,
-		excerptOffsets:           make(map[string]int),
 	}
 
 	// 初始化 EvolutionRail 基类（先于 Options，确保 Option 可安全访问基类字段）
@@ -273,7 +272,7 @@ func NewSkillEvolutionRail(
 
 	// ─── 初始化 Sharing ───
 	// Python: self._init_sharing(sharing_config, llm=llm, model=model, language=language, evolution_store=self._evolution_store)
-	r.initSharing(llmModel, model, language)
+	r.initSharing(r.sharingConfig, llmModel, model, language)
 
 	return r
 }
@@ -318,28 +317,11 @@ func WithSimplifyLLMPolicy(policy llm_resilience.LLMInvokePolicy) SkillEvolution
 	return func(r *SkillEvolutionRail) { r.simplifyLLMPolicy = policy }
 }
 
-// WithSharingConfig 设置跨用户共享配置。
-//
-// config 非空时创建 ExperienceSharer + ShareStager，对齐 Python: _init_sharing()。
-func WithSharingConfig(config map[string]any) SkillEvolutionRailOption {
-	return func(r *SkillEvolutionRail) {
-		if config == nil {
-			r.sharingEnabled = false
-			return
-		}
-		enabled := resolveSharingBool(config["enabled"])
-		envEnabled := os.Getenv("EVOLUTION_SHARING_ENABLED")
-		if envEnabled != "" {
-			enabled = envEnabled == "true" || envEnabled == "1"
-		}
-		if !enabled {
-			r.sharingEnabled = false
-			return
-		}
-		// 标记 sharing 为启用状态，保存配置供 initSharing 延迟使用
-		r.sharingEnabled = true
-		r.sharingConfig = config
-	}
+// WithSharingConfigMap 设置跨用户共享配置字典。
+// 仅保存配置，实际解析在 initSharing 中完成。
+// 对齐 Python: SkillEvolutionRail.__init__(sharing_config=...)
+func WithSharingConfigMap(config map[string]any) SkillEvolutionRailOption {
+	return func(r *SkillEvolutionRail) { r.sharingConfig = config }
 }
 
 // WithDisabledSkillsSet 设置禁用的技能名称列表。
@@ -1072,15 +1054,27 @@ func (r *SkillEvolutionRail) RecordPresentedExperiences(ctx context.Context, ski
 
 // initSharing 初始化 Sharing 组件。
 // 对齐 Python: SkillEvolutionSharingMixin._init_sharing(sharing_config, *, llm, model, language, evolution_store)
-func (r *SkillEvolutionRail) initSharing(llmModel *llm.Model, model string, language string) {
-	if !r.sharingEnabled {
+func (r *SkillEvolutionRail) initSharing(sharingConfig map[string]any, llmModel *llm.Model, model string, language string) {
+	// Python: self._sharing_download_top_k = self._resolve_download_top_k(sharing_config)
+	r.sharingDownloadTopK = resolveDownloadTopK(sharingConfig)
+	r.sharingConfig = sharingConfig
+	r.excerptOffsets = make(map[string]int)
+
+	// Python: self._experience_sharer = self._build_experience_sharer(sharing_config)
+	// enabled 解析对齐 Python _build_experience_sharer 中的 env+config 判断
+	enabled := resolveSharingBool(sharingConfig["enabled"])
+	envEnabled := os.Getenv("EVOLUTION_SHARING_ENABLED")
+	if envEnabled != "" {
+		enabled = envEnabled == "true" || envEnabled == "1"
+	}
+	if !enabled || sharingConfig == nil {
 		r.experienceSharer = nil
 		r.keywordExtractor = nil
 		r.shareStager = nil
+		r.sharingEnabled = false
 		return
 	}
 
-	// Python: self._experience_sharer = self._build_experience_sharer(sharing_config)
 	r.experienceSharer = r.buildExperienceSharer()
 	if r.experienceSharer == nil {
 		r.keywordExtractor = nil
@@ -2001,6 +1995,30 @@ func resolveSharingBool(value any) bool {
 		return lower == "1" || lower == "true" || lower == "yes" || lower == "on"
 	}
 	return false
+}
+
+// resolveDownloadTopK 从共享配置解析下载 topK。
+// 对齐 Python: SkillEvolutionSharingMixin._resolve_download_top_k(sharing_config)
+func resolveDownloadTopK(sharingConfig map[string]any) int {
+	rawTopK := defaultSharingDownloadTopK
+	if sharingConfig != nil {
+		if v, ok := sharingConfig["download_top_k"]; ok {
+			switch n := v.(type) {
+			case int:
+				rawTopK = n
+			case float64:
+				rawTopK = int(n)
+			case string:
+				if parsed, err := strconv.Atoi(n); err == nil {
+					rawTopK = parsed
+				}
+			}
+		}
+	}
+	if rawTopK < 1 {
+		rawTopK = 1
+	}
+	return rawTopK
 }
 
 // mapKeys 提取 map 的键为切片。
