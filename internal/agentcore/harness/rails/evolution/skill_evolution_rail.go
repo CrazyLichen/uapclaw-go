@@ -963,10 +963,9 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 	}
 
 	// 非共享记录审批后触发 sharing 上传
-	// Python: if not is_shared and approved_records: await self._stage_records_for_share(...); await self._flush_share_uploads(...)
+	// Python: if not is_shared and approved_records: await self._upload_approved_records_for_sharing(pending, request_id)
 	if !isShared && len(approvedRecords) > 0 {
-		r.stageRecordsForShare(ctx, pending.SkillName, approvalMessages, approvedRecords)
-		r.flushShareUploads(ctx, pending.SkillName)
+		r.uploadApprovedRecordsForSharing(ctx, pending.SkillName, approvalMessages, approvedRecords)
 	}
 
 	return nil
@@ -1411,6 +1410,21 @@ func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName st
 	}
 }
 
+// uploadApprovedRecordsForSharing 审批后上传共享记录。
+// 对齐 Python: SkillEvolutionSharingMixin._upload_approved_records_for_sharing(pending, request_id)
+func (r *SkillEvolutionRail) uploadApprovedRecordsForSharing(ctx context.Context, skillName string, messages []map[string]any, records []checkpointing.EvolutionRecord) {
+	if !r.IsSharingEnabled() || r.shareStager == nil || len(records) == 0 {
+		return
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] approve share staging failed")
+		}
+	}()
+	r.stageRecordsForShare(ctx, skillName, messages, records)
+	r.flushShareUploads(ctx, skillName)
+}
+
 // filterDuplicateSharedRecords 过滤重复的共享记录。
 // 对齐 Python: SkillEvolutionSharingMixin._filter_duplicate_shared_records(skill_name, shared_records)
 func (r *SkillEvolutionRail) filterDuplicateSharedRecords(
@@ -1730,8 +1744,7 @@ func (r *SkillEvolutionRail) sharingAfterAutoApproved(ctx context.Context, skill
 		return
 	}
 	messages := stagedRequest.PendingChange.Messages
-	r.stageRecordsForShare(ctx, skillName, messages, records)
-	r.flushShareUploads(ctx, skillName)
+	r.uploadApprovedRecordsForSharing(ctx, skillName, messages, records)
 }
 
 // emitGeneratedRecords 缓存审批请求事件以供后续传递。

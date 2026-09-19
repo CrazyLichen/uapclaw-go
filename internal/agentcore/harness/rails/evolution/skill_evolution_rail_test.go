@@ -481,6 +481,20 @@ func TestResolveDownloadTopK(t *testing.T) {
 	assert.Equal(t, 1, resolveDownloadTopK(map[string]any{"download_top_k": -3}))
 }
 
+// ──────────────────────────── G4: uploadApprovedRecordsForSharing ────────────────────────────
+
+func TestUploadApprovedRecordsForSharing_未启用(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	// sharing 未启用，应直接返回不 panic
+	r.uploadApprovedRecordsForSharing(context.Background(), "test_skill", nil, nil)
+}
+
+func TestUploadApprovedRecordsForSharing_启用但无记录(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	// 启用 sharing 但传入空记录，应直接返回
+	r.uploadApprovedRecordsForSharing(context.Background(), "test_skill", nil, []checkpointing.EvolutionRecord{})
+}
+
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
 	messages := []map[string]any{
 		{"role": "assistant", "content": "I will help you with that."},
