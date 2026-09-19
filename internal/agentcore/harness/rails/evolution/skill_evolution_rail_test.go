@@ -495,6 +495,31 @@ func TestUploadApprovedRecordsForSharing_启用但无记录(t *testing.T) {
 	r.uploadApprovedRecordsForSharing(context.Background(), "test_skill", nil, []checkpointing.EvolutionRecord{})
 }
 
+// ──────────────────────────── G5: getExcerptOffsetByKey / setExcerptOffsetByKey ────────────────────────────
+
+func TestGetExcerptOffsetByKey(t *testing.T) {
+	r := &SkillEvolutionRail{excerptOffsets: map[string]int{"sess1": 5, "sess2": 10}}
+
+	assert.Equal(t, 5, r.getExcerptOffsetByKey("sess1"))
+	assert.Equal(t, 10, r.getExcerptOffsetByKey("sess2"))
+	assert.Equal(t, 0, r.getExcerptOffsetByKey("nonexistent"))
+
+	// 空 key 返回 0
+	assert.Equal(t, 0, r.getExcerptOffsetByKey(""))
+}
+
+func TestSetExcerptOffsetByKey(t *testing.T) {
+	r := &SkillEvolutionRail{excerptOffsets: map[string]int{}}
+
+	r.setExcerptOffsetByKey("sess1", 5)
+	assert.Equal(t, 5, r.excerptOffsets["sess1"])
+
+	// 空 key 不写入
+	r.setExcerptOffsetByKey("", 99)
+	_, exists := r.excerptOffsets[""]
+	assert.False(t, exists)
+}
+
 func TestExtractConversationExcerpt_assistantResponses(t *testing.T) {
 	messages := []map[string]any{
 		{"role": "assistant", "content": "I will help you with that."},

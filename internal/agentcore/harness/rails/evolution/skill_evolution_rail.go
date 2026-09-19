@@ -1202,9 +1202,9 @@ func (r *SkillEvolutionRail) resolveIncrementalMessages(messages []map[string]an
 	}
 	if cbc != nil {
 		excerptKey := r.getExcerptKeyFromCtx(cbc)
-		prevOffset := r.excerptOffsets[excerptKey]
+		prevOffset := r.getExcerptOffsetByKey(excerptKey)
 		incrementalMessages := messages[prevOffset:]
-		r.excerptOffsets[excerptKey] = len(messages)
+		r.setExcerptOffsetByKey(excerptKey, len(messages))
 		return incrementalMessages
 	}
 	return messages
@@ -1229,6 +1229,23 @@ func (r *SkillEvolutionRail) getExcerptKeyFromCtx(cbc *agentinterfaces.AgentCall
 		}
 	}
 	return ""
+}
+
+// getExcerptOffsetByKey 获取增量消息偏移量。
+// 对齐 Python: SkillEvolutionSharingMixin._get_excerpt_offset_by_key(key)
+func (r *SkillEvolutionRail) getExcerptOffsetByKey(key string) int {
+	if key == "" {
+		return 0
+	}
+	return r.excerptOffsets[key]
+}
+
+// setExcerptOffsetByKey 设置增量消息偏移量。
+// 对齐 Python: SkillEvolutionSharingMixin._set_excerpt_offset_by_key(key, offset)
+func (r *SkillEvolutionRail) setExcerptOffsetByKey(key string, offset int) {
+	if key != "" {
+		r.excerptOffsets[key] = offset
+	}
 }
 
 // downloadSharedExperiences 下载共享经验。
