@@ -41,6 +41,8 @@ type HookResult struct {
 // LLM 配置在 queryLLM 调用时从全局 Config 读取，对齐 Python _query_llm 中动态 get_config()
 type HookExecutor struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // HookOutcome hook 执行结果类型，对齐 Python HookOutcome
@@ -51,9 +53,10 @@ const (
 	HookOutcomeBlocking = "blocking"
 	// HookOutcomeNonBlockingError 非阻塞错误，对齐 Python HookOutcome.NON_BLOCKING_ERROR
 	HookOutcomeNonBlockingError = "non_blocking_error"
-)
 
-const logComponent = logger.ComponentAgentServer
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentServer
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

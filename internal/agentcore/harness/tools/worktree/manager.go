@@ -41,7 +41,7 @@ type WorktreeManager struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件
-var logComponent = logger.ComponentCommon
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

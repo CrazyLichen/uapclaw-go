@@ -745,12 +745,12 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 			Int("new_tasks", len(newTasks)).
 			Int("new_edges", len(mc.newEdgeSet)).
 			Int("refreshed", len(mc.refreshedTasks)).
-			Msg("Created task(s); added edge(s); refreshed task(s)")
+			Msg("已创建任务；已添加边；已刷新任务")
 	} else {
 		logger.Info(logComponent).
 			Int("new_edges", len(mc.newEdgeSet)).
 			Int("refreshed", len(mc.refreshedTasks)).
-			Msg("Added edge(s); refreshed task(s)")
+			Msg("已添加边；已刷新任务")
 	}
 
 	return GraphMutationResult{Ok: true, RefreshedTasks: mc.refreshedTasks}

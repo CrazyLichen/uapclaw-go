@@ -169,7 +169,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	if d.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") {
 		// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
 		// 暂时跳过，等 browser 功能实现时回填
-		// cfg := subagents.BuildBrowserAgentConfig(d.model, &hschema.SubagentCreateParams{})
+		// Python: cfg := subagents.BuildBrowserAgentConfig(d.model, &hschema.SubagentCreateParams{})
 		_ = subagents.BuildBrowserAgentConfig
 	}
 
@@ -263,7 +263,7 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 
 	// 步骤 2: 构建工具列表
 	// Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
-	// if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
+	// Python: if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
 	tools := agentDef.Tools
 	if len(tools) == 0 {
 		tools = []string{"*"}

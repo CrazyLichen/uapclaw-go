@@ -225,7 +225,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 					Path:    resolved,
 					Mode:    WriteModeSkip,
 					Type:    fm["type"],
-					Note:    "Content is redundant with existing memories",
+					Note:    "内容与已有记忆重复",
 				}).ToDict()
 			}
 
@@ -241,7 +241,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 					conflict.ConflictDetected = true
 					conflict.ConflictingFiles = conflicting
 					conflict.Note = fmt.Sprintf(
-						"Conflicts with: %s. Use coding_memory_read to review, then coding_memory_edit to update.",
+						"与以下记忆冲突: %s。请使用 coding_memory_read 查看后再用 coding_memory_edit 更新。",
 						strings.Join(conflicting, ", "),
 					)
 				}
@@ -257,7 +257,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 					Path:    resolved,
 					Mode:    WriteModeSkip,
 					Type:    fm["type"],
-					Note:    "Content is redundant with existing memories",
+					Note:    "内容与已有记忆重复",
 				}).ToDict()
 			}
 		}

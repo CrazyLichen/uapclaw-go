@@ -76,12 +76,12 @@ func NewExternalDirectoryChecker(config map[string]any, workspaceRoot string) *E
 func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs map[string]any) *PermissionResult {
 	workspace := c.workspaceRoot
 	if workspace == "" {
-		logger.Debug(checkerLogComponent).Msg("permission.external.workspace: missing; skip external_directory check")
+		logger.Debug(checkerLogComponent).Msg("外部目录权限: workspace 缺失，跳过 external_directory 检查")
 		return nil
 	}
 	logger.Debug(checkerLogComponent).
 		Str("workspace", workspace).
-		Msg("permission.external.workspace: source=config")
+		Msg("外部目录权限: workspace 来源=config")
 
 	var externalPaths []string
 
@@ -96,7 +96,7 @@ func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs 
 			Str("tool", toolName).
 			Str("cmd", cmd).
 			Str("workdir", workdirResolved).
-			Msg("permission.external.shell_input")
+			Msg("外部目录权限: shell 输入")
 
 		paths := extractPathsFromCommand(cmd, workdirResolved)
 		for _, p := range paths {
@@ -123,7 +123,7 @@ func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs 
 		}
 		logger.Debug(checkerLogComponent).
 			Str("tool", toolName).
-			Msg("permission.external.path_input")
+			Msg("外部目录权限: 路径输入")
 	} else {
 		return nil
 	}
@@ -218,7 +218,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 		Str("tool_command", command).
 		Str("cmd", cmd).
 		Bool("path_aware", pathAwareCommands[cmd]).
-		Msg("permission.external.parse")
+		Msg("外部目录权限: 解析命令")
 
 	if !pathAwareCommands[cmd] {
 		return nil
@@ -229,7 +229,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 		base, _ = os.Getwd()
 	}
 	base = filepath.Clean(base)
-	logger.Debug(checkerLogComponent).Str("base", base).Msg("permission.external.parse_base")
+	logger.Debug(checkerLogComponent).Str("base", base).Msg("外部目录权限: 解析基准路径")
 
 	var paths []string
 	for _, tok := range tokens[1:] {
@@ -250,7 +250,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 	}
 	logger.Debug(checkerLogComponent).
 		Strs("extracted_paths", paths).
-		Msg("permission.external.parse_paths")
+		Msg("外部目录权限: 解析路径列表")
 	return paths
 }
 

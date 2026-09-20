@@ -277,8 +277,8 @@ func DiscoverAndLoadMemoryFiles(workspace string, targetPath string, additionalD
 		worktreeInfo := detectGitWorktree(cwd)
 		scanRoot := projectRoot
 		// Python: if worktree_info is not None and worktree_info.canonical_root != worktree_info.worktree_root
-		//           and _is_relative_to(project_root, worktree_info.canonical_root):
-		//             scan_root = worktree_info.canonical_root
+		// Python:    and _is_relative_to(project_root, worktree_info.canonical_root):
+		// Python:      scan_root = worktree_info.canonical_root
 		if worktreeInfo != nil && worktreeInfo.CanonicalRoot != worktreeInfo.WorktreeRoot &&
 			isRelativeTo(projectRoot, worktreeInfo.CanonicalRoot) {
 			scanRoot = worktreeInfo.CanonicalRoot

@@ -304,7 +304,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 		for _, edge := range newEdges {
 			if createErr := tx.Table(depTable).Create(&edge).Error; createErr != nil {
 				mutationErr = createErr
-				return createErr // rollback
+				return createErr // 回滚
 			}
 		}
 
@@ -339,12 +339,12 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 				Int("new_tasks", len(newTasks)).
 				Int("new_edges", len(newEdges)).
 				Int("refreshed", len(result.RefreshedTasks)).
-				Msg("Created task(s); added edge(s); refreshed task(s)")
+				Msg("已创建任务；已添加边；已刷新任务")
 		} else {
 			logger.Info(logComponent).
 				Int("new_edges", len(newEdges)).
 				Int("refreshed", len(result.RefreshedTasks)).
-				Msg("Added edge(s); refreshed task(s)")
+				Msg("已添加边；已刷新任务")
 		}
 	}
 	return result
@@ -588,8 +588,6 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_task_dependency_" + suffix
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
 // Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]

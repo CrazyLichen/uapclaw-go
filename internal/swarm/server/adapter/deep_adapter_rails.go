@@ -39,6 +39,7 @@ import (
 
 // buildAgentRails 构建 Agent Rails 列表。
 // Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
+// Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
 //
 // 根据 mode 决定启用哪些 Rail，调用各 builder 组装列表。
 func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[string]any, mode string) []sainterfaces.AgentRail {
@@ -217,8 +218,6 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	return railsList
 }
 
-// ──────────────────────────── 已实现 Rail 构建器 ────────────────────────────
-
 // buildHeartbeatRail 构建心跳护栏。
 // Python: _build_heartbeat_rail() (line 1632-1648)
 func (d *DeepAdapter) buildHeartbeatRail() *rails.HeartbeatRail {
@@ -256,8 +255,6 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	// adapter 层不需要构建，此方法保留仅为接口兼容。
 	return nil
 }
-
-// ──────────────────────────── 未实现 Rail 构建器（⤵️ 10.6.3-10） ────────────────────────────
 
 // buildSkillRail 构建技能使用护栏。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
@@ -580,8 +577,6 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	return rail
 }
 
-// ──────────────────────────── Rail 模式切换（⤵️ 10.6.3-10） ────────────────────────────
-
 // updateRailsForMode 按模式注册/注销 Rail。
 // Python: _update_rails_for_mode() (line 2754-2896)
 func (d *DeepAdapter) updateRailsForMode(mode string) {
@@ -836,8 +831,6 @@ func (d *DeepAdapter) updatePromptForMode(mode string) {
 		Msg("updatePromptForMode 完成")
 }
 
-// ──────────────────────────── 工具权限宿主回调方法 ────────────────────────────
-
 // getPermissionsSnapshot 返回当前权限配置快照。
 // Python: get_permissions_snapshot = lambda: get_config().get("permissions", {}) (interrupt_helpers.py L215)
 func (d *DeepAdapter) getPermissionsSnapshot() map[string]any {
@@ -972,8 +965,6 @@ func (d *DeepAdapter) permissionSceneHook(input harnesssecurity.PermissionSceneH
 	}
 	return []string{"reject", fmt.Sprintf("[PERMISSION_DENIED] 该工具未被授权 (owner_scopes: %s)", ownerLevel)}, nil
 }
-
-// ──────────────────────────── 辅助函数 ────────────────────────────
 
 // isPermissionEnabled 检查 permissions 配置中 enabled 字段是否为真值。
 func isPermissionEnabled(permissionConfig map[string]any) bool {

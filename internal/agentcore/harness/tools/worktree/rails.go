@@ -251,7 +251,7 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 	return nil
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)

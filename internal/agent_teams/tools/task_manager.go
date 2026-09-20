@@ -271,7 +271,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 		// Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
 			logger.Warn(taskLogComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
-			results = append(results, &TaskCreateResult{Reason: "invalid spec: missing title or content"})
+			results = append(results, &TaskCreateResult{Reason: "无效规格：缺少标题或内容"})
 			continue
 		}
 		task, err := tm.Add(ctx, spec.Title, spec.Content,

@@ -101,7 +101,7 @@ func RequireCurrentSession(ctx context.Context) (*WorktreeSession, error) {
 	return session, nil
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetCurrentSession 获取当前 worktree 会话。
 func (s *WorktreeSessionState) GetCurrentSession() *WorktreeSession {

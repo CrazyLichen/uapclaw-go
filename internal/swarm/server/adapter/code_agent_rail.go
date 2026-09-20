@@ -92,10 +92,10 @@ func NewCodeAgentRail(workspaceDir string, configLister AgentConfigLister) *Code
 // 步骤：
 //  1. loadCustomAgents() 从 AgentConfigService 加载 enabled 的非 builtin Agent
 //  2. 无自定义 Agent → 跳过注册，日志记录
-//  3. buildAgentToolCard(customAgents, agent.Card().ID)
-//  4. NewAgentTool(card, parentAgent, customAgents)
+//     Python: 3. buildAgentToolCard(customAgents, agent.Card().ID)
+//     Python: 4. NewAgentTool(card, parentAgent, customAgents)
 //  5. ResourceMgr.AddTool(agentTool) — 幂等注册
-//  6. AbilityManager.Add(agentTool.Card())
+//     Python: 6. AbilityManager.Add(agentTool.Card())
 func (r *CodeAgentRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	// 步骤 1: 加载自定义 Agent
 	customAgents := r.loadCustomAgents()
@@ -159,7 +159,7 @@ func (r *CodeAgentRail) Init(_ context.Context, agent sainterfaces.BaseAgent) er
 //  1. agentTool == nil → 直接返回
 //  2. 从 AbilityManager 移除（name）
 //  3. 从 ResourceMgr 移除（toolID）
-//  4. agentTool = nil
+//     Python: 4. agentTool = nil
 func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 	if r.agentTool == nil {
 		return nil
@@ -328,7 +328,7 @@ func filterToolCards(
 //  1. 遍历 customAgents，生成描述行 "- name: when_to_use (Tools: ...)"
 //  2. 追加 Usage notes
 //  3. 构建 ToolCard，name="Agent"，含 5 个输入参数
-//  4. required: ["description", "prompt", "subagent_type"]
+//     Python: 4. required: ["description", "prompt", "subagent_type"]
 func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *tool.ToolCard {
 	// 步骤 1: 构建描述行
 	// Python: lines = ["Launch a new agent to handle complex, multi-step tasks autonomously.", ...]

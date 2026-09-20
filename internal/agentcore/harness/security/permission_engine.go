@@ -122,11 +122,11 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 	logger.Info(engineLogComponent).
 		Str("tool", toolName).
 		Bool("enabled", e.enabled).
-		Msg("permission.check.start")
+		Msg("权限检查: 开始")
 
 	// 未启用 → 允许
 	if !e.enabled {
-		logger.Info(engineLogComponent).Msg("permission.check.skip: reason=system_disabled decision=allow")
+		logger.Info(engineLogComponent).Msg("权限检查: 跳过，原因=系统已禁用 决定=允许")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
 			Reason:     "权限系统已禁用",
@@ -135,7 +135,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 
 	// 宿主说不要校验 → 允许
 	if e.permissionChecksActive != nil && !e.permissionChecksActive() {
-		logger.Info(engineLogComponent).Msg("permission.check.skip: reason=permission_checks_inactive decision=allow")
+		logger.Info(engineLogComponent).Msg("权限检查: 跳过，原因=权限检查未激活 决定=允许")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
 			Reason:     "当前上下文未启用工具权限检查",
@@ -222,7 +222,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 			Str("matched_rule", extResult.MatchedRule).
 			Strs("external_paths", extResult.ExternalPaths).
 			Str("merged_with", permission.String()).
-			Msg("permission.external.result")
+			Msg("外部目录权限: 检查结果")
 		permission = Strictest(permission, extResult.Permission)
 		if matchedRule != "" {
 			matchedRule = matchedRule + "|" + extResult.MatchedRule
@@ -240,7 +240,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 			Str("permission", "none").
 			Str("matched_rule", "none").
 			Strs("external_paths", []string{}).
-			Msg("permission.external.result")
+			Msg("外部目录权限: 检查结果")
 	}
 
 	result := &PermissionResult{

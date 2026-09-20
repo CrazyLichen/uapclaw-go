@@ -303,7 +303,7 @@ func ReadWorktreeHeadSHA(wtPath string) (string, error) {
 	return strings.TrimSpace(string(sha)), nil
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // OK 检查 GitResult 是否成功。
 func (r GitResult) OK() bool { return r.ReturnCode == 0 }

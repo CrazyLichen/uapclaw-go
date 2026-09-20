@@ -44,7 +44,7 @@ var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 //
 //	if not isinstance(raw, list): return None
 //	Python: keywords = [str(item).strip() for item in raw if str(item).strip()]
-//	return keywords or None
+//	Python: return keywords or None
 func NormalizeKeywords(raw any) []string {
 	if raw == nil {
 		return nil
@@ -73,7 +73,7 @@ func NormalizeKeywords(raw any) []string {
 //	if not isinstance(raw, str): return None
 //	Python: summary = " ".join(raw.split())
 //	if not summary or summary.lower() == "null": return None
-//	return summary
+//	Python: return summary
 func NormalizeSummary(raw any) *string {
 	if raw == nil {
 		return nil

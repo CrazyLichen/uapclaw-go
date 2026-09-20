@@ -365,7 +365,7 @@ func updateYAMLKeyInConfig(key string, value any) error {
 	case "memory_forbidden_description":
 		// Python: update_memory_forbidden_description_in_config
 		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
-		// config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
+		// Python: config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
 		descMap := cfg.Get("memory.forbidden_memory_definition.description")
 		currentDesc := make(map[string]any)
 		if descMap != nil {

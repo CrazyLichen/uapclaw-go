@@ -342,7 +342,7 @@ func (m *BaseOptimizerMixin) StepTemplate(
 //	    Python: matched = [t for t in targets if t in tunables]
 //	    if not matched:
 //	        Python: logger.warning("[optimizer] operator %s has no tunables in targets=%s", op_id, targets)
-//	        continue
+//	        Python: continue
 //	    Python: out[op_id] = op
 //
 // Python: BaseOptimizer.filter_operators()

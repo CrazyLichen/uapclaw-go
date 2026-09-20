@@ -195,7 +195,7 @@ func ContainsPath(parent, child string) bool {
 func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions map[string]any) bool {
 	cfgPath := resolveAgentConfigYAMLPath(configYAMLPath)
 	if cfgPath == "" {
-		logger.Warn(patternsLogComponent).Msg("permission.write_yaml.abort: no_config_yaml_path")
+		logger.Warn(patternsLogComponent).Msg("权限写入YAML: 中止，无配置YAML路径")
 		return false
 	}
 
@@ -370,7 +370,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	}
 	if data == nil {
 		if len(bootstrapPermissions) == 0 {
-			logger.Warn(patternsLogComponent).Str("path", cfgPath).Msg("permission.persist.abort: new_yaml_requires_fallback_permissions")
+			logger.Warn(patternsLogComponent).Str("path", cfgPath).Msg("权限持久化: 中止，新YAML需要回退权限")
 			return map[string]any{"ok": false, "error": "cannot bootstrap yaml (missing file; pass bootstrap_permissions with non-empty permissions dict)"}
 		}
 		data = map[string]any{"permissions": utils.DeepCopyMap(bootstrapPermissions)}
@@ -440,11 +440,11 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 
 	out, err := yaml.Marshal(data)
 	if err != nil {
-		logger.Error(patternsLogComponent).Err(err).Msg("permission.persist.cli_add_dir.failed: marshal error")
+		logger.Error(patternsLogComponent).Err(err).Msg("权限持久化: CLI添加目录失败，序列化错误")
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
 	if err := os.WriteFile(cfgPath, out, 0644); err != nil {
-		logger.Error(patternsLogComponent).Err(err).Msg("permission.persist.cli_add_dir.failed: write error")
+		logger.Error(patternsLogComponent).Err(err).Msg("权限持久化: CLI添加目录失败，写入错误")
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
 

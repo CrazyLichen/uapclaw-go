@@ -1159,12 +1159,12 @@ func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.Experience
 	// Python: backend = LocalFileBackend(hub_path=hub_path)
 	backendInstance := backend.NewLocalFileBackend(hubPath, 0)
 
-	// Python: return ExperienceSharer(backend=backend, local_cache_dir=..., max_upload_retries=...)
+	// Python: self._experience_sharer = ExperienceSharer(backend=backend, local_cache_dir=..., max_upload_retries=...)
 	return sharing.NewExperienceSharer(
 		backendInstance,
 		localCacheDir,
 		maxUploadRetries,
-		0,   // backoff_base_secs
+		0,   // 退避基础秒数
 		nil, // provider 在 initSharing 中设置
 	)
 }
@@ -1278,7 +1278,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] keyword extraction failed")
+				logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] 关键词提取失败")
 				query = sharing.QueryKeywords{}
 			}
 		}()
@@ -1445,7 +1445,7 @@ func (r *SkillEvolutionRail) uploadApprovedRecordsForSharing(ctx context.Context
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] approve share staging failed")
+			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] 审批共享暂存失败")
 		}
 	}()
 	r.stageRecordsForShare(ctx, skillName, messages, records)
@@ -1718,10 +1718,10 @@ func (r *SkillEvolutionRail) handleEvolutionFromSignals(
 		convertSignalsToValues(signals),
 		messages,
 		userQuery,
-		nil, // trajectory
+		nil, // trajectory 轨迹
 		requiresApproval,
 		map[string]any{},
-		nil, // source
+		nil, // source 来源
 	)
 	if err != nil {
 		return nil, err

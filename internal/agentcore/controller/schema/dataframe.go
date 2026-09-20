@@ -79,7 +79,7 @@ func UnmarshalDataFrames(data []byte) ([]DataFrame, error) {
 	return []DataFrame(ds), nil
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 DataFrame 按具体类型序列化。
 func (ds dataFrameSlice) MarshalJSON() ([]byte, error) {

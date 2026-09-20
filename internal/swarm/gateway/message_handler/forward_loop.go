@@ -96,7 +96,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 
 				// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
 				// Python: 网关钩子处理器检测
-				//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
+				// Python: await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
 
 				// 步骤4: CHAT_ANSWER 分支
 				if msg.ReqMethod == schema.ReqMethodChatAnswer {

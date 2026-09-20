@@ -156,33 +156,34 @@ func NewCodeAdapter() *CodeAdapter {
 // Python: JiuwenClawCodeAdapter.create_instance() (line 221-342)
 //
 // Python 执行步骤：
-//  1. set_checkpoint
-//  2. instance_overrides = dict(config or {})
-//  3. config_base = get_config()
-//  4. _refresh_multimodal_configs(config_base)
-//  5. config = config_base.get("react", {}).copy()
-//  6. self._config_cache = config.copy()
-//  7. self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
-//  8. self._project_dir = overrides.get("project_dir", config.get("project_dir"))
-//  9. self._workspace_dir = self._project_dir or config.get("workspace_dir") or get_agent_workspace_dir()
-//  10. self._agent_workspace_dir = str(get_agent_workspace_dir())
-//  11. self._dreaming_mode = "code"
-//  12. model = self._create_model(config_base)
-//  13. ⤵️ A2X / 11.10: _try_init_a2x_client — code 模式不初始化
-//  14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
-//  15. tool_cards = await self._get_tool_cards(agent_card.id)
-//  16. rails_list = self._build_agent_rails(config, config_base, mode="code")
-//  17. sys_operation = self._create_sys_operation()
-//  18. configured_subagents = self._build_configured_subagents(model, config, config_base)
-//  19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
-//  20. await self._instance.ensure_initialized()
-//  21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
-//     Python: 21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
-//     Python: 21.2 coding_memory workspace set_directory
-//     21.3 agent_history 写入路径修正
-//  22. self._registered_mcp_server_ids.clear()
-//  23. await self._register_mcp_servers_from_config(config_base, tag="code")
-//  24. await self.load_user_rails()
+//
+//	Python: 1. set_checkpoint
+//	Python: 2. instance_overrides = dict(config or {})
+//	Python: 3. config_base = get_config()
+//	Python: 4. _refresh_multimodal_configs(config_base)
+//	Python: 5. config = config_base.get("react", {}).copy()
+//	Python: 6. self._config_cache = config.copy()
+//	Python: 7. self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
+//	Python: 8. self._project_dir = overrides.get("project_dir", config.get("project_dir"))
+//	Python: 9. self._workspace_dir = self._project_dir or config.get("workspace_dir") or get_agent_workspace_dir()
+//	Python: 10. self._agent_workspace_dir = str(get_agent_workspace_dir())
+//	Python: 11. self._dreaming_mode = "code"
+//	12. model = self._create_model(config_base)
+//	13. ⤵️ A2X / 11.10: _try_init_a2x_client — code 模式不初始化
+//	14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+//	15. tool_cards = await self._get_tool_cards(agent_card.id)
+//	16. rails_list = self._build_agent_rails(config, config_base, mode="code")
+//	17. sys_operation = self._create_sys_operation()
+//	18. configured_subagents = self._build_configured_subagents(model, config, config_base)
+//	19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
+//	20. await self._instance.ensure_initialized()
+//	21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
+//	   Python: 21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
+//	   Python: 21.2 coding_memory workspace set_directory
+//	   21.3 agent_history 写入路径修正
+//	22. self._registered_mcp_server_ids.clear()
+//	23. await self._register_mcp_servers_from_config(config_base, tag="code")
+//	24. await self.load_user_rails()
 func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error {
 	// 步骤 11: dreaming_mode = "code"（Python 中在步骤 11，此处提前设置，其余步骤仍按 Python 编号）
 	c.deep.dreamingMode = "code"
@@ -1191,7 +1192,7 @@ func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
 	return rail
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
 // Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
@@ -1452,7 +1453,7 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 		Msg("配置团队成员为 code 配置")
 }
 
-// ──────────────────────────── 辅助函数（对齐 Python interface_code.py 模块级） ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // mergeToolCards 将 tool_cards 合并到 agent 的 AbilityManager（去重）。
 // Python: _merge_tool_cards() (interface_code.py)

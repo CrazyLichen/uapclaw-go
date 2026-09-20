@@ -300,6 +300,34 @@
       ],
       "latest_plan_id": "plan_task_test-team_1789754724034_867_1789754724034_847",
       "status": "plan_approved"
+    },
+    "task_test-team_1789837858410_416": {
+      "plan_ids": [
+        "plan_task_test-team_1789837858410_416_1789837858410_778"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789837858410_416_1789837858410_778",
+      "status": "plan_approved"
+    },
+    "task_test-team_1789927254214_610": {
+      "plan_ids": [
+        "plan_task_test-team_1789927254214_610_1789927254214_782"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789927254214_610_1789927254214_782",
+      "status": "plan_approved"
+    },
+    "task_test-team_1789927365815_204": {
+      "plan_ids": [
+        "plan_task_test-team_1789927365815_204_1789927365815_91"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789927365815_204_1789927365815_91",
+      "status": "plan_approved"
+    },
+    "task_test-team_1789927551078_391": {
+      "plan_ids": [
+        "plan_task_test-team_1789927551078_391_1789927551079_832"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789927551078_391_1789927551079_832",
+      "status": "plan_approved"
     }
   },
   "task_plans": {
@@ -719,6 +747,50 @@
       "submitted_at": "2026-09-19T02:05:24+08:00",
       "decided_at": "2026-09-19T02:05:24+08:00",
       "updated_at": "2026-09-19T02:05:24+08:00"
+    },
+    "plan_task_test-team_1789837858410_416_1789837858410_778": {
+      "plan_id": "plan_task_test-team_1789837858410_416_1789837858410_778",
+      "task_id": "task_test-team_1789837858410_416",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789837858410_416/plans/plan_task_test-team_1789837858410_416_1789837858410_778.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-20T01:10:58+08:00",
+      "decided_at": "2026-09-20T01:10:58+08:00",
+      "updated_at": "2026-09-20T01:10:58+08:00"
+    },
+    "plan_task_test-team_1789927254214_610_1789927254214_782": {
+      "plan_id": "plan_task_test-team_1789927254214_610_1789927254214_782",
+      "task_id": "task_test-team_1789927254214_610",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789927254214_610/plans/plan_task_test-team_1789927254214_610_1789927254214_782.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-21T02:00:54+08:00",
+      "decided_at": "2026-09-21T02:00:54+08:00",
+      "updated_at": "2026-09-21T02:00:54+08:00"
+    },
+    "plan_task_test-team_1789927365815_204_1789927365815_91": {
+      "plan_id": "plan_task_test-team_1789927365815_204_1789927365815_91",
+      "task_id": "task_test-team_1789927365815_204",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789927365815_204/plans/plan_task_test-team_1789927365815_204_1789927365815_91.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-21T02:02:45+08:00",
+      "decided_at": "2026-09-21T02:02:45+08:00",
+      "updated_at": "2026-09-21T02:02:45+08:00"
+    },
+    "plan_task_test-team_1789927551078_391_1789927551079_832": {
+      "plan_id": "plan_task_test-team_1789927551078_391_1789927551079_832",
+      "task_id": "task_test-team_1789927551078_391",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789927551078_391/plans/plan_task_test-team_1789927551078_391_1789927551079_832.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-21T02:05:51+08:00",
+      "decided_at": "2026-09-21T02:05:51+08:00",
+      "updated_at": "2026-09-21T02:05:51+08:00"
     }
   }
 }

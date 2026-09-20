@@ -67,7 +67,7 @@ func (s *AgentServer) handleHooksList(_ context.Context, request *schema.AgentRe
 	// 用 defer/recover 捕获 panic，转为 ok=False 响应
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponentExt).Str("error", fmt.Sprintf("%v", r)).Msg("handleHooksList panic")
+			logger.Error(logComponentExt).Str("error", fmt.Sprintf("%v", r)).Msg("handleHooksList 发生 panic")
 			resp = schema.NewAgentResponse(request.RequestID, request.ChannelID,
 				schema.WithResponseOK(false),
 				schema.WithPayload(map[string]any{

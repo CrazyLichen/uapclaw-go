@@ -830,8 +830,8 @@ func (uc *UapClaw) processTeamInterrupt(
 func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
 	// ⤵️ 10.6.19-23: get_team_manager + terminate_session_runtime
 	// T09: CodeAdapter 缺少 configure_team_member_agent，Team 模式下 code 成员 Agent 无法正确配置
-	// teamManager := getTeamManager(channelID)
-	// return teamManager.TerminateSessionRuntime(ctx, sessionID, logPrefix)
+	// Python: teamManager := getTeamManager(channelID)
+	// Python: return teamManager.TerminateSessionRuntime(ctx, sessionID, logPrefix)
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("channel_id", channelID).

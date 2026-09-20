@@ -25,7 +25,7 @@ import "encoding/json"
 //		    if isinstance(value, dict):      result[key] = extract_schema(value)
 //		    elif isinstance(value, list):    result[key] = value
 //	   否则: result[key] = ""
-//		return result
+//		Python: return result
 func ExtractSchema(schemaDict map[string]any) map[string]any {
 	result := make(map[string]any, len(schemaDict))
 	for key, value := range schemaDict {

@@ -1441,7 +1441,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 	emitHostEvents bool,
 ) (*experience.ExperienceApprovalRequest, error) {
 	if emitHostEvents {
-		r.emitProgress("generating_updates", fmt.Sprintf("generating evolution records for '%s'", skillName), WithSkillName(skillName))
+		r.emitProgress("generating_updates", fmt.Sprintf("正在为 '%s' 生成演化记录", skillName), WithSkillName(skillName))
 	}
 
 	// Python: result = await self._stage_evolution_from_signals(...)
@@ -1455,7 +1455,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 		if emitHostEvents && result.Status == "no_evolution_no_records" {
 			msg := result.Message
 			if msg == "" {
-				msg = fmt.Sprintf("online evolution finished with status=%s", result.Status)
+				msg = fmt.Sprintf("在线演化完成，状态=%s", result.Status)
 			}
 			r.emitBackgroundOutcomeEvent(map[string]string{
 				"status":     result.Status,
@@ -1510,7 +1510,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 	// Python: return await self.approval_runtime.finalize_staged_evolution_request(...)
 	err = r.approvalRuntime.FinalizeStagedEvolutionRequest(
 		request,
-		!autoApprove, // requires_approval = not auto_approve
+		!autoApprove, // requires_approval 是否需要审批
 		emitApprovalRequest,
 		onAutoApproved,
 	)
@@ -1544,7 +1544,7 @@ func (r *TeamSkillEvolutionRail) stageEvolutionFromSignals(
 	source := "team_skill_experience_updater"
 	result, err := r.orchestrator.Evolve(
 		ctx, skillName, signalValues, messages, userQuery, traj,
-		!autoApprove, // requires_approval
+		!autoApprove, // requires_approval 是否需要审批
 		map[string]any{},
 		&source,
 	)

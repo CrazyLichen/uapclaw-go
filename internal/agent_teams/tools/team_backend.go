@@ -250,8 +250,6 @@ func NewTeamBackend(
 	return tb
 }
 
-// ── 属性访问 ──
-
 // TeamName 返回团队名。
 // Python: TeamBackend.team_name
 func (tb *TeamBackend) TeamName() string { return tb.teamName }
@@ -279,8 +277,6 @@ func (tb *TeamBackend) TaskManager() *TeamTaskManager { return tb.taskManager }
 // MessageManager 返回消息管理器。
 // Python: TeamBackend.message_manager
 func (tb *TeamBackend) MessageManager() *TeamMessageManager { return tb.messageManager }
-
-// ── 查询方法 ──
 
 // GetMember 获取成员信息。
 // Python: TeamBackend.get_member(member_name)
@@ -363,8 +359,6 @@ func (tb *TeamBackend) GetTeamUpdatedAt(ctx context.Context) int64 {
 func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 	return tb.db.Member().GetMembersMaxUpdatedAt(ctx, tb.teamName)
 }
-
-// ── 成员生命周期 ──
 
 // SpawnMember 创建成员记录。
 // Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)
@@ -613,8 +607,6 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	return atschema.NewMemberOpResultSuccess()
 }
 
-// ── 团队生命周期 ──
-
 // BuildTeam 创建团队 + 注册 leader + 预定义成员 + HITT。
 // Python: TeamBackend.build_team(display_name, desc, leader_display_name, leader_desc, enable_hitt)
 //
@@ -800,8 +792,6 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 	return success, nil
 }
 
-// ── 任务操作 ──
-
 // CancelTask 取消任务 + 通知 assignee。
 // Python: TeamBackend.cancel_task(task_id)
 func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.MemberOpResult {
@@ -813,7 +803,7 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 	task, _ := tb.taskManager.Get(ctx, taskID)
 	if task != nil && task.Assignee != nil {
 		// 发送取消消息通知（对齐 Python: message_manager.send_message）
-		content := fmt.Sprintf("Task '%s' (ID: %s) has been cancelled by the team leader.", task.Title, taskID)
+		content := fmt.Sprintf("任务 '%s'（ID: %s）已被团队负责人取消。", task.Title, taskID)
 		_, _ = tb.messageManager.SendMessage(ctx, content, *task.Assignee, tb.memberName)
 		// 发布取消事件
 		tb.publishEvent(ctx, events.TaskCancelledEvent{
@@ -921,8 +911,6 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 		Bool("approved", approved).Msg("ApproveTool: 工具调用审批结果")
 	return atschema.NewMemberOpResultSuccess()
 }
-
-// ── HITT 管理 ──
 
 // SpawnHumanAgent 注册 human-agent 成员。
 // Python: TeamBackend.spawn_human_agent(member_name, display_name, desc, prompt)
@@ -1038,8 +1026,6 @@ func (tb *TeamBackend) HITTEnabled() bool {
 	defer tb.hittMu.RUnlock()
 	return tb.enableHITT
 }
-
-// ── 文件清理 ──
 
 // RegisterCleanupPath 注册清理路径（去重）。
 // Python: TeamBackend.register_cleanup_path(path)

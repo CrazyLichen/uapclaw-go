@@ -11,19 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// GitBackend 原生 git worktree 后端。
-// Python: GitBackend
-//
-// 实现完整的创建流程：
-// 1. 快速恢复检查（readWorktreeHeadSHA，不调 git 子进程）
-// 2. 条件 fetch（跳过本地已存在的 origin ref）
-// 3. git worktree add -B
-// 4. 可选稀疏检出
-type GitBackend struct {
-	// config Worktree 配置
-	config WorktreeConfig
-}
-
 // WorktreeLifecycleRail worktree 生命周期 hook 基类。
 // Python: WorktreeLifecycleRail (rails.py)
 //
@@ -54,8 +41,18 @@ type WorktreeBackend interface {
 	Exists(ctx context.Context, worktreePath string) bool
 }
 
-// ManagerOption WorktreeManager 构造选项。
-type ManagerOption func(*managerOptions)
+// GitBackend 原生 git worktree 后端。
+// Python: GitBackend
+//
+// 实现完整的创建流程：
+// 1. 快速恢复检查（readWorktreeHeadSHA，不调 git 子进程）
+// 2. 条件 fetch（跳过本地已存在的 origin ref）
+// 3. git worktree add -B
+// 4. 可选稀疏检出
+type GitBackend struct {
+	// config Worktree 配置
+	config WorktreeConfig
+}
 
 // managerOptions WorktreeManager 内部构造选项。
 type managerOptions struct {
@@ -64,6 +61,9 @@ type managerOptions struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ManagerOption WorktreeManager 构造选项。
+type ManagerOption func(*managerOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

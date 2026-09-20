@@ -695,7 +695,7 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decision *SecurityAlert) {
 	// Python: log_method = getattr(logger, decision.level.value, logger.warning)
 	// Python: log_method("[SecurityAlert] rail=%s message=%s ...", self.__class__.__name__, ...)
-	logMsg := fmt.Sprintf("[SecurityAlert] rail=%s message=%s alert_type=%s level=%s display_mode=%s",
+	logMsg := fmt.Sprintf("[安全告警] rail=%s 消息=%s 告警类型=%s 级别=%s 显示模式=%s",
 		r.TypeName(), decision.Message, decision.AlertType, decision.Level.String(), decision.DisplayMode)
 
 	switch decision.Level {
@@ -878,7 +878,7 @@ func (r *BaseSecurityRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackCo
 
 	logger.Info(securityLogComponent).
 		Str("auto_confirm_key", autoConfirmKey).
-		Msg("auto_confirm.store")
+		Msg("自动确认存储")
 }
 
 // resolveSubjectID 解析 subject_id（用于中断恢复匹配）。
@@ -907,7 +907,7 @@ func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContex
 	logger.Info(securityLogComponent).
 		Str("subject_id", subjectID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("get_user_input")
+		Msg("获取用户输入")
 
 	// Python: isinstance(raw_input, InteractiveInput)
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {

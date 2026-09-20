@@ -228,8 +228,8 @@ func (am *AgentManager) Initialize(ctx context.Context, channelID string, extraC
 	// ⤵️ ACP: channel_key=="acp" 时：
 	//   1. 记录 client_capabilities 到 clientCapabilitiesByChannel
 	//   2. cleanup 已有 ACP agents
-	//   3. _build_acp_agent_config(extra_config) → _create_agent("acp", "code", config)
-	//   4. return ACP_DEFAULT_CAPABILITIES.copy()
+	//   3. Python: _build_acp_agent_config(extra_config) → _create_agent("acp", "code", config)
+	//   4. Python: return ACP_DEFAULT_CAPABILITIES.copy()
 	_ = channelKey
 	_ = ctx
 	_ = extraConfig
