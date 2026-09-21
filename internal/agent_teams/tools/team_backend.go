@@ -731,7 +731,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		}
 		// Python: 只允许 SHUTDOWN 状态
 		if m.Status != string(atschema.MemberStatusShutdown) {
-			logger.Warn(tbLogComponent).Str("team_name", tb.teamName).
+			logger.Error(tbLogComponent).Str("team_name", tb.teamName).
 				Str("active_member", m.MemberName).Str("status", m.Status).
 				Msg("CleanTeam: 仍有活跃成员，无法清理")
 			return false, nil
@@ -943,6 +943,8 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 	)
 	result := tb.SpawnMember(ctx, memberName, displayName, memberCard, string(atschema.TeamRoleHumanAgent), desc, prompt, "")
 	if !result.OK {
+		logger.Warn(tbLogComponent).Str("member_name", memberName).Str("reason", result.Reason).
+			Msg("SpawnHumanAgent: 注册 human-agent 失败")
 		return result
 	}
 	logger.Info(tbLogComponent).Str("member_name", memberName).Msg("SpawnHumanAgent: human-agent 已创建")

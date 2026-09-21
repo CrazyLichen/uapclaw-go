@@ -923,7 +923,6 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 12: ConfirmInterruptRail（确认中断护栏）
-	// ⤵️ 10.6.3-10: ConfirmInterruptRail 尚未实现
 	if ci := c.buildConfirmInterruptRail(); ci != nil {
 		railsList = append(railsList, ci)
 	}

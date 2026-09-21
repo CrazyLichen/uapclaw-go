@@ -500,8 +500,13 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	}
 
 	// 4. 事件发布（对齐 Python: await self._publish_task_event + _publish_unblocked_events + _maybe_publish_task_list_drained）
+	// Python: TaskCompletedEvent(member_name=completed_task.assignee)
+	assigneeName := ""
+	if task.Assignee != nil {
+		assigneeName = *task.Assignee
+	}
 	tm.publishTaskEvent(ctx, events.TaskCompletedEvent{
-		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: assigneeName},
 		TaskID:           taskID,
 	})
 	// unblockedTasks 是 []*TeamTaskBase，直接发布事件

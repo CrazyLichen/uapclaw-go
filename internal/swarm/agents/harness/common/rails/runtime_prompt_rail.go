@@ -17,6 +17,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -47,6 +48,9 @@ type RuntimePromptRail struct {
 	mode string
 	// forceEnglish 强制英文 section（code 模式）
 	forceEnglish bool
+	// builder 系统提示词构建器引用，Init 时从 Agent 获取，Uninit 时置 nil
+	// Python: self.system_prompt_builder
+	builder saprompt.SystemPromptBuilderInterface
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -154,10 +158,39 @@ func (r *RuntimePromptRail) SetForceEnglish(force bool) {
 	r.forceEnglish = force
 }
 
+// Init 从 Agent 获取 system_prompt_builder 引用并存储。
+// Python: RuntimePromptRail.init(agent)
+func (r *RuntimePromptRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
+	if agent != nil {
+		r.builder = agent.SystemPromptBuilder()
+	}
+	return nil
+}
+
+// Uninit 清除注入的 section 并释放 builder 引用。
+// Python: RuntimePromptRail.uninit(agent)
+func (r *RuntimePromptRail) Uninit(_ agentinterfaces.BaseAgent) error {
+	if r.builder != nil {
+		r.builder.RemoveSection("time")
+		r.builder.RemoveSection("runtime")
+		r.builder.RemoveSection("language_output")
+		r.builder.RemoveSection("env")
+		r.builder.RemoveSection("git_status")
+		r.builder.RemoveSection("browser_tool_policy")
+		r.builder.RemoveSection("trusted_dirs_policy")
+	}
+	r.builder = nil
+	return nil
+}
+
 // BeforeModelCall 模型调用前动态注入运行时状态 PromptSection。
 // Python: RuntimePromptRail.before_model_call(ctx)
 func (r *RuntimePromptRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	builder := cbc.Agent().SystemPromptBuilder()
+	// 优先使用 Init 时存储的 builder（对齐 Python: self.system_prompt_builder）
+	builder := r.builder
+	if builder == nil && cbc != nil {
+		builder = cbc.Agent().SystemPromptBuilder()
+	}
 	if builder == nil {
 		return nil
 	}
@@ -289,16 +322,13 @@ func FirstNonEmpty(vals ...string) string {
 // injectTimeSection 注入 time PromptSection。
 func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuilderInterface) {
 	if !r.forceEnglish && r.language == "cn" {
-		// Python L131-134: 一比一复制
+		// Python L129-134: cn 模式下 cn/en 都填中文内容
 		timeContentCN := "# 时间说明\n\n" +
 			"- 当用户询问\u201c最新、当前、今年、本年、实时、近期\u201d等信息并需要搜索时，" +
 			"搜索 query 必须优先使用当前年份或日期"
-		timeContentEN := "# Time Description\n\n" +
-			"- When the user asks for latest/current/this-year/recent information and search is needed, " +
-			"search queries must prefer the current year or date."
 		builder.AddSection(saprompt.PromptSection{
 			Name:     "time",
-			Content:  map[string]string{"cn": timeContentCN, "en": timeContentEN},
+			Content:  map[string]string{"cn": timeContentCN, "en": timeContentCN},
 			Priority: sectionTimePriority,
 		})
 	} else {
@@ -638,21 +668,24 @@ func existingDirs(paths []string) []string {
 	var result []string
 	seen := make(map[string]struct{})
 	for _, item := range paths {
-		item = strings.TrimSpace(item)
-		if item == "" {
+		p := strings.TrimSpace(item)
+		if p == "" {
 			continue
 		}
-		path := filepath.Clean(item)
-		key := filepath.Clean(strings.ToLower(path))
+		p = pathutil.ExpandHome(p)
+		if absPath, err := filepath.Abs(p); err == nil {
+			p = absPath
+		}
+		key := filepath.Clean(strings.ToLower(p))
 		if _, ok := seen[key]; ok {
 			continue
 		}
-		info, err := os.Stat(path)
+		info, err := os.Stat(p)
 		if err != nil || !info.IsDir() {
 			continue
 		}
 		seen[key] = struct{}{}
-		result = append(result, path)
+		result = append(result, p)
 	}
 	return result
 }
@@ -664,7 +697,10 @@ func existingDir(path string) string {
 	if path == "" {
 		return ""
 	}
-	path = filepath.Clean(path)
+	path = pathutil.ExpandHome(path)
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+	}
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
 		return ""
