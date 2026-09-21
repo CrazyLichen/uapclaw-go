@@ -89,13 +89,15 @@ func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID strin
 	logger.Info(logComponent).Str("session_id", sessionID).Str("prefix", logPrefix).Msg("取消 session 非流式任务")
 	cancelFn()
 
-	// 如果有等待超时，等待任务完成
+	// Python: if wait_timeout is None: await task（无限期等待任务完成）
+	// Go: 等待 sessionTasks[sessionID] 变为 nil（processSessionQueue 在任务完成后设 nil）
 	if waitTimeout != nil {
-		select {
-		case <-time.After(*waitTimeout):
-			logger.Warn(logComponent).Str("session_id", sessionID).Dur("wait_timeout", *waitTimeout).Msg("cancel_session_task 等待超时")
-		case <-ctx.Done():
-		}
+		// 有超时的等待
+		deadline := time.After(*waitTimeout)
+		sm.waitTaskDone(sessionID, deadline, ctx.Done())
+	} else {
+		// 无超时，无限期等待任务完成（对齐 Python: await task）
+		sm.waitTaskDone(sessionID, nil, ctx.Done())
 	}
 
 	sm.mu.Lock()
@@ -317,4 +319,28 @@ func (sm *SessionManager) cleanupSession(sessionID string) {
 	delete(sm.sessionSignals, sessionID)
 
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 任务处理器已关闭")
+}
+
+// waitTaskDone 等待 session 任务完成（sessionTasks[sessionID] 变为 nil）。
+// deadline 为 nil 时无限期等待，对齐 Python: await task。
+func (sm *SessionManager) waitTaskDone(sessionID string, deadline <-chan time.Time, ctxDone <-chan struct{}) {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		sm.mu.Lock()
+		done := sm.sessionTasks[sessionID] == nil
+		sm.mu.Unlock()
+		if done {
+			return
+		}
+		select {
+		case <-ticker.C:
+			// 继续轮询
+		case <-deadline:
+			logger.Warn(logComponent).Str("session_id", sessionID).Msg("cancel_session_task 等待超时")
+			return
+		case <-ctxDone:
+			return
+		}
+	}
 }
