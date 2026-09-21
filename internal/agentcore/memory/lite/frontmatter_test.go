@@ -155,6 +155,24 @@ func Test_ExtractBody_空Body(t *testing.T) {
 	}
 }
 
+// TestValidTypes_返回合法类型 测试 ValidTypes 返回所有合法记忆类型
+func TestValidTypes_返回合法类型(t *testing.T) {
+	types := ValidTypes()
+	if len(types) == 0 {
+		t.Error("ValidTypes 不应返回空列表")
+	}
+	// 验证包含核心类型
+	hasUser := false
+	for _, typ := range types {
+		if typ == "user" {
+			hasUser = true
+		}
+	}
+	if !hasUser {
+		t.Error("ValidTypes 应包含 'user' 类型")
+	}
+}
+
 // stringsContains 字符串包含辅助函数
 func stringsContains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || searchSubstring(s, sub))

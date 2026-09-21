@@ -89,3 +89,129 @@ func TestCodingMemoryEditTool_Invoke_路径缺失(t *testing.T) {
 		t.Fatal("new_text 缺失时应返回错误")
 	}
 }
+
+// TestCodingReadResultToMap_全部字段 测试完整结果转 map
+func TestCodingReadResultToMap_全部字段(t *testing.T) {
+	r := &lite.CodingReadResult{
+		Success:     true,
+		Path:        "/test/path.md",
+		Content:     "hello world",
+		TotalLines:  10,
+		StartLine:   1,
+		EndLine:     5,
+		Truncated:   true,
+		Error:       "",
+	}
+	m := codingReadResultToMap(r)
+	if m["success"] != true {
+		t.Error("success 应为 true")
+	}
+	if m["path"] != "/test/path.md" {
+		t.Error("path 不匹配")
+	}
+	if m["content"] != "hello world" {
+		t.Error("content 不匹配")
+	}
+	if m["total_lines"] != 10 {
+		t.Error("total_lines 不匹配")
+	}
+	if m["start_line"] != 1 {
+		t.Error("start_line 不匹配")
+	}
+	if m["end_line"] != 5 {
+		t.Error("end_line 不匹配")
+	}
+	if m["truncated"] != true {
+		t.Error("truncated 应为 true")
+	}
+	if _, ok := m["error"]; ok {
+		t.Error("空 error 不应出现在 map 中")
+	}
+}
+
+// TestCodingReadResultToMap_最小字段 测试仅必填字段
+func TestCodingReadResultToMap_最小字段(t *testing.T) {
+	r := &lite.CodingReadResult{
+		Success: false,
+		Path:    "/err.md",
+		Error:   "读取失败",
+	}
+	m := codingReadResultToMap(r)
+	if m["success"] != false {
+		t.Error("success 应为 false")
+	}
+	if m["error"] != "读取失败" {
+		t.Error("error 不匹配")
+	}
+	if _, ok := m["content"]; ok {
+		t.Error("空 content 不应出现在 map 中")
+	}
+	if _, ok := m["total_lines"]; ok {
+		t.Error("0 total_lines 不应出现在 map 中")
+	}
+}
+
+// TestCodingEditResultToMap_全部字段 测试完整编辑结果转 map
+func TestCodingEditResultToMap_全部字段(t *testing.T) {
+	r := &lite.CodingEditResult{
+		Success:     true,
+		Path:        "/test/path.md",
+		NewContent:  "new content",
+		Error:       "",
+	}
+	m := codingEditResultToMap(r)
+	if m["success"] != true {
+		t.Error("success 应为 true")
+	}
+	if m["path"] != "/test/path.md" {
+		t.Error("path 不匹配")
+	}
+	if m["new_content"] != "new content" {
+		t.Error("new_content 不匹配")
+	}
+	if _, ok := m["error"]; ok {
+		t.Error("空 error 不应出现在 map 中")
+	}
+}
+
+// TestCodingEditResultToMap_仅成功字段 测试仅成功标记
+func TestCodingEditResultToMap_仅成功字段(t *testing.T) {
+	r := &lite.CodingEditResult{
+		Success: false,
+		Error:   "编辑失败",
+	}
+	m := codingEditResultToMap(r)
+	if m["success"] != false {
+		t.Error("success 应为 false")
+	}
+	if m["error"] != "编辑失败" {
+		t.Error("error 不匹配")
+	}
+	if _, ok := m["path"]; ok {
+		t.Error("空 path 不应出现在 map 中")
+	}
+}
+
+// TestCodingMemoryStream_不支持 测试 Stream 方法返回不支持错误
+func TestCodingMemoryStream_不支持(t *testing.T) {
+	ctx := lite.NewCodingMemoryToolContext()
+	tools := CreateCodingMemoryTools(ctx, "cn", "test-agent")
+
+	readTool := tools[0].(*CodingMemoryReadTool)
+	_, err := readTool.Stream(context.Background(), map[string]any{})
+	if err == nil {
+		t.Error("ReadTool.Stream 应返回错误")
+	}
+
+	writeTool := tools[1].(*CodingMemoryWriteTool)
+	_, err = writeTool.Stream(context.Background(), map[string]any{})
+	if err == nil {
+		t.Error("WriteTool.Stream 应返回错误")
+	}
+
+	editTool := tools[2].(*CodingMemoryEditTool)
+	_, err = editTool.Stream(context.Background(), map[string]any{})
+	if err == nil {
+		t.Error("EditTool.Stream 应返回错误")
+	}
+}
