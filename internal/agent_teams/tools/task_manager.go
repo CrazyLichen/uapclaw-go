@@ -866,6 +866,10 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	if task.Status != fsm.TaskStatusClaimed {
 		return fmt.Errorf("任务状态应为 CLAIMED: 当前 %s", task.Status)
 	}
+	// Python: if not existing.assignee: return TaskOpResult.fail(f"Task {task_id} has no assignee")
+	if task.Assignee == nil || *task.Assignee == "" {
+		return fmt.Errorf("任务 %s 没有 assignee", planRecord.TaskID)
+	}
 
 	// 4. 校验 planID 是 latest_plan_id
 	taskPlanIdx, idxExists := index.Tasks[planRecord.TaskID]

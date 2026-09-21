@@ -226,7 +226,7 @@ func NewTeamBackend(
 		teamName:             teamName,
 		memberName:           memberName,
 		isLeader:             isLeader,
-		leaderMemberName:     memberName, // 默认值，WithLeaderMemberName 可覆盖
+		leaderMemberName:     "", // 由 WithLeaderMemberName 或下方逻辑设置
 		db:                   db,
 		messager:             msg,
 		teammateMode:         string(atschema.MemberModeBuildMode),
@@ -236,6 +236,11 @@ func NewTeamBackend(
 	}
 	for _, opt := range opts {
 		opt(tb)
+	}
+	// Python: self.leader_member_name = str(leader_member_name or (member_name if is_leader else "")).strip()
+	// 如果 WithLeaderMemberName 未设置（空字符串），则 isLeader 时回退到 memberName
+	if tb.leaderMemberName == "" && isLeader {
+		tb.leaderMemberName = memberName
 	}
 	// 内部构造 TaskManager 和 MessageManager
 	tb.taskManager = NewTeamTaskManager(
@@ -389,16 +394,15 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 		return atschema.NewMemberOpResultFail("成员 " + memberName + " 已存在于团队 " + tb.teamName)
 	}
 	// 步骤 2: 模型分配（优先使用 opts 中的 allocation，否则使用 modelConfigAllocator）
+	// Python: model_ref_json = _json.dumps(allocation.to_db_ref()) if allocation is not None else None
 	modelRefJSON := ""
 	if cfg.allocation != nil {
-		refMap := map[string]any{"model_name": cfg.allocation.Entry.ModelName, "model_index": cfg.allocation.GroupIndex}
-		if data, err := json.Marshal(refMap); err == nil {
+		if data, err := json.Marshal(cfg.allocation.ToDBRef()); err == nil {
 			modelRefJSON = string(data)
 		}
 	} else if tb.modelConfigAllocator != nil {
 		if alloc := tb.modelConfigAllocator(modelName); alloc != nil {
-			refMap := map[string]any{"model_name": alloc.Entry.ModelName, "model_index": alloc.GroupIndex}
-			if data, err := json.Marshal(refMap); err == nil {
+			if data, err := json.Marshal(alloc.ToDBRef()); err == nil {
 				modelRefJSON = string(data)
 			}
 		}
@@ -454,9 +458,9 @@ func (tb *TeamBackend) Startup(
 		if err != nil {
 			return started, err
 		}
-		if ok {
-			started = append(started, m.MemberName)
-		}
+		// Python: started.append(member.member_name) — 无条件 append
+		_ = ok
+		started = append(started, m.MemberName)
 	}
 	return started, nil
 }
@@ -525,6 +529,8 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 			fmt.Sprintf("成员 %s 无法从状态 '%s' 关闭", memberName, member.Status))
 	}
 	// 步骤 4: CAS 转换
+	// 注：Python 使用非 CAS 的 update_member_status，Go 使用 TryTransitionMemberStatus（CAS）
+	// 这是有意改进——CAS 更安全，防止并发场景下状态竞态条件
 	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
 		member.Status, string(atschema.MemberStatusShutdownRequested))
 	if !ok {
@@ -795,12 +801,22 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 // CancelTask 取消任务 + 通知 assignee。
 // Python: TeamBackend.cancel_task(task_id)
 func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.MemberOpResult {
+	// Python: task = await self.task_manager.get(task_id)
+	// Python: if not task: return False
+	task, _ := tb.taskManager.Get(ctx, taskID)
+	if task == nil {
+		return atschema.NewMemberOpResultFail("任务不存在: " + taskID)
+	}
+	// Python: if task.status == TaskStatus.CANCELLED.value: return True
+	if task.Status == string(atschema.TaskStatusCancelled) {
+		return atschema.NewMemberOpResultSuccess() // 幂等返回
+	}
+
 	unblocked, err := tb.taskManager.Cancel(ctx, taskID)
 	if err != nil {
 		return atschema.NewMemberOpResultFail("取消任务失败: " + err.Error())
 	}
-	// 通知 assignee（如果有）
-	task, _ := tb.taskManager.Get(ctx, taskID)
+	// 通知 assignee（如果有）— 复用上方已获取的 task
 	if task != nil && task.Assignee != nil {
 		// 发送取消消息通知（对齐 Python: message_manager.send_message）
 		content := fmt.Sprintf("任务 '%s'（ID: %s）已被团队负责人取消。", task.Title, taskID)
