@@ -106,11 +106,11 @@ func TestApplyCurlySingleQuotes_上下文感知(t *testing.T) {
 // TestPreserveQuoteStyle_引号风格保留 测试引号风格保留逻辑
 func TestPreserveQuoteStyle_引号风格保留(t *testing.T) {
 	tests := []struct {
-		name        string
-		oldStr      string
+		name         string
+		oldStr       string
 		actualOldStr string
-		newStr      string
-		want        string
+		newStr       string
+		want         string
 	}{
 		{"相同无转换", "hello", "hello", "world", "world"},
 		{"含弯双引号", `"old"`, "\u201cold\u201d", `"new"`, "\u201cnew\u201d"},
@@ -130,11 +130,11 @@ func TestPreserveQuoteStyle_引号风格保留(t *testing.T) {
 // TestTryQuoteVariants_引号变体匹配 测试引号变体查找
 func TestTryQuoteVariants_引号变体匹配(t *testing.T) {
 	tests := []struct {
-		name       string
-		oldStr     string
-		content    string
-		wantMatch  string
-		wantFound  bool
+		name      string
+		oldStr    string
+		content   string
+		wantMatch string
+		wantFound bool
 	}{
 		{"直接匹配", "hello", "say hello world", "hello", true},
 		{"弯引号匹配", "\u2018hello\u2019", "say 'hello' world", "'hello'", true},

@@ -93,14 +93,14 @@ func TestCodingMemoryEditTool_Invoke_路径缺失(t *testing.T) {
 // TestCodingReadResultToMap_全部字段 测试完整结果转 map
 func TestCodingReadResultToMap_全部字段(t *testing.T) {
 	r := &lite.CodingReadResult{
-		Success:     true,
-		Path:        "/test/path.md",
-		Content:     "hello world",
-		TotalLines:  10,
-		StartLine:   1,
-		EndLine:     5,
-		Truncated:   true,
-		Error:       "",
+		Success:    true,
+		Path:       "/test/path.md",
+		Content:    "hello world",
+		TotalLines: 10,
+		StartLine:  1,
+		EndLine:    5,
+		Truncated:  true,
+		Error:      "",
 	}
 	m := codingReadResultToMap(r)
 	if m["success"] != true {
@@ -154,10 +154,10 @@ func TestCodingReadResultToMap_最小字段(t *testing.T) {
 // TestCodingEditResultToMap_全部字段 测试完整编辑结果转 map
 func TestCodingEditResultToMap_全部字段(t *testing.T) {
 	r := &lite.CodingEditResult{
-		Success:     true,
-		Path:        "/test/path.md",
-		NewContent:  "new content",
-		Error:       "",
+		Success:    true,
+		Path:       "/test/path.md",
+		NewContent: "new content",
+		Error:      "",
 	}
 	m := codingEditResultToMap(r)
 	if m["success"] != true {
