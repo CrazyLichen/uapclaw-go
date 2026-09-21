@@ -216,13 +216,25 @@ func (r *ProjectMemoryRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 
 	workspacePath := r.ResolveWorkspacePath()
 
-	// Python: files = discover_and_load_memory_files(...)
-	// Go 版本的 DiscoverAndLoadMemoryFiles 内部处理所有异常，不返回 error。
-	files := project_memory.DiscoverAndLoadMemoryFiles(
-		workspacePath,
-		workspacePath, // target_path = workspace（对齐 Python: paths: scoped rules evaluated against active workspace/cwd）
-		r.additionalDirectories,
-	)
+	// Python: try/except (OSError, ValueError, TypeError) — discovery 失败时优雅降级
+	// Go 版本增加 defer/recover 保护，防止 DiscoverAndLoadMemoryFiles 内部 panic 导致 BeforeModelCall 崩溃
+	var files []project_memory.LoadedMemoryFile
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error(pmrLogComponent).
+					Str("event_type", "ProjectMemoryRail_discovery_failed").
+					Str("workspace", workspacePath).
+					Any("recover", rec).
+					Msg("DiscoverAndLoadMemoryFiles panic，降级为空文件列表")
+			}
+		}()
+		files = project_memory.DiscoverAndLoadMemoryFiles(
+			workspacePath,
+			workspacePath, // target_path = workspace（对齐 Python: paths: scoped rules evaluated against active workspace/cwd）
+			r.additionalDirectories,
+		)
+	}()
 
 	merged := project_memory.MergeMemoryContent(files, r.maxChars)
 

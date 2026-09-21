@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -376,9 +377,26 @@ func (r *SkillEvolutionRail) AutoSave() bool { return r.autoSave }
 func (r *SkillEvolutionRail) SetAutoSave(v bool) { r.autoSave = v }
 
 // ApprovalRuntime 返回审批运行时。
-// Python: SkillEvolutionRail.approval_runtime
+// Python: SkillEvolutionRail.approval_runtime (property) — 延迟重建
 func (r *SkillEvolutionRail) ApprovalRuntime() *EvolutionApprovalRuntime {
-	return r.approvalRuntime
+	runtime := r.approvalRuntime
+	// Python: 检查 manager 和 pendingApprovalSnapshots 是否变化，不一致时重建
+	needRebuild := runtime == nil
+	if runtime != nil {
+		// Python 用 is 判断对象身份；Go 用接口比较（manager）和 reflect.Pointer 比较（map）
+		if runtime.manager != r.manager {
+			needRebuild = true
+		}
+		// map 只能与 nil 比较，使用 reflect 判断是否同一底层对象
+		if reflect.ValueOf(runtime.pendingApprovalSnapshots).Pointer() != reflect.ValueOf(r.pendingApprovalSnapshots).Pointer() {
+			needRebuild = true
+		}
+	}
+	if needRebuild {
+		runtime = NewEvolutionApprovalRuntime(r.manager, r.pendingApprovalSnapshots)
+		r.approvalRuntime = runtime
+	}
+	return runtime
 }
 
 // Manager 返回经验生命周期管理器。
@@ -1832,9 +1850,23 @@ func (r *SkillEvolutionRail) detectActiveRequestSignals(
 	).BindLLM(r.evolver.LLM(), r.evolver.ModelName(), r.language)
 
 	var detected []*signal.EvolutionSignal
-	detected = append(detected, detector.DetectTrajectorySignals(traj, messages)...)
+	// Python: try/except — DetectTrajectorySignals 失败时优雅降级
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Warn(logComponent).Any("recover", rec).
+					Msg("[SkillEvolutionRail] active request trajectory detection failed")
+			}
+		}()
+		detected = append(detected, detector.DetectTrajectorySignals(traj, messages)...)
+	}()
 
-	userIntentSignals, _ := detector.DetectUserIntent(ctx, messages)
+	// Python: try/except — DetectUserIntent 失败时优雅降级
+	userIntentSignals, intentErr := detector.DetectUserIntent(ctx, messages)
+	if intentErr != nil {
+		logger.Warn(logComponent).Err(intentErr).
+			Msg("[SkillEvolutionRail] active request user-feedback detection failed")
+	}
 	for _, sig := range userIntentSignals {
 		if sig.SkillName != nil && *sig.SkillName != skillName {
 			continue
