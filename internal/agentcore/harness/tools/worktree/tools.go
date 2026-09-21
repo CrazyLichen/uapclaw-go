@@ -3,12 +3,14 @@ package worktree
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	toolspkg "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -181,7 +183,16 @@ func (t *ExitWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, _ 
 
 	result, err := t.manager.Exit(ctx, action, discard)
 	if err != nil {
-		return map[string]any{"error": err.Error()}, nil
+		// 区分 ValidationError（参数验证失败）和 RuntimeError（执行失败）
+		// Python: ValidationError → ToolOutput(success=False, error=e.message)
+		// Python: RuntimeError/GitError → ToolOutput(success=False, error="Failed to exit worktree: {e}")
+		var baseErr *exception.BaseError
+		if errors.As(err, &baseErr) && baseErr.Status() == exception.StatusToolWorktreeExitInvalid {
+			// ValidationError: 直接传递验证错误消息
+			return map[string]any{"error": baseErr.Message()}, nil
+		}
+		// RuntimeError / 其他错误: 包装为 "Failed to exit worktree: ..."
+		return map[string]any{"error": fmt.Sprintf("Failed to exit worktree: %s", err.Error())}, nil
 	}
 
 	// 恢复 CWD

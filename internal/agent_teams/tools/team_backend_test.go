@@ -595,9 +595,12 @@ func TestCancelAllTasks(t *testing.T) {
 	tb.taskManager.Add(ctx, "Task 1", "desc")
 	tb.taskManager.Add(ctx, "Task 2", "desc")
 
-	result := tb.CancelAllTasks(ctx, nil)
-	if !result.OK {
-		t.Errorf("CancelAllTasks() = %v, want OK", result)
+	count, err := tb.CancelAllTasks(ctx, nil)
+	if err != nil {
+		t.Errorf("CancelAllTasks() 返回错误: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("CancelAllTasks() = %d, want 2", count)
 	}
 }
 

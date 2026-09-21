@@ -839,19 +839,20 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 }
 
 // CancelAllTasks 批量取消 + 广播。
-// Python: TeamBackend.cancel_all_tasks(skip_assignees)
-func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []string) atschema.MemberOpResult {
+// Python: TeamBackend.cancel_all_tasks(skip_assignees) → int（取消的任务数量）
+func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []string) (int, error) {
 	cancelled, err := tb.taskManager.CancelAllTasks(ctx, skipAssignees)
 	if err != nil {
-		return atschema.NewMemberOpResultFail("批量取消任务失败: " + err.Error())
+		return 0, fmt.Errorf("批量取消任务失败: %w", err)
 	}
+	cancelledCount := len(cancelled)
 	// 广播取消消息（对齐 Python: message_manager.broadcast_message）
-	if len(cancelled) > 0 {
-		content := fmt.Sprintf("所有任务（%d 个）已被团队负责人取消。", len(cancelled))
+	if cancelledCount > 0 {
+		content := fmt.Sprintf("所有任务（%d 个）已被团队负责人取消。", cancelledCount)
 		_, _ = tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
 	}
-	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CancelAllTasks: 所有任务已取消")
-	return atschema.NewMemberOpResultSuccess()
+	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Int("cancelled_count", cancelledCount).Msg("CancelAllTasks: 所有任务已取消")
+	return cancelledCount, nil
 }
 
 // ApprovePlan 审批计划。

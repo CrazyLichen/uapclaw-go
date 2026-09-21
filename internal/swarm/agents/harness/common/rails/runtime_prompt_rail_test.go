@@ -152,7 +152,7 @@ func TestInjectRuntimeSection(t *testing.T) {
 	rail.SetModelName("test-model")
 	rail.SetMode("agent.plan")
 	builder := newMockBuilder()
-	rail.injectRuntimeSection(builder)
+	rail.injectRuntimeSection(builder, nil)
 	section := builder.GetSection("runtime")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionRuntimePriority, section.Priority)
@@ -178,7 +178,7 @@ func TestInjectGitStatusSection_条件(t *testing.T) {
 	// 无 runtime_state.yaml → git_branch 为空 → 不注入
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectGitStatusSection(builder)
+	rail.injectGitStatusSection(builder, nil)
 	assert.False(t, builder.HasSection("git_status"))
 }
 
@@ -196,7 +196,7 @@ func TestInjectEnvSection(t *testing.T) {
 func TestInjectLanguageOutputSection(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectLanguageOutputSection(builder)
+	rail.injectLanguageOutputSection(builder, nil)
 	section := builder.GetSection("language_output")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionLanguageOutputPriority, section.Priority)

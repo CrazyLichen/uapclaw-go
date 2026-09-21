@@ -328,6 +328,20 @@
       ],
       "latest_plan_id": "plan_task_test-team_1789927551078_391_1789927551079_832",
       "status": "plan_approved"
+    },
+    "task_test-team_1789980144751_794": {
+      "plan_ids": [
+        "plan_task_test-team_1789980144751_794_1789980144751_528"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789980144751_794_1789980144751_528",
+      "status": "plan_approved"
+    },
+    "task_test-team_1789980189997_469": {
+      "plan_ids": [
+        "plan_task_test-team_1789980189997_469_1789980189997_744"
+      ],
+      "latest_plan_id": "plan_task_test-team_1789980189997_469_1789980189997_744",
+      "status": "plan_approved"
     }
   },
   "task_plans": {
@@ -791,6 +805,28 @@
       "submitted_at": "2026-09-21T02:05:51+08:00",
       "decided_at": "2026-09-21T02:05:51+08:00",
       "updated_at": "2026-09-21T02:05:51+08:00"
+    },
+    "plan_task_test-team_1789980144751_794_1789980144751_528": {
+      "plan_id": "plan_task_test-team_1789980144751_794_1789980144751_528",
+      "task_id": "task_test-team_1789980144751_794",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789980144751_794/plans/plan_task_test-team_1789980144751_794_1789980144751_528.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-21T16:42:24+08:00",
+      "decided_at": "2026-09-21T16:42:24+08:00",
+      "updated_at": "2026-09-21T16:42:24+08:00"
+    },
+    "plan_task_test-team_1789980189997_469_1789980189997_744": {
+      "plan_id": "plan_task_test-team_1789980189997_469_1789980189997_744",
+      "task_id": "task_test-team_1789980189997_469",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1789980189997_469/plans/plan_task_test-team_1789980189997_469_1789980189997_744.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-21T16:43:09+08:00",
+      "decided_at": "2026-09-21T16:43:10+08:00",
+      "updated_at": "2026-09-21T16:43:10+08:00"
     }
   }
 }

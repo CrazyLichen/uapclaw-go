@@ -45,21 +45,16 @@ import (
 func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[string]any, mode string) []sainterfaces.AgentRail {
 	var railsList []sainterfaces.AgentRail
 
-	// 步骤 1: heartbeatRail — 心跳
-	hb := d.buildHeartbeatRail()
-	if hb != nil {
-		d.heartbeatRail = hb
-		railsList = append(railsList, hb)
+	// ─── 以下注册顺序对齐 Python _build_agent_rails (interface_deep.py L2130-2156) ───
+
+	// 步骤 1: runtimePromptRail — Python: _runtime_prompt_rail (index 0)
+	rp := d.buildRuntimePromptRail()
+	if rp != nil {
+		d.runtimePromptRail = rp
+		railsList = append(railsList, rp)
 	}
 
-	// 步骤 2: taskPlanningRail — 任务规划
-	tp := d.buildTaskPlanningRail(config, d.resolveRuntimeLanguage())
-	if tp != nil {
-		d.taskPlanningRail = tp
-		railsList = append(railsList, tp)
-	}
-
-	// 步骤 3: filesystemRail — 文件系统（非 ACP 模式启用）
+	// 步骤 2: filesystemRail — Python: conditional insert at 1
 	if d.filesystemRailEnabledForProfile(d.instanceOverrides) {
 		readOnly := mode == "agent.plan"
 		fs := d.buildFilesystemRail(readOnly)
@@ -69,7 +64,77 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		}
 	}
 
-	// 步骤 4: agentModeRail — 模式约束（plan 模式）
+	// 步骤 3: skillRail — Python: conditional insert at 2 (or 1 if no filesystem)
+	skill := d.buildSkillRail()
+	if skill != nil {
+		d.skillRail = skill
+		railsList = append(railsList, skill)
+	}
+
+	// 步骤 4: responsePromptRail — Python: _response_prompt_rail
+	resp := d.buildResponsePromptRail()
+	if resp != nil {
+		d.responsePromptRail = resp
+		railsList = append(railsList, resp)
+	}
+
+	// 步骤 5: streamEventRail — Python: _stream_event_rail
+	se := d.buildStreamEventRail()
+	if se != nil {
+		d.streamEventRail = se
+		railsList = append(railsList, se)
+	}
+
+	// 步骤 6: taskPlanningRail — Python: _task_planning_rail
+	tp := d.buildTaskPlanningRail(config, d.resolveRuntimeLanguage())
+	if tp != nil {
+		d.taskPlanningRail = tp
+		railsList = append(railsList, tp)
+	}
+
+	// 步骤 7: securityRail — Python: _security_rail
+	sec := d.buildSecurityRail(configBase)
+	if sec != nil {
+		d.securityRail = sec
+		railsList = append(railsList, sec)
+	}
+
+	// 步骤 8: heartbeatRail — Python: _heartbeat_rail
+	hb := d.buildHeartbeatRail()
+	if hb != nil {
+		d.heartbeatRail = hb
+		railsList = append(railsList, hb)
+	}
+
+	// 步骤 9: avatarRail — Python: _avatar_rail
+	av := d.buildAvatarRail()
+	if av != nil {
+		d.avatarRail = av
+		railsList = append(railsList, av)
+	}
+
+	// 步骤 10: subagentRail — Python: _subagent_rail
+	sa := d.buildSubagentRail()
+	if rail, ok := sa.(*subagent.SubagentRail); ok {
+		d.subagentRail = rail
+	}
+	railsList = append(railsList, sa)
+
+	// 步骤 11: permissionRail — Python: _permission_rail
+	perm := d.buildPermissionRail(configBase)
+	if perm != nil {
+		d.permissionRail = perm
+		railsList = append(railsList, perm)
+	}
+
+	// 步骤 12: contextProcessorRail — Python: _context_processor_rail
+	cp := d.buildContextProcessorRail()
+	d.contextProcessorRail = cp
+	railsList = append(railsList, cp)
+
+	// ─── Go 独有 Rail（Python 中不存在或不同） ───
+
+	// agentModeRail — plan 模式约束（Go 独有）
 	if mode == "agent.plan" {
 		am := d.buildAgentModeRail(nil)
 		if am != nil {
@@ -77,123 +142,51 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		}
 	}
 
-	// 步骤 5: mcpRail — MCP 资源浏览
+	// mcpRail — MCP 资源浏览（Go 独有）
 	mcp := d.buildMcpRail()
 	if mcp != nil {
 		railsList = append(railsList, mcp)
 	}
 
-	// 步骤 6: progressiveToolRail — 渐进式工具
+	// progressiveToolRail — 渐进式工具（Go 独有）
 	pt := d.buildProgressiveToolRail()
 	if pt != nil {
 		railsList = append(railsList, pt)
 	}
 
-	// 步骤 7-19: 未实现 Rail builder（⤵️ 10.6.3-10）
-	// Python: _build_agent_rails 中的 skill/stream_event/subagent/security 等分支
-
-	// 步骤 7: skillRail
-	skill := d.buildSkillRail()
-	if skill != nil {
-		d.skillRail = skill
-		railsList = append(railsList, skill)
-	}
-
-	// 步骤 8: skillEvolutionRail
-	evolve := d.buildSkillEvolutionRail()
-	if evolve != nil {
-		var ok bool
-		d.skillEvolutionRail, ok = evolve.(*evolution.SkillEvolutionRail)
-		if ok {
-			railsList = append(railsList, d.skillEvolutionRail)
-		}
-	}
-
-	// 步骤 9: skillCreateRail
-	create := d.buildSkillCreateRail()
-	if create != nil {
-		d.skillCreateRail = create
-		railsList = append(railsList, create)
-	}
-
-	// 步骤 10: streamEventRail
-	se := d.buildStreamEventRail()
-	if se != nil {
-		d.streamEventRail = se
-		railsList = append(railsList, se)
-	}
-
-	// 步骤 11: subagentRail
-	sa := d.buildSubagentRail()
-	// buildSubagentRail 始终返回非 nil 的 SubagentRail
-	if rail, ok := sa.(*subagent.SubagentRail); ok {
-		d.subagentRail = rail
-	}
-	railsList = append(railsList, sa)
-
-	// 步骤 12: securityRail
-	sec := d.buildSecurityRail(configBase)
-	if sec != nil {
-		d.securityRail = sec
-		railsList = append(railsList, sec)
-	}
-
-	// 步骤 13: memoryRail
-	mem := d.buildMemoryRail()
-	if mem != nil {
-		d.memoryRail = mem
-		railsList = append(railsList, mem)
-	}
-
-	// 步骤 14: externalMemoryRail
-	emem := d.buildExternalMemoryRail()
-	if emem != nil {
-		d.externalMemoryRail = emem
-		railsList = append(railsList, emem)
-	}
-
-	// 步骤 15: avatarRail
-	av := d.buildAvatarRail()
-	if av != nil {
-		d.avatarRail = av
-		railsList = append(railsList, av)
-	}
-
-	// 步骤 16: runtimePromptRail
-	rp := d.buildRuntimePromptRail()
-	if rp != nil {
-		d.runtimePromptRail = rp
-		railsList = append(railsList, rp)
-	}
-
-	// 步骤 17: responsePromptRail
-	resp := d.buildResponsePromptRail()
-	if resp != nil {
-		d.responsePromptRail = resp
-		railsList = append(railsList, resp)
-	}
-
-	// 步骤 18: contextAssembleRail
+	// contextAssembleRail — 上下文组装（Go 独有）
 	ca := d.buildContextAssembleRail(mode)
 	if ca != nil {
 		d.contextAssembleRail = ca
 		railsList = append(railsList, ca)
 	}
 
-	// 步骤 19: contextProcessorRail
-	// buildContextProcessorRail() 始终返回非 nil，无需 nil 检查
-	cp := d.buildContextProcessorRail()
-	d.contextProcessorRail = cp
-	railsList = append(railsList, cp)
+	// ─── 不在冷启动时挂载的 Rail（由 updateRailsForMode 按需注册） ───
 
-	// 步骤 20: permissionRail
-	perm := d.buildPermissionRail(configBase)
-	if perm != nil {
-		d.permissionRail = perm
-		railsList = append(railsList, perm)
+	// skillEvolutionRail — 仅构建实例存储到字段，不注册
+	// Python: SkillEvolutionRail 不在冷启动时挂载，由 _update_rails_for_mode 按 mode 按需注册/注销
+	evolve := d.buildSkillEvolutionRail()
+	if evolve != nil {
+		if rail, ok := evolve.(*evolution.SkillEvolutionRail); ok {
+			d.skillEvolutionRail = rail
+		}
 	}
 
-	// 步骤 21: userHookRail — 用户配置的 hooks，对齐 Python interface_deep.py L2200-2211
+	// skillCreateRail — 仅构建实例存储到字段，不注册
+	// Python: SkillCreateRail 由 _update_rails_for_mode 按 mode 按需注册/注销
+	_ = d.buildSkillCreateRail()
+
+	// memoryRail — 仅构建实例存储到字段，不注册
+	// Python: MemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
+	_ = d.buildMemoryRail()
+
+	// externalMemoryRail — 仅构建实例存储到字段，不注册
+	// Python: ExternalMemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
+	_ = d.buildExternalMemoryRail()
+
+	// ─── 用户自定义 Hook Rail ───
+
+	// userHookRail — 用户配置的 hooks，对齐 Python interface_deep.py L2200-2211
 	// Python: try/except 包裹注册流程，失败时 warning 并继续
 	func() {
 		defer func() {

@@ -1256,6 +1256,7 @@ func TestDeepAdapter_Slash占位函数(t *testing.T) {
 }
 
 // TestDeepAdapter_HandleSlashCommand_evolve前缀 测试 /evolve 前缀分发。
+// 对齐 Python: _ensure_evolution_rail_for_slash 会检查 mode 和 evolution.enabled 配置
 func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
@@ -1267,10 +1268,28 @@ func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 		"/evolve_rollback",
 		"/evolve_list",
 	}
+	// agent.plan + evolution 未启用 → 返回 "演进功能未启用。" 错误
 	for _, query := range tests {
 		result, err := d.handleSlashCommand(ctx, query, "s1", "agent.plan")
-		if result != nil || err != nil {
-			t.Errorf("handleSlashCommand(%q) 占位应返回 nil, nil", query)
+		if err != nil {
+			t.Errorf("handleSlashCommand(%q) 意外返回 error: %v", query, err)
+		}
+		if result == nil {
+			t.Errorf("handleSlashCommand(%q) 应返回错误信息，得到 nil", query)
+		}
+		if result != nil {
+			resultType, _ := result["result_type"].(string)
+			if resultType != "error" {
+				t.Errorf("handleSlashCommand(%q) result_type 期望 'error'，得到 %q", query, resultType)
+			}
+		}
+	}
+
+	// 非 agent.plan 模式 → 返回 "agent 模式下演进功能不可用。" 错误
+	for _, query := range tests {
+		result, _ := d.handleSlashCommand(ctx, query, "s1", "agent.fast")
+		if result == nil {
+			t.Errorf("handleSlashCommand(%q, agent.fast) 应返回错误信息，得到 nil", query)
 		}
 	}
 }

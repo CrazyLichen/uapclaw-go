@@ -105,3 +105,15 @@ func (b *baseLifecycleRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSes
 func (b *baseLifecycleRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
+func (b *baseLifecycleRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (b *baseLifecycleRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
+	return "", nil
+}
+func (b *baseLifecycleRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (b *baseLifecycleRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
+	return nil
+}

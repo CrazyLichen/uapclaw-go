@@ -195,20 +195,24 @@ func (r *RuntimePromptRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 		return nil
 	}
 
+	// 在入口处读取一次 runtime_state.yaml，所有 inject 方法共用
+	// Python: runtime_state = self._read_runtime_state_yaml() 只读一次
+	runtimeState := readRuntimeStateYAML()
+
 	// ── time 节 ──
 	r.injectTimeSection(builder)
 
 	// ── runtime section（读 YAML fallback setter）──
-	r.injectRuntimeSection(builder)
+	r.injectRuntimeSection(builder, runtimeState)
 
 	// ── language_output 节 ──
-	r.injectLanguageOutputSection(builder)
+	r.injectLanguageOutputSection(builder, runtimeState)
 
 	// ── env 节 ──
 	r.injectEnvSection(builder)
 
 	// ── git_status section（条件）──
-	r.injectGitStatusSection(builder)
+	r.injectGitStatusSection(builder, runtimeState)
 
 	// ── browser_tool_policy section（条件）──
 	r.injectBrowserToolPolicySection(builder)
@@ -284,7 +288,7 @@ func WriteRuntimeStateYAML(modelName, mode, language, channel, agentName, projec
 		"language":           language,
 		"channel":            channel,
 		"agent":              agentName,
-		"platform":           fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH),
+		"platform":           getOSVersion(),
 		"go_version":         runtime.Version(),
 		"git_branch":         gitBranch,
 		"git_main_branch":    gitMainBranch,
@@ -345,10 +349,9 @@ func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuild
 }
 
 // injectRuntimeSection 注入 runtime PromptSection。
-func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBuilderInterface) {
-	// 读取 runtime_state.yaml
-	// Python L148-155: 一比一复制逻辑
-	runtimeState := readRuntimeStateYAML()
+func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
+	// 使用入口处传入的 runtimeState，不再重复读取 YAML
+	// Python L148-155: runtime_state 只读取一次，所有字段共用
 
 	model := FirstNonEmpty(runtimeState["model"], r.modelName, "unknown")
 	mde := FirstNonEmpty(runtimeState["mode"], r.mode, "unknown")
@@ -388,10 +391,9 @@ func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBu
 }
 
 // injectLanguageOutputSection 注入 language_output PromptSection。
-func (r *RuntimePromptRail) injectLanguageOutputSection(builder saprompt.SystemPromptBuilderInterface) {
+func (r *RuntimePromptRail) injectLanguageOutputSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
 	// Python L191-205: 一比一复制逻辑
 	builder.RemoveSection("language_output")
-	runtimeState := readRuntimeStateYAML()
 	languageVal := FirstNonEmpty(runtimeState["language"], r.language, "unknown")
 	languageName, ok := languageNames[languageVal]
 	if !ok {
@@ -420,7 +422,9 @@ func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilde
 	if shellPath != "" {
 		shellName = filepath.Base(shellPath)
 	}
-	osVersion := fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
+	// Python: platform.system() → runtime.GOOS 首字母大写
+	// Python: platform.release() → syscall.Uname().Release
+	osVersion := getOSVersion()
 
 	if !r.forceEnglish && r.language == "cn" {
 		// Python L214-237: 一比一复制
@@ -484,10 +488,9 @@ func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilde
 }
 
 // injectGitStatusSection 注入 git_status PromptSection（条件）。
-func (r *RuntimePromptRail) injectGitStatusSection(builder saprompt.SystemPromptBuilderInterface) {
+func (r *RuntimePromptRail) injectGitStatusSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
 	// Python L271-300: 一比一复制逻辑
 	builder.RemoveSection("git_status")
-	runtimeState := readRuntimeStateYAML()
 	gitBranch := strings.TrimSpace(runtimeState["git_branch"])
 	if gitBranch == "" || gitBranch == "N/A" {
 		return
@@ -635,6 +638,47 @@ func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.Syst
 			Priority: sectionTrustedDirsPolicyPriority,
 		})
 	}
+}
+
+// getOSVersion 获取操作系统版本字符串，对齐 Python: platform.system() + " " + platform.release()。
+// Linux: "Linux 6.5.0"，macOS: "Darwin 23.1.0"，Windows: "windows 10.0"
+func getOSVersion() string {
+	sysName := runtime.GOOS
+	// 首字母大写，对齐 Python platform.system()
+	if len(sysName) > 0 {
+		sysName = strings.ToUpper(sysName[:1]) + sysName[1:]
+	}
+	release := getOSRelease()
+	if release != "" {
+		return sysName + " " + release
+	}
+	return sysName
+}
+
+// getOSRelease 获取操作系统 release 信息。
+// 对齐 Python: platform.release()
+func getOSRelease() string {
+	switch runtime.GOOS {
+	case "linux", "darwin":
+		release, err := getUnameRelease()
+		if err == nil && release != "" {
+			return release
+		}
+		return ""
+	default:
+		// Windows: 暂无 syscall.Uname，使用环境变量
+		return os.Getenv("OS")
+	}
+}
+
+// getUnameRelease 通过 uname 系统调用获取 release 信息。
+// 对齐 Python: platform.release()
+func getUnameRelease() (string, error) {
+	out, err := exec.Command("uname", "-r").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // readRuntimeStateYAML 读取 runtime_state.yaml 文件，返回 map。

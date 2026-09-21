@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -21,7 +22,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleSlashCommand 处理斜杠命令。
-// Python: _handle_slash_command() (line 3769-3830)
+// Python: _handle_slash_command() (line 4305-4382)
 //
 // 按 query 前缀 /evolve* 分发到具体处理器。
 // ✅ 已回填：依赖 SkillEvolutionRail
@@ -33,18 +34,61 @@ func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sess
 	// Python: 按 query 前缀分发
 	switch {
 	case strings.HasPrefix(query, "/evolve_simplify"):
+		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		}
 		return d.handleEvolveSimplifyCommand(ctx, query, sessionID)
 	case strings.HasPrefix(query, "/evolve_rebuild"):
+		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		}
 		return d.handleEvolveRebuildCommand(ctx, query, sessionID)
 	case strings.HasPrefix(query, "/evolve_rollback"):
+		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		}
 		return d.handleEvolveRollbackCommand(ctx, query, sessionID)
 	case strings.HasPrefix(query, "/evolve_list"):
+		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		}
 		return d.handleEvolveListCommand(ctx, sessionID)
 	case strings.HasPrefix(query, "/evolve"):
+		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+			return map[string]any{"output": errMsg, "result_type": "error"}, nil
+		}
 		return d.handleEvolveCommand(ctx, query, sessionID)
 	default:
 		return nil, nil
 	}
+}
+
+// ensureEvolutionRailForSlash 检查演进功能可用性，必要时懒加载 SkillEvolutionRail。
+// Python: _ensure_evolution_rail_for_slash() (interface_deep.py L4285-4303)
+//
+// 返回空字符串表示可用，非空表示错误信息。
+func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
+	if mode != "agent.plan" {
+		return "agent 模式下演进功能不可用。"
+	}
+	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	enabled, _ := evolutionConfig["enabled"].(bool)
+	if !enabled {
+		return "演进功能未启用。"
+	}
+	// 懒加载：如果 rail 为 nil，尝试构建
+	if d.skillEvolutionRail == nil {
+		rail := d.buildSkillEvolutionRail()
+		if rail != nil {
+			if r, ok := rail.(*evolution.SkillEvolutionRail); ok {
+				d.skillEvolutionRail = r
+			}
+		}
+	}
+	if d.skillEvolutionRail == nil {
+		return "演进功能初始化失败。"
+	}
+	return ""
 }
 
 // handleEvolveCommand 处理 /evolve 命令。

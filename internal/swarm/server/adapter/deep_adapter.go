@@ -744,7 +744,38 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	mode := paramsString(params, "mode", "agent.plan")
 
 	// 步骤 7-8: slash 命令处理
-	// ⤵️ 10.6.3-10: slash_result = _handle_slash_command(query, sessionID, mode)
+	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
+	slashResult, slashErr := d.handleSlashCommand(ctx, query, sessionID, mode)
+	if slashErr != nil {
+		logger.Warn(logComponent).Err(slashErr).Msg("handleSlashCommand 执行失败，继续正常流程")
+	}
+	if slashResult != nil {
+		// Python: followup_prompt = self._extract_rebuild_followup_prompt(slash_result)
+		followupPrompt := extractRebuildFollowupPrompt(slashResult)
+		if followupPrompt != "" {
+			// Python: inputs = dict(inputs); inputs["query"] = followup_prompt
+			inputs = copyMap(inputs)
+			inputs["query"] = followupPrompt
+		} else {
+			// Python: approval_chunks = slash_result.get("approval_chunks")
+			approvalChunks, _ := slashResult["approval_chunks"]
+			if approvalChunks != nil {
+				return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+					schema.WithPayload(map[string]any{"approval_chunks": approvalChunks}),
+				), nil
+			}
+			// Python: content = slash_result.get("output", str(slash_result))
+			content := slashResult["output"]
+			if content == nil {
+				content = fmt.Sprintf("%v", slashResult)
+			}
+			resultType, _ := slashResult["result_type"].(string)
+			return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+				schema.WithResponseOK(resultType != "error"),
+				schema.WithPayload(map[string]any{"content": content}),
+			), nil
+		}
+	}
 
 	// 步骤 9: cron 上下文绑定
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
@@ -778,18 +809,21 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 15: streamEventRail.reset_abort(sessionID)
 	// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.reset_abort(sessionID) }
 
-	// 步骤 16-17: update_runtime_config + CWD 种子
+	// 步骤 16-17: update_runtime_config（含 CWD 种子、语言/频道解析、RuntimePromptRail setter 等）
+	// Python: await self._update_runtime_config(self._RuntimeConfig(...))
 	requestCwd := paramsString(params, "cwd", "")
-	if requestCwd == "" {
-		if v, ok := params["project_dir"]; ok {
-			if s, ok := v.(string); ok {
-				requestCwd = s
-			}
-		}
-	}
-	if requestCwd != "" {
-		d.seedRuntimeCwd(ctx, requestCwd)
-	}
+	trustedDirs := parseStringSlice(params, "trusted_dirs")
+	projectDir := paramsString(params, "project_dir", "")
+	d.updateRuntimeConfig(ctx, &runtimeConfig{
+		SessionID:       sessionID,
+		Mode:            mode,
+		RequestID:       req.RequestID,
+		ChannelID:       req.ChannelID,
+		RequestMetadata: req.Metadata,
+		TrustedDirs:     trustedDirs,
+		CWD:             requestCwd,
+		ProjectDir:      projectDir,
+	})
 
 	// 步骤 18: Runner.run_agent(agent=d.instance, inputs=inputs)
 	// Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
@@ -895,7 +929,49 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
 
 	// 步骤 9: slash 命令处理
-	// ⤵️ 10.6.3-10: slash_result = _handle_slash_command(query, sessionID, mode)
+	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
+	streamQuery := paramsString(params, "query", "")
+	slashResultStream, slashErrStream := d.handleSlashCommand(ctx, streamQuery, sessionID, mode)
+	if slashErrStream != nil {
+		logger.Warn(logComponent).Err(slashErrStream).Msg("handleSlashCommand 执行失败，继续正常流程")
+	}
+	if slashResultStream != nil {
+		// Python: followup_prompt = self._extract_rebuild_followup_prompt(slash_result)
+		followupPrompt := extractRebuildFollowupPrompt(slashResultStream)
+		if followupPrompt != "" {
+			// Python: inputs = dict(inputs); inputs["query"] = followup_prompt
+			inputs = copyMap(inputs)
+			inputs["query"] = followupPrompt
+		} else {
+			// Python: approval_chunks → yield chunks; else content → yield chat.final
+			slashCh := make(chan *schema.AgentResponseChunk, 8)
+			go func() {
+				defer close(slashCh)
+				approvalChunks, _ := slashResultStream["approval_chunks"]
+				if approvalChunks != nil {
+					// yield approval chunks
+					if slice, ok := approvalChunks.([]any); ok {
+						for _, item := range slice {
+							if chunkMap, ok := item.(map[string]any); ok {
+								slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, chunkMap)
+							}
+						}
+					}
+					slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID,
+						map[string]any{"event_type": "chat.done"}, schema.WithChunkIsComplete(true))
+				} else {
+					content := slashResultStream["output"]
+					if content == nil {
+						content = fmt.Sprintf("%v", slashResultStream)
+					}
+					slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID,
+						map[string]any{"event_type": "chat.final", "content": content},
+						schema.WithChunkIsComplete(true))
+				}
+			}()
+			return slashCh, nil
+		}
+	}
 
 	// 步骤 10: cron 上下文绑定
 	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
@@ -926,18 +1002,21 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
 
-	// 步骤 16-17: update_runtime_config + CWD 种子
-	requestCwd := paramsString(params, "cwd", "")
-	if requestCwd == "" {
-		if v, ok := params["project_dir"]; ok {
-			if s, ok := v.(string); ok {
-				requestCwd = s
-			}
-		}
-	}
-	if requestCwd != "" {
-		d.seedRuntimeCwd(ctx, requestCwd)
-	}
+	// 步骤 16-17: update_runtime_config（含 CWD 种子、语言/频道解析、RuntimePromptRail setter 等）
+	// Python: await self._update_runtime_config(self._RuntimeConfig(...))
+	streamRequestCwd := paramsString(params, "cwd", "")
+	streamTrustedDirs := parseStringSlice(params, "trusted_dirs")
+	streamProjectDir := paramsString(params, "project_dir", "")
+	d.updateRuntimeConfig(ctx, &runtimeConfig{
+		SessionID:       sessionID,
+		Mode:            mode,
+		RequestID:       req.RequestID,
+		ChannelID:       req.ChannelID,
+		RequestMetadata: req.Metadata,
+		TrustedDirs:     streamTrustedDirs,
+		CWD:             streamRequestCwd,
+		ProjectDir:      streamProjectDir,
+	})
 
 	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
 	// Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
@@ -2033,6 +2112,57 @@ func paramsString(params map[string]any, key string, defaultVal string) string {
 		return defaultVal
 	}
 	return s
+}
+
+// parseStringSlice 从 params 中取字符串切片值。
+// Python: inputs.get("trusted_dirs") → list[str] | None
+func parseStringSlice(params map[string]any, key string) []string {
+	v, ok := params[key]
+	if !ok || v == nil {
+		return nil
+	}
+	// JSON 反序列化通常是 []any
+	if slice, ok := v.([]any); ok {
+		var result []string
+		for _, item := range slice {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	// 直接是 []string
+	if slice, ok := v.([]string); ok {
+		return slice
+	}
+	return nil
+}
+
+// extractRebuildFollowupPrompt 从 slash 结果中提取 rebuild followup prompt。
+// Python: _extract_rebuild_followup_prompt() (interface_deep.py L4273-4283)
+func extractRebuildFollowupPrompt(slashResult map[string]any) string {
+	if slashResult == nil {
+		return ""
+	}
+	action, _ := slashResult["action"].(string)
+	if action != "run_rebuild_followup" {
+		return ""
+	}
+	prompt, _ := slashResult["followup_prompt"].(string)
+	return strings.TrimSpace(prompt)
+}
+
+// copyMap 浅拷贝 map[string]any。
+// Python: inputs = dict(inputs)
+func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return make(map[string]any)
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
 }
 
 // getDefaultModels 从配置获取默认模型列表。
