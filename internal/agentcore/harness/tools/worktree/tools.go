@@ -99,7 +99,13 @@ func (t *worktreeToolBase) Stream(_ context.Context, _ map[string]any, _ ...tool
 // Invoke EnterWorktreeTool 的执行入口。
 // Python: EnterWorktreeTool.invoke(inputs, **kwargs)
 func (t *EnterWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
-	existing := GetCurrentSession(ctx)
+	// 优先通过 manager.sessionState 获取（S-21 修复），回退到 ctx 传播
+	var existing *WorktreeSession
+	if t.manager != nil && t.manager.SessionState() != nil {
+		existing = t.manager.SessionState().GetCurrentSession()
+	} else {
+		existing = GetCurrentSession(ctx)
+	}
 	if existing != nil {
 		return map[string]any{
 			"error": fmt.Sprintf("Already in worktree '%s'. Exit first with exit_worktree.", existing.WorktreeName),
@@ -111,7 +117,7 @@ func (t *EnterWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, o
 		return map[string]any{"error": err.Error()}, nil
 	}
 
-	ownerID, tag := resolveOwner(opts)
+	ownerID, tag := resolveOwner(inputs)
 
 	session, err := t.manager.Enter(ctx, slug, ownerID, tag)
 	if err != nil {
@@ -281,12 +287,36 @@ func generateRandomSlug() string {
 	return fmt.Sprintf("%s-%s-%s", adj, noun, suffix)
 }
 
-// resolveOwner 从 ToolCallOptions 中解析 owner 信息。
-// Python: _resolve_owner(kwargs)
-func resolveOwner(opts []tool.ToolOption) (string, string) {
-	// Go 的 ToolOption 是函数式选项，当前实现不包含 owner 信息
-	// owner 信息通过 agent_teams 层的上下文注入
-	return "", ""
+// resolveOwner 从 inputs 中解析 owner 信息。
+// Python: _resolve_owner(kwargs) — kwargs.get("owner_id") or kwargs.get("member_name", "")
+func resolveOwner(inputs map[string]any) (string, string) {
+	ownerID := ""
+	if v, ok := inputs["owner_id"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			ownerID = s
+		}
+	}
+	if ownerID == "" {
+		if v, ok := inputs["member_name"]; ok {
+			if s, ok := v.(string); ok {
+				ownerID = s
+			}
+		}
+	}
+	tag := ""
+	if v, ok := inputs["tag"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			tag = s
+		}
+	}
+	if tag == "" {
+		if v, ok := inputs["team_name"]; ok {
+			if s, ok := v.(string); ok {
+				tag = s
+			}
+		}
+	}
+	return ownerID, tag
 }
 
 // randomInt 生成 [0, n) 范围的随机整数

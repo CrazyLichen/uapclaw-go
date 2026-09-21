@@ -32,6 +32,9 @@ type WorktreeManager struct {
 	eventHandler WorktreeEventHandler
 	// lifecycleRails 生命周期 hook 列表
 	lifecycleRails []WorktreeLifecycleRail
+	// sessionState worktree 会话状态容器，tool 通过 manager 引用直接操作
+	// 对齐 Python: WorktreeSessionState（Go 用 context.Value 传播改为 manager 直接持有）
+	sessionState *WorktreeSessionState
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -66,6 +69,7 @@ func NewWorktreeManager(config WorktreeConfig, backend WorktreeBackend, opts ...
 		backend:        backend,
 		eventHandler:   o.eventHandler,
 		lifecycleRails: o.lifecycleRails,
+		sessionState:   InitWorktreeSessionState(),
 	}
 }
 
@@ -73,6 +77,12 @@ func NewWorktreeManager(config WorktreeConfig, backend WorktreeBackend, opts ...
 // Python: WorktreeManager.backend property
 func (m *WorktreeManager) Backend() WorktreeBackend {
 	return m.backend
+}
+
+// SessionState 返回 worktree 会话状态容器。
+// tool 通过 manager 引用直接操作 session，绕开 ctx 传播限制。
+func (m *WorktreeManager) SessionState() *WorktreeSessionState {
+	return m.sessionState
 }
 
 // Config 返回配置访问器。
@@ -127,7 +137,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 		UsedSparsePaths:    len(m.config.SparsePaths) > 0,
 	}
 
-	SetCurrentSession(ctx, session)
+	m.sessionState.SetCurrentSession(session)
 
 	logger.Info(logComponent).Str("slug", slug).Str("worktree_path", result.WorktreePath).
 		Str("status", func() string {
@@ -191,7 +201,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	repoRoot, _ := FindCanonicalGitRoot(ctx, session.OriginalCWD)
 
 	if action == "keep" {
-		SetCurrentSession(ctx, nil)
+		m.sessionState.SetCurrentSession(nil)
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
 			Str("worktree_path", session.WorktreePath).Msg("已保留 worktree")
 		return map[string]string{
@@ -441,9 +451,59 @@ func (m *WorktreeManager) resolvePolicy() WorktreeLifecyclePolicy {
 // fireRail 调用生命周期 hook。
 // Python: WorktreeManager._fire_rail(method, *args, **kwargs)
 func (m *WorktreeManager) fireRail(method string, args ...any) any {
-	// 当前实现只支持 BeforeWorktreeCreate 和 BeforeWorktreeExit
-	// 完整的 rail 调度在 rails.go 的 WorktreeRail 中处理
-	return nil
+	var lastResult any
+	for _, rail := range m.lifecycleRails {
+		var result any
+		switch method {
+		case "before_worktree_create":
+			if len(args) >= 2 {
+				slug, _ := args[0].(string)
+				repoRoot, _ := args[1].(string)
+				r, err := rail.BeforeWorktreeCreate(context.Background(), slug, repoRoot)
+				if err != nil {
+					logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
+					continue
+				}
+				result = r
+			}
+		case "after_worktree_create":
+			if len(args) >= 1 {
+				if session, ok := args[0].(*WorktreeSession); ok {
+					if err := rail.AfterWorktreeCreate(context.Background(), session); err != nil {
+						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
+					}
+				}
+			}
+		case "before_worktree_exit":
+			if len(args) >= 2 {
+				if session, ok := args[0].(*WorktreeSession); ok {
+					action, _ := args[1].(string)
+					r, err := rail.BeforeWorktreeExit(context.Background(), session, action)
+					if err != nil {
+						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
+						continue
+					}
+					result = r
+				}
+			}
+		case "after_worktree_exit":
+			if len(args) >= 2 {
+				if session, ok := args[0].(*WorktreeSession); ok {
+					action, _ := args[1].(string)
+					if err := rail.AfterWorktreeExit(context.Background(), session, action); err != nil {
+						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
+					}
+				}
+			}
+		default:
+			// M-34: 未来补充的 hook 在此处添加
+			logger.Debug(logComponent).Str("method", method).Msg("fireRail: 未知 hook 方法")
+		}
+		if result != nil {
+			lastResult = result
+		}
+	}
+	return lastResult
 }
 
 // checkChanges 检查 worktree 路径的未提交变更。

@@ -125,8 +125,19 @@ func (r *WorktreeRail) Priority() int {
 // Init 构建 Manager 并注册 enter/exit 工具。
 // Python: WorktreeRail.init(agent)
 func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) error {
+	// Python: lang = agent.system_prompt_builder.language
 	lang := "cn" // 默认中文
+	if agent != nil && agent.SystemPromptBuilder() != nil {
+		l := agent.SystemPromptBuilder().Language()
+		if l != "" {
+			lang = l
+		}
+	}
+	// Python: agent_id = getattr(getattr(agent, "card", None), "id", None)
 	agentID := ""
+	if agent != nil && agent.Card() != nil {
+		agentID = agent.Card().ID
+	}
 
 	r.manager = NewWorktreeManager(
 		r.userConfig,
@@ -134,10 +145,6 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 		WithEventHandler(r.eventHandler),
 		WithLifecycleRails(r.lifecycleRails...),
 	)
-
-	// 提前创建 session container
-	state := InitWorktreeSessionState()
-	_ = WithWorktreeSessionState(ctx, state)
 
 	enterTool, err := NewEnterWorktreeTool(r.manager, lang, agentID)
 	if err != nil {
@@ -152,6 +159,16 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 
 	r.tools = []tool.Tool{enterTool, exitTool}
 
+	// Python: agent.ability_manager.add(tool.card)
+	if agent != nil && agent.AbilityManager() != nil {
+		for _, t := range r.tools {
+			card := t.Card()
+			if card != nil {
+				agent.AbilityManager().Add(card)
+			}
+		}
+	}
+
 	logger.Info(logComponent).Msg("WorktreeRail 初始化完成")
 	return nil
 }
@@ -159,6 +176,15 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 // Uninit 移除工具并清空 Manager。
 // Python: WorktreeRail.uninit(agent)
 func (r *WorktreeRail) Uninit(agent interfaces.BaseAgent) error {
+	// Python: for tool in self._tools: agent.ability_manager.remove(name)
+	if agent != nil && agent.AbilityManager() != nil {
+		for _, t := range r.tools {
+			card := t.Card()
+			if card != nil && card.Name != "" {
+				agent.AbilityManager().Remove(card.Name)
+			}
+		}
+	}
 	r.tools = nil
 	r.manager = nil
 	return nil
@@ -285,6 +311,18 @@ func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession
 func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
+func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (string, error) {
+	return message, nil
+}
+func (a *AutoSetupRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
+	return nil
+}
 
 // BeforeWorktreeExit DiffSummaryRail 的 hook 实现。
 // Python: DiffSummaryRail.before_worktree_exit(ctx, session, action)
@@ -315,6 +353,18 @@ func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSess
 
 // AfterWorktreeExit DiffSummaryRail 的空实现。
 func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (string, error) {
+	return message, nil
+}
+func (d *DiffSummaryRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+	return nil
+}
+func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
 	return nil
 }
 

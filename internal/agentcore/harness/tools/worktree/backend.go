@@ -25,6 +25,18 @@ type WorktreeLifecycleRail interface {
 	BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (string, error)
 	// AfterWorktreeExit 退出后 hook。
 	AfterWorktreeExit(ctx context.Context, session *WorktreeSession, action string) error
+	// OnWorktreeFileWrite worktree 内文件写入后 hook。
+	// Python: WorktreeLifecycleRail.on_worktree_file_write
+	OnWorktreeFileWrite(ctx context.Context, session *WorktreeSession, filePath string) error
+	// BeforeWorktreeCommit 提交前 hook。返回修改后的 commit message，nil 不干预。
+	// Python: WorktreeLifecycleRail.before_worktree_commit
+	BeforeWorktreeCommit(ctx context.Context, session *WorktreeSession, message string) (string, error)
+	// AfterWorktreeCommit 提交后 hook。
+	// Python: WorktreeLifecycleRail.after_worktree_commit
+	AfterWorktreeCommit(ctx context.Context, session *WorktreeSession, commitHash string) error
+	// OnWorktreeSync 同步操作 hook。
+	// Python: WorktreeLifecycleRail.on_worktree_sync
+	OnWorktreeSync(ctx context.Context, session *WorktreeSession) error
 }
 
 // WorktreeBackend worktree 后端接口。
