@@ -18,9 +18,9 @@ import (
 // Priority=60: 在 SecurityRail(80) 之后，JiuClawStreamEventRail(50) 之前
 type UserHookRail struct {
 	rails.DeepAgentRail
-	// config hooks 配置
+	// config hooks 配置实例
 	config hookscfg.HooksConfig
-	// executor hook 执行器
+	// executor hook 执行器实例
 	executor *HookExecutor
 }
 

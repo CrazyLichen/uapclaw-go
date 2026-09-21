@@ -72,7 +72,7 @@ func NewSkillDevPipeline(taskID string, state *SkillDevState, deps *SkillDevDeps
 // Run 从当前阶段开始执行，直到遇到挂起点或终态。
 //
 // 返回只读事件 channel，调用方逐个读取事件。
-// Pipeline goroutine 结束后自动 close channel。
+// Pipeline 协程结束后自动 close channel。
 //
 // Python: SkillDevPipeline.run() → AsyncIterator[SkillDevEvent]
 func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error) {

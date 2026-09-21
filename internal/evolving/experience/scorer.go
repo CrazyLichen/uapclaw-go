@@ -70,7 +70,7 @@ var (
 
 // 双语提示词（一比一复刻 Python 原文）
 // Python 的 {{ 在 .format() 中表示 literal {，Go raw string 中不需要转义
-// Go raw string 不能包含反引号字符，提示词中的 ```json 代码块标记用 bt 常量拼接
+// Go 原始字符串不能包含反引号字符，提示词中的 ```json 代码块标记用 bt 常量拼接
 
 // ExperienceEvalPromptCN 中文经验评估提示词
 // Python: EXPERIENCE_EVAL_PROMPT_CN

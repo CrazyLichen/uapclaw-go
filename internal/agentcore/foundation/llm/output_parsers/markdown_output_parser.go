@@ -273,7 +273,7 @@ func (p *MarkdownOutputParser) extractAllElements(text string, content *Markdown
 
 	// 提取链接（排除图片：![alt](url) 中的链接不算）
 	// Python: r'(?<!\!)\[([^\]]+)\]\(([^)]+)\)' 使用 lookbehind 排除图片
-	// Go regexp 不支持 lookbehind，先匹配所有 [text](url)，再排除前面紧跟 ! 的
+	// Go 正则不支持 lookbehind，先匹配所有 [text](url)，再排除前面紧跟 ! 的
 	for _, match := range linkRegexp.FindAllStringSubmatchIndex(text, -1) {
 		// 检查匹配位置前一个字符是否为 '!'（图片标记）
 		matchStart := match[0]

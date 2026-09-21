@@ -13,7 +13,7 @@ import (
 //
 // 每个 ActiveTeam 持有一个 TeamAgent Leader 实例、绑定的 session ID、
 // 生命周期状态和 InteractGate 门控。
-// Pool key 为 team_name——同一团队同时绑定最多一个 session。
+// Pool 以 team_name 为键——同一团队同时绑定最多一个 session。
 type ActiveTeam struct {
 	// TeamName 团队名
 	TeamName string

@@ -94,13 +94,13 @@ func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 //   - label (string, required) — 选项文本（1-5 个词）
 //   - description (string, optional) — 选项说明
 func buildExtendedInputParams(language string) []*schema.Param {
-	// options item schema（对齐 Python: options.items）
+	// options 条目结构定义（对齐 Python: options.items）
 	optionsItem := schema.NewObjectParam("", "", false, []*schema.Param{
 		schema.NewStringParam("label", getLabelDesc(language), true),
 		schema.NewStringParam("description", getOptionDescDesc(language), false),
 	})
 
-	// questions item schema（对齐 Python: _QUESTIONS_ITEM_SCHEMA）
+	// questions 条目结构定义（对齐 Python: _QUESTIONS_ITEM_SCHEMA）
 	questionsItem := schema.NewObjectParam("", "", false, []*schema.Param{
 		schema.NewStringParam("question", getQuestionDesc(language), true),
 		schema.NewStringParam("header", getHeaderDesc(language), false),

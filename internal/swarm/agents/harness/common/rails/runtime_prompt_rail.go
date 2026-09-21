@@ -32,19 +32,19 @@ import (
 // Python: RuntimePromptRail(DeepAgentRail) — runtime_prompt_rail.py (385 行)
 type RuntimePromptRail struct {
 	rails.DeepAgentRail
-	// language per-request 语言
+	// language 每次请求的语言
 	language string
-	// channel per-request 频道
+	// channel 每次请求的频道
 	channel string
-	// trustedDirs per-request 可信目录
+	// trustedDirs 每次请求的可信目录
 	trustedDirs []string
-	// cwd per-request 当前工作目录
+	// cwd 每次请求的当前工作目录
 	cwd string
-	// projectDir per-request 项目目录
+	// projectDir 每次请求的项目目录
 	projectDir string
-	// modelName per-request 模型名称（YAML 读取失败时的 fallback）
+	// modelName 每次请求的模型名称（YAML 读取失败时的 fallback）
 	modelName string
-	// mode per-request 运行模式（YAML 读取失败时的 fallback）
+	// mode 每次请求的运行模式（YAML 读取失败时的 fallback）
 	mode string
 	// forceEnglish 强制英文 section（code 模式）
 	forceEnglish bool
@@ -115,38 +115,38 @@ func NewRuntimePromptRail(language, channel string) *RuntimePromptRail {
 	return r
 }
 
-// SetLanguage per-request 更新语言。
+// SetLanguage 每次请求更新语言。
 // Python: RuntimePromptRail.set_language(language)
 func (r *RuntimePromptRail) SetLanguage(language string) {
 	r.language = language
 }
 
-// SetChannel per-request 更新频道。
+// SetChannel 每次请求更新频道。
 // Python: RuntimePromptRail.set_channel(channel)
 func (r *RuntimePromptRail) SetChannel(channel string) {
 	r.channel = channel
 }
 
-// SetTrustedDirs per-request 更新可信目录。
+// SetTrustedDirs 每次请求更新可信目录。
 // Python: RuntimePromptRail.set_trusted_dirs(trusted_dirs)
 func (r *RuntimePromptRail) SetTrustedDirs(dirs []string) {
 	r.trustedDirs = dirs
 }
 
-// SetRuntimePaths per-request 更新当前工作目录和项目目录。
+// SetRuntimePaths 每次请求更新当前工作目录和项目目录。
 // Python: RuntimePromptRail.set_runtime_paths(cwd, project_dir)
 func (r *RuntimePromptRail) SetRuntimePaths(cwd, projectDir string) {
 	r.cwd = strings.TrimSpace(cwd)
 	r.projectDir = strings.TrimSpace(projectDir)
 }
 
-// SetModelName per-request 更新模型名称，作为文件读取失败时的兜底。
+// SetModelName 每次请求更新模型名称，作为文件读取失败时的兜底。
 // Python: RuntimePromptRail.set_model_name(model_name)
 func (r *RuntimePromptRail) SetModelName(modelName string) {
 	r.modelName = modelName
 }
 
-// SetMode per-request 更新运行模式，作为文件读取失败时的兜底。
+// SetMode 每次请求更新运行模式，作为文件读取失败时的兜底。
 // Python: RuntimePromptRail.set_mode(mode)
 func (r *RuntimePromptRail) SetMode(mode string) {
 	r.mode = mode

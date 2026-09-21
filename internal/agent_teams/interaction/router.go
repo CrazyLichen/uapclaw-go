@@ -31,7 +31,7 @@ var (
 	mentionRe = regexp.MustCompile(`^@(\S+)\s+([\s\S]+)$`)
 	// humanAgentPrefixRe $name 前缀宽松正则
 	// Python: _HUMAN_AGENT_PREFIX_RE = re.compile(r"^\$([^\s@]+)(?:\s+|(?=@))([\s\S]*)$")
-	// Go regexp 不支持 lookahead (?=@)，改用宽松正则匹配 $name + 剩余文本，
+	// Go 正则不支持 lookahead (?=@)，改用宽松正则匹配 $name + 剩余文本，
 	// 然后在 ParseInteractStr 中手动验证剩余文本首字符符合 \s+|(?=@) 语义。
 	// 这样 @ 字符保留在 rest 中，后续 recipientRe 循环能正确提取接收者。
 	humanAgentPrefixRe = regexp.MustCompile(`^\$([^\s@]+)([\s\S]*)$`)

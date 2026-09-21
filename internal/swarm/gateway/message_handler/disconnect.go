@@ -21,7 +21,7 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 	}
 
 	// Python: cancel_agent_sessions_on_disconnect (L530-573):
-	// seen set 去重，避免重复取消同一 session
+	// seen 集合，去重避免重复取消同一 session
 	seen := make(map[string]struct{})
 	for _, key := range sessionKeys {
 		channelID := key[0]

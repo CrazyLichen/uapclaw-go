@@ -13,7 +13,7 @@ import (
 type CommandHookConfig struct {
 	// Type 类型标识，默认 "command"
 	Type string `json:"type"`
-	// Command shell 命令
+	// Command Shell 命令
 	Command string `json:"command"`
 	// Timeout 超时秒数，默认 30
 	Timeout int `json:"timeout"`

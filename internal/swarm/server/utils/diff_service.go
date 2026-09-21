@@ -69,7 +69,7 @@ type Hunk struct {
 	NewStart int `json:"newStart"`
 	// NewLines 新文件行数
 	NewLines int `json:"newLines"`
-	// Lines diff 行列表（+/- 前缀）
+	// Lines diff 行列表（+/- 前缀标记）
 	Lines []string `json:"lines"`
 }
 

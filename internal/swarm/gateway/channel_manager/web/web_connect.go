@@ -52,7 +52,7 @@ type WebChannel struct {
 	clientsMu sync.RWMutex
 	// dispatcher RPC 分发器
 	dispatcher *RPCDispatcher
-	// upgrader gorilla WebSocket 升级器
+	// upgrader gorilla WebSocket 升级器实例
 	upgrader websocket.Upgrader
 	// running 是否正在运行
 	running bool

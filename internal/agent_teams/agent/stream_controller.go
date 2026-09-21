@@ -679,7 +679,7 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) error
 	var taskErr *taskFailedError
 	for chunk := range chunkCh {
 		if chunk == nil {
-			// nil sentinel，流关闭
+			// nil 哨兵值，流关闭
 			break
 		}
 		if taskErr != nil {

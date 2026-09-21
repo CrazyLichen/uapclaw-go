@@ -17,7 +17,7 @@ import (
 // GlobInput glob 模式搜索工具的输入参数。
 // Python: GlobTool inputs (filesystem.py L1446)
 type GlobInput struct {
-	// Pattern glob 模式
+	// Pattern glob 匹配模式
 	Pattern string `json:"pattern"`
 	// Path 搜索目录（可选）
 	Path string `json:"path"`

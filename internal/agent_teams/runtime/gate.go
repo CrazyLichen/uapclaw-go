@@ -41,7 +41,7 @@ type InteractGate struct {
 	closed bool
 	// inflight 飞行中载荷计数
 	inflight int
-	// drained inflight==0 信号通道（关闭表示已排空）
+	// drained 飞行中载荷为零时的信号通道（关闭表示已排空）
 	drained chan struct{}
 	// mu 互斥锁
 	mu sync.Mutex

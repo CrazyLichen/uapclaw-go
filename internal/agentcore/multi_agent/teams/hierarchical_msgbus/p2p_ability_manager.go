@@ -95,7 +95,7 @@ func (m *P2PAbilityManager) Execute(
 		}
 	}
 
-	// Fast path：无 Agent 调用时委托基类
+	// 快速路径：无 Agent 调用时委托基类
 	if len(agentIndices) == 0 {
 		return m.AbilityManager.Execute(ctx, cbc, toolCalls, sess, tag)
 	}

@@ -275,8 +275,11 @@ func TestCleanupWorktreesByPrefix_空目录(t *testing.T) {
 
 // TestExit_Keep 测试保留 worktree 退出
 func TestExit_Keep(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
+	cfg := NewWorktreeConfig()
+	mgr := NewWorktreeManager(cfg, nil)
+
+	// 使用 manager 内部的 sessionState 注入 ctx，确保 Exit 清空的是同一个 state
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
 
 	session := &WorktreeSession{
 		OriginalCWD:    "/home/user/project",
@@ -285,9 +288,6 @@ func TestExit_Keep(t *testing.T) {
 		WorktreeBranch: "worktree-test",
 	}
 	SetCurrentSession(ctx, session)
-
-	cfg := NewWorktreeConfig()
-	mgr := NewWorktreeManager(cfg, nil)
 
 	result, err := mgr.Exit(ctx, "keep", false)
 	if err != nil {
@@ -304,9 +304,10 @@ func TestExit_Keep(t *testing.T) {
 // TestExit_Remove无变更 测试删除无变更 worktree
 func TestExit_Remove无变更(t *testing.T) {
 	repoRoot := setupGitRepo(t)
-	state := InitWorktreeSessionState()
+	cfg := NewWorktreeConfig()
+	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 	ctx := testManagerCtx(t)
-	ctx = WithWorktreeSessionState(ctx, state)
+	ctx = WithWorktreeSessionState(ctx, mgr.SessionState())
 
 	headSHA, _ := RevParse(ctx, "HEAD", repoRoot)
 
@@ -318,10 +319,6 @@ func TestExit_Remove无变更(t *testing.T) {
 		OriginalHeadCommit: headSHA,
 	}
 	SetCurrentSession(ctx, session)
-
-	cfg := NewWorktreeConfig()
-	// 使用 fake backend 避免 true 删除
-	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 
 	result, err := mgr.Exit(ctx, "remove", false)
 	if err != nil {
@@ -335,9 +332,10 @@ func TestExit_Remove无变更(t *testing.T) {
 // TestExit_Remove有变更拒绝 测试 fail-closed
 func TestExit_Remove有变更拒绝(t *testing.T) {
 	repoRoot := setupGitRepo(t)
-	state := InitWorktreeSessionState()
+	cfg := NewWorktreeConfig()
+	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 	ctx := testManagerCtx(t)
-	ctx = WithWorktreeSessionState(ctx, state)
+	ctx = WithWorktreeSessionState(ctx, mgr.SessionState())
 
 	// 创建变更
 	testFile := filepath.Join(repoRoot, "changed.txt")
@@ -353,9 +351,6 @@ func TestExit_Remove有变更拒绝(t *testing.T) {
 		OriginalHeadCommit: headSHA,
 	}
 	SetCurrentSession(ctx, session)
-
-	cfg := NewWorktreeConfig()
-	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 
 	_, err := mgr.Exit(ctx, "remove", false)
 	if err == nil {

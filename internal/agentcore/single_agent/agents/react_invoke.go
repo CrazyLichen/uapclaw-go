@@ -561,14 +561,14 @@ func (a *ReActAgent) innerStream(
 	}
 
 	if isAgentSess {
-		// Agent session: 启动 streamProcess goroutine，从 StreamIterator 消费
+		// Agent 会话：启动 streamProcess 协程，从 StreamIterator 消费
 		go streamProcess()
 
 		for chunk := range agentSess.StreamIterator() {
 			outCh <- chunk
 		}
 	} else {
-		// Workflow session: 直接执行 streamProcess
+		// 工作流会话：直接执行 streamProcess
 		// 输出通过 session.WriteStream → StreamWriterManager 传递给 Workflow
 		streamProcess()
 	}

@@ -29,7 +29,7 @@ import (
 type GatewayServer struct {
 	// config 配置管理器
 	config *config.Config
-	// router chi 路由器
+	// router chi 路由器实例
 	router *chi.Mux
 	// webChannel Web 通道
 	webChannel *web.WebChannel

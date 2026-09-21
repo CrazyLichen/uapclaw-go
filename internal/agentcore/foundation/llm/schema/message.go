@@ -37,7 +37,7 @@ type ImageURL struct {
 
 // InputAudio 音频输入内容块数据（对应 OpenAI input_audio content block）
 type InputAudio struct {
-	// Data base64 编码音频数据
+	// Data base64 编码的音频数据
 	Data string `json:"data"`
 	// Format 音频格式（mp3/wav/m4a 等）
 	Format string `json:"format"`

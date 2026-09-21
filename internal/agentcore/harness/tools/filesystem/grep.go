@@ -27,7 +27,7 @@ type GrepInput struct {
 	Path string `json:"path"`
 	// IgnoreCase 兼容旧字段：大小写不敏感
 	IgnoreCase bool `json:"ignore_case"`
-	// Glob glob 过滤模式
+	// Glob glob 匹配过滤模式
 	Glob string `json:"glob"`
 	// OutputMode 输出模式：content/files_with_matches/count，默认 content
 	OutputMode string `json:"output_mode"`

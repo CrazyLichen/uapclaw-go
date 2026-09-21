@@ -33,7 +33,7 @@ type ProjectMemoryRail struct {
 	// workspacePath 构造期传入的工作空间路径（私有，避免被 SetWorkspace 覆盖）
 	// Python: self._workspace_path
 	workspacePath string
-	// language per-request 语言
+	// language 每次请求的语言
 	// Python: self._language
 	language string
 	// maxChars 最大字符数

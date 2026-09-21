@@ -23,7 +23,7 @@ type agentsListParams struct {
 
 // agentsGetParams agents.get 请求参数
 type agentsGetParams struct {
-	// Name agent 名称
+	// Name Agent 名称
 	Name string `json:"name"`
 }
 
@@ -63,7 +63,7 @@ type agentsCreateParams struct {
 
 // agentsUpdateParams agents.update 请求参数
 type agentsUpdateParams struct {
-	// Name agent 名称（必填，标识要更新的 agent）
+	// Name Agent 名称（必填，标识要更新的 agent）
 	Name string `json:"name"`
 	// Description 描述
 	Description *string `json:"description,omitempty"`
@@ -95,7 +95,7 @@ type agentsUpdateParams struct {
 
 // agentsDeleteParams agents.delete 请求参数
 type agentsDeleteParams struct {
-	// Name agent 名称
+	// Name Agent 名称
 	Name string `json:"name"`
 	// WorkspaceDir 工作空间目录（可选覆盖）
 	WorkspaceDir string `json:"workspace_dir,omitempty"`
@@ -103,7 +103,7 @@ type agentsDeleteParams struct {
 
 // agentsEnableParams agents.enable 请求参数
 type agentsEnableParams struct {
-	// Name agent 名称
+	// Name Agent 名称
 	Name string `json:"name"`
 	// WorkspaceDir 工作空间目录（可选覆盖）
 	WorkspaceDir string `json:"workspace_dir,omitempty"`
@@ -111,7 +111,7 @@ type agentsEnableParams struct {
 
 // agentsDisableParams agents.disable 请求参数
 type agentsDisableParams struct {
-	// Name agent 名称
+	// Name Agent 名称
 	Name string `json:"name"`
 	// WorkspaceDir 工作空间目录（可选覆盖）
 	WorkspaceDir string `json:"workspace_dir,omitempty"`

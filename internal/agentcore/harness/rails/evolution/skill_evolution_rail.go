@@ -2265,7 +2265,7 @@ func truncateString(s string, maxLen int) string {
 
 // hasRealError 判断内容中是否包含"真实的" error 关键词（排除 "error = None" 模式）。
 // 对齐 Python: _FAILURE_KEYWORDS 中的负向前瞻 error(?!\s*=\s*None)。
-// Go regexp 不支持负向前瞻，因此用 FindAllStringIndex 逐匹配点检查后缀。
+// Go 正则不支持负向前瞻，因此用 FindAllStringIndex 逐匹配点检查后缀。
 func hasRealError(content string) bool {
 	matches := failureRe.FindAllStringIndex(content, -1)
 	if len(matches) == 0 {

@@ -16,19 +16,19 @@ type LoggingLevels struct {
 	Logger LogLevel
 	// Console 控制台级别
 	Console LogLevel
-	// Common common.log 级别（基础设施层：config/workspace/dotenv/version）
+	// Common 公共日志级别（基础设施层：config/workspace/dotenv/version）
 	Common LogLevel
-	// Gateway gateway.log 级别
+	// Gateway 网关日志级别
 	Gateway LogLevel
-	// Channel channel.log 级别
+	// Channel 通道日志级别
 	Channel LogLevel
-	// AgentServer agent_server.log 级别
+	// AgentServer Agent 服务器日志级别
 	AgentServer LogLevel
-	// Permissions permissions.log 级别
+	// Permissions 权限日志级别
 	Permissions LogLevel
-	// AgentCore agent_core.log 级别（agentcore/*）
+	// AgentCore Agent 核心日志级别（agentcore/*）
 	AgentCore LogLevel
-	// Full full.log 级别
+	// Full 全量日志级别
 	Full LogLevel
 }
 

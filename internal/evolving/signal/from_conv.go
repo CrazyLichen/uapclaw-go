@@ -83,7 +83,7 @@ const userFeedbackPromptEN = "Determine whether the following user messages cont
 //
 // Python: _FAILURE_KEYWORDS
 // 注意：Python 使用 (?!...) 负向前瞻排除 "error = None"，
-// Go regexp 不支持该语法，改为匹配 error 后在 matchFailureKeyword 中过滤。
+// Go 正则不支持该语法，改为匹配 error 后在 matchFailureKeyword 中过滤。
 var failureKeywords = regexp.MustCompile(
 	`(?i)error|exception|traceback|failed|failure|timeout|timed out` +
 		`|errno|connectionerror|oserror|valueerror|typeerror` +

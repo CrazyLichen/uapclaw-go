@@ -93,7 +93,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		return
 	}
 
-	// evolution chunk 处理
+	// 演化块处理
 	mh.handleEvolutionChunk(chunk, sessionID, busMetadata)
 
 	// Agent 响应块转为消息再推送到机器人消息列表

@@ -167,7 +167,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 		}
 
 		// Python: UapClaw._handle_skilldev_request 的 try/except 兜底
-		// Pipeline goroutine 内的 fatal error 通过 runErr 传播到此处
+		// Pipeline 协程内的致命错误通过 runErr 传播到此处
 		if pipeline.runErr != nil {
 			logger.Error(logComponent).
 				Str("task_id", taskID).

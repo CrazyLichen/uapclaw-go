@@ -610,7 +610,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 //
 // Python: process_stream (L2559-2648)：
 // 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
-// evolution chunk 处理、cancelled final、processing_status=false 通知。
+// 演化块处理、cancelled final、processing_status=false 通知。
 func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
 	requestID := envelope.RequestID
 	channelID := msg.ChannelID
@@ -669,7 +669,7 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 				continue
 			}
 
-			// evolution chunk 处理
+			// 演化块处理
 			mh.handleEvolutionChunk(chunk, sessionID, requestMetadata)
 
 			// 追踪 processing_status=false

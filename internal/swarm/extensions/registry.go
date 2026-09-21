@@ -173,7 +173,7 @@ func (r *ExtensionRegistry) Unregister(event string, handler callback.CustomCall
 
 // Trigger 触发事件，对齐 Python trigger(event, context)
 // 内部调 callbackFramework.TriggerCustom(ctx, event, data)
-// nil context 不触发（对齐 CallbackFramework 行为）
+// nil 上下文不触发（对齐 CallbackFramework 行为）
 func (r *ExtensionRegistry) Trigger(ctx context.Context, event string, data map[string]any) []any {
 	return r.callbackFramework.TriggerCustom(ctx, event, data)
 }

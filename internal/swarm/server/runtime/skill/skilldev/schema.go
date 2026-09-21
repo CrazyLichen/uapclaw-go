@@ -191,7 +191,7 @@ type BenchmarkRun struct {
 	PassRate float64 `json:"pass_rate"`
 	// TimeSeconds 耗时秒
 	TimeSeconds float64 `json:"time_seconds"`
-	// Tokens token 数量
+	// Tokens 令牌数量
 	Tokens int `json:"tokens"`
 	// Expectations 期望详情列表
 	Expectations []map[string]any `json:"expectations"`

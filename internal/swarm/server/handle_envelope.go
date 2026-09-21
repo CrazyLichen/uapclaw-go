@@ -619,7 +619,7 @@ func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
 			subMode = ""
 		}
 	}
-	// code subMode 白名单
+	// code subMode 合法值校验
 	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
 		subMode = "normal"
 	}
@@ -670,7 +670,7 @@ func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode str
 		if len(parts) > 1 && parts[1] != "" {
 			subMode = parts[1]
 		}
-		// team subMode 白名单：仅允许 nil 和 "plan"
+		// team subMode 合法值校验：仅允许 nil 和 "plan"
 		if subMode != "" && subMode != "plan" {
 			subMode = ""
 		}
@@ -700,7 +700,7 @@ func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode str
 			subMode = def
 		}
 	}
-	// code subMode 白名单
+	// code subMode 合法值校验
 	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
 		subMode = "normal"
 	}

@@ -24,7 +24,7 @@ type InProcessSpawnHandle struct {
 	processID string
 	// cancelCtx 取消 goroutine 的 context.CancelFunc
 	cancelCtx context.CancelFunc
-	// done goroutine 完成通知 chan，close 表示完成
+	// done 协程完成通知 chan，close 表示完成
 	done chan struct{}
 	// agentRef 进程内 Agent 引用（对齐 Python agent_ref: Any）
 	agentRef SpawnableAgent

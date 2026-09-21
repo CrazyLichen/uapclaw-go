@@ -30,14 +30,15 @@ func TestGenerateRandomSlug(t *testing.T) {
 
 // TestEnterWorktreeTool_Invoke_已在Worktree 测试重复进入
 func TestEnterWorktreeTool_Invoke_已在Worktree(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
+	cfg := NewWorktreeConfig()
+	mgr := NewWorktreeManager(cfg, &fakeBackend{})
+
+	// 使用 manager 内部的 sessionState 注入 ctx，确保 Invoke 检测到已有 session
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
 
 	// 设置已有 session
 	SetCurrentSession(ctx, &WorktreeSession{WorktreeName: "existing"})
 
-	cfg := NewWorktreeConfig()
-	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 	enterTool := &EnterWorktreeTool{
 		worktreeToolBase: worktreeToolBase{manager: mgr},
 	}
@@ -47,21 +48,22 @@ func TestEnterWorktreeTool_Invoke_已在Worktree(t *testing.T) {
 	if result == nil {
 		t.Fatal("结果不应为 nil")
 	}
-	if _, ok := result["error"]; !ok {
+	errVal, ok := result["error"]
+	if !ok {
 		t.Error("已在 worktree 时应返回 error 字段")
-	}
-	if !strings.Contains(result["error"].(string), "Already in worktree") {
-		t.Errorf("错误信息应包含 'Already in worktree'，实际: %s", result["error"])
+	} else {
+		if !strings.Contains(errVal.(string), "Already in worktree") {
+			t.Errorf("错误信息应包含 'Already in worktree'，实际: %s", errVal)
+		}
 	}
 }
 
 // TestExitWorktreeTool_Invoke_无Session 测试无 session 退出
 func TestExitWorktreeTool_Invoke_无Session(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
-
 	cfg := NewWorktreeConfig()
 	mgr := NewWorktreeManager(cfg, &fakeBackend{})
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
+
 	exitTool := &ExitWorktreeTool{
 		worktreeToolBase: worktreeToolBase{manager: mgr},
 	}
@@ -77,12 +79,11 @@ func TestExitWorktreeTool_Invoke_无Session(t *testing.T) {
 
 // TestExitWorktreeTool_Invoke_无效Action 测试无效 action
 func TestExitWorktreeTool_Invoke_无效Action(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
-	SetCurrentSession(ctx, &WorktreeSession{WorktreeName: "test"})
-
 	cfg := NewWorktreeConfig()
 	mgr := NewWorktreeManager(cfg, &fakeBackend{})
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
+	SetCurrentSession(ctx, &WorktreeSession{WorktreeName: "test"})
+
 	exitTool := &ExitWorktreeTool{
 		worktreeToolBase: worktreeToolBase{manager: mgr},
 	}
@@ -95,12 +96,10 @@ func TestExitWorktreeTool_Invoke_无效Action(t *testing.T) {
 
 // TestEnterWorktreeTool_Invoke_Enter失败 测试 Enter 失败场景
 func TestEnterWorktreeTool_Invoke_Enter失败(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
-
-	// 使用会失败的 backend
 	cfg := NewWorktreeConfig()
 	mgr := NewWorktreeManager(cfg, &failingBackend{})
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
+
 	enterTool := &EnterWorktreeTool{
 		worktreeToolBase: worktreeToolBase{manager: mgr},
 	}
@@ -125,8 +124,9 @@ func (f *failingBackend) Exists(_ context.Context, _ string) bool    { return fa
 
 // TestExitWorktreeTool_Invoke_Keep 测试 keep 退出
 func TestExitWorktreeTool_Invoke_Keep(t *testing.T) {
-	state := InitWorktreeSessionState()
-	ctx := WithWorktreeSessionState(context.Background(), state)
+	cfg := NewWorktreeConfig()
+	mgr := NewWorktreeManager(cfg, &fakeBackend{})
+	ctx := WithWorktreeSessionState(context.Background(), mgr.SessionState())
 	SetCurrentSession(ctx, &WorktreeSession{
 		OriginalCWD:    "/home/user/project",
 		WorktreePath:   "/tmp/worktree-test",
@@ -134,8 +134,6 @@ func TestExitWorktreeTool_Invoke_Keep(t *testing.T) {
 		WorktreeBranch: "worktree-test",
 	})
 
-	cfg := NewWorktreeConfig()
-	mgr := NewWorktreeManager(cfg, &fakeBackend{})
 	exitTool := &ExitWorktreeTool{
 		worktreeToolBase: worktreeToolBase{manager: mgr},
 	}

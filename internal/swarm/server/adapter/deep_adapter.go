@@ -758,7 +758,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 			inputs["query"] = followupPrompt
 		} else {
 			// Python: approval_chunks = slash_result.get("approval_chunks")
-			approvalChunks, _ := slashResult["approval_chunks"]
+			approvalChunks := slashResult["approval_chunks"]
 			if approvalChunks != nil {
 				return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 					schema.WithPayload(map[string]any{"approval_chunks": approvalChunks}),
@@ -832,7 +832,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	func() {
 		defer func() {
 			// 步骤 20: finally 清理
-			// Go context 不可变值模式，无需 reset/cleanup（Python 需要 reset(token)）
+			// Go 上下文不可变值模式，无需 reset/cleanup（Python 需要 reset(token)）
 			// ⤵️ 11.10: _reset_runtime_cron_context(cron_context_tokens)
 			d.unmarkSessionActive(sessionID)
 		}()
@@ -947,7 +947,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			slashCh := make(chan *schema.AgentResponseChunk, 8)
 			go func() {
 				defer close(slashCh)
-				approvalChunks, _ := slashResultStream["approval_chunks"]
+				approvalChunks := slashResultStream["approval_chunks"]
 				if approvalChunks != nil {
 					// yield approval chunks
 					if slice, ok := approvalChunks.([]any); ok {

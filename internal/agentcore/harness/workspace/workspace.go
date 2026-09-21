@@ -660,7 +660,7 @@ func createDirectoryLink(linkPath, targetPath string) error {
 
 // createWindowsJunction 创建 Windows 目录链接
 func createWindowsJunction(linkPath, targetPath string) error {
-	// Windows junction 通过 syscall 或外部命令实现
+	// Windows 目录链接通过 syscall 或外部命令实现
 	// 此处简化处理：先尝试 symlink，失败则返回错误
 	if err := os.Symlink(targetPath, linkPath); err != nil {
 		return fmt.Errorf("在 Windows 上创建目录链接 %q -> %q 失败: %w", linkPath, targetPath, err)
