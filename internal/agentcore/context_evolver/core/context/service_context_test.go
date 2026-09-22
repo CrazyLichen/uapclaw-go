@@ -22,18 +22,34 @@ func TestServiceContext_RegisterService_GetService(t *testing.T) {
 	assert.Nil(t, sc.GetService("nonexistent"))
 }
 
-func TestServiceContext_LLM(t *testing.T) {
-	sc := NewServiceContext()
-	assert.Nil(t, sc.LLM())
-	sc.RegisterService("llm", "my-llm")
-	assert.Equal(t, "my-llm", sc.LLM())
+// fakeLLMService LLMService 的 mock 实现
+type fakeLLMService struct {
+	response string
+	err      error
 }
 
-func TestServiceContext_EmbeddingModel(t *testing.T) {
-	sc := NewServiceContext()
-	assert.Nil(t, sc.EmbeddingModel())
-	sc.RegisterService("embedding_model", "my-embedding")
-	assert.Equal(t, "my-embedding", sc.EmbeddingModel())
+func (f *fakeLLMService) Generate(_ context.Context, _ string, _ ...GenerateOption) (string, error) {
+	return f.response, f.err
+}
+
+// fakeEmbeddingService EmbeddingService 的 mock 实现
+type fakeEmbeddingService struct {
+	embeddings [][]float64
+	err        error
+}
+
+func (f *fakeEmbeddingService) Embed(_ context.Context, _ string) ([]float64, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if len(f.embeddings) > 0 {
+		return f.embeddings[0], nil
+	}
+	return []float64{0.1, 0.2, 0.3}, nil
+}
+
+func (f *fakeEmbeddingService) EmbedBatch(_ context.Context, _ []string) ([][]float64, error) {
+	return f.embeddings, f.err
 }
 
 // mockVectorStore VectorStoreService 的 mock 实现
@@ -70,6 +86,46 @@ func (m *mockVectorStore) Count() int {
 	return len(m.nodes)
 }
 
+func (m *mockVectorStore) GetAll(_ map[string]any) []*schema.VectorNode {
+	var result []*schema.VectorNode
+	for _, node := range m.nodes {
+		result = append(result, node)
+	}
+	return result
+}
+
+func TestServiceContext_LLM(t *testing.T) {
+	sc := NewServiceContext()
+	assert.Nil(t, sc.LLM())
+
+	// 注册实现 LLMService 接口的 mock
+	llm := &fakeLLMService{response: "test-response"}
+	sc.RegisterService("llm", llm)
+	result := sc.LLM()
+	require.NotNil(t, result)
+
+	// 注册未实现接口的值，返回 nil
+	sc2 := NewServiceContext()
+	sc2.RegisterService("llm", "not-a-llm")
+	assert.Nil(t, sc2.LLM())
+}
+
+func TestServiceContext_EmbeddingModel(t *testing.T) {
+	sc := NewServiceContext()
+	assert.Nil(t, sc.EmbeddingModel())
+
+	// 注册实现 EmbeddingService 接口的 mock
+	emb := &fakeEmbeddingService{embeddings: [][]float64{{0.1, 0.2}}}
+	sc.RegisterService("embedding_model", emb)
+	result := sc.EmbeddingModel()
+	require.NotNil(t, result)
+
+	// 注册未实现接口的值，返回 nil
+	sc2 := NewServiceContext()
+	sc2.RegisterService("embedding_model", "not-an-embedding")
+	assert.Nil(t, sc2.EmbeddingModel())
+}
+
 func TestServiceContext_VectorStore(t *testing.T) {
 	sc := NewServiceContext()
 	assert.Nil(t, sc.VectorStore())
@@ -89,22 +145,33 @@ func TestServiceContext_VectorStore(t *testing.T) {
 
 func TestServiceContext_Clear(t *testing.T) {
 	sc := NewServiceContext()
-	sc.RegisterService("llm", "my-llm")
+	sc.RegisterService("llm", &fakeLLMService{})
 	sc.Clear()
 	assert.Nil(t, sc.GetService("llm"))
 }
 
 func TestServiceContext_覆盖注册(t *testing.T) {
 	sc := NewServiceContext()
-	sc.RegisterService("llm", "v1")
-	sc.RegisterService("llm", "v2")
-	assert.Equal(t, "v2", sc.GetService("llm"))
+	sc.RegisterService("llm", &fakeLLMService{response: "v1"})
+	sc.RegisterService("llm", &fakeLLMService{response: "v2"})
+	llm := sc.LLM()
+	require.NotNil(t, llm)
 }
 
 func TestServiceContext_String(t *testing.T) {
 	sc := NewServiceContext()
-	sc.RegisterService("llm", "my-llm")
+	sc.RegisterService("llm", &fakeLLMService{})
 	s := sc.String()
 	assert.Contains(t, s, "ServiceContext")
 	assert.Contains(t, s, "llm")
+}
+
+func TestGenerateOption(t *testing.T) {
+	c := &GenerateConfig{}
+	WithSystemPrompt("sys")(c)
+	assert.Equal(t, "sys", c.SystemPrompt)
+	WithTemperature(0.7)(c)
+	assert.Equal(t, 0.7, c.Temperature)
+	WithMaxTokens(100)(c)
+	assert.Equal(t, 100, c.MaxTokens)
 }

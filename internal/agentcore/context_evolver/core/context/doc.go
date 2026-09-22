@@ -8,7 +8,7 @@
 //	context/
 //	├── doc.go                # 包文档
 //	├── runtime_context.go    # RuntimeContext 操作间上下文
-//	└── service_context.go    # ServiceContext 共享服务上下文
+//	└── service_context.go    # ServiceContext + LLMService + EmbeddingService + VectorStoreService + GenerateConfig
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/core/context/
 package context

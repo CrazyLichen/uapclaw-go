@@ -9,6 +9,27 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
+// LLMService LLM 服务本地接口。
+// 对齐 Python OpenAILLMWrapper.async_generate(prompt, system_prompt?, temperature?, max_tokens?)。
+// P6 的 OpenAILLMWrapper 实现此接口。
+type LLMService interface {
+	// Generate 调用 LLM 生成文本响应。
+	// 对齐 Python async_generate(prompt) → str。
+	Generate(ctx context.Context, prompt string, opts ...GenerateOption) (string, error)
+}
+
+// EmbeddingService Embedding 模型本地接口。
+// 对齐 Python OpenAIEmbeddingWrapper.async_embed(text)/async_embed_batch(texts)。
+// P6 的 OpenAIEmbeddingWrapper 实现此接口。
+type EmbeddingService interface {
+	// Embed 生成单文本的向量嵌入。
+	// 对齐 Python async_embed(text) → List[float]。
+	Embed(ctx context.Context, text string) ([]float64, error)
+	// EmbedBatch 批量生成文本的向量嵌入。
+	// 对齐 Python async_embed_batch(texts) → List[List[float]]。
+	EmbedBatch(ctx context.Context, texts []string) ([][]float64, error)
+}
+
 // VectorStoreService 向量存储服务本地接口。
 // 对齐 Python ServiceContext.vector_store 属性返回 Optional[Any]，
 // Go 改为返回本地接口以提供编译期类型安全。
@@ -27,9 +48,26 @@ type VectorStoreService interface {
 	Clear()
 	// Count 获取向量数量
 	Count() int
+	// GetAll 获取所有向量节点，可选按 metadata 过滤。
+	// 对齐 Python MemoryVectorStore.get_all(metadata_filter)。
+	// MemoryDeduplicationOp 和 PersistMemoryOp 依赖此方法。
+	GetAll(metadataFilter map[string]any) []*schema.VectorNode
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// GenerateConfig LLM 调用的可选配置。
+type GenerateConfig struct {
+	// SystemPrompt 系统提示词，空字符串表示未设置
+	SystemPrompt string
+	// Temperature 生成温度，0 表示未设置，使用模型默认值
+	Temperature float64
+	// MaxTokens 最大生成 token 数，0 表示未设置，使用模型默认值
+	MaxTokens int
+}
+
+// GenerateOption LLM 调用选项函数。
+type GenerateOption func(*GenerateConfig)
 
 // ServiceContext 管理共享服务（LLM/Embedding/VectorStore）的上下文。
 //
@@ -49,6 +87,21 @@ func NewServiceContext() *ServiceContext {
 	return &ServiceContext{services: make(map[string]any)}
 }
 
+// WithSystemPrompt 设置 LLM 调用的系统提示词。
+func WithSystemPrompt(s string) GenerateOption {
+	return func(c *GenerateConfig) { c.SystemPrompt = s }
+}
+
+// WithTemperature 设置 LLM 调用的生成温度。
+func WithTemperature(f float64) GenerateOption {
+	return func(c *GenerateConfig) { c.Temperature = f }
+}
+
+// WithMaxTokens 设置 LLM 调用的最大生成 token 数。
+func WithMaxTokens(n int) GenerateOption {
+	return func(c *GenerateConfig) { c.MaxTokens = n }
+}
+
 // ──────────────────────────── 导出方法 ────────────────────────────
 
 // RegisterService 注册服务。
@@ -65,17 +118,33 @@ func (sc *ServiceContext) GetService(name string) any {
 }
 
 // LLM 获取 LLM 服务。
-// 对齐 Python ServiceContext.llm 属性（返回 Optional[Any]）。
-// TODO(P6): 定义 LLMService 本地接口替换 any，待 OpenAILLMWrapper 接口确定后实施。
-func (sc *ServiceContext) LLM() any {
-	return sc.GetService("llm")
+// 对齐 Python ServiceContext.llm 属性。
+// 未注册或类型不匹配时返回 nil。
+func (sc *ServiceContext) LLM() LLMService {
+	svc := sc.GetService("llm")
+	if svc == nil {
+		return nil
+	}
+	llm, ok := svc.(LLMService)
+	if !ok {
+		return nil
+	}
+	return llm
 }
 
 // EmbeddingModel 获取 Embedding 模型服务。
-// 对齐 Python ServiceContext.embedding_model 属性（返回 Optional[Any]）。
-// TODO(P6): 定义 EmbeddingService 本地接口替换 any，待 OpenAIEmbeddingWrapper 接口确定后实施。
-func (sc *ServiceContext) EmbeddingModel() any {
-	return sc.GetService("embedding_model")
+// 对齐 Python ServiceContext.embedding_model 属性。
+// 未注册或类型不匹配时返回 nil。
+func (sc *ServiceContext) EmbeddingModel() EmbeddingService {
+	svc := sc.GetService("embedding_model")
+	if svc == nil {
+		return nil
+	}
+	emb, ok := svc.(EmbeddingService)
+	if !ok {
+		return nil
+	}
+	return emb
 }
 
 // VectorStore 获取 VectorStore 服务。

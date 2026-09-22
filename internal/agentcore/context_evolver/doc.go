@@ -10,17 +10,27 @@
 //	context_evolver/
 //	├── doc.go                                # 包文档
 //	├── core/                                 # 核心框架子包
-//	│   ├── context/                          # RuntimeContext + ServiceContext
-//	│   ├── op/                               # BaseOp + SequentialOp + ParallelOp
+//	│   ├── context/                          # RuntimeContext + ServiceContext + LLMService + EmbeddingService
+//	│   ├── op/                               # BaseOp + OpBase + SequentialOp + ParallelOp
 //	│   ├── schema/                           # VectorNode
 //	│   ├── vector_store/                     # MemoryVectorStore
 //	│   ├── file_connector/                   # JSONFileConnector
 //	│   └── persistence/                      # MemoryPersistenceHelper
-//	└── schema/                               # IO Schema 子包
+//	├── schema/                               # IO Schema 子包
+//	│   ├── doc.go                            # 包文档
+//	│   ├── trajectory.go                     # FeedbackType + Trajectory + TrajectoryBatch
+//	│   ├── memory.go                         # BaseMemory + MemoryInterface + ACE/RB/ReMe Memory
+//	│   └── io_schema.go                      # ACE/RB/ReMe Request/Response + 泛型 Response
+//	├── retrieve/reme/                        # ReMe 检索管线
+//	│   ├── doc.go                            # 包文档
+//	│   ├── run.go                            # RecallMemoryOp + RerankMemoryOp + RewriteMemoryOp
+//	│   ├── prompt.go                         # rerank + rewrite 提示词
+//	│   └── utils.go                          # ParseJSONListResponse + ParseJSONField
+//	└── summary/reme/                         # ReMe 总结管线
 //	    ├── doc.go                            # 包文档
-//	    ├── trajectory.go                     # FeedbackType + Trajectory + TrajectoryBatch
-//	    ├── memory.go                         # BaseMemory + MemoryInterface + ACE/RB/ReMe Memory
-//	    └── io_schema.go                      # ACE/RB/ReMe Request/Response + 泛型 Response
+//	    ├── update.go                         # 9 个总结 Op 实现
+//	    ├── prompt.go                         # 5 个提取/验证提示词
+//	    └── utils.go                          # ParseJSONExperienceResponse + CalculateCosineSimilarity
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/
 package contextevolver
