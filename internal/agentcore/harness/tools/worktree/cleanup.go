@@ -50,7 +50,7 @@ func IsEphemeralSlug(slug string) bool {
 // 4. 检查未推送提交（git rev-list）
 // 5. 任何检查失败 → 跳过
 func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend WorktreeBackend, currentWorktreePath string) (int, error) {
-	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
 		return 0, nil
 	}
@@ -98,11 +98,11 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 		var unpushedResult *bool
 		eg, egCtx := errgroup.WithContext(ctx)
 		eg.Go(func() error {
-			changes, changesErr = StatusPorcelain(egCtx, wtPath)
+			changes, changesErr = statusPorcelain(egCtx, wtPath)
 			return nil
 		})
 		eg.Go(func() error {
-			unpushedResult = HasUnpushedCommits(egCtx, wtPath)
+			unpushedResult = hasUnpushedCommits(egCtx, wtPath)
 			return nil
 		})
 		_ = eg.Wait()
@@ -123,7 +123,7 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 	}
 
 	if removed > 0 {
-		_ = WorktreePrune(ctx, repoRoot)
+		_ = worktreePrune(ctx, repoRoot)
 	}
 
 	return removed, nil

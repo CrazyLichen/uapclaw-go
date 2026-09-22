@@ -138,7 +138,7 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 	wtBranch := WorktreeBranchName(slug)
 
 	// 阶段 1: 快速恢复 —— worktree 已存在
-	existingHead, err := ReadWorktreeHeadSHA(targetPath)
+	existingHead, err := readWorktreeHeadSHA(targetPath)
 	if err == nil && existingHead != "" {
 		return &WorktreeCreateResult{
 			WorktreePath:   targetPath,
@@ -156,21 +156,21 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 
 	// 阶段 3: 创建 worktree
 	sparse := g.config.SparsePaths
-	if err := WorktreeAdd(ctx, repoRoot, targetPath, wtBranch, baseBranch, len(sparse) > 0); err != nil {
+	if err := worktreeAdd(ctx, repoRoot, targetPath, wtBranch, baseBranch, len(sparse) > 0); err != nil {
 		return nil, err
 	}
 
 	// 阶段 4: 稀疏检出（可选，失败回滚）
 	if len(sparse) > 0 {
-		if err := SparseCheckoutSet(ctx, targetPath, sparse); err != nil {
+		if err := sparseCheckoutSet(ctx, targetPath, sparse); err != nil {
 			// 回滚：移除刚创建的 worktree
-			_ = WorktreeRemove(ctx, targetPath, repoRoot, true)
+			_ = worktreeRemove(ctx, targetPath, repoRoot, true)
 			return nil, fmt.Errorf("稀疏检出失败，worktree 已清理: %w", err)
 		}
 	}
 
 	if baseSHA == "" {
-		baseSHA, _ = RevParse(ctx, "HEAD", targetPath)
+		baseSHA, _ = revParse(ctx, "HEAD", targetPath)
 	}
 
 	return &WorktreeCreateResult{
@@ -185,10 +185,10 @@ func (g *GitBackend) Create(ctx context.Context, slug, repoRoot, targetPath stri
 // Remove 删除 worktree 及其分支。
 // Python: GitBackend.remove(worktree_path, repo_root)
 func (g *GitBackend) Remove(ctx context.Context, worktreePath, repoRoot string) bool {
-	branch, _ := GetCurrentBranch(ctx, worktreePath)
-	ok := WorktreeRemove(ctx, worktreePath, repoRoot, true)
+	branch, _ := getCurrentBranch(ctx, worktreePath)
+	ok := worktreeRemove(ctx, worktreePath, repoRoot, true)
 	if ok && branch != "" && strings.HasPrefix(branch, "worktree-") {
-		_ = BranchDelete(ctx, branch, repoRoot)
+		_ = branchDelete(ctx, branch, repoRoot)
 	}
 	return ok
 }
@@ -196,7 +196,7 @@ func (g *GitBackend) Remove(ctx context.Context, worktreePath, repoRoot string) 
 // Exists 通过快速 HEAD 读取检查 worktree 是否存在。
 // Python: GitBackend.exists(worktree_path)
 func (g *GitBackend) Exists(_ context.Context, worktreePath string) bool {
-	sha, err := ReadWorktreeHeadSHA(worktreePath)
+	sha, err := readWorktreeHeadSHA(worktreePath)
 	return err == nil && sha != ""
 }
 
@@ -207,23 +207,23 @@ func (g *GitBackend) Exists(_ context.Context, worktreePath string) bool {
 //
 // 优化：跳过本地已存在的 origin ref，节省 6-8s。
 func (g *GitBackend) resolveBase(ctx context.Context, repoRoot string) (string, string) {
-	defaultBranch := GetDefaultBranch(ctx, repoRoot)
+	defaultBranch := getDefaultBranch(ctx, repoRoot)
 	originRef := "origin/" + defaultBranch
 
 	// 先尝试本地解析
-	if sha, err := RevParse(ctx, originRef, repoRoot); err == nil && sha != "" {
+	if sha, err := revParse(ctx, originRef, repoRoot); err == nil && sha != "" {
 		return originRef, sha
 	}
 
 	// 从远程 fetch
-	if FetchRef(ctx, repoRoot, defaultBranch) {
-		if sha, err := RevParse(ctx, originRef, repoRoot); err == nil && sha != "" {
+	if fetchRef(ctx, repoRoot, defaultBranch) {
+		if sha, err := revParse(ctx, originRef, repoRoot); err == nil && sha != "" {
 			return originRef, sha
 		}
 	}
 
 	// 最后回退：使用当前 HEAD
-	sha, _ := RevParse(ctx, "HEAD", repoRoot)
+	sha, _ := revParse(ctx, "HEAD", repoRoot)
 	return "HEAD", sha
 }
 

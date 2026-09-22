@@ -39,7 +39,7 @@ func TestRunGit_错误命令(t *testing.T) {
 	}
 }
 
-// TestFindCanonicalGitRoot 测试在真实 git 仓库中查找主仓库根目录
+// TestfindCanonicalGitRoot 测试在真实 git 仓库中查找主仓库根目录
 func TestFindCanonicalGitRoot(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := testCtx(t)
@@ -49,26 +49,26 @@ func TestFindCanonicalGitRoot(t *testing.T) {
 		t.Fatalf("git init 失败: %v", err)
 	}
 
-	root, err := FindCanonicalGitRoot(ctx, tmpDir)
+	root, err := findCanonicalGitRoot(ctx, tmpDir)
 	if err != nil {
-		t.Fatalf("FindCanonicalGitRoot 失败: %v", err)
+		t.Fatalf("findCanonicalGitRoot 失败: %v", err)
 	}
 	if root == "" {
-		t.Error("FindCanonicalGitRoot 不应返回空字符串")
+		t.Error("findCanonicalGitRoot 不应返回空字符串")
 	}
 }
 
-// TestReadWorktreeHeadSHA 测试快速路径验证
+// TestreadWorktreeHeadSHA 测试快速路径验证
 func TestReadWorktreeHeadSHA(t *testing.T) {
 	// 在非 worktree 目录应返回错误
 	tmpDir := t.TempDir()
-	_, err := ReadWorktreeHeadSHA(tmpDir)
+	_, err := readWorktreeHeadSHA(tmpDir)
 	if err == nil {
 		t.Error("非 worktree 目录应返回错误")
 	}
 }
 
-// TestStatusPorcelain 测试在临时 git 仓库中验证
+// TeststatusPorcelain 测试在临时 git 仓库中验证
 func TestStatusPorcelain(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := testCtx(t)
@@ -79,9 +79,9 @@ func TestStatusPorcelain(t *testing.T) {
 	}
 
 	// 空仓库应无变更
-	changes, err := StatusPorcelain(ctx, tmpDir)
+	changes, err := statusPorcelain(ctx, tmpDir)
 	if err != nil {
-		t.Fatalf("StatusPorcelain 失败: %v", err)
+		t.Fatalf("statusPorcelain 失败: %v", err)
 	}
 	if len(changes) != 0 {
 		t.Errorf("空仓库应无变更，实际: %d", len(changes))
@@ -93,16 +93,16 @@ func TestStatusPorcelain(t *testing.T) {
 		t.Fatalf("写入测试文件失败: %v", err)
 	}
 
-	changes, err = StatusPorcelain(ctx, tmpDir)
+	changes, err = statusPorcelain(ctx, tmpDir)
 	if err != nil {
-		t.Fatalf("StatusPorcelain 失败: %v", err)
+		t.Fatalf("statusPorcelain 失败: %v", err)
 	}
 	if len(changes) == 0 {
 		t.Error("有未跟踪文件时应返回变更")
 	}
 }
 
-// TestGetCurrentBranch 测试分支名读取
+// TestgetCurrentBranch 测试分支名读取
 func TestGetCurrentBranch(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := testCtx(t)
@@ -118,9 +118,9 @@ func TestGetCurrentBranch(t *testing.T) {
 	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
 	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "init").Run()
 
-	branch, err := GetCurrentBranch(ctx, tmpDir)
+	branch, err := getCurrentBranch(ctx, tmpDir)
 	if err != nil {
-		t.Fatalf("GetCurrentBranch 失败: %v", err)
+		t.Fatalf("getCurrentBranch 失败: %v", err)
 	}
 	if branch == "" {
 		t.Error("分支名不应为空")

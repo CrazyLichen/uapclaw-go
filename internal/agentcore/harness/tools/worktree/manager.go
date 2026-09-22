@@ -101,13 +101,13 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 		return nil, err
 	}
 
-	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
 		return nil, fmt.Errorf("无法创建 worktree: 不在 git 仓库中")
 	}
 
 	originalCwd := cwd.GetCwd(ctx)
-	originalBranch, _ := GetCurrentBranch(ctx, repoRoot)
+	originalBranch, _ := getCurrentBranch(ctx, repoRoot)
 	targetPath, err := m.resolveTargetPath(ctx, slug)
 	if err != nil {
 		return nil, err
@@ -203,7 +203,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 		}
 	}
 
-	repoRoot, _ := FindCanonicalGitRoot(ctx, session.OriginalCWD)
+	repoRoot, _ := findCanonicalGitRoot(ctx, session.OriginalCWD)
 
 	if action == "keep" {
 		m.sessionState.SetCurrentSession(nil)
@@ -252,7 +252,7 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 		return nil, err
 	}
 
-	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
 		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
 	}
@@ -290,7 +290,7 @@ func (m *WorktreeManager) CreateAgentWorktree(ctx context.Context, slug string) 
 // Python: WorktreeManager.recover_worktree_for_owner(owner_id, tag)
 func (m *WorktreeManager) RecoverWorktreeForOwner(ctx context.Context, ownerID, tag string) (*WorktreeSession, error) {
 	slug := ownerSlug(ownerID)
-	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
 		return nil, nil
 	}
@@ -299,12 +299,12 @@ func (m *WorktreeManager) RecoverWorktreeForOwner(ctx context.Context, ownerID, 
 	if err != nil {
 		return nil, nil
 	}
-	headSHA, err := ReadWorktreeHeadSHA(wtPath)
+	headSHA, err := readWorktreeHeadSHA(wtPath)
 	if err != nil || headSHA == "" {
 		return nil, nil
 	}
 
-	branch, _ := GetCurrentBranch(ctx, wtPath)
+	branch, _ := getCurrentBranch(ctx, wtPath)
 	return &WorktreeSession{
 		OriginalCWD:        repoRoot,
 		WorktreePath:       wtPath,
@@ -328,7 +328,7 @@ func (m *WorktreeManager) RecoverWorktreeForMember(ctx context.Context, memberNa
 //
 // 返回 nil 表示无法确定（fail-closed）。
 func (m *WorktreeManager) CountChanges(ctx context.Context, session *WorktreeSession) *WorktreeChangeSummary {
-	changes, err := StatusPorcelain(ctx, session.WorktreePath)
+	changes, err := statusPorcelain(ctx, session.WorktreePath)
 	if err != nil {
 		return nil
 	}
@@ -338,7 +338,7 @@ func (m *WorktreeManager) CountChanges(ctx context.Context, session *WorktreeSes
 		return nil
 	}
 
-	commits := CountCommitsSince(ctx, session.OriginalHeadCommit, session.WorktreePath)
+	commits := countCommitsSince(ctx, session.OriginalHeadCommit, session.WorktreePath)
 	if commits == nil {
 		return nil
 	}
@@ -359,7 +359,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 		return nil, nil
 	}
 
-	repoRoot, err := FindCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
 	if err != nil || repoRoot == "" {
 		return nil, nil
 	}
@@ -406,7 +406,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 	}
 
 	if len(removed) > 0 {
-		_ = WorktreePrune(ctx, repoRoot)
+		_ = worktreePrune(ctx, repoRoot)
 	}
 
 	return removed, nil
@@ -517,7 +517,7 @@ func (m *WorktreeManager) fireRail(method string, args ...any) any {
 // checkChanges 检查 worktree 路径的未提交变更。
 // Python: WorktreeManager._check_changes(wt_path)
 func (m *WorktreeManager) checkChanges(ctx context.Context, wtPath string) *WorktreeChangeSummary {
-	changes, err := StatusPorcelain(ctx, wtPath)
+	changes, err := statusPorcelain(ctx, wtPath)
 	if err != nil {
 		return nil
 	}

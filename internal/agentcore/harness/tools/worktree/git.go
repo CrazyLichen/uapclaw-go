@@ -44,11 +44,11 @@ const gitCommandTimeout = 30 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
-// FindGitRoot 查找 git 仓库根目录。
+// findGitRoot 查找 git 仓库根目录。
 // Python: find_git_root(cwd)
-func FindGitRoot(ctx context.Context, cwd string) (string, error) {
+func findGitRoot(ctx context.Context, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", "--show-toplevel"}, cwd)
 	if !r.OK() {
 		return "", fmt.Errorf("不在 git 仓库中: %s", r.Stderr)
@@ -56,16 +56,16 @@ func FindGitRoot(ctx context.Context, cwd string) (string, error) {
 	return r.Stdout, nil
 }
 
-// FindCanonicalGitRoot 从 worktree 中查找主仓库根目录。
+// findCanonicalGitRoot 从 worktree 中查找主仓库根目录。
 // Python: find_canonical_git_root(cwd)
 //
 // 如果 cwd 在 worktree 内，返回父仓库根目录。
-func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
+func findCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
 	// 先尝试通过 resolveGitDir 获取 .git 目录
 	gitDir, err := resolveGitDir(ctx, cwd)
 	if err != nil || gitDir == "" {
 		// 降级为 findGitRoot
-		return FindGitRoot(ctx, cwd)
+		return findGitRoot(ctx, cwd)
 	}
 
 	// 检查是否为 worktree（有 commondir 文件）
@@ -73,7 +73,7 @@ func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
 	if info, err := os.Stat(commondirPath); err == nil && !info.IsDir() {
 		data, err := os.ReadFile(commondirPath)
 		if err != nil {
-			return FindGitRoot(ctx, cwd)
+			return findGitRoot(ctx, cwd)
 		}
 		common := strings.TrimSpace(string(data))
 		commonAbs := filepath.Clean(filepath.Join(gitDir, common))
@@ -85,12 +85,12 @@ func FindCanonicalGitRoot(ctx context.Context, cwd string) (string, error) {
 	}
 
 	// 普通仓库：gitDir 是 <root>/.git
-	return FindGitRoot(ctx, cwd)
+	return findGitRoot(ctx, cwd)
 }
 
-// GetCurrentBranch 获取当前分支名。
+// getCurrentBranch 获取当前分支名。
 // Python: get_current_branch(cwd)
-func GetCurrentBranch(ctx context.Context, cwd string) (string, error) {
+func getCurrentBranch(ctx context.Context, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", "--abbrev-ref", "HEAD"}, cwd)
 	if !r.OK() || r.Stdout == "HEAD" {
 		return "", fmt.Errorf("HEAD 处于分离状态或不在仓库中")
@@ -98,11 +98,11 @@ func GetCurrentBranch(ctx context.Context, cwd string) (string, error) {
 	return r.Stdout, nil
 }
 
-// GetDefaultBranch 检测默认分支（main/master）。
+// getDefaultBranch 检测默认分支（main/master）。
 // Python: get_default_branch(cwd)
 //
 // 尝试 symbolic-ref，然后回退探测常见名称，最终回退 "main"。
-func GetDefaultBranch(ctx context.Context, cwd string) string {
+func getDefaultBranch(ctx context.Context, cwd string) string {
 	r := runGit(ctx, []string{"symbolic-ref", "refs/remotes/origin/HEAD", "--short"}, cwd)
 	if r.OK() {
 		// "origin/main" -> "main"
@@ -122,9 +122,9 @@ func GetDefaultBranch(ctx context.Context, cwd string) string {
 	return "main"
 }
 
-// RevParse 解析 ref 到 SHA。
+// revParse 解析 ref 到 SHA。
 // Python: rev_parse(ref, cwd)
-func RevParse(ctx context.Context, ref, cwd string) (string, error) {
+func revParse(ctx context.Context, ref, cwd string) (string, error) {
 	r := runGit(ctx, []string{"rev-parse", ref}, cwd)
 	if !r.OK() {
 		return "", fmt.Errorf("rev-parse %s 失败: %s", ref, r.Stderr)
@@ -132,9 +132,9 @@ func RevParse(ctx context.Context, ref, cwd string) (string, error) {
 	return r.Stdout, nil
 }
 
-// WorktreeAdd 创建新 git worktree。
+// worktreeAdd 创建新 git worktree。
 // Python: worktree_add(repo_root, worktree_path, branch_name, base_ref, *, no_checkout=False)
-func WorktreeAdd(ctx context.Context, repoRoot, wtPath, branch, baseRef string, noCheckout bool) error {
+func worktreeAdd(ctx context.Context, repoRoot, wtPath, branch, baseRef string, noCheckout bool) error {
 	args := []string{"worktree", "add"}
 	if noCheckout {
 		args = append(args, "--no-checkout")
@@ -147,9 +147,9 @@ func WorktreeAdd(ctx context.Context, repoRoot, wtPath, branch, baseRef string, 
 	return nil
 }
 
-// WorktreeRemove 删除 git worktree。
+// worktreeRemove 删除 git worktree。
 // Python: worktree_remove(worktree_path, *, repo_root, force=False)
-func WorktreeRemove(ctx context.Context, wtPath, repoRoot string, force bool) bool {
+func worktreeRemove(ctx context.Context, wtPath, repoRoot string, force bool) bool {
 	args := []string{"worktree", "remove"}
 	if force {
 		args = append(args, "--force")
@@ -159,23 +159,23 @@ func WorktreeRemove(ctx context.Context, wtPath, repoRoot string, force bool) bo
 	return r.OK()
 }
 
-// WorktreePrune 清理过期的 worktree 引用。
+// worktreePrune 清理过期的 worktree 引用。
 // Python: worktree_prune(repo_root)
-func WorktreePrune(ctx context.Context, repoRoot string) error {
+func worktreePrune(ctx context.Context, repoRoot string) error {
 	runGit(ctx, []string{"worktree", "prune"}, repoRoot)
 	return nil
 }
 
-// BranchDelete 删除本地 git 分支。
+// branchDelete 删除本地 git 分支。
 // Python: branch_delete(branch, repo_root)
-func BranchDelete(ctx context.Context, branch, repoRoot string) bool {
+func branchDelete(ctx context.Context, branch, repoRoot string) bool {
 	r := runGit(ctx, []string{"branch", "-D", branch}, repoRoot)
 	return r.OK()
 }
 
-// FetchRef 从远程获取指定 ref。
+// fetchRef 从远程获取指定 ref。
 // Python: fetch_ref(repo_root, ref, *, remote="origin")
-func FetchRef(ctx context.Context, repoRoot, ref string, remote ...string) bool {
+func fetchRef(ctx context.Context, repoRoot, ref string, remote ...string) bool {
 	remoteName := "origin"
 	if len(remote) > 0 && remote[0] != "" {
 		remoteName = remote[0]
@@ -184,9 +184,9 @@ func FetchRef(ctx context.Context, repoRoot, ref string, remote ...string) bool 
 	return r.OK()
 }
 
-// SparseCheckoutSet 配置稀疏检出（cone 模式）。
+// sparseCheckoutSet 配置稀疏检出（cone 模式）。
 // Python: sparse_checkout_set(worktree_path, paths)
-func SparseCheckoutSet(ctx context.Context, wtPath string, paths []string) error {
+func sparseCheckoutSet(ctx context.Context, wtPath string, paths []string) error {
 	args := []string{"sparse-checkout", "set", "--cone", "--"}
 	args = append(args, paths...)
 	r := runGit(ctx, args, wtPath)
@@ -201,9 +201,9 @@ func SparseCheckoutSet(ctx context.Context, wtPath string, paths []string) error
 	return nil
 }
 
-// StatusPorcelain 获取未提交变更文件列表。
+// statusPorcelain 获取未提交变更文件列表。
 // Python: status_porcelain(cwd)
-func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
+func statusPorcelain(ctx context.Context, cwd string) ([]string, error) {
 	r := runGit(ctx, []string{"status", "--porcelain"}, cwd)
 	if !r.OK() {
 		return nil, fmt.Errorf("git status 失败: %s", r.Stderr)
@@ -218,11 +218,11 @@ func StatusPorcelain(ctx context.Context, cwd string) ([]string, error) {
 	return result, nil
 }
 
-// CountCommitsSince 计算 base_commit 以来的提交数。
+// countCommitsSince 计算 base_commit 以来的提交数。
 // Python: count_commits_since(base_commit, cwd)
 //
 // 返回 nil 表示无法确定（fail-closed）。
-func CountCommitsSince(ctx context.Context, baseCommit, cwd string) *int {
+func countCommitsSince(ctx context.Context, baseCommit, cwd string) *int {
 	r := runGit(ctx, []string{"rev-list", "--count", baseCommit + "..HEAD"}, cwd)
 	if !r.OK() {
 		return nil
@@ -234,11 +234,11 @@ func CountCommitsSince(ctx context.Context, baseCommit, cwd string) *int {
 	return &n
 }
 
-// HasUnpushedCommits 检查是否有未推送的提交。
+// hasUnpushedCommits 检查是否有未推送的提交。
 // Python: has_unpushed_commits(cwd)
 //
 // 返回 nil 表示检查失败（fail-closed：调用方应视为有变更）。
-func HasUnpushedCommits(ctx context.Context, cwd string) *bool {
+func hasUnpushedCommits(ctx context.Context, cwd string) *bool {
 	r := runGit(ctx, []string{"rev-list", "--max-count=1", "HEAD", "--not", "--remotes"}, cwd)
 	if !r.OK() {
 		return nil
@@ -247,11 +247,11 @@ func HasUnpushedCommits(ctx context.Context, cwd string) *bool {
 	return &result
 }
 
-// ReadWorktreeHeadSHA 快速路径：不调 git 子进程，直接读 HEAD SHA。
+// readWorktreeHeadSHA 快速路径：不调 git 子进程，直接读 HEAD SHA。
 // Python: read_worktree_head_sha(worktree_path)
 //
 // 读取 .git 文件 → gitdir → HEAD → resolve ref。~0.5ms vs ~15ms for git rev-parse HEAD。
-func ReadWorktreeHeadSHA(wtPath string) (string, error) {
+func readWorktreeHeadSHA(wtPath string) (string, error) {
 	gitFile := filepath.Join(wtPath, ".git")
 	data, err := os.ReadFile(gitFile)
 	if err != nil {
@@ -303,7 +303,7 @@ func ReadWorktreeHeadSHA(wtPath string) (string, error) {
 	return strings.TrimSpace(string(sha)), nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // OK 检查 GitResult 是否成功。
 func (r GitResult) OK() bool { return r.ReturnCode == 0 }

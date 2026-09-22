@@ -218,7 +218,7 @@ func TestCountChanges_无变更(t *testing.T) {
 	ctx := testManagerCtx(t)
 
 	// 获取 HEAD commit SHA
-	headSHA, _ := RevParse(ctx, "HEAD", repoRoot)
+	headSHA, _ := revParse(ctx, "HEAD", repoRoot)
 
 	session := &WorktreeSession{
 		WorktreePath:       repoRoot,
@@ -310,7 +310,7 @@ func TestExit_Remove无变更(t *testing.T) {
 	ctx := testManagerCtx(t)
 	ctx = WithWorktreeSessionState(ctx, mgr.SessionState())
 
-	headSHA, _ := RevParse(ctx, "HEAD", repoRoot)
+	headSHA, _ := revParse(ctx, "HEAD", repoRoot)
 
 	session := &WorktreeSession{
 		OriginalCWD:        repoRoot,
@@ -342,7 +342,7 @@ func TestExit_Remove有变更拒绝(t *testing.T) {
 	testFile := filepath.Join(repoRoot, "changed.txt")
 	_ = os.WriteFile(testFile, []byte("modified"), 0o644)
 
-	headSHA, _ := RevParse(ctx, "HEAD", repoRoot)
+	headSHA, _ := revParse(ctx, "HEAD", repoRoot)
 
 	session := &WorktreeSession{
 		OriginalCWD:        repoRoot,
