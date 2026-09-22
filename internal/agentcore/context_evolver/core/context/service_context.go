@@ -1,16 +1,41 @@
 package context
 
 import (
+	"context"
 	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 )
+
+// ──────────────────────────── 接口 ────────────────────────────
+
+// VectorStoreService 向量存储服务本地接口。
+// 对齐 Python ServiceContext.vector_store 属性返回 Optional[Any]，
+// Go 改为返回本地接口以提供编译期类型安全。
+// 此接口在 context 包定义，避免 context → vector_store 单向依赖，
+// MemoryVectorStore 隐式实现此接口（duck typing）。
+//
+// Python: openjiuwen/extensions/context_evolver/core/context/service_context.py
+type VectorStoreService interface {
+	// Upsert 插入或更新向量节点
+	Upsert(ctx context.Context, node *schema.VectorNode) error
+	// Search 向量相似度搜索
+	Search(ctx context.Context, embedding []float64, topK int, metadataFilter map[string]any) ([]*schema.VectorNode, error)
+	// Delete 删除向量节点
+	Delete(ctx context.Context, nodeID string) (bool, error)
+	// Clear 清除所有向量
+	Clear()
+	// Count 获取向量数量
+	Count() int
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ServiceContext 管理共享服务（LLM/Embedding/VectorStore）的上下文。
 //
-// Python 用 __new__ 单例模式，Go 改为依赖注入——由调用方构造并传入。
-// 不使用单例的原因：Go 惯用法倾向显式依赖注入，
-// 且单例模式在测试中难以隔离。
+// 非并发安全：需在初始化阶段完成所有 RegisterService 调用后，才能并发读取。
+// Python 用 __new__ 单例模式（初始化后只读），Go 改为依赖注入——
+// 由调用方构造并传入。如果 P6 的 reconfigure 需要运行时修改，届时需加锁。
 //
 // Python: openjiuwen/extensions/context_evolver/core/context/service_context.py
 type ServiceContext struct {
@@ -28,6 +53,7 @@ func NewServiceContext() *ServiceContext {
 
 // RegisterService 注册服务。
 // 对齐 Python ServiceContext.register_service(name, service)。
+// 非并发安全，需在初始化阶段调用。
 func (sc *ServiceContext) RegisterService(name string, svc any) {
 	sc.services[name] = svc
 }
@@ -39,22 +65,33 @@ func (sc *ServiceContext) GetService(name string) any {
 }
 
 // LLM 获取 LLM 服务。
-// 对齐 Python ServiceContext.llm 属性。
+// 对齐 Python ServiceContext.llm 属性（返回 Optional[Any]）。
+// TODO(P6): 定义 LLMService 本地接口替换 any，待 OpenAILLMWrapper 接口确定后实施。
 func (sc *ServiceContext) LLM() any {
 	return sc.GetService("llm")
 }
 
 // EmbeddingModel 获取 Embedding 模型服务。
-// 对齐 Python ServiceContext.embedding_model 属性。
+// 对齐 Python ServiceContext.embedding_model 属性（返回 Optional[Any]）。
+// TODO(P6): 定义 EmbeddingService 本地接口替换 any，待 OpenAIEmbeddingWrapper 接口确定后实施。
 func (sc *ServiceContext) EmbeddingModel() any {
 	return sc.GetService("embedding_model")
 }
 
 // VectorStore 获取 VectorStore 服务。
-// 对齐 Python ServiceContext.vector_store 属性。
-// 返回 any 类型而非 *vector_store.MemoryVectorStore，避免 context 包循环依赖 vector_store 包。
-func (sc *ServiceContext) VectorStore() any {
-	return sc.GetService("vector_store")
+// 对齐 Python ServiceContext.vector_store 属性（返回 Optional[Any]）。
+// Go 改为返回 VectorStoreService 本地接口，提供编译期类型安全。
+// 注册时需传入实现 VectorStoreService 接口的类型（如 *MemoryVectorStore）。
+func (sc *ServiceContext) VectorStore() VectorStoreService {
+	svc := sc.GetService("vector_store")
+	if svc == nil {
+		return nil
+	}
+	vs, ok := svc.(VectorStoreService)
+	if !ok {
+		return nil
+	}
+	return vs
 }
 
 // Clear 清除所有已注册的服务。

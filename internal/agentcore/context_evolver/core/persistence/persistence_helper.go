@@ -46,6 +46,9 @@ type MemoryPersistenceHelper struct {
 	resolvedType    string          // auto 探测后缓存
 }
 
+// PersistenceOption 持久化助手配置选项。
+type PersistenceOption func(*MemoryPersistenceHelper)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -93,6 +96,31 @@ func NewMemoryPersistenceHelper(opts ...PersistenceOption) *MemoryPersistenceHel
 // 对齐 Python _namespace(user_id, algo_name) → "memory_{algo_name}_{user_id}"。
 func Namespace(userID, algoName string) string {
 	return fmt.Sprintf("memory_%s_%s", algoName, userID)
+}
+
+// WithPersistType 设置持久化类型。
+func WithPersistType(pt string) PersistenceOption {
+	return func(h *MemoryPersistenceHelper) { h.persistType = pt }
+}
+
+// WithPersistPath 设置路径模板。
+func WithPersistPath(p string) PersistenceOption {
+	return func(h *MemoryPersistenceHelper) { h.persistPath = p }
+}
+
+// WithMilvusHost 设置 Milvus 主机。
+func WithMilvusHost(host string) PersistenceOption {
+	return func(h *MemoryPersistenceHelper) { h.milvusHost = host }
+}
+
+// WithMilvusPort 设置 Milvus 端口。
+func WithMilvusPort(port int) PersistenceOption {
+	return func(h *MemoryPersistenceHelper) { h.milvusPort = port }
+}
+
+// WithMilvusCollection 设置 Milvus 集合名。
+func WithMilvusCollection(name string) PersistenceOption {
+	return func(h *MemoryPersistenceHelper) { h.milvusCollection = name }
 }
 
 // ──────────────────────────── 导出方法 ────────────────────────────
@@ -221,36 +249,4 @@ func (h *MemoryPersistenceHelper) loadJSON(userID, algoName string) (map[string]
 		Str("algo", algoName).
 		Msg("从 JSON 加载记忆")
 	return data, nil
-}
-
-// ──────────────────────────── 非导出类型 ────────────────────────────
-
-// PersistenceOption 持久化助手配置选项。
-type PersistenceOption func(*MemoryPersistenceHelper)
-
-// ──────────────────────────── 导出选项函数 ────────────────────────────
-
-// WithPersistType 设置持久化类型。
-func WithPersistType(pt string) PersistenceOption {
-	return func(h *MemoryPersistenceHelper) { h.persistType = pt }
-}
-
-// WithPersistPath 设置路径模板。
-func WithPersistPath(p string) PersistenceOption {
-	return func(h *MemoryPersistenceHelper) { h.persistPath = p }
-}
-
-// WithMilvusHost 设置 Milvus 主机。
-func WithMilvusHost(host string) PersistenceOption {
-	return func(h *MemoryPersistenceHelper) { h.milvusHost = host }
-}
-
-// WithMilvusPort 设置 Milvus 端口。
-func WithMilvusPort(port int) PersistenceOption {
-	return func(h *MemoryPersistenceHelper) { h.milvusPort = port }
-}
-
-// WithMilvusCollection 设置 Milvus 集合名。
-func WithMilvusCollection(name string) PersistenceOption {
-	return func(h *MemoryPersistenceHelper) { h.milvusCollection = name }
 }

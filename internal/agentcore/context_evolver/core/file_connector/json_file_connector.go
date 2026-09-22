@@ -22,6 +22,9 @@ type JSONFileConnector struct {
 	ensureASCII bool
 }
 
+// JSONFileConnectorOption JSON 文件连接器配置选项。
+type JSONFileConnectorOption func(*JSONFileConnector)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -42,6 +45,17 @@ func NewJSONFileConnector(opts ...JSONFileConnectorOption) *JSONFileConnector {
 		opt(c)
 	}
 	return c
+}
+
+// WithIndent 设置缩进空格数。
+func WithIndent(n int) JSONFileConnectorOption {
+	return func(c *JSONFileConnector) { c.indent = n }
+}
+
+// WithEnsureASCII 设置是否转义非 ASCII 字符。
+// Python 默认 ensure_ascii=False（保留中文），Go 对齐此默认值。
+func WithEnsureASCII(ensure bool) JSONFileConnectorOption {
+	return func(c *JSONFileConnector) { c.ensureASCII = ensure }
 }
 
 // ──────────────────────────── 导出方法 ────────────────────────────
@@ -122,24 +136,6 @@ func (c *JSONFileConnector) EnsureASCII() bool {
 // String 实现 Stringer 接口。
 func (c *JSONFileConnector) String() string {
 	return fmt.Sprintf("JSONFileConnector(indent=%d, ensure_ascii=%v)", c.indent, c.ensureASCII)
-}
-
-// ──────────────────────────── 非导出类型 ────────────────────────────
-
-// JSONFileConnectorOption JSON 文件连接器配置选项。
-type JSONFileConnectorOption func(*JSONFileConnector)
-
-// ──────────────────────────── 导出选项函数 ────────────────────────────
-
-// WithIndent 设置缩进空格数。
-func WithIndent(n int) JSONFileConnectorOption {
-	return func(c *JSONFileConnector) { c.indent = n }
-}
-
-// WithEnsureASCII 设置是否转义非 ASCII 字符。
-// Python 默认 ensure_ascii=False（保留中文），Go 对齐此默认值。
-func WithEnsureASCII(ensure bool) JSONFileConnectorOption {
-	return func(c *JSONFileConnector) { c.ensureASCII = ensure }
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
