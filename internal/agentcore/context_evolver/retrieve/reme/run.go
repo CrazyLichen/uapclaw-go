@@ -113,10 +113,10 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		return fmt.Errorf("embedding query failed: %w", err)
 	}
 
-	// 构建元数据过滤条件
-	var metadataFilter map[string]any
+	// 构建元数据过滤条件，对齐 Python: metadata_filter={"workspace_id": user_id, "type": "reme_memory"}
+	metadataFilter := map[string]any{"type": "reme_memory"}
 	if userID != "" {
-		metadataFilter = map[string]any{"workspace_id": userID}
+		metadataFilter["workspace_id"] = userID
 	}
 
 	// 向量相似度搜索
@@ -169,14 +169,17 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 
 	llm := o.LLM()
 	if llm == nil {
-		return fmt.Errorf("llm not configured in ServiceContext")
+		return fmt.Errorf("LLM not configured in ServiceContext")
 	}
 
-	// 格式化候选项
+	// 格式化候选项，对齐 Python _format_candidates_for_rerank
 	candidates := formatCandidatesForRerank(retrieved)
 
-	// 构建提示词
-	prompt := FormatRerankPrompt(o.prompts.RerankPrompt, query, len(retrieved), candidates)
+	// 构建提示词，使用 strings.ReplaceAll 链式替换占位符
+	prompt := o.prompts.RerankPrompt
+	prompt = strings.ReplaceAll(prompt, "{query}", query)
+	prompt = strings.ReplaceAll(prompt, "{num_candidates}", fmt.Sprintf("%d", len(retrieved)))
+	prompt = strings.ReplaceAll(prompt, "{candidates}", candidates)
 
 	// 调用 LLM
 	response, err := llm.Generate(ctx, prompt)
@@ -184,8 +187,7 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		logger.Error(logComponent).
 			Err(err).
 			Msg("LLM 重排序调用失败")
-		// LLM 调用失败时保留原顺序
-		return nil
+		return fmt.Errorf("LLM rerank failed: %w", err)
 	}
 
 	// 解析排序索引
@@ -252,27 +254,24 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 
 	llm := o.LLM()
 	if llm == nil {
-		// LLM 未注册时降级为格式化原文
-		logger.Warn(logComponent).
-			Msg("LLM 未注册，降级为格式化原文")
-		rc.Set("memory_string", formatMemoriesForContext(retrieved))
-		return nil
+		return fmt.Errorf("LLM not configured in ServiceContext")
 	}
 
 	// 格式化记忆原文
 	originalContext := formatMemoriesForContext(retrieved)
 
-	// 构建提示词
-	prompt := FormatRewritePrompt(o.prompts.RewritePrompt, query, originalContext)
+	// 构建提示词，使用 strings.ReplaceAll 链式替换占位符
+	prompt := o.prompts.RewritePrompt
+	prompt = strings.ReplaceAll(prompt, "{current_query}", query)
+	prompt = strings.ReplaceAll(prompt, "{original_context}", originalContext)
 
 	// 调用 LLM
 	response, err := llm.Generate(ctx, prompt)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Msg("LLM 改写调用失败，降级为格式化原文")
-		rc.Set("memory_string", originalContext)
-		return nil
+			Msg("LLM 改写调用失败")
+		return fmt.Errorf("LLM rewrite failed: %w", err)
 	}
 
 	// 解析改写结果
@@ -297,24 +296,27 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatCandidatesForRerank 格式化候选项供重排序提示词使用。
-// 对齐 Python RerankMemoryOp 中 format_candidates_for_rerank。
+// 对齐 Python RerankMemoryOp._format_candidates_for_rerank：
+// f"Candidate {i}:\nCondition: {condition}\nExperience: {content}\n"
+// 候选项之间用 "\n---\n" 连接。
 func formatCandidatesForRerank(candidates []ceschema.ReMeRetrievedMemory) string {
-	var sb strings.Builder
+	formatted := make([]string, 0, len(candidates))
 	for i, mem := range candidates {
-		sb.WriteString(fmt.Sprintf("[%d] When to use: %s\n    Content: %s\n", i, mem.WhenToUse, mem.Content))
+		text := fmt.Sprintf("Candidate %d:\nCondition: %s\nExperience: %s\n", i, mem.WhenToUse, mem.Content)
+		formatted = append(formatted, text)
 	}
-	return sb.String()
+	return strings.Join(formatted, "\n---\n")
 }
 
 // formatMemoriesForContext 格式化记忆供上下文使用。
-// 对齐 Python RewriteMemoryOp 中 format_memories_for_context。
+// 对齐 Python RewriteMemoryOp._format_memories_for_context：
+// f"Memory {i}:\n  When to use: {condition}\n  Content: {memory_content}\n"
+// 记忆之间用 "\n" 连接。
 func formatMemoriesForContext(memories []ceschema.ReMeRetrievedMemory) string {
-	var sb strings.Builder
+	formatted := make([]string, 0, len(memories))
 	for i, mem := range memories {
-		if i > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(fmt.Sprintf("When to use: %s\nContent: %s", mem.WhenToUse, mem.Content))
+		text := fmt.Sprintf("Memory %d:\n  When to use: %s\n  Content: %s\n", i+1, mem.WhenToUse, mem.Content)
+		formatted = append(formatted, text)
 	}
-	return sb.String()
+	return strings.Join(formatted, "\n")
 }

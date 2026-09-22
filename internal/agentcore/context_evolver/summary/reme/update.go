@@ -243,7 +243,11 @@ func (op *SuccessExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 
 	var memories []*ceschema.ReMeMemory
 	for _, trajectory := range successTrajectories {
-		userPrompt := fmt.Sprintf(op.prompts.SuccessMemoryPrompt, query, trajectory, "successful")
+		// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
+		userPrompt := op.prompts.SuccessMemoryPrompt
+		userPrompt = strings.ReplaceAll(userPrompt, "{query}", query)
+		userPrompt = strings.ReplaceAll(userPrompt, "{step_sequence}", trajectory)
+		userPrompt = strings.ReplaceAll(userPrompt, "{outcome}", "successful")
 		response, err := llm.Generate(ctx, userPrompt)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Failed to generate success memory")
@@ -312,7 +316,11 @@ func (op *FailureExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 
 	var memories []*ceschema.ReMeMemory
 	for _, trajectory := range failureTrajectories {
-		userPrompt := fmt.Sprintf(op.prompts.FailureMemoryPrompt, query, trajectory, "failed")
+		// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
+		userPrompt := op.prompts.FailureMemoryPrompt
+		userPrompt = strings.ReplaceAll(userPrompt, "{query}", query)
+		userPrompt = strings.ReplaceAll(userPrompt, "{step_sequence}", trajectory)
+		userPrompt = strings.ReplaceAll(userPrompt, "{outcome}", "failed")
 		response, err := llm.Generate(ctx, userPrompt)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Failed to generate failure memory")
@@ -415,7 +423,12 @@ func (op *ComparativeExtractionOp) Execute(ctx context.Context, rc *cecontext.Ru
 		lowerSteps = allTrajectories[minIdx]
 	}
 
-	userPrompt := fmt.Sprintf(op.prompts.ComparativeMemoryPrompt, maxScore, higherSteps, minScore, lowerSteps)
+	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
+	userPrompt := op.prompts.ComparativeMemoryPrompt
+	userPrompt = strings.ReplaceAll(userPrompt, "{higher_score}", fmt.Sprintf("%v", maxScore))
+	userPrompt = strings.ReplaceAll(userPrompt, "{higher_steps}", higherSteps)
+	userPrompt = strings.ReplaceAll(userPrompt, "{lower_score}", fmt.Sprintf("%v", minScore))
+	userPrompt = strings.ReplaceAll(userPrompt, "{lower_steps}", lowerSteps)
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("Failed to generate comparative memory")
@@ -484,7 +497,9 @@ func (op *ComparativeAllExtractionOp) Execute(ctx context.Context, rc *cecontext
 	}
 	trajectoriesStr := strings.Join(parts, "\n\n")
 
-	userPrompt := fmt.Sprintf(op.prompts.ComparativeAllMemoryPrompt, trajectoriesStr)
+	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
+	userPrompt := op.prompts.ComparativeAllMemoryPrompt
+	userPrompt = strings.ReplaceAll(userPrompt, "{trajectory}", trajectoriesStr)
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("Failed to generate comparative all memory")
@@ -588,7 +603,11 @@ func (op *MemoryDeduplicationOp) Execute(ctx context.Context, rc *cecontext.Runt
 		return nil
 	}
 
+	// 对齐 Python: if not self.embedding_model: raise ValueError(...)
 	embeddingModel := op.EmbeddingModel()
+	if embeddingModel == nil {
+		return fmt.Errorf("EmbeddingModel not configured in ServiceContext")
+	}
 	vectorStore := op.VectorStore()
 
 	// 获取已有记忆的 embeddings
@@ -764,9 +783,13 @@ func (op *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 // validateMemory 校验单条记忆质量。
 // 对齐 Python MemoryValidationOp._validate_memory。
 func (op *MemoryValidationOp) validateMemory(ctx context.Context, llm cecontext.LLMService, memory *ceschema.ReMeMemory) (bool, float64, string) {
-	userPrompt := fmt.Sprintf(op.prompts.MemoryValidationPrompt, memory.WhenToUse, memory.Content)
+	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
+	userPrompt := op.prompts.MemoryValidationPrompt
+	userPrompt = strings.ReplaceAll(userPrompt, "{condition}", memory.WhenToUse)
+	userPrompt = strings.ReplaceAll(userPrompt, "{task_memory_content}", memory.Content)
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("LLM 校验失败")
 		return false, 0, fmt.Sprintf("LLM generate failed: %v", err)
 	}
 

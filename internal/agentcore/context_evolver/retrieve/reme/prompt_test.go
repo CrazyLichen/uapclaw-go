@@ -32,9 +32,13 @@ func TestReMeRetrieveDefaultPrompts(t *testing.T) {
 	}
 }
 
-// TestRerankPrompt_格式化 测试重排序提示词格式化
+// TestRerankPrompt_格式化 测试重排序提示词 ReplaceAll 替换
 func TestRerankPrompt_格式化(t *testing.T) {
-	result := FormatRerankPrompt(ReMeRetrieveDefaultPrompts.RerankPrompt, "test query", 3, "candidate text")
+	result := ReMeRetrieveDefaultPrompts.RerankPrompt
+	result = strings.ReplaceAll(result, "{query}", "test query")
+	result = strings.ReplaceAll(result, "{num_candidates}", "3")
+	result = strings.ReplaceAll(result, "{candidates}", "candidate text")
+
 	if !strings.Contains(result, "test query") {
 		t.Fatal("格式化结果应包含 query")
 	}
@@ -54,11 +58,18 @@ func TestRerankPrompt_格式化(t *testing.T) {
 	if strings.Contains(result, "{candidates}") {
 		t.Fatal("格式化后不应包含 {candidates} 占位符")
 	}
+	// JSON 示例中不应有双大括号
+	if strings.Contains(result, "{{") {
+		t.Fatal("格式化后不应包含 {{ 双大括号")
+	}
 }
 
-// TestRewritePrompt_格式化 测试改写提示词格式化
+// TestRewritePrompt_格式化 测试改写提示词 ReplaceAll 替换
 func TestRewritePrompt_格式化(t *testing.T) {
-	result := FormatRewritePrompt(ReMeRetrieveDefaultPrompts.RewritePrompt, "my query", "original text")
+	result := ReMeRetrieveDefaultPrompts.RewritePrompt
+	result = strings.ReplaceAll(result, "{current_query}", "my query")
+	result = strings.ReplaceAll(result, "{original_context}", "original text")
+
 	if !strings.Contains(result, "my query") {
 		t.Fatal("格式化结果应包含 current_query")
 	}
@@ -71,5 +82,9 @@ func TestRewritePrompt_格式化(t *testing.T) {
 	}
 	if strings.Contains(result, "{original_context}") {
 		t.Fatal("格式化后不应包含 {original_context} 占位符")
+	}
+	// JSON 示例中不应有双大括号
+	if strings.Contains(result, "{{") {
+		t.Fatal("格式化后不应包含 {{ 双大括号")
 	}
 }

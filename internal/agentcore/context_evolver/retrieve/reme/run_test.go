@@ -2,6 +2,7 @@ package reme
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
@@ -245,9 +246,29 @@ func TestRerankMemoryOp_无记忆(t *testing.T) {
 	}
 }
 
-// TestRerankMemoryOp_LLM未注册 测试 LLM 未注册
+// TestRerankMemoryOp_LLM未注册 测试 LLM 未注册时返回错误
 func TestRerankMemoryOp_LLM未注册(t *testing.T) {
 	sc := newTestServiceContext() // 不注册 LLM
+	op := NewRerankMemoryOp(sc, true, 5)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("query", "test query")
+	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
+		{WhenToUse: "when A", Content: "content A"},
+	})
+
+	err := op.Execute(context.Background(), rc)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+	if err.Error() != "LLM not configured in ServiceContext" {
+		t.Fatalf("错误消息不匹配: %v", err)
+	}
+}
+
+// TestRerankMemoryOp_LLM调用失败 测试 LLM 调用失败时返回错误
+func TestRerankMemoryOp_LLM调用失败(t *testing.T) {
+	sc := newTestServiceContext()
+	sc.RegisterService("llm", &fakeLLMService{err: fmt.Errorf("LLM error")})
 	op := NewRerankMemoryOp(sc, true, 5)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
@@ -341,8 +362,10 @@ func TestRewriteMemoryOp_跳过改写(t *testing.T) {
 	if memStr == "" {
 		t.Fatal("应设置格式化原文")
 	}
-	if memStr != "When to use: when A\nContent: content A" {
-		t.Fatalf("格式化原文不匹配，实际 '%s'", memStr)
+	// 对齐 Python 格式: Memory {i}:\n  When to use: ...\n  Content: ...\n
+	expected := "Memory 1:\n  When to use: when A\n  Content: content A\n"
+	if memStr != expected {
+		t.Fatalf("格式化原文不匹配，期望 '%s'，实际 '%s'", expected, memStr)
 	}
 }
 
@@ -389,13 +412,13 @@ func TestRewriteMemoryOp_解析失败用原文(t *testing.T) {
 		t.Fatal("memory_string 未设置")
 	}
 	// 解析失败时应降级为格式化原文
-	expected := "When to use: when A\nContent: content A"
+	expected := "Memory 1:\n  When to use: when A\n  Content: content A\n"
 	if memStr != expected {
 		t.Fatalf("期望 '%s'，实际 '%s'", expected, memStr)
 	}
 }
 
-// TestRewriteMemoryOp_LLM未注册 测试 LLM 未注册时降级为格式化原文
+// TestRewriteMemoryOp_LLM未注册 测试 LLM 未注册时返回错误
 func TestRewriteMemoryOp_LLM未注册(t *testing.T) {
 	sc := newTestServiceContext() // 不注册 LLM
 	op := NewRewriteMemoryOp(sc, true)
@@ -406,16 +429,90 @@ func TestRewriteMemoryOp_LLM未注册(t *testing.T) {
 	})
 
 	err := op.Execute(context.Background(), rc)
-	if err != nil {
-		t.Fatalf("执行失败: %v", err)
+	if err == nil {
+		t.Fatal("期望返回错误")
 	}
+	if err.Error() != "LLM not configured in ServiceContext" {
+		t.Fatalf("错误消息不匹配: %v", err)
+	}
+}
 
-	memStr, ok := cecontext.GetTyped[string](rc, "memory_string")
-	if !ok {
-		t.Fatal("memory_string 未设置")
+// TestRewriteMemoryOp_LLM调用失败 测试 LLM 调用失败时返回错误
+func TestRewriteMemoryOp_LLM调用失败(t *testing.T) {
+	sc := newTestServiceContext()
+	sc.RegisterService("llm", &fakeLLMService{err: fmt.Errorf("LLM error")})
+	op := NewRewriteMemoryOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("query", "test query")
+	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
+		{WhenToUse: "when A", Content: "content A"},
+	})
+
+	err := op.Execute(context.Background(), rc)
+	if err == nil {
+		t.Fatal("期望返回错误")
 	}
-	expected := "When to use: when A\nContent: content A"
-	if memStr != expected {
-		t.Fatalf("期望 '%s'，实际 '%s'", expected, memStr)
+}
+
+// ──────────────────────────── 格式化函数测试 ────────────────────────────
+
+// TestFormatCandidatesForRerank_格式 测试对齐 Python 的候选格式
+func TestFormatCandidatesForRerank_格式(t *testing.T) {
+	candidates := []ceschema.ReMeRetrievedMemory{
+		{WhenToUse: "cond A", Content: "exp A"},
+		{WhenToUse: "cond B", Content: "exp B"},
 	}
+	result := formatCandidatesForRerank(candidates)
+
+	// 对齐 Python: Candidate {i}:\nCondition: {cond}\nExperience: {content}\n
+	if !contains(result, "Candidate 0:") {
+		t.Fatal("应包含 'Candidate 0:'")
+	}
+	if !contains(result, "Condition: cond A") {
+		t.Fatal("应包含 'Condition: cond A'")
+	}
+	if !contains(result, "Experience: exp A") {
+		t.Fatal("应包含 'Experience: exp A'")
+	}
+	if !contains(result, "Candidate 1:") {
+		t.Fatal("应包含 'Candidate 1:'")
+	}
+	// 候选项之间用 "\n---\n" 连接
+	if !contains(result, "\n---\n") {
+		t.Fatal("候选项之间应用 \\n---\\n 连接")
+	}
+}
+
+// TestFormatMemoriesForContext_格式 测试对齐 Python 的记忆格式
+func TestFormatMemoriesForContext_格式(t *testing.T) {
+	memories := []ceschema.ReMeRetrievedMemory{
+		{WhenToUse: "cond A", Content: "content A"},
+	}
+	result := formatMemoriesForContext(memories)
+
+	// 对齐 Python: Memory {i}:\n  When to use: {cond}\n  Content: {content}\n
+	if !contains(result, "Memory 1:") {
+		t.Fatal("应包含 'Memory 1:'")
+	}
+	if !contains(result, "When to use: cond A") {
+		t.Fatal("应包含 'When to use: cond A'")
+	}
+	if !contains(result, "Content: content A") {
+		t.Fatal("应包含 'Content: content A'")
+	}
+}
+
+// contains 简单字符串包含检查
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		(len(s) > 0 && len(sub) > 0 && findSubstring(s, sub)))
+}
+
+func findSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }

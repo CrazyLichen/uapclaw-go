@@ -517,6 +517,25 @@ func TestMemoryDeduplicationOp_检测重复(t *testing.T) {
 	assert.Equal(t, 1, dupCount)
 }
 
+// TestMemoryDeduplicationOp_EmbeddingModel未注册 测试 EmbeddingModel 未注册时返回错误
+func TestMemoryDeduplicationOp_EmbeddingModel未注册(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	// 不注册 embedding_model
+	vs := vector_store.NewMemoryVectorStore()
+	sc.RegisterService("vector_store", vs)
+
+	op := NewMemoryDeduplicationOp(sc, true, 0.9)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("validated_memories", []*ceschema.ReMeMemory{
+		{WhenToUse: "when1", Content: "content1"},
+	})
+	rc.Set("user_id", "user1")
+
+	err := op.Execute(context.Background(), rc)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "EmbeddingModel not configured")
+}
+
 // ──────────────────────────── UpdateVectorStoreOp 测试 ────────────────────────────
 
 // TestUpdateVectorStoreOp_正常存储 测试正常存储流程
