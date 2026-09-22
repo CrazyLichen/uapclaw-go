@@ -45,7 +45,7 @@ func GetTyped[T any](rc *RuntimeContext, key string) (T, bool) {
 	return typed, true
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Set 设置键值。
 // 对齐 Python RuntimeContext.set(key, value)。

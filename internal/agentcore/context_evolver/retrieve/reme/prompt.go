@@ -1,5 +1,16 @@
 package reme
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ReMeRetrievePrompts ReMe 检索管线的提示词配置。
+// 对齐 Python ReMeRetrievePrompts(BaseModel)。
+type ReMeRetrievePrompts struct {
+	// RerankPrompt 重排序提示词
+	RerankPrompt string
+	// RewritePrompt 改写提示词
+	RewritePrompt string
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 提示词模板 — 一比一复刻 Python 原文，不做自行翻译
@@ -63,17 +74,6 @@ Guidelines:
 - Consolidate overlapping insights into coherent recommendations
 - Prioritize experiences most relevant to the current situation
 - Make the guidance feel custom-written for this specific task`
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ReMeRetrievePrompts ReMe 检索管线的提示词配置。
-// 对齐 Python ReMeRetrievePrompts(BaseModel)。
-type ReMeRetrievePrompts struct {
-	// RerankPrompt 重排序提示词
-	RerankPrompt string
-	// RewritePrompt 改写提示词
-	RewritePrompt string
-}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

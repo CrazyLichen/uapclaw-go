@@ -31,7 +31,7 @@ func NewMemoryVectorStore() *MemoryVectorStore {
 	return &MemoryVectorStore{vectors: make(map[string]*schema.VectorNode)}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Upsert 插入或更新向量节点。
 // 对齐 Python MemoryVectorStore.async_upsert(node)。

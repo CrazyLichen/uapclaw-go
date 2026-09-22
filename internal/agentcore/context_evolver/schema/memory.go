@@ -9,7 +9,7 @@ import (
 	coreschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryInterface 记忆类型的通用接口。
 // 所有 Memory 类型（ACEMemory/ReasoningBankMemory/ReMeMemory）均实现此接口。
@@ -241,7 +241,7 @@ func VectorNodeToMemory(node *coreschema.VectorNode) (MemoryInterface, error) {
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetWorkspaceID 实现 MemoryInterface 接口。
 // 对齐 Python BaseMemory.workspace_id 属性访问。
@@ -340,12 +340,12 @@ func (m ReMeMemory) ToVectorNode() *coreschema.VectorNode {
 		"updated_at":   formatTimeField(m.UpdatedAt),
 		"workspace_id": m.WorkspaceID,
 		"metadata": map[string]any{
-			"tags":        m.Metadata.Tags,
-			"step_type":   m.Metadata.StepType,
-			"tools_used":  m.Metadata.ToolsUsed,
-			"confidence":  m.Metadata.Confidence,
-			"freq":        m.Metadata.Freq,
-			"utility":     m.Metadata.Utility,
+			"tags":       m.Metadata.Tags,
+			"step_type":  m.Metadata.StepType,
+			"tools_used": m.Metadata.ToolsUsed,
+			"confidence": m.Metadata.Confidence,
+			"freq":       m.Metadata.Freq,
+			"utility":    m.Metadata.Utility,
 		},
 	}
 

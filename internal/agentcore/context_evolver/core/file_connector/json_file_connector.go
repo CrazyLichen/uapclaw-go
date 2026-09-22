@@ -58,7 +58,7 @@ func WithEnsureASCII(ensure bool) JSONFileConnectorOption {
 	return func(c *JSONFileConnector) { c.ensureASCII = ensure }
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // SaveToFile 保存字典数据到 JSON 文件。
 // 对齐 Python JSONFileConnector.save_to_file(file_path, data)。

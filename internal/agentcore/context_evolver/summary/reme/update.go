@@ -8,8 +8,8 @@ import (
 	"time"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
-	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	op "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/op"
+	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -170,7 +170,7 @@ func NewPersistMemoryOp(sc *cecontext.ServiceContext, helper *cepersistence.Memo
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行轨迹预处理，按分数分组。
 // 对齐 Python TrajectoryPreprocessOp.async_execute。
@@ -778,7 +778,7 @@ func (op *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	return nil
 }
 
-// ──────────────────────────── 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateMemory 校验单条记忆质量。
 // 对齐 Python MemoryValidationOp._validate_memory。

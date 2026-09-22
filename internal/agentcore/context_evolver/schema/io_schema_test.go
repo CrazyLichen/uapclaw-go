@@ -303,9 +303,9 @@ func TestReMeSummarizeResponse_JSON往返(t *testing.T) {
 
 func TestReMeRetrieveRequest_JSON往返(t *testing.T) {
 	original := ReMeRetrieveRequest{
-		Query:          "How to implement caching?",
-		TopKRetrieval:  10,
-		TopKRerank:     5,
+		Query:         "How to implement caching?",
+		TopKRetrieval: 10,
+		TopKRerank:    5,
 	}
 	data, err := json.Marshal(original)
 	if err != nil {

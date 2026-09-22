@@ -159,7 +159,7 @@ func TestJSONFileConnector_ensureASCII_含转义序列(t *testing.T) {
 	// 验证文件中确实使用了 surrogate pair 编码
 	raw, err := os.ReadFile(fp)
 	require.NoError(t, err)
-	assert.NotContains(t, string(raw), "🌍") // emoji 不应直接出现在文件中
+	assert.NotContains(t, string(raw), "🌍")         // emoji 不应直接出现在文件中
 	assert.Contains(t, string(raw), `\uD83C\uDF0D`) // surrogate pair
 }
 

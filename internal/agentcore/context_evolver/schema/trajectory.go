@@ -106,7 +106,7 @@ func TrajectoryFromDict(data map[string]any) *Trajectory {
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 实现 Stringer 接口。
 // 对齐 Python FeedbackType.__str__()，输出 "helpful"/"harmful"/"neutral"。

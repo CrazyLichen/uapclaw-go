@@ -123,7 +123,7 @@ func WithMilvusCollection(name string) PersistenceOption {
 	return func(h *MemoryPersistenceHelper) { h.milvusCollection = name }
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 持久化节点到后端。
 // 对齐 Python MemoryPersistenceHelper.save(user_id, algo_name, nodes_dict)。

@@ -67,10 +67,10 @@ func NewRecallMemoryOp(sc *cecontext.ServiceContext, topK int) *RecallMemoryOp {
 // 对齐 Python RerankMemoryOp(service_context, llm_rerank, topk_rerank)。
 func NewRerankMemoryOp(sc *cecontext.ServiceContext, llmRerank bool, topKRerank int) *RerankMemoryOp {
 	return &RerankMemoryOp{
-		OpBase:      *op.NewOpBase(sc),
-		llmRerank:   llmRerank,
-		topKRerank:  topKRerank,
-		prompts:     ReMeRetrieveDefaultPrompts,
+		OpBase:     *op.NewOpBase(sc),
+		llmRerank:  llmRerank,
+		topKRerank: topKRerank,
+		prompts:    ReMeRetrieveDefaultPrompts,
 	}
 }
 
@@ -78,13 +78,13 @@ func NewRerankMemoryOp(sc *cecontext.ServiceContext, llmRerank bool, topKRerank 
 // 对齐 Python RewriteMemoryOp(service_context, llm_rewrite)。
 func NewRewriteMemoryOp(sc *cecontext.ServiceContext, llmRewrite bool) *RewriteMemoryOp {
 	return &RewriteMemoryOp{
-		OpBase:      *op.NewOpBase(sc),
-		llmRewrite:  llmRewrite,
-		prompts:     ReMeRetrieveDefaultPrompts,
+		OpBase:     *op.NewOpBase(sc),
+		llmRewrite: llmRewrite,
+		prompts:    ReMeRetrieveDefaultPrompts,
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行向量检索。
 // 对齐 Python RecallMemoryOp.__call__。

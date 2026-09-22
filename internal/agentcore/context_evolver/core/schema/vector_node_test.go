@@ -64,10 +64,10 @@ func TestVectorNodeFromDict_缺失字段(t *testing.T) {
 func TestVectorNodeFromDict_从JSON反序列化的embedding(t *testing.T) {
 	// JSON 反序列化后 embedding 是 []any 而非 []float64
 	data := map[string]any{
-		"id":      "n1",
-		"content": "text",
+		"id":        "n1",
+		"content":   "text",
 		"embedding": []any{1.0, 2.0, 3.0},
-		"metadata": map[string]any{"k": "v"},
+		"metadata":  map[string]any{"k": "v"},
 	}
 	node, err := VectorNodeFromDict(data)
 	require.NoError(t, err)

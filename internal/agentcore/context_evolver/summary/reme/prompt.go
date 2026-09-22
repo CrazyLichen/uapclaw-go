@@ -1,5 +1,22 @@
 package reme
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ReMeSummaryPrompts ReMe Summary 算法的提示词集合。
+// 对齐 Python ReMePrompt dataclass。
+type ReMeSummaryPrompts struct {
+	// ComparativeMemoryPrompt 对比提示词
+	ComparativeMemoryPrompt string
+	// SuccessMemoryPrompt 成功提取提示词
+	SuccessMemoryPrompt string
+	// FailureMemoryPrompt 失败提取提示词
+	FailureMemoryPrompt string
+	// ComparativeAllMemoryPrompt 全量对比提示词
+	ComparativeAllMemoryPrompt string
+	// MemoryValidationPrompt 记忆校验提示词
+	MemoryValidationPrompt string
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -187,23 +204,6 @@ Score should be between 0.0 (poor quality) and 1.0 (excellent quality).
 Mark as invalid if score is below 0.3 or if there are fundamental issues with the task memory.
 ` + "```"
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ReMeSummaryPrompts ReMe Summary 算法的提示词集合。
-// 对齐 Python ReMePrompt dataclass。
-type ReMeSummaryPrompts struct {
-	// ComparativeMemoryPrompt 对比提示词
-	ComparativeMemoryPrompt string
-	// SuccessMemoryPrompt 成功提取提示词
-	SuccessMemoryPrompt string
-	// FailureMemoryPrompt 失败提取提示词
-	FailureMemoryPrompt string
-	// ComparativeAllMemoryPrompt 全量对比提示词
-	ComparativeAllMemoryPrompt string
-	// MemoryValidationPrompt 记忆校验提示词
-	MemoryValidationPrompt string
-}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

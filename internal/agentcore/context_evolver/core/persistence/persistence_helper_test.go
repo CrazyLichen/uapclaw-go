@@ -31,7 +31,7 @@ func TestNewMemoryPersistenceHelper_自定义选项(t *testing.T) {
 func TestMemoryPersistenceHelper_Save_Load_JSON往返(t *testing.T) {
 	dir := t.TempDir()
 	h := NewMemoryPersistenceHelper(
-		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
+		WithPersistPath(dir + "/{algo_name}/{user_id}.json"),
 	)
 
 	nodes := map[string]any{
@@ -46,13 +46,13 @@ func TestMemoryPersistenceHelper_Save_Load_JSON往返(t *testing.T) {
 }
 
 func TestMemoryPersistenceHelper_Save_空数据(t *testing.T) {
-	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"))
 	err := h.Save("alice", "ace", nil)
 	assert.NoError(t, err) // 空数据直接返回，对齐 Python
 }
 
 func TestMemoryPersistenceHelper_Load_不存在(t *testing.T) {
-	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"))
 	loaded, err := h.Load("alice", "ace")
 	require.NoError(t, err)
 	assert.Empty(t, loaded) // 对齐 Python：文件不存在返回 {}
@@ -116,7 +116,7 @@ func TestMemoryPersistenceHelper_String(t *testing.T) {
 // mockMilvusConnector MilvusConnector 的 mock 实现
 type mockMilvusConnector struct{}
 
-func (m *mockMilvusConnector) SaveToDB(_ string, _ map[string]any) error  { return nil }
+func (m *mockMilvusConnector) SaveToDB(_ string, _ map[string]any) error   { return nil }
 func (m *mockMilvusConnector) LoadFromDB(_ string) (map[string]any, error) { return nil, nil }
 func (m *mockMilvusConnector) Exists(_ string) bool                        { return false }
 func (m *mockMilvusConnector) Delete(_ string) bool                        { return false }

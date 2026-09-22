@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -825,15 +825,15 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	// 6. 写入 index.json
 	nowISO := time.Now().Format(time.RFC3339)
 	record := &PlanRecord{
-		PlanID:         planID,
-		TaskID:         taskID,
-		TeamPlanID:     tm.teamPlanID,
-		MemberName:     tm.memberName,
-		Status:         fsm.TaskStatusClaimed,
-		MemberPlanMD:   destPath,
-		Decision:       "pending",
-		SubmittedAt:    nowISO,
-		UpdatedAt:      nowISO,
+		PlanID:       planID,
+		TaskID:       taskID,
+		TeamPlanID:   tm.teamPlanID,
+		MemberName:   tm.memberName,
+		Status:       fsm.TaskStatusClaimed,
+		MemberPlanMD: destPath,
+		Decision:     "pending",
+		SubmittedAt:  nowISO,
+		UpdatedAt:    nowISO,
 	}
 	// M-08: 记录源计划文件路径（对齐 Python: source_plan_path）
 	if planFilePath != "" {

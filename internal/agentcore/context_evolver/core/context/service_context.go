@@ -102,7 +102,7 @@ func WithMaxTokens(n int) GenerateOption {
 	return func(c *GenerateConfig) { c.MaxTokens = n }
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterService 注册服务。
 // 对齐 Python ServiceContext.register_service(name, service)。
