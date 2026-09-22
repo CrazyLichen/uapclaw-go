@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
@@ -434,18 +435,30 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) *
 
 	// 事件镜像回调：harness 层 WorktreeEvent → agent_teams 层 schema.TypedEvent
 	var eventHandler worktree.WorktreeEventHandler
-	if c.WorkspaceManager() != nil {
+	if c.WorkspaceManager() != nil && c.TeamBackend() != nil {
 		wsMgr := c.WorkspaceManager()
+		tb := c.TeamBackend()
 		eventHandler = func(ctx context.Context, event worktree.WorktreeEvent) error {
 			switch e := event.(type) {
 			case *worktree.WorktreeCreatedEvent:
 				// 挂载 worktree symlink
 				_ = wsMgr.MountWorktree(e.WorktreeName, e.WorktreePath)
-				// TODO(#9.58): TeamBackend.publishEvent 导出后补充 schema 层事件发布
+				// 发布 schema 层事件
+				tb.PublishEvent(ctx, atevents.WorktreeCreatedEvent{
+					BaseEventMessage: atevents.BaseEventMessage{TeamName: c.TeamName()},
+					WorktreeName:     e.WorktreeName,
+					WorktreePath:     e.WorktreePath,
+					Existed:          e.Existed,
+				})
 			case *worktree.WorktreeRemovedEvent:
 				// 卸载 worktree symlink
 				_ = wsMgr.UnmountWorktree(e.WorktreeName)
-				// TODO(#9.58): TeamBackend.publishEvent 导出后补充 schema 层事件发布
+				// 发布 schema 层事件
+				tb.PublishEvent(ctx, atevents.WorktreeRemovedEvent{
+					BaseEventMessage: atevents.BaseEventMessage{TeamName: c.TeamName()},
+					WorktreeName:     e.WorktreeName,
+					WorktreePath:     e.WorktreePath,
+				})
 			}
 			return nil
 		}

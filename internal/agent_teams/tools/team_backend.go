@@ -545,7 +545,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	}
 	_, _ = tb.messageManager.SendMessage(ctx, shutdownMsg, memberName, tb.memberName)
 	// 步骤 5: 发布事件（对齐 Python: MemberShutdownEvent(force=force)）
-	tb.publishEvent(ctx, events.MemberShutdownEvent{
+	tb.PublishEvent(ctx, events.MemberShutdownEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		Force:            cfg.force,
 	})
@@ -606,7 +606,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 		return atschema.NewMemberOpResultFail("取消消息发送失败: " + memberName)
 	}
 	// 步骤 5: 发布事件
-	tb.publishEvent(ctx, events.MemberCanceledEvent{
+	tb.PublishEvent(ctx, events.MemberCanceledEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 	})
 	logger.Info(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
@@ -712,7 +712,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 		}
 	}
 	// 步骤 6: 事件发布
-	tb.publishEvent(ctx, events.TeamCreatedEvent{
+	tb.PublishEvent(ctx, events.TeamCreatedEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName},
 		DisplayName:      displayName,
 		LeaderMemberName: tb.leaderMemberName,
@@ -759,7 +759,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: 移除清理路径失败")
 	}
 	// 步骤 6: 事件发布
-	tb.publishEvent(ctx, events.TeamCleanedEvent{
+	tb.PublishEvent(ctx, events.TeamCleanedEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName},
 	})
 	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CleanTeam: 团队已清理")
@@ -823,14 +823,14 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 		content := fmt.Sprintf("任务 '%s'（ID: %s）已被团队负责人取消。", task.Title, taskID)
 		_, _ = tb.messageManager.SendMessage(ctx, content, *task.Assignee, tb.memberName)
 		// 发布取消事件
-		tb.publishEvent(ctx, events.TaskCancelledEvent{
+		tb.PublishEvent(ctx, events.TaskCancelledEvent{
 			BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: *task.Assignee},
 			TaskID:           taskID,
 		})
 	}
 	// 通知 unblocked 任务
 	for _, uid := range unblocked {
-		tb.publishEvent(ctx, events.TaskUnblockedEvent{
+		tb.PublishEvent(ctx, events.TaskUnblockedEvent{
 			BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName},
 			TaskID:           uid,
 		})
@@ -899,7 +899,7 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 	if err != nil {
 		return atschema.NewMemberOpResultFail("审批计划失败: " + err.Error())
 	}
-	tb.publishEvent(ctx, events.TaskPlanResponseEvent{
+	tb.PublishEvent(ctx, events.TaskPlanResponseEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		TaskID:           taskID,
 		Approved:         cfg.approved,
@@ -918,7 +918,7 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 	if err != nil || member == nil {
 		return atschema.NewMemberOpResultFail("成员未找到: " + memberName)
 	}
-	tb.publishEvent(ctx, events.ToolApprovalResultEvent{
+	tb.PublishEvent(ctx, events.ToolApprovalResultEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		ToolCallID:       toolCallID,
 		Approved:         approved,
@@ -1099,9 +1099,9 @@ func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// publishEvent 发布团队事件。
+// PublishEvent 发布团队事件。
 // Python: TeamBackend 中通过 messager.publish 调用
-func (tb *TeamBackend) publishEvent(ctx context.Context, event events.TypedEvent) {
+func (tb *TeamBackend) PublishEvent(ctx context.Context, event events.TypedEvent) {
 	if tb.messager == nil {
 		return
 	}
@@ -1109,7 +1109,7 @@ func (tb *TeamBackend) publishEvent(ctx context.Context, event events.TypedEvent
 	msg := events.EventMessageFromEvent(event)
 	if err := tb.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(tbLogComponent).Str("event_type", event.EventTypeName()).Err(err).
-			Msg("publishEvent: 发布事件失败")
+			Msg("PublishEvent: 发布事件失败")
 	}
 }
 
@@ -1133,7 +1133,7 @@ func (tb *TeamBackend) spawnAndPublish(
 	}
 
 	// 步骤 2: 发布 MemberSpawnedEvent（失败只记日志不抛异常）
-	tb.publishEvent(ctx, events.MemberSpawnedEvent{
+	tb.PublishEvent(ctx, events.MemberSpawnedEvent{
 		BaseEventMessage: events.BaseEventMessage{
 			TeamName:   tb.teamName,
 			MemberName: memberName,
