@@ -4,5 +4,11 @@
 // "auto" 模式探测 Milvus 可达性后回退 JSON。
 // P1 阶段只实现 JSON 后端，Milvus 在 P7 启用。
 //
+// 文件目录：
+//
+//	persistence/
+//	├── doc.go                   # 包文档
+//	└── persistence_helper.go    # MemoryPersistenceHelper + MilvusConnector 接口
+//
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/core/persistence.py
 package persistence
