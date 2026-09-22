@@ -26,6 +26,25 @@ func NewRuntimeContext() *RuntimeContext {
 	return &RuntimeContext{data: make(map[string]any)}
 }
 
+// GetTyped 泛型获取，带类型断言。
+// 返回值和是否成功；类型不匹配或键不存在时 ok=false。
+// Python 无此方法（Python 用动态类型直接访问），Go 需要类型安全辅助。
+func GetTyped[T any](rc *RuntimeContext, key string) (T, bool) {
+	rc.mu.RLock()
+	v, ok := rc.data[key]
+	rc.mu.RUnlock()
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	typed, ok := v.(T)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	return typed, true
+}
+
 // ──────────────────────────── 导出方法 ────────────────────────────
 
 // Set 设置键值。
@@ -75,27 +94,4 @@ func (rc *RuntimeContext) String() string {
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
 	return fmt.Sprintf("RuntimeContext(%v)", rc.data)
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// ──────────────────────────── 导出泛型函数 ────────────────────────────
-
-// GetTyped 泛型获取，带类型断言。
-// 返回值和是否成功；类型不匹配或键不存在时 ok=false。
-// Python 无此方法（Python 用动态类型直接访问），Go 需要类型安全辅助。
-func GetTyped[T any](rc *RuntimeContext, key string) (T, bool) {
-	rc.mu.RLock()
-	v, ok := rc.data[key]
-	rc.mu.RUnlock()
-	if !ok {
-		var zero T
-		return zero, false
-	}
-	typed, ok := v.(T)
-	if !ok {
-		var zero T
-		return zero, false
-	}
-	return typed, true
 }
