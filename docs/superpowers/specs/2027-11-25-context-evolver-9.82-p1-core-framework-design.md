@@ -65,7 +65,9 @@ DeepAgent 会话循环
 | config 模块 | 不实现，复用 Go 项目已有 config 包 | Python 的 `core/config.py` 也是自建的，Go 项目有成熟 config 包 |
 | Message/Role | 不实现，复用 `agentcore/foundation/llm/schema` 的 `BaseMessage`/`RoleType` | Python 的 `core/schema/message.py` 定义了自己的 Message/Role 但业务代码未使用，实际用 `openjiuwen.core.foundation.llm` 的消息类型 |
 | 操作组合方式 | 方法链 `Then`/`With` | 用户选择方案 B |
-| ServiceContext | 非单例，依赖注入 | Go 惯用法，Python 用 `__new__` 单例不适配 |
+| ServiceContext | 非单例，依赖注入，非并发安全 | Go 惯用法，Python 用 `__new__` 单例不适配。初始化后只读无需加锁，P6 reconfigure 时需加锁 |
+| ServiceContext.VectorStore() | 返回 VectorStoreService 本地接口 | 对齐 Python Optional[Any]，Go 改为本地接口获得编译期类型安全 |
+| ServiceContext.LLM()/EmbeddingModel() | 返回 any，待 P6 定义本地接口 | Python 也是 Optional[Any]，P6 接口确定后再替换 |
 | RuntimeContext | `map[string]any` + 泛型 `GetTyped[T]` | Python 用 `__getattr__`/`__setattr__` 动态属性，Go 无此特性 |
 | MemoryVectorStore | 手写余弦相似度 | 纯 `math` 包，无外部依赖 |
 | MilvusConnector | P1 只定义接口，实现在 P7 | Milvus 依赖外部服务，和 ContextEvolutionRail 一起实现 |
@@ -148,7 +150,20 @@ func (rc *RuntimeContext) ToDict() map[string]any
 对齐 Python `core/context/service_context.py`。Python 用 `__new__` 单例 → Go 用依赖注入。
 
 ```go
+// VectorStoreService 向量存储服务本地接口。
+// 对齐 Python ServiceContext.vector_store 属性返回 Optional[Any]，
+// Go 改为返回本地接口以提供编译期类型安全。
+// MemoryVectorStore 隐式实现此接口（duck typing）。
+type VectorStoreService interface {
+    Upsert(ctx context.Context, node *schema.VectorNode) error
+    Search(ctx context.Context, embedding []float64, topK int, metadataFilter map[string]any) ([]*schema.VectorNode, error)
+    Delete(ctx context.Context, nodeID string) (bool, error)
+    Clear()
+    Count() int
+}
+
 // ServiceContext 管理共享服务（LLM/Embedding/VectorStore）的上下文。
+// 非并发安全：需在初始化阶段完成所有 RegisterService 调用后，才能并发读取。
 //
 // Python 用 __new__ 单例模式，Go 改为依赖注入——由调用方构造并传入。
 //
@@ -165,14 +180,14 @@ func (sc *ServiceContext) RegisterService(name string, svc any)
 // GetService 获取服务
 func (sc *ServiceContext) GetService(name string) any
 
-// LLM 获取 LLM 服务
+// LLM 获取 LLM 服务（返回 any，待 P6 定义 LLMService 本地接口替换）
 func (sc *ServiceContext) LLM() any
 
-// EmbeddingModel 获取 Embedding 模型服务
+// EmbeddingModel 获取 Embedding 模型服务（返回 any，待 P6 定义 EmbeddingService 本地接口替换）
 func (sc *ServiceContext) EmbeddingModel() any
 
 // VectorStore 获取 VectorStore 服务
-func (sc *ServiceContext) VectorStore() *MemoryVectorStore
+func (sc *ServiceContext) VectorStore() VectorStoreService
 
 // Clear 清除所有服务
 func (sc *ServiceContext) Clear()
@@ -370,7 +385,7 @@ P1 阶段 `persistType` 只支持 `"json"`，`"auto"` 和 `"milvus"` 在 P7 实�
 // Python: openjiuwen/extensions/context_evolver/core/db_connector/milvus_connector.py
 type MilvusConnector interface {
     SaveToDB(namespace string, data map[string]any) error
-    LoadFromDB(namespace string) (map[string]any, error
+    LoadFromDB(namespace string) (map[string]any, error)
     Exists(namespace string) bool
     Delete(namespace string) bool
 }
