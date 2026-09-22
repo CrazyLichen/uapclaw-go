@@ -456,62 +456,110 @@ func (m *WorktreeManager) resolvePolicy() WorktreeLifecyclePolicy {
 	return WorktreeLifecyclePolicyEphemeral
 }
 
-// fireRail 调用生命周期 hook。
-// Python: WorktreeManager._fire_rail(method, *args, **kwargs)
-func (m *WorktreeManager) fireRail(method string, args ...any) any {
-	var lastResult any
+// fireBeforeCreate 调用 BeforeWorktreeCreate hook。
+// 返回最后一个非空 slug 修改，空字符串表示不干预。
+// Python: WorktreeManager._fire_rail("before_worktree_create", slug, repo_root)
+func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, slug, repoRoot string) (string, error) {
+	var lastResult string
 	for _, rail := range m.lifecycleRails {
-		var result any
-		switch method {
-		case "before_worktree_create":
-			if len(args) >= 2 {
-				slug, _ := args[0].(string)
-				repoRoot, _ := args[1].(string)
-				r, err := rail.BeforeWorktreeCreate(context.Background(), slug, repoRoot)
-				if err != nil {
-					logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
-					continue
-				}
-				result = r
-			}
-		case "after_worktree_create":
-			if len(args) >= 1 {
-				if session, ok := args[0].(*WorktreeSession); ok {
-					if err := rail.AfterWorktreeCreate(context.Background(), session); err != nil {
-						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
-					}
-				}
-			}
-		case "before_worktree_exit":
-			if len(args) >= 2 {
-				if session, ok := args[0].(*WorktreeSession); ok {
-					action, _ := args[1].(string)
-					r, err := rail.BeforeWorktreeExit(context.Background(), session, action)
-					if err != nil {
-						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
-						continue
-					}
-					result = r
-				}
-			}
-		case "after_worktree_exit":
-			if len(args) >= 2 {
-				if session, ok := args[0].(*WorktreeSession); ok {
-					action, _ := args[1].(string)
-					if err := rail.AfterWorktreeExit(context.Background(), session, action); err != nil {
-						logger.Warn(logComponent).Err(err).Str("method", method).Msg("fireRail hook 失败")
-					}
-				}
-			}
-		default:
-			// M-34: 未来补充的 hook 在此处添加
-			logger.Debug(logComponent).Str("method", method).Msg("fireRail: 未知 hook 方法")
+		r, err := rail.BeforeWorktreeCreate(ctx, slug, repoRoot)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeCreate hook 失败")
+			continue
 		}
-		if result != nil {
-			lastResult = result
+		if r != "" {
+			lastResult = r
 		}
 	}
-	return lastResult
+	return lastResult, nil
+}
+
+// fireAfterCreate 调用 AfterWorktreeCreate hook。
+// Python: WorktreeManager._fire_rail("after_worktree_create", session)
+func (m *WorktreeManager) fireAfterCreate(ctx context.Context, session *WorktreeSession) {
+	for _, rail := range m.lifecycleRails {
+		if err := rail.AfterWorktreeCreate(ctx, session); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireAfterCreate hook 失败")
+		}
+	}
+}
+
+// fireBeforeExit 调用 BeforeWorktreeExit hook。
+// 返回最后一个非空 action 修改，空字符串表示不干预。
+// Python: WorktreeManager._fire_rail("before_worktree_exit", session, action)
+func (m *WorktreeManager) fireBeforeExit(ctx context.Context, session *WorktreeSession, action string) (string, error) {
+	var lastResult string
+	for _, rail := range m.lifecycleRails {
+		r, err := rail.BeforeWorktreeExit(ctx, session, action)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeExit hook 失败")
+			continue
+		}
+		if r != "" {
+			lastResult = r
+		}
+	}
+	return lastResult, nil
+}
+
+// fireAfterExit 调用 AfterWorktreeExit hook。
+// Python: WorktreeManager._fire_rail("after_worktree_exit", session, action)
+func (m *WorktreeManager) fireAfterExit(ctx context.Context, session *WorktreeSession, action string) {
+	for _, rail := range m.lifecycleRails {
+		if err := rail.AfterWorktreeExit(ctx, session, action); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireAfterExit hook 失败")
+		}
+	}
+}
+
+// fireOnFileWrite 调用 OnWorktreeFileWrite hook。
+// Python: WorktreeManager._fire_rail("on_worktree_file_write", session, file_path)
+func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, session *WorktreeSession, filePath string) error {
+	for _, rail := range m.lifecycleRails {
+		if err := rail.OnWorktreeFileWrite(ctx, session, filePath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fireBeforeCommit 调用 BeforeWorktreeCommit hook。
+// 返回最后一个非空 message 修改，空字符串表示不干预。
+// Python: WorktreeManager._fire_rail("before_worktree_commit", session, message)
+func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, session *WorktreeSession, message string) (string, error) {
+	var lastResult string
+	for _, rail := range m.lifecycleRails {
+		r, err := rail.BeforeWorktreeCommit(ctx, session, message)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeCommit hook 失败")
+			continue
+		}
+		if r != "" {
+			lastResult = r
+		}
+	}
+	return lastResult, nil
+}
+
+// fireAfterCommit 调用 AfterWorktreeCommit hook。
+// Python: WorktreeManager._fire_rail("after_worktree_commit", session, commit_sha)
+func (m *WorktreeManager) fireAfterCommit(ctx context.Context, session *WorktreeSession, commitHash string) {
+	for _, rail := range m.lifecycleRails {
+		if err := rail.AfterWorktreeCommit(ctx, session, commitHash); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fireAfterCommit hook 失败")
+		}
+	}
+}
+
+// fireOnSync 调用 OnWorktreeSync hook。
+// Python: WorktreeManager._fire_rail("on_worktree_sync", session)
+func (m *WorktreeManager) fireOnSync(ctx context.Context, session *WorktreeSession) error {
+	for _, rail := range m.lifecycleRails {
+		if err := rail.OnWorktreeSync(ctx, session); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkChanges 检查 worktree 路径的未提交变更。
