@@ -26,6 +26,10 @@ type InvokeParams struct {
 	OutputParser BaseOutputParser
 	// Timeout 请求超时时间（秒）
 	Timeout *float64
+	// ResponseFormat 结构化输出格式（OpenAI response_format），nil 表示不使用
+	//
+	// Python: **kwargs 中的 response_format 参数
+	ResponseFormat map[string]any
 	// Extra 额外参数（对应 Python **kwargs）
 	Extra map[string]any
 	// CustomHeaders 请求级自定义请求头
@@ -54,6 +58,10 @@ type StreamParams struct {
 	OutputParser BaseOutputParser
 	// Timeout 请求超时时间（秒）
 	Timeout *float64
+	// ResponseFormat 结构化输出格式（OpenAI response_format），nil 表示不使用
+	//
+	// Python: **kwargs 中的 response_format 参数
+	ResponseFormat map[string]any
 	// Extra 额外参数（对应 Python **kwargs）
 	Extra map[string]any
 	// CustomHeaders 请求级自定义请求头
@@ -290,6 +298,14 @@ func WithInvokeCustomHeaders(h map[string]string) InvokeOption {
 	return func(p *InvokeParams) { p.CustomHeaders = h }
 }
 
+// WithResponseFormat 设置结构化输出格式。
+//
+// Python: **kwargs 中的 response_format 参数，对齐 Python 透传模式。
+// 支持 structured output 的后端会将其传入 API 请求，不支持的后端静默忽略。
+func WithResponseFormat(schemaMap map[string]any) InvokeOption {
+	return func(p *InvokeParams) { p.ResponseFormat = schemaMap }
+}
+
 // WithInvokeTracerRecordData 设置追踪记录回调。
 func WithInvokeTracerRecordData(d func(map[string]any)) InvokeOption {
 	return func(p *InvokeParams) { p.TracerRecordData = d }
@@ -343,6 +359,13 @@ func WithStreamExtra(extra map[string]any) StreamOption {
 // WithStreamCustomHeaders 设置请求级自定义请求头。
 func WithStreamCustomHeaders(h map[string]string) StreamOption {
 	return func(p *StreamParams) { p.CustomHeaders = h }
+}
+
+// WithStreamResponseFormat 设置结构化输出格式。
+//
+// Python: **kwargs 中的 response_format 参数，对齐 Python 透传模式。
+func WithStreamResponseFormat(schemaMap map[string]any) StreamOption {
+	return func(p *StreamParams) { p.ResponseFormat = schemaMap }
 }
 
 // WithStreamTracerRecordData 设置追踪记录回调。
@@ -530,6 +553,7 @@ func (p *StreamParams) ToStreamParams() *InvokeParams {
 		Stop:             p.Stop,
 		OutputParser:     p.OutputParser,
 		Timeout:          p.Timeout,
+		ResponseFormat:   p.ResponseFormat,
 		Extra:            p.Extra,
 		CustomHeaders:    p.CustomHeaders,
 		TracerRecordData: p.TracerRecordData,

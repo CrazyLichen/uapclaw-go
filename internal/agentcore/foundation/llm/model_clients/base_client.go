@@ -366,7 +366,15 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 		}
 	}
 
-	// 6. 日志记录
+	// 6. 处理 ResponseFormat（结构化输出）
+	//
+	// Python: **kwargs 中的 response_format 参数透传给 API。
+	// 支持 structured output 的后端会使用此参数，不支持的后端静默忽略（对齐 Python 透传模式）。
+	if params.ResponseFormat != nil {
+		reqParams["response_format"] = params.ResponseFormat
+	}
+
+	// 7. 日志记录
 	// Python: 敏感模式（默认）不记录 messages/tools；非敏感模式记录。
 	// 环境变量 IS_SENSITIVE=false 时为非敏感模式，默认为敏感模式。
 	isSensitive := true
@@ -391,7 +399,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	baseKeys := map[string]bool{
 		"model": true, "messages": true, "stream": true,
 		"temperature": true, "top_p": true, "max_tokens": true, "stop": true,
-		"tools": true, "tool_choice": true,
+		"tools": true, "tool_choice": true, "response_format": true,
 	}
 	for k, v := range reqParams {
 		if !baseKeys[k] {

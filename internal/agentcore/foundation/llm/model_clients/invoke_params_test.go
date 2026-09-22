@@ -780,3 +780,56 @@ func TestNewReleaseParams_组合选项(t *testing.T) {
 		t.Errorf("ToolsReleasedIndex = %v, 期望 2", p.ToolsReleasedIndex)
 	}
 }
+
+// ──────────────────────────── ResponseFormat 测试 ────────────────────────────
+
+func TestWithResponseFormat(t *testing.T) {
+	schema := map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "test"}}
+	p := NewInvokeParams(WithResponseFormat(schema))
+	if p.ResponseFormat == nil {
+		t.Error("ResponseFormat 不应为 nil")
+	}
+	if p.ResponseFormat["type"] != "json_schema" {
+		t.Errorf("ResponseFormat.type 期望 json_schema，实际 %v", p.ResponseFormat["type"])
+	}
+}
+
+func TestWithStreamResponseFormat(t *testing.T) {
+	schema := map[string]any{"type": "json_schema"}
+	p := NewStreamParams(WithStreamResponseFormat(schema))
+	if p.ResponseFormat == nil {
+		t.Error("ResponseFormat 不应为 nil")
+	}
+}
+
+func TestBuildRequestParams_ResponseFormat(t *testing.T) {
+	e := newTestClientEmbed()
+	messagesDict := []map[string]any{{"role": "user", "content": "hi"}}
+	schema := map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "test", "schema": map[string]any{}}}
+	params := NewInvokeParams(WithResponseFormat(schema))
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)
+	if err != nil {
+		t.Fatalf("BuildRequestParams 报错: %v", err)
+	}
+	rf, ok := result["response_format"]
+	if !ok {
+		t.Error("response_format 应出现在请求参数中")
+	}
+	rfMap, ok := rf.(map[string]any)
+	if !ok || rfMap["type"] != "json_schema" {
+		t.Errorf("response_format 内容不正确: %v", rf)
+	}
+}
+
+func TestBuildRequestParams_ResponseFormat为空时不传入(t *testing.T) {
+	e := newTestClientEmbed()
+	messagesDict := []map[string]any{{"role": "user", "content": "hi"}}
+	params := NewInvokeParams()
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)
+	if err != nil {
+		t.Fatalf("BuildRequestParams 报错: %v", err)
+	}
+	if _, ok := result["response_format"]; ok {
+		t.Error("ResponseFormat 为 nil 时不应传入请求参数")
+	}
+}

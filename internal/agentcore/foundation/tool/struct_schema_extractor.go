@@ -168,8 +168,8 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 			param.Format = v
 		}
 
-		// 递归处理嵌套 struct
-		if paramType == schema.ParamTypeObject {
+		// 递归处理嵌套 struct（map 类型标记为 Object 但不递归提取 Properties）
+		if paramType == schema.ParamTypeObject && dereferenceType(fieldType).Kind() == reflect.Struct {
 			props, err := StructSchemaExtractor{}.Extract(dereferenceType(fieldType))
 			if err != nil {
 				return nil, fmt.Errorf("嵌套 struct %q 提取失败: %w", jsonName, err)
@@ -304,6 +304,8 @@ func goTypeToParamType(typ reflect.Type) (schema.ParamType, error) {
 	case reflect.Struct:
 		return schema.ParamTypeObject, nil
 	case reflect.Interface:
+		return schema.ParamTypeObject, nil
+	case reflect.Map:
 		return schema.ParamTypeObject, nil
 	default:
 		return schema.ParamTypeObject, fmt.Errorf("不支持的类型: %v", typ.Kind())
