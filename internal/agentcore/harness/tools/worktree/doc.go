@@ -19,7 +19,7 @@
 //	├── notice.go        # BuildWorktreeNotice 上下文提示
 //	├── cleanup.go       # CleanupStaleWorktrees 过期清理
 //	├── tools.go         # worktreeToolBase + Enter/ExitWorktreeTool
-//	└── rails.go         # WorktreeRail + AutoSetupRail + DiffSummaryRail
+//	└── rails.go         # WorktreeRail + WorktreeLifecycleRail + AutoSetupRail + DiffSummaryRail
 //
 // 对应 Python 代码：openjiuwen/harness/tools/worktree/
 package worktree
