@@ -245,14 +245,16 @@ func VectorNodeToMemory(node *coreschema.VectorNode) (MemoryInterface, error) {
 
 // GetWorkspaceID 实现 MemoryInterface 接口。
 // 对齐 Python BaseMemory.workspace_id 属性访问。
-func (b *BaseMemory) GetWorkspaceID() string {
+// 使用值接收者：不修改接收者，且值类型 ACEMemory 需满足 MemoryInterface 约束（SummarizeResponse[T MemoryInterface]）。
+func (b BaseMemory) GetWorkspaceID() string {
 	return b.WorkspaceID
 }
 
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ACEMemory.to_vector_node()。
 // metadata.type = "ace_memory"，embedding content = Content。
-func (m *ACEMemory) ToVectorNode() *coreschema.VectorNode {
+// 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
+func (m ACEMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: node_id = f"ace_{self.workspace_id}_{self.id}"
 	nodeID := fmt.Sprintf("ace_%s_%s", m.WorkspaceID, m.ID)
 
@@ -279,7 +281,8 @@ func (m *ACEMemory) ToVectorNode() *coreschema.VectorNode {
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ReasoningBankMemory.to_vector_node()。
 // metadata.type = "reasoning_bank_memory"，embedding content = Query。
-func (m *ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
+// 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
+func (m ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: combined = f"{self.query}|{self.memory[0].title}" if self.memory else self.query
 	combined := m.Query
 	if len(m.Memory) > 0 {
@@ -318,7 +321,8 @@ func (m *ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ReMeMemory.to_vector_node()。
 // metadata.type = "reme_memory"，embedding content = WhenToUse。
-func (m *ReMeMemory) ToVectorNode() *coreschema.VectorNode {
+// 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
+func (m ReMeMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: node_id = f"reme_{self.workspace_id}_{hashlib.md5(self.when_to_use.encode()).hexdigest()[:12]}"
 	contentHash := md5Hash(m.WhenToUse)[:12]
 	nodeID := fmt.Sprintf("reme_%s_%s", m.WorkspaceID, contentHash)

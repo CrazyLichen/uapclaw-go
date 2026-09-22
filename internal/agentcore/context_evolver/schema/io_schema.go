@@ -255,12 +255,16 @@ type ReMeRetrieveResponse struct {
 // SummarizeResponse 通用摘要响应，支持任意算法的 Memory 类型。
 // 对齐 Python SummarizeResponse(BaseModel) 的 Union 字段，Go 用泛型实现。
 //
+// 泛型约束 T MemoryInterface：摘要响应的 Memory 必须是可向量化的完整记忆类型
+// （ACEMemory/ReasoningBankMemory/ReMeMemory），与 RetrieveResponse 中的
+// RetrievedMemory 快照类型区分（后者不实现 MemoryInterface，不需要向量化）。
+//
 // 使用示例：
 //
 //	SummarizeResponse[ACEMemory]      // ACE 算法
 //	SummarizeResponse[ReasoningBankMemory] // ReasoningBank 算法
 //	SummarizeResponse[ReMeMemory]     // ReMe 算法
-type SummarizeResponse[T any] struct {
+type SummarizeResponse[T MemoryInterface] struct {
 	// Status 操作状态
 	Status string `json:"status"`
 	// Memory 创建或更新的记忆列表（算法特定类型）
