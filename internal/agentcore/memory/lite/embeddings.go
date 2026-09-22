@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
@@ -66,7 +67,9 @@ func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 // Python: MockEmbeddingProvider.embed_query — random.seed(md5(text).hexdigest()), [random.uniform(-1,1) for _ in range(128)]
 func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]float64, error) {
 	h := md5.Sum([]byte(text))
-	seed := int64(binary.BigEndian.Uint64(h[:8]))
+	// Python 用完整 32 位 hex md5 做 seed：random.seed(md5(text).hexdigest())
+	hexStr := hex.EncodeToString(h[:])
+	seed := int64(binary.BigEndian.Uint64([]byte(hexStr[:8])))
 	r := rand.New(rand.NewSource(seed))
 	vec := make([]float64, 128)
 	for i := range vec {
@@ -107,15 +110,9 @@ func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey st
 	}
 	baseURL := os.Getenv("EMBEDDING_BASE_URL")
 	if baseURL == "" {
-		baseURL = os.Getenv("EMBED_BASE_URL")
-	}
-	if baseURL == "" {
 		baseURL = fallbackBaseURL
 	}
 	apiKey := os.Getenv("EMBEDDING_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("EMBED_API_KEY")
-	}
 	if apiKey == "" {
 		apiKey = fallbackAPIKey
 	}

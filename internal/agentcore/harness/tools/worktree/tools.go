@@ -11,6 +11,7 @@ import (
 	toolspkg "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -131,6 +132,8 @@ func (t *EnterWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, o
 	if cwdState != nil {
 		cwdState.SetCwd(session.WorktreePath)
 		cwdState.SetOriginalCwd(session.WorktreePath)
+		// Python: logger.info("CWD switched to worktree: %s", session.worktree_path)
+		logger.Info(logComponent).Str("worktree_path", session.WorktreePath).Msg("CWD switched to worktree")
 	}
 
 	message := fmt.Sprintf("Created worktree at %s on branch %s. CWD switched to worktree.",

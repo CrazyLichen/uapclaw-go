@@ -351,12 +351,20 @@ func runGit(ctx context.Context, args []string, cwd string) GitResult {
 }
 
 // gitEnv 构建抑制交互式提示的环境变量。
-// Python: _git_env()
+// Python: _git_env() — dict 会覆盖同名 key，Go 用 append 会追加重复 key，
+// 因此先移除已有的 GIT_ASKPASS 条目再追加，确保宿主环境的值被覆盖
 func gitEnv() []string {
 	env := os.Environ()
-	env = append(env, "GIT_TERMINAL_PROMPT=0")
-	env = append(env, "GIT_ASKPASS=")
-	return env
+	// 先移除已有的 GIT_ASKPASS，避免 append 后出现重复 key
+	filtered := make([]string, 0, len(env)+2)
+	for _, e := range env {
+		if !strings.HasPrefix(e, "GIT_ASKPASS=") {
+			filtered = append(filtered, e)
+		}
+	}
+	filtered = append(filtered, "GIT_TERMINAL_PROMPT=0")
+	filtered = append(filtered, "GIT_ASKPASS=")
+	return filtered
 }
 
 // resolveGitDir 获取 .git 目录路径（worktree 也适用）。

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
+	"golang.org/x/sync/errgroup"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -65,7 +66,8 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 		return 0, nil
 	}
 
-	cutoffTime := time.Now().Add(-time.Duration(config.CleanupAfterDays) * 24 * time.Hour)
+	// Python: datetime.now(tz=timezone.utc) — 使用 UTC 时间对齐 Python
+	cutoffTime := time.Now().UTC().Add(-time.Duration(config.CleanupAfterDays) * 24 * time.Hour)
 	removed := 0
 
 	for _, entry := range entries {
@@ -90,15 +92,28 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 			continue
 		}
 
+		// Python: asyncio.gather — 并行执行安全检查，对齐 Python 并发行为
+		var changes []string
+		var changesErr error
+		var unpushedResult *bool
+		eg, egCtx := errgroup.WithContext(ctx)
+		eg.Go(func() error {
+			changes, changesErr = StatusPorcelain(egCtx, wtPath)
+			return nil
+		})
+		eg.Go(func() error {
+			unpushedResult = HasUnpushedCommits(egCtx, wtPath)
+			return nil
+		})
+		_ = eg.Wait()
+
 		// 检查未提交变更
-		changes, err := StatusPorcelain(ctx, wtPath)
-		if err != nil || len(changes) > 0 {
+		if changesErr != nil || len(changes) > 0 {
 			continue
 		}
 
 		// 检查未推送提交
-		unpushed := HasUnpushedCommits(ctx, wtPath)
-		if unpushed == nil || *unpushed {
+		if unpushedResult == nil || *unpushedResult {
 			continue
 		}
 

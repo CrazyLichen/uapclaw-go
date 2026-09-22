@@ -409,30 +409,22 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	finalPrompt = strings.ReplaceAll(finalPrompt, "$TOOL_NAME", toolName)
 
 	// 带超时调用 LLM，对齐 Python: asyncio.wait_for(self._query_llm(prompt, model), timeout=timeout)
-	type llmResult struct {
-		text string
-		err  error
-	}
-	resultCh := make(chan llmResult, 1)
-	go func() {
-		text, err := e.queryLLM(ctx, finalPrompt, modelName)
-		resultCh <- llmResult{text, err}
-	}()
+	// 使用 context.WithTimeout 替代 goroutine+time.After，超时后 LLM 调用链能收到取消信号
+	llmCtx, llmCancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer llmCancel()
 
-	var result llmResult
-	select {
-	case <-time.After(time.Duration(timeout) * time.Second):
-		// Python: asyncio.TimeoutError → NON_BLOCKING_ERROR(f"prompt hook timeout after {timeout}s")
-		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("prompt hook timeout after %ds", timeout)}
-	case result = <-resultCh:
-		if result.err != nil {
-			// Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
-			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: result.err.Error()}
+	resultText, err := e.queryLLM(llmCtx, finalPrompt, modelName)
+	if err != nil {
+		if llmCtx.Err() == context.DeadlineExceeded {
+			// Python: asyncio.TimeoutError → NON_BLOCKING_ERROR(f"prompt hook timeout after {timeout}s")
+			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("prompt hook timeout after %ds", timeout)}
 		}
+		// Python: except Exception as e → NON_BLOCKING_ERROR(str(e))
+		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: err.Error()}
 	}
 
 	// Python: data = self.extract_json_from_response(response_text)
-	data := ExtractJSONFromResponse(result.text)
+	data := ExtractJSONFromResponse(resultText)
 	decision, _ := data["decision"].(string)
 	if decision == "" {
 		decision = "allow" // 默认允许，对齐 Python: decision = data.get("decision", "allow")

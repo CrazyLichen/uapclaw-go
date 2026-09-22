@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -217,6 +218,29 @@ func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Age
 		}
 	}
 	return nil
+}
+
+// GetCallbacks 覆写基类 GetCallbacks，注册 UserHookRail 实现的 4 个回调。
+// 对齐 Python UserHookRail 通过 DeepAgentRail 基类的 DeepEventMethodMap 自动发现机制：
+// Python 中 before_tool_call/after_tool_call/on_tool_exception/after_invoke 被自动发现并注册。
+// Go 需要手动覆写 GetCallbacks 显式注册。
+func (r *UserHookRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeToolCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeToolCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackAfterToolCall] = func(ctx context.Context, railCtx any) error {
+		return r.AfterToolCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackOnToolException] = func(ctx context.Context, railCtx any) error {
+		return r.OnToolException(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackAfterInvoke] = func(ctx context.Context, railCtx any) error {
+		return r.AfterInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

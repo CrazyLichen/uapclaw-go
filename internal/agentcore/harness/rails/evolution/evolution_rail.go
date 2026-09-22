@@ -730,8 +730,14 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 			}
 		}
 	} else {
-		// Python: 同步模式 — 直接调用 run_evolution(trajectory, ctx)
-		return r.ext.RunEvolution(context.Background(), traj, nil)
+		// Python: 同步模式 — 对齐 Python 双层异常保护，也走 safeRunEvolution
+		// Python 的 sync 路径由 run_evolution 内部 try/except（静默捕获）+
+		// _safe_run_evolution 外部 try/except（emit 事件）共同保护
+		snapshot := r.ext.SnapshotForEvolution(context.Background(), traj, cbc)
+		if snapshot == nil {
+			return nil
+		}
+		return r.safeRunEvolution(context.Background(), snapshot)
 	}
 	return nil
 }
