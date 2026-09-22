@@ -3,5 +3,11 @@
 // MemoryVectorStore 是内存向量库，使用余弦相似度搜索。
 // Python 用 numpy 计算余弦相似度，Go 手写（点积 / 范数乘积），纯 math 包。
 //
+// 文件目录：
+//
+//	vector_store/
+//	├── doc.go                      # 包文档
+//	└── memory_vector_store.go      # MemoryVectorStore 内存向量库
+//
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/core/vector_store/
 package vector_store
