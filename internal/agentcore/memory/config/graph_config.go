@@ -123,8 +123,8 @@ var (
 	//
 	// Python: BaseStrategy()
 	DefaultBaseStrategy = BaseStrategy{
-		TopK:      3,
-		MinScore:  0.3,
+		TopK:       3,
+		MinScore:   0.3,
 		RankConfig: graph.NewRRFRankConfig(),
 	}
 
@@ -133,8 +133,8 @@ var (
 	// Python: RetrievalStrategy()
 	DefaultRetrievalStrategy = RetrievalStrategy{
 		BaseStrategy: BaseStrategy{
-			TopK:      3,
-			MinScore:  0.3,
+			TopK:       3,
+			MinScore:   0.3,
 			RankConfig: graph.NewRRFRankConfig(),
 		},
 		SameKind: false,
@@ -146,8 +146,8 @@ var (
 	DefaultEpisodeRetrievalStrategy = EpisodeRetrievalStrategy{
 		RetrievalStrategy: RetrievalStrategy{
 			BaseStrategy: BaseStrategy{
-				TopK:      3,
-				MinScore:  0.025,
+				TopK:       3,
+				MinScore:   0.025,
 				RankConfig: graph.NewRRFRankConfig(),
 			},
 			SameKind: false,
@@ -166,8 +166,8 @@ var (
 		RecallEpisode: EpisodeRetrievalStrategy{
 			RetrievalStrategy: RetrievalStrategy{
 				BaseStrategy: BaseStrategy{
-					TopK:      3,
-					MinScore:  0.025,
+					TopK:       3,
+					MinScore:   0.025,
 					RankConfig: graph.NewRRFRankConfig(),
 				},
 				SameKind: false,
@@ -176,7 +176,7 @@ var (
 		},
 		RecallEntity: RetrievalStrategy{
 			BaseStrategy: BaseStrategy{
-				TopK: 3,
+				TopK:     3,
 				MinScore: 0.1,
 				RankConfig: &graph.WeightedRankConfig{
 					NameDense:     0.7,
@@ -188,8 +188,8 @@ var (
 		},
 		RecallRelation: RetrievalStrategy{
 			BaseStrategy: BaseStrategy{
-				TopK:      3,
-				MinScore:  0.02,
+				TopK:       3,
+				MinScore:   0.02,
 				RankConfig: graph.NewRRFRankConfig(),
 			},
 			SameKind: false,
@@ -205,8 +205,8 @@ var (
 	// Python: SearchConfig()
 	DefaultSearchConfig = SearchConfig{
 		BaseStrategy: BaseStrategy{
-			TopK:      3,
-			MinScore:  0.3,
+			TopK:       3,
+			MinScore:   0.3,
 			RankConfig: graph.NewRRFRankConfig(),
 		},
 		BFSK:         3,

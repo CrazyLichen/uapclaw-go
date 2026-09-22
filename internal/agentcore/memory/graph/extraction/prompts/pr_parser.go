@@ -79,8 +79,8 @@ func ParsePRContent(content string) []schema.BaseMessage {
 
 	// 重新实现：收集所有分隔符位置，然后提取角色和对应内容
 	type roleSpan struct {
-		role      string
-		content   string
+		role    string
+		content string
 	}
 	var spans []roleSpan
 

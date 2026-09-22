@@ -27,7 +27,7 @@ type EntityDeclaration struct {
 	// Name 新提取实体的名字
 	Name string `json:"name" jsonschema:"description={{[ent_def_name]}}"`
 	// EntityTypeID 新提取实体的类型id
- EntityTypeID int `json:"entity_type_id" jsonschema:"description={{[ent_def_type]}}"`
+	EntityTypeID int `json:"entity_type_id" jsonschema:"description={{[ent_def_type]}}"`
 }
 
 // Duplication 实体去重
