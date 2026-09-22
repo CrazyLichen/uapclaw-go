@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
@@ -179,6 +180,25 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 
 	r.tools = []tool.Tool{enterTool, exitTool}
 
+	// 注册到 ResourceMgr
+	// Python: L88: Runner.resource_mgr.add_tool(self._tools)
+	// 对齐 SysOperationRail.Init 模式：先移除已存在的同名工具，再批量注册
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr != nil {
+		for _, t := range r.tools {
+			toolID := t.Card().ID
+			if toolID != "" {
+				existing, err := resourceMgr.GetTool([]string{toolID})
+				if err == nil && len(existing) > 0 {
+					_, _ = resourceMgr.RemoveTool([]string{toolID})
+				}
+			}
+		}
+		for _, t := range r.tools {
+			_ = resourceMgr.AddTool(t)
+		}
+	}
+
 	// Python: agent.ability_manager.add(tool.card)
 	if agent != nil && agent.AbilityManager() != nil {
 		for _, t := range r.tools {
@@ -196,6 +216,28 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 // Uninit 移除工具并清空 Manager。
 // Python: WorktreeRail.uninit(agent)
 func (r *WorktreeRail) Uninit(agent interfaces.BaseAgent) error {
+	// 从 ResourceMgr 移除
+	// Python: L95-102: Runner.resource_mgr.remove_tool(tool_id)
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr != nil {
+		for _, t := range r.tools {
+			func(t tool.Tool) {
+				defer func() {
+					if rec := recover(); rec != nil {
+						logger.Warn(logComponent).
+							Str("event_type", "worktree_rail_uninit").
+							Str("tool_name", t.Card().Name).
+							Msgf("注销工具失败: %v", rec)
+					}
+				}()
+				toolID := t.Card().ID
+				if toolID != "" && resourceMgr != nil {
+					_, _ = resourceMgr.RemoveTool([]string{toolID})
+				}
+			}(t)
+		}
+	}
+
 	// Python: for tool in self._tools: agent.ability_manager.remove(name)
 	if agent != nil && agent.AbilityManager() != nil {
 		for _, t := range r.tools {
