@@ -134,3 +134,39 @@ func TestJSONFileConnector_缩进格式(t *testing.T) {
 	// 验证4空格缩进
 	assert.Contains(t, string(raw), "    ") // 4个空格
 }
+
+func TestJSONFileConnector_String(t *testing.T) {
+	c := NewJSONFileConnector()
+	s := c.String()
+	assert.Contains(t, s, "JSONFileConnector")
+	assert.Contains(t, s, "indent=2")
+}
+
+func TestJSONFileConnector_ensureASCII_含转义序列(t *testing.T) {
+	c := NewJSONFileConnector(WithEnsureASCII(true))
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "escape.json")
+
+	// 包含已有转义序列和非 BMP 字符（emoji）
+	data := map[string]any{"text": "hello\\nworld 🌍"}
+	require.NoError(t, c.SaveToFile(fp, data))
+
+	loaded, err := c.LoadFromFile(fp)
+	require.NoError(t, err)
+	// JSON 解码时 Go 会自动将 surrogate pair 还原为原始字符
+	assert.Equal(t, "hello\\nworld 🌍", loaded["text"])
+
+	// 验证文件中确实使用了 surrogate pair 编码
+	raw, err := os.ReadFile(fp)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "🌍") // emoji 不应直接出现在文件中
+	assert.Contains(t, string(raw), `\uD83C\uDF0D`) // surrogate pair
+}
+
+func TestJSONFileConnector_Delete_删除失败(t *testing.T) {
+	c := NewJSONFileConnector()
+	// 删除不存在的文件返回 false，不报错
+	deleted, err := c.Delete("/nonexistent/file.json")
+	require.NoError(t, err)
+	assert.False(t, deleted)
+}

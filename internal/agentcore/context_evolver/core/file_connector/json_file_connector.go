@@ -197,8 +197,17 @@ func escapeNonASCII(data []byte) []byte {
 			// 解码 UTF-8 rune
 			r, size := utf8.DecodeRune(data[i:])
 			if r != utf8.RuneError {
-				// 转义为 \uXXXX
-				result = append(result, []byte(fmt.Sprintf(`\u%04X`, r))...)
+				if r <= 0xFFFF {
+					// BMP 字符直接 \uXXXX
+					result = append(result, []byte(fmt.Sprintf(`\u%04X`, r))...)
+				} else {
+					// 超过 BMP 的字符使用 UTF-16 surrogate pair
+					// 对齐 Python json.dump(ensure_ascii=True) 行为
+					r -= 0x10000
+					hi := 0xD800 + (r >> 10)
+					lo := 0xDC00 + (r & 0x3FF)
+					result = append(result, []byte(fmt.Sprintf(`\u%04X\u%04X`, hi, lo))...)
+				}
 				i += size
 			} else {
 				result = append(result, b)

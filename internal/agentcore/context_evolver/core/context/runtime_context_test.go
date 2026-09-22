@@ -79,3 +79,11 @@ func TestRuntimeContext_覆盖(t *testing.T) {
 	rc.Set("key", "v2")
 	assert.Equal(t, "v2", rc.Get("key"))
 }
+
+func TestRuntimeContext_String(t *testing.T) {
+	rc := NewRuntimeContext()
+	rc.Set("k", "v")
+	s := rc.String()
+	assert.Contains(t, s, "RuntimeContext")
+	assert.Contains(t, s, "k")
+}

@@ -52,3 +52,11 @@ func TestServiceContext_覆盖注册(t *testing.T) {
 	sc.RegisterService("llm", "v2")
 	assert.Equal(t, "v2", sc.GetService("llm"))
 }
+
+func TestServiceContext_String(t *testing.T) {
+	sc := NewServiceContext()
+	sc.RegisterService("llm", "my-llm")
+	s := sc.String()
+	assert.Contains(t, s, "ServiceContext")
+	assert.Contains(t, s, "llm")
+}
