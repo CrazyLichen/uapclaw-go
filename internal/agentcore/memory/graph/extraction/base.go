@@ -228,7 +228,7 @@ func formatReadableSchema(schema map[string]any, indent string) string {
 			}
 			desc, _ := propMap["description"].(string)
 			propType := inferPythonType(propMap)
-			sb.WriteString(fmt.Sprintf("%s    %s: %s  # %s\n", indent, propName, propType, desc))
+			fmt.Fprintf(&sb, "%s    %s: %s  # %s\n", indent, propName, propType, desc)
 			if propType == "dict" || propType == "list[dict]" {
 				nestedStr := formatReadableSchema(propMap, indent+"    ")
 				if nestedStr != "" {
