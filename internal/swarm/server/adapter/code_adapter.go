@@ -1424,7 +1424,7 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 	}
 
 	// Python: _set_coding_memory_directory(agent, self._project_dir)
-	// ⤵️ 待回填: setCodingMemoryDirectory
+	setCodingMemoryDirectory(agent, c.deep.projectDir)
 
 	// Python: setattr(agent, "_jiuwenswarm_adapter_mode", "code")
 	c.uapswarmAdapterMode = "code"
@@ -1563,4 +1563,38 @@ func toStringAny(v any) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// setCodingMemoryDirectory 在 agent 的 workspace 中注册 coding_memory 目录节点。
+// 对齐 Python: _set_coding_memory_directory(agent, project_dir)
+// 定义为包级函数（Python 中是模块级函数），仅被 ConfigureTeamMemberAgent 调用。
+func setCodingMemoryDirectory(agent *harness.DeepAgent, projectDir string) {
+	deepConfig := agent.DeepConfig()
+	if deepConfig == nil {
+		return
+	}
+	ws := deepConfig.Workspace
+	if ws == nil {
+		return
+	}
+	projectName := "default"
+	if projectDir != "" {
+		projectName = filepath.Base(projectDir)
+	}
+	codingMemoryPath := filepath.Join("coding_memory", projectName)
+	_ = ws.SetDirectory(map[string]any{
+		"name":        "coding_memory",
+		"description": "Coding Agent 记忆模块",
+		"path":        codingMemoryPath,
+		"children": []any{
+			map[string]any{
+				"name":            "MEMORY.md",
+				"description":     "Coding 记忆索引",
+				"path":            "MEMORY.md",
+				"children":        []any{},
+				"is_file":         true,
+				"default_content": "",
+			},
+		},
+	})
 }

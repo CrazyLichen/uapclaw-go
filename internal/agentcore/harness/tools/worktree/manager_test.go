@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	fnmatch "github.com/danwakefield/fnmatch"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -190,8 +191,8 @@ func TestPostCreationSetup_HooksPath(t *testing.T) {
 	}
 }
 
-// TestSimpleMatch 测试简单模式匹配
-func TestSimpleMatch(t *testing.T) {
+// TestFnmatchMatch 测试 fnmatch 模式匹配（对齐 Python fnmatch）
+func TestFnmatchMatch(t *testing.T) {
 	tests := []struct {
 		name    string
 		pattern string
@@ -199,14 +200,14 @@ func TestSimpleMatch(t *testing.T) {
 	}{
 		{".env.local", ".env.local", true},
 		{".env.production", ".env.*", true},
-		{"src/main.go", "*.go", false}, // 简单匹配不支持路径中间的 *
+		{"src/main.go", "*.go", true},
 		{"anything", "*", true},
 		{"other", ".env.local", false},
 	}
 	for _, tt := range tests {
-		got := simpleMatch(tt.name, tt.pattern)
+		got := fnmatch.Match(tt.pattern, tt.name, 0)
 		if got != tt.want {
-			t.Errorf("simpleMatch(%q, %q) = %v, want %v", tt.name, tt.pattern, got, tt.want)
+			t.Errorf("fnmatch.Match(%q, %q, 0) = %v, want %v", tt.pattern, tt.name, got, tt.want)
 		}
 	}
 }

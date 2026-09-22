@@ -180,9 +180,16 @@ func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 	// Python: base_resolved = {os.path.realpath(d) for d in self._additional_directories}
 	baseResolved := make(map[string]struct{})
 	for _, d := range r.additionalDirectories {
-		if resolved, err := filepath.Abs(d); err == nil {
-			baseResolved[resolved] = struct{}{}
+		absPath, absErr := filepath.Abs(d)
+		resolved := d
+		if absErr == nil {
+			if evRes, evErr := filepath.EvalSymlinks(absPath); evErr == nil {
+				resolved = evRes
+			} else {
+				resolved = absPath // 降级：EvalSymlinks 失败时使用 Abs 路径
+			}
 		}
+		baseResolved[resolved] = struct{}{}
 	}
 	// Python: merged = list(self._additional_directories)
 	merged := make([]string, len(r.additionalDirectories))
@@ -194,14 +201,18 @@ func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 		if d == "" {
 			continue
 		}
-		if resolved, err := filepath.Abs(d); err == nil {
-			if _, exists := baseResolved[resolved]; !exists {
-				merged = append(merged, d)
-				baseResolved[resolved] = struct{}{}
+		absPath, absErr := filepath.Abs(d)
+		resolved := d
+		if absErr == nil {
+			if evRes, evErr := filepath.EvalSymlinks(absPath); evErr == nil {
+				resolved = evRes
+			} else {
+				resolved = absPath // 降级：EvalSymlinks 失败时使用 Abs 路径
 			}
-		} else {
-			// 无法解析的路径直接追加
+		}
+		if _, exists := baseResolved[resolved]; !exists {
 			merged = append(merged, d)
+			baseResolved[resolved] = struct{}{}
 		}
 	}
 	r.additionalDirectories = merged

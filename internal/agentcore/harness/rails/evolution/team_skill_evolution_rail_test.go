@@ -136,6 +136,17 @@ func TestTeamSkillEvolutionRail_EvolutionConfig(t *testing.T) {
 	config := r.EvolutionConfig()
 	assert.Equal(t, 5, config["eval_interval"])
 	assert.Equal(t, 720.0, config["evolution_total_timeout_secs"])
+	// 未初始化 EvolutionRail 时，max_concurrent_evolution 为 0
+	assert.Equal(t, 0, config["max_concurrent_evolution"])
+
+	// 手动构造带 EvolutionRail 的场景验证 cap
+	r2 := &TeamSkillEvolutionRail{
+		evalInterval:             5,
+		evolutionTotalTimeoutSec: 720.0,
+	}
+	r2.EvolutionRail = &EvolutionRail{evolutionSem: make(chan struct{}, 3)}
+	config2 := r2.EvolutionConfig()
+	assert.Equal(t, 3, config2["max_concurrent_evolution"])
 }
 
 func TestTeamSkillEvolutionRail_MarkPassiveEvolutionPending(t *testing.T) {

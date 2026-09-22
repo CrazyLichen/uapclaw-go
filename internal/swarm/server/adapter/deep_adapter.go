@@ -141,7 +141,7 @@ type DeepAdapter struct {
 	// ✅ 已回填：SafetyPromptRail（对齐 Python: _security_rail: SecurityRail | None）
 	securityRail sainterfaces.AgentRail
 	// memoryRail 记忆护栏
-	// ⤵️ 10.6.3-10: MemoryRail
+	// ✅ 已回填：MemoryRail（对齐 Python: _memory_rail: MemoryRail | None）
 	memoryRail sainterfaces.AgentRail
 	// externalMemoryRail 外接记忆护栏
 	// ⤵️ 10.6.3-10: 外部记忆 rail
@@ -239,6 +239,8 @@ type DeepAdapter struct {
 	paidSearchRegistered bool
 	// paidSearchTool 付费搜索工具实例
 	paidSearchTool tool.Tool
+	// uapswarmProjectDir 项目目录，对齐 Python: _jiuwenswarm_project_dir
+	uapswarmProjectDir string
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -432,6 +434,12 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 	if d.workspaceDir == "" {
 		d.workspaceDir = workspace.AgentRootDir()
+	}
+
+	// Python: setattr(self._instance, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)
+	d.uapswarmProjectDir = d.projectDir
+	if d.uapswarmProjectDir == "" {
+		d.uapswarmProjectDir = d.workspaceDir
 	}
 
 	// 存储 mode/subMode

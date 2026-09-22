@@ -3,6 +3,8 @@ package worktree
 import (
 	"context"
 	"fmt"
+	fnmatch "github.com/danwakefield/fnmatch"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,7 +108,10 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 
 	originalCwd := cwd.GetCwd(ctx)
 	originalBranch, _ := GetCurrentBranch(ctx, repoRoot)
-	targetPath := m.resolveTargetPath(ctx, slug)
+	targetPath, err := m.resolveTargetPath(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
 
 	start := time.Now()
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
@@ -252,7 +257,10 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
 	}
 
-	targetPath := m.resolveTargetPath(ctx, slug)
+	targetPath, err := m.resolveTargetPath(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
 	if err != nil {
 		return nil, err
@@ -287,7 +295,10 @@ func (m *WorktreeManager) RecoverWorktreeForOwner(ctx context.Context, ownerID, 
 		return nil, nil
 	}
 
-	wtPath := m.resolveTargetPath(ctx, slug)
+	wtPath, err := m.resolveTargetPath(ctx, slug)
+	if err != nil {
+		return nil, nil
+	}
 	headSHA, err := ReadWorktreeHeadSHA(wtPath)
 	if err != nil || headSHA == "" {
 		return nil, nil
@@ -417,17 +428,14 @@ func (m *WorktreeManager) RemoveWorktree(ctx context.Context, worktreePath, repo
 
 // resolveTargetPath 计算 worktree 文件系统路径。
 // Python: WorktreeManager._resolve_target_path(slug)
-func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) string {
+//
+// workspace 为空时直接返回 error，对齐 Python 抛 RuntimeError。
+func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) (string, error) {
 	workspace := cwd.GetWorkspace(ctx)
 	if workspace == "" {
-		// 降级到 base_dir 配置
-		if m.config.BaseDir != "" {
-			return WorktreePathFor(m.config.BaseDir, slug)
-		}
-		// 最后降级
-		return WorktreePathFor(cwd.GetCwd(ctx), slug)
+		return "", fmt.Errorf("workspace 未设置，无法解析 worktree 目标路径")
 	}
-	return WorktreePathFor(workspace, slug)
+	return WorktreePathFor(workspace, slug), nil
 }
 
 // ownerSlug 从 owner 标识派生 worktree slug。
@@ -577,7 +585,7 @@ func (m *WorktreeManager) copyIncludeFiles(ctx context.Context, repoRoot, worktr
 		// 简单模式匹配
 		matched := false
 		for _, pattern := range patterns {
-			if simpleMatch(entry, pattern) {
+			if fnmatch.Match(pattern, entry, 0) {
 				matched = true
 				break
 			}
@@ -616,23 +624,29 @@ func (m *WorktreeManager) configureHooksPath(ctx context.Context, repoRoot, work
 	}
 }
 
-// simpleMatch 简单的 glob 模式匹配（对齐 Python fnmatch）
-func simpleMatch(name, pattern string) bool {
-	if pattern == "*" {
-		return true
-	}
-	if strings.Contains(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		return strings.HasPrefix(name, prefix)
-	}
-	return name == pattern
-}
-
-// copyFile 拷贝单个文件。
+// copyFile 拷贝单个文件，保留权限和修改时间。
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o644)
+
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	dstF, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstF.Close()
+
+	if _, err := io.Copy(dstF, f); err != nil {
+		return err
+	}
+
+	// 恢复修改时间
+	return os.Chtimes(dst, info.ModTime(), info.ModTime())
 }

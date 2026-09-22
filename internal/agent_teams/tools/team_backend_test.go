@@ -993,7 +993,7 @@ func TestApprovePlan_通过Backend(t *testing.T) {
 	os.WriteFile(planFile, []byte("# 计划"), 0o644)
 
 	// 用 teammate1 的 taskManager 提交计划
-	teammateTM := NewTeamTaskManager(tb.db, tb.TeamName(), "teammate1", nil,
+	teammateTM := NewTeamTaskManager(tb.db, tb.TeamName(), "teammate1", nil, nil,
 		tb.taskManager.plansDir, tb.taskManager.teamPlanID, tb.taskManager.leaderMemberName)
 	record, err := teammateTM.SubmitPlan(ctx, task.TaskID, planFile, "call_1")
 	if err != nil {

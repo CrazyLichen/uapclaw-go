@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -122,6 +124,9 @@ type TeamTaskManager struct {
 	memberName string
 	// messager 事件发布器
 	messager messager.Messager
+	// messageManager 消息管理器（用于 notifyLeaderOfPlan 持久化消息到 DB）
+	// Python: _notify_leader_of_plan 中创建 TeamMessageManager 实例
+	messageManager *TeamMessageManager
 	// plansDir 计划文件存储目录
 	plansDir string
 	// teamPlanID 团队级计划标识
@@ -183,12 +188,13 @@ func WithPriorityDependentTaskIDs(ids []string) TaskAddWithPriorityOption {
 
 // NewTeamTaskManager 创建任务管理器。
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
-func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, messager messager.Messager, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
+func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, msg messager.Messager, messageManager *TeamMessageManager, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
 	return &TeamTaskManager{
 		db:               db,
 		teamName:         teamName,
 		memberName:       memberName,
-		messager:         messager,
+		messager:         msg,
+		messageManager:   messageManager,
 		plansDir:         plansDir,
 		teamPlanID:       teamPlanID,
 		leaderMemberName: leaderMemberName,
@@ -802,27 +808,38 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	}
 	destPath := filepath.Join(planDir, planID+".md")
 	if planFilePath != "" {
-		content, err := os.ReadFile(planFilePath)
+		// M-08: 路径验证对齐 Python: _resolve_submitted_plan_path
+		resolvedPath, err := resolveSubmittedPlanPath(planFilePath)
 		if err != nil {
-			return nil, fmt.Errorf("读取计划文件失败: %v", err)
+			return nil, fmt.Errorf("解析计划文件路径失败: %v", err)
 		}
-		if err := os.WriteFile(destPath, content, 0o644); err != nil {
-			return nil, fmt.Errorf("写入计划文件失败: %v", err)
+		// 跳过源和目标相同的拷贝（对齐 Python: if submitted_plan_path != member_plan_path.resolve()）
+		absDest, _ := filepath.Abs(destPath)
+		if resolvedPath == absDest {
+			// 源和目标相同，跳过拷贝
+		} else if err := copyFileWithMeta(resolvedPath, destPath); err != nil {
+			return nil, fmt.Errorf("拷贝计划文件失败: %v", err)
 		}
 	}
 
 	// 6. 写入 index.json
 	nowISO := time.Now().Format(time.RFC3339)
 	record := &PlanRecord{
-		PlanID:       planID,
-		TaskID:       taskID,
-		TeamPlanID:   tm.teamPlanID,
-		MemberName:   tm.memberName,
-		Status:       fsm.TaskStatusClaimed,
-		MemberPlanMD: destPath,
-		Decision:     "pending",
-		SubmittedAt:  nowISO,
-		UpdatedAt:    nowISO,
+		PlanID:         planID,
+		TaskID:         taskID,
+		TeamPlanID:     tm.teamPlanID,
+		MemberName:     tm.memberName,
+		Status:         fsm.TaskStatusClaimed,
+		MemberPlanMD:   destPath,
+		Decision:       "pending",
+		SubmittedAt:    nowISO,
+		UpdatedAt:      nowISO,
+	}
+	// M-08: 记录源计划文件路径（对齐 Python: source_plan_path）
+	if planFilePath != "" {
+		if resolvedPath, err := resolveSubmittedPlanPath(planFilePath); err == nil {
+			record.SourcePlanPath = resolvedPath
+		}
 	}
 	if err := tm.writePlanIndex(record); err != nil {
 		return nil, fmt.Errorf("写入计划索引失败: %v", err)
@@ -838,8 +855,13 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		ToolCallID:       toolCallID,
 	})
 
-	// 8. 对齐 Python: _notify_leader_of_plan — 通过 P2P 消息直接通知 leader
-	tm.notifyLeaderOfPlan(ctx, record, destPath, toolCallID)
+	// 8. 对齐 Python: _notify_leader_of_plan — 通过 TeamMessageManager 通知 leader
+	leaderMessageID := tm.notifyLeaderOfPlan(ctx, record, destPath, toolCallID)
+	if leaderMessageID != "" {
+		// Python: _write_task_plan_index(task_id, {"plan_id": ..., "leader_message_id": ..., "updated_at": ...})
+		record.LeaderMessageID = leaderMessageID
+		_ = tm.writePlanIndex(record)
+	}
 
 	return record, nil
 }
@@ -926,12 +948,10 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// notifyLeaderOfPlan 通过 P2P 消息直接通知 leader 审批计划。
+// notifyLeaderOfPlan 通过 TeamMessageManager 通知 leader 审批计划。
+// 返回 leader_message_id（对齐 Python: _notify_leader_of_plan → leader_message_id）。
 // Python: TeamTaskManager._notify_leader_of_plan()
-func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) {
-	if tm.messager == nil {
-		return
-	}
+func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) string {
 	leaderName := tm.resolveLeaderMemberName()
 	if leaderName == "" {
 		logger.Warn(taskLogComponent).
@@ -939,21 +959,49 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
 			Msg("notifyLeaderOfPlan: 无法通知 leader，leader_member_name 为空")
-		return
+		return ""
 	}
 	// Python: leader_member_name == self.member_name → 跳过
 	if leaderName == tm.memberName {
-		return
+		return ""
 	}
 
 	content := renderPlanReviewMessage(record.MemberName, record.TaskID, record.PlanID, planFilePath, toolCallID)
+
+	// M-09: 改用 TeamMessageManager.SendMessage 对齐 Python
+	// Python: message_manager = TeamMessageManager(db, team_name, member_name, messager)
+	// Python: message_id = await message_manager.send_message(content=..., to_member_name=...)
+	if tm.messageManager != nil {
+		messageID, err := tm.messageManager.SendMessage(ctx, content, leaderName, tm.memberName)
+		if err != nil {
+			logger.Error(taskLogComponent).
+				Str("leader", leaderName).
+				Str("task_id", record.TaskID).
+				Str("plan_id", record.PlanID).
+				Err(err).
+				Msg("notifyLeaderOfPlan: SendMessage 失败")
+			return ""
+		}
+		logger.Info(taskLogComponent).
+			Str("leader", leaderName).
+			Str("task_id", record.TaskID).
+			Str("plan_id", record.PlanID).
+			Str("message_id", messageID).
+			Msg("notifyLeaderOfPlan: 已通知 leader 审批计划")
+		return messageID
+	}
+
+	// 降级：messageManager 不可用时回退到 messager.Send（保持向后兼容）
+	if tm.messager == nil {
+		return ""
+	}
+	logger.Warn(taskLogComponent).Msg("notifyLeaderOfPlan: messageManager 不可用，降级使用 messager.Send")
 	msg := events.EventMessageFromEvent(events.MessageEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		MessageID:        fmt.Sprintf("plan_notify_%s_%d", record.PlanID, time.Now().UnixMilli()),
 		FromMemberName:   tm.memberName,
 		ToMemberName:     leaderName,
 	})
-	// 在 payload 中附加内容信息，供 leader 处理
 	if msg.Payload == nil {
 		msg.Payload = make(map[string]any)
 	}
@@ -961,11 +1009,10 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	if err := tm.messager.Send(ctx, leaderName, msg); err != nil {
 		logger.Warn(taskLogComponent).
 			Str("leader", leaderName).
-			Str("task_id", record.TaskID).
-			Str("plan_id", record.PlanID).
 			Err(err).
-			Msg("notifyLeaderOfPlan: 发送 P2P 消息失败")
+			Msg("notifyLeaderOfPlan: messager.Send 失败")
 	}
+	return ""
 }
 
 // resolveLeaderMemberName 解析 leader 成员名。
@@ -1001,6 +1048,82 @@ func renderPlanReviewMessage(memberName, taskID, planID, planFilePath, toolCallI
 	}
 	lines = append(lines, "", "Please review the plan file and call approve_plan with this plan_id.")
 	return strings.Join(lines, "\n")
+}
+
+// resolveSubmittedPlanPath 解析并验证提交的计划文件路径。
+// 对齐 Python: TeamTaskManager._resolve_submitted_plan_path(plan_path)
+// 执行：ExpandHome → filepath.Abs → filepath.EvalSymlinks → os.Stat 文件存在性检查。
+func resolveSubmittedPlanPath(planPath string) (string, error) {
+	rawPath := strings.TrimSpace(planPath)
+	if rawPath == "" {
+		return "", fmt.Errorf("submit_plan requires plan_path")
+	}
+
+	// 1. ExpandHome（对齐 Python: Path(raw_path).expanduser()）
+	expanded := pathutil.ExpandHome(rawPath)
+
+	// 2. 转为绝对路径（对齐 Python: base_dir / submitted_path）
+	absPath, err := filepath.Abs(expanded)
+	if err != nil {
+		return "", fmt.Errorf("解析绝对路径失败: %v", err)
+	}
+
+	// 3. 解析符号链接（对齐 Python: submitted_path.resolve()）
+	resolved, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		// EvalSymlinks 在路径不存在时返回错误，使用 absPath 继续
+		resolved = absPath
+	}
+
+	// 4. 文件存在性检查（对齐 Python: if not submitted_path.is_file()）
+	info, err := os.Stat(resolved)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("计划文件不存在: %s", resolved)
+		}
+		return "", fmt.Errorf("访问计划文件失败: %v", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("计划路径是目录而非文件: %s", resolved)
+	}
+
+	return resolved, nil
+}
+
+// copyFileWithMeta 拷贝文件并保留原始权限和修改时间。
+// 对齐 Python: shutil.copy2(src, dst) — 保留权限 + mtime + atime。
+func copyFileWithMeta(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("获取源文件信息失败: %v", err)
+	}
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("打开源文件失败: %v", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return fmt.Errorf("创建目标文件失败: %v", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("拷贝文件内容失败: %v", err)
+	}
+
+	// 恢复修改时间（对齐 Python: shutil.copystat → os.utime）
+	if err := os.Chtimes(dst, info.ModTime(), info.ModTime()); err != nil {
+		// 修改时间恢复失败不阻断流程，仅记录日志
+		logger.Warn(taskLogComponent).
+			Str("dst", dst).
+			Err(err).
+			Msg("copyFileWithMeta: 恢复修改时间失败")
+	}
+
+	return nil
 }
 
 // publishTaskEvent 发布任务事件到 TeamTopic。

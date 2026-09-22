@@ -11,10 +11,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -178,7 +180,9 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 
 	// memoryRail — 仅构建实例存储到字段，不注册
 	// Python: MemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
-	_ = d.buildMemoryRail()
+	if mr := d.buildMemoryRail(); mr != nil {
+		d.memoryRail = mr
+	}
 
 	// externalMemoryRail — 仅构建实例存储到字段，不注册
 	// Python: ExternalMemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
@@ -435,11 +439,58 @@ func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.
 }
 
 // buildMemoryRail 构建记忆护栏。
-// ⤵️ 10.6.3-10: MemoryRail
-// Python: _build_memory_rail() (line 2116-2130)
+// ✅ 已回填：MemoryRail（对齐 Python: _build_memory_rail() — MemoryRail）
+//
+// Python: _build_memory_rail(mode) (line 2044-2072)
 func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 MemoryRail
-	return nil
+	// Python: try/except 包裹创建过程
+	var rail sainterfaces.AgentRail
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn(logComponent).Any("panic", r).
+					Msg("MemoryRail 创建失败，跳过")
+			}
+		}()
+
+		// Python: embed_config = config.get("embed")
+		embedConfig, _ := d.configCache["embed"].(map[string]any)
+		if embedConfig == nil {
+			logger.Warn(logComponent).
+				Msg("MemoryRail 创建失败: 无 embed 配置")
+			return
+		}
+
+		// Python: has_api_key / has_base_url / has_model
+		apiKey, _ := embedConfig["embed_api_key"].(string)
+		baseURL, _ := embedConfig["embed_base_url"].(string)
+		if baseURL == "" {
+			baseURL, _ = embedConfig["embed_api_base"].(string)
+		}
+		modelName, _ := embedConfig["embed_model"].(string)
+
+		if apiKey == "" || baseURL == "" || modelName == "" {
+			logger.Warn(logComponent).
+				Str("has_api_key", boolStr(apiKey != "")).
+				Str("has_base_url", boolStr(baseURL != "")).
+				Str("has_model", boolStr(modelName != "")).
+				Msg("MemoryRail 创建失败: 嵌入配置不完整")
+		}
+
+		// Python: self._is_proactive_memory = is_proactive_memory(mode, config)
+		// 注意：buildMemoryRail 在冷启动时调用无 mode 上下文，isProactive 留默认 false，
+		// 后续 handleMemoryRailByConfig 会按 mode 重建
+		isProactive := false
+
+		ec := &embedding.EmbeddingConfig{
+			ModelName: modelName,
+			BaseURL:   baseURL,
+			APIKey:    apiKey,
+		}
+		rail = memrail.NewMemoryRail(ec, isProactive)
+		logger.Info(logComponent).Msg("MemoryRail 创建成功")
+	}()
+	return rail
 }
 
 // buildExternalMemoryRail 构建外接记忆护栏。
@@ -448,6 +499,102 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ExternalMemoryRail
 	return nil
+}
+
+// handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
+// ✅ 已回填：handleMemoryRailByConfig（对齐 Python: _handle_memory_rail_by_config()）
+//
+// Python: _handle_memory_rail_by_config(mode) (line 5296-5320)
+func (d *DeepAdapter) handleMemoryRailByConfig(mode string) {
+	ctx := context.Background()
+
+	// Python: if get_memory_mode(config) == "local":
+	if getMemoryMode(d.configCache) == "local" {
+		// Python: builtin_on = is_builtin_memory_allowed(config) and is_memory_enabled(mode, config)
+		builtinOn := isBuiltinMemoryAllowed(d.configCache) && isMemoryEnabled(mode, d.configCache)
+
+		if builtinOn {
+			// 开启记忆
+			if d.memoryRail != nil {
+				// Python: cur_memory_type = is_proactive_memory(mode, config)
+				curProactive := isProactiveMemory(mode, d.configCache)
+				if d.isProactiveMemory != nil && *d.isProactiveMemory != curProactive {
+					// 当前记忆类型（主动/被动）和之前注册的不一致，注销后重建
+					if d.instance != nil {
+						if err := d.instance.UnregisterRail(ctx, d.memoryRail); err != nil {
+							logger.Error(logComponent).Err(err).Msg("注销 MemoryRail 失败（类型不一致）")
+						}
+					}
+					d.memoryRail = nil
+				} else {
+					// 已经注册，且记忆类型相同，无需其他操作
+					return
+				}
+			}
+			if d.memoryRail == nil {
+				// 重建 MemoryRail（使用当前 mode 决定 isProactive）
+				d.memoryRail = d.buildMemoryRailWithMode(mode)
+			}
+			if d.memoryRail != nil && d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, d.memoryRail); err != nil {
+					logger.Error(logComponent).Err(err).Str("mode", mode).Msg("注册 MemoryRail 失败")
+				} else {
+					logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail 注册成功")
+				}
+			}
+		} else if d.memoryRail != nil {
+			// Python: elif not builtin_on and self._memory_rail is not None:
+			if d.instance != nil {
+				if err := d.instance.UnregisterRail(ctx, d.memoryRail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("注销 MemoryRail 失败")
+				}
+			}
+			d.memoryRail = nil
+			d.isProactiveMemory = nil
+			logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail 已注销（配置禁用）")
+		}
+	}
+}
+
+// buildMemoryRailWithMode 构建带 mode 上下文的 MemoryRail（设置 isProactive）。
+// Python: _build_memory_rail(mode) 中会调用 is_proactive_memory(mode, config)
+func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRail {
+	var rail sainterfaces.AgentRail
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn(logComponent).Any("panic", r).
+					Msg("buildMemoryRailWithMode 创建失败，跳过")
+			}
+		}()
+
+		embedConfig, _ := d.configCache["embed"].(map[string]any)
+		if embedConfig == nil {
+			logger.Warn(logComponent).Msg("buildMemoryRailWithMode: 无 embed 配置")
+			return
+		}
+
+		apiKey, _ := embedConfig["embed_api_key"].(string)
+		baseURL, _ := embedConfig["embed_base_url"].(string)
+		if baseURL == "" {
+			baseURL, _ = embedConfig["embed_api_base"].(string)
+		}
+		modelName, _ := embedConfig["embed_model"].(string)
+
+		isProactive := isProactiveMemory(mode, d.configCache)
+		d.isProactiveMemory = &isProactive
+
+		ec := &embedding.EmbeddingConfig{
+			ModelName: modelName,
+			BaseURL:   baseURL,
+			APIKey:    apiKey,
+		}
+		rail = memrail.NewMemoryRail(ec, isProactive)
+		logger.Info(logComponent).
+			Bool("is_proactive", isProactive).
+			Msg("MemoryRail (with mode) 创建成功")
+	}()
+	return rail
 }
 
 // buildAvatarRail 构建数字分身护栏。
@@ -618,7 +765,7 @@ func (d *DeepAdapter) updatePlanModeRails() {
 
 	// 3. 记忆 rail 处理
 	// Python: await self._handle_memory_rail_by_config("plan")
-	// ⤵️ 待回填: handleMemoryRailByConfig
+	d.handleMemoryRailByConfig("plan")
 
 	// 4. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()
@@ -760,7 +907,7 @@ func (d *DeepAdapter) updateAgentModeRails(mode string) {
 
 	// 2. 记忆 rail 处理
 	// Python: await self._handle_memory_rail_by_config("fast")
-	// ⤵️ 待回填: handleMemoryRailByConfig
+	d.handleMemoryRailByConfig("fast")
 
 	// 3. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()
@@ -1033,6 +1180,111 @@ func extractModelName(configBase map[string]any) string {
 		return "gpt-4"
 	}
 	return modelName
+}
+
+// resolveModeMemory 定位 modes 配置下指定 mode 的 memory 块。
+// Python: _resolve_mode_memory(mode, config) (config.py L193-223)
+func resolveModeMemory(mode string, config map[string]any) map[string]any {
+	modesCfg, _ := config["modes"].(map[string]any)
+	if modesCfg == nil {
+		return map[string]any{}
+	}
+
+	token := strings.TrimSpace(mode)
+	if token == "" {
+		return map[string]any{}
+	}
+
+	var node map[string]any
+
+	if strings.Contains(token, ".") {
+		// "agent.plan" / "agent.fast" -> modes.agent.plan / modes.agent.fast
+		parts := strings.SplitN(token, ".", 2)
+		top, _ := modesCfg[parts[0]].(map[string]any)
+		if top == nil {
+			return map[string]any{}
+		}
+		node, _ = top[parts[1]].(map[string]any)
+	} else if token == "code" {
+		node, _ = modesCfg["code"].(map[string]any)
+	} else {
+		// "plan" / "fast" -> modes.agent.<plan|fast>
+		agentNode, _ := modesCfg["agent"].(map[string]any)
+		if agentNode == nil {
+			return map[string]any{}
+		}
+		node, _ = agentNode[token].(map[string]any)
+	}
+
+	if node == nil {
+		return map[string]any{}
+	}
+	mem, _ := node["memory"].(map[string]any)
+	if mem == nil {
+		return map[string]any{}
+	}
+	return mem
+}
+
+// getMemoryMode 读取 memory.mode：cloud 或 local（默认）。
+// Python: get_memory_mode(config) (config.py L255-259)
+func getMemoryMode(config map[string]any) string {
+	memCfg, _ := config["memory"].(map[string]any)
+	if memCfg == nil {
+		return "local"
+	}
+	mode, _ := memCfg["mode"].(string)
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "cloud" {
+		return "cloud"
+	}
+	return "local"
+}
+
+// isBuiltinMemoryAllowed 引擎门禁：memory.engine 是否放行内置 MemoryRail。
+// Python: is_builtin_memory_allowed(config) (external_memory_config.py L42-44)
+func isBuiltinMemoryAllowed(config map[string]any) bool {
+	engine := getMemoryEngine(config)
+	return engine == "builtin" || engine == "both"
+}
+
+// getMemoryEngine 读取 memory.engine 配置，默认 "builtin"。
+// Python: get_memory_engine(config) (external_memory_config.py)
+func getMemoryEngine(config map[string]any) string {
+	memCfg, _ := config["memory"].(map[string]any)
+	if memCfg == nil {
+		return "builtin"
+	}
+	engine, _ := memCfg["engine"].(string)
+	engine = strings.ToLower(strings.TrimSpace(engine))
+	if engine == "" {
+		return "builtin"
+	}
+	return engine
+}
+
+// isMemoryEnabled 检查指定 mode 下内置记忆是否启用。
+// Python: is_memory_enabled(mode, config) (config.py L226-239)
+func isMemoryEnabled(mode string, config map[string]any) bool {
+	mem := resolveModeMemory(mode, config)
+	enabled, _ := mem["enabled"].(bool)
+	return enabled
+}
+
+// isProactiveMemory 检查指定 mode 下是否为主动记忆模式。
+// Python: is_proactive_memory(mode, config) (config.py L242-252)
+func isProactiveMemory(mode string, config map[string]any) bool {
+	mem := resolveModeMemory(mode, config)
+	proactive, _ := mem["is_proactive"].(bool)
+	return proactive
+}
+
+// boolStr 将 bool 转为 "true"/"false" 字符串（用于日志）。
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // buildDynamicRail 根据方法名调用对应的 Rail builder。

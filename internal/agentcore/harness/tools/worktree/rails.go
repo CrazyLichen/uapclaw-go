@@ -50,7 +50,13 @@ type worktreeRailOptions struct {
 
 // AutoSetupRail 自动检测项目类型并运行 setup 的 LifecycleRail。
 // Python: AutoSetupRail
-type AutoSetupRail struct{}
+type AutoSetupRail struct {
+	// commands 预设的 setup 命令列表；为空时调用 detectSetup 自动检测
+	commands []string
+}
+
+// AutoSetupRailOption AutoSetupRail 构造选项
+type AutoSetupRailOption func(*AutoSetupRail)
 
 // DiffSummaryRail action=keep 时记录 git diff --stat 的 LifecycleRail。
 // Python: DiffSummaryRail
@@ -109,6 +115,20 @@ func WithWorktreeRailEventHandler(handler WorktreeEventHandler) WorktreeRailOpti
 // WithWorktreeRailLifecycleRails 设置生命周期 rail。
 func WithWorktreeRailLifecycleRails(rails ...WorktreeLifecycleRail) WorktreeRailOption {
 	return func(o *worktreeRailOptions) { o.lifecycleRails = rails }
+}
+
+// NewAutoSetupRail 创建 AutoSetupRail 实例。
+func NewAutoSetupRail(opts ...AutoSetupRailOption) *AutoSetupRail {
+	r := &AutoSetupRail{}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+// WithCommands 设置预设的 setup 命令。
+func WithCommands(cmds ...string) AutoSetupRailOption {
+	return func(r *AutoSetupRail) { r.commands = cmds }
 }
 
 // Manager 返回 WorktreeManager 访问器。
@@ -277,12 +297,13 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 	return nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)
 func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *WorktreeSession) error {
-	commands := detectSetup(session.WorktreePath)
+	commands := a.commands
+	if len(commands) == 0 {
+		commands = detectSetup(session.WorktreePath)
+	}
 	for _, cmd := range commands {
 		execCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		cmdObj := exec.CommandContext(execCtx, "sh", "-c", cmd)

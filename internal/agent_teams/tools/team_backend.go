@@ -242,12 +242,13 @@ func NewTeamBackend(
 	if tb.leaderMemberName == "" && isLeader {
 		tb.leaderMemberName = memberName
 	}
-	// 内部构造 TaskManager 和 MessageManager
+	// 内部构造 MessageManager（需在 TaskManager 之前，因 TaskManager 依赖 MessageManager）
+	tb.messageManager = NewTeamMessageManager(db, teamName, memberName, msg)
 	tb.taskManager = NewTeamTaskManager(
 		db, teamName, memberName, msg,
+		tb.messageManager,
 		tb.planStorageDir, tb.planID, tb.leaderMemberName,
 	)
-	tb.messageManager = NewTeamMessageManager(db, teamName, memberName, msg)
 
 	logger.Info(tbLogComponent).Str("team_name", teamName).Str("member_name", memberName).
 		Msg("TeamBackend 初始化完成")

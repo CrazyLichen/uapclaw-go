@@ -20,7 +20,7 @@ func setupTestTaskManager() (*TeamTaskManager, *database.InMemoryTeamDatabase) {
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, "", "", "leader1")
 	db.Initialize(ctx)
 	return tm, db
 }
@@ -273,7 +273,7 @@ func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemor
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "plan_mode", "", "")
 
 	plansDir := t.TempDir()
-	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, plansDir, "plan_session_1", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", nil, nil, plansDir, "plan_session_1", "leader1")
 	db.Initialize(ctx)
 	return tm, db, plansDir
 }
@@ -572,7 +572,7 @@ func TestTaskManager_SubmitPlan_已完成任务(t *testing.T) {
 	}
 
 	// leader 审批计划
-	leaderTM := NewTeamTaskManager(db, "alpha", "leader1", nil, plansDir, "plan_session_1", "leader1")
+	leaderTM := NewTeamTaskManager(db, "alpha", "leader1", nil, nil, plansDir, "plan_session_1", "leader1")
 	if err := leaderTM.ApprovePlan(ctx, planRecord.PlanID, true, ""); err != nil {
 		t.Fatalf("ApprovePlan 返回错误: %v", err)
 	}
@@ -841,7 +841,7 @@ func TestTaskManager_SubmitPlan_带Messager(t *testing.T) {
 
 	plansDir := t.TempDir()
 	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
-	tm := NewTeamTaskManager(db, "alpha", "agent1", msg, plansDir, "plan_session_1", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "agent1", msg, nil, plansDir, "plan_session_1", "leader1")
 	db.Initialize(ctx)
 
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -915,7 +915,7 @@ func TestTaskManager_Claim_已被他人认领(t *testing.T) {
 	tm.Claim(ctx, task.TaskID)
 
 	// 创建另一个 manager 以 leader1 身份认领
-	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, "", "", "leader1")
+	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, nil, "", "", "leader1")
 	err := leaderTM.Claim(ctx, task.TaskID)
 	if err == nil {
 		t.Error("已被他人认领的任务应返回错误")
@@ -1038,7 +1038,7 @@ func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
 	}
 
 	// 从 team 获取（清空 leaderMemberName 后）
-	tm2 := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, "", "", "")
+	tm2 := NewTeamTaskManager(tm.db, "alpha", "agent1", nil, nil, "", "", "")
 	// team 表有 leader_member_name
 	team, _ := tm2.db.Team().GetTeam(ctx, "alpha")
 	if team == nil || team.LeaderMemberName != "leader1" {
@@ -1093,7 +1093,7 @@ func TestTaskManager_Claim_成员不存在(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// 创建不存在的成员的 manager
-	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, "", "", "leader1")
+	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, nil, "", "", "leader1")
 	err := ghostTM.Claim(ctx, task.TaskID)
 	if err == nil {
 		t.Error("不存在的成员认领应返回错误")
@@ -1134,7 +1134,7 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	// 不创建 agent1
-	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, "", "", "leader1")
+	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, nil, "", "", "leader1")
 	db.Initialize(ctx)
 
 	task, _ := tm.Add(ctx, "任务", "")

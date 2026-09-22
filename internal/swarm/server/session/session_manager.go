@@ -11,6 +11,16 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// processorEntry 处理器条目，同时存储 context 和 cancel。
+// 用于 EnsureSessionProcessor 检测处理器是否已死（对齐 Python: task.done()），
+// 以及 HasActiveTasks 准确判断任务是否仍在执行。
+type processorEntry struct {
+	// ctx 处理器 context，通过 select <-ctx.Done() 非阻塞探测存活状态
+	ctx context.Context
+	// cancel 处理器 cancel 函数
+	cancel context.CancelFunc
+}
+
 // SessionManager 会话任务队列管理器，提供按 session 序列化执行、优先级排序和取消能力。
 //
 // Python: jiuwenswarm/server/runtime/session/session_manager.py
@@ -19,12 +29,14 @@ type SessionManager struct {
 	mu sync.Mutex
 	// sessionTasks session→当前执行任务的 cancel 函数
 	sessionTasks map[string]context.CancelFunc
+	// sessionTaskCtxs session→当前执行任务的 context（用于 HasActiveTasks 探测存活）
+	sessionTaskCtxs map[string]context.Context
 	// sessionPriorities session→优先级计数器（从 0 递减，LIFO 语义）
 	sessionPriorities map[string]int
 	// sessionQueues session→优先级堆
 	sessionQueues map[string]*priorityHeap
-	// sessionProcessors session→消费者 goroutine 的 cancel 函数
-	sessionProcessors map[string]context.CancelFunc
+	// sessionProcessors session→消费者 goroutine 的处理器条目（含 ctx 和 cancel）
+	sessionProcessors map[string]*processorEntry
 	// sessionSignals session→通知消费者有新任务的信号 channel
 	sessionSignals map[string]chan struct{}
 }
@@ -60,9 +72,10 @@ type priorityHeap []*priorityItem
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
 		sessionTasks:      make(map[string]context.CancelFunc),
+		sessionTaskCtxs:   make(map[string]context.Context),
 		sessionPriorities: make(map[string]int),
 		sessionQueues:     make(map[string]*priorityHeap),
-		sessionProcessors: make(map[string]context.CancelFunc),
+		sessionProcessors: make(map[string]*processorEntry),
 		sessionSignals:    make(map[string]chan struct{}),
 	}
 }
@@ -126,15 +139,25 @@ func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix s
 }
 
 // EnsureSessionProcessor 确保 session 的任务处理器在运行。
+// 如果处理器 context 已取消（等价 Python: task.done()），则重建队列和优先级。
 //
 // Python: SessionManager.ensure_session_processor(session_id)
 func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	if _, procOk := sm.sessionProcessors[sessionID]; procOk {
+	// 检查处理器是否存活（对齐 Python: if not processor.done()）
+	if entry, procOk := sm.sessionProcessors[sessionID]; procOk {
 		if sigCh, sigOk := sm.sessionSignals[sessionID]; sigOk && sigCh != nil {
-			return nil
+			// 非阻塞探测 context 是否已取消
+			select {
+			case <-entry.ctx.Done():
+				// 处理器已死，需要重建队列和优先级（对齐 Python）
+				logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 处理器已停止，重建队列和优先级")
+			default:
+				// 处理器仍然存活
+				return nil
+			}
 		}
 	}
 
@@ -147,7 +170,7 @@ func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID st
 	sm.sessionSignals[sessionID] = sigCh
 
 	procCtx, procCancel := context.WithCancel(context.Background())
-	sm.sessionProcessors[sessionID] = procCancel
+	sm.sessionProcessors[sessionID] = &processorEntry{ctx: procCtx, cancel: procCancel}
 
 	go sm.processSessionQueue(procCtx, sessionID, sigCh)
 
@@ -224,17 +247,35 @@ func (sm *SessionManager) GetCurrentTask(sessionID string) context.CancelFunc {
 func (sm *SessionManager) HasActiveProcessor(sessionID string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	_, ok := sm.sessionProcessors[sessionID]
-	return ok
+	entry, ok := sm.sessionProcessors[sessionID]
+	if !ok {
+		return false
+	}
+	// 非阻塞探测处理器是否已停止
+	select {
+	case <-entry.ctx.Done():
+		return false
+	default:
+		return true
+	}
 }
 
 // HasActiveTasks 检查是否有活跃的 session 任务。
+// 通过探测任务 context 是否已取消来判断（对齐 Python: not task.done()）。
 func (sm *SessionManager) HasActiveTasks() bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	for _, cancelFn := range sm.sessionTasks {
-		if cancelFn != nil {
-			return true
+	for sessionID, taskCtx := range sm.sessionTaskCtxs {
+		if taskCtx != nil {
+			select {
+			case <-taskCtx.Done():
+				// 任务 context 已取消，不算活跃
+				continue
+			default:
+				// 任务仍在执行
+				logger.Debug(logComponent).Str("session_id", sessionID).Msg("HasActiveTasks: 检测到活跃任务")
+				return true
+			}
 		}
 	}
 	return false
@@ -296,15 +337,41 @@ func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID str
 		taskCtx, taskCancel := context.WithCancel(ctx)
 		sm.mu.Lock()
 		sm.sessionTasks[sessionID] = taskCancel
+		sm.sessionTaskCtxs[sessionID] = taskCtx
 		sm.mu.Unlock()
 
-		_, _ = item.task(taskCtx)
+		// M-12: 完整对齐 Python 的 task 错误处理
+		// Python: except Exception as e: logger.error(...) + handle_task_execution_failure
+		result, err := item.task(taskCtx)
+		if err != nil {
+			// Python: logger.error(f"Task {task_id} execution failed: {e}", exc_info=True)
+			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("Session 任务执行失败")
+			// Python: _handle_task_execution_failure → 更新状态为 FAILED + 发布 TASK_FAILED 事件
+			sm.handleTaskFailure(sessionID, err)
+		}
 
 		sm.mu.Lock()
 		sm.sessionTasks[sessionID] = nil
+		delete(sm.sessionTaskCtxs, sessionID)
 		sm.mu.Unlock()
 		taskCancel()
+		// 避免未使用变量警告
+		_ = result
 	}
+}
+
+// handleTaskFailure 处理任务执行失败（对齐 Python: _handle_task_execution_failure）。
+// 记录失败日志并发布 TASK_FAILED 事件。
+func (sm *SessionManager) handleTaskFailure(sessionID string, taskErr error) {
+	// Python: update_task_status(task_id, TaskStatus.FAILED, error_message=error_message)
+	// Python: publish ControllerOutputChunk(type=TASK_FAILED, data=[TextDataFrame(text=error_message)])
+	// Go 的 SessionManager 是轻量级队列管理器，没有 task status 跟踪和事件发布机制，
+	// 因此这里仅记录日志。上游（TaskScheduler / AgentServer）负责状态更新和事件发布。
+	logger.Warn(logComponent).
+		Str("session_id", sessionID).
+		Str("event_type", "TASK_FAILED").
+		Err(taskErr).
+		Msg("Session 任务失败，需上游处理状态更新和事件发布")
 }
 
 // cleanupSession 清理 session 相关的所有 map 条目。
@@ -315,6 +382,7 @@ func (sm *SessionManager) cleanupSession(sessionID string) {
 	delete(sm.sessionQueues, sessionID)
 	delete(sm.sessionPriorities, sessionID)
 	delete(sm.sessionTasks, sessionID)
+	delete(sm.sessionTaskCtxs, sessionID)
 	delete(sm.sessionProcessors, sessionID)
 	delete(sm.sessionSignals, sessionID)
 

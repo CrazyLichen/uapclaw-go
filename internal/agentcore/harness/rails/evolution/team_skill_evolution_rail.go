@@ -1011,6 +1011,12 @@ func (r *TeamSkillEvolutionRail) EvolutionConfig() map[string]any {
 		"simplify_llm_policy":          r.simplifyLLMPolicy,
 		"eval_interval":                r.evalInterval,
 		"evolution_total_timeout_secs": r.evolutionTotalTimeoutSec,
+		"max_concurrent_evolution":     func() int {
+			if r.EvolutionRail != nil && r.evolutionSem != nil {
+				return cap(r.evolutionSem)
+			}
+			return 0
+		}(),
 	}
 }
 

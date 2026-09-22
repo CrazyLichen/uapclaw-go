@@ -73,13 +73,17 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentServer 创建 AgentServer 实例。
+// Python: AgentWebSocketServer.__init__() 风格——AgentManager 在构造时创建。
 func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *AgentServer {
 	// Python: AgentConfigService(workspace_dir)
 	// Python 默认 Path.cwd()，Go 使用 workspace.WorkspaceDir()
 	agentConfigService := runtime.NewAgentConfigService(workspace.WorkspaceDir())
+	// Python: self._agent_manager = AgentManager()（在 __init__ 中创建）
+	agentManager := runtime.NewAgentManager()
 	return &AgentServer{
 		config:             cfg,
 		transport:          transport,
+		agentManager:       agentManager,
 		agentConfigService: agentConfigService,
 		sessionStreamTasks: make(map[string]context.CancelFunc),
 		stopCh:             make(chan struct{}),
@@ -87,7 +91,7 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 }
 
 // SetAgentFactoryForTest 设置 Agent 创建工厂覆盖（仅测试用）。
-// 必须在 Start() 之前调用，run() 初始化 AgentManager 后会应用此覆盖。
+// 必须在 Start() 之前调用，run() 中会应用此覆盖。
 func (s *AgentServer) SetAgentFactoryForTest(factory runtime.AgentFactory) {
 	s.agentFactoryOverride = factory
 }
@@ -253,13 +257,11 @@ func (s *AgentServer) run(ctx context.Context) {
 		// Python: raise RuntimeError，Go 侧记录错误但继续启动（best-effort）
 	}
 
-	// 3. 初始化 AgentManager
-	s.agentManager = runtime.NewAgentManager()
-	// 应用测试工厂覆盖（如有）
+	// 3. 应用测试工厂覆盖（如有）
 	if s.agentFactoryOverride != nil {
 		s.agentManager.SetAgentFactory(s.agentFactoryOverride)
 	}
-	logger.Info(logComponent).Msg("AgentManager 已初始化")
+	logger.Info(logComponent).Msg("AgentManager 已就绪")
 
 	// 4. 发送 connection.ack 事件帧（对齐 Python AgentWebSocketServer._connection_handler 首帧）
 	ackFrame := transport.BuildConnectionAckFrame()
