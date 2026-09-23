@@ -241,32 +241,34 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 	gitRecentCommits := ""
 	gitUser := ""
 
+	// 对齐 Python: git_bin = which("git")
 	gitBin, err := exec.LookPath("git")
 	if err == nil && gitBin != "" && projectDir != "" {
 		info, statErr := os.Stat(projectDir)
 		if statErr == nil && info.IsDir() {
-			gitBranch = runGit(ctx, projectDir, "rev-parse", "--abbrev-ref", "HEAD")
-			if gitBranch == "" {
-				gitBranch = "N/A"
-			}
-			if gitBranch != "N/A" {
-				insideWorkTree := runGit(ctx, projectDir, "rev-parse", "--is-inside-work-tree")
-				if insideWorkTree == "true" {
-					gitStatus = runGit(ctx, projectDir, "status", "--short")
-					if len(gitStatus) > 0 {
-						lines := strings.Split(gitStatus, "\n")
-						if len(lines) > 50 {
-							lines = lines[:50]
-						}
-						gitStatus = strings.Join(lines, "\n")
+			// 对齐 Python: 先检查 --is-inside-work-tree，再获取 branch
+			// Python: inside = _run_git(["rev-parse", "--is-inside-work-tree"])
+			insideWorkTree := runGit(ctx, projectDir, "rev-parse", "--is-inside-work-tree")
+			if insideWorkTree == "true" {
+				// Python: git_branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"]) or "HEAD"
+				gitBranch = runGit(ctx, projectDir, "rev-parse", "--abbrev-ref", "HEAD")
+				if gitBranch == "" {
+					gitBranch = "HEAD"
+				}
+				gitStatus = runGit(ctx, projectDir, "status", "--short")
+				if len(gitStatus) > 0 {
+					lines := strings.Split(gitStatus, "\n")
+					if len(lines) > 50 {
+						lines = lines[:50]
 					}
-					gitRecentCommits = runGit(ctx, projectDir, "log", "--oneline", "-5")
-					gitUser = runGit(ctx, projectDir, "config", "user.name")
-					for _, candidate := range []string{"origin/main", "origin/master", "main", "master"} {
-						if runGit(ctx, projectDir, "rev-parse", "--verify", "--quiet", candidate) != "" {
-							gitMainBranch = candidate
-							break
-						}
+					gitStatus = strings.Join(lines, "\n")
+				}
+				gitRecentCommits = runGit(ctx, projectDir, "log", "--oneline", "-5")
+				gitUser = runGit(ctx, projectDir, "config", "user.name")
+				for _, candidate := range []string{"origin/main", "origin/master", "main", "master"} {
+					if runGit(ctx, projectDir, "rev-parse", "--verify", "--quiet", candidate) != "" {
+						gitMainBranch = candidate
+						break
 					}
 				}
 			}
@@ -288,7 +290,10 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 		"language":           language,
 		"channel":            channel,
 		"agent":              agentName,
-		"platform":           getOSVersion(),
+		// 对齐 Python: "platform": f"{platform.system()} {platform.machine()}"
+		// Python platform.system() → runtime.GOOS 首字母大写
+		// Python platform.machine() → runtime.GOARCH
+		"platform":           fmt.Sprintf("%s %s", capitalizeOS(runtime.GOOS), runtime.GOARCH),
 		"go_version":         runtime.Version(),
 		"git_branch":         gitBranch,
 		"git_main_branch":    gitMainBranch,
@@ -640,14 +645,20 @@ func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.Syst
 	}
 }
 
+// capitalizeOS 将 runtime.GOOS 首字母大写，对齐 Python platform.system()。
+// "linux" → "Linux", "darwin" → "Darwin", "windows" → "Windows"
+func capitalizeOS(osName string) string {
+	if len(osName) > 0 {
+		return strings.ToUpper(osName[:1]) + osName[1:]
+	}
+	return osName
+}
+
 // getOSVersion 获取操作系统版本字符串，对齐 Python: platform.system() + " " + platform.release()。
 // Linux: "Linux 6.5.0"，macOS: "Darwin 23.1.0"，Windows: "windows 10.0"
+// 注意：此函数用于 env section（显示 OS 版本），与 platform 字段的 system+machine 含义不同。
 func getOSVersion() string {
-	sysName := runtime.GOOS
-	// 首字母大写，对齐 Python platform.system()
-	if len(sysName) > 0 {
-		sysName = strings.ToUpper(sysName[:1]) + sysName[1:]
-	}
+	sysName := capitalizeOS(runtime.GOOS)
 	release := getOSRelease()
 	if release != "" {
 		return sysName + " " + release

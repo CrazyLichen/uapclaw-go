@@ -176,11 +176,26 @@ func TestInjectBrowserToolPolicySection_条件(t *testing.T) {
 
 // TestInjectGitStatusSection_条件 测试 git_branch 条件
 func TestInjectGitStatusSection_条件(t *testing.T) {
-	// 无 runtime_state.yaml → git_branch 为空 → 不注入
+	// git_branch 为空 → 不注入
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
 	rail.injectGitStatusSection(builder, nil)
 	assert.False(t, builder.HasSection("git_status"))
+
+	// git_branch = "N/A" → 不注入（不在 git 仓库内）
+	builder2 := newMockBuilder()
+	rail.injectGitStatusSection(builder2, map[string]string{"git_branch": "N/A"})
+	assert.False(t, builder2.HasSection("git_status"))
+
+	// git_branch = "HEAD" → 应注入（对齐 Python: detached HEAD fallback）
+	builder3 := newMockBuilder()
+	rail.injectGitStatusSection(builder3, map[string]string{"git_branch": "HEAD"})
+	assert.True(t, builder3.HasSection("git_status"))
+
+	// git_branch = "feature-branch" → 应注入
+	builder4 := newMockBuilder()
+	rail.injectGitStatusSection(builder4, map[string]string{"git_branch": "feature-branch"})
+	assert.True(t, builder4.HasSection("git_status"))
 }
 
 // TestInjectEnvSection 测试 env section 注入
@@ -249,6 +264,16 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
 		t.Log("runtime_state.yaml 未写入 ConfigDir（正常，ConfigDir 可能不是 tmpDir）")
 	}
+}
+
+// TestWriteRuntimeStateYAML_Platform字段 测试 platform 字段格式（Bug 1 修复）。
+// 对齐 Python: f"{platform.system()} {platform.machine()}" → "Linux amd64"
+func TestWriteRuntimeStateYAML_Platform字段(t *testing.T) {
+	// capitalizeOS 应将 runtime.GOOS 首字母大写
+	assert.Equal(t, "Linux", capitalizeOS("linux"))
+	assert.Equal(t, "Darwin", capitalizeOS("darwin"))
+	assert.Equal(t, "Windows", capitalizeOS("windows"))
+	assert.Equal(t, "", capitalizeOS(""))
 }
 
 // TestReadRuntimeStateYAML 测试 YAML 读取

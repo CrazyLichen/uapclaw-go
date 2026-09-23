@@ -21,7 +21,7 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 	d.modelRequestConfig = llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-max"))
 	d.agentName = "test_agent"
 
-	d.writeRuntimeStateYAML("agent.plan", "cn", "web", "/tmp/project")
+	d.writeRuntimeStateYAML(t.Context(), "agent.plan", "cn", "web", "/tmp/project")
 
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
@@ -52,6 +52,12 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 	// 验证模式显示名映射：agent.plan + cn → "规划模式"
 	if v, _ := raw["mode"].(string); v != "规划模式" {
 		t.Errorf("mode = %q, want %q", v, "规划模式")
+	}
+
+	// 验证 platform 字段格式：对齐 Python f"{platform.system()} {platform.machine()}"
+	// 应为 "Linux amd64" / "Darwin arm64" 等格式，而非旧版的 "Linux 6.5.0" 含内核版本号
+	if v, _ := raw["platform"].(string); v == "" {
+		t.Error("platform 字段为空")
 	}
 }
 
