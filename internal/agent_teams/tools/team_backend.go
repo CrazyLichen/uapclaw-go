@@ -882,7 +882,7 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 		return atschema.NewMemberOpResultFail(fmt.Sprintf("成员 %s 不在团队 %s 中", memberName, tb.teamName))
 	}
 	// 执行审批
-	result, err := tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
+	result, _ := tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
 	if !result.OK {
 		return atschema.NewMemberOpResultFail("审批计划失败: " + result.Reason)
 	}

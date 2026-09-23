@@ -19,7 +19,7 @@ var (
 	// reMarkdownCodeBlock 提取 markdown code block 中的 JSON
 	reMarkdownCodeBlock = regexp.MustCompile("```(?:json)?\\s*(\\{.*?\\})\\s*```")
 	// reAnyJSONObject 提取任意 JSON 对象
-	reAnyJSONObject = regexp.MustCompile("\\{.*\\}")
+	reAnyJSONObject = regexp.MustCompile(`\{.*\}`)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

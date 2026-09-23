@@ -66,10 +66,8 @@ func ExtractEntityDeclaration(
 		withLanguage(language),
 	)
 
-	if extras != nil {
-		for k, v := range extras {
-			kwargs[k] = v
-		}
+	for k, v := range extras {
+		kwargs[k] = v
 	}
 
 	if entityTypes == nil {
@@ -114,15 +112,13 @@ func ExtractEntityAttributes(
 		kwargs["entity_summary"] = entity.Content
 	}
 
-	if entity.Attributes != nil && len(entity.Attributes) > 0 {
+	if len(entity.Attributes) > 0 {
 		attrBytes, _ := json.MarshalIndent(entity.Attributes, "", strings.Repeat(" ", indent))
 		kwargs["entity_attribute"] = string(attrBytes)
 	}
 
-	if extras != nil {
-		for k, v := range extras {
-			kwargs[k] = v
-		}
+	for k, v := range extras {
+		kwargs[k] = v
 	}
 
 	// Python: entity.obj_type.casefold() == "human" and "summary_target" in kwargs
@@ -241,7 +237,7 @@ func MergeExistingEntities(
 		kwargs["entity_summary"] = target.Content
 	}
 
-	if target.Attributes != nil && len(target.Attributes) > 0 {
+	if len(target.Attributes) > 0 {
 		attrBytes, _ := json.MarshalIndent(target.Attributes, "", strings.Repeat(" ", indent))
 		kwargs["entity_attribute"] = string(attrBytes)
 	}
@@ -253,10 +249,8 @@ func MergeExistingEntities(
 	}
 	kwargs["entities_to_merge"] = entity_extraction.FormatExistingEntities(sourceMaps, 1, language)
 
-	if extras != nil {
-		for k, v := range extras {
-			kwargs[k] = v
-		}
+	for k, v := range extras {
+		kwargs[k] = v
 	}
 
 	return kwargs, prompts.GetTemplateManager().Get(templateName), multilingualResponseFormat(reflect.TypeOf(EntitySummary{}), language)
@@ -294,7 +288,7 @@ func FilterRelationsForMerge(
 		kwargs["entity_summary"] = target.Content
 	}
 
-	if target.Attributes != nil && len(target.Attributes) > 0 {
+	if len(target.Attributes) > 0 {
 		attrBytes, _ := json.MarshalIndent(target.Attributes, "", strings.Repeat(" ", indent))
 		kwargs["entity_attribute"] = string(attrBytes)
 	}
@@ -302,10 +296,8 @@ func FilterRelationsForMerge(
 	// Python: format_existing_relations(relations, include_time=False)
 	kwargs["existing_relations"] = entity_extraction.FormatExistingRelations(relMaps, 1, false)
 
-	if extras != nil {
-		for k, v := range extras {
-			kwargs[k] = v
-		}
+	for k, v := range extras {
+		kwargs[k] = v
 	}
 
 	return kwargs, prompts.GetTemplateManager().Get(templateName), multilingualResponseFormat(reflect.TypeOf(RelevantFacts{}), language)

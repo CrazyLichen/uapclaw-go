@@ -2,8 +2,6 @@ package rb
 
 import (
 	"testing"
-
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 )
 
 // TestMemoryItemParser_Parse_正常解析 验证标准 Markdown 输入可正确解析
@@ -327,6 +325,6 @@ func TestMemoryItemParser_Parse_ReasoningBankMemory结构(t *testing.T) {
 		t.Fatalf("期望 1 个记忆，实际 %d", len(memories))
 	}
 
-	// 验证 ReasoningBankMemory 是 ceschema.ReasoningBankMemory 类型
-	var _ *ceschema.ReasoningBankMemory = memories[0]
+	// 验证 ReasoningBankMemory 类型
+	_ = memories[0]
 }

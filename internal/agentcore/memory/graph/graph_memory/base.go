@@ -315,13 +315,8 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 	searchEpisode *config.SearchConfig,
 	force ...bool,
 ) error {
-	// 校验 SearchConfig 类型
-	configs := []*config.SearchConfig{searchEntity, searchRelation, searchEpisode}
-	for _, c := range configs {
-		if c != nil {
-			// Go 类型系统已保证是 SearchConfig，无需 isinstance 检查
-		}
-	}
+	// Go 类型系统已保证是 SearchConfig，无需 isinstance 检查
+	_ = []*config.SearchConfig{searchEntity, searchRelation, searchEpisode}
 
 	gm.ThreadLock.Lock()
 	defer gm.ThreadLock.Unlock()
@@ -662,10 +657,8 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 	}
 	// 合并 extra
 	for _, e := range extra {
-		if e != nil {
-			for k, v := range e {
-				params[k] = v
-			}
+		for k, v := range e {
+			params[k] = v
 		}
 	}
 
@@ -1453,7 +1446,7 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 
 		dedupeEntity := extraction.ParseJSON(task.Result, state.Prompting.SchemaRelationFilter)
 		if dedupeMap, ok := dedupeEntity.(map[string]any); ok {
-			keepIDs, _ := dedupeMap["relevant_relations"]
+			keepIDs := dedupeMap["relevant_relations"]
 			if idList, ok := keepIDs.([]any); ok {
 				var relationsFiltered []*graph.Relation
 				for _, idVal := range idList {
@@ -1488,9 +1481,10 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 
 			if inNewRelations {
 				// 更新关系端点
-				if field == "lhs" {
+				switch field {
+				case "lhs":
 					relation.LHS = value
-				} else if field == "rhs" {
+				case "rhs":
 					relation.RHS = value
 				}
 				if !containsRelationPtr(state.MemUpdateSkipEmbed.UpdatedRelation, relation) {

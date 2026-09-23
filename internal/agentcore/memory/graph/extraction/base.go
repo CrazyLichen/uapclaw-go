@@ -133,7 +133,7 @@ func StrictSchemaEnforce(schemaMap map[string]any) {
 // 对齐 Python EntitySummary.response_format(language) 的完整调用链
 func BuildResponseFormat(model any, language string) map[string]any {
 	modelType := reflect.TypeOf(model)
-	if modelType.Kind() == reflect.Ptr {
+	if modelType.Kind() == reflect.Pointer {
 		modelType = modelType.Elem()
 	}
 

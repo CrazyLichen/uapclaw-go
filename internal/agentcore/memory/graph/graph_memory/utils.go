@@ -160,7 +160,7 @@ func contentToAny(c schema.MessageContent) any {
 //
 // Python: _parse_summary(entity, extracted_entity_info)
 func parseSummary(entity *graph.Entity, info map[string]any) {
-	summaryVal, _ := info["summary"]
+	summaryVal := info["summary"]
 	if summaryVal == nil {
 		return
 	}
@@ -198,7 +198,7 @@ func parseSummary(entity *graph.Entity, info map[string]any) {
 //
 // Python: _parse_attributes(entity, extracted_entity_info)
 func parseAttributes(entity *graph.Entity, info map[string]any) {
-	attributesVal, _ := info["attributes"]
+	attributesVal := info["attributes"]
 	if attributesVal == nil {
 		return
 	}

@@ -637,7 +637,7 @@ func BlockKeyboardInterrupt(ctx context.Context) context.CancelFunc {
 		close(done)
 		if received {
 			// 恢复后重新发送中断信号
-			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 		}
 	}
 }
@@ -866,7 +866,7 @@ func sliceCopy[T any](s []T) []T {
 // 对齐 Python: setattr(obj, attribute, embedding)
 func setEmbeddingField(obj any, fieldName string, embedding []float64) {
 	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	f := v.FieldByName(fieldNameToExported(fieldName))

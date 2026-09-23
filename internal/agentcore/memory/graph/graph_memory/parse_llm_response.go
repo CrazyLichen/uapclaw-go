@@ -358,7 +358,7 @@ func parseEntityMerging(
 	numEntities int,
 	numExisting int,
 ) {
-	dupIDs, _ := dup["duplicate_ids"]
+	dupIDs := dup["duplicate_ids"]
 	ids, ok := dupIDs.([]any)
 	if !ok {
 		return

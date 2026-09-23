@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -297,8 +298,9 @@ func TestReadDailyMemory_读取成功(t *testing.T) {
 	require.NotNil(t, memoryDir)
 	dailyMemoryDir := *memoryDir + "/" + string(hworkspace.WorkspaceNodeDailyMemory)
 
-	// 设置时区为 Asia/Shanghai
-	today := "2026-09-23"
+	// 设置时区为 Asia/Shanghai，动态获取当前日期
+	tz, _ := time.LoadLocation("Asia/Shanghai")
+	today := time.Now().In(tz).Format("2006-01-02")
 	todayFile := today + ".md"
 
 	// 模拟 ListFiles 返回包含今日文件
