@@ -174,7 +174,7 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 //  1. 若非 Agent 调用，委托基类（fallback 路径）
 //  2. 解析 toolCall.Arguments 为 map[string]any
 //  3. 从 session 获取 sessionID
-//  4. supervisor.Send(ctx, toolArgs, agentCard.ID)
+//  4. supervisor.Send(ctx, toolArgs, agentCard.ID)（发送工具调用到目标 Agent）
 //  5. 成功/失败处理
 //
 // Python: P2PAbilityManager._execute_single_tool_call()

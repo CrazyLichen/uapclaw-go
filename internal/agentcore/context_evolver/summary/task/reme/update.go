@@ -811,7 +811,7 @@ func (op *MemoryValidationOp) validateMemory(ctx context.Context, llm cecontext.
 	// 使用 text/template 渲染提示词，对齐 Python prompt.format()
 	var buf bytes.Buffer
 	if err := op.prompts.MemoryValidationPrompt.Execute(&buf, map[string]any{
-		"Condition":        memory.WhenToUse,
+		"Condition":         memory.WhenToUse,
 		"TaskMemoryContent": memory.Content,
 	}); err != nil {
 		logger.Error(logComponent).Err(err).Msg("记忆校验提示词模板执行失败")

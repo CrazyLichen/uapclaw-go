@@ -30,7 +30,7 @@ var prPattern = regexp.MustCompile("`#((?:user)|(?:system)|(?:assistant)|(?:tool
 //   - 使用正则匹配 `#role#` 分隔符，捕获角色名
 //   - Python 的 re.split 对含捕获组的正则，结果交替为 [前缀, role1, content1, role2, content2, ...]
 //   - Go 用 FindAllStringSubmatchIndex 定位分隔符，手动提取角色和内容
-//   - role ∈ {system, user, assistant, tool}
+//   - role ∈ {system, user, assistant, tool}（角色集合）
 //   - 每个角色标记开始一个新的消息段落
 //   - 未知角色跳过
 func ParsePRContent(content string) []schema.BaseMessage {

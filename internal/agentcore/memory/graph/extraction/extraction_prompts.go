@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	graphobj "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/prompts/entity_extraction"
@@ -20,7 +20,20 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// formattingConfig 格式化配置
+type formattingConfig struct {
+	sourceDescription string
+	outputModel       reflect.Type
+	outputIndent      int
+	history           string
+	content           string
+	language          string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// formattingOption 格式化参数选项
+type formattingOption func(*formattingConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -373,19 +386,6 @@ func DedupeRelationList(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// formattingOption 格式化参数选项
-type formattingOption func(*formattingConfig)
-
-// formattingConfig 格式化配置
-type formattingConfig struct {
-	sourceDescription string
-	outputModel       reflect.Type
-	outputIndent      int
-	history           string
-	content           string
-	language          string
-}
 
 // withSourceDescription 设置数据源描述
 func withSourceDescription(desc string) formattingOption {

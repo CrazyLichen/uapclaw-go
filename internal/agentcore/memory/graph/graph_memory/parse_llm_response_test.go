@@ -335,7 +335,7 @@ func TestResolveEntities_基本(t *testing.T) {
 	// 去重信息：已有实体 [0] 和候选 [1] 是重复的
 	duplication := []map[string]any{
 		{
-			"id":            1, // 1-based，指向 existing[0]
+			"id":            1,        // 1-based，指向 existing[0]
 			"duplicate_ids": []any{2}, // 1-based，指向 candidates[0]（num_existing+1=2）
 		},
 	}
@@ -374,7 +374,7 @@ func TestResolveEntities_现有实体间合并(t *testing.T) {
 
 	duplication := []map[string]any{
 		{
-			"id":            1, // 1-based → existing[0] (Alice)
+			"id":            1,        // 1-based → existing[0] (Alice)
 			"duplicate_ids": []any{2}, // 1-based → existing[1] (Alice_Smith)
 		},
 	}
@@ -406,11 +406,11 @@ func TestParseRelationMerging_需要合并(t *testing.T) {
 	}
 
 	response := map[string]any{
-		"need_merging":    true,
+		"need_merging":     true,
 		"combined_content": "merged content",
-		"duplicate_ids":   []any{2, 3},
-		"valid_since":     "2024-01-01T00:00:00Z",
-		"valid_until":     "2024-12-31T23:59:59Z",
+		"duplicate_ids":    []any{2, 3},
+		"valid_since":      "2024-01-01T00:00:00Z",
+		"valid_until":      "2024-12-31T23:59:59Z",
 	}
 
 	toRemove := ParseRelationMerging(response, relation, existingRels)
@@ -489,9 +489,9 @@ func TestParseRelationMerging_空内容不合并(t *testing.T) {
 // TestToInt 测试 toInt 辅助函数
 func TestToInt(t *testing.T) {
 	tests := []struct {
-		input   any
-		want    int
-		wantOK  bool
+		input  any
+		want   int
+		wantOK bool
 	}{
 		{42, 42, true},
 		{int64(42), 42, true},

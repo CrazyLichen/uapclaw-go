@@ -39,9 +39,6 @@ type WorktreeRail struct {
 	tools []tool.Tool
 }
 
-// WorktreeRailOption WorktreeRail 构造选项
-type WorktreeRailOption func(*worktreeRailOptions)
-
 // worktreeRailOptions WorktreeRail 内部构造选项
 type worktreeRailOptions struct {
 	config         *WorktreeConfig
@@ -56,12 +53,17 @@ type AutoSetupRail struct {
 	commands []string
 }
 
-// AutoSetupRailOption AutoSetupRail 构造选项
-type AutoSetupRailOption func(*AutoSetupRail)
-
 // DiffSummaryRail action=keep 时记录 git diff --stat 的 LifecycleRail。
 // Python: DiffSummaryRail
 type DiffSummaryRail struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// WorktreeRailOption WorktreeRail 构造选项
+type WorktreeRailOption func(*worktreeRailOptions)
+
+// AutoSetupRailOption AutoSetupRail 构造选项
+type AutoSetupRailOption func(*AutoSetupRail)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -341,7 +343,7 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)
-func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, session *WorktreeSession) error {
+func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, _ *interfaces.AgentCallbackContext, session *WorktreeSession) error {
 	commands := a.commands
 	if len(commands) == 0 {
 		commands = detectSetup(session.WorktreePath)
@@ -361,35 +363,35 @@ func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, session *Worktr
 }
 
 // BeforeWorktreeCreate AutoSetupRail 的空实现，不干预 slug。
-func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _ *interfaces.AgentCallbackContext, _, _ string) (*string, error) {
 	return nil, nil
 }
 
 // BeforeWorktreeExit AutoSetupRail 的空实现，不干预 action。
-func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) (*string, error) {
 	return nil, nil
 }
 
 // AfterWorktreeExit AutoSetupRail 的空实现。
-func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
-func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (*string, error) {
+func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, message string, _ []string) (*string, error) {
 	return &message, nil
 }
-func (a *AutoSetupRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (a *AutoSetupRail) AfterWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, files []string) []string {
 	return files
 }
 
 // BeforeWorktreeExit DiffSummaryRail 的 hook 实现。
 // Python: DiffSummaryRail.before_worktree_exit(ctx, session, action)
-func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (*string, error) {
+func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, _ *interfaces.AgentCallbackContext, session *WorktreeSession, action string) (*string, error) {
 	if action != "keep" {
 		return nil, nil
 	}
@@ -405,29 +407,29 @@ func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *Workt
 }
 
 // BeforeWorktreeCreate DiffSummaryRail 的空实现，不干预 slug。
-func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _ *interfaces.AgentCallbackContext, _, _ string) (*string, error) {
 	return nil, nil
 }
 
 // AfterWorktreeCreate DiffSummaryRail 的空实现。
-func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error {
+func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession) error {
 	return nil
 }
 
 // AfterWorktreeExit DiffSummaryRail 的空实现。
-func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
-func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (*string, error) {
+func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, message string, _ []string) (*string, error) {
 	return &message, nil
 }
-func (d *DiffSummaryRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (d *DiffSummaryRail) AfterWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, files []string) []string {
 	return files
 }
 

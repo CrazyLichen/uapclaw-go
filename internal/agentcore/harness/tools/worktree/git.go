@@ -105,7 +105,7 @@ func getCurrentBranch(ctx context.Context, cwd string) (string, error) {
 func getDefaultBranch(ctx context.Context, cwd string) string {
 	r := runGit(ctx, []string{"symbolic-ref", "refs/remotes/origin/HEAD", "--short"}, cwd)
 	if r.OK() {
-		// "origin/main" -> "main"
+		// "origin/main" → "main"，去掉远程前缀
 		parts := strings.SplitN(r.Stdout, "/", 2)
 		if len(parts) > 1 {
 			return parts[1]

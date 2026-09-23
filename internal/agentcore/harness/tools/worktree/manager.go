@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -121,10 +122,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 	durationMs := time.Since(start).Seconds() * 1000
 
 	if !result.Existed {
-		if err := m.postCreationSetup(ctx, repoRoot, result.WorktreePath); err != nil {
-			logger.Warn(logComponent).Err(err).Str("worktree_path", result.WorktreePath).
-				Msg("post-creation setup 部分失败")
-		}
+		m.postCreationSetup(ctx, repoRoot, result.WorktreePath)
 	}
 
 	session := &WorktreeSession{
@@ -267,10 +265,7 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 	}
 
 	if !result.Existed {
-		if err := m.postCreationSetup(ctx, repoRoot, result.WorktreePath); err != nil {
-			logger.Warn(logComponent).Err(err).Str("worktree_path", result.WorktreePath).
-				Msg("post-creation setup 部分失败")
-		}
+		m.postCreationSetup(ctx, repoRoot, result.WorktreePath)
 	} else {
 		// 更新 mtime 防止清理
 		now := time.Now()
@@ -459,10 +454,10 @@ func (m *WorktreeManager) resolvePolicy() WorktreeLifecyclePolicy {
 // fireBeforeCreate 调用 BeforeWorktreeCreate hook。
 // 返回最后一个非 nil slug 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_create", slug, repo_root)
-func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, slug, repoRoot string) (*string, error) {
+func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, cbc *interfaces.AgentCallbackContext, slug, repoRoot string) (*string, error) {
 	var lastResult *string
 	for _, rail := range m.lifecycleRails {
-		r, err := rail.BeforeWorktreeCreate(ctx, slug, repoRoot)
+		r, err := rail.BeforeWorktreeCreate(ctx, cbc, slug, repoRoot)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeCreate hook 失败")
 			continue
@@ -476,9 +471,9 @@ func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, slug, repoRoot s
 
 // fireAfterCreate 调用 AfterWorktreeCreate hook。
 // Python: WorktreeManager._fire_rail("after_worktree_create", session)
-func (m *WorktreeManager) fireAfterCreate(ctx context.Context, session *WorktreeSession) {
+func (m *WorktreeManager) fireAfterCreate(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession) {
 	for _, rail := range m.lifecycleRails {
-		if err := rail.AfterWorktreeCreate(ctx, session); err != nil {
+		if err := rail.AfterWorktreeCreate(ctx, cbc, session); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireAfterCreate hook 失败")
 		}
 	}
@@ -487,10 +482,10 @@ func (m *WorktreeManager) fireAfterCreate(ctx context.Context, session *Worktree
 // fireBeforeExit 调用 BeforeWorktreeExit hook。
 // 返回最后一个非 nil action 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_exit", session, action)
-func (m *WorktreeManager) fireBeforeExit(ctx context.Context, session *WorktreeSession, action string) (*string, error) {
+func (m *WorktreeManager) fireBeforeExit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, action string) (*string, error) {
 	var lastResult *string
 	for _, rail := range m.lifecycleRails {
-		r, err := rail.BeforeWorktreeExit(ctx, session, action)
+		r, err := rail.BeforeWorktreeExit(ctx, cbc, session, action)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeExit hook 失败")
 			continue
@@ -504,9 +499,9 @@ func (m *WorktreeManager) fireBeforeExit(ctx context.Context, session *WorktreeS
 
 // fireAfterExit 调用 AfterWorktreeExit hook。
 // Python: WorktreeManager._fire_rail("after_worktree_exit", session, action)
-func (m *WorktreeManager) fireAfterExit(ctx context.Context, session *WorktreeSession, action string) {
+func (m *WorktreeManager) fireAfterExit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, action string) {
 	for _, rail := range m.lifecycleRails {
-		if err := rail.AfterWorktreeExit(ctx, session, action); err != nil {
+		if err := rail.AfterWorktreeExit(ctx, cbc, session, action); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireAfterExit hook 失败")
 		}
 	}
@@ -515,9 +510,9 @@ func (m *WorktreeManager) fireAfterExit(ctx context.Context, session *WorktreeSe
 // fireOnFileWrite 调用 OnWorktreeFileWrite hook。
 // 返回 false 表示任何 rail 阻止写入，true 表示允许。
 // Python: WorktreeManager._fire_rail("on_worktree_file_write", session, file_path)
-func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, session *WorktreeSession, filePath string) bool {
+func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, filePath string) bool {
 	for _, rail := range m.lifecycleRails {
-		if !rail.OnWorktreeFileWrite(ctx, session, filePath) {
+		if !rail.OnWorktreeFileWrite(ctx, cbc, session, filePath) {
 			return false
 		}
 	}
@@ -527,10 +522,10 @@ func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, session *Worktree
 // fireBeforeCommit 调用 BeforeWorktreeCommit hook。
 // 返回最后一个非 nil message 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_commit", session, message)
-func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, session *WorktreeSession, message string) (*string, error) {
+func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, message string, files []string) (*string, error) {
 	var lastResult *string
 	for _, rail := range m.lifecycleRails {
-		r, err := rail.BeforeWorktreeCommit(ctx, session, message)
+		r, err := rail.BeforeWorktreeCommit(ctx, cbc, session, message, files)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeCommit hook 失败")
 			continue
@@ -544,9 +539,9 @@ func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, session *Worktre
 
 // fireAfterCommit 调用 AfterWorktreeCommit hook。
 // Python: WorktreeManager._fire_rail("after_worktree_commit", session, commit_sha)
-func (m *WorktreeManager) fireAfterCommit(ctx context.Context, session *WorktreeSession, commitHash string) {
+func (m *WorktreeManager) fireAfterCommit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, commitHash string) {
 	for _, rail := range m.lifecycleRails {
-		if err := rail.AfterWorktreeCommit(ctx, session, commitHash); err != nil {
+		if err := rail.AfterWorktreeCommit(ctx, cbc, session, commitHash); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireAfterCommit hook 失败")
 		}
 	}
@@ -555,10 +550,10 @@ func (m *WorktreeManager) fireAfterCommit(ctx context.Context, session *Worktree
 // fireOnSync 调用 OnWorktreeSync hook。
 // 返回所有 rail 过滤后的文件列表。
 // Python: WorktreeManager._fire_rail("on_worktree_sync", session)
-func (m *WorktreeManager) fireOnSync(ctx context.Context, session *WorktreeSession, direction string, files []string) []string {
+func (m *WorktreeManager) fireOnSync(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, direction string, files []string) []string {
 	filtered := files
 	for _, rail := range m.lifecycleRails {
-		filtered = rail.OnWorktreeSync(ctx, session, direction, filtered)
+		filtered = rail.OnWorktreeSync(ctx, cbc, session, direction, filtered)
 	}
 	return filtered
 }
@@ -585,9 +580,7 @@ func (m *WorktreeManager) removeWorktreeInternal(ctx context.Context, wtPath, re
 // 1. 符号链接配置的目录
 // 2. 拷贝 gitignored include 文件
 // 3. 配置 git hooks 路径
-func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, worktreePath string) error {
-	var firstErr error
-
+func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, worktreePath string) {
 	// 1. 符号链接目录
 	dirs := m.config.SymlinkDirectories
 	for _, d := range dirs {
@@ -606,15 +599,13 @@ func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, workt
 
 	// 2. 拷贝 gitignored include 文件
 	if len(m.config.IncludePatterns) > 0 {
-		if _, err := m.copyIncludeFiles(ctx, repoRoot, worktreePath, m.config.IncludePatterns); err != nil && firstErr == nil {
-			firstErr = err
+		if _, err := m.copyIncludeFiles(ctx, repoRoot, worktreePath, m.config.IncludePatterns); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("拷贝 include 文件失败")
 		}
 	}
 
 	// 3. 配置 hooks 路径
 	m.configureHooksPath(ctx, repoRoot, worktreePath)
-
-	return firstErr
 }
 
 // copyIncludeFiles 拷贝 gitignored 文件到 worktree。

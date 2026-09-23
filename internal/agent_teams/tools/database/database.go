@@ -106,8 +106,8 @@ type TaskDao interface {
 	// Python: approve_plan_task() → bool
 	ApprovePlanTask(ctx context.Context, taskID string) (bool, error)
 	// UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 BLOCKED→PENDING。
-	// 返回刷新的 task ID 列表。
-	UpdateTaskStatus(ctx context.Context, taskID, newStatus string) ([]string, error)
+	// 返回 true 表示成功，false 表示任务不存在或 FSM 不合法。
+	UpdateTaskStatus(ctx context.Context, taskID, newStatus string) (bool, error)
 	// UpdateTask 更新标题/内容。CLAIMED/PLAN_APPROVED 状态下禁止编辑。
 	// Python: update_task() → bool
 	UpdateTask(ctx context.Context, taskID, title, content string) (bool, error)

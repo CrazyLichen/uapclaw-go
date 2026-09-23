@@ -289,7 +289,7 @@ func (s *stubOptimizer) Domain() string                                         
 func (s *stubOptimizer) RequiresForwardData() bool                                     { return true }
 func (s *stubOptimizer) DefaultTargets() []string                                      { return nil }
 func (s *stubOptimizer) Backward(_ context.Context, _ []*signal.EvolutionSignal) error { return nil }
-func (s *stubOptimizer) Step() (map[schema.UpdateKey]any, error)                      { return nil, nil }
+func (s *stubOptimizer) Step() (map[schema.UpdateKey]any, error)                       { return nil, nil }
 
 // TestBaseOptimizer_接口完整性 编译期验证 stubOptimizer 实现 BaseOptimizer
 func TestBaseOptimizer_接口完整性(t *testing.T) {

@@ -140,6 +140,15 @@ type asyncTask struct {
 	Result string
 	// Err 任务执行错误
 	Err error
+	// done 用于同步 goroutine 完成，解决 race detector 报告
+	done chan struct{}
+}
+
+// Wait 阻塞等待异步任务完成
+func (t *asyncTask) Wait() {
+	if t.done != nil {
+		<-t.done
+	}
 }
 
 // pendingMergeTask 待合并的阻塞任务
@@ -638,10 +647,10 @@ func BlockKeyboardInterrupt(ctx context.Context) context.CancelFunc {
 // newGraphMemPrompting 创建提示词 Schema 配置（对齐 Python GraphMemPrompting 默认值）
 func newGraphMemPrompting() *GraphMemPrompting {
 	return &GraphMemPrompting{
-		SchemaEntityExtraction:    extraction.ResponseFormat("EntitySummary", map[string]any{}),
-		SchemaEntityDedupe:        extraction.ResponseFormat("EntityDuplication", map[string]any{}),
-		SchemaRelationMerge:       extraction.ResponseFormat("MergeRelations", map[string]any{}),
-		SchemaRelationFilter:      extraction.ResponseFormat("RelevantFacts", map[string]any{}),
+		SchemaEntityExtraction:     extraction.ResponseFormat("EntitySummary", map[string]any{}),
+		SchemaEntityDedupe:         extraction.ResponseFormat("EntityDuplication", map[string]any{}),
+		SchemaRelationMerge:        extraction.ResponseFormat("MergeRelations", map[string]any{}),
+		SchemaRelationFilter:       extraction.ResponseFormat("RelevantFacts", map[string]any{}),
 		Language:                   "cn",
 		EntityExtractionLanguage:   "cn",
 		RelationExtractionLanguage: "cn",

@@ -8,6 +8,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件常量
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -16,9 +21,6 @@ var (
 	// reAnyJSONObject 提取任意 JSON 对象
 	reAnyJSONObject = regexp.MustCompile("\\{.*\\}")
 )
-
-// logComponent 日志组件常量
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

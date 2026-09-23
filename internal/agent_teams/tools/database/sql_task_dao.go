@@ -192,10 +192,10 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 
 // UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 blocked→pending。
 // Python: update_task_status(task_id, status) → bool
-func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus string) ([]string, error) {
+func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus string) (bool, error) {
 	table := d.taskTableName(ctx)
 	depTable := d.depTableName(ctx)
-	var refreshedIDs []string
+	var ok bool
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var task TeamTaskBase
 		result := tx.Table(table).Where("task_id = ?", taskID).First(&task)
@@ -223,10 +223,11 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 			}
 		}
 
+		ok = true
 		logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务状态已更新")
 		return nil
 	})
-	return refreshedIDs, err
+	return ok, err
 }
 
 // UpdateTask 更新标题/内容。claimed/plan_approved 状态下禁止编辑。

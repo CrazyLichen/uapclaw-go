@@ -33,11 +33,6 @@ type WebChannelConfig struct {
 	AllowFrom []string
 }
 
-// ConnectHook 连接建立钩子函数。
-//
-// Python: WebChannel._connect_hooks 中的 ConnectHook 签名。
-type ConnectHook func(conn *websocket.Conn) error
-
 // WebChannel Web 通道，实现 BaseChannel 接口。
 //
 // 管理 WebSocket 连接生命周期、RPC 请求分发和事件推送。
@@ -71,6 +66,11 @@ type WebChannel struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ConnectHook 连接建立钩子函数。
+//
+// Python: WebChannel._connect_hooks 中的 ConnectHook 签名。
+type ConnectHook func(conn *websocket.Conn) error
 
 // ──────────────────────────── 常量 ────────────────────────────
 

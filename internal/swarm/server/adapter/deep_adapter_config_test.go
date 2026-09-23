@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"

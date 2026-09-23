@@ -570,6 +570,12 @@ func (r *SkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *tra
 //
 // 对齐 Python: SkillEvolutionRail.run_evolution(trajectory, ctx, *, snapshot)
 func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Error(logComponent).Any("panic", rec).Str("method", "RunEvolution").
+				Msg("[SkillEvolutionRail] RunEvolution panic")
+		}
+	}()
 	logger.Info(logComponent).Bool("auto_scan", r.autoScan).Msg("[SkillEvolutionRail] run_evolution 已调用")
 	if !r.autoScan {
 		logger.Info(logComponent).Msg("[SkillEvolutionRail] auto_scan 已禁用，跳过")

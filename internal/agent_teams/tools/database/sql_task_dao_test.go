@@ -135,9 +135,9 @@ func TestSQLTaskDao_UpdateTaskStatus(t *testing.T) {
 	dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "team1", Title: "T1", Status: fsm.TaskStatusClaimed})
 
 	// Python: claimed → completed
-	refreshed, err := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusCompleted)
+	ok, err := dao.UpdateTaskStatus(ctx, "t1", fsm.TaskStatusCompleted)
 	require.NoError(t, err)
-	_ = refreshed
+	assert.True(t, ok)
 
 	got, _ := dao.GetTask(ctx, "t1")
 	assert.Equal(t, fsm.TaskStatusCompleted, got.Status)

@@ -104,9 +104,9 @@ func TestACEReflectorNoGTPrompt(t *testing.T) {
 func TestACECuratorPrompt(t *testing.T) {
 	data := curatorPromptData{
 		QuestionContext: "find all items",
-		Playbook:       "existing playbook",
-		Trajectory:     "current attempt",
-		Reflection:     "reflection result",
+		Playbook:        "existing playbook",
+		Trajectory:      "current attempt",
+		Reflection:      "reflection result",
 	}
 	var buf bytes.Buffer
 	if err := ACEPrompts.ACECuratorPrompt.Execute(&buf, data); err != nil {
@@ -176,9 +176,9 @@ func TestACEReflectorScalingNoGTPrompt(t *testing.T) {
 func TestACECuratorScalingPrompt(t *testing.T) {
 	data := curatorScalingPromptData{
 		QuestionContext: "find all items",
-		Playbook:       "existing playbook",
-		Trajectories:   "attempt1\nattempt2",
-		Reflection:     "reflection result",
+		Playbook:        "existing playbook",
+		Trajectories:    "attempt1\nattempt2",
+		Reflection:      "reflection result",
 	}
 	var buf bytes.Buffer
 	if err := ACEPrompts.ACECuratorScalingPrompt.Execute(&buf, data); err != nil {
@@ -231,9 +231,9 @@ func TestPromptJSONEscaping(t *testing.T) {
 func TestACECuratorPromptBacktickEscaping(t *testing.T) {
 	data := curatorPromptData{
 		QuestionContext: "ctx",
-		Playbook:       "pb",
-		Trajectory:     "tr",
-		Reflection:     "ref",
+		Playbook:        "pb",
+		Trajectory:      "tr",
+		Reflection:      "ref",
 	}
 	var buf bytes.Buffer
 	if err := ACEPrompts.ACECuratorPrompt.Execute(&buf, data); err != nil {
@@ -250,9 +250,9 @@ func TestACECuratorPromptBacktickEscaping(t *testing.T) {
 func TestACECuratorScalingPromptBacktickEscaping(t *testing.T) {
 	data := curatorScalingPromptData{
 		QuestionContext: "ctx",
-		Playbook:       "pb",
-		Trajectories:   "trajs",
-		Reflection:     "ref",
+		Playbook:        "pb",
+		Trajectories:    "trajs",
+		Reflection:      "ref",
 	}
 	var buf bytes.Buffer
 	if err := ACEPrompts.ACECuratorScalingPrompt.Execute(&buf, data); err != nil {
@@ -268,9 +268,9 @@ func TestACECuratorScalingPromptBacktickEscaping(t *testing.T) {
 func TestACECuratorPromptMetadataEscaping(t *testing.T) {
 	data := curatorPromptData{
 		QuestionContext: "ctx",
-		Playbook:       "pb",
-		Trajectory:     "tr",
-		Reflection:     "ref",
+		Playbook:        "pb",
+		Trajectory:      "tr",
+		Reflection:      "ref",
 	}
 	var buf bytes.Buffer
 	if err := ACEPrompts.ACECuratorPrompt.Execute(&buf, data); err != nil {

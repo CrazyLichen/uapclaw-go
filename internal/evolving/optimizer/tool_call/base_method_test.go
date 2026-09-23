@@ -171,7 +171,10 @@ func TestToolOptimizerBase_Step(t *testing.T) {
 	ops := map[string]operator.Operator{"desc": &fakeToolOpOperator{id: "desc"}}
 	base.Bind(ops, []string{"tool_description"}, map[string]any{})
 
-	updates := base.Step()
+	updates, err := base.Step()
+	if err != nil {
+		t.Fatalf("Step() 返回错误: %v", err)
+	}
 	if len(updates) != 0 {
 		t.Errorf("期望 Step 返回空 map, 实际=%d 项", len(updates))
 	}

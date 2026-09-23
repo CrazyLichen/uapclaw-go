@@ -117,7 +117,10 @@ func TestInstructionOptimizer_Step_无优化结果(t *testing.T) {
 		t.Fatalf("Bind() = %d, expected 1", count)
 	}
 
-	updates := opt.Step()
+	updates, err := opt.Step()
+	if err != nil {
+		t.Fatalf("Step() 返回错误: %v", err)
+	}
 	if len(updates) != 0 {
 		t.Errorf("Step() 无优化结果时应返回空 map, got %d entries", len(updates))
 	}

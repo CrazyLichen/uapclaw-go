@@ -67,7 +67,7 @@ func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
 		return newTestAgentForInteraction() // 非 nil 表示有活跃运行时
 	}
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
-	result, err := h.Send("hello", nil, nil)
+	result, err := h.Send(context.Background(), "hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestHumanAgentInbox_Send_广播(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	target := "all"
-	result, err := h.Send("hello all", &target, nil)
+	result, err := h.Send(context.Background(), "hello all", &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestHumanAgentInbox_Send_广播(t *testing.T) {
 func TestHumanAgentInbox_Send_无lookup时驱动失败(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
-	result, err := h.Send("hello", nil, nil)
+	result, err := h.Send(context.Background(), "hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestHumanAgentInbox_Send_lookup返回nil(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	lookup := func(sender string) *agent.TeamAgent { return nil }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
-	result, err := h.Send("hello", nil, nil)
+	result, err := h.Send(context.Background(), "hello", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestHumanAgentInbox_Send_未知发送者(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	sender := "ghost"
-	_, err := h.Send("hello", nil, &sender)
+	_, err := h.Send(context.Background(), "hello", nil, &sender)
 	if err == nil {
 		t.Error("未知发送者应返回错误")
 	}
@@ -145,7 +145,7 @@ func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
 	lookup := func(sender string) *agent.TeamAgent { return newTestAgentForInteraction() }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	sender := "human_agent"
-	result, err := h.Send("hello", nil, &sender)
+	result, err := h.Send(context.Background(), "hello", nil, &sender)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestHumanAgentInbox_Send_点对点(t *testing.T) {
 	tb.SpawnMember(context.Background(), "alice", "Alice", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), nil, nil)
 	target := "alice"
-	result, err := h.Send("hello", &target, nil)
+	result, err := h.Send(context.Background(), "hello", &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

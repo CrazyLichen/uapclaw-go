@@ -136,11 +136,11 @@ var defaultReasoningBankPrompt = NewReasoningBankPrompt()
 // NewReasoningBankPrompt 创建默认提示词实例并解析模板。
 func NewReasoningBankPrompt() *ReasoningBankPrompt {
 	return &ReasoningBankPrompt{
-		LLMJudgeSystemPrompt:          template.Must(template.New("llm_judge_system").Parse(llmJudgeSystemPrompt)),
-		LLMJudgeUserPrompt:            template.Must(template.New("llm_judge_user").Parse(llmJudgeUserPrompt)),
-		BestOfNEvalPrompt:             template.Must(template.New("best_of_n_eval").Parse(bestOfNEvalPrompt)),
-		SelfContrastPrompt:            template.Must(template.New("self_contrast").Parse(selfContrastPrompt)),
-		SequentialFirstRefinePrompt:   template.Must(template.New("seq_first_refine").Parse(sequentialFirstRefinePrompt)),
+		LLMJudgeSystemPrompt:           template.Must(template.New("llm_judge_system").Parse(llmJudgeSystemPrompt)),
+		LLMJudgeUserPrompt:             template.Must(template.New("llm_judge_user").Parse(llmJudgeUserPrompt)),
+		BestOfNEvalPrompt:              template.Must(template.New("best_of_n_eval").Parse(bestOfNEvalPrompt)),
+		SelfContrastPrompt:             template.Must(template.New("self_contrast").Parse(selfContrastPrompt)),
+		SequentialFirstRefinePrompt:    template.Must(template.New("seq_first_refine").Parse(sequentialFirstRefinePrompt)),
 		SequentialFollowUpRefinePrompt: template.Must(template.New("seq_follow_up_refine").Parse(sequentialFollowUpRefinePrompt)),
 	}
 }

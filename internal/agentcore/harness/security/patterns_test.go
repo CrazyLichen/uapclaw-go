@@ -831,7 +831,7 @@ func TestPersistCliTrustedDirectory_正常写入(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "agent.yaml")
 
 	bootstrap := map[string]any{
-		"tools":   map[string]any{"bash": "ask"},
+		"tools":              map[string]any{"bash": "ask"},
 		"external_directory": map[string]any{"*": "ask"},
 	}
 
@@ -865,7 +865,7 @@ func TestPersistCliTrustedDirectory_已有配置文件(t *testing.T) {
 	// 先写入已有配置
 	existingData := map[string]any{
 		"permissions": map[string]any{
-			"tools": map[string]any{"bash": "ask"},
+			"tools":              map[string]any{"bash": "ask"},
 			"external_directory": map[string]any{"*": "ask"},
 		},
 	}

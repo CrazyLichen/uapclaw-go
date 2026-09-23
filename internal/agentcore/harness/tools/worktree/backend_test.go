@@ -3,6 +3,8 @@ package worktree
 import (
 	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // TestCreateBackend_默认Git 测试注册表默认 Git 后端
@@ -93,27 +95,27 @@ func TestWithLifecycleRails(t *testing.T) {
 // baseLifecycleRail WorktreeLifecycleRail 的最小实现，仅用于测试
 type baseLifecycleRail struct{}
 
-func (b *baseLifecycleRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+func (b *baseLifecycleRail) BeforeWorktreeCreate(_ context.Context, _ *interfaces.AgentCallbackContext, _, _ string) (*string, error) {
 	return nil, nil
 }
-func (b *baseLifecycleRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error {
+func (b *baseLifecycleRail) AfterWorktreeCreate(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession) error {
 	return nil
 }
-func (b *baseLifecycleRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+func (b *baseLifecycleRail) BeforeWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) (*string, error) {
 	return nil, nil
 }
-func (b *baseLifecycleRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (b *baseLifecycleRail) AfterWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (b *baseLifecycleRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+func (b *baseLifecycleRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
-func (b *baseLifecycleRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+func (b *baseLifecycleRail) BeforeWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, _ []string) (*string, error) {
 	return nil, nil
 }
-func (b *baseLifecycleRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
+func (b *baseLifecycleRail) AfterWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (b *baseLifecycleRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+func (b *baseLifecycleRail) OnWorktreeSync(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, files []string) []string {
 	return files
 }

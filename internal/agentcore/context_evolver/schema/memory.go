@@ -252,7 +252,7 @@ func (b BaseMemory) GetWorkspaceID() string {
 
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ACEMemory.to_vector_node()。
-// metadata.type = "ace_memory"，embedding content = Content。
+// metadata.type = "ace_memory"，向量嵌入内容 = Content。
 // 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
 func (m ACEMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: node_id = f"ace_{self.workspace_id}_{self.id}"
@@ -280,7 +280,7 @@ func (m ACEMemory) ToVectorNode() *coreschema.VectorNode {
 
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ReasoningBankMemory.to_vector_node()。
-// metadata.type = "reasoning_bank_memory"，embedding content = Query。
+// metadata.type = "reasoning_bank_memory"，向量嵌入内容 = Query。
 // 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
 func (m ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: combined = f"{self.query}|{self.memory[0].title}" if self.memory else self.query
@@ -320,7 +320,7 @@ func (m ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 
 // ToVectorNode 实现 MemoryInterface 接口。
 // 对齐 Python ReMeMemory.to_vector_node()。
-// metadata.type = "reme_memory"，embedding content = WhenToUse。
+// metadata.type = "reme_memory"，向量嵌入内容 = WhenToUse。
 // 使用值接收者：不修改接收者，且值类型需满足 MemoryInterface 约束。
 func (m ReMeMemory) ToVectorNode() *coreschema.VectorNode {
 	// 对齐 Python: node_id = f"reme_{self.workspace_id}_{hashlib.md5(self.when_to_use.encode()).hexdigest()[:12]}"

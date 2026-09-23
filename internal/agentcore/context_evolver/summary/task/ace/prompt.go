@@ -12,7 +12,7 @@ type reflectorPromptData struct {
 	GroundTruth string
 	// Feedback 测试报告
 	Feedback string
-	// Playbook ACE Playbook
+	// Playbook ACE 结构化上下文存储
 	Playbook string
 	// Trajectory 当前轨迹
 	Trajectory string
@@ -22,7 +22,7 @@ type reflectorPromptData struct {
 type reflectorScalingPromptData struct {
 	// GroundTruth 参考代码
 	GroundTruth string
-	// Playbook ACE Playbook
+	// Playbook ACE 结构化上下文存储
 	Playbook string
 	// Trajectories 多条轨迹
 	Trajectories string
@@ -210,7 +210,7 @@ Answer in this exact JSON format:
   "key_insight": "[What strategy, formula, or principle should be remembered to avoid this error?]"
 {{"}}"}}
 
-{{.Trajectory}}`;
+{{.Trajectory}}`
 
 // aceCuratorPrompt 策展 prompt。
 // 一比一复刻 Python ACE_CURATOR_PROMPT。
@@ -336,7 +336,7 @@ RESPONSE FORMAT - Output ONLY this JSON structure (no markdown, no code blocks):
     {{"}}"}}
   ]
 {{"}}"}}
-If no updates are required, return an empty list for "operations".`;
+If no updates are required, return an empty list for "operations".`
 
 // aceReflectorScalingPrompt 扩展反思 prompt（含 Ground Truth）。
 // 一比一复刻 Python ACE_REFLECTOR_SCALING_PROMPT。
@@ -414,7 +414,7 @@ Answer in this exact JSON format:
   "key_insight": "[What strategy, formula, or principle should be remembered to avoid this error?]"
 {{"}}"}}
 
-{{.Trajectories}}`;
+{{.Trajectories}}`
 
 // aceReflectorScalingNoGTPrompt 扩展反思 prompt（不含 Ground Truth）。
 // 一比一复刻 Python ACE_REFLECTOR_SCALING_NOGT_PROMPT。
@@ -486,7 +486,7 @@ Answer in this exact JSON format:
   "key_insight": "[What strategy, formula, or principle should be remembered to avoid this error?]"
 {{"}}"}}
 
-{{.Trajectories}}`;
+{{.Trajectories}}`
 
 // aceCuratorScalingPrompt 扩展策展 prompt。
 // 一比一复刻 Python ACE_CURATOR_SCALING_PROMPT。
@@ -612,7 +612,7 @@ RESPONSE FORMAT - Output ONLY this JSON structure (no markdown, no code blocks):
     {{"}}"}}
   ]
 {{"}}"}}
-If no updates are required, return an empty list for "operations".`;
+If no updates are required, return an empty list for "operations".`
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -626,11 +626,11 @@ var ACEPrompts = NewACEPrompt()
 // 对齐 Python ACEPrompt() 构造。
 func NewACEPrompt() *ACEPrompt {
 	return &ACEPrompt{
-		ACEReflectorPrompt:             template.Must(template.New("ace_reflector").Parse(aceReflectorPrompt)),
-		ACEReflectorNoGTPrompt:         template.Must(template.New("ace_reflector_nogt").Parse(aceReflectorNoGTPrompt)),
-		ACECuratorPrompt:               template.Must(template.New("ace_curator").Parse(aceCuratorPrompt)),
-		ACEReflectorScalingPrompt:      template.Must(template.New("ace_reflector_scaling").Parse(aceReflectorScalingPrompt)),
-		ACEReflectorScalingNoGTPrompt:  template.Must(template.New("ace_reflector_scaling_nogt").Parse(aceReflectorScalingNoGTPrompt)),
-		ACECuratorScalingPrompt:        template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
+		ACEReflectorPrompt:            template.Must(template.New("ace_reflector").Parse(aceReflectorPrompt)),
+		ACEReflectorNoGTPrompt:        template.Must(template.New("ace_reflector_nogt").Parse(aceReflectorNoGTPrompt)),
+		ACECuratorPrompt:              template.Must(template.New("ace_curator").Parse(aceCuratorPrompt)),
+		ACEReflectorScalingPrompt:     template.Must(template.New("ace_reflector_scaling").Parse(aceReflectorScalingPrompt)),
+		ACEReflectorScalingNoGTPrompt: template.Must(template.New("ace_reflector_scaling_nogt").Parse(aceReflectorScalingNoGTPrompt)),
+		ACECuratorScalingPrompt:       template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
 	}
 }

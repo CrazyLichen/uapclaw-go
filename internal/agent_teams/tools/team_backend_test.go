@@ -615,7 +615,7 @@ func TestApprovePlan(t *testing.T) {
 	// 创建任务
 	task, _ := tb.taskManager.Add(ctx, "Plan Task", "desc")
 	// Claim 任务
-	tb.taskManager.Claim(ctx, task.TaskID)
+	_, _ = tb.taskManager.Claim(ctx, task.TaskID)
 	// 设置成员为 PLAN_MODE
 	memDB := tb.DB().(*database.InMemoryTeamDatabase)
 	memDB.SetMemberMode("leader", tb.TeamName(), "plan_mode")
@@ -920,7 +920,7 @@ func TestCancelMember_Busy(t *testing.T) {
 	tb.taskManager.Add(ctx, "测试任务", "内容")
 	pendingTasks, _ := tb.taskManager.GetClaimableTasks(ctx)
 	if len(pendingTasks) > 0 {
-		tb.taskManager.Claim(ctx, pendingTasks[0].TaskID)
+		_, _ = tb.taskManager.Claim(ctx, pendingTasks[0].TaskID)
 	}
 
 	// 设为 BUSY
@@ -965,7 +965,7 @@ func TestCancelTask_有Assignee(t *testing.T) {
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	task, _ := tb.taskManager.Add(ctx, "可取消任务", "内容")
-	tb.taskManager.Claim(ctx, task.TaskID)
+	_, _ = tb.taskManager.Claim(ctx, task.TaskID)
 
 	result := tb.CancelTask(ctx, task.TaskID)
 	if !result.OK {

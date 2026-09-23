@@ -116,9 +116,7 @@ func TestPostCreationSetup_Symlink(t *testing.T) {
 	cfg.SymlinkDirectories = []string{".venv"}
 	mgr := NewWorktreeManager(cfg, nil)
 
-	if err := mgr.postCreationSetup(ctx, repoRoot, wtDir); err != nil {
-		t.Fatalf("postCreationSetup 失败: %v", err)
-	}
+	mgr.postCreationSetup(ctx, repoRoot, wtDir)
 
 	linkPath := filepath.Join(wtDir, ".venv")
 	info, err := os.Lstat(linkPath)
@@ -150,9 +148,7 @@ func TestPostCreationSetup_IncludeFiles(t *testing.T) {
 	cfg.IncludePatterns = []string{".env.local"}
 	mgr := NewWorktreeManager(cfg, nil)
 
-	if err := mgr.postCreationSetup(ctx, repoRoot, wtDir); err != nil {
-		t.Fatalf("postCreationSetup 失败: %v", err)
-	}
+	mgr.postCreationSetup(ctx, repoRoot, wtDir)
 
 	copiedPath := filepath.Join(wtDir, ".env.local")
 	if _, err := os.Stat(copiedPath); os.IsNotExist(err) {

@@ -97,7 +97,7 @@ func TestDiffSummaryRail_Remove(t *testing.T) {
 		OriginalHeadCommit: "abc123",
 	}
 
-	result, err := rail.BeforeWorktreeExit(ctx, session, "remove")
+	result, err := rail.BeforeWorktreeExit(ctx, nil, session, "remove")
 	if err != nil {
 		t.Errorf("BeforeWorktreeExit 不应返回错误: %v", err)
 	}

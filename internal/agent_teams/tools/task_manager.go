@@ -336,52 +336,52 @@ func (tm *TeamTaskManager) GetTasksByAssignee(ctx context.Context, memberName, s
 }
 
 // Claim 成员自认领。对齐 Python: TeamTaskManager.claim()
-func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
+func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
 	// 1. 检查任务是否存在（对齐 Python: task = await self.get(task_id)）
 	task, err := tm.db.Task().GetTask(ctx, taskID)
 	if err != nil {
-		return fmt.Errorf("查询任务失败: %w", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询任务失败: %s", err.Error())), nil
 	}
 	if task == nil {
-		return fmt.Errorf("任务 %s 不存在", taskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 不存在", taskID)), nil
 	}
 
 	// 2. 检查成员是否存在（对齐 Python: member = await self.db.member.get_member(...)）
 	member, err := tm.db.Member().GetMember(ctx, tm.memberName, tm.teamName)
 	if err != nil {
-		return fmt.Errorf("查询成员失败: %w", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询成员失败: %s", err.Error())), nil
 	}
 	if member == nil {
-		return fmt.Errorf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)), nil
 	}
 
 	// 3. PLAN_MODE 检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
 	if member.Mode == "plan_mode" {
-		return fmt.Errorf("PLAN_MODE 成员必须先调用 submit_plan，leader 审批后任务从 claimed 变为 plan_approved")
+		return schema.TaskOpResult{}.Fail("PLAN_MODE 成员必须先调用 submit_plan，leader 审批后任务从 claimed 变为 plan_approved"), nil
 	}
 
 	// 4. 幂等性检查（对齐 Python: if task.assignee == member_name and task.status == CLAIMED）
 	if task.Assignee != nil && *task.Assignee == tm.memberName && task.Status == fsm.TaskStatusClaimed {
-		return nil // 已认领，幂等返回成功
+		return schema.TaskOpResult{}.Success(), nil // 已认领，幂等返回成功
 	}
 
 	// 5. 已被他人认领检查（对齐 Python: if task.assignee）
 	if task.Assignee != nil {
-		return fmt.Errorf("任务 %s 已被 %s 认领，%s 无法认领", taskID, *task.Assignee, tm.memberName)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 已被 %s 认领，%s 无法认领", taskID, *task.Assignee, tm.memberName)), nil
 	}
 
 	// 6. FSM 状态转换合法性检查（对齐 Python: is_valid_transition(task.status, CLAIMED, TASK_TRANSITIONS)）
 	if !database.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
-		return fmt.Errorf("任务 %s 无法从状态 '%s' 认领（只有 pending 任务可认领）", taskID, task.Status)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 无法从状态 '%s' 认领（只有 pending 任务可认领）", taskID, task.Status)), nil
 	}
 
 	// 7. 执行认领（对齐 Python: success = await self.db.task.claim_task(task_id, member_name)）
 	ok, err := tm.db.Task().ClaimTask(ctx, taskID, tm.memberName)
 	if err != nil {
-		return err
+		return schema.TaskOpResult{}, err
 	}
 	if !ok {
-		return fmt.Errorf("认领任务失败: 数据库拒绝认领 %s（可能存在并发认领竞争）", taskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("认领任务失败: 数据库拒绝认领 %s（可能存在并发认领竞争）", taskID)), nil
 	}
 
 	// 8. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
@@ -389,46 +389,46 @@ func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) error {
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
 		TaskID:           taskID,
 	})
-	return nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // Assign Leader 分配。对齐 Python: TeamTaskManager.assign()
-func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) error {
+func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) (schema.TaskOpResult, error) {
 	// 1. 检查任务是否存在（对齐 Python: task = await self.get(task_id)）
 	task, err := tm.db.Task().GetTask(ctx, taskID)
 	if err != nil {
-		return fmt.Errorf("查询任务失败: %w", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询任务失败: %s", err.Error())), nil
 	}
 	if task == nil {
-		return fmt.Errorf("任务 %s 不存在", taskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 不存在", taskID)), nil
 	}
 
 	// 2. 检查被分配者是否是团队成员（对齐 Python: member = await self.db.member.get_member(assignee, ...)）
 	member, err := tm.db.Member().GetMember(ctx, assignee, tm.teamName)
 	if err != nil {
-		return fmt.Errorf("查询成员失败: %w", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询成员失败: %s", err.Error())), nil
 	}
 	if member == nil {
-		return fmt.Errorf("成员 %s 在团队 %s 中不存在", assignee, tm.teamName)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("成员 %s 在团队 %s 中不存在", assignee, tm.teamName)), nil
 	}
 
 	// 3. 幂等性检查（对齐 Python: if task.assignee == assignee and task.status == CLAIMED）
 	if task.Assignee != nil && *task.Assignee == assignee && task.Status == fsm.TaskStatusClaimed {
-		return nil // 已分配给同一成员，幂等返回成功
+		return schema.TaskOpResult{}.Success(), nil // 已分配给同一成员，幂等返回成功
 	}
 
 	// 4. 已被他人认领检查（对齐 Python: if task.assignee and task.assignee != assignee）
 	if task.Assignee != nil && *task.Assignee != assignee {
-		return fmt.Errorf("任务 %s 已被 %s 认领，需先 reset 再分配给 %s", taskID, *task.Assignee, assignee)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 已被 %s 认领，需先 reset 再分配给 %s", taskID, *task.Assignee, assignee)), nil
 	}
 
 	// 5. 执行分配（对齐 Python: success = await self.db.task.claim_task(task_id, assignee)）
 	ok, err := tm.db.Task().ClaimTask(ctx, taskID, assignee)
 	if err != nil {
-		return err
+		return schema.TaskOpResult{}, err
 	}
 	if !ok {
-		return fmt.Errorf("分配任务失败: 数据库拒绝分配 %s（状态转换无效: %s）", taskID, task.Status)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("分配任务失败: 数据库拒绝分配 %s（状态转换无效: %s）", taskID, task.Status)), nil
 	}
 
 	// 6. 事件发布（对齐 Python: await self.messager.publish(TaskClaimedEvent(...))）
@@ -436,35 +436,49 @@ func (tm *TeamTaskManager) Assign(ctx context.Context, taskID, assignee string) 
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: assignee},
 		TaskID:           taskID,
 	})
-	return nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // Complete 完成任务。对齐 Python: TeamTaskManager.complete()
-func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]string, error) {
+func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
 	// 1. 检查成员是否存在（对齐 Python: member = await self.db.member.get_member(...)）
 	member, err := tm.db.Member().GetMember(ctx, tm.memberName, tm.teamName)
 	if err != nil {
-		return nil, fmt.Errorf("查询成员失败: %w", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询成员失败: %s", err.Error())), nil
 	}
 	if member == nil {
-		return nil, fmt.Errorf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("成员 %s 在团队 %s 中不存在", tm.memberName, tm.teamName)), nil
 	}
 
-	// 2. PLAN_MODE 检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
+	// 2. PLAN_MODE 状态检查（对齐 Python: if member.mode == MemberMode.PLAN_MODE.value）
+	// 仅验证状态，plan index 写入移到 CompleteTask 之后（对齐 Python 执行顺序）
+	var preCompleteTask *database.TeamTaskBase
 	if member.Mode == "plan_mode" {
-		task, err := tm.db.Task().GetTask(ctx, taskID)
+		preCompleteTask, err = tm.db.Task().GetTask(ctx, taskID)
 		if err != nil {
-			return nil, fmt.Errorf("查询任务失败: %w", err)
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("查询任务失败: %s", err.Error())), nil
 		}
-		if task == nil {
-			return nil, fmt.Errorf("任务 %s 不存在", taskID)
+		if preCompleteTask == nil {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 不存在", taskID)), nil
 		}
 		// PLAN_MODE 成员只能完成 PLAN_APPROVED 状态的任务
-		if task.Status != fsm.TaskStatusPlanApproved {
-			return nil, fmt.Errorf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", task.Status, taskID)
+		if preCompleteTask.Status != fsm.TaskStatusPlanApproved {
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("PLAN_MODE 成员无法完成状态为 '%s' 的任务 %s（只能完成 plan_approved 任务）", preCompleteTask.Status, taskID)), nil
 		}
+	}
 
-		// Python: PLAN_MODE 下更新 plan index 的完成状态
+	// 3. 执行完成（对齐 Python: result = await self.db.task.complete_task(task_id)）
+	task, unblockedTasks, err := tm.db.Task().CompleteTask(ctx, taskID)
+	if err != nil {
+		return schema.TaskOpResult{}, err
+	}
+	// terminateTaskInSession: task=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
+	if task == nil {
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)), nil
+	}
+
+	// 4. PLAN_MODE 下更新 plan index 的完成状态（移到 CompleteTask 之后，对齐 Python 执行顺序）
+	if member.Mode == "plan_mode" {
 		planIndex, err := tm.loadPlanIndex()
 		if err == nil && planIndex != nil {
 			taskIdx, ok := planIndex.Tasks[taskID]
@@ -495,17 +509,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 		}
 	}
 
-	// 3. 执行完成（对齐 Python: result = await self.db.task.complete_task(task_id)）
-	task, unblockedTasks, err := tm.db.Task().CompleteTask(ctx, taskID)
-	if err != nil {
-		return nil, err
-	}
-	// terminateTaskInSession: task=nil 表示不存在/FSM不合法，非 nil 表示成功（含幂等）
-	if task == nil {
-		return nil, fmt.Errorf("完成任务失败: 任务不存在或状态不允许完成 %s", taskID)
-	}
-
-	// 4. 事件发布（对齐 Python: await self._publish_task_event + _publish_unblocked_events + _maybe_publish_task_list_drained）
+	// 5. 事件发布（对齐 Python: await self._publish_task_event + _publish_unblocked_events + _maybe_publish_task_list_drained）
 	// Python: TaskCompletedEvent(member_name=completed_task.assignee)
 	assigneeName := ""
 	if task.Assignee != nil {
@@ -518,12 +522,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) ([]strin
 	// unblockedTasks 是 []*TeamTaskBase，直接发布事件
 	tm.publishUnblockedEvents(ctx, unblockedTasks)
 	tm.maybePublishTaskListDrained(ctx)
-	// 返回 unblocked task ID 列表
-	var refreshed []string
-	for _, t := range unblockedTasks {
-		refreshed = append(refreshed, t.TaskID)
-	}
-	return refreshed, nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // Cancel 取消单条任务。对齐 Python: TeamTaskManager.cancel()
@@ -570,15 +569,15 @@ func (tm *TeamTaskManager) CancelAllTasks(ctx context.Context, skipAssignees []s
 }
 
 // Reset 重置任务（CLAIMED→PENDING）。对齐 Python: TeamTaskManager.reset()
-func (tm *TeamTaskManager) Reset(ctx context.Context, taskID string) error {
+func (tm *TeamTaskManager) Reset(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
 	ok, err := tm.db.Task().ResetTask(ctx, taskID)
 	if err != nil {
-		return err
+		return schema.TaskOpResult{}, err
 	}
 	if !ok {
-		return fmt.Errorf("重置任务失败: 任务不存在或状态不允许重置 %s", taskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("重置任务失败: 任务不存在或状态不允许重置 %s", taskID)), nil
 	}
-	return nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // UpdateTask 更新标题/内容。对齐 Python: TeamTaskManager.update_task()
@@ -690,16 +689,16 @@ func (tm *TeamTaskManager) AddAsTopPriority(ctx context.Context, title, content 
 }
 
 // AddDependencies 向已有任务添加依赖。对齐 Python: TeamTaskManager.add_dependencies()
-func (tm *TeamTaskManager) AddDependencies(ctx context.Context, taskID string, dependsOnIDs []string) (database.GraphMutationResult, error) {
+func (tm *TeamTaskManager) AddDependencies(ctx context.Context, taskID string, dependsOnIDs []string) (schema.TaskOpResult, error) {
 	var edges []database.EdgeSpec
 	for _, upstreamID := range dependsOnIDs {
 		edges = append(edges, database.EdgeSpec{TaskID: taskID, DependsOnID: upstreamID})
 	}
 	result := tm.db.Task().MutateDependencyGraph(ctx, tm.teamName, nil, edges)
 	if !result.Ok {
-		return result, fmt.Errorf("添加依赖失败: %s", result.Reason)
+		return schema.TaskOpResult{}.Fail(result.Reason), nil
 	}
-	return result, nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // GetTaskDetail 详细视图（含 blocked_by + blocks）。
@@ -875,55 +874,55 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 }
 
 // ApprovePlan PLAN_MODE 审批/拒绝计划。对齐 Python: TeamTaskManager.approve_plan()
-func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, approved bool, feedback string) error {
+func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, approved bool, feedback string) (schema.TaskOpResult, error) {
 	// 1. 加载 index.json
 	index, err := tm.loadPlanIndex()
 	if err != nil {
-		return fmt.Errorf("加载计划索引失败: %v", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("加载计划索引失败: %v", err)), nil
 	}
 
 	// 2. 校验 planID 存在
 	planRecord, planExists := index.TaskPlans[planID]
 	if !planExists {
-		return fmt.Errorf("计划不存在: %s", planID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("计划不存在: %s", planID)), nil
 	}
 
 	// 3. 校验 task 状态
 	task, _ := tm.db.Task().GetTask(ctx, planRecord.TaskID)
 	if task == nil {
-		return fmt.Errorf("任务不存在: %s", planRecord.TaskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务不存在: %s", planRecord.TaskID)), nil
 	}
 	if task.Status != fsm.TaskStatusClaimed {
-		return fmt.Errorf("任务状态应为 CLAIMED: 当前 %s", task.Status)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务状态应为 CLAIMED: 当前 %s", task.Status)), nil
 	}
 	// Python: if not existing.assignee: return TaskOpResult.fail(f"Task {task_id} has no assignee")
 	if task.Assignee == nil || *task.Assignee == "" {
-		return fmt.Errorf("任务 %s 没有 assignee", planRecord.TaskID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("任务 %s 没有 assignee", planRecord.TaskID)), nil
 	}
 
 	// 4. 校验 planID 是 latest_plan_id
 	taskPlanIdx, idxExists := index.Tasks[planRecord.TaskID]
 	if idxExists && taskPlanIdx.LatestPlanID != planID {
-		return fmt.Errorf("不能审批过期计划: latest=%s, current=%s", taskPlanIdx.LatestPlanID, planID)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("不能审批过期计划: latest=%s, current=%s", taskPlanIdx.LatestPlanID, planID)), nil
 	}
 
 	// 5. 校验 decision 为 pending
 	if planRecord.Decision != "pending" {
-		return fmt.Errorf("计划已审批: decision=%s", planRecord.Decision)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("计划已审批: decision=%s", planRecord.Decision)), nil
 	}
 
 	// 6. 校验 plan 文件物理存在
 	planDir := filepath.Join(tm.plansDir, tm.teamPlanID, "tasks", planRecord.TaskID, "plans")
 	planFile := filepath.Join(planDir, planID+".md")
 	if _, err := os.Stat(planFile); os.IsNotExist(err) {
-		return fmt.Errorf("计划文件不存在: %s", planFile)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("计划文件不存在: %s", planFile)), nil
 	}
 
 	if approved {
 		// 审批通过：CLAIMED→PLAN_APPROVED
 		ok, _ := tm.db.Task().ApprovePlanTask(ctx, planRecord.TaskID)
 		if !ok {
-			return fmt.Errorf("审批 FSM 转换失败: %s", planRecord.TaskID)
+			return schema.TaskOpResult{}.Fail(fmt.Sprintf("审批 FSM 转换失败: %s", planRecord.TaskID)), nil
 		}
 		planRecord.Decision = "approve"
 		planRecord.Status = fsm.TaskStatusPlanApproved
@@ -938,7 +937,7 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 
 	// 更新 index.json
 	if err := tm.updatePlanIndex(planID, planRecord); err != nil {
-		return fmt.Errorf("更新计划索引失败: %v", err)
+		return schema.TaskOpResult{}.Fail(fmt.Sprintf("更新计划索引失败: %v", err)), nil
 	}
 
 	// 发布事件
@@ -951,7 +950,7 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 		Feedback:         feedback,
 	})
 
-	return nil
+	return schema.TaskOpResult{}.Success(), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

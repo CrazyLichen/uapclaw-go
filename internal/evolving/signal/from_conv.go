@@ -35,9 +35,6 @@ type ConversationSignalDetector struct {
 	language string
 }
 
-// ConvDetectorOption ConversationSignalDetector 构造选项函数。
-type ConvDetectorOption func(*ConversationSignalDetector)
-
 // skillReadEntry 技能读取历史条目。
 type skillReadEntry struct {
 	msgIdx    int
@@ -45,6 +42,9 @@ type skillReadEntry struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ConvDetectorOption ConversationSignalDetector 构造选项函数。
+type ConvDetectorOption func(*ConversationSignalDetector)
 
 // SignalDetector 向后兼容别名。
 //
@@ -732,7 +732,10 @@ func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[st
 			if rawArgs != nil {
 				var argsDict map[string]any
 				if argsStr, ok := rawArgs.(string); ok {
-					_ = json.Unmarshal([]byte(argsStr), &argsDict)
+					if err := json.Unmarshal([]byte(argsStr), &argsDict); err != nil {
+						logger.Debug(logComponent).Err(err).Str("args", argsStr).
+							Msg("[ConversationSignalDetector] failed to parse skill_tool arguments")
+					}
 				} else if m, ok := rawArgs.(map[string]any); ok {
 					argsDict = m
 				}

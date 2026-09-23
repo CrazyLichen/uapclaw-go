@@ -350,10 +350,10 @@ func TestProcessEntities_基本(t *testing.T) {
 // mockGraphStore 用于测试的模拟图存储
 type mockGraphStore struct{}
 
-func (m *mockGraphStore) Config() *graph.GraphConfig                    { return graph.NewGraphConfig("") }
-func (m *mockGraphStore) Rebuild(_ context.Context) error               { return nil }
+func (m *mockGraphStore) Config() *graph.GraphConfig                         { return graph.NewGraphConfig("") }
+func (m *mockGraphStore) Rebuild(_ context.Context) error                    { return nil }
 func (m *mockGraphStore) Refresh(_ context.Context, _ ...graph.Option) error { return nil }
-func (m *mockGraphStore) Close() error                                  { return nil }
+func (m *mockGraphStore) Close() error                                       { return nil }
 func (m *mockGraphStore) AddEntity(_ context.Context, _ []*graph.Entity, _ ...graph.Option) error {
 	return nil
 }

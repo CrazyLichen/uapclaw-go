@@ -372,7 +372,7 @@ func (o *SkillExperienceOptimizer) step() (map[schema.UpdateKey]any, error) {
 	}
 	return updates, nil
 }
-//
+
 // Python: SkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals)
 //
 //	Python: online_ctx = self._online_contexts.get(skill_name)

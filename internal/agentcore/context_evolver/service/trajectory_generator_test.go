@@ -41,9 +41,9 @@ func (f *fakeAgentFlowService) Execute(ctx context.Context, query string, sessio
 	trajectory := f.trajectories[sessionID]
 
 	return &cecontext.TrajectoryResult{
-		Answer:      answer,
-		Trajectory:  trajectory,
-		Success:     true,
+		Answer:     answer,
+		Trajectory: trajectory,
+		Success:    true,
 	}, nil
 }
 
@@ -137,9 +137,9 @@ func TestEvaluateTrial_无GroundTruth(t *testing.T) {
 
 func TestRunTrials_none模式(t *testing.T) {
 	agent := &fakeAgentFlowService{
-		answers:     map[string]string{"trial_0": "answer0"},
+		answers:      map[string]string{"trial_0": "answer0"},
 		trajectories: map[string]string{"trial_0": "USER: q\nASSISTANT: a"},
-		err:         map[string]error{},
+		err:          map[string]error{},
 	}
 
 	results, err := RunTrials(context.Background(), agent, RunTrialsInput{

@@ -43,9 +43,12 @@ func TestTaskManager_Claim(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
-	err := tm.Claim(ctx, task.TaskID)
+	result, err := tm.Claim(ctx, task.TaskID)
 	if err != nil {
 		t.Fatalf("Claim 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("Claim 失败: %s", result.Reason)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
 	if got.Status != fsm.TaskStatusClaimed {
@@ -61,16 +64,18 @@ func TestTaskManager_Complete(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
-	tm.Claim(ctx, task.TaskID)
-	refreshed, err := tm.Complete(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
+	result, err := tm.Complete(ctx, task.TaskID)
 	if err != nil {
 		t.Fatalf("Complete 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("Complete 失败: %s", result.Reason)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
 	if got.Status != fsm.TaskStatusCompleted {
 		t.Errorf("完成后状态应为 completed: got %q", got.Status)
 	}
-	_ = refreshed // 返回刷新的 task IDs（无下游依赖时为空列表）
 }
 
 func TestTaskManager_Cancel(t *testing.T) {
@@ -115,7 +120,7 @@ func TestTaskManager_GetClaimableTasks(t *testing.T) {
 	if len(claimableBefore) != 2 {
 		t.Errorf("初始可认领任务应为2: got %d", len(claimableBefore))
 	}
-	tm.Claim(ctx, claimableBefore[0].TaskID)
+	_, _ = tm.Claim(ctx, claimableBefore[0].TaskID)
 
 	claimable, _ := tm.GetClaimableTasks(ctx)
 	if len(claimable) != 1 {
@@ -168,11 +173,14 @@ func TestTaskManager_Reset(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Claim(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
 
-	err := tm.Reset(ctx, task.TaskID)
+	result, err := tm.Reset(ctx, task.TaskID)
 	if err != nil {
 		t.Fatalf("Reset 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("Reset 失败: %s", result.Reason)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
 	if got.Status != fsm.TaskStatusPending {
@@ -185,9 +193,12 @@ func TestTaskManager_Assign(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "内容")
-	err := tm.Assign(ctx, task.TaskID, "agent1")
+	result, err := tm.Assign(ctx, task.TaskID, "agent1")
 	if err != nil {
 		t.Fatalf("Assign 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("Assign 失败: %s", result.Reason)
 	}
 	got, _ := tm.Get(ctx, task.TaskID)
 	if got.Assignee == nil || *got.Assignee != "agent1" {
@@ -217,7 +228,7 @@ func TestTaskManager_GetTaskDetail(t *testing.T) {
 	upstream, _ := tm.Add(ctx, "上游", "")
 	downstream, _ := tm.Add(ctx, "下游", "")
 	result, _ := tm.AddDependencies(ctx, downstream.TaskID, []string{upstream.TaskID})
-	if !result.Ok {
+	if !result.OK {
 		t.Fatalf("AddDependencies 失败: %s", result.Reason)
 	}
 
@@ -314,9 +325,12 @@ func TestTaskManager_ApprovePlan_通过(t *testing.T) {
 	task, _ := tm.Add(ctx, "数据分析", "")
 	record, _ := tm.SubmitPlan(ctx, task.TaskID, planFile, "call_123")
 
-	err := tm.ApprovePlan(ctx, record.PlanID, true, "")
+	result, err := tm.ApprovePlan(ctx, record.PlanID, true, "")
 	if err != nil {
 		t.Fatalf("ApprovePlan 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("ApprovePlan 失败: %s", result.Reason)
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
@@ -335,9 +349,12 @@ func TestTaskManager_ApprovePlan_拒绝(t *testing.T) {
 	task, _ := tm.Add(ctx, "数据分析", "")
 	record, _ := tm.SubmitPlan(ctx, task.TaskID, planFile, "call_123")
 
-	err := tm.ApprovePlan(ctx, record.PlanID, false, "需要更多细节")
+	result, err := tm.ApprovePlan(ctx, record.PlanID, false, "需要更多细节")
 	if err != nil {
 		t.Fatalf("ApprovePlan 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("ApprovePlan 失败: %s", result.Reason)
 	}
 
 	got, _ := tm.Get(ctx, task.TaskID)
@@ -352,8 +369,8 @@ func TestTaskManager_checkTaskListDrained(t *testing.T) {
 
 	// 所有任务终态
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Claim(ctx, task.TaskID)
-	tm.Complete(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
+	_, _ = tm.Complete(ctx, task.TaskID)
 
 	if !tm.checkTaskListDrained(ctx) {
 		t.Error("所有任务终态时应返回 true")
@@ -371,7 +388,7 @@ func TestTaskManager_GetTasksByAssignee(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Assign(ctx, task.TaskID, "agent1")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
 	result, err := tm.GetTasksByAssignee(ctx, "agent1", "")
 	if err != nil {
@@ -387,11 +404,14 @@ func TestTaskManager_Claim_失败(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Claim(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
 	// 同一成员再次认领同一任务应幂等返回成功（对齐 Python: idempotent re-claim）
-	err := tm.Claim(ctx, task.TaskID)
+	result, err := tm.Claim(ctx, task.TaskID)
 	if err != nil {
 		t.Errorf("同一成员重复认领应幂等返回成功, got: %v", err)
+	}
+	if !result.OK {
+		t.Errorf("同一成员重复认领应幂等返回成功, reason: %s", result.Reason)
 	}
 }
 
@@ -400,8 +420,8 @@ func TestTaskManager_Assign_失败(t *testing.T) {
 	ctx := context.Background()
 
 	// 分配不存在任务应失败
-	err := tm.Assign(ctx, "nonexist", "agent1")
-	if err == nil {
+	result, err := tm.Assign(ctx, "nonexist", "agent1")
+	if err == nil && result.OK {
 		t.Error("分配不存在任务应返回错误")
 	}
 }
@@ -412,8 +432,8 @@ func TestTaskManager_Complete_失败(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// 从 pending 直接完成应失败（需要先 claim）
-	_, err := tm.Complete(ctx, task.TaskID)
-	if err == nil {
+	result, err := tm.Complete(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("PENDING 状态直接完成应返回错误")
 	}
 }
@@ -435,8 +455,8 @@ func TestTaskManager_Reset_失败(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// PENDING 状态下 reset 应失败
-	err := tm.Reset(ctx, task.TaskID)
-	if err == nil {
+	result, err := tm.Reset(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("PENDING 状态下 reset 应返回错误")
 	}
 }
@@ -446,7 +466,7 @@ func TestTaskManager_UpdateTask_失败(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Claim(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
 	// CLAIMED 状态下禁止编辑
 	err := tm.UpdateTask(ctx, task.TaskID, "新标题", "新内容")
 	if err == nil {
@@ -471,7 +491,7 @@ func TestTaskManager_CancelAllTasks_skipAssignees(t *testing.T) {
 
 	task1, _ := tm.Add(ctx, "任务1", "")
 	tm.Add(ctx, "任务2", "")
-	tm.Assign(ctx, task1.TaskID, "agent1")
+	_, _ = tm.Assign(ctx, task1.TaskID, "agent1")
 
 	cancelled, err := tm.CancelAllTasks(ctx, []string{"agent1"})
 	if err != nil {
@@ -508,7 +528,7 @@ func TestTaskManager_AddDependencies_成功(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddDependencies 返回错误: %v", err)
 	}
-	if !result.Ok {
+	if !result.OK {
 		t.Errorf("应成功: reason=%s", result.Reason)
 	}
 
@@ -525,8 +545,8 @@ func TestTaskManager_AddDependencies_失败(t *testing.T) {
 	task, _ := tm.Add(ctx, "任务", "")
 
 	// 依赖不存在的任务应失败
-	_, err := tm.AddDependencies(ctx, task.TaskID, []string{"nonexist"})
-	if err == nil {
+	result, _ := tm.AddDependencies(ctx, task.TaskID, []string{"nonexist"})
+	if result.OK {
 		t.Error("依赖不存在任务应返回错误")
 	}
 }
@@ -548,7 +568,7 @@ func TestTaskManager_SubmitPlan_不合法状态(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// 分配给 leader1，agent1 不是认领人
-	tm.Assign(ctx, task.TaskID, "leader1")
+	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_123")
 	if err == nil {
@@ -561,7 +581,7 @@ func TestTaskManager_SubmitPlan_已完成任务(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "已完成任务", "")
-	tm.Assign(ctx, task.TaskID, "agent1")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
 	// PLAN_MODE 成员只能完成 plan_approved 任务，需先提交计划并审批
 	planFile := filepath.Join(t.TempDir(), "plan.md")
@@ -573,14 +593,19 @@ func TestTaskManager_SubmitPlan_已完成任务(t *testing.T) {
 
 	// leader 审批计划
 	leaderTM := NewTeamTaskManager(db, "alpha", "leader1", nil, nil, plansDir, "plan_session_1", "leader1")
-	if err := leaderTM.ApprovePlan(ctx, planRecord.PlanID, true, ""); err != nil {
+	if result, err := leaderTM.ApprovePlan(ctx, planRecord.PlanID, true, ""); err != nil {
 		t.Fatalf("ApprovePlan 返回错误: %v", err)
+	} else if !result.OK {
+		t.Fatalf("ApprovePlan 失败: %s", result.Reason)
 	}
 
 	// 现在可以完成
-	_, err = tm.Complete(ctx, task.TaskID)
+	result, err := tm.Complete(ctx, task.TaskID)
 	if err != nil {
 		t.Fatalf("Complete 返回错误: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("Complete 失败: %s", result.Reason)
 	}
 
 	// 已完成任务提交计划应返回错误
@@ -606,8 +631,8 @@ func TestTaskManager_ApprovePlan_过期计划(t *testing.T) {
 	_, _ = tm.SubmitPlan(ctx, task.TaskID, planFile2, "call_2")
 
 	// 审批第一个（过期）应失败
-	err := tm.ApprovePlan(ctx, record1.PlanID, true, "")
-	if err == nil {
+	result, err := tm.ApprovePlan(ctx, record1.PlanID, true, "")
+	if err == nil && result.OK {
 		t.Error("审批过期计划应返回错误")
 	}
 }
@@ -790,7 +815,7 @@ func TestTaskManager_SubmitPlan_已认领非当前成员(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// leader1 认领（而非 agent1）
-	tm.Assign(ctx, task.TaskID, "leader1")
+	_, _ = tm.Assign(ctx, task.TaskID, "leader1")
 
 	_, err := tm.SubmitPlan(ctx, task.TaskID, "", "call_1")
 	if err == nil {
@@ -809,14 +834,17 @@ func TestTaskManager_ApprovePlan_已审批(t *testing.T) {
 	record, _ := tm.SubmitPlan(ctx, task.TaskID, planFile, "call_1")
 
 	// 先审批通过
-	err := tm.ApprovePlan(ctx, record.PlanID, true, "")
+	result, err := tm.ApprovePlan(ctx, record.PlanID, true, "")
 	if err != nil {
 		t.Fatalf("审批通过应成功: %v", err)
 	}
+	if !result.OK {
+		t.Fatalf("审批通过应成功: %s", result.Reason)
+	}
 
 	// 再次审批同一 planID 应失败（decision 已不是 pending）
-	err = tm.ApprovePlan(ctx, record.PlanID, true, "")
-	if err == nil {
+	result2, err := tm.ApprovePlan(ctx, record.PlanID, true, "")
+	if err == nil && result2.OK {
 		t.Error("重复审批应返回错误")
 	}
 }
@@ -825,8 +853,8 @@ func TestTaskManager_ApprovePlan_不存在计划(t *testing.T) {
 	tm, _, _ := setupPlanModeTaskManager(t)
 	ctx := context.Background()
 
-	err := tm.ApprovePlan(ctx, "nonexist_plan", true, "")
-	if err == nil {
+	result, err := tm.ApprovePlan(ctx, "nonexist_plan", true, "")
+	if err == nil && result.OK {
 		t.Error("审批不存在的计划应返回错误")
 	}
 }
@@ -912,12 +940,12 @@ func TestTaskManager_Claim_已被他人认领(t *testing.T) {
 
 	task, _ := tm.Add(ctx, "任务", "")
 	// agent1 认领
-	tm.Claim(ctx, task.TaskID)
+	_, _ = tm.Claim(ctx, task.TaskID)
 
 	// 创建另一个 manager 以 leader1 身份认领
 	leaderTM := NewTeamTaskManager(tm.db, "alpha", "leader1", nil, nil, "", "", "leader1")
-	err := leaderTM.Claim(ctx, task.TaskID)
-	if err == nil {
+	result, err := leaderTM.Claim(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("已被他人认领的任务应返回错误")
 	}
 }
@@ -935,8 +963,8 @@ func TestTaskManager_Claim_BLOCKED任务(t *testing.T) {
 		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
 	}
 
-	err := tm.Claim(ctx, downstream.TaskID)
-	if err == nil {
+	result, err := tm.Claim(ctx, downstream.TaskID)
+	if err == nil && result.OK {
 		t.Error("BLOCKED 任务不能被认领")
 	}
 }
@@ -946,11 +974,11 @@ func TestTaskManager_Assign_已被他人认领(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Assign(ctx, task.TaskID, "agent1")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
 	// 分配给不同人应失败
-	err := tm.Assign(ctx, task.TaskID, "leader1")
-	if err == nil {
+	result, err := tm.Assign(ctx, task.TaskID, "leader1")
+	if err == nil && result.OK {
 		t.Error("已被他人认领的任务应返回错误")
 	}
 }
@@ -968,10 +996,13 @@ func TestTaskManager_Complete_解除阻塞(t *testing.T) {
 	}
 
 	// 认领并完成上游 → 下游应解除阻塞
-	tm.Claim(ctx, upstream.TaskID)
-	_, err := tm.Complete(ctx, upstream.TaskID)
+	_, _ = tm.Claim(ctx, upstream.TaskID)
+	result, err := tm.Complete(ctx, upstream.TaskID)
 	if err != nil {
 		t.Fatalf("完成上游应成功: %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("完成上游应成功: %s", result.Reason)
 	}
 
 	// 下游应变为 PENDING
@@ -1032,7 +1063,7 @@ func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
 	ctx := context.Background()
 
 	// 已有 leader1 在构造时传入
-	name := tm.resolveLeaderMemberName()
+	name := tm.resolveLeaderMemberName(ctx)
 	if name != "leader1" {
 		t.Errorf("应返回 leader1: got %q", name)
 	}
@@ -1044,7 +1075,7 @@ func TestTaskManager_resolveLeaderMemberName(t *testing.T) {
 	if team == nil || team.LeaderMemberName != "leader1" {
 		t.Log("team.LeaderMemberName 不为 leader1，跳过回退测试")
 	} else {
-		name2 := tm2.resolveLeaderMemberName()
+		name2 := tm2.resolveLeaderMemberName(ctx)
 		if name2 != "leader1" {
 			t.Errorf("从 team 获取应返回 leader1: got %q", name2)
 		}
@@ -1067,8 +1098,8 @@ func TestTaskManager_Add_带依赖(t *testing.T) {
 	}
 
 	// 上游完成后下游解除阻塞
-	tm.Claim(ctx, upstream.TaskID)
-	tm.Complete(ctx, upstream.TaskID)
+	_, _ = tm.Claim(ctx, upstream.TaskID)
+	_, _ = tm.Complete(ctx, upstream.TaskID)
 	got, _ := tm.Get(ctx, downstream.TaskID)
 	if got.Status != fsm.TaskStatusPending {
 		t.Errorf("上游完成后下游应为 pending: got %q", got.Status)
@@ -1094,8 +1125,8 @@ func TestTaskManager_Claim_成员不存在(t *testing.T) {
 	task, _ := tm.Add(ctx, "任务", "")
 	// 创建不存在的成员的 manager
 	ghostTM := NewTeamTaskManager(tm.db, "alpha", "ghost", nil, nil, "", "", "leader1")
-	err := ghostTM.Claim(ctx, task.TaskID)
-	if err == nil {
+	result, err := ghostTM.Claim(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("不存在的成员认领应返回错误")
 	}
 }
@@ -1107,8 +1138,8 @@ func TestTaskManager_Claim_PLAN_MODE(t *testing.T) {
 	// 将 agent1 改为 plan_mode
 	db.SetMemberMode("agent1", "alpha", "plan_mode")
 	task, _ := tm.Add(ctx, "任务", "")
-	err := tm.Claim(ctx, task.TaskID)
-	if err == nil {
+	result, err := tm.Claim(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("PLAN_MODE 成员不应直接认领")
 	}
 }
@@ -1118,11 +1149,11 @@ func TestTaskManager_Complete_PLAN_MODE_非PLAN_APPROVED(t *testing.T) {
 	ctx := context.Background()
 
 	task, _ := tm.Add(ctx, "任务", "")
-	tm.Assign(ctx, task.TaskID, "agent1")
+	_, _ = tm.Assign(ctx, task.TaskID, "agent1")
 
 	// PLAN_MODE 成员只能完成 PLAN_APPROVED 任务，CLAIMED 应失败
-	_, err := tm.Complete(ctx, task.TaskID)
-	if err == nil {
+	result, err := tm.Complete(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("PLAN_MODE 成员完成 CLAIMED 任务应返回错误")
 	}
 }
@@ -1138,8 +1169,8 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 	db.Initialize(ctx)
 
 	task, _ := tm.Add(ctx, "任务", "")
-	_, err := tm.Complete(ctx, task.TaskID)
-	if err == nil {
+	result, err := tm.Complete(ctx, task.TaskID)
+	if err == nil && result.OK {
 		t.Error("不存在的成员完成任务应返回错误")
 	}
 }

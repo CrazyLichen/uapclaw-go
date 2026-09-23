@@ -286,7 +286,7 @@ func (o *InstructionOptimizer) step() (map[schema.UpdateKey]any, error) {
 
 	return updates, nil
 }
-//
+
 // Python: InstructionOptimizer._generate_textual_gradient(op)
 //
 //	Python: system_tpl = self._get_prompt_template(op, "system_prompt")

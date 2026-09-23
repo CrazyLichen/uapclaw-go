@@ -187,6 +187,9 @@ func ProcessEntities(ctx context.Context, database graph.BaseGraphStore, entitie
 	for _, task := range state.MergingTasks {
 		entity := state.MergingTasksEntities[task]
 		// Python: update_entity(entity, response.content, state.prompting.schema_entity_extraction)
+		if task != nil {
+			task.Wait()
+		}
 		if entity != nil && task != nil && task.Err == nil && task.Result != "" {
 			UpdateEntity(entity, task.Result, state.Prompting.SchemaEntityExtraction)
 		}

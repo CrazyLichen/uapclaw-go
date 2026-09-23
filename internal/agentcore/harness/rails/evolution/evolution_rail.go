@@ -25,7 +25,7 @@ import (
 // 核心设计（对齐 Python EvolutionRail）：
 //   - 轨迹收集是自动的（由基类 4 个 final 回调处理）
 //   - 扩展点：OnBeforeInvoke / OnAfterModelCall / OnAfterToolCall /
-//     OnAfterInvoke / OnAfterTaskIteration / RunEvolution
+//     OnAfterInvoke / OnAfterTaskIteration / RunEvolution（方法名保持英文）
 //   - 演化触发时机通过 evolution_trigger 参数配置
 //
 // Python: EvolutionRail(DeepAgentRail)
@@ -695,8 +695,8 @@ func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 //
 // Python: _trigger_evolution(trajectory, ctx)
 // Python 实现：
-//   - async=True: snapshot → create_background_task → _safe_run_evolution
-//   - async=False: 直接调用 run_evolution(trajectory, ctx)
+//   - 异步模式：快照 → 创建后台任务 → _safe_run_evolution
+//   - 同步模式：直接调用 run_evolution(trajectory, ctx)
 func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.asyncEvolution {
 		// Python: Phase 1 — 同步捕获快照

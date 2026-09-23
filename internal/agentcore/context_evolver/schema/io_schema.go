@@ -6,9 +6,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ============================================================================
-// ACE 系列
-// ============================================================================
+// ──────────────── ACE 系列 ────────────────
 
 // ACESummarizeRequest ACE 摘要请求。
 // 对齐 Python ACESummarizeRequest(BaseModel)。
@@ -23,19 +21,6 @@ type ACESummarizeRequest struct {
 	GroundTruth *string `json:"ground_truth,omitempty"`
 	// Feedback 可选的轨迹环境反馈
 	Feedback []string `json:"feedback,omitempty"`
-}
-
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
-func (r *ACESummarizeRequest) UnmarshalJSON(data []byte) error {
-	type alias ACESummarizeRequest
-	var a alias
-	a.Matts = "none" // 对齐 Python default
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*r = ACESummarizeRequest(a)
-	return nil
 }
 
 // ACESummarizeResponse ACE 摘要响应。
@@ -82,9 +67,7 @@ type ACERetrieveResponse struct {
 	RetrievedMemory []ACERetrievedMemory `json:"retrieved_memory"`
 }
 
-// ============================================================================
-// ReasoningBank 系列
-// ============================================================================
+// ──────────────── ReasoningBank 系列 ────────────────
 
 // ReasoningBankSummarizeRequest ReasoningBank 摘要请求。
 // 对齐 Python ReasoningBankSummarizeRequest(BaseModel)。
@@ -97,19 +80,6 @@ type ReasoningBankSummarizeRequest struct {
 	Trajectories []string `json:"trajectories"`
 	// Label 可选的轨迹标签列表
 	Label []*bool `json:"label,omitempty"`
-}
-
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
-func (r *ReasoningBankSummarizeRequest) UnmarshalJSON(data []byte) error {
-	type alias ReasoningBankSummarizeRequest
-	var a alias
-	a.Matts = "none" // 对齐 Python default
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*r = ReasoningBankSummarizeRequest(a)
-	return nil
 }
 
 // ReasoningBankSummarizeResponse ReasoningBank 摘要响应。
@@ -128,19 +98,6 @@ type ReasoningBankRetrieveRequest struct {
 	Query string `json:"query"`
 	// TopK 检索返回数量，默认 5
 	TopK int `json:"topk"`
-}
-
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 对齐 Python default=5，JSON 缺少 topk 字段时使用 5 默认值。
-func (r *ReasoningBankRetrieveRequest) UnmarshalJSON(data []byte) error {
-	type alias ReasoningBankRetrieveRequest
-	var a alias
-	a.TopK = 5 // 对齐 Python default
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*r = ReasoningBankRetrieveRequest(a)
-	return nil
 }
 
 // ReasoningBankRetrievedMemory ReasoningBank 检索到的记忆条目。
@@ -165,9 +122,7 @@ type ReasoningBankRetrieveResponse struct {
 	RetrievedMemory []ReasoningBankRetrievedMemory `json:"retrieved_memory"`
 }
 
-// ============================================================================
-// ReMe 系列
-// ============================================================================
+// ──────────────── ReMe 系列 ────────────────
 
 // ReMeSummarizeRequest ReMe 摘要请求。
 // 对齐 Python ReMeSummarizeRequest(BaseModel)。
@@ -178,19 +133,6 @@ type ReMeSummarizeRequest struct {
 	Trajectories []string `json:"trajectories"`
 	// Score 可选的轨迹分数列表 (0-1)
 	Score []float64 `json:"score,omitempty"`
-}
-
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
-func (r *ReMeSummarizeRequest) UnmarshalJSON(data []byte) error {
-	type alias ReMeSummarizeRequest
-	var a alias
-	a.Matts = "none" // 对齐 Python default
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*r = ReMeSummarizeRequest(a)
-	return nil
 }
 
 // ReMeSummarizeResponse ReMe 摘要响应。
@@ -213,21 +155,6 @@ type ReMeRetrieveRequest struct {
 	TopKRerank int `json:"topk_rerank"`
 }
 
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 对齐 Python default=topk_retrieval=10/topk_rerank=5，
-// JSON 缺少字段时使用对应默认值。
-func (r *ReMeRetrieveRequest) UnmarshalJSON(data []byte) error {
-	type alias ReMeRetrieveRequest
-	var a alias
-	a.TopKRetrieval = 10 // 对齐 Python default
-	a.TopKRerank = 5     // 对齐 Python default
-	if err := json.Unmarshal(data, &a); err != nil {
-		return err
-	}
-	*r = ReMeRetrieveRequest(a)
-	return nil
-}
-
 // ReMeRetrievedMemory ReMe 检索到的记忆条目。
 // 对齐 Python ReMeRetrievedMemory(BaseModel)。
 type ReMeRetrievedMemory struct {
@@ -248,9 +175,7 @@ type ReMeRetrieveResponse struct {
 	RetrievedMemory []ReMeRetrievedMemory `json:"retrieved_memory"`
 }
 
-// ============================================================================
-// 泛型 Response
-// ============================================================================
+// ──────────────── 泛型 Response ────────────────
 
 // SummarizeResponse 通用摘要响应，支持任意算法的 Memory 类型。
 // 对齐 Python SummarizeResponse(BaseModel) 的 Union 字段，Go 用泛型实现。
@@ -286,4 +211,73 @@ type RetrieveResponse[T any] struct {
 	MemoryString string `json:"memory_string"`
 	// RetrievedMemory 检索到的记忆列表（算法特定类型）
 	RetrievedMemory []T `json:"retrieved_memory"`
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口。
+// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
+func (r *ACESummarizeRequest) UnmarshalJSON(data []byte) error {
+	type alias ACESummarizeRequest
+	var a alias
+	a.Matts = "none" // 对齐 Python default
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = ACESummarizeRequest(a)
+	return nil
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口。
+// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
+func (r *ReasoningBankSummarizeRequest) UnmarshalJSON(data []byte) error {
+	type alias ReasoningBankSummarizeRequest
+	var a alias
+	a.Matts = "none" // 对齐 Python default
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = ReasoningBankSummarizeRequest(a)
+	return nil
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口。
+// 对齐 Python default=5，JSON 缺少 topk 字段时使用 5 默认值。
+func (r *ReasoningBankRetrieveRequest) UnmarshalJSON(data []byte) error {
+	type alias ReasoningBankRetrieveRequest
+	var a alias
+	a.TopK = 5 // 对齐 Python default
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = ReasoningBankRetrieveRequest(a)
+	return nil
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口。
+// 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
+func (r *ReMeSummarizeRequest) UnmarshalJSON(data []byte) error {
+	type alias ReMeSummarizeRequest
+	var a alias
+	a.Matts = "none" // 对齐 Python default
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = ReMeSummarizeRequest(a)
+	return nil
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口。
+// 对齐 Python default=topk_retrieval=10/topk_rerank=5，
+// JSON 缺少字段时使用对应默认值。
+func (r *ReMeRetrieveRequest) UnmarshalJSON(data []byte) error {
+	type alias ReMeRetrieveRequest
+	var a alias
+	a.TopKRetrieval = 10 // 对齐 Python default
+	a.TopKRerank = 5     // 对齐 Python default
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = ReMeRetrieveRequest(a)
+	return nil
 }

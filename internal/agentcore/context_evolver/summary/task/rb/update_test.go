@@ -131,7 +131,7 @@ func TestSummarizeMemoryOp_label通过LLM判断(t *testing.T) {
 	callCount := 0
 	llm := &fakeLLMServiceWithCount{
 		responses: []string{
-			"Thoughts: looks good\nStatus: success",   // LabelDeterminator 调用
+			"Thoughts: looks good\nStatus: success",                                                      // LabelDeterminator 调用
 			"# Memory Item 1\n## Title LLM Label\n## Description LLM determined\n## Content LLM content", // 提取调用
 		},
 		callCount: &callCount,

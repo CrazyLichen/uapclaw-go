@@ -423,7 +423,7 @@ func (s *ExperienceScorer) Evaluate(
 		return nil, nil
 	}
 
-	results := parseLLMJSON(raw)
+	results := convertSliceToMapSlice(parseLLMJSON(raw))
 	if results == nil {
 		logger.Warn(logComponent).
 			Str("method", "ExperienceScorer.Evaluate").
@@ -515,7 +515,7 @@ func (s *ExperienceScorer) Simplify(
 		Int("response_chars", len(raw)).
 		Msg("[ExperienceScorer] simplify LLM 调用完成")
 
-	actions := parseLLMJSON(raw)
+	actions := convertSliceToMapSlice(parseLLMJSON(raw))
 	if actions == nil {
 		logger.Warn(logComponent).
 			Str("skill", skillName).
@@ -590,10 +590,10 @@ func formatScoredExperiences(records []checkpointing.EvolutionRecord) string {
 // 3. re.sub 去掉 // 行注释：//[^\n]*
 // 4. re.sub 去掉尾逗号：,\s*([}\]]) → \1
 // 步骤 5: strip（去除前后空白）
-// 6. json.Unmarshal → []map → 返回；单个 map → 包装为 slice；否则 nil
-// 7. 失败 → regexp 提取 [\s\S]* → 再次 json.Unmarshal → list 返回
+// 6. json.Unmarshal → list 直接返回（对齐 Python）；单个 map → 包装为 slice；否则 nil
+// 7. 失败 → regexp 提取 [\s\S]* → 再次 json.Unmarshal → list 直接返回
 // Python: ExperienceScorer._parse_llm_json()
-func parseLLMJSON(raw string) []map[string]any {
+func parseLLMJSON(raw string) []any {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -620,9 +620,10 @@ func parseLLMJSON(raw string) []map[string]any {
 	if err := json.Unmarshal([]byte(raw), &data); err == nil {
 		switch v := data.(type) {
 		case []any:
-			return convertSliceToMapSlice(v)
+			// 对齐 Python: if isinstance(data, list): return data
+			return v
 		case map[string]any:
-			return []map[string]any{v}
+			return []any{v}
 		default:
 			return nil
 		}
@@ -635,7 +636,7 @@ func parseLLMJSON(raw string) []map[string]any {
 		var extracted any
 		if err := json.Unmarshal([]byte(match), &extracted); err == nil {
 			if slice, ok := extracted.([]any); ok {
-				return convertSliceToMapSlice(slice)
+				return slice
 			}
 		}
 	}
@@ -643,7 +644,7 @@ func parseLLMJSON(raw string) []map[string]any {
 	return nil
 }
 
-// convertSliceToMapSlice 将 []any 转为 []map[string]any。
+// convertSliceToMapSlice 将 []any 转为 []map[string]any，过滤非 map 元素。
 func convertSliceToMapSlice(slice []any) []map[string]any {
 	result := make([]map[string]any, 0, len(slice))
 	for _, item := range slice {

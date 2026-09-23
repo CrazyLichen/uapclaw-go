@@ -102,12 +102,12 @@ func (t *worktreeToolBase) Stream(_ context.Context, _ map[string]any, _ ...tool
 // Invoke EnterWorktreeTool 的执行入口。
 // Python: EnterWorktreeTool.invoke(inputs, **kwargs)
 func (t *EnterWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
-	// 优先通过 manager.sessionState 获取（S-21 修复），回退到 ctx 传播
-	var existing *WorktreeSession
-	if t.manager != nil && t.manager.SessionState() != nil {
+	// 优先通过 ctx 传播获取 session，回退到 manager.sessionState
+	existing := GetCurrentSession(ctx)
+	if existing == nil && t.manager != nil && t.manager.SessionState() != nil {
+		// 回退：ctx 传播未携带时从 manager.sessionState 读取
+		logger.Warn(logComponent).Msg("GetCurrentSession(ctx) 返回 nil，回退到 manager.SessionState()")
 		existing = t.manager.SessionState().GetCurrentSession()
-	} else {
-		existing = GetCurrentSession(ctx)
 	}
 	if existing != nil {
 		return map[string]any{

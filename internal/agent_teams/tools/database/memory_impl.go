@@ -493,6 +493,10 @@ func (db *InMemoryTeamDatabase) ResetTask(_ context.Context, taskID string) (boo
 	if !exists {
 		return false, nil
 	}
+	// 只允许 CLAIMED 状态重置（对齐 Python + SQL 实现）
+	if task.Status != fsm.TaskStatusClaimed {
+		return false, nil
+	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
 		return false, nil
 	}
@@ -597,32 +601,28 @@ func (db *InMemoryTeamDatabase) GetTasksDependingOn(_ context.Context, taskID st
 
 // UpdateTaskStatus 更新任务状态。完成时自动解除下游依赖并刷新 BLOCKED→PENDING。
 // Python: TaskDao.update_task_status()
-func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newStatus string) ([]string, error) {
+func (db *InMemoryTeamDatabase) UpdateTaskStatus(_ context.Context, taskID, newStatus string) (bool, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	task, exists := db.tasks[taskID]
 	if !exists {
-		return nil, nil
+		return false, nil
 	}
 	if !IsValidTaskTransition(task.Status, newStatus) {
-		return nil, nil
+		return false, nil
 	}
 
 	// 如果是终态（COMPLETED/CANCELLED），执行终止传播
 	if newStatus == fsm.TaskStatusCompleted || newStatus == fsm.TaskStatusCancelled {
-		_, refreshed, _ := db.terminateTaskInSession(taskID, newStatus)
-		var unblockedIDs []string
-		for _, t := range refreshed {
-			unblockedIDs = append(unblockedIDs, t.TaskID)
-		}
-		return unblockedIDs, nil
+		task, _, _ := db.terminateTaskInSession(taskID, newStatus)
+		return task != nil, nil
 	}
 
 	// 非终态转换：直接更新状态
 	task.Status = newStatus
 	task.UpdatedAt = GetCurrentTime()
-	return nil, nil
+	return true, nil
 }
 
 // CancelTask 取消任务（原子终止传播），返回被取消的任务和解除阻塞的任务列表。

@@ -294,7 +294,7 @@ func TestSequenceMatcherRatio(t *testing.T) {
 		{"abc", "", 0.0},
 		{"", "abc", 0.0},
 		{"abc", "def", 0.0},
-		{"abc", "abcd", 0.857}, // 2*3/7 ≈ 0.857
+		{"abc", "abcd", 0.857},            // 2*3/7 ≈ 0.857
 		{"entityname", "entityname", 1.0}, // 相同字符串
 	}
 	for _, tt := range tests {

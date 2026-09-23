@@ -105,10 +105,10 @@ const (
 // 对齐 Python ParallelScalingOp(k=3, temperature=0.9)。
 func NewParallelScalingOp(sc *cecontext.ServiceContext, k int, temperature float64) *ParallelScalingOp {
 	return &ParallelScalingOp{
-		OpBase:     *op.NewOpBase(sc),
-		k:          k,
+		OpBase:      *op.NewOpBase(sc),
+		k:           k,
 		temperature: temperature,
-		prompts:    defaultReasoningBankPrompt,
+		prompts:     defaultReasoningBankPrompt,
 	}
 }
 

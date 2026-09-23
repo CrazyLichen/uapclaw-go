@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -341,7 +340,7 @@ func TestStartRelationExtractionAsync_有LLM(t *testing.T) {
 	task := gm.startRelationExtractionAsync(context.Background(), declarations, "Alice works at a company", state, "")
 	assert.NotNil(t, task)
 
-	time.Sleep(500 * time.Millisecond)
+	task.Wait()
 	assert.Nil(t, task.Err)
 	assert.NotEmpty(t, task.Result)
 }
@@ -359,7 +358,7 @@ func TestStartEntityDedupeAsync_有LLM(t *testing.T) {
 	task := gm.startEntityDedupeAsync(context.Background(), "content", declarations, existing, state)
 	assert.NotNil(t, task)
 
-	time.Sleep(500 * time.Millisecond)
+	task.Wait()
 	assert.Nil(t, task.Err)
 }
 
@@ -382,7 +381,7 @@ func TestInvokeLLMAsync_有LLM(t *testing.T) {
 	task := gm.invokeLLMAsync(context.Background(), kwargs, tmpl, nil)
 	assert.NotNil(t, task)
 
-	time.Sleep(500 * time.Millisecond)
+	task.Wait()
 	assert.Nil(t, task.Err)
 	assert.NotEmpty(t, task.Result)
 }

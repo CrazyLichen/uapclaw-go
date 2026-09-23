@@ -384,7 +384,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 		[]string{skillsDir},
 		d.model,
 		modelName,
-		"cn",
+		d.resolveRuntimeLanguage(),
 		opts...,
 	)
 

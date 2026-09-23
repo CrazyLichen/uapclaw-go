@@ -504,6 +504,37 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// updateRailsForMode 覆写 DeepAdapter，Code 模式下保留 SubagentRail/ProjectMemoryRail/CodingMemoryRail。
+// Python: JiuwenClawCodeAdapter._update_rails_for_mode() — 完全覆写（不调 super）
+//
+// Code 模式：卸载 TaskPlanningRail 和 SkillEvolutionRail，保留 SubagentRail/ProjectMemoryRail/CodingMemoryRail。
+// 非 Code 模式：回退到 DeepAdapter 默认行为。
+func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
+	if mode != "code" {
+		// 非 Code 模式回退到 DeepAdapter 默认行为
+		c.deep.updateRailsForMode(ctx, mode)
+		return
+	}
+	// Code 模式：卸载 TaskPlanningRail 和 SkillEvolutionRail
+	if c.deep.taskPlanningRail != nil && c.deep.instance != nil {
+		if err := c.deep.instance.UnregisterRail(ctx, c.deep.taskPlanningRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail 已注销（Code 模式）")
+		}
+		c.deep.taskPlanningRail = nil
+	}
+	if c.deep.skillEvolutionRail != nil && c.deep.instance != nil {
+		if err := c.deep.instance.UnregisterRail(ctx, c.deep.skillEvolutionRail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("注销 Rail 失败")
+		} else {
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail 已注销（Code 模式）")
+		}
+		c.deep.skillEvolutionRail = nil
+	}
+	// 保留 SubagentRail、ProjectMemoryRail、CodingMemoryRail
+}
+
 // resolvePromptLanguage 覆写 DeepAdapter，code 模式强制英文。
 // Python: JiuwenClawCodeAdapter._resolve_prompt_language() → "en"
 func (c *CodeAdapter) resolvePromptLanguage() string {
@@ -585,7 +616,7 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 7: rail 模式切换
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
-	c.deep.updateRailsForMode(ctx, config.Mode)
+	c.updateRailsForMode(ctx, config.Mode)
 
 	// ⤴️ 10.6.7: ProjectMemoryRail 语言同步 + trusted_dirs 注入
 	// Python: if self._project_memory_rail is not None:
@@ -678,8 +709,16 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 				codeCfg.FactoryKwargs = make(map[string]any)
 			}
 			codeCfg.FactoryKwargs["auto_create_workspace"] = false
-			// ⤵️ 7.8: CodingMemoryRail 条件注入（当前 nil 占位）
+			// ⤴️ 7.8: CodingMemoryRail 条件注入
 			// Python: if coding_memory_rail is not None: code_agent_rails = [SysOperationRail(), coding_memory_rail]
+			if c.codingMemoryRail != nil {
+				// Python: code_agent_rails = [SysOperationRail(), coding_memory_rail]
+				codeAgentRails := []sainterfaces.AgentRail{
+					c.deep.buildFilesystemRail(false),
+					c.codingMemoryRail,
+				}
+				codeCfg.Rails = codeAgentRails
+			}
 			specs = append(specs, codeCfg)
 		}
 	}
@@ -1003,8 +1042,27 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 			continue
 		}
 
-		// 调用 DeepAdapter 的 builder 方法
-		rail := c.deep.buildDynamicRail(methodName, configBase)
+		// Python: getattr(self, method_name, None) — CodeAdapter 优先查找自己的 builder
+		// CodeAdapter 专有的 builder（buildWorktreeRail、buildCodeAgentRail 等）
+		// 在 DeepAdapter.buildDynamicRail 中返回 nil，需要在此处拦截。
+		var rail sainterfaces.AgentRail
+		switch methodName {
+		case "buildWorktreeRail":
+			rail = c.buildWorktreeRail()
+		case "buildCodeAgentRail":
+			if car := c.buildCodeAgentRail(); car != nil {
+				rail = car
+			}
+		case "buildLspRail":
+			rail = c.buildLspRail()
+		case "buildProjectMemoryRail":
+			rail = c.buildProjectMemoryRail()
+		case "buildCodingMemoryRail":
+			rail = c.buildCodingMemoryRail()
+		default:
+			// 回退到 DeepAdapter 的 builder
+			rail = c.deep.buildDynamicRail(methodName, configBase)
+		}
 		if rail != nil {
 			*railsList = append(*railsList, rail)
 			logger.Info(logComponent).Str("rail_name", railName).
@@ -1051,9 +1109,37 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 	// Python: language = self._resolve_runtime_language()
 	language := c.resolveRuntimeLanguage()
 
+	// Python: project_memory_dir 三级回退（对齐 Python: _build_project_memory_rail）
+	// Python: project_memory_dir = (
+	//   getattr(self, "_jiuwenswarm_project_memory_dir", None)
+	//   or self._config_cache.get("project_memory_dir")
+	//   or os.environ.get("JIUWENSWARM_PROJECT_MEMORY_DIR")
+	// )
+	projectMemoryDir := ""
+	if c.deep.uapswarmProjectMemoryDir != "" {
+		projectMemoryDir = c.deep.uapswarmProjectMemoryDir
+	} else if v, ok := c.deep.configCache["project_memory_dir"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			projectMemoryDir = s
+		}
+	}
+	if projectMemoryDir == "" {
+		projectMemoryDir = os.Getenv("UAPSWARM_PROJECT_MEMORY_DIR")
+	}
+
 	// Python: raw_additional_dirs = self._instance_overrides.get("project_memory_additional_directories", ...)
 	// 从环境变量 UAPCLAWSWARM_ADDITIONAL_DIRECTORIES 读取额外目录
 	var additionalDirs []string
+	if rawOverrides, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
+		// 优先从 instance_overrides 读取
+		if items, ok := rawOverrides.([]any); ok {
+			for _, item := range items {
+				if s, ok := item.(string); ok && s != "" {
+					additionalDirs = append(additionalDirs, s)
+				}
+			}
+		}
+	}
 	rawEnv := os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES")
 	if rawEnv != "" {
 		for _, item := range filepath.SplitList(rawEnv) {
@@ -1066,10 +1152,16 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 
 	rail := commonrails.NewProjectMemoryRail(ws, language, 0, additionalDirs)
 
+	// 存储 project_memory_dir 供后续使用（对齐 Python: setattr(self, "_jiuwenswarm_project_memory_dir", ...)）
+	if projectMemoryDir != "" {
+		c.deep.uapswarmProjectMemoryDir = projectMemoryDir
+	}
+
 	logger.Info(logComponent).
 		Str("event_type", "ProjectMemoryRail_create").
 		Str("workspace", ws).
 		Str("language", language).
+		Str("project_memory_dir", projectMemoryDir).
 		Int("additional_dirs", len(additionalDirs)).
 		Msg("ProjectMemoryRail 创建成功")
 
@@ -1438,6 +1530,12 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 	c.uapswarmProjectDir = c.deep.projectDir
 	if c.uapswarmProjectDir == "" {
 		c.uapswarmProjectDir = c.deep.workspaceDir
+	}
+
+	// Python: setattr(agent, "_jiuwenswarm_code_team_member", True)
+	// 对齐 Python: interface_code.py:1157
+	if agent != nil {
+		agent.SetUapswarmCodeTeamMember(true)
 	}
 
 	logger.Info(logComponent).

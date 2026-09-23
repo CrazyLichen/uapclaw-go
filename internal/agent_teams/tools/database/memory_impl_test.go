@@ -1005,9 +1005,9 @@ func TestUpdateTaskStatus_终态传播(t *testing.T) {
 	db.MutateDependencyGraph(ctx, "alpha", nil, []EdgeSpec{{TaskID: "downstream", DependsOnID: "upstream"}})
 
 	// 通过 UpdateTaskStatus 完成上游（对齐 Python: update_task_status → complete 传播）
-	refreshed, _ := db.UpdateTaskStatus(ctx, "upstream", fsm.TaskStatusCompleted)
-	if len(refreshed) == 0 {
-		t.Error("UpdateTaskStatus 终态应触发传播")
+	ok, _ := db.UpdateTaskStatus(ctx, "upstream", fsm.TaskStatusCompleted)
+	if !ok {
+		t.Error("UpdateTaskStatus 终态应成功")
 	}
 
 	down, _ := db.GetTask(ctx, "downstream")

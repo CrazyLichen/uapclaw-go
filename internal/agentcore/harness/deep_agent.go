@@ -125,6 +125,8 @@ type DeepAgent struct {
 	uapswarmCodeProjectDir string
 	// uapswarmAdapterMode 适配器模式，对齐 Python: _jiuwenswarm_adapter_mode
 	uapswarmAdapterMode string
+	// uapswarmCodeTeamMember 是否为 code team 成员，对齐 Python: _jiuwenswarm_code_team_member
+	uapswarmCodeTeamMember bool
 
 	// configMu 配置读写锁
 	configMu sync.RWMutex
@@ -714,6 +716,22 @@ func (d *DeepAgent) SetUapswarmAdapterMode(mode string) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.uapswarmAdapterMode = mode
+}
+
+// UapswarmCodeTeamMember 获取是否为 code team 成员。
+// Python: DeepAgent._jiuwenswarm_code_team_member
+func (d *DeepAgent) UapswarmCodeTeamMember() bool {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.uapswarmCodeTeamMember
+}
+
+// SetUapswarmCodeTeamMember 设置是否为 code team 成员。
+// Python: setattr(instance, "_jiuwenswarm_code_team_member", True)
+func (d *DeepAgent) SetUapswarmCodeTeamMember(v bool) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.uapswarmCodeTeamMember = v
 }
 
 // SetReactAgent 注入内层 Agent 实现（用于运行时接线/测试）。

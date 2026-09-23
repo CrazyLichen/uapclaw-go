@@ -18,6 +18,11 @@
 | AH-S-04 | StreamEventRail 完全未实现 | 需全新构建 Rail，体量大，不在修复范畴 |
 | AH-S-05 | ProcessMessageStreamImpl 缺少 streamEventRail.reset_abort | 同 AH-S-04，依赖 StreamEventRail |
 | AH-S-09 | ReloadAgentConfig 缺少 load_user_rails() | 同 AH-S-02，依赖 RailManager |
+| AH-M-02 | CodeAdapter 缺少 _update_tools_for_mode 和 _update_session_tools | 依赖 ACP、user_todos 等尚未实现的子系统 |
+| AH-M-10 | buildLspRail 返回 nil | 依赖 LSP（Language Server Protocol）功能整体未实现 |
+| AH-M-12 | CodeAdapter 缺少 browser_agent 配置 | 依赖 browser 功能，⤵️ 标记 |
+| AH-M-13 | CodeAdapter 缺少 _refresh_acp_runtime_tools | 依赖 ACP 子系统 |
+| AH-M-14 | CodeAdapter.updateRuntimeConfig 缺少 user_todos channel_id per-request sync | 依赖 user_todos 子系统 |
 
 ## 跳过项（确认无需修复）
 

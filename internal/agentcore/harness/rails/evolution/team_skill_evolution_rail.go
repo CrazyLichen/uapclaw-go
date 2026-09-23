@@ -578,8 +578,8 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 //	2. 聚合团队轨迹（aggregateTeamTrajectory）
 //	3. 检测使用的团队技能（detectUsedTeamSkill）
 //	4. 运行 TeamSignalDetector（trajectory signals + user intent）
-//	5. handleEvolutionFromSignals
-//	6. evaluatePresentedEntries
+//	5. handleEvolutionFromSignals（从信号触发演化）
+//	6. evaluatePresentedEntries（评估已呈现条目）
 func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
 	if !r.autoScan {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan 已禁用，跳过")

@@ -5,32 +5,6 @@ import (
 	"fmt"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// FeedbackType 轨迹结果反馈类型。
-// 对齐 Python FeedbackType(str, Enum)，JSON 序列化输出字符串值。
-type FeedbackType int
-
-const (
-	// FeedbackHelpful 有帮助
-	FeedbackHelpful FeedbackType = iota
-	// FeedbackHarmful 有害
-	FeedbackHarmful
-	// FeedbackNeutral 中性
-	FeedbackNeutral
-)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// feedbackHelpfulStr JSON 序列化值
-	feedbackHelpfulStr = "helpful"
-	// feedbackHarmfulStr JSON 序列化值
-	feedbackHarmfulStr = "harmful"
-	// feedbackNeutralStr JSON 序列化值
-	feedbackNeutralStr = "neutral"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Trajectory 表示一次任务执行的轨迹。
@@ -61,6 +35,32 @@ type TrajectoryBatch struct {
 	// Metadata 批次元数据
 	Metadata map[string]any `json:"metadata"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// FeedbackType 轨迹结果反馈类型。
+// 对齐 Python FeedbackType(str, Enum)，JSON 序列化输出字符串值。
+type FeedbackType int
+
+const (
+	// FeedbackHelpful 有帮助
+	FeedbackHelpful FeedbackType = iota
+	// FeedbackHarmful 有害
+	FeedbackHarmful
+	// FeedbackNeutral 中性
+	FeedbackNeutral
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// feedbackHelpfulStr JSON 序列化值
+	feedbackHelpfulStr = "helpful"
+	// feedbackHarmfulStr JSON 序列化值
+	feedbackHarmfulStr = "harmful"
+	// feedbackNeutralStr JSON 序列化值
+	feedbackNeutralStr = "neutral"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -105,8 +105,6 @@ func TrajectoryFromDict(data map[string]any) *Trajectory {
 		Context:  ctx,
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 实现 Stringer 接口。
 // 对齐 Python FeedbackType.__str__()，输出 "helpful"/"harmful"/"neutral"。

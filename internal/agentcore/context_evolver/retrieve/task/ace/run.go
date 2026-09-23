@@ -10,13 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件常量
-	logComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ACERecallMemoryOp ACE 记忆检索操作。
@@ -27,6 +20,13 @@ const (
 type ACERecallMemoryOp struct {
 	op.OpBase
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件常量
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

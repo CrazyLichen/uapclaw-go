@@ -537,14 +537,14 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	if !ok {
 		return atschema.NewMemberOpResultFail("CAS 状态转换失败: " + memberName)
 	}
-	// 步骤 4: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
+	// 步骤 5: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
 	shutdownMsg, shutdownI18nErr := atschema.T("team.shutdown_request_content")
 	if shutdownI18nErr != nil {
 		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n 键缺失，使用回退值")
 		shutdownMsg = "team.shutdown_request_content"
 	}
 	_, _ = tb.messageManager.SendMessage(ctx, shutdownMsg, memberName, tb.memberName)
-	// 步骤 5: 发布事件（对齐 Python: MemberShutdownEvent(force=force)）
+	// 步骤 6: 发布事件（对齐 Python: MemberShutdownEvent(force=force)）
 	tb.PublishEvent(ctx, events.MemberShutdownEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
 		Force:            cfg.force,
@@ -582,9 +582,8 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	// Python: reset_count 统计 + 汇总日志
 	resetCount := 0
 	for _, t := range tasks {
-		if err := tb.taskManager.Reset(ctx, t.TaskID); err != nil {
-			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Err(err).
-				Msg("CancelMember: 重置任务失败")
+		if result, _ := tb.taskManager.Reset(ctx, t.TaskID); !result.OK {
+			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Msg("CancelMember: 重置任务失败")
 		} else {
 			resetCount++
 		}
@@ -813,7 +812,7 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 		return atschema.NewMemberOpResultSuccess() // 幂等返回
 	}
 
-	unblocked, err := tb.taskManager.Cancel(ctx, taskID)
+	_, err := tb.taskManager.Cancel(ctx, taskID)
 	if err != nil {
 		return atschema.NewMemberOpResultFail("取消任务失败: " + err.Error())
 	}
@@ -822,18 +821,6 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 		// 发送取消消息通知（对齐 Python: message_manager.send_message）
 		content := fmt.Sprintf("任务 '%s'（ID: %s）已被团队负责人取消。", task.Title, taskID)
 		_, _ = tb.messageManager.SendMessage(ctx, content, *task.Assignee, tb.memberName)
-		// 发布取消事件
-		tb.PublishEvent(ctx, events.TaskCancelledEvent{
-			BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: *task.Assignee},
-			TaskID:           taskID,
-		})
-	}
-	// 通知 unblocked 任务
-	for _, uid := range unblocked {
-		tb.PublishEvent(ctx, events.TaskUnblockedEvent{
-			BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName},
-			TaskID:           uid,
-		})
 	}
 	logger.Info(tbLogComponent).Str("task_id", taskID).Msg("CancelTask: 任务已取消")
 	return atschema.NewMemberOpResultSuccess()
@@ -895,16 +882,10 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 		return atschema.NewMemberOpResultFail(fmt.Sprintf("成员 %s 不在团队 %s 中", memberName, tb.teamName))
 	}
 	// 执行审批
-	err = tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
-	if err != nil {
-		return atschema.NewMemberOpResultFail("审批计划失败: " + err.Error())
+	result, err := tb.taskManager.ApprovePlan(ctx, planID, cfg.approved, cfg.feedback)
+	if !result.OK {
+		return atschema.NewMemberOpResultFail("审批计划失败: " + result.Reason)
 	}
-	tb.PublishEvent(ctx, events.TaskPlanResponseEvent{
-		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName, MemberName: memberName},
-		TaskID:           taskID,
-		Approved:         cfg.approved,
-		Status:           string(atschema.TaskStatusPlanApproved),
-	})
 	logger.Info(tbLogComponent).Str("plan_id", planID).Str("task_id", taskID).Str("member_name", memberName).
 		Bool("approved", cfg.approved).Msg("ApprovePlan: 计划已审批")
 	return atschema.NewMemberOpResultSuccess()

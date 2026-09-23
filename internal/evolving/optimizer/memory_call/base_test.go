@@ -125,7 +125,8 @@ func TestMemoryOptimizerBase_Step(t *testing.T) {
 	operators := map[string]operator.Operator{"memory_call": memOp}
 	base.Bind(operators, nil, nil)
 
-	updates := base.Step()
+	updates, err := base.Step()
+	assert.NoError(t, err)
 	assert.NotNil(t, updates)
 	assert.Equal(t, 0, len(updates))
 }
@@ -226,7 +227,8 @@ func TestMemoryOptimizerBase_Step_绑定后无梯度(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Step 应返回空 map
-	updates := base.Step()
+	updates, err := base.Step()
+	assert.NoError(t, err)
 	assert.Equal(t, 0, len(updates))
 }
 

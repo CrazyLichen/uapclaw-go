@@ -158,15 +158,15 @@ func TestGraphMemUpdate_Merge(t *testing.T) {
 	r1.UUID = "r1"
 
 	u1 := &GraphMemUpdate{
-		AddedEntity:    []*graph.Entity{e1},
-		RemovedEntity:  map[string]struct{}{"old-1": {}},
-		AddedRelation:  []*graph.Relation{r1},
+		AddedEntity:     []*graph.Entity{e1},
+		RemovedEntity:   map[string]struct{}{"old-1": {}},
+		AddedRelation:   []*graph.Relation{r1},
 		RemovedRelation: map[string]struct{}{"old-rel-1": {}},
 	}
 
 	u2 := &GraphMemUpdate{
-		AddedEntity:    []*graph.Entity{e2},
-		RemovedEntity:  map[string]struct{}{"old-2": {}},
+		AddedEntity:     []*graph.Entity{e2},
+		RemovedEntity:   map[string]struct{}{"old-2": {}},
 		RemovedRelation: map[string]struct{}{"old-rel-2": {}},
 	}
 

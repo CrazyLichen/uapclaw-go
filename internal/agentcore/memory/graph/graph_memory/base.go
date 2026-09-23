@@ -142,10 +142,19 @@ type GraphMemory struct {
 	embedderVal embedding.BaseEmbedding
 }
 
+// tzTaskResult 时区预测异步任务结果
+type tzTaskResult struct {
+	response string
+	err      error
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // GraphMemoryOption GraphMemory 构造选项函数
 type GraphMemoryOption func(*GraphMemory)
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// SearchOption Search 调用选项函数
+type SearchOption func(*SearchConfigOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -613,9 +622,6 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []strin
 	return result, nil
 }
 
-// SearchOption Search 调用选项函数
-type SearchOption func(*SearchConfigOptions)
-
 // WithSearchStrategy 设置搜索策略名称
 func WithSearchStrategy(name string) SearchOption {
 	return func(o *SearchConfigOptions) { o.SearchStrategy = name }
@@ -765,6 +771,37 @@ func (gm *GraphMemory) EntityEnrich(ctx context.Context, entities []*graph.Entit
 // Python: _relation_dedupe(user_id, content, relations, relation_embed_results, state)
 func (gm *GraphMemory) RelationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, relationEmbedResults [][]float64, state *GraphMemState) error {
 	return gm.relationDedupe(ctx, userID, content, relations, relationEmbedResults, state)
+}
+
+// ReplaceOneSideOfRelation 更新关系的一端（lhs 或 rhs）指向目标实体，
+// 若同一关系中已存在该目标实体的引用则标记为有缺陷。
+//
+// Python: _replace_one_side_of_relation(side, relation, tgt_uuid, entity_relation_updates, state)
+func ReplaceOneSideOfRelation(side string, relation *graph.Relation, tgtUUID string, entityRelationUpdates map[string]map[string]*graph.Relation, state *GraphMemState) {
+	if _, ok := entityRelationUpdates[tgtUUID]; !ok {
+		entityRelationUpdates[tgtUUID] = make(map[string]*graph.Relation)
+	}
+	if _, exists := entityRelationUpdates[tgtUUID][relation.UUID]; !exists {
+		// 首次出现，添加延迟更新
+		state.RelationDeferredUpdates[tgtUUID] = append(state.RelationDeferredUpdates[tgtUUID], deferredRelationUpdate{
+			Relation: relation,
+			Field:    side,
+			Value:    tgtUUID,
+		})
+		entityRelationUpdates[tgtUUID][relation.UUID] = relation
+	} else {
+		// 重复出现，标记为有缺陷关系
+		state.FaultyRelations[relation.UUID] = relation
+		delete(entityRelationUpdates[tgtUUID], relation.UUID)
+		// 从延迟更新中移除该关系的所有任务
+		var filtered []deferredRelationUpdate
+		for _, task := range state.RelationDeferredUpdates[tgtUUID] {
+			if task.Relation != relation {
+				filtered = append(filtered, task)
+			}
+		}
+		state.RelationDeferredUpdates[tgtUUID] = filtered
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1143,9 +1180,9 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 				Operator: "and",
 				Left:     filterByUser,
 				Right: &query.MatchExpr{
-					Field:      "obj_type",
-					Value:      entityType.Name,
-					MatchMode:  query.MatchModeExact,
+					Field:     "obj_type",
+					Value:     entityType.Name,
+					MatchMode: query.MatchModeExact,
 				},
 			}
 			searchResult, err := gm.DBBackend.Search(ctx, ent.Name,
@@ -1173,12 +1210,12 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 		exactMatch := &query.LogicalExpr{
 			Operator: "and",
 			Left:     filterByUser,
-			Right: &query.MatchExpr{Field: "name", Value: ent.Name, MatchMode: query.MatchModeExact},
+			Right:    &query.MatchExpr{Field: "name", Value: ent.Name, MatchMode: query.MatchModeExact},
 		}
 		infixMatch := &query.LogicalExpr{
 			Operator: "and",
 			Left:     filterByUser,
-			Right: &query.MatchExpr{Field: "name", Value: ent.Name, MatchMode: query.MatchModeInfix},
+			Right:    &query.MatchExpr{Field: "name", Value: ent.Name, MatchMode: query.MatchModeInfix},
 		}
 
 		exactResult, _ := gm.DBBackend.Query(ctx, graph.EntityCollection,
@@ -1262,7 +1299,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 
 	// 处理合并任务（对齐 Python: _entity_merge 的 blocking/non-blocking 分派）
 	if len(mergePairs) > 0 {
-		var blockingTasks []MergePair   // 目标实体在 extractedDeclarations 中（阻塞实体摘要抽取）
+		var blockingTasks []MergePair    // 目标实体在 extractedDeclarations 中（阻塞实体摘要抽取）
 		var nonBlockingTasks []MergePair // 目标实体不在 extractedDeclarations 中
 
 		// 对齐 Python: if tgt in extracted_declarations
@@ -1371,6 +1408,7 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 
 	// 等待所有任务完成（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
 	for _, task := range state.Tasks {
+		task.Wait()
 		if task.Err != nil {
 			logger.Warn(logComponent).Err(task.Err).Msg("Graph Memory: 实体摘要抽取失败")
 			continue
@@ -1385,6 +1423,7 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 		}
 		task := state.Tasks[taskIdx]
 		taskIdx++
+		task.Wait()
 		if task.Err != nil || task.Result == "" {
 			continue
 		}
@@ -1401,6 +1440,7 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relations []*graph.Relation, state *GraphMemState) error {
 	// 处理关系过滤任务（对齐 Python: if state.relation_filter_tasks: await asyncio.wait(...)）
 	for task, taskItem := range state.RelationFilterTasks {
+		task.Wait()
 		tgtEntity := taskItem.TargetEntity
 		relationList := taskItem.Relations
 		tgtUUID := tgtEntity.UUID
@@ -1599,9 +1639,9 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 			}
 
 			dedupeRelationTasks = append(dedupeRelationTasks, DedupeRelationTask{
-				Relation:         newRelation,
+				Relation:          newRelation,
 				ExistingRelations: existingRelMaps,
-				Response:         assistantContent(response),
+				Response:          assistantContent(response),
 			})
 		}
 	}
@@ -1668,11 +1708,6 @@ func (gm *GraphMemory) updateEntitiesForRelationRemoval(ctx context.Context, sta
 }
 
 // startTimezoneTask 启动时区预测异步任务
-type tzTaskResult struct {
-	response string
-	err      error
-}
-
 func (gm *GraphMemory) startTimezoneTask(ctx context.Context, content string, state *GraphMemState) <-chan tzTaskResult {
 	ch := make(chan tzTaskResult, 1)
 	go func() {
@@ -1700,8 +1735,9 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 	state *GraphMemState,
 	tzResponse string,
 ) *asyncTask {
-	task := &asyncTask{}
+	task := &asyncTask{done: make(chan struct{})}
 	go func() {
+		defer close(task.done)
 		if gm.LLMClient == nil {
 			task.Err = fmt.Errorf("LLM client is not set")
 			return
@@ -1745,8 +1781,9 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 	existingEntities []map[string]any,
 	state *GraphMemState,
 ) *asyncTask {
-	task := &asyncTask{}
+	task := &asyncTask{done: make(chan struct{})}
 	go func() {
+		defer close(task.done)
 		if gm.LLMClient == nil {
 			task.Err = fmt.Errorf("LLM client is not set")
 			return
@@ -1774,8 +1811,9 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 
 // invokeLLMAsync 异步调用 LLM（返回 *asyncTask，对齐 Python: asyncio.create_task(self._invoke_llm(...))）
 func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) *asyncTask {
-	task := &asyncTask{}
+	task := &asyncTask{done: make(chan struct{})}
 	go func() {
+		defer close(task.done)
 		if gm.LLMClient == nil {
 			task.Err = fmt.Errorf("LLM client is not set")
 			return
@@ -1940,37 +1978,6 @@ func (gm *GraphMemory) maybeGC(ctx context.Context) {
 		if err := gm.DBBackend.Refresh(ctx, graph.WithFlush(false)); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh 失败")
 		}
-	}
-}
-
-// ReplaceOneSideOfRelation 更新关系的一端（lhs 或 rhs）指向目标实体，
-// 若同一关系中已存在该目标实体的引用则标记为有缺陷。
-//
-// Python: _replace_one_side_of_relation(side, relation, tgt_uuid, entity_relation_updates, state)
-func ReplaceOneSideOfRelation(side string, relation *graph.Relation, tgtUUID string, entityRelationUpdates map[string]map[string]*graph.Relation, state *GraphMemState) {
-	if _, ok := entityRelationUpdates[tgtUUID]; !ok {
-		entityRelationUpdates[tgtUUID] = make(map[string]*graph.Relation)
-	}
-	if _, exists := entityRelationUpdates[tgtUUID][relation.UUID]; !exists {
-		// 首次出现，添加延迟更新
-		state.RelationDeferredUpdates[tgtUUID] = append(state.RelationDeferredUpdates[tgtUUID], deferredRelationUpdate{
-			Relation: relation,
-			Field:    side,
-			Value:    tgtUUID,
-		})
-		entityRelationUpdates[tgtUUID][relation.UUID] = relation
-	} else {
-		// 重复出现，标记为有缺陷关系
-		state.FaultyRelations[relation.UUID] = relation
-		delete(entityRelationUpdates[tgtUUID], relation.UUID)
-		// 从延迟更新中移除该关系的所有任务
-		var filtered []deferredRelationUpdate
-		for _, task := range state.RelationDeferredUpdates[tgtUUID] {
-			if task.Relation != relation {
-				filtered = append(filtered, task)
-			}
-		}
-		state.RelationDeferredUpdates[tgtUUID] = filtered
 	}
 }
 

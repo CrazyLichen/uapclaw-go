@@ -199,8 +199,9 @@ func TestParseLLMJSON(t *testing.T) {
 		if len(got) != 1 {
 			t.Errorf("parseLLMJSON 长度 = %d, 期望 1", len(got))
 		}
-		if got[0]["record_id"] != "r1" {
-			t.Errorf("record_id = %v, 期望 r1", got[0]["record_id"])
+		m, ok := got[0].(map[string]any)
+		if !ok || m["record_id"] != "r1" {
+			t.Errorf("record_id = %v, 期望 r1", got[0])
 		}
 	})
 	t.Run("带 markdown code block", func(t *testing.T) {
@@ -230,11 +231,11 @@ func TestParseLLMJSON(t *testing.T) {
 			t.Errorf("parseLLMJSON(无效) = %v, 期望 nil", got)
 		}
 	})
-	t.Run("混合类型数组（非 map 元素被忽略）", func(t *testing.T) {
+	t.Run("混合类型数组（对齐 Python 直接返回）", func(t *testing.T) {
 		input := `[42, {"record_id": "r6"}, "hello"]`
 		got := parseLLMJSON(input)
-		if len(got) != 1 {
-			t.Errorf("parseLLMJSON(混合) 镀度 = %d, 期望 1", len(got))
+		if len(got) != 3 {
+			t.Errorf("parseLLMJSON(混合) 长度 = %d, 期望 3", len(got))
 		}
 	})
 	t.Run("regexp 提取嵌套数组", func(t *testing.T) {

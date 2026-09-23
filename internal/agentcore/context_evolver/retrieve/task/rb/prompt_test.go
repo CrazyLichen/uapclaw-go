@@ -88,8 +88,8 @@ func TestBestOfNEvalPrompt_格式化(t *testing.T) {
 	prompts := NewReasoningBankPrompt()
 	var buf bytes.Buffer
 	err := prompts.BestOfNEvalPrompt.Execute(&buf, map[string]any{
-		"NumTrajectories": 3,
-		"Query":           "find the answer",
+		"NumTrajectories":  3,
+		"Query":            "find the answer",
 		"TrajDescriptions": "Trajectory 1: ...\nTrajectory 2: ...",
 		"MaxIndex":         2,
 	})

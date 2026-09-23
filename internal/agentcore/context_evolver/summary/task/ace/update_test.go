@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
-	coreschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
+	coreschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/vector_store"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 )
@@ -55,7 +55,7 @@ func (f *fakeEmbeddingService) EmbedBatch(_ context.Context, _ []string) ([][]fl
 // makeReflectionJSON 构造 Reflector 返回的 JSON 响应
 func makeReflectionJSON() string {
 	obj := map[string]any{
-		"reasoning":           "The agent made a pagination error.",
+		"reasoning":            "The agent made a pagination error.",
 		"error_identification": "Used fixed range loop.",
 		"root_cause_analysis":  "Misunderstood pagination pattern.",
 		"correct_approach":     "Use while True loop.",

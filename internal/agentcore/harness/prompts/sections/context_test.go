@@ -469,9 +469,9 @@ func TestBuildToolsContent_分组工具完整(t *testing.T) {
 // TestBuildToolsContent_分组工具不完整 测试分组工具不完整时单独渲染
 func TestBuildToolsContent_分组工具不完整(t *testing.T) {
 	tools := map[string]string{
-		"read_file": "read",
+		"read_file":  "read",
 		"write_file": "write",
-		"bash":      "run commands",
+		"bash":       "run commands",
 	}
 	result := BuildToolsContent(tools, "cn")
 	// 缺少 edit_file，不应合并为一行
@@ -529,9 +529,9 @@ func TestBuildToolsContent_taskTool使用原则(t *testing.T) {
 // TestBuildToolsContent_隐藏工具 测试隐藏工具不出现在列表中
 func TestBuildToolsContent_隐藏工具(t *testing.T) {
 	tools := map[string]string{
-		"bash":            "run commands",
-		"cron_list_jobs":  "list cron jobs",
-		"cron_get_job":    "get cron job",
+		"bash":           "run commands",
+		"cron_list_jobs": "list cron jobs",
+		"cron_get_job":   "get cron job",
 	}
 	result := BuildToolsContent(tools, "cn")
 	assert.Contains(t, result, "bash")

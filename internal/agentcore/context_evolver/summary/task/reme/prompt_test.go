@@ -135,7 +135,7 @@ func TestMemoryValidationPrompt_格式化(t *testing.T) {
 	prompts := NewReMeSummaryPrompts()
 	var buf bytes.Buffer
 	err := prompts.MemoryValidationPrompt.Execute(&buf, map[string]any{
-		"Condition":        "test condition",
+		"Condition":         "test condition",
 		"TaskMemoryContent": "memory content",
 	})
 	if err != nil {

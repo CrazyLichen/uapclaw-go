@@ -960,7 +960,7 @@ func TestEntityEnrich_无阻塞实体(t *testing.T) {
 func TestMaybeGC_到达时间(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	gm.TimeTillNextGC = 0.001 // 很小的间隔
-	gm.lastGC = 0              // 很久以前
+	gm.lastGC = 0             // 很久以前
 	// 应不报错且执行 GC
 	gm.maybeGC(context.Background())
 	// 验证 lastGC 被更新
@@ -2523,7 +2523,7 @@ func TestStartRelationExtractionAsync_等待完成(t *testing.T) {
 	}
 
 	task := gm.startRelationExtractionAsync(context.Background(), nil, "content", state, "")
-	time.Sleep(300 * time.Millisecond)
+	task.Wait()
 	assert.NotNil(t, task.Err)
 }
 
@@ -2536,7 +2536,7 @@ func TestStartEntityDedupeAsync_等待完成(t *testing.T) {
 	}
 
 	task := gm.startEntityDedupeAsync(context.Background(), "content", nil, nil, state)
-	time.Sleep(300 * time.Millisecond)
+	task.Wait()
 	assert.NotNil(t, task.Err)
 }
 
@@ -2544,7 +2544,7 @@ func TestStartEntityDedupeAsync_等待完成(t *testing.T) {
 func TestInvokeLLMAsync_等待完成(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	task := gm.invokeLLMAsync(context.Background(), map[string]any{}, nil, nil)
-	time.Sleep(300 * time.Millisecond)
+	task.Wait()
 	assert.NotNil(t, task.Err)
 }
 
@@ -2869,4 +2869,3 @@ func TestFetchRelevantEntities_有查询结果(t *testing.T) {
 	err := gm.fetchRelevantEntities(context.Background(), declarations, false, "user1", state)
 	assert.NoError(t, err)
 }
-

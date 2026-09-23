@@ -223,7 +223,8 @@ func TestSkillExperienceOptimizer_Step(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	updates := opt.Step()
+	updates, err := opt.Step()
+	assert.NoError(t, err)
 	assert.NotEmpty(t, updates)
 }
 
@@ -237,7 +238,8 @@ func TestSkillExperienceOptimizer_Step_无梯度(t *testing.T) {
 	config := map[string]any{"online_contexts": map[string]any{}}
 	opt.Bind(operators, []string{"experiences"}, config)
 
-	updates := opt.Step()
+	updates, err := opt.Step()
+	assert.NoError(t, err)
 	assert.Empty(t, updates)
 }
 
@@ -692,7 +694,8 @@ func TestTeamSkillExperienceOptimizer_Step(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	updates := opt.Step()
+	updates, err := opt.Step()
+	assert.NoError(t, err)
 	assert.NotEmpty(t, updates)
 }
 

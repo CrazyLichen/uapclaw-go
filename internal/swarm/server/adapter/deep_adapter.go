@@ -243,6 +243,8 @@ type DeepAdapter struct {
 	uapswarmProjectDir string
 	// uapswarmCodeProjectDir 代码项目目录，对齐 Python: _jiuwenswarm_code_project_dir
 	uapswarmCodeProjectDir string
+	// uapswarmProjectMemoryDir 项目记忆目录，对齐 Python: _jiuwenswarm_project_memory_dir
+	uapswarmProjectMemoryDir string
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
