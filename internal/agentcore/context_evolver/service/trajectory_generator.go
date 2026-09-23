@@ -114,6 +114,8 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 
 // SummarizeTrajectories 将轨迹总结为记忆。对齐 Python summarize_trajectories()。
 // 注：依赖 TaskMemoryService（P6），P4 阶段先定义签名，实现留 P6。
+// TODO: P6 移植 TaskMemoryService 后，将 memoryService any 替换为具体类型/接口，
+// 将返回值 map[string]any 替换为具体结构体。
 func SummarizeTrajectories(ctx context.Context, memoryService any, userID string, params SummarizeTrajectoriesInput) (map[string]any, error) {
 	return nil, fmt.Errorf("not implemented: depends on TaskMemoryService (P6)")
 }

@@ -105,6 +105,8 @@ func (o *SummarizeMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	}
 
 	// 获取或判定 label
+	// 对齐 Python context.label: Optional[List[bool]]，多轨迹场景每条轨迹各有一个 label，
+	// 因此用 []bool 而非单值 bool。此处取第一个元素用于单轨迹提取。
 	var label bool
 	labelVal, ok := cecontext.GetTyped[[]bool](rc, "label")
 	if ok && len(labelVal) > 0 {
