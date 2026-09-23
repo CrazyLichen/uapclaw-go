@@ -8,6 +8,7 @@
 //	rails/
 //	├── doc.go                        # 包文档
 //	├── project_memory_rail.go        # ProjectMemoryRail 项目记忆护栏
+//	├── response_prompt_rail.go       # ResponsePromptRail 响应提示词护栏
 //	├── structured_ask_user_rail.go    # StructuredAskUserRail + StructuredAskUserPayload
 //	├── structured_ask_user_tool.go    # StructuredAskUserTool + 扩展 schema
 //	├── avatar_rail.go                # AvatarPromptRail 数字分身 Rail

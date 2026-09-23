@@ -625,11 +625,13 @@ func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 }
 
 // buildResponsePromptRail 构建响应提示词护栏。
-// ⤵️ 10.6.3-10: ResponsePromptRail
+// ✅ 已回填：ResponsePromptRail（对齐 Python: _build_response_prompt_rail() — ResponsePromptRail()）
+//
 // Python: _build_response_prompt_rail() (line 2171-2180)
 func (d *DeepAdapter) buildResponsePromptRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ResponsePromptRail
-	return nil
+	rail := commrails.NewResponsePromptRail()
+	logger.Info(logComponent).Msg("ResponsePromptRail 创建成功")
+	return rail
 }
 
 // buildContextAssembleRail 构建上下文组装护栏。

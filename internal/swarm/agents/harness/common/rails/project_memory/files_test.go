@@ -364,7 +364,7 @@ func TestParseFrontmatterValue_引号字符串(t *testing.T) {
 
 func TestDetectGitWorktree_非Git目录(t *testing.T) {
 	tmpDir := t.TempDir()
-	info := detectGitWorktree(tmpDir)
+	info := detectGitWorktree(context.Background(), tmpDir)
 	// 非 git 目录应返回 nil
 	if info != nil {
 		t.Fatalf("expected nil for non-git directory, got %+v", info)

@@ -135,7 +135,7 @@ type DeepAdapter struct {
 	// ✅ 已回填：RuntimePromptRail（对齐 Python: _runtime_prompt_rail: RuntimePromptRail | None）
 	runtimePromptRail *commrails.RuntimePromptRail
 	// responsePromptRail 响应提示词护栏
-	// ⤵️ 10.6.3-10: ResponsePromptRail
+	// ✅ 10.6.3-10: ResponsePromptRail
 	responsePromptRail sainterfaces.AgentRail
 	// securityRail 安全护栏
 	// ✅ 已回填：SafetyPromptRail（对齐 Python: _security_rail: SecurityRail | None）

@@ -1,6 +1,7 @@
 package rails
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -243,7 +244,7 @@ func TestFirstNonEmpty(t *testing.T) {
 func TestWriteRuntimeStateYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	// 写入 runtime_state.yaml 到 ConfigDir
-	WriteRuntimeStateYAML("test-model", "agent.plan", "cn", "web", "test-agent", tmpDir)
+	WriteRuntimeStateYAML(context.Background(), "test-model", "agent.plan", "cn", "web", "test-agent", tmpDir)
 	yamlPath := filepath.Join(workspace.ConfigDir(), "runtime_state.yaml")
 	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
 		t.Log("runtime_state.yaml 未写入 ConfigDir（正常，ConfigDir 可能不是 tmpDir）")
