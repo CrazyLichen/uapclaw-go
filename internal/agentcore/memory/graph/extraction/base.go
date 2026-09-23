@@ -90,6 +90,78 @@ func ReadableSchema(modelType reflect.Type, language string) (string, map[string
 	return outStr, refDict
 }
 
+// StrictSchemaEnforce BFS 遍历 JSON Schema，对所有 type=object 节点设置 additionalProperties=false 和 required
+//
+// 对齐 Python MultilingualBaseModel.multilingual_model_json_schema(strict=True) 中的 BFS 逻辑
+func StrictSchemaEnforce(schemaMap map[string]any) {
+	toVisit := []map[string]any{schemaMap}
+	for len(toVisit) > 0 {
+		node := toVisit[0]
+		toVisit = toVisit[1:]
+		if node == nil {
+			continue
+		}
+		if typeName, _ := node["type"].(string); typeName == "object" {
+			if props, ok := node["properties"].(map[string]any); ok && len(props) > 0 {
+				node["additionalProperties"] = false
+				keys := make([]string, 0, len(props))
+				for k := range props {
+					keys = append(keys, k)
+				}
+				node["required"] = keys
+			}
+		}
+		// BFS 继续遍历所有值
+		for _, v := range node {
+			switch child := v.(type) {
+			case map[string]any:
+				toVisit = append(toVisit, child)
+			case []any:
+				for _, item := range child {
+					if m, ok := item.(map[string]any); ok {
+						toVisit = append(toVisit, m)
+					}
+				}
+			}
+		}
+	}
+}
+
+// BuildResponseFormat 从模型实例生成完整的 OpenAI response_format
+//
+// 封装 StructSchemaExtractor → ReplaceDescriptions → ToJSONSchemaMap → StrictSchemaEnforce → ResponseFormat 链路，
+// 对齐 Python EntitySummary.response_format(language) 的完整调用链
+func BuildResponseFormat(model any, language string) map[string]any {
+	modelType := reflect.TypeOf(model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	langMap := registry.MultilingualDescription[language]
+	if langMap == nil {
+		langMap = map[string]string{}
+	}
+
+	// 1. 提取 Schema
+	extractor := tool.StructSchemaExtractor{}
+	params, err := extractor.Extract(modelType)
+	if err != nil {
+		return ResponseFormat(modelType.Name(), map[string]any{})
+	}
+
+	// 2. 替换多语言描述
+	replaced := ReplaceDescriptions(params, langMap)
+
+	// 3. 生成 JSON Schema
+	schemaMap := commonschema.ToJSONSchemaMap(replaced)
+
+	// 4. 严格模式：BFS 设置 additionalProperties=false + required
+	StrictSchemaEnforce(schemaMap)
+
+	// 5. 包装为 OpenAI response_format
+	return ResponseFormat(modelType.Name(), schemaMap)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // replacePlaceholders 替换字符串中的 {{[xxx]}} 占位符
