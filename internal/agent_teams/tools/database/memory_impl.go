@@ -758,7 +758,7 @@ func (db *InMemoryTeamDatabase) MutateDependencyGraph(_ context.Context, teamNam
 
 // AddTaskWithBidirectionalDependencies 带双向依赖创建任务。
 // Python: add_task_with_bidirectional_dependencies()
-func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
+func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(ctx context.Context, teamName string, task *TeamTaskBase, dependencies []string, dependentTaskIDs []string) GraphMutationResult {
 	// 构建 NewTaskSpec
 	newTaskSpec := NewTaskSpec{
 		TaskID:        task.TaskID,
@@ -781,7 +781,7 @@ func (db *InMemoryTeamDatabase) AddTaskWithBidirectionalDependencies(_ context.C
 		edges = append(edges, EdgeSpec{TaskID: downstreamID, DependsOnID: task.TaskID})
 	}
 
-	return db.MutateDependencyGraph(context.Background(), teamName, []NewTaskSpec{newTaskSpec}, edges)
+	return db.MutateDependencyGraph(ctx, teamName, []NewTaskSpec{newTaskSpec}, edges)
 }
 
 // GetMessage 按 ID 查消息。对齐 Python: MessageDao.get_message()

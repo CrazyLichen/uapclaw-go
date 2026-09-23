@@ -86,7 +86,7 @@ func (o *TeamSkillExperienceOptimizer) Backward(ctx context.Context, signals []*
 // Python: TeamSkillExperienceOptimizer._step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
-func (o *TeamSkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
+func (o *TeamSkillExperienceOptimizer) Step() (map[schema.UpdateKey]any, error) {
 	return o.StepTemplate(o.step)
 }
 
@@ -675,7 +675,7 @@ func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*
 // step 子类逻辑，返回预计算的更新映射。
 //
 // Python: TeamSkillExperienceOptimizer._step()
-func (o *TeamSkillExperienceOptimizer) step() map[schema.UpdateKey]any {
+func (o *TeamSkillExperienceOptimizer) step() (map[schema.UpdateKey]any, error) {
 	updates := make(map[schema.UpdateKey]any)
 	for opID, param := range o.BaseOptimizerMixin.Parameters() {
 		recordsAny := param.GetGradient(schema.ExperiencesTarget)
@@ -685,7 +685,7 @@ func (o *TeamSkillExperienceOptimizer) step() map[schema.UpdateKey]any {
 			}
 		}
 	}
-	return updates
+	return updates, nil
 }
 
 // loadSkillContent 从 evolutionStore 读取技能内容摘要。

@@ -241,6 +241,8 @@ type DeepAdapter struct {
 	paidSearchTool tool.Tool
 	// uapswarmProjectDir 项目目录，对齐 Python: _jiuwenswarm_project_dir
 	uapswarmProjectDir string
+	// uapswarmCodeProjectDir 代码项目目录，对齐 Python: _jiuwenswarm_code_project_dir
+	uapswarmCodeProjectDir string
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -442,6 +444,13 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		d.uapswarmProjectDir = d.workspaceDir
 	}
 
+	// Python: self._jiuwenswarm_code_project_dir
+	if v, ok := config["code_project_dir"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			d.uapswarmCodeProjectDir = s
+		}
+	}
+
 	// 存储 mode/subMode
 	d.mode = mode
 	d.subMode = subMode
@@ -518,6 +527,15 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		return fmt.Errorf("CreateDeepAgent 失败: %w", createErr)
 	}
 	d.instance = agent
+
+	// 对齐 Python: setattr(self._instance, "_jiuwenswarm_project_dir", ...)
+	d.instance.SetUapswarmProjectDir(d.uapswarmProjectDir)
+	if d.uapswarmCodeProjectDir != "" {
+		d.instance.SetUapswarmCodeProjectDir(d.uapswarmCodeProjectDir)
+	}
+	if mode != "" {
+		d.instance.SetUapswarmAdapterMode(mode)
+	}
 
 	// 步骤 20: d.instance.EnsureInitialized(ctx)
 	// Python: await self._instance.ensure_initialized()
@@ -633,6 +651,13 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		d.configCache = make(map[string]any)
 	}
 
+	// 对齐 Python L2710: if "agent_name" in self._instance_overrides: self._agent_name = ...
+	if name, ok := d.instanceOverrides["agent_name"].(string); ok && name != "" {
+		d.agentName = name
+	} else if name, ok := config["agent_name"].(string); ok && name != "" {
+		d.agentName = name
+	}
+
 	// 步骤 5: _refresh_multimodal_configs(configBase)
 	d.configBase = configBase
 	d.refreshMultimodalConfigs(configBase)
@@ -680,7 +705,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		agentschema.WithAgentName(d.agentName),
 		agentschema.WithAgentID("uapclaw"),
 	)
-	deepCfg := d.makeDeepAgentConfig(d.model, config, agentCard, nil, railsList)
+	deepCfg := d.makeDeepAgentConfig(d.model, config, agentCard, newToolCards, railsList)
 	if cfgErr := d.instance.ConfigureDeepConfig(ctx, deepCfg); cfgErr != nil {
 		return fmt.Errorf("DeepAgent ConfigureDeepConfig 失败: %w", cfgErr)
 	}
@@ -1386,7 +1411,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 		if parseApprovalAnswers(parsedAnswers) {
 			approvalType = "approve"
 		}
-		resolved = d.handleGovernanceApproval(requestID, parsedAnswers, approvalType)
+		resolved = d.handleGovernanceApproval(ctx, requestID, parsedAnswers, approvalType)
 	case strings.HasPrefix(requestID, "skill_evolve_"):
 		// ✅ 已回填：_handle_evolution_approval(requestID, answers)
 		resolved = d.handleEvolutionApproval(requestID, parsedAnswers)

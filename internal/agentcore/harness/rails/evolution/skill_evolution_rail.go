@@ -1400,7 +1400,7 @@ func (r *SkillEvolutionRail) emitSharedRecordsApproval(
 	}
 	// Python: request = self._manager.stage_records(skill_name, records, source="experience_sharing", messages=..., is_shared_records=True)
 	request, _ := r.manager.StageRecords(
-		context.Background(), skillName, records,
+		ctx, skillName, records,
 		true,                        // requiresApproval
 		"experience_sharing",        // source
 		"",                          // userQuery
@@ -1765,14 +1765,27 @@ func (r *SkillEvolutionRail) handleEvolutionFromSignals(
 		if emitHostEvents {
 			r.emitProgress("auto_approved", fmt.Sprintf("'%s' 的经验记录已自动保存", skillName), WithSkillName(skillName), WithRequestID(request.RequestID))
 		}
-		// Sharing: auto-approve 后上传
-		r.sharingAfterAutoApproved(ctx, skillName, request)
-		return request, nil
 	}
 
-	// 需要审批：发送审批事件
-	if emitHostEvents {
-		r.emitGeneratedRecords(cbc, skillName, request)
+	// 对齐 Python: finalize_staged_evolution_request(request, requires_approval, emit_fn=..., on_auto_approved=...)
+	err = r.approvalRuntime.FinalizeStagedEvolutionRequest(
+		request,
+		requiresApproval,
+		func(req *experience.ExperienceApprovalRequest) error {
+			// 需要审批：发送审批事件
+			if emitHostEvents {
+				r.emitGeneratedRecords(cbc, skillName, req)
+			}
+			return nil
+		},
+		func(req *experience.ExperienceApprovalRequest) error {
+			// 自动审批后触发 sharing
+			r.sharingAfterAutoApproved(ctx, skillName, req)
+			return nil
+		},
+	)
+	if err != nil {
+		return request, err
 	}
 
 	return request, nil

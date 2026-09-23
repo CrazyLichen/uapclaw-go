@@ -1032,7 +1032,9 @@ func (r *TeamSkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 	if r.generator != nil {
 		r.generator.UpdateLLM(llmModel, model)
 	}
-	// ExperienceScorer 的 LLM 更新需通过重建，此处无需操作
+	if r.scorer != nil {
+		r.scorer.UpdateLLM(llmModel, model)
+	}
 	if r.teamSignalDetector != nil {
 		r.teamSignalDetector = signal.NewTeamSignalDetector(
 			llmModel, model, r.language,
@@ -1209,7 +1211,7 @@ func (r *TeamSkillEvolutionRail) detectActiveRequestSignals(
 
 // detectExperienceDetailRead 检测经验详情读取操作（团队技能变体）。
 // 对齐 Python: TeamSkillEvolutionRail._detect_experience_detail_read(inputs)
-func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(inputs *agentinterfaces.ToolCallInputs) string {
+func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(ctx context.Context, inputs *agentinterfaces.ToolCallInputs) string {
 	toolName := inputs.ToolName
 	args := extractToolArgs(inputs.ToolArgs)
 
@@ -1222,7 +1224,7 @@ func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(inputs *agentinterfa
 		}
 		// Python: 区别于 SkillEvolutionRail —— 这里检查 _is_team_skill
 		if skillName != "" && isExperienceDetailRelativePath(relativePath) {
-			if r.isTeamSkill(context.Background(), skillName) {
+			if r.isTeamSkill(ctx, skillName) {
 				return skillName
 			}
 		}
@@ -1296,7 +1298,7 @@ func teamExtractPresentedRecordIDs(content string) []string {
 // recordPresentedExperienceDetail 在 after_tool_call 中记录经验详情读取。
 // 对齐 Python: TeamSkillEvolutionRail._record_presented_experience_detail(ctx, inputs)
 func (r *TeamSkillEvolutionRail) recordPresentedExperienceDetail(ctx context.Context, inputs *agentinterfaces.ToolCallInputs) {
-	skillName := r.detectExperienceDetailRead(inputs)
+	skillName := r.detectExperienceDetailRead(ctx, inputs)
 	if skillName == "" {
 		return
 	}

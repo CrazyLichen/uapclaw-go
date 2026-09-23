@@ -234,7 +234,7 @@ func (r *RuntimePromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEven
 
 // WriteRuntimeStateYAML 将运行时状态写入 config 目录下的 runtime_state.yaml。
 // Python: _write_runtime_state() (interface_deep.py L756-821)
-func WriteRuntimeStateYAML(modelName, mode, language, channel, agentName, projectDir string) {
+func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, channel, agentName, projectDir string) {
 	gitBranch := "N/A"
 	gitMainBranch := ""
 	gitStatus := ""
@@ -245,14 +245,14 @@ func WriteRuntimeStateYAML(modelName, mode, language, channel, agentName, projec
 	if err == nil && gitBin != "" && projectDir != "" {
 		info, statErr := os.Stat(projectDir)
 		if statErr == nil && info.IsDir() {
-			gitBranch = runGit(projectDir, "rev-parse", "--abbrev-ref", "HEAD")
+			gitBranch = runGit(ctx, projectDir, "rev-parse", "--abbrev-ref", "HEAD")
 			if gitBranch == "" {
 				gitBranch = "N/A"
 			}
 			if gitBranch != "N/A" {
-				insideWorkTree := runGit(projectDir, "rev-parse", "--is-inside-work-tree")
+				insideWorkTree := runGit(ctx, projectDir, "rev-parse", "--is-inside-work-tree")
 				if insideWorkTree == "true" {
-					gitStatus = runGit(projectDir, "status", "--short")
+					gitStatus = runGit(ctx, projectDir, "status", "--short")
 					if len(gitStatus) > 0 {
 						lines := strings.Split(gitStatus, "\n")
 						if len(lines) > 50 {
@@ -260,10 +260,10 @@ func WriteRuntimeStateYAML(modelName, mode, language, channel, agentName, projec
 						}
 						gitStatus = strings.Join(lines, "\n")
 					}
-					gitRecentCommits = runGit(projectDir, "log", "--oneline", "-5")
-					gitUser = runGit(projectDir, "config", "user.name")
+					gitRecentCommits = runGit(ctx, projectDir, "log", "--oneline", "-5")
+					gitUser = runGit(ctx, projectDir, "config", "user.name")
 					for _, candidate := range []string{"origin/main", "origin/master", "main", "master"} {
-						if runGit(projectDir, "rev-parse", "--verify", "--quiet", candidate) != "" {
+						if runGit(ctx, projectDir, "rev-parse", "--verify", "--quiet", candidate) != "" {
 							gitMainBranch = candidate
 							break
 						}
@@ -760,10 +760,10 @@ func samePath(left, right string) bool {
 
 // runGit 在指定目录执行 git 命令，返回 stdout（5 秒超时）。
 // Python: _run_git(args) (interface_deep.py L775-783)
-func runGit(dir string, args ...string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+func runGit(ctx context.Context, dir string, args ...string) string {
+	childCtx, cancel := context.WithTimeout(ctx, gitCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(childCtx, "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

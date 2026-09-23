@@ -220,7 +220,7 @@ func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 
 // BeforeModelCall 模型调用前，从缓存发现结果刷新 project_memory section。
 // Python: ProjectMemoryRail.before_model_call(ctx)
-func (r *ProjectMemoryRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *ProjectMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
@@ -230,6 +230,7 @@ func (r *ProjectMemoryRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 	// Python: try/except (OSError, ValueError, TypeError) — discovery 失败时优雅降级
 	// Go 版本增加 defer/recover 保护，防止 DiscoverAndLoadMemoryFiles 内部 panic 导致 BeforeModelCall 崩溃
 	var files []project_memory.LoadedMemoryFile
+	var discErr error
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -240,12 +241,20 @@ func (r *ProjectMemoryRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 					Msg("DiscoverAndLoadMemoryFiles panic，降级为空文件列表")
 			}
 		}()
-		files = project_memory.DiscoverAndLoadMemoryFiles(
+		files, discErr = project_memory.DiscoverAndLoadMemoryFiles(
+			ctx,
 			workspacePath,
 			workspacePath, // target_path = workspace（对齐 Python: paths: scoped rules evaluated against active workspace/cwd）
 			r.additionalDirectories,
 		)
 	}()
+	if discErr != nil {
+		logger.Warn(pmrLogComponent).
+			Str("event_type", "ProjectMemoryRail_discovery_error").
+			Str("workspace", workspacePath).
+			Err(discErr).
+			Msg("DiscoverAndLoadMemoryFiles 返回错误，降级为空文件列表")
+	}
 
 	merged := project_memory.MergeMemoryContent(files, r.maxChars)
 

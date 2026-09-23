@@ -85,7 +85,10 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajecto
 	// 执行 step
 	// Python: return self._opt.step()
 	// 单映射包装为切片，对齐 Python: isinstance(updated, list) 分支
-	result := u.opt.Step()
+	result, err := u.opt.Step()
+	if err != nil {
+		return nil, err
+	}
 	return []map[schema.UpdateKey]any{result}, nil
 }
 

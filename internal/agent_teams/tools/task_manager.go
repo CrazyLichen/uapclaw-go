@@ -801,7 +801,15 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 	// 4. 生成 plan_id（加入纳秒避免同一毫秒内重复提交时 ID 冲突）
 	planID := fmt.Sprintf("plan_%s_%d_%d", taskID, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
 
-	// 5. 拷贝 plan 文件到 plansDir
+	// 5. 检查 plan_id 是否已存在（对齐 Python L938: if self._read_plan_index(plan_id): return failure）
+	planIndex, _ := tm.loadPlanIndex()
+	if planIndex != nil {
+		if _, exists := planIndex.TaskPlans[planID]; exists {
+			return nil, fmt.Errorf("计划已存在: %s", planID)
+		}
+	}
+
+	// 6. 拷贝 plan 文件到 plansDir
 	planDir := filepath.Join(tm.plansDir, tm.teamPlanID, "tasks", taskID, "plans")
 	if err := os.MkdirAll(planDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建计划目录失败: %v", err)
@@ -822,7 +830,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		}
 	}
 
-	// 6. 写入 index.json
+	// 7. 写入 index.json
 	nowISO := time.Now().Format(time.RFC3339)
 	record := &PlanRecord{
 		PlanID:       planID,
@@ -845,7 +853,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		return nil, fmt.Errorf("写入计划索引失败: %v", err)
 	}
 
-	// 7. 发布事件
+	// 8. 发布事件
 	tm.publishTaskEvent(ctx, events.TaskPlanRequestEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
 		TaskID:           taskID,
@@ -855,7 +863,7 @@ func (tm *TeamTaskManager) SubmitPlan(ctx context.Context, taskID, planFilePath,
 		ToolCallID:       toolCallID,
 	})
 
-	// 8. 对齐 Python: _notify_leader_of_plan — 通过 TeamMessageManager 通知 leader
+	// 9. 对齐 Python: _notify_leader_of_plan — 通过 TeamMessageManager 通知 leader
 	leaderMessageID := tm.notifyLeaderOfPlan(ctx, record, destPath, toolCallID)
 	if leaderMessageID != "" {
 		// Python: _write_task_plan_index(task_id, {"plan_id": ..., "leader_message_id": ..., "updated_at": ...})
@@ -952,7 +960,7 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 // 返回 leader_message_id（对齐 Python: _notify_leader_of_plan → leader_message_id）。
 // Python: TeamTaskManager._notify_leader_of_plan()
 func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) string {
-	leaderName := tm.resolveLeaderMemberName()
+	leaderName := tm.resolveLeaderMemberName(ctx)
 	if leaderName == "" {
 		logger.Warn(taskLogComponent).
 			Str("team", tm.teamName).
@@ -1017,12 +1025,12 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 
 // resolveLeaderMemberName 解析 leader 成员名。
 // Python: TeamTaskManager._resolve_leader_member_name()
-func (tm *TeamTaskManager) resolveLeaderMemberName() string {
+func (tm *TeamTaskManager) resolveLeaderMemberName(ctx context.Context) string {
 	if tm.leaderMemberName != "" {
 		return tm.leaderMemberName
 	}
 	// Python: 从 db.team.get_team 获取 leader_member_name
-	team, err := tm.db.Team().GetTeam(context.Background(), tm.teamName)
+	team, err := tm.db.Team().GetTeam(ctx, tm.teamName)
 	if err != nil || team == nil {
 		return ""
 	}

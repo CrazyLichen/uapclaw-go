@@ -341,13 +341,13 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 
 // AfterWorktreeCreate AutoSetupRail 的 hook 实现。
 // Python: AutoSetupRail.after_worktree_create(ctx, session)
-func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *WorktreeSession) error {
+func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, session *WorktreeSession) error {
 	commands := a.commands
 	if len(commands) == 0 {
 		commands = detectSetup(session.WorktreePath)
 	}
 	for _, cmd := range commands {
-		execCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		execCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		cmdObj := exec.CommandContext(execCtx, "sh", "-c", cmd)
 		cmdObj.Dir = session.WorktreePath
 		cmdObj.Stdout = nil
@@ -361,52 +361,52 @@ func (a *AutoSetupRail) AfterWorktreeCreate(_ context.Context, session *Worktree
 }
 
 // BeforeWorktreeCreate AutoSetupRail 的空实现，不干预 slug。
-func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
-	return "", nil
+func (a *AutoSetupRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+	return nil, nil
 }
 
 // BeforeWorktreeExit AutoSetupRail 的空实现，不干预 action。
-func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
-	return "", nil
+func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+	return nil, nil
 }
 
 // AfterWorktreeExit AutoSetupRail 的空实现。
 func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
-	return nil
+func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+	return true
 }
-func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (string, error) {
-	return message, nil
+func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (*string, error) {
+	return &message, nil
 }
 func (a *AutoSetupRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
-	return nil
+func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+	return files
 }
 
 // BeforeWorktreeExit DiffSummaryRail 的 hook 实现。
 // Python: DiffSummaryRail.before_worktree_exit(ctx, session, action)
-func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (string, error) {
+func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (*string, error) {
 	if action != "keep" {
-		return "", nil
+		return nil, nil
 	}
 	if session.OriginalHeadCommit == "" {
-		return "", nil
+		return nil, nil
 	}
 	r := runGit(ctx, []string{"diff", "--stat", session.OriginalHeadCommit + "..HEAD"}, session.WorktreePath)
 	if r.OK() && r.Stdout != "" {
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
 			Str("diff_stat", r.Stdout).Msg("Worktree 变更摘要")
 	}
-	return "", nil
+	return nil, nil
 }
 
 // BeforeWorktreeCreate DiffSummaryRail 的空实现，不干预 slug。
-func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
-	return "", nil
+func (d *DiffSummaryRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+	return nil, nil
 }
 
 // AfterWorktreeCreate DiffSummaryRail 的空实现。
@@ -418,17 +418,17 @@ func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSess
 func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
-	return nil
+func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+	return true
 }
-func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (string, error) {
-	return message, nil
+func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, message string) (*string, error) {
+	return &message, nil
 }
 func (d *DiffSummaryRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
-	return nil
+func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+	return files
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

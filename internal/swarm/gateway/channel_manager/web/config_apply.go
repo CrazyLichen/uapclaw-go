@@ -238,7 +238,7 @@ func NotifyConfigSavedOnce(
 // ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
 //
 // Python: _process_files (web_connect.py L189-221)。
-func ProcessFiles(params map[string]any) map[string]any {
+func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
 	files, ok := params["files"]
 	if !ok {
 		return params
@@ -273,7 +273,7 @@ func ProcessFiles(params map[string]any) map[string]any {
 		}
 
 		if fileURL != "" {
-			fileContent, err := downloadFile(fileURL)
+			fileContent, err := downloadFile(ctx, fileURL)
 			if err != nil {
 				logger.Warn(logComponentConfigApply).
 					Str("url", fileURL).
@@ -726,15 +726,15 @@ func parseInt(val any) (int, error) {
 //
 // Python: _process_files (web_connect.py L189-221)。
 // 供 HandleWebSocket 内部调用，外部请使用 ProcessFiles。
-func processFiles(params map[string]any) map[string]any {
-	return ProcessFiles(params)
+func processFiles(ctx context.Context, params map[string]any) map[string]any {
+	return ProcessFiles(ctx, params)
 }
 
 // downloadFile 下载指定 URL 的文件内容。
-func downloadFile(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func downloadFile(ctx context.Context, url string) ([]byte, error) {
+	childCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(childCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -1156,8 +1156,8 @@ func TestDeepAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
 // TestUpdateRailsForMode 测试按模式切换 Rails。
 func TestUpdateRailsForMode(t *testing.T) {
 	d := NewDeepAdapter()
-	d.updateRailsForMode("agent.plan")
-	d.updateRailsForMode("agent.fast")
+	d.updateRailsForMode(context.Background(), "agent.plan")
+	d.updateRailsForMode(context.Background(), "agent.fast")
 }
 
 // TestUpdatePromptForMode 测试按模式更新提示词。
@@ -1250,7 +1250,7 @@ func TestDeepAdapter_Slash占位函数(t *testing.T) {
 	if result, err := d.handleEvolveRollbackCommand(ctx, "/evolve_rollback", "s1"); result != nil || err != nil {
 		t.Errorf("handleEvolveRollbackCommand 占位应返回 nil, nil")
 	}
-	if d.handleGovernanceApproval("req1", nil, "simplify") != false {
+	if d.handleGovernanceApproval(context.Background(), "req1", nil, "simplify") != false {
 		t.Error("handleGovernanceApproval 占位应返回 false")
 	}
 }

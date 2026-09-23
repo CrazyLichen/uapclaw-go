@@ -326,7 +326,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 			nil, // ⤵️ 待 9.55 回填: agentLookup
 			nil, // ⤵️ 待 9.55 回填: onInbound
 		)
-		result, err := hInbox.Send(p.Body(), p.Target(), strPtr(p.Sender()))
+		result, err := hInbox.Send(ctx, p.Body(), p.Target(), strPtr(p.Sender()))
 		if err != nil {
 			// Python 步骤 5c-5d
 			if _, ok := err.(*interaction.HumanAgentNotEnabledError); ok {

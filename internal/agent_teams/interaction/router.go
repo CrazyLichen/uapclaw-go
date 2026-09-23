@@ -230,7 +230,7 @@ func ResolveTargets(payloads []InteractPayload, memberExists MemberExistsCheck) 
 
 // DeliverDirect 验证 target 并发送点对点消息。
 // Python: deliver_direct(body, *, sender, target, message_manager, member_exists)
-func DeliverDirect(body string, sender string, target string, messageManager *tools.TeamMessageManager, memberExists MemberExistsCheck) (*DeliverResult, error) {
+func DeliverDirect(ctx context.Context, body string, sender string, target string, messageManager *tools.TeamMessageManager, memberExists MemberExistsCheck) (*DeliverResult, error) {
 	// Python: if not await member_exists(target): return DeliverResult.failure(f"unknown_member:{target}")
 	exists, err := memberExists(target)
 	if err != nil {
@@ -241,7 +241,6 @@ func DeliverDirect(body string, sender string, target string, messageManager *to
 		return NewDeliverResultFailure(reason), nil
 	}
 	// Python: msg_id = await message_manager.send_message(content=body, to_member_name=target, from_member_name=sender)
-	ctx := context.Background()
 	msgID, err := messageManager.SendMessage(ctx, body, target, sender)
 	if err != nil {
 		reason := "send_failed:" + target + ":" + err.Error()

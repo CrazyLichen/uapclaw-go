@@ -362,13 +362,13 @@ func TestProjectMemoryRail_AfterToolCall_写工具(t *testing.T) {
 	}
 
 	// 预热缓存
-	project_memory.DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	_, _ = project_memory.DiscoverAndLoadMemoryFiles(context.Background(), tmpDir, tmpDir, nil)
 
 	r := NewProjectMemoryRail(tmpDir, "cn", 60000, nil)
 
 	for _, toolName := range []string{"write_file", "edit_file", "delete_file", "write", "delete", "move_file", "rename_file", "write_text_file"} {
 		// 重新预热缓存
-		project_memory.DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+		_, _ = project_memory.DiscoverAndLoadMemoryFiles(context.Background(), tmpDir, tmpDir, nil)
 
 		toolInputs := &agentinterfaces.ToolCallInputs{ToolName: toolName}
 		cbc := agentinterfaces.NewAgentCallbackContext(nil, toolInputs, nil)

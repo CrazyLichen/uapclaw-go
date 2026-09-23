@@ -18,25 +18,25 @@ import (
 // 子类覆盖关心的 hook 方法，WorktreeManager.fireRail 直接调用。
 type WorktreeLifecycleRail interface {
 	// BeforeWorktreeCreate 创建前 hook。返回修改后的 slug，nil 不干预。
-	BeforeWorktreeCreate(ctx context.Context, slug, repoRoot string) (string, error)
+	BeforeWorktreeCreate(ctx context.Context, slug, repoRoot string) (*string, error)
 	// AfterWorktreeCreate 创建后 hook。
 	AfterWorktreeCreate(ctx context.Context, session *WorktreeSession) error
 	// BeforeWorktreeExit 退出前 hook。返回修改后的 action，nil 不干预。
-	BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (string, error)
+	BeforeWorktreeExit(ctx context.Context, session *WorktreeSession, action string) (*string, error)
 	// AfterWorktreeExit 退出后 hook。
 	AfterWorktreeExit(ctx context.Context, session *WorktreeSession, action string) error
-	// OnWorktreeFileWrite worktree 内文件写入后 hook。
+	// OnWorktreeFileWrite worktree 内文件写入后 hook。返回 true 允许写入，false 阻止。
 	// Python: WorktreeLifecycleRail.on_worktree_file_write
-	OnWorktreeFileWrite(ctx context.Context, session *WorktreeSession, filePath string) error
+	OnWorktreeFileWrite(ctx context.Context, session *WorktreeSession, filePath string) bool
 	// BeforeWorktreeCommit 提交前 hook。返回修改后的 commit message，nil 不干预。
 	// Python: WorktreeLifecycleRail.before_worktree_commit
-	BeforeWorktreeCommit(ctx context.Context, session *WorktreeSession, message string) (string, error)
+	BeforeWorktreeCommit(ctx context.Context, session *WorktreeSession, message string) (*string, error)
 	// AfterWorktreeCommit 提交后 hook。
 	// Python: WorktreeLifecycleRail.after_worktree_commit
 	AfterWorktreeCommit(ctx context.Context, session *WorktreeSession, commitHash string) error
-	// OnWorktreeSync 同步操作 hook。
+	// OnWorktreeSync 同步操作 hook。返回过滤后的文件列表。
 	// Python: WorktreeLifecycleRail.on_worktree_sync
-	OnWorktreeSync(ctx context.Context, session *WorktreeSession) error
+	OnWorktreeSync(ctx context.Context, session *WorktreeSession, direction string, files []string) []string
 }
 
 // WorktreeBackend worktree 后端接口。

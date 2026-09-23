@@ -224,7 +224,7 @@ func FindProjectRoot(cwd string) string {
 
 // DiscoverAndLoadMemoryFiles 发现并加载所有适用的 memory 文件。
 // Python: discover_and_load_memory_files (files.py L174-333)
-func DiscoverAndLoadMemoryFiles(workspace string, targetPath string, additionalDirectories []string) []LoadedMemoryFile {
+func DiscoverAndLoadMemoryFiles(ctx context.Context, workspace string, targetPath string, additionalDirectories []string) ([]LoadedMemoryFile, error) {
 	workspaceKey := safeResolve(workspace)
 	targetKey := safeResolve(targetPath)
 	if targetKey == "" {
@@ -244,7 +244,7 @@ func DiscoverAndLoadMemoryFiles(workspace string, targetPath string, additionalD
 		}
 		currentSnapshot := buildWatchSnapshot(watchPaths)
 		if snapshotUnchanged(cached.snapshot, currentSnapshot) {
-			return append([]LoadedMemoryFile(nil), cached.files...)
+			return append([]LoadedMemoryFile(nil), cached.files...), nil
 		}
 	}
 
@@ -274,7 +274,7 @@ func DiscoverAndLoadMemoryFiles(workspace string, targetPath string, additionalD
 	if projectRoot != "" {
 		cwd := workspaceKey
 		// Python: worktree_info = _detect_git_worktree(cwd)
-		worktreeInfo := detectGitWorktree(cwd)
+		worktreeInfo := detectGitWorktree(ctx, cwd)
 		scanRoot := projectRoot
 		// Python: if worktree_info is not None and worktree_info.canonical_root != worktree_info.worktree_root
 		// Python:    and _is_relative_to(project_root, worktree_info.canonical_root):
@@ -333,7 +333,12 @@ func DiscoverAndLoadMemoryFiles(workspace string, targetPath string, additionalD
 	discoveryCache[ck] = &cacheEntry{files: files, snapshot: snapshot}
 	cacheMu.Unlock()
 
-	return append([]LoadedMemoryFile(nil), files...)
+	logger.Debug(pmLogComponent).
+		Str("workspace", workspaceKey).
+		Int("file_count", len(files)).
+		Msg("[project_memory] 发现记忆文件完成")
+
+	return append([]LoadedMemoryFile(nil), files...), nil
 }
 
 // MergeMemoryContent 将文件合并为单个文本块，按优先级排列，超过 maxChars 时截断。
@@ -437,17 +442,20 @@ func expandHome(p string) string {
 
 // detectGitWorktree 检测 git worktree 信息。
 // Python: _detect_git_worktree (files.py L822-834)
-func detectGitWorktree(cwd string) *GitWorktreeInfo {
+func detectGitWorktree(ctx context.Context, cwd string) *GitWorktreeInfo {
 	// Python: git_exe = _git_executable()
 	gitExe, err := exec.LookPath("git")
 	if err != nil {
+		logger.Debug(pmLogComponent).
+			Str("cwd", cwd).
+			Msg("[project_memory] git 可执行文件未找到")
 		return nil
 	}
 
 	// Python: worktree_root = _git_path(cwd, "rev-parse", "--show-toplevel")
-	worktreeRoot := gitPath(cwd, gitExe, "rev-parse", "--show-toplevel")
+	worktreeRoot := gitPath(ctx, cwd, gitExe, "rev-parse", "--show-toplevel")
 	// Python: common_dir = _git_path(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	commonDir := gitPath(cwd, gitExe, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	commonDir := gitPath(ctx, cwd, gitExe, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if worktreeRoot == "" || commonDir == "" {
 		return nil
 	}
@@ -466,13 +474,18 @@ func detectGitWorktree(cwd string) *GitWorktreeInfo {
 
 // gitPath 执行 git 命令返回路径。
 // Python: _git_path (files.py L848-869)
-func gitPath(cwd string, gitExe string, args ...string) string {
+func gitPath(ctx context.Context, cwd string, gitExe string, args ...string) string {
 	// Python: completed = subprocess.run([git_exe, "-C", str(cwd), *args], check=True, stdout=PIPE, stderr=DEVNULL, text=True, timeout=2)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	childCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, gitExe, append([]string{"-C", cwd}, args...)...)
+	cmd := exec.CommandContext(childCtx, gitExe, append([]string{"-C", cwd}, args...)...)
 	out, err := cmd.Output()
 	if err != nil {
+		logger.Debug(pmLogComponent).
+			Str("cwd", cwd).
+			Strs("args", args).
+			Err(err).
+			Msg("[project_memory] git 命令执行失败")
 		return ""
 	}
 	result := strings.TrimSpace(string(out))

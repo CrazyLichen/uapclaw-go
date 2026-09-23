@@ -206,7 +206,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	repoRoot, _ := findCanonicalGitRoot(ctx, session.OriginalCWD)
 
 	if action == "keep" {
-		m.sessionState.SetCurrentSession(nil)
+		SetCurrentSession(ctx, nil)
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
 			Str("worktree_path", session.WorktreePath).Msg("已保留 worktree")
 		return map[string]string{
@@ -457,17 +457,17 @@ func (m *WorktreeManager) resolvePolicy() WorktreeLifecyclePolicy {
 }
 
 // fireBeforeCreate 调用 BeforeWorktreeCreate hook。
-// 返回最后一个非空 slug 修改，空字符串表示不干预。
+// 返回最后一个非 nil slug 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_create", slug, repo_root)
-func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, slug, repoRoot string) (string, error) {
-	var lastResult string
+func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, slug, repoRoot string) (*string, error) {
+	var lastResult *string
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeCreate(ctx, slug, repoRoot)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeCreate hook 失败")
 			continue
 		}
-		if r != "" {
+		if r != nil {
 			lastResult = r
 		}
 	}
@@ -485,17 +485,17 @@ func (m *WorktreeManager) fireAfterCreate(ctx context.Context, session *Worktree
 }
 
 // fireBeforeExit 调用 BeforeWorktreeExit hook。
-// 返回最后一个非空 action 修改，空字符串表示不干预。
+// 返回最后一个非 nil action 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_exit", session, action)
-func (m *WorktreeManager) fireBeforeExit(ctx context.Context, session *WorktreeSession, action string) (string, error) {
-	var lastResult string
+func (m *WorktreeManager) fireBeforeExit(ctx context.Context, session *WorktreeSession, action string) (*string, error) {
+	var lastResult *string
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeExit(ctx, session, action)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeExit hook 失败")
 			continue
 		}
-		if r != "" {
+		if r != nil {
 			lastResult = r
 		}
 	}
@@ -513,28 +513,29 @@ func (m *WorktreeManager) fireAfterExit(ctx context.Context, session *WorktreeSe
 }
 
 // fireOnFileWrite 调用 OnWorktreeFileWrite hook。
+// 返回 false 表示任何 rail 阻止写入，true 表示允许。
 // Python: WorktreeManager._fire_rail("on_worktree_file_write", session, file_path)
-func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, session *WorktreeSession, filePath string) error {
+func (m *WorktreeManager) fireOnFileWrite(ctx context.Context, session *WorktreeSession, filePath string) bool {
 	for _, rail := range m.lifecycleRails {
-		if err := rail.OnWorktreeFileWrite(ctx, session, filePath); err != nil {
-			return err
+		if !rail.OnWorktreeFileWrite(ctx, session, filePath) {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // fireBeforeCommit 调用 BeforeWorktreeCommit hook。
-// 返回最后一个非空 message 修改，空字符串表示不干预。
+// 返回最后一个非 nil message 修改，nil 表示不干预。
 // Python: WorktreeManager._fire_rail("before_worktree_commit", session, message)
-func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, session *WorktreeSession, message string) (string, error) {
-	var lastResult string
+func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, session *WorktreeSession, message string) (*string, error) {
+	var lastResult *string
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeCommit(ctx, session, message)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("fireBeforeCommit hook 失败")
 			continue
 		}
-		if r != "" {
+		if r != nil {
 			lastResult = r
 		}
 	}
@@ -552,14 +553,14 @@ func (m *WorktreeManager) fireAfterCommit(ctx context.Context, session *Worktree
 }
 
 // fireOnSync 调用 OnWorktreeSync hook。
+// 返回所有 rail 过滤后的文件列表。
 // Python: WorktreeManager._fire_rail("on_worktree_sync", session)
-func (m *WorktreeManager) fireOnSync(ctx context.Context, session *WorktreeSession) error {
+func (m *WorktreeManager) fireOnSync(ctx context.Context, session *WorktreeSession, direction string, files []string) []string {
+	filtered := files
 	for _, rail := range m.lifecycleRails {
-		if err := rail.OnWorktreeSync(ctx, session); err != nil {
-			return err
-		}
+		filtered = rail.OnWorktreeSync(ctx, session, direction, filtered)
 	}
-	return nil
+	return filtered
 }
 
 // checkChanges 检查 worktree 路径的未提交变更。

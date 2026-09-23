@@ -505,8 +505,7 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 // ✅ 已回填：handleMemoryRailByConfig（对齐 Python: _handle_memory_rail_by_config()）
 //
 // Python: _handle_memory_rail_by_config(mode) (line 5296-5320)
-func (d *DeepAdapter) handleMemoryRailByConfig(mode string) {
-	ctx := context.Background()
+func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string) {
 
 	// Python: if get_memory_mode(config) == "local":
 	if getMemoryMode(d.configCache) == "local" {
@@ -719,20 +718,19 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 
 // updateRailsForMode 按模式注册/注销 Rail。
 // Python: _update_rails_for_mode() (line 2754-2896)
-func (d *DeepAdapter) updateRailsForMode(mode string) {
+func (d *DeepAdapter) updateRailsForMode(ctx context.Context, mode string) {
 	// Python: if mode == "agent.plan": await self._update_plan_mode_rails()
 	// Python: else: await self._update_agent_mode_rails(mode)
 	if mode == "agent.plan" {
-		d.updatePlanModeRails()
+		d.updatePlanModeRails(ctx)
 	} else {
-		d.updateAgentModeRails(mode)
+		d.updateAgentModeRails(ctx, mode)
 	}
 }
 
 // updatePlanModeRails plan 模式：注册 plan 专属 rails。
 // Python: _update_plan_mode_rails() (line 2761-2852)
-func (d *DeepAdapter) updatePlanModeRails() {
-	ctx := context.Background()
+func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 
 	// 1. TaskPlanningRail — plan 模式下注册
 	if d.taskPlanningRail == nil {
@@ -765,7 +763,7 @@ func (d *DeepAdapter) updatePlanModeRails() {
 
 	// 3. 记忆 rail 处理
 	// Python: await self._handle_memory_rail_by_config("plan")
-	d.handleMemoryRailByConfig("plan")
+	d.handleMemoryRailByConfig(ctx, "plan")
 
 	// 4. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()
@@ -867,8 +865,7 @@ func (d *DeepAdapter) updatePlanModeRails() {
 
 // updateAgentModeRails agent 模式：卸载 plan 专属 rails，按需注册 agent 专属 rails。
 // Python: _update_agent_mode_rails() (line 2854-2895)
-func (d *DeepAdapter) updateAgentModeRails(mode string) {
-	ctx := context.Background()
+func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 
 	// 1. 卸载 plan 专属 rails
 	// Python: rail_specs = (("_task_planning_rail", "TaskPlanningRail"), ...)
@@ -907,7 +904,7 @@ func (d *DeepAdapter) updateAgentModeRails(mode string) {
 
 	// 2. 记忆 rail 处理
 	// Python: await self._handle_memory_rail_by_config("fast")
-	d.handleMemoryRailByConfig("fast")
+	d.handleMemoryRailByConfig(ctx, "fast")
 
 	// 3. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()

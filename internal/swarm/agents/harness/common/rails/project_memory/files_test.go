@@ -1,6 +1,7 @@
 package project_memory
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func TestDiscoverAndLoadMemoryFiles_项目根加载(t *testing.T) {
 	// 清除可能残留的缓存
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) == 0 {
 		t.Fatal("expected at least one file")
 	}
@@ -87,7 +88,7 @@ func TestDiscoverAndLoadMemoryFiles_空目录不生成结果(t *testing.T) {
 	os.Mkdir(filepath.Join(tmpDir, ".git"), 0o755)
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) != 0 {
 		t.Fatalf("expected 0 files, got %d", len(files))
 	}
@@ -102,7 +103,7 @@ func TestDiscoverAndLoadMemoryFiles_Glob扫描(t *testing.T) {
 	os.WriteFile(filepath.Join(rulesDir, "rule2.md"), []byte("Rule 2 content"), 0o644)
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) < 2 {
 		t.Fatalf("expected at least 2 files, got %d", len(files))
 	}
@@ -115,7 +116,7 @@ func TestDiscoverAndLoadMemoryFiles_Local优先级最高(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.local.md"), []byte("Local content"), 0o644)
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) < 2 {
 		t.Fatalf("expected at least 2 files, got %d", len(files))
 	}
@@ -144,7 +145,7 @@ func TestDiscoverAndLoadMemoryFiles_Include展开(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.md"), []byte(mainContent), 0o644)
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) < 2 {
 		t.Fatalf("expected at least 2 files (main + included), got %d", len(files))
 	}
@@ -170,7 +171,7 @@ func TestDiscoverAndLoadMemoryFiles_缓存快照失效(t *testing.T) {
 	ClearProjectMemoryCache(tmpDir)
 
 	// 首次加载
-	files1 := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files1, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files1) == 0 || files1[0].Content != "Original" {
 		t.Fatal("first load failed")
 	}
@@ -179,7 +180,7 @@ func TestDiscoverAndLoadMemoryFiles_缓存快照失效(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.md"), []byte("Modified"), 0o644)
 
 	// 再次加载应获取新内容（缓存快照失效）
-	files2 := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files2, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files2) == 0 {
 		t.Fatal("second load returned empty")
 	}
@@ -199,7 +200,7 @@ func TestDiscoverAndLoadMemoryFiles_FrontmatterPaths作用域(t *testing.T) {
 	ClearProjectMemoryCache(tmpDir)
 
 	// targetPath 是项目根目录，不匹配 src/**，应跳过
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	for _, f := range files {
 		if strings.Contains(f.Path, "scoped.md") {
 			t.Fatal("scoped rule should not match workspace root path")
@@ -245,9 +246,9 @@ func TestClearProjectMemoryCache(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.md"), []byte("test"), 0o644)
 	ClearProjectMemoryCache(tmpDir)
 
-	DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	_, _ = DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	ClearProjectMemoryCache(tmpDir)
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, nil)
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, nil)
 	if len(files) == 0 {
 		t.Fatal("expected files after cache clear")
 	}
@@ -545,7 +546,7 @@ func TestDiscoverAndLoadMemoryFiles_额外目录(t *testing.T) {
 	os.WriteFile(filepath.Join(extraDir, "UAPCLAWSWARM.md"), []byte("Extra dir content"), 0o644)
 	ClearProjectMemoryCache(tmpDir)
 
-	files := DiscoverAndLoadMemoryFiles(tmpDir, tmpDir, []string{extraDir})
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(),tmpDir, tmpDir, []string{extraDir})
 	var found bool
 	for _, f := range files {
 		if strings.Contains(f.Content, "Extra dir content") {

@@ -118,7 +118,7 @@ func (b *MemoryOptimizerBase) Backward(ctx context.Context, signals []*signal.Ev
 //	MemoryOptimizerBase 为空实现，返回空映射。
 //
 // Python: BaseOptimizer.step() → _step()
-func (b *MemoryOptimizerBase) Step() map[cschema.UpdateKey]any {
+func (b *MemoryOptimizerBase) Step() (map[cschema.UpdateKey]any, error) {
 	return b.StepTemplate(b.step)
 }
 
@@ -138,6 +138,6 @@ func (b *MemoryOptimizerBase) SelectSignals(signals []*signal.EvolutionSignal) [
 // MemoryOptimizerBase 为空实现，返回空映射。
 //
 // Python: BaseOptimizer._step() → 抽象（子类实现）
-func (b *MemoryOptimizerBase) step() map[cschema.UpdateKey]any {
-	return map[cschema.UpdateKey]any{}
+func (b *MemoryOptimizerBase) step() (map[cschema.UpdateKey]any, error) {
+	return map[cschema.UpdateKey]any{}, nil
 }

@@ -142,7 +142,7 @@ func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix s
 // 如果处理器 context 已取消（等价 Python: task.done()），则重建队列和优先级。
 //
 // Python: SessionManager.ensure_session_processor(session_id)
-func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID string) error {
+func (sm *SessionManager) EnsureSessionProcessor(ctx context.Context, sessionID string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -169,7 +169,7 @@ func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID st
 	sigCh := make(chan struct{}, 1)
 	sm.sessionSignals[sessionID] = sigCh
 
-	procCtx, procCancel := context.WithCancel(context.Background())
+	procCtx, procCancel := context.WithCancel(ctx)
 	sm.sessionProcessors[sessionID] = &processorEntry{ctx: procCtx, cancel: procCancel}
 
 	go sm.processSessionQueue(procCtx, sessionID, sigCh)

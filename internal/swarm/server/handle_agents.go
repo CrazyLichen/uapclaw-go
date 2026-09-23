@@ -206,7 +206,7 @@ func (s *AgentServer) handleAgentsGet(_ context.Context, request *schema.AgentRe
 
 // handleAgentsCreate 处理 agents.create 请求。
 // Python: _handle_agents_create
-func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleAgentsCreate(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsCreateParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -223,7 +223,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 	// Python: if generate: llm_result = await self._generate_agent_with_llm(name, description)
 	generated := false
 	if params.Generate && params.Name != "" && params.Description != "" {
-		llmResult := runtime.GenerateAgentWithLLM(context.Background(), s.resolveModel(), params.Name, params.Description)
+		llmResult := runtime.GenerateAgentWithLLM(ctx, s.resolveModel(), params.Name, params.Description)
 		if llmResult != nil {
 			params.WhenToUse = llmResult.WhenToUse
 			params.Prompt = llmResult.SystemPrompt
@@ -285,7 +285,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 
 // handleAgentsUpdate 处理 agents.update 请求。
 // Python: _handle_agents_update
-func (s *AgentServer) handleAgentsUpdate(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleAgentsUpdate(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsUpdateParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -311,7 +311,7 @@ func (s *AgentServer) handleAgentsUpdate(_ context.Context, request *schema.Agen
 	// 步骤 1: 如果 generate=true 且有 description，使用 LLM 生成
 	generated := false
 	if params.Generate && name != "" && params.Description != nil && *params.Description != "" {
-		llmResult := runtime.GenerateAgentWithLLM(context.Background(), s.resolveModel(), name, *params.Description)
+		llmResult := runtime.GenerateAgentWithLLM(ctx, s.resolveModel(), name, *params.Description)
 		if llmResult != nil {
 			params.WhenToUse = &llmResult.WhenToUse
 			params.Prompt = &llmResult.SystemPrompt

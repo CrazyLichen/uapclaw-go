@@ -61,9 +61,9 @@ func (m *mockOptimizer) Backward(ctx context.Context, signals []*signal.Evolutio
 	return m.backwardErr
 }
 
-func (m *mockOptimizer) Step() map[schema.UpdateKey]any {
+func (m *mockOptimizer) Step() (map[schema.UpdateKey]any, error) {
 	m.stepCalled = true
-	return m.stepReturn
+	return m.stepReturn, nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

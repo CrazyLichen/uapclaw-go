@@ -228,7 +228,8 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 处理文件下载（对齐 Python _process_files）
-		params = processFiles(params)
+		ctx := context.Background()
+		params = processFiles(ctx, params)
 
 		// ─── 两层消息架构（对齐 Python _handle_raw_message）───
 		// 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发

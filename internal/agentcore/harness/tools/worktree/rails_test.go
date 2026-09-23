@@ -101,8 +101,8 @@ func TestDiffSummaryRail_Remove(t *testing.T) {
 	if err != nil {
 		t.Errorf("BeforeWorktreeExit 不应返回错误: %v", err)
 	}
-	// action=remove 时应返回空（不干预）
-	if result != "" {
-		t.Errorf("action=remove 时应返回空字符串，实际: %q", result)
+	// action=remove 时应返回 nil（不干预）
+	if result != nil {
+		t.Errorf("action=remove 时应返回 nil，实际: %v", result)
 	}
 }

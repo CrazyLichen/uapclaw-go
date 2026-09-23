@@ -105,6 +105,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// 步骤 4: 写 runtime_state.yaml（替代旧的环境变量写入）
 	// Python: self._write_runtime_state(mode=..., language=..., channel=..., project_dir=...)
 	d.writeRuntimeStateYAML(
+		ctx,
 		config.Mode,
 		resolvedLanguage,
 		resolvedChannel,
@@ -129,7 +130,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 7: rail/tool 模式切换（仅 evolution 分支已实现）
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
-	d.updateRailsForMode(config.Mode)
+	d.updateRailsForMode(ctx, config.Mode)
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
@@ -319,8 +320,9 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 
 // writeRuntimeStateYAML 将运行时状态写入 config 目录下的 runtime_state.yaml。
 // Python: _write_runtime_state() (interface_deep.py L756-821)
-func (d *DeepAdapter) writeRuntimeStateYAML(mode, language, channel, projectDir string) {
+func (d *DeepAdapter) writeRuntimeStateYAML(ctx context.Context, mode, language, channel, projectDir string) {
 	commrails.WriteRuntimeStateYAML(
+		ctx,
 		d.resolveModelName(),
 		mode,
 		language,

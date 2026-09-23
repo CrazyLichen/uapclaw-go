@@ -279,7 +279,7 @@ func (b *ToolOptimizerBase) Backward(ctx context.Context, signals []*signal.Evol
 //	ToolOptimizer 为空实现，返回空映射。
 //
 // Python: BaseOptimizer.step() → _step() → return
-func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
+func (b *ToolOptimizerBase) Step() (map[cschema.UpdateKey]any, error) {
 	return b.StepTemplate(b.step)
 }
 
@@ -361,8 +361,8 @@ func WithToolName(name string) ToolOptimizerBaseOption {
 // ToolOptimizer 为空实现，返回空映射。
 //
 // Python: def _step(self): updates = {}; return
-func (b *ToolOptimizerBase) step() map[cschema.UpdateKey]any {
-	return map[cschema.UpdateKey]any{}
+func (b *ToolOptimizerBase) step() (map[cschema.UpdateKey]any, error) {
+	return map[cschema.UpdateKey]any{}, nil
 }
 
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。

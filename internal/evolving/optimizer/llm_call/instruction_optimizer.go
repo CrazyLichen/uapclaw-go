@@ -136,7 +136,7 @@ func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.E
 // Python: BaseOptimizer.step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
-func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
+func (o *InstructionOptimizer) Step() (map[schema.UpdateKey]any, error) {
 	return o.StepTemplate(o.step)
 }
 
@@ -267,7 +267,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 //	    Python: if sys_val: updates[(op_id, "system_prompt")] = sys_val
 //	    Python: if usr_val: updates[(op_id, "user_prompt")] = usr_val
 //	Python: return updates if updates else None
-func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
+func (o *InstructionOptimizer) step() (map[schema.UpdateKey]any, error) {
 	updates := make(map[schema.UpdateKey]any)
 	params := o.Parameters()
 
@@ -284,10 +284,8 @@ func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 		}
 	}
 
-	return updates
+	return updates, nil
 }
-
-// generateTextualGradient 使用 LLM 分析为什么当前 prompt 失败。
 //
 // Python: InstructionOptimizer._generate_textual_gradient(op)
 //

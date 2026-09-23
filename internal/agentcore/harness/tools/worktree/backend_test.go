@@ -93,27 +93,27 @@ func TestWithLifecycleRails(t *testing.T) {
 // baseLifecycleRail WorktreeLifecycleRail 的最小实现，仅用于测试
 type baseLifecycleRail struct{}
 
-func (b *baseLifecycleRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (string, error) {
-	return "", nil
+func (b *baseLifecycleRail) BeforeWorktreeCreate(_ context.Context, _, _ string) (*string, error) {
+	return nil, nil
 }
 func (b *baseLifecycleRail) AfterWorktreeCreate(_ context.Context, _ *WorktreeSession) error {
 	return nil
 }
-func (b *baseLifecycleRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
-	return "", nil
+func (b *baseLifecycleRail) BeforeWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+	return nil, nil
 }
 func (b *baseLifecycleRail) AfterWorktreeExit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (b *baseLifecycleRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) error {
-	return nil
+func (b *baseLifecycleRail) OnWorktreeFileWrite(_ context.Context, _ *WorktreeSession, _ string) bool {
+	return true
 }
-func (b *baseLifecycleRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) (string, error) {
-	return "", nil
+func (b *baseLifecycleRail) BeforeWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) (*string, error) {
+	return nil, nil
 }
 func (b *baseLifecycleRail) AfterWorktreeCommit(_ context.Context, _ *WorktreeSession, _ string) error {
 	return nil
 }
-func (b *baseLifecycleRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession) error {
-	return nil
+func (b *baseLifecycleRail) OnWorktreeSync(_ context.Context, _ *WorktreeSession, _ string, files []string) []string {
+	return files
 }

@@ -160,7 +160,11 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		if emitProcessingStatus {
 			mh.sendProcessingStatus(streamRid, msg.SessionID, msg.ChannelID, true)
 		}
-		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, nil)
+		// 对齐 Python: asyncio.create_task 立即注册完整 entry，无 nil 时间窗口
+		streamCtx, streamCancel := context.WithCancel(ctx)
+		entry := &streamTaskEntry{cancel: streamCancel}
+		entry.wg.Add(1)
+		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, entry)
 		mh.streamEmitsProcessingStatus[streamRid] = emitProcessingStatus
 		mh.streamModes[streamRid] = mh.extractModeFromParams(msg)
 		go func() {
@@ -175,7 +179,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 					mh.PublishRobotMessages(errMsg)
 				}
 			}()
-			mh.processStream(ctx, msg, env, emitProcessingStatus)
+			mh.processStreamWithEntry(streamCtx, streamCancel, entry, msg, env, emitProcessingStatus)
 		}()
 		logger.Info(logComponent).
 			Str("event_type", "stream_task_started").
@@ -611,19 +615,28 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 // Python: process_stream (L2559-2648)：
 // 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
 // 演化块处理、cancelled final、processing_status=false 通知。
+// processStreamWithEntry 使用外部预构造的 entry 执行流式处理，消除 nil entry 时间窗口。
+func (mh *MessageHandler) processStreamWithEntry(streamCtx context.Context, streamCancel context.CancelFunc, entry *streamTaskEntry, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
+	mh.processStreamCore(streamCtx, streamCancel, entry, msg, envelope, emitProcessingStatus)
+}
+
+// processStream 流式处理入口（兼容旧调用路径）。
 func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	entry := &streamTaskEntry{cancel: streamCancel}
+	entry.wg.Add(1)
+	mh.streamMu.Lock()
+	mh.streamTasks[envelope.RequestID] = entry
+	mh.streamMu.Unlock()
+	mh.processStreamCore(streamCtx, streamCancel, entry, msg, envelope, emitProcessingStatus)
+}
+
+// processStreamCore 流式处理核心逻辑。
+func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCancel context.CancelFunc, entry *streamTaskEntry, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
 	requestID := envelope.RequestID
 	channelID := msg.ChannelID
 	sessionID := msg.SessionID
 	requestMetadata := msg.Metadata
-
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	// 更新 streamTasks 的 entry（包含 cancel 和 wg）
-	entry := &streamTaskEntry{cancel: streamCancel}
-	entry.wg.Add(1)
-	mh.streamMu.Lock()
-	mh.streamTasks[requestID] = entry
-	mh.streamMu.Unlock()
 
 	// 追踪状态（供 defer 使用）
 	streamState := &streamFinalState{}

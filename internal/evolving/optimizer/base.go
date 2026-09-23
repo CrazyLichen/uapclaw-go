@@ -51,7 +51,7 @@ type BaseOptimizer interface {
 	Backward(ctx context.Context, signals []*signal.EvolutionSignal) error
 
 	// Step 生成更新映射，由 Trainer.apply_updates 统一应用。
-	Step() map[schema.UpdateKey]any
+	Step() (map[schema.UpdateKey]any, error)
 
 	// Parameters 返回梯度容器的副本。
 	Parameters() map[string]*TextualParameter
@@ -317,20 +317,26 @@ func (m *BaseOptimizerMixin) BackwardTemplate(
 //
 //	self._validate_parameters()
 //	try: updates = self._step()
+//	except: raise build_error(StatusCode.TOOLCHAIN_OPTIMIZER_UPDATE_EXECUTION_ERROR, ...)
 //	finally: self.clear_trajectories()
 //	return updates or {}
 //
 // Python: BaseOptimizer.step()
 func (m *BaseOptimizerMixin) StepTemplate(
-	stepFn func() map[schema.UpdateKey]any,
-) map[schema.UpdateKey]any {
+	stepFn func() (map[schema.UpdateKey]any, error),
+) (map[schema.UpdateKey]any, error) {
 	m.ValidateParameters()
 	defer m.ClearTrajectories()
-	updates := stepFn()
+	updates, err := stepFn()
+	if err != nil {
+		return nil, exception.NewBaseError(exception.StatusToolchainOptimizerUpdateExecutionError,
+			exception.WithCause(err),
+		)
+	}
 	if updates == nil {
 		updates = make(map[schema.UpdateKey]any)
 	}
-	return updates
+	return updates, nil
 }
 
 // FilterOperators 过滤暴露任何 target 的 Operator。对不匹配的记录警告，不中断。

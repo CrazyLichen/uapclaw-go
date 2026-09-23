@@ -119,6 +119,13 @@ type DeepAgent struct {
 	// pendingHarnessConfigs 待加载的 Harness 配置路径
 	pendingHarnessConfigs []string
 
+	// uapswarmProjectDir 项目目录，对齐 Python: _jiuwenswarm_project_dir
+	uapswarmProjectDir string
+	// uapswarmCodeProjectDir 代码项目目录，对齐 Python: _jiuwenswarm_code_project_dir
+	uapswarmCodeProjectDir string
+	// uapswarmAdapterMode 适配器模式，对齐 Python: _jiuwenswarm_adapter_mode
+	uapswarmAdapterMode string
+
 	// configMu 配置读写锁
 	configMu sync.RWMutex
 }
@@ -659,6 +666,54 @@ func (d *DeepAgent) SetSessionToolkit(toolkit *subagent.SessionToolkit) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.sessionToolkit = toolkit
+}
+
+// UapswarmProjectDir 获取项目目录。
+// Python: DeepAgent._jiuwenswarm_project_dir
+func (d *DeepAgent) UapswarmProjectDir() string {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.uapswarmProjectDir
+}
+
+// SetUapswarmProjectDir 设置项目目录。
+// Python: setattr(instance, "_jiuwenswarm_project_dir", value)
+func (d *DeepAgent) SetUapswarmProjectDir(dir string) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.uapswarmProjectDir = dir
+}
+
+// UapswarmCodeProjectDir 获取代码项目目录。
+// Python: DeepAgent._jiuwenswarm_code_project_dir
+func (d *DeepAgent) UapswarmCodeProjectDir() string {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.uapswarmCodeProjectDir
+}
+
+// SetUapswarmCodeProjectDir 设置代码项目目录。
+// Python: setattr(instance, "_jiuwenswarm_code_project_dir", value)
+func (d *DeepAgent) SetUapswarmCodeProjectDir(dir string) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.uapswarmCodeProjectDir = dir
+}
+
+// UapswarmAdapterMode 获取适配器模式。
+// Python: DeepAgent._jiuwenswarm_adapter_mode
+func (d *DeepAgent) UapswarmAdapterMode() string {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.uapswarmAdapterMode
+}
+
+// SetUapswarmAdapterMode 设置适配器模式。
+// Python: setattr(instance, "_jiuwenswarm_adapter_mode", value)
+func (d *DeepAgent) SetUapswarmAdapterMode(mode string) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.uapswarmAdapterMode = mode
 }
 
 // SetReactAgent 注入内层 Agent 实现（用于运行时接线/测试）。

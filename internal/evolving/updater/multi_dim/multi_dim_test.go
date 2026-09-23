@@ -32,8 +32,8 @@ func (m *mockDomainOptimizer) DefaultTargets() []string  { return m.defaultTarge
 func (m *mockDomainOptimizer) Backward(_ context.Context, _ []*signal.EvolutionSignal) error {
 	return nil
 }
-func (m *mockDomainOptimizer) Step() map[schema.UpdateKey]any {
-	return nil
+func (m *mockDomainOptimizer) Step() (map[schema.UpdateKey]any, error) {
+	return nil, nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

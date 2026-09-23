@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -443,7 +444,7 @@ func TestResolveTargets_广播透传(t *testing.T) {
 
 func TestDeliverDirect_未知成员(t *testing.T) {
 	check := func(name string) (bool, error) { return false, nil }
-	result, err := DeliverDirect("hi", "user", "ghost", nil, check)
+	result, err := DeliverDirect(context.Background(), "hi", "user", "ghost", nil, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +459,7 @@ func TestDeliverDirect_未知成员(t *testing.T) {
 func TestDeliverDirect_成功(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	check := func(name string) (bool, error) { return true, nil }
-	result, err := DeliverDirect("hi", "user", "alice", tb.MessageManager(), check)
+	result, err := DeliverDirect(context.Background(), "hi", "user", "alice", tb.MessageManager(), check)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -560,6 +560,7 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python CodeAdapter 差异: self._write_runtime_state(language=self._resolve_output_language(), ...)
 	outputLanguage := c.resolveOutputLanguage()
 	c.deep.writeRuntimeStateYAML(
+		ctx,
 		config.Mode,
 		outputLanguage,
 		resolvedChannel,
@@ -584,7 +585,7 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 7: rail 模式切换
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
-	c.deep.updateRailsForMode(config.Mode)
+	c.deep.updateRailsForMode(ctx, config.Mode)
 
 	// ⤴️ 10.6.7: ProjectMemoryRail 语言同步 + trusted_dirs 注入
 	// Python: if self._project_memory_rail is not None:

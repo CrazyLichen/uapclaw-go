@@ -76,7 +76,7 @@ func (o *SkillExperienceOptimizer) Backward(ctx context.Context, signals []*sign
 // Python: SkillExperienceOptimizer._step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
-func (o *SkillExperienceOptimizer) Step() map[schema.UpdateKey]any {
+func (o *SkillExperienceOptimizer) Step() (map[schema.UpdateKey]any, error) {
 	return o.StepTemplate(o.step)
 }
 
@@ -360,7 +360,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 //	    Python: records = param.get_gradient(EXPERIENCES_TARGET) or []
 //	    Python: if records: updates[(op_id, EXPERIENCES_TARGET)] = records
 //	Python: return updates
-func (o *SkillExperienceOptimizer) step() map[schema.UpdateKey]any {
+func (o *SkillExperienceOptimizer) step() (map[schema.UpdateKey]any, error) {
 	updates := make(map[schema.UpdateKey]any)
 	for opID, param := range o.BaseOptimizerMixin.Parameters() {
 		recordsAny := param.GetGradient(schema.ExperiencesTarget)
@@ -370,10 +370,8 @@ func (o *SkillExperienceOptimizer) step() map[schema.UpdateKey]any {
 			}
 		}
 	}
-	return updates
+	return updates, nil
 }
-
-// buildEvolutionContext 从 onlineContexts 查找 EvolutionContext，不存在时抛异常。
 //
 // Python: SkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals)
 //

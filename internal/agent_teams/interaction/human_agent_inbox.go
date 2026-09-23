@@ -84,7 +84,7 @@ func NewHumanAgentInbox(team *tools.TeamBackend, messageManager *tools.TeamMessa
 //  3. if to is None: return await self._drive_agent(body, sender=resolved_sender)
 //  4. if to in BROADCAST_TARGETS: broadcast_message → DeliverResult
 //  5. return await deliver_direct(body, sender=resolved_sender, target=to, ...)
-func (h *HumanAgentInbox) Send(body string, to *string, sender *string) (*DeliverResult, error) {
+func (h *HumanAgentInbox) Send(ctx context.Context, body string, to *string, sender *string) (*DeliverResult, error) {
 	// Python 步骤 1: resolved_sender = self._resolve_sender(sender)
 	resolvedSender, err := h.resolveSender(sender)
 	if err != nil {
@@ -118,7 +118,7 @@ func (h *HumanAgentInbox) Send(body string, to *string, sender *string) (*Delive
 	}
 
 	// Python 步骤 5: return await deliver_direct(body, sender=resolved_sender, target=to, ...)
-	return DeliverDirect(body, resolvedSender, *to, h.messageManager, h.memberExists)
+	return DeliverDirect(ctx, body, resolvedSender, *to, h.messageManager, h.memberExists)
 }
 
 // GetOnInbound 返回团队→用户通知回调。

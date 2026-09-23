@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -71,6 +73,10 @@ func GetCurrentSession(ctx context.Context) *WorktreeSession {
 func SetCurrentSession(ctx context.Context, session *WorktreeSession) {
 	if s := WorktreeSessionStateFromCtx(ctx); s != nil {
 		s.SetCurrentSession(session)
+	} else {
+		logger.Warn(logComponent).
+			Str("event_type", "set_current_session_no_state").
+			Msg("ctx 中缺少 WorktreeSessionState，SetCurrentSession 无效")
 	}
 }
 

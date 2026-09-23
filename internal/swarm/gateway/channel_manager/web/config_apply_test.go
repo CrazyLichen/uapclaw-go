@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -257,19 +258,19 @@ func TestApplyConfigPayload_空params(t *testing.T) {
 
 func TestProcessFiles_无files字段(t *testing.T) {
 	params := map[string]any{"query": "hello"}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	assert.Equal(t, "hello", result["query"])
 }
 
 func TestProcessFiles_files非列表(t *testing.T) {
 	params := map[string]any{"files": "not a list"}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	assert.Equal(t, "not a list", result["files"])
 }
 
 func TestProcessFiles_空files列表(t *testing.T) {
 	params := map[string]any{"files": []any{}}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList, ok := result["files"].([]any)
 	assert.True(t, ok)
 	assert.Empty(t, filesList)
@@ -277,7 +278,7 @@ func TestProcessFiles_空files列表(t *testing.T) {
 
 func TestProcessFiles_非map文件项(t *testing.T) {
 	params := map[string]any{"files": []any{"string_item"}}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList, ok := result["files"].([]any)
 	assert.True(t, ok)
 	assert.Len(t, filesList, 1)
@@ -289,7 +290,7 @@ func TestProcessFiles_本地文件无URL(t *testing.T) {
 			map[string]any{"name": "local.txt", "content": "data"},
 		},
 	}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList := result["files"].([]any)
 	assert.Len(t, filesList, 1)
 }
@@ -575,7 +576,7 @@ func TestProcessFiles_有URL但下载失败(t *testing.T) {
 		},
 	}
 	// 下载失败但不会 panic
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList := result["files"].([]any)
 	assert.Len(t, filesList, 1)
 }
@@ -586,7 +587,7 @@ func TestProcessFiles_有uri字段(t *testing.T) {
 			map[string]any{"filename": "test.txt", "uri": "http://invalid-host-12345/nonexistent"},
 		},
 	}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList := result["files"].([]any)
 	assert.Len(t, filesList, 1)
 }
@@ -597,7 +598,7 @@ func TestProcessFiles_无name和filename(t *testing.T) {
 			map[string]any{"url": "http://invalid-host-12345/nonexistent"},
 		},
 	}
-	result := ProcessFiles(params)
+	result := ProcessFiles(context.Background(),params)
 	filesList := result["files"].([]any)
 	assert.Len(t, filesList, 1)
 }

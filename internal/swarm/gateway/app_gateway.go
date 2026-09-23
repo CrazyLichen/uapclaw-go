@@ -171,6 +171,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 			logger.Error(logComponentAppGateway).
 				Err(err).
 				Msg("连接 AgentServer 失败")
+			return err
 		}
 	}
 
