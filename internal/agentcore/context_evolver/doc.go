@@ -26,6 +26,9 @@
 //	│   ├── run.go                            # RecallMemoryOp + RerankMemoryOp + RewriteMemoryOp
 //	│   ├── prompt.go                         # rerank + rewrite 提示词
 //	│   └── utils.go                          # ParseJSONListResponse + ParseJSONField
+//	├── service/                              # 服务层函数
+//	│   ├── doc.go                            # 包文档
+//	│   └── trajectory_generator.go           # 轨迹生成和 MaTTS 试验函数
 //	└── summary/reme/                         # ReMe 总结管线
 //	    ├── doc.go                            # 包文档
 //	    ├── update.go                         # 9 个总结 Op 实现

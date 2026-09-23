@@ -5,7 +5,7 @@
 //
 // 文件目录：
 //
-//	reme/
+//	task/reme/
 //	├── doc.go       # 包文档
 //	├── run.go       # RecallMemoryOp + RerankMemoryOp + RewriteMemoryOp
 //	├── prompt.go    # rerank + rewrite 提示词

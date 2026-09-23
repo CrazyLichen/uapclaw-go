@@ -56,6 +56,11 @@ func NewOpBase(sc *cecontext.ServiceContext) *OpBase {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ServiceContext 返回操作持有的服务上下文。
+func (b *OpBase) ServiceContext() *cecontext.ServiceContext {
+	return b.sc
+}
+
 // LLM 返回 LLM 服务。未注册时返回 nil。
 // 对齐 Python BaseOp.llm 属性。
 func (b *OpBase) LLM() cecontext.LLMService {

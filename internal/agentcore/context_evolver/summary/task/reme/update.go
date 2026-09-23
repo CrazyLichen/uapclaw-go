@@ -1,6 +1,7 @@
 package reme
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -29,7 +30,7 @@ type SuccessExtractionOp struct {
 	// useExtraction 是否执行提取
 	useExtraction bool
 	// prompts 提示词集合
-	prompts ReMeSummaryPrompts
+	prompts *ReMeSummaryPrompts
 }
 
 // FailureExtractionOp 失败轨迹经验提取操作。
@@ -39,7 +40,7 @@ type FailureExtractionOp struct {
 	// useExtraction 是否执行提取
 	useExtraction bool
 	// prompts 提示词集合
-	prompts ReMeSummaryPrompts
+	prompts *ReMeSummaryPrompts
 }
 
 // ComparativeExtractionOp 对比经验提取操作（高低分对比）。
@@ -49,7 +50,7 @@ type ComparativeExtractionOp struct {
 	// useExtraction 是否执行提取
 	useExtraction bool
 	// prompts 提示词集合
-	prompts ReMeSummaryPrompts
+	prompts *ReMeSummaryPrompts
 }
 
 // ComparativeAllExtractionOp 全量对比经验提取操作。
@@ -59,7 +60,7 @@ type ComparativeAllExtractionOp struct {
 	// useExtraction 是否执行提取
 	useExtraction bool
 	// prompts 提示词集合
-	prompts ReMeSummaryPrompts
+	prompts *ReMeSummaryPrompts
 }
 
 // MemoryValidationOp 记忆校验操作，过滤低质量记忆。
@@ -69,7 +70,7 @@ type MemoryValidationOp struct {
 	// useValidation 是否执行校验
 	useValidation bool
 	// prompts 提示词集合
-	prompts ReMeSummaryPrompts
+	prompts *ReMeSummaryPrompts
 }
 
 // MemoryDeduplicationOp 记忆去重操作，基于 embedding 相似度。
@@ -243,11 +244,17 @@ func (op *SuccessExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 
 	var memories []*ceschema.ReMeMemory
 	for _, trajectory := range successTrajectories {
-		// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
-		userPrompt := op.prompts.SuccessMemoryPrompt
-		userPrompt = strings.ReplaceAll(userPrompt, "{query}", query)
-		userPrompt = strings.ReplaceAll(userPrompt, "{step_sequence}", trajectory)
-		userPrompt = strings.ReplaceAll(userPrompt, "{outcome}", "successful")
+		// 使用 text/template 渲染提示词，对齐 Python prompt.format()
+		var buf bytes.Buffer
+		if err := op.prompts.SuccessMemoryPrompt.Execute(&buf, map[string]any{
+			"Query":        query,
+			"StepSequence": trajectory,
+			"Outcome":      "successful",
+		}); err != nil {
+			logger.Error(logComponent).Err(err).Msg("成功提取提示词模板执行失败")
+			continue
+		}
+		userPrompt := buf.String()
 		response, err := llm.Generate(ctx, userPrompt)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Failed to generate success memory")
@@ -316,11 +323,17 @@ func (op *FailureExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 
 	var memories []*ceschema.ReMeMemory
 	for _, trajectory := range failureTrajectories {
-		// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
-		userPrompt := op.prompts.FailureMemoryPrompt
-		userPrompt = strings.ReplaceAll(userPrompt, "{query}", query)
-		userPrompt = strings.ReplaceAll(userPrompt, "{step_sequence}", trajectory)
-		userPrompt = strings.ReplaceAll(userPrompt, "{outcome}", "failed")
+		// 使用 text/template 渲染提示词，对齐 Python prompt.format()
+		var buf bytes.Buffer
+		if err := op.prompts.FailureMemoryPrompt.Execute(&buf, map[string]any{
+			"Query":        query,
+			"StepSequence": trajectory,
+			"Outcome":      "failed",
+		}); err != nil {
+			logger.Error(logComponent).Err(err).Msg("失败提取提示词模板执行失败")
+			continue
+		}
+		userPrompt := buf.String()
 		response, err := llm.Generate(ctx, userPrompt)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Failed to generate failure memory")
@@ -423,12 +436,18 @@ func (op *ComparativeExtractionOp) Execute(ctx context.Context, rc *cecontext.Ru
 		lowerSteps = allTrajectories[minIdx]
 	}
 
-	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
-	userPrompt := op.prompts.ComparativeMemoryPrompt
-	userPrompt = strings.ReplaceAll(userPrompt, "{higher_score}", fmt.Sprintf("%v", maxScore))
-	userPrompt = strings.ReplaceAll(userPrompt, "{higher_steps}", higherSteps)
-	userPrompt = strings.ReplaceAll(userPrompt, "{lower_score}", fmt.Sprintf("%v", minScore))
-	userPrompt = strings.ReplaceAll(userPrompt, "{lower_steps}", lowerSteps)
+	// 使用 text/template 渲染提示词，对齐 Python prompt.format()
+	var buf bytes.Buffer
+	if err := op.prompts.ComparativeMemoryPrompt.Execute(&buf, map[string]any{
+		"HigherScore": maxScore,
+		"HigherSteps": higherSteps,
+		"LowerScore":  minScore,
+		"LowerSteps":  lowerSteps,
+	}); err != nil {
+		logger.Error(logComponent).Err(err).Msg("对比提取提示词模板执行失败")
+		return err
+	}
+	userPrompt := buf.String()
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("Failed to generate comparative memory")
@@ -497,9 +516,15 @@ func (op *ComparativeAllExtractionOp) Execute(ctx context.Context, rc *cecontext
 	}
 	trajectoriesStr := strings.Join(parts, "\n\n")
 
-	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
-	userPrompt := op.prompts.ComparativeAllMemoryPrompt
-	userPrompt = strings.ReplaceAll(userPrompt, "{trajectory}", trajectoriesStr)
+	// 使用 text/template 渲染提示词，对齐 Python prompt.format()
+	var buf bytes.Buffer
+	if err := op.prompts.ComparativeAllMemoryPrompt.Execute(&buf, map[string]any{
+		"Trajectory": trajectoriesStr,
+	}); err != nil {
+		logger.Error(logComponent).Err(err).Msg("全量对比提示词模板执行失败")
+		return err
+	}
+	userPrompt := buf.String()
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("Failed to generate comparative all memory")
@@ -783,10 +808,16 @@ func (op *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 // validateMemory 校验单条记忆质量。
 // 对齐 Python MemoryValidationOp._validate_memory。
 func (op *MemoryValidationOp) validateMemory(ctx context.Context, llm cecontext.LLMService, memory *ceschema.ReMeMemory) (bool, float64, string) {
-	// 使用 strings.ReplaceAll 链式替换占位符，对齐 Python prompt.format()
-	userPrompt := op.prompts.MemoryValidationPrompt
-	userPrompt = strings.ReplaceAll(userPrompt, "{condition}", memory.WhenToUse)
-	userPrompt = strings.ReplaceAll(userPrompt, "{task_memory_content}", memory.Content)
+	// 使用 text/template 渲染提示词，对齐 Python prompt.format()
+	var buf bytes.Buffer
+	if err := op.prompts.MemoryValidationPrompt.Execute(&buf, map[string]any{
+		"Condition":        memory.WhenToUse,
+		"TaskMemoryContent": memory.Content,
+	}); err != nil {
+		logger.Error(logComponent).Err(err).Msg("记忆校验提示词模板执行失败")
+		return false, 0, fmt.Sprintf("template execute failed: %v", err)
+	}
+	userPrompt := buf.String()
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("LLM 校验失败")

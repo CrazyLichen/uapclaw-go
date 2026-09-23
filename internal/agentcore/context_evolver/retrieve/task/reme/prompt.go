@@ -1,19 +1,23 @@
 package reme
 
+import "text/template"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReMeRetrievePrompts ReMe 检索管线的提示词配置。
 // 对齐 Python ReMeRetrievePrompts(BaseModel)。
 type ReMeRetrievePrompts struct {
-	// RerankPrompt 重排序提示词
-	RerankPrompt string
-	// RewritePrompt 改写提示词
-	RewritePrompt string
+	// RerankPrompt 重排序提示词模板
+	RerankPrompt *template.Template
+	// RewritePrompt 改写提示词模板
+	RewritePrompt *template.Template
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 提示词模板 — 一比一复刻 Python 原文，不做自行翻译
+// 占位符从 Python 的 {xxx} 改为 Go text/template 的 {{.Xxx}} 格式
+// 注意：text/template 中单个 { 和 } 不是特殊字符，JSON 示例中的花括号无需转义
 
 // memoryRerankPrompt 记忆重排序提示词
 // 对齐 Python MEMORY_RERANK_PROMPT
@@ -26,10 +30,10 @@ Your task is to analyze the candidates and rank them by relevance, considering:
 ● QUALITY: The overall quality and clarity of the experience
 
 # Current Query
-{query}
+{{.Query}}
 
-# Candidate Experiences (Total: {num_candidates})
-{candidates}
+# Candidate Experiences (Total: {{.NumCandidates}})
+{{.Candidates}}
 
 OUTPUT FORMAT:
 Provide a ranked list of candidate indices (0-based) from most relevant to least relevant:
@@ -55,10 +59,10 @@ REWRITING GUIDELINES:
 ● SITUATIONAL AWARENESS: Adapt the guidance to the current situation
 
 # Current Task/Query
-{current_query}
+{{.CurrentQuery}}
 
 # Original Context Content (Multiple Experiences)
-{original_context}
+{{.OriginalContext}}
 
 OUTPUT FORMAT:
 Provide the rewritten context:
@@ -79,7 +83,14 @@ Guidelines:
 
 // ReMeRetrieveDefaultPrompts 默认提示词实例。
 // 对齐 Python ReMeRetrievePrompts() 无参构造的默认值。
-var ReMeRetrieveDefaultPrompts = ReMeRetrievePrompts{
-	RerankPrompt:  memoryRerankPrompt,
-	RewritePrompt: memoryRewritePrompt,
+var ReMeRetrieveDefaultPrompts = NewReMeRetrievePrompts()
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewReMeRetrievePrompts 创建默认提示词实例并解析模板。
+func NewReMeRetrievePrompts() *ReMeRetrievePrompts {
+	return &ReMeRetrievePrompts{
+		RerankPrompt:  template.Must(template.New("rerank").Parse(memoryRerankPrompt)),
+		RewritePrompt: template.Must(template.New("rewrite").Parse(memoryRewritePrompt)),
+	}
 }

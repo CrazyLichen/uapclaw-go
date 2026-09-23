@@ -1,20 +1,22 @@
 package reme
 
+import "text/template"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReMeSummaryPrompts ReMe Summary 算法的提示词集合。
 // 对齐 Python ReMePrompt dataclass。
 type ReMeSummaryPrompts struct {
 	// ComparativeMemoryPrompt 对比提示词
-	ComparativeMemoryPrompt string
+	ComparativeMemoryPrompt *template.Template
 	// SuccessMemoryPrompt 成功提取提示词
-	SuccessMemoryPrompt string
+	SuccessMemoryPrompt *template.Template
 	// FailureMemoryPrompt 失败提取提示词
-	FailureMemoryPrompt string
+	FailureMemoryPrompt *template.Template
 	// ComparativeAllMemoryPrompt 全量对比提示词
-	ComparativeAllMemoryPrompt string
+	ComparativeAllMemoryPrompt *template.Template
 	// MemoryValidationPrompt 记忆校验提示词
-	MemoryValidationPrompt string
+	MemoryValidationPrompt *template.Template
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -38,11 +40,11 @@ EXTRACTION PRINCIPLES:
 ● Identify REFINEMENT STRATEGIES that lead to higher scores
 ● Frame insights as PERFORMANCE ENHANCEMENT guidelines
 
-# Higher-Scoring Step Sequence (Score: {higher_score})
-{higher_steps}
+# Higher-Scoring Step Sequence (Score: {{.HigherScore}})
+{{.HigherSteps}}
 
-# Lower-Scoring Step Sequence (Score: {lower_score})
-{lower_steps}
+# Lower-Scoring Step Sequence (Score: {{.LowerScore}})
+{{.LowerSteps}}
 
 
 OUTPUT FORMAT:
@@ -77,13 +79,13 @@ EXTRACTION PRINCIPLES:
 ● Frame insights as actionable guidelines and best practices
 
 # Original Query
-{query}
+{{.Query}}
 
 # Step Sequence Analysis
-{step_sequence}
+{{.StepSequence}}
 
 # Outcome
-This step sequence was part of a {outcome} trajectory.
+This step sequence was part of a {{.Outcome}} trajectory.
 
 OUTPUT FORMAT:
 Generate 1-3 step-level success insights as JSON objects:
@@ -117,13 +119,13 @@ EXTRACTION PRINCIPLES:
 ● Focus on PATTERNS and RULES as well as particular instances
 
 # Original Query
-{query}
+{{.Query}}
 
 # Step Sequence Analysis
-{step_sequence}
+{{.StepSequence}}
 
 # Outcome
-This step sequence was part of a {outcome} trajectory.
+This step sequence was part of a {{.Outcome}} trajectory.
 
 OUTPUT FORMAT:
 Generate 1-3 step-level failure prevention insights as JSON objects:
@@ -158,7 +160,7 @@ EXTRACTION PRINCIPLES:
 ● Extract RULES that can guide future similar situations
 ● Focus on UNDERLYING MECHANISMS rather than surface-level differences
 
-{trajectory}
+{{.Trajectory}}
 OUTPUT FORMAT:
 Generate up to 5 comparative insights as JSON objects:
 ` + "```json" + `
@@ -187,8 +189,8 @@ VALIDATION CRITERIA:
 ● UNIQUENESS: Does the task memory provide novel insights or common knowledge?
 
 # Task Memory to Validate
-Condition: {condition}
-Task Memory Content: {task_memory_content}
+Condition: {{.Condition}}
+Task Memory Content: {{.TaskMemoryContent}}
 
 OUTPUT FORMAT:
 Provide validation assessment:
@@ -209,11 +211,18 @@ Mark as invalid if score is below 0.3 or if there are fundamental issues with th
 
 var (
 	// ReMeSummaryDefaultPrompts 默认提示词实例。
-	ReMeSummaryDefaultPrompts = ReMeSummaryPrompts{
-		ComparativeMemoryPrompt:    comparativeMemoryPrompt,
-		SuccessMemoryPrompt:        successMemoryPrompt,
-		FailureMemoryPrompt:        failureMemoryPrompt,
-		ComparativeAllMemoryPrompt: comparativeAllMemoryPrompt,
-		MemoryValidationPrompt:     memoryValidationPrompt,
-	}
+	ReMeSummaryDefaultPrompts = NewReMeSummaryPrompts()
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewReMeSummaryPrompts 创建默认提示词模板实例。
+func NewReMeSummaryPrompts() *ReMeSummaryPrompts {
+	return &ReMeSummaryPrompts{
+		ComparativeMemoryPrompt:    template.Must(template.New("comparative").Parse(comparativeMemoryPrompt)),
+		SuccessMemoryPrompt:        template.Must(template.New("success").Parse(successMemoryPrompt)),
+		FailureMemoryPrompt:        template.Must(template.New("failure").Parse(failureMemoryPrompt)),
+		ComparativeAllMemoryPrompt: template.Must(template.New("comparative_all").Parse(comparativeAllMemoryPrompt)),
+		MemoryValidationPrompt:     template.Must(template.New("validation").Parse(memoryValidationPrompt)),
+	}
+}

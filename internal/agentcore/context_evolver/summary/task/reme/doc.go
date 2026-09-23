@@ -8,7 +8,7 @@
 //
 // 文件目录：
 //
-//	reme/
+//	task/reme/
 //	├── doc.go       # 包文档
 //	├── update.go    # 9 个总结 Op 实现
 //	├── prompt.go    # 5 个提取/验证提示词

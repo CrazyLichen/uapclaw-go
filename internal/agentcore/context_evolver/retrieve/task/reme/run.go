@@ -1,6 +1,7 @@
 package reme
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -36,7 +37,7 @@ type RerankMemoryOp struct {
 	// topKRerank 重排序后保留数量
 	topKRerank int
 	// prompts 提示词配置
-	prompts ReMeRetrievePrompts
+	prompts *ReMeRetrievePrompts
 }
 
 // RewriteMemoryOp LLM 改写操作。
@@ -49,7 +50,7 @@ type RewriteMemoryOp struct {
 	// llmRewrite 是否启用 LLM 改写
 	llmRewrite bool
 	// prompts 提示词配置
-	prompts ReMeRetrievePrompts
+	prompts *ReMeRetrievePrompts
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -175,11 +176,16 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	// 格式化候选项，对齐 Python _format_candidates_for_rerank
 	candidates := formatCandidatesForRerank(retrieved)
 
-	// 构建提示词，使用 strings.ReplaceAll 链式替换占位符
-	prompt := o.prompts.RerankPrompt
-	prompt = strings.ReplaceAll(prompt, "{query}", query)
-	prompt = strings.ReplaceAll(prompt, "{num_candidates}", fmt.Sprintf("%d", len(retrieved)))
-	prompt = strings.ReplaceAll(prompt, "{candidates}", candidates)
+	// 构建提示词，使用模板引擎替换占位符
+	var buf bytes.Buffer
+	if err := o.prompts.RerankPrompt.Execute(&buf, map[string]any{
+		"Query":         query,
+		"NumCandidates": len(retrieved),
+		"Candidates":    candidates,
+	}); err != nil {
+		return fmt.Errorf("rerank prompt template execute failed: %w", err)
+	}
+	prompt := buf.String()
 
 	// 调用 LLM
 	response, err := llm.Generate(ctx, prompt)
@@ -260,10 +266,15 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	// 格式化记忆原文
 	originalContext := formatMemoriesForContext(retrieved)
 
-	// 构建提示词，使用 strings.ReplaceAll 链式替换占位符
-	prompt := o.prompts.RewritePrompt
-	prompt = strings.ReplaceAll(prompt, "{current_query}", query)
-	prompt = strings.ReplaceAll(prompt, "{original_context}", originalContext)
+	// 构建提示词，使用模板引擎替换占位符
+	var buf bytes.Buffer
+	if err := o.prompts.RewritePrompt.Execute(&buf, map[string]any{
+		"CurrentQuery":    query,
+		"OriginalContext": originalContext,
+	}); err != nil {
+		return fmt.Errorf("rewrite prompt template execute failed: %w", err)
+	}
+	prompt := buf.String()
 
 	// 调用 LLM
 	response, err := llm.Generate(ctx, prompt)

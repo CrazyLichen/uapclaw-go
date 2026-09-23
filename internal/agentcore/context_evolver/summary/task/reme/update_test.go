@@ -2,6 +2,7 @@ package reme
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -702,4 +703,118 @@ func TestGetStringSliceFromMap(t *testing.T) {
 	assert.Equal(t, []string{"x", "y"}, getStringSliceFromMap(m, "any_slice"))
 	assert.Nil(t, getStringSliceFromMap(m, "missing"))
 	assert.Nil(t, getStringSliceFromMap(m, "num"))
+}
+
+// ──────────────────────────── 补充覆盖率测试 ────────────────────────────
+
+// TestFailureExtractionOp_LLM调用失败 测试 LLM 调用失败时跳过该轨迹
+func TestFailureExtractionOp_LLM调用失败(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	llm := &fakeLLMService{err: fmt.Errorf("LLM error")}
+	sc.RegisterService("llm", llm)
+
+	op := NewFailureExtractionOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("failure_trajectories", []string{"bad step A"})
+	rc.Set("query", "test query")
+	rc.Set("user_id", "user1")
+
+	err := op.Execute(context.Background(), rc)
+	require.NoError(t, err)
+
+	// LLM 调用失败时跳过，返回空列表
+	memories, _ := cecontext.GetTyped[[]*ceschema.ReMeMemory](rc, "failure_memories")
+	assert.Empty(t, memories)
+}
+
+// TestComparativeExtractionOp_LLM调用失败 测试 LLM 调用失败时返回错误
+func TestComparativeExtractionOp_LLM调用失败(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	llm := &fakeLLMService{err: fmt.Errorf("LLM error")}
+	sc.RegisterService("llm", llm)
+
+	op := NewComparativeExtractionOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("all_trajectories", []string{"high steps", "low steps"})
+	rc.Set("score", []float64{0.9, 0.3})
+	rc.Set("user_id", "user1")
+
+	err := op.Execute(context.Background(), rc)
+	assert.Error(t, err)
+}
+
+// TestComparativeAllExtractionOp_LLM调用失败 测试 LLM 调用失败时返回错误
+func TestComparativeAllExtractionOp_LLM调用失败(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	llm := &fakeLLMService{err: fmt.Errorf("LLM error")}
+	sc.RegisterService("llm", llm)
+
+	op := NewComparativeAllExtractionOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("all_trajectories", []string{"step A", "step B"})
+	rc.Set("user_id", "user1")
+
+	err := op.Execute(context.Background(), rc)
+	assert.Error(t, err)
+}
+
+// TestMemoryValidationOp_ValidateMemoryLLM失败 测试 validateMemory 中 LLM 调用失败
+func TestMemoryValidationOp_ValidateMemoryLLM失败(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	llm := &fakeLLMService{err: fmt.Errorf("LLM error")}
+	sc.RegisterService("llm", llm)
+
+	op := NewMemoryValidationOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("success_memories", []*ceschema.ReMeMemory{
+		{WhenToUse: "when1", Content: "content1"},
+	})
+	rc.Set("failure_memories", []*ceschema.ReMeMemory{})
+	rc.Set("comparative_memories", []*ceschema.ReMeMemory{})
+
+	err := op.Execute(context.Background(), rc)
+	require.NoError(t, err)
+
+	// LLM 调用失败时记忆被过滤
+	validated, _ := cecontext.GetTyped[[]*ceschema.ReMeMemory](rc, "validated_memories")
+	assert.Empty(t, validated)
+}
+
+// TestMemoryValidationOp_JSON解析失败 测试 validateMemory 中 JSON 解析失败
+func TestMemoryValidationOp_JSON解析失败(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	llm := &fakeLLMService{response: "not valid json at all"}
+	sc.RegisterService("llm", llm)
+
+	op := NewMemoryValidationOp(sc, true)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("success_memories", []*ceschema.ReMeMemory{
+		{WhenToUse: "when1", Content: "content1"},
+	})
+	rc.Set("failure_memories", []*ceschema.ReMeMemory{})
+	rc.Set("comparative_memories", []*ceschema.ReMeMemory{})
+
+	err := op.Execute(context.Background(), rc)
+	require.NoError(t, err)
+
+	// JSON 解析失败时记忆被过滤
+	validated, _ := cecontext.GetTyped[[]*ceschema.ReMeMemory](rc, "validated_memories")
+	assert.Empty(t, validated)
+}
+
+// TestPersistMemoryOp_Helper为Nil 测试 helper 为 nil 时的 persistType
+func TestPersistMemoryOp_Helper为Nil(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	vs := vector_store.NewMemoryVectorStore()
+	sc.RegisterService("vector_store", vs)
+
+	op := NewPersistMemoryOp(sc, nil)
+	rc := cecontext.NewRuntimeContext()
+	rc.Set("user_id", "user1")
+
+	err := op.Execute(context.Background(), rc)
+	require.NoError(t, err)
+
+	persistCount, _ := cecontext.GetTyped[int](rc, "persist_count")
+	assert.Equal(t, 0, persistCount)
 }
