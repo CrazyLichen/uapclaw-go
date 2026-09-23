@@ -21,19 +21,38 @@
 //	│   ├── trajectory.go                     # FeedbackType + Trajectory + TrajectoryBatch
 //	│   ├── memory.go                         # BaseMemory + MemoryInterface + ACE/RB/ReMe Memory
 //	│   └── io_schema.go                      # ACE/RB/ReMe Request/Response + 泛型 Response
-//	├── retrieve/reme/                        # ReMe 检索管线
-//	│   ├── doc.go                            # 包文档
-//	│   ├── run.go                            # RecallMemoryOp + RerankMemoryOp + RewriteMemoryOp
-//	│   ├── prompt.go                         # rerank + rewrite 提示词
-//	│   └── utils.go                          # ParseJSONListResponse + ParseJSONField
-//	├── service/                              # 服务层函数
-//	│   ├── doc.go                            # 包文档
-//	│   └── trajectory_generator.go           # 轨迹生成和 MaTTS 试验函数
-//	└── summary/reme/                         # ReMe 总结管线
+//	├── retrieve/                             # 检索管线
+//	│   ├── task/reme/                        # ReMe 检索
+//	│   │   ├── doc.go                        # 包文档
+//	│   │   ├── run.go                        # RecallMemoryOp + RerankMemoryOp + RewriteMemoryOp
+//	│   │   ├── prompt.go                     # rerank + rewrite 提示词
+//	│   │   └── utils.go                      # ParseJSONListResponse + ParseJSONField
+//	│   ├── task/rb/                          # ReasoningBank 检索
+//	│   │   ├── doc.go                        # 包文档
+//	│   │   └── run.go                        # RBRecallMemoryOp
+//	│   └── task/ace/                         # ACE 检索
+//	│       ├── doc.go                        # 包文档
+//	│       └── run.go                        # ACERecallMemoryOp
+//	├── summary/                              # 总结管线
+//	│   ├── task/reme/                        # ReMe 总结
+//	│   │   ├── doc.go                        # 包文档
+//	│   │   ├── update.go                     # 9 个总结 Op 实现
+//	│   │   ├── prompt.go                     # 5 个提取/验证提示词
+//	│   │   └── utils.go                      # ParseJSONExperienceResponse + CalculateCosineSimilarity
+//	│   ├── task/rb/                          # ReasoningBank 总结
+//	│   │   ├── doc.go                        # 包文档
+//	│   │   ├── update.go                     # RB 总结 Ops
+//	│   │   ├── label.go                      # LabelDeterminator
+//	│   │   └── prompt.go                     # RB 提示词
+//	│   └── task/ace/                         # ACE 总结
+//	│       ├── doc.go                        # 包文档
+//	│       ├── playbook.go                   # Playbook/DeltaBatch/Bullet/DeltaOperation/OperationType
+//	│       ├── update.go                     # 7 个总结 Op（LoadPlaybookOp + Reflect + Curate + ApplyDelta + Persist）
+//	│       ├── prompt.go                     # 6 个 prompt 模板 + ACEPrompt 结构体
+//	│       └── utils.go                      # SafeJSONLoads 安全 JSON 解析
+//	└── service/                              # 服务层函数
 //	    ├── doc.go                            # 包文档
-//	    ├── update.go                         # 9 个总结 Op 实现
-//	    ├── prompt.go                         # 5 个提取/验证提示词
-//	    └── utils.go                          # ParseJSONExperienceResponse + CalculateCosineSimilarity
+//	    └── trajectory_generator.go           # 轨迹生成和 MaTTS 试验函数
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/
 package contextevolver
