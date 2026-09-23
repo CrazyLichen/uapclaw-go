@@ -453,8 +453,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.8 | ✅ | WriteManager / SearchManager / MemUpdateChecker | ✅ MemUpdateChecker LLM 驱动冲突检查 + ✅ PromptApplier（运行时读文件+缓存） + ✅ WriteManager 写入路由器 + ✅ SearchManager 搜索路由器 + ✅ FragmentMemoryManager 冲突检查回填 + ✅ lite runChecker 回填 | `openjiuwen/core/memory/manage/update/` · `search/` · `index/write_manager.py` |
 | 7.9 | ✅ | Memory DB Models | MemoryType/OperationType/FragmentMemoryUnit/VariableUnit/SummaryUnit；⤴️ 回填 UserMemStore + SemanticStore + SupportMemoryType + memory/common/base.go | `openjiuwen/core/memory/manage/mem_model/` |
 | 7.10 | ✅ | Memory Index | ✅ BaseMemoryIndex 接口 + SimpleMemoryIndex 实现 + BaseMemoryManager 接口 + FragmentMemoryManager + SummaryManager + VariableManager + WriteManager（实际已在 7.6/7.7/7.8 中完成） | `openjiuwen/core/memory/manage/index/` · `openjiuwen/core/foundation/store/` |
-| 7.11 | ☐ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
-| 7.12 | ☐ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
+| 7.11 | ✅ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
+| 7.12 | ✅ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
 | 7.13 | ☐ | MemoryProvider 协议 | 外部 Memory Provider 接口 | `openjiuwen/core/memory/external/provider.py` |
 | 7.14 | ☐ | Mem0Provider | Mem0 适配 | `openjiuwen/core/memory/external/mem0_provider.py` |
 | 7.15 | ☐ | OpenVikingProvider | OpenViking 适配 | `openjiuwen/core/memory/external/openviking_memory_provider.py` |

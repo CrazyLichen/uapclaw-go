@@ -148,6 +148,51 @@ func TestFormatRelationDefinitions_空列表(t *testing.T) {
 	}
 }
 
+// TestFormatSchemaInfo_有refDict 测试有 refDict 时的格式化
+func TestFormatSchemaInfo_有refDict(t *testing.T) {
+	refDict := map[string]map[string]any{
+		"Person": {"name": "string", "age": "int"},
+	}
+	result := FormatSchemaInfo("class Person:", refDict, 2, "cn")
+	if result == "" {
+		t.Error("有 refDict 时应返回非空字符串")
+	}
+	if !contains(result, "Person") {
+		t.Error("结果应包含 refDict 的 key")
+	}
+	if !contains(result, "class Person:") {
+		t.Error("结果应包含 outStr")
+	}
+	if !contains(result, "相关JSON Object定义") {
+		t.Error("结果应包含 RefJSONObjectDef 标题")
+	}
+	if !contains(result, "输出定义") {
+		t.Error("结果应包含 OutputFormat 标题")
+	}
+}
+
+// TestFormatSchemaInfo_无refDict 测试无 refDict 时的格式化
+func TestFormatSchemaInfo_无refDict(t *testing.T) {
+	result := FormatSchemaInfo("class Person:", nil, 2, "cn")
+	if result == "" {
+		t.Error("无 refDict 时应返回非空字符串")
+	}
+	if contains(result, "相关JSON Object定义") {
+		t.Error("无 refDict 时不应包含 RefJSONObjectDef 标题")
+	}
+	if !contains(result, "class Person:") {
+		t.Error("结果应包含 outStr")
+	}
+}
+
+// TestFormatSchemaInfo_空outStr 测试空输出返回空字符串
+func TestFormatSchemaInfo_空outStr(t *testing.T) {
+	result := FormatSchemaInfo("", nil, 2, "cn")
+	if result != "" {
+		t.Error("空 outStr 应返回空字符串")
+	}
+}
+
 // contains 辅助函数：检查字符串是否包含子串
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstr(s, substr))

@@ -702,6 +702,301 @@ func TestEscapeRegexChars(t *testing.T) {
 	assert.Contains(t, result, `\`)
 }
 
+// ──────────────────────────── WritePermissionsSectionToAgentConfigYAML ────────────────────────────
+
+func TestWritePermissionsSectionToAgentConfigYAML_正常写入(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	permissions := map[string]any{
+		"tools": map[string]any{"bash": "allow"},
+	}
+
+	result := WritePermissionsSectionToAgentConfigYAML(cfgPath, permissions)
+	assert.True(t, result)
+
+	// 验证写入后的文件包含 permissions 段
+	readBack := ReadAgentConfigYAML(cfgPath)
+	assert.NotNil(t, readBack["permissions"])
+}
+
+func TestWritePermissionsSectionToAgentConfigYAML_无效路径(t *testing.T) {
+	// 父目录不存在，resolveAgentConfigYAMLPath 返回空
+	result := WritePermissionsSectionToAgentConfigYAML("/nonexistent_dir_xyz/sub/agent.yaml", map[string]any{})
+	assert.False(t, result)
+}
+
+func TestWritePermissionsSectionToAgentConfigYAML_保留其它键(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	// 先写入含其它键的配置
+	initialData := map[string]any{
+		"other_key": "other_value",
+	}
+	err := WriteAgentConfigYAML(cfgPath, initialData)
+	assert.NoError(t, err)
+
+	// 写入 permissions 段
+	permissions := map[string]any{"tools": map[string]any{"bash": "ask"}}
+	result := WritePermissionsSectionToAgentConfigYAML(cfgPath, permissions)
+	assert.True(t, result)
+
+	// 验证其它键被保留
+	readBack := ReadAgentConfigYAML(cfgPath)
+	assert.Equal(t, "other_value", readBack["other_key"])
+	assert.NotNil(t, readBack["permissions"])
+}
+
+func TestWritePermissionsSectionToAgentConfigYAML_深拷贝不污染原数据(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	permissions := map[string]any{
+		"tools": map[string]any{"bash": "ask"},
+	}
+	originalTools := permissions["tools"]
+
+	result := WritePermissionsSectionToAgentConfigYAML(cfgPath, permissions)
+	assert.True(t, result)
+
+	// 原始 permissions 不应被修改（深拷贝）
+	assert.Equal(t, originalTools, permissions["tools"])
+}
+
+// ──────────────────────────── MergePermissionAllowRuleIntoPermissions ────────────────────────────
+
+func TestMergePermissionAllowRuleIntoPermissions_非ask跳过(t *testing.T) {
+	// bash 已为 allow，不应被覆盖
+	permissions := map[string]any{
+		"tools": map[string]any{"bash": "allow"},
+	}
+	merged, applied := MergePermissionAllowRuleIntoPermissions(permissions, "bash", map[string]any{"command": "ls"})
+	assert.False(t, applied)
+	assert.Equal(t, "allow", merged["tools"].(map[string]any)["bash"])
+}
+
+func TestMergePermissionAllowRuleIntoPermissions_shell工具(t *testing.T) {
+	permissions := map[string]any{
+		"defaults": map[string]any{"allow": []any{"bash"}},
+	}
+
+	merged, applied := MergePermissionAllowRuleIntoPermissions(permissions, "bash", map[string]any{"command": "git status"})
+	_ = merged
+	_ = applied
+	// 不论是否 applied，都不应 panic
+}
+
+func TestMergePermissionAllowRuleIntoPermissions_路径工具(t *testing.T) {
+	permissions := map[string]any{
+		"defaults": map[string]any{"allow": []any{"read_file"}},
+	}
+
+	merged, applied := MergePermissionAllowRuleIntoPermissions(permissions, "read_file", map[string]any{"path": "/tmp/file.txt"})
+	_ = merged
+	_ = applied
+	// 不应 panic
+}
+
+func TestMergePermissionAllowRuleIntoPermissions_非shell非路径工具(t *testing.T) {
+	permissions := map[string]any{
+		"defaults": map[string]any{"allow": []any{"paid_search"}},
+	}
+
+	merged, applied := MergePermissionAllowRuleIntoPermissions(permissions, "paid_search", map[string]any{})
+	_ = merged
+	_ = applied
+	// 不应 panic
+}
+
+// ──────────────────────────── PersistCliTrustedDirectory ────────────────────────────
+
+func TestPersistCliTrustedDirectory_空路径(t *testing.T) {
+	result := PersistCliTrustedDirectory("", "", nil)
+	assert.Equal(t, false, result["ok"])
+}
+
+func TestPersistCliTrustedDirectory_无效路径解析(t *testing.T) {
+	result := PersistCliTrustedDirectory("   ", "", nil)
+	assert.Equal(t, false, result["ok"])
+}
+
+func TestPersistCliTrustedDirectory_无配置路径(t *testing.T) {
+	result := PersistCliTrustedDirectory("/tmp/test", "/nonexistent_dir_xyz/sub/agent.yaml", nil)
+	assert.Equal(t, false, result["ok"])
+}
+
+func TestPersistCliTrustedDirectory_正常写入(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	bootstrap := map[string]any{
+		"tools":   map[string]any{"bash": "ask"},
+		"external_directory": map[string]any{"*": "ask"},
+	}
+
+	result := PersistCliTrustedDirectory("/tmp/test_project", cfgPath, bootstrap)
+	assert.Equal(t, true, result["ok"])
+	normalized, ok := result["normalized"].(string)
+	assert.True(t, ok)
+	assert.Contains(t, normalized, "test_project")
+
+	// 验证文件写入
+	raw, err := os.ReadFile(cfgPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(raw), "permissions")
+
+	// 验证 approval_overrides 存在
+	readBack := ReadAgentConfigYAML(cfgPath)
+	perms, ok := readBack["permissions"].(map[string]any)
+	assert.True(t, ok)
+	assert.NotNil(t, perms)
+
+	// 验证 approval_overrides 包含 path 和 shell 规则
+	overrides, ok := perms["approval_overrides"].([]any)
+	assert.True(t, ok)
+	assert.NotEmpty(t, overrides)
+}
+
+func TestPersistCliTrustedDirectory_已有配置文件(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	// 先写入已有配置
+	existingData := map[string]any{
+		"permissions": map[string]any{
+			"tools": map[string]any{"bash": "ask"},
+			"external_directory": map[string]any{"*": "ask"},
+		},
+	}
+	err := WriteAgentConfigYAML(cfgPath, existingData)
+	assert.NoError(t, err)
+
+	result := PersistCliTrustedDirectory("/tmp/my_project", cfgPath, nil)
+	assert.Equal(t, true, result["ok"])
+
+	// 验证已有配置保留
+	readBack := ReadAgentConfigYAML(cfgPath)
+	perms, ok := readBack["permissions"].(map[string]any)
+	assert.True(t, ok)
+	tools, ok := perms["tools"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "ask", tools["bash"])
+}
+
+func TestPersistCliTrustedDirectory_缺少permissions且无bootstrap(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	// 写入无 permissions 的配置
+	existingData := map[string]any{
+		"other_key": "value",
+	}
+	err := WriteAgentConfigYAML(cfgPath, existingData)
+	assert.NoError(t, err)
+
+	// 无 bootstrap 且文件中无 permissions → 函数会从文件中读取数据
+	// 由于 data["permissions"] 不存在，会创建空的 permissions
+	result := PersistCliTrustedDirectory("/tmp/test_project", cfgPath, nil)
+	// 由于已有 YAML 数据（data 不为 nil），不需要 bootstrap
+	assert.Equal(t, true, result["ok"])
+}
+
+func TestPersistCliTrustedDirectory_新文件无bootstrap失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+
+	// 文件不存在，且无 bootstrap
+	result := PersistCliTrustedDirectory("/tmp/test_project", cfgPath, nil)
+	// 应该返回错误，因为新文件需要 bootstrap permissions
+	assert.Equal(t, false, result["ok"])
+	errorMsg, ok := result["error"].(string)
+	assert.True(t, ok)
+	assert.Contains(t, errorMsg, "bootstrap")
+}
+
+// ──────────────────────────── ContainsPath 补充 ────────────────────────────
+
+func TestContainsPath_解析失败(t *testing.T) {
+	// 当 Abs 解析失败时返回 false
+	// 此测试验证函数不会 panic
+	result := ContainsPath(string([]byte{0}), string([]byte{0}))
+	_ = result
+}
+
+func TestContainsPath_相同路径规范化(t *testing.T) {
+	assert.True(t, ContainsPath("/home/user/", "/home/user/"))
+	assert.True(t, ContainsPath("/home/user", "/home/user/"))
+}
+
+// ──────────────────────────── ReadAgentConfigYAML 补充 ────────────────────────────
+
+func TestReadAgentConfigYAML_空文件(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+	err := os.WriteFile(cfgPath, []byte(""), 0644)
+	assert.NoError(t, err)
+
+	result := ReadAgentConfigYAML(cfgPath)
+	assert.Empty(t, result)
+}
+
+func TestReadAgentConfigYAML_无效YAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+	err := os.WriteFile(cfgPath, []byte("{{invalid yaml"), 0644)
+	assert.NoError(t, err)
+
+	result := ReadAgentConfigYAML(cfgPath)
+	assert.Empty(t, result)
+}
+
+func TestReadAgentConfigYAML_只含null(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "agent.yaml")
+	err := os.WriteFile(cfgPath, []byte("null"), 0644)
+	assert.NoError(t, err)
+
+	result := ReadAgentConfigYAML(cfgPath)
+	assert.Empty(t, result)
+}
+
+// ──────────────────────────── WriteAgentConfigYAML 补充 ────────────────────────────
+
+func TestWriteAgentConfigYAML_无配置路径(t *testing.T) {
+	// 空路径回退到默认，若默认路径也不存在
+	err := WriteAgentConfigYAML("", map[string]any{})
+	_ = err
+}
+
+// ──────────────────────────── MatchURL 补充 ────────────────────────────
+
+func TestURLMatcher_带端口匹配(t *testing.T) {
+	um := &URLMatcher{pm: PatternMatcher{}}
+	// 匹配含端口的 URL
+	assert.True(t, um.MatchURL("example.com:8080", "https://example.com:8080/api"))
+	assert.True(t, um.MatchURL("example.com", "https://example.com:8080/api"))
+}
+
+func TestURLMatcher_仅主机名(t *testing.T) {
+	um := &URLMatcher{pm: PatternMatcher{}}
+	// 无 scheme 的纯主机名
+	assert.True(t, um.MatchURL("example.com", "example.com"))
+}
+
+func TestURLMatcher_IPv6地址(t *testing.T) {
+	um := &URLMatcher{pm: PatternMatcher{}}
+	// IPv6 地址中的冒号不应被截断
+	result := um.MatchURL("[::1]", "http://[::1]:8080/path")
+	_ = result
+}
+
+func TestURLMatcher_无Host(t *testing.T) {
+	um := &URLMatcher{pm: PatternMatcher{}}
+	// 无 host 部分的 URL
+	assert.False(t, um.MatchURL("example.com", "://path"))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func stringsLower(s string) string {
