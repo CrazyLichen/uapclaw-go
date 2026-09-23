@@ -7,8 +7,7 @@
 //
 //	entity_extraction/
 //	├── doc.go       # 包文档
-//	├── base.go      # 格式化辅助函数（FormatSchemaInfo/FormatSourceDescription/...）
-//	└── format.go    # FormatNewEntities 格式化辅助
+//	└── base.go      # 格式化辅助函数（FormatSchemaInfo/FormatSourceDescription/...）
 //
 // 对应 Python 代码：openjiuwen/core/memory/graph/extraction/prompts/entity_extraction/base.py
 package entity_extraction
