@@ -266,7 +266,7 @@ func (o *ReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 	var prompt *template.Template
 	var data reflectorPromptData
 	if o.useGroundTruth && groundTruth != "" && len(feedback) > 0 {
-		prompt = defaultACEPrompt.Reflector
+		prompt = ACEPrompts.ACEReflectorPrompt
 		data = reflectorPromptData{
 			GroundTruth: groundTruth,
 			Feedback:    feedback[0],
@@ -274,7 +274,7 @@ func (o *ReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 			Trajectory:  trajectoryStr,
 		}
 	} else {
-		prompt = defaultACEPrompt.ReflectorNoGT
+		prompt = ACEPrompts.ACEReflectorNoGTPrompt
 		data = reflectorPromptData{
 			Playbook:   playbook.AsPrompt(),
 			Trajectory: trajectoryStr,
@@ -359,14 +359,14 @@ func (o *ParallelReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	var prompt *template.Template
 	var data reflectorScalingPromptData
 	if o.useGroundTruth && groundTruth != "" {
-		prompt = defaultACEPrompt.ReflectorScaling
+		prompt = ACEPrompts.ACEReflectorScalingPrompt
 		data = reflectorScalingPromptData{
 			GroundTruth:  groundTruth,
 			Playbook:     playbook.AsPrompt(),
 			Trajectories: trajectoriesStr,
 		}
 	} else {
-		prompt = defaultACEPrompt.ReflectorScalingNoGT
+		prompt = ACEPrompts.ACEReflectorScalingNoGTPrompt
 		data = reflectorScalingPromptData{
 			Playbook:     playbook.AsPrompt(),
 			Trajectories: trajectoriesStr,
@@ -448,7 +448,7 @@ func (o *CurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) er
 	logger.Debug(logComponent).Msg("Generating playbook operations from reflection...")
 
 	var buf bytes.Buffer
-	if err := defaultACEPrompt.Curator.Execute(&buf, data); err != nil {
+	if err := ACEPrompts.ACECuratorPrompt.Execute(&buf, data); err != nil {
 		return fmt.Errorf("CurateOp: 渲染提示词失败: %w", err)
 	}
 
@@ -533,7 +533,7 @@ func (o *ParallelCurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	logger.Debug(logComponent).Msg("Generating playbook operations from parallel reflection...")
 
 	var buf bytes.Buffer
-	if err := defaultACEPrompt.CuratorScaling.Execute(&buf, data); err != nil {
+	if err := ACEPrompts.ACECuratorScalingPrompt.Execute(&buf, data); err != nil {
 		return fmt.Errorf("ParallelCurateOp: 渲染提示词失败: %w", err)
 	}
 

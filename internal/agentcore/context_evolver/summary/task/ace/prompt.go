@@ -53,20 +53,20 @@ type curatorScalingPromptData struct {
 }
 
 // ACEPrompt ACE 算法使用的 6 个 prompt 模板。
-// 对齐 Python ACEPrompt dataclass。
+// 对齐 Python ACEPrompt dataclass，字段名对齐 Python ACEPrompt 类属性。
 type ACEPrompt struct {
-	// Reflector 反思 prompt（含 Ground Truth）
-	Reflector *template.Template
-	// ReflectorNoGT 反思 prompt（不含 Ground Truth）
-	ReflectorNoGT *template.Template
-	// Curator 策展 prompt
-	Curator *template.Template
-	// ReflectorScaling 扩展反思 prompt（含 Ground Truth）
-	ReflectorScaling *template.Template
-	// ReflectorScalingNoGT 扩展反思 prompt（不含 Ground Truth）
-	ReflectorScalingNoGT *template.Template
-	// CuratorScaling 扩展策展 prompt
-	CuratorScaling *template.Template
+	// ACEReflectorPrompt 反思 prompt（含 Ground Truth）
+	ACEReflectorPrompt *template.Template
+	// ACEReflectorNoGTPrompt 反思 prompt（不含 Ground Truth）
+	ACEReflectorNoGTPrompt *template.Template
+	// ACECuratorPrompt 策展 prompt
+	ACECuratorPrompt *template.Template
+	// ACEReflectorScalingPrompt 扩展反思 prompt（含 Ground Truth）
+	ACEReflectorScalingPrompt *template.Template
+	// ACEReflectorScalingNoGTPrompt 扩展反思 prompt（不含 Ground Truth）
+	ACEReflectorScalingNoGTPrompt *template.Template
+	// ACECuratorScalingPrompt 扩展策展 prompt
+	ACECuratorScalingPrompt *template.Template
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -616,8 +616,9 @@ If no updates are required, return an empty list for "operations".`;
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// defaultACEPrompt 包级默认 ACE prompt 实例，供 Op 使用
-var defaultACEPrompt = NewACEPrompt()
+// ACEPrompts 包级默认 ACE prompt 实例，供 Op 使用。
+// 对齐 Python ACEPrompts = ACEPrompt()。
+var ACEPrompts = NewACEPrompt()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -625,11 +626,11 @@ var defaultACEPrompt = NewACEPrompt()
 // 对齐 Python ACEPrompt() 构造。
 func NewACEPrompt() *ACEPrompt {
 	return &ACEPrompt{
-		Reflector:             template.Must(template.New("ace_reflector").Parse(aceReflectorPrompt)),
-		ReflectorNoGT:         template.Must(template.New("ace_reflector_nogt").Parse(aceReflectorNoGTPrompt)),
-		Curator:               template.Must(template.New("ace_curator").Parse(aceCuratorPrompt)),
-		ReflectorScaling:      template.Must(template.New("ace_reflector_scaling").Parse(aceReflectorScalingPrompt)),
-		ReflectorScalingNoGT:  template.Must(template.New("ace_reflector_scaling_nogt").Parse(aceReflectorScalingNoGTPrompt)),
-		CuratorScaling:        template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
+		ACEReflectorPrompt:             template.Must(template.New("ace_reflector").Parse(aceReflectorPrompt)),
+		ACEReflectorNoGTPrompt:         template.Must(template.New("ace_reflector_nogt").Parse(aceReflectorNoGTPrompt)),
+		ACECuratorPrompt:               template.Must(template.New("ace_curator").Parse(aceCuratorPrompt)),
+		ACEReflectorScalingPrompt:      template.Must(template.New("ace_reflector_scaling").Parse(aceReflectorScalingPrompt)),
+		ACEReflectorScalingNoGTPrompt:  template.Must(template.New("ace_reflector_scaling_nogt").Parse(aceReflectorScalingNoGTPrompt)),
+		ACECuratorScalingPrompt:        template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
 	}
 }
