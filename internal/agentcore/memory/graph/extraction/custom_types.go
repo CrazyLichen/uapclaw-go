@@ -11,3 +11,11 @@ package extraction
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// JSONLike 表示 JSON 解析后的合法值类型（dict 或 list）
+//
+// Python: JSONLike = Union[dict[str, Any], list[Any]]
+//
+// 用于 parse_response.go 中 ParseJSON 等函数的返回类型注解，
+// 表达"这是 JSON 结构"的语义，区别于无约束的 any。
+type JSONLike = any
