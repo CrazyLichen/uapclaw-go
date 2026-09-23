@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
 )
 
@@ -101,6 +102,23 @@ func FormatExistingRelations(relations []map[string]any, startIdx int, includeTi
 	var lines []string
 	for i, rel := range relations {
 		content := fmt.Sprintf("%v", rel["content"])
+
+		// 对齐 Python: include_time and valid_since != -1
+		if includeTime {
+			if validSince, ok := toInt64(rel["valid_since"]); ok && validSince != -1 {
+				offsetSince, _ := toInt8(rel["offset_since"])
+				if t, err := graph.LoadStoredTimeFromDB(validSince, offsetSince); err == nil {
+					content += fmt.Sprintf("\nvalid_since=%s", t.Format("2006-01-02T15:04:05Z07:00"))
+				}
+			}
+			if validUntil, ok := toInt64(rel["valid_until"]); ok && validUntil != -1 {
+				offsetUntil, _ := toInt8(rel["offset_until"])
+				if t, err := graph.LoadStoredTimeFromDB(validUntil, offsetUntil); err == nil {
+					content += fmt.Sprintf("\nvalid_until=%s", t.Format("2006-01-02T15:04:05Z07:00"))
+				}
+			}
+		}
+
 		line := strings.ReplaceAll(tmpl, "{i}", fmt.Sprintf("%d", startIdx+i))
 		line = strings.ReplaceAll(line, "{content}", content)
 		lines = append(lines, line)
@@ -134,4 +152,34 @@ func EnsureValidLanguage(language string, maxLen int) (string, error) {
 func jsonMarshalIndent(v map[string]any, indent int) ([]byte, error) {
 	indentStr := strings.Repeat(" ", indent)
 	return json.MarshalIndent(v, "", indentStr)
+}
+
+// toInt64 将 any 转为 int64（对齐 Python rel.get("valid_since", 0)）
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case float64:
+		return int64(n), true
+	default:
+		return 0, false
+	}
+}
+
+// toInt8 将 any 转为 int8（对齐 Python rel.get("offset_since", 0)）
+func toInt8(v any) (int8, bool) {
+	switch n := v.(type) {
+	case int8:
+		return n, true
+	case int:
+		return int8(n), true
+	case int64:
+		return int8(n), true
+	case float64:
+		return int8(n), true
+	default:
+		return 0, false
+	}
 }

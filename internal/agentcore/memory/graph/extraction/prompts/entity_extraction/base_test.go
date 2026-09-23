@@ -59,6 +59,62 @@ func TestFormatExistingEntities_空列表(t *testing.T) {
 	}
 }
 
+// TestFormatExistingRelations_包含时间 测试 includeTime=true 时格式化 valid_since/valid_until
+func TestFormatExistingRelations_包含时间(t *testing.T) {
+	relations := []map[string]any{
+		{
+			"content":      "张三在北京工作",
+			"valid_since":  int64(1705276800), // 2024-01-15 00:00:00 UTC
+			"offset_since": int8(32),          // 32*15min=480min=UTC+8
+			"valid_until":  int64(1735689600), // 2025-01-01 00:00:00 UTC
+			"offset_until": int8(32),
+		},
+	}
+	result := FormatExistingRelations(relations, 1, true)
+	if !contains(result, "valid_since=") {
+		t.Error("includeTime=true 时应包含 valid_since=")
+	}
+	if !contains(result, "valid_until=") {
+		t.Error("includeTime=true 时应包含 valid_until=")
+	}
+	if !contains(result, "2024") {
+		t.Errorf("valid_since 应包含年份 2024，实际: %s", result)
+	}
+}
+
+// TestFormatExistingRelations_未知时间跳过 测试 timestamp=-1 时跳过格式化
+func TestFormatExistingRelations_未知时间跳过(t *testing.T) {
+	relations := []map[string]any{
+		{
+			"content":     "张三在北京工作",
+			"valid_since": int64(-1),
+			"valid_until": int64(-1),
+		},
+	}
+	result := FormatExistingRelations(relations, 1, true)
+	if contains(result, "valid_since=") {
+		t.Error("timestamp=-1 时不应格式化 valid_since")
+	}
+	if contains(result, "valid_until=") {
+		t.Error("timestamp=-1 时不应格式化 valid_until")
+	}
+}
+
+// TestFormatExistingRelations_不包含时间 测试 includeTime=false
+func TestFormatExistingRelations_不包含时间(t *testing.T) {
+	relations := []map[string]any{
+		{
+			"content":      "张三在北京工作",
+			"valid_since":  int64(1705276800),
+			"offset_since": int8(32),
+		},
+	}
+	result := FormatExistingRelations(relations, 1, false)
+	if contains(result, "valid_since=") {
+		t.Error("includeTime=false 时不应包含时间信息")
+	}
+}
+
 // TestFormatExistingRelations_基本 测试关系列表格式化
 func TestFormatExistingRelations_基本(t *testing.T) {
 	relations := []map[string]any{
