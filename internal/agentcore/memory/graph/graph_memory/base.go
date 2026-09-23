@@ -511,7 +511,7 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 // Search 搜索图记忆
 //
 // Python: search(query, user_id, search_strategy, entity, relation, episode, query_embedding)
-func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, searchEntity, searchRelation, searchEpisode bool, opts ...SearchOption) (*SearchResult, error) {
+func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []string, searchEntity, searchRelation, searchEpisode bool, opts ...SearchOption) (*SearchResult, error) {
 	searchOpts := &SearchConfigOptions{
 		SearchStrategy: "default",
 		SearchEntity:   searchEntity,
@@ -538,7 +538,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, sea
 	}
 
 	// 校验输入
-	userIDs, err := ValidateSearchInput(query, userID, []bool{searchEntity, searchRelation, searchEpisode})
+	validatedUserIDs, err := ValidateSearchInput(query, userIDs, []bool{searchEntity, searchRelation, searchEpisode})
 	if err != nil {
 		return nil, err
 	}
@@ -575,7 +575,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, sea
 
 	if searchEntity {
 		g.Go(func() error {
-			objects, err := gm.performSearch(gctx, 0, userIDs, strategyName, query, queryEmbedding)
+			objects, err := gm.performSearch(gctx, 0, validatedUserIDs, strategyName, query, queryEmbedding)
 			if err != nil {
 				return err
 			}
@@ -586,7 +586,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, sea
 
 	if searchRelation {
 		g.Go(func() error {
-			objects, err := gm.performSearch(gctx, 1, userIDs, strategyName, query, queryEmbedding)
+			objects, err := gm.performSearch(gctx, 1, validatedUserIDs, strategyName, query, queryEmbedding)
 			if err != nil {
 				return err
 			}
@@ -597,7 +597,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, sea
 
 	if searchEpisode {
 		g.Go(func() error {
-			objects, err := gm.performSearch(gctx, 2, userIDs, strategyName, query, queryEmbedding)
+			objects, err := gm.performSearch(gctx, 2, validatedUserIDs, strategyName, query, queryEmbedding)
 			if err != nil {
 				return err
 			}

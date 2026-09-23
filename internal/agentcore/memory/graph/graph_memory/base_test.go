@@ -632,7 +632,7 @@ func TestSearch_未知策略(t *testing.T) {
 	gm, err := newTestGraphMemory()
 	assert.NoError(t, err)
 
-	_, err = gm.Search(context.Background(), "query", "user1", true, true, true, WithSearchStrategy("nonexistent"))
+	_, err = gm.Search(context.Background(), "query", []string{"user1"}, true, true, true, WithSearchStrategy("nonexistent"))
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -645,7 +645,7 @@ func TestSearch_空策略(t *testing.T) {
 	gm, err := newTestGraphMemory()
 	assert.NoError(t, err)
 
-	_, err = gm.Search(context.Background(), "query", "user1", true, true, true, WithSearchStrategy(""))
+	_, err = gm.Search(context.Background(), "query", []string{"user1"}, true, true, true, WithSearchStrategy(""))
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -658,7 +658,7 @@ func TestSearch_无嵌入模型无预计算向量(t *testing.T) {
 	gm, err := newTestGraphMemory()
 	assert.NoError(t, err)
 
-	_, err = gm.Search(context.Background(), "query", "user1", true, true, true)
+	_, err = gm.Search(context.Background(), "query", []string{"user1"}, true, true, true)
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -737,7 +737,7 @@ func TestSearch_有预计算向量(t *testing.T) {
 	fakeEmb := &fakeEmbedder{dimension: 32}
 	_ = gm.AttachEmbedder(fakeEmb)
 
-	result, err := gm.Search(context.Background(), "query", "user1", true, true, true,
+	result, err := gm.Search(context.Background(), "query", []string{"user1"}, true, true, true,
 		WithQueryEmbedding(make([]float64, 32)),
 	)
 	// 搜索需要实际后端，这里测试不会 panic 即可
@@ -1132,7 +1132,7 @@ func TestSearch_部分集合(t *testing.T) {
 	_ = gm.AttachEmbedder(fakeEmb)
 
 	// 只搜索实体
-	result, err := gm.Search(context.Background(), "query", "user1", true, false, false,
+	result, err := gm.Search(context.Background(), "query", []string{"user1"}, true, false, false,
 		WithQueryEmbedding(make([]float64, 32)),
 	)
 	assert.NoError(t, err)
@@ -1746,7 +1746,7 @@ func TestSearch_NaNQueryEmbedding(t *testing.T) {
 	fakeEmb := &fakeEmbedder{dimension: 32}
 	_ = gm.AttachEmbedder(fakeEmb)
 
-	_, err := gm.Search(context.Background(), "query", "user1", true, false, false,
+	_, err := gm.Search(context.Background(), "query", []string{"user1"}, true, false, false,
 		WithQueryEmbedding([]float64{0.1, math.NaN()}),
 	)
 	assert.Error(t, err)
@@ -1760,7 +1760,7 @@ func TestSearch_InfQueryEmbedding(t *testing.T) {
 	fakeEmb := &fakeEmbedder{dimension: 32}
 	_ = gm.AttachEmbedder(fakeEmb)
 
-	_, err := gm.Search(context.Background(), "query", "user1", true, false, false,
+	_, err := gm.Search(context.Background(), "query", []string{"user1"}, true, false, false,
 		WithQueryEmbedding([]float64{0.1, math.Inf(1)}),
 	)
 	assert.Error(t, err)

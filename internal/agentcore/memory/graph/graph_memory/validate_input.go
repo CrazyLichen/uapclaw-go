@@ -80,13 +80,10 @@ func ValidateAddMemoryInput(userIDMaxLength int, srcType config.EpisodeType, use
 //
 // 依次校验：
 //  1. query 必须是非空字符串
-//  2. userID 展开为列表后，每个元素必须是非空字符串且长度 <= 32
-//  3. settings 中每个元素必须为布尔值
-//
-// 返回展开后的 userID 列表。
+//  2. userIDs 每个元素必须是非空字符串且长度 <= 32
 //
 // Python: validate_search_input(query, user_id, settings)
-func ValidateSearchInput(query string, userID any, settings []bool) ([]string, error) {
+func ValidateSearchInput(query string, userIDs []string, settings []bool) ([]string, error) {
 	// 校验 query
 	if strings.TrimSpace(query) == "" {
 		return nil, exception.BuildError(
@@ -94,12 +91,6 @@ func ValidateSearchInput(query string, userID any, settings []bool) ([]string, e
 			exception.WithParam("store_type", storeType),
 			exception.WithParam("error_msg", "query must be a non-empty string value"),
 		)
-	}
-
-	// 将 userID 规范化为 []string
-	userIDs, err := normalizeUserIDs(userID)
-	if err != nil {
-		return nil, err
 	}
 
 	// 校验每个 userID 元素
@@ -113,10 +104,6 @@ func ValidateSearchInput(query string, userID any, settings []bool) ([]string, e
 			)
 		}
 	}
-
-	// 校验 settings 中每个元素为 bool（Go 类型已保证，但需检查长度）
-	// Python: if not all(isinstance(s, bool) for s in settings)
-	// Go 中 settings 参数类型已为 []bool，无需逐个检查类型
 
 	return userIDs, nil
 }
@@ -132,23 +119,5 @@ func isValidEpisodeType(t config.EpisodeType) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// normalizeUserIDs 将 userID 规范化为 []string
-//
-// Python: if not isinstance(user_id, list): user_id = [user_id]
-func normalizeUserIDs(userID any) ([]string, error) {
-	switch uid := userID.(type) {
-	case string:
-		return []string{uid}, nil
-	case []string:
-		return uid, nil
-	default:
-		return nil, exception.BuildError(
-			exception.StatusMemoryStoreValidationInvalid,
-			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "user_id must be a string or a list of strings"),
-		)
 	}
 }

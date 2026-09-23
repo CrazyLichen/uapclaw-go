@@ -104,20 +104,20 @@ func TestValidateAddMemoryInput_userID恰好最大长度(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestValidateSearchInput_正常字符串UserID(t *testing.T) {
-	result, err := ValidateSearchInput("test query", "user123", []bool{true, false, true})
+func TestValidateSearchInput_正常UserID列表(t *testing.T) {
+	result, err := ValidateSearchInput("test query", []string{"user123"}, []bool{true, false, true})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"user123"}, result)
 }
 
-func TestValidateSearchInput_列表UserID(t *testing.T) {
+func TestValidateSearchInput_多UserID(t *testing.T) {
 	result, err := ValidateSearchInput("test query", []string{"user1", "user2"}, []bool{true, false, true})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"user1", "user2"}, result)
 }
 
 func TestValidateSearchInput_空query(t *testing.T) {
-	_, err := ValidateSearchInput("", "user123", []bool{true})
+	_, err := ValidateSearchInput("", []string{"user123"}, []bool{true})
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -125,14 +125,7 @@ func TestValidateSearchInput_空query(t *testing.T) {
 }
 
 func TestValidateSearchInput_空白query(t *testing.T) {
-	_, err := ValidateSearchInput("   ", "user123", []bool{true})
-	assert.Error(t, err)
-	var baseErr *exception.BaseError
-	assert.ErrorAs(t, err, &baseErr)
-}
-
-func TestValidateSearchInput_userID为空字符串(t *testing.T) {
-	_, err := ValidateSearchInput("test query", "", []bool{true})
+	_, err := ValidateSearchInput("   ", []string{"user123"}, []bool{true})
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -147,7 +140,7 @@ func TestValidateSearchInput_userID列表中有空字符串(t *testing.T) {
 
 func TestValidateSearchInput_userID超长(t *testing.T) {
 	longUID := strings.Repeat("a", 33)
-	_, err := ValidateSearchInput("test query", longUID, []bool{true})
+	_, err := ValidateSearchInput("test query", []string{longUID}, []bool{true})
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -155,16 +148,9 @@ func TestValidateSearchInput_userID超长(t *testing.T) {
 
 func TestValidateSearchInput_userID恰好32字符(t *testing.T) {
 	uid := strings.Repeat("a", 32)
-	result, err := ValidateSearchInput("test query", uid, []bool{true})
+	result, err := ValidateSearchInput("test query", []string{uid}, []bool{true})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{uid}, result)
-}
-
-func TestValidateSearchInput_无效userID类型(t *testing.T) {
-	_, err := ValidateSearchInput("test query", 123, []bool{true})
-	assert.Error(t, err)
-	var baseErr *exception.BaseError
-	assert.ErrorAs(t, err, &baseErr)
 }
 
 func TestIsValidEpisodeType(t *testing.T) {
@@ -174,18 +160,3 @@ func TestIsValidEpisodeType(t *testing.T) {
 	assert.False(t, isValidEpisodeType(config.EpisodeType(99)))
 }
 
-func TestNormalizeUserIDs(t *testing.T) {
-	// 字符串
-	result, err := normalizeUserIDs("user1")
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"user1"}, result)
-
-	// 字符串列表
-	result, err = normalizeUserIDs([]string{"user1", "user2"})
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"user1", "user2"}, result)
-
-	// 无效类型
-	_, err = normalizeUserIDs(123)
-	assert.Error(t, err)
-}
