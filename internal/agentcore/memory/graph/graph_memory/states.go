@@ -109,17 +109,70 @@ type GraphMemPrompting struct {
 	EntityDedupeLanguage string
 }
 
+// EntityMerge 实体合并信息
+//
+// Python: relation_deferred_updates: dict[str, list[tuple[Relation, str, str]]]
+type deferredRelationUpdate struct {
+	// Relation 待更新的关系
+	Relation *graph.Relation
+	// Field 待更新的字段名
+	Field string
+	// Value 待设置的新值
+	Value string
+}
+
+// toRemoveItem 待移除项（BaseGraphObject 的 UUID + ObjType）
+//
+// Python: to_remove: list[BaseGraphObject | str]
+type toRemoveItem struct {
+	// UUID 对象的 UUID
+	UUID string
+	// ObjType 对象类型
+	ObjType string
+}
+
+// asyncTask 异步任务结果（对齐 Python asyncio.Task）
+//
+// Python 中 state.tasks 是 List[asyncio.Task]，Task 完成后通过 await 获取 AssistantMessage。
+// Go 中使用 channel 模拟：任务在 goroutine 中执行，结果通过 channel 传回。
+type asyncTask struct {
+	// Result LLM 响应内容（对齐 Python: response.content）
+	Result string
+	// Err 任务执行错误
+	Err error
+}
+
+// pendingMergeTask 待合并的阻塞任务
+//
+// Python: state.pending_merge[tgt.uuid] = task
+type pendingMergeTask struct {
+	// Result LLM 响应内容
+	Result string
+	// Err 任务执行错误
+	Err error
+}
+
+// relationFilterTaskItem 关系过滤任务条目
+//
+// Python: relation_filter_tasks[task] = (tgt_entity, relation_list)
+type relationFilterTaskItem struct {
+	// TargetEntity 关联的目标实体
+	TargetEntity *graph.Entity
+	// Relations 待过滤的关系列表
+	Relations []*graph.Relation
+}
+
 // GraphMemState 图记忆完整状态
 //
 // Python: GraphMemState (states.py)
 type GraphMemState struct {
-	// 任务缓冲区（延迟更新或并发）
-	Tasks                     []error
-	MergingTasks              []error
-	MergingTasksEntities      map[error]*graph.Entity
-	PendingMerge              map[string]error
-	RelationDeferredUpdates   map[string][]deferredRelationUpdate
-	RelationFilterTasks       map[error]*relationFilterTask
+	// 任务缓冲区（对齐 Python: state.tasks: list[asyncio.Task]）
+	Tasks                   []*asyncTask
+	MergingTasks            []*asyncTask
+	MergingTasksEntities    map[*asyncTask]*graph.Entity
+	PendingMerge            map[string]*pendingMergeTask
+	RelationDeferredUpdates map[string][]deferredRelationUpdate
+	RelationFilterTasks     map[*asyncTask]*relationFilterTaskItem
 
 	// 通用临时缓冲区
 	ToRemove  []toRemoveItem
@@ -147,38 +200,6 @@ type GraphMemState struct {
 	EpisodeType        config.EpisodeType
 	Content            string
 	History            string
-}
-
-// deferredRelationUpdate 关系延迟更新项
-//
-// Python: relation_deferred_updates: dict[str, list[tuple[Relation, str, str]]]
-type deferredRelationUpdate struct {
-	// Relation 待更新的关系
-	Relation *graph.Relation
-	// Field 待更新的字段名
-	Field string
-	// Value 待设置的新值
-	Value string
-}
-
-// relationFilterTask 关系过滤任务
-//
-// Python: relation_filter_tasks: dict[asyncio.Future, tuple[Entity, list[Relation]]]
-type relationFilterTask struct {
-	// Entity 关联实体
-	Entity *graph.Entity
-	// Relations 待过滤关系列表
-	Relations []*graph.Relation
-}
-
-// toRemoveItem 待移除项（BaseGraphObject 的 UUID + ObjType）
-//
-// Python: to_remove: list[BaseGraphObject | str]
-type toRemoveItem struct {
-	// UUID 对象的 UUID
-	UUID string
-	// ObjType 对象类型
-	ObjType string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -306,12 +327,12 @@ func NewGraphMemUpdate() *GraphMemUpdate {
 // Python: GraphMemState()
 func NewGraphMemState() *GraphMemState {
 	return &GraphMemState{
-		Tasks:                     make([]error, 0),
-		MergingTasks:              make([]error, 0),
-		MergingTasksEntities:      make(map[error]*graph.Entity),
-		PendingMerge:              make(map[string]error),
-		RelationDeferredUpdates:   make(map[string][]deferredRelationUpdate),
-		RelationFilterTasks:       make(map[error]*relationFilterTask),
+		Tasks:                   make([]*asyncTask, 0),
+		MergingTasks:            make([]*asyncTask, 0),
+		MergingTasksEntities:    make(map[*asyncTask]*graph.Entity),
+		PendingMerge:            make(map[string]*pendingMergeTask),
+		RelationDeferredUpdates: make(map[string][]deferredRelationUpdate),
+		RelationFilterTasks:     make(map[*asyncTask]*relationFilterTaskItem),
 
 		ToRemove:  make([]toRemoveItem, 0),
 		TmpBuffer: make([]any, 0),

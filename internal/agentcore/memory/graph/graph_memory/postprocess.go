@@ -183,13 +183,13 @@ func ProcessEntities(ctx context.Context, database graph.BaseGraphStore, entitie
 
 	// 完成剩余的合并任务
 	// Python: for future in state.merging_tasks: response = await future
-	// Go 中合并任务以 error 类型存储（对齐 states.go 中的设计），
-	// 实际的合并响应存储在 MergingTasksEntities 中
-	for _, future := range state.MergingTasks {
-		entity := state.MergingTasksEntities[future]
+	// Go 中合并任务以 *asyncTask 存储，MergingTasksEntities 保存关联实体
+	for _, task := range state.MergingTasks {
+		entity := state.MergingTasksEntities[task]
 		// Python: update_entity(entity, response.content, state.prompting.schema_entity_extraction)
-		// Go 中 future 本身就是任务标识，合并响应需要从外部获取
-		// 此处跳过 LLM 响应内容（在调用侧设置），仅确保 entity 在列表中
+		if entity != nil && task != nil && task.Err == nil && task.Result != "" {
+			UpdateEntity(entity, task.Result, state.Prompting.SchemaEntityExtraction)
+		}
 		if entity != nil && !containsEntityPtr(entities, entity) {
 			entities = append(entities, entity)
 		}
