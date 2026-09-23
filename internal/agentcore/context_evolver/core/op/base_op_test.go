@@ -148,3 +148,31 @@ func TestOpBase_VectorStore_未注册(t *testing.T) {
 	b := NewOpBase(sc)
 	assert.Nil(t, b.VectorStore())
 }
+
+// fakeAgentFlowService AgentFlowService 的 mock 实现
+type fakeAgentFlowService struct {
+	result *cecontext.TrajectoryResult
+	err    error
+}
+
+func (f *fakeAgentFlowService) Execute(_ context.Context, _ string, _ string) (*cecontext.TrajectoryResult, error) {
+	return f.result, f.err
+}
+
+func TestOpBase_AgentFlow_未注册(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	b := NewOpBase(sc)
+	assert.Nil(t, b.AgentFlow())
+}
+
+func TestOpBase_AgentFlow_已注册(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	af := &fakeAgentFlowService{result: &cecontext.TrajectoryResult{Answer: "agent answer", Success: true}}
+	sc.RegisterAgentFlow(af)
+	b := NewOpBase(sc)
+	result := b.AgentFlow()
+	require.NotNil(t, result)
+	resp, err := result.Execute(context.Background(), "query", "session1")
+	require.NoError(t, err)
+	assert.Equal(t, "agent answer", resp.Answer)
+}

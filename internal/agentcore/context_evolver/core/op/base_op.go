@@ -82,3 +82,11 @@ func (b *OpBase) VectorStore() cecontext.VectorStoreService {
 	}
 	return b.sc.VectorStore()
 }
+
+// AgentFlow 返回 Agent 执行服务。未注册时返回 nil。
+func (b *OpBase) AgentFlow() cecontext.AgentFlowService {
+	if b.sc == nil {
+		return nil
+	}
+	return b.sc.AgentFlow()
+}

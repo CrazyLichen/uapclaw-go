@@ -143,6 +143,45 @@ func TestServiceContext_VectorStore(t *testing.T) {
 	assert.Nil(t, sc2.VectorStore())
 }
 
+func TestServiceContext_AgentFlow_未注册(t *testing.T) {
+	sc := NewServiceContext()
+	assert.Nil(t, sc.AgentFlow())
+}
+
+func TestServiceContext_AgentFlow_已注册(t *testing.T) {
+	sc := NewServiceContext()
+	af := &fakeAgentFlowService{result: &TrajectoryResult{Answer: "test answer", Success: true}}
+	sc.RegisterAgentFlow(af)
+	result := sc.AgentFlow()
+	require.NotNil(t, result)
+	resp, err := result.Execute(context.Background(), "query", "session1")
+	require.NoError(t, err)
+	assert.Equal(t, "test answer", resp.Answer)
+}
+
+func TestServiceContext_AgentFlow_类型不匹配(t *testing.T) {
+	sc := NewServiceContext()
+	sc.RegisterService("agent_flow", "not-an-agent-flow")
+	assert.Nil(t, sc.AgentFlow())
+}
+
+func TestServiceContext_RegisterAgentFlow(t *testing.T) {
+	sc := NewServiceContext()
+	af := &fakeAgentFlowService{result: &TrajectoryResult{Answer: "registered"}}
+	sc.RegisterAgentFlow(af)
+	require.NotNil(t, sc.AgentFlow())
+}
+
+// fakeAgentFlowService AgentFlowService 的 mock 实现
+type fakeAgentFlowService struct {
+	result *TrajectoryResult
+	err    error
+}
+
+func (f *fakeAgentFlowService) Execute(_ context.Context, _ string, _ string) (*TrajectoryResult, error) {
+	return f.result, f.err
+}
+
 func TestServiceContext_Clear(t *testing.T) {
 	sc := NewServiceContext()
 	sc.RegisterService("llm", &fakeLLMService{})

@@ -54,7 +54,27 @@ type VectorStoreService interface {
 	GetAll(metadataFilter map[string]any) []*schema.VectorNode
 }
 
+// AgentFlowService Agent 执行服务接口。
+// MaTTS 的 ParallelScalingOp 通过此接口执行 Agent 轨迹，
+// 解耦 Op 与具体 Agent 实现的依赖。
+type AgentFlowService interface {
+	// Execute 执行一次 Agent 推理，返回轨迹结果。
+	Execute(ctx context.Context, query string, sessionID string) (*TrajectoryResult, error)
+}
+
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// TrajectoryResult 单次 Agent 执行的轨迹结果。
+type TrajectoryResult struct {
+	// Answer Agent 最终回答
+	Answer string
+	// Steps 执行步骤
+	Steps []any
+	// Success 是否成功
+	Success bool
+	// Trajectory 格式化后的轨迹文本
+	Trajectory string
+}
 
 // GenerateConfig LLM 调用的可选配置。
 type GenerateConfig struct {
@@ -69,7 +89,7 @@ type GenerateConfig struct {
 // GenerateOption LLM 调用选项函数。
 type GenerateOption func(*GenerateConfig)
 
-// ServiceContext 管理共享服务（LLM/Embedding/VectorStore）的上下文。
+// ServiceContext 管理共享服务（LLM/Embedding/VectorStore/AgentFlow）的上下文。
 //
 // 非并发安全：需在初始化阶段完成所有 RegisterService 调用后，才能并发读取。
 // Python 用 __new__ 单例模式（初始化后只读），Go 改为依赖注入——
@@ -101,8 +121,6 @@ func WithTemperature(f float64) GenerateOption {
 func WithMaxTokens(n int) GenerateOption {
 	return func(c *GenerateConfig) { c.MaxTokens = n }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterService 注册服务。
 // 对齐 Python ServiceContext.register_service(name, service)。
@@ -161,6 +179,25 @@ func (sc *ServiceContext) VectorStore() VectorStoreService {
 		return nil
 	}
 	return vs
+}
+
+// AgentFlow 获取 Agent 执行服务。
+// 未注册或类型不匹配时返回 nil。
+func (sc *ServiceContext) AgentFlow() AgentFlowService {
+	svc := sc.GetService("agent_flow")
+	if svc == nil {
+		return nil
+	}
+	af, ok := svc.(AgentFlowService)
+	if !ok {
+		return nil
+	}
+	return af
+}
+
+// RegisterAgentFlow 注册 Agent 执行服务。
+func (sc *ServiceContext) RegisterAgentFlow(af AgentFlowService) {
+	sc.RegisterService("agent_flow", af)
 }
 
 // Clear 清除所有已注册的服务。
