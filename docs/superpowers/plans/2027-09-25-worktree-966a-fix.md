@@ -37,7 +37,7 @@
 - Modify: `internal/agentcore/harness/tools/worktree/manager.go`
 - Modify: `internal/agentcore/harness/tools/worktree/cleanup.go`
 
-- [ ] **Step 1: 修改 git.go — 15 个导出函数改为非导出**
+- [x] **Step 1: 修改 git.go — 15 个导出函数改为非导出**
 
 对以下函数执行首字母小写重命名：
 
@@ -63,7 +63,7 @@ ReadWorktreeHeadSHA → readWorktreeHeadSHA
 
 注意：`GitError`、`GitResult` 保持导出（类型在 `backend_test.go` 等处可能被间接引用）；`runGit` 已是非导出不变。
 
-- [ ] **Step 2: 同步修改 git_test.go 中的调用**
+- [x] **Step 2: 同步修改 git_test.go 中的调用**
 
 将测试文件中对大写函数名的调用全部改为小写。例如：
 - `FindGitRoot(` → `findGitRoot(`
@@ -72,7 +72,7 @@ ReadWorktreeHeadSHA → readWorktreeHeadSHA
 - `ReadWorktreeHeadSHA(` → `readWorktreeHeadSHA(`
 - `StatusPorcelain(` → `statusPorcelain(`
 
-- [ ] **Step 3: 同步修改 backend.go 中的调用**
+- [x] **Step 3: 同步修改 backend.go 中的调用**
 
 ```go
 // 原调用 → 新调用
@@ -87,7 +87,7 @@ GetDefaultBranch( → getDefaultBranch(
 FetchRef( → fetchRef(
 ```
 
-- [ ] **Step 4: 同步修改 manager.go 中的调用**
+- [x] **Step 4: 同步修改 manager.go 中的调用**
 
 ```go
 // 原调用 → 新调用
@@ -99,7 +99,7 @@ CountCommitsSince( → countCommitsSince(
 WorktreePrune( → worktreePrune(
 ```
 
-- [ ] **Step 5: 同步修改 cleanup.go 中的调用**
+- [x] **Step 5: 同步修改 cleanup.go 中的调用**
 
 ```go
 // 原调用 → 新调用
@@ -109,17 +109,17 @@ HasUnpushedCommits( → hasUnpushedCommits(
 WorktreePrune( → worktreePrune(
 ```
 
-- [ ] **Step 6: 编译验证**
+- [x] **Step 6: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/harness/tools/worktree/...`
 Expected: 编译成功
 
-- [ ] **Step 7: 运行测试**
+- [x] **Step 7: 运行测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/harness/tools/worktree/... -count=1`
 Expected: PASS
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add internal/agentcore/harness/tools/worktree/git.go internal/agentcore/harness/tools/worktree/git_test.go internal/agentcore/harness/tools/worktree/backend.go internal/agentcore/harness/tools/worktree/manager.go internal/agentcore/harness/tools/worktree/cleanup.go
@@ -137,7 +137,7 @@ git commit -m "refactor(worktree): git 辅助函数改为非导出
 **Files:**
 - Modify: `internal/agentcore/harness/tools/worktree/manager.go`
 
-- [ ] **Step 1: 删除旧的 fireRail 方法**
+- [x] **Step 1: 删除旧的 fireRail 方法**
 
 删除 `manager.go` 中的：
 ```go
@@ -146,7 +146,7 @@ func (m *WorktreeManager) fireRail(method string, args ...any) any {
 }
 ```
 
-- [ ] **Step 2: 添加 8 个类型安全的 fire 方法**
+- [x] **Step 2: 添加 8 个类型安全的 fire 方法**
 
 在 `manager.go` 的非导出函数区块中添加：
 
@@ -250,17 +250,17 @@ func (m *WorktreeManager) fireOnSync(ctx context.Context, session *WorktreeSessi
 }
 ```
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/harness/tools/worktree/...`
 Expected: 编译成功
 
-- [ ] **Step 4: 运行测试**
+- [x] **Step 4: 运行测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/harness/tools/worktree/... -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/tools/worktree/manager.go
@@ -279,7 +279,7 @@ git commit -m "refactor(worktree): fireRail 类型安全化
 **Files:**
 - Modify: `internal/agentcore/harness/tools/worktree/rails.go`
 
-- [ ] **Step 1: 在 Init 方法中补全 resourceMgr.AddTool**
+- [x] **Step 1: 在 Init 方法中补全 resourceMgr.AddTool**
 
 在 `rails.go` 的 `Init` 方法中，在 `AbilityManager` 注册代码块之后添加 resourceMgr 注册：
 
@@ -293,7 +293,7 @@ if resourceMgr != nil {
 }
 ```
 
-- [ ] **Step 2: 在 Uninit 方法中补全 resourceMgr.RemoveTool**
+- [x] **Step 2: 在 Uninit 方法中补全 resourceMgr.RemoveTool**
 
 在 `rails.go` 的 `Uninit` 方法中，在 `AbilityManager` 清理代码块之前添加 resourceMgr 清理：
 
@@ -310,7 +310,7 @@ if resourceMgr != nil {
 }
 ```
 
-- [ ] **Step 3: 添加 import**
+- [x] **Step 3: 添加 import**
 
 在 `rails.go` 的 import 块中添加：
 
@@ -320,17 +320,17 @@ if resourceMgr != nil {
 
 注意：需检查是否与已有的 `rails` 包 alias 冲突（`runner` 不是 `rails`，不会冲突）。
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/harness/tools/worktree/...`
 Expected: 编译成功
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/harness/tools/worktree/... -count=1`
 Expected: PASS
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/agentcore/harness/tools/worktree/rails.go
@@ -350,7 +350,7 @@ git commit -m "fix(worktree): WorktreeRail.Init/Uninit 补全 resourceMgr 注册
 - Modify: `internal/agent_teams/tools/team_backend_test.go`（如有 publishEvent 引用）
 - Modify: `internal/agent_teams/agent/agent_configurator.go`
 
-- [ ] **Step 1: 将 team_backend.go 中的 publishEvent 改为 PublishEvent**
+- [x] **Step 1: 将 team_backend.go 中的 publishEvent 改为 PublishEvent**
 
 1. 方法签名：`func (tb *TeamBackend) publishEvent(` → `func (tb *TeamBackend) PublishEvent(`
 2. 方法注释：更新为导出格式
@@ -367,16 +367,16 @@ git commit -m "fix(worktree): WorktreeRail.Init/Uninit 补全 resourceMgr 注册
 - ToolApprovalResultEvent 发布
 - MemberSpawnedEvent 发布
 
-- [ ] **Step 2: 同步修改 team_backend_test.go**
+- [x] **Step 2: 同步修改 team_backend_test.go**
 
 如果测试文件中有 `publishEvent` 引用，同步改为 `PublishEvent`。搜索确认。
 
-- [ ] **Step 3: 编译验证 team_backend 改动**
+- [x] **Step 3: 编译验证 team_backend 改动**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agent_teams/tools/...`
 Expected: 编译成功
 
-- [ ] **Step 4: 修改 agent_configurator.go 补全事件桥接**
+- [x] **Step 4: 修改 agent_configurator.go 补全事件桥接**
 
 1. 修改事件处理器条件守卫，从 `if c.WorkspaceManager() != nil` 改为 `if c.WorkspaceManager() != nil && c.TeamBackend() != nil`
 2. 在事件处理器闭包中添加 `tb` 变量引用
@@ -422,12 +422,12 @@ if c.WorkspaceManager() != nil && c.TeamBackend() != nil {
 atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 ```
 
-- [ ] **Step 5: 编译验证**
+- [x] **Step 5: 编译验证**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agent_teams/...`
 Expected: 编译成功
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agent_teams/agent/... -count=1 -timeout 120s`
 Expected: PASS
@@ -435,7 +435,7 @@ Expected: PASS
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agent_teams/tools/... -count=1 -timeout 120s`
 Expected: PASS
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/agent_teams/tools/team_backend.go internal/agent_teams/tools/team_backend_test.go internal/agent_teams/agent/agent_configurator.go
@@ -454,7 +454,7 @@ git commit -m "feat(agent): 导出 PublishEvent 并补全 worktree 事件桥接
 **Files:**
 - Modify: `internal/agentcore/harness/tools/worktree/doc.go`
 
-- [ ] **Step 1: 修改 doc.go 中 rails.go 的描述**
+- [x] **Step 1: 修改 doc.go 中 rails.go 的描述**
 
 将：
 ```
@@ -465,12 +465,12 @@ git commit -m "feat(agent): 导出 PublishEvent 并补全 worktree 事件桥接
 └── rails.go         # WorktreeRail + WorktreeLifecycleRail + AutoSetupRail + DiffSummaryRail
 ```
 
-- [ ] **Step 2: 全量编译**
+- [x] **Step 2: 全量编译**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/harness/tools/worktree/... && go build ./internal/agent_teams/... && go build ./internal/swarm/...`
 Expected: 全部编译成功
 
-- [ ] **Step 3: 全量测试**
+- [x] **Step 3: 全量测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/harness/tools/worktree/... -count=1`
 Expected: PASS
@@ -481,7 +481,7 @@ Expected: PASS
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agent_teams/tools/... -count=1 -timeout 120s`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/harness/tools/worktree/doc.go

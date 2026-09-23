@@ -384,6 +384,20 @@
       ],
       "latest_plan_id": "plan_task_test-team_1790063699075_899_1790063699075_565",
       "status": "plan_approved"
+    },
+    "task_test-team_1790090187256_471": {
+      "plan_ids": [
+        "plan_task_test-team_1790090187256_471_1790090187257_391"
+      ],
+      "latest_plan_id": "plan_task_test-team_1790090187256_471_1790090187257_391",
+      "status": "plan_approved"
+    },
+    "task_test-team_1790090220925_550": {
+      "plan_ids": [
+        "plan_task_test-team_1790090220925_550_1790090220925_578"
+      ],
+      "latest_plan_id": "plan_task_test-team_1790090220925_550_1790090220925_578",
+      "status": "plan_approved"
     }
   },
   "task_plans": {
@@ -936,6 +950,30 @@
       "submitted_at": "2026-09-22T15:54:59+08:00",
       "decided_at": "2026-09-22T15:54:59+08:00",
       "updated_at": "2026-09-22T15:54:59+08:00"
+    },
+    "plan_task_test-team_1790090187256_471_1790090187257_391": {
+      "plan_id": "plan_task_test-team_1790090187256_471_1790090187257_391",
+      "task_id": "task_test-team_1790090187256_471",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1790090187256_471/plans/plan_task_test-team_1790090187256_471_1790090187257_391.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend2673812018/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-22T23:16:27+08:00",
+      "decided_at": "2026-09-22T23:16:27+08:00",
+      "updated_at": "2026-09-22T23:16:27+08:00"
+    },
+    "plan_task_test-team_1790090220925_550_1790090220925_578": {
+      "plan_id": "plan_task_test-team_1790090220925_550_1790090220925_578",
+      "task_id": "task_test-team_1790090220925_550",
+      "member_name": "teammate1",
+      "status": "plan_approved",
+      "member_plan_md": "tasks/task_test-team_1790090220925_550/plans/plan_task_test-team_1790090220925_550_1790090220925_578.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend1238914173/001/plan.md",
+      "decision": "approve",
+      "submitted_at": "2026-09-22T23:17:00+08:00",
+      "decided_at": "2026-09-22T23:17:00+08:00",
+      "updated_at": "2026-09-22T23:17:00+08:00"
     }
   }
 }

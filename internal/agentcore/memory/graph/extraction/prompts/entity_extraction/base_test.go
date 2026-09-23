@@ -1,7 +1,13 @@
-package extraction
+package entity_extraction
 
 import (
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
+
+	// 空白导入触发 cn/en 的 init() 注册多语言数据
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/prompts/cn"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/prompts/en"
 )
 
 // TestFormatSourceDescription_有描述 测试有描述时的格式化
@@ -117,12 +123,12 @@ func TestEnsureValidLanguage_空(t *testing.T) {
 
 // TestFormatRelationDefinitions_有类型 测试有类型时的格式化
 func TestFormatRelationDefinitions_有类型(t *testing.T) {
-	relationTypes := []RelationDef{
+	relationTypes := []registry.RelationDef{
 		{
 			Name:        "工作于",
 			Description: map[string]string{"cn": "描述工作关系"},
-			LHS:         DefaultEntity,
-			RHS:         DefaultEntity,
+			LHS:         registry.DefaultEntity,
+			RHS:         registry.DefaultEntity,
 		},
 	}
 	result := FormatRelationDefinitions(relationTypes, "cn")

@@ -1,73 +1,43 @@
 package extraction
 
-import "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
+// 此文件已将 EntityDef/RelationDef/HumanEntity/AIEntity/DefaultEntity/DefaultRelation
+// 下移到 registry 子包（解决循环依赖），通过重新导出保持 extraction 包的 API 兼容。
+//
+// Python: EntityDef/RelationDef 定义在 extraction/entity_type_definition.py
+// Go 差异：下移到 registry/ 子包，因为 prompts/entity_extraction/ 需要使用
+// EntityDef 而不能反向导入 extraction 包（extraction 通过 registry.go
+// 空白导入 prompts/cn 和 prompts/en）。
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// EntityDef 实体类型定义
+// EntityDef 实体类型定义（重新导出，实际定义在 registry 包）
 //
 // Python: EntityDef (entity_type_definition.py)
-type EntityDef struct {
-	// Name 类型名称
-	Name string `json:"name"`
-	// Description 多语言描述（key 为语言代码）
-	Description map[string]string `json:"description"`
-}
+type EntityDef = registry.EntityDef
 
-// RelationDef 关系类型定义
+// RelationDef 关系类型定义（重新导出，实际定义在 registry 包）
 //
 // Python: RelationDef (entity_type_definition.py)
-type RelationDef struct {
-	// Name 类型名称
-	Name string `json:"name"`
-	// Description 多语言描述（key 为语言代码）
-	Description map[string]string `json:"description"`
-	// LHS 左侧实体类型
-	LHS *EntityDef `json:"lhs"`
-	// RHS 右侧实体类型
-	RHS *EntityDef `json:"rhs"`
-}
+type RelationDef = registry.RelationDef
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 常数 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// HumanEntity 人类实体类型定义
-	//
-	// Python: HUMAN_ENTITY
-	HumanEntity = &EntityDef{
-		Name:        "Human",
-		Description: registry.HumanEntityDescription,
-	}
-
-	// AIEntity AI 实体类型定义
-	//
-	// Python: AI_ENTITY
-	AIEntity = &EntityDef{
-		Name:        "AI",
-		Description: registry.AIEntityDescription,
-	}
-
-	// DefaultEntity 默认实体类型定义
-	//
-	// Python: ENTITY_DEFINITION
-	DefaultEntity = &EntityDef{
-		Name:        "Entity",
-		Description: registry.EntityDefinitionDescription,
-	}
-
-	// DefaultRelation 默认关系类型定义
-	//
-	// Python: RELATION_DEFINITION
-	DefaultRelation = &RelationDef{
-		Name:        "Relation",
-		Description: registry.RelationDefinitionDescription,
-		LHS:         DefaultEntity,
-		RHS:         DefaultEntity,
-	}
+	// HumanEntity 人类实体类型定义（重新导出）
+	HumanEntity = registry.HumanEntity
+	// AIEntity AI 实体类型定义（重新导出）
+	AIEntity = registry.AIEntity
+	// DefaultEntity 默认实体类型定义（重新导出）
+	DefaultEntity = registry.DefaultEntity
+	// DefaultRelation 默认关系类型定义（重新导出）
+	DefaultRelation = registry.DefaultRelation
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
