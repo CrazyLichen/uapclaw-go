@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"golang.org/x/sync/errgroup"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -569,31 +570,44 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userID any, sea
 
 	result := &SearchResult{}
 
-	// 实体搜索
+	// 并发搜索三个集合（对齐 Python asyncio.as_completed）
+	g, gctx := errgroup.WithContext(ctx)
+
 	if searchEntity {
-		objects, err := gm.performSearch(ctx, 0, userIDs, strategyName, query, queryEmbedding)
-		if err != nil {
-			return nil, err
-		}
-		result.Entity = objects
+		g.Go(func() error {
+			objects, err := gm.performSearch(gctx, 0, userIDs, strategyName, query, queryEmbedding)
+			if err != nil {
+				return err
+			}
+			result.Entity = objects
+			return nil
+		})
 	}
 
-	// 关系搜索
 	if searchRelation {
-		objects, err := gm.performSearch(ctx, 1, userIDs, strategyName, query, queryEmbedding)
-		if err != nil {
-			return nil, err
-		}
-		result.Relation = objects
+		g.Go(func() error {
+			objects, err := gm.performSearch(gctx, 1, userIDs, strategyName, query, queryEmbedding)
+			if err != nil {
+				return err
+			}
+			result.Relation = objects
+			return nil
+		})
 	}
 
-	// 片段搜索
 	if searchEpisode {
-		objects, err := gm.performSearch(ctx, 2, userIDs, strategyName, query, queryEmbedding)
-		if err != nil {
-			return nil, err
-		}
-		result.Episode = objects
+		g.Go(func() error {
+			objects, err := gm.performSearch(gctx, 2, userIDs, strategyName, query, queryEmbedding)
+			if err != nil {
+				return err
+			}
+			result.Episode = objects
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return result, nil
