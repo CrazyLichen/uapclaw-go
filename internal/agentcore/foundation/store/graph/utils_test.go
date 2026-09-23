@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -173,5 +174,51 @@ func TestStringsToAny_空切片(t *testing.T) {
 	result := stringsToAny(nil)
 	if len(result) != 0 {
 		t.Errorf("空切片应返回空，实际为 %v", result)
+	}
+}
+
+// TestFormatListOfMessages_基本 测试基本消息格式化
+func TestFormatListOfMessages_基本(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "user", "content": "你好"},
+		{"role": "assistant", "content": "很高兴认识你"},
+	}
+	result := FormatListOfMessages(messages, nil, "")
+	if !strings.Contains(result, "user: 你好") {
+		t.Errorf("期望包含 'user: 你好'，实际: %s", result)
+	}
+	if !strings.Contains(result, "assistant: 很高兴认识你") {
+		t.Errorf("期望包含 'assistant: 很高兴认识你'，实际: %s", result)
+	}
+}
+
+// TestFormatListOfMessages_角色替换 测试 roleReplace 映射
+func TestFormatListOfMessages_角色替换(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "user", "content": "你好"},
+	}
+	roleReplace := map[string]string{"user": "张三（用户）"}
+	result := FormatListOfMessages(messages, roleReplace, "")
+	if !strings.Contains(result, "张三（用户）: 你好") {
+		t.Errorf("期望包含角色替换结果，实际: %s", result)
+	}
+}
+
+// TestFormatListOfMessages_自定义模板 测试自定义 template
+func TestFormatListOfMessages_自定义模板(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "user", "content": "你好"},
+	}
+	result := FormatListOfMessages(messages, nil, "[{role}] {content}\n")
+	if !strings.Contains(result, "[user] 你好") {
+		t.Errorf("期望包含自定义模板结果，实际: %s", result)
+	}
+}
+
+// TestFormatListOfMessages_空列表 测试空消息列表
+func TestFormatListOfMessages_空列表(t *testing.T) {
+	result := FormatListOfMessages(nil, nil, "")
+	if result != "" {
+		t.Errorf("空列表应返回空字符串，实际: %s", result)
 	}
 }

@@ -997,7 +997,7 @@ func TestPrepareEpisodes_空内容(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	state := NewGraphMemState()
 
-	_, err := gm.prepareEpisodes(context.Background(), state, "  ", config.EpisodeTypeDocument, "user1", nil)
+	_, err := gm.prepareEpisodes(context.Background(), state, "  ", nil, config.EpisodeTypeDocument, "user1", nil)
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
@@ -1187,7 +1187,7 @@ func TestAttachReranker_成功(t *testing.T) {
 func TestPrepareEpisodes_委托(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	state := NewGraphMemState()
-	_, err := gm.PrepareEpisodes(context.Background(), state, "  ", config.EpisodeTypeDocument, "user1", nil)
+	_, err := gm.PrepareEpisodes(context.Background(), state, "  ", nil, config.EpisodeTypeDocument, "user1", nil)
 	assert.Error(t, err)
 }
 
@@ -2430,17 +2430,20 @@ func TestPrepareEpisodes_有历史(t *testing.T) {
 	state := NewGraphMemState()
 	state.Strategy.RecallEpisode.TopK = 5
 
-	_, err := gm.prepareEpisodes(context.Background(), state, "hello world", config.EpisodeTypeDocument, "user1", nil)
+	_, err := gm.prepareEpisodes(context.Background(), state, "hello world", nil, config.EpisodeTypeDocument, "user1", nil)
 	assert.NoError(t, err)
 }
 
-// TestPrepareEpisodes_对话内容 测试对话类型内容
+// TestPrepareEpisodes_对话内容 测试对话类型内容（使用 Messages）
 func TestPrepareEpisodes_对话内容(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	state := NewGraphMemState()
 
-	kwargs := map[string]string{"role_user": "Alice", "role_assistant": "Bob"}
-	_, err := gm.prepareEpisodes(context.Background(), state, "What is AI?", config.EpisodeTypeConversation, "user1", kwargs)
+	kwargs := map[string]string{"user": "Alice", "assistant": "Bob"}
+	_, err := gm.prepareEpisodes(context.Background(), state, "", []llmschema.BaseMessage{
+		llmschema.NewUserMessage("What is AI?"),
+		llmschema.NewAssistantMessage("AI is artificial intelligence."),
+	}, config.EpisodeTypeConversation, "user1", kwargs)
 	assert.NoError(t, err)
 }
 
@@ -2449,7 +2452,7 @@ func TestPrepareEpisodes_无效输入(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	state := NewGraphMemState()
 
-	_, err := gm.prepareEpisodes(context.Background(), state, "", config.EpisodeTypeDocument, "user1", nil)
+	_, err := gm.prepareEpisodes(context.Background(), state, "", nil, config.EpisodeTypeDocument, "user1", nil)
 	assert.Error(t, err)
 }
 

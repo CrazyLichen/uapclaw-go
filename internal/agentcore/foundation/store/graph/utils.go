@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -114,6 +115,37 @@ func EnsureUniqueUUIDs(ctx context.Context, store BaseGraphStore, ids []string, 
 	}
 
 	return result, nil
+}
+
+// FormatListOfMessages 将消息列表格式化为字符串
+//
+// 对齐 Python foundation/store/graph/utils.py: format_list_of_messages
+//
+// messages 为包含 "role" 和 "content" 键的 dict 列表，
+// roleReplace 用于将角色名映射为自定义名称（如 "user" → "张三（用户）"），
+// template 为每条消息的格式化模板，默认 "{role}: {content}\n"。
+func FormatListOfMessages(messages []map[string]any, roleReplace map[string]string, template string) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	if template == "" {
+		template = "{role}: {content}\n"
+	}
+	if roleReplace == nil {
+		roleReplace = map[string]string{}
+	}
+	var result strings.Builder
+	for _, msg := range messages {
+		role, _ := msg["role"].(string)
+		if replaced, ok := roleReplace[role]; ok {
+			role = replaced
+		}
+		content := fmt.Sprintf("%v", msg["content"])
+		line := strings.ReplaceAll(template, "{role}", role)
+		line = strings.ReplaceAll(line, "{content}", content)
+		result.WriteString(line)
+	}
+	return result.String()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

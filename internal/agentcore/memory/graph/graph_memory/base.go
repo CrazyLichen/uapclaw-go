@@ -67,9 +67,11 @@ type AddMemoryConfig struct {
 	SourceType config.EpisodeType
 	// UserID 用户标识
 	UserID string
-	// Content 内容字符串
+	// Content 内容字符串（与 Messages 二选一）
 	Content string
-	// ContentFmtKwargs 内容格式化参数（对话场景的角色映射）
+	// Messages 消息列表输入（与 Content 二选一，仅 CONVERSATION 类型）
+	Messages []llmschema.BaseMessage
+	// ContentFmtKwargs 内容格式化参数（对话场景的角色映射，仅 Messages 时有效）
 	ContentFmtKwargs map[string]string
 	// ReferenceTime 参考时间，nil 表示使用当前时间
 	ReferenceTime *time.Time
@@ -384,7 +386,7 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	state := gm.initState(cfg.ReferenceTime, cfg.SourceType)
 
 	// 1. 准备片段内容 + 检索历史
-	content, err := gm.prepareEpisodes(ctx, state, cfg.Content, cfg.SourceType, cfg.UserID, cfg.ContentFmtKwargs)
+	content, err := gm.prepareEpisodes(ctx, state, cfg.Content, cfg.Messages, cfg.SourceType, cfg.UserID, cfg.ContentFmtKwargs)
 	if err != nil {
 		return nil, err
 	}
@@ -719,8 +721,8 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 // PrepareEpisodes 验证并规范化片段内容，检索相关历史
 //
 // Python: _prepare_episodes(src_type, user_id, content, state, content_fmt_kwargs)
-func (gm *GraphMemory) PrepareEpisodes(ctx context.Context, state *GraphMemState, content string, srcType config.EpisodeType, userID string, contentFmtKwargs map[string]string) (string, error) {
-	return gm.prepareEpisodes(ctx, state, content, srcType, userID, contentFmtKwargs)
+func (gm *GraphMemory) PrepareEpisodes(ctx context.Context, state *GraphMemState, content string, messages []llmschema.BaseMessage, srcType config.EpisodeType, userID string, contentFmtKwargs map[string]string) (string, error) {
+	return gm.prepareEpisodes(ctx, state, content, messages, srcType, userID, contentFmtKwargs)
 }
 
 // ExtractEntityDeclarations 运行 LLM 抽取实体声明
@@ -803,13 +805,70 @@ func (gm *GraphMemory) initState(referenceTime *time.Time, srcType config.Episod
 // prepareEpisodes 验证并规范化片段内容，检索相关历史
 //
 // Python: _prepare_episodes(src_type, user_id, content, state, content_fmt_kwargs)
-func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState, content string, srcType config.EpisodeType, userID string, contentFmtKwargs map[string]string) (string, error) {
+func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState, content string, messages []llmschema.BaseMessage, srcType config.EpisodeType, userID string, contentFmtKwargs map[string]string) (string, error) {
 	// 校验输入
 	if err := ValidateAddMemoryInput(gm.Config.StorageConfig.UserID, srcType, "", contentFmtKwargs); err != nil {
 		// 允许 userID 为空（在 AddMemory 中会单独校验）
 		if !strings.Contains(err.Error(), "user_id") {
 			return "", err
 		}
+	}
+
+	// 二选一校验（对齐 Python: isinstance(content, str) vs list[BaseMessage | dict]）
+	if content == "" && len(messages) == 0 {
+		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", storeType),
+			exception.WithParam("error_msg", "content and messages cannot both be empty"),
+		)
+	}
+	if content != "" && len(messages) > 0 {
+		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", storeType),
+			exception.WithParam("error_msg", "content and messages are mutually exclusive, please provide only one"),
+		)
+	}
+
+	// content 为字符串时 content_fmt_kwargs 无效（对齐 Python: if content_fmt_kwargs: raise error）
+	if content != "" && len(contentFmtKwargs) > 0 {
+		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", storeType),
+			exception.WithParam("error_msg", "content_fmt_kwargs has no effect when content is str, please leave it empty"),
+		)
+	}
+
+	// 消息列表路径（对齐 Python: content is list[BaseMessage | dict]）
+	if len(messages) > 0 {
+		if srcType != config.EpisodeTypeConversation {
+			return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+				exception.WithParam("store_type", storeType),
+				exception.WithParam("error_msg", "messages input requires src_type=CONVERSATION"),
+			)
+		}
+		dicts, err := Msg2Dict(messages, false)
+		if err != nil {
+			return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+				exception.WithParam("store_type", storeType),
+				exception.WithParam("error_msg", "The content must be str or list of messages in dict or BaseMessage standard"),
+				exception.WithCause(err),
+			)
+		}
+		// 校验每条消息有 role + content（对齐 Python: if not all((isinstance(msg, dict) and "role" in msg and "content" in msg) for msg in content)）
+		for _, msg := range dicts {
+			if _, ok := msg["role"]; !ok {
+				return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+					exception.WithParam("store_type", storeType),
+					exception.WithParam("error_msg", `The content is not a list of dict with keys "role" and "content"`),
+				)
+			}
+			if _, ok := msg["content"]; !ok {
+				return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
+					exception.WithParam("store_type", storeType),
+					exception.WithParam("error_msg", `The content is not a list of dict with keys "role" and "content"`),
+				)
+			}
+		}
+		// 格式化消息列表（对齐 Python: content = format_list_of_messages(content, role_replace=content_fmt_kwargs)）
+		content = graph.FormatListOfMessages(dicts, contentFmtKwargs, "")
 	}
 
 	// 内容为空检查
