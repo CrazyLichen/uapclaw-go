@@ -285,11 +285,11 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 	}
 
 	state := map[string]any{
-		"model":              modelName,
-		"mode":               modeDisplay,
-		"language":           language,
-		"channel":            channel,
-		"agent":              agentName,
+		"model":    modelName,
+		"mode":     modeDisplay,
+		"language": language,
+		"channel":  channel,
+		"agent":    agentName,
 		// 对齐 Python: "platform": f"{platform.system()} {platform.machine()}"
 		// Python platform.system() → runtime.GOOS 首字母大写
 		// Python platform.machine() → runtime.GOARCH

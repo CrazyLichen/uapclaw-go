@@ -159,4 +159,3 @@ func TestIsValidEpisodeType(t *testing.T) {
 	assert.True(t, isValidEpisodeType(config.EpisodeTypeJSON))
 	assert.False(t, isValidEpisodeType(config.EpisodeType(99)))
 }
-
