@@ -257,7 +257,10 @@ func extractRefDictRecursive(schema map[string]any, refDict map[string]map[strin
 		for defName, defVal := range defs {
 			defMap, ok := defVal.(map[string]any)
 			if ok {
-				refDict[defName] = defMap
+				// 对齐 Python: refDict = {key: val["properties"] for key, val in refs.items()}
+				if propsOnly, ok := defMap["properties"].(map[string]any); ok {
+					refDict[defName] = propsOnly
+				}
 			}
 		}
 		extractRefDictRecursive(propMap, refDict)
