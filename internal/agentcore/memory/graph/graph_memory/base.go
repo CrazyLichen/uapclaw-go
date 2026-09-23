@@ -785,10 +785,10 @@ func (gm *GraphMemory) initState(referenceTime *time.Time, srcType config.Episod
 	if !strategy.ChineseEntityDedupe {
 		state.Prompting.EntityDedupeLanguage = gm.Language
 	}
-	state.Prompting.SchemaEntityExtraction = extraction.ResponseFormat("EntitySummary", map[string]any{})
-	state.Prompting.SchemaEntityDedupe = extraction.ResponseFormat("EntityDuplication", map[string]any{})
-	state.Prompting.SchemaRelationMerge = extraction.ResponseFormat("MergeRelations", map[string]any{})
-	state.Prompting.SchemaRelationFilter = extraction.ResponseFormat("RelevantFacts", map[string]any{})
+	state.Prompting.SchemaEntityExtraction = extraction.BuildResponseFormat(extraction.EntitySummary{}, gm.Language)
+	state.Prompting.SchemaEntityDedupe = extraction.BuildResponseFormat(extraction.EntityDuplication{}, state.Prompting.EntityDedupeLanguage)
+	state.Prompting.SchemaRelationMerge = extraction.BuildResponseFormat(extraction.MergeRelations{}, gm.Language)
+	state.Prompting.SchemaRelationFilter = extraction.BuildResponseFormat(extraction.RelevantFacts{}, gm.Language)
 	state.Extras = map[string]any{"summary_target": fmt.Sprintf("%d", strategy.SummaryTarget)}
 
 	if referenceTime == nil {
@@ -1634,7 +1634,7 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 			return
 		}
 		tzInfo := extraction.ParseJSON(tzResponse,
-			extraction.ResponseFormat("TimezonePredictions", map[string]any{}),
+			extraction.BuildResponseFormat(extraction.TimezonePredictions{}, state.Prompting.Language),
 		)
 		if tzInfo == nil {
 			tzInfo = []any{}
