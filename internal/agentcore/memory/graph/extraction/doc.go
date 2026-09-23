@@ -17,8 +17,8 @@
 //	├── custom_types.go            # JSONLike 类型别名
 //	├── entity_type_definition.go  # EntityDef/RelationDef 重新导出（实际定义在 registry/）
 //	├── extraction_models.go       # 输出模型 Go struct（EntityExtraction/EntitySummary/...）
-//	├── extraction_prompts.go      # 提示词组装函数（待实现）
-//	├── parse_response.go          # JSON 解析（parseJSON/ensureList）（待实现）
+//	├── extraction_prompts.go      # 提示词组装函数（ExtractEntityDeclaration/ExtractEntityAttributes/...）
+//	├── parse_response.go          # JSON 解析（ParseJSON/rawDecodeJSON/TryGetKey/EnsureList）
 //	├── registry.go                # 空白导入触发 cn/en init()
 //	└── registry/                  # 多语言注册表 + EntityDef/RelationDef 类型定义
 //	    ├── doc.go
