@@ -24,17 +24,21 @@ func (h *testHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
 func (h *testHandler) OnTestEvent(_ context.Context, _ coordination.CoordinationEvent) {}
 
 // fakeHost 实现 coordination.DispatcherHost 用于测试
-type fakeHost struct{}
+type fakeHost struct {
+	shutdownCalled bool
+	cancelCalled   bool
+	deliverCalled  bool
+}
 
-func (f *fakeHost) IsAgentReady() bool                                                { return true }
-func (f *fakeHost) IsAgentRunning() bool                                              { return false }
-func (f *fakeHost) HasInFlightRound() bool                                            { return false }
-func (f *fakeHost) HasPendingInterrupt() bool                                         { return false }
-func (f *fakeHost) CancelAgent(_ context.Context) error                               { return nil }
-func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error               { return nil }
-func (f *fakeHost) ResumeInterrupt(_ context.Context, _ any) error                    { return nil }
-func (f *fakeHost) ShutdownSelf(_ context.Context) error                              { return nil }
-func (f *fakeHost) ConcludeCompletedRound(_ context.Context, _, _ int) error          { return nil }
+func (f *fakeHost) IsAgentReady() bool                                       { return true }
+func (f *fakeHost) IsAgentRunning() bool                                     { return false }
+func (f *fakeHost) HasInFlightRound() bool                                   { return false }
+func (f *fakeHost) HasPendingInterrupt() bool                                { return false }
+func (f *fakeHost) CancelAgent(_ context.Context) error                      { f.cancelCalled = true; return nil }
+func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error      { f.deliverCalled = true; return nil }
+func (f *fakeHost) ResumeInterrupt(_ context.Context, _ any) error           { return nil }
+func (f *fakeHost) ShutdownSelf(_ context.Context) error                     { f.shutdownCalled = true; return nil }
+func (f *fakeHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 
 // fakeBP 实现 coordination.DispatcherBlueprint 用于测试
 type fakeBP struct {
@@ -46,10 +50,13 @@ func (f *fakeBP) Role() schema.TeamRole   { return f.role }
 func (f *fakeBP) MemberName() string      { return f.memberName }
 
 // fakePollCtrl 实现 coordination.PollController 用于测试
-type fakePollCtrl struct{}
+type fakePollCtrl struct {
+	paused  bool
+	resumed bool
+}
 
-func (f *fakePollCtrl) PausePolls()  {}
-func (f *fakePollCtrl) ResumePolls() {}
+func (f *fakePollCtrl) PausePolls()  { f.paused = true }
+func (f *fakePollCtrl) ResumePolls() { f.resumed = true }
 
 // ──────────────────────────── BaseCoordinationHandler 测试 ────────────────────────────
 
