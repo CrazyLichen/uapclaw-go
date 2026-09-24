@@ -9,46 +9,11 @@ import (
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
+	vector_store "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// mockEmbeddingServiceForTMS 用于 TaskMemoryService 测试的 EmbeddingService mock。
-type mockEmbeddingServiceForTMS struct {
-	embedFn      func(ctx context.Context, text string) ([]float64, error)
-	embedBatchFn func(ctx context.Context, texts []string) ([][]float64, error)
-}
-
-func (m *mockEmbeddingServiceForTMS) Embed(ctx context.Context, text string) ([]float64, error) {
-	if m.embedFn != nil {
-		return m.embedFn(ctx, text)
-	}
-	return []float64{0.1, 0.2, 0.3}, nil
-}
-
-func (m *mockEmbeddingServiceForTMS) EmbedBatch(ctx context.Context, texts []string) ([][]float64, error) {
-	if m.embedBatchFn != nil {
-		return m.embedBatchFn(ctx, texts)
-	}
-	result := make([][]float64, len(texts))
-	for i := range texts {
-		result[i] = []float64{0.1, 0.2, 0.3}
-	}
-	return result, nil
-}
-
-// mockLLMServiceForTMS 用于 TaskMemoryService 测试的 LLMService mock。
-type mockLLMServiceForTMS struct {
-	generateFn func(ctx context.Context, prompt string, opts ...cecontext.GenerateOption) (string, error)
-}
-
-func (m *mockLLMServiceForTMS) Generate(ctx context.Context, prompt string, opts ...cecontext.GenerateOption) (string, error) {
-	if m.generateFn != nil {
-		return m.generateFn(ctx, prompt, opts...)
-	}
-	return "mock llm response", nil
-}
 
 // mockVectorStoreForTMS 用于 TaskMemoryService 测试的 VectorStoreService mock。
 type mockVectorStoreForTMS struct {
@@ -56,6 +21,10 @@ type mockVectorStoreForTMS struct {
 	count   int
 	upserts int
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 func newMockVectorStore() *mockVectorStoreForTMS {
 	return &mockVectorStoreForTMS{nodes: make(map[string]any)}
@@ -94,9 +63,29 @@ func (m *mockVectorStoreForTMS) GetAll(_ map[string]any) []*schema.VectorNode {
 	return nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// newTestTaskMemoryService 创建测试用 TaskMemoryService。
+// 使用 mock client 注入 OpenAILLMWrapper/OpenAIEmbeddingWrapper + MemoryVectorStore。
+func newTestTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, *mockVectorStoreForTMS, error) {
+	cfg = applyConfigDefaults(cfg)
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+	sc := cecontext.NewServiceContext()
+	llm := &OpenAILLMWrapper{
+		modelName:    cfg.LLMModel,
+		temperature:  0.7,
+		maxTokens:    2000,
+		isNewerModel: false,
+		client:       &mockLLMClient{},
+	}
+	emb := NewOpenAIEmbeddingWrapperWithClient(cfg.EmbeddingModel, &mockEmbeddingClient{})
+	vs := newMockVectorStore()
+
+	sc.RegisterService("llm", llm)
+	sc.RegisterService("embedding_model", emb)
+	sc.RegisterService("vector_store", vs)
+
+	svc, err := newTaskMemoryServiceWithServices(sc, llm, emb, vs, cfg)
+	return svc, vs, err
+}
 
 // TestNormalizeAlgoName_正常值 验证算法名规范化。
 func TestNormalizeAlgoName_正常值(t *testing.T) {
@@ -132,13 +121,9 @@ func TestNormalizeAlgoName_非法值(t *testing.T) {
 	assert.ErrorAs(t, err, &baseErr)
 }
 
-// TestNewTaskMemoryServiceWithServices_基本构造 验证 ACE 算法的基本构造。
-func TestNewTaskMemoryServiceWithServices_基本构造(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+// TestNewTaskMemoryService_基本构造 验证 ACE 算法的基本构造。
+func TestNewTaskMemoryService_基本构造(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "ACE",
 		SummaryAlgo:   "ACE",
 	})
@@ -150,13 +135,9 @@ func TestNewTaskMemoryServiceWithServices_基本构造(t *testing.T) {
 	assert.NotNil(t, svc.summaryFlow)
 }
 
-// TestNewTaskMemoryServiceWithServices_RB算法 验证 ReasoningBank 算法构造。
-func TestNewTaskMemoryServiceWithServices_RB算法(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+// TestNewTaskMemoryService_RB算法 验证 ReasoningBank 算法构造。
+func TestNewTaskMemoryService_RB算法(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "RB",
 		SummaryAlgo:   "RB",
 	})
@@ -165,25 +146,17 @@ func TestNewTaskMemoryServiceWithServices_RB算法(t *testing.T) {
 	assert.Equal(t, "ReasoningBank", svc.summaryAlgorithm)
 }
 
-// TestNewTaskMemoryServiceWithServices_默认值 验证默认算法为 ACE。
-func TestNewTaskMemoryServiceWithServices_默认值(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, nil)
+// TestNewTaskMemoryService_默认值 验证默认算法为 ACE。
+func TestNewTaskMemoryService_默认值(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(nil)
 	require.NoError(t, err)
 	assert.Equal(t, "ACE", svc.retrievalAlgorithm)
 	assert.Equal(t, "ACE", svc.summaryAlgorithm)
 }
 
-// TestNewTaskMemoryServiceWithServices_非法算法 验证非法算法返回错误。
-func TestNewTaskMemoryServiceWithServices_非法算法(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	_, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+// TestNewTaskMemoryService_非法算法 验证非法算法返回错误。
+func TestNewTaskMemoryService_非法算法(t *testing.T) {
+	_, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "invalid",
 	})
 	require.Error(t, err)
@@ -191,11 +164,7 @@ func TestNewTaskMemoryServiceWithServices_非法算法(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_ACE 验证 ACE 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ACE(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, vs, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		SummaryAlgo: "ACE",
 	})
 	require.NoError(t, err)
@@ -211,13 +180,24 @@ func TestTaskMemoryService_AddMemory_ACE(t *testing.T) {
 	assert.Equal(t, 1, vs.upserts)
 }
 
+// TestTaskMemoryService_AddMemory_ACE_缺少内容 验证 ACE 输入校验。
+func TestTaskMemoryService_AddMemory_ACE_缺少内容(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
+		SummaryAlgo: "ACE",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
+		Section: "general",
+		// Content 为空
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "content and section")
+}
+
 // TestTaskMemoryService_AddMemory_ReMe 验证 ReMe 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ReMe(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		SummaryAlgo: "ReMe",
 	})
 	require.NoError(t, err)
@@ -232,13 +212,24 @@ func TestTaskMemoryService_AddMemory_ReMe(t *testing.T) {
 	assert.Equal(t, "ReMe", result.Algorithm)
 }
 
+// TestTaskMemoryService_AddMemory_ReMe_缺少WhenToUse 验证 ReMe 输入校验。
+func TestTaskMemoryService_AddMemory_ReMe_缺少WhenToUse(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
+		SummaryAlgo: "ReMe",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
+		Content: "This is a ReMe memory",
+		// WhenToUse 为空
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "content and when_to_use")
+}
+
 // TestTaskMemoryService_AddMemory_ReasoningBank 验证 RB 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ReasoningBank(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		SummaryAlgo: "RB",
 	})
 	require.NoError(t, err)
@@ -255,13 +246,26 @@ func TestTaskMemoryService_AddMemory_ReasoningBank(t *testing.T) {
 	assert.Equal(t, "ReasoningBank", result.Algorithm)
 }
 
+// TestTaskMemoryService_AddMemory_RB_缺少Title 验证 RB 输入校验。
+func TestTaskMemoryService_AddMemory_RB_缺少Title(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
+		SummaryAlgo: "RB",
+	})
+	require.NoError(t, err)
+
+	desc := "test description"
+	_, err = svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
+		Content:     "This is an RB memory",
+		Description: &desc,
+		// Title 为空
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "content, title, and description")
+}
+
 // TestTaskMemoryService_Reconfigure 验证重新配置算法。
 func TestTaskMemoryService_Reconfigure(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "ACE",
 		SummaryAlgo:   "ACE",
 	})
@@ -275,11 +279,7 @@ func TestTaskMemoryService_Reconfigure(t *testing.T) {
 
 // TestTaskMemoryService_Reconfigure_非法算法 验证非法算法名重新配置返回错误。
 func TestTaskMemoryService_Reconfigure_非法算法(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "ACE",
 		SummaryAlgo:   "ACE",
 	})
@@ -293,11 +293,7 @@ func TestTaskMemoryService_Reconfigure_非法算法(t *testing.T) {
 
 // TestTaskMemoryService_LoadMemories_无Persistence 验证无持久化时为 no-op。
 func TestTaskMemoryService_LoadMemories_无Persistence(t *testing.T) {
-	llm := &mockLLMServiceForTMS{}
-	emb := &mockEmbeddingServiceForTMS{}
-	vs := newMockVectorStore()
-
-	svc, err := NewTaskMemoryServiceWithServices(llm, emb, vs, &TaskMemoryServiceConfig{
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
 		RetrievalAlgo: "ACE",
 		SummaryAlgo:   "ACE",
 	})
@@ -334,10 +330,6 @@ func TestApplyConfigDefaults(t *testing.T) {
 	assert.Equal(t, "text-embedding-3-small", cfg.EmbeddingModel)
 	assert.Equal(t, "ACE", cfg.RetrievalAlgo)
 	assert.Equal(t, "ACE", cfg.SummaryAlgo)
-	assert.Equal(t, 10, cfg.TopKRetrieval)
-	assert.Equal(t, 5, cfg.TopKRerank)
-	assert.Equal(t, 1, cfg.TopKQuery)
-	assert.Equal(t, 50, cfg.MaxPlaybookSize)
 }
 
 // TestApplyConfigDefaults_自定义值 验证自定义值不被覆盖。
@@ -362,9 +354,6 @@ func TestNewOpenAIEmbeddingWrapperWithClient(t *testing.T) {
 	assert.Equal(t, mock, wrapper.client)
 }
 
-// mockBaseEmbeddingForTMS 简单 BaseEmbedding mock（用于 NewOpenAIEmbeddingWrapperWithClient）
-// 这里复用 embedding_wrapper_test.go 中的 mockEmbeddingClient 即可
-
 // TestNewOpenAILLMWrapperWithMockClient 验证内部构造注入。
 func TestNewOpenAILLMWrapperWithMockClient(t *testing.T) {
 	mock := &mockLLMClient{}
@@ -377,4 +366,46 @@ func TestNewOpenAILLMWrapperWithMockClient(t *testing.T) {
 	}
 	assert.NotNil(t, wrapper)
 	assert.Equal(t, "gpt-3.5-turbo", wrapper.modelName)
+}
+
+// TestTaskMemoryService_GetPlaybook_非ACE 验证非 ACE 算法返回空。
+func TestTaskMemoryService_GetPlaybook_非ACE(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
+		SummaryAlgo: "ReMe",
+	})
+	require.NoError(t, err)
+
+	nodes, err := svc.GetPlaybook(context.Background(), "user1")
+	require.NoError(t, err)
+	assert.Nil(t, nodes)
+}
+
+// TestTaskMemoryService_ClearPlaybook_非ACE 验证非 ACE 算法返回 nil。
+func TestTaskMemoryService_ClearPlaybook_非ACE(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
+		SummaryAlgo: "ReMe",
+	})
+	require.NoError(t, err)
+
+	err = svc.ClearPlaybook(context.Background(), "user1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, vs.count) // 不应清除
+}
+
+// TestTaskMemoryService_GetPlaybook_ACE 验证 ACE 算法返回 playbook。
+func TestTaskMemoryService_GetPlaybook_ACE(t *testing.T) {
+	vs := vector_store.NewMemoryVectorStore()
+	vs.LoadNode("ace_user1_test1", schema.NewVectorNode(
+		"ace_user1_test1", "content", []float64{0.1},
+		map[string]any{"workspace_id": "user1", "type": "ace_memory"},
+	))
+
+	svc := &TaskMemoryService{
+		vectorStore:       vs,
+		summaryAlgorithm: "ACE",
+	}
+
+	nodes, err := svc.GetPlaybook(context.Background(), "user1")
+	require.NoError(t, err)
+	assert.NotEmpty(t, nodes)
 }

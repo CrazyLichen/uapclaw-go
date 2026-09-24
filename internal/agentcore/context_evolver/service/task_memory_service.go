@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	op "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/op"
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
@@ -93,7 +94,8 @@ type AddMemoryRequest struct {
 }
 
 // TaskMemoryServiceConfig 任务记忆服务配置。
-// 集中管理管线组装所需的全部参数，对齐 Python config.yaml 中的相关键。
+// 仅保留连接/初始化参数，运行时参数（top_k/llm_rerank 等）由 config 实时读取。
+// 对齐 Python TaskMemoryService.__init__ 中 self.xxx 字段与 config.get() 的分离。
 type TaskMemoryServiceConfig struct {
 	// LLMModel LLM 模型名称，默认 "gpt-5.2"
 	LLMModel string
@@ -119,38 +121,6 @@ type TaskMemoryServiceConfig struct {
 	MilvusPort int
 	// MilvusCollection Milvus 集合名
 	MilvusCollection string
-
-	// --- ReMe 检索参数 ---
-	// TopKRetrieval ReMe 检索 top-k，默认 10
-	TopKRetrieval int
-	// TopKRerank ReMe 重排 top-k，默认 5
-	TopKRerank int
-	// LLMRerank 是否使用 LLM 重排，默认 true
-	LLMRerank bool
-	// LLMRewrite 是否使用 LLM 改写，默认 true
-	LLMRewrite bool
-
-	// --- RB 检索参数 ---
-	// TopKQuery RB 检索 top-k，默认 1
-	TopKQuery int
-
-	// --- ACE 总结参数 ---
-	// UseGroundTruth 是否使用参考答案，默认 false
-	UseGroundTruth bool
-	// MaxPlaybookSize Playbook 最大条目数，默认 50
-	MaxPlaybookSize int
-
-	// --- ReMe 总结参数 ---
-	// ExtractBestTraj 是否提取最佳轨迹，默认 true
-	ExtractBestTraj bool
-	// ExtractWorstTraj 是否提取最差轨迹，默认 true
-	ExtractWorstTraj bool
-	// ExtractComparativeTraj 是否提取对比轨迹，默认 true
-	ExtractComparativeTraj bool
-	// MemoryValidation 是否验证记忆，默认 true
-	MemoryValidation bool
-	// MemoryDeduplication 是否去重，默认 true
-	MemoryDeduplication bool
 }
 
 // TaskMemoryService 任务记忆服务，提供记忆检索/总结/管理的统一入口。
@@ -160,10 +130,10 @@ type TaskMemoryServiceConfig struct {
 type TaskMemoryService struct {
 	// serviceContext 共享服务上下文
 	serviceContext *cecontext.ServiceContext
-	// llm LLM 服务
-	llm cecontext.LLMService
-	// embedding Embedding 服务
-	embedding cecontext.EmbeddingService
+	// llm LLM 服务（具体类型，对齐 Python self.llm）
+	llm *OpenAILLMWrapper
+	// embedding Embedding 服务（具体类型，对齐 Python self.embedding）
+	embedding *OpenAIEmbeddingWrapper
 	// vectorStore 向量存储
 	vectorStore cecontext.VectorStoreService
 	// retrievalAlgorithm 检索算法名称
@@ -223,6 +193,7 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	// 对齐 Python：创建 OpenAILLMWrapper
 	llm, err := NewOpenAILLMWrapper(cfg.LLMModel, cfg.APIKey, cfg.APIBase, 0.7, 2000)
 	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("TaskMemoryService initialization failed")
 		return nil, exception.NewBaseError(
 			exception.StatusToolchainEvolvingMemoryServiceInitFailed,
 			exception.WithMsg(fmt.Sprintf("Failed to create LLM wrapper: %s", err.Error())),
@@ -232,6 +203,7 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	// 对齐 Python：创建 OpenAIEmbeddingWrapper
 	emb, err := NewOpenAIEmbeddingWrapper(cfg.EmbeddingModel, cfg.APIKey, cfg.APIBase)
 	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("TaskMemoryService initialization failed")
 		return nil, exception.NewBaseError(
 			exception.StatusToolchainEvolvingMemoryServiceInitFailed,
 			exception.WithMsg(fmt.Sprintf("Failed to create Embedding wrapper: %s", err.Error())),
@@ -247,24 +219,6 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	sc.RegisterService("vector_store", vs)
 
 	return newTaskMemoryServiceWithServices(sc, llm, emb, vs, cfg)
-}
-
-// NewTaskMemoryServiceWithServices 使用已构造好的 LLM/Embedding 服务创建任务记忆服务。
-// 方便测试时注入 mock，也方便复用已有的服务实例。
-func NewTaskMemoryServiceWithServices(
-	llm cecontext.LLMService,
-	emb cecontext.EmbeddingService,
-	vectorStore cecontext.VectorStoreService,
-	cfg *TaskMemoryServiceConfig,
-) (*TaskMemoryService, error) {
-	cfg = applyConfigDefaults(cfg)
-
-	sc := cecontext.NewServiceContext()
-	sc.RegisterService("llm", llm)
-	sc.RegisterService("embedding_model", emb)
-	sc.RegisterService("vector_store", vectorStore)
-
-	return newTaskMemoryServiceWithServices(sc, llm, emb, vectorStore, cfg)
 }
 
 // Retrieve 检索记忆。对齐 Python TaskMemoryService.retrieve(user_id, query, **kwargs)。
@@ -377,10 +331,28 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 
 	switch s.summaryAlgorithm {
 	case "ReasoningBank":
+		if req.Content == "" || (req.Title == nil || *req.Title == "") || (req.Description == nil || *req.Description == "") {
+			return nil, exception.NewBaseError(
+				exception.StatusToolchainEvolvingMemoryAddExecutionError,
+				exception.WithMsg("ReasoningBank add_memory requires content, title, and description"),
+			)
+		}
 		node, memoryID = s.createRBMemory(ctx, userID, req)
 	case "ReMe", "RefCon", "DivCon":
+		if req.Content == "" || (req.WhenToUse == nil || *req.WhenToUse == "") {
+			return nil, exception.NewBaseError(
+				exception.StatusToolchainEvolvingMemoryAddExecutionError,
+				exception.WithMsg(fmt.Sprintf("%s add_memory requires content and when_to_use", s.summaryAlgorithm)),
+			)
+		}
 		node, memoryID = s.createReMeMemory(ctx, userID, req)
 	case "ACE":
+		if req.Content == "" || req.Section == "" {
+			return nil, exception.NewBaseError(
+				exception.StatusToolchainEvolvingMemoryAddExecutionError,
+				exception.WithMsg("ACE add_memory requires content and section"),
+			)
+		}
 		node, memoryID = s.createACEMemory(ctx, userID, req)
 	default:
 		return nil, exception.NewBaseError(
@@ -414,10 +386,10 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 		)
 	}
 
-	// 对齐 Python：持久化
+	// 对齐 Python：持久化（{node_id: node_data} dict 格式）
 	if s.persistenceHelper != nil {
 		algoName := algoToPersistName(s.summaryAlgorithm)
-		if err := s.persistenceHelper.Save(userID, algoName, node.ToDict()); err != nil {
+		if err := s.persistenceHelper.Save(userID, algoName, map[string]any{memoryID: node.ToDict()}); err != nil {
 			logger.Error(logComponent).Err(err).Msg("Failed to persist memory")
 		}
 	}
@@ -449,28 +421,26 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 		return err
 	}
 
+	loaded := 0
 	// 对齐 Python：将加载的 node 插入 vectorStore
-	if nodes, ok := nodesDict["nodes"]; ok {
-		if nodeList, ok := nodes.([]any); ok {
-			loaded := 0
-			for _, n := range nodeList {
-				if nodeData, ok := n.(map[string]any); ok {
-					vn, err := schema.VectorNodeFromDict(nodeData)
-					if err != nil {
-						logger.Warn(logComponent).
-							Err(err).
-							Msg("Failed to load node from persistence")
-						continue
-					}
-					s.vectorStore.(*vector_store.MemoryVectorStore).LoadNode(vn.ID, vn)
-					loaded++
-				}
+	// Python 用 {node_id: node_data} dict 格式，不是 {"nodes": [...]} list
+	for id, nodeData := range nodesDict {
+		if nodeMap, ok := nodeData.(map[string]any); ok {
+			vn, err := schema.VectorNodeFromDict(nodeMap)
+			if err != nil {
+				logger.Warn(logComponent).
+					Str("node_id", id).
+					Err(err).
+					Msg("Failed to load node from persistence")
+				continue
 			}
-			// 对齐 Python：logger.info("Loaded %d memories into vector store (algo=%s)", ...)
-			logger.Info(logComponent).
-				Int("loaded_count", loaded).
-				Str("algorithm", s.summaryAlgorithm).
-				Msg("Loaded memories into vector store")
+			if err := s.vectorStore.Upsert(ctx, vn); err != nil {
+				logger.Warn(logComponent).
+					Str("node_id", id).
+					Err(err).
+					Msg("Failed to upsert node into vector store")
+			}
+			loaded++
 		}
 	}
 
@@ -520,6 +490,38 @@ func (s *TaskMemoryService) PersistenceHelper() *cepersistence.MemoryPersistence
 	return s.persistenceHelper
 }
 
+// GetPlaybook 获取用户的 Playbook 记忆。对齐 Python TaskMemoryService.get_playbook(user_id)。
+// 仅 ACE 算法有 Playbook 概念，其他算法返回空。
+func (s *TaskMemoryService) GetPlaybook(ctx context.Context, userID string) ([]*schema.VectorNode, error) {
+	if s.summaryAlgorithm != "ACE" {
+		return nil, nil
+	}
+	// 使用 vectorStore.GetAll 获取所有 ACE 记忆
+	if getAller, ok := s.vectorStore.(interface {
+		GetAll(map[string]any) []*schema.VectorNode
+	}); ok {
+		filter := map[string]any{
+			"workspace_id": userID,
+			"type":         "ace_memory",
+		}
+		return getAller.GetAll(filter), nil
+	}
+	return nil, nil
+}
+
+// ClearPlaybook 清除用户的 Playbook 记忆。对齐 Python TaskMemoryService.clear_playbook(user_id)。
+// 仅 ACE 算法有 Playbook 概念，其他算法返回 nil。
+func (s *TaskMemoryService) ClearPlaybook(ctx context.Context, userID string) error {
+	if s.summaryAlgorithm != "ACE" {
+		return nil
+	}
+	// 清除 vectorStore 中所有 ACE 记忆
+	if clearer, ok := s.vectorStore.(interface{ Clear() }); ok {
+		clearer.Clear()
+	}
+	return nil
+}
+
 // NormalizeAlgoName 规范化算法名称。对齐 Python normalize_algo_name。
 func NormalizeAlgoName(algo string) (string, error) {
 	upper := strings.ToUpper(algo)
@@ -534,11 +536,11 @@ func NormalizeAlgoName(algo string) (string, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// newTaskMemoryServiceWithServices 内部构造逻辑，被 NewTaskMemoryService 和 NewTaskMemoryServiceWithServices 共用。
+// newTaskMemoryServiceWithServices 内部构造逻辑，被 NewTaskMemoryService 共用。
 func newTaskMemoryServiceWithServices(
 	sc *cecontext.ServiceContext,
-	llm cecontext.LLMService,
-	emb cecontext.EmbeddingService,
+	llm *OpenAILLMWrapper,
+	emb *OpenAIEmbeddingWrapper,
 	vs cecontext.VectorStoreService,
 	cfg *TaskMemoryServiceConfig,
 ) (*TaskMemoryService, error) {
@@ -607,6 +609,7 @@ func newTaskMemoryServiceWithServices(
 }
 
 // applyConfigDefaults 应用配置默认值。
+// 仅处理连接/初始化参数，运行时参数由 ceconfig 实时读取。
 func applyConfigDefaults(cfg *TaskMemoryServiceConfig) *TaskMemoryServiceConfig {
 	if cfg == nil {
 		cfg = &TaskMemoryServiceConfig{}
@@ -623,45 +626,33 @@ func applyConfigDefaults(cfg *TaskMemoryServiceConfig) *TaskMemoryServiceConfig 
 	if cfg.SummaryAlgo == "" {
 		cfg.SummaryAlgo = "ACE"
 	}
-	if cfg.TopKRetrieval == 0 {
-		cfg.TopKRetrieval = 10
-	}
-	if cfg.TopKRerank == 0 {
-		cfg.TopKRerank = 5
-	}
-	if cfg.TopKQuery == 0 {
-		cfg.TopKQuery = 1
-	}
-	if cfg.MaxPlaybookSize == 0 {
-		cfg.MaxPlaybookSize = 50
-	}
-	// 布尔默认值：零值为 false，但 Python 默认是 true
-	// 只有在明确设置时才生效，这里不自动设为 true
-	// LLMRerank/LLMRewrite/ExtractBestTraj/ExtractWorstTraj/ExtractComparativeTraj
-	// 的默认值在 createFlow 中按需设置
 	return cfg
 }
 
 // createRetrieveFlow 创建检索管线。对齐 Python _create_retrieve_flow。
+// 运行时参数从 ceconfig 实时读取，对齐 Python config.get()。
 func (s *TaskMemoryService) createRetrieveFlow() op.BaseOp {
 	sc := s.serviceContext
 
 	switch s.retrievalAlgorithm {
 	case "ReasoningBank":
-		return rbretrieve.NewRBRecallMemoryOp(sc, 1) // topK 默认 1
+		topK := ceconfig.GetInt("TOPK_QUERY", 1)
+		return rbretrieve.NewRBRecallMemoryOp(sc, topK)
 
 	case "ACE":
 		return aceretrieve.NewACERecallMemoryOp(sc)
 
 	case "ReMe":
-		llmRerank := true
-		llmRewrite := true
-		return op.Seq(emeretrieve.NewRecallMemoryOp(sc, 10)).
-			Then(emeretrieve.NewRerankMemoryOp(sc, llmRerank, 5)).
+		topKRetrieval := ceconfig.GetInt("TOPK_RETRIEVAL", 10)
+		topKRerank := ceconfig.GetInt("TOPK_RERANK", 5)
+		llmRerank := ceconfig.GetBool("LLM_RERANK", true)
+		llmRewrite := ceconfig.GetBool("LLM_REWRITE", true)
+		return op.Seq(emeretrieve.NewRecallMemoryOp(sc, topKRetrieval)).
+			Then(emeretrieve.NewRerankMemoryOp(sc, llmRerank, topKRerank)).
 			Then(emeretrieve.NewRewriteMemoryOp(sc, llmRewrite))
 
 	case "RefCon", "DivCon":
-		// 同 ReMe 但用硬编码参数
+		// 同 ReMe 但用硬编码参数（对齐 Python）
 		return op.Seq(emeretrieve.NewRecallMemoryOp(sc, 10)).
 			Then(emeretrieve.NewRerankMemoryOp(sc, true, 5)).
 			Then(emeretrieve.NewRewriteMemoryOp(sc, true))
@@ -673,15 +664,18 @@ func (s *TaskMemoryService) createRetrieveFlow() op.BaseOp {
 }
 
 // createSummaryFlow 创建总结管线。对齐 Python _create_summary_flow。
+// 运行时参数从 ceconfig 实时读取，对齐 Python config.get()。
 func (s *TaskMemoryService) createSummaryFlow() op.BaseOp {
 	sc := s.serviceContext
 
 	switch s.summaryAlgorithm {
 	case "ACE":
+		maxPlaybookSize := ceconfig.GetInt("MAX_PLAYBOOK_SIZE", 50)
+		useGroundTruth := ceconfig.GetBool("USE_GROUNDTRUTH", false)
 		flow := op.Seq(acesummary.NewLoadPlaybookOp(sc)).
-			Then(op.Par(acesummary.NewReflectOp(sc, false)).With(acesummary.NewParallelReflectOp(sc, false))).
+			Then(op.Par(acesummary.NewReflectOp(sc, useGroundTruth)).With(acesummary.NewParallelReflectOp(sc, useGroundTruth))).
 			Then(op.Par(acesummary.NewCurateOp(sc)).With(acesummary.NewParallelCurateOp(sc))).
-			Then(acesummary.NewApplyDeltaOp(sc, 50))
+			Then(acesummary.NewApplyDeltaOp(sc, maxPlaybookSize))
 		if s.persistType != nil {
 			flow = flow.Then(acesummary.NewPersistMemoryOp(sc, s.persistenceHelper))
 		}
@@ -696,16 +690,21 @@ func (s *TaskMemoryService) createSummaryFlow() op.BaseOp {
 		return flow
 
 	case "ReMe":
+		extractBest := ceconfig.GetBool("EXTRACT_BEST_TRAJ", true)
+		extractWorst := ceconfig.GetBool("EXTRACT_WORST_TRAJ", true)
+		extractComparative := ceconfig.GetBool("EXTRACT_COMPARATIVE_TRAJ", true)
+		memoryValidation := ceconfig.GetBool("MEMORY_VALIDATION", true)
+		memoryDeduplication := ceconfig.GetBool("MEMORY_DEDUPLICATION", true)
 		flow := op.Seq(remesummary.NewTrajectoryPreprocessOp(sc)).
 			Then(op.Par(
-				remesummary.NewSuccessExtractionOp(sc, true),
+				remesummary.NewSuccessExtractionOp(sc, extractBest),
 			).With(
-				remesummary.NewFailureExtractionOp(sc, true),
+				remesummary.NewFailureExtractionOp(sc, extractWorst),
 			).With(
-				remesummary.NewComparativeExtractionOp(sc, true),
+				remesummary.NewComparativeExtractionOp(sc, extractComparative),
 			)).
-			Then(remesummary.NewMemoryValidationOp(sc, true)).
-			Then(remesummary.NewMemoryDeduplicationOp(sc, true, 0.9)).
+			Then(remesummary.NewMemoryValidationOp(sc, memoryValidation)).
+			Then(remesummary.NewMemoryDeduplicationOp(sc, memoryDeduplication, 0.9)).
 			Then(remesummary.NewUpdateVectorStoreOp(sc))
 		if s.persistType != nil {
 			flow = flow.Then(remesummary.NewPersistMemoryOp(sc, s.persistenceHelper))
@@ -725,10 +724,11 @@ func (s *TaskMemoryService) createSummaryFlow() op.BaseOp {
 
 	default:
 		// 防御性返回 ACE flow
+		maxPlaybookSize := ceconfig.GetInt("MAX_PLAYBOOK_SIZE", 50)
 		return op.Seq(acesummary.NewLoadPlaybookOp(sc)).
 			Then(op.Par(acesummary.NewReflectOp(sc, false)).With(acesummary.NewParallelReflectOp(sc, false))).
 			Then(op.Par(acesummary.NewCurateOp(sc)).With(acesummary.NewParallelCurateOp(sc))).
-			Then(acesummary.NewApplyDeltaOp(sc, 50))
+			Then(acesummary.NewApplyDeltaOp(sc, maxPlaybookSize))
 	}
 }
 
@@ -751,7 +751,14 @@ func (s *TaskMemoryService) createRBMemory(_ context.Context, userID string, req
 		label = *req.Label
 	}
 
-	memoryID := fmt.Sprintf("rb_%s_%s", userID, title)
+	// 对齐 Python: memoryID = reasoning_bank_{workspaceID}_{md5(title|content)}
+	combined := title
+	if combined == "" {
+		combined = req.Content
+	}
+	contentHash := md5.Sum([]byte(combined))
+	memoryID := fmt.Sprintf("reasoning_bank_%s_%x", userID, contentHash)
+
 	metadata := map[string]any{
 		"workspace_id": userID,
 		"algorithm":    "ReasoningBank",
@@ -772,7 +779,10 @@ func (s *TaskMemoryService) createReMeMemory(_ context.Context, userID string, r
 		whenToUse = *req.WhenToUse
 	}
 
-	memoryID := fmt.Sprintf("reme_%s_%d", userID, len(whenToUse))
+	// 对齐 Python: memoryID = reme_{workspaceID}_{md5(when_to_use)[:12]}
+	contentHash := md5.Sum([]byte(whenToUse))
+	memoryID := fmt.Sprintf("reme_%s_%x", userID, contentHash[:6]) // 6 bytes = 12 hex chars
+
 	metadata := map[string]any{
 		"workspace_id": userID,
 		"algorithm":    s.summaryAlgorithm,
