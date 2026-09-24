@@ -141,10 +141,10 @@ func (es *ExperienceSharer) LocalCacheDir() *string {
 // provider 为空或 skillName 为空时返回空字符串。
 //
 // Python: ExperienceSharer.resolve_skill_id()
-func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string) string {
+func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string) (string, error) {
 	provider := es.skillSharingContextProvider
 	if provider == nil || skillName == "" {
-		return ""
+		return "", nil
 	}
 	skillID, _, _, _, err := provider(ctx, skillName)
 	if err != nil {
@@ -152,9 +152,9 @@ func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceSharer] resolve_skill_id failed")
-		return ""
+		return "", err
 	}
-	return strings.TrimSpace(skillID)
+	return strings.TrimSpace(skillID), nil
 }
 
 // HasPending 是否有待上传的经验。
@@ -225,7 +225,7 @@ func (es *ExperienceSharer) DiscardPendingUploads(skillName string) int {
 // 加写锁取走队列 → MakeSharedSkillBundle → syncSkillPackage → 重试循环 → 成功后 mirrorBundle。
 //
 // Python: ExperienceSharer.flush_pending_uploads()
-func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName string) UploadResult {
+func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName string) (UploadResult, error) {
 	es.mu.Lock()
 	experiences := es.pendingUploads[skillName]
 	delete(es.pendingUploads, skillName)
@@ -233,7 +233,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 	es.mu.Unlock()
 
 	if len(experiences) == 0 {
-		return UploadResult{OK: true}
+		return UploadResult{OK: true}, nil
 	}
 
 	bundle := MakeSharedSkillBundle(skillName, experiences, "", "")
@@ -245,19 +245,39 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 			Str("skill", skillName).
 			Str("reason", reason).
 			Msg("[ExperienceSharer] skipping upload")
-		return UploadResult{OK: false, Reason: reason}
+		return UploadResult{OK: false, Reason: reason}, fmt.Errorf("skill_id unavailable for skill %s", skillName)
 	}
 
 	attempt := 0
 	lastResult := UploadResult{OK: false, Reason: "upload not attempted"}
+	var lastErr error
 	for attempt < es.maxUploadRetries {
 		attempt++
-		result := es.backend.UploadBundle(ctx, *bundle)
+		result, err := es.backend.UploadBundle(ctx, *bundle)
+		if err != nil {
+			lastErr = err
+			lastResult = result
+			logger.Warn(logComponent).
+				Int("attempt", attempt).
+				Str("skill", skillName).
+				Str("skill_id", bundle.SkillID).
+				Err(err).
+				Msg("[ExperienceSharer] upload attempt error")
+			if attempt < es.maxUploadRetries && es.backoffBaseSecs > 0 {
+				delay := es.backoffBaseSecs * math.Pow(2, float64(attempt-1))
+				select {
+				case <-time.After(time.Duration(delay * float64(time.Second))):
+				case <-ctx.Done():
+					return UploadResult{OK: false, Reason: ctx.Err().Error()}, ctx.Err()
+				}
+			}
+			continue
+		}
 		if result.OK {
-			if err := es.mirrorBundle(bundle, "uploaded"); err != nil {
+			if mirrorErr := es.mirrorBundle(bundle, "uploaded"); mirrorErr != nil {
 				logger.Warn(logComponent).
 					Str("bundle_id", bundle.BundleID).
-					Err(err).
+					Err(mirrorErr).
 					Msg("[ExperienceSharer] mirror uploaded failed")
 			}
 			logger.Info(logComponent).
@@ -266,10 +286,11 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 				Str("skill_id", bundle.SkillID).
 				Int("attempts", attempt).
 				Msg("[ExperienceSharer] flushed bundle")
-			return result
+			return result, nil
 		}
 
 		lastResult = result
+		lastErr = nil
 		logger.Warn(logComponent).
 			Int("attempt", attempt).
 			Int("max_attempts", es.maxUploadRetries).
@@ -279,14 +300,14 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 			Msg("[ExperienceSharer] upload attempt rejected")
 
 		if !result.Retryable {
-			return result
+			return result, fmt.Errorf("upload rejected (non-retryable): %s", result.Reason)
 		}
 		if attempt < es.maxUploadRetries && es.backoffBaseSecs > 0 {
 			delay := es.backoffBaseSecs * math.Pow(2, float64(attempt-1))
 			select {
 			case <-time.After(time.Duration(delay * float64(time.Second))):
 			case <-ctx.Done():
-				return UploadResult{OK: false, Reason: ctx.Err().Error()}
+				return UploadResult{OK: false, Reason: ctx.Err().Error()}, ctx.Err()
 			}
 		}
 	}
@@ -297,7 +318,10 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 		Int("attempts", es.maxUploadRetries).
 		Str("reason", lastResult.Reason).
 		Msg("[ExperienceSharer] giving up upload")
-	return lastResult
+	if lastErr != nil {
+		return lastResult, lastErr
+	}
+	return lastResult, fmt.Errorf("upload failed after %d attempts: %s", es.maxUploadRetries, lastResult.Reason)
 }
 
 // DownloadRelevant 下载并镜像最多 topK 个相关 bundle。
@@ -309,10 +333,10 @@ func (es *ExperienceSharer) DownloadRelevant(
 	query QueryKeywords,
 	topK int,
 	skillName string,
-) []SharedSkillBundle {
+) ([]SharedSkillBundle, error) {
 	resolvedID := strings.TrimSpace(skillID)
 	if resolvedID == "" {
-		return nil
+		return nil, nil
 	}
 
 	bundles, err := es.backend.DownloadBundles(ctx, resolvedID, query, topK)
@@ -322,14 +346,14 @@ func (es *ExperienceSharer) DownloadRelevant(
 			Str("skill_id", resolvedID).
 			Err(err).
 			Msg("[ExperienceSharer] backend download failed")
-		return nil
+		return nil, err
 	}
 
 	for i := range bundles {
-		if err := es.mirrorBundle(&bundles[i], "downloaded"); err != nil {
+		if mirrorErr := es.mirrorBundle(&bundles[i], "downloaded"); mirrorErr != nil {
 			logger.Warn(logComponent).
 				Str("bundle_id", bundles[i].BundleID).
-				Err(err).
+				Err(mirrorErr).
 				Msg("[ExperienceSharer] mirror downloaded failed")
 		}
 	}
@@ -341,7 +365,7 @@ func (es *ExperienceSharer) DownloadRelevant(
 			Int("top_k", topK).
 			Msg("[ExperienceSharer] downloaded bundle(s)")
 	}
-	return bundles
+	return bundles, nil
 }
 
 // SearchSkills 全局搜索技能。

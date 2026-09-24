@@ -81,9 +81,9 @@ func (s *ShareStager) ScreenAndStage(
 	skillName string,
 	records []checkpointing.EvolutionRecord,
 	messages []map[string]any,
-) *StagingResult {
+) (*StagingResult, error) {
 	if len(records) == 0 {
-		return EmptyStagingResult()
+		return EmptyStagingResult(), nil
 	}
 
 	var staged []SharedExperience
@@ -110,7 +110,7 @@ func (s *ShareStager) ScreenAndStage(
 	return &StagingResult{
 		StagedForShare:  staged,
 		DroppedForShare: dropped,
-	}
+	}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

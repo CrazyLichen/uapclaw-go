@@ -760,6 +760,7 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 			ExecutionID: "user_triggered",
 			SessionID:   "user_triggered",
 			Source:      "user_triggered",
+			Steps:       []*trajectory.TrajectoryStep{},
 		}
 	}
 
@@ -1746,15 +1747,6 @@ func inferTeamSkillFromTrajectory(traj *trajectory.Trajectory, knownSkills []str
 			}
 			texts = append(texts, fmt.Sprintf("%v", td.CallArgs))
 			texts = append(texts, fmt.Sprintf("%v", td.CallResult))
-		}
-		// 也收集 LLM 步骤的文本
-		if ld, ok := step.Detail.(*trajectory.LLMCallDetail); ok && ld != nil {
-			for _, msg := range ld.Messages {
-				texts = append(texts, msg.GetContent().String())
-			}
-			if ld.Response != nil {
-				texts = append(texts, fmt.Sprintf("%v", ld.Response))
-			}
 		}
 	}
 

@@ -242,8 +242,11 @@ func DeliverDirect(ctx context.Context, body string, sender string, target strin
 	}
 	// Python: msg_id = await message_manager.send_message(content=body, to_member_name=target, from_member_name=sender)
 	msgID, err := messageManager.SendMessage(ctx, body, target, sender)
-	if err != nil {
-		reason := "send_failed:" + target + ":" + err.Error()
+	if err != nil || msgID == "" {
+		reason := "send_failed:" + target
+		if err != nil {
+			reason += ":" + err.Error()
+		}
 		return NewDeliverResultFailure(reason), nil
 	}
 	logger.Debug(routerLogComponent).Str("sender", sender).Str("target", target).

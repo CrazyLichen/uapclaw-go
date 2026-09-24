@@ -17,8 +17,8 @@ import (
 //
 // Python: openjiuwen/agent_evolving/sharing/backends/base.py SharingBackend
 type SharingBackend interface {
-	// UploadBundle 上传经验 bundle，返回上传结果。
-	UploadBundle(ctx context.Context, bundle SharedSkillBundle) UploadResult
+	// UploadBundle 上传经验 bundle，返回上传结果和可能的错误。
+	UploadBundle(ctx context.Context, bundle SharedSkillBundle) (UploadResult, error)
 	// DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。
 	DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error)
 	// HasSkillPackage Hub 是否已有该技能包。

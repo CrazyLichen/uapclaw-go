@@ -42,15 +42,15 @@ func newFakeHubBackend() *fakeHubBackend {
 }
 
 // UploadBundle 上传经验 bundle
-func (f *fakeHubBackend) UploadBundle(ctx context.Context, bundle SharedSkillBundle) UploadResult {
+func (f *fakeHubBackend) UploadBundle(ctx context.Context, bundle SharedSkillBundle) (UploadResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	skillID := bundle.SkillID
 	if skillID == "" {
-		return UploadResult{OK: false, Reason: "skill_id is required"}
+		return UploadResult{OK: false, Reason: "skill_id is required"}, nil
 	}
 	f.bundles[skillID] = append(f.bundles[skillID], bundle)
-	return UploadResult{OK: true, BundleID: bundle.BundleID}
+	return UploadResult{OK: true, BundleID: bundle.BundleID}, nil
 }
 
 // DownloadBundles 下载经验 bundle

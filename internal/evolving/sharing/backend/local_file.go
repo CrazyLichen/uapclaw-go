@@ -114,10 +114,10 @@ func (b *LocalFileBackend) OutboxDir() string {
 // 写入失败时将 bundle 暂存到 outbox。
 //
 // Python: LocalFileBackend.upload_bundle()
-func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.SharedSkillBundle) sharing.UploadResult {
+func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.SharedSkillBundle) (sharing.UploadResult, error) {
 	skillID := strings.TrimSpace(bundle.SkillID)
 	if skillID == "" {
-		return sharing.UploadResult{OK: false, Reason: "bundle.skill_id is required for upload"}
+		return sharing.UploadResult{OK: false, Reason: "bundle.skill_id is required for upload"}, nil
 	}
 
 	b.mu.Lock()
@@ -131,7 +131,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Str("skill_id", skillID).
 			Str("reason", dupReason).
 			Msg("[LocalFileBackend] rejected bundle")
-		return sharing.UploadResult{OK: false, Reason: dupReason}
+		return sharing.UploadResult{OK: false, Reason: dupReason}, nil
 	}
 
 	// 写入 bundle 文件
@@ -143,7 +143,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Err(err).
 			Msg("[LocalFileBackend] upload failed; routing to outbox")
 		b.spoolToOutbox(bundle)
-		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
+		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 	if err := os.MkdirAll(b.indexDir, 0o755); err != nil {
 		logger.Warn(logComponent).
@@ -152,7 +152,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Err(err).
 			Msg("[LocalFileBackend] upload failed; routing to outbox")
 		b.spoolToOutbox(bundle)
-		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
+		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 
 	bundleFile := filepath.Join(bundleDir, bundle.BundleID+".json")
@@ -164,7 +164,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Err(err).
 			Msg("[LocalFileBackend] upload failed; routing to outbox")
 		b.spoolToOutbox(bundle)
-		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
+		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 
 	// 写入索引行
@@ -186,7 +186,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Err(err).
 			Msg("[LocalFileBackend] upload failed; routing to outbox")
 		b.spoolToOutbox(bundle)
-		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
+		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 	if _, err := fmt.Fprintf(indexFile, "%s\n", indexLine); err != nil {
 		if closeErr := indexFile.Close(); closeErr != nil {
@@ -198,7 +198,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 			Err(err).
 			Msg("[LocalFileBackend] upload failed; routing to outbox")
 		b.spoolToOutbox(bundle)
-		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}
+		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 	if closeErr := indexFile.Close(); closeErr != nil {
 		logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close 失败")
@@ -214,7 +214,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 		Int("experience_count", len(bundle.Experiences)).
 		Msg("[LocalFileBackend] uploaded bundle")
 
-	return sharing.UploadResult{OK: true, BundleID: bundle.BundleID}
+	return sharing.UploadResult{OK: true, BundleID: bundle.BundleID}, nil
 }
 
 // DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -304,15 +305,30 @@ func (wc *WebChannel) Start(_ context.Context) error {
 	return nil
 }
 
-// Stop 停止 Web 通道，关闭所有客户端连接。
-func (wc *WebChannel) Stop(_ context.Context) error {
+// Stop 停止 Web 通道，发送 Close 帧后关闭所有客户端连接。
+func (wc *WebChannel) Stop(ctx context.Context) error {
 	wc.runningMu.Lock()
 	wc.running = false
 	wc.runningMu.Unlock()
 
-	// 关闭所有客户端连接
+	// 发送 WebSocket Close 帧后关闭所有客户端连接
 	wc.clientsMu.Lock()
 	for conn := range wc.clients {
+		// 发送 Close 帧（code=1001 Going Away），尊重 ctx 超时
+		done := make(chan struct{})
+		go func(c *websocket.Conn) {
+			_ = c.WriteControl(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseGoingAway, "shutdown"),
+				time.Now().Add(time.Second),
+			)
+			close(done)
+		}(conn)
+		select {
+		case <-done:
+		case <-ctx.Done():
+			// ctx 取消，不再等待 Close 帧写入
+		}
 		_ = conn.Close()
 	}
 	wc.clients = make(map[*websocket.Conn]bool)

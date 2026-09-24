@@ -1118,16 +1118,20 @@ func (r *SkillEvolutionRail) initSharing(sharingConfig map[string]any, llmModel 
 
 // buildExperienceSharer 构建 ExperienceSharer。
 // 对齐 Python: SkillEvolutionSharingMixin._build_experience_sharer(sharing_config)
+//
+// Python: try: ... except Exception: logger.warning(...); return None
+// 保留 recover 兜底防意外 panic，确保异常时降级返回 nil（共享功能禁用）。
 func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.ExperienceSharer) {
 	config := r.sharingConfig
 	if config == nil {
 		config = map[string]any{}
 	}
 
-	// Python: try: ... except Exception: logger.warning(...); return None
+	// Python: try: ... except Exception as exc: logger.warning("...%s...", exc); return None
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] 构建 ExperienceSharer 失败，共享功能已禁用")
+			logger.Warn(logComponent).Any("exception", rec).
+				Msg("[SkillEvolutionRail] 构建 ExperienceSharer 失败，共享功能已禁用")
 			sharer = nil
 		}
 	}()
@@ -1297,16 +1301,24 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 	}
 
 	// Python: try: query = await self._keyword_extractor.extract_query_keywords(feedback_excerpt=excerpt)
-	// Python: except Exception as exc: logger.warning(...); return {}
+	// Python: except Exception as exc: logger.warning("[SkillEvolutionRail] keyword extraction failed: %s", exc); return {}
+	// 下游 ExtractQueryKeywords 已返回 error，保留 recover 兜底防意外 panic。
 	var query sharing.QueryKeywords
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Warn(logComponent).Any("error", rec).Msg("[SkillEvolutionRail] 关键词提取失败")
+				logger.Warn(logComponent).Any("exception", rec).
+					Msg("[SkillEvolutionRail] 关键词提取异常，降级返回空结果")
 				query = sharing.QueryKeywords{}
 			}
 		}()
-		query = r.keywordExtractor.ExtractQueryKeywords(ctx, excerpt)
+		var kwErr error
+		query, kwErr = r.keywordExtractor.ExtractQueryKeywords(ctx, excerpt)
+		if kwErr != nil {
+			logger.Warn(logComponent).Err(kwErr).
+				Msg("[SkillEvolutionRail] 关键词提取失败，降级返回空结果")
+			query = sharing.QueryKeywords{}
+		}
 	}()
 	if len(query.Keywords) == 0 {
 		return map[string][]checkpointing.EvolutionRecord{}
@@ -1317,18 +1329,30 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] download_shared_experiences 单技能失败")
+					// Python: except Exception as exc: logger.warning("...download_relevant failed...: %s", exc); continue
+					logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
+						Msg("[SkillEvolutionRail] download_shared_experiences 单技能异常，跳过")
 				}
 			}()
 			if r.experienceSharer == nil {
 				return
 			}
-			skillID := r.experienceSharer.ResolveSkillID(ctx, skillName)
+			skillID, resolveErr := r.experienceSharer.ResolveSkillID(ctx, skillName)
+			if resolveErr != nil {
+				logger.Warn(logComponent).Str("skill", skillName).Err(resolveErr).
+					Msg("[SkillEvolutionRail] resolve_skill_id 失败，跳过共享下载")
+				return
+			}
 			if skillID == "" {
 				logger.Debug(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] 跳过共享下载: skill_id 不可用")
 				return
 			}
-			bundles := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
+			bundles, dlErr := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
+			if dlErr != nil {
+				logger.Warn(logComponent).Str("skill", skillName).Str("skill_id", skillID).Err(dlErr).
+					Msg("[SkillEvolutionRail] download_shared_experiences 失败，跳过")
+				return
+			}
 
 			var records []checkpointing.EvolutionRecord
 			for _, bundle := range bundles {
@@ -1425,6 +1449,9 @@ func (r *SkillEvolutionRail) emitSharedRecordsApproval(
 
 // stageRecordsForShare 暂存记录以供共享上传。
 // 对齐 Python: SkillEvolutionSharingMixin._stage_records_for_share(skill_name, messages, records)
+//
+// Python: try: return await self._share_stager.screen_and_stage(...) except Exception: logger.warning(...); return None
+// Go: 下游 ScreenAndStage 已返回 error，保留 recover 兜底防意外 panic。
 func (r *SkillEvolutionRail) stageRecordsForShare(
 	ctx context.Context,
 	skillName string,
@@ -1436,26 +1463,45 @@ func (r *SkillEvolutionRail) stageRecordsForShare(
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] 共享暂存失败")
+			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
+				Msg("[SkillEvolutionRail] 共享暂存异常，降级返回 nil")
 			result = nil
 		}
 	}()
-	result = r.shareStager.ScreenAndStage(ctx, skillName, records, messages)
+	var stageErr error
+	result, stageErr = r.shareStager.ScreenAndStage(ctx, skillName, records, messages)
+	if stageErr != nil {
+		logger.Warn(logComponent).Str("skill", skillName).Err(stageErr).
+			Msg("[SkillEvolutionRail] 共享暂存失败，降级返回 nil")
+		result = nil
+	}
 	return result
 }
 
 // flushShareUploads 刷新共享上传。
 // 对齐 Python: SkillEvolutionSharingMixin._flush_share_uploads(skill_name)
+//
+// Python: try: result = await self._experience_sharer.flush_pending_uploads(skill_name)
+// Python: except Exception as exc: logger.warning("...failed...: %s", exc); return
+// Python: if not result.ok and result.reason: logger.warning("...rejected...: %s", result.reason)
+// Go: 下游 FlushPendingUploads 已返回 error，保留 recover 兜底防意外 panic。
 func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName string) {
 	if r.experienceSharer == nil || !r.experienceSharer.HasPending(skillName) {
 		return
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] 刷新待上传失败")
+			// Python: except Exception as exc: logger.warning("..."); return
+			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
+				Msg("[SkillEvolutionRail] 刷新待上传异常，降级跳过")
 		}
 	}()
-	result := r.experienceSharer.FlushPendingUploads(ctx, skillName)
+	result, flushErr := r.experienceSharer.FlushPendingUploads(ctx, skillName)
+	if flushErr != nil {
+		logger.Warn(logComponent).Str("skill", skillName).Err(flushErr).
+			Msg("[SkillEvolutionRail] 刷新待上传失败，降级跳过")
+		return
+	}
 	if !result.OK && result.Reason != "" {
 		logger.Warn(logComponent).Str("skill", skillName).Str("reason", result.Reason).Msg("[SkillEvolutionRail] 共享上传被拒绝")
 	}
@@ -1463,13 +1509,19 @@ func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName st
 
 // uploadApprovedRecordsForSharing 审批后上传共享记录。
 // 对齐 Python: SkillEvolutionSharingMixin._upload_approved_records_for_sharing(pending, request_id)
+//
+// Python: try: await self._stage_records_for_share(...); await self._flush_share_uploads(...)
+// Python: except Exception as exc: logger.warning("...approve share staging failed...: %s", exc)
+// Go: 下游函数已返回 error，保留 recover 兜底防意外 panic。
 func (r *SkillEvolutionRail) uploadApprovedRecordsForSharing(ctx context.Context, skillName string, messages []map[string]any, records []checkpointing.EvolutionRecord) {
 	if !r.IsSharingEnabled() || r.shareStager == nil || len(records) == 0 {
 		return
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Str("skill", skillName).Any("error", rec).Msg("[SkillEvolutionRail] 审批共享暂存失败")
+			// Python: except Exception as exc: logger.warning("...approve share staging failed for skill=%s (request=%s): %s", ...)
+			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
+				Msg("[SkillEvolutionRail] 审批共享暂存异常，降级跳过")
 		}
 	}()
 	r.stageRecordsForShare(ctx, skillName, messages, records)
@@ -1869,12 +1921,14 @@ func (r *SkillEvolutionRail) detectActiveRequestSignals(
 	).BindLLM(r.evolver.LLM(), r.evolver.ModelName(), r.language)
 
 	var detected []*signal.EvolutionSignal
-	// Python: try/except — DetectTrajectorySignals 失败时优雅降级
+	// Python: try: detected.extend(detector.detect_trajectory_signals(trajectory, messages=messages))
+	// Python: except Exception as exc: logger.warning("...active request trajectory detection failed: %s", exc)
+	// ConversationSignalDetector.DetectTrajectorySignals 是纯规则匹配，保留 recover 兜底防意外 panic。
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Warn(logComponent).Any("recover", rec).
-					Msg("[SkillEvolutionRail] active request trajectory detection failed")
+				logger.Warn(logComponent).Any("exception", rec).
+					Msg("[SkillEvolutionRail] active request trajectory detection 异常，降级跳过")
 			}
 		}()
 		detected = append(detected, detector.DetectTrajectorySignals(traj, messages)...)

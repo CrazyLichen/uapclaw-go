@@ -45,7 +45,8 @@ func TestInProcessSpawnHandle_IsHealthy_shutdownRequested后返回false(t *testi
 	h := spawn.NewInProcessSpawnHandle("inproc-test", func() {}, done, nil)
 
 	h.SetOnUnhealthy(func() {})
-	// 模拟请求关闭
+	// ForceKill 会等待 done 关闭，先异步关闭 done
+	go close(done)
 	_ = h.ForceKill()
 
 	if h.IsHealthy() {
@@ -102,6 +103,9 @@ func TestInProcessSpawnHandle_ForceKill(t *testing.T) {
 
 	h := spawn.NewInProcessSpawnHandle("inproc-test", cancel, done, nil)
 
+	// ForceKill 会等待 done 关闭，先异步关闭 done
+	go close(done)
+
 	err := h.ForceKill()
 	if err != nil {
 		t.Errorf("ForceKill() error = %v", err)
@@ -147,12 +151,14 @@ func TestInProcessSpawnHandle_StartHealthCheck_noop(t *testing.T) {
 
 // TestInProcessSpawnHandle_SetOnUnhealthy 测试设置不健康回调。
 func TestInProcessSpawnHandle_SetOnUnhealthy(t *testing.T) {
-	h := spawn.NewInProcessSpawnHandle("inproc-test", func() {}, make(chan struct{}), nil)
+	done := make(chan struct{})
+	h := spawn.NewInProcessSpawnHandle("inproc-test", func() {}, done, nil)
 
 	called := false
 	h.SetOnUnhealthy(func() { called = true })
 
-	// ForceKill 不应触发 onUnhealthy
+	// ForceKill 会等待 done 关闭，先异步关闭 done
+	go close(done)
 	_ = h.ForceKill()
 	if called {
 		t.Error("onUnhealthy 不应在 ForceKill 时自动触发")

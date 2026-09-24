@@ -152,7 +152,7 @@ func (h *InProcessSpawnHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 	}
 }
 
-// ForceKill 强制终止：取消 goroutine，不等待完成。
+// ForceKill 强制终止：取消 goroutine 上下文，等待协程退出。
 // Python: InProcessSpawnHandle.force_kill
 func (h *InProcessSpawnHandle) ForceKill() error {
 	h.mu.Lock()
@@ -161,6 +161,11 @@ func (h *InProcessSpawnHandle) ForceKill() error {
 
 	if h.cancelCtx != nil {
 		h.cancelCtx()
+	}
+
+	// 等待协程退出（无超时，对齐 Python await self._task）
+	if h.done != nil {
+		<-h.done
 	}
 
 	logger.Info(inprocessLogComponent).

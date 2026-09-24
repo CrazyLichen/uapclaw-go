@@ -144,7 +144,7 @@ func TestParseFromOptimizerOutput_DictKeywordsNotList(t *testing.T) {
 func TestExtractQueryKeywords_NoLLM(t *testing.T) {
 	ext := NewKeywordExtractor(nil, "", "cn", llm_resilience.LLMInvokePolicy{})
 
-	result := ext.ExtractQueryKeywords(context.Background(), "这是一段对话摘录内容，用于测试关键词提取")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "这是一段对话摘录内容，用于测试关键词提取")
 	assert.Empty(t, result.Keywords)
 	// 原文 20 个中文字符，不超过 40，intent 应等于原文
 	assert.Equal(t, "这是一段对话摘录内容，用于测试关键词提取", result.Intent)
@@ -156,7 +156,7 @@ func TestExtractQueryKeywords_NoModel(t *testing.T) {
 	model := newMockModel(t, nil)
 	ext := NewKeywordExtractor(model, "", "cn", llm_resilience.LLMInvokePolicy{})
 
-	result := ext.ExtractQueryKeywords(context.Background(), "some excerpt")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "some excerpt")
 	assert.Empty(t, result.Keywords)
 	assert.Equal(t, "some excerpt", result.Intent)
 }
@@ -165,7 +165,7 @@ func TestExtractQueryKeywords_NoModel(t *testing.T) {
 func TestExtractQueryKeywords_EmptyExcerpt(t *testing.T) {
 	ext := NewKeywordExtractor(nil, "", "cn", llm_resilience.LLMInvokePolicy{})
 
-	result := ext.ExtractQueryKeywords(context.Background(), "")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "")
 	assert.Empty(t, result.Keywords)
 	assert.Empty(t, result.Intent)
 	assert.Empty(t, result.RawExcerpt)
@@ -183,7 +183,7 @@ func TestExtractQueryKeywords_正常调用(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "用户遇到了 IndexError: list index out of range 错误")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "用户遇到了 IndexError: list index out of range 错误")
 	assert.Equal(t, []string{"IndexError", "list index out of range", "Python列表越界"}, result.Keywords)
 	assert.Equal(t, "Python列表索引越界错误", result.Intent)
 	assert.Equal(t, "用户遇到了 IndexError: list index out of range 错误", result.RawExcerpt)
@@ -202,7 +202,7 @@ func TestExtractQueryKeywords_LLM失败(t *testing.T) {
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
 	excerpt := "测试摘录内容"
-	result := ext.ExtractQueryKeywords(context.Background(), excerpt)
+	result, _ := ext.ExtractQueryKeywords(context.Background(), excerpt)
 	assert.Empty(t, result.Keywords)
 	assert.Equal(t, truncateString(excerpt, 40), result.Intent)
 }
@@ -219,7 +219,7 @@ func TestExtractQueryKeywords_英文语言(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "en", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "KeyError on dict access", "some hint")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "KeyError on dict access", "some hint")
 	assert.Equal(t, []string{"KeyError", "dict access"}, result.Keywords)
 	assert.Equal(t, "dict key missing", result.Intent)
 }
@@ -236,7 +236,7 @@ func TestExtractQueryKeywords_WithSkillHint(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "request timed out", "这是技能提示")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "request timed out", "这是技能提示")
 	assert.Equal(t, []string{"timeout"}, result.Keywords)
 }
 
@@ -252,7 +252,7 @@ func TestExtractQueryKeywords_无SkillHint(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "some error occurred")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "some error occurred")
 	assert.Equal(t, []string{"error"}, result.Keywords)
 }
 
@@ -282,7 +282,7 @@ func TestExtractQueryKeywords_关键词超限(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "test excerpt")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "test excerpt")
 	assert.Equal(t, 20, len(result.Keywords))
 }
 
@@ -301,7 +301,7 @@ func TestExtractQueryKeywords_Intent超限(t *testing.T) {
 	}
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
-	result := ext.ExtractQueryKeywords(context.Background(), "test excerpt")
+	result, _ := ext.ExtractQueryKeywords(context.Background(), "test excerpt")
 	assert.True(t, len([]rune(result.Intent)) <= 80, "intent rune 长度应 <= 80")
 }
 
@@ -318,7 +318,7 @@ func TestExtractQueryKeywords_LLM返回非JSON(t *testing.T) {
 	ext := NewKeywordExtractor(model, "test-model", "cn", policy)
 
 	excerpt := "测试摘录"
-	result := ext.ExtractQueryKeywords(context.Background(), excerpt)
+	result, _ := ext.ExtractQueryKeywords(context.Background(), excerpt)
 	assert.Empty(t, result.Keywords)
 	assert.Equal(t, truncateString(excerpt, 40), result.Intent)
 }

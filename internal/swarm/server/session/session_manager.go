@@ -11,14 +11,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// processorEntry 处理器条目，同时存储 context 和 cancel。
+// processorEntry 处理器条目，同时存储 context、cancel 和 done channel。
 // 用于 EnsureSessionProcessor 检测处理器是否已死（对齐 Python: task.done()），
 // 以及 HasActiveTasks 准确判断任务是否仍在执行。
+// 重建时通过 done channel 同步等待旧 goroutine 退出，消除与 cleanupSession 的竞态。
 type processorEntry struct {
 	// ctx 处理器 context，通过 select <-ctx.Done() 非阻塞探测存活状态
 	ctx context.Context
 	// cancel 处理器 cancel 函数
 	cancel context.CancelFunc
+	// done 处理器 goroutine 退出信号，goroutine 退出时 close(done)
+	done chan struct{}
 }
 
 // SessionManager 会话任务队列管理器，提供按 session 序列化执行、优先级排序和取消能力。
@@ -139,12 +142,11 @@ func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix s
 }
 
 // EnsureSessionProcessor 确保 session 的任务处理器在运行。
-// 如果处理器 context 已取消（等价 Python: task.done()），则重建队列和优先级。
+// 如果处理器 context 已取消（等价 Python: task.done()），则同步等待旧 goroutine 退出后再重建队列和优先级。
 //
 // Python: SessionManager.ensure_session_processor(session_id)
 func (sm *SessionManager) EnsureSessionProcessor(ctx context.Context, sessionID string) error {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
 
 	// 检查处理器是否存活（对齐 Python: if not processor.done()）
 	if entry, procOk := sm.sessionProcessors[sessionID]; procOk {
@@ -154,8 +156,18 @@ func (sm *SessionManager) EnsureSessionProcessor(ctx context.Context, sessionID 
 			case <-entry.ctx.Done():
 				// 处理器已死，需要重建队列和优先级（对齐 Python）
 				logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 处理器已停止，重建队列和优先级")
+
+				// cancel 旧 processor（确保 goroutine 收到取消信号）
+				entry.cancel()
+				// 释放锁后等待旧 goroutine 退出（cleanupSession 需要获取锁）
+				sm.mu.Unlock()
+				<-entry.done
+				// 重新获取锁
+				sm.mu.Lock()
+
 			default:
 				// 处理器仍然存活
+				sm.mu.Unlock()
 				return nil
 			}
 		}
@@ -170,10 +182,12 @@ func (sm *SessionManager) EnsureSessionProcessor(ctx context.Context, sessionID 
 	sm.sessionSignals[sessionID] = sigCh
 
 	procCtx, procCancel := context.WithCancel(ctx)
-	sm.sessionProcessors[sessionID] = &processorEntry{ctx: procCtx, cancel: procCancel}
+	done := make(chan struct{})
+	sm.sessionProcessors[sessionID] = &processorEntry{ctx: procCtx, cancel: procCancel, done: done}
 
-	go sm.processSessionQueue(procCtx, sessionID, sigCh)
+	go sm.processSessionQueue(procCtx, sessionID, sigCh, done)
 
+	sm.mu.Unlock()
 	return nil
 }
 
@@ -310,7 +324,10 @@ func (h *priorityHeap) Pop() any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // processSessionQueue 处理 session 任务队列（先进后出执行，新任务优先）。
-func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID string, sigCh chan struct{}) {
+// 退出时 close(done) 通知 EnsureSessionProcessor 旧 goroutine 已完成。
+func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID string, sigCh chan struct{}, done chan struct{}) {
+	defer close(done)
+
 	for {
 		select {
 		case <-ctx.Done():

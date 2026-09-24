@@ -85,7 +85,7 @@ func TestShareStager_ScreenAndStage_正常记录通过(t *testing.T) {
 	records := []checkpointing.EvolutionRecord{
 		newStagerRecord("ev_001", "user_correction", 0.8),
 	}
-	result := stager.ScreenAndStage(context.Background(), "test_skill", records, nil)
+	result, _ := stager.ScreenAndStage(context.Background(), "test_skill", records, nil)
 
 	if len(result.StagedForShare) != 1 {
 		t.Fatalf("期望 1 条通过，实际 %d", len(result.StagedForShare))
@@ -108,7 +108,7 @@ func TestShareStager_ScreenAndStage_ExecutionFailure无成功工具(t *testing.T
 	messages := []map[string]any{
 		{"role": "tool", "content": "Error: command not found"},
 	}
-	result := stager.ScreenAndStage(context.Background(), "test_skill", records, messages)
+	result, _ := stager.ScreenAndStage(context.Background(), "test_skill", records, messages)
 
 	if len(result.StagedForShare) != 0 {
 		t.Fatalf("期望 0 条通过，实际 %d", len(result.StagedForShare))
@@ -132,7 +132,7 @@ func TestShareStager_ScreenAndStage_ExecutionFailure有成功工具(t *testing.T
 		{"role": "tool", "content": "Error: command not found"},
 		{"role": "tool", "content": "file contents retrieved successfully"},
 	}
-	result := stager.ScreenAndStage(context.Background(), "test_skill", records, messages)
+	result, _ := stager.ScreenAndStage(context.Background(), "test_skill", records, messages)
 
 	if len(result.StagedForShare) != 1 {
 		t.Fatalf("期望 1 条通过，实际 %d", len(result.StagedForShare))
@@ -148,7 +148,7 @@ func TestShareStager_ScreenAndStage_ScoreBelowThreshold(t *testing.T) {
 	records := []checkpointing.EvolutionRecord{
 		newStagerRecord("ev_004", "user_correction", 0.3),
 	}
-	result := stager.ScreenAndStage(context.Background(), "test_skill", records, nil)
+	result, _ := stager.ScreenAndStage(context.Background(), "test_skill", records, nil)
 
 	if len(result.StagedForShare) != 0 {
 		t.Fatalf("期望 0 条通过，实际 %d", len(result.StagedForShare))
@@ -164,7 +164,7 @@ func TestShareStager_ScreenAndStage_ScoreBelowThreshold(t *testing.T) {
 // TestShareStager_ScreenAndStage_空记录 返回空 StagingResult
 func TestShareStager_ScreenAndStage_空记录(t *testing.T) {
 	stager, _ := newTestShareStager(t)
-	result := stager.ScreenAndStage(context.Background(), "test_skill", nil, nil)
+	result, _ := stager.ScreenAndStage(context.Background(), "test_skill", nil, nil)
 
 	if len(result.StagedForShare) != 0 {
 		t.Fatalf("期望 0 条通过，实际 %d", len(result.StagedForShare))

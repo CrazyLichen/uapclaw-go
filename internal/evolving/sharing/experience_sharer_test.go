@@ -29,7 +29,7 @@ func newMockBackend() *mockBackend {
 	}
 }
 
-func (m *mockBackend) UploadBundle(_ context.Context, bundle SharedSkillBundle) UploadResult {
+func (m *mockBackend) UploadBundle(_ context.Context, bundle SharedSkillBundle) (UploadResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.uploadResults) > 0 && m.uploadCallIdx < len(m.uploadResults) {
@@ -38,10 +38,10 @@ func (m *mockBackend) UploadBundle(_ context.Context, bundle SharedSkillBundle) 
 		if r.OK {
 			m.bundles[bundle.SkillID] = append(m.bundles[bundle.SkillID], bundle)
 		}
-		return r
+		return r, nil
 	}
 	m.bundles[bundle.SkillID] = append(m.bundles[bundle.SkillID], bundle)
-	return UploadResult{OK: true, BundleID: bundle.BundleID}
+	return UploadResult{OK: true, BundleID: bundle.BundleID}, nil
 }
 
 func (m *mockBackend) DownloadBundles(_ context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error) {
@@ -217,7 +217,7 @@ func TestExperienceSharer_FlushPendingUploads_UploadsInitialPackage(t *testing.T
 	es.SetSkillSharingContextProvider(fakeProvider("sk_init", []byte("pkg-bytes"), "resolved-name", "desc"))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if !result.OK {
 		t.Fatalf("FlushPendingUploads 失败: %s", result.Reason)
 	}
@@ -235,7 +235,7 @@ func TestExperienceSharer_FlushPendingUploads_SkillIDUnavailable(t *testing.T) {
 	es.SetSkillSharingContextProvider(fakeProvider("", nil, "", ""))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if result.OK {
 		t.Error("skill_id 不可用时不应成功")
 	}
@@ -250,7 +250,7 @@ func TestExperienceSharer_FlushPendingUploads_NoProvider(t *testing.T) {
 	ctx := context.Background()
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if result.OK {
 		t.Error("无 provider 且 skill_id 为空时应跳过上传")
 	}
@@ -264,7 +264,7 @@ func TestExperienceSharer_FlushPendingUploads_Success(t *testing.T) {
 	es.SetSkillSharingContextProvider(fakeProvider("sk_ok", []byte("pkg"), "ok-skill", "ok desc"))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"python", "debug"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if !result.OK {
 		t.Fatalf("FlushPendingUploads 失败: %s", result.Reason)
 	}
@@ -298,7 +298,7 @@ func TestExperienceSharer_FlushPendingUploads_EmptyQueue(t *testing.T) {
 	es, _, _ := newTestSharer(t)
 	ctx := context.Background()
 
-	result := es.FlushPendingUploads(ctx, "nonexistent")
+	result, _ := es.FlushPendingUploads(ctx, "nonexistent")
 	if !result.OK {
 		t.Errorf("空队列应返回 OK, 实际: %s", result.Reason)
 	}
@@ -317,7 +317,7 @@ func TestExperienceSharer_FlushPendingUploads_PackageAlreadyPresent(t *testing.T
 	es.SetSkillSharingContextProvider(fakeProvider("sk_exists", []byte("new-pkg"), "existing", ""))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if !result.OK {
 		t.Fatalf("FlushPendingUploads 失败: %s", result.Reason)
 	}
@@ -340,7 +340,7 @@ func TestExperienceSharer_FlushPendingUploads_EmptyPackageBytes(t *testing.T) {
 	es.SetSkillSharingContextProvider(fakeProvider("sk_empty", nil, "", ""))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if !result.OK {
 		t.Logf("结果: OK=%v Reason=%q", result.OK, result.Reason)
 	}
@@ -359,14 +359,14 @@ func TestExperienceSharer_DownloadRelevant(t *testing.T) {
 	// 先上传一个 bundle
 	es.SetSkillSharingContextProvider(fakeProvider("sk_dl", []byte("pkg"), "dl-skill", "desc"))
 	es.StageForUpload("skill_dl", makeExp("r1", []string{"python", "debug"}))
-	result := es.FlushPendingUploads(ctx, "skill_dl")
+	result, _ := es.FlushPendingUploads(ctx, "skill_dl")
 	if !result.OK {
 		t.Fatalf("上传失败: %s", result.Reason)
 	}
 
 	// 下载
 	query := QueryKeywords{Keywords: []string{"python"}}
-	bundles := es.DownloadRelevant(ctx, "sk_dl", query, 3, "skill_dl")
+	bundles, _ := es.DownloadRelevant(ctx, "sk_dl", query, 3, "skill_dl")
 	if len(bundles) == 0 {
 		t.Fatal("应下载到 bundle")
 	}
@@ -384,7 +384,7 @@ func TestExperienceSharer_DownloadRelevant_EmptySkillID(t *testing.T) {
 	ctx := context.Background()
 
 	query := QueryKeywords{Keywords: []string{"python"}}
-	bundles := es.DownloadRelevant(ctx, "", query, 3, "")
+	bundles, _ := es.DownloadRelevant(ctx, "", query, 3, "")
 	if bundles != nil {
 		t.Error("空 skill_id 应返回 nil")
 	}
@@ -438,18 +438,18 @@ func TestExperienceSharer_ResolveSkillID(t *testing.T) {
 	es, _, _ := newTestSharer(t)
 	ctx := context.Background()
 
-	id := es.ResolveSkillID(ctx, "skill_x")
+	id, _ := es.ResolveSkillID(ctx, "skill_x")
 	if id != "" {
 		t.Errorf("无 provider 时应返回空, 实际: %q", id)
 	}
 
 	es.SetSkillSharingContextProvider(fakeProvider("sk_resolved", nil, "resolved", "desc"))
-	id = es.ResolveSkillID(ctx, "skill_x")
+	id, _ = es.ResolveSkillID(ctx, "skill_x")
 	if id != "sk_resolved" {
 		t.Errorf("skill_id = %q, 期望 %q", id, "sk_resolved")
 	}
 
-	id = es.ResolveSkillID(ctx, "")
+	id, _ = es.ResolveSkillID(ctx, "")
 	if id != "" {
 		t.Errorf("空 skillName 应返回空, 实际: %q", id)
 	}
@@ -465,9 +465,12 @@ func TestExperienceSharer_ResolveSkillID_ProviderError(t *testing.T) {
 	}
 	es.SetSkillSharingContextProvider(errorProvider)
 
-	id := es.ResolveSkillID(ctx, "skill_x")
+	id, err := es.ResolveSkillID(ctx, "skill_x")
 	if id != "" {
 		t.Errorf("provider 出错时应返回空, 实际: %q", id)
+	}
+	if err == nil {
+		t.Error("provider 出错时应返回 error")
 	}
 }
 
@@ -607,7 +610,7 @@ func TestExperienceSharer_FlushPendingUploads_RetryableFail(t *testing.T) {
 	es.SetSkillSharingContextProvider(fakeProvider("sk_retry", []byte("pkg"), "retry-skill", ""))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if !result.OK {
 		t.Errorf("重试后应成功, 实际: OK=%v Reason=%q", result.OK, result.Reason)
 	}
@@ -626,7 +629,7 @@ func TestExperienceSharer_FlushPendingUploads_NonRetryableFail(t *testing.T) {
 	es.SetSkillSharingContextProvider(fakeProvider("sk_perm", []byte("pkg"), "perm-skill", ""))
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	if result.OK {
 		t.Error("不可重试失败不应返回成功")
 	}
@@ -649,7 +652,7 @@ func TestExperienceSharer_FlushPendingUploads_ProviderError(t *testing.T) {
 	es.SetSkillSharingContextProvider(errorProvider)
 
 	es.StageForUpload("skill_x", makeExp("r1", []string{"a"}))
-	result := es.FlushPendingUploads(ctx, "skill_x")
+	result, _ := es.FlushPendingUploads(ctx, "skill_x")
 	// provider 异常 → skill_id 不会被设置 → 跳过上传
 	if result.OK {
 		t.Error("provider 异常时不应成功")

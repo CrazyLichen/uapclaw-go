@@ -201,13 +201,13 @@ func ParseFromOptimizerOutput(rawPatch any) ([]string, string) {
 // ExtractQueryKeywords 从对话摘录中提取检索关键词。
 //
 // 摘录通常包含用户查询、工具执行结果（特别是失败的）等关键信息。
-// 优先使用小型 LLM 调用；失败时返回空关键词，确保不阻塞调用方。
+// 优先使用小型 LLM 调用；失败时返回空关键词和 error，确保调用方可以区分降级和成功。
 //
 // Python: KeywordExtractor.extract_query_keywords()
-func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExcerpt string, skillHint ...string) QueryKeywords {
+func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExcerpt string, skillHint ...string) (QueryKeywords, error) {
 	excerpt := strings.TrimSpace(feedbackExcerpt)
 	if excerpt == "" {
-		return QueryKeywords{Keywords: []string{}, Intent: "", RawExcerpt: ""}
+		return QueryKeywords{Keywords: []string{}, Intent: "", RawExcerpt: ""}, nil
 	}
 
 	if e.llm == nil || e.model == "" {
@@ -218,7 +218,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),
 			RawExcerpt: excerpt,
-		}
+		}, nil
 	}
 
 	logger.Info(logComponent).
@@ -258,7 +258,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),
 			RawExcerpt: excerpt,
-		}
+		}, err
 	}
 
 	data := extractQueryJSON(raw)
@@ -270,7 +270,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 			Keywords:   []string{},
 			Intent:     truncateString(excerpt, 40),
 			RawExcerpt: excerpt,
-		}
+		}, fmt.Errorf("LLM JSON parse failed for keyword extraction")
 	}
 
 	rawKeywords, _ := data["keywords"].([]any)
@@ -299,7 +299,7 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 		Keywords:   keywords,
 		Intent:     intent,
 		RawExcerpt: excerpt,
-	}
+	}, nil
 }
 
 // UpdateLLM 后置绑定 LLM 模型实例和名称。

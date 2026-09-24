@@ -58,8 +58,7 @@ type StreamController struct {
 	// cancelRequested 当前轮次是否被协作取消
 	cancelRequested bool
 	// pendingInterruptResumes 待处理的中断恢复输入
-	// ⤵️ 待 9.55 TeamAgent 完善后回填具体类型（可能为 *interaction.InteractPayload 或 *sessioninteraction.InteractiveInput）
-	// 已实现 Interaction 层（9.59b），类型定义在 interaction 包中
+	// Python 中存储 InteractiveInput 对象；Go 端当前通过 any 传递，待上游接口定型后改为具体类型
 	pendingInterruptResumes []any
 	// pendingInputs 待处理的输入队列（轮次结束后自动消费）
 	pendingInputs []any
@@ -498,11 +497,12 @@ func (sc *StreamController) logRoundPanic() {
 // Python: StreamController._run_one_round(message)
 func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	// Python: except BaseException → MemberStatus.ERROR
+	savedCtx := ctx
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(scLogComponent).Str("member_name", sc.memberName()).
 				Any("panic", r).Msg("runOneRound panic; 设 ERROR 状态")
-			_ = sc.updateStatus(context.Background(), atschema.MemberStatusError)
+			_ = sc.updateStatus(savedCtx, atschema.MemberStatusError)
 		}
 	}()
 

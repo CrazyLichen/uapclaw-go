@@ -49,7 +49,7 @@ func TestLocalFileBackend_UploadAndDownload(t *testing.T) {
 	ctx := context.Background()
 
 	bundle := makeTestBundle("sk_py", "python-debug", []string{"IndexError", "bounds"})
-	result := b.UploadBundle(ctx, bundle)
+	result, _ := b.UploadBundle(ctx, bundle)
 	if !result.OK {
 		t.Fatalf("UploadBundle 失败: %s", result.Reason)
 	}
@@ -74,8 +74,8 @@ func TestLocalFileBackend_DifferentSkillIDsNoCollide(t *testing.T) {
 	b1 := makeTestBundleWithID("sb_001", "sk_a", "skill-a", []string{"python", "debug"})
 	b2 := makeTestBundleWithID("sb_002", "sk_b", "skill-b", []string{"java", "compile"})
 
-	r1 := b.UploadBundle(ctx, b1)
-	r2 := b.UploadBundle(ctx, b2)
+	r1, _ := b.UploadBundle(ctx, b1)
+	r2, _ := b.UploadBundle(ctx, b2)
 	if !r1.OK || !r2.OK {
 		t.Fatalf("上传应全部成功: r1=%v r2=%v", r1.OK, r2.OK)
 	}
@@ -129,14 +129,14 @@ func TestLocalFileBackend_RejectsDuplicateOnUpload(t *testing.T) {
 	ctx := context.Background()
 
 	b1 := makeTestBundleWithID("sb_001", "sk_dedup", "skill-dedup", []string{"python", "debug", "IndexError"})
-	r1 := b.UploadBundle(ctx, b1)
+	r1, _ := b.UploadBundle(ctx, b1)
 	if !r1.OK {
 		t.Fatalf("第一次上传应成功: %s", r1.Reason)
 	}
 
 	// 高度重叠的关键词 → 应被拒绝（交集3/并集3=1.0 >= 0.85）
 	b2 := makeTestBundleWithID("sb_002", "sk_dedup", "skill-dedup", []string{"python", "debug", "IndexError"})
-	r2 := b.UploadBundle(ctx, b2)
+	r2, _ := b.UploadBundle(ctx, b2)
 	if r2.OK {
 		t.Error("重复 bundle 应被拒绝")
 	}
@@ -160,7 +160,7 @@ func TestLocalFileBackend_SearchSkills(t *testing.T) {
 
 	// 上传 bundle 会更新全局索引
 	bundle := makeTestBundleWithID("sb_search1", "sk_search", "search-skill", []string{"python", "debug"})
-	r := b.UploadBundle(ctx, bundle)
+	r, _ := b.UploadBundle(ctx, bundle)
 	if !r.OK {
 		t.Fatalf("UploadBundle 失败: %s", r.Reason)
 	}
@@ -375,7 +375,7 @@ func TestLocalFileBackend_UploadBundle_EmptySkillID(t *testing.T) {
 	ctx := context.Background()
 
 	bundle := makeTestBundle("", "skill-name", []string{"test"})
-	result := b.UploadBundle(ctx, bundle)
+	result, _ := b.UploadBundle(ctx, bundle)
 	if result.OK {
 		t.Error("空 skill_id 上传应被拒绝")
 	}
@@ -392,14 +392,14 @@ func TestLocalFileBackend_UploadBundle_NoKeywordsSkipsDedup(t *testing.T) {
 	ctx := context.Background()
 
 	b1 := makeTestBundleWithID("sb_001", "sk_nkw", "no-kw", nil)
-	r1 := b.UploadBundle(ctx, b1)
+	r1, _ := b.UploadBundle(ctx, b1)
 	if !r1.OK {
 		t.Fatalf("第一次上传应成功: %s", r1.Reason)
 	}
 
 	// 关键词为空不会触发去重检查
 	b2 := makeTestBundleWithID("sb_002", "sk_nkw", "no-kw", nil)
-	r2 := b.UploadBundle(ctx, b2)
+	r2, _ := b.UploadBundle(ctx, b2)
 	if !r2.OK {
 		t.Errorf("无关键词时去重检查应跳过: %s", r2.Reason)
 	}
@@ -427,7 +427,7 @@ func TestLocalFileBackend_DownloadBundles_ZeroScoreFiltered(t *testing.T) {
 	ctx := context.Background()
 
 	bundle := makeTestBundle("sk_zero", "zero-skill", []string{"python"})
-	_ = b.UploadBundle(ctx, bundle)
+	_, _ = b.UploadBundle(ctx, bundle)
 
 	query := sharing.QueryKeywords{Keywords: []string{"nonexistent"}}
 	results, _ := b.DownloadBundles(ctx, "sk_zero", query, 3)
@@ -545,7 +545,7 @@ func TestLocalFileBackend_ReadIndex_CorruptLine(t *testing.T) {
 	ctx := context.Background()
 
 	bundle := makeTestBundle("sk_idxc", "idx-skill", []string{"test"})
-	r := b.UploadBundle(ctx, bundle)
+	r, _ := b.UploadBundle(ctx, bundle)
 	if !r.OK {
 		t.Fatalf("上传失败: %s", r.Reason)
 	}
@@ -655,7 +655,7 @@ func TestLocalFileBackend_UploadBundle_SpoolsToOutbox(t *testing.T) {
 
 	// 先正常上传一个不同 skill 的 bundle（建立 bundles 目录结构）
 	bundle0 := makeTestBundleWithID("sb_000", "sk_other", "other-skill", []string{"other"})
-	r0 := b.UploadBundle(ctx, bundle0)
+	r0, _ := b.UploadBundle(ctx, bundle0)
 	if !r0.OK {
 		t.Fatalf("初始上传应成功: %s", r0.Reason)
 	}
@@ -667,7 +667,7 @@ func TestLocalFileBackend_UploadBundle_SpoolsToOutbox(t *testing.T) {
 	defer os.Chmod(indexPath, 0o755) // 确保清理
 
 	bundle1 := makeTestBundleWithID("sb_ob1", "sk_obtest", "ob-skill", []string{"outbox"})
-	r1 := b.UploadBundle(ctx, bundle1)
+	r1, _ := b.UploadBundle(ctx, bundle1)
 	if r1.OK {
 		t.Skip("只读目录未阻止写入，跳过 outbox 测试")
 	}
