@@ -15,7 +15,8 @@ import (
 
 // mockMemoryServiceForAgent 用于测试的 TaskMemoryService mock。
 type mockMemoryServiceForAgent struct {
-	retrieveFn func(ctx context.Context, userID string, query string) (*service.RetrieveResult, error)
+	retrieveFn   func(ctx context.Context, userID string, query string) (*service.RetrieveResult, error)
+	loadMemoriesFn func(ctx context.Context, userID string) error
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -31,6 +32,14 @@ func (m *mockMemoryServiceForAgent) Retrieve(ctx context.Context, userID string,
 		MemoryString:    "test memory content",
 		RetrievedMemory: []ceschema.MemoryItem{ceschema.ReMeRetrievedMemory{WhenToUse: "test", Content: "mem1"}},
 	}, nil
+}
+
+// LoadMemories 实现 LoadMemories 方法。
+func (m *mockMemoryServiceForAgent) LoadMemories(_ context.Context, _ string) error {
+	if m.loadMemoriesFn != nil {
+		return m.loadMemoriesFn(nil, "")
+	}
+	return nil
 }
 
 // TestNewContextEvolvingReActAgent_基本构造 验证构造不报错。

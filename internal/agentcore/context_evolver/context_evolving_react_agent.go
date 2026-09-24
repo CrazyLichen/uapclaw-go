@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
@@ -70,7 +71,10 @@ type ContextEvolvingReActAgent struct {
 
 // NewContextEvolvingReActAgent 创建带记忆检索能力的 ReActAgent。
 // 对齐 Python ContextEvolvingReActAgent.__init__(card, user_id, memory_service, ...)。
+// 双路径构造：memoryService 非 nil 时直接使用，否则用 persist 参数自建。
+// 返回 (*Agent, error) 因为构造时需要调用 LoadMemories。
 func NewContextEvolvingReActAgent(
+	ctx context.Context,
 	card *agentschema.AgentCard,
 	config *config.ReActAgentConfig,
 	userID string,
@@ -78,7 +82,28 @@ func NewContextEvolvingReActAgent(
 	injectMemoriesInContext bool,
 	autoSummarize bool,
 	autoSummarizeMattsMode string,
-) *ContextEvolvingReActAgent {
+	persistType *string,
+	persistPath string,
+	milvusHost string,
+	milvusPort int,
+	milvusCollection string,
+) (*ContextEvolvingReActAgent, error) {
+	// 对齐 Python：memoryService 为 nil 时用 persist 参数自建
+	var err error
+	if memoryService == nil && persistType != nil {
+		cfg := &service.TaskMemoryServiceConfig{
+			PersistType:     persistType,
+			PersistPath:     persistPath,
+			MilvusHost:      milvusHost,
+			MilvusPort:      milvusPort,
+			MilvusCollection: milvusCollection,
+		}
+		memoryService, err = service.NewTaskMemoryService(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TaskMemoryService: %w", err)
+		}
+	}
+
 	// 对齐 Python：创建父类 ReActAgent
 	reactAgent := agents.NewReActAgent(card, config)
 
@@ -91,6 +116,14 @@ func NewContextEvolvingReActAgent(
 		autoSummarizeMattsMode:  autoSummarizeMattsMode,
 	}
 
+	// 对齐 Python：构造时加载记忆
+	if memoryService != nil {
+		if loadErr := memoryService.LoadMemories(ctx, userID); loadErr != nil {
+			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("Failed to load memories during agent initialization")
+			return nil, fmt.Errorf("failed to load memories: %w", loadErr)
+		}
+	}
+
 	// 对齐 Python：logger.info("ContextEvolvingReActAgent initialized for user=%s, inject_in_context=%s, auto_summarize=%s, persist_type=%s", ...)
 	logger.Info(logger.ComponentAgentCore).
 		Str("user_id", userID).
@@ -98,7 +131,7 @@ func NewContextEvolvingReActAgent(
 		Bool("auto_summarize", autoSummarize).
 		Msg("ContextEvolvingReActAgent initialized")
 
-	return agent
+	return agent, nil
 }
 
 // Invoke 重写 Invoke 添加记忆检索路由。
@@ -107,7 +140,8 @@ func NewContextEvolvingReActAgent(
 func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	query, _ := inputs["query"].(string)
 	if query == "" {
-		// 对齐 Python：无 query 时走父类
+		// 对齐 Python：无 query 时补警告日志
+		logger.Warn(logger.ComponentAgentCore).Msg("No query provided in inputs")
 		return a.ReActAgent.Invoke(ctx, inputs, opts...)
 	}
 
@@ -174,6 +208,40 @@ func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, s
 // GetMemoryService 返回记忆服务。
 func (a *ContextEvolvingReActAgent) GetMemoryService() *service.TaskMemoryService {
 	return a.memoryService
+}
+
+// AutoConfigure 从 config 自动配置 Agent。对齐 Python Agent.auto_configure()。
+// 读取 API_KEY/API_BASE/MODEL_NAME/MODEL_PROVIDER 等配置，
+// 重新构建 ReActAgent 并更新记忆服务。
+func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
+	apiKey := ceconfig.GetString("API_KEY", "")
+	if apiKey == "" {
+		return fmt.Errorf("API_KEY not configured in context_evolver config")
+	}
+	apiBase := ceconfig.GetString("API_BASE", "https://api.openai.com/v1")
+	modelName := ceconfig.GetString("MODEL_NAME", "gpt-5.2")
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("model_name", modelName).
+		Str("api_base", apiBase).
+		Msg("AutoConfigure: configuring agent from context_evolver config")
+
+	// 重新创建 TaskMemoryService（如果存在）
+	if a.memoryService != nil {
+		cfg := &service.TaskMemoryServiceConfig{
+			LLMModel:      modelName,
+			EmbeddingModel: ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small"),
+			APIKey:        apiKey,
+			APIBase:       apiBase,
+		}
+		newSvc, err := service.NewTaskMemoryService(cfg)
+		if err != nil {
+			return fmt.Errorf("AutoConfigure: failed to create TaskMemoryService: %w", err)
+		}
+		a.memoryService = newSvc
+	}
+
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
