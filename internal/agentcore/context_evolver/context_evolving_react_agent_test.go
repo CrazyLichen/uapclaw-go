@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
@@ -15,7 +17,7 @@ import (
 
 // mockMemoryServiceForAgent 用于测试的 TaskMemoryService mock。
 type mockMemoryServiceForAgent struct {
-	retrieveFn   func(ctx context.Context, userID string, query string) (*service.RetrieveResult, error)
+	retrieveFn     func(ctx context.Context, userID string, query string) (*service.RetrieveResult, error)
 	loadMemoriesFn func(ctx context.Context, userID string) error
 }
 
@@ -44,7 +46,6 @@ func (m *mockMemoryServiceForAgent) LoadMemories(_ context.Context, _ string) er
 
 // TestNewContextEvolvingReActAgent_基本构造 验证构造不报错。
 func TestNewContextEvolvingReActAgent_基本构造(t *testing.T) {
-	// 使用 nil memoryService 验证不 panic
 	agent := &ContextEvolvingReActAgent{
 		userID:                  "test-user",
 		injectMemoriesInContext: true,
@@ -56,7 +57,6 @@ func TestNewContextEvolvingReActAgent_基本构造(t *testing.T) {
 
 // TestContextEvolvingReActAgent_Execute_实现AgentFlowService 验证 Execute 方法签名。
 func TestContextEvolvingReActAgent_Execute_实现AgentFlowService(t *testing.T) {
-	// 编译期接口断言
 	var _ cecontext.AgentFlowService = (*ContextEvolvingReActAgent)(nil)
 }
 
@@ -73,7 +73,6 @@ func TestCopyMap(t *testing.T) {
 	assert.Equal(t, original["query"], copied["query"])
 	assert.Equal(t, original["matts_k"], copied["matts_k"])
 
-	// 修改 copy 不影响 original
 	copied["query"] = "world"
 	assert.Equal(t, "hello", original["query"])
 }
@@ -94,18 +93,6 @@ func TestFormatTrajectoryFromResult_空结果(t *testing.T) {
 
 	trajectory = formatTrajectoryFromResult(map[string]any{})
 	assert.Equal(t, "", trajectory)
-}
-
-// TestContextEvolvingReActAgent_Invoke_无Query 验证无 query 时走父类。
-func TestContextEvolvingReActAgent_Invoke_无Query(t *testing.T) {
-	// 此测试验证无 query 时 Invoke 的路由行为
-	// 完整的 Invoke 测试需要构造完整的 ReActAgent（需要较多依赖）
-	// 这里验证核心路由逻辑
-	agent := &ContextEvolvingReActAgent{
-		userID: "test-user",
-	}
-	assert.NotNil(t, agent)
-	// 无 ReActAgent 嵌入时 Invoke 会 panic，这里只验证类型存在
 }
 
 // TestContextEvolvingReActAgent_MemoryCache 验证记忆缓存逻辑。
@@ -139,26 +126,31 @@ func TestMemoryAgentConfigInput(t *testing.T) {
 	assert.Equal(t, "gpt-5.2", cfg.ModelName)
 }
 
-// TestContextEvolvingReActAgent_Execute_无ReActAgent 验证 Execute 在缺少 ReActAgent 时的行为。
-// 由于嵌入 *ReActAgent 为 nil 时 invokeWithMemory 会 panic，
-// 此测试仅验证类型正确。
-func TestContextEvolvingReActAgent_Execute_无ReActAgent(t *testing.T) {
-	agent := &ContextEvolvingReActAgent{
-		userID:                  "test-user",
-		injectMemoriesInContext: true,
-	}
-	// 不能调用 Execute（会 panic 因为 ReActAgent 为 nil）
-	// 只验证字段设置
-	assert.True(t, agent.injectMemoriesInContext)
-}
-
 // TestContextEvolvingReActAgent_GetMemoryService 验证 GetMemoryService。
 func TestContextEvolvingReActAgent_GetMemoryService(t *testing.T) {
 	agent := &ContextEvolvingReActAgent{}
 	assert.Nil(t, agent.GetMemoryService())
 
-	// 模拟设置
 	svc := &service.TaskMemoryService{}
 	agent.memoryService = svc
 	assert.Equal(t, svc, agent.GetMemoryService())
+}
+
+// TestContextEvolvingReActAgent_AutoConfigure_无APIKey 验证 API_KEY 缺失时返回错误。
+func TestContextEvolvingReActAgent_AutoConfigure_无APIKey(t *testing.T) {
+	ceconfig.Delete("API_KEY")
+	agent := &ContextEvolvingReActAgent{}
+	err := agent.AutoConfigure(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "API_KEY not configured")
+}
+
+// TestContextEvolvingReActAgent_AutoConfigure_有APIKey 验证有 API_KEY 时成功配置。
+func TestContextEvolvingReActAgent_AutoConfigure_有APIKey(t *testing.T) {
+	ceconfig.Set("API_KEY", "test-key-auto")
+	defer ceconfig.Delete("API_KEY")
+
+	agent := &ContextEvolvingReActAgent{}
+	err := agent.AutoConfigure(context.Background())
+	require.NoError(t, err)
 }

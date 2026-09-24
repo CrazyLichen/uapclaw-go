@@ -6,7 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -285,4 +290,138 @@ func TestRunTrials_AgentFlow失败(t *testing.T) {
 	if results[2].Feedback != "success" {
 		t.Errorf("第 3 次试验应为成功，得到 Feedback=%q", results[2].Feedback)
 	}
+}
+
+// TestIsReMeFamily 验证 ReMe 系列判断。
+func TestIsReMeFamily(t *testing.T) {
+	tests := []struct {
+		algo     string
+		expected bool
+	}{
+		{"ReMe", true},
+		{"RefCon", true},
+		{"DivCon", true},
+		{"ACE", false},
+		{"ReasoningBank", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.algo, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isReMeFamily(tc.algo))
+		})
+	}
+}
+
+// TestGetUseGoldLabel 验证从 ceconfig 读取 USE_GOLDLABEL。
+func TestGetUseGoldLabel(t *testing.T) {
+	// 默认值
+	ceconfig.Delete("USE_GOLDLABEL")
+	assert.False(t, getUseGoldLabel())
+
+	// 设置为 true
+	ceconfig.Set("USE_GOLDLABEL", "true")
+	assert.True(t, getUseGoldLabel())
+
+	// 清理
+	ceconfig.Delete("USE_GOLDLABEL")
+}
+
+// TestGetUseGroundTruth 验证从 ceconfig 读取 USE_GROUNDTRUTH。
+func TestGetUseGroundTruth(t *testing.T) {
+	// 默认值
+	ceconfig.Delete("USE_GROUNDTRUTH")
+	assert.False(t, getUseGroundTruth())
+
+	// 设置为 true
+	ceconfig.Set("USE_GROUNDTRUTH", "true")
+	assert.True(t, getUseGroundTruth())
+
+	// 清理
+	ceconfig.Delete("USE_GROUNDTRUTH")
+}
+
+// TestSummarizeTrajectories_ACE 验证 ACE 算法 SummarizeTrajectories。
+func TestSummarizeTrajectories_ACE(t *testing.T) {
+	svc := &TaskMemoryService{
+		summaryAlgorithm: "ACE",
+		summaryFlow: &mockFlowOp{
+			setupFn: func(rc *cecontext.RuntimeContext) {
+				rc.Set("memories", []*schema.VectorNode{
+					schema.NewVectorNode("id1", "content", []float64{0.1}, nil),
+				})
+			},
+		},
+	}
+
+	ceconfig.Delete("USE_GROUNDTRUTH")
+	result, err := SummarizeTrajectories(context.Background(), svc, "user1", SummarizeTrajectoriesInput{
+		Trajectory: []string{"traj1"},
+		Feedback:   []string{"success"},
+		Score:      []int{1},
+		MattsMode:  "parallel",
+		Query:      "test query",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "ACE", result.Algorithm)
+}
+
+// TestSummarizeTrajectories_Sequential截断 验证 sequential 模式只保留最后一条轨迹。
+func TestSummarizeTrajectories_Sequential截断(t *testing.T) {
+	svc := &TaskMemoryService{
+		summaryAlgorithm: "ReMe",
+		summaryFlow: &mockFlowOp{
+			setupFn: func(rc *cecontext.RuntimeContext) {
+				rc.Set("memories", []*schema.VectorNode{})
+			},
+		},
+	}
+
+	result, err := SummarizeTrajectories(context.Background(), svc, "user1", SummarizeTrajectoriesInput{
+		Trajectory: []string{"traj1", "traj2", "traj3"},
+		Feedback:   []string{"fail", "fail", "success"},
+		Score:      []int{0, 0, 1},
+		MattsMode:  "sequential",
+		Query:      "test query",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// TestSummarizeTrajectories_ReMe传Score 验证 ReMe 系列传入 score。
+func TestSummarizeTrajectories_ReMe传Score(t *testing.T) {
+	svc := &TaskMemoryService{
+		summaryAlgorithm: "ReMe",
+		summaryFlow: &mockFlowOp{
+			setupFn: func(rc *cecontext.RuntimeContext) {
+				rc.Set("memories", []*schema.VectorNode{})
+			},
+		},
+	}
+
+	result, err := SummarizeTrajectories(context.Background(), svc, "user1", SummarizeTrajectoriesInput{
+		Trajectory: []string{"traj1"},
+		Score:      []int{1},
+		MattsMode:  "parallel",
+		Query:      "test query",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// TestSummarizeTrajectories_执行失败 验证 flow 失败返回错误。
+func TestSummarizeTrajectories_执行失败(t *testing.T) {
+	svc := &TaskMemoryService{
+		summaryAlgorithm: "ACE",
+		summaryFlow: &mockFlowOp{
+			err: fmt.Errorf("summarize failed"),
+		},
+	}
+
+	_, err := SummarizeTrajectories(context.Background(), svc, "user1", SummarizeTrajectoriesInput{
+		Trajectory: []string{"traj1"},
+		MattsMode:  "parallel",
+		Query:      "test query",
+	})
+	require.Error(t, err)
 }

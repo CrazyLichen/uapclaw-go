@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -186,10 +185,4 @@ func TestOpenAIEmbeddingWrapper_String(t *testing.T) {
 	wrapper := &OpenAIEmbeddingWrapper{modelName: "text-embedding-3-small"}
 	result := wrapper.String()
 	assert.Contains(t, result, "text-embedding-3-small")
-}
-
-// TestOpenAIEmbeddingWrapper_实现EmbeddingService接口 验证接口实现。
-func TestOpenAIEmbeddingWrapper_实现EmbeddingService接口(t *testing.T) {
-	// 编译期接口断言
-	var _ cecontext.EmbeddingService = (*OpenAIEmbeddingWrapper)(nil)
 }

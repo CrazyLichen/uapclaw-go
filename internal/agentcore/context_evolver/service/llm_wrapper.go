@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -55,6 +56,9 @@ type OpenAILLMWrapper struct {
 // 不走 Model 门面（无回调装饰，与 Python 行为一致）。
 func NewOpenAILLMWrapper(modelName string, apiKey string, baseURL string, temperature float64, maxTokens int) (*OpenAILLMWrapper, error) {
 	// 对齐 Python：api_key = api_key or config.get("API_KEY")
+	if apiKey == "" {
+		apiKey = ceconfig.GetString("API_KEY", "")
+	}
 	if apiKey == "" {
 		return nil, exception.NewBaseError(
 			exception.StatusToolchainEvolvingMemoryConfigInvalid,

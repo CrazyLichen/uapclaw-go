@@ -9,7 +9,9 @@
 //
 //	context_evolver/
 //	├── doc.go                                # 包文档
+//	├── context_evolving_react_agent.go       # ContextEvolvingReActAgent + MemoryAgentConfigInput
 //	├── core/                                 # 核心框架子包
+//	│   ├── config/                           # 配置管理（懒加载全局单例 + ceconfig）
 //	│   ├── context/                          # RuntimeContext + ServiceContext + LLMService + EmbeddingService
 //	│   ├── op/                               # BaseOp + OpBase + SequentialOp + ParallelOp
 //	│   ├── schema/                           # VectorNode
@@ -20,7 +22,7 @@
 //	│   ├── doc.go                            # 包文档
 //	│   ├── trajectory.go                     # FeedbackType + Trajectory + TrajectoryBatch
 //	│   ├── memory.go                         # BaseMemory + MemoryInterface + ACE/RB/ReMe Memory
-//	│   └── io_schema.go                      # ACE/RB/ReMe Request/Response + 泛型 Response
+//	│   └── io_schema.go                      # MemoryItem 接口 + ACE/RB/ReMe Request/Response + 泛型 Response
 //	├── retrieve/                             # 检索管线
 //	│   ├── task/reme/                        # ReMe 检索
 //	│   │   ├── doc.go                        # 包文档
@@ -29,7 +31,8 @@
 //	│   │   └── utils.go                      # ParseJSONListResponse + ParseJSONField
 //	│   ├── task/rb/                          # ReasoningBank 检索
 //	│   │   ├── doc.go                        # 包文档
-//	│   │   └── run.go                        # RBRecallMemoryOp
+//	│   │   ├── run.go                        # RBRecallMemoryOp
+//	│   │   └── matts.go                      # MaTTS 辅助函数
 //	│   └── task/ace/                         # ACE 检索
 //	│       ├── doc.go                        # 包文档
 //	│       └── run.go                        # ACERecallMemoryOp
@@ -52,11 +55,10 @@
 //	│       └── utils.go                      # SafeJSONLoads 安全 JSON 解析
 //	└── service/                              # 服务层函数
 //	    ├── doc.go                            # 包文档
-//	    ├── llm_wrapper.go                    # OpenAILLMWrapper — BaseModelClient → LLMService 适配
-//	    ├── embedding_wrapper.go              # OpenAIEmbeddingWrapper — BaseEmbedding → EmbeddingService 适配
-//	    ├── task_memory_service.go            # TaskMemoryService 核心编排器 + AddMemoryRequest + TaskMemoryServiceConfig
+//	    ├── llm_wrapper.go                    # OpenAILLMWrapper — BaseModelClient 适配
+//	    ├── embedding_wrapper.go              # OpenAIEmbeddingWrapper — BaseEmbedding 适配
+//	    ├── task_memory_service.go            # TaskMemoryService + 结果 struct + ceconfig 运行时参数
 //	    └── trajectory_generator.go           # 轨迹生成和 MaTTS 试验函数
-//	└── context_evolving_react_agent.go       # ContextEvolvingReActAgent + MemoryAgentConfigInput
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/
 package contextevolver

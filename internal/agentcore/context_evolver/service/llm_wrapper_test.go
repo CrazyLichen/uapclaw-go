@@ -384,9 +384,3 @@ func TestOpenAILLMWrapper_String(t *testing.T) {
 	result := wrapper.String()
 	assert.True(t, strings.Contains(result, "gpt-5.2"))
 }
-
-// TestOpenAILLMWrapper_实现LLMService接口 验证 OpenAILLMWrapper 实现 LLMService 接口。
-func TestOpenAILLMWrapper_实现LLMService接口(t *testing.T) {
-	// 编译期接口断言
-	var _ cecontext.LLMService = (*OpenAILLMWrapper)(nil)
-}

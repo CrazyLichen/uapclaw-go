@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	retrievalembedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
-	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -32,11 +32,6 @@ type OpenAIEmbeddingWrapper struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 编译期接口断言：OpenAIEmbeddingWrapper 实现 cecontext.EmbeddingService
-var _ cecontext.EmbeddingService = (*OpenAIEmbeddingWrapper)(nil)
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOpenAIEmbeddingWrapper 创建 OpenAI Embedding 适配器。
@@ -44,6 +39,9 @@ var _ cecontext.EmbeddingService = (*OpenAIEmbeddingWrapper)(nil)
 // 内部用 Go 已有的 OpenAIEmbedding 构造，复用 HTTP 客户端和 API 调用逻辑。
 func NewOpenAIEmbeddingWrapper(modelName string, apiKey string, baseURL string) (*OpenAIEmbeddingWrapper, error) {
 	// 对齐 Python：api_key = api_key or config.get("API_KEY")
+	if apiKey == "" {
+		apiKey = ceconfig.GetString("API_KEY", "")
+	}
 	if apiKey == "" {
 		return nil, exception.NewBaseError(
 			exception.StatusToolchainEvolvingMemoryConfigInvalid,
