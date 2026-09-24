@@ -127,12 +127,16 @@ func TestRecallMemoryOp_正常检索(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
 	if len(retrieved) == 0 {
 		t.Fatal("应检索到记忆")
+	}
+	// 验证类型为 ReMeRetrievedMemory
+	if _, ok := retrieved[0].(ceschema.ReMeRetrievedMemory); !ok {
+		t.Error("第一条记忆应为 ReMeRetrievedMemory 类型")
 	}
 }
 
@@ -178,10 +182,10 @@ func TestRerankMemoryOp_正常重排序(t *testing.T) {
 	op := NewRerankMemoryOp(sc, true, 2)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
-		{WhenToUse: "when B", Content: "content B"},
-		{WhenToUse: "when C", Content: "content C"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when B", Content: "content B"},
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when C", Content: "content C"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -189,7 +193,7 @@ func TestRerankMemoryOp_正常重排序(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
@@ -197,13 +201,19 @@ func TestRerankMemoryOp_正常重排序(t *testing.T) {
 	if len(retrieved) != 2 {
 		t.Fatalf("期望 2 个结果，实际 %d", len(retrieved))
 	}
+	// 验证并检查排序
+	first, ok1 := retrieved[0].(ceschema.ReMeRetrievedMemory)
+	second, ok2 := retrieved[1].(ceschema.ReMeRetrievedMemory)
+	if !ok1 || !ok2 {
+		t.Fatal("记忆应为 ReMeRetrievedMemory 类型")
+	}
 	// 第一个应为原索引 1（when B）
-	if retrieved[0].WhenToUse != "when B" {
-		t.Fatalf("第一个应为 'when B'，实际 '%s'", retrieved[0].WhenToUse)
+	if first.WhenToUse != "when B" {
+		t.Fatalf("第一个应为 'when B'，实际 '%s'", first.WhenToUse)
 	}
 	// 第二个应为原索引 0（when A）
-	if retrieved[1].WhenToUse != "when A" {
-		t.Fatalf("第二个应为 'when A'，实际 '%s'", retrieved[1].WhenToUse)
+	if second.WhenToUse != "when A" {
+		t.Fatalf("第二个应为 'when A'，实际 '%s'", second.WhenToUse)
 	}
 }
 
@@ -213,8 +223,8 @@ func TestRerankMemoryOp_跳过重排序(t *testing.T) {
 	op := NewRerankMemoryOp(sc, false, 5)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -223,11 +233,15 @@ func TestRerankMemoryOp_跳过重排序(t *testing.T) {
 	}
 
 	// 应保持原顺序
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
-	if len(retrieved) != 1 || retrieved[0].WhenToUse != "when A" {
+	if len(retrieved) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(retrieved))
+	}
+	first, ok := retrieved[0].(ceschema.ReMeRetrievedMemory)
+	if !ok || first.WhenToUse != "when A" {
 		t.Fatal("跳过重排序时应保持原数据")
 	}
 }
@@ -252,8 +266,8 @@ func TestRerankMemoryOp_LLM未注册(t *testing.T) {
 	op := NewRerankMemoryOp(sc, true, 5)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -272,8 +286,8 @@ func TestRerankMemoryOp_LLM调用失败(t *testing.T) {
 	op := NewRerankMemoryOp(sc, true, 5)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -289,9 +303,9 @@ func TestRerankMemoryOp_解析失败用原顺序(t *testing.T) {
 	op := NewRerankMemoryOp(sc, true, 5)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
-		{WhenToUse: "when B", Content: "content B"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when B", Content: "content B"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -300,14 +314,19 @@ func TestRerankMemoryOp_解析失败用原顺序(t *testing.T) {
 	}
 
 	// 解析失败时应保留原顺序
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
 	if len(retrieved) != 2 {
 		t.Fatalf("期望 2 个结果，实际 %d", len(retrieved))
 	}
-	if retrieved[0].WhenToUse != "when A" || retrieved[1].WhenToUse != "when B" {
+	first, ok1 := retrieved[0].(ceschema.ReMeRetrievedMemory)
+	second, ok2 := retrieved[1].(ceschema.ReMeRetrievedMemory)
+	if !ok1 || !ok2 {
+		t.Fatal("记忆应为 ReMeRetrievedMemory 类型")
+	}
+	if first.WhenToUse != "when A" || second.WhenToUse != "when B" {
 		t.Fatal("解析失败时应保留原顺序")
 	}
 }
@@ -321,9 +340,9 @@ func TestRewriteMemoryOp_正常改写(t *testing.T) {
 	op := NewRewriteMemoryOp(sc, true)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
-		{WhenToUse: "when B", Content: "content B"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when B", Content: "content B"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -346,8 +365,8 @@ func TestRewriteMemoryOp_跳过改写(t *testing.T) {
 	op := NewRewriteMemoryOp(sc, false)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -398,8 +417,8 @@ func TestRewriteMemoryOp_解析失败用原文(t *testing.T) {
 	op := NewRewriteMemoryOp(sc, true)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -424,8 +443,8 @@ func TestRewriteMemoryOp_LLM未注册(t *testing.T) {
 	op := NewRewriteMemoryOp(sc, true)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)
@@ -444,8 +463,8 @@ func TestRewriteMemoryOp_LLM调用失败(t *testing.T) {
 	op := NewRewriteMemoryOp(sc, true)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("query", "test query")
-	rc.Set("retrieved_memories", []ceschema.ReMeRetrievedMemory{
-		{WhenToUse: "when A", Content: "content A"},
+	rc.Set("retrieved_memories", []ceschema.MemoryItem{
+		ceschema.ReMeRetrievedMemory{WhenToUse: "when A", Content: "content A"},
 	})
 
 	err := op.Execute(context.Background(), rc)

@@ -128,22 +128,27 @@ func TestRBRecallMemoryOp_正常检索(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReasoningBankRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
 	if len(retrieved) == 0 {
 		t.Fatal("应检索到记忆")
 	}
+	// 验证类型为 ReasoningBankRetrievedMemory
+	first, ok := retrieved[0].(ceschema.ReasoningBankRetrievedMemory)
+	if !ok {
+		t.Fatal("第一条记忆应为 ReasoningBankRetrievedMemory 类型")
+	}
 	// 验证第一条记录内容
-	if retrieved[0].Title != "Strategy A" {
-		t.Fatalf("期望 Title='Strategy A'，实际 '%s'", retrieved[0].Title)
+	if first.Title != "Strategy A" {
+		t.Fatalf("期望 Title='Strategy A'，实际 '%s'", first.Title)
 	}
-	if retrieved[0].Description != "A good strategy" {
-		t.Fatalf("期望 Description='A good strategy'，实际 '%s'", retrieved[0].Description)
+	if first.Description != "A good strategy" {
+		t.Fatalf("期望 Description='A good strategy'，实际 '%s'", first.Description)
 	}
-	if retrieved[0].Content != "Do X then Y" {
-		t.Fatalf("期望 Content='Do X then Y'，实际 '%s'", retrieved[0].Content)
+	if first.Content != "Do X then Y" {
+		t.Fatalf("期望 Content='Do X then Y'，实际 '%s'", first.Content)
 	}
 }
 
@@ -193,7 +198,7 @@ func TestRBRecallMemoryOp_默认UserID(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReasoningBankRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
@@ -201,8 +206,8 @@ func TestRBRecallMemoryOp_默认UserID(t *testing.T) {
 		t.Fatal("默认 user_id='default' 时应检索到记忆")
 	}
 	// 应检索到 workspace_id="default" 的记忆，而非 "other_user" 的
-	for _, mem := range retrieved {
-		if mem.Title == "Strategy C" {
+	for _, item := range retrieved {
+		if m, ok := item.(ceschema.ReasoningBankRetrievedMemory); ok && m.Title == "Strategy C" {
 			t.Fatal("不应检索到 other_user 的记忆")
 		}
 	}
@@ -258,7 +263,7 @@ func TestRBRecallMemoryOp_向量节点转换失败(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReasoningBankRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
@@ -266,8 +271,12 @@ func TestRBRecallMemoryOp_向量节点转换失败(t *testing.T) {
 	if len(retrieved) != 1 {
 		t.Fatalf("期望 1 条结果，实际 %d", len(retrieved))
 	}
-	if retrieved[0].Title != "Good Strategy" {
-		t.Fatalf("期望 Title='Good Strategy'，实际 '%s'", retrieved[0].Title)
+	first, ok := retrieved[0].(ceschema.ReasoningBankRetrievedMemory)
+	if !ok {
+		t.Fatal("第一条记忆应为 ReasoningBankRetrievedMemory 类型")
+	}
+	if first.Title != "Good Strategy" {
+		t.Fatalf("期望 Title='Good Strategy'，实际 '%s'", first.Title)
 	}
 }
 
@@ -332,18 +341,23 @@ func TestRBRecallMemoryOp_多记忆条目(t *testing.T) {
 		t.Fatalf("执行失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReasoningBankRetrievedMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
 	if len(retrieved) != 2 {
 		t.Fatalf("期望 2 条结果，实际 %d", len(retrieved))
 	}
-	if retrieved[0].Title != "Item 1" {
-		t.Fatalf("期望 Title='Item 1'，实际 '%s'", retrieved[0].Title)
+	first, ok1 := retrieved[0].(ceschema.ReasoningBankRetrievedMemory)
+	second, ok2 := retrieved[1].(ceschema.ReasoningBankRetrievedMemory)
+	if !ok1 || !ok2 {
+		t.Fatal("记忆应为 ReasoningBankRetrievedMemory 类型")
 	}
-	if retrieved[1].Title != "Item 2" {
-		t.Fatalf("期望 Title='Item 2'，实际 '%s'", retrieved[1].Title)
+	if first.Title != "Item 1" {
+		t.Fatalf("期望 Title='Item 1'，实际 '%s'", first.Title)
+	}
+	if second.Title != "Item 2" {
+		t.Fatalf("期望 Title='Item 2'，实际 '%s'", second.Title)
 	}
 }
 

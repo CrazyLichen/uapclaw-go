@@ -155,7 +155,7 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	}
 
 	// 读取已检索的记忆，复制到每条轨迹的上下文
-	retrievedMemories := rc.Get("retrieved_memories")
+	retrievedMemories, _ := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 
 	// 保存原始温度并设置新温度
 	originalTemp := rc.Get("llm_temperature")

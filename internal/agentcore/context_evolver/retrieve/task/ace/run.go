@@ -75,8 +75,9 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		return fmt.Errorf("ACE memory search failed: %w", err)
 	}
 
-	// 对齐 Python: 遍历 VectorNode → NewACEMemoryFromVectorNode → 转为 ACEMemory
-	memories := make([]ceschema.ACEMemory, 0, len(nodes))
+	// 对齐 Python: 遍历 VectorNode → NewACEMemoryFromVectorNode → 转为 MemoryItem
+	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
+	items := make([]ceschema.MemoryItem, 0, len(nodes))
 	for _, node := range nodes {
 		aceMemory := ceschema.NewACEMemoryFromVectorNode(node)
 		if aceMemory == nil {
@@ -85,15 +86,15 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 				Msg("Failed to convert ACE memory from node")
 			continue
 		}
-		memories = append(memories, *aceMemory)
+		items = append(items, *aceMemory)
 	}
 
 	// 写入 RuntimeContext
-	rc.Set("retrieved_memories", memories)
+	rc.Set("retrieved_memories", items)
 
 	logger.Info(logComponent).
 		Str("user_id", userID).
-		Int("retrieved_count", len(memories)).
+		Int("retrieved_count", len(items)).
 		Msg("Retrieved ACE memories (playbook bullets)")
 
 	return nil

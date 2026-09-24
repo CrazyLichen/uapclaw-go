@@ -48,12 +48,16 @@ func TestACERecallMemoryOp_正常检索(t *testing.T) {
 		t.Fatalf("Execute 失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ACEMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
 	if len(retrieved) == 0 {
 		t.Error("应检索到至少 1 条 ACE 记忆")
+	}
+	// 验证类型为 ACEMemory
+	if _, ok := retrieved[0].(ceschema.ACEMemory); !ok {
+		t.Error("第一条记忆应为 ACEMemory 类型")
 	}
 }
 
@@ -82,7 +86,7 @@ func TestACERecallMemoryOp_默认用户ID(t *testing.T) {
 		t.Fatalf("Execute 失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ACEMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
@@ -116,7 +120,7 @@ func TestACERecallMemoryOp_空结果(t *testing.T) {
 		t.Fatalf("Execute 失败: %v", err)
 	}
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ACEMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	if !ok {
 		t.Fatal("retrieved_memories 未设置")
 	}
@@ -159,9 +163,13 @@ func TestACERecallMemoryOp_无效节点跳过(t *testing.T) {
 	err := op.Execute(context.Background(), rc)
 	require.NoError(t, err)
 
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ACEMemory](rc, "retrieved_memories")
+	retrieved, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 	require.True(t, ok)
 	assert.Len(t, retrieved, 1)
+	// 验证类型为 ACEMemory
+	if _, ok := retrieved[0].(ceschema.ACEMemory); !ok {
+		t.Error("第一条记忆应为 ACEMemory 类型")
+	}
 }
 
 // fakeErrorVectorStore 模拟 Search 返回错误的 VectorStore

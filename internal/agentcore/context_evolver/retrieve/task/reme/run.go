@@ -130,23 +130,24 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		return fmt.Errorf("vector search failed: %w", err)
 	}
 
-	// 转换为 []ReMeRetrievedMemory
-	retrieved := make([]ceschema.ReMeRetrievedMemory, 0, len(nodes))
+	// 转换为 []ceschema.MemoryItem
+	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
+	items := make([]ceschema.MemoryItem, 0, len(nodes))
 	for _, node := range nodes {
 		whenToUse, _ := node.Metadata["when_to_use"].(string)
 		content, _ := node.Metadata["content"].(string)
-		retrieved = append(retrieved, ceschema.ReMeRetrievedMemory{
+		items = append(items, ceschema.ReMeRetrievedMemory{
 			WhenToUse: whenToUse,
 			Content:   content,
 		})
 	}
 
 	// 写入 RuntimeContext
-	rc.Set("retrieved_memories", retrieved)
+	rc.Set("retrieved_memories", items)
 
 	logger.Info(logComponent).
 		Str("query", query).
-		Int("retrieved_count", len(retrieved)).
+		Int("retrieved_count", len(items)).
 		Msg("向量检索完成")
 
 	return nil
@@ -162,9 +163,15 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 
 	// 从 RuntimeContext 获取 query 和 retrieved_memories
 	query, _ := cecontext.GetTyped[string](rc, "query")
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
-	if !ok || len(retrieved) == 0 {
+	memItems, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
+	if !ok || len(memItems) == 0 {
 		// 无记忆，跳过
+		return nil
+	}
+
+	// 从 MemoryItem 切片中提取 ReMeRetrievedMemory
+	retrieved := extractReMeRetrievedMemories(memItems)
+	if len(retrieved) == 0 {
 		return nil
 	}
 
@@ -228,8 +235,12 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		reranked = reranked[:o.topKRerank]
 	}
 
-	// 写回 RuntimeContext
-	rc.Set("retrieved_memories", reranked)
+	// 写回 RuntimeContext（转为 []MemoryItem 统一类型）
+	rerankedItems := make([]ceschema.MemoryItem, len(reranked))
+	for i, m := range reranked {
+		rerankedItems[i] = m
+	}
+	rc.Set("retrieved_memories", rerankedItems)
 
 	logger.Info(logComponent).
 		Int("original_count", len(retrieved)).
@@ -244,13 +255,16 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
 	// 从 RuntimeContext 获取 query 和 retrieved_memories
 	query, _ := cecontext.GetTyped[string](rc, "query")
-	retrieved, ok := cecontext.GetTyped[[]ceschema.ReMeRetrievedMemory](rc, "retrieved_memories")
+	memItems, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 
 	// 无记忆时设置空字符串
-	if !ok || len(retrieved) == 0 {
+	if !ok || len(memItems) == 0 {
 		rc.Set("memory_string", "")
 		return nil
 	}
+
+	// 从 MemoryItem 切片中提取 ReMeRetrievedMemory
+	retrieved := extractReMeRetrievedMemories(memItems)
 
 	// llmRewrite=false 时用格式化原文
 	if !o.llmRewrite {
@@ -305,6 +319,18 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extractReMeRetrievedMemories 从 []MemoryItem 中提取 ReMeRetrievedMemory。
+// RerankOp/RewriteOp 仅处理 ReMe 类型，通过 type switch 过滤。
+func extractReMeRetrievedMemories(items []ceschema.MemoryItem) []ceschema.ReMeRetrievedMemory {
+	result := make([]ceschema.ReMeRetrievedMemory, 0, len(items))
+	for _, item := range items {
+		if m, ok := item.(ceschema.ReMeRetrievedMemory); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
 
 // formatCandidatesForRerank 格式化候选项供重排序提示词使用。
 // 对齐 Python RerankMemoryOp._format_candidates_for_rerank：

@@ -92,9 +92,10 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 		Str("query", query).
 		Msg("向量搜索完成")
 
-	// 转换为 []ReasoningBankRetrievedMemory
+	// 转换为 []ceschema.MemoryItem
 	// 对齐 Python: 遍历 VectorNode → NewReasoningBankMemoryFromVectorNode → 取 Memory 字段 → 逐条构建 ReasoningBankRetrievedMemory
-	retrieved := make([]ceschema.ReasoningBankRetrievedMemory, 0)
+	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
+	items := make([]ceschema.MemoryItem, 0)
 	for _, node := range nodes {
 		rbMemory := ceschema.NewReasoningBankMemoryFromVectorNode(node)
 		if rbMemory == nil || len(rbMemory.Memory) == 0 {
@@ -104,16 +105,16 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 			continue
 		}
 		for _, item := range rbMemory.Memory {
-			retrieved = append(retrieved, ceschema.ReasoningBankRetrievedMemory(item))
+			items = append(items, ceschema.ReasoningBankRetrievedMemory(item))
 		}
 	}
 
 	// 写入 RuntimeContext
-	rc.Set("retrieved_memories", retrieved)
+	rc.Set("retrieved_memories", items)
 
 	logger.Info(logComponent).
 		Str("query", query).
-		Int("retrieved_count", len(retrieved)).
+		Int("retrieved_count", len(items)).
 		Msg("ReasoningBank 记忆检索完成")
 
 	return nil
