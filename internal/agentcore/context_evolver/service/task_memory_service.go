@@ -11,6 +11,7 @@ import (
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/vector_store"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	acesummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/ace"
 	rbsummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/rb"
 	remesummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/reme"
@@ -22,6 +23,56 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// RetrieveResult 检索结果。对齐 Python RetrieveResponse(BaseModel)。
+type RetrieveResult struct {
+	// MemoryString 格式化后的记忆文本
+	MemoryString string
+	// RetrievedMemory 检索到的记忆项列表
+	RetrievedMemory []ceschema.MemoryItem
+	// Query 查询
+	Query string
+	// UserID 用户标识
+	UserID string
+	// Algorithm 算法名称
+	Algorithm string
+}
+
+// SummarizeResult 摘要结果。对齐 Python SummarizeResponse(BaseModel)。
+type SummarizeResult struct {
+	// Memories 更新后的记忆节点列表
+	Memories []*schema.VectorNode
+	// UserID 用户标识
+	UserID string
+	// Query 查询
+	Query string
+	// Algorithm 算法名称
+	Algorithm string
+}
+
+// AddMemoryResult 添加记忆结果。
+type AddMemoryResult struct {
+	// Status 操作状态
+	Status string
+	// MemoryID 记忆标识
+	MemoryID string
+	// UserID 用户标识
+	UserID string
+	// Algorithm 算法名称
+	Algorithm string
+}
+
+// MaTTSResult MaTTS 试验结果。
+type MaTTSResult struct {
+	// Trials 试验结果列表
+	Trials []TrialOutput
+	// Query 查询
+	Query string
+	// UserID 用户标识
+	UserID string
+	// MattsMode MaTTS 模式
+	MattsMode string
+}
 
 // AddMemoryRequest 手动添加记忆请求。对齐 Python AddMemoryRequest。
 type AddMemoryRequest struct {
@@ -217,7 +268,7 @@ func NewTaskMemoryServiceWithServices(
 }
 
 // Retrieve 检索记忆。对齐 Python TaskMemoryService.retrieve(user_id, query, **kwargs)。
-func (s *TaskMemoryService) Retrieve(ctx context.Context, userID string, query string) (map[string]any, error) {
+func (s *TaskMemoryService) Retrieve(ctx context.Context, userID string, query string) (*RetrieveResult, error) {
 	// 对齐 Python：logger.info("Retrieving task memory for user=%s, query='%s...'", ...)
 	logger.Info(logComponent).
 		Str("user_id", userID).
@@ -238,14 +289,14 @@ func (s *TaskMemoryService) Retrieve(ctx context.Context, userID string, query s
 	}
 
 	// 对齐 Python：按算法格式化结果
-	retrievedMemories := rc.Get("retrieved_memories")
+	// 使用 GetTyped[[]ceschema.MemoryItem] 提取，遍历调 FormatMemoryString 构建 MemoryString
 	var memoryString string
+	retrievedMemories, _ := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
 
 	switch s.retrievalAlgorithm {
-	case "ReasoningBank":
-		memoryString = formatRBMemoryString(retrievedMemories)
-	case "ACE":
-		memoryString = formatACEMemoryString(retrievedMemories)
+	case "ReasoningBank", "ACE":
+		// RB/ACE：遍历 MemoryItem 切片，调 FormatMemoryString 拼接
+		memoryString = formatMemoryItems(retrievedMemories)
 	default:
 		// ReMe/RefCon/DivCon：直接从 RuntimeContext 取 memory_string
 		if ms, ok := rc.Get("memory_string").(string); ok {
@@ -253,23 +304,17 @@ func (s *TaskMemoryService) Retrieve(ctx context.Context, userID string, query s
 		}
 	}
 
-	// 构建返回结果
-	var memoriesList []any
-	if ml, ok := retrievedMemories.([]any); ok {
-		memoriesList = ml
-	}
-
-	result := map[string]any{
-		"memory_string":    memoryString,
-		"retrieved_memory": memoriesList,
-		"query":            query,
-		"user_id":          userID,
-		"algorithm":        s.retrievalAlgorithm,
+	result := &RetrieveResult{
+		MemoryString:    memoryString,
+		RetrievedMemory: retrievedMemories,
+		Query:           query,
+		UserID:          userID,
+		Algorithm:       s.retrievalAlgorithm,
 	}
 
 	// 对齐 Python：logger.info("Retrieved memories:\n%s\nUsing %s memories", ...)
 	logger.Info(logComponent).
-		Int("memories_count", len(memoriesList)).
+		Int("memories_count", len(retrievedMemories)).
 		Str("algorithm", s.retrievalAlgorithm).
 		Msg("Retrieved memories")
 
@@ -277,7 +322,7 @@ func (s *TaskMemoryService) Retrieve(ctx context.Context, userID string, query s
 }
 
 // Summarize 总结记忆。对齐 Python TaskMemoryService.summarize(user_id, matts, query, trajectories, **kwargs)。
-func (s *TaskMemoryService) Summarize(ctx context.Context, userID string, matts string, query string, trajectories []string, extraKwargs ...map[string]any) (map[string]any, error) {
+func (s *TaskMemoryService) Summarize(ctx context.Context, userID string, matts string, query string, trajectories []string, extraKwargs ...map[string]any) (*SummarizeResult, error) {
 	// 对齐 Python：logger.info("Summarizing %s trajectories for user=%s", ...)
 	logger.Info(logComponent).
 		Int("trajectory_count", len(trajectories)).
@@ -307,20 +352,20 @@ func (s *TaskMemoryService) Summarize(ctx context.Context, userID string, matts 
 	}
 
 	// 对齐 Python：获取结果
-	memories := rc.Get("memories")
+	memories, _ := cecontext.GetTyped[[]*schema.VectorNode](rc, "memories")
 
-	result := map[string]any{
-		"memories":  memories,
-		"user_id":   userID,
-		"query":     query,
-		"algorithm": s.summaryAlgorithm,
+	result := &SummarizeResult{
+		Memories:  memories,
+		UserID:    userID,
+		Query:     query,
+		Algorithm: s.summaryAlgorithm,
 	}
 
 	return result, nil
 }
 
 // AddMemory 手动添加记忆。对齐 Python TaskMemoryService.add_memory(user_id, request)。
-func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req AddMemoryRequest) (map[string]any, error) {
+func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req AddMemoryRequest) (*AddMemoryResult, error) {
 	// 对齐 Python：logger.info("Adding manual %s memory for user=%s", ...)
 	logger.Info(logComponent).
 		Str("algorithm", s.summaryAlgorithm).
@@ -383,11 +428,11 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 		Str("memory_id", memoryID).
 		Msg("Added memory")
 
-	return map[string]any{
-		"status":    "success",
-		"memory_id": memoryID,
-		"user_id":   userID,
-		"algorithm": s.summaryAlgorithm,
+	return &AddMemoryResult{
+		Status:    "success",
+		MemoryID:  memoryID,
+		UserID:    userID,
+		Algorithm: s.summaryAlgorithm,
 	}, nil
 }
 
@@ -782,20 +827,15 @@ func algoToPersistName(algo string) string {
 	}
 }
 
-// formatRBMemoryString 格式化 ReasoningBank 检索结果为文本。
-func formatRBMemoryString(memories any) string {
-	// ReasoningBank: title/description/content 格式
-	if memories == nil {
+// formatMemoryItems 遍历 MemoryItem 切片，调 FormatMemoryString 拼接为文本。
+// 对齐 Python 各算法的 memory_string 格式化逻辑。
+func formatMemoryItems(items []ceschema.MemoryItem) string {
+	if len(items) == 0 {
 		return ""
 	}
-	// 简单格式化：尝试转为字符串
-	return fmt.Sprintf("%v", memories)
-}
-
-// formatACEMemoryString 格式化 ACE 检索结果为文本。
-func formatACEMemoryString(memories any) string {
-	if memories == nil {
-		return ""
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, item.FormatMemoryString())
 	}
-	return fmt.Sprintf("%v", memories)
+	return strings.Join(parts, "\n")
 }

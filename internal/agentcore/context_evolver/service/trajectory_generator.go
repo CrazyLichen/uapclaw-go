@@ -114,7 +114,7 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 
 // SummarizeTrajectories 将轨迹总结为记忆。对齐 Python summarize_trajectories()。
 // P6 阶段实现：委托 TaskMemoryService.Summarize()，含序列截断和算法特定 kwargs 过滤。
-func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService, userID string, params SummarizeTrajectoriesInput) (map[string]any, error) {
+func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService, userID string, params SummarizeTrajectoriesInput) (*SummarizeResult, error) {
 	// 对齐 Python：matts_mode == "sequential" 时只保留最后一条轨迹
 	trajectories := params.Trajectory
 	if params.MattsMode == "sequential" && len(trajectories) > 1 {

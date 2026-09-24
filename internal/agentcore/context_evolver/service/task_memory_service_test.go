@@ -205,9 +205,9 @@ func TestTaskMemoryService_AddMemory_ACE(t *testing.T) {
 		Section: "general",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "success", result["status"])
-	assert.Equal(t, "user1", result["user_id"])
-	assert.Equal(t, "ACE", result["algorithm"])
+	assert.Equal(t, "success", result.Status)
+	assert.Equal(t, "user1", result.UserID)
+	assert.Equal(t, "ACE", result.Algorithm)
 	assert.Equal(t, 1, vs.upserts)
 }
 
@@ -228,8 +228,8 @@ func TestTaskMemoryService_AddMemory_ReMe(t *testing.T) {
 		WhenToUse: &whenToUse,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "success", result["status"])
-	assert.Equal(t, "ReMe", result["algorithm"])
+	assert.Equal(t, "success", result.Status)
+	assert.Equal(t, "ReMe", result.Algorithm)
 }
 
 // TestTaskMemoryService_AddMemory_ReasoningBank 验证 RB 算法的添加记忆。
@@ -251,8 +251,8 @@ func TestTaskMemoryService_AddMemory_ReasoningBank(t *testing.T) {
 		Description: &desc,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "success", result["status"])
-	assert.Equal(t, "ReasoningBank", result["algorithm"])
+	assert.Equal(t, "success", result.Status)
+	assert.Equal(t, "ReasoningBank", result.Algorithm)
 }
 
 // TestTaskMemoryService_Reconfigure 验证重新配置算法。

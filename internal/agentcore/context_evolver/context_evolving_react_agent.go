@@ -57,7 +57,7 @@ type ContextEvolvingReActAgent struct {
 	// lastRetrievedQuery 缓存上次检索的 query
 	lastRetrievedQuery string
 	// lastRetrievalResult 缓存上次检索结果
-	lastRetrievalResult map[string]any
+	lastRetrievalResult *service.RetrieveResult
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -133,11 +133,11 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 			return nil, err
 		}
 
-		// 转换 TrialOutput 列表为 map 格式返回
+		// 转换为 MaTTSResult 返回
 		return map[string]any{
-			"trials":   results,
-			"query":    query,
-			"user_id":  a.userID,
+			"trials":     results,
+			"query":      query,
+			"user_id":    a.userID,
 			"matts_mode": mattsMode,
 		}, nil
 	}
@@ -195,10 +195,8 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 		if a.lastRetrievedQuery == retrievalQuery && a.lastRetrievalResult != nil {
 			// 对齐 Python：logger.info("Reusing cached memory retrieval result")
 			logger.Info(logger.ComponentAgentCore).Msg("Reusing cached memory retrieval result")
-			memoryString, _ = a.lastRetrievalResult["memory_string"].(string)
-			if ml, ok := a.lastRetrievalResult["retrieved_memory"].([]any); ok {
-				memoriesUsed = len(ml)
-			}
+			memoryString = a.lastRetrievalResult.MemoryString
+			memoriesUsed = len(a.lastRetrievalResult.RetrievedMemory)
 		} else {
 			result, err := a.memoryService.Retrieve(ctx, a.userID, retrievalQuery)
 			if err != nil {
@@ -207,10 +205,8 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 			} else {
 				a.lastRetrievedQuery = retrievalQuery
 				a.lastRetrievalResult = result
-				memoryString, _ = result["memory_string"].(string)
-				if ml, ok := result["retrieved_memory"].([]any); ok {
-					memoriesUsed = len(ml)
-				}
+				memoryString = result.MemoryString
+				memoriesUsed = len(result.RetrievedMemory)
 				// 对齐 Python：logger.info("Retrieved %s memories for query", ...)
 				logger.Info(logger.ComponentAgentCore).
 					Int("memories_used", memoriesUsed).

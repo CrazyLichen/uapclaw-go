@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 )
@@ -14,7 +15,7 @@ import (
 
 // mockMemoryServiceForAgent 用于测试的 TaskMemoryService mock。
 type mockMemoryServiceForAgent struct {
-	retrieveFn func(ctx context.Context, userID string, query string) (map[string]any, error)
+	retrieveFn func(ctx context.Context, userID string, query string) (*service.RetrieveResult, error)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -22,13 +23,13 @@ type mockMemoryServiceForAgent struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Retrieve 实现 Retrieve 方法。
-func (m *mockMemoryServiceForAgent) Retrieve(ctx context.Context, userID string, query string) (map[string]any, error) {
+func (m *mockMemoryServiceForAgent) Retrieve(ctx context.Context, userID string, query string) (*service.RetrieveResult, error) {
 	if m.retrieveFn != nil {
 		return m.retrieveFn(ctx, userID, query)
 	}
-	return map[string]any{
-		"memory_string":    "test memory content",
-		"retrieved_memory": []any{"mem1"},
+	return &service.RetrieveResult{
+		MemoryString:    "test memory content",
+		RetrievedMemory: []ceschema.MemoryItem{ceschema.ReMeRetrievedMemory{WhenToUse: "test", Content: "mem1"}},
 	}, nil
 }
 
@@ -101,15 +102,19 @@ func TestContextEvolvingReActAgent_Invoke_无Query(t *testing.T) {
 // TestContextEvolvingReActAgent_MemoryCache 验证记忆缓存逻辑。
 func TestContextEvolvingReActAgent_MemoryCache(t *testing.T) {
 	agent := &ContextEvolvingReActAgent{
-		userID: "test-user",
+		userID:             "test-user",
 		lastRetrievedQuery: "test-query",
-		lastRetrievalResult: map[string]any{
-			"memory_string":    "cached memory",
-			"retrieved_memory": []any{"mem1", "mem2"},
+		lastRetrievalResult: &service.RetrieveResult{
+			MemoryString: "cached memory",
+			RetrievedMemory: []ceschema.MemoryItem{
+				ceschema.ReMeRetrievedMemory{WhenToUse: "w1", Content: "mem1"},
+				ceschema.ReMeRetrievedMemory{WhenToUse: "w2", Content: "mem2"},
+			},
 		},
 	}
 	assert.Equal(t, "test-query", agent.lastRetrievedQuery)
 	assert.NotNil(t, agent.lastRetrievalResult)
+	assert.Equal(t, 2, len(agent.lastRetrievalResult.RetrievedMemory))
 }
 
 // TestMemoryAgentConfigInput 验证配置输入结构体。
