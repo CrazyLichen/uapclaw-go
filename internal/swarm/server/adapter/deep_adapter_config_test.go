@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 
@@ -11,6 +12,32 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// readRuntimeStateYAMLWithRetry 读取 runtime_state.yaml 并解析为 map。
+// 多个包的测试并行运行时可能并发写入同一个文件，导致短暂的内容不一致。
+// 遇到解析错误时重试最多 3 次，间隔 100ms。
+func readRuntimeStateYAMLWithRetry(t *testing.T, yamlPath string) map[string]any {
+	t.Helper()
+	var lastErr error
+	var data []byte
+	for i := 0; i < 3; i++ {
+		var err error
+		data, err = os.ReadFile(yamlPath)
+		if err != nil {
+			t.Fatalf("读取 runtime_state.yaml 失败: %v", err)
+		}
+		var raw map[string]any
+		if err = yaml.Unmarshal(data, &raw); err == nil {
+			return raw
+		}
+		lastErr = err
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("解析 runtime_state.yaml 失败（重试3次后）: %v\n文件内容:\n%s", lastErr, string(data))
+	return nil
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -25,15 +52,7 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("读取 runtime_state.yaml 失败: %v", err)
-	}
-
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// 验证关键字段
 	if v, _ := raw["model"].(string); v != "qwen-max" {
@@ -85,15 +104,7 @@ func TestUpdateRuntimeConfig_全部字段(t *testing.T) {
 	// 验证 runtime_state.yaml 被写入
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("runtime_state.yaml 应被写入，但读取失败: %v", err)
-	}
-
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// Channel 应来自 ChannelID（优先级高于 sessionID 前缀解析）
 	if v, _ := raw["channel"].(string); v != "feishu" {
@@ -126,15 +137,7 @@ func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 	// 验证 channel 来自 sessionID 前缀
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
-	}
-
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	if v, _ := raw["channel"].(string); v != "acp" {
 		t.Errorf("channel = %q, want %q（从 sessionID 前缀解析）", v, "acp")
@@ -165,14 +168,7 @@ func TestUpdateRuntimeConfig_RuntimePromptRailSetter(t *testing.T) {
 	// 注：字段未导出，无法直接断言，通过 runtime_state.yaml 间接验证
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 	if v, _ := raw["language"].(string); v != "en" {
 		t.Errorf("language = %q, want %q", v, "en")
 	}

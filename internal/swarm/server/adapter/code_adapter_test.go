@@ -2,14 +2,12 @@ package adapter
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -249,14 +247,7 @@ func TestCodeAdapter_UpdateRuntimeConfig_ForceEnglish(t *testing.T) {
 	// 验证 runtime_state.yaml 被写入
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	// Channel 应来自 sessionID 前缀
 	if v, _ := raw["channel"].(string); v != "acp" {
@@ -290,14 +281,7 @@ func TestCodeAdapter_UpdateRuntimeConfig_OutputLanguage(t *testing.T) {
 	// 验证 YAML 中 language 来自 resolveOutputLanguage（"cn"）而非 resolveRuntimeLanguage（"en"）
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		t.Fatalf("runtime_state.yaml 应被写入: %v", err)
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("解析 runtime_state.yaml 失败: %v", err)
-	}
+	raw := readRuntimeStateYAMLWithRetry(t, yamlPath)
 
 	if v, _ := raw["language"].(string); v != "cn" {
 		t.Errorf("language = %q, want %q（来自 resolveOutputLanguage）", v, "cn")
