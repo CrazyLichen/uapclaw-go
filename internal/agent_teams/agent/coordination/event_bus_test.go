@@ -8,6 +8,7 @@ import (
 
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 )
 
 // ──────────────────────────── CoordinationEvent 测试 ────────────────────────────
@@ -15,13 +16,13 @@ import (
 func TestInnerEventType_值(t *testing.T) {
 	tests := []struct {
 		name  string
-		value InnerEventType
+		value types.InnerEventType
 		want  string
 	}{
-		{"user_input", InnerEventTypeUserInput, "user_input"},
-		{"poll_mailbox", InnerEventTypePollMailbox, "coordination_poll_mailbox"},
-		{"poll_task", InnerEventTypePollTask, "coordination_poll_task"},
-		{"shutdown", InnerEventTypeShutdown, "shutdown"},
+		{"user_input", types.InnerEventTypeUserInput, "user_input"},
+		{"poll_mailbox", types.InnerEventTypePollMailbox, "coordination_poll_mailbox"},
+		{"poll_task", types.InnerEventTypePollTask, "coordination_poll_task"},
+		{"shutdown", types.InnerEventTypeShutdown, "shutdown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,7 +34,7 @@ func TestInnerEventType_值(t *testing.T) {
 }
 
 func TestCoordinationEvent_IsInner(t *testing.T) {
-	innerEvent := CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput}}
+	innerEvent := types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput}}
 	if !innerEvent.IsInner() {
 		t.Error("IsInner() 应为 true（Inner 非 nil）")
 	}
@@ -43,7 +44,7 @@ func TestCoordinationEvent_IsInner(t *testing.T) {
 }
 
 func TestCoordinationEvent_IsTransport(t *testing.T) {
-	transportEvent := CoordinationEvent{Transport: &events.EventMessage{EventType: "message"}}
+	transportEvent := types.CoordinationEvent{Transport: &events.EventMessage{EventType: "message"}}
 	if !transportEvent.IsTransport() {
 		t.Error("IsTransport() 应为 true（Transport 非 nil）")
 	}
@@ -53,11 +54,11 @@ func TestCoordinationEvent_IsTransport(t *testing.T) {
 }
 
 func TestCoordinationEvent_EventType(t *testing.T) {
-	innerEvent := CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypePollTask}}
+	innerEvent := types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypePollTask}}
 	if got := innerEvent.EventType(); got != "coordination_poll_task" {
 		t.Errorf("EventType() = %q, want %q", got, "coordination_poll_task")
 	}
-	transportEvent := CoordinationEvent{Transport: &events.EventMessage{EventType: "member_shutdown"}}
+	transportEvent := types.CoordinationEvent{Transport: &events.EventMessage{EventType: "member_shutdown"}}
 	if got := transportEvent.EventType(); got != "member_shutdown" {
 		t.Errorf("EventType() = %q, want %q", got, "member_shutdown")
 	}
@@ -94,8 +95,8 @@ func TestEventBus_StartStop(t *testing.T) {
 		t.Error("新创建的 EventBus 不应运行中")
 	}
 	var mu sync.Mutex
-	var received []CoordinationEvent
-	callback := func(ctx context.Context, event CoordinationEvent) {
+	var received []types.CoordinationEvent
+	callback := func(ctx context.Context, event types.CoordinationEvent) {
 		mu.Lock()
 		received = append(received, event)
 		mu.Unlock()
@@ -105,7 +106,7 @@ func TestEventBus_StartStop(t *testing.T) {
 	if !bus.IsRunning() {
 		t.Error("Start 后应运行中")
 	}
-	bus.Enqueue(CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput}})
+	bus.Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput}})
 	time.Sleep(100 * time.Millisecond)
 	bus.Stop()
 	if bus.IsRunning() {
@@ -121,7 +122,7 @@ func TestEventBus_StartStop(t *testing.T) {
 
 func TestEventBus_Start幂等(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleLeader, 30.0, 30.0)
-	callback := func(ctx context.Context, event CoordinationEvent) {}
+	callback := func(ctx context.Context, event types.CoordinationEvent) {}
 	ctx := context.Background()
 	bus.Start(ctx, callback)
 	bus.Start(ctx, callback) // 二次调用应无副作用
@@ -143,8 +144,8 @@ func TestEventBus_轮询事件(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleTeammate, 0.05, 0.05)
 	var mu sync.Mutex
 	var pollCount int
-	callback := func(ctx context.Context, event CoordinationEvent) {
-		if event.IsInner() && (event.Inner.EventType == InnerEventTypePollMailbox || event.Inner.EventType == InnerEventTypePollTask) {
+	callback := func(ctx context.Context, event types.CoordinationEvent) {
+		if event.IsInner() && (event.Inner.EventType == types.InnerEventTypePollMailbox || event.Inner.EventType == types.InnerEventTypePollTask) {
 			mu.Lock()
 			pollCount++
 			mu.Unlock()
@@ -166,8 +167,8 @@ func TestEventBus_HumanAgent无轮询(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleHumanAgent, 0.05, 0.05)
 	var mu sync.Mutex
 	var pollCount int
-	callback := func(ctx context.Context, event CoordinationEvent) {
-		if event.IsInner() && (event.Inner.EventType == InnerEventTypePollMailbox || event.Inner.EventType == InnerEventTypePollTask) {
+	callback := func(ctx context.Context, event types.CoordinationEvent) {
+		if event.IsInner() && (event.Inner.EventType == types.InnerEventTypePollMailbox || event.Inner.EventType == types.InnerEventTypePollTask) {
 			mu.Lock()
 			pollCount++
 			mu.Unlock()
@@ -189,8 +190,8 @@ func TestEventBus_PausePolls和ResumePolls(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleTeammate, 0.05, 0.05)
 	var mu sync.Mutex
 	var pollCount int
-	callback := func(ctx context.Context, event CoordinationEvent) {
-		if event.IsInner() && (event.Inner.EventType == InnerEventTypePollMailbox || event.Inner.EventType == InnerEventTypePollTask) {
+	callback := func(ctx context.Context, event types.CoordinationEvent) {
+		if event.IsInner() && (event.Inner.EventType == types.InnerEventTypePollMailbox || event.Inner.EventType == types.InnerEventTypePollTask) {
 			mu.Lock()
 			pollCount++
 			mu.Unlock()
@@ -215,7 +216,6 @@ func TestEventBus_PausePolls和ResumePolls(t *testing.T) {
 	mu.Lock()
 	finalCount := pollCount
 	mu.Unlock()
-	// 暂停后轮询计数增长应放缓（cancel 到 goroutine 退出间可能有 0-1 个残留事件）
 	if countAfterPause > countBeforePause+1 {
 		t.Errorf("暂停期间不应有大量新轮询事件（before=%d, after=%d）", countBeforePause, countAfterPause)
 	}
@@ -228,8 +228,8 @@ func TestEventBus_串行消费(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleLeader, 30.0, 30.0)
 	var mu sync.Mutex
 	var order []string
-	callback := func(ctx context.Context, event CoordinationEvent) {
-		if event.IsInner() && event.Inner.EventType == InnerEventTypeUserInput {
+	callback := func(ctx context.Context, event types.CoordinationEvent) {
+		if event.IsInner() && event.Inner.EventType == types.InnerEventTypeUserInput {
 			mu.Lock()
 			order = append(order, event.Inner.Payload["seq"].(string))
 			mu.Unlock()
@@ -237,9 +237,9 @@ func TestEventBus_串行消费(t *testing.T) {
 	}
 	ctx := context.Background()
 	bus.Start(ctx, callback)
-	bus.Enqueue(CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput, Payload: map[string]any{"seq": "first"}}})
-	bus.Enqueue(CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput, Payload: map[string]any{"seq": "second"}}})
-	bus.Enqueue(CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput, Payload: map[string]any{"seq": "third"}}})
+	bus.Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput, Payload: map[string]any{"seq": "first"}}})
+	bus.Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput, Payload: map[string]any{"seq": "second"}}})
+	bus.Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput, Payload: map[string]any{"seq": "third"}}})
 	time.Sleep(100 * time.Millisecond)
 	bus.Stop()
 	mu.Lock()
@@ -258,8 +258,7 @@ func TestEventBus_无回调时不panic(t *testing.T) {
 	bus := NewEventBus(schema.TeamRoleLeader, 30.0, 30.0)
 	ctx := context.Background()
 	bus.Start(ctx, nil) // 无 callback
-	bus.Enqueue(CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeUserInput}})
+	bus.Enqueue(types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeUserInput}})
 	time.Sleep(50 * time.Millisecond)
 	bus.Stop()
-	// 不 panic 即为通过
 }

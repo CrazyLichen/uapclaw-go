@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -39,10 +39,10 @@ var logComponent = logger.ComponentChannel
 // NewAgentLifecycleHandler 创建 AgentLifecycleHandler 实例。
 // Python: AgentLifecycleHandler.__init__
 func NewAgentLifecycleHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 ) *AgentLifecycleHandler {
 	return &AgentLifecycleHandler{
 		BaseCoordinationHandler: NewBaseCoordinationHandler(host, bp, inf, pollCtrl),
@@ -51,9 +51,9 @@ func NewAgentLifecycleHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: AgentLifecycleHandler.get_callbacks
-func (h *AgentLifecycleHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
-		string(coordination.InnerEventTypeUserInput): h.OnUserInput,
+func (h *AgentLifecycleHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
+		string(types.InnerEventTypeUserInput): h.OnUserInput,
 		events.TeamEventStandby:              h.OnStandby,
 		events.TeamEventCleaned:             h.OnCleaned,
 		events.TeamEventToolApprovalResult:  h.OnToolApprovalResult,
@@ -63,7 +63,7 @@ func (h *AgentLifecycleHandler) GetCallbacks() map[string]coordination.EventCall
 
 // OnUserInput 转发协调引导的用户输入到 agent。
 // Python: AgentLifecycleHandler.on_user_input
-func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.CoordinationEvent) {
 	if !event.IsInner() {
 		return
 	}
@@ -83,7 +83,7 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event coordinat
 
 // OnStandby 收到 TEAM_STANDBY 事件时暂停周期轮询。
 // Python: AgentLifecycleHandler.on_standby
-func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ coordination.CoordinationEvent) {
+func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.CoordinationEvent) {
 	h.poll.PausePolls()
 	logger.Info(logComponent).Msg("on_standby: 已暂停周期轮询")
 }
@@ -91,7 +91,7 @@ func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ coordination.Coor
 // OnCleaned 收到 TEAM_CLEANED 事件，非 leader 成员关闭自身。
 // Leader 不关闭（需要存活等待下次交互）。
 // Python: AgentLifecycleHandler.on_cleaned
-func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.CoordinationEvent) {
 	if h.blueprint.Role() == schema.TeamRoleLeader {
 		logger.Debug(logComponent).Msg("on_cleaned: leader 忽略 team_cleaned")
 		return
@@ -106,7 +106,7 @@ func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event coordinatio
 // OnToolApprovalResult 收到工具审批结果后恢复 HITL 中断。
 // 仅当事件的目标成员名匹配自身时才处理。
 // Python: AgentLifecycleHandler.on_tool_approval_result
-func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -137,7 +137,7 @@ func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event 
 // OnTaskPlanResponse 收到 Leader 对成员计划的审批决策后恢复 HITL 中断。
 // 仅当事件目标为自己且含 tool_call_id 时处理。
 // Python: AgentLifecycleHandler.on_task_plan_response
-func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}

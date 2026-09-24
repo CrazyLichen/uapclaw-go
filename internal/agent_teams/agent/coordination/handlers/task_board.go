@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -40,10 +40,10 @@ type TaskBoardHandler struct {
 // NewTaskBoardHandler 创建 TaskBoardHandler 实例。
 // Python: TaskBoardHandler.__init__
 func NewTaskBoardHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 ) *TaskBoardHandler {
 	return &TaskBoardHandler{
 		BaseCoordinationHandler: NewBaseCoordinationHandler(host, bp, inf, pollCtrl),
@@ -52,8 +52,8 @@ func NewTaskBoardHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: TaskBoardHandler.get_callbacks
-func (h *TaskBoardHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
+func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
 		events.TeamEventTaskClaimed:      h.OnTaskClaimed,
 		events.TeamEventTaskCreated:      h.OnTaskBoardEvent,
 		events.TeamEventTaskPlanRequest:  h.OnTaskBoardEvent,
@@ -68,7 +68,7 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]coordination.EventCallbackF
 // OnTaskClaimed 收到任务认领事件。如果认领目标是自己，投递任务分配内容。
 // 如果认领目标是其他人（或 human-agent），走 onTaskBoardEvent 通用逻辑。
 // Python: TaskBoardHandler.on_task_claimed
-func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -99,7 +99,7 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event coordination
 // 如果 tool_call_id 存在，跳过额外 deliver_input（中断恢复已处理）。
 // 否则投递 task_plan_approved_to_self 或 task_plan_rejected_to_self。
 // Python: TaskBoardHandler.on_task_plan_decision
-func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -123,7 +123,7 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event coordin
 
 // OnTaskBoardEvent 通用任务板事件处理：恢复轮询 + 提醒空闲 agent。
 // Python: TaskBoardHandler.on_task_board_event
-func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}

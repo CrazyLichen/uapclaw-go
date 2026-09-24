@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -36,10 +36,10 @@ type MessageHandler struct {
 // NewMessageHandler 创建 MessageHandler 实例。
 // Python: MessageHandler.__init__
 func NewMessageHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 ) *MessageHandler {
 	return &MessageHandler{
 		BaseCoordinationHandler: NewBaseCoordinationHandler(host, bp, inf, pollCtrl),
@@ -48,11 +48,11 @@ func NewMessageHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: MessageHandler.get_callbacks
-func (h *MessageHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
+func (h *MessageHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
 		events.TeamEventMessage:                    h.OnMessageOrBroadcast,
 		events.TeamEventBroadcast:                  h.OnMessageOrBroadcast,
-		string(coordination.InnerEventTypePollMailbox): h.OnPollMailbox,
+		string(types.InnerEventTypePollMailbox): h.OnPollMailbox,
 		events.TeamEventMemberShutdown:             h.OnMemberShutdownDrain,
 	}
 }
@@ -61,7 +61,7 @@ func (h *MessageHandler) GetCallbacks() map[string]coordination.EventCallbackFun
 // Leader 做额外工作：自动确认 teammate→user 回复、通知 human-agent 入站回调。
 // 所有成员恢复轮询并排空未读邮箱。
 // Python: MessageHandler.on_message_or_broadcast
-func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -86,14 +86,14 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event coordin
 
 // OnPollMailbox 周期邮箱轮询：排空未读消息。
 // Python: MessageHandler.on_poll_mailbox
-func (h *MessageHandler) OnPollMailbox(ctx context.Context, _ coordination.CoordinationEvent) {
+func (h *MessageHandler) OnPollMailbox(ctx context.Context, _ types.CoordinationEvent) {
 	h.processUnreadMessages(ctx, h.blueprint.MemberName())
 }
 
 // OnMemberShutdownDrain 成员关闭时排空邮箱，确保在拆卸前所有消息到达 agent。
 // 仅 teammate 处理自身关闭事件；leader 和 human-agent 使用不同的拆卸路径。
 // Python: MessageHandler.on_member_shutdown_drain
-func (h *MessageHandler) OnMemberShutdownDrain(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *MessageHandler) OnMemberShutdownDrain(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -151,7 +151,7 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 // ackUserBoundMessage Leader 自动确认 teammate→user 的直接消息。
 // 对齐 Python: MessageHandler._ack_user_bound_message
 // TODO(#9.63): 等消息管理器接口就绪后补充
-func (h *MessageHandler) ackUserBoundMessage(_ coordination.CoordinationEvent) {
+func (h *MessageHandler) ackUserBoundMessage(_ types.CoordinationEvent) {
 	// Leader 标记 teammate→user 直接消息为已读
 	// Python: 对 user 伪成员没有轮询 agent，leader 代为确认
 }
@@ -159,7 +159,7 @@ func (h *MessageHandler) ackUserBoundMessage(_ coordination.CoordinationEvent) {
 // notifyHumanAgentInbound 转发团队侧消息到 SDK human-agent 入站回调。
 // 对齐 Python: MessageHandler._notify_human_agent_inbound
 // TODO(#9.63): 等交互层接口就绪后补充
-func (h *MessageHandler) notifyHumanAgentInbound(_ coordination.CoordinationEvent) {
+func (h *MessageHandler) notifyHumanAgentInbound(_ types.CoordinationEvent) {
 	// 对于广播：触发所有已注册回调（排除发送者）
 	// 对于直接消息：仅在接收方为 human-agent 时触发
 }

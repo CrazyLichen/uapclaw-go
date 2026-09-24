@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -55,10 +55,10 @@ var idleNudgeStatuses = map[string]bool{
 // staleClaimThrottle 与 StaleTaskHandler 共享引用。
 // Python: MemberHandler.__init__
 func NewMemberHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 	staleClaimThrottle map[string]float64,
 ) *MemberHandler {
 	if staleClaimThrottle == nil {
@@ -72,8 +72,8 @@ func NewMemberHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: MemberHandler.get_callbacks
-func (h *MemberHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
+func (h *MemberHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
 		events.TeamEventMemberSpawned:          h.OnMemberEvent,
 		events.TeamEventMemberRestarted:        h.OnMemberEvent,
 		events.TeamEventMemberStatusChanged:    h.OnMemberEvent,
@@ -83,10 +83,16 @@ func (h *MemberHandler) GetCallbacks() map[string]coordination.EventCallbackFunc
 	}
 }
 
+// StaleClaimThrottle 返回共享的过期认领节流映射引用。
+// 供测试验证 Member 和 StaleTask handler 共享同一映射。
+func (h *MemberHandler) StaleClaimThrottle() map[string]float64 {
+	return h.staleClaimThrottle
+}
+
 // OnMemberEvent 根据角色分发成员事件处理。
 // Leader 走 handleLeaderMemberEvent，teammate 走 handleTeammateMemberEvent。
 // Python: MemberHandler.on_member_event
-func (h *MemberHandler) OnMemberEvent(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *MemberHandler) OnMemberEvent(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -104,7 +110,7 @@ func (h *MemberHandler) OnMemberEvent(ctx context.Context, event coordination.Co
 // 仅处理目标为自己的事件：MEMBER_CANCELED 调 cancel_agent，
 // MEMBER_SHUTDOWN 对于 HUMAN_AGENT 走关闭流程。
 // Python: MemberHandler._handle_teammate_member_event
-func (h *MemberHandler) handleTeammateMemberEvent(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *MemberHandler) handleTeammateMemberEvent(ctx context.Context, event types.CoordinationEvent) {
 	em := event.Transport
 	targetMember, _ := em.Payload["member_name"].(string)
 	memberName := h.blueprint.MemberName()
@@ -132,7 +138,7 @@ func (h *MemberHandler) handleTeammateMemberEvent(ctx context.Context, event coo
 // shutdownHumanAgent 处理 human-agent 关闭逻辑。
 // 强制或无 in-flight round 时直接关闭，否则交给 round-end 检查。
 // Python: MemberHandler._shutdown_human_agent
-func (h *MemberHandler) shutdownHumanAgent(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *MemberHandler) shutdownHumanAgent(ctx context.Context, event types.CoordinationEvent) {
 	em := event.Transport
 	force, _ := em.Payload["force"].(bool)
 	if force || !h.round.HasInFlightRound() {
@@ -146,7 +152,7 @@ func (h *MemberHandler) shutdownHumanAgent(ctx context.Context, event coordinati
 
 // handleLeaderMemberEvent Leader 处理成员事件：记录日志 + 过期认领提醒。
 // Python: MemberHandler._handle_leader_member_event
-func (h *MemberHandler) handleLeaderMemberEvent(_ context.Context, event coordination.CoordinationEvent) {
+func (h *MemberHandler) handleLeaderMemberEvent(_ context.Context, event types.CoordinationEvent) {
 	em := event.Transport
 	// 对齐 Python: 记录每个成员生命周期转换
 	logger.Info(logComponent).

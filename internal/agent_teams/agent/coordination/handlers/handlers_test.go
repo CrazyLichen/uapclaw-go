@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 )
@@ -17,7 +17,7 @@ func TestAgentLifecycleHandler_GetCallbacks_事件映射(t *testing.T) {
 	cb := h.GetCallbacks()
 
 	expected := map[string]string{
-		string(coordination.InnerEventTypeUserInput): "OnUserInput",
+		string(types.InnerEventTypeUserInput): "OnUserInput",
 		events.TeamEventStandby:              "OnStandby",
 		events.TeamEventCleaned:             "OnCleaned",
 		events.TeamEventToolApprovalResult:  "OnToolApprovalResult",
@@ -39,7 +39,7 @@ func TestAgentLifecycleHandler_OnStandby_暂停轮询(t *testing.T) {
 	pollCtrl := &fakePollCtrl{}
 	h := NewAgentLifecycleHandler(&fakeHost{}, &fakeBP{role: schema.TeamRoleLeader}, nil, pollCtrl)
 
-	h.OnStandby(context.Background(), coordination.CoordinationEvent{
+	h.OnStandby(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{EventType: events.TeamEventStandby},
 	})
 
@@ -52,7 +52,7 @@ func TestAgentLifecycleHandler_OnCleaned_Leader不关闭(t *testing.T) {
 	host := &fakeHost{}
 	h := NewAgentLifecycleHandler(host, &fakeBP{role: schema.TeamRoleLeader}, nil, &fakePollCtrl{})
 
-	h.OnCleaned(context.Background(), coordination.CoordinationEvent{
+	h.OnCleaned(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{EventType: events.TeamEventCleaned},
 	})
 
@@ -66,7 +66,7 @@ func TestAgentLifecycleHandler_OnCleaned_Teammate关闭(t *testing.T) {
 	host := &fakeHost{}
 	h := NewAgentLifecycleHandler(host, &fakeBP{role: schema.TeamRoleTeammate}, nil, &fakePollCtrl{})
 
-	h.OnCleaned(context.Background(), coordination.CoordinationEvent{
+	h.OnCleaned(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{EventType: events.TeamEventCleaned},
 	})
 
@@ -105,7 +105,7 @@ func TestMemberHandler_OnMemberEvent_Teammate取消(t *testing.T) {
 	host := &fakeHost{}
 	h := NewMemberHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "worker1"}, nil, &fakePollCtrl{}, nil)
 
-	h.OnMemberEvent(context.Background(), coordination.CoordinationEvent{
+	h.OnMemberEvent(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventMemberCanceled,
 			Payload:   map[string]any{"member_name": "worker1"},
@@ -121,7 +121,7 @@ func TestMemberHandler_OnMemberEvent_非自身事件跳过(t *testing.T) {
 	host := &fakeHost{}
 	h := NewMemberHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "worker1"}, nil, &fakePollCtrl{}, nil)
 
-	h.OnMemberEvent(context.Background(), coordination.CoordinationEvent{
+	h.OnMemberEvent(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventMemberCanceled,
 			Payload:   map[string]any{"member_name": "worker2"},
@@ -142,7 +142,7 @@ func TestMessageHandler_GetCallbacks_事件映射(t *testing.T) {
 	expected := map[string]bool{
 		events.TeamEventMessage:                    true,
 		events.TeamEventBroadcast:                  true,
-		string(coordination.InnerEventTypePollMailbox): true,
+		string(types.InnerEventTypePollMailbox): true,
 		events.TeamEventMemberShutdown:             true,
 	}
 
@@ -162,7 +162,7 @@ func TestMessageHandler_OnMemberShutdownDrain_Leader跳过(t *testing.T) {
 	h := NewMessageHandler(&fakeHost{}, &fakeBP{role: schema.TeamRoleLeader, memberName: "leader"}, nil, pollCtrl)
 
 	// Leader 应跳过，不应调用任何消息处理
-	h.OnMemberShutdownDrain(context.Background(), coordination.CoordinationEvent{
+	h.OnMemberShutdownDrain(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventMemberShutdown,
 			Payload:   map[string]any{"member_name": "leader"},
@@ -203,7 +203,7 @@ func TestTaskBoardHandler_OnTaskPlanDecision_有ToolCallID跳过(t *testing.T) {
 	host := &fakeHost{}
 	h := NewTaskBoardHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "w1"}, nil, &fakePollCtrl{})
 
-	h.OnTaskPlanDecision(context.Background(), coordination.CoordinationEvent{
+	h.OnTaskPlanDecision(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventTaskPlanResponse,
 			Payload: map[string]any{
@@ -227,7 +227,7 @@ func TestStaleTaskHandler_GetCallbacks_事件映射(t *testing.T) {
 	if len(cb) != 1 {
 		t.Errorf("GetCallbacks 返回 %d 项，期望 1 项", len(cb))
 	}
-	if _, ok := cb[string(coordination.InnerEventTypePollTask)]; !ok {
+	if _, ok := cb[string(types.InnerEventTypePollTask)]; !ok {
 		t.Error("缺少 coordination_poll_task 事件键")
 	}
 }
@@ -254,7 +254,7 @@ func TestTeamCompletionHandler_GetCallbacks_事件映射(t *testing.T) {
 	cb := h.GetCallbacks()
 
 	expected := map[string]bool{
-		string(coordination.InnerEventTypePollTask): true,
+		string(types.InnerEventTypePollTask): true,
 		events.TeamEventTaskListDrained:            true,
 		events.TeamEventTeamCompleted:              true,
 	}
@@ -295,7 +295,7 @@ func TestTeamCompletionHandler_OnTaskListDrained_触发回调(t *testing.T) {
 		return nil
 	})
 
-	h.OnTaskListDrained(context.Background(), coordination.CoordinationEvent{
+	h.OnTaskListDrained(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventTaskListDrained,
 			Payload:   map[string]any{},
@@ -319,7 +319,7 @@ func TestTeamCompletionHandler_OnTaskListDrained_回调失败不阻断(t *testin
 		return nil
 	})
 
-	h.OnTaskListDrained(context.Background(), coordination.CoordinationEvent{
+	h.OnTaskListDrained(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventTaskListDrained,
 			Payload:   map[string]any{},
@@ -336,8 +336,8 @@ func TestTeamCompletionHandler_OnPollTask_已发出时跳过(t *testing.T) {
 	h.teamCompletedEmitted = true
 
 	// 应直接返回，不执行任何逻辑
-	h.OnPollTask(context.Background(), coordination.CoordinationEvent{
-		Inner: &coordination.InnerEventMessage{EventType: coordination.InnerEventTypePollTask},
+	h.OnPollTask(context.Background(), types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{EventType: types.InnerEventTypePollTask},
 	})
 	// 无 panic 即通过
 }
@@ -345,8 +345,8 @@ func TestTeamCompletionHandler_OnPollTask_已发出时跳过(t *testing.T) {
 func TestTeamCompletionHandler_OnPollTask_非Leader跳过(t *testing.T) {
 	h := NewTeamCompletionHandler(&fakeHost{}, &fakeBP{role: schema.TeamRoleTeammate}, nil, &fakePollCtrl{})
 
-	h.OnPollTask(context.Background(), coordination.CoordinationEvent{
-		Inner: &coordination.InnerEventMessage{EventType: coordination.InnerEventTypePollTask},
+	h.OnPollTask(context.Background(), types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{EventType: types.InnerEventTypePollTask},
 	})
 	// 无 panic 即通过
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
@@ -15,15 +15,15 @@ type testHandler struct {
 	BaseCoordinationHandler
 }
 
-func (h *testHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
+func (h *testHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
 		"test_event": h.OnTestEvent,
 	}
 }
 
-func (h *testHandler) OnTestEvent(_ context.Context, _ coordination.CoordinationEvent) {}
+func (h *testHandler) OnTestEvent(_ context.Context, _ types.CoordinationEvent) {}
 
-// fakeHost 实现 coordination.DispatcherHost 用于测试
+// fakeHost 实现 types.DispatcherHost 用于测试
 type fakeHost struct {
 	shutdownCalled bool
 	cancelCalled   bool
@@ -40,7 +40,7 @@ func (f *fakeHost) ResumeInterrupt(_ context.Context, _ any) error           { r
 func (f *fakeHost) ShutdownSelf(_ context.Context) error                     { f.shutdownCalled = true; return nil }
 func (f *fakeHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 
-// fakeBP 实现 coordination.DispatcherBlueprint 用于测试
+// fakeBP 实现 types.DispatcherBlueprint 用于测试
 type fakeBP struct {
 	role       schema.TeamRole
 	memberName string
@@ -49,7 +49,7 @@ type fakeBP struct {
 func (f *fakeBP) Role() schema.TeamRole   { return f.role }
 func (f *fakeBP) MemberName() string      { return f.memberName }
 
-// fakePollCtrl 实现 coordination.PollController 用于测试
+// fakePollCtrl 实现 types.PollController 用于测试
 type fakePollCtrl struct {
 	paused  bool
 	resumed bool

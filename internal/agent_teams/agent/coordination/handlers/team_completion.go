@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -45,10 +45,10 @@ type TeamCompletionHandler struct {
 // NewTeamCompletionHandler 创建 TeamCompletionHandler 实例。
 // Python: TeamCompletionHandler.__init__
 func NewTeamCompletionHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 ) *TeamCompletionHandler {
 	return &TeamCompletionHandler{
 		BaseCoordinationHandler: NewBaseCoordinationHandler(host, bp, inf, pollCtrl),
@@ -58,9 +58,9 @@ func NewTeamCompletionHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: TeamCompletionHandler.get_callbacks
-func (h *TeamCompletionHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
-		string(coordination.InnerEventTypePollTask): h.OnPollTask,
+func (h *TeamCompletionHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
+		string(types.InnerEventTypePollTask): h.OnPollTask,
 		events.TeamEventTaskListDrained:            h.OnTaskListDrained,
 		events.TeamEventTeamCompleted:              h.OnTeamCompleted,
 	}
@@ -86,7 +86,7 @@ func (h *TeamCompletionHandler) Rearm() {
 // 3. 无 in-flight round
 // 上升沿时发布 TEAM_COMPLETED 事件，持久团队还需 conclude_completed_round。
 // Python: TeamCompletionHandler.on_poll_task
-func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ coordination.CoordinationEvent) {
+func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.CoordinationEvent) {
 	if h.teamCompletedEmitted {
 		return
 	}
@@ -113,7 +113,7 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ coordination.C
 // OnTaskListDrained 记录任务列表清空事件并触发所有注册的完成回调。
 // 每个回调隔离执行，一个失败不跳过其余。
 // Python: TeamCompletionHandler.on_task_list_drained
-func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event coordination.CoordinationEvent) {
+func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}
@@ -138,7 +138,7 @@ func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event coo
 // OnTeamCompleted 消费 TEAM_COMPLETED 事件，记录结构化日志。
 // 仅在 teammate 上执行（发出方 leader 自身的副本由 kernel._filter_self 过滤）。
 // Python: TeamCompletionHandler.on_team_completed
-func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event coordination.CoordinationEvent) {
+func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.CoordinationEvent) {
 	if event.IsInner() {
 		return
 	}

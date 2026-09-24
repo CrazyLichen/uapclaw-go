@@ -5,30 +5,11 @@ import (
 	"time"
 
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// InnerEventMessage 协调层内部事件消息，与跨进程 EventMessage 隔离。
-// Python: InnerEventMessage
-type InnerEventMessage struct {
-	// EventType 事件类型
-	EventType InnerEventType
-	// Payload 事件载荷
-	Payload map[string]any
-}
-
-// CoordinationEvent 事件总线处理的统一事件包装。
-// Python: CoordinationEvent = Union[InnerEventMessage, EventMessage]
-// Go 用包装结构体实现：Inner 和 Transport 恰好一个非 nil。
-type CoordinationEvent struct {
-	// Inner 内部事件（非 nil 时 Transport 为 nil）
-	Inner *InnerEventMessage
-	// Transport 跨进程事件（非 nil 时 Inner 为 nil）
-	Transport *events.EventMessage
-}
 
 // EventBus 事件驱动的唤醒循环，用于团队协调。
 //
@@ -56,7 +37,7 @@ type EventBus struct {
 	// periodicPollEnabled 是否启用周期轮询（HUMAN_AGENT 角色为 false）
 	periodicPollEnabled bool
 	// eventCh 事件队列 channel
-	eventCh chan CoordinationEvent
+	eventCh chan types.CoordinationEvent
 	// cancelFunc 用于停止 runLoop goroutine
 	cancelFunc context.CancelFunc
 	// mailboxPollCancel 邮箱轮询定时器取消函数
@@ -67,26 +48,11 @@ type EventBus struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// InnerEventType 协调层内部事件类型枚举。
-// Python: InnerEventType
-type InnerEventType string
-
 // WakeCallback 事件唤醒回调，当事件到达时调用。
 // Python: WakeCallback = Callable[[CoordinationEvent], Awaitable[None]]
-type WakeCallback func(ctx context.Context, event CoordinationEvent)
+type WakeCallback func(ctx context.Context, event types.CoordinationEvent)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// InnerEventTypeUserInput 用户输入事件
-	InnerEventTypeUserInput InnerEventType = "user_input"
-	// InnerEventTypePollMailbox 邮箱轮询事件
-	InnerEventTypePollMailbox InnerEventType = "coordination_poll_mailbox"
-	// InnerEventTypePollTask 任务轮询事件
-	InnerEventTypePollTask InnerEventType = "coordination_poll_task"
-	// InnerEventTypeShutdown 关闭事件
-	InnerEventTypeShutdown InnerEventType = "shutdown"
-)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -94,24 +60,6 @@ const (
 var logComponent = logger.ComponentChannel
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// IsInner 返回是否为内部事件。
-func (e CoordinationEvent) IsInner() bool {
-	return e.Inner != nil
-}
-
-// IsTransport 返回是否为跨进程事件。
-func (e CoordinationEvent) IsTransport() bool {
-	return e.Transport != nil
-}
-
-// EventType 返回事件类型字符串（用于 dispatcher 粗筛和 CallbackFramework 注册）。
-func (e CoordinationEvent) EventType() string {
-	if e.Inner != nil {
-		return string(e.Inner.EventType)
-	}
-	return e.Transport.EventType
-}
 
 // NewEventBus 创建事件总线实例。
 // Python: EventBus.__init__
@@ -121,7 +69,7 @@ func NewEventBus(role schema.TeamRole, mailboxPollInterval, taskPollInterval flo
 		mailboxPollInterval: mailboxPollInterval,
 		taskPollInterval:    taskPollInterval,
 		periodicPollEnabled: role != schema.TeamRoleHumanAgent,
-		eventCh:             make(chan CoordinationEvent, 256),
+		eventCh:             make(chan types.CoordinationEvent, 256),
 	}
 }
 
@@ -175,7 +123,7 @@ func (b *EventBus) Stop() {
 
 	// 发送 shutdown 事件通知 runLoop 退出
 	select {
-	case b.eventCh <- CoordinationEvent{Inner: &InnerEventMessage{EventType: InnerEventTypeShutdown}}:
+	case b.eventCh <- types.CoordinationEvent{Inner: &types.InnerEventMessage{EventType: types.InnerEventTypeShutdown}}:
 	default:
 		// channel 满则跳过，context cancel 也会退出
 	}
@@ -218,7 +166,7 @@ func (b *EventBus) ResumePolls() {
 
 // Enqueue 将事件推入处理队列。
 // Python: EventBus.enqueue
-func (b *EventBus) Enqueue(event CoordinationEvent) {
+func (b *EventBus) Enqueue(event types.CoordinationEvent) {
 	b.eventCh <- event
 }
 
@@ -233,11 +181,11 @@ func (b *EventBus) startPollTasks(ctx context.Context) {
 	}
 	mailboxCtx, mailboxCancel := context.WithCancel(ctx)
 	b.mailboxPollCancel = mailboxCancel
-	go b.pollLoop(mailboxCtx, InnerEventTypePollMailbox, b.mailboxPollInterval)
+	go b.pollLoop(mailboxCtx, types.InnerEventTypePollMailbox, b.mailboxPollInterval)
 
 	taskCtx, taskCancel := context.WithCancel(ctx)
 	b.taskPollCancel = taskCancel
-	go b.pollLoop(taskCtx, InnerEventTypePollTask, b.taskPollInterval)
+	go b.pollLoop(taskCtx, types.InnerEventTypePollTask, b.taskPollInterval)
 }
 
 // runLoop 后台 goroutine：从 channel 读取事件，调用 wakeCallback。
@@ -249,7 +197,7 @@ func (b *EventBus) runLoop(ctx context.Context) {
 			return
 		case event := <-b.eventCh:
 			// 检查 shutdown
-			if event.Inner != nil && event.Inner.EventType == InnerEventTypeShutdown {
+			if event.Inner != nil && event.Inner.EventType == types.InnerEventTypeShutdown {
 				return
 			}
 			if b.wakeCallback != nil {
@@ -273,7 +221,7 @@ func (b *EventBus) runLoop(ctx context.Context) {
 
 // pollLoop 周期回退：每隔 interval 秒入队一个轮询事件。
 // Python: EventBus._poll_loop
-func (b *EventBus) pollLoop(ctx context.Context, eventType InnerEventType, interval float64) {
+func (b *EventBus) pollLoop(ctx context.Context, eventType types.InnerEventType, interval float64) {
 	ticker := time.NewTicker(time.Duration(interval * float64(time.Second)))
 	defer ticker.Stop()
 	for {
@@ -284,8 +232,8 @@ func (b *EventBus) pollLoop(ctx context.Context, eventType InnerEventType, inter
 			if !b.running {
 				return
 			}
-			b.Enqueue(CoordinationEvent{
-				Inner: &InnerEventMessage{EventType: eventType},
+			b.Enqueue(types.CoordinationEvent{
+				Inner: &types.InnerEventMessage{EventType: eventType},
 			})
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -47,10 +47,10 @@ const (
 // staleClaimThrottle 与 MemberHandler 共享引用。
 // Python: StaleTaskHandler.__init__
 func NewStaleTaskHandler(
-	host coordination.DispatcherHost,
-	bp coordination.DispatcherBlueprint,
-	inf coordination.DispatcherInfra,
-	pollCtrl coordination.PollController,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 	staleClaimThrottle map[string]float64,
 ) *StaleTaskHandler {
 	if staleClaimThrottle == nil {
@@ -65,15 +65,21 @@ func NewStaleTaskHandler(
 
 // GetCallbacks 返回 event_key → 回调方法注册表。
 // Python: StaleTaskHandler.get_callbacks
-func (h *StaleTaskHandler) GetCallbacks() map[string]coordination.EventCallbackFunc {
-	return map[string]coordination.EventCallbackFunc{
-		string(coordination.InnerEventTypePollTask): h.OnPollTask,
+func (h *StaleTaskHandler) GetCallbacks() map[string]types.EventCallbackFunc {
+	return map[string]types.EventCallbackFunc{
+		string(types.InnerEventTypePollTask): h.OnPollTask,
 	}
+}
+
+// StaleClaimThrottle 返回共享的过期认领节流映射引用。
+// 供测试验证 Member 和 StaleTask handler 共享同一映射。
+func (h *StaleTaskHandler) StaleClaimThrottle() map[string]float64 {
+	return h.staleClaimThrottle
 }
 
 // OnPollTask 周期任务板扫描：检查过期 CLAIMED 和 PENDING 任务。
 // Python: StaleTaskHandler.on_poll_task
-func (h *StaleTaskHandler) OnPollTask(ctx context.Context, _ coordination.CoordinationEvent) {
+func (h *StaleTaskHandler) OnPollTask(ctx context.Context, _ types.CoordinationEvent) {
 	h.checkStaleClaimedTasks(ctx)
 	h.checkStalePendingTasks(ctx)
 }

@@ -6,6 +6,8 @@ import (
 
 	callback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -19,38 +21,28 @@ import (
 // Python: EventDispatcher
 type EventDispatcher struct {
 	// round dispatch() 只需要 round-readiness 查询
-	round AgentRoundController
+	round types.AgentRoundController
 	// blueprint 静态身份
-	blueprint DispatcherBlueprint
+	blueprint types.DispatcherBlueprint
 	// infra per-process 容器
-	infra DispatcherInfra
+	infra types.DispatcherInfra
 	// framework 私有回调框架实例（与全局单例隔离）
 	framework *callback.CallbackFramework
 
-	// 六个场景 handler（公开暴露供测试直接访问）
-	// TODO(#9.63-Task6): handler 字段在 Task 6 接线后非 nil
-	Lifecycle      CallbacksProvider
-	Member         CallbacksProvider
-	Message        CallbacksProvider
-	TaskBoard      CallbacksProvider
-	StaleTask      CallbacksProvider
-	TeamCompletion CallbacksProvider
+	// 六个场景 handler（公开暴露供测试直接访问和 kernel 回调）
+	// Python: (self.lifecycle, self.member, self.message, self.task_board, self.stale_task, self.team_completion)
+	Lifecycle      *handlers.AgentLifecycleHandler
+	Member         *handlers.MemberHandler
+	Message        *handlers.MessageHandler
+	TaskBoard      *handlers.TaskBoardHandler
+	StaleTask      *handlers.StaleTaskHandler
+	TeamCompletion *handlers.TeamCompletionHandler
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // coordCallbackFunc coordination handler 的原生回调签名。
-type coordCallbackFunc func(ctx context.Context, event CoordinationEvent)
-
-// CallbacksProvider handler 回调注册接口。
-// 由 BaseCoordinationHandler 实现，供 EventDispatcher 遍历注册。
-type CallbacksProvider interface {
-	// GetCallbacks 返回 event_key → 回调方法，供 framework 注册。
-	GetCallbacks() map[string]EventCallbackFunc
-}
-
-// EventCallbackFunc 协调事件回调函数类型（同包兼容签名）。
-type EventCallbackFunc func(ctx context.Context, event CoordinationEvent)
+type coordCallbackFunc func(ctx context.Context, event types.CoordinationEvent)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -61,64 +53,6 @@ const coordEventMapKey = "__coordination_event"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// AgentRoundController Round 级控制面，与 TeamHarness 打交道。
-// Python: AgentRoundController(Protocol)
-type AgentRoundController interface {
-	// IsAgentReady 返回 agent 是否已完成初始化
-	IsAgentReady() bool
-	// IsAgentRunning 返回 agent 是否在活跃 round 中
-	IsAgentRunning() bool
-	// HasInFlightRound 返回是否有已调度但未完成的 round
-	HasInFlightRound() bool
-	// HasPendingInterrupt 返回是否有未解决的工具中断
-	HasPendingInterrupt() bool
-	// CancelAgent 取消运行中的 agent 任务
-	CancelAgent(ctx context.Context) error
-	// DeliverInput 确保内容到达 DeepAgent，不论当前状态
-	DeliverInput(ctx context.Context, content any, useSteer bool) error
-	// ResumeInterrupt 以结构化输入恢复 HITL 中断
-	ResumeInterrupt(ctx context.Context, userInput any) error
-}
-
-// TeamLifecycleController TeamAgent 级生命周期效果，跨多个 manager。
-// Python: TeamLifecycleController(Protocol)
-type TeamLifecycleController interface {
-	// ShutdownSelf 响应团队解散强制关闭自身
-	ShutdownSelf(ctx context.Context) error
-	// ConcludeCompletedRound 发出 team-completed 标记块，关闭 leader 流
-	ConcludeCompletedRound(ctx context.Context, memberCount, taskCount int) error
-}
-
-// PollController EventBus 自身的周期轮询控制面。
-// Python: PollController(Protocol)
-// Handler 直接操作此接口而非通过 host 中转——EventBus 已知道如何暂停/恢复自己的 poll 任务。
-type PollController interface {
-	// PausePolls 暂停事件总线的周期轮询
-	PausePolls()
-	// ResumePolls 恢复事件总线的周期轮询
-	ResumePolls()
-}
-
-// DispatcherHost 组合 host 契约，供 kernel 和 dispatcher 使用。
-// Python: DispatcherHost(AgentRoundController, TeamLifecycleController, Protocol)
-type DispatcherHost interface {
-	AgentRoundController
-	TeamLifecycleController
-}
-
-// DispatcherBlueprint Dispatcher 构造所需的 blueprint 接口。
-// 从 TeamAgentBlueprint 中提取 dispatcher 实际需要的窄接口。
-type DispatcherBlueprint interface {
-	// Role 返回团队角色
-	Role() schema.TeamRole
-	// MemberName 返回成员名
-	MemberName() string
-}
-
-// DispatcherInfra Dispatcher 构造所需的 infra 接口。
-// 从 TeamInfra 中提取 dispatcher 实际需要的窄接口。
-type DispatcherInfra interface{}
-
 // wrapCallback 将 coordination handler 回调包装为 CallbackFramework 的 CustomCallbackFunc。
 // 注册时使用：fw.OnCustom(eventKey, wrapCallback(handlerMethod))
 func wrapCallback(fn coordCallbackFunc) callback.CustomCallbackFunc {
@@ -127,7 +61,7 @@ func wrapCallback(fn coordCallbackFunc) callback.CustomCallbackFunc {
 		if !ok {
 			return nil
 		}
-		event, ok := raw.(CoordinationEvent)
+		event, ok := raw.(types.CoordinationEvent)
 		if !ok {
 			return nil
 		}
@@ -137,52 +71,54 @@ func wrapCallback(fn coordCallbackFunc) callback.CustomCallbackFunc {
 }
 
 // packEvent 将 CoordinationEvent 打包进 map[string]any，供 TriggerCustom 使用。
-func packEvent(event CoordinationEvent) map[string]any {
+func packEvent(event types.CoordinationEvent) map[string]any {
 	return map[string]any{coordEventMapKey: event}
 }
 
-// NewEventDispatcher 创建事件分发器。
+// NewEventDispatcher 创建事件分发器，内部创建 6 个 handler 并注册回调。
+// 对齐 Python EventDispatcher.__init__：在 __init__ 内部创建所有 handler。
+// handler 创建顺序和注册顺序一致：
+//
+//	(lifecycle, member, message, task_board, stale_task, team_completion)
+//
+// 共享 staleClaimThrottle 映射在 Member 和 StaleTask 之间传递。
 // Python: EventDispatcher.__init__
-// handlerProviders 按 (lifecycle, member, message, task_board, stale_task, team_completion) 顺序传入。
 func NewEventDispatcher(
-	host DispatcherHost,
-	bp DispatcherBlueprint,
-	inf DispatcherInfra,
-	pollCtrl PollController,
-	handlerProviders []CallbacksProvider,
+	host types.DispatcherHost,
+	bp types.DispatcherBlueprint,
+	inf types.DispatcherInfra,
+	pollCtrl types.PollController,
 ) *EventDispatcher {
 	fw := callback.NewCallbackFramework()
 
-	d := &EventDispatcher{
-		round:     host,
-		blueprint: bp,
-		infra:     inf,
-		framework: fw,
-	}
+	// 对齐 Python: 创建共享节流映射
+	staleClaimThrottle := make(map[string]float64)
 
-	// 按 Python 注册顺序存储 handler
-	if len(handlerProviders) >= 1 {
-		d.Lifecycle = handlerProviders[0]
-	}
-	if len(handlerProviders) >= 2 {
-		d.Member = handlerProviders[1]
-	}
-	if len(handlerProviders) >= 3 {
-		d.Message = handlerProviders[2]
-	}
-	if len(handlerProviders) >= 4 {
-		d.TaskBoard = handlerProviders[3]
-	}
-	if len(handlerProviders) >= 5 {
-		d.StaleTask = handlerProviders[4]
-	}
-	if len(handlerProviders) >= 6 {
-		d.TeamCompletion = handlerProviders[5]
+	// 对齐 Python 注册顺序创建 handler
+	lifecycle := handlers.NewAgentLifecycleHandler(host, bp, inf, pollCtrl)
+	member := handlers.NewMemberHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
+	message := handlers.NewMessageHandler(host, bp, inf, pollCtrl)
+	taskBoard := handlers.NewTaskBoardHandler(host, bp, inf, pollCtrl)
+	staleTask := handlers.NewStaleTaskHandler(host, bp, inf, pollCtrl, staleClaimThrottle)
+	teamCompletion := handlers.NewTeamCompletionHandler(host, bp, inf, pollCtrl)
+
+	d := &EventDispatcher{
+		round:          host,
+		blueprint:      bp,
+		infra:          inf,
+		framework:      fw,
+		Lifecycle:      lifecycle,
+		Member:         member,
+		Message:        message,
+		TaskBoard:      taskBoard,
+		StaleTask:      staleTask,
+		TeamCompletion: teamCompletion,
 	}
 
 	// 注册顺序决定 fan-out 顺序，与 Python 一致：
 	// (lifecycle, member, message, task_board, stale_task, team_completion)
-	for _, handler := range handlerProviders {
+	handlerList := []types.CallbacksProvider{lifecycle, member, message, taskBoard, staleTask, teamCompletion}
+	for _, handler := range handlerList {
 		for eventKey, cb := range handler.GetCallbacks() {
 			fw.OnCustom(eventKey, wrapCallback(coordCallbackFunc(cb)))
 		}
@@ -193,7 +129,7 @@ func NewEventDispatcher(
 
 // Dispatch 唤醒入口。应用粗筛规则，然后触发 framework。
 // Python: EventDispatcher.dispatch
-func (d *EventDispatcher) Dispatch(ctx context.Context, event CoordinationEvent) {
+func (d *EventDispatcher) Dispatch(ctx context.Context, event types.CoordinationEvent) {
 	// 粗筛 1：agent 未就绪，跳过
 	if !d.round.IsAgentReady() {
 		logger.Debug(logComponent).Msg("agent not ready, skipping coordination wake")
@@ -206,8 +142,8 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event CoordinationEvent)
 	if event.IsInner() {
 		// Human-agent 绝不自发轮询
 		if role == schema.TeamRoleHumanAgent &&
-			(event.Inner.EventType == InnerEventTypePollTask ||
-				event.Inner.EventType == InnerEventTypePollMailbox) {
+			(event.Inner.EventType == types.InnerEventTypePollTask ||
+				event.Inner.EventType == types.InnerEventTypePollMailbox) {
 			return
 		}
 		logger.Debug(logComponent).
@@ -228,13 +164,13 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event CoordinationEvent)
 	// Python: 对齐 dispatcher.py L262-272 的 7 种允许事件
 	if role == schema.TeamRoleHumanAgent {
 		allowed := map[string]bool{
-			"team_cleaned":        true,
-			"member_shutdown":     true,
-			"member_canceled":     true,
-			"team_standby":        true,
-			"message":             true,
-			"broadcast":           true,
-			"task_claimed":        true,
+			"team_cleaned":    true,
+			"member_shutdown": true,
+			"member_canceled": true,
+			"team_standby":    true,
+			"message":         true,
+			"broadcast":       true,
+			"task_claimed":    true,
 		}
 		if !allowed[event.Transport.EventType] {
 			return
