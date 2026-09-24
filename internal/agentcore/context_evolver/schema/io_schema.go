@@ -2,9 +2,17 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// MemoryItem 记忆项通用接口，统一不同算法的检索结果类型。
+// 各算法的 RetrievedMemory 类型实现此接口，使 Retrieve() 可统一处理。
+type MemoryItem interface {
+	// FormatMemoryString 将记忆格式化为可注入上下文的文本。
+	FormatMemoryString() string
+}
 
 // ──────────────── ACE 系列 ────────────────
 
@@ -280,4 +288,25 @@ func (r *ReMeRetrieveRequest) UnmarshalJSON(data []byte) error {
 	}
 	*r = ReMeRetrieveRequest(a)
 	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// FormatMemoryString 对齐 Python ACE 的记忆格式化。
+// 输出格式：[{id}] helpful={helpful} harmful={harmful} neutral={neutral}\nSection: {section}\nContent: {content}
+func (m ACERetrievedMemory) FormatMemoryString() string {
+	return fmt.Sprintf("[%s] helpful=%d harmful=%d neutral=%d\nSection: %s\nContent: %s",
+		m.ID, m.Helpful, m.Harmful, m.Neutral, m.Section, m.Content)
+}
+
+// FormatMemoryString 对齐 Python ReasoningBank 的记忆格式化。
+// 输出格式：Title: {title}\nDescription: {desc}\nContent: {content}
+func (m ReasoningBankRetrievedMemory) FormatMemoryString() string {
+	return fmt.Sprintf("Title: %s\nDescription: %s\nContent: %s", m.Title, m.Description, m.Content)
+}
+
+// FormatMemoryString 对齐 Python ReMe 的记忆格式化。
+// 输出格式：When to use: {when_to_use}\nContent: {content}
+func (m ReMeRetrievedMemory) FormatMemoryString() string {
+	return fmt.Sprintf("When to use: %s\nContent: %s", m.WhenToUse, m.Content)
 }

@@ -361,6 +361,13 @@ func (m *ReasoningBankMemory) String() string {
 	)
 }
 
+// FormatMemoryString 对齐 Python ACE 的记忆格式化。
+// 输出格式：[{id}] helpful={helpful} harmful={harmful} neutral={neutral}\nSection: {section}\nContent: {content}
+func (m ACEMemory) FormatMemoryString() string {
+	return fmt.Sprintf("[%s] helpful=%d harmful=%d neutral=%d\nSection: %s\nContent: %s",
+		m.ID, m.Helpful, m.Harmful, m.Neutral, m.Section, m.Content)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // md5Hash 计算字符串的 MD5 哈希。

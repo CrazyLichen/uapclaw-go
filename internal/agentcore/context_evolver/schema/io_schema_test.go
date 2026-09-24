@@ -508,6 +508,110 @@ func TestRetrieveResponse_ReMe(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── MemoryItem 接口 ────────────────────────────
+
+func TestMemoryItem_ACERetrievedMemory实现接口(t *testing.T) {
+	var _ MemoryItem = (*ACERetrievedMemory)(nil)
+}
+
+func TestMemoryItem_ReasoningBankRetrievedMemory实现接口(t *testing.T) {
+	var _ MemoryItem = (*ReasoningBankRetrievedMemory)(nil)
+}
+
+func TestMemoryItem_ReMeRetrievedMemory实现接口(t *testing.T) {
+	var _ MemoryItem = (*ReMeRetrievedMemory)(nil)
+}
+
+// ──────────────────────────── FormatMemoryString ────────────────────────────
+
+func TestACERetrievedMemory_FormatMemoryString(t *testing.T) {
+	m := ACERetrievedMemory{
+		ID:      "mem_001",
+		Section: "python",
+		Content: "Use lru_cache for memoization",
+		Helpful: 3,
+		Harmful: 1,
+		Neutral: 2,
+	}
+	got := m.FormatMemoryString()
+	want := "[mem_001] helpful=3 harmful=1 neutral=2\nSection: python\nContent: Use lru_cache for memoization"
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
+func TestACERetrievedMemory_FormatMemoryString_零值(t *testing.T) {
+	m := ACERetrievedMemory{ID: "empty_id"}
+	got := m.FormatMemoryString()
+	want := "[empty_id] helpful=0 harmful=0 neutral=0\nSection: \nContent: "
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
+func TestReasoningBankRetrievedMemory_FormatMemoryString(t *testing.T) {
+	m := ReasoningBankRetrievedMemory{
+		Title:       "Error Handling",
+		Description: "Best practices for exception handling",
+		Content:     "Use specific exception types",
+	}
+	got := m.FormatMemoryString()
+	want := "Title: Error Handling\nDescription: Best practices for exception handling\nContent: Use specific exception types"
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
+func TestReMeRetrievedMemory_FormatMemoryString(t *testing.T) {
+	m := ReMeRetrievedMemory{
+		WhenToUse: "When implementing caching in Python",
+		Content:   "Use functools.lru_cache decorator",
+	}
+	got := m.FormatMemoryString()
+	want := "When to use: When implementing caching in Python\nContent: Use functools.lru_cache decorator"
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
+// ──────────────────────────── MemoryItem 统一调用 ────────────────────────────
+
+func TestMemoryItem_统一调用(t *testing.T) {
+	items := []MemoryItem{
+		ACERetrievedMemory{ID: "ace_1", Section: "s1", Content: "c1", Helpful: 1},
+		ReasoningBankRetrievedMemory{Title: "T1", Description: "D1", Content: "C1"},
+		ReMeRetrievedMemory{WhenToUse: "W1", Content: "C2"},
+	}
+	if len(items) != 3 {
+		t.Fatalf("MemoryItem 切片长度 = %d, want 3", len(items))
+	}
+	// 验证各类型通过接口调用 FormatMemoryString
+	if !contains(items[0].FormatMemoryString(), "[ace_1]") {
+		t.Errorf("ACE FormatMemoryString 应包含 [ace_1]，实际: %q", items[0].FormatMemoryString())
+	}
+	if !contains(items[1].FormatMemoryString(), "Title: T1") {
+		t.Errorf("RB FormatMemoryString 应包含 Title: T1，实际: %q", items[1].FormatMemoryString())
+	}
+	if !contains(items[2].FormatMemoryString(), "When to use: W1") {
+		t.Errorf("ReMe FormatMemoryString 应包含 When to use: W1，实际: %q", items[2].FormatMemoryString())
+	}
+}
+
+// contains 检查字符串是否包含子串
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		(len(s) > 0 && len(sub) > 0 && findSubstring(s, sub)))
+}
+
+func findSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
 // ──────────────────────────── 默认值 ────────────────────────────
 
 func TestACESummarizeRequest_默认值(t *testing.T) {

@@ -38,6 +38,40 @@ func TestReMeMemory_实现MemoryInterface(t *testing.T) {
 	var _ MemoryInterface = (*ReMeMemory)(nil)
 }
 
+// ──────────────────────────── MemoryItem 接口 ────────────────────────────
+
+func TestACEMemory_实现MemoryItem接口(t *testing.T) {
+	var _ MemoryItem = (*ACEMemory)(nil)
+}
+
+// ──────────────────────────── FormatMemoryString ────────────────────────────
+
+func TestACEMemory_FormatMemoryString(t *testing.T) {
+	m := ACEMemory{
+		BaseMemory: BaseMemory{WorkspaceID: "ws1"},
+		ID:         "mem_001",
+		Section:    "python",
+		Content:    "Use lru_cache for memoization",
+		Helpful:    3,
+		Harmful:    1,
+		Neutral:    2,
+	}
+	got := m.FormatMemoryString()
+	want := "[mem_001] helpful=3 harmful=1 neutral=2\nSection: python\nContent: Use lru_cache for memoization"
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
+func TestACEMemory_FormatMemoryString_零值(t *testing.T) {
+	m := ACEMemory{ID: "empty_id"}
+	got := m.FormatMemoryString()
+	want := "[empty_id] helpful=0 harmful=0 neutral=0\nSection: \nContent: "
+	if got != want {
+		t.Errorf("FormatMemoryString() = %q, want %q", got, want)
+	}
+}
+
 // ──────────────────────────── ACEMemory ────────────────────────────
 
 func TestACEMemory_ToVectorNode(t *testing.T) {
