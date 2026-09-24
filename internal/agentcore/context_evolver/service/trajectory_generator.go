@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -35,6 +36,18 @@ type RunTrialsInput struct {
 	MattsK int
 	// MattsMode 缩放模式：none/parallel/sequential/combined
 	MattsMode string
+	// MemoryService 记忆服务，对齐 Python memory_service 参数
+	MemoryService *TaskMemoryService
+	// PersistType 持久化类型，对齐 Python persist_type
+	PersistType *string
+	// PersistPath JSON 持久化路径，对齐 Python persist_path
+	PersistPath string
+	// MilvusHost Milvus 主机，对齐 Python milvus_host
+	MilvusHost string
+	// MilvusPort Milvus 端口，对齐 Python milvus_port
+	MilvusPort int
+	// MilvusCollection Milvus 集合名，对齐 Python milvus_collection
+	MilvusCollection string
 }
 
 // SummarizeTrajectoriesInput 轨迹摘要参数。对齐 Python SummarizeTrajectoriesInput。
@@ -77,6 +90,12 @@ const (
 		"search sequence and whether you used the tool correctly. If you find " +
 		"inconsistencies, correct them. If everything seems correct, make it more " +
 		"efficient. Now, solve the same problem again from scratch.\n\n"
+
+	// selfDiversityPrompt 多样性提示词。对齐 Python _SELF_DIVERSITY_PROMPT。
+	selfDiversityPrompt = "Let's carefully re-examine the previous trajectory, including your reasoning " +
+		"steps and action taken. The solution might be correct or wrong. Now, solve the " +
+		"same problem again from scratch using DIFFERENT reasoning approach. " +
+		"Focus on exploring alternative strategies.\n\n"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -109,7 +128,44 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 		selfRefine = (params.MattsMode == "sequential" || params.MattsMode == "combined")
 	}
 
-	return runTrialsInner(ctx, agent, params.Question, params.GroundTruth, mattsK, selfRefine)
+	results, err := runTrialsInner(ctx, agent, params.Question, params.GroundTruth, mattsK, selfRefine)
+	if err != nil {
+		return nil, err
+	}
+
+	// 对齐 Python：运行后调用 SummarizeTrajectories 摘要记忆
+	if params.MemoryService != nil {
+		trajectories := make([]string, 0, len(results))
+		for _, r := range results {
+			if r.Trajectory != "" {
+				trajectories = append(trajectories, r.Trajectory)
+			}
+		}
+		feedbacks := make([]string, 0, len(results))
+		scores := make([]int, 0, len(results))
+		for _, r := range results {
+			feedbacks = append(feedbacks, r.Feedback)
+			scores = append(scores, r.Score)
+		}
+
+		sumParams := SummarizeTrajectoriesInput{
+			Query:       params.Question,
+			Trajectory:  trajectories,
+			MattsMode:   params.MattsMode,
+			Feedback:    feedbacks,
+			Score:       scores,
+		}
+		if params.GroundTruth != "" {
+			gt := params.GroundTruth
+			sumParams.GroundTruth = &gt
+		}
+
+		if _, summarizeErr := SummarizeTrajectories(ctx, params.MemoryService, params.UserID, sumParams); summarizeErr != nil {
+			logger.Error(logComponent).Err(summarizeErr).Msg("Failed to summarize trajectories after run_trials")
+		}
+	}
+
+	return results, nil
 }
 
 // SummarizeTrajectories 将轨迹总结为记忆。对齐 Python summarize_trajectories()。
@@ -117,8 +173,17 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService, userID string, params SummarizeTrajectoriesInput) (*SummarizeResult, error) {
 	// 对齐 Python：matts_mode == "sequential" 时只保留最后一条轨迹
 	trajectories := params.Trajectory
+	feedbacks := params.Feedback
+	scores := params.Score
+
 	if params.MattsMode == "sequential" && len(trajectories) > 1 {
 		trajectories = trajectories[len(trajectories)-1:]
+		if len(feedbacks) > 1 {
+			feedbacks = feedbacks[len(feedbacks)-1:]
+		}
+		if len(scores) > 1 {
+			scores = scores[len(scores)-1:]
+		}
 	}
 
 	// 对齐 Python：算法特定 kwargs 过滤
@@ -126,14 +191,14 @@ func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService
 
 	// ReMe 系列：传 score
 	if isReMeFamily(memoryService.summaryAlgorithm) {
-		extraKwargs["score"] = params.Score
+		extraKwargs["score"] = scores
 	}
 
 	// ReasoningBank + USE_GOLDLABEL：从 score 推导 label
 	if memoryService.summaryAlgorithm == "ReasoningBank" {
 		if getUseGoldLabel() {
-			labels := make([]bool, len(params.Score))
-			for i, s := range params.Score {
+			labels := make([]bool, len(scores))
+			for i, s := range scores {
 				labels[i] = (s == 1)
 			}
 			extraKwargs["label"] = labels
@@ -143,7 +208,7 @@ func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService
 	// ACE + USE_GROUNDTRUTH：传 feedback + ground_truth
 	if memoryService.summaryAlgorithm == "ACE" {
 		if getUseGroundTruth() {
-			extraKwargs["feedback"] = params.Feedback
+			extraKwargs["feedback"] = feedbacks
 			if params.GroundTruth != nil {
 				extraKwargs["ground_truth"] = *params.GroundTruth
 			}
@@ -226,7 +291,15 @@ func runTrialsInner(ctx context.Context, agent cecontext.AgentFlowService, quest
 			}
 			if len(prevTrajectories) > 0 {
 				prevTraj := prevTrajectories[len(prevTrajectories)-1]
-				currentQuery = fmt.Sprintf("Previous attempt:\n%s\n\n%sQuestion: %s", prevTraj, selfRefinePrompt, question)
+				// 对齐 Python：COMBINED_MATTS_PROMPT 控制使用 refine 还是 diversity
+				combinedPrompt := ceconfig.GetString("COMBINED_MATTS_PROMPT", "refine")
+				var prompt string
+				if combinedPrompt == "diversity" {
+					prompt = selfDiversityPrompt
+				} else {
+					prompt = selfRefinePrompt
+				}
+				currentQuery = fmt.Sprintf("Previous attempt:\n%s\n\n%sQuestion: %s", prevTraj, prompt, question)
 			} else {
 				currentQuery = fmt.Sprintf("Question: %s", question)
 			}
@@ -285,15 +358,11 @@ func isReMeFamily(algo string) bool {
 }
 
 // getUseGoldLabel 获取 USE_GOLDLABEL 配置。对齐 Python config.get("USE_GOLDLABEL", False)。
-// 默认 false。
 func getUseGoldLabel() bool {
-	// TODO: 从 common/config 全局配置读取 USE_GOLDLABEL
-	return false
+	return ceconfig.GetBool("USE_GOLDLABEL", false)
 }
 
 // getUseGroundTruth 获取 USE_GROUNDTRUTH 配置。对齐 Python config.get("USE_GROUNDTRUTH", False)。
-// 默认 false。
 func getUseGroundTruth() bool {
-	// TODO: 从 common/config 全局配置读取 USE_GROUNDTRUTH
-	return false
+	return ceconfig.GetBool("USE_GROUNDTRUTH", false)
 }
