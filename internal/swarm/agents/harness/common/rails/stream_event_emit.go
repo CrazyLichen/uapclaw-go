@@ -213,7 +213,9 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// todoToolLoader TodoTool 的最小接口，解耦 emit 层对 todo 包的具体依赖
+// todoToolLoader TodoTool 的最小接口，用于依赖注入和可测试性
+//
+// 通过接口而非具体类型引用，允许测试中注入 fake 实现，避免真实 TodoTool 的外部依赖。
 type todoToolLoader interface {
 	LoadTodos(ctx context.Context, sessionID string) ([]hschema.TodoItem, error)
 }

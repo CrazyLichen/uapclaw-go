@@ -98,8 +98,8 @@ func (pc *pauseCond) Resume() {
 
 // inflightToolCallInfo 跟踪执行中的工具调用，对齐 Python: _inflight_tool_calls value
 type inflightToolCallInfo struct {
-	toolCall  any    // *llmschema.ToolCall
-	sessionID string // 关联的会话 ID
+	toolCall  *llmschema.ToolCall // 工具调用引用
+	sessionID string             // 关联的会话 ID
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -241,7 +241,7 @@ func (r *JiuClawStreamEventRail) CollectCancelledToolUpdates(sessionID string) {
 		if sessionID != "" && info.sessionID != sessionID {
 			continue
 		}
-		tcName := toolCallNameFromAny(info.toolCall)
+		tcName := toolCallName(info.toolCall)
 		r.cancelledToolResults[sid] = append(r.cancelledToolResults[sid], map[string]any{
 			"tool_name":    tcName,
 			"tool_call_id": tcID,
@@ -308,7 +308,9 @@ func (r *JiuClawStreamEventRail) BeforeModelCall(ctx context.Context, cbc *saint
 
 	// 上下文修复，对齐 Python: await self._fix_incomplete_tool_context(ctx.context)
 	if cbc.ModelContext() != nil {
-		_ = fixIncompleteToolContext(ctx, cbc.ModelContext(), r.getPromptLanguage)
+		if err := fixIncompleteToolContext(ctx, cbc.ModelContext(), r.getPromptLanguage); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fix_incomplete_tool_context failed in before_model_call")
+		}
 	}
 
 	return nil
@@ -405,7 +407,9 @@ func (r *JiuClawStreamEventRail) AfterToolCall(ctx context.Context, cbc *sainter
 func (r *JiuClawStreamEventRail) OnModelException(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if cbc.ModelContext() != nil {
 		logger.Info(logComponent).Msg("Attempting context repair after model exception")
-		_ = fixIncompleteToolContext(ctx, cbc.ModelContext(), r.getPromptLanguage)
+		if err := fixIncompleteToolContext(ctx, cbc.ModelContext(), r.getPromptLanguage); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fix_incomplete_tool_context failed in on_model_exception")
+		}
 	}
 	return nil
 }
@@ -504,17 +508,6 @@ func (r *JiuClawStreamEventRail) getPromptLanguage() string {
 		return "cn"
 	}
 	return lang
-}
-
-// toolCallNameFromAny 从 any 类型提取工具名称（用于 inflight 跟踪信息）
-func toolCallNameFromAny(tc any) string {
-	if tc == nil {
-		return ""
-	}
-	if typed, ok := tc.(*llmschema.ToolCall); ok {
-		return typed.Name
-	}
-	return ""
 }
 
 // ── GetCallbacks 包装方法 ──

@@ -121,7 +121,10 @@ func parseToolCallArguments(tc *llmschema.ToolCall) map[string]any {
 }
 
 // ExtractToolInterrupt 递归查找 ToolInterruptException，对齐 Python: _extract_tool_interrupt
-func extractToolInterrupt(value any) any {
+//
+// 入参为 any 因为调用来源（ToolResult、exception）类型不固定，对齐 Python result: Any；
+// 返回值为具体类型 *saschema.ToolInterruptException（Python 返回 Any 是因为鸭子类型，Go 应更严格）。
+func extractToolInterrupt(value any) *saschema.ToolInterruptException {
 	if value == nil {
 		return nil
 	}
@@ -141,12 +144,12 @@ func extractToolInterrupt(value any) any {
 }
 
 // AskUserQuestionPayloadFromInterrupt 从中断构造 ask_user_question payload，对齐 Python: _ask_user_question_payload_from_interrupt
-func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt any) map[string]any {
+func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *saschema.ToolInterruptException) map[string]any {
 	// 获取 request_id，对齐 Python: request_id = str(getattr(getattr(interrupt, "request", None), "tool_call_id", None) or getattr(tool_call, "id", "") or "")
 	var requestID string
-	if exc, ok := interrupt.(*saschema.ToolInterruptException); ok && exc.Request != nil {
+	if interrupt != nil && interrupt.Request != nil {
 		// 尝试从 Request 获取 tool_call_id
-		if accessor, ok := exc.Request.(interface{ GetToolCallID() string }); ok {
+		if accessor, ok := interrupt.Request.(interface{ GetToolCallID() string }); ok {
 			requestID = strings.TrimSpace(accessor.GetToolCallID())
 		}
 	}
@@ -159,8 +162,8 @@ func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt any) 
 
 	// 构造 value_obj，对齐 Python: value_obj = getattr(interrupt, "request", None)
 	var valueObj any
-	if exc, ok := interrupt.(*saschema.ToolInterruptException); ok && exc.Request != nil {
-		valueObj = exc.Request
+	if interrupt != nil && interrupt.Request != nil {
+		valueObj = interrupt.Request
 	}
 	if valueObj == nil {
 		args := parseToolCallArguments(tc)
