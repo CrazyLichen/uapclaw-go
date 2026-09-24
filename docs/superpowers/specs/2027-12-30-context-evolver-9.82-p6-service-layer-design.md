@@ -27,56 +27,122 @@ summary/rb 覆盖率 89.1%），但 IMPLEMENTATION_PLAN.md 中状态仍为 ☐�
 
 | Python 文件 | Go 目标路径 |
 |-------------|------------|
-| `openjiuwen/extensions/context_evolver/core/config.py` | `internal/agentcore/context_evolver/core/config/config.go`（P6 新建） |
 | `openjiuwen/extensions/context_evolver/service/task_memory_service.py` | `internal/agentcore/context_evolver/service/task_memory_service.go` |
 | `openjiuwen/extensions/context_evolver/service/trajectory_generator.py` | `internal/agentcore/context_evolver/service/trajectory_generator.go`（补全 stub） |
 | `openjiuwen/extensions/context_evolver/context_evolving_react_agent.py` | `internal/agentcore/context_evolver/context_evolving_react_agent.go` |
+
+注：Python `context_evolver/core/config.py` 的全局配置功能在 Go 侧通过 `internal/common/config` 已有包 + `TaskMemoryServiceConfig` 结构体实现，不需要新建 config 包。
 
 ## 文件结构
 
 ```
 context_evolver/
-├── core/
-│   └── config/
-│       ├── doc.go                # 包文档
-│       └── config.go             # 配置加载（P6 新建，对齐 Python config.py）
 ├── service/
 │   ├── doc.go                       # 包文档（回填更新）
 │   ├── trajectory_generator.go      # 补全 SummarizeTrajectories stub
-│   ├── task_memory_service.go       # TaskMemoryService + AddMemoryRequest
+│   ├── task_memory_service.go       # TaskMemoryService + AddMemoryRequest + TaskMemoryServiceConfig
 │   ├── llm_wrapper.go              # OpenAILLMWrapper
 │   └── embedding_wrapper.go        # OpenAIEmbeddingWrapper
 ├── context_evolving_react_agent.go  # ContextEvolvingReActAgent + MemoryAgentConfigInput
 ├── doc.go                           # 包文档（回填更新）
 ```
 
-## 零、config 包（core/config/config.go）
+## 零、配置获取策略
 
-Python 的 `context_evolver/core/config.py` 提供全局配置加载（.env + config.yaml）和 `get(key, default)` / `set_value(key, value)` / `snapshot()` / `restore(snap)` 接口。
+Python 的 `context_evolver/core/config.py` 提供 `config.get(key, default)` 全局配置读取，
+被 TaskMemoryService / trajectory_generator / ContextEvolvingReActAgent 大量使用。
 
-Go 侧 P1-P5 未移植此模块，P6 需要新建。
+Go 项目已有 `internal/common/config` 全局配置包（支持 YAML 加载 + `Config.Get(key)` + 环境变量解析），
+**不需要新建 context_evolver 专属的 config 包**。
 
-### 设计
+### 配置分为两类
 
-- 包路径：`internal/agentcore/context_evolver/core/config`
-- 对齐 Python 的 `load()` / `get()` / `set_value()` / `delete()` / `snapshot()` / `restore()` / `reload()`
-- Go 实现差异：
-  - 不使用 `dotenv` 库（Go 项目已有 `internal/agentcore/config` 全局配置体系），context_evolver 的 config 包作为**局部配置覆盖层**
-  - `Load(configPath)` 从 YAML 文件加载（使用 `gopkg.in/yaml.v3`）
-  - `Get(key, default)` 查找顺序：内部配置 → 环境变量 → default
-  - 环境变量类型转换：对齐 Python `_convert_value`（bool/int/float/string）
-  - 全局变量 `var _config map[string]any` + `var _configLoaded bool`（对齐 Python `_config` / `_config_loaded`）
-  - 提供 `SetValue(key, value)` / `Delete(key)` / `Snapshot() map[string]any` / `Restore(snap map[string]any)` / `Reload()`
-- **不加载 .env 文件**：Go 项目的 API key 通过构造函数参数传入，不从 .env 读取
+**类别 1：构造函数参数（API key / model name / algo 名称等）**
 
-### 日志
+Python 中通过 `config.get("API_KEY")` 等回退，Go 侧已通过构造函数参数显式传入：
+- `NewOpenAILLMWrapper(modelName, apiKey, baseURL, ...)` — 不需要从 config 读 API key
+- `NewTaskMemoryService(cfg *TaskMemoryServiceConfig)` — 不需要从 config 读 model name
+- `NewContextEvolvingReActAgent(card, config, userID, memoryService, ...)` — 不需要从 config 读
 
-- config 包有循环依赖风险（logger → config），对齐项目规则 3.4，使用 `log.Printf("[config] ...")` 代替 logger
+**类别 2：管线组装运行时参数（TOPK_QUERY / USE_GROUNDTRUTH 等）**
 
-### 测试
+这些是 `config.yaml` 中的算法调优参数，Go 侧通过以下方式获取：
 
-- config_test.go：测试 Load/Get/SetValue/Delete/Snapshot/Restore/Reload
-- 覆盖率 ≥ 85%
+| 方式 | 说明 | 适用参数 |
+|------|------|---------|
+| `TaskMemoryServiceConfig` 结构体 | 带默认值的管线调优参数，构造时传入 | 全部管线参数（见下方结构体定义） |
+| `common/config` 全局配置 | 运行时动态读取（仅 trajectory_generator 中需要） | SUMMARY_ALGO, USE_GOLDLABEL, USE_GROUNDTRUTH, MATTS_DEFAULT_K, COMBINED_MATTS_PROMPT |
+
+### TaskMemoryServiceConfig 结构体
+
+```go
+// TaskMemoryServiceConfig 任务记忆服务配置。
+// 集中管理管线组装所需的全部参数，对齐 Python config.yaml 中的相关键。
+type TaskMemoryServiceConfig struct {
+    // LLMModel LLM 模型名称，默认 "gpt-5.2"
+    LLMModel string
+    // EmbeddingModel Embedding 模型名称，默认 "text-embedding-3-small"
+    EmbeddingModel string
+    // APIKey API 密钥
+    APIKey string
+    // APIBase API 基地址
+    APIBase string
+    // RetrievalAlgo 检索算法，默认 "ACE"
+    RetrievalAlgo string
+    // SummaryAlgo 总结算法，默认 "ACE"
+    SummaryAlgo string
+
+    // --- 持久化 ---
+    // PersistType 持久化类型，nil=关闭
+    PersistType *string
+    // PersistPath JSON 持久化路径模板
+    PersistPath string
+    // MilvusHost Milvus 主机
+    MilvusHost string
+    // MilvusPort Milvus 端口
+    MilvusPort int
+    // MilvusCollection Milvus 集合名
+    MilvusCollection string
+
+    // --- ReMe 检索参数 ---
+    // TopKRetrieval ReMe 检索 top-k，默认 10
+    TopKRetrieval int
+    // TopKRerank ReMe 重排 top-k，默认 5
+    TopKRerank int
+    // LLMRerank 是否使用 LLM 重排，默认 true
+    LLMRerank bool
+    // LLMRewrite 是否使用 LLM 改写，默认 true
+    LLMRewrite bool
+
+    // --- RB 检索参数 ---
+    // TopKQuery RB 检索 top-k，默认 1
+    TopKQuery int
+
+    // --- ACE 总结参数 ---
+    // UseGroundTruth 是否使用参考答案，默认 false
+    UseGroundTruth bool
+    // MaxPlaybookSize Playbook 最大条目数，默认 50
+    MaxPlaybookSize int
+
+    // --- ReMe 总结参数 ---
+    // ExtractBestTraj 是否提取最佳轨迹，默认 true
+    ExtractBestTraj bool
+    // ExtractWorstTraj 是否提取最差轨迹，默认 true
+    ExtractWorstTraj bool
+    // ExtractComparativeTraj 是否提取对比轨迹，默认 true
+    ExtractComparativeTraj bool
+    // MemoryValidation 是否验证记忆，默认 true
+    MemoryValidation bool
+    // MemoryDeduplication 是否去重，默认 true
+    MemoryDeduplication bool
+}
+```
+
+### trajectory_generator 中的 config 读取
+
+`summarize_trajectories` 和 `run_trials` 中需要读取 `SUMMARY_ALGO`/`USE_GOLDLABEL` 等来判断
+算法特定的 kwargs 过滤逻辑。这些通过 `common/config` 全局配置读取：
+- 如果全局配置未加载，使用默认值（对齐 Python 的 `config.get("KEY", default)` 语义）
 
 ## 一、OpenAILLMWrapper（llm_wrapper.go）
 
@@ -274,15 +340,10 @@ type TaskMemoryService struct {
 
 ```go
 // NewTaskMemoryService 创建任务记忆服务。
-// 对齐 Python TaskMemoryService.__init__(llm_model, embedding_model, api_key,
-//     retrieval_algo, summary_algo, config_path, persist_type, persist_path, ...)。
-// 内部创建 OpenAILLMWrapper + OpenAIEmbeddingWrapper，注册到 ServiceContext。
-func NewTaskMemoryService(
-    llmModel string, embeddingModel string, apiKey string, apiBase string,
-    retrievalAlgo string, summaryAlgo string,
-    persistType *string, persistPath string,
-    milvusHost string, milvusPort int, milvusCollection string,
-) (*TaskMemoryService, error)
+// 对齐 Python TaskMemoryService.__init__(...)。
+// 从 TaskMemoryServiceConfig 读取参数，内部创建 OpenAILLMWrapper + OpenAIEmbeddingWrapper，
+// 注册到 ServiceContext。
+func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, error)
 ```
 
 **辅助构造**（方便测试注入）：
@@ -293,9 +354,7 @@ func NewTaskMemoryService(
 func NewTaskMemoryServiceWithServices(
     llm cecontext.LLMService, emb cecontext.EmbeddingService,
     vectorStore cecontext.VectorStoreService,
-    retrievalAlgo string, summaryAlgo string,
-    persistType *string, persistPath string,
-    milvusHost string, milvusPort int, milvusCollection string,
+    cfg *TaskMemoryServiceConfig,
 ) (*TaskMemoryService, error)
 ```
 
@@ -395,14 +454,14 @@ var algoNameMap = map[string]string{
 
 ### 4.3 config 读取
 
-对齐 Python 中的 `memory_config.get(...)` 调用。Go 侧需要新建 `core/config/config.go`（见§零），从配置中读取：
+对齐 Python 中的 `memory_config.get(...)` 调用。Go 侧使用已有 `internal/common/config` 全局配置包（见§零）：
 - `SUMMARY_ALGO` — 判断当前算法
 - `USE_GOLDLABEL` — RB 是否推导 label
 - `USE_GROUNDTRUTH` — ACE 是否传 ground_truth
-- `TOPK_QUERY` / `TOPK_RETRIEVAL` / `TOPK_RERANK` / `LLM_RERANK` / `LLM_REWRITE` — ReMe 检索参数
-- `USE_GROUNDTRUTH` / `MAX_PLAYBOOK_SIZE` — ACE 总结参数
-- `EXTRACT_BEST_TRAJ` / `EXTRACT_WORST_TRAJ` / `EXTRACT_COMPARATIVE_TRAJ` / `MEMORY_VALIDATION` / `MEMORY_DEDUPLICATION` — ReMe 总结参数
-- `MATTS_DEFAULT_K` / `MATTS_DEFAULT_MODE` — MaTTS 参数
+- `MATTS_DEFAULT_K` — MaTTS 默认缩放因子
+- `COMBINED_MATTS_PROMPT` — combined 模式的提示词类型（refine/diversity）
+
+如果全局配置未加载，使用硬编码默认值（对齐 Python 的 `config.get("KEY", default)` 语义）。
 
 ### 4.4 日志
 
