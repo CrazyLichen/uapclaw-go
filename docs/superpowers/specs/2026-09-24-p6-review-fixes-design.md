@@ -142,6 +142,26 @@ rc.Set("retrieved_memories", items)
 
 **影响范围**：`retrieve/task/rb/run.go`、`retrieve/task/ace/run.go`、`retrieve/task/reme/run.go`、以及下游消费 `retrieved_memories` 的 op（RerankOp、RewriteOp 等）需适配。
 
+### 2.3.1 下游 op 适配策略
+
+RerankOp/RewriteOp 等下游 op 需要从 `[]MemoryItem` 访问算法特定字段（如 `mem.WhenToUse`）。
+适配方式：各 op 在内部用类型 switch 断言回具体类型：
+
+```go
+for _, item := range memories {
+    switch m := item.(type) {
+    case ceschema.ReMeRetrievedMemory:
+        // 访问 m.WhenToUse, m.Content
+    case ceschema.ReasoningBankRetrievedMemory:
+        // 访问 m.Title, m.Description, m.Content
+    case ceschema.ACEMemory:
+        // 访问 m.ID, m.Section, m.Content
+    }
+}
+```
+
+注意：Go 中 `MemoryItem` 是接口，类型 switch 可以直接用，无需 `.(type)` 前的额外断言。
+
 ### 2.4 Retrieve() 统一提取
 
 ```go
@@ -171,11 +191,7 @@ for nodeID, nodeData := range nodesDict {
     if data, ok := nodeData.(map[string]any); ok {
         vn, err := schema.VectorNodeFromDict(data)
         if err != nil { continue }
-        if vs, ok := s.vectorStore.(interface{ LoadNode(string, *schema.VectorNode) }); ok {
-            vs.LoadNode(nodeID, vn)
-        } else {
-            s.vectorStore.Upsert(ctx, vn)  // 回退用 Upsert
-        }
+        s.vectorStore.Upsert(ctx, vn)  // 统一用 Upsert，无需强制断言
     }
 }
 ```
@@ -265,9 +281,10 @@ func (s *TaskMemoryService) GetPlaybook(ctx context.Context, userID string) ([]*
 func (s *TaskMemoryService) ClearPlaybook(ctx context.Context, userID string) error
 ```
 
-### 4.4 LoadNode 改为 Upsert（D-18）
+### 4.4 LoadMemories 中用 Upsert 替代强制断言（D-18）
 
-LoadMemories 中不再强制断言 `*MemoryVectorStore`，改用 `Upsert` 或接口检测。
+LoadMemories 中不再强制断言 `*MemoryVectorStore`，统一使用 `VectorStoreService.Upsert(ctx, node)`。
+VectorNode 已包含 ID 字段，Upsert 内部可按 ID 去重，与 LoadNode 语义等价。
 
 ### 4.5 AddMemory 输入校验（D-20）
 
@@ -394,7 +411,7 @@ type SummarizeResult struct {
 | D-24 | NewTaskMemoryService 构造 error 前补统一 error 日志 |
 | D-25 | RB memoryID 改为 `reasoning_bank_{workspace_id}_{md5(title\|content)}` |
 | D-26 | ACE memoryID 分隔符 `_` 改为 `-`（对齐 Python `ace_{workspace_id}_{id}`） |
-| D-12 | SUMMARY_ALGO 从自建 config 读取 |
+| D-12 | SUMMARY_ALGO 从自建 config 读取，但 `memoryService.summaryAlgorithm` 字段保留（Python 也保留 `self.summary_algorithm`），两者等价 |
 
 ## 八、影响范围汇总
 
