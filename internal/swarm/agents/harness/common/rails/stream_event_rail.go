@@ -7,8 +7,8 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -99,7 +99,7 @@ func (pc *pauseCond) Resume() {
 // inflightToolCallInfo 跟踪执行中的工具调用，对齐 Python: _inflight_tool_calls value
 type inflightToolCallInfo struct {
 	toolCall  *llmschema.ToolCall // 工具调用引用
-	sessionID string             // 关联的会话 ID
+	sessionID string              // 关联的会话 ID
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

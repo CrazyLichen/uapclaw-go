@@ -9,7 +9,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
@@ -22,6 +21,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"

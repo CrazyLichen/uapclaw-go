@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	interruptHelpers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

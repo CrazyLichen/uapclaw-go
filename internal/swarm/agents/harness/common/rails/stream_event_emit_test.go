@@ -7,10 +7,10 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 辅助类型 ────────────────────────────
@@ -21,14 +21,17 @@ type fakeSession struct {
 	err     error
 }
 
-func (s *fakeSession) GetSessionID() string                                       { return "test-session" }
-func (s *fakeSession) UpdateState(map[string]any)                                  {}
-func (s *fakeSession) WriteStream(_ context.Context, data any) error              { s.written = append(s.written, data); return s.err }
-func (s *fakeSession) WriteCustomStream(_ context.Context, data any) error        { return nil }
-func (s *fakeSession) GetState(_ state.StateKey) (any, error)                           { return nil, nil }
-func (s *fakeSession) DumpState() map[string]any                                  { return map[string]any{} }
-func (s *fakeSession) GetEnv(_ string, _ ...any) any                              { return nil }
-func (s *fakeSession) Interact(_ context.Context, _ any) error                    { return nil }
+func (s *fakeSession) GetSessionID() string       { return "test-session" }
+func (s *fakeSession) UpdateState(map[string]any) {}
+func (s *fakeSession) WriteStream(_ context.Context, data any) error {
+	s.written = append(s.written, data)
+	return s.err
+}
+func (s *fakeSession) WriteCustomStream(_ context.Context, data any) error { return nil }
+func (s *fakeSession) GetState(_ state.StateKey) (any, error)              { return nil, nil }
+func (s *fakeSession) DumpState() map[string]any                           { return map[string]any{} }
+func (s *fakeSession) GetEnv(_ string, _ ...any) any                       { return nil }
+func (s *fakeSession) Interact(_ context.Context, _ any) error             { return nil }
 
 // lastOutput 获取最后写入的 OutputSchema
 func (s *fakeSession) lastOutput() *stream.OutputSchema {

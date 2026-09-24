@@ -44,6 +44,7 @@ go 1.26
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
+	github.com/RealAlexandreAI/json-repair v0.0.18
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/amikos-tech/chroma-go v0.4.1
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be
@@ -85,7 +86,6 @@ require (
 )
 
 require (
-	github.com/RealAlexandreAI/json-repair v0.0.18 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.13 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.29 // indirect

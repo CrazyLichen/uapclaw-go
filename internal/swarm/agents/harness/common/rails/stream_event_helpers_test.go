@@ -244,5 +244,5 @@ func (e *testError) Unwrap() error { return e.cause }
 
 type testInterruptRequest struct{ msg string }
 
-func (r testInterruptRequest) GetMessage() string       { return r.msg }
+func (r testInterruptRequest) GetMessage() string        { return r.msg }
 func (r testInterruptRequest) GetAutoConfirmKey() string { return "" }
