@@ -120,8 +120,7 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: SkillUseRail
 	skillRail sainterfaces.AgentRail
 	// streamEventRail 流事件护栏
-	// ⤵️ 10.6.3-10: JiuClawStreamEventRail
-	streamEventRail sainterfaces.AgentRail
+	streamEventRail *commrails.JiuClawStreamEventRail
 	// taskPlanningRail 任务规划护栏
 	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
@@ -842,7 +841,9 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	d.markSessionActive(sessionID)
 
 	// 步骤 15: streamEventRail.reset_abort(sessionID)
-	// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.reset_abort(sessionID) }
+	if d.streamEventRail != nil {
+		d.streamEventRail.ResetAbort(sessionID)
+	}
 
 	// 步骤 16-17: update_runtime_config（含 CWD 种子、语言/频道解析、RuntimePromptRail setter 等）
 	// Python: await self._update_runtime_config(self._RuntimeConfig(...))
@@ -1316,18 +1317,25 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	interruptMsg := ""
 	switch intent {
 	case "pause":
-		// ⤵️ 10.6.3-10: if sessionActive && d.streamEventRail != nil { d.streamEventRail.pause(normalizedSID) }
+		if sessionActive && d.streamEventRail != nil {
+			d.streamEventRail.Pause(normalizedSID)
+		}
 		interruptMsg = "执行已暂停"
 		logger.Info(logComponent).Str("intent", "pause").Msg("中断: 已暂停执行")
 	case "resume":
-		// ⤵️ 10.6.3-10: if sessionActive && d.streamEventRail != nil { d.streamEventRail.resume(normalizedSID) }
+		if sessionActive && d.streamEventRail != nil {
+			d.streamEventRail.Resume(normalizedSID)
+		}
 		interruptMsg = "执行已恢复"
 		logger.Info(logComponent).Str("intent", "resume").Msg("中断: 已恢复执行")
 	case "supplement":
 		if newInput != nil {
 			d.markSessionActive(normalizedSID)
 		}
-		// ⤵️ 10.6.3-10: rail.abort(sessionID)
+		// rail.abort(sessionID)，对齐 Python: self._stream_event_rail.abort(request.session_id)
+		if sessionActive && d.streamEventRail != nil {
+			d.streamEventRail.Abort(normalizedSID)
+		}
 		// Python: instance.abort() 仅当 otherActiveSessions == 0
 		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
 			d.instance.Abort(ctx)
@@ -1335,7 +1343,12 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		interruptMsg = "supplement 已处理"
 		logger.Info(logComponent).Str("intent", "supplement").Msg("中断: supplement 处理")
 	case "cancel":
-		// ⤵️ 10.6.3-10: rail.abort(sessionID) + rail.reset_for_new_task(sessionID)
+		// rail.abort(sessionID) + rail.reset_for_new_task(sessionID)，对齐 Python
+		if sessionActive && d.streamEventRail != nil {
+			d.streamEventRail.Abort(normalizedSID)
+			d.streamEventRail.CollectCancelledToolUpdates(normalizedSID)
+			d.streamEventRail.ResetForNewTask(normalizedSID)
+		}
 		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
 			d.instance.Abort(ctx)
 		}
@@ -1363,11 +1376,15 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		payload["new_input"] = newInput
 	}
 
-	// ⤵️ 10.6.3-10: todos 和 cancelled_tools 依赖 StreamEventRail 实现
-	// 待实现：流事件Rail处理 if d.streamEventRail != nil {
-	//     对应 Python: payload["todos"] = ...
-	//     对应 Python: payload["cancelled_tools"] = ...
-	// }
+	// cancel 后附带被中断的工具执行结果，通知前端更新状态
+	// 对齐 Python: if cancelled_tool_results: payload["cancelled_tools"] = cancelled_tool_results
+	if d.streamEventRail != nil {
+		cancelledToolResults := d.streamEventRail.GetCancelledToolResults(normalizedSID)
+		if len(cancelledToolResults) > 0 {
+			payload["cancelled_tools"] = cancelledToolResults
+			d.streamEventRail.ClearCancelledToolResults(normalizedSID)
+		}
+	}
 
 	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 		schema.WithPayload(payload),
@@ -1545,7 +1562,10 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 				activeSIDs = append(activeSIDs, sid)
 			}
 		}
-		_ = activeSIDs // ⤵️ 10.6.3-10: for sid := range activeSIDs { d.streamEventRail.abort(sid) }
+		_ = activeSIDs // 已在下方使用
+		for _, sid := range activeSIDs {
+			d.streamEventRail.Abort(sid)
+		}
 	}
 
 	// 步骤 2: 中止 DeepAgent 实例（协作式，无法中断进行中的 LLM HTTP 请求）
@@ -2096,7 +2116,9 @@ func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
 	count := d.activeSessionIDs[sessionID]
 	if count <= 1 {
 		delete(d.activeSessionIDs, sessionID)
-		// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.cleanup_session(sessionID) }
+		if d.streamEventRail != nil {
+			d.streamEventRail.CleanupSession(sessionID)
+		}
 	} else {
 		d.activeSessionIDs[sessionID] = count - 1
 	}
