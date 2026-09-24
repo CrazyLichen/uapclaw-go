@@ -113,11 +113,52 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 }
 
 // SummarizeTrajectories 将轨迹总结为记忆。对齐 Python summarize_trajectories()。
-// 注：依赖 TaskMemoryService（P6），P4 阶段先定义签名，实现留 P6。
-// TODO: P6 移植 TaskMemoryService 后，将 memoryService any 替换为具体类型/接口，
-// 将返回值 map[string]any 替换为具体结构体。
-func SummarizeTrajectories(ctx context.Context, memoryService any, userID string, params SummarizeTrajectoriesInput) (map[string]any, error) {
-	return nil, fmt.Errorf("not implemented: depends on TaskMemoryService (P6)")
+// P6 阶段实现：委托 TaskMemoryService.Summarize()，含序列截断和算法特定 kwargs 过滤。
+func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService, userID string, params SummarizeTrajectoriesInput) (map[string]any, error) {
+	// 对齐 Python：matts_mode == "sequential" 时只保留最后一条轨迹
+	trajectories := params.Trajectory
+	if params.MattsMode == "sequential" && len(trajectories) > 1 {
+		trajectories = trajectories[len(trajectories)-1:]
+	}
+
+	// 对齐 Python：算法特定 kwargs 过滤
+	extraKwargs := make(map[string]any)
+
+	// ReMe 系列：传 score
+	if isReMeFamily(memoryService.summaryAlgorithm) {
+		extraKwargs["score"] = params.Score
+	}
+
+	// ReasoningBank + USE_GOLDLABEL：从 score 推导 label
+	if memoryService.summaryAlgorithm == "ReasoningBank" {
+		if getUseGoldLabel() {
+			labels := make([]bool, len(params.Score))
+			for i, s := range params.Score {
+				labels[i] = (s == 1)
+			}
+			extraKwargs["label"] = labels
+		}
+	}
+
+	// ACE + USE_GROUNDTRUTH：传 feedback + ground_truth
+	if memoryService.summaryAlgorithm == "ACE" {
+		if getUseGroundTruth() {
+			extraKwargs["feedback"] = params.Feedback
+			if params.GroundTruth != nil {
+				extraKwargs["ground_truth"] = *params.GroundTruth
+			}
+		}
+	}
+
+	// 对齐 Python：委托 TaskMemoryService.Summarize()
+	result, err := memoryService.Summarize(ctx, userID, params.MattsMode, params.Query, trajectories, extraKwargs)
+	if err != nil {
+		// 对齐 Python：logger.error("Failed to summarize trajectories: %s", exc)
+		logger.Error(logComponent).Err(err).Msg("Failed to summarize trajectories")
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -236,4 +277,23 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// isReMeFamily 判断算法是否属于 ReMe 系列（ReMe/RefCon/DivCon）。
+func isReMeFamily(algo string) bool {
+	return algo == "ReMe" || algo == "RefCon" || algo == "DivCon"
+}
+
+// getUseGoldLabel 获取 USE_GOLDLABEL 配置。对齐 Python config.get("USE_GOLDLABEL", False)。
+// 默认 false。
+func getUseGoldLabel() bool {
+	// TODO: 从 common/config 全局配置读取 USE_GOLDLABEL
+	return false
+}
+
+// getUseGroundTruth 获取 USE_GROUNDTRUTH 配置。对齐 Python config.get("USE_GROUNDTRUTH", False)。
+// 默认 false。
+func getUseGroundTruth() bool {
+	// TODO: 从 common/config 全局配置读取 USE_GROUNDTRUTH
+	return false
 }

@@ -52,7 +52,11 @@
 //	│       └── utils.go                      # SafeJSONLoads 安全 JSON 解析
 //	└── service/                              # 服务层函数
 //	    ├── doc.go                            # 包文档
+//	    ├── llm_wrapper.go                    # OpenAILLMWrapper — BaseModelClient → LLMService 适配
+//	    ├── embedding_wrapper.go              # OpenAIEmbeddingWrapper — BaseEmbedding → EmbeddingService 适配
+//	    ├── task_memory_service.go            # TaskMemoryService 核心编排器 + AddMemoryRequest + TaskMemoryServiceConfig
 //	    └── trajectory_generator.go           # 轨迹生成和 MaTTS 试验函数
+//	└── context_evolving_react_agent.go       # ContextEvolvingReActAgent + MemoryAgentConfigInput
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/
 package contextevolver
