@@ -237,7 +237,7 @@ func loadEnvFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("打开 .env 文件失败: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {

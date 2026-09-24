@@ -303,7 +303,7 @@ func (r *JiuClawStreamEventRail) BeforeModelCall(ctx context.Context, cbc *saint
 
 	// 终止检查，对齐 Python: if self._abort_requested.get(sid, False): raise asyncio.CancelledError
 	if r.isAbortRequested(sid) {
-		return fmt.Errorf("Agent abort requested")
+		return fmt.Errorf("agent abort requested")
 	}
 
 	// 上下文修复，对齐 Python: await self._fix_incomplete_tool_context(ctx.context)
@@ -331,7 +331,7 @@ func (r *JiuClawStreamEventRail) BeforeToolCall(ctx context.Context, cbc *sainte
 
 	// 终止检查
 	if r.isAbortRequested(sid) {
-		return fmt.Errorf("Agent abort requested")
+		return fmt.Errorf("agent abort requested")
 	}
 
 	session := cbc.Session()
