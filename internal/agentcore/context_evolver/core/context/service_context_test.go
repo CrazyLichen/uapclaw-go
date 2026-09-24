@@ -178,7 +178,7 @@ type fakeAgentFlowService struct {
 	err    error
 }
 
-func (f *fakeAgentFlowService) Execute(_ context.Context, _ string, _ string) (*TrajectoryResult, error) {
+func (f *fakeAgentFlowService) Execute(_ context.Context, _ string, _ string, _ ...AgentFlowOption) (*TrajectoryResult, error) {
 	return f.result, f.err
 }
 

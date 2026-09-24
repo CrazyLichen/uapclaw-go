@@ -180,7 +180,7 @@ func NewTeamDatabase(ctx context.Context, config DBConfigProvider) TeamDatabase 
 	default:
 		sqlDB := NewSqlTeamDatabase(config.(DatabaseConfig))
 		if err := sqlDB.Initialize(ctx); err != nil {
-			logger.Error(logComponent).Err(err).Msg("SQL 数据库初始化失败，降级为 InMemory")
+			logger.Error(logComponent).Err(err).Msg("SQL database init failed, falling back to InMemory")
 			return NewInMemoryTeamDatabase()
 		}
 		return sqlDB

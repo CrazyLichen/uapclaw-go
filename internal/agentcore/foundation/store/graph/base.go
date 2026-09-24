@@ -43,7 +43,16 @@ type BaseGraphStore interface {
 	Search(ctx context.Context, query string, opts ...Option) (map[string][]map[string]any, error)
 
 	// AttachEmbedder 绑定嵌入模型，校验嵌入维度是否匹配
+	//
+	// 与 Python 差异：Python attach_embedder() 不返回值（校验失败时 raise 异常），
+	// Go 返回 error 以符合 Go 惯例。Go 额外缓存 embedderVal 供 Embedder() 方法访问。
 	AttachEmbedder(embedder embedding.BaseEmbedding) error
+
+	// ReturnSimilarityScore 返回的分数是否为相似度（越大越相似）而非距离（越小越相似）
+	//
+	// Python: @property return_similarity_score
+	// Milvus 使用 IP/COSINE 度量时返回 true；使用 L2/EUCLIDEAN 度量时返回 false
+	ReturnSimilarityScore() bool
 }
 
 // Options 图存储操作选项
@@ -75,7 +84,7 @@ type Options struct {
 // GraphStoreFactory 图存储工厂（线程安全）
 type GraphStoreFactory struct {
 	mu       sync.RWMutex
-	backends map[string]func(*GraphConfig) (BaseGraphStore, error)
+	backends map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error)
 }
 
 // Option 函数式选项
@@ -101,7 +110,7 @@ const (
 var (
 	// globalFactory 全局图存储工厂
 	globalFactory = &GraphStoreFactory{
-		backends: make(map[string]func(*GraphConfig) (BaseGraphStore, error)),
+		backends: make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error)),
 	}
 )
 
@@ -188,7 +197,10 @@ func WithMinScore(score float64) Option {
 }
 
 // RegisterBackend 注册后端构造函数
-func RegisterBackend(name string, constructor func(*GraphConfig) (BaseGraphStore, error), force ...bool) error {
+//
+// Python: GraphStoreFactory.from_config(config, **kwargs) 中的 **kwargs
+// Go 通过 extraKwargs map[string]any 传递，对齐 Python 的 db_kwargs
+func RegisterBackend(name string, constructor func(*GraphConfig, map[string]any) (BaseGraphStore, error), force ...bool) error {
 	globalFactory.mu.Lock()
 	defer globalFactory.mu.Unlock()
 
@@ -203,7 +215,10 @@ func RegisterBackend(name string, constructor func(*GraphConfig) (BaseGraphStore
 }
 
 // NewFromConfig 从配置创建图存储实例
-func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, error) {
+//
+// Python: GraphStoreFactory.from_config(config=db_config, **db_kwargs)
+// extraKwargs 对齐 Python 的 **db_kwargs，传递给后端构造函数
+func NewFromConfig(config *GraphConfig, extraKwargs map[string]any, backendName ...string) (BaseGraphStore, error) {
 	globalFactory.mu.RLock()
 	defer globalFactory.mu.RUnlock()
 
@@ -216,7 +231,7 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 		return nil, exception.BuildError(exception.StatusStoreGraphBackendNotFound,
 			exception.WithParam("name", name))
 	}
-	return constructor(config)
+	return constructor(config, extraKwargs)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

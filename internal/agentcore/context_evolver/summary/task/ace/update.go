@@ -204,12 +204,12 @@ func (o *LoadPlaybookOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		}
 
 		// 对齐 Python: 从所有 bullet ID 中提取最大数字，设置 playbook.set_next_id(max_id)
+		// Python: bullet_id.rsplit('-', 1) — 从右侧分割
 		maxID := 0
 		for _, bulletID := range playbook.BulletIDs() {
-			idParts := strings.Split(bulletID, "-")
-			if len(idParts) >= 2 {
+			if idx := strings.LastIndex(bulletID, "-"); idx >= 0 {
 				var idNum int
-				if _, err := fmt.Sscanf(idParts[len(idParts)-1], "%d", &idNum); err == nil {
+				if _, err := fmt.Sscanf(bulletID[idx+1:], "%d", &idNum); err == nil {
 					if idNum > maxID {
 						maxID = idNum
 					}
@@ -244,6 +244,8 @@ func (o *ReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 		return fmt.Errorf("LLM not configured in ServiceContext")
 	}
 
+	// 对齐 Python: query = context.query（Python 也获取了 query 但未在 reflector prompt 中使用，
+	// 保留此行对齐 Python，后续如果 reflector prompt 需要可立即启用）
 	_, _ = cecontext.GetTyped[string](rc, "query")
 	trajectories, _ := cecontext.GetTyped[[]string](rc, "trajectories")
 	playbook, _ := rc.Get("playbook").(*Playbook)
@@ -436,7 +438,10 @@ func (o *CurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) er
 	}
 
 	// 对齐 Python: reflection JSON 序列化
-	reflectionJSON, _ := json.Marshal(reflection)
+	reflectionJSON, err := json.Marshal(reflection)
+	if err != nil {
+		return fmt.Errorf("CurateOp: reflection 序列化失败: %w", err)
+	}
 
 	data := curatorPromptData{
 		QuestionContext: query,
@@ -521,7 +526,10 @@ func (o *ParallelCurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	}
 	trajectoriesStr := strings.Join(trajectoryParts, "\n")
 
-	reflectionJSON, _ := json.Marshal(reflection)
+	reflectionJSON, err := json.Marshal(reflection)
+	if err != nil {
+		return fmt.Errorf("ParallelCurateOp: reflection 序列化失败: %w", err)
+	}
 
 	data := curatorScalingPromptData{
 		QuestionContext: query,
@@ -649,11 +657,9 @@ func (o *ApplyDeltaOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext
 						Msg("UPDATE operation converted to ADD: bullet not found, creating new bullet")
 					section := operation.Section
 					if section == "" && operation.BulletID != nil {
-						// 对齐 Python: 从 bullet_id 提取 section
-						parts := strings.Split(*operation.BulletID, "-")
-						if len(parts) > 1 {
-							section = strings.Join(parts[:len(parts)-1], "-")
-							section = strings.ReplaceAll(section, "_", " ")
+						// 对齐 Python: 从 bullet_id 提取 section（rsplit('-', 1) 从右侧分割）
+						if idx := strings.LastIndex(*operation.BulletID, "-"); idx >= 0 {
+							section = strings.ReplaceAll((*operation.BulletID)[:idx], "_", " ")
 						}
 					}
 					if section == "" {

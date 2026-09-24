@@ -55,13 +55,12 @@ const (
 	defaultHubPath = "~/.openjiuwen/experience_hub"
 	// globalIndexFileName 全局索引文件名
 	globalIndexFileName = "global.jsonl"
+	// logComponent 日志组件常量（与 sharing 包的 interface.go 中声明同值，
+	// backend 是独立 Go 包，无法跨包引用 sharing.logComponent）
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件常量（与 sharing 包的 interface.go 中声明同值，
-// backend 是独立 Go 包，无法跨包引用 sharing.logComponent）
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -190,7 +189,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 	}
 	if _, err := fmt.Fprintf(indexFile, "%s\n", indexLine); err != nil {
 		if closeErr := indexFile.Close(); closeErr != nil {
-			logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close 失败")
+			logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close failed")
 		}
 		logger.Warn(logComponent).
 			Str("skill_id", skillID).
@@ -201,7 +200,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 		return sharing.UploadResult{OK: false, Reason: err.Error(), Retryable: true}, err
 	}
 	if closeErr := indexFile.Close(); closeErr != nil {
-		logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close 失败")
+		logger.Warn(logComponent).Err(closeErr).Msg("[LocalFileBackend] indexFile.Close failed")
 	}
 
 	// 更新全局索引

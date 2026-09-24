@@ -431,7 +431,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 		tb.hittMu.Unlock()
 	}
 	// 步骤 5: 日志
-	logger.Info(tbLogComponent).Str("member_name", memberName).Msg("SpawnMember: 成员已创建")
+	logger.Info(tbLogComponent).Str("member_name", memberName).Msg("SpawnMember: member created")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -540,7 +540,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	// 步骤 5: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
 	shutdownMsg, shutdownI18nErr := atschema.T("team.shutdown_request_content")
 	if shutdownI18nErr != nil {
-		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n 键缺失，使用回退值")
+		logger.Warn(tbLogComponent).Err(shutdownI18nErr).Msg("i18n key missing, using fallback value")
 		shutdownMsg = "team.shutdown_request_content"
 	}
 	_, _ = tb.messageManager.SendMessage(ctx, shutdownMsg, memberName, tb.memberName)
@@ -551,7 +551,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	})
 	logger.Info(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 		Bool("force", cfg.force).
-		Msg("ShutdownMember: 成员已请求关闭")
+		Msg("ShutdownMember: shutdown requested")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -574,7 +574,7 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	// 步骤 2: 仅对 BUSY 成员操作（对齐 Python: 非 BUSY 直接返回）
 	if member.Status != string(atschema.MemberStatusBusy) {
 		logger.Info(tbLogComponent).Str("member_name", memberName).Str("status", member.Status).
-			Msg("CancelMember: 成员非忙碌状态，无需取消")
+			Msg("CancelMember: member not busy, no action needed")
 		return atschema.NewMemberOpResultSuccess()
 	}
 	// 步骤 3: 重置该成员的 CLAIMED 任务（通过 taskManager.Reset，对齐 Python）
@@ -583,25 +583,25 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 	resetCount := 0
 	for _, t := range tasks {
 		if result, _ := tb.taskManager.Reset(ctx, t.TaskID); !result.OK {
-			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Msg("CancelMember: 重置任务失败")
+			logger.Warn(tbLogComponent).Str("task_id", t.TaskID).Msg("CancelMember: failed to reset task")
 		} else {
 			resetCount++
 		}
 	}
 	if resetCount > 0 {
 		logger.Info(tbLogComponent).Str("member_name", memberName).
-			Int("reset_count", resetCount).Msg("CancelMember: 已重置成员任务")
+			Int("reset_count", resetCount).Msg("CancelMember: member tasks reset")
 	}
 	// 步骤 4: 发送取消消息（对齐 Python: success = send_message; if not success → return False）
 	cancelMsg, cancelI18nErr := atschema.T("team.cancel_request_content")
 	if cancelI18nErr != nil {
-		logger.Warn(tbLogComponent).Err(cancelI18nErr).Msg("i18n 键缺失，使用回退值")
+		logger.Warn(tbLogComponent).Err(cancelI18nErr).Msg("i18n key missing, using fallback value")
 		cancelMsg = "team.cancel_request_content"
 	}
 	_, msgErr := tb.messageManager.SendMessage(ctx, cancelMsg, memberName, tb.memberName)
 	if msgErr != nil {
 		logger.Error(tbLogComponent).Str("member_name", memberName).Err(msgErr).
-			Msg("CancelMember: 发送取消消息失败")
+			Msg("CancelMember: failed to send cancel message")
 		return atschema.NewMemberOpResultFail("取消消息发送失败: " + memberName)
 	}
 	// 步骤 5: 发布事件
@@ -707,7 +707,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	if tb.onTeamBuilt != nil {
 		if err := tb.onTeamBuilt(ctx); err != nil {
 			logger.Error(tbLogComponent).Str("team_name", tb.teamName).Err(err).
-				Msg("BuildTeam: onTeamBuilt 回调失败")
+				Msg("BuildTeam: onTeamBuilt callback failed")
 		}
 	}
 	// 步骤 6: 事件发布
@@ -717,7 +717,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 		LeaderMemberName: tb.leaderMemberName,
 		Created:          database.GetCurrentTime(),
 	})
-	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("BuildTeam: 团队已创建")
+	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("BuildTeam: team created")
 	return nil
 }
 
@@ -739,7 +739,7 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 		if m.Status != string(atschema.MemberStatusShutdown) {
 			logger.Error(tbLogComponent).Str("team_name", tb.teamName).
 				Str("active_member", m.MemberName).Str("status", m.Status).
-				Msg("CleanTeam: 仍有活跃成员，无法清理")
+				Msg("CleanTeam: active members still present, cannot clean")
 			return false, nil
 		}
 	}
@@ -750,18 +750,18 @@ func (tb *TeamBackend) CleanTeam(ctx context.Context) (bool, error) {
 	// 步骤 4: 回调触发
 	if tb.onTeamCleaned != nil {
 		if err := tb.onTeamCleaned(ctx); err != nil {
-			logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: onTeamCleaned 回调失败")
+			logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: onTeamCleaned callback failed")
 		}
 	}
 	// 步骤 5: 清理路径
 	if err := tb.RemoveCleanupPaths(ctx); err != nil {
-		logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: 移除清理路径失败")
+		logger.Warn(tbLogComponent).Err(err).Msg("CleanTeam: failed to remove cleanup paths")
 	}
 	// 步骤 6: 事件发布
 	tb.PublishEvent(ctx, events.TeamCleanedEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tb.teamName},
 	})
-	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CleanTeam: 团队已清理")
+	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("CleanTeam: team cleaned")
 	return true, nil
 }
 
@@ -780,7 +780,7 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 			if !result.OK {
 				logger.Warn(tbLogComponent).Str("member_name", m.MemberName).
 					Str("reason", result.Reason).
-					Msg("ForceCleanTeam: 关闭成员失败，继续执行")
+					Msg("ForceCleanTeam: failed to shutdown member, continuing")
 			}
 		}
 	}
@@ -789,11 +789,11 @@ func (tb *TeamBackend) ForceCleanTeam(ctx context.Context, shutdownMembers bool)
 	// 步骤 3: 清理路径（对齐 Python: 清理路径失败设 success=false）
 	if err := tb.RemoveCleanupPaths(ctx); err != nil {
 		logger.Error(tbLogComponent).Err(err).Str("team_name", tb.teamName).
-			Msg("ForceCleanTeam: 清理路径失败")
+			Msg("ForceCleanTeam: cleanup paths failed")
 		success = false
 	}
 	if success {
-		logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("ForceCleanTeam: 团队已强制清理")
+		logger.Info(tbLogComponent).Str("team_name", tb.teamName).Msg("ForceCleanTeam: team force-cleaned")
 	}
 	return success, nil
 }
@@ -822,7 +822,7 @@ func (tb *TeamBackend) CancelTask(ctx context.Context, taskID string) atschema.M
 		content := fmt.Sprintf("任务 '%s'（ID: %s）已被团队负责人取消。", task.Title, taskID)
 		_, _ = tb.messageManager.SendMessage(ctx, content, *task.Assignee, tb.memberName)
 	}
-	logger.Info(tbLogComponent).Str("task_id", taskID).Msg("CancelTask: 任务已取消")
+	logger.Info(tbLogComponent).Str("task_id", taskID).Msg("CancelTask: task cancelled")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -839,7 +839,7 @@ func (tb *TeamBackend) CancelAllTasks(ctx context.Context, skipAssignees []strin
 		content := fmt.Sprintf("所有任务（%d 个）已被团队负责人取消。", cancelledCount)
 		_, _ = tb.messageManager.BroadcastMessage(ctx, content, tb.memberName)
 	}
-	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Int("cancelled_count", cancelledCount).Msg("CancelAllTasks: 所有任务已取消")
+	logger.Info(tbLogComponent).Str("team_name", tb.teamName).Int("cancelled_count", cancelledCount).Msg("CancelAllTasks: all tasks cancelled")
 	return cancelledCount, nil
 }
 
@@ -854,31 +854,31 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 	// Python: 三层前置校验
 	// 校验 1: planID 非空（对齐 Python: if not plan_id → return False）
 	if planID == "" {
-		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id 不能为空")
+		logger.Error(tbLogComponent).Msg("ApprovePlan: plan_id must not be empty")
 		return atschema.NewMemberOpResultFail("approve_plan 需要 plan_id")
 	}
 	// 校验 2: plan record 存在（对齐 Python: plan_record = self.task_manager.get_plan_record(plan_id); if not plan_record → return False）
 	planIndex, planErr := tb.taskManager.loadPlanIndex()
 	if planErr != nil || planIndex == nil {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Err(planErr).Msg("ApprovePlan: 计划索引未找到")
+		logger.Error(tbLogComponent).Str("plan_id", planID).Err(planErr).Msg("ApprovePlan: plan index not found")
 		return atschema.NewMemberOpResultFail("计划索引未找到")
 	}
 	planRecord, planExists := planIndex.TaskPlans[planID]
 	if !planExists || planRecord == nil {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: 计划未找到")
+		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan not found")
 		return atschema.NewMemberOpResultFail("计划未找到: " + planID)
 	}
 	memberName := planRecord.MemberName
 	taskID := planRecord.TaskID
 	// 校验 3: member 存在（对齐 Python: member_data = get_member(member_name); if member_data is None → return False）
 	if memberName == "" {
-		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: 计划缺少 member_name")
+		logger.Error(tbLogComponent).Str("plan_id", planID).Msg("ApprovePlan: plan missing member_name")
 		return atschema.NewMemberOpResultFail("计划缺少 member_name: " + planID)
 	}
 	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
 	if err != nil || member == nil {
 		logger.Error(tbLogComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
-			Msg("ApprovePlan: 成员不在团队中")
+			Msg("ApprovePlan: member not in team")
 		return atschema.NewMemberOpResultFail(fmt.Sprintf("成员 %s 不在团队 %s 中", memberName, tb.teamName))
 	}
 	// 执行审批
@@ -887,7 +887,7 @@ func (tb *TeamBackend) ApprovePlan(ctx context.Context, planID string, opts ...A
 		return atschema.NewMemberOpResultFail("审批计划失败: " + result.Reason)
 	}
 	logger.Info(tbLogComponent).Str("plan_id", planID).Str("task_id", taskID).Str("member_name", memberName).
-		Bool("approved", cfg.approved).Msg("ApprovePlan: 计划已审批")
+		Bool("approved", cfg.approved).Msg("ApprovePlan: plan approved")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -907,7 +907,7 @@ func (tb *TeamBackend) ApproveTool(ctx context.Context, memberName, toolCallID s
 		AutoConfirm:      autoConfirm,
 	})
 	logger.Info(tbLogComponent).Str("member_name", memberName).Str("tool_call_id", toolCallID).
-		Bool("approved", approved).Msg("ApproveTool: 工具调用审批结果")
+		Bool("approved", approved).Msg("ApproveTool: tool approval result")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -922,7 +922,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 		if val, err := atschema.T("hitt.human_agent_display_name"); err == nil {
 			displayName = val
 		} else {
-			logger.Warn(tbLogComponent).Err(err).Msg("i18n 键缺失，使用回退值")
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback value")
 			displayName = "hitt.human_agent_display_name"
 		}
 	}
@@ -930,7 +930,7 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 		if val, err := atschema.T("hitt.human_agent_default_persona"); err == nil {
 			desc = val
 		} else {
-			logger.Warn(tbLogComponent).Err(err).Msg("i18n 键缺失，使用回退值")
+			logger.Warn(tbLogComponent).Err(err).Msg("i18n key missing, using fallback value")
 			desc = "hitt.human_agent_default_persona"
 		}
 	}
@@ -943,10 +943,10 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 	result := tb.SpawnMember(ctx, memberName, displayName, memberCard, string(atschema.TeamRoleHumanAgent), desc, prompt, "")
 	if !result.OK {
 		logger.Warn(tbLogComponent).Str("member_name", memberName).Str("reason", result.Reason).
-			Msg("SpawnHumanAgent: 注册 human-agent 失败")
+			Msg("SpawnHumanAgent: failed to register human-agent")
 		return result
 	}
-	logger.Info(tbLogComponent).Str("member_name", memberName).Msg("SpawnHumanAgent: human-agent 已创建")
+	logger.Info(tbLogComponent).Str("member_name", memberName).Msg("SpawnHumanAgent: human-agent created")
 	return atschema.NewMemberOpResultSuccess()
 }
 
@@ -955,12 +955,12 @@ func (tb *TeamBackend) SpawnHumanAgent(ctx context.Context, memberName, displayN
 func (tb *TeamBackend) RefreshHumanAgentRoster(ctx context.Context) {
 	// 步骤 0: 对齐 Python — 先初始化 DB（预热 DAO），确保冷恢复路径中 DAO 已就绪
 	if err := tb.db.Initialize(ctx); err != nil {
-		logger.Debug(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: DB 初始化失败")
+		logger.Debug(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: DB init failed")
 	}
 	// 步骤 1: 查询 human_agent 成员名
 	names, err := tb.db.Member().ListHumanAgentNames(ctx, tb.teamName)
 	if err != nil {
-		logger.Error(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: 查询失败")
+		logger.Error(tbLogComponent).Err(err).Msg("RefreshHumanAgentRoster: query failed")
 		return
 	}
 	tb.hittMu.Lock()
@@ -969,7 +969,7 @@ func (tb *TeamBackend) RefreshHumanAgentRoster(ctx context.Context) {
 		tb.hittNames[n] = struct{}{}
 	}
 	tb.hittMu.Unlock()
-	logger.Info(tbLogComponent).Int("count", len(names)).Msg("RefreshHumanAgentRoster: 名册已重建")
+	logger.Info(tbLogComponent).Int("count", len(names)).Msg("RefreshHumanAgentRoster: roster rebuilt")
 }
 
 // IsHumanAgent 判断是否 human-agent（读缓存）。
@@ -1066,12 +1066,12 @@ func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error {
 			continue
 		}
 		if err := os.RemoveAll(p); err != nil {
-			logger.Error(tbLogComponent).Str("path", p).Err(err).Msg("RemoveCleanupPaths: 删除失败")
+			logger.Error(tbLogComponent).Str("path", p).Err(err).Msg("RemoveCleanupPaths: failed to delete")
 			if firstErr == nil {
 				firstErr = err
 			}
 		} else {
-			logger.Info(tbLogComponent).Str("path", p).Msg("RemoveCleanupPaths: 已删除")
+			logger.Info(tbLogComponent).Str("path", p).Msg("RemoveCleanupPaths: deleted")
 		}
 	}
 	tb.cleanupPaths = make(map[string]struct{})

@@ -14,6 +14,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -23,13 +30,6 @@ var (
 	_configLoaded bool
 	// _configMu 保护并发读写。Go 新增，Python 无此需求（GIL）。
 	_configMu sync.RWMutex
-)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -129,24 +129,24 @@ func Load(configPath ...string) error {
 	// 对齐 Python：先加载 .env（最高优先级）
 	if _, err := os.Stat(envPath); err == nil {
 		if err := loadEnvFile(envPath); err != nil {
-			logger.Warn(logComponent).Str("path", envPath).Err(err).Msg("加载 .env 文件失败")
+			logger.Warn(logComponent).Str("path", envPath).Err(err).Msg("Failed to load .env file")
 		} else {
-			logger.Debug(logComponent).Str("path", envPath).Msg("已加载 .env 配置")
+			logger.Debug(logComponent).Str("path", envPath).Msg("Loaded .env config")
 		}
 	}
 
 	// 对齐 Python：再加载 config.yaml（不覆盖 .env 已有 key）
 	if _, err := os.Stat(yamlPath); err == nil {
 		if err := loadYAMLFile(yamlPath); err != nil {
-			logger.Warn(logComponent).Str("path", yamlPath).Err(err).Msg("加载 config.yaml 文件失败")
+			logger.Warn(logComponent).Str("path", yamlPath).Err(err).Msg("Failed to load config.yaml file")
 		} else {
-			logger.Debug(logComponent).Str("path", yamlPath).Msg("已加载 config.yaml 配置")
+			logger.Debug(logComponent).Str("path", yamlPath).Msg("Loaded config.yaml config")
 		}
 	}
 
 	logger.Info(logComponent).
 		Int("key_count", len(_config)).
-		Msg("配置加载完成")
+		Msg("Config loaded")
 	return nil
 }
 

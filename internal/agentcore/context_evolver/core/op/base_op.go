@@ -54,8 +54,6 @@ func NewOpBase(sc *cecontext.ServiceContext) *OpBase {
 	return &OpBase{sc: sc}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ServiceContext 返回操作持有的服务上下文。
 func (b *OpBase) ServiceContext() *cecontext.ServiceContext {
 	return b.sc

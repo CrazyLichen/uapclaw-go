@@ -48,7 +48,7 @@ func ParseJSONExperienceResponse(response string) []map[string]any {
 	// 无代码块，尝试直接解析整个响应
 	var parsed any
 	if err := json.Unmarshal([]byte(response), &parsed); err != nil {
-		logger.Warn(logComponent).Str("error", err.Error()).Msg("解析 JSON 经验响应失败")
+		logger.Warn(logComponent).Str("error", err.Error()).Msg("Failed to parse JSON experience response")
 		return nil
 	}
 	switch v := parsed.(type) {

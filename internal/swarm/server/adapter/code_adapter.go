@@ -214,7 +214,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 3.5: load_dotenv（对齐 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
 	if err := dotenv.Load(workspace.EnvFile()); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("load_dotenv 失败，继续使用当前环境变量")
+		logger.Warn(logComponent).Err(err).Msg("load_dotenv failed, continuing with current env vars")
 	}
 
 	// 步骤 4: 多模态工具 _refresh_multimodal_configs(configBase)
@@ -395,7 +395,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 23: _register_mcp_servers_from_config(configBase, tag="code")
 	// Python: await self._register_mcp_servers_from_config(config_base, tag="code")
 	if regErr := c.deep.registerMcpServersFromConfig(ctx, configBase, "code"); regErr != nil {
-		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册(code 模式)失败，继续执行")
+		logger.Warn(logComponent).Err(regErr).Msg("MCP service registration (code mode) failed, continuing")
 	}
 
 	// 步骤 24: ⤵️ 10.6.3-10: load_user_rails()
@@ -518,17 +518,17 @@ func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
 	// Code 模式：卸载 TaskPlanningRail 和 SkillEvolutionRail
 	if c.deep.taskPlanningRail != nil && c.deep.instance != nil {
 		if err := c.deep.instance.UnregisterRail(ctx, c.deep.taskPlanningRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail 已注销（Code 模式）")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail unregistered (Code mode)")
 		}
 		c.deep.taskPlanningRail = nil
 	}
 	if c.deep.skillEvolutionRail != nil && c.deep.instance != nil {
 		if err := c.deep.instance.UnregisterRail(ctx, c.deep.skillEvolutionRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail 已注销（Code 模式）")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail unregistered (Code mode)")
 		}
 		c.deep.skillEvolutionRail = nil
 	}
@@ -767,26 +767,26 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		case "web_free_search":
 			freeSearchTool := web_tools.NewWebFreeSearchTool(resolvedLanguage, agentID)
 			if err := runner.GetResourceMgr().AddTool(freeSearchTool); err != nil {
-				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("Failed to register tool to ResourceMgr")
 			}
 			toolCards = append(toolCards, freeSearchTool.Card())
 		case "web_fetch_webpage":
 			fetchTool := web_tools.NewWebFetchWebpageTool(resolvedLanguage, agentID)
 			if err := runner.GetResourceMgr().AddTool(fetchTool); err != nil {
-				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("Failed to register tool to ResourceMgr")
 			}
 			toolCards = append(toolCards, fetchTool.Card())
 		case "web_paid_search":
 			if web_tools.IsPaidSearchEnabled() {
 				paidSearchTool := web_tools.NewWebPaidSearchTool(resolvedLanguage, agentID)
 				if err := runner.GetResourceMgr().AddTool(paidSearchTool); err != nil {
-					logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("注册工具到 ResourceMgr 失败")
+					logger.Warn(logComponent).Err(err).Str("tool", toolName).Msg("Failed to register tool to ResourceMgr")
 				}
 				toolCards = append(toolCards, paidSearchTool.Card())
 			}
 		case "user_todos":
 			// ⤵️ 10.6.3-10: user_todos 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos 工具尚未实现，跳过")
+			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos tool not implemented, skipping")
 		case "skill_toolkit":
 			// Python: JiuwenClawCodeAdapter._build_skill_toolkit(agent_id)
 			// 构建 SkillToolkit 并注册到 ResourceMgr，与 Deep 模式步骤 9 逻辑一致
@@ -796,18 +796,18 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 					existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})
 					if len(existing) == 0 {
 						if err := runner.GetResourceMgr().AddTool(t); err != nil {
-							logger.Warn(logComponent).Err(err).Str("tool", "skill_toolkit").Msg("注册工具到 ResourceMgr 失败")
+							logger.Warn(logComponent).Err(err).Str("tool", "skill_toolkit").Msg("Failed to register tool to ResourceMgr")
 						}
 					}
 					toolCards = append(toolCards, t.Card())
 				}
-				logger.Info(logComponent).Msg("CodeAdapter: SkillToolkit 已注册")
+				logger.Info(logComponent).Msg("CodeAdapter: SkillToolkit registered")
 			}
 		case "acp_chat":
 			// ⤵️ 10.6.24: acp_chat 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat 工具尚未实现，跳过")
+			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat tool not implemented, skipping")
 		default:
-			logger.Warn(logComponent).Str("tool", toolName).Msg("未知的 code 模式工具名，跳过")
+			logger.Warn(logComponent).Str("tool", toolName).Msg("Unknown code mode tool name, skipping")
 		}
 	}
 
@@ -995,7 +995,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 		if len(hooksCfg.Events) > 0 {
 			userHookRail := serverhooks.NewUserHookRail(*hooksCfg)
 			railsList = append(railsList, userHookRail)
-			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
+			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail loaded")
 		}
 	}()
 
@@ -1212,7 +1212,7 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 		}
 	}()
 	rail := commonrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
-	logger.Info(logComponent).Msg("StructuredAskUserRail 创建成功")
+	logger.Info(logComponent).Msg("StructuredAskUserRail created")
 	return rail
 }
 
@@ -1220,7 +1220,7 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 // ✅ 已回填：ConfirmInterruptRail（对齐 Python: _build_confirm_interrupt_rail() — ConfirmInterruptRail(tool_names=["switch_mode"])）
 func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
 	rail := interrupt.NewConfirmInterruptRail("switch_mode")
-	logger.Info(logComponent).Msg("ConfirmInterruptRail 创建成功")
+	logger.Info(logComponent).Msg("ConfirmInterruptRail created")
 	return rail
 }
 
@@ -1371,12 +1371,12 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 	// Python: config_base = get_config()
 	cfg, cfgErr := cfgPkg.New("")
 	if cfgErr != nil {
-		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: 获取配置失败")
+		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: failed to get config")
 		return
 	}
 	configBase, cfgErr := cfg.Load()
 	if cfgErr != nil {
-		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: 加载配置失败")
+		logger.Error(logComponent).Err(cfgErr).Msg("ConfigureTeamMemberAgent: failed to load config")
 		return
 	}
 

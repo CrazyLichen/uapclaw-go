@@ -231,7 +231,7 @@ func (sc *StreamController) StartRound(ctx context.Context, content any) error {
 		}
 	}
 	logger.Info(scLogComponent).Str("member_name", sc.memberName()).
-		Str("preview", preview).Msg("启动 Agent")
+		Str("preview", preview).Msg("Agent started")
 
 	sc.startRound(ctx, content)
 	return nil
@@ -339,7 +339,7 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 	if harness != nil {
 		if err := harness.Abort(ctx); err != nil {
 			logger.Debug(scLogComponent).Str("member_name", sc.memberName()).
-				Err(err).Msg("harness.Abort 失败")
+				Err(err).Msg("harness.Abort failed")
 		}
 	}
 	// 等待 goroutine 自然完成或超时
@@ -376,8 +376,6 @@ func (e *taskFailedError) Code() int {
 func (e *taskFailedError) Text() string {
 	return e.text
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // memberName 解析当前成员名。
 // Python: StreamController._member_name()
@@ -489,7 +487,7 @@ func (sc *StreamController) startRound(ctx context.Context, content any) {
 func (sc *StreamController) logRoundPanic() {
 	if r := recover(); r != nil {
 		logger.Error(scLogComponent).Str("member_name", sc.memberName()).
-			Any("panic", r).Msg("_run_one_round 协程 panic")
+			Any("panic", r).Msg("_run_one_round goroutine panic")
 	}
 }
 
@@ -501,7 +499,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error(scLogComponent).Str("member_name", sc.memberName()).
-				Any("panic", r).Msg("runOneRound panic; 设 ERROR 状态")
+				Any("panic", r).Msg("runOneRound panic; setting ERROR status")
 			_ = sc.updateStatus(savedCtx, atschema.MemberStatusError)
 		}
 	}()
@@ -729,7 +727,7 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 			attempt++
 			logger.Warn(scLogComponent).Int("error_code", code).
 				Int("attempt", attempt).Int("max_attempts", maxRetryAttempts).
-				Str("error_text", text).Msg("DeepAgent 循环瞬态错误")
+				Str("error_text", text).Msg("DeepAgent loop transient error")
 			currentQuery = retryQuery
 			continue
 		}
@@ -789,6 +787,8 @@ func (sc *StreamController) combinePendingInputs(items []any) any {
 	}
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // detectTaskFailed 检测 chunk 中的 task_failed 错误。
 // Python: _detect_task_failed(chunk) → Optional[Tuple[Optional[int], str]]

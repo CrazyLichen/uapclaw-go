@@ -294,7 +294,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	}
 
 	if err := d.drainPendingHarnessConfigs(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("drainPendingHarnessConfigs 失败")
+		logger.Warn(logComponent).Err(err).Msg("drainPendingHarnessConfigs failed")
 	}
 
 	d.configMu.RLock()
@@ -334,7 +334,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
 				ch, err := d.runTaskLoopStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
-					logger.Error(logComponent).Err(err).Msg("runTaskLoopStream 启动失败")
+					logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
 					return err
 				}
 				for chunk := range ch {
@@ -347,7 +347,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			} else {
 				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
-					logger.Error(logComponent).Err(err).Msg("runSingleRoundStream 启动失败")
+					logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
 					return err
 				}
 				for chunk := range ch {
@@ -526,7 +526,7 @@ func (d *DeepAgent) LoadState(sess sessioninterfaces.SessionFacade) *hschema.Dee
 	// 从持久化状态加载
 	data, err := sess.GetState(sessstate.StringKey(hschema.SessionStateKey))
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("LoadState: GetState 失败，使用默认状态")
+		logger.Warn(logComponent).Err(err).Msg("LoadState: GetState failed, using default state")
 	}
 	var loaded hschema.DeepAgentState
 	if dataMap, ok := data.(map[string]any); ok {
@@ -582,7 +582,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText
 		d.configMu.RUnlock()
 
 		if loopSess == nil {
-			logger.Warn(logComponent).Msg("[AutoInvoke] 会话在延迟期间被清理，跳过")
+			logger.Warn(logComponent).Msg("[AutoInvoke] session cleaned up during delay, skipping")
 			return
 		}
 
@@ -592,7 +592,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText
 		_, err := d.Invoke(invokeCtx, map[string]any{"query": steerText},
 			agentinterfaces.WithSession(loopSess))
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("[AutoInvoke] 自动 invoke 失败")
+			logger.Error(logComponent).Err(err).Msg("[AutoInvoke] auto invoke failed")
 		}
 	}()
 
@@ -611,7 +611,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 
 	// 如果 spec 本身就是 *DeepAgent 实例，直接返回
 	if deepAgent, ok := spec.(*DeepAgent); ok {
-		logger.Info(logComponent).Str("subagent_type", subagentType).Msg("已获得 DeepAgent 实例，直接返回")
+		logger.Info(logComponent).Str("subagent_type", subagentType).Msg("DeepAgent instance acquired, returning directly")
 		return deepAgent, nil
 	}
 
@@ -829,7 +829,7 @@ func (d *DeepAgent) SwitchMode(sess sessioninterfaces.SessionFacade, mode string
 	state := d.LoadState(sess)
 	if state.PlanMode.Mode == mode {
 		state.PlanMode.PrePlanMode = state.PlanMode.Mode
-		logger.Info(logComponent).Str("mode", mode).Msg("[DeepAgent] 会话中模式相同，无需切换")
+		logger.Info(logComponent).Str("mode", mode).Msg("[DeepAgent] session mode unchanged, no switch needed")
 		return
 	}
 	state.PlanMode.PrePlanMode = state.PlanMode.Mode
@@ -906,7 +906,7 @@ func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, ses
 
 	// Python: controller.event_queue.publish_event_async(card.id, sess, event)
 	if err := ctrl.PublishEventAsync(ctx, sessToUse, event); err != nil {
-		logger.Error(logComponent).Err(err).Str("msg", msg).Msg("FollowUp 发布事件失败")
+		logger.Error(logComponent).Err(err).Str("msg", msg).Msg("FollowUp failed to publish event")
 	}
 }
 
@@ -935,10 +935,10 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 		Interaction: []cschema.DataFrame{&cschema.TextDataFrame{Text: msg}},
 	}
 	if err := ctrl.PublishEventAsync(ctx, s, event); err != nil {
-		logger.Warn(logComponent).Err(err).Str("msg", msg).Msg("Steer 发布 TaskInteractionEvent 失败")
+		logger.Warn(logComponent).Err(err).Str("msg", msg).Msg("Steer failed to publish TaskInteractionEvent")
 		return
 	}
-	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: TaskInteractionEvent 已发布")
+	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: TaskInteractionEvent published")
 }
 
 // Abort 请求立即中止任务循环。
@@ -1005,7 +1005,7 @@ func (d *DeepAgent) InitWorkspace(ctx context.Context) error {
 	}
 
 	// ⤵️ 9.3 回填：DirectoryBuilder 构建逻辑
-	logger.Info(logComponent).Str("root_path", cfg.Workspace.RootPath).Msg("InitWorkspace: 目录构建待补全")
+	logger.Info(logComponent).Str("root_path", cfg.Workspace.RootPath).Msg("InitWorkspace: directory setup pending")
 	return nil
 }
 
@@ -1144,8 +1144,6 @@ func (d *DeepAgent) SpecName() string {
 	return d.card.Name
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveContextSessionID 解析上下文 API 使用的会话 ID。
 // Python: DeepAgent._resolve_context_session_id(session_id) (line 483)
 func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
@@ -1230,6 +1228,8 @@ func (d *DeepAgent) resolveContextWindowTokens() int {
 
 	return cecontext.ResolveContextMax(modelName, fallbackTokens, modelContextWindowTokens)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeContextMessages 规范化上下文消息输入。
 // Python: DeepAgent._normalize_context_messages(messages) (line 614)
@@ -1391,11 +1391,11 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	if err := d.reactAgent.Configure(ctx, &newReactConfig); err != nil {
-		logger.Error(logComponent).Err(err).Msg("热重配置 ReActAgent 模型失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to hot-reconfigure ReActAgent model")
 		return
 	}
 
-	logger.Info(logComponent).Msg("[DeepAgent] 模型配置热重载完成")
+	logger.Info(logComponent).Msg("[DeepAgent] model config hot-reload completed")
 }
 
 // hotReloadTools 同步 AbilityManager 工具卡片。
@@ -1492,7 +1492,7 @@ func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.D
 				{"role": "system", "content": prompt},
 			}
 			if err := d.reactAgent.Configure(ctx, &newReactConfig); err != nil {
-				logger.Error(logComponent).Err(err).Msg("热重配置系统提示词失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to hot-reconfigure system prompt")
 			}
 		}
 	}
@@ -1502,7 +1502,7 @@ func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.D
 		d.reactAgent.SetPromptBuilder(promptBuilder.SystemPromptBuilder)
 	}
 
-	logger.Info(logComponent).Msg("[DeepAgent] 系统提示词热重载完成")
+	logger.Info(logComponent).Msg("[DeepAgent] system prompt hot-reload completed")
 }
 
 // queuePendingRails 将配置驱动的 Rail 追加到待注册列表。
@@ -1520,13 +1520,13 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	if config.ProgressiveToolEnabled {
 		// ⤴️ 9.11 回填：ProgressiveToolRail 创建
 		d.pendingRails = append(d.pendingRails, rails.NewProgressiveToolRail(config))
-		logger.Debug(logComponent).Msg("ProgressiveToolRail 已创建，⤴️ 9.11 回填")
+		logger.Debug(logComponent).Msg("ProgressiveToolRail created, backfill from 9.11")
 	}
 
 	if config.EnableTaskLoop {
 		// ⤴️ 9.12 回填：TaskCompletionRail 创建
 		d.pendingRails = append(d.pendingRails, rails.NewTaskCompletionRail())
-		logger.Debug(logComponent).Msg("TaskCompletionRail 已创建，⤴️ 9.12 回填")
+		logger.Debug(logComponent).Msg("TaskCompletionRail created, backfill from 9.12")
 	}
 
 	if config.Permissions != nil {
@@ -1550,7 +1550,7 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 		)
 		if permRail != nil {
 			d.pendingRails = append(d.pendingRails, permRail)
-			logger.Debug(logComponent).Msg("PermissionInterruptRail 已创建，⤴️ 9.19 SecurityRail 回填")
+			logger.Debug(logComponent).Msg("PermissionInterruptRail created, backfill from 9.19 SecurityRail")
 		}
 	}
 }
@@ -1623,7 +1623,7 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 
 	// Configure 内部会覆盖 promptBuilder
 	if err := agent.Configure(ctx, reactConfig); err != nil {
-		logger.Error(logComponent).Err(err).Msg("内层 ReActAgent Configure 失败")
+		logger.Error(logComponent).Err(err).Msg("Inner ReActAgent Configure failed")
 	}
 
 	// 覆盖回共享 builder（对齐 Python L755-762）
@@ -1664,7 +1664,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 		initRoot := cfg.Workspace.RootPath
 		cwdState := cwd.InitCwd(initRoot, cwd.WithWorkspace(initRoot))
 		ctx = cwd.WithCwdState(ctx, cwdState)
-		logger.Info(logComponent).Str("init_root", initRoot).Msg("CWD 已初始化")
+		logger.Info(logComponent).Str("init_root", initRoot).Msg("CWD initialized")
 	}
 
 	// 注册待处理的 MCP 服务器
@@ -1673,7 +1673,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	// 工作空间初始化
 	if d.needsWorkspaceInit() {
 		if err := d.InitWorkspace(ctx); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("工作空间初始化失败")
+			logger.Warn(logComponent).Err(err).Msg("Workspace initialization failed")
 		}
 	}
 
@@ -1704,7 +1704,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	// 执行废弃 Rail 注销
 	for _, staleRail := range staleToUnregister {
 		if err := d.UnregisterRail(ctx, staleRail); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("注销废弃 Rail 失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to unregister deprecated Rail")
 		}
 	}
 
@@ -1726,7 +1726,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 			}
 		}
 		if err := r.Init(ctx, d); err != nil {
-			logger.Warn(logComponent).Err(err).Str("rail_type", reflect.TypeOf(r).String()).Msg("Rail 初始化失败")
+			logger.Warn(logComponent).Err(err).Str("rail_type", reflect.TypeOf(r).String()).Msg("Rail initialization failed")
 			continue
 		}
 		d.registerRailSelective(ctx, r)
@@ -1771,7 +1771,7 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 			// Python: existing_config is None → add_mcp_server
 			_, addErr := resourceMgr.AddMcpServer(ctx, mcpConfig, resources_manager.WithMcpTag(resources_manager.Tag(d.card.ID)))
 			if addErr != nil {
-				logger.Error(logComponent).Err(addErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 服务器注册失败")
+				logger.Error(logComponent).Err(addErr).Str("server_id", mcpConfig.ServerID).Msg("MCP server registration failed")
 				continue
 			}
 		} else {
@@ -1786,21 +1786,21 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 			// Python: add_resource_tag(server_id, self.card.id)
 			_, tagErr := resourceMgr.AddResourceTag(mcpConfig.ServerID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 			if tagErr != nil {
-				logger.Warn(logComponent).Err(tagErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 资源标签添加失败")
+				logger.Warn(logComponent).Err(tagErr).Str("server_id", mcpConfig.ServerID).Msg("MCP resource tag addition failed")
 			}
 
 			// Python: for tool_id in get_mcp_tool_ids → add_resource_tag
 			for _, toolID := range resourceMgr.GetMcpToolIDs(mcpConfig.ServerID) {
 				_, tagErr := resourceMgr.AddResourceTag(toolID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 				if tagErr != nil {
-					logger.Warn(logComponent).Err(tagErr).Str("tool_id", toolID).Msg("MCP 工具标签添加失败")
+					logger.Warn(logComponent).Err(tagErr).Str("tool_id", toolID).Msg("MCP tool tag addition failed")
 				}
 			}
 		}
 
 		// Python: self.ability_manager.add(mcp_config)
 		d.abilityManager.Add(mcpConfig)
-		logger.Debug(logComponent).Str("server_id", mcpConfig.ServerID).Msg("MCP 配置已注册")
+		logger.Debug(logComponent).Str("server_id", mcpConfig.ServerID).Msg("MCP config registered")
 	}
 }
 
@@ -2053,7 +2053,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 	sessionID := sess.GetSessionID()
 	if boundID != sessionID {
 		if err := ctrl.BindSession(ctx, sess); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("绑定会话失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to bind session")
 		}
 		d.configMu.Lock()
 		d.boundSessionID = sessionID
@@ -2120,7 +2120,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 			logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
 
 			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), isFollowUp, isStreaming, modified.RunKind, modified.RunContext); err != nil {
-				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
+				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("Failed to commit round")
 				break
 			}
 
@@ -2408,12 +2408,12 @@ func (d *DeepAgent) forceCleanupController(ctx context.Context) {
 
 	if loopSess != nil {
 		if err := ctrl.UnbindSession(ctx, loopSess); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("force cleanup 时 UnbindSession 失败")
+			logger.Warn(logComponent).Err(err).Msg("UnbindSession failed during force cleanup")
 		}
 	}
 
 	if err := ctrl.Stop(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("force cleanup 时 Stop 失败")
+		logger.Warn(logComponent).Err(err).Msg("Stop failed during force cleanup")
 	}
 
 	d.configMu.Lock()
@@ -2571,10 +2571,10 @@ func (d *DeepAgent) drainPendingHarnessConfigs(ctx context.Context) error {
 	for _, path := range configs {
 		loaded, err := d.LoadHarnessConfig(ctx, path)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("path", path).Msg("自动加载 harness 配置失败")
+			logger.Error(logComponent).Err(err).Str("path", path).Msg("Failed to auto-load harness config")
 			continue
 		}
-		logger.Info(logComponent).Str("path", path).Any("loaded", loaded).Msg("自动加载 harness 配置成功")
+		logger.Info(logComponent).Str("path", path).Any("loaded", loaded).Msg("Harness config auto-loaded successfully")
 	}
 	return nil
 }
@@ -2678,7 +2678,7 @@ func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
 		// Python: remove_resource_tag(card.id, self.card.id, skip_if_tag_not_exists=True)
 		_, err := resourceMgr.RemoveResourceTag(card.ID, []resources_manager.Tag{agentTag}, resources_manager.WithTagSkipIfNotExists())
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("移除工具标签失败")
+			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("Failed to remove tool tags")
 		}
 		return
 	}
@@ -2687,7 +2687,7 @@ func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
 	if agentInTags || len(tags) == 0 {
 		_, err := resourceMgr.RemoveTool([]string{card.ID})
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("注销工具失败")
+			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("Failed to unregister tool")
 		}
 	}
 }
@@ -2708,7 +2708,7 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 		// Python: add_resource_tag(card.id, self.card.id)
 		_, tagErr := resourceMgr.AddResourceTag(card.ID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
 		if tagErr != nil {
-			logger.Warn(logComponent).Err(tagErr).Str("tool_id", card.ID).Msg("标记已存在的搜索工具失败")
+			logger.Warn(logComponent).Err(tagErr).Str("tool_id", card.ID).Msg("Failed to tag existing search tool")
 		}
 		return
 	}
@@ -2724,7 +2724,7 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 		webTool = web_tools.NewWebFreeSearchTool(language, d.card.ID)
 	}
 	if addErr := resourceMgr.AddTool(webTool, resources_manager.WithTag(resources_manager.Tag(d.card.ID))); addErr != nil {
-		logger.Warn(logComponent).Err(addErr).Str("tool_id", card.ID).Msg("注册搜索工具失败")
+		logger.Warn(logComponent).Err(addErr).Str("tool_id", card.ID).Msg("Failed to register search tool")
 	}
 }
 

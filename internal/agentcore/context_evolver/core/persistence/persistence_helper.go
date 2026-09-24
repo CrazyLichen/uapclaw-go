@@ -123,15 +123,13 @@ func WithMilvusCollection(name string) PersistenceOption {
 	return func(h *MemoryPersistenceHelper) { h.milvusCollection = name }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Save 持久化节点到后端。
 // 对齐 Python MemoryPersistenceHelper.save(user_id, algo_name, nodes_dict)。
 // P1 只实现 JSON 后端。JSON 模式下先加载已有文件再合并写入（upsert 语义）。
 // 空数据直接返回（对齐 Python）。
 func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[string]any) error {
 	if len(nodesDict) == 0 {
-		logger.Debug(logComponent).Str("user_id", userID).Str("algo", algoName).Msg("空数据跳过持久化")
+		logger.Debug(logComponent).Str("user_id", userID).Str("algo", algoName).Msg("Empty data, skipping persistence")
 		return nil
 	}
 	return h.saveJSON(userID, algoName, nodesDict)
@@ -207,7 +205,7 @@ func (h *MemoryPersistenceHelper) saveJSON(userID, algoName string, nodesDict ma
 	if h.jsonConnector.Exists(path) {
 		loaded, err := h.jsonConnector.LoadFromFile(path)
 		if err != nil {
-			logger.Error(logComponent).Str("path", path).Err(err).Msg("加载已有 JSON 失败")
+			logger.Error(logComponent).Str("path", path).Err(err).Msg("Failed to load existing JSON")
 			// 不阻断，继续写入（对齐 Python 只记日志不中断的行为）
 		} else {
 			existing = loaded
@@ -227,7 +225,7 @@ func (h *MemoryPersistenceHelper) saveJSON(userID, algoName string, nodesDict ma
 		Str("path", path).
 		Int("count", len(nodesDict)).
 		Str("algo", algoName).
-		Msg("持久化记忆到 JSON")
+		Msg("Persisted memories to JSON")
 	return nil
 }
 
@@ -247,6 +245,6 @@ func (h *MemoryPersistenceHelper) loadJSON(userID, algoName string) (map[string]
 		Str("path", path).
 		Int("count", len(data)).
 		Str("algo", algoName).
-		Msg("从 JSON 加载记忆")
+		Msg("Loaded memories from JSON")
 	return data, nil
 }

@@ -231,6 +231,10 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 		if currentSource == "skillnet" {
 			params["mode"] = "vector"
 		}
+		// 传递 market_url 参数（TeamSkillsHub 搜索需要）
+		if v := toString(inputs["market_url"]); v != "" {
+			params["market_url"] = v
+		}
 
 		var payload map[string]any
 		switch currentSource {

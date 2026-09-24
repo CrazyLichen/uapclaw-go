@@ -140,8 +140,6 @@ func (o *InstructionOptimizer) Step() (map[schema.UpdateKey]any, error) {
 	return o.StepTemplate(o.step)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // backward 反向传播主逻辑。
 //
 // Python: InstructionOptimizer._backward(signals)
@@ -625,6 +623,8 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 
 	return raw, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractTag 提取 XML 标签内容。
 //

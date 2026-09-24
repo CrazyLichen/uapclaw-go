@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -92,10 +92,10 @@ func NewContextEvolvingReActAgent(
 	var err error
 	if memoryService == nil && persistType != nil {
 		cfg := &service.TaskMemoryServiceConfig{
-			PersistType:     persistType,
-			PersistPath:     persistPath,
-			MilvusHost:      milvusHost,
-			MilvusPort:      milvusPort,
+			PersistType:      persistType,
+			PersistPath:      persistPath,
+			MilvusHost:       milvusHost,
+			MilvusPort:       milvusPort,
 			MilvusCollection: milvusCollection,
 		}
 		memoryService, err = service.NewTaskMemoryService(cfg)
@@ -183,11 +183,28 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 // Execute 实现 AgentFlowService 接口。
 // runTrialsInner 通过此路径调用，走内层 invokeWithMemory 避免递归。
 // 对齐 Python _run_trials_inner 中 getattr(agent, "_invoke_with_memory", agent.invoke)。
-func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, sessionID string) (*cecontext.TrajectoryResult, error) {
+func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, sessionID string, opts ...cecontext.AgentFlowOption) (*cecontext.TrajectoryResult, error) {
+	// 解析 AgentFlow 选项
+	cfg := &cecontext.AgentFlowConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// 对齐 Python: retrieval_query 优先使用显式传入的值，否则默认用 query
+	rq := query
+	if cfg.RetrievalQuery != "" {
+		rq = cfg.RetrievalQuery
+	}
+
 	inputs := map[string]any{
-		"query":          query,
-		"retrieval_query": query, // 自纠正模式传入原始问题
-		"session_id":     sessionID,
+		"query":           query,
+		"retrieval_query": rq,
+		"session_id":      sessionID,
+	}
+
+	// 对齐 Python: llm_temperature 设置
+	if cfg.LLMTemperature != 0 {
+		inputs["llm_temperature"] = cfg.LLMTemperature
 	}
 
 	result, err := a.invokeWithMemory(ctx, inputs)
@@ -229,10 +246,10 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	// 重新创建 TaskMemoryService（如果存在）
 	if a.memoryService != nil {
 		cfg := &service.TaskMemoryServiceConfig{
-			LLMModel:      modelName,
+			LLMModel:       modelName,
 			EmbeddingModel: ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small"),
-			APIKey:        apiKey,
-			APIBase:       apiBase,
+			APIKey:         apiKey,
+			APIBase:        apiBase,
 		}
 		newSvc, err := service.NewTaskMemoryService(cfg)
 		if err != nil {
@@ -253,6 +270,13 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 	retrievalQuery := query
 	if rq, ok := inputs["retrieval_query"].(string); ok && rq != "" {
 		retrievalQuery = rq
+	}
+
+	// 对齐 Python: llm_temperature 设置
+	// 从 inputs 中读取 llm_temperature（由 ParallelScalingOp 通过 AgentFlowOption 传入）
+	// TODO(#9.82): ReActAgent.Invoke 支持读取 llm_temperature 传给 Model.Generate
+	if llmTemp, ok := inputs["llm_temperature"]; ok {
+		_ = llmTemp // 当前 ReActAgent 不支持动态温度，待后续集成
 	}
 
 	// 对齐 Python：1. 检索记忆（带缓存）

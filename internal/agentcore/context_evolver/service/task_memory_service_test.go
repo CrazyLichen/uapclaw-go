@@ -13,8 +13,8 @@ import (
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/vector_store"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -379,9 +379,9 @@ func TestTaskMemoryService_LoadMemories_有Persistence(t *testing.T) {
 	// 预先保存一些数据
 	nodesData := map[string]any{
 		"ace_user1_m1": map[string]any{
-			"id":       "ace_user1_m1",
-			"content":  "test memory",
-			"metadata": map[string]any{"workspace_id": "user1"},
+			"id":        "ace_user1_m1",
+			"content":   "test memory",
+			"metadata":  map[string]any{"workspace_id": "user1"},
 			"embedding": []float64{0.1, 0.2},
 		},
 	}
@@ -389,8 +389,8 @@ func TestTaskMemoryService_LoadMemories_有Persistence(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := &TaskMemoryService{
-		summaryAlgorithm: "ACE",
-		vectorStore:      vs,
+		summaryAlgorithm:  "ACE",
+		vectorStore:       vs,
 		persistenceHelper: ph,
 	}
 
@@ -431,7 +431,7 @@ func TestApplyConfigDefaults(t *testing.T) {
 // TestApplyConfigDefaults_自定义值 验证自定义值不被覆盖。
 func TestApplyConfigDefaults_自定义值(t *testing.T) {
 	cfg := applyConfigDefaults(&TaskMemoryServiceConfig{
-		LLMModel:      "custom-model",
+		LLMModel:       "custom-model",
 		EmbeddingModel: "custom-emb",
 		RetrievalAlgo:  "RB",
 		SummaryAlgo:    "ReMe",
@@ -497,7 +497,7 @@ func TestTaskMemoryService_GetPlaybook_ACE(t *testing.T) {
 	))
 
 	svc := &TaskMemoryService{
-		vectorStore:       vs,
+		vectorStore:      vs,
 		summaryAlgorithm: "ACE",
 	}
 
@@ -515,7 +515,7 @@ func TestTaskMemoryService_ClearPlaybook_ACE(t *testing.T) {
 	))
 
 	svc := &TaskMemoryService{
-		vectorStore:       vs,
+		vectorStore:      vs,
 		summaryAlgorithm: "ACE",
 	}
 
@@ -566,10 +566,10 @@ func TestFormatMemoryItems_混合类型(t *testing.T) {
 // TestTaskMemoryService_属性访问器 验证 PersistType/PersistPath/Milvus 属性。
 func TestTaskMemoryService_属性访问器(t *testing.T) {
 	svc := &TaskMemoryService{
-		persistType:     strPtr("milvus"),
-		persistPath:     "/tmp/memories",
-		milvusHost:      "localhost",
-		milvusPort:      19530,
+		persistType:      strPtr("milvus"),
+		persistPath:      "/tmp/memories",
+		milvusHost:       "localhost",
+		milvusPort:       19530,
 		milvusCollection: "vector_nodes",
 	}
 	assert.Equal(t, "milvus", *svc.PersistType())

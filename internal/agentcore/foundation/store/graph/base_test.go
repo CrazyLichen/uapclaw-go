@@ -43,12 +43,13 @@ func (f *fakeGraphStore) Search(ctx context.Context, query string, opts ...Optio
 	return nil, nil
 }
 func (f *fakeGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) error { return nil }
+func (f *fakeGraphStore) ReturnSimilarityScore() bool                           { return true }
 
 // TestRegisterBackend_正常注册 测试正常注册
 func TestRegisterBackend_正常注册(t *testing.T) {
 	// 使用独立的 factory 避免污染全局
-	f := &GraphStoreFactory{backends: make(map[string]func(*GraphConfig) (BaseGraphStore, error))}
-	constructor := func(cfg *GraphConfig) (BaseGraphStore, error) {
+	f := &GraphStoreFactory{backends: make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error))}
+	constructor := func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{config: cfg}, nil
 	}
 	f.backends["test"] = constructor
@@ -61,10 +62,10 @@ func TestRegisterBackend_正常注册(t *testing.T) {
 func TestNewFromConfig_正常创建(t *testing.T) {
 	// 临时替换全局 factory 的 backends
 	origBackends := globalFactory.backends
-	globalFactory.backends = make(map[string]func(*GraphConfig) (BaseGraphStore, error))
+	globalFactory.backends = make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error))
 	defer func() { globalFactory.backends = origBackends }()
 
-	err := RegisterBackend("test_backend", func(cfg *GraphConfig) (BaseGraphStore, error) {
+	err := RegisterBackend("test_backend", func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{config: cfg}, nil
 	})
 	if err != nil {
@@ -73,7 +74,7 @@ func TestNewFromConfig_正常创建(t *testing.T) {
 
 	cfg := NewGraphConfig("http://localhost:19530")
 	cfg.Backend = "test_backend"
-	store, err := NewFromConfig(cfg)
+	store, err := NewFromConfig(cfg, nil)
 	if err != nil {
 		t.Fatalf("创建图存储失败: %v", err)
 	}
@@ -85,12 +86,12 @@ func TestNewFromConfig_正常创建(t *testing.T) {
 // TestNewFromConfig_未找到后端 测试未找到后端
 func TestNewFromConfig_未找到后端(t *testing.T) {
 	origBackends := globalFactory.backends
-	globalFactory.backends = make(map[string]func(*GraphConfig) (BaseGraphStore, error))
+	globalFactory.backends = make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error))
 	defer func() { globalFactory.backends = origBackends }()
 
 	cfg := NewGraphConfig("http://localhost:19530")
 	cfg.Backend = "nonexistent"
-	_, err := NewFromConfig(cfg)
+	_, err := NewFromConfig(cfg, nil)
 	if err == nil {
 		t.Error("未注册的后端应返回错误")
 	}
@@ -99,13 +100,13 @@ func TestNewFromConfig_未找到后端(t *testing.T) {
 // TestRegisterBackend_重复注册 测试重复注册
 func TestRegisterBackend_重复注册(t *testing.T) {
 	origBackends := globalFactory.backends
-	globalFactory.backends = make(map[string]func(*GraphConfig) (BaseGraphStore, error))
+	globalFactory.backends = make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error))
 	defer func() { globalFactory.backends = origBackends }()
 
-	_ = RegisterBackend("dup", func(cfg *GraphConfig) (BaseGraphStore, error) {
+	_ = RegisterBackend("dup", func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{}, nil
 	})
-	err := RegisterBackend("dup", func(cfg *GraphConfig) (BaseGraphStore, error) {
+	err := RegisterBackend("dup", func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{}, nil
 	})
 	if err == nil {
@@ -116,13 +117,13 @@ func TestRegisterBackend_重复注册(t *testing.T) {
 // TestRegisterBackend_强制覆盖 测试强制覆盖
 func TestRegisterBackend_强制覆盖(t *testing.T) {
 	origBackends := globalFactory.backends
-	globalFactory.backends = make(map[string]func(*GraphConfig) (BaseGraphStore, error))
+	globalFactory.backends = make(map[string]func(*GraphConfig, map[string]any) (BaseGraphStore, error))
 	defer func() { globalFactory.backends = origBackends }()
 
-	_ = RegisterBackend("dup", func(cfg *GraphConfig) (BaseGraphStore, error) {
+	_ = RegisterBackend("dup", func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{}, nil
 	})
-	err := RegisterBackend("dup", func(cfg *GraphConfig) (BaseGraphStore, error) {
+	err := RegisterBackend("dup", func(cfg *GraphConfig, extraKwargs map[string]any) (BaseGraphStore, error) {
 		return &fakeGraphStore{}, nil
 	}, true)
 	if err != nil {

@@ -201,7 +201,8 @@ func (f *fakeErrorVectorStore) GetAll(metadataFilter map[string]any) []*coresche
 	return f.vector_store.GetAll(metadataFilter)
 }
 
-// TestACERecallMemoryOp_Search失败 测试 Search 返回错误时传播错误
+// TestACERecallMemoryOp_Search失败 测试 Search 返回错误时回退到空结果
+// 对齐 Python LoadPlaybookOp：搜索失败回退到空 Playbook 而非返回 error
 func TestACERecallMemoryOp_Search失败(t *testing.T) {
 	sc := cecontext.NewServiceContext()
 	vs := &fakeErrorVectorStore{vector_store: vector_store.NewMemoryVectorStore()}
@@ -212,6 +213,10 @@ func TestACERecallMemoryOp_Search失败(t *testing.T) {
 	rc.Set("user_id", "user1")
 
 	err := op.Execute(context.Background(), rc)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ACE memory search failed")
+	// 对齐 Python: Search 失败时回退到空结果，不返回 error
+	assert.NoError(t, err)
+	// 验证回退到空结果
+	items, ok := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
+	assert.True(t, ok)
+	assert.Empty(t, items)
 }

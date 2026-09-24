@@ -82,7 +82,7 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 		}
 	}
 	if loadOK {
-		logger.Info(logComponent).Msg("集合加载成功，跳过重建")
+		logger.Info(logComponent).Msg("Collection loaded successfully, skipping rebuild")
 		return nil
 	}
 
@@ -90,13 +90,13 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 		has, err := client.HasCollection(ctx, milvusclient.NewHasCollectionOption(coll))
 		if err == nil && has {
-			logger.Warn(logComponent).Str("collection", coll).Msg("即将删除集合，重建失败时旧数据将丢失")
+			logger.Warn(logComponent).Str("collection", coll).Msg("About to drop collection, old data will be lost if rebuild fails")
 		}
 	}
 
 	// 加载失败，删数据库再重建，对齐 Python: drop database
 	if err := client.DropDatabase(ctx, milvusclient.NewDropDatabaseOption(s.config.Name)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("db_name", s.config.Name).Msg("删除数据库失败，回退到删除集合")
+		logger.Warn(logComponent).Err(err).Str("db_name", s.config.Name).Msg("Failed to drop database, falling back to drop collection")
 		// 回退到删除集合
 		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 			has, err := client.HasCollection(ctx, milvusclient.NewHasCollectionOption(coll))
@@ -113,11 +113,11 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 
 	// 重新创建集合
 	if err := EnsureCollections(ctx, client, s.config.StorageConfig, s.config.IndexConfig, s.config.EmbedDim); err != nil {
-		logger.Error(logComponent).Err(err).Msg("重建集合失败，旧数据已丢失，请手动恢复")
+		logger.Error(logComponent).Err(err).Msg("Failed to rebuild collection, old data lost, manual recovery required")
 		return fmt.Errorf("重建集合失败: %w", err)
 	}
 
-	logger.Info(logComponent).Msg("成功重建图存储集合")
+	logger.Info(logComponent).Msg("Successfully rebuilt graph store collection")
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) er
 
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 		if err := client.Flush(ctx, milvusclient.NewFlushOption(coll)); err != nil {
-			logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Flush 失败")
+			logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Flush failed")
 		}
 	}
 
@@ -139,7 +139,7 @@ func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) er
 	if s.config.EnableCompact {
 		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 			if _, err := client.Compact(ctx, milvusclient.NewCompactOption(coll)); err != nil {
-				logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Compact 失败")
+				logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Compact failed")
 			}
 		}
 	}
@@ -154,13 +154,13 @@ func (s *MilvusGraphStore) Close() error {
 
 	if s.client != nil {
 		if err := s.client.Close(context.Background()); err != nil {
-			logger.Error(logComponent).Err(err).Msg("关闭 Milvus 连接失败")
+			logger.Error(logComponent).Err(err).Msg("Failed to close Milvus connection")
 			return err
 		}
 		s.client = nil
 	}
 
-	logger.Info(logComponent).Msg("成功关闭图存储连接")
+	logger.Info(logComponent).Msg("Successfully closed graph store connection")
 	return nil
 }
 
@@ -285,8 +285,16 @@ func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) erro
 		s.graphSearcher.embedder = embedder
 	}
 
-	logger.Info(logComponent).Int("embed_dim", s.config.EmbedDim).Msg("已绑定嵌入模型")
+	logger.Info(logComponent).Int("embed_dim", s.config.EmbedDim).Msg("Embedding model bound")
 	return nil
+}
+
+// ReturnSimilarityScore Milvus 返回的分数为相似度（越大越相似），而非距离。
+//
+// Python: @property return_similarity_score -> Literal[True]
+// Milvus 使用 IP/COSINE 度量，返回值越大表示越相似
+func (s *MilvusGraphStore) ReturnSimilarityScore() bool {
+	return true
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -309,11 +317,11 @@ func (s *MilvusGraphStore) getClient(ctx context.Context) (milvusClient, error) 
 
 	c, err := s.createClient(ctx, s.config.URI, s.config.Token, s.config.Name)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("uri", s.config.URI).Msg("连接 Milvus 失败")
+		logger.Error(logComponent).Err(err).Str("uri", s.config.URI).Msg("Failed to connect to Milvus")
 		return nil, fmt.Errorf("连接 Milvus 失败: %w", err)
 	}
 	s.client = c
-	logger.Info(logComponent).Str("uri", s.config.URI).Msg("成功连接 Milvus")
+	logger.Info(logComponent).Str("uri", s.config.URI).Msg("Successfully connected to Milvus")
 	return s.client, nil
 }
 
@@ -337,12 +345,12 @@ func (s *MilvusGraphStore) ensureInit(ctx context.Context) error {
 	if client == nil {
 		c, err := s.createClient(ctx, s.config.URI, s.config.Token, s.config.Name)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("uri", s.config.URI).Msg("连接 Milvus 失败")
+			logger.Error(logComponent).Err(err).Str("uri", s.config.URI).Msg("Failed to connect to Milvus")
 			return fmt.Errorf("连接 Milvus 失败: %w", err)
 		}
 		s.client = c
 		client = c
-		logger.Info(logComponent).Str("uri", s.config.URI).Msg("成功连接 Milvus")
+		logger.Info(logComponent).Str("uri", s.config.URI).Msg("Successfully connected to Milvus")
 	}
 
 	// 确保集合存在
@@ -370,15 +378,16 @@ func (s *MilvusGraphStore) ensureInit(ctx context.Context) error {
 	s.graphSearcher = newGraphSearcher(client, nil, indexCfg, graph.GlobalRankerRegistry, metric)
 	s.initialized = true
 
-	logger.Info(logComponent).Msg("Milvus 图存储初始化完成")
+	logger.Info(logComponent).Msg("Milvus graph store initialized")
 	return nil
 }
 
 // init 注册 milvus 后端到全局工厂
 func init() {
-	if err := graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig) (graph.BaseGraphStore, error) {
+	if err := graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig, extraKwargs map[string]any) (graph.BaseGraphStore, error) {
+		// Python: MilvusGraphStore.from_config(config, **kwargs) 中 kwargs 当前 ignored
 		return NewMilvusGraphStore(cfg), nil
 	}); err != nil {
-		logger.Error(logComponent).Err(err).Msg("注册 milvus 图存储后端失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to register milvus graph store backend")
 	}
 }

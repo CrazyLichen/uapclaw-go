@@ -31,7 +31,7 @@ import (
 
 // init 注册模拟后端，确保测试中 NewGraphMemory 不会因 "backend not found" 而失败
 func init() {
-	graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig) (graph.BaseGraphStore, error) {
+	graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig, extraKwargs map[string]any) (graph.BaseGraphStore, error) {
 		return &mockGraphStore{}, nil
 	}, true)
 }
@@ -758,9 +758,13 @@ func TestAsyncTask(t *testing.T) {
 
 // TestPendingMergeTask 测试 pendingMergeTask 结构体
 func TestPendingMergeTask(t *testing.T) {
-	task := &pendingMergeTask{Result: "merge result"}
+	pendingDone := make(chan struct{})
+	close(pendingDone)
+	task := &pendingMergeTask{Result: "merge result", done: pendingDone}
 	assert.Equal(t, "merge result", task.Result)
 	assert.Nil(t, task.Err)
+	// 验证 done 通道可读
+	<-task.done
 }
 
 // TestRelationFilterTaskItem 测试 relationFilterTaskItem 结构体
@@ -1817,7 +1821,10 @@ func TestEntityEnrich_有阻塞实体(t *testing.T) {
 	entity2.Content = ""
 
 	// 设置 pending merge，使 entity1 成为阻塞实体
-	state.PendingMerge["e1"] = &pendingMergeTask{Result: "merged summary", Err: nil}
+	// done 通道需要预关闭（测试场景：合并已完成）
+	pendingDone := make(chan struct{})
+	close(pendingDone)
+	state.PendingMerge["e1"] = &pendingMergeTask{Result: "merged summary", Err: nil, done: pendingDone}
 
 	entities := []*graph.Entity{entity1, entity2}
 	content := "Alice and Bob had a meeting"

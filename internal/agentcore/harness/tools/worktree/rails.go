@@ -171,12 +171,12 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 
 	enterTool, err := NewEnterWorktreeTool(r.manager, lang, agentID)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建 EnterWorktreeTool 失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to create EnterWorktreeTool")
 		return err
 	}
 	exitTool, err := NewExitWorktreeTool(r.manager, lang, agentID)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建 ExitWorktreeTool 失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to create ExitWorktreeTool")
 		return err
 	}
 
@@ -211,7 +211,7 @@ func (r *WorktreeRail) Init(ctx context.Context, agent interfaces.BaseAgent) err
 		}
 	}
 
-	logger.Info(logComponent).Msg("WorktreeRail 初始化完成")
+	logger.Info(logComponent).Msg("WorktreeRail initialization completed")
 	return nil
 }
 
@@ -284,12 +284,12 @@ func (r *WorktreeRail) BeforeInvoke(ctx context.Context, cbc *interfaces.AgentCa
 	case map[string]any:
 		data, err := json.Marshal(v)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("反序列化 worktree session 失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to deserialize worktree session")
 			SetCurrentSession(ctx, nil)
 			return nil
 		}
 		if err := json.Unmarshal(data, &ws); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("解析 worktree session 失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to parse worktree session")
 			SetCurrentSession(ctx, nil)
 			return nil
 		}
@@ -324,11 +324,11 @@ func (r *WorktreeRail) AfterInvoke(ctx context.Context, cbc *interfaces.AgentCal
 	if current != nil {
 		data, err := json.Marshal(current)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("序列化 worktree session 失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to serialize worktree session")
 			return nil
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("转换 worktree session 失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to convert worktree session")
 			return nil
 		}
 	}
@@ -355,7 +355,7 @@ func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, _ *interfaces.A
 		cmdObj.Stdout = nil
 		cmdObj.Stderr = nil
 		if err := cmdObj.Run(); err != nil {
-			logger.Warn(logComponent).Str("cmd", cmd).Err(err).Msg("Setup 命令执行失败")
+			logger.Warn(logComponent).Str("cmd", cmd).Err(err).Msg("Setup command execution failed")
 		}
 		cancel()
 	}
@@ -401,7 +401,7 @@ func (d *DiffSummaryRail) BeforeWorktreeExit(ctx context.Context, _ *interfaces.
 	r := runGit(ctx, []string{"diff", "--stat", session.OriginalHeadCommit + "..HEAD"}, session.WorktreePath)
 	if r.OK() && r.Stdout != "" {
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-			Str("diff_stat", r.Stdout).Msg("Worktree 变更摘要")
+			Str("diff_stat", r.Stdout).Msg("Worktree diff summary")
 	}
 	return nil, nil
 }

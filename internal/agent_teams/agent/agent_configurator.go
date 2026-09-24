@@ -211,9 +211,12 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 8. 团队后端
 	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
+	// 注意：步骤 9 的 CreateWorktreeManager 依赖 c.TeamBackend()，
+	// TeamBackend 未实现时 eventHandler 为 nil，worktree 事件不会桥接到 team_events。
 
 	// 9. 工作树管理器（仅非 leader）
 	// ⤴️ 9.66a 回填完成：工作树管理器初始化 + 事件镜像回调
+	// 必须在步骤 8（TeamBackend）之后，因为 eventHandler 依赖 c.TeamBackend()
 	if ctx.Role != atschema.TeamRoleLeader {
 		wtMgr := c.CreateWorktreeManager(spec)
 		c.SetWorktreeManager(wtMgr)
@@ -233,7 +236,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// ⤴️ 9.66 回填完成：工作空间初始化
 	if c.WorkspaceManager() != nil && !c.WorkspaceInitialized() {
 		if err := c.WorkspaceManager().Initialize(context.Background()); err != nil {
-			logger.Error(logComponent).Err(err).Msg("工作空间初始化失败")
+			logger.Error(logComponent).Err(err).Msg("Workspace initialization failed")
 		} else {
 			c.SetWorkspaceInitialized(true)
 		}
@@ -247,7 +250,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// ⤴️ 9.66 回填完成：MountIntoWorkspace
 	if c.WorkspaceManager() != nil && spec.Workspace.RootPath != "" {
 		if err := c.WorkspaceManager().MountIntoWorkspace(spec.Workspace.RootPath); err != nil {
-			logger.Error(logComponent).Err(err).Str("root_path", spec.Workspace.RootPath).Msg("工作空间挂载失败")
+			logger.Error(logComponent).Err(err).Str("root_path", spec.Workspace.RootPath).Msg("Workspace mount failed")
 		}
 	}
 
@@ -381,7 +384,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	tb.RegisterCleanupPath(agentteams.TeamHome(teamName))
 
 	logger.Info(logComponent).Str("team_name", teamName).Str("member_name", currentMemberName).
-		Bool("is_leader", isLeader).Msg("SetupTeamBackend: 团队后端已创建")
+		Bool("is_leader", isLeader).Msg("SetupTeamBackend: team backend created")
 
 	return tb
 }
@@ -408,10 +411,10 @@ func (c *AgentConfigurator) CreateWorkspaceManager(spec atschema.TeamAgentSpec, 
 
 	// Python: os.makedirs(ws_path, exist_ok=True)
 	if err := os.MkdirAll(wsPath, 0o755); err != nil {
-		logger.Error(logComponent).Err(err).Str("ws_path", wsPath).Msg("创建工作空间目录失败")
+		logger.Error(logComponent).Err(err).Str("ws_path", wsPath).Msg("Failed to create workspace directory")
 		return nil
 	}
-	logger.Info(logComponent).Str("ws_path", wsPath).Msg("工作空间目录已确认")
+	logger.Info(logComponent).Str("ws_path", wsPath).Msg("Workspace directory confirmed")
 
 	// Python: TeamWorkspaceManager(config=ws_config, workspace_path=ws_path, team_name=team_name)
 	return team_workspace.NewTeamWorkspaceManager(

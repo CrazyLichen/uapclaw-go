@@ -102,7 +102,7 @@ func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID strin
 		return nil
 	}
 
-	logger.Info(logComponent).Str("session_id", sessionID).Str("prefix", logPrefix).Msg("取消 session 非流式任务")
+	logger.Info(logComponent).Str("session_id", sessionID).Str("prefix", logPrefix).Msg("Cancelling session non-streaming task")
 	cancelFn()
 
 	// Python: if wait_timeout is None: await task（无限期等待任务完成）
@@ -120,7 +120,7 @@ func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID strin
 	sm.sessionTasks[sessionID] = nil
 	sm.mu.Unlock()
 
-	logger.Info(logComponent).Str("session_id", sessionID).Str("prefix", logPrefix).Msg("session 任务已终止")
+	logger.Info(logComponent).Str("session_id", sessionID).Str("prefix", logPrefix).Msg("Session task terminated")
 	return nil
 }
 
@@ -155,7 +155,7 @@ func (sm *SessionManager) EnsureSessionProcessor(ctx context.Context, sessionID 
 			select {
 			case <-entry.ctx.Done():
 				// 处理器已死，需要重建队列和优先级（对齐 Python）
-				logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 处理器已停止，重建队列和优先级")
+				logger.Info(logComponent).Str("session_id", sessionID).Msg("Session processor stopped, rebuilding queue and priority")
 
 				// cancel 旧 processor（确保 goroutine 收到取消信号）
 				entry.cancel()
@@ -287,7 +287,7 @@ func (sm *SessionManager) HasActiveTasks() bool {
 				continue
 			default:
 				// 任务仍在执行
-				logger.Debug(logComponent).Str("session_id", sessionID).Msg("HasActiveTasks: 检测到活跃任务")
+				logger.Debug(logComponent).Str("session_id", sessionID).Msg("HasActiveTasks: active task detected")
 				return true
 			}
 		}
@@ -331,7 +331,7 @@ func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID str
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 任务处理器被取消")
+			logger.Info(logComponent).Str("session_id", sessionID).Msg("Session task processor cancelled")
 			sm.cleanupSession(sessionID)
 			return
 		case <-sigCh:
@@ -362,7 +362,7 @@ func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID str
 		result, err := item.task(taskCtx)
 		if err != nil {
 			// Python: logger.error(f"Task {task_id} execution failed: {e}", exc_info=True)
-			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("Session 任务执行失败")
+			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("Session task execution failed")
 			// Python: _handle_task_execution_failure → 更新状态为 FAILED + 发布 TASK_FAILED 事件
 			sm.handleTaskFailure(sessionID, err)
 		}
@@ -403,7 +403,7 @@ func (sm *SessionManager) cleanupSession(sessionID string) {
 	delete(sm.sessionProcessors, sessionID)
 	delete(sm.sessionSignals, sessionID)
 
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 任务处理器已关闭")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("Session task processor closed")
 }
 
 // waitTaskDone 等待 session 任务完成（sessionTasks[sessionID] 变为 nil）。
@@ -422,7 +422,7 @@ func (sm *SessionManager) waitTaskDone(sessionID string, deadline <-chan time.Ti
 		case <-ticker.C:
 			// 继续轮询
 		case <-deadline:
-			logger.Warn(logComponent).Str("session_id", sessionID).Msg("cancel_session_task 等待超时")
+			logger.Warn(logComponent).Str("session_id", sessionID).Msg("cancel_session_task wait timed out")
 			return
 		case <-ctxDone:
 			return

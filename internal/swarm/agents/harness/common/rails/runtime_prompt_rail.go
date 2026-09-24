@@ -304,14 +304,14 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 
 	yamlData, err := yaml.Marshal(state)
 	if err != nil {
-		logger.Debug(runtimeLogComponent).Err(err).Msg("序列化 runtime_state.yaml 失败")
+		logger.Debug(runtimeLogComponent).Err(err).Msg("Failed to serialize runtime_state.yaml")
 		return
 	}
 
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
 	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
-		logger.Debug(runtimeLogComponent).Err(err).Msg("写入 runtime_state.yaml 失败")
+		logger.Debug(runtimeLogComponent).Err(err).Msg("Failed to write runtime_state.yaml")
 	}
 }
 
@@ -325,8 +325,6 @@ func FirstNonEmpty(vals ...string) string {
 	}
 	return ""
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // injectTimeSection 注入 time PromptSection。
 func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuilderInterface) {
@@ -645,6 +643,8 @@ func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.Syst
 	}
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // capitalizeOS 将 runtime.GOOS 首字母大写，对齐 Python platform.system()。
 // "linux" → "Linux", "darwin" → "Darwin", "windows" → "Windows"
 func capitalizeOS(osName string) string {
@@ -701,13 +701,13 @@ func readRuntimeStateYAML() map[string]string {
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn(runtimeLogComponent).Err(err).Msg("读取 runtime_state.yaml 失败")
+			logger.Warn(runtimeLogComponent).Err(err).Msg("Failed to read runtime_state.yaml")
 		}
 		return make(map[string]string)
 	}
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		logger.Warn(runtimeLogComponent).Err(err).Msg("解析 runtime_state.yaml 失败")
+		logger.Warn(runtimeLogComponent).Err(err).Msg("Failed to parse runtime_state.yaml")
 		return make(map[string]string)
 	}
 	result := make(map[string]string, len(raw))

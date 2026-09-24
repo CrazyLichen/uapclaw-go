@@ -92,7 +92,7 @@ func ParseJSONField(response string, key string) string {
 	// 解析失败
 	logger.Warn(logComponent).
 		Str("key", key).
-		Msg("解析 JSON 响应字段失败")
+		Msg("Failed to parse JSON response field")
 	return ""
 }
 

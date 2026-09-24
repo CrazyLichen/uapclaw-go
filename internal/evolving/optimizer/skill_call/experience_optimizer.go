@@ -274,8 +274,6 @@ func (o *SkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenR
 	return drafts, response, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // backward 反向传播子类逻辑。
 //
 // Python: SkillExperienceOptimizer._backward(signals)
@@ -437,6 +435,8 @@ func (o *SkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Context
 
 	return nil, fmt.Errorf("SkillExperienceOptimizer 响应无法解析")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildConversationSnippet 构建紧凑对话片段用于 LLM 提示词上下文。
 //

@@ -490,7 +490,7 @@ func (r *TeamSkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agent
 		Msg("[TeamSkillEvolutionRail] view_task 完成检查结果")
 
 	if !completed {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] view_task: 任务仍在进行中，跳过")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] view_task: task still in progress, skipping")
 		return nil
 	}
 
@@ -582,7 +582,7 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 //	6. evaluatePresentedEntries（评估已呈现条目）
 func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
 	if !r.autoScan {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan 已禁用，跳过")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] auto_scan disabled, skipping")
 		return nil
 	}
 
@@ -599,7 +599,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	t0 := time.Now()
 	defer func() {
 		elapsed := time.Since(t0).Seconds()
-		logger.Info(logComponent).Float64("elapsed_secs", elapsed).Msg("[TeamSkillEvolutionRail] run_evolution 完成")
+		logger.Info(logComponent).Float64("elapsed_secs", elapsed).Msg("[TeamSkillEvolutionRail] run_evolution completed")
 	}()
 
 	// Python: emit_progress("started", "team tasks completed; starting team skill evolution analysis")
@@ -628,39 +628,39 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 	// Python: used_skill = self._detect_used_team_skill(trajectory)
 	usedSkill := r.detectUsedTeamSkill(ctx, traj)
 	if usedSkill == "" {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] 未检测到现有技能，跳过")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] no existing skills detected, skipping")
 		r.emitProgress("cancelled", "轨迹中未检测到团队/集群技能使用，取消团队技能演进分析")
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
 	}
 
-	logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] 检测到现有技能")
+	logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] existing skill detected")
 
 	// Python: current_content = await self._store.read_skill_content(used_skill)
 	currentContent, err := r.evolutionStore.ReadSkillContent(ctx, usedSkill)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] 读取技能内容失败")
+		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] failed to read skill content")
 		currentContent = ""
 	}
 
 	// Python: signals = await self.team_signal_detector.detect_trajectory_signals(...)
 	signals, err := r.teamSignalDetector.DetectTrajectorySignals(ctx, traj, usedSkill, currentContent)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] 轨迹信号检测失败")
+		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] trajectory signal detection failed")
 		signals = nil
 	}
 
 	// Python: user_intent = await self._detect_user_request(messages, current_content)
 	userIntent, err := r.detectUserRequest(ctx, messages, currentContent)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] 用户意图检测失败")
+		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] user intent detection failed")
 	}
 	if userIntent != nil && userIntent.Intent != "" {
 		r.teamAppendUniqueSignal(&signals, signal.MakeTeamUserIntentSignal(usedSkill, userIntent.Intent))
 	}
 
 	if len(signals) == 0 {
-		logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] 未检测到信号")
+		logger.Info(logComponent).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] no signals detected")
 		r.emitProgress("cancelled", fmt.Sprintf("未检测到 '%s' 的可操作演进信号，取消团队技能演进分析", usedSkill), WithSkillName(usedSkill))
 		r.evaluatePresentedEntries(ctx, presentedEntries)
 		return nil
@@ -686,7 +686,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		r.autoSave, userQuery, messages, true,
 	)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] handleEvolutionFromSignals 失败")
+		logger.Warn(logComponent).Err(err).Str("skill_name", usedSkill).Msg("[TeamSkillEvolutionRail] handleEvolutionFromSignals failed")
 	}
 
 	if request == nil {
@@ -720,13 +720,13 @@ func (r *TeamSkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 //	检查 autoScan、builder 可用性，设置 hostCompletionPendingSessionID
 func (r *TeamSkillEvolutionRail) NotifyTeamCompleted(_ context.Context) (bool, error) {
 	if !r.autoScan {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] notify_team_completed 因 auto_scan 禁用被忽略")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] notify_team_completed ignored due to auto_scan disabled")
 		return false, nil
 	}
 
 	sessionID := r.currentBuilderSessionID()
 	if sessionID == "" {
-		logger.Warn(logComponent).Msg("[TeamSkillEvolutionRail] notify_team_completed: 无可用轨迹（before_invoke 可能未触发）")
+		logger.Warn(logComponent).Msg("[TeamSkillEvolutionRail] notify_team_completed: no trajectory available (before_invoke may not have fired)")
 		return false, nil
 	}
 
@@ -778,7 +778,7 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 	if len(traj.Steps) > 0 {
 		detected, err := r.detectActiveRequestSignals(ctx, skillName, traj)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request 信号检测失败")
+			logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request signal detection failed")
 		} else {
 			signals = detected
 		}
@@ -790,7 +790,7 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 	}
 
 	if len(signals) == 0 {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: 无证据或用户意图")
+		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: no evidence or user intent")
 		return &EvolutionRequestResult{SkillName: skillName}, nil
 	}
 
@@ -804,12 +804,12 @@ func (r *TeamSkillEvolutionRail) RequestUserEvolution(
 		autoApprove, userIntent, messages, false,
 	)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution 演化处理失败")
+		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution evolution handling failed")
 		return &EvolutionRequestResult{SkillName: skillName}, nil
 	}
 
 	if request == nil {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: 未生成记录")
+		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] request_user_evolution: no record generated")
 		return &EvolutionRequestResult{SkillName: skillName}, nil
 	}
 
@@ -912,7 +912,7 @@ func (r *TeamSkillEvolutionRail) OnApproveSimplify(ctx context.Context, requestI
 	if err != nil {
 		return nil, err
 	}
-	logger.Info(logComponent).Str("request_id", requestID).Msg("[TeamSkillEvolutionRail] simplify 已批准")
+	logger.Info(logComponent).Str("request_id", requestID).Msg("[TeamSkillEvolutionRail] simplify approved")
 	return result, nil
 }
 
@@ -920,7 +920,7 @@ func (r *TeamSkillEvolutionRail) OnApproveSimplify(ctx context.Context, requestI
 // Python: TeamSkillEvolutionRail.on_reject_simplify(request_id)
 func (r *TeamSkillEvolutionRail) OnRejectSimplify(requestID string) {
 	r.manager.RejectSimplify(requestID)
-	logger.Info(logComponent).Str("request_id", requestID).Msg("[TeamSkillEvolutionRail] simplify 已拒绝")
+	logger.Info(logComponent).Str("request_id", requestID).Msg("[TeamSkillEvolutionRail] simplify rejected")
 }
 
 // RequestRebuild 构建重建提示词。
@@ -933,7 +933,7 @@ func (r *TeamSkillEvolutionRail) RequestRebuild(ctx context.Context, skillName s
 	if followupText == "" {
 		return "", nil
 	}
-	logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] rebuild 提示词已生成")
+	logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] rebuild prompt generated")
 	return followupText, nil
 }
 
@@ -1056,8 +1056,6 @@ func (r *TeamSkillEvolutionRail) SetSysOperation(op sys_operation.SysOperation) 
 	r.evolutionStore.SetSysOperation(op)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // isTeamSkill 判断技能是否为团队类型（kind=team-skill 或 swarm-skill）。
 // 对齐 Python: TeamSkillEvolutionRail._is_team_skill(name)
 func (r *TeamSkillEvolutionRail) isTeamSkill(ctx context.Context, name string) bool {
@@ -1083,7 +1081,7 @@ func (r *TeamSkillEvolutionRail) isTeamSkill(ctx context.Context, name string) b
 func (r *TeamSkillEvolutionRail) detectUsedTeamSkill(ctx context.Context, traj *trajectory.Trajectory) string {
 	allSkillNames := r.evolutionStore.ListSkillNames(ctx)
 	if len(allSkillNames) == 0 {
-		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] 磁盘上无现有团队技能")
+		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] no existing team skill on disk")
 		return ""
 	}
 
@@ -1103,11 +1101,11 @@ func (r *TeamSkillEvolutionRail) detectUsedTeamSkill(ctx context.Context, traj *
 
 	best := inferTeamSkillFromTrajectory(traj, knownSkills)
 	if best != "" {
-		logger.Info(logComponent).Str("skill_name", best).Msg("[TeamSkillEvolutionRail] 从轨迹检测到团队技能")
+		logger.Info(logComponent).Str("skill_name", best).Msg("[TeamSkillEvolutionRail] team skill detected from trajectory")
 		return best
 	}
 
-	logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] 轨迹中未找到 SKILL.md 读取痕迹")
+	logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] no SKILL.md read trace found in trajectory")
 	return ""
 }
 
@@ -1195,7 +1193,7 @@ func (r *TeamSkillEvolutionRail) detectActiveRequestSignals(
 	// Python: detected = await self.team_signal_detector.detect_trajectory_signals(...)
 	detected, err := r.teamSignalDetector.DetectTrajectorySignals(ctx, traj, skillName, currentContent)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request 轨迹检测失败")
+		logger.Warn(logComponent).Err(err).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] active request trajectory detection failed")
 		return nil, nil
 	}
 
@@ -1248,6 +1246,8 @@ func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(ctx context.Context,
 	// Python: return self._team_skill_for_experience_detail_file(file_path)
 	return r.teamSkillForExperienceDetailFile(context.Background(), filePath)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // teamExtractToolContent 提取工具调用返回内容（独立于 SkillEvolutionRail.extractToolContent）。
 // 对齐 Python: TeamSkillEvolutionRail._extract_tool_content(inputs)
@@ -1501,7 +1501,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 
 	// Python: def _on_auto_approved(staged_request)
 	onAutoApproved := func(stagedReq *experience.ExperienceApprovalRequest) error {
-		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] 信号已消费，记录已自动批准")
+		logger.Info(logComponent).Str("skill_name", skillName).Msg("[TeamSkillEvolutionRail] signal consumed, record auto-approved")
 		if emitHostEvents {
 			requestID := ""
 			if stagedReq != nil {
@@ -1594,7 +1594,7 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 	}
 
 	if err := os.MkdirAll(debugDir, 0o755); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] 创建调试目录失败")
+		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] failed to create debug directory")
 		return
 	}
 
@@ -1659,15 +1659,15 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 
 	data, err := json.MarshalIndent(dump, "", "  ")
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] 轨迹 JSON 序列化失败")
+		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] trajectory JSON serialization failed")
 		return
 	}
 
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] 轨迹写入失败")
+		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] trajectory write failed")
 		return
 	}
-	logger.Info(logComponent).Str("path", path).Msg("[TeamSkillEvolutionRail] 轨迹已导出")
+	logger.Info(logComponent).Str("path", path).Msg("[TeamSkillEvolutionRail] trajectory exported")
 }
 
 // emitBackgroundOutcomeEvent 将后台执行结果写入主机事件缓冲。

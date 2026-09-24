@@ -472,7 +472,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 // Python: EvolutionRail.after_tool_call(ctx)
 func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
-		logger.Debug(logComponent).Msg("after_tool_call 跳过：轨迹构造器为空")
+		logger.Debug(logComponent).Msg("after_tool_call skipped: trajectory builder is nil")
 		return nil
 	}
 
@@ -603,8 +603,6 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	return nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveSessionID 解析运行时 session ID。
 //
 // Python: _resolve_trajectory_session_id(ctx, inputs)
@@ -715,7 +713,7 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 			"evolution-"+skillName, "evolution",
 		)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("创建演化后台任务失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to create evolution background task")
 			return err
 		}
 		r.bgTasks[bgTask] = true
@@ -763,7 +761,7 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 	case r.evolutionSem <- struct{}{}:
 		defer func() { <-r.evolutionSem }()
 	case <-ctx.Done():
-		logger.Warn(logComponent).Err(ctx.Err()).Msg("safeRunEvolution: 获取信号量被取消")
+		logger.Warn(logComponent).Err(ctx.Err()).Msg("safeRunEvolution: semaphore acquisition canceled")
 		return ctx.Err()
 	}
 
@@ -777,7 +775,7 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 				"status":  "timed_out",
 				"message": "background evolution timed out after " + timeoutText + "s",
 			}
-			logger.Warn(logComponent).Str("timeout_secs", timeoutText).Msg("后台演化执行超时")
+			logger.Warn(logComponent).Str("timeout_secs", timeoutText).Msg("Background evolution execution timed out")
 			r.emitBackgroundOutcomeEvent(outcome)
 			return err
 		}
@@ -786,7 +784,7 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 			"status":  "failed",
 			"message": err.Error(),
 		}
-		logger.Warn(logComponent).Err(err).Msg("后台演化执行失败")
+		logger.Warn(logComponent).Err(err).Msg("Background evolution execution failed")
 		r.emitBackgroundOutcomeEvent(outcome)
 	}
 	return err
@@ -844,6 +842,8 @@ func (r *EvolutionRail) collectPendingHostEvents() []*stream.OutputSchema {
 func (r *EvolutionRail) resetTrajectoryBuilder() {
 	r.builder = nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // stringPtr 返回字符串指针，空字符串返回 nil。
 func stringPtr(s string) *string {

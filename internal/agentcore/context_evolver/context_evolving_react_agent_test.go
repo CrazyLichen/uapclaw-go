@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 )
 
@@ -63,9 +63,9 @@ func TestContextEvolvingReActAgent_Execute_实现AgentFlowService(t *testing.T) 
 // TestCopyMap 验证 copyMap 辅助函数。
 func TestCopyMap(t *testing.T) {
 	original := map[string]any{
-		"query":    "hello",
-		"matts_k":  3,
-		"nested":   map[string]any{"key": "value"},
+		"query":   "hello",
+		"matts_k": 3,
+		"nested":  map[string]any{"key": "value"},
 	}
 
 	copied := copyMap(original)
@@ -117,9 +117,9 @@ func TestContextEvolvingReActAgent_MemoryCache(t *testing.T) {
 func TestMemoryAgentConfigInput(t *testing.T) {
 	cfg := MemoryAgentConfigInput{
 		ModelProvider: "OpenAI",
-		APIKey:       "test-key",
-		APIBase:      "https://api.openai.com/v1",
-		ModelName:    "gpt-5.2",
+		APIKey:        "test-key",
+		APIBase:       "https://api.openai.com/v1",
+		ModelName:     "gpt-5.2",
 		MaxIterations: 10,
 	}
 	assert.Equal(t, "OpenAI", cfg.ModelProvider)

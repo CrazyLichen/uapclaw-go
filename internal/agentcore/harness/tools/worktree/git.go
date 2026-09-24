@@ -303,8 +303,6 @@ func readWorktreeHeadSHA(wtPath string) (string, error) {
 	return strings.TrimSpace(string(sha)), nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // OK 检查 GitResult 是否成功。
 func (r GitResult) OK() bool { return r.ReturnCode == 0 }
 
@@ -312,8 +310,6 @@ func (r GitResult) OK() bool { return r.ReturnCode == 0 }
 func (e *GitError) Error() string {
 	return fmt.Sprintf("git %s 失败 (rc=%d): %s", e.Command, e.ReturnCode, e.Stderr)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runGit 核心 Git 命令执行器。
 // Python: _run_git(args, *, cwd, check)

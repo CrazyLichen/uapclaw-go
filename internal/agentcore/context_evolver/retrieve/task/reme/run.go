@@ -85,8 +85,6 @@ func NewRewriteMemoryOp(sc *cecontext.ServiceContext, llmRewrite bool) *RewriteM
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Execute 执行向量检索。
 // 对齐 Python RecallMemoryOp.__call__。
 func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
@@ -110,7 +108,7 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		logger.Error(logComponent).
 			Err(err).
 			Str("query", query).
-			Msg("生成 query embedding 失败")
+			Msg("Failed to generate query embedding")
 		return fmt.Errorf("embedding query failed: %w", err)
 	}
 
@@ -126,7 +124,7 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 		logger.Error(logComponent).
 			Err(err).
 			Str("query", query).
-			Msg("向量搜索失败")
+			Msg("Vector search failed")
 		return fmt.Errorf("vector search failed: %w", err)
 	}
 
@@ -148,7 +146,7 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	logger.Info(logComponent).
 		Str("query", query).
 		Int("retrieved_count", len(items)).
-		Msg("向量检索完成")
+		Msg("Vector retrieval completed")
 
 	return nil
 }
@@ -199,7 +197,7 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Msg("LLM 重排序调用失败")
+			Msg("LLM rerank call failed")
 		return fmt.Errorf("LLM rerank failed: %w", err)
 	}
 
@@ -207,7 +205,7 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	indices := ParseJSONListResponse(response, "ranked_indices")
 	if len(indices) == 0 {
 		logger.Warn(logComponent).
-			Msg("LLM 重排序解析失败，保留原顺序")
+			Msg("LLM rerank parse failed, keeping original order")
 		// 解析失败时保留原顺序
 		return nil
 	}
@@ -245,7 +243,7 @@ func (o *RerankMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	logger.Info(logComponent).
 		Int("original_count", len(retrieved)).
 		Int("reranked_count", len(reranked)).
-		Msg("LLM 重排序完成")
+		Msg("LLM rerank completed")
 
 	return nil
 }
@@ -295,7 +293,7 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Msg("LLM 改写调用失败")
+			Msg("LLM rewrite call failed")
 		return fmt.Errorf("LLM rewrite failed: %w", err)
 	}
 
@@ -303,7 +301,7 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	rewritten := ParseJSONField(response, "rewritten_context")
 	if rewritten == "" {
 		logger.Warn(logComponent).
-			Msg("LLM 改写解析失败，降级为格式化原文")
+			Msg("LLM rewrite parse failed, falling back to formatted original")
 		rc.Set("memory_string", originalContext)
 		return nil
 	}
@@ -313,7 +311,7 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 
 	logger.Info(logComponent).
 		Int("memory_count", len(retrieved)).
-		Msg("LLM 改写完成")
+		Msg("LLM rewrite completed")
 
 	return nil
 }

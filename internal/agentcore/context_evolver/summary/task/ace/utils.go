@@ -55,7 +55,7 @@ func SafeJSONLoads(text string) (map[string]any, error) {
 	}
 	logger.Error(logComponent).
 		Str("text_preview", truncated).
-		Msg("SafeJSONLoads: 无法从响应中解析有效 JSON")
+		Msg("SafeJSONLoads: could not parse valid JSON from response")
 
 	return nil, fmt.Errorf("could not parse valid JSON from response")
 }

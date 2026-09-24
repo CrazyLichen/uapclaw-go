@@ -166,8 +166,6 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 	return a.AbilityKind() == schema.AbilityKindAgent
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // executeSingleP2P 单个 P2P 派发。
 //
 // 流程：
@@ -261,6 +259,8 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
 	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // errorToP2PResult 将 error 转换为 ExecuteResult（P2P 派发失败）。
 //

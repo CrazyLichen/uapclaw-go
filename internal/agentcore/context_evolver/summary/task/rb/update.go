@@ -116,11 +116,13 @@ func (o *SummarizeMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		det := NewLabelDeterminator(o.ServiceContext())
 		determinedLabel, err := det.DetermineLabel(ctx, query, trajectories[0])
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("LabelDeterminator 判定失败，使用默认 false")
+			logger.Warn(logComponent).Err(err).Msg("LabelDeterminator failed, using default false")
 			label = false
 		} else {
 			label = determinedLabel
 		}
+		// 对齐 Python: context.label = [is_success] — 判定后写回 RuntimeContext
+		rc.Set("label", []bool{label})
 	}
 
 	// 选择系统提示词
@@ -165,7 +167,7 @@ func (o *SummarizeMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		Int("count", len(memories)).
 		Str("matts", matts).
 		Bool("label", label).
-		Msg("SummarizeMemoryOp: 完成单轨迹策略提取")
+		Msg("SummarizeMemoryOp: completed single trajectory strategy extraction")
 
 	return nil
 }
@@ -226,7 +228,7 @@ func (o *SummarizeMemoryParallelOp) Execute(ctx context.Context, rc *cecontext.R
 		Int("count", len(memories)).
 		Str("matts", matts).
 		Int("trajectory_count", len(trajectories)).
-		Msg("SummarizeMemoryParallelOp: 完成多轨迹策略提取")
+		Msg("SummarizeMemoryParallelOp: completed multi-trajectory strategy extraction")
 
 	return nil
 }
@@ -292,7 +294,7 @@ func (o *UpdateVectorStoreOp) Execute(ctx context.Context, rc *cecontext.Runtime
 	logger.Info(logComponent).
 		Int("stored_count", storedCount).
 		Str("user_id", userID).
-		Msg("UpdateVectorStoreOp (RB): 完成记忆向量存储更新")
+		Msg("UpdateVectorStoreOp (RB): completed memory vector store update")
 
 	return nil
 }
@@ -331,7 +333,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 		Int("count", len(nodesDict)).
 		Str("user_id", userID).
 		Str("helper_type", o.persistType()).
-		Msg("PersistMemoryOp (RB): 完成记忆持久化")
+		Msg("PersistMemoryOp (RB): completed memory persistence")
 
 	return nil
 }

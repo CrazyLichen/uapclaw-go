@@ -221,8 +221,6 @@ type RetrieveResponse[T any] struct {
 	RetrievedMemory []T `json:"retrieved_memory"`
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // UnmarshalJSON 实现 json.Unmarshaler 接口。
 // 对齐 Python default="none"，JSON 缺少 matts 字段时使用 "none" 默认值。
 func (r *ACESummarizeRequest) UnmarshalJSON(data []byte) error {

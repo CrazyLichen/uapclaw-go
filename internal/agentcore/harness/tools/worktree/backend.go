@@ -202,8 +202,6 @@ func (g *GitBackend) Exists(_ context.Context, worktreePath string) bool {
 	return err == nil && sha != ""
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveBase 解析新 worktree 的基准分支和 SHA。
 // Python: GitBackend._resolve_base(repo_root)
 //
@@ -228,6 +226,8 @@ func (g *GitBackend) resolveBase(ctx context.Context, repoRoot string) (string, 
 	sha, _ := revParse(ctx, "HEAD", repoRoot)
 	return "HEAD", sha
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // availableBackends 返回所有已注册后端名称。
 func availableBackends() []string {

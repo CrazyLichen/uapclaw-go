@@ -486,8 +486,6 @@ func (es *ExperienceSharer) ListCachedBundles(skillID string) []SharedSkillBundl
 	return bundles
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // syncSkillPackage 通过 provider 确保 skill_id 并上传初始技能包。
 //
 // Python: ExperienceSharer._sync_skill_package()
@@ -597,6 +595,8 @@ func (es *ExperienceSharer) mirrorBundle(bundle *SharedSkillBundle, kind string)
 	}
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // firstNonEmpty 返回第一个非空字符串，都为空则返回空。
 func firstNonEmpty(a, b string) string {

@@ -369,7 +369,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 4: load_dotenv
 	if err := dotenv.Load(workspace.EnvFile()); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("load_dotenv 失败，继续使用当前环境变量")
+		logger.Warn(logComponent).Err(err).Msg("load_dotenv failed, continuing with current env vars")
 	}
 
 	// 步骤 5: get_config → configBase
@@ -551,6 +551,17 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 	d.seedRuntimeCwd(ctx, initCwd)
 
+	// 步骤 21.1: _update_runtime_config()
+	// 对齐 Python: CreateInstance 中需调用 updateRuntimeConfig 更新 Language/Channel/Mode 等
+	d.updateRuntimeConfig(ctx, &runtimeConfig{
+		CWD:          initCwd,
+		Language:     d.resolvePromptLanguage(),
+		Mode:         mode,
+		SessionID:    "",
+		ProjectDir:   d.projectDir,
+		ForceEnglish: d.isCodeAgent,
+	})
+
 	// 步骤 22: _sync_a2x_runtime_state()
 	// ⤵️ A2X / 11.10: A2X 运行时状态同步
 
@@ -561,7 +572,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 步骤 24: _register_mcp_servers_from_config(configBase, tag)
 	// Python: await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
 	if regErr := d.registerMcpServersFromConfig(ctx, configBase, fmt.Sprintf("agent.%s", mode)); regErr != nil {
-		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册失败，继续执行")
+		logger.Warn(logComponent).Err(regErr).Msg("MCP service registration failed, continuing")
 	}
 
 	// 步骤 25: load_user_rails()
@@ -685,7 +696,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	//   self._filesystem_rail = None
 	if !d.filesystemRailEnabledForProfile(d.instanceOverrides) && d.filesystemRail != nil {
 		if err := d.instance.UnregisterRail(ctx, d.filesystemRail); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("ACP filesystem rail 注销失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to unregister ACP filesystem rail")
 		}
 		d.filesystemRail = nil
 	}
@@ -716,10 +727,10 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	d.registeredMCPServerIDs = make(map[string]bool)
 	d.registeredMCPServers = make(map[string]any)
 	if syncErr := d.syncMcpServersForRuntime(ctx, configBase, "agent.reload"); syncErr != nil {
-		logger.Warn(logComponent).Err(syncErr).Msg("MCP 服务热同步失败，继续执行")
+		logger.Warn(logComponent).Err(syncErr).Msg("MCP service hot-sync failed, continuing")
 	}
 
-	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig 配置已热更新")
+	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig config hot-reloaded")
 	return nil
 }
 
@@ -781,7 +792,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
 	slashResult, slashErr := d.handleSlashCommand(ctx, query, sessionID, mode)
 	if slashErr != nil {
-		logger.Warn(logComponent).Err(slashErr).Msg("handleSlashCommand 执行失败，继续正常流程")
+		logger.Warn(logComponent).Err(slashErr).Msg("handleSlashCommand failed, continuing normal flow")
 	}
 	if slashResult != nil {
 		// Python: followup_prompt = self._extract_rebuild_followup_prompt(slash_result)
@@ -969,7 +980,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	streamQuery := paramsString(params, "query", "")
 	slashResultStream, slashErrStream := d.handleSlashCommand(ctx, streamQuery, sessionID, mode)
 	if slashErrStream != nil {
-		logger.Warn(logComponent).Err(slashErrStream).Msg("handleSlashCommand 执行失败，继续正常流程")
+		logger.Warn(logComponent).Err(slashErrStream).Msg("handleSlashCommand failed, continuing normal flow")
 	}
 	if slashResultStream != nil {
 		// Python: followup_prompt = self._extract_rebuild_followup_prompt(slash_result)
@@ -985,7 +996,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				defer close(slashCh)
 				approvalChunks := slashResultStream["approval_chunks"]
 				if approvalChunks != nil {
-					// yield approval chunks
+					// 输出审批块
 					if slice, ok := approvalChunks.([]any); ok {
 						for _, item := range slice {
 							if chunkMap, ok := item.(map[string]any); ok {
@@ -1070,7 +1081,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Error(logComponent).Any("recover", rec).Msg("ProcessMessageStreamImpl panic 恢复")
+				logger.Error(logComponent).Any("recover", rec).Msg("ProcessMessageStreamImpl panic recovered")
 			}
 		}()
 		defer close(outCh)
@@ -1321,13 +1332,13 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.streamEventRail.Pause(normalizedSID)
 		}
 		interruptMsg = "执行已暂停"
-		logger.Info(logComponent).Str("intent", "pause").Msg("中断: 已暂停执行")
+		logger.Info(logComponent).Str("intent", "pause").Msg("Interrupt: execution paused")
 	case "resume":
 		if sessionActive && d.streamEventRail != nil {
 			d.streamEventRail.Resume(normalizedSID)
 		}
 		interruptMsg = "执行已恢复"
-		logger.Info(logComponent).Str("intent", "resume").Msg("中断: 已恢复执行")
+		logger.Info(logComponent).Str("intent", "resume").Msg("Interrupt: execution resumed")
 	case "supplement":
 		if newInput != nil {
 			d.markSessionActive(normalizedSID)
@@ -1341,7 +1352,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.instance.Abort(ctx)
 		}
 		interruptMsg = "supplement 已处理"
-		logger.Info(logComponent).Str("intent", "supplement").Msg("中断: supplement 处理")
+		logger.Info(logComponent).Str("intent", "supplement").Msg("Interrupt: supplement processed")
 	case "cancel":
 		// rail.abort(sessionID) + rail.reset_for_new_task(sessionID)，对齐 Python
 		if sessionActive && d.streamEventRail != nil {
@@ -1356,7 +1367,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		// ⤵️ 11.10: _cancel_scheduler_running_tasks()
 		// ⤵️ 10.6.3-10: _cancel_pending_todos(sessionID)
 		interruptMsg = "执行已取消"
-		logger.Info(logComponent).Str("intent", "cancel").Msg("中断: cancel 处理")
+		logger.Info(logComponent).Str("intent", "cancel").Msg("Interrupt: cancel processed")
 	}
 
 	// 步骤 10: 清理 evolution watchers
@@ -1538,7 +1549,7 @@ func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	_ = d.closeA2xClient()
 
-	logger.Info(logComponent).Msg("DeepAdapter Cleanup 完成")
+	logger.Info(logComponent).Msg("DeepAdapter Cleanup completed")
 	return nil
 }
 
@@ -1574,7 +1585,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Warn(logComponent).Any("panic", r).Msg("AbortOnGatewayDisconnect instance.Abort 发生 panic")
+					logger.Warn(logComponent).Any("panic", r).Msg("AbortOnGatewayDisconnect instance.Abort panicked")
 				}
 			}()
 			d.instance.Abort(ctx)
@@ -1584,7 +1595,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	// 步骤 3: 取消调度器任务，在 await 点注入 CancelledError
 	// ⤵️ 11.10: _cancel_scheduler_running_tasks()
 
-	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect 完成")
+	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect completed")
 }
 
 // EnsurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
@@ -1702,7 +1713,7 @@ func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string
 		llm.WithInitVerifySSL(false),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("model", model).Msg("构建模型客户端失败")
+		logger.Error(logComponent).Err(err).Str("model", model).Msg("Failed to build model client")
 		return nil
 	}
 	return m.GetClient()
@@ -2010,7 +2021,7 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 	}
 
 	if len(d.modelCache) == 0 {
-		logger.Error(logComponent).Msg("配置中未找到有效的模型条目")
+		logger.Error(logComponent).Msg("No valid model entries found in config")
 		return nil
 	}
 
@@ -2385,7 +2396,7 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 		// Python: self._permission_rail.update_config(permission_config)
 		if rail, ok := d.permissionRail.(*secrail.PermissionInterruptRail); ok {
 			rail.UpdateConfig(permissionConfig, nil)
-			logger.Info(logComponent).Msg("permissionRail 配置热更新完成")
+			logger.Info(logComponent).Msg("permissionRail config hot-reloaded")
 		}
 		return
 	}
@@ -2396,7 +2407,7 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 			rail := d.buildPermissionRail(configBase)
 			if rail != nil {
 				d.permissionRail = rail
-				logger.Info(logComponent).Msg("permissionRail 首次创建完成（热重载触发）")
+				logger.Info(logComponent).Msg("permissionRail created for first time (hot-reload triggered)")
 			}
 		}
 	}

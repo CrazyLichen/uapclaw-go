@@ -334,7 +334,7 @@ func (wc *WebChannel) Stop(ctx context.Context) error {
 	wc.clients = make(map[*websocket.Conn]bool)
 	wc.clientsMu.Unlock()
 
-	logger.Info(logComponent).Msg("WebChannel 已停止")
+	logger.Info(logComponent).Msg("WebChannel stopped")
 	return nil
 }
 
@@ -445,8 +445,6 @@ func (wc *WebChannel) ClientCount() int {
 	return wc.clientCount()
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // broadcastEvent 向所有已连接客户端广播事件帧。
 func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {
 	frame := NewEventFrame(event, payload, 0, "")
@@ -493,6 +491,8 @@ func (wc *WebChannel) clientCount() int {
 	defer wc.clientsMu.RUnlock()
 	return len(wc.clients)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // determineEventName 确定消息的事件名
 //

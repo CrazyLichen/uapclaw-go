@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"strings"
 
-	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	op "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/op"
 	cepersistence "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/vector_store"
+	aceretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/ace"
+	rbretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/rb"
+	emeretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/reme"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	acesummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/ace"
 	rbsummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/rb"
 	remesummary "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/summary/task/reme"
-	aceretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/ace"
-	rbretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/rb"
-	emeretrieve "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/retrieve/task/reme"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -568,16 +568,16 @@ func newTaskMemoryServiceWithServices(
 
 	svc := &TaskMemoryService{
 		serviceContext:     sc,
-		llm:               llm,
-		embedding:         emb,
-		vectorStore:       vs,
+		llm:                llm,
+		embedding:          emb,
+		vectorStore:        vs,
 		retrievalAlgorithm: retrievalAlgo,
-		summaryAlgorithm:  summaryAlgo,
-		persistType:       cfg.PersistType,
-		persistPath:       cfg.PersistPath,
-		milvusHost:        cfg.MilvusHost,
-		milvusPort:        cfg.MilvusPort,
-		milvusCollection:  cfg.MilvusCollection,
+		summaryAlgorithm:   summaryAlgo,
+		persistType:        cfg.PersistType,
+		persistPath:        cfg.PersistPath,
+		milvusHost:         cfg.MilvusHost,
+		milvusPort:         cfg.MilvusPort,
+		milvusCollection:   cfg.MilvusCollection,
 	}
 
 	// 对齐 Python：创建 MemoryPersistenceHelper

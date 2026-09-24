@@ -472,7 +472,7 @@ func (db *InMemoryTeamDatabase) ClaimTask(_ context.Context, taskID, assignee st
 	}
 	// 对齐 Python: if task.assignee → warning + return False
 	if task.Assignee != nil && *task.Assignee != "" {
-		logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("任务已被认领")
+		logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 		return false, nil
 	}
 	if !IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
@@ -1290,10 +1290,10 @@ func (db *InMemoryTeamDatabase) refreshTaskStatusesByID(teamName string, taskIDs
 		oldStatus := task.Status
 		if task.Status == fsm.TaskStatusPending && unresolvedCount > 0 {
 			task.Status = fsm.TaskStatusBlocked
-			logger.Info(logComponent).Str("task_id", tid).Int("unresolved", unresolvedCount).Msg("任务被阻塞")
+			logger.Info(logComponent).Str("task_id", tid).Int("unresolved", unresolvedCount).Msg("Task blocked")
 		} else if task.Status == fsm.TaskStatusBlocked && unresolvedCount == 0 {
 			task.Status = fsm.TaskStatusPending
-			logger.Info(logComponent).Str("task_id", tid).Msg("任务解除阻塞")
+			logger.Info(logComponent).Str("task_id", tid).Msg("Task unblocked")
 		}
 		if oldStatus != task.Status {
 			task.UpdatedAt = GetCurrentTime()

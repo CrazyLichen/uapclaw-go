@@ -35,7 +35,7 @@ type callRecord struct {
 }
 
 // Execute 实现 AgentFlowService 接口
-func (f *fakeAgentFlowService) Execute(ctx context.Context, query string, sessionID string) (*cecontext.TrajectoryResult, error) {
+func (f *fakeAgentFlowService) Execute(ctx context.Context, query string, sessionID string, _ ...cecontext.AgentFlowOption) (*cecontext.TrajectoryResult, error) {
 	f.calls = append(f.calls, callRecord{query: query, sessionID: sessionID})
 
 	if err, ok := f.err[sessionID]; ok {

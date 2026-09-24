@@ -75,7 +75,7 @@ func (d *LabelDeterminator) DetermineLabel(ctx context.Context, query string, tr
 	// 调用 LLM
 	resp, err := llm.Generate(ctx, userPrompt, cecontext.WithSystemPrompt(systemPrompt))
 	if err != nil {
-		logger.Error(logComponent).Str("method", "DetermineLabel").Err(err).Msg("LLM 调用失败")
+		logger.Error(logComponent).Str("method", "DetermineLabel").Err(err).Msg("LLM call failed")
 		return false, fmt.Errorf("LabelDeterminator: LLM 调用失败: %w", err)
 	}
 
@@ -86,6 +86,6 @@ func (d *LabelDeterminator) DetermineLabel(ctx context.Context, query string, tr
 	}
 
 	// 回退：检查响应中是否包含 "success"（不区分大小写）
-	logger.Warn(logComponent).Str("method", "DetermineLabel").Str("response", resp).Msg("正则未匹配 Status，回退检查 success 关键字")
+	logger.Warn(logComponent).Str("method", "DetermineLabel").Str("response", resp).Msg("Regex did not match Status, falling back to success keyword check")
 	return strings.Contains(strings.ToLower(resp), "success"), nil
 }

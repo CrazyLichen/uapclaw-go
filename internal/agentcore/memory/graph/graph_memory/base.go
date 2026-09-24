@@ -120,7 +120,11 @@ type GraphMemory struct {
 	// Debug 是否开启调试日志
 	Debug bool
 	// TokenRecord token 使用记录
+	//
+	// Python 的 asyncio 单线程无需加锁；Go 并发调用 InvokeLLM 时需加锁保护
 	TokenRecord map[string]int
+	// tokenRecordMu TokenRecord 并发写锁
+	tokenRecordMu sync.Mutex
 	// UserLocks 用户级锁映射
 	UserLocks map[string]*sync.Mutex
 	// Semaphore LLM 并发信号量
@@ -130,6 +134,9 @@ type GraphMemory struct {
 	// TimeTillNextGC 下次 GC 间隔（秒），<0 表示禁用
 	TimeTillNextGC float64
 	// metricIsSim 是否使用相似度分数（距离越小越相似 → false；越大越相似 → true）
+	//
+	// Python: self.metric_is_sim = self.db_backend.return_similarity_score
+	// 从 dbBackend.ReturnSimilarityScore() 获取
 	metricIsSim bool
 	// searchStrategies 已注册的搜索策略
 	searchStrategies map[string]*searchStrategyTuple
@@ -140,6 +147,11 @@ type GraphMemory struct {
 	// Python: self.db_backend.embedder
 	// Go 中 BaseGraphStore 没有 Embedder() 方法，通过 AttachEmbedder 绑定后在此缓存
 	embedderVal embedding.BaseEmbedding
+	// dbKwargs 传递给图存储工厂的额外参数
+	//
+	// Python: GraphMemory.__init__(db_kwargs) → GraphStoreFactory.from_config(config, **db_kwargs)
+	// 在 NewGraphMemory 中应用选项后传给 NewFromConfig
+	dbKwargs map[string]any
 }
 
 // tzTaskResult 时区预测异步任务结果
@@ -184,45 +196,13 @@ const (
 //
 //	extraction_strategy, db_kwargs, llm_extra_kwargs, language, debug)
 func NewGraphMemory(dbConfig *graph.GraphConfig, opts ...GraphMemoryOption) (*GraphMemory, error) {
-	// 创建数据库后端
-	dbBackend, err := graph.NewFromConfig(dbConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// 校验并确定语言
-	language := "cn"
-	if dbConfig.StorageConfig != nil {
-		validLang, langErr := entity_extraction.EnsureValidLanguage(language, dbConfig.StorageConfig.Language)
-		if langErr != nil {
-			return nil, exception.BuildError(exception.StatusMemoryGraphLanguageInvalid,
-				exception.WithParam("error_msg", langErr.Error()),
-			)
-		}
-		language = validLang
-	}
-
-	concurrencyLimit := defaultConcurrencyLimit
-	if dbConfig.MaxConcurrent > 0 {
-		concurrencyLimit = dbConfig.MaxConcurrent
-	}
-
+	// 应用选项以获取 db_kwargs 及其他选项
 	gm := &GraphMemory{
-		DBBackend:                 dbBackend,
 		Config:                    dbConfig,
-		LLMClient:                 nil,
 		LLMStructuredOutput:       true,
-		Reranker:                  nil,
 		DefaultExtractionStrategy: config.NewAddMemStrategy(),
-		LLMExtraKwargs:            nil,
-		Language:                  language,
-		Debug:                     false,
 		TokenRecord:               map[string]int{"input_tokens": 0, "output_tokens": 0},
 		UserLocks:                 make(map[string]*sync.Mutex),
-		Semaphore:                 make(chan struct{}, concurrencyLimit),
-		ThreadLock:                sync.Mutex{},
-		TimeTillNextGC:            defaultGCTime,
-		metricIsSim:               false, // 默认值，后续从 dbBackend 获取
 		searchStrategies: map[string]*searchStrategyTuple{
 			"default": {
 				EntityConfig:   config.NewSearchConfig(),
@@ -233,10 +213,48 @@ func NewGraphMemory(dbConfig *graph.GraphConfig, opts ...GraphMemoryOption) (*Gr
 		lastGC: float64(time.Now().Unix()),
 	}
 
-	// 应用选项
+	// 应用选项（包括 WithDBKwargs、WithLanguage 等）
 	for _, opt := range opts {
 		opt(gm)
 	}
+
+	// 创建数据库后端
+	// Python: self.db_backend = GraphStoreFactory.from_config(config=db_config, **db_kwargs)
+	dbBackend, err := graph.NewFromConfig(dbConfig, gm.dbKwargs)
+	if err != nil {
+		return nil, err
+	}
+
+	gm.DBBackend = dbBackend
+
+	// Python: self.metric_is_sim = self.db_backend.return_similarity_score
+	gm.metricIsSim = dbBackend.ReturnSimilarityScore()
+
+	// 校验并确定语言
+	// Python: self.language = ensure_valid_language(language, db_config.db_storage_config.language)
+	// 如果 WithLanguage 已设置语言，使用该值；否则默认 "cn"
+	language := gm.Language
+	if language == "" {
+		language = "cn"
+	}
+	if dbConfig.StorageConfig != nil {
+		validLang, langErr := entity_extraction.EnsureValidLanguage(language, dbConfig.StorageConfig.Language)
+		if langErr != nil {
+			return nil, exception.BuildError(exception.StatusMemoryGraphLanguageInvalid,
+				exception.WithParam("error_msg", langErr.Error()),
+			)
+		}
+		language = validLang
+	}
+	gm.Language = language
+
+	// 设置并发限制和 GC 间隔
+	concurrencyLimit := defaultConcurrencyLimit
+	if dbConfig.MaxConcurrent > 0 {
+		concurrencyLimit = dbConfig.MaxConcurrent
+	}
+	gm.Semaphore = make(chan struct{}, concurrencyLimit)
+	gm.TimeTillNextGC = defaultGCTime
 
 	return gm, nil
 }
@@ -274,6 +292,13 @@ func WithLanguage(lang string) GraphMemoryOption {
 // WithDebug 设置调试模式
 func WithDebug(debug bool) GraphMemoryOption {
 	return func(gm *GraphMemory) { gm.Debug = debug }
+}
+
+// WithDBKwargs 设置传递给图存储工厂的额外参数
+//
+// Python: GraphMemory.__init__(db_kwargs) → GraphStoreFactory.from_config(config, **db_kwargs)
+func WithDBKwargs(kwargs map[string]any) GraphMemoryOption {
+	return func(gm *GraphMemory) { gm.dbKwargs = kwargs }
 }
 
 // Embedder 获取图后端使用的嵌入模型
@@ -503,7 +528,7 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	// 16. 清理 + 刷新
 	state.ClearReferences()
 	if err := gm.DBBackend.Refresh(ctx, graph.WithFlush(false)); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("Graph Memory: refresh 失败")
+		logger.Warn(logComponent).Err(err).Msg("Graph Memory: refresh failed")
 	}
 
 	// GC 检查（对齐 Python: gc.collect()）
@@ -688,9 +713,12 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 		response, err := gm.LLMClient.Invoke(ctx, messages, invokeOpts...)
 		if err == nil {
 			// 更新 token 记录（对齐 Python: self.token_record）
+			// Python asyncio 单线程无需加锁，Go 并发调用时需加锁
 			if response != nil && response.UsageMetadata != nil {
+				gm.tokenRecordMu.Lock()
 				gm.TokenRecord["input_tokens"] += response.UsageMetadata.InputTokens
 				gm.TokenRecord["output_tokens"] += response.UsageMetadata.OutputTokens
+				gm.tokenRecordMu.Unlock()
 			}
 
 			// 调试日志（对齐 Python: if self.debug）
@@ -850,12 +878,9 @@ func (gm *GraphMemory) initState(referenceTime *time.Time, srcType config.Episod
 //
 // Python: _prepare_episodes(src_type, user_id, content, state, content_fmt_kwargs)
 func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState, content string, messages []llmschema.BaseMessage, srcType config.EpisodeType, userID string, contentFmtKwargs map[string]string) (string, error) {
-	// 校验输入
-	if err := ValidateAddMemoryInput(gm.Config.StorageConfig.UserID, srcType, "", contentFmtKwargs); err != nil {
-		// 允许 userID 为空（在 AddMemory 中会单独校验）
-		if !strings.Contains(err.Error(), "user_id") {
-			return "", err
-		}
+	// 校验输入（对齐 Python: validate_add_memory_input(...)，校验失败直接返回 error）
+	if err := ValidateAddMemoryInput(gm.Config.StorageConfig.UserID, srcType, userID, contentFmtKwargs); err != nil {
+		return "", err
 	}
 
 	// 二选一校验（对齐 Python: isinstance(content, str) vs list[BaseMessage | dict]）
@@ -931,6 +956,9 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 
 	if recallStrategy.TopK > 0 {
 		isEmpty, err := gm.DBBackend.IsEmpty(ctx, graph.EpisodeCollection)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("collection", graph.EpisodeCollection).Msg("Graph Memory: IsEmpty check failed, skipping episode search")
+		}
 		if err == nil && !isEmpty {
 			// 组装搜索查询
 			var queryComponents []query.QueryExpr
@@ -1039,10 +1067,7 @@ func (gm *GraphMemory) extractEntityDeclarations(ctx context.Context, srcType co
 	// 解析实体列表
 	var extractedList []map[string]any
 	if list, ok := extractedRaw.([]any); ok {
-		entityNames := map[string]struct{}{
-			"user": {}, "assistant": {}, "User": {}, "Assistant": {},
-			"USER": {}, "ASSISTANT": {},
-		}
+		entityNames := map[string]struct{}{}
 		for _, item := range list {
 			entMap, ok := item.(map[string]any)
 			if !ok {
@@ -1053,7 +1078,9 @@ func (gm *GraphMemory) extractEntityDeclarations(ctx context.Context, srcType co
 			if name == "" {
 				continue
 			}
-			if _, exists := entityNames[name]; exists {
+			// 对齐 Python: casefold() 大小写不敏感过滤系统实体名
+			lowerName := strings.ToLower(name)
+			if lowerName == "user" || lowerName == "assistant" {
 				continue
 			}
 			entityNames[name] = struct{}{}
@@ -1092,6 +1119,9 @@ func (gm *GraphMemory) extractEntityDeclarations(ctx context.Context, srcType co
 	// 判断是否没有已有实体
 	noExistingEntity := false
 	isEmpty, err := gm.DBBackend.IsEmpty(ctx, graph.EntityCollection)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("collection", graph.EntityCollection).Msg("Graph Memory: IsEmpty check failed, assuming entity collection non-empty")
+	}
 	if err == nil {
 		noExistingEntity = isEmpty
 	}
@@ -1124,7 +1154,7 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 
 	entityEmbedResults, err := embedder.EmbedDocuments(ctx, extractedEntityNames, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("Graph Memory: 实体名称嵌入失败")
+		logger.Warn(logComponent).Err(err).Msg("Graph Memory: entity name embedding failed")
 		return nil
 	}
 
@@ -1250,7 +1280,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		dedupeTask := state.Tasks[len(state.Tasks)-1]
 		state.Tasks = state.Tasks[:len(state.Tasks)-1]
 		if dedupeTask.Err != nil {
-			logger.Warn(logComponent).Err(dedupeTask.Err).Msg("Graph Memory: 实体去重 LLM 失败")
+			logger.Warn(logComponent).Err(dedupeTask.Err).Msg("Graph Memory: entity dedup LLM failed")
 		} else {
 			dedupeResult := extraction.ParseJSON(dedupeTask.Result, state.Prompting.SchemaEntityDedupe)
 			if dedupeResult != nil {
@@ -1312,21 +1342,26 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		}
 
 		// 先处理阻塞任务（对齐 Python: task = asyncio.create_task(self._invoke_llm(...))）
+		// Go: 用 invokeLLMAsync 并发启动，entityEnrich 中等待完成
 		for _, pair := range blockingTasks {
 			kwargs, tmpl, outputModel := extraction.MergeExistingEntities(
 				pair.Target, pair.Sources, state.Prompting.Language, state.Extras, 2,
 			)
-			response, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("entity", pair.Target.Name).Msg("Graph Memory: 实体合并 LLM 失败")
-				continue
-			}
+			task := gm.invokeLLMAsync(ctx, kwargs, tmpl, outputModel)
 			// 对齐 Python: state.pending_merge[tgt.uuid] = task
-			state.PendingMerge[pair.Target.UUID] = &pendingMergeTask{
-				Result: assistantContent(response),
+			pending := &pendingMergeTask{
+				done: make(chan struct{}),
 			}
+			state.PendingMerge[pair.Target.UUID] = pending
+			// 对齐 Python: task 完成后设置 result
+			go func(t *asyncTask, p *pendingMergeTask) {
+				t.Wait()
+				p.Result = t.Result
+				p.Err = t.Err
+				close(p.done)
+			}(task, pending)
 			// 对齐 Python: state.merging_tasks.append(task); state.merging_tasks_entities[task] = tgt
-			mergeTask := &asyncTask{Result: assistantContent(response)}
+			mergeTask := task
 			state.MergingTasks = append(state.MergingTasks, mergeTask)
 			state.MergingTasksEntities[mergeTask] = pair.Target
 		}
@@ -1338,7 +1373,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 			)
 			response, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
 			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("entity", pair.Target.Name).Msg("Graph Memory: 实体合并 LLM 失败")
+				logger.Warn(logComponent).Err(err).Str("entity", pair.Target.Name).Msg("Graph Memory: entity merge LLM failed")
 				continue
 			}
 			mergeTask := &asyncTask{Result: assistantContent(response)}
@@ -1348,7 +1383,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 
 		// 解析合并实体后的关系和 Episode 引用（对齐 Python: await self._resolve_entity_merges(merging_args, state)）
 		if err := gm.resolveEntityMerges(ctx, mergePairs, state); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Graph Memory: resolveEntityMerges 失败")
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: resolveEntityMerges failed")
 		}
 	}
 
@@ -1388,8 +1423,14 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 	// 阻塞任务需要先等 pending merge 完成（对齐 Python: response = await task; update_entity(...)）
 	for _, entity := range entitiesBlocking {
 		pendingTask := state.PendingMerge[entity.UUID]
-		if pendingTask != nil && pendingTask.Err == nil && pendingTask.Result != "" {
-			UpdateEntity(entity, pendingTask.Result, state.Prompting.SchemaEntityExtraction)
+		if pendingTask != nil {
+			// 对齐 Python: response = await task — 等待合并完成
+			<-pendingTask.done
+			if pendingTask.Err == nil && pendingTask.Result != "" {
+				UpdateEntity(entity, pendingTask.Result, state.Prompting.SchemaEntityExtraction)
+			} else if pendingTask.Err != nil {
+				logger.Warn(logComponent).Err(pendingTask.Err).Str("entity", entity.Name).Msg("Graph Memory: failed waiting for entity merge completion")
+			}
 		}
 		// 然后发起摘要/属性抽取
 		kwargs, tmpl, outputModel := extraction.ExtractEntityAttributes(
@@ -1403,7 +1444,7 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 	for _, task := range state.Tasks {
 		task.Wait()
 		if task.Err != nil {
-			logger.Warn(logComponent).Err(task.Err).Msg("Graph Memory: 实体摘要抽取失败")
+			logger.Warn(logComponent).Err(task.Err).Msg("Graph Memory: entity summary extraction failed")
 			continue
 		}
 	}
@@ -1450,7 +1491,9 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 			if idList, ok := keepIDs.([]any); ok {
 				var relationsFiltered []*graph.Relation
 				for _, idVal := range idList {
-					if id, ok := toInt(idVal); ok && id > 0 && id <= len(relationList) {
+					// 对齐 Python: [new_relation_list[i - 1] for i in keep_ids]
+					// Python 不做边界检查，Go 保留 id >= 1 防止负索引 panic
+					if id, ok := toInt(idVal); ok && id >= 1 && id <= len(relationList) {
 						relationsFiltered = append(relationsFiltered, relationList[id-1])
 					}
 				}
@@ -1541,7 +1584,7 @@ func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, 
 
 		results, err := embedder.EmbedDocuments(ctx, texts, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Graph Memory: 关系内容嵌入失败")
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: relation content embedding failed")
 			return nil
 		}
 
@@ -1628,7 +1671,7 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 
 			response, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
 			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("relation", newRelation.Name).Msg("Graph Memory: 关系去重 LLM 失败")
+				logger.Warn(logComponent).Err(err).Str("relation", newRelation.Name).Msg("Graph Memory: relation dedup LLM failed")
 				continue
 			}
 
@@ -1970,7 +2013,7 @@ func (gm *GraphMemory) maybeGC(ctx context.Context) {
 	if now-gm.lastGC > gm.TimeTillNextGC {
 		gm.lastGC = now
 		if err := gm.DBBackend.Refresh(ctx, graph.WithFlush(false)); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh 失败")
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh failed")
 		}
 	}
 }
@@ -2074,7 +2117,7 @@ func (gm *GraphMemory) dispatchEntityMergeTasks(ctx context.Context, episodesToU
 		}
 		queryResult, err := gm.DBBackend.Query(ctx, graph.EpisodeCollection, graph.WithIDs(ids...))
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Graph Memory: 查询 Episode 失败")
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: Episode query failed")
 		} else {
 			for _, e := range queryResult {
 				ep := state.LookupTable.GetEpisode(e)

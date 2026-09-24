@@ -23,8 +23,6 @@ type MemoryInterface interface {
 	ToVectorNode() *coreschema.VectorNode
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // BaseMemory 记忆类型的公共基类。
 // 对齐 Python io_schema.BaseMemory(BaseModel)，各 Memory 类型嵌入此结构体。
 //
@@ -240,8 +238,6 @@ func VectorNodeToMemory(node *coreschema.VectorNode) (MemoryInterface, error) {
 		return nil, fmt.Errorf("VectorNodeToMemory: 未知的记忆类型: %q", typeStr)
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetWorkspaceID 实现 MemoryInterface 接口。
 // 对齐 Python BaseMemory.workspace_id 属性访问。

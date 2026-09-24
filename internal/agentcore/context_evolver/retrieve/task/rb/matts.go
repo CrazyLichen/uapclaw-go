@@ -146,7 +146,6 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	logger.Info(logComponent).Int("k", o.k).Msg("Executing parallel scaling")
 
 	query, _ := cecontext.GetTyped[string](rc, "query")
-	userID, _ := cecontext.GetTyped[string](rc, "user_id")
 
 	agentFlow := o.AgentFlow()
 	if agentFlow == nil {
@@ -154,30 +153,25 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		return nil
 	}
 
-	// 读取已检索的记忆，复制到每条轨迹的上下文
-	retrievedMemories, _ := cecontext.GetTyped[[]ceschema.MemoryItem](rc, "retrieved_memories")
-
-	// 保存原始温度并设置新温度
-	originalTemp := rc.Get("llm_temperature")
-	rc.Set("llm_temperature", o.temperature)
+	// 对齐 Python: llm.temperature = self.temperature
+	// Go: 通过 AgentFlow 传递 llm_temperature，Agent 内部 LLM 调用时读取
+	llmTempKey := "llm_temperature"
+	originalTemp := rc.Get(llmTempKey)
+	rc.Set(llmTempKey, o.temperature)
 
 	trajectories := make([]*trajectoryData, 0, o.k)
 	for i := 0; i < o.k; i++ {
 		logger.Info(logComponent).Int("trajectory", i+1).Int("k", o.k).Msg("Generating trajectory")
 
-		// 对齐 Python：为每条轨迹构造独立上下文
-		trajRC := cecontext.NewRuntimeContext()
-		trajRC.Set("query", query)
-		trajRC.Set("user_id", userID)
-		if retrievedMemories != nil {
-			trajRC.Set("retrieved_memories", retrievedMemories)
-		}
-
 		// 对齐 Python：sessionID = parallel_{i}
 		sessionID := fmt.Sprintf("parallel_%d", i)
 
 		// 执行 Agent 轨迹
-		result, err := agentFlow.Execute(ctx, query, sessionID)
+		// 对齐 Python: llm.temperature = self.temperature + retrieval_query=query
+		result, err := agentFlow.Execute(ctx, query, sessionID,
+			cecontext.WithRetrievalQuery(query),
+			cecontext.WithLLMTemperature(o.temperature),
+		)
 		if err != nil {
 			logger.Warn(logComponent).Int("index", i).Err(err).Msg("Parallel trajectory failed, skipping")
 			trajectories = append(trajectories, &trajectoryData{
@@ -201,8 +195,9 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	rc.Set("parallel_trajectories", trajectories)
 	rc.Set("scaling_factor", o.k)
 
-	// 恢复原始温度
-	rc.Set("llm_temperature", originalTemp)
+	// 对齐 Python: llm.temperature = original_temp
+	// Go: 恢复原始温度设置
+	rc.Set(llmTempKey, originalTemp)
 
 	logger.Info(logComponent).Int("count", len(trajectories)).Msg("Generated trajectories")
 
@@ -249,7 +244,7 @@ func (o *SequentialScalingOp) Execute(ctx context.Context, rc *cecontext.Runtime
 		// 调用 LLM
 		response, err := llm.Generate(ctx, prompt)
 		if err != nil {
-			logger.Error(logComponent).Int("round", roundIdx+1).Err(err).Msg("LLM 精炼调用失败")
+			logger.Error(logComponent).Int("round", roundIdx+1).Err(err).Msg("LLM refinement call failed")
 			return fmt.Errorf("SequentialScalingOp: LLM 精炼调用失败: %w", err)
 		}
 

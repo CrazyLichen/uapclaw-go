@@ -62,14 +62,14 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 		logger.Error(logComponent).
 			Err(err).
 			Str("query", query).
-			Msg("生成 query embedding 失败")
+			Msg("Failed to generate query embedding")
 		return fmt.Errorf("embedding query failed: %w", err)
 	}
 
 	logger.Debug(logComponent).
 		Int("embedding_len", len(embedding)).
 		Str("query", query).
-		Msg("生成 query embedding 成功")
+		Msg("Successfully generated query embedding")
 
 	// 构建元数据过滤条件，对齐 Python: metadata_filter={"workspace_id": user_id, "type": "reasoning_bank_memory"}
 	metadataFilter := map[string]any{
@@ -83,14 +83,14 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 		logger.Error(logComponent).
 			Err(err).
 			Str("query", query).
-			Msg("向量搜索失败")
+			Msg("Vector search failed")
 		return fmt.Errorf("vector search failed: %w", err)
 	}
 
 	logger.Debug(logComponent).
 		Int("result_count", len(nodes)).
 		Str("query", query).
-		Msg("向量搜索完成")
+		Msg("Vector search completed")
 
 	// 转换为 []ceschema.MemoryItem
 	// 对齐 Python: 遍历 VectorNode → NewReasoningBankMemoryFromVectorNode → 取 Memory 字段 → 逐条构建 ReasoningBankRetrievedMemory
@@ -101,7 +101,7 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 		if rbMemory == nil || len(rbMemory.Memory) == 0 {
 			logger.Warn(logComponent).
 				Str("node_id", node.ID).
-				Msg("向量节点转换为 ReasoningBankMemory 失败或 Memory 为空，跳过")
+				Msg("Failed to convert vector node to ReasoningBankMemory or Memory is empty, skipping")
 			continue
 		}
 		for _, item := range rbMemory.Memory {
@@ -115,7 +115,7 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	logger.Info(logComponent).
 		Str("query", query).
 		Int("retrieved_count", len(items)).
-		Msg("ReasoningBank 记忆检索完成")
+		Msg("ReasoningBank memory retrieval completed")
 
 	return nil
 }

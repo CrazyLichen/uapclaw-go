@@ -84,8 +84,6 @@ func VectorNodeFromDict(data map[string]any) (*VectorNode, error) {
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ToDict 转换为字典。
 // 对齐 Python VectorNode.to_dict()，调用 Pydantic model_dump()。
 // embedding 和 metadata 为空时不输出对应字段。

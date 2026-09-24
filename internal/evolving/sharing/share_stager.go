@@ -113,8 +113,6 @@ func (s *ShareStager) ScreenAndStage(
 	}, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // qc 对记录执行质量检查，返回丢弃原因字符串；通过时返回空字符串。
 //
 // Python: ShareStager._qc()
@@ -130,6 +128,8 @@ func (s *ShareStager) qc(record checkpointing.EvolutionRecord, messages []map[st
 
 	return ""
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // messagesHasSuccessfulTool 检查消息中是否包含成功的工具执行结果。
 //

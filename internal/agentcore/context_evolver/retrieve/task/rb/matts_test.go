@@ -39,7 +39,7 @@ type fakeAgentFlowService struct {
 	}
 }
 
-func (f *fakeAgentFlowService) Execute(_ context.Context, query string, sessionID string) (*cecontext.TrajectoryResult, error) {
+func (f *fakeAgentFlowService) Execute(_ context.Context, query string, sessionID string, _ ...cecontext.AgentFlowOption) (*cecontext.TrajectoryResult, error) {
 	f.calls = append(f.calls, struct {
 		query     string
 		sessionID string
@@ -63,7 +63,7 @@ type failingAgentFlowService struct {
 	successResult  *cecontext.TrajectoryResult
 }
 
-func (f *failingAgentFlowService) Execute(_ context.Context, _ string, sessionID string) (*cecontext.TrajectoryResult, error) {
+func (f *failingAgentFlowService) Execute(_ context.Context, _ string, sessionID string, _ ...cecontext.AgentFlowOption) (*cecontext.TrajectoryResult, error) {
 	if f.failOnSessions[sessionID] {
 		return nil, context.DeadlineExceeded
 	}

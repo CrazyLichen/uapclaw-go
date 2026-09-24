@@ -372,3 +372,4 @@ func (m *mockGraphStore) Search(_ context.Context, _ string, _ ...graph.Option) 
 	return nil, nil
 }
 func (m *mockGraphStore) AttachEmbedder(_ embedding.BaseEmbedding) error { return nil }
+func (m *mockGraphStore) ReturnSimilarityScore() bool                    { return true }

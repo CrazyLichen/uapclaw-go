@@ -276,7 +276,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 	for _, spec := range specs {
 		// Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
-			logger.Warn(taskLogComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("批量创建跳过无效规格")
+			logger.Warn(taskLogComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("Batch create skipping invalid spec")
 			results = append(results, &TaskCreateResult{Reason: "无效规格：缺少标题或内容"})
 			continue
 		}
@@ -286,7 +286,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 		)
 		if err != nil {
 			// Python: if not result.ok → warning + skip
-			logger.Warn(taskLogComponent).Err(err).Str("title", spec.Title).Msg("批量创建跳过失败任务")
+			logger.Warn(taskLogComponent).Err(err).Str("title", spec.Title).Msg("Batch create skipping failed task")
 			results = append(results, &TaskCreateResult{Reason: err.Error()})
 			continue
 		}
@@ -299,7 +299,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 			created++
 		}
 	}
-	logger.Info(taskLogComponent).Int("count", created).Int("total", len(results)).Msg("批量创建完成")
+	logger.Info(taskLogComponent).Int("count", created).Int("total", len(results)).Msg("Batch create completed")
 	return results, nil
 }
 
@@ -503,7 +503,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) (schema.
 					UpdatedAt:   nowISO,
 				}
 				if err := tm.writePlanIndex(planRecord); err != nil {
-					logger.Warn(taskLogComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE 完成：更新 plan index 失败")
+					logger.Warn(taskLogComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE completed: failed to update plan index")
 				}
 			}
 		}
@@ -953,8 +953,6 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	return schema.TaskOpResult{}.Success(), nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // notifyLeaderOfPlan 通过 TeamMessageManager 通知 leader 审批计划。
 // 返回 leader_message_id（对齐 Python: _notify_leader_of_plan → leader_message_id）。
 // Python: TeamTaskManager._notify_leader_of_plan()
@@ -1002,7 +1000,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	if tm.messager == nil {
 		return ""
 	}
-	logger.Warn(taskLogComponent).Msg("notifyLeaderOfPlan: messageManager 不可用，降级使用 messager.Send")
+	logger.Warn(taskLogComponent).Msg("notifyLeaderOfPlan: messageManager unavailable, falling back to messager.Send")
 	msg := events.EventMessageFromEvent(events.MessageEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		MessageID:        fmt.Sprintf("plan_notify_%s_%d", record.PlanID, time.Now().UnixMilli()),
@@ -1039,6 +1037,8 @@ func (tm *TeamTaskManager) resolveLeaderMemberName(ctx context.Context) string {
 	}
 	return name
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // renderPlanReviewMessage 渲染计划审批消息。
 // Python: TeamTaskManager._render_plan_review_message()

@@ -47,7 +47,7 @@ func (d *SQLTaskDao) CreateTask(ctx context.Context, task *TeamTaskBase) (bool, 
 		// Python: except IntegrityError → False
 		return false, nil
 	}
-	logger.Info(logComponent).Str("task_id", task.TaskID).Msg("任务创建成功")
+	logger.Info(logComponent).Str("task_id", task.TaskID).Msg("Task created")
 	return true, nil
 }
 
@@ -118,18 +118,18 @@ func (d *SQLTaskDao) ClaimTask(ctx context.Context, taskID, assignee string) (bo
 		}
 		// Python: if task.assignee → warning + return False
 		if task.Assignee != nil && *task.Assignee != "" {
-			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("任务已被认领")
+			logger.Warn(logComponent).Str("task_id", taskID).Str("assignee", *task.Assignee).Msg("Task already claimed")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusClaimed) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusClaimed).Msg("任务状态转换不合法")
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusClaimed).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
 			Updates(&TeamTaskBase{Status: fsm.TaskStatusClaimed, Assignee: StringPtr(assignee), UpdatedAt: GetCurrentTime()})
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("任务认领成功")
+		logger.Info(logComponent).Str("task_id", taskID).Str("assignee", assignee).Msg("Task claimed")
 		return nil
 	})
 	return ok, err
@@ -148,18 +148,18 @@ func (d *SQLTaskDao) ResetTask(ctx context.Context, taskID string) (bool, error)
 		}
 		// Python: if task.status != claimed → error
 		if task.Status != fsm.TaskStatusClaimed {
-			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("只能重置 claimed 状态的任务")
+			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Can only reset claimed tasks")
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPending) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPending).Msg("任务状态转换不合法")
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPending).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "assignee", "updated_at").
 			Updates(&TeamTaskBase{Status: fsm.TaskStatusPending, Assignee: nil, UpdatedAt: GetCurrentTime()})
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Msg("任务重置为 pending")
+		logger.Info(logComponent).Str("task_id", taskID).Msg("Task reset to pending")
 		return nil
 	})
 	return ok, err
@@ -177,14 +177,14 @@ func (d *SQLTaskDao) ApprovePlanTask(ctx context.Context, taskID string) (bool, 
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, fsm.TaskStatusPlanApproved) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPlanApproved).Msg("任务状态转换不合法")
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", fsm.TaskStatusPlanApproved).Msg("Invalid task status transition")
 			return nil
 		}
 		tx.Table(table).Where("task_id = ?", taskID).
 			Select("status", "updated_at").
 			Updates(&TeamTaskBase{Status: fsm.TaskStatusPlanApproved, UpdatedAt: GetCurrentTime()})
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Msg("任务计划已审批")
+		logger.Info(logComponent).Str("task_id", taskID).Msg("Task plan approved")
 		return nil
 	})
 	return ok, err
@@ -203,7 +203,7 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 			return nil
 		}
 		if !fsm.IsValidTaskTransition(task.Status, newStatus) {
-			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("任务状态转换不合法")
+			logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("Invalid task status transition")
 			return nil
 		}
 
@@ -214,17 +214,17 @@ func (d *SQLTaskDao) UpdateTaskStatus(ctx context.Context, taskID, newStatus str
 
 		// Python: if status == completed → 标记依赖 resolved
 		if newStatus == fsm.TaskStatusCompleted {
-			logger.Info(logComponent).Str("task_id", taskID).Msg("任务已完成")
+			logger.Info(logComponent).Str("task_id", taskID).Msg("Task completed")
 			depResult := tx.Table(depTable).
 				Where("depends_on_task_id = ? AND resolved = 0", taskID).
 				Update("resolved", 1)
 			if depResult.RowsAffected > 0 {
-				logger.Info(logComponent).Str("task_id", taskID).Int64("resolved", depResult.RowsAffected).Msg("标记依赖已解决")
+				logger.Info(logComponent).Str("task_id", taskID).Int64("resolved", depResult.RowsAffected).Msg("Dependencies marked resolved")
 			}
 		}
 
 		ok = true
-		logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务状态已更新")
+		logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("Task status updated")
 		return nil
 	})
 	return ok, err
@@ -243,7 +243,7 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 		}
 		// Python: if task.status in (claimed, plan_approved) → error
 		if task.Status == fsm.TaskStatusClaimed || task.Status == fsm.TaskStatusPlanApproved {
-			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("当前状态禁止编辑任务内容")
+			logger.Error(logComponent).Str("task_id", taskID).Str("status", task.Status).Msg("Cannot edit task in current status")
 			return nil
 		}
 
@@ -256,7 +256,7 @@ func (d *SQLTaskDao) UpdateTask(ctx context.Context, taskID, title, content stri
 		}
 		if len(updates) > 0 {
 			tx.Table(table).Where("task_id = ?", taskID).Updates(updates)
-			logger.Info(logComponent).Str("task_id", taskID).Msg("任务内容已更新")
+			logger.Info(logComponent).Str("task_id", taskID).Msg("Task content updated")
 		}
 		ok = true
 		return nil
@@ -332,7 +332,7 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 	if err != nil {
 		// Python: except _MutationFailure → session.rollback(); return fail
 		result.Reason = mutationErr.Error()
-		logger.Error(logComponent).Str("reason", result.Reason).Msg("图变更管线失败")
+		logger.Error(logComponent).Str("reason", result.Reason).Msg("Dependency graph mutation pipeline failed")
 	} else if result.Ok {
 		// Python: 内存实现: 分支日志，使用去重后的 newEdges 计数
 		if len(newTasks) > 0 {
@@ -340,12 +340,12 @@ func (d *SQLTaskDao) MutateDependencyGraph(ctx context.Context, teamName string,
 				Int("new_tasks", len(newTasks)).
 				Int("new_edges", len(newEdges)).
 				Int("refreshed", len(result.RefreshedTasks)).
-				Msg("已创建任务；已添加边；已刷新任务")
+				Msg("Tasks created; edges added; tasks refreshed")
 		} else {
 			logger.Info(logComponent).
 				Int("new_edges", len(newEdges)).
 				Int("refreshed", len(result.RefreshedTasks)).
-				Msg("已添加边；已刷新任务")
+				Msg("Edges added; tasks refreshed")
 		}
 	}
 	return result
@@ -372,7 +372,7 @@ func (d *SQLTaskDao) AddTaskWithBidirectionalDependencies(ctx context.Context, t
 
 	result := d.MutateDependencyGraph(ctx, teamName, []NewTaskSpec{newTaskSpec}, edges)
 	if !result.Ok {
-		logger.Error(logComponent).Str("task_id", task.TaskID).Str("reason", result.Reason).Msg("带依赖创建任务失败")
+		logger.Error(logComponent).Str("task_id", task.TaskID).Str("reason", result.Reason).Msg("Failed to create task with dependencies")
 	}
 	return result
 }
@@ -433,7 +433,7 @@ func (d *SQLTaskDao) DeleteTask(ctx context.Context, taskID string) error {
 	// Python: session.delete(task) — 先检查存在
 	result := d.db.WithContext(ctx).Table(taskTable).Where("task_id = ?", taskID).Delete(nil)
 	if result.RowsAffected == 0 {
-		logger.Warn(logComponent).Str("task_id", taskID).Msg("删除任务未找到")
+		logger.Warn(logComponent).Str("task_id", taskID).Msg("Task not found for deletion")
 	}
 	// 同步删依赖
 	d.db.WithContext(ctx).Table(depTable).
@@ -490,7 +490,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 			Find(&candidates)
 
 		if len(candidates) == 0 {
-			logger.Info(logComponent).Str("team_name", teamName).Msg("无可取消的活跃任务")
+			logger.Info(logComponent).Str("team_name", teamName).Msg("No active tasks to cancel")
 			return nil
 		}
 
@@ -505,7 +505,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 			}
 			if skipSet[assigneeKey] {
 				assigneeStr := assigneeKey
-				logger.Debug(logComponent).Str("task_id", task.TaskID).Str("assignee", assigneeStr).Msg("跳过：assignee 在 skipAssignees 中")
+				logger.Debug(logComponent).Str("task_id", task.TaskID).Str("assignee", assigneeStr).Msg("Skipping: assignee in skipAssignees")
 				continue
 			}
 			_, refreshed, _ := terminateTaskInTx(tx, taskTable, depTable, task.TaskID, fsm.TaskStatusCancelled, now)
@@ -569,8 +569,6 @@ func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName s
 // Error 返回失败原因。
 func (e *mutationFailure) Error() string { return e.reason }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // withTx 返回绑定指定事务的 DAO 实例。
 func (d *SQLTaskDao) withTx(tx *gorm.DB) *SQLTaskDao {
 	return &SQLTaskDao{db: tx}
@@ -589,6 +587,8 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_task_dependency_" + suffix
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
 // Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]
@@ -637,7 +637,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 			task.Status = fsm.TaskStatusBlocked
 			task.UpdatedAt = now
 			refreshedTasks = append(refreshedTasks, &task)
-			logger.Info(logComponent).Str("task_id", task.TaskID).Int("unresolved", unresolved).Msg("任务被阻塞")
+			logger.Info(logComponent).Str("task_id", task.TaskID).Int("unresolved", unresolved).Msg("Task blocked")
 		} else if task.Status == fsm.TaskStatusBlocked && unresolved == 0 {
 			// Python: blocked + unresolved == 0 → pending
 			tx.Table(taskTable).Where("task_id = ?", task.TaskID).
@@ -646,7 +646,7 @@ func refreshStatusInTx(tx *gorm.DB, taskTable, depTable string, taskIDs []string
 			task.Status = fsm.TaskStatusPending
 			task.UpdatedAt = now
 			refreshedTasks = append(refreshedTasks, &task)
-			logger.Info(logComponent).Str("task_id", task.TaskID).Msg("任务解除阻塞")
+			logger.Info(logComponent).Str("task_id", task.TaskID).Msg("Task unblocked")
 		}
 	}
 	return refreshedTasks
@@ -671,13 +671,13 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 
 	// Python: 已是目标状态（幂等）
 	if task.Status == newStatus {
-		logger.Debug(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务已是目标状态")
+		logger.Debug(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("Task already in target status")
 		return &task, []*TeamTaskBase{}, nil
 	}
 
 	// Python: is_valid_transition 校验
 	if !fsm.IsValidTaskTransition(task.Status, newStatus) {
-		logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("任务状态转换不合法")
+		logger.Error(logComponent).Str("task_id", taskID).Str("from", task.Status).Str("to", newStatus).Msg("Invalid task status transition")
 		return nil, nil, nil
 	}
 
@@ -688,7 +688,7 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 	// 更新本地 task 对象状态
 	task.Status = newStatus
 	task.UpdatedAt = now
-	logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("任务终止")
+	logger.Info(logComponent).Str("task_id", taskID).Str("status", newStatus).Msg("Task terminated")
 
 	// Python: 标记下游依赖 resolved
 	depResult := tx.Table(depTable).
@@ -696,7 +696,7 @@ func terminateTaskInTx(tx *gorm.DB, taskTable, depTable, taskID, newStatus strin
 		Update("resolved", 1)
 	resolvedCount := int(depResult.RowsAffected)
 	if resolvedCount > 0 {
-		logger.Info(logComponent).Str("task_id", taskID).Int("resolved", resolvedCount).Msg("标记依赖已解决")
+		logger.Info(logComponent).Str("task_id", taskID).Int("resolved", resolvedCount).Msg("Dependencies marked resolved")
 	}
 
 	// Python: 获取下游任务 ID

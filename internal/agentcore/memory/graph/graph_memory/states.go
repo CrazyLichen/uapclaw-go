@@ -159,6 +159,10 @@ type pendingMergeTask struct {
 	Result string
 	// Err 任务执行错误
 	Err error
+	// done 完成信号通道，对齐 Python await task
+	// entityMerge 用 invokeLLMAsync 启动后关闭此通道，
+	// entityEnrich 通过 <-done 等待合并完成
+	done chan struct{}
 }
 
 // relationFilterTaskItem 关系过滤任务条目
@@ -442,7 +446,7 @@ func BatchEmbed(ctx context.Context, objects []embeddable, embedder embedding.Ba
 	// 执行嵌入
 	embedResults, err := embedder.EmbedDocuments(ctx, texts, embedding.WithBatchSize(cfg.EmbedBatchSize))
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("Graph Memory: batch embed 失败")
+		logger.Warn(logComponent).Err(err).Msg("Graph Memory: batch embed failed")
 		return objects
 	}
 

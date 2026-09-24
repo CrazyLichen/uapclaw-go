@@ -37,8 +37,6 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // buildAgentRails 构建 Agent Rails 列表。
 // Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
 // Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
@@ -203,7 +201,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		if len(hooksCfg.Events) > 0 {
 			userHookRail := serverhooks.NewUserHookRail(*hooksCfg)
 			railsList = append(railsList, userHookRail)
-			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail 加载完成")
+			logger.Info(logComponent).Int("event_types", len(hooksCfg.Events)).Msg("UserHookRail loaded")
 		}
 	}()
 
@@ -259,7 +257,7 @@ func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
 	// Python: try-except 保护，失败返回 nil 不影响其他 Rail
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Warn(logComponent).Any("panic", r).Msg("buildSkillRail panic，跳过")
+			logger.Warn(logComponent).Any("panic", r).Msg("buildSkillRail panicked, skipping")
 			rail = nil
 		}
 	}()
@@ -323,7 +321,7 @@ func (d *DeepAdapter) resolveSkillMode() string {
 // ✅ 已回填：SkillEvolutionRail（对齐 Python: _build_skill_evolution_rail()）
 func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 	if d.model == nil {
-		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model 为空，跳过")
+		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model is nil, skipping")
 		return nil
 	}
 
@@ -359,7 +357,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 	// skills 目录
 	skillsDir := workspace.AgentSkillsDir()
 	if skillsDir == "" {
-		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: skills 目录为空，跳过")
+		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: skills dir is empty, skipping")
 		return nil
 	}
 
@@ -388,7 +386,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 		opts...,
 	)
 
-	logger.Info(logComponent).Msg("SkillEvolutionRail 创建成功")
+	logger.Info(logComponent).Msg("SkillEvolutionRail created")
 	return rail
 }
 
@@ -412,7 +410,7 @@ func (d *DeepAdapter) buildStreamEventRail() *commrails.JiuClawStreamEventRail {
 // ✅ 已回填：SubagentRail（对齐 Python: _build_subagent_rail() — SubagentRail()）
 func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
 	rail := subagent.NewSubagentRail()
-	logger.Info(logComponent).Msg("SubagentRail 创建成功")
+	logger.Info(logComponent).Msg("SubagentRail created")
 	return rail
 }
 
@@ -427,13 +425,13 @@ func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("panic", r).
-					Msg("SafetyPromptRail 创建失败，跳过")
+					Msg("SafetyPromptRail creation failed, skipping")
 			}
 		}()
 		rail = secrail.NewSafetyPromptRail()
 	}()
 	if rail != nil {
-		logger.Info(logComponent).Msg("SafetyPromptRail 创建成功")
+		logger.Info(logComponent).Msg("SafetyPromptRail created")
 	}
 	return rail
 }
@@ -449,7 +447,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("panic", r).
-					Msg("MemoryRail 创建失败，跳过")
+					Msg("MemoryRail creation failed, skipping")
 			}
 		}()
 
@@ -457,7 +455,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 		embedConfig, _ := d.configCache["embed"].(map[string]any)
 		if embedConfig == nil {
 			logger.Warn(logComponent).
-				Msg("MemoryRail 创建失败: 无 embed 配置")
+				Msg("MemoryRail creation failed: no embed config")
 			return
 		}
 
@@ -488,7 +486,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 			APIKey:    apiKey,
 		}
 		rail = memrail.NewMemoryRail(ec, isProactive)
-		logger.Info(logComponent).Msg("MemoryRail 创建成功")
+		logger.Info(logComponent).Msg("MemoryRail created")
 	}()
 	return rail
 }
@@ -521,7 +519,7 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 					// 当前记忆类型（主动/被动）和之前注册的不一致，注销后重建
 					if d.instance != nil {
 						if err := d.instance.UnregisterRail(ctx, d.memoryRail); err != nil {
-							logger.Error(logComponent).Err(err).Msg("注销 MemoryRail 失败（类型不一致）")
+							logger.Error(logComponent).Err(err).Msg("Failed to unregister MemoryRail (type mismatch)")
 						}
 					}
 					d.memoryRail = nil
@@ -536,21 +534,21 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 			}
 			if d.memoryRail != nil && d.instance != nil {
 				if err := d.instance.RegisterRail(ctx, d.memoryRail); err != nil {
-					logger.Error(logComponent).Err(err).Str("mode", mode).Msg("注册 MemoryRail 失败")
+					logger.Error(logComponent).Err(err).Str("mode", mode).Msg("Failed to register MemoryRail")
 				} else {
-					logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail 注册成功")
+					logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail registered")
 				}
 			}
 		} else if d.memoryRail != nil {
 			// Python: elif not builtin_on and self._memory_rail is not None:
 			if d.instance != nil {
 				if err := d.instance.UnregisterRail(ctx, d.memoryRail); err != nil {
-					logger.Error(logComponent).Err(err).Msg("注销 MemoryRail 失败")
+					logger.Error(logComponent).Err(err).Msg("Failed to unregister MemoryRail")
 				}
 			}
 			d.memoryRail = nil
 			d.isProactiveMemory = nil
-			logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail 已注销（配置禁用）")
+			logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail unregistered (config disabled)")
 		}
 	}
 }
@@ -569,7 +567,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 
 		embedConfig, _ := d.configCache["embed"].(map[string]any)
 		if embedConfig == nil {
-			logger.Warn(logComponent).Msg("buildMemoryRailWithMode: 无 embed 配置")
+			logger.Warn(logComponent).Msg("buildMemoryRailWithMode: no embed config")
 			return
 		}
 
@@ -600,7 +598,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 // Python: _build_avatar_rail() (line 2146-2155)
 func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
 	rail := commrails.NewAvatarPromptRail()
-	logger.Info(logComponent).Msg("AvatarPromptRail 创建成功")
+	logger.Info(logComponent).Msg("AvatarPromptRail created")
 	return rail
 }
 
@@ -620,7 +618,7 @@ func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 	}
 	// Python: rail = RuntimePromptRail(language=self._resolve_runtime_language(), channel=default_channel)
 	rail := commrails.NewRuntimePromptRail(d.resolveRuntimeLanguage(), defaultChannel)
-	logger.Info(logComponent).Msg("RuntimePromptRail 创建成功")
+	logger.Info(logComponent).Msg("RuntimePromptRail created")
 	return rail
 }
 
@@ -630,7 +628,7 @@ func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 // Python: _build_response_prompt_rail() (line 2171-2180)
 func (d *DeepAdapter) buildResponsePromptRail() sainterfaces.AgentRail {
 	rail := commrails.NewResponsePromptRail()
-	logger.Info(logComponent).Msg("ResponsePromptRail 创建成功")
+	logger.Info(logComponent).Msg("ResponsePromptRail created")
 	return rail
 }
 
@@ -663,7 +661,7 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	}
 	enabled, _ := permissionConfig["enabled"].(bool)
 	if !enabled {
-		logger.Info(logComponent).Msg("PermissionRail: permissions.enabled=false，跳过创建")
+		logger.Info(logComponent).Msg("PermissionRail: permissions.enabled=false, skipping creation")
 		return nil
 	}
 
@@ -681,7 +679,7 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	logger.Info(logComponent).
 		Strs("tools_config_keys", toolsConfigKeys).
 		Strs("tool_names", toolNames).
-		Msg("permission rail tools_config keys 和 rail tool_names")
+		Msg("permission rail tools_config keys and rail tool_names")
 
 	// Python: logger.info("[InterruptHelpers] Building PermissionInterruptRail with tool_names=%s llm=%s model_name=%s", ...)
 	logger.Info(logComponent).
@@ -711,9 +709,9 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	if rail != nil {
 		logger.Info(logComponent).
 			Strs("tool_names", toolNames).
-			Msg("PermissionInterruptRail 创建成功")
+			Msg("PermissionInterruptRail created")
 	} else {
-		logger.Warn(logComponent).Msg("PermissionInterruptRail 创建失败")
+		logger.Warn(logComponent).Msg("PermissionInterruptRail creation failed")
 	}
 	return rail
 }
@@ -739,10 +737,10 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		rail := d.buildTaskPlanningRail(d.configCache, d.resolveRuntimeLanguage())
 		if rail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, rail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注册 TaskPlanningRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to register TaskPlanningRail")
 			} else {
 				d.taskPlanningRail = rail
-				logger.Info(logComponent).Msg("TaskPlanningRail 注册成功（plan 模式）")
+				logger.Info(logComponent).Msg("TaskPlanningRail registered (plan mode)")
 			}
 		}
 	}
@@ -775,7 +773,7 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	if d.contextAssembleRail == nil || d.contextAssembleMode != "agent.plan" {
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注销 ContextAssembleRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to unregister ContextAssembleRail")
 			}
 			d.contextAssembleRail = nil
 		}
@@ -783,9 +781,9 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		d.contextAssembleMode = "agent.plan"
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注册 ContextAssembleRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to register ContextAssembleRail")
 			} else {
-				logger.Info(logComponent).Msg("ContextAssembleRail 注册成功（plan 模式）")
+				logger.Info(logComponent).Msg("ContextAssembleRail registered (plan mode)")
 			}
 		}
 	}
@@ -798,19 +796,19 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 			d.contextProcessorRail = d.buildContextProcessorRail()
 			if d.contextProcessorRail != nil && d.instance != nil {
 				if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
-					logger.Error(logComponent).Err(err).Msg("注册 ContextProcessorRail 失败")
+					logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
 				} else {
-					logger.Info(logComponent).Msg("ContextProcessorRail 注册成功（plan 模式）")
+					logger.Info(logComponent).Msg("ContextProcessorRail registered (plan mode)")
 				}
 			}
 		}
 	} else {
 		if d.contextProcessorRail != nil && d.instance != nil {
 			if err := d.instance.UnregisterRail(ctx, d.contextProcessorRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注销 ContextProcessorRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to unregister ContextProcessorRail")
 			}
 			d.contextProcessorRail = nil
-			logger.Info(logComponent).Msg("ContextProcessorRail 已注销（plan 模式，配置禁用）")
+			logger.Info(logComponent).Msg("ContextProcessorRail unregistered (plan mode, config disabled)")
 		}
 	}
 
@@ -825,9 +823,9 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 				d.skillEvolutionRail, ok = rail.(*evolution.SkillEvolutionRail)
 				if ok && d.skillEvolutionRail != nil && d.instance != nil {
 					if err := d.instance.RegisterRail(ctx, d.skillEvolutionRail); err != nil {
-						logger.Error(logComponent).Err(err).Msg("注册 SkillEvolutionRail 失败")
+						logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail")
 					} else {
-						logger.Info(logComponent).Msg("SkillEvolutionRail 注册成功（plan 模式）")
+						logger.Info(logComponent).Msg("SkillEvolutionRail registered (plan mode)")
 					}
 				}
 			}
@@ -836,11 +834,11 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		if d.skillEvolutionRail != nil {
 			if d.instance != nil {
 				if err := d.instance.UnregisterRail(ctx, d.skillEvolutionRail); err != nil {
-					logger.Error(logComponent).Err(err).Msg("注销 SkillEvolutionRail 失败")
+					logger.Error(logComponent).Err(err).Msg("Failed to unregister SkillEvolutionRail")
 				}
 			}
 			d.skillEvolutionRail = nil
-			logger.Info(logComponent).Msg("SkillEvolutionRail 已注销（evolution.enabled=false）")
+			logger.Info(logComponent).Msg("SkillEvolutionRail unregistered (evolution.enabled=false)")
 		}
 	}
 
@@ -855,14 +853,14 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		d.subagentRail, ok = rail.(*subagent.SubagentRail)
 		if ok && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.subagentRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注册 SubagentRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to register SubagentRail")
 			} else {
-				logger.Info(logComponent).Msg("SubagentRail 注册成功（plan 模式）")
+				logger.Info(logComponent).Msg("SubagentRail registered (plan mode)")
 			}
 		}
 	}
 
-	logger.Info(logComponent).Msg("updatePlanModeRails 执行完成")
+	logger.Info(logComponent).Msg("updatePlanModeRails completed")
 }
 
 // updateAgentModeRails agent 模式：卸载 plan 专属 rails，按需注册 agent 专属 rails。
@@ -873,33 +871,33 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 	// Python: rail_specs = (("_task_planning_rail", "TaskPlanningRail"), ...)
 	if d.taskPlanningRail != nil && d.instance != nil {
 		if err := d.instance.UnregisterRail(ctx, d.taskPlanningRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail 已注销")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "TaskPlanningRail").Msg("Rail unregistered")
 		}
 		d.taskPlanningRail = nil
 	}
 	if d.skillEvolutionRail != nil && d.instance != nil {
 		if err := d.instance.UnregisterRail(ctx, d.skillEvolutionRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "SkillEvolutionRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail 已注销")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillEvolutionRail").Msg("Rail unregistered")
 		}
 		d.skillEvolutionRail = nil
 	}
 	if d.skillCreateRail != nil && d.instance != nil {
 		if err := d.instance.UnregisterRail(ctx, d.skillCreateRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "SkillCreateRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "SkillCreateRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillCreateRail").Msg("Rail 已注销")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SkillCreateRail").Msg("Rail unregistered")
 		}
 		d.skillCreateRail = nil
 	}
 	if d.subagentRail != nil && d.instance != nil {
 		if err := d.instance.UnregisterRail(ctx, d.subagentRail); err != nil {
-			logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("注销 Rail 失败")
+			logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("Failed to unregister Rail")
 		} else {
-			logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("Rail 已注销")
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("Rail unregistered")
 		}
 		d.subagentRail = nil
 	}
@@ -916,7 +914,7 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 	if d.contextAssembleRail == nil || d.contextAssembleMode == "agent.plan" {
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注销 ContextAssembleRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to unregister ContextAssembleRail")
 			}
 			d.contextAssembleRail = nil
 		}
@@ -924,7 +922,7 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 		d.contextAssembleMode = "agent.fast"
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注册 ContextAssembleRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to register ContextAssembleRail")
 			}
 		}
 	}
@@ -934,14 +932,14 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 		d.contextProcessorRail = d.buildContextProcessorRail()
 		if d.contextProcessorRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("注册 ContextProcessorRail 失败")
+				logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
 			} else {
-				logger.Info(logComponent).Str("mode", mode).Msg("ContextProcessorRail 注册成功")
+				logger.Info(logComponent).Str("mode", mode).Msg("ContextProcessorRail registered")
 			}
 		}
 	}
 
-	logger.Info(logComponent).Str("mode", mode).Msg("updateAgentModeRails 执行完成")
+	logger.Info(logComponent).Str("mode", mode).Msg("updateAgentModeRails completed")
 }
 
 // updatePromptForMode 按模式更新系统提示词语言。
@@ -988,12 +986,12 @@ func (d *DeepAdapter) getPermissionsSnapshot() map[string]any {
 func (d *DeepAdapter) persistAllowRule(permissions map[string]any) bool {
 	yamlPath := d.getPermissionYAMLPath()
 	if yamlPath == "" {
-		logger.Warn(logComponent).Msg("persistAllowRule: config path 为空")
+		logger.Warn(logComponent).Msg("persistAllowRule: config path is empty")
 		return false
 	}
 	ok := harnesssecurity.WritePermissionsSectionToAgentConfigYAML(yamlPath, permissions)
 	if !ok {
-		logger.Warn(logComponent).Str("yaml_path", yamlPath).Msg("persistAllowRule 写盘失败")
+		logger.Warn(logComponent).Str("yaml_path", yamlPath).Msg("persistAllowRule write to disk failed")
 	}
 	return ok
 }
@@ -1104,6 +1102,8 @@ func (d *DeepAdapter) permissionSceneHook(input harnesssecurity.PermissionSceneH
 	}
 	return []string{"reject", fmt.Sprintf("[PERMISSION_DENIED] 该工具未被授权 (owner_scopes: %s)", ownerLevel)}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isPermissionEnabled 检查 permissions 配置中 enabled 字段是否为真值。
 func isPermissionEnabled(permissionConfig map[string]any) bool {

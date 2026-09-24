@@ -149,11 +149,11 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 		}
 
 		sumParams := SummarizeTrajectoriesInput{
-			Query:       params.Question,
-			Trajectory:  trajectories,
-			MattsMode:   params.MattsMode,
-			Feedback:    feedbacks,
-			Score:       scores,
+			Query:      params.Question,
+			Trajectory: trajectories,
+			MattsMode:  params.MattsMode,
+			Feedback:   feedbacks,
+			Score:      scores,
 		}
 		if params.GroundTruth != "" {
 			gt := params.GroundTruth
@@ -307,7 +307,15 @@ func runTrialsInner(ctx context.Context, agent cecontext.AgentFlowService, quest
 			currentQuery = fmt.Sprintf("Question: %s", question)
 		}
 
-		result, err := agent.Execute(ctx, currentQuery, sessionID)
+		// 对齐 Python: self_refine 模式下传入 retrieval_query=question
+		// 确保记忆检索使用原始问题而非精炼后的查询
+		var result *cecontext.TrajectoryResult
+		var err error
+		if selfRefine {
+			result, err = agent.Execute(ctx, currentQuery, sessionID, cecontext.WithRetrievalQuery(question))
+		} else {
+			result, err = agent.Execute(ctx, currentQuery, sessionID)
+		}
 		if err != nil {
 			logger.Error(logComponent).
 				Int("run_id", runID+1).

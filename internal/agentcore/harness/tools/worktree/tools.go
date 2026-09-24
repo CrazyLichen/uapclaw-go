@@ -106,7 +106,7 @@ func (t *EnterWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, o
 	existing := GetCurrentSession(ctx)
 	if existing == nil && t.manager != nil && t.manager.SessionState() != nil {
 		// 回退：ctx 传播未携带时从 manager.sessionState 读取
-		logger.Warn(logComponent).Msg("GetCurrentSession(ctx) 返回 nil，回退到 manager.SessionState()")
+		logger.Warn(logComponent).Msg("GetCurrentSession(ctx) returned nil, falling back to manager.SessionState()")
 		existing = t.manager.SessionState().GetCurrentSession()
 	}
 	if existing != nil {
@@ -238,8 +238,6 @@ func (t *ExitWorktreeTool) Invoke(ctx context.Context, inputs map[string]any, _ 
 	return data, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveSlug 解析 worktree slug。
 // Python: EnterWorktreeTool._resolve_slug(inputs)
 func (t *EnterWorktreeTool) resolveSlug(ctx context.Context, inputs map[string]any) (string, bool, error) {
@@ -289,6 +287,8 @@ func (t *EnterWorktreeTool) slugExists(ctx context.Context, slug string) bool {
 	targetPath := WorktreePathFor(workspace, slug)
 	return t.manager.Backend().Exists(ctx, targetPath)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // generateRandomSlug 生成短随机 worktree 名称。
 // Python: _generate_random_slug()

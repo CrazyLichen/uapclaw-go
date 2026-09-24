@@ -61,7 +61,7 @@ func NewWorktreeManager(config WorktreeConfig, backend WorktreeBackend, opts ...
 	if backend == nil {
 		b, err := CreateBackend("git", config)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建默认 GitBackend 失败，使用空配置")
+			logger.Error(logComponent).Err(err).Msg("Failed to create default GitBackend, using empty config")
 			backend = &GitBackend{config: config}
 		} else {
 			backend = b
@@ -206,7 +206,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	if action == "keep" {
 		SetCurrentSession(ctx, nil)
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-			Str("worktree_path", session.WorktreePath).Msg("已保留 worktree")
+			Str("worktree_path", session.WorktreePath).Msg("worktree preserved")
 		return map[string]string{
 			"action":          "keep",
 			"original_cwd":    session.OriginalCWD,
@@ -232,7 +232,7 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	}
 
 	logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
-		Str("worktree_path", session.WorktreePath).Msg("已移除 worktree")
+		Str("worktree_path", session.WorktreePath).Msg("worktree removed")
 	return map[string]string{
 		"action":          "remove",
 		"original_cwd":    session.OriginalCWD,
@@ -419,8 +419,6 @@ func (m *WorktreeManager) RemoveWorktree(ctx context.Context, worktreePath, repo
 	return m.removeWorktreeInternal(ctx, worktreePath, repoRoot)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveTargetPath 计算 worktree 文件系统路径。
 // Python: WorktreeManager._resolve_target_path(slug)
 //
@@ -432,6 +430,8 @@ func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) (s
 	}
 	return WorktreePathFor(workspace, slug), nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ownerSlug 从 owner 标识派生 worktree slug。
 // Python: WorktreeManager._owner_slug(owner_id)
@@ -459,7 +459,7 @@ func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, cbc *interfaces.
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeCreate(ctx, cbc, slug, repoRoot)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireBeforeCreate hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeCreate hook failed")
 			continue
 		}
 		if r != nil {
@@ -474,7 +474,7 @@ func (m *WorktreeManager) fireBeforeCreate(ctx context.Context, cbc *interfaces.
 func (m *WorktreeManager) fireAfterCreate(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession) {
 	for _, rail := range m.lifecycleRails {
 		if err := rail.AfterWorktreeCreate(ctx, cbc, session); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireAfterCreate hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireAfterCreate hook failed")
 		}
 	}
 }
@@ -487,7 +487,7 @@ func (m *WorktreeManager) fireBeforeExit(ctx context.Context, cbc *interfaces.Ag
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeExit(ctx, cbc, session, action)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireBeforeExit hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeExit hook failed")
 			continue
 		}
 		if r != nil {
@@ -502,7 +502,7 @@ func (m *WorktreeManager) fireBeforeExit(ctx context.Context, cbc *interfaces.Ag
 func (m *WorktreeManager) fireAfterExit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, action string) {
 	for _, rail := range m.lifecycleRails {
 		if err := rail.AfterWorktreeExit(ctx, cbc, session, action); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireAfterExit hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireAfterExit hook failed")
 		}
 	}
 }
@@ -527,7 +527,7 @@ func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, cbc *interfaces.
 	for _, rail := range m.lifecycleRails {
 		r, err := rail.BeforeWorktreeCommit(ctx, cbc, session, message, files)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireBeforeCommit hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireBeforeCommit hook failed")
 			continue
 		}
 		if r != nil {
@@ -542,7 +542,7 @@ func (m *WorktreeManager) fireBeforeCommit(ctx context.Context, cbc *interfaces.
 func (m *WorktreeManager) fireAfterCommit(ctx context.Context, cbc *interfaces.AgentCallbackContext, session *WorktreeSession, commitHash string) {
 	for _, rail := range m.lifecycleRails {
 		if err := rail.AfterWorktreeCommit(ctx, cbc, session, commitHash); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fireAfterCommit hook 失败")
+			logger.Warn(logComponent).Err(err).Msg("fireAfterCommit hook failed")
 		}
 	}
 }
@@ -585,14 +585,14 @@ func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, workt
 	dirs := m.config.SymlinkDirectories
 	for _, d := range dirs {
 		if strings.Contains(d, "..") || strings.HasPrefix(d, "/") {
-			logger.Warn(logComponent).Str("dir", d).Msg("跳过符号链接：检测到路径穿越")
+			logger.Warn(logComponent).Str("dir", d).Msg("Skipping symlink: path traversal detected")
 			continue
 		}
 		src := filepath.Join(repoRoot, d)
 		dst := filepath.Join(worktreePath, d)
 		if err := os.Symlink(src, dst); err != nil {
 			if !os.IsExist(err) && !os.IsNotExist(err) {
-				logger.Warn(logComponent).Str("dir", d).Err(err).Msg("创建符号链接失败")
+				logger.Warn(logComponent).Str("dir", d).Err(err).Msg("Failed to create symlink")
 			}
 		}
 	}
@@ -600,7 +600,7 @@ func (m *WorktreeManager) postCreationSetup(ctx context.Context, repoRoot, workt
 	// 2. 拷贝 gitignored include 文件
 	if len(m.config.IncludePatterns) > 0 {
 		if _, err := m.copyIncludeFiles(ctx, repoRoot, worktreePath, m.config.IncludePatterns); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("拷贝 include 文件失败")
+			logger.Warn(logComponent).Err(err).Msg("Failed to copy include files")
 		}
 	}
 
@@ -636,11 +636,11 @@ func (m *WorktreeManager) copyIncludeFiles(ctx context.Context, repoRoot, worktr
 		src := filepath.Join(repoRoot, entry)
 		dst := filepath.Join(worktreePath, entry)
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("为 include 文件创建目录失败")
+			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("Failed to create directory for include file")
 			continue
 		}
 		if err := copyFile(src, dst); err != nil {
-			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("拷贝 include 文件失败")
+			logger.Warn(logComponent).Str("entry", entry).Err(err).Msg("Failed to copy include file")
 			continue
 		}
 		copied = append(copied, entry)
@@ -658,7 +658,7 @@ func (m *WorktreeManager) configureHooksPath(ctx context.Context, repoRoot, work
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
 			_ = runGit(ctx, []string{"config", "core.hooksPath", candidate}, worktreePath)
-			logger.Debug(logComponent).Str("hooks_path", candidate).Msg("已配置 worktree hooks 路径")
+			logger.Debug(logComponent).Str("hooks_path", candidate).Msg("Worktree hooks path configured")
 			return
 		}
 	}

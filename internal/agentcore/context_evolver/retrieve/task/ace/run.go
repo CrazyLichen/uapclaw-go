@@ -68,11 +68,13 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 
 	nodes, err := vectorStore.Search(ctx, dummyEmbedding, 50, metadataFilter)
 	if err != nil {
-		logger.Error(logComponent).
+		// 对齐 Python LoadPlaybookOp：搜索失败时回退到空结果，而非返回 error
+		logger.Warn(logComponent).
 			Err(err).
 			Str("user_id", userID).
-			Msg("ACE 记忆检索失败")
-		return fmt.Errorf("ACE memory search failed: %w", err)
+			Msg("ACE memory retrieval failed, falling back to empty result")
+		rc.Set("retrieved_memories", []ceschema.MemoryItem{})
+		return nil
 	}
 
 	// 对齐 Python: 遍历 VectorNode → NewACEMemoryFromVectorNode → 转为 MemoryItem

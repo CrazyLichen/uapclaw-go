@@ -576,9 +576,9 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 				Msg("[SkillEvolutionRail] RunEvolution panic")
 		}
 	}()
-	logger.Info(logComponent).Bool("auto_scan", r.autoScan).Msg("[SkillEvolutionRail] run_evolution 已调用")
+	logger.Info(logComponent).Bool("auto_scan", r.autoScan).Msg("[SkillEvolutionRail] run_evolution called")
 	if !r.autoScan {
-		logger.Info(logComponent).Msg("[SkillEvolutionRail] auto_scan 已禁用，跳过")
+		logger.Info(logComponent).Msg("[SkillEvolutionRail] auto_scan disabled, skipping")
 		return nil
 	}
 
@@ -600,12 +600,12 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 		return nil
 	}
 
-	logger.Info(logComponent).Int("messages", len(messages)).Msg("[SkillEvolutionRail] 已收集消息")
+	logger.Info(logComponent).Int("messages", len(messages)).Msg("[SkillEvolutionRail] messages collected")
 
 	r.emitProgress("started", "开始常规技能演进分析")
 
 	if len(messages) == 0 {
-		logger.Info(logComponent).Msg("[SkillEvolutionRail] 无消息，跳过")
+		logger.Info(logComponent).Msg("[SkillEvolutionRail] no messages, skipping")
 		r.emitProgress("cancelled", "无对话消息，取消常规技能演进分析")
 		r.experienceTracker.EvaluatePresented(ctx, presentedEntries)
 		return nil
@@ -661,7 +661,7 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 		r.processedSignalKeys = make(map[[4]string]bool)
 	}
 
-	logger.Info(logComponent).Int("signals", len(signals)).Msg("[SkillEvolutionRail] 检测到信号")
+	logger.Info(logComponent).Int("signals", len(signals)).Msg("[SkillEvolutionRail] signals detected")
 
 	// 无信号时推断 primary skill
 	// Python: if not signals: primary_skill = self._infer_primary_skill(messages, skill_names)
@@ -823,7 +823,7 @@ func (r *SkillEvolutionRail) OnApproveSimplify(ctx context.Context, requestID st
 		return nil, err
 	}
 	if result != nil {
-		logger.Info(logComponent).Str("request_id", requestID).Any("result", result).Msg("[SkillEvolutionRail] simplify 已执行")
+		logger.Info(logComponent).Str("request_id", requestID).Any("result", result).Msg("[SkillEvolutionRail] simplify executed")
 	}
 	return result, nil
 }
@@ -835,7 +835,7 @@ func (r *SkillEvolutionRail) OnRejectSimplify(requestID string) {
 	gov, ok := r.pendingGovernance[requestID]
 	r.manager.RejectSimplify(requestID)
 	if ok && gov != nil {
-		logger.Info(logComponent).Str("skill_name", gov.SkillName).Msg("[SkillEvolutionRail] simplify 已拒绝")
+		logger.Info(logComponent).Str("skill_name", gov.SkillName).Msg("[SkillEvolutionRail] simplify rejected")
 	}
 }
 
@@ -853,7 +853,7 @@ func (r *SkillEvolutionRail) RequestRebuild(ctx context.Context, skillName strin
 	if followupText == "" {
 		return "", nil
 	}
-	logger.Info(logComponent).Str("skill", skillName).Float64("min_score", minScore).Msg("[SkillEvolutionRail] rebuild 提示词已构建")
+	logger.Info(logComponent).Str("skill", skillName).Float64("min_score", minScore).Msg("[SkillEvolutionRail] rebuild prompt built")
 	return followupText, nil
 }
 
@@ -870,7 +870,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 	archiveDir := filepath.Join(skillDir, "archive")
 	dirEntries, err := os.ReadDir(archiveDir)
 	if err != nil || len(dirEntries) == 0 {
-		logger.Warn(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] 无归档目录")
+		logger.Warn(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] no archive directory")
 		return false, nil
 	}
 
@@ -890,7 +890,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 			}
 		}
 		if len(bodyFiles) == 0 {
-			logger.Warn(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] 无归档 body")
+			logger.Warn(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] no archive body")
 			return false, nil
 		}
 		// 按文件名降序排序，取最新版本
@@ -905,10 +905,10 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 	// 先归档当前状态
 	// Python: await store.archive_skill_body(skill_name); await store.archive_evolutions(skill_name)
 	if _, err := store.ArchiveSkillBody(ctx, skillName); err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("归档 skill body 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to archive skill body")
 	}
 	if _, err := store.ArchiveEvolutions(ctx, skillName); err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("归档 evolutions 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to archive evolutions")
 	}
 
 	// 恢复旧 body
@@ -917,7 +917,7 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 		return false, fmt.Errorf("读取归档 body 失败: %w", err)
 	}
 	if _, err := store.WriteSkillContent(ctx, skillName, oldBody); err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("恢复 skill body 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to restore skill body")
 	}
 
 	// 恢复旧 evolutions.json
@@ -926,21 +926,21 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 		if readErr == nil {
 			evoPath := filepath.Join(skillDir, "evolutions.json")
 			if writeErr := store.WriteFileText(ctx, evoPath, evoContent); writeErr != nil {
-				logger.Error(logComponent).Err(writeErr).Str("skill", skillName).Msg("恢复 evolutions.json 失败")
+				logger.Error(logComponent).Err(writeErr).Str("skill", skillName).Msg("Failed to restore evolutions.json")
 			}
 		}
 	} else {
 		if err := store.ClearEvolutions(ctx, skillName); err != nil {
-			logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("清除 evolutions 失败")
+			logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to clear evolutions")
 		}
 	}
 
 	// Python: await store.render_evolution_markdown(skill_name)
 	if err := store.RenderEvolutionMarkdown(ctx, skillName); err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("渲染 evolution markdown 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to render evolution markdown")
 	}
 
-	logger.Info(logComponent).Str("skill", skillName).Str("archive", filepath.Base(bodyArchivePath)).Msg("[SkillEvolutionRail] 回滚完成")
+	logger.Info(logComponent).Str("skill", skillName).Str("archive", filepath.Base(bodyArchivePath)).Msg("[SkillEvolutionRail] rollback completed")
 	return true, nil
 }
 
@@ -1073,8 +1073,6 @@ func (r *SkillEvolutionRail) RecordPresentedExperiences(ctx context.Context, ski
 	r.experienceTracker.RecordPresented(ctx, sessionID, skillName, presentationSnippet)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // initSharing 初始化 Sharing 组件。
 // 对齐 Python: SkillEvolutionSharingMixin._init_sharing(sharing_config, *, llm, model, language, evolution_store)
 func (r *SkillEvolutionRail) initSharing(sharingConfig map[string]any, llmModel *llm.Model, model string, language string) {
@@ -1145,7 +1143,7 @@ func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.Experience
 		}
 	}
 	if backendName != "local_file" {
-		logger.Warn(logComponent).Str("backend", backendName).Msg("[SkillEvolutionRail] 不支持的后端，回退到 local_file")
+		logger.Warn(logComponent).Str("backend", backendName).Msg("[SkillEvolutionRail] unsupported backend, falling back to local_file")
 	}
 
 	hubPath := os.Getenv("EVOLUTION_SHARING_HUB_PATH")
@@ -1344,7 +1342,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 				return
 			}
 			if skillID == "" {
-				logger.Debug(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] 跳过共享下载: skill_id 不可用")
+				logger.Debug(logComponent).Str("skill", skillName).Msg("[SkillEvolutionRail] skipping shared download: skill_id unavailable")
 				return
 			}
 			bundles, dlErr := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
@@ -1388,7 +1386,7 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 		r.emitProgress("generating_updates", fmt.Sprintf("为 '%s' 生成演进记录", skillName), WithSkillName(skillName))
 		request, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", !r.autoSave, true)
 		if err != nil {
-			logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] evolve_skill 失败")
+			logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] evolve_skill failed")
 			r.emitProgress("failed", fmt.Sprintf("'%s' 演进失败: %s", skillName, err.Error()), WithSkillName(skillName))
 			return
 		}
@@ -1403,12 +1401,12 @@ func (r *SkillEvolutionRail) evolveSkillWithSharing(
 		// 自动保存：先持久化共享记录，再正常演化
 		for _, record := range sharedRecords {
 			if err := r.evolutionStore.AppendRecord(ctx, skillName, record); err != nil {
-				logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("持久化共享记录失败")
+				logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("Failed to persist shared records")
 			}
 		}
-		logger.Info(logComponent).Int("records", len(sharedRecords)).Str("skill", skillName).Msg("[SkillEvolutionRail] 已持久化共享记录")
+		logger.Info(logComponent).Int("records", len(sharedRecords)).Str("skill", skillName).Msg("[SkillEvolutionRail] shared records persisted")
 		if _, err := r.handleEvolutionFromSignals(ctx, skillName, skillSignals, messages, nil, "", false, true); err != nil {
-			logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("[SkillEvolutionRail] 共享记录后演进失败")
+			logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("[SkillEvolutionRail] post-shared-record evolution failed")
 		}
 		return
 	}
@@ -1503,7 +1501,7 @@ func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName st
 		return
 	}
 	if !result.OK && result.Reason != "" {
-		logger.Warn(logComponent).Str("skill", skillName).Str("reason", result.Reason).Msg("[SkillEvolutionRail] 共享上传被拒绝")
+		logger.Warn(logComponent).Str("skill", skillName).Str("reason", result.Reason).Msg("[SkillEvolutionRail] shared upload rejected")
 	}
 }
 
@@ -1572,7 +1570,7 @@ func (r *SkillEvolutionRail) llmCheckDuplicates(
 		llm_resilience.WithRetryPrompt(prompt),
 	)
 	if err != nil {
-		logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] LLM 去重检查失败")
+		logger.Warn(logComponent).Str("skill", skillName).Err(err).Msg("[SkillEvolutionRail] LLM dedup check failed")
 		return sharedRecords
 	}
 	return parseDuplicateCheckResponse(sharedRecords, rawResponse)
@@ -1615,6 +1613,8 @@ func (r *SkillEvolutionRail) buildDuplicateCheckPrompt(
 		"## Downloaded Shared Experiences\n" + strings.Join(sharedSummary, "\n") + "\n\n" +
 		`Output JSON array: [{"record_id": "...", "decision": "keep|duplicate", "reason": "..."}]`
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseDuplicateCheckResponse 解析 LLM 返回的去重 JSON。
 // 对齐 Python: SkillEvolutionSharingMixin._parse_duplicate_check_response(shared_records, raw_response)

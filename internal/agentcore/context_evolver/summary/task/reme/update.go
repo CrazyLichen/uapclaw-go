@@ -171,8 +171,6 @@ func NewPersistMemoryOp(sc *cecontext.ServiceContext, helper *cepersistence.Memo
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Execute 执行轨迹预处理，按分数分组。
 // 对齐 Python TrajectoryPreprocessOp.async_execute。
 func (op *TrajectoryPreprocessOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
@@ -251,7 +249,7 @@ func (op *SuccessExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 			"StepSequence": trajectory,
 			"Outcome":      "successful",
 		}); err != nil {
-			logger.Error(logComponent).Err(err).Msg("成功提取提示词模板执行失败")
+			logger.Error(logComponent).Err(err).Msg("Failed to execute success extraction prompt template")
 			continue
 		}
 		userPrompt := buf.String()
@@ -330,7 +328,7 @@ func (op *FailureExtractionOp) Execute(ctx context.Context, rc *cecontext.Runtim
 			"StepSequence": trajectory,
 			"Outcome":      "failed",
 		}); err != nil {
-			logger.Error(logComponent).Err(err).Msg("失败提取提示词模板执行失败")
+			logger.Error(logComponent).Err(err).Msg("Failed to execute failure extraction prompt template")
 			continue
 		}
 		userPrompt := buf.String()
@@ -444,7 +442,7 @@ func (op *ComparativeExtractionOp) Execute(ctx context.Context, rc *cecontext.Ru
 		"LowerScore":  minScore,
 		"LowerSteps":  lowerSteps,
 	}); err != nil {
-		logger.Error(logComponent).Err(err).Msg("对比提取提示词模板执行失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to execute comparative extraction prompt template")
 		return err
 	}
 	userPrompt := buf.String()
@@ -521,7 +519,7 @@ func (op *ComparativeAllExtractionOp) Execute(ctx context.Context, rc *cecontext
 	if err := op.prompts.ComparativeAllMemoryPrompt.Execute(&buf, map[string]any{
 		"Trajectory": trajectoriesStr,
 	}); err != nil {
-		logger.Error(logComponent).Err(err).Msg("全量对比提示词模板执行失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to execute comparative all prompt template")
 		return err
 	}
 	userPrompt := buf.String()
@@ -814,13 +812,13 @@ func (op *MemoryValidationOp) validateMemory(ctx context.Context, llm cecontext.
 		"Condition":         memory.WhenToUse,
 		"TaskMemoryContent": memory.Content,
 	}); err != nil {
-		logger.Error(logComponent).Err(err).Msg("记忆校验提示词模板执行失败")
+		logger.Error(logComponent).Err(err).Msg("Failed to execute memory validation prompt template")
 		return false, 0, fmt.Sprintf("template execute failed: %v", err)
 	}
 	userPrompt := buf.String()
 	response, err := llm.Generate(ctx, userPrompt)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("LLM 校验失败")
+		logger.Error(logComponent).Err(err).Msg("LLM validation failed")
 		return false, 0, fmt.Sprintf("LLM generate failed: %v", err)
 	}
 
@@ -860,8 +858,6 @@ func (op *PersistMemoryOp) persistType() string {
 	}
 	return "none"
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getStringFromMap 从 map[string]any 中安全获取字符串字段。
 func getStringFromMap(m map[string]any, key, defaultVal string) string {

@@ -434,7 +434,10 @@ func TestEntityEnrich_有阻塞实体有LLM(t *testing.T) {
 	entity2.UUID = "e2"
 	entity2.Name = "Bob"
 
-	state.PendingMerge["e1"] = &pendingMergeTask{Result: "pre-merge summary", Err: nil}
+	// done 通道需要预关闭（测试场景：合并已完成）
+	pendingDone := make(chan struct{})
+	close(pendingDone)
+	state.PendingMerge["e1"] = &pendingMergeTask{Result: "pre-merge summary", Err: nil, done: pendingDone}
 
 	entities := []*graph.Entity{entity1, entity2}
 	result, err := gm.entityEnrich(context.Background(), entities, "Alice and Bob met", state)
