@@ -129,6 +129,8 @@ func TestSpawnManager_CleanupTeammate_inprocess句柄(t *testing.T) {
 	)
 	sm.spawnedHandles["alice"] = inprocHandle
 
+	// ForceKill 会等待 done 关闭，先异步关闭 done
+	go close(done)
 	sm.CleanupTeammate(context.Background(), "alice")
 
 	// 验证已从 map 中移除
@@ -189,6 +191,9 @@ func TestSpawnManager_ShutdownAllHandles_有句柄(t *testing.T) {
 		NewTeamAgent(agentschema.NewAgentCard()),
 	)
 
+	// ForceKill 会等待 done 关闭，先异步关闭 done
+	go close(done1)
+	go close(done2)
 	sm.ShutdownAllHandles(context.Background())
 
 	// 验证已清空
