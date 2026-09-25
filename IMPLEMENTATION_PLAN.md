@@ -594,8 +594,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；⤵️ 9.55 回填 TeamAgent 类型依赖；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
 | 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ 9.55 回填 pendingInterruptResumes 类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
 | 9.61 | ☐ | RecoveryManager | 恢复管理（⤴️ 依赖 9.65a-4 的 *TeamBackend；⤴️ 依赖 9.65a-1 的 SessionPersistence 接口） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
-| 9.62 | ☐ | CoordinationKernel | 协调内核 | `openjiuwen/agent_teams/` |
-| 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
+| 9.62 | ✅ | CoordinationKernel | 协调内核（facade + Setup/Start/Pause/Stop 生命周期 + KernelHost 窄接口 + 便捷方法 EnqueueUserInput/WakeMailboxIfInterruptCleared） | `openjiuwen/agent_teams/` |
+| 9.63 | ✅ | EventBus / Dispatcher | 事件总线与分发（EventBus 串行消费+轮询+生命周期 + EventDispatcher 粗筛+CallbackFramework 适配 + types 子包打破循环依赖 + 6 个 Handler 骨架 + 共享 staleClaimThrottle） | `openjiuwen/agent_teams/` |
 | 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
 | **9.x TeamBackend 子系统** | — | | | |
 | 9.65a-1 | ✅ | TeamDB 基础层 | 数据模型+TeamDatabase接口+InMemoryDAO（TeamDao/MemberDao含FSM校验）+会话表生命周期；覆盖率92.6% | `openjiuwen/agent_teams/tools/database/` · `tools/models.py` |
