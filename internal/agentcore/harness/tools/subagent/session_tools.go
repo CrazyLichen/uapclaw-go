@@ -229,7 +229,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		session := callOpts.Session
 		if session == nil {
 			return nil, exception.BuildError(exception.StatusToolSessionToolInvoked,
-				exception.WithParam("error_msg", "SessionsSpawnTool requires a valid session in kwargs"))
+				exception.WithParam("error_msg", "SessionsSpawnTool 需要 kwargs 中包含有效的 session"))
 		}
 		parentSessionID := session.GetSessionID()
 		subSessionID := fmt.Sprintf("%s_sub_%s", parentSessionID, generateTokenHex(4))

@@ -50,10 +50,10 @@ func NewMessageHandler(
 // Python: MessageHandler.get_callbacks
 func (h *MessageHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 	return map[string]types.EventCallbackFunc{
-		events.TeamEventMessage:                    h.OnMessageOrBroadcast,
-		events.TeamEventBroadcast:                  h.OnMessageOrBroadcast,
+		events.TeamEventMessage:                 h.OnMessageOrBroadcast,
+		events.TeamEventBroadcast:               h.OnMessageOrBroadcast,
 		string(types.InnerEventTypePollMailbox): h.OnPollMailbox,
-		events.TeamEventMemberShutdown:             h.OnMemberShutdownDrain,
+		events.TeamEventMemberShutdown:          h.OnMemberShutdownDrain,
 	}
 }
 

@@ -40,7 +40,7 @@ func ValidateAddMemoryInput(userIDMaxLength int, srcType config.EpisodeType, use
 			return exception.BuildError(
 				exception.StatusMemoryStoreValidationInvalid,
 				exception.WithParam("store_type", storeType),
-				exception.WithParam("error_msg", "When supplied, content_fmt_kwargs must be of type dict[str, str] and not empty"),
+				exception.WithParam("error_msg", "提供 content_fmt_kwargs 时必须为 dict[str,str] 类型且非空"),
 			)
 		}
 		for k, v := range contentFmtKwargs {
@@ -48,7 +48,7 @@ func ValidateAddMemoryInput(userIDMaxLength int, srcType config.EpisodeType, use
 				return exception.BuildError(
 					exception.StatusMemoryStoreValidationInvalid,
 					exception.WithParam("store_type", storeType),
-					exception.WithParam("error_msg", "content_fmt_kwargs must have non-empty keys and values of string type"),
+					exception.WithParam("error_msg", "content_fmt_kwargs 的键和值必须为非空字符串"),
 				)
 			}
 		}
@@ -59,7 +59,7 @@ func ValidateAddMemoryInput(userIDMaxLength int, srcType config.EpisodeType, use
 		return exception.BuildError(
 			exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "src_type must be one of [EpisodeType.CONVERSATION, EpisodeType.DOCUMENT, EpisodeType.JSON]"),
+			exception.WithParam("error_msg", "src_type 必须为 [CONVERSATION, DOCUMENT, JSON] 之一"),
 		)
 	}
 
@@ -69,7 +69,7 @@ func ValidateAddMemoryInput(userIDMaxLength int, srcType config.EpisodeType, use
 		return exception.BuildError(
 			exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", fmt.Sprintf("user_id must be a string of length <= %d (preferably UUID4)", userIDMaxLength)),
+			exception.WithParam("error_msg", fmt.Sprintf("user_id 必须为长度 <= %d 的字符串（推荐 UUID4）", userIDMaxLength)),
 		)
 	}
 
@@ -89,7 +89,7 @@ func ValidateSearchInput(query string, userIDs []string, settings []bool) ([]str
 		return nil, exception.BuildError(
 			exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "query must be a non-empty string value"),
+			exception.WithParam("error_msg", "query 必须为非空字符串"),
 		)
 	}
 
@@ -100,7 +100,7 @@ func ValidateSearchInput(query string, userIDs []string, settings []bool) ([]str
 			return nil, exception.BuildError(
 				exception.StatusMemoryStoreValidationInvalid,
 				exception.WithParam("store_type", storeType),
-				exception.WithParam("error_msg", "user_id must be a non-empty string of length <= 32 or a list of such strings"),
+				exception.WithParam("error_msg", "user_id 必须为长度 <= 32 的非空字符串或此类字符串列表"),
 			)
 		}
 	}

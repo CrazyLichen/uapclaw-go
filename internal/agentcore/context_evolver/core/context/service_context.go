@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // LLMService LLM 服务本地接口。
 // 对齐 Python OpenAILLMWrapper.async_generate(prompt, system_prompt?, temperature?, max_tokens?)。
@@ -79,16 +79,6 @@ type AgentFlowConfig struct {
 // AgentFlowOption Agent 执行选项函数。
 type AgentFlowOption func(*AgentFlowConfig)
 
-// WithRetrievalQuery 设置记忆检索查询。
-func WithRetrievalQuery(q string) AgentFlowOption {
-	return func(c *AgentFlowConfig) { c.RetrievalQuery = q }
-}
-
-// WithLLMTemperature 设置 LLM 生成温度。
-func WithLLMTemperature(t float64) AgentFlowOption {
-	return func(c *AgentFlowConfig) { c.LLMTemperature = t }
-}
-
 // TrajectoryResult 单次 Agent 执行的轨迹结果。
 type TrajectoryResult struct {
 	// Answer Agent 最终回答
@@ -126,6 +116,16 @@ type ServiceContext struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithRetrievalQuery 设置记忆检索查询。
+func WithRetrievalQuery(q string) AgentFlowOption {
+	return func(c *AgentFlowConfig) { c.RetrievalQuery = q }
+}
+
+// WithLLMTemperature 设置 LLM 生成温度。
+func WithLLMTemperature(t float64) AgentFlowOption {
+	return func(c *AgentFlowConfig) { c.LLMTemperature = t }
+}
 
 // NewServiceContext 创建空的服务上下文。
 func NewServiceContext() *ServiceContext {

@@ -126,12 +126,12 @@ func DocID(doc any) string {
 func ValidateConfig(config *RerankerConfig) error {
 	if config.APIBase == "" {
 		return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "APIBase is required"),
+			exception.WithParam("error_msg", "APIBase 不能为空"),
 		)
 	}
 	if config.Timeout <= 0 {
 		return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "Timeout must be greater than 0"),
+			exception.WithParam("error_msg", "Timeout 必须大于 0"),
 		)
 	}
 	return nil

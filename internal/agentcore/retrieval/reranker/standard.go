@@ -269,7 +269,7 @@ func validateStandardConfig(docs []any) error {
 				Msg("Reranker 收到多模态重排序请求，不支持")
 		default:
 			return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-				exception.WithParam("error_msg", "input to reranker must be either list[str | Document]"),
+				exception.WithParam("error_msg", "reranker 的输入必须是 []string 或 []Document"),
 			)
 		}
 	}

@@ -40,7 +40,7 @@ type fakeRecord struct {
 
 func newFakeMilvusClient() *fakeMilvusClient {
 	return &fakeMilvusClient{
-		records:            make(map[string]map[string]*fakeRecord),
+		records:             make(map[string]map[string]*fakeRecord),
 		hasCollectionResult: true,
 	}
 }

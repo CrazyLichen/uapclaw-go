@@ -75,7 +75,7 @@ func RegisterDatabaseQueryLanguage(name string, def QueryLanguageDefinition, for
 func registerDatabaseQueryLanguage(m map[string]QueryLanguageDefinition, name string, def QueryLanguageDefinition, force bool) error {
 	if _, ok := m[name]; ok && !force {
 		return exception.BuildError(exception.StatusRetrievalVectorStoreQueryInvalid,
-			exception.WithParam("error_msg", "Database query language for "+name+" already registered"))
+			exception.WithParam("error_msg", name+" 的数据库查询语言已注册"))
 	}
 	m[name] = def
 	return nil
@@ -91,7 +91,7 @@ func validateLanguageRegistered(name string) error {
 
 	if !ok {
 		return exception.BuildError(exception.StatusRetrievalVectorStoreQueryInvalid,
-			exception.WithParam("error_msg", "Database query language "+name+" not registered via RegisterDatabaseQueryLanguage method"))
+			exception.WithParam("error_msg", name+" 的数据库查询语言未通过 RegisterDatabaseQueryLanguage 方法注册"))
 	}
 	return nil
 }

@@ -378,6 +378,8 @@ func (e *taskFailedError) Text() string {
 	return e.text
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // memberName 解析当前成员名。
 // Python: StreamController._member_name()
 func (sc *StreamController) memberName() string {
@@ -787,8 +789,6 @@ func (sc *StreamController) combinePendingInputs(items []any) any {
 	}
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // detectTaskFailed 检测 chunk 中的 task_failed 错误。
 // Python: _detect_task_failed(chunk) → Optional[Tuple[Optional[int], str]]

@@ -158,7 +158,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 	pkField := schema.GetPrimaryKeyField()
 	if pkField == nil {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", "schema must contain a primary key field"),
+			exception.WithParam("error_msg", "Schema 必须包含主键字段"),
 		)
 	}
 
@@ -166,7 +166,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 	vectorFields := schema.GetVectorFields()
 	if len(vectorFields) == 0 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", "schema must contain at least one FLOAT_VECTOR field"),
+			exception.WithParam("error_msg", "Schema 必须包含至少一个 FLOAT_VECTOR 字段"),
 		)
 	}
 
@@ -655,7 +655,7 @@ func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName str
 	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
 	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema is not yet implemented, pending 7.22/7.23"),
+		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
 	)
 }
 

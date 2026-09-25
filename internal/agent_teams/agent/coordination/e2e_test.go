@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 )
 
 // ──────────────────────────── 端到端集成测试 ────────────────────────────
@@ -16,10 +16,10 @@ import (
 // fakeTrackableHost 可追踪 handler 调用状态的 fake host
 type fakeTrackableHost struct {
 	fakeKernelHost
-	mu             sync.Mutex
+	mu              sync.Mutex
 	deliveredInputs []any
-	shutdownCalled bool
-	cancelCalled   bool
+	shutdownCalled  bool
+	cancelCalled    bool
 }
 
 func (f *fakeTrackableHost) DeliverInput(_ context.Context, content any, _ bool) error {
@@ -178,10 +178,13 @@ func TestEndToEnd_HumanAgent轮询过滤(t *testing.T) {
 	k.Setup(schema.TeamRoleHumanAgent, bp, nil)
 
 	// Human-agent 不启用周期轮询，手动发 poll 事件
+	var mu sync.Mutex
 	var pollTriggered bool
 	d := k.Dispatcher()
 	d.framework.OnCustom("coordination_poll_mailbox", func(ctx context.Context, data map[string]any) any {
+		mu.Lock()
 		pollTriggered = true
+		mu.Unlock()
 		return nil
 	})
 
@@ -192,7 +195,11 @@ func TestEndToEnd_HumanAgent轮询过滤(t *testing.T) {
 	k.Dispatcher().Dispatch(context.Background(), types.CoordinationEvent{
 		Inner: &types.InnerEventMessage{EventType: types.InnerEventTypePollMailbox},
 	})
-	if pollTriggered {
+
+	mu.Lock()
+	triggered := pollTriggered
+	mu.Unlock()
+	if triggered {
 		t.Error("Human-agent 不应触发 POLL_MAILBOX 回调")
 	}
 
@@ -213,9 +220,12 @@ func TestEndToEnd_TeamCompletion回调(t *testing.T) {
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 	k.Start(context.Background())
 
+	var mu sync.Mutex
 	var callbackInvoked bool
 	k.Dispatcher().TeamCompletion.RegisterCompletionCallback(func(_ context.Context) error {
+		mu.Lock()
 		callbackInvoked = true
+		mu.Unlock()
 		return nil
 	})
 
@@ -228,7 +238,10 @@ func TestEndToEnd_TeamCompletion回调(t *testing.T) {
 	})
 	time.Sleep(100 * time.Millisecond)
 
-	if !callbackInvoked {
+	mu.Lock()
+	invoked := callbackInvoked
+	mu.Unlock()
+	if !invoked {
 		t.Error("TASK_LIST_DRAINED 应触发注册的完成回调")
 	}
 

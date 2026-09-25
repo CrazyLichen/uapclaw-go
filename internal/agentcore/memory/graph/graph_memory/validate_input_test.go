@@ -62,7 +62,7 @@ func TestValidateAddMemoryInput_无效EpisodeType(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "src_type must be one of")
+	assert.Contains(t, baseErr.Message(), "src_type 必须为")
 }
 
 func TestValidateAddMemoryInput_所有有效EpisodeType(t *testing.T) {
@@ -95,7 +95,7 @@ func TestValidateAddMemoryInput_userID超长(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "user_id must be a string of length <= 10")
+	assert.Contains(t, baseErr.Message(), "user_id 必须为长度 <= 10")
 }
 
 func TestValidateAddMemoryInput_userID恰好最大长度(t *testing.T) {
@@ -121,7 +121,7 @@ func TestValidateSearchInput_空query(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "query must be a non-empty string value")
+	assert.Contains(t, baseErr.Message(), "query 必须为非空字符串")
 }
 
 func TestValidateSearchInput_空白query(t *testing.T) {

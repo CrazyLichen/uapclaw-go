@@ -230,3 +230,5 @@ func (h *InProcessSpawnHandle) AgentCard() *agentschema.AgentCard {
 	}
 	return h.agentRef.AgentCard()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

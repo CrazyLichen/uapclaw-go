@@ -69,7 +69,7 @@ func Msg2Dict(messages any, preserveMeta bool) ([]map[string]any, error) {
 		return nil, exception.BuildError(
 			exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", "graph memory"),
-			exception.WithParam("error_msg", "Input is not a list of dict or BaseMessage"),
+			exception.WithParam("error_msg", "输入不是 dict 列表或 BaseMessage"),
 		)
 	}
 }

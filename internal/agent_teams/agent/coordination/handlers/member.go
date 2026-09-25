@@ -40,6 +40,8 @@ const (
 	staleClaimSeconds = 600.0
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // idleNudgeStatuses 触发过期认领提醒的空闲状态集合。
 // 对齐 Python: _IDLE_NUDGE_STATUSES = frozenset({MemberStatus.READY.value, MemberStatus.ERROR.value})
 var idleNudgeStatuses = map[string]bool{

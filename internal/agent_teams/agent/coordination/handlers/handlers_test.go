@@ -18,10 +18,10 @@ func TestAgentLifecycleHandler_GetCallbacks_事件映射(t *testing.T) {
 
 	expected := map[string]string{
 		string(types.InnerEventTypeUserInput): "OnUserInput",
-		events.TeamEventStandby:              "OnStandby",
-		events.TeamEventCleaned:             "OnCleaned",
-		events.TeamEventToolApprovalResult:  "OnToolApprovalResult",
-		events.TeamEventTaskPlanResponse:    "OnTaskPlanResponse",
+		events.TeamEventStandby:               "OnStandby",
+		events.TeamEventCleaned:               "OnCleaned",
+		events.TeamEventToolApprovalResult:    "OnToolApprovalResult",
+		events.TeamEventTaskPlanResponse:      "OnTaskPlanResponse",
 	}
 
 	if len(cb) != len(expected) {
@@ -140,10 +140,10 @@ func TestMessageHandler_GetCallbacks_事件映射(t *testing.T) {
 	cb := h.GetCallbacks()
 
 	expected := map[string]bool{
-		events.TeamEventMessage:                    true,
-		events.TeamEventBroadcast:                  true,
+		events.TeamEventMessage:                 true,
+		events.TeamEventBroadcast:               true,
 		string(types.InnerEventTypePollMailbox): true,
-		events.TeamEventMemberShutdown:             true,
+		events.TeamEventMemberShutdown:          true,
 	}
 
 	if len(cb) != len(expected) {
@@ -255,8 +255,8 @@ func TestTeamCompletionHandler_GetCallbacks_事件映射(t *testing.T) {
 
 	expected := map[string]bool{
 		string(types.InnerEventTypePollTask): true,
-		events.TeamEventTaskListDrained:            true,
-		events.TeamEventTeamCompleted:              true,
+		events.TeamEventTaskListDrained:      true,
+		events.TeamEventTeamCompleted:        true,
 	}
 
 	if len(cb) != len(expected) {

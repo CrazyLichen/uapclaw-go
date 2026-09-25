@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"

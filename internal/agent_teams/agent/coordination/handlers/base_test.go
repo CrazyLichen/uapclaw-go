@@ -31,13 +31,18 @@ type fakeHost struct {
 	deliverCalled  bool
 }
 
-func (f *fakeHost) IsAgentReady() bool                                       { return true }
-func (f *fakeHost) IsAgentRunning() bool                                     { return false }
-func (f *fakeHost) HasInFlightRound() bool                                   { return false }
-func (f *fakeHost) HasPendingInterrupt() bool                                { return false }
-func (f *fakeHost) CancelAgent(_ context.Context) error                      { f.cancelCalled = true; return nil }
-func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error      { f.deliverCalled = true; return nil }
-func (f *fakeHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error { return nil }
+func (f *fakeHost) IsAgentReady() bool                  { return true }
+func (f *fakeHost) IsAgentRunning() bool                { return false }
+func (f *fakeHost) HasInFlightRound() bool              { return false }
+func (f *fakeHost) HasPendingInterrupt() bool           { return false }
+func (f *fakeHost) CancelAgent(_ context.Context) error { f.cancelCalled = true; return nil }
+func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error {
+	f.deliverCalled = true
+	return nil
+}
+func (f *fakeHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
+	return nil
+}
 func (f *fakeHost) ShutdownSelf(_ context.Context) error                     { f.shutdownCalled = true; return nil }
 func (f *fakeHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 
@@ -47,8 +52,8 @@ type fakeBP struct {
 	memberName string
 }
 
-func (f *fakeBP) Role() schema.TeamRole   { return f.role }
-func (f *fakeBP) MemberName() string      { return f.memberName }
+func (f *fakeBP) Role() schema.TeamRole { return f.role }
+func (f *fakeBP) MemberName() string    { return f.memberName }
 
 // fakePollCtrl 实现 types.PollController 用于测试
 type fakePollCtrl struct {

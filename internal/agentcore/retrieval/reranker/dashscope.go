@@ -276,7 +276,7 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 		default:
 			return nil, nil, nil, exception.ValidateError(
 				exception.StatusRetrievalRerankerInputInvalid,
-				exception.WithParam("error_msg", "input to reranker must be list[str | Document | MultimodalDocument]"),
+				exception.WithParam("error_msg", "reranker 的输入必须是 []string、[]Document 或 []MultimodalDocument"),
 			)
 		}
 	}

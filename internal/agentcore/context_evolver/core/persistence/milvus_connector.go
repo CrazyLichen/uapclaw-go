@@ -100,12 +100,12 @@ const (
 	milvusDefaultMetricType = "COSINE"
 	// milvusProbeTimeout 探测超时
 	milvusProbeTimeout = 5 * time.Second
+
+	// milvusLogComponent 日志组件标识
+	milvusLogComponent = logger.ComponentCommon
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// milvusLogComponent 日志组件标识
-const milvusLogComponent = logger.ComponentCommon
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

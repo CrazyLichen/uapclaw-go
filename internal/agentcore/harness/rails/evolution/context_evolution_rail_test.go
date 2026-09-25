@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
-	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
+	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -257,8 +257,8 @@ func TestBeforeTaskIteration_不注入(t *testing.T) {
 
 	err := r.beforeTaskIteration(context.Background(), cbc)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, r.memoriesUsed)       // 检索到记忆
-	assert.Nil(t, r.originalPromptTemplate)   // 但不注入
+	assert.Equal(t, 1, r.memoriesUsed)      // 检索到记忆
+	assert.Nil(t, r.originalPromptTemplate) // 但不注入
 }
 
 func TestBeforeTaskIteration_无Query(t *testing.T) {

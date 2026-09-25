@@ -569,6 +569,8 @@ func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName s
 // Error 返回失败原因。
 func (e *mutationFailure) Error() string { return e.reason }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // withTx 返回绑定指定事务的 DAO 实例。
 func (d *SQLTaskDao) withTx(tx *gorm.DB) *SQLTaskDao {
 	return &SQLTaskDao{db: tx}
@@ -587,8 +589,6 @@ func (d *SQLTaskDao) depTableName(ctx context.Context) string {
 	suffix := SanitizeSessionIDForTable(sessionID)
 	return "team_task_dependency_" + suffix
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // refreshStatusInTx 根据 unresolved deps 重算 pending/blocked 状态。
 // Python: _refresh_status_in_session(session, task_ids, now) -> List[TeamTaskBase]

@@ -32,7 +32,7 @@ type CommunicableAgent struct {
 // errRuntimeNotBound 运行时未绑定错误，使用结构化异常对齐 Python build_error(StatusCode.AGENT_TEAM_EXECUTION_ERROR)
 
 var errRuntimeNotBound = exception.BuildError(exception.StatusAgentTeamExecutionError,
-	exception.WithParam("error_msg", "Agent not bound to a TeamRuntime. Register the agent with a TeamRuntime first."),
+	exception.WithParam("error_msg", "Agent 未绑定到 TeamRuntime，请先注册到 TeamRuntime"),
 )
 
 // 编译时验证 CommunicableAgent 满足 Communicable 接口

@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // SummarizeTrajectorier 轨迹总结器接口。
 // 用于 SummarizeTrajectories 的第二个参数，支持 TaskMemoryService 和 mock 注入。

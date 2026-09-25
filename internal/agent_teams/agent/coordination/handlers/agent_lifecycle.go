@@ -55,10 +55,10 @@ func NewAgentLifecycleHandler(
 func (h *AgentLifecycleHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 	return map[string]types.EventCallbackFunc{
 		string(types.InnerEventTypeUserInput): h.OnUserInput,
-		events.TeamEventStandby:              h.OnStandby,
-		events.TeamEventCleaned:             h.OnCleaned,
-		events.TeamEventToolApprovalResult:  h.OnToolApprovalResult,
-		events.TeamEventTaskPlanResponse:    h.OnTaskPlanResponse,
+		events.TeamEventStandby:               h.OnStandby,
+		events.TeamEventCleaned:               h.OnCleaned,
+		events.TeamEventToolApprovalResult:    h.OnToolApprovalResult,
+		events.TeamEventTaskPlanResponse:      h.OnTaskPlanResponse,
 	}
 }
 

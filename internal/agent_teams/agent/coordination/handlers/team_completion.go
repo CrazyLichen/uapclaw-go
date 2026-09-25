@@ -61,8 +61,8 @@ func NewTeamCompletionHandler(
 func (h *TeamCompletionHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 	return map[string]types.EventCallbackFunc{
 		string(types.InnerEventTypePollTask): h.OnPollTask,
-		events.TeamEventTaskListDrained:            h.OnTaskListDrained,
-		events.TeamEventTeamCompleted:              h.OnTeamCompleted,
+		events.TeamEventTaskListDrained:      h.OnTaskListDrained,
+		events.TeamEventTeamCompleted:        h.OnTeamCompleted,
 	}
 }
 

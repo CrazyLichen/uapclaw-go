@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
@@ -20,13 +20,15 @@ type fakeDispatcherHost struct {
 	pendingInt   bool
 }
 
-func (f *fakeDispatcherHost) IsAgentReady() bool                                       { return f.agentReady }
-func (f *fakeDispatcherHost) IsAgentRunning() bool                                     { return f.agentRunning }
-func (f *fakeDispatcherHost) HasInFlightRound() bool                                   { return f.inFlight }
-func (f *fakeDispatcherHost) HasPendingInterrupt() bool                                { return f.pendingInt }
-func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                      { return nil }
-func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error      { return nil }
-func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error    { return nil }
+func (f *fakeDispatcherHost) IsAgentReady() bool                                  { return f.agentReady }
+func (f *fakeDispatcherHost) IsAgentRunning() bool                                { return f.agentRunning }
+func (f *fakeDispatcherHost) HasInFlightRound() bool                              { return f.inFlight }
+func (f *fakeDispatcherHost) HasPendingInterrupt() bool                           { return f.pendingInt }
+func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                 { return nil }
+func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
+func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
+	return nil
+}
 func (f *fakeDispatcherHost) ShutdownSelf(_ context.Context) error                     { return nil }
 func (f *fakeDispatcherHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 
@@ -36,8 +38,8 @@ type fakeDispatcherBlueprint struct {
 	memberName string
 }
 
-func (f *fakeDispatcherBlueprint) Role() schema.TeamRole   { return f.role }
-func (f *fakeDispatcherBlueprint) MemberName() string      { return f.memberName }
+func (f *fakeDispatcherBlueprint) Role() schema.TeamRole { return f.role }
+func (f *fakeDispatcherBlueprint) MemberName() string    { return f.memberName }
 
 // fakePollCtrl 实现 types.PollController 用于测试
 type fakePollCtrl struct {

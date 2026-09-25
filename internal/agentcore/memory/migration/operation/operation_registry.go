@@ -54,7 +54,7 @@ func (r *OperationRegistry) Register(entityKey string, op Operation) error {
 			exception.StatusMemoryRegisterOperationValidationInvalid,
 			exception.WithParam("entity_key", entityKey),
 			exception.WithParam("schema_version", fmt.Sprintf("%d", op.SchemaVersion())),
-			exception.WithParam("error_msg", "the schema number of the new operation must be greater than the current maximum"),
+			exception.WithParam("error_msg", "新操作的 schema 编号必须大于当前最大值"),
 		)
 	}
 

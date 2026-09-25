@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator

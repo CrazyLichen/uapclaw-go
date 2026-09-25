@@ -2,11 +2,12 @@ package coordination
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
@@ -22,19 +23,23 @@ type fakeKernelHost struct {
 	memberName   string
 }
 
-func (f *fakeKernelHost) IsAgentReady() bool                                       { return f.agentReady }
-func (f *fakeKernelHost) IsAgentRunning() bool                                     { return f.agentRunning }
-func (f *fakeKernelHost) HasInFlightRound() bool                                   { return f.inFlight }
-func (f *fakeKernelHost) HasPendingInterrupt() bool                                { return f.pendingInt }
-func (f *fakeKernelHost) CancelAgent(_ context.Context) error                      { return nil }
-func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error      { return nil }
-func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error    { return nil }
+func (f *fakeKernelHost) IsAgentReady() bool                                  { return f.agentReady }
+func (f *fakeKernelHost) IsAgentRunning() bool                                { return f.agentRunning }
+func (f *fakeKernelHost) HasInFlightRound() bool                              { return f.inFlight }
+func (f *fakeKernelHost) HasPendingInterrupt() bool                           { return f.pendingInt }
+func (f *fakeKernelHost) CancelAgent(_ context.Context) error                 { return nil }
+func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
+func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
+	return nil
+}
 func (f *fakeKernelHost) ShutdownSelf(_ context.Context) error                     { return nil }
 func (f *fakeKernelHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 func (f *fakeKernelHost) Role() schema.TeamRole                                    { return f.role }
 func (f *fakeKernelHost) MemberName() string                                       { return f.memberName }
-func (f *fakeKernelHost) Blueprint() types.DispatcherBlueprint                     { return &fakeDispatcherBlueprint{role: f.role, memberName: f.memberName} }
-func (f *fakeKernelHost) Infra() types.DispatcherInfra                             { return nil }
+func (f *fakeKernelHost) Blueprint() types.DispatcherBlueprint {
+	return &fakeDispatcherBlueprint{role: f.role, memberName: f.memberName}
+}
+func (f *fakeKernelHost) Infra() types.DispatcherInfra { return nil }
 
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
 
@@ -162,15 +167,21 @@ func TestCoordinationKernel_EnqueueUserInput(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 
+	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
 	k.eventBus.Start(context.Background(), func(ctx context.Context, event types.CoordinationEvent) {
+		mu.Lock()
 		receivedEvent = event
+		mu.Unlock()
 	})
 
 	k.EnqueueUserInput("hello team")
 	time.Sleep(50 * time.Millisecond)
 
-	if receivedEvent.Inner == nil || receivedEvent.Inner.EventType != types.InnerEventTypeUserInput {
+	mu.Lock()
+	ev := receivedEvent
+	mu.Unlock()
+	if ev.Inner == nil || ev.Inner.EventType != types.InnerEventTypeUserInput {
 		t.Error("EnqueueUserInput 应产生 USER_INPUT 事件")
 	}
 }
@@ -181,15 +192,21 @@ func TestCoordinationKernel_WakeMailboxIfInterruptCleared(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
 	k.Setup(schema.TeamRoleTeammate, bp, nil)
 
+	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
 	k.eventBus.Start(context.Background(), func(ctx context.Context, event types.CoordinationEvent) {
+		mu.Lock()
 		receivedEvent = event
+		mu.Unlock()
 	})
 
 	k.WakeMailboxIfInterruptCleared()
 	time.Sleep(50 * time.Millisecond)
 
-	if receivedEvent.Inner == nil || receivedEvent.Inner.EventType != types.InnerEventTypePollMailbox {
+	mu.Lock()
+	ev := receivedEvent
+	mu.Unlock()
+	if ev.Inner == nil || ev.Inner.EventType != types.InnerEventTypePollMailbox {
 		t.Error("WakeMailboxIfInterruptCleared 应产生 POLL_MAILBOX 事件")
 	}
 }
@@ -200,14 +217,20 @@ func TestCoordinationKernel_WakeMailbox_Leader跳过(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 
+	var mu sync.Mutex
 	var received bool
 	k.eventBus.Start(context.Background(), func(ctx context.Context, event types.CoordinationEvent) {
+		mu.Lock()
 		received = true
+		mu.Unlock()
 	})
 
 	k.WakeMailboxIfInterruptCleared()
 
-	if received {
+	mu.Lock()
+	r := received
+	mu.Unlock()
+	if r {
 		t.Error("Leader 不应触发 WakeMailboxIfInterruptCleared")
 	}
 }
@@ -218,14 +241,20 @@ func TestCoordinationKernel_WakeMailbox_有中断跳过(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
 	k.Setup(schema.TeamRoleTeammate, bp, nil)
 
+	var mu sync.Mutex
 	var received bool
 	k.eventBus.Start(context.Background(), func(ctx context.Context, event types.CoordinationEvent) {
+		mu.Lock()
 		received = true
+		mu.Unlock()
 	})
 
 	k.WakeMailboxIfInterruptCleared()
 
-	if received {
+	mu.Lock()
+	r := received
+	mu.Unlock()
+	if r {
 		t.Error("有 pending interrupt 时不应触发 WakeMailboxIfInterruptCleared")
 	}
 }

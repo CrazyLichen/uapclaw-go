@@ -3,12 +3,27 @@ package coordination
 import (
 	"context"
 
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// KernelHost CoordinationKernel 对宿主 TeamAgent 所需的窄接口。
+// 与 Python CoordinationKernel.__init__(host: TeamAgent) 对应，
+// 但 Go 提取为窄接口避免循环依赖。
+type KernelHost interface {
+	types.DispatcherHost
+	// Role 返回团队角色
+	Role() schema.TeamRole
+	// MemberName 返回成员名
+	MemberName() string
+	// Blueprint 返回 blueprint
+	Blueprint() types.DispatcherBlueprint
+	// Infra 返回 infra
+	Infra() types.DispatcherInfra
+}
 
 // CoordinationKernel 协调子系统门面，拥有 EventBus + EventDispatcher 的完整生命周期。
 //
@@ -34,21 +49,6 @@ type CoordinationKernel struct {
 	subscribedTopics []string
 	// lifecycleState 生命周期状态："idle" | "running" | "paused" | "stopped"
 	lifecycleState string
-}
-
-// KernelHost CoordinationKernel 对宿主 TeamAgent 所需的窄接口。
-// 与 Python CoordinationKernel.__init__(host: TeamAgent) 对应，
-// 但 Go 提取为窄接口避免循环依赖。
-type KernelHost interface {
-	types.DispatcherHost
-	// Role 返回团队角色
-	Role() schema.TeamRole
-	// MemberName 返回成员名
-	MemberName() string
-	// Blueprint 返回 blueprint
-	Blueprint() types.DispatcherBlueprint
-	// Infra 返回 infra
-	Infra() types.DispatcherInfra
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -112,7 +112,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	if callOpts.Session == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolTaskToolInvoked,
-			exception.WithParam("error_msg", "Agent tool requires a valid session"),
+			exception.WithParam("error_msg", "Agent 工具需要有效的会话"),
 		)
 	}
 

@@ -59,17 +59,17 @@ func NewMessageManager(store db.BaseMessageStore) *MessageManager {
 func (m *MessageManager) Add(ctx context.Context, req *MessageAddRequest) (string, error) {
 	if req.UserID == "" {
 		return "", exception.BuildError(exception.StatusStoreMessageAddExecutionError,
-			exception.WithParam("error_msg", "must provide user_id for add message"),
+			exception.WithParam("error_msg", "添加消息时必须提供 user_id"),
 		)
 	}
 	if req.ScopeID == "" {
 		return "", exception.BuildError(exception.StatusStoreMessageAddExecutionError,
-			exception.WithParam("error_msg", "must provide scope_id for add message"),
+			exception.WithParam("error_msg", "添加消息时必须提供 scope_id"),
 		)
 	}
 	if req.Content == "" {
 		return "", exception.BuildError(exception.StatusStoreMessageAddExecutionError,
-			exception.WithParam("error_msg", "must provide content for add message"),
+			exception.WithParam("error_msg", "添加消息时必须提供 content"),
 		)
 	}
 
@@ -100,7 +100,7 @@ func (m *MessageManager) Add(ctx context.Context, req *MessageAddRequest) (strin
 func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string, sessionID string, messageLen int) ([]*db.MessageAndMeta, error) {
 	if messageLen <= 0 {
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
-			exception.WithParam("error_msg", "message length must be bigger than zero for get message"),
+			exception.WithParam("error_msg", "获取消息时 message_len 必须大于零"),
 		)
 	}
 

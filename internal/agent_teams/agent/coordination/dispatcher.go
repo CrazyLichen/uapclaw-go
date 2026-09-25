@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	callback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	callback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -52,28 +52,6 @@ const coordEventMapKey = "__coordination_event"
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// wrapCallback 将 coordination handler 回调包装为 CallbackFramework 的 CustomCallbackFunc。
-// 注册时使用：fw.OnCustom(eventKey, wrapCallback(handlerMethod))
-func wrapCallback(fn coordCallbackFunc) callback.CustomCallbackFunc {
-	return func(ctx context.Context, data map[string]any) any {
-		raw, ok := data[coordEventMapKey]
-		if !ok {
-			return nil
-		}
-		event, ok := raw.(types.CoordinationEvent)
-		if !ok {
-			return nil
-		}
-		fn(ctx, event)
-		return nil
-	}
-}
-
-// packEvent 将 CoordinationEvent 打包进 map[string]any，供 TriggerCustom 使用。
-func packEvent(event types.CoordinationEvent) map[string]any {
-	return map[string]any{coordEventMapKey: event}
-}
 
 // NewEventDispatcher 创建事件分发器，内部创建 6 个 handler 并注册回调。
 // 对齐 Python EventDispatcher.__init__：在 __init__ 内部创建所有 handler。
@@ -154,7 +132,7 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event types.Coordination
 		return
 	}
 
-	// --- Transport 事件（跨进程 EventMessage）---
+	// ── Transport 事件（跨进程 EventMessage）──
 	if d.blueprint.MemberName() == "" {
 		logger.Debug(logComponent).Msg("no member_name, skipping transport event")
 		return
@@ -186,6 +164,28 @@ func (d *EventDispatcher) Framework() *callback.CallbackFramework {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// wrapCallback 将 coordination handler 回调包装为 CallbackFramework 的 CustomCallbackFunc。
+// 注册时使用：fw.OnCustom(eventKey, wrapCallback(handlerMethod))
+func wrapCallback(fn coordCallbackFunc) callback.CustomCallbackFunc {
+	return func(ctx context.Context, data map[string]any) any {
+		raw, ok := data[coordEventMapKey]
+		if !ok {
+			return nil
+		}
+		event, ok := raw.(types.CoordinationEvent)
+		if !ok {
+			return nil
+		}
+		fn(ctx, event)
+		return nil
+	}
+}
+
+// packEvent 将 CoordinationEvent 打包进 map[string]any，供 TriggerCustom 使用。
+func packEvent(event types.CoordinationEvent) map[string]any {
+	return map[string]any{coordEventMapKey: event}
+}
 
 // verifyDispatcherReady 校验 dispatcher 构造完整。
 func (d *EventDispatcher) verifyDispatcherReady() error {

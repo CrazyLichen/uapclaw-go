@@ -507,7 +507,7 @@ func PersistToDB(ctx context.Context, database graph.BaseGraphStore, state *Grap
 	}
 	if retries == 0 && len(objectsToEmbed) > 0 {
 		return exception.BuildError(exception.StatusMemoryGraphEmbeddingCallFailed,
-			exception.WithParam("error_msg", "Unable to access embedding service"))
+			exception.WithParam("error_msg", "无法访问嵌入服务"))
 	}
 
 	// 尝试嵌入新增片段
@@ -530,7 +530,7 @@ func PersistToDB(ctx context.Context, database graph.BaseGraphStore, state *Grap
 	}
 	if retries == 0 && len(objectsToEmbed) > 0 {
 		return exception.BuildError(exception.StatusMemoryGraphEmbeddingCallFailed,
-			exception.WithParam("error_msg", "Unable to access embedding service for new episode, maybe exceeding context limit"))
+			exception.WithParam("error_msg", "无法访问新片段的嵌入服务，可能超出上下文限制"))
 	}
 
 	// 阻断键盘中断，确保数据库操作完成

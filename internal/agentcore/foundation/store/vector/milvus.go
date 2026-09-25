@@ -652,7 +652,7 @@ func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName str
 	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
 	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema is not yet implemented, pending 7.22/7.23"),
+		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
 	)
 }
 

@@ -182,7 +182,7 @@ func TestGraphMemory_RegisterSearchStrategy(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "empty value")
+	assert.Contains(t, baseErr.Message(), "空值")
 }
 
 // TestGraphMemory_RegisterSearchStrategy_NilConfigs 测试 nil 配置使用默认值
@@ -650,7 +650,7 @@ func TestSearch_未知策略(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "not found")
+	assert.Contains(t, baseErr.Message(), "未找到策略")
 }
 
 // TestSearch_空策略 测试空搜索策略报错
@@ -663,7 +663,7 @@ func TestSearch_空策略(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "non-empty string")
+	assert.Contains(t, baseErr.Message(), "非空字符串")
 }
 
 // TestSearch_无嵌入模型无预计算向量 测试无嵌入模型且无预计算向量报错
@@ -708,7 +708,7 @@ func TestRegisterSearchStrategy_重复注册(t *testing.T) {
 	assert.Error(t, err)
 	var baseErr *exception.BaseError
 	assert.ErrorAs(t, err, &baseErr)
-	assert.Contains(t, baseErr.Message(), "already exists")
+	assert.Contains(t, baseErr.Message(), "已存在")
 }
 
 // TestRegisterSearchStrategy_Force覆盖 测试 force=True 覆盖已有策略

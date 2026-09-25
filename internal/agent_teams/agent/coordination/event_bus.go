@@ -2,10 +2,11 @@ package coordination
 
 import (
 	"context"
+	"sync"
 	"time"
 
-	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -20,6 +21,8 @@ import (
 // 所有决策逻辑在 DeepAgent 中——本结构体只管生命周期和唤醒。
 // Python: EventBus
 type EventBus struct {
+	// mu 保护 running / pollsPaused / cancelFunc / mailboxPollCancel / taskPollCancel 等字段
+	mu sync.Mutex
 	// role 拥有此事件循环的角色
 	role schema.TeamRole
 	// mailboxPollInterval 邮箱轮询间隔（秒）
@@ -77,15 +80,25 @@ func NewEventBus(role schema.TeamRole, mailboxPollInterval, taskPollInterval flo
 func (b *EventBus) Role() schema.TeamRole { return b.role }
 
 // IsRunning 返回事件循环是否运行中。
-func (b *EventBus) IsRunning() bool { return b.running }
+func (b *EventBus) IsRunning() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.running
+}
 
 // PollsPaused 返回周期轮询是否暂停。
-func (b *EventBus) PollsPaused() bool { return b.pollsPaused }
+func (b *EventBus) PollsPaused() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.pollsPaused
+}
 
 // Start 启动事件循环和轮询定时器。
 // wakeCallback 在此绑定而非构造时，以便 CoordinationKernel 打破循环依赖。
 // Python: EventBus.start
 func (b *EventBus) Start(ctx context.Context, wakeCallback WakeCallback) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.running {
 		return
 	}
@@ -97,12 +110,14 @@ func (b *EventBus) Start(ctx context.Context, wakeCallback WakeCallback) {
 	loopCtx, cancel := context.WithCancel(ctx)
 	b.cancelFunc = cancel
 	go b.runLoop(loopCtx)
-	b.startPollTasks(loopCtx)
+	b.startPollTasksLocked(loopCtx)
 }
 
 // Stop 停止事件循环、取消轮询定时器。
 // Python: EventBus.stop
 func (b *EventBus) Stop() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !b.running {
 		return
 	}
@@ -138,6 +153,8 @@ func (b *EventBus) Stop() {
 // PausePolls 停止周期轮询，但保持事件循环运行。
 // Python: EventBus.pause_polls
 func (b *EventBus) PausePolls() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.pollsPaused {
 		return
 	}
@@ -156,11 +173,13 @@ func (b *EventBus) PausePolls() {
 // ResumePolls 恢复周期轮询。
 // Python: EventBus.resume_polls
 func (b *EventBus) ResumePolls() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !b.pollsPaused || !b.running {
 		return
 	}
 	logger.Info(logComponent).Str("role", string(b.role)).Msg("EventBus resuming polls")
-	b.startPollTasks(context.Background())
+	b.startPollTasksLocked(context.Background())
 	b.pollsPaused = false
 }
 
@@ -172,10 +191,11 @@ func (b *EventBus) Enqueue(event types.CoordinationEvent) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// startPollTasks 启动周期轮询定时器（邮箱+任务各一个 goroutine）。
+// startPollTasksLocked 启动周期轮询定时器（邮箱+任务各一个 goroutine）。
 // Human-agent 角色不启动周期轮询（periodicPollEnabled = false）。
+// 调用者必须持有 b.mu。
 // Python: EventBus._start_poll_tasks
-func (b *EventBus) startPollTasks(ctx context.Context) {
+func (b *EventBus) startPollTasksLocked(ctx context.Context) {
 	if !b.periodicPollEnabled {
 		return
 	}
@@ -229,7 +249,10 @@ func (b *EventBus) pollLoop(ctx context.Context, eventType types.InnerEventType,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !b.running {
+			b.mu.Lock()
+			isRunning := b.running
+			b.mu.Unlock()
+			if !isRunning {
 				return
 			}
 			b.Enqueue(types.CoordinationEvent{

@@ -1078,8 +1078,6 @@ func (tb *TeamBackend) RemoveCleanupPaths(ctx context.Context) error {
 	return firstErr
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // PublishEvent 发布团队事件。
 // Python: TeamBackend 中通过 messager.publish 调用
 func (tb *TeamBackend) PublishEvent(ctx context.Context, event events.TypedEvent) {
@@ -1093,6 +1091,8 @@ func (tb *TeamBackend) PublishEvent(ctx context.Context, event events.TypedEvent
 			Msg("PublishEvent: 发布事件失败")
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // spawnAndPublish 启动成员 agent 并发布 MemberSpawnedEvent。
 // Python: _spawn_and_publish(member_name, on_created)

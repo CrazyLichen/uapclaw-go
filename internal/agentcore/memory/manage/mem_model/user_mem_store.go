@@ -89,7 +89,7 @@ func NewUserMemStore(kvStore kv.BaseKVStore) (*UserMemStore, error) {
 		return nil, exception.BuildError(
 			exception.StatusMemoryStoreInitFailed,
 			exception.WithParam("store_type", "user mem store"),
-			exception.WithParam("error_msg", "kv store instance is None in UserMemStore"),
+			exception.WithParam("error_msg", "UserMemStore 中 kv store 实例为 nil"),
 		)
 	}
 	// 注册 KV 前缀

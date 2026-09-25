@@ -323,7 +323,7 @@ func (gm *GraphMemory) AttachReranker(r reranker.BaseReranker) error {
 	if r == nil {
 		return exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "Reranker must be an implementation of Reranker, got nil instead."),
+			exception.WithParam("error_msg", "Reranker 必须是 Reranker 的实现，传入的值为 nil"),
 		)
 	}
 	gm.Reranker = r
@@ -349,7 +349,7 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 	if name == "" {
 		return exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "Search config cannot be registered as an empty value."),
+			exception.WithParam("error_msg", "搜索配置不能注册为空值"),
 		)
 	}
 
@@ -357,7 +357,7 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 	if _, exists := gm.searchStrategies[name]; exists && !forceRegister {
 		return exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", fmt.Sprintf("Search config with name [%s] already exists.", name)),
+			exception.WithParam("error_msg", fmt.Sprintf("名为 [%s] 的搜索配置已存在", name)),
 		)
 	}
 
@@ -579,12 +579,12 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []strin
 		if strings.TrimSpace(strategyName) == "" {
 			return nil, exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 				exception.WithParam("store_type", storeType),
-				exception.WithParam("error_msg", "strategy must be a non-empty string value"),
+				exception.WithParam("error_msg", "策略必须为非空字符串"),
 			)
 		}
 		return nil, exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", fmt.Sprintf("Strategy [%s] not found, please register with register_search_configs method or use \"default\".", strategyName)),
+			exception.WithParam("error_msg", fmt.Sprintf("未找到策略 [%s]，请使用 register_search_configs 方法注册或使用 \"default\"", strategyName)),
 		)
 	}
 
@@ -600,7 +600,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []strin
 		embedder := gm.Embedder()
 		if embedder == nil {
 			return nil, exception.BuildError(exception.StatusMemoryGraphEmbedModelNotFound,
-				exception.WithParam("error_msg", "use the attach_embedder method to attach one"),
+				exception.WithParam("error_msg", "请使用 attach_embedder 方法挂载嵌入模型"),
 			)
 		}
 		queryEmbedding, err = embedder.EmbedQuery(ctx, query)
@@ -613,7 +613,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []strin
 			if math.IsNaN(val) || math.IsInf(val, 0) {
 				return nil, exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 					exception.WithParam("store_type", storeType),
-					exception.WithParam("error_msg", "query_embedding must be a list[float] or None"),
+					exception.WithParam("error_msg", "query_embedding 必须是 []float64 或 nil"),
 				)
 			}
 		}
@@ -681,7 +681,7 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 	// 校验 LLM 客户端
 	if gm.LLMClient == nil {
 		return nil, exception.BuildError(exception.StatusMemoryGraphInvokeLlmFailed,
-			exception.WithParam("error_msg", "LLM client is not set"),
+			exception.WithParam("error_msg", "LLM 客户端未设置"),
 		)
 	}
 
@@ -915,13 +915,13 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 	if content == "" && len(messages) == 0 {
 		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "content and messages cannot both be empty"),
+			exception.WithParam("error_msg", "content 和 messages 不能同时为空"),
 		)
 	}
 	if content != "" && len(messages) > 0 {
 		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "content and messages are mutually exclusive, please provide only one"),
+			exception.WithParam("error_msg", "content 和 messages 互斥，请仅提供其中一个"),
 		)
 	}
 
@@ -929,7 +929,7 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 	if content != "" && len(contentFmtKwargs) > 0 {
 		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "content_fmt_kwargs has no effect when content is str, please leave it empty"),
+			exception.WithParam("error_msg", "content 为字符串时 content_fmt_kwargs 无效，请留空"),
 		)
 	}
 
@@ -938,14 +938,14 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 		if srcType != config.EpisodeTypeConversation {
 			return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 				exception.WithParam("store_type", storeType),
-				exception.WithParam("error_msg", "messages input requires src_type=CONVERSATION"),
+				exception.WithParam("error_msg", "messages 输入需要 src_type=CONVERSATION"),
 			)
 		}
 		dicts, err := Msg2Dict(messages, false)
 		if err != nil {
 			return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 				exception.WithParam("store_type", storeType),
-				exception.WithParam("error_msg", "The content must be str or list of messages in dict or BaseMessage standard"),
+				exception.WithParam("error_msg", "content 必须是字符串或 dict/BaseMessage 格式的消息列表"),
 				exception.WithCause(err),
 			)
 		}
@@ -954,13 +954,13 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 			if _, ok := msg["role"]; !ok {
 				return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 					exception.WithParam("store_type", storeType),
-					exception.WithParam("error_msg", `The content is not a list of dict with keys "role" and "content"`),
+					exception.WithParam("error_msg", `content 不是包含 "role" 和 "content" 键的字典列表`),
 				)
 			}
 			if _, ok := msg["content"]; !ok {
 				return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 					exception.WithParam("store_type", storeType),
-					exception.WithParam("error_msg", `The content is not a list of dict with keys "role" and "content"`),
+					exception.WithParam("error_msg", `content 不是包含 "role" 和 "content" 键的字典列表`),
 				)
 			}
 		}
@@ -973,7 +973,7 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 	if content == "" {
 		return "", exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", "content must be a non-empty value of either a str or a list of messages"),
+			exception.WithParam("error_msg", "content 必须是非空的字符串或消息列表"),
 		)
 	}
 
@@ -1943,7 +1943,7 @@ func (gm *GraphMemory) performSearch(ctx context.Context, colIdx int, userIDs []
 	if searchConfig.Rerank && gm.Reranker == nil {
 		return nil, exception.BuildError(exception.StatusMemoryStoreValidationInvalid,
 			exception.WithParam("store_type", storeType),
-			exception.WithParam("error_msg", fmt.Sprintf("Search strategy [%s] for %s has rerank=True but reranker is not set, please use the attach_reranker method to attach a reranker.", strategyName, collection)),
+			exception.WithParam("error_msg", fmt.Sprintf("搜索策略 [%s]（%s）启用了 rerank=True 但未设置 reranker，请使用 attach_reranker 方法挂载", strategyName, collection)),
 		)
 	}
 

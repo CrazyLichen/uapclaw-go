@@ -1016,16 +1016,25 @@ func TestTaskManager_Cancel_解除阻塞(t *testing.T) {
 	tm, _ := setupTestTaskManager()
 	ctx := context.Background()
 
-	upstream, _ := tm.Add(ctx, "上游", "")
-	downstream, _ := tm.AddWithPriority(ctx, "下游", "内容",
+	upstream, err := tm.Add(ctx, "上游", "")
+	if err != nil {
+		t.Fatalf("创建上游任务失败: %v", err)
+	}
+	downstream, err := tm.AddWithPriority(ctx, "下游", "内容",
 		WithPriorityDependencies([]string{upstream.TaskID}),
 	)
+	if err != nil {
+		t.Fatalf("创建下游任务失败: %v", err)
+	}
+	if downstream == nil {
+		t.Fatal("下游任务不应为 nil")
+	}
 	if downstream.Status != fsm.TaskStatusBlocked {
 		t.Fatalf("下游应为 blocked: got %q", downstream.Status)
 	}
 
 	// 取消上游 → 下游应解除阻塞
-	_, err := tm.Cancel(ctx, upstream.TaskID)
+	_, err = tm.Cancel(ctx, upstream.TaskID)
 	if err != nil {
 		t.Fatalf("取消上游应成功: %v", err)
 	}
