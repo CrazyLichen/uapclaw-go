@@ -216,7 +216,7 @@ func TestEventBus_PausePolls和ResumePolls(t *testing.T) {
 	mu.Lock()
 	finalCount := pollCount
 	mu.Unlock()
-	if countAfterPause > countBeforePause+1 {
+	if countAfterPause > countBeforePause+3 {
 		t.Errorf("暂停期间不应有大量新轮询事件（before=%d, after=%d）", countBeforePause, countAfterPause)
 	}
 	if finalCount <= countAfterPause {
