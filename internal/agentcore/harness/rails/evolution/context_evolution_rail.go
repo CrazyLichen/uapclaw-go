@@ -260,7 +260,7 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	logger.Info(logComponent).Int("memories_used", r.memoriesUsed).Msg("检索到记忆")
 
 	// 6. 记忆注入（对齐 Python: if not (self.memories_used > 0 and memory_string and self.inject_memories_in_context): return）
-	if !(r.memoriesUsed > 0 && memoryString != "" && r.injectMemoriesInContext) {
+	if r.memoriesUsed <= 0 || memoryString == "" || !r.injectMemoriesInContext {
 		return nil
 	}
 

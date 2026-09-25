@@ -256,7 +256,7 @@ func (h *MemoryPersistenceHelper) probeMilvus() bool {
 
 	// 非 MilvusConnectorImpl 实现时，尝试 Exists 操作
 	// 如果不 panic 且不报错，认为可达
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	return h.milvusConnector.Exists("__probe__") || true
 }
 
