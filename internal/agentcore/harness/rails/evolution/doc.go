@@ -3,7 +3,7 @@
 //
 // 本包实现了 9.24 的 P1 契约层、P2（EvolutionRail 基类 + TrajectoryRail）
 // P3（SkillEvolutionRail 单 Agent 技能演进护栏）和 P4（TeamSkillEvolutionRail 团队技能演进护栏），
-// 为 P5（DeepAdapter 集成）和 P6（ContextEvolutionRail）提供基础类型和基类。
+// P5（DeepAdapter 集成）和 P6（ContextEvolutionRail 上下文演化轨道：记忆检索注入 + 自动轨迹总结）已完成。
 //
 // 核心功能：
 //   - 契约类型：EvolutionHostEventMeta / EvolutionSnapshot / EvolutionRequestResult / SimplifyRequestResult
@@ -14,6 +14,7 @@
 //   - TrajectoryRail：纯轨迹收集轨道，使用 noOpExtension，不触发任何演化逻辑
 //   - SkillEvolutionRail：单 Agent 技能演进护栏（Priority=80），信号检测→技能归属→经验生成→评分→暂存审批→应用更新
 //   - TeamSkillEvolutionRail：团队技能演进护栏（Priority=80），团队任务完成→聚合团队轨迹→TeamSignalDetector→暂存审批→应用更新
+//   - ContextEvolutionRail：上下文演化轨道（Priority=50），BeforeTaskIteration 检索记忆注入系统提示词，AfterTaskIteration 恢复提示词+标注memoriesUsed+自动总结轨迹
 //   - 辅助函数：消息/工具/角色规范化、token 字段分离等
 //
 // 文件目录：
@@ -25,6 +26,7 @@
 //	├── approval_runtime.go             # EvolutionApprovalRuntime 结构体 + 4 方法
 //	├── extension.go                    # EvolutionExtension 接口（10 方法）+ noOpExtension 默认实现 + EvolutionTriggerPoint 枚举
 //	├── evolution_rail.go               # EvolutionRail 基类 + 构造选项 + 回调注册 + 轨迹收集 + 异步演化
+//	├── context_evolution_rail.go       # ContextEvolutionRail 上下文演化轨道（Priority=50+记忆注入+自动总结）
 //	├── trajectory_rail.go              # TrajectoryRail 纯轨迹收集轨道（Priority=10）
 //	├── skill_evolution_rail.go         # SkillEvolutionRail 单 Agent 技能演进护栏（Priority=80）+ Sharing 集成
 //	├── team_skill_evolution_rail.go    # TeamSkillEvolutionRail 团队技能演进护栏（Priority=80）+ Slash 命令集成
