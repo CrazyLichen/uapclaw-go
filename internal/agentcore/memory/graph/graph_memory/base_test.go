@@ -993,7 +993,7 @@ func TestUpdateEntitiesForRelationRemoval_有待移除(t *testing.T) {
 	state := NewGraphMemState()
 
 	// 设置待移除关系
-	state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: "rel-1", ObjType: "Relation"})
+	state.ToRemove["rel-1"] = &graph.Relation{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "rel-1"}}}
 	state.MemUpdate.RemovedRelation["rel-1"] = struct{}{}
 
 	// 设置实体包含该关系
@@ -1663,8 +1663,8 @@ func TestParseRelationUUIDsToRemove_完整(t *testing.T) {
 	// duplicate_ids=[2] 表示 existingRels[1] 即 "dup-2" 应被删除
 	// 添加到 state.ToRemove，而非 state.MemUpdate.RemovedRelation
 	foundDup2 := false
-	for _, item := range state.ToRemove {
-		if item.UUID == "dup-2" {
+	for uuid := range state.ToRemove {
+		if uuid == "dup-2" {
 			foundDup2 = true
 		}
 	}
@@ -2294,7 +2294,11 @@ func TestUpdateEntitiesForRelationRemoval_有查询结果(t *testing.T) {
 	gm.DBBackend = queryStore
 
 	state := NewGraphMemState()
-	state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: "rel-1", ObjType: "Relation"})
+	// ToRemove 中存储完整 Relation 对象，LHS/RHS 指向受影响的实体
+	relToRemove := &graph.Relation{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "rel-1"}}}
+	relToRemove.LHS = entityShell("entity-1")
+	relToRemove.RHS = entityShell("entity-2")
+	state.ToRemove["rel-1"] = relToRemove
 	state.MemUpdate.RemovedRelation["rel-1"] = struct{}{}
 
 	// 预注册实体到 lookup table
@@ -2372,7 +2376,7 @@ func TestHandleRelationDedupe_有删除项(t *testing.T) {
 	rel2.UUID = "rel-2"
 	relations := []*graph.Relation{rel1, rel2}
 
-	state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: "rel-1", ObjType: "Relation"})
+	state.ToRemove["rel-1"] = &graph.Relation{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "rel-1"}}}
 
 	err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
 	assert.NoError(t, err)

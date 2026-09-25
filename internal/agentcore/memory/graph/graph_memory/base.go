@@ -1542,7 +1542,7 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 			} else {
 				// 关系不在保留列表中，标记为待删除
 				state.MemUpdate.RemovedRelation[relation.UUID] = struct{}{}
-				state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: relation.UUID, ObjType: "Relation"})
+				state.ToRemove[relation.UUID] = relation
 			}
 		}
 	}
@@ -1555,10 +1555,10 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 //
 // Python: _handle_relation_dedupe(user_id, content, relations, state)
 func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, state *GraphMemState) error {
-	// 移除待删除的关系
-	for _, item := range state.ToRemove {
+	// 移除待删除的关系（对齐 Python: for relation in state.to_remove: ...）
+	for uuid := range state.ToRemove {
 		for i, rel := range relations {
-			if rel.UUID == item.UUID {
+			if rel.UUID == uuid {
 				relations = append(relations[:i], relations[i+1:]...)
 				break
 			}
@@ -1697,10 +1697,16 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 //
 // Python: _update_entities_for_relation_removal(state, extracted_declarations)
 func (gm *GraphMemory) updateEntitiesForRelationRemoval(ctx context.Context, state *GraphMemState, extractedDeclarations []extraction.EntityDeclaration) {
+	// 对齐 Python: for relation in state.to_remove
+	// 从 relation.LHS.UUID 和 relation.RHS.UUID 取端点实体 UUID
 	entitiesToRemoveRelationsFrom := make(map[string]struct{})
-	for _, item := range state.ToRemove {
-		// 对齐 Python: relation.lhs if isinstance(relation.lhs, str) else relation.lhs.uuid
-		entitiesToRemoveRelationsFrom[item.UUID] = struct{}{}
+	for _, relation := range state.ToRemove {
+		if relation.LHS != nil {
+			entitiesToRemoveRelationsFrom[relation.LHS.UUID] = struct{}{}
+		}
+		if relation.RHS != nil {
+			entitiesToRemoveRelationsFrom[relation.RHS.UUID] = struct{}{}
+		}
 	}
 
 	if len(entitiesToRemoveRelationsFrom) == 0 {

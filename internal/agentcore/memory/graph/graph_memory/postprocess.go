@@ -204,14 +204,18 @@ func ProcessEntities(ctx context.Context, database graph.BaseGraphStore, entitie
 		entity.Content = strings.TrimPrefix(entity.Content, "\n")
 
 		// 移除已废弃关系的引用
-		state.ToRemove = state.ToRemove[:0]
+		for k := range state.ToRemove {
+			delete(state.ToRemove, k)
+		}
 		for _, r := range entity.Relations {
 			if containsStringSet(state.MemUpdate.RemovedRelation, r) {
-				state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: r, ObjType: "Relation"})
+				// 构造空壳 Relation 仅用于 ToRemove 标记
+				state.ToRemove[r] = &graph.Relation{}
+				state.ToRemove[r].UUID = r
 			}
 		}
-		for _, item := range state.ToRemove {
-			entity.Relations = removeString(entity.Relations, item.UUID)
+		for uuid := range state.ToRemove {
+			entity.Relations = removeString(entity.Relations, uuid)
 		}
 
 		// 关联当前 Episode
@@ -267,7 +271,7 @@ func ParseRelationUUIDsToRemove(dedupeRelationTasks []DedupeRelationTask, state 
 		}
 		toRemoveUUIDs := ParseRelationMerging(dedupeMap, task.Relation, task.ExistingRelations)
 		for uuid := range toRemoveUUIDs {
-			state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: uuid, ObjType: "Relation"})
+			state.ToRemove[uuid] = task.Relation
 		}
 	}
 }

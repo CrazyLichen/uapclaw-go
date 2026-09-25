@@ -121,16 +121,6 @@ type deferredRelationUpdate struct {
 	Value string
 }
 
-// toRemoveItem 待移除项（BaseGraphObject 的 UUID + ObjType）
-//
-// Python: to_remove: list[BaseGraphObject | str]
-type toRemoveItem struct {
-	// UUID 对象的 UUID
-	UUID string
-	// ObjType 对象类型
-	ObjType string
-}
-
 // asyncResult 异步 LLM 调用结果
 type asyncResult struct {
 	// Content LLM 响应内容（对齐 Python: response.content）
@@ -187,7 +177,7 @@ type GraphMemState struct {
 	RelationFilterTasks     map[asyncTask]*relationFilterTaskItem
 
 	// 通用临时缓冲区
-	ToRemove  []toRemoveItem
+	ToRemove  map[string]*graph.Relation
 	TmpBuffer []any
 
 	// 专用临时缓冲区
@@ -346,7 +336,7 @@ func NewGraphMemState() *GraphMemState {
 		RelationDeferredUpdates: make(map[string][]deferredRelationUpdate),
 		RelationFilterTasks:     make(map[asyncTask]*relationFilterTaskItem),
 
-		ToRemove:  make([]toRemoveItem, 0),
+		ToRemove:  make(map[string]*graph.Relation),
 		TmpBuffer: make([]any, 0),
 
 		UpdatedEntitiesInCurrentEp: make([]*graph.Entity, 0),
@@ -594,7 +584,7 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 		// 记录自指向关系（关于对象的事实）
 		relation.Language = state.Prompting.Language
 		if strings.TrimSpace(relation.Content) == "" {
-			state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: relation.UUID, ObjType: "Relation"})
+			state.ToRemove[relation.UUID] = relation
 		} else if relation.LHSUUID() == relation.RHSUUID() {
 			// 自指向关系：将关系内容追加到实体 content
 			// 对齐 Python: relation.lhs 是 Entity 对象，直接访问
@@ -602,7 +592,7 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 				content := strings.TrimSuffix(relation.LHS.Content, "\n")
 				relation.LHS.Content = fmt.Sprintf("%s\n- %s", content, relation.Content)
 			}
-			state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: relation.UUID, ObjType: "Relation"})
+			state.ToRemove[relation.UUID] = relation
 		} else {
 			state.TmpBuffer = append(state.TmpBuffer, relation.Content)
 		}

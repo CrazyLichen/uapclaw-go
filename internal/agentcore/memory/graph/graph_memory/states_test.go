@@ -230,7 +230,7 @@ func TestGraphMemState_ClearReferences(t *testing.T) {
 	state.Content = "test content"
 	state.History = "test history"
 	state.TmpBuffer = append(state.TmpBuffer, "tmp")
-	state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: "x", ObjType: "Relation"})
+	state.ToRemove["x"] = &graph.Relation{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "x"}}}
 
 	state.ClearReferences()
 
@@ -452,8 +452,8 @@ func TestClassifyRelationsExtracted(t *testing.T) {
 
 	// rel2 自指向 → 应在 ToRemove 中，且实体 Content 应被更新
 	foundSelfRef := false
-	for _, item := range state.ToRemove {
-		if item.UUID == rel2.UUID {
+	for uuid := range state.ToRemove {
+		if uuid == rel2.UUID {
 			foundSelfRef = true
 		}
 	}
@@ -466,8 +466,8 @@ func TestClassifyRelationsExtracted(t *testing.T) {
 
 	// rel3 空内容 → 应在 ToRemove 中
 	foundEmpty := false
-	for _, item := range state.ToRemove {
-		if item.UUID == rel3.UUID {
+	for uuid := range state.ToRemove {
+		if uuid == rel3.UUID {
 			foundEmpty = true
 		}
 	}

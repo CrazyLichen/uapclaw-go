@@ -213,8 +213,8 @@ func TestParseRelationUUIDsToRemove_基本(t *testing.T) {
 
 	// 验证：existing-1 的 UUID 应被加入 state.ToRemove
 	found := false
-	for _, item := range state.ToRemove {
-		if item.UUID == "existing-1" && item.ObjType == "Relation" {
+	for uuid := range state.ToRemove {
+		if uuid == "existing-1" {
 			found = true
 			break
 		}
