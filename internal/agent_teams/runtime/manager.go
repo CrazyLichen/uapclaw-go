@@ -139,16 +139,16 @@ func (m *TeamRuntimeManager) Interact(
 }
 
 // Activate 激活团队。
-// ⤵️ 待 9.62 CoordinationKernel 章节回填
+// ⤵️(#9.62) CoordinationKernel 骨架已实现
 func (m *TeamRuntimeManager) Activate(ctx context.Context, teamName string, sessionID string, agent any) error {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("Activate（桩实现）")
-	// ⤵️ 待 9.62: 创建 ActiveTeam → pool.Add(entry)
+	// ⤵️(#9.62) 创建 ActiveTeam → pool.Add(entry)
 	return nil
 }
 
 // Finalize 终结团队运行。
-// ⤵️ 待 9.62 CoordinationKernel 章节回填
+// ⤵️(#9.62) CoordinationKernel 骨架已实现
 func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sessionID string) error {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("Finalize（桩实现）")
@@ -156,7 +156,7 @@ func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sess
 }
 
 // Pause 暂停团队。
-// ⤵️ 待 9.62 CoordinationKernel 章节回填
+// ⤵️(#9.62) CoordinationKernel 骨架已实现
 func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("Pause（桩实现）")
@@ -164,7 +164,7 @@ func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, session
 }
 
 // StopTeam 停止团队。
-// ⤵️ 待 9.62 CoordinationKernel 章节回填
+// ⤵️(#9.62) CoordinationKernel 骨架已实现
 func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("StopTeam（桩实现）")
@@ -172,7 +172,7 @@ func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sess
 }
 
 // DeleteTeam 删除团队。
-// ⤵️ 待 9.62 CoordinationKernel 章节回填
+// ⤵️(#9.62) CoordinationKernel 骨架已实现
 func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("DeleteTeam（桩实现）")

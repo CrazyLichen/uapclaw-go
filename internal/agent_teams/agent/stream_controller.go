@@ -40,10 +40,10 @@ type StreamController struct {
 	// updateExecution 执行状态更新回调
 	updateExecution func(ctx context.Context, status atschema.ExecutionStatus) error
 	// wakeMailboxCb 中断清除后唤醒邮箱回调
-	// ⤵️ 待 9.62 CoordinationKernel 章节回填：实际回调从 TeamAgent 传入
+	// ⤵️(#9.62) CoordinationKernel 骨架已实现，实际回调待回填
 	wakeMailboxCb func(ctx context.Context) error
 	// requestCompletionPollCb 轮次干净结束时请求完成轮询的回调（仅 Leader 传入）
-	// ⤵️ 待 9.62 CoordinationKernel 章节回填：实际回调从 TeamAgent 传入
+	// ⤵️(#9.62) CoordinationKernel 骨架已实现，实际回调待回填
 	requestCompletionPollCb func(ctx context.Context) error
 
 	// streamQueue 流式分块队列（nil sentinel 关闭流）
@@ -508,7 +508,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	sc.mu.Lock()
 	sc.cancelRequested = false
 	sc.mu.Unlock()
-	// ⤵️ 待 9.62 CoordinationKernel 章节回填：set_member_id 上下文变量
+	// ⤵️(#9.62) CoordinationKernel 骨架已实现，set_member_id 上下文变量待回填
 
 	harness := sc.resources.Harness
 	if harness != nil {

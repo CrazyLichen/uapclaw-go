@@ -28,11 +28,12 @@
 //	├── session_manager.go    # SessionManager 会话三态管理（9.59）
 //	├── stream_controller.go  # StreamController 流式控制器（9.60）
 //	├── recovery_manager.go   # TODO(#9.61) 恢复管理器
-//	└── coordination/         # TODO(#9.62-9.63) 协调子系统
-//	    ├── kernel.go         # TODO(#9.62) 协调内核
-//	    ├── event_bus.go      # TODO(#9.63) 事件总线
-//	    ├── dispatcher.go     # TODO(#9.63) 事件分发器
-//	    └── handlers/         # TODO(#9.63) 事件处理器
+//	└── coordination/         # ✅(#9.62-9.63) 协调子系统
+//	    ├── kernel.go         # ✅(#9.62) 协调内核
+//	    ├── event_bus.go      # ✅(#9.63) 事件总线
+//	    ├── dispatcher.go     # ✅(#9.63) 事件分发器
+//	    ├── types/            # ✅(#9.63) 共享类型（打破循环依赖）
+//	    └── handlers/         # ✅(#9.63) 事件处理器
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/
 package agent
@@ -81,7 +82,7 @@ type TeamAgent struct {
 	// streamController 流式控制器
 	streamController *StreamController
 	// coordination 协调内核
-	// TODO(#9.62): CoordinationKernel 类型
+	// ✅(#9.62): CoordinationKernel 类型已在 coordination 包实现
 	coordination any
 }
 
@@ -111,9 +112,9 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 		a.configurator.Resources(),
 		a.UpdateStatus,
 		a.updateExecution,
-		// ⤵️ 待 9.62 CoordinationKernel 章节回填：WithWakeMailbox / WithRequestCompletionPoll
+		// ✅(#9.62): WithWakeMailbox / WithRequestCompletionPoll 已在 CoordinationKernel.WakeMailboxIfInterruptCleared 实现
 	)
-	// TODO(#9.62): 构建 CoordinationKernel(self)
+	// ⤵️(#9.62): 构建 CoordinationKernel(self)
 	return a
 }
 
@@ -192,7 +193,7 @@ func (a *TeamAgent) RuntimeContext() *atschema.TeamRuntimeContext {
 // Coordination 返回协调内核。
 // Python: TeamAgent.coordination property
 func (a *TeamAgent) Coordination() any {
-	// TODO(#9.62): return coordination (CoordinationKernel 类型)
+	// ⤵️(#9.62): return coordination (CoordinationKernel 类型)
 	return a.coordination
 }
 
@@ -202,7 +203,7 @@ func (a *TeamAgent) Coordination() any {
 // 保留为测试和遗留调用者的公开访问器；
 // 新代码应通过 coordination 访问。
 func (a *TeamAgent) CoordinationLoop() any {
-	// TODO(#9.62): 返回协调事件总线 return coordination.event_bus
+	// ⤵️(#9.62): 返回协调事件总线 return coordination.event_bus
 	return nil
 }
 
@@ -475,7 +476,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 		)
 	}
 
-	// TODO(#9.62): 设置协调角色 coordination.setup(role=ctx.Role)
+	// ⤵️(#9.62): 设置协调角色 coordination.setup(role=ctx.Role)
 	// TODO(#9.55): 注册团队完成回调 a.registerTeamCompletionCallbacks()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
@@ -486,7 +487,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // Invoke 非流式调用 TeamAgent。
 // Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
-	// TODO(#9.62): coordination.start(session) + 入队用户输入
+	// ⤵️(#9.62): coordination.start(session) + 入队用户输入
 	// 9.60: 创建 streamQueue
 	if a.streamController != nil {
 		a.streamController.streamQueue = make(chan stream.Schema, 64)
@@ -494,14 +495,14 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
-	// TODO(#9.62): 从 streamQueue 读取直到 nil sentinel → coordination.finalize_round()
+	// ⤵️(#9.62): 从 streamQueue 读取直到 nil sentinel → coordination.finalize_round()
 	return nil, nil
 }
 
 // Stream 流式调用 TeamAgent。
 // Python: TeamAgent.stream(inputs, session, stream_modes)
 func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
-	// TODO(#9.62): coordination.start(session) + 入队用户输入
+	// ⤵️(#9.62): coordination.start(session) + 入队用户输入
 	// 9.60: 创建 streamQueue
 	if a.streamController != nil {
 		a.streamController.streamQueue = make(chan stream.Schema, 64)
@@ -509,7 +510,7 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Stream 开始")
-	// TODO(#9.62): 从 streamQueue 持续读取直到 nil sentinel
+	// ⤵️(#9.62): 从 streamQueue 持续读取直到 nil sentinel
 	return nil, nil
 }
 
@@ -665,28 +666,28 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 	if a.streamController != nil {
 		_ = a.streamController.CancelAgent(ctx)
 	}
-	// TODO(#9.62+#9.58): 停止协调 → 从池中移除 → 强制清理团队
+	// ⤵️(#9.62+#9.58): 停止协调 → 从池中移除 → 强制清理团队
 	return false, nil
 }
 
 // StartCoordination 启动协调。
 // Python: TeamAgent._start_coordination(session)
 func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
-	// TODO(#9.62): 启动协调 coordination.start(session)
+	// ⤵️(#9.62): 启动协调 coordination.start(session)
 	return nil
 }
 
 // PauseCoordination 暂停协调（不拆卸 Teammate 进程）。
 // Python: TeamAgent.pause_coordination()
 func (a *TeamAgent) PauseCoordination(ctx context.Context) error {
-	// TODO(#9.62): 暂停协调 coordination.pause()
+	// ⤵️(#9.62): 暂停协调 coordination.pause()
 	return nil
 }
 
 // StopCoordination 停止协调（关闭所有生成的 Teammate）。
 // Python: TeamAgent.stop_coordination()
 func (a *TeamAgent) StopCoordination(ctx context.Context) error {
-	// TODO(#9.62): 停止协调 coordination.stop()
+	// ⤵️(#9.62): 停止协调 coordination.stop()
 	return nil
 }
 
