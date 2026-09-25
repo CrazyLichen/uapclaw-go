@@ -18,6 +18,10 @@
 //	├── event_bus.go           # EventBus 事件入队 + 周期 poll timer + 生命周期
 //	├── dispatcher.go          # EventDispatcher 粗筛 + CallbackFramework 分发 + 3 个 Protocol
 //	├── kernel.go              # CoordinationKernel 协调子系统 facade
+//	├── types/                 # 共享类型子包（打破 coordination ↔ handlers 循环依赖）
+//	│   ├── events.go          # CoordinationEvent / InnerEventType / InnerEventMessage
+//	│   ├── protocols.go       # AgentRoundController / TeamLifecycleController / PollController / DispatcherHost / Blueprint / Infra
+//	│   └── callbacks.go       # EventCallbackFunc / CallbacksProvider
 //	└── handlers/              # 场景 handler 子包
 //	    ├── base.go            # BaseCoordinationHandler 基类
 //	    ├── agent_lifecycle.go # Agent 生命周期事件（USER_INPUT / STANDBY / CLEANED / TOOL_APPROVAL_RESULT）
