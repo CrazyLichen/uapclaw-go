@@ -474,10 +474,11 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	}
 	relationTaskResult := state.Tasks[0]
 	state.Tasks = state.Tasks[1:]
-	if relationTaskResult.Err != nil {
-		return nil, relationTaskResult.Err
+	relationContent, relationErr := relationTaskResult.Wait()
+	if relationErr != nil {
+		return nil, relationErr
 	}
-	parsedRelations := extraction.ParseJSON(relationTaskResult.Result, state.Prompting.SchemaRelationMerge)
+	parsedRelations := extraction.ParseJSON(relationContent, state.Prompting.SchemaRelationMerge)
 	if parsedRelations == nil {
 		parsedRelations = []any{}
 	}
@@ -1279,10 +1280,11 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		// 取最后一个 task（即实体去重任务，对齐 Python: state.tasks.pop()）
 		dedupeTask := state.Tasks[len(state.Tasks)-1]
 		state.Tasks = state.Tasks[:len(state.Tasks)-1]
-		if dedupeTask.Err != nil {
-			logger.Warn(logComponent).Err(dedupeTask.Err).Msg("Graph Memory: entity dedup LLM failed")
+		dedupeContent, dedupeErr := dedupeTask.Wait()
+		if dedupeErr != nil {
+			logger.Warn(logComponent).Err(dedupeErr).Msg("Graph Memory: entity dedup LLM failed")
 		} else {
-			dedupeResult := extraction.ParseJSON(dedupeTask.Result, state.Prompting.SchemaEntityDedupe)
+			dedupeResult := extraction.ParseJSON(dedupeContent, state.Prompting.SchemaEntityDedupe)
 			if dedupeResult != nil {
 				dedupeEntityRaw = extraction.EnsureList(dedupeResult)
 			}
@@ -1353,17 +1355,16 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 				done: make(chan struct{}),
 			}
 			state.PendingMerge[pair.Target.UUID] = pending
-			// 对齐 Python: task 完成后设置 result
-			go func(t *asyncTask, p *pendingMergeTask) {
-				t.Wait()
-				p.Result = t.Result
-				p.Err = t.Err
+			// 对齐 Python: await task — 等待合并完成
+			go func(t asyncTask, p *pendingMergeTask) {
+				content, err := t.Wait()
+				p.Result = content
+				p.Err = err
 				close(p.done)
 			}(task, pending)
 			// 对齐 Python: state.merging_tasks.append(task); state.merging_tasks_entities[task] = tgt
-			mergeTask := task
-			state.MergingTasks = append(state.MergingTasks, mergeTask)
-			state.MergingTasksEntities[mergeTask] = pair.Target
+			state.MergingTasks = append(state.MergingTasks, task)
+			state.MergingTasksEntities[task] = pair.Target
 		}
 
 		// 再处理非阻塞任务（对齐 Python: for tgt, prompt_entity_merge in non_blocking_tasks）
@@ -1376,7 +1377,9 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 				logger.Warn(logComponent).Err(err).Str("entity", pair.Target.Name).Msg("Graph Memory: entity merge LLM failed")
 				continue
 			}
-			mergeTask := &asyncTask{Result: assistantContent(response)}
+			// 构造已完成的 asyncTask（同步调用已完成，直接写入结果）
+			mergeTask := make(asyncTask, 1)
+			mergeTask <- asyncResult{Content: assistantContent(response)}
 			state.MergingTasks = append(state.MergingTasks, mergeTask)
 			state.MergingTasksEntities[mergeTask] = pair.Target
 		}
@@ -1440,28 +1443,31 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 		state.Tasks = append(state.Tasks, task)
 	}
 
-	// 等待所有任务完成（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
-	for _, task := range state.Tasks {
-		task.Wait()
-		if task.Err != nil {
-			logger.Warn(logComponent).Err(task.Err).Msg("Graph Memory: entity summary extraction failed")
-			continue
+	// 等待所有任务完成并缓存结果（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
+	// channel 化后 Wait() 只能读取一次，因此统一收集结果
+	taskResults := make([]struct {
+		Content string
+		Err     error
+	}, len(state.Tasks))
+	for i, task := range state.Tasks {
+		taskResults[i].Content, taskResults[i].Err = task.Wait()
+		if taskResults[i].Err != nil {
+			logger.Warn(logComponent).Err(taskResults[i].Err).Msg("Graph Memory: entity summary extraction failed")
 		}
 	}
 
 	// 更新实体（对齐 Python: for entity, future in zip(entities, state.tasks): ...）
 	taskIdx := 0
 	for _, entity := range entities {
-		if taskIdx >= len(state.Tasks) {
+		if taskIdx >= len(taskResults) {
 			break
 		}
-		task := state.Tasks[taskIdx]
+		result := taskResults[taskIdx]
 		taskIdx++
-		task.Wait()
-		if task.Err != nil || task.Result == "" {
+		if result.Err != nil || result.Content == "" {
 			continue
 		}
-		UpdateEntity(entity, task.Result, state.Prompting.SchemaEntityExtraction)
+		UpdateEntity(entity, result.Content, state.Prompting.SchemaEntityExtraction)
 	}
 
 	state.Tasks = state.Tasks[:0]
@@ -1474,18 +1480,18 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relations []*graph.Relation, state *GraphMemState) error {
 	// 处理关系过滤任务（对齐 Python: if state.relation_filter_tasks: await asyncio.wait(...)）
 	for task, taskItem := range state.RelationFilterTasks {
-		task.Wait()
+		taskContent, taskErr := task.Wait()
 		tgtEntity := taskItem.TargetEntity
 		relationList := taskItem.Relations
 		tgtUUID := tgtEntity.UUID
 
-		if task.Err != nil {
+		if taskErr != nil {
 			// 异常时保留全部关系（对齐 Python: except Exception: relations_filtered = new_relation_list）
 			state.MergeInfos[tgtUUID].NewRelations = relationList
 			continue
 		}
 
-		dedupeEntity := extraction.ParseJSON(task.Result, state.Prompting.SchemaRelationFilter)
+		dedupeEntity := extraction.ParseJSON(taskContent, state.Prompting.SchemaRelationFilter)
 		if dedupeMap, ok := dedupeEntity.(map[string]any); ok {
 			keepIDs := dedupeMap["relevant_relations"]
 			if idList, ok := keepIDs.([]any); ok {
@@ -1762,7 +1768,7 @@ func (gm *GraphMemory) startTimezoneTask(ctx context.Context, content string, st
 	return ch
 }
 
-// startRelationExtractionAsync 启动关系抽取异步任务（返回 *asyncTask，对齐 Python: state.tasks.append(...)）
+// startRelationExtractionAsync 启动关系抽取异步任务（返回 asyncTask，对齐 Python: state.tasks.append(...)）
 //
 // Python: state.tasks.append(asyncio.create_task(self._invoke_llm(*extract_relation_declaration(...))))
 func (gm *GraphMemory) startRelationExtractionAsync(
@@ -1771,12 +1777,11 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 	content string,
 	state *GraphMemState,
 	tzResponse string,
-) *asyncTask {
-	task := &asyncTask{done: make(chan struct{})}
+) asyncTask {
+	ch := make(asyncTask, 1)
 	go func() {
-		defer close(task.done)
 		if gm.LLMClient == nil {
-			task.Err = fmt.Errorf("LLM client is not set")
+			ch <- asyncResult{Content: "", Err: fmt.Errorf("LLM client is not set")}
 			return
 		}
 		tzInfo := extraction.ParseJSON(tzResponse,
@@ -1799,16 +1804,12 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 		)
 
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		if err != nil {
-			task.Err = err
-			return
-		}
-		task.Result = assistantContent(resp)
+		ch <- asyncResult{Content: assistantContent(resp), Err: err}
 	}()
-	return task
+	return ch
 }
 
-// startEntityDedupeAsync 启动实体去重异步任务（返回 *asyncTask，对齐 Python: state.tasks.append(...)）
+// startEntityDedupeAsync 启动实体去重异步任务（返回 asyncTask，对齐 Python: state.tasks.append(...)）
 //
 // Python: state.tasks.append(asyncio.create_task(self._invoke_llm(*dedupe_entity_list(...))))
 func (gm *GraphMemory) startEntityDedupeAsync(
@@ -1817,12 +1818,11 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 	candidateEntities []extraction.EntityDeclaration,
 	existingEntities []map[string]any,
 	state *GraphMemState,
-) *asyncTask {
-	task := &asyncTask{done: make(chan struct{})}
+) asyncTask {
+	ch := make(asyncTask, 1)
 	go func() {
-		defer close(task.done)
 		if gm.LLMClient == nil {
-			task.Err = fmt.Errorf("LLM client is not set")
+			ch <- asyncResult{Content: "", Err: fmt.Errorf("LLM client is not set")}
 			return
 		}
 		entityTypesPtr := make([]*registry.EntityDef, len(state.EntityTypes))
@@ -1837,32 +1837,19 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 		)
 
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		if err != nil {
-			task.Err = err
-			return
-		}
-		task.Result = assistantContent(resp)
+		ch <- asyncResult{Content: assistantContent(resp), Err: err}
 	}()
-	return task
+	return ch
 }
 
-// invokeLLMAsync 异步调用 LLM（返回 *asyncTask，对齐 Python: asyncio.create_task(self._invoke_llm(...))）
-func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) *asyncTask {
-	task := &asyncTask{done: make(chan struct{})}
+// invokeLLMAsync 异步调用 LLM（返回 asyncTask，对齐 Python: asyncio.create_task(self._invoke_llm(...))）
+func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) asyncTask {
+	ch := make(asyncTask, 1)
 	go func() {
-		defer close(task.done)
-		if gm.LLMClient == nil {
-			task.Err = fmt.Errorf("LLM client is not set")
-			return
-		}
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		if err != nil {
-			task.Err = err
-			return
-		}
-		task.Result = assistantContent(resp)
+		ch <- asyncResult{Content: assistantContent(resp), Err: err}
 	}()
-	return task
+	return ch
 }
 
 // entityListFromState 从 state.RetrievedEntities 构建 map 列表

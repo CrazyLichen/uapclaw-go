@@ -340,9 +340,9 @@ func TestStartRelationExtractionAsync_有LLM(t *testing.T) {
 	task := gm.startRelationExtractionAsync(context.Background(), declarations, "Alice works at a company", state, "")
 	assert.NotNil(t, task)
 
-	task.Wait()
-	assert.Nil(t, task.Err)
-	assert.NotEmpty(t, task.Result)
+	content, err := task.Wait()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, content)
 }
 
 // TestStartEntityDedupeAsync_有LLM 测试有 LLM 客户端的异步实体去重
@@ -358,8 +358,8 @@ func TestStartEntityDedupeAsync_有LLM(t *testing.T) {
 	task := gm.startEntityDedupeAsync(context.Background(), "content", declarations, existing, state)
 	assert.NotNil(t, task)
 
-	task.Wait()
-	assert.Nil(t, task.Err)
+	_, err = task.Wait()
+	assert.NoError(t, err)
 }
 
 // TestInvokeLLMAsync_有LLM 测试有 LLM 客户端的异步调用
@@ -381,9 +381,9 @@ func TestInvokeLLMAsync_有LLM(t *testing.T) {
 	task := gm.invokeLLMAsync(context.Background(), kwargs, tmpl, nil)
 	assert.NotNil(t, task)
 
-	task.Wait()
-	assert.Nil(t, task.Err)
-	assert.NotEmpty(t, task.Result)
+	content, err := task.Wait()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, content)
 }
 
 // TestStartTimezoneTask_有LLM 测试有 LLM 客户端的时区任务
@@ -466,7 +466,7 @@ func TestParseRelationFilteringResult_非relevantRelations(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// 返回非 relevant_relations 格式
-	filterTask := &asyncTask{Result: `{"other_key": "value"}`}
+	filterTask := newAsyncTaskWithResult(`{"other_key": "value"}`)
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -497,7 +497,7 @@ func TestParseRelationFilteringResult_relevantRelations非列表(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// relevant_relations 为字符串而非列表
-	filterTask := &asyncTask{Result: `{"relevant_relations": "invalid"}`}
+	filterTask := newAsyncTaskWithResult(`{"relevant_relations": "invalid"}`)
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -528,7 +528,7 @@ func TestParseRelationFilteringResult_无效ID(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// ID 为 99（越界）
-	filterTask := &asyncTask{Result: `{"relevant_relations": [99]}`}
+	filterTask := newAsyncTaskWithResult(`{"relevant_relations": [99]}`)
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -559,7 +559,7 @@ func TestParseRelationFilteringResult_有效ID(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// ID=1 指向 rel（1-based）
-	filterTask := &asyncTask{Result: `{"relevant_relations": [1]}`}
+	filterTask := newAsyncTaskWithResult(`{"relevant_relations": [1]}`)
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -608,7 +608,7 @@ func TestEntityMerge_有合并但LLM失败(t *testing.T) {
 	state.RetrievedEntities["existing-1"] = existingEntity
 	state.LookupTable.Entities["existing-1"] = existingEntity
 
-	dedupeTask := &asyncTask{Result: `[{"id": 1, "duplicate_ids": [2]}]`}
+	dedupeTask := newAsyncTaskWithResult(`[{"id": 1, "duplicate_ids": [2]}]`)
 	state.Tasks = append(state.Tasks, dedupeTask)
 
 	existingEntity2 := graph.NewEntity()

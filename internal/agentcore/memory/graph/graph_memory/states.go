@@ -131,24 +131,23 @@ type toRemoveItem struct {
 	ObjType string
 }
 
-// asyncTask 异步任务结果（对齐 Python asyncio.Task）
-//
-// Python 中 state.tasks 是 List[asyncio.Task]，Task 完成后通过 await 获取 AssistantMessage。
-// Go 中使用 channel 模拟：任务在 goroutine 中执行，结果通过 channel 传回。
-type asyncTask struct {
-	// Result LLM 响应内容（对齐 Python: response.content）
-	Result string
-	// Err 任务执行错误
+// asyncResult 异步 LLM 调用结果
+type asyncResult struct {
+	// Content LLM 响应内容（对齐 Python: response.content）
+	Content string
+	// Err 调用错误
 	Err error
-	// done 用于同步 goroutine 完成，解决 race detector 报告
-	done chan struct{}
 }
 
-// Wait 阻塞等待异步任务完成
-func (t *asyncTask) Wait() {
-	if t.done != nil {
-		<-t.done
-	}
+// asyncTask 异步 LLM 调用任务，通过 channel 传递结果
+// 对齐 Python: asyncio.create_task 返回的 Future，await future 获取结果
+type asyncTask chan asyncResult
+
+// Wait 阻塞等待异步任务完成，返回结果
+// 对齐 Python: await future
+func (t asyncTask) Wait() (string, error) {
+	result := <-t
+	return result.Content, result.Err
 }
 
 // pendingMergeTask 待合并的阻塞任务
@@ -180,12 +179,12 @@ type relationFilterTaskItem struct {
 // Python: GraphMemState (states.py)
 type GraphMemState struct {
 	// 任务缓冲区（对齐 Python: state.tasks: list[asyncio.Task]）
-	Tasks                   []*asyncTask
-	MergingTasks            []*asyncTask
-	MergingTasksEntities    map[*asyncTask]*graph.Entity
+	Tasks                   []asyncTask
+	MergingTasks            []asyncTask
+	MergingTasksEntities    map[asyncTask]*graph.Entity
 	PendingMerge            map[string]*pendingMergeTask
 	RelationDeferredUpdates map[string][]deferredRelationUpdate
-	RelationFilterTasks     map[*asyncTask]*relationFilterTaskItem
+	RelationFilterTasks     map[asyncTask]*relationFilterTaskItem
 
 	// 通用临时缓冲区
 	ToRemove  []toRemoveItem
@@ -340,12 +339,12 @@ func NewGraphMemUpdate() *GraphMemUpdate {
 // Python: GraphMemState()
 func NewGraphMemState() *GraphMemState {
 	return &GraphMemState{
-		Tasks:                   make([]*asyncTask, 0),
-		MergingTasks:            make([]*asyncTask, 0),
-		MergingTasksEntities:    make(map[*asyncTask]*graph.Entity),
+		Tasks:                   make([]asyncTask, 0),
+		MergingTasks:            make([]asyncTask, 0),
+		MergingTasksEntities:    make(map[asyncTask]*graph.Entity),
 		PendingMerge:            make(map[string]*pendingMergeTask),
 		RelationDeferredUpdates: make(map[string][]deferredRelationUpdate),
-		RelationFilterTasks:     make(map[*asyncTask]*relationFilterTaskItem),
+		RelationFilterTasks:     make(map[asyncTask]*relationFilterTaskItem),
 
 		ToRemove:  make([]toRemoveItem, 0),
 		TmpBuffer: make([]any, 0),

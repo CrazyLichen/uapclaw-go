@@ -42,6 +42,20 @@ func newTestGraphMemory(opts ...GraphMemoryOption) (*GraphMemory, error) {
 	return NewGraphMemory(dbConfig, opts...)
 }
 
+// newAsyncTaskWithResult 构造已完成的 asyncTask（带结果）
+func newAsyncTaskWithResult(content string) asyncTask {
+	ch := make(asyncTask, 1)
+	ch <- asyncResult{Content: content}
+	return ch
+}
+
+// newAsyncTaskWithError 构造已完成的 asyncTask（带错误）
+func newAsyncTaskWithError(err error) asyncTask {
+	ch := make(asyncTask, 1)
+	ch <- asyncResult{Err: err}
+	return ch
+}
+
 // TestNewGraphMemory_构造 测试 GraphMemory 构造
 func TestNewGraphMemory_构造(t *testing.T) {
 	gm, err := newTestGraphMemory()
@@ -747,13 +761,15 @@ func TestSearch_有预计算向量(t *testing.T) {
 
 // TestAsyncTask 测试 asyncTask 结构体
 func TestAsyncTask(t *testing.T) {
-	task := &asyncTask{Result: "test result"}
-	assert.Equal(t, "test result", task.Result)
-	assert.Nil(t, task.Err)
+	task := newAsyncTaskWithResult("test result")
+	content, err := task.Wait()
+	assert.Equal(t, "test result", content)
+	assert.NoError(t, err)
 
-	taskErr := &asyncTask{Err: fmt.Errorf("test error")}
-	assert.Empty(t, taskErr.Result)
-	assert.Error(t, taskErr.Err)
+	taskErr := newAsyncTaskWithError(fmt.Errorf("test error"))
+	content, err = taskErr.Wait()
+	assert.Empty(t, content)
+	assert.Error(t, err)
 }
 
 // TestPendingMergeTask 测试 pendingMergeTask 结构体
@@ -822,7 +838,7 @@ func TestParseRelationFilteringResult_有过滤任务(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// 添加关系过滤任务
-	filterTask := &asyncTask{Result: `{"relevant_relations": [1]}`}
+	filterTask := newAsyncTaskWithResult(`{"relevant_relations": [1]}`)
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -856,7 +872,7 @@ func TestParseRelationFilteringResult_过滤任务失败(t *testing.T) {
 	state.RelationDeferredUpdates["e1"] = []deferredRelationUpdate{}
 
 	// 添加失败的关系过滤任务
-	filterTask := &asyncTask{Err: fmt.Errorf("LLM error")}
+	filterTask := newAsyncTaskWithError(fmt.Errorf("LLM error"))
 	state.RelationFilterTasks[filterTask] = &relationFilterTaskItem{
 		TargetEntity: entity1,
 		Relations:    []*graph.Relation{rel},
@@ -887,7 +903,7 @@ func TestEntityMerge_有去重结果(t *testing.T) {
 	state.LookupTable.Entities["existing-1"] = existingEntity
 
 	// 模拟去重 LLM 结果（空列表表示无需合并）
-	dedupeTask := &asyncTask{Result: `[]`}
+	dedupeTask := newAsyncTaskWithResult(`[]`)
 	state.Tasks = append(state.Tasks, dedupeTask)
 
 	existingEntitiesList := []map[string]any{
@@ -1069,7 +1085,7 @@ func TestEntityMerge_有合并任务(t *testing.T) {
 	state.LookupTable.Entities["existing-1"] = existingEntity
 
 	// 模拟去重结果：将索引 1 的已有实体合并到索引 0 的已有实体
-	dedupeTask := &asyncTask{Result: `[{"id": 1, "duplicate_ids": [2]}]`}
+	dedupeTask := newAsyncTaskWithResult(`[{"id": 1, "duplicate_ids": [2]}]`)
 	state.Tasks = append(state.Tasks, dedupeTask)
 
 	// 添加第二个已有实体用于合并
@@ -1109,7 +1125,7 @@ func TestEntityMerge_无合并实体(t *testing.T) {
 	state.LookupTable.Entities["existing-1"] = existingEntity
 
 	// 去重结果表示有重复（但 MergeEntities=false 应忽略合并）
-	dedupeTask := &asyncTask{Result: `[{"id": 1, "duplicate_ids": [2]}]`}
+	dedupeTask := newAsyncTaskWithResult(`[{"id": 1, "duplicate_ids": [2]}]`)
 	state.Tasks = append(state.Tasks, dedupeTask)
 
 	existingEntity2 := graph.NewEntity()
@@ -2005,7 +2021,7 @@ func TestProcessEntities_有合并任务(t *testing.T) {
 	entity.Content = ""
 
 	// 设置合并任务
-	mergeTask := &asyncTask{Result: `{"summary": "updated summary"}`}
+	mergeTask := newAsyncTaskWithResult(`{"summary": "updated summary"}`)
 	state.MergingTasks = append(state.MergingTasks, mergeTask)
 	state.MergingTasksEntities[mergeTask] = entity
 
@@ -2530,8 +2546,8 @@ func TestStartRelationExtractionAsync_等待完成(t *testing.T) {
 	}
 
 	task := gm.startRelationExtractionAsync(context.Background(), nil, "content", state, "")
-	task.Wait()
-	assert.NotNil(t, task.Err)
+	_, err := task.Wait()
+	assert.NotNil(t, err)
 }
 
 // TestStartEntityDedupeAsync_等待完成 测试异步任务在无 LLM 时快速失败
@@ -2543,16 +2559,16 @@ func TestStartEntityDedupeAsync_等待完成(t *testing.T) {
 	}
 
 	task := gm.startEntityDedupeAsync(context.Background(), "content", nil, nil, state)
-	task.Wait()
-	assert.NotNil(t, task.Err)
+	_, err := task.Wait()
+	assert.NotNil(t, err)
 }
 
 // TestInvokeLLMAsync_等待完成 测试异步任务在无 LLM 时快速失败
 func TestInvokeLLMAsync_等待完成(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	task := gm.invokeLLMAsync(context.Background(), map[string]any{}, nil, nil)
-	task.Wait()
-	assert.NotNil(t, task.Err)
+	_, err := task.Wait()
+	assert.NotNil(t, err)
 }
 
 // TestStartTimezoneTask_等待完成 测试时区任务在无 LLM 时快速失败
@@ -2826,7 +2842,7 @@ func TestEntityMerge_去重任务失败(t *testing.T) {
 	declarations := []extraction.EntityDeclaration{{Name: "Alice", EntityTypeID: 0}}
 	existingEntitiesList := []map[string]any{{"uuid": "e1", "name": "Alice"}}
 
-	failedTask := &asyncTask{Err: fmt.Errorf("LLM failed")}
+	failedTask := newAsyncTaskWithError(fmt.Errorf("LLM failed"))
 	state.Tasks = append(state.Tasks, failedTask)
 
 	result, err := gm.entityMerge(context.Background(), declarations, existingEntitiesList, state)
