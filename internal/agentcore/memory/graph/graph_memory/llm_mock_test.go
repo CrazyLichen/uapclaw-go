@@ -454,8 +454,8 @@ func TestParseRelationFilteringResult_非relevantRelations(t *testing.T) {
 
 	rel := graph.NewRelation()
 	rel.UUID = "rel-1"
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "e1"}}}
+	rel.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "e2"}}}
 
 	state.MergeInfos["e1"] = &EntityMerge{
 		Target:          entity1,

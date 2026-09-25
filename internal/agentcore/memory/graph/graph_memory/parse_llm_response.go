@@ -148,8 +148,8 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity) *graph.Rel
 	rel.ValidUntil = validUntil
 	rel.OffsetSince = offsetSince
 	rel.OffsetUntil = offsetUntil
-	rel.LHS = lhs.UUID
-	rel.RHS = rhs.UUID
+	rel.LHS = lhs
+	rel.RHS = rhs
 
 	return rel
 }

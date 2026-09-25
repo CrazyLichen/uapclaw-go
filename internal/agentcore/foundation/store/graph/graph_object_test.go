@@ -93,19 +93,39 @@ func TestEntity_ToMap_去重排序(t *testing.T) {
 // TestRelation_ToMap 测试 Relation 的 ToMap
 func TestRelation_ToMap(t *testing.T) {
 	r := NewRelation()
-	r.LHS = "entity-uuid-1"
-	r.RHS = "entity-uuid-2"
+	r.LHS = &Entity{NamedGraphObject: NamedGraphObject{BaseGraphObject: BaseGraphObject{UUID: "entity-uuid-1"}}}
+	r.RHS = &Entity{NamedGraphObject: NamedGraphObject{BaseGraphObject: BaseGraphObject{UUID: "entity-uuid-2"}}}
 	r.ValidSince = 1000
 	r.ValidUntil = 2000
 	m := r.ToMap()
 	if m["lhs"] != "entity-uuid-1" {
-		t.Error("ToMap lhs 字段不匹配")
+		t.Errorf("ToMap lhs = %v, want entity-uuid-1", m["lhs"])
 	}
 	if m["rhs"] != "entity-uuid-2" {
-		t.Error("ToMap rhs 字段不匹配")
+		t.Errorf("ToMap rhs = %v, want entity-uuid-2", m["rhs"])
 	}
 	if m["valid_since"] != int64(1000) {
 		t.Error("ToMap valid_since 字段不匹配")
+	}
+}
+
+// TestRelation_LHS_RHS_Nil 测试 LHS/RHS 为 nil 时的辅助方法
+func TestRelation_LHS_RHS_Nil(t *testing.T) {
+	r := NewRelation()
+	r.LHS = nil
+	r.RHS = nil
+	if r.LHSUUID() != "" {
+		t.Errorf("LHSUUID() nil = %q, want empty", r.LHSUUID())
+	}
+	if r.RHSUUID() != "" {
+		t.Errorf("RHSUUID() nil = %q, want empty", r.RHSUUID())
+	}
+	m := r.ToMap()
+	if m["lhs"] != "" {
+		t.Errorf("ToMap()[lhs] nil = %v, want empty", m["lhs"])
+	}
+	if m["rhs"] != "" {
+		t.Errorf("ToMap()[rhs] nil = %v, want empty", m["rhs"])
 	}
 }
 

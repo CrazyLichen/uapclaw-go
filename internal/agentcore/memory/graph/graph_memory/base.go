@@ -1523,12 +1523,12 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 			}
 
 			if inNewRelations {
-				// 更新关系端点
+				// 更新关系端点（对齐 Python: setattr(relation, field, tgt_uuid)）
 				switch field {
 				case "lhs":
-					relation.LHS = value
+					relation.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
 				case "rhs":
-					relation.RHS = value
+					relation.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
 				}
 				if !containsRelationPtr(state.MemUpdateSkipEmbed.UpdatedRelation, relation) {
 					state.MemUpdateSkipEmbed.UpdatedRelation = append(state.MemUpdateSkipEmbed.UpdatedRelation, relation)
@@ -1606,8 +1606,8 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 		emb := relationEmbedResults[i]
 
 		// 检查 lhs/rhs 有效性
-		lhs := newRelation.LHS
-		rhs := newRelation.RHS
+		lhs := newRelation.LHSUUID()
+		rhs := newRelation.RHSUUID()
 		if lhs == "" || rhs == "" {
 			continue
 		}
@@ -1982,11 +1982,13 @@ func stateLookupRelation(r map[string]any, uuid string) *graph.Relation {
 	if v, ok := r["content"].(string); ok {
 		rel.Content = v
 	}
-	if v, ok := r["lhs"].(string); ok {
-		rel.LHS = v
+	if v, ok := r["lhs"].(string); ok && v != "" {
+		rel.LHS = &graph.Entity{}
+		rel.LHS.UUID = v
 	}
-	if v, ok := r["rhs"].(string); ok {
-		rel.RHS = v
+	if v, ok := r["rhs"].(string); ok && v != "" {
+		rel.RHS = &graph.Entity{}
+		rel.RHS.UUID = v
 	}
 	return rel
 }
@@ -2155,7 +2157,7 @@ func (gm *GraphMemory) resolveEachRelation(
 
 	for _, relation := range srcRelations {
 		toReplace := srcEntity.UUID
-		lhsRhs := map[string]bool{relation.LHS: true, relation.RHS: true}
+		lhsRhs := map[string]bool{relation.LHSUUID(): true, relation.RHSUUID(): true}
 
 		// 自指向关系 → 移除
 		allInAlias := true
@@ -2180,11 +2182,11 @@ func (gm *GraphMemory) resolveEachRelation(
 			if !ok {
 				break
 			}
-			if relation.LHS == toReplace {
+			if relation.LHSUUID() == toReplace {
 				ReplaceOneSideOfRelation("lhs", relation, tgtUUID, entityRelationUpdates, state)
 				break
 			}
-			if relation.RHS == toReplace {
+			if relation.RHSUUID() == toReplace {
 				ReplaceOneSideOfRelation("rhs", relation, tgtUUID, entityRelationUpdates, state)
 				break
 			}
@@ -2195,7 +2197,7 @@ func (gm *GraphMemory) resolveEachRelation(
 		if _, isSelf := selfPointing[relation.UUID]; !isSelf {
 			if _, faulty := state.FaultyRelations[relation.UUID]; !faulty {
 				if toReplace != "" && toReplace != tgtUUID {
-					relationRepr := fmt.Sprintf("[%s]-<%s>->[%s]", relation.LHS, relation.UUID, relation.RHS)
+					relationRepr := fmt.Sprintf("[%s]-<%s>->[%s]", relation.LHSUUID(), relation.UUID, relation.RHSUUID())
 					logger.Warn(logComponent).
 						Str("relation_uuid", relation.UUID).
 						Str("src_entity_uuid", srcEntity.UUID).

@@ -16,7 +16,7 @@
 - Modify: `internal/agentcore/memory/graph/extraction/base.go`
 - Create: `internal/agentcore/memory/graph/extraction/base_test.go`
 
-- [ ] **Step 1: 写 StrictSchemaEnforce 的测试**
+- [x] **Step 1: 写 StrictSchemaEnforce 的测试**
 
 创建 `internal/agentcore/memory/graph/extraction/base_test.go`：
 
@@ -124,12 +124,12 @@ func TestBuildResponseFormat_EntityDuplication(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/... -run "TestStrictSchemaEnforce|TestBuildResponseFormat" -count=1 2>&1 | head -20`
 Expected: 编译失败，未定义 StrictSchemaEnforce/BuildResponseFormat
 
-- [ ] **Step 3: 实现 StrictSchemaEnforce + BuildResponseFormat**
+- [x] **Step 3: 实现 StrictSchemaEnforce + BuildResponseFormat**
 
 在 `internal/agentcore/memory/graph/extraction/base.go` 导出函数区块末尾（`ReadableSchema` 之后）添加：
 
@@ -194,12 +194,12 @@ func BuildResponseFormat(model any, language string) map[string]any {
 
 注意：需要在 base.go import 中确认已有 `"reflect"`，已有则不需添加。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/... -run "TestStrictSchemaEnforce|TestBuildResponseFormat" -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/extraction/base.go internal/agentcore/memory/graph/extraction/base_test.go
@@ -216,7 +216,7 @@ git commit -m "feat(extraction): 新增 StrictSchemaEnforce + BuildResponseForma
 **Files:**
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`
 
-- [ ] **Step 1: 修改 initState 中 4 行空 Schema**
+- [x] **Step 1: 修改 initState 中 4 行空 Schema**
 
 在 `internal/agentcore/memory/graph/graph_memory/base.go` 中，找到 `initState` 函数内的 4 行空 Schema：
 
@@ -238,17 +238,17 @@ git commit -m "feat(extraction): 新增 StrictSchemaEnforce + BuildResponseForma
 
 注意：`EntityDedupe` 使用 `state.Prompting.EntityDedupeLanguage`（可能被 strategy 的 chinese_entity_dedupe 覆盖为 "cn"），其他 3 个使用 `gm.Language`，对齐 Python `_init_state`。
 
-- [ ] **Step 2: 编译确认**
+- [x] **Step 2: 编译确认**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/memory/graph/graph_memory/...`
 Expected: 编译成功
 
-- [ ] **Step 3: 运行 graph_memory 测试确认无回归**
+- [x] **Step 3: 运行 graph_memory 测试确认无回归**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/graph_memory/... -count=1`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/graph_memory/base.go
@@ -266,7 +266,7 @@ git commit -m "fix(graph_memory): initState 使用 BuildResponseFormat 动态生
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base.go`
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base_test.go`
 
-- [ ] **Step 1: 写时间格式化测试**
+- [x] **Step 1: 写时间格式化测试**
 
 在 `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base_test.go` 中添加：
 
@@ -336,12 +336,12 @@ import (
 )
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/prompts/entity_extraction/... -run "TestFormatExistingRelations_包含时间" -count=1 2>&1 | tail -5`
 Expected: PASS（当前函数不报错但输出不含时间信息，所以测试会 FAIL 在 Contains 检查）
 
-- [ ] **Step 3: 实现 FormatExistingRelations 时间格式化**
+- [x] **Step 3: 实现 FormatExistingRelations 时间格式化**
 
 修改 `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base.go` 中的 `FormatExistingRelations` 函数，从：
 
@@ -439,12 +439,12 @@ import (
 )
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/prompts/entity_extraction/... -run "TestFormatExistingRelations" -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base.go internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base_test.go
@@ -463,7 +463,7 @@ git commit -m "fix(entity_extraction): FormatExistingRelations 补充时间格�
 - Modify: `internal/agentcore/foundation/store/graph/utils_test.go`
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`
 
-- [ ] **Step 1: 写 FormatListOfMessages 测试**
+- [x] **Step 1: 写 FormatListOfMessages 测试**
 
 在 `internal/agentcore/foundation/store/graph/utils_test.go` 中添加：
 
@@ -515,12 +515,12 @@ func TestFormatListOfMessages_空列表(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/foundation/store/graph/... -run "TestFormatListOfMessages" -count=1 2>&1 | head -5`
 Expected: 编译失败，未定义 FormatListOfMessages
 
-- [ ] **Step 3: 实现 FormatListOfMessages**
+- [x] **Step 3: 实现 FormatListOfMessages**
 
 在 `internal/agentcore/foundation/store/graph/utils.go` 导出函数区块末尾添加：
 
@@ -559,12 +559,12 @@ func FormatListOfMessages(messages []map[string]any, roleReplace map[string]stri
 
 需要在 utils.go import 中确认有 `"fmt"` 和 `"strings"`，缺少则添加。
 
-- [ ] **Step 4: 运行 FormatListOfMessages 测试确认通过**
+- [x] **Step 4: 运行 FormatListOfMessages 测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/foundation/store/graph/... -run "TestFormatListOfMessages" -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 修改 AddMemoryConfig 和 prepareEpisodes**
+- [x] **Step 5: 修改 AddMemoryConfig 和 prepareEpisodes**
 
 在 `internal/agentcore/memory/graph/graph_memory/base.go` 中：
 
@@ -666,17 +666,17 @@ func (gm *GraphMemory) prepareEpisodes(ctx context.Context, state *GraphMemState
 
 注意：content 字符串路径中已有对 content_fmt_kwargs 的校验（非空报错），保留不变。
 
-- [ ] **Step 6: 编译确认**
+- [x] **Step 6: 编译确认**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/memory/graph/graph_memory/...`
 Expected: 编译成功
 
-- [ ] **Step 7: 运行 graph_memory 测试确认无回归**
+- [x] **Step 7: 运行 graph_memory 测试确认无回归**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/graph_memory/... -count=1`
 Expected: PASS
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add internal/agentcore/foundation/store/graph/utils.go internal/agentcore/foundation/store/graph/utils_test.go internal/agentcore/memory/graph/graph_memory/base.go
@@ -694,7 +694,7 @@ AddMemoryConfig 新增 Messages 字段（与 Content 二选一），
 **Files:**
 - Modify: `internal/agentcore/memory/graph/extraction/base.go`
 
-- [ ] **Step 1: 修改 extractRefDictRecursive 只保留 properties**
+- [x] **Step 1: 修改 extractRefDictRecursive 只保留 properties**
 
 在 `internal/agentcore/memory/graph/extraction/base.go` 中，修改 `extractRefDictRecursive` 函数：
 
@@ -747,12 +747,12 @@ func extractRefDictRecursive(schema map[string]any, refDict map[string]map[strin
 }
 ```
 
-- [ ] **Step 2: 运行 extraction 测试确认无回归**
+- [x] **Step 2: 运行 extraction 测试确认无回归**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/... -count=1`
 Expected: PASS
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/extraction/base.go
@@ -772,19 +772,19 @@ git commit -m "fix(extraction): extractRefDict 只保留 properties 子集
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/doc.go`
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/doc.go`
 
-- [ ] **Step 1: 确认无调用方**
+- [x] **Step 1: 确认无调用方**
 
 Run: `cd /home/opensource/uapclaw-gateway && grep -rn "FormatNewEntities" --include="*.go" | grep -v "_test.go" | grep -v format.go | grep -v doc.go | grep -v "format_new_entities"`
 Expected: 仅在 extraction_prompts_test.go 的测试中引用 `formatNewEntities`（小写，是 extraction 包的函数），`entity_extraction.FormatNewEntities` 无外部调用方
 
-- [ ] **Step 2: 删除文件**
+- [x] **Step 2: 删除文件**
 
 ```bash
 rm internal/agentcore/memory/graph/extraction/prompts/entity_extraction/format.go
 rm internal/agentcore/memory/graph/extraction/prompts/entity_extraction/format_test.go
 ```
 
-- [ ] **Step 3: 更新 entity_extraction/doc.go**
+- [x] **Step 3: 更新 entity_extraction/doc.go**
 
 从：
 ```go
@@ -801,7 +801,7 @@ rm internal/agentcore/memory/graph/extraction/prompts/entity_extraction/format_t
 //	└── base.go      # 格式化辅助函数（FormatSchemaInfo/FormatSourceDescription/...）
 ```
 
-- [ ] **Step 4: 更新 prompts/doc.go**
+- [x] **Step 4: 更新 prompts/doc.go**
 
 从：
 ```go
@@ -816,12 +816,12 @@ rm internal/agentcore/memory/graph/extraction/prompts/entity_extraction/format_t
 //	    └── base.go           # 格式化辅助函数（FormatSchemaInfo/FormatSourceDescription/...）
 ```
 
-- [ ] **Step 5: 编译确认**
+- [x] **Step 5: 编译确认**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/memory/graph/extraction/...`
 Expected: 编译成功
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add -A internal/agentcore/memory/graph/extraction/prompts/entity_extraction/
@@ -839,7 +839,7 @@ format.go + format_test.go 是误加的函数，Python prompts/entity_extraction
 **Files:**
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`
 
-- [ ] **Step 1: 修改 Search 方法使用 errgroup**
+- [x] **Step 1: 修改 Search 方法使用 errgroup**
 
 在 `internal/agentcore/memory/graph/graph_memory/base.go` 中，找到 Search 方法的串行搜索部分：
 
@@ -925,17 +925,17 @@ format.go + format_test.go 是误加的函数，Python prompts/entity_extraction
 import "golang.org/x/sync/errgroup"
 ```
 
-- [ ] **Step 2: 编译确认**
+- [x] **Step 2: 编译确认**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/memory/graph/graph_memory/...`
 Expected: 编译成功
 
-- [ ] **Step 3: 运行测试确认无回归**
+- [x] **Step 3: 运行测试确认无回归**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/graph_memory/... -count=1`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/graph_memory/base.go
@@ -954,7 +954,7 @@ git commit -m "perf(graph_memory): Search 使用 errgroup 并发搜索三个集�
 - Modify: `internal/agentcore/memory/graph/graph_memory/validate_input.go`
 - Modify: `internal/agentcore/memory/graph/graph_memory/validate_input_test.go`
 
-- [ ] **Step 1: 修改 Search 签名**
+- [x] **Step 1: 修改 Search 签名**
 
 在 `internal/agentcore/memory/graph/graph_memory/base.go` 中，修改 `Search` 方法签名：
 
@@ -989,7 +989,7 @@ func (gm *GraphMemory) Search(ctx context.Context, query string, userIDs []strin
 
 然后将后续使用 `userIDs` 的地方改为 `validatedUserIDs`（3 个 performSearch 调用 + errgroup 中）。
 
-- [ ] **Step 2: 修改 ValidateSearchInput 签名**
+- [x] **Step 2: 修改 ValidateSearchInput 签名**
 
 在 `internal/agentcore/memory/graph/graph_memory/validate_input.go` 中：
 
@@ -1037,7 +1037,7 @@ func ValidateSearchInput(query string, userIDs []string, settings []bool) ([]str
 
 删除 `normalizeUserIDs` 函数。
 
-- [ ] **Step 3: 更新 validate_input_test.go**
+- [x] **Step 3: 更新 validate_input_test.go**
 
 将所有 `ValidateSearchInput` 调用中的 `userID` 参数从 `any` 改为 `[]string`：
 - `"user123"` → `[]string{"user123"}`
@@ -1048,17 +1048,17 @@ func ValidateSearchInput(query string, userIDs []string, settings []bool) ([]str
 删除 `TestNormalizeUserIDs_*` 系列测试（函数已删除）。
 删除 `TestValidateSearchInput_无效userID类型` 测试（Go 类型系统已保证不会传入非 string 类型）。
 
-- [ ] **Step 4: 编译确认**
+- [x] **Step 4: 编译确认**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/agentcore/memory/graph/graph_memory/...`
 Expected: 编译成功
 
-- [ ] **Step 5: 运行测试确认通过**
+- [x] **Step 5: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/graph_memory/... -count=1`
 Expected: PASS
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/agentcore/memory/graph/graph_memory/base.go internal/agentcore/memory/graph/graph_memory/validate_input.go internal/agentcore/memory/graph/graph_memory/validate_input_test.go
@@ -1075,22 +1075,22 @@ git commit -m "refactor(graph_memory): userID 参数类型从 any 改为 []strin
 **Files:**
 - 无新文件
 
-- [ ] **Step 1: 运行 extraction 全量测试**
+- [x] **Step 1: 运行 extraction 全量测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/extraction/... -count=1`
 Expected: PASS
 
-- [ ] **Step 2: 运行 graph_memory 全量测试**
+- [x] **Step 2: 运行 graph_memory 全量测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/memory/graph/graph_memory/... -count=1`
 Expected: PASS
 
-- [ ] **Step 3: 运行 graph store 全量测试**
+- [x] **Step 3: 运行 graph store 全量测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/foundation/store/graph/... -count=1`
 Expected: PASS
 
-- [ ] **Step 4: 推送所有提交**
+- [x] **Step 4: 推送所有提交**
 
 ```bash
 git push

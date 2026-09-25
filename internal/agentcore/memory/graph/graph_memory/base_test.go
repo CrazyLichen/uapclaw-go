@@ -262,8 +262,8 @@ func TestReplaceOneSideOfRelation_首次出现(t *testing.T) {
 
 	relation := graph.NewRelation()
 	relation.UUID = "rel-1"
-	relation.LHS = "src-entity"
-	relation.RHS = "other-entity"
+	relation.LHS = entityShell("src-entity")
+	relation.RHS = entityShell("other-entity")
 
 	ReplaceOneSideOfRelation("lhs", relation, "tgt-entity", entityRelationUpdates, state)
 
@@ -409,8 +409,8 @@ func TestParseRelationFilteringResult_延迟更新(t *testing.T) {
 	// 创建待过滤关系
 	rel := graph.NewRelation()
 	rel.UUID = "rel-1"
-	rel.LHS = "src-entity"
-	rel.RHS = "other-entity"
+	rel.LHS = entityShell("src-entity")
+	rel.RHS = entityShell("other-entity")
 
 	state.MergeInfos["entity-1"] = &EntityMerge{
 		Target:          entity1,
@@ -429,7 +429,7 @@ func TestParseRelationFilteringResult_延迟更新(t *testing.T) {
 	_ = gm.parseRelationFilteringResult(context.Background(), nil, state)
 
 	// 关系在 NewRelations 中，应更新端点
-	assert.Equal(t, "entity-1", rel.LHS)
+	assert.Equal(t, "entity-1", rel.LHSUUID())
 	// 应添加到 mem_update_skip_embed
 	assert.True(t, containsRelationPtr(state.MemUpdateSkipEmbed.UpdatedRelation, rel))
 }
@@ -445,8 +445,8 @@ func TestParseRelationFilteringResult_不在保留列表(t *testing.T) {
 
 	rel := graph.NewRelation()
 	rel.UUID = "rel-remove"
-	rel.LHS = "src-entity"
-	rel.RHS = "other-entity"
+	rel.LHS = entityShell("src-entity")
+	rel.RHS = entityShell("other-entity")
 
 	state.MergeInfos["entity-1"] = &EntityMerge{
 		Target:          entity1,
@@ -608,8 +608,8 @@ func TestStateLookupRelation(t *testing.T) {
 	rel := stateLookupRelation(r, "rel-1")
 	assert.NotNil(t, rel)
 	assert.Equal(t, "rel-1", rel.UUID)
-	assert.Equal(t, "entity-1", rel.LHS)
-	assert.Equal(t, "entity-2", rel.RHS)
+	assert.Equal(t, "entity-1", rel.LHSUUID())
+	assert.Equal(t, "entity-2", rel.RHSUUID())
 }
 
 // TestStateLookupEpisode 测试 stateLookupEpisode
@@ -809,8 +809,8 @@ func TestParseRelationFilteringResult_有过滤任务(t *testing.T) {
 
 	rel := graph.NewRelation()
 	rel.UUID = "rel-1"
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = entityShell("e1")
+	rel.RHS = entityShell("e2")
 	rel.Content = "test"
 
 	state.MergeInfos["e1"] = &EntityMerge{
@@ -844,8 +844,8 @@ func TestParseRelationFilteringResult_过滤任务失败(t *testing.T) {
 
 	rel := graph.NewRelation()
 	rel.UUID = "rel-1"
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = entityShell("e1")
+	rel.RHS = entityShell("e2")
 
 	state.MergeInfos["e1"] = &EntityMerge{
 		Target:          entity1,
@@ -1491,8 +1491,8 @@ func TestRelationFromMap(t *testing.T) {
 	assert.Equal(t, int64(3000), r.ValidUntil)
 	assert.Equal(t, int8(1), r.OffsetSince)
 	assert.Equal(t, int8(-1), r.OffsetUntil)
-	assert.Equal(t, "entity-1", r.LHS)
-	assert.Equal(t, "entity-2", r.RHS)
+	assert.Equal(t, "entity-1", r.LHSUUID())
+	assert.Equal(t, "entity-2", r.RHSUUID())
 }
 
 // TestEpisodeFromMap 测试 episodeFromMap
@@ -2030,8 +2030,8 @@ func TestProcessRelations_有删除关系(t *testing.T) {
 
 	rel := graph.NewRelation()
 	rel.UUID = "r-new"
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = entityShell("e1")
+	rel.RHS = entityShell("e2")
 	state.LookupTable.Entities["e1"] = entity
 
 	err := ProcessRelations(context.Background(), gm.DBBackend, []*graph.Entity{entity}, []*graph.Relation{rel}, state)
@@ -2322,8 +2322,8 @@ func TestHandleRelationDedupe_有嵌入结果(t *testing.T) {
 	gm.DBBackend = queryStore
 
 	rel := graph.NewRelation()
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = entityShell("e1")
+	rel.RHS = entityShell("e2")
 	rel.Content = "test"
 
 	err := gm.handleRelationDedupe(context.Background(), "user1", "content", []*graph.Relation{rel}, state)
@@ -2581,8 +2581,8 @@ func TestRelationDedupe_有搜索结果(t *testing.T) {
 	state.Strategy.RecallRelation.TopK = 5
 
 	rel := graph.NewRelation()
-	rel.LHS = "e1"
-	rel.RHS = "e2"
+	rel.LHS = entityShell("e1")
+	rel.RHS = entityShell("e2")
 	rel.Content = "test content"
 
 	embedResults := [][]float64{{0.1, 0.2}}
@@ -2597,8 +2597,8 @@ func TestRelationDedupe_无LHS(t *testing.T) {
 	state := NewGraphMemState()
 
 	rel := graph.NewRelation()
-	rel.LHS = ""
-	rel.RHS = "e2"
+	rel.LHS = nil
+	rel.RHS = entityShell("e2")
 
 	embedResults := [][]float64{{0.1, 0.2}}
 

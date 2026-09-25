@@ -67,10 +67,11 @@ type Relation struct {
 	OffsetSince int8 `json:"offset_since"`
 	// OffsetUntil 终止时区偏移（15分钟为单位）
 	OffsetUntil int8 `json:"offset_until"`
-	// LHS 左侧实体UUID
-	LHS string `json:"lhs"`
-	// RHS 右侧实体UUID
-	RHS string `json:"rhs"`
+	// LHS 左侧实体（对齐 Python: lhs: BaseGraphObject | str）
+	// json:"-" 不直接序列化，ToMap 输出 UUID 字符串
+	LHS *Entity `json:"-"`
+	// RHS 右侧实体
+	RHS *Entity `json:"-"`
 }
 
 // Episode 片段（对话片段）
@@ -207,8 +208,8 @@ func (r *Relation) EmbedTasks() []EmbedTask {
 // ToMap 序列化 Relation
 func (r *Relation) ToMap() map[string]any {
 	m := r.NamedGraphObject.ToMap()
-	m["lhs"] = r.LHS
-	m["rhs"] = r.RHS
+	m["lhs"] = r.LHSUUID()
+	m["rhs"] = r.RHSUUID()
 	m["valid_since"] = r.ValidSince
 	m["valid_until"] = r.ValidUntil
 	m["offset_since"] = r.OffsetSince
@@ -216,8 +217,35 @@ func (r *Relation) ToMap() map[string]any {
 	return m
 }
 
+// LHSUUID 返回左侧实体 UUID
+// 对齐 Python: isinstance(relation.lhs, BaseGraphObject) ? relation.lhs.uuid : relation.lhs
+func (r *Relation) LHSUUID() string {
+	if r.LHS != nil {
+		return r.LHS.UUID
+	}
+	return ""
+}
+
+// RHSUUID 返回右侧实体 UUID
+// 对齐 Python: isinstance(relation.rhs, BaseGraphObject) ? relation.rhs.uuid : relation.rhs
+func (r *Relation) RHSUUID() string {
+	if r.RHS != nil {
+		return r.RHS.UUID
+	}
+	return ""
+}
+
 // UpdateConnectedEntities 将自身 UUID 添加到 lhs/rhs 实体的 Relations 中
+// 对齐 Python: relation.update_connected_entities()
+// Python 中 lhs/rhs 是 BaseGraphObject | str，只有是 BaseGraphObject 时才添加引用
 func (r *Relation) UpdateConnectedEntities(lhs, rhs *Entity) {
+	// 优先使用关系自身持有的 LHS/RHS 实体引用（对齐 Python: connected_node = getattr(self, field_name)）
+	if r.LHS != nil {
+		lhs = r.LHS
+	}
+	if r.RHS != nil {
+		rhs = r.RHS
+	}
 	if lhs != nil {
 		for _, rel := range lhs.Relations {
 			if rel == r.UUID {

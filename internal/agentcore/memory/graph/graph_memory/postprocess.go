@@ -142,10 +142,12 @@ func ProcessRelations(ctx context.Context, database graph.BaseGraphStore, entiti
 	}
 
 	// 处理关系：更新关联实体 + 累积到 mem_update
+	// 对齐 Python: relation.update_connected_entities()
+	// LHS/RHS 已持有 *Entity 引用，UpdateConnectedEntities 优先使用关系自身的引用
 	for _, relation := range relations {
 		relation.UpdateConnectedEntities(
-			state.LookupTable.Entities[relation.LHS],
-			state.LookupTable.Entities[relation.RHS],
+			state.LookupTable.Entities[relation.LHSUUID()],
+			state.LookupTable.Entities[relation.RHSUUID()],
 		)
 		state.MemUpdate.AddedRelation = append(state.MemUpdate.AddedRelation, relation)
 		toResolve = append(toResolve, relation.UUID)

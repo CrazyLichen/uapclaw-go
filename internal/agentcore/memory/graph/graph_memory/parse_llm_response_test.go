@@ -90,11 +90,11 @@ func TestDict2Relation_有效输入(t *testing.T) {
 	if rel.ObjType != "Relation" {
 		t.Fatalf("期望 obj_type=Relation，得到 %s", rel.ObjType)
 	}
-	if rel.LHS != e1.UUID {
-		t.Fatalf("期望 LHS=%s，得到 %s", e1.UUID, rel.LHS)
+	if rel.LHSUUID() != e1.UUID {
+		t.Fatalf("期望 LHS=%s，得到 %s", e1.UUID, rel.LHSUUID())
 	}
-	if rel.RHS != e2.UUID {
-		t.Fatalf("期望 RHS=%s，得到 %s", e2.UUID, rel.RHS)
+	if rel.RHSUUID() != e2.UUID {
+		t.Fatalf("期望 RHS=%s，得到 %s", e2.UUID, rel.RHSUUID())
 	}
 }
 

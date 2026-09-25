@@ -163,8 +163,8 @@ func TestGraphWriter_AddRelation_基本写入(t *testing.T) {
 
 	r := graph.NewRelation()
 	r.Content = "测试关系"
-	r.LHS = "entity1"
-	r.RHS = "entity2"
+	r.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "entity1"}}}
+	r.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "entity2"}}}
 
 	ctx := context.Background()
 	err := w.addRelation(ctx, []*graph.Relation{r}, graph.WithNoEmbed(true))

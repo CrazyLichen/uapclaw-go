@@ -577,8 +577,8 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 	// 分类需要保留和移除的关系
 	for _, mergeInfo := range state.MergeInfos {
 		for _, relation := range mergeInfo.NewRelations {
-			lhsUUID := relation.LHS
-			rhsUUID := relation.RHS
+			lhsUUID := relation.LHSUUID()
+			rhsUUID := relation.RHSUUID()
 			if lhsUUID != rhsUUID {
 				mergeInfo.RelationsToKeep[relation.UUID] = struct{}{}
 			} else {
@@ -596,13 +596,12 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 		relation.Language = state.Prompting.Language
 		if strings.TrimSpace(relation.Content) == "" {
 			state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: relation.UUID, ObjType: "Relation"})
-		} else if relation.LHS == relation.RHS {
+		} else if relation.LHSUUID() == relation.RHSUUID() {
 			// 自指向关系：将关系内容追加到实体 content
-			// Python 中 relation.lhs 是 Entity 对象，Go 中 LHS 是 UUID 字符串，
-			// 需要通过 RetrievedEntities 查找对应实体
-			if entity, ok := state.RetrievedEntities[relation.LHS]; ok {
-				content := strings.TrimSuffix(entity.Content, "\n")
-				entity.Content = fmt.Sprintf("%s\n- %s", content, relation.Content)
+			// 对齐 Python: relation.lhs 是 Entity 对象，直接访问
+			if relation.LHS != nil {
+				content := strings.TrimSuffix(relation.LHS.Content, "\n")
+				relation.LHS.Content = fmt.Sprintf("%s\n- %s", content, relation.Content)
 			}
 			state.ToRemove = append(state.ToRemove, toRemoveItem{UUID: relation.UUID, ObjType: "Relation"})
 		} else {
@@ -737,12 +736,14 @@ func relationFromMap(input map[string]any) *graph.Relation {
 	if v, ok := toInt8(input["offset_until"]); ok {
 		r.OffsetUntil = v
 	}
-	// lhs/rhs 在 Python 中可以是 Entity 对象或字符串，Go 统一为字符串 UUID
-	if v, ok := input["lhs"].(string); ok {
-		r.LHS = v
+	// lhs/rhs 反序列化：构造 *Entity 空壳（仅填 UUID），对齐 Python: lhs: BaseGraphObject | str
+	if v, ok := input["lhs"].(string); ok && v != "" {
+		r.LHS = &graph.Entity{}
+		r.LHS.UUID = v
 	}
-	if v, ok := input["rhs"].(string); ok {
-		r.RHS = v
+	if v, ok := input["rhs"].(string); ok && v != "" {
+		r.RHS = &graph.Entity{}
+		r.RHS.UUID = v
 	}
 	return r
 }

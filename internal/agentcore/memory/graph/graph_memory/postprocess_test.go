@@ -264,8 +264,8 @@ func TestProcessRelations_移除废弃关系(t *testing.T) {
 
 	// 准备新关系
 	newRel := graph.NewRelation()
-	newRel.LHS = entity1.UUID
-	newRel.RHS = entity1.UUID
+	newRel.LHS = entity1
+	newRel.RHS = entity1
 	relations := []*graph.Relation{newRel}
 
 	err := ProcessRelations(context.Background(), &mockGraphStore{}, entities, relations, state)

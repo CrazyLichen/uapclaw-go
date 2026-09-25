@@ -296,8 +296,8 @@ func TestMilvusGraphStore_AddRelation(t *testing.T) {
 	ctx := context.Background()
 	r := graph.NewRelation()
 	r.Content = "测试关系"
-	r.LHS = "e1"
-	r.RHS = "e2"
+	r.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "e1"}}}
+	r.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "e2"}}}
 
 	err := s.AddRelation(ctx, []*graph.Relation{r}, graph.WithNoEmbed(true))
 	if err != nil {

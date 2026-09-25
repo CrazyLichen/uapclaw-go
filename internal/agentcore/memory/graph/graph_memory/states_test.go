@@ -19,6 +19,19 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// entityShell 构造仅含 UUID 的 Entity 空壳（测试辅助）
+func entityShell(uuid string) *graph.Entity {
+	return &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: uuid}}}
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // TestLookupTables_GetEntity 测试 LookupTables.GetEntity 去重逻辑
 func TestLookupTables_GetEntity(t *testing.T) {
 	lt := NewLookupTables()
@@ -409,18 +422,18 @@ func TestClassifyRelationsExtracted(t *testing.T) {
 
 	// 构造测试关系
 	rel1 := graph.NewRelation()
-	rel1.LHS = "entity-1"
-	rel1.RHS = "entity-2"
+	rel1.LHS = entityShell("entity-1")
+	rel1.RHS = entityShell("entity-2")
 	rel1.Content = "正常关系"
 
 	rel2 := graph.NewRelation()
-	rel2.LHS = "entity-1"
-	rel2.RHS = "entity-1"
+	rel2.LHS = entity1 // 自指向关系，LHS 指向有 Content 的实体
+	rel2.RHS = entity1
 	rel2.Content = "自指向事实"
 
 	rel3 := graph.NewRelation()
-	rel3.LHS = "entity-2"
-	rel3.RHS = "entity-1"
+	rel3.LHS = entityShell("entity-2")
+	rel3.RHS = entityShell("entity-1")
 	rel3.Content = "" // 空内容
 
 	relations := []*graph.Relation{rel1, rel2, rel3}
@@ -476,13 +489,13 @@ func TestClassifyRelationsExtracted_MergeInfo(t *testing.T) {
 
 	// lhs != rhs 的关系 → relations_to_keep
 	relKeep := graph.NewRelation()
-	relKeep.LHS = "entity-1"
-	relKeep.RHS = "entity-2"
+	relKeep.LHS = entityShell("entity-1")
+	relKeep.RHS = entityShell("entity-2")
 
 	// lhs == rhs 的关系 → removed_relation
 	relRemove := graph.NewRelation()
-	relRemove.LHS = "entity-1"
-	relRemove.RHS = "entity-1"
+	relRemove.LHS = entityShell("entity-1")
+	relRemove.RHS = entityShell("entity-1")
 
 	state.MergeInfos["m1"] = &EntityMerge{
 		Target:          entity1,
