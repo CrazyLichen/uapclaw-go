@@ -228,8 +228,8 @@ func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// formatTrajectory 将消息列表格式化为轨迹文本。对齐 Python format_trajectory()。
-func formatTrajectory(messages []Message) string {
+// FormatTrajectory 将消息列表格式化为轨迹文本。对齐 Python format_trajectory()。
+func FormatTrajectory(messages []Message) string {
 	var transcript []string
 
 	for _, msg := range messages {

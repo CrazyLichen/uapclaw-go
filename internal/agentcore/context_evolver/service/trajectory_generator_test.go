@@ -64,7 +64,7 @@ func TestFormatTrajectory_正常格式化(t *testing.T) {
 		{Role: "assistant", Content: "The answer is 4."},
 	}
 
-	result := formatTrajectory(messages)
+	result := FormatTrajectory(messages)
 
 	expected := []string{
 		"USER: What is 2+2?",
@@ -85,7 +85,7 @@ func TestFormatTrajectory_去除记忆注入块(t *testing.T) {
 		{Role: "user", Content: "Question: What is Go?\nSome Related Experience to help you complete the task\nExperience1\nExperience2"},
 	}
 
-	result := formatTrajectory(messages)
+	result := FormatTrajectory(messages)
 
 	if strings.Contains(result, "Some Related Experience") {
 		t.Error("应去除记忆注入块")
@@ -100,7 +100,7 @@ func TestFormatTrajectory_去除Task前缀(t *testing.T) {
 		{Role: "user", Content: "Task:\nFind the bug in the code."},
 	}
 
-	result := formatTrajectory(messages)
+	result := FormatTrajectory(messages)
 
 	if strings.Contains(result, "Task:") {
 		t.Error("应去除 Task: 前缀")

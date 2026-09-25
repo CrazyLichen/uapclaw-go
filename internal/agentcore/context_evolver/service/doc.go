@@ -12,7 +12,7 @@
 //	├── llm_wrapper.go             # OpenAILLMWrapper — BaseModelClient 适配，支持 ceconfig APIKey 兜底
 //	├── embedding_wrapper.go       # OpenAIEmbeddingWrapper — BaseEmbedding 适配，支持 ceconfig APIKey 兜底
 //	├── task_memory_service.go     # TaskMemoryService 核心编排器 + 结果 struct + ceconfig 运行时参数
-//	└── trajectory_generator.go    # 轨迹生成和 MaTTS 试验函数
+//	└── trajectory_generator.go    # EvaluateTrial / RunTrials / SummarizeTrajectories / FormatTrajectory 轨迹生成和 MaTTS 试验函数
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/service/
 package service
