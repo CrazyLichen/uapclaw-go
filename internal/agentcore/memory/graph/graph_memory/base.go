@@ -1131,6 +1131,26 @@ func (gm *GraphMemory) extractEntityDeclarations(ctx context.Context, srcType co
 		noExistingEntity = isEmpty
 	}
 
+	// 异步嵌入实体名称（对齐 Python: state.tasks.append(asyncio.create_task(self.embedder.embed_documents(...)))）
+	// 与关系抽取 LLM 调用并行执行
+	if !noExistingEntity && len(declarations) > 0 {
+		names := make([]string, len(declarations))
+		for i, ent := range declarations {
+			names[i] = ent.Name
+		}
+		embedCh := make(embedTask, 1)
+		embedder := gm.Embedder()
+		go func() {
+			if embedder == nil {
+				embedCh <- embedResult{Err: fmt.Errorf("embedder not available")}
+				return
+			}
+			embeddings, embedErr := embedder.EmbedDocuments(ctx, names, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
+			embedCh <- embedResult{Embeddings: embeddings, Err: embedErr}
+		}()
+		state.EmbedTask = embedCh
+	}
+
 	return noExistingEntity, declarations, nil
 }
 
@@ -1142,25 +1162,36 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 		return nil
 	}
 
-	// 嵌入实体名称
-	extractedEntityNames := make([]string, len(extractedDeclarations))
-	for i, ent := range extractedDeclarations {
-		extractedEntityNames[i] = ent.Name
-	}
-
-	if len(extractedEntityNames) == 0 {
-		return nil
-	}
-
-	embedder := gm.Embedder()
-	if embedder == nil {
-		return nil
-	}
-
-	entityEmbedResults, err := embedder.EmbedDocuments(ctx, extractedEntityNames, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("Graph Memory: entity name embedding failed")
-		return nil
+	// 等待嵌入任务完成（对齐 Python: entity_embed_results = await state.tasks.pop(-2)）
+	// Python 中嵌入任务在 _extract_entity_declarations 中通过 asyncio.create_task 发起
+	var entityEmbedResults [][]float64
+	if state.EmbedTask != nil {
+		embedResults, embedErr := state.EmbedTask.Wait()
+		state.EmbedTask = nil
+		if embedErr != nil {
+			logger.Warn(logComponent).Err(embedErr).Msg("Graph Memory: entity name embedding failed")
+			return nil
+		}
+		entityEmbedResults = embedResults
+	} else {
+		// 降级：嵌入任务未启动时同步嵌入
+		names := make([]string, len(extractedDeclarations))
+		for i, ent := range extractedDeclarations {
+			names[i] = ent.Name
+		}
+		if len(names) == 0 {
+			return nil
+		}
+		embedder := gm.Embedder()
+		if embedder == nil {
+			return nil
+		}
+		var err error
+		entityEmbedResults, err = embedder.EmbedDocuments(ctx, names, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: entity name embedding failed")
+			return nil
+		}
 	}
 
 	for i, ent := range extractedDeclarations {
@@ -1369,19 +1400,14 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 			state.MergingTasksEntities[task] = pair.Target
 		}
 
-		// 再处理非阻塞任务（对齐 Python: for tgt, prompt_entity_merge in non_blocking_tasks）
+		// 再处理非阻塞任务（对齐 Python: for tgt, prompt_entity_merge in non_blocking_tasks: asyncio.create_task(...)）
 		for _, pair := range nonBlockingTasks {
 			kwargs, tmpl, outputModel := extraction.MergeExistingEntities(
 				pair.Target, pair.Sources, state.Prompting.Language, state.Extras, 2,
 			)
-			response, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("entity", pair.Target.Name).Msg("Graph Memory: entity merge LLM failed")
-				continue
-			}
-			// 构造已完成的 asyncTask（同步调用已完成，直接写入结果）
-			mergeTask := make(asyncTask, 1)
-			mergeTask <- asyncResult{Content: assistantContent(response)}
+			// 对齐 Python: task = asyncio.create_task(self._invoke_llm(*prompt_entity_merge))
+			// 非阻塞任务并发发起，与阻塞任务并行执行
+			mergeTask := gm.invokeLLMAsync(ctx, kwargs, tmpl, outputModel)
 			state.MergingTasks = append(state.MergingTasks, mergeTask)
 			state.MergingTasksEntities[mergeTask] = pair.Target
 		}

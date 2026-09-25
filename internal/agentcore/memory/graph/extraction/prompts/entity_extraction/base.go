@@ -133,7 +133,11 @@ func FormatExistingRelations(relations []map[string]any, startIdx int, includeTi
 // Python: ensure_valid_language(language, max_len)
 func EnsureValidLanguage(language string, maxLen int) (string, error) {
 	if language == "" {
-		return "", fmt.Errorf("语言选项不能为空")
+		return "", exception.BuildError(
+			exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", "graph memory"),
+			exception.WithParam("error_msg", "语言选项不能为空"),
+		)
 	}
 	if _, ok := registry.RegisteredLanguage[language]; !ok {
 		registered := make([]string, 0, len(registry.RegisteredLanguage))
@@ -147,7 +151,11 @@ func EnsureValidLanguage(language string, maxLen int) (string, error) {
 		)
 	}
 	if len(language) > maxLen {
-		return "", fmt.Errorf("语言 \"%s\" 超过数据库配置的最大长度限制 (%d)", language, maxLen)
+		return "", exception.BuildError(
+			exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", "graph memory"),
+			exception.WithParam("error_msg", fmt.Sprintf("语言 \"%s\" 超过数据库配置的最大长度限制 (%d)", language, maxLen)),
+		)
 	}
 	return language, nil
 }

@@ -140,6 +140,25 @@ func (t asyncTask) Wait() (string, error) {
 	return result.Content, result.Err
 }
 
+// embedResult 实体名称嵌入结果
+type embedResult struct {
+	// Embeddings 嵌入向量列表（对齐 Python: embedder.embed_documents 返回值）
+	Embeddings [][]float64
+	// Err 调用错误
+	Err error
+}
+
+// embedTask 实体名称嵌入任务，通过 channel 传递结果
+// 对齐 Python: asyncio.create_task(self.embedder.embed_documents(...)) 返回的 Future
+type embedTask chan embedResult
+
+// Wait 阻塞等待嵌入任务完成，返回结果
+// 对齐 Python: await embed_task
+func (t embedTask) Wait() ([][]float64, error) {
+	result := <-t
+	return result.Embeddings, result.Err
+}
+
 // pendingMergeTask 待合并的阻塞任务
 //
 // Python: state.pending_merge[tgt.uuid] = task
@@ -175,6 +194,10 @@ type GraphMemState struct {
 	PendingMerge            map[string]*pendingMergeTask
 	RelationDeferredUpdates map[string][]deferredRelationUpdate
 	RelationFilterTasks     map[asyncTask]*relationFilterTaskItem
+
+	// 嵌入任务（对齐 Python: state.tasks.append(asyncio.create_task(self.embedder.embed_documents(...)))）
+	// Python 中嵌入任务存放在 state.tasks 中，Go 中因类型不同（[][]float64 vs string）单独存储
+	EmbedTask embedTask
 
 	// 通用临时缓冲区
 	ToRemove  map[string]*graph.Relation

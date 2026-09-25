@@ -772,6 +772,24 @@ func TestAsyncTask(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestEmbedTask 测试 embedTask 结构体
+func TestEmbedTask(t *testing.T) {
+	// 测试正常嵌入结果
+	ch := make(embedTask, 1)
+	expected := [][]float64{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}}
+	ch <- embedResult{Embeddings: expected}
+	embeddings, err := ch.Wait()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, embeddings)
+
+	// 测试错误场景
+	chErr := make(embedTask, 1)
+	chErr <- embedResult{Err: fmt.Errorf("embedding failed")}
+	embeddings, err = chErr.Wait()
+	assert.Error(t, err)
+	assert.Nil(t, embeddings)
+}
+
 // TestPendingMergeTask 测试 pendingMergeTask 结构体
 func TestPendingMergeTask(t *testing.T) {
 	pendingDone := make(chan struct{})
