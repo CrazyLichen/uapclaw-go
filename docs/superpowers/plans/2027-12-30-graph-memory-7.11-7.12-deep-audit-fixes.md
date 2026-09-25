@@ -1,6 +1,6 @@
 # 7.11+7.12 Python 对齐度深度审查修复 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 修复 Go 实现中与 Python 源码的 30 项对齐偏差，确保 GraphMemory + Graph Extraction 功能正确性
 
@@ -18,7 +18,7 @@
 - Modify: `internal/agentcore/foundation/store/graph/graph_object.go:219-238`（Relation.UpdateConnectedEntities）
 - Test: `internal/agentcore/foundation/store/graph/graph_object_test.go`
 
-- [ ] **Step 1: 写 Relation.LHS/RHS 改为 *Entity 的测试**
+- [x] **Step 1: 写 Relation.LHS/RHS 改为 *Entity 的测试**
 
 在 `graph_object_test.go` 中新增测试：
 ```go
@@ -74,11 +74,11 @@ func TestRelation_LHS_RHS_Nil(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && pgrep -f 'go (build|test)' | xargs -r kill 2>/dev/null; sleep 1; GOPROXY=https://goproxy.cn,direct go test ./internal/agentcore/foundation/store/graph/... -run TestRelation_LHS_RHS -v -count=1`
 
-- [ ] **Step 3: 修改 Relation 结构体**
+- [x] **Step 3: 修改 Relation 结构体**
 
 在 `graph_object.go` 第 59-74 行，将 `LHS string` 和 `RHS string` 改为 `*Entity`：
 ```go
@@ -95,7 +95,7 @@ type Relation struct {
 }
 ```
 
-- [ ] **Step 4: 添加 LHSUUID/RHSUUID 辅助方法**
+- [x] **Step 4: 添加 LHSUUID/RHSUUID 辅助方法**
 
 在 `graph_object.go` 的导出函数区块新增：
 ```go
@@ -116,7 +116,7 @@ func (r *Relation) RHSUUID() string {
 }
 ```
 
-- [ ] **Step 5: 修改 Relation.ToMap 输出 UUID 字符串**
+- [x] **Step 5: 修改 Relation.ToMap 输出 UUID 字符串**
 
 在 `graph_object.go` 第 207-217 行，将 ToMap 中的 lhs/rhs 改为从 *Entity 取 UUID：
 ```go
@@ -140,22 +140,22 @@ func (r *Relation) ToMap() map[string]any {
 }
 ```
 
-- [ ] **Step 6: 修改 UpdateConnectedEntities 签名不变，实现适配**
+- [x] **Step 6: 修改 UpdateConnectedEntities 签名不变，实现适配**
 
 `UpdateConnectedEntities(lhs, rhs *Entity)` 签名不变，因为参数已经是 `*Entity`。但需确认调用方传入的参数类型正确。
 
-- [ ] **Step 7: 修改 NewRelation 默认值**
+- [x] **Step 7: 修改 NewRelation 默认值**
 
 确保 `NewRelation()` 不再初始化 LHS/RHS 为空字符串（零值 nil 即可）。
 
-- [ ] **Step 8: 修复 graph_memory 包中所有访问 relation.LHS/relation.RHS 的地方**
+- [x] **Step 8: 修复 graph_memory 包中所有访问 relation.LHS/relation.RHS 的地方**
 
 在 `graph_memory/` 所有文件中将 `relation.LHS`（原为 string）改为 `relation.LHSUUID()` 或 `relation.LHS.UUID`（根据上下文）。需要逐一替换：
 - 字符串比较场景 → `relation.LHSUUID()`
 - 需要访问 Entity 内容 → `relation.LHS.Content` 等
 - 赋值场景 → `relation.LHS = entityPtr`
 
-- [ ] **Step 9: 修复 Milvus 反序列化**
+- [x] **Step 9: 修复 Milvus 反序列化**
 
 在 Milvus 图存储的反序列化代码中，将读取到的 `lhs`/`rhs` UUID 字符串构造为 `*Entity` 空壳：
 ```go
@@ -172,11 +172,11 @@ if rhsUUID != "" {
 }
 ```
 
-- [ ] **Step 10: 运行测试确认通过**
+- [x] **Step 10: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && GOPROXY=https://goproxy.cn,direct go test ./internal/agentcore/foundation/store/graph/... ./internal/agentcore/memory/graph/... -v -count=1 2>&1 | tail -50`
 
-- [ ] **Step 11: 提交**
+- [x] **Step 11: 提交**
 
 ```bash
 git add -A && git commit -m "fix(S6): Relation.LHS/RHS 改为 *Entity 对齐 Python BaseGraphObject | str
@@ -197,7 +197,7 @@ git add -A && git commit -m "fix(S6): Relation.LHS/RHS 改为 *Entity 对齐 Pyt
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`（所有 state.Tasks 消费处）
 - Test: `internal/agentcore/memory/graph/graph_memory/states_test.go`
 
-- [ ] **Step 1: 写 asyncTask channel 化的测试**
+- [x] **Step 1: 写 asyncTask channel 化的测试**
 
 ```go
 func TestAsyncTask_Wait(t *testing.T) {
@@ -230,9 +230,9 @@ func TestAsyncTask_Wait_Error(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
-- [ ] **Step 3: 修改 states.go 中 asyncTask 类型**
+- [x] **Step 3: 修改 states.go 中 asyncTask 类型**
 
 ```go
 // asyncResult 异步 LLM 调用结果
@@ -257,7 +257,7 @@ func (t asyncTask) Wait() (string, error) {
 
 删除旧的 `asyncTask` struct 定义和 `Wait()` 方法。
 
-- [ ] **Step 4: 修改 invokeLLMAsync**
+- [x] **Step 4: 修改 invokeLLMAsync**
 
 ```go
 func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) asyncTask {
@@ -270,13 +270,13 @@ func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any
 }
 ```
 
-- [ ] **Step 5: 修改所有 state.Tasks 消费处**
+- [x] **Step 5: 修改所有 state.Tasks 消费处**
 
 将 `state.Tasks[i].Result` / `state.Tasks[i].Err` 改为 `state.Tasks[i].Wait()`。
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add -A && git commit -m "fix(S1): asyncTask channel 化，对齐 Python await Future 语义
@@ -297,7 +297,7 @@ git add -A && git commit -m "fix(S1): asyncTask channel 化，对齐 Python awai
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go:136-140,231`（metricIsSim）
 - Test: `internal/agentcore/foundation/store/graph/base_test.go`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```go
 // mockGraphStoreForSim 用于测试 ReturnSimilarityScore
@@ -308,7 +308,7 @@ type mockGraphStoreForSim struct {
 func (m *mockGraphStoreForSim) ReturnSimilarityScore() bool { return m.simScore }
 ```
 
-- [ ] **Step 2: 在 BaseGraphStore 接口加 ReturnSimilarityScore**
+- [x] **Step 2: 在 BaseGraphStore 接口加 ReturnSimilarityScore**
 
 ```go
 type BaseGraphStore interface {
@@ -319,11 +319,11 @@ type BaseGraphStore interface {
 }
 ```
 
-- [ ] **Step 3: Milvus 实现 ReturnSimilarityScore 返回 true**
+- [x] **Step 3: Milvus 实现 ReturnSimilarityScore 返回 true**
 
-- [ ] **Step 4: 其他后端根据 DistanceMetric 推导**
+- [x] **Step 4: 其他后端根据 DistanceMetric 推导**
 
-- [ ] **Step 5: 修改 GraphMemory 构造函数**
+- [x] **Step 5: 修改 GraphMemory 构造函数**
 
 ```go
 // 当前：
@@ -332,9 +332,9 @@ metricIsSim: false,
 metricIsSim: dbBackend.ReturnSimilarityScore(),
 ```
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ---
 
@@ -345,9 +345,9 @@ metricIsSim: dbBackend.ReturnSimilarityScore(),
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`（所有读写 ToRemove 处）
 - Test: `internal/agentcore/memory/graph/graph_memory/base_test.go`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
-- [ ] **Step 2: 修改 GraphMemState.ToRemove 类型**
+- [x] **Step 2: 修改 GraphMemState.ToRemove 类型**
 
 ```go
 // 当前：
@@ -356,11 +356,11 @@ ToRemove map[string]struct{}
 ToRemove map[string]*graph.Relation
 ```
 
-- [ ] **Step 3: 修改所有写入 ToRemove 处**
+- [x] **Step 3: 修改所有写入 ToRemove 处**
 
 `ToRemove[uuid] = struct{}{}` → `ToRemove[uuid] = relation`
 
-- [ ] **Step 4: 修改 updateEntitiesForRelationRemoval**
+- [x] **Step 4: 修改 updateEntitiesForRelationRemoval**
 
 ```go
 for _, relation := range state.ToRemove {
@@ -373,13 +373,13 @@ for _, relation := range state.ToRemove {
 }
 ```
 
-- [ ] **Step 5: 修改所有读取 ToRemove 处**
+- [x] **Step 5: 修改所有读取 ToRemove 处**
 
 遍历从 `for uuid := range state.ToRemove` 改为 `for _, relation := range state.ToRemove`
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ---
 
@@ -391,7 +391,7 @@ for _, relation := range state.ToRemove {
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`（entityMerge 消费处）
 - Test: `internal/agentcore/memory/graph/graph_memory/parse_llm_response_test.go`
 
-- [ ] **Step 1: 定义 EntityOrDeclaration 结构体**
+- [x] **Step 1: 定义 EntityOrDeclaration 结构体**
 
 在 `parse_llm_response.go` 结构体区块新增：
 ```go
@@ -429,19 +429,19 @@ func (e EntityOrDeclaration) EntityTypeID() int {
 }
 ```
 
-- [ ] **Step 2: 修改 ResolveEntities 返回 []EntityOrDeclaration**
+- [x] **Step 2: 修改 ResolveEntities 返回 []EntityOrDeclaration**
 
-- [ ] **Step 3: 修改 DeclareEntities 接收 []EntityOrDeclaration**
+- [x] **Step 3: 修改 DeclareEntities 接收 []EntityOrDeclaration**
 
-- [ ] **Step 4: 修改 Dict2Relation entities 参数为 []EntityOrDeclaration**
+- [x] **Step 4: 修改 Dict2Relation entities 参数为 []EntityOrDeclaration**
 
-- [ ] **Step 5: 修改 ParseAllRelations entities 参数**
+- [x] **Step 5: 修改 ParseAllRelations entities 参数**
 
-- [ ] **Step 6: 修改 base.go 中 entityMerge 的 resolved 消费**
+- [x] **Step 6: 修改 base.go 中 entityMerge 的 resolved 消费**
 
-- [ ] **Step 7: 运行测试**
+- [x] **Step 7: 运行测试**
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ---
 
@@ -452,21 +452,21 @@ func (e EntityOrDeclaration) EntityTypeID() int {
 - Modify: `internal/agentcore/memory/graph/graph_memory/parse_llm_response.go:157-198`（ParseAllRelations）
 - Test: `internal/agentcore/memory/graph/graph_memory/parse_llm_response_test.go`
 
-- [ ] **Step 1: 修改 Dict2Relation 签名加 createdAt/userID**
+- [x] **Step 1: 修改 Dict2Relation 签名加 createdAt/userID**
 
 ```go
 func Dict2Relation(response map[string]any, entities []EntityOrDeclaration, createdAt int64, userID string) *graph.Relation
 ```
 
-- [ ] **Step 2: 在 Dict2Relation 内部设置 Relation 的 CreatedAt 和 UserID**
+- [x] **Step 2: 在 Dict2Relation 内部设置 Relation 的 CreatedAt 和 UserID**
 
-- [ ] **Step 3: 修改 ParseAllRelations 签名加 createdAt/userID 并传递给 Dict2Relation**
+- [x] **Step 3: 修改 ParseAllRelations 签名加 createdAt/userID 并传递给 Dict2Relation**
 
-- [ ] **Step 4: 修改调用方传入 state.CurrentTimestamp 和 userID**
+- [x] **Step 4: 修改调用方传入 state.CurrentTimestamp 和 userID**
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ---
 
@@ -477,7 +477,7 @@ func Dict2Relation(response map[string]any, entities []EntityOrDeclaration, crea
 - Modify: `internal/agentcore/memory/graph/extraction/extraction_prompts.go:523-542`（multilingualResponseFormat）
 - Test: `internal/agentcore/memory/graph/extraction/base_test.go`
 
-- [ ] **Step 1: 修改 StrictSchemaEnforce 去掉 len(props)>0 条件**
+- [x] **Step 1: 修改 StrictSchemaEnforce 去掉 len(props)>0 条件**
 
 ```go
 // 当前：
@@ -486,7 +486,7 @@ if props, ok := node["properties"].(map[string]any); ok && len(props) > 0 {
 if props, ok := node["properties"].(map[string]any); ok {
 ```
 
-- [ ] **Step 2: 在 multilingualResponseFormat 中加 StrictSchemaEnforce 调用**
+- [x] **Step 2: 在 multilingualResponseFormat 中加 StrictSchemaEnforce 调用**
 
 ```go
 func multilingualResponseFormat(modelType reflect.Type, language string) map[string]any {
@@ -498,9 +498,9 @@ func multilingualResponseFormat(modelType reflect.Type, language string) map[str
 }
 ```
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ---
 
@@ -511,7 +511,7 @@ func multilingualResponseFormat(modelType reflect.Type, language string) map[str
 - Modify: `internal/agentcore/memory/graph/extraction/entity_type_definition.go:16-41`
 - Test: `internal/agentcore/memory/graph/extraction/registry/` (新增测试)
 
-- [ ] **Step 1: 在 registry/entity_type_definition.go 新增 EntityDefAttr**
+- [x] **Step 1: 在 registry/entity_type_definition.go 新增 EntityDefAttr**
 
 ```go
 // EntityDefAttr 实体定义属性模板
@@ -525,7 +525,7 @@ type EntityDefAttr struct {
 var DefaultEntityDefAttr = &EntityDefAttr{Content: ""}
 ```
 
-- [ ] **Step 2: EntityDef 加 Attributes 字段**
+- [x] **Step 2: EntityDef 加 Attributes 字段**
 
 ```go
 type EntityDef struct {
@@ -536,13 +536,13 @@ type EntityDef struct {
 }
 ```
 
-- [ ] **Step 3: DefaultEntity/HumanEntity/AIEntity 设置 Attributes**
+- [x] **Step 3: DefaultEntity/HumanEntity/AIEntity 设置 Attributes**
 
-- [ ] **Step 4: entity_type_definition.go re-export EntityDefAttr**
+- [x] **Step 4: entity_type_definition.go re-export EntityDefAttr**
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ---
 
@@ -552,9 +552,9 @@ type EntityDef struct {
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base.go:76-92`
 - Test: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base_test.go`
 
-- [ ] **Step 1: 写测试验证动态替换**
+- [x] **Step 1: 写测试验证动态替换**
 
-- [ ] **Step 2: 修改 FormatExistingEntities**
+- [x] **Step 2: 修改 FormatExistingEntities**
 
 ```go
 func FormatExistingEntities(entities []map[string]any, startIdx int, language string) string {
@@ -572,9 +572,9 @@ func FormatExistingEntities(entities []map[string]any, startIdx int, language st
 }
 ```
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ---
 
@@ -583,17 +583,17 @@ func FormatExistingEntities(entities []map[string]any, startIdx int, language st
 **Files:**
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`（extractEntityDeclarations、fetchRelevantEntities、entityMerge、entityEnrich）
 
-- [ ] **Step 1: extractEntityDeclarations 中嵌入操作放入 goroutine+channel**
+- [x] **Step 1: extractEntityDeclarations 中嵌入操作放入 goroutine+channel**
 
-- [ ] **Step 2: fetchRelevantEntities 中先 Wait() 嵌入结果**
+- [x] **Step 2: fetchRelevantEntities 中先 Wait() 嵌入结果**
 
-- [ ] **Step 3: entityMerge 中阻塞/非阻塞任务并发发起**
+- [x] **Step 3: entityMerge 中阻塞/非阻塞任务并发发起**
 
-- [ ] **Step 4: entityEnrich 中并发发起 LLM 调用，统一 Wait()**
+- [x] **Step 4: entityEnrich 中并发发起 LLM 调用，统一 Wait()**
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ---
 
@@ -603,17 +603,17 @@ func FormatExistingEntities(entities []map[string]any, startIdx int, language st
 - Modify: `internal/agentcore/memory/graph/extraction/base.go:64-91,167-211`
 - Test: `internal/agentcore/memory/graph/extraction/base_test.go`
 
-- [ ] **Step 1: 写 recursiveReplace 测试**
+- [x] **Step 1: 写 recursiveReplace 测试**
 
-- [ ] **Step 2: 实现 recursiveReplace 函数**
+- [x] **Step 2: 实现 recursiveReplace 函数**
 
-- [ ] **Step 3: 修改 ReadableSchema 使用 recursiveReplace 删除 title/required + 内联 $ref**
+- [x] **Step 3: 修改 ReadableSchema 使用 recursiveReplace 删除 title/required + 内联 $ref**
 
-- [ ] **Step 4: 修改 formatReadableSchema 删除 class Output 包裹（M14）**
+- [x] **Step 4: 修改 formatReadableSchema 删除 class Output 包裹（M14）**
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ---
 
@@ -624,11 +624,11 @@ func FormatExistingEntities(entities []map[string]any, startIdx int, language st
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/entity_extraction/base.go`（EnsureValidLanguage 异常体系 M9）
 - Test: 对应测试文件
 
-- [ ] **Step 1: 修改 FormatSchemaInfo refDict 类型为 map[string]any（M3）**
+- [x] **Step 1: 修改 FormatSchemaInfo refDict 类型为 map[string]any（M3）**
 
-- [ ] **Step 2: 修改 ReadableSchema 返回类型为 map[string]any（M3）**
+- [x] **Step 2: 修改 ReadableSchema 返回类型为 map[string]any（M3）**
 
-- [ ] **Step 3: 修改 replacePlaceholders 为正则精确匹配（L1）**
+- [x] **Step 3: 修改 replacePlaceholders 为正则精确匹配（L1）**
 
 ```go
 var placeholderPattern = regexp.MustCompile(`\{\{\[([^\]]+)\]\}\}`)
@@ -643,11 +643,11 @@ func replacePlaceholders(desc string, langMap map[string]string) string {
 }
 ```
 
-- [ ] **Step 4: 修改 EnsureValidLanguage 使用异常体系（M9）**
+- [x] **Step 4: 修改 EnsureValidLanguage 使用异常体系（M9）**
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ---
 
@@ -657,19 +657,19 @@ func replacePlaceholders(desc string, langMap map[string]string) string {
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/manager.go`（M10 + M11 + L2）
 - Modify: `internal/agentcore/memory/graph/extraction/prompts/pr_parser.go`（M12 + L3）
 
-- [ ] **Step 1: registerInBulk 空文件返回异常（M10）**
+- [x] **Step 1: registerInBulk 空文件返回异常（M10）**
 
-- [ ] **Step 2: TemplateManager 锁注释标注不可重入（M11）**
+- [x] **Step 2: TemplateManager 锁注释标注不可重入（M11）**
 
-- [ ] **Step 3: registerInBulk 锁范围+日志时序对齐（L2）**
+- [x] **Step 3: registerInBulk 锁范围+日志时序对齐（L2）**
 
-- [ ] **Step 4: pr_parser.go tool 角色返回 nil（M12）**
+- [x] **Step 4: pr_parser.go tool 角色返回 nil（M12）**
 
-- [ ] **Step 5: pr_parser.go 删除死代码第 51-78 行（L3）**
+- [x] **Step 5: pr_parser.go 删除死代码第 51-78 行（L3）**
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ---
 
@@ -679,19 +679,19 @@ func replacePlaceholders(desc string, langMap map[string]string) string {
 - Modify: `internal/agentcore/memory/graph/graph_memory/base.go`（M4 + M6 + M7 + M13）
 - Modify: `internal/agentcore/memory/graph/graph_memory/parse_llm_response.go`（M8）
 
-- [ ] **Step 1: entityEnrich 改用 zip 语义（M4）**
+- [x] **Step 1: entityEnrich 改用 zip 语义（M4）**
 
-- [ ] **Step 2: InvokeLLM 重试释放信号量（M6）**
+- [x] **Step 2: InvokeLLM 重试释放信号量（M6）**
 
-- [ ] **Step 3: InvokeLLM 加 WithCause（M13）**
+- [x] **Step 3: InvokeLLM 加 WithCause（M13）**
 
-- [ ] **Step 4: extractEntityDeclarations name 读取后删除（M7）**
+- [x] **Step 4: extractEntityDeclarations name 读取后删除（M7）**
 
-- [ ] **Step 5: ParseISO 不追加 Z，用本地时区解析（M8）**
+- [x] **Step 5: ParseISO 不追加 Z，用本地时区解析（M8）**
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ---
 
@@ -700,16 +700,16 @@ func replacePlaceholders(desc string, langMap map[string]string) string {
 **Files:**
 - All modified packages
 
-- [ ] **Step 1: 运行全量单元测试**
+- [x] **Step 1: 运行全量单元测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && GOPROXY=https://goproxy.cn,direct go test ./internal/agentcore/foundation/store/graph/... ./internal/agentcore/memory/graph/... -v -count=1`
 
-- [ ] **Step 2: 运行覆盖率检查**
+- [x] **Step 2: 运行覆盖率检查**
 
 Run: `cd /home/opensource/uapclaw-gateway && GOPROXY=https://goproxy.cn,direct go test -cover ./internal/agentcore/foundation/store/graph/... ./internal/agentcore/memory/graph/...`
 
-- [ ] **Step 3: 补充未达 85% 的包的测试**
+- [x] **Step 3: 补充未达 85% 的包的测试**
 
-- [ ] **Step 4: 更新 IMPLEMENTATION_PLAN.md 中 7.11/7.12 状态**
+- [x] **Step 4: 更新 IMPLEMENTATION_PLAN.md 中 7.11/7.12 状态**
 
-- [ ] **Step 5: 最终提交**
+- [x] **Step 5: 最终提交**
