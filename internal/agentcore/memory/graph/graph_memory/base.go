@@ -420,24 +420,30 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "1_prepare_episodes").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 2. 创建当前 Episode
 	currentEpisode, err := CreateEpisode(ctx, gm.DBBackend, cfg.UserID, content, state)
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "2_create_episode").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 3. 内容前加时间戳
 	content = graph.FormatTimestampISO(state.ReferenceTimestamp, nil) + "\n" + content
+	logger.Debug(logComponent).Str("step", "3_prepend_timestamp").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 4. 时区预测（异步，对齐 Python: tz_task = asyncio.create_task(...)）
 	tzTaskCh := gm.startTimezoneTask(ctx, content, state)
+	logger.Debug(logComponent).Str("step", "4_start_tz_task").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 5. 抽取实体声明
 	noExistingEntity, extractedDeclarations, err := gm.extractEntityDeclarations(ctx, cfg.SourceType, content, state)
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "5_extract_entities").Str("user_id", cfg.UserID).
+		Int("declaration_count", len(extractedDeclarations)).Msg("AddMemory step completed")
 
 	// 6. 等待时区结果，发起关系抽取（对齐 Python: response = await tz_task; state.tasks.append(...)）
 	tzResult := <-tzTaskCh
@@ -447,11 +453,13 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	// 将关系抽取任务追加到 state.tasks（对齐 Python: state.tasks.append(asyncio.create_task(...))）
 	relationTask := gm.startRelationExtractionAsync(ctx, extractedDeclarations, content, state, tzResult.response)
 	state.Tasks = append(state.Tasks, relationTask)
+	logger.Debug(logComponent).Str("step", "6_relation_extraction").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 7. 获取相关已有实体
 	if err := gm.fetchRelevantEntities(ctx, extractedDeclarations, noExistingEntity, cfg.UserID, state); err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "7_fetch_entities").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 8. 实体去重（对齐 Python: if existing_entities_list: state.tasks.append(...)）
 	existingEntitiesList := gm.entityListFromState(state)
@@ -459,12 +467,14 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 		dedupeTask := gm.startEntityDedupeAsync(ctx, content, extractedDeclarations, existingEntitiesList, state)
 		state.Tasks = append(state.Tasks, dedupeTask)
 	}
+	logger.Debug(logComponent).Str("step", "8_entity_dedupe").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 9. 实体合并
 	extractedDeclarations, err = gm.entityMerge(ctx, extractedDeclarations, existingEntitiesList, state)
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "9_entity_merge").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 10. 解析关系抽取结果（对齐 Python: response = await state.tasks.pop(0)）
 	if len(state.Tasks) == 0 {
@@ -489,25 +499,31 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 		state.CurrentTimestamp,
 		cfg.UserID,
 	)
+	logger.Debug(logComponent).Str("step", "10_parse_relations").Str("user_id", cfg.UserID).
+		Int("relation_count", len(relations)).Int("entity_count", len(entities)).Msg("AddMemory step completed")
 
 	// 11. 实体摘要与属性抽取
 	entities, err = gm.entityEnrich(ctx, entities, content, state)
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "11_entity_enrich").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 12. 关系过滤
 	if err := gm.parseRelationFilteringResult(ctx, relations, state); err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "12_relation_filter").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 13. 关系去重
 	if err := gm.handleRelationDedupe(ctx, cfg.UserID, content, relations, state); err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "13_relation_dedupe").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 14. 更新因关系删除而受影响的实体
 	gm.updateEntitiesForRelationRemoval(ctx, state, extractedDeclarations)
+	logger.Debug(logComponent).Str("step", "14_update_entities_for_removal").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 15. 后处理 + 持久化
 	if err := ProcessRelations(ctx, gm.DBBackend, entities, relations, state); err != nil {
@@ -527,6 +543,7 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	if err := PersistToDB(ctx, gm.DBBackend, state, embedderForPersist, gm.Config); err != nil {
 		return nil, err
 	}
+	logger.Debug(logComponent).Str("step", "15_persist").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 16. 清理 + 刷新
 	state.ClearReferences()
@@ -536,6 +553,8 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 
 	// GC 检查（对齐 Python: gc.collect()）
 	gm.maybeGC(ctx)
+
+	logger.Debug(logComponent).Str("step", "16_cleanup_refresh").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	return state.MemUpdate.Merge(state.MemUpdateSkipEmbed), nil
 }
@@ -752,7 +771,13 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 		if attempt < maxRetries-1 {
 			logger.Error(logComponent).Err(err).Msg("Graph Memory LLM Invoke Error")
 			// 对齐 Python: await asyncio.sleep(random.random() / 2)
-			time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
+			// 使用 select + time.After 实现可取消的等待，避免持有信号量时无法响应 context 取消
+			waitDuration := time.Duration(rand.Float64()*500) * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(waitDuration):
+			}
 		}
 	}
 

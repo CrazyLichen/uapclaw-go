@@ -248,7 +248,10 @@ func (o *ReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 	// 保留此行对齐 Python，后续如果 reflector prompt 需要可立即启用）
 	_, _ = cecontext.GetTyped[string](rc, "query")
 	trajectories, _ := cecontext.GetTyped[[]string](rc, "trajectories")
-	playbook, _ := rc.Get("playbook").(*Playbook)
+	playbook, playbookOK := rc.Get("playbook").(*Playbook)
+	if !playbookOK && rc.Get("playbook") != nil {
+		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+	}
 	if playbook == nil {
 		playbook = NewPlaybook()
 	}
@@ -327,7 +330,10 @@ func (o *ParallelReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	}
 
 	trajectories, _ := cecontext.GetTyped[[]string](rc, "trajectories")
-	playbook, _ := rc.Get("playbook").(*Playbook)
+	playbook, playbookOK := rc.Get("playbook").(*Playbook)
+	if !playbookOK && rc.Get("playbook") != nil {
+		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+	}
 	if playbook == nil {
 		playbook = NewPlaybook()
 	}
@@ -418,7 +424,10 @@ func (o *CurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) er
 	}
 
 	reflection, _ := rc.Get("reflection").(map[string]any)
-	playbook, _ := rc.Get("playbook").(*Playbook)
+	playbook, playbookOK := rc.Get("playbook").(*Playbook)
+	if !playbookOK && rc.Get("playbook") != nil {
+		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+	}
 	if playbook == nil {
 		playbook = NewPlaybook()
 	}
@@ -496,7 +505,10 @@ func (o *ParallelCurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	}
 
 	reflection, _ := rc.Get("reflection").(map[string]any)
-	playbook, _ := rc.Get("playbook").(*Playbook)
+	playbook, playbookOK := rc.Get("playbook").(*Playbook)
+	if !playbookOK && rc.Get("playbook") != nil {
+		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+	}
 	if playbook == nil {
 		playbook = NewPlaybook()
 	}
@@ -571,7 +583,10 @@ func (o *ParallelCurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 // 对齐 Python ApplyDeltaOp.async_execute(context)。
 func (o *ApplyDeltaOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) error {
 	delta, _ := rc.Get("delta").(*DeltaBatch)
-	playbook, _ := rc.Get("playbook").(*Playbook)
+	playbook, playbookOK := rc.Get("playbook").(*Playbook)
+	if !playbookOK && rc.Get("playbook") != nil {
+		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+	}
 	if playbook == nil {
 		playbook = NewPlaybook()
 	}

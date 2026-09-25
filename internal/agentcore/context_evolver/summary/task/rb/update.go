@@ -325,6 +325,9 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 		if err := o.helper.Save(userID, "rb", nodesDict); err != nil {
 			return fmt.Errorf("failed to persist memories: %w", err)
 		}
+	} else {
+		// 对齐 Python: helper 为 nil 时持久化被跳过，记录 Warn 日志便于排查
+		logger.Warn(logComponent).Str("user_id", userID).Msg("PersistMemoryOp: helper 为 nil，跳过持久化")
 	}
 
 	rc.Set("persist_count", len(nodesDict))

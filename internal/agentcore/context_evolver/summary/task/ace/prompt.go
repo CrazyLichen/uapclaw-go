@@ -340,7 +340,7 @@ If no updates are required, return an empty list for "operations".`
 
 // aceReflectorScalingPrompt 扩展反思 prompt（含 Ground Truth）。
 // 一比一复刻 Python ACE_REFLECTOR_SCALING_PROMPT。
-const aceReflectorScalingPrompt = `You are an expert reflection agent and educator. Your job is to diagnose the current trajectory: identify what went wrong (or could be better), grounded in executionfeedback, API usage, unit test report, and ground truth when applicable.
+const aceReflectorScalingPrompt = `You are an expert reflection agent and educator. Your job is to diagnose the current trajectory: identify what went wrong (or could be better), grounded in execution feedback, API usage, unit test report, and ground truth when applicable.
 
 Guidelines:
 Your goal is to compare and contrast these trajectories to identify the most useful and generalizable strategies as memory items.

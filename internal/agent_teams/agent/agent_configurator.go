@@ -452,6 +452,8 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) *
 					WorktreeName:     e.WorktreeName,
 					WorktreePath:     e.WorktreePath,
 					Existed:          e.Existed,
+					OwnerID:          e.OwnerID,
+					Tag:              e.Tag,
 				})
 			case *worktree.WorktreeRemovedEvent:
 				// 卸载 worktree symlink
@@ -461,6 +463,8 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) *
 					BaseEventMessage: atevents.BaseEventMessage{TeamName: c.TeamName()},
 					WorktreeName:     e.WorktreeName,
 					WorktreePath:     e.WorktreePath,
+					OwnerID:          e.OwnerID,
+					Tag:              e.Tag,
 				})
 			}
 			return nil

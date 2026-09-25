@@ -12,6 +12,10 @@ type WorktreeCreatedEvent struct {
 	WorktreePath string
 	// Existed 是否从已有 worktree 恢复
 	Existed bool
+	// OwnerID 持有者标识（如 team member name）
+	OwnerID string
+	// Tag 分组标签（如 team name）
+	Tag string
 }
 
 // WorktreeRemovedEvent Worktree 移除事件。
@@ -22,6 +26,10 @@ type WorktreeRemovedEvent struct {
 	WorktreeName string
 	// WorktreePath 绝对路径
 	WorktreePath string
+	// OwnerID 持有者标识
+	OwnerID string
+	// Tag 分组标签
+	Tag string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -37,7 +45,7 @@ func (e WorktreeCreatedEvent) EventTypeName() string { return TeamEventWorktreeC
 
 // ToPayload 转换为事件载荷。
 func (e WorktreeCreatedEvent) ToPayload() map[string]any {
-	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath, "existed": e.Existed}
+	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath, "existed": e.Existed, "owner_id": e.OwnerID, "tag": e.Tag}
 }
 
 // EventTypeName 返回 worktree 移除事件类型名。
@@ -45,7 +53,7 @@ func (e WorktreeRemovedEvent) EventTypeName() string { return TeamEventWorktreeR
 
 // ToPayload 转换为事件载荷。
 func (e WorktreeRemovedEvent) ToPayload() map[string]any {
-	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath}
+	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath, "owner_id": e.OwnerID, "tag": e.Tag}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

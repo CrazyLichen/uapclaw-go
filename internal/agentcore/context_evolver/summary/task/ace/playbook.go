@@ -297,9 +297,9 @@ func PlaybookFromDict(payload map[string]any) *Playbook {
 }
 
 // Dumps 序列化为 JSON 字符串。
-// 对齐 Python Playbook.dumps()。
+// 对齐 Python Playbook.dumps()：json.dumps(..., ensure_ascii=False, indent=2)。
 func (p *Playbook) Dumps() (string, error) {
-	data, err := json.Marshal(p.ToDict())
+	data, err := json.MarshalIndent(p.ToDict(), "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("Playbook.Dumps: 序列化失败: %w", err)
 	}

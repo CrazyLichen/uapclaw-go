@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -353,9 +354,12 @@ func (a *AutoSetupRail) AfterWorktreeCreate(ctx context.Context, _ *interfaces.A
 		cmdObj := exec.CommandContext(execCtx, "sh", "-c", cmd)
 		cmdObj.Dir = session.WorktreePath
 		cmdObj.Stdout = nil
-		cmdObj.Stderr = nil
+		// 对齐 Python: 捕获 stderr，失败时记录到日志
+		var stderrBuf bytes.Buffer
+		cmdObj.Stderr = &stderrBuf
 		if err := cmdObj.Run(); err != nil {
-			logger.Warn(logComponent).Str("cmd", cmd).Err(err).Msg("Setup command execution failed")
+			stderrStr := stderrBuf.String()
+			logger.Warn(logComponent).Str("cmd", cmd).Str("stderr", stderrStr).Err(err).Msg("Setup command execution failed")
 		}
 		cancel()
 	}
@@ -376,6 +380,9 @@ func (a *AutoSetupRail) BeforeWorktreeExit(_ context.Context, _ *interfaces.Agen
 func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
+
+// ─── AutoSetupRail 其余空方法实现 ───
+
 func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
@@ -420,6 +427,9 @@ func (d *DiffSummaryRail) AfterWorktreeCreate(_ context.Context, _ *interfaces.A
 func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
+
+// ─── DiffSummaryRail 其余空方法实现 ───
+
 func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
