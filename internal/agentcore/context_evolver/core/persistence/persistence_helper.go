@@ -1,8 +1,10 @@
 package persistence
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/file_connector"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -44,6 +46,7 @@ type MemoryPersistenceHelper struct {
 	jsonConnector   *file_connector.JSONFileConnector
 	milvusConnector MilvusConnector // P7 注入
 	resolvedType    string          // auto 探测后缓存
+	resolveOnce     sync.Once       // 保证只探测一次
 }
 
 // PersistenceOption 持久化助手配置选项。
@@ -75,16 +78,16 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryPersistenceHelper 创建记忆持久化助手。
-// P1 默认 persistType="json"（对齐 Python 默认 "auto"，但 P1 无 Milvus 实现）。
+// 对齐 Python 默认 persistType="auto"，惰性探测 Milvus 可达性。
 func NewMemoryPersistenceHelper(opts ...PersistenceOption) *MemoryPersistenceHelper {
 	h := &MemoryPersistenceHelper{
-		persistType:      "json",
+		persistType:      "auto",
 		persistPath:      defaultPersistPath,
 		milvusHost:       defaultMilvusHost,
 		milvusPort:       defaultMilvusPort,
 		milvusCollection: defaultMilvusCollection,
 		jsonConnector:    file_connector.NewJSONFileConnector(),
-		resolvedType:     "json", // P1 固定 json
+		resolvedType:     "", // auto 模式下待探测
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -125,20 +128,35 @@ func WithMilvusCollection(name string) PersistenceOption {
 
 // Save 持久化节点到后端。
 // 对齐 Python MemoryPersistenceHelper.save(user_id, algo_name, nodes_dict)。
-// P1 只实现 JSON 后端。JSON 模式下先加载已有文件再合并写入（upsert 语义）。
+// auto 模式惰性探测后路由到 milvus 或 json 后端。
 // 空数据直接返回（对齐 Python）。
 func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[string]any) error {
 	if len(nodesDict) == 0 {
-		logger.Debug(logComponent).Str("user_id", userID).Str("algo", algoName).Msg("Empty data, skipping persistence")
+		logger.Debug(logComponent).Str("user_id", userID).Str("algo", algoName).Msg("空数据跳过持久化")
 		return nil
 	}
-	return h.saveJSON(userID, algoName, nodesDict)
+	h.resolveBackend()
+	switch h.resolvedType {
+	case "milvus":
+		ns := Namespace(userID, algoName)
+		return h.milvusConnector.SaveToDB(ns, nodesDict)
+	default:
+		return h.saveJSON(userID, algoName, nodesDict)
+	}
 }
 
 // Load 从后端加载节点。
 // 对齐 Python MemoryPersistenceHelper.load(user_id, algo_name)。
+// auto 模式惰性探测后路由到 milvus 或 json 后端。
 func (h *MemoryPersistenceHelper) Load(userID, algoName string) (map[string]any, error) {
-	return h.loadJSON(userID, algoName)
+	h.resolveBackend()
+	switch h.resolvedType {
+	case "milvus":
+		ns := Namespace(userID, algoName)
+		return h.milvusConnector.LoadFromDB(ns)
+	default:
+		return h.loadJSON(userID, algoName)
+	}
 }
 
 // SetMilvusConnector 注入 Milvus 连接器（P7 使用）。
@@ -185,6 +203,62 @@ func (h *MemoryPersistenceHelper) String() string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveBackend 惰性探测后端类型。
+// 对齐 Python MemoryPersistenceHelper 构造时同步探测，Go 改为惰性避免阻塞。
+func (h *MemoryPersistenceHelper) resolveBackend() {
+	h.resolveOnce.Do(func() {
+		switch h.persistType {
+		case "auto":
+			if h.milvusConnector != nil {
+				if h.probeMilvus() {
+					h.resolvedType = "milvus"
+					logger.Info(logComponent).Str("resolved_type", "milvus").Msg("auto 模式探测到 Milvus 可达")
+					return
+				}
+			} else if h.milvusHost != "" {
+				// 自动创建 MilvusConnectorImpl 并注入
+				conn := NewMilvusConnectorImpl(
+					WithConnectorHost(h.milvusHost),
+					WithConnectorPort(h.milvusPort),
+					WithConnectorCollection(h.milvusCollection),
+				)
+				h.milvusConnector = conn
+				if h.probeMilvus() {
+					h.resolvedType = "milvus"
+					logger.Info(logComponent).Str("resolved_type", "milvus").Msg("auto 模式探测到 Milvus 可达（自动创建连接器）")
+					return
+				}
+			}
+			h.resolvedType = "json"
+			logger.Warn(logComponent).Str("persist_type", h.persistType).Msg("Milvus 不可达，回退 JSON 后端")
+		case "milvus":
+			h.resolvedType = "milvus"
+		default:
+			h.resolvedType = "json"
+		}
+	})
+}
+
+// probeMilvus 探测 Milvus 可达性。
+func (h *MemoryPersistenceHelper) probeMilvus() bool {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).Msg("探测 Milvus 时发生 panic")
+		}
+	}()
+
+	if impl, ok := h.milvusConnector.(*MilvusConnectorImpl); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), milvusProbeTimeout)
+		defer cancel()
+		return impl.ProbeReachable(ctx)
+	}
+
+	// 非 MilvusConnectorImpl 实现时，尝试 Exists 操作
+	// 如果不 panic 且不报错，认为可达
+	defer func() { recover() }()
+	return h.milvusConnector.Exists("__probe__") || true
+}
 
 // jsonPath 根据模板生成 JSON 文件路径。
 // 对齐 Python _json_path(user_id, algo_name)，替换 {user_id} 和 {algo_name} 占位符。

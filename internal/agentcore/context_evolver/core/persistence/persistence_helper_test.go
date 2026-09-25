@@ -10,7 +10,8 @@ import (
 func TestNewMemoryPersistenceHelper(t *testing.T) {
 	h := NewMemoryPersistenceHelper()
 	assert.NotNil(t, h)
-	assert.Equal(t, "json", h.PersistType()) // P1 默认 json
+	assert.Equal(t, "auto", h.PersistType()) // P7 默认 auto（对齐 Python）
+	assert.Equal(t, "", h.ResolvedType())    // auto 模式下待探测
 }
 
 func TestNewMemoryPersistenceHelper_自定义选项(t *testing.T) {
@@ -28,10 +29,65 @@ func TestNewMemoryPersistenceHelper_自定义选项(t *testing.T) {
 	assert.Equal(t, "test_coll", h.MilvusCollection())
 }
 
+// ──────────────────────────── auto 模式测试 ────────────────────────────
+
+func TestAuto_默认Auto(t *testing.T) {
+	h := NewMemoryPersistenceHelper()
+	assert.Equal(t, "auto", h.PersistType())
+	assert.Equal(t, "", h.ResolvedType()) // 未探测前为空
+}
+
+func TestAuto_Milvus可达(t *testing.T) {
+	// 注入 mock MilvusConnector，probeMilvus 对非 MilvusConnectorImpl 总是返回 true
+	h := NewMemoryPersistenceHelper(WithPersistType("auto"))
+	h.SetMilvusConnector(&mockMilvusConnector{})
+
+	// 触发探测（通过 Save）
+	err := h.Save("alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
+	require.NoError(t, err)
+	assert.Equal(t, "milvus", h.ResolvedType()) // 探测到可达 → milvus
+}
+
+func TestAuto_Milvus不可达(t *testing.T) {
+	// 不注入 MilvusConnector，milvusHost 为默认 localhost（无真实 Milvus 服务）
+	// auto 模式探测失败后回退 JSON
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("auto"),
+		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+		WithMilvusHost(""), // 空 host → 不会自动创建 MilvusConnectorImpl
+	)
+
+	err := h.Save("alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
+	require.NoError(t, err)
+	assert.Equal(t, "json", h.ResolvedType()) // 不可达 → 回退 json
+}
+
+func TestAuto_显式JSON(t *testing.T) {
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("json"),
+		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
+	// 显式 json 不需要探测，首次 Save 时 resolveBackend 直接设为 json
+	err := h.Save("alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
+	require.NoError(t, err)
+	assert.Equal(t, "json", h.ResolvedType())
+}
+
+func TestAuto_显式Milvus(t *testing.T) {
+	h := NewMemoryPersistenceHelper(WithPersistType("milvus"))
+	h.SetMilvusConnector(&mockMilvusConnector{}) // 注入 mock 防止 nil 调用
+	// 显式 milvus 不探测，直接设为 milvus
+	_ = h.Save("alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
+	assert.Equal(t, "milvus", h.ResolvedType())
+}
+
+// ──────────────────────────── JSON 后端测试 ────────────────────────────
+
 func TestMemoryPersistenceHelper_Save_Load_JSON往返(t *testing.T) {
 	dir := t.TempDir()
 	h := NewMemoryPersistenceHelper(
-		WithPersistPath(dir + "/{algo_name}/{user_id}.json"),
+		WithPersistType("json"),
+		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
 	)
 
 	nodes := map[string]any{
@@ -46,13 +102,19 @@ func TestMemoryPersistenceHelper_Save_Load_JSON往返(t *testing.T) {
 }
 
 func TestMemoryPersistenceHelper_Save_空数据(t *testing.T) {
-	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("json"),
+		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
 	err := h.Save("alice", "ace", nil)
 	assert.NoError(t, err) // 空数据直接返回，对齐 Python
 }
 
 func TestMemoryPersistenceHelper_Load_不存在(t *testing.T) {
-	h := NewMemoryPersistenceHelper(WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("json"),
+		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
 	loaded, err := h.Load("alice", "ace")
 	require.NoError(t, err)
 	assert.Empty(t, loaded) // 对齐 Python：文件不存在返回 {}
@@ -60,7 +122,10 @@ func TestMemoryPersistenceHelper_Load_不存在(t *testing.T) {
 
 func TestMemoryPersistenceHelper_Save_合并(t *testing.T) {
 	dir := t.TempDir()
-	h := NewMemoryPersistenceHelper(WithPersistPath(dir + "/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("json"),
+		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
+	)
 
 	require.NoError(t, h.Save("alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "a"}}))
 	require.NoError(t, h.Save("alice", "ace", map[string]any{"n2": map[string]any{"id": "n2", "content": "b"}}))
@@ -75,7 +140,10 @@ func TestMemoryPersistenceHelper_Save_合并(t *testing.T) {
 
 func TestMemoryPersistenceHelper_路径模板替换(t *testing.T) {
 	dir := t.TempDir()
-	h := NewMemoryPersistenceHelper(WithPersistPath(dir + "/{algo_name}/{user_id}.json"))
+	h := NewMemoryPersistenceHelper(
+		WithPersistType("json"),
+		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
+	)
 	require.NoError(t, h.Save("bob", "rb", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}}))
 
 	loaded, err := h.Load("bob", "rb")
@@ -89,17 +157,16 @@ func TestMemoryPersistenceHelper_路径模板替换(t *testing.T) {
 }
 
 func TestMemoryPersistenceHelper_SetMilvusConnector(t *testing.T) {
-	h := NewMemoryPersistenceHelper()
+	h := NewMemoryPersistenceHelper(WithPersistType("auto"))
 	mock := &mockMilvusConnector{}
 	h.SetMilvusConnector(mock)
-	// 通过行为间接验证：SetMilvusConnector 不报错即表示注入成功
-	// P7 启用 Milvus 后，可验证 Save/Load 走 Milvus 后端
-	assert.Equal(t, "json", h.ResolvedType()) // P1 仍为 json，P7 auto 模式下会变
+	// 注入后未调用 Save/Load，resolvedType 仍为空
+	assert.Equal(t, "", h.ResolvedType())
 }
 
 func TestMemoryPersistenceHelper_ResolvedType(t *testing.T) {
 	h := NewMemoryPersistenceHelper()
-	assert.Equal(t, "json", h.ResolvedType()) // P1 固定 json
+	assert.Equal(t, "", h.ResolvedType()) // auto 模式未探测前为空
 }
 
 func TestMemoryPersistenceHelper_Namespace(t *testing.T) {
@@ -110,8 +177,10 @@ func TestMemoryPersistenceHelper_Namespace(t *testing.T) {
 func TestMemoryPersistenceHelper_String(t *testing.T) {
 	h := NewMemoryPersistenceHelper()
 	s := h.String()
-	assert.Contains(t, s, "json")
+	assert.Contains(t, s, "auto") // P7 默认 persistType=auto
 }
+
+// ──────────────────────────── mock 实现 ────────────────────────────
 
 // mockMilvusConnector MilvusConnector 的 mock 实现
 type mockMilvusConnector struct{}
