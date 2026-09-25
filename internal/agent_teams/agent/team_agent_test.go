@@ -8,6 +8,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator
@@ -491,7 +492,8 @@ func TestTeamAgent_DeliverInput(t *testing.T) {
 func TestTeamAgent_ResumeInterrupt(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
-	err := a.ResumeInterrupt(context.Background(), "input")
+	ii, _ := interaction.NewInteractiveInput("input")
+	err := a.ResumeInterrupt(context.Background(), ii)
 	assert.NoError(t, err)
 }
 

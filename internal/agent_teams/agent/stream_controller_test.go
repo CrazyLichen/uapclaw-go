@@ -9,6 +9,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -21,6 +22,12 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// iiStub 创建用于测试的 *interaction.InteractiveInput 桩实例。
+func iiStub(raw string) *interaction.InteractiveInput {
+	ii, _ := interaction.NewInteractiveInput(raw)
+	return ii
+}
 
 // newTestStreamController 创建测试用 StreamController
 func newTestStreamController() *StreamController {
@@ -464,7 +471,7 @@ func TestStreamController_FanOutToObservers_异常自动移除(t *testing.T) {
 func TestStreamController_DrainAgentTask(t *testing.T) {
 	sc := newTestStreamController()
 	sc.pendingInputs = []any{"input1", "input2"}
-	sc.pendingInterruptResumes = []any{"resume1"}
+	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
 
 	_ = sc.DrainAgentTask(context.Background())
 
@@ -535,7 +542,7 @@ func TestStreamController_DequeueValidInterruptResume(t *testing.T) {
 	}
 
 	// 添加无效项（IsValidInterruptResume 始终返回 false，因为无 harness）
-	sc.pendingInterruptResumes = []any{"invalid1", "invalid2"}
+	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("invalid1"), iiStub("invalid2")}
 	if result := sc.dequeueValidInterruptResume(); result != nil {
 		t.Error("无效项应被丢弃")
 	}
@@ -596,7 +603,7 @@ func TestStreamController_FollowUp(t *testing.T) {
 func TestStreamController_IsValidInterruptResume(t *testing.T) {
 	sc := newTestStreamController()
 	// 无 harness 时返回 false
-	if sc.IsValidInterruptResume("test") {
+	if sc.IsValidInterruptResume(iiStub("test")) {
 		t.Error("无 harness 时应返回 false")
 	}
 }
@@ -871,7 +878,7 @@ func TestStreamController_HasPendingInterrupt_有harness(t *testing.T) {
 func TestStreamController_IsValidInterruptResume_有harness(t *testing.T) {
 	sc := newTestStreamController()
 	sc.resources.Harness = &agentteams.TeamHarness{}
-	if sc.IsValidInterruptResume("test") {
+	if sc.IsValidInterruptResume(iiStub("test")) {
 		t.Error("当前 TeamHarness.IsPendingInterruptResumeValid 返回 false")
 	}
 }
@@ -991,7 +998,7 @@ func TestStreamController_runOneRound_续轮interruptResume(t *testing.T) {
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	// 当前 TeamHarness 总是返回 false，所以 dequeueValidInterruptResume 会丢弃
-	sc.pendingInterruptResumes = []any{"resume1"}
+	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
 
 	sc.runOneRound(context.Background(), "first")
 
@@ -1181,7 +1188,7 @@ func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.pendingInputs = []any{"input1"}
-	sc.pendingInterruptResumes = []any{"resume1"}
+	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
 
 	sc.startRound(context.Background(), "hello")
 

@@ -7,6 +7,7 @@ import (
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -25,7 +26,7 @@ func (f *fakeDispatcherHost) HasInFlightRound() bool                            
 func (f *fakeDispatcherHost) HasPendingInterrupt() bool                                { return f.pendingInt }
 func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                      { return nil }
 func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error      { return nil }
-func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ any) error           { return nil }
+func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error    { return nil }
 func (f *fakeDispatcherHost) ShutdownSelf(_ context.Context) error                     { return nil }
 func (f *fakeDispatcherHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 

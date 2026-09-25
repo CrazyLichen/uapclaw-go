@@ -48,6 +48,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -617,7 +618,7 @@ func (a *TeamAgent) Steer(ctx context.Context, content string) error {
 
 // ResumeInterrupt 恢复中断。
 // Python: TeamAgent.resume_interrupt(user_input)
-func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
+func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error {
 	if a.streamController == nil {
 		return nil
 	}

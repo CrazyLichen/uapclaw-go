@@ -10,6 +10,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -58,8 +59,8 @@ type StreamController struct {
 	// cancelRequested 当前轮次是否被协作取消
 	cancelRequested bool
 	// pendingInterruptResumes 待处理的中断恢复输入
-	// Python 中存储 InteractiveInput 对象；Go 端当前通过 any 传递，待上游接口定型后改为具体类型
-	pendingInterruptResumes []any
+	// Python 中存储 InteractiveInput 对象；Go 端使用具体类型 *InteractiveInput
+	pendingInterruptResumes []*interaction.InteractiveInput
 	// pendingInputs 待处理的输入队列（轮次结束后自动消费）
 	pendingInputs []any
 	// chunkObservers 分块观察者列表（SpawnManager 注册，用于 Teammate chunk 转发到 Leader）
@@ -207,7 +208,7 @@ func (sc *StreamController) HasPendingInterrupt() bool {
 
 // IsValidInterruptResume 验证用户输入是否为有效中断恢复。
 // Python: StreamController.is_valid_interrupt_resume(user_input)
-func (sc *StreamController) IsValidInterruptResume(userInput any) bool {
+func (sc *StreamController) IsValidInterruptResume(userInput *interaction.InteractiveInput) bool {
 	harness := sc.resources.Harness
 	if harness == nil {
 		return false
@@ -741,8 +742,7 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 
 // dequeueValidInterruptResume 弹出有效中断恢复。
 // Python: StreamController._dequeue_valid_interrupt_resume()
-// ⤵️ 待 9.55 TeamAgent 完善后回填具体类型（interaction 包已实现）
-func (sc *StreamController) dequeueValidInterruptResume() any {
+func (sc *StreamController) dequeueValidInterruptResume() *interaction.InteractiveInput {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	for len(sc.pendingInterruptResumes) > 0 {

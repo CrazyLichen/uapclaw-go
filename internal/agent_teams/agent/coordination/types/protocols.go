@@ -4,6 +4,7 @@ import (
 	"context"
 
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,7 +33,8 @@ type AgentRoundController interface {
 	// DeliverInput 确保内容到达 DeepAgent，不论当前状态
 	DeliverInput(ctx context.Context, content any, useSteer bool) error
 	// ResumeInterrupt 以结构化输入恢复 HITL 中断
-	ResumeInterrupt(ctx context.Context, userInput any) error
+	// Python: resume_interrupt(user_input: Any) — 实际调用始终传 InteractiveInput
+	ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error
 }
 
 // TeamLifecycleController TeamAgent 级生命周期效果，跨多个 manager。

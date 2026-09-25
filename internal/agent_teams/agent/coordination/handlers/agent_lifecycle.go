@@ -6,6 +6,7 @@ import (
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -171,9 +172,8 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildInteractiveInput 从事件 payload 构建 InteractiveInput 结构。
-// 对齐 Python: InteractiveInput(tool_call_id=..., approved=..., feedback=..., auto_confirm=...)
-// TODO(#9.63): 等 InteractiveInput 类型定义后补充完整构建逻辑
-func buildInteractiveInput(payload map[string]any) map[string]any {
+// 对齐 Python: InteractiveInput(); interactive_input.update(tool_call_id, {...})
+func buildInteractiveInput(payload map[string]any) *interaction.InteractiveInput {
 	toolCallID, _ := payload["tool_call_id"].(string)
 	if toolCallID == "" {
 		return nil
@@ -182,10 +182,16 @@ func buildInteractiveInput(payload map[string]any) map[string]any {
 	feedback, _ := payload["feedback"].(string)
 	autoConfirm, _ := payload["auto_confirm"].(bool)
 
-	return map[string]any{
-		"tool_call_id": toolCallID,
+	// 对齐 Python: InteractiveInput() + update(tool_call_id, value)
+	input, err := interaction.NewInteractiveInput()
+	if err != nil {
+		return nil
+	}
+	value := map[string]any{
 		"approved":     approved,
 		"feedback":     feedback,
 		"auto_confirm": autoConfirm,
 	}
+	_ = input.Update(toolCallID, value)
+	return input
 }
