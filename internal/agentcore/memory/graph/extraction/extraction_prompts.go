@@ -538,5 +538,6 @@ func multilingualResponseFormat(modelType reflect.Type, language string) map[str
 
 	replaced := ReplaceDescriptions(params, langMap)
 	schemaMap := commonschema.ToJSONSchemaMap(replaced)
+	StrictSchemaEnforce(schemaMap)
 	return ResponseFormat(modelType.Name(), schemaMap)
 }

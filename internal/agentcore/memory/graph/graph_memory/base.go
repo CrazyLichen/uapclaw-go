@@ -486,6 +486,8 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 		anyListToMapList(extraction.EnsureList(parsedRelations)),
 		extractedDeclarations,
 		state.EntityTypes,
+		state.CurrentTimestamp,
+		cfg.UserID,
 	)
 
 	// 11. 实体摘要与属性抽取

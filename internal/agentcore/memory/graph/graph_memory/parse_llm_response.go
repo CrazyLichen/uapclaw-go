@@ -122,7 +122,7 @@ func ParseISO(timeStr string) (int64, int8) {
 // source_id/target_id 为 1-based 实体索引，解析失败返回 nil。
 //
 // Python: dict2relation(response, entities, **kwargs)
-func Dict2Relation(response map[string]any, entities []*graph.Entity) *graph.Relation {
+func Dict2Relation(response map[string]any, entities []*graph.Entity, createdAt int64, userID string) *graph.Relation {
 	// 如果 response 只有 1 个 key，尝试展开其值
 	if len(response) == 1 {
 		for _, v := range response {
@@ -174,6 +174,8 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity) *graph.Rel
 	validUntil, offsetUntil := ParseISO(validUntilStr)
 
 	rel := graph.NewRelation()
+	rel.CreatedAt = createdAt
+	rel.UserID = userID
 	rel.ObjType = relType
 	rel.Name = name
 	rel.Content = content
@@ -193,9 +195,9 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity) *graph.Rel
 // 最后解析为 Relation 对象并去重实体。
 //
 // Python: parse_all_relations(relations, entities, entity_types, **kwargs)
-func ParseAllRelations(relations []map[string]any, entityDecls []extraction.EntityDeclaration, entityTypes []registry.EntityDef) ([]*graph.Relation, []*graph.Entity) {
+func ParseAllRelations(relations []map[string]any, entityDecls []extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) ([]*graph.Relation, []*graph.Entity) {
 	// 将 EntityDeclaration 转为 Entity
-	entities := DeclareEntities(entityDecls, entityTypes)
+	entities := DeclareEntities(entityDecls, entityTypes, createdAt, userID)
 
 	// 去重关系内容（LLM 可能重复输出）
 	existingContents := make(map[string]struct{})
@@ -219,7 +221,7 @@ func ParseAllRelations(relations []map[string]any, entityDecls []extraction.Enti
 	// 解析关系抽取结果
 	var result []*graph.Relation
 	for _, rel := range relations {
-		if r := Dict2Relation(rel, entities); r != nil {
+		if r := Dict2Relation(rel, entities, createdAt, userID); r != nil {
 			result = append(result, r)
 		}
 	}
@@ -233,13 +235,15 @@ func ParseAllRelations(relations []map[string]any, entityDecls []extraction.Enti
 // DeclareEntities 将 EntityDeclaration 转为 Entity
 //
 // Python: declare_entities(entities, entity_types, **kwargs)
-func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []registry.EntityDef) []*graph.Entity {
+func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) []*graph.Entity {
 	typeIDMax := len(entityTypes) - 1
 	result := make([]*graph.Entity, 0, len(entityDecls))
 	for _, ent := range entityDecls {
 		e := graph.NewEntity()
 		e.Name = ent.Name
 		e.Content = ""
+		e.CreatedAt = createdAt
+		e.UserID = userID
 		if typeIDMax >= 0 {
 			typeIdx := ent.EntityTypeID
 			if typeIdx > typeIDMax {

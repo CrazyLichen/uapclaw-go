@@ -84,8 +84,9 @@ func FormatExistingEntities(entities []map[string]any, startIdx int, language st
 	var lines []string
 	for i, ent := range entities {
 		line := strings.ReplaceAll(tmpl, "{i}", fmt.Sprintf("%d", startIdx+i))
-		line = strings.ReplaceAll(line, "{name}", fmt.Sprintf("%v", ent["name"]))
-		line = strings.ReplaceAll(line, "{content}", fmt.Sprintf("%v", ent["content"]))
+		for key, val := range ent {
+			line = strings.ReplaceAll(line, "{"+key+"}", fmt.Sprintf("%v", val))
+		}
 		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n\n")

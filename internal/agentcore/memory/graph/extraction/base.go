@@ -102,7 +102,7 @@ func StrictSchemaEnforce(schemaMap map[string]any) {
 			continue
 		}
 		if typeName, _ := node["type"].(string); typeName == "object" {
-			if props, ok := node["properties"].(map[string]any); ok && len(props) > 0 {
+			if props, ok := node["properties"].(map[string]any); ok {
 				node["additionalProperties"] = false
 				keys := make([]string, 0, len(props))
 				for k := range props {

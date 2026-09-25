@@ -18,6 +18,9 @@ import (
 // Python: EntityDef (entity_type_definition.py)
 type EntityDef = registry.EntityDef
 
+// EntityDefAttr 实体定义属性模板（重新导出，实际定义在 registry 包）
+type EntityDefAttr = registry.EntityDefAttr
+
 // RelationDef 关系类型定义（重新导出，实际定义在 registry 包）
 //
 // Python: RelationDef (entity_type_definition.py)
@@ -36,6 +39,8 @@ var (
 	AIEntity = registry.AIEntity
 	// DefaultEntity 默认实体类型定义（重新导出）
 	DefaultEntity = registry.DefaultEntity
+	// DefaultEntityDefAttr 默认实体属性模板实例（重新导出）
+	DefaultEntityDefAttr = registry.DefaultEntityDefAttr
 	// DefaultRelation 默认关系类型定义（重新导出）
 	DefaultRelation = registry.DefaultRelation
 )

@@ -77,7 +77,7 @@ func TestDict2Relation_有效输入(t *testing.T) {
 		"fact":      "Alice knows Bob",
 	}
 
-	rel := Dict2Relation(response, entities)
+	rel := Dict2Relation(response, entities, 0, "test-user")
 	if rel == nil {
 		t.Fatal("期望非 nil Relation")
 	}
@@ -115,7 +115,7 @@ func TestDict2Relation_无效ID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rel := Dict2Relation(tt.response, entities)
+			rel := Dict2Relation(tt.response, entities, 0, "test-user")
 			if rel != nil {
 				t.Fatalf("期望 nil，得到非 nil Relation")
 			}
@@ -136,7 +136,7 @@ func TestDict2Relation_自引用(t *testing.T) {
 		"fact":      "Alice lives in Beijing",
 	}
 
-	rel := Dict2Relation(response, entities)
+	rel := Dict2Relation(response, entities, 0, "test-user")
 	if rel == nil {
 		t.Fatal("期望非 nil Relation")
 	}
@@ -161,7 +161,7 @@ func TestDict2Relation_嵌套dict(t *testing.T) {
 		},
 	}
 
-	rel := Dict2Relation(response, entities)
+	rel := Dict2Relation(response, entities, 0, "test-user")
 	if rel == nil {
 		t.Fatal("期望非 nil Relation")
 	}
@@ -182,7 +182,7 @@ func TestDict2Relation_缺省name(t *testing.T) {
 		"fact":      "some fact",
 	}
 
-	rel := Dict2Relation(response, entities)
+	rel := Dict2Relation(response, entities, 0, "test-user")
 	if rel == nil {
 		t.Fatal("期望非 nil Relation")
 	}
@@ -213,7 +213,7 @@ func TestParseAllRelations_基本(t *testing.T) {
 		},
 	}
 
-	resultRels, resultEntities := ParseAllRelations(relations, entityDecls, entityTypes)
+	resultRels, resultEntities := ParseAllRelations(relations, entityDecls, entityTypes, 0, "test-user")
 
 	if len(resultRels) != 1 {
 		t.Fatalf("期望 1 个关系，得到 %d", len(resultRels))
@@ -254,7 +254,7 @@ func TestParseAllRelations_去重(t *testing.T) {
 		},
 	}
 
-	resultRels, _ := ParseAllRelations(relations, entityDecls, entityTypes)
+	resultRels, _ := ParseAllRelations(relations, entityDecls, entityTypes, 0, "test-user")
 
 	// 第二条内容是第一条的子串，应被标记为空 content，Dict2Relation 会用 name 作为 content
 	if len(resultRels) != 2 {
@@ -274,7 +274,7 @@ func TestDeclareEntities_基本(t *testing.T) {
 		{Name: "ChatGPT", EntityTypeID: 1},
 	}
 
-	entities := DeclareEntities(decls, entityTypes)
+	entities := DeclareEntities(decls, entityTypes, 0, "test-user")
 
 	if len(entities) != 2 {
 		t.Fatalf("期望 2 个实体，得到 %d", len(entities))
@@ -301,7 +301,7 @@ func TestDeclareEntities_类型ID越界(t *testing.T) {
 		{Name: "Unknown", EntityTypeID: 10}, // 超出范围，应使用最后一个
 	}
 
-	entities := DeclareEntities(decls, entityTypes)
+	entities := DeclareEntities(decls, entityTypes, 0, "test-user")
 	if entities[0].ObjType != "AI" {
 		t.Fatalf("期望 obj_type=AI（最大索引），得到 %s", entities[0].ObjType)
 	}
@@ -314,7 +314,7 @@ func TestDeclareEntities_空类型列表(t *testing.T) {
 	}
 
 	// 空类型列表不应 panic
-	entities := DeclareEntities(decls, nil)
+	entities := DeclareEntities(decls, nil, 0, "test-user")
 	if len(entities) != 1 {
 		t.Fatalf("期望 1 个实体，得到 %d", len(entities))
 	}
