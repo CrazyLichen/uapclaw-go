@@ -206,8 +206,8 @@ func TestFormatRelationDefinitions_空列表(t *testing.T) {
 
 // TestFormatSchemaInfo_有refDict 测试有 refDict 时的格式化
 func TestFormatSchemaInfo_有refDict(t *testing.T) {
-	refDict := map[string]map[string]any{
-		"Person": {"name": "string", "age": "int"},
+	refDict := map[string]any{
+		"Person": map[string]any{"name": "string", "age": "int"},
 	}
 	result := FormatSchemaInfo("class Person:", refDict, 2, "cn")
 	if result == "" {

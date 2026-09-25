@@ -3,6 +3,7 @@ package extraction
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -17,6 +18,9 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// placeholderPattern 精确匹配 {{[xxx]}} 格式的占位符（对齐 Python _recursive_replace 的 lookup 语义）
+var placeholderPattern = regexp.MustCompile(`\{\{\[([^\]]+)\]\}\}`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -64,7 +68,7 @@ func ResponseFormat(name string, schemaMap map[string]any) map[string]any {
 // ReadableSchema 从输出模型生成 LLM 可读的类型定义字符串
 //
 // Python: MultilingualBaseModel.readable_schema()
-func ReadableSchema(modelType reflect.Type, language string) (string, map[string]map[string]any) {
+func ReadableSchema(modelType reflect.Type, language string) (string, map[string]any) {
 	langMap := registry.MultilingualDescription[language]
 	if langMap == nil {
 		langMap = map[string]string{}
@@ -83,9 +87,22 @@ func ReadableSchema(modelType reflect.Type, language string) (string, map[string
 	// 3. 生成 JSON Schema
 	schemaMap := commonschema.ToJSONSchemaMap(replaced)
 
-	// 4. 生成可读字符串（对齐 Python readable_schema 格式）
-	outStr := formatReadableSchema(schemaMap, "")
+	// 4. 递归替换：删除 title、删除 required、$ref → type 内联
+	recursiveReplace(schemaMap, nil, "title", "")
+	recursiveReplace(schemaMap, nil, "required", "")
+	// 在删除 $defs 之前提取 refDict
 	refDict := extractRefDict(schemaMap)
+	if defs, ok := schemaMap["$defs"].(map[string]any); ok {
+		refLookup := make(map[string]string, len(defs))
+		for key := range defs {
+			refLookup["#/$defs/"+key] = key
+		}
+		recursiveReplace(schemaMap, refLookup, "$ref", "type")
+		delete(schemaMap, "$defs")
+	}
+
+	// 5. 生成可读字符串（对齐 Python readable_schema 格式）
+	outStr := formatReadableSchema(schemaMap, "")
 
 	return outStr, refDict
 }
@@ -164,12 +181,56 @@ func BuildResponseFormat(model any, language string) map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// replacePlaceholders 替换字符串中的 {{[xxx]}} 占位符
+// replacePlaceholders 精确匹配替换（对齐 Python _recursive_replace 的 lookup 语义）
 func replacePlaceholders(desc string, langMap map[string]string) string {
-	for placeholder, replacement := range langMap {
-		desc = strings.ReplaceAll(desc, placeholder, replacement)
+	return placeholderPattern.ReplaceAllStringFunc(desc, func(match string) string {
+		if replacement, ok := langMap[match]; ok {
+			return replacement
+		}
+		return match
+	})
+}
+
+// recursiveReplace 递归替换 JSON Schema map 中的字段
+// 对齐 Python: _recursive_replace(to_search, lookup, from_key, to_key=None)
+func recursiveReplace(data any, lookup map[string]string, fromKey string, toKey string) bool {
+	replaced := false
+	switch d := data.(type) {
+	case map[string]any:
+		if val, exists := d[fromKey]; exists {
+			if toKey == "" {
+				delete(d, fromKey)
+				replaced = true
+			} else {
+				descKey, ok := val.(string)
+				if ok && lookup != nil {
+					if replacement, found := lookup[descKey]; found {
+						d[toKey] = replacement
+					} else {
+						d[toKey] = descKey
+					}
+				} else if ok {
+					d[toKey] = descKey
+				}
+				if fromKey != toKey {
+					delete(d, fromKey)
+				}
+				replaced = true
+			}
+		}
+		for _, v := range d {
+			if recursiveReplace(v, lookup, fromKey, toKey) {
+				replaced = true
+			}
+		}
+	case []any:
+		for _, v := range d {
+			if recursiveReplace(v, lookup, fromKey, toKey) {
+				replaced = true
+			}
+		}
 	}
-	return desc
+	return replaced
 }
 
 // formatReadableSchema 递归生成可读 Schema 字符串
@@ -180,7 +241,6 @@ func formatReadableSchema(schema map[string]any, indent string) string {
 
 	switch typeName {
 	case "object":
-		sb.WriteString(indent + "class Output:\n")
 		props, _ := schema["properties"].(map[string]any)
 		for propName, propVal := range props {
 			propMap, ok := propVal.(map[string]any)
@@ -189,7 +249,7 @@ func formatReadableSchema(schema map[string]any, indent string) string {
 			}
 			desc, _ := propMap["description"].(string)
 			propType := inferPythonType(propMap)
-			fmt.Fprintf(&sb, "%s    %s: %s  # %s\n", indent, propName, propType, desc)
+			fmt.Fprintf(&sb, "%s%s: %s  # %s\n", indent, propName, propType, desc)
 			if propType == "dict" || propType == "list[dict]" {
 				nestedStr := formatReadableSchema(propMap, indent+"    ")
 				if nestedStr != "" {
@@ -237,13 +297,13 @@ func inferPythonType(prop map[string]any) string {
 }
 
 // extractRefDict 从 Schema 中提取引用定义
-func extractRefDict(schema map[string]any) map[string]map[string]any {
-	refDict := map[string]map[string]any{}
+func extractRefDict(schema map[string]any) map[string]any {
+	refDict := map[string]any{}
 	extractRefDictRecursive(schema, refDict)
 	return refDict
 }
 
-func extractRefDictRecursive(schema map[string]any, refDict map[string]map[string]any) {
+func extractRefDictRecursive(schema map[string]any, refDict map[string]any) {
 	props, _ := schema["properties"].(map[string]any)
 	if props == nil {
 		return

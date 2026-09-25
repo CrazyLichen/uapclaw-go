@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -20,6 +21,8 @@ import (
 // 启动时通过 embed.FS 读取 prompts/cn/ 和 prompts/en/ 目录下的 .pr.md 文件，
 // 解析为 PromptTemplate 并缓存到内存中。
 type TemplateManager struct {
+	// mu 保护 templates map 的读写锁。
+	// 注意：sync.RWMutex 不可重入，禁止在 Get/registerInBulk 中递归调用自身。
 	mu        sync.RWMutex
 	templates map[string]*prompt.PromptTemplate
 }
@@ -93,7 +96,11 @@ func (m *TemplateManager) init() {
 	totalLoaded := 0
 
 	for _, lang := range languageDirs {
-		count := m.registerInBulk(lang)
+		count, err := m.registerInBulk(lang)
+		if err != nil {
+			logger.Error(logger.ComponentAgentCore).Err(err).Str("lang", lang).Msg("加载提示词模板失败")
+			continue
+		}
 		totalLoaded += count
 	}
 
@@ -105,20 +112,28 @@ func (m *TemplateManager) init() {
 // registerInBulk 批量注册某目录下的 .pr.md 文件
 //
 // Python: ThreadSafePromptManager.register_in_bulk(prompt_dir, name)
-func (m *TemplateManager) registerInBulk(lang string) int {
+func (m *TemplateManager) registerInBulk(lang string) (int, error) {
 	pattern := lang + "/*.pr.md"
+
+	// 文件扫描在锁内执行（对齐 Python: 同步扫描+注册）
+	m.mu.Lock()
 	paths, err := fs.Glob(promptFiles, pattern)
 	if err != nil {
-		logger.Error(logger.ComponentAgentCore).Str("pattern", pattern).Err(err).Msg("扫描提示词模板文件失败")
-		return 0
+		m.mu.Unlock()
+		return 0, exception.BuildError(
+			exception.StatusMemoryGraphPromptFilesMissing,
+			exception.WithParam("prompt_dir", lang),
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
 	if len(paths) == 0 {
-		logger.Warn(logger.ComponentAgentCore).Str("lang", lang).Msg("目录下未找到 .pr.md 文件")
-		return 0
+		m.mu.Unlock()
+		// 对齐 Python: raise build_error(StatusCode.MEMORY_GRAPH_PROMPT_FILES_MISSING)
+		return 0, exception.BuildError(
+			exception.StatusMemoryGraphPromptFilesMissing,
+			exception.WithParam("prompt_dir", lang),
+		)
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	for _, tPath := range paths {
 		tName := filepath.Base(tPath)
@@ -141,11 +156,13 @@ func (m *TemplateManager) registerInBulk(lang string) int {
 
 		m.templates[tName] = prompt.NewPromptTemplate(tName, messages)
 	}
+	m.mu.Unlock()
 
+	// 日志在锁外输出（对齐 Python: 日志不阻塞其他操作）
 	logger.Info(logger.ComponentAgentCore).
 		Int("count", len(paths)).
 		Str("name", lang).
 		Msg("已加载提示词模板")
 
-	return len(paths)
+	return len(paths), nil
 }

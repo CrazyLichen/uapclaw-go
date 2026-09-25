@@ -708,12 +708,11 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 		maxRetries = 1
 	}
 
-	gm.Semaphore <- struct{}{} // 获取信号量
-	defer func() { <-gm.Semaphore }()
-
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		gm.Semaphore <- struct{}{} // 获取信号量
 		response, err := gm.LLMClient.Invoke(ctx, messages, invokeOpts...)
+		<-gm.Semaphore // 立即释放信号量（对齐 Python: sleep 期间不持有信号量）
 		if err == nil {
 			// 更新 token 记录（对齐 Python: self.token_record）
 			// Python asyncio 单线程无需加锁，Go 并发调用时需加锁
@@ -758,6 +757,7 @@ func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmp
 	}
 
 	return nil, exception.BuildError(exception.StatusMemoryGraphInvokeLlmFailed,
+		exception.WithCause(lastErr),
 		exception.WithParam("error_msg", lastErr.Error()),
 	)
 }
@@ -1081,6 +1081,8 @@ func (gm *GraphMemory) extractEntityDeclarations(ctx context.Context, srcType co
 			if name == "" {
 				continue
 			}
+			// 对齐 Python: extraction.pop("name", "")
+			delete(entMap, "name")
 			// 对齐 Python: casefold() 大小写不敏感过滤系统实体名
 			lowerName := strings.ToLower(name)
 			if lowerName == "user" || lowerName == "assistant" {
@@ -1456,14 +1458,14 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 		}
 	}
 
-	// 更新实体（对齐 Python: for entity, future in zip(entities, state.tasks): ...）
-	taskIdx := 0
-	for _, entity := range entities {
-		if taskIdx >= len(taskResults) {
-			break
-		}
-		result := taskResults[taskIdx]
-		taskIdx++
+	// 更新实体（对齐 Python: for entity, future in zip(entities, state.tasks)）
+	n := len(entities)
+	if len(taskResults) < n {
+		n = len(taskResults)
+	}
+	for i := 0; i < n; i++ {
+		entity := entities[i]
+		result := taskResults[i]
 		if result.Err != nil || result.Content == "" {
 			continue
 		}

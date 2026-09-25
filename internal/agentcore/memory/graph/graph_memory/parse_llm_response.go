@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction"
@@ -94,7 +95,9 @@ func ParseISO(timeStr string) (int64, int8) {
 			// 手动对齐时区偏移
 			offsetH := match[7]
 			offsetM := match[8]
-			if offsetH != "" {
+			hasOffset := offsetH != ""
+			hasZ := strings.Contains(timeStr, "Z")
+			if hasOffset {
 				oh, _ := strconv.Atoi(offsetH)
 				offsetStr := fmt.Sprintf("+%02d", oh)
 				if offsetM != "" {
@@ -102,12 +105,28 @@ func ParseISO(timeStr string) (int64, int8) {
 					offsetStr += fmt.Sprintf(":%02d", om)
 				}
 				isoStr += offsetStr
-			} else {
-				// 无时区信息时默认 UTC
-				isoStr += "Z"
 			}
 
-			ts, offset, err := graph.ISO2Timestamp(isoStr)
+			var ts int64
+			var offset int8
+			var err error
+			if hasOffset {
+				ts, offset, err = graph.ISO2Timestamp(isoStr)
+			} else if hasZ {
+				// 有 Z 后缀表示 UTC（对齐 Python: Z 后缀按 UTC 处理）
+				isoStr += "Z"
+				ts, offset, err = graph.ISO2Timestamp(isoStr)
+			} else {
+				// 无时区信息时按本地时区解析（对齐 Python: 无 Z 后缀时按本地时区处理）
+				local := time.Local
+				t, parseErr := time.ParseInLocation("2006-01-02T15:04:05", isoStr, local)
+				if parseErr != nil {
+					return -1, 0
+				}
+				ts = t.Unix()
+				_, localOffset := t.Zone()
+				offset = int8(localOffset / (15 * 60))
+			}
 			if err == nil {
 				return ts, offset
 			}

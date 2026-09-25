@@ -48,41 +48,6 @@ func ParsePRContent(content string) []schema.BaseMessage {
 	}
 
 	var messages []schema.BaseMessage
-	lastEnd := 0
-
-	for _, match := range matches {
-		// match[0:2] 是完整匹配的 [start, end]
-		// match[2:4] 是第一个捕获组（角色名）的 [start, end]
-		fullStart := match[0]
-		roleStart := match[2]
-		roleEnd := match[3]
-		fullEnd := match[1]
-
-		// 角色名前的内容（通常是空或上一条消息的尾部）
-		// 在 Python 的 split 中，分隔符前的内容属于上一条消息
-		// 第一条消息前的内容忽略（通常是空）
-
-		// 获取角色名
-		role := content[roleStart:roleEnd]
-		if !roles[role] {
-			lastEnd = fullEnd
-			continue
-		}
-
-		// 下一段内容：从当前分隔符结束到下一个分隔符开始
-		// 我们先记录角色，等下一个匹配来确定内容结束位置
-		// 简化：先收集 (role, contentStart) 对，最后统一提取内容
-		_ = fullEnd
-		_ = lastEnd
-		_ = fullStart
-	}
-
-	// 重新实现：收集所有分隔符位置，然后提取角色和对应内容
-	type roleSpan struct {
-		role    string
-		content string
-	}
-	var spans []roleSpan
 
 	for i, match := range matches {
 		roleStart := match[2]
@@ -98,15 +63,8 @@ func ParsePRContent(content string) []schema.BaseMessage {
 			contentEnd = len(content)
 		}
 
-		spans = append(spans, roleSpan{
-			role:    role,
-			content: content[contentStart:contentEnd],
-		})
-	}
-
-	for _, span := range spans {
-		if roles[span.role] {
-			msg := newMessageByRole(span.role, span.content)
+		if roles[role] {
+			msg := newMessageByRole(role, content[contentStart:contentEnd])
 			if msg != nil {
 				messages = append(messages, msg)
 			}
@@ -127,8 +85,9 @@ func newMessageByRole(role, content string) schema.BaseMessage {
 		return schema.NewUserMessage(content)
 	case "assistant":
 		return schema.NewAssistantMessage(content)
-	case "tool":
-		return schema.NewToolMessage("", content)
+	// case "tool" 跳过：当前 .pr.md 模板无 #tool# 角色，
+	// ToolMessage 需要 tool_call_id，而模板中无此字段。
+	// 待后续 #tool# 模板出现时正确实现。
 	default:
 		return nil
 	}

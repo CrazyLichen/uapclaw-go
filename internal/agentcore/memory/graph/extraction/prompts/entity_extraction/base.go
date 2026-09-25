@@ -7,6 +7,7 @@ import (
 
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/registry"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -22,7 +23,7 @@ import (
 // FormatSchemaInfo 将 LLM 可读 Schema 拼接到提示词末尾
 //
 // Python: format_schema_info(output_model, indent, language)
-func FormatSchemaInfo(outStr string, refDict map[string]map[string]any, indent int, language string) string {
+func FormatSchemaInfo(outStr string, refDict map[string]any, indent int, language string) string {
 	if outStr == "" {
 		return ""
 	}
@@ -139,7 +140,11 @@ func EnsureValidLanguage(language string, maxLen int) (string, error) {
 		for lang := range registry.RegisteredLanguage {
 			registered = append(registered, lang)
 		}
-		return "", fmt.Errorf("graph memory 不支持语言 %s，已注册: %v", language, registered)
+		return "", exception.BuildError(
+			exception.StatusMemoryStoreValidationInvalid,
+			exception.WithParam("store_type", "graph memory"),
+			exception.WithParam("error_msg", fmt.Sprintf("不支持语言 %s，已注册: %v", language, registered)),
+		)
 	}
 	if len(language) > maxLen {
 		return "", fmt.Errorf("语言 \"%s\" 超过数据库配置的最大长度限制 (%d)", language, maxLen)
@@ -149,8 +154,8 @@ func EnsureValidLanguage(language string, maxLen int) (string, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// jsonMarshalIndent 将 map 序列化为缩进 JSON
-func jsonMarshalIndent(v map[string]any, indent int) ([]byte, error) {
+// jsonMarshalIndent 将 any 序列化为缩进 JSON
+func jsonMarshalIndent(v any, indent int) ([]byte, error) {
 	indentStr := strings.Repeat(" ", indent)
 	return json.MarshalIndent(v, "", indentStr)
 }

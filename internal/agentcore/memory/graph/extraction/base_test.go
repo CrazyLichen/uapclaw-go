@@ -136,3 +136,113 @@ func TestBuildResponseFormat_RelevantFacts(t *testing.T) {
 		t.Errorf("name 期望 RelevantFacts，实际 %v", rf["name"])
 	}
 }
+
+// TestRecursiveReplace_删除字段 测试 toKey 为空时删除 fromKey
+func TestRecursiveReplace_删除字段(t *testing.T) {
+	data := map[string]any{
+		"title": "MyTitle",
+		"type":  "object",
+		"properties": map[string]any{
+			"name": map[string]any{
+				"type":  "string",
+				"title": "NameTitle",
+			},
+		},
+	}
+	replaced := recursiveReplace(data, nil, "title", "")
+	if !replaced {
+		t.Error("应返回 true 表示执行了替换")
+	}
+	if _, ok := data["title"]; ok {
+		t.Error("顶层 title 应被删除")
+	}
+	props := data["properties"].(map[string]any)
+	nameProp := props["name"].(map[string]any)
+	if _, ok := nameProp["title"]; ok {
+		t.Error("嵌套 title 应被删除")
+	}
+}
+
+// TestRecursiveReplace_替换字段 测试 fromKey → toKey 替换
+func TestRecursiveReplace_替换字段(t *testing.T) {
+	lookup := map[string]string{
+		"#/$defs/Foo": "Foo",
+	}
+	data := map[string]any{
+		"$ref": "#/$defs/Foo",
+	}
+	replaced := recursiveReplace(data, lookup, "$ref", "type")
+	if !replaced {
+		t.Error("应返回 true")
+	}
+	if data["type"] != "Foo" {
+		t.Errorf("type 期望 Foo，实际 %v", data["type"])
+	}
+	if _, ok := data["$ref"]; ok {
+		t.Error("$ref 应被删除")
+	}
+}
+
+// TestRecursiveReplace_lookup未命中 测试 lookup 未命中时使用原值
+func TestRecursiveReplace_lookup未命中(t *testing.T) {
+	lookup := map[string]string{}
+	data := map[string]any{
+		"$ref": "#/$defs/Bar",
+	}
+	replaced := recursiveReplace(data, lookup, "$ref", "type")
+	if !replaced {
+		t.Error("应返回 true")
+	}
+	if data["type"] != "#/$defs/Bar" {
+		t.Errorf("type 期望 #/$defs/Bar，实际 %v", data["type"])
+	}
+}
+
+// TestRecursiveReplace_fromKey等于toKey 测试 fromKey == toKey 时不删除
+func TestRecursiveReplace_fromKey等于toKey(t *testing.T) {
+	lookup := map[string]string{
+		"old": "new",
+	}
+	data := map[string]any{
+		"x": "old",
+	}
+	replaced := recursiveReplace(data, lookup, "x", "x")
+	if !replaced {
+		t.Error("应返回 true")
+	}
+	if data["x"] != "new" {
+		t.Errorf("x 期望 new，实际 %v", data["x"])
+	}
+}
+
+// TestRecursiveReplace_数组内替换 测试 []any 中的递归替换
+func TestRecursiveReplace_数组内替换(t *testing.T) {
+	data := map[string]any{
+		"items": []any{
+			map[string]any{"title": "A"},
+			map[string]any{"title": "B"},
+		},
+	}
+	replaced := recursiveReplace(data, nil, "title", "")
+	if !replaced {
+		t.Error("应返回 true")
+	}
+	items := data["items"].([]any)
+	for _, item := range items {
+		m := item.(map[string]any)
+		if _, ok := m["title"]; ok {
+			t.Error("数组内 title 应被删除")
+		}
+	}
+}
+
+// TestRecursiveReplace_无匹配 测试无匹配时返回 false
+func TestRecursiveReplace_无匹配(t *testing.T) {
+	data := map[string]any{
+		"type": "string",
+	}
+	replaced := recursiveReplace(data, nil, "title", "")
+	if replaced {
+		t.Error("无匹配时应返回 false")
+	}
+}

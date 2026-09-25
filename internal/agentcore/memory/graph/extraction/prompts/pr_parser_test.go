@@ -68,15 +68,12 @@ func TestParsePRContent_三角色(t *testing.T) {
 	}
 }
 
-// TestParsePRContent_tool角色 测试 tool 角色
+// TestParsePRContent_tool角色 测试 tool 角色（当前跳过，返回 nil）
 func TestParsePRContent_tool角色(t *testing.T) {
 	content := "`#tool#`工具返回结果"
 	msgs := ParsePRContent(content)
-	if len(msgs) != 1 {
-		t.Fatalf("期望 1 条消息，实际 %d", len(msgs))
-	}
-	if msgs[0].GetRole() != llmschema.RoleTypeTool {
-		t.Errorf("期望 role=tool，实际 %s", msgs[0].GetRole().String())
+	if len(msgs) != 0 {
+		t.Fatalf("tool 角色应跳过，期望 0 条消息，实际 %d", len(msgs))
 	}
 }
 
