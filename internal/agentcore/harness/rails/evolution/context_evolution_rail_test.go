@@ -2,10 +2,12 @@ package evolution
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -23,10 +25,11 @@ type mockTaskMemoryService struct {
 	loadMemoriesErr error
 	loadCalled      bool
 
-	summarizeResult *ceservice.SummarizeResult
-	summarizeErr    error
-	summarizeCalled bool
-	summarizeParams []string // 记录传入的 trajectories
+	summaryAlgorithm string
+	summarizeResult  *ceservice.SummarizeResult
+	summarizeErr     error
+	summarizeCalled  bool
+	summarizeParams  []string // 记录传入的 trajectories
 }
 
 func (m *mockTaskMemoryService) Retrieve(_ context.Context, userID string, query string) (*ceservice.RetrieveResult, error) {
@@ -52,6 +55,13 @@ func (m *mockTaskMemoryService) LoadMemories(_ context.Context, _ string) error 
 	return m.loadMemoriesErr
 }
 
+func (m *mockTaskMemoryService) SummaryAlgorithm() string {
+	if m.summaryAlgorithm == "" {
+		return "ACE"
+	}
+	return m.summaryAlgorithm
+}
+
 func (m *mockTaskMemoryService) Summarize(_ context.Context, userID string, matts string, query string, trajectories []string, _ ...map[string]any) (*ceservice.SummarizeResult, error) {
 	m.summarizeCalled = true
 	m.summarizeParams = trajectories
@@ -73,13 +83,23 @@ func (m *mockRetrievedMemory) FormatMemoryString() string {
 // ──────────────────────────── 构造测试 ────────────────────────────
 
 func TestNewContextEvolutionRail_默认值(t *testing.T) {
+	// 清除 API_KEY 确保默认 TaskMemoryService 创建失败（降级模式）
+	ceconfig.Delete("API_KEY")
+	origEnv := os.Getenv("API_KEY")
+	os.Unsetenv("API_KEY")
+	defer func() {
+		if origEnv != "" {
+			os.Setenv("API_KEY", origEnv)
+		}
+	}()
+
 	r := NewContextEvolutionRail("alice", nil)
 	assert.Equal(t, "alice", r.userID)
 	assert.True(t, r.injectMemoriesInContext)
 	assert.True(t, r.autoSummarize)
 	assert.Equal(t, "none", r.autoSummarizeMattsMode)
 	assert.Equal(t, contextEvolutionPriority, r.Priority())
-	assert.Nil(t, r.memoryService) // nil 时不创建默认实例
+	assert.Nil(t, r.memoryService) // 无 API_KEY 时降级为 nil
 }
 
 func TestNewContextEvolutionRail_自定义选项(t *testing.T) {
@@ -99,10 +119,31 @@ func TestNewContextEvolutionRail_自定义选项(t *testing.T) {
 }
 
 func TestNewContextEvolutionRail_NilMemoryService(t *testing.T) {
+	// 清除 ceconfig 和环境变量中的 API_KEY，使默认 TaskMemoryService 创建失败（降级模式）
+	ceconfig.Delete("API_KEY")
+	origEnv := os.Getenv("API_KEY")
+	os.Unsetenv("API_KEY")
+	defer func() {
+		if origEnv != "" {
+			os.Setenv("API_KEY", origEnv)
+		}
+	}()
+
 	r := NewContextEvolutionRail("charlie", nil)
+	// 创建失败时 memoryService 为 nil（降级模式）
 	assert.Nil(t, r.memoryService)
 	assert.Equal(t, 0, r.MemoriesUsed())
 	assert.Equal(t, "", r.CurrentQuery())
+}
+
+func TestNewContextEvolutionRail_有APIKey(t *testing.T) {
+	// 设置 ceconfig API_KEY，使默认 TaskMemoryService 创建成功
+	ceconfig.Set("API_KEY", "test-key-for-rail")
+	defer ceconfig.Delete("API_KEY")
+
+	r := NewContextEvolutionRail("dave", nil)
+	// 创建成功时 memoryService 不为 nil
+	assert.NotNil(t, r.memoryService)
 }
 
 // ──────────────────────────── GetCallbacks 测试 ────────────────────────────

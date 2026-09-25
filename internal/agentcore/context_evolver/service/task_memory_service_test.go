@@ -70,18 +70,22 @@ func (m *mockVectorStoreForTMS) GetAll(_ map[string]any) []*schema.VectorNode {
 
 // newTestTaskMemoryService 创建测试用 TaskMemoryService。
 // 使用 mock client 注入 OpenAILLMWrapper/OpenAIEmbeddingWrapper + MemoryVectorStore。
-func newTestTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, *mockVectorStoreForTMS, error) {
+func newTestTaskMemoryService(opts ...TaskMemoryServiceOption) (*TaskMemoryService, *mockVectorStoreForTMS, error) {
+	cfg := &taskMemoryServiceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	cfg = applyConfigDefaults(cfg)
 
 	sc := cecontext.NewServiceContext()
 	llm := &OpenAILLMWrapper{
-		modelName:    cfg.LLMModel,
+		modelName:    cfg.llmModel,
 		temperature:  0.7,
 		maxTokens:    2000,
 		isNewerModel: false,
 		client:       &mockLLMClient{},
 	}
-	emb := NewOpenAIEmbeddingWrapperWithClient(cfg.EmbeddingModel, &mockEmbeddingClient{})
+	emb := NewOpenAIEmbeddingWrapperWithClient(cfg.embeddingModel, &mockEmbeddingClient{})
 	vs := newMockVectorStore()
 
 	sc.RegisterService("llm", llm)
@@ -128,10 +132,7 @@ func TestNormalizeAlgoName_非法值(t *testing.T) {
 
 // TestNewTaskMemoryService_基本构造 验证 ACE 算法的基本构造。
 func TestNewTaskMemoryService_基本构造(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
 	assert.Equal(t, "ACE", svc.retrievalAlgorithm)
@@ -142,10 +143,7 @@ func TestNewTaskMemoryService_基本构造(t *testing.T) {
 
 // TestNewTaskMemoryService_RB算法 验证 ReasoningBank 算法构造。
 func TestNewTaskMemoryService_RB算法(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "RB",
-		SummaryAlgo:   "RB",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("RB"), WithSummaryAlgo("RB"))
 	require.NoError(t, err)
 	assert.Equal(t, "ReasoningBank", svc.retrievalAlgorithm)
 	assert.Equal(t, "ReasoningBank", svc.summaryAlgorithm)
@@ -153,10 +151,7 @@ func TestNewTaskMemoryService_RB算法(t *testing.T) {
 
 // TestNewTaskMemoryService_ReMe算法 验证 ReMe 算法构造。
 func TestNewTaskMemoryService_ReMe算法(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ReMe",
-		SummaryAlgo:   "ReMe",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("ReMe"), WithSummaryAlgo("ReMe"))
 	require.NoError(t, err)
 	assert.Equal(t, "ReMe", svc.retrievalAlgorithm)
 	assert.Equal(t, "ReMe", svc.summaryAlgorithm)
@@ -164,27 +159,21 @@ func TestNewTaskMemoryService_ReMe算法(t *testing.T) {
 
 // TestNewTaskMemoryService_RefCon算法 验证 RefCon 算法构造。
 func TestNewTaskMemoryService_RefCon算法(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "RefCon",
-		SummaryAlgo:   "RefCon",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("RefCon"), WithSummaryAlgo("RefCon"))
 	require.NoError(t, err)
 	assert.Equal(t, "RefCon", svc.retrievalAlgorithm)
 }
 
 // TestNewTaskMemoryService_DivCon算法 验证 DivCon 算法构造。
 func TestNewTaskMemoryService_DivCon算法(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "DivCon",
-		SummaryAlgo:   "DivCon",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("DivCon"), WithSummaryAlgo("DivCon"))
 	require.NoError(t, err)
 	assert.Equal(t, "DivCon", svc.retrievalAlgorithm)
 }
 
 // TestNewTaskMemoryService_默认值 验证默认算法为 ACE。
 func TestNewTaskMemoryService_默认值(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(nil)
+	svc, _, err := newTestTaskMemoryService()
 	require.NoError(t, err)
 	assert.Equal(t, "ACE", svc.retrievalAlgorithm)
 	assert.Equal(t, "ACE", svc.summaryAlgorithm)
@@ -192,17 +181,13 @@ func TestNewTaskMemoryService_默认值(t *testing.T) {
 
 // TestNewTaskMemoryService_非法算法 验证非法算法返回错误。
 func TestNewTaskMemoryService_非法算法(t *testing.T) {
-	_, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "invalid",
-	})
+	_, _, err := newTestTaskMemoryService(WithRetrievalAlgo("invalid"))
 	require.Error(t, err)
 }
 
 // TestTaskMemoryService_AddMemory_ACE 验证 ACE 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ACE(t *testing.T) {
-	svc, vs, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ACE",
-	})
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 
 	result, err := svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
@@ -218,9 +203,7 @@ func TestTaskMemoryService_AddMemory_ACE(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_ACE_缺少内容 验证 ACE 输入校验。
 func TestTaskMemoryService_AddMemory_ACE_缺少内容(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ACE",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 
 	_, err = svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
@@ -233,9 +216,7 @@ func TestTaskMemoryService_AddMemory_ACE_缺少内容(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_ReMe 验证 ReMe 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ReMe(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ReMe",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
 	require.NoError(t, err)
 
 	whenToUse := "when debugging"
@@ -250,9 +231,7 @@ func TestTaskMemoryService_AddMemory_ReMe(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_ReMe_缺少WhenToUse 验证 ReMe 输入校验。
 func TestTaskMemoryService_AddMemory_ReMe_缺少WhenToUse(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ReMe",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
 	require.NoError(t, err)
 
 	_, err = svc.AddMemory(context.Background(), "user1", AddMemoryRequest{
@@ -265,9 +244,7 @@ func TestTaskMemoryService_AddMemory_ReMe_缺少WhenToUse(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_ReasoningBank 验证 RB 算法的添加记忆。
 func TestTaskMemoryService_AddMemory_ReasoningBank(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "RB",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("RB"))
 	require.NoError(t, err)
 
 	title := "test title"
@@ -284,9 +261,7 @@ func TestTaskMemoryService_AddMemory_ReasoningBank(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_RB_缺少Title 验证 RB 输入校验。
 func TestTaskMemoryService_AddMemory_RB_缺少Title(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "RB",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("RB"))
 	require.NoError(t, err)
 
 	desc := "test description"
@@ -301,9 +276,7 @@ func TestTaskMemoryService_AddMemory_RB_缺少Title(t *testing.T) {
 
 // TestTaskMemoryService_AddMemory_RB_缺少Description 验证 RB 输入校验。
 func TestTaskMemoryService_AddMemory_RB_缺少Description(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "RB",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("RB"))
 	require.NoError(t, err)
 
 	title := "test title"
@@ -332,10 +305,7 @@ func TestTaskMemoryService_AddMemory_不支持的算法(t *testing.T) {
 
 // TestTaskMemoryService_Reconfigure 验证重新配置算法。
 func TestTaskMemoryService_Reconfigure(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 
 	err = svc.Reconfigure("RB")
@@ -346,10 +316,7 @@ func TestTaskMemoryService_Reconfigure(t *testing.T) {
 
 // TestTaskMemoryService_Reconfigure_非法算法 验证非法算法名重新配置返回错误。
 func TestTaskMemoryService_Reconfigure_非法算法(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 
 	err = svc.Reconfigure("invalid")
@@ -360,10 +327,7 @@ func TestTaskMemoryService_Reconfigure_非法算法(t *testing.T) {
 
 // TestTaskMemoryService_LoadMemories_无Persistence 验证无持久化时为 no-op。
 func TestTaskMemoryService_LoadMemories_无Persistence(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	svc, _, err := newTestTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 	assert.Nil(t, svc.PersistenceHelper())
 
@@ -422,24 +386,24 @@ func TestAlgoToPersistName(t *testing.T) {
 // TestApplyConfigDefaults 验证默认值应用。
 func TestApplyConfigDefaults(t *testing.T) {
 	cfg := applyConfigDefaults(nil)
-	assert.Equal(t, "gpt-5.2", cfg.LLMModel)
-	assert.Equal(t, "text-embedding-3-small", cfg.EmbeddingModel)
-	assert.Equal(t, "ACE", cfg.RetrievalAlgo)
-	assert.Equal(t, "ACE", cfg.SummaryAlgo)
+	assert.Equal(t, "gpt-5.2", cfg.llmModel)
+	assert.Equal(t, "text-embedding-3-small", cfg.embeddingModel)
+	assert.Equal(t, "ACE", cfg.retrievalAlgo)
+	assert.Equal(t, "ACE", cfg.summaryAlgo)
 }
 
 // TestApplyConfigDefaults_自定义值 验证自定义值不被覆盖。
 func TestApplyConfigDefaults_自定义值(t *testing.T) {
-	cfg := applyConfigDefaults(&TaskMemoryServiceConfig{
-		LLMModel:       "custom-model",
-		EmbeddingModel: "custom-emb",
-		RetrievalAlgo:  "RB",
-		SummaryAlgo:    "ReMe",
+	cfg := applyConfigDefaults(&taskMemoryServiceConfig{
+		llmModel:       "custom-model",
+		embeddingModel: "custom-emb",
+		retrievalAlgo:  "RB",
+		summaryAlgo:    "ReMe",
 	})
-	assert.Equal(t, "custom-model", cfg.LLMModel)
-	assert.Equal(t, "custom-emb", cfg.EmbeddingModel)
-	assert.Equal(t, "RB", cfg.RetrievalAlgo)
-	assert.Equal(t, "ReMe", cfg.SummaryAlgo)
+	assert.Equal(t, "custom-model", cfg.llmModel)
+	assert.Equal(t, "custom-emb", cfg.embeddingModel)
+	assert.Equal(t, "RB", cfg.retrievalAlgo)
+	assert.Equal(t, "ReMe", cfg.summaryAlgo)
 }
 
 // TestNewOpenAIEmbeddingWrapperWithClient 验证 WithClient 构造。
@@ -466,9 +430,7 @@ func TestNewOpenAILLMWrapperWithMockClient(t *testing.T) {
 
 // TestTaskMemoryService_GetPlaybook_非ACE 验证非 ACE 算法返回空。
 func TestTaskMemoryService_GetPlaybook_非ACE(t *testing.T) {
-	svc, _, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ReMe",
-	})
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
 	require.NoError(t, err)
 
 	nodes, err := svc.GetPlaybook(context.Background(), "user1")
@@ -478,9 +440,7 @@ func TestTaskMemoryService_GetPlaybook_非ACE(t *testing.T) {
 
 // TestTaskMemoryService_ClearPlaybook_非ACE 验证非 ACE 算法返回 nil。
 func TestTaskMemoryService_ClearPlaybook_非ACE(t *testing.T) {
-	svc, vs, err := newTestTaskMemoryService(&TaskMemoryServiceConfig{
-		SummaryAlgo: "ReMe",
-	})
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
 	require.NoError(t, err)
 
 	err = svc.ClearPlaybook(context.Background(), "user1")
@@ -628,10 +588,7 @@ func TestNewTaskMemoryService_需APIKey(t *testing.T) {
 		}
 	}()
 
-	_, err := NewTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	_, err := NewTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.Error(t, err)
 }
 
@@ -640,10 +597,7 @@ func TestNewTaskMemoryService_通过Ceconfig(t *testing.T) {
 	ceconfig.Set("API_KEY", "test-api-key-for-tms")
 	defer ceconfig.Delete("API_KEY")
 
-	svc, err := NewTaskMemoryService(&TaskMemoryServiceConfig{
-		RetrievalAlgo: "ACE",
-		SummaryAlgo:   "ACE",
-	})
+	svc, err := NewTaskMemoryService(WithRetrievalAlgo("ACE"), WithSummaryAlgo("ACE"))
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
 	assert.Equal(t, "ACE", svc.retrievalAlgorithm)

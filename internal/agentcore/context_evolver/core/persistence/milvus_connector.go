@@ -23,16 +23,16 @@ import (
 //
 // 生产代码使用真实 milvusclient.Client，测试代码注入 fakeMilvusClient。
 type milvusClient interface {
-	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error
-	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error)
-	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error)
-	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error)
-	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error)
-	Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error)
-	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error)
-	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error
-	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error
-	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error
+	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error
+	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption) (bool, error)
+	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption) (*entity.Collection, error)
+	Insert(ctx context.Context, option milvusclient.InsertOption) (milvusclient.InsertResult, error)
+	Search(ctx context.Context, option milvusclient.SearchOption) ([]milvusclient.ResultSet, error)
+	Query(ctx context.Context, option milvusclient.QueryOption) (milvusclient.ResultSet, error)
+	Delete(ctx context.Context, option milvusclient.DeleteOption) (milvusclient.DeleteResult, error)
+	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption) error
+	Flush(ctx context.Context, option milvusclient.FlushOption) error
+	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption) error
 	Close(ctx context.Context) error
 }
 
@@ -886,41 +886,41 @@ func findColumn(ds milvusclient.DataSet, name string) column.Column {
 
 // persistenceClientAdapter 将 milvusclient.Client 适配到 milvusClient 接口。
 //
-// 新 SDK 的 Client 方法签名使用 ...grpc.CallOption，需要适配层桥接。
+// 桥接真实 SDK 的 Client 方法签名到内部 milvusClient 接口。
 // 对齐 foundation/store/vector/milvus_adapter.go 的 milvusClientAdapter。
 type persistenceClientAdapter struct {
 	client *milvusclient.Client
 }
 
-func (a *persistenceClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
+func (a *persistenceClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error {
 	return a.client.CreateCollection(ctx, option)
 }
 
-func (a *persistenceClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
+func (a *persistenceClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption) (bool, error) {
 	return a.client.HasCollection(ctx, option)
 }
 
-func (a *persistenceClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
+func (a *persistenceClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption) (*entity.Collection, error) {
 	return a.client.DescribeCollection(ctx, option)
 }
 
-func (a *persistenceClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
+func (a *persistenceClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption) (milvusclient.InsertResult, error) {
 	return a.client.Insert(ctx, option)
 }
 
-func (a *persistenceClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
+func (a *persistenceClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption) ([]milvusclient.ResultSet, error) {
 	return a.client.Search(ctx, option)
 }
 
-func (a *persistenceClientAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
+func (a *persistenceClientAdapter) Query(ctx context.Context, option milvusclient.QueryOption) (milvusclient.ResultSet, error) {
 	return a.client.Query(ctx, option)
 }
 
-func (a *persistenceClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
+func (a *persistenceClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption) (milvusclient.DeleteResult, error) {
 	return a.client.Delete(ctx, option)
 }
 
-func (a *persistenceClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
+func (a *persistenceClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption) error {
 	task, err := a.client.LoadCollection(ctx, option)
 	if err != nil {
 		return err
@@ -928,7 +928,7 @@ func (a *persistenceClientAdapter) LoadCollection(ctx context.Context, option mi
 	return task.Await(ctx)
 }
 
-func (a *persistenceClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
+func (a *persistenceClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption) error {
 	task, err := a.client.Flush(ctx, option)
 	if err != nil {
 		return err
@@ -939,7 +939,7 @@ func (a *persistenceClientAdapter) Flush(ctx context.Context, option milvusclien
 	return nil
 }
 
-func (a *persistenceClientAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error {
+func (a *persistenceClientAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption) error {
 	task, err := a.client.CreateIndex(ctx, option)
 	if err != nil {
 		return err

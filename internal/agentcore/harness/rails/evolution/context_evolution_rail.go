@@ -20,12 +20,15 @@ import (
 // taskMemoryServicer 记忆服务接口（非导出，用于测试 mock）。
 //
 // 提取 TaskMemoryService 的关键方法，ContextEvolutionRail 持有此接口而非具体类型。
+// 实现 ceservice.SummarizeTrajectorier 接口，可直接传给 SummarizeTrajectories。
 // 对齐 Python: ContextEvolutionRail 使用 TaskMemoryService 实例。
 type taskMemoryServicer interface {
 	// Retrieve 检索记忆
 	Retrieve(ctx context.Context, userID string, query string) (*ceservice.RetrieveResult, error)
 	// LoadMemories 加载已有记忆
 	LoadMemories(ctx context.Context, userID string) error
+	// SummaryAlgorithm 返回总结算法名称
+	SummaryAlgorithm() string
 	// Summarize 总结轨迹
 	Summarize(ctx context.Context, userID string, matts string, query string, trajectories []string, extraKwargs ...map[string]any) (*ceservice.SummarizeResult, error)
 }
@@ -93,9 +96,8 @@ const (
 
 // NewContextEvolutionRail 创建上下文演化轨道实例。
 //
-// memoryService 为 nil 时创建默认 TaskMemoryService（对齐 Python）。
-// 注意：Go 的 NewTaskMemoryService 需要显式配置，无法像 Python 无参创建，
-// 因此 nil 时打印警告并跳过记忆功能。
+// memoryService 为 nil 时尝试创建默认 TaskMemoryService（对齐 Python TaskMemoryService() 无参创建）。
+// 如果创建失败（如 ceconfig 未配置 API_KEY），打印警告并跳过记忆功能。
 //
 // 对齐 Python: ContextEvolutionRail(user_id, memory_service, inject_memories_in_context, auto_summarize, auto_summarize_matts_mode)
 func NewContextEvolutionRail(
@@ -115,6 +117,16 @@ func NewContextEvolutionRail(
 	}
 	for _, opt := range opts {
 		opt(r)
+	}
+
+	// 对齐 Python：memoryService 为 nil 时尝试无参创建（对齐 Python TaskMemoryService()）
+	if r.memoryService == nil {
+		svc, err := ceservice.NewTaskMemoryService()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail 无法创建默认 TaskMemoryService，跳过记忆功能")
+		} else {
+			r.memoryService = svc
+		}
 	}
 
 	// 加载已有记忆（对齐 Python __init__ 末尾调用 load_memories）
@@ -351,13 +363,13 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 			feedback, score := ceservice.EvaluateTrial(r.currentQuery, trajectory, "")
 			logger.Info(logComponent).Msg("正在为当前轨迹运行自动总结")
 			// 对齐 Python: await _summarize_trajectories(self.memory_service, self.user_id, SummarizeTrajectoriesInput(...))
-			// 使用 taskMemoryServicer.Summarize 方法（避免类型断言，对 mock 友好）
-			_, err := r.memoryService.Summarize(ctx, r.userID, "none", r.currentQuery, []string{trajectory},
-				map[string]any{
-					"feedback": []string{feedback},
-					"score":    []int{score},
-				},
-			)
+			_, err := ceservice.SummarizeTrajectories(ctx, r.memoryService, r.userID, ceservice.SummarizeTrajectoriesInput{
+				Query:      r.currentQuery,
+				Trajectory: []string{trajectory},
+				MattsMode:  "none",
+				Feedback:   []string{feedback},
+				Score:      []int{score},
+			})
 			if err != nil {
 				logger.Error(logComponent).Err(err).Msg("afterTaskIteration 自动总结失败")
 			}

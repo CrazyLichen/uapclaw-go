@@ -91,14 +91,13 @@ func NewContextEvolvingReActAgent(
 	// 对齐 Python：memoryService 为 nil 时用 persist 参数自建
 	var err error
 	if memoryService == nil && persistType != nil {
-		cfg := &service.TaskMemoryServiceConfig{
-			PersistType:      persistType,
-			PersistPath:      persistPath,
-			MilvusHost:       milvusHost,
-			MilvusPort:       milvusPort,
-			MilvusCollection: milvusCollection,
-		}
-		memoryService, err = service.NewTaskMemoryService(cfg)
+		memoryService, err = service.NewTaskMemoryService(
+			service.WithPersistType(*persistType),
+			service.WithPersistPath(persistPath),
+			service.WithMilvusHost(milvusHost),
+			service.WithMilvusPort(milvusPort),
+			service.WithMilvusCollection(milvusCollection),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TaskMemoryService: %w", err)
 		}
@@ -245,13 +244,12 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 
 	// 重新创建 TaskMemoryService（如果存在）
 	if a.memoryService != nil {
-		cfg := &service.TaskMemoryServiceConfig{
-			LLMModel:       modelName,
-			EmbeddingModel: ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small"),
-			APIKey:         apiKey,
-			APIBase:        apiBase,
-		}
-		newSvc, err := service.NewTaskMemoryService(cfg)
+		newSvc, err := service.NewTaskMemoryService(
+			service.WithLLMModel(modelName),
+			service.WithEmbeddingModel(ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small")),
+			service.WithAPIKey(apiKey),
+			service.WithAPIBase(apiBase),
+		)
 		if err != nil {
 			return fmt.Errorf("AutoConfigure: failed to create TaskMemoryService: %w", err)
 		}

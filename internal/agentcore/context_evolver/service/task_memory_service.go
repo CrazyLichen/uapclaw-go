@@ -93,34 +93,34 @@ type AddMemoryRequest struct {
 	Label *string
 }
 
-// TaskMemoryServiceConfig 任务记忆服务配置。
-// 仅保留连接/初始化参数，运行时参数（top_k/llm_rerank 等）由 config 实时读取。
-// 对齐 Python TaskMemoryService.__init__ 中 self.xxx 字段与 config.get() 的分离。
-type TaskMemoryServiceConfig struct {
-	// LLMModel LLM 模型名称，默认 "gpt-5.2"
-	LLMModel string
-	// EmbeddingModel Embedding 模型名称，默认 "text-embedding-3-small"
-	EmbeddingModel string
-	// APIKey API 密钥
-	APIKey string
-	// APIBase API 基地址
-	APIBase string
-	// RetrievalAlgo 检索算法，默认 "ACE"
-	RetrievalAlgo string
-	// SummaryAlgo 总结算法，默认 "ACE"
-	SummaryAlgo string
+// TaskMemoryServiceOption 构造选项函数。对齐 Python TaskMemoryService 的可选参数风格。
+type TaskMemoryServiceOption func(*taskMemoryServiceConfig)
 
-	// --- 持久化 ---
-	// PersistType 持久化类型，nil=关闭
-	PersistType *string
-	// PersistPath JSON 持久化路径模板
-	PersistPath string
-	// MilvusHost Milvus 主机
-	MilvusHost string
-	// MilvusPort Milvus 端口
-	MilvusPort int
-	// MilvusCollection Milvus 集合名
-	MilvusCollection string
+// taskMemoryServiceConfig 内部配置结构，不导出。
+// 对齐 Python TaskMemoryService.__init__ 中所有参数均为可选，走 config.get() 兜底。
+type taskMemoryServiceConfig struct {
+	// llmModel LLM 模型名称，空=从 ceconfig 读取或使用默认 "gpt-5.2"
+	llmModel string
+	// embeddingModel Embedding 模型名称，空=从 ceconfig 读取或使用默认 "text-embedding-3-small"
+	embeddingModel string
+	// apiKey API 密钥，空=从 ceconfig 读取
+	apiKey string
+	// apiBase API 基地址，空=从 ceconfig 读取或使用默认
+	apiBase string
+	// retrievalAlgo 检索算法，空=从 ceconfig 读取或使用默认 "ACE"
+	retrievalAlgo string
+	// summaryAlgo 总结算法，空=从 ceconfig 读取或使用默认 "ACE"
+	summaryAlgo string
+	// persistType 持久化类型，nil=从 ceconfig 读取，空字符串=关闭
+	persistType *string
+	// persistPath JSON 持久化路径模板
+	persistPath string
+	// milvusHost Milvus 主机
+	milvusHost string
+	// milvusPort Milvus 端口
+	milvusPort int
+	// milvusCollection Milvus 集合名
+	milvusCollection string
 }
 
 // TaskMemoryService 任务记忆服务，提供记忆检索/总结/管理的统一入口。
@@ -177,11 +177,13 @@ var algoNameMap = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskMemoryService 创建任务记忆服务。
-// 对齐 Python TaskMemoryService.__init__(...)。
-// 从 TaskMemoryServiceConfig 读取参数，内部创建 OpenAILLMWrapper + OpenAIEmbeddingWrapper，
-// 注册到 ServiceContext。
-func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, error) {
-	// 应用默认值
+// 对齐 Python TaskMemoryService() 无参创建风格，所有参数从 ceconfig 读取。
+// 通过 Functional Options 覆盖默认值。
+func NewTaskMemoryService(opts ...TaskMemoryServiceOption) (*TaskMemoryService, error) {
+	cfg := &taskMemoryServiceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	cfg = applyConfigDefaults(cfg)
 
 	// 对齐 Python：logger.info("Initializing TaskMemoryService...")
@@ -191,7 +193,7 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	sc := cecontext.NewServiceContext()
 
 	// 对齐 Python：创建 OpenAILLMWrapper
-	llm, err := NewOpenAILLMWrapper(cfg.LLMModel, cfg.APIKey, cfg.APIBase, 0.7, 2000)
+	llm, err := NewOpenAILLMWrapper(cfg.llmModel, cfg.apiKey, cfg.apiBase, 0.7, 2000)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("TaskMemoryService initialization failed")
 		return nil, exception.NewBaseError(
@@ -201,7 +203,7 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	}
 
 	// 对齐 Python：创建 OpenAIEmbeddingWrapper
-	emb, err := NewOpenAIEmbeddingWrapper(cfg.EmbeddingModel, cfg.APIKey, cfg.APIBase)
+	emb, err := NewOpenAIEmbeddingWrapper(cfg.embeddingModel, cfg.apiKey, cfg.apiBase)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("TaskMemoryService initialization failed")
 		return nil, exception.NewBaseError(
@@ -219,6 +221,61 @@ func NewTaskMemoryService(cfg *TaskMemoryServiceConfig) (*TaskMemoryService, err
 	sc.RegisterService("vector_store", vs)
 
 	return newTaskMemoryServiceWithServices(sc, llm, emb, vs, cfg)
+}
+
+// WithLLMModel 设置 LLM 模型名称。对齐 Python llm_model 参数。
+func WithLLMModel(model string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.llmModel = model }
+}
+
+// WithEmbeddingModel 设置 Embedding 模型名称。对齐 Python embedding_model 参数。
+func WithEmbeddingModel(model string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.embeddingModel = model }
+}
+
+// WithAPIKey 设置 API 密钥。对齐 Python api_key 参数。
+func WithAPIKey(key string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.apiKey = key }
+}
+
+// WithAPIBase 设置 API 基地址。对齐 Python api_base 参数。
+func WithAPIBase(base string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.apiBase = base }
+}
+
+// WithRetrievalAlgo 设置检索算法。对齐 Python retrieval_algo 参数。
+func WithRetrievalAlgo(algo string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.retrievalAlgo = algo }
+}
+
+// WithSummaryAlgo 设置总结算法。对齐 Python summary_algo 参数。
+func WithSummaryAlgo(algo string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.summaryAlgo = algo }
+}
+
+// WithPersistType 设置持久化类型。对齐 Python persist_type 参数。
+func WithPersistType(pt string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.persistType = &pt }
+}
+
+// WithPersistPath 设置 JSON 持久化路径模板。对齐 Python persist_path 参数。
+func WithPersistPath(path string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.persistPath = path }
+}
+
+// WithMilvusHost 设置 Milvus 主机。对齐 Python milvus_host 参数。
+func WithMilvusHost(host string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.milvusHost = host }
+}
+
+// WithMilvusPort 设置 Milvus 端口。对齐 Python milvus_port 参数。
+func WithMilvusPort(port int) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.milvusPort = port }
+}
+
+// WithMilvusCollection 设置 Milvus 集合名。对齐 Python milvus_collection 参数。
+func WithMilvusCollection(collection string) TaskMemoryServiceOption {
+	return func(c *taskMemoryServiceConfig) { c.milvusCollection = collection }
 }
 
 // Retrieve 检索记忆。对齐 Python TaskMemoryService.retrieve(user_id, query, **kwargs)。
@@ -490,6 +547,11 @@ func (s *TaskMemoryService) PersistenceHelper() *cepersistence.MemoryPersistence
 	return s.persistenceHelper
 }
 
+// SummaryAlgorithm 返回总结算法名称。对齐 Python @property summary_algorithm。
+func (s *TaskMemoryService) SummaryAlgorithm() string {
+	return s.summaryAlgorithm
+}
+
 // GetPlaybook 获取用户的 Playbook 记忆。对齐 Python TaskMemoryService.get_playbook(user_id)。
 // 仅 ACE 算法有 Playbook 概念，其他算法返回空。
 func (s *TaskMemoryService) GetPlaybook(ctx context.Context, userID string) ([]*schema.VectorNode, error) {
@@ -542,22 +604,22 @@ func newTaskMemoryServiceWithServices(
 	llm *OpenAILLMWrapper,
 	emb *OpenAIEmbeddingWrapper,
 	vs cecontext.VectorStoreService,
-	cfg *TaskMemoryServiceConfig,
+	cfg *taskMemoryServiceConfig,
 ) (*TaskMemoryService, error) {
 	// 对齐 Python：规范化算法名
-	retrievalAlgo, err := NormalizeAlgoName(cfg.RetrievalAlgo)
+	retrievalAlgo, err := NormalizeAlgoName(cfg.retrievalAlgo)
 	if err != nil {
 		return nil, err
 	}
-	summaryAlgo, err := NormalizeAlgoName(cfg.SummaryAlgo)
+	summaryAlgo, err := NormalizeAlgoName(cfg.summaryAlgo)
 	if err != nil {
 		return nil, err
 	}
 
 	// 对齐 Python：Configuration 日志
 	logger.Info(logComponent).
-		Str("llm_model", cfg.LLMModel).
-		Str("embedding_model", cfg.EmbeddingModel).
+		Str("llm_model", cfg.llmModel).
+		Str("embedding_model", cfg.embeddingModel).
 		Msg("Configuration")
 
 	// 对齐 Python：Selected algorithms 日志
@@ -573,25 +635,25 @@ func newTaskMemoryServiceWithServices(
 		vectorStore:        vs,
 		retrievalAlgorithm: retrievalAlgo,
 		summaryAlgorithm:   summaryAlgo,
-		persistType:        cfg.PersistType,
-		persistPath:        cfg.PersistPath,
-		milvusHost:         cfg.MilvusHost,
-		milvusPort:         cfg.MilvusPort,
-		milvusCollection:   cfg.MilvusCollection,
+		persistType:        cfg.persistType,
+		persistPath:        cfg.persistPath,
+		milvusHost:         cfg.milvusHost,
+		milvusPort:         cfg.milvusPort,
+		milvusCollection:   cfg.milvusCollection,
 	}
 
 	// 对齐 Python：创建 MemoryPersistenceHelper
-	if cfg.PersistType != nil && *cfg.PersistType != "" {
+	if cfg.persistType != nil && *cfg.persistType != "" {
 		opts := []cepersistence.PersistenceOption{}
-		if cfg.PersistPath != "" {
-			opts = append(opts, cepersistence.WithPersistPath(cfg.PersistPath))
+		if cfg.persistPath != "" {
+			opts = append(opts, cepersistence.WithPersistPath(cfg.persistPath))
 		}
 		svc.persistenceHelper = cepersistence.NewMemoryPersistenceHelper(opts...)
 
 		// 对齐 Python：logger.info("Memory persistence enabled: type=%s, path=%s", ...)
 		logger.Info(logComponent).
-			Str("type", *cfg.PersistType).
-			Str("path", cfg.PersistPath).
+			Str("type", *cfg.persistType).
+			Str("path", cfg.persistPath).
 			Msg("Memory persistence enabled")
 	}
 
@@ -609,22 +671,57 @@ func newTaskMemoryServiceWithServices(
 }
 
 // applyConfigDefaults 应用配置默认值。
+// 对齐 Python TaskMemoryService.__init__：llm_model or config.get("MODEL_NAME") or "gpt-5.2"。
 // 仅处理连接/初始化参数，运行时参数由 ceconfig 实时读取。
-func applyConfigDefaults(cfg *TaskMemoryServiceConfig) *TaskMemoryServiceConfig {
+func applyConfigDefaults(cfg *taskMemoryServiceConfig) *taskMemoryServiceConfig {
 	if cfg == nil {
-		cfg = &TaskMemoryServiceConfig{}
+		cfg = &taskMemoryServiceConfig{}
 	}
-	if cfg.LLMModel == "" {
-		cfg.LLMModel = "gpt-5.2"
+	// 对齐 Python：llm_model = llm_model or config.get("MODEL_NAME") or config.get("LLM_MODEL", "gpt-5.2")
+	if cfg.llmModel == "" {
+		cfg.llmModel = ceconfig.GetString("MODEL_NAME", ceconfig.GetString("LLM_MODEL", "gpt-5.2"))
 	}
-	if cfg.EmbeddingModel == "" {
-		cfg.EmbeddingModel = "text-embedding-3-small"
+	// 对齐 Python：embedding_model = embedding_model or config.get("EMBEDDING_MODEL", "text-embedding-3-small")
+	if cfg.embeddingModel == "" {
+		cfg.embeddingModel = ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small")
 	}
-	if cfg.RetrievalAlgo == "" {
-		cfg.RetrievalAlgo = "ACE"
+	// 对齐 Python：api_key = api_key or config.get("API_KEY")
+	if cfg.apiKey == "" {
+		cfg.apiKey = ceconfig.GetString("API_KEY", "")
 	}
-	if cfg.SummaryAlgo == "" {
-		cfg.SummaryAlgo = "ACE"
+	// 对齐 Python：api_base = config.get("API_BASE")
+	if cfg.apiBase == "" {
+		cfg.apiBase = ceconfig.GetString("API_BASE", "https://api.openai.com/v1")
+	}
+	// 对齐 Python：retrieval_algo = (retrieval_algo or config.get("RETRIEVAL_ALGO", "ACE")).upper()
+	if cfg.retrievalAlgo == "" {
+		cfg.retrievalAlgo = ceconfig.GetString("RETRIEVAL_ALGO", "ACE")
+	}
+	// 对齐 Python：summary_algo = (summary_algo or config.get("SUMMARY_ALGO", "ACE")).upper()
+	if cfg.summaryAlgo == "" {
+		cfg.summaryAlgo = ceconfig.GetString("SUMMARY_ALGO", "ACE")
+	}
+	// 对齐 Python：persist_type = persist_type or config.get("PERSIST_TYPE")
+	if cfg.persistType == nil {
+		if pt := ceconfig.GetString("PERSIST_TYPE", ""); pt != "" {
+			cfg.persistType = &pt
+		}
+	}
+	// 对齐 Python：persist_path = persist_path or config.get("PERSIST_PATH", "./memories/{algo_name}/{user_id}.json")
+	if cfg.persistPath == "" {
+		cfg.persistPath = ceconfig.GetString("PERSIST_PATH", "./memories/{algo_name}/{user_id}.json")
+	}
+	// 对齐 Python：milvus_host = milvus_host (默认 "localhost")
+	if cfg.milvusHost == "" {
+		cfg.milvusHost = "localhost"
+	}
+	// 对齐 Python：milvus_port = milvus_port (默认 19530)
+	if cfg.milvusPort == 0 {
+		cfg.milvusPort = 19530
+	}
+	// 对齐 Python：milvus_collection = milvus_collection (默认 "vector_nodes")
+	if cfg.milvusCollection == "" {
+		cfg.milvusCollection = "vector_nodes"
 	}
 	return cfg
 }

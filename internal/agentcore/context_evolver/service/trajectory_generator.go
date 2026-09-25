@@ -10,6 +10,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 接口 ────────────────────────────
+
+// SummarizeTrajectorier 轨迹总结器接口。
+// 用于 SummarizeTrajectories 的第二个参数，支持 TaskMemoryService 和 mock 注入。
+// 对齐 Python _summarize_trajectories(memory_service, user_id, SummarizeTrajectoriesInput) 的 memory_service 参数。
+type SummarizeTrajectorier interface {
+	// SummaryAlgorithm 返回总结算法名称（用于算法特定 kwargs 过滤）
+	SummaryAlgorithm() string
+	// Summarize 总结轨迹
+	Summarize(ctx context.Context, userID string, matts string, query string, trajectories []string, extraKwargs ...map[string]any) (*SummarizeResult, error)
+}
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrialOutput 单次试验执行结果。对齐 Python TrialOutput。
@@ -37,7 +49,7 @@ type RunTrialsInput struct {
 	// MattsMode 缩放模式：none/parallel/sequential/combined
 	MattsMode string
 	// MemoryService 记忆服务，对齐 Python memory_service 参数
-	MemoryService *TaskMemoryService
+	MemoryService SummarizeTrajectorier
 	// PersistType 持久化类型，对齐 Python persist_type
 	PersistType *string
 	// PersistPath JSON 持久化路径，对齐 Python persist_path
@@ -169,8 +181,8 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 }
 
 // SummarizeTrajectories 将轨迹总结为记忆。对齐 Python summarize_trajectories()。
-// P6 阶段实现：委托 TaskMemoryService.Summarize()，含序列截断和算法特定 kwargs 过滤。
-func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService, userID string, params SummarizeTrajectoriesInput) (*SummarizeResult, error) {
+// P6 阶段实现：委托 SummarizeTrajectorier.Summarize()，含序列截断和算法特定 kwargs 过滤。
+func SummarizeTrajectories(ctx context.Context, memoryService SummarizeTrajectorier, userID string, params SummarizeTrajectoriesInput) (*SummarizeResult, error) {
 	// 对齐 Python：matts_mode == "sequential" 时只保留最后一条轨迹
 	trajectories := params.Trajectory
 	feedbacks := params.Feedback
@@ -190,12 +202,13 @@ func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService
 	extraKwargs := make(map[string]any)
 
 	// ReMe 系列：传 score
-	if isReMeFamily(memoryService.summaryAlgorithm) {
+	algo := memoryService.SummaryAlgorithm()
+	if isReMeFamily(algo) {
 		extraKwargs["score"] = scores
 	}
 
 	// ReasoningBank + USE_GOLDLABEL：从 score 推导 label
-	if memoryService.summaryAlgorithm == "ReasoningBank" {
+	if algo == "ReasoningBank" {
 		if getUseGoldLabel() {
 			labels := make([]bool, len(scores))
 			for i, s := range scores {
@@ -206,7 +219,7 @@ func SummarizeTrajectories(ctx context.Context, memoryService *TaskMemoryService
 	}
 
 	// ACE + USE_GROUNDTRUTH：传 feedback + ground_truth
-	if memoryService.summaryAlgorithm == "ACE" {
+	if algo == "ACE" {
 		if getUseGroundTruth() {
 			extraKwargs["feedback"] = feedbacks
 			if params.GroundTruth != nil {
