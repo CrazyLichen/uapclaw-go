@@ -1609,13 +1609,13 @@ func TestResolveMergeDict_目标在结果中(t *testing.T) {
 	mergeDict := map[string][]*graph.Entity{
 		"tgt-1": {src},
 	}
-	result := []any{src, tgt}
+	result := []EntityOrDeclaration{{Entity: src}, {Entity: tgt}}
 	uuidLookup := map[string]*graph.Entity{"tgt-1": tgt, "src-1": src}
 
 	mergeDictSorted := resolveMergeDict(mergeDict, result, uuidLookup)
 	assert.Contains(t, mergeDictSorted, "tgt-1")
 	// src 应被替换为 tgt
-	assert.Equal(t, tgt, result[0])
+	assert.Equal(t, tgt, result[0].Entity)
 }
 
 // TestResolveMergeDict_目标不在结果中 测试目标实体不在结果中时选择新目标
@@ -1631,7 +1631,7 @@ func TestResolveMergeDict_目标不在结果中(t *testing.T) {
 		"tgt-1": {src1, src2},
 	}
 	// 只有 src 在 result 中，tgt 不在
-	result := []any{src1, src2}
+	result := []EntityOrDeclaration{{Entity: src1}, {Entity: src2}}
 	uuidLookup := map[string]*graph.Entity{"tgt-1": tgt, "src-1": src1, "src-2": src2}
 
 	mergeDictSorted := resolveMergeDict(mergeDict, result, uuidLookup)
@@ -2702,7 +2702,7 @@ func TestParseEntityMerging_候选实体替换(t *testing.T) {
 	existing := []*graph.Entity{}
 
 	candidate := &extraction.EntityDeclaration{Name: "Alice"}
-	result := []any{candidate}
+	result := []EntityOrDeclaration{{Decl: candidate}}
 
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)
@@ -2712,7 +2712,7 @@ func TestParseEntityMerging_候选实体替换(t *testing.T) {
 	parseEntityMerging(dup, mergeMap, isTarget, result, existing, tgtEntity, 1, 0)
 
 	// candidate[0] 应被替换为 tgtEntity
-	assert.Equal(t, tgtEntity, result[0])
+	assert.Equal(t, tgtEntity, result[0].Entity)
 }
 
 // TestParseEntityMerging_现有实体替换 测试现有实体间替换
@@ -2724,7 +2724,7 @@ func TestParseEntityMerging_现有实体替换(t *testing.T) {
 	srcEntity.UUID = "src-1"
 
 	existing := []*graph.Entity{tgtEntity, srcEntity}
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)
@@ -2745,7 +2745,7 @@ func TestParseEntityMerging_无效ID(t *testing.T) {
 	dup := map[string]any{"duplicate_ids": []any{"invalid"}}
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	parseEntityMerging(dup, mergeMap, isTarget, result, nil, tgtEntity, 0, 0)
 	assert.Empty(t, mergeMap)
@@ -2757,7 +2757,7 @@ func TestParseEntityMerging_无duplicateIDs(t *testing.T) {
 	dup := map[string]any{}
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	parseEntityMerging(dup, mergeMap, isTarget, result, nil, tgtEntity, 0, 0)
 	assert.Empty(t, mergeMap)
@@ -2772,7 +2772,7 @@ func TestParseEntityMerging_src已在mergeMap(t *testing.T) {
 	srcEntity.UUID = "src-1"
 
 	existing := []*graph.Entity{tgtEntity, srcEntity}
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	mergeMap := map[string]map[string]struct{}{
 		"src-1": {"other": {}},
@@ -2796,7 +2796,7 @@ func TestParseEntityMerging_都未在mergeMap(t *testing.T) {
 	srcEntity.UUID = "src-1"
 
 	existing := []*graph.Entity{tgtEntity, srcEntity}
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)
@@ -2814,7 +2814,7 @@ func TestParseEntityMerging_同UUID跳过(t *testing.T) {
 	tgtEntity.UUID = "same-1"
 
 	existing := []*graph.Entity{tgtEntity}
-	result := []any{}
+	result := []EntityOrDeclaration{}
 
 	mergeMap := make(map[string]map[string]struct{})
 	isTarget := make(map[string]string)

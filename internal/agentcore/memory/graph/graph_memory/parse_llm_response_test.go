@@ -347,12 +347,12 @@ func TestResolveEntities_基本(t *testing.T) {
 	}
 
 	// 结果中第一个候选实体应被替换为已有实体
-	if ent, ok := result[0].(*graph.Entity); ok {
+	if ent := result[0].Entity; ent != nil {
 		if ent.UUID != existingEntity.UUID {
 			t.Fatalf("期望结果实体 UUID 为 %s，得到 %v", existingEntity.UUID, ent.UUID)
 		}
 	} else {
-		t.Fatal("期望结果为 *graph.Entity 类型")
+		t.Fatal("期望结果为 Entity 类型")
 	}
 
 	// 待删除集合应为空（因为候选不在 mergeMap 中作为源）

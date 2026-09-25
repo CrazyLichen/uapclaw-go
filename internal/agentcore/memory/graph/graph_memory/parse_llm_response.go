@@ -13,6 +13,39 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// EntityOrDeclaration 实体声明或已存在实体的联合类型
+// 对齐 Python: Union[EntityDeclaration, Entity]
+type EntityOrDeclaration struct {
+	// Decl 新抽取的实体声明（非 nil 时 Entity 为 nil）
+	Decl *extraction.EntityDeclaration
+	// Entity 已存在的实体对象（非 nil 时 Decl 为 nil）
+	Entity *graph.Entity
+}
+
+// IsEntity 是否为已存在实体
+func (e EntityOrDeclaration) IsEntity() bool {
+	return e.Entity != nil
+}
+
+// Name 获取实体名称
+func (e EntityOrDeclaration) Name() string {
+	if e.Entity != nil {
+		return e.Entity.Name
+	}
+	if e.Decl != nil {
+		return e.Decl.Name
+	}
+	return ""
+}
+
+// EntityTypeID 获取实体类型 ID
+func (e EntityOrDeclaration) EntityTypeID() int {
+	if e.Decl != nil {
+		return e.Decl.EntityTypeID
+	}
+	return 0
+}
+
 // MergePair 实体合并对（目标实体 + 待合并的源实体列表）
 //
 // Python: tuple[Entity, list[Entity]] (resolve_entities 返回值)
@@ -225,16 +258,16 @@ func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []r
 // ResolveEntities 实体去重/合并解析
 //
 // 返回 (已解析的实体列表, 合并对列表, 待删除的UUID集合)。
-// 已解析的实体列表可能包含 *extraction.EntityDeclaration 和 *graph.Entity 两种类型。
+// 已解析的实体列表包含 EntityDeclaration 和 Entity 两种类型（对齐 Python: list[Union[EntityDeclaration, Entity]]）。
 // 合并对列表中每项包含目标实体和待合并的源实体列表。
 //
 // Python: resolve_entities(candidates, existing, duplication)
-func ResolveEntities(candidates []extraction.EntityDeclaration, existing []*graph.Entity, duplication []map[string]any) ([]any, []MergePair, map[string]struct{}) {
+func ResolveEntities(candidates []extraction.EntityDeclaration, existing []*graph.Entity, duplication []map[string]any) ([]EntityOrDeclaration, []MergePair, map[string]struct{}) {
 	// 复制候选列表（结果列表可能混合 EntityDeclaration 和 Entity）
-	result := make([]any, len(candidates))
+	result := make([]EntityOrDeclaration, len(candidates))
 	for i := range candidates {
 		c := candidates[i]
-		result[i] = &c
+		result[i] = EntityOrDeclaration{Decl: &c}
 	}
 
 	nameLookup := make(map[string]*graph.Entity)
@@ -352,7 +385,7 @@ func parseEntityMerging(
 	dup map[string]any,
 	mergeMap map[string]map[string]struct{},
 	isTarget map[string]string,
-	result []any,
+	result []EntityOrDeclaration,
 	existing []*graph.Entity,
 	tgtEntity *graph.Entity,
 	numEntities int,
@@ -373,7 +406,7 @@ func parseEntityMerging(
 		dupID = dupID - 1
 		if numExisting <= dupID && dupID < numEntities {
 			// 现有实体替换新的候选实体
-			result[dupID-numExisting] = tgtEntity
+			result[dupID-numExisting] = EntityOrDeclaration{Entity: tgtEntity}
 		} else if dupID >= 0 && dupID < numExisting {
 			// 现有实体替换另一个现有实体
 			srcEntity := existing[dupID]
@@ -410,7 +443,7 @@ func parseEntityMerging(
 // Python: _resolve_merge_dict(merge_dict, result, uuid_lookup)
 func resolveMergeDict(
 	mergeDict map[string][]*graph.Entity,
-	result []any,
+	result []EntityOrDeclaration,
 	uuidLookup map[string]*graph.Entity,
 ) map[string][]*graph.Entity {
 	mergeDictSorted := make(map[string][]*graph.Entity)
@@ -427,7 +460,7 @@ func resolveMergeDict(
 
 		for _, src := range srcEntities {
 			for idx, e := range result {
-				if ent, ok := e.(*graph.Entity); ok && ent == src {
+				if e.Entity == src {
 					replaceIdxList = append(replaceIdxList, idx)
 					replaceCount[src.UUID]++
 				}
@@ -437,7 +470,7 @@ func resolveMergeDict(
 		// 检查目标实体是否在 result 中
 		tgtInResult := false
 		for _, e := range result {
-			if ent, ok := e.(*graph.Entity); ok && ent == tgt {
+			if e.Entity == tgt {
 				tgtInResult = true
 				break
 			}
@@ -447,7 +480,7 @@ func resolveMergeDict(
 			// 目标实体在 result 中，或没有源实体在 result 中
 			mergeDictSorted[tgtUUID] = srcEntities
 			for _, idx := range replaceIdxList {
-				result[idx] = tgt
+				result[idx] = EntityOrDeclaration{Entity: tgt}
 			}
 		} else {
 			// 至少一个源实体在 result 中，但目标实体不在 result 中
@@ -461,7 +494,7 @@ func resolveMergeDict(
 
 			mergeDictSorted[newTgtUUID] = srcEntities
 			for _, idx := range replaceIdxList {
-				result[idx] = newTgt
+				result[idx] = EntityOrDeclaration{Entity: newTgt}
 			}
 		}
 	}

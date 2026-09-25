@@ -1314,12 +1314,10 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 	// 将 resolved 转回 []extraction.EntityDeclaration（对齐 Python: extracted_declarations 返回值）
 	var result []extraction.EntityDeclaration
 	for _, item := range resolved {
-		switch v := item.(type) {
-		case *extraction.EntityDeclaration:
-			result = append(result, *v)
-		case *graph.Entity:
-			// 已有实体不需要加入声明列表（Python: 它们已在 existing_entities 中）
+		if item.Decl != nil {
+			result = append(result, *item.Decl)
 		}
+		// 已有实体（item.Entity != nil）不需要加入声明列表（Python: 它们已在 existing_entities 中）
 	}
 
 	// 处理合并任务（对齐 Python: _entity_merge 的 blocking/non-blocking 分派）
