@@ -9,11 +9,10 @@
 // 文件目录：
 //
 //	runtime/
-//	├── doc.go       # 包文档
-//	├── gate.go      # InteractGate 并发门控
-//	├── pool.go      # ActiveTeam/ActiveTeamInfo/TeamRuntimePool
-//	├── manager.go   # TeamRuntimeManager（interact 完整实现，其余空 stub）
-//	└── metadata.go  # Team Namespace 读写函数（对齐 Python metadata.py）
+//	├── doc.go      # 包文档
+//	├── gate.go     # InteractGate 并发门控
+//	├── pool.go     # ActiveTeam/ActiveTeamInfo/TeamRuntimePool
+//	└── manager.go  # TeamRuntimeManager（interact 完整实现，其余空 stub）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/runtime/
 package runtime

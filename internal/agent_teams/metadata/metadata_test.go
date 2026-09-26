@@ -1,11 +1,11 @@
-package runtime_test
+package metadata_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -16,8 +16,6 @@ import (
 type fakeSessionFacade struct {
 	data map[string]any
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -45,15 +43,13 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 // 编译时检查
 var _ interfaces.SessionFacade = (*fakeSessionFacade)(nil)
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ──────────────────────────── 测试 ────────────────────────────
 
 // TestReadTeamsBucket_空命名空间 测试空命名空间返回空 map
 // Python: read_teams_bucket(session) 空时返回 {}
 func TestReadTeamsBucket_空命名空间(t *testing.T) {
 	sess := newFakeSessionFacade()
-	result := runtime.ReadTeamsBucket(sess)
+	result := metadata.ReadTeamsBucket(sess)
 	assert.NotNil(t, result)
 	assert.Empty(t, result)
 }
@@ -63,11 +59,11 @@ func TestReadTeamsBucket_空命名空间(t *testing.T) {
 func TestReadTeamNamespace_存在(t *testing.T) {
 	sess := newFakeSessionFacade()
 	sess.UpdateState(map[string]any{
-		runtime.TeamsKey: map[string]any{
+		metadata.TeamsKey: map[string]any{
 			"team1": map[string]any{"spec": "data", "db_state": "created"},
 		},
 	})
-	result := runtime.ReadTeamNamespace(sess, "team1")
+	result := metadata.ReadTeamNamespace(sess, "team1")
 	assert.NotNil(t, result)
 	assert.Equal(t, "data", result["spec"])
 }
@@ -76,7 +72,7 @@ func TestReadTeamNamespace_存在(t *testing.T) {
 // Python: read_team_namespace(session, team_name) 不存在时返回 None
 func TestReadTeamNamespace_不存在(t *testing.T) {
 	sess := newFakeSessionFacade()
-	result := runtime.ReadTeamNamespace(sess, "no_team")
+	result := metadata.ReadTeamNamespace(sess, "no_team")
 	assert.Nil(t, result)
 }
 
@@ -85,12 +81,12 @@ func TestReadTeamNamespace_不存在(t *testing.T) {
 func TestReadTeamNamesInSession_正常(t *testing.T) {
 	sess := newFakeSessionFacade()
 	sess.UpdateState(map[string]any{
-		runtime.TeamsKey: map[string]any{
+		metadata.TeamsKey: map[string]any{
 			"team1": map[string]any{},
 			"team2": map[string]any{},
 		},
 	})
-	names := runtime.ReadTeamNamesInSession(sess)
+	names := metadata.ReadTeamNamesInSession(sess)
 	assert.Len(t, names, 2)
 	assert.Contains(t, names, "team1")
 	assert.Contains(t, names, "team2")
@@ -101,11 +97,11 @@ func TestReadTeamNamesInSession_正常(t *testing.T) {
 func TestReadTeamDBState_正常(t *testing.T) {
 	sess := newFakeSessionFacade()
 	sess.UpdateState(map[string]any{
-		runtime.TeamsKey: map[string]any{
-			"team1": map[string]any{runtime.TeamDBStateKey: "created"},
+		metadata.TeamsKey: map[string]any{
+			"team1": map[string]any{metadata.TeamDBStateKey: "created"},
 		},
 	})
-	result := runtime.ReadTeamDBState(sess, "team1")
+	result := metadata.ReadTeamDBState(sess, "team1")
 	assert.Equal(t, "created", result)
 }
 
@@ -113,7 +109,7 @@ func TestReadTeamDBState_正常(t *testing.T) {
 // Python: read_team_db_state(session, team_name) 不存在时返回 None
 func TestReadTeamDBState_不存在(t *testing.T) {
 	sess := newFakeSessionFacade()
-	result := runtime.ReadTeamDBState(sess, "no_team")
+	result := metadata.ReadTeamDBState(sess, "no_team")
 	assert.Equal(t, "", result)
 }
 
@@ -121,12 +117,12 @@ func TestReadTeamDBState_不存在(t *testing.T) {
 // Python: write_team_namespace(session, team_name, payload) 全量覆写
 func TestWriteTeamNamespace_覆盖(t *testing.T) {
 	sess := newFakeSessionFacade()
-	runtime.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
-	result := runtime.ReadTeamNamespace(sess, "team1")
+	metadata.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
+	result := metadata.ReadTeamNamespace(sess, "team1")
 	assert.Equal(t, "v1", result["spec"])
 
-	runtime.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v2"})
-	result = runtime.ReadTeamNamespace(sess, "team1")
+	metadata.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v2"})
+	result = metadata.ReadTeamNamespace(sess, "team1")
 	assert.Equal(t, "v2", result["spec"])
 }
 
@@ -134,9 +130,9 @@ func TestWriteTeamNamespace_覆盖(t *testing.T) {
 // Python: merge_team_namespace(session, team_name, partial) 浅合并
 func TestMergeTeamNamespace_浅合并不覆盖无关key(t *testing.T) {
 	sess := newFakeSessionFacade()
-	runtime.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1", "context": "c1"})
-	runtime.MergeTeamNamespace(sess, "team1", map[string]any{"spec": "v2"})
-	result := runtime.ReadTeamNamespace(sess, "team1")
+	metadata.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1", "context": "c1"})
+	metadata.MergeTeamNamespace(sess, "team1", map[string]any{"spec": "v2"})
+	result := metadata.ReadTeamNamespace(sess, "team1")
 	assert.Equal(t, "v2", result["spec"])
 	assert.Equal(t, "c1", result["context"])
 }
@@ -145,8 +141,8 @@ func TestMergeTeamNamespace_浅合并不覆盖无关key(t *testing.T) {
 // Python: merge_team_namespace(session, team_name, partial) 桶不存在时自动创建
 func TestMergeTeamNamespace_桶不存在时创建(t *testing.T) {
 	sess := newFakeSessionFacade()
-	runtime.MergeTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
-	result := runtime.ReadTeamNamespace(sess, "team1")
+	metadata.MergeTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
+	result := metadata.ReadTeamNamespace(sess, "team1")
 	assert.Equal(t, "v1", result["spec"])
 }
 
@@ -154,8 +150,8 @@ func TestMergeTeamNamespace_桶不存在时创建(t *testing.T) {
 // Python: merge_team_db_state(session, team_name, state) 写入后 read_team_db_state 读取
 func TestMergeTeamDBState_写入后读取(t *testing.T) {
 	sess := newFakeSessionFacade()
-	runtime.MergeTeamDBState(sess, "team1", "created")
-	result := runtime.ReadTeamDBState(sess, "team1")
+	metadata.MergeTeamDBState(sess, "team1", "created")
+	result := metadata.ReadTeamDBState(sess, "team1")
 	assert.Equal(t, "created", result)
 }
 
@@ -163,16 +159,16 @@ func TestMergeTeamDBState_写入后读取(t *testing.T) {
 // Python: remove_team_namespace(session, team_name) -> bool
 func TestRemoveTeamNamespace_存在时删除(t *testing.T) {
 	sess := newFakeSessionFacade()
-	runtime.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
-	removed := runtime.RemoveTeamNamespace(sess, "team1")
+	metadata.WriteTeamNamespace(sess, "team1", map[string]any{"spec": "v1"})
+	removed := metadata.RemoveTeamNamespace(sess, "team1")
 	assert.True(t, removed)
-	assert.Nil(t, runtime.ReadTeamNamespace(sess, "team1"))
+	assert.Nil(t, metadata.ReadTeamNamespace(sess, "team1"))
 }
 
 // TestRemoveTeamNamespace_不存在返回false 测试删除不存在的桶返回 false
 // Python: remove_team_namespace(session, team_name) 不存在时返回 False
 func TestRemoveTeamNamespace_不存在返回false(t *testing.T) {
 	sess := newFakeSessionFacade()
-	removed := runtime.RemoveTeamNamespace(sess, "no_team")
+	removed := metadata.RemoveTeamNamespace(sess, "no_team")
 	assert.False(t, removed)
 }
