@@ -1031,7 +1031,7 @@ func TestUpdateEntitiesForRelationRemoval_有待移除(t *testing.T) {
 	// updateEntitiesForRelationRemoval 会查询数据库，
 	// 使用 mockGraphStore 查询返回空
 
-	declarations := []extraction.EntityDeclaration{{Name: "Alice", EntityTypeID: 0}}
+	declarations := []EntityOrDeclaration{{Decl: &extraction.EntityDeclaration{Name: "Alice", EntityTypeID: 0}}}
 	gm.updateEntitiesForRelationRemoval(context.Background(), state, declarations)
 	// mockGraphStore.Query 返回空，所以不会更新实体
 }
@@ -2332,7 +2332,7 @@ func TestUpdateEntitiesForRelationRemoval_有查询结果(t *testing.T) {
 	entity.Relations = []string{"rel-1", "rel-2"}
 	state.LookupTable.Entities["entity-1"] = entity
 
-	gm.updateEntitiesForRelationRemoval(context.Background(), state, []extraction.EntityDeclaration{{Name: "Alice"}})
+	gm.updateEntitiesForRelationRemoval(context.Background(), state, []EntityOrDeclaration{{Decl: &extraction.EntityDeclaration{Name: "Alice"}}})
 	// rel-1 应从 entity.Relations 中移除
 	assert.NotContains(t, entity.Relations, "rel-1")
 	// Alice 在 extractedDeclarations 中需要 re-embed，不应加入 skip embed

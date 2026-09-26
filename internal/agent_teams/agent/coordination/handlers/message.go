@@ -62,6 +62,12 @@ func (h *MessageHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // 所有成员恢复轮询并排空未读邮箱。
 // Python: MessageHandler.on_message_or_broadcast
 func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.CoordinationEvent) {
+	// 对齐 Python: if not member_name or self._infra.message_manager is None: return
+	memberName := h.blueprint.MemberName()
+	if memberName == "" {
+		return
+	}
+
 	if event.IsInner() {
 		return
 	}
@@ -90,7 +96,12 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 // OnPollMailbox 周期邮箱轮询：排空未读消息。
 // Python: MessageHandler.on_poll_mailbox
 func (h *MessageHandler) OnPollMailbox(ctx context.Context, _ types.CoordinationEvent) {
-	h.processUnreadMessages(ctx, h.blueprint.MemberName())
+	// 对齐 Python: if member_name and self._infra.message_manager
+	memberName := h.blueprint.MemberName()
+	if memberName == "" {
+		return
+	}
+	h.processUnreadMessages(ctx, memberName)
 }
 
 // OnMemberShutdownDrain 成员关闭时排空邮箱，确保在拆卸前所有消息到达 agent。

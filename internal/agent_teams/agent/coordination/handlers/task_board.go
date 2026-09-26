@@ -69,16 +69,23 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // 如果认领目标是其他人（或 human-agent），走 onTaskBoardEvent 通用逻辑。
 // Python: TaskBoardHandler.on_task_claimed
 func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.CoordinationEvent) {
+	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
+	memberName := h.blueprint.MemberName()
+	if memberName == "" {
+		return
+	}
+
 	if event.IsInner() {
 		return
 	}
 	em := event.Transport
-	memberName := h.blueprint.MemberName()
 	role := h.blueprint.Role()
 
 	claimMember, _ := em.Payload["member_name"].(string)
 	// 对齐 Python: 认领目标是自身时投递任务分配内容
 	if claimMember == memberName && role != schema.TeamRoleHumanAgent {
+		// 对齐 Python: await self._poll.resume_polls() — 自身认领时恢复轮询
+		h.poll.ResumePolls(ctx)
 		// 对齐 Python: deliver_input(task_assigned_to_self 格式化内容)
 		// TODO(#9.63): 等任务格式化模板就绪后补充
 		content := formatTaskAssignedToSelf(em.Payload, role == schema.TeamRoleHumanAgent)
@@ -106,10 +113,18 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 // 否则投递 task_plan_approved_to_self 或 task_plan_rejected_to_self。
 // Python: TaskBoardHandler.on_task_plan_decision
 func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.CoordinationEvent) {
+	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
+	if h.blueprint.MemberName() == "" {
+		return
+	}
+
 	if event.IsInner() {
 		return
 	}
 	em := event.Transport
+
+	// 对齐 Python: await self._poll.resume_polls() — 计划决策后恢复轮询
+	h.poll.ResumePolls(ctx)
 
 	// 对齐 Python: 有 tool_call_id 时由中断恢复处理，此处跳过
 	toolCallID, _ := em.Payload["tool_call_id"].(string)
@@ -138,6 +153,11 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 // OnTaskBoardEvent 通用任务板事件处理：恢复轮询 + 提醒空闲 agent。
 // Python: TaskBoardHandler.on_task_board_event
 func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event types.CoordinationEvent) {
+	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
+	if h.blueprint.MemberName() == "" {
+		return
+	}
+
 	if event.IsInner() {
 		return
 	}

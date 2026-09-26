@@ -525,8 +525,8 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	}
 	logger.Debug(logComponent).Str("step", "13_relation_dedupe").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
-	// 14. 更新因关系删除而受影响的实体
-	gm.updateEntitiesForRelationRemoval(ctx, state, extractedDeclarations)
+	// 14. 更新因关系删除而受影响的实体（对齐 Python: _update_entities_for_relation_removal(state, update_needs_embed)）
+	gm.updateEntitiesForRelationRemoval(ctx, state, resolvedList)
 	logger.Debug(logComponent).Str("step", "14_update_entities_for_removal").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 15. 后处理 + 持久化
@@ -1192,6 +1192,12 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 		return nil
 	}
 
+	// 对齐 Python: if len(state.tasks) <= 1: return
+	// Python 中 tasks <= 1 时意味着只有关系抽取任务，无嵌入任务可等待
+	if len(state.Tasks) <= 1 {
+		return nil
+	}
+
 	// 等待嵌入任务完成（对齐 Python: entity_embed_results = await state.tasks.pop(-2)）
 	// Python 中嵌入任务在 _extract_entity_declarations 中通过 asyncio.create_task 发起
 	var entityEmbedResults [][]float64
@@ -1422,7 +1428,8 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 			task := gm.invokeLLMAsync(ctx, kwargs, tmpl, outputModel)
 			// 对齐 Python: state.pending_merge[tgt.uuid] = task
 			pending := &pendingMergeTask{
-				done: make(chan struct{}),
+				SourceTask: task,
+				done:       make(chan struct{}),
 			}
 			state.PendingMerge[pair.Target.UUID] = pending
 			// 对齐 Python: await task — 等待合并完成
@@ -1499,6 +1506,17 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 			} else if pendingTask.Err != nil {
 				logger.Warn(logComponent).Err(pendingTask.Err).Str("entity", entity.Name).Msg("Graph Memory: failed waiting for entity merge completion")
 			}
+			// 对齐 Python: state.merging_tasks.remove(task) — 从合并任务列表中移除已完成的任务
+			if pendingTask.SourceTask != nil {
+				for j, mt := range state.MergingTasks {
+					if mt == pendingTask.SourceTask {
+						state.MergingTasks = append(state.MergingTasks[:j], state.MergingTasks[j+1:]...)
+						delete(state.MergingTasksEntities, mt)
+						break
+					}
+				}
+			}
+			delete(state.PendingMerge, entity.UUID)
 		}
 		// 然后发起摘要/属性抽取
 		kwargs, tmpl, outputModel := extraction.ExtractEntityAttributes(
@@ -1508,31 +1526,26 @@ func (gm *GraphMemory) entityEnrich(ctx context.Context, entities []*graph.Entit
 		state.Tasks = append(state.Tasks, task)
 	}
 
-	// 等待所有任务完成并缓存结果（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
-	// channel 化后 Wait() 只能读取一次，因此统一收集结果
-	taskResults := make([]struct {
-		Content string
-		Err     error
-	}, len(state.Tasks))
-	for i, task := range state.Tasks {
-		taskResults[i].Content, taskResults[i].Err = task.Wait()
-		if taskResults[i].Err != nil {
-			logger.Warn(logComponent).Err(taskResults[i].Err).Msg("Graph Memory: entity summary extraction failed")
+	// 等待所有任务完成（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
+	// asyncTask.Wait() 使用 sync.Once 缓存结果，可安全多次调用
+	for _, task := range state.Tasks {
+		if _, err := task.Wait(); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: entity summary extraction failed")
 		}
 	}
 
 	// 更新实体（对齐 Python: for entity, future in zip(entities, state.tasks)）
 	n := len(entities)
-	if len(taskResults) < n {
-		n = len(taskResults)
+	if len(state.Tasks) < n {
+		n = len(state.Tasks)
 	}
 	for i := 0; i < n; i++ {
 		entity := entities[i]
-		result := taskResults[i]
-		if result.Err != nil || result.Content == "" {
+		content, err := state.Tasks[i].Wait()
+		if err != nil || content == "" {
 			continue
 		}
-		UpdateEntity(entity, result.Content, state.Prompting.SchemaEntityExtraction)
+		UpdateEntity(entity, content, state.Prompting.SchemaEntityExtraction)
 	}
 
 	state.Tasks = state.Tasks[:0]
@@ -1784,7 +1797,7 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 // updateEntitiesForRelationRemoval 更新因关系删除而受影响的实体
 //
 // Python: _update_entities_for_relation_removal(state, extracted_declarations)
-func (gm *GraphMemory) updateEntitiesForRelationRemoval(ctx context.Context, state *GraphMemState, extractedDeclarations []extraction.EntityDeclaration) {
+func (gm *GraphMemory) updateEntitiesForRelationRemoval(ctx context.Context, state *GraphMemState, updateNeedsEmbed []EntityOrDeclaration) {
 	// 对齐 Python: for relation in state.to_remove
 	// 从 relation.LHS.UUID 和 relation.RHS.UUID 取端点实体 UUID
 	entitiesToRemoveRelationsFrom := make(map[string]struct{})
@@ -1819,8 +1832,10 @@ func (gm *GraphMemory) updateEntitiesForRelationRemoval(ctx context.Context, sta
 		}
 
 		needsReEmbed := false
-		for _, decl := range extractedDeclarations {
-			if decl.Name == entity.Name {
+		for _, item := range updateNeedsEmbed {
+			// 对齐 Python: isinstance(existing_entity_item, Entity) and existing_entity_item.uuid == entity.uuid
+			if item.IsEntity() && item.Entity.UUID == entity.UUID {
+				entity = item.Entity
 				needsReEmbed = true
 				break
 			}

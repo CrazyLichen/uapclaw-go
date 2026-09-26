@@ -189,6 +189,8 @@ type pendingMergeTask struct {
 	Result string
 	// Err 任务执行错误
 	Err error
+	// SourceTask 原始合并任务引用（对齐 Python: state.merging_tasks.remove(task)）
+	SourceTask *asyncTask
 	// done 完成信号通道，对齐 Python await task
 	// entityMerge 用 invokeLLMAsync 启动后关闭此通道，
 	// entityEnrich 通过 <-done 等待合并完成

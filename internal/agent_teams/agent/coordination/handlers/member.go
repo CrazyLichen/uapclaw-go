@@ -178,6 +178,14 @@ func (h *MemberHandler) handleLeaderMemberEvent(_ context.Context, event types.C
 // 对齐 Python: MemberHandler._nudge_idle_member_with_stale_claims
 // TODO(#9.63): 等消息管理器和任务后端接口就绪后补充完整提醒逻辑
 func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(targetID, oldStatus, newStatus string) {
+	// 对齐 Python: if not target_id: return
+	if targetID == "" {
+		return
+	}
+	// 对齐 Python: if new_status == old_status: return
+	if newStatus == oldStatus {
+		return
+	}
 	// 仅在转换到空闲状态时触发
 	if !idleNudgeStatuses[newStatus] {
 		return

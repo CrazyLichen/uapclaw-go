@@ -86,6 +86,13 @@ func inferToolResultError(value any) *bool {
 	switch v := value.(type) {
 	case map[string]any:
 		return inferDictError(v)
+	case map[string]string:
+		// Python dict 不区分 dict[str, any] 和 dict[str, str]，Go 需要额外处理
+		converted := make(map[string]any, len(v))
+		for k, val := range v {
+			converted[k] = val
+		}
+		return inferDictError(converted)
 	case []any:
 		for _, item := range v {
 			if itemErr := inferToolResultError(item); itemErr != nil && *itemErr {
@@ -102,8 +109,16 @@ func inferToolResultError(value any) *bool {
 
 // StructuredToolResultPayload 提取结构化工具结果，对齐 Python: _structured_tool_result_payload
 func structuredToolResultPayload(result any) any {
-	if _, ok := result.(map[string]any); ok {
-		return result
+	if m, ok := result.(map[string]any); ok {
+		return m
+	}
+	if m, ok := result.(map[string]string); ok {
+		// Python dict 不区分 dict[str, any] 和 dict[str, str]，统一转为 map[string]any
+		converted := make(map[string]any, len(m))
+		for k, v := range m {
+			converted[k] = v
+		}
+		return converted
 	}
 	if _, ok := result.([]any); ok {
 		return result

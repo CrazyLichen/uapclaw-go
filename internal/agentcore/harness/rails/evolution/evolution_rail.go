@@ -458,7 +458,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 		r.ext.AllowEvolutionTrigger(TriggerAfterModelCall, cbc) {
 		traj := r.buildTrajectory()
 		if traj != nil {
-			return r.triggerEvolution(traj, cbc)
+			return r.triggerEvolution(ctx, traj, cbc)
 		}
 	}
 
@@ -530,7 +530,7 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 		r.ext.AllowEvolutionTrigger(TriggerAfterToolCall, cbc) {
 		traj := r.buildTrajectory()
 		if traj != nil {
-			return r.triggerEvolution(traj, cbc)
+			return r.triggerEvolution(ctx, traj, cbc)
 		}
 	}
 
@@ -551,7 +551,7 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 		r.ext.AllowEvolutionTrigger(TriggerAfterTaskIteration, cbc) {
 		traj := r.buildTrajectory()
 		if traj != nil {
-			return r.triggerEvolution(traj, cbc)
+			return r.triggerEvolution(ctx, traj, cbc)
 		}
 	}
 
@@ -592,7 +592,7 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	//     await self._on_after_evolution_triggered(trajectory, ctx)
 	if r.evolutionTrigger == TriggerAfterInvoke &&
 		r.ext.AllowEvolutionTrigger(TriggerAfterInvoke, cbc) {
-		if err := r.triggerEvolution(traj, cbc); err != nil {
+		if err := r.triggerEvolution(ctx, traj, cbc); err != nil {
 			return err
 		}
 		if err := r.ext.OnAfterEvolutionTriggered(ctx, traj, cbc); err != nil {
@@ -695,10 +695,10 @@ func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 // Python 实现：
 //   - 异步模式：快照 → 创建后台任务 → _safe_run_evolution
 //   - 同步模式：直接调用 run_evolution(trajectory, ctx)
-func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) error {
+func (r *EvolutionRail) triggerEvolution(ctx context.Context, traj *trajectory.Trajectory, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.asyncEvolution {
 		// Python: Phase 1 — 同步捕获快照
-		snapshot := r.ext.SnapshotForEvolution(context.Background(), traj, cbc)
+		snapshot := r.ext.SnapshotForEvolution(ctx, traj, cbc)
 		if snapshot == nil {
 			return nil
 		}
@@ -706,7 +706,7 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 		// Python: Phase 2 — 启动后台任务
 		skillName := formatSkillName(snapshot)
 		bgTask, err := utils.CreateBackgroundTask(
-			context.Background(),
+			ctx,
 			func(bgCtx context.Context) error {
 				return r.safeRunEvolution(bgCtx, snapshot)
 			},
@@ -731,11 +731,11 @@ func (r *EvolutionRail) triggerEvolution(traj *trajectory.Trajectory, cbc *agent
 		// Python: 同步模式 — 对齐 Python 双层异常保护，也走 safeRunEvolution
 		// Python 的 sync 路径由 run_evolution 内部 try/except（静默捕获）+
 		// _safe_run_evolution 外部 try/except（emit 事件）共同保护
-		snapshot := r.ext.SnapshotForEvolution(context.Background(), traj, cbc)
+		snapshot := r.ext.SnapshotForEvolution(ctx, traj, cbc)
 		if snapshot == nil {
 			return nil
 		}
-		return r.safeRunEvolution(context.Background(), snapshot)
+		return r.safeRunEvolution(ctx, snapshot)
 	}
 	return nil
 }

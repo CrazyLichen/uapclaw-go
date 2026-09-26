@@ -1244,7 +1244,7 @@ func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(ctx context.Context,
 	}
 
 	// Python: return self._team_skill_for_experience_detail_file(file_path)
-	return r.teamSkillForExperienceDetailFile(context.Background(), filePath)
+	return r.teamSkillForExperienceDetailFile(ctx, filePath)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

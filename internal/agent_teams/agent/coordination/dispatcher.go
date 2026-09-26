@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	callback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -142,13 +143,13 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event types.Coordination
 	// Python: 对齐 dispatcher.py L262-272 的 7 种允许事件
 	if role == schema.TeamRoleHumanAgent {
 		allowed := map[string]bool{
-			"team_cleaned":    true,
-			"member_shutdown": true,
-			"member_canceled": true,
-			"team_standby":    true,
-			"message":         true,
-			"broadcast":       true,
-			"task_claimed":    true,
+			events.TeamEventCleaned:       true,
+			events.TeamEventMemberShutdown: true,
+			events.TeamEventMemberCanceled: true,
+			events.TeamEventStandby:       true,
+			events.TeamEventMessage:       true,
+			events.TeamEventBroadcast:     true,
+			events.TeamEventTaskClaimed:   true,
 		}
 		if !allowed[event.Transport.EventType] {
 			return
