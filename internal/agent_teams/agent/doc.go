@@ -27,7 +27,7 @@
 //	├── spawn_manager.go      # SpawnManager 子进程管理（9.58）
 //	├── session_manager.go    # SessionManager 会话三态管理（9.59）
 //	├── stream_controller.go  # StreamController 流式控制器（9.60）
-//	└── recovery_manager.go   # ⤵️ 回填: #9.61 恢复管理器
+//	└── recovery_manager.go   # 恢复管理器（团队恢复、会话切换、配置持久化）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/
 package agent

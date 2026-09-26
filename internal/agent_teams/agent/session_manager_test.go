@@ -167,7 +167,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 
 // TestResumeForNewSession_基本流程 测试返回新 ctx
 // Python: SessionManager.resume_for_new_session(session)
-// TODO(#9.61): RecoveryManager 回填后补充完整逻辑测试
+// RecoveryManager 为 nil 时跳过 collect/restart，仅执行 BindSession
 func TestResumeForNewSession_基本流程(t *testing.T) {
 	state := NewTeamAgentState()
 	configurator := NewAgentConfigurator(nil)
@@ -183,7 +183,7 @@ func TestResumeForNewSession_基本流程(t *testing.T) {
 
 // TestRecoverForExistingSession_基本流程 测试返回新 ctx
 // Python: SessionManager.recover_for_existing_session(session)
-// TODO(#9.61): RecoveryManager 回填后补充完整逻辑测试
+// RecoveryManager 为 nil 时跳过 collect/restart，仅执行 BindSession
 func TestRecoverForExistingSession_基本流程(t *testing.T) {
 	state := NewTeamAgentState()
 	configurator := NewAgentConfigurator(nil)

@@ -252,11 +252,11 @@ func TestTeamAgent_SessionManager(t *testing.T) {
 	assert.NotNil(t, a.SessionManager())
 }
 
-// TestTeamAgent_RecoveryManager 测试返回 nil
+// TestTeamAgent_RecoveryManager 测试返回 RecoveryManager 实例
 func TestTeamAgent_RecoveryManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
-	assert.Nil(t, a.RecoveryManager())
+	assert.NotNil(t, a.RecoveryManager())
 }
 
 // TestTeamAgent_SpawnManager 测试返回 SpawnManager
@@ -416,20 +416,21 @@ func TestTeamAgent_FromSpawnPayload(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestTeamAgent_RecoverTeam 测试返回 nil
+// TestTeamAgent_RecoverTeam 测试无 TeamBackend 时返回空列表
 func TestTeamAgent_RecoverTeam(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 	result, err := a.RecoverTeam(context.Background())
-	assert.Nil(t, result)
+	assert.Empty(t, result)
 	assert.NoError(t, err)
 }
 
-// TestTeamAgent_RecoverFromSession 测试返回 nil
+// TestTeamAgent_RecoverFromSession 测试返回 TODO(#9.55) 错误
 func TestTeamAgent_RecoverFromSession(t *testing.T) {
 	a, err := RecoverFromSession(context.Background(), nil, "test", nil)
 	assert.Nil(t, a)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "#9.55")
 }
 
 // TestTeamAgent_PersistSessionManifest 测试空操作

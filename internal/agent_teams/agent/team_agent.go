@@ -27,7 +27,7 @@
 //	├── spawn_manager.go      # SpawnManager 子进程管理（9.58）
 //	├── session_manager.go    # SessionManager 会话三态管理（9.59）
 //	├── stream_controller.go  # StreamController 流式控制器（9.60）
-//	├── recovery_manager.go   # TODO(#9.61) 恢复管理器
+//	├── recovery_manager.go   # 恢复管理器（团队恢复、会话切换、配置持久化）
 //	└── coordination/         # ✅(#9.62-9.63) 协调子系统
 //	    ├── kernel.go         # ✅(#9.62) 协调内核
 //	    ├── event_bus.go      # ✅(#9.63) 事件总线
@@ -45,6 +45,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	sessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -76,8 +77,7 @@ type TeamAgent struct {
 	// spawnManager 子进程管理器
 	spawnManager *SpawnManager
 	// recoveryManager 恢复管理器
-	// TODO(#9.61): RecoveryManager 类型
-	recoveryManager any
+	recoveryManager *RecoveryManager
 	// sessionManager 会话管理器
 	sessionManager *SessionManager
 	// streamController 流式控制器
@@ -105,7 +105,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	}
 	// 构建 SpawnManager
 	a.spawnManager = NewSpawnManager(a.state, a.configurator, func() *TeamAgent { return a })
-	// TODO(#9.61): 构建 RecoveryManager(configurator, spawnManager)
+	a.recoveryManager = NewRecoveryManager(a.configurator, a.spawnManager)
 	a.sessionManager = NewSessionManager(a.state, a.configurator, a.recoveryManager)
 	a.streamController = NewStreamController(
 		a.configurator.Blueprint,
@@ -293,7 +293,7 @@ func (a *TeamAgent) SessionManager() *SessionManager {
 
 // RecoveryManager 返回恢复管理器。
 // Python: TeamAgent.recovery_manager property
-func (a *TeamAgent) RecoveryManager() any {
+func (a *TeamAgent) RecoveryManager() *RecoveryManager {
 	return a.recoveryManager
 }
 
@@ -775,21 +775,29 @@ func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) 
 // RecoverTeam 恢复团队。
 // Python: TeamAgent.recover_team()
 func (a *TeamAgent) RecoverTeam(ctx context.Context) ([]string, error) {
-	// TODO(#9.61): 恢复管理器恢复团队 recoveryManager.recover_team()
+	if a.recoveryManager != nil {
+		return a.recoveryManager.RecoverTeam(ctx), nil
+	}
 	return nil, nil
 }
 
-// RecoverFromSession 从会话检查点重构 Leader TeamAgent。
+// RecoverFromSession 从 session 检查点重构 Leader TeamAgent。
+// 流程：读取 team namespace → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
+//
 // Python: TeamAgent.recover_from_session(session, team_name, runtime_spec)
+// TODO(#9.55): 实现完整恢复逻辑
 func RecoverFromSession(ctx context.Context, session any, teamName string, runtimeSpec *atschema.TeamAgentSpec) (*TeamAgent, error) {
-	// TODO(#9.61): 从 session 读取 bucket → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
-	return nil, nil
+	return nil, fmt.Errorf("RecoverFromSession 尚未实现（#9.55）")
 }
 
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。
 // Python: TeamAgent.persist_session_manifest(session)
 func (a *TeamAgent) PersistSessionManifest(session any) {
-	// TODO(#9.61): 持久化领导者配置 recoveryManager.persist_leader_config(session)
+	if a.recoveryManager != nil {
+		if sf, ok := session.(sessinterfaces.SessionFacade); ok {
+			a.recoveryManager.PersistLeaderConfig(sf)
+		}
+	}
 }
 
 // UpdateModelPool 更新模型池。
@@ -801,7 +809,12 @@ func (a *TeamAgent) UpdateModelPool(newPool any) {
 			a.configurator.UpdateModelPool(poolSlice)
 		}
 	}
-	// TODO(#9.61): 持久化领导者配置 recoveryManager.persist_leader_config
+	// 持久化领导者配置（模型池变更后）
+	if a.recoveryManager != nil && a.sessionManager != nil {
+		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
+			a.recoveryManager.PersistLeaderConfig(sf)
+		}
+	}
 }
 
 // AttachModelAllocator 附加模型分配器。

@@ -4,6 +4,8 @@ import (
 	"context"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -33,8 +35,7 @@ type SessionManager struct {
 	// configurator Agent 配置器
 	configurator *AgentConfigurator
 	// recoveryManager 恢复管理器
-	// TODO(#9.61): 替换 any 为 RecoveryManager 类型
-	recoveryManager any
+	recoveryManager *RecoveryManager
 	// sessionState session_id 可变容器（通过 context 传播）
 	sessionState *agentteams.SessionState
 }
@@ -57,7 +58,7 @@ const (
 func NewSessionManager(
 	state *TeamAgentState,
 	configurator *AgentConfigurator,
-	recoveryManager any, // TODO(#9.61): RecoveryManager 类型
+	recoveryManager *RecoveryManager,
 ) *SessionManager {
 	return &SessionManager{
 		state:           state,
@@ -93,8 +94,8 @@ func (m *SessionManager) SetTeamSession(session any) {
 //  1. 不需要 Token reset — 直接 SetSessionID 覆盖旧值
 //  2. sessionState.SetSessionID(sessionID) — 原地修改，共享指针立即可见
 //  3. state.TeamSession = session — 存储到可变状态
-//  4. TODO(#9.61): teamBackend.DB().CreateCurSessionTables()
-//  5. TODO(#9.61): recoveryManager.PersistLeaderConfig(session)
+//  4. teamBackend.DB().CreateCurSessionTables()
+//  5. recoveryManager.PersistLeaderConfig(session)
 //
 // 返回新的 context.Context（含 SessionState），调用方必须用于后续传播。
 func (m *SessionManager) BindSession(
@@ -121,11 +122,21 @@ func (m *SessionManager) BindSession(
 
 	// 步骤 4: 创建 DB 表（幂等）
 	// Python: if team_backend: await team_backend.db.create_cur_session_tables()
-	// TODO(#9.61): if teamBackend := m.configurator.TeamBackend(); teamBackend != nil { ... }
+	if teamBackend := m.configurator.TeamBackend(); teamBackend != nil {
+		if err := teamBackend.DB().CreateCurSessionTables(ctx); err != nil {
+			logger.Warn(sessionMgrLogComponent).Err(err).
+				Str("session_id", sessionID).
+				Msg("创建会话表失败")
+		}
+	}
 
 	// 步骤 5: Leader 侧持久化
 	// Python: if spec and role == TeamRole.LEADER: recovery_manager.persist_leader_config(session)
-	// TODO(#9.61): if m.configurator.Role() == TeamRoleLeader && m.configurator.Spec() != nil { ... }
+	if m.recoveryManager != nil && m.configurator.Role() == atschema.TeamRoleLeader && m.configurator.Spec() != nil {
+		if sf, ok := session.(interfaces.SessionFacade); ok {
+			m.recoveryManager.PersistLeaderConfig(sf)
+		}
+	}
 
 	logger.Info(sessionMgrLogComponent).
 		Str("session_id", sessionID).
@@ -169,10 +180,10 @@ func (m *SessionManager) ReleaseSession() {
 //  4. await recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=True)
 //
 // Go 对应步骤：
-//  1. TODO(#9.61): 收集活着的 teammate
+//  1. recoveryManager.CollectLiveTeammatesForSessionSwitch()
 //  2. BindSession — 已实现
-//  3. TODO(#9.61): Leader 判断
-//  4. TODO(#9.61): 重启 teammate
+//  3. Leader 判断
+//  4. recoveryManager.RestartForSessionSwitch(recoverableMembers, true)
 //
 // 顺序重要：先快照再 bind，这样新 session_id 通过 spawn 载荷传播到重启的 teammate。
 func (m *SessionManager) ResumeForNewSession(
@@ -181,7 +192,10 @@ func (m *SessionManager) ResumeForNewSession(
 ) (context.Context, error) {
 	// 步骤 1: 收集活着的 teammate（快照）
 	// Python: recoverable_members = await self._recovery_manager.collect_live_teammates_for_session_switch()
-	// TODO(#9.61): recoverableMembers := m.recoveryManager.CollectLiveTeammatesForSessionSwitch()
+	var recoverableMembers []LiveTeammate
+	if m.recoveryManager != nil {
+		recoverableMembers = m.recoveryManager.CollectLiveTeammatesForSessionSwitch(ctx)
+	}
 
 	// 步骤 2: 绑定新会话
 	// Python: await self.bind_session(session)
@@ -194,8 +208,9 @@ func (m *SessionManager) ResumeForNewSession(
 	// Python:
 	//   if self._configurator.role != TeamRole.LEADER or not team_backend: return
 	//   await self._recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=True)
-	// TODO(#9.61): if m.configurator.Role() != Leader || m.configurator.TeamBackend() == nil → return
-	// TODO(#9.61): m.recoveryManager.RestartForSessionSwitch(recoverableMembers, true)
+	if m.recoveryManager != nil && m.configurator.Role() == atschema.TeamRoleLeader && m.configurator.TeamBackend() != nil {
+		m.recoveryManager.RestartForSessionSwitch(ctx, recoverableMembers, true)
+	}
 
 	return newCtx, nil
 }
@@ -216,7 +231,10 @@ func (m *SessionManager) RecoverForExistingSession(
 ) (context.Context, error) {
 	// 步骤 1: 收集活着的 teammate（快照）
 	// Python: recoverable_members = await self._recovery_manager.collect_live_teammates_for_session_switch()
-	// TODO(#9.61): recoverableMembers := m.recoveryManager.CollectLiveTeammatesForSessionSwitch()
+	var recoverableMembers []LiveTeammate
+	if m.recoveryManager != nil {
+		recoverableMembers = m.recoveryManager.CollectLiveTeammatesForSessionSwitch(ctx)
+	}
 
 	// 步骤 2: 绑定会话
 	// Python: await self.bind_session(session)
@@ -229,8 +247,9 @@ func (m *SessionManager) RecoverForExistingSession(
 	// Python:
 	//   if self._configurator.role != TeamRole.LEADER or not team_backend: return
 	//   await self._recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=False)
-	// TODO(#9.61): if m.configurator.Role() != Leader || m.configurator.TeamBackend() == nil → return
-	// TODO(#9.61): m.recoveryManager.RestartForSessionSwitch(recoverableMembers, false)
+	if m.recoveryManager != nil && m.configurator.Role() == atschema.TeamRoleLeader && m.configurator.TeamBackend() != nil {
+		m.recoveryManager.RestartForSessionSwitch(ctx, recoverableMembers, false)
+	}
 
 	return newCtx, nil
 }
