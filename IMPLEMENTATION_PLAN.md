@@ -607,7 +607,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
 | 9.66 | ✅ | Team Workspace | 团队工作空间（TeamWorkspaceManager + TeamWorkspaceRail + WorkspaceMetaTool + ToolTranslator + i18n + locales + 回填 agent/harness） | `openjiuwen/agent_teams/team_workspace/` |
 | 9.66a | ✅ | WorktreeManager | Worktree 完整实现（manager + tools + rails + git + cleanup + session + backend + notice + slug；⤴️ 9.38-49 仅完成 models；⤴️ 回填 agent/resources.go WorktreeManager any 类型 + agent_configurator.go CreateWorktreeManager + 事件镜像回调 + code_adapter.go buildWorktreeRail） | `openjiuwen/harness/tools/worktree/` |
-| 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |
+| 9.67 | ✅ | Team Observability | OpenTelemetry 集成（Callback/Monitor/Rail 三层；OtelSpanState ctx 注入；UnregisterNamespace 扩展；DeepAgent SpanState 注入；⤵️ 9.55 回填 AttachToTeamAgent/DetachFromTeamAgent） | `openjiuwen/agent_teams/observability/` |
 | 9.68-69 | ☐ | Team Rails / Prompts | 团队级 Rails / 提示词 | `openjiuwen/agent_teams/rails/` · `prompts/` |
 | **9.x 自演化系统** | — | | | |
 | 9.70a | ✅ | Operator 基础接口 | Operator 抽象接口（operator_id/get_tunables/get_state/load_state/set_parameter/apply_update）+ LLMCallOperator + ToolCallOperator + MemoryCallOperator + SkillExperienceOperator + evolving/schema 共享契约层（protocol.go/update.go） | `openjiuwen/core/operator/` |

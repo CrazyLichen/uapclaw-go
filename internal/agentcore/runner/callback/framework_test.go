@@ -1921,6 +1921,68 @@ func TestUnregisterNamespace_基本功能(t *testing.T) {
 	assert.Len(t, callbacks, 0)
 }
 
+// TestUnregisterNamespace_LLMToolAgent 测试 UnregisterNamespace 支持 LLM/Tool/Agent 回调
+func TestUnregisterNamespace_LLMToolAgent(t *testing.T) {
+	fw := NewCallbackFramework()
+	var llmCalled, toolCalled, agentCalled int32
+
+	// 注册带命名空间的 LLM/Tool/Agent 回调
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		atomic.AddInt32(&llmCalled, 1)
+		return nil
+	}, WithNamespace("otel"))
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
+		atomic.AddInt32(&toolCalled, 1)
+		return nil
+	}, WithNamespace("otel"))
+	fw.OnGlobalAgent(GlobalAgentInvokeInput, func(_ context.Context, _ *GlobalAgentEventData) any {
+		atomic.AddInt32(&agentCalled, 1)
+		return nil
+	}, WithNamespace("otel"))
+
+	// 注册不同命名空间的回调，不应被移除
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		return nil
+	}, WithNamespace("other"))
+
+	// 注销 otel 命名空间
+	fw.UnregisterNamespace("otel")
+
+	// 触发事件
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	fw.TriggerTool(context.Background(), NewToolCallEventData(ToolCallStarted, nil))
+	fw.TriggerGlobalAgent(context.Background(), &GlobalAgentEventData{Event: GlobalAgentInvokeInput})
+
+	// otel 命名空间的回调不应被触发
+	assert.Equal(t, int32(0), atomic.LoadInt32(&llmCalled), "otel LLM 回调应被注销")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&toolCalled), "otel Tool 回调应被注销")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&agentCalled), "otel Agent 回调应被注销")
+
+	// other 命名空间的回调仍应存在
+	callbacks := fw.GetCallbacksForTest(LLMCallStarted)
+	assert.Len(t, callbacks, 1, "other 命名空间的 LLM 回调应保留")
+	assert.Equal(t, "other", callbacks[0].Namespace)
+}
+
+// TestUnregisterNamespace_其他命名空间不受影响 测试注销一个命名空间不影响其他
+func TestUnregisterNamespace_其他命名空间不受影响(t *testing.T) {
+	fw := NewCallbackFramework()
+	var keepCalled int32
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		atomic.AddInt32(&keepCalled, 1)
+		return nil
+	}, WithNamespace("keep"))
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		return nil
+	}, WithNamespace("remove"))
+
+	fw.UnregisterNamespace("remove")
+
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	assert.Equal(t, int32(1), atomic.LoadInt32(&keepCalled), "keep 命名空间的回调应仍被触发")
+}
+
 // TestOnChain_基本功能 测试 OnChain 注册链式回调
 func TestOnChain_基本功能(t *testing.T) {
 	fw := NewCallbackFramework()

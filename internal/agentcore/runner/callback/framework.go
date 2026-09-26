@@ -1316,6 +1316,107 @@ func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
 			delete(fw.circuitBreakers, k)
 		}
 	}
+	// 清理枚举键回调 map（按 CallbackInfo.Namespace 过滤）
+	// LLM 回调
+	for k, v := range fw.llmCallbacks {
+		filtered := make([]*CallbackInfo[LLMCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.llmCallbacks[k] = filtered
+	}
+	// Tool 回调
+	for k, v := range fw.toolCallbacks {
+		filtered := make([]*CallbackInfo[ToolCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.toolCallbacks[k] = filtered
+	}
+	// Session 回调
+	for k, v := range fw.sessionCallbacks {
+		filtered := make([]*CallbackInfo[SessionCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.sessionCallbacks[k] = filtered
+	}
+	// Context 回调
+	for k, v := range fw.contextCallbacks {
+		filtered := make([]*CallbackInfo[ContextCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.contextCallbacks[k] = filtered
+	}
+	// GlobalAgent 回调
+	for k, v := range fw.globalAgentCallbacks {
+		filtered := make([]*CallbackInfo[GlobalAgentCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.globalAgentCallbacks[k] = filtered
+	}
+	// Workflow 回调
+	for k, v := range fw.workflowCallbacks {
+		filtered := make([]*CallbackInfo[WorkflowCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.workflowCallbacks[k] = filtered
+	}
+	// AgentTeam 回调
+	for k, v := range fw.agentTeamCallbacks {
+		filtered := make([]*CallbackInfo[AgentTeamCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.agentTeamCallbacks[k] = filtered
+	}
+	// Retrieval 回调
+	for k, v := range fw.retrievalCallbacks {
+		filtered := make([]*CallbackInfo[RetrievalCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.retrievalCallbacks[k] = filtered
+	}
+	// Memory 回调
+	for k, v := range fw.memoryCallbacks {
+		filtered := make([]*CallbackInfo[MemoryCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.memoryCallbacks[k] = filtered
+	}
+	// TaskManager 回调
+	for k, v := range fw.taskManagerCallbacks {
+		filtered := make([]*CallbackInfo[TaskManagerCallbackFunc], 0, len(v))
+		for _, info := range v {
+			if info.Namespace != namespace {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.taskManagerCallbacks[k] = filtered
+	}
 }
 
 func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {

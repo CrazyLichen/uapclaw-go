@@ -50,6 +50,7 @@ import (
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -654,6 +655,9 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 		}
 		subCwdState := cwd.InitCwd(subWwRootPath, cwd.WithWorkspace(subWwRootPath))
 		subCtx := cwd.WithCwdState(ctx, subCwdState)
+		// 子 Agent 创建独立 SpanState，实现 inter-Agent 隔离
+		subSpanState := observability.InitSpanState()
+		subCtx = observability.WithSpanState(subCtx, subSpanState)
 		subAgent, createErr := CreateDeepAgent(subCtx, createParams)
 		if createErr != nil {
 			return nil, fmt.Errorf("创建子 Agent 失败: %w", createErr)
@@ -1665,6 +1669,14 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 		cwdState := cwd.InitCwd(initRoot, cwd.WithWorkspace(initRoot))
 		ctx = cwd.WithCwdState(ctx, cwdState)
 		logger.Info(logComponent).Str("init_root", initRoot).Msg("CWD initialized")
+	}
+
+	// 初始化可观测性 SpanState（对齐 SessionState 注入模式）
+	// Python: contextvars 自动传播 span_context
+	// Go: 通过 context.Value 传播 *OtelSpanState 指针
+	if observability.SpanStateFromCtx(ctx) == nil {
+		spanState := observability.InitSpanState()
+		ctx = observability.WithSpanState(ctx, spanState)
 	}
 
 	// 注册待处理的 MCP 服务器
