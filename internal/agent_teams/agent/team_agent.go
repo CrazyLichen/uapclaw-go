@@ -42,7 +42,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	sessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -83,8 +85,7 @@ type TeamAgent struct {
 	// streamController 流式控制器
 	streamController *StreamController
 	// coordination 协调内核
-	// ✅(#9.62): CoordinationKernel 类型已在 coordination 包实现
-	coordination any
+	coordination *coordination.CoordinationKernel
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -115,7 +116,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 		a.updateExecution,
 		// ✅(#9.62): WithWakeMailbox / WithRequestCompletionPoll 已在 CoordinationKernel.WakeMailboxIfInterruptCleared 实现
 	)
-	// ⤵️(#9.62): 构建 CoordinationKernel(self)
+	// TODO(#9.62): 构建 CoordinationKernel(self)（需 TeamAgent 实现 KernelHost）
 	return a
 }
 
@@ -193,8 +194,7 @@ func (a *TeamAgent) RuntimeContext() *atschema.TeamRuntimeContext {
 
 // Coordination 返回协调内核。
 // Python: TeamAgent.coordination property
-func (a *TeamAgent) Coordination() any {
-	// ⤵️(#9.62): return coordination (CoordinationKernel 类型)
+func (a *TeamAgent) Coordination() *coordination.CoordinationKernel {
 	return a.coordination
 }
 
@@ -203,8 +203,10 @@ func (a *TeamAgent) Coordination() any {
 //
 // 保留为测试和遗留调用者的公开访问器；
 // 新代码应通过 coordination 访问。
-func (a *TeamAgent) CoordinationLoop() any {
-	// ⤵️(#9.62): 返回协调事件总线 return coordination.event_bus
+func (a *TeamAgent) CoordinationLoop() *coordination.EventBus {
+	if a.coordination != nil {
+		return a.coordination.EventBus()
+	}
 	return nil
 }
 
@@ -309,9 +311,9 @@ func (a *TeamAgent) StreamController() *StreamController {
 	return a.streamController
 }
 
-// EventListeners 返回已注册的事件监听器。
+// EventListeners 返回已注册的事件监听器句柄列表。
 // Python: TeamAgent.event_listeners property
-func (a *TeamAgent) EventListeners() []any {
+func (a *TeamAgent) EventListeners() []*messager.EventListenerHandle {
 	return a.state.EventListeners
 }
 
@@ -383,17 +385,19 @@ func (a *TeamAgent) PersistAllocatorState() {
 	// TODO(#9.64): 委托 _persistAllocatorState()
 }
 
-// AddEventListener 添加事件监听器。
+// AddEventListener 添加事件监听器，返回可移除的句柄。
 // Python: TeamAgent.add_event_listener(handler)
-func (a *TeamAgent) AddEventListener(handler any) {
-	a.state.EventListeners = append(a.state.EventListeners, handler)
+func (a *TeamAgent) AddEventListener(handler messager.MessagerHandler) *messager.EventListenerHandle {
+	h := messager.NewEventListenerHandle(handler)
+	a.state.EventListeners = append(a.state.EventListeners, h)
+	return h
 }
 
 // RemoveEventListener 移除事件监听器。
 // Python: TeamAgent.remove_event_listener(handler)
-func (a *TeamAgent) RemoveEventListener(handler any) {
+func (a *TeamAgent) RemoveEventListener(handle *messager.EventListenerHandle) {
 	for i, h := range a.state.EventListeners {
-		if h == handler {
+		if h.ID() == handle.ID() {
 			a.state.EventListeners = append(a.state.EventListeners[:i], a.state.EventListeners[i+1:]...)
 			return
 		}
@@ -802,12 +806,9 @@ func (a *TeamAgent) PersistSessionManifest(session any) {
 
 // UpdateModelPool 更新模型池。
 // Python: TeamAgent.update_model_pool(new_pool)
-func (a *TeamAgent) UpdateModelPool(newPool any) {
+func (a *TeamAgent) UpdateModelPool(newPool []models.ModelPoolEntry) {
 	if a.configurator != nil {
-		// 类型断言：从 any 转为 []models.ModelPoolEntry
-		if poolSlice, ok := newPool.([]models.ModelPoolEntry); ok {
-			a.configurator.UpdateModelPool(poolSlice)
-		}
+		a.configurator.UpdateModelPool(newPool)
 	}
 	// 持久化领导者配置（模型池变更后）
 	if a.recoveryManager != nil && a.sessionManager != nil {
@@ -819,18 +820,9 @@ func (a *TeamAgent) UpdateModelPool(newPool any) {
 
 // AttachModelAllocator 附加模型分配器。
 // Python: TeamAgent.attach_model_allocator(allocator, leader_allocation)
-func (a *TeamAgent) AttachModelAllocator(allocator any, leaderAllocation any) {
+func (a *TeamAgent) AttachModelAllocator(allocator models.ModelAllocator, leaderAllocation *models.Allocation) {
 	if a.configurator != nil {
-		// 类型断言
-		var alloc models.ModelAllocator
-		if a, ok := allocator.(models.ModelAllocator); ok {
-			alloc = a
-		}
-		var la *models.Allocation
-		if v, ok := leaderAllocation.(*models.Allocation); ok {
-			la = v
-		}
-		a.configurator.AttachModelAllocator(alloc, la)
+		a.configurator.AttachModelAllocator(allocator, leaderAllocation)
 	}
 }
 

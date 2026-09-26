@@ -3,15 +3,18 @@ package observability
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -30,6 +33,16 @@ const (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// EventListenerRegistrar 事件监听注册接口，打破 observability → agent 循环依赖。
+// TeamAgent 隐式实现此接口，AttachToTeamAgent / DetachFromTeamAgent 通过接口操作。
+// Python: TeamAgent.add_event_listener / remove_event_listener
+type EventListenerRegistrar interface {
+	// AddEventListener 添加事件监听器，返回可移除的句柄
+	AddEventListener(handler messager.MessagerHandler) *messager.EventListenerHandle
+	// RemoveEventListener 移除事件监听器
+	RemoveEventListener(handle *messager.EventListenerHandle)
+}
 
 // ObservabilityOption InitObservability 的函数选项。
 type ObservabilityOption func(*observabilityOptions)
@@ -178,7 +191,7 @@ func GetTracer(name string) trace.Tracer {
 // Python: attach_to_team_agent(team_agent)
 //
 // 当前为桩实现（no-op），待 9.55 TeamAgent 完成后回填。
-func AttachToTeamAgent(teamAgent any) {
+func AttachToTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandler == nil {
 		logger.Warn(logComponent).Msg("attach_to_team_agent 在 init_observability 之前调用")
 		return
@@ -192,7 +205,7 @@ func AttachToTeamAgent(teamAgent any) {
 // Python: detach_from_team_agent(team_agent)
 //
 // 当前为桩实现。
-func DetachFromTeamAgent(teamAgent any) {
+func DetachFromTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandler == nil {
 		return
 	}
@@ -241,8 +254,7 @@ func buildExporter(config *ObservabilityConfig, override sdktrace.SpanExporter) 
 	switch config.Exporter {
 	case "console":
 		// Python: ConsoleSpanExporter()
-		// Go: 使用 noop exporter（console 输出可后续通过 stdouttrace 包引入）
-		return newNoopExporter()
+		return stdouttrace.New(stdouttrace.WithWriter(os.Stdout))
 	case "otlp_grpc":
 		// Python: OTLPSpanExporter(endpoint=config.endpoint, insecure=True)
 		return otlptracegrpc.New(
@@ -260,22 +272,6 @@ func buildExporter(config *ObservabilityConfig, override sdktrace.SpanExporter) 
 // isConsoleExporter 检查是否为 console 导出器。
 func isConsoleExporter(config *ObservabilityConfig) bool {
 	return config.Exporter == "console"
-}
-
-// newNoopExporter 创建 noop span 导出器（console 模式的占位实现）。
-// 后续可替换为 stdouttrace.New(stdouttrace.WithWriter(os.Stdout))
-func newNoopExporter() (sdktrace.SpanExporter, error) {
-	return &noopExporter{}, nil
-}
-
-// noopExporter 不输出 span 的空导出器。
-type noopExporter struct{}
-
-func (e *noopExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
-	return nil
-}
-func (e *noopExporter) Shutdown(ctx context.Context) error {
-	return nil
 }
 
 // getCallbackFramework 懒加载 CallbackFramework 单例。

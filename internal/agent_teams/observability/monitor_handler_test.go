@@ -26,14 +26,14 @@ func TestOtelTeamMonitorHandler_TeamCreated_Cleaned(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// team_created
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team", "display_name": "My Team"},
 	})
 	assert.Contains(t, handler.teamSpans, "my-team")
 
 	// team_cleaned
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCleaned,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
@@ -49,20 +49,20 @@ func TestOtelTeamMonitorHandler_TaskCreated_Completed(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// 先创建 team span
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
 	// task_created
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCreated,
 		Payload:   map[string]any{"team_name": "my-team", "task_id": "task-1", "status": "pending"},
 	})
 	assert.Contains(t, handler.taskSpans, "task-1")
 
 	// task_completed
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCompleted,
 		Payload:   map[string]any{"task_id": "task-1"},
 	})
@@ -74,19 +74,19 @@ func TestOtelTeamMonitorHandler_Task中间事件(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// 先创建 team span
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
 	// task_created
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCreated,
 		Payload:   map[string]any{"team_name": "my-team", "task_id": "task-2", "status": "pending"},
 	})
 
 	// task_updated 中间事件（recordTaskEvent）
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskUpdated,
 		Payload:   map[string]any{"task_id": "task-2", "status": "running"},
 	})
@@ -97,7 +97,7 @@ func TestOtelTeamMonitorHandler_未知事件静默忽略(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// 不应 panic
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: "unknown_event",
 		Payload:   map[string]any{},
 	})
@@ -108,7 +108,7 @@ func TestOtelTeamMonitorHandler_TaskCreated_无taskID(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// task_id 为空，不应创建 span
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCreated,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
@@ -120,13 +120,13 @@ func TestOtelTeamMonitorHandler_Member事件(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// 先创建 team span
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
 	// member 事件不应 panic
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventMemberSpawned,
 		Payload:   map[string]any{
 			"team_name":   "my-team",
@@ -142,13 +142,13 @@ func TestOtelTeamMonitorHandler_Message事件(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	// 先创建 team span
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
 	// message 事件不应 panic
-	handler.HandleEvent(&events.EventMessage{
+	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventMessage,
 		Payload: map[string]any{
 			"team_name":  "my-team",

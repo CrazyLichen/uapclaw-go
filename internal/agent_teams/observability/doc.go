@@ -19,8 +19,7 @@
 //	├── callback_handler.go  # OtelCallbackHandler
 //	├── monitor_handler.go   # OtelTeamMonitorHandler
 //	├── rail.go              # ObservabilityRail
-//	├── setup.go             # 生命周期管理
-//	└── observability.go     # 公共 API 导出
+//	└── setup.go             # 生命周期管理 + EventListenerRegistrar 接口
 //
 // 对应 Python 代码：openjiuwen/agent_teams/observability/
 package observability

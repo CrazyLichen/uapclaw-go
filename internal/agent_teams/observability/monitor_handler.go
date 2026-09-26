@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -78,7 +79,8 @@ func NewOtelTeamMonitorHandler(config *ObservabilityConfig, tracer trace.Tracer)
 
 // HandleEvent 事件分发入口。
 // Python: OtelTeamMonitorHandler.__call__(self, event: EventMessage)
-func (h *OtelTeamMonitorHandler) HandleEvent(event *events.EventMessage) {
+// 签名对齐 messager.MessagerHandler，9.55 回填时可直接传入 AddEventListener。
+func (h *OtelTeamMonitorHandler) HandleEvent(_ context.Context, event *events.EventMessage) error {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("error", r).Str("event_type", event.EventType).
@@ -111,6 +113,7 @@ func (h *OtelTeamMonitorHandler) HandleEvent(event *events.EventMessage) {
 	case messageTypes[etype]:
 		h.recordMessageEvent(teamName, payload, etype)
 	}
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -201,7 +204,7 @@ func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype str
 		return
 	}
 	// Python: span.set_attribute(AT_TASK_STATUS, etype.replace("task_", ""))
-	span.SetAttributes(attribute.String(ATTaskStatus, etype))
+	span.SetAttributes(attribute.String(ATTaskStatus, strings.TrimPrefix(etype, "task_")))
 	span.SetStatus(codes.Ok, "")
 	span.End()
 	delete(h.taskSpans, taskID)

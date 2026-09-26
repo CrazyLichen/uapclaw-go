@@ -1,5 +1,9 @@
 package agent
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamAgentState TeamAgent 可变运行时状态。
@@ -19,7 +23,10 @@ type TeamAgentState struct {
 	// PendingUserQuery 待处理的用户查询
 	PendingUserQuery string
 	// EventListeners 已注册的事件监听器
-	EventListeners []any
+	// Python: list[Callable[[EventMessage], Awaitable[None]]]
+	// Go 等价：messager.MessagerHandler = func(ctx, *EventMessage) error
+	// 用 EventListenerHandle 包装以支持移除操作
+	EventListeners []*messager.EventListenerHandle
 	// TeamCleaned clean_team 成功路径的一次性锁存标志
 	TeamCleaned bool
 }
@@ -35,7 +42,7 @@ type TeamAgentState struct {
 // NewTeamAgentState 创建默认的 TeamAgentState。
 func NewTeamAgentState() *TeamAgentState {
 	return &TeamAgentState{
-		EventListeners: make([]any, 0),
+		EventListeners: make([]*messager.EventListenerHandle, 0),
 	}
 }
 

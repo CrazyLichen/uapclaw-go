@@ -10,7 +10,7 @@
 //
 //	messager/
 //	├── doc.go           # 包文档
-//	├── messager.go      # Messager 接口定义 + MessagerHandler 类型
+//	├── messager.go      # Messager 接口定义 + MessagerHandler 类型 + EventListenerHandle
 //	├── inprocess.go     # InProcessMessager 实现 + 全局 Bus
 //	└── base.go          # CreateMessager 工厂函数（配置结构体已迁移到 schema 包）
 //

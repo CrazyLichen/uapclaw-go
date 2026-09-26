@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -174,8 +176,8 @@ func TestTeamAgent_AttachModelAllocator(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	// 不 panic 即可
-	a.AttachModelAllocator("mock_allocator", "mock_allocation")
+	// 传 nil 不 panic
+	a.AttachModelAllocator(nil, nil)
 }
 
 // TestTeamAgent_RestoreAllocatorState 测试代理到 configurator
@@ -192,8 +194,8 @@ func TestTeamAgent_UpdateModelPool(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	// 不 panic 即可
-	a.UpdateModelPool("mock_pool")
+	// 传 nil 不 panic
+	a.UpdateModelPool(nil)
 }
 
 // TestTeamAgent_RegisterRail 测试代理到 harness
@@ -293,10 +295,12 @@ func TestTeamAgent_AddEventListener(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	handler := "test_handler"
-	a.AddEventListener(handler)
+	var handler messager.MessagerHandler = func(_ context.Context, _ *events.EventMessage) error {
+		return nil
+	}
+	h := a.AddEventListener(handler)
+	assert.NotNil(t, h)
 	assert.Len(t, a.EventListeners(), 1)
-	assert.Equal(t, handler, a.EventListeners()[0])
 }
 
 // TestTeamAgent_RemoveEventListener 测试移除事件监听器
@@ -304,15 +308,19 @@ func TestTeamAgent_RemoveEventListener(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	handler1 := "handler1"
-	handler2 := "handler2"
-	a.AddEventListener(handler1)
-	a.AddEventListener(handler2)
+	var handler1 messager.MessagerHandler = func(_ context.Context, _ *events.EventMessage) error {
+		return nil
+	}
+	var handler2 messager.MessagerHandler = func(_ context.Context, _ *events.EventMessage) error {
+		return nil
+	}
+	h1 := a.AddEventListener(handler1)
+	h2 := a.AddEventListener(handler2)
 	assert.Len(t, a.EventListeners(), 2)
 
-	a.RemoveEventListener(handler1)
+	a.RemoveEventListener(h1)
 	assert.Len(t, a.EventListeners(), 1)
-	assert.Equal(t, handler2, a.EventListeners()[0])
+	assert.Equal(t, h2.ID(), a.EventListeners()[0].ID())
 }
 
 // TestTeamAgent_IsAgentRunning 测试返回 false

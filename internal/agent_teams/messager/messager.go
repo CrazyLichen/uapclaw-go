@@ -2,6 +2,7 @@ package messager
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 )
@@ -11,6 +12,26 @@ import (
 // MessagerHandler 消息处理回调函数类型。
 // Python: MessagerHandler = Callable[[EventMessage], Awaitable[None]]
 type MessagerHandler func(ctx context.Context, msg *events.EventMessage) error
+
+// EventListenerHandle 事件监听器句柄，用于移除监听器时的身份识别。
+// Go 中函数类型不可直接比较（==），故用递增 ID 实现引用相等语义，
+// 对齐 Python list.remove(handler) 的行为。
+type EventListenerHandle struct {
+	// id 唯一标识
+	id uint64
+	// handler 实际回调
+	handler MessagerHandler
+}
+
+// Handler 返回底层回调函数。
+func (h *EventListenerHandle) Handler() MessagerHandler {
+	return h.handler
+}
+
+// ID 返回句柄的唯一标识，用于跨包比较。
+func (h *EventListenerHandle) ID() uint64 {
+	return h.id
+}
 
 // Messager 团队事件消息通信接口。
 // Python: Messager (openjiuwen/agent_teams/messager/messager.py)
@@ -40,6 +61,21 @@ type Messager interface {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// eventListenerSeq 全局监听器 ID 序列
+	eventListenerSeq uint64
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewEventListenerHandle 创建带唯一 ID 的监听器句柄。
+// Go 中函数类型不可直接比较（==），故用递增 ID 实现引用相等语义，
+// 对齐 Python list.remove(handler) 的行为。
+func NewEventListenerHandle(handler MessagerHandler) *EventListenerHandle {
+	return &EventListenerHandle{
+		id:      atomic.AddUint64(&eventListenerSeq, 1),
+		handler: handler,
+	}
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
