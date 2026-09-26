@@ -58,9 +58,10 @@ type BaseGraphStore interface {
 // Options 图存储操作选项
 type Options struct {
 	// 写入选项
-	Flush   bool
-	Upsert  bool
-	NoEmbed bool
+	Flush       bool
+	Upsert      bool
+	NoEmbed     bool
+	SkipCompact *bool // Refresh 时跳过 compact（对齐 Python: skip_compact），nil 表示未设置回退到配置
 
 	// 查询选项
 	IDs           []any
@@ -129,6 +130,12 @@ func WithUpsert(upsert bool) Option {
 // WithNoEmbed 跳过自动嵌入
 func WithNoEmbed(noEmbed bool) Option {
 	return func(o *Options) { o.NoEmbed = noEmbed }
+}
+
+// WithSkipCompact 设置 Refresh 时是否跳过 compact
+// 对齐 Python: refresh(skip_compact=True/False)
+func WithSkipCompact(skip bool) Option {
+	return func(o *Options) { o.SkipCompact = &skip }
 }
 
 // WithIDs 按ID查询/删除

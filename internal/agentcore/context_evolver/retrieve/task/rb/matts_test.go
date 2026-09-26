@@ -553,7 +553,7 @@ func TestParallelScalingOp_温度保存恢复(t *testing.T) {
 	assert.InDelta(t, 0.3, restoredTemp, 0.01)
 }
 
-// TestBestOfNOp_LLM调用失败 测试 LLM 评估调用失败时返回错误
+// TestBestOfNOp_LLM调用失败 测试 LLM 评估调用失败时回退到第一条轨迹
 func TestBestOfNOp_LLM调用失败(t *testing.T) {
 	sc := cecontext.NewServiceContext()
 	sc.RegisterService("llm", &fakeLLMService{err: fmt.Errorf("LLM error")})
@@ -566,11 +566,17 @@ func TestBestOfNOp_LLM调用失败(t *testing.T) {
 	})
 
 	err := op.Execute(context.Background(), rc)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "LLM 评估调用失败")
+	// 对齐 Python: LLM 失败时回退到第一条轨迹，不返回 error
+	assert.NoError(t, err)
+	answer, ok := cecontext.GetTyped[string](rc, "answer")
+	require.True(t, ok)
+	assert.Equal(t, "first answer", answer)
+	bestIdx, ok := cecontext.GetTyped[int](rc, "best_trajectory_index")
+	require.True(t, ok)
+	assert.Equal(t, 0, bestIdx)
 }
 
-// TestSelfContrastMemoryOp_LLM调用失败 测试 LLM 对比调用失败时返回错误
+// TestSelfContrastMemoryOp_LLM调用失败 测试 LLM 对比调用失败时回退到空列表
 func TestSelfContrastMemoryOp_LLM调用失败(t *testing.T) {
 	sc := cecontext.NewServiceContext()
 	sc.RegisterService("llm", &fakeLLMService{err: fmt.Errorf("LLM error")})
@@ -583,6 +589,9 @@ func TestSelfContrastMemoryOp_LLM调用失败(t *testing.T) {
 	})
 
 	err := op.Execute(context.Background(), rc)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "LLM 调用失败")
+	// 对齐 Python: LLM 失败时 contrastive_memories=[]，不返回 error
+	assert.NoError(t, err)
+	memories, ok := cecontext.GetTyped[[]*ceschema.ReasoningBankMemory](rc, "contrastive_memories")
+	require.True(t, ok)
+	assert.Empty(t, memories)
 }

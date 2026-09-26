@@ -122,11 +122,17 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 }
 
 // Refresh 刷新数据（flush + 可选 compact）。
-// Python: flush + 可选 compact。
+// Python: flush + 可选 compact。调用级别 skip_compact 选项优先于配置级别 EnableCompact。
 func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) error {
 	client, err := s.getClient(ctx)
 	if err != nil {
 		return err
+	}
+
+	// 解析调用级别选项
+	options := &graph.Options{}
+	for _, opt := range opts {
+		opt(options)
 	}
 
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
@@ -136,7 +142,13 @@ func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) er
 	}
 
 	// Python: 可选 compact 操作
-	if s.config.EnableCompact {
+	// 调用级别 SkipCompact 优先：SkipCompact=true 时跳过 compact，SkipCompact=false 时执行 compact
+	// SkipCompact 为 nil（未设置）时回退到配置级别 EnableCompact
+	shouldCompact := s.config.EnableCompact
+	if options.SkipCompact != nil {
+		shouldCompact = !*options.SkipCompact
+	}
+	if shouldCompact {
 		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 			if _, err := client.Compact(ctx, milvusclient.NewCompactOption(coll)); err != nil {
 				logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Compact failed")

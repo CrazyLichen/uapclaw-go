@@ -307,8 +307,20 @@ func (o *BestOfNOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 	// 调用 LLM 评估
 	response, err := llm.Generate(ctx, buf.String(), cecontext.WithTemperature(0.0))
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("BestOfN LLM evaluation failed")
-		return fmt.Errorf("BestOfNOp: LLM 评估调用失败: %w", err)
+		// 对齐 Python: except Exception → fallback 到第一条轨迹
+		logger.Error(logComponent).Err(err).Msg("BestOfN LLM evaluation failed, falling back to first trajectory")
+		bestTraj := trajectories[0]
+		rc.Set("answer", bestTraj.Answer)
+		rc.Set("best_trajectory_index", 0)
+		rc.Set("best_trajectory", bestTraj)
+		successCount := 0
+		for _, t := range trajectories {
+			if t.Success {
+				successCount++
+			}
+		}
+		rc.Set("pass_at_k", float64(successCount)/float64(len(trajectories)))
+		return nil
 	}
 
 	// 对齐 Python：使用正则 \b\d+\b 解析索引
@@ -404,8 +416,10 @@ func (o *SelfContrastMemoryOp) Execute(ctx context.Context, rc *cecontext.Runtim
 	// 调用 LLM 提取
 	response, err := llm.Generate(ctx, buf.String(), cecontext.WithTemperature(1.0))
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("Self-contrast LLM call failed")
-		return fmt.Errorf("SelfContrastMemoryOp: LLM 调用失败: %w", err)
+		// 对齐 Python: except Exception → context.contrastive_memories = []
+		logger.Error(logComponent).Err(err).Msg("Self-contrast LLM call failed, returning empty memories")
+		rc.Set("contrastive_memories", []*ceschema.ReasoningBankMemory{})
+		return nil
 	}
 
 	// 对齐 Python：解析记忆项

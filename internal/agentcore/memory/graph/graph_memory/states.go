@@ -611,9 +611,16 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 		} else if relation.LHSUUID() == relation.RHSUUID() {
 			// 自指向关系：将关系内容追加到实体 content
 			// 对齐 Python: relation.lhs 是 Entity 对象，直接访问
-			if relation.LHS != nil {
-				content := strings.TrimSuffix(relation.LHS.Content, "\n")
-				relation.LHS.Content = fmt.Sprintf("%s\n- %s", content, relation.Content)
+			entity := relation.LHS
+			if entity == nil {
+				// 防御性回退：从 LookupTable 查找实体
+				if e, ok := state.LookupTable.Entities[relation.LHSUUID()]; ok {
+					entity = e
+				}
+			}
+			if entity != nil {
+				content := strings.TrimSuffix(entity.Content, "\n")
+				entity.Content = fmt.Sprintf("%s\n- %s", content, relation.Content)
 			}
 			state.ToRemove[relation.UUID] = relation
 		} else {

@@ -161,63 +161,53 @@ func (o *LoadPlaybookOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	playbook := NewPlaybook()
 
 	// 对齐 Python: 用 dummy embedding + metadata_filter 搜索 ACE memories
-	func() {
-		defer func() {
-			// 对齐 Python: 加载失败时回退到空 Playbook
-			if r := recover(); r != nil {
-				logger.Warn(logComponent).
-					Any("recover", r).
-					Msg("Failed to load playbook. Starting with empty playbook.")
-				playbook = NewPlaybook()
-			}
-		}()
+	dummyEmbedding := make([]float64, 2560)
+	metadataFilter := map[string]any{
+		"workspace_id": userID,
+		"type":         "ace_memory",
+	}
 
-		dummyEmbedding := make([]float64, 2560)
-		metadataFilter := map[string]any{
-			"workspace_id": userID,
-			"type":         "ace_memory",
+	nodes, err := vectorStore.Search(ctx, dummyEmbedding, 50, metadataFilter)
+	if err != nil {
+		// 对齐 Python: 加载失败时回退到空 Playbook
+		logger.Warn(logComponent).
+			Err(err).
+			Str("user_id", userID).
+			Msg("Failed to load playbook. Starting with empty playbook.")
+		rc.Set("playbook", playbook)
+		return nil
+	}
+
+	// 对齐 Python: 将 VectorNode metadata 转为 Bullet，调用 playbook.load_bullet(bullet)
+	for _, node := range nodes {
+		metadata := node.Metadata
+		bullet := &Bullet{
+			ID:        getString(metadata, "id"),
+			Section:   getString(metadata, "section"),
+			Content:   getString(metadata, "content"),
+			Helpful:   getInt(metadata, "helpful"),
+			Harmful:   getInt(metadata, "harmful"),
+			Neutral:   getInt(metadata, "neutral"),
+			CreatedAt: parseTime(metadata["created_at"]),
+			UpdatedAt: parseTime(metadata["updated_at"]),
 		}
+		playbook.LoadBullet(bullet)
+	}
 
-		nodes, err := vectorStore.Search(ctx, dummyEmbedding, 50, metadataFilter)
-		if err != nil {
-			logger.Warn(logComponent).
-				Err(err).
-				Str("user_id", userID).
-				Msg("Failed to load playbook. Starting with empty playbook.")
-			return
-		}
-
-		// 对齐 Python: 将 VectorNode metadata 转为 Bullet，调用 playbook.load_bullet(bullet)
-		for _, node := range nodes {
-			metadata := node.Metadata
-			bullet := &Bullet{
-				ID:        getString(metadata, "id"),
-				Section:   getString(metadata, "section"),
-				Content:   getString(metadata, "content"),
-				Helpful:   getInt(metadata, "helpful"),
-				Harmful:   getInt(metadata, "harmful"),
-				Neutral:   getInt(metadata, "neutral"),
-				CreatedAt: parseTime(metadata["created_at"]),
-				UpdatedAt: parseTime(metadata["updated_at"]),
-			}
-			playbook.LoadBullet(bullet)
-		}
-
-		// 对齐 Python: 从所有 bullet ID 中提取最大数字，设置 playbook.set_next_id(max_id)
-		// Python: bullet_id.rsplit('-', 1) — 从右侧分割
-		maxID := 0
-		for _, bulletID := range playbook.BulletIDs() {
-			if idx := strings.LastIndex(bulletID, "-"); idx >= 0 {
-				var idNum int
-				if _, err := fmt.Sscanf(bulletID[idx+1:], "%d", &idNum); err == nil {
-					if idNum > maxID {
-						maxID = idNum
-					}
+	// 对齐 Python: 从所有 bullet ID 中提取最大数字，设置 playbook.set_next_id(max_id)
+	// Python: bullet_id.rsplit('-', 1) — 从右侧分割
+	maxID := 0
+	for _, bulletID := range playbook.BulletIDs() {
+		if idx := strings.LastIndex(bulletID, "-"); idx >= 0 {
+			var idNum int
+			if _, err := fmt.Sscanf(bulletID[idx+1:], "%d", &idNum); err == nil {
+				if idNum > maxID {
+					maxID = idNum
 				}
 			}
 		}
-		playbook.SetNextID(maxID)
-	}()
+	}
+	playbook.SetNextID(maxID)
 
 	rc.Set("playbook", playbook)
 

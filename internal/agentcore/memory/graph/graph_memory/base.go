@@ -550,7 +550,8 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 
 	// 16. 清理 + 刷新
 	state.ClearReferences()
-	if err := gm.DBBackend.Refresh(ctx, graph.WithFlush(false)); err != nil {
+	// 对齐 Python: await self.db_backend.refresh(skip_compact=True) — 步骤16 不压缩
+	if err := gm.DBBackend.Refresh(ctx, graph.WithSkipCompact(true)); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("Graph Memory: refresh failed")
 	}
 
@@ -1614,14 +1615,18 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 // Python: _handle_relation_dedupe(user_id, content, relations, state)
 func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, state *GraphMemState) error {
 	// 移除待删除的关系（对齐 Python: for relation in state.to_remove: ...）
+	// 使用 filter 方式构建新切片，避免遍历中修改切片导致索引偏移
+	removeSet := make(map[string]struct{}, len(state.ToRemove))
 	for uuid := range state.ToRemove {
-		for i, rel := range relations {
-			if rel.UUID == uuid {
-				relations = append(relations[:i], relations[i+1:]...)
-				break
-			}
+		removeSet[uuid] = struct{}{}
+	}
+	filtered := make([]*graph.Relation, 0, len(relations))
+	for _, rel := range relations {
+		if _, ok := removeSet[rel.UUID]; !ok {
+			filtered = append(filtered, rel)
 		}
 	}
+	relations = filtered
 
 	// 批量嵌入 + 去重
 	if state.Strategy.MergeRelations && len(state.TmpBuffer) > 0 {
@@ -2154,13 +2159,14 @@ func (gm *GraphMemory) maybeGC(ctx context.Context) {
 	gm.ThreadLock.Lock()
 	defer gm.ThreadLock.Unlock()
 
-	now := float64(time.Now().Unix())
-	if now-gm.lastGC > gm.TimeTillNextGC {
-		gm.lastGC = now
-		if err := gm.DBBackend.Refresh(ctx, graph.WithFlush(false)); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh failed")
+		now := float64(time.Now().Unix())
+		if now-gm.lastGC > gm.TimeTillNextGC {
+			gm.lastGC = now
+			// 对齐 Python: await self.db_backend.refresh(skip_compact=False) — GC 后执行压缩
+			if err := gm.DBBackend.Refresh(ctx, graph.WithSkipCompact(false)); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh failed")
+			}
 		}
-	}
 }
 
 // resolveEntityMerges 解析合并实体后的关系和 Episode 引用
