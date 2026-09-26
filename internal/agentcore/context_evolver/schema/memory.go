@@ -60,7 +60,7 @@ type ACEMemory struct {
 }
 
 // ReasoningBankMemoryItem ReasoningBank 记忆条目。
-// 对齐 Python ReasoningBankMemoryItem(BaseModel)。
+// 对齐 Python ReasoningBankMemoryItem(BaseModel) + memory.py ReasoningBankMemory 的字段。
 //
 // 非独立 Memory 类型，是 ReasoningBankMemory.Memory 列表中的元素。
 type ReasoningBankMemoryItem struct {
@@ -70,6 +70,12 @@ type ReasoningBankMemoryItem struct {
 	Description string `json:"description"`
 	// Content 详细内容
 	Content string `json:"content"`
+	// SourceType 来源类型，默认 "success"（对齐 Python memory.py: source_type = "success"）
+	SourceType string `json:"source_type"`
+	// HelpfulCount 有帮助计数，默认 0（对齐 Python memory.py: helpful_count = 0）
+	HelpfulCount int `json:"helpful_count"`
+	// HarmfulCount 有害计数，默认 0（对齐 Python memory.py: harmful_count = 0）
+	HarmfulCount int `json:"harmful_count"`
 }
 
 // ReasoningBankMemory ReasoningBank 算法的记忆类型。
@@ -297,9 +303,12 @@ func (m ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 	memoryData := make([]any, len(m.Memory))
 	for i, item := range m.Memory {
 		memoryData[i] = map[string]any{
-			"title":       item.Title,
-			"description": item.Description,
-			"content":     item.Content,
+			"title":          item.Title,
+			"description":    item.Description,
+			"content":        item.Content,
+			"source_type":    item.SourceType,
+			"helpful_count":  item.HelpfulCount,
+			"harmful_count":  item.HarmfulCount,
 		}
 	}
 
@@ -455,26 +464,31 @@ func parseMemoryItems(raw any) []ReasoningBankMemoryItem {
 	case []any:
 		for _, item := range memList {
 			if m, ok := item.(map[string]any); ok {
-				items = append(items, ReasoningBankMemoryItem{
-					Title:       getStringField(m, "title", ""),
-					Description: getStringField(m, "description", ""),
-					Content:     getStringField(m, "content", ""),
-				})
+				items = append(items, parseSingleMemoryItem(m))
 			}
 		}
 	case []ReasoningBankMemoryItem:
 		items = memList
 	case []map[string]any:
 		for _, m := range memList {
-			items = append(items, ReasoningBankMemoryItem{
-				Title:       getStringField(m, "title", ""),
-				Description: getStringField(m, "description", ""),
-				Content:     getStringField(m, "content", ""),
-			})
+			items = append(items, parseSingleMemoryItem(m))
 		}
 	}
 
 	return items
+}
+
+// parseSingleMemoryItem 从 map 解析单个 ReasoningBankMemoryItem。
+// 对齐 Python memory.py ReasoningBankMemory 字段：source_type/helpful_count/harmful_count。
+func parseSingleMemoryItem(m map[string]any) ReasoningBankMemoryItem {
+	return ReasoningBankMemoryItem{
+		Title:         getStringField(m, "title", ""),
+		Description:   getStringField(m, "description", ""),
+		Content:       getStringField(m, "content", ""),
+		SourceType:    getStringField(m, "source_type", "success"),
+		HelpfulCount:  getIntField(m, "helpful_count"),
+		HarmfulCount:  getIntField(m, "harmful_count"),
+	}
 }
 
 // parseReMeMemoryMetadata 从 map 解析 ReMeMemoryMetadata。

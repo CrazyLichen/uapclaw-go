@@ -214,9 +214,22 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity, createdAt 
 // 最后解析为 Relation 对象并去重实体。
 //
 // Python: parse_all_relations(relations, entities, entity_types, **kwargs)
-func ParseAllRelations(relations []map[string]any, entityDecls []extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) ([]*graph.Relation, []*graph.Entity) {
-	// 将 EntityDeclaration 转为 Entity
-	entities := DeclareEntities(entityDecls, entityTypes, createdAt, userID)
+// ParseAllRelations 解析所有关系抽取结果。
+// entityList 对齐 Python extracted_declarations：混合类型列表 list[Union[EntityDeclaration, Entity]]，
+// 包含新抽取的 EntityDeclaration 和已存在的 Entity（来自 resolve_entities）。
+// 对齐 Python: parse_all_relations(..., entities=extracted_declarations)
+func ParseAllRelations(relations []map[string]any, entityList []EntityOrDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) ([]*graph.Relation, []*graph.Entity) {
+	// 将混合列表转为 []*graph.Entity：
+	// - Decl 非空的项：调用 DeclareEntities 创建新 Entity（与 Python declare_entities 行为一致）
+	// - Entity 非空的项：直接使用已有的 Entity 对象（Python: 已存在的实体保持原样）
+	entities := make([]*graph.Entity, 0, len(entityList))
+	for _, item := range entityList {
+		if item.Entity != nil {
+			entities = append(entities, item.Entity)
+		} else if item.Decl != nil {
+			entities = append(entities, declareSingleEntity(*item.Decl, entityTypes, createdAt, userID))
+		}
+	}
 
 	// 去重关系内容（LLM 可能重复输出）
 	existingContents := make(map[string]struct{})
@@ -276,6 +289,28 @@ func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []r
 		result = append(result, e)
 	}
 	return result
+}
+
+// declareSingleEntity 将单个 EntityDeclaration 转为 Entity。
+// 提取自 DeclareEntities 的循环体，供 ParseAllRelations 处理混合列表时复用。
+func declareSingleEntity(decl extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) *graph.Entity {
+	typeIDMax := len(entityTypes) - 1
+	e := graph.NewEntity()
+	e.Name = decl.Name
+	e.Content = ""
+	e.CreatedAt = createdAt
+	e.UserID = userID
+	if typeIDMax >= 0 {
+		typeIdx := decl.EntityTypeID
+		if typeIdx > typeIDMax {
+			typeIdx = typeIDMax
+		}
+		if typeIdx < 0 {
+			typeIdx = 0
+		}
+		e.ObjType = entityTypes[typeIdx].Name
+	}
+	return e
 }
 
 // ResolveEntities 实体去重/合并解析

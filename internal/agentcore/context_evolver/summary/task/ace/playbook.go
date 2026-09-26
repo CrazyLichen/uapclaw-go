@@ -426,15 +426,17 @@ func ParseOperationType(s string) (OperationType, error) {
 
 // ApplyMetadata 应用元数据变更。
 // 对齐 Python Bullet.apply_metadata(metadata)：增量更新 helpful/harmful/neutral。
+// ApplyMetadata 将 metadata 中的计数值直接赋值给 Bullet 字段。
+// 对齐 Python Bullet.apply_metadata：self.helpful = metadata.get("helpful", self.helpful)（直接赋值，非增量累加）。
 func (b *Bullet) ApplyMetadata(metadata map[string]int) {
 	for key, value := range metadata {
 		switch key {
 		case "helpful":
-			b.Helpful += value
+			b.Helpful = value
 		case "harmful":
-			b.Harmful += value
+			b.Harmful = value
 		case "neutral":
-			b.Neutral += value
+			b.Neutral = value
 		}
 	}
 }

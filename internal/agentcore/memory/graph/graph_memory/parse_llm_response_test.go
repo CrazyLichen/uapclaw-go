@@ -213,7 +213,13 @@ func TestParseAllRelations_基本(t *testing.T) {
 		},
 	}
 
-	resultRels, resultEntities := ParseAllRelations(relations, entityDecls, entityTypes, 0, "test-user")
+	entityOrDecls := make([]EntityOrDeclaration, len(entityDecls))
+	for i := range entityDecls {
+		d := entityDecls[i]
+		entityOrDecls[i] = EntityOrDeclaration{Decl: &d}
+	}
+
+	resultRels, resultEntities := ParseAllRelations(relations, entityOrDecls, entityTypes, 0, "test-user")
 
 	if len(resultRels) != 1 {
 		t.Fatalf("期望 1 个关系，得到 %d", len(resultRels))
@@ -254,11 +260,88 @@ func TestParseAllRelations_去重(t *testing.T) {
 		},
 	}
 
-	resultRels, _ := ParseAllRelations(relations, entityDecls, entityTypes, 0, "test-user")
+	entityOrDecls2 := make([]EntityOrDeclaration, len(entityDecls))
+	for i := range entityDecls {
+		d := entityDecls[i]
+		entityOrDecls2[i] = EntityOrDeclaration{Decl: &d}
+	}
+
+	resultRels, _ := ParseAllRelations(relations, entityOrDecls2, entityTypes, 0, "test-user")
 
 	// 第二条内容是第一条的子串，应被标记为空 content，Dict2Relation 会用 name 作为 content
 	if len(resultRels) != 2 {
 		t.Fatalf("期望 2 个关系，得到 %d", len(resultRels))
+	}
+}
+
+// TestParseAllRelations_混合列表 测试混合 EntityDeclaration + Entity 列表
+// 对齐 Python: extracted_declarations = list[Union[EntityDeclaration, Entity]] after resolve_entities
+func TestParseAllRelations_混合列表(t *testing.T) {
+	entityTypes := []registry.EntityDef{
+		{Name: "Person"},
+		{Name: "Organization"},
+	}
+
+	// 混合列表：第一个是 EntityDeclaration，第二个是已存在的 Entity
+	existingEntity := graph.NewEntity()
+	existingEntity.Name = "Bob"
+	existingEntity.UUID = "existing-bob-uuid"
+	existingEntity.Content = "Bob is a person"
+	existingEntity.UserID = "test-user"
+
+	mixedList := []EntityOrDeclaration{
+		{Decl: &extraction.EntityDeclaration{Name: "Alice", EntityTypeID: 0}},
+		{Entity: existingEntity},
+	}
+
+	relations := []map[string]any{
+		{
+			"source_id": 1,
+			"target_id": 2,
+			"name":      "knows",
+			"fact":      "Alice knows Bob",
+			"content":   "Alice knows Bob",
+		},
+	}
+
+	resultRels, resultEntities := ParseAllRelations(relations, mixedList, entityTypes, 1000, "test-user")
+
+	if len(resultRels) != 1 {
+		t.Fatalf("期望 1 个关系，得到 %d", len(resultRels))
+	}
+	if resultRels[0].Name != "knows" {
+		t.Fatalf("期望 name=knows，得到 %s", resultRels[0].Name)
+	}
+	if len(resultEntities) != 2 {
+		t.Fatalf("期望 2 个实体，得到 %d", len(resultEntities))
+	}
+	// 验证结果包含 Alice（新声明）和 Bob（已有实体，UUID 不变）
+	entityByName := make(map[string]*graph.Entity)
+	for _, e := range resultEntities {
+		entityByName[e.Name] = e
+	}
+	alice, hasAlice := entityByName["Alice"]
+	bob, hasBob := entityByName["Bob"]
+	if !hasAlice {
+		t.Fatal("结果中缺少 Alice")
+	}
+	if !hasBob {
+		t.Fatal("结果中缺少 Bob")
+	}
+	// Alice 是新声明的实体，UUID 应不是 existing-bob-uuid
+	if alice.UUID == "existing-bob-uuid" {
+		t.Fatalf("Alice 的 UUID 不应与 Bob 相同")
+	}
+	// Bob 是已有实体，UUID 应保持不变
+	if bob.UUID != "existing-bob-uuid" {
+		t.Fatalf("期望已有实体 UUID=existing-bob-uuid，得到 %s", bob.UUID)
+	}
+	// 关系的 LHS 应指向 Alice，RHS 应指向 Bob
+	if resultRels[0].LHS != alice {
+		t.Fatalf("LHS 应指向 Alice，实际 name=%s", resultRels[0].LHS.Name)
+	}
+	if resultRels[0].RHS != bob {
+		t.Fatalf("RHS 应指向 Bob，实际 name=%s", resultRels[0].RHS.Name)
 	}
 }
 

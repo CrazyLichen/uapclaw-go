@@ -17,9 +17,11 @@ const logComponent = logger.ComponentAgentCore
 
 var (
 	// reMarkdownCodeBlock 提取 markdown code block 中的 JSON
-	reMarkdownCodeBlock = regexp.MustCompile("```(?:json)?\\s*(\\{.*?\\})\\s*```")
+	// 对齐 Python: (?s) DOTALL 标志使 . 匹配换行，非贪婪 .*? 匹配最短 JSON
+	reMarkdownCodeBlock = regexp.MustCompile(`(?s)` + "```(?:json)?\\s*(\\{.*?\\})\\s*```")
 	// reAnyJSONObject 提取任意 JSON 对象
-	reAnyJSONObject = regexp.MustCompile(`\{.*\}`)
+	// 对齐 Python: (?s) DOTALL + 非贪婪 .*? 避免跨对象贪婪匹配
+	reAnyJSONObject = regexp.MustCompile(`(?s)\{.*?\}`)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

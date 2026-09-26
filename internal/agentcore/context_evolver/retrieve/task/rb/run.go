@@ -105,7 +105,11 @@ func (o *RBRecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 			continue
 		}
 		for _, item := range rbMemory.Memory {
-			items = append(items, ceschema.ReasoningBankRetrievedMemory(item))
+			items = append(items, ceschema.ReasoningBankRetrievedMemory{
+				Title:       item.Title,
+				Description: item.Description,
+				Content:     item.Content,
+			})
 		}
 	}
 

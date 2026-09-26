@@ -363,7 +363,8 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 
 	entityConf := searchEntity
 	if entityConf == nil {
-		entityConf = config.NewSearchConfig()
+		// 对齐 Python: Entity 默认 MinScore = defaultSearchMinScoreEntity (0.02)，而非 SearchConfig 默认的 0.3
+		entityConf = newSearchConfigWithMinScore(defaultSearchMinScoreEntity)
 	}
 	relationConf := searchRelation
 	if relationConf == nil {
@@ -470,7 +471,7 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	logger.Debug(logComponent).Str("step", "8_entity_dedupe").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 9. 实体合并
-	extractedDeclarations, err = gm.entityMerge(ctx, extractedDeclarations, existingEntitiesList, state)
+	resolvedList, err := gm.entityMerge(ctx, extractedDeclarations, existingEntitiesList, state)
 	if err != nil {
 		return nil, err
 	}
@@ -492,9 +493,11 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	if parsedRelations == nil {
 		parsedRelations = []any{}
 	}
+	// 对齐 Python: parse_all_relations(..., entities=extracted_declarations)
+	// resolvedList 已是 []EntityOrDeclaration（包含 EntityDeclaration 和 Entity 混合类型）
 	relations, entities := ParseAllRelations(
 		anyListToMapList(extraction.EnsureList(parsedRelations)),
-		extractedDeclarations,
+		resolvedList,
 		state.EntityTypes,
 		state.CurrentTimestamp,
 		cfg.UserID,
@@ -1326,9 +1329,16 @@ func (gm *GraphMemory) fetchRelevantEntities(ctx context.Context, extractedDecla
 // entityMerge 实体合并
 //
 // Python: _entity_merge(extracted_declarations, existing_entities_list, state)
-func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []extraction.EntityDeclaration, existingEntitiesList []map[string]any, state *GraphMemState) ([]extraction.EntityDeclaration, error) {
+// 返回混合列表 []EntityOrDeclaration（对齐 Python: list[Union[EntityDeclaration, Entity]]）
+func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []extraction.EntityDeclaration, existingEntitiesList []map[string]any, state *GraphMemState) ([]EntityOrDeclaration, error) {
 	if len(existingEntitiesList) == 0 {
-		return extractedDeclarations, nil
+		// 没有已有实体，直接返回纯声明列表
+		result := make([]EntityOrDeclaration, len(extractedDeclarations))
+		for i := range extractedDeclarations {
+			d := extractedDeclarations[i]
+			result[i] = EntityOrDeclaration{Decl: &d}
+		}
+		return result, nil
 	}
 
 	// 等待所有 tasks 完成（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
@@ -1371,14 +1381,9 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		}
 	}
 
-	// 将 resolved 转回 []extraction.EntityDeclaration（对齐 Python: extracted_declarations 返回值）
-	var result []extraction.EntityDeclaration
-	for _, item := range resolved {
-		if item.Decl != nil {
-			result = append(result, *item.Decl)
-		}
-		// 已有实体（item.Entity != nil）不需要加入声明列表（Python: 它们已在 existing_entities 中）
-	}
+	// 对齐 Python: resolve_entities 返回混合列表 list[Union[EntityDeclaration, Entity]]
+	// resolved 直接传递给 ParseAllRelations，不再将已有实体转回 EntityDeclaration
+	// （Python: extracted_declarations = resolved，保留 Entity 对象作为 lhs/rhs 引用）
 
 	// 处理合并任务（对齐 Python: _entity_merge 的 blocking/non-blocking 分派）
 	if len(mergePairs) > 0 {
@@ -1386,15 +1391,15 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		var nonBlockingTasks []MergePair // 目标实体不在 extractedDeclarations 中
 
 		// 对齐 Python: if tgt in extracted_declarations
-		// Python 中 extracted_declarations 在 resolve_entities 后可能是混合类型列表
-		// 通过名字匹配判断目标实体是否在声明列表中
-		resultNameSet := make(map[string]struct{})
-		for _, decl := range result {
-			resultNameSet[decl.Name] = struct{}{}
+		// Python 中 extracted_declarations 在 resolve_entities 后是混合类型列表
+		// 通过名字匹配判断目标实体是否在 resolved 列表中
+		resolvedNameSet := make(map[string]struct{})
+		for _, item := range resolved {
+			resolvedNameSet[item.Name()] = struct{}{}
 		}
 
 		for _, pair := range mergePairs {
-			if _, inResult := resultNameSet[pair.Target.Name]; inResult {
+			if _, inResult := resolvedNameSet[pair.Target.Name]; inResult {
 				blockingTasks = append(blockingTasks, pair)
 			} else {
 				nonBlockingTasks = append(nonBlockingTasks, pair)
@@ -1443,7 +1448,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 		}
 	}
 
-	return result, nil
+	return resolved, nil
 }
 
 // entityEnrich 抽取实体摘要和属性
@@ -1709,12 +1714,17 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 		}
 
 		if len(currentRelations) > 0 {
-			// 构建去重提示词
+			// 构建去重提示词 — 对齐 Python _endpoint_to_entity_dict：
+			// 如果 LHS/RHS 已是完整 Entity（Content 非空），直接使用；否则从 LookupTable 查找
 			var existingEntities []*graph.Entity
-			if e, ok := state.LookupTable.Entities[lhs]; ok {
+			if newRelation.LHS != nil && strings.TrimSpace(newRelation.LHS.Content) != "" {
+				existingEntities = append(existingEntities, newRelation.LHS)
+			} else if e, ok := state.LookupTable.Entities[lhs]; ok {
 				existingEntities = append(existingEntities, e)
 			}
-			if e, ok := state.LookupTable.Entities[rhs]; ok {
+			if newRelation.RHS != nil && strings.TrimSpace(newRelation.RHS.Content) != "" {
+				existingEntities = append(existingEntities, newRelation.RHS)
+			} else if e, ok := state.LookupTable.Entities[rhs]; ok {
 				existingEntities = append(existingEntities, e)
 			}
 
@@ -2005,7 +2015,8 @@ func (gm *GraphMemory) performSearch(ctx context.Context, colIdx int, userIDs []
 	return objects, nil
 }
 
-// stateLookupEntity 从搜索结果构造 Entity
+// stateLookupEntity 从搜索结果构造 Entity。
+// 对齐 Python LookupTables.get_entity：使用 Entity(**input_obj) 从完整 dict 构造。
 func stateLookupEntity(r map[string]any, uuid string) *graph.Entity {
 	e := graph.NewEntity()
 	e.UUID = uuid
@@ -2018,15 +2029,75 @@ func stateLookupEntity(r map[string]any, uuid string) *graph.Entity {
 	if v, ok := r["user_id"].(string); ok {
 		e.UserID = v
 	}
+	// 对齐 Python Entity(**input_obj)：补充完整字段
+	if v, ok := r["created_at"].(float64); ok {
+		e.CreatedAt = int64(v)
+	}
+	if v, ok := r["language"].(string); ok {
+		e.Language = v
+	}
+	if v, ok := r["obj_type"].(string); ok {
+		e.ObjType = v
+	}
+	if v, ok := r["name_embedding"].([]any); ok {
+		e.NameEmbedding = anySliceToFloat64Slice(v)
+	}
+	if v, ok := r["content_embedding"].([]any); ok {
+		e.ContentEmbedding = anySliceToFloat64Slice(v)
+	}
+	if v, ok := r["relations"].([]any); ok {
+		e.Relations = anySliceToStringSlice(v)
+	}
+	if v, ok := r["episodes"].([]any); ok {
+		e.Episodes = anySliceToStringSlice(v)
+	}
+	if v, ok := r["attributes"].(map[string]any); ok {
+		e.Attributes = v
+	}
+	if v, ok := r["metadata"].(map[string]any); ok {
+		e.Metadata = v
+	}
 	return e
 }
 
-// stateLookupRelation 从搜索结果构造 Relation
+// stateLookupRelation 从搜索结果构造 Relation。
+// 对齐 Python LookupTables.get_relation：使用 Relation(**input_obj) 从完整 dict 构造。
 func stateLookupRelation(r map[string]any, uuid string) *graph.Relation {
 	rel := graph.NewRelation()
 	rel.UUID = uuid
+	if v, ok := r["name"].(string); ok {
+		rel.Name = v
+	}
 	if v, ok := r["content"].(string); ok {
 		rel.Content = v
+	}
+	if v, ok := r["user_id"].(string); ok {
+		rel.UserID = v
+	}
+	// 对齐 Python Relation(**input_obj)：补充完整字段
+	if v, ok := r["created_at"].(float64); ok {
+		rel.CreatedAt = int64(v)
+	}
+	if v, ok := r["language"].(string); ok {
+		rel.Language = v
+	}
+	if v, ok := r["obj_type"].(string); ok {
+		rel.ObjType = v
+	}
+	if v, ok := r["name_embedding"].([]any); ok {
+		rel.NameEmbedding = anySliceToFloat64Slice(v)
+	}
+	if v, ok := r["content_embedding"].([]any); ok {
+		rel.ContentEmbedding = anySliceToFloat64Slice(v)
+	}
+	if v, ok := r["valid_since"].(float64); ok {
+		rel.ValidSince = int64(v)
+	}
+	if v, ok := r["valid_until"].(float64); ok {
+		rel.ValidUntil = int64(v)
+	}
+	if v, ok := r["metadata"].(map[string]any); ok {
+		rel.Metadata = v
 	}
 	if v, ok := r["lhs"].(string); ok && v != "" {
 		rel.LHS = &graph.Entity{}
@@ -2039,12 +2110,38 @@ func stateLookupRelation(r map[string]any, uuid string) *graph.Relation {
 	return rel
 }
 
-// stateLookupEpisode 从搜索结果构造 Episode
+// stateLookupEpisode 从搜索结果构造 Episode。
+// 对齐 Python LookupTables.get_episode：使用 Episode(**input_obj) 从完整 dict 构造。
 func stateLookupEpisode(r map[string]any, uuid string) *graph.Episode {
 	ep := graph.NewEpisode()
 	ep.UUID = uuid
 	if v, ok := r["content"].(string); ok {
 		ep.Content = v
+	}
+	if v, ok := r["user_id"].(string); ok {
+		ep.UserID = v
+	}
+	// 对齐 Python Episode(**input_obj)：补充完整字段
+	if v, ok := r["created_at"].(float64); ok {
+		ep.CreatedAt = int64(v)
+	}
+	if v, ok := r["language"].(string); ok {
+		ep.Language = v
+	}
+	if v, ok := r["obj_type"].(string); ok {
+		ep.ObjType = v
+	}
+	if v, ok := r["content_embedding"].([]any); ok {
+		ep.ContentEmbedding = anySliceToFloat64Slice(v)
+	}
+	if v, ok := r["valid_since"].(float64); ok {
+		ep.ValidSince = int64(v)
+	}
+	if v, ok := r["entities"].([]any); ok {
+		ep.Entities = anySliceToStringSlice(v)
+	}
+	if v, ok := r["metadata"].(map[string]any); ok {
+		ep.Metadata = v
 	}
 	return ep
 }
@@ -2106,7 +2203,7 @@ func (gm *GraphMemory) resolveEntityMerges(ctx context.Context, mergingArgs []Me
 			if len(srcEntity.Relations) == 0 {
 				continue
 			}
-			if err := gm.resolveEachRelation(tgtUUID, srcEntity, mapSrc2Tgt, entityRelationUpdates, state, alias); err != nil {
+			if err := gm.resolveEachRelation(ctx, tgtUUID, srcEntity, mapSrc2Tgt, entityRelationUpdates, state, alias); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("src_entity_uuid", srcEntity.UUID).
 					Msg("Graph Memory: resolveEachRelation 失败")
@@ -2181,6 +2278,7 @@ func (gm *GraphMemory) dispatchEntityMergeTasks(ctx context.Context, episodesToU
 //
 // Python: _resolve_each_relation(tgt_uuid, src_entity, map_src2tgt, entity_relation_updates, state, *, alias)
 func (gm *GraphMemory) resolveEachRelation(
+	ctx context.Context,
 	tgtUUID string,
 	srcEntity *graph.Entity,
 	mapSrc2Tgt map[string]string,
@@ -2192,7 +2290,7 @@ func (gm *GraphMemory) resolveEachRelation(
 
 	// 查询源实体的所有关系（对齐 Python: query_result = await self.db_backend.query(RELATION_COLLECTION, ids=src_entity.relations)）
 	srcRelationIDs := anySliceFromStringSlice(srcEntity.Relations)
-	queryResult, err := gm.DBBackend.Query(context.Background(), graph.RelationCollection, graph.WithIDs(srcRelationIDs...))
+	queryResult, err := gm.DBBackend.Query(ctx, graph.RelationCollection, graph.WithIDs(srcRelationIDs...))
 	if err != nil {
 		return err
 	}
@@ -2313,6 +2411,28 @@ func anySliceFromStringSlice(items []string) []any {
 	result := make([]any, 0, len(items))
 	for _, s := range items {
 		result = append(result, s)
+	}
+	return result
+}
+
+// anySliceToStringSlice 将 []any 转为 []string，跳过非 string 元素
+func anySliceToStringSlice(items []any) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// anySliceToFloat64Slice 将 []any 转为 []float64，跳过非数值元素
+func anySliceToFloat64Slice(items []any) []float64 {
+	result := make([]float64, 0, len(items))
+	for _, item := range items {
+		if f, ok := item.(float64); ok {
+			result = append(result, f)
+		}
 	}
 	return result
 }

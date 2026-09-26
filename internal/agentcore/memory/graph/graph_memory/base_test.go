@@ -594,7 +594,13 @@ func TestEntityMerge_空已有实体(t *testing.T) {
 	declarations := []extraction.EntityDeclaration{{Name: "Alice", EntityTypeID: 0}}
 	result, err := gm.entityMerge(context.Background(), declarations, nil, state)
 	assert.NoError(t, err)
-	assert.Equal(t, declarations, result)
+	// 返回 []EntityOrDeclaration，每个元素包含 Decl
+	assert.Equal(t, len(declarations), len(result))
+	for i, item := range result {
+		assert.NotNil(t, item.Decl)
+		assert.Equal(t, declarations[i].Name, item.Decl.Name)
+		assert.Nil(t, item.Entity)
+	}
 }
 
 // TestStateLookupEntity 测试 stateLookupEntity
@@ -2708,7 +2714,7 @@ func TestResolveEachRelation(t *testing.T) {
 	entityRelationUpdates := make(map[string]map[string]*graph.Relation)
 	alias := map[string]struct{}{"tgt-1": {}, "src-1": {}}
 
-	err := gm.resolveEachRelation(tgtUUID, srcEntity, mapSrc2Tgt, entityRelationUpdates, state, alias)
+	err := gm.resolveEachRelation(context.Background(), tgtUUID, srcEntity, mapSrc2Tgt, entityRelationUpdates, state, alias)
 	_ = err
 }
 

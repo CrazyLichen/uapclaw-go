@@ -77,8 +77,9 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		return nil
 	}
 
-	// 对齐 Python: 遍历 VectorNode → NewACEMemoryFromVectorNode → 转为 MemoryItem
-	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
+	// 对齐 Python: 遍历 VectorNode → NewACEMemoryFromVectorNode → 转为 ACERetrievedMemory → MemoryItem
+	// Python: ace_memory = ACEMemory.from_vector_node(node)
+	//         retrieved_memory = ACERetrievedMemory(id=..., section=..., content=..., helpful=..., harmful=..., neutral=...)
 	items := make([]ceschema.MemoryItem, 0, len(nodes))
 	for _, node := range nodes {
 		aceMemory := ceschema.NewACEMemoryFromVectorNode(node)
@@ -88,7 +89,16 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 				Msg("Failed to convert ACE memory from node")
 			continue
 		}
-		items = append(items, *aceMemory)
+		// 对齐 Python: 第二步转换 ACERetrievedMemory（保留关键字段，去掉 workspace_id/时间戳等内部字段）
+		retrieved := ceschema.ACERetrievedMemory{
+			ID:      aceMemory.ID,
+			Section: aceMemory.Section,
+			Content: aceMemory.Content,
+			Helpful: aceMemory.Helpful,
+			Harmful: aceMemory.Harmful,
+			Neutral: aceMemory.Neutral,
+		}
+		items = append(items, retrieved)
 	}
 
 	// 写入 RuntimeContext

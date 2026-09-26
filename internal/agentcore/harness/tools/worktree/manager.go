@@ -114,6 +114,15 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 		return nil, err
 	}
 
+	// 对齐 Python: _fire_rail("before_worktree_create", ctx, slug, repo_root)
+	if len(m.lifecycleRails) > 0 {
+		if modifiedSlug, hookErr := m.fireBeforeCreate(ctx, nil, slug, repoRoot); hookErr != nil {
+			logger.Warn(logComponent).Err(hookErr).Msg("before_worktree_create hook failed")
+		} else if modifiedSlug != nil {
+			slug = *modifiedSlug
+		}
+	}
+
 	start := time.Now()
 	result, err := m.backend.Create(ctx, slug, repoRoot, targetPath)
 	if err != nil {
@@ -141,6 +150,11 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 	}
 
 	m.sessionState.SetCurrentSession(session)
+
+	// 对齐 Python: _fire_rail("after_worktree_create", ctx, session)
+	if len(m.lifecycleRails) > 0 {
+		m.fireAfterCreate(ctx, nil, session)
+	}
 
 	logger.Info(logComponent).Str("slug", slug).Str("worktree_path", result.WorktreePath).
 		Str("status", func() string {
@@ -203,8 +217,21 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 
 	repoRoot, _ := findCanonicalGitRoot(ctx, session.OriginalCWD)
 
+	// 对齐 Python: _fire_rail("before_worktree_exit", ctx, session, action)
+	if len(m.lifecycleRails) > 0 {
+		if modifiedAction, hookErr := m.fireBeforeExit(ctx, nil, session, action); hookErr != nil {
+			logger.Warn(logComponent).Err(hookErr).Msg("before_worktree_exit hook failed")
+		} else if modifiedAction != nil {
+			action = *modifiedAction
+		}
+	}
+
 	if action == "keep" {
 		SetCurrentSession(ctx, nil)
+		// 对齐 Python: _fire_rail("after_worktree_exit", ctx, session, action)
+		if len(m.lifecycleRails) > 0 {
+			m.fireAfterExit(ctx, nil, session, "keep")
+		}
 		logger.Info(logComponent).Str("worktree_name", session.WorktreeName).
 			Str("worktree_path", session.WorktreePath).Msg("worktree preserved")
 		return map[string]string{
@@ -221,6 +248,11 @@ func (m *WorktreeManager) Exit(ctx context.Context, action string, discardChange
 	}
 
 	SetCurrentSession(ctx, nil)
+
+	// 对齐 Python: _fire_rail("after_worktree_exit", ctx, session, action)
+	if len(m.lifecycleRails) > 0 {
+		m.fireAfterExit(ctx, nil, session, "remove")
+	}
 
 	if m.eventHandler != nil {
 		_ = m.eventHandler(ctx, &WorktreeRemovedEvent{

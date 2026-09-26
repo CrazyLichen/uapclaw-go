@@ -67,8 +67,9 @@ func TestBullet_ApplyMetadata(t *testing.T) {
 		UpdatedAt: time.Now().UTC(),
 	}
 	b.ApplyMetadata(map[string]int{"helpful": 2, "harmful": 1})
-	if b.Helpful != 3 {
-		t.Errorf("Helpful = %d, want 3", b.Helpful)
+	// 对齐 Python: 直接赋值 self.helpful = metadata.get("helpful", self.helpful)，Helpful=2（非 1+2=3）
+	if b.Helpful != 2 {
+		t.Errorf("Helpful = %d, want 2", b.Helpful)
 	}
 	if b.Harmful != 1 {
 		t.Errorf("Harmful = %d, want 1", b.Harmful)
