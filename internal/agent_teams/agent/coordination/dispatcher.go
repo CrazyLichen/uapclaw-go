@@ -32,11 +32,17 @@ type EventDispatcher struct {
 
 	// 六个场景 handler（公开暴露供测试直接访问和 kernel 回调）
 	// Python: (self.lifecycle, self.member, self.message, self.task_board, self.stale_task, self.team_completion)
-	Lifecycle      *handlers.AgentLifecycleHandler
-	Member         *handlers.MemberHandler
-	Message        *handlers.MessageHandler
-	TaskBoard      *handlers.TaskBoardHandler
-	StaleTask      *handlers.StaleTaskHandler
+	// Lifecycle 生命周期处理器
+	Lifecycle *handlers.AgentLifecycleHandler
+	// Member 成员处理器
+	Member *handlers.MemberHandler
+	// Message 消息处理器
+	Message *handlers.MessageHandler
+	// TaskBoard 任务面板处理器
+	TaskBoard *handlers.TaskBoardHandler
+	// StaleTask 过期任务处理器
+	StaleTask *handlers.StaleTaskHandler
+	// TeamCompletion 团队完成处理器
 	TeamCompletion *handlers.TeamCompletionHandler
 }
 
@@ -143,13 +149,13 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event types.Coordination
 	// Python: 对齐 dispatcher.py L262-272 的 7 种允许事件
 	if role == schema.TeamRoleHumanAgent {
 		allowed := map[string]bool{
-			events.TeamEventCleaned:       true,
+			events.TeamEventCleaned:        true,
 			events.TeamEventMemberShutdown: true,
 			events.TeamEventMemberCanceled: true,
-			events.TeamEventStandby:       true,
-			events.TeamEventMessage:       true,
-			events.TeamEventBroadcast:     true,
-			events.TeamEventTaskClaimed:   true,
+			events.TeamEventStandby:        true,
+			events.TeamEventMessage:        true,
+			events.TeamEventBroadcast:      true,
+			events.TeamEventTaskClaimed:    true,
 		}
 		if !allowed[event.Transport.EventType] {
 			return

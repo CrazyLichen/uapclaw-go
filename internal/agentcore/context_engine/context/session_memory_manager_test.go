@@ -314,9 +314,9 @@ func TestSessionMemoryAgentUpdater_SetAgent(t *testing.T) {
 
 // mockSessionMemoryAgent SessionMemoryAgent 的 mock 实现
 type mockSessionMemoryAgent struct {
-	invoked           bool
-	lastQuery         string
-	inheritedPrompt   string
+	invoked         bool
+	lastQuery       string
+	inheritedPrompt string
 }
 
 func (m *mockSessionMemoryAgent) Invoke(_ context.Context, inputs map[string]any, _ ...SessionMemoryAgentOption) (map[string]any, error) {

@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -508,7 +508,9 @@ func extractUsageMetadata(response any) *llmschema.UsageMetadata {
 		return u
 	}
 	// 尝试通过接口提取
-	type usageHolder interface{ GetUsageMetadata() *llmschema.UsageMetadata }
+	type usageHolder interface {
+		GetUsageMetadata() *llmschema.UsageMetadata
+	}
 	if u, ok := response.(usageHolder); ok {
 		return u.GetUsageMetadata()
 	}

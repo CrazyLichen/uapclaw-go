@@ -16,8 +16,8 @@ type testProvider struct {
 	toolSchemas []ToolSchema
 }
 
-func (t *testProvider) Name() string       { return t.name }
-func (t *testProvider) IsAvailable() bool  { return t.available }
+func (t *testProvider) Name() string      { return t.name }
+func (t *testProvider) IsAvailable() bool { return t.available }
 func (t *testProvider) Initialize(_ context.Context, _ ...ProviderOption) error {
 	t.initialized = true
 	return nil

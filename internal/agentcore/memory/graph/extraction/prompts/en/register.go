@@ -35,7 +35,7 @@ func init() {
 	registry.RelationDefinitionDescription[lang] = ": Default relation type."
 
 	registry.MultilingualDescription[lang] = map[string]string{
-		// Entity
+		// Entity 实体
 		"{{[ent_def_name]}}":     "Name of extracted entity",
 		"{{[ent_def_type]}}":     "Type ID of extracted entity, needs to be from the list of provided entity types",
 		"{{[ent_ext_list]}}":     "List of extracted entities",
@@ -48,7 +48,7 @@ func init() {
 		"{{[ent_dupe_id]}}":      "ID of existing entity",
 		"{{[ent_dupe_id_list]}}": "List of IDs for entities that may be duplicate of this existing entity",
 		"{{[ent_dupe_list]}}":    "List of duplicate entities",
-		// Relation
+		// Relation 关系
 		"{{[rel_valid_since]}}":      "Date for when this fact / relation starts to be valid, please use ISO format YYYY-MM-DDTHH:MM:SS[+HH:MM]",
 		"{{[rel_valid_until]}}":      "Date for when this fact / relation stops being valid, please use ISO format YYYY-MM-DDTHH:MM:SS[+HH:MM]",
 		"{{[rel_fact]}}":             "Fact regarding the relation",
@@ -64,7 +64,7 @@ func init() {
 		"{{[rel_dupe_reasoning]}}":   "Why do we need to merge the new relation with existing?",
 		"{{[rel_dupe_content]}}":     "Updated fact regarding the relation",
 		"{{[rel_dupe_id_list]}}":     "List of IDs for existing relations that should be merged within the new relation",
-		// Datetime
+		// Datetime 日期时间
 		"{{[year]}}":      "year",
 		"{{[month]}}":     "month",
 		"{{[day]}}":       "day",
@@ -75,7 +75,7 @@ func init() {
 		"{{[tz_offset]}}": "Offset from UTC (use +HH:MM format)",
 		"{{[tz_reason]}}": "Why this candidate",
 		"{{[tz_list]}}":   "List of candidate timezones",
-		// Misc.
+		// Misc. 其他
 		":": ":",
 	}
 

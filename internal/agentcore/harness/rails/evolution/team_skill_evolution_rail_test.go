@@ -388,8 +388,8 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 	// .data 优先于顶层字段
 	inputs7 := &agentinterfaces.ToolCallInputs{
 		ToolResult: map[string]any{
-			"data":           map[string]any{"skill_content": "data wins"},
-			"skill_content":  "top level",
+			"data":          map[string]any{"skill_content": "data wins"},
+			"skill_content": "top level",
 		},
 	}
 	assert.Equal(t, "data wins", teamExtractToolContent(inputs7))

@@ -39,7 +39,9 @@ type TaskAddOption func(*taskAddConfig)
 
 // taskAddConfig Add 方法的可选配置
 type taskAddConfig struct {
-	taskID       string
+	// taskID 可选自定义任务 ID
+	taskID string
+	// dependencies 可选依赖列表
 	dependencies []string
 }
 
@@ -48,9 +50,12 @@ type TaskAddWithPriorityOption func(*taskAddWithPriorityConfig)
 
 // taskAddWithPriorityConfig AddWithPriority 的可选配置
 type taskAddWithPriorityConfig struct {
-	taskID           string
-	dependencies     []string // 依赖列表
-	dependentTaskIDs []string // 被依赖任务 ID 列表
+	// taskID 可选自定义任务 ID
+	taskID string
+	// dependencies 依赖列表
+	dependencies []string
+	// dependentTaskIDs 被依赖任务 ID 列表
+	dependentTaskIDs []string
 }
 
 // TaskCreateResult 任务创建结果，对齐 Python TaskCreateResult。
@@ -64,17 +69,25 @@ type TaskCreateResult struct {
 
 // TaskDetail 任务详细视图（含阻塞关系）。
 type TaskDetail struct {
-	Task      *database.TeamTaskBase
+	// Task 任务基本信息
+	Task *database.TeamTaskBase
+	// BlockedBy 阻塞该任务的任务列表
 	BlockedBy []*database.TeamTaskBase
-	Blocks    []*database.TeamTaskBase
+	// Blocks 被该任务阻塞的任务列表
+	Blocks []*database.TeamTaskBase
 }
 
 // TaskSummary 任务摘要视图（含阻塞信息）。
 type TaskSummary struct {
-	TaskID    string
-	Title     string
-	Status    string
-	Assignee  string
+	// TaskID 任务标识
+	TaskID string
+	// Title 任务标题
+	Title string
+	// Status 任务状态
+	Status string
+	// Assignee 指派成员
+	Assignee string
+	// BlockedBy 阻塞该任务的任务 ID 列表
 	BlockedBy []string
 }
 

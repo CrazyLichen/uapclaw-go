@@ -49,8 +49,6 @@ var idleNudgeStatuses = map[string]bool{
 	string(schema.MemberStatusError): true,
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemberHandler 创建 MemberHandler 实例。

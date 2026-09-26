@@ -6,11 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // newTestHandler 创建带 mock tracer 的测试 handler
@@ -76,7 +76,7 @@ func TestOtelCallbackHandler_OnLLMInvokeOutput_关闭span(t *testing.T) {
 
 	// 再关闭
 	outputData := &cb.LLMCallEventData{
-		Event:   cb.LLMInvokeOutput,
+		Event:     cb.LLMInvokeOutput,
 		ModelName: "qwen-max",
 	}
 	handler.OnLLMInvokeOutput(ctx, outputData)
@@ -166,10 +166,10 @@ func TestOtelCallbackHandler_OnAgentInvokeInput_生成span(t *testing.T) {
 	ctx := WithSpanState(context.Background(), spanState)
 
 	data := &cb.GlobalAgentEventData{
-		Event:    cb.GlobalAgentInvokeInput,
-		AgentID:  "leader",
+		Event:     cb.GlobalAgentInvokeInput,
+		AgentID:   "leader",
 		AgentName: "leader-agent",
-		Inputs:   map[string]any{"user_input": "hello"},
+		Inputs:    map[string]any{"user_input": "hello"},
 	}
 	handler.OnAgentInvokeInput(ctx, data)
 
@@ -261,8 +261,8 @@ func TestOtelCallbackHandler_OnLLMStreamOutput_记录chunk(t *testing.T) {
 
 	// stream chunk — 通过 Response 字段传递内容
 	outputData := &cb.LLMCallEventData{
-		Event:   cb.LLMStreamOutput,
-		Extra:   map[string]any{"chunk_index": 1},
+		Event: cb.LLMStreamOutput,
+		Extra: map[string]any{"chunk_index": 1},
 	}
 	handler.OnLLMStreamOutput(ctx, outputData)
 

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -337,11 +338,16 @@ func (b *LocalFileBackend) UploadSkillPackage(ctx context.Context, skillID strin
 	}
 
 	// 写入 meta.json
+	// 对齐 Python: SkillPackageMeta 构造时自动填充 uploaded_at（default_factory=_now_iso）
+	uploadedAt := meta.UploadedAt
+	if uploadedAt == "" {
+		uploadedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
 	metaPayload := sharing.SkillPackageMeta{
 		SkillID:     resolvedID,
 		SkillName:   meta.SkillName,
 		Description: meta.Description,
-		UploadedAt:  meta.UploadedAt,
+		UploadedAt:  uploadedAt,
 	}
 	metaData, _ := json.MarshalIndent(metaPayload.ToDict(), "", "  ")
 	if err := os.WriteFile(b.packageMetaPath(resolvedID), metaData, 0o644); err != nil {

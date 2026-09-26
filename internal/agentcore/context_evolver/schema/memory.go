@@ -303,12 +303,12 @@ func (m ReasoningBankMemory) ToVectorNode() *coreschema.VectorNode {
 	memoryData := make([]any, len(m.Memory))
 	for i, item := range m.Memory {
 		memoryData[i] = map[string]any{
-			"title":          item.Title,
-			"description":    item.Description,
-			"content":        item.Content,
-			"source_type":    item.SourceType,
-			"helpful_count":  item.HelpfulCount,
-			"harmful_count":  item.HarmfulCount,
+			"title":         item.Title,
+			"description":   item.Description,
+			"content":       item.Content,
+			"source_type":   item.SourceType,
+			"helpful_count": item.HelpfulCount,
+			"harmful_count": item.HarmfulCount,
 		}
 	}
 
@@ -482,12 +482,12 @@ func parseMemoryItems(raw any) []ReasoningBankMemoryItem {
 // 对齐 Python memory.py ReasoningBankMemory 字段：source_type/helpful_count/harmful_count。
 func parseSingleMemoryItem(m map[string]any) ReasoningBankMemoryItem {
 	return ReasoningBankMemoryItem{
-		Title:         getStringField(m, "title", ""),
-		Description:   getStringField(m, "description", ""),
-		Content:       getStringField(m, "content", ""),
-		SourceType:    getStringField(m, "source_type", "success"),
-		HelpfulCount:  getIntField(m, "helpful_count"),
-		HarmfulCount:  getIntField(m, "harmful_count"),
+		Title:        getStringField(m, "title", ""),
+		Description:  getStringField(m, "description", ""),
+		Content:      getStringField(m, "content", ""),
+		SourceType:   getStringField(m, "source_type", "success"),
+		HelpfulCount: getIntField(m, "helpful_count"),
+		HarmfulCount: getIntField(m, "harmful_count"),
 	}
 }
 

@@ -8,18 +8,18 @@ import (
 	"testing"
 	"time"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	ext "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/external"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -27,12 +27,16 @@ import (
 // noopSystemPromptBuilder 空 SystemPromptBuilder，用于测试中满足非 nil 检查
 type noopSystemPromptBuilder struct{}
 
-func (n *noopSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder { return nil }
-func (n *noopSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPromptBuilder                { return nil }
-func (n *noopSystemPromptBuilder) Language() string                                                       { return "cn" }
-func (n *noopSystemPromptBuilder) SetLanguage(lang string)                                                {}
-func (n *noopSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection                        { return nil }
-func (n *noopSystemPromptBuilder) HasSection(name string) bool                                           { return false }
+func (n *noopSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder {
+	return nil
+}
+func (n *noopSystemPromptBuilder) RemoveSection(name string) *saprompt.SystemPromptBuilder {
+	return nil
+}
+func (n *noopSystemPromptBuilder) Language() string                               { return "cn" }
+func (n *noopSystemPromptBuilder) SetLanguage(lang string)                        {}
+func (n *noopSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection { return nil }
+func (n *noopSystemPromptBuilder) HasSection(name string) bool                    { return false }
 
 // fakeAbilityManager 测试用 AbilityManagerInterface 实现
 type fakeAbilityManager struct {
@@ -55,10 +59,10 @@ func (f *fakeAbilityManager) AddMany(abilities []cschema.Ability) []agentschema.
 	}
 	return results
 }
-func (f *fakeAbilityManager) Remove(name string) cschema.Ability                          { return nil }
-func (f *fakeAbilityManager) RemoveMany(names []string) []cschema.Ability                 { return nil }
-func (f *fakeAbilityManager) Get(name string) cschema.Ability                             { return nil }
-func (f *fakeAbilityManager) List() []cschema.Ability                                     { return nil }
+func (f *fakeAbilityManager) Remove(name string) cschema.Ability          { return nil }
+func (f *fakeAbilityManager) RemoveMany(names []string) []cschema.Ability { return nil }
+func (f *fakeAbilityManager) Get(name string) cschema.Ability             { return nil }
+func (f *fakeAbilityManager) List() []cschema.Ability                     { return nil }
 func (f *fakeAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }
@@ -93,8 +97,10 @@ func (f *fakeBaseAgentForMemoryRail) Stream(_ context.Context, _ map[string]any,
 func (f *fakeBaseAgentForMemoryRail) Card() *agentschema.AgentCard {
 	return &agentschema.AgentCard{BaseCard: cschema.BaseCard{ID: "test-agent", Name: "TestAgent"}}
 }
-func (f *fakeBaseAgentForMemoryRail) Config() agentinterfaces.AgentConfig                     { return nil }
-func (f *fakeBaseAgentForMemoryRail) AbilityManager() agentinterfaces.AbilityManagerInterface { return f.am }
+func (f *fakeBaseAgentForMemoryRail) Config() agentinterfaces.AgentConfig { return nil }
+func (f *fakeBaseAgentForMemoryRail) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return f.am
+}
 func (f *fakeBaseAgentForMemoryRail) CallbackManager() *agentinterfaces.AgentCallbackManager {
 	return agentinterfaces.NewAgentCallbackManager("test-agent")
 }
@@ -812,7 +818,7 @@ func TestProviderTool_Stream_不支持(t *testing.T) {
 
 func TestProviderTool_Invoke_HandleToolCall错误(t *testing.T) {
 	provider := &fakeProviderErrHandle{
-		name:  "test",
+		name:   "test",
 		errMsg: "工具调用失败",
 	}
 	schema := ext.ToolSchema{Name: "search", Description: "搜索"}
@@ -980,12 +986,12 @@ type fakeProviderInitErr struct {
 	err  error
 }
 
-func (f *fakeProviderInitErr) Name() string                         { return f.name }
-func (f *fakeProviderInitErr) IsAvailable() bool                    { return true }
+func (f *fakeProviderInitErr) Name() string      { return f.name }
+func (f *fakeProviderInitErr) IsAvailable() bool { return true }
 func (f *fakeProviderInitErr) Initialize(_ context.Context, _ ...ext.ProviderOption) error {
 	return f.err
 }
-func (f *fakeProviderInitErr) GetToolSchemas() []ext.ToolSchema    { return nil }
+func (f *fakeProviderInitErr) GetToolSchemas() []ext.ToolSchema { return nil }
 func (f *fakeProviderInitErr) HandleToolCall(_ context.Context, _ string, _ map[string]any) (string, error) {
 	return "", nil
 }
@@ -999,12 +1005,12 @@ func (f *fakeProviderInitErr) SyncTurn(_ context.Context, _, _ string, _ ...ext.
 // fakeProviderErrHandle HandleToolCall 返回错误的 fakeProvider
 type fakeProviderErrHandle struct {
 	ext.BaseMemoryProvider
-	name  string
+	name   string
 	errMsg string
 }
 
-func (f *fakeProviderErrHandle) Name() string                      { return f.name }
-func (f *fakeProviderErrHandle) IsAvailable() bool                 { return true }
+func (f *fakeProviderErrHandle) Name() string      { return f.name }
+func (f *fakeProviderErrHandle) IsAvailable() bool { return true }
 func (f *fakeProviderErrHandle) Initialize(_ context.Context, _ ...ext.ProviderOption) error {
 	return nil
 }
@@ -1018,4 +1024,3 @@ func (f *fakeProviderErrHandle) Prefetch(_ context.Context, _ string, _ ...ext.P
 func (f *fakeProviderErrHandle) SyncTurn(_ context.Context, _, _ string, _ ...ext.ProviderOption) error {
 	return nil
 }
-

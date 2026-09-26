@@ -35,7 +35,7 @@ func init() {
 	registry.RelationDefinitionDescription[lang] = "：默认实体联系类型。"
 
 	registry.MultilingualDescription[lang] = map[string]string{
-		// Entity
+		// Entity 实体
 		"{{[ent_def_name]}}":     "新提取实体的名字",
 		"{{[ent_def_type]}}":     "新提取实体的类型id，需要在提供的实体类型中",
 		"{{[ent_ext_list]}}":     "新提取的实体列表",
@@ -48,7 +48,7 @@ func init() {
 		"{{[ent_dupe_id]}}":      "现有实体的ID",
 		"{{[ent_dupe_id_list]}}": "与现有实体重复的实体ID列表",
 		"{{[ent_dupe_list]}}":    "重复实体列表",
-		// Relation
+		// Relation 关系
 		"{{[rel_valid_since]}}":      "事实/关系的生效日期，请使用ISO格式YYYY-MM-DDTHH:MM:SS[+HH:MM]",
 		"{{[rel_valid_until]}}":      "事实/关系的中止日期，请使用ISO格式YYYY-MM-DDTHH:MM:SS[+HH:MM]",
 		"{{[rel_fact]}}":             "关于实体联系的事实",
@@ -64,7 +64,7 @@ func init() {
 		"{{[rel_dupe_reasoning]}}":   "为何需要将新增关系与现有关系融合？",
 		"{{[rel_dupe_content]}}":     "更新后的实体联系事实",
 		"{{[rel_dupe_id_list]}}":     "需要与新增关系融合的已有关系ID列表",
-		// Datetime
+		// Datetime 日期时间
 		"{{[year]}}":      "年",
 		"{{[month]}}":     "月",
 		"{{[day]}}":       "日",
@@ -75,7 +75,7 @@ func init() {
 		"{{[tz_offset]}}": "相对于UTC标准时的时差（用+HH:MM格式）",
 		"{{[tz_reason]}}": "为什么可能是这个时区",
 		"{{[tz_list]}}":   "可能的时区列表",
-		// Misc.
+		// Misc. 其他
 		":": "：",
 	}
 

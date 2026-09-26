@@ -128,7 +128,7 @@ func TestOtelTeamMonitorHandler_Member事件(t *testing.T) {
 	// member 事件不应 panic
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventMemberSpawned,
-		Payload:   map[string]any{
+		Payload: map[string]any{
 			"team_name":   "my-team",
 			"member_name": "worker-1",
 			"old_status":  "idle",

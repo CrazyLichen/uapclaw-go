@@ -38,33 +38,55 @@ type OnInbound func(ctx context.Context, memberName string, payload any) error
 // HITT 缓存由独立 hittMu 保护，DB 操作靠 DAO 层并发安全。
 type TeamBackend struct {
 	// ── 必填字段 ──
-	teamName         string
-	memberName       string
-	isLeader         bool
+	// teamName 团队名称
+	teamName string
+	// memberName 当前成员名称
+	memberName string
+	// isLeader 是否为领导者
+	isLeader bool
+	// leaderMemberName 领导者成员名称
 	leaderMemberName string
-	db               database.TeamDatabase
-	messager         messager.Messager
-	taskManager      *TeamTaskManager
-	messageManager   *TeamMessageManager
+	// db 团队数据库
+	db database.TeamDatabase
+	// messager 消息发送器
+	messager messager.Messager
+	// taskManager 任务管理器
+	taskManager *TeamTaskManager
+	// messageManager 消息管理器
+	messageManager *TeamMessageManager
 
 	// ── 可选字段（Functional Options 注入）──
-	teammateMode         string
-	predefinedMembers    []atschema.TeamMemberSpec
+	// teammateMode 队友模式
+	teammateMode string
+	// predefinedMembers 预定义成员规格
+	predefinedMembers []atschema.TeamMemberSpec
+	// modelConfigAllocator 模型配置分配器
 	modelConfigAllocator func(modelName string) *models.Allocation
-	leaderAllocation     *models.Allocation
-	onTeamCleaned        func(ctx context.Context) error
-	onTeamBuilt          func(ctx context.Context) error
-	planStorageDir       string
-	planID               string
+	// leaderAllocation 领导者资源分配
+	leaderAllocation *models.Allocation
+	// onTeamCleaned 团队清理回调
+	onTeamCleaned func(ctx context.Context) error
+	// onTeamBuilt 团队构建完成回调
+	onTeamBuilt func(ctx context.Context) error
+	// planStorageDir 计划存储目录
+	planStorageDir string
+	// planID 当前计划标识
+	planID string
 
 	// ── HITT 缓存（hittMu 保护）──
-	hittMu               sync.RWMutex
-	specEnableHITT       bool
-	enableHITT           bool
-	hittNames            map[string]struct{}
+	// hittMu HITT 缓存读写锁
+	hittMu sync.RWMutex
+	// specEnableHITT 配置是否启用 HITT
+	specEnableHITT bool
+	// enableHITT 运行时是否启用 HITT
+	enableHITT bool
+	// hittNames HITT 名册名称集合
+	hittNames map[string]struct{}
+	// hittInboundCallbacks HITT 入站回调映射
 	hittInboundCallbacks map[string]OnInbound
 
 	// ── 文件系统清理路径 ──
+	// cleanupPaths 待清理的文件路径集合
 	cleanupPaths map[string]struct{}
 }
 

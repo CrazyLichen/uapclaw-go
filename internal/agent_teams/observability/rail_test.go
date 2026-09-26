@@ -29,8 +29,8 @@ type mockInputs struct {
 	isFollowUp bool
 }
 
-func (m *mockInputs) EventKind() string { return "task_iteration" }
-func (m *mockInputs) GetIteration() int  { return m.iteration }
+func (m *mockInputs) EventKind() string   { return "task_iteration" }
+func (m *mockInputs) GetIteration() int   { return m.iteration }
 func (m *mockInputs) GetIsFollowUp() bool { return m.isFollowUp }
 
 // newRailCtx 创建带初始化 extra 的 AgentCallbackContext

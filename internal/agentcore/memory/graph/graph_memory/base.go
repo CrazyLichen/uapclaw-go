@@ -2194,14 +2194,14 @@ func (gm *GraphMemory) maybeGC(ctx context.Context) {
 	gm.ThreadLock.Lock()
 	defer gm.ThreadLock.Unlock()
 
-		now := float64(time.Now().Unix())
-		if now-gm.lastGC > gm.TimeTillNextGC {
-			gm.lastGC = now
-			// 对齐 Python: await self.db_backend.refresh(skip_compact=False) — GC 后执行压缩
-			if err := gm.DBBackend.Refresh(ctx, graph.WithSkipCompact(false)); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh failed")
-			}
+	now := float64(time.Now().Unix())
+	if now-gm.lastGC > gm.TimeTillNextGC {
+		gm.lastGC = now
+		// 对齐 Python: await self.db_backend.refresh(skip_compact=False) — GC 后执行压缩
+		if err := gm.DBBackend.Refresh(ctx, graph.WithSkipCompact(false)); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("Graph Memory: GC refresh failed")
 		}
+	}
 }
 
 // resolveEntityMerges 解析合并实体后的关系和 Episode 引用

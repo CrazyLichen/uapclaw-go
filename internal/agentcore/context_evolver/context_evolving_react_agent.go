@@ -232,7 +232,8 @@ func (a *ContextEvolvingReActAgent) GetMemoryService() *service.TaskMemoryServic
 func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	apiKey := ceconfig.GetString("API_KEY", "")
 	if apiKey == "" {
-		return fmt.Errorf("API_KEY not configured in context_evolver config")
+		// 对齐 Python: if not api_key: return（静默跳过，不返回错误）
+		return nil
 	}
 	apiBase := ceconfig.GetString("API_BASE", "https://api.openai.com/v1")
 	modelName := ceconfig.GetString("MODEL_NAME", "gpt-5.2")

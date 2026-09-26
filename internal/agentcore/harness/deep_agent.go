@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -50,7 +51,6 @@ import (
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

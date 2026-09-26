@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -28,10 +28,12 @@ func newFakeSessionFacade() *fakeSessionFacade {
 	return &fakeSessionFacade{data: make(map[string]any)}
 }
 
-func (f *fakeSessionFacade) GetSessionID() string                     { return "test-session" }
-func (f *fakeSessionFacade) UpdateState(data map[string]any)          { f.data = data }
-func (f *fakeSessionFacade) GetState(key state.StateKey) (any, error) { return f.data[key.String()], nil }
-func (f *fakeSessionFacade) DumpState() map[string]any                { return f.data }
+func (f *fakeSessionFacade) GetSessionID() string            { return "test-session" }
+func (f *fakeSessionFacade) UpdateState(data map[string]any) { f.data = data }
+func (f *fakeSessionFacade) GetState(key state.StateKey) (any, error) {
+	return f.data[key.String()], nil
+}
+func (f *fakeSessionFacade) DumpState() map[string]any { return f.data }
 func (f *fakeSessionFacade) WriteStream(_ context.Context, _ any) error {
 	return nil
 }

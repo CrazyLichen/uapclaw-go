@@ -158,8 +158,14 @@ func WithAutoSummarize(v bool) ContextEvolutionRailOption {
 }
 
 // WithAutoSummarizeMattsMode 设置自动总结的 MaTTS 模式。
+// 仅支持 "none"，其他值会输出 Warn 日志。
 func WithAutoSummarizeMattsMode(mode string) ContextEvolutionRailOption {
-	return func(r *ContextEvolutionRail) { r.autoSummarizeMattsMode = mode }
+	return func(r *ContextEvolutionRail) {
+		if mode != "none" && mode != "" {
+			logger.Warn(logComponent).Str("matts_mode", mode).Msg("autoSummarizeMattsMode only supports 'none', other values may not work correctly")
+		}
+		r.autoSummarizeMattsMode = mode
+	}
 }
 
 // WithUserID 设置用户标识。

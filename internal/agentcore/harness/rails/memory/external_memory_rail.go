@@ -18,8 +18,8 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -41,11 +41,11 @@ type providerTool struct {
 // ExternalMemoryRail 外部记忆护栏，桥接 MemoryProvider 到 Agent 生命周期。
 //
 // 生命周期:
-//   1. Init: 注册 Provider 工具 + 注入 system_prompt_block
-//   2. BeforeInvoke: 调 provider.Initialize()
-//   3. BeforeModelCall: 调 provider.Prefetch() 注入记忆上下文
-//   4. AfterInvoke: 调 provider.SyncTurn()（序列化 + 熔断器）
-//   5. Uninit: 注销工具 + provider.Shutdown()
+//  1. Init: 注册 Provider 工具 + 注入 system_prompt_block
+//  2. BeforeInvoke: 调 provider.Initialize()
+//  3. BeforeModelCall: 调 provider.Prefetch() 注入记忆上下文
+//  4. AfterInvoke: 调 provider.SyncTurn()（序列化 + 熔断器）
+//  5. Uninit: 注销工具 + provider.Shutdown()
 //
 // Python: ExternalMemoryRail (openjiuwen/harness/rails/memory/external_memory_rail.py)
 type ExternalMemoryRail struct {
@@ -345,17 +345,6 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 		return nil
 	}
 
-	// 熔断器检查
-	// Python: if self._sync_consecutive_failures >= _SYNC_BREAKER_THRESHOLD:
-	//             if time.monotonic() < self._sync_breaker_until: return
-	//             self._sync_consecutive_failures = 0
-	if r.syncConsecutiveFailures >= externalMemorySyncBreakerThreshold {
-		if time.Now().Before(r.syncBreakerUntil) {
-			return nil // 熔断中
-		}
-		r.syncConsecutiveFailures = 0 // 冷却完毕，重置
-	}
-
 	// 解析用户查询和助手输出
 	// Python: query = self._resolve_user_text_for_memory(ctx)
 	//         output = self._extract_assistant_output(ctx)
@@ -365,10 +354,23 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 		return nil
 	}
 
-	// 序列化：等待上一次 sync 完成
+	// 序列化：加锁保护熔断器状态 + 等待上一次 sync 完成
 	// Python: if self._sync_task and not self._sync_task.done():
 	//             await asyncio.wait_for(asyncio.shield(self._sync_task), timeout=5.0)
 	r.syncMu.Lock()
+
+	// 熔断器检查（需在 syncMu 内，与 goroutine 的写入互斥）
+	// Python: if self._sync_consecutive_failures >= _SYNC_BREAKER_THRESHOLD:
+	//             if time.monotonic() < self._sync_breaker_until: return
+	//             self._sync_consecutive_failures = 0
+	if r.syncConsecutiveFailures >= externalMemorySyncBreakerThreshold {
+		if time.Now().Before(r.syncBreakerUntil) {
+			r.syncMu.Unlock()
+			return nil // 熔断中
+		}
+		r.syncConsecutiveFailures = 0 // 冷却完毕，重置
+	}
+
 	select {
 	case <-r.syncDone:
 		// 上一次已完成

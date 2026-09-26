@@ -2,12 +2,12 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
-
-	"encoding/json"
 
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
@@ -92,6 +92,10 @@ const (
 	// contentMaxLen 内容字段最大长度（Milvus VARCHAR 上限）
 	contentMaxLen = 65535
 
+	// namespacePattern namespace 合法字符白名单（仅允许字母、数字、下划线、连字符）
+	// Python 也未校验但 namespace 由内部生成，Go 侧加校验更安全
+	namespacePattern = `^[a-zA-Z0-9_-]+$`
+
 	// milvusDefaultCollectionName 默认集合名
 	milvusDefaultCollectionName = "vector_nodes"
 	// milvusDefaultAlias 默认连接别名
@@ -106,6 +110,9 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// namespaceRe 预编译的 namespace 校验正则
+var namespaceRe = regexp.MustCompile(namespacePattern)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -137,6 +144,9 @@ func NewMilvusConnectorImpl(opts ...MilvusConnectorOption) *MilvusConnectorImpl 
 //
 // 对齐 Python: MilvusConnector.save_to_db(namespace, data)
 func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, data map[string]any) error {
+	if err := validateNamespace(namespace); err != nil {
+		return err
+	}
 	if len(data) == 0 {
 		logger.Info(milvusLogComponent).Msg("save_to_db: 空 data，跳过")
 		return nil
@@ -244,7 +254,7 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 		return fmt.Errorf("save_to_db: 插入失败: %w", err)
 	}
 
-	// Flush
+	// Flush 刷新持久化
 	_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
 
 	logger.Info(milvusLogComponent).
@@ -258,6 +268,9 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 //
 // 对齐 Python: MilvusConnector.load_from_db(namespace)
 func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) (map[string]any, error) {
+	if err := validateNamespace(namespace); err != nil {
+		return nil, err
+	}
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("load_from_db: 获取客户端失败: %w", err)
@@ -299,6 +312,9 @@ func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) 
 //
 // 对齐 Python: MilvusConnector.exists(namespace)
 func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool {
+	if err := validateNamespace(namespace); err != nil {
+		return false
+	}
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return false
@@ -321,6 +337,9 @@ func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool
 //
 // 对齐 Python: MilvusConnector.delete(namespace)
 func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool {
+	if err := validateNamespace(namespace); err != nil {
+		return false
+	}
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return false
@@ -367,6 +386,9 @@ func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool
 //
 // 对齐 Python: MilvusConnector.search(namespace, embedding, top_k, metric)
 func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embedding []float32, topK int, metric string) ([]map[string]any, error) {
+	if err := validateNamespace(namespace); err != nil {
+		return nil, err
+	}
 	if topK <= 0 {
 		topK = 10
 	}
@@ -660,6 +682,15 @@ func WithConnectorCreateClient(fn func(ctx context.Context, host string, port in
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// validateNamespace 校验 namespace 仅包含安全字符，防止过滤表达式注入。
+// Python 未做此校验（namespace 由内部生成），Go 侧增加防御。
+func validateNamespace(namespace string) error {
+	if !namespaceRe.MatchString(namespace) {
+		return fmt.Errorf("namespace contains invalid characters (only [a-zA-Z0-9_-] allowed): %q", namespace)
+	}
+	return nil
+}
 
 // getClient 惰性获取或创建 Milvus 客户端。
 // 对齐 Python: MilvusConnector._get_collection(dim)

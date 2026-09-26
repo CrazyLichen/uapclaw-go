@@ -38,20 +38,31 @@ type InMemoryTeamDatabase struct {
 // mutationContext 依赖图变更管线共享上下文。
 // 替代 Python _MutationFailure 异常信号，使用 failReason flag 模式。
 type mutationContext struct {
-	db       *InMemoryTeamDatabase
+	// db 内存数据库引用
+	db *InMemoryTeamDatabase
+	// teamName 团队名称
 	teamName string
+	// newTasks 新增任务规格列表
 	newTasks []NewTaskSpec
+	// addEdges 新增边规格列表
 	addEdges []EdgeSpec
 
 	// 步骤间共享数据（闭包操作）
-	stagedTasks    map[string]*TeamTaskBase // 步骤1产出：已插入的新任务
-	endpointTasks  map[string]*TeamTaskBase // 步骤2产出：边端点对应的任务
-	newEdgeSet     map[string]bool          // 步骤3产出：去重后的新边集合（key=taskID+"\x00"+dependsOnID）
-	newEdgeRows    []TeamTaskDependencyBase // 步骤4产出：待插入的依赖边行
-	refreshedTasks []*TeamTaskBase          // 步骤5产出：状态刷新的任务列表
-	affectedIDs    map[string]bool          // 步骤5输入：受影响的任务 ID 集合
+	// stagedTasks 步骤1产出：已插入的新任务
+	stagedTasks map[string]*TeamTaskBase
+	// endpointTasks 步骤2产出：边端点对应的任务
+	endpointTasks map[string]*TeamTaskBase
+	// newEdgeSet 步骤3产出：去重后的新边集合（key=taskID+"\x00"+dependsOnID）
+	newEdgeSet map[string]bool
+	// newEdgeRows 步骤4产出：待插入的依赖边行
+	newEdgeRows []TeamTaskDependencyBase
+	// refreshedTasks 步骤5产出：状态刷新的任务列表
+	refreshedTasks []*TeamTaskBase
+	// affectedIDs 步骤5输入：受影响的任务 ID 集合
+	affectedIDs map[string]bool
 
 	// 失败标记（替代 Python _MutationFailure）
+	// failReason 失败原因，非空表示管线中止
 	failReason string
 }
 

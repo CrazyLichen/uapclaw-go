@@ -254,10 +254,10 @@ func (h *OtelTeamMonitorHandler) recordMemberEvent(teamName string, payload map[
 // Python: _record_message_event(team_name, payload, etype)
 func (h *OtelTeamMonitorHandler) recordMessageEvent(teamName string, payload map[string]any, etype string) {
 	attrs := map[string]any{
-		ATEventType:       etype,
-		ATMessageID:       strVal(payload["message_id"]),
-		ATMessageFrom:     strVal(payload["from_member_name"]),
-		ATMessageTo:       strVal(payload["to_member_name"]),
+		ATEventType:        etype,
+		ATMessageID:        strVal(payload["message_id"]),
+		ATMessageFrom:      strVal(payload["from_member_name"]),
+		ATMessageTo:        strVal(payload["to_member_name"]),
 		ATMessageBroadcast: etype == events.TeamEventBroadcast,
 	}
 	h.recordTeamEvent(teamName, etype, attrs)

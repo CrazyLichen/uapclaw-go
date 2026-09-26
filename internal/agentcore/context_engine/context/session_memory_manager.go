@@ -528,7 +528,7 @@ func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemo
 
 	// 调用 agent（对齐 Python: self._agent.invoke(inputs, session=session)）
 	inputs := map[string]any{
-		"query":          query,
+		"query":           query,
 		"conversation_id": u.toolNamespace,
 	}
 

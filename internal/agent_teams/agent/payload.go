@@ -89,12 +89,12 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 // Python: SpawnPayloadBuilder.build_member_context(member_spec)
 func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
 	return atschema.TeamRuntimeContext{
-		Role:            memberSpec.RoleType,
-		MemberName:      memberSpec.MemberName,
-		Persona:         memberSpec.Persona,
-		TeamSpec:        b.ctx.TeamSpec,
-		MessagerConfig:  b.BuildMemberMessagerConfig(memberSpec.MemberName),
-		DBConfig:        b.ctx.DBConfig,
+		Role:           memberSpec.RoleType,
+		MemberName:     memberSpec.MemberName,
+		Persona:        memberSpec.Persona,
+		TeamSpec:       b.ctx.TeamSpec,
+		MessagerConfig: b.BuildMemberMessagerConfig(memberSpec.MemberName),
+		DBConfig:       b.ctx.DBConfig,
 	}
 }
 
