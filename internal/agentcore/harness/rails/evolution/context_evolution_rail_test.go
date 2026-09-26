@@ -93,7 +93,7 @@ func TestNewContextEvolutionRail_默认值(t *testing.T) {
 		}
 	}()
 
-	r := NewContextEvolutionRail("alice", nil)
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
 	assert.Equal(t, "alice", r.userID)
 	assert.True(t, r.injectMemoriesInContext)
 	assert.True(t, r.autoSummarize)
@@ -104,7 +104,7 @@ func TestNewContextEvolutionRail_默认值(t *testing.T) {
 
 func TestNewContextEvolutionRail_自定义选项(t *testing.T) {
 	mock := &mockTaskMemoryService{}
-	r := NewContextEvolutionRail("bob", nil,
+	r := NewContextEvolutionRail(context.Background(), "bob", nil,
 		WithMemoryService(mock),
 		WithInjectMemoriesInContext(false),
 		WithAutoSummarize(false),
@@ -129,7 +129,7 @@ func TestNewContextEvolutionRail_NilMemoryService(t *testing.T) {
 		}
 	}()
 
-	r := NewContextEvolutionRail("charlie", nil)
+	r := NewContextEvolutionRail(context.Background(), "charlie", nil)
 	// 创建失败时 memoryService 为 nil（降级模式）
 	assert.Nil(t, r.memoryService)
 	assert.Equal(t, 0, r.MemoriesUsed())
@@ -141,7 +141,7 @@ func TestNewContextEvolutionRail_有APIKey(t *testing.T) {
 	ceconfig.Set("API_KEY", "test-key-for-rail")
 	defer ceconfig.Delete("API_KEY")
 
-	r := NewContextEvolutionRail("dave", nil)
+	r := NewContextEvolutionRail(context.Background(), "dave", nil)
 	// 创建成功时 memoryService 不为 nil
 	assert.NotNil(t, r.memoryService)
 }
@@ -149,7 +149,7 @@ func TestNewContextEvolutionRail_有APIKey(t *testing.T) {
 // ──────────────────────────── GetCallbacks 测试 ────────────────────────────
 
 func TestContextEvolutionRail_GetCallbacks(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil)
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
 	callbacks := r.GetCallbacks()
 	_, hasBefore := callbacks[agentinterfaces.CallbackBeforeTaskIteration]
 	_, hasAfter := callbacks[agentinterfaces.CallbackAfterTaskIteration]
@@ -169,7 +169,7 @@ func TestBeforeTaskIteration_记忆注入(t *testing.T) {
 			Algorithm:       "ACE",
 		},
 	}
-	r := NewContextEvolutionRail("alice", nil, WithMemoryService(mock))
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
 
 	// 构造 AgentCallbackContext — 测试 beforeTaskIteration 直接调用
 	cbc := &agentinterfaces.AgentCallbackContext{}
@@ -192,7 +192,7 @@ func TestBeforeTaskIteration_缓存命中(t *testing.T) {
 			Algorithm:       "ACE",
 		},
 	}
-	r := NewContextEvolutionRail("alice", nil, WithMemoryService(mock))
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: "相同查询"})
@@ -215,7 +215,7 @@ func TestBeforeTaskIteration_检索失败(t *testing.T) {
 	mock := &mockTaskMemoryService{
 		retrieveErr: assert.AnError,
 	}
-	r := NewContextEvolutionRail("alice", nil, WithMemoryService(mock))
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: "查询"})
@@ -227,7 +227,7 @@ func TestBeforeTaskIteration_检索失败(t *testing.T) {
 
 func TestBeforeTaskIteration_无记忆(t *testing.T) {
 	mock := &mockTaskMemoryService{} // 默认返回空结果
-	r := NewContextEvolutionRail("alice", nil, WithMemoryService(mock))
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: "查询"})
@@ -247,7 +247,7 @@ func TestBeforeTaskIteration_不注入(t *testing.T) {
 			Algorithm:       "ACE",
 		},
 	}
-	r := NewContextEvolutionRail("alice", nil,
+	r := NewContextEvolutionRail(context.Background(), "alice", nil,
 		WithMemoryService(mock),
 		WithInjectMemoriesInContext(false),
 	)
@@ -263,7 +263,7 @@ func TestBeforeTaskIteration_不注入(t *testing.T) {
 
 func TestBeforeTaskIteration_无Query(t *testing.T) {
 	mock := &mockTaskMemoryService{}
-	r := NewContextEvolutionRail("alice", nil, WithMemoryService(mock))
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: ""})
@@ -274,7 +274,7 @@ func TestBeforeTaskIteration_无Query(t *testing.T) {
 }
 
 func TestBeforeTaskIteration_NilMemoryService(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil) // memoryService 为 nil
+	r := NewContextEvolutionRail(context.Background(), "alice", nil) // memoryService 为 nil
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: "查询"})
@@ -284,10 +284,100 @@ func TestBeforeTaskIteration_NilMemoryService(t *testing.T) {
 	assert.Equal(t, 0, r.memoriesUsed)
 }
 
+// TestBeforeTaskIteration_RetrievalQuery优先 验证 RetrievalQuery 优先于 Query 用于检索。
+// Python: retrieval_query = getattr(ctx.inputs, "retrieval_query", None) or query
+func TestBeforeTaskIteration_RetrievalQuery优先(t *testing.T) {
+	mock := &mockTaskMemoryService{
+		retrieveResult: &ceservice.RetrieveResult{
+			MemoryString:    "专用检索结果",
+			RetrievedMemory: []ceschema.MemoryItem{&mockRetrievedMemory{text: "经验1"}},
+			Query:           "专用检索查询",
+			UserID:          "alice",
+			Algorithm:       "ACE",
+		},
+	}
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
+
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{
+		Query:          "原始查询",
+		RetrievalQuery: "专用检索查询",
+	})
+
+	err := r.beforeTaskIteration(context.Background(), cbc)
+	assert.NoError(t, err)
+	assert.True(t, mock.retrieveCalled)
+	// 验证：currentQuery 保存的是原始 Query（对齐 Python: self._current_query = query）
+	assert.Equal(t, "原始查询", r.currentQuery)
+}
+
+// TestBeforeTaskIteration_RetrievalQuery为空回退Query 验证 RetrievalQuery 为空时回退到 Query。
+// Python: retrieval_query = getattr(ctx.inputs, "retrieval_query", None) or query
+func TestBeforeTaskIteration_RetrievalQuery为空回退Query(t *testing.T) {
+	mock := &mockTaskMemoryService{
+		retrieveResult: &ceservice.RetrieveResult{
+			MemoryString:    "回退检索结果",
+			RetrievedMemory: []ceschema.MemoryItem{&mockRetrievedMemory{text: "经验1"}},
+			Query:           "原始查询",
+			UserID:          "alice",
+			Algorithm:       "ACE",
+		},
+	}
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
+
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{
+		Query:          "原始查询",
+		RetrievalQuery: "", // 空值，应回退到 Query
+	})
+
+	err := r.beforeTaskIteration(context.Background(), cbc)
+	assert.NoError(t, err)
+	assert.True(t, mock.retrieveCalled)
+}
+
+// TestBeforeTaskIteration_缓存键使用RetrievalQuery 验证缓存键使用 retrievalQuery 而非 query。
+// Python: self.last_retrieved_query == retrieval_query
+func TestBeforeTaskIteration_缓存键使用RetrievalQuery(t *testing.T) {
+	mock := &mockTaskMemoryService{
+		retrieveResult: &ceservice.RetrieveResult{
+			MemoryString:    "缓存结果",
+			RetrievedMemory: []ceschema.MemoryItem{&mockRetrievedMemory{text: "经验1"}},
+			Query:           "检索查询",
+			UserID:          "alice",
+			Algorithm:       "ACE",
+		},
+	}
+	r := NewContextEvolutionRail(context.Background(), "alice", nil, WithMemoryService(mock))
+
+	// 第一次调用：Query 相同，RetrievalQuery 也相同
+	cbc1 := &agentinterfaces.AgentCallbackContext{}
+	cbc1.SetInputs(&agentinterfaces.TaskIterationInputs{
+		Query:          "原始查询",
+		RetrievalQuery: "检索查询",
+	})
+	err := r.beforeTaskIteration(context.Background(), cbc1)
+	assert.NoError(t, err)
+	assert.True(t, mock.retrieveCalled)
+
+	// 重置标记
+	mock.retrieveCalled = false
+
+	// 第二次调用：Query 不同，但 RetrievalQuery 相同 → 应缓存命中
+	cbc2 := &agentinterfaces.AgentCallbackContext{}
+	cbc2.SetInputs(&agentinterfaces.TaskIterationInputs{
+		Query:          "不同的原始查询",
+		RetrievalQuery: "检索查询", // 相同的 RetrievalQuery
+	})
+	err = r.beforeTaskIteration(context.Background(), cbc2)
+	assert.NoError(t, err)
+	assert.False(t, mock.retrieveCalled, "RetrievalQuery 相同时应命中缓存，即使 Query 不同")
+}
+
 // ──────────────────────────── afterTaskIteration 测试 ────────────────────────────
 
 func TestAfterTaskIteration_恢复Prompt(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil)
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
 
 	// 模拟 beforeTaskIteration 保存了原始模板
 	r.originalPromptTemplate = []map[string]any{
@@ -304,7 +394,7 @@ func TestAfterTaskIteration_AutoSummarize(t *testing.T) {
 	mock := &mockTaskMemoryService{
 		summarizeResult: &ceservice.SummarizeResult{},
 	}
-	r := NewContextEvolutionRail("alice", nil,
+	r := NewContextEvolutionRail(context.Background(), "alice", nil,
 		WithMemoryService(mock),
 		WithAutoSummarize(true),
 	)
@@ -321,7 +411,7 @@ func TestAfterTaskIteration_AutoSummarize失败(t *testing.T) {
 	mock := &mockTaskMemoryService{
 		summarizeErr: assert.AnError,
 	}
-	r := NewContextEvolutionRail("alice", nil,
+	r := NewContextEvolutionRail(context.Background(), "alice", nil,
 		WithMemoryService(mock),
 		WithAutoSummarize(true),
 	)
@@ -332,25 +422,96 @@ func TestAfterTaskIteration_AutoSummarize失败(t *testing.T) {
 	assert.NoError(t, err) // 失败不中断
 }
 
-func TestAfterTaskIteration_标注MemoriesUsed(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil)
-	r.memoriesUsed = 5
+// TestAfterTaskIteration_MattsMode非None跳过AutoSummarize 验证 mattsMode 非 none 时跳过自动总结。
+// Python: only support matts_mode = "none", because other matts_mode need to call multiple invoke
+func TestAfterTaskIteration_MattsMode非None跳过AutoSummarize(t *testing.T) {
+	mock := &mockTaskMemoryService{
+		summarizeResult: &ceservice.SummarizeResult{},
+	}
+	r := NewContextEvolutionRail(context.Background(), "alice", nil,
+		WithMemoryService(mock),
+		WithAutoSummarize(true),
+		WithAutoSummarizeMattsMode("sequential"), // 非 "none"
+	)
+	r.currentQuery = "查询"
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
-	// Extra() 默认为 nil，需要直接设置内部 extra 字段
-	// 由于 Extra() 返回 map[string]any，如果为 nil 则无法赋值
-	// 但 afterTaskIteration 中检查 cbc.Extra() != nil，所以 nil 时跳过
-
-	// 构造一个有 extra 的 cbc：利用反射或直接通过回调上下文构造
-	// 更好的方式：验证 nil extra 不 panic
 	err := r.afterTaskIteration(context.Background(), cbc)
-	assert.NoError(t, err) // nil extra 不应 panic
+	assert.NoError(t, err)
+	assert.False(t, mock.summarizeCalled, "mattsMode 非 none 时不应触发自动总结")
+}
+
+// TestBeforeTaskIteration_MemoryStringTrimSpace 验证注入内容 TrimSpace。
+func TestBeforeTaskIteration_MemoryStringTrimSpace(t *testing.T) {
+	mock := &mockTaskMemoryService{
+		retrieveResult: &ceservice.RetrieveResult{
+			MemoryString:    "  有前后空格的记忆  ",
+			RetrievedMemory: []ceschema.MemoryItem{&mockRetrievedMemory{text: "经验1"}},
+			Query:           "查询",
+			UserID:          "alice",
+			Algorithm:       "ACE",
+		},
+	}
+	r := NewContextEvolutionRail(context.Background(), "alice", nil,
+		WithMemoryService(mock),
+		WithInjectMemoriesInContext(true),
+	)
+
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetInputs(&agentinterfaces.TaskIterationInputs{Query: "查询"})
+
+	err := r.beforeTaskIteration(context.Background(), cbc)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, r.memoriesUsed)
+	// 验证 TrimSpace 生效：currentQuery 不含前后空格
+	// memoryString 被使用前已 TrimSpace，此测试确认不 panic 且正常工作
+}
+
+// TestWithUserID 验证 WithUserID 选项函数。
+func TestWithUserID(t *testing.T) {
+	r := NewContextEvolutionRail(context.Background(), "", nil,
+		WithUserID("override-user"),
+	)
+	assert.Equal(t, "override-user", r.userID)
+}
+
+func TestAfterTaskIteration_标注MemoriesUsed(t *testing.T) {
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
+	r.memoriesUsed = 5
+
+	// 构造有 Result 的 TaskIterationInputs
+	taskInputs := &agentinterfaces.TaskIterationInputs{
+		Result: map[string]any{"status": "ok"},
+	}
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetInputs(taskInputs)
+
+	err := r.afterTaskIteration(context.Background(), cbc)
+	assert.NoError(t, err)
+
+	// 验证：memories_used 写入 taskInputs.Result（对齐 Python: result["memories_used"] = self.memories_used）
+	assert.Equal(t, 5, taskInputs.Result["memories_used"])
+}
+
+// TestAfterTaskIteration_标注MemoriesUsed_Result为Nil 验证 Result 为 nil 时不 panic。
+func TestAfterTaskIteration_标注MemoriesUsed_Result为Nil(t *testing.T) {
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
+	r.memoriesUsed = 3
+
+	taskInputs := &agentinterfaces.TaskIterationInputs{
+		Result: nil,
+	}
+	cbc := &agentinterfaces.AgentCallbackContext{}
+	cbc.SetInputs(taskInputs)
+
+	err := r.afterTaskIteration(context.Background(), cbc)
+	assert.NoError(t, err) // Result 为 nil 不应 panic
 }
 
 // ──────────────────────────── extractTrajectory 测试 ────────────────────────────
 
 func TestExtractTrajectory_无DeepAgent(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil)
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
 
 	cbc := &agentinterfaces.AgentCallbackContext{}
 	// Agent() 默认返回 nil（无 Agent 实现 DeepAgentInterface）
@@ -410,7 +571,7 @@ func TestRoleTypeToString(t *testing.T) {
 // ──────────────────────────── 访问器测试 ────────────────────────────
 
 func TestAccessors(t *testing.T) {
-	r := NewContextEvolutionRail("alice", nil)
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
 	assert.Equal(t, "alice", r.userID)
 	assert.Equal(t, 0, r.MemoriesUsed())
 	assert.Equal(t, "", r.CurrentQuery())

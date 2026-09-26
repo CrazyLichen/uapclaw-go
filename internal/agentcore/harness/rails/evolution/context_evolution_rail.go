@@ -3,6 +3,7 @@ package evolution
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -101,6 +102,7 @@ const (
 //
 // 对齐 Python: ContextEvolutionRail(user_id, memory_service, inject_memories_in_context, auto_summarize, auto_summarize_matts_mode)
 func NewContextEvolutionRail(
+	ctx context.Context,
 	userID string,
 	memoryService *ceservice.TaskMemoryService,
 	opts ...ContextEvolutionRailOption,
@@ -131,7 +133,7 @@ func NewContextEvolutionRail(
 
 	// 加载已有记忆（对齐 Python __init__ 末尾调用 load_memories）
 	if r.memoryService != nil {
-		if err := r.memoryService.LoadMemories(context.Background(), r.userID); err != nil {
+		if err := r.memoryService.LoadMemories(ctx, r.userID); err != nil {
 			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail 加载记忆失败")
 		}
 	}
@@ -158,6 +160,11 @@ func WithAutoSummarize(v bool) ContextEvolutionRailOption {
 // WithAutoSummarizeMattsMode 设置自动总结的 MaTTS 模式。
 func WithAutoSummarizeMattsMode(mode string) ContextEvolutionRailOption {
 	return func(r *ContextEvolutionRail) { r.autoSummarizeMattsMode = mode }
+}
+
+// WithUserID 设置用户标识。
+func WithUserID(userID string) ContextEvolutionRailOption {
+	return func(r *ContextEvolutionRail) { r.userID = userID }
 }
 
 // WithMemoryService 设置记忆服务（用于测试注入 mock）。
@@ -220,7 +227,7 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 		r.agent = cbc.Agent()
 	}
 
-	// 3. 获取 query（对齐 Python: query = getattr(ctx.inputs, "query", None) or ""）
+	// 3. 获取 query 和 retrievalQuery（对齐 Python: query = getattr(ctx.inputs, "query", None) or ""; retrieval_query = getattr(ctx.inputs, "retrieval_query", None) or query）
 	inputs := cbc.Inputs()
 	taskInputs, ok := inputs.(*agentinterfaces.TaskIterationInputs)
 	if !ok || taskInputs == nil {
@@ -229,6 +236,12 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	query := taskInputs.Query
 	if query == "" {
 		return nil
+	}
+
+	// retrievalQuery 优先于 query 用于检索（对齐 Python: retrieval_query = getattr(ctx.inputs, "retrieval_query", None) or query）
+	retrievalQuery := taskInputs.RetrievalQuery
+	if retrievalQuery == "" {
+		retrievalQuery = query
 	}
 
 	// 4. 保存 currentQuery（对齐 Python: self._current_query = query）
@@ -240,22 +253,22 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	}
 
 	var memoryResult *ceservice.RetrieveResult
-	// 对齐 Python: 如果上次检索查询相同，复用缓存结果
-	if r.lastRetrievedQuery == query && r.lastRetrievalResult != nil {
+	// 对齐 Python: 缓存键使用 retrieval_query（self.last_retrieved_query == retrieval_query）
+	if r.lastRetrievedQuery == retrievalQuery && r.lastRetrievalResult != nil {
 		memoryResult = r.lastRetrievalResult
 		logger.Info(logComponent).Msg("复用缓存的记忆检索结果")
 	} else {
-		result, err := r.memoryService.Retrieve(ctx, r.userID, query)
+		result, err := r.memoryService.Retrieve(ctx, r.userID, retrievalQuery)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("检索记忆失败")
 			return nil // 不中断 Agent（对齐 Python: except → return）
 		}
 		memoryResult = result
-		r.lastRetrievedQuery = query
+		r.lastRetrievedQuery = retrievalQuery
 		r.lastRetrievalResult = result
 	}
 
-	memoryString := memoryResult.MemoryString
+	memoryString := strings.TrimSpace(memoryResult.MemoryString)
 	r.memoriesUsed = len(memoryResult.RetrievedMemory)
 	logger.Info(logComponent).Int("memories_used", r.memoriesUsed).Msg("检索到记忆")
 
@@ -349,14 +362,18 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 		logger.Debug(logComponent).Msg("已恢复原始 Agent 系统提示词")
 	}
 
-	// 2. 标注 memoriesUsed（对齐 Python: result["memories_used"] = self.memories_used）
-	if cbc.Extra() != nil {
-		cbc.Extra()["memories_used"] = r.memoriesUsed
+	// 2. 标注 memoriesUsed（对齐 Python: result = getattr(ctx.inputs, "result", None); result["memories_used"] = self.memories_used）
+	if inputs := cbc.Inputs(); inputs != nil {
+		if taskInputs, ok := inputs.(*agentinterfaces.TaskIterationInputs); ok && taskInputs != nil {
+			if taskInputs.Result != nil {
+				taskInputs.Result["memories_used"] = r.memoriesUsed
+			}
+		}
 	}
 
 	// 3. 自动总结（对齐 Python 221-243 行）
 	// Python 注释：only support matts_mode = "none", because other matts_mode need to call multiple invoke
-	if r.autoSummarize && r.currentQuery != "" && r.memoryService != nil {
+	if r.autoSummarize && r.autoSummarizeMattsMode == "none" && r.currentQuery != "" && r.memoryService != nil {
 		trajectory := r.extractTrajectory(cbc)
 		if trajectory != "" {
 			// 对齐 Python: feedback, score = _evaluate_trial(self._current_query, trajectory)

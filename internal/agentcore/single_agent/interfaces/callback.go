@@ -222,6 +222,10 @@ type TaskIterationInputs struct {
 	Result map[string]any
 	// Query 本次迭代的有效查询（before_task_iteration 钩子可修改）
 	Query string
+	// RetrievalQuery 专用检索查询，优先于 Query 用于记忆检索。
+	// Python: getattr(ctx.inputs, "retrieval_query", None) or query
+	// 由 trajectory_generator 在 self_refine 场景设置
+	RetrievalQuery string
 	// IsFollowUp 是否由 controller follow-up 触发
 	IsFollowUp bool
 }

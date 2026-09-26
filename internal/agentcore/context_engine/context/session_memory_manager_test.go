@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -272,34 +274,120 @@ func TestNewSessionMemoryAgentUpdater(t *testing.T) {
 	}
 }
 
-// TestSessionMemoryAgentUpdater_Invoke_尚未实现 测试 agent_edit 模式 Invoke 返回错误
-func TestSessionMemoryAgentUpdater_Invoke_尚未实现(t *testing.T) {
+// TestSessionMemoryAgentUpdater_Invoke_模型未配置时返回错误 验证 agent_edit 模式无模型配置时返回错误
+func TestSessionMemoryAgentUpdater_Invoke_模型未配置时返回错误(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
 	updater := NewSessionMemoryAgentUpdater(cfg)
 
 	err := updater.Invoke(context.Background(), SessionMemoryUpdateOptions{})
 	if err == nil {
-		t.Error("agent_edit 模式 Invoke 应返回错误")
-	}
-	if !strings.Contains(err.Error(), "尚未实现") {
-		t.Errorf("错误信息应包含\"尚未实现\"，实际: %v", err)
+		t.Error("agent_edit 模式模型未配置时 Invoke 应返回错误")
 	}
 }
 
-// TestSessionMemoryAgentUpdater_BindModelDefaults 测试空操作
+// TestSessionMemoryAgentUpdater_Invoke_Agent未设置时返回错误 验证 agent 未注入时返回错误
+func TestSessionMemoryAgentUpdater_Invoke_Agent未设置时返回错误(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	cfg.Model = &llm_schema.ModelRequestConfig{ModelName: "test"}
+	cfg.ModelClient = &llm_schema.ModelClientConfig{ClientProvider: "test"}
+	updater := NewSessionMemoryAgentUpdater(cfg)
+
+	err := updater.Invoke(context.Background(), SessionMemoryUpdateOptions{})
+	if err == nil {
+		t.Error("agent 未设置时 Invoke 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "Agent 未初始化") {
+		t.Errorf("错误信息应包含\"Agent 未初始化\"，实际: %v", err)
+	}
+}
+
+// TestSessionMemoryAgentUpdater_SetAgent 验证 SetAgent 方法
+func TestSessionMemoryAgentUpdater_SetAgent(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	updater := NewSessionMemoryAgentUpdater(cfg)
+	assert.Nil(t, updater.agent)
+
+	// 注入 mock agent
+	updater.SetAgent(&mockSessionMemoryAgent{})
+	assert.NotNil(t, updater.agent)
+}
+
+// mockSessionMemoryAgent SessionMemoryAgent 的 mock 实现
+type mockSessionMemoryAgent struct {
+	invoked           bool
+	lastQuery         string
+	inheritedPrompt   string
+}
+
+func (m *mockSessionMemoryAgent) Invoke(_ context.Context, inputs map[string]any, _ ...SessionMemoryAgentOption) (map[string]any, error) {
+	m.invoked = true
+	if q, ok := inputs["query"].(string); ok {
+		m.lastQuery = q
+	}
+	return map[string]any{"output": "ok"}, nil
+}
+
+func (m *mockSessionMemoryAgent) SetInheritedSystemPrompt(prompt string) {
+	m.inheritedPrompt = prompt
+}
+
+// TestSessionMemoryAgentUpdater_Invoke_正常调用 验证 agent_edit 正常调用流程
+func TestSessionMemoryAgentUpdater_Invoke_正常调用(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	cfg.Model = &llm_schema.ModelRequestConfig{ModelName: "test"}
+	cfg.ModelClient = &llm_schema.ModelClientConfig{ClientProvider: "test"}
+	updater := NewSessionMemoryAgentUpdater(cfg)
+
+	mockAgent := &mockSessionMemoryAgent{}
+	updater.SetAgent(mockAgent)
+
+	err := updater.Invoke(context.Background(), SessionMemoryUpdateOptions{
+		NotesPath:    "/tmp/test_notes.md",
+		CurrentNotes: "# Test Notes",
+	})
+	assert.NoError(t, err)
+	assert.True(t, mockAgent.invoked)
+	assert.Contains(t, mockAgent.lastQuery, "/tmp/test_notes.md")
+}
+
+// TestSessionMemoryAgentUpdater_BindModelDefaults 验证绑定默认模型配置
 func TestSessionMemoryAgentUpdater_BindModelDefaults(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
 	updater := NewSessionMemoryAgentUpdater(cfg)
-	// 应不 panic
-	updater.BindModelDefaults(nil, nil)
+	modelCfg := &llm_schema.ModelRequestConfig{ModelName: "test-model"}
+	clientCfg := &llm_schema.ModelClientConfig{ClientProvider: "test-provider"}
+	updater.BindModelDefaults(modelCfg, clientCfg)
+	// BindModelDefaults 修改的是 updater 内部的 config 副本，不返回
+	// 验证不 panic 且 config 不为 nil 即可
+	assert.NotNil(t, updater.config.Model)
+	assert.Equal(t, "test-model", updater.config.Model.ModelName)
 }
 
-// TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt 测试空操作
+// TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt 验证设置继承提示词
 func TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
 	updater := NewSessionMemoryAgentUpdater(cfg)
-	// 应不 panic
-	updater.SetInheritedSystemPrompt("test")
+	updater.SetInheritedSystemPrompt("test prompt")
+	assert.Equal(t, "test prompt", updater.inheritedSystemPrompt)
+}
+
+// TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt_透传Agent 验证提示词透传到 agent
+func TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt_透传Agent(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	updater := NewSessionMemoryAgentUpdater(cfg)
+	mockAgent := &mockSessionMemoryAgent{}
+	updater.SetAgent(mockAgent)
+
+	updater.SetInheritedSystemPrompt("inherited prompt")
+	assert.Equal(t, "inherited prompt", mockAgent.inheritedPrompt)
+}
+
+// TestSessionMemoryAgentUpdater_SetPrimeNotesFn 验证设置预填充回调
+func TestSessionMemoryAgentUpdater_SetPrimeNotesFn(t *testing.T) {
+	cfg := NewSessionMemoryConfig()
+	updater := NewSessionMemoryAgentUpdater(cfg)
+	updater.SetPrimeNotesFn(func(path string, notes string) {})
+	assert.NotNil(t, updater.primeNotesFn)
 }
 
 // ──────────────────────────── SessionMemoryManager 测试 ────────────────────────────
@@ -1461,27 +1549,6 @@ func TestFormatReloadedMessages_序列化失败(t *testing.T) {
 }
 
 // ──────────────────────────── SessionMemoryAgentUpdater 方法覆盖 ────────────────────────────
-
-// TestSessionMemoryAgentUpdater_BindModelDefaults_实际调用 测试 BindModelDefaults 方法
-func TestSessionMemoryAgentUpdater_BindModelDefaults_实际调用(t *testing.T) {
-	cfg := NewSessionMemoryConfig()
-	cfg.UpdateMode = "agent_edit"
-	updater := NewSessionMemoryAgentUpdater(cfg)
-	// 不应 panic，空操作
-	updater.BindModelDefaults(
-		&llm_schema.ModelRequestConfig{ModelName: "test"},
-		&llm_schema.ModelClientConfig{ClientProvider: "test"},
-	)
-}
-
-// TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt_实际调用 测试 SetInheritedSystemPrompt 方法
-func TestSessionMemoryAgentUpdater_SetInheritedSystemPrompt_实际调用(t *testing.T) {
-	cfg := NewSessionMemoryConfig()
-	cfg.UpdateMode = "agent_edit"
-	updater := NewSessionMemoryAgentUpdater(cfg)
-	// 不应 panic，空操作
-	updater.SetInheritedSystemPrompt("测试系统提示词")
-}
 
 // ──────────────────────────── CollectContextWindow 测试 ────────────────────────────
 

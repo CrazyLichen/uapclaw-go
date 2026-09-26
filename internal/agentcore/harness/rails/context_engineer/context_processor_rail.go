@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -40,10 +41,8 @@ type ContextProcessorRail struct {
 	// sessionMemoryEnabled 是否启用会话记忆
 	sessionMemoryEnabled bool
 	// sessionMemoryConfig 会话记忆配置
-	// ⤵️ TODO: 后续回填 — 等 session memory 集成时初始化
 	sessionMemoryConfig *cecontext.SessionMemoryConfig
 	// sessionMemoryMgr 会话记忆管理器
-	// ⤵️ TODO: 后续回填 — 等 session memory 集成时初始化
 	sessionMemoryMgr *cecontext.SessionMemoryManager
 	// systemPromptBuilder 系统提示词构建器引用
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
@@ -94,6 +93,12 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	modelConfig := config.ModelRequestConfig
 	modelClientConfig := config.ModelClientConfig
 
+	// 绑定 session memory 模型默认值（对齐 Python: self._session_memory_config.model = model_config; self._session_memory_mgr.bind_model_defaults()）
+	if r.sessionMemoryConfig != nil && r.sessionMemoryMgr != nil {
+		r.sessionMemoryConfig.SetModelDefaults(modelConfig, modelClientConfig)
+		r.sessionMemoryMgr.BindModelDefaults(modelConfig, modelClientConfig)
+	}
+
 	var baseProcessors []ceiface.ProcessorSpec
 	if r.preset {
 		baseProcessors = r.buildPresetProcessors(modelConfig, modelClientConfig)
@@ -122,12 +127,14 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	return nil
 }
 
-// Uninit Rail 注销钩子：清除处理器和 offload 节。
+// Uninit Rail 注销钩子：关闭会话记忆管理器，清除处理器和 offload 节。
 //
 // Python: ContextProcessorRail.uninit(agent)
 func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
-	// 关闭会话记忆管理器（预留）
-	// TODO(#通用): 后续回填 session memory manager shutdown
+	// 关闭会话记忆管理器（对齐 Python: if self._session_memory_mgr is not None: self._session_memory_mgr.shutdown()）
+	if r.sessionMemoryMgr != nil {
+		r.sessionMemoryMgr.Shutdown()
+	}
 
 	config := getReactAgentConfig(agent)
 	if config != nil {
@@ -168,8 +175,19 @@ func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainter
 // Python: ContextProcessorRail.after_model_call(ctx)
 func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
-	// TODO(#通用): 后续回填 session memory update_inherited_system_prompt
-	// TODO(#通用): 后续回填 session memory maybe_schedule_update
+
+	// 会话记忆调度（对齐 Python: self._session_memory_mgr.update_inherited_system_prompt(ctx); await self._maybe_schedule_session_memory_update(ctx)）
+	if r.sessionMemoryMgr != nil {
+		// 提取系统提示词并设置到 updater（对齐 Python: update_inherited_system_prompt）
+		if inputs := cbc.Inputs(); inputs != nil {
+			if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok && mcInputs != nil {
+				r.sessionMemoryMgr.UpdateInheritedSystemPrompt(mcInputs.Messages)
+			}
+		}
+		// 调度后台更新（对齐 Python: maybe_schedule_update）
+		r.maybeScheduleSessionMemoryUpdate(ctx, cbc)
+	}
+
 	return nil
 }
 
@@ -227,6 +245,20 @@ func WithUserProcessors(procs []ceiface.ProcessorSpec) ContextProcessorRailOptio
 // WithSessionMemoryEnabled 设置是否启用会话记忆
 func WithSessionMemoryEnabled(enabled bool) ContextProcessorRailOption {
 	return func(r *ContextProcessorRail) { r.sessionMemoryEnabled = enabled }
+}
+
+// WithSessionMemoryConfig 设置会话记忆配置。
+// 对齐 Python: ContextProcessorRail(session_memory=SessionMemoryConfig | dict | None)
+// 传入配置时自动启用 sessionMemoryEnabled。
+func WithSessionMemoryConfig(cfg *cecontext.SessionMemoryConfig) ContextProcessorRailOption {
+	return func(r *ContextProcessorRail) {
+		if cfg != nil {
+			r.sessionMemoryConfig = cfg
+			r.sessionMemoryEnabled = true
+			// 构造时立即初始化 SessionMemoryManager（对齐 Python: self._session_memory_mgr = SessionMemoryManager(self._session_memory_config)）
+			r.sessionMemoryMgr = cecontext.NewSessionMemoryManager(*cfg)
+		}
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -329,6 +361,45 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	}
 	section := sections.BuildReloadSection(lang)
 	r.systemPromptBuilder.AddSection(section)
+}
+
+// maybeScheduleSessionMemoryUpdate 调度会话记忆更新。
+//
+// 对齐 Python: ContextProcessorRail._maybe_schedule_session_memory_update(ctx)
+// 仅在 session_memory 启用且 mgr 存在时调用 MaybeScheduleUpdate。
+func (r *ContextProcessorRail) maybeScheduleSessionMemoryUpdate(
+	ctx context.Context,
+	cbc *sainterfaces.AgentCallbackContext,
+) {
+	if !r.sessionMemoryEnabled || r.sessionMemoryMgr == nil {
+		return
+	}
+
+	// 获取 workspace 和 session（对齐 Python: workspace=self.workspace; ctx.session）
+	ws := r.Workspace()
+	var workspaceDir string
+	if ws != nil {
+		workspaceDir = ws.RootPath
+	}
+
+	sess := cbc.Session()
+	if workspaceDir == "" || sess == nil {
+		return
+	}
+
+	// 获取 ModelContext（对齐 Python: ctx.context）
+	mc := cbc.ModelContext()
+	if mc == nil {
+		// 尝试从 Agent → DeepAgentInterface → ReactAgent → ContextEngine → GetContext
+		if deepAgent, ok := cbc.Agent().(hinterfaces.DeepAgentInterface); ok && deepAgent != nil {
+			reactAgent := deepAgent.ReactAgent()
+			if reactAgent != nil && reactAgent.ContextEngine() != nil {
+				mc = reactAgent.ContextEngine().GetContext("default_context_id", sess.GetSessionID())
+			}
+		}
+	}
+
+	r.sessionMemoryMgr.MaybeScheduleUpdate(ctx, sess, mc, workspaceDir)
 }
 
 // getReactAgentConfig 从 BaseAgent 获取 ReActAgentConfig。

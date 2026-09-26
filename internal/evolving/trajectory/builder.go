@@ -155,6 +155,11 @@ func (b *TrajectoryBuilder) SessionID() string {
 	return b.sessionID
 }
 
+// GetSteps 返回已累积步骤的只读切片。
+func (b *TrajectoryBuilder) GetSteps() []*TrajectoryStep {
+	return b.steps
+}
+
 // Build 组装最终 Trajectory。
 //
 // Python: TrajectoryBuilder.build()

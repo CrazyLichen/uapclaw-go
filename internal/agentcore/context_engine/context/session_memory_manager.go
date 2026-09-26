@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	crypto_rand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -75,11 +76,38 @@ type SessionMemoryDirectUpdater struct {
 	inheritedSystemPrompt string
 }
 
-// SessionMemoryAgentUpdater agent_edit 模式的会话记忆更新器（骨架）。
-// ⤵️ 6.x 回填：完整实现需要 ReActAgent
+// SessionMemoryAgentUpdater agent_edit 模式的会话记忆更新器。
+// 通过创建专用 ReActAgent（含 edit_file 工具）编辑笔记文件。
+//
+// agent_edit 模式需要延迟创建 ReActAgent（避免循环依赖），
+// 由 SetAgent 方法在首次调用前注入 agent 实例。
+// PrimeNotesFn 回调用于预填充文件读取状态（由外部 filesystem 包实现）。
+//
+// Python: SessionMemoryUpdateAgent (openjiuwen/core/context_engine/context/session_memory_manager.py L214-466)
 type SessionMemoryAgentUpdater struct {
-	config SessionMemoryConfig
+	config                SessionMemoryConfig
+	agent                 SessionMemoryAgent
+	inheritedSystemPrompt string
+	toolNamespace         string
+	workspaceRoot         string
+	// primeNotesFn 预填充文件读取状态的回调（避免 context → filesystem 循环依赖）
+	// 对齐 Python: _prime_notes_file_as_read()
+	primeNotesFn func(notesPath string, currentNotes string)
 }
+
+// SessionMemoryAgent agent_edit 模式专用 Agent 接口。
+// 由外部创建的 ReActAgent 实现，避免 context 包直接依赖 agents 包。
+//
+// Python: self._agent (ReActAgent)
+type SessionMemoryAgent interface {
+	// Invoke 执行 agent 调用
+	Invoke(ctx context.Context, inputs map[string]any, opts ...SessionMemoryAgentOption) (map[string]any, error)
+	// SetInheritedSystemPrompt 设置继承的系统提示词到 agent config
+	SetInheritedSystemPrompt(prompt string)
+}
+
+// SessionMemoryAgentOption agent 调用选项（简化版）。
+type SessionMemoryAgentOption any
 
 // SessionMemoryManager 会话记忆管理器，协调何时触发更新、后台任务调度和文件管理。
 //
@@ -435,27 +463,86 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 	return fmt.Errorf("direct_replace 模型调用失败（重试 %d 次）: %w", attempts, lastErr)
 }
 
-// NewSessionMemoryAgentUpdater 创建 agent_edit 模式的会话记忆更新器骨架。
+// NewSessionMemoryAgentUpdater 创建 agent_edit 模式的会话记忆更新器。
 func NewSessionMemoryAgentUpdater(config SessionMemoryConfig) *SessionMemoryAgentUpdater {
 	return &SessionMemoryAgentUpdater{
-		config: config,
+		config:        config,
+		toolNamespace: fmt.Sprintf("session_memory_update_%s", generateShortID()),
 	}
 }
 
-// Invoke 执行记忆更新（agent_edit 模式尚未实现）。
-func (u *SessionMemoryAgentUpdater) Invoke(_ context.Context, _ SessionMemoryUpdateOptions) error {
-	return fmt.Errorf("agent_edit 模式尚未实现（⤵️ 6.x 回填）")
+// SetPrimeNotesFn 设置预填充文件读取状态的回调。
+// 对齐 Python: _prime_notes_file_as_read() — 由外部 filesystem 包注入实现。
+func (u *SessionMemoryAgentUpdater) SetPrimeNotesFn(fn func(notesPath string, currentNotes string)) {
+	u.primeNotesFn = fn
 }
 
-// BindModelDefaults 绑定默认模型配置（agent_edit 模式尚未实现，空操作）。
+// BindModelDefaults 绑定默认模型配置。
+// 对齐 Python: SessionMemoryUpdateAgent.bind_model_defaults()
 func (u *SessionMemoryAgentUpdater) BindModelDefaults(
-	_ *llm_schema.ModelRequestConfig,
-	_ *llm_schema.ModelClientConfig,
+	modelConfig *llm_schema.ModelRequestConfig,
+	clientConfig *llm_schema.ModelClientConfig,
 ) {
+	if u.config.Model == nil {
+		u.config.Model = modelConfig
+	}
+	if u.config.ModelClient == nil {
+		u.config.ModelClient = clientConfig
+	}
 }
 
-// SetInheritedSystemPrompt 设置继承的系统提示词（agent_edit 模式尚未实现，空操作）。
-func (u *SessionMemoryAgentUpdater) SetInheritedSystemPrompt(_ string) {
+// SetInheritedSystemPrompt 设置继承的系统提示词。
+// 对齐 Python: SessionMemoryUpdateAgent.set_inherited_system_prompt()
+func (u *SessionMemoryAgentUpdater) SetInheritedSystemPrompt(prompt string) {
+	u.inheritedSystemPrompt = prompt
+	if u.agent != nil {
+		u.agent.SetInheritedSystemPrompt(prompt)
+	}
+}
+
+// SetAgent 设置 agent_edit 模式的 Agent 实例。
+// 外部创建 ReActAgent + EditFileTool 后通过此方法注入，避免循环依赖。
+func (u *SessionMemoryAgentUpdater) SetAgent(agent SessionMemoryAgent) {
+	u.agent = agent
+}
+
+// Invoke 执行记忆更新：通过 agent_edit 模式调用 agent 编辑笔记文件。
+//
+// 对齐 Python: SessionMemoryUpdateAgent.invoke() → _ensure_agent → _prime_notes_file_as_read → invoke
+func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error {
+	if u.config.Model == nil || u.config.ModelClient == nil {
+		return fmt.Errorf("agent_edit 模式模型配置缺失: Model=%v, ModelClient=%v", u.config.Model, u.config.ModelClient)
+	}
+
+	if u.agent == nil {
+		return fmt.Errorf("agent_edit 模式 Agent 未初始化：请先调用 SetAgent 注入 ReActAgent 实例")
+	}
+
+	// 预填充文件读取状态（对齐 Python: _prime_notes_file_as_read）
+	if u.primeNotesFn != nil {
+		u.primeNotesFn(opts.NotesPath, opts.CurrentNotes)
+	}
+
+	// 构建提示词（对齐 Python: query = build_session_memory_prompt(str(notes_path), current_notes)）
+	query := buildSessionMemoryPrompt(opts.NotesPath, opts.CurrentNotes)
+
+	// 调用 agent（对齐 Python: self._agent.invoke(inputs, session=session)）
+	inputs := map[string]any{
+		"query":          query,
+		"conversation_id": u.toolNamespace,
+	}
+
+	_, err := u.agent.Invoke(ctx, inputs)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "SESSION_MEMORY_AGENT_EDIT_ERROR").
+			Str("tool_namespace", u.toolNamespace).
+			Err(err).
+			Msg("agent_edit 模式执行失败")
+		return fmt.Errorf("agent_edit 模式执行失败: %w", err)
+	}
+
+	return nil
 }
 
 // NewSessionMemoryManager 创建会话记忆管理器。
@@ -1173,4 +1260,11 @@ func providerName(cfg *llm_schema.ModelClientConfig) string {
 		return ""
 	}
 	return cfg.ClientProvider
+}
+
+// generateShortID 生成短随机 ID（8 字符十六进制）。
+func generateShortID() string {
+	b := make([]byte, 4)
+	_, _ = crypto_rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }

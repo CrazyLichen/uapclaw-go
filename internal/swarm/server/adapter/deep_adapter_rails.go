@@ -391,11 +391,83 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 }
 
 // buildSkillCreateRail 构建技能创建护栏。
-// ⤵️ 10.6.3-10: SkillCreateRail
-// Python: _build_skill_create_rail() (line 2011-2050)
+// 对齐 Python: _build_skill_create_rail() (line 2011-2050)
+// Python: TeamSkillCreateRail(EvolutionRail, skills_dir=..., language=..., auto_trigger=..., min_team_members_for_create=...)
 func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 SkillCreateRail
-	return nil
+	skillsDir := d.getSkillsDir()
+	if skillsDir == "" {
+		logger.Warn(logComponent).Msg("buildSkillCreateRail: skillsDir 为空，跳过创建")
+		return nil
+	}
+
+	language := d.getLanguage()
+	autoTrigger := d.getSkillCreateEnabled()
+	minMembers := d.getMinTeamMembersForCreate()
+
+	rail := evolution.NewTeamSkillCreateRail(skillsDir,
+		evolution.WithTeamSkillCreateAutoTrigger(autoTrigger),
+		evolution.WithTeamSkillCreateMinTeamMembers(minMembers),
+		evolution.WithTeamSkillCreateLanguage(language),
+	)
+
+	d.skillCreateRail = rail
+	logger.Info(logComponent).
+		Str("skills_dir", skillsDir).
+		Bool("auto_trigger", autoTrigger).
+		Int("min_team_members", minMembers).
+		Msg("TeamSkillCreateRail 创建成功")
+	return rail
+}
+
+// getSkillsDir 获取技能目录路径。
+// 对齐 Python: _get_skills_dir() — 从 workspace 或 config 中获取
+func (d *DeepAdapter) getSkillsDir() string {
+	// 优先从 config 读取
+	if d.configCache != nil {
+		if dir, ok := d.configCache["skills_dir"].(string); ok && dir != "" {
+			return dir
+		}
+	}
+	// fallback: workspace 下的 skills 子目录
+	wsDir := d.getAgentWorkspaceDir()
+	if wsDir != "" {
+		return wsDir + "/skills"
+	}
+	return ""
+}
+
+// getLanguage 获取语言设置。
+func (d *DeepAdapter) getLanguage() string {
+	if d.configCache != nil {
+		if lang, ok := d.configCache["language"].(string); ok && lang != "" {
+			return lang
+		}
+	}
+	return "cn"
+}
+
+// getSkillCreateEnabled 获取是否启用技能创建。
+// 对齐 Python: _get_skill_create_enabled()
+func (d *DeepAdapter) getSkillCreateEnabled() bool {
+	if d.configCache != nil {
+		if enabled, ok := d.configCache["skill_create_enabled"].(bool); ok {
+			return enabled
+		}
+	}
+	return true // 默认启用
+}
+
+// getMinTeamMembersForCreate 获取创建团队技能的最小团队成员数。
+func (d *DeepAdapter) getMinTeamMembersForCreate() int {
+	if d.configCache != nil {
+		if min, ok := d.configCache["min_team_members_for_create"].(float64); ok {
+			return int(min)
+		}
+		if min, ok := d.configCache["min_team_members_for_create"].(int); ok {
+			return min
+		}
+	}
+	return 2 // 默认值
 }
 
 // buildStreamEventRail 构建流事件护栏。
@@ -842,9 +914,18 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		}
 	}
 
-	// 8. SkillCreateRail
+	// 8. SkillCreateRail — plan 模式下注册
 	// Python: skill_create_enabled = _get_skill_create_enabled(self._config_cache)
-	// ⤵️ 待回填: SkillCreateRail 处理
+	if d.skillCreateRail == nil {
+		rail := d.buildSkillCreateRail()
+		if rail != nil && d.instance != nil {
+			if err := d.instance.RegisterRail(ctx, rail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("Failed to register TeamSkillCreateRail")
+			} else {
+				logger.Info(logComponent).Msg("TeamSkillCreateRail registered (plan mode)")
+			}
+		}
+	}
 
 	// 9. SubagentRail — plan 模式下注册
 	if d.subagentRail == nil {

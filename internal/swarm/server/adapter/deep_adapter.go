@@ -154,8 +154,8 @@ type DeepAdapter struct {
 	// ✅ 已回填：SkillEvolutionRail（对齐 Python: _skill_evolution_rail: SkillEvolutionRail | None）
 	skillEvolutionRail *evolution.SkillEvolutionRail
 	// skillCreateRail 技能创建护栏
-	// ⤵️ 10.6.3-10: SkillCreateRail
-	skillCreateRail sainterfaces.AgentRail
+	// 对齐 Python: _skill_create_rail: TeamSkillCreateRail | None
+	skillCreateRail *evolution.TeamSkillCreateRail
 	// teamSkillEvolutionRail 团队技能演进护栏
 	// ✅ P4 已回填：TeamSkillEvolutionRail（对齐 Python: _team_skill_evolution_rail: TeamSkillEvolutionRail | None）
 	teamSkillEvolutionRail *evolution.TeamSkillEvolutionRail

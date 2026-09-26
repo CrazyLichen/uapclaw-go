@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -21,12 +22,38 @@ import (
 
 // findTeamSkillRail 查找 TeamSkillEvolutionRail。
 // Python: _find_team_skill_rail() (line 3651-3670)
-// ⤵️ 10.6.3-10: Rail 实例化/注入部分依赖对应章节实现
 func (d *DeepAdapter) findTeamSkillRail() *evolution.TeamSkillEvolutionRail {
 	if d.teamSkillEvolutionRail != nil {
 		return d.teamSkillEvolutionRail
 	}
-	// ⤵️ 10.6.3-10: 在 instance.rails 中查找 TeamSkillEvolutionRail
+	// 在 instance 的已注册 rails 中查找
+	if d.instance != nil {
+		found := d.instance.FindRailsByType(reflect.TypeOf(&evolution.TeamSkillEvolutionRail{}))
+		if len(found) > 0 {
+			if r, ok := found[0].(*evolution.TeamSkillEvolutionRail); ok {
+				d.teamSkillEvolutionRail = r
+				return r
+			}
+		}
+	}
+	return nil
+}
+
+// findSkillCreateRail 查找 TeamSkillCreateRail。
+// 对齐 Python: _find_skill_create_rail()
+func (d *DeepAdapter) findSkillCreateRail() *evolution.TeamSkillCreateRail {
+	if d.skillCreateRail != nil {
+		return d.skillCreateRail
+	}
+	// 在 instance 的已注册 rails 中查找
+	if d.instance != nil {
+		found := d.instance.FindRailsByType(reflect.TypeOf(&evolution.TeamSkillCreateRail{}))
+		if len(found) > 0 {
+			if r, ok := found[0].(*evolution.TeamSkillCreateRail); ok {
+				return r
+			}
+		}
+	}
 	return nil
 }
 

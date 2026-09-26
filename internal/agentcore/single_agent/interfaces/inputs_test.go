@@ -382,6 +382,28 @@ func TestTaskIterationInputs_默认零值(t *testing.T) {
 	assert.Nil(t, inputs.Result)
 	assert.Equal(t, "", inputs.Query)
 	assert.False(t, inputs.IsFollowUp)
+	assert.Equal(t, "", inputs.RetrievalQuery)
+}
+
+// TestTaskIterationInputs_RetrievalQuery 验证 RetrievalQuery 字段赋值
+// Python: getattr(ctx.inputs, "retrieval_query", None) or query
+// Go 通过结构体字段直接访问，trajectory_generator 在 self_refine 场景设置此字段
+func TestTaskIterationInputs_RetrievalQuery(t *testing.T) {
+	// RetrievalQuery 非空时，表示专用检索查询
+	inputs := &TaskIterationInputs{
+		Query:          "原始查询",
+		RetrievalQuery: "专用检索查询",
+	}
+	assert.Equal(t, "原始查询", inputs.Query)
+	assert.Equal(t, "专用检索查询", inputs.RetrievalQuery)
+
+	// RetrievalQuery 为空时，回退使用 Query
+	inputs2 := &TaskIterationInputs{
+		Query:          "回退查询",
+		RetrievalQuery: "",
+	}
+	assert.Equal(t, "回退查询", inputs2.Query)
+	assert.Equal(t, "", inputs2.RetrievalQuery)
 }
 
 // ──────────────────────────── MapInputs ────────────────────────────
