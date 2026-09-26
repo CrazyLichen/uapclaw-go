@@ -9,6 +9,8 @@
 
 实现顺序：**先 9.61a 再 9.61**（RecoveryManager 的 `PersistLeaderConfig` / `PersistAllocatorState` 依赖 metadata 函数）。
 
+> **实现偏差说明：** 设计文档中 9.61a 原计划放在 `agent_teams/runtime/metadata.go`，但因 `runtime` 包导入了 `agent` 包导致循环依赖（`agent → runtime → agent`），实际实现迁移到独立子包 `agent_teams/metadata/`。所有函数签名和语义不变，仅包路径调整。
+
 RecoverFromSession 函数（`team_agent.go:785`）仅定义签名，实现体标注 `TODO(#9.55)`，待 9.55 完整实现。
 
 ---
