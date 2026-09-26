@@ -638,6 +638,6 @@ func TestHandleRelationDedupe_非StringTmpBuffer(t *testing.T) {
 	queryStore := &mockSearchGraphStore{IsEmptyResult: false}
 	gm.DBBackend = queryStore
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }

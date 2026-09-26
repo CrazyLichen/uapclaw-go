@@ -519,7 +519,8 @@ func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*Gra
 	logger.Debug(logComponent).Str("step", "12_relation_filter").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
 
 	// 13. 关系去重
-	if err := gm.handleRelationDedupe(ctx, cfg.UserID, content, relations, state); err != nil {
+	relations, err = gm.handleRelationDedupe(ctx, cfg.UserID, content, relations, state)
+	if err != nil {
 		return nil, err
 	}
 	logger.Debug(logComponent).Str("step", "13_relation_dedupe").Str("user_id", cfg.UserID).Msg("AddMemory step completed")
@@ -1343,15 +1344,20 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 	}
 
 	// 等待所有 tasks 完成（对齐 Python: if state.tasks: await asyncio.wait(state.tasks)）
-	// 在 Go 中，tasks 已经在各自的 goroutine 中完成，结果已在 asyncTask 中
+	// asyncTask.Wait() 使用 sync.Once 缓存结果，可安全多次调用
+	for _, task := range state.Tasks {
+		if task != nil {
+			task.Wait()
+		}
+	}
 
 	// 获取实体去重 LLM 结果（对齐 Python: response_resolve_entity = await state.tasks.pop()）
 	var dedupeEntityRaw []any
 	if len(state.Tasks) > 0 {
-		// 取最后一个 task（即实体去重任务，对齐 Python: state.tasks.pop()）
+		// 取最后一个 task 的结果（即实体去重任务，对齐 Python: state.tasks.pop()）
 		dedupeTask := state.Tasks[len(state.Tasks)-1]
-		state.Tasks = state.Tasks[:len(state.Tasks)-1]
 		dedupeContent, dedupeErr := dedupeTask.Wait()
+		state.Tasks = state.Tasks[:len(state.Tasks)-1]
 		if dedupeErr != nil {
 			logger.Warn(logComponent).Err(dedupeErr).Msg("Graph Memory: entity dedup LLM failed")
 		} else {
@@ -1420,7 +1426,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 			}
 			state.PendingMerge[pair.Target.UUID] = pending
 			// 对齐 Python: await task — 等待合并完成
-			go func(t asyncTask, p *pendingMergeTask) {
+			go func(t *asyncTask, p *pendingMergeTask) {
 				content, err := t.Wait()
 				p.Result = content
 				p.Err = err
@@ -1591,9 +1597,19 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 				// 更新关系端点（对齐 Python: setattr(relation, field, tgt_uuid)）
 				switch field {
 				case "lhs":
-					relation.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
+					// 优先从 LookupTable 获取完整 Entity，找不到时回退到空壳构造
+					if e, ok := state.LookupTable.Entities[value]; ok {
+						relation.LHS = e
+					} else {
+						relation.LHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
+					}
 				case "rhs":
-					relation.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
+					// 优先从 LookupTable 获取完整 Entity，找不到时回退到空壳构造
+					if e, ok := state.LookupTable.Entities[value]; ok {
+						relation.RHS = e
+					} else {
+						relation.RHS = &graph.Entity{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: value}}}
+					}
 				}
 				if !containsRelationPtr(state.MemUpdateSkipEmbed.UpdatedRelation, relation) {
 					state.MemUpdateSkipEmbed.UpdatedRelation = append(state.MemUpdateSkipEmbed.UpdatedRelation, relation)
@@ -1613,7 +1629,7 @@ func (gm *GraphMemory) parseRelationFilteringResult(ctx context.Context, relatio
 // handleRelationDedupe 关系去重处理
 //
 // Python: _handle_relation_dedupe(user_id, content, relations, state)
-func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, state *GraphMemState) error {
+func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, state *GraphMemState) ([]*graph.Relation, error) {
 	// 移除待删除的关系（对齐 Python: for relation in state.to_remove: ...）
 	// 使用 filter 方式构建新切片，避免遍历中修改切片导致索引偏移
 	removeSet := make(map[string]struct{}, len(state.ToRemove))
@@ -1632,7 +1648,7 @@ func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, 
 	if state.Strategy.MergeRelations && len(state.TmpBuffer) > 0 {
 		isEmpty, err := gm.DBBackend.IsEmpty(ctx, graph.RelationCollection)
 		if err != nil || isEmpty {
-			return nil
+			return relations, nil
 		}
 
 		// 提取文本用于嵌入
@@ -1643,23 +1659,27 @@ func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, 
 			}
 		}
 		if len(texts) == 0 {
-			return nil
+			return relations, nil
 		}
 
 		embedder := gm.Embedder()
 		if embedder == nil {
-			return nil
+			return relations, nil
 		}
 
 		results, err := embedder.EmbedDocuments(ctx, texts, embedding.WithBatchSize(gm.Config.EmbedBatchSize))
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("Graph Memory: relation content embedding failed")
-			return nil
+			return relations, nil
 		}
 
-		return gm.relationDedupe(ctx, userID, content, relations, results, state)
+		err = gm.relationDedupe(ctx, userID, content, relations, results, state)
+		if err != nil {
+			return relations, err
+		}
+		return relations, nil
 	}
-	return nil
+	return relations, nil
 }
 
 // relationDedupe 关系去重
@@ -1851,11 +1871,11 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 	content string,
 	state *GraphMemState,
 	tzResponse string,
-) asyncTask {
-	ch := make(asyncTask, 1)
+) *asyncTask {
+	task := newAsyncTask()
 	go func() {
 		if gm.LLMClient == nil {
-			ch <- asyncResult{Content: "", Err: fmt.Errorf("LLM client is not set")}
+			task.Send("", fmt.Errorf("LLM client is not set"))
 			return
 		}
 		tzInfo := extraction.ParseJSON(tzResponse,
@@ -1878,9 +1898,9 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 		)
 
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		ch <- asyncResult{Content: assistantContent(resp), Err: err}
+		task.Send(assistantContent(resp), err)
 	}()
-	return ch
+	return task
 }
 
 // startEntityDedupeAsync 启动实体去重异步任务（返回 asyncTask，对齐 Python: state.tasks.append(...)）
@@ -1892,11 +1912,11 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 	candidateEntities []extraction.EntityDeclaration,
 	existingEntities []map[string]any,
 	state *GraphMemState,
-) asyncTask {
-	ch := make(asyncTask, 1)
+) *asyncTask {
+	task := newAsyncTask()
 	go func() {
 		if gm.LLMClient == nil {
-			ch <- asyncResult{Content: "", Err: fmt.Errorf("LLM client is not set")}
+			task.Send("", fmt.Errorf("LLM client is not set"))
 			return
 		}
 		entityTypesPtr := make([]*registry.EntityDef, len(state.EntityTypes))
@@ -1911,19 +1931,19 @@ func (gm *GraphMemory) startEntityDedupeAsync(
 		)
 
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		ch <- asyncResult{Content: assistantContent(resp), Err: err}
+		task.Send(assistantContent(resp), err)
 	}()
-	return ch
+	return task
 }
 
 // invokeLLMAsync 异步调用 LLM（返回 asyncTask，对齐 Python: asyncio.create_task(self._invoke_llm(...))）
-func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) asyncTask {
-	ch := make(asyncTask, 1)
+func (gm *GraphMemory) invokeLLMAsync(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) *asyncTask {
+	task := newAsyncTask()
 	go func() {
 		resp, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-		ch <- asyncResult{Content: assistantContent(resp), Err: err}
+		task.Send(assistantContent(resp), err)
 	}()
-	return ch
+	return task
 }
 
 // entityListFromState 从 state.RetrievedEntities 构建 map 列表

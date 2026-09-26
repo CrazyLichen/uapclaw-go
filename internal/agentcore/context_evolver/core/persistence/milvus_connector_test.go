@@ -216,7 +216,7 @@ func TestMapMetricType(t *testing.T) {
 func TestSaveToDB_空数据(t *testing.T) {
 	m := NewMilvusConnectorImpl()
 	m.SetClient(newFakeMilvusClient())
-	err := m.SaveToDB("ns", map[string]any{})
+	err := m.SaveToDB(context.Background(), "ns", map[string]any{})
 	assert.NoError(t, err)
 }
 
@@ -243,7 +243,7 @@ func TestSaveToDB_Upsert(t *testing.T) {
 	// 预置数据到 fake 存储（模拟已有数据被 upsert）
 	fake.directInsert(milvusDefaultCollectionName, "node1", "test_ns", "old content", []float32{1, 2, 3}, map[string]any{})
 
-	err := m.SaveToDB("test_ns", data)
+	err := m.SaveToDB(context.Background(), "test_ns", data)
 	require.NoError(t, err)
 }
 
@@ -257,7 +257,7 @@ func TestSaveToDB_跳过无Embedding(t *testing.T) {
 		"node2": map[string]any{"id": "node2", "content": "world"}, // 无 embedding
 	}
 
-	err := m.SaveToDB("ns", data)
+	err := m.SaveToDB(context.Background(), "ns", data)
 	assert.NoError(t, err)
 }
 
@@ -270,7 +270,7 @@ func TestSaveToDB_无Dim信息(t *testing.T) {
 		"node1": map[string]any{"id": "node1", "content": "hello"},
 	}
 
-	err := m.SaveToDB("ns", data)
+	err := m.SaveToDB(context.Background(), "ns", data)
 	assert.NoError(t, err)
 }
 
@@ -281,7 +281,7 @@ func TestLoadFromDB(t *testing.T) {
 
 	// LoadFromDB 通过 Query 实现，fake 返回空结果
 	// 因此测试无数据情况
-	loaded, err := m.LoadFromDB("test_ns")
+	loaded, err := m.LoadFromDB(context.Background(), "test_ns")
 	require.NoError(t, err)
 	assert.Len(t, loaded, 0)
 }
@@ -293,7 +293,7 @@ func TestExists_有数据(t *testing.T) {
 
 	// Exists 通过 Query 实现，fake 返回空结果
 	// 因此测试无数据情况（始终 false）
-	assert.False(t, m.Exists("test_ns"))
+	assert.False(t, m.Exists(context.Background(), "test_ns"))
 }
 
 func TestExists_集合不存在(t *testing.T) {
@@ -302,7 +302,7 @@ func TestExists_集合不存在(t *testing.T) {
 	fake.hasCollectionResult = false
 	m.SetClient(fake)
 
-	result := m.Exists("ns")
+	result := m.Exists(context.Background(), "ns")
 	assert.False(t, result)
 }
 
@@ -312,7 +312,7 @@ func TestDelete_有数据(t *testing.T) {
 	m.SetClient(fake)
 
 	// Delete 通过 Query + Delete 实现，fake Query 返回空
-	result := m.Delete("test_ns")
+	result := m.Delete(context.Background(), "test_ns")
 	assert.False(t, result) // Query 返回空 → 无数据可删
 }
 
@@ -322,7 +322,7 @@ func TestDelete_集合不存在(t *testing.T) {
 	fake.hasCollectionResult = false
 	m.SetClient(fake)
 
-	result := m.Delete("ns")
+	result := m.Delete(context.Background(), "ns")
 	assert.False(t, result)
 }
 
@@ -332,7 +332,7 @@ func TestSearch(t *testing.T) {
 	m.SetClient(fake)
 
 	// Search 通过 fake 返回空结果
-	results, err := m.Search("test_ns", []float32{1.0, 2.0, 3.0}, 10, "COSINE")
+	results, err := m.Search(context.Background(), "test_ns", []float32{1.0, 2.0, 3.0}, 10, "COSINE")
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
 }
@@ -342,7 +342,7 @@ func TestDeleteNodes_空列表(t *testing.T) {
 	fake := newFakeMilvusClient()
 	m.SetClient(fake)
 
-	result := m.DeleteNodes("ns", []string{})
+	result := m.DeleteNodes(context.Background(), "ns", []string{})
 	assert.True(t, result)
 }
 
@@ -350,7 +350,7 @@ func TestClose(t *testing.T) {
 	m := NewMilvusConnectorImpl()
 	fake := newFakeMilvusClient()
 	m.SetClient(fake)
-	m.Close()
+	m.Close(context.Background())
 	assert.True(t, fake.closed)
 }
 

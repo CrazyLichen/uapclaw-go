@@ -45,7 +45,7 @@ type PollController interface {
 	// PausePolls 暂停事件总线的周期轮询
 	PausePolls()
 	// ResumePolls 恢复事件总线的周期轮询
-	ResumePolls()
+	ResumePolls(ctx context.Context)
 }
 
 // DispatcherHost 组合 host 契约，供 kernel 和 dispatcher 使用。

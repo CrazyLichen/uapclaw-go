@@ -61,8 +61,8 @@ type fakePollCtrl struct {
 	resumed bool
 }
 
-func (f *fakePollCtrl) PausePolls()  { f.paused = true }
-func (f *fakePollCtrl) ResumePolls() { f.resumed = true }
+func (f *fakePollCtrl) PausePolls()                         { f.paused = true }
+func (f *fakePollCtrl) ResumePolls(_ context.Context) { f.resumed = true }
 
 // ──────────────────────────── BaseCoordinationHandler 测试 ────────────────────────────
 

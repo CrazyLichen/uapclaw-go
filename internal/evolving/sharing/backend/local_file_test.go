@@ -264,7 +264,7 @@ func TestLocalFileBackend_HasSkillPackage(t *testing.T) {
 	b := newTestBackend(t)
 	ctx := context.Background()
 
-	if b.HasSkillPackage(ctx, "sk_has") {
+	if ok, _ := b.HasSkillPackage(ctx, "sk_has"); ok {
 		t.Error("尚未上传应返回 false")
 	}
 
@@ -275,7 +275,7 @@ func TestLocalFileBackend_HasSkillPackage(t *testing.T) {
 		t.Fatalf("UploadSkillPackage 失败: %v", err)
 	}
 
-	if !b.HasSkillPackage(ctx, "sk_has") {
+	if ok, _ := b.HasSkillPackage(ctx, "sk_has"); !ok {
 		t.Error("上传后应返回 true")
 	}
 }
@@ -476,10 +476,10 @@ func TestLocalFileBackend_HasSkillPackage_EmptyID(t *testing.T) {
 	b := newTestBackend(t)
 	ctx := context.Background()
 
-	if b.HasSkillPackage(ctx, "") {
+	if ok, _ := b.HasSkillPackage(ctx, ""); ok {
 		t.Error("空 skill_id 应返回 false")
 	}
-	if b.HasSkillPackage(ctx, "   ") {
+	if ok, _ := b.HasSkillPackage(ctx, "   "); ok {
 		t.Error("空白 skill_id 应返回 false")
 	}
 }

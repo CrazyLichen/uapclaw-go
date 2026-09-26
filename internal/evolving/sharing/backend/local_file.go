@@ -280,13 +280,19 @@ func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, 
 // 读操作，不加锁。
 //
 // Python: LocalFileBackend.has_skill_package()
-func (b *LocalFileBackend) HasSkillPackage(ctx context.Context, skillID string) bool {
+func (b *LocalFileBackend) HasSkillPackage(ctx context.Context, skillID string) (bool, error) {
 	resolvedID := strings.TrimSpace(skillID)
 	if resolvedID == "" {
-		return false
+		return false, nil
 	}
 	_, err := os.Stat(b.packageArchive(resolvedID))
-	return err == nil
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // UploadSkillPackage 上传初始技能包（不可变，重复上传为 no-op）。

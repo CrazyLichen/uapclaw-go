@@ -2001,11 +2001,23 @@ func (r *SkillEvolutionRail) detectExperienceDetailRead(inputs *agentinterfaces.
 func (r *SkillEvolutionRail) extractToolContent(inputs *agentinterfaces.ToolCallInputs) string {
 	result := inputs.ToolResult
 	if result != nil {
-		if data, ok := result.(map[string]any); ok {
-			if content, ok := data["skill_content"].(string); ok && content != "" {
+		// Python: data = getattr(result, "data", None); if isinstance(data, dict): ...
+		// 先检查 result["data"] 中间层，再直接从 result 取
+		if resultMap, ok := result.(map[string]any); ok {
+			// 优先从 data 子字段取
+			if dataField, ok := resultMap["data"].(map[string]any); ok {
+				if content, ok := dataField["skill_content"].(string); ok && content != "" {
+					return content
+				}
+				if content, ok := dataField["content"].(string); ok && content != "" {
+					return content
+				}
+			}
+			// data 子字段不存在或未命中，回退到直接从 result 取
+			if content, ok := resultMap["skill_content"].(string); ok && content != "" {
 				return content
 			}
-			if content, ok := data["content"].(string); ok && content != "" {
+			if content, ok := resultMap["content"].(string); ok && content != "" {
 				return content
 			}
 		}

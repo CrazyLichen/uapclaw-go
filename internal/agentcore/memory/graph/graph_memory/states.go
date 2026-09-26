@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
@@ -131,13 +132,34 @@ type asyncResult struct {
 
 // asyncTask 异步 LLM 调用任务，通过 channel 传递结果
 // 对齐 Python: asyncio.create_task 返回的 Future，await future 获取结果
-type asyncTask chan asyncResult
+// Python 的 Future 可多次 await 不消耗结果；Go 的 channel 只能读取一次，
+// 因此用 sync.Once + 缓存实现可重复 Wait。
+type asyncTask struct {
+	// ch 结果通道（由 goroutine 写入一次）
+	ch chan asyncResult
+	// once 保证只从 channel 读取一次
+	once sync.Once
+	// cached 缓存的结果，供后续 Wait 复用
+	cached asyncResult
+}
+
+// newAsyncTask 创建新的异步任务
+func newAsyncTask() *asyncTask {
+	return &asyncTask{ch: make(chan asyncResult, 1)}
+}
 
 // Wait 阻塞等待异步任务完成，返回结果
-// 对齐 Python: await future
-func (t asyncTask) Wait() (string, error) {
-	result := <-t
-	return result.Content, result.Err
+// 对齐 Python: await future（可多次调用，结果缓存后立即返回）
+func (t *asyncTask) Wait() (string, error) {
+	t.once.Do(func() {
+		t.cached = <-t.ch
+	})
+	return t.cached.Content, t.cached.Err
+}
+
+// Send 向任务发送结果（goroutine 内部调用）
+func (t *asyncTask) Send(content string, err error) {
+	t.ch <- asyncResult{Content: content, Err: err}
 }
 
 // embedResult 实体名称嵌入结果
@@ -188,12 +210,12 @@ type relationFilterTaskItem struct {
 // Python: GraphMemState (states.py)
 type GraphMemState struct {
 	// 任务缓冲区（对齐 Python: state.tasks: list[asyncio.Task]）
-	Tasks                   []asyncTask
-	MergingTasks            []asyncTask
-	MergingTasksEntities    map[asyncTask]*graph.Entity
+	Tasks                   []*asyncTask
+	MergingTasks            []*asyncTask
+	MergingTasksEntities    map[*asyncTask]*graph.Entity
 	PendingMerge            map[string]*pendingMergeTask
 	RelationDeferredUpdates map[string][]deferredRelationUpdate
-	RelationFilterTasks     map[asyncTask]*relationFilterTaskItem
+	RelationFilterTasks     map[*asyncTask]*relationFilterTaskItem
 
 	// 嵌入任务（对齐 Python: state.tasks.append(asyncio.create_task(self.embedder.embed_documents(...)))）
 	// Python 中嵌入任务存放在 state.tasks 中，Go 中因类型不同（[][]float64 vs string）单独存储
@@ -352,12 +374,12 @@ func NewGraphMemUpdate() *GraphMemUpdate {
 // Python: GraphMemState()
 func NewGraphMemState() *GraphMemState {
 	return &GraphMemState{
-		Tasks:                   make([]asyncTask, 0),
-		MergingTasks:            make([]asyncTask, 0),
-		MergingTasksEntities:    make(map[asyncTask]*graph.Entity),
+		Tasks:                   make([]*asyncTask, 0),
+		MergingTasks:            make([]*asyncTask, 0),
+		MergingTasksEntities:    make(map[*asyncTask]*graph.Entity),
 		PendingMerge:            make(map[string]*pendingMergeTask),
 		RelationDeferredUpdates: make(map[string][]deferredRelationUpdate),
-		RelationFilterTasks:     make(map[asyncTask]*relationFilterTaskItem),
+		RelationFilterTasks:     make(map[*asyncTask]*relationFilterTaskItem),
 
 		ToRemove:  make(map[string]*graph.Relation),
 		TmpBuffer: make([]any, 0),

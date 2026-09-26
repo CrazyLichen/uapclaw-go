@@ -22,7 +22,7 @@ type SharingBackend interface {
 	// DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。
 	DownloadBundles(ctx context.Context, skillID string, query QueryKeywords, topK int) ([]SharedSkillBundle, error)
 	// HasSkillPackage Hub 是否已有该技能包。
-	HasSkillPackage(ctx context.Context, skillID string) bool
+	HasSkillPackage(ctx context.Context, skillID string) (bool, error)
 	// UploadSkillPackage 上传初始技能包（不可变，重复上传为 no-op）。
 	UploadSkillPackage(ctx context.Context, skillID string, packageBytes []byte, meta SkillPackageMeta) error
 	// DownloadSkillPackage 下载技能包字节。

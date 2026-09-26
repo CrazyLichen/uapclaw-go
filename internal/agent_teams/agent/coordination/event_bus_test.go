@@ -207,7 +207,7 @@ func TestEventBus_PausePolls和ResumePolls(t *testing.T) {
 	countBeforePause := func() int { mu.Lock(); defer mu.Unlock(); return pollCount }()
 	time.Sleep(200 * time.Millisecond) // 等暂停期间
 	countAfterPause := func() int { mu.Lock(); defer mu.Unlock(); return pollCount }()
-	bus.ResumePolls()
+	bus.ResumePolls(context.Background())
 	if bus.PollsPaused() {
 		t.Error("ResumePolls 后不应暂停")
 	}

@@ -390,14 +390,6 @@ func (es *ExperienceSharer) DownloadSkillPackage(ctx context.Context, skillID st
 	if resolvedID == "" {
 		return nil
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn(logComponent).
-				Str("skill_id", resolvedID).
-				Any("panic", r).
-				Msg("[ExperienceSharer] download_skill_package failed")
-		}
-	}()
 	data, err := es.backend.DownloadSkillPackage(ctx, resolvedID)
 	if err != nil {
 		logger.Warn(logComponent).
@@ -413,14 +405,6 @@ func (es *ExperienceSharer) DownloadSkillPackage(ctx context.Context, skillID st
 //
 // Python: ExperienceSharer.get_skill_package_meta()
 func (es *ExperienceSharer) GetSkillPackageMeta(ctx context.Context, skillID string) *SkillPackageMeta {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn(logComponent).
-				Str("skill_id", skillID).
-				Any("panic", r).
-				Msg("[ExperienceSharer] get_skill_package_meta failed")
-		}
-	}()
 	meta, err := es.backend.GetSkillPackageMeta(ctx, strings.TrimSpace(skillID))
 	if err != nil {
 		logger.Warn(logComponent).
@@ -517,7 +501,14 @@ func (es *ExperienceSharer) syncSkillPackage(ctx context.Context, bundle *Shared
 		bundle.SkillName = resolvedName
 	}
 
-	alreadyPresent := es.backend.HasSkillPackage(ctx, skillID)
+	alreadyPresent, hasErr := es.backend.HasSkillPackage(ctx, skillID)
+	if hasErr != nil {
+		logger.Warn(logComponent).
+			Str("skill_id", skillID).
+			Err(hasErr).
+			Msg("[ExperienceSharer] has_skill_package failed; treating as not present")
+		// 异常时吞掉 error，视为不存在，对齐 Python 行为
+	}
 	if alreadyPresent {
 		logger.Debug(logComponent).
 			Str("skill_id", skillID).
@@ -537,6 +528,7 @@ func (es *ExperienceSharer) syncSkillPackage(ctx context.Context, bundle *Shared
 		SkillID:     skillID,
 		SkillName:   firstNonEmpty(resolvedName, skillName),
 		Description: description,
+		UploadedAt:  time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if err := es.backend.UploadSkillPackage(ctx, skillID, packageBytes, meta); err != nil {
 		logger.Warn(logComponent).

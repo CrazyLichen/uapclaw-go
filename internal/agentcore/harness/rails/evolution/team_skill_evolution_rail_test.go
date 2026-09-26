@@ -373,6 +373,36 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 	}
 	assert.Equal(t, "fallback content", teamExtractToolContent(inputs2))
 
+	// .data 中间层含 skill_content（对齐 Python: getattr(result, "data", None)）
+	inputs5 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{"data": map[string]any{"skill_content": "from data layer"}},
+	}
+	assert.Equal(t, "from data layer", teamExtractToolContent(inputs5))
+
+	// .data 中间层含 content
+	inputs6 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{"data": map[string]any{"content": "data content"}},
+	}
+	assert.Equal(t, "data content", teamExtractToolContent(inputs6))
+
+	// .data 优先于顶层字段
+	inputs7 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{
+			"data":           map[string]any{"skill_content": "data wins"},
+			"skill_content":  "top level",
+		},
+	}
+	assert.Equal(t, "data wins", teamExtractToolContent(inputs7))
+
+	// .data 不是 dict 时回退到顶层
+	inputs8 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{
+			"data":          "not a dict",
+			"skill_content": "top level fallback",
+		},
+	}
+	assert.Equal(t, "top level fallback", teamExtractToolContent(inputs8))
+
 	// string 类型结果
 	inputs3 := &agentinterfaces.ToolCallInputs{
 		ToolResult: "direct string result",

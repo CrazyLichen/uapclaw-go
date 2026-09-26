@@ -224,6 +224,56 @@ func TestTodoToolNames(t *testing.T) {
 	}
 }
 
+func TestInferStringError_大小写不敏感(t *testing.T) {
+	tests := []struct {
+		input string
+		want  *bool
+	}{
+		// success=False 各种大小写
+		{"success=False", boolPtr(true)},
+		{"SUCCESS=FALSE", boolPtr(true)},
+		{"Success : False", boolPtr(true)},
+		{"success=false", boolPtr(true)},
+		// exit_code 大小写
+		{"Exit_Code=1", boolPtr(true)},
+		{"EXIT CODE 1", boolPtr(true)},
+		{"ReturnCode=0", boolPtr(false)},
+		{"return_code = 0", boolPtr(false)},
+		// 普通文本
+		{"normal result", nil},
+		{"", nil},
+	}
+	for _, tt := range tests {
+		got := inferStringError(tt.input)
+		if (got == nil) != (tt.want == nil) {
+			t.Errorf("inferStringError(%q) = %v, want %v", tt.input, got, tt.want)
+		} else if got != nil && *got != *tt.want {
+			t.Errorf("inferStringError(%q) = %v, want %v", tt.input, *got, *tt.want)
+		}
+	}
+}
+
+func TestPrecompiledRegexes_大小写不敏感(t *testing.T) {
+	// successFalseRe 应匹配大小写不敏感
+	if !successFalseRe.MatchString("success=False") {
+		t.Error("successFalseRe 应匹配 success=False")
+	}
+	if !successFalseRe.MatchString("SUCCESS=FALSE") {
+		t.Error("successFalseRe 应匹配 SUCCESS=FALSE")
+	}
+	if !successFalseRe.MatchString("Success : False") {
+		t.Error("successFalseRe 应匹配 Success : False")
+	}
+
+	// exitCodeRe 应匹配大小写不敏感
+	if !exitCodeRe.MatchString("Exit_Code=1") {
+		t.Error("exitCodeRe 应匹配 Exit_Code=1")
+	}
+	if !exitCodeRe.MatchString("RETURN CODE 1") {
+		t.Error("exitCodeRe 应匹配 RETURN CODE 1")
+	}
+}
+
 // ── 辅助 ──
 
 func assertBoolPtr(t *testing.T, got *bool, want bool) {

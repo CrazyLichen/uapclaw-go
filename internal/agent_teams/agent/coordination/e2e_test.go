@@ -93,7 +93,7 @@ func TestEndToEnd_Kernel完整链路(t *testing.T) {
 	}
 
 	// 恢复轮询以便后续测试
-	k.EventBus().ResumePolls()
+	k.EventBus().ResumePolls(context.Background())
 
 	// 3. 验证 team_cleaned → lifecycle.OnCleaned（Leader 不关闭）
 	k.Enqueue(types.CoordinationEvent{

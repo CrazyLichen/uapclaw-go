@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
@@ -549,4 +550,54 @@ func TestExtractConversationExcerpt_toolName回退(t *testing.T) {
 	}
 	excerpt := extractConversationExcerpt(messages)
 	assert.Contains(t, excerpt, "my_tool")
+}
+
+func TestSkillEvolutionRail_ExtractToolContent_data中间层(t *testing.T) {
+	r := &SkillEvolutionRail{}
+
+	// .data 中间层含 skill_content
+	inputs := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{"data": map[string]any{"skill_content": "from data"}},
+	}
+	assert.Equal(t, "from data", r.extractToolContent(inputs))
+
+	// .data 中间层含 content
+	inputs2 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{"data": map[string]any{"content": "data content"}},
+	}
+	assert.Equal(t, "data content", r.extractToolContent(inputs2))
+
+	// .data 优先于顶层字段
+	inputs3 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{
+			"data":          map[string]any{"skill_content": "data wins"},
+			"skill_content": "top level",
+		},
+	}
+	assert.Equal(t, "data wins", r.extractToolContent(inputs3))
+
+	// .data 不是 dict 时回退到顶层
+	inputs4 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{
+			"data":          "not a dict",
+			"skill_content": "top fallback",
+		},
+	}
+	assert.Equal(t, "top fallback", r.extractToolContent(inputs4))
+
+	// 顶层 skill_content
+	inputs5 := &agentinterfaces.ToolCallInputs{
+		ToolResult: map[string]any{"skill_content": "direct"},
+	}
+	assert.Equal(t, "direct", r.extractToolContent(inputs5))
+
+	// string 类型结果
+	inputs6 := &agentinterfaces.ToolCallInputs{
+		ToolResult: "string result",
+	}
+	assert.Equal(t, "string result", r.extractToolContent(inputs6))
+
+	// nil 结果
+	inputs7 := &agentinterfaces.ToolCallInputs{}
+	assert.Equal(t, "", r.extractToolContent(inputs7))
 }

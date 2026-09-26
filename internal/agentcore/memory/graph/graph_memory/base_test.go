@@ -43,17 +43,17 @@ func newTestGraphMemory(opts ...GraphMemoryOption) (*GraphMemory, error) {
 }
 
 // newAsyncTaskWithResult 构造已完成的 asyncTask（带结果）
-func newAsyncTaskWithResult(content string) asyncTask {
-	ch := make(asyncTask, 1)
-	ch <- asyncResult{Content: content}
-	return ch
+func newAsyncTaskWithResult(content string) *asyncTask {
+	task := newAsyncTask()
+	task.Send(content, nil)
+	return task
 }
 
 // newAsyncTaskWithError 构造已完成的 asyncTask（带错误）
-func newAsyncTaskWithError(err error) asyncTask {
-	ch := make(asyncTask, 1)
-	ch <- asyncResult{Err: err}
-	return ch
+func newAsyncTaskWithError(err error) *asyncTask {
+	task := newAsyncTask()
+	task.Send("", err)
+	return task
 }
 
 // TestNewGraphMemory_构造 测试 GraphMemory 构造
@@ -558,7 +558,7 @@ func TestHandleRelationDedupe_空TmpBuffer(t *testing.T) {
 	state := NewGraphMemState()
 	state.Strategy.MergeRelations = true
 	relations := []*graph.Relation{graph.NewRelation()}
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
 	assert.NoError(t, err)
 }
 
@@ -567,7 +567,7 @@ func TestHandleRelationDedupe_禁用合并(t *testing.T) {
 	gm, _ := newTestGraphMemory()
 	state := NewGraphMemState()
 	state.Strategy.MergeRelations = false
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }
 
@@ -1970,7 +1970,7 @@ func TestHandleRelationDedupe_有TmpBuffer(t *testing.T) {
 	state.TmpBuffer = append(state.TmpBuffer, "relation content")
 
 	relations := []*graph.Relation{graph.NewRelation()}
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
 	assert.NoError(t, err)
 }
 
@@ -2348,7 +2348,7 @@ func TestHandleRelationDedupe_无嵌入器(t *testing.T) {
 	queryStore := &mockSearchGraphStore{IsEmptyResult: false}
 	gm.DBBackend = queryStore
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }
 
@@ -2370,7 +2370,7 @@ func TestHandleRelationDedupe_有嵌入结果(t *testing.T) {
 	rel.RHS = entityShell("e2")
 	rel.Content = "test"
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", []*graph.Relation{rel}, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", []*graph.Relation{rel}, state)
 	assert.NoError(t, err)
 }
 
@@ -2384,7 +2384,7 @@ func TestHandleRelationDedupe_空文本(t *testing.T) {
 	queryStore := &mockSearchGraphStore{IsEmptyResult: false}
 	gm.DBBackend = queryStore
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }
 
@@ -2402,7 +2402,7 @@ func TestHandleRelationDedupe_有删除项(t *testing.T) {
 
 	state.ToRemove["rel-1"] = &graph.Relation{NamedGraphObject: graph.NamedGraphObject{BaseGraphObject: graph.BaseGraphObject{UUID: "rel-1"}}}
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", relations, state)
 	assert.NoError(t, err)
 }
 
@@ -2561,7 +2561,7 @@ func TestHandleRelationDedupe_有嵌入失败(t *testing.T) {
 	queryStore := &mockSearchGraphStore{IsEmptyResult: false}
 	gm.DBBackend = queryStore
 
-	err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
+	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }
 

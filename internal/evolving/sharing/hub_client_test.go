@@ -65,11 +65,11 @@ func (f *fakeHubBackend) DownloadBundles(ctx context.Context, skillID string, qu
 }
 
 // HasSkillPackage Hub 是否已有该技能包
-func (f *fakeHubBackend) HasSkillPackage(ctx context.Context, skillID string) bool {
+func (f *fakeHubBackend) HasSkillPackage(ctx context.Context, skillID string) (bool, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	_, ok := f.packages[skillID]
-	return ok
+	return ok, nil
 }
 
 // UploadSkillPackage 上传技能包

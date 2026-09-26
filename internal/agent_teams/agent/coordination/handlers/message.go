@@ -69,13 +69,16 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 	role := h.blueprint.Role()
 
 	// Leader 额外逻辑
+	// 对齐 Python: 只有 MESSAGE 时调用 _ack_user_bound_message，BROADCAST 不调用
 	if role == schema.TeamRoleLeader {
-		h.ackUserBoundMessage(event)
+		if em != nil && em.EventType == events.TeamEventMessage {
+			h.ackUserBoundMessage(event)
+		}
 		h.notifyHumanAgentInbound(event)
 	}
 
 	// 所有成员：恢复轮询 + 排空未读邮箱
-	h.poll.ResumePolls()
+	h.poll.ResumePolls(ctx)
 	h.processUnreadMessages(ctx, h.blueprint.MemberName())
 
 	logger.Debug(logComponent).

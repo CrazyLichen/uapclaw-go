@@ -82,12 +82,18 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 		// 对齐 Python: deliver_input(task_assigned_to_self 格式化内容)
 		// TODO(#9.63): 等任务格式化模板就绪后补充
 		content := formatTaskAssignedToSelf(em.Payload, role == schema.TeamRoleHumanAgent)
-		if err := h.round.DeliverInput(ctx, content, false); err != nil {
+		// 对齐 Python: deliver_input 默认 use_steer=True
+		if err := h.round.DeliverInput(ctx, content, true); err != nil {
 			logger.Error(logComponent).
 				Err(err).
 				Str("event_type", em.EventType).
 				Msg("onTaskClaimed: deliver_input 失败")
 		}
+		return
+	}
+
+	// 对齐 Python: 非自身认领时，human-agent 直接 return（不转发到 on_task_board_event）
+	if role == schema.TeamRoleHumanAgent {
 		return
 	}
 
@@ -111,6 +117,14 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 		return
 	}
 
+	// 对齐 Python: 非目标成员（审批结果不是给自己的）转发到 on_task_board_event
+	payloadMember, _ := em.Payload["member_name"].(string)
+	memberName := h.blueprint.MemberName()
+	if payloadMember != "" && payloadMember != memberName {
+		h.OnTaskBoardEvent(ctx, event)
+		return
+	}
+
 	approved, _ := em.Payload["approved"].(bool)
 	// TODO(#9.63): 等任务格式化模板就绪后补充 task_plan_approved/rejected_to_self
 	_ = approved
@@ -130,7 +144,7 @@ func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event types.Coo
 	em := event.Transport
 
 	// 恢复轮询
-	h.poll.ResumePolls()
+	h.poll.ResumePolls(ctx)
 
 	// 提醒空闲 agent 查看任务板
 	memberName, _ := em.Payload["member_name"].(string)

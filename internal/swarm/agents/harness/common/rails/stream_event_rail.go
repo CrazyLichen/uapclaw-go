@@ -81,6 +81,35 @@ func (pc *pauseCond) Wait() {
 	pc.mu.Unlock()
 }
 
+// WaitWithContext 阻塞直到未暂停或 context 被取消，避免 goroutine 泄漏
+func (pc *pauseCond) WaitWithContext(ctx context.Context) error {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	if !pc.paused {
+		return nil
+	}
+
+	// 启动辅助 goroutine：context 取消时唤醒 cond.Wait()
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			pc.cond.Broadcast()
+		case <-done:
+		}
+	}()
+	defer close(done)
+
+	for pc.paused {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		pc.cond.Wait()
+	}
+	return nil
+}
+
 // Pause 设置暂停状态，对齐 Python: asyncio.Event.clear()
 func (pc *pauseCond) Pause() {
 	pc.mu.Lock()
@@ -299,7 +328,7 @@ func (r *JiuClawStreamEventRail) BeforeModelCall(ctx context.Context, cbc *saint
 	sid := r.resolveSID(cbc, cbc.Session())
 
 	// 暂停检查点，对齐 Python: await self._get_pause_event(sid).wait()
-	r.checkpointWait(sid)
+	r.checkpointWait(ctx, sid)
 
 	// 终止检查，对齐 Python: if self._abort_requested.get(sid, False): raise asyncio.CancelledError
 	if r.isAbortRequested(sid) {
@@ -327,7 +356,7 @@ func (r *JiuClawStreamEventRail) BeforeToolCall(ctx context.Context, cbc *sainte
 	sid := r.resolveSID(cbc, cbc.Session())
 
 	// 暂停检查点
-	r.checkpointWait(sid)
+	r.checkpointWait(ctx, sid)
 
 	// 终止检查
 	if r.isAbortRequested(sid) {
@@ -473,11 +502,14 @@ func (r *JiuClawStreamEventRail) getPauseCond(sid string) *pauseCond {
 }
 
 // checkpointWait 执行暂停检查点，对齐 Python: await self._get_pause_event(sid).wait()
-func (r *JiuClawStreamEventRail) checkpointWait(sid string) {
+// 接受 ctx 参数，当 context 取消时退出等待，避免 goroutine 泄漏
+func (r *JiuClawStreamEventRail) checkpointWait(ctx context.Context, sid string) {
 	r.mu.Lock()
 	pc := r.getPauseCond(sid)
 	r.mu.Unlock()
-	pc.Wait()
+	if err := pc.WaitWithContext(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sid).Msg("checkpointWait context cancelled")
+	}
 }
 
 // isAbortRequested 检查是否请求了终止，对齐 Python: self._abort_requested.get(sid, False)

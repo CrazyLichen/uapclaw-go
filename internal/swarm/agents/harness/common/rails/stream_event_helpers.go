@@ -28,6 +28,13 @@ var todoToolNames = map[string]bool{
 	"todo_modify": true,
 }
 
+var (
+	// 对齐 Python: re.search(r"\bsuccess\s*[:=]\s*False\b", text, re.IGNORECASE)
+	successFalseRe = regexp.MustCompile(`(?i)\bsuccess\s*[:=]\s*False\b`)
+	// 对齐 Python: exit_code/returncode/return_code 正则，re.IGNORECASE
+	exitCodeRe = regexp.MustCompile(`(?i)\b(?:exit(?:[_ ]?code)?|returncode|return[_ ]code)\s*[:= ]\s*(-?\d+)\b`)
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BoolishFalse 判断值是否为"假-ish"，对齐 Python: _boolish_false
@@ -308,16 +315,15 @@ func inferStringError(s string) *bool {
 		}
 	}
 	// success=False 模式，对齐 Python: re.search(r"\bsuccess\s*[:=]\s*False\b", text, re.IGNORECASE)
-	if matched, _ := regexp.MatchString(`\bsuccess\s*[:=]\s*False\b`, text); matched {
+	if successFalseRe.MatchString(text) {
 		return boolPtr(true)
 	}
 	// [ERROR] 前缀
 	if strings.HasPrefix(text, "[ERROR]") {
 		return boolPtr(true)
 	}
-	// exit_code 模式
-	re := regexp.MustCompile(`\b(?:exit(?:[_ ]?code)?|returncode|return[_ ]code)\s*[:= ]\s*(-?\d+)\b`)
-	if m := re.FindStringSubmatch(text); len(m) > 1 {
+	// exit_code 模式，使用预编译正则
+	if m := exitCodeRe.FindStringSubmatch(text); len(m) > 1 {
 		if code := parseIntSafe(m[1]); code != 0 {
 			return boolPtr(true)
 		}

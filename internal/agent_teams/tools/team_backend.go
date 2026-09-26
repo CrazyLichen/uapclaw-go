@@ -332,11 +332,19 @@ func (tb *TeamBackend) IsTeamCompleted(ctx context.Context) (*atschema.TeamCompl
 	if err != nil {
 		return nil, err
 	}
+	// 对齐 Python: if not tasks: return None — 无任务时无法判定完成
+	if len(tasks) == 0 {
+		return nil, nil
+	}
 	// 步骤 4: 判定 — 所有任务终态
 	for _, t := range tasks {
 		if !fsm.IsTaskTerminal(t.Status) {
 			return nil, nil
 		}
+	}
+	// 对齐 Python: if not members: return None — 无成员时无法判定完成
+	if len(members) == 0 {
+		return nil, nil
 	}
 	// 步骤 5: 判定 — 所有成员 settled
 	for _, m := range members {

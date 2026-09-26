@@ -46,8 +46,8 @@ type fakePollCtrl struct {
 	paused bool
 }
 
-func (f *fakePollCtrl) PausePolls()  { f.paused = true }
-func (f *fakePollCtrl) ResumePolls() { f.paused = false }
+func (f *fakePollCtrl) PausePolls()                         { f.paused = true }
+func (f *fakePollCtrl) ResumePolls(_ context.Context) { f.paused = false }
 
 // newTestDispatcher 创建测试用 EventDispatcher（4 参数，内部自动创建 handler）。
 func newTestDispatcher(host types.DispatcherHost, bp types.DispatcherBlueprint, pollCtrl types.PollController) *EventDispatcher {

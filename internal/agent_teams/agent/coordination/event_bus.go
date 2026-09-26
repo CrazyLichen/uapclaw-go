@@ -172,14 +172,14 @@ func (b *EventBus) PausePolls() {
 
 // ResumePolls 恢复周期轮询。
 // Python: EventBus.resume_polls
-func (b *EventBus) ResumePolls() {
+func (b *EventBus) ResumePolls(ctx context.Context) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.pollsPaused || !b.running {
 		return
 	}
 	logger.Info(logComponent).Str("role", string(b.role)).Msg("EventBus resuming polls")
-	b.startPollTasksLocked(context.Background())
+	b.startPollTasksLocked(ctx)
 	b.pollsPaused = false
 }
 

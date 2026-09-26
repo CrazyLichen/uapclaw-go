@@ -54,11 +54,11 @@ func (m *mockBackend) DownloadBundles(_ context.Context, skillID string, query Q
 	return bundles, nil
 }
 
-func (m *mockBackend) HasSkillPackage(_ context.Context, skillID string) bool {
+func (m *mockBackend) HasSkillPackage(_ context.Context, skillID string) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	_, ok := m.skillPackages[skillID]
-	return ok
+	return ok, nil
 }
 
 func (m *mockBackend) UploadSkillPackage(_ context.Context, skillID string, packageBytes []byte, meta SkillPackageMeta) error {
@@ -222,7 +222,7 @@ func TestExperienceSharer_FlushPendingUploads_UploadsInitialPackage(t *testing.T
 		t.Fatalf("FlushPendingUploads 失败: %s", result.Reason)
 	}
 
-	if !bk.HasSkillPackage(ctx, "sk_init") {
+	if ok, _ := bk.HasSkillPackage(ctx, "sk_init"); !ok {
 		t.Error("首次 flush 后 Hub 应已有技能包")
 	}
 }
@@ -344,7 +344,7 @@ func TestExperienceSharer_FlushPendingUploads_EmptyPackageBytes(t *testing.T) {
 	if !result.OK {
 		t.Logf("结果: OK=%v Reason=%q", result.OK, result.Reason)
 	}
-	if bk.HasSkillPackage(ctx, "sk_empty") {
+	if ok, _ := bk.HasSkillPackage(ctx, "sk_empty"); ok {
 		t.Error("空 packageBytes 不应上传技能包")
 	}
 }

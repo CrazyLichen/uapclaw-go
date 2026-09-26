@@ -41,7 +41,7 @@ func TestJiuClawStreamEventRail_PauseResume(t *testing.T) {
 
 	// checkpointWait 应阻塞直到 Resume
 	start := time.Now()
-	rail.checkpointWait("session-1")
+	rail.checkpointWait(context.Background(), "session-1")
 	elapsed := time.Since(start)
 
 	if elapsed < 40*time.Millisecond {
@@ -62,7 +62,30 @@ func TestJiuClawStreamEventRail_Abort(t *testing.T) {
 		t.Error("abort 标记应已设置")
 	}
 	// checkpointWait 不应阻塞（Abort 会 Resume）
-	rail.checkpointWait("session-1")
+	rail.checkpointWait(context.Background(), "session-1")
+}
+
+func TestJiuClawStreamEventRail_CheckpointWait_Context取消(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	rail.Pause("session-1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		rail.checkpointWait(ctx, "session-1")
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+		// context 取消后应退出等待
+	case <-time.After(200 * time.Millisecond):
+		t.Error("context 取消后 checkpointWait 应返回")
+	}
 }
 
 func TestJiuClawStreamEventRail_ResetAbort(t *testing.T) {
@@ -86,7 +109,7 @@ func TestJiuClawStreamEventRail_ResetForNewTask(t *testing.T) {
 	rail.ResetForNewTask("session-1")
 
 	// 应恢复暂停
-	rail.checkpointWait("session-1") // 不应阻塞
+	rail.checkpointWait(context.Background(), "session-1") // 不应阻塞
 
 	// 应清除 conversation_id 和 session
 	rail.mu.Lock()
@@ -491,6 +514,57 @@ func TestPauseCond_并发Wait(t *testing.T) {
 	pc.Resume()
 	wg.Wait()
 	// 所有 goroutine 应已返回
+}
+
+func TestPauseCond_WaitWithContext_取消(t *testing.T) {
+	pc := newPauseCond()
+	pc.Pause()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		err := pc.WaitWithContext(ctx)
+		done <- err
+	}()
+
+	// 短暂延迟确保 goroutine 进入等待
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("context 取消时应返回错误")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Error("context 取消后 WaitWithContext 应返回")
+	}
+}
+
+func TestPauseCond_WaitWithContext_正常恢复(t *testing.T) {
+	pc := newPauseCond()
+	pc.Pause()
+
+	ctx := context.Background()
+
+	done := make(chan error, 1)
+	go func() {
+		err := pc.WaitWithContext(ctx)
+		done <- err
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	pc.Resume()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("正常恢复时不应返回错误: %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Error("Resume 后 WaitWithContext 应返回")
+	}
 }
 
 // ──────────────────────────── 确认接口实现 ────────────────────────────

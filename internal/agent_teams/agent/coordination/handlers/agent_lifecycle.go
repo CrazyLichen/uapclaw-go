@@ -73,8 +73,8 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 		logger.Debug(logComponent).Msg("on_user_input: payload 缺少 content，跳过")
 		return
 	}
-	// 对齐 Python: self._round.deliver_input(content)
-	if err := h.round.DeliverInput(ctx, content, false); err != nil {
+	// 对齐 Python: self._round.deliver_input(content)（Python 默认 use_steer=True）
+	if err := h.round.DeliverInput(ctx, content, true); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", string(event.Inner.EventType)).

@@ -19,13 +19,13 @@ import (
 // Python: openjiuwen/extensions/context_evolver/core/db_connector/milvus_connector.py
 type MilvusConnector interface {
 	// SaveToDB 保存数据到 Milvus 命名空间
-	SaveToDB(namespace string, data map[string]any) error
+	SaveToDB(ctx context.Context, namespace string, data map[string]any) error
 	// LoadFromDB 从 Milvus 命名空间加载数据
-	LoadFromDB(namespace string) (map[string]any, error)
+	LoadFromDB(ctx context.Context, namespace string) (map[string]any, error)
 	// Exists 检查命名空间是否有数据
-	Exists(namespace string) bool
+	Exists(ctx context.Context, namespace string) bool
 	// Delete 删除命名空间数据
-	Delete(namespace string) bool
+	Delete(ctx context.Context, namespace string) bool
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -139,7 +139,7 @@ func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[st
 	switch h.resolvedType {
 	case "milvus":
 		ns := Namespace(userID, algoName)
-		return h.milvusConnector.SaveToDB(ns, nodesDict)
+		return h.milvusConnector.SaveToDB(context.Background(), ns, nodesDict)
 	default:
 		return h.saveJSON(userID, algoName, nodesDict)
 	}
@@ -153,7 +153,7 @@ func (h *MemoryPersistenceHelper) Load(userID, algoName string) (map[string]any,
 	switch h.resolvedType {
 	case "milvus":
 		ns := Namespace(userID, algoName)
-		return h.milvusConnector.LoadFromDB(ns)
+		return h.milvusConnector.LoadFromDB(context.Background(), ns)
 	default:
 		return h.loadJSON(userID, algoName)
 	}
@@ -257,7 +257,7 @@ func (h *MemoryPersistenceHelper) probeMilvus() bool {
 	// 非 MilvusConnectorImpl 实现时，尝试 Exists 操作
 	// 如果不 panic 且不报错，认为可达
 	defer func() { _ = recover() }()
-	return h.milvusConnector.Exists("__probe__") || true
+	return h.milvusConnector.Exists(context.Background(), "__probe__") || true
 }
 
 // jsonPath 根据模板生成 JSON 文件路径。

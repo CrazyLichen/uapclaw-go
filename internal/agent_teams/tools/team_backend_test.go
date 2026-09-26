@@ -804,6 +804,14 @@ func TestIsTeamCompleted_已完成(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
 
+	// 创建一个终态任务（对齐 Python: if not tasks: return None — 无任务时无法判定完成）
+	tb.db.Task().CreateTask(ctx, &database.TeamTaskBase{
+		TaskID:   "task-1",
+		TeamName: tb.TeamName(),
+		Title:    "测试任务",
+		Status:   string(atschema.TaskStatusCompleted),
+	})
+
 	// 关闭所有成员
 	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdownRequested))
 	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdown))
@@ -813,7 +821,7 @@ func TestIsTeamCompleted_已完成(t *testing.T) {
 		t.Fatalf("IsTeamCompleted() error = %v", err)
 	}
 	if snapshot == nil {
-		t.Error("IsTeamCompleted() = nil（所有成员已终态），want non-nil")
+		t.Error("IsTeamCompleted() = nil（所有任务终态+所有成员已终态），want non-nil")
 	}
 }
 

@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -185,7 +186,7 @@ func TestMemoryPersistenceHelper_String(t *testing.T) {
 // mockMilvusConnector MilvusConnector 的 mock 实现
 type mockMilvusConnector struct{}
 
-func (m *mockMilvusConnector) SaveToDB(_ string, _ map[string]any) error   { return nil }
-func (m *mockMilvusConnector) LoadFromDB(_ string) (map[string]any, error) { return nil, nil }
-func (m *mockMilvusConnector) Exists(_ string) bool                        { return false }
-func (m *mockMilvusConnector) Delete(_ string) bool                        { return false }
+func (m *mockMilvusConnector) SaveToDB(_ context.Context, _ string, _ map[string]any) error   { return nil }
+func (m *mockMilvusConnector) LoadFromDB(_ context.Context, _ string) (map[string]any, error) { return nil, nil }
+func (m *mockMilvusConnector) Exists(_ context.Context, _ string) bool                        { return false }
+func (m *mockMilvusConnector) Delete(_ context.Context, _ string) bool                        { return false }

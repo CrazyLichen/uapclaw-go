@@ -136,13 +136,11 @@ func NewMilvusConnectorImpl(opts ...MilvusConnectorOption) *MilvusConnectorImpl 
 // 无 embedding 的节点被跳过（Milvus 要求非 null 向量）。
 //
 // 对齐 Python: MilvusConnector.save_to_db(namespace, data)
-func (m *MilvusConnectorImpl) SaveToDB(namespace string, data map[string]any) error {
+func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, data map[string]any) error {
 	if len(data) == 0 {
 		logger.Info(milvusLogComponent).Msg("save_to_db: 空 data，跳过")
 		return nil
 	}
-
-	ctx := context.Background()
 
 	// 自动检测嵌入维度（对齐 Python: 从首个有 embedding 的节点推断 dim）
 	var dim int
@@ -259,9 +257,7 @@ func (m *MilvusConnectorImpl) SaveToDB(namespace string, data map[string]any) er
 // LoadFromDB 从 Milvus 命名空间加载所有节点。实现 persistence.MilvusConnector 接口。
 //
 // 对齐 Python: MilvusConnector.load_from_db(namespace)
-func (m *MilvusConnectorImpl) LoadFromDB(namespace string) (map[string]any, error) {
-	ctx := context.Background()
-
+func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) (map[string]any, error) {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("load_from_db: 获取客户端失败: %w", err)
@@ -302,9 +298,7 @@ func (m *MilvusConnectorImpl) LoadFromDB(namespace string) (map[string]any, erro
 // Exists 检查命名空间是否有数据。实现 persistence.MilvusConnector 接口。
 //
 // 对齐 Python: MilvusConnector.exists(namespace)
-func (m *MilvusConnectorImpl) Exists(namespace string) bool {
-	ctx := context.Background()
-
+func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return false
@@ -326,9 +320,7 @@ func (m *MilvusConnectorImpl) Exists(namespace string) bool {
 // Delete 删除命名空间的所有数据。实现 persistence.MilvusConnector 接口。
 //
 // 对齐 Python: MilvusConnector.delete(namespace)
-func (m *MilvusConnectorImpl) Delete(namespace string) bool {
-	ctx := context.Background()
-
+func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return false
@@ -374,12 +366,10 @@ func (m *MilvusConnectorImpl) Delete(namespace string) bool {
 // Search 在命名空间内执行 ANN 搜索。
 //
 // 对齐 Python: MilvusConnector.search(namespace, embedding, top_k, metric)
-func (m *MilvusConnectorImpl) Search(namespace string, embedding []float32, topK int, metric string) ([]map[string]any, error) {
+func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embedding []float32, topK int, metric string) ([]map[string]any, error) {
 	if topK <= 0 {
 		topK = 10
 	}
-
-	ctx := context.Background()
 
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
@@ -448,12 +438,10 @@ func (m *MilvusConnectorImpl) Search(namespace string, embedding []float32, topK
 // DeleteNodes 按 ID 删除指定节点。
 //
 // 对齐 Python: MilvusConnector.delete_nodes(namespace, node_ids)
-func (m *MilvusConnectorImpl) DeleteNodes(namespace string, nodeIDs []string) bool {
+func (m *MilvusConnectorImpl) DeleteNodes(ctx context.Context, namespace string, nodeIDs []string) bool {
 	if len(nodeIDs) == 0 {
 		return true
 	}
-
-	ctx := context.Background()
 
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
@@ -477,9 +465,7 @@ func (m *MilvusConnectorImpl) DeleteNodes(namespace string, nodeIDs []string) bo
 // ListNamespaces 列出所有命名空间。
 //
 // 对齐 Python: MilvusConnector.list_namespaces()
-func (m *MilvusConnectorImpl) ListNamespaces() []string {
-	ctx := context.Background()
-
+func (m *MilvusConnectorImpl) ListNamespaces(ctx context.Context) []string {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return nil
@@ -511,9 +497,7 @@ func (m *MilvusConnectorImpl) ListNamespaces() []string {
 // Count 统计节点数量。
 //
 // 对齐 Python: MilvusConnector.count(namespace)
-func (m *MilvusConnectorImpl) Count(namespace string) int {
-	ctx := context.Background()
-
+func (m *MilvusConnectorImpl) Count(ctx context.Context, namespace string) int {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
 		return 0
@@ -545,13 +529,13 @@ func (m *MilvusConnectorImpl) Count(namespace string) int {
 // Flush 刷写缓冲区。
 //
 // 对齐 Python: MilvusConnector.flush()
-func (m *MilvusConnectorImpl) Flush() {
+func (m *MilvusConnectorImpl) Flush(ctx context.Context) {
 	m.mu.RLock()
 	c := m.client
 	m.mu.RUnlock()
 
 	if c != nil {
-		_ = c.Flush(context.Background(), milvusclient.NewFlushOption(m.collectionName))
+		_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
 		logger.Debug(milvusLogComponent).Str("collection", m.collectionName).Msg("Flush 完成")
 	}
 }
@@ -559,12 +543,12 @@ func (m *MilvusConnectorImpl) Flush() {
 // Close 关闭连接。
 //
 // 对齐 Python: MilvusConnector.close()
-func (m *MilvusConnectorImpl) Close() {
+func (m *MilvusConnectorImpl) Close(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.client != nil {
-		_ = m.client.Close(context.Background())
+		_ = m.client.Close(ctx)
 		m.client = nil
 		logger.Info(milvusLogComponent).
 			Str("host", m.host).Int("port", m.port).
