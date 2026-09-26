@@ -726,7 +726,7 @@ func TestExternalMemoryRail_Init_注册工具和注入提示词(t *testing.T) {
 	}
 	// BaseMemoryProvider 嵌入后 SystemPromptBlock 返回空串，用一个自定义 provider 测试注入
 	providerWithPrompt := &fakeProviderWithPrompt{
-		fakeProvider: *provider,
+		fakeProvider: provider,
 		promptBlock:  "记住用户偏好",
 	}
 
@@ -973,7 +973,7 @@ func TestExternalMemoryRail_BeforeModelCall_Prefetch超时(t *testing.T) {
 
 // fakeProviderWithPrompt 带自定义 SystemPromptBlock 的 fakeProvider
 type fakeProviderWithPrompt struct {
-	fakeProvider
+	*fakeProvider
 	promptBlock string
 }
 

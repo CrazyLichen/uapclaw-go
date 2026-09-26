@@ -1353,7 +1353,7 @@ func (gm *GraphMemory) entityMerge(ctx context.Context, extractedDeclarations []
 	// asyncTask.Wait() 使用 sync.Once 缓存结果，可安全多次调用
 	for _, task := range state.Tasks {
 		if task != nil {
-			task.Wait()
+			_, _ = task.Wait()
 		}
 	}
 

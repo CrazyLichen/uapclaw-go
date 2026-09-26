@@ -205,11 +205,11 @@ func TestUnpackAgentInputs(t *testing.T) {
 	assert.Equal(t, "hello", query)
 
 	// fallbackAgentID
-	agentID, role, query = unpackAgentInputs(nil, "fallback-id")
+	agentID, _, _ = unpackAgentInputs(nil, "fallback-id")
 	assert.Equal(t, "fallback-id", agentID)
 
 	// 空 inputs
-	agentID, role, query = unpackAgentInputs(nil, "")
+	agentID, _, _ = unpackAgentInputs(nil, "")
 	assert.Equal(t, "unknown", agentID)
 }
 

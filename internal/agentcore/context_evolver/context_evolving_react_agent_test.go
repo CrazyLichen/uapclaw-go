@@ -136,13 +136,13 @@ func TestContextEvolvingReActAgent_GetMemoryService(t *testing.T) {
 	assert.Equal(t, svc, agent.GetMemoryService())
 }
 
-// TestContextEvolvingReActAgent_AutoConfigure_无APIKey 验证 API_KEY 缺失时返回错误。
+// TestContextEvolvingReActAgent_AutoConfigure_无APIKey 验证 API_KEY 缺失时静默跳过（对齐 Python）。
 func TestContextEvolvingReActAgent_AutoConfigure_无APIKey(t *testing.T) {
 	ceconfig.Delete("API_KEY")
 	agent := &ContextEvolvingReActAgent{}
 	err := agent.AutoConfigure(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "API_KEY not configured")
+	// 对齐 Python: if not api_key: return（静默跳过，不返回错误）
+	require.NoError(t, err)
 }
 
 // TestContextEvolvingReActAgent_AutoConfigure_有APIKey 验证有 API_KEY 时成功配置。
