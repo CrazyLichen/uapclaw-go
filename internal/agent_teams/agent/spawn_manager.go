@@ -125,6 +125,19 @@ func (m *SpawnManager) SpawnTeammate(
 	return nil
 }
 
+// SpawnedHandles 返回已生成句柄的快照（key=memberName）。
+// RecoveryManager 通过此方法判断哪些 teammate 有存活句柄。
+// Python: SpawnManager.spawned_handles (property)
+func (m *SpawnManager) SpawnedHandles() map[string]spawn.SpawnHandle {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make(map[string]spawn.SpawnHandle, len(m.spawnedHandles))
+	for k, v := range m.spawnedHandles {
+		result[k] = v
+	}
+	return result
+}
+
 // LookupInprocessAgent 查找进程内 agent 引用。
 // Python: SpawnManager.lookup_inprocess_agent(member_name)
 //
