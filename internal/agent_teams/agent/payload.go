@@ -62,7 +62,7 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 
 	// TODO(#9.65): 构建成员消息配置 memberTransport = b.BuildMemberMessagerConfig(ctx.MemberName)
 	// 当 MessagerTransportConfig 实现后，序列化为 map
-	var transport any = nil
+	var transport map[string]any = nil
 
 	coordination := map[string]any{
 		"team_name":          teamName,
@@ -89,19 +89,12 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 // Python: SpawnPayloadBuilder.build_member_context(member_spec)
 func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
 	return atschema.TeamRuntimeContext{
-		Role:       memberSpec.RoleType,
-		MemberName: memberSpec.MemberName,
-		Persona:    memberSpec.Persona,
-		TeamSpec:   b.ctx.TeamSpec,
-		MessagerConfig: func() *atschema.MessagerTransportConfig {
-			if v := b.BuildMemberMessagerConfig(memberSpec.MemberName); v != nil {
-				if cfg, ok := v.(*atschema.MessagerTransportConfig); ok {
-					return cfg
-				}
-			}
-			return nil
-		}(),
-		DBConfig: b.ctx.DBConfig,
+		Role:            memberSpec.RoleType,
+		MemberName:      memberSpec.MemberName,
+		Persona:         memberSpec.Persona,
+		TeamSpec:        b.ctx.TeamSpec,
+		MessagerConfig:  b.BuildMemberMessagerConfig(memberSpec.MemberName),
+		DBConfig:        b.ctx.DBConfig,
 	}
 }
 
@@ -109,7 +102,7 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 // Python: SpawnPayloadBuilder.build_member_messager_config(member_name)
 //
 // TODO(#9.65): MessagerTransportConfig 深拷贝和端口分配实现后替换
-func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) any {
+func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atschema.MessagerTransportConfig {
 	return nil
 }
 

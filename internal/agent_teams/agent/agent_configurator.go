@@ -575,7 +575,7 @@ func (c *AgentConfigurator) BuildMemberContext(memberSpec atschema.TeamMemberSpe
 
 // BuildMemberMessagerConfig 构建成员消息配置（代理到 SpawnPayloadBuilder）。
 // Python: AgentConfigurator.build_member_messager_config(member_name)
-func (c *AgentConfigurator) BuildMemberMessagerConfig(memberName string) any {
+func (c *AgentConfigurator) BuildMemberMessagerConfig(memberName string) *atschema.MessagerTransportConfig {
 	if c.spawnPayloadBuilder == nil {
 		return nil
 	}
