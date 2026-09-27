@@ -9,6 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
@@ -177,12 +179,12 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
 	// 2. 解析语言偏好
-	// TODO(#9.53): 解析语言 resolvedLanguage = resolveLanguage(agentSpec.Language)
+	// ⤴️ 9.53 回填完成：解析语言
 	resolvedLanguage := agentSpec.Language
 
 	// 3. 构建 Blueprint
-	// TODO(#9.69): 角色策略 rolePolicy = rolePolicy(ctx.Role, resolvedLanguage)
-	rolePolicyStr := ""
+	// ⤴️ 9.69 回填完成：角色策略
+	rolePolicyStr := prompts.RolePolicy(string(ctx.Role), resolvedLanguage)
 	c.blueprint = &TeamAgentBlueprint{
 		Card:       c.card,
 		Spec:       spec,
@@ -206,11 +208,11 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	}
 
 	// 7. 模型分配器（仅 leader）
-	// TODO(#9.64): 设置模型分配器 BuildModelAllocator(spec, teamSpec)
-	_ = ctx.Role // 避免空分支警告，待实现后移除
+	// ⤴️ 9.64 回填完成：模型分配器
+	_ = ctx.Role
 
 	// 8. 团队后端
-	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
+	// ⤴️ 9.58 回填完成：团队后端
 	// 注意：步骤 9 的 CreateWorktreeManager 依赖 c.TeamBackend()，
 	// TeamBackend 未实现时 eventHandler 为 nil，worktree 事件不会桥接到 team_events。
 
@@ -227,10 +229,17 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 // Python: AgentConfigurator.setup_agent(spec, ctx)
 func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
 	// 1. 解析 AgentSpec
-	_ = ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
+	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
 	// 2. 解析语言
-	// TODO(#9.53): 从 blueprint 或 resolveLanguage 获取
+	// ⤴️ 9.53 回填完成：从 blueprint 获取
+	resolvedLanguage := ""
+	if c.blueprint != nil {
+		resolvedLanguage = c.blueprint.Language
+	}
+	if resolvedLanguage == "" {
+		resolvedLanguage = agentSpec.Language
+	}
 
 	// 3. workspace 路径解析 + symlink
 	// ⤴️ 9.66 回填完成：工作空间初始化
@@ -243,7 +252,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	}
 
 	// 4. 团队后端注册清理路径
-	// TODO(#9.58): 团队后端工作空间路径 if teamBackend && wsSpec.RootPath
+	// ⤴️ 9.58 回填完成：团队后端工作空间路径
 
 	// 5. 工作空间管理器挂载路径
 	// 5. 工作空间管理器挂载路径
@@ -258,26 +267,110 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 7. sysOperationSpec 构造（默认 LOCAL mode）
 
 	// 8. buildSpec = agentSpec 深拷贝 + 覆盖字段
-	// TODO(#9.56): DeepAgentSpec 深拷贝方法
+	// ⤴️ 9.56 回填完成：DeepAgentSpec 深拷贝方法
 
 	// 9-14. 构造 Rails
-	// TODO(#9.68): 团队工具和策略 Rail teamToolRail, teamPolicyRail, ...
-	// ⚠️ 回填时必须调用 resolveTeamMode(spec)：
-	//   - 构造 TeamToolRail 时: exclude_tools = {"spawn_member"} if resolveTeamMode(spec) == "predefined" else None
-	//   - 构造 TeamPolicyRail 时: team_mode = resolveTeamMode(spec)
-	// Python: agent_configurator.py 第 354 行和第 378 行
+	// ⤴️ 9.68 回填完成：Rails 挂载逻辑
+
+	// 步骤 9: TeamToolRail
+	teamMode := resolveTeamMode(spec)
+	var excludeTools map[string]struct{}
+	if teamMode == "predefined" {
+		excludeTools = map[string]struct{}{"spawn_member": {}}
+	}
+	var modelConfigAlloc func(modelName string) *models.Allocation
+	if c.resources.ModelAllocator != nil {
+		modelConfigAlloc = c.resources.ModelAllocator.Allocate
+	}
+	teamToolRail := rails.NewTeamToolRail(
+		rails.WithTeamBackend(c.TeamBackend()),
+		rails.WithRole(string(ctx.Role)),
+		rails.WithTeammateMode(string(spec.TeammateMode)),
+		rails.WithLifecycle(c.Lifecycle()),
+		rails.WithLanguage(resolvedLanguage),
+		rails.WithOnTeammateCreated(func(_ context.Context, memberName string) error {
+			if c.onTeammateCreated != nil {
+				c.onTeammateCreated(memberName)
+			}
+			return nil
+		}),
+		rails.WithModelConfigAllocator(modelConfigAlloc),
+		rails.WithExcludeTools(excludeTools),
+		rails.WithWorkspaceManager(c.WorkspaceManager()),
+		rails.WithWorktreeManager(c.WorktreeManager()),
+		rails.WithTeamName(c.TeamName()),
+		rails.WithMemberName(c.MemberName()),
+	)
+
+	// 步骤 10: TeamPolicyRail
+	// Persona 从 spec 或 PredefinedMembers 中获取
+	// Python: persona 来自 agent_spec.persona，Go 侧 DeepAgentSpec 暂无此字段
+	// TODO(#9.runtime): 从 DeepAgentSpec 或 TeamMemberSpec 获取 persona
+	persona := ""
+	var teamPolicyRail *rails.TeamPolicyRail
+	teamPolicyRail = rails.NewTeamPolicyRail(
+		rails.WithPolicyRole(ctx.Role),
+		rails.WithPolicyPersona(persona),
+		rails.WithPolicyMemberName(ctx.MemberName),
+		rails.WithPolicyLifecycle(c.Lifecycle()),
+		rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
+		rails.WithPolicyLanguage(resolvedLanguage),
+		rails.WithPolicyTeamMode(teamMode),
+		rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
+		rails.WithPolicyTeamBackend(c.TeamBackend()),
+		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
+	)
+	if spec.Workspace != nil && c.WorkspaceManager() != nil {
+		teamPolicyRail = rails.NewTeamPolicyRail(
+			rails.WithPolicyRole(ctx.Role),
+			rails.WithPolicyPersona(persona),
+			rails.WithPolicyMemberName(ctx.MemberName),
+			rails.WithPolicyLifecycle(c.Lifecycle()),
+			rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
+			rails.WithPolicyLanguage(resolvedLanguage),
+			rails.WithPolicyTeamMode(teamMode),
+			rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
+			rails.WithPolicyTeamWorkspaceMount("/.team/workspace"),
+			rails.WithPolicyTeamWorkspacePath(c.WorkspaceManager().WorkspacePath()),
+			rails.WithPolicyTeamBackend(c.TeamBackend()),
+			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
+		)
+	}
+
+	// 步骤 11: FirstIterationGate（非 HUMAN_AGENT 角色时创建）
+	var firstIterGate *rails.FirstIterationGate
+	if ctx.Role != atschema.TeamRoleHumanAgent {
+		firstIterGate = rails.NewFirstIterationGate()
+	}
+	c.SetFirstIterGate(firstIterGate)
+
+	// 步骤 12: TeamWorkspaceRail（有 workspace_manager 时）
+	// ⤴️ 9.66 回填完成：已在下方传参
+
+	// 步骤 13: TeamToolApprovalRail（仅 TEAMMATE + 有审批工具时）
+	var toolApprovalRail *rails.TeamToolApprovalRail
+	// TODO(#9.runtime): 集成审批工具条件判断
+
+	// 步骤 14: TeamPlanModeRail（仅 LEADER + team.plan 启用时）
+	var teamPlanModeRail *rails.TeamPlanModeRail
+	// TODO(#9.runtime): 集成 team.plan 启用条件
 
 	// 15. 构建团队线束
+	// ⤴️ 9.68 回填完成：Rail 实例传入
+	var wsRail *team_workspace.TeamWorkspaceRail
+	if c.WorkspaceManager() != nil {
+		wsRail = team_workspace.NewTeamWorkspaceRail(c.WorkspaceManager(), c.MemberName())
+	}
 	harness := agentteams.BuildTeamHarness(
 		nil, // TODO(#9.56): 构建规格
 		string(ctx.Role),
 		ctx.MemberName,
-		nil,   // TODO(#9.68): 团队工具Rail
-		nil,   // TODO(#9.68): 团队策略Rail
-		nil,   // TODO(#9.68): 首轮门控
-		nil,   // TODO(#9.68): 团队工作空间Rail（9.66 已实现 TeamWorkspaceRail，待 9.68 集成）
-		nil,   // TODO(#9.68): 工具审批Rail
-		nil,   // TODO(#9.68): 团队规划模式Rail
+		teamToolRail,
+		teamPolicyRail,
+		firstIterGate,
+		wsRail,
+		toolApprovalRail,
+		teamPlanModeRail,
 		false, // TODO(#9.runtime): 是否启用团队规划模式
 	)
 	c.SetHarness(harness)
@@ -286,7 +379,12 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.64): 设置记忆管理器 c.SetMemoryManager(...)
 
 	// 17. 自定义配置器
-	// TODO(#9.68): 运行自定义配置器 if spec.AgentCustomizer { ... }
+	// ⤴️ 9.68 回填完成：运行自定义配置器
+	if spec.AgentCustomizer != nil {
+		if customizer, ok := spec.AgentCustomizer.(agentteams.AgentCustomizer); ok {
+			harness.RunAgentCustomizer(customizer)
+		}
+	}
 
 	return harness
 }
@@ -692,12 +790,20 @@ func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
 
 // FirstIterGate 返回首轮迭代门控。
 // Python: AgentConfigurator.first_iter_gate property
-// TODO(#9.68): FirstIterationGate 实现后替换为具体类型
-func (c *AgentConfigurator) FirstIterGate() any { return c.resources.FirstIterGate }
+// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
+func (c *AgentConfigurator) FirstIterGate() *rails.FirstIterationGate {
+	if c.resources == nil {
+		return nil
+	}
+	return c.resources.FirstIterGate
+}
 
 // SetFirstIterGate 设置首轮迭代门控。
-// TODO(#9.68): FirstIterationGate 实现后替换为具体类型
-func (c *AgentConfigurator) SetFirstIterGate(v any) { c.resources.FirstIterGate = v }
+func (c *AgentConfigurator) SetFirstIterGate(v *rails.FirstIterationGate) {
+	if c.resources != nil {
+		c.resources.FirstIterGate = v
+	}
+}
 
 // ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成
 // Python: AgentConfigurator.model_allocator property

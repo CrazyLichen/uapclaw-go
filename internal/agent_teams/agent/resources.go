@@ -4,6 +4,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 )
 
@@ -21,8 +22,8 @@ type PrivateAgentResources struct {
 	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成
 	MemoryManager *memory.TeamMemoryManager
 	// FirstIterGate 首轮迭代门控
-	// TODO(#9.68): FirstIterationGate 类型
-	FirstIterGate any
+	// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
+	FirstIterGate *rails.FirstIterationGate
 	// ModelAllocator 模型分配器（仅 Leader）。⤴️ 9.64 回填完成
 	ModelAllocator models.ModelAllocator
 }

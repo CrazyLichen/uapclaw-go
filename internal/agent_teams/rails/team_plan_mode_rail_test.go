@@ -64,3 +64,23 @@ func TestTeamPlanModeRail_ResolveLanguage(t *testing.T) {
 		t.Fatalf("expected cn, got %s", r2.resolveLanguage())
 	}
 }
+
+// TestTeamPlanModeRail_BeforeModelCall 测试 BeforeModelCall
+func TestTeamPlanModeRail_BeforeModelCall(t *testing.T) {
+	r := NewTeamPlanModeRail()
+	agent := newFakeBaseAgentTeam()
+	_ = r.Init(context.Background(), agent)
+	err := r.BeforeModelCall(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BeforeModelCall returned error: %v", err)
+	}
+}
+
+// TestTeamPlanModeRail_BeforeModelCall_无Agent 测试无 agent 时不 panic
+func TestTeamPlanModeRail_BeforeModelCall_无Agent(t *testing.T) {
+	r := NewTeamPlanModeRail()
+	err := r.BeforeModelCall(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BeforeModelCall should not fail without agent: %v", err)
+	}
+}

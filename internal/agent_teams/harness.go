@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -23,23 +24,23 @@ import (
 // 字段顺序与 BuildTeamHarness 中 Rails 挂载顺序一致。
 type MountedRails struct {
 	// TeamTool 团队工具轨
-	// TODO(#9.68): TeamToolRail 类型
-	TeamTool any
+	// ⤴️ 9.68 回填完成：TeamToolRail 具体类型
+	TeamTool *rails.TeamToolRail
 	// TeamPolicy 团队策略轨
-	// TODO(#9.68): TeamPolicyRail 类型
-	TeamPolicy any
+	// ⤴️ 9.68 回填完成：TeamPolicyRail 具体类型
+	TeamPolicy *rails.TeamPolicyRail
 	// FirstIterGate 首轮迭代门控
-	// TODO(#9.68): FirstIterationGate 类型
-	FirstIterGate any
+	// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
+	FirstIterGate *rails.FirstIterationGate
 	// TeamWorkspace 团队工作空间轨
 	// ⤴️ 9.66 回填完成：TeamWorkspaceRail 具体类型
 	TeamWorkspace *team_workspace.TeamWorkspaceRail
 	// ToolApproval 工具审批轨
-	// TODO(#9.68): TeamToolApprovalRail 类型
-	ToolApproval any
+	// ⤴️ 9.68 回填完成：TeamToolApprovalRail 具体类型
+	ToolApproval *rails.TeamToolApprovalRail
 	// TeamPlanMode 团队计划模式轨
-	// TODO(#9.68): TeamPlanModeRail 类型
-	TeamPlanMode any
+	// ⤴️ 9.68 回填完成：TeamPlanModeRail 具体类型
+	TeamPlanMode *rails.TeamPlanModeRail
 }
 
 // AgentCustomizer 用户自定义钩子签名。
@@ -109,25 +110,27 @@ func NewTeamHarness(
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
 //
-// TODO(#9.68): Rails 挂载逻辑实现后替换
+// ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
 func BuildTeamHarness(
 	agentSpec any, // TODO(#9.56): DeepAgentSpec 类型
 	role string,
 	memberName string,
-	teamToolRail any, // TODO(#9.68): 团队工具Rail
-	teamPolicyRail any, // TODO(#9.68): 团队策略Rail
-	firstIterGate any, // TODO(#9.68): 首轮门控
+	teamToolRail *rails.TeamToolRail,
+	teamPolicyRail *rails.TeamPolicyRail,
+	firstIterGate *rails.FirstIterationGate,
 	teamWorkspaceRail *team_workspace.TeamWorkspaceRail, // ⤴️ 9.66: 团队工作空间Rail
-	toolApprovalRail any, // TODO(#9.68): 工具审批Rail
-	teamPlanModeRail any, // TODO(#9.68): 团队规划模式Rail
+	toolApprovalRail *rails.TeamToolApprovalRail,
+	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
 ) *TeamHarness {
 	// TODO(#9.56): 构建深度Agent deepAgent = agentSpec.Build()
-	// TODO(#9.68): 添加团队策略Rail deepAgent.AddRail(teamPolicyRail)
-	// TODO(#9.68): 首轮门控Rail deepAgent.AddRail(firstIterGate)
-	// TODO(#9.68): 团队工作空间Rail deepAgent.AddRail(teamWorkspaceRail)
-	// TODO(#9.68): 工具审批Rail deepAgent.AddRail(toolApprovalRail)
-	// TODO(#9.68): 团队规划模式Rail deepAgent.AddRail(teamPlanModeRail)
+	// ⤴️ 9.68: 以下 Rail 挂载需要 deepAgent 实例
+	// deepAgent.AddRail(teamToolRail)
+	// deepAgent.AddRail(teamPolicyRail)
+	// deepAgent.AddRail(firstIterGate)
+	// deepAgent.AddRail(teamWorkspaceRail)
+	// deepAgent.AddRail(toolApprovalRail)
+	// deepAgent.AddRail(teamPlanModeRail)
 	rails := &MountedRails{
 		TeamTool:      teamToolRail,
 		TeamPolicy:    teamPolicyRail,

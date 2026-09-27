@@ -36,8 +36,8 @@
 //	├── models/             # ⤵️ 回填: 9.64 模型池/分配器
 //	├── monitor/            # ⤵️ 回填: 9.67 团队监控
 //	├── observability/      # ⤵️ 回填: 9.67 OpenTelemetry
-//	├── rails/              # ⤵️ 回填: 9.68 团队级 Rails
-//	├── prompts/            # ⤵️ 回填: 9.69 团队提示词
+//	├── rails/              # 团队级 Rails（9.68）
+//	├── prompts/            # 团队提示词（9.69）
 //	├── runtime/            # 团队运行时管理（9.59b）
 //	│   ├── doc.go          # 包文档
 //	│   ├── gate.go         # InteractGate 并发门控

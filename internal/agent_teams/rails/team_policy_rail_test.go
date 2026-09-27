@@ -163,3 +163,31 @@ func TestTeamPolicyRail_PersonaSection(t *testing.T) {
 		t.Fatal("expected team_persona section when persona is set")
 	}
 }
+
+// TestTeamPolicyRail_BeforeModelCall 测试 BeforeModelCall 注入 section
+func TestTeamPolicyRail_BeforeModelCall(t *testing.T) {
+	r := NewTeamPolicyRail(
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyMemberName("alice"),
+		WithPolicyLanguage("cn"),
+	)
+	agent := newFakeBaseAgentTeam()
+	_ = r.Init(context.Background(), agent)
+	err := r.BeforeModelCall(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BeforeModelCall returned error: %v", err)
+	}
+}
+
+// TestTeamPolicyRail_BeforeModelCall_无Builder 测试无 builder 时不 panic
+func TestTeamPolicyRail_BeforeModelCall_无Builder(t *testing.T) {
+	r := NewTeamPolicyRail(
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyLanguage("cn"),
+	)
+	// 不调用 Init，systemPromptBuilder 为 nil
+	err := r.BeforeModelCall(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BeforeModelCall should not fail with nil builder: %v", err)
+	}
+}
