@@ -18,8 +18,8 @@ type mockDeepAgent struct {
 // TestNewTeamHarness 测试 TeamHarness 构造函数
 func TestNewTeamHarness(t *testing.T) {
 	rails := &agent_teams.MountedRails{
-		TeamTool:   "mock_tool_rail",
-		TeamPolicy: "mock_policy_rail",
+		TeamTool:   nil, // ⤴️ 9.68 回填后 TeamTool 类型为 *rails.TeamToolRail
+		TeamPolicy: nil, // ⤴️ 9.68 回填后 TeamPolicy 类型为 *rails.TeamPolicyRail
 	}
 	var agent hinterfaces.DeepAgentInterface // nil 接口
 	h := agent_teams.NewTeamHarness(
@@ -45,7 +45,7 @@ func TestNewTeamHarness_NilRails(t *testing.T) {
 
 // TestTeamHarness_Rails 返回 Rails 句柄
 func TestTeamHarness_Rails(t *testing.T) {
-	rails := &agent_teams.MountedRails{TeamTool: "x"}
+	rails := &agent_teams.MountedRails{TeamTool: nil}
 	h := agent_teams.NewTeamHarness(nil, rails, string(atschema.TeamRoleLeader), "", false)
 	assert.Equal(t, rails, h.Rails())
 }
@@ -88,20 +88,20 @@ func TestBuildTeamHarness(t *testing.T) {
 		nil, // agentSpec
 		string(atschema.TeamRoleTeammate),
 		"teammate_1",
-		"tool_rail",   // teamToolRail
-		"policy_rail", // teamPolicyRail
-		nil,           // firstIterGate
-		nil,           // teamWorkspaceRail
-		nil,           // toolApprovalRail
-		nil,           // teamPlanModeRail
+		nil, // teamToolRail — ⤴️ 9.68 回填后类型为 *rails.TeamToolRail
+		nil, // teamPolicyRail — ⤴️ 9.68 回填后类型为 *rails.TeamPolicyRail
+		nil, // firstIterGate
+		nil, // teamWorkspaceRail
+		nil, // toolApprovalRail
+		nil, // teamPlanModeRail
 		true,
 	)
 	assert.NotNil(t, h)
 	assert.Equal(t, string(atschema.TeamRoleTeammate), h.Role())
 	assert.Equal(t, "teammate_1", h.MemberName())
 	assert.NotNil(t, h.Rails())
-	assert.Equal(t, "tool_rail", h.Rails().TeamTool)
-	assert.Equal(t, "policy_rail", h.Rails().TeamPolicy)
+	assert.Nil(t, h.Rails().TeamTool)
+	assert.Nil(t, h.Rails().TeamPolicy)
 	assert.Nil(t, h.Rails().FirstIterGate)
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -314,8 +315,9 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("FirstIterGate设置后获取", func(t *testing.T) {
-		c.SetFirstIterGate("gate")
-		assert.Equal(t, "gate", c.FirstIterGate())
+		gate := rails.NewFirstIterationGate()
+		c.SetFirstIterGate(gate)
+		assert.Equal(t, gate, c.FirstIterGate())
 	})
 
 	t.Run("ModelAllocator设置后获取", func(t *testing.T) {
