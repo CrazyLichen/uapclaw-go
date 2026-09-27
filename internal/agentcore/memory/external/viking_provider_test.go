@@ -743,8 +743,8 @@ func TestOpenVikingProvider_HandleToolCall_未知工具(t *testing.T) {
 	var parsed map[string]any
 	json.Unmarshal([]byte(result), &parsed)
 	errMsg, _ := parsed["error"].(string)
-	if !strings.Contains(errMsg, "Unknown tool") {
-		t.Errorf("error = %q, 应提及 Unknown tool", errMsg)
+	if !strings.Contains(errMsg, "unknown tool") {
+		t.Errorf("error = %q, 应提及 unknown tool", errMsg)
 	}
 }
 
