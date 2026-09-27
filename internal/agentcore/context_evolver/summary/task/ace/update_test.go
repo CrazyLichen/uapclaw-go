@@ -884,7 +884,7 @@ func TestPersistMemoryOp_正常持久化(t *testing.T) {
 
 	helper := cepersistence.NewMemoryPersistenceHelper(
 		cepersistence.WithPersistType("json"),
-		cepersistence.WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"),
+		cepersistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
 	)
 
 	op := NewPersistMemoryOp(sc, helper)

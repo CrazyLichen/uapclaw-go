@@ -626,7 +626,7 @@ func TestPersistMemoryOp_正常持久化(t *testing.T) {
 
 	helper := persistence.NewMemoryPersistenceHelper(
 		persistence.WithPersistType("json"),
-		persistence.WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"),
+		persistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
 	)
 
 	op := NewPersistMemoryOp(sc, helper)
