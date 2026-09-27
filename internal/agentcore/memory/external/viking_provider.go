@@ -427,7 +427,7 @@ func (p *OpenVikingProvider) dispatchToolCall(ctx context.Context, toolName stri
 	case "viking_add_resource":
 		return p.handleVikingAddResource(ctx, args)
 	default:
-		return nil, fmt.Errorf("Unknown tool: %s", toolName)
+		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
 
@@ -575,7 +575,7 @@ func (p *OpenVikingProvider) handleVikingRead(ctx context.Context, args map[stri
 	}
 
 	// 对齐 Python: content = result.get("result", "")
-	content, _ := result["result"]
+	content := result["result"]
 	var contentStr string
 	switch v := content.(type) {
 	case string:
@@ -632,7 +632,7 @@ func (p *OpenVikingProvider) handleVikingBrowse(ctx context.Context, args map[st
 	}
 
 	// 对齐 Python: entries = result.get("result", {})
-	entries, _ := result["result"]
+	entries := result["result"]
 
 	// 对齐 Python: if action in ("list", "tree") and isinstance(entries, list):
 	if action == "list" || action == "tree" {

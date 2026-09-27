@@ -103,16 +103,14 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	)
 
 	// Python: if self._workspace_manager is not None
-	if r.workspaceManager != nil {
-		// TODO(#9.66): 追加 WorkspaceMetaTool
-		// 需要导入 team_workspace 包，当前用 any 占位，后续回填
-	}
+	// TODO(#9.66): 追加 WorkspaceMetaTool
+	// 需要导入 team_workspace 包，当前用 any 占位，后续回填
+	_ = r.workspaceManager
 
 	// Python: if self._worktree_manager is not None
-	if r.worktreeManager != nil {
-		// TODO(#9.66a): 追加 EnterWorktreeTool / ExitWorktreeTool
-		// 需要导入 worktree 包，当前用 any 占位，后续回填
-	}
+	// TODO(#9.66a): 追加 EnterWorktreeTool / ExitWorktreeTool
+	// 需要导入 worktree 包，当前用 any 占位，后续回填
+	_ = r.worktreeManager
 
 	// Python: if self._qualify_ids
 	if r.qualifyIDs {

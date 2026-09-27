@@ -237,10 +237,8 @@ func CreateTeamTools(
 	}
 
 	// 排除指定工具
-	if excludeTools != nil {
-		for name := range excludeTools {
-			delete(allowed, name)
-		}
+	for name := range excludeTools {
+		delete(allowed, name)
 	}
 
 	// 按权限集合过滤
