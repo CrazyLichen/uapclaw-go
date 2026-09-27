@@ -10,14 +10,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -95,8 +95,8 @@ func (f *fakeAbilityManagerTeam) Remove(name string) cschema.Ability {
 	return nil
 }
 func (f *fakeAbilityManagerTeam) RemoveMany(names []string) []cschema.Ability { return nil }
-func (f *fakeAbilityManagerTeam) Get(_ string) cschema.Ability                 { return nil }
-func (f *fakeAbilityManagerTeam) List() []cschema.Ability                      { return nil }
+func (f *fakeAbilityManagerTeam) Get(_ string) cschema.Ability                { return nil }
+func (f *fakeAbilityManagerTeam) List() []cschema.Ability                     { return nil }
 func (f *fakeAbilityManagerTeam) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }

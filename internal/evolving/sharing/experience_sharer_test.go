@@ -469,8 +469,9 @@ func TestExperienceSharer_ResolveSkillID_ProviderError(t *testing.T) {
 	if id != "" {
 		t.Errorf("provider 出错时应返回空, 实际: %q", id)
 	}
-	if err == nil {
-		t.Error("provider 出错时应返回 error")
+	// 对齐 Python resilience boundary：provider 出错时吞掉异常，返回 nil error
+	if err != nil {
+		t.Errorf("provider 出错时应对齐 resilience boundary 返回 nil error, 实际: %v", err)
 	}
 }
 

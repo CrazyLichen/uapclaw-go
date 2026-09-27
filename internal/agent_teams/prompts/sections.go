@@ -72,53 +72,53 @@ var workflowTemplateName = map[string]string{
 // Python: _LABELS: dict[str, dict[str, str]] (openjiuwen/agent_teams/prompts/sections.py)
 var labels = map[string]map[string]string{
 	"cn": {
-		"member_name_line":     "你的 member_name",
-		"role_heading":         "# 团队角色",
-		"workflow_heading":     "# 工作流程",
-		"lifecycle_heading":    "# 团队生命周期",
-		"persona_heading":      "# 当前人设",
-		"info_heading":         "# 团队信息",
-		"team_name_label":      "team_name（团队唯一标识）",
-		"display_name_label":   "display_name（团队展示名）",
-		"team_desc":            "团队目标与指令",
-		"team_workspace":       "团队共享工作空间",
+		"member_name_line":   "你的 member_name",
+		"role_heading":       "# 团队角色",
+		"workflow_heading":   "# 工作流程",
+		"lifecycle_heading":  "# 团队生命周期",
+		"persona_heading":    "# 当前人设",
+		"info_heading":       "# 团队信息",
+		"team_name_label":    "team_name（团队唯一标识）",
+		"display_name_label": "display_name（团队展示名）",
+		"team_desc":          "团队目标与指令",
+		"team_workspace":     "团队共享工作空间",
 		"team_workspace_purpose": "用于存放团队共享文件（方案、设计、交付成果），" +
 			"所有成员通过该路径前缀读写同一份文件，系统自动管理版本和文件锁",
-		"team_workspace_abs":   "绝对路径",
-		"members_heading":      "# 成员关系",
-		"leader_mode_plan":     "团队成员执行模式: plan_mode（成员选择或接到任务后需直接通过 submit_plan 提交计划，" +
+		"team_workspace_abs": "绝对路径",
+		"members_heading":    "# 成员关系",
+		"leader_mode_plan": "团队成员执行模式: plan_mode（成员选择或接到任务后需直接通过 submit_plan 提交计划，" +
 			"由你通过 approve_plan 审批后才能执行）",
-		"leader_mode_build":    "团队成员执行模式: build_mode（成员领取任务后自主执行并直接完成，无需你审批计划）",
-		"teammate_mode_plan":   "你的执行模式: plan_mode（选择或接到任务后必须先通过 submit_plan 提交计划，" +
+		"leader_mode_build": "团队成员执行模式: build_mode（成员领取任务后自主执行并直接完成，无需你审批计划）",
+		"teammate_mode_plan": "你的执行模式: plan_mode（选择或接到任务后必须先通过 submit_plan 提交计划，" +
 			"该工具会认领任务；等待 leader 通过 approve_plan 审批后才能开始执行）",
-		"teammate_mode_build":  "你的执行模式: build_mode（领取任务后可自主执行并直接标记完成，无需 leader 审批计划）",
+		"teammate_mode_build": "你的执行模式: build_mode（领取任务后可自主执行并直接标记完成，无需 leader 审批计划）",
 	},
 	"en": {
-		"member_name_line":     "Your member_name",
-		"role_heading":         "# Team Role",
-		"workflow_heading":     "# Workflow",
-		"lifecycle_heading":    "# Team Lifecycle",
-		"persona_heading":      "# Current Persona",
-		"info_heading":         "# Team Info",
-		"team_name_label":      "team_name (unique identifier)",
-		"display_name_label":   "display_name (human-readable label)",
-		"team_desc":            "Team Goal & Directives",
-		"team_workspace":       "Team Shared Workspace",
+		"member_name_line":   "Your member_name",
+		"role_heading":       "# Team Role",
+		"workflow_heading":   "# Workflow",
+		"lifecycle_heading":  "# Team Lifecycle",
+		"persona_heading":    "# Current Persona",
+		"info_heading":       "# Team Info",
+		"team_name_label":    "team_name (unique identifier)",
+		"display_name_label": "display_name (human-readable label)",
+		"team_desc":          "Team Goal & Directives",
+		"team_workspace":     "Team Shared Workspace",
 		"team_workspace_purpose": "Holds team-shared files (plans, designs, deliverables); " +
 			"all members read/write the same files through this path prefix. " +
 			"Versioning and file locks are managed automatically",
-		"team_workspace_abs":   "Absolute path",
-		"members_heading":      "# Relationships",
-		"leader_mode_plan":     "Teammate execution mode: plan_mode (teammates must submit a plan " +
+		"team_workspace_abs": "Absolute path",
+		"members_heading":    "# Relationships",
+		"leader_mode_plan": "Teammate execution mode: plan_mode (teammates must submit a plan " +
 			"with submit_plan after selecting or receiving a task; " +
 			"that tool reserves the task, then teammates wait for your exact plan_id approval via approve_plan " +
 			"before executing)",
-		"leader_mode_build":    "Teammate execution mode: build_mode (teammates execute and " +
+		"leader_mode_build": "Teammate execution mode: build_mode (teammates execute and " +
 			"complete tasks autonomously without plan approval)",
-		"teammate_mode_plan":   "Your execution mode: plan_mode (after selecting or receiving a task you must " +
+		"teammate_mode_plan": "Your execution mode: plan_mode (after selecting or receiving a task you must " +
 			"submit a plan via submit_plan; that tool reserves the task. Wait for the leader to approve " +
 			"that plan_id via approve_plan before executing)",
-		"teammate_mode_build":  "Your execution mode: build_mode (after claiming a task you " +
+		"teammate_mode_build": "Your execution mode: build_mode (after claiming a task you " +
 			"execute autonomously and mark it completed without leader plan " +
 			"approval)",
 	},

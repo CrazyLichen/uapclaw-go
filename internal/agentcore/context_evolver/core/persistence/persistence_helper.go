@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/file_connector"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -70,6 +71,10 @@ const (
 	// defaultMilvusCollection 默认 Milvus 集合名
 	// 对齐 Python: milvus_collection="vector_nodes"
 	defaultMilvusCollection = "vector_nodes"
+
+	// probeTimeout Milvus 探测超时时间
+	// 在无 Milvus 环境中 gRPC 连接会阻塞，3 秒超时后回退 JSON 后端
+	probeTimeout = 3 * time.Second
 
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentCommon
@@ -242,6 +247,7 @@ func (h *MemoryPersistenceHelper) resolveBackend() {
 
 // probeMilvus 探测 Milvus 可达性。
 // 对齐 Python: 尝试创建 MilvusConnector 操作，成功则可达，异常则回退 JSON。
+// 使用 3 秒超时防止在无 Milvus 环境中无限阻塞。
 func (h *MemoryPersistenceHelper) probeMilvus() bool {
 	defer func() {
 		if r := recover(); r != nil {
@@ -249,9 +255,13 @@ func (h *MemoryPersistenceHelper) probeMilvus() bool {
 		}
 	}()
 
+	// 使用带超时的 context，防止 gRPC 连接在无 Milvus 服务时无限阻塞
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+
 	// 对齐 Python: try MilvusConnector(...) → success; except → fail
 	// 尝试 Exists 操作，成功则可达
-	ok := h.milvusConnector.Exists(context.Background(), "__probe__")
+	ok := h.milvusConnector.Exists(ctx, "__probe__")
 	if !ok {
 		logger.Warn(logComponent).Msg("Milvus 探测失败")
 		return false

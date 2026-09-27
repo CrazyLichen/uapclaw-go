@@ -122,10 +122,10 @@ var mem0ConcludeSchema = ToolSchema{
 // 对齐 Python: Mem0MemoryProvider.__init__(api_key=..., user_id=..., agent_id=..., rerank=...)
 func NewMem0Provider(apiKey, userID, agentID string, rerank bool) *Mem0Provider {
 	return &Mem0Provider{
-		apiKey:   apiKey,
-		userID:   userID,
-		agentID:  agentID,
-		rerank:   rerank,
+		apiKey:  apiKey,
+		userID:  userID,
+		agentID: agentID,
+		rerank:  rerank,
 	}
 }
 

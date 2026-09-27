@@ -338,7 +338,10 @@ func TestTaskMemoryService_LoadMemories_无Persistence(t *testing.T) {
 // TestTaskMemoryService_LoadMemories_有Persistence 验证从持久化加载记忆。
 func TestTaskMemoryService_LoadMemories_有Persistence(t *testing.T) {
 	vs := newMockVectorStore()
-	ph := cepersistence.NewMemoryPersistenceHelper()
+	ph := cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
 
 	// 预先保存一些数据
 	nodesData := map[string]any{

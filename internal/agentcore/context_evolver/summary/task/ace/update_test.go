@@ -883,6 +883,7 @@ func TestPersistMemoryOp_正常持久化(t *testing.T) {
 	vs.Upsert(context.Background(), vectorNode)
 
 	helper := cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
 		cepersistence.WithPersistPath(t.TempDir() + "/{algo_name}/{user_id}.json"),
 	)
 
@@ -901,7 +902,10 @@ func TestPersistMemoryOp_正常持久化(t *testing.T) {
 // TestPersistMemoryOp_VectorStore未配置 测试 VectorStore 未注册时返回错误
 func TestPersistMemoryOp_VectorStore未配置(t *testing.T) {
 	sc := cecontext.NewServiceContext()
-	helper := cepersistence.NewMemoryPersistenceHelper()
+	helper := cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
 	op := NewPersistMemoryOp(sc, helper)
 	rc := cecontext.NewRuntimeContext()
 	rc.Set("user_id", "user1")

@@ -64,9 +64,9 @@ func NewTeamToolApprovalRail(
 	toolNames []string,
 ) *TeamToolApprovalRail {
 	r := &TeamToolApprovalRail{
-		teamName:          teamName,
-		memberName:        memberName,
-		leaderMemberName:  leaderMemberName,
+		teamName:         teamName,
+		memberName:       memberName,
+		leaderMemberName: leaderMemberName,
 	}
 
 	// Python: super().__init__(tool_names=tool_names)

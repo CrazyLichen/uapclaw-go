@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 )
@@ -335,8 +335,8 @@ func newCleanTeamTool(team *TeamBackend, t locales.Translator) *CleanTeamTool {
 // newSpawnMemberTool 创建 SpawnMemberTool 实例。
 func newSpawnMemberTool(team *TeamBackend, t locales.Translator, alloc func(modelName string) *models.Allocation) *SpawnMemberTool {
 	return &SpawnMemberTool{
-		TeamTool:        NewTeamTool(tool.NewToolCardWithID("team.spawn_member", "spawn_member", t("spawn_member"), nil, nil)),
-		team:            team,
+		TeamTool:         NewTeamTool(tool.NewToolCardWithID("team.spawn_member", "spawn_member", t("spawn_member"), nil, nil)),
+		team:             team,
 		modelConfigAlloc: alloc,
 	}
 }

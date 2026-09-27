@@ -16,21 +16,21 @@ import (
 // Python: _I18N_LABELS (openjiuwen/agent_teams/prompts/policy.py)
 var policyLabels = map[string]map[string]string{
 	"cn": {
-		"persona":              "当前人设",
-		"member_name_label":    "你的成员名（member_name）",
-		"team_info_heading":    "团队信息",
-		"team_name_label":      "团队名（team_name）",
-		"display_name_label":   "显示名（display_name）",
-		"team_desc":            "团队目标与指令",
+		"persona":               "当前人设",
+		"member_name_label":     "你的成员名（member_name）",
+		"team_info_heading":     "团队信息",
+		"team_name_label":       "团队名（team_name）",
+		"display_name_label":    "显示名（display_name）",
+		"team_desc":             "团队目标与指令",
 		"relationships_heading": "成员关系",
 	},
 	"en": {
-		"persona":              "Current Persona",
-		"member_name_label":    "Your member_name",
-		"team_info_heading":    "Team Info",
-		"team_name_label":      "team_name",
-		"display_name_label":   "display_name",
-		"team_desc":            "Team Goal & Directives",
+		"persona":               "Current Persona",
+		"member_name_label":     "Your member_name",
+		"team_info_heading":     "Team Info",
+		"team_name_label":       "team_name",
+		"display_name_label":    "display_name",
+		"team_desc":             "Team Goal & Directives",
 		"relationships_heading": "Relationships",
 	},
 }
