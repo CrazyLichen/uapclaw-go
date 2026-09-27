@@ -456,7 +456,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.11 | ✅ | GraphMemory | 实体抽取，三元组存储 | `openjiuwen/core/memory/graph/graph_memory/` |
 | 7.12 | ✅ | Graph Extraction | 图实体抽取 | `openjiuwen/core/memory/graph/extraction/` |
 | 7.13 | ✅ | MemoryProvider 协议 | MemoryProvider 接口 + BaseMemoryProvider + ProviderOption + ExternalMemoryRail（Provider 桥接 + prefetch + syncTurn + 熔断器） | `openjiuwen/core/memory/external/provider.py` |
-| 7.14 | ☐ | Mem0Provider | Mem0 适配 | `openjiuwen/core/memory/external/mem0_provider.py` |
+| 7.14 | ✅ | Mem0Provider | Mem0 适配（自封装 HTTP 客户端 + 双重熔断器 + QueuePrefetch goroutine） | `openjiuwen/core/memory/external/mem0_provider.py` |
 | 7.15 | ☐ | OpenVikingProvider | OpenViking 适配 | `openjiuwen/core/memory/external/openviking_memory_provider.py` |
 | 7.16 | ☐ | OpenJiuwenMemoryProvider | openjiuwen LTM 适配 | `openjiuwen/core/memory/external/openjiuwen_memory_provider.py` |
 | 7.17 | ☐ | AgentArtsMemoryProvider | AgentArts 适配 | `openjiuwen/core/memory/external/agentarts_memory_provider.py` |
