@@ -77,7 +77,7 @@ func (c *vikingClient) health(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -149,7 +149,7 @@ func (c *vikingClient) doRequest(req *http.Request) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respData, err := io.ReadAll(resp.Body)
 	if err != nil {

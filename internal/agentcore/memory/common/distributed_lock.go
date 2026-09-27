@@ -115,7 +115,7 @@ func (l *DistributedLock) WithLock(ctx context.Context, fn func(ctx context.Cont
 	if err := l.Acquire(ctx); err != nil {
 		return err
 	}
-	defer l.Release(ctx)
+	defer func() { _ = l.Release(ctx) }()
 	return fn(ctx)
 }
 

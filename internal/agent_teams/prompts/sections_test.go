@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // TestBuildTeamRoleSection_Leader 测试 Leader 角色构建
@@ -631,12 +630,12 @@ func TestFormatHumanAgentRoster(t *testing.T) {
 // TestAllBuilders 返回类型验证
 func TestAllBuilders(t *testing.T) {
 	// 验证所有 builder 返回正确的 PromptSection 类型
-	var _ *saprompt.PromptSection = BuildTeamRoleSection(atschema.TeamRoleLeader, "a", "build_mode", "cn")
-	var _ *saprompt.PromptSection = BuildTeamWorkflowSection(atschema.TeamRoleLeader, "default", "cn")
-	var _ *saprompt.PromptSection = BuildTeamLifecycleSection(atschema.TeamRoleLeader, "temporary", "cn")
-	var _ *saprompt.PromptSection = BuildTeamPersonaSection("p", "cn")
-	var _ *saprompt.PromptSection = BuildTeamExtraSection("e", "cn")
-	var _ *saprompt.PromptSection = BuildTeamInfoSection(&TeamInfo{TeamName: "t"}, "", "", "cn")
-	var _ *saprompt.PromptSection = BuildTeamMembersSection([]TeamMember{{MemberName: "b"}}, "", "cn")
-	var _ *saprompt.PromptSection = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"h"}, "cn", "", false)
+	var _ = BuildTeamRoleSection(atschema.TeamRoleLeader, "a", "build_mode", "cn")
+	var _ = BuildTeamWorkflowSection(atschema.TeamRoleLeader, "default", "cn")
+	var _ = BuildTeamLifecycleSection(atschema.TeamRoleLeader, "temporary", "cn")
+	var _ = BuildTeamPersonaSection("p", "cn")
+	var _ = BuildTeamExtraSection("e", "cn")
+	var _ = BuildTeamInfoSection(&TeamInfo{TeamName: "t"}, "", "", "cn")
+	var _ = BuildTeamMembersSection([]TeamMember{{MemberName: "b"}}, "", "cn")
+	var _ = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"h"}, "cn", "", false)
 }

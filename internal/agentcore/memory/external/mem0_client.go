@@ -132,7 +132,7 @@ func (c *mem0HTTPClient) doRequest(ctx context.Context, method, path string, bod
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
