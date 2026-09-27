@@ -148,11 +148,12 @@ func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string
 	}
 	skillID, _, _, _, err := provider(ctx, skillName)
 	if err != nil {
+		// 对齐 Python: resilience boundary — 吞掉异常返回空字符串
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
 			Msg("[ExperienceSharer] resolve_skill_id failed")
-		return "", err
+		return "", nil
 	}
 	return strings.TrimSpace(skillID), nil
 }
