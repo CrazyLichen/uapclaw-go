@@ -7,6 +7,8 @@ import (
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/persistence"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -20,6 +22,21 @@ type SummarizeTrajectorier interface {
 	SummaryAlgorithm() string
 	// Summarize 总结轨迹
 	Summarize(ctx context.Context, userID string, matts string, query string, trajectories []string, extraKwargs ...map[string]any) (*SummarizeResult, error)
+}
+
+// VectorStoreAccessor 提供 vector_store 访问能力的接口。
+// 对齐 Python hasattr(memory_service, "vector_store") 动态检查。
+// TaskMemoryService 实现此接口，用于 run_trials 独立模式的持久化预加载/写回。
+type VectorStoreAccessor interface {
+	// VectorStore 返回向量存储服务
+	VectorStore() cecontext.VectorStoreService
+}
+
+// VectorNodeLoader 向量存储的 LoadNode 能力接口。
+// 对齐 Python MemoryVectorStore.load_node(node_id, node)。
+type VectorNodeLoader interface {
+	// LoadNode 直接加载单个向量节点（跳过 embedding 检查）
+	LoadNode(nodeID string, node *schema.VectorNode)
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -90,12 +107,22 @@ type Message struct {
 	ToolArgs string
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// algoToNameMap 算法名到持久化命名空间短名称的映射。对齐 Python _ALGO_TO_NAME。
+var algoToNameMap = map[string]string{
+	"ACE":           "ace",
+	"ReasoningBank": "rb",
+	"ReMe":          "reme",
+	"RefCon":        "reme",
+	"DivCon":        "reme",
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
-
 	// selfRefinePrompt 自纠正提示词。对齐 Python _SELF_REFINE_PROMPT。
 	selfRefinePrompt = "Let's carefully re-examine the previous trajectory, including your reasoning " +
 		"steps and action taken. Pay special attention to whether you used the best " +
@@ -126,6 +153,54 @@ func EvaluateTrial(question string, output string, groundTruth string) (string, 
 
 // RunTrials 运行 MaTTS 试验并返回轨迹结果。对齐 Python run_trials()。
 func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params RunTrialsInput) ([]TrialOutput, error) {
+	// 对齐 Python: if persist_type is set (standalone mode), load memories from persistence backend
+	var persistenceHelper *persistence.MemoryPersistenceHelper
+	algoName := algoToName(params.MemoryService)
+
+	if params.PersistType != nil {
+		persistenceHelper = persistence.NewMemoryPersistenceHelper(
+			persistence.WithPersistType(*params.PersistType),
+			persistence.WithPersistPath(params.PersistPath),
+			persistence.WithMilvusHost(params.MilvusHost),
+			persistence.WithMilvusPort(params.MilvusPort),
+			persistence.WithMilvusCollection(params.MilvusCollection),
+		)
+
+		// 对齐 Python: data = persistence_helper.load(params.user_id, algo_name)
+		data, err := persistenceHelper.Load(params.UserID, algoName)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("algo", algoName).Msg("Failed to load existing memories")
+		} else if data != nil {
+			// 对齐 Python: if hasattr(params.memory_service, "vector_store")
+			if vsAccessor, ok := params.MemoryService.(VectorStoreAccessor); ok {
+				vs := vsAccessor.VectorStore()
+				if loader, loaderOK := vs.(VectorNodeLoader); loaderOK {
+					count := 0
+					for nodeID, nodeRaw := range data {
+						nodeData, nodeDataOK := nodeRaw.(map[string]any)
+						if !nodeDataOK {
+							logger.Warn(logComponent).Str("node_id", nodeID).Msg("Node data is not a dict, skipping")
+							continue
+						}
+						node, nodeErr := schema.VectorNodeFromDict(nodeData)
+						if nodeErr != nil {
+							logger.Warn(logComponent).Err(nodeErr).Str("node_id", nodeID).Msg("Failed to load node")
+							continue
+						}
+						loader.LoadNode(nodeID, node)
+						count++
+					}
+					logger.Info(logComponent).Int("count", count).Str("algo", algoName).
+						Msg("Loaded memories into vector store")
+				} else {
+					logger.Warn(logComponent).Msg("VectorStore does not expose LoadNode, cannot load memories")
+				}
+			} else {
+				logger.Warn(logComponent).Msg("MemoryService does not expose VectorStore, cannot load memories")
+			}
+		}
+	}
+
 	var mattsK int
 	var selfRefine bool
 
@@ -174,6 +249,25 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 
 		if _, summarizeErr := SummarizeTrajectories(ctx, params.MemoryService, params.UserID, sumParams); summarizeErr != nil {
 			logger.Error(logComponent).Err(summarizeErr).Msg("Failed to summarize trajectories after run_trials")
+		}
+	}
+
+	// 对齐 Python: if persistence_helper is not None and hasattr(params.memory_service, "vector_store"):
+	//   all_nodes = params.memory_service.vector_store.get_all()
+	//   persistence_helper.save(params.user_id, algo_name, nodes_dict)
+	if persistenceHelper != nil {
+		if vsAccessor, ok := params.MemoryService.(VectorStoreAccessor); ok {
+			vs := vsAccessor.VectorStore()
+			allNodes := vs.GetAll(nil)
+			if len(allNodes) > 0 {
+				nodesDict := make(map[string]any, len(allNodes))
+				for _, node := range allNodes {
+					nodesDict[node.ID] = node.ToDict()
+				}
+				if err := persistenceHelper.Save(params.UserID, algoName, nodesDict); err != nil {
+					logger.Error(logComponent).Err(err).Msg("Failed to persist memories after run_trials")
+				}
+			}
 		}
 	}
 
@@ -240,6 +334,19 @@ func SummarizeTrajectories(ctx context.Context, memoryService SummarizeTrajector
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// algoToName 将算法名称映射为持久化命名空间短名称。
+// 对齐 Python _ALGO_TO_NAME。
+func algoToName(ms SummarizeTrajectorier) string {
+	algo := ""
+	if ms != nil {
+		algo = ms.SummaryAlgorithm()
+	}
+	if name, ok := algoToNameMap[algo]; ok {
+		return name
+	}
+	return "ace"
+}
 
 // FormatTrajectory 将消息列表格式化为轨迹文本。对齐 Python format_trajectory()。
 func FormatTrajectory(messages []Message) string {

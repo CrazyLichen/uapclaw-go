@@ -26,6 +26,8 @@ const (
 	ComponentPermissions
 	// ComponentAgentCore agentcore/* 日志 → agent_core.log
 	ComponentAgentCore
+	// ComponentTeam agent_teams/* 日志 → team.log
+	ComponentTeam
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -33,7 +35,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // componentStrings Component 枚举到字符串的映射。
-var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions", "agent_core"}
+var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions", "agent_core", "team"}
 
 // 确保 Component 在编译时实现所需接口。
 var (
@@ -92,6 +94,8 @@ func (c Component) LogFileName() string {
 		return "permissions.log"
 	case ComponentAgentCore:
 		return "agent_core.log"
+	case ComponentTeam:
+		return "team.log"
 	default:
 		return "gateway.log"
 	}
@@ -101,7 +105,7 @@ func (c Component) LogFileName() string {
 
 // allComponents 返回所有组件枚举值，用于遍历。
 func allComponents() []Component {
-	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions, ComponentAgentCore}
+	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions, ComponentAgentCore, ComponentTeam}
 }
 
 // componentFromString 从字符串解析 Component，未匹配时返回 ComponentCommon。

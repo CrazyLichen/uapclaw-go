@@ -552,6 +552,12 @@ func (s *TaskMemoryService) SummaryAlgorithm() string {
 	return s.summaryAlgorithm
 }
 
+// VectorStore 返回向量存储服务。对齐 Python TaskMemoryService.vector_store 属性。
+// 用于 run_trials 独立模式的持久化预加载/写回。
+func (s *TaskMemoryService) VectorStore() cecontext.VectorStoreService {
+	return s.vectorStore
+}
+
 // GetPlaybook 获取用户的 Playbook 记忆。对齐 Python TaskMemoryService.get_playbook(user_id)。
 // 仅 ACE 算法有 Playbook 概念，其他算法返回空。
 func (s *TaskMemoryService) GetPlaybook(ctx context.Context, userID string) ([]*schema.VectorNode, error) {

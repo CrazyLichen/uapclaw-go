@@ -1759,11 +1759,17 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 				existingEntities = append(existingEntities, newRelation.LHS)
 			} else if e, ok := state.LookupTable.Entities[lhs]; ok {
 				existingEntities = append(existingEntities, e)
+			} else {
+				// 对齐 Python: raise build_error — 实体 UUID 不在 lookup table 中
+				return fmt.Errorf("relation_dedupe: 实体 UUID %q 不在 lookup table 中", lhs)
 			}
 			if newRelation.RHS != nil && strings.TrimSpace(newRelation.RHS.Content) != "" {
 				existingEntities = append(existingEntities, newRelation.RHS)
 			} else if e, ok := state.LookupTable.Entities[rhs]; ok {
 				existingEntities = append(existingEntities, e)
+			} else {
+				// 对齐 Python: raise build_error — 实体 UUID 不在 lookup table 中
+				return fmt.Errorf("relation_dedupe: 实体 UUID %q 不在 lookup table 中", rhs)
 			}
 
 			existingRelMaps := make([]map[string]any, len(currentRelations))

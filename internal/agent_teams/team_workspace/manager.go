@@ -70,7 +70,7 @@ const (
 	// defaultLockTimeoutSeconds 默认锁超时秒数
 	defaultLockTimeoutSeconds = 300
 	// logComponent 日志组件
-	logComponent = logger.ComponentChannel
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

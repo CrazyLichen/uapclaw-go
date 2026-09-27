@@ -97,6 +97,11 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.Coordina
 		return
 	}
 
+	// 对齐 Python: if self._round.has_in_flight_round() or self._round.is_agent_running(): return
+	if h.round.HasInFlightRound() || h.round.IsAgentRunning() {
+		return
+	}
+
 	// TODO(#9.63): 等任务后端接口就绪后补充 is_team_completed 检查
 	// 对齐 Python 步骤：
 	// 1. 调用 TeamBackend.is_team_completed()
@@ -119,8 +124,12 @@ func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event typ
 	}
 	em := event.Transport
 
+	teamName, _ := em.Payload["team_name"].(string)
+	taskCount, _ := em.Payload["task_count"].(int)
 	logger.Info(logComponent).
 		Str("event_type", em.EventType).
+		Str("team_name", teamName).
+		Int("task_count", taskCount).
 		Int("callbacks", len(h.completionCallbacks)).
 		Msg("onTaskListDrained: 任务列表已清空")
 
@@ -144,12 +153,16 @@ func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.C
 	}
 	em := event.Transport
 
+	memberCount, _ := em.Payload["member_count"].(int)
+	taskCount, _ := em.Payload["task_count"].(int)
 	logger.Info(logComponent).
 		Str("event_type", em.EventType).
 		Str("team_name", func() string {
 			n, _ := em.Payload["team_name"].(string)
 			return n
 		}()).
+		Int("member_count", memberCount).
+		Int("task_count", taskCount).
 		Msg("onTeamCompleted: 团队已完成")
 }
 

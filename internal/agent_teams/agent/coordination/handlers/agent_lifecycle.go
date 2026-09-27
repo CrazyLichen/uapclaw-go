@@ -33,7 +33,7 @@ type AgentLifecycleHandler struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 协调子系统的日志组件
-var logComponent = logger.ComponentChannel
+var logComponent = logger.ComponentTeam
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -85,8 +85,9 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 // OnStandby 收到 TEAM_STANDBY 事件时暂停周期轮询。
 // Python: AgentLifecycleHandler.on_standby
 func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.CoordinationEvent) {
+	memberName := h.blueprint.MemberName()
 	h.poll.PausePolls()
-	logger.Info(logComponent).Msg("on_standby: 已暂停周期轮询")
+	logger.Info(logComponent).Str("member_name", memberName).Msg("on_standby: 已暂停周期轮询")
 }
 
 // OnCleaned 收到 TEAM_CLEANED 事件，非 leader 成员关闭自身。
@@ -94,11 +95,12 @@ func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.Coordinatio
 // Python: AgentLifecycleHandler.on_cleaned
 func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.CoordinationEvent) {
 	if h.blueprint.Role() == schema.TeamRoleLeader {
-		logger.Debug(logComponent).Msg("on_cleaned: leader 忽略 team_cleaned")
+		logger.Debug(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("on_cleaned: leader 忽略 team_cleaned")
 		return
 	}
 	if err := h.lifecycle.ShutdownSelf(ctx); err != nil {
 		logger.Error(logComponent).
+			Str("member_name", h.blueprint.MemberName()).
 			Err(err).
 			Msg("on_cleaned: shutdown_self 失败")
 	}
@@ -149,17 +151,29 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 		return
 	}
 
-	// 对齐 Python: 只有包含 tool_call_id 时才恢复中断
-	toolCallID, _ := em.Payload["tool_call_id"].(string)
-	if toolCallID == "" {
+	// 对齐 Python: on_task_plan_response 使用 plan_id 而非 auto_confirm
+	toolCallIDPlan, _ := em.Payload["tool_call_id"].(string)
+	if toolCallIDPlan == "" {
 		return
 	}
-
-	input := buildInteractiveInput(em.Payload)
-	if input == nil {
-		logger.Debug(logComponent).Msg("on_task_plan_response: 无法构建 InteractiveInput，跳过")
+	approvedPlan, _ := em.Payload["approved"].(bool)
+	feedbackPlan, _ := em.Payload["feedback"].(string)
+	planID, _ := em.Payload["plan_id"].(string)
+	inputPlan, errPlan := interaction.NewInteractiveInput()
+	if errPlan != nil {
+		logger.Debug(logComponent).Msg("on_task_plan_response: 无法创建 InteractiveInput，跳过")
 		return
 	}
+	valuePlan := map[string]any{
+		"approved": approvedPlan,
+		"feedback": feedbackPlan,
+		"plan_id":  planID,
+	}
+	if errPlan = inputPlan.Update(toolCallIDPlan, valuePlan); errPlan != nil {
+		logger.Debug(logComponent).Err(errPlan).Msg("on_task_plan_response: InteractiveInput.Update 失败，跳过")
+		return
+	}
+	input := inputPlan
 
 	if err := h.round.ResumeInterrupt(ctx, input); err != nil {
 		logger.Error(logComponent).
@@ -192,6 +206,9 @@ func buildInteractiveInput(payload map[string]any) *interaction.InteractiveInput
 		"feedback":     feedback,
 		"auto_confirm": autoConfirm,
 	}
-	_ = input.Update(toolCallID, value)
+	if err := input.Update(toolCallID, value); err != nil {
+		logger.Debug(logComponent).Err(err).Str("tool_call_id", toolCallID).Msg("buildInteractiveInput: Update 失败")
+		return nil
+	}
 	return input
 }

@@ -111,8 +111,8 @@ func TestComponentFromString(t *testing.T) {
 
 func TestAllComponents(t *testing.T) {
 	comps := allComponents()
-	if len(comps) != 6 {
-		t.Errorf("期望 6 个组件，实际 %d", len(comps))
+	if len(comps) != 7 {
+		t.Errorf("期望 7 个组件，实际 %d", len(comps))
 	}
 	// 确保顺序正确
 	if comps[0] != ComponentCommon {
@@ -123,5 +123,8 @@ func TestAllComponents(t *testing.T) {
 	}
 	if comps[5] != ComponentAgentCore {
 		t.Errorf("期望 comps[5] = ComponentAgentCore，实际 %v", comps[5])
+	}
+	if comps[6] != ComponentTeam {
+		t.Errorf("期望 comps[6] = ComponentTeam，实际 %v", comps[6])
 	}
 }

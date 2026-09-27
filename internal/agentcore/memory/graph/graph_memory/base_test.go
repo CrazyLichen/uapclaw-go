@@ -2624,6 +2624,10 @@ func TestRelationDedupe_有搜索结果(t *testing.T) {
 	state := NewGraphMemState()
 	state.Strategy.RecallRelation.TopK = 5
 
+	// 对齐 Python: lookup table 中必须包含 lhs/rhs 实体，否则 raise error
+	state.LookupTable.Entities["e1"] = entityShell("e1")
+	state.LookupTable.Entities["e2"] = entityShell("e2")
+
 	rel := graph.NewRelation()
 	rel.LHS = entityShell("e1")
 	rel.RHS = entityShell("e2")

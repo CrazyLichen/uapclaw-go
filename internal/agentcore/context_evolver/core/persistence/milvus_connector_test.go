@@ -364,24 +364,6 @@ func TestSetClient(t *testing.T) {
 	assert.NotNil(t, c)
 }
 
-func TestProbeReachable_成功(t *testing.T) {
-	m := NewMilvusConnectorImpl()
-	fake := newFakeMilvusClient()
-	fake.hasCollectionResult = true
-	m.SetClient(fake)
-	result := m.ProbeReachable(context.Background())
-	assert.True(t, result)
-}
-
-func TestProbeReachable_失败(t *testing.T) {
-	m := NewMilvusConnectorImpl()
-	fake := newFakeMilvusClient()
-	fake.hasCollectionErr = context.DeadlineExceeded
-	m.SetClient(fake)
-	result := m.ProbeReachable(context.Background())
-	assert.False(t, result)
-}
-
 func TestHost_Port_Dim_Accessors(t *testing.T) {
 	m := NewMilvusConnectorImpl(
 		WithConnectorHost("myhost"),

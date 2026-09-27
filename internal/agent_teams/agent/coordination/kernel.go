@@ -51,6 +51,15 @@ type CoordinationKernel struct {
 	lifecycleState string
 }
 
+// kernelOptions 内部选项结构体
+type kernelOptions struct {
+	mailboxPollInterval float64
+	taskPollInterval    float64
+}
+
+// KernelOption CoordinationKernel.Setup 的选项函数。
+type KernelOption func(*kernelOptions)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -70,6 +79,20 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithMailboxPollInterval 设置邮箱轮询间隔（秒）。
+func WithMailboxPollInterval(interval float64) KernelOption {
+	return func(o *kernelOptions) {
+		o.mailboxPollInterval = interval
+	}
+}
+
+// WithTaskPollInterval 设置任务轮询间隔（秒）。
+func WithTaskPollInterval(interval float64) KernelOption {
+	return func(o *kernelOptions) {
+		o.taskPollInterval = interval
+	}
+}
+
 // NewCoordinationKernel 创建协调内核实例。
 // Python: CoordinationKernel.__init__
 func NewCoordinationKernel(host KernelHost) *CoordinationKernel {
@@ -84,8 +107,22 @@ func NewCoordinationKernel(host KernelHost) *CoordinationKernel {
 // 先建 bus，再将 bus 作为 PollController 传给 dispatcher。
 // dispatcher.dispatch 在 Start() 时绑定回 bus 作为 wake callback，此处不绑定。
 // Python: CoordinationKernel.setup(role)
-func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlueprint, inf types.DispatcherInfra) {
-	eventBus := NewEventBus(role, 30.0, 30.0)
+func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlueprint, inf types.DispatcherInfra, opts ...KernelOption) {
+	// 应用选项
+	o := &kernelOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	mailboxPollInterval := 30.0
+	taskPollInterval := 30.0
+	if o.mailboxPollInterval > 0 {
+		mailboxPollInterval = o.mailboxPollInterval
+	}
+	if o.taskPollInterval > 0 {
+		taskPollInterval = o.taskPollInterval
+	}
+
+	eventBus := NewEventBus(role, mailboxPollInterval, taskPollInterval)
 	dispatcher := NewEventDispatcher(k.host, bp, inf, eventBus)
 	k.eventBus = eventBus
 	k.dispatcher = dispatcher

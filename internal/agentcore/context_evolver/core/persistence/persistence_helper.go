@@ -241,6 +241,7 @@ func (h *MemoryPersistenceHelper) resolveBackend() {
 }
 
 // probeMilvus 探测 Milvus 可达性。
+// 对齐 Python: 尝试创建 MilvusConnector 操作，成功则可达，异常则回退 JSON。
 func (h *MemoryPersistenceHelper) probeMilvus() bool {
 	defer func() {
 		if r := recover(); r != nil {
@@ -248,16 +249,14 @@ func (h *MemoryPersistenceHelper) probeMilvus() bool {
 		}
 	}()
 
-	if impl, ok := h.milvusConnector.(*MilvusConnectorImpl); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), milvusProbeTimeout)
-		defer cancel()
-		return impl.ProbeReachable(ctx)
+	// 对齐 Python: try MilvusConnector(...) → success; except → fail
+	// 尝试 Exists 操作，成功则可达
+	ok := h.milvusConnector.Exists(context.Background(), "__probe__")
+	if !ok {
+		logger.Warn(logComponent).Msg("Milvus 探测失败")
+		return false
 	}
-
-	// 非 MilvusConnectorImpl 实现时，尝试 Exists 操作
-	// 如果不 panic 且不报错，认为可达
-	defer func() { _ = recover() }()
-	return h.milvusConnector.Exists(context.Background(), "__probe__") || true
+	return true
 }
 
 // jsonPath 根据模板生成 JSON 文件路径。

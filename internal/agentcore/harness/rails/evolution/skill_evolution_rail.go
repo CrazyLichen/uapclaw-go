@@ -596,6 +596,9 @@ func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.
 	} else if traj != nil {
 		// 同步路径：从轨迹收集消息
 		messages = collectMessagesFromTrajectory(traj)
+		// 对齐 Python: presented_entries = self._experience_tracker.consume_eval_state(session)
+		// 同步路径无 cbc，无法获取 sessionID，传空字符串
+		presentedEntries = r.experienceTracker.ConsumeEvalState("")
 	} else {
 		return nil
 	}

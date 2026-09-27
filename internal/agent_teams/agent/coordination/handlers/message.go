@@ -121,8 +121,9 @@ func (h *MessageHandler) OnMemberShutdownDrain(ctx context.Context, event types.
 	}
 
 	role := h.blueprint.Role()
-	// Leader 和 human-agent 跳过（使用不同拆卸路径）
-	if role == schema.TeamRoleLeader || role == schema.TeamRoleHumanAgent {
+	// 对齐 Python: if self._blueprint.role != TeamRole.TEAMMATE: return
+	// 非 teammate 跳过（防御性写法，未来新增角色时自动过滤）
+	if role != schema.TeamRoleTeammate {
 		return
 	}
 

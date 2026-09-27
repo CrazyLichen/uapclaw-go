@@ -266,6 +266,81 @@ func NewPendingChangeForSharedRecords(
 	return pc
 }
 
+// Clone 返回 EvolutionPatch 的深拷贝（Keywords 是切片、可选字段是 *string，引用类型需单独 copy）。
+func (p *EvolutionPatch) Clone() *EvolutionPatch {
+	if p == nil {
+		return nil
+	}
+	c := *p // 浅拷贝值类型字段
+	if p.Keywords != nil {
+		c.Keywords = make([]string, len(p.Keywords))
+		copy(c.Keywords, p.Keywords)
+	}
+	if p.SkipReason != nil {
+		v := *p.SkipReason
+		c.SkipReason = &v
+	}
+	if p.MergeTarget != nil {
+		v := *p.MergeTarget
+		c.MergeTarget = &v
+	}
+	if p.ScriptFilename != nil {
+		v := *p.ScriptFilename
+		c.ScriptFilename = &v
+	}
+	if p.ScriptLanguage != nil {
+		v := *p.ScriptLanguage
+		c.ScriptLanguage = &v
+	}
+	if p.ScriptPurpose != nil {
+		v := *p.ScriptPurpose
+		c.ScriptPurpose = &v
+	}
+	if p.Summary != nil {
+		v := *p.Summary
+		c.Summary = &v
+	}
+	return &c
+}
+
+// Clone 返回 UsageStats 的深拷贝（指针字段需单独 clone）。
+func (u *UsageStats) Clone() *UsageStats {
+	if u == nil {
+		return nil
+	}
+	c := *u
+	if u.LastPresentedAt != nil {
+		v := *u.LastPresentedAt
+		c.LastPresentedAt = &v
+	}
+	if u.LastEvaluatedAt != nil {
+		v := *u.LastEvaluatedAt
+		c.LastEvaluatedAt = &v
+	}
+	return &c
+}
+
+// Clone 返回 EvolutionRecord 的选择性深拷贝。
+// UsageStats 是指针字段需单独 clone；SkillVersion/Summary 是 *string 需单独 clone。
+func (r *EvolutionRecord) Clone() *EvolutionRecord {
+	if r == nil {
+		return nil
+	}
+	c := *r // 浅拷贝值类型字段
+	if r.UsageStats != nil {
+		c.UsageStats = r.UsageStats.Clone()
+	}
+	if r.SkillVersion != nil {
+		v := *r.SkillVersion
+		c.SkillVersion = &v
+	}
+	if r.Summary != nil {
+		v := *r.Summary
+		c.Summary = &v
+	}
+	return &c
+}
+
 // IsPending 判断 EvolutionRecord 是否为待定状态。
 //
 // Python: EvolutionRecord.is_pending (property)

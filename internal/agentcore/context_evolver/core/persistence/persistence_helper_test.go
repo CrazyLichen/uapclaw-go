@@ -39,7 +39,7 @@ func TestAuto_默认Auto(t *testing.T) {
 }
 
 func TestAuto_Milvus可达(t *testing.T) {
-	// 注入 mock MilvusConnector，probeMilvus 对非 MilvusConnectorImpl 总是返回 true
+	// 注入 mock MilvusConnector，probeMilvus 调用 Exists 返回 true → 可达
 	h := NewMemoryPersistenceHelper(WithPersistType("auto"))
 	h.SetMilvusConnector(&mockMilvusConnector{})
 
@@ -192,5 +192,5 @@ func (m *mockMilvusConnector) SaveToDB(_ context.Context, _ string, _ map[string
 func (m *mockMilvusConnector) LoadFromDB(_ context.Context, _ string) (map[string]any, error) {
 	return nil, nil
 }
-func (m *mockMilvusConnector) Exists(_ context.Context, _ string) bool { return false }
+func (m *mockMilvusConnector) Exists(_ context.Context, _ string) bool { return true }
 func (m *mockMilvusConnector) Delete(_ context.Context, _ string) bool { return false }

@@ -33,7 +33,7 @@ type TeamMessageManager struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
-const logComponent = logger.ComponentAgentCore
+const logComponent = logger.ComponentTeam
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

@@ -78,7 +78,7 @@ type TeamHarness struct {
 
 const (
 	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

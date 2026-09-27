@@ -11,6 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -258,6 +260,27 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// AddTool 添加工具到当前 Agent。
+// 对齐 Python: ContextEvolvingReActAgent.add_tool(tool)
+func (a *ContextEvolvingReActAgent) AddTool(t tool.Tool) {
+	am := a.AbilityManager()
+	if am != nil {
+		am.Add(t.Card())
+	}
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr != nil {
+		_ = resourceMgr.AddTool(t)
+	}
+}
+
+// AddTools 批量添加工具到当前 Agent。
+// 对齐 Python: ContextEvolvingReActAgent.add_tools(tools)
+func (a *ContextEvolvingReActAgent) AddTools(tools []tool.Tool) {
+	for _, t := range tools {
+		a.AddTool(t)
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

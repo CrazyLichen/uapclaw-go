@@ -341,12 +341,13 @@ func (es *ExperienceSharer) DownloadRelevant(
 
 	bundles, err := es.backend.DownloadBundles(ctx, resolvedID, query, topK)
 	if err != nil {
+		// 对齐 Python: resilience boundary — 吞掉异常返回空列表
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Str("skill_id", resolvedID).
 			Err(err).
 			Msg("[ExperienceSharer] backend download failed")
-		return nil, err
+		return nil, nil
 	}
 
 	for i := range bundles {

@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
@@ -102,8 +101,6 @@ const (
 	milvusDefaultAlias = "default"
 	// milvusDefaultMetricType 默认距离度量
 	milvusDefaultMetricType = "COSINE"
-	// milvusProbeTimeout 探测超时
-	milvusProbeTimeout = 5 * time.Second
 
 	// milvusLogComponent 日志组件标识
 	milvusLogComponent = logger.ComponentCommon
@@ -598,17 +595,6 @@ func (m *MilvusConnectorImpl) CollectionName() string { return m.collectionName 
 
 // Dim 返回配置的维度。
 func (m *MilvusConnectorImpl) Dim() int { return m.dim }
-
-// ProbeReachable 探测 Milvus 是否可达（用于 auto 模式）。
-func (m *MilvusConnectorImpl) ProbeReachable(ctx context.Context) bool {
-	c, err := m.getClient(ctx, 0)
-	if err != nil {
-		return false
-	}
-	// 轻量操作：检查集合是否存在
-	_, err = c.HasCollection(ctx, milvusclient.NewHasCollectionOption(m.collectionName))
-	return err == nil
-}
 
 // Truncate UTF-8 安全截断。对齐 Python: MilvusConnector.truncate(text, max_bytes)。
 func Truncate(text string, maxBytes int) string {
