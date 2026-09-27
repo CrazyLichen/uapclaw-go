@@ -477,17 +477,9 @@ func (p *Mem0Provider) handleSearch(ctx context.Context, client *mem0HTTPClient,
 		return string(b), nil
 	}
 
-	payload := make([]map[string]any, 0, len(response))
-	for _, item := range response {
-		payload = append(payload, map[string]any{
-			"memory": item.Memory,
-			"score":  item.Score,
-		})
-	}
-
 	b, _ := json.Marshal(map[string]any{
-		"results": payload,
-		"count":   len(payload),
+		"results": response,
+		"count":   len(response),
 	})
 	return string(b), nil
 }

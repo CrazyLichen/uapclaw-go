@@ -48,10 +48,10 @@ type mem0Message struct {
 }
 
 // mem0MemoryItem 记忆项
-// 对齐 Python: _unwrap_results 中的 dict，含 memory 字段和可选 score
+// 对齐 Python: _unwrap_results 中的 dict，含 memory 字段和 score
 type mem0MemoryItem struct {
 	Memory string  `json:"memory"`
-	Score  float64 `json:"score,omitempty"`
+	Score  float64 `json:"score"`
 }
 
 // mem0SearchResponse search API 响应（dict 格式）
