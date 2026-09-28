@@ -67,54 +67,57 @@ const (
 	mem0ShutdownWaitTimeout = 2 * time.Second
 )
 
-var mem0LogComponent = logger.ComponentAgentCore
-
-// mem0ProfileSchema mem0_profile 工具 Schema
-// 对齐 Python: PROFILE_SCHEMA
-var mem0ProfileSchema = ToolSchema{
-	Name: "mem0_profile",
-	Description: "Retrieve all stored memories about the user — preferences, facts, " +
-		"project context. Fast, no reranking. Use at conversation start.",
-	Parameters: map[string]any{
-		"type":       "object",
-		"properties": map[string]any{},
-		"required":   []string{},
-	},
-}
-
-// mem0SearchSchema mem0_search 工具 Schema
-// 对齐 Python: SEARCH_SCHEMA
-var mem0SearchSchema = ToolSchema{
-	Name: "mem0_search",
-	Description: "Search memories by meaning. Returns relevant facts ranked by similarity. " +
-		"Set rerank=true for higher accuracy on important queries.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"query":  map[string]any{"type": "string", "description": "What to search for."},
-			"rerank": map[string]any{"type": "boolean", "description": "Enable reranking for precision (default: false)."},
-			"top_k":  map[string]any{"type": "integer", "description": "Max results (default: 10, max: 50)."},
-		},
-		"required": []string{"query"},
-	},
-}
-
-// mem0ConcludeSchema mem0_conclude 工具 Schema
-// 对齐 Python: CONCLUDE_SCHEMA
-var mem0ConcludeSchema = ToolSchema{
-	Name: "mem0_conclude",
-	Description: "Store a durable fact about the user. Stored verbatim (no LLM extraction). " +
-		"Use for explicit preferences, corrections, or decisions.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"conclusion": map[string]any{"type": "string", "description": "The fact to store."},
-		},
-		"required": []string{"conclusion"},
-	},
-}
-
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// mem0LogComponent 日志组件标识
+	mem0LogComponent = logger.ComponentAgentCore
+
+	// mem0ProfileSchema mem0_profile 工具 Schema
+	// 对齐 Python: PROFILE_SCHEMA
+	mem0ProfileSchema = ToolSchema{
+		Name: "mem0_profile",
+		Description: "Retrieve all stored memories about the user — preferences, facts, " +
+			"project context. Fast, no reranking. Use at conversation start.",
+		Parameters: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+			"required":   []string{},
+		},
+	}
+
+	// mem0SearchSchema mem0_search 工具 Schema
+	// 对齐 Python: SEARCH_SCHEMA
+	mem0SearchSchema = ToolSchema{
+		Name: "mem0_search",
+		Description: "Search memories by meaning. Returns relevant facts ranked by similarity. " +
+			"Set rerank=true for higher accuracy on important queries.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"query":  map[string]any{"type": "string", "description": "What to search for."},
+				"rerank": map[string]any{"type": "boolean", "description": "Enable reranking for precision (default: false)."},
+				"top_k":  map[string]any{"type": "integer", "description": "Max results (default: 10, max: 50)."},
+			},
+			"required": []string{"query"},
+		},
+	}
+
+	// mem0ConcludeSchema mem0_conclude 工具 Schema
+	// 对齐 Python: CONCLUDE_SCHEMA
+	mem0ConcludeSchema = ToolSchema{
+		Name: "mem0_conclude",
+		Description: "Store a durable fact about the user. Stored verbatim (no LLM extraction). " +
+			"Use for explicit preferences, corrections, or decisions.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"conclusion": map[string]any{"type": "string", "description": "The fact to store."},
+			},
+			"required": []string{"conclusion"},
+		},
+	}
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

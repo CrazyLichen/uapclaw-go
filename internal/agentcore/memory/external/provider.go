@@ -32,29 +32,6 @@ type ProviderOptions struct {
 	SessionID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// WithUserID 设置用户标识。
-func WithUserID(id string) ProviderOption {
-	return func(opts *ProviderOptions) { opts.UserID = id }
-}
-
-// WithScopeID 设置作用域标识。
-func WithScopeID(id string) ProviderOption {
-	return func(opts *ProviderOptions) { opts.ScopeID = id }
-}
-
-// WithSessionID 设置会话标识。
-func WithSessionID(id string) ProviderOption {
-	return func(opts *ProviderOptions) { opts.SessionID = id }
-}
-
 // MemoryProvider 外部记忆提供者接口。
 // 对齐 Python: MemoryProvider(ABC) (openjiuwen/core/memory/external/provider.py)
 //
@@ -112,6 +89,29 @@ type MemoryProvider interface {
 // 具体 Provider 嵌入此结构体后只需覆盖关心的方法。
 // 对齐 Python: MemoryProvider 中的非 @abstractmethod 方法。
 type BaseMemoryProvider struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithUserID 设置用户标识。
+func WithUserID(id string) ProviderOption {
+	return func(opts *ProviderOptions) { opts.UserID = id }
+}
+
+// WithScopeID 设置作用域标识。
+func WithScopeID(id string) ProviderOption {
+	return func(opts *ProviderOptions) { opts.ScopeID = id }
+}
+
+// WithSessionID 设置会话标识。
+func WithSessionID(id string) ProviderOption {
+	return func(opts *ProviderOptions) { opts.SessionID = id }
+}
 
 // SystemPromptBlock 默认返回空字符串。
 // Python: def system_prompt_block(self) -> str: return ""

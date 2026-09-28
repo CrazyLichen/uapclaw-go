@@ -54,6 +54,9 @@ type TeamToolRail struct {
 	registeredTools []tool.Tool
 }
 
+// TeamToolRailOption TeamToolRail 构造选项。
+type TeamToolRailOption func(*TeamToolRail)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -156,9 +159,6 @@ func (r *TeamToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 func (r *TeamToolRail) RegisteredTools() []tool.Tool {
 	return r.registeredTools
 }
-
-// TeamToolRailOption TeamToolRail 构造选项。
-type TeamToolRailOption func(*TeamToolRail)
 
 // WithTeamBackend 设置团队后端。
 func WithTeamBackend(tb *tools.TeamBackend) TeamToolRailOption {

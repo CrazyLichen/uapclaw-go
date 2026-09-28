@@ -13,7 +13,29 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// OtelTeamMonitorHandler 消费 TeamAgent EventMessage 事件流的 OTel handler。
+// Python: OtelTeamMonitorHandler (monitor_handler.py)
+//
+// 通过 TeamAgent.add_event_listener 注册，将团队/任务事件转换为 OTel span。
+// 当前为桩实现：HandleEvent 逻辑完整，但 attach_to_team_agent 暂为 no-op（待 9.55 完成后回填）。
+type OtelTeamMonitorHandler struct {
+	// config 当前可观测性配置
+	config *ObservabilityConfig
+	// injectedTracer 可选显式注入的 tracer（测试用）
+	injectedTracer trace.Tracer
+	// teamSpans 活跃的 team span（key=teamName）
+	teamSpans map[string]trace.Span
+	// taskSpans 活跃的 task span（key=taskID）
+	taskSpans map[string]trace.Span
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// taskOpenTypes 任务开启事件类型集合
@@ -45,24 +67,6 @@ var (
 		events.TeamEventBroadcast: true,
 	}
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// OtelTeamMonitorHandler 消费 TeamAgent EventMessage 事件流的 OTel handler。
-// Python: OtelTeamMonitorHandler (monitor_handler.py)
-//
-// 通过 TeamAgent.add_event_listener 注册，将团队/任务事件转换为 OTel span。
-// 当前为桩实现：HandleEvent 逻辑完整，但 attach_to_team_agent 暂为 no-op（待 9.55 完成后回填）。
-type OtelTeamMonitorHandler struct {
-	// config 当前可观测性配置
-	config *ObservabilityConfig
-	// injectedTracer 可选显式注入的 tracer（测试用）
-	injectedTracer trace.Tracer
-	// teamSpans 活跃的 team span（key=teamName）
-	teamSpans map[string]trace.Span
-	// taskSpans 活跃的 task span（key=taskID）
-	taskSpans map[string]trace.Span
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

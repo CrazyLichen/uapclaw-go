@@ -18,20 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// namespace 注册回调时使用的命名空间（用于注销）
-	// Python: _NAMESPACE = "agent_teams.observability"
-	namespace = "agent_teams.observability"
-	// callbackTracerName Callback 层 tracer 名称
-	// Python: _CALLBACK_TRACER_NAME
-	callbackTracerName = "openjiuwen.agent_teams.observability"
-	// monitorTracerName Monitor 层 tracer 名称
-	// Python: _MONITOR_TRACER_NAME
-	monitorTracerName = "openjiuwen.agent_teams.observability.monitor"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventListenerRegistrar 事件监听注册接口，打破 observability → agent 循环依赖。
@@ -47,17 +33,27 @@ type EventListenerRegistrar interface {
 // ObservabilityOption InitObservability 的函数选项。
 type ObservabilityOption func(*observabilityOptions)
 
+// observabilityOptions 可观测性初始化选项。
 type observabilityOptions struct {
+	// spanExporterOverride span 导出器覆盖（测试用）
 	spanExporterOverride sdktrace.SpanExporter
 }
 
-// WithSpanExporterOverride 设置 span 导出器覆盖（测试用）。
-// Python: init_observability(config, span_exporter_override=...)
-func WithSpanExporterOverride(exporter sdktrace.SpanExporter) ObservabilityOption {
-	return func(o *observabilityOptions) {
-		o.spanExporterOverride = exporter
-	}
-}
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// namespace 注册回调时使用的命名空间（用于注销）
+	// Python: _NAMESPACE = "agent_teams.observability"
+	namespace = "agent_teams.observability"
+	// callbackTracerName Callback 层 tracer 名称
+	// Python: _CALLBACK_TRACER_NAME
+	callbackTracerName = "openjiuwen.agent_teams.observability"
+	// monitorTracerName Monitor 层 tracer 名称
+	// Python: _MONITOR_TRACER_NAME
+	monitorTracerName = "openjiuwen.agent_teams.observability.monitor"
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -74,6 +70,14 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithSpanExporterOverride 设置 span 导出器覆盖（测试用）。
+// Python: init_observability(config, span_exporter_override=...)
+func WithSpanExporterOverride(exporter sdktrace.SpanExporter) ObservabilityOption {
+	return func(o *observabilityOptions) {
+		o.spanExporterOverride = exporter
+	}
+}
 
 // InitObservability 初始化 TracerProvider 并注册回调处理器。
 // Python: init_observability(config, span_exporter_override=...)

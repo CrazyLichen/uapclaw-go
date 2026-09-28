@@ -15,19 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// tracerName OTel tracer 名称
-	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability"
-	tracerName = "openjiuwen.agent_teams.observability"
-	// genAISystemValue gen_ai.system 属性值
-	// Python: _GEN_AI_SYSTEM_VALUE = "openjiuwen"
-	genAISystemValue = "openjiuwen"
-	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OtelCallbackHandler 注册到 CallbackFramework 的 OTel 回调处理器。
@@ -41,6 +28,23 @@ type OtelCallbackHandler struct {
 	// injectedTracer 可选显式注入的 tracer（测试用）
 	injectedTracer trace.Tracer
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// tracerName OTel tracer 名称
+	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability"
+	tracerName = "openjiuwen.agent_teams.observability"
+	// genAISystemValue gen_ai.system 属性值
+	// Python: _GEN_AI_SYSTEM_VALUE = "openjiuwen"
+	genAISystemValue = "openjiuwen"
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

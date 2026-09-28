@@ -11,6 +11,10 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -19,6 +23,8 @@ const (
 	// defaultSessionID 默认 session ID，对齐 Python: "default"
 	defaultSessionID = "default"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // todoToolNames TODO 相关工具名称集合，对齐 Python: _TODO_TOOL_NAMES
 var todoToolNames = map[string]bool{

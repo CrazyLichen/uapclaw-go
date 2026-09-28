@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // TeamPlanAgentDesc 团队规划 Agent 的中英文描述。
 // Python: TEAM_PLAN_AGENT_DESC (openjiuwen/agent_teams/prompts/team_plan_agent.py)
 var TeamPlanAgentDesc = map[string]string{
@@ -19,8 +21,6 @@ var TeamPlanAgentDesc = map[string]string{
 	"en": "Team planning specialist. Designs team execution strategy, role split, " +
 		"dependencies, and acceptance plans from goals, constraints, and context.",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // teamPlanAgentSystemPromptCN 中文 plan_agent 系统提示词（从模板加载，包级初始化）。
 // Python: TEAM_PLAN_AGENT_SYSTEM_PROMPT_CN (openjiuwen/agent_teams/prompts/team_plan_agent.py)

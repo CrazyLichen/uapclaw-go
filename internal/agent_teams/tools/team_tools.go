@@ -132,11 +132,11 @@ const (
 	HumanAgentToolsStr = "view_task,member_complete_task,send_message"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // memberNamePattern 成员名正则，对齐 Python _MEMBER_NAME_PATTERN。
 // Python: _MEMBER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 var memberNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // leaderOnlySet Leader 专用工具名集合。
 var leaderOnlySet = commaStrToSet(LeaderOnlyToolsStr)

@@ -32,6 +32,9 @@ type TeamPlanModeRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 }
 
+// TeamPlanModeRailOption TeamPlanModeRail 构造选项。
+type TeamPlanModeRailOption func(*TeamPlanModeRail)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -116,9 +119,6 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 
 	return nil
 }
-
-// TeamPlanModeRailOption TeamPlanModeRail 构造选项。
-type TeamPlanModeRailOption func(*TeamPlanModeRail)
 
 // WithLanguageOverride 设置语言覆盖。
 func WithLanguageOverride(lang string) TeamPlanModeRailOption {

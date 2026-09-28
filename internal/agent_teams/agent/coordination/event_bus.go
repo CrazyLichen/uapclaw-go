@@ -57,10 +57,10 @@ type WakeCallback func(ctx context.Context, event types.CoordinationEvent)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // logComponent 协调子系统的日志组件
-var logComponent = logger.ComponentTeam
+const logComponent = logger.ComponentTeam
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

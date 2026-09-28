@@ -58,6 +58,8 @@ const (
 	SectionMembers = "team_members"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // workflowTemplateName 工作流模板名映射。
 // Python: _WORKFLOW_TEMPLATES (openjiuwen/agent_teams/prompts/sections.py)
 var workflowTemplateName = map[string]string{
@@ -65,8 +67,6 @@ var workflowTemplateName = map[string]string{
 	"predefined": "leader_workflow_predefined",
 	"hybrid":     "leader_workflow_hybrid",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // labels 双语标签字典，对齐 Python _LABELS。
 // Python: _LABELS: dict[str, dict[str, str]] (openjiuwen/agent_teams/prompts/sections.py)

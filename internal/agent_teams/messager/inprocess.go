@@ -51,9 +51,9 @@ var (
 	busOnce sync.Once
 	// busMu 保护 globalBus 的访问
 	busMu sync.Mutex
+	// _ 确保 InProcessMessager 实现 Messager 接口
+	_ Messager = (*InProcessMessager)(nil)
 )
-
-var _ Messager = (*InProcessMessager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

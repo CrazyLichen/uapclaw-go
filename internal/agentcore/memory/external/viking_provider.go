@@ -45,99 +45,102 @@ type OpenVikingProvider struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var vikingLogComponent = logger.ComponentAgentCore
+var (
+	// vikingLogComponent 日志组件标识
+	vikingLogComponent = logger.ComponentAgentCore
 
-// vikingSearchSchema viking_search 工具 Schema
-// 对齐 Python: VIKING_SEARCH_SCHEMA
-var vikingSearchSchema = ToolSchema{
-	Name:        "viking_search",
-	Description: "在知识库中进行全域搜索.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"query": map[string]any{"type": "string", "description": "搜索查询词."},
-			"mode": map[string]any{
-				"type":        "string",
-				"enum":        []string{"auto", "fast", "deep"},
-				"description": "搜索模式（默认：auto）.",
+	// vikingSearchSchema viking_search 工具 Schema
+	// 对齐 Python: VIKING_SEARCH_SCHEMA
+	vikingSearchSchema = ToolSchema{
+		Name:        "viking_search",
+		Description: "在知识库中进行全域搜索.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{"type": "string", "description": "搜索查询词."},
+				"mode": map[string]any{
+					"type":        "string",
+					"enum":        []string{"auto", "fast", "deep"},
+					"description": "搜索模式（默认：auto）.",
+				},
+				"top_k": map[string]any{"type": "integer", "description": "最大返回结果数（默认10）."},
 			},
-			"top_k": map[string]any{"type": "integer", "description": "最大返回结果数（默认10）."},
+			"required": []string{"query"},
 		},
-		"required": []string{"query"},
-	},
-}
+	}
 
-// vikingReadSchema viking_read 工具 Schema
-// 对齐 Python: VIKING_READ_SCHEMA
-var vikingReadSchema = ToolSchema{
-	Name:        "viking_read",
-	Description: "读取 viking:// URI 上的内容.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"uri": map[string]any{"type": "string", "description": "要读取的 viking:// URI."},
-			"detail": map[string]any{
-				"type":        "string",
-				"enum":        []string{"abstract", "overview", "full"},
-				"description": "详情级别（默认：overview）.",
+	// vikingReadSchema viking_read 工具 Schema
+	// 对齐 Python: VIKING_READ_SCHEMA
+	vikingReadSchema = ToolSchema{
+		Name:        "viking_read",
+		Description: "读取 viking:// URI 上的内容.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"uri": map[string]any{"type": "string", "description": "要读取的 viking:// URI."},
+				"detail": map[string]any{
+					"type":        "string",
+					"enum":        []string{"abstract", "overview", "full"},
+					"description": "详情级别（默认：overview）.",
+				},
 			},
+			"required": []string{"uri"},
 		},
-		"required": []string{"uri"},
-	},
-}
+	}
 
-// vikingBrowseSchema viking_browse 工具 Schema
-// 对齐 Python: VIKING_BROWSE_SCHEMA
-var vikingBrowseSchema = ToolSchema{
-	Name:        "viking_browse",
-	Description: "浏览知识库结构.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"action": map[string]any{
-				"type":        "string",
-				"enum":        []string{"list", "tree", "stat"},
-				"description": "浏览操作.",
+	// vikingBrowseSchema viking_browse 工具 Schema
+	// 对齐 Python: VIKING_BROWSE_SCHEMA
+	vikingBrowseSchema = ToolSchema{
+		Name:        "viking_browse",
+		Description: "浏览知识库结构.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action": map[string]any{
+					"type":        "string",
+					"enum":        []string{"list", "tree", "stat"},
+					"description": "浏览操作.",
+				},
+				"path": map[string]any{"type": "string", "description": "浏览路径（默认：/）."},
 			},
-			"path": map[string]any{"type": "string", "description": "浏览路径（默认：/）."},
+			"required": []string{"action"},
 		},
-		"required": []string{"action"},
-	},
-}
+	}
 
-// vikingRememberSchema viking_remember 工具 Schema
-// 对齐 Python: VIKING_REMEMBER_SCHEMA
-var vikingRememberSchema = ToolSchema{
-	Name:        "viking_remember",
-	Description: "显式存储一个事实或偏好.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"content": map[string]any{"type": "string", "description": "要记住的事实."},
-			"category": map[string]any{
-				"type":        "string",
-				"enum":        []string{"preference", "entity", "event", "case", "pattern"},
-				"description": "记忆类别.",
+	// vikingRememberSchema viking_remember 工具 Schema
+	// 对齐 Python: VIKING_REMEMBER_SCHEMA
+	vikingRememberSchema = ToolSchema{
+		Name:        "viking_remember",
+		Description: "显式存储一个事实或偏好.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"content": map[string]any{"type": "string", "description": "要记住的事实."},
+				"category": map[string]any{
+					"type":        "string",
+					"enum":        []string{"preference", "entity", "event", "case", "pattern"},
+					"description": "记忆类别.",
+				},
 			},
+			"required": []string{"content"},
 		},
-		"required": []string{"content"},
-	},
-}
+	}
 
-// vikingAddResourceSchema viking_add_resource 工具 Schema
-// 对齐 Python: VIKING_ADD_RESOURCE_SCHEMA
-var vikingAddResourceSchema = ToolSchema{
-	Name:        "viking_add_resource",
-	Description: "索引一个 URL 或文档以供后续搜索.",
-	Parameters: map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"url":   map[string]any{"type": "string", "description": "要索引的 URL 或文件路径."},
-			"title": map[string]any{"type": "string", "description": "可选标题."},
+	// vikingAddResourceSchema viking_add_resource 工具 Schema
+	// 对齐 Python: VIKING_ADD_RESOURCE_SCHEMA
+	vikingAddResourceSchema = ToolSchema{
+		Name:        "viking_add_resource",
+		Description: "索引一个 URL 或文档以供后续搜索.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"url":   map[string]any{"type": "string", "description": "要索引的 URL 或文件路径."},
+				"title": map[string]any{"type": "string", "description": "可选标题."},
+			},
+			"required": []string{"url"},
 		},
-		"required": []string{"url"},
-	},
-}
+	}
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -9,3 +9,30 @@ internal/common/crypto/aes_gcm.go
 
 # workspace/init.go — 依赖文件系统特定路径（~/.uapclaw/），init 阶段路径可能不存在
 internal/common/workspace/init.go
+
+# ── 以下为代码声明顺序重排（声明区移动/var→const/分隔线添加），未改变逻辑行为 ──
+# 历史覆盖率不足，本次仅格式调整，后续迭代补充测试
+
+# agent_lifecycle.go — 处理器桩实现，待 9.52/9.53 回填
+internal/agent_teams/agent/coordination/handlers/agent_lifecycle.go
+
+# callback_handler.go — OTel 回调处理器，依赖 OTel SDK provider 初始化
+internal/agent_teams/observability/callback_handler.go
+
+# monitor_handler.go — OTel 团队监控处理器，依赖 OTel SDK provider 初始化
+internal/agent_teams/observability/monitor_handler.go
+
+# team_policy_rail.go — 团队策略 Rail，结构体重排 + Option 类型前移
+internal/agent_teams/rails/team_policy_rail.go
+
+# team_tool_rail.go — 团队工具 Rail，Option 类型前移
+internal/agent_teams/rails/team_tool_rail.go
+
+# team_tools.go — 团队工具集，全局变量声明位置调整
+internal/agent_teams/tools/team_tools.go
+
+# session_memory_manager.go — 会话记忆管理器，模板常量位置调整
+internal/agentcore/context_engine/context/session_memory_manager.go
+
+# stream_event_helpers.go — 流事件辅助函数，分隔线添加
+internal/swarm/agents/harness/common/rails/stream_event_helpers.go

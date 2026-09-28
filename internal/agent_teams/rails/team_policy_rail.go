@@ -60,9 +60,14 @@ type TeamPolicyRail struct {
 	membersCache *prompts.MtimeSectionCache
 }
 
+// TeamPolicyRailOption TeamPolicyRail 构造选项。
+type TeamPolicyRailOption func(*TeamPolicyRail)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // dynamicSectionNames 动态 Section 名称列表（对应 Python _DYNAMIC_SECTION_NAMES）
 var dynamicSectionNames = []string{
@@ -168,9 +173,6 @@ func (r *TeamPolicyRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.A
 func (r *TeamPolicyRail) StaticSections() []saprompt.PromptSection {
 	return r.staticSections
 }
-
-// TeamPolicyRailOption TeamPolicyRail 构造选项。
-type TeamPolicyRailOption func(*TeamPolicyRail)
 
 // WithPolicyRole 设置角色。
 func WithPolicyRole(role atschema.TeamRole) TeamPolicyRailOption {
