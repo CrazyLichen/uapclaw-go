@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -159,6 +162,157 @@ func TestPromptApplier_Apply_实际模板(t *testing.T) {
 	}
 	if result == "" {
 		t.Error("应用模板后结果不应为空")
+	}
+}
+
+// TestPromptApplier_Apply_所有实际模板 测试全部 4 个 .md 模板都能正确加载
+func TestPromptApplier_Apply_所有实际模板(t *testing.T) {
+	applier := DefaultApplier()
+	applier.ClearCache()
+
+	cases := []struct {
+		name       string
+		filePrefix string
+		vars       map[string]any
+	}{
+		{
+			name:       "fragment_memory_prompt",
+			filePrefix: "fragment_memory_prompt",
+			vars: map[string]any{
+				"reference_messages":         "参考消息内容",
+				"conversation_time":          "2026-01-01",
+				"current_week":               "2026.01.01~2026.01.07",
+				"input_messages":             "目标消息内容",
+				"user_profile_definition":    "用户画像定义",
+				"semantic_memory_definition": "语义记忆定义",
+				"episodic_memory_definition": "情景记忆定义",
+			},
+		},
+		{
+			name:       "memory_analysis_prompt",
+			filePrefix: "memory_analysis_prompt",
+			vars: map[string]any{
+				"history":                    "历史消息",
+				"conversation":               "当前消息",
+				"has_variable":               true,
+				"variables_define_template":  "[]",
+				"variables_output_template":  "[]",
+				"forbidden_variables":        "None",
+				"max_message_token":          100,
+				"user_profile_definition":    "用户画像定义",
+				"semantic_memory_definition": "语义记忆定义",
+				"episodic_memory_definition": "情景记忆定义",
+			},
+		},
+		{
+			name:       "memory_update_check",
+			filePrefix: "memory_update_check",
+			vars: map[string]any{
+				"old_information": "1: 旧记忆",
+				"new_information": "2: 新记忆",
+			},
+		},
+		{
+			name:       "semantic_validation",
+			filePrefix: "semantic_validation",
+			vars: map[string]any{
+				"obtained_mem": "待判断信息",
+				"old_mem":      "参考信息",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			applier.ClearCache()
+			result, err := applier.Apply(tc.filePrefix, tc.vars)
+			if err != nil {
+				t.Fatalf("加载 %s.md 失败: %v", tc.filePrefix, err)
+			}
+			if result == "" {
+				t.Errorf("应用模板 %s 后结果不应为空", tc.filePrefix)
+			}
+		})
+	}
+}
+
+// TestPromptApplier_Apply_缓存中存入消息列表模板 测试 Content 为 []BaseMessage 时 Apply 返回错误
+func TestPromptApplier_Apply_缓存中存入消息列表模板(t *testing.T) {
+	applier := NewPromptApplier(t.TempDir())
+
+	// 手动向缓存中注入一个 Content 为 []BaseMessage 的模板
+	msgTemplate := prompt.NewPromptTemplate("msgtype", []schema.BaseMessage{
+		schema.NewUserMessage("hello"),
+	})
+	applier.cache.Store("msgtype", msgTemplate)
+
+	_, err := applier.Apply("msgtype", map[string]any{})
+	if err == nil {
+		t.Error("Content 为消息列表时应返回错误，实际返回 nil")
+	}
+}
+
+// TestPromptApplier_Apply_缓存中存入消息列表含nil 测试 Content 为含 nil 消息的列表时 Format 错误传播
+func TestPromptApplier_Apply_缓存中存入消息列表含nil(t *testing.T) {
+	applier := NewPromptApplier(t.TempDir())
+
+	// 手动向缓存中注入一个含 nil 元素的 []BaseMessage 模板
+	// deepCopyMessages 中 nil 消息会导致 Format 失败
+	msgs := []schema.BaseMessage{nil, schema.NewUserMessage("hello")}
+	msgTemplate := prompt.NewPromptTemplate("nilmsg", msgs)
+	applier.cache.Store("nilmsg", msgTemplate)
+
+	_, err := applier.Apply("nilmsg", map[string]any{"x": "v"})
+	if err == nil {
+		t.Error("含 nil 消息的模板 Format 应返回错误，实际返回 nil")
+	}
+}
+
+// TestPromptApplier_GetTemplate_文件不存在 测试 GetTemplate 文件不存在
+func TestPromptApplier_GetTemplate_文件不存在(t *testing.T) {
+	dir := t.TempDir()
+	applier := NewPromptApplier(dir)
+
+	_, err := applier.GetTemplate("nonexistent")
+	if err == nil {
+		t.Error("期望返回错误，实际返回 nil")
+	}
+}
+
+// TestPromptApplier_Apply_无变量 测试不带变量时 Apply 返回原始模板
+func TestPromptApplier_Apply_无变量(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "plain.md"), []byte("没有占位符的内容"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	applier := NewPromptApplier(dir)
+	result, err := applier.Apply("plain", nil)
+	if err != nil {
+		t.Fatalf("Apply 返回错误: %v", err)
+	}
+	if result != "没有占位符的内容" {
+		t.Errorf("result = %q, want %q", result, "没有占位符的内容")
+	}
+}
+
+// TestPromptApplier_Apply_部分变量 测试部分变量替换
+func TestPromptApplier_Apply_部分变量(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "partial.md"), []byte("你好 {{name}}，今天是{{day}}"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	applier := NewPromptApplier(dir)
+	result, err := applier.Apply("partial", map[string]any{"name": "世界"})
+	if err != nil {
+		t.Fatalf("Apply 返回错误: %v", err)
+	}
+	// name 被替换，day 保留原始占位符
+	if result != "你好 世界，今天是{{day}}" {
+		t.Errorf("result = %q, want %q", result, "你好 世界，今天是{{day}}")
 	}
 }
 

@@ -468,7 +468,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.23 | ☐ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/migrator/` |
 | 7.24 | ☐ | Memory Codec | 记忆编解码 | `openjiuwen/core/memory/codec/` |
 | 7.25 | ✅ | Memory Common | 记忆公共工具（base.go + KvPrefixRegistry 已在 7.7/7.9 回填 ✅；DistributedLock ✅） | `openjiuwen/core/memory/common/` |
-| 7.26 | ☐ | Memory Prompts | 记忆提示词 | `openjiuwen/core/memory/prompts/` |
+| 7.26 | ✅ | Memory Prompts | 记忆提示词（⤴️ 7.8 回填：PromptApplier 单例 + 4 个 .md 提示词模板；测试覆盖率 94.6%） | `openjiuwen/core/memory/prompts/` |
 | 7.27 | ☐ | LongTermMemory | 长期记忆模块 | `openjiuwen/core/memory/long_term_memory.py` |
 | **7.x 安全护栏** | — | | | |
 | 7.28 | ☐ | BaseGuardrail 接口 | `ExtractContext/Detect/Register/Unregister` | `openjiuwen/core/security/guardrail/guardrail.py` |
