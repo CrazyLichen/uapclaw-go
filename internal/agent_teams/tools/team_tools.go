@@ -2,15 +2,20 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -152,6 +157,9 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// ttLogComponent 工具包日志组件标识
+var ttLogComponent = logger.ComponentTeam
 
 // memberNamePattern 成员名正则，对齐 Python _MEMBER_NAME_PATTERN。
 // Python: _MEMBER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -299,6 +307,17 @@ func MemberNameRegexp() *regexp.Regexp {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// toolSuccess 构造成功的工具返回（对齐 Python ToolOutput(success=True, data=...)）。
+func toolSuccess(data map[string]any) (map[string]any, error) {
+	return map[string]any{"success": true, "data": data}, nil
+}
+
+// toolError 构造业务失败的工具返回（对齐 Python ToolOutput(success=False, error="...")）。
+// 注意：这不是 Go error，而是正常返回 map——BuildToolMessageContent 路径 1b 自动提取。
+func toolError(msg string) (map[string]any, error) {
+	return map[string]any{"success": false, "error": msg}, nil
+}
 
 // commaStrToSet 将逗号分隔字符串转为 map[string]struct{} 集合。
 func commaStrToSet(s string) map[string]struct{} {
@@ -546,129 +565,850 @@ func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *
 	}
 }
 
-// Invoke 实现 Tool 接口（桩实现，返回未实现错误）。
-func (t *BuildTeamTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("BuildTeamTool.Invoke 未实现")
+// Invoke 执行 BuildTeamTool，对齐 Python BuildTeamTool.invoke。
+func (t *BuildTeamTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	displayName, _ := inputs["display_name"].(string)
+	leaderDisplayName, _ := inputs["leader_display_name"].(string)
+	leaderDesc, _ := inputs["leader_desc"].(string)
+	teamDesc, _ := inputs["team_desc"].(string)
+	var enableHITT *bool
+	if v, ok := inputs["enable_hitt"]; ok {
+		if b, ok := v.(bool); ok {
+			enableHITT = &b
+		}
+	}
+	err := t.team.BuildTeam(ctx, displayName, teamDesc, leaderDisplayName, leaderDesc, enableHITT)
+	if err != nil {
+		return toolError(err.Error())
+	}
+	return toolSuccess(map[string]any{
+		"team_name":           t.team.TeamName(),
+		"display_name":        displayName,
+		"leader_member_name":  t.team.MemberName(),
+		"leader_display_name": leaderDisplayName,
+		"enable_hitt":         t.team.HITTEnabled(),
+	})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *BuildTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *CleanTeamTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("CleanTeamTool.Invoke 未实现")
+// Invoke 执行 CleanTeamTool，对齐 Python CleanTeamTool.invoke。
+func (t *CleanTeamTool) Invoke(ctx context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	teamName := t.team.TeamName()
+	success, err := t.team.CleanTeam(ctx)
+	if err != nil {
+		logger.Error(ttLogComponent).Err(err).Msg("clean_team 失败")
+		return toolError(fmt.Sprintf("Internal error: %s", err))
+	}
+	if !success {
+		return toolError("Active members remain. Use shutdown_member to close all members first.")
+	}
+	return toolSuccess(map[string]any{"team_name": teamName})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *CleanTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *SpawnMemberTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("SpawnMemberTool.Invoke 未实现")
+// Invoke 执行 SpawnMemberTool，对齐 Python SpawnMemberTool.invoke。
+func (t *SpawnMemberTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName, _ := inputs["member_name"].(string)
+	displayName, _ := inputs["display_name"].(string)
+	desc, _ := inputs["desc"].(string)
+	roleType := "teammate"
+	if v, ok := inputs["role_type"].(string); ok && v != "" {
+		roleType = strings.ToLower(v)
+	}
+
+	// 校验 member_name 格式（对齐 Python _MEMBER_NAME_PATTERN）
+	if memberName == "" || !memberNamePattern.MatchString(memberName) {
+		return toolError(fmt.Sprintf(
+			"Invalid member_name %q: must start with a lowercase ASCII letter (a-z), "+
+				"followed by lowercase letters, digits (0-9) or hyphen (-); no uppercase, "+
+				"underscore, whitespace, or non-ASCII characters", memberName))
+	}
+
+	if roleType != "teammate" && roleType != "human_agent" {
+		return toolError(fmt.Sprintf("Invalid role_type %q; expected 'teammate' or 'human_agent'", roleType))
+	}
+
+	// human_agent 路径
+	if roleType == "human_agent" {
+		if !t.team.HITTEnabled() {
+			return toolError("Cannot spawn human agent: HITT capability is disabled " +
+				"(enable_hitt=False on TeamAgentSpec or build_team). " +
+				"Either enable HITT in the team spec or use role_type='teammate'.")
+		}
+		if _, ok := inputs["model_name"]; ok {
+			return toolError("role_type='human_agent' does not accept 'model_name' or 'prompt'; " +
+				"human members use the framework template — remove these fields")
+		}
+		result := t.team.SpawnHumanAgent(ctx, memberName, displayName, desc, "")
+		if !result.OK {
+			return toolError(result.Reason)
+		}
+		return toolSuccess(map[string]any{
+			"member_name": memberName, "display_name": displayName, "role_type": "human_agent",
+		})
+	}
+
+	// teammate 路径
+	mode := atschema.MemberMode(t.team.TeammateMode())
+	modelName, _ := inputs["model_name"].(string)
+	var allocation *models.Allocation
+	if t.modelConfigAlloc != nil {
+		allocation = t.modelConfigAlloc(modelName)
+	}
+	cardID := fmt.Sprintf("%s_%s", t.team.TeamName(), memberName)
+	agentCard := &agentschema.AgentCard{}
+	agentCard.ID = cardID
+	agentCard.Name = displayName
+	agentCard.Description = desc
+	result := t.team.SpawnMember(ctx, memberName, displayName, agentCard, string(mode), desc,
+		inputs["prompt"].(string), modelName,
+		WithAllocation(allocation))
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{
+		"member_name": memberName, "display_name": displayName, "role_type": "teammate",
+	})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *SpawnMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ShutdownMemberTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ShutdownMemberTool.Invoke 未实现")
+// Invoke 执行 ShutdownMemberTool，对齐 Python ShutdownMemberTool.invoke。
+func (t *ShutdownMemberTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName, _ := inputs["member_name"].(string)
+	force := false
+	if v, ok := inputs["force"].(bool); ok {
+		force = v
+	}
+	result := t.team.ShutdownMember(ctx, memberName, WithForce(force))
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(map[string]any{"member_name": memberName})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ShutdownMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ApprovePlanTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ApprovePlanTool.Invoke 未实现")
+// Invoke 执行 ApprovePlanTool，对齐 Python ApprovePlanTool.invoke。
+func (t *ApprovePlanTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	planID, _ := inputs["plan_id"].(string)
+	approved := false
+	if v, ok := inputs["approved"].(bool); ok {
+		approved = v
+	}
+	feedback, _ := inputs["feedback"].(string)
+	result := t.team.ApprovePlan(ctx, planID, WithApproved(approved), WithFeedback(feedback))
+	if !result.OK {
+		return toolError("Failed to approve/reject plan")
+	}
+	return toolSuccess(map[string]any{"plan_id": planID, "approved": approved})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ApprovePlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ApproveToolCallTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ApproveToolCallTool.Invoke 未实现")
+// Invoke 执行 ApproveToolCallTool，对齐 Python ApproveToolCallTool.invoke。
+func (t *ApproveToolCallTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	memberName, _ := inputs["member_name"].(string)
+	toolCallID, _ := inputs["tool_call_id"].(string)
+	approved := false
+	if v, ok := inputs["approved"].(bool); ok {
+		approved = v
+	}
+	feedback, _ := inputs["feedback"].(string)
+	autoConfirm := false
+	if v, ok := inputs["auto_confirm"].(bool); ok {
+		autoConfirm = v
+	}
+	result := t.team.ApproveTool(ctx, memberName, toolCallID, approved, feedback, autoConfirm)
+	if !result.OK {
+		return toolError("Failed to approve/reject tool call")
+	}
+	return toolSuccess(map[string]any{"member_name": memberName, "tool_call_id": toolCallID, "approved": approved})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ApproveToolCallTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ListMembersTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ListMembersTool.Invoke 未实现")
+// Invoke 执行 ListMembersTool，对齐 Python ListMembersTool.invoke。
+func (t *ListMembersTool) Invoke(ctx context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	members, err := t.team.ListMembers(ctx)
+	if err != nil {
+		return toolError(fmt.Sprintf("Failed to list members: %s", err))
+	}
+	memberList := make([]map[string]any, len(members))
+	for i, m := range members {
+		memberList[i] = map[string]any{
+			"member_name":  m.MemberName,
+			"display_name": m.DisplayName,
+			"status":       m.Status,
+		}
+	}
+	return toolSuccess(map[string]any{"members": memberList, "count": len(members)})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ListMembersTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *TaskCreateTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("TaskCreateTool.Invoke 未实现")
+// Invoke 执行 TaskCreateTool，对齐 Python TaskCreateTool.invoke。
+func (t *TaskCreateTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	tasksRaw, ok := inputs["tasks"].([]any)
+	if !ok || len(tasksRaw) == 0 {
+		return toolError("'tasks' is required")
+	}
+
+	// 单任务快速路径
+	if len(tasksRaw) == 1 {
+		spec, _ := tasksRaw[0].(map[string]any)
+		if spec == nil {
+			return toolError("Invalid task spec")
+		}
+		title, _ := spec["title"].(string)
+		content, _ := spec["content"].(string)
+		if title == "" || content == "" {
+			return toolError(fmt.Sprintf("Task %q missing required title/content", specLabel(spec)))
+		}
+		result, err := t.createOne(ctx, spec)
+		if err != nil {
+			return toolError(err.Error())
+		}
+	if !result.Ok() {
+		return toolError(result.Reason)
+	}
+	return toolSuccess(taskBrief(result.Task))
+	}
+
+	// 批量路径
+	var created []*database.TeamTaskBase
+	var failures []map[string]any
+	for _, raw := range tasksRaw {
+		spec, _ := raw.(map[string]any)
+		if spec == nil {
+			continue
+		}
+		title, _ := spec["title"].(string)
+		content, _ := spec["content"].(string)
+		if title == "" || content == "" {
+			failures = append(failures, map[string]any{
+				"spec":   specLabel(spec),
+				"reason": "missing required title/content",
+			})
+			continue
+		}
+		result, err := t.createOne(ctx, spec)
+		if err != nil || !result.Ok() {
+			reason := "unknown error"
+			if err != nil {
+				reason = err.Error()
+			} else {
+				reason = result.Reason
+			}
+			failures = append(failures, map[string]any{"spec": specLabel(spec), "reason": reason})
+			continue
+		}
+		created = append(created, result.Task)
+	}
+
+	if len(created) == 0 && len(failures) > 0 {
+		var msgs []string
+		for _, f := range failures {
+			msgs = append(msgs, fmt.Sprintf("%s: %s", f["spec"], f["reason"]))
+		}
+		return toolError(fmt.Sprintf("All %d task creations failed: %s", len(failures), strings.Join(msgs, "; ")))
+	}
+
+	briefs := make([]map[string]any, len(created))
+	for i, task := range created {
+		briefs[i] = taskBrief(task)
+	}
+	return toolSuccess(map[string]any{
+		"tasks":    briefs,
+		"count":    len(created),
+		"skipped":  len(failures),
+		"failures": failures,
+	})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// createOne 创建单个任务，对齐 Python TaskCreateTool._create_one。
+func (t *TaskCreateTool) createOne(ctx context.Context, spec map[string]any) (*TaskCreateResult, error) {
+	title, _ := spec["title"].(string)
+	content, _ := spec["content"].(string)
+	taskID, _ := spec["task_id"].(string)
+
+	// depended_by 路径（对齐 Python: add_with_priority）
+	if dependedBy := extractStringSlice(spec, "depended_by"); len(dependedBy) > 0 {
+		dependsOn := extractStringSlice(spec, "depends_on")
+		task, err := t.taskManager.AddWithPriority(ctx, title, content,
+			WithPriorityTaskID(taskID), WithPriorityDependencies(dependsOn), WithPriorityDependentTaskIDs(dependedBy))
+		if err != nil {
+			return nil, err
+		}
+		return &TaskCreateResult{Task: task}, nil
+	}
+
+	// 普通路径
+	dependsOn := extractStringSlice(spec, "depends_on")
+	task, err := t.taskManager.Add(ctx, title, content,
+		WithTaskID(taskID), WithDependencies(dependsOn))
+	if err != nil {
+		return nil, err
+	}
+	return &TaskCreateResult{Task: task}, nil
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *TaskCreateTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ViewTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ViewTaskTool.Invoke 未实现")
+// Invoke 执行 ViewTaskTool，对齐 Python ViewTaskToolV2.invoke。
+func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	action, _ := inputs["action"].(string)
+	if action == "" {
+		action = "list"
+	}
+
+	if action == "get" {
+		taskID, _ := inputs["task_id"].(string)
+		if taskID == "" {
+			return toolError("task_id required for get action")
+		}
+		detail, err := t.taskManager.GetTaskDetail(ctx, taskID)
+		if err != nil || detail == nil || detail.Task == nil {
+			return toolError("Task not found")
+		}
+		blockedBy := make([]map[string]any, len(detail.BlockedBy))
+		for i, b := range detail.BlockedBy {
+			blockedBy[i] = taskBrief(b)
+		}
+		blocks := make([]map[string]any, len(detail.Blocks))
+		for i, b := range detail.Blocks {
+			blocks[i] = taskBrief(b)
+		}
+		data := map[string]any{
+			"task_id":    detail.Task.TaskID,
+			"title":      detail.Task.Title,
+			"content":    detail.Task.Content,
+			"status":     detail.Task.Status,
+			"assignee":   detail.Task.Assignee,
+			"blocked_by": blockedBy,
+			"blocks":     blocks,
+		}
+		return toolSuccess(data)
+	}
+
+	// list / claimable
+	var summaries []*TaskSummary
+	var err error
+	if action == "claimable" {
+		summaries, err = t.taskManager.ListTasksWithDeps(ctx)
+	} else {
+		summaries, err = t.taskManager.ListTasksWithDeps(ctx)
+	}
+	if err != nil {
+		return toolError(fmt.Sprintf("Failed to list tasks: %s", err))
+	}
+	taskList := make([]map[string]any, len(summaries))
+	for i, s := range summaries {
+		blockedBy := make([]string, len(s.BlockedBy))
+		copy(blockedBy, s.BlockedBy)
+		taskList[i] = map[string]any{
+			"task_id":    s.TaskID,
+			"title":      s.Title,
+			"status":     s.Status,
+			"assignee":   s.Assignee,
+			"blocked_by": blockedBy,
+		}
+	}
+	return toolSuccess(map[string]any{"tasks": taskList})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ViewTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *UpdateTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("UpdateTaskTool.Invoke 未实现")
+// Invoke 执行 UpdateTaskTool，对齐 Python UpdateTaskTool.invoke。
+func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	taskID, _ := inputs["task_id"].(string)
+	if taskID == "" {
+		return toolError("'task_id' is required")
+	}
+	status, _ := inputs["status"].(string)
+	title, _ := inputs["title"].(string)
+	content, _ := inputs["content"].(string)
+	assignee, _ := inputs["assignee"].(string)
+	addBlockedBy := extractStringSlice(inputs, "add_blocked_by")
+
+	// 批量取消：task_id="*" + status="cancelled"
+	if taskID == "*" && status == "cancelled" {
+		// 取消所有 claimed 的非 human-agent 成员
+		t.cancelClaimedMembers(ctx)
+		skip := t.agentTeam.HumanAgentNames()
+		count, err := t.agentTeam.CancelAllTasks(ctx, skip)
+		if err != nil {
+			return toolError(fmt.Sprintf("Failed to cancel all tasks: %s", err))
+		}
+		return toolSuccess(map[string]any{"cancelled_count": count})
+	}
+
+	task, err := t.agentTeam.TaskManager().Get(ctx, taskID)
+	if err != nil || task == nil {
+		return toolError("Task not found")
+	}
+
+	// 取消单个任务
+	if status == "cancelled" {
+		if isHumanAgentLocked(t.agentTeam, task) {
+			return toolError(fmt.Sprintf("Task '%s' is held by a human-agent member and cannot be cancelled by the leader", taskID))
+		}
+		cancelMemberIfClaimed(ctx, t.agentTeam, taskID)
+		result := t.agentTeam.CancelTask(ctx, taskID)
+		if !result.OK {
+			return toolError("Failed to cancel task")
+		}
+		return toolSuccess(map[string]any{"task_id": taskID, "status": "cancelled"})
+	}
+
+	// 收集字段更新
+	var updated []string
+
+	// 内容更新（title 和/或 content）
+	if title != "" || content != "" {
+		cancelMemberIfClaimed(ctx, t.agentTeam, taskID)
+		if err := t.agentTeam.TaskManager().UpdateTask(ctx, taskID, title, content); err != nil {
+			return toolError(err.Error())
+		}
+		if title != "" {
+			updated = append(updated, "title")
+		}
+		if content != "" {
+			updated = append(updated, "content")
+		}
+	}
+
+	// 分配任务
+	if assignee != "" {
+		assigneePtr := task.Assignee
+		if assigneePtr != nil && *assigneePtr != assignee {
+			if isHumanAgentLocked(t.agentTeam, task) {
+				return toolError(fmt.Sprintf("Task '%s' is held by a human-agent member and cannot be reassigned", taskID))
+			}
+			t.agentTeam.CancelMember(ctx, *assigneePtr)
+			resetResult, _ := t.agentTeam.TaskManager().Reset(ctx, taskID)
+			if !resetResult.OK {
+				return toolError(fmt.Sprintf("Failed to reset task before reassigning from %s to %s: %s", *assigneePtr, assignee, resetResult.Reason))
+			}
+		}
+		assignResult, _ := t.agentTeam.TaskManager().Assign(ctx, taskID, assignee)
+		if !assignResult.OK {
+			return toolError(assignResult.Reason)
+		}
+		updated = append(updated, "assignee")
+	}
+
+	// 添加依赖
+	if len(addBlockedBy) > 0 {
+		depsResult, _ := t.agentTeam.TaskManager().AddDependencies(ctx, taskID, addBlockedBy)
+		if !depsResult.OK {
+			return toolError(depsResult.Reason)
+		}
+		updated = append(updated, "blocked_by")
+	}
+
+	if len(updated) == 0 {
+		return toolError("No update specified — provide status, title, content, assignee, or add_blocked_by")
+	}
+	return toolSuccess(map[string]any{"task_id": taskID, "status": "updated", "updated_fields": updated})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// isHumanAgentLocked 检查任务是否被 human-agent 持有（对齐 Python _is_human_agent_locked）。
+func isHumanAgentLocked(team *TeamBackend, task *database.TeamTaskBase) bool {
+	return task.Assignee != nil && team.IsHumanAgent(*task.Assignee) && task.Status == "claimed"
+}
+
+// cancelMemberIfClaimed 如果任务处于 claimed 状态则取消认领者（对齐 Python _cancel_member_if_claimed）。
+func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string) {
+	task, _ := team.TaskManager().Get(ctx, taskID)
+	if task == nil || task.Status != "claimed" || task.Assignee == nil {
+		return
+	}
+	if !team.IsHumanAgent(*task.Assignee) {
+		team.CancelMember(ctx, *task.Assignee)
+	}
+}
+
+// cancelClaimedMembers 取消所有 claimed 状态的非 human-agent 成员（对齐 Python _cancel_claimed_members）。
+func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) {
+	claimedTasks, _ := t.agentTeam.TaskManager().ListTasks(ctx, "claimed")
+	cancelled := make(map[string]struct{})
+	for _, task := range claimedTasks {
+		if task.Assignee == nil {
+			continue
+		}
+		assignee := *task.Assignee
+		if _, ok := cancelled[assignee]; ok {
+			continue
+		}
+		if t.agentTeam.IsHumanAgent(assignee) {
+			continue
+		}
+		t.agentTeam.CancelMember(ctx, assignee)
+		cancelled[assignee] = struct{}{}
+	}
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *UpdateTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *SubmitPlanTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("SubmitPlanTool.Invoke 未实现")
+// Invoke 执行 SubmitPlanTool，对齐 Python SubmitPlanTool.invoke。
+func (t *SubmitPlanTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	taskID, _ := inputs["task_id"].(string)
+	planID, _ := inputs["plan_id"].(string)
+	planPath, _ := inputs["plan_path"].(string)
+
+	result, err := t.taskManager.SubmitPlan(ctx, taskID, planPath, planID)
+	if err != nil {
+		return toolError(fmt.Sprintf("Failed to submit plan: %s", err))
+	}
+	// 将 PlanRecord 转为 map
+	resultMap := map[string]any{
+		"plan_id":        result.PlanID,
+		"task_id":        result.TaskID,
+		"member_name":    result.MemberName,
+		"status":         result.Status,
+		"team_plan_id":   result.TeamPlanID,
+		"member_plan_md": result.MemberPlanMD,
+	}
+	return toolSuccess(resultMap)
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *SubmitPlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *ClaimTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("ClaimTaskTool.Invoke 未实现")
+// Invoke 执行 ClaimTaskTool，对齐 Python ClaimTaskTool.invoke。
+func (t *ClaimTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	taskID, _ := inputs["task_id"].(string)
+	status, _ := inputs["status"].(string)
+
+	task, err := t.taskManager.Get(ctx, taskID)
+	if err != nil || task == nil {
+		return toolError("Task not found")
+	}
+
+	var statusChange map[string]any
+	if status == "claimed" {
+		result, _ := t.taskManager.Claim(ctx, taskID)
+		if !result.OK {
+			return toolError(result.Reason)
+		}
+		statusChange = map[string]any{"from": task.Status, "to": "claimed"}
+	} else if status == "completed" {
+		result, _ := t.taskManager.Complete(ctx, taskID)
+		if !result.OK {
+			return toolError(result.Reason)
+		}
+		statusChange = map[string]any{"from": task.Status, "to": "completed"}
+	} else {
+		return toolError(fmt.Sprintf("Invalid status: %s", status))
+	}
+	return toolSuccess(map[string]any{
+		"task_id":        taskID,
+		"updated_fields": []string{"status"},
+		"status_change":  statusChange,
+	})
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *ClaimTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *MemberCompleteTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("MemberCompleteTaskTool.Invoke 未实现")
+// Invoke 执行 MemberCompleteTaskTool，对齐 Python MemberCompleteTaskTool.invoke。
+func (t *MemberCompleteTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	taskID := strings.TrimSpace(fmt.Sprintf("%v", inputs["task_id"]))
+	if taskID == "" {
+		return toolError("'task_id' is required")
+	}
+
+	task, err := t.taskManager.Get(ctx, taskID)
+	if err != nil {
+		logger.Error(ttLogComponent).Err(err).Str("task_id", taskID).Msg("member_complete_task: get 失败")
+		return toolError(fmt.Sprintf("Internal error: %s", err))
+	}
+	if task == nil {
+		return toolError(fmt.Sprintf("Task '%s' not found", taskID))
+	}
+
+	// 校验调用者是任务的认领人（对齐 Python: task.assignee != self.task_manager.member_name）
+	caller := t.taskManager.MemberName()
+	taskAssignee := ""
+	if task.Assignee != nil {
+		taskAssignee = *task.Assignee
+	}
+	if taskAssignee != caller {
+		return toolError(fmt.Sprintf("Task '%s' is assigned to '%s', not '%s'; you can only complete tasks assigned to yourself",
+			taskID, taskAssignee, caller))
+	}
+
+	result, _ := t.taskManager.Complete(ctx, taskID)
+	if !result.OK {
+		return toolError(result.Reason)
+	}
+
+	note := ""
+	if v, ok := inputs["note"].(string); ok {
+		note = strings.TrimSpace(v)
+	}
+	data := map[string]any{"task_id": taskID, "status": "completed"}
+	if note != "" {
+		data["note"] = note
+	}
+	return toolSuccess(data)
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *MemberCompleteTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
-func (t *SendMessageTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
-	return nil, fmt.Errorf("SendMessageTool.Invoke 未实现")
+// Invoke 执行 SendMessageTool，对齐 Python SendMessageTool.invoke。
+func (t *SendMessageTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	toRaw := inputs["to"]
+	content, _ := inputs["content"].(string)
+	summary, _ := inputs["summary"].(string)
+	content = strings.TrimSpace(content)
+
+	if content == "" {
+		return toolError("'content' is required")
+	}
+
+	// 根据 to 的类型分派
+	switch v := toRaw.(type) {
+	case []any:
+		return t.multicast(ctx, v, content, summary)
+	case string:
+		to := strings.TrimSpace(v)
+		if to == "" {
+			return toolError("'to' is required")
+		}
+		if to == "*" {
+			return t.broadcast(ctx, content, summary)
+		}
+		return t.send(ctx, to, content, summary)
+	default:
+		return toolError("'to' must be a string or an array of strings")
+	}
 }
 
-// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
+// broadcast 广播消息（对齐 Python SendMessageTool._broadcast）。
+func (t *SendMessageTool) broadcast(ctx context.Context, content, summary string) (map[string]any, error) {
+	t.autoStartMembers(ctx)
+	msgID, err := t.messageManager.BroadcastMessage(ctx, content, "")
+	if err != nil || msgID == "" {
+		return toolError("Failed to broadcast message")
+	}
+	data := map[string]any{"type": "broadcast", "from": t.messageManager.MemberName()}
+	if summary != "" {
+		data["summary"] = summary
+	}
+	return toolSuccess(data)
+}
+
+// send 点对点发送（对齐 Python SendMessageTool._send）。
+func (t *SendMessageTool) send(ctx context.Context, to, content, summary string) (map[string]any, error) {
+	// "user" 是伪成员，跳过 roster 校验
+	if t.team != nil && to != "user" {
+		member, err := t.team.GetMember(ctx, to)
+		if err != nil || member == nil {
+			return toolError(fmt.Sprintf("Member '%s' not found", to))
+		}
+	}
+	t.autoStartMembers(ctx)
+	msgID, err := t.messageManager.SendMessage(ctx, content, to, "")
+	if err != nil || msgID == "" {
+		return toolError(fmt.Sprintf("Failed to send message to '%s'", to))
+	}
+	data := map[string]any{"type": "message", "from": t.messageManager.MemberName(), "to": to}
+	if summary != "" {
+		data["summary"] = summary
+	}
+	return toolSuccess(data)
+}
+
+// multicast 群发消息（对齐 Python SendMessageTool._multicast）。
+func (t *SendMessageTool) multicast(ctx context.Context, targets []any, content, summary string) (map[string]any, error) {
+	// 清洗：去空白、去重
+	var cleaned []string
+	seen := make(map[string]struct{})
+	for _, raw := range targets {
+		s, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		cleaned = append(cleaned, s)
+	}
+
+	if len(cleaned) == 0 {
+		return toolError("'to' list must contain at least one member name")
+	}
+	for _, name := range cleaned {
+		if name == "*" {
+			return toolError("Cannot mix broadcast '*' with member names; use to='*' for broadcast")
+		}
+		if name == "user" {
+			return toolError("'user' cannot be combined in multicast; send to user separately")
+		}
+	}
+
+	t.autoStartMembers(ctx)
+
+	var delivered []string
+	var failed []map[string]any
+	for _, name := range cleaned {
+		if t.team != nil {
+			member, err := t.team.GetMember(ctx, name)
+			if err != nil || member == nil {
+				failed = append(failed, map[string]any{"to": name, "reason": fmt.Sprintf("Member '%s' not found", name)})
+				continue
+			}
+		}
+		msgID, err := t.messageManager.SendMessage(ctx, content, name, "")
+		if err != nil || msgID == "" {
+			failed = append(failed, map[string]any{"to": name, "reason": fmt.Sprintf("Failed to send message to '%s'", name)})
+			continue
+		}
+		delivered = append(delivered, name)
+	}
+
+	ok := len(failed) == 0
+	data := map[string]any{
+		"type":      "multicast",
+		"from":      t.messageManager.MemberName(),
+		"delivered": delivered,
+		"failed":    failed,
+	}
+	if summary != "" {
+		data["summary"] = summary
+	}
+	if ok {
+		return toolSuccess(data)
+	}
+	return map[string]any{
+		"success": false,
+		"error":   fmt.Sprintf("Multicast partially failed: %d/%d target(s) failed", len(failed), len(cleaned)),
+		"data":    data,
+	}, nil
+}
+
+// autoStartMembers Leader 自动启动未启动的成员（对齐 Python SendMessageTool._auto_start_members）。
+func (t *SendMessageTool) autoStartMembers(ctx context.Context) {
+	if t.team == nil || t.onTeammateCreated == nil || !t.team.IsLeader() {
+		return
+	}
+	started, err := t.team.Startup(ctx, t.onTeammateCreated)
+	if err != nil {
+		logger.Warn(ttLogComponent).Err(err).Msg("auto_start_members 失败")
+	}
+	if len(started) > 0 {
+		logger.Info(ttLogComponent).Strs("started", started).Msg("Auto-started members")
+	}
+}
+
+// Stream 实现 Tool 接口（不支持流式调用）。
 func (t *SendMessageTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
+}
+
+// specLabel 返回任务规格的标签（对齐 Python TaskCreateTool._spec_label）。
+func specLabel(spec map[string]any) string {
+	if id, ok := spec["task_id"].(string); ok && id != "" {
+		return id
+	}
+	if title, ok := spec["title"].(string); ok && title != "" {
+		return title
+	}
+	return "<unnamed>"
+}
+
+// taskBrief 返回任务的简要信息 map。
+func taskBrief(task *database.TeamTaskBase) map[string]any {
+	if task == nil {
+		return nil
+	}
+	assignee := ""
+	if task.Assignee != nil {
+		assignee = *task.Assignee
+	}
+	return map[string]any{
+		"task_id":   task.TaskID,
+		"title":     task.Title,
+		"status":    task.Status,
+		"assignee":  assignee,
+		"team_name": task.TeamName,
+	}
+}
+
+// extractStringSlice 从 map 中提取字符串切片。
+func extractStringSlice(m map[string]any, key string) []string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
+	}
+	// 可能是 []any 或 []string
+	switch s := v.(type) {
+	case []string:
+		return s
+	case []any:
+		result := make([]string, 0, len(s))
+		for _, item := range s {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	default:
+		// 尝试 JSON 序列化/反序列化
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		var result []string
+		if err := json.Unmarshal(b, &result); err != nil {
+			return nil
+		}
+		return result
+	}
 }

@@ -290,6 +290,10 @@ func (tb *TeamBackend) MemberName() string { return tb.memberName }
 // Python: TeamBackend.is_leader
 func (tb *TeamBackend) IsLeader() bool { return tb.isLeader }
 
+// TeammateMode 返回队友模式。
+// Python: TeamBackend.teammate_mode
+func (tb *TeamBackend) TeammateMode() string { return tb.teammateMode }
+
 // LeaderMemberName 返回 Leader 成员名。
 // Python: TeamBackend.leader_member_name
 func (tb *TeamBackend) LeaderMemberName() string { return tb.leaderMemberName }

@@ -223,6 +223,12 @@ func WithPriorityDependentTaskIDs(ids []string) TaskAddWithPriorityOption {
 
 // NewTeamTaskManager 创建任务管理器。
 // sessionID 从 context 中获取（schema.GetSessionID(ctx)），不再作为构造参数。
+// MemberName 返回当前成员标识。
+// Python: TeamTaskManager.member_name
+func (tm *TeamTaskManager) MemberName() string { return tm.memberName }
+
+// NewTeamTaskManager 创建团队任务管理器。
+// Python: TeamTaskManager.__init__(db, team_name, member_name, messager, message_manager, plans_dir, team_plan_id, leader_member_name)
 func NewTeamTaskManager(db database.TeamDatabase, teamName, memberName string, msg messager.Messager, messageManager *TeamMessageManager, plansDir, teamPlanID, leaderMemberName string) *TeamTaskManager {
 	return &TeamTaskManager{
 		db:               db,

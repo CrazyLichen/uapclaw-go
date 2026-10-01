@@ -51,6 +51,10 @@ func NewTeamMessageManager(db database.TeamDatabase, teamName, memberName string
 	}
 }
 
+// MemberName 返回当前成员标识。
+// Python: TeamMessageManager.member_name
+func (tm *TeamMessageManager) MemberName() string { return tm.memberName }
+
 // SendMessage 发送直发消息。
 // Python: TeamMessageManager.send_message()
 func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, toMemberName string, fromMemberName string) (string, error) {
