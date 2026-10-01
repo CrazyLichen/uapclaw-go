@@ -191,7 +191,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inp
 	go func() {
 		defer close(ch)
 		// 步骤 3: 判断是否首次请求
-		entry := mgr.Pool().Get(teamName)
+		entry := mgr.PoolEntry().GetEntry(teamName)
 		if entry == nil {
 			// 首次请求：创建 TeamAgent
 			logger.Info(logComponent).Str("team_name", teamName).Msg("processTeamMessageStream: 首次请求")

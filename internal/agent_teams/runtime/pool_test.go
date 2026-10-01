@@ -1,7 +1,10 @@
 package runtime
 
 import (
+	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
 )
 
 func TestNewTeamRuntimePool(t *testing.T) {
@@ -118,4 +121,51 @@ func TestTeamRuntimePool_ListAllInfo(t *testing.T) {
 	if infos[0].GateClosed {
 		t.Error("GateClosed 应为 false")
 	}
+}
+
+func TestTeamRuntimePool_满足RegistryPoolEntry(t *testing.T) {
+	var _ registry.PoolEntry = (*TeamRuntimePool)(nil)
+}
+
+func TestActiveTeam_满足RegistryPoolTeamEntry(t *testing.T) {
+	e := &ActiveTeam{SessionID: "sess-1"}
+	if e.GetSessionID() != "sess-1" {
+		t.Errorf("GetSessionID() = %q, want %q", e.GetSessionID(), "sess-1")
+	}
+	var _ registry.PoolTeamEntry = (*ActiveTeam)(nil)
+}
+
+func TestTeamRuntimePool_GetEntry(t *testing.T) {
+	p := NewTeamRuntimePool()
+	p.Add(&ActiveTeam{TeamName: "team-1", SessionID: "sess-1", InteractGate: NewInteractGate()})
+	entry := p.GetEntry("team-1")
+	if entry == nil {
+		t.Fatal("GetEntry 应返回非 nil")
+	}
+	if entry.GetSessionID() != "sess-1" {
+		t.Errorf("GetSessionID() = %q, want %q", entry.GetSessionID(), "sess-1")
+	}
+	if p.GetEntry("ghost") != nil {
+		t.Error("不存在的团队应返回 nil")
+	}
+}
+
+func TestTeamRuntimePool_RemoveEntry(t *testing.T) {
+	p := NewTeamRuntimePool()
+	p.Add(&ActiveTeam{TeamName: "team-1", InteractGate: NewInteractGate()})
+	p.RemoveEntry("team-1")
+	if p.HasActive("team-1") {
+		t.Error("RemoveEntry 后不应有活跃团队")
+	}
+}
+
+func TestTeamRuntimeManager_满足RegistryPoolAccessor(t *testing.T) {
+	var _ registry.PoolAccessor = (*TeamRuntimeManager)(nil)
+	mgr := NewTeamRuntimeManager()
+	if mgr.PoolEntry() == nil {
+		t.Error("PoolEntry() 应返回非 nil")
+	}
+	// PoolEntry() 返回的值应满足 PoolEntry
+	var _ registry.PoolEntry = mgr.PoolEntry()
+	_ = context.Background()
 }

@@ -120,9 +120,11 @@ func ExtractLongTermMemory(
 				continue
 			}
 			// 对齐 Python: 全部重试失败返回空 dict
-			// Python: memory_logger.error("Long term memory extractor model output format error", ...)
+			// Python: memory_logger.error("Long term memory extractor model output format error",
+			//   event_type=LogEventType.MEMORY_PROCESS, exception=str(e))
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
+				Str("exception", "JSON解析结果为nil").
 				Msg("长期记忆提取模型输出格式错误")
 			return map[string]any{}, nil
 		}
@@ -134,6 +136,7 @@ func ExtractLongTermMemory(
 			}
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
+				Str("exception", fmt.Sprintf("JSON解析结果类型非map[string]any，实际: %T", parsedResult)).
 				Msg("长期记忆提取模型输出格式错误")
 			return map[string]any{}, nil
 		}

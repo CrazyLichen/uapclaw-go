@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
@@ -36,8 +37,8 @@ type Runner struct {
 	// callbackFramework 异步回调框架（对齐 Python _callback_framework）
 	callbackFramework *callback.CallbackFramework
 	// teamRuntimeManager Team运行时管理器（对齐 Python _team_runtime_manager）
-	// 9.55: 类型保持 any，具体 *runtime.TeamRuntimeManager 通过 runtime 包的全局函数懒创建
-	teamRuntimeManager any
+	// 类型为 registry.PoolAccessor，打破 runner → runtime 循环依赖
+	teamRuntimeManager registry.PoolAccessor
 	// distributeMessageQueue 分布式消息队列（对齐 Python _distribute_message_queue）
 	// ⤵️ 预留：分布式模式实现后回填
 	distributeMessageQueue any
@@ -590,17 +591,16 @@ func GetDistPubSub() any {
 
 // SetTeamRuntimeManager 设置 TeamRuntimeManager 实例到全局 Runner。
 // 对齐 Python: runner._team_runtime_manager = TeamRuntimeManager()。
-// 由于循环依赖（runner → runtime → agent → runner），runner 不能直接导入 runtime 包，
-// 因此由调用方（如 agent_teams）负责创建并通过此函数注入。
-func SetTeamRuntimeManager(mgr any) {
+// 参数类型为 registry.PoolAccessor，由 runtime 包在懒创建时注入。
+func SetTeamRuntimeManager(mgr registry.PoolAccessor) {
 	r := getRunner()
 	r.teamRuntimeManager = mgr
 }
 
-// GetTeamRuntimeManagerAny 获取 TeamRuntimeManager（any 类型）。
-// 返回 any 避免循环依赖。调用方应类型断言为 *runtime.TeamRuntimeManager。
+// GetTeamRuntimeManager 获取 TeamRuntimeManager（registry.PoolAccessor 类型）。
+// 编译期类型安全，无需运行时断言。
 // 对齐 Python: runner._team_runtime_manager
-func GetTeamRuntimeManagerAny() any {
+func GetTeamRuntimeManager() registry.PoolAccessor {
 	return getRunner().teamRuntimeManager
 }
 

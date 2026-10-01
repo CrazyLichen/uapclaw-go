@@ -203,8 +203,8 @@ func TestTeamAgent_RegisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	// 配置前：configurator.Harness() 为 nil
-	result, err := a.RegisterRail(context.Background(), "mock_rail")
+	// 配置前：configurator.Harness() 为 nil，传 nil rail 不 panic
+	result, err := a.RegisterRail(context.Background(), nil)
 	assert.Equal(t, a, result)
 	assert.NoError(t, err)
 }
@@ -214,7 +214,7 @@ func TestTeamAgent_UnregisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	result, err := a.UnregisterRail(context.Background(), "mock_rail")
+	result, err := a.UnregisterRail(context.Background(), nil)
 	assert.Equal(t, a, result)
 	assert.NoError(t, err)
 }

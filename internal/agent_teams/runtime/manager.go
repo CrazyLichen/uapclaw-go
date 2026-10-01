@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -43,6 +44,9 @@ var (
 	globalTeamRuntimeMu sync.Mutex
 )
 
+// 编译期检查：确保 TeamRuntimeManager 满足 registry.PoolAccessor
+var _ registry.PoolAccessor = (*TeamRuntimeManager)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetTeamRuntimeManager 获取全局 TeamRuntimeManager（懒创建）。
@@ -68,6 +72,12 @@ func NewTeamRuntimeManager() *TeamRuntimeManager {
 
 // Pool 返回运行时池。
 func (m *TeamRuntimeManager) Pool() *TeamRuntimePool {
+	return m.pool
+}
+
+// PoolEntry 返回运行时池（满足 registry.PoolAccessor 接口）。
+// 与 Pool 方法的区别：返回 registry.PoolEntry 接口类型，编译期类型安全。
+func (m *TeamRuntimeManager) PoolEntry() registry.PoolEntry {
 	return m.pool
 }
 

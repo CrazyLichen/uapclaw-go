@@ -928,6 +928,8 @@ func (a *TeamAgent) PersistSessionManifest(session any) {
 	if a.recoveryManager != nil {
 		if sf, ok := session.(sessinterfaces.SessionFacade); ok {
 			a.recoveryManager.PersistLeaderConfig(sf)
+		} else {
+			logger.Warn(logComponent).Msg("PersistSessionManifest: session 未实现 SessionFacade，跳过持久化")
 		}
 	}
 }
@@ -942,6 +944,8 @@ func (a *TeamAgent) UpdateModelPool(newPool []models.ModelPoolEntry) {
 	if a.recoveryManager != nil && a.sessionManager != nil {
 		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
 			a.recoveryManager.PersistLeaderConfig(sf)
+		} else if a.sessionManager.TeamSession() != nil {
+			logger.Warn(logComponent).Msg("UpdateModelPool: TeamSession 未实现 SessionFacade，跳过持久化")
 		}
 	}
 }
@@ -1216,34 +1220,18 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 	if teamName == "" || sessionID == "" {
 		return
 	}
-	// 通过 runner 间接获取 TeamRuntimeManager（避免循环依赖 agent → runtime → agent）
-	mgrAny := runner.GetTeamRuntimeManagerAny()
-	if mgrAny == nil {
+	// 通过 registry 接口获取 TeamRuntimeManager（编译期类型安全，无需运行时断言）
+	mgr := runner.GetTeamRuntimeManager()
+	if mgr == nil {
 		return
 	}
-	// 类型断言到含 Pool() 方法的接口
-	type poolAccessor interface {
-		Pool() any
-	}
-	type poolEntry interface {
-		Get(teamName string) any
-		Remove(teamName string) any
-	}
-	mgr, ok := mgrAny.(poolAccessor)
-	if !ok || mgr.Pool() == nil {
+	pool := mgr.PoolEntry()
+	if pool == nil {
 		return
 	}
-	p, ok := mgr.Pool().(poolEntry)
-	if !ok {
+	entry := pool.GetEntry(teamName)
+	if entry == nil || entry.GetSessionID() != sessionID {
 		return
 	}
-	entry := p.Get(teamName)
-	// 检查 SessionID 匹配
-	type sessionIDer interface {
-		SessionID() string
-	}
-	if e, ok := entry.(sessionIDer); !ok || e.SessionID() != sessionID {
-		return
-	}
-	p.Remove(teamName)
+	pool.RemoveEntry(teamName)
 }

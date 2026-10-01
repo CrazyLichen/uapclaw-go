@@ -14,8 +14,9 @@ package registry
 // 打破 agent ↔ runtime 循环依赖：agent 和 runtime 都依赖 registry，互不 import。
 // Python 对应：TeamRuntimeManager.pool 属性
 type PoolAccessor interface {
-	// Pool 返回运行时池
-	Pool() PoolEntry
+	// PoolEntry 返回运行时池（满足 registry.PoolEntry 接口）
+	// 方法名用 PoolEntry 避免与 TeamRuntimeManager.Pool() *TeamRuntimePool 签名冲突
+	PoolEntry() PoolEntry
 }
 
 // PoolEntry 运行时池条目访问接口。
