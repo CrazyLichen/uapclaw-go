@@ -82,8 +82,8 @@ type ExtractMemoryParams struct {
     Messages []schema.BaseMessage
     // HistoryMessages 历史消息列表
     HistoryMessages []schema.BaseMessage
-    // BaseModel 基础聊天模型
-    BaseModel model.Model
+    // BaseModel 基础聊天模型（具体类型 *llm.Model，非接口）
+    BaseModel *llm.Model
 }
 
 // MemoryOperationParams 记忆操作参数（UPDATE/DELETE 语义验证时使用）。
@@ -98,14 +98,14 @@ type MemoryOperationParams struct {
     MessageMemID string
     // Timestamp 时间戳
     Timestamp string
-    // BaseModel 基础聊天模型
-    BaseModel model.Model
+    // BaseModel 基础聊天模型（具体类型 *llm.Model，非接口）
+    BaseModel *llm.Model
     // SemanticStore 语义存储（用于搜索旧记忆做语义验证）
     SemanticStore any
 }
 ```
 
-- `base_chat_model` → `BaseModel model.Model`，对齐 Go 侧 Model 接口
+- `base_chat_model` → `BaseModel *llm.Model`，Go 代码库中统一使用 `*llm.Model`（门面结构体），无 `model.Model` 接口
 - `semantic_store: Any` → `SemanticStore any`，保持灵活性，后续回填时可收窄
 - `MemoryOperationParams` 在 7.18 中不被直接使用，但属于 `common.py` 的一部分，按对齐原则一并定义
 
@@ -148,7 +148,7 @@ func buildTimeContext(timestamp string) string
 2. **返回值 `(map[string]any, error)`**：Python 返回 `Dict[str, Any]` 或空 dict。Go 用 `map[string]any` 对齐，增加 error 返回值符合 Go 惯例
 3. **retries 参数**：Python 默认 `retries=3`，Go 中由调用方显式传入
 4. **scopeConfig nil 处理**：Python 中 `if not scope_config: scope_config = MemoryScopeConfig()`。Go 中 `if scopeConfig == nil` 时使用 `DefaultMemoryScopeConfig()`
-5. **日志同步**：Python 仅在最终重试失败时记录 `memory_logger.error("Long term memory extractor model output format error")`，Go 等价对齐，使用 `logger.Error(logComponent).Str("event_type", "MEMORY_PROCESS")`
+5. **日志同步**：Python 在最终重试失败时记录 `memory_logger.error("Long term memory extractor model output format error", event_type=LogEventType.MEMORY_PROCESS, exception=str(e))`。Go 等价对齐，使用 `logger.Error(logComponent).Str("event_type", "MEMORY_PROCESS").Str("exception", ...).Msg(...)`，其中 `exception` 字段对齐 Python 的 `exception=str(e)`，提供诊断上下文
 6. **JsonOutputParser 重试模式**：对齐已有的 `update_checker.go` 先例——`NewJsonOutputParser()` + `for attempt` 循环
 
 ### 4. doc.go
@@ -178,7 +178,11 @@ package extract
 | `memory/process/extract/common_test.go` | 结构体零值 / 赋值基本验证 |
 | `memory/process/extract/extractor_test.go` | `ExtractLongTermMemory`：mock LLM 返回合法 JSON / 非法 JSON 重试 / 全部失败返回空 map；`buildTimeContext`：合法 ISO 时间 / 空串 / 非法格式 fallback |
 
-mock LLM 方式对齐已有的 `update_checker_test.go` 先例——在测试文件中定义 `fakeModel` 结构体实现 `model.Model` 接口，控制 `Invoke` 返回预设的 JSON 字符串或错误。
+mock LLM 方式：在测试文件中定义 `mockLLMClient` 结构体实现 `model_clients.BaseModelClient` 接口，通过 `llm.NewModel` + 合法 provider（`"openai"` + 虚假凭据 + `WithVerifySSL(false)`）+ `llm.WithClient(client)` 覆盖底层客户端。
+
+> **偏差说明**：初始计划使用 `NewModelClientConfig("mock", ...)` 构造 mock 配置，但 `"mock"` 不是合法 provider 会被 `NewModelClientConfig` 校验拒绝。实际采用合法 provider + `WithClient` 覆盖模式，这是项目中 mock LLM 的标准做法。
+
+> **偏差说明**：mock client 的 `Invoke` 方法中必须手动调用 `OutputParser.Parse()` 并设置 `resp.ParserContent`，以对齐真实 client 行为。初始计划未预见此步骤，但不模拟会导致 `ExtractLongTermMemory` 永远拿不到 `parsedResult`。
 
 ## 已有依赖（✅ = 已实现）
 
@@ -187,7 +191,7 @@ mock LLM 方式对齐已有的 `update_checker_test.go` 先例——在测试文
 | PromptApplier | ✅ | memory/prompts/ |
 | fragment_memory_prompt.md | ✅ | memory/prompts/ |
 | JsonOutputParser | ✅ | foundation/llm/output_parsers/ |
-| Model 接口 | ✅ | foundation/llm/ |
+| *llm.Model 结构体 | ✅ | foundation/llm/ |
 | BaseMessage 接口 | ✅ | foundation/llm/schema/ |
 | MemoryScopeConfig | ❌ 本次实现 | memory/config/ |
 

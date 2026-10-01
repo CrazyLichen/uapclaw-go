@@ -258,6 +258,11 @@ type mockLLMClient struct {
 }
 
 // Invoke 实现 BaseModelClient.Invoke，执行 invokeFn 并处理 OutputParser。
+//
+// 重要：必须手动调用 OutputParser.Parse() 并设置 resp.ParserContent，
+// 对齐真实 client 的行为（真实 client 在 Invoke 内部会调用 OutputParser
+// 并将解析结果填入 ParserContent）。如果不模拟此步骤，ExtractLongTermMemory
+// 永远拿不到 parsedResult，所有测试将失败。
 func (m *mockLLMClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	if m.invokeFn != nil {
 		resp, err := m.invokeFn(ctx, messages, opts...)
@@ -314,7 +319,9 @@ func (m *mockLLMClient) SupportsKVCacheRelease() bool {
 
 // newFakeModelWithResponse 构造返回预设 JSON 字符串的 fake *llm.Model。
 //
-// 通过 NewModel + 合法 provider + WithClient 覆盖底层客户端实现 mock。
+// 通过 NewModel + 合法 provider（"openai" + 虚假凭据 + WithVerifySSL(false)）
+// + WithClient 覆盖底层客户端实现 mock。
+// 注意：不能用 NewModelClientConfig("mock", ...)，因为 "mock" 不是合法 provider 会被校验拒绝。
 // WithInvokeOutputParser 会自动解析 JSON 并填入 ParserContent。
 func newFakeModelWithResponse(t *testing.T, jsonStr string) *llm.Model {
 	t.Helper()
@@ -336,6 +343,7 @@ func newFakeModelWithResponse(t *testing.T, jsonStr string) *llm.Model {
 }
 
 // newFakeModelWithInvokeErr 构造 Invoke 返回错误的 fake *llm.Model。
+// 同 newFakeModelWithResponse，使用合法 provider + WithClient 模式。
 func newFakeModelWithInvokeErr(invokeErr error) *llm.Model {
 	client := &mockLLMClient{
 		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
