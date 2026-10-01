@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

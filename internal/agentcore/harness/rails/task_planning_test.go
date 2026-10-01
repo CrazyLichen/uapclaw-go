@@ -119,7 +119,9 @@ func (f *fakeDeepAgentForTaskPlanning) SaveState(_ sessioninterfaces.SessionFaca
 }
 
 // FindRailsByType 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentForTaskPlanning) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentForTaskPlanning) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTaskPlanning)(nil)
@@ -1616,7 +1618,9 @@ func (f *fakeDeepAgentWithAm) SaveState(_ sessioninterfaces.SessionFacade, _ *hs
 }
 
 // FindRailsByType 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentWithAm) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentWithAm) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentWithAm)(nil)

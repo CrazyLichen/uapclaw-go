@@ -352,12 +352,12 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 	}
 
 	return atschema.TeamRuntimeContext{
-		Role:           role,
-		MemberName:     teammate.MemberName,
-		Persona:        teammate.Desc,
-		TeamSpec:       runtimeCtx.TeamSpec,
-		DBConfig:       runtimeCtx.DBConfig,
-		MemberModel:    nil, // TODO(#9.64): resolveMemberModelFromDB 返回 *models.TeamModelConfig
+		Role:        role,
+		MemberName:  teammate.MemberName,
+		Persona:     teammate.Desc,
+		TeamSpec:    runtimeCtx.TeamSpec,
+		DBConfig:    runtimeCtx.DBConfig,
+		MemberModel: nil, // TODO(#9.64): resolveMemberModelFromDB 返回 *models.TeamModelConfig
 	}, nil
 }
 

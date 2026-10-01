@@ -91,13 +91,13 @@ func BuildSystemPrompt(
 ) string {
 	lbl := policyLabelsFor(language)
 
-	// member_name_section
+	// 成员名段落
 	memberNameSection := ""
 	if memberName != "" {
 		memberNameSection = lbl["member_name_label"] + ": " + memberName + "\n"
 	}
 
-	// role_policy
+	// 角色策略
 	policyName := "leader_policy"
 	if role != "leader" {
 		policyName = "teammate_policy"
@@ -124,22 +124,22 @@ func BuildSystemPrompt(
 		lifecycleSection = LoadTemplate(lcName, language).Content()
 	}
 
-	// persona_label + persona
+	// 人设标签 + 人设
 	personaLabel := lbl["persona"]
 
-	// team_info_section
+	// 团队信息段落
 	teamInfoSection := ""
 	if teamInfo != nil {
 		teamInfoSection = formatTeamInfo(teamInfo, lbl)
 	}
 
-	// team_members_section
+	// 团队成员段落
 	teamMembersSection := ""
 	if len(teamMembers) > 0 {
 		teamMembersSection = formatTeamMembers(teamMembers, lbl, memberName)
 	}
 
-	// base_prompt_section
+	// 基础提示词段落
 	basePromptSection := ""
 	if basePrompt != "" {
 		basePromptSection = "\n" + basePrompt

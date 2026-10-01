@@ -418,4 +418,3 @@ func getLoopController(agent agentinterfaces.BaseAgent) loopController {
 	}
 	return nil
 }
-

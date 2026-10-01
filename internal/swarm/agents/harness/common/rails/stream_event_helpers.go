@@ -296,7 +296,7 @@ func inferDictError(v map[string]any) *bool {
 			return boolPtr(true)
 		}
 	}
-	// exit_code / exitCode / returncode / return_code
+	// 退出码字段名变体
 	for _, key := range []string{"exit_code", "exitCode", "returncode", "return_code"} {
 		if val, ok := v[key]; ok {
 			if exitFailed := nonzeroExit(val); exitFailed != nil {

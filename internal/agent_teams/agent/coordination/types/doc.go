@@ -6,10 +6,11 @@
 // 文件目录：
 //
 //	types/
-//	├── doc.go       # 包文档
-//	├── events.go    # CoordinationEvent / InnerEventType / InnerEventMessage
-//	├── protocols.go # AgentRoundController / TeamLifecycleController / PollController / DispatcherHost / DispatcherBlueprint / DispatcherInfra
-//	└── callbacks.go # EventCallbackFunc / CallbacksProvider
+//	├── doc.go               # 包文档
+//	├── events.go            # CoordinationEvent / InnerEventType / InnerEventMessage
+//	├── protocols.go         # AgentRoundController / TeamLifecycleController / PollController / DispatcherHost / DispatcherBlueprint / DispatcherInfra
+//	├── lifecycle_accessors.go # SessionAccessor / SessionController / InfraAccessor / TeamBackendAccessor / ResourceAccessor / HarnessAccessor / LifecycleAccessor / KernelHost
+//	└── callbacks.go         # EventCallbackFunc / CallbacksProvider
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/coordination/event_bus.py + dispatcher.py 的协议定义
 package types

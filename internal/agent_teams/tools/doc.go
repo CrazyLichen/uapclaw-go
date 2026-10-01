@@ -22,12 +22,13 @@
 //	    ├── models.go        # Team + TeamMember + TeamTask + TeamMessageBase 数据模型 + 辅助类型 + 动态表常量
 //	    ├── database.go      # TeamDatabase 门面接口 + TeamDao/MemberDao/TaskDao/MessageDao DAO 接口
 //	    ├── fsm.go           # FSM 状态转换表 + 校验函数
-//	    ├── engine.go        # 数据库引擎初始化函数 + GetCurrentTime/SanitizeSessionIDForTable
+//	    ├── engine.go        # GetCurrentTime / SanitizeSessionIDForTable 工具函数
+//	    ├── sql_engine.go    # SqlTeamDatabase 门面 + newGormDB + DDL 建表/删表 + 清理 + WithTx
 //	    ├── memory_impl.go   # InMemoryTeamDatabase 单体实现（含 TaskDao + MessageDao）
-//	    ├── team_dao.go      # TeamDao 占位文件（已迁移为 sql_team_dao.go）
-//	    ├── member_dao.go    # MemberDao 占位文件（已迁移为 sql_member_dao.go）
-//	    ├── task_dao.go      # TaskDao 注释说明文件（已迁移为 sql_task_dao.go）
-//	    └── message_dao.go   # MessageDao 注释说明文件（已迁移为 sql_message_dao.go）
+//	    ├── sql_team_dao.go  # SQLTeamDao（5 方法，静态表 team_info）
+//	    ├── sql_member_dao.go # SQLMemberDao（8 方法，含 CAS，静态表 team_member）
+//	    ├── sql_task_dao.go  # SQLTaskDao（18 方法 + 5 辅助函数 + 环检测，动态表 team_task_{suffix}）
+//	    └── sql_message_dao.go # SQLMessageDao（7 方法，含重试 + watermark，动态表 team_message_{suffix}）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/tools/
 package tools

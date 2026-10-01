@@ -45,22 +45,22 @@ func (f *fakeKernelHost) UpdateStatus(_ context.Context, _ schema.MemberStatus) 
 func (f *fakeKernelHost) Blueprint() types.DispatcherBlueprint {
 	return &fakeDispatcherBlueprint{role: f.role, memberName: f.memberName}
 }
-func (f *fakeKernelHost) Infra() types.DispatcherInfra   { return nil }
-func (f *fakeKernelHost) SessionController() types.SessionController { return nil }
-func (f *fakeKernelHost) TeamBackendAccessor() types.TeamBackendAccessor { return nil }
-func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor       { return nil }
-func (f *fakeKernelHost) SetWorkspaceInitialized()                         {}
-func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager             { return nil }
-func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor           { return nil }
-func (f *fakeKernelHost) SpecAny() any                                     { return nil }
-func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error       { return nil }
-func (f *fakeKernelHost) UnsubscribeTransport() error                      { return nil }
-func (f *fakeKernelHost) PersistAllocatorState()                           {}
-func (f *fakeKernelHost) DrainAgentTask(_ context.Context)                {}
+func (f *fakeKernelHost) Infra() types.DispatcherInfra                        { return nil }
+func (f *fakeKernelHost) SessionController() types.SessionController          { return nil }
+func (f *fakeKernelHost) TeamBackendAccessor() types.TeamBackendAccessor      { return nil }
+func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor           { return nil }
+func (f *fakeKernelHost) SetWorkspaceInitialized()                            {}
+func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager            { return nil }
+func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor              { return nil }
+func (f *fakeKernelHost) SpecAny() any                                        { return nil }
+func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error          { return nil }
+func (f *fakeKernelHost) UnsubscribeTransport() error                         { return nil }
+func (f *fakeKernelHost) PersistAllocatorState()                              {}
+func (f *fakeKernelHost) DrainAgentTask(_ context.Context)                    {}
 func (f *fakeKernelHost) MarkLiveTeammates(_ context.Context, _ string) error { return nil }
-func (f *fakeKernelHost) CloseStream()                                     {}
-func (f *fakeKernelHost) SetMemberID(_ string)                             {}
-func (f *fakeKernelHost) Lifecycle() string                                { return "temporary" }
+func (f *fakeKernelHost) CloseStream()                                        {}
+func (f *fakeKernelHost) SetMemberID(_ string)                                {}
+func (f *fakeKernelHost) Lifecycle() string                                   { return "temporary" }
 
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
 

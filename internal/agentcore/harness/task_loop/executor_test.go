@@ -560,7 +560,9 @@ func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *
 }
 
 // FindRailsByType 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeSessionFacade) GetSessionID() string {

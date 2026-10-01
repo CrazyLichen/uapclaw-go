@@ -109,7 +109,7 @@ func TryGetKey(key string, src map[string]any) string {
 	// 对齐 Python difflib.get_close_matches(word, possibilities, n=1, cutoff=0.85)
 	// 找到相似度 >= 0.85 的最佳匹配
 	bestOrigKey := ""
-	bestScore := 0.85 // cutoff
+	bestScore := 0.85 // 截止阈值
 	for nk, origK := range norm2key {
 		score := sequenceMatcherRatio(normKey, nk)
 		if score >= bestScore {

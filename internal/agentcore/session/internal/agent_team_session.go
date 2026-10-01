@@ -49,7 +49,7 @@ type AgentTeamSessionOption func(*AgentTeamSession)
 // _ 编译时验证接口实现
 var (
 	// _ 编译时验证 AgentTeamSession 满足 InnerSession 接口
-	_ interfaces.InnerSession   = (*AgentTeamSession)(nil)
+	_ interfaces.InnerSession = (*AgentTeamSession)(nil)
 	// _ 编译时验证 AgentTeamSession 满足 TeamIDProvider 接口
 	_ interfaces.TeamIDProvider = (*AgentTeamSession)(nil)
 )

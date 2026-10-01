@@ -610,7 +610,9 @@ func (f *fakeDeepAgentForNotify) SaveState(_ sessioninterfaces.SessionFacade, _ 
 }
 
 // FindRailsByType 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentForNotify) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentForNotify) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)

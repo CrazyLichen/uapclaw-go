@@ -65,7 +65,9 @@ func (f *fakeDeepAgentForHeartbeat) GetPlanFilePath(_ sessioninterfaces.SessionF
 }
 func (f *fakeDeepAgentForHeartbeat) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
-func (f *fakeDeepAgentForHeartbeat) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentForHeartbeat) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForHeartbeat)(nil)

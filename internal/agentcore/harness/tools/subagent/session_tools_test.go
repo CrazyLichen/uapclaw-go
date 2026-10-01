@@ -574,7 +574,9 @@ func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *
 }
 
 // FindRailsByType 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
 
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }

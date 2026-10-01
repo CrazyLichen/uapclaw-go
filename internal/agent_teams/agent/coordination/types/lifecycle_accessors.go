@@ -4,22 +4,12 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // SessionAccessor 会话管理器访问接口。
 // Python: host.session_manager
@@ -151,3 +141,13 @@ type KernelHost interface {
 	// TeamName 返回团队名
 	TeamName() string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

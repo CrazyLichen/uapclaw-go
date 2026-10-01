@@ -792,10 +792,10 @@ func (t *TaskCreateTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 		if err != nil {
 			return toolError(err.Error())
 		}
-	if !result.Ok() {
-		return toolError(result.Reason)
-	}
-	return toolSuccess(taskBrief(result.Task))
+		if !result.Ok() {
+			return toolError(result.Reason)
+		}
+		return toolSuccess(taskBrief(result.Task))
 	}
 
 	// 批量路径
@@ -917,7 +917,7 @@ func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...t
 		return toolSuccess(data)
 	}
 
-	// list / claimable
+	// 列表 / 可认领
 	var summaries []*TaskSummary
 	var err error
 	if action == "claimable" {

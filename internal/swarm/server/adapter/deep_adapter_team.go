@@ -7,8 +7,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

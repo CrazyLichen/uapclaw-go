@@ -44,8 +44,8 @@ func (s *LlmSpanState) NextChunkSeq() int {
 type OtelSpanState struct {
 	mu           sync.Mutex
 	llmStack     []*LlmSpanState
-	toolSpanMap  map[string][]trace.Span // key=toolName
-	agentSpanMap map[string][]trace.Span // key=agentID
+	toolSpanMap  map[string][]trace.Span // key=toolName 工具名
+	agentSpanMap map[string][]trace.Span // key=agentID Agent 标识
 }
 
 // spanStateKeyType OtelSpanState 的 context key 类型。

@@ -44,7 +44,7 @@ func TestAuto_Milvus可达(t *testing.T) {
 	h.SetMilvusConnector(&mockMilvusConnector{})
 
 	// 触发探测（通过 Save）
-	err := h.Save(context.Background(),"alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
+	err := h.Save(context.Background(), "alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
 	require.NoError(t, err)
 	assert.Equal(t, "milvus", h.ResolvedType()) // 探测到可达 → milvus
 }
@@ -58,7 +58,7 @@ func TestAuto_Milvus不可达(t *testing.T) {
 		WithMilvusHost(""), // 空 host → 不会自动创建 MilvusConnectorImpl
 	)
 
-	err := h.Save(context.Background(),"alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
+	err := h.Save(context.Background(), "alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "hello"}})
 	require.NoError(t, err)
 	assert.Equal(t, "json", h.ResolvedType()) // 不可达 → 回退 json
 }
@@ -69,7 +69,7 @@ func TestAuto_显式JSON(t *testing.T) {
 		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
 	)
 	// 显式 json 不需要探测，首次 Save 时 resolveBackend 直接设为 json
-	err := h.Save(context.Background(),"alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
+	err := h.Save(context.Background(), "alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
 	require.NoError(t, err)
 	assert.Equal(t, "json", h.ResolvedType())
 }
@@ -78,7 +78,7 @@ func TestAuto_显式Milvus(t *testing.T) {
 	h := NewMemoryPersistenceHelper(WithPersistType("milvus"))
 	h.SetMilvusConnector(&mockMilvusConnector{}) // 注入 mock 防止 nil 调用
 	// 显式 milvus 不探测，直接设为 milvus
-	_ = h.Save(context.Background(),"alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
+	_ = h.Save(context.Background(), "alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}})
 	assert.Equal(t, "milvus", h.ResolvedType())
 }
 
@@ -95,9 +95,9 @@ func TestMemoryPersistenceHelper_Save_Load_JSON往返(t *testing.T) {
 		"node1": map[string]any{"id": "node1", "content": "hello", "metadata": map[string]any{}},
 	}
 
-	require.NoError(t, h.Save(context.Background(),"alice", "ace", nodes))
+	require.NoError(t, h.Save(context.Background(), "alice", "ace", nodes))
 
-	loaded, err := h.Load(context.Background(),"alice", "ace")
+	loaded, err := h.Load(context.Background(), "alice", "ace")
 	require.NoError(t, err)
 	assert.Equal(t, "hello", loaded["node1"].(map[string]any)["content"])
 }
@@ -107,7 +107,7 @@ func TestMemoryPersistenceHelper_Save_空数据(t *testing.T) {
 		WithPersistType("json"),
 		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
 	)
-	err := h.Save(context.Background(),"alice", "ace", nil)
+	err := h.Save(context.Background(), "alice", "ace", nil)
 	assert.NoError(t, err) // 空数据直接返回，对齐 Python
 }
 
@@ -116,7 +116,7 @@ func TestMemoryPersistenceHelper_Load_不存在(t *testing.T) {
 		WithPersistType("json"),
 		WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
 	)
-	loaded, err := h.Load(context.Background(),"alice", "ace")
+	loaded, err := h.Load(context.Background(), "alice", "ace")
 	require.NoError(t, err)
 	assert.Empty(t, loaded) // 对齐 Python：文件不存在返回 {}
 }
@@ -128,10 +128,10 @@ func TestMemoryPersistenceHelper_Save_合并(t *testing.T) {
 		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
 	)
 
-	require.NoError(t, h.Save(context.Background(),"alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "a"}}))
-	require.NoError(t, h.Save(context.Background(),"alice", "ace", map[string]any{"n2": map[string]any{"id": "n2", "content": "b"}}))
+	require.NoError(t, h.Save(context.Background(), "alice", "ace", map[string]any{"n1": map[string]any{"id": "n1", "content": "a"}}))
+	require.NoError(t, h.Save(context.Background(), "alice", "ace", map[string]any{"n2": map[string]any{"id": "n2", "content": "b"}}))
 
-	loaded, err := h.Load(context.Background(),"alice", "ace")
+	loaded, err := h.Load(context.Background(), "alice", "ace")
 	require.NoError(t, err)
 	_, hasN1 := loaded["n1"]
 	_, hasN2 := loaded["n2"]
@@ -145,14 +145,14 @@ func TestMemoryPersistenceHelper_路径模板替换(t *testing.T) {
 		WithPersistType("json"),
 		WithPersistPath(dir+"/{algo_name}/{user_id}.json"),
 	)
-	require.NoError(t, h.Save(context.Background(),"bob", "rb", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}}))
+	require.NoError(t, h.Save(context.Background(), "bob", "rb", map[string]any{"n1": map[string]any{"id": "n1", "content": "x"}}))
 
-	loaded, err := h.Load(context.Background(),"bob", "rb")
+	loaded, err := h.Load(context.Background(), "bob", "rb")
 	require.NoError(t, err)
 	assert.NotEmpty(t, loaded)
 
 	// 验证其他算法名/用户名不影响
-	loadedOther, err := h.Load(context.Background(),"bob", "ace")
+	loadedOther, err := h.Load(context.Background(), "bob", "ace")
 	require.NoError(t, err)
 	assert.Empty(t, loadedOther)
 }
@@ -194,4 +194,4 @@ func (m *mockMilvusConnector) LoadFromDB(_ context.Context, _ string) (map[strin
 }
 func (m *mockMilvusConnector) Exists(_ context.Context, _ string) bool { return true }
 func (m *mockMilvusConnector) Delete(_ context.Context, _ string) bool { return false }
-func (m *mockMilvusConnector) Ping(_ context.Context) bool               { return true }
+func (m *mockMilvusConnector) Ping(_ context.Context) bool             { return true }

@@ -1432,16 +1432,16 @@ func (r *SkillEvolutionRail) emitSharedRecordsApproval(
 	// Python: request = self._manager.stage_records(skill_name, records, source="experience_sharing", messages=..., is_shared_records=True)
 	request, _ := r.manager.StageRecords(
 		ctx, skillName, records,
-		true,                        // requiresApproval
-		"experience_sharing",        // source
-		"",                          // userQuery
-		nil,                         // signalType
-		nil,                         // signalSource
-		schema.SkillExperienceEntry, // changeType
-		"skill_evolve_",             // requestIDPrefix
-		nil,                         // trajectory
+		true,                        // requiresApproval 需要审批
+		"experience_sharing",        // source 来源
+		"",                          // userQuery 用户查询
+		nil,                         // signalType 信号类型
+		nil,                         // signalSource 信号来源
+		schema.SkillExperienceEntry, // changeType 变更类型
+		"skill_evolve_",             // requestIDPrefix 请求ID前缀
+		nil,                         // trajectory 轨迹
 		messages,
-		true, // isSharedRecords
+		true, // isSharedRecords 共享记录
 	)
 	if request != nil {
 		r.emitGeneratedRecords(nil, skillName, request)

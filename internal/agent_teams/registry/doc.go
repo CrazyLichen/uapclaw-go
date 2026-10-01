@@ -10,8 +10,7 @@
 //
 //	registry/
 //	├── doc.go              # 包文档
-//	├── interfaces.go       # PoolAccessor + PoolEntry + PoolTeamEntry 接口
-//	└── interfaces_test.go  # 接口编译期检查测试
+//	└── interfaces.go       # PoolAccessor + PoolEntry + PoolTeamEntry 接口
 //
 // 对应 Python 代码：无独立对应，接口从 runtime/manager.py + runtime/pool.py 提取
 package registry
