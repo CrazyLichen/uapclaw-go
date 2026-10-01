@@ -460,7 +460,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.15 | ✅ | OpenVikingProvider | ✅ vikingClient（health/post/get/close + 身份 Header + 30s 超时）+ ✅ OpenVikingProvider（5 工具 Schema + Initialize 健康检查 + Prefetch + SyncTurn + HandleToolCall 5 分支 + OnSessionEnd commit + Shutdown）；环境变量 fallback；无内建熔断器；日志同步 7 点；测试覆盖率 88.5% | `openjiuwen/core/memory/external/openviking_memory_provider.py` |
 | 7.16 | ☐ | OpenJiuwenMemoryProvider | openjiuwen LTM 适配 | `openjiuwen/core/memory/external/openjiuwen_memory_provider.py` |
 | 7.17 | ☐ | AgentArtsMemoryProvider | AgentArts 适配 | `openjiuwen/core/memory/external/agentarts_memory_provider.py` |
-| 7.18 | ☐ | LongTermMemoryExtractor | 长期记忆提取 | `openjiuwen/core/memory/process/extract/` |
+| 7.18 | ✅ | LongTermMemoryExtractor | ✅ LongTermMemoryExtractor（ExtractLongTermMemory + buildTimeContext）+ ✅ ExtractMemoryParams + ✅ MemoryOperationParams + ✅ MemoryScopeConfig + DefaultMemoryScopeConfig | `openjiuwen/core/memory/process/extract/` |
 | 7.19 | ☐ | MemoryAnalyzer / Refiner | 记忆精炼 | `openjiuwen/core/memory/process/refine/` |
 | 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
 | 7.21 | 🔄 | MigrationPlan | 迁移计划（部分提前：OperationRegistry + BaseOperation + Operations + MigrationPlan；⤵️ 7.22-7.23 Migrator + run_migrations 待后续回填） | `openjiuwen/core/memory/migration/migration_plan.py` |

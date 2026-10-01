@@ -105,6 +105,11 @@ func WithCallbackFramework(fw *callback.CallbackFramework) ModelOption {
 	return func(m *Model) { m.callbackFramework = fw }
 }
 
+// WithClient 设置自定义底层客户端（主要用于测试注入 mock）。
+func WithClient(client model_clients.BaseModelClient) ModelOption {
+	return func(m *Model) { m.client = client }
+}
+
 // Invoke 非流式调用 LLM。
 //
 // Python: Model.invoke()
