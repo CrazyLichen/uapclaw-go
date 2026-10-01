@@ -140,6 +140,12 @@ func NewExternalMemoryRail(
 	return r
 }
 
+// Provider 返回外部记忆 Provider 实例。
+// 用于 handleExternalMemoryRailByConfig 在注销前调用 OnSessionEnd。
+func (r *ExternalMemoryRail) Provider() ext.MemoryProvider {
+	return r.provider
+}
+
 // Init 注册 Provider 工具 + 注入 system_prompt_block。
 // Python: ExternalMemoryRail.init(agent)
 func (r *ExternalMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {

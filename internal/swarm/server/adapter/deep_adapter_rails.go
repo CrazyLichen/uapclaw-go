@@ -12,6 +12,7 @@ import (
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	ext "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/external"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
@@ -564,11 +565,96 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildExternalMemoryRail 构建外接记忆护栏。
-// ⤵️ 10.6.3-10: ExternalMemoryRail
-// Python: _build_external_memory_rail() (line 2131-2145)
+// 对齐 Python: _build_external_memory_rail() — 根据 memory.external.provider 配置构建
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ExternalMemoryRail
-	return nil
+	providerName, providerCfg := getExternalMemoryProviderConfig(d.configCache)
+	if providerName == "" {
+		logger.Debug(logComponent).Msg("buildExternalMemoryRail: 无外接记忆 provider 配置")
+		return nil
+	}
+
+	provider := d.buildExternalMemoryProvider(providerName, providerCfg)
+	if provider == nil {
+		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryRail: 构建 provider 失败")
+		return nil
+	}
+
+	// 对齐 Python: ExternalMemoryRail(provider, user_id, scope_id, session_id)
+	userID := d.resolveExternalMemoryUserID()
+	scopeID := d.resolveExternalMemoryScopeID()
+
+	rail := memrail.NewExternalMemoryRail(provider, userID, scopeID, "")
+	logger.Info(logComponent).
+		Str("provider", providerName).
+		Str("user_id", userID).
+		Str("scope_id", scopeID).
+		Msg("ExternalMemoryRail 创建成功")
+	return rail
+}
+
+// buildExternalMemoryProvider 按 provider 名称分发构建 MemoryProvider。
+// 对齐 Python: build_external_memory_provider(config, workspace_dir)
+func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[string]any) ext.MemoryProvider {
+	switch providerName {
+	case "mem0":
+		apiKey := strVal(cfg["api_key"])
+		userID := strVal(cfg["user_id"])
+		agentID := strVal(cfg["agent_id"])
+		rerank := boolVal(cfg["rerank"])
+		provider := ext.NewMem0Provider(apiKey, userID, agentID, rerank)
+		if !provider.IsAvailable() {
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: Mem0Provider 不可用（缺少 api_key）")
+			return nil
+		}
+		return provider
+	case "openviking":
+		endpoint := strVal(cfg["endpoint"])
+		apiKey := strVal(cfg["api_key"])
+		account := strVal(cfg["account"])
+		user := strVal(cfg["user"])
+		agent := strVal(cfg["agent"])
+		provider := ext.NewOpenVikingProvider(endpoint, apiKey, account, user, agent)
+		if !provider.IsAvailable() {
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider 不可用")
+			return nil
+		}
+		return provider
+	default:
+		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryProvider: 不支持的 provider 类型")
+		return nil
+	}
+}
+
+// resolveExternalMemoryUserID 解析外接记忆的 user_id。
+func (d *DeepAdapter) resolveExternalMemoryUserID() string {
+	_, cfg := getExternalMemoryProviderConfig(d.configCache)
+	if cfg != nil {
+		if uid := strVal(cfg["user_id"]); uid != "" {
+			return uid
+		}
+	}
+	// 回退到 agentName
+	return d.agentName
+}
+
+// resolveExternalMemoryScopeID 解析外接记忆的 scope_id。
+func (d *DeepAdapter) resolveExternalMemoryScopeID() string {
+	memCfg, _ := d.configCache["memory"].(map[string]any)
+	if memCfg != nil {
+		extCfg, _ := memCfg["external"].(map[string]any)
+		if extCfg != nil {
+			if sid := strVal(extCfg["scope_id"]); sid != "" {
+				return sid
+			}
+		}
+	}
+	return d.agentName
+}
+
+// boolVal 从 map[string]any 中安全提取布尔值。
+func boolVal(v any) bool {
+	b, _ := v.(bool)
+	return b
 }
 
 // handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
@@ -621,6 +707,49 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 			d.memoryRail = nil
 			d.isProactiveMemory = nil
 			logger.Info(logComponent).Str("mode", mode).Msg("MemoryRail unregistered (config disabled)")
+		}
+	}
+}
+
+// handleExternalMemoryRailByConfig 按配置注册/注销 ExternalMemoryRail。
+// 对齐 Python: _handle_external_memory_rail_by_config()
+// engine 为 "external" 或 "both" 时注册，否则注销。
+func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
+	if isExternalMemoryEnabled(d.configCache) {
+		if !d.externalMemoryRailRegistered {
+			rail := d.buildExternalMemoryRail()
+			if rail != nil {
+				d.externalMemoryRail = rail
+				if d.instance != nil {
+					if err := d.instance.RegisterRail(ctx, rail); err != nil {
+						logger.Error(logComponent).Err(err).Msg("Failed to register ExternalMemoryRail")
+					} else {
+						d.externalMemoryRailRegistered = true
+						logger.Info(logComponent).Msg("ExternalMemoryRail registered")
+					}
+				}
+			}
+		}
+	} else {
+		if d.externalMemoryRailRegistered {
+			// 对齐 Python: 注销前先调 provider.on_session_end(messages)
+			// 接受双重调用模式（此处带 messages，Uninit 中带 nil）
+			if emRail, ok := d.externalMemoryRail.(*memrail.ExternalMemoryRail); ok {
+				provider := emRail.Provider()
+				if provider != nil {
+					if err := provider.OnSessionEnd(ctx, nil); err != nil {
+						logger.Warn(logComponent).Err(err).Msg("ExternalMemoryRail Provider OnSessionEnd 失败")
+					}
+				}
+			}
+			if d.instance != nil {
+				if err := d.instance.UnregisterRail(ctx, d.externalMemoryRail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("Failed to unregister ExternalMemoryRail")
+				}
+			}
+			d.externalMemoryRail = nil
+			d.externalMemoryRailRegistered = false
+			logger.Info(logComponent).Msg("ExternalMemoryRail unregistered (config disabled)")
 		}
 	}
 }
@@ -839,7 +968,7 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 
 	// 4. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()
-	// ⤵️ 待回填: handleExternalMemoryRailByConfig
+	d.handleExternalMemoryRailByConfig(ctx)
 
 	// 5. ContextAssembleRail — plan 模式专属实例
 	if d.contextAssembleRail == nil || d.contextAssembleMode != "agent.plan" {
@@ -989,7 +1118,7 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 
 	// 3. 外接记忆 rail
 	// Python: await self._handle_external_memory_rail_by_config()
-	// ⤵️ 待回填: handleExternalMemoryRailByConfig
+	d.handleExternalMemoryRailByConfig(ctx)
 
 	// 4. ContextAssembleRail — agent.fast 模式专属实例
 	if d.contextAssembleRail == nil || d.contextAssembleMode == "agent.plan" {
@@ -1341,6 +1470,34 @@ func getMemoryEngine(config map[string]any) string {
 		return "builtin"
 	}
 	return engine
+}
+
+// isExternalMemoryEnabled 检查 memory.engine 是否允许外接记忆。
+// 对齐 Python: engine in ("external", "both")
+func isExternalMemoryEnabled(config map[string]any) bool {
+	engine := getMemoryEngine(config)
+	return engine == "external" || engine == "both"
+}
+
+// getExternalMemoryProviderConfig 读取 memory.external 配置段。
+// 返回 provider 名称和对应配置 map。
+func getExternalMemoryProviderConfig(config map[string]any) (providerName string, providerCfg map[string]any) {
+	memCfg, _ := config["memory"].(map[string]any)
+	if memCfg == nil {
+		return "", nil
+	}
+	extCfg, _ := memCfg["external"].(map[string]any)
+	if extCfg == nil {
+		return "", nil
+	}
+	name, _ := extCfg["provider"].(string)
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return "", nil
+	}
+	// 读取 provider 子段：memory.external.mem0 / memory.external.openviking
+	subCfg, _ := extCfg[name].(map[string]any)
+	return name, subCfg
 }
 
 // isMemoryEnabled 检查指定 mode 下内置记忆是否启用。

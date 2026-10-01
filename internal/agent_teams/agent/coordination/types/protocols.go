@@ -66,7 +66,100 @@ type DispatcherBlueprint interface {
 
 // DispatcherInfra Dispatcher 构造所需的 infra 接口。
 // 从 TeamInfra 中提取 dispatcher 实际需要的窄接口。
-type DispatcherInfra interface{}
+// 对齐 Python: EventDispatcher.__init__(infra: TeamInfra)
+type DispatcherInfra interface {
+	// TaskManager 返回任务管理器（可能为 nil）
+	TaskManager() DispTaskManager
+	// MessageManager 返回消息管理器（可能为 nil）
+	MessageManager() DispMessageManager
+	// TeamBackend 返回团队后端（可能为 nil）
+	TeamBackend() DispTeamBackend
+	// Messager 返回消息总线（可能为 nil）
+	Messager() DispMessager
+}
+
+// DispTaskManager Dispatcher 级任务管理器窄接口。
+// 与 lifecycle_accessors.go 中的 TeamBackendAccessor 区分：
+// DispTaskManager 用于 EventDispatcher handler，TeamBackendAccessor 用于 KernelHost 生命周期。
+type DispTaskManager interface {
+	// ListTasks 列出所有任务
+	ListTasks(ctx context.Context) ([]TaskBrief, error)
+	// Get 获取指定 ID 的任务
+	Get(ctx context.Context, taskID string) (TaskDetail, error)
+}
+
+// DispMessageManager Dispatcher 级消息管理器窄接口。
+type DispMessageManager interface {
+	// MarkMessageRead 标记消息已读
+	MarkMessageRead(ctx context.Context, messageID, memberName string) error
+	// SendMessage 发送消息给指定成员
+	SendMessage(ctx context.Context, content any, recipient string) error
+	// ListUnread 列出未读消息
+	ListUnread(ctx context.Context, memberName string) ([]UnreadMessage, error)
+}
+
+// DispTeamBackend Dispatcher 级团队后端窄接口。
+// 注意：与 lifecycle_accessors.go 中的 TeamBackendAccessor 不同，此处仅包含 handler 所需方法。
+type DispTeamBackend interface {
+	// IsTeamCompleted 检查团队是否已完成
+	IsTeamCompleted(ctx context.Context) (*TeamCompletionSnapshot, error)
+	// IsHumanAgent 检查指定成员是否为 human-agent
+	IsHumanAgent(memberName string) bool
+	// TeamName 返回团队名称
+	TeamName() string
+}
+
+// DispMessager Dispatcher 级消息总线窄接口。
+type DispMessager interface {
+	// PublishEvent 发布团队事件
+	PublishEvent(ctx context.Context, eventType string, payload map[string]any) error
+}
+
+// TaskBrief 任务简要信息。
+type TaskBrief struct {
+	// ID 任务标识
+	ID string
+	// Title 任务标题
+	Title string
+	// Assignee 任务分配对象
+	Assignee string
+	// Status 任务状态
+	Status string
+}
+
+// TaskDetail 任务详情。
+type TaskDetail struct {
+	// ID 任务标识
+	ID string
+	// Title 任务标题
+	Title string
+	// Assignee 任务分配对象
+	Assignee string
+	// Status 任务状态
+	Status string
+	// ClaimedAt 任务认领时间
+	ClaimedAt int64
+	// CreatedAt 任务创建时间
+	CreatedAt int64
+}
+
+// UnreadMessage 未读消息。
+type UnreadMessage struct {
+	// MessageID 消息标识
+	MessageID string
+	// Sender 发送者
+	Sender string
+	// Content 消息内容
+	Content string
+}
+
+// TeamCompletionSnapshot 团队完成快照。
+type TeamCompletionSnapshot struct {
+	// MemberCount 成员数
+	MemberCount int
+	// TaskCount 任务数
+	TaskCount int
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
