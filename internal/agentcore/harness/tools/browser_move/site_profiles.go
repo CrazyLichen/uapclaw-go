@@ -711,7 +711,7 @@ func (c *BrowserSelectorCache) load() map[string]any {
 func (c *BrowserSelectorCache) save(data map[string]any) {
 	dir := filepath.Dir(c.path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Str("path", c.path).
 			Err(err).
@@ -721,7 +721,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 
 	raw, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Err(err).
 			Msg("序列化缓存数据失败")
@@ -730,7 +730,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 
 	tmpPath := c.path + ".tmp"
 	if err := os.WriteFile(tmpPath, raw, 0o644); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Str("path", tmpPath).
 			Err(err).
@@ -739,7 +739,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 	}
 
 	if err := os.Rename(tmpPath, c.path); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Err(err).
 			Msg("重命名缓存文件失败")

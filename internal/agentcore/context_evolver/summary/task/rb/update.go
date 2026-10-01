@@ -322,7 +322,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	}
 
 	if o.helper != nil {
-		if err := o.helper.Save(userID, "rb", nodesDict); err != nil {
+		if err := o.helper.Save(ctx, userID, "rb", nodesDict); err != nil {
 			return fmt.Errorf("failed to persist memories: %w", err)
 		}
 	} else {

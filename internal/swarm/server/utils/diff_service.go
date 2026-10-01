@@ -93,16 +93,23 @@ type FileRestoreInfo struct {
 
 // historyRecord 会话历史记录
 type historyRecord struct {
-	Role      string  `json:"role"`
-	Content   string  `json:"content"`
+	// Role 角色（user/assistant）
+	Role string `json:"role"`
+	// Content 消息内容
+	Content string `json:"content"`
+	// Timestamp 时间戳
 	Timestamp float64 `json:"timestamp"`
 }
 
 // opEntry 操作历史条目
 type opEntry struct {
-	Action     string  `json:"action"`
-	Timestamp  string  `json:"timestamp"`
+	// Action 操作类型（write/delete）
+	Action string `json:"action"`
+	// Timestamp 操作时间戳
+	Timestamp string `json:"timestamp"`
+	// OldContent 操作前内容
 	OldContent *string `json:"old_content"`
+	// NewContent 操作后内容
 	NewContent *string `json:"new_content"`
 }
 

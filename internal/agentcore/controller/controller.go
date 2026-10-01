@@ -61,6 +61,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 Controller 满足 ControllerInterface
+// _ 编译时验证 Controller 满足 ControllerInterface 接口
 var _ ControllerInterface = (*Controller)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

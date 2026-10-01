@@ -212,43 +212,69 @@ type relationFilterTaskItem struct {
 // Python: GraphMemState (states.py)
 type GraphMemState struct {
 	// 任务缓冲区（对齐 Python: state.tasks: list[asyncio.Task]）
-	Tasks                   []*asyncTask
-	MergingTasks            []*asyncTask
-	MergingTasksEntities    map[*asyncTask]*graph.Entity
-	PendingMerge            map[string]*pendingMergeTask
+	// Tasks 异步 LLM 调用任务列表
+	Tasks []*asyncTask
+	// MergingTasks 合并中的任务列表
+	MergingTasks []*asyncTask
+	// MergingTasksEntities 合并任务关联的实体映射
+	MergingTasksEntities map[*asyncTask]*graph.Entity
+	// PendingMerge 等待合并的任务（目标UUID → 任务）
+	PendingMerge map[string]*pendingMergeTask
+	// RelationDeferredUpdates 关系延迟更新（目标UUID → 更新列表）
 	RelationDeferredUpdates map[string][]deferredRelationUpdate
-	RelationFilterTasks     map[*asyncTask]*relationFilterTaskItem
+	// RelationFilterTasks 关系过滤任务（任务 → 关联条目）
+	RelationFilterTasks map[*asyncTask]*relationFilterTaskItem
 
 	// 嵌入任务（对齐 Python: state.tasks.append(asyncio.create_task(self.embedder.embed_documents(...)))）
 	// Python 中嵌入任务存放在 state.tasks 中，Go 中因类型不同（[][]float64 vs string）单独存储
+	// EmbedTask 实体名称嵌入任务
 	EmbedTask embedTask
 
 	// 通用临时缓冲区
-	ToRemove  map[string]*graph.Relation
+	// ToRemove 待移除的关系映射
+	ToRemove map[string]*graph.Relation
+	// TmpBuffer 通用临时缓冲区
 	TmpBuffer []any
 
 	// 专用临时缓冲区
+	// UpdatedEntitiesInCurrentEp 当前片段中已更新的实体列表
 	UpdatedEntitiesInCurrentEp []*graph.Entity
-	RetrievedEntities          map[string]*graph.Entity
-	RetrievedRelations         map[string]*graph.Relation
-	FaultyRelations            map[string]*graph.Relation
-	MergeInfos                 map[string]*EntityMerge
+	// RetrievedEntities 检索到的实体映射
+	RetrievedEntities map[string]*graph.Entity
+	// RetrievedRelations 检索到的关系映射
+	RetrievedRelations map[string]*graph.Relation
+	// FaultyRelations 有缺陷的关系映射
+	FaultyRelations map[string]*graph.Relation
+	// MergeInfos 合并信息映射（目标UUID → 合并详情）
+	MergeInfos map[string]*EntityMerge
 
 	// 记忆变更（累积，最终统一刷入）
-	MemUpdate          *GraphMemUpdate
+	// MemUpdate 记忆增量变更
+	MemUpdate *GraphMemUpdate
+	// MemUpdateSkipEmbed 跳过嵌入的增量变更
 	MemUpdateSkipEmbed *GraphMemUpdate
 
 	// 共享变量/字典
-	CurrentTimestamp   int64
+	// CurrentTimestamp 当前时间戳
+	CurrentTimestamp int64
+	// ReferenceTimestamp 参考时间戳
 	ReferenceTimestamp int64
-	LookupTable        *LookupTables
-	Extras             map[string]any
-	Strategy           *config.AddMemStrategy
-	Prompting          *GraphMemPrompting
-	EntityTypes        []extraction.EntityDef
-	EpisodeType        config.EpisodeType
-	Content            string
-	History            string
+	// LookupTable UUID 去重查找表
+	LookupTable *LookupTables
+	// Extras 额外信息字典
+	Extras map[string]any
+	// Strategy 添加记忆策略
+	Strategy *config.AddMemStrategy
+	// Prompting 提示词 Schema 配置
+	Prompting *GraphMemPrompting
+	// EntityTypes 实体类型定义列表
+	EntityTypes []extraction.EntityDef
+	// EpisodeType 片段类型
+	EpisodeType config.EpisodeType
+	// Content 当前处理的内容
+	Content string
+	// History 历史上下文
+	History string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -739,6 +765,13 @@ func entityFromMap(input map[string]any) *graph.Entity {
 	}
 	if v, ok := toStringSlice(input["episodes"]); ok {
 		e.Episodes = v
+	}
+	// 对齐 Python: model_validator(mode="before") 中 setdefault — nil map 写入会 panic
+	if e.Metadata == nil {
+		e.Metadata = make(map[string]any)
+	}
+	if e.Attributes == nil {
+		e.Attributes = make(map[string]any)
 	}
 	return e
 }

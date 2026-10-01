@@ -93,6 +93,11 @@ const (
 	memoryBlockHeader = "Some Related Experience to help you complete the task:\n"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// _ 编译时验证 TaskMemoryService 满足 taskMemoryServicer 接口
+var _ taskMemoryServicer = (*ceservice.TaskMemoryService)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextEvolutionRail 创建上下文演化轨道实例。
@@ -501,6 +506,3 @@ func roleTypeToString(rt llmschema.RoleType) string {
 		return fmt.Sprintf("unknown(%d)", rt)
 	}
 }
-
-// compile-time 接口断言
-var _ taskMemoryServicer = (*ceservice.TaskMemoryService)(nil)

@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -90,13 +91,13 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 
 	// Python: if not config.enabled: return
 	if !config.Enabled {
-		logger.Info(logComponent).Msg("observability 已禁用")
+		logger.Info(logComponent).Msg("可观测性已禁用")
 		return nil
 	}
 
 	// Python: if _provider is not None: warning; return
 	if provider != nil {
-		logger.Warn(logComponent).Msg("observability 已初始化，跳过重复初始化")
+		logger.Warn(logComponent).Msg("可观测性已初始化，跳过重复初始化")
 		return nil
 	}
 
@@ -106,7 +107,7 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceNameKey.String(config.ServiceName)),
 	)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("创建 OTel resource 失败，使用默认")
+		logger.Warn(logComponent).Err(err).Msg("创建 OTel 资源失败，使用默认")
 		res = resource.Default()
 	}
 
@@ -151,7 +152,7 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 	logger.Info(logComponent).Str("service_name", config.ServiceName).
 		Str("exporter", config.Exporter).
 		Float64("sample_rate", config.SampleRate).
-		Msg("observability 初始化完成")
+		Msg("可观测性初始化完成")
 
 	return nil
 }
@@ -170,7 +171,7 @@ func ShutdownObservability() {
 	// Python: if _provider is not None: _provider.shutdown()
 	if tp, ok := provider.(*sdktrace.TracerProvider); ok && tp != nil {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("OTel provider shutdown 失败")
+			logger.Warn(logComponent).Err(err).Msg("OTel provider 关闭失败")
 		}
 	}
 
@@ -178,7 +179,7 @@ func ShutdownObservability() {
 	callbackHandler = nil
 	monitorHandler = nil
 
-	logger.Info(logComponent).Msg("observability 已关闭")
+	logger.Info(logComponent).Msg("可观测性已关闭")
 }
 
 // GetTracer 返回绑定到当前可观测性 provider 的 tracer。
@@ -271,7 +272,12 @@ func buildExporter(config *ObservabilityConfig, override sdktrace.SpanExporter) 
 			otlptracegrpc.WithInsecure(),
 		)
 	case "otlp_http":
-		return nil, fmt.Errorf("otlp_http 导出器暂未实现，请使用 otlp_grpc 或 console")
+		// Python: OTLPSpanExporter(endpoint=config.endpoint, insecure=True, headers=...)
+		return otlptracehttp.New(
+			context.Background(),
+			otlptracehttp.WithEndpoint(config.Endpoint),
+			otlptracehttp.WithInsecure(),
+		)
 	default:
 		return nil, fmt.Errorf("不支持的导出器类型: %s", config.Exporter)
 	}

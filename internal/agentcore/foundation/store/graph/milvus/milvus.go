@@ -42,7 +42,7 @@ type MilvusGraphStore struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时检查接口实现
+// _ 编译时验证 MilvusGraphStore 满足 BaseGraphStore 接口
 var _ graph.BaseGraphStore = (*MilvusGraphStore)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

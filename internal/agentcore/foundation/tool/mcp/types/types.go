@@ -95,6 +95,7 @@ const NoTimeout = -1
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 McpToolCard 满足 schema.CardInterface。
+// _ 编译时验证 McpToolCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*McpToolCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

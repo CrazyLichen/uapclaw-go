@@ -40,6 +40,7 @@ type Operation interface {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时校验 BaseOperation 满足 Operation 接口
+// _ 编译时验证 BaseOperation 满足 Operation 接口
 var _ Operation = (*BaseOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

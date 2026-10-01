@@ -26,6 +26,7 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
+// _ 编译时验证 ReActAgent 满足 BaseAgent 接口
 var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

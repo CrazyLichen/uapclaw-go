@@ -77,6 +77,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期断言：EvolutionStore 必须满足 EvolutionStoreReader 接口
+// _ 编译时验证 EvolutionStore 满足 EvolutionStoreReader 接口
 var _ EvolutionStoreReader = (*EvolutionStore)(nil)
 
 // evolutionIndexPattern evolution-index 块正则

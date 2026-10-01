@@ -167,7 +167,7 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 		)
 
 		// 对齐 Python: data = persistence_helper.load(params.user_id, algo_name)
-		data, err := persistenceHelper.Load(params.UserID, algoName)
+		data, err := persistenceHelper.Load(ctx, params.UserID, algoName)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("algo", algoName).Msg("Failed to load existing memories")
 		} else if data != nil {
@@ -264,7 +264,7 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 				for _, node := range allNodes {
 					nodesDict[node.ID] = node.ToDict()
 				}
-				if err := persistenceHelper.Save(params.UserID, algoName, nodesDict); err != nil {
+				if err := persistenceHelper.Save(ctx, params.UserID, algoName, nodesDict); err != nil {
 					logger.Error(logComponent).Err(err).Msg("Failed to persist memories after run_trials")
 				}
 			}

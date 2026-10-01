@@ -125,7 +125,10 @@ func StrictSchemaEnforce(schemaMap map[string]any) {
 				for k := range props {
 					keys = append(keys, k)
 				}
-				node["required"] = keys
+				// 对齐 Python: node.setdefault("required", list(property_field.keys()))
+				if _, exists := node["required"]; !exists {
+					node["required"] = keys
+				}
 			}
 		}
 		// BFS 继续遍历所有值

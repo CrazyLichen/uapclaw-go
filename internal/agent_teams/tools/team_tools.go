@@ -18,6 +18,7 @@ import (
 // Python: BuildTeamTool(TeamTool) (tools/team_tools.py L173)
 type BuildTeamTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -25,6 +26,7 @@ type BuildTeamTool struct {
 // Python: CleanTeamTool(TeamTool) (tools/team_tools.py L243)
 type CleanTeamTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -32,7 +34,9 @@ type CleanTeamTool struct {
 // Python: SpawnMemberTool(TeamTool) (tools/team_tools.py L280)
 type SpawnMemberTool struct {
 	TeamTool
-	team             *TeamBackend
+	// team 团队后端实例
+	team *TeamBackend
+	// modelConfigAlloc 模型配置分配器
 	modelConfigAlloc func(modelName string) *models.Allocation
 }
 
@@ -40,6 +44,7 @@ type SpawnMemberTool struct {
 // Python: ShutdownMemberTool(TeamTool) (tools/team_tools.py L422)
 type ShutdownMemberTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -47,6 +52,7 @@ type ShutdownMemberTool struct {
 // Python: ApprovePlanTool(TeamTool) (tools/team_tools.py L464)
 type ApprovePlanTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -54,6 +60,7 @@ type ApprovePlanTool struct {
 // Python: ApproveToolCallTool(TeamTool) (tools/team_tools.py L514)
 type ApproveToolCallTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -61,6 +68,7 @@ type ApproveToolCallTool struct {
 // Python: ListMembersTool(TeamTool) (tools/team_tools.py L568)
 type ListMembersTool struct {
 	TeamTool
+	// team 团队后端实例
 	team *TeamBackend
 }
 
@@ -68,6 +76,7 @@ type ListMembersTool struct {
 // Python: TaskCreateTool(TeamTool) (tools/team_tools.py L603)
 type TaskCreateTool struct {
 	TeamTool
+	// taskManager 任务管理器
 	taskManager *TeamTaskManager
 }
 
@@ -75,6 +84,7 @@ type TaskCreateTool struct {
 // Python: ViewTaskToolV2(TeamTool) (tools/team_tools.py L748)
 type ViewTaskTool struct {
 	TeamTool
+	// taskManager 任务管理器
 	taskManager *TeamTaskManager
 }
 
@@ -82,6 +92,7 @@ type ViewTaskTool struct {
 // Python: UpdateTaskTool(TeamTool) (tools/team_tools.py L837)
 type UpdateTaskTool struct {
 	TeamTool
+	// agentTeam 团队后端实例
 	agentTeam *TeamBackend
 }
 
@@ -89,6 +100,7 @@ type UpdateTaskTool struct {
 // Python: SubmitPlanTool(TeamTool) (tools/team_tools.py L1034)
 type SubmitPlanTool struct {
 	TeamTool
+	// taskManager 任务管理器
 	taskManager *TeamTaskManager
 }
 
@@ -96,6 +108,7 @@ type SubmitPlanTool struct {
 // Python: ClaimTaskTool(TeamTool) (tools/team_tools.py L1086)
 type ClaimTaskTool struct {
 	TeamTool
+	// taskManager 任务管理器
 	taskManager *TeamTaskManager
 }
 
@@ -103,6 +116,7 @@ type ClaimTaskTool struct {
 // Python: MemberCompleteTaskTool(TeamTool) (tools/team_tools.py L1155)
 type MemberCompleteTaskTool struct {
 	TeamTool
+	// taskManager 任务管理器
 	taskManager *TeamTaskManager
 }
 
@@ -110,8 +124,11 @@ type MemberCompleteTaskTool struct {
 // Python: SendMessageTool(TeamTool) (tools/team_tools.py L1246)
 type SendMessageTool struct {
 	TeamTool
-	messageManager    *TeamMessageManager
-	team              *TeamBackend
+	// messageManager 消息管理器
+	messageManager *TeamMessageManager
+	// team 团队后端实例
+	team *TeamBackend
+	// onTeammateCreated 队友创建回调
 	onTeammateCreated func(ctx context.Context, memberName string) error
 }
 
@@ -429,11 +446,12 @@ func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *
 	}
 }
 
-// Invoke 实现 Tool 接口（各工具的 Invoke 在独立方法中实现，此处为占位）。
-// 完整的 Invoke 实现将在后续 PR 中逐个回填。
+// Invoke 实现 Tool 接口（桩实现，返回未实现错误）。
 func (t *BuildTeamTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("BuildTeamTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *BuildTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -441,6 +459,8 @@ func (t *BuildTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.To
 func (t *CleanTeamTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("CleanTeamTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *CleanTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -448,6 +468,8 @@ func (t *CleanTeamTool) Stream(_ context.Context, _ map[string]any, _ ...tool.To
 func (t *SpawnMemberTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("SpawnMemberTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *SpawnMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -455,6 +477,8 @@ func (t *SpawnMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.
 func (t *ShutdownMemberTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ShutdownMemberTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ShutdownMemberTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -462,6 +486,8 @@ func (t *ShutdownMemberTool) Stream(_ context.Context, _ map[string]any, _ ...to
 func (t *ApprovePlanTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ApprovePlanTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ApprovePlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -469,6 +495,8 @@ func (t *ApprovePlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.
 func (t *ApproveToolCallTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ApproveToolCallTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ApproveToolCallTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -476,6 +504,8 @@ func (t *ApproveToolCallTool) Stream(_ context.Context, _ map[string]any, _ ...t
 func (t *ListMembersTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ListMembersTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ListMembersTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -483,6 +513,8 @@ func (t *ListMembersTool) Stream(_ context.Context, _ map[string]any, _ ...tool.
 func (t *TaskCreateTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("TaskCreateTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *TaskCreateTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -490,6 +522,8 @@ func (t *TaskCreateTool) Stream(_ context.Context, _ map[string]any, _ ...tool.T
 func (t *ViewTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ViewTaskTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ViewTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -497,6 +531,8 @@ func (t *ViewTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.Too
 func (t *UpdateTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("UpdateTaskTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *UpdateTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -504,6 +540,8 @@ func (t *UpdateTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.T
 func (t *SubmitPlanTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("SubmitPlanTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *SubmitPlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -511,6 +549,8 @@ func (t *SubmitPlanTool) Stream(_ context.Context, _ map[string]any, _ ...tool.T
 func (t *ClaimTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("ClaimTaskTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *ClaimTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -518,6 +558,8 @@ func (t *ClaimTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.To
 func (t *MemberCompleteTaskTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("MemberCompleteTaskTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *MemberCompleteTaskTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
@@ -525,6 +567,8 @@ func (t *MemberCompleteTaskTool) Stream(_ context.Context, _ map[string]any, _ .
 func (t *SendMessageTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, fmt.Errorf("SendMessageTool.Invoke 未实现")
 }
+
+// Stream 实现 Tool 接口（桩实现，返回流不支持错误）。
 func (t *SendMessageTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }

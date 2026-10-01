@@ -120,6 +120,7 @@ var (
 		"4. 阅读代码不等于验证。运行命令并展示实际输出。"
 )
 
+// _ 编译时验证 VerificationRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*VerificationRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -40,8 +40,8 @@ type BrowserAgentRuntime struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponentBR 日志组件标识
-const logComponentBR = logger.ComponentAgentCore
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
 
 const ()
 
@@ -119,7 +119,7 @@ func (r *BrowserAgentRuntime) SetCodeExecutor(fn CodeExecutorFunc) {
 // Python: BrowserAgentRuntime.cancel_run
 func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.RequestCancel(ctx, sessionID, requestID); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "browser_cancel_run_error").
 			Str("session_id", sessionID).
 			Str("request_id", requestID).
@@ -139,7 +139,7 @@ func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestI
 // Python: BrowserAgentRuntime.clear_cancel
 func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.ClearCancel(ctx, sessionID, requestID); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "browser_clear_cancel_error").
 			Str("session_id", sessionID).
 			Str("request_id", requestID).
@@ -174,7 +174,7 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 	//   self._controller.bind_code_executor(_direct_code_executor)
 	//   self._controller.register_builtin_actions()
 
-	logger.Debug(logComponentBR).
+	logger.Debug(logComponent).
 		Str("event_type", "browser_runtime_ready").
 		Msg("浏览器运行时就绪（code executor 待回填）")
 
@@ -222,7 +222,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	//       self._service.browser_agent.ability_manager.add(self._browser_probe_interactives_tool.card)
 	//       self._service.browser_agent.ability_manager.add(self._browser_probe_cards_tool.card)
 
-	logger.Debug(logComponentBR).
+	logger.Debug(logComponent).
 		Str("event_type", "browser_runtime_started").
 		Msg("浏览器运行时已启动（runtime tools 已注册，register_runtime_tool 待回填）")
 

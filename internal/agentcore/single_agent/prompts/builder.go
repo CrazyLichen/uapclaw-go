@@ -74,6 +74,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 *SystemPromptBuilder 满足 SystemPromptBuilderInterface 接口。
+// _ 编译时验证 SystemPromptBuilder 满足 SystemPromptBuilderInterface 接口
 var _ SystemPromptBuilderInterface = (*SystemPromptBuilder)(nil)
 
 var (

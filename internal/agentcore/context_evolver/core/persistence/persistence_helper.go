@@ -27,9 +27,9 @@ type MilvusConnector interface {
 	Exists(ctx context.Context, namespace string) bool
 	// Delete 删除命名空间数据
 	Delete(ctx context.Context, namespace string) bool
+	// Ping 探测 Milvus 连接可达性（用于 auto 模式后端探测）
+	Ping(ctx context.Context) bool
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryPersistenceHelper 记忆持久化助手。
 //
@@ -135,7 +135,7 @@ func WithMilvusCollection(name string) PersistenceOption {
 // 对齐 Python MemoryPersistenceHelper.save(user_id, algo_name, nodes_dict)。
 // auto 模式惰性探测后路由到 milvus 或 json 后端。
 // 空数据直接返回（对齐 Python）。
-func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[string]any) error {
+func (h *MemoryPersistenceHelper) Save(ctx context.Context, userID, algoName string, nodesDict map[string]any) error {
 	if len(nodesDict) == 0 {
 		logger.Debug(logComponent).Str("user_id", userID).Str("algo", algoName).Msg("空数据跳过持久化")
 		return nil
@@ -144,7 +144,7 @@ func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[st
 	switch h.resolvedType {
 	case "milvus":
 		ns := Namespace(userID, algoName)
-		return h.milvusConnector.SaveToDB(context.Background(), ns, nodesDict)
+		return h.milvusConnector.SaveToDB(ctx, ns, nodesDict)
 	default:
 		return h.saveJSON(userID, algoName, nodesDict)
 	}
@@ -153,12 +153,12 @@ func (h *MemoryPersistenceHelper) Save(userID, algoName string, nodesDict map[st
 // Load 从后端加载节点。
 // 对齐 Python MemoryPersistenceHelper.load(user_id, algo_name)。
 // auto 模式惰性探测后路由到 milvus 或 json 后端。
-func (h *MemoryPersistenceHelper) Load(userID, algoName string) (map[string]any, error) {
+func (h *MemoryPersistenceHelper) Load(ctx context.Context, userID, algoName string) (map[string]any, error) {
 	h.resolveBackend()
 	switch h.resolvedType {
 	case "milvus":
 		ns := Namespace(userID, algoName)
-		return h.milvusConnector.LoadFromDB(context.Background(), ns)
+		return h.milvusConnector.LoadFromDB(ctx, ns)
 	default:
 		return h.loadJSON(userID, algoName)
 	}
@@ -246,8 +246,8 @@ func (h *MemoryPersistenceHelper) resolveBackend() {
 }
 
 // probeMilvus 探测 Milvus 可达性。
-// 对齐 Python: 尝试创建 MilvusConnector 操作，成功则可达，异常则回退 JSON。
-// 使用 3 秒超时防止在无 Milvus 环境中无限阻塞。
+// 对齐 Python: 尝试连接 Milvus，成功则可达，异常则回退 JSON。
+// 使用 Ping 探测连接，而非 Exists("__probe__") 这种非语义化的方式。
 func (h *MemoryPersistenceHelper) probeMilvus() bool {
 	defer func() {
 		if r := recover(); r != nil {
@@ -259,9 +259,8 @@ func (h *MemoryPersistenceHelper) probeMilvus() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 
-	// 对齐 Python: try MilvusConnector(...) → success; except → fail
-	// 尝试 Exists 操作，成功则可达
-	ok := h.milvusConnector.Exists(ctx, "__probe__")
+	// 对齐 Python: try MilvusConnector.ping() → success; except → fail
+	ok := h.milvusConnector.Ping(ctx)
 	if !ok {
 		logger.Warn(logComponent).Msg("Milvus 探测失败")
 		return false
@@ -288,7 +287,7 @@ func (h *MemoryPersistenceHelper) saveJSON(userID, algoName string, nodesDict ma
 	if h.jsonConnector.Exists(path) {
 		loaded, err := h.jsonConnector.LoadFromFile(path)
 		if err != nil {
-			logger.Error(logComponent).Str("path", path).Err(err).Msg("Failed to load existing JSON")
+			logger.Error(logComponent).Str("path", path).Err(err).Msg("加载已有 JSON 失败")
 			// 不阻断，继续写入（对齐 Python 只记日志不中断的行为）
 		} else {
 			existing = loaded
@@ -308,7 +307,7 @@ func (h *MemoryPersistenceHelper) saveJSON(userID, algoName string, nodesDict ma
 		Str("path", path).
 		Int("count", len(nodesDict)).
 		Str("algo", algoName).
-		Msg("Persisted memories to JSON")
+		Msg("持久化记忆到 JSON 完成")
 	return nil
 }
 
@@ -328,6 +327,6 @@ func (h *MemoryPersistenceHelper) loadJSON(userID, algoName string) (map[string]
 		Str("path", path).
 		Int("count", len(data)).
 		Str("algo", algoName).
-		Msg("Loaded memories from JSON")
+		Msg("从 JSON 加载记忆完成")
 	return data, nil
 }

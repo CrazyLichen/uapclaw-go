@@ -44,6 +44,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// _ 编译时验证 LocalFsOperation 满足 FsOperation 接口
 var _ sysop.FsOperation = (*LocalFsOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

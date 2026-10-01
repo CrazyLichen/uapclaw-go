@@ -82,30 +82,28 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 	role := h.blueprint.Role()
 
 	claimMember, _ := em.Payload["member_name"].(string)
-	// 对齐 Python: 认领目标是自身时投递任务分配内容
-	if claimMember == memberName && role != schema.TeamRoleHumanAgent {
-		// 对齐 Python: await self._poll.resume_polls() — 自身认领时恢复轮询
-		h.poll.ResumePolls(ctx)
-		// 对齐 Python: deliver_input(task_assigned_to_self 格式化内容)
-		// TODO(#9.63): 等任务格式化模板就绪后补充
-		content := formatTaskAssignedToSelf(em.Payload, role == schema.TeamRoleHumanAgent)
-		// 对齐 Python: deliver_input 默认 use_steer=True
-		if err := h.round.DeliverInput(ctx, content, true); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("event_type", em.EventType).
-				Msg("onTaskClaimed: deliver_input 失败")
+
+	// 对齐 Python: claim 不是自己时
+	if claimMember != memberName {
+		// human-agent 忽略他人的 claim（avatar 不自主扫任务板）
+		if role == schema.TeamRoleHumanAgent {
+			return
 		}
+		// 非 human-agent 走通用任务板事件，通知空闲 agent
+		h.OnTaskBoardEvent(ctx, event)
 		return
 	}
 
-	// 对齐 Python: 非自身认领时，human-agent 直接 return（不转发到 on_task_board_event）
-	if role == schema.TeamRoleHumanAgent {
-		return
+	// 对齐 Python: claim 是自己时恢复轮询 + deliver_input（human-agent 也走此路径，但用不同模板）
+	h.poll.ResumePolls(ctx)
+	content := formatTaskAssignedToSelf(em.Payload, role == schema.TeamRoleHumanAgent)
+	// 对齐 Python: deliver_input 默认 use_steer=True
+	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", em.EventType).
+			Msg("onTaskClaimed: deliver_input 失败")
 	}
-
-	// 非自身认领：走通用任务板事件
-	h.OnTaskBoardEvent(ctx, event)
 }
 
 // OnTaskPlanDecision Leader 对成员计划的审批决策通知。

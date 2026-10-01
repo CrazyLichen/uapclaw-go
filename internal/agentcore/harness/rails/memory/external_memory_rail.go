@@ -111,6 +111,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 ExternalMemoryRail 满足 AgentRail 接口
+// _ 编译时验证 ExternalMemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ExternalMemoryRail)(nil)
 
 var extMemoryLogComponent = logger.ComponentAgentCore
@@ -219,7 +220,20 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		r.systemPromptBuilder = nil
 	}
 
-	// 5. 关闭 Provider（带超时，对齐 Python: await asyncio.wait_for(self._provider.shutdown(), timeout=10.0)）
+	// 5. 通知 Provider 会话结束（在 Shutdown 之前，对齐 Python: on_session_end 语义）
+	// Python 中 on_session_end 定义了但未显式调用，Go 中补充此步骤确保会话数据刷新
+	if r.provider != nil {
+		sessionEndCtx, cancel := context.WithTimeout(context.Background(), externalMemoryShutdownTimeout)
+		if err := r.provider.OnSessionEnd(sessionEndCtx, nil); err != nil {
+			logger.Warn(extMemoryLogComponent).
+				Str("event_type", "external_memory_rail_uninit").
+				Err(err).
+				Msg("Provider on_session_end 失败")
+		}
+		cancel()
+	}
+
+	// 6. 关闭 Provider（带超时，对齐 Python: await asyncio.wait_for(self._provider.shutdown(), timeout=10.0)）
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), externalMemoryShutdownTimeout)
 	defer cancel()
 	if err := r.provider.Shutdown(shutdownCtx); err != nil {

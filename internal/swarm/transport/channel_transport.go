@@ -50,6 +50,7 @@ var (
 )
 
 // 接口合规：ChannelTransport 实现 AgentTransport
+// _ 编译时验证 ChannelTransport 满足 AgentTransport 接口
 var _ AgentTransport = (*ChannelTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

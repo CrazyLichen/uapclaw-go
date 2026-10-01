@@ -159,6 +159,11 @@ func (r *JiuClawStreamEventRail) Init(_ context.Context, agent sainterfaces.Base
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.deepAgent = agent
+	// 对齐 Python: 懒加载 TodoTool（从 agent 的 AbilityManager 查找）
+	// Python 中 TaskPlanningRail._find_todo_tool() 在需要时从 self.tools 查找
+	if r.todoTool == nil && agent != nil {
+		r.lazyLoadTodoTool(agent)
+	}
 	return nil
 }
 
@@ -456,6 +461,22 @@ func (r *JiuClawStreamEventRail) GetCallbacks() map[sainterfaces.AgentCallbackEv
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// lazyLoadTodoTool 从 agent 的 AbilityManager 懒加载 TodoTool。
+// 对齐 Python: TaskPlanningRail._find_todo_tool() — 在需要时从已注册工具中查找。
+func (r *JiuClawStreamEventRail) lazyLoadTodoTool(agent sainterfaces.BaseAgent) {
+	am := agent.AbilityManager()
+	if am == nil {
+		return
+	}
+	for _, ability := range am.List() {
+		if loader, ok := ability.(todoToolLoader); ok {
+			r.todoTool = loader
+			logger.Debug(logComponent).Str("ability_name", ability.AbilityName()).Msg("懒加载 TodoTool 成功")
+			return
+		}
+	}
+}
 
 // resolveSessionID 解析会话 ID，空字符串回退到 "default"
 func resolveSessionID(sessionID string) string {

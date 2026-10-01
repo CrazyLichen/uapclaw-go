@@ -73,6 +73,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 AgentModeRail 满足 AgentRail 接口
+// _ 编译时验证 AgentModeRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AgentModeRail)(nil)
 
 var agentModeLogComponent = logger.ComponentAgentCore

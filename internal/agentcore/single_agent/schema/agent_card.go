@@ -37,6 +37,7 @@ type AgentCardOption func(*AgentCard)
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 AgentCard 满足 schema.CardInterface。
+// _ 编译时验证 AgentCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*AgentCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

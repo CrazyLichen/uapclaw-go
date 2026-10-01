@@ -62,6 +62,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时校验 RedisStore 满足 BaseKVStore 接口
+// _ 编译时验证 RedisStore 满足 BaseKVStore 接口
 var _ BaseKVStore = (*RedisStore)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

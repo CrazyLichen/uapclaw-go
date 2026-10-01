@@ -36,9 +36,11 @@ var errRuntimeNotBound = exception.BuildError(exception.StatusAgentTeamExecution
 )
 
 // 编译时验证 CommunicableAgent 满足 Communicable 接口
+// _ 编译时验证 CommunicableAgent 满足 Communicable 接口
 var _ Communicable = (*CommunicableAgent)(nil)
 
 // 编译时验证 CommunicableAgent 满足 RuntimeBindable 接口
+// _ 编译时验证 CommunicableAgent 满足 RuntimeBindable 接口
 var _ RuntimeBindable = (*CommunicableAgent)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

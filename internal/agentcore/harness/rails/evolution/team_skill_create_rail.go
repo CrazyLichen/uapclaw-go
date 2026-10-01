@@ -83,6 +83,9 @@ const followUpPromptEN = "**Important: You MUST confirm with the user first. Do 
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// _ 编译时验证 TeamSkillCreateRail 满足 EvolutionExtension 接口
+var _ EvolutionExtension = (*TeamSkillCreateRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSkillCreateRail 创建团队技能创建护栏实例。
@@ -271,7 +274,59 @@ func (r *TeamSkillCreateRail) canEnqueueCreationFollowUp(sessionID string, spawn
 			Msg("TeamSkillCreateRail spawn_member 低于阈值，跳过")
 		return false
 	}
+	// 对齐 Python: if self._detect_used_team_skill() is not None: return False
+	if used := r.detectUsedTeamSkill(); used != "" {
+		logger.Info(logComponent).
+			Str("used_skill", used).
+			Msg("TeamSkillCreateRail 已有团队技能，跳过创建提议")
+		return false
+	}
 	return true
+}
+
+// detectUsedTeamSkill 检测轨迹中是否已使用了团队技能。
+// 对齐 Python: _detect_used_team_skill()
+func (r *TeamSkillCreateRail) detectUsedTeamSkill() string {
+	builder := r.Builder()
+	if builder == nil {
+		return ""
+	}
+
+	knownSkills := r.knownTeamSkillNames()
+	if len(knownSkills) == 0 {
+		return ""
+	}
+
+	// 收集 skill_tool 调用参数和所有文本
+	var skillToolPayloads []string
+	var texts []string
+	for _, step := range builder.GetSteps() {
+		if step.Kind != trajectory.StepKindTool || step.Detail == nil {
+			continue
+		}
+		toolDetail, ok := step.Detail.(*trajectory.ToolCallDetail)
+		if !ok {
+			continue
+		}
+		if toolDetail.ToolName == "skill_tool" {
+			skillToolPayloads = append(skillToolPayloads, fmt.Sprint(toolDetail.CallArgs))
+		}
+		texts = append(texts, fmt.Sprint(toolDetail.CallArgs))
+		texts = append(texts, fmt.Sprint(toolDetail.CallResult))
+	}
+
+	skillNames := make([]string, 0, len(knownSkills))
+	for name := range knownSkills {
+		skillNames = append(skillNames, name)
+	}
+
+	usedSkill := inferSkillFromTexts(skillNames, skillToolPayloads, texts)
+	if usedSkill != "" {
+		logger.Info(logComponent).
+			Str("used_skill", usedSkill).
+			Msg("TeamSkillCreateRail 检测到已使用团队技能，跳过创建提议")
+	}
+	return usedSkill
 }
 
 // buildFollowUpPrompt 构建确认提示词。
@@ -336,14 +391,12 @@ func (r *TeamSkillCreateRail) knownTeamSkillNames() map[string]bool {
 }
 
 // containsTeamSkillKind 检查 SKILL.md 内容是否包含团队技能 kind。
+// 对齐 Python: frontmatter = parse_top_level_frontmatter(content); frontmatter.get("kind") in _TEAM_SKILL_KINDS
 func containsTeamSkillKind(content string) bool {
-	for kind := range teamSkillKinds {
-		if strings.Contains(content, fmt.Sprintf("kind: %s", kind)) ||
-			strings.Contains(content, fmt.Sprintf("kind: \"%s\"", kind)) {
-			return true
-		}
-	}
-	return false
+	frontmatter := parseTopLevelFrontmatter(content)
+	kind := frontmatter["kind"]
+	_, ok := teamSkillKinds[kind]
+	return ok
 }
 
 // loopController LoopController 接口子集。
@@ -366,5 +419,3 @@ func getLoopController(agent agentinterfaces.BaseAgent) loopController {
 	return nil
 }
 
-// compile-time 接口断言
-var _ EvolutionExtension = (*TeamSkillCreateRail)(nil)

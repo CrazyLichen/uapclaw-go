@@ -10,39 +10,56 @@ import (
 
 // AgentServerConfig AgentServer 服务配置。
 type AgentServerConfig struct {
+	// Host 监听地址
 	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	// Port 监听端口
+	Port int `yaml:"port"`
 }
 
 // GatewayConfig Gateway 服务配置。
 type GatewayConfig struct {
+	// Host 监听地址
 	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	// Port 监听端口
+	Port int `yaml:"port"`
 }
 
 // ServerConfig 服务配置（包含 AgentServer 和 Gateway）。
 type ServerConfig struct {
+	// AgentServer AgentServer 服务配置
 	AgentServer AgentServerConfig `yaml:"agentserver"`
-	Gateway     GatewayConfig     `yaml:"gateway"`
+	// Gateway Gateway 服务配置
+	Gateway GatewayConfig `yaml:"gateway"`
 }
 
 // LoggingConfig 日志配置，各通道可独立设置级别。
 // Python: config.yaml 的 logging 段
 type LoggingConfig struct {
-	Level        string `yaml:"level"`         // 基础级别，默认 INFO
-	Format       string `yaml:"format"`        // 输出格式：json / text
-	ConsoleLevel string `yaml:"console_level"` // 控制台级别
-	Common       string `yaml:"common"`        // common.log 级别（基础设施层）
-	Gateway      string `yaml:"gateway"`       // gateway.log 级别
-	Channel      string `yaml:"channel"`       // channel.log 级别
-	AgentServer  string `yaml:"agent_server"`  // agent_server.log 级别
-	Permissions  string `yaml:"permissions"`   // permissions.log 级别
-	AgentCore    string `yaml:"agent_core"`    // agent_core.log 级别（agentcore/*）
-	Full         string `yaml:"full"`          // full.log 级别
+	// Level 基础级别，默认 INFO
+	Level string `yaml:"level"`
+	// Format 输出格式：json / text
+	Format string `yaml:"format"`
+	// ConsoleLevel 控制台级别
+	ConsoleLevel string `yaml:"console_level"`
+	// Common common.log 级别（基础设施层）
+	Common string `yaml:"common"`
+	// Gateway gateway.log 级别
+	Gateway string `yaml:"gateway"`
+	// Channel channel.log 级别
+	Channel string `yaml:"channel"`
+	// AgentServer agent_server.log 级别
+	AgentServer string `yaml:"agent_server"`
+	// Permissions permissions.log 级别
+	Permissions string `yaml:"permissions"`
+	// AgentCore agent_core.log 级别（agentcore/*）
+	AgentCore string `yaml:"agent_core"`
+	// Full full.log 级别
+	Full string `yaml:"full"`
 }
 
 // WorkspaceConfig 工作区配置。
 type WorkspaceConfig struct {
+	// Path 工作区路径
 	Path string `yaml:"path"`
 }
 

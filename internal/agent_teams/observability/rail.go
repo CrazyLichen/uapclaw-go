@@ -51,7 +51,7 @@ func NewObservabilityRail(tracer trace.Tracer) *ObservabilityRail {
 
 // BeforeTaskIteration 每个 task_iteration 开始时：打开 span。
 // Python: ObservabilityRail.before_task_iteration(ctx)
-func (r *ObservabilityRail) BeforeTaskIteration(_ context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
+func (r *ObservabilityRail) BeforeTaskIteration(ctx context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Warn(logComponent).Any("error", rec).Msg("otel rail before_task_iteration 异常")
@@ -69,7 +69,7 @@ func (r *ObservabilityRail) BeforeTaskIteration(_ context.Context, railCtx *agen
 	isFollowUp := extractIsFollowUp(inputs)
 
 	// Python: span = self._tracer().start_span(name=f"deepagent.task_iteration.{iteration}", kind=SpanKind.INTERNAL)
-	_, span := r.tracer().Start(context.Background(),
+	_, span := r.tracer().Start(ctx,
 		fmt.Sprintf("deepagent.task_iteration.%d", iteration),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)

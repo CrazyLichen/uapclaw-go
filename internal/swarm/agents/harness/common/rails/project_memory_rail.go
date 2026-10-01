@@ -78,6 +78,7 @@ var writeLikeTools = map[string]struct{}{
 var pmrLogComponent = logger.ComponentAgentServer
 
 // 编译时验证 ProjectMemoryRail 满足 AgentRail 接口
+// _ 编译时验证 ProjectMemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProjectMemoryRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

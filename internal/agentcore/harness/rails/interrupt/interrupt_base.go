@@ -77,6 +77,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 BaseInterruptRail 满足 AgentRail 接口
+// _ 编译时验证 BaseInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*BaseInterruptRail)(nil)
 
 var interruptLogComponent = logger.ComponentAgentCore

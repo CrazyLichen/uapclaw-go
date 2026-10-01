@@ -805,7 +805,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 
 	// 对齐 Python: self._helper.save(user_id, self._ALGO_NAME, nodes_dict)
 	if o.helper != nil {
-		if err := o.helper.Save(userID, aceAlgoName, nodesDict); err != nil {
+		if err := o.helper.Save(ctx, userID, aceAlgoName, nodesDict); err != nil {
 			return fmt.Errorf("PersistMemoryOp (ACE): 持久化失败: %w", err)
 		}
 	}

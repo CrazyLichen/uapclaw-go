@@ -446,7 +446,7 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 	// 对齐 Python：持久化（{node_id: node_data} dict 格式）
 	if s.persistenceHelper != nil {
 		algoName := algoToPersistName(s.summaryAlgorithm)
-		if err := s.persistenceHelper.Save(userID, algoName, map[string]any{memoryID: node.ToDict()}); err != nil {
+		if err := s.persistenceHelper.Save(ctx, userID, algoName, map[string]any{memoryID: node.ToDict()}); err != nil {
 			logger.Error(logComponent).Err(err).Msg("Failed to persist memory")
 		}
 	}
@@ -472,7 +472,7 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 	}
 
 	algoName := algoToPersistName(s.summaryAlgorithm)
-	nodesDict, err := s.persistenceHelper.Load(userID, algoName)
+	nodesDict, err := s.persistenceHelper.Load(ctx, userID, algoName)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("Failed to load memories from persistence")
 		return err

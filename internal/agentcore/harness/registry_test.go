@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -147,7 +148,7 @@ func TestHarnessConfigRegistry_Load_未找到(t *testing.T) {
 		disabled: make(map[string]bool),
 	}
 
-	_, err := r.Load("nonexistent", nil, nil)
+	_, err := r.Load(context.Background(), "nonexistent", nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "未找到")
 }
@@ -160,7 +161,7 @@ func TestHarnessConfigRegistry_Load_无路径(t *testing.T) {
 	}
 
 	r.Register(HarnessConfigInfo{ID: "test", Name: "测试"})
-	_, err := r.Load("test", nil, nil)
+	_, err := r.Load(context.Background(), "test", nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "没有配置路径")
 }
@@ -185,7 +186,7 @@ language: cn
 
 	// Load 调用 Builder.Build → CreateDeepAgent
 	// 当前 resolveBuiltinTools 未实现，会返回错误
-	agent, err := r.Load("registry-test", nil, nil)
+	agent, err := r.Load(context.Background(), "registry-test", nil, nil)
 	// 预期：因为工具实例化尚未实现，Load 可能返回错误或成功（取决于 YAML 内容）
 	_ = agent
 	_ = err

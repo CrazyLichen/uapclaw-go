@@ -43,7 +43,7 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BoolishFalse 判断值是否为"假-ish"，对齐 Python: _boolish_false
+// ──────────────────────────── 非导出函数 ────────────────────────────
 func boolishFalse(value any) bool {
 	if v, ok := value.(bool); ok {
 		return !v
@@ -55,7 +55,7 @@ func boolishFalse(value any) bool {
 	return false
 }
 
-// BoolishTrue 判断值是否为"真-ish"，对齐 Python: _boolish_true
+// boolishTrue 判断值是否为"真-ish"，对齐 Python: _boolish_true
 func boolishTrue(value any) bool {
 	if v, ok := value.(bool); ok {
 		return v
@@ -67,7 +67,7 @@ func boolishTrue(value any) bool {
 	return false
 }
 
-// NonzeroExit 判断值是否为非零退出码，对齐 Python: _nonzero_exit
+// nonzeroExit 判断值是否为非零退出码，对齐 Python: _nonzero_exit
 func nonzeroExit(value any) *bool {
 	if _, ok := value.(bool); ok {
 		return nil
@@ -247,10 +247,10 @@ func toolCallArguments(tc *llmschema.ToolCall) any {
 	return tc.Arguments
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// boolPtr 返回 bool 的指针
 func boolPtr(b bool) *bool { return &b }
 
+// parseInt 解析整数字符串
 func parseInt(s string) (int, error) {
 	var neg bool
 	s = strings.TrimSpace(s)
@@ -259,12 +259,12 @@ func parseInt(s string) (int, error) {
 		s = s[1:]
 	}
 	if s == "" {
-		return 0, fmt.Errorf("invalid int: empty")
+		return 0, fmt.Errorf("无效整数: 空字符串")
 	}
 	var result int
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("invalid int: %s", s)
+			return 0, fmt.Errorf("无效整数: %s", s)
 		}
 		result = result*10 + int(c-'0')
 	}
@@ -353,6 +353,7 @@ func inferStringError(s string) *bool {
 	return nil
 }
 
+// parseIntSafe 安全解析整数字符串，支持负数。
 func parseIntSafe(s string) int {
 	s = strings.TrimSpace(s)
 	if len(s) > 0 && s[0] == '-' {
@@ -362,6 +363,7 @@ func parseIntSafe(s string) int {
 	return parseIntPositive(s)
 }
 
+// parseIntPositive 解析正整数字符串，不支持负数。
 func parseIntPositive(s string) int {
 	var result int
 	for _, c := range s {

@@ -51,6 +51,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// _ 编译时验证 TaskCompletionRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskCompletionRail)(nil)
 
 var taskCompLogComponent = logger.ComponentAgentCore

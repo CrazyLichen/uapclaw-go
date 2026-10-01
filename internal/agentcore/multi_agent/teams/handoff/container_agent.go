@@ -68,8 +68,10 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 ContainerAgent 满足 BaseAgent 接口
+// _ 编译时验证 ContainerAgent 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*ContainerAgent)(nil)
 
+// _ 编译时验证 HandoffTool 满足 Tool 接口
 var _ tool.Tool = (*HandoffTool)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

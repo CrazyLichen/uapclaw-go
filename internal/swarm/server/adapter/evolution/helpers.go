@@ -103,8 +103,8 @@ const (
 	// TeamEvolutionHiddenStage 隐藏阶段
 	TeamEvolutionHiddenStage = "hidden"
 
-	// logComponentEvolution 日志组件
-	logComponentEvolution = logger.ComponentAgentServer
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -628,7 +628,7 @@ func PushEvolutionProgress(
 ) error {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Warn(logComponentEvolution).
+			logger.Warn(logComponent).
 				Str("event_type", "EVOLUTION_PUSH_RECOVERED").
 				Any("recover", r).
 				Msg("PushEvolutionProgress panic 已恢复")
@@ -644,7 +644,7 @@ func PushEvolutionProgress(
 		}
 		msg := buildMsgFn(pushCtx.SessionID, requestID, parsed, pushCtx.ChannelID)
 		if err := pushCtx.Transport.SendPush(ctx, msg); err != nil {
-			logger.Warn(logComponentEvolution).
+			logger.Warn(logComponent).
 				Str("request_id", requestID).
 				Str("session_id", pushCtx.SessionID).
 				Err(err).

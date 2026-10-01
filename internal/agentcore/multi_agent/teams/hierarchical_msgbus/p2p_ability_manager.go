@@ -53,6 +53,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 P2PAbilityManager 满足 AbilityManagerInterface 接口
+// _ 编译时验证 P2PAbilityManager 满足 AbilityManagerInterface 接口
 var _ agentinterfaces.AbilityManagerInterface = (*P2PAbilityManager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

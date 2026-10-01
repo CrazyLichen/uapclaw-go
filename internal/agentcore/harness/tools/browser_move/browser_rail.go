@@ -94,7 +94,7 @@ func (r *BrowserRuntimeRail) Runtime() *BrowserAgentRuntime {
 // Python: BrowserRuntimeRail.before_invoke
 func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if err := r.runtime.EnsureRuntimeReady(ctx); err != nil {
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "browser_rail_before_invoke_error").
 			Err(err).
 			Msg("确保运行时就绪失败")

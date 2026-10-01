@@ -54,7 +54,7 @@ type AgentTeamSessionOption func(*AgentTeamSession)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时检查 *AgentTeamSession 满足 SessionFacade 接口
+// _ 编译时验证 AgentTeamSession 满足 SessionFacade 接口
 var _ interfaces.SessionFacade = (*AgentTeamSession)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

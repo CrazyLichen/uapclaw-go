@@ -41,6 +41,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// _ 编译时验证 LocalCodeOperation 满足 CodeOperation 接口
 var _ sysop.CodeOperation = (*LocalCodeOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

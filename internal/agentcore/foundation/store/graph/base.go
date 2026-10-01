@@ -58,28 +58,46 @@ type BaseGraphStore interface {
 // Options 图存储操作选项
 type Options struct {
 	// 写入选项
-	Flush       bool
-	Upsert      bool
-	NoEmbed     bool
-	SkipCompact *bool // Refresh 时跳过 compact（对齐 Python: skip_compact），nil 表示未设置回退到配置
+	// Flush 写入后刷盘
+	Flush bool
+	// Upsert 覆盖写入
+	Upsert bool
+	// NoEmbed 跳过自动嵌入
+	NoEmbed bool
+	// SkipCompact Refresh 时跳过 compact（对齐 Python: skip_compact），nil 表示未设置回退到配置
+	SkipCompact *bool
 
 	// 查询选项
-	IDs           []any
-	Expr          query.QueryExpr
+	// IDs 按ID查询/删除
+	IDs []any
+	// Expr 过滤表达式
+	Expr query.QueryExpr
+	// SilenceErrors 静默错误
 	SilenceErrors bool
 
 	// 搜索选项
-	Collection     string
-	K              int
-	RankerConfig   BaseRankConfig
-	Reranker       reranker.BaseReranker
-	BFSDepth       int
-	BFSK           int
-	FilterExpr     query.QueryExpr
-	OutputFields   []string
+	// Collection 搜索集合名称
+	Collection string
+	// K 搜索返回数量
+	K int
+	// RankerConfig 排序策略配置
+	RankerConfig BaseRankConfig
+	// Reranker 重排序器
+	Reranker reranker.BaseReranker
+	// BFSDepth BFS 图扩展深度
+	BFSDepth int
+	// BFSK BFS 图扩展每层获取数量
+	BFSK int
+	// FilterExpr 搜索过滤表达式
+	FilterExpr query.QueryExpr
+	// OutputFields 返回字段列表
+	OutputFields []string
+	// QueryEmbedding 直接提供的查询向量（跳过嵌入步骤）
 	QueryEmbedding []float64
-	Language       string
-	MinScore       float64
+	// Language 搜索语言
+	Language string
+	// MinScore 最低相似度分数
+	MinScore float64
 }
 
 // GraphStoreFactory 图存储工厂（线程安全）

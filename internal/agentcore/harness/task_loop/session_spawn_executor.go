@@ -34,6 +34,7 @@ type SessionSpawnExecutor struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：SessionSpawnExecutor 必须满足 modules.TaskExecutor
+// _ 编译时验证 SessionSpawnExecutor 满足 TaskExecutor 接口
 var _ modules.TaskExecutor = (*SessionSpawnExecutor)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -39,7 +39,7 @@ type NodeSessionFacade struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时检查 *NodeSessionFacade 满足 SessionFacade 接口
+// _ 编译时验证 NodeSessionFacade 满足 SessionFacade 接口
 var _ interfaces.SessionFacade = (*NodeSessionFacade)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

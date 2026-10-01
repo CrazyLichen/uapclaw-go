@@ -29,6 +29,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期校验：DefaultAgentCreator 必须满足 spawn.AgentCreator 接口
+// _ 编译时验证 DefaultAgentCreator 满足 AgentCreator 接口
 var _ spawn.AgentCreator = (*DefaultAgentCreator)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

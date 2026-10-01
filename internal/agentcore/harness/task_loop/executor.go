@@ -37,6 +37,7 @@ type TaskLoopEventExecutor struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：TaskLoopEventExecutor 必须满足 modules.TaskExecutor
+// _ 编译时验证 TaskLoopEventExecutor 满足 TaskExecutor 接口
 var _ modules.TaskExecutor = (*TaskLoopEventExecutor)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

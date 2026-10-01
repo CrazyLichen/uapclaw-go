@@ -498,6 +498,12 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 		searchOpt = searchOpt.WithAnnParam(annParam)
 	}
 
+	// 对齐 Python: search_params={"metric_type": distance_metric}
+	// Milvus 在索引创建时锁定 metric_type，搜索时必须匹配
+	if dm := o.DistanceMetric; dm != "" {
+		searchOpt = searchOpt.WithSearchParam("metric_type", strings.ToUpper(dm))
+	}
+
 	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("向量搜索失败")

@@ -66,6 +66,7 @@ func BuildTeamPlanAgentCard(language string) *agentschema.AgentCard {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// init 初始化 plan_agent 的中英文系统提示词（从模板加载）
 func init() {
 	tplCN := LoadTemplate("team_plan_agent", "cn")
 	if tplCN != nil {

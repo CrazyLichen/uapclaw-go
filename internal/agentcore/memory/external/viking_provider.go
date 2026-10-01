@@ -402,7 +402,8 @@ func (p *OpenVikingProvider) Shutdown(_ context.Context) error {
 					// 对齐 Python: logger.debug("OpenViking client close failed: %s", e)
 					logger.Debug(vikingLogComponent).
 						Str("event_type", "viking_provider_shutdown").
-						Msgf("关闭客户端失败: %v", r)
+						Any("error", r).
+						Msg("关闭客户端失败")
 				}
 			}()
 			p.client.close()

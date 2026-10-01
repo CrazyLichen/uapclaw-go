@@ -73,8 +73,10 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 BaseCard 和 WorkflowCard 实现 CardInterface 接口。
+// _ 编译时验证 BaseCard 满足 CardInterface 接口
 var _ CardInterface = (*BaseCard)(nil)
 
+// _ 编译时验证 WorkflowCard 满足 CardInterface 接口
 var _ CardInterface = (*WorkflowCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

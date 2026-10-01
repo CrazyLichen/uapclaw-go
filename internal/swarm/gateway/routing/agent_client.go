@@ -70,8 +70,8 @@ const (
 	messageQueueBufferSize = 16
 )
 
-// logComponentRouting 日志组件
-const logComponentRouting = logger.ComponentGateway
+// logComponent 日志组件
+const logComponent = logger.ComponentGateway
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -106,7 +106,7 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 	ac.serverReadyCh = make(chan struct{})
 	ac.serverReadyMu.Unlock()
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "agent_client_connecting").
 		Msg("AgentClient 正在连接")
 
@@ -119,18 +119,18 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 	ac.receiverWg.Add(1)
 	go ac.receiverLoop(loopCtx)
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "agent_client_loop_started").
 		Msg("AgentClient 接收循环已启动，等待 connection.ack")
 
 	// 等待 serverReady 或 5s 超时（对齐 Python timeout=5.0，超时不报错仅 warn）
 	select {
 	case <-ac.serverReadyCh:
-		logger.Info(logComponentRouting).
+		logger.Info(logComponent).
 			Str("event_type", "agent_client_connected").
 			Msg("AgentClient 已连接，AgentServer 已就绪")
 	case <-time.After(connectionAckTimeoutSeconds * time.Second):
-		logger.Warn(logComponentRouting).
+		logger.Warn(logComponent).
 			Str("event_type", "agent_client_ack_timeout").
 			Int("timeout_seconds", connectionAckTimeoutSeconds).
 			Msg("等待 connection.ack 超时（5s），继续运行")
@@ -174,7 +174,7 @@ func (ac *AgentClient) Disconnect() {
 		_ = ac.transport.Close()
 	}
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "agent_client_disconnected").
 		Msg("AgentClient 已断开")
 }
@@ -230,7 +230,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 	envelope.IsStream = false
 	rid := transport.WireRequestIDKey(envelope.RequestID)
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
 		Str("channel", envelope.Channel).
@@ -239,7 +239,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		Msg("发送非流式请求")
 
 	// Python: logger.debug("发送请求(非流式) E2A: %s", _to_json(envelope.to_dict()))
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
 		Str("method", envelope.Method).
@@ -270,7 +270,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 	}
 
 	// Python: logger.info("发送请求(非流式) payload: %s", _to_json(payload))
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
 		Int("payload_bytes", len(data)).
@@ -284,7 +284,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		}
 		return parseAgentServerWireUnary(respData)
 	case <-time.After(unaryRequestTimeoutSeconds * time.Second):
-		logger.Warn(logComponentRouting).
+		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("request_id", rid).
 			Int("timeout_seconds", unaryRequestTimeoutSeconds).
@@ -307,7 +307,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 	envelope.IsStream = true
 	rid := transport.WireRequestIDKey(envelope.RequestID)
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
 		Str("channel", envelope.Channel).
@@ -316,7 +316,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 		Msg("发送流式请求")
 
 	// Python: logger.debug("发送请求(流式) E2A: %s", _to_json(envelope.to_dict()))
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
 		Str("method", envelope.Method).
@@ -347,7 +347,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 	}
 
 	// Python: logger.info("发送请求(流式) payload: %s", _to_json(payload))
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
 		Int("payload_bytes", len(data)).
@@ -385,7 +385,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 
 	recvCh, err := ac.transport.Recv()
 	if err != nil {
-		logger.Error(logComponentRouting).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Err(err).
 			Msg("获取接收通道失败")
@@ -395,13 +395,13 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info(logComponentRouting).
+			logger.Info(logComponent).
 				Str("event_type", "agent_client_receiver_stopped").
 				Msg("接收循环已停止")
 			return
 		case data, ok := <-recvCh:
 			if !ok {
-				logger.Info(logComponentRouting).
+				logger.Info(logComponent).
 					Str("event_type", "agent_client_recv_channel_closed").
 					Msg("接收通道已关闭")
 				return
@@ -409,7 +409,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 			// JSON 字节 → map（对齐 Python json.loads(raw)）
 			var msg map[string]any
 			if err := json.Unmarshal(data, &msg); err != nil {
-				logger.Warn(logComponentRouting).
+				logger.Warn(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
 					Err(err).
 					Int("bytes", len(data)).
@@ -431,7 +431,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 					if ac.onServerPush != nil {
 						go ac.onServerPush(msg) // Python: asyncio.create_task
 					} else {
-						logger.Warn(logComponentRouting).
+						logger.Warn(logComponent).
 							Str("event_type", "agent_client_server_push_no_handler").
 							Str("request_id", fmt.Sprintf("%v", msg["request_id"])).
 							Msg("收到 server_push 但未注册 handler，已丢弃")
@@ -461,11 +461,11 @@ func (ac *AgentClient) handleEventFrame(msg map[string]any) {
 				// 已发送过就绪通知，忽略
 			}
 		}
-		logger.Info(logComponentRouting).
+		logger.Info(logComponent).
 			Str("event_type", "agent_client_connection_ack").
 			Msg("收到 connection.ack，AgentServer 已就绪")
 	} else {
-		logger.Warn(logComponentRouting).
+		logger.Warn(logComponent).
 			Str("event_type", "agent_client_unknown_event").
 			Str("event", event).
 			Msg("收到未知事件帧")
@@ -482,7 +482,7 @@ func (ac *AgentClient) routeToQueue(msg map[string]any) {
 	// 检查是否是已取消的请求，静默丢弃消息（对齐 Python）
 	if _, cancelled := ac.cancelledRequests[rid]; cancelled {
 		ac.messageQueuesMu.Unlock()
-		logger.Debug(logComponentRouting).
+		logger.Debug(logComponent).
 			Str("event_type", "agent_client_cancelled_message_discarded").
 			Str("request_id", rid).
 			Msg("收到已取消请求的残余消息，已丢弃")
@@ -494,13 +494,13 @@ func (ac *AgentClient) routeToQueue(msg map[string]any) {
 			select {
 			case q <- msg:
 			default:
-				logger.Warn(logComponentRouting).
+				logger.Warn(logComponent).
 					Str("event_type", "agent_client_queue_full").
 					Str("request_id", rid).
 					Msg("消息队列已满，丢弃消息")
 			}
 		} else {
-			logger.Debug(logComponentRouting).
+			logger.Debug(logComponent).
 				Str("event_type", "agent_client_no_target_queue").
 				Str("request_id", rid).
 				Msg("收到无目标队列的消息")
@@ -536,7 +536,7 @@ func (ac *AgentClient) drainAndRemoveQueue(rid string) {
 done:
 	ac.messageQueuesMu.Unlock()
 
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "agent_client_queue_drained").
 		Str("request_id", rid).
 		Int("drained_count", drainedCount).
@@ -555,7 +555,7 @@ func (ac *AgentClient) delayedCleanupCancelledRequestID(rid string) {
 	delete(ac.cancelledRequests, rid)
 	ac.messageQueuesMu.Unlock()
 
-	logger.Debug(logComponentRouting).
+	logger.Debug(logComponent).
 		Str("event_type", "agent_client_cancelled_id_cleaned").
 		Str("request_id", rid).
 		Msg("已取消标记已清理")
@@ -623,7 +623,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 
 		chunk, err := parseAgentServerWireChunk(msg)
 		if err != nil {
-			logger.Warn(logComponentRouting).
+			logger.Warn(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("request_id", rid).
 				Err(err).
@@ -643,7 +643,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 		}
 	}
 
-	logger.Info(logComponentRouting).
+	logger.Info(logComponent).
 		Str("event_type", "agent_client_stream_complete").
 		Str("request_id", rid).
 		Int("chunk_count", chunkCount).

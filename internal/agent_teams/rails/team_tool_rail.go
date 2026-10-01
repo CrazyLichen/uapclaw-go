@@ -63,7 +63,7 @@ type TeamToolRailOption func(*TeamToolRail)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 TeamToolRail 满足 DeepAgentRailProvider 接口
+// _ 编译时验证 TeamToolRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamToolRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

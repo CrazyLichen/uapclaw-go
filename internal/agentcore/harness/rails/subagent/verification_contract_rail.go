@@ -112,6 +112,7 @@ var (
 		"你自己的检查和注意事项不能替代验证代理的判决。"
 )
 
+// _ 编译时验证 VerificationContractRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

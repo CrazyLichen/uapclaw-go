@@ -94,36 +94,58 @@ type TaskSummary struct {
 // PlanRecord 计划记录（index.json 中的一条）。
 // Python: _write_task_plan_index 写入的完整字段集
 type PlanRecord struct {
-	PlanID          string `json:"plan_id"`
-	TaskID          string `json:"task_id"`
-	TeamPlanID      string `json:"team_plan_id,omitempty"`
-	MemberName      string `json:"member_name"`
-	Status          string `json:"status"`
-	LatestPlanID    string `json:"latest_plan_id,omitempty"`
-	MemberPlanMD    string `json:"member_plan_md,omitempty"`
-	SourcePlanPath  string `json:"source_plan_path,omitempty"`
-	ToolCallID      string `json:"tool_call_id,omitempty"`
+	// PlanID 计划唯一标识
+	PlanID string `json:"plan_id"`
+	// TaskID 关联的任务标识
+	TaskID string `json:"task_id"`
+	// TeamPlanID 团队级计划标识
+	TeamPlanID string `json:"team_plan_id,omitempty"`
+	// MemberName 提交计划的成员名
+	MemberName string `json:"member_name"`
+	// Status 计划状态
+	Status string `json:"status"`
+	// LatestPlanID 最新计划标识
+	LatestPlanID string `json:"latest_plan_id,omitempty"`
+	// MemberPlanMD 成员计划 Markdown 文件路径
+	MemberPlanMD string `json:"member_plan_md,omitempty"`
+	// SourcePlanPath 源计划文件路径
+	SourcePlanPath string `json:"source_plan_path,omitempty"`
+	// ToolCallID 触发计划提交的工具调用 ID
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	// LeaderMessageID Leader 审批消息 ID
 	LeaderMessageID string `json:"leader_message_id,omitempty"`
-	LeaderName      string `json:"leader_name,omitempty"`
-	Decision        string `json:"decision"`
-	Feedback        string `json:"feedback,omitempty"`
-	SubmittedAt     string `json:"submitted_at,omitempty"`
-	DecidedAt       string `json:"decided_at,omitempty"`
-	CompletedAt     string `json:"completed_at,omitempty"`
-	UpdatedAt       string `json:"updated_at,omitempty"`
+	// LeaderName Leader 成员名
+	LeaderName string `json:"leader_name,omitempty"`
+	// Decision 审批决定（pending/approve/reject）
+	Decision string `json:"decision"`
+	// Feedback 审批反馈
+	Feedback string `json:"feedback,omitempty"`
+	// SubmittedAt 提交时间
+	SubmittedAt string `json:"submitted_at,omitempty"`
+	// DecidedAt 审批时间
+	DecidedAt string `json:"decided_at,omitempty"`
+	// CompletedAt 完成时间
+	CompletedAt string `json:"completed_at,omitempty"`
+	// UpdatedAt 更新时间
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // PlanIndex 计划索引（index.json 结构）。
 type PlanIndex struct {
-	Tasks     map[string]*TaskPlanIndex `json:"tasks"`
-	TaskPlans map[string]*PlanRecord    `json:"task_plans"`
+	// Tasks 任务ID → 每任务的计划索引
+	Tasks map[string]*TaskPlanIndex `json:"tasks"`
+	// TaskPlans 计划ID → 计划记录
+	TaskPlans map[string]*PlanRecord `json:"task_plans"`
 }
 
 // TaskPlanIndex 每任务的计划索引。
 type TaskPlanIndex struct {
-	PlanIDs      []string `json:"plan_ids"`
-	LatestPlanID string   `json:"latest_plan_id"`
-	Status       string   `json:"status"`
+	// PlanIDs 计划ID列表（按提交顺序）
+	PlanIDs []string `json:"plan_ids"`
+	// LatestPlanID 最新计划ID
+	LatestPlanID string `json:"latest_plan_id"`
+	// Status 任务状态
+	Status string `json:"status"`
 }
 
 // TeamTaskManager 团队任务管理器。

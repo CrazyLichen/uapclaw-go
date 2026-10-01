@@ -72,6 +72,7 @@ type defaultBuiltinConfigLoader struct{}
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 defaultSessionConfig 实现 SessionConfig 接口
+// _ 编译时验证 defaultSessionConfig 满足 SessionConfig 接口
 var _ SessionConfig = (*defaultSessionConfig)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

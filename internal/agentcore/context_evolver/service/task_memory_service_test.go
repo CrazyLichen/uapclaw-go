@@ -352,7 +352,7 @@ func TestTaskMemoryService_LoadMemories_有Persistence(t *testing.T) {
 			"embedding": []float64{0.1, 0.2},
 		},
 	}
-	err := ph.Save("user1", "ace", nodesData)
+	err := ph.Save(context.Background(), "user1", "ace", nodesData)
 	require.NoError(t, err)
 
 	svc := &TaskMemoryService{

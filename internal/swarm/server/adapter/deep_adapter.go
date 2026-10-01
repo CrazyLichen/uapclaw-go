@@ -576,7 +576,10 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 25: load_user_rails()
-	// ⤵️ 10.6.3-10: 动态加载用户自定义的 Rail 扩展
+	// 对齐 Python: load_user_rails() — 动态加载用户自定义的 Rail 扩展
+	// Go 不支持 Python 的动态导入机制，此处为占位实现
+	// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
+	d.loadUserRails()
 
 	logger.Info(logComponent).
 		Str("agent_name", d.agentName).
@@ -584,6 +587,14 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		Str("sub_mode", subMode).
 		Msg("DeepAdapter CreateInstance 完成")
 	return nil
+}
+
+// loadUserRails 动态加载用户自定义的 Rail 扩展。
+// 对齐 Python: load_user_rails() — 从配置中加载用户自定义 Rail 并注册到 harness。
+// Go 不支持 Python 的动态导入机制，当前为占位实现（仅记录日志）。
+// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
+func (d *DeepAdapter) loadUserRails() {
+	logger.Debug(logComponent).Msg("loadUserRails: Go 不支持动态导入，用户自定义 Rail 扩展待设计")
 }
 
 // ReloadAgentConfig 热重载配置，不重启进程。

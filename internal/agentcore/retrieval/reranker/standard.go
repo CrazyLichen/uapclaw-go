@@ -42,6 +42,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保编译时接口合规
+// _ 编译时验证 StandardReranker 满足 BaseReranker 接口
 var _ reranker.BaseReranker = (*StandardReranker)(nil)
 
 // 抑制未使用导入警告

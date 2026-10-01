@@ -87,26 +87,28 @@ func (h *TeamCompletionHandler) Rearm() {
 // 上升沿时发布 TEAM_COMPLETED 事件，持久团队还需 conclude_completed_round。
 // Python: TeamCompletionHandler.on_poll_task
 func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.CoordinationEvent) {
-	if h.teamCompletedEmitted {
-		return
-	}
-
-	role := h.blueprint.Role()
 	// 对齐 Python: 仅 leader 评估完成条件
+	role := h.blueprint.Role()
 	if role != schema.TeamRoleLeader {
 		return
 	}
 
 	// 对齐 Python: if self._round.has_in_flight_round() or self._round.is_agent_running(): return
+	// 先于 teamCompletedEmitted 检查，避免 leader 忙碌时永不重置上升沿标志
 	if h.round.HasInFlightRound() || h.round.IsAgentRunning() {
+		return
+	}
+
+	if h.teamCompletedEmitted {
 		return
 	}
 
 	// TODO(#9.63): 等任务后端接口就绪后补充 is_team_completed 检查
 	// 对齐 Python 步骤：
 	// 1. 调用 TeamBackend.is_team_completed()
-	// 2. 上升沿：!teamCompletedEmitted && is_completed → publish_team_completed
-	// 3. 持久团队：conclude_completed_round
+	// 2. 若 snapshot == nil（下降沿）：重置 teamCompletedEmitted = False，return
+	// 3. 上升沿：!teamCompletedEmitted && is_completed → publish_team_completed
+	// 4. 持久团队：conclude_completed_round
 	logger.Debug(logComponent).
 		Str("role", string(role)).
 		Bool("emitted", h.teamCompletedEmitted).

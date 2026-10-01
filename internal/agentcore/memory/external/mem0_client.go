@@ -28,30 +28,41 @@ type mem0HTTPClient struct {
 
 // mem0SearchRequest search API 请求体
 type mem0SearchRequest struct {
-	Query   string         `json:"query"`
+	// Query 搜索查询文本
+	Query string `json:"query"`
+	// Filters 过滤条件
 	Filters map[string]any `json:"filters,omitempty"`
-	Rerank  bool           `json:"rerank,omitempty"`
-	TopK    int            `json:"top_k,omitempty"`
+	// Rerank 是否启用重排序
+	Rerank bool `json:"rerank,omitempty"`
+	// TopK 返回数量上限
+	TopK int `json:"top_k,omitempty"`
 }
 
 // mem0AddRequest add API 请求体
 type mem0AddRequest struct {
-	Messages []mem0Message  `json:"messages"`
-	Filters  map[string]any `json:"filters,omitempty"`
-	Infer    *bool          `json:"infer,omitempty"` // pointer 区分零值和未设置
+	// Messages 消息列表
+	Messages []mem0Message `json:"messages"`
+	// Filters 过滤条件
+	Filters map[string]any `json:"filters,omitempty"`
+	// Infer 是否启用推理（pointer 区分零值和未设置）
+	Infer *bool `json:"infer,omitempty"`
 }
 
 // mem0Message 消息格式
 type mem0Message struct {
-	Role    string `json:"role"`
+	// Role 角色（user/assistant）
+	Role string `json:"role"`
+	// Content 消息内容
 	Content string `json:"content"`
 }
 
 // mem0MemoryItem 记忆项
 // 对齐 Python: _unwrap_results 中的 dict，含 memory 字段和 score
 type mem0MemoryItem struct {
-	Memory string  `json:"memory"`
-	Score  float64 `json:"score"`
+	// Memory 记忆内容
+	Memory string `json:"memory"`
+	// Score 相似度分数
+	Score float64 `json:"score"`
 }
 
 // mem0SearchResponse search API 响应（dict 格式）

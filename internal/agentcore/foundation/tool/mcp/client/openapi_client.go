@@ -79,6 +79,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：OpenApiClient 实现 McpClient 接口
+// _ 编译时验证 OpenApiClient 满足 McpClient 接口
 var _ types.McpClient = (*OpenApiClient)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

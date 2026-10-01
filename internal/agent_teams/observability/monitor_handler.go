@@ -84,11 +84,11 @@ func NewOtelTeamMonitorHandler(config *ObservabilityConfig, tracer trace.Tracer)
 // HandleEvent 事件分发入口。
 // Python: OtelTeamMonitorHandler.__call__(self, event: EventMessage)
 // 签名对齐 messager.MessagerHandler，9.55 回填时可直接传入 AddEventListener。
-func (h *OtelTeamMonitorHandler) HandleEvent(_ context.Context, event *events.EventMessage) error {
+func (h *OtelTeamMonitorHandler) HandleEvent(ctx context.Context, event *events.EventMessage) error {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("error", r).Str("event_type", event.EventType).
-				Msg("otel monitor handler 异常")
+				Msg("OTel 监控处理器异常")
 		}
 	}()
 
@@ -101,13 +101,13 @@ func (h *OtelTeamMonitorHandler) HandleEvent(_ context.Context, event *events.Ev
 
 	switch {
 	case etype == events.TeamEventCreated:
-		h.openTeamSpan(teamName, payload)
+		h.openTeamSpan(ctx, teamName, payload)
 	case etype == events.TeamEventCleaned:
 		h.closeTeamSpan(teamName)
 	case etype == events.TeamEventStandby:
 		h.recordTeamEvent(teamName, etype, map[string]any{ATEventType: etype})
 	case taskOpenTypes[etype]:
-		h.openTaskSpan(teamName, payload)
+		h.openTaskSpan(ctx, teamName, payload)
 	case taskCloseTypes[etype]:
 		h.closeTaskSpan(payload, etype)
 	case etype == events.TeamEventTaskUpdated || etype == events.TeamEventTaskClaimed:
@@ -132,12 +132,12 @@ func (h *OtelTeamMonitorHandler) tracer() trace.Tracer {
 
 // openTeamSpan 打开长生命周期的 team root span。
 // Python: _open_team_span(team_name, payload)
-func (h *OtelTeamMonitorHandler) openTeamSpan(teamName string, payload map[string]any) {
+func (h *OtelTeamMonitorHandler) openTeamSpan(ctx context.Context, teamName string, payload map[string]any) {
 	if _, exists := h.teamSpans[teamName]; exists {
 		return
 	}
 	// Python: span = self._tracer().start_span(name=f"team.{team_name}", kind=SpanKind.INTERNAL)
-	_, span := h.tracer().Start(context.Background(), "team."+teamName, trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := h.tracer().Start(ctx, "team."+teamName, trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(
 		attribute.String(ATTeamName, teamName),
 		attribute.String(ATTeamDisplayName, strVal(payload["display_name"], teamName)),
@@ -173,7 +173,7 @@ func (h *OtelTeamMonitorHandler) recordTeamEvent(teamName string, name string, a
 
 // openTaskSpan 打开 per-task span。
 // Python: _open_task_span(team_name, payload)
-func (h *OtelTeamMonitorHandler) openTaskSpan(teamName string, payload map[string]any) {
+func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName string, payload map[string]any) {
 	taskID := strVal(payload["task_id"])
 	if taskID == "" {
 		return
@@ -181,7 +181,7 @@ func (h *OtelTeamMonitorHandler) openTaskSpan(teamName string, payload map[strin
 	if _, exists := h.taskSpans[taskID]; exists {
 		return
 	}
-	_, span := h.tracer().Start(context.Background(), "task."+taskID, trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := h.tracer().Start(ctx, "task."+taskID, trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(attribute.String(ATTaskID, taskID))
 	if teamName != "" {
 		span.SetAttributes(attribute.String(ATTeamName, teamName))

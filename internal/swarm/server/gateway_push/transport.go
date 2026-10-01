@@ -36,12 +36,13 @@ type ChannelPushTransport struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponentPush 推送日志组件
-const logComponentPush = logger.ComponentAgentServer
+// logComponent 推送日志组件
+const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 接口合规：ChannelPushTransport 实现 GatewayPushTransport
+// _ 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
 var _ GatewayPushTransport = (*ChannelPushTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -55,7 +56,7 @@ func NewChannelPushTransport() *ChannelPushTransport {
 func (t *ChannelPushTransport) SendPush(ctx context.Context, msg map[string]any) error {
 	s := server.GetInstance()
 	if s == nil {
-		logger.Warn(logComponentPush).Msg("ChannelPushTransport: AgentServer 单例未初始化")
+		logger.Warn(logComponent).Msg("ChannelPushTransport: AgentServer 单例未初始化")
 		return fmt.Errorf("AgentServer 单例未初始化")
 	}
 	return s.SendPush(ctx, msg)

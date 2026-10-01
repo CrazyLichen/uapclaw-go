@@ -48,20 +48,34 @@ type Task struct {
 
 // taskJSON Task 的 JSON 序列化中间结构。
 type taskJSON struct {
-	SessionID           string                 `json:"session_id"`
-	TaskID              string                 `json:"task_id"`
-	TaskType            string                 `json:"task_type"`
-	Description         string                 `json:"description,omitempty"`
-	Priority            int                    `json:"priority"`
-	Inputs              eventSlice             `json:"inputs,omitempty"`
-	Outputs             []*stream.OutputSchema `json:"outputs,omitempty"`
-	Status              TaskStatus             `json:"status"`
-	ParentTaskID        string                 `json:"parent_task_id,omitempty"`
-	ContextID           string                 `json:"context_id,omitempty"`
-	InputRequiredFields map[string]any         `json:"input_required_fields,omitempty"`
-	ErrorMessage        string                 `json:"error_message,omitempty"`
-	Metadata            map[string]any         `json:"metadata,omitempty"`
-	Extensions          map[string]any         `json:"extensions,omitempty"`
+	// SessionID 会话ID
+	SessionID string `json:"session_id"`
+	// TaskID 任务唯一标识
+	TaskID string `json:"task_id"`
+	// TaskType 任务类型
+	TaskType string `json:"task_type"`
+	// Description 任务描述
+	Description string `json:"description,omitempty"`
+	// Priority 优先级
+	Priority int `json:"priority"`
+	// Inputs 输入事件列表
+	Inputs eventSlice `json:"inputs,omitempty"`
+	// Outputs 输出分片列表
+	Outputs []*stream.OutputSchema `json:"outputs,omitempty"`
+	// Status 任务状态
+	Status TaskStatus `json:"status"`
+	// ParentTaskID 父任务ID
+	ParentTaskID string `json:"parent_task_id,omitempty"`
+	// ContextID 上下文ID
+	ContextID string `json:"context_id,omitempty"`
+	// InputRequiredFields 需要用户输入的字段
+	InputRequiredFields map[string]any `json:"input_required_fields,omitempty"`
+	// ErrorMessage 错误消息
+	ErrorMessage string `json:"error_message,omitempty"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// Extensions 扩展字段
+	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

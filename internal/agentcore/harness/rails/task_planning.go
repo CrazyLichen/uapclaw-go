@@ -78,6 +78,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// _ 编译时验证 TaskPlanningRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
 var taskPlanLogComponent = logger.ComponentAgentCore

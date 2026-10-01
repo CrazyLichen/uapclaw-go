@@ -379,6 +379,23 @@ func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool
 	return true
 }
 
+// Ping 探测 Milvus 连接可达性。实现 persistence.MilvusConnector 接口。
+// 通过 HasCollection 调用验证 gRPC 通道是否可用，而非使用非语义化的 Exists("__probe__")。
+func (m *MilvusConnectorImpl) Ping(ctx context.Context) bool {
+	c, err := m.getClient(ctx, 0)
+	if err != nil {
+		logger.Warn(milvusLogComponent).Err(err).Msg("ping: 获取客户端失败")
+		return false
+	}
+	// HasCollection 会建立 gRPC 连接，如果 Milvus 不可达会返回错误
+	_, err = c.HasCollection(ctx, milvusclient.NewHasCollectionOption(m.collectionName))
+	if err != nil {
+		logger.Warn(milvusLogComponent).Err(err).Msg("ping: Milvus 不可达")
+		return false
+	}
+	return true
+}
+
 // Search 在命名空间内执行 ANN 搜索。
 //
 // 对齐 Python: MilvusConnector.search(namespace, embedding, top_k, metric)
@@ -421,7 +438,16 @@ func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embe
 	searchOpt := milvusclient.NewSearchOption(m.collectionName, topK, vectors).
 		WithANNSField(fieldEmbedding).
 		WithFilter(expr).
-		WithOutputFields(fieldID, fieldContent, fieldMetadata)
+		WithOutputFields(fieldID, fieldContent, fieldMetadata).
+		// 对齐 Python: search_params={"metric_type": milvus_metric, "params": {"ef": max(top_k * 2, 64)}}
+		WithSearchParam("metric_type", milvusMetric)
+
+	// 对齐 Python: "params": {"ef": max(top_k * 2, 64)} — HNSW 索引 ef 参数
+	ef := topK * 2
+	if ef < 64 {
+		ef = 64
+	}
+	searchOpt = searchOpt.WithSearchParam("params", fmt.Sprintf(`{"ef": %d}`, ef))
 
 	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {

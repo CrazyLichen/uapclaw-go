@@ -57,8 +57,6 @@ func NewOtelCallbackHandler(config *ObservabilityConfig, tracer trace.Tracer) *O
 	}
 }
 
-// ──────────────────────────── LLM 回调 ────────────────────────────
-
 // OnLLMInvokeInput LLM invoke 调用前：打开 LLM span 并附加 prompt 属性。
 // Python: on_llm_invoke_input
 func (h *OtelCallbackHandler) OnLLMInvokeInput(ctx context.Context, data *cb.LLMCallEventData) any {
@@ -164,8 +162,6 @@ func (h *OtelCallbackHandler) OnLLMCallError(ctx context.Context, data *cb.LLMCa
 	return nil
 }
 
-// ──────────────────────────── Tool 回调 ────────────────────────────
-
 // OnToolCallStarted Tool 调用启动：打开 tool span。
 // Python: on_tool_call_started
 func (h *OtelCallbackHandler) OnToolCallStarted(ctx context.Context, data *cb.ToolCallEventData) any {
@@ -181,7 +177,11 @@ func (h *OtelCallbackHandler) OnToolCallStarted(ctx context.Context, data *cb.To
 	}
 	// 创建子 span 时，以当前 LLM span 为 parent
 	// Python: span = self._tracer().start_span(name=f"tool.{tool_name}", kind=SpanKind.INTERNAL)
-	parentCtx := trace.ContextWithSpanContext(ctx, spanState.CurrentLLMSpanContext())
+	llmSC := spanState.CurrentLLMSpanContext()
+	parentCtx := ctx
+	if llmSC.IsValid() {
+		parentCtx = trace.ContextWithSpanContext(ctx, llmSC)
+	}
 	_, toolSpan := h.tracer().Start(parentCtx, "tool."+toolName, trace.WithSpanKind(trace.SpanKindInternal))
 	// Python: span.set_attribute(GEN_AI_TOOL_NAME, tool_name)
 	toolSpan.SetAttributes(attribute.String(GenAIToolName, toolName))
@@ -253,8 +253,6 @@ func (h *OtelCallbackHandler) OnToolCallError(ctx context.Context, data *cb.Tool
 	return nil
 }
 
-// ──────────────────────────── Agent 回调 ────────────────────────────
-
 // OnAgentInvokeInput Agent 调用前：打开 agent span。
 // Python: on_agent_invoke_input
 func (h *OtelCallbackHandler) OnAgentInvokeInput(ctx context.Context, data *cb.GlobalAgentEventData) any {
@@ -267,7 +265,11 @@ func (h *OtelCallbackHandler) OnAgentInvokeInput(ctx context.Context, data *cb.G
 	agentID, role, query := unpackAgentInputs(data.Inputs, data.AgentID)
 	// 创建子 span 时，以当前 LLM span 为 parent
 	// Python: span = self._tracer().start_span(name=f"agent.{agent_id}", kind=SpanKind.INTERNAL)
-	parentCtx := trace.ContextWithSpanContext(ctx, spanState.CurrentLLMSpanContext())
+	llmSC := spanState.CurrentLLMSpanContext()
+	parentCtx := ctx
+	if llmSC.IsValid() {
+		parentCtx = trace.ContextWithSpanContext(ctx, llmSC)
+	}
 	_, agentSpan := h.tracer().Start(parentCtx, "agent."+agentID, trace.WithSpanKind(trace.SpanKindInternal))
 	// Python: span.set_attribute(AT_AGENT_ID, agent_id)
 	agentSpan.SetAttributes(attribute.String(ATAgentID, agentID))
@@ -332,7 +334,11 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 	}
 	// 创建子 span 时，以当前 LLM span 为 parent（支持嵌套 LLM 调用）
 	// Python: span = self._tracer().start_span(name="llm.call", kind=SpanKind.CLIENT)
-	parentCtx := trace.ContextWithSpanContext(ctx, spanState.CurrentLLMSpanContext())
+	llmSC := spanState.CurrentLLMSpanContext()
+	parentCtx := ctx
+	if llmSC.IsValid() {
+		parentCtx = trace.ContextWithSpanContext(ctx, llmSC)
+	}
 	_, llmSpan := h.tracer().Start(parentCtx, "llm.call", trace.WithSpanKind(trace.SpanKindClient))
 	// Python: span.set_attribute(GEN_AI_SYSTEM, _GEN_AI_SYSTEM_VALUE)
 	llmSpan.SetAttributes(attribute.String(GenAISystem, genAISystemValue))
@@ -386,6 +392,7 @@ func (h *OtelCallbackHandler) closeLlmSpan(state *LlmSpanState, response any) {
 	// Python: if reasoning_text: 生成 reasoning 子 span
 	if reasoningText != "" {
 		// Python: with self._tracer().start_as_current_span(name="llm.reasoning", context=set_span_in_context(state.span))
+		// 对齐 Python: 从 state.Span 构建新 context 作为 reasoning span 的 parent
 		reasoningCtx := trace.ContextWithSpan(context.Background(), state.Span)
 		_, reasoningSpan := h.tracer().Start(reasoningCtx, "llm.reasoning", trace.WithSpanKind(trace.SpanKindInternal))
 		reasoningSpan.SetAttributes(
@@ -440,7 +447,7 @@ func (h *OtelCallbackHandler) maybeRecordResponseAttrs(state *LlmSpanState, resp
 // Python: except Exception as exc: team_logger.warning("otel: xxx failed: {}", exc)
 func recoverCallback(methodName string) {
 	if r := recover(); r != nil {
-		logger.Warn(logComponent).Any("error", r).Str("method", methodName).Msg("otel 回调异常")
+		logger.Warn(logComponent).Any("error", r).Str("method", methodName).Msg("OTel 回调异常")
 	}
 }
 

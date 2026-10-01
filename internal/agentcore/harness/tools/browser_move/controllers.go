@@ -285,7 +285,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		paramKeys = strings.Join(keys, ",")
 	}
 
-	logger.Info(logComponentBR).
+	logger.Info(logComponent).
 		Str("event_type", "CONTROLLER_ACTION").
 		Str("action", actionName).
 		Str("session_id", orEmpty(sid)).
@@ -297,7 +297,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 	if IsBrowserWorkerAction(ctx) && recursiveBrowserActions[actionName] {
 		error := "recursive_browser_task_blocked: browser workers must not invoke " +
 			"browser_task/run_browser_task via browser_custom_action; return a JSON error instead"
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "CONTROLLER_ACTION_BLOCKED").
 			Str("action", actionName).
 			Str("session_id", orEmpty(sid)).
@@ -318,7 +318,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 
 	if !exists {
 		c.mu.Unlock()
-		logger.Warn(logComponentBR).
+		logger.Warn(logComponent).
 			Str("event_type", "CONTROLLER_ACTION_UNKNOWN").
 			Str("action", actionName).
 			Str("session_id", orEmpty(sid)).
@@ -372,7 +372,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 	if _ok {
 		result["error"] = nil
 	}
-	logger.Info(logComponentBR).
+	logger.Info(logComponent).
 		Str("event_type", "CONTROLLER_ACTION").
 		Str("action", actionName).
 		Str("session_id", orEmpty(sid)).

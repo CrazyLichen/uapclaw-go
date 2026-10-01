@@ -101,7 +101,7 @@ func NewContextEvolvingReActAgent(
 			service.WithMilvusCollection(milvusCollection),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create TaskMemoryService: %w", err)
+			return nil, fmt.Errorf("创建 TaskMemoryService 失败: %w", err)
 		}
 	}
 
@@ -120,8 +120,8 @@ func NewContextEvolvingReActAgent(
 	// 对齐 Python：构造时加载记忆
 	if memoryService != nil {
 		if loadErr := memoryService.LoadMemories(ctx, userID); loadErr != nil {
-			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("Failed to load memories during agent initialization")
-			return nil, fmt.Errorf("failed to load memories: %w", loadErr)
+			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("初始化期间加载记忆失败")
+			return nil, fmt.Errorf("加载记忆失败: %w", loadErr)
 		}
 	}
 
@@ -130,7 +130,7 @@ func NewContextEvolvingReActAgent(
 		Str("user_id", userID).
 		Bool("inject_in_context", injectMemoriesInContext).
 		Bool("auto_summarize", autoSummarize).
-		Msg("ContextEvolvingReActAgent initialized")
+		Msg("ContextEvolvingReActAgent 初始化完成")
 
 	return agent, nil
 }
@@ -142,7 +142,7 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 	query, _ := inputs["query"].(string)
 	if query == "" {
 		// 对齐 Python：无 query 时补警告日志
-		logger.Warn(logger.ComponentAgentCore).Msg("No query provided in inputs")
+		logger.Warn(logger.ComponentAgentCore).Msg("输入中未提供 query")
 		return a.ReActAgent.Invoke(ctx, inputs, opts...)
 	}
 
@@ -243,7 +243,7 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	logger.Info(logger.ComponentAgentCore).
 		Str("model_name", modelName).
 		Str("api_base", apiBase).
-		Msg("AutoConfigure: configuring agent from context_evolver config")
+		Msg("AutoConfigure: 从 context_evolver 配置自动配置 Agent")
 
 	// 重新创建 TaskMemoryService（如果存在）
 	if a.memoryService != nil {
@@ -254,7 +254,7 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 			service.WithAPIBase(apiBase),
 		)
 		if err != nil {
-			return fmt.Errorf("AutoConfigure: failed to create TaskMemoryService: %w", err)
+			return fmt.Errorf("AutoConfigure: 创建 TaskMemoryService 失败: %w", err)
 		}
 		a.memoryService = newSvc
 	}
@@ -308,14 +308,14 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 	if a.memoryService != nil {
 		if a.lastRetrievedQuery == retrievalQuery && a.lastRetrievalResult != nil {
 			// 对齐 Python：logger.info("Reusing cached memory retrieval result")
-			logger.Info(logger.ComponentAgentCore).Msg("Reusing cached memory retrieval result")
+			logger.Info(logger.ComponentAgentCore).Msg("复用缓存的记忆检索结果")
 			memoryString = a.lastRetrievalResult.MemoryString
 			memoriesUsed = len(a.lastRetrievalResult.RetrievedMemory)
 		} else {
 			result, err := a.memoryService.Retrieve(ctx, a.userID, retrievalQuery)
 			if err != nil {
 				// 对齐 Python：logger.error("Failed to retrieve memories: %s", e)
-				logger.Error(logger.ComponentAgentCore).Err(err).Msg("Failed to retrieve memories")
+				logger.Error(logger.ComponentAgentCore).Err(err).Msg("检索记忆失败")
 			} else {
 				a.lastRetrievedQuery = retrievalQuery
 				a.lastRetrievalResult = result
@@ -324,7 +324,7 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 				// 对齐 Python：logger.info("Retrieved %s memories for query", ...)
 				logger.Info(logger.ComponentAgentCore).
 					Int("memories_used", memoriesUsed).
-					Msg("Retrieved memories")
+					Msg("检索记忆完成")
 			}
 		}
 	}

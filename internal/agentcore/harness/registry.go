@@ -75,8 +75,8 @@ func GetConfig(configID string) *HarnessConfigInfo {
 // 调用链：Get → Loader.Load → Builder.Build → CreateDeepAgent。
 //
 // Python: HarnessConfigRegistry.load() → DeepAgent
-func LoadConfig(configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
-	return getGlobalRegistry().Load(configID, model, params, workspaceRoot...)
+func LoadConfig(ctx context.Context, configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
+	return getGlobalRegistry().Load(ctx, configID, model, params, workspaceRoot...)
 }
 
 // DisableConfig 禁用指定 ID 的 harness_config
@@ -135,7 +135,7 @@ func (r *HarnessConfigRegistry) Get(configID string) *HarnessConfigInfo {
 // Load 便捷方法：按 ID 查找 → Loader.Load → Builder.Build → CreateDeepAgent
 //
 // Python: HarnessConfigRegistry.load() → DeepAgent
-func (r *HarnessConfigRegistry) Load(configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
+func (r *HarnessConfigRegistry) Load(ctx context.Context, configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
 	info := r.Get(configID)
 	if info == nil {
 		installed := make([]string, 0)
@@ -165,7 +165,7 @@ func (r *HarnessConfigRegistry) Load(configID string, model *llm.Model, params m
 	}
 
 	// 串联 Build → CreateDeepAgent
-	agent, err := CreateDeepAgent(context.Background(), *createParams)
+	agent, err := CreateDeepAgent(ctx, *createParams)
 	if err != nil {
 		return nil, fmt.Errorf("创建 DeepAgent '%s' 失败: %w", configID, err)
 	}

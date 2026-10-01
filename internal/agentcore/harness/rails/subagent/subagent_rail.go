@@ -58,6 +58,7 @@ var knownAgentTools = map[string]string{
 }
 
 // 编译时接口检查
+// _ 编译时验证 SubagentRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

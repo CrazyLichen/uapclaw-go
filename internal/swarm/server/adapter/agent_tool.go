@@ -140,7 +140,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 
 	// 步骤 6: 创建子 Agent
 	// Python: subagent = self._create_sub_agent(agent_def, sub_session_id) (code_agent_rail.py L297)
-	subAgent, err := t.createSubAgent(agentDef, subSessionID)
+	subAgent, err := t.createSubAgent(ctx, agentDef, subSessionID)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "agent_tool_create_subagent_failed").
@@ -224,7 +224,7 @@ func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...t
 //  4. 构建 Workspace（复用父 workspace root_path）
 //  5. 构建 CreateDeepAgentParams（对齐 Python create_kwargs 字段映射）
 //  6. 调用 CreateDeepAgent(ctx, params)
-func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
+func (t *AgentTool) createSubAgent(ctx context.Context, agentDef *types.AgentDefinition, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	// 步骤 1: 将 AgentDefinition 转换为 SubAgentConfig
 	// Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
 	var model *llm.Model
@@ -363,7 +363,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 
 	// 步骤 6: 创建子 Agent
 	// Python: sub_agent = create_deep_agent(**create_kwargs, **factory_kwargs)
-	subAgent, err := harness.CreateDeepAgent(context.Background(), params)
+	subAgent, err := harness.CreateDeepAgent(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("create_deep_agent 失败: %w", err)
 	}

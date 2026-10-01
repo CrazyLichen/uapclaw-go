@@ -75,6 +75,7 @@ type ModelClientExtraOption func(*modelClientExtra)
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口检查：ReActAgentConfig 必须实现 AgentConfig 接口
+// _ 编译时验证 ReActAgentConfig 满足 AgentConfig 接口
 var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

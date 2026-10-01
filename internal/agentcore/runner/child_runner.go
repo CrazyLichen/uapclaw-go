@@ -22,6 +22,7 @@ type ChildRunnerImpl struct{}
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期校验：ChildRunnerImpl 必须满足 spawn.ChildRunner 接口
+// _ 编译时验证 ChildRunnerImpl 满足 ChildRunner 接口
 var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

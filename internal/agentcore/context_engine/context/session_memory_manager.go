@@ -71,8 +71,11 @@ type SessionMemoryUpdateOptions struct {
 //
 // Python: SessionMemoryUpdateAgent._invoke_direct_replace()
 type SessionMemoryDirectUpdater struct {
-	config                SessionMemoryConfig
-	model                 *llm.Model
+	// config 会话记忆配置
+	config SessionMemoryConfig
+	// model LLM 模型实例（延迟初始化）
+	model *llm.Model
+	// inheritedSystemPrompt 继承的系统提示词
 	inheritedSystemPrompt string
 }
 
@@ -85,11 +88,16 @@ type SessionMemoryDirectUpdater struct {
 //
 // Python: SessionMemoryUpdateAgent (openjiuwen/core/context_engine/context/session_memory_manager.py L214-466)
 type SessionMemoryAgentUpdater struct {
-	config                SessionMemoryConfig
-	agent                 SessionMemoryAgent
+	// config 会话记忆配置
+	config SessionMemoryConfig
+	// agent Agent 实例（延迟注入）
+	agent SessionMemoryAgent
+	// inheritedSystemPrompt 继承的系统提示词
 	inheritedSystemPrompt string
-	toolNamespace         string
-	workspaceRoot         string
+	// toolNamespace 工具命名空间
+	toolNamespace string
+	// workspaceRoot 工作空间根路径
+	workspaceRoot string
 	// primeNotesFn 预填充文件读取状态的回调（避免 context → filesystem 循环依赖）
 	// 对齐 Python: _prime_notes_file_as_read()
 	primeNotesFn func(notesPath string, currentNotes string)
@@ -113,10 +121,14 @@ type SessionMemoryAgentOption any
 //
 // Python: openjiuwen/core/context_engine/context/session_memory_manager.py (SessionMemoryManager)
 type SessionMemoryManager struct {
-	config  SessionMemoryConfig
+	// config 会话记忆配置
+	config SessionMemoryConfig
+	// updater 记忆更新器
 	updater SessionMemoryUpdater
-	mu      sync.Mutex
-	tasks   map[string]context.CancelFunc
+	// mu 保护 tasks 字段
+	mu sync.Mutex
+	// tasks 后台任务取消函数（key=sessionID）
+	tasks map[string]context.CancelFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
