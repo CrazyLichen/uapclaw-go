@@ -4,13 +4,22 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
+
+// fakeDeliverInputer 用于测试的 DeliverInputer 模拟实现。
+type fakeDeliverInputer struct {
+	delivered bool
+	err       error
+}
+
+func (f *fakeDeliverInputer) DeliverInput(_ context.Context, _ any, _ bool) error {
+	f.delivered = true
+	return f.err
+}
 
 // newTestTeamBackendForInteraction 创建测试用的 TeamBackend。
 func newTestTeamBackendForInteraction() *tools.TeamBackend {
@@ -23,10 +32,9 @@ func newTestTeamBackendForInteraction() *tools.TeamBackend {
 	return tb
 }
 
-// newTestAgentForInteraction 创建测试用的 TeamAgent。
-func newTestAgentForInteraction() *agent.TeamAgent {
-	a := agent.NewTeamAgent(&agentschema.AgentCard{})
-	return a
+// newTestDeliverInputer 创建测试用的 DeliverInputer。
+func newTestDeliverInputer() DeliverInputer {
+	return &fakeDeliverInputer{}
 }
 
 func TestHumanAgentNotEnabledError(t *testing.T) {
@@ -62,9 +70,9 @@ func TestNewHumanAgentInbox(t *testing.T) {
 func TestHumanAgentInbox_Send_驱动avatar(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	var lookedUp string
-	lookup := func(sender string) *agent.TeamAgent {
+	lookup := func(sender string) DeliverInputer {
 		lookedUp = sender
-		return newTestAgentForInteraction() // 非 nil 表示有活跃运行时
+		return newTestDeliverInputer() // 非 nil 表示有活跃运行时
 	}
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send(context.Background(), "hello", nil, nil)
@@ -113,7 +121,7 @@ func TestHumanAgentInbox_Send_无lookup时驱动失败(t *testing.T) {
 
 func TestHumanAgentInbox_Send_lookup返回nil(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
-	lookup := func(sender string) *agent.TeamAgent { return nil }
+	lookup := func(sender string) DeliverInputer { return nil }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	result, err := h.Send(context.Background(), "hello", nil, nil)
 	if err != nil {
@@ -142,7 +150,7 @@ func TestHumanAgentInbox_Send_未知发送者(t *testing.T) {
 
 func TestHumanAgentInbox_Send_指定发送者(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
-	lookup := func(sender string) *agent.TeamAgent { return newTestAgentForInteraction() }
+	lookup := func(sender string) DeliverInputer { return newTestDeliverInputer() }
 	h := NewHumanAgentInbox(tb, tb.MessageManager(), lookup, nil)
 	sender := "human_agent"
 	result, err := h.Send(context.Background(), "hello", nil, &sender)

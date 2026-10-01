@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -14,9 +13,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// DeliverInputer 投递输入接口。
+// 打破 interaction → agent 循环依赖：interaction 只需 DeliverInput 方法，
+// 不需要 import agent 包。*agent.TeamAgent 隐式满足此接口。
+type DeliverInputer interface {
+	// DeliverInput 投递输入到 Agent。
+	// Python: TeamAgent.deliver_input(content, use_steer=True)
+	DeliverInput(ctx context.Context, content any, useSteer bool) error
+}
+
 // AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
 // Python: AgentLookup = Callable[[str], Optional[TeamAgent]]
-type AgentLookup func(sender string) *agent.TeamAgent
+type AgentLookup func(sender string) DeliverInputer
 
 // OnInbound 团队→用户通知回调。
 // Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]

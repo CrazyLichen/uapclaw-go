@@ -357,10 +357,17 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		if backend == nil {
 			return interaction.NewDeliverResultFailure("no_team_backend"), nil
 		}
+		// 包装 agentLookup：*agent.TeamAgent → interaction.DeliverInputer（隐式满足）
+		var agentLookup interaction.AgentLookup
+		if entry.Agent != nil {
+			agentLookup = func(sender string) interaction.DeliverInputer {
+				return entry.Agent.LookupHumanAgentRuntime(sender)
+			}
+		}
 		hInbox := interaction.NewHumanAgentInbox(
 			backend,
 			backend.MessageManager(),
-			entry.Agent.LookupHumanAgentRuntime, // ✅(#9.55): 注入 agentLookup
+			agentLookup,
 			nil, // TODO(#9.85): 注入 onInbound（需 TeamRunner 完整实现后回填）
 		)
 		result, err := hInbox.Send(ctx, p.Body(), p.Target(), strPtr(p.Sender()))
