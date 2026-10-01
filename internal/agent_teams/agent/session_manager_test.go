@@ -112,7 +112,7 @@ func TestReleaseSession_释放(t *testing.T) {
 	sess := &mockSession{sessionID: "sess-1"}
 	_, _ = m.BindSession(context.Background(), sess)
 
-	m.ReleaseSession()
+	m.ReleaseSession(context.Background())
 
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
@@ -125,8 +125,8 @@ func TestReleaseSession_幂等(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	m.ReleaseSession() // 未 bind 就 release
-	m.ReleaseSession() // 再次 release
+	m.ReleaseSession(context.Background()) // 未 bind 就 release
+	m.ReleaseSession(context.Background()) // 再次 release
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
 }
@@ -154,7 +154,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	assert.Equal(t, sess, state.TeamSession)
 
 	// → Unbound (ReleaseSession 清空 sessionID 和 teamSession)
-	m.ReleaseSession()
+	m.ReleaseSession(context.Background())
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
 

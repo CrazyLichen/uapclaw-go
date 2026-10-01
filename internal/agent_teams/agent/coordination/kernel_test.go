@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
@@ -49,7 +50,7 @@ func (f *fakeKernelHost) SessionController() types.SessionController { return ni
 func (f *fakeKernelHost) TeamBackendAccessor() types.TeamBackendAccessor { return nil }
 func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor       { return nil }
 func (f *fakeKernelHost) SetWorkspaceInitialized()                         {}
-func (f *fakeKernelHost) MemoryManager() types.MemoryAccessor             { return nil }
+func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager             { return nil }
 func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor           { return nil }
 func (f *fakeKernelHost) SpecAny() any                                     { return nil }
 func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error       { return nil }

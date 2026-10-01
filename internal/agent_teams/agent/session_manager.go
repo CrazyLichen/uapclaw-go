@@ -157,7 +157,7 @@ func (m *SessionManager) BindSession(
 //  2. state.TeamSession = nil           — 清空会话引用
 //
 // 清空后 sessionID=""，teamSession=nil → Unbound 状态。
-func (m *SessionManager) ReleaseSession() {
+func (m *SessionManager) ReleaseSession(ctx context.Context) error {
 	// 步骤 1: 清空 sessionID
 	// Python: _reset_session_id_token()
 	m.sessionState.SetSessionID("")
@@ -168,6 +168,7 @@ func (m *SessionManager) ReleaseSession() {
 
 	logger.Info(sessionMgrLogComponent).
 		Msg("SessionManager.ReleaseSession")
+	return nil
 }
 
 // ResumeForNewSession 切换到新会话并重新绑定活着的 teammate 运行时。

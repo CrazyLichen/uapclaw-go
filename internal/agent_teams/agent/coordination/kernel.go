@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -184,7 +185,7 @@ func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 				if members != nil && allMembersShutdown(members) {
 					logger.Warn(logComponent).Str("team_name", backendAccessor.TeamName()).
 						Msg("team found with all teammates in SHUTDOWN — finalizing prior incomplete cleanup")
-					_ = backendAccessor.CleanTeam(ctx)
+					_, _ = backendAccessor.CleanTeam(ctx)
 				} else {
 					_, _ = k.host.RecoverTeam(ctx)
 				}
@@ -214,7 +215,7 @@ func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 			if memMgr.ExtractionModel() == nil {
 				memMgr.SetExtractionModel(harnessAccessor.Model())
 			}
-			_ = harnessAccessor.InjectMemberMemory(ctx, memMgr)
+			_ = harnessAccessor.InjectMemberMemory(ctx, memMgr, "")
 		}
 	}
 
@@ -330,7 +331,7 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	// 步骤 6: Memory close
 	memMgr := k.host.MemoryManager()
 	if memMgr != nil {
-		memMgr.Close()
+		_ = memMgr.Close(ctx)
 	}
 
 	// 步骤 7: 停止事件总线
@@ -395,12 +396,10 @@ func (k *CoordinationKernel) WakeMailboxIfInterruptCleared() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // allMembersShutdown 检查所有成员是否都是 SHUTDOWN 状态。
-func allMembersShutdown(members []any) bool {
+func allMembersShutdown(members []*database.TeamMember) bool {
 	for _, m := range members {
-		if statusExtractor, ok := m.(interface{ Status() string }); ok {
-			if statusExtractor.Status() != string(schema.MemberStatusShutdown) {
-				return false
-			}
+		if m.Status != string(schema.MemberStatusShutdown) {
+			return false
 		}
 	}
 	return true

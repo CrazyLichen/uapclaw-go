@@ -3,12 +3,15 @@ package types
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚举────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -26,6 +29,7 @@ type SessionAccessor interface {
 }
 
 // SessionController 会话管理器的 Start/Pause/Stop 所需窄接口。
+// 签名对齐 *SessionManager 具体类型，编译期检查通过 var _ 验证。
 type SessionController interface {
 	// BindSession 绑定会话
 	BindSession(ctx context.Context, session any) (context.Context, error)
@@ -47,68 +51,47 @@ type InfraAccessor interface {
 }
 
 // TeamBackendAccessor TeamBackend 的窄接口。
+// 签名对齐 *tools.TeamBackend 具体类型，编译期检查通过 var _ 验证。
 type TeamBackendAccessor interface {
-	// DB 返回数据库访问器
-	DB() DBAccessor
+	// DB 返回数据库
+	DB() database.TeamDatabase
 	// TeamName 返回团队名
 	TeamName() string
 	// IsLeader 是否是 Leader
 	IsLeader() bool
 	// CleanTeam 清理团队
-	CleanTeam(ctx context.Context) error
+	CleanTeam(ctx context.Context) (bool, error)
 	// ListMembers 列出非 Leader 成员
-	ListMembers(ctx context.Context) ([]any, error)
-}
-
-// DBAccessor 数据库窄接口。
-type DBAccessor interface {
-	// Initialize 初始化数据库
-	Initialize(ctx context.Context) error
-	// Team 返回团队表访问器
-	Team() TeamTableAccessor
-}
-
-// TeamTableAccessor 团队表窄接口。
-type TeamTableAccessor interface {
-	// GetTeam 获取团队信息
-	GetTeam(ctx context.Context, teamName string) (any, error)
+	ListMembers(ctx context.Context) ([]*database.TeamMember, error)
 }
 
 // WorkspaceAccessor 工作空间管理器窄接口。
+// 签名对齐 *team_workspace.TeamWorkspaceManager 具体类型。
 type WorkspaceAccessor interface {
 	// Initialize 初始化工作空间
-	Initialize(ctx context.Context, remoteURL string) error
+	Initialize(ctx context.Context, remoteURL ...string) error
 }
 
 // ResourceAccessor 运行时资源访问接口。
 // Python: host.resources
+// MemoryManager() 直接返回 *memory.TeamMemoryManager 具体类型，
+// 避免 HarnessAccessor 需要反向断言。
 type ResourceAccessor interface {
 	// MemoryManager 返回记忆管理器（可能为 nil）
-	MemoryManager() MemoryAccessor
-	// HarnessAccessor 返回 Harness 访问器（可能为 nil）
+	MemoryManager() *memory.TeamMemoryManager
+	// HarnessAccessor 返回 Harness 访问器
 	HarnessAccessor() HarnessAccessor
 }
 
-// MemoryAccessor 记忆管理器窄接口。
-type MemoryAccessor interface {
-	// InitToolkit 初始化记忆工具包
-	InitToolkit(ctx context.Context) (bool, error)
-	// SetExtractionModel 设置抽取模型
-	SetExtractionModel(model any)
-	// ExtractionModel 返回抽取模型
-	ExtractionModel() any
-	// Close 关闭记忆管理器
-	Close()
-}
-
 // HarnessAccessor Harness 窄接口。
+// 签名对齐 *agentteams.TeamHarness 具体类型，编译期检查通过 var _ 验证。
 type HarnessAccessor interface {
 	// RegisterMemberTools 注册成员工具
-	RegisterMemberTools(memMgr MemoryAccessor)
+	RegisterMemberTools(memMgr *memory.TeamMemoryManager)
 	// InjectMemberMemory 注入成员记忆
-	InjectMemberMemory(ctx context.Context, memMgr MemoryAccessor) error
+	InjectMemberMemory(ctx context.Context, memMgr *memory.TeamMemoryManager, query string) error
 	// Model 返回当前模型
-	Model() any
+	Model() *llm.Model
 }
 
 // BlueprintAccessor 蓝图扩展接口。
@@ -148,6 +131,7 @@ type LifecycleAccessor interface {
 // KernelHost CoordinationKernel 对宿主 TeamAgent 所需的窄接口。
 // 细粒度拆分避免循环依赖：每个子接口由 TeamAgent 实现。
 // 与 Python CoordinationKernel.__init__(host: TeamAgent) 对应。
+// 编译期检查：var _ KernelHost = (*TeamAgent)(nil)
 type KernelHost interface {
 	DispatcherHost
 	SessionAccessor

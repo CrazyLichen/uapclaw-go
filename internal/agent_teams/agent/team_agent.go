@@ -47,6 +47,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -99,6 +100,14 @@ type TeamAgent struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期检查：确保具体类型直接满足窄接口（无需适配器）
+var (
+	_ types.SessionController   = (*SessionManager)(nil)
+	_ types.TeamBackendAccessor = (*tools.TeamBackend)(nil)
+	_ types.HarnessAccessor     = (*agentteams.TeamHarness)(nil)
+	_ types.KernelHost          = (*TeamAgent)(nil)
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -1006,32 +1015,29 @@ func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.Executi
 
 // SessionController 返回会话控制器。
 // 满足 types.SessionAccessor 接口。
-// 适配 SessionManager → types.SessionController。
+// *SessionManager 直接满足 types.SessionController（编译期检查）。
 func (a *TeamAgent) SessionController() types.SessionController {
-	return &sessionControllerAdapter{mgr: a.sessionManager}
+	if a.sessionManager == nil {
+		return nil
+	}
+	return a.sessionManager
 }
 
 // TeamBackendAccessor 返回 TeamBackend 访问器。
 // 满足 types.InfraAccessor 接口。
-// 适配 *tools.TeamBackend → types.TeamBackendAccessor。
+// *tools.TeamBackend 直接满足 types.TeamBackendAccessor（编译期检查）。
 func (a *TeamAgent) TeamBackendAccessor() types.TeamBackendAccessor {
-	if tb := a.TeamBackend(); tb != nil {
-		return &teamBackendAccessorAdapter{TeamBackend: tb}
-	}
-	return nil
+	return a.TeamBackend()
 }
 
 // WorkspaceManager 返回工作空间管理器。
 // 满足 types.InfraAccessor 接口。
+// *team_workspace.TeamWorkspaceManager 直接满足 types.WorkspaceAccessor（编译期检查）。
 func (a *TeamAgent) WorkspaceManager() types.WorkspaceAccessor {
 	if a.configurator == nil {
 		return nil
 	}
-	wsMgr := a.configurator.WorkspaceManager()
-	if wsMgr == nil {
-		return nil
-	}
-	return &workspaceAccessorAdapter{TeamWorkspaceManager: wsMgr}
+	return a.configurator.WorkspaceManager()
 }
 
 // SetWorkspaceInitialized 标记工作空间已初始化。
@@ -1044,24 +1050,19 @@ func (a *TeamAgent) SetWorkspaceInitialized() {
 
 // MemoryManager 返回记忆管理器。
 // 满足 types.ResourceAccessor 接口。
-func (a *TeamAgent) MemoryManager() types.MemoryAccessor {
-	if a.configurator == nil || a.configurator.Resources() == nil {
+// 直接返回 *memory.TeamMemoryManager 具体类型，无需适配器。
+func (a *TeamAgent) MemoryManager() *memory.TeamMemoryManager {
+	if a.configurator == nil {
 		return nil
 	}
-	memMgr := a.configurator.MemoryManager()
-	if memMgr == nil {
-		return nil
-	}
-	return &memoryAccessorAdapter{TeamMemoryManager: memMgr}
+	return a.configurator.MemoryManager()
 }
 
 // HarnessAccessor 返回 Harness 访问器。
 // 满足 types.ResourceAccessor 接口。
+// *agentteams.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
 func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
-	if h := a.Harness(); h != nil {
-		return &harnessAccessorAdapter{TeamHarness: h}
-	}
-	return nil
+	return a.Harness()
 }
 
 // SubscribeTransport 订阅团队传输主题。
