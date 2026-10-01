@@ -148,8 +148,9 @@ func TestOpenVikingProvider_Initialize_健康检查失败(t *testing.T) {
 
 	p := NewOpenVikingProvider(server.URL, "key", "acc", "usr", "ag")
 	err := p.Initialize(context.Background())
-	if err != nil {
-		t.Fatalf("Initialize() error = %v", err)
+	// Go 侧返回 error 以便上层感知初始化失败（Python 静默返回 nil）
+	if err == nil {
+		t.Fatal("Initialize() 应返回 error（健康检查失败）")
 	}
 	if p.IsInitialized() {
 		t.Error("IsInitialized() = true, want false (健康检查失败)")

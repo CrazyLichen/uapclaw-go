@@ -184,7 +184,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 3. 构建 Blueprint
 	// ⤴️ 9.69 回填完成：角色策略
-	rolePolicyStr := prompts.RolePolicy(string(ctx.Role), resolvedLanguage)
+	rolePolicyStr := prompts.RolePolicy(ctx.Role, resolvedLanguage)
 	c.blueprint = &TeamAgentBlueprint{
 		Card:       c.card,
 		Spec:       spec,

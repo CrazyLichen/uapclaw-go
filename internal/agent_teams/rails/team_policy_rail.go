@@ -113,7 +113,8 @@ func NewTeamPolicyRail(opts ...TeamPolicyRailOption) *TeamPolicyRail {
 }
 
 // Init 缓存 Agent 的共享 prompt builder。
-// Python: TeamPolicyRail.init(agent)
+// Python: TeamPolicyRail.init(agent) — 调用 super().init(agent) 后设置 system_prompt_builder
+// Go 侧 DeepAgentRail.Init 是 no-op（BaseRail 默认实现），因此不调用 super init
 func (r *TeamPolicyRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	return nil
@@ -136,7 +137,7 @@ func (r *TeamPolicyRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 // BeforeModelCall 在每次模型调用前注入静态 Section + 刷新动态 Section。
 // Python: TeamPolicyRail.before_model_call(ctx)
-func (r *TeamPolicyRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+func (r *TeamPolicyRail) BeforeModelCall(ctx context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
@@ -148,7 +149,6 @@ func (r *TeamPolicyRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.A
 
 	// Python: if self._info_cache is not None
 	if r.infoCache != nil {
-		ctx := context.Background()
 		infoSection := r.infoCache.Refresh(ctx)
 		if infoSection != nil {
 			r.systemPromptBuilder.AddSection(*infoSection)

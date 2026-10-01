@@ -3,16 +3,18 @@ package prompts
 import (
 	"strings"
 	"testing"
+
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
 // TestRolePolicy_Leader 测试 Leader 角色策略
 func TestRolePolicy_Leader(t *testing.T) {
-	result := RolePolicy("leader", "cn")
+	result := RolePolicy(atschema.TeamRoleLeader, "cn")
 	if result == "" {
 		t.Fatal("RolePolicy(leader, cn) returned empty")
 	}
 	// 应包含角色相关策略文本
-	result = RolePolicy("leader", "en")
+	result = RolePolicy(atschema.TeamRoleLeader, "en")
 	if result == "" {
 		t.Fatal("RolePolicy(leader, en) returned empty")
 	}
@@ -20,11 +22,11 @@ func TestRolePolicy_Leader(t *testing.T) {
 
 // TestRolePolicy_Teammate 测试 Teammate 角色策略
 func TestRolePolicy_Teammate(t *testing.T) {
-	result := RolePolicy("teammate", "cn")
+	result := RolePolicy(atschema.TeamRoleTeammate, "cn")
 	if result == "" {
 		t.Fatal("RolePolicy(teammate, cn) returned empty")
 	}
-	result = RolePolicy("teammate", "en")
+	result = RolePolicy(atschema.TeamRoleTeammate, "en")
 	if result == "" {
 		t.Fatal("RolePolicy(teammate, en) returned empty")
 	}
@@ -32,12 +34,12 @@ func TestRolePolicy_Teammate(t *testing.T) {
 
 // TestRolePolicy_HumanAgent 测试 HumanAgent 使用 teammate 策略
 func TestRolePolicy_HumanAgent(t *testing.T) {
-	result := RolePolicy("human_agent", "cn")
+	result := RolePolicy(atschema.TeamRoleHumanAgent, "cn")
 	if result == "" {
 		t.Fatal("RolePolicy(human_agent, cn) returned empty")
 	}
 	// human_agent 不是 leader，所以应该加载 teammate_policy
-	teammateResult := RolePolicy("teammate", "cn")
+	teammateResult := RolePolicy(atschema.TeamRoleTeammate, "cn")
 	if result != teammateResult {
 		t.Fatal("human_agent should use teammate_policy (same as teammate)")
 	}
@@ -48,7 +50,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 	info := &TeamInfo{TeamName: "test", DisplayName: "Test", Description: "Desc"}
 	members := []TeamMember{{MemberName: "bob", DisplayName: "Bob", Description: "Eng"}}
 	result := BuildSystemPrompt("alice", "leader", "cn", "高级工程师", "temporary", "default",
-		info, members, "extra prompt", "/.team/ws", "/abs/ws")
+		info, members, "extra prompt")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty")
 	}
@@ -69,13 +71,13 @@ func TestBuildSystemPrompt(t *testing.T) {
 // TestBuildSystemPrompt_Teammate 测试 Teammate 组装（无工作流/生命周期）
 func TestBuildSystemPrompt_Teammate(t *testing.T) {
 	result := BuildSystemPrompt("bob", "teammate", "cn", "助手", "temporary", "default",
-		nil, nil, "", "", "")
+		nil, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty for teammate")
 	}
 	// Teammate 不应有工作流内容
 	leaderResult := BuildSystemPrompt("alice", "leader", "cn", "人设", "temporary", "default",
-		nil, nil, "", "", "")
+		nil, nil, "")
 	if len(result) >= len(leaderResult) {
 		t.Fatal("Teammate system prompt should be shorter than leader's (no workflow/lifecycle)")
 	}
@@ -85,7 +87,7 @@ func TestBuildSystemPrompt_Teammate(t *testing.T) {
 func TestBuildSystemPrompt_English(t *testing.T) {
 	info := &TeamInfo{TeamName: "team1", DisplayName: "Team One", Description: "Test team"}
 	result := BuildSystemPrompt("leader1", "leader", "en", "Senior Engineer", "persistent", "hybrid",
-		info, nil, "", "", "")
+		info, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty for English")
 	}
@@ -100,7 +102,7 @@ func TestBuildSystemPrompt_English(t *testing.T) {
 // TestBuildSystemPrompt_无BasePrompt 测试无 base prompt 时无多余换行
 func TestBuildSystemPrompt_无BasePrompt(t *testing.T) {
 	result := BuildSystemPrompt("bob", "teammate", "cn", "助手", "temporary", "default",
-		nil, nil, "", "", "")
+		nil, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty")
 	}
@@ -109,7 +111,7 @@ func TestBuildSystemPrompt_无BasePrompt(t *testing.T) {
 // TestBuildSystemPrompt_PersistentLifecycle 测试 persistent 生命周期
 func TestBuildSystemPrompt_PersistentLifecycle(t *testing.T) {
 	result := BuildSystemPrompt("alice", "leader", "cn", "人设", "persistent", "default",
-		nil, nil, "", "", "")
+		nil, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty for persistent lifecycle")
 	}

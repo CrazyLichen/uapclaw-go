@@ -43,10 +43,16 @@ type Mem0Provider struct {
 	// breakerOpenUntil 熔断器冷却截止时间
 	// 对齐 Python: _breaker_open_until
 	breakerOpenUntil time.Time
+	// breakerMu 保护 consecutiveFailures/breakerOpenUntil 的并发访问
+	// Python asyncio 是单线程协程无此问题，Go 需要显式保护
+	breakerMu sync.Mutex
 
 	// prefetchCancel 取消后台 prefetch goroutine
 	// 对齐 Python: _prefetch_task (asyncio.Task)
 	prefetchCancel context.CancelFunc
+	// prefetchMu 保护 prefetchCancel 的并发访问
+	// QueuePrefetch 和 Shutdown 可并发调用
+	prefetchMu sync.Mutex
 	// prefetchWg 等待后台 prefetch goroutine 退出
 	prefetchWg sync.WaitGroup
 }
@@ -61,7 +67,7 @@ const (
 	mem0BreakerThreshold = 5
 	// mem0BreakerCooldownSecs 熔断器冷却时间（秒）
 	// 对齐 Python: _BREAKER_COOLDOWN_SECS = 120.0
-	mem0BreakerCooldownSecs = 120.0
+	mem0BreakerCooldownSecs = 120
 	// mem0ShutdownWaitTimeout Shutdown 等待 prefetch goroutine 退出的超时
 	// 对齐 Python: asyncio.wait_for(..., timeout=2.0)
 	mem0ShutdownWaitTimeout = 2 * time.Second
@@ -172,11 +178,19 @@ func (p *Mem0Provider) Initialize(_ context.Context, opts ...ProviderOption) err
 	po := applyOptions(opts...)
 
 	// 对齐 Python: kwargs.get("api_key") or self._api_key
+	if po.APIKey != "" {
+		p.apiKey = po.APIKey
+	}
 	if po.UserID != "" {
 		p.userID = po.UserID
 	}
+	// 对齐 Python: kwargs.get("user_id") or self._user_id
 	if po.ScopeID != "" {
 		p.agentID = po.ScopeID // ScopeID 对应 Python 的 agent_id
+	}
+	// 对齐 Python: if "rerank" in kwargs: self._rerank = bool(kwargs["rerank"])
+	if po.Rerank != nil {
+		p.rerank = *po.Rerank
 	}
 
 	if p.apiKey == "" {
@@ -198,8 +212,20 @@ func (p *Mem0Provider) Prefetch(ctx context.Context, query string, opts ...Provi
 		return "", nil
 	}
 
+	// 对齐 Python: top_k = min(int(kwargs.get("top_k", 5)), 50)
 	topK := 5
+	po := applyOptions(opts...)
+	if po.TopK > 0 {
+		topK = po.TopK
+	}
+	if topK > 50 {
+		topK = 50
+	}
+	// 对齐 Python: rerank = bool(kwargs.get("rerank", self._rerank))
 	rerank := p.rerank
+	if po.Rerank != nil {
+		rerank = *po.Rerank
+	}
 
 	client := p.getClient()
 	response, err := client.search(ctx, query, p.readFilters(), rerank, topK)
@@ -238,19 +264,34 @@ func (p *Mem0Provider) QueuePrefetch(ctx context.Context, query string, opts ...
 	}
 
 	// 取消上一次 prefetch goroutine，对齐 Python: self._prefetch_task.cancel()
+	p.prefetchMu.Lock()
 	if p.prefetchCancel != nil {
 		p.prefetchCancel()
 	}
 
+	// 对齐 Python: top_k = min(int(kwargs.get("top_k", 5)), 50)
 	topK := 5
+	po := applyOptions(opts...)
+	if po.TopK > 0 {
+		topK = po.TopK
+	}
+	if topK > 50 {
+		topK = 50
+	}
+	// 对齐 Python: rerank = bool(kwargs.get("rerank", self._rerank))
+	rerank := p.rerank
+	if po.Rerank != nil {
+		rerank = *po.Rerank
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	p.prefetchCancel = cancel
+	p.prefetchMu.Unlock()
 
 	p.prefetchWg.Add(1)
 	go func() {
 		defer p.prefetchWg.Done()
 		client := p.getClient()
-		_, err := client.search(ctx, query, p.readFilters(), p.rerank, topK)
+		_, err := client.search(ctx, query, p.readFilters(), rerank, topK)
 		if err != nil {
 			// context.Canceled 是正常取消，不算失败
 			if ctx.Err() != nil {
@@ -281,7 +322,8 @@ func (p *Mem0Provider) SyncTurn(ctx context.Context, userMsg, assistantMsg strin
 	if err != nil {
 		p.recordFailure()
 		logger.Warn(mem0LogComponent).Err(err).Msg("Mem0 sync_turn 失败")
-		return err
+		// 对齐 Python: 静默吞错，不中断主流程
+		return nil
 	}
 
 	p.recordSuccess()
@@ -317,9 +359,11 @@ func (p *Mem0Provider) HandleToolCall(ctx context.Context, toolName string, args
 // 对齐 Python: async def shutdown(self) -> None
 func (p *Mem0Provider) Shutdown(_ context.Context) error {
 	// 取消 prefetch goroutine，对齐 Python: self._prefetch_task.cancel()
+	p.prefetchMu.Lock()
 	if p.prefetchCancel != nil {
 		p.prefetchCancel()
 	}
+	p.prefetchMu.Unlock()
 
 	// 等待 goroutine 退出，带超时，对齐 Python: asyncio.wait_for(..., timeout=2.0)
 	done := make(chan struct{})
@@ -334,7 +378,10 @@ func (p *Mem0Provider) Shutdown(_ context.Context) error {
 		// 超时后继续清理，对齐 Python: except TimeoutError -> pass
 	}
 
+	p.prefetchMu.Lock()
 	p.prefetchCancel = nil
+	p.prefetchMu.Unlock()
+
 	p.mu.Lock()
 	p.client = nil
 	p.initialized = false
@@ -379,6 +426,8 @@ func (p *Mem0Provider) writeFilters() map[string]any {
 // isBreakerOpen 检查熔断器是否处于开启状态。
 // 对齐 Python: _is_breaker_open()
 func (p *Mem0Provider) isBreakerOpen() bool {
+	p.breakerMu.Lock()
+	defer p.breakerMu.Unlock()
 	if p.consecutiveFailures < mem0BreakerThreshold {
 		return false
 	}
@@ -392,18 +441,22 @@ func (p *Mem0Provider) isBreakerOpen() bool {
 // recordSuccess 记录成功，重置连续失败计数。
 // 对齐 Python: _record_success()
 func (p *Mem0Provider) recordSuccess() {
+	p.breakerMu.Lock()
+	defer p.breakerMu.Unlock()
 	p.consecutiveFailures = 0
 }
 
 // recordFailure 记录失败，递增连续失败计数，达到阈值时开启熔断器。
 // 对齐 Python: _record_failure()
 func (p *Mem0Provider) recordFailure() {
+	p.breakerMu.Lock()
+	defer p.breakerMu.Unlock()
 	p.consecutiveFailures++
 	if p.consecutiveFailures >= mem0BreakerThreshold {
-		p.breakerOpenUntil = time.Now().Add(time.Duration(mem0BreakerCooldownSecs * float64(time.Second)))
+		p.breakerOpenUntil = time.Now().Add(time.Duration(mem0BreakerCooldownSecs) * time.Second)
 		logger.Warn(mem0LogComponent).
 			Int("consecutive_failures", p.consecutiveFailures).
-			Float64("cooldown_secs", mem0BreakerCooldownSecs).
+			Int("cooldown_secs", mem0BreakerCooldownSecs).
 			Msg("[Mem0Provider] 熔断器开启")
 	}
 }
@@ -480,9 +533,15 @@ func (p *Mem0Provider) handleSearch(ctx context.Context, client *mem0HTTPClient,
 		return string(b), nil
 	}
 
+	// 对齐 Python: 显式过滤字段 [{"memory": item.get("memory", ""), "score": item.get("score", 0)}]
+	payload := make([]map[string]any, len(response))
+	for i, item := range response {
+		payload[i] = map[string]any{"memory": item.Memory, "score": item.Score}
+	}
+
 	b, _ := json.Marshal(map[string]any{
-		"results": response,
-		"count":   len(response),
+		"results": payload,
+		"count":   len(payload),
 	})
 	return string(b), nil
 }

@@ -10,6 +10,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -144,7 +145,8 @@ const (
 	// MemberOnlyToolsStr 仅 Teammate 可用的工具名（逗号分隔）
 	MemberOnlyToolsStr = "claim_task,submit_plan"
 	// SharedToolsStr Leader 和 Teammate 共用的工具名（逗号分隔）
-	SharedToolsStr = "view_task,send_message,workspace_meta"
+	// 注意：workspace_meta 待 9.66 回填后添加，当前未注册到 allTools
+	SharedToolsStr = "view_task,send_message"
 	// HumanAgentToolsStr Human-Agent 可用的工具名（逗号分隔）
 	HumanAgentToolsStr = "view_task,member_complete_task,send_message"
 )
@@ -334,23 +336,41 @@ func copySet(s map[string]struct{}) map[string]struct{} {
 // newBuildTeamTool 创建 BuildTeamTool 实例。
 func newBuildTeamTool(team *TeamBackend, t locales.Translator) *BuildTeamTool {
 	return &BuildTeamTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.build_team", "build_team", t("build_team"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.build_team", "build_team", t("build_team"),
+			[]*schema.Param{
+				schema.NewStringParam("display_name", t("build_team", "display_name"), true),
+				schema.NewStringParam("team_desc", t("build_team", "team_desc"), true),
+				schema.NewStringParam("leader_display_name", t("build_team", "leader_display_name"), true),
+				schema.NewStringParam("leader_desc", t("build_team", "leader_desc"), true),
+				schema.NewBooleanParam("enable_hitt", t("build_team", "enable_hitt"), false),
+			}, nil)),
+		team: team,
 	}
 }
 
 // newCleanTeamTool 创建 CleanTeamTool 实例。
 func newCleanTeamTool(team *TeamBackend, t locales.Translator) *CleanTeamTool {
 	return &CleanTeamTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.clean_team", "clean_team", t("clean_team"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.clean_team", "clean_team", t("clean_team"),
+			nil, nil)),
+		team: team,
 	}
 }
 
 // newSpawnMemberTool 创建 SpawnMemberTool 实例。
 func newSpawnMemberTool(team *TeamBackend, t locales.Translator, alloc func(modelName string) *models.Allocation) *SpawnMemberTool {
+	roleTypeParam := schema.NewStringParam("role_type", t("spawn_member", "role_type"), false, "teammate")
+	roleTypeParam.Enum = []any{"teammate", "human_agent"}
 	return &SpawnMemberTool{
-		TeamTool:         NewTeamTool(tool.NewToolCardWithID("team.spawn_member", "spawn_member", t("spawn_member"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.spawn_member", "spawn_member", t("spawn_member"),
+			[]*schema.Param{
+				schema.NewStringParam("member_name", t("spawn_member", "member_name"), true),
+				schema.NewStringParam("display_name", t("spawn_member", "display_name"), true),
+				schema.NewStringParam("desc", t("spawn_member", "desc"), true),
+				roleTypeParam,
+				schema.NewStringParam("prompt", t("spawn_member", "prompt"), false),
+				schema.NewStringParam("model_name", t("spawn_member", "model_name"), false),
+			}, nil)),
 		team:             team,
 		modelConfigAlloc: alloc,
 	}
@@ -359,63 +379,120 @@ func newSpawnMemberTool(team *TeamBackend, t locales.Translator, alloc func(mode
 // newShutdownMemberTool 创建 ShutdownMemberTool 实例。
 func newShutdownMemberTool(team *TeamBackend, t locales.Translator) *ShutdownMemberTool {
 	return &ShutdownMemberTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.shutdown_member", "shutdown_member", t("shutdown_member"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.shutdown_member", "shutdown_member", t("shutdown_member"),
+			[]*schema.Param{
+				schema.NewStringParam("member_name", t("shutdown_member", "member_name"), true),
+				schema.NewBooleanParam("force", t("shutdown_member", "force"), false),
+			}, nil)),
+		team: team,
 	}
 }
 
 // newApprovePlanTool 创建 ApprovePlanTool 实例。
 func newApprovePlanTool(team *TeamBackend, t locales.Translator) *ApprovePlanTool {
 	return &ApprovePlanTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.approve_plan", "approve_plan", t("approve_plan"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.approve_plan", "approve_plan", t("approve_plan"),
+			[]*schema.Param{
+				schema.NewStringParam("plan_id", t("approve_plan", "plan_id"), true),
+				schema.NewBooleanParam("approved", t("approve_plan", "approved"), true),
+				schema.NewStringParam("feedback", t("approve_plan", "feedback"), false),
+			}, nil)),
+		team: team,
 	}
 }
 
 // newApproveToolCallTool 创建 ApproveToolCallTool 实例。
 func newApproveToolCallTool(team *TeamBackend, t locales.Translator) *ApproveToolCallTool {
 	return &ApproveToolCallTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.approve_tool", "approve_tool", t("approve_tool"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.approve_tool", "approve_tool", t("approve_tool"),
+			[]*schema.Param{
+				schema.NewStringParam("member_name", t("approve_tool", "member_name"), true),
+				schema.NewStringParam("tool_call_id", t("approve_tool", "tool_call_id"), true),
+				schema.NewBooleanParam("approved", t("approve_tool", "approved"), true),
+				schema.NewStringParam("feedback", t("approve_tool", "feedback"), false),
+				schema.NewBooleanParam("auto_confirm", t("approve_tool", "auto_confirm"), false),
+			}, nil)),
+		team: team,
 	}
 }
 
 // newListMembersTool 创建 ListMembersTool 实例。
 func newListMembersTool(team *TeamBackend, t locales.Translator) *ListMembersTool {
 	return &ListMembersTool{
-		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.list_members", "list_members", t("list_members"), nil, nil)),
-		team:     team,
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.list_members", "list_members", t("list_members"),
+			nil, nil)),
+		team: team,
 	}
 }
 
 // newTaskCreateTool 创建 TaskCreateTool 实例。
 func newTaskCreateTool(agentTeam *TeamBackend, t locales.Translator) *TaskCreateTool {
+	taskSchema := &schema.Param{
+		Name: "task", Type: schema.ParamTypeObject,
+		Properties: []*schema.Param{
+			schema.NewStringParam("task_id", t("create_task", "task.task_id"), false),
+			schema.NewStringParam("title", t("create_task", "task.title"), true),
+			schema.NewStringParam("content", t("create_task", "task.content"), true),
+			schema.NewArrayParam("depends_on", t("create_task", "task.depends_on"), false,
+				schema.NewStringParam("item", "", false)),
+			schema.NewArrayParam("depended_by", t("create_task", "task.depended_by"), false,
+				schema.NewStringParam("item", "", false)),
+		},
+		AdditionalProperties: true,
+	}
 	return &TaskCreateTool{
-		TeamTool:    NewTeamTool(tool.NewToolCardWithID("team.create_task", "create_task", t("create_task"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.create_task", "create_task", t("create_task"),
+			[]*schema.Param{
+				schema.NewArrayParam("tasks", t("create_task", "tasks"), true, taskSchema),
+			}, nil)),
 		taskManager: agentTeam.TaskManager(),
 	}
 }
 
 // newUpdateTaskTool 创建 UpdateTaskTool 实例。
 func newUpdateTaskTool(agentTeam *TeamBackend, t locales.Translator) *UpdateTaskTool {
+	statusParam := schema.NewStringParam("status", t("update_task", "status"), false)
+	statusParam.Enum = []any{"cancelled"}
 	return &UpdateTaskTool{
-		TeamTool:  NewTeamTool(tool.NewToolCardWithID("team.update_task", "update_task", t("update_task"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.update_task", "update_task", t("update_task"),
+			[]*schema.Param{
+				schema.NewStringParam("task_id", t("update_task", "task_id"), true),
+				statusParam,
+				schema.NewStringParam("title", t("update_task", "title"), false),
+				schema.NewStringParam("content", t("update_task", "content"), false),
+				schema.NewStringParam("assignee", t("update_task", "assignee"), false),
+				schema.NewArrayParam("add_blocked_by", t("update_task", "add_blocked_by"), false,
+					schema.NewStringParam("item", "", false)),
+			}, nil)),
 		agentTeam: agentTeam,
 	}
 }
 
 // newViewTaskTool 创建 ViewTaskTool 实例。
 func newViewTaskTool(taskManager *TeamTaskManager, t locales.Translator) *ViewTaskTool {
+	actionParam := schema.NewStringParam("action", t("view_task", "action"), false, "list")
+	actionParam.Enum = []any{"get", "list", "claimable"}
 	return &ViewTaskTool{
-		TeamTool:    NewTeamTool(tool.NewToolCardWithID("team.view_task", "view_task", t("view_task"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.view_task", "view_task", t("view_task"),
+			[]*schema.Param{
+				actionParam,
+				schema.NewStringParam("task_id", t("view_task", "task_id"), false),
+				schema.NewStringParam("status", t("view_task", "status"), false),
+			}, nil)),
 		taskManager: taskManager,
 	}
 }
 
 // newClaimTaskTool 创建 ClaimTaskTool 实例。
 func newClaimTaskTool(taskManager *TeamTaskManager, t locales.Translator) *ClaimTaskTool {
+	statusParam := schema.NewStringParam("status", t("claim_task", "status"), true)
+	statusParam.Enum = []any{"claimed", "completed"}
 	return &ClaimTaskTool{
-		TeamTool:    NewTeamTool(tool.NewToolCardWithID("team.claim_task", "claim_task", t("claim_task"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.claim_task", "claim_task", t("claim_task"),
+			[]*schema.Param{
+				schema.NewStringParam("task_id", t("claim_task", "task_id"), true),
+				statusParam,
+			}, nil)),
 		taskManager: taskManager,
 	}
 }
@@ -423,7 +500,12 @@ func newClaimTaskTool(taskManager *TeamTaskManager, t locales.Translator) *Claim
 // newSubmitPlanTool 创建 SubmitPlanTool 实例。
 func newSubmitPlanTool(taskManager *TeamTaskManager, t locales.Translator) *SubmitPlanTool {
 	return &SubmitPlanTool{
-		TeamTool:    NewTeamTool(tool.NewToolCardWithID("team.submit_plan", "submit_plan", t("submit_plan"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.submit_plan", "submit_plan", t("submit_plan"),
+			[]*schema.Param{
+				schema.NewStringParam("task_id", t("submit_plan", "task_id"), true),
+				schema.NewStringParam("plan_id", t("submit_plan", "plan_id"), false),
+				schema.NewStringParam("plan_path", t("submit_plan", "plan_path"), true),
+			}, nil)),
 		taskManager: taskManager,
 	}
 }
@@ -431,15 +513,33 @@ func newSubmitPlanTool(taskManager *TeamTaskManager, t locales.Translator) *Subm
 // newMemberCompleteTaskTool 创建 MemberCompleteTaskTool 实例。
 func newMemberCompleteTaskTool(taskManager *TeamTaskManager, t locales.Translator) *MemberCompleteTaskTool {
 	return &MemberCompleteTaskTool{
-		TeamTool:    NewTeamTool(tool.NewToolCardWithID("team.member_complete_task", "member_complete_task", t("member_complete_task"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.member_complete_task", "member_complete_task", t("member_complete_task"),
+			[]*schema.Param{
+				schema.NewStringParam("task_id", t("member_complete_task", "task_id"), true),
+				schema.NewStringParam("note", t("member_complete_task", "note"), false),
+			}, nil)),
 		taskManager: taskManager,
 	}
 }
 
 // newSendMessageTool 创建 SendMessageTool 实例。
 func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *TeamBackend, onCreated func(ctx context.Context, memberName string) error) *SendMessageTool {
+	toParam := &schema.Param{
+		Name: "to", Type: schema.ParamTypeString, Required: true,
+		Description: t("send_message", "to"),
+		AnyOf: []*schema.Param{
+			schema.NewStringParam("to_str", "", false),
+			schema.NewArrayParam("to_arr", "", false,
+				schema.NewStringParam("item", "", false)),
+		},
+	}
 	return &SendMessageTool{
-		TeamTool:          NewTeamTool(tool.NewToolCardWithID("team.send_message", "send_message", t("send_message"), nil, nil)),
+		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.send_message", "send_message", t("send_message"),
+			[]*schema.Param{
+				toParam,
+				schema.NewStringParam("content", t("send_message", "content"), true),
+				schema.NewStringParam("summary", t("send_message", "summary"), false),
+			}, nil)),
 		messageManager:    msgMgr,
 		team:              team,
 		onTeammateCreated: onCreated,

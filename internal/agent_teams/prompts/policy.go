@@ -2,6 +2,8 @@ package prompts
 
 import (
 	"strings"
+
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -46,10 +48,10 @@ var workflowTemplates = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RolePolicy 返回指定角色的策略文本。
-// Python: role_policy(role, language) (openjiuwen/agent_teams/prompts/policy.py)
-func RolePolicy(role string, language string) string {
+// Python: role_policy(role: TeamRole, language) (openjiuwen/agent_teams/prompts/policy.py)
+func RolePolicy(role atschema.TeamRole, language string) string {
 	policyName := "leader_policy"
-	if role != "leader" {
+	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
 	}
 	tpl := LoadTemplate(policyName, language)
@@ -76,8 +78,6 @@ func RolePolicy(role string, language string) string {
 //   - teamInfo: 团队元数据，nil 时省略
 //   - teamMembers: 成员列表，nil 时省略
 //   - basePrompt: 用户自定义额外指令，空时省略
-//   - teamWorkspaceMount: 工作空间挂载路径
-//   - teamWorkspacePath: 工作空间绝对路径
 func BuildSystemPrompt(
 	memberName string,
 	role string,
@@ -88,8 +88,6 @@ func BuildSystemPrompt(
 	teamInfo *TeamInfo,
 	teamMembers []TeamMember,
 	basePrompt string,
-	teamWorkspaceMount string,
-	teamWorkspacePath string,
 ) string {
 	lbl := policyLabelsFor(language)
 

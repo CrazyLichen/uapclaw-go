@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -88,6 +89,8 @@ func (r *KvPrefixRegistry) GetAllPrefixes() []string {
 	for prefix := range r.allPrefixes {
 		result = append(result, prefix)
 	}
+	// Go map 遍历顺序不确定，排序保证确定性输出
+	sort.Strings(result)
 	return result
 }
 

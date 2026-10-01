@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -250,12 +252,13 @@ func (p *OpenVikingProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	healthy := p.client.health(ctx)
 	if !healthy {
 		// 对齐 Python: logger.warning("OpenViking at %s not reachable", self._endpoint)
+		// Python 静默返回 nil，Go 返回 error 以便上层感知初始化失败
 		logger.Warn(vikingLogComponent).
 			Str("endpoint", p.endpoint).
 			Msg("OpenViking 不可达")
 		p.client = nil
 		p.initialized = false
-		return nil
+		return fmt.Errorf("OpenViking at %s not reachable", p.endpoint)
 	}
 
 	p.initialized = true
@@ -490,7 +493,7 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 				continue
 			}
 			// 对齐 Python: raw_score = item.get("score"); sort_score = raw_score if raw_score is not None else 0.0
-			rawScore := floatVal(itemMap["score"])
+			rawScore, hasScore := floatValOK(itemMap["score"])
 			sortScore := rawScore
 
 			entry := map[string]any{
@@ -499,7 +502,7 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 				"abstract": strVal(itemMap["abstract"]),
 			}
 			// 对齐 Python: entry["score"] = round(raw_score, 3) if raw_score is not None else 0.0
-			if rawScore > 0 {
+			if hasScore {
 				entry["score"] = roundTo3(rawScore)
 			} else {
 				entry["score"] = 0.0
@@ -534,9 +537,12 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 	}
 
 	// 对齐 Python: result = {"results": formatted, "total": resp.get("result", {}).get("total", len(formatted))}
-	total := floatVal(resultMap["total"])
-	if total == 0 {
-		total = float64(len(formatted))
+	// .get("total", default) 仅在 key 不存在时用 default，total=0 是合法值
+	var total int
+	if totalVal, hasTotal := resultMap["total"]; hasTotal {
+		total = int(floatVal(totalVal))
+	} else {
+		total = len(formatted)
 	}
 	return map[string]any{
 		"results": formatted,
@@ -580,6 +586,9 @@ func (p *OpenVikingProvider) handleVikingRead(ctx context.Context, args map[stri
 
 	// 对齐 Python: content = result.get("result", "")
 	content := result["result"]
+	if content == nil {
+		return nil, fmt.Errorf("content is nil for uri: %s", uri)
+	}
 	var contentStr string
 	switch v := content.(type) {
 	case string:
@@ -592,8 +601,10 @@ func (p *OpenVikingProvider) handleVikingRead(ctx context.Context, args map[stri
 	}
 
 	// 对齐 Python: if len(content) > 8000: content = content[:8000] + "\n\n[... truncated, ...]"
-	if len(contentStr) > 8000 {
-		contentStr = contentStr[:8000] + "\n\n[... truncated, use a more specific URI or abstract level]"
+	// 使用 rune 截断（CJK-safe），对齐 Python 字符串切片
+	if utf8.RuneCountInString(contentStr) > 8000 {
+		runes := []rune(contentStr)
+		contentStr = string(runes[:8000]) + "\n\n[... truncated, use a more specific URI or abstract level]"
 	}
 
 	return map[string]any{
@@ -747,13 +758,14 @@ func (p *OpenVikingProvider) handleVikingAddResource(ctx context.Context, args m
 	}, nil
 }
 
-// truncStr 截断字符串到指定长度。
-// 对齐 Python: user_msg[:4000]
+// truncStr 截断字符串到指定 rune 长度（CJK-safe）。
+// 对齐 Python: user_msg[:4000] — Python 按字符（rune）截断，Go 必须 按 rune 截断以避免破坏多字节字符
 func truncStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	runes := []rune(s)
+	return string(runes[:maxLen])
 }
 
 // floatVal 从 map 值中提取 float64。
@@ -761,10 +773,33 @@ func floatVal(v any) float64 {
 	switch n := v.(type) {
 	case float64:
 		return n
+	case float32:
+		return float64(n)
 	case int:
+		return float64(n)
+	case int8:
+		return float64(n)
+	case int16:
+		return float64(n)
+	case int32:
 		return float64(n)
 	case int64:
 		return float64(n)
+	case uint:
+		return float64(n)
+	case uint8:
+		return float64(n)
+	case uint16:
+		return float64(n)
+	case uint32:
+		return float64(n)
+	case uint64:
+		return float64(n)
+	case json.Number:
+		if f, err := n.Float64(); err == nil {
+			return f
+		}
+		return 0
 	default:
 		return 0
 	}
@@ -776,8 +811,50 @@ func strVal(v any) string {
 	return s
 }
 
+// floatValOK 从 map 值中提取 float64，同时返回是否存在。
+// 对齐 Python: raw_score = item.get("score") — 区分 None 和 0
+func floatValOK(v any) (float64, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case json.Number:
+		if f, err := n.Float64(); err == nil {
+			return f, true
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
+}
+
 // roundTo3 保留 3 位小数。
 // 对齐 Python: round(raw_score, 3)
+// 使用 math.Round 对正数行为一致，对负数更正确
 func roundTo3(f float64) float64 {
-	return float64(int(f*1000+0.5)) / 1000
+	return math.Round(f*1000) / 1000
 }

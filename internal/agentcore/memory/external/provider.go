@@ -30,6 +30,15 @@ type ProviderOptions struct {
 	ScopeID string
 	// SessionID 会话标识
 	SessionID string
+	// APIKey API 密钥覆盖
+	// 对齐 Python: kwargs.get("api_key") or self._api_key
+	APIKey string
+	// Rerank 是否启用重排序覆盖（nil 表示不覆盖）
+	// 对齐 Python: kwargs.get("rerank") → bool
+	Rerank *bool
+	// TopK 预取结果数量覆盖（0 表示不覆盖，使用默认值）
+	// 对齐 Python: kwargs.get("top_k", 5)
+	TopK int
 }
 
 // MemoryProvider 外部记忆提供者接口。
@@ -111,6 +120,24 @@ func WithScopeID(id string) ProviderOption {
 // WithSessionID 设置会话标识。
 func WithSessionID(id string) ProviderOption {
 	return func(opts *ProviderOptions) { opts.SessionID = id }
+}
+
+// WithAPIKey 设置 API 密钥覆盖。
+// 对齐 Python: initialize(api_key=...)
+func WithAPIKey(key string) ProviderOption {
+	return func(opts *ProviderOptions) { opts.APIKey = key }
+}
+
+// WithRerank 设置重排序覆盖。
+// 对齐 Python: initialize(rerank=True/False)
+func WithRerank(enable bool) ProviderOption {
+	return func(opts *ProviderOptions) { opts.Rerank = &enable }
+}
+
+// WithTopK 设置预取结果数量覆盖。
+// 对齐 Python: prefetch(top_k=N)
+func WithTopK(k int) ProviderOption {
+	return func(opts *ProviderOptions) { opts.TopK = k }
 }
 
 // SystemPromptBlock 默认返回空字符串。

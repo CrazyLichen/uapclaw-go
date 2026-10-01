@@ -220,11 +220,16 @@ func TestMem0Provider_SyncTurn_API失败(t *testing.T) {
 
 	p := newTestMem0Provider(server)
 	err := p.SyncTurn(context.Background(), "你好", "你好！")
-	if err == nil {
-		t.Fatal("SyncTurn() 应返回错误")
+	// 对齐 Python: 静默吞错，不中断主流程
+	if err != nil {
+		t.Fatalf("SyncTurn() 应返回 nil（对齐 Python 静默吞错），实际: %v", err)
 	}
-	if p.consecutiveFailures != 1 {
-		t.Errorf("consecutiveFailures = %d, want 1", p.consecutiveFailures)
+	// 失败仍应记录到熔断器
+	p.breakerMu.Lock()
+	failures := p.consecutiveFailures
+	p.breakerMu.Unlock()
+	if failures != 1 {
+		t.Errorf("consecutiveFailures = %d, want 1", failures)
 	}
 }
 

@@ -504,39 +504,32 @@
       "latest_plan_id": "plan_task_test-team_1790480886121_44_1790480886121_153",
       "status": "plan_approved"
     },
-    "task_test-team_1790641205883_111": {
+    "task_test-team_1790835146206_928": {
       "plan_ids": [
-        "plan_task_test-team_1790641205883_111_1790641205883_990"
+        "plan_task_test-team_1790835146206_928_1790835146206_984"
       ],
-      "latest_plan_id": "plan_task_test-team_1790641205883_111_1790641205883_990",
+      "latest_plan_id": "plan_task_test-team_1790835146206_928_1790835146206_984",
       "status": "plan_approved"
     },
-    "task_test-team_1790641330156_487": {
+    "task_test-team_1790835304785_558": {
       "plan_ids": [
-        "plan_task_test-team_1790641330156_487_1790641330156_435"
+        "plan_task_test-team_1790835304785_558_1790835304786_144"
       ],
-      "latest_plan_id": "plan_task_test-team_1790641330156_487_1790641330156_435",
+      "latest_plan_id": "plan_task_test-team_1790835304785_558_1790835304786_144",
       "status": "plan_approved"
     },
-    "task_test-team_1790641619079_157": {
+    "task_test-team_1790848218691_661": {
       "plan_ids": [
-        "plan_task_test-team_1790641619079_157_1790641619079_742"
+        "plan_task_test-team_1790848218691_661_1790848218691_231"
       ],
-      "latest_plan_id": "plan_task_test-team_1790641619079_157_1790641619079_742",
+      "latest_plan_id": "plan_task_test-team_1790848218691_661_1790848218691_231",
       "status": "plan_approved"
     },
-    "task_test-team_1790641672283_212": {
+    "task_test-team_1790848290031_293": {
       "plan_ids": [
-        "plan_task_test-team_1790641672283_212_1790641672283_638"
+        "plan_task_test-team_1790848290031_293_1790848290031_576"
       ],
-      "latest_plan_id": "plan_task_test-team_1790641672283_212_1790641672283_638",
-      "status": "plan_approved"
-    },
-    "task_test-team_1790845629490_177": {
-      "plan_ids": [
-        "plan_task_test-team_1790845629490_177_1790845629490_58"
-      ],
-      "latest_plan_id": "plan_task_test-team_1790845629490_177_1790845629490_58",
+      "latest_plan_id": "plan_task_test-team_1790848290031_293_1790848290031_576",
       "status": "plan_approved"
     }
   },
@@ -1295,65 +1288,53 @@
       "decided_at": "2026-09-27T11:48:06+08:00",
       "updated_at": "2026-09-27T11:48:06+08:00"
     },
-    "plan_task_test-team_1790641205883_111_1790641205883_990": {
-      "plan_id": "plan_task_test-team_1790641205883_111_1790641205883_990",
-      "task_id": "task_test-team_1790641205883_111",
+    "plan_task_test-team_1790835146206_928_1790835146206_984": {
+      "plan_id": "plan_task_test-team_1790835146206_928_1790835146206_984",
+      "task_id": "task_test-team_1790835146206_928",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "member_plan_md": "tasks/task_test-team_1790641205883_111/plans/plan_task_test-team_1790641205883_111_1790641205883_990.md",
-      "source_plan_path": "/tmp/TestApprovePlan_通过Backend2108196942/001/plan.md",
+      "member_plan_md": "tasks/task_test-team_1790835146206_928/plans/plan_task_test-team_1790835146206_928_1790835146206_984.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3644438283/001/plan.md",
       "decision": "approve",
-      "submitted_at": "2026-09-29T08:20:05+08:00",
-      "decided_at": "2026-09-29T08:20:05+08:00",
-      "updated_at": "2026-09-29T08:20:05+08:00"
+      "submitted_at": "2026-10-01T14:12:26+08:00",
+      "decided_at": "2026-10-01T14:12:26+08:00",
+      "updated_at": "2026-10-01T14:12:26+08:00"
     },
-    "plan_task_test-team_1790641330156_487_1790641330156_435": {
-      "plan_id": "plan_task_test-team_1790641330156_487_1790641330156_435",
-      "task_id": "task_test-team_1790641330156_487",
+    "plan_task_test-team_1790835304785_558_1790835304786_144": {
+      "plan_id": "plan_task_test-team_1790835304785_558_1790835304786_144",
+      "task_id": "task_test-team_1790835304785_558",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "member_plan_md": "tasks/task_test-team_1790641330156_487/plans/plan_task_test-team_1790641330156_487_1790641330156_435.md",
-      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3624087012/001/plan.md",
+      "member_plan_md": "tasks/task_test-team_1790835304785_558/plans/plan_task_test-team_1790835304785_558_1790835304786_144.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend453941848/001/plan.md",
       "decision": "approve",
-      "submitted_at": "2026-09-29T08:22:10+08:00",
-      "decided_at": "2026-09-29T08:22:10+08:00",
-      "updated_at": "2026-09-29T08:22:10+08:00"
+      "submitted_at": "2026-10-01T14:15:04+08:00",
+      "decided_at": "2026-10-01T14:15:04+08:00",
+      "updated_at": "2026-10-01T14:15:04+08:00"
     },
-    "plan_task_test-team_1790641619079_157_1790641619079_742": {
-      "plan_id": "plan_task_test-team_1790641619079_157_1790641619079_742",
-      "task_id": "task_test-team_1790641619079_157",
+    "plan_task_test-team_1790848218691_661_1790848218691_231": {
+      "plan_id": "plan_task_test-team_1790848218691_661_1790848218691_231",
+      "task_id": "task_test-team_1790848218691_661",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "member_plan_md": "tasks/task_test-team_1790641619079_157/plans/plan_task_test-team_1790641619079_157_1790641619079_742.md",
-      "source_plan_path": "/tmp/TestApprovePlan_通过Backend1856798813/001/plan.md",
+      "member_plan_md": "tasks/task_test-team_1790848218691_661/plans/plan_task_test-team_1790848218691_661_1790848218691_231.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3209297129/001/plan.md",
       "decision": "approve",
-      "submitted_at": "2026-09-29T08:26:59+08:00",
-      "decided_at": "2026-09-29T08:26:59+08:00",
-      "updated_at": "2026-09-29T08:26:59+08:00"
+      "submitted_at": "2026-10-01T17:50:18+08:00",
+      "decided_at": "2026-10-01T17:50:18+08:00",
+      "updated_at": "2026-10-01T17:50:18+08:00"
     },
-    "plan_task_test-team_1790641672283_212_1790641672283_638": {
-      "plan_id": "plan_task_test-team_1790641672283_212_1790641672283_638",
-      "task_id": "task_test-team_1790641672283_212",
+    "plan_task_test-team_1790848290031_293_1790848290031_576": {
+      "plan_id": "plan_task_test-team_1790848290031_293_1790848290031_576",
+      "task_id": "task_test-team_1790848290031_293",
       "member_name": "teammate1",
       "status": "plan_approved",
-      "member_plan_md": "tasks/task_test-team_1790641672283_212/plans/plan_task_test-team_1790641672283_212_1790641672283_638.md",
-      "source_plan_path": "/tmp/TestApprovePlan_通过Backend3813692293/001/plan.md",
+      "member_plan_md": "tasks/task_test-team_1790848290031_293/plans/plan_task_test-team_1790848290031_293_1790848290031_576.md",
+      "source_plan_path": "/tmp/TestApprovePlan_通过Backend1058219042/001/plan.md",
       "decision": "approve",
-      "submitted_at": "2026-09-29T08:27:52+08:00",
-      "decided_at": "2026-09-29T08:27:52+08:00",
-      "updated_at": "2026-09-29T08:27:52+08:00"
-    },
-    "plan_task_test-team_1790845629490_177_1790845629490_58": {
-      "plan_id": "plan_task_test-team_1790845629490_177_1790845629490_58",
-      "task_id": "task_test-team_1790845629490_177",
-      "member_name": "teammate1",
-      "status": "plan_approved",
-      "member_plan_md": "tasks/task_test-team_1790845629490_177/plans/plan_task_test-team_1790845629490_177_1790845629490_58.md",
-      "source_plan_path": "/tmp/TestApprovePlan_通过Backend2413288496/001/plan.md",
-      "decision": "approve",
-      "submitted_at": "2026-10-01T17:07:09+08:00",
-      "decided_at": "2026-10-01T17:07:09+08:00",
-      "updated_at": "2026-10-01T17:07:09+08:00"
+      "submitted_at": "2026-10-01T17:51:30+08:00",
+      "decided_at": "2026-10-01T17:51:30+08:00",
+      "updated_at": "2026-10-01T17:51:30+08:00"
     }
   }
 }

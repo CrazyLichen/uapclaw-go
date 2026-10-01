@@ -72,6 +72,9 @@ func (c *MtimeSectionCache) Refresh(ctx context.Context) *saprompt.PromptSection
 func (c *MtimeSectionCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// 对齐 Python: _cached_section = None, _cached_mtime = 0, _initialized = False
+	c.cached = nil
+	c.cachedMtime = 0
 	c.initialized = false
 }
 

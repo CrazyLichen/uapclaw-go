@@ -57,7 +57,7 @@ func NewDistributedLock(store kv.BaseKVStore, lockName string) *DistributedLock 
 
 // Acquire 获取分布式锁。自旋调用 ExclusiveSet 直到成功或 ctx 被取消。
 //
-// 每次尝试生成新的 UUID 作为 lockValue，通过 ExclusiveSet 原子写入。
+// 生成 UUID 作为 lockValue，通过 ExclusiveSet 原子写入。
 // 成功时 lockValue 被保存，用于 Release 时校验身份。
 // 失败时等待 retryDelay 后重试。
 //

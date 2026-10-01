@@ -108,8 +108,10 @@ func newMem0HTTPClient(apiKey string, baseURL string) *mem0HTTPClient {
 //   - list 格式: [...]
 func unwrapResults(data []byte) ([]mem0MemoryItem, error) {
 	// 先尝试 dict 格式
+	// 对齐 Python: isinstance(response, dict) → response.get("results", [])
+	// 仅检查 unmarshal 成功，空 results 列表也是合法的 dict 格式
 	var dictResp mem0SearchResponse
-	if err := json.Unmarshal(data, &dictResp); err == nil && len(dictResp.Results) > 0 {
+	if err := json.Unmarshal(data, &dictResp); err == nil {
 		return dictResp.Results, nil
 	}
 	// 再尝试 list 格式
@@ -117,8 +119,8 @@ func unwrapResults(data []byte) ([]mem0MemoryItem, error) {
 	if err := json.Unmarshal(data, &listResp); err == nil {
 		return listResp, nil
 	}
-	// 两种都不匹配，返回空
-	return nil, nil
+	// 两种都不匹配，返回空切片（对齐 Python: return []）
+	return []mem0MemoryItem{}, nil
 }
 
 // doRequest 执行 HTTP 请求并返回响应体。

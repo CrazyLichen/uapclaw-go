@@ -92,7 +92,7 @@ func NewTeamToolApprovalRail(
 //   - 首次调用（userInput nil）：检查 auto_confirm → 发消息给 leader → 中断
 //   - 恢复调用（userInput 有值）：解析 ConfirmPayload → 批准/拒绝/重新中断
 func (r *TeamToolApprovalRail) resolveInterrupt(
-	_ context.Context,
+	ctx context.Context,
 	_ *agentinterfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	userInput any,
@@ -144,7 +144,7 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 			Msg("发送工具审批请求给 Leader")
 
 		if r.messageManager != nil {
-			messageID, err := r.messageManager.SendMessage(context.Background(), message, r.leaderMemberName, "")
+			messageID, err := r.messageManager.SendMessage(ctx, message, r.leaderMemberName, "")
 			if err != nil || messageID == "" {
 				logger.Error(approvalLogComponent).
 					Str("tool_name", toolName).
