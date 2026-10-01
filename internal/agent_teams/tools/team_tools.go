@@ -1121,19 +1121,20 @@ func (t *ClaimTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...
 	}
 
 	var statusChange map[string]any
-	if status == "claimed" {
+	switch status {
+	case "claimed":
 		result, _ := t.taskManager.Claim(ctx, taskID)
 		if !result.OK {
 			return toolError(result.Reason)
 		}
 		statusChange = map[string]any{"from": task.Status, "to": "claimed"}
-	} else if status == "completed" {
+	case "completed":
 		result, _ := t.taskManager.Complete(ctx, taskID)
 		if !result.OK {
 			return toolError(result.Reason)
 		}
 		statusChange = map[string]any{"from": task.Status, "to": "completed"}
-	} else {
+	default:
 		return toolError(fmt.Sprintf("Invalid status: %s", status))
 	}
 	return toolSuccess(map[string]any{

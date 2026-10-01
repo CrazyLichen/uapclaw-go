@@ -813,8 +813,8 @@ func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) run
 // Python: TeamAgent.from_spawn_payload(payload)
 func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, error) {
 	// 步骤 1: 反序列化 spec/context
-	specAny, _ := payload["spec"]
-	contextAny, _ := payload["context"]
+	specAny := payload["spec"]
+	contextAny := payload["context"]
 
 	spec, ok := specAny.(atschema.TeamAgentSpec)
 	if !ok {
@@ -894,7 +894,7 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	}
 
 	// 步骤 2: 反序列化 spec
-	specAny, _ := bucket["spec"]
+	specAny := bucket["spec"]
 	spec, ok := specAny.(atschema.TeamAgentSpec)
 	if !ok {
 		return nil, fmt.Errorf("team spec 反序列化失败")
@@ -906,7 +906,7 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	}
 
 	// 步骤 4: 反序列化 context
-	contextAny, _ := bucket["context"]
+	contextAny := bucket["context"]
 	runtimeCtx, ok := contextAny.(atschema.TeamRuntimeContext)
 	if !ok {
 		return nil, fmt.Errorf("team context 反序列化失败")
@@ -923,7 +923,7 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	agent.Configure(ctx, spec, runtimeCtx)
 
 	// 步骤 7: 恢复 allocator state
-	allocatorStateAny, _ := bucket["model_allocator_state"]
+	allocatorStateAny := bucket["model_allocator_state"]
 	if allocatorState, ok := allocatorStateAny.(map[string]any); ok {
 		agent.RestoreAllocatorState(allocatorState)
 	}

@@ -50,17 +50,22 @@ func TestMemoryOperationParams_字段赋值(t *testing.T) {
 // TestExtractMemoryParams_类型检查 测试消息字段和模型字段的类型
 func TestExtractMemoryParams_类型检查(t *testing.T) {
 	// 验证 Messages 字段可赋值 []schema.BaseMessage
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ []schema.BaseMessage = ExtractMemoryParams{}.Messages
 	// 验证 HistoryMessages 字段可赋值 []schema.BaseMessage
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ []schema.BaseMessage = ExtractMemoryParams{}.HistoryMessages
 	// 验证 BaseModel 字段可赋值 *llm.Model
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ *llm.Model = ExtractMemoryParams{}.BaseModel
 }
 
 // TestMemoryOperationParams_类型检查 测试模型字段和语义存储字段的类型
 func TestMemoryOperationParams_类型检查(t *testing.T) {
 	// 验证 BaseModel 字段可赋值 *llm.Model
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ *llm.Model = MemoryOperationParams{}.BaseModel
 	// 验证 SemanticStore 字段可赋值 any
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ any = MemoryOperationParams{}.SemanticStore
 }

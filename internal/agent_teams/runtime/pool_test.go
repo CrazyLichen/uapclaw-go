@@ -166,6 +166,7 @@ func TestTeamRuntimeManager_满足RegistryPoolAccessor(t *testing.T) {
 		t.Error("PoolEntry() 应返回非 nil")
 	}
 	// PoolEntry() 返回的值应满足 PoolEntry
+	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ registry.PoolEntry = mgr.PoolEntry()
 	_ = context.Background()
 }
