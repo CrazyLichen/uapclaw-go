@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -607,6 +608,9 @@ func (f *fakeDeepAgentForNotify) GetPlanFilePath(_ sessioninterfaces.SessionFaca
 // SaveState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentForNotify) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+
+// FindRailsByType 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)

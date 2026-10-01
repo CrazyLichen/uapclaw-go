@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,6 +70,7 @@ func (f *fakeDeepAgentForAgentMode) GetPlanFilePath(_ sessioninterfaces.SessionF
 }
 func (f *fakeDeepAgentForAgentMode) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+func (f *fakeDeepAgentForAgentMode) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForAgentMode)(nil)

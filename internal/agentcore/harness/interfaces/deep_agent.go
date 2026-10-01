@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -61,6 +62,9 @@ type DeepAgentInterface interface {
 	// SaveState 保存 DeepAgentState 到会话。
 	// Python: DeepAgent.save_state
 	SaveState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState)
+	// FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。
+	// Python: DeepAgent.find_rails_by_type(rail_types)
+	FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail
 }
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。

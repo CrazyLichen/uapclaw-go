@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,6 +111,7 @@ func (f *fakeDeepAgentForTest) RestoreModeAfterPlanExit(_ sessioninterfaces.Sess
 func (f *fakeDeepAgentForTest) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string   { return "" }
 func (f *fakeDeepAgentForTest) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+func (f *fakeDeepAgentForTest) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentForTest)(nil)

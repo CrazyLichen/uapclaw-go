@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,6 +117,9 @@ func (f *fakeDeepAgentForTaskPlanning) GetPlanFilePath(_ sessioninterfaces.Sessi
 // SaveState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentForTaskPlanning) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+
+// FindRailsByType 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTaskPlanning)(nil)
@@ -1610,6 +1614,9 @@ func (f *fakeDeepAgentWithAm) GetPlanFilePath(_ sessioninterfaces.SessionFacade)
 // SaveState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentWithAm) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+
+// FindRailsByType 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentWithAm)(nil)

@@ -305,25 +305,15 @@ func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, s
 }
 
 // FindRails 返回挂载在底层 Agent 上的指定类型 Rails。
-// Python: TeamHarness.find_rails(rail_type)
+// 对齐 Python: TeamHarness.find_rails(rail_type) → self._deep_agent.find_rails_by_type((rail_type,))
 func (h *TeamHarness) FindRails(railType reflect.Type) []any {
-	if h.rails == nil {
+	if h.deepAgent == nil {
 		return nil
 	}
-	// 从 MountedRails 中匹配类型
-	var result []any
-	v := reflect.ValueOf(h.rails).Elem()
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		if field.IsNil() {
-			continue
-		}
-		// 检查字段类型是否匹配 railType（包括指针元素类型）
-		fieldType := t.Field(i).Type
-		if fieldType == railType || reflect.PtrTo(fieldType.Elem()) == railType {
-			result = append(result, field.Interface())
-		}
+	rails := h.deepAgent.FindRailsByType(railType)
+	result := make([]any, len(rails))
+	for i, r := range rails {
+		result[i] = r
 	}
 	return result
 }

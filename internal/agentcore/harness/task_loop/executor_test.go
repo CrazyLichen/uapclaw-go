@@ -3,6 +3,7 @@ package task_loop
 import (
 	"context"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
@@ -557,6 +558,9 @@ func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacad
 // SaveState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+
+// FindRailsByType 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeSessionFacade) GetSessionID() string {

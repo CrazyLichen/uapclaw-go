@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -571,6 +572,9 @@ func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacad
 // SaveState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
 }
+
+// FindRailsByType 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
 
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
