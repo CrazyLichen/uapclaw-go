@@ -46,6 +46,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	ateaminteraction "github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
@@ -523,7 +524,7 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 
 // Stream 流式调用 TeamAgent。
 // Python: TeamAgent.stream(inputs, session, stream_modes)
-func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
+func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	// ⤵️(#9.62): coordination.start(session) + 入队用户输入
 	// 9.60: 创建 streamQueue
 	if a.streamController != nil {
@@ -546,38 +547,44 @@ func (a *TeamAgent) Interact(ctx context.Context, message string) error {
 }
 
 // Broadcast 广播用户侧公告。
-// Python: TeamAgent.broadcast(content)
-func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) {
+// Python: TeamAgent.broadcast(content) → DeliverResult
+func (a *TeamAgent) Broadcast(ctx context.Context, content string) (*ateaminteraction.DeliverResult, error) {
 	msgMgr := a.MessageManager()
 	if msgMgr == nil {
-		return nil, nil
+		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
 	}
 	msgID, err := msgMgr.BroadcastMessage(ctx, content, "")
 	if err != nil {
-		return nil, err
+		return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
 	}
-	return msgID, nil
+	return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
 }
 
 // HumanAgentSay 以注册的 human_agent 成员身份发言。
-// Python: TeamAgent.human_agent_say(content, to, sender)
-func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (any, error) {
+// Python: TeamAgent.human_agent_say(content, to, sender) → DeliverResult
+func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (*ateaminteraction.DeliverResult, error) {
 	// 对齐 Python: HumanAgentInbox(team_backend, message_manager, agent_lookup, on_inbound).send(...)
 	backend := a.TeamBackend()
 	if backend == nil {
-		return nil, nil
+		return ateaminteraction.NewDeliverResultFailure("no_team_backend"), nil
 	}
 	// 简化实现：直接通过 MessageManager 发送
 	msgMgr := backend.MessageManager()
 	if msgMgr == nil {
-		return nil, nil
+		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
 	}
 	if to == "" || to == "all" || to == "*" {
 		msgID, err := msgMgr.BroadcastMessage(ctx, content, sender)
-		return msgID, err
+		if err != nil {
+			return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
+		}
+		return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
 	}
 	msgID, err := msgMgr.SendMessage(ctx, to, content, sender)
-	return msgID, err
+	if err != nil {
+		return ateaminteraction.NewDeliverResultFailure("send_failed:" + err.Error()), nil
+	}
+	return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
 }
 
 // DeliverInput 投递输入到 Agent。
@@ -977,7 +984,7 @@ func (a *TeamAgent) RestoreAllocatorState(state map[string]any) {
 
 // RegisterRail 注册 Rail。
 // Python: TeamAgent.register_rail(rail)
-func (a *TeamAgent) RegisterRail(ctx context.Context, rail any) (*TeamAgent, error) {
+func (a *TeamAgent) RegisterRail(ctx context.Context, rail interfaces.AgentRail) (*TeamAgent, error) {
 	if a.configurator != nil && a.configurator.Harness() != nil {
 		if err := a.configurator.Harness().RegisterRail(ctx, rail); err != nil {
 			return a, err
@@ -988,7 +995,7 @@ func (a *TeamAgent) RegisterRail(ctx context.Context, rail any) (*TeamAgent, err
 
 // UnregisterRail 注销 Rail。
 // Python: TeamAgent.unregister_rail(rail)
-func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, error) {
+func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRail) (*TeamAgent, error) {
 	if a.configurator != nil && a.configurator.Harness() != nil {
 		if err := a.configurator.Harness().UnregisterRail(ctx, rail); err != nil {
 			return a, err

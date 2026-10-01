@@ -135,6 +135,8 @@ func (m *SessionManager) BindSession(
 	if m.recoveryManager != nil && m.configurator.Role() == atschema.TeamRoleLeader && m.configurator.Spec() != nil {
 		if sf, ok := session.(interfaces.SessionFacade); ok {
 			m.recoveryManager.PersistLeaderConfig(sf)
+		} else {
+			logger.Warn(sessionMgrLogComponent).Msg("BindSession: session 未实现 SessionFacade，跳过持久化 Leader 配置")
 		}
 	}
 

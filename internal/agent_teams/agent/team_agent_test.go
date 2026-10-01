@@ -359,22 +359,24 @@ func TestTeamAgent_Interact(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestTeamAgent_Broadcast 测试空操作
+// TestTeamAgent_Broadcast 测试无 MessageManager 时返回失败结果
 func TestTeamAgent_Broadcast(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 	result, err := a.Broadcast(context.Background(), "announcement")
-	assert.Nil(t, result)
 	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.IsOK())
 }
 
-// TestTeamAgent_HumanAgentSay 测试空操作
+// TestTeamAgent_HumanAgentSay 测试无 TeamBackend 时返回失败结果
 func TestTeamAgent_HumanAgentSay(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 	result, err := a.HumanAgentSay(context.Background(), "hello", "to", "sender")
-	assert.Nil(t, result)
 	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.IsOK())
 }
 
 // TestTeamAgent_StartCoordination 测试空操作
