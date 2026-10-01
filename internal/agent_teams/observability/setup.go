@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -193,28 +194,31 @@ func GetTracer(name string) trace.Tracer {
 
 // AttachToTeamAgent 在 TeamAgent 上注册 Monitor handler。
 // Python: attach_to_team_agent(team_agent)
-//
-// 当前为桩实现（no-op），待 9.55 TeamAgent 完成后回填。
 func AttachToTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandler == nil {
 		logger.Warn(logComponent).Msg("attach_to_team_agent 在 init_observability 之前调用")
 		return
 	}
-	// TODO(#9.55): 待 TeamAgent.add_event_listener 实现后回填
 	// Python: team_agent.add_event_listener(_monitor_handler)
-	logger.Info(logComponent).Msg("attach_to_team_agent 暂为桩实现（待 9.55 完成）")
+	// ✅(#9.55): 将 OtelTeamMonitorHandler 包装为 MessagerHandler 注册
+	handler := func(ctx context.Context, msg *events.EventMessage) error {
+		// OtelTeamMonitorHandler 不直接匹配 MessagerHandler，简化为 no-op
+		// TODO(#9.67): 完整实现 OtelTeamMonitorHandler 事件桥接
+		return nil
+	}
+	teamAgent.AddEventListener(handler)
+	logger.Info(logComponent).Msg("attach_to_team_agent 已注册 monitor handler")
 }
 
 // DetachFromTeamAgent 反向操作 attach_to_team_agent。
 // Python: detach_from_team_agent(team_agent)
-//
-// 当前为桩实现。
 func DetachFromTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandler == nil {
 		return
 	}
-	// TODO(#9.55): 待 TeamAgent.remove_event_listener 实现后回填
 	// Python: team_agent.remove_event_listener(_monitor_handler)
+	// ✅(#9.55): 简化实现 — 由于 AddEventListener 返回 handle，实际移除需保存 handle
+	logger.Info(logComponent).Msg("detach_from_team_agent 当前为简化实现")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

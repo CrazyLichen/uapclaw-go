@@ -1225,7 +1225,7 @@ func TestDeepAdapter_Team占位函数(t *testing.T) {
 	if err := d.pushTeamSkillEvolveResolutionStatus(ctx, "req1", "approved"); err != nil {
 		t.Errorf("pushTeamSkillEvolveResolutionStatus error: %v", err)
 	}
-	if err := d.processTeamMessageStream(ctx, nil, nil); err != nil {
+	if _, err := d.processTeamMessageStream(ctx, nil, nil); err != nil {
 		t.Errorf("processTeamMessageStream error: %v", err)
 	}
 }

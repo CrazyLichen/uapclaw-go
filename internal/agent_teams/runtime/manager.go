@@ -2,11 +2,12 @@ package runtime
 
 import (
 	"context"
-	"fmt"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -34,7 +35,29 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// globalTeamRuntimeManager 全局 TeamRuntimeManager 单例
+	// 对齐 Python: _runner_team_runtime_manager(runner)
+	globalTeamRuntimeManager *TeamRuntimeManager
+	// globalTeamRuntimeMu 保护全局单例
+	globalTeamRuntimeMu sync.Mutex
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetTeamRuntimeManager 获取全局 TeamRuntimeManager（懒创建）。
+// 对齐 Python _runner_team_runtime_manager(runner)：首次访问时创建并绑定到 Runner。
+// 由于循环依赖，Runner 中存储为 any 类型，本函数负责创建和类型安全的获取。
+func GetTeamRuntimeManager() *TeamRuntimeManager {
+	globalTeamRuntimeMu.Lock()
+	defer globalTeamRuntimeMu.Unlock()
+	if globalTeamRuntimeManager == nil {
+		globalTeamRuntimeManager = NewTeamRuntimeManager()
+		// 同步到 Runner.teamRuntimeManager（any 类型）
+		runner.SetTeamRuntimeManager(globalTeamRuntimeManager)
+	}
+	return globalTeamRuntimeManager
+}
 
 // NewTeamRuntimeManager 创建运行时管理器。
 func NewTeamRuntimeManager() *TeamRuntimeManager {
@@ -230,10 +253,20 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 //  3. return DeliverResult.success(None)
 //  4. return DeliverResult.failure("unsupported_interactive_input")
 func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
-	// ⤵️ 待 9.55 回填: 完整实现
-	// 当前 stub: 模拟成功
-	logger.Debug(mgrLogComponent).Msg("处理交互输入（桩实现）")
-	return interaction.NewDeliverResultSuccess(nil), nil
+	// 防御：Agent 为 nil 时无法处理交互输入
+	if entry.Agent == nil {
+		return interaction.NewDeliverResultFailure("agent_unavailable"), nil
+	}
+	// Python: if entry.agent.has_pending_interrupt(): await entry.agent.resume_interrupt(payload); return success
+	if entry.Agent.HasPendingInterrupt() {
+		err := entry.Agent.ResumeInterrupt(context.Background(), input)
+		if err != nil {
+			return interaction.NewDeliverResultFailure("resume_interrupt_failed"), nil
+		}
+		return interaction.NewDeliverResultSuccess(nil), nil
+	}
+	// Python: return DeliverResult.failure("unsupported_interactive_input")
+	return interaction.NewDeliverResultFailure("unsupported_interactive_input"), nil
 }
 
 // resolveRecipients 校验 @<member> 接收者是否在花名册中。
@@ -286,11 +319,11 @@ func (m *TeamRuntimeManager) dispatchPayload(
 	switch p := payload.(type) {
 	case *interaction.GodViewMessage:
 		// Python 步骤 3: return await UserInbox.deliver_to_leader(agent.deliver_input, payload.body)
+		if entry.Agent == nil {
+			return interaction.NewDeliverResultFailure("agent_unavailable"), nil
+		}
 		deliverInput := func(ctx context.Context, content string) error {
-			logger.Debug(mgrLogComponent).Str("body_len", fmt.Sprintf("%d", len(content))).
-				Msg("deliverInput (stub)")
-			// ⤵️ 待 9.55 回填: entry.Agent.DeliverInput(ctx, content)
-			return nil
+			return entry.Agent.DeliverInput(ctx, content, true)
 		}
 		return interaction.DeliverToLeader(deliverInput, p.Body()), nil
 
@@ -307,11 +340,15 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		inbox := interaction.NewUserInbox(msgManager)
 		if p.Target() == nil {
 			// Python 步骤 4b: 广播前先自动启动所有未启动成员
-			// ⤵️ 待 9.55 回填: agent.AutoStartAll()
+			if entry.Agent != nil {
+				entry.Agent.AutoStartAll(ctx)
+			}
 			return inbox.Broadcast(p.Body())
 		}
 		// Python 步骤 4c: 点对点前先启动目标成员
-		// ⤵️ 待 9.55 回填: agent.AutoStartMember(*p.Target())
+		if entry.Agent != nil {
+			entry.Agent.AutoStartMember(ctx, *p.Target())
+		}
 		return inbox.Direct(*p.Target(), p.Body())
 
 	case *interaction.HumanAgentMessage:
@@ -323,8 +360,8 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		hInbox := interaction.NewHumanAgentInbox(
 			backend,
 			backend.MessageManager(),
-			nil, // ⤵️ 待 9.55 回填: agentLookup
-			nil, // ⤵️ 待 9.55 回填: onInbound
+			entry.Agent.LookupHumanAgentRuntime, // ✅(#9.55): 注入 agentLookup
+			nil, // TODO(#9.85): 注入 onInbound（需 TeamRunner 完整实现后回填）
 		)
 		result, err := hInbox.Send(ctx, p.Body(), p.Target(), strPtr(p.Sender()))
 		if err != nil {

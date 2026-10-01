@@ -48,17 +48,17 @@ type AgentConfigurator struct {
 	// leaderAllocation Leader 分配结果。⤴️ 9.64 回填完成
 	leaderAllocation *models.Allocation
 	// onTeammateCreated 队友创建回调
-	onTeammateCreated func(memberName string)
+	onTeammateCreated func(ctx context.Context, memberName string) error
 }
 
 // setupInfraConfig SetupInfra 可选参数配置
 type setupInfraConfig struct {
 	// onTeammateCreated 队友创建回调
-	onTeammateCreated func(memberName string)
+	onTeammateCreated func(ctx context.Context, memberName string) error
 	// onTeamCleaned 团队清理回调
-	onTeamCleaned func(memberName string)
+	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
-	onTeamBuilt func(memberName string)
+	onTeamBuilt func(ctx context.Context) error
 }
 
 // SetupInfraOption SetupInfra 的可选参数。
@@ -119,17 +119,17 @@ func ResolveAgentSpec(spec atschema.TeamAgentSpec, role atschema.TeamRole, membe
 }
 
 // WithOnTeammateCreated 设置队友创建回调。
-func WithOnTeammateCreated(cb func(memberName string)) SetupInfraOption {
+func WithOnTeammateCreated(cb func(ctx context.Context, memberName string) error) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeammateCreated = cb }
 }
 
 // WithOnTeamCleaned 设置团队清理回调。
-func WithOnTeamCleaned(cb func(memberName string)) SetupInfraOption {
+func WithOnTeamCleaned(cb func(ctx context.Context) error) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeamCleaned = cb }
 }
 
 // WithOnTeamBuilt 设置团队构建回调。
-func WithOnTeamBuilt(cb func(memberName string)) SetupInfraOption {
+func WithOnTeamBuilt(cb func(ctx context.Context) error) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeamBuilt = cb }
 }
 
@@ -288,9 +288,9 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		rails.WithTeammateMode(string(spec.TeammateMode)),
 		rails.WithLifecycle(c.Lifecycle()),
 		rails.WithLanguage(resolvedLanguage),
-		rails.WithOnTeammateCreated(func(_ context.Context, memberName string) error {
+		rails.WithOnTeammateCreated(func(ctx context.Context, memberName string) error {
 			if c.onTeammateCreated != nil {
-				c.onTeammateCreated(memberName)
+				return c.onTeammateCreated(ctx, memberName)
 			}
 			return nil
 		}),

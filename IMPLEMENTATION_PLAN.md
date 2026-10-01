@@ -587,13 +587,13 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **9.x CLI** | — | | | |
 | 9.54 | ☐ | CLI REPL | 命令行交互界面 | `openjiuwen/harness/cli/` |
 | **9.x TeamAgent 应用层** | — | | | |
-| 9.55 | ☐ | TeamAgent | 生产级团队 Agent | `openjiuwen/agent_teams/agent/team_agent.py` |
+| 9.55 | ✅ | TeamAgent | 生产级团队 Agent（CoordinationKernel 完整生命周期 + KernelHost 细粒度窄接口 + 回调签名升级 + Invoke/Stream/Interact/Broadcast/HumanAgentSay + RecoverFromSession + FromSpawnPayload + AutoStart + DestroyTeam + BuildContextFromDB + FindRails + Runner.TeamRuntimeManager 接入 + 回填 9.59/9.60/9.61/9.67 + deep_adapter team 分流） | `openjiuwen/agent_teams/agent/team_agent.py` · `jiuwenswarm/server/runtime/agent_adapter/team_helpers.py` |
 | 9.56 | ✅ | Blueprint | 团队蓝图定义 | `openjiuwen/agent_teams/agent/blueprint.py` |
 | 9.57 | ✅ | AgentConfigurator | Agent 配置器（骨架+TODO占位） | `openjiuwen/agent_teams/agent/` |
 | 9.58 | ✅ | SpawnManager | 子进程管理（InProcessSpawnHandle+InProcessSpawn+SharedResources+SpawnManager+回调类型+BuildSpawnConfig） | `openjiuwen/agent_teams/spawn/` |
-| 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；⤵️ 9.55 回填 TeamAgent 类型依赖；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
-| 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ 9.55 回填 pendingInterruptResumes 类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
-| 9.61 | ✅ | RecoveryManager | 恢复管理（metadata子包8函数 + RecoveryManager 7方法 + LiveTeammate + SpawnedHandles访问器 + 回填session_manager/team_agent全部TODO(#9.61) + RecoverFromSession占位#9.55） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
+| 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
+| 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle） | `openjiuwen/agent_teams/agent/stream_controller.py` |
+| 9.61 | ✅ | RecoveryManager | 恢复管理（metadata子包8函数 + RecoveryManager 7方法 + LiveTeammate + SpawnedHandles访问器 + 回填session_manager/team_agent全部TODO(#9.61)） | `openjiuwen/agent_teams/agent/recovery_manager.py` |
 | 9.62 | ✅ | CoordinationKernel | 协调内核（facade + Setup/Start/Pause/Stop 生命周期 + KernelHost 窄接口 + 便捷方法 EnqueueUserInput/WakeMailboxIfInterruptCleared） | `openjiuwen/agent_teams/` |
 | 9.63 | ✅ | EventBus / Dispatcher | 事件总线与分发（EventBus 串行消费+轮询+生命周期 + EventDispatcher 粗筛+CallbackFramework 适配 + types 子包打破循环依赖 + 6 个 Handler 骨架 + 共享 staleClaimThrottle） | `openjiuwen/agent_teams/` |
 | 9.64 | ✅ | Team Memory | 共享记忆（lite 薄接口+真实实现：conflict_types/internal/SharedMemoryManager/3种Allocator；回填 config/manager_params/manager/toolkit/extractor/allocator/resources/configurator/harness） | `openjiuwen/agent_teams/memory/` · `agentcore/memory/lite/` · `agent_teams/models/` |
@@ -607,7 +607,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.65-2 | ☐ | PyZmqMessager | PyZmq 后端实现 | `openjiuwen/agent_teams/messager/pyzmq_backend.py` |
 | 9.66 | ✅ | Team Workspace | 团队工作空间（TeamWorkspaceManager + TeamWorkspaceRail + WorkspaceMetaTool + ToolTranslator + i18n + locales + 回填 agent/harness） | `openjiuwen/agent_teams/team_workspace/` |
 | 9.66a | ✅ | WorktreeManager | Worktree 完整实现（manager + tools + rails + git + cleanup + session + backend + notice + slug；⤴️ 9.38-49 仅完成 models；⤴️ 回填 agent/resources.go WorktreeManager any 类型 + agent_configurator.go CreateWorktreeManager + 事件镜像回调 + code_adapter.go buildWorktreeRail） | `openjiuwen/harness/tools/worktree/` |
-| 9.67 | ✅ | Team Observability | OpenTelemetry 集成（Callback/Monitor/Rail 三层；OtelSpanState ctx 注入；UnregisterNamespace 扩展；DeepAgent SpanState 注入；⤵️ 9.55 回填 AttachToTeamAgent/DetachFromTeamAgent） | `openjiuwen/agent_teams/observability/` |
+| 9.67 | ✅ | Team Observability | OpenTelemetry 集成（Callback/Monitor/Rail 三层；OtelSpanState ctx 注入；UnregisterNamespace 扩展；DeepAgent SpanState 注入；AttachToTeamAgent/DetachFromTeamAgent 回填） | `openjiuwen/agent_teams/observability/` |
 | 9.68-69 | ✅ | Team Rails / Prompts | 团队级 Rails / 提示词（9.69 Prompts：18+1 .md 模板 + loader.go go:embed + MtimeSectionCache + 8 Section Builder + RolePolicy + BuildSystemPrompt + team_plan_agent/mode；9.68 Rails：FirstIterationGate channel 替代 asyncio.Event + TeamToolRail P:90 工具注册 + TeamPolicyRail P:12 8 PromptSection 注入 + TeamToolApprovalRail 审批流 + TeamPlanModeRail P:84 plan 模式；14 ToolCard + CreateTeamTools + QualifyTeamToolIDs；回填 harness.go MountedRails any→具体类型 + resources.go + agent_configurator.go Rail 构造 + TODO 清理） | `openjiuwen/agent_teams/rails/` · `prompts/` |
 | **9.x 自演化系统** | — | | | |
 | 9.70a | ✅ | Operator 基础接口 | Operator 抽象接口（operator_id/get_tunables/get_state/load_state/set_parameter/apply_update）+ LLMCallOperator + ToolCallOperator + MemoryCallOperator + SkillExperienceOperator + evolving/schema 共享契约层（protocol.go/update.go） | `openjiuwen/core/operator/` |

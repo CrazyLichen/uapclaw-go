@@ -970,8 +970,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 7: team 模式分流
 	// Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
-	// ⤵️ 9.55-9.65 TeamHelpers
-
+	if mode == "team" || mode == "team.plan" || mode == "code.team" {
+		return d.processTeamMessageStream(ctx, req, inputs)
+	}
 	// 步骤 8: auto_harness 分流
 	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
 

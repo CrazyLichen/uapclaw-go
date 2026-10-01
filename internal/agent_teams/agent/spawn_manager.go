@@ -220,7 +220,7 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	m.CleanupTeammate(ctx, memberName)
 
 	// 从 DB 恢复上下文
-	runtimeCtx, err := m.BuildContextFromDB(memberName)
+	runtimeCtx, err := m.BuildContextFromDB(ctx, memberName)
 	if err != nil {
 		return fmt.Errorf("恢复 %s 上下文失败: %w", memberName, err)
 	}
@@ -324,15 +324,41 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 
 // BuildContextFromDB 从 DB 恢复 TeamRuntimeContext。
 // Python: SpawnManager.build_context_from_db(member_name)
-// ⤵️ 预留：TeamDatabase（9.65a-4）实现后回填
-func (m *SpawnManager) BuildContextFromDB(memberName string) (atschema.TeamRuntimeContext, error) {
-	// TODO(#9.64): 从 TeamDatabase 读取 teammate 行
-	// 解析 model_ref_json → resolve_member_model
-	// 构建 TeamRuntimeContext (role, member_name, persona, team_spec, ...)
-	logger.Debug(spawnLogComponent).
-		Str("member_name", memberName).
-		Msg("BuildContextFromDB 当前返回空上下文（TODO #9.64）")
-	return atschema.TeamRuntimeContext{}, nil
+// 9.55: 签名升级为 BuildContextFromDB(ctx, memberName) 支持回调中调用
+func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string) (atschema.TeamRuntimeContext, error) {
+	teamBackend := m.configurator.TeamBackend()
+	if teamBackend == nil {
+		return atschema.TeamRuntimeContext{}, fmt.Errorf("team_backend 未配置")
+	}
+
+	teammate, err := teamBackend.GetMember(ctx, memberName)
+	if err != nil || teammate == nil {
+		logger.Error(spawnLogComponent).Str("member_name", memberName).Err(err).
+			Msg("BuildContextFromDB: 成员不存在")
+		return atschema.TeamRuntimeContext{}, fmt.Errorf("成员 %s 不存在", memberName)
+	}
+
+	// 解析 model_ref_json → resolveMemberModelFromDB
+	_ = resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON) // TODO(#9.64): 接入 MemberModel
+
+	// 从 configurator 继承 team_spec、db_config 等
+	runtimeCtx := m.configurator.RuntimeContext()
+	if runtimeCtx == nil {
+		return atschema.TeamRuntimeContext{}, nil
+	}
+	role := atschema.TeamRole(teammate.Role)
+	if role == "" {
+		role = atschema.TeamRoleTeammate
+	}
+
+	return atschema.TeamRuntimeContext{
+		Role:           role,
+		MemberName:     teammate.MemberName,
+		Persona:        teammate.Desc,
+		TeamSpec:       runtimeCtx.TeamSpec,
+		DBConfig:       runtimeCtx.DBConfig,
+		MemberModel:    nil, // TODO(#9.64): resolveMemberModelFromDB 返回 *models.TeamModelConfig
+	}, nil
 }
 
 // PublishRestartEvent 发布重启事件。
@@ -381,6 +407,17 @@ func (m *SpawnManager) CancelRecoveryTasks() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveMemberModelFromDB 从 DB 记录解析成员模型。
+// Python: SpawnManager.build_context_from_db 中的 resolve_member_model
+func resolveMemberModelFromDB(configurator *AgentConfigurator, modelRefJSON string) any {
+	if configurator == nil || modelRefJSON == "" {
+		return nil
+	}
+	// 简化实现：从 model_ref_json 解析模型引用
+	// TODO(#9.64): 完整实现 model_ref_json 解析 + ResolveMemberModelFromPool
+	return nil
+}
 
 // spawnInprocess 以 inprocess 模式生成 teammate。
 // Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)

@@ -36,10 +36,30 @@ func (f *fakeKernelHost) ShutdownSelf(_ context.Context) error                  
 func (f *fakeKernelHost) ConcludeCompletedRound(_ context.Context, _, _ int) error { return nil }
 func (f *fakeKernelHost) Role() schema.TeamRole                                    { return f.role }
 func (f *fakeKernelHost) MemberName() string                                       { return f.memberName }
+func (f *fakeKernelHost) TeamName() string                                         { return "test-team" }
+func (f *fakeKernelHost) RecoverTeam(_ context.Context) ([]string, error)          { return nil, nil }
+func (f *fakeKernelHost) UpdateStatus(_ context.Context, _ schema.MemberStatus) error {
+	return nil
+}
 func (f *fakeKernelHost) Blueprint() types.DispatcherBlueprint {
 	return &fakeDispatcherBlueprint{role: f.role, memberName: f.memberName}
 }
-func (f *fakeKernelHost) Infra() types.DispatcherInfra { return nil }
+func (f *fakeKernelHost) Infra() types.DispatcherInfra   { return nil }
+func (f *fakeKernelHost) SessionController() types.SessionController { return nil }
+func (f *fakeKernelHost) TeamBackendAccessor() types.TeamBackendAccessor { return nil }
+func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor       { return nil }
+func (f *fakeKernelHost) SetWorkspaceInitialized()                         {}
+func (f *fakeKernelHost) MemoryManager() types.MemoryAccessor             { return nil }
+func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor           { return nil }
+func (f *fakeKernelHost) SpecAny() any                                     { return nil }
+func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error       { return nil }
+func (f *fakeKernelHost) UnsubscribeTransport() error                      { return nil }
+func (f *fakeKernelHost) PersistAllocatorState()                           {}
+func (f *fakeKernelHost) DrainAgentTask(_ context.Context)                {}
+func (f *fakeKernelHost) MarkLiveTeammates(_ context.Context, _ string) error { return nil }
+func (f *fakeKernelHost) CloseStream()                                     {}
+func (f *fakeKernelHost) SetMemberID(_ string)                             {}
+func (f *fakeKernelHost) Lifecycle() string                                { return "temporary" }
 
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
 
@@ -111,7 +131,7 @@ func TestCoordinationKernel_Pause(t *testing.T) {
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 	k.Start(context.Background())
 
-	k.Pause()
+	k.Pause(context.Background())
 
 	if k.LifecycleState() != kernelStatePaused {
 		t.Errorf("pause 后状态应为 paused，实际 %q", k.LifecycleState())
@@ -123,7 +143,7 @@ func TestCoordinationKernel_Pause幂等(t *testing.T) {
 	k := NewCoordinationKernel(host)
 
 	// idle 态 pause 不应 panic
-	k.Pause()
+	k.Pause(context.Background())
 	if k.LifecycleState() != kernelStateIdle {
 		t.Errorf("idle 态 pause 应保持 idle，实际 %q", k.LifecycleState())
 	}
@@ -136,7 +156,7 @@ func TestCoordinationKernel_Stop(t *testing.T) {
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 	k.Start(context.Background())
 
-	k.Stop()
+	k.Stop(context.Background())
 
 	if k.LifecycleState() != kernelStateStopped {
 		t.Errorf("stop 后状态应为 stopped，实际 %q", k.LifecycleState())
@@ -148,14 +168,14 @@ func TestCoordinationKernel_Stop幂等(t *testing.T) {
 	k := NewCoordinationKernel(host)
 
 	// idle 态 stop 不应 panic
-	k.Stop()
+	k.Stop(context.Background())
 	if k.LifecycleState() != kernelStateIdle {
 		t.Errorf("idle 态 stop 应保持 idle，实际 %q", k.LifecycleState())
 	}
 
 	// stopped 态再次 stop
 	k.lifecycleState = kernelStateStopped
-	k.Stop()
+	k.Stop(context.Background())
 	if k.LifecycleState() != kernelStateStopped {
 		t.Errorf("stopped 态 stop 应保持 stopped，实际 %q", k.LifecycleState())
 	}
@@ -272,19 +292,19 @@ func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	}
 
 	// running → paused
-	k.Pause()
+	k.Pause(context.Background())
 	if k.LifecycleState() != kernelStatePaused {
 		t.Errorf("期望 paused，实际 %q", k.LifecycleState())
 	}
 
 	// paused → stopped
-	k.Stop()
+	k.Stop(context.Background())
 	if k.LifecycleState() != kernelStateStopped {
 		t.Errorf("期望 stopped，实际 %q", k.LifecycleState())
 	}
 
 	// stopped → stop again (幂等)
-	k.Stop()
+	k.Stop(context.Background())
 	if k.LifecycleState() != kernelStateStopped {
 		t.Errorf("stop 幂等应保持 stopped，实际 %q", k.LifecycleState())
 	}

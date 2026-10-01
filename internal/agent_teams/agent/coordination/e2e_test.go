@@ -105,7 +105,7 @@ func TestEndToEnd_Kernel完整链路(t *testing.T) {
 	}
 
 	// 停止
-	k.Stop()
+	k.Stop(context.Background())
 }
 
 // TestEndToEnd_Teammate取消 测试 teammate MEMBER_CANCELED → cancel_agent
@@ -135,7 +135,7 @@ func TestEndToEnd_Teammate取消(t *testing.T) {
 		t.Error("MEMBER_CANCELED 目标为自己时应调用 cancel_agent")
 	}
 
-	k.Stop()
+	k.Stop(context.Background())
 }
 
 // TestEndToEnd_Teammate清理 测试 teammate team_cleaned → shutdown_self
@@ -161,7 +161,7 @@ func TestEndToEnd_Teammate清理(t *testing.T) {
 		t.Error("Teammate 收到 team_cleaned 应调用 shutdown_self")
 	}
 
-	k.Stop()
+	k.Stop(context.Background())
 }
 
 // TestEndToEnd_HumanAgent轮询过滤 测试 Human-agent 不接收 poll 事件
@@ -203,7 +203,7 @@ func TestEndToEnd_HumanAgent轮询过滤(t *testing.T) {
 		t.Error("Human-agent 不应触发 POLL_MAILBOX 回调")
 	}
 
-	k.Stop()
+	k.Stop(context.Background())
 }
 
 // TestEndToEnd_TeamCompletion回调 测试 TASK_LIST_DRAINED 触发注册回调
@@ -245,7 +245,7 @@ func TestEndToEnd_TeamCompletion回调(t *testing.T) {
 		t.Error("TASK_LIST_DRAINED 应触发注册的完成回调")
 	}
 
-	k.Stop()
+	k.Stop(context.Background())
 }
 
 // TestEndToEnd_共享节流映射 测试 Member 和 StaleTask 共享 staleClaimThrottle

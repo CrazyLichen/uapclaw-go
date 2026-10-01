@@ -149,7 +149,7 @@ func (e *HumanAgentNotEnabledError) Error() string {
 //  4. if sender not in names: raise UnknownHumanAgentError(...)
 //  5. return sender
 //
-// ⤵️ 待 9.55 回填: 调用 team.HumanAgentNames() 获取已注册成员列表
+// ✅(#9.55) 已回填: team.HumanAgentNames() 获取已注册成员列表
 func (h *HumanAgentInbox) resolveSender(sender *string) (string, error) {
 	// Python 步骤 1: names = self._team.human_agent_names()
 	names := h.team.HumanAgentNames()
@@ -211,8 +211,10 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 	}
 
 	// Python 步骤 4-5
-	// ⤵️ 待 9.55 回填: agent.DeliverInput(ctx, body)
-	_ = agent // 避免未使用变量编译错误
+	// ✅(#9.55): 通过 agentLookup 返回的 TeamAgent.DeliverInput 实现投递
+	if err := agent.DeliverInput(context.Background(), body, true); err != nil {
+		return NewDeliverResultFailure("deliver_input_failed:" + err.Error()), nil
+	}
 	return NewDeliverResultSuccess(nil), nil
 }
 

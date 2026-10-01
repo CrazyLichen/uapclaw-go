@@ -56,12 +56,14 @@ func TestTeamRuntimeManager_Interact_团队不存在(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_字符串输入(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        newTestAgent(tb),
 	}
 	m.Pool().Add(entry)
 
@@ -75,12 +77,14 @@ func TestTeamRuntimeManager_Interact_字符串输入(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_GodView载荷(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        newTestAgent(tb),
 	}
 	m.Pool().Add(entry)
 
@@ -165,12 +169,14 @@ func TestTeamRuntimeManager_Interact_门控关闭(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_InteractiveInput(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        newTestAgent(tb),
 	}
 	m.Pool().Add(entry)
 
@@ -179,9 +185,12 @@ func TestTeamRuntimeManager_Interact_InteractiveInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// stub 总是返回成功
-	if !result.IsOK() {
-		t.Errorf("IsOK = %v, want true (stub)", result.IsOK())
+	// 没有 pending interrupt 时返回 unsupported_interactive_input（对齐 Python）
+	if result.IsOK() {
+		t.Errorf("无 pending interrupt 时 IsOK 应为 false")
+	}
+	if result.Reason == nil || *result.Reason != "unsupported_interactive_input" {
+		t.Errorf("Reason = %v, want unsupported_interactive_input", result.Reason)
 	}
 }
 
@@ -230,12 +239,14 @@ func TestTeamRuntimeManager_Interact_不支持的载荷类型(t *testing.T) {
 }
 
 func TestTeamRuntimeManager_Interact_井号字符串解析(t *testing.T) {
+	tb := newTestTeamBackendForRuntime()
 	m := NewTeamRuntimeManager()
 	entry := &ActiveTeam{
 		TeamName:     "team-1",
 		SessionID:    "sess-1",
 		State:        RuntimeStateRunning,
 		InteractGate: NewInteractGate(),
+		Agent:        newTestAgent(tb),
 	}
 	m.Pool().Add(entry)
 

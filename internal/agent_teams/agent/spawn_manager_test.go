@@ -231,9 +231,9 @@ func TestSpawnManager_OnTeammateUnhealthy_触发重启(t *testing.T) {
 func TestSpawnManager_BuildContextFromDB_占位(t *testing.T) {
 	sm := newTestSpawnManager(t)
 
-	ctx, err := sm.BuildContextFromDB("alice")
-	// 当前返回空上下文 + nil error（TODO #9.64）
-	assert.NoError(t, err)
+	ctx, err := sm.BuildContextFromDB(context.Background(), "alice")
+	// team_backend 未配置时返回错误
+	assert.Error(t, err)
 	assert.Equal(t, atschema.TeamRuntimeContext{}, ctx)
 }
 

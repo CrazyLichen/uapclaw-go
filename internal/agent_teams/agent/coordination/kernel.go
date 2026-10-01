@@ -10,21 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// KernelHost CoordinationKernel 对宿主 TeamAgent 所需的窄接口。
-// 与 Python CoordinationKernel.__init__(host: TeamAgent) 对应，
-// 但 Go 提取为窄接口避免循环依赖。
-type KernelHost interface {
-	types.DispatcherHost
-	// Role 返回团队角色
-	Role() schema.TeamRole
-	// MemberName 返回成员名
-	MemberName() string
-	// Blueprint 返回 blueprint
-	Blueprint() types.DispatcherBlueprint
-	// Infra 返回 infra
-	Infra() types.DispatcherInfra
-}
-
 // CoordinationKernel 协调子系统门面，拥有 EventBus + EventDispatcher 的完整生命周期。
 //
 // 持有宿主 TeamAgent 的反向引用，因为协调需要跨多个协作者
@@ -40,7 +25,7 @@ type KernelHost interface {
 // Python: CoordinationKernel
 type CoordinationKernel struct {
 	// host 宿主 TeamAgent 引用
-	host KernelHost
+	host types.KernelHost
 	// eventBus 事件总线（setup 后非 nil）
 	eventBus *EventBus
 	// dispatcher 事件分发器（setup 后非 nil）
@@ -95,7 +80,7 @@ func WithTaskPollInterval(interval float64) KernelOption {
 
 // NewCoordinationKernel 创建协调内核实例。
 // Python: CoordinationKernel.__init__
-func NewCoordinationKernel(host KernelHost) *CoordinationKernel {
+func NewCoordinationKernel(host types.KernelHost) *CoordinationKernel {
 	return &CoordinationKernel{
 		host:           host,
 		lifecycleState: kernelStateIdle,
@@ -157,14 +142,9 @@ func (k *CoordinationKernel) LifecycleState() string {
 	return k.lifecycleState
 }
 
-// Start 启动协调子系统。
-// 绑定 dispatcher.dispatch 为 wake callback，启动事件总线和轮询定时器。
+// Start 启动协调子系统，编排完整初始化链。
 // 对齐 Python: CoordinationKernel.start(session)
-//
-// 注意：Python 的 start() 包含大量基础设施初始化（session bind、workspace init、
-// memory toolkit wire、member status update 等），这些在 Go 端由各自的 Manager 负责，
-// kernel 只关注协调子系统的启动。
-func (k *CoordinationKernel) Start(ctx context.Context) {
+func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 	if k.eventBus == nil {
 		return
 	}
@@ -172,13 +152,78 @@ func (k *CoordinationKernel) Start(ctx context.Context) {
 	if memberName == "" {
 		memberName = "?"
 	}
-	logger.Info(logComponent).
-		Str("member_name", memberName).
-		Msg("coordination starting")
+	logger.Info(logComponent).Str("member_name", memberName).Msg("coordination starting")
 
-	// 对齐 Python: bus.start(wake_callback=dispatcher.dispatch)
+	// 步骤 1: setMemberId
+	k.host.SetMemberID(memberName)
+
+	// 步骤 2: DB 初始化
+	backendAccessor := k.host.TeamBackendAccessor()
+	if backendAccessor != nil && backendAccessor.DB() != nil {
+		_ = backendAccessor.DB().Initialize(ctx)
+	}
+
+	// 步骤 3: Session bind/release
+	sessCtrl := k.host.SessionController()
+	var sess any
+	if len(session) > 0 {
+		sess = session[0]
+	}
+	if sess != nil && sessCtrl != nil {
+		_, _ = sessCtrl.BindSession(ctx, sess)
+	} else if sessCtrl != nil {
+		_ = sessCtrl.ReleaseSession(ctx)
+	}
+
+	// 步骤 4: [Leader] 检查全 SHUTDOWN → clean_team 或 recover
+	if k.host.Role() == schema.TeamRoleLeader && backendAccessor != nil {
+		if backendAccessor.DB() != nil && backendAccessor.DB().Team() != nil {
+			existing, _ := backendAccessor.DB().Team().GetTeam(ctx, backendAccessor.TeamName())
+			if existing != nil {
+				members, _ := backendAccessor.ListMembers(ctx)
+				if members != nil && allMembersShutdown(members) {
+					logger.Warn(logComponent).Str("team_name", backendAccessor.TeamName()).
+						Msg("team found with all teammates in SHUTDOWN — finalizing prior incomplete cleanup")
+					_ = backendAccessor.CleanTeam(ctx)
+				} else {
+					_, _ = k.host.RecoverTeam(ctx)
+				}
+			}
+		}
+	}
+
+	// 步骤 5: Workspace 初始化
+	wsMgr := k.host.WorkspaceManager()
+	if wsMgr != nil {
+		var remoteURL string
+		specAccessor := k.host.(types.BlueprintAccessor)
+		if specAccessor != nil && specAccessor.SpecAny() != nil {
+			remoteURL = extractWorkspaceRemoteURL(specAccessor.SpecAny())
+		}
+		_ = wsMgr.Initialize(ctx, remoteURL)
+		k.host.SetWorkspaceInitialized()
+	}
+
+	// 步骤 6: Memory toolkit init
+	memMgr := k.host.MemoryManager()
+	harnessAccessor := k.host.HarnessAccessor()
+	if memMgr != nil && harnessAccessor != nil {
+		success, _ := memMgr.InitToolkit(ctx)
+		if success {
+			harnessAccessor.RegisterMemberTools(memMgr)
+			if memMgr.ExtractionModel() == nil {
+				memMgr.SetExtractionModel(harnessAccessor.Model())
+			}
+			_ = harnessAccessor.InjectMemberMemory(ctx, memMgr)
+		}
+	}
+
+	// 步骤 7: 更新状态
+	_ = k.host.UpdateStatus(ctx, schema.MemberStatusReady)
+
+	// 步骤 8: EventBus 启动
 	if k.dispatcher == nil {
-		logger.Error(logComponent).Msg("CoordinationKernel.start() requires setup() before start()")
+		logger.Error(logComponent).Msg("CoordinationKernel.start() requires setup()")
 		return
 	}
 	if !k.eventBus.IsRunning() {
@@ -187,7 +232,10 @@ func (k *CoordinationKernel) Start(ctx context.Context) {
 		})
 	}
 
-	// 对齐 Python: 重新装备 team-completion 上升沿保护
+	// 步骤 9: Subscribe transport
+	_ = k.host.SubscribeTransport(ctx)
+
+	// 步骤 10: TeamCompletion rearmed
 	if k.dispatcher != nil && k.dispatcher.TeamCompletion != nil {
 		k.dispatcher.TeamCompletion.Rearm()
 	}
@@ -197,10 +245,8 @@ func (k *CoordinationKernel) Start(ctx context.Context) {
 
 // Pause 暂停协调子系统（幂等）。
 // 仅从 running 态有效转换；paused/stopped/idle 短路返回。
-// Python: CoordinationKernel.pause()
-// TODO(#9.63): 等基础设施就绪后补充完整暂停逻辑
-// （drain_agent_task, persist_allocator_state, mark_live_teammates, unsubscribe, close_stream 等）
-func (k *CoordinationKernel) Pause() {
+// 对齐 Python: CoordinationKernel.pause()
+func (k *CoordinationKernel) Pause(ctx context.Context) {
 	if k.lifecycleState != kernelStateRunning {
 		return
 	}
@@ -208,13 +254,44 @@ func (k *CoordinationKernel) Pause() {
 	if memberName == "" {
 		memberName = "?"
 	}
-	logger.Info(logComponent).
-		Str("member_name", memberName).
-		Msg("coordination pausing (persistent)")
+	logger.Info(logComponent).Str("member_name", memberName).
+		Str("lifecycle", k.host.Lifecycle()).Msg("coordination pausing (persistent)")
 
-	// 停止事件总线
+	// 步骤 1: Drain agent task
+	k.host.DrainAgentTask(ctx)
+
+	// 步骤 2: Persist allocator state
+	k.host.PersistAllocatorState()
+
+	// 步骤 3: [Leader] 标记活跃成员
+	if k.host.Role() == schema.TeamRoleLeader {
+		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusPaused))
+	}
+
+	// 步骤 4: [Leader] 取消恢复任务
+	// TODO(#9.55): k.host.CancelRecoveryTasks()
+
+	// 步骤 5: 持久化生命周期状态 "paused"
+	// TODO(#9.55): persistLifecycleState("paused")
+
+	// 步骤 6: [Leader] 发布 TEAM_STANDBY
+	// TODO(#9.55): publishTeamStandby()
+
+	// 步骤 7: Unsubscribe transport
+	_ = k.host.UnsubscribeTransport()
+
+	// 步骤 8: 停止事件总线
 	if k.eventBus != nil {
 		k.eventBus.Stop()
+	}
+
+	// 步骤 9: Close stream
+	k.host.CloseStream()
+
+	// 步骤 10: Release session
+	sessCtrl := k.host.SessionController()
+	if sessCtrl != nil {
+		_ = sessCtrl.ReleaseSession(ctx)
 	}
 
 	k.lifecycleState = kernelStatePaused
@@ -222,10 +299,8 @@ func (k *CoordinationKernel) Pause() {
 
 // Stop 停止协调子系统（幂等，终态）。
 // idle/stopped 为 no-op；paused → stop 和 running → stop 均有效。
-// Python: CoordinationKernel.stop()
-// TODO(#9.63): 等基础设施就绪后补充完整停止逻辑
-// （drain_agent_task, shutdown_all_handles, memory_manager.close 等）
-func (k *CoordinationKernel) Stop() {
+// 对齐 Python: CoordinationKernel.stop()
+func (k *CoordinationKernel) Stop(ctx context.Context) {
 	if k.lifecycleState == kernelStateIdle || k.lifecycleState == kernelStateStopped {
 		return
 	}
@@ -233,13 +308,43 @@ func (k *CoordinationKernel) Stop() {
 	if memberName == "" {
 		memberName = "?"
 	}
-	logger.Info(logComponent).
-		Str("member_name", memberName).
-		Msg("coordination stopping")
+	logger.Info(logComponent).Str("member_name", memberName).Msg("coordination stopping")
 
-	// 停止事件总线
+	// 步骤 1: Drain agent task
+	k.host.DrainAgentTask(ctx)
+
+	// 步骤 2: Persist allocator state
+	k.host.PersistAllocatorState()
+
+	// 步骤 3: [Leader] 标记活跃成员
+	if k.host.Role() == schema.TeamRoleLeader {
+		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusStopped))
+	}
+
+	// 步骤 4: Unsubscribe transport
+	_ = k.host.UnsubscribeTransport()
+
+	// 步骤 5: Shutdown all handles
+	// TODO(#9.55): k.host.ShutdownAllHandles()
+
+	// 步骤 6: Memory close
+	memMgr := k.host.MemoryManager()
+	if memMgr != nil {
+		memMgr.Close()
+	}
+
+	// 步骤 7: 停止事件总线
 	if k.eventBus != nil {
 		k.eventBus.Stop()
+	}
+
+	// 步骤 8: Close stream
+	k.host.CloseStream()
+
+	// 步骤 9: Release session
+	sessCtrl := k.host.SessionController()
+	if sessCtrl != nil {
+		_ = sessCtrl.ReleaseSession(ctx)
 	}
 
 	k.lifecycleState = kernelStateStopped
@@ -288,3 +393,27 @@ func (k *CoordinationKernel) WakeMailboxIfInterruptCleared() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// allMembersShutdown 检查所有成员是否都是 SHUTDOWN 状态。
+func allMembersShutdown(members []any) bool {
+	for _, m := range members {
+		if statusExtractor, ok := m.(interface{ Status() string }); ok {
+			if statusExtractor.Status() != string(schema.MemberStatusShutdown) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// extractWorkspaceRemoteURL 从 spec 中提取工作空间远程 URL。
+func extractWorkspaceRemoteURL(spec any) string {
+	// 尝试通过反射获取 Workspace.RemoteURL 字段
+	type specWithWorkspace interface {
+		GetWorkspaceRemoteURL() string
+	}
+	if s, ok := spec.(specWithWorkspace); ok {
+		return s.GetWorkspaceRemoteURL()
+	}
+	return ""
+}

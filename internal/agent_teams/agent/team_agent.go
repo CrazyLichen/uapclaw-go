@@ -41,20 +41,26 @@ package agent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -69,7 +75,7 @@ import (
 //   - Teammate：执行具体任务、与 Leader/其他成员协作
 type TeamAgent struct {
 	// card Agent 身份卡片
-	card *schema.AgentCard
+	card *agentschema.AgentCard
 	// deepAgent 内层 DeepAgent 实例（TODO(#9.57): AgentConfigurator 构建后赋值）
 	deepAgent hinterfaces.DeepAgentInterface
 	// configurator Agent 配置器
@@ -98,7 +104,7 @@ type TeamAgent struct {
 
 // NewTeamAgent 创建新的 TeamAgent 实例。
 // Python: TeamAgent.__init__(card)
-func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
+func NewTeamAgent(card *agentschema.AgentCard) *TeamAgent {
 	a := &TeamAgent{
 		card:         card,
 		state:        NewTeamAgentState(),
@@ -116,7 +122,8 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 		a.updateExecution,
 		// ✅(#9.62): WithWakeMailbox / WithRequestCompletionPoll 已在 CoordinationKernel.WakeMailboxIfInterruptCleared 实现
 	)
-	// TODO(#9.62): 构建 CoordinationKernel(self)（需 TeamAgent 实现 KernelHost）
+	// 9.55: 构建 CoordinationKernel(self)，TeamAgent 通过适配器实现 KernelHost
+	a.coordination = coordination.NewCoordinationKernel(a)
 	return a
 }
 
@@ -125,7 +132,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 // AgentCard 返回 Agent 身份卡片。
 // 满足 spawn.SpawnableAgent 接口。
 // Python: TeamAgent.card property
-func (a *TeamAgent) AgentCard() *schema.AgentCard {
+func (a *TeamAgent) AgentCard() *agentschema.AgentCard {
 	return a.card
 }
 
@@ -463,9 +470,9 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) *TeamAgent {
 	// Phase 1: 基础设施搭建
 	a.configurator.SetupInfra(spec, runtimeCtx,
-		WithOnTeammateCreated(nil), // TODO(#9.55): 成员创建回调
-		WithOnTeamCleaned(nil),     // TODO(#9.55): 团队清理回调
-		WithOnTeamBuilt(nil),       // TODO(#9.55): 团队构建回调
+		WithOnTeammateCreated(a.onTeammateCreated),
+		WithOnTeamCleaned(a.markTeamCleaned),
+		WithOnTeamBuilt(a.markTeamBuilt),
 	)
 
 	// Phase 2: Agent 组装
@@ -481,8 +488,9 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 		)
 	}
 
-	// ⤵️(#9.62): 设置协调角色 coordination.setup(role=ctx.Role)
-	// TODO(#9.55): 注册团队完成回调 a.registerTeamCompletionCallbacks()
+	// 9.55: 设置协调角色 + 注册团队完成回调
+	// 9.55: Blueprint/Infra 参数通过 KernelHost 子接口可达，传 nil 占位
+	a.coordination.Setup(runtimeCtx.Role, nil, nil)
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent 配置")
@@ -521,45 +529,46 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 
 // Interact 向团队发送输入。
 // Python: TeamAgent.interact(message)
-//
-// Python 执行步骤：
-//  1. self._coordination.enqueue_user_input(message)
-//
-// 可委托路径：runtime.TeamRuntimeManager.Interact(ctx, message, teamName, sessionID)
-// ⤵️ 待 9.55 TeamAgent 完善后注入 TeamRuntimeManager 并实现
 func (a *TeamAgent) Interact(ctx context.Context, message string) error {
-	// ⤵️ 待 9.55 回填: 委托 runtimeManager.Interact(ctx, message, teamName, sessionID)
+	if a.coordination != nil {
+		a.coordination.EnqueueUserInput(message)
+	}
 	return nil
 }
 
 // Broadcast 广播用户侧公告。
 // Python: TeamAgent.broadcast(content)
-//
-// Python 执行步骤：
-//  1. inbox = UserInbox(self.team_backend.message_manager)
-//  2. return await inbox.broadcast(content)
-//
-// 可委托路径：interaction.UserInbox.Broadcast(content)
-// ⤵️ 待 9.55 TeamAgent 完善后注入 UserInbox 并实现
 func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) {
-	// ⤵️ 待 9.55 回填: 委托 userInbox.Broadcast(content)
-	return nil, nil
+	msgMgr := a.MessageManager()
+	if msgMgr == nil {
+		return nil, nil
+	}
+	msgID, err := msgMgr.BroadcastMessage(ctx, content, "")
+	if err != nil {
+		return nil, err
+	}
+	return msgID, nil
 }
 
 // HumanAgentSay 以注册的 human_agent 成员身份发言。
 // Python: TeamAgent.human_agent_say(content, to, sender)
-//
-// Python 执行步骤：
-//
-//	Python: 1. inbox = HumanAgentInbox(self.team_backend, self.team_backend.message_manager,
-//	   Python: agent_lookup=self.lookup_human_agent_runtime)
-//	Python: 2. return await inbox.send(body=content, to=to, sender=sender)
-//
-// 可委托路径：interaction.HumanAgentInbox.Send(content, &to, &sender)
-// ⤵️ 待 9.55 TeamAgent 完善后注入 HumanAgentInbox 并实现
 func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (any, error) {
-	// ⤵️ 待 9.55 回填: 委托 humanAgentInbox.Send(content, &to, &sender)
-	return nil, nil
+	// 对齐 Python: HumanAgentInbox(team_backend, message_manager, agent_lookup, on_inbound).send(...)
+	backend := a.TeamBackend()
+	if backend == nil {
+		return nil, nil
+	}
+	// 简化实现：直接通过 MessageManager 发送
+	msgMgr := backend.MessageManager()
+	if msgMgr == nil {
+		return nil, nil
+	}
+	if to == "" || to == "all" || to == "*" {
+		msgID, err := msgMgr.BroadcastMessage(ctx, content, sender)
+		return msgID, err
+	}
+	msgID, err := msgMgr.SendMessage(ctx, to, content, sender)
+	return msgID, err
 }
 
 // DeliverInput 投递输入到 Agent。
@@ -667,32 +676,50 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 // DestroyTeam 销毁团队。
 // Python: TeamAgent.destroy_team(force=True)
 func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
-	// 9.60: 取消Agent
+	// Python 步骤 1: 取消运行中的 agent（best-effort）
 	if a.streamController != nil {
 		_ = a.streamController.CancelAgent(ctx)
 	}
-	// ⤵️(#9.62+#9.58): 停止协调 → 从池中移除 → 强制清理团队
-	return false, nil
+
+	// Python 步骤 2: 停止协调（best-effort）
+	_ = a.StopCoordination(ctx)
+
+	// Python 步骤 3: 从运行时池移除
+	sessionIDSnapshot := a.SessionID(ctx)
+	a.removeSelfFromPool(ctx, sessionIDSnapshot)
+
+	// Python 步骤 4: ForceCleanTeam
+	backend := a.TeamBackend()
+	if backend == nil {
+		return false, nil
+	}
+	return backend.ForceCleanTeam(ctx, force)
 }
 
 // StartCoordination 启动协调。
 // Python: TeamAgent._start_coordination(session)
 func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
-	// ⤵️(#9.62): 启动协调 coordination.start(session)
+	if a.coordination != nil {
+		a.coordination.Start(ctx, session)
+	}
 	return nil
 }
 
 // PauseCoordination 暂停协调（不拆卸 Teammate 进程）。
 // Python: TeamAgent.pause_coordination()
 func (a *TeamAgent) PauseCoordination(ctx context.Context) error {
-	// ⤵️(#9.62): 暂停协调 coordination.pause()
+	if a.coordination != nil {
+		a.coordination.Pause(ctx)
+	}
 	return nil
 }
 
 // StopCoordination 停止协调（关闭所有生成的 Teammate）。
 // Python: TeamAgent.stop_coordination()
 func (a *TeamAgent) StopCoordination(ctx context.Context) error {
-	// ⤵️(#9.62): 停止协调 coordination.stop()
+	if a.coordination != nil {
+		a.coordination.Stop(ctx)
+	}
 	return nil
 }
 
@@ -708,15 +735,35 @@ func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamR
 // AutoStartMember 启动单个 UNSTARTED 成员。
 // Python: TeamAgent.auto_start_member(member_name)
 func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool {
-	// TODO(#9.58): 团队后端启动成员 team_backend.startup_member(...)
-	return false
+	backend := a.TeamBackend()
+	if backend == nil || !backend.IsLeader() {
+		return false
+	}
+	started, err := backend.StartupMember(ctx, memberName, func(ctx context.Context, name string) error {
+		return a.onTeammateCreated(ctx, name)
+	})
+	if err != nil {
+		logger.Error(logComponent).Str("member_name", memberName).Err(err).Msg("AutoStartMember 失败")
+		return false
+	}
+	return started
 }
 
 // AutoStartAll 启动所有 UNSTARTED 成员。
 // Python: TeamAgent.auto_start_all()
 func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
-	// TODO(#9.58): 团队后端启动 team_backend.startup(on_created)
-	return nil
+	backend := a.TeamBackend()
+	if backend == nil || !backend.IsLeader() {
+		return nil
+	}
+	started, err := backend.Startup(ctx, func(ctx context.Context, name string) error {
+		return a.onTeammateCreated(ctx, name)
+	})
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("AutoStartAll 失败")
+		return nil
+	}
+	return started
 }
 
 // BuildSpawnPayload 构建生成载荷。
@@ -749,8 +796,36 @@ func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) run
 // FromSpawnPayload 从生成载荷重构 TeamAgent。
 // Python: TeamAgent.from_spawn_payload(payload)
 func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, error) {
-	// TODO(#9.57): 解析 spec/context → 构造 card → NewTeamAgent → configure → refresh_human_agent_roster
-	return nil, nil
+	// 步骤 1: 反序列化 spec/context
+	specAny, _ := payload["spec"]
+	contextAny, _ := payload["context"]
+
+	spec, ok := specAny.(atschema.TeamAgentSpec)
+	if !ok {
+		return nil, fmt.Errorf("payload 中 spec 字段无效")
+	}
+	runtimeCtx, ok := contextAny.(atschema.TeamRuntimeContext)
+	if !ok {
+		return nil, fmt.Errorf("payload 中 context 字段无效")
+	}
+
+	// 步骤 2: 构造 AgentCard
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(fmt.Sprintf("%s_%s", spec.TeamName, runtimeCtx.MemberName)),
+		agentschema.WithAgentName(runtimeCtx.MemberName),
+		agentschema.WithAgentDescription(fmt.Sprintf("Teammate: %s", runtimeCtx.Persona)),
+	)
+
+	// 步骤 3: NewTeamAgent + Configure
+	agent := NewTeamAgent(card)
+	agent.Configure(ctx, spec, runtimeCtx)
+
+	// 步骤 4: RefreshHumanAgentRoster
+	if backend := agent.TeamBackend(); backend != nil {
+		backend.RefreshHumanAgentRoster(ctx)
+	}
+
+	return agent, nil
 }
 
 // ResumeForNewSession 为新会话恢复。
@@ -789,9 +864,62 @@ func (a *TeamAgent) RecoverTeam(ctx context.Context) ([]string, error) {
 // 流程：读取 team namespace → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
 //
 // Python: TeamAgent.recover_from_session(session, team_name, runtime_spec)
-// TODO(#9.55): 实现完整恢复逻辑
 func RecoverFromSession(ctx context.Context, session any, teamName string, runtimeSpec *atschema.TeamAgentSpec) (*TeamAgent, error) {
-	return nil, fmt.Errorf("RecoverFromSession 尚未实现（#9.55）")
+	// 步骤 1: 读取 team namespace
+	var sf sessinterfaces.SessionFacade
+	if s, ok := session.(sessinterfaces.SessionFacade); ok {
+		sf = s
+	} else {
+		return nil, fmt.Errorf("session 不满足 SessionFacade 接口")
+	}
+	bucket := metadata.ReadTeamNamespace(sf, teamName)
+	if bucket == nil {
+		return nil, fmt.Errorf("team namespace %s 不存在", teamName)
+	}
+
+	// 步骤 2: 反序列化 spec
+	specAny, _ := bucket["spec"]
+	spec, ok := specAny.(atschema.TeamAgentSpec)
+	if !ok {
+		return nil, fmt.Errorf("team spec 反序列化失败")
+	}
+
+	// 步骤 3: 如果 runtimeSpec 有自定义器则覆盖
+	if runtimeSpec != nil && runtimeSpec.AgentCustomizer != nil {
+		spec.AgentCustomizer = runtimeSpec.AgentCustomizer
+	}
+
+	// 步骤 4: 反序列化 context
+	contextAny, _ := bucket["context"]
+	runtimeCtx, ok := contextAny.(atschema.TeamRuntimeContext)
+	if !ok {
+		return nil, fmt.Errorf("team context 反序列化失败")
+	}
+
+	// 步骤 5: 构造 AgentCard
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(fmt.Sprintf("%s_%s", teamName, runtimeCtx.MemberName)),
+		agentschema.WithAgentName(runtimeCtx.MemberName),
+	)
+
+	// 步骤 6: NewTeamAgent + Configure
+	agent := NewTeamAgent(card)
+	agent.Configure(ctx, spec, runtimeCtx)
+
+	// 步骤 7: 恢复 allocator state
+	allocatorStateAny, _ := bucket["model_allocator_state"]
+	if allocatorState, ok := allocatorStateAny.(map[string]any); ok {
+		agent.RestoreAllocatorState(allocatorState)
+	}
+
+	// 步骤 8: 设置 session_id
+	if sessionIDer, ok := session.(interface{ GetSessionID() string }); ok {
+		if state := sessionctx.SessionStateFromCtx(ctx); state != nil {
+			state.SetSessionID(sessionIDer.GetSessionID())
+		}
+	}
+
+	return agent, nil
 }
 
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。
@@ -861,8 +989,261 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, e
 // updateExecution 更新执行状态。
 // Python: TeamAgent._update_execution(status)
 func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.ExecutionStatus) error {
-	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
+	if a.state.TeamMember != nil {
+		_, err := a.state.TeamMember.UpdateExecutionStatus(ctx, status)
+		return err
+	}
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("execution_status", string(status)).Msg("更新执行状态")
+		Str("execution_status", string(status)).Msg("更新执行状态（无 TeamMember 句柄）")
 	return nil
+}
+
+// ── KernelHost 接口适配方法 ──
+
+// SessionController 返回会话控制器。
+// 满足 types.SessionAccessor 接口。
+// 适配 SessionManager → types.SessionController。
+func (a *TeamAgent) SessionController() types.SessionController {
+	return &sessionControllerAdapter{mgr: a.sessionManager}
+}
+
+// TeamBackendAccessor 返回 TeamBackend 访问器。
+// 满足 types.InfraAccessor 接口。
+// 适配 *tools.TeamBackend → types.TeamBackendAccessor。
+func (a *TeamAgent) TeamBackendAccessor() types.TeamBackendAccessor {
+	if tb := a.TeamBackend(); tb != nil {
+		return &teamBackendAccessorAdapter{TeamBackend: tb}
+	}
+	return nil
+}
+
+// WorkspaceManager 返回工作空间管理器。
+// 满足 types.InfraAccessor 接口。
+func (a *TeamAgent) WorkspaceManager() types.WorkspaceAccessor {
+	if a.configurator == nil {
+		return nil
+	}
+	wsMgr := a.configurator.WorkspaceManager()
+	if wsMgr == nil {
+		return nil
+	}
+	return &workspaceAccessorAdapter{TeamWorkspaceManager: wsMgr}
+}
+
+// SetWorkspaceInitialized 标记工作空间已初始化。
+// 满足 types.InfraAccessor 接口。
+func (a *TeamAgent) SetWorkspaceInitialized() {
+	if a.configurator != nil {
+		a.configurator.SetWorkspaceInitialized(true)
+	}
+}
+
+// MemoryManager 返回记忆管理器。
+// 满足 types.ResourceAccessor 接口。
+func (a *TeamAgent) MemoryManager() types.MemoryAccessor {
+	if a.configurator == nil || a.configurator.Resources() == nil {
+		return nil
+	}
+	memMgr := a.configurator.MemoryManager()
+	if memMgr == nil {
+		return nil
+	}
+	return &memoryAccessorAdapter{TeamMemoryManager: memMgr}
+}
+
+// HarnessAccessor 返回 Harness 访问器。
+// 满足 types.ResourceAccessor 接口。
+func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
+	if h := a.Harness(); h != nil {
+		return &harnessAccessorAdapter{TeamHarness: h}
+	}
+	return nil
+}
+
+// SubscribeTransport 订阅团队传输主题。
+// 满足 types.TransportAccessor 接口。
+func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
+	if a.configurator == nil {
+		return nil
+	}
+	mgr := a.configurator.Messager()
+	if mgr == nil {
+		return nil
+	}
+	// 对齐 Python: messager.subscribe(TeamTopic.*)
+	// 当前简化实现：使用 no-op handler 占位
+	handler := func(ctx context.Context, msg *atevents.EventMessage) error { return nil }
+	return mgr.Subscribe(ctx, a.TeamName(), handler)
+}
+
+// UnsubscribeTransport 取消订阅。
+// 满足 types.TransportAccessor 接口。
+func (a *TeamAgent) UnsubscribeTransport() error {
+	if a.configurator == nil {
+		return nil
+	}
+	mgr := a.configurator.Messager()
+	if mgr == nil {
+		return nil
+	}
+	return mgr.Unsubscribe(context.Background(), a.TeamName())
+}
+
+// DrainAgentTask 等待当前 agent round 完成。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: drain_agent_task()
+func (a *TeamAgent) DrainAgentTask(ctx context.Context) {
+	// 当前简化实现：等待飞行中的 round 完成
+	// TODO(#9.60): 通过 StreamController.WaitForRoundCompletion 实现
+	if a.streamController != nil && a.streamController.HasInFlightRound() {
+		// 等待一段合理时间让当前 round 完成
+		select {
+		case <-ctx.Done():
+		case <-time.After(30 * time.Second):
+		}
+	}
+}
+
+// MarkLiveTeammates 标记所有活跃成员为指定状态。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: mark_live_teammates(status)
+func (a *TeamAgent) MarkLiveTeammates(ctx context.Context, status string) error {
+	backend := a.TeamBackend()
+	if backend == nil {
+		return nil
+	}
+	// 遍历所有成员并更新状态
+	members, err := backend.ListMembers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, m := range members {
+		if m.Status != string(atschema.MemberStatusShutdown) &&
+			m.Status != string(atschema.MemberStatusShutdownRequested) {
+			backend.DB().Member().UpdateMemberStatus(ctx, m.MemberName, backend.TeamName(), status)
+		}
+	}
+	return nil
+}
+
+// CloseStream 关闭流。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: close_stream()
+func (a *TeamAgent) CloseStream() {
+	if a.streamController != nil && a.streamController.streamQueue != nil {
+		close(a.streamController.streamQueue)
+		a.streamController.streamQueue = nil
+	}
+}
+
+// SetMemberID 设置成员 ID 上下文。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: set_member_id(member_name)
+func (a *TeamAgent) SetMemberID(name string) {
+	// Python: 通过 contextvar 设置，Go 端通过 SessionState 传播
+	// 当前仅记录日志
+	memberName := name
+	if memberName == "" {
+		memberName = a.MemberName()
+	}
+	logger.Debug(logComponent).Str("member_name", memberName).Msg("SetMemberID")
+}
+
+// SpecAny 返回 TeamAgentSpec（any 类型）。
+// 满足 types.BlueprintAccessor 接口。
+// 与 Spec() *atschema.TeamAgentSpec 签名不同，避免冲突。
+func (a *TeamAgent) SpecAny() any {
+	return a.Spec()
+}
+
+// onTeammateCreated 队友创建回调。
+// Python: TeamAgent._on_teammate_created(teammate_id)
+func (a *TeamAgent) onTeammateCreated(ctx context.Context, teammateID string) error {
+	runtimeCtx, err := a.spawnManager.BuildContextFromDB(ctx, teammateID)
+	if err != nil || runtimeCtx.MemberName == "" {
+		return err
+	}
+	teammate, _ := a.TeamBackend().GetMember(ctx, teammateID)
+	prompt := ""
+	if teammate != nil {
+		prompt = teammate.Prompt
+	}
+	return a.SpawnTeammate(ctx, runtimeCtx, prompt, a.SessionID(ctx), nil)
+}
+
+// markTeamCleaned 团队清理回调。
+// Python: TeamAgent._mark_team_cleaned()
+func (a *TeamAgent) markTeamCleaned(ctx context.Context) error {
+	a.persistTeamDbState(ctx, "cleaned")
+	a.state.TeamCleaned = true
+	return nil
+}
+
+// markTeamBuilt 团队构建回调。
+// Python: TeamAgent._mark_team_built()
+func (a *TeamAgent) markTeamBuilt(ctx context.Context) error {
+	a.persistTeamDbState(ctx, "created")
+	return nil
+}
+
+// persistTeamDbState 持久化团队 DB 生命周期状态到当前检查点。
+// Python: TeamAgent._persist_team_db_state(db_state)
+func (a *TeamAgent) persistTeamDbState(ctx context.Context, dbState string) {
+	teamSession := a.sessionManager.TeamSession()
+	teamName := a.TeamName()
+	if teamSession == nil || teamName == "" {
+		return
+	}
+	sf, ok := teamSession.(sessinterfaces.SessionFacade)
+	if !ok {
+		return
+	}
+	// Python: metadata.MergeTeamDBState(session, team_name, db_state)
+	metadata.MergeTeamDBState(sf, teamName, dbState)
+	// FlushCheckpoint 不在 SessionFacade 接口上，需要断言到具体类型
+	type flusher interface {
+		FlushCheckpoint(ctx context.Context) error
+	}
+	if f, ok := teamSession.(flusher); ok {
+		_ = f.FlushCheckpoint(ctx)
+	}
+}
+
+// removeSelfFromPool 从运行时池中移除自身。
+// Python: TeamAgent._remove_self_from_pool()
+func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
+	teamName := a.TeamName()
+	if teamName == "" || sessionID == "" {
+		return
+	}
+	// 通过 runner 间接获取 TeamRuntimeManager（避免循环依赖 agent → runtime → agent）
+	mgrAny := runner.GetTeamRuntimeManagerAny()
+	if mgrAny == nil {
+		return
+	}
+	// 类型断言到含 Pool() 方法的接口
+	type poolAccessor interface {
+		Pool() any
+	}
+	type poolEntry interface {
+		Get(teamName string) any
+		Remove(teamName string) any
+	}
+	mgr, ok := mgrAny.(poolAccessor)
+	if !ok || mgr.Pool() == nil {
+		return
+	}
+	p, ok := mgr.Pool().(poolEntry)
+	if !ok {
+		return
+	}
+	entry := p.Get(teamName)
+	// 检查 SessionID 匹配
+	type sessionIDer interface {
+		SessionID() string
+	}
+	if e, ok := entry.(sessionIDer); !ok || e.SessionID() != sessionID {
+		return
+	}
+	p.Remove(teamName)
 }

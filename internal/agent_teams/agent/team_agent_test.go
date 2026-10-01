@@ -233,11 +233,11 @@ func TestTeamAgent_State(t *testing.T) {
 	assert.NotNil(t, a.State())
 }
 
-// TestTeamAgent_Coordination 测试返回 nil
+// TestTeamAgent_Coordination 测试返回 CoordinationKernel（9.55: NewTeamAgent 自动创建）
 func TestTeamAgent_Coordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
-	assert.Nil(t, a.Coordination())
+	assert.NotNil(t, a.Coordination())
 }
 
 // TestTeamAgent_CoordinationLoop 测试返回 nil
@@ -417,11 +417,11 @@ func TestTeamAgent_AutoStartAll(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// TestTeamAgent_FromSpawnPayload 测试返回 nil
+// TestTeamAgent_FromSpawnPayload 测试空 payload 返回错误
 func TestTeamAgent_FromSpawnPayload(t *testing.T) {
 	a, err := FromSpawnPayload(context.Background(), nil)
 	assert.Nil(t, a)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }
 
 // TestTeamAgent_RecoverTeam 测试无 TeamBackend 时返回空列表
@@ -433,12 +433,11 @@ func TestTeamAgent_RecoverTeam(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestTeamAgent_RecoverFromSession 测试返回 TODO(#9.55) 错误
+// TestTeamAgent_RecoverFromSession 测试 nil session 返回错误
 func TestTeamAgent_RecoverFromSession(t *testing.T) {
 	a, err := RecoverFromSession(context.Background(), nil, "test", nil)
 	assert.Nil(t, a)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "#9.55")
 }
 
 // TestTeamAgent_PersistSessionManifest 测试空操作

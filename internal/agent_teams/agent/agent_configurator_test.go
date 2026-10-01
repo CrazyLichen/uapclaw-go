@@ -172,34 +172,34 @@ func TestResolveAgentSpec_空Spec(t *testing.T) {
 func TestSetupInfraOption(t *testing.T) {
 	t.Run("WithOnTeammateCreated", func(t *testing.T) {
 		called := false
-		cb := func(name string) { called = true }
+		cb := func(ctx context.Context, name string) error { called = true; return nil }
 		opt := WithOnTeammateCreated(cb)
 		cfg := &setupInfraConfig{}
 		opt(cfg)
 		assert.NotNil(t, cfg.onTeammateCreated)
-		cfg.onTeammateCreated("test")
+		_ = cfg.onTeammateCreated(context.Background(), "test")
 		assert.True(t, called)
 	})
 
 	t.Run("WithOnTeamCleaned", func(t *testing.T) {
 		called := false
-		cb := func(name string) { called = true }
+		cb := func(ctx context.Context) error { called = true; return nil }
 		opt := WithOnTeamCleaned(cb)
 		cfg := &setupInfraConfig{}
 		opt(cfg)
 		assert.NotNil(t, cfg.onTeamCleaned)
-		cfg.onTeamCleaned("test")
+		_ = cfg.onTeamCleaned(context.Background())
 		assert.True(t, called)
 	})
 
 	t.Run("WithOnTeamBuilt", func(t *testing.T) {
 		called := false
-		cb := func(name string) { called = true }
+		cb := func(ctx context.Context) error { called = true; return nil }
 		opt := WithOnTeamBuilt(cb)
 		cfg := &setupInfraConfig{}
 		opt(cfg)
 		assert.NotNil(t, cfg.onTeamBuilt)
-		cfg.onTeamBuilt("test")
+		_ = cfg.onTeamBuilt(context.Background())
 		assert.True(t, called)
 	})
 }
@@ -418,15 +418,15 @@ func TestAgentConfigurator_SetupInfra_WithOptions(t *testing.T) {
 	createdCalled := false
 	// 验证所有 Option 回调可以被正确赋值
 	c.SetupInfra(spec, ctx,
-		WithOnTeammateCreated(func(name string) { createdCalled = true }),
-		WithOnTeamCleaned(func(name string) {}),
-		WithOnTeamBuilt(func(name string) {}),
+		WithOnTeammateCreated(func(ctx context.Context, name string) error { createdCalled = true; return nil }),
+		WithOnTeamCleaned(func(ctx context.Context) error { return nil }),
+		WithOnTeamBuilt(func(ctx context.Context) error { return nil }),
 	)
 
 	assert.NotNil(t, c.Blueprint())
 	// 手动触发回调验证
 	if c.onTeammateCreated != nil {
-		c.onTeammateCreated("test")
+		_ = c.onTeammateCreated(context.Background(), "test")
 		assert.True(t, createdCalled)
 	}
 }

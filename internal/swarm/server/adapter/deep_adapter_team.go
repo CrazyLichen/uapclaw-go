@@ -2,9 +2,12 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -159,10 +162,54 @@ func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 }
 
 // processTeamMessageStream team 模式流式消息处理。
-// Python: process_team_message_stream()
-// ⤵️ 10.3.7-11: 依赖 TeamHelpers
-func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inputs map[string]any) error {
-	// ⤵️ 10.3.7-11: team 模式分流，调用 team_helpers.process_team_message_stream
-	logger.Info(logComponent).Msg("processTeamMessageStream 等待 10.3.7-11 回填")
-	return nil
+// 对齐 Python: team_helpers.process_team_message_stream()
+// 9.55: 实现核心分流逻辑
+func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inputs map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
+	logger.Info(logComponent).Str("mode", "team").Msg("processTeamMessageStream: team 模式分流")
+
+	ch := make(chan *agentschema.AgentResponseChunk, 64)
+
+	// 步骤 1: 获取 TeamRuntimeManager
+	mgr := runtime.GetTeamRuntimeManager()
+	if mgr == nil {
+		close(ch)
+		return ch, fmt.Errorf("TeamRuntimeManager 不可用")
+	}
+
+	// 步骤 2: 提取 team_name 和 session_id（简化实现）
+	teamName := ""
+	sessionID := ""
+	if params, ok := inputs["params"].(map[string]any); ok {
+		if tn, ok := params["team_name"].(string); ok {
+			teamName = tn
+		}
+	}
+	if sID, ok := inputs["conversation_id"].(string); ok {
+		sessionID = sID
+	}
+
+	go func() {
+		defer close(ch)
+		// 步骤 3: 判断是否首次请求
+		entry := mgr.Pool().Get(teamName)
+		if entry == nil {
+			// 首次请求：创建 TeamAgent
+			logger.Info(logComponent).Str("team_name", teamName).Msg("processTeamMessageStream: 首次请求")
+			// TODO(#9.85): TeamRunner 完整创建 TeamAgent + streaming 流程
+			return
+		}
+
+		// 步骤 4: 后续请求：通过 Interact 发送
+		query := paramsString(inputs, "query", "")
+		result, err := mgr.Interact(ctx, query, teamName, sessionID)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("processTeamMessageStream: Interact 失败")
+			return
+		}
+		if !result.IsOK() {
+			logger.Warn(logComponent).Msg("processTeamMessageStream: Interact 返回失败")
+		}
+	}()
+
+	return ch, nil
 }
