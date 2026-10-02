@@ -1,6 +1,6 @@
 # 应用层 TeamManager 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 在 `internal/swarm/agents/harness/team/` 下实现应用层 TeamManager，完整对齐 Python 的 `jiwenswarm/agents/harness/team/team_manager.py`，同时删除 Go 独有的 `registry.PoolEntry` 接口。
 
@@ -38,13 +38,13 @@
 **Files:**
 - Create: `internal/swarm/agents/harness/team/doc.go`
 
-- [ ] **Step 1: 创建目录**
+- [x] **Step 1: 创建目录**
 
 ```bash
 mkdir -p /home/opensource/uap-claw-go/internal/swarm/agents/harness/team
 ```
 
-- [ ] **Step 2: 创建 doc.go**
+- [x] **Step 2: 创建 doc.go**
 
 ```go
 // Package team 提供应用层 TeamManager，管理每个 channel 下的 TeamAgent 运行时。
@@ -78,12 +78,12 @@ mkdir -p /home/opensource/uap-claw-go/internal/swarm/agents/harness/team
 package team
 ```
 
-- [ ] **Step 3: 验证编译**
+- [x] **Step 3: 验证编译**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/agents/harness/team/...`
 Expected: 编译成功（空包）
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/team/doc.go
@@ -98,7 +98,7 @@ git commit -m "feat: 创建应用层 team 包 + doc.go"
 - Create: `internal/swarm/agents/harness/team/team_manager.go`
 - Ref: `/home/opensource/jiuwenswarm-develop/jiuwenswarm/agents/harness/team/team_manager.py`
 
-- [ ] **Step 1: 实现结构体和全局索引**
+- [x] **Step 1: 实现结构体和全局索引**
 
 对齐 Python `TeamManager.__init__` + `_team_managers` 全局字典 + `get_team_manager` 函数 + 6 个访问器属性。
 
@@ -258,16 +258,16 @@ func (m *TeamManager) GetTeamAgent(sessionID string) any {
 }
 ```
 
-- [ ] **Step 2: 补充 context 导入**
+- [x] **Step 2: 补充 context 导入**
 
 确保文件顶部 import 包含 `"context"`。
 
-- [ ] **Step 3: 验证编译**
+- [x] **Step 3: 验证编译**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/agents/harness/team/...`
 Expected: 编译成功
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/team/team_manager.go
@@ -292,19 +292,19 @@ git commit -m "feat: TeamManager 结构体 + 全局索引 + 访问器对齐 Pyth
 - `TerminateSessionRuntime`：停止 Runner + 清理本地状态 + 保留持久化
 - `CancelAllStreamTasks`：遍历 streamTasks 调 cancel
 
-- [ ] **Step 1: 编写测试文件骨架**
+- [x] **Step 1: 编写测试文件骨架**
 
 创建 `team_manager_lifecycle_test.go`，包含 `TestNewTeamManager` 和 `TestGetOrCreateTeam` 骨架。
 
-- [ ] **Step 2: 实现生命周期方法**
+- [x] **Step 2: 实现生命周期方法**
 
 按 Python 逐方法实现，每个方法添加 `// 对齐 Python: TeamManager.xxx` 注释。
 
-- [ ] **Step 3: 验证编译**
+- [x] **Step 3: 验证编译**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/agents/harness/team/...`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/team/team_manager_lifecycle.go internal/swarm/agents/harness/team/team_manager_lifecycle_test.go
@@ -354,9 +354,9 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 }
 ```
 
-- [ ] **Step 1: 实现 interact 方法**
-- [ ] **Step 2: 验证编译**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: 实现 interact 方法**
+- [x] **Step 2: 验证编译**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/team/team_manager_interact.go
@@ -379,9 +379,9 @@ git commit -m "feat: TeamManager.Interact 对齐 Python"
 5. `NormalizeDistributedTransportFields` — 分布式传输字段标准化
 6. `ParsePort` — 端口解析
 
-- [ ] **Step 1: 实现 6 个方法**
-- [ ] **Step 2: 验证编译**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: 实现 6 个方法**
+- [x] **Step 2: 验证编译**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -393,9 +393,9 @@ git commit -m "feat: TeamManager.Interact 对齐 Python"
 
 14 个方法：`EnsureTeamSharedSkillsInitialized`, `SyncTeamSkills`, 9 个 Register/Get/Find/Drain 方法, `GetTeamRailContext`, `UpdateEvolutionConfig`
 
-- [ ] **Step 1: 实现 14 个方法**
-- [ ] **Step 2: 验证编译**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: 实现 14 个方法**
+- [x] **Step 2: 验证编译**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -409,9 +409,9 @@ git commit -m "feat: TeamManager.Interact 对齐 Python"
 
 Go 差异：Python 用 `asyncio.Task`，Go 用 `context.CancelFunc` 表示流任务。`PopStreamTask` 返回 cancel 函数而非 Task。
 
-- [ ] **Step 1: 实现 8 个方法**
-- [ ] **Step 2: 验证编译**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: 实现 8 个方法**
+- [x] **Step 2: 验证编译**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -425,9 +425,9 @@ Go 差异：Python 用 `asyncio.Task`，Go 用 `context.CancelFunc` 表示流任
 1. `AttachDistributedHooksForRunnerRuntime` — 为 Runner 池中的 TeamAgent 附加分布式 hooks
 2. `NormalizeDistributedTransportFields` — 公共包装：分布式传输字段标准化
 
-- [ ] **Step 1: 实现 2 个方法**
-- [ ] **Step 2: 验证编译**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: 实现 2 个方法**
+- [x] **Step 2: 验证编译**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -439,15 +439,15 @@ Go 差异：Python 用 `asyncio.Task`，Go 用 `context.CancelFunc` 表示流任
 - Modify: `internal/agent_teams/runtime/pool.go`
 - Modify: `internal/agent_teams/agent/team_agent.go`
 
-- [ ] **Step 1: 从 registry/interfaces.go 删除 PoolEntry/PoolTeamEntry/PoolAccessor**
+- [x] **Step 1: 从 registry/interfaces.go 删除 PoolEntry/PoolTeamEntry/PoolAccessor**
 
 删除 `PoolAccessor` 接口、`PoolEntry` 接口、`PoolTeamEntry` 接口。
 
-- [ ] **Step 2: 从 runtime/manager.go 删除 PoolEntry() 方法**
+- [x] **Step 2: 从 runtime/manager.go 删除 PoolEntry() 方法**
 
 删除 `func (m *TeamRuntimeManager) PoolEntry() registry.PoolEntry` 方法。
 
-- [ ] **Step 3: 从 runtime/pool.go 删除 GetEntry/RemoveEntry + 编译期断言**
+- [x] **Step 3: 从 runtime/pool.go 删除 GetEntry/RemoveEntry + 编译期断言**
 
 删除：
 - `func (p *TeamRuntimePool) GetEntry(teamName string) registry.PoolTeamEntry`
@@ -456,7 +456,7 @@ Go 差异：Python 用 `asyncio.Task`，Go 用 `context.CancelFunc` 表示流任
 - `var _ registry.PoolTeamEntry = (*ActiveTeam)(nil)`
 - `func (a *ActiveTeam) GetSessionID() string`（如果仅服务于 PoolTeamEntry 接口）
 
-- [ ] **Step 4: 修改 team_agent.go 的 removeSelfFromPool**
+- [x] **Step 4: 修改 team_agent.go 的 removeSelfFromPool**
 
 将 `mgr.PoolEntry()` 改为 `mgr.Pool()`：
 
@@ -482,15 +482,15 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 }
 ```
 
-- [ ] **Step 5: 更新 pool_test.go**
+- [x] **Step 5: 更新 pool_test.go**
 
 删除 `PoolEntry()` 相关测试，改用 `Pool()` 测试。
 
-- [ ] **Step 6: 验证编译**
+- [x] **Step 6: 验证编译**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./...`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -504,7 +504,7 @@ git commit -m "refactor: 删除 Go 独有的 registry.PoolEntry 接口，改用 
 **Files:**
 - Modify: `internal/swarm/server/adapter/deep_adapter_team.go`
 
-- [ ] **Step 1: 改造 processTeamMessageStream 使用 TeamManager**
+- [x] **Step 1: 改造 processTeamMessageStream 使用 TeamManager**
 
 核心改动：
 1. 不再从 `inputs["params"]["team_name"]` 提取 teamName
@@ -513,11 +513,11 @@ git commit -m "refactor: 删除 Go 独有的 registry.PoolEntry 接口，改用 
 4. 首次：`GetEnrichedTeamSpec` + `PrepareRuntimeActivation` + 创建后台流任务
 5. 后续：`teamManager.Interact(ctx, sessionID, query)`
 
-- [ ] **Step 2: 验证编译**
+- [x] **Step 2: 验证编译**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/server/adapter/...`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/swarm/server/adapter/deep_adapter_team.go
@@ -531,16 +531,16 @@ git commit -m "refactor: processTeamMessageStream 改用 TeamManager channel_id 
 **Files:**
 - Create: `internal/swarm/agents/harness/team/team_manager_test.go`
 
-- [ ] **Step 1: 编写 GetTeamManager 测试（double-check locking + default channel）**
-- [ ] **Step 2: 编写 Active/Pending 状态管理测试**
-- [ ] **Step 3: 编写 Interact 测试（非活跃 session 拒绝）**
-- [ ] **Step 4: 编写 Skill/Monitor/Stream 注册查询测试**
-- [ ] **Step 5: 运行测试**
+- [x] **Step 1: 编写 GetTeamManager 测试（double-check locking + default channel）**
+- [x] **Step 2: 编写 Active/Pending 状态管理测试**
+- [x] **Step 3: 编写 Interact 测试（非活跃 session 拒绝）**
+- [x] **Step 4: 编写 Skill/Monitor/Stream 注册查询测试**
+- [x] **Step 5: 运行测试**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/swarm/agents/harness/team/... -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/team/team_manager_test.go
