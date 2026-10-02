@@ -421,7 +421,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		Str("mode", mode).
 		Str("sub_mode", subMode).
 		Bool("is_code_agent", c.deep.isCodeAgent).
-		Msg("CodeAdapter CreateInstance 完成")
+		Msg("CodeAdapter CreateInstance completed")
 	return nil
 }
 
@@ -441,7 +441,7 @@ func (c *CodeAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 			if err := car.Reload(c.deep.instance); err != nil {
 				logger.Warn(logComponent).
 					Err(err).
-					Msg("CodeAgentRail Reload 失败，继续执行")
+					Msg("CodeAgentRail Reload failed, continuing")
 			}
 		}
 	}
@@ -653,7 +653,7 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 		Str("channel", resolvedChannel).
 		Str("mode", config.Mode).
 		Bool("force_english", c.forceEnglishRuntimePrompt).
-		Msg("CodeAdapter.updateRuntimeConfig 完成")
+		Msg("CodeAdapter.updateRuntimeConfig completed")
 }
 
 // buildConfiguredSubagents 覆写 DeepAdapter，code 模式固定挂载 explore/plan/code 子代理。
@@ -753,7 +753,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
-		Msg("CodeAdapter buildConfiguredSubagents 完成")
+		Msg("CodeAdapter buildConfiguredSubagents completed")
 
 	// Python: return subagents, False (should_add_general = False)
 	return specs, false
@@ -830,7 +830,7 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	logger.Info(logComponent).
 		Int("tool_count", len(toolCards)).
-		Msg("CodeAdapter getToolCards 完成")
+		Msg("CodeAdapter getToolCards completed")
 	return toolCards
 }
 
@@ -1000,7 +1000,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("panic", r).
-					Msg("UserHookRail 加载失败，跳过")
+					Msg("UserHookRail load failed, skipping")
 			}
 		}()
 		hooksCfg := hookscfg.LoadHooksConfig(configBase)
@@ -1014,7 +1014,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	logger.Info(logComponent).
 		Str("mode", "code").
 		Int("rails_count", len(railsList)).
-		Msg("buildCodeAgentRails 完成")
+		Msg("buildCodeAgentRails completed")
 
 	return railsList
 }
@@ -1035,14 +1035,14 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 		// 跳过已在固定列表中的 rail
 		if codeFixedRailNames[railName] {
 			logger.Info(logComponent).Str("rail_name", railName).
-				Msg("动态 Rail 已在固定集合中，跳过")
+				Msg("dynamic Rail already in fixed set, skipping")
 			continue
 		}
 
 		// MemoryRail 不支持 code 模式
 		if railName == "MemoryRail" {
 			logger.Warn(logComponent).Str("rail_name", railName).
-				Msg("MemoryRail 不支持 code 模式，请使用 CodingMemoryRail，跳过")
+				Msg("MemoryRail not supported in code mode, use CodingMemoryRail instead, skipping")
 			continue
 		}
 
@@ -1050,7 +1050,7 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 		methodName, ok := codeRailBuildNames[railName]
 		if !ok {
 			logger.Warn(logComponent).Str("rail_name", railName).
-				Msg("未知的动态 Rail 名称，跳过")
+				Msg("unknown dynamic Rail name, skipping")
 			continue
 		}
 
@@ -1078,10 +1078,10 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 		if rail != nil {
 			*railsList = append(*railsList, rail)
 			logger.Info(logComponent).Str("rail_name", railName).
-				Msg("动态 Rail 从配置加载成功")
+				Msg("dynamic Rail loaded from config")
 		} else {
 			logger.Warn(logComponent).Str("rail_name", railName).Str("method", methodName).
-				Msg("动态 Rail 构建返回 nil")
+				Msg("dynamic Rail builder returned nil")
 		}
 	}
 }
@@ -1175,7 +1175,7 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		Str("language", language).
 		Str("project_memory_dir", projectMemoryDir).
 		Int("additional_dirs", len(additionalDirs)).
-		Msg("ProjectMemoryRail 创建成功")
+		Msg("ProjectMemoryRail created")
 
 	return rail
 }
@@ -1203,7 +1203,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 			Str("event_type", "build_coding_memory_rail").
 			Str("dir", codingMemoryDir).
 			Err(err).
-			Msg("创建 coding_memory 目录失败")
+			Msg("failed to create coding_memory directory")
 	}
 
 	// Python: 始终创建 Rail（embedding 不完整时降级到 fallback provider）
@@ -1220,7 +1220,7 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("panic", r).
-				Msg("StructuredAskUserRail 创建失败")
+				Msg("StructuredAskUserRail creation failed")
 		}
 	}()
 	rail := commonrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
@@ -1281,7 +1281,7 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 	if rail != nil {
 		logger.Info(logComponent).
 			Strs("tool_names", toolNames).
-			Msg("PermissionInterruptRail (CodeAdapter) 创建成功")
+			Msg("PermissionInterruptRail (CodeAdapter) created")
 	}
 	return rail
 }
@@ -1295,8 +1295,6 @@ func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
 	rail := worktree.NewWorktreeRail(worktree.WithWorktreeRailConfig(cfg))
 	return rail
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
 // Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
@@ -1328,7 +1326,7 @@ func (c *CodeAdapter) MergeMemberMcpConfigs(agent *harness.DeepAgent, configBase
 		if cfg == nil {
 			logger.Warn(logComponent).
 				Str("name", toStringAny(entry["name"])).
-				Msg("跳过无效的成员 MCP 服务器条目")
+				Msg("skipping invalid member MCP server entry")
 			continue
 		}
 		serverID := cfg.ServerID
@@ -1560,7 +1558,7 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 		Int("subagents", addedSubagents).
 		Int("mcps", addedMcps).
 		Str("project_dir", c.deep.projectDir).
-		Msg("配置团队成员为 code 配置")
+		Msg("configured team member with code config")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

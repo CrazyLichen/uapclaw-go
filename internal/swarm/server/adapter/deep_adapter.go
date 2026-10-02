@@ -594,7 +594,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		Str("agent_name", d.agentName).
 		Str("mode", mode).
 		Str("sub_mode", subMode).
-		Msg("DeepAdapter CreateInstance 完成")
+		Msg("DeepAdapter CreateInstance completed")
 	return nil
 }
 
@@ -603,7 +603,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 // Go 不支持 Python 的动态导入机制，当前为占位实现（仅记录日志）。
 // TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
 func (d *DeepAdapter) loadUserRails() {
-	logger.Debug(logComponent).Msg("loadUserRails: Go 不支持动态导入，用户自定义 Rail 扩展待设计")
+	logger.Debug(logComponent).Msg("loadUserRails: Go does not support dynamic import, user custom Rail extensions pending design")
 }
 
 // ReloadAgentConfig 热重载配置，不重启进程。
@@ -911,7 +911,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 			Err(runErr).
 			Str("session_id", sessionID).
 			Str("mode", mode).
-			Msg("Runner.RunAgent 执行失败")
+			Msg("Runner.RunAgent execution failed")
 		return nil, runErr
 	}
 
@@ -1099,7 +1099,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		d.unmarkSessionActive(sessionID)
 		ch := make(chan *schema.AgentResponseChunk)
 		close(ch)
-		return ch, fmt.Errorf("Runner.RunAgentStreaming 启动失败: %w", streamErr)
+		return ch, fmt.Errorf("Runner.RunAgentStreaming start failed: %w", streamErr)
 	}
 
 	// goroutine 从 rawCh 读取，parseStreamChunk 转换，写入 outCh
@@ -1347,7 +1347,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		logger.Info(logComponent).
 			Str("intent", intent).
 			Str("session_id", normalizedSID).
-			Msg("interrupt: session 不活跃，跳过 abort 操作")
+			Msg("interrupt: session inactive, skipping abort")
 	}
 
 	// 步骤 6-9: 按 intent 分支
@@ -1527,7 +1527,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 	logger.Info(logComponent).
 		Str("request_id", req.RequestID).
 		Str("session_id", sid).
-		Msg("heartbeat query 已注入")
+		Msg("heartbeat query injected")
 
 	// 步骤 5: 返回 nil，继续正常流程
 	return nil, nil
@@ -1671,8 +1671,8 @@ func EnsurePersistentCheckpointer() error {
 		logger.Error(logComponent).
 			Err(err).
 			Str("db_path", dbPath).
-			Msg("持久化检查点器初始化失败")
-		return fmt.Errorf("持久化检查点器初始化失败: %w", err)
+			Msg("persistent checkpointer initialization failed")
+		return fmt.Errorf("persistent checkpointer initialization failed: %w", err)
 	}
 
 	checkpointer.SetDefaultCheckpointer(cp)
@@ -1680,7 +1680,7 @@ func EnsurePersistentCheckpointer() error {
 
 	logger.Info(logComponent).
 		Str("db_path", dbPath+".db").
-		Msg("持久化检查点器已就绪")
+		Msg("persistent checkpointer ready")
 
 	return nil
 }
@@ -1808,7 +1808,7 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 	logger.Info(logComponent).
 		Str("runtime_cwd", runtimeCwd).
 		Str("workspace_root", workspaceRoot).
-		Msg("CWD 已从 runtime 种子初始化")
+		Msg("CWD initialized from runtime seed")
 
 	return ctx
 }
@@ -1951,7 +1951,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
 			logger.Warn(logComponent).
 				Err(err).
 				Str("model_name", modelName).
-				Msg("跳过无效模型条目")
+				Msg("skipping invalid model entry")
 			continue
 		}
 		d.modelCache[cacheKey] = m
@@ -2031,7 +2031,7 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any) {
 		logger.Warn(logComponent).
 			Err(err).
 			Str("model_name", modelName).
-			Msg("跳过无效模型条目(legacy)")
+			Msg("skipping invalid model entry(legacy)")
 		return
 	}
 	d.modelCache[modelName] = m
@@ -2087,7 +2087,7 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 	logger.Info(logComponent).
 		Str("default_model_name", d.defaultModelName).
 		Int("model_cache_size", len(d.modelCache)).
-		Msg("模型缓存构建完成")
+		Msg("model cache build completed")
 
 	return d.model
 }

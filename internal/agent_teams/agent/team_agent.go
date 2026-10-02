@@ -537,6 +537,13 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
 
+	// 未配置时直接返回（对齐 Python：未 configure 的 TeamAgent 无法执行 invoke）
+	if a.configurator == nil || a.configurator.Blueprint() == nil {
+		logger.Warn(logComponent).Msg("TeamAgent Invoke: 未配置，跳过执行")
+		a.coordination.FinalizeRound(ctx)
+		return nil, nil
+	}
+
 	// Python: self._stream_controller.stream_queue = asyncio.Queue()
 	if a.streamController != nil {
 		a.streamController.streamQueue = make(chan stream.Schema, 64)
@@ -568,16 +575,22 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	//   return last_result
 	var lastResult map[string]any
 	if a.streamController != nil && a.streamController.streamQueue != nil {
-		for chunk := range a.streamController.streamQueue {
-			if chunk == nil {
-				break
-			}
-			// 将 stream.Schema 转换为 map[string]any
-			if m, ok := chunk.(interface{ ToMap() map[string]any }); ok {
-				lastResult = m.ToMap()
+		for {
+			select {
+			case chunk, ok := <-a.streamController.streamQueue:
+				if !ok || chunk == nil {
+					goto done
+				}
+				// 将 stream.Schema 转换为 map[string]any
+				if m, ok := chunk.(interface{ ToMap() map[string]any }); ok {
+					lastResult = m.ToMap()
+				}
+			case <-ctx.Done():
+				goto done
 			}
 		}
 	}
+done:
 
 	// Python: finally: await self._coordination.finalize_round()
 	a.coordination.FinalizeRound(ctx)
@@ -590,6 +603,12 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Stream 开始")
+
+	// 未配置时直接返回空流（对齐 Python：未 configure 的 TeamAgent 无法执行 stream）
+	if a.configurator == nil || a.configurator.Blueprint() == nil {
+		logger.Warn(logComponent).Msg("TeamAgent Stream: 未配置，跳过执行")
+		return nil, nil
+	}
 
 	// Python: self._stream_controller.stream_queue = asyncio.Queue()
 	if a.streamController != nil {

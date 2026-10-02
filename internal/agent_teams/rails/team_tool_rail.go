@@ -73,7 +73,7 @@ const toolRailLogComponent = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// _ 编译时验证 TeamToolRail 满足 DeepAgentRailProvider 接口
+// 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamToolRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

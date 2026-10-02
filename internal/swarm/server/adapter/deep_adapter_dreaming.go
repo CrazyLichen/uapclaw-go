@@ -35,13 +35,13 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 
 	// 步骤 2: dreaming 模式未启用则跳过
 	if d.dreamingMode == "" {
-		logger.Info(logComponent).Msg("dreaming 模式未启用，跳过启动")
+		logger.Info(logComponent).Msg("dreaming mode not enabled, skipping start")
 		return nil
 	}
 
 	// 步骤 3: 检查是否忙碌
 	if busyChecker != nil && busyChecker() {
-		logger.Warn(logComponent).Msg("Agent 忙碌中，跳过 dreaming 启动")
+		logger.Warn(logComponent).Msg("agent busy, skipping dreaming start")
 		return nil
 	}
 
@@ -52,7 +52,7 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 	// ⤵️ 10.6.13-18: 调用 swarm memory dreaming.startDreaming(...)
 	logger.Info(logComponent).
 		Str("dreaming_mode", d.dreamingMode).
-		Msg("dreaming 启动（实际调用待回填）")
+		Msg("dreaming started (actual call pending backfill)")
 
 	return nil
 }
@@ -77,7 +77,7 @@ func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 
 	// 步骤 3: 调用 swarm memory dreaming.stopDreaming()
 	// ⤵️ 10.6.13-18: 调用 swarm memory dreaming.stopDreaming(...)
-	logger.Info(logComponent).Msg("dreaming 停止（实际调用待回填）")
+	logger.Info(logComponent).Msg("dreaming stopped (actual call pending backfill)")
 
 	return nil
 }

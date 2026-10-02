@@ -36,18 +36,19 @@ type ChannelPushTransport struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent 推送日志组件
-const logComponent = logger.ComponentAgentServer
+const (
+	// logComponent 推送日志组件
+	logComponent = logger.ComponentAgentServer
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 接口合规：ChannelPushTransport 实现 GatewayPushTransport
-// _ 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
+// 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
 var _ GatewayPushTransport = (*ChannelPushTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewChannelPushTransport 创建 ChannelPushPushTransport 实例。
+// NewChannelPushTransport 创建 ChannelPushTransport 实例。
 func NewChannelPushTransport() *ChannelPushTransport {
 	return &ChannelPushTransport{}
 }

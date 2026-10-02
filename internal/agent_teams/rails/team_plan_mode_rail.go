@@ -52,7 +52,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// _ 编译时验证 TeamPlanModeRail 满足 DeepAgentRailProvider 接口
+// 编译时验证：确保 TeamPlanModeRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamPlanModeRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -94,6 +94,9 @@ func (r *TeamPlanModeRail) Uninit(_ agentinterfaces.BaseAgent) error {
 // Python: TeamPlanModeRail.before_model_call(ctx)
 func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.agent == nil || r.systemPromptBuilder == nil {
+		return nil
+	}
+	if cbc == nil {
 		return nil
 	}
 

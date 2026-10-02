@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 )
@@ -343,6 +344,9 @@ type errorMemoryIndex struct {
 }
 
 func (e *errorMemoryIndex) SetStorageCodec(_ index.StorageCodec) {}
+
+// SetEmbeddingModel 设置或替换嵌入模型
+func (e *errorMemoryIndex) SetEmbeddingModel(_ embedding.BaseEmbedding) {}
 func (e *errorMemoryIndex) AddMemories(_ context.Context, _, _ string, _ []*index.MemoryDoc) error {
 	return nil
 }

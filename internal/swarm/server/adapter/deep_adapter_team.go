@@ -72,7 +72,7 @@ func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, request
 	if rail == nil {
 		logger.Warn(logComponent).
 			Str("request_id", requestID).
-			Msg("handleTeamSkillEvolveApproval: TeamSkillEvolutionRail 未初始化")
+			Msg("handleTeamSkillEvolveApproval: TeamSkillEvolutionRail not initialized")
 		return false
 	}
 
@@ -85,12 +85,12 @@ func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, request
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("request_id", requestID).
-				Msg("handleTeamSkillEvolveApproval: ApproveRecord 失败")
+				Msg("handleTeamSkillEvolveApproval: ApproveRecord failed")
 			return false
 		}
 		logger.Info(logComponent).
 			Str("request_id", requestID).
-			Msg("handleTeamSkillEvolveApproval: 已批准")
+			Msg("handleTeamSkillEvolveApproval: approved")
 
 		// 推送解决状态
 		_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "approved")
@@ -101,12 +101,12 @@ func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, request
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("request_id", requestID).
-			Msg("handleTeamSkillEvolveApproval: RejectRecord 失败")
+			Msg("handleTeamSkillEvolveApproval: RejectRecord failed")
 		return false
 	}
 	logger.Info(logComponent).
 		Str("request_id", requestID).
-		Msg("handleTeamSkillEvolveApproval: 已拒绝")
+		Msg("handleTeamSkillEvolveApproval: rejected")
 
 	// 推送解决状态
 	_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "rejected")
@@ -122,7 +122,7 @@ func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, r
 	logger.Info(logComponent).
 		Str("request_id", requestID).
 		Str("status", status).
-		Msg("pushTeamSkillEvolveResolutionStatus: 审批结果已推送")
+		Msg("pushTeamSkillEvolveResolutionStatus: approval result pushed")
 	// Python: 通过 stream event 推送，当前 Go 端仅记录日志
 	// 完整的 stream 推送需要 d.instance 的 stream 支持
 	return nil
@@ -171,9 +171,15 @@ func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 //   - req（AgentRequest）：元信息 — session_id, request_id, channel_id
 //   - inputs：业务参数 — query, params.team_name 等
 func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentschema.AgentRequest, inputs map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
-	logger.Info(logComponent).Str("mode", "team").Msg("processTeamMessageStream: team 模式分流")
+	logger.Info(logComponent).Str("mode", "team").Msg("processTeamMessageStream: team mode routing")
 
 	ch := make(chan *agentschema.AgentResponseChunk, 64)
+
+	// 防御：req 为 nil 时直接返回空流
+	if req == nil {
+		close(ch)
+		return ch, nil
+	}
 
 	// 步骤 1: 从 req 获取元信息（对齐 Python: request.session_id / request.request_id / request.channel_id）
 	sessionID := ""
@@ -199,7 +205,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		if isFirstRequest {
 			// 首次请求：创建 TeamAgent + 启动后台流任务
 			logger.Info(logComponent).Str("session_id", sessionID).Str("channel_id", channelID).
-				Msg("processTeamMessageStream: 首次请求")
+				Msg("processTeamMessageStream: first request")
 
 			// 对齐 Python 步骤：
 			//  1. teamSpec = teamManager.GetEnrichedTeamSpec(session_id, deep_agent, ...)
@@ -217,12 +223,12 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		ok, err := teamManager.Interact(ctx, sessionID, query)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("session_id", sessionID).
-				Msg("processTeamMessageStream: Interact 失败")
+				Msg("processTeamMessageStream: Interact failed")
 			return
 		}
 		if !ok {
 			logger.Warn(logComponent).Str("session_id", sessionID).
-				Msg("processTeamMessageStream: Interact 返回失败（非活跃 session）")
+				Msg("processTeamMessageStream: Interact returned false (inactive session)")
 		}
 	}()
 

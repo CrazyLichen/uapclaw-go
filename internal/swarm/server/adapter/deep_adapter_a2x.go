@@ -22,14 +22,14 @@ import (
 // Python: _clear_a2x_runtime_state() (line 612-636)。
 // ⤵️ A2X / 11.10: 清除 A2X 运行时状态
 func (d *DeepAdapter) clearA2xRuntimeState() {
-	logger.Info(logComponent).Msg("clearA2xRuntimeState 等待回填")
+	logger.Info(logComponent).Msg("clearA2xRuntimeState pending backfill")
 }
 
 // closeA2xClient 关闭 A2X 客户端。
 // Python: _close_a2x_client() (line 638-653)。
 // ⤵️ A2X / 11.10: 关闭 A2X 客户端
 func (d *DeepAdapter) closeA2xClient() error {
-	logger.Info(logComponent).Msg("closeA2xClient 等待回填")
+	logger.Info(logComponent).Msg("closeA2xClient pending backfill")
 	return nil
 }
 
@@ -37,7 +37,7 @@ func (d *DeepAdapter) closeA2xClient() error {
 // Python: _init_a2x_client() (line 655-691)。
 // ⤵️ A2X / 11.10: 初始化 A2X 客户端
 func (d *DeepAdapter) initA2xClient(ctx context.Context, configBase map[string]any) error {
-	logger.Info(logComponent).Msg("initA2xClient 等待回填")
+	logger.Info(logComponent).Msg("initA2xClient pending backfill")
 	return nil
 }
 
@@ -45,7 +45,7 @@ func (d *DeepAdapter) initA2xClient(ctx context.Context, configBase map[string]a
 // Python: _try_init_a2x_client() (line 693-706)。
 // ⤵️ A2X / 11.10: 尝试初始化 A2X 客户端
 func (d *DeepAdapter) tryInitA2xClient(ctx context.Context, configBase map[string]any) error {
-	logger.Info(logComponent).Msg("tryInitA2xClient 等待回填")
+	logger.Info(logComponent).Msg("tryInitA2xClient pending backfill")
 	return nil
 }
 
@@ -53,7 +53,7 @@ func (d *DeepAdapter) tryInitA2xClient(ctx context.Context, configBase map[strin
 // Python: _sync_a2x_runtime_state() (line 708-743)。
 // ⤵️ A2X / 11.10: 同步 A2X 运行时状态
 func (d *DeepAdapter) syncA2xRuntimeState() error {
-	logger.Info(logComponent).Msg("syncA2xRuntimeState 等待回填")
+	logger.Info(logComponent).Msg("syncA2xRuntimeState pending backfill")
 	return nil
 }
 
@@ -61,7 +61,7 @@ func (d *DeepAdapter) syncA2xRuntimeState() error {
 // Python: _bind_runtime_cron_context() (line 2719-2752)。
 // ⤵️ 11.10: 绑定 Cron 运行时上下文
 func (d *DeepAdapter) bindRuntimeCronContext(requestID string, sessionID string) any {
-	logger.Info(logComponent).Msg("bindRuntimeCronContext 等待回填")
+	logger.Info(logComponent).Msg("bindRuntimeCronContext pending backfill")
 	return nil
 }
 
@@ -69,5 +69,5 @@ func (d *DeepAdapter) bindRuntimeCronContext(requestID string, sessionID string)
 // Python: _reset_runtime_cron_context() (line 2754-2760)。
 // ⤵️ 11.10: 重置 Cron 运行时上下文
 func (d *DeepAdapter) resetRuntimeCronContext(tokens any) {
-	logger.Info(logComponent).Msg("resetRuntimeCronContext 等待回填")
+	logger.Info(logComponent).Msg("resetRuntimeCronContext pending backfill")
 }

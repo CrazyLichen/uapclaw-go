@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
@@ -11,10 +12,15 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -76,8 +82,33 @@ func (f *fakeBaseAgentTeam) UnregisterRail(_ context.Context, _ agentinterfaces.
 	return nil
 }
 
+// DeepAgentInterface 方法（桩实现，供 TeamPlanModeRail.Init 类型断言通过）
+func (f *fakeBaseAgentTeam) ReactAgent() *agents.ReActAgent                                 { return nil }
+func (f *fakeBaseAgentTeam) LoopCoordinator() harnessinterfaces.LoopCoordinatorInterface   { return nil }
+func (f *fakeBaseAgentTeam) LoopController() controller.ControllerInterface                { return nil }
+func (f *fakeBaseAgentTeam) EventHandler() modules.EventHandler                             { return nil }
+func (f *fakeBaseAgentTeam) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
+	return nil
+}
+func (f *fakeBaseAgentTeam) DeepConfig() *hschema.DeepAgentConfig { return nil }
+func (f *fakeBaseAgentTeam) IsInvokeActive() bool                  { return false }
+func (f *fakeBaseAgentTeam) IsAutoInvokeScheduled() bool           { return false }
+func (f *fakeBaseAgentTeam) SetAutoInvokeScheduled(_ bool)         {}
+func (f *fakeBaseAgentTeam) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
+	return nil
+}
+func (f *fakeBaseAgentTeam) CreateSubagent(_ context.Context, _ string, _ string) (harnessinterfaces.DeepAgentInterface, error) {
+	return nil, nil
+}
+func (f *fakeBaseAgentTeam) SwitchMode(_ sessioninterfaces.SessionFacade, _ string)        {}
+func (f *fakeBaseAgentTeam) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade)    {}
+func (f *fakeBaseAgentTeam) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string       { return "" }
+func (f *fakeBaseAgentTeam) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeBaseAgentTeam) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail { return nil }
+
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentTeam)(nil)
+var _ harnessinterfaces.DeepAgentInterface = (*fakeBaseAgentTeam)(nil)
 
 // fakeAbilityManagerTeam 方法实现
 func (f *fakeAbilityManagerTeam) Add(ability cschema.Ability) agentschema.AddAbilityResult {

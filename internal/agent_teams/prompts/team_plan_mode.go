@@ -111,6 +111,7 @@ func BuildPlanFileInfoEN(planFilePath string, exists bool) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// init 初始化 team.plan 模式的中英文提示词模板（从模板加载）
 func init() {
 	tplCN := LoadTemplate("team_plan_mode", "cn")
 	if tplCN != nil {

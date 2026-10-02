@@ -16,7 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // milvusClient Milvus 客户端操作接口（用于解耦和测试）。
 //
@@ -909,7 +909,9 @@ func findColumn(ds milvusclient.DataSet, name string) column.Column {
 	return nil
 }
 
-// ──────────────────────────── 适配器 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ──────────────────────────── 结构体（适配器） ────────────────────────────
 
 // persistenceClientAdapter 将 milvusclient.Client 适配到 milvusClient 接口。
 //

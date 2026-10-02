@@ -70,9 +70,9 @@ const (
 	// maxInjectDesc 最大注入描述经验条数
 	// Python: _MAX_INJECT_DESC = 5
 	maxInjectDesc = 5
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
 )
-
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

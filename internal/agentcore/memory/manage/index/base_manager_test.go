@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -32,6 +33,9 @@ func (f *fakeMemoryIndex) key(userID, scopeID, memID string) string {
 }
 
 func (f *fakeMemoryIndex) SetStorageCodec(_ index.StorageCodec) {}
+
+// SetEmbeddingModel 设置或替换嵌入模型
+func (f *fakeMemoryIndex) SetEmbeddingModel(_ embedding.BaseEmbedding) {}
 
 func (f *fakeMemoryIndex) AddMemories(_ context.Context, userID string, scopeID string, memories []*index.MemoryDoc) error {
 	for _, doc := range memories {

@@ -61,7 +61,7 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 		ceinterface.WithReturnState(returnState),
 	)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("CompressContext 压缩失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("CompressContext compression failed")
 		return map[string]any{"result": "error", "error": err.Error()}, err
 	}
 
@@ -107,7 +107,7 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("result", result).
-		Msg("CompressContext 完成")
+		Msg("CompressContext completed")
 
 	return response, nil
 }
@@ -121,7 +121,7 @@ func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (ma
 	// Python: 直接调 instance.get_context_usage()
 	usage, err := d.instance.GetContextUsage(ctx, sessionID, "")
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("GetContextUsage 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("GetContextUsage failed")
 		return nil, err
 	}
 	return usage, nil
@@ -151,7 +151,7 @@ func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[
 		return map[string]any{"status": "failed", "error": "模型返回空响应"}, nil
 	}
 
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("GenerateRecap 完成")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("GenerateRecap completed")
 	return map[string]any{"status": "ok", "summary": strings.TrimSpace(summaryText)}, nil
 }
 
@@ -221,7 +221,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 // onEvolutionWatcherDone evolution 观察任务完成回调。
 // ✅ 已回填（对齐 Python: _on_evolution_watcher_done()）
 func (d *DeepAdapter) onEvolutionWatcherDone(sessionID string) {
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("onEvolutionWatcherDone: evolution watcher 已完成")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("onEvolutionWatcherDone: evolution watcher done")
 }
 
 // buildRecapPrompt 构建 recap 提示词。
@@ -246,7 +246,7 @@ func buildRecapPrompt(memory string) string {
 // 根据 request_id 前缀路由到 SkillEvolutionRail.ApproveRecord / RejectRecord
 func (d *DeepAdapter) handleEvolutionApproval(ctx context.Context, requestID string, answers []ApprovalAnswer) bool {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: SkillEvolutionRail not initialized")
 		return false
 	}
 
@@ -256,19 +256,19 @@ func (d *DeepAdapter) handleEvolutionApproval(ctx context.Context, requestID str
 	if approved {
 		err := d.skillEvolutionRail.ApproveRecord(ctx, requestID)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleEvolutionApproval: ApproveRecord 失败")
+			logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleEvolutionApproval: ApproveRecord failed")
 			return false
 		}
-		logger.Info(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: 已批准")
+		logger.Info(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: approved")
 		return true
 	}
 
 	err := d.skillEvolutionRail.RejectRecord(ctx, requestID)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleEvolutionApproval: RejectRecord 失败")
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleEvolutionApproval: RejectRecord failed")
 		return false
 	}
-	logger.Info(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: 已拒绝")
+	logger.Info(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: rejected")
 	return true
 }
 
@@ -314,7 +314,7 @@ func (d *DeepAdapter) getRecentMessages(sessionID string) []llmschema.BaseMessag
 // 不传 system prompt，prompt 作为最后一条 user message。
 func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []llmschema.BaseMessage, prompt string) (string, error) {
 	if d.model == nil {
-		logger.Error(logComponent).Msg("callModelForRecap: 无可用模型实例")
+		logger.Error(logComponent).Msg("callModelForRecap: no model instance available")
 		return "", nil
 	}
 
@@ -366,7 +366,7 @@ func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []llmschem
 		model_clients.WithInvokeTemperature(0),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("callModelForRecap 模型调用失败")
+		logger.Error(logComponent).Err(err).Msg("callModelForRecap model invocation failed")
 		return "", err
 	}
 	if result == nil {
@@ -508,7 +508,7 @@ func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.Out
 		return
 	}
 	if globalSendPushFunc == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("pushEventToFrontend: globalSendPushFunc 未注入")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("pushEventToFrontend: globalSendPushFunc not injected")
 		return
 	}
 
@@ -518,7 +518,7 @@ func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.Out
 		// Python: await push_evolution_event(push_context, rid, evt, build_server_push_message)
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
 		if err := globalSendPushFunc(ctx, msg); err != nil {
-			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送审批事件失败")
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to push approval event")
 		}
 	case "outcome":
 		// Python: await push_evolution_status(push_context, update, build_server_push_message)
@@ -532,10 +532,10 @@ func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.Out
 		}
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
 		if err := globalSendPushFunc(ctx, msg); err != nil {
-			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送结果状态失败")
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to push outcome status")
 		}
 	default:
-		logger.Debug(logComponent).Str("session_id", sessionID).Str("event_kind", evtKind).Msg("演进进度事件已在批量推送中处理")
+		logger.Debug(logComponent).Str("session_id", sessionID).Str("event_kind", evtKind).Msg("evolution progress event already handled in batch push")
 	}
 }
 

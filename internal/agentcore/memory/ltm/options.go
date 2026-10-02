@@ -53,6 +53,15 @@ type searchParams struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// AddMessagesOption AddMessages 的可选参数。
+type AddMessagesOption func(*addMessagesParams)
+
+// UserScopeOption 用户+作用域通用可选参数，被搜索/删除/更新/查询操作复用。
+type UserScopeOption func(*userScopeParams)
+
+// SearchOption SearchUserMem 的可选参数。
+type SearchOption func(*searchParams)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -65,9 +74,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// AddMessagesOption AddMessages 的可选参数。
-type AddMessagesOption func(*addMessagesParams)
 
 // WithUserID 设置用户标识。
 func WithUserID(uid string) AddMessagesOption {
@@ -99,6 +105,33 @@ func WithGenMemWithHistoryMsgNum(n int) AddMessagesOption {
 	return func(p *addMessagesParams) { p.GenMemWithHistoryMsgNum = n }
 }
 
+// Uid 设置用户标识。
+func Uid(uid string) UserScopeOption {
+	return func(p *userScopeParams) { p.UserID = uid }
+}
+
+// Sid 设置作用域标识。
+func Sid(sid string) UserScopeOption {
+	return func(p *userScopeParams) { p.ScopeID = sid }
+}
+
+// SearchWithUserID 设置用户标识。
+func SearchWithUserID(uid string) SearchOption {
+	return func(p *searchParams) { p.UserID = uid }
+}
+
+// SearchWithScopeID 设置作用域标识。
+func SearchWithScopeID(sid string) SearchOption {
+	return func(p *searchParams) { p.ScopeID = sid }
+}
+
+// SearchWithThreshold 设置最低相关度阈值。
+func SearchWithThreshold(threshold float64) SearchOption {
+	return func(p *searchParams) { p.Threshold = threshold }
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // newAddMessagesParams 从选项构建参数（对齐 Python add_messages 的默认值）。
 func newAddMessagesParams(messages []llmschema.BaseMessage, agentConfig *config.AgentMemoryConfig, opts ...AddMessagesOption) *addMessagesParams {
 	p := &addMessagesParams{
@@ -116,19 +149,6 @@ func newAddMessagesParams(messages []llmschema.BaseMessage, agentConfig *config.
 	return p
 }
 
-// UserScopeOption 用户+作用域通用可选参数，被搜索/删除/更新/查询操作复用。
-type UserScopeOption func(*userScopeParams)
-
-// Uid 设置用户标识。
-func Uid(uid string) UserScopeOption {
-	return func(p *userScopeParams) { p.UserID = uid }
-}
-
-// Sid 设置作用域标识。
-func Sid(sid string) UserScopeOption {
-	return func(p *userScopeParams) { p.ScopeID = sid }
-}
-
 // newUserScopeParams 从选项构建用户+作用域参数。
 func newUserScopeParams(opts ...UserScopeOption) *userScopeParams {
 	p := &userScopeParams{
@@ -139,24 +159,6 @@ func newUserScopeParams(opts ...UserScopeOption) *userScopeParams {
 		opt(p)
 	}
 	return p
-}
-
-// SearchOption SearchUserMem 的可选参数。
-type SearchOption func(*searchParams)
-
-// SearchWithUserID 设置用户标识。
-func SearchWithUserID(uid string) SearchOption {
-	return func(p *searchParams) { p.UserID = uid }
-}
-
-// SearchWithScopeID 设置作用域标识。
-func SearchWithScopeID(sid string) SearchOption {
-	return func(p *searchParams) { p.ScopeID = sid }
-}
-
-// SearchWithThreshold 设置最低相关度阈值。
-func SearchWithThreshold(threshold float64) SearchOption {
-	return func(p *searchParams) { p.Threshold = threshold }
 }
 
 // newSearchParams 从选项构建搜索参数。
@@ -173,5 +175,3 @@ func newSearchParams(query string, num int, opts ...SearchOption) *searchParams 
 	}
 	return p
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

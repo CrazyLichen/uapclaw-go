@@ -39,8 +39,6 @@ type VectorNodeLoader interface {
 	LoadNode(nodeID string, node *schema.VectorNode)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TrialOutput 单次试验执行结果。对齐 Python TrialOutput。
 type TrialOutput struct {
 	// Trajectory 格式化后的轨迹文本
@@ -107,16 +105,7 @@ type Message struct {
 	ToolArgs string
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// algoToNameMap 算法名到持久化命名空间短名称的映射。对齐 Python _ALGO_TO_NAME。
-var algoToNameMap = map[string]string{
-	"ACE":           "ace",
-	"ReasoningBank": "rb",
-	"ReMe":          "reme",
-	"RefCon":        "reme",
-	"DivCon":        "reme",
-}
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -127,8 +116,8 @@ const (
 	selfRefinePrompt = "Let's carefully re-examine the previous trajectory, including your reasoning " +
 		"steps and action taken. Pay special attention to whether you used the best " +
 		"search sequence and whether you used the tool correctly. If you find " +
-		"inconsistencies, correct them. If everything seems correct, make it more " +
-		"efficient. Now, solve the same problem again from scratch.\n\n"
+		"inconsistencies, correct them. If everything seems correct, make it " +
+		"more efficient. Now, solve the same problem again from scratch.\n\n"
 
 	// selfDiversityPrompt 多样性提示词。对齐 Python _SELF_DIVERSITY_PROMPT。
 	selfDiversityPrompt = "Let's carefully re-examine the previous trajectory, including your reasoning " +
@@ -136,6 +125,17 @@ const (
 		"same problem again from scratch using DIFFERENT reasoning approach. " +
 		"Focus on exploring alternative strategies.\n\n"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// algoToNameMap 算法名到持久化命名空间短名称的映射。对齐 Python _ALGO_TO_NAME。
+var algoToNameMap = map[string]string{
+	"ACE":           "ace",
+	"ReasoningBank": "rb",
+	"ReMe":          "reme",
+	"RefCon":        "reme",
+	"DivCon":        "reme",
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

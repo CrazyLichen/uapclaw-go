@@ -27,7 +27,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ResolveSDKChoice 从环境变量解析 SDK 选择。
+// ResolveSDKChoice 从环境变量resolved SDK choice。
 //
 // Python: resolve_sdk_choice()
 //
@@ -39,17 +39,17 @@ const (
 func ResolveSDKChoice() string {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(sdkEnvVar)))
 	if raw == "" {
-		logger.Debug(logComponent).Str("env_var", sdkEnvVar).Str("default", defaultSDK).Msg("环境变量未设置，使用默认 SDK")
+		logger.Debug(logComponent).Str("env_var", sdkEnvVar).Str("default", defaultSDK).Msg("env var not set, using default SDK")
 		return defaultSDK
 	}
 
 	validSDKs := map[string]bool{"harness": true, "pi": true}
 	if validSDKs[raw] {
-		logger.Info(logComponent).Str("sdk", raw).Msg("解析 SDK 选择")
+		logger.Info(logComponent).Str("sdk", raw).Msg("resolved SDK choice")
 		return raw
 	}
 
-	logger.Warn(logComponent).Str("raw", raw).Str("default", defaultSDK).Msg("未知 SDK 值，回退到默认")
+	logger.Warn(logComponent).Str("raw", raw).Str("default", defaultSDK).Msg("unknown SDK value, falling back to default")
 	return defaultSDK
 }
 

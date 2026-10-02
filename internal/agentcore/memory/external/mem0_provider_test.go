@@ -20,11 +20,11 @@ import (
 // newTestMem0Provider 创建使用 mock server 的 Mem0Provider
 func newTestMem0Provider(server *httptest.Server) *Mem0Provider {
 	p := NewMem0Provider("test-key", "user-1", "agent-1", false)
-	// 替换 client 指向 mock server
-	p.mu.Lock()
+	// 直接设置 client 和 initialized，无需加锁：
+	// 此时 p 尚未暴露给其他 goroutine，且 getClient() 内 clientOnce.Do
+	// 检查 client == nil 才赋值，不会覆盖已设置的 mock client
 	p.client = newMem0HTTPClient("test-key", server.URL)
 	p.initialized = true
-	p.mu.Unlock()
 	return p
 }
 

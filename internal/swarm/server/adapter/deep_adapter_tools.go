@@ -74,13 +74,13 @@ const (
 // 同时调用 ResourceMgr.AddTool/RemoveTool 同步到资源管理器。
 func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any) {
 	if d.instance == nil {
-		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: instance 未初始化，跳过")
+		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: instance not initialized, skipping")
 		return
 	}
 
 	reactAgent := d.instance.ReactAgent()
 	if reactAgent == nil {
-		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: ReactAgent 为 nil，跳过")
+		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: ReactAgent is nil, skipping")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 	}
 	for _, t := range toolInstancesToAdd {
 		if err := runner.GetResourceMgr().AddTool(t, resources_manager.WithTag(resources_manager.Tag(toolGroup))); err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("AddTool 到 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("failed to add tool to ResourceMgr")
 		}
 	}
 
@@ -112,11 +112,11 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 	}
 	if len(toolIDsToRemove) > 0 {
 		if _, err := runner.GetResourceMgr().RemoveTool(toolIDsToRemove, resources_manager.WithTag(resources_manager.Tag(toolGroup))); err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("RemoveTool 从 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("failed to remove tool from ResourceMgr")
 		}
 	}
 
-	logger.Info(logComponent).Str("tool_group", toolGroup).Int("add_count", len(toolCardsToAdd)).Int("remove_count", len(toolIDsToRemove)).Msg("syncToolGroup 完成")
+	logger.Info(logComponent).Str("tool_group", toolGroup).Int("add_count", len(toolCardsToAdd)).Int("remove_count", len(toolIDsToRemove)).Msg("syncToolGroup completed")
 }
 
 // removeRegisteredTools 移除已注册的工具。
@@ -137,7 +137,7 @@ func (d *DeepAdapter) removeRegisteredTools(tools []tool.Tool) {
 		// Python: Runner.resource_mgr.remove_tool(tool.card.id)
 		if rm != nil {
 			if _, err := rm.RemoveTool([]string{card.ID}); err != nil {
-				logger.Warn(logComponent).Err(err).Str("card_id", card.ID).Msg("RemoveTool 从 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Str("card_id", card.ID).Msg("failed to remove tool from ResourceMgr")
 			}
 		}
 		// Python: self._instance.ability_manager.remove(tool.card.name)
@@ -146,7 +146,7 @@ func (d *DeepAdapter) removeRegisteredTools(tools []tool.Tool) {
 		}
 	}
 
-	logger.Info(logComponent).Int("count", len(tools)).Msg("removeRegisteredTools 完成")
+	logger.Info(logComponent).Int("count", len(tools)).Msg("removeRegisteredTools completed")
 }
 
 // appendToolCard 追加工具卡片。
@@ -176,7 +176,7 @@ func (d *DeepAdapter) appendToolCard(cards []*tool.ToolCard) {
 	}
 
 	d.toolCards = current
-	logger.Info(logComponent).Int("total_count", len(current)).Msg("appendToolCard 完成")
+	logger.Info(logComponent).Int("total_count", len(current)).Msg("appendToolCard completed")
 }
 
 // prioritizePaidSearchToolCard 优先付费搜索工具卡片。
@@ -312,7 +312,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 			d.syncToolsToManager(ctx, []*tool.ToolCard{metadataTool.Card()}, []tool.Tool{metadataTool}, nil, "audio")
 			d.audioTools = []tool.Tool{metadataTool}
 			d.audioToolsRegistered = true
-			logger.Info(logComponent).Msg("音频工具: metadata-only 模式（跳过 audio_transcription & audio_question_answering: incomplete audio LLM config）")
+			logger.Info(logComponent).Msg("audio tools: metadata-only mode (skipping audio_transcription & audio_question_answering: incomplete audio LLM config)")
 		}
 	} else {
 		// 情况3: 完整配置 → 全部音频工具
@@ -366,7 +366,7 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 		}
 		if rm != nil {
 			if err := rm.AddTool(d.paidSearchTool); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("注册付费搜索工具到 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Msg("failed to register paid search tool to ResourceMgr")
 			}
 		}
 	} else {
@@ -374,12 +374,12 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 		if d.paidSearchTool != nil {
 			if rm != nil {
 				if _, err := rm.RemoveTool([]string{d.paidSearchTool.Card().ID}); err != nil {
-					logger.Warn(logComponent).Err(err).Msg("移除付费搜索工具从 ResourceMgr 失败")
+					logger.Warn(logComponent).Err(err).Msg("failed to remove paid search tool from ResourceMgr")
 				}
 			}
 		}
 	}
-	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime 完成")
+	logger.Info(logComponent).Bool("registered", d.paidSearchRegistered).Msg("syncPaidSearchToolForRuntime completed")
 }
 
 // refreshMultimodalConfigs 刷新多模态配置。
@@ -415,7 +415,7 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.VisionModelConfig {
 	// 1. 先检查 models.vision 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
 	if !DedicatedMultimodalModelConfigured(configBase, "vision") {
-		logger.Info(logComponent).Msg("跳过 vision tools: config.yaml 中 models.vision 无独立 api_key")
+		logger.Info(logComponent).Msg("skipping vision tools: no dedicated api_key in config.yaml models.vision")
 		return nil
 	}
 
@@ -425,7 +425,7 @@ func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.
 	// 3. 从环境变量构建 VisionModelConfig
 	cfg := schema.VisionModelConfig{}.FromEnv()
 	if cfg.APIKey == "" || cfg.BaseURL == "" || cfg.Model == "" {
-		logger.Info(logComponent).Msg("vision tools 跳过: 配置不完整")
+		logger.Info(logComponent).Msg("vision tools skipped: incomplete config")
 		return nil
 	}
 	return &cfg
@@ -438,7 +438,7 @@ func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.
 func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.AudioModelConfig {
 	// 1. 先检查 models.audio 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
 	if !DedicatedMultimodalModelConfigured(configBase, "audio") {
-		logger.Info(logComponent).Msg("跳过 audio tools: config.yaml 中 models.audio 无独立 api_key")
+		logger.Info(logComponent).Msg("skipping audio tools: no dedicated api_key in config.yaml models.audio")
 		return nil
 	}
 
@@ -448,7 +448,7 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 	// 3. 从环境变量构建 AudioModelConfig
 	cfg := schema.AudioModelConfig{}.FromEnv()
 	if cfg.APIKey == "" || cfg.BaseURL == "" {
-		logger.Info(logComponent).Msg("audio tools 跳过: 配置不完整")
+		logger.Info(logComponent).Msg("audio tools skipped: incomplete config")
 		return nil
 	}
 	return &cfg
@@ -466,14 +466,14 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.V
 
 	// 2. 检查 models.video 是否有独立 api_key
 	if !DedicatedMultimodalModelConfigured(configBase, "video") {
-		logger.Info(logComponent).Msg("跳过 video_understanding: config.yaml 中 models.video 无独立 api_key")
+		logger.Info(logComponent).Msg("skipping video_understanding: no dedicated api_key in config.yaml models.video")
 		return nil
 	}
 
 	// 3. 从环境变量构建 VideoModelConfig
 	cfg := schema.VideoModelConfig{}.FromEnv()
 	if cfg.APIKey == "" {
-		logger.Info(logComponent).Msg("视频工具跳过: 配置不完整 (VIDEO_API_KEY 未设置)")
+		logger.Info(logComponent).Msg("video tool skipped: incomplete config (VIDEO_API_KEY not set)")
 		return nil
 	}
 	return &cfg
@@ -488,7 +488,7 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 	// 待实现：应用图像生成模型配置 applyImageGenModelConfigFromYAML(configBase)
 
 	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
-		logger.Info(logComponent).Msg("图片生成工具跳过: 配置不完整 (IMAGE_GEN_API_KEY 未设置)")
+		logger.Info(logComponent).Msg("image gen tool skipped: incomplete config (IMAGE_GEN_API_KEY not set)")
 		return false
 	}
 	return true
@@ -539,7 +539,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	if web_tools.IsPaidSearchEnabled() {
 		paidSearchTool := web_tools.NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
 		if err := runner.GetResourceMgr().AddTool(paidSearchTool); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("注册付费搜索工具到 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to register paid search tool to ResourceMgr")
 		}
 		toolCards = append(toolCards, paidSearchTool.Card())
 		d.paidSearchTool = paidSearchTool
@@ -558,7 +558,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	} {
 		toolInst := toolCls(d.resolveRuntimeLanguage(), agentID)
 		if err := runner.GetResourceMgr().AddTool(toolInst); err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_name", toolInst.Card().Name).Msg("注册搜索工具到 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Str("tool_name", toolInst.Card().Name).Msg("failed to register search tool to ResourceMgr")
 		}
 		toolCards = append(toolCards, toolInst.Card())
 	}
@@ -576,7 +576,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		visionTools := multimodal.CreateVisionTools(client, d.visionModelConfig, d.resolveRuntimeLanguage(), agentID)
 		for _, t := range visionTools {
 			if err := runner.GetResourceMgr().AddTool(t); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("注册 vision 工具到 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Msg("failed to register vision tool to ResourceMgr")
 			}
 			toolCards = append(toolCards, t.Card())
 		}
@@ -596,19 +596,19 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		// 情况2: 有独立 key 但无 model config → 仅注册 audio_metadata（metadata-only）
 		metadataTool := multimodal.NewAudioMetadataTool(nil, nil, d.resolveRuntimeLanguage(), agentID)
 		if err := runner.GetResourceMgr().AddTool(metadataTool); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("注册 audio_metadata 工具到 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to register audio_metadata tool to ResourceMgr")
 		}
 		toolCards = append(toolCards, metadataTool.Card())
 		d.audioTools = []tool.Tool{metadataTool}
 		d.audioToolsRegistered = true
-		logger.Info(logComponent).Msg("getToolCards: 音频工具 metadata-only 模式")
+		logger.Info(logComponent).Msg("getToolCards: audio tools metadata-only mode")
 	} else {
 		// 情况3: 完整配置 → 全部音频工具
 		client := d.resolveAudioModelClient()
 		audioTools := multimodal.CreateAudioTools(client, d.audioModelConfig, d.resolveRuntimeLanguage(), agentID)
 		for _, t := range audioTools {
 			if err := runner.GetResourceMgr().AddTool(t); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("注册 audio 工具到 ResourceMgr 失败")
+				logger.Warn(logComponent).Err(err).Msg("failed to register audio tool to ResourceMgr")
 			}
 			toolCards = append(toolCards, t.Card())
 		}
@@ -626,7 +626,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		client := d.resolveVideoModelClient()
 		videoTool := multimodal.NewVideoUnderstandingTool(client, d.videoModelConfig, d.resolveRuntimeLanguage(), agentID)
 		if err := runner.GetResourceMgr().AddTool(videoTool); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("注册 video_understanding 到 ResourceMgr 失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to register video_understanding to ResourceMgr")
 		}
 		toolCards = append(toolCards, videoTool.Card())
 		d.videoTool = videoTool // Python: self._video_tools = [video_understanding]
@@ -643,7 +643,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		// ⤵️ 10.6.24: generate_image 工具实例尚未实现
 		// 待实现：注册图像生成工具 _ = rm.AddTool(generateImage)
 		// toolCards = append(toolCards, generateImage.Card())
-		logger.Info(logComponent).Msg("getToolCards: 图片生成工具配置已就绪，等待 10.6.24 回填 generate_image")
+		logger.Info(logComponent).Msg("getToolCards: image gen config ready, pending 10.6.24 backfill for generate_image")
 	}
 
 	// ── 步骤 8: 小艺手机端工具 ──
@@ -691,7 +691,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			toolCards = append(toolCards, t.Card())
 			skillToolNames = append(skillToolNames, t.Card().ID)
 		}
-		logger.Info(logComponent).Strs("tools", skillToolNames).Msg("getToolCards: SkillToolkit 已注册")
+		logger.Info(logComponent).Strs("tools", skillToolNames).Msg("getToolCards: SkillToolkit registered")
 	}
 
 	// ── 步骤 10: acp_chat ──
@@ -716,7 +716,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	logger.Info(logComponent).
 		Str("agent_id", agentID).
 		Int("tool_count", len(toolCards)).
-		Msg("getToolCards 完成")
+		Msg("getToolCards completed")
 
 	return toolCards
 }

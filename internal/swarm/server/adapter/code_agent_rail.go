@@ -70,7 +70,6 @@ var displayToInternal = map[string]string{
 var toolGroups = types.ToolGroups
 
 // 编译时验证 CodeAgentRail 满足 AgentRail 接口
-// _ 编译时验证 CodeAgentRail 满足 AgentRail 接口
 var _ sainterfaces.AgentRail = (*CodeAgentRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -103,7 +102,7 @@ func (r *CodeAgentRail) Init(_ context.Context, agent sainterfaces.BaseAgent) er
 	if len(customAgents) == 0 {
 		logger.Info(logComponent).
 			Str("event_type", "code_agent_rail_no_custom_agents").
-			Msg("无自定义 Agent，Agent 工具未注册")
+			Msg("no custom agents, agent tool not registered")
 		return nil
 	}
 
@@ -148,7 +147,7 @@ func (r *CodeAgentRail) Init(_ context.Context, agent sainterfaces.BaseAgent) er
 		Str("event_type", "code_agent_rail_init").
 		Int("custom_agent_count", len(customAgents)).
 		Strs("agent_names", names).
-		Msg("CodeAgentRail 已注册 Agent 工具")
+		Msg("CodeAgentRail agent tool registered")
 
 	return nil
 }
@@ -178,7 +177,8 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 				if rec := recover(); rec != nil {
 					logger.Debug(logComponent).
 						Str("tool_name", name).
-						Msgf("从 ability_manager 移除失败: %v", rec)
+						Any("recover", rec).
+						Msg("failed to remove from ability_manager")
 				}
 			}()
 			am.Remove(name)
@@ -194,7 +194,8 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 				if rec := recover(); rec != nil {
 					logger.Debug(logComponent).
 						Str("tool_id", toolID).
-						Msgf("从 resource_mgr 移除失败: %v", rec)
+						Any("recover", rec).
+						Msg("failed to remove from resource_mgr")
 				}
 			}()
 			_, _ = resourceMgr.RemoveTool([]string{toolID})
@@ -204,7 +205,7 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 	r.agentTool = nil
 	logger.Info(logComponent).
 		Str("event_type", "code_agent_rail_uninit").
-		Msg("CodeAgentRail 注销完成")
+		Msg("CodeAgentRail uninit completed")
 
 	return nil
 }
@@ -249,7 +250,8 @@ func (r *CodeAgentRail) loadCustomAgents() []*types.AgentDefinition {
 		if rec := recover(); rec != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "code_agent_rail_load_failed").
-				Msgf("加载自定义 Agent 失败: %v", rec)
+				Any("recover", rec).
+				Msg("failed to load custom agents")
 		}
 	}()
 

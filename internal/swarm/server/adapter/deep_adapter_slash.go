@@ -98,7 +98,7 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 // 无 skill_name 时 fallback 到 handleEvolveListCommand
 func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveCommand: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
@@ -121,7 +121,7 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 	// Python: result = await self._skill_evolution_rail.request_user_evolution(skill_name, user_intent, auto_approve=False)
 	result, err := d.skillEvolutionRail.RequestUserEvolution(ctx, skillName, userIntent, false)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveCommand: RequestUserEvolution 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveCommand: RequestUserEvolution failed")
 		return map[string]any{"status": "failed", "error": err.Error()}, nil
 	}
 
@@ -147,7 +147,7 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 // 列出所有技能及其演进经验摘要
 func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveListCommand: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveListCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
@@ -176,7 +176,7 @@ func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, sessionID str
 // 格式：/evolve_simplify skill_name [user_intent]
 func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveSimplifyCommand: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveSimplifyCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
@@ -195,7 +195,7 @@ func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query str
 	// Python: result = await self._skill_evolution_rail.request_simplify(skill_name, user_intent=user_intent)
 	result, err := d.skillEvolutionRail.RequestSimplify(ctx, skillName, userIntent)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveSimplifyCommand: RequestSimplify 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveSimplifyCommand: RequestSimplify failed")
 		return map[string]any{"status": "failed", "error": err.Error()}, nil
 	}
 
@@ -223,7 +223,7 @@ func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query str
 // 返回 followup_prompt 用于注入 agent loop 执行 skill-creator
 func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveRebuildCommand: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveRebuildCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
@@ -242,7 +242,7 @@ func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query stri
 	// Python: followup_prompt = await self._skill_evolution_rail.request_rebuild(skill_name, user_intent=user_intent, min_score=0.5)
 	followupPrompt, err := d.skillEvolutionRail.RequestRebuild(ctx, skillName, userIntent, 0.5)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRebuildCommand: RequestRebuild 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRebuildCommand: RequestRebuild failed")
 		return map[string]any{"status": "failed", "error": err.Error()}, nil
 	}
 
@@ -264,7 +264,7 @@ func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query stri
 // 格式：/evolve_rollback skill_name [version]
 func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveRollbackCommand: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveRollbackCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
@@ -283,7 +283,7 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 	// Python: success = await self._skill_evolution_rail.rollback_skill(skill_name, version=version)
 	success, err := d.skillEvolutionRail.RollbackSkill(ctx, skillName, version)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRollbackCommand: RollbackSkill 失败")
+		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRollbackCommand: RollbackSkill failed")
 		return map[string]any{"status": "failed", "error": err.Error()}, nil
 	}
 
@@ -299,7 +299,7 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 // 根据 request_id 前缀路由到 OnApproveSimplify / OnRejectSimplify
 func (d *DeepAdapter) handleGovernanceApproval(ctx context.Context, requestID string, answers []ApprovalAnswer, approvalType string) bool {
 	if d.skillEvolutionRail == nil {
-		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleGovernanceApproval: SkillEvolutionRail 未初始化")
+		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleGovernanceApproval: SkillEvolutionRail not initialized")
 		return false
 	}
 
@@ -307,19 +307,19 @@ func (d *DeepAdapter) handleGovernanceApproval(ctx context.Context, requestID st
 	case "approve":
 		result, err := d.skillEvolutionRail.OnApproveSimplify(ctx, requestID)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleGovernanceApproval: OnApproveSimplify 失败")
+			logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("handleGovernanceApproval: OnApproveSimplify failed")
 			return false
 		}
 		if result != nil {
-			logger.Info(logComponent).Str("request_id", requestID).Any("result", result).Msg("handleGovernanceApproval: simplify 已执行")
+			logger.Info(logComponent).Str("request_id", requestID).Any("result", result).Msg("handleGovernanceApproval: simplify executed")
 		}
 		return true
 	case "reject":
 		d.skillEvolutionRail.OnRejectSimplify(requestID)
-		logger.Info(logComponent).Str("request_id", requestID).Msg("handleGovernanceApproval: simplify 已拒绝")
+		logger.Info(logComponent).Str("request_id", requestID).Msg("handleGovernanceApproval: simplify rejected")
 		return true
 	default:
-		logger.Warn(logComponent).Str("approval_type", approvalType).Msg("handleGovernanceApproval: 未知审批类型")
+		logger.Warn(logComponent).Str("approval_type", approvalType).Msg("handleGovernanceApproval: unknown approval type")
 		return false
 	}
 }

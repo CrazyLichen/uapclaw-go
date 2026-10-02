@@ -825,7 +825,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 		}
 	}
 
-	// 4. approved → Allow; approved + auto_confirm → store
+	// 4. 已批准 → 允许；已批准 + 自动确认 → 存储
 	if approved {
 		if autoConfirm && securityCtx.CallbackCtx != nil {
 			r.storeAutoConfirm(securityCtx.CallbackCtx, autoConfirmKey)
@@ -833,7 +833,7 @@ func (r *BaseSecurityRail) handleInterruptResume(
 		return r.Allow(nil)
 	}
 
-	// 5. rejected → Reject
+	// 5. 已拒绝 → 拒绝
 	return r.Reject("", nil, nil, nil)
 }
 

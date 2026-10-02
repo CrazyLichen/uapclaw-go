@@ -68,10 +68,9 @@ const (
 	delayedCleanupSeconds = 2
 	// messageQueueBufferSize 消息队列缓冲大小
 	messageQueueBufferSize = 16
+	// logComponent 日志组件
+	logComponent = logger.ComponentGateway
 )
-
-// logComponent 日志组件
-const logComponent = logger.ComponentGateway
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

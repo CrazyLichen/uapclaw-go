@@ -146,7 +146,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Str("event_type", "agent_tool_create_subagent_failed").
 			Str("subagent_type", subagentType).
 			Err(err).
-			Msg("子 Agent 创建失败")
+			Msg("sub-agent creation failed")
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 创建失败: %v", subagentType, err)),
@@ -185,7 +185,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Str("event_type", "agent_tool_invoke_failed").
 			Str("subagent_type", subagentType).
 			Err(err).
-			Msg("子 Agent 执行失败")
+			Msg("sub-agent execution failed")
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 执行失败: %v", subagentType, err)),
@@ -371,7 +371,7 @@ func (t *AgentTool) createSubAgent(ctx context.Context, agentDef *types.AgentDef
 	logger.Info(logComponent).
 		Str("event_type", "agent_tool_create_subagent").
 		Str("subagent_type", agentDef.Name).
-		Msg("子 Agent 创建成功")
+		Msg("sub-agent created successfully")
 
 	return subAgent, nil
 }
@@ -393,7 +393,7 @@ func (t *AgentTool) runAsync(
 				Str("event_type", "agent_tool_async_panic").
 				Str("subagent_type", subagentType).
 				Any("panic", r).
-				Msg("异步子 Agent 执行 panic")
+				Msg("async sub-agent execution panic")
 		}
 	}()
 
@@ -413,7 +413,7 @@ func (t *AgentTool) runAsync(
 			Str("event_type", "agent_tool_async_failed").
 			Str("subagent_type", subagentType).
 			Err(err).
-			Msg("异步子 Agent 执行失败")
+			Msg("async sub-agent execution failed")
 	}
 }
 

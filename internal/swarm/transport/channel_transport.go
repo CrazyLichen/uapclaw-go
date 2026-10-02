@@ -37,10 +37,9 @@ const (
 	defaultSendBufferSize = 64
 	// defaultRecvBufferSize 响应通道默认缓冲大小
 	defaultRecvBufferSize = 128
+	// logComponentCh 日志组件
+	logComponentCh = logger.ComponentChannel
 )
-
-// logComponentCh 日志组件
-const logComponentCh = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -49,8 +48,7 @@ var (
 	ErrTransportClosed = errors.New("传输通道已关闭")
 )
 
-// 接口合规：ChannelTransport 实现 AgentTransport
-// _ 编译时验证 ChannelTransport 满足 AgentTransport 接口
+// 编译时验证 ChannelTransport 满足 AgentTransport 接口
 var _ AgentTransport = (*ChannelTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -38,6 +38,13 @@ const AESKeyLength = 32
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// 确保 MemoryEngineConfig 引用的类型可用（编译时检查）
+	_ *llmschema.ModelRequestConfig = nil
+	_ *llmschema.ModelClientConfig  = nil
+	_ *embedding.EmbeddingConfig    = nil
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultMemoryEngineConfig 返回默认记忆引擎配置。
@@ -68,10 +75,3 @@ func (c *MemoryEngineConfig) Validate() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 确保 MemoryEngineConfig 引用的类型可用（编译时检查）
-var (
-	_ *llmschema.ModelRequestConfig = nil
-	_ *llmschema.ModelClientConfig  = nil
-	_ *embedding.EmbeddingConfig    = nil
-)

@@ -38,7 +38,7 @@ func (d *DeepAdapter) registerMcpServersFromConfig(ctx context.Context, configBa
 				Err(err).
 				Str("server_id", config.ServerID).
 				Str("tag", tag).
-				Msg("MCP 服务注册失败，跳过")
+				Msg("MCP service registration failed, skipping")
 			continue
 		}
 		d.registeredMCPServerIDs[config.ServerID] = true
@@ -48,7 +48,7 @@ func (d *DeepAdapter) registerMcpServersFromConfig(ctx context.Context, configBa
 	logger.Info(logComponent).
 		Int("count", len(entries)).
 		Str("tag", tag).
-		Msg("MCP 服务注册完成")
+		Msg("MCP service registration completed")
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (d *DeepAdapter) syncMcpServersForRuntime(ctx context.Context, configBase m
 	for id := range d.registeredMCPServerIDs {
 		if !newIDs[id] {
 			if err := d.unregisterMcpServer(ctx, id); err != nil {
-				logger.Warn(logComponent).Err(err).Str("server_id", id).Msg("MCP 服务移除失败")
+				logger.Warn(logComponent).Err(err).Str("server_id", id).Msg("MCP service removal failed")
 			}
 			delete(d.registeredMCPServerIDs, id)
 			delete(d.registeredMCPServers, id)
@@ -85,7 +85,7 @@ func (d *DeepAdapter) syncMcpServersForRuntime(ctx context.Context, configBase m
 		}
 		if !d.registeredMCPServerIDs[config.ServerID] {
 			if err := d.registerMcpServer(ctx, config, tag); err != nil {
-				logger.Warn(logComponent).Err(err).Str("server_id", config.ServerID).Msg("MCP 服务注册失败")
+				logger.Warn(logComponent).Err(err).Str("server_id", config.ServerID).Msg("MCP service registration failed")
 				continue
 			}
 			d.registeredMCPServerIDs[config.ServerID] = true
@@ -97,12 +97,12 @@ func (d *DeepAdapter) syncMcpServersForRuntime(ctx context.Context, configBase m
 	for id := range d.registeredMCPServerIDs {
 		if newIDs[id] {
 			if _, err := runner.GetResourceMgr().RefreshMcpServer(ctx, id); err != nil {
-				logger.Warn(logComponent).Err(err).Str("server_id", id).Msg("MCP 服务刷新失败")
+				logger.Warn(logComponent).Err(err).Str("server_id", id).Msg("MCP service refresh failed")
 			}
 		}
 	}
 
-	logger.Info(logComponent).Str("tag", tag).Msg("MCP 服务热同步完成")
+	logger.Info(logComponent).Str("tag", tag).Msg("MCP service hot-sync completed")
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (d *DeepAdapter) registerMcpServer(ctx context.Context, config *mcptypes.Mc
 		Str("server_id", config.ServerID).
 		Str("server_name", config.ServerName).
 		Str("tag", tag).
-		Msg("MCP 服务已注册")
+		Msg("MCP service registered")
 	return nil
 }
 
@@ -213,6 +213,6 @@ func (d *DeepAdapter) unregisterMcpServer(ctx context.Context, serverID string) 
 	}
 	logger.Info(logComponent).
 		Str("server_id", serverID).
-		Msg("MCP 服务已移除")
+		Msg("MCP service removed")
 	return nil
 }

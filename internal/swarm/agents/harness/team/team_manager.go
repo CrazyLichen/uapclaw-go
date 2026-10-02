@@ -137,7 +137,7 @@ func GetTeamManager(channelID string) *TeamManager {
 	}
 	teamManagersMu.Lock()
 	defer teamManagersMu.Unlock()
-	// double-check
+	// 二次检查（double-check locking 模式）
 	if mgr, ok = teamManagers[resolved]; ok {
 		return mgr
 	}

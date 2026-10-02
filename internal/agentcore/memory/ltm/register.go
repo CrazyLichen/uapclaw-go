@@ -74,7 +74,7 @@ func (m *LongTermMemory) RegisterStore(
 	m.baseEmbed = params.embeddingModel
 	m.messageStore = params.messageStore
 
-	// Step 3: Auto register SimpleMemoryIndex if vector_store is provided
+	// Step 3: vector_store + kv_store → 自动注册 SimpleMemoryIndex
 	if m.vectorStore != nil && m.kvStore != nil {
 		simpleIndex := storeindex.NewSimpleMemoryIndex(m.kvStore, m.vectorStore, m.baseEmbed)
 		if m.memoryIndex == nil {
@@ -94,7 +94,7 @@ func (m *LongTermMemory) RegisterStore(
 		}
 	}
 
-	// Step 5: Create internal SqlMessageStore if not provided externally
+	// Step 5: 无 message_store + 有 db_store → 自动创建 SqlMessageStore
 	if m.messageStore == nil && m.dbStore != nil {
 		sqlDbStore := mem_model.NewSqlDbStore(m.dbStore)
 		sqlMsgStore, err := mem_model.NewSqlMessageStore(nil, sqlDbStore, "")

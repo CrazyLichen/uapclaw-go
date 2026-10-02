@@ -137,7 +137,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 		Str("language", resolvedLanguage).
 		Str("channel", resolvedChannel).
 		Str("mode", config.Mode).
-		Msg("updateRuntimeConfig 完成")
+		Msg("updateRuntimeConfig completed")
 }
 
 // buildConfiguredSubagents 构建子代理规格。
@@ -182,7 +182,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
 		Bool("should_add_general_agent", shouldAddGeneralAgent).
-		Msg("buildConfiguredSubagents 完成")
+		Msg("buildConfiguredSubagents completed")
 
 	return specs, shouldAddGeneralAgent
 }
@@ -244,7 +244,7 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 			logger.Info(logComponent).
 				Str("agent_name", agentDef.Name).
 				Str("source", agentDef.Source).
-				Msg("已加载自定义 Agent")
+				Msg("custom agent loaded")
 		}
 	}
 	return result
@@ -444,7 +444,7 @@ func (d *DeepAdapter) getAgentWorkspaceDir() string {
 func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result sysop.SysOperation) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("recover", rec).Msg("[DeepAdapter] createSysOperation panic 降级")
+			logger.Warn(logComponent).Any("recover", rec).Msg("[DeepAdapter] createSysOperation panic degraded")
 			result = nil
 		}
 	}()
@@ -466,7 +466,7 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result syso
 				logger.Warn(logComponent).
 					Str("key", "excluded_commands").
 					Str("actual_type", fmt.Sprintf("%T", v)).
-					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+					Msg("sandbox runtime field type assertion failed, using default value")
 			}
 		}
 
@@ -479,7 +479,7 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result syso
 				logger.Warn(logComponent).
 					Str("key", "idle_ttl_seconds").
 					Str("actual_type", fmt.Sprintf("%T", v)).
-					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+					Msg("sandbox runtime field type assertion failed, using default value")
 			}
 		}
 
@@ -491,7 +491,7 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result syso
 				logger.Warn(logComponent).
 					Str("key", "idle_check_interval").
 					Str("actual_type", fmt.Sprintf("%T", v)).
-					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+					Msg("sandbox runtime field type assertion failed, using default value")
 			}
 		}
 
@@ -515,7 +515,7 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (result syso
 
 	logger.Info(logComponent).
 		Str("mode", mode.String()).
-		Msg("createSysOperation 完成")
+		Msg("createSysOperation completed")
 
 	return instance
 }

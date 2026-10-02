@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
@@ -128,6 +129,9 @@ func (f *fakeMemoryIndex) UpdateMemories(_ context.Context, _, _ string, _ []*in
 }
 
 func (f *fakeMemoryIndex) SetStorageCodec(_ index.StorageCodec) {}
+
+// SetEmbeddingModel 设置或替换嵌入模型
+func (f *fakeMemoryIndex) SetEmbeddingModel(_ embedding.BaseEmbedding) {}
 
 func (f *fakeMemoryIndex) GetByID(_ context.Context, _, _, _ string) (*index.MemoryDoc, error) {
 	return nil, nil

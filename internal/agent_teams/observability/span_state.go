@@ -26,13 +26,6 @@ type LlmSpanState struct {
 	ChunkCount int
 }
 
-// NextChunkSeq 递增并返回下一个 chunk 序号。
-// Python: LlmSpanState.next_chunk_seq()
-func (s *LlmSpanState) NextChunkSeq() int {
-	s.ChunkCount++
-	return s.ChunkCount
-}
-
 // OtelSpanState 每-DeepAgent 的可变 span 追踪状态容器。
 // Python: _llm_span_stack + _tool_span_map + _agent_span_map (3 个 ContextVar)
 //
@@ -51,7 +44,20 @@ type OtelSpanState struct {
 // spanStateKeyType OtelSpanState 的 context key 类型。
 type spanStateKeyType struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NextChunkSeq 递增并返回下一个 chunk 序号。
+// Python: LlmSpanState.next_chunk_seq()
+func (s *LlmSpanState) NextChunkSeq() int {
+	s.ChunkCount++
+	return s.ChunkCount
+}
 
 // InitSpanState 创建新的 OtelSpanState 实例。
 // Python: _llm_span_stack = ContextVar(default=[]) 等 3 个

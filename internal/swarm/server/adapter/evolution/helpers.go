@@ -631,7 +631,7 @@ func PushEvolutionProgress(
 			logger.Warn(logComponent).
 				Str("event_type", "EVOLUTION_PUSH_RECOVERED").
 				Any("recover", r).
-				Msg("PushEvolutionProgress panic 已恢复")
+				Msg("PushEvolutionProgress panic recovered")
 		}
 	}()
 	for _, evt := range events {
@@ -648,7 +648,7 @@ func PushEvolutionProgress(
 				Str("request_id", requestID).
 				Str("session_id", pushCtx.SessionID).
 				Err(err).
-				Msg("推送 evolution 进度失败")
+				Msg("failed to push evolution progress")
 		}
 	}
 	return nil

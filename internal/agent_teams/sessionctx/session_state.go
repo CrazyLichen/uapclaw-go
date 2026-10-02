@@ -63,8 +63,6 @@ func GetSessionID(ctx context.Context) string {
 	return ""
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetSessionID 获取当前 session_id。
 func (s *SessionState) GetSessionID() string {
 	s.mu.RLock()

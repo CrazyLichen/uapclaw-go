@@ -25,6 +25,22 @@ type MessageMigrator struct {
 	messageStore db.BaseMessageStore
 }
 
+// messageBackupRecord 备份记录，用于序列化/反序列化
+type messageBackupRecord struct {
+	// MessageContent 消息内容
+	MessageContent string `json:"message_content"`
+	// MessageRole 消息角色
+	MessageRole string `json:"message_role"`
+	// UserID 用户 ID
+	UserID string `json:"user_id"`
+	// ScopeID 作用域 ID
+	ScopeID string `json:"scope_id"`
+	// SessionID 会话 ID
+	SessionID string `json:"session_id"`
+	// Timestamp 时间戳
+	Timestamp string `json:"timestamp"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -153,22 +169,6 @@ func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Ope
 			exception.WithParam("error_msg", fmt.Sprintf("不支持的操作类型: %s", op.TypeName())),
 		)
 	}
-}
-
-// messageBackupRecord 备份记录，用于序列化/反序列化
-type messageBackupRecord struct {
-	// MessageContent 消息内容
-	MessageContent string `json:"message_content"`
-	// MessageRole 消息角色
-	MessageRole string `json:"message_role"`
-	// UserID 用户 ID
-	UserID string `json:"user_id"`
-	// ScopeID 作用域 ID
-	ScopeID string `json:"scope_id"`
-	// SessionID 会话 ID
-	SessionID string `json:"session_id"`
-	// Timestamp 时间戳
-	Timestamp string `json:"timestamp"`
 }
 
 // createBackup 创建消息备份。

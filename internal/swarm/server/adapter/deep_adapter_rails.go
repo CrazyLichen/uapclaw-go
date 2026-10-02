@@ -40,7 +40,6 @@ import (
 
 // buildAgentRails 构建 Agent Rails 列表。
 // Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
-// Python: _build_agent_rails(config, config_base, mode) (line 2116-2212)
 //
 // 根据 mode 决定启用哪些 Rail，调用各 builder 组装列表。
 func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[string]any, mode string) []sainterfaces.AgentRail {
@@ -195,7 +194,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("panic", r).
-					Msg("UserHookRail 加载失败，跳过")
+					Msg("UserHookRail load failed, skipping")
 			}
 		}()
 		hooksCfg := hookscfg.LoadHooksConfig(configBase)
@@ -209,7 +208,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	logger.Info(logComponent).
 		Str("mode", mode).
 		Int("rails_count", len(railsList)).
-		Msg("buildAgentRails 完成")
+		Msg("buildAgentRails completed")
 
 	return railsList
 }
@@ -293,7 +292,7 @@ func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
 		Bool("include_tools", includeTools).
 		Bool("enable_image_multimodal", enableImageMultimodal).
 		Int("disabled_count", len(disabled)).
-		Msg("SkillUseRail 创建成功")
+		Msg("SkillUseRail created")
 	return rail
 }
 
@@ -314,7 +313,7 @@ func (d *DeepAdapter) resolveSkillMode() string {
 	logger.Warn(logComponent).
 		Str("raw_skill_mode", rawSkillMode).
 		Str("fallback", skillrails.SkillModeAll).
-		Msg("无效的 skill_mode，回退到 all")
+		Msg("invalid skill_mode, falling back to all")
 	return skillrails.SkillModeAll
 }
 
@@ -397,7 +396,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
 	skillsDir := d.getSkillsDir()
 	if skillsDir == "" {
-		logger.Warn(logComponent).Msg("buildSkillCreateRail: skillsDir 为空，跳过创建")
+		logger.Warn(logComponent).Msg("buildSkillCreateRail: skillsDir is empty, skipping creation")
 		return nil
 	}
 
@@ -416,7 +415,7 @@ func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
 		Str("skills_dir", skillsDir).
 		Bool("auto_trigger", autoTrigger).
 		Int("min_team_members", minMembers).
-		Msg("TeamSkillCreateRail 创建成功")
+		Msg("TeamSkillCreateRail created")
 	return rail
 }
 
@@ -475,7 +474,7 @@ func (d *DeepAdapter) getMinTeamMembersForCreate() int {
 // 对齐 Python: _build_stream_event_rail() (line 2051-2080)
 func (d *DeepAdapter) buildStreamEventRail() *commrails.JiuClawStreamEventRail {
 	rail := commrails.NewJiuClawStreamEventRail()
-	logger.Info(logComponent).Msg("JiuClawStreamEventRail 创建成功")
+	logger.Info(logComponent).Msg("JiuClawStreamEventRail created")
 	return rail
 }
 
@@ -545,7 +544,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 				Str("has_api_key", boolStr(apiKey != "")).
 				Str("has_base_url", boolStr(baseURL != "")).
 				Str("has_model", boolStr(modelName != "")).
-				Msg("MemoryRail 创建失败: 嵌入配置不完整")
+				Msg("MemoryRail creation failed: incomplete embed config")
 		}
 
 		// Python: self._is_proactive_memory = is_proactive_memory(mode, config)
@@ -569,13 +568,13 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 	providerName, providerCfg := getExternalMemoryProviderConfig(d.configCache)
 	if providerName == "" {
-		logger.Debug(logComponent).Msg("buildExternalMemoryRail: 无外接记忆 provider 配置")
+		logger.Debug(logComponent).Msg("buildExternalMemoryRail: no external memory provider config")
 		return nil
 	}
 
 	provider := d.buildExternalMemoryProvider(providerName, providerCfg)
 	if provider == nil {
-		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryRail: 构建 provider 失败")
+		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryRail: failed to build provider")
 		return nil
 	}
 
@@ -588,7 +587,7 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 		Str("provider", providerName).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("ExternalMemoryRail 创建成功")
+		Msg("ExternalMemoryRail created")
 	return rail
 }
 
@@ -603,7 +602,7 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		rerank := boolVal(cfg["rerank"])
 		provider := ext.NewMem0Provider(apiKey, userID, agentID, rerank)
 		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: Mem0Provider 不可用（缺少 api_key）")
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: Mem0Provider unavailable (missing api_key)")
 			return nil
 		}
 		return provider
@@ -615,12 +614,12 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		agent := strVal(cfg["agent"])
 		provider := ext.NewOpenVikingProvider(endpoint, apiKey, account, user, agent)
 		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider 不可用")
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider unavailable")
 			return nil
 		}
 		return provider
 	default:
-		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryProvider: 不支持的 provider 类型")
+		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryProvider: unsupported provider type")
 		return nil
 	}
 }
@@ -738,7 +737,7 @@ func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
 				provider := emRail.Provider()
 				if provider != nil {
 					if err := provider.OnSessionEnd(ctx, nil); err != nil {
-						logger.Warn(logComponent).Err(err).Msg("ExternalMemoryRail Provider OnSessionEnd 失败")
+						logger.Warn(logComponent).Err(err).Msg("ExternalMemoryRail Provider OnSessionEnd failed")
 					}
 				}
 			}
@@ -762,7 +761,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Warn(logComponent).Any("panic", r).
-					Msg("buildMemoryRailWithMode 创建失败，跳过")
+					Msg("buildMemoryRailWithMode creation failed, skipping")
 			}
 		}()
 
@@ -790,7 +789,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		rail = memrail.NewMemoryRail(ec, isProactive)
 		logger.Info(logComponent).
 			Bool("is_proactive", isProactive).
-			Msg("MemoryRail (with mode) 创建成功")
+			Msg("MemoryRail (with mode) created")
 	}()
 	return rail
 }
@@ -1175,7 +1174,7 @@ func (d *DeepAdapter) updatePromptForMode(mode string) {
 	logger.Info(logComponent).
 		Str("mode", mode).
 		Str("language", resolvedLanguage).
-		Msg("updatePromptForMode 完成")
+		Msg("updatePromptForMode completed")
 }
 
 // getPermissionsSnapshot 返回当前权限配置快照。
@@ -1235,7 +1234,7 @@ func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.Permissi
 			Action: harnesssecurity.ConfirmActionInterrupt,
 		}, nil
 	}
-	// ⤵️ ACP: ACP output manager 尚未实现，降级为 ConfirmActionInterrupt
+	// ⤵️ ACP: ACP output manager not implemented, falling back to ConfirmActionInterrupt
 	toolName := ""
 	if req.ToolCall != nil {
 		toolName = req.ToolCall.Name
@@ -1246,7 +1245,7 @@ func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.Permissi
 	logger.Warn(logComponent).
 		Str("channel_id", channelID).
 		Str("tool_name", toolName).
-		Msg("ACP 通道权限确认尚未实现，降级为 interrupt")
+		Msg("ACP channel permission confirmation not implemented, falling back to interrupt")
 	return &harnesssecurity.PermissionConfirmResponse{
 		Action: harnesssecurity.ConfirmActionInterrupt,
 	}, nil
@@ -1554,7 +1553,7 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 		return nil
 	default:
 		logger.Warn(logComponent).Str("method", methodName).
-			Msg("未知的动态 Rail builder 方法名")
+			Msg("unknown dynamic Rail builder method name")
 		return nil
 	}
 }

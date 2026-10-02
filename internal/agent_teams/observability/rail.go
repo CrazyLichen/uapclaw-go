@@ -13,17 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// spanKey task_iteration span 在 railCtx.Extra 中的存储键
-	// Python: _SPAN_KEY = "_otel_task_iter_span"
-	spanKey = "_otel_task_iter_span"
-	// railTracerName Rail 层 tracer 名称
-	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability.rail"
-	railTracerName = "openjiuwen.agent_teams.observability.rail"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ObservabilityRail DeepAgent 可观测性 Rail。
@@ -36,6 +25,21 @@ type ObservabilityRail struct {
 	// injectedTracer 可选显式注入的 tracer（测试用）
 	injectedTracer trace.Tracer
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// spanKey task_iteration span 在 railCtx.Extra 中的存储键
+	// Python: _SPAN_KEY = "_otel_task_iter_span"
+	spanKey = "_otel_task_iter_span"
+	// railTracerName Rail 层 tracer 名称
+	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability.rail"
+	railTracerName = "openjiuwen.agent_teams.observability.rail"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

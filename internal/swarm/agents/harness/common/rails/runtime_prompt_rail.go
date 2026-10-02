@@ -26,7 +26,8 @@ import (
 // RuntimePromptRail 运行时提示词护栏 — 在 before_model_call 中注入时间及运行时状态。
 //
 // 在每次 LLM 调用前动态注入 7 个 PromptSection：
-// time/runtime/language_output/env/git_status/browser_tool_policy/trusted_dirs_policy，
+// time/runtime/language_output/env/git_status/browser_tool_policy/trusted_dirs_policy
+// （即时间、运行时、语言输出、环境、Git 状态、浏览器工具策略、信任目录策略），
 // 确保 LLM 无需工具调用即可感知当前运行时环境。
 //
 // Python: RuntimePromptRail(DeepAgentRail) — runtime_prompt_rail.py (385 行)
