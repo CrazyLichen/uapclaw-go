@@ -1,6 +1,9 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
@@ -46,6 +49,26 @@ func DefaultMemoryScopeConfig() *MemoryScopeConfig {
 		SemanticMemoryDefinition: "用户对话中涉及的和时间无明确关系的事实性内容或概念",
 		EpisodicMemoryDefinition: "用户对话中涉及的和时间有明确关系的事实性内容或概念",
 	}
+}
+
+// ToJSON 将 MemoryScopeConfig 序列化为 JSON 字符串。
+// 对齐 Python: MemoryScopeConfig.model_dump_json(by_alias=True)
+func (c *MemoryScopeConfig) ToJSON() (string, error) {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("序列化 MemoryScopeConfig 失败: %w", err)
+	}
+	return string(data), nil
+}
+
+// MemoryScopeConfigFromJSON 从 JSON 字符串反序列化 MemoryScopeConfig。
+// 对齐 Python: MemoryScopeConfig.model_validate_json(config_json)
+func MemoryScopeConfigFromJSON(data string) (*MemoryScopeConfig, error) {
+	cfg := &MemoryScopeConfig{}
+	if err := json.Unmarshal([]byte(data), cfg); err != nil {
+		return nil, fmt.Errorf("反序列化 MemoryScopeConfig 失败: %w", err)
+	}
+	return cfg, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
