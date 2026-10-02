@@ -768,10 +768,20 @@ func (t *ListMembersTool) Invoke(ctx context.Context, _ map[string]any, _ ...too
 	}
 	memberList := make([]map[string]any, len(members))
 	for i, m := range members {
+		// 对齐 Python: member.model_dump() 返回完整字段
 		memberList[i] = map[string]any{
-			"member_name":  m.MemberName,
-			"display_name": m.DisplayName,
-			"status":       m.Status,
+			"member_name":      m.MemberName,
+			"team_name":        m.TeamName,
+			"display_name":     m.DisplayName,
+			"desc":             m.Desc,
+			"agent_card":       m.AgentCard,
+			"status":           m.Status,
+			"execution_status": m.ExecutionStatus,
+			"mode":             m.Mode,
+			"role":             m.Role,
+			"prompt":           m.Prompt,
+			"model_ref_json":   m.ModelRefJSON,
+			"updated_at":       m.UpdatedAt,
 		}
 	}
 	return toolSuccess(map[string]any{"members": memberList, "count": len(members)})
