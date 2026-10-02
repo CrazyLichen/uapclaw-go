@@ -550,11 +550,12 @@ func isOutcomeEvent(event *stream.OutputSchema) bool {
 	if !ok {
 		return false
 	}
-	meta, ok := payload["_evolution_meta"].(map[string]string)
+	meta, ok := payload["_evolution_meta"].(map[string]any)
 	if !ok {
 		return false
 	}
-	return meta["event_kind"] == "outcome"
+	kind, _ := meta["event_kind"].(string)
+	return kind == "outcome"
 }
 
 // parseApprovalAnswers 解析审批答案为 bool。
