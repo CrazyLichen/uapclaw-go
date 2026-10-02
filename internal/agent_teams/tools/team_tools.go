@@ -1038,7 +1038,9 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 			if isHumanAgentLocked(t.agentTeam, task) {
 				return toolError(fmt.Sprintf("Task '%s' is held by a human-agent member and cannot be reassigned", taskID))
 			}
-			t.agentTeam.CancelMember(ctx, *assigneePtr)
+			if result := t.agentTeam.CancelMember(ctx, *assigneePtr); !result.OK {
+				logger.Warn(logComponent).Str("member", *assigneePtr).Str("reason", result.Reason).Msg("CancelMember 失败")
+			}
 			resetResult, _ := t.agentTeam.TaskManager().Reset(ctx, taskID)
 			if !resetResult.OK {
 				return toolError(fmt.Sprintf("Failed to reset task before reassigning from %s to %s: %s", *assigneePtr, assignee, resetResult.Reason))
@@ -1078,7 +1080,9 @@ func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string
 		return
 	}
 	if !team.IsHumanAgent(*task.Assignee) {
-		team.CancelMember(ctx, *task.Assignee)
+		if result := team.CancelMember(ctx, *task.Assignee); !result.OK {
+			logger.Warn(logComponent).Str("member", *task.Assignee).Str("reason", result.Reason).Msg("CancelMember 失败")
+		}
 	}
 }
 
@@ -1097,7 +1101,9 @@ func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) {
 		if t.agentTeam.IsHumanAgent(assignee) {
 			continue
 		}
-		t.agentTeam.CancelMember(ctx, assignee)
+		if result := t.agentTeam.CancelMember(ctx, assignee); !result.OK {
+			logger.Warn(logComponent).Str("member", assignee).Str("reason", result.Reason).Msg("CancelMember 失败")
+		}
 		cancelled[assignee] = struct{}{}
 	}
 }
