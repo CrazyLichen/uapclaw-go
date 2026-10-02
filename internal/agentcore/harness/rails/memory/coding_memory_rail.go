@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -581,10 +580,22 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 			if remaining > 200 {
 				// 至少保留 200 字节才截断
 				truncated := body
-				// 按 rune 截断，避免截断多字节字符
-				if utf8.RuneCountInString(truncated) > remaining {
+				// 修复 S-37: remaining 是字节数，截断判断应使用字节数对比
+				// Python 的 body[:remaining] 同样存在 rune/字节 bug，Go 版本修复此 bug
+				suffix := "\n\n... (truncated)"
+				if len(truncated) > remaining {
+					// 按 rune 截断确保不超过 remaining 字节且不破坏 UTF-8
 					runes := []rune(truncated)
-					truncated = string(runes[:remaining]) + "\n\n... (truncated)"
+					for i := len(runes); i > 0; i-- {
+						if len(string(runes[:i]))+len(suffix) <= remaining {
+							truncated = string(runes[:i]) + suffix
+							break
+						}
+					}
+					// 如果连第一个 rune 都放不下，跳过此条目
+					if len(truncated) > remaining {
+						break
+					}
 				}
 				title := rPath
 				if fm != nil {
