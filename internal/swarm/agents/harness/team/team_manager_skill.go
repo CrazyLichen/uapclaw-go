@@ -1,6 +1,8 @@
 package team
 
 import (
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -13,7 +15,7 @@ import (
 // Python 步骤：
 //  1. TeamManager._copy_global_skills_to_team_shared_dir(spec)
 //  2. TeamManager._sync_team_shared_skills_to_agent_global(spec)
-func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec any) {
+func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgentSpec) {
 	// ⤵️(#9.72) 完整实现 — 待 skill_manager / workspace 路径回填
 }
 
@@ -91,7 +93,7 @@ func (m *TeamManager) GetTeamRailContext(sessionID string) *TeamRailMountContext
 //	rails = self._team_live_rails.setdefault(session_id, [])
 //	entry = (agent, rail)
 //	if entry not in rails: rails.append(entry)
-func (m *TeamManager) RegisterTeamLiveRail(sessionID string, agent any, rail any) {
+func (m *TeamManager) RegisterTeamLiveRail(sessionID string, agent interfaces.DeepAgentInterface, rail any) {
 	rails := m.teamLiveRails[sessionID]
 	entry := LiveRailEntry{Agent: agent, Rail: rail}
 	for _, r := range rails {

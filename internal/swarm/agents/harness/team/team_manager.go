@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -16,7 +17,7 @@ import (
 // 对齐 Python: TeamManager._team_live_rails 条目 (agent, rail) 二元组
 type LiveRailEntry struct {
 	// Agent Rail 所属的 Agent
-	Agent any
+	Agent interfaces.DeepAgentInterface
 	// Rail Rail 实例
 	Rail any
 }
@@ -34,7 +35,7 @@ type SkillSyncTarget struct {
 // 对齐 Python: TeamRailMountContext dataclass
 type TeamRailMountContext struct {
 	// Agent 重建 rails 时关联的 Agent 实例
-	Agent any
+	Agent interfaces.DeepAgentInterface
 	// MemberInfo 成员信息
 	MemberInfo any
 	// Runtime 运行时信息

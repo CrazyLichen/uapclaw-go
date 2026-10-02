@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -132,8 +134,8 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 func (m *TeamManager) CreateTeam(
 	ctx context.Context,
 	sessionID string,
-	deepAgent any,
-	spec any,
+	deepAgent interfaces.DeepAgentInterface,
+	spec *atschema.TeamAgentSpec,
 ) (*agent.TeamAgent, error) {
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("创建 TeamAgent（应用层）")
 
@@ -161,8 +163,8 @@ func (m *TeamManager) CreateTeam(
 func (m *TeamManager) GetOrCreateTeam(
 	ctx context.Context,
 	sessionID string,
-	deepAgent any,
-	spec any,
+	deepAgent interfaces.DeepAgentInterface,
+	spec *atschema.TeamAgentSpec,
 ) (*agent.TeamAgent, error) {
 	m.mu.Lock()
 	teamAgent, ok := m.teamAgents[sessionID]

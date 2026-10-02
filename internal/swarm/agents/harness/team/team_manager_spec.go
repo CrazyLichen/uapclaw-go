@@ -1,5 +1,18 @@
 package team
 
+import (
+	"context"
+
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentCustomizer Agent 定制器函数类型。
+// 对齐 Python: build_agent_customizer 返回的 customizer(agent, member_name, role) 闭包
+type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
@@ -18,11 +31,11 @@ package team
 // 当前作为编排入口，具体步骤由调用方或后续回填完成。
 func (m *TeamManager) GetEnrichedTeamSpec(
 	sessionID string,
-	deepAgent any,
+	deepAgent interfaces.DeepAgentInterface,
 	requestID *string,
 	channelID *string,
 	requestMetadata map[string]any,
-) any {
+) *atschema.TeamAgentSpec {
 	// ⤵️(#9.72) 完整实现 — 待 config_loader / distributed_runtime / team_runtime_inheritance 回填
 	return nil
 }
@@ -33,7 +46,7 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 // Python 步骤：
 //  1. mode = str((request_metadata or {}).get("mode") or "").strip().lower()
 //  2. if mode == "team.plan": spec.enable_team_plan = True
-func (m *TeamManager) ApplyTeamPlanMode(spec any, requestMetadata map[string]any) {
+func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMetadata map[string]any) {
 	mode := ""
 	if requestMetadata != nil {
 		if m, ok := requestMetadata["mode"].(string); ok {
@@ -41,7 +54,7 @@ func (m *TeamManager) ApplyTeamPlanMode(spec any, requestMetadata map[string]any
 		}
 	}
 	_ = mode
-	// ⤵️(#9.72) 设置 spec.enable_team_plan = True — 待 TeamAgentSpec 回填
+	// ⤵️(#9.72) 设置 spec.EnableTeamPlan = true — 待 TeamAgentSpec 回填
 }
 
 // BuildAgentCustomizer 构建 agent customizer 闭包。
@@ -60,16 +73,16 @@ func (m *TeamManager) ApplyTeamPlanMode(spec any, requestMetadata map[string]any
 //     f. 注册 member runtime tools（CronRuntimeBridge + SendFileToolkit）
 //  4. return customizer
 //
-// Go 差异：Python 的 customizer 是一个闭包，Go 中改为接口/函数类型。
+// Go 差异：Python 的 customizer 是一个闭包，Go 中改为 AgentCustomizer 函数类型。
 // 当前返回 nil，待后续回填。
 func (m *TeamManager) BuildAgentCustomizer(
-	spec any,
-	deepAgent any,
+	spec *atschema.TeamAgentSpec,
+	deepAgent interfaces.DeepAgentInterface,
 	sessionID string,
 	requestID *string,
 	channelID *string,
 	requestMetadata map[string]any,
-) any {
+) AgentCustomizer {
 	// ⤵️(#9.72) 完整实现 — 待 team_runtime_inheritance / rail_manager / skill_manager 回填
 	return nil
 }
@@ -82,7 +95,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 //  2. 检查 send_file_allowed 配置
 //  3. 创建 SendFileToolkit → 注册到 Runner.resource_mgr + agent.ability_manager
 func (m *TeamManager) RegisterMemberRuntimeTools(
-	agent any,
+	agent interfaces.DeepAgentInterface,
 	sessionID string,
 	requestID *string,
 	channelID *string,
@@ -168,7 +181,7 @@ func trimDotsUnderscores(s string) string {
 
 // loadTeamSpec 加载团队配置并构建 TeamAgentSpec。
 // 对齐 Python: TeamManager._load_team_spec(session_id)
-func loadTeamSpec(sessionID string) any {
+func loadTeamSpec(sessionID string) *atschema.TeamAgentSpec {
 	// ⤵️(#9.72) 完整实现 — 待 config_loader / distributed_runtime 回填
 	return nil
 }
