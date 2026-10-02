@@ -1320,6 +1320,30 @@ func (t *SendMessageTool) multicast(ctx context.Context, targets []any, content,
 		}
 	}
 
+	// 修复 S-30: 全员覆盖检查，对齐 Python team_tools.py:1384-1393
+	// 如果 multicast 目标恰好覆盖所有 roster 成员，引导使用 to='*' 广播
+	if t.team != nil {
+		roster, _ := t.team.ListMembers(ctx)
+		if len(roster) > 0 {
+			rosterSet := make(map[string]struct{}, len(roster))
+			for _, m := range roster {
+				rosterSet[m.MemberName] = struct{}{}
+			}
+			if len(cleaned) == len(rosterSet) {
+				allMatch := true
+				for _, name := range cleaned {
+					if _, ok := rosterSet[name]; !ok {
+						allMatch = false
+						break
+					}
+				}
+				if allMatch {
+					return toolError("Multicast targets cover every other team member; use to='*' to broadcast instead — same delivery, lower cost.")
+				}
+			}
+		}
+	}
+
 	t.autoStartMembers(ctx)
 
 	var delivered []string
