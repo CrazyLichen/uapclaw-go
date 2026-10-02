@@ -1250,6 +1250,12 @@ func (a *TeamAgent) FirstIterGate() types.FirstIterGateAccessor {
 
 // SubscribeTransport 订阅团队传输主题。
 // 满足 types.TransportAccessor 接口。
+// 修复 S-10: 对齐 Python subscribe_transport 完整实现 (kernel.py:330-356)
+//
+// 步骤：
+// 1. 注册 direct_message_handler（将点对点消息推入 eventBus）
+// 2. 遍历 TeamTopic 订阅（team/task/message），使用 self-filter 回调
+// 3. self-filter: 先触发 event_listeners，然后跳过自己发出的事件，非自身事件推入 eventBus
 func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
 	if a.configurator == nil {
 		return nil
@@ -1258,14 +1264,65 @@ func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
 	if mgr == nil {
 		return nil
 	}
-	// 对齐 Python: messager.subscribe(TeamTopic.*)
-	// 当前简化实现：使用 no-op handler 占位
-	handler := func(ctx context.Context, msg *atevents.EventMessage) error { return nil }
-	return mgr.Subscribe(ctx, a.TeamName(), handler)
+	teamName := a.TeamName()
+	if teamName == "" {
+		return nil
+	}
+	sessionID := agentteams.GetSessionID(ctx)
+
+	// 对齐 Python: messager.register_direct_message_handler(self._event_bus.enqueue)
+	if a.coordination != nil && a.coordination.EventBus() != nil {
+		bus := a.coordination.EventBus()
+		dmHandler := func(ctx context.Context, msg *atevents.EventMessage) error {
+			bus.Enqueue(types.CoordinationEvent{Transport: msg})
+			return nil
+		}
+		_ = mgr.RegisterDirectMessageHandler(ctx, dmHandler)
+	}
+
+	// 对齐 Python: for topic in TeamTopic:
+	//   topic_str = topic.build(session_id, team_name)
+	//   await messager.subscribe(topic_str, _filter_self)
+	//   self._subscribed_topics.append(topic_str)
+	localMemberName := a.MemberName()
+	for _, topic := range []atevents.TeamTopic{atevents.TeamTopicTeam, atevents.TeamTopicTask, atevents.TeamTopicMessage} {
+		topicID := topic.Build(sessionID, teamName)
+		// 对齐 Python: _filter_self 回调
+		handler := func(ctx context.Context, event *atevents.EventMessage) error {
+			// Python: for listener in host.state.event_listeners: await listener(event)
+			for _, handle := range a.state.EventListeners {
+				if handle != nil && handle.Handler() != nil {
+					_ = handle.Handler()(ctx, event)
+				}
+			}
+			// Python: if local_member_name and event.sender_id == local_member_name: return
+			if localMemberName != "" && event.SenderID == localMemberName {
+				return nil
+			}
+			// Python: await self._event_bus.enqueue(event)
+			if a.coordination != nil && a.coordination.EventBus() != nil {
+				a.coordination.EventBus().Enqueue(types.CoordinationEvent{Transport: event})
+			}
+			return nil
+		}
+		_ = mgr.Subscribe(ctx, topicID, handler)
+		// 跟踪已订阅的主题
+		if a.coordination != nil {
+			a.coordination.AddSubscribedTopic(topicID)
+		}
+	}
+	return nil
 }
 
 // UnsubscribeTransport 取消订阅。
 // 满足 types.TransportAccessor 接口。
+// 修复 S-11: 对齐 Python unsubscribe_transport 完整实现
+//
+// 步骤：
+// 1. 取消注册 direct_message_handler
+// 2. 逐个取消订阅所有已订阅的 topics
+// 3. 清空 subscribedTopics
+// 4. 传递 ctx 而非 context.Background()
 func (a *TeamAgent) UnsubscribeTransport() error {
 	if a.configurator == nil {
 		return nil
@@ -1274,7 +1331,19 @@ func (a *TeamAgent) UnsubscribeTransport() error {
 	if mgr == nil {
 		return nil
 	}
-	return mgr.Unsubscribe(context.Background(), a.TeamName())
+	ctx := context.Background()
+	// 对齐 Python: messager.unregister_direct_message_handler()
+	_ = mgr.UnregisterDirectMessageHandler(ctx)
+
+	// 对齐 Python: for topic in self._subscribed_topics: await messager.unsubscribe(topic)
+	if a.coordination != nil {
+		for _, topicID := range a.coordination.SubscribedTopics() {
+			_ = mgr.Unsubscribe(ctx, topicID)
+		}
+		// 对齐 Python: self._subscribed_topics.clear()
+		a.coordination.ClearSubscribedTopics()
+	}
+	return nil
 }
 
 // PublishTeamEvent 发布团队事件到 TEAM 主题。

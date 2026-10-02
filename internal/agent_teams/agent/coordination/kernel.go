@@ -143,6 +143,16 @@ func (k *CoordinationKernel) SubscribedTopics() []string {
 	return k.subscribedTopics
 }
 
+// AddSubscribedTopic 追加已订阅的传输主题。
+func (k *CoordinationKernel) AddSubscribedTopic(topicID string) {
+	k.subscribedTopics = append(k.subscribedTopics, topicID)
+}
+
+// ClearSubscribedTopics 清空已订阅的传输主题列表。
+func (k *CoordinationKernel) ClearSubscribedTopics() {
+	k.subscribedTopics = nil
+}
+
 // IsRunning 返回事件总线是否运行中。
 func (k *CoordinationKernel) IsRunning() bool {
 	return k.eventBus != nil && k.eventBus.IsRunning()
