@@ -61,6 +61,12 @@ func (f *fakeKernelHost) MarkLiveTeammates(_ context.Context, _ string) error { 
 func (f *fakeKernelHost) CloseStream()                                        {}
 func (f *fakeKernelHost) SetMemberID(_ string)                                {}
 func (f *fakeKernelHost) Lifecycle() string                                   { return "temporary" }
+func (f *fakeKernelHost) CancelRecoveryTasks()                                {}
+func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                {}
+func (f *fakeKernelHost) SpawnedHandleNames() []string                        { return nil }
+func (f *fakeKernelHost) FirstIterGate() types.FirstIterGateAccessor          { return nil }
+func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor    { return nil }
+func (f *fakeKernelHost) PublishTeamEvent(_ context.Context, _ string, _ map[string]any) error { return nil }
 
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
 
