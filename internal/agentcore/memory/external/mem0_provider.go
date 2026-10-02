@@ -32,10 +32,10 @@ type Mem0Provider struct {
 
 	// client Mem0 HTTP 客户端（延迟初始化，对齐 Python _get_client 懒加载）
 	client *mem0HTTPClient
+	// clientOnce 确保 client 只初始化一次
+	clientOnce sync.Once
 	// initialized 是否已初始化
 	initialized bool
-	// mu 保护 client 延迟初始化
-	mu sync.Mutex
 
 	// consecutiveFailures 连续失败次数
 	// 对齐 Python: _consecutive_failures
@@ -197,10 +197,10 @@ func (p *Mem0Provider) Initialize(_ context.Context, opts ...ProviderOption) err
 		return fmt.Errorf("Mem0 API key is required. Provide api_key in provider initialization")
 	}
 
-	p.mu.Lock()
-	p.client = newMem0HTTPClient(p.apiKey, "")
+	p.clientOnce.Do(func() {
+		p.client = newMem0HTTPClient(p.apiKey, "")
+	})
 	p.initialized = true
-	p.mu.Unlock()
 
 	return nil
 }
@@ -382,10 +382,9 @@ func (p *Mem0Provider) Shutdown(_ context.Context) error {
 	p.prefetchCancel = nil
 	p.prefetchMu.Unlock()
 
-	p.mu.Lock()
+	p.clientOnce = sync.Once{}
 	p.client = nil
 	p.initialized = false
-	p.mu.Unlock()
 
 	return nil
 }
@@ -394,13 +393,13 @@ func (p *Mem0Provider) Shutdown(_ context.Context) error {
 
 // getClient 延迟初始化并返回 Mem0 HTTP 客户端。
 // 对齐 Python: _get_client() — 懒加载模式
+// 使用 sync.Once 确保 client 只初始化一次，避免每次调用加锁
 func (p *Mem0Provider) getClient() *mem0HTTPClient {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.client != nil {
-		return p.client
-	}
-	p.client = newMem0HTTPClient(p.apiKey, "")
+	p.clientOnce.Do(func() {
+		if p.client == nil {
+			p.client = newMem0HTTPClient(p.apiKey, "")
+		}
+	})
 	return p.client
 }
 

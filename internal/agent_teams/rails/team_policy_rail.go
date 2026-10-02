@@ -157,7 +157,6 @@ func (r *TeamPolicyRail) BeforeModelCall(ctx context.Context, _ *agentinterfaces
 
 	// Python: if self._members_cache is not None
 	if r.membersCache != nil {
-		ctx := context.Background()
 		membersSection := r.membersCache.Refresh(ctx)
 		if membersSection != nil {
 			r.systemPromptBuilder.AddSection(*membersSection)

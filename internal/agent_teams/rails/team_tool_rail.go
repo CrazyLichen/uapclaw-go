@@ -3,11 +3,18 @@ package rails
 import (
 	"context"
 
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	worktree "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -41,9 +48,9 @@ type TeamToolRail struct {
 	// excludeTools 排除的工具名集合
 	excludeTools map[string]struct{}
 	// workspaceManager 工作空间管理器
-	workspaceManager any // TODO(#9.66): TeamWorkspaceManager 类型（避免循环导入）
+	workspaceManager *team_workspace.TeamWorkspaceManager
 	// worktreeManager 工作树管理器
-	worktreeManager any // TODO(#9.66a): WorktreeManager 类型（避免循环导入）
+	worktreeManager *worktree.WorktreeManager
 	// qualifyIDs 是否后缀工具 ID
 	qualifyIDs bool
 	// teamName 团队名
@@ -60,6 +67,9 @@ type TeamToolRailOption func(*TeamToolRail)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// toolRailLogComponent 日志组件标识
+const toolRailLogComponent = logger.ComponentChannel
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -89,9 +99,6 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	if r.registeredTools != nil {
 		return nil
 	}
-	if err := r.DeepAgentRail.Init(ctx, agent); err != nil {
-		return err
-	}
 
 	// Python: tools = create_team_tools(...)
 	toolList := tools.CreateTeamTools(
@@ -106,19 +113,54 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	)
 
 	// Python: if self._workspace_manager is not None
-	// TODO(#9.66): 追加 WorkspaceMetaTool
-	// 需要导入 team_workspace 包，当前用 any 占位，后续回填
-	_ = r.workspaceManager
+	//     tools.append(WorkspaceMetaTool(self._workspace_manager, ws_t))
+	if r.workspaceManager != nil {
+		wsT := locales.MakeTranslator(atschema.Language(r.language))
+		wsTool := team_workspace.NewWorkspaceMetaTool(r.workspaceManager, team_workspace.ToolTranslator(wsT), r.memberName, "")
+		toolList = append(toolList, wsTool)
+	}
 
 	// Python: if self._worktree_manager is not None
-	// TODO(#9.66a): 追加 EnterWorktreeTool / ExitWorktreeTool
-	// 需要导入 worktree 包，当前用 any 占位，后续回填
-	_ = r.worktreeManager
+	//     tools.append(EnterWorktreeTool(self._worktree_manager, language=...))
+	//     tools.append(ExitWorktreeTool(self._worktree_manager, language=...))
+	if r.worktreeManager != nil {
+		enterTool, err := worktree.NewEnterWorktreeTool(r.worktreeManager, r.language, "")
+		if err != nil {
+			logger.Warn(toolRailLogComponent).Err(err).Msg("创建 EnterWorktreeTool 失败")
+		} else {
+			toolList = append(toolList, enterTool)
+		}
+		exitTool, err := worktree.NewExitWorktreeTool(r.worktreeManager, r.language, "")
+		if err != nil {
+			logger.Warn(toolRailLogComponent).Err(err).Msg("创建 ExitWorktreeTool 失败")
+		} else {
+			toolList = append(toolList, exitTool)
+		}
+	}
 
 	// Python: if self._qualify_ids
 	if r.qualifyIDs {
 		tools.QualifyTeamToolIDs(toolList, r.teamName, r.memberName)
 	}
+
+	// Python: try: Runner.resource_mgr.add_tool(tools, refresh=True)
+	// Python: except Exception: team_logger.debug("Runner.resource_mgr not available, skipping...")
+	// Go 侧等价：使用 recover 静默吞错
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Debug(toolRailLogComponent).Any("recover", r).Msg("Runner.resource_mgr 不可用，跳过工具注册")
+			}
+		}()
+		rm := runner.GetResourceMgr()
+		if rm != nil {
+			for _, t := range toolList {
+				if err := rm.AddTool(t, resources_manager.WithRefresh()); err != nil {
+					logger.Debug(toolRailLogComponent).Err(err).Msg("resource_mgr.add_tool 失败")
+				}
+			}
+		}
+	}()
 
 	// Python: ability_manager = getattr(agent, "ability_manager", None)
 	am := agent.AbilityManager()
@@ -142,13 +184,36 @@ func (r *TeamToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		return nil
 	}
 
+	// 收集工具 ID 列表，用于 ResourceMgr 批量移除
+	var toolIDs []string
 	am := agent.AbilityManager()
 	for _, tl := range r.registeredTools {
 		card := tl.Card()
 		if am != nil && card != nil && card.Name != "" {
 			am.Remove(card.Name)
 		}
-		// Python: Runner.resource_mgr.remove_tool(tool_id) — Go 侧暂无对应
+		if card != nil && card.ID != "" {
+			toolIDs = append(toolIDs, card.ID)
+		}
+	}
+
+	// Python: for tool in self._tools:
+	//     try: Runner.resource_mgr.remove_tool(tool_id)
+	//     except Exception: team_logger.debug("removal failed for {}", tool_id)
+	if len(toolIDs) > 0 {
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Debug(toolRailLogComponent).Any("recover", rec).Msg("Runner.resource_mgr 不可用，跳过工具移除")
+				}
+			}()
+			rm := runner.GetResourceMgr()
+			if rm != nil {
+				if _, err := rm.RemoveTool(toolIDs); err != nil {
+					logger.Debug(toolRailLogComponent).Err(err).Msg("resource_mgr.remove_tool 失败")
+				}
+			}
+		}()
 	}
 
 	r.registeredTools = nil
@@ -201,12 +266,12 @@ func WithExcludeTools(names map[string]struct{}) TeamToolRailOption {
 }
 
 // WithWorkspaceManager 设置工作空间管理器。
-func WithWorkspaceManager(mgr any) TeamToolRailOption {
+func WithWorkspaceManager(mgr *team_workspace.TeamWorkspaceManager) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.workspaceManager = mgr }
 }
 
 // WithWorktreeManager 设置工作树管理器。
-func WithWorktreeManager(mgr any) TeamToolRailOption {
+func WithWorktreeManager(mgr *worktree.WorktreeManager) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.worktreeManager = mgr }
 }
 

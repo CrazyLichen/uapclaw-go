@@ -2,6 +2,9 @@ package prompts
 
 import (
 	"strings"
+
+	harnesssections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -40,6 +43,22 @@ func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFi
 	return strings.ReplaceAll(strings.ReplaceAll(tpl,
 		"{enter_plan_mode_status}", enterPlanModeStatus),
 		"{plan_file_info}", planFileInfo)
+}
+
+// BuildTeamPlanModeSection 构建 team.plan MODE_INSTRUCTIONS PromptSection。
+// Python: build_team_plan_mode_section(language, agent, session) (openjiuwen/agent_teams/prompts/team_plan_mode.py)
+//
+// 将 BuildTeamPlanModePrompt 的结果包装为 PromptSection，
+// name=SectionModeInstructions, priority=85。
+// enterPlanModeStatus 和 planFileInfo 由调用方提前计算后传入。
+func BuildTeamPlanModeSection(language string, enterPlanModeStatus string, planFileInfo string) *saprompt.PromptSection {
+	content := BuildTeamPlanModePrompt(language, enterPlanModeStatus, planFileInfo)
+	section := saprompt.NewPromptSection(
+		harnesssections.SectionModeInstructions,
+		map[string]string{language: content},
+		85,
+	)
+	return &section
 }
 
 // BuildEnterPlanModeStatusCN 构建 plan_mode 状态文本（中文）。

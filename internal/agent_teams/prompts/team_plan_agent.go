@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -64,7 +65,58 @@ func BuildTeamPlanAgentCard(language string) *agentschema.AgentCard {
 	)
 }
 
+// ApplyTeamPlanAgentPrompt 特化内置 plan_agent，将其系统提示词替换为 team.plan 版本。
+// Python: apply_team_plan_agent_prompt(subagents, language=...) (openjiuwen/agent_teams/prompts/team_plan_agent.py)
+//
+// 仅替换使用默认 plan 提示词的 plan_agent，用户自定义的 plan_agent 提示词保持不变。
+// 返回 true 表示已替换，false 表示未找到或用户自定义。
+func ApplyTeamPlanAgentPrompt(subagents []hschema.SubagentSpec, language string) bool {
+	if len(subagents) == 0 {
+		return false
+	}
+
+	// Python: builtin_prompts = set(DEFAULT_PLAN_AGENT_SYSTEM_PROMPT.values())
+	resolvedLang := resolveLanguage(language)
+	builtinPromptSet := make(map[string]struct{})
+	for _, v := range DefaultTeamPlanAgentSystemPrompt {
+		builtinPromptSet[v] = struct{}{}
+	}
+
+	for _, spec := range subagents {
+		// 只处理 *SubAgentConfig 类型
+		cfg, ok := spec.(*hschema.SubAgentConfig)
+		if !ok {
+			continue
+		}
+		if cfg.AgentCard == nil || cfg.AgentCard.Name != "plan_agent" {
+			continue
+		}
+		// Python: if spec.system_prompt not in builtin_prompts: return False
+		if _, ok := builtinPromptSet[cfg.SystemPrompt]; !ok {
+			return false
+		}
+		// Python: spec.system_prompt = _team_plan_agent_prompt(resolved_language)
+		cfg.SystemPrompt = TeamPlanAgentSystemPrompt(resolvedLang)
+		// Python: spec.agent_card = spec.agent_card.model_copy(update={"description": ...})
+		cfg.AgentCard = agentschema.NewAgentCard(
+			agentschema.WithAgentName("plan_agent"),
+			agentschema.WithAgentDescription(TeamPlanAgentDescription(resolvedLang)),
+		)
+		return true
+	}
+	return false
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveLanguage 解析语言参数，空字符串回退到 "cn"。
+// Python: resolve_language(language) (openjiuwen/agent_teams/prompts/__init__.py)
+func resolveLanguage(language string) string {
+	if language == "en" {
+		return "en"
+	}
+	return "cn"
+}
 
 // init 初始化 plan_agent 的中英文系统提示词（从模板加载）
 func init() {

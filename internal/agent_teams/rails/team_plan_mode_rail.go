@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	harnesssections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -26,8 +28,8 @@ type TeamPlanModeRail struct {
 	harnessrails.DeepAgentRail
 	// languageOverride 语言覆盖（可选）
 	languageOverride string
-	// agent 引用（Init 时缓存）
-	agent agentinterfaces.BaseAgent
+	// agent 引用（Init 时缓存），使用 DeepAgentInterface 访问 LoadState/DeepConfig
+	agent harnessinterfaces.DeepAgentInterface
 	// systemPromptBuilder 系统提示词构建器（Init 时缓存）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 }
@@ -68,7 +70,10 @@ func NewTeamPlanModeRail(opts ...TeamPlanModeRailOption) *TeamPlanModeRail {
 // Init 缓存 prompt builder 并特化默认 plan subagent。
 // Python: TeamPlanModeRail.init(agent)
 func (r *TeamPlanModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
-	r.agent = agent
+	// Python 中 self._agent = agent，此处转为 DeepAgentInterface 以访问 LoadState/DeepConfig
+	if dai, ok := agent.(harnessinterfaces.DeepAgentInterface); ok {
+		r.agent = dai
+	}
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	r.specializePlanAgent()
 	return nil
@@ -93,28 +98,26 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	}
 
 	// Python: state = self._agent.load_state(ctx.session)
-	// Python: if getattr(state.plan_mode, "mode", None) != "plan"
-	// Go 侧暂无 load_state / plan_mode 访问能力，
-	// 此处默认在 plan 模式下添加 team.plan 指令。
-	// TODO(#9.runtime): 集成 agent plan_mode 状态检查
-
-	// 非 plan 模式：移除 MODE_INSTRUCTIONS section
-	// Python: self.system_prompt_builder.remove_section(SectionName.MODE_INSTRUCTIONS)
-	// 当 plan_mode 状态可检查后补充此分支
+	// Python: if getattr(state.plan_mode, "mode", None) != "plan":
+	//     self.system_prompt_builder.remove_section(SectionName.MODE_INSTRUCTIONS)
+	//     return
+	sess := cbc.Session()
+	if sess != nil {
+		state := r.agent.LoadState(sess)
+		if state != nil && state.PlanMode.Mode != "plan" {
+			r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+			return nil
+		}
+	}
 
 	// Plan 模式：特化 plan_agent + 注入 team.plan 指令
 	r.specializePlanAgent()
 
 	language := r.resolveLanguage()
 	// Python: build_team_plan_mode_section(language, agent, session)
-	content := prompts.BuildTeamPlanModePrompt(language, "", "")
-	if content != "" {
-		section := saprompt.NewPromptSection(
-			modeInstructionsSectionName,
-			map[string]string{language: content},
-			84, // priority 对齐 Python TeamPlanModeRail.priority = 84
-		)
-		r.systemPromptBuilder.AddSection(section)
+	section := prompts.BuildTeamPlanModeSection(language, "", "")
+	if section != nil {
+		r.systemPromptBuilder.AddSection(*section)
 	}
 
 	return nil
@@ -147,15 +150,20 @@ func (r *TeamPlanModeRail) resolveLanguage() string {
 // Python: TeamPlanModeRail._specialize_plan_agent()
 //
 // 将 plan subagent 的 system prompt 替换为 team.plan 版本。
-// 在 Go 侧，通过 prompts 包提供的函数完成 plan_agent 的特化。
 func (r *TeamPlanModeRail) specializePlanAgent() {
 	if r.agent == nil {
 		return
 	}
 	// Python: deep_config = getattr(self._agent, "deep_config", None)
+	// Python: if deep_config is not None and hasattr(deep_config, "subagents")
+	deepConfig := r.agent.DeepConfig()
+	if deepConfig == nil || len(deepConfig.Subagents) == 0 {
+		return
+	}
 	// Python: applied = apply_team_plan_agent_prompt(deep_config.subagents, language=...)
-	// Go 侧暂无法直接访问 deep_config.subagents，
-	// 但 prompts.BuildTeamPlanAgentCard() 和 prompts.TeamPlanAgentSystemPrompt()
-	// 已提供，可在后续集成 DeepAgentInterface 扩展时完成。
-	// TODO(#9.runtime): 集成 apply_team_plan_agent_prompt 逻辑
+	language := r.resolveLanguage()
+	applied := prompts.ApplyTeamPlanAgentPrompt(deepConfig.Subagents, language)
+	if applied {
+		logger.Debug(planModeLogComponent).Str("language", language).Msg("已特化 plan_agent 系统提示词")
+	}
 }

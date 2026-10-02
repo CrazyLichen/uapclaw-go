@@ -68,7 +68,14 @@ func NewAbilityExecutionError(
 func BuildToolMessageContent(result any) string {
 	// 路径 1：map[string]any — 按 key 提取
 	if m, ok := result.(map[string]any); ok {
-		// 1a. data.content 提取
+		// 1a-mapped: 对齐 Python MappedToolOutput.__str__()
+		// 工具返回 map 中含 __mapped_content 键时，优先返回其值作为 LLM 友好文本
+		if mapped, ok := m["__mapped_content"]; ok {
+			if s, ok := mapped.(string); ok && s != "" {
+				return s
+			}
+		}
+		// 1b. data.content 提取
 		if data, ok := m["data"].(map[string]any); ok {
 			if content, ok := data["content"]; ok {
 				if s := fmt.Sprintf("%v", content); s != "" {

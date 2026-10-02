@@ -150,8 +150,8 @@ const (
 	// MemberOnlyToolsStr 仅 Teammate 可用的工具名（逗号分隔）
 	MemberOnlyToolsStr = "claim_task,submit_plan"
 	// SharedToolsStr Leader 和 Teammate 共用的工具名（逗号分隔）
-	// 注意：workspace_meta 待 9.66 回填后添加，当前未注册到 allTools
-	SharedToolsStr = "view_task,send_message"
+	// Python: SHARED_TOOLS = {"view_task", "send_message", "workspace_meta"}
+	SharedToolsStr = "view_task,send_message,workspace_meta"
 	// HumanAgentToolsStr Human-Agent 可用的工具名（逗号分隔）
 	HumanAgentToolsStr = "view_task,member_complete_task,send_message"
 )
@@ -275,6 +275,13 @@ func CreateTeamTools(
 			result = append(result, tl)
 		}
 	}
+
+	// Python: for tool in tools: _wrap_invoke_with_logging(tool)
+	// 为每个工具添加日志和 map_result 包装
+	for i, tl := range result {
+		result[i] = WrapInvokeWithLogging(tl)
+	}
+
 	return result
 }
 
