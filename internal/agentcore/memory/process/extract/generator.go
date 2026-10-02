@@ -566,9 +566,10 @@ func (g *Generator) handleMemoryWithInstruct(
 		if !ok {
 			continue
 		}
-		if opType == mem_model.OperationTypeUpdate {
+		switch opType {
+		case mem_model.OperationTypeUpdate:
 			updateMemories = append(updateMemories, memDict)
-		} else if opType == mem_model.OperationTypeDelete {
+		case mem_model.OperationTypeDelete:
 			deleteMemories = append(deleteMemories, memDict)
 		}
 	}

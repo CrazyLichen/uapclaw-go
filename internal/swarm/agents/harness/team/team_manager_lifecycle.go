@@ -106,7 +106,7 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 			continue
 		}
 		seen[sid] = true
-		m.StopSessionRuntime(ctx, sid, reason)
+		m.StopSessionRuntime(ctx, sid, reason) //nolint:errcheck // 清理操作，错误不可操作
 	}
 	return nil
 }
@@ -202,7 +202,7 @@ func (m *TeamManager) CleanupAll(ctx context.Context) {
 	m.mu.Unlock()
 
 	for _, sid := range sessionIDs {
-		m.destroyTeam(ctx, sid)
+		m.destroyTeam(ctx, sid) //nolint:errcheck // 清理操作，错误不可操作
 	}
 	logger.Info(logComponent).Msg("所有 team 已清理")
 }
@@ -419,7 +419,7 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	teamName := m.resolveDeleteSessionTeamName(sessionID)
 
-	m.StopSessionRuntime(ctx, sessionID, reason)
+	m.StopSessionRuntime(ctx, sessionID, reason) //nolint:errcheck // 清理操作，错误不可操作
 
 	if teamName != "" {
 		// ⤵️(#9.62) Runner.delete_agent_team — 待回填
@@ -481,7 +481,7 @@ func (m *TeamManager) destroyOtherSessions(ctx context.Context, currentSessionID
 	m.mu.Unlock()
 
 	for _, sid := range staleIDs {
-		m.destroyTeam(ctx, sid)
+		m.destroyTeam(ctx, sid) //nolint:errcheck // 清理操作，错误不可操作
 	}
 }
 

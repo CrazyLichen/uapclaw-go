@@ -168,7 +168,7 @@ func TestSQLMigrator_TryMigrate_添加列(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取版本失败: %v", err)
 	}
-	if currentVersion == nil || len(currentVersion) == 0 {
+	if len(currentVersion) == 0 {
 		t.Error("版本记录不存在")
 	}
 }

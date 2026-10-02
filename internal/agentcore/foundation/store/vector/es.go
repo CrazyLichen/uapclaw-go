@@ -1035,7 +1035,7 @@ func (s *ESVectorStore) esSearchAllDocs(ctx context.Context, c esClient, collect
 	if err != nil {
 		return nil, fmt.Errorf("搜索请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // 响应体关闭错误不影响主流程
 
 	if resp.IsError() {
 		return nil, fmt.Errorf("搜索请求返回错误: %s", resp.String())

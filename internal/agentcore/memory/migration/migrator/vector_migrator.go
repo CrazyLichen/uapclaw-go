@@ -123,9 +123,7 @@ func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames
 // Python: VectorMigrator._find_collections
 func (m *VectorMigrator) findCollections(ctx context.Context, memTypeStr string) ([]string, error) {
 	// 去掉 'vector_' 前缀
-	if strings.HasPrefix(memTypeStr, "vector_") {
-		memTypeStr = memTypeStr[7:]
-	}
+	memTypeStr = strings.TrimPrefix(memTypeStr, "vector_")
 
 	// 校验记忆类型是否支持
 	isSupported := false

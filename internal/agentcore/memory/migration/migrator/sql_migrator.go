@@ -107,7 +107,7 @@ func (m *SQLMigrator) getCurrentVersion(ctx context.Context, tableName string) (
 	if err != nil {
 		return nil, err
 	}
-	if currentMeta != nil && len(currentMeta) > 0 {
+	if len(currentMeta) > 0 {
 		versionStr, ok := currentMeta[0]["schema_version"].(string)
 		if ok {
 			version, err := strconv.Atoi(versionStr)
