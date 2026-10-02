@@ -2,11 +2,14 @@ package extract
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	storeindex "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
@@ -82,11 +85,14 @@ func TestGetFragmentMemoryUnit_正常(t *testing.T) {
 	result, err := g.getFragmentMemoryUnit("user1", "msg1", memoryDict, "2025-01-01T00:00:00Z")
 	require.NoError(t, err)
 	assert.Len(t, result, 2)
-	assert.Equal(t, mem_model.MemoryTypeUserProfile, result[0].MemType)
-	assert.Equal(t, mem_model.OperationTypeAdd, result[0].OperationType)
-	assert.Equal(t, "用户喜欢Python", result[0].Content)
-	assert.Equal(t, mem_model.MemoryTypeSemanticMemory, result[1].MemType)
-	assert.Equal(t, "项目使用Go语言", result[1].Content)
+	// map 遍历顺序不确定，按类型收集验证
+	resultMap := map[string]string{}
+	for _, u := range result {
+		resultMap[u.MemType.String()] = u.Content
+		assert.Equal(t, mem_model.OperationTypeAdd, u.OperationType)
+	}
+	assert.Equal(t, "用户喜欢Python", resultMap["user_profile"])
+	assert.Equal(t, "项目使用Go语言", resultMap["semantic_memory"])
 }
 
 // TestGetFragmentMemoryUnit_非string内容 测试非 string 内容尝试 .content 字段
@@ -199,20 +205,35 @@ func TestCategoryToClass_未知类型(t *testing.T) {
 func TestGenAllMemory_必填参数缺失(t *testing.T) {
 	g := NewGenerator(mem_model.NewDataIdManager(), nil)
 
-	// 缺少 userID
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("test")},
-		nil,
-		newFakeModelWithResponse(t, `{}`),
-		config.DefaultAgentMemoryConfig(),
-		nil, nil,
-		"", // userID 为空
-		"scope1",
-		"", "", "", 128, nil,
-	)
-	require.NoError(t, err)
-	assert.Empty(t, result)
+	tests := []struct {
+		name     string
+		userID   string
+		scopeID  string
+		messages []llmschema.BaseMessage
+		model    *llm.Model
+	}{
+		{"缺少userID", "", "scope1", []llmschema.BaseMessage{llmschema.NewUserMessage("test")}, newFakeModelWithResponse(t, `{}`)},
+		{"缺少scopeID", "user1", "", []llmschema.BaseMessage{llmschema.NewUserMessage("test")}, newFakeModelWithResponse(t, `{}`)},
+		{"缺少messages", "user1", "scope1", []llmschema.BaseMessage{}, newFakeModelWithResponse(t, `{}`)},
+		{"缺少model", "user1", "scope1", []llmschema.BaseMessage{llmschema.NewUserMessage("test")}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := g.GenAllMemory(
+				context.Background(),
+				tt.messages,
+				nil,
+				tt.model,
+				config.DefaultAgentMemoryConfig(),
+				nil, nil,
+				tt.userID, tt.scopeID,
+				"", "", "", 128, nil,
+			)
+			require.NoError(t, err)
+			assert.Empty(t, result)
+		})
+	}
 }
 
 // TestGenAllMemory_关闭长期记忆 测试 EnableLongTermMem=false 时只返回变量
@@ -253,6 +274,430 @@ func TestGenAllMemory_关闭长期记忆(t *testing.T) {
 	// 不应包含 summary（因为 EnableLongTermMem=false）
 	summaryType := mem_model.MemoryTypeSummary.String()
 	assert.NotContains(t, result, summaryType)
+}
+
+// TestGenAllMemory_无关键信息 测试 has_key_information=false 时不生成碎片记忆
+func TestGenAllMemory_无关键信息(t *testing.T) {
+	analyzerJSON := `{
+		"has_key_information": false,
+		"variables": [],
+		"summary": "测试摘要"
+	}`
+	model := newFakeModelWithResponse(t, analyzerJSON)
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryConfig := &config.AgentMemoryConfig{
+		MemVariables:         []commonschema.Param{},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
+		EnableSemanticMemory: true,
+		EnableEpisodicMemory: true,
+		EnableSummaryMemory:  true,
+	}
+
+	result, err := g.GenAllMemory(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("今天天气不错")},
+		nil,
+		model,
+		memoryConfig,
+		nil, nil,
+		"user1", "scope1",
+		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
+	)
+	require.NoError(t, err)
+	// 应包含 summary
+	summaryType := mem_model.MemoryTypeSummary.String()
+	assert.Contains(t, result, summaryType)
+	// 不应包含碎片记忆类型
+	userProfileType := mem_model.MemoryTypeUserProfile.String()
+	assert.NotContains(t, result, userProfileType)
+}
+
+// TestGenAllMemory_摘要记忆关闭 测试 EnableSummaryMemory=false 时不生成摘要
+func TestGenAllMemory_摘要记忆关闭(t *testing.T) {
+	analyzerJSON := `{
+		"has_key_information": false,
+		"variables": [],
+		"summary": "测试摘要"
+	}`
+	model := newFakeModelWithResponse(t, analyzerJSON)
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryConfig := &config.AgentMemoryConfig{
+		MemVariables:         []commonschema.Param{},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
+		EnableSemanticMemory: true,
+		EnableEpisodicMemory: true,
+		EnableSummaryMemory:  false,
+	}
+
+	result, err := g.GenAllMemory(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		nil,
+		model,
+		memoryConfig,
+		nil, nil,
+		"user1", "scope1",
+		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
+	)
+	require.NoError(t, err)
+	summaryType := mem_model.MemoryTypeSummary.String()
+	assert.NotContains(t, result, summaryType)
+}
+
+// TestGenAllMemory_部分fragment关闭 测试关闭部分碎片记忆类型时的过滤
+func TestGenAllMemory_部分fragment关闭(t *testing.T) {
+	callCount := 0
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			callCount++
+			if callCount == 1 {
+				return llmschema.NewAssistantMessage(`{
+					"has_key_information": true,
+					"variables": [],
+					"summary": "摘要"
+				}`), nil
+			}
+			return llmschema.NewAssistantMessage(`{
+				"has_explict_instruct": false,
+				"instruct_memories": [],
+				"user_profile": ["用户画像"],
+				"semantic_memory": ["语义记忆"],
+				"episodic_memory": ["情景记忆"]
+			}`), nil
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryConfig := &config.AgentMemoryConfig{
+		MemVariables:         []commonschema.Param{},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
+		EnableSemanticMemory: false, // 关闭语义记忆
+		EnableEpisodicMemory: false, // 关闭情景记忆
+		EnableSummaryMemory:  true,
+	}
+
+	result, err := g.GenAllMemory(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		nil,
+		model,
+		memoryConfig,
+		nil, nil,
+		"user1", "scope1",
+		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
+	)
+	require.NoError(t, err)
+	// user_profile 开启
+	assert.Contains(t, result, mem_model.MemoryTypeUserProfile.String())
+	assert.Len(t, result[mem_model.MemoryTypeUserProfile.String()], 1)
+	// semantic_memory 和 episodic_memory 关闭
+	assert.NotContains(t, result, mem_model.MemoryTypeSemanticMemory.String())
+	assert.NotContains(t, result, mem_model.MemoryTypeEpisodicMemory.String())
+}
+
+// TestGenAllMemory_完整流程 测试完整的 Generator 流程（含碎片记忆提取）
+func TestGenAllMemory_完整流程(t *testing.T) {
+	// 第一次调用 MemoryAnalyzer 返回，第二次调用 ExtractLongTermMemory 返回
+	callCount := 0
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			callCount++
+			if callCount == 1 {
+				// MemoryAnalyzer 的响应
+				return llmschema.NewAssistantMessage(`{
+					"has_key_information": true,
+					"variables": [{"variable_key": "name", "variable_value": "张三"}],
+					"summary": "用户介绍了自己"
+				}`), nil
+			}
+			// ExtractLongTermMemory 的响应
+			return llmschema.NewAssistantMessage(`{
+				"has_explict_instruct": false,
+				"instruct_memories": [],
+				"user_profile": ["用户喜欢编程"],
+				"semantic_memory": ["项目使用Go"],
+				"episodic_memory": []
+			}`), nil
+		},
+	}
+
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	require.NoError(t, err)
+	model, err := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+	require.NoError(t, err)
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryConfig := &config.AgentMemoryConfig{
+		MemVariables: []commonschema.Param{
+			*commonschema.NewStringParam("name", "用户姓名", true),
+		},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
+		EnableSemanticMemory: true,
+		EnableEpisodicMemory: true,
+		EnableSummaryMemory:  true,
+	}
+
+	result, err := g.GenAllMemory(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("我叫张三，喜欢编程")},
+		nil,
+		model,
+		memoryConfig,
+		nil, nil,
+		"user1", "scope1",
+		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
+	)
+	require.NoError(t, err)
+	// 应包含 variable、summary、user_profile、semantic_memory
+	assert.Contains(t, result, mem_model.MemoryTypeVariable.String())
+	assert.Contains(t, result, mem_model.MemoryTypeSummary.String())
+	assert.Contains(t, result, mem_model.MemoryTypeUserProfile.String())
+	assert.Contains(t, result, mem_model.MemoryTypeSemanticMemory.String())
+	// episodic_memory 为空列表，不应包含
+	assert.NotContains(t, result, mem_model.MemoryTypeEpisodicMemory.String())
+}
+
+// TestCategoriesToMemoryUnit_无指令 测试 has_explict_instruct=false 时不调用 handleMemoryWithInstruct
+func TestCategoriesToMemoryUnit_无指令(t *testing.T) {
+	// ExtractLongTermMemory 返回无指令的结果
+	extractJSON := `{
+		"has_explict_instruct": false,
+		"instruct_memories": [],
+		"user_profile": ["用户画像信息"],
+		"semantic_memory": [],
+		"episodic_memory": []
+	}`
+	model := newFakeModelWithResponse(t, extractJSON)
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	params := &ExtractMemoryParams{
+		UserID:    "user1",
+		ScopeID:   "scope1",
+		Messages:  []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseModel: model,
+	}
+
+	result, err := g.categoriesToMemoryUnit(
+		context.Background(),
+		params,
+		"msg1",
+		"2025-01-01T00:00:00Z",
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	// 应包含 user_profile 碎片
+	assert.NotEmpty(t, result)
+	foundUserProfile := false
+	for _, u := range result {
+		if u.GetMemType() == mem_model.MemoryTypeUserProfile {
+			foundUserProfile = true
+		}
+	}
+	assert.True(t, foundUserProfile)
+}
+
+// TestSemanticValidation_CORRECT 测试语义校验返回 CORRECT
+func TestSemanticValidation_CORRECT(t *testing.T) {
+	// LLM 返回 CORRECT
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			return llmschema.NewAssistantMessage("The result is CORRECT"), nil
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	obtainedMems := []*storeindex.MemorySearchResult{
+		{
+			Doc:   &storeindex.MemoryDoc{ID: "mem123", Text: "用户喜欢编程"},
+			Score: 0.9,
+		},
+	}
+
+	result := g.semanticValidation(context.Background(), obtainedMems, "用户喜欢编程", model)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "mem123", result[0].ID)
+	assert.Equal(t, "用户喜欢编程", result[0].Mem)
+}
+
+// TestSemanticValidation_WRONG 测试语义校验返回 WRONG
+func TestSemanticValidation_WRONG(t *testing.T) {
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			return llmschema.NewAssistantMessage("The result is WRONG"), nil
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	obtainedMems := []*storeindex.MemorySearchResult{
+		{
+			Doc:   &storeindex.MemoryDoc{ID: "mem123", Text: "用户喜欢编程"},
+			Score: 0.9,
+		},
+	}
+
+	result := g.semanticValidation(context.Background(), obtainedMems, "完全不同的内容", model)
+	assert.Empty(t, result)
+}
+
+// TestSemanticValidation_LLM错误 测试 LLM 调用失败时跳过
+func TestSemanticValidation_LLM错误(t *testing.T) {
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			return nil, fmt.Errorf("API 调用失败")
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	obtainedMems := []*storeindex.MemorySearchResult{
+		{
+			Doc:   &storeindex.MemoryDoc{ID: "mem123", Text: "用户喜欢编程"},
+			Score: 0.9,
+		},
+	}
+
+	result := g.semanticValidation(context.Background(), obtainedMems, "用户喜欢编程", model)
+	assert.Empty(t, result)
+}
+
+// TestSemanticValidation_空列表 测试空候选列表
+func TestSemanticValidation_空列表(t *testing.T) {
+	model := newFakeModelWithResponse(t, "CORRECT")
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+
+	result := g.semanticValidation(context.Background(), nil, "用户喜欢编程", model)
+	assert.Empty(t, result)
+}
+
+// TestHandleMemoryWithInstruct_空列表 测试空 instruct 列表
+func TestHandleMemoryWithInstruct_空列表(t *testing.T) {
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryOperationParams := &MemoryOperationParams{
+		UserID:    "user1",
+		ScopeID:   "scope1",
+		BaseModel: newFakeModelWithResponse(t, "CORRECT"),
+	}
+
+	result := g.handleMemoryWithInstruct(context.Background(), memoryOperationParams, []any{})
+	assert.Empty(t, result)
+}
+
+// TestHandleMemoryWithInstruct_有UPDATE和DELETE 测试分离 UPDATE 和 DELETE 操作（searchManager 为 nil）
+func TestHandleMemoryWithInstruct_有UPDATE和DELETE(t *testing.T) {
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryOperationParams := &MemoryOperationParams{
+		UserID:       "user1",
+		ScopeID:      "scope1",
+		MessageMemID: "msg1",
+		Timestamp:    "2025-01-01T00:00:00Z",
+		BaseModel:    newFakeModelWithResponse(t, "CORRECT"),
+	}
+	memoryList := []any{
+		map[string]any{"mem_instruct": "update", "mem_type": "user_profile", "mem_content": "更新内容", "old_mem": "旧内容"},
+		map[string]any{"mem_instruct": "delete", "mem_type": "user_profile", "mem_content": "删除内容", "old_mem": "旧内容"},
+		map[string]any{"mem_instruct": "add", "mem_type": "user_profile", "mem_content": "新增忽略"}, // 非 update/delete
+		"not a dict",
+	}
+	// searchManager 为 nil，processMemoryOperations 返回空，但 handleMemoryWithInstruct 的分组逻辑会被执行
+	result := g.handleMemoryWithInstruct(context.Background(), memoryOperationParams, memoryList)
+	assert.Empty(t, result) // searchManager 为 nil 时返回空
+}
+
+// TestProcessMemoryOperations_searchManager为nil 测试 searchManager 为 nil 时返回空
+func TestProcessMemoryOperations_searchManager为nil(t *testing.T) {
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryOperationParams := &MemoryOperationParams{
+		UserID:       "user1",
+		ScopeID:      "scope1",
+		MessageMemID: "msg1",
+		Timestamp:    "2025-01-01T00:00:00Z",
+		BaseModel:    newFakeModelWithResponse(t, "CORRECT"),
+	}
+	memoryDicts := []map[string]any{
+		{"old_mem": "旧内容", "mem_type": "user_profile", "mem_content": "新内容"},
+	}
+
+	result := g.processMemoryOperations(context.Background(), memoryOperationParams, memoryDicts, mem_model.OperationTypeUpdate)
+	assert.Empty(t, result)
+}
+
+// TestProcessMemoryOperations_无OldMem 测试 old_mem 为空时跳过
+func TestProcessMemoryOperations_无OldMem(t *testing.T) {
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryOperationParams := &MemoryOperationParams{
+		UserID:       "user1",
+		ScopeID:      "scope1",
+		MessageMemID: "msg1",
+		Timestamp:    "2025-01-01T00:00:00Z",
+		BaseModel:    newFakeModelWithResponse(t, "CORRECT"),
+	}
+	memoryDicts := []map[string]any{
+		{"mem_type": "user_profile", "mem_content": "新内容"}, // 缺少 old_mem
+		{"old_mem": "", "mem_type": "user_profile", "mem_content": "新内容"}, // old_mem 为空
+	}
+
+	result := g.processMemoryOperations(context.Background(), memoryOperationParams, memoryDicts, mem_model.OperationTypeUpdate)
+	assert.Empty(t, result)
+}
+
+// TestCategoriesToMemoryUnit_有指令 测试 has_explict_instruct=true 时调用 handleMemoryWithInstruct
+func TestCategoriesToMemoryUnit_有指令(t *testing.T) {
+	// ExtractLongTermMemory 返回有指令的结果
+	extractJSON := `{
+		"has_explict_instruct": true,
+		"instruct_memories": [{"mem_instruct": "update", "mem_type": "user_profile", "mem_content": "更新内容", "old_mem": "旧内容"}],
+		"user_profile": ["用户画像信息"],
+		"semantic_memory": [],
+		"episodic_memory": []
+	}`
+	model := newFakeModelWithResponse(t, extractJSON)
+
+	// searchManager 为 nil，handleMemoryWithInstruct 内部 processMemoryOperations 返回空
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	params := &ExtractMemoryParams{
+		UserID:    "user1",
+		ScopeID:   "scope1",
+		Messages:  []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseModel: model,
+	}
+
+	result, err := g.categoriesToMemoryUnit(
+		context.Background(),
+		params,
+		"msg1",
+		"2025-01-01T00:00:00Z",
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	// 即使指令式记忆处理返回空，仍应有 user_profile 碎片
+	assert.NotEmpty(t, result)
+}
+
+// TestProcessProactiveMemoryData_非stringMemContent 测试 mem_content 非字符串时尝试 .mem_content 字段
+func TestProcessProactiveMemoryData_非stringMemContent(t *testing.T) {
+	g := NewGenerator(mem_model.NewDataIdManager(), nil)
+	memoryList := []any{
+		map[string]any{"mem_instruct": "add", "mem_type": "user_profile", "mem_content": map[string]any{"mem_content": "嵌套内容"}},
+	}
+	result, err := g.processProactiveMemoryData("user1", "msg1", memoryList, "2025-01-01T00:00:00Z")
+	require.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "嵌套内容", result[0].Content)
 }
 
 // TestSortSearchResultsByScore 测试搜索结果按分数降序排序

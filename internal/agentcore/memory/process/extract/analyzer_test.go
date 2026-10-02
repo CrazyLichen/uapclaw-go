@@ -233,17 +233,62 @@ func TestAnalyze_scopeConfig为nil时使用默认值(t *testing.T) {
 	result, err := analyzer.Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
-		nil,
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("历史消息")}, // 有历史消息
 		model,
 		memoryConfig,
 		128,
 		nil, // scopeConfig 为 nil
-		"",
+		"", // 空禁止变量
 		3,
 	)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
+}
+
+// TestAnalyze_有变量配置 测试有 mem_variables 时构建 variables JSON
+func TestAnalyze_有变量配置(t *testing.T) {
+	jsonResponse := `{
+		"has_key_information": true,
+		"variables": [{"variable_key": "hobby", "variable_value": "编程"}],
+		"summary": "用户提到自己的爱好"
+	}`
+
+	model := newFakeModelWithResponse(t, jsonResponse)
+	memoryConfig := &config.AgentMemoryConfig{
+		MemVariables: []commonschema.Param{
+			*commonschema.NewStringParam("hobby", "用户爱好", true),
+		},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
+		EnableSemanticMemory: true,
+		EnableEpisodicMemory: true,
+		EnableSummaryMemory:  true,
+	}
+
+	analyzer := MemoryAnalyzer{}
+	result, err := analyzer.Analyze(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("我喜欢编程")},
+		nil,
+		model,
+		memoryConfig,
+		256,
+		&config.MemoryScopeConfig{
+			UserProfileDefinition:    "用户画像定义",
+			SemanticMemoryDefinition: "语义记忆定义",
+			EpisodicMemoryDefinition: "情景记忆定义",
+		},
+		"password", // 禁止变量
+		3,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.HasKeyInformation)
+	assert.Len(t, result.Variables, 1)
+	assert.Equal(t, "hobby", result.Variables[0].VariableKey)
+	assert.Equal(t, "编程", result.Variables[0].VariableValue)
 }
 
 // TestAnalyze_forbiddenVariables空字符串映射为None 测试空字符串映射

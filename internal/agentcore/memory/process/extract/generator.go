@@ -203,10 +203,10 @@ func (g *Generator) GenAllMemory(
 	// 步骤 9：按 fragment_enable 过滤（对齐 Python: if fragment_enable.get(mem_type, False)）
 	for _, unit := range mergedUnits {
 		memType := unit.GetMemType().String()
-		if _, ok := allMemoryResults[memType]; !ok {
-			allMemoryResults[memType] = []mem_model.MemoryUnit{}
-		}
 		if fragmentEnable[memType] {
+			if _, ok := allMemoryResults[memType]; !ok {
+				allMemoryResults[memType] = []mem_model.MemoryUnit{}
+			}
 			allMemoryResults[memType] = append(allMemoryResults[memType], unit)
 		}
 	}
@@ -567,6 +567,14 @@ func (g *Generator) processMemoryOperations(
 	operationType mem_model.OperationType,
 ) []*mem_model.FragmentMemoryUnit {
 	retMemories := make([]*mem_model.FragmentMemoryUnit, 0)
+
+	// 防御性检查：searchManager 为 nil 时无法搜索，直接返回空
+	if g.searchManager == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "MEMORY_PROCESS").
+			Msg("searchManager 为 nil，跳过记忆操作处理")
+		return retMemories
+	}
 
 	for _, memDict := range memoryDicts {
 		// 对齐 Python: old_mem = mem_dict.get("old_mem"); if not old_mem: continue
