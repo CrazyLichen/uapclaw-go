@@ -94,6 +94,16 @@ func NewCoordinationKernel(host types.KernelHost) *CoordinationKernel {
 // dispatcher.dispatch 在 Start() 时绑定回 bus 作为 wake callback，此处不绑定。
 // Python: CoordinationKernel.setup(role)
 func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlueprint, inf types.DispatcherInfra, opts ...KernelOption) {
+	// 修复 S-05: 对齐 Python kernel.py:55-69
+	// Python 从 host 获取 blueprint/infra，当 blueprint 或 infra 为 None 时抛 RuntimeError。
+	// Go 侧当前 TeamAgent.Configure 传 nil（host 通过 KernelHost 子接口可达 blueprint/infra），
+	// 当 bp/inf 为 nil 时记录警告，Dispatcher 会在实际使用时处理 nil 情况。
+	if bp == nil || inf == nil {
+		logger.Warn(logComponent).
+			Bool("blueprint_nil", bp == nil).
+			Bool("infra_nil", inf == nil).
+			Msg("Setup 收到 nil blueprint/infra，对齐 Python 应从 host 获取")
+	}
 	// 应用选项
 	o := &kernelOptions{}
 	for _, opt := range opts {
