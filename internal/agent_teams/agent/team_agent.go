@@ -1320,22 +1320,40 @@ func (a *TeamAgent) DrainAgentTask(ctx context.Context) {
 
 // MarkLiveTeammates 标记所有活跃成员为指定状态。
 // 满足 types.LifecycleAccessor 接口。
-// 对齐 Python: mark_live_teammates(status)
+// 对齐 Python: _mark_live_teammates(status) (kernel.py:232-276)
+//
+// 仅标记 spawned_handles 中存在的成员，跳过 leader 自身、UNSTARTED 和 SHUTDOWN 成员。
 func (a *TeamAgent) MarkLiveTeammates(ctx context.Context, status string) error {
 	backend := a.TeamBackend()
 	if backend == nil {
 		return nil
 	}
-	// 遍历所有成员并更新状态
 	members, err := backend.ListMembers(ctx)
 	if err != nil {
 		return err
 	}
+	// 修复 S-08: 对齐 Python 过滤逻辑
+	// Python: spawned = set(host.spawn_manager.spawned_handles.keys())
+	spawnedNames := make(map[string]bool)
+	for _, name := range a.SpawnedHandleNames() {
+		spawnedNames[name] = true
+	}
+	leaderName := a.MemberName()
 	for _, m := range members {
-		if m.Status != string(atschema.MemberStatusShutdown) &&
-			m.Status != string(atschema.MemberStatusShutdownRequested) {
-			backend.DB().Member().UpdateMemberStatus(ctx, m.MemberName, backend.TeamName(), status)
+		// Python: if member.member_name == leader: continue
+		if m.MemberName == leaderName {
+			continue
 		}
+		// Python: if member.member_name not in spawned: continue
+		if !spawnedNames[m.MemberName] {
+			continue
+		}
+		// Python: if current in {MemberStatus.UNSTARTED, MemberStatus.SHUTDOWN}: continue
+		current := atschema.MemberStatus(m.Status)
+		if current == atschema.MemberStatusUnstarted || current == atschema.MemberStatusShutdown {
+			continue
+		}
+		backend.DB().Member().UpdateMemberStatus(ctx, m.MemberName, backend.TeamName(), status)
 	}
 	return nil
 }
