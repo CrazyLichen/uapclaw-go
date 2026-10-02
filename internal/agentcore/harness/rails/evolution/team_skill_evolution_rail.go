@@ -979,6 +979,13 @@ func (r *TeamSkillEvolutionRail) ApprovalRuntime() *EvolutionApprovalRuntime {
 	return r.approvalRuntime
 }
 
+// HasPendingApprovalSnapshot 检查是否有指定 requestID 的待审批快照。
+// 对齐 Python: request_id in self._pending_approval_snapshots
+func (r *TeamSkillEvolutionRail) HasPendingApprovalSnapshot(requestID string) bool {
+	_, ok := r.pendingApprovalSnapshots[requestID]
+	return ok
+}
+
 // AutoScan 返回是否自动检测团队完成信号。
 func (r *TeamSkillEvolutionRail) AutoScan() bool { return r.autoScan }
 

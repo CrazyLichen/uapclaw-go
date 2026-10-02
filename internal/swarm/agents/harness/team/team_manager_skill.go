@@ -1,6 +1,7 @@
 package team
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -40,13 +41,13 @@ func (m *TeamManager) SyncTeamSkills(sessionID string) {
 
 // RegisterTeamSkillRail 注册 TeamSkillEvolutionRail 实例。
 // 对齐 Python: TeamManager.register_team_skill_rail(session_id, rail)
-func (m *TeamManager) RegisterTeamSkillRail(sessionID string, rail any) {
+func (m *TeamManager) RegisterTeamSkillRail(sessionID string, rail *evolution.TeamSkillEvolutionRail) {
 	m.teamSkillRails[sessionID] = rail
 }
 
 // RegisterTeamMemberSkillEvolutionRail 注册成员 SkillEvolutionRail 实例。
 // 对齐 Python: TeamManager.register_team_member_skill_evolution_rail(session_id, rail)
-func (m *TeamManager) RegisterTeamMemberSkillEvolutionRail(sessionID string, rail any) {
+func (m *TeamManager) RegisterTeamMemberSkillEvolutionRail(sessionID string, rail *evolution.SkillEvolutionRail) {
 	rails := m.teamMemberSkillEvoRails[sessionID]
 	for _, r := range rails {
 		if r == rail {
@@ -58,7 +59,7 @@ func (m *TeamManager) RegisterTeamMemberSkillEvolutionRail(sessionID string, rai
 
 // RegisterTeamSkillCreateRail 注册 TeamSkillCreateRail 实例。
 // 对齐 Python: TeamManager.register_team_skill_create_rail(session_id, rail)
-func (m *TeamManager) RegisterTeamSkillCreateRail(sessionID string, rail any) {
+func (m *TeamManager) RegisterTeamSkillCreateRail(sessionID string, rail *evolution.TeamSkillCreateRail) {
 	m.teamSkillCreateRails[sessionID] = rail
 }
 
@@ -116,13 +117,13 @@ func (m *TeamManager) HasTeamSkillSyncTarget(sessionID string) bool {
 
 // GetTeamSkillRail 获取指定 session 的 TeamSkillEvolutionRail。
 // 对齐 Python: TeamManager.get_team_skill_rail(session_id)
-func (m *TeamManager) GetTeamSkillRail(sessionID string) any {
+func (m *TeamManager) GetTeamSkillRail(sessionID string) *evolution.TeamSkillEvolutionRail {
 	return m.teamSkillRails[sessionID]
 }
 
 // GetTeamSkillCreateRail 获取指定 session 的 TeamSkillCreateRail。
 // 对齐 Python: TeamManager.get_team_skill_create_rail(session_id)
-func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) any {
+func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) *evolution.TeamSkillCreateRail {
 	return m.teamSkillCreateRails[sessionID]
 }
 
@@ -133,10 +134,9 @@ func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) any {
 //  1. for rail in self._team_skill_rails.values():
 //  2. if request_id in getattr(rail, "_pending_approval_snapshots", {}): return rail
 //  3. return None
-func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) any {
+func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) *evolution.TeamSkillEvolutionRail {
 	for _, rail := range m.teamSkillRails {
-		// 检查 rail 是否有 _pending_approval_snapshots 属性
-		if hasPendingApproval(rail, requestID) {
+		if rail.HasPendingApprovalSnapshot(requestID) {
 			return rail
 		}
 	}
@@ -200,18 +200,6 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 	}
 	// 默认：如果无法判断，保守存储
 	return true
-}
-
-// hasPendingApproval 检查 rail 是否有指定 requestID 的待审批快照。
-func hasPendingApproval(rail any, requestID string) bool {
-	// 尝试通过接口检查
-	type pendingSnapshots interface {
-		HasPendingApprovalSnapshot(requestID string) bool
-	}
-	if checker, ok := rail.(pendingSnapshots); ok {
-		return checker.HasPendingApprovalSnapshot(requestID)
-	}
-	return false
 }
 
 // unregisterLiveRail 从 live rails 中移除并反注册指定 rail。

@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -234,14 +236,16 @@ func TestSkillRegistration(t *testing.T) {
 	mgr := NewTeamManager()
 
 	// TeamSkillRail
-	mgr.RegisterTeamSkillRail("sess-1", "rail-instance")
-	if mgr.GetTeamSkillRail("sess-1") != "rail-instance" {
+	skillRail := &evolution.TeamSkillEvolutionRail{}
+	mgr.RegisterTeamSkillRail("sess-1", skillRail)
+	if mgr.GetTeamSkillRail("sess-1") != skillRail {
 		t.Error("GetTeamSkillRail 应返回注册的 rail")
 	}
 
 	// TeamSkillCreateRail
-	mgr.RegisterTeamSkillCreateRail("sess-1", "create-rail")
-	if mgr.GetTeamSkillCreateRail("sess-1") != "create-rail" {
+	createRail := &evolution.TeamSkillCreateRail{}
+	mgr.RegisterTeamSkillCreateRail("sess-1", createRail)
+	if mgr.GetTeamSkillCreateRail("sess-1") != createRail {
 		t.Error("GetTeamSkillCreateRail 应返回注册的 rail")
 	}
 
@@ -255,9 +259,11 @@ func TestSkillRegistration(t *testing.T) {
 	}
 
 	// TeamMemberSkillEvolutionRail
-	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", "member-rail-1")
-	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", "member-rail-2")
-	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", "member-rail-1") // 重复注册
+	memberRail1 := &evolution.SkillEvolutionRail{}
+	memberRail2 := &evolution.SkillEvolutionRail{}
+	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", memberRail1)
+	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", memberRail2)
+	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", memberRail1) // 重复注册
 	rails := mgr.teamMemberSkillEvoRails["sess-1"]
 	if len(rails) != 2 {
 		t.Errorf("应注册 2 个 member rail，实际 %d", len(rails))
@@ -357,8 +363,8 @@ func TestCleanupRuntimeLocals(t *testing.T) {
 	// 注册一些状态
 	called1 := false
 	mgr.RegisterStreamTask("sess-1", func() { called1 = true })
-	mgr.RegisterTeamSkillRail("sess-1", "rail")
-	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", "member-rail")
+	mgr.RegisterTeamSkillRail("sess-1", &evolution.TeamSkillEvolutionRail{})
+	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", &evolution.SkillEvolutionRail{})
 	mgr.teamRailContexts["sess-1"] = &TeamRailMountContext{}
 
 	// 清理

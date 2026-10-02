@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -74,9 +75,9 @@ type TeamManager struct {
 	// Rail 管理
 	// 对齐 Python: _team_skill_rails, _team_member_skill_evolution_rails, _team_skill_create_rails,
 	//             _team_rail_contexts, _team_live_rails, _team_skill_sync_targets
-	teamSkillRails          map[string]any                   // sessionID → TeamSkillEvolutionRail
-	teamMemberSkillEvoRails map[string][]any                 // sessionID → []SkillEvolutionRail
-	teamSkillCreateRails    map[string]any                   // sessionID → TeamSkillCreateRail
+	teamSkillRails          map[string]*evolution.TeamSkillEvolutionRail     // sessionID → TeamSkillEvolutionRail
+	teamMemberSkillEvoRails map[string][]*evolution.SkillEvolutionRail       // sessionID → []SkillEvolutionRail
+	teamSkillCreateRails    map[string]*evolution.TeamSkillCreateRail        // sessionID → TeamSkillCreateRail
 	teamRailContexts        map[string]*TeamRailMountContext // sessionID → TeamRailMountContext
 	teamLiveRails           map[string][]LiveRailEntry       // sessionID → []LiveRailEntry
 	teamSkillSyncTargets    map[string]SkillSyncTarget       // sessionID → SkillSyncTarget
@@ -112,9 +113,9 @@ func NewTeamManager() *TeamManager {
 		runnerTeamAgents:        make(map[string]*agent.TeamAgent),
 		teamMonitors:            make(map[string]any),
 		streamTasks:             make(map[string]context.CancelFunc),
-		teamSkillRails:          make(map[string]any),
-		teamMemberSkillEvoRails: make(map[string][]any),
-		teamSkillCreateRails:    make(map[string]any),
+		teamSkillRails:          make(map[string]*evolution.TeamSkillEvolutionRail),
+		teamMemberSkillEvoRails: make(map[string][]*evolution.SkillEvolutionRail),
+		teamSkillCreateRails:    make(map[string]*evolution.TeamSkillCreateRail),
 		teamRailContexts:        make(map[string]*TeamRailMountContext),
 		teamLiveRails:           make(map[string][]LiveRailEntry),
 		teamSkillSyncTargets:    make(map[string]SkillSyncTarget),
@@ -148,7 +149,7 @@ func GetTeamManager(channelID string) *TeamManager {
 
 // FindTeamSkillRailAcrossManagers 在所有 channel 的 TeamManager 中查找拥有指定 requestID 的 TeamSkillEvolutionRail。
 // 对齐 Python: find_team_skill_rail_across_managers(request_id)
-func FindTeamSkillRailAcrossManagers(requestID string) any {
+func FindTeamSkillRailAcrossManagers(requestID string) *evolution.TeamSkillEvolutionRail {
 	teamManagersMu.RLock()
 	defer teamManagersMu.RUnlock()
 	for _, mgr := range teamManagers {
