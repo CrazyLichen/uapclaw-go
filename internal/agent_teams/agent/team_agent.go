@@ -424,6 +424,11 @@ func (a *TeamAgent) RemoveEventListener(handle *messager.EventListenerHandle) {
 // LookupHumanAgentRuntime 解析进程内生成的人类代理的活跃 TeamAgent。
 // Python: TeamAgent.lookup_human_agent_runtime(member_name)
 func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
+	// 修复 S-13: 先检查 is_human_agent，对齐 Python: backend.is_human_agent(member_name)
+	backend := a.TeamBackend()
+	if backend == nil || !backend.IsHumanAgent(memberName) {
+		return nil
+	}
 	if a.spawnManager == nil {
 		return nil
 	}
