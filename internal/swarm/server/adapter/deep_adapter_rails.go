@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -615,6 +616,15 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		provider := ext.NewOpenVikingProvider(endpoint, apiKey, account, user, agent)
 		if !provider.IsAvailable() {
 			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider unavailable")
+			return nil
+		}
+		return provider
+	case "openjiuwen":
+		// 对齐 Python: openjiuwen provider 分支
+		providerConfig := buildOpenJiuwenProviderConfig(cfg, d.configCache)
+		provider := ext.NewOpenJiuwenProvider(providerConfig)
+		if !provider.IsAvailable() {
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenJiuwenProvider 不可用")
 			return nil
 		}
 		return provider
@@ -1555,5 +1565,52 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 		logger.Warn(logComponent).Str("method", methodName).
 			Msg("unknown dynamic Rail builder method name")
 		return nil
+	}
+}
+
+// buildOpenJiuwenProviderConfig 将 memory.external.openjiuwen 配置映射为 OpenJiuwenProvider 预期的 config dict。
+// 对齐 Python: build_openjiuwen_provider_config(ext_cfg) (external_memory_config.py L87-126)
+func buildOpenJiuwenProviderConfig(cfg map[string]any, configCache map[string]any) map[string]any {
+	ojCfg, _ := cfg["openjiuwen"].(map[string]any)
+	if ojCfg == nil {
+		ojCfg = make(map[string]any)
+	}
+	ltmDir := filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
+
+	// KV 配置
+	kvBackend := strOr(strVal(ojCfg["kv_type"]), "shelve")
+	kvBackend = strings.ToLower(strings.TrimSpace(kvBackend))
+	kvPath := strOr(strVal(ojCfg["kv_path"]), filepath.Join(ltmDir, "kv"))
+
+	// Vector 配置
+	vectorBackend := strOr(strVal(ojCfg["vector_type"]), "chroma")
+	vectorBackend = strings.ToLower(strings.TrimSpace(vectorBackend))
+	vectorDir := strOr(strVal(ojCfg["vector_persist_dir"]), filepath.Join(ltmDir, "chroma"))
+
+	// DB 配置
+	dbBackend := strOr(strVal(ojCfg["db_type"]), "sqlite")
+	dbBackend = strings.ToLower(strings.TrimSpace(dbBackend))
+	dbPath := strOr(strVal(ojCfg["db_path"]), filepath.Join(ltmDir, "ltm.db"))
+
+	// Embedding 配置 — 从顶层 embed 配置获取
+	embedCfg, _ := configCache["embed"].(map[string]any)
+	embeddingConfig := map[string]any{}
+	if embedCfg != nil {
+		modelName := strOr(strVal(embedCfg["embed_model"]), os.Getenv("EMBED_MODEL"))
+		baseURL := strOr(strVal(embedCfg["embed_api_base"]), os.Getenv("EMBED_BASE_URL"))
+		apiKey := strOr(strVal(embedCfg["embed_api_key"]), os.Getenv("EMBED_API_KEY"))
+		embeddingConfig["model_name"] = modelName
+		embeddingConfig["base_url"] = baseURL
+		embeddingConfig["api_key"] = apiKey
+		if modelName == "" {
+			logger.Warn(logComponent).Msg("buildOpenJiuwenProviderConfig: Embedding 未配置 — LTM 将跳过向量搜索")
+		}
+	}
+
+	return map[string]any{
+		"kv":        map[string]any{"backend": kvBackend, "path": kvPath},
+		"vector":    map[string]any{"backend": vectorBackend, "persist_directory": vectorDir},
+		"db":        map[string]any{"backend": dbBackend, "path": dbPath},
+		"embedding": embeddingConfig,
 	}
 }

@@ -13,22 +13,23 @@ import (
 // MemoryScopeConfig 记忆作用域配置，定义各类型记忆的提取规则。
 //
 // Python: openjiuwen/core/memory/config/config.py (MemoryScopeConfig)
+// JSON tag 使用 snake_case 对齐 Python 字段名（model_dump_json(by_alias=True)）
 type MemoryScopeConfig struct {
 	// UserProfileDefinition 用户画像提取规则定义
-	UserProfileDefinition string
+	UserProfileDefinition string `json:"user_profile_definition"`
 	// SemanticMemoryDefinition 语义记忆提取规则定义
-	SemanticMemoryDefinition string
+	SemanticMemoryDefinition string `json:"semantic_memory_definition"`
 	// EpisodicMemoryDefinition 情景记忆提取规则定义
-	EpisodicMemoryDefinition string
+	EpisodicMemoryDefinition string `json:"episodic_memory_definition"`
 	// ModelCfg 模型请求配置（7.27 回填时使用）
 	// Python: model_cfg: ModelRequestConfig = None
-	ModelCfg *llmschema.ModelRequestConfig
+	ModelCfg *llmschema.ModelRequestConfig `json:"model_cfg"`
 	// ModelClientCfg 模型客户端配置（7.27 回填时使用）
 	// Python: model_client_cfg: ModelClientConfig = None
-	ModelClientCfg *llmschema.ModelClientConfig
+	ModelClientCfg *llmschema.ModelClientConfig `json:"model_client_cfg"`
 	// EmbeddingCfg 嵌入模型配置（7.27 回填时使用）
 	// Python: embedding_cfg: EmbeddingConfig = None
-	EmbeddingCfg *embedding.EmbeddingConfig
+	EmbeddingCfg *embedding.EmbeddingConfig `json:"embedding_cfg"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
