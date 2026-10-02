@@ -673,6 +673,9 @@ func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	}
 	// Python: team_member.update_status(SHUTDOWN)
 	_ = a.UpdateStatus(ctx, atschema.MemberStatusShutdown)
+	// 修复 S-12: 关闭流队列，让 invoke/stream 读取循环退出
+	// Python: self._close_stream()
+	a.CloseStream()
 	return nil
 }
 
