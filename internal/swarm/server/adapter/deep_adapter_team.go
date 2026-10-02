@@ -164,7 +164,11 @@ func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 // processTeamMessageStream team 模式流式消息处理。
 // 对齐 Python: team_helpers.process_team_message_stream()
 // 9.55: 实现核心分流逻辑
-func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inputs map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
+//
+// 参数分工对齐 Python：
+//   - req（AgentRequest）：元信息 — session_id, request_id, channel_id
+//   - inputs：业务参数 — query, params.team_name 等
+func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentschema.AgentRequest, inputs map[string]any) (<-chan *agentschema.AgentResponseChunk, error) {
 	logger.Info(logComponent).Str("mode", "team").Msg("processTeamMessageStream: team 模式分流")
 
 	ch := make(chan *agentschema.AgentResponseChunk, 64)
@@ -176,16 +180,20 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req any, inp
 		return ch, fmt.Errorf("TeamRuntimeManager 不可用")
 	}
 
-	// 步骤 2: 提取 team_name 和 session_id（简化实现）
-	teamName := ""
+	// 步骤 2: 从 req 获取元信息（对齐 Python: request.session_id / request.request_id / request.channel_id）
 	sessionID := ""
+	if req.SessionID != nil {
+		sessionID = *req.SessionID
+	}
+	_ = req.RequestID  // 预留：后续可用于请求追踪
+	_ = req.ChannelID  // 预留：后续可用于频道路由
+
+	// 从 inputs 获取业务参数（对齐 Python: inputs.get("query", ""), inputs.get("params", {})）
+	teamName := ""
 	if params, ok := inputs["params"].(map[string]any); ok {
 		if tn, ok := params["team_name"].(string); ok {
 			teamName = tn
 		}
-	}
-	if sID, ok := inputs["conversation_id"].(string); ok {
-		sessionID = sID
 	}
 
 	go func() {
