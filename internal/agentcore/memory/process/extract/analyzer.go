@@ -39,35 +39,12 @@ type MemoryAnalyzerResult struct {
 	Summary string `json:"summary"`
 }
 
-// MemoryAnalyzer 记忆分析器，通过 LLM 从对话中提取变量和摘要。
-//
-// 无状态分析器，所有方法均为静态（对齐 Python: __init__: pass, @staticmethod）。
-//
-// Python: openjiuwen/core/memory/process/extract/memory_analyzer.py (MemoryAnalyzer)
-type MemoryAnalyzer struct{}
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Analyze 分析对话消息，提取变量和摘要。
 //
-// 流程：
-//  1. messages 为空时返回 nil（对齐 Python: if len(messages) == 0: return None）
-//  2. 格式化 history_messages 和 messages 为字符串
-//  3. 从 memory_config.mem_variables 构建 variables_description 和 variables_output_format JSON
-//  4. forbidden_variables 空字符串映射为 "None"
-//  5. 加载 memory_analysis_prompt 模板
-//  6. 调用 LLM + JsonOutputParser 解析，最多重试 retries 次
-//  7. !enable_long_term_mem || !enable_summary_memory 时清空 summary
-//  8. 全部重试失败返回空 MemoryAnalyzerResult
-//
-// Python: MemoryAnalyzer.analyze (@staticmethod)
-func (MemoryAnalyzer) Analyze(
+// 包级函数，对齐 Python MemoryAnalyzer.analyze (@staticmethod)。
+func Analyze(
 	ctx context.Context,
 	messages []llmschema.BaseMessage,
 	historyMessages []llmschema.BaseMessage,

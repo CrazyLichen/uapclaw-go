@@ -41,6 +41,8 @@ type MemoryOperationParams struct {
 	// BaseModel 基础聊天模型
 	BaseModel *llm.Model
 	// SemanticStore 语义存储（用于搜索旧记忆做语义验证）
+	// TODO(#7.27): 回填为具体类型——当前 Go 版 SearchManager.Search 不再接收 semantic_store 参数（已内置），
+	// 此字段保留供 7.27 回填时使用。
 	SemanticStore any
 }
 

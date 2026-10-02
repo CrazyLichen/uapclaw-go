@@ -35,13 +35,14 @@ func TestProcessExtractedData_正常转换(t *testing.T) {
 		{VariableKey: "name", VariableValue: "张三"},
 		{VariableKey: "age", VariableValue: "25"},
 	}
-	result := g.processExtractedData(variables)
+	result := g.processExtractedData("user1", variables)
 	require.Len(t, result, 2)
 	assert.Equal(t, "name", result[0].VariableName)
 	assert.Equal(t, "张三", result[0].VariableMem)
 	assert.Equal(t, "age", result[1].VariableName)
 	assert.Equal(t, "25", result[1].VariableMem)
 	assert.Equal(t, mem_model.MemoryTypeVariable, result[0].MemType)
+	assert.NotEmpty(t, result[0].MemID)
 }
 
 // TestProcessExtractedData_空值跳过 测试 VariableValue 为空时跳过
@@ -51,7 +52,7 @@ func TestProcessExtractedData_空值跳过(t *testing.T) {
 		{VariableKey: "name", VariableValue: "张三"},
 		{VariableKey: "empty", VariableValue: ""},
 	}
-	result := g.processExtractedData(variables)
+	result := g.processExtractedData("user1", variables)
 	assert.Len(t, result, 1)
 	assert.Equal(t, "name", result[0].VariableName)
 }
@@ -59,7 +60,7 @@ func TestProcessExtractedData_空值跳过(t *testing.T) {
 // TestProcessExtractedData_空列表 测试空输入返回空列表
 func TestProcessExtractedData_空列表(t *testing.T) {
 	g := NewGenerator(mem_model.NewDataIdManager(), nil)
-	result := g.processExtractedData([]VariableResult{})
+	result := g.processExtractedData("user1", []VariableResult{})
 	assert.Empty(t, result)
 }
 
@@ -181,7 +182,7 @@ func TestProcessProactiveMemoryData_无memContent跳过(t *testing.T) {
 // TestHandleMemoryWithInstruct_分离UPDATE和DELETE 测试分离 UPDATE 和 DELETE 操作
 func TestHandleMemoryWithInstruct_分离UPDATE和DELETE(t *testing.T) {
 	// 此测试仅验证映射常量的正确性，
-	// 不依赖真实 SearchManager（processMemoryOperations 需要 searchManager 为 nil 时会 panic）
+	// 不依赖真实 SearchManager（processMemoryCommands 需要 searchManager 为 nil 时会返回空）
 	// 所以只测试方法本身的数据分组逻辑
 
 	// 验证 categoryToClass 映射
@@ -220,16 +221,14 @@ func TestGenAllMemory_必填参数缺失(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := g.GenAllMemory(
-				context.Background(),
-				tt.messages,
-				nil,
-				tt.model,
-				config.DefaultAgentMemoryConfig(),
-				nil, nil,
-				tt.userID, tt.scopeID,
-				"", "", "", 128, nil,
-			)
+			params := &GenAllMemoryParams{
+				Messages:     tt.messages,
+				BaseModel:    tt.model,
+				MemoryConfig: config.DefaultAgentMemoryConfig(),
+				UserID:       tt.userID,
+				ScopeID:      tt.scopeID,
+			}
+			result, err := g.GenAllMemory(context.Background(), params)
 			require.NoError(t, err)
 			assert.Empty(t, result)
 		})
@@ -257,16 +256,18 @@ func TestGenAllMemory_关闭长期记忆(t *testing.T) {
 		EnableSummaryMemory:  true,
 	}
 
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("我叫张三")},
-		nil,
-		model,
-		memoryConfig,
-		nil, nil,
-		"user1", "scope1",
-		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
-	)
+	params := &GenAllMemoryParams{
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("我叫张三")},
+		BaseModel:       model,
+		MemoryConfig:    memoryConfig,
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		MessageMemID:    "msg1",
+		Timestamp:       "2025-01-01T00:00:00Z",
+		SummaryMaxToken: 128,
+	}
+
+	result, err := g.GenAllMemory(context.Background(), params)
 	require.NoError(t, err)
 	// 应该只有 variable 类型
 	varType := mem_model.MemoryTypeVariable.String()
@@ -295,16 +296,18 @@ func TestGenAllMemory_无关键信息(t *testing.T) {
 		EnableSummaryMemory:  true,
 	}
 
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("今天天气不错")},
-		nil,
-		model,
-		memoryConfig,
-		nil, nil,
-		"user1", "scope1",
-		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
-	)
+	params := &GenAllMemoryParams{
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("今天天气不错")},
+		BaseModel:       model,
+		MemoryConfig:    memoryConfig,
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		MessageMemID:    "msg1",
+		Timestamp:       "2025-01-01T00:00:00Z",
+		SummaryMaxToken: 128,
+	}
+
+	result, err := g.GenAllMemory(context.Background(), params)
 	require.NoError(t, err)
 	// 应包含 summary
 	summaryType := mem_model.MemoryTypeSummary.String()
@@ -333,16 +336,18 @@ func TestGenAllMemory_摘要记忆关闭(t *testing.T) {
 		EnableSummaryMemory:  false,
 	}
 
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
-		nil,
-		model,
-		memoryConfig,
-		nil, nil,
-		"user1", "scope1",
-		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
-	)
+	params := &GenAllMemoryParams{
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseModel:       model,
+		MemoryConfig:    memoryConfig,
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		MessageMemID:    "msg1",
+		Timestamp:       "2025-01-01T00:00:00Z",
+		SummaryMaxToken: 128,
+	}
+
+	result, err := g.GenAllMemory(context.Background(), params)
 	require.NoError(t, err)
 	summaryType := mem_model.MemoryTypeSummary.String()
 	assert.NotContains(t, result, summaryType)
@@ -383,16 +388,18 @@ func TestGenAllMemory_部分fragment关闭(t *testing.T) {
 		EnableSummaryMemory:  true,
 	}
 
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
-		nil,
-		model,
-		memoryConfig,
-		nil, nil,
-		"user1", "scope1",
-		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
-	)
+	params := &GenAllMemoryParams{
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseModel:       model,
+		MemoryConfig:    memoryConfig,
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		MessageMemID:    "msg1",
+		Timestamp:       "2025-01-01T00:00:00Z",
+		SummaryMaxToken: 128,
+	}
+
+	result, err := g.GenAllMemory(context.Background(), params)
 	require.NoError(t, err)
 	// user_profile 开启
 	assert.Contains(t, result, mem_model.MemoryTypeUserProfile.String())
@@ -445,16 +452,18 @@ func TestGenAllMemory_完整流程(t *testing.T) {
 		EnableSummaryMemory:  true,
 	}
 
-	result, err := g.GenAllMemory(
-		context.Background(),
-		[]llmschema.BaseMessage{llmschema.NewUserMessage("我叫张三，喜欢编程")},
-		nil,
-		model,
-		memoryConfig,
-		nil, nil,
-		"user1", "scope1",
-		"", "msg1", "2025-01-01T00:00:00Z", 128, nil,
-	)
+	params := &GenAllMemoryParams{
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("我叫张三，喜欢编程")},
+		BaseModel:       model,
+		MemoryConfig:    memoryConfig,
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		MessageMemID:    "msg1",
+		Timestamp:       "2025-01-01T00:00:00Z",
+		SummaryMaxToken: 128,
+	}
+
+	result, err := g.GenAllMemory(context.Background(), params)
 	require.NoError(t, err)
 	// 应包含 variable、summary、user_profile、semantic_memory
 	assert.Contains(t, result, mem_model.MemoryTypeVariable.String())

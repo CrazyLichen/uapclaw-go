@@ -17,12 +17,11 @@ import (
 
 // TestAnalyze_消息为空返回nil 测试 messages 为空时返回 nil
 func TestAnalyze_消息为空返回nil(t *testing.T) {
-	analyzer := MemoryAnalyzer{}
 	model := newFakeModelWithResponse(t, `{}`)
 
 	memoryConfig := config.DefaultAgentMemoryConfig()
 
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{}, // 空 messages
 		nil,
@@ -55,8 +54,8 @@ func TestAnalyze_正常分析返回结果(t *testing.T) {
 			*commonschema.NewStringParam("name", "用户姓名", true),
 			*commonschema.NewStringParam("age", "用户年龄", true),
 		},
-		EnableLongTermMem:   true,
-		EnableUserProfile:   true,
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
 		EnableSemanticMemory: true,
 		EnableEpisodicMemory: true,
 		EnableSummaryMemory:  true,
@@ -70,8 +69,7 @@ func TestAnalyze_正常分析返回结果(t *testing.T) {
 		llmschema.NewAssistantMessage("你好！有什么可以帮你的？"),
 	}
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		messages,
 		historyMessages,
@@ -100,8 +98,7 @@ func TestAnalyze_LLM解析失败返回空结果(t *testing.T) {
 
 	memoryConfig := config.DefaultAgentMemoryConfig()
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		nil,
@@ -127,8 +124,7 @@ func TestAnalyze_Invoke错误向上传播(t *testing.T) {
 
 	memoryConfig := config.DefaultAgentMemoryConfig()
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		nil,
@@ -155,16 +151,15 @@ func TestAnalyze_关闭长期记忆时清空摘要(t *testing.T) {
 
 	model := newFakeModelWithResponse(t, jsonResponse)
 	memoryConfig := &config.AgentMemoryConfig{
-		MemVariables:      []commonschema.Param{},
-		EnableLongTermMem:  false, // 关闭长期记忆
-		EnableUserProfile:  true,
+		MemVariables:         []commonschema.Param{},
+		EnableLongTermMem:    false, // 关闭长期记忆
+		EnableUserProfile:    true,
 		EnableSemanticMemory: true,
 		EnableEpisodicMemory: true,
 		EnableSummaryMemory:  true,
 	}
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		nil,
@@ -192,16 +187,15 @@ func TestAnalyze_关闭摘要记忆时清空摘要(t *testing.T) {
 
 	model := newFakeModelWithResponse(t, jsonResponse)
 	memoryConfig := &config.AgentMemoryConfig{
-		MemVariables:      []commonschema.Param{},
-		EnableLongTermMem:  true,
-		EnableUserProfile:  true,
+		MemVariables:         []commonschema.Param{},
+		EnableLongTermMem:    true,
+		EnableUserProfile:    true,
 		EnableSemanticMemory: true,
 		EnableEpisodicMemory: true,
 		EnableSummaryMemory:  false, // 关闭摘要记忆
 	}
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		nil,
@@ -229,8 +223,7 @@ func TestAnalyze_scopeConfig为nil时使用默认值(t *testing.T) {
 	model := newFakeModelWithResponse(t, jsonResponse)
 	memoryConfig := config.DefaultAgentMemoryConfig()
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("历史消息")}, // 有历史消息
@@ -266,8 +259,7 @@ func TestAnalyze_有变量配置(t *testing.T) {
 		EnableSummaryMemory:  true,
 	}
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("我喜欢编程")},
 		nil,
@@ -302,8 +294,7 @@ func TestAnalyze_forbiddenVariables空字符串映射为None(t *testing.T) {
 	model := newFakeModelWithResponse(t, jsonResponse)
 	memoryConfig := config.DefaultAgentMemoryConfig()
 
-	analyzer := MemoryAnalyzer{}
-	result, err := analyzer.Analyze(
+	result, err := Analyze(
 		context.Background(),
 		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		nil,

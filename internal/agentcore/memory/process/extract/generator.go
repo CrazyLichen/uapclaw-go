@@ -39,6 +39,43 @@ type Generator struct {
 	searchManager *search.SearchManager
 }
 
+// GenAllMemoryParams 记忆生成编排器的全部参数。
+//
+// Python 的 gen_all_memory 使用 **kwargs 接收参数，
+// Go 无法用 **kwargs，将所有参数收进此结构体，方法签名更清晰。
+//
+// Python: Generator.gen_all_memory(**kwargs)
+type GenAllMemoryParams struct {
+	// Messages 当前轮次消息列表
+	Messages []llmschema.BaseMessage
+	// HistoryMessages 历史消息列表
+	HistoryMessages []llmschema.BaseMessage
+	// BaseModel 基础聊天模型
+	BaseModel *llm.Model
+	// MemoryConfig Agent 记忆配置
+	MemoryConfig *config.AgentMemoryConfig
+	// EngineConfig 记忆引擎配置（可选，提取 forbiddenVariables 和 summaryMaxToken）
+	EngineConfig *config.MemoryEngineConfig
+	// ScopeConfig 记忆作用域配置（可选）
+	ScopeConfig *config.MemoryScopeConfig
+	// UserID 用户标识
+	UserID string
+	// ScopeID 作用域标识
+	ScopeID string
+	// ForbiddenVariables 禁用变量名列表（逗号分隔，对齐 Python forbidden_variables）
+	ForbiddenVariables string
+	// MessageMemID 关联消息 ID
+	MessageMemID string
+	// Timestamp 时间戳
+	Timestamp string
+	// SummaryMaxToken 单轮历史摘要最大 token 数
+	SummaryMaxToken int
+	// SemanticStore 语义存储（用于搜索旧记忆做语义验证）
+	// TODO(#7.27): 回填为具体类型——当前 Go 版 SearchManager.Search 不再接收 semantic_store 参数（已内置），
+	// 此字段仅传递到 MemoryOperationParams 供 7.27 回填时使用。
+	SemanticStore any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -76,9 +113,9 @@ func NewGenerator(dataIdGenerator *mem_model.DataIdManager, searchManager *searc
 // GenAllMemory 编排全部记忆生成流程。
 //
 // 流程：
-//  1. 验证必填参数（messages, config, userID, scopeID, model）
+//  1. 验证必填参数（messages, memoryConfig, userID, scopeID, baseModel）
 //  2. 构建 ExtractMemoryParams
-//  3. 调 MemoryAnalyzer.Analyze
+//  3. 调 Analyze（包级函数）
 //  4. 调 processExtractedData 处理变量
 //  5. 按 enable 标志判断是否继续
 //  6. 调 processSummaryData 生成摘要单元
@@ -90,51 +127,39 @@ func NewGenerator(dataIdGenerator *mem_model.DataIdManager, searchManager *searc
 // Python: Generator.gen_all_memory
 func (g *Generator) GenAllMemory(
 	ctx context.Context,
-	messages []llmschema.BaseMessage,
-	historyMessages []llmschema.BaseMessage,
-	baseChatModel *llm.Model,
-	memoryConfig *config.AgentMemoryConfig,
-	engineConfig *config.MemoryEngineConfig,
-	scopeConfig *config.MemoryScopeConfig,
-	userID string,
-	scopeID string,
-	forbiddenVariables string,
-	messageMemID string,
-	timestamp string,
-	summaryMaxToken int,
-	semanticStore any,
+	params *GenAllMemoryParams,
 ) (map[string][]mem_model.MemoryUnit, error) {
 	// 步骤 1：验证必填参数（对齐 Python: if not all([messages, config, user_id, scope_id, model])）
-	if len(messages) == 0 || memoryConfig == nil || userID == "" || scopeID == "" || baseChatModel == nil {
+	if len(params.Messages) == 0 || params.MemoryConfig == nil || params.UserID == "" || params.ScopeID == "" || params.BaseModel == nil {
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_PROCESS").
-			Str("user_id", userID).
-			Str("scope_id", scopeID).
+			Str("user_id", params.UserID).
+			Str("scope_id", params.ScopeID).
 			Msg("Messages, config, user_id, scope_id, model are required parameters")
 		return map[string][]mem_model.MemoryUnit{}, nil
 	}
 
 	// 步骤 2：构建 ExtractMemoryParams（对齐 Python: extract_memory_params = ExtractMemoryParams(...)）
 	extractMemoryParams := &ExtractMemoryParams{
-		UserID:          userID,
-		ScopeID:         scopeID,
-		Messages:        messages,
-		HistoryMessages: historyMessages,
-		BaseModel:       baseChatModel,
+		UserID:          params.UserID,
+		ScopeID:         params.ScopeID,
+		Messages:        params.Messages,
+		HistoryMessages: params.HistoryMessages,
+		BaseModel:       params.BaseModel,
 	}
 
 	allMemoryResults := map[string][]mem_model.MemoryUnit{}
 
-	// 步骤 3：调 MemoryAnalyzer.Analyze（对齐 Python: memory_analyze_res = await MemoryAnalyzer.analyze(...)）
-	memoryAnalyzeRes, err := MemoryAnalyzer{}.Analyze(
+	// 步骤 3：调 Analyze（对齐 Python: memory_analyze_res = await MemoryAnalyzer.analyze(...)）
+	memoryAnalyzeRes, err := Analyze(
 		ctx,
-		messages,
-		historyMessages,
-		baseChatModel,
-		memoryConfig,
-		summaryMaxToken,
-		scopeConfig,
-		forbiddenVariables,
+		params.Messages,
+		params.HistoryMessages,
+		params.BaseModel,
+		params.MemoryConfig,
+		params.SummaryMaxToken,
+		params.ScopeConfig,
+		params.ForbiddenVariables,
 		3,
 	)
 	if err != nil {
@@ -146,7 +171,7 @@ func (g *Generator) GenAllMemory(
 	}
 
 	// 步骤 4：调 processExtractedData 处理变量（对齐 Python: variable_units = self._process_extracted_data(...)）
-	variableUnits := g.processExtractedData(memoryAnalyzeRes.Variables)
+	variableUnits := g.processExtractedData(params.UserID, memoryAnalyzeRes.Variables)
 	for _, unit := range variableUnits {
 		memType := unit.MemType.String()
 		if _, ok := allMemoryResults[memType]; !ok {
@@ -156,18 +181,18 @@ func (g *Generator) GenAllMemory(
 	}
 
 	// 步骤 5：按 enable 标志判断是否继续（对齐 Python: if not config.enable_long_term_mem）
-	if !memoryConfig.EnableLongTermMem {
+	if !params.MemoryConfig.EnableLongTermMem {
 		logger.Info(logComponent).
 			Str("event_type", "MEMORY_PROCESS").
-			Str("user_id", userID).
-			Str("scope_id", scopeID).
+			Str("user_id", params.UserID).
+			Str("scope_id", params.ScopeID).
 			Msg("未启用长期记忆")
 		return allMemoryResults, nil
 	}
 
 	// 步骤 6：调 processSummaryData 生成摘要单元（对齐 Python: if config.enable_summary_memory: summary_unit = ...）
-	if memoryConfig.EnableSummaryMemory {
-		summaryUnit := g.processSummaryData(userID, messageMemID, memoryAnalyzeRes.Summary, timestamp)
+	if params.MemoryConfig.EnableSummaryMemory {
+		summaryUnit := g.processSummaryData(params.UserID, params.MessageMemID, memoryAnalyzeRes.Summary, params.Timestamp)
 		summaryType := summaryUnit.MemType.String()
 		if _, ok := allMemoryResults[summaryType]; !ok {
 			allMemoryResults[summaryType] = []mem_model.MemoryUnit{}
@@ -182,19 +207,19 @@ func (g *Generator) GenAllMemory(
 
 	// fragment_enable 映射（对齐 Python: fragment_enable = {MemoryType.XXX.value: config.enable_xxx}）
 	fragmentEnable := map[string]bool{
-		mem_model.MemoryTypeUserProfile.String():    memoryConfig.EnableUserProfile,
-		mem_model.MemoryTypeSemanticMemory.String(): memoryConfig.EnableSemanticMemory,
-		mem_model.MemoryTypeEpisodicMemory.String(): memoryConfig.EnableEpisodicMemory,
+		mem_model.MemoryTypeUserProfile.String():    params.MemoryConfig.EnableUserProfile,
+		mem_model.MemoryTypeSemanticMemory.String(): params.MemoryConfig.EnableSemanticMemory,
+		mem_model.MemoryTypeEpisodicMemory.String(): params.MemoryConfig.EnableEpisodicMemory,
 	}
 
 	// 步骤 8：调 categoriesToMemoryUnit（对齐 Python: try: merged_units = await self._categories_to_memory_unit(...)）
-	mergedUnits, err := g.categoriesToMemoryUnit(ctx, extractMemoryParams, messageMemID, timestamp, scopeConfig, semanticStore)
+	mergedUnits, err := g.categoriesToMemoryUnit(ctx, extractMemoryParams, params.MessageMemID, params.Timestamp, params.ScopeConfig, params.SemanticStore)
 	if err != nil {
 		// 对齐 Python: except AttributeError/ValueError/BaseException → 记日志并返回已有结果
 		logger.Warn(logComponent).
 			Str("event_type", "MEMORY_PROCESS").
-			Str("user_id", userID).
-			Str("scope_id", scopeID).
+			Str("user_id", params.UserID).
+			Str("scope_id", params.ScopeID).
 			Str("exception", err.Error()).
 			Msg("获取冲突信息时发生异常")
 		return allMemoryResults, nil
@@ -213,8 +238,8 @@ func (g *Generator) GenAllMemory(
 
 	logger.Info(logComponent).
 		Str("event_type", "MEMORY_PROCESS").
-		Str("user_id", userID).
-		Str("scope_id", scopeID).
+		Str("user_id", params.UserID).
+		Str("scope_id", params.ScopeID).
 		Msg("记忆单元生成成功")
 
 	return allMemoryResults, nil
@@ -273,16 +298,20 @@ func (g *Generator) categoriesToMemoryUnit(
 // processExtractedData 将 VariableResult 列表转换为 VariableUnit 列表。
 //
 // 对齐 Python: Generator._process_extracted_data（@staticmethod）
-func (g *Generator) processExtractedData(variableResults []VariableResult) []*mem_model.VariableUnit {
+// 注意：Python VariableUnit 无 mem_id 字段，但 Go 的 VariableUnit 嵌入了 BaseMemoryUnit（有 MemID），
+// 下游写入依赖 MemID，因此需要为每个 VariableUnit 生成唯一 ID。
+func (g *Generator) processExtractedData(userID string, variableResults []VariableResult) []*mem_model.VariableUnit {
 	variableUnits := make([]*mem_model.VariableUnit, 0, len(variableResults))
 	for _, tmpData := range variableResults {
 		// 对齐 Python: if not tmp_data.variable_value: continue
 		if tmpData.VariableValue == "" {
 			continue
 		}
+		memID := g.dataIdGenerator.GenerateNextID(userID)
 		variableUnits = append(variableUnits, &mem_model.VariableUnit{
 			BaseMemoryUnit: mem_model.BaseMemoryUnit{
 				MemType: mem_model.MemoryTypeVariable,
+				MemID:   memID,
 			},
 			VariableName: tmpData.VariableKey,
 			VariableMem:  tmpData.VariableValue,
