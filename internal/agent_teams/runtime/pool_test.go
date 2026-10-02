@@ -150,14 +150,11 @@ func TestTeamRuntimePool_RemoveTeam(t *testing.T) {
 func TestTeamRuntimeManager_满足RegistryPoolAccessor(t *testing.T) {
 	var _ registry.PoolAccessor = (*TeamRuntimeManager)(nil)
 	mgr := NewTeamRuntimeManager()
-	if mgr.PoolAny() == nil {
-		t.Error("PoolAny() 应返回非 nil")
+	pool := mgr.PoolReader()
+	if pool == nil {
+		t.Error("PoolReader() 应返回非 nil")
 	}
-	// PoolAny() 返回的值应满足 PoolReader
-	pool, ok := mgr.PoolAny().(registry.PoolReader)
-	if !ok {
-		t.Error("PoolAny() 返回值应满足 registry.PoolReader")
-	}
-	_ = pool
+	// PoolReader() 返回的值应满足 PoolReader
+	var _ registry.PoolReader = pool
 	_ = context.Background()
 }

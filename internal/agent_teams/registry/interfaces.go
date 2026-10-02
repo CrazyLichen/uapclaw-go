@@ -4,11 +4,12 @@ package registry
 
 // PoolAccessor 运行时池访问接口。
 // 打破 agent ↔ runtime 循环依赖：agent 和 runtime 都依赖 registry，互不 import。
+// runner 也依赖 registry 存储此接口类型，避免 any。
 // Python 对应：TeamRuntimeManager.pool 属性
 type PoolAccessor interface {
-	// PoolAny 返回运行时池（any 类型，避免返回类型绑定具体包）
-	// 方法名用 PoolAny 避免与 TeamRuntimeManager.Pool() *TeamRuntimePool 签名冲突
-	PoolAny() any
+	// PoolReader 返回运行时池的最小读取+移除接口。
+	// 方法名用 PoolReader 避免与 TeamRuntimeManager.Pool() *TeamRuntimePool 签名冲突。
+	PoolReader() PoolReader
 }
 
 // PoolReader 运行时池最小读取+移除接口。

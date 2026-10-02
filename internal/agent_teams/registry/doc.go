@@ -1,14 +1,19 @@
 // Package registry 提供团队运行时池的访问接口，打破 agent ↔ runtime 循环依赖。
 //
 // 本包定义 PoolAccessor 和 PoolReader 最小接口：
-// agent 包通过这些接口访问 TeamRuntimeManager 的 Pool 功能，
-// 无需直接 import runtime 包（避免 agent → runtime → agent 循环）。
+//   - PoolAccessor(PoolReader() PoolReader)：runner 存储此类型，agent 通过 runner 获取
+//   - PoolReader(GetSessionIDForTeam/RemoveTeam)：agent 只需这两个操作
 //
-// 原来的 PoolEntry 接口（含 GetEntry/RemoveEntry/HasActive/ListTeamNames/TeamsForSession）
-// 和 PoolTeamEntry 接口已删除，因为：
-// - 应用层 TeamManager（swarm/agents/harness/team）替代了间接访问
-// - adapter 直接通过 runtime.GetTeamRuntimeManager().Pool() 访问池
-// - agent 包只需要 GetSessionIDForTeam + RemoveTeam 两个操作
+// 依赖关系：
+//
+//	runner ──→ registry    （teamRuntimeManager 字段类型为 PoolAccessor）
+//	runtime ──→ registry   （实现 PoolAccessor + PoolReader）
+//	agent  ──→ runner      （通过 GetTeamRuntimeManager() 获取 PoolAccessor，零断言）
+//
+// 原来的 PoolEntry/PoolTeamEntry 接口和 PoolAny() any 已删除，因为：
+//   - 应用层 TeamManager 替代了间接访问
+//   - PoolAccessor.PoolReader() 返回 PoolReader 接口，无需 any 中转
+//   - agent 包零类型断言直接调用
 //
 // 文件目录：
 //

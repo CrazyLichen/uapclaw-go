@@ -75,8 +75,8 @@ func (m *TeamRuntimeManager) Pool() *TeamRuntimePool {
 	return m.pool
 }
 
-// PoolAny 返回运行时池（any 类型，满足 registry.PoolAccessor 接口）。
-func (m *TeamRuntimeManager) PoolAny() any {
+// PoolReader 返回运行时池的最小读取+移除接口（满足 registry.PoolAccessor）。
+func (m *TeamRuntimeManager) PoolReader() registry.PoolReader {
 	return m.pool
 }
 
