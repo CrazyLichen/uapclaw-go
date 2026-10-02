@@ -140,10 +140,10 @@ func (p *TeamRuntimePool) ListTeamNames() []string {
 
 // TeamsForSession 返回绑定到指定 session 的所有活跃团队。
 // Python: TeamRuntimePool.teams_for_session(session_id)
-func (p *TeamRuntimePool) TeamsForSession(sessionID string) []*ActiveTeam {
+func (p *TeamRuntimePool) TeamsForSession(sessionID string) []registry.PoolTeamEntry {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	var result []*ActiveTeam
+	var result []registry.PoolTeamEntry
 	for _, entry := range p.entries {
 		if entry.SessionID == sessionID {
 			result = append(result, entry)

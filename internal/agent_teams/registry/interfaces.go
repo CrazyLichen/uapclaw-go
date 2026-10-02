@@ -26,6 +26,12 @@ type PoolEntry interface {
 	GetEntry(teamName string) PoolTeamEntry
 	// RemoveEntry 移除指定团队的活跃条目
 	RemoveEntry(teamName string)
+	// HasActive 检查指定团队是否有活跃条目
+	HasActive(teamName string) bool
+	// ListTeamNames 列出所有活跃团队名称
+	ListTeamNames() []string
+	// TeamsForSession 获取指定 session 下的所有团队条目
+	TeamsForSession(sessionID string) []PoolTeamEntry
 }
 
 // PoolTeamEntry 池中团队条目。
