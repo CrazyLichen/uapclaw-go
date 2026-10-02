@@ -189,18 +189,15 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isLeaderRole 检查 TeamRailMountContext 中的 member_info 是否为 leader 角色。
+// 对齐 Python: getattr(context.member_info, "role", None) == "leader"
 func isLeaderRole(ctx *TeamRailMountContext) bool {
 	if ctx == nil || ctx.MemberInfo == nil {
 		return false
 	}
-	// 尝试通过反射或接口获取 role
-	type roleHolder interface {
-		GetRole() string
+	if ctx.MemberInfo.Role != nil {
+		return *ctx.MemberInfo.Role == "leader"
 	}
-	if holder, ok := ctx.MemberInfo.(roleHolder); ok {
-		return holder.GetRole() == "leader"
-	}
-	// 默认：如果无法判断，保守存储
+	// Role 为 nil 时，保守存储（Python 中 role=None 也允许注册）
 	return true
 }
 

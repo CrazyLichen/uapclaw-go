@@ -31,17 +31,52 @@ type SkillSyncTarget struct {
 	Target string
 }
 
+// MemberInfo 成员身份信息。
+// 对齐 Python: MemberInfo dataclass (team_runtime_inheritance.py)
+type MemberInfo struct {
+	// AgentName 成员名称
+	AgentName string
+	// ModelName 模型名称
+	ModelName string
+	// Role 角色（leader/teammate），nil 表示未指定
+	Role *string
+}
+
+// RuntimeInfo 运行时环境信息。
+// 对齐 Python: RuntimeInfo dataclass (team_runtime_inheritance.py)
+type RuntimeInfo struct {
+	// Channel 渠道标识
+	Channel string
+	// Language 语言标识
+	Language string
+}
+
+// TeamWorkspaceInfo Team 共享 workspace 信息。
+// 对齐 Python: TeamWorkspaceInfo dataclass (team_runtime_inheritance.py)
+type TeamWorkspaceInfo struct {
+	// RootDir 工作区根目录
+	RootDir *string
+	// SkillsDir 技能目录
+	SkillsDir *string
+	// TeamID 团队标识
+	TeamID *string
+	// Config 配置字典
+	Config map[string]any
+	// TrajectoryRegistry 轨迹注册表
+	TrajectoryRegistry any // ⤵️(#9.72) 待 TrajectoryRegistry 类型实现后回填
+}
+
 // TeamRailMountContext 重建 team rails 所需的上下文。
 // 对齐 Python: TeamRailMountContext dataclass
 type TeamRailMountContext struct {
 	// Agent 重建 rails 时关联的 Agent 实例
 	Agent interfaces.DeepAgentInterface
 	// MemberInfo 成员信息
-	MemberInfo any
+	MemberInfo *MemberInfo
 	// Runtime 运行时信息
-	Runtime any
+	Runtime *RuntimeInfo
 	// TeamWorkspace 团队工作区信息
-	TeamWorkspace any
+	TeamWorkspace *TeamWorkspaceInfo
 }
 
 // TeamManager 管理一个 channel 下的所有 TeamAgent 运行时。
