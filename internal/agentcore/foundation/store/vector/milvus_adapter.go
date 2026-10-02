@@ -118,6 +118,11 @@ func (a *milvusClientAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)
 }
 
+// RenameCollection 重命名集合。
+func (a *milvusClientAdapter) RenameCollection(ctx context.Context, option milvusclient.RenameCollectionOption, callOptions ...any) error {
+	return a.client.RenameCollection(ctx, option)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。

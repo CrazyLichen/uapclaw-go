@@ -11,6 +11,7 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -85,6 +86,10 @@ func (f *fakeMilvusClient) DescribeIndex(ctx context.Context, option milvusclien
 }
 
 func (f *fakeMilvusClient) Close(ctx context.Context) error {
+	return nil
+}
+
+func (f *fakeMilvusClient) RenameCollection(ctx context.Context, option milvusclient.RenameCollectionOption, callOptions ...any) error {
 	return nil
 }
 
@@ -677,7 +682,7 @@ func TestMilvusVectorStore_GetCollectionMetadata_缓存命中(t *testing.T) {
 func TestMilvusVectorStore_UpdateSchema_预留(t *testing.T) {
 	s := newTestStore()
 	ctx := context.Background()
-	err := s.UpdateSchema(ctx, "test_coll", []any{})
+	err := s.UpdateSchema(ctx, "test_coll", []operation.Operation{})
 	if err == nil {
 		t.Error("UpdateSchema() 预留方法应返回错误")
 	}

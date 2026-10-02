@@ -114,6 +114,10 @@ var (
 	StatusStoreVectorCollectionNotFound = NewStatusCode(
 		"STORE_VECTOR_COLLECTION_NOT_FOUND", 186002,
 		"store vector_collection not found, collection_name={collection_name}")
+	// StatusStoreVectorNotSupported 向量存储操作不支持
+	StatusStoreVectorNotSupported = NewStatusCode(
+		"STORE_VECTOR_NOT_SUPPORTED", 186003,
+		"store vector operation not supported, error_msg={error_msg}")
 	// StatusStoreGraphParamInvalid 图存储参数无效
 	StatusStoreGraphParamInvalid = NewStatusCode(
 		"STORE_GRAPH_PARAM_INVALID", 186003,

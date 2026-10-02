@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -584,10 +585,24 @@ func (s *GaussVectorStore) ListCollectionNames(ctx context.Context) ([]string, e
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
 // Python: GaussVectorStore.update_schema()
-func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
+func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
+	// TODO(#回填): 待 Task 11 回填完整迁移逻辑
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
+		exception.WithParam("error_msg", "UpdateSchema 待回填"),
 	)
+}
+
+// RenameCollection 使用 ALTER TABLE RENAME 重命名集合（PostgreSQL 兼容）。
+//
+// Python: GaussVectorStore.rename_collection(old_name, new_name)
+func (s *GaussVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, _ ...Option) error {
+	_, err := s.pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", oldName, newName))
+	if err != nil {
+		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("ALTER TABLE RENAME 失败: %v", err)),
+		)
+	}
+	return nil
 }
 
 // UpdateCollectionMetadata 更新集合元数据。

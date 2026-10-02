@@ -14,6 +14,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -735,9 +736,19 @@ func (s *ESVectorStore) ListCollectionNames(ctx context.Context) ([]string, erro
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
 // Python: ESVectorStore.update_schema()
-func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
+func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
+	// TODO(#回填): 待 Task 12 回填完整迁移逻辑
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
+		exception.WithParam("error_msg", "UpdateSchema 待回填"),
+	)
+}
+
+// RenameCollection ES 不支持重命名索引。
+//
+// Python: ESVectorStore.rename_collection → 不支持
+func (s *ESVectorStore) RenameCollection(_ context.Context, _ string, _ string, _ ...Option) error {
+	return exception.BuildError(exception.StatusStoreVectorNotSupported,
+		exception.WithParam("error_msg", "Elasticsearch does not support rename_collection"),
 	)
 }
 

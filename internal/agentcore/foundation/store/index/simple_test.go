@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -258,7 +259,7 @@ func (f *fakeVectorStore) ListCollectionNames(_ context.Context) ([]string, erro
 	return names, nil
 }
 
-func (f *fakeVectorStore) UpdateSchema(_ context.Context, _ string, _ []any, _ ...vector.Option) error {
+func (f *fakeVectorStore) UpdateSchema(_ context.Context, _ string, _ []operation.Operation, _ ...vector.Option) error {
 	return nil
 }
 
@@ -268,6 +269,10 @@ func (f *fakeVectorStore) UpdateCollectionMetadata(_ context.Context, _ string, 
 
 func (f *fakeVectorStore) GetCollectionMetadata(_ context.Context, _ string, _ ...vector.Option) (map[string]any, error) {
 	return nil, nil
+}
+
+func (f *fakeVectorStore) RenameCollection(_ context.Context, _ string, _ string, _ ...vector.Option) error {
+	return nil
 }
 
 // newFakeEmbedding 创建模拟嵌入模型
@@ -1723,7 +1728,7 @@ func (f *failingVectorStore) ListCollectionNames(ctx context.Context) ([]string,
 	return f.fakeVectorStore.ListCollectionNames(ctx)
 }
 
-func (f *failingVectorStore) UpdateSchema(ctx context.Context, name string, fields []any, opts ...vector.Option) error {
+func (f *failingVectorStore) UpdateSchema(ctx context.Context, name string, fields []operation.Operation, opts ...vector.Option) error {
 	return f.fakeVectorStore.UpdateSchema(ctx, name, fields, opts...)
 }
 
@@ -1733,6 +1738,10 @@ func (f *failingVectorStore) UpdateCollectionMetadata(ctx context.Context, name 
 
 func (f *failingVectorStore) GetCollectionMetadata(ctx context.Context, name string, opts ...vector.Option) (map[string]any, error) {
 	return f.fakeVectorStore.GetCollectionMetadata(ctx, name, opts...)
+}
+
+func (f *failingVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, opts ...vector.Option) error {
+	return f.fakeVectorStore.RenameCollection(ctx, oldName, newName, opts...)
 }
 
 // failingEmbedding 包装 fakeEmbedding，可在指定方法上注入错误

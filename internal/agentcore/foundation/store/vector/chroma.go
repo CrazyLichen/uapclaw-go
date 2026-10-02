@@ -10,6 +10,7 @@ import (
 	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -651,11 +652,19 @@ func (s *ChromaVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
 // Python: ChromaVectorStore.update_schema(collection_name, operations)
-func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
-	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
-	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
+func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
+	// TODO(#回填): 待 Task 10 回填完整迁移逻辑
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
+		exception.WithParam("error_msg", "UpdateSchema 待回填"),
+	)
+}
+
+// RenameCollection ChromaDB 不支持重命名集合。
+//
+// Python: ChromaVectorStore.rename_collection → 不支持
+func (s *ChromaVectorStore) RenameCollection(_ context.Context, _ string, _ string, _ ...Option) error {
+	return exception.BuildError(exception.StatusStoreVectorNotSupported,
+		exception.WithParam("error_msg", "ChromaDB does not support rename_collection"),
 	)
 }
 

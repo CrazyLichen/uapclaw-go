@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,7 +40,7 @@ func (f *fakeVectorStore) DeleteDocsByFilters(_ context.Context, _ string, _ map
 func (f *fakeVectorStore) ListCollectionNames(_ context.Context) ([]string, error) {
 	return nil, nil
 }
-func (f *fakeVectorStore) UpdateSchema(_ context.Context, _ string, _ []any, _ ...Option) error {
+func (f *fakeVectorStore) UpdateSchema(_ context.Context, _ string, _ []operation.Operation, _ ...Option) error {
 	return nil
 }
 func (f *fakeVectorStore) UpdateCollectionMetadata(_ context.Context, _ string, _ map[string]any, _ ...Option) error {
@@ -46,6 +48,9 @@ func (f *fakeVectorStore) UpdateCollectionMetadata(_ context.Context, _ string, 
 }
 func (f *fakeVectorStore) GetCollectionMetadata(_ context.Context, _ string, _ ...Option) (map[string]any, error) {
 	return nil, nil
+}
+func (f *fakeVectorStore) RenameCollection(_ context.Context, _ string, _ string, _ ...Option) error {
+	return nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

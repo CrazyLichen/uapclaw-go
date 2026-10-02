@@ -13,6 +13,7 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -34,6 +35,7 @@ type milvusClient interface {
 	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error
 	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error
 	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error)
+	RenameCollection(ctx context.Context, option milvusclient.RenameCollectionOption, callOptions ...any) error
 	Close(ctx context.Context) error
 }
 
@@ -654,12 +656,23 @@ func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 // ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 //
 // Python: MilvusVectorStore.update_schema(collection_name, operations)
-func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
-	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
-	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
+func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
+	// TODO(#回填): 待 Task 9 回填完整迁移逻辑
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 未实现，待 7.22/7.23 回填"),
+		exception.WithParam("error_msg", "UpdateSchema 待回填"),
 	)
+}
+
+// RenameCollection 重命名集合。
+// 使用 Milvus SDK 的 RenameCollection API。
+//
+// Python: MilvusVectorStore.rename_collection(old_name, new_name)
+func (s *MilvusVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, _ ...Option) error {
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+	return c.RenameCollection(ctx, milvusclient.NewRenameCollectionOption(oldName, newName))
 }
 
 // UpdateCollectionMetadata 更新集合元数据。

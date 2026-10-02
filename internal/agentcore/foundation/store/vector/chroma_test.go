@@ -8,6 +8,8 @@ import (
 
 	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -958,7 +960,7 @@ func TestChromaVectorStore_UpdateSchema_预留(t *testing.T) {
 	s := newChromaTestStore()
 	ctx := context.Background()
 
-	err := s.UpdateSchema(ctx, "test_coll", []any{})
+	err := s.UpdateSchema(ctx, "test_coll", []operation.Operation{})
 	if err == nil {
 		t.Error("UpdateSchema() 预留方法应返回错误")
 	}

@@ -6,6 +6,7 @@ import (
 
 	embedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── Fake 实现 ────────────────────────────
@@ -100,7 +101,7 @@ func (f *fakeVectorStore) ListCollectionNames(ctx context.Context) ([]string, er
 	return names, nil
 }
 
-func (f *fakeVectorStore) UpdateSchema(ctx context.Context, name string, operations []any, opts ...vector.Option) error {
+func (f *fakeVectorStore) UpdateSchema(ctx context.Context, name string, operations []operation.Operation, opts ...vector.Option) error {
 	return nil
 }
 
@@ -110,6 +111,10 @@ func (f *fakeVectorStore) UpdateCollectionMetadata(ctx context.Context, name str
 
 func (f *fakeVectorStore) GetCollectionMetadata(ctx context.Context, name string, opts ...vector.Option) (map[string]any, error) {
 	return nil, nil
+}
+
+func (f *fakeVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, opts ...vector.Option) error {
+	return nil
 }
 
 // ──────────────────────────── SemanticStore 测试 ────────────────────────────

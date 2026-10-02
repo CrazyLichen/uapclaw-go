@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -69,10 +70,9 @@ type BaseVectorStore interface {
 	ListCollectionNames(ctx context.Context) ([]string, error)
 
 	// UpdateSchema 执行 schema 迁移操作。
-	// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
 	//
 	// Python: BaseVectorStore.update_schema(collection_name, operations)
-	UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error
+	UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error
 
 	// UpdateCollectionMetadata 更新集合元数据。
 	//
@@ -83,6 +83,12 @@ type BaseVectorStore interface {
 	//
 	// Python: BaseVectorStore.get_collection_metadata(collection_name)
 	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
+
+	// RenameCollection 重命名集合。
+	// 不支持的后端返回 StatusStoreVectorNotSupported 错误。
+	//
+	// Python: BaseVectorStore.rename_collection(old_name, new_name)
+	RenameCollection(ctx context.Context, oldName string, newName string, opts ...Option) error
 }
 
 // FieldSchema 集合中单个字段的 Schema 定义。
