@@ -1277,6 +1277,32 @@ func (a *TeamAgent) UnsubscribeTransport() error {
 	return mgr.Unsubscribe(context.Background(), a.TeamName())
 }
 
+// PublishTeamEvent 发布团队事件到 TEAM 主题。
+// 满足 types.TransportAccessor 接口。
+// 对齐 Python: messager.publish(TeamTopic.TEAM.build(session_id, team_name), EventMessage.from_event(event))
+func (a *TeamAgent) PublishTeamEvent(ctx context.Context, eventType string, payload map[string]any) error {
+	if a.configurator == nil {
+		return nil
+	}
+	mgr := a.configurator.Messager()
+	if mgr == nil {
+		return nil
+	}
+	teamName := a.TeamName()
+	if teamName == "" {
+		return nil
+	}
+	// 对齐 Python: TeamTopic.TEAM.build(get_session_id(), team_name)
+	sessionID := agentteams.GetSessionID(ctx)
+	topicID := atevents.TeamTopicTeam.Build(sessionID, teamName)
+	// 对齐 Python: EventMessage.from_event(TeamStandbyEvent(team_name=team_name))
+	em := &atevents.EventMessage{
+		EventType: eventType,
+		Payload:   payload,
+	}
+	return mgr.Publish(ctx, topicID, em)
+}
+
 // DrainAgentTask 等待当前 agent round 完成。
 // 满足 types.LifecycleAccessor 接口。
 // 对齐 Python: drain_agent_task()
@@ -1335,6 +1361,34 @@ func (a *TeamAgent) SetMemberID(name string) {
 		memberName = a.MemberName()
 	}
 	logger.Debug(logComponent).Str("member_name", memberName).Msg("SetMemberID")
+}
+
+// CancelRecoveryTasks 取消所有恢复任务。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: host.spawn_manager.cancel_recovery_tasks()
+func (a *TeamAgent) CancelRecoveryTasks() {
+	if a.spawnManager != nil {
+		a.spawnManager.CancelRecoveryTasks()
+	}
+}
+
+// ShutdownAllHandles 关闭所有已生成的句柄。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: host.spawn_manager.shutdown_all_handles()
+func (a *TeamAgent) ShutdownAllHandles(ctx context.Context) {
+	if a.spawnManager != nil {
+		a.spawnManager.ShutdownAllHandles(ctx)
+	}
+}
+
+// SpawnedHandleNames 返回已生成的句柄成员名集合。
+// 满足 types.LifecycleAccessor 接口。
+// 对齐 Python: host.spawn_manager.spawned_handles.keys()
+func (a *TeamAgent) SpawnedHandleNames() []string {
+	if a.spawnManager == nil {
+		return nil
+	}
+	return a.spawnManager.SpawnedHandleNames()
 }
 
 // SpecAny 返回 TeamAgentSpec（any 类型）。

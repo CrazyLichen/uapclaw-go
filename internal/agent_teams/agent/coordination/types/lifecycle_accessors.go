@@ -122,6 +122,9 @@ type TransportAccessor interface {
 	SubscribeTransport(ctx context.Context) error
 	// UnsubscribeTransport 取消订阅
 	UnsubscribeTransport() error
+	// PublishTeamEvent 发布团队事件到 TEAM 主题
+	// 对齐 Python: messager.publish(TeamTopic.TEAM.build(session_id, team_name), EventMessage.from_event(event))
+	PublishTeamEvent(ctx context.Context, eventType string, payload map[string]any) error
 }
 
 // LifecycleAccessor 生命周期效果接口。
@@ -139,6 +142,15 @@ type LifecycleAccessor interface {
 	SetMemberID(name string)
 	// Lifecycle 返回生命周期模式
 	Lifecycle() string
+	// CancelRecoveryTasks 取消所有恢复任务
+	// 对齐 Python: host.spawn_manager.cancel_recovery_tasks()
+	CancelRecoveryTasks()
+	// ShutdownAllHandles 关闭所有已生成的句柄
+	// 对齐 Python: host.spawn_manager.shutdown_all_handles()
+	ShutdownAllHandles(ctx context.Context)
+	// SpawnedHandleNames 返回已生成的句柄成员名集合（用于 MarkLiveTeammates 过滤）
+	// 对齐 Python: host.spawn_manager.spawned_handles.keys()
+	SpawnedHandleNames() []string
 }
 
 // KernelHost CoordinationKernel 对宿主 TeamAgent 所需的窄接口。

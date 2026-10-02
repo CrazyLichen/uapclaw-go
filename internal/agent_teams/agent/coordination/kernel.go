@@ -274,32 +274,47 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
 
-	// 步骤 3: [Leader] 标记活跃成员
+	// 步骤 3: [Leader] 标记活跃成员为 PAUSED
 	if k.host.Role() == schema.TeamRoleLeader {
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusPaused))
 	}
 
 	// 步骤 4: [Leader] 取消恢复任务
-	// TODO(#9.55): k.host.CancelRecoveryTasks()
+	// 修复 S-06: 对齐 Python: await host.spawn_manager.cancel_recovery_tasks()
+	if k.host.Role() == schema.TeamRoleLeader {
+		k.host.CancelRecoveryTasks()
+	}
 
-	// 步骤 5: 持久化生命周期状态 "paused"
-	// TODO(#9.55): persistLifecycleState("paused")
+	// 步骤 5: [Leader] 关闭所有已生成句柄
+	// 修复 S-06: 对齐 Python: await host.spawn_manager.shutdown_all_handles()
+	if k.host.Role() == schema.TeamRoleLeader {
+		k.host.ShutdownAllHandles(ctx)
+	}
 
-	// 步骤 6: [Leader] 发布 TEAM_STANDBY
-	// TODO(#9.55): publishTeamStandby()
+	// 步骤 6: [Leader] 持久化生命周期状态 "paused"
+	// 修复 S-06: 对齐 Python: self._persist_team_lifecycle("paused")
+	if k.host.Role() == schema.TeamRoleLeader {
+		k.persistTeamLifecycle(ctx, "paused")
+	}
 
-	// 步骤 7: Unsubscribe transport
+	// 步骤 7: [Leader] 发布 TEAM_STANDBY 事件
+	// 修复 S-06: 对齐 Python: messager.publish(TeamTopic.TEAM, TeamStandbyEvent)
+	if k.host.Role() == schema.TeamRoleLeader {
+		k.publishTeamStandby(ctx)
+	}
+
+	// 步骤 8: Unsubscribe transport
 	_ = k.host.UnsubscribeTransport()
 
-	// 步骤 8: 停止事件总线
+	// 步骤 9: 停止事件总线
 	if k.eventBus != nil {
 		k.eventBus.Stop()
 	}
 
-	// 步骤 9: Close stream
+	// 步骤 10: Close stream
 	k.host.CloseStream()
 
-	// 步骤 10: Release session
+	// 步骤 11: Release session
 	sessCtrl := k.host.SessionController()
 	if sessCtrl != nil {
 		_ = sessCtrl.ReleaseSession(ctx)
@@ -327,7 +342,7 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
 
-	// 步骤 3: [Leader] 标记活跃成员
+	// 步骤 3: [Leader] 标记活跃成员为 STOPPED（在关闭句柄前，避免任务取消与状态写入竞争）
 	if k.host.Role() == schema.TeamRoleLeader {
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusStopped))
 	}
@@ -335,24 +350,29 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	// 步骤 4: Unsubscribe transport
 	_ = k.host.UnsubscribeTransport()
 
-	// 步骤 5: Shutdown all handles
-	// TODO(#9.55): k.host.ShutdownAllHandles()
+	// 步骤 5: 取消恢复任务（所有角色，非 Leader 专有）
+	// 修复 S-07: 对齐 Python: await host.spawn_manager.cancel_recovery_tasks()
+	k.host.CancelRecoveryTasks()
 
-	// 步骤 6: Memory close
+	// 步骤 6: 关闭所有已生成句柄（所有角色，非 Leader 专有）
+	// 修复 S-07: 对齐 Python: await host.spawn_manager.shutdown_all_handles()
+	k.host.ShutdownAllHandles(ctx)
+
+	// 步骤 7: Memory close
 	memMgr := k.host.MemoryManager()
 	if memMgr != nil {
 		_ = memMgr.Close(ctx)
 	}
 
-	// 步骤 7: 停止事件总线
+	// 步骤 8: 停止事件总线
 	if k.eventBus != nil {
 		k.eventBus.Stop()
 	}
 
-	// 步骤 8: Close stream
+	// 步骤 9: Close stream
 	k.host.CloseStream()
 
-	// 步骤 9: Release session
+	// 步骤 10: Release session
 	sessCtrl := k.host.SessionController()
 	if sessCtrl != nil {
 		_ = sessCtrl.ReleaseSession(ctx)
@@ -454,6 +474,66 @@ func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// persistTeamLifecycle 将团队生命周期状态写入 session 的 per-team 命名空间。
+// 对齐 Python: CoordinationKernel._persist_team_lifecycle(lifecycle) (kernel.py:278-294)
+func (k *CoordinationKernel) persistTeamLifecycle(_ context.Context, lifecycle string) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return
+	}
+	// 对齐 Python: merge_team_namespace(session, team_name, {"lifecycle": lifecycle})
+	sf, ok := teamSession.(interface {
+		UpdateState(map[string]any)
+	})
+	if !ok {
+		logger.Warn(logComponent).Str("team_name", teamName).Msg("persistTeamLifecycle: session 不支持 UpdateState")
+		return
+	}
+	// 对齐 Python metadata.merge_team_namespace
+	type teamsAccessor interface {
+		GetState() map[string]any
+	}
+	if sa, ok := teamSession.(teamsAccessor); ok {
+		state := sa.GetState()
+		teamsKey := "teams"
+		teamsMap, _ := state[teamsKey].(map[string]any)
+		if teamsMap == nil {
+			teamsMap = make(map[string]any)
+		}
+		bucket, _ := teamsMap[teamName].(map[string]any)
+		if bucket == nil {
+			bucket = make(map[string]any)
+		}
+		bucket["lifecycle"] = lifecycle
+		teamsMap[teamName] = bucket
+		state[teamsKey] = teamsMap
+		sf.UpdateState(state)
+	}
+	logger.Debug(logComponent).Str("team_name", teamName).Str("lifecycle", lifecycle).
+		Msg("persistTeamLifecycle 完成")
+}
+
+// publishTeamStandby 发布 TEAM_STANDBY 事件。
+// 对齐 Python: CoordinationKernel.pause() 中内联的 messager.publish(TeamTopic.TEAM, TeamStandbyEvent) (kernel.py:201-218)
+func (k *CoordinationKernel) publishTeamStandby(ctx context.Context) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	// 对齐 Python: await messager.publish(topic_id, EventMessage.from_event(TeamStandbyEvent(team_name=team_name)))
+	if err := k.host.PublishTeamEvent(ctx, "team_standby", map[string]any{"team_name": teamName}); err != nil {
+		logger.Error(logComponent).Err(err).Str("team_name", teamName).Msg("publishTeamStandby: 发布 TEAM_STANDBY 失败")
+	}
+}
 
 // allMembersShutdown 检查所有成员是否都是 SHUTDOWN 状态。
 func allMembersShutdown(members []*database.TeamMember) bool {

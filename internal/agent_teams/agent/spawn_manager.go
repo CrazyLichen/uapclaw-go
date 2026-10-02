@@ -138,6 +138,18 @@ func (m *SpawnManager) SpawnedHandles() map[string]spawn.SpawnHandle {
 	return result
 }
 
+// SpawnedHandleNames 返回已生成句柄的成员名列表。
+// 对齐 Python: host.spawn_manager.spawned_handles.keys()
+func (m *SpawnManager) SpawnedHandleNames() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	names := make([]string, 0, len(m.spawnedHandles))
+	for name := range m.spawnedHandles {
+		names = append(names, name)
+	}
+	return names
+}
+
 // LookupInprocessAgent 查找进程内 agent 引用。
 // Python: SpawnManager.lookup_inprocess_agent(member_name)
 //
