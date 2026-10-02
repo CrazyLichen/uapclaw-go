@@ -930,12 +930,14 @@ func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...t
 	}
 
 	// 列表 / 可认领
+	// 对齐 Python: claimable 传 status=PENDING，list 传 inputs["status"]
 	var summaries []*TaskSummary
 	var err error
 	if action == "claimable" {
-		summaries, err = t.taskManager.ListTasksWithDeps(ctx)
+		summaries, err = t.taskManager.ListTasksWithDeps(ctx, "pending")
 	} else {
-		summaries, err = t.taskManager.ListTasksWithDeps(ctx)
+		statusVal, _ := inputs["status"].(string)
+		summaries, err = t.taskManager.ListTasksWithDeps(ctx, statusVal)
 	}
 	if err != nil {
 		return toolError(fmt.Sprintf("Failed to list tasks: %s", err))

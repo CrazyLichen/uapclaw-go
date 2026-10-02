@@ -773,8 +773,12 @@ func (tm *TeamTaskManager) GetTaskDetail(ctx context.Context, taskID string) (*T
 }
 
 // ListTasksWithDeps 摘要视图。对齐 Python: TeamTaskManager.list_tasks_with_deps()
-func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context) ([]*TaskSummary, error) {
-	tasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, "")
+func (tm *TeamTaskManager) ListTasksWithDeps(ctx context.Context, status ...string) ([]*TaskSummary, error) {
+	statusFilter := ""
+	if len(status) > 0 {
+		statusFilter = status[0]
+	}
+	tasks, err := tm.db.Task().GetTeamTasks(ctx, tm.teamName, statusFilter)
 	if err != nil {
 		return nil, err
 	}
