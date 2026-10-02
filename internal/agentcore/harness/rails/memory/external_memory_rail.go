@@ -407,7 +407,11 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 
 	go func() {
 		defer close(done)
-		err := r.provider.SyncTurn(ctx, query, output,
+		// 修复 S-32: 使用 context.WithoutCancel 隔离请求生命周期
+		// Python 中 asyncio.create_task 创建的协程不受请求 context 影响，
+		// Go 的 context.WithoutCancel(ctx) 实现等价效果：请求取消后 SyncTurn 继续执行
+		syncCtx := context.WithoutCancel(ctx)
+		err := r.provider.SyncTurn(syncCtx, query, output,
 			ext.WithUserID(r.userID),
 			ext.WithScopeID(r.scopeID),
 			ext.WithSessionID(r.sessionID),
