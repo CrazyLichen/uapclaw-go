@@ -252,13 +252,13 @@ func (p *OpenVikingProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	healthy := p.client.health(ctx)
 	if !healthy {
 		// 对齐 Python: logger.warning("OpenViking at %s not reachable", self._endpoint)
-		// Python 静默返回 nil，Go 返回 error 以便上层感知初始化失败
+		// Python 静默返回 None（不抛异常），client=None，initialized=True
 		logger.Warn(vikingLogComponent).
 			Str("endpoint", p.endpoint).
-			Msg("OpenViking 不可达")
+			Msg("OpenViking 不可达，静默降级")
 		p.client = nil
-		p.initialized = false
-		return fmt.Errorf("OpenViking at %s not reachable", p.endpoint)
+		p.initialized = true // 标记已初始化，允许后续 Prefetch/SyncTurn 检查 client==nil 优雅跳过
+		return nil           // 静默降级，对齐 Python
 	}
 
 	p.initialized = true
