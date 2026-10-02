@@ -317,10 +317,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.5 | ✅ | RedisStore | Redis 实现 | `openjiuwen/extensions/store/redis_store.py` |
 | 4.6 | ✅ | BaseVectorStore 接口 | `CreateCollection/AddDocs/Search/DeleteDocs` | `openjiuwen/core/foundation/store/base_vector_store.py` |
 | 4.7 | ✅ | CollectionSchema / FieldSchema / VectorField 基类 | 向量集合 Schema 定义 + 索引配置基类与 vf 标签反射机制 | `openjiuwen/core/foundation/store/vector_fields/` |
-| 4.8 | ✅ | MilvusVectorStore | Milvus 实现（含 Milvus 索引子类型、距离转换；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
-| 4.9 | ✅ | ChromaVectorStore | ChromaDB 实现（含 PersistentClient、fieldMapping、距离转换；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
-| 4.10 | ✅ | GaussVectorStore | GaussDB 向量实现（pgx/v5 pgxpool + DiskANN 索引 + 参数化查询；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/extensions/store/gauss_vector_store.py` |
-| 4.11 | ✅ | ESVectorStore | Elasticsearch 向量实现（go-elasticsearch/v8 + k-NN 搜索 + _meta 文档持久化；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/extensions/store/es_vector_store.py` |
+| 4.8 | ✅ | MilvusVectorStore | Milvus 实现（含 Milvus 索引子类型、距离转换、UpdateSchema rename 策略） | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
+| 4.9 | ✅ | ChromaVectorStore | ChromaDB 实现（含 PersistentClient、fieldMapping、距离转换、UpdateSchema double-copy 策略） | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
+| 4.10 | ✅ | GaussVectorStore | GaussDB 向量实现（pgx/v5 pgxpool + DiskANN 索引 + 参数化查询、UpdateSchema ALTER TABLE RENAME 策略） | `openjiuwen/extensions/store/gauss_vector_store.py` |
+| 4.11 | ✅ | ESVectorStore | Elasticsearch 向量实现（go-elasticsearch/v8 + k-NN 搜索 + _meta 文档持久化、UpdateSchema double-copy 策略） | `openjiuwen/extensions/store/es_vector_store.py` |
 | 4.12 | ✅ | BaseDbStore 接口 | SQL 数据库抽象 | `openjiuwen/core/foundation/store/base_db_store.py` |
 | 4.13 | ✅ | DefaultDbStore | 默认数据库实现 | `openjiuwen/core/foundation/store/db/default_db_store.py` |
 | 4.14 | ✅ | GaussDbStore | GaussDB 数据库实现 | `openjiuwen/extensions/store/gauss_db_store.py` |
@@ -463,9 +463,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.18 | ✅ | LongTermMemoryExtractor | ✅ LongTermMemoryExtractor（ExtractLongTermMemory + buildTimeContext）+ ✅ ExtractMemoryParams + ✅ MemoryOperationParams + ✅ MemoryScopeConfig + DefaultMemoryScopeConfig | `openjiuwen/core/memory/process/extract/` |
 | 7.19 | ✅ | MemoryAnalyzer / Generator | ✅ MemoryAnalyzer（Analyze + VariableResult + MemoryAnalyzerResult）+ ✅ Generator（GenAllMemory + categoriesToMemoryUnit + processExtractedData + processSummaryData + getFragmentMemoryUnit + processProactiveMemoryData + semanticValidation + handleMemoryWithInstruct + processMemoryOperations）+ ✅ MemoryEngineConfig + ✅ AgentMemoryConfig + ✅ ScopeConfig 补全（ModelCfg/ModelClientCfg/EmbeddingCfg）| `openjiuwen/core/memory/process/extract/` |
 | 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
-| 7.21 | 🔄 | MigrationPlan | 迁移计划（部分提前：OperationRegistry + BaseOperation + Operations + MigrationPlan；⤵️ 7.22-7.23 Migrator + run_migrations 待后续回填） | `openjiuwen/core/memory/migration/migration_plan.py` |
-| 7.22 | ☐ | Migration Operations | 迁移操作注册表（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/operation/` |
-| 7.23 | ☐ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/migrator/` |
+| 7.21 | ✅ | MigrationPlan | 迁移计划（OperationRegistry + BaseOperation + Operations + MigrationPlan） | `openjiuwen/core/memory/migration/migration_plan.py` |
+| 7.22 | ✅ | Migration Operations | 迁移操作注册表 + 共享工具函数（ComputeNewSchema + BuildTransformFunc） | `openjiuwen/core/memory/migration/operation/` |
+| 7.23 | ✅ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器 + run_migrations 编排 + 4 种 VectorStore UpdateSchema 回填 | `openjiuwen/core/memory/migration/migrator/` |
 | 7.24 | ☐ | Memory Codec | 记忆编解码 | `openjiuwen/core/memory/codec/` |
 | 7.25 | ✅ | Memory Common | 记忆公共工具（base.go + KvPrefixRegistry 已在 7.7/7.9 回填 ✅；DistributedLock ✅） | `openjiuwen/core/memory/common/` |
 | 7.26 | ✅ | Memory Prompts | 记忆提示词（⤴️ 7.8 回填：PromptApplier 单例 + 4 个 .md 提示词模板；测试覆盖率 94.6%） | `openjiuwen/core/memory/prompts/` |

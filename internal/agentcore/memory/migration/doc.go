@@ -1,16 +1,23 @@
-// Package migration 提供记忆存储的迁移注册表和迁移管理器。
+// Package migration 提供记忆存储的迁移注册表和迁移编排器。
 //
 // 本包定义全局迁移注册表（SQL / Vector / KV / Message / Index），
 // 各 Operation 通过注册表声明迁移步骤，由 Migrator 按序执行。
+// RunXxxMigrations 函数提供迁移编排入口。
 //
 // 文件目录：
 //
 //	migration/
 //	├── doc.go                  # 包文档
 //	├── migration_plan.go       # 全局迁移注册表（SQLRegistry 等）
+//	├── run_migrations.go       # 迁移编排器（RunKVMigrations 等）
 //	├── migrator/               # 迁移执行器
 //	│   ├── doc.go              # 子包文档
-//	│   └── memory_meta_manager.go  # 记忆元数据迁移管理器
+//	│   ├── memory_meta_manager.go  # 记忆元数据迁移管理器
+//	│   ├── kv_migrator.go      # KV 存储迁移执行器
+//	│   ├── sql_migrator.go     # SQL 数据库迁移执行器
+//	│   ├── vector_migrator.go  # 向量存储迁移执行器
+//	│   ├── message_migrator.go # 消息存储迁移执行器
+//	│   └── index_version_migrator.go # 索引版本迁移执行器
 //	└── operation/              # 迁移操作定义
 //	    ├── doc.go              # 子包文档
 //	    ├── base_operation.go   # 操作基类

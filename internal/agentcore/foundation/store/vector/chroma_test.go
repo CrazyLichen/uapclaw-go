@@ -955,14 +955,14 @@ func TestChromaVectorStore_GetSchema_集合不存在(t *testing.T) {
 	}
 }
 
-// TestChromaVectorStore_UpdateSchema_预留 测试 UpdateSchema 预留方法
-func TestChromaVectorStore_UpdateSchema_预留(t *testing.T) {
+// TestChromaVectorStore_UpdateSchema_空操作 测试 UpdateSchema 空操作直接返回
+func TestChromaVectorStore_UpdateSchema_空操作(t *testing.T) {
 	s := newChromaTestStore()
 	ctx := context.Background()
 
 	err := s.UpdateSchema(ctx, "test_coll", []operation.Operation{})
-	if err == nil {
-		t.Error("UpdateSchema() 预留方法应返回错误")
+	if err != nil {
+		t.Errorf("UpdateSchema() 空操作应返回 nil, error = %v", err)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -75,6 +76,8 @@ const (
 	gaussDefaultDistanceMetric = "COSINE"
 	// gaussDefaultBatchSize GaussDB 默认批量插入大小
 	gaussDefaultBatchSize = 128
+	// gaussMigrationBatchSize 迁移时每批次文档数，对齐 Python: batch_size = 100
+	gaussMigrationBatchSize = 100
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -582,14 +585,40 @@ func (s *GaussVectorStore) ListCollectionNames(ctx context.Context) ([]string, e
 }
 
 // UpdateSchema 执行 Schema 迁移操作。
-// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
+// GaussDB 使用 ALTER TABLE RENAME 策略：
+// 创建临时集合 → SQL SELECT 复制+变换数据 → 删除旧集合 → ALTER TABLE RENAME
 //
-// Python: GaussVectorStore.update_schema()
+// Python: GaussVectorStore.update_schema(collection_name, operations)
 func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
-	// TODO(#回填): 待 Task 11 回填完整迁移逻辑
-	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 待回填"),
-	)
+	if len(operations) == 0 {
+		return nil
+	}
+
+	// 1. 获取当前 schema
+	oldSchema, err := s.GetSchema(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 2. 计算 operations 应用后的目标 schema
+	newSchema, err := ComputeNewSchema(oldSchema, operations)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+		return err
+	}
+
+	// 3. 构建统一的文档变换函数
+	transformFunc := BuildTransformFunc(operations)
+
+	// 4. 获取集合元数据
+	metadata, err := s.GetCollectionMetadata(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 5. 执行迁移
+	return s.executeGaussMigration(ctx, collectionName, newSchema, transformFunc, metadata)
 }
 
 // RenameCollection 使用 ALTER TABLE RENAME 重命名集合（PostgreSQL 兼容）。
@@ -684,6 +713,178 @@ func (s *GaussVectorStore) GetCollectionMetadata(ctx context.Context, collection
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// executeGaussMigration 执行 GaussDB schema 迁移的核心流程。
+// 使用 ALTER TABLE RENAME 策略：创建临时集合 → SQL 读取+变换+写入 → 删除旧集合 → ALTER TABLE RENAME
+//
+// Python: GaussVectorStore.update_schema 中的内联迁移逻辑
+func (s *GaussVectorStore) executeGaussMigration(
+	ctx context.Context,
+	collectionName string,
+	newSchema *CollectionSchema,
+	transformFunc func(map[string]any) map[string]any,
+	metadata map[string]any,
+) error {
+	tempCollectionName := fmt.Sprintf("%s_migration_%d", collectionName, time.Now().UnixMilli())
+
+	distanceMetric := gaussDefaultDistanceMetric
+	if dm, ok := metadata["distance_metric"].(string); ok && dm != "" {
+		distanceMetric = strings.ToUpper(dm)
+	}
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始 GaussDB schema 迁移")
+
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 1. 创建临时集合（新 schema）
+	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+		return err
+	}
+
+	// 2. SQL 读取旧集合数据，变换后写入临时集合
+	// Python: cursor.execute(f"SELECT * FROM {collection_name};")
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始数据复制")
+
+	rows, err := c.Query(ctx, fmt.Sprintf("SELECT * FROM %s", collectionName))
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("查询旧集合数据失败")
+		s.cleanupGaussTempCollection(ctx, tempCollectionName)
+		return err
+	}
+	defer rows.Close()
+
+	// 获取列名
+	// Python: columns = [desc[0] for desc in cursor.description]
+	fieldDescriptions := rows.FieldDescriptions()
+	columns := make([]string, len(fieldDescriptions))
+	for i, fd := range fieldDescriptions {
+		columns[i] = string(fd.Name)
+	}
+
+	batch := make([]map[string]any, 0, gaussMigrationBatchSize)
+	totalDocs := 0
+
+	for rows.Next() {
+		// 读取行数据为 map
+		values, err := rows.Values()
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+				Str("event_type", "STORE_UPDATE").Msg("读取行数据失败")
+			s.cleanupGaussTempCollection(ctx, tempCollectionName)
+			return err
+		}
+
+		doc := make(map[string]any)
+		for i, col := range columns {
+			if i < len(values) {
+				doc[col] = values[i]
+			}
+		}
+
+		transformedDoc := transformFunc(doc)
+		batch = append(batch, transformedDoc)
+
+		if len(batch) >= gaussMigrationBatchSize {
+			if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
+				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+					Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+				s.cleanupGaussTempCollection(ctx, tempCollectionName)
+				return err
+			}
+			totalDocs += len(batch)
+			logger.Debug(logComponent).Str("temp_collection_name", tempCollectionName).
+				Int("migrated", totalDocs).
+				Str("event_type", "STORE_UPDATE").Msg("迁移进度")
+			batch = batch[:0]
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("遍历行数据失败")
+		s.cleanupGaussTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	// 写入剩余文档
+	if len(batch) > 0 {
+		if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
+			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入临时集合最后批次失败")
+			s.cleanupGaussTempCollection(ctx, tempCollectionName)
+			return err
+		}
+		totalDocs += len(batch)
+	}
+
+	logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+		Int("total_docs", totalDocs).
+		Str("event_type", "STORE_UPDATE").
+		Msg("数据复制完成")
+
+	// 3. 删除旧集合
+	// Python: await self.delete_collection(collection_name)
+	if err := s.DeleteCollection(ctx, collectionName); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+		s.cleanupGaussTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	// 4. ALTER TABLE RENAME
+	// Python: cursor.execute(f"ALTER TABLE {temp_collection_name} RENAME TO {collection_name};")
+	if _, err := c.Exec(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempCollectionName, collectionName)); err != nil {
+		logger.Error(logComponent).Err(err).Str("old_name", tempCollectionName).
+			Str("new_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("ALTER TABLE RENAME 失败")
+		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("ALTER TABLE RENAME 失败: %v", err)),
+		)
+	}
+
+	// 清除旧集合的元数据缓存
+	// Python: if collection_name in self._collection_metadata: del self._collection_metadata[collection_name]
+	s.mu.Lock()
+	delete(s.collectionMetadata, collectionName)
+	s.mu.Unlock()
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("GaussDB schema 迁移完成")
+
+	return nil
+}
+
+// cleanupGaussTempCollection 迁移失败时清理 GaussDB 临时集合。
+func (s *GaussVectorStore) cleanupGaussTempCollection(ctx context.Context, tempCollectionName string) {
+	exists, err := s.CollectionExists(ctx, tempCollectionName)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("检查临时集合是否存在失败")
+		return
+	}
+	if exists {
+		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
+			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
+				Msg("清理临时集合失败")
+		} else {
+			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+				Msg("成功清理临时集合")
+		}
+	}
+}
 
 // defaultCreatePool 默认连接池创建函数
 func defaultCreatePool(ctx context.Context, connString string) (dbClient, error) {

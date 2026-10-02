@@ -11,6 +11,7 @@
 //	├── doc.go              # 包文档
 //	├── base.go             # VectorDataType + FieldSchema + CollectionSchema + VectorSearchResult + BaseVectorStore + Option
 //	├── utils.go            # 距离/相似度转换函数（L2/余弦/IP）
+//	├── schema_utils.go     # Schema 迁移工具函数（ComputeNewSchema + BuildTransformFunc）
 //	├── milvus.go           # MilvusVectorStore 结构体 + BaseVectorStore 接口实现
 //	├── milvus_adapter.go   # Milvus 适配器（类型转换与结果映射）
 //	├── chroma.go           # ChromaVectorStore 结构体 + BaseVectorStore 接口实现

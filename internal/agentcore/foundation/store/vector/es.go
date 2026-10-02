@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	elasticsearch8 "github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
@@ -75,6 +76,8 @@ const (
 	esDefaultIndexPrefix = "agent_vector"
 	// esMetaDocumentID ES _meta 文档 ID，用于持久化集合元数据
 	esMetaDocumentID = "__collection_metadata__"
+	// esMigrationSearchSize 迁移时单次搜索读取的文档数量，对齐 Python: size = 10000
+	esMigrationSearchSize = 10000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -733,14 +736,40 @@ func (s *ESVectorStore) ListCollectionNames(ctx context.Context) ([]string, erro
 }
 
 // UpdateSchema 执行 Schema 迁移操作。
-// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
+// ES 不支持原地 schema 变更和索引重命名，使用 double-copy 策略：
+// 创建临时索引 → 读取+变换数据 → 删除旧索引 → 用原名创建新索引 → 复制 → 删除临时索引
 //
-// Python: ESVectorStore.update_schema()
+// Python: ESVectorStore.update_schema(collection_name, operations)
 func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
-	// TODO(#回填): 待 Task 12 回填完整迁移逻辑
-	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 待回填"),
-	)
+	if len(operations) == 0 {
+		return nil
+	}
+
+	// 1. 获取当前 schema
+	oldSchema, err := s.GetSchema(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 2. 计算 operations 应用后的目标 schema
+	newSchema, err := ComputeNewSchema(oldSchema, operations)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+		return err
+	}
+
+	// 3. 构建统一的文档变换函数
+	transformFunc := BuildTransformFunc(operations)
+
+	// 4. 获取集合元数据
+	metadata, err := s.GetCollectionMetadata(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 5. 执行迁移
+	return s.executeESMigration(ctx, collectionName, newSchema, transformFunc, metadata)
 }
 
 // RenameCollection ES 不支持重命名索引。
@@ -847,6 +876,222 @@ func (w *esClientWrapper) Close() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// executeESMigration 执行 ES schema 迁移的核心流程。
+// ES 不支持原地 schema 变更和索引重命名，使用 double-copy 策略：
+// 1. 创建临时索引 → 2. 搜索+变换+写入 → 3. 删除旧索引
+// 4. 用原名创建新索引 → 5. 从临时索引搜索+写入 → 6. 删除临时索引
+//
+// Python: ESVectorStore.update_schema 中的内联迁移逻辑
+func (s *ESVectorStore) executeESMigration(
+	ctx context.Context,
+	collectionName string,
+	newSchema *CollectionSchema,
+	transformFunc func(map[string]any) map[string]any,
+	metadata map[string]any,
+) error {
+	tempCollectionName := fmt.Sprintf("%s_migration_%d", collectionName, time.Now().Unix())
+
+	distanceMetric := "COSINE"
+	if dm, ok := metadata["distance_metric"].(string); ok && dm != "" {
+		distanceMetric = strings.ToUpper(dm)
+	}
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始 ES schema 迁移")
+
+	c, err := s.getClient()
+	if err != nil {
+		return err
+	}
+
+	// 1. 创建临时索引（新 schema）
+	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("创建临时索引失败")
+		return err
+	}
+
+	// 2. 从旧索引读取所有文档（排除 _meta 文档），变换后写入临时索引
+	// Python: body = {"query": {"bool": {"must_not": [{"term": {"_id": _METADATA_DOC_ID}}]}}, "size": 10000}
+	oldDocs, err := s.esSearchAllDocs(ctx, c, collectionName)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("搜索旧索引文档失败")
+		s.cleanupESTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	if len(oldDocs) > 0 {
+		transformedDocs := make([]map[string]any, 0, len(oldDocs))
+		for _, doc := range oldDocs {
+			transformedDocs = append(transformedDocs, transformFunc(doc))
+		}
+		if err := s.AddDocs(ctx, tempCollectionName, transformedDocs); err != nil {
+			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入临时索引失败")
+			s.cleanupESTempCollection(ctx, tempCollectionName)
+			return err
+		}
+	}
+
+	// 3. 删除旧索引
+	if err := s.DeleteCollection(ctx, collectionName); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("删除旧索引失败")
+		s.cleanupESTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	// 4. 用原名创建新索引
+	if err := s.CreateCollection(ctx, collectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("用原名创建新索引失败")
+		return err
+	}
+
+	// 5. 从临时索引读取所有文档，写入新索引
+	// Python: temp_resp = await self._es.search(index=temp_index_name, body={"query": {"match_all": {}}, "size": 10000})
+	tempDocs, err := s.esSearchAllDocs(ctx, c, tempCollectionName)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("搜索临时索引文档失败")
+		return err
+	}
+
+	if len(tempDocs) > 0 {
+		if err := s.AddDocs(ctx, collectionName, tempDocs); err != nil {
+			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入新索引失败")
+			return err
+		}
+	}
+
+	// 6. 删除临时索引
+	if err := s.DeleteCollection(ctx, tempCollectionName); err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("删除临时索引失败，非致命错误")
+	}
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("ES schema 迁移完成")
+
+	return nil
+}
+
+// esSearchAllDocs 从 ES 索引搜索所有文档（排除 _meta 文档），返回 map 列表。
+// 对齐 Python: body = {"query": {"bool": {"must_not": [{"term": {"_id": _METADATA_DOC_ID}}]}}, "size": 10000}
+func (s *ESVectorStore) esSearchAllDocs(ctx context.Context, c esClient, collectionName string) ([]map[string]any, error) {
+	indexName := s.esIndexName(collectionName)
+
+	// 获取主键字段名
+	meta, err := s.esLoadMetadata(ctx, c, indexName)
+	if err != nil {
+		meta = map[string]any{}
+	}
+	pkField := "id"
+	if schemaDict, ok := meta["schema"].(map[string]any); ok {
+		if pk := esGetPrimaryKeyField(schemaDict); pk != "" {
+			pkField = pk
+		}
+	}
+
+	// 构建搜索请求：排除 _meta 文档
+	queryBody := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must_not": []map[string]any{
+					{"term": map[string]any{"_id": esMetaDocumentID}},
+				},
+			},
+		},
+		"size": esMigrationSearchSize,
+		"_source": map[string]any{
+			"excludes": []string{"_meta"},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(queryBody)
+	if err != nil {
+		return nil, fmt.Errorf("序列化搜索请求失败: %w", err)
+	}
+
+	req := esapi.SearchRequest{
+		Index: []string{indexName},
+		Body:  bytes.NewReader(bodyBytes),
+	}
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("搜索请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("搜索请求返回错误: %s", resp.String())
+	}
+
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("解析搜索响应失败: %w", err)
+	}
+
+	hits, ok := result["hits"].(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	hitList, ok := hits["hits"].([]any)
+	if !ok {
+		return nil, nil
+	}
+
+	docs := make([]map[string]any, 0, len(hitList))
+	for _, hit := range hitList {
+		h, ok := hit.(map[string]any)
+		if !ok {
+			continue
+		}
+		source, ok := h["_source"].(map[string]any)
+		if !ok {
+			continue
+		}
+		// 移除 _meta
+		delete(source, "_meta")
+
+		// 如果主键字段不在 source 中，从 _id 获取
+		if _, exists := source[pkField]; !exists {
+			if id, ok := h["_id"].(string); ok {
+				source[pkField] = id
+			}
+		}
+
+		docs = append(docs, source)
+	}
+
+	return docs, nil
+}
+
+// cleanupESTempCollection 迁移失败时清理 ES 临时索引。
+func (s *ESVectorStore) cleanupESTempCollection(ctx context.Context, tempCollectionName string) {
+	exists, err := s.CollectionExists(ctx, tempCollectionName)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("检查临时索引是否存在失败")
+		return
+	}
+	if exists {
+		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
+			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
+				Msg("清理临时索引失败")
+		} else {
+			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+				Msg("成功清理临时索引")
+		}
+	}
+}
 
 // getClient 惰性获取或创建 ES 客户端，双重检查锁。
 func (s *ESVectorStore) getClient() (esClient, error) {

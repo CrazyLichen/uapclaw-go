@@ -123,6 +123,16 @@ func (a *milvusClientAdapter) RenameCollection(ctx context.Context, option milvu
 	return a.client.RenameCollection(ctx, option)
 }
 
+// ReleaseCollection 释放集合内存。
+func (a *milvusClientAdapter) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+	return a.client.ReleaseCollection(ctx, option)
+}
+
+// QueryIterator 创建查询迭代器。
+func (a *milvusClientAdapter) QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error) {
+	return a.client.QueryIterator(ctx, option)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。

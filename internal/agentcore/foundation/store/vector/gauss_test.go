@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -342,13 +343,13 @@ func TestGaussVectorStore_ListCollectionNames(t *testing.T) {
 
 // ─── UpdateSchema 测试 ───
 
-func TestGaussVectorStore_UpdateSchema_未实现(t *testing.T) {
+func TestGaussVectorStore_UpdateSchema_空操作(t *testing.T) {
 	s := newTestGaussStore()
 	ctx := context.Background()
 
-	err := s.UpdateSchema(ctx, "test_coll", nil)
-	if err == nil {
-		t.Error("UpdateSchema 应返回未实现错误")
+	err := s.UpdateSchema(ctx, "test_coll", []operation.Operation{})
+	if err != nil {
+		t.Errorf("UpdateSchema() 空操作应返回 nil, error = %v", err)
 	}
 }
 

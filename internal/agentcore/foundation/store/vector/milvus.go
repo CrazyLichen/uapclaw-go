@@ -3,9 +3,11 @@ package vector
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
@@ -32,10 +34,12 @@ type milvusClient interface {
 	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error)
 	ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error)
 	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error
+	ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error
 	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error
 	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...any) error
 	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error)
 	RenameCollection(ctx context.Context, option milvusclient.RenameCollectionOption, callOptions ...any) error
+	QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error)
 	Close(ctx context.Context) error
 }
 
@@ -88,6 +92,8 @@ const (
 	defaultDistanceMetric = "COSINE"
 	// defaultBatchSize 默认批量插入大小
 	defaultBatchSize = 128
+	// migrationBatchSize 迁移时每批次文档数，对齐 Python: batch_size = 100
+	migrationBatchSize = 100
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore
 )
@@ -653,14 +659,44 @@ func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 }
 
 // UpdateSchema 执行 schema 迁移操作。
-// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
+// 流程：GetSchema → ComputeNewSchema → BuildTransformFunc → executeMigration
+// 使用 rename 策略：创建临时集合 → 复制数据 → 删除旧集合 → 重命名临时集合
 //
 // Python: MilvusVectorStore.update_schema(collection_name, operations)
 func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
-	// TODO(#回填): 待 Task 9 回填完整迁移逻辑
-	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 待回填"),
-	)
+	if len(operations) == 0 {
+		return nil
+	}
+
+	// 1. 获取当前 schema
+	// Python: old_schema = await self.get_schema(collection_name)
+	oldSchema, err := s.GetSchema(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 2. 计算 operations 应用后的目标 schema
+	// Python: new_schema = compute_new_schema(old_schema, operations)
+	newSchema, err := ComputeNewSchema(oldSchema, operations)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+		return err
+	}
+
+	// 3. 构建统一的文档变换函数
+	// Python: transform_func = build_transform_func_for_operations(operations)
+	transformFunc := BuildTransformFunc(operations)
+
+	// 4. 获取集合元数据作为创建新集合的参数
+	// Python: metadata = await self.get_collection_metadata(collection_name)
+	metadata, err := s.GetCollectionMetadata(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 5. 执行迁移
+	return s.executeMigration(ctx, collectionName, newSchema, transformFunc, metadata)
 }
 
 // RenameCollection 重命名集合。
@@ -857,6 +893,210 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// executeMigration 执行 schema 迁移的核心流程。
+// 使用 rename 策略：创建临时集合 → 流式复制数据（应用变换） → 释放旧集合 → 删除旧集合 → 重命名临时集合
+//
+// Python: MilvusVectorStore._execute_migration(collection_name, new_schema, transform_func, new_collection_kwargs)
+func (s *MilvusVectorStore) executeMigration(
+	ctx context.Context,
+	collectionName string,
+	newSchema *CollectionSchema,
+	transformFunc func(map[string]any) map[string]any,
+	metadata map[string]any,
+) error {
+	// 生成临时集合名称
+	// Python: temp_collection_name = f"{collection_name}_migration_{int(time.time())}"
+	tempCollectionName := fmt.Sprintf("%s_migration_%d", collectionName, time.Now().Unix())
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始 schema 迁移")
+
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 构建创建新集合的选项（distance_metric 等）
+	createOpts := []Option{}
+	if dm, ok := metadata["distance_metric"].(string); ok && dm != "" {
+		createOpts = append(createOpts, WithDistanceMetric(dm))
+	}
+
+	// 创建临时集合
+	// Python: await self.create_collection(temp_collection_name, new_schema, **new_collection_kwargs)
+	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, createOpts...); err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+		return err
+	}
+
+	// 流式复制数据：从旧集合读取 → 变换 → 写入临时集合
+	// Python: iterator = client.query_iterator(collection_name=..., filter="", output_fields=["*"])
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始数据复制")
+
+	// 确保旧集合已加载
+	if err := s.ensureLoaded(ctx, collectionName); err != nil {
+		// 迁移失败，清理临时集合
+		s.cleanupTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	// 使用 QueryIterator 流式读取所有数据
+	queryIterOpt := milvusclient.NewQueryIteratorOption(collectionName).
+		WithBatchSize(migrationBatchSize).
+		WithOutputFields("*")
+
+	iter, err := c.QueryIterator(ctx, queryIterOpt)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("创建查询迭代器失败")
+		s.cleanupTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	batch := make([]map[string]any, 0, migrationBatchSize)
+	totalDocs := 0
+
+	for {
+		rs, err := iter.Next(ctx)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+				Str("event_type", "STORE_UPDATE").Msg("查询迭代器读取失败")
+			s.cleanupTempCollection(ctx, tempCollectionName)
+			return err
+		}
+		if rs.ResultCount == 0 {
+			break
+		}
+
+		// 将 ResultSet 中的每一行转为 map[string]any
+		for i := 0; i < rs.ResultCount; i++ {
+			doc := resultSetRowToMap(rs, i)
+			transformedDoc := transformFunc(doc)
+			batch = append(batch, transformedDoc)
+
+			if len(batch) >= migrationBatchSize {
+				if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
+					logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+						Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+					s.cleanupTempCollection(ctx, tempCollectionName)
+					return err
+				}
+				totalDocs += len(batch)
+				logger.Debug(logComponent).Str("temp_collection_name", tempCollectionName).
+					Int("migrated", totalDocs).
+					Str("event_type", "STORE_UPDATE").Msg("迁移进度")
+				batch = batch[:0]
+			}
+		}
+	}
+
+	// 写入剩余文档
+	if len(batch) > 0 {
+		if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
+			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入临时集合最后批次失败")
+			s.cleanupTempCollection(ctx, tempCollectionName)
+			return err
+		}
+		totalDocs += len(batch)
+	}
+
+	logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+		Int("total_docs", totalDocs).
+		Str("event_type", "STORE_UPDATE").
+		Msg("数据复制完成")
+
+	// 释放旧集合内存
+	// Python: client.release_collection(collection_name)
+	if err := c.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(collectionName)); err != nil {
+		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).
+			Msg("释放旧集合失败，非致命错误")
+	}
+	// 清除旧集合的加载缓存
+	s.mu.Lock()
+	delete(s.collectionsLoaded, collectionName)
+	s.mu.Unlock()
+
+	// 删除旧集合
+	// Python: await self.delete_collection(collection_name)
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("event_type", "STORE_DELETE").
+		Msg("删除旧集合")
+	if err := s.DeleteCollection(ctx, collectionName); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+		return err
+	}
+
+	// 重命名临时集合为原始名称
+	// Python: client.rename_collection(temp_collection_name, collection_name)
+	logger.Info(logComponent).Str("old_name", tempCollectionName).
+		Str("new_name", collectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("重命名临时集合")
+	if err := c.RenameCollection(ctx, milvusclient.NewRenameCollectionOption(tempCollectionName, collectionName)); err != nil {
+		logger.Error(logComponent).Err(err).Str("old_name", tempCollectionName).
+			Str("new_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("重命名集合失败")
+		return err
+	}
+
+	// 清除旧集合的元数据缓存
+	// Python: if collection_name in self._collection_metadata: del self._collection_metadata[collection_name]
+	s.mu.Lock()
+	delete(s.collectionMetadata, collectionName)
+	s.mu.Unlock()
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("schema 迁移完成")
+
+	return nil
+}
+
+// cleanupTempCollection 迁移失败时清理临时集合。
+// 对齐 Python: except Exception: if await self.collection_exists(temp_collection_name): await self.delete_collection(temp_collection_name)
+func (s *MilvusVectorStore) cleanupTempCollection(ctx context.Context, tempCollectionName string) {
+	exists, err := s.CollectionExists(ctx, tempCollectionName)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("检查临时集合是否存在失败")
+		return
+	}
+	if exists {
+		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
+			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
+				Msg("清理临时集合失败")
+		} else {
+			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+				Msg("成功清理临时集合")
+		}
+	}
+}
+
+// resultSetRowToMap 将 Milvus QueryIterator 返回的 ResultSet 中的单行转为 map[string]any。
+// 用于迁移时读取旧集合数据。
+func resultSetRowToMap(rs milvusclient.ResultSet, rowIdx int) map[string]any {
+	doc := make(map[string]any)
+	for _, col := range rs.Fields {
+		val, err := col.Get(rowIdx)
+		if err != nil {
+			continue
+		}
+		doc[col.Name()] = val
+	}
+	return doc
+}
 
 // getClient 惰性获取或创建 Milvus 客户端。
 func (s *MilvusVectorStore) getClient(ctx context.Context) (milvusClient, error) {

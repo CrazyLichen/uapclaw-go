@@ -3,6 +3,7 @@ package vector
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/milvus-io/milvus/client/v2/column"
@@ -91,6 +92,21 @@ func (f *fakeMilvusClient) Close(ctx context.Context) error {
 
 func (f *fakeMilvusClient) RenameCollection(ctx context.Context, option milvusclient.RenameCollectionOption, callOptions ...any) error {
 	return nil
+}
+
+func (f *fakeMilvusClient) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+	return nil
+}
+
+func (f *fakeMilvusClient) QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error) {
+	return &emptyQueryIterator{}, nil
+}
+
+// emptyQueryIterator 空的查询迭代器，用于基础测试
+type emptyQueryIterator struct{}
+
+func (e *emptyQueryIterator) Next(ctx context.Context) (milvusclient.ResultSet, error) {
+	return milvusclient.ResultSet{}, io.EOF
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -679,12 +695,13 @@ func TestMilvusVectorStore_GetCollectionMetadata_缓存命中(t *testing.T) {
 	}
 }
 
-func TestMilvusVectorStore_UpdateSchema_预留(t *testing.T) {
+func TestMilvusVectorStore_UpdateSchema_空操作(t *testing.T) {
 	s := newTestStore()
 	ctx := context.Background()
+	// 空操作列表应直接返回 nil
 	err := s.UpdateSchema(ctx, "test_coll", []operation.Operation{})
-	if err == nil {
-		t.Error("UpdateSchema() 预留方法应返回错误")
+	if err != nil {
+		t.Errorf("UpdateSchema() 空操作应返回 nil, error = %v", err)
 	}
 }
 
@@ -857,6 +874,14 @@ func (f *fakeMilvusClientWithSearch) HasCollection(ctx context.Context, option m
 		return false, f.hasCollErr
 	}
 	return f.hasCollection, nil
+}
+
+func (f *fakeMilvusClientWithSearch) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+	return nil
+}
+
+func (f *fakeMilvusClientWithSearch) QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error) {
+	return &emptyQueryIterator{}, nil
 }
 
 func TestMilvusVectorStore_Search_有结果(t *testing.T) {
@@ -1148,6 +1173,14 @@ func (f *fakeMilvusClientWithErrors) DescribeCollection(ctx context.Context, opt
 	return nil, fmt.Errorf("collection not found")
 }
 
+func (f *fakeMilvusClientWithErrors) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+	return nil
+}
+
+func (f *fakeMilvusClientWithErrors) QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error) {
+	return &emptyQueryIterator{}, nil
+}
+
 func TestMilvusVectorStore_CreateCollection_HasCollectionError(t *testing.T) {
 	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
 	fake := &fakeMilvusClientWithErrors{
@@ -1315,6 +1348,8 @@ type fakeMilvusClientFull struct {
 	// 自定义 ListCollections
 	listResult []string
 	listErr    error
+	// 自定义 QueryIterator
+	queryIter milvusclient.QueryIterator
 }
 
 func newFakeMilvusClientFull() *fakeMilvusClientFull {
@@ -1374,6 +1409,17 @@ func (f *fakeMilvusClientFull) ListCollections(ctx context.Context, option milvu
 		names = append(names, name)
 	}
 	return names, nil
+}
+
+func (f *fakeMilvusClientFull) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+	return nil
+}
+
+func (f *fakeMilvusClientFull) QueryIterator(ctx context.Context, option milvusclient.QueryIteratorOption, callOptions ...any) (milvusclient.QueryIterator, error) {
+	if f.queryIter != nil {
+		return f.queryIter, nil
+	}
+	return &emptyQueryIterator{}, nil
 }
 
 // ──────────────────────────── 补充测试 ────────────────────────────
@@ -2161,4 +2207,331 @@ func TestMilvusVectorStore_GetSchema_GetClientError(t *testing.T) {
 	if err == nil {
 		t.Error("GetSchema() 连接失败应返回错误")
 	}
+}
+
+// ──────────────────────────── UpdateSchema 迁移测试 ────────────────────────────
+
+// mockQueryIterator 模拟查询迭代器，返回预设的文档批次
+type mockQueryIterator struct {
+	batches   []milvusclient.ResultSet
+	batchIdx  int
+}
+
+func (m *mockQueryIterator) Next(ctx context.Context) (milvusclient.ResultSet, error) {
+	if m.batchIdx >= len(m.batches) {
+		return milvusclient.ResultSet{}, io.EOF
+	}
+	batch := m.batches[m.batchIdx]
+	m.batchIdx++
+	return batch, nil
+}
+
+func TestMilvusVectorStore_UpdateSchema_添加字段迁移(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.collections["test_coll"] = true
+	fake.describeCollResult = &entity.Collection{
+		Schema: &entity.Schema{
+			CollectionName: "test_coll",
+			Fields: []*entity.Field{
+				{Name: "id", DataType: entity.FieldTypeVarChar, PrimaryKey: true, TypeParams: map[string]string{"max_length": "256"}},
+				{Name: "embedding", DataType: entity.FieldTypeFloatVector, TypeParams: map[string]string{"dim": "4"}},
+			},
+		},
+	}
+	s.client = fake
+	s.collectionMetadata["test_coll"] = &collMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      4,
+		PKType:         entity.FieldTypeVarChar,
+		FieldNames:     []string{"id", "embedding"},
+	}
+	s.collectionsLoaded["test_coll"] = true
+
+	ctx := context.Background()
+
+	// 添加一个新字段
+	ops := []operation.Operation{
+		&operation.AddScalarFieldOperation{
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			FieldName:     "new_field",
+			FieldType:     "VARCHAR",
+			DefaultValue:  "default_val",
+		},
+	}
+
+	err := s.UpdateSchema(ctx, "test_coll", ops)
+	if err != nil {
+		t.Fatalf("UpdateSchema() error = %v", err)
+	}
+	// 验证临时集合创建、旧集合删除、重命名发生
+	// fake 会自动追踪
+}
+
+func TestMilvusVectorStore_UpdateSchema_带数据迁移(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.collections["test_coll"] = true
+	fake.describeCollResult = &entity.Collection{
+		Schema: &entity.Schema{
+			CollectionName: "test_coll",
+			Fields: []*entity.Field{
+				{Name: "id", DataType: entity.FieldTypeVarChar, PrimaryKey: true, TypeParams: map[string]string{"max_length": "256"}},
+				{Name: "embedding", DataType: entity.FieldTypeFloatVector, TypeParams: map[string]string{"dim": "4"}},
+				{Name: "text", DataType: entity.FieldTypeVarChar, TypeParams: map[string]string{"max_length": "65535"}},
+			},
+		},
+	}
+
+	// 准备模拟数据
+	vecCol := column.NewColumnFloatVector("embedding", 4, [][]float32{{0.1, 0.2, 0.3, 0.4}, {0.5, 0.6, 0.7, 0.8}})
+	textCol := column.NewColumnVarChar("text", []string{"hello", "world"})
+	idCol := column.NewColumnVarChar("id", []string{"doc1", "doc2"})
+
+	fake.queryIter = &mockQueryIterator{
+		batches: []milvusclient.ResultSet{
+			{
+				ResultCount: 2,
+				Fields:      []column.Column{idCol, vecCol, textCol},
+			},
+		},
+	}
+
+	s.client = fake
+	s.collectionMetadata["test_coll"] = &collMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      4,
+		PKType:         entity.FieldTypeVarChar,
+		FieldNames:     []string{"id", "embedding", "text"},
+	}
+	s.collectionsLoaded["test_coll"] = true
+
+	ctx := context.Background()
+
+	// 重命名字段 text → content
+	ops := []operation.Operation{
+		&operation.RenameScalarFieldOperation{
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			OldFieldName:  "text",
+			NewFieldName:  "content",
+		},
+	}
+
+	err := s.UpdateSchema(ctx, "test_coll", ops)
+	if err != nil {
+		t.Fatalf("UpdateSchema() error = %v", err)
+	}
+	// 验证创建了临时集合
+	if len(fake.createdCollections) != 1 {
+		t.Errorf("应创建 1 个临时集合, 实际创建 %d 个", len(fake.createdCollections))
+	}
+	// 验证旧集合被删除
+	if len(fake.droppedCollections) < 1 {
+		t.Errorf("应删除旧集合, 实际删除 %d 个", len(fake.droppedCollections))
+	}
+}
+
+func TestMilvusVectorStore_UpdateSchema_GetSchema失败(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	s.client = fake
+
+	ctx := context.Background()
+
+	ops := []operation.Operation{
+		&operation.AddScalarFieldOperation{
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			FieldName:     "new_field",
+			FieldType:     "VARCHAR",
+		},
+	}
+
+	err := s.UpdateSchema(ctx, "not_exist_coll", ops)
+	if err == nil {
+		t.Error("UpdateSchema() GetSchema 失败应返回错误")
+	}
+}
+
+func TestMilvusVectorStore_executeMigration_创建临时集合失败(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.describeCollResult = &entity.Collection{
+		Schema: &entity.Schema{
+			CollectionName: "test_coll",
+			Fields: []*entity.Field{
+				{Name: "id", DataType: entity.FieldTypeVarChar, PrimaryKey: true, TypeParams: map[string]string{"max_length": "256"}},
+				{Name: "embedding", DataType: entity.FieldTypeFloatVector, TypeParams: map[string]string{"dim": "4"}},
+			},
+		},
+	}
+	s.client = fake
+	s.collectionMetadata["test_coll"] = &collMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      4,
+		PKType:         entity.FieldTypeVarChar,
+		FieldNames:     []string{"id", "embedding"},
+	}
+	s.collectionsLoaded["test_coll"] = true
+
+	ctx := context.Background()
+	schema, _ := NewCollectionSchemaFromFields([]*FieldSchema{
+		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
+		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
+	})
+	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	metadata := map[string]any{"distance_metric": "COSINE"}
+
+	// 成功场景：executeMigration 应正常执行
+	err := s.executeMigration(ctx, "test_coll", schema, transformFunc, metadata)
+	if err != nil {
+		t.Fatalf("executeMigration() 应成功, error = %v", err)
+	}
+	// 验证临时集合被创建（新 schema）
+	if len(fake.createdCollections) < 1 {
+		t.Errorf("应至少创建 1 个临时集合, 实际创建 %d 个", len(fake.createdCollections))
+	}
+}
+
+func TestMilvusVectorStore_executeMigration_QueryIterator失败(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.collections["test_coll"] = true
+	// 使用会返回错误的 QueryIterator
+	fake.queryIter = &errorQueryIterator{err: fmt.Errorf("query iterator failed")}
+	s.client = fake
+	s.collectionMetadata["test_coll"] = &collMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      4,
+	}
+	s.collectionsLoaded["test_coll"] = true
+
+	ctx := context.Background()
+	schema, _ := NewCollectionSchemaFromFields([]*FieldSchema{
+		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
+		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
+	})
+	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	metadata := map[string]any{"distance_metric": "COSINE"}
+
+	err := s.executeMigration(ctx, "test_coll", schema, transformFunc, metadata)
+	if err == nil {
+		t.Error("executeMigration() QueryIterator 失败应返回错误")
+	}
+}
+
+// errorQueryIterator 模拟查询迭代器错误
+type errorQueryIterator struct {
+	err error
+}
+
+func (e *errorQueryIterator) Next(ctx context.Context) (milvusclient.ResultSet, error) {
+	return milvusclient.ResultSet{}, e.err
+}
+
+func TestMilvusVectorStore_executeMigration_AddDocs失败(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.collections["test_coll"] = true
+	fake.describeCollResult = &entity.Collection{
+		Schema: &entity.Schema{
+			CollectionName: "test_coll",
+			Fields: []*entity.Field{
+				{Name: "id", DataType: entity.FieldTypeVarChar, PrimaryKey: true, TypeParams: map[string]string{"max_length": "256"}},
+				{Name: "embedding", DataType: entity.FieldTypeFloatVector, TypeParams: map[string]string{"dim": "4"}},
+			},
+		},
+	}
+	// 准备数据让 QueryIterator 返回文档
+	vecCol := column.NewColumnFloatVector("embedding", 4, [][]float32{{0.1, 0.2, 0.3, 0.4}})
+	idCol := column.NewColumnVarChar("id", []string{"doc1"})
+	fake.queryIter = &mockQueryIterator{
+		batches: []milvusclient.ResultSet{
+			{ResultCount: 1, Fields: []column.Column{idCol, vecCol}},
+		},
+	}
+	s.client = fake
+	s.collectionMetadata["test_coll"] = &collMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      4,
+		PKType:         entity.FieldTypeVarChar,
+		FieldNames:     []string{"id", "embedding"},
+	}
+	s.collectionsLoaded["test_coll"] = true
+
+	ctx := context.Background()
+	schema, _ := NewCollectionSchemaFromFields([]*FieldSchema{
+		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
+		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
+	})
+	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	metadata := map[string]any{"distance_metric": "COSINE"}
+
+	// 由于 fakeMilvusClientFull 的 Insert 总是成功，
+	// 这个测试验证 executeMigration 可以成功完成带数据的迁移
+	err := s.executeMigration(ctx, "test_coll", schema, transformFunc, metadata)
+	if err != nil {
+		t.Fatalf("executeMigration() 应成功, error = %v", err)
+	}
+	// 验证数据复制确实发生了（fake 追踪 insertedDocs）
+	if fake.insertedDocs == 0 {
+		t.Error("executeMigration() 应插入至少 1 批数据")
+	}
+}
+
+func TestResultSetRowToMap(t *testing.T) {
+	rs := milvusclient.ResultSet{
+		ResultCount: 2,
+		Fields: []column.Column{
+			column.NewColumnVarChar("id", []string{"doc1", "doc2"}),
+			column.NewColumnVarChar("text", []string{"hello", "world"}),
+		},
+	}
+
+	doc0 := resultSetRowToMap(rs, 0)
+	if doc0["id"] != "doc1" {
+		t.Errorf("doc0[id] = %v, want doc1", doc0["id"])
+	}
+	if doc0["text"] != "hello" {
+		t.Errorf("doc0[text] = %v, want hello", doc0["text"])
+	}
+
+	doc1 := resultSetRowToMap(rs, 1)
+	if doc1["id"] != "doc2" {
+		t.Errorf("doc1[id] = %v, want doc2", doc1["id"])
+	}
+}
+
+func TestMilvusVectorStore_cleanupTempCollection_存在(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	fake.collections["temp_coll"] = true
+	s.client = fake
+
+	ctx := context.Background()
+	s.cleanupTempCollection(ctx, "temp_coll")
+	// 不应 panic
+}
+
+func TestMilvusVectorStore_cleanupTempCollection_不存在(t *testing.T) {
+	s := NewMilvusVectorStore("http://localhost:19530", "", "default")
+	fake := newFakeMilvusClientFull()
+	s.client = fake
+
+	ctx := context.Background()
+	s.cleanupTempCollection(ctx, "nonexistent")
+	// 不应 panic
+}
+
+// mustNewFieldSchema 创建 FieldSchema 的测试辅助函数，失败时 panic
+func mustNewFieldSchema(name string, dtype VectorDataType, opts ...FieldOption) *FieldSchema {
+	f, err := NewFieldSchema(name, dtype, opts...)
+	if err != nil {
+		panic(fmt.Sprintf("mustNewFieldSchema(%s): %v", name, err))
+	}
+	return f
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
@@ -649,14 +650,44 @@ func (s *ChromaVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 }
 
 // UpdateSchema 执行 schema 迁移操作。
-// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
+// ChromaDB 不支持原地 schema 变更，使用 double-copy 策略：
+// 创建临时集合 → 复制数据 → 删除旧集合 → 用原名创建新集合 → 复制 → 删除临时集合
 //
 // Python: ChromaVectorStore.update_schema(collection_name, operations)
 func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error {
-	// TODO(#回填): 待 Task 10 回填完整迁移逻辑
-	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-		exception.WithParam("error_msg", "UpdateSchema 待回填"),
-	)
+	if len(operations) == 0 {
+		return nil
+	}
+
+	// 1. 获取当前 schema
+	// Python: old_schema = await self.get_schema(collection_name)
+	oldSchema, err := s.GetSchema(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 2. 计算 operations 应用后的目标 schema
+	// Python: new_schema = compute_new_schema(old_schema, operations)
+	newSchema, err := ComputeNewSchema(oldSchema, operations)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+		return err
+	}
+
+	// 3. 构建统一的文档变换函数
+	// Python: transform_func = build_transform_func_for_operations(operations)
+	transformFunc := BuildTransformFunc(operations)
+
+	// 4. 获取集合元数据作为创建新集合的参数
+	// Python: metadata = await self.get_collection_metadata(collection_name)
+	metadata, err := s.GetCollectionMetadata(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// 5. 执行迁移
+	return s.executeChromaMigration(ctx, collectionName, newSchema, transformFunc, metadata)
 }
 
 // RenameCollection ChromaDB 不支持重命名集合。
@@ -829,6 +860,133 @@ func (s *ChromaVectorStore) GetAllDocuments(ctx context.Context, collectionName 
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// executeChromaMigration 执行 ChromaDB schema 迁移的核心流程。
+// ChromaDB 不支持原地 schema 变更和 rename，使用 double-copy 策略：
+// 1. 创建临时集合（新 schema） → 2. 复制+变换数据 → 3. 删除旧集合
+// 4. 用原名创建新集合 → 5. 从临时集合复制数据 → 6. 删除临时集合
+//
+// Python: ChromaVectorStore._execute_migration(collection_name, new_schema, transform_func, new_collection_kwargs)
+func (s *ChromaVectorStore) executeChromaMigration(
+	ctx context.Context,
+	collectionName string,
+	newSchema *CollectionSchema,
+	transformFunc func(map[string]any) map[string]any,
+	metadata map[string]any,
+) error {
+	// 生成临时集合名称
+	// Python: temp_collection_name = f"{collection_name}_migration_{int(time.time())}"
+	tempCollectionName := fmt.Sprintf("%s_migration_%d", collectionName, time.Now().Unix())
+
+	distanceMetric := "COSINE"
+	if dm, ok := metadata["distance_metric"].(string); ok && dm != "" {
+		distanceMetric = strings.ToUpper(dm)
+	}
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("temp_collection_name", tempCollectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("开始 ChromaDB schema 迁移")
+
+	// 1. 创建临时集合（新 schema）
+	// Python: await self.create_collection(temp_collection_name, new_schema, distance_metric=...)
+	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+		return err
+	}
+
+	// 2. 获取旧集合的所有文档，变换后写入临时集合
+	// Python: old_collection_data = await self.get_all_documents(collection_name)
+	oldDocs, err := s.GetAllDocuments(ctx, collectionName)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("获取旧集合文档失败")
+		s.cleanupChromaTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	if len(oldDocs) > 0 {
+		transformedDocs := make([]map[string]any, 0, len(oldDocs))
+		for _, doc := range oldDocs {
+			transformedDocs = append(transformedDocs, transformFunc(doc))
+		}
+		// Python: await self.add_docs(temp_collection_name, transformed_docs)
+		if err := s.AddDocs(ctx, tempCollectionName, transformedDocs); err != nil {
+			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+			s.cleanupChromaTempCollection(ctx, tempCollectionName)
+			return err
+		}
+	}
+
+	// 3. 删除旧集合
+	// Python: await self.delete_collection(collection_name)
+	if err := s.DeleteCollection(ctx, collectionName); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+		s.cleanupChromaTempCollection(ctx, tempCollectionName)
+		return err
+	}
+
+	// 4. ChromaDB 不支持 rename，用原名创建新集合
+	// Python: await self.create_collection(collection_name, new_schema, distance_metric=...)
+	if err := s.CreateCollection(ctx, collectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+			Str("event_type", "STORE_UPDATE").Msg("用原名创建新集合失败")
+		// 注意：旧集合已被删除，此处不可恢复
+		return err
+	}
+
+	// 5. 从临时集合复制数据到新集合
+	// Python: temp_collection_data = await self.get_all_documents(temp_collection_name)
+	tempDocs, err := s.GetAllDocuments(ctx, tempCollectionName)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Str("event_type", "STORE_UPDATE").Msg("获取临时集合文档失败")
+		return err
+	}
+
+	if len(tempDocs) > 0 {
+		if err := s.AddDocs(ctx, collectionName, tempDocs); err != nil {
+			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
+				Str("event_type", "STORE_UPDATE").Msg("写入新集合失败")
+			return err
+		}
+	}
+
+	// 6. 删除临时集合
+	// Python: await self.delete_collection(temp_collection_name)
+	if err := s.DeleteCollection(ctx, tempCollectionName); err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("删除临时集合失败，非致命错误")
+	}
+
+	logger.Info(logComponent).Str("collection_name", collectionName).
+		Str("event_type", "STORE_UPDATE").
+		Msg("ChromaDB schema 迁移完成")
+
+	return nil
+}
+
+// cleanupChromaTempCollection 迁移失败时清理 ChromaDB 临时集合。
+func (s *ChromaVectorStore) cleanupChromaTempCollection(ctx context.Context, tempCollectionName string) {
+	exists, err := s.CollectionExists(ctx, tempCollectionName)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+			Msg("检查临时集合是否存在失败")
+		return
+	}
+	if exists {
+		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
+			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
+				Msg("清理临时集合失败")
+		} else {
+			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
+				Msg("成功清理临时集合")
+		}
+	}
+}
 
 // defaultChromaCreateClient 默认的客户端创建函数，使用 chroma-go PersistentClient。
 func defaultChromaCreateClient(persistPath string) (chromav2.Client, error) {
