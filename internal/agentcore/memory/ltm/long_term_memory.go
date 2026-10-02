@@ -112,6 +112,17 @@ func ResetLongTermMemory() {
 	ltmInstance = nil
 }
 
+// KVStore 返回已注册的 KV 存储（nil 表示未注册）。
+// 供 OpenJiuwenProvider 判断是否需要 RegisterStore。
+func (m *LongTermMemory) KVStore() kv.BaseKVStore {
+	return m.kvStore
+}
+
+// IsInitialized 返回 LTM 是否已初始化（kvStore/dbStore 已注册且 SetConfig 已调用）。
+func (m *LongTermMemory) IsInitialized() bool {
+	return m.kvStore != nil && m.dbStore != nil && m.searchManager != nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getLLMFromConfig 从配置创建 LLM 实例。
