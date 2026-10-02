@@ -3,6 +3,7 @@ package callback
 import (
 	"context"
 	"fmt"
+	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -160,7 +161,21 @@ type RetrievalEventData struct {
 type MemoryEventData struct {
 	// Event 事件类型
 	Event MemoryEventType
-	// Key 记忆键
+	// UserID 用户标识
+	UserID string
+	// ScopeID 作用域标识
+	ScopeID string
+	// Query 搜索查询
+	Query string
+	// MemoryType 记忆类型
+	MemoryType string
+	// MemoryID 记忆标识
+	MemoryID string
+	// Score 相关度分数
+	Score float64
+	// Timestamp 时间戳
+	Timestamp *time.Time
+	// Key 记忆键（保留向后兼容）
 	Key string
 	// Value 记忆值
 	Value any
