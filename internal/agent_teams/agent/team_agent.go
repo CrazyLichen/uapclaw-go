@@ -553,43 +553,59 @@ func (a *TeamAgent) Interact(ctx context.Context, message string) error {
 
 // Broadcast 广播用户侧公告。
 // Python: TeamAgent.broadcast(content) → DeliverResult
+// 修复 S-14: 改用 UserInbox.Broadcast 对齐 Python
 func (a *TeamAgent) Broadcast(ctx context.Context, content string) (*ateaminteraction.DeliverResult, error) {
-	msgMgr := a.MessageManager()
-	if msgMgr == nil {
-		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
-	}
-	msgID, err := msgMgr.BroadcastMessage(ctx, content, "")
-	if err != nil {
-		return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
-	}
-	return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
-}
-
-// HumanAgentSay 以注册的 human_agent 成员身份发言。
-// Python: TeamAgent.human_agent_say(content, to, sender) → DeliverResult
-func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (*ateaminteraction.DeliverResult, error) {
-	// 对齐 Python: HumanAgentInbox(team_backend, message_manager, agent_lookup, on_inbound).send(...)
 	backend := a.TeamBackend()
 	if backend == nil {
 		return ateaminteraction.NewDeliverResultFailure("no_team_backend"), nil
 	}
-	// 简化实现：直接通过 MessageManager 发送
 	msgMgr := backend.MessageManager()
 	if msgMgr == nil {
 		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
 	}
-	if to == "" || to == "all" || to == "*" {
-		msgID, err := msgMgr.BroadcastMessage(ctx, content, sender)
-		if err != nil {
-			return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
-		}
-		return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
+	// 对齐 Python: UserInbox(backend.message_manager).broadcast(content)
+	inbox := ateaminteraction.NewUserInbox(msgMgr)
+	result, err := inbox.Broadcast(content)
+	if err != nil {
+		return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
 	}
-	msgID, err := msgMgr.SendMessage(ctx, to, content, sender)
+	return result, nil
+}
+
+// HumanAgentSay 以注册的 human_agent 成员身份发言。
+// Python: TeamAgent.human_agent_say(content, to, sender) → DeliverResult
+// 修复 S-15: 改用 HumanAgentInbox.Send 对齐 Python
+func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (*ateaminteraction.DeliverResult, error) {
+	backend := a.TeamBackend()
+	if backend == nil {
+		return ateaminteraction.NewDeliverResultFailure("no_team_backend"), nil
+	}
+	msgMgr := backend.MessageManager()
+	if msgMgr == nil {
+		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
+	}
+	// 对齐 Python: HumanAgentInbox(backend, backend.message_manager, agent_lookup, on_inbound).send(content, to=to, sender=sender)
+	// agent_lookup: 查找 human_agent 的 TeamAgent 实例用于驱动 avatar
+	agentLookup := ateaminteraction.AgentLookup(func(name string) ateaminteraction.DeliverInputer {
+		if ta := a.LookupHumanAgentRuntime(name); ta != nil {
+			return ta
+		}
+		return nil
+	})
+	inbox := ateaminteraction.NewHumanAgentInbox(backend, msgMgr, agentLookup, nil)
+	var toPtr *string
+	if to != "" {
+		toPtr = &to
+	}
+	var senderPtr *string
+	if sender != "" {
+		senderPtr = &sender
+	}
+	result, err := inbox.Send(ctx, content, toPtr, senderPtr)
 	if err != nil {
 		return ateaminteraction.NewDeliverResultFailure("send_failed:" + err.Error()), nil
 	}
-	return ateaminteraction.NewDeliverResultSuccess(&msgID), nil
+	return result, nil
 }
 
 // DeliverInput 投递输入到 Agent。
