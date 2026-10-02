@@ -461,7 +461,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.16 | ☐ | OpenJiuwenMemoryProvider | openjiuwen LTM 适配 | `openjiuwen/core/memory/external/openjiuwen_memory_provider.py` |
 | 7.17 | ☐ | AgentArtsMemoryProvider | AgentArts 适配 | `openjiuwen/core/memory/external/agentarts_memory_provider.py` |
 | 7.18 | ✅ | LongTermMemoryExtractor | ✅ LongTermMemoryExtractor（ExtractLongTermMemory + buildTimeContext）+ ✅ ExtractMemoryParams + ✅ MemoryOperationParams + ✅ MemoryScopeConfig + DefaultMemoryScopeConfig | `openjiuwen/core/memory/process/extract/` |
-| 7.19 | ☐ | MemoryAnalyzer / Refiner | 记忆精炼 | `openjiuwen/core/memory/process/refine/` |
+| 7.19 | ✅ | MemoryAnalyzer / Generator | ✅ MemoryAnalyzer（Analyze + VariableResult + MemoryAnalyzerResult）+ ✅ Generator（GenAllMemory + categoriesToMemoryUnit + processExtractedData + processSummaryData + getFragmentMemoryUnit + processProactiveMemoryData + semanticValidation + handleMemoryWithInstruct + processMemoryOperations）+ ✅ MemoryEngineConfig + ✅ AgentMemoryConfig + ✅ ScopeConfig 补全（ModelCfg/ModelClientCfg/EmbeddingCfg）| `openjiuwen/core/memory/process/extract/` |
 | 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
 | 7.21 | 🔄 | MigrationPlan | 迁移计划（部分提前：OperationRegistry + BaseOperation + Operations + MigrationPlan；⤵️ 7.22-7.23 Migrator + run_migrations 待后续回填） | `openjiuwen/core/memory/migration/migration_plan.py` |
 | 7.22 | ☐ | Migration Operations | 迁移操作注册表（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/operation/` |
