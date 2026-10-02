@@ -121,7 +121,7 @@ func (m *TeamRuntimeManager) Interact(
 
 	// Python 步骤 3: InteractiveInput → 恢复中断
 	if interactiveInput, ok := payload.(*sessioninteraction.InteractiveInput); ok {
-		return m.handleInteractiveInput(entry, interactiveInput)
+		return m.handleInteractiveInput(ctx, entry, interactiveInput)
 	}
 
 	// Python 步骤 4-5: 解析 payloads
@@ -149,7 +149,7 @@ func (m *TeamRuntimeManager) Interact(
 	defer entry.InteractGate.ConsumeDone(ticket)
 
 	// Python 步骤 8a: resolve_recipients
-	resolved, err := m.resolveRecipients(entry, payloads)
+	resolved, err := m.resolveRecipients(ctx, entry, payloads)
 	if err != nil {
 		return nil, err
 	}
@@ -262,14 +262,14 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 //  2. await entry.agent.resume_interrupt(payload)
 //  3. return DeliverResult.success(None)
 //  4. return DeliverResult.failure("unsupported_interactive_input")
-func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
+func (m *TeamRuntimeManager) handleInteractiveInput(ctx context.Context, entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
 	// 防御：Agent 为 nil 时无法处理交互输入
 	if entry.Agent == nil {
 		return interaction.NewDeliverResultFailure("agent_unavailable"), nil
 	}
 	// Python: if entry.agent.has_pending_interrupt(): await entry.agent.resume_interrupt(payload); return success
 	if entry.Agent.HasPendingInterrupt() {
-		err := entry.Agent.ResumeInterrupt(context.Background(), input)
+		err := entry.Agent.ResumeInterrupt(ctx, input)
 		if err != nil {
 			return interaction.NewDeliverResultFailure("resume_interrupt_failed"), nil
 		}
@@ -287,14 +287,13 @@ func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *se
 //  2. if backend is None: return payloads
 //  3. async def _member_exists(name): return await backend.get_member(name) is not None
 //  4. return await resolve_targets(payloads, member_exists=_member_exists)
-func (m *TeamRuntimeManager) resolveRecipients(entry *ActiveTeam, payloads []interaction.InteractPayload) ([]interaction.InteractPayload, error) {
+func (m *TeamRuntimeManager) resolveRecipients(ctx context.Context, entry *ActiveTeam, payloads []interaction.InteractPayload) ([]interaction.InteractPayload, error) {
 	// Python 步骤 1-2: backend = agent.team_backend; if backend is None: return payloads
 	backend := getTeamBackend(entry.Agent)
 	if backend == nil {
 		return payloads, nil
 	}
 	// Python 步骤 3: async def _member_exists(name): return await backend.get_member(name) is not None
-	ctx := context.Background()
 	memberExists := func(name string) (bool, error) {
 		member, _ := backend.GetMember(ctx, name)
 		return member != nil, nil
