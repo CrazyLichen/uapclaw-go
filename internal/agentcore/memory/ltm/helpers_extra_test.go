@@ -120,7 +120,7 @@ func TestGetScopeEmbeddingModel_无配置(t *testing.T) {
 func TestUserMemTotalNum_正常流程(t *testing.T) {
 	env := newTestEnv(t)
 	// searchManager 未初始化
-	_, err := env.m.UserMemTotalNum(context.Background(), SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	_, err := env.m.UserMemTotalNum(context.Background(), Uid("u1"), Sid("s1"))
 	assert.Error(t, err)
 }
 
@@ -128,14 +128,14 @@ func TestUserMemTotalNum_正常流程(t *testing.T) {
 func TestGetUserMemByPage_正常流程(t *testing.T) {
 	env := newTestEnv(t)
 	_, err := env.m.GetUserMemByPage(context.Background(), 10, 1, mem_model.MemoryTypeUnknown,
-		SearchWithUserID("u1"), SearchWithScopeID("s1"))
+		Uid("u1"), Sid("s1"))
 	assert.Error(t, err)
 }
 
 // TestGetRecentMessages_ManagerNil 测试 messageManager 为 nil。
 func TestGetRecentMessages_ManagerNil(t *testing.T) {
 	env := newTestEnv(t)
-	msgs, err := env.m.GetRecentMessages(context.Background(), SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	msgs, err := env.m.GetRecentMessages(context.Background(), 10, Uid("u1"), Sid("s1"))
 	assert.NoError(t, err)
 	assert.Nil(t, msgs)
 }
@@ -143,14 +143,14 @@ func TestGetRecentMessages_ManagerNil(t *testing.T) {
 // TestGetRecentMessages_无效ScopeID 测试无效 scopeID。
 func TestGetRecentMessages_无效ScopeID(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.GetRecentMessages(context.Background(), SearchWithScopeID("has/slash"))
+	_, err := m.GetRecentMessages(context.Background(), 10, Sid("has/slash"))
 	assert.Error(t, err)
 }
 
 // TestDeleteVariables_正常流程 测试 variableManager 未初始化。
 func TestDeleteVariables_正常流程(t *testing.T) {
 	env := newTestEnv(t)
-	err := env.m.DeleteVariables(context.Background(), []string{"var1"}, SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	err := env.m.DeleteVariables(context.Background(), []string{"var1"}, Uid("u1"), Sid("s1"))
 	// acquireUserLock 需要成功的 kvStore，但 variableManager 为 nil 在锁内部
 	assert.Error(t, err)
 }
@@ -158,14 +158,14 @@ func TestDeleteVariables_正常流程(t *testing.T) {
 // TestUpdateVariables_正常流程 测试 variableManager 未初始化。
 func TestUpdateVariables_正常流程(t *testing.T) {
 	env := newTestEnv(t)
-	err := env.m.UpdateVariables(context.Background(), map[string]string{"k": "v"}, SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	err := env.m.UpdateVariables(context.Background(), map[string]string{"k": "v"}, Uid("u1"), Sid("s1"))
 	assert.Error(t, err)
 }
 
 // TestDeleteMemByIDImpl_正常流程 测试 writeManager 未初始化（在锁内部）。
 func TestDeleteMemByIDImpl_正常流程(t *testing.T) {
 	env := newTestEnv(t)
-	err := env.m.deleteMemByIDImpl(context.Background(), "mem1", &searchParams{
+	err := env.m.deleteMemByIDImpl(context.Background(), "mem1", &userScopeParams{
 		UserID:  "u1",
 		ScopeID: "s1",
 	})
@@ -175,7 +175,7 @@ func TestDeleteMemByIDImpl_正常流程(t *testing.T) {
 // TestDeleteMemByUserIDImpl_正常流程 测试 writeManager 未初始化。
 func TestDeleteMemByUserIDImpl_正常流程(t *testing.T) {
 	env := newTestEnv(t)
-	err := env.m.deleteMemByUserIDImpl(context.Background(), &searchParams{
+	err := env.m.deleteMemByUserIDImpl(context.Background(), &userScopeParams{
 		UserID:  "u1",
 		ScopeID: "s1",
 	})
@@ -185,7 +185,7 @@ func TestDeleteMemByUserIDImpl_正常流程(t *testing.T) {
 // TestUpdateMemByIDImpl_正常流程 测试 writeManager 未初始化。
 func TestUpdateMemByIDImpl_正常流程(t *testing.T) {
 	env := newTestEnv(t)
-	err := env.m.updateMemByIDImpl(context.Background(), "mem1", "new content", &searchParams{
+	err := env.m.updateMemByIDImpl(context.Background(), "mem1", "new content", &userScopeParams{
 		UserID:  "u1",
 		ScopeID: "s1",
 	})

@@ -29,6 +29,14 @@ type addMessagesParams struct {
 	GenMemWithHistoryMsgNum int
 }
 
+// userScopeParams 用户+作用域通用参数，被搜索/删除/更新/查询操作复用。
+type userScopeParams struct {
+	// UserID 用户标识
+	UserID string
+	// ScopeID 作用域标识
+	ScopeID string
+}
+
 // searchParams SearchUserMem / SearchUserHistorySummary 的全部参数。
 type searchParams struct {
 	// Query 搜索查询
@@ -101,6 +109,31 @@ func newAddMessagesParams(messages []llmschema.BaseMessage, agentConfig *config.
 		SessionID:               DefaultValue,
 		GenMem:                  true,
 		GenMemWithHistoryMsgNum: 2,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// UserScopeOption 用户+作用域通用可选参数，被搜索/删除/更新/查询操作复用。
+type UserScopeOption func(*userScopeParams)
+
+// Uid 设置用户标识。
+func Uid(uid string) UserScopeOption {
+	return func(p *userScopeParams) { p.UserID = uid }
+}
+
+// Sid 设置作用域标识。
+func Sid(sid string) UserScopeOption {
+	return func(p *userScopeParams) { p.ScopeID = sid }
+}
+
+// newUserScopeParams 从选项构建用户+作用域参数。
+func newUserScopeParams(opts ...UserScopeOption) *userScopeParams {
+	p := &userScopeParams{
+		UserID:  DefaultValue,
+		ScopeID: DefaultValue,
 	}
 	for _, opt := range opts {
 		opt(p)

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/index"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/process/extract"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -196,8 +196,8 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			return genErr
 		}
 
-		// Step 14: writeManager.AddMemories
-		writeResult, writeErr := m.writeManager.AddMemories(ctx, p.UserID, p.ScopeID, allMemory)
+		// Step 14: writeManager.AddMemories（对齐 Python: write_manager.add_memories(memories, llm=llm)）
+		writeResult, writeErr := m.writeManager.AddMemories(ctx, p.UserID, p.ScopeID, allMemory, index.WithLLMModel(llmInstance))
 		if writeErr != nil {
 			logger.Error(logComponent).Err(writeErr).Str("memory_type", "unknown").
 				Str("event_type", "MEMORY_STORE").Str("user_id", p.UserID).
@@ -255,7 +255,3 @@ func classifyWriteResult(writeResult []mem_model.MemoryUnit) *AddMemResult {
 	}
 	return r
 }
-
-// getLLM 用于将 *llm.Model 传递给需要的地方（避免循环引用）。
-// 声明为包级变量类型别名，以便后续操作使用。
-var _ = (*llm.Model)(nil)

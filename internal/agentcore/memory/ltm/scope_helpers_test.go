@@ -179,21 +179,21 @@ func TestTriggerMemoryAfter(t *testing.T) {
 func TestGetVariables_NilNames(t *testing.T) {
 	env := newTestEnv(t)
 	// searchManager 未初始化，应返回错误
-	_, err := env.m.GetVariables(context.Background(), nil, SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	_, err := env.m.GetVariables(context.Background(), nil, Uid("u1"), Sid("s1"))
 	assert.Error(t, err)
 }
 
-// TestGetVariables_StringName 测试 names 为 string 时走单变量分支。
+// TestGetVariables_StringName 测试 names 为单元素 []string 时走单变量分支。
 func TestGetVariables_StringName(t *testing.T) {
 	env := newTestEnv(t)
-	_, err := env.m.GetVariables(context.Background(), "var1", SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	_, err := env.m.GetVariables(context.Background(), []string{"var1"}, Uid("u1"), Sid("s1"))
 	assert.Error(t, err) // searchManager 未初始化
 }
 
 // TestGetVariables_SliceNames 测试 names 为 []string 时走多变量分支。
 func TestGetVariables_SliceNames(t *testing.T) {
 	env := newTestEnv(t)
-	_, err := env.m.GetVariables(context.Background(), []string{"var1", "var2"}, SearchWithUserID("u1"), SearchWithScopeID("s1"))
+	_, err := env.m.GetVariables(context.Background(), []string{"var1", "var2"}, Uid("u1"), Sid("s1"))
 	assert.Error(t, err) // searchManager 未初始化
 }
 

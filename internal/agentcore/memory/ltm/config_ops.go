@@ -38,25 +38,29 @@ import (
 // 5. 设置初始 LLM（如果配置中有默认模型）
 //
 // Python: LongTermMemory.set_config(config)
-func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) {
+func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 	if m.kvStore == nil || m.dbStore == nil {
-		panic(exception.BuildError(exception.StatusMemorySetConfigExecutionError,
+		return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
 			exception.WithParam("config_type", "system"),
 			exception.WithMsg("kv store and db store must be registered before setting config"),
-		))
+		)
 	}
 	if m.memoryIndex == nil {
-		panic(exception.BuildError(exception.StatusMemorySetConfigExecutionError,
+		return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
 			exception.WithParam("config_type", "system"),
 			exception.WithMsg("memory_index must be provided (via register_plugin or register_store)"),
-		))
+		)
 	}
 	m.sysMemConfig = cfg
 
 	// 创建编解码器
 	c, err := codec.NewAesStorageCodec(cfg.CryptoKey)
 	if err != nil {
-		panic(fmt.Sprintf("创建 AesStorageCodec 失败: %v", err))
+		return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
+			exception.WithParam("config_type", "system"),
+			exception.WithMsg(fmt.Sprintf("创建 AesStorageCodec 失败: %v", err)),
+			exception.WithCause(err),
+		)
 	}
 	if m.memoryIndex != nil {
 		m.memoryIndex.SetStorageCodec(c)
@@ -84,7 +88,11 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) {
 	// 初始化 VariableManager
 	varMgr, err := index.NewVariableManager(m.kvStore, cfg.CryptoKey)
 	if err != nil {
-		panic(fmt.Sprintf("创建 VariableManager 失败: %v", err))
+		return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
+			exception.WithParam("config_type", "system"),
+			exception.WithMsg(fmt.Sprintf("创建 VariableManager 失败: %v", err)),
+			exception.WithCause(err),
+		)
 	}
 	m.variableManager = varMgr
 
@@ -118,6 +126,8 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) {
 			m.baseLLM = llmInstance
 		}
 	}
+
+	return nil
 }
 
 // SetScopeConfig 设置 scope 级配置，深拷贝并加密 API Key 后存入 KVStore。

@@ -11,7 +11,7 @@ import (
 // TestGetRecentMessages_ScopeID无效 测试无效 scopeID 返回错误。
 func TestGetRecentMessages_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.GetRecentMessages(context.Background(), SearchWithScopeID(""))
+	_, err := m.GetRecentMessages(context.Background(), 10, Sid(""))
 	assert.Error(t, err)
 }
 
@@ -25,27 +25,27 @@ func TestGetMessageByID_MessageManagerNil(t *testing.T) {
 // TestUserMemTotalNum_ScopeID无效 测试无效 scopeID 返回错误。
 func TestUserMemTotalNum_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.UserMemTotalNum(context.Background(), SearchWithScopeID(""))
+	_, err := m.UserMemTotalNum(context.Background(), Sid(""))
 	assert.Error(t, err)
 }
 
 // TestUserMemTotalNum_SearchManagerNil 测试 searchManager 未初始化。
 func TestUserMemTotalNum_SearchManagerNil(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.UserMemTotalNum(context.Background(), SearchWithScopeID("valid"))
+	_, err := m.UserMemTotalNum(context.Background(), Sid("valid"))
 	assert.Error(t, err)
 }
 
 // TestGetUserMemByPage_ScopeID无效 测试无效 scopeID 返回错误。
 func TestGetUserMemByPage_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.GetUserMemByPage(context.Background(), 10, 1, mem_model.MemoryTypeUnknown, SearchWithScopeID(""))
+	_, err := m.GetUserMemByPage(context.Background(), 10, 1, mem_model.MemoryTypeUnknown, Sid(""))
 	assert.Error(t, err)
 }
 
 // TestGetUserMemByPage_SearchManagerNil 测试 searchManager 未初始化。
 func TestGetUserMemByPage_SearchManagerNil(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.GetUserMemByPage(context.Background(), 10, 1, mem_model.MemoryTypeUnknown, SearchWithScopeID("valid"))
+	_, err := m.GetUserMemByPage(context.Background(), 10, 1, mem_model.MemoryTypeUnknown, Sid("valid"))
 	assert.Error(t, err)
 }

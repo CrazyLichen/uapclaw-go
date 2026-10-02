@@ -96,19 +96,22 @@ func (m *LongTermMemory) SearchUserHistorySummary(
 
 // GetVariables 获取用户变量。
 //
-// names 支持三种输入对齐 Python Union[str, list[str], None]：
-// - nil: 返回所有变量
-// - string: 返回单个变量
-// - []string: 返回多个变量
+// names 为变量名列表：
+//   - nil / 空切片: 返回所有变量
+//   - 单元素: 返回单个变量
+//   - 多元素: 返回多个变量
+//
+// 返回值为 map[变量名]变量值。
 //
 // Python: LongTermMemory.get_variables(names, user_id, scope_id)
+// Python names 类型为 Union[str, list[str], None]，Go 用 []string 统一表达三种语义。
 func (m *LongTermMemory) GetVariables(
 	ctx context.Context,
-	names any, // nil | string | []string
-	opts ...SearchOption,
+	names []string,
+	opts ...UserScopeOption,
 ) (map[string]string, error) {
 	// 解析默认参数
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").
@@ -128,40 +131,23 @@ func (m *LongTermMemory) GetVariables(
 		)
 	}
 
-	ret := make(map[string]string)
-
-	switch v := names.(type) {
-	case nil:
-		// 返回所有变量
+	// nil / 空切片 → 返回所有变量
+	if len(names) == 0 {
 		return m.searchManager.GetAllUserVariable(ctx, p.UserID, p.ScopeID)
-	case string:
-		if v == "" {
-			return ret, nil
-		}
-		value, err := m.searchManager.GetUserVariable(ctx, p.UserID, p.ScopeID, v)
-		if err != nil {
-			return nil, err
-		}
-		ret[v] = value
-		return ret, nil
-	case []string:
-		for _, name := range v {
-			value, err := m.searchManager.GetUserVariable(ctx, p.UserID, p.ScopeID, name)
-			if err != nil {
-				logger.Error(logComponent).Err(err).Str("name", name).
-					Msg("获取变量失败")
-				ret[name] = ""
-				continue
-			}
-			ret[name] = value
-		}
-		return ret, nil
-	default:
-		return nil, exception.BuildError(exception.StatusMemoryGetMemoryExecutionError,
-			exception.WithParam("memory_type", "all"),
-			exception.WithMsg("names must be string | []string | nil"),
-		)
 	}
+
+	ret := make(map[string]string, len(names))
+	for _, name := range names {
+		value, err := m.searchManager.GetUserVariable(ctx, p.UserID, p.ScopeID, name)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("name", name).
+				Msg("获取变量失败")
+			ret[name] = ""
+			continue
+		}
+		ret[name] = value
+	}
+	return ret, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

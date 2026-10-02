@@ -10,14 +10,14 @@ import (
 // TestDeleteMemByID_ScopeID无效 测试无效 scopeID 返回错误。
 func TestDeleteMemByID_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.DeleteMemByID(context.Background(), "mem1", SearchWithScopeID(""))
+	err := m.DeleteMemByID(context.Background(), "mem1", Sid(""))
 	assert.Error(t, err)
 }
 
 // TestDeleteMemByUserID_ScopeID无效 测试无效 scopeID 返回错误。
 func TestDeleteMemByUserID_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.DeleteMemByUserID(context.Background(), SearchWithScopeID("scope/id"))
+	err := m.DeleteMemByUserID(context.Background(), Sid("scope/id"))
 	assert.Error(t, err)
 }
 
@@ -31,14 +31,14 @@ func TestDeleteMemByScope_ScopeID无效(t *testing.T) {
 // TestDeleteMessagesByUserAndScope_ScopeID无效 测试无效 scopeID 返回错误。
 func TestDeleteMessagesByUserAndScope_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.DeleteMessagesByUserAndScope(context.Background(), SearchWithScopeID(""))
+	err := m.DeleteMessagesByUserAndScope(context.Background(), Sid(""))
 	assert.Error(t, err)
 }
 
 // TestDeleteVariables_ScopeID无效 测试无效 scopeID 返回错误。
 func TestDeleteVariables_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.DeleteVariables(context.Background(), []string{"var1"}, SearchWithScopeID(""))
+	err := m.DeleteVariables(context.Background(), []string{"var1"}, Sid(""))
 	assert.Error(t, err)
 }
 

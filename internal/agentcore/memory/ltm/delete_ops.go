@@ -25,9 +25,9 @@ import (
 func (m *LongTermMemory) DeleteMemByID(
 	ctx context.Context,
 	memID string,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 	// ① 触发 MEMORY_DELETED 回调
 	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
 		Event:    callback.MemoryDeleted,
@@ -46,9 +46,9 @@ func (m *LongTermMemory) DeleteMemByID(
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_DELETED) + delete_mem_by_user_id
 func (m *LongTermMemory) DeleteMemByUserID(
 	ctx context.Context,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 	// ① 触发 MEMORY_DELETED 回调
 	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
 		Event:   callback.MemoryDeleted,
@@ -81,7 +81,10 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 	userIDs := make([]string, 0, len(scopeUserData))
 	for _, data := range scopeUserData {
 		if uid, ok := data["user_id"]; ok {
-			userIDs = append(userIDs, uid.(string))
+			// 安全类型断言：user_id 字段由 ScopeUserMappingManager.Add 写入，类型为 string
+			if s, ok := uid.(string); ok {
+				userIDs = append(userIDs, s)
+			}
 		}
 	}
 
@@ -114,9 +117,9 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 // 对齐 Python: LongTermMemory.delete_messages_by_user_and_scope(user_id, scope_id)
 func (m *LongTermMemory) DeleteMessagesByUserAndScope(
 	ctx context.Context,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").
@@ -142,9 +145,9 @@ func (m *LongTermMemory) DeleteMessagesByUserAndScope(
 func (m *LongTermMemory) DeleteVariables(
 	ctx context.Context,
 	names []string,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_DELETE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
@@ -177,7 +180,7 @@ func (m *LongTermMemory) DeleteVariables(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // deleteMemByIDImpl DeleteMemByID 的核心实现。
-func (m *LongTermMemory) deleteMemByIDImpl(ctx context.Context, memID string, p *searchParams) error {
+func (m *LongTermMemory) deleteMemByIDImpl(ctx context.Context, memID string, p *userScopeParams) error {
 	if !validateID("MEMORY_DELETE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
 			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
@@ -201,7 +204,7 @@ func (m *LongTermMemory) deleteMemByIDImpl(ctx context.Context, memID string, p 
 }
 
 // deleteMemByUserIDImpl DeleteMemByUserID 的核心实现。
-func (m *LongTermMemory) deleteMemByUserIDImpl(ctx context.Context, p *searchParams) error {
+func (m *LongTermMemory) deleteMemByUserIDImpl(ctx context.Context, p *userScopeParams) error {
 	if !validateID("MEMORY_DELETE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
 			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).

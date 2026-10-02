@@ -25,15 +25,7 @@ func TestSearchUserHistorySummary_ScopeID无效(t *testing.T) {
 // TestGetVariables_ScopeID无效 测试无效 scopeID 返回错误。
 func TestGetVariables_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	_, err := m.GetVariables(context.Background(), nil, SearchWithScopeID(""))
-	assert.Error(t, err)
-}
-
-// TestGetVariables_NamesType 测试 names 参数类型分发。
-func TestGetVariables_NamesType(t *testing.T) {
-	m := NewLongTermMemory()
-	// 无效类型应返回错误
-	_, err := m.GetVariables(context.Background(), 123, SearchWithScopeID("valid"))
+	_, err := m.GetVariables(context.Background(), nil, Sid(""))
 	assert.Error(t, err)
 }
 

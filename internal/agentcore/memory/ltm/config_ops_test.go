@@ -38,10 +38,9 @@ func TestDeepCopyScopeConfig_含模型配置(t *testing.T) {
 	assert.Nil(t, copied.ModelCfg)
 }
 
-// TestSetConfig_存储未注册 测试 SetConfig 在存储未注册时 panic。
+// TestSetConfig_存储未注册 测试 SetConfig 在存储未注册时返回错误。
 func TestSetConfig_存储未注册(t *testing.T) {
 	m := NewLongTermMemory()
-	assert.Panics(t, func() {
-		m.SetConfig(config.DefaultMemoryEngineConfig())
-	})
+	err := m.SetConfig(config.DefaultMemoryEngineConfig())
+	assert.Error(t, err)
 }

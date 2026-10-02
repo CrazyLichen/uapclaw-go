@@ -25,9 +25,10 @@ import (
 // 对齐 Python: LongTermMemory.get_recent_messages(user_id, scope_id, session_id, num)
 func (m *LongTermMemory) GetRecentMessages(
 	ctx context.Context,
-	opts ...SearchOption,
+	num int,
+	opts ...UserScopeOption,
 ) ([]llmschema.BaseMessage, error) {
-	p := newSearchParams("", 10, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").
@@ -44,7 +45,7 @@ func (m *LongTermMemory) GetRecentMessages(
 		return nil, nil
 	}
 
-	msgAndMetas, err := m.messageManager.Get(ctx, p.UserID, p.ScopeID, "", p.Num)
+	msgAndMetas, err := m.messageManager.Get(ctx, p.UserID, p.ScopeID, "", num)
 	if err != nil {
 		return nil, err
 	}
@@ -92,9 +93,9 @@ func (m *LongTermMemory) GetMessageByID(ctx context.Context, msgID string) (*llm
 // 对齐 Python: LongTermMemory.user_mem_total_num(user_id, scope_id)
 func (m *LongTermMemory) UserMemTotalNum(
 	ctx context.Context,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) (int, error) {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").
@@ -128,9 +129,9 @@ func (m *LongTermMemory) GetUserMemByPage(
 	pageSize int,
 	pageIdx int,
 	memoryType mem_model.MemoryType,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) ([]*MemInfo, error) {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").

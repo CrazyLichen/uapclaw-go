@@ -26,9 +26,9 @@ func (m *LongTermMemory) UpdateMemByID(
 	ctx context.Context,
 	memID string,
 	memory string,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 	// ① 触发 MEMORY_UPDATED 回调
 	triggerMemoryBefore(ctx, callback.MemoryUpdated, &callback.MemoryEventData{
 		Event:    callback.MemoryUpdated,
@@ -47,9 +47,9 @@ func (m *LongTermMemory) UpdateMemByID(
 func (m *LongTermMemory) UpdateVariables(
 	ctx context.Context,
 	variables map[string]string,
-	opts ...SearchOption,
+	opts ...UserScopeOption,
 ) error {
-	p := newSearchParams("", 0, opts...)
+	p := newUserScopeParams(opts...)
 
 	if !validateID("MEMORY_UPDATE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_UPDATE").
@@ -82,7 +82,7 @@ func (m *LongTermMemory) UpdateVariables(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateMemByIDImpl UpdateMemByID 的核心实现。
-func (m *LongTermMemory) updateMemByIDImpl(ctx context.Context, memID string, memory string, p *searchParams) error {
+func (m *LongTermMemory) updateMemByIDImpl(ctx context.Context, memID string, memory string, p *userScopeParams) error {
 	if !validateID("MEMORY_UPDATE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_UPDATE").
 			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).

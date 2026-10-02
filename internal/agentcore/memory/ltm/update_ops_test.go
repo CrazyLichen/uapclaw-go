@@ -10,21 +10,21 @@ import (
 // TestUpdateMemByID_ScopeID无效 测试无效 scopeID 返回错误。
 func TestUpdateMemByID_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.UpdateMemByID(context.Background(), "mem1", "new content", SearchWithScopeID(""))
+	err := m.UpdateMemByID(context.Background(), "mem1", "new content", Sid(""))
 	assert.Error(t, err)
 }
 
 // TestUpdateVariables_ScopeID无效 测试无效 scopeID 返回错误。
 func TestUpdateVariables_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.UpdateVariables(context.Background(), map[string]string{"k": "v"}, SearchWithScopeID(""))
+	err := m.UpdateVariables(context.Background(), map[string]string{"k": "v"}, Sid(""))
 	assert.Error(t, err)
 }
 
 // TestUpdateMemByIDImpl_ScopeID无效 测试 impl 层 scopeID 无效。
 func TestUpdateMemByIDImpl_ScopeID无效(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.updateMemByIDImpl(context.Background(), "mem1", "content", &searchParams{
+	err := m.updateMemByIDImpl(context.Background(), "mem1", "content", &userScopeParams{
 		UserID:  "u1",
 		ScopeID: "",
 	})
@@ -34,7 +34,7 @@ func TestUpdateMemByIDImpl_ScopeID无效(t *testing.T) {
 // TestUpdateMemByIDImpl_ScopeID含斜杠 测试含斜杠的 scopeID。
 func TestUpdateMemByIDImpl_ScopeID含斜杠(t *testing.T) {
 	m := NewLongTermMemory()
-	err := m.updateMemByIDImpl(context.Background(), "mem1", "content", &searchParams{
+	err := m.updateMemByIDImpl(context.Background(), "mem1", "content", &userScopeParams{
 		UserID:  "u1",
 		ScopeID: "scope/id",
 	})

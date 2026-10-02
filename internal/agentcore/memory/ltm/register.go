@@ -110,7 +110,9 @@ func (m *LongTermMemory) RegisterStore(
 	}
 
 	// Step 6: SetConfig 初始化所有 manager
-	m.SetConfig(config.DefaultMemoryEngineConfig())
+	if err := m.SetConfig(config.DefaultMemoryEngineConfig()); err != nil {
+		return err
+	}
 
 	// Step 7: 执行 4 类 migration
 	if err := runMigration(ctx, func(ctx context.Context) error {
