@@ -75,11 +75,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译期检查：确保 TeamRuntimePool 和 ActiveTeam 满足 registry 接口
-var (
-	_ registry.PoolEntry     = (*TeamRuntimePool)(nil)
-	_ registry.PoolTeamEntry = (*ActiveTeam)(nil)
-)
+// 编译期检查：确保 TeamRuntimePool 满足 registry.PoolReader 接口
+var _ registry.PoolReader = (*TeamRuntimePool)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -140,10 +137,10 @@ func (p *TeamRuntimePool) ListTeamNames() []string {
 
 // TeamsForSession 返回绑定到指定 session 的所有活跃团队。
 // Python: TeamRuntimePool.teams_for_session(session_id)
-func (p *TeamRuntimePool) TeamsForSession(sessionID string) []registry.PoolTeamEntry {
+func (p *TeamRuntimePool) TeamsForSession(sessionID string) []*ActiveTeam {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	var result []registry.PoolTeamEntry
+	var result []*ActiveTeam
 	for _, entry := range p.entries {
 		if entry.SessionID == sessionID {
 			result = append(result, entry)
@@ -171,28 +168,20 @@ func (p *TeamRuntimePool) ListAllInfo() []ActiveTeamInfo {
 	return result
 }
 
-// GetSessionID 返回当前绑定的 session ID。
-// 满足 registry.PoolTeamEntry 接口。
-// 方法名用 GetSessionID 避免与 SessionID 字段冲突。
-func (e *ActiveTeam) GetSessionID() string {
-	return e.SessionID
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
-// GetEntry 获取指定团队的活跃条目（满足 registry.PoolEntry 接口）。
-// 与 Get 方法的区别：返回 registry.PoolTeamEntry 接口类型。
-// 显式处理 nil *ActiveTeam → nil 接口值的转换，避免 Go nil 接口陷阱。
-func (p *TeamRuntimePool) GetEntry(teamName string) registry.PoolTeamEntry {
+// GetSessionIDForTeam 获取指定团队的 session ID。
+// 满足 registry.PoolReader 接口。
+func (p *TeamRuntimePool) GetSessionIDForTeam(teamName string) string {
 	entry := p.Get(teamName)
 	if entry == nil {
-		return nil
+		return ""
 	}
-	return entry
+	return entry.SessionID
 }
 
-// RemoveEntry 移除指定团队的活跃条目（满足 registry.PoolEntry 接口）。
-// 与 Remove 方法的区别：无返回值。
-func (p *TeamRuntimePool) RemoveEntry(teamName string) {
+// RemoveTeam 移除指定团队的活跃条目。
+// 满足 registry.PoolReader 接口。
+func (p *TeamRuntimePool) RemoveTeam(teamName string) {
 	p.Remove(teamName)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

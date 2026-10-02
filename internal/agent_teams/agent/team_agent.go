@@ -55,6 +55,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
@@ -1545,18 +1546,28 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 	if teamName == "" || sessionID == "" {
 		return
 	}
-	// 通过 registry 接口获取 TeamRuntimeManager（编译期类型安全，无需运行时断言）
-	mgr := runner.GetTeamRuntimeManager()
-	if mgr == nil {
+	// 通过 runner 获取 TeamRuntimeManager（any 类型，避免 agent → runtime 循环依赖）
+	mgrAny := runner.GetTeamRuntimeManager()
+	if mgrAny == nil {
 		return
 	}
-	pool := mgr.PoolEntry()
-	if pool == nil {
+	// 类型断言获取 PoolAccessor 接口
+	mgr, ok := mgrAny.(registry.PoolAccessor)
+	if !ok {
 		return
 	}
-	entry := pool.GetEntry(teamName)
-	if entry == nil || entry.GetSessionID() != sessionID {
+	poolAny := mgr.PoolAny()
+	if poolAny == nil {
 		return
 	}
-	pool.RemoveEntry(teamName)
+	// 类型断言获取 PoolReader 接口
+	pool, ok := poolAny.(registry.PoolReader)
+	if !ok {
+		return
+	}
+	// 检查 session ID 匹配后移除
+	if pool.GetSessionIDForTeam(teamName) != sessionID {
+		return
+	}
+	pool.RemoveTeam(teamName)
 }

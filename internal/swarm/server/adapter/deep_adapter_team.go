@@ -2,12 +2,11 @@ package adapter
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -165,6 +164,9 @@ func (d *DeepAdapter) optionMatches(option map[string]any, answers any) bool {
 // 对齐 Python: team_helpers.process_team_message_stream()
 // 9.55: 实现核心分流逻辑
 //
+// 改造后：通过 channel_id → TeamManager 路由，对齐 Python 的 get_team_manager(channel_id).interact()
+// 而非通过 inputs["params"]["team_name"] 提取 teamName
+//
 // 参数分工对齐 Python：
 //   - req（AgentRequest）：元信息 — session_id, request_id, channel_id
 //   - inputs：业务参数 — query, params.team_name 等
@@ -173,49 +175,54 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 
 	ch := make(chan *agentschema.AgentResponseChunk, 64)
 
-	// 步骤 1: 获取 TeamRuntimeManager
-	mgr := runtime.GetTeamRuntimeManager()
-	if mgr == nil {
-		close(ch)
-		return ch, fmt.Errorf("TeamRuntimeManager 不可用")
-	}
-
-	// 步骤 2: 从 req 获取元信息（对齐 Python: request.session_id / request.request_id / request.channel_id）
+	// 步骤 1: 从 req 获取元信息（对齐 Python: request.session_id / request.request_id / request.channel_id）
 	sessionID := ""
 	if req.SessionID != nil {
 		sessionID = *req.SessionID
 	}
-	_ = req.RequestID  // 预留：后续可用于请求追踪
-	_ = req.ChannelID  // 预留：后续可用于频道路由
-
-	// 从 inputs 获取业务参数（对齐 Python: inputs.get("query", ""), inputs.get("params", {})）
-	teamName := ""
-	if params, ok := inputs["params"].(map[string]any); ok {
-		if tn, ok := params["team_name"].(string); ok {
-			teamName = tn
-		}
+	channelID := "default"
+	if req.ChannelID != "" {
+		channelID = req.ChannelID
 	}
+
+	// 步骤 2: 通过 channel_id 获取 TeamManager
+	// 对齐 Python: get_team_manager(channel_id)
+	teamManager := team.GetTeamManager(channelID)
+
+	// 步骤 3: 判断是否首次请求
+	// 对齐 Python: if not team_manager.has_stream_task(session_id)
+	isFirstRequest := !teamManager.HasStreamTask(sessionID)
 
 	go func() {
 		defer close(ch)
-		// 步骤 3: 判断是否首次请求
-		entry := mgr.PoolEntry().GetEntry(teamName)
-		if entry == nil {
-			// 首次请求：创建 TeamAgent
-			logger.Info(logComponent).Str("team_name", teamName).Msg("processTeamMessageStream: 首次请求")
-			// TODO(#9.85): TeamRunner 完整创建 TeamAgent + streaming 流程
+
+		if isFirstRequest {
+			// 首次请求：创建 TeamAgent + 启动后台流任务
+			logger.Info(logComponent).Str("session_id", sessionID).Str("channel_id", channelID).
+				Msg("processTeamMessageStream: 首次请求")
+
+			// 对齐 Python 步骤：
+			//  1. teamSpec = teamManager.GetEnrichedTeamSpec(session_id, deep_agent, ...)
+			//  2. teamManager.PrepareRuntimeActivation(ctx, sessionID, teamSpec.TeamName)
+			//  3. 创建 TeamAgent + 启动 streaming goroutine
+			//  4. teamManager.CommitRuntimeReady(sessionID, teamSpec.TeamName)
+			//  5. 注册 stream task cancel
+			// ⤵️(#9.85): TeamRunner 完整创建 TeamAgent + streaming 流程
 			return
 		}
 
-		// 步骤 4: 后续请求：通过 Interact 发送
+		// 后续请求：通过 TeamManager.Interact 路由
+		// 对齐 Python: team_manager.interact(session_id, user_input)
 		query := paramsString(inputs, "query", "")
-		result, err := mgr.Interact(ctx, query, teamName, sessionID)
+		ok, err := teamManager.Interact(ctx, sessionID, query)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("processTeamMessageStream: Interact 失败")
+			logger.Error(logComponent).Err(err).Str("session_id", sessionID).
+				Msg("processTeamMessageStream: Interact 失败")
 			return
 		}
-		if !result.IsOK() {
-			logger.Warn(logComponent).Msg("processTeamMessageStream: Interact 返回失败")
+		if !ok {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Msg("processTeamMessageStream: Interact 返回失败（非活跃 session）")
 		}
 	}()
 

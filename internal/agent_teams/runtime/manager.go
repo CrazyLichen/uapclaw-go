@@ -70,14 +70,13 @@ func NewTeamRuntimeManager() *TeamRuntimeManager {
 	}
 }
 
-// Pool 返回运行时池。
+// Pool 返回运行时池（具体类型）。
 func (m *TeamRuntimeManager) Pool() *TeamRuntimePool {
 	return m.pool
 }
 
-// PoolEntry 返回运行时池（满足 registry.PoolAccessor 接口）。
-// 与 Pool 方法的区别：返回 registry.PoolEntry 接口类型，编译期类型安全。
-func (m *TeamRuntimeManager) PoolEntry() registry.PoolEntry {
+// PoolAny 返回运行时池（any 类型，满足 registry.PoolAccessor 接口）。
+func (m *TeamRuntimeManager) PoolAny() any {
 	return m.pool
 }
 

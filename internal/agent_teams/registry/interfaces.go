@@ -2,45 +2,24 @@ package registry
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PoolAccessor 运行时池访问接口。
 // 打破 agent ↔ runtime 循环依赖：agent 和 runtime 都依赖 registry，互不 import。
 // Python 对应：TeamRuntimeManager.pool 属性
 type PoolAccessor interface {
-	// PoolEntry 返回运行时池（满足 registry.PoolEntry 接口）
-	// 方法名用 PoolEntry 避免与 TeamRuntimeManager.Pool() *TeamRuntimePool 签名冲突
-	PoolEntry() PoolEntry
+	// PoolAny 返回运行时池（any 类型，避免返回类型绑定具体包）
+	// 方法名用 PoolAny 避免与 TeamRuntimeManager.Pool() *TeamRuntimePool 签名冲突
+	PoolAny() any
 }
 
-// PoolEntry 运行时池条目访问接口。
-// Python 对应：TeamRuntimePool
-type PoolEntry interface {
-	// GetEntry 获取指定团队的活跃条目（可能为 nil）
-	GetEntry(teamName string) PoolTeamEntry
-	// RemoveEntry 移除指定团队的活跃条目
-	RemoveEntry(teamName string)
-	// HasActive 检查指定团队是否有活跃条目
-	HasActive(teamName string) bool
-	// ListTeamNames 列出所有活跃团队名称
-	ListTeamNames() []string
-	// TeamsForSession 获取指定 session 下的所有团队条目
-	TeamsForSession(sessionID string) []PoolTeamEntry
-}
-
-// PoolTeamEntry 池中团队条目。
-// Python 对应：ActiveTeam
-//
-// 方法名用 GetSessionID 而非 SessionID，避免与 ActiveTeam.SessionID 字段冲突。
-type PoolTeamEntry interface {
-	// GetSessionID 返回当前绑定的 session ID
-	GetSessionID() string
+// PoolReader 运行时池最小读取+移除接口。
+// agent 包通过此接口访问 TeamRuntimePool，无需 import runtime 包。
+type PoolReader interface {
+	// GetSessionIDForTeam 获取指定团队的 session ID（空字符串表示不存在）
+	GetSessionIDForTeam(teamName string) string
+	// RemoveTeam 移除指定团队的活跃条目
+	RemoveTeam(teamName string)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

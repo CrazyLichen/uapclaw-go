@@ -123,50 +123,41 @@ func TestTeamRuntimePool_ListAllInfo(t *testing.T) {
 	}
 }
 
-func TestTeamRuntimePool_满足RegistryPoolEntry(t *testing.T) {
-	var _ registry.PoolEntry = (*TeamRuntimePool)(nil)
+func TestTeamRuntimePool_满足RegistryPoolReader(t *testing.T) {
+	var _ registry.PoolReader = (*TeamRuntimePool)(nil)
 }
 
-func TestActiveTeam_满足RegistryPoolTeamEntry(t *testing.T) {
-	e := &ActiveTeam{SessionID: "sess-1"}
-	if e.GetSessionID() != "sess-1" {
-		t.Errorf("GetSessionID() = %q, want %q", e.GetSessionID(), "sess-1")
-	}
-	var _ registry.PoolTeamEntry = (*ActiveTeam)(nil)
-}
-
-func TestTeamRuntimePool_GetEntry(t *testing.T) {
+func TestTeamRuntimePool_GetSessionIDForTeam(t *testing.T) {
 	p := NewTeamRuntimePool()
 	p.Add(&ActiveTeam{TeamName: "team-1", SessionID: "sess-1", InteractGate: NewInteractGate()})
-	entry := p.GetEntry("team-1")
-	if entry == nil {
-		t.Fatal("GetEntry 应返回非 nil")
+	if p.GetSessionIDForTeam("team-1") != "sess-1" {
+		t.Errorf("GetSessionIDForTeam = %q, want %q", p.GetSessionIDForTeam("team-1"), "sess-1")
 	}
-	if entry.GetSessionID() != "sess-1" {
-		t.Errorf("GetSessionID() = %q, want %q", entry.GetSessionID(), "sess-1")
-	}
-	if p.GetEntry("ghost") != nil {
-		t.Error("不存在的团队应返回 nil")
+	if p.GetSessionIDForTeam("ghost") != "" {
+		t.Error("不存在的团队应返回空字符串")
 	}
 }
 
-func TestTeamRuntimePool_RemoveEntry(t *testing.T) {
+func TestTeamRuntimePool_RemoveTeam(t *testing.T) {
 	p := NewTeamRuntimePool()
 	p.Add(&ActiveTeam{TeamName: "team-1", InteractGate: NewInteractGate()})
-	p.RemoveEntry("team-1")
+	p.RemoveTeam("team-1")
 	if p.HasActive("team-1") {
-		t.Error("RemoveEntry 后不应有活跃团队")
+		t.Error("RemoveTeam 后不应有活跃团队")
 	}
 }
 
 func TestTeamRuntimeManager_满足RegistryPoolAccessor(t *testing.T) {
 	var _ registry.PoolAccessor = (*TeamRuntimeManager)(nil)
 	mgr := NewTeamRuntimeManager()
-	if mgr.PoolEntry() == nil {
-		t.Error("PoolEntry() 应返回非 nil")
+	if mgr.PoolAny() == nil {
+		t.Error("PoolAny() 应返回非 nil")
 	}
-	// PoolEntry() 返回的值应满足 PoolEntry
-	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
-	var _ registry.PoolEntry = mgr.PoolEntry()
+	// PoolAny() 返回的值应满足 PoolReader
+	pool, ok := mgr.PoolAny().(registry.PoolReader)
+	if !ok {
+		t.Error("PoolAny() 返回值应满足 registry.PoolReader")
+	}
+	_ = pool
 	_ = context.Background()
 }
