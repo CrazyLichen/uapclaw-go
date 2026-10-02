@@ -1197,7 +1197,7 @@ func TestDeepAdapter_Evolution占位函数(t *testing.T) {
 		t.Errorf("watchEvolutionAndPush error: %v", err)
 	}
 	d.onEvolutionWatcherDone("s1")
-	if d.handleEvolutionApproval("req1", nil) != false {
+	if d.handleEvolutionApproval(context.Background(), "req1", nil) != false {
 		t.Error("handleEvolutionApproval 占位应返回 false")
 	}
 	if msgs := d.getRecentMessages("s1"); msgs != nil {

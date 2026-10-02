@@ -207,7 +207,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 					continue
 				}
 				if isEvolutionApprovalEventLocal(evt) || isEvolutionOutcomeEventLocal(evt) {
-					d.pushEventToFrontend(event, sessionID, channelID, requestID)
+					d.pushEventToFrontend(ctx, event, sessionID, channelID, requestID)
 				}
 				// 检查是否包含 outcome 事件（完成/失败/超时）
 				if isOutcomeEvent(event) {
@@ -244,13 +244,11 @@ func buildRecapPrompt(memory string) string {
 // ✅ 已回填（对齐 Python: _handle_evolution_approval()）
 //
 // 根据 request_id 前缀路由到 SkillEvolutionRail.ApproveRecord / RejectRecord
-func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers []ApprovalAnswer) bool {
+func (d *DeepAdapter) handleEvolutionApproval(ctx context.Context, requestID string, answers []ApprovalAnswer) bool {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval: SkillEvolutionRail 未初始化")
 		return false
 	}
-
-	ctx := context.Background()
 
 	// 解析 answers 为 approve/reject
 	approved := parseApprovalAnswers(answers)
@@ -504,7 +502,7 @@ func outputSchemaToDict(schema *stream.OutputSchema) map[string]any {
 // pushEventToFrontend 将演进事件推送到前端。
 // Python: _push_event_to_frontend(event)
 // ✅ 已回填：通过 globalSendPushFunc 推送，避免 adapter→server 循环依赖
-func (d *DeepAdapter) pushEventToFrontend(event *stream.OutputSchema, sessionID string, channelID string, requestID string) {
+func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.OutputSchema, sessionID string, channelID string, requestID string) {
 	evt := outputSchemaToDict(event)
 	if evt == nil {
 		return
@@ -519,7 +517,7 @@ func (d *DeepAdapter) pushEventToFrontend(event *stream.OutputSchema, sessionID 
 	case "approval":
 		// Python: await push_evolution_event(push_context, rid, evt, build_server_push_message)
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
-		if err := globalSendPushFunc(context.Background(), msg); err != nil {
+		if err := globalSendPushFunc(ctx, msg); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送审批事件失败")
 		}
 	case "outcome":
@@ -533,7 +531,7 @@ func (d *DeepAdapter) pushEventToFrontend(event *stream.OutputSchema, sessionID 
 			"request_id": requestID,
 		}
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
-		if err := globalSendPushFunc(context.Background(), msg); err != nil {
+		if err := globalSendPushFunc(ctx, msg); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("推送结果状态失败")
 		}
 	default:

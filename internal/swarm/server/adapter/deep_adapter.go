@@ -1456,7 +1456,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 		resolved = d.handleGovernanceApproval(ctx, requestID, parsedAnswers, approvalType)
 	case strings.HasPrefix(requestID, "skill_evolve_"):
 		// ✅ 已回填：_handle_evolution_approval(requestID, answers)
-		resolved = d.handleEvolutionApproval(requestID, parsedAnswers)
+		resolved = d.handleEvolutionApproval(ctx, requestID, parsedAnswers)
 	}
 
 	// 步骤 8: 构造响应
