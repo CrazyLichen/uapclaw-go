@@ -361,6 +361,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	}
 	c.uapswarmCodeProjectDir = projectDir
 	c.uapswarmProjectDir = projectDir
+	// 修复 S-20: 同时设置到 DeepAgent instance 上，对齐 Python setattr(self._instance, ...)
+	if c.deep.instance != nil {
+		c.deep.instance.SetUapswarmAdapterMode("code")
+		if projectDir != "" {
+			c.deep.instance.SetUapswarmCodeProjectDir(projectDir)
+			c.deep.instance.SetUapswarmProjectDir(projectDir)
+		}
+	}
 
 	// 步骤 21.2: coding_memory workspace set_directory
 	// ✅ 已回填：Workspace.SetDirectory（对齐 Python: self._instance.deep_config.workspace.set_directory(...)）
