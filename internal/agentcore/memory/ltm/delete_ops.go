@@ -1,0 +1,224 @@
+package ltm
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// DeleteMemByID 按 ID 删除记忆。
+//
+// ① emit_before MEMORY_DELETED → ② 分布式锁 → writeManager.DeleteMemByID
+// 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_DELETED) + delete_mem_by_id
+func (m *LongTermMemory) DeleteMemByID(
+	ctx context.Context,
+	memID string,
+	opts ...SearchOption,
+) error {
+	p := newSearchParams("", 0, opts...)
+	// ① 触发 MEMORY_DELETED 回调
+	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
+		Event:    callback.MemoryDeleted,
+		UserID:   p.UserID,
+		ScopeID:  p.ScopeID,
+		MemoryID: memID,
+	})
+
+	// ② 执行删除
+	return m.deleteMemByIDImpl(ctx, memID, p)
+}
+
+// DeleteMemByUserID 按用户 ID 删除记忆。
+//
+// ① emit_before MEMORY_DELETED → ② 分布式锁 → writeManager.DeleteMemByUserID
+// 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_DELETED) + delete_mem_by_user_id
+func (m *LongTermMemory) DeleteMemByUserID(
+	ctx context.Context,
+	opts ...SearchOption,
+) error {
+	p := newSearchParams("", 0, opts...)
+	// ① 触发 MEMORY_DELETED 回调
+	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
+		Event:   callback.MemoryDeleted,
+		UserID:  p.UserID,
+		ScopeID: p.ScopeID,
+	})
+
+	// ② 执行删除
+	return m.deleteMemByUserIDImpl(ctx, p)
+}
+
+// DeleteMemByScope 按 scope 删除所有记忆。
+// 遍历 scope_user_mapping → 逐用户分布式锁 → writeManager.DeleteMemByUserID → 删除 mapping。
+//
+// 对齐 Python: LongTermMemory.delete_mem_by_scope(scope_id)
+func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) error {
+	if !validateID("MEMORY_DELETE", scopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
+			Str("scope_id", scopeID).Msg("Invalid scope_id format.")
+		return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+			exception.WithParam("memory_type", "all"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	scopeUserData, err := m.scopeUserMappingManager.GetByScopeID(ctx, scopeID)
+	if err != nil {
+		return err
+	}
+	userIDs := make([]string, 0, len(scopeUserData))
+	for _, data := range scopeUserData {
+		if uid, ok := data["user_id"]; ok {
+			userIDs = append(userIDs, uid.(string))
+		}
+	}
+
+	if m.writeManager != nil {
+		for _, userID := range userIDs {
+			lockErr := acquireUserLock(ctx, m.kvStore, userID, func(ctx context.Context) error {
+				return m.writeManager.DeleteMemByUserID(ctx, userID, scopeID)
+			})
+			if lockErr != nil {
+				logger.Error(logComponent).Err(lockErr).Str("user_id", userID).
+					Str("scope_id", scopeID).Msg("DeleteMemByUserID 失败")
+			}
+		}
+	}
+
+	if m.scopeUserMappingManager != nil {
+		if delErr := m.scopeUserMappingManager.DeleteByScopeID(ctx, scopeID); delErr != nil {
+			logger.Error(logComponent).Err(delErr).Str("scope_id", scopeID).
+				Msg("DeleteByScopeID 失败")
+		}
+	}
+
+	logger.Debug(logComponent).Str("event_type", "MEMORY_DELETE").
+		Str("scope_id", scopeID).Msg("Successfully deleted memories.")
+	return nil
+}
+
+// DeleteMessagesByUserAndScope 按用户和 scope 删除消息。
+//
+// 对齐 Python: LongTermMemory.delete_messages_by_user_and_scope(user_id, scope_id)
+func (m *LongTermMemory) DeleteMessagesByUserAndScope(
+	ctx context.Context,
+	opts ...SearchOption,
+) error {
+	p := newSearchParams("", 0, opts...)
+
+	if !validateID("MEMORY_RETRIEVE", p.ScopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_RETRIEVE").
+			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+			Str("memory_type", "message").
+			Msg("Invalid scope_id format.")
+		return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+			exception.WithParam("memory_type", "message"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	if m.messageManager != nil {
+		_, err := m.messageManager.DeleteByUserAndScope(ctx, p.UserID, p.ScopeID)
+		return err
+	}
+	return nil
+}
+
+// DeleteVariables 删除用户变量。
+//
+// 对齐 Python: LongTermMemory.delete_variables(names, user_id, scope_id)
+func (m *LongTermMemory) DeleteVariables(
+	ctx context.Context,
+	names []string,
+	opts ...SearchOption,
+) error {
+	p := newSearchParams("", 0, opts...)
+
+	if !validateID("MEMORY_DELETE", p.ScopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
+			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+			Str("memory_type", "variable").
+			Msg("Invalid scope_id format.")
+		return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+			exception.WithParam("memory_type", "variable"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	return acquireUserLock(ctx, m.kvStore, p.UserID, func(ctx context.Context) error {
+		if m.variableManager == nil {
+			return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+				exception.WithParam("memory_type", "variable"),
+				exception.WithMsg("variable manager is not initialized"),
+			)
+		}
+		for _, name := range names {
+			if err := m.variableManager.DeleteUserVariable(ctx, p.UserID, p.ScopeID, name); err != nil {
+				logger.Error(logComponent).Err(err).Str("name", name).
+					Msg("删除变量失败")
+			}
+		}
+		return nil
+	})
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// deleteMemByIDImpl DeleteMemByID 的核心实现。
+func (m *LongTermMemory) deleteMemByIDImpl(ctx context.Context, memID string, p *searchParams) error {
+	if !validateID("MEMORY_DELETE", p.ScopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
+			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+			Str("memory_id", memID).
+			Msg("Invalid scope_id format.")
+		return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+			exception.WithParam("memory_type", "all"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	return acquireUserLock(ctx, m.kvStore, p.UserID, func(ctx context.Context) error {
+		if m.writeManager == nil {
+			return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+				exception.WithParam("memory_type", "all"),
+				exception.WithMsg("write manager is not initialized"),
+			)
+		}
+		return m.writeManager.DeleteMemByID(ctx, p.UserID, p.ScopeID, memID)
+	})
+}
+
+// deleteMemByUserIDImpl DeleteMemByUserID 的核心实现。
+func (m *LongTermMemory) deleteMemByUserIDImpl(ctx context.Context, p *searchParams) error {
+	if !validateID("MEMORY_DELETE", p.ScopeID) {
+		logger.Error(logComponent).Str("event_type", "MEMORY_DELETE").
+			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
+			Msg("Invalid scope_id format.")
+		return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+			exception.WithParam("memory_type", "all"),
+			exception.WithMsg("invalid scope_id format"),
+		)
+	}
+
+	return acquireUserLock(ctx, m.kvStore, p.UserID, func(ctx context.Context) error {
+		if m.writeManager == nil {
+			return exception.BuildError(exception.StatusMemoryDeleteMemoryExecutionError,
+				exception.WithParam("memory_type", "all"),
+				exception.WithMsg("write manager is not initialized"),
+			)
+		}
+		return m.writeManager.DeleteMemByUserID(ctx, p.UserID, p.ScopeID)
+	})
+}
