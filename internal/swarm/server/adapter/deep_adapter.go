@@ -1070,6 +1070,12 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
 
+	// 修复 S-18: 对齐 Python process_message_stream_impl 中的 reset_abort
+	// Python: if self._stream_event_rail: self._stream_event_rail.reset_abort(session_id)
+	if d.streamEventRail != nil {
+		d.streamEventRail.ResetAbort(sessionID)
+	}
+
 	// 步骤 16-17: update_runtime_config（含 CWD 种子、语言/频道解析、RuntimePromptRail setter 等）
 	// Python: await self._update_runtime_config(self._RuntimeConfig(...))
 	streamRequestCwd := paramsString(params, "cwd", "")
