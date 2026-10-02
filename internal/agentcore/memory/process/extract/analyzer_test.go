@@ -231,7 +231,7 @@ func TestAnalyze_scopeConfig为nil时使用默认值(t *testing.T) {
 		memoryConfig,
 		128,
 		nil, // scopeConfig 为 nil
-		"", // 空禁止变量
+		"",  // 空禁止变量
 		3,
 	)
 

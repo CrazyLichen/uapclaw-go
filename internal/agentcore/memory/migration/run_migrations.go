@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
-	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
+	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/migrator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"

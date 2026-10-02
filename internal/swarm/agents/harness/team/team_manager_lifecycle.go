@@ -124,6 +124,7 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 //  7. try: team_agent = spec.build(); self._team_agents[session_id] = team_agent
 //  8. self.ensure_team_shared_skills_initialized(spec)
 //  9. if distributed: attach distributed hooks
+//
 // 10. finally: reset_session_id(token)
 //
 // Go 差异：Python 的 _ensure_postgresql、distributed hooks 等在 Go 中尚未完全实现，
@@ -153,10 +154,10 @@ func (m *TeamManager) CreateTeam(
 //
 // Python 步骤：
 //  1. async with self._lock:
-//  2.   team_agent = self._team_agents.get(session_id)
-//  3.   if team_agent is not None: return team_agent
-//  4.   await self._destroy_other_sessions(session_id)
-//  5.   return await self.create_team(...)
+//  2. team_agent = self._team_agents.get(session_id)
+//  3. if team_agent is not None: return team_agent
+//  4. await self._destroy_other_sessions(session_id)
+//  5. return await self.create_team(...)
 func (m *TeamManager) GetOrCreateTeam(
 	ctx context.Context,
 	sessionID string,

@@ -2213,8 +2213,8 @@ func TestMilvusVectorStore_GetSchema_GetClientError(t *testing.T) {
 
 // mockQueryIterator 模拟查询迭代器，返回预设的文档批次
 type mockQueryIterator struct {
-	batches   []milvusclient.ResultSet
-	batchIdx  int
+	batches  []milvusclient.ResultSet
+	batchIdx int
 }
 
 func (m *mockQueryIterator) Next(ctx context.Context) (milvusclient.ResultSet, error) {

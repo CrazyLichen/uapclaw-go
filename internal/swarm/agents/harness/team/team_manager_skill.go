@@ -66,8 +66,9 @@ func (m *TeamManager) RegisterTeamSkillCreateRail(sessionID string, rail any) {
 // 对齐 Python: TeamManager.register_team_rail_context(session_id, context)
 //
 // Python 步骤：
-//  if getattr(context.member_info, "role", None) == "leader":
-//      self._team_rail_contexts[session_id] = context
+//
+//	if getattr(context.member_info, "role", None) == "leader":
+//	    self._team_rail_contexts[session_id] = context
 func (m *TeamManager) RegisterTeamRailContext(sessionID string, ctx *TeamRailMountContext) {
 	// 检查是否为 leader（member_info 中 role == "leader"）
 	if isLeaderRole(ctx) {
@@ -85,9 +86,10 @@ func (m *TeamManager) GetTeamRailContext(sessionID string) *TeamRailMountContext
 // 对齐 Python: TeamManager.register_team_live_rail(session_id, agent, rail)
 //
 // Python 步骤：
-//  rails = self._team_live_rails.setdefault(session_id, [])
-//  entry = (agent, rail)
-//  if entry not in rails: rails.append(entry)
+//
+//	rails = self._team_live_rails.setdefault(session_id, [])
+//	entry = (agent, rail)
+//	if entry not in rails: rails.append(entry)
 func (m *TeamManager) RegisterTeamLiveRail(sessionID string, agent any, rail any) {
 	rails := m.teamLiveRails[sessionID]
 	entry := LiveRailEntry{Agent: agent, Rail: rail}
@@ -129,7 +131,7 @@ func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) any {
 //
 // Python 步骤：
 //  1. for rail in self._team_skill_rails.values():
-//  2.   if request_id in getattr(rail, "_pending_approval_snapshots", {}): return rail
+//  2. if request_id in getattr(rail, "_pending_approval_snapshots", {}): return rail
 //  3. return None
 func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) any {
 	for _, rail := range m.teamSkillRails {
@@ -164,19 +166,19 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 //  1. auto_scan_enabled = get_evolution_auto_scan_enabled(config)
 //  2. skill_create_enabled = get_skill_create_enabled(config)
 //  3. for rails in self._team_member_skill_evolution_rails.values():
-//       for rail in rails: rail.auto_scan = auto_scan_enabled
+//     for rail in rails: rail.auto_scan = auto_scan_enabled
 //  4. for rail in self._team_skill_rails.values():
-//       rail.auto_scan = auto_scan_enabled
+//     rail.auto_scan = auto_scan_enabled
 //  5. if not skill_create_enabled:
-//       for session_id, rail in self._team_skill_create_rails.items():
-//         await self._unregister_live_rail(session_id, rail)
-//         self._team_skill_create_rails.pop(session_id, None)
-//       return
+//     for session_id, rail in self._team_skill_create_rails.items():
+//     await self._unregister_live_rail(session_id, rail)
+//     self._team_skill_create_rails.pop(session_id, None)
+//     return
 //  6. for session_id, context in self._team_rail_contexts.items():
-//       if session_id in self._team_skill_create_rails: continue
-//       self._build_and_mount_member_rails_for_context(session_id, context,
-//         mount_team_skill_rail=False, mount_team_skill_create_rail=True,
-//         mount_skill_evolution_rail=False)
+//     if session_id in self._team_skill_create_rails: continue
+//     self._build_and_mount_member_rails_for_context(session_id, context,
+//     mount_team_skill_rail=False, mount_team_skill_create_rail=True,
+//     mount_skill_evolution_rail=False)
 func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 	// ⤵️(#9.72) 完整实现 — 待 Rail 类型和 evolution config 回填
 	logger.Info(logComponent).Msg("更新 evolution 配置（待回填）")

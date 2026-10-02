@@ -74,12 +74,12 @@ type TeamManager struct {
 	// Rail 管理
 	// 对齐 Python: _team_skill_rails, _team_member_skill_evolution_rails, _team_skill_create_rails,
 	//             _team_rail_contexts, _team_live_rails, _team_skill_sync_targets
-	teamSkillRails          map[string]any             // sessionID → TeamSkillEvolutionRail
-	teamMemberSkillEvoRails map[string][]any           // sessionID → []SkillEvolutionRail
-	teamSkillCreateRails    map[string]any             // sessionID → TeamSkillCreateRail
+	teamSkillRails          map[string]any                   // sessionID → TeamSkillEvolutionRail
+	teamMemberSkillEvoRails map[string][]any                 // sessionID → []SkillEvolutionRail
+	teamSkillCreateRails    map[string]any                   // sessionID → TeamSkillCreateRail
 	teamRailContexts        map[string]*TeamRailMountContext // sessionID → TeamRailMountContext
-	teamLiveRails           map[string][]LiveRailEntry      // sessionID → []LiveRailEntry
-	teamSkillSyncTargets    map[string]SkillSyncTarget      // sessionID → SkillSyncTarget
+	teamLiveRails           map[string][]LiveRailEntry       // sessionID → []LiveRailEntry
+	teamSkillSyncTargets    map[string]SkillSyncTarget       // sessionID → SkillSyncTarget
 
 	// 演进监控
 	// 对齐 Python: _team_evolution_watchers

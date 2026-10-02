@@ -614,10 +614,10 @@ func (g *Generator) processMemoryOperations(
 
 		// 对齐 Python: params = SearchParams(query=old_mem, scope_id=..., top_k=1, user_id=...)
 		params := &search.SearchParams{
-			Query:      oldMem,
-			ScopeID:    memoryOperationParams.ScopeID,
-			TopK:       1,
-			UserID:     memoryOperationParams.UserID,
+			Query:   oldMem,
+			ScopeID: memoryOperationParams.ScopeID,
+			TopK:    1,
+			UserID:  memoryOperationParams.UserID,
 			SearchType: []string{
 				mem_model.MemoryTypeUserProfile.String(),
 				mem_model.MemoryTypeEpisodicMemory.String(),
@@ -689,4 +689,3 @@ func sortSearchResultsByScore(results []*storeindex.MemorySearchResult) {
 		}
 	}
 }
-

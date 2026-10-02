@@ -3,9 +3,9 @@ package config
 import (
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

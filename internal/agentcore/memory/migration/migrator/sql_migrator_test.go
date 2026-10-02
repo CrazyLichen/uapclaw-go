@@ -185,10 +185,10 @@ func TestSQLMigrator_TryMigrate_重命名列(t *testing.T) {
 
 	ops := []operation.Operation{
 		&operation.RenameColumnOperation{
-			BaseOperation:  operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
-			Table:          "test_table",
-			OldColumnName:  "old_name",
-			NewColumnName:  "new_name",
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			Table:         "test_table",
+			OldColumnName: "old_name",
+			NewColumnName: "new_name",
 		},
 	}
 
@@ -292,10 +292,10 @@ func TestSQLMigrator_TryMigrate_事务回滚(t *testing.T) {
 			Nullable:      true,
 		},
 		&operation.RenameColumnOperation{
-			BaseOperation:  operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 2}},
-			Table:          "test_table",
-			OldColumnName:  "nonexist_col",
-			NewColumnName:  "renamed_col",
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 2}},
+			Table:         "test_table",
+			OldColumnName: "nonexist_col",
+			NewColumnName: "renamed_col",
 		},
 	}
 

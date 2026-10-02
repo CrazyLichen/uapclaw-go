@@ -3,8 +3,8 @@ package config
 import (
 	"testing"
 
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/stretchr/testify/assert"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 func TestDefaultAgentMemoryConfig(t *testing.T) {

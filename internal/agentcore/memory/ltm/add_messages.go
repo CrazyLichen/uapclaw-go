@@ -178,18 +178,18 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			summaryMaxToken = m.sysMemConfig.SingleTurnHistorySummaryMaxToken
 		}
 		genParams := &extract.GenAllMemoryParams{
-			Messages:          checkedMessages,
-			HistoryMessages:   historyMessages,
-			BaseModel:         llmInstance,
-			MemoryConfig:      p.AgentConfig,
-			EngineConfig:      m.sysMemConfig,
-			ScopeConfig:       scopeConfig,
-			UserID:            p.UserID,
-			ScopeID:           p.ScopeID,
+			Messages:           checkedMessages,
+			HistoryMessages:    historyMessages,
+			BaseModel:          llmInstance,
+			MemoryConfig:       p.AgentConfig,
+			EngineConfig:       m.sysMemConfig,
+			ScopeConfig:        scopeConfig,
+			UserID:             p.UserID,
+			ScopeID:            p.ScopeID,
 			ForbiddenVariables: forbiddenVariables,
-			MessageMemID:      msgID,
-			Timestamp:         timestampStr,
-			SummaryMaxToken:   summaryMaxToken,
+			MessageMemID:       msgID,
+			Timestamp:          timestampStr,
+			SummaryMaxToken:    summaryMaxToken,
 		}
 		allMemory, genErr := m.generator.GenAllMemory(ctx, genParams)
 		if genErr != nil {

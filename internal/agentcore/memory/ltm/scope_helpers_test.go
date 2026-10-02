@@ -10,16 +10,16 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // testEnv 测试环境，包含预初始化的 LongTermMemory 和依赖。
 type testEnv struct {
-	m      *LongTermMemory
+	m       *LongTermMemory
 	kvStore kv.BaseKVStore
 }
 

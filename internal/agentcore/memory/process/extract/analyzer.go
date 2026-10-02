@@ -251,4 +251,3 @@ func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) 
 
 	return result, nil
 }
-

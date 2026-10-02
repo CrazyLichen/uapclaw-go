@@ -315,7 +315,7 @@ func TestBuildSessionScopedTeamName(t *testing.T) {
 		{"my-team", "", "my-team"},
 		{"", "sess-123", "team_sess-123"},
 		{"team-abc_sess-123", "sess-123", "team-abc_sess-123"}, // 已有后缀不重复
-		{"my-team", "abc!@#def", "my-team_abc___def"},           // 特殊字符替换
+		{"my-team", "abc!@#def", "my-team_abc___def"},          // 特殊字符替换
 	}
 
 	for _, tt := range tests {

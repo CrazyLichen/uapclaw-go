@@ -5,8 +5,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	harnesssections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

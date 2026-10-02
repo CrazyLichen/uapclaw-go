@@ -655,7 +655,7 @@ func TestProcessMemoryOperations_无OldMem(t *testing.T) {
 		BaseModel:    newFakeModelWithResponse(t, "CORRECT"),
 	}
 	memoryDicts := []map[string]any{
-		{"mem_type": "user_profile", "mem_content": "新内容"}, // 缺少 old_mem
+		{"mem_type": "user_profile", "mem_content": "新内容"},                // 缺少 old_mem
 		{"old_mem": "", "mem_type": "user_profile", "mem_content": "新内容"}, // old_mem 为空
 	}
 

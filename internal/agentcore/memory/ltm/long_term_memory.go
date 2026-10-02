@@ -8,11 +8,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
-	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	storeindex "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
+	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/codec"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/index"
@@ -101,7 +101,7 @@ func GetLongTermMemory() *LongTermMemory {
 // Python: LongTermMemory.__init__()
 func NewLongTermMemory() *LongTermMemory {
 	return &LongTermMemory{
-		scopeConfig:   make(map[string]*config.MemoryScopeConfig),
+		scopeConfig:    make(map[string]*config.MemoryScopeConfig),
 		scopeEmbedding: make(map[string]embedding.BaseEmbedding),
 	}
 }
@@ -238,4 +238,3 @@ func runMigration(ctx context.Context, migrateFunc func(ctx context.Context) err
 		Msg(fmt.Sprintf("%s migration completed successfully", storeType))
 	return nil
 }
-

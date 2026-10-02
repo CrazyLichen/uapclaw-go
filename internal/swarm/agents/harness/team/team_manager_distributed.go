@@ -20,6 +20,7 @@ package team
 //     - attach_shutdown_member_remote_cleanup_wrapper
 //     - attach_remote_bootstrap_ack_listener
 //     - attach_remote_teammate_bootstrap_listener
+//
 // 10. return True
 func (m *TeamManager) AttachDistributedHooksForRunnerRuntime(
 	teamName string,

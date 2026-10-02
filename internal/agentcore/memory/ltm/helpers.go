@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
-	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )

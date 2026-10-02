@@ -1132,7 +1132,7 @@ func (t *SubmitPlanTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 		"team_plan_id":   result.TeamPlanID,
 		"member_plan_md": result.MemberPlanMD,
 		// 对齐 Python: "Member plan submitted. Wait for leader approval before execution."
-		"message":        "Member plan submitted. Wait for leader approval before execution.",
+		"message": "Member plan submitted. Wait for leader approval before execution.",
 	}
 	return toolSuccess(resultMap)
 }

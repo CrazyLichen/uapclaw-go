@@ -284,8 +284,8 @@ func TestIndexVersionMigrator_TryMigrate_添加字段_函数默认值(t *testing
 	m := NewIndexVersionMigrator()
 	ops := []operation.Operation{
 		&operation.AddMemoryDocFieldOperation{
-			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
-			FieldName:     "computed",
+			BaseOperation:      operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			FieldName:          "computed",
 			DefaultValueOrFunc: func() any { return 42 },
 		},
 	}
