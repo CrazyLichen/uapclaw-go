@@ -861,6 +861,8 @@ func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) (conte
 // 假定 session.pre_run() 已恢复检查点状态。
 // 返回新的 context.Context（含 session_id），调用方必须用于后续传播。
 func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) (context.Context, error) {
+	// 修复 S-09: 先停止协调，对齐 Python: await self._stop_coordination()
+	_ = a.StopCoordination(ctx)
 	if a.sessionManager != nil {
 		return a.sessionManager.RecoverForExistingSession(ctx, session)
 	}
