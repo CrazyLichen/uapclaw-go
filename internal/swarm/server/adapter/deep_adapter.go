@@ -111,6 +111,11 @@ type DeepAdapter struct {
 	// configLister 自定义 agent 配置列表接口（避免 adapter↔runtime 循环依赖）
 	// Python: AgentConfigService
 	configLister AgentConfigLister
+	// runtimeConfigUpdater 运行时配置更新函数指针。
+	// 默认指向 d.updateRuntimeConfig；CodeAdapter 通过覆写此字段实现子类行为，
+	// 对齐 Python 继承中 self._update_runtime_config() 的动态分派。
+	// 修复 S-17: Go 无继承多态，通过函数指针实现等价的动态分派。
+	runtimeConfigUpdater func(ctx context.Context, config *runtimeConfig)
 
 	// ─── ⤵️ 10.6.3-10: 轨道（Rails）───
 
@@ -305,7 +310,7 @@ func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
 //
 // Python: JiuWenClawDeepAdapter.__init__()
 func NewDeepAdapter() *DeepAdapter {
-	return &DeepAdapter{
+	d := &DeepAdapter{
 		agentName:              "main_agent",
 		isCodeAgent:            false,
 		activeSessionIDs:       make(map[string]int),
@@ -315,6 +320,10 @@ func NewDeepAdapter() *DeepAdapter {
 		registeredMCPServers:   make(map[string]any),
 		interactionConverter:   interrupt.ConvertInteractionsToAskUserQuestion,
 	}
+	// 默认指向 DeepAdapter 自身的 updateRuntimeConfig 方法
+	// CodeAdapter 在构造后覆写此字段实现子类行为（修复 S-17）
+	d.runtimeConfigUpdater = d.updateRuntimeConfig
+	return d
 }
 
 // CreateInstance 初始化底层 SDK Agent。
@@ -553,7 +562,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 21.1: _update_runtime_config()
 	// 对齐 Python: CreateInstance 中需调用 updateRuntimeConfig 更新 Language/Channel/Mode 等
-	d.updateRuntimeConfig(ctx, &runtimeConfig{
+	d.runtimeConfigUpdater(ctx, &runtimeConfig{
 		CWD:          initCwd,
 		Language:     d.resolvePromptLanguage(),
 		Mode:         mode,
@@ -872,7 +881,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	requestCwd := paramsString(params, "cwd", "")
 	trustedDirs := parseStringSlice(params, "trusted_dirs")
 	projectDir := paramsString(params, "project_dir", "")
-	d.updateRuntimeConfig(ctx, &runtimeConfig{
+	d.runtimeConfigUpdater(ctx, &runtimeConfig{
 		SessionID:       sessionID,
 		Mode:            mode,
 		RequestID:       req.RequestID,
@@ -1066,7 +1075,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	streamRequestCwd := paramsString(params, "cwd", "")
 	streamTrustedDirs := parseStringSlice(params, "trusted_dirs")
 	streamProjectDir := paramsString(params, "project_dir", "")
-	d.updateRuntimeConfig(ctx, &runtimeConfig{
+	d.runtimeConfigUpdater(ctx, &runtimeConfig{
 		SessionID:       sessionID,
 		Mode:            mode,
 		RequestID:       req.RequestID,

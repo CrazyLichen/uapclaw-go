@@ -145,10 +145,14 @@ var codeRailBuildNames = map[string]string{
 func NewCodeAdapter() *CodeAdapter {
 	deep := NewDeepAdapter()
 	deep.isCodeAgent = true // 单点 source-of-truth：code-agent → project_dir
-	return &CodeAdapter{
+	c := &CodeAdapter{
 		deep:                      deep,
 		forceEnglishRuntimePrompt: true,
 	}
+	// 修复 S-17: 覆写 runtimeConfigUpdater 指向 CodeAdapter 的版本
+	// 对齐 Python 继承中 self._update_runtime_config() 的动态分派
+	deep.runtimeConfigUpdater = c.updateRuntimeConfig
+	return c
 }
 
 // CreateInstance 初始化底层 SDK Agent（code 模式）。
