@@ -71,6 +71,29 @@ type ResourceAccessor interface {
 	MemoryManager() *memory.TeamMemoryManager
 	// HarnessAccessor 返回 Harness 访问器
 	HarnessAccessor() HarnessAccessor
+	// FirstIterGate 返回首轮迭代门控（可能为 nil，HUMAN_AGENT 不设置）
+	// 对齐 Python: host.resources.first_iter_gate
+	FirstIterGate() FirstIterGateAccessor
+	// StreamController 返回流式控制器
+	// 对齐 Python: host.stream_controller
+	StreamController() StreamControllerAccessor
+}
+
+// FirstIterGateAccessor 首轮迭代门控窄接口。
+// 签名对齐 *rails.FirstIterationGate 具体类型。
+type FirstIterGateAccessor interface {
+	// Wait 阻塞直到首次迭代开始
+	Wait(ctx context.Context) error
+	// IsReady 门是否已打开
+	IsReady() bool
+}
+
+// StreamControllerAccessor 流式控制器窄接口。
+// 对齐 Python: host.stream_controller（仅 finalize_round 使用的子集）
+type StreamControllerAccessor interface {
+	// ResetStreamQueue 释放 streamQueue 引用（设为 nil）
+	// 对齐 Python: host.stream_controller.stream_queue = None
+	ResetStreamQueue()
 }
 
 // HarnessAccessor Harness 窄接口。

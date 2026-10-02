@@ -403,6 +403,56 @@ func (k *CoordinationKernel) WakeMailboxIfInterruptCleared() {
 	})
 }
 
+// EnqueueMailboxAfterFirstIteration 等待首轮迭代门控后投递 POLL_MAILBOX 事件。
+// 对齐 Python: CoordinationKernel.enqueue_mailbox_after_first_iteration (kernel.py:391-401)
+//
+// 仅 Teammate 使用（Leader 直接 return）。确保 Teammate 在首次迭代完成前
+// 不做邮箱 sweep，避免启动竞争。
+func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Context) {
+	// Python: if host.role == TeamRole.LEADER: return
+	if k.host.Role() == schema.TeamRoleLeader {
+		return
+	}
+	// Python: gate = host.resources.first_iter_gate
+	gate := k.host.FirstIterGate()
+	if gate == nil || k.eventBus == nil {
+		return
+	}
+	// Python: await gate.wait()
+	if err := gate.Wait(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("enqueueMailboxAfterFirstIteration: gate wait 被取消")
+		return
+	}
+	// Python: await self._event_bus.enqueue(InnerEventMessage(event_type=InnerEventType.POLL_MAILBOX))
+	k.eventBus.Enqueue(types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{
+			EventType: types.InnerEventTypePollMailbox,
+		},
+	})
+}
+
+// FinalizeRound 执行轮次结束清理：记忆提取 + 释放 streamQueue。
+// 对齐 Python: CoordinationKernel.finalize_round (kernel.py:421-434)
+//
+// 纯 round-end hook，仅做两件事：
+// 1. memory_manager.extract_after_round()
+// 2. stream_controller.stream_queue = None
+// 不做 pause/stop/lifecycle 决策（由 Runner 层负责）。
+func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
+	// Python: memory_manager = host.resources.memory_manager
+	memMgr := k.host.MemoryManager()
+	if memMgr != nil {
+		if err := memMgr.ExtractAfterRound(ctx); err != nil {
+			logger.Error(logComponent).Err(err).Msg("finalizeRound: extract_after_round 失败")
+		}
+	}
+	// Python: host.stream_controller.stream_queue = None
+	sc := k.host.StreamController()
+	if sc != nil {
+		sc.ResetStreamQueue()
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // allMembersShutdown 检查所有成员是否都是 SHUTDOWN 状态。

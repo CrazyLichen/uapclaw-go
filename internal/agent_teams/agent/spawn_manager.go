@@ -182,7 +182,7 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		if forwardCb != nil {
 			agentRef := inproc.AgentRef()
 			if ta, ok := agentRef.(*TeamAgent); ok {
-				teammateSC := ta.StreamController()
+				teammateSC := ta.InternalStreamController()
 				if teammateSC != nil {
 					teammateSC.RemoveChunkObserver(forwardCb)
 				}
@@ -509,11 +509,11 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 	if !ok {
 		return
 	}
-	teammateSC := ta.StreamController()
+	teammateSC := ta.InternalStreamController()
 	if teammateSC == nil {
 		return
 	}
-	leaderSC := m.getTeamAgent().StreamController()
+	leaderSC := m.getTeamAgent().InternalStreamController()
 	if leaderSC == nil {
 		return
 	}

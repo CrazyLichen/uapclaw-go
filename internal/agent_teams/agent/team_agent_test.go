@@ -272,7 +272,7 @@ func TestTeamAgent_SpawnManager(t *testing.T) {
 func TestTeamAgent_StreamController(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
-	assert.NotNil(t, a.StreamController())
+	assert.NotNil(t, a.InternalStreamController())
 }
 
 // TestTeamAgent_EventListeners 测试返回事件监听器

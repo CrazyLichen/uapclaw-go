@@ -326,7 +326,18 @@ func (a *TeamAgent) SpawnManager() *SpawnManager {
 
 // StreamController 返回流式控制器。
 // Python: TeamAgent.stream_controller property
-func (a *TeamAgent) StreamController() *StreamController {
+//
+// 注意：返回 types.StreamControllerAccessor 窄接口以满足 KernelHost 编译约束。
+// 调用方需要 *StreamController 具体类型时，用 InternalStreamController()。
+func (a *TeamAgent) StreamController() types.StreamControllerAccessor {
+	if a.streamController == nil {
+		return nil
+	}
+	return a.streamController
+}
+
+// InternalStreamController 返回 *StreamController 具体类型（供同包代码使用）。
+func (a *TeamAgent) InternalStreamController() *StreamController {
 	return a.streamController
 }
 
@@ -1145,6 +1156,16 @@ func (a *TeamAgent) MemoryManager() *memory.TeamMemoryManager {
 // *agentteams.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
 func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
 	return a.Harness()
+}
+
+// FirstIterGate 返回首轮迭代门控。
+// 满足 types.ResourceAccessor 接口。
+// 对齐 Python: host.resources.first_iter_gate
+func (a *TeamAgent) FirstIterGate() types.FirstIterGateAccessor {
+	if a.configurator == nil {
+		return nil
+	}
+	return a.configurator.FirstIterGate()
 }
 
 // SubscribeTransport 订阅团队传输主题。

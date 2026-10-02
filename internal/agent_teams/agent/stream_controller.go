@@ -378,6 +378,15 @@ func (e *taskFailedError) Text() string {
 	return e.text
 }
 
+// ResetStreamQueue 释放 streamQueue 引用（设为 nil）。
+// 满足 types.StreamControllerAccessor 接口。
+// 对齐 Python: StreamController.stream_queue = None（finalize_round 中调用）
+func (sc *StreamController) ResetStreamQueue() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.streamQueue = nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // memberName 解析当前成员名。
