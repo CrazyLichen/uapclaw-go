@@ -2,7 +2,9 @@
 
 ## 概述
 
-实现记忆精炼流水线的核心编排层——`MemoryAnalyzer`（对话分析器）和 `Generator`（编排器），串联 7.18（LongTermMemoryExtractor）和 7.8（WriteManager），完成从对话中提取、分析、精炼记忆的完整流程。同时实现前置依赖 `Param` 类型、`MemoryEngineConfig` 和 `AgentMemoryConfig`，以及补全 `MemoryScopeConfig` 缺失字段。
+实现记忆精炼流水线的核心编排层——`MemoryAnalyzer`（对话分析器）和 `Generator`（编排器），串联 7.18（LongTermMemoryExtractor）和 7.8（WriteManager），完成从对话中提取、分析、精炼记忆的完整流程。同时实现 `MemoryEngineConfig` 和 `AgentMemoryConfig`，以及补全 `MemoryScopeConfig` 缺失字段。
+
+> **Param/ParamType 已有实现**：`internal/common/schema/param.go` 中已有完整的 ParamType 枚举 + Param 结构体 + Validate + 工厂方法 + ToJSONSchemaMap/ParseJSONSchemaMap，与 Python `openjiuwen/core/common/schema/param.py` 对齐且更丰富（多了 Enum/Nullable/Format/MinItems/MaxItems/AnyOf/AllOf/OneOf）。Python 侧也只有一份定义，AgentMemoryConfig.mem_variables 直接引用。本次无需新建，AgentMemoryConfig 直接引用 `common/schema` 包的 Param 类型。
 
 严格对齐 Python `openjiuwen/core/memory/process/extract/` 和 `openjiuwen/core/memory/config/` 目录结构。
 
@@ -52,10 +54,8 @@
 ## 文件组织方案
 
 ```
-agentcore/schema/                          ← 新建包
-  ├── doc.go                               # 包文档
-  ├── param.go                             # ParamType 枚举 + Param 结构体
-  └── param_test.go                        # Param 校验 + 工厂方法测试
+common/schema/                             ← 已有包（无需新建）
+  └── param.go                             # ✅ ParamType + Param 已实现
 
 agentcore/memory/config/                   ← 已有包，新增文件
   ├── doc.go                               # 更新文件目录
@@ -63,7 +63,7 @@ agentcore/memory/config/                   ← 已有包，新增文件
   ├── scope_config_test.go                 # 修改：补充新字段测试
   ├── engine_config.go                     # 新增：MemoryEngineConfig
   ├── engine_config_test.go                # 新增：MemoryEngineConfig 测试
-  ├── agent_config.go                      # 新增：AgentMemoryConfig
+  ├── agent_config.go                      # 新增：AgentMemoryConfig（引用 common/schema.Param）
   └── agent_config_test.go                 # 新增：AgentMemoryConfig 测试
 
 agentcore/memory/process/extract/          ← 已有包，新增文件
@@ -79,51 +79,11 @@ agentcore/memory/process/extract/          ← 已有包，新增文件
 
 ## 详细设计
 
-### 1. Param 类型（agentcore/schema/param.go）
+### 1. Param 类型（common/schema/param.go — 已有实现）
 
-对齐 Python `openjiuwen/core/common/schema/param.py`。
+**无需新建**。`internal/common/schema/param.go` 已有完整实现，与 Python `openjiuwen/core/common/schema/param.py` 对齐。Python 和 Go 都只定义了一份 Param，AgentMemoryConfig.mem_variables 直接引用。
 
-```go
-// ParamType 参数类型枚举
-type ParamType int
-
-const (
-    ParamTypeString  ParamType = iota  // string
-    ParamTypeBoolean                    // boolean
-    ParamTypeInteger                    // integer
-    ParamTypeNumber                     // number
-    ParamTypeArray                      // array
-    ParamTypeObject                     // object
-)
-
-// Param 参数定义结构体
-type Param struct {
-    // Name 参数名称（必填）
-    Name string
-    // Description 参数描述（必填）
-    Description string
-    // Type 参数类型（必填）
-    Type ParamType
-    // Required 是否必填（必填）
-    Required bool
-    // Default 默认值（可选，nil 表示未设置）
-    Default any
-    // Items 数组元素类型定义（仅 Array 类型使用）
-    Items *Param
-    // Properties 对象属性列表（仅 Object 类型使用）
-    Properties []Param
-}
-```
-
-**校验规则（Validate 方法）**：
-
-| Type | Items | Properties | 约束 |
-|------|-------|------------|------|
-| Array | 必须 != nil | 必须为空 | 否则返回错误 |
-| Object | 必须为空 | 必须 len > 0 | 否则返回错误 |
-| 其他 | 必须为空 | 必须为空 | 否则返回错误 |
-
-**工厂方法**：`NewStringParam`、`NewBooleanParam`、`NewIntegerParam`、`NewNumberParam`、`NewArrayParam`、`NewObjectParam`——对齐 Python 的 `Param.string()`、`Param.boolean()` 等类方法。
+**已有内容**：ParamType 枚举（String/Boolean/Integer/Number/Array/Object）、Param 结构体（含 Validate 校验、6 个工厂方法、ToJSONSchemaMap/ParseJSONSchemaMap）。Go 版本比 Python 更丰富（多了 Enum、Nullable、Format、MinItems/MaxItems、AdditionalProperties、AnyOf/AllOf/OneOf 等 JSON Schema 字段）。
 
 ### 2. MemoryEngineConfig（memory/config/engine_config.go）
 
@@ -163,7 +123,7 @@ type MemoryEngineConfig struct {
 // AgentMemoryConfig Agent 记忆配置
 type AgentMemoryConfig struct {
     // MemVariables 记忆变量配置列表
-    MemVariables []schema.Param
+    MemVariables []commonschema.Param
     // EnableLongTermMem 是否启用长期记忆
     EnableLongTermMem bool
     // EnableUserProfile 是否启用用户画像记忆
@@ -178,7 +138,7 @@ type AgentMemoryConfig struct {
 ```
 
 - 默认值：全部 `true`，`MemVariables` 为空切片
-- **引用**：`schema` = `internal/agentcore/schema`（Param 类型）
+- **引用**：`commonschema` = `internal/common/schema`（已有 Param 类型，无需新建）
 
 ### 4. MemoryScopeConfig 补全（memory/config/scope_config.go）
 
@@ -398,9 +358,9 @@ semanticValidation(ctx, obtainedMem, oldMem, model)
 ## 依赖关系
 
 ```
-agentcore/schema/param.go
-    ↓
-memory/config/agent_config.go ──→ schema.Param
+common/schema/param.go              ← ✅ 已有实现，无需新建
+    ↓（引用）
+memory/config/agent_config.go ──→ commonschema.Param
 memory/config/engine_config.go ──→ llm/schema.ModelRequestConfig + ModelClientConfig
                                 ──→ retrieval/embedding.EmbeddingConfig
 memory/config/scope_config.go ──→ 同上 3 个类型（补全）
@@ -415,12 +375,6 @@ memory/process/extract/generator.go ──→ extract.MemoryAnalyzer + ExtractLo
 ```
 
 ## 测试策略
-
-### Param 测试（param_test.go）
-
-- 校验规则：Array 无 Items 报错、Object 无 Properties 报错、其他类型有 Items/Properties 报错
-- 工厂方法：每个工厂方法创建正确类型的 Param
-- 序列化/反序列化：JSON 往返
 
 ### Config 测试
 
@@ -446,11 +400,10 @@ memory/process/extract/generator.go ──→ extract.MemoryAnalyzer + ExtractLo
 
 ## 实现顺序
 
-1. `schema/param.go` + `schema/doc.go` + `schema/param_test.go`
-2. `config/engine_config.go` + `config/engine_config_test.go`
-3. `config/agent_config.go` + `config/agent_config_test.go`
-4. `config/scope_config.go` 修改 + `config/scope_config_test.go` 修改 + `config/doc.go` 更新
-5. `extract/analyzer.go` + `extract/analyzer_test.go`
-6. `extract/generator.go` + `extract/generator_test.go`
-7. `extract/doc.go` 更新
-8. `IMPLEMENTATION_PLAN.md` 修正 7.19 路径
+1. `config/engine_config.go` + `config/engine_config_test.go`
+2. `config/agent_config.go` + `config/agent_config_test.go`
+3. `config/scope_config.go` 修改 + `config/scope_config_test.go` 修改 + `config/doc.go` 更新
+4. `extract/analyzer.go` + `extract/analyzer_test.go`
+5. `extract/generator.go` + `extract/generator_test.go`
+6. `extract/doc.go` 更新
+7. `IMPLEMENTATION_PLAN.md` 修正 7.19 路径
