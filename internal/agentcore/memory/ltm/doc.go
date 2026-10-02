@@ -14,17 +14,17 @@
 //	ltm/
 //	├── doc.go                 # 包文档
 //	├── models.go              # MemInfo / MemResult / AddMemResult 返回值模型
-//	├── options.go             # 函数式选项（AddMessagesOption / SearchOption）
-//	├── long_term_memory.go    # LongTermMemory 结构体 + sync.Once 单例
+//	├── options.go             # 函数式选项（AddMessagesOption / SearchOption / RegisterStoreOption）
+//	├── long_term_memory.go    # LongTermMemory 结构体 + sync.Once 单例 + validateID / checkMessages / getHistoryMessages
 //	├── register.go            # RegisterStore / RegisterPlugin / MigrateBetweenIndices
-//	├── config_ops.go          # SetConfig / SetScopeConfig / GetScopeConfig / DeleteScopeConfig
-//	├── add_messages.go        # AddMessages 核心写入流程
+//	├── config_ops.go          # SetConfig / SetScopeConfig / GetScopeConfig / DeleteScopeConfig + scope helpers
+//	├── add_messages.go        # AddMessages 核心写入流程 + 回调包装
 //	├── search_ops.go          # SearchUserMem / SearchUserHistorySummary / GetVariables
-//	├── delete_ops.go          # DeleteMemByID / DeleteMemByUserID / DeleteMemByScope 等
+//	├── delete_ops.go          # DeleteMemByID / DeleteMemByUserID / DeleteMemByScope / DeleteMessages / DeleteVariables
 //	├── update_ops.go          # UpdateMemByID / UpdateVariables
-//	├── query_ops.go           # GetRecentMessages / GetMessageByID / GetUserMemByPage 等
-//	├── scope_helpers.go       # getScopeLLM / getScopeConfig / applyScopeEmbedding 等私有方法
-//	└── helpers.go             # checkMessages / getHistoryMessages / validateID / runMigration
+//	├── query_ops.go           # GetRecentMessages / GetMessageByID / GetUserMemByPage / UserMemTotalNum
+//	├── scope_helpers.go       # scope_helpers 占位文件（实际方法在 config_ops.go）
+//	└── helpers.go             # validateKVStore / acquireUserLock 等辅助方法
 //
 // 对应 Python 代码：openjiuwen/core/memory/long_term_memory.py
 package ltm
