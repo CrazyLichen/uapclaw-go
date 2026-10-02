@@ -871,7 +871,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	ctx context.Context,
 	collectionName string,
 	newSchema *CollectionSchema,
-	transformFunc func(map[string]any) map[string]any,
+	transformFunc func(map[string]any) (map[string]any, error),
 	metadata map[string]any,
 ) error {
 	// 生成临时集合名称
@@ -909,7 +909,14 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	if len(oldDocs) > 0 {
 		transformedDocs := make([]map[string]any, 0, len(oldDocs))
 		for _, doc := range oldDocs {
-			transformedDocs = append(transformedDocs, transformFunc(doc))
+			transformedDoc, err := transformFunc(doc)
+			if err != nil {
+				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+					Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+				s.cleanupChromaTempCollection(ctx, tempCollectionName)
+				return err
+			}
+			transformedDocs = append(transformedDocs, transformedDoc)
 		}
 		// Python: await self.add_docs(temp_collection_name, transformed_docs)
 		if err := s.AddDocs(ctx, tempCollectionName, transformedDocs); err != nil {

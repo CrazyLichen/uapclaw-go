@@ -253,7 +253,10 @@ func TestBuildTransformFunc_AddField(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"id": 1}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if result["new_field"] != "hello" {
 		t.Errorf("new_field = %v, want hello", result["new_field"])
 	}
@@ -269,7 +272,10 @@ func TestBuildTransformFunc_AddField_AlreadyExists(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"existing": "original"}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if result["existing"] != "original" {
 		t.Errorf("existing = %v, want original（不应覆盖已存在字段）", result["existing"])
 	}
@@ -284,7 +290,10 @@ func TestBuildTransformFunc_AddField_NilDefaultValue(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"id": 1}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if _, exists := result["new_field"]; exists {
 		t.Error("DefaultValue 为 nil 时不应设置新字段")
 	}
@@ -299,7 +308,10 @@ func TestBuildTransformFunc_RenameField(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"old": "value"}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if _, exists := result["old"]; exists {
 		t.Error("old 字段不应存在")
 	}
@@ -317,7 +329,10 @@ func TestBuildTransformFunc_RenameField_OldNotExist(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"id": 1}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if _, exists := result["new"]; exists {
 		t.Error("旧字段不存在时不应添加新字段")
 	}
@@ -332,7 +347,10 @@ func TestBuildTransformFunc_UpdateFieldType_NoOp(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"score": 42}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if result["score"] != 42 {
 		t.Errorf("score = %v, want 42 (no-op)", result["score"])
 	}
@@ -347,7 +365,10 @@ func TestBuildTransformFunc_UpdateEmbeddingDim_ZeroVector(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"embedding": []float64{1.0, 2.0}}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	vec, ok := result["embedding"].([]float64)
 	if !ok {
 		t.Fatalf("embedding 类型不是 []float64")
@@ -374,7 +395,10 @@ func TestBuildTransformFunc_UpdateEmbeddingDim_WithRecomputeFunc(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"text": "hello"}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	vec, ok := result["embedding"].([]float64)
 	if !ok {
 		t.Fatalf("embedding 类型不是 []float64")
@@ -387,7 +411,7 @@ func TestBuildTransformFunc_UpdateEmbeddingDim_WithRecomputeFunc(t *testing.T) {
 	}
 }
 
-// TestBuildTransformFunc_UpdateEmbeddingDim_DimensionMismatch 测试返回向量长度不匹配时用零向量 fallback
+// TestBuildTransformFunc_UpdateEmbeddingDim_DimensionMismatch 测试返回向量长度不匹配时返回错误（对齐 Python: raise build_error）
 func TestBuildTransformFunc_UpdateEmbeddingDim_DimensionMismatch(t *testing.T) {
 	op := &operation.UpdateEmbeddingDimensionOperation{
 		BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
@@ -399,19 +423,9 @@ func TestBuildTransformFunc_UpdateEmbeddingDim_DimensionMismatch(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc([]operation.Operation{op})
 	doc := map[string]any{"text": "hello"}
-	result := transformFunc(doc)
-	vec, ok := result["embedding"].([]float64)
-	if !ok {
-		t.Fatalf("embedding 类型不是 []float64")
-	}
-	if len(vec) != 4 {
-		t.Errorf("embedding 长度 = %d, want 4", len(vec))
-	}
-	// 维度不匹配时应 fallback 为零向量
-	for _, v := range vec {
-		if v != 0.0 {
-			t.Errorf("维度不匹配 fallback 后期望零向量, got %v", v)
-		}
+	_, err := transformFunc(doc)
+	if err == nil {
+		t.Fatal("维度不匹配时应返回错误（对齐 Python raise build_error）")
 	}
 }
 
@@ -431,7 +445,10 @@ func TestBuildTransformFunc_MultipleOperations(t *testing.T) {
 	}
 	transformFunc := BuildTransformFunc(ops)
 	doc := map[string]any{"id": 1}
-	result := transformFunc(doc)
+	result, err := transformFunc(doc)
+	if err != nil {
+		t.Fatalf("transformFunc 失败: %v", err)
+	}
 	if _, exists := result["field_a"]; exists {
 		t.Error("field_a 应被重命名为 field_b")
 	}

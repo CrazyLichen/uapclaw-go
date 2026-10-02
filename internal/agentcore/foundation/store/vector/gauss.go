@@ -722,7 +722,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 	ctx context.Context,
 	collectionName string,
 	newSchema *CollectionSchema,
-	transformFunc func(map[string]any) map[string]any,
+	transformFunc func(map[string]any) (map[string]any, error),
 	metadata map[string]any,
 ) error {
 	tempCollectionName := fmt.Sprintf("%s_migration_%d", collectionName, time.Now().UnixMilli())
@@ -793,7 +793,13 @@ func (s *GaussVectorStore) executeGaussMigration(
 			}
 		}
 
-		transformedDoc := transformFunc(doc)
+		transformedDoc, err := transformFunc(doc)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+				Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+			s.cleanupGaussTempCollection(ctx, tempCollectionName)
+			return err
+		}
 		batch = append(batch, transformedDoc)
 
 		if len(batch) >= gaussMigrationBatchSize {

@@ -902,7 +902,7 @@ func (s *MilvusVectorStore) executeMigration(
 	ctx context.Context,
 	collectionName string,
 	newSchema *CollectionSchema,
-	transformFunc func(map[string]any) map[string]any,
+	transformFunc func(map[string]any) (map[string]any, error),
 	metadata map[string]any,
 ) error {
 	// 生成临时集合名称
@@ -981,7 +981,13 @@ func (s *MilvusVectorStore) executeMigration(
 		// 将 ResultSet 中的每一行转为 map[string]any
 		for i := 0; i < rs.ResultCount; i++ {
 			doc := resultSetRowToMap(rs, i)
-			transformedDoc := transformFunc(doc)
+			transformedDoc, err := transformFunc(doc)
+			if err != nil {
+				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
+					Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+				s.cleanupTempCollection(ctx, tempCollectionName)
+				return err
+			}
 			batch = append(batch, transformedDoc)
 
 			if len(batch) >= migrationBatchSize {

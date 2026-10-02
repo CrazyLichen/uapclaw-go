@@ -1,6 +1,8 @@
 package vector
 
 import (
+	"fmt"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -53,12 +55,16 @@ func ComputeNewSchema(oldSchema *CollectionSchema, operations []operation.Operat
 // BuildTransformFunc 构建统一的文档变换函数，顺序应用所有 operation。
 //
 // Python: openjiuwen/core/foundation/store/vector/utils.py (build_transform_func_for_operations)
-func BuildTransformFunc(operations []operation.Operation) func(map[string]any) map[string]any {
-	return func(doc map[string]any) map[string]any {
+func BuildTransformFunc(operations []operation.Operation) func(map[string]any) (map[string]any, error) {
+	return func(doc map[string]any) (map[string]any, error) {
 		for _, op := range operations {
-			doc = applyOperationToDoc(doc, op)
+			var err error
+			doc, err = applyOperationToDoc(doc, op)
+			if err != nil {
+				return nil, err
+			}
 		}
-		return doc
+		return doc, nil
 	}
 }
 
@@ -179,7 +185,7 @@ func computeSchemaUpdateVectorDim(schema *CollectionSchema, op *operation.Update
 // applyOperationToDoc 对单个文档应用单个操作。
 //
 // Python: openjiuwen/core/foundation/store/vector/utils.py (_apply_operation_to_doc)
-func applyOperationToDoc(doc map[string]any, op operation.Operation) map[string]any {
+func applyOperationToDoc(doc map[string]any, op operation.Operation) (map[string]any, error) {
 	switch o := op.(type) {
 	case *operation.AddScalarFieldOperation:
 		// 字段不存在且默认值非零时设置
@@ -209,12 +215,16 @@ func applyOperationToDoc(doc map[string]any, op operation.Operation) map[string]
 		}
 		// 校验向量长度
 		if len(newVector) != o.NewDimension {
-			// Python: raise build_error(...)，Go 中记录警告但不中断
-			// 为与 Python 行为一致，这里使用零向量 fallback
-			newVector = make([]float64, o.NewDimension)
+			// Python: raise build_error(...)
+			return nil, exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+				exception.WithParam("error_msg", "RecomputeEmbeddingFunc 返回向量维度不匹配"),
+				exception.WithParam("field_name", o.FieldName),
+				exception.WithParam("expected_dim", fmt.Sprintf("%d", o.NewDimension)),
+				exception.WithParam("actual_dim", fmt.Sprintf("%d", len(newVector))),
+			)
 		}
 		doc[o.FieldName] = newVector
 	}
 
-	return doc
+	return doc, nil
 }

@@ -2381,7 +2381,7 @@ func TestMilvusVectorStore_executeMigration_创建临时集合失败(t *testing.
 		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
 		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
 	})
-	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	transformFunc := func(doc map[string]any) (map[string]any, error) { return doc, nil }
 	metadata := map[string]any{"distance_metric": "COSINE"}
 
 	// 成功场景：executeMigration 应正常执行
@@ -2414,7 +2414,7 @@ func TestMilvusVectorStore_executeMigration_QueryIterator失败(t *testing.T) {
 		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
 		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
 	})
-	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	transformFunc := func(doc map[string]any) (map[string]any, error) { return doc, nil }
 	metadata := map[string]any{"distance_metric": "COSINE"}
 
 	err := s.executeMigration(ctx, "test_coll", schema, transformFunc, metadata)
@@ -2468,7 +2468,7 @@ func TestMilvusVectorStore_executeMigration_AddDocs失败(t *testing.T) {
 		mustNewFieldSchema("id", VectorDataTypeVarchar, WithPrimary()),
 		mustNewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(4)),
 	})
-	transformFunc := func(doc map[string]any) map[string]any { return doc }
+	transformFunc := func(doc map[string]any) (map[string]any, error) { return doc, nil }
 	metadata := map[string]any{"distance_metric": "COSINE"}
 
 	// 由于 fakeMilvusClientFull 的 Insert 总是成功，
