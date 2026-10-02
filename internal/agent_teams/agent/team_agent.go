@@ -41,6 +41,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -56,6 +57,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -506,6 +508,10 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	// 9.55: 设置协调角色 + 注册团队完成回调
 	// 9.55: Blueprint/Infra 参数通过 KernelHost 子接口可达，传 nil 占位
 	a.coordination.Setup(runtimeCtx.Role, nil, nil)
+
+	// 修复 S-04: 对齐 Python _register_team_completion_callbacks()
+	// 在 DeepAgent 完全构建后、dispatcher 存在时注册 TeamSkillRail 的完成回调
+	a.registerTeamCompletionCallbacks()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent 配置")
@@ -1042,6 +1048,49 @@ func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.Executi
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
 		Str("execution_status", string(status)).Msg("更新执行状态（无 TeamMember 句柄）")
 	return nil
+}
+
+// registerTeamCompletionCallbacks 将 TeamSkillRail 的 notify_team_completed 注册到 TeamCompletionHandler。
+// 对齐 Python: TeamAgent._register_team_completion_callbacks()
+// Python: team_agent.py:447-467
+func (a *TeamAgent) registerTeamCompletionCallbacks() {
+	harness := a.Harness()
+	// Python: if harness is None or dispatcher is None: return
+	if harness == nil || a.coordination == nil || a.coordination.Dispatcher() == nil {
+		return
+	}
+	teamCompletion := a.coordination.Dispatcher().TeamCompletion
+	if teamCompletion == nil {
+		return
+	}
+	// 对齐 Python: for rail_type in (TeamSkillEvolutionRail, TeamSkillCreateRail):
+	for _, railType := range []reflect.Type{
+		reflect.TypeOf((*evolution.TeamSkillEvolutionRail)(nil)),
+		reflect.TypeOf((*evolution.TeamSkillCreateRail)(nil)),
+	} {
+		for _, railAny := range harness.FindRails(railType) {
+			// TeamSkillEvolutionRail.NotifyTeamCompleted(ctx context.Context) (bool, error)
+			if evoRail, ok := railAny.(*evolution.TeamSkillEvolutionRail); ok {
+				cb := func(ctx context.Context) error {
+					_, err := evoRail.NotifyTeamCompleted(ctx)
+					return err
+				}
+				teamCompletion.RegisterCompletionCallback(cb)
+				continue
+			}
+			// TeamSkillCreateRail.NotifyTeamCompleted(cbc *AgentCallbackContext) bool
+			if createRail, ok := railAny.(*evolution.TeamSkillCreateRail); ok {
+				cb := func(ctx context.Context) error {
+					createRail.NotifyTeamCompleted(nil)
+					return nil
+				}
+				teamCompletion.RegisterCompletionCallback(cb)
+				continue
+			}
+		}
+	}
+	logger.Debug(logComponent).Str("member_name", a.MemberName()).
+		Msg("registerTeamCompletionCallbacks 完成")
 }
 
 // ── KernelHost 接口适配方法 ──
