@@ -53,6 +53,9 @@ func ExtractLongTermMemory(
 	// Python: for msg in extract_memory_paras.messages:
 	//   reference_str += f"{msg.name or msg.role}: {msg.content}\n"
 	//   if msg.role == "user": input_msg_str += f"{msg.name or msg.role}: {msg.content}\n"
+	// 修复 S-38: Python 的 msg.content 对多模态消息（list[Union[str,dict]]）在 f-string 中
+	// 会转为 str(list)，Go 的 Text() 对多模态消息返回空串导致内容丢失。
+	// 使用 safeContentText 辅助函数，多模态消息回退到 String()。
 	referenceStr := ""
 	inputMsgStr := ""
 	for _, msg := range params.HistoryMessages {
@@ -60,16 +63,16 @@ func ExtractLongTermMemory(
 		if name == "" {
 			name = string(msg.GetRole().String())
 		}
-		referenceStr += fmt.Sprintf("%s: %s\n", name, msg.GetContent().Text())
+		referenceStr += fmt.Sprintf("%s: %s\n", name, safeContentText(msg))
 	}
 	for _, msg := range params.Messages {
 		name := msg.GetName()
 		if name == "" {
 			name = string(msg.GetRole().String())
 		}
-		referenceStr += fmt.Sprintf("%s: %s\n", name, msg.GetContent().Text())
+		referenceStr += fmt.Sprintf("%s: %s\n", name, safeContentText(msg))
 		if msg.GetRole() == schema.RoleTypeUser {
-			inputMsgStr += fmt.Sprintf("%s: %s\n", name, msg.GetContent().Text())
+			inputMsgStr += fmt.Sprintf("%s: %s\n", name, safeContentText(msg))
 		}
 	}
 
@@ -194,4 +197,15 @@ func buildTimeContext(timestamp string) string {
 		monday.Year(), monday.Month(), monday.Day(),
 		sunday.Year(), sunday.Month(), sunday.Day(),
 		monday.Format("01.02"), sunday.Format("01.02"))
+}
+
+// safeContentText 安全提取消息文本内容。
+// 纯文本消息使用 Text()，多模态消息（含图片/视频等）回退到 String()，
+// 对齐 Python 中 msg.content 在 f-string 中的行为（str(list) 不丢失内容）。
+func safeContentText(msg schema.BaseMessage) string {
+	c := msg.GetContent()
+	if c.IsText() {
+		return c.Text()
+	}
+	return c.String()
 }
