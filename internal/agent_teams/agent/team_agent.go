@@ -532,31 +532,111 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // Invoke 非流式调用 TeamAgent。
 // Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
-	// ⤵️(#9.62): coordination.start(session) + 入队用户输入
-	// 9.60: 创建 streamQueue
-	if a.streamController != nil {
-		a.streamController.streamQueue = make(chan stream.Schema, 64)
-	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
-	// ⤵️(#9.62): 从 streamQueue 读取直到 nil sentinel → coordination.finalize_round()
-	return nil, nil
+
+	// Python: self._stream_controller.stream_queue = asyncio.Queue()
+	if a.streamController != nil {
+		a.streamController.streamQueue = make(chan stream.Schema, 64)
+	}
+
+	// Python: self._state.pending_user_query = inputs.get("query", "") if isinstance(inputs, dict) else str(inputs)
+	if query, ok := inputs["query"].(string); ok {
+		a.state.PendingUserQuery = query
+	}
+
+	// Python: await self._coordination.start(session)
+	a.coordination.Start(ctx)
+
+	// Python: try:
+	//   await self._coordination.enqueue_user_input(inputs)
+	//   await self._coordination.enqueue_mailbox_after_first_iteration()
+	query := ""
+	if q, ok := inputs["query"].(string); ok {
+		query = q
+	}
+	a.coordination.EnqueueUserInput(query)
+	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+
+	// Python: last_result = None
+	//   while True:
+	//     chunk = await self._stream_controller.stream_queue.get()
+	//     if chunk is None: break
+	//     last_result = chunk
+	//   return last_result
+	var lastResult map[string]any
+	if a.streamController != nil && a.streamController.streamQueue != nil {
+		for chunk := range a.streamController.streamQueue {
+			if chunk == nil {
+				break
+			}
+			// 将 stream.Schema 转换为 map[string]any
+			if m, ok := chunk.(interface{ ToMap() map[string]any }); ok {
+				lastResult = m.ToMap()
+			}
+		}
+	}
+
+	// Python: finally: await self._coordination.finalize_round()
+	a.coordination.FinalizeRound(ctx)
+	return lastResult, nil
 }
 
 // Stream 流式调用 TeamAgent。
 // Python: TeamAgent.stream(inputs, session, stream_modes)
 func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
-	// ⤵️(#9.62): coordination.start(session) + 入队用户输入
-	// 9.60: 创建 streamQueue
-	if a.streamController != nil {
-		a.streamController.streamQueue = make(chan stream.Schema, 64)
-	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Stream 开始")
-	// ⤵️(#9.62): 从 streamQueue 持续读取直到 nil sentinel
-	return nil, nil
+
+	// Python: self._stream_controller.stream_queue = asyncio.Queue()
+	if a.streamController != nil {
+		a.streamController.streamQueue = make(chan stream.Schema, 64)
+	}
+
+	// Python: self._state.pending_user_query = inputs.get("query", "") if isinstance(inputs, dict) else str(inputs)
+	if query, ok := inputs["query"].(string); ok {
+		a.state.PendingUserQuery = query
+	}
+
+	// Python: await self._coordination.start(session)
+	a.coordination.Start(ctx)
+
+	// Python: try:
+	//   await self._coordination.enqueue_user_input(inputs)
+	//   await self._coordination.enqueue_mailbox_after_first_iteration()
+	query := ""
+	if q, ok := inputs["query"].(string); ok {
+		query = q
+	}
+	a.coordination.EnqueueUserInput(query)
+	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+
+	// Python: while True:
+	//   chunk = await self._stream_controller.stream_queue.get()
+	//   if chunk is None: break
+	//   yield chunk
+	//
+	// Go: 将内部 streamQueue 通过 goroutine 转发到只读输出 channel
+	outCh := make(chan stream.Schema, 64)
+	if a.streamController != nil && a.streamController.streamQueue != nil {
+		go func() {
+			defer close(outCh)
+			for chunk := range a.streamController.streamQueue {
+				if chunk == nil {
+					break
+				}
+				outCh <- chunk
+			}
+			// Python: finally: await self._coordination.finalize_round()
+			a.coordination.FinalizeRound(ctx)
+		}()
+	} else {
+		close(outCh)
+	}
+
+	return outCh, nil
 }
 
 // Interact 向团队发送输入。
