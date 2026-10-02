@@ -1,11 +1,13 @@
 package config
 
+import (
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryScopeConfig 记忆作用域配置，定义各类型记忆的提取规则。
-//
-// 暂不包含 model_cfg / model_client_cfg / embedding_cfg，这些字段在 7.18 中未使用，
-// 后续 7.27 LongTermMemory 回填时补充。
 //
 // Python: openjiuwen/core/memory/config/config.py (MemoryScopeConfig)
 type MemoryScopeConfig struct {
@@ -15,6 +17,15 @@ type MemoryScopeConfig struct {
 	SemanticMemoryDefinition string
 	// EpisodicMemoryDefinition 情景记忆提取规则定义
 	EpisodicMemoryDefinition string
+	// ModelCfg 模型请求配置（7.27 回填时使用）
+	// Python: model_cfg: ModelRequestConfig = None
+	ModelCfg *llmschema.ModelRequestConfig
+	// ModelClientCfg 模型客户端配置（7.27 回填时使用）
+	// Python: model_client_cfg: ModelClientConfig = None
+	ModelClientCfg *llmschema.ModelClientConfig
+	// EmbeddingCfg 嵌入模型配置（7.27 回填时使用）
+	// Python: embedding_cfg: EmbeddingConfig = None
+	EmbeddingCfg *embedding.EmbeddingConfig
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

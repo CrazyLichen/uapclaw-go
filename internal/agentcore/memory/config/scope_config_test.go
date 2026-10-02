@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"testing"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/stretchr/testify/assert"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -36,4 +41,20 @@ func TestDefaultMemoryScopeConfig_对齐Python默认值(t *testing.T) {
 	if cfg.EpisodicMemoryDefinition != expectedEpisodic {
 		t.Errorf("EpisodicMemoryDefinition = %q, want %q", cfg.EpisodicMemoryDefinition, expectedEpisodic)
 	}
+}
+
+// TestDefaultMemoryScopeConfig_新字段为nil 测试补全的新字段默认为 nil
+func TestDefaultMemoryScopeConfig_新字段为nil(t *testing.T) {
+	cfg := DefaultMemoryScopeConfig()
+	assert.Nil(t, cfg.ModelCfg)
+	assert.Nil(t, cfg.ModelClientCfg)
+	assert.Nil(t, cfg.EmbeddingCfg)
+}
+
+// TestMemoryScopeConfig_设置模型配置 测试设置模型配置字段
+func TestMemoryScopeConfig_设置模型配置(t *testing.T) {
+	cfg := DefaultMemoryScopeConfig()
+	modelCfg := &llmschema.ModelRequestConfig{ModelName: "test-model"}
+	cfg.ModelCfg = modelCfg
+	assert.Equal(t, "test-model", cfg.ModelCfg.ModelName)
 }
