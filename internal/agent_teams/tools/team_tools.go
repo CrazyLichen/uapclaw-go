@@ -675,8 +675,9 @@ func (t *SpawnMemberTool) Invoke(ctx context.Context, inputs map[string]any, _ .
 	agentCard.ID = cardID
 	agentCard.Name = displayName
 	agentCard.Description = desc
+	prompt, _ := inputs["prompt"].(string) // 安全断言，prompt 为可选参数，对齐 Python inputs.get("prompt")
 	result := t.team.SpawnMember(ctx, memberName, displayName, agentCard, string(mode), desc,
-		inputs["prompt"].(string), modelName,
+		prompt, modelName,
 		WithAllocation(allocation))
 	if !result.OK {
 		return toolError(result.Reason)
