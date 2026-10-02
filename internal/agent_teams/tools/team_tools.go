@@ -651,8 +651,12 @@ func (t *SpawnMemberTool) Invoke(ctx context.Context, inputs map[string]any, _ .
 				"Either enable HITT in the team spec or use role_type='teammate'.")
 		}
 		if _, ok := inputs["model_name"]; ok {
-			return toolError("role_type='human_agent' does not accept 'model_name' or 'prompt'; " +
-				"human members use the framework template — remove these fields")
+			return toolError("role_type='human_agent' does not accept 'model_name'; " +
+				"human members use the framework template — remove this field")
+		}
+		if _, ok := inputs["prompt"]; ok {
+			return toolError("role_type='human_agent' does not accept 'prompt'; " +
+				"human members use the framework template — remove this field")
 		}
 		result := t.team.SpawnHumanAgent(ctx, memberName, displayName, desc, "")
 		if !result.OK {
