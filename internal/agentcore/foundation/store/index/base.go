@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -35,6 +36,10 @@ type StorageCodec interface {
 type BaseMemoryIndex interface {
 	// SetStorageCodec 设置存储编解码器。
 	SetStorageCodec(codec StorageCodec)
+
+	// SetEmbeddingModel 设置或替换嵌入模型。
+	// Python: hasattr(memory_index, 'set_embedding_model') → memory_index.set_embedding_model(emb)
+	SetEmbeddingModel(model embedding.BaseEmbedding)
 
 	// AddMemories 添加新的记忆文档。
 	AddMemories(ctx context.Context, userID string, scopeID string, memories []*MemoryDoc) error
