@@ -16,6 +16,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Migrator 通用迁移器接口，所有具体 Migrator（除 IndexVersionMigrator 外）必须实现。
+// IndexVersionMigrator 的 TryMigrate 签名不接受 entityKey，因此独立处理。
+type Migrator interface {
+	// TryMigrate 尝试执行迁移。
+	// entityKey 为实体标识（表名/KV 键/记忆类型等），operations 为待执行的操作列表。
+	TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error
+}
+
 // KVMigrator KV 存储迁移执行器。
 // 版本跟踪通过 KV_STORE 自身的 key MEMORY_MIGRATION_KV_SCHEMA_VERSION。
 // 迁移前创建备份，失败时从备份恢复。
