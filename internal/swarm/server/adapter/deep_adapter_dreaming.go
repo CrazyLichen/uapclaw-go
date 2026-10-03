@@ -2,8 +2,11 @@ package adapter
 
 import (
 	"context"
+	"path/filepath"
 
+	swarmdreaming "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory/dreaming"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -49,10 +52,56 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 	d.dreamingStarted = true
 
 	// 步骤 5: 调用 swarm memory dreaming.startDreaming(...)
-	// ⤵️ 10.6.13-18: 调用 swarm memory dreaming.startDreaming(...)
-	logger.Info(logComponent).
-		Str("dreaming_mode", d.dreamingMode).
-		Msg("dreaming started (actual call pending backfill)")
+	// Python: from jiuwenswarm.common.utils import get_agent_sessions_dir
+	// Python: sessions_dir = str(get_agent_sessions_dir() or "")
+	sessionsDir := workspace.AgentSessionsDir()
+
+	// Python: output_name = "memory" if mode == "agent" else "coding_memory"
+	outputName := "memory"
+	if d.dreamingMode != "agent" {
+		outputName = "coding_memory"
+	}
+
+	// Python: base_dir = getattr(self, "_agent_workspace_dir", None) or self._workspace_dir
+	baseDir := d.agentWorkspaceDir
+	if baseDir == "" {
+		baseDir = d.workspaceDir
+	}
+	// Python: output_dir = os.path.join(base_dir, output_name)
+	outputDir := filepath.Join(baseDir, outputName)
+
+	// 将 resolveRuntimeLanguage (cn/en) 映射为 dreaming 语言 (zh/en)
+	language := d.resolveRuntimeLanguage()
+	if language == "cn" || language == "zh" {
+		language = "zh"
+	} else {
+		language = "en"
+	}
+
+	// Python: orch = await start_dreaming(
+	//     sessions_dir=sessions_dir,
+	//     output_dir=output_dir,
+	//     mode=mode,
+	//     busy_checker=busy_checker,
+	// )
+	orch, err := swarmdreaming.StartDreaming(sessionsDir, outputDir, d.dreamingMode, language, busyChecker)
+	if err != nil {
+		// 步骤 6: 启动失败，回退标记
+		// Python: except Exception: logger.error(...); self._dreaming_started = False
+		logger.Error(logComponent).Str("dreaming_mode", d.dreamingMode).Err(err).Msg("start_dreaming failed")
+		d.dreamingStarted = false
+		return err
+	}
+
+	// Python: self._dreaming_started = orch is not None
+	d.dreamingStarted = orch != nil
+	if orch != nil {
+		logger.Info(logComponent).
+			Str("dreaming_mode", d.dreamingMode).
+			Str("sessions_dir", sessionsDir).
+			Str("output_dir", outputDir).
+			Msg("dreaming started")
+	}
 
 	return nil
 }
@@ -76,8 +125,11 @@ func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 	d.dreamingStarted = false
 
 	// 步骤 3: 调用 swarm memory dreaming.stopDreaming()
-	// ⤵️ 10.6.13-18: 调用 swarm memory dreaming.stopDreaming(...)
-	logger.Info(logComponent).Msg("dreaming stopped (actual call pending backfill)")
+	// Python: from jiuwenswarm.agents.harness.common.memory.dreaming import stop_dreaming
+	// Python: mode = getattr(self, "_dreaming_mode", "agent")
+	// Python: await stop_dreaming(mode=mode)
+	swarmdreaming.StopDreaming(d.dreamingMode)
+	logger.Info(logComponent).Str("dreaming_mode", d.dreamingMode).Msg("dreaming stopped")
 
 	return nil
 }

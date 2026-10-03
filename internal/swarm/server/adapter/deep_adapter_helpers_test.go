@@ -81,10 +81,26 @@ func TestDeepAdapter_TryStartDreaming_Agent忙碌(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_TryStartDreaming_正常启动 测试正常启动。
+// TestDeepAdapter_TryStartDreaming_正常启动 测试正常启动（配置 enabled + 临时目录）。
 func TestDeepAdapter_TryStartDreaming_正常启动(t *testing.T) {
+	// 准备临时目录
+	tmpDir := t.TempDir()
+	sessionsDir := tmpDir + "/agent/sessions"
+	outputDir := tmpDir + "/memory"
+	os.MkdirAll(sessionsDir, 0o755)
+	os.MkdirAll(outputDir, 0o755)
+
 	d := NewDeepAdapter()
 	d.dreamingMode = "agent"
+	d.workspaceDir = tmpDir
+
+	// 设置环境变量启用 dreaming
+	envKey := "DREAMING_AGENT_ENABLED"
+	os.Setenv(envKey, "true")
+	defer os.Unsetenv(envKey)
+	os.Setenv("DREAMING_INTERVAL", "999999")
+	defer os.Unsetenv("DREAMING_INTERVAL")
+
 	ctx := t.Context()
 	if err := d.TryStartDreaming(ctx, nil); err != nil {
 		t.Errorf("TryStartDreaming error = %v", err)
@@ -92,6 +108,9 @@ func TestDeepAdapter_TryStartDreaming_正常启动(t *testing.T) {
 	if !d.dreamingStarted {
 		t.Error("应标记 dreamingStarted = true")
 	}
+
+	// 清理
+	d.TryStopDreaming(ctx)
 }
 
 // TestDeepAdapter_TryStopDreaming_未启动 测试未启动时跳过。

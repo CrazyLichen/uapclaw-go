@@ -462,7 +462,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.17 | ✅ | AgentArtsMemoryProvider | ✅ AgentArtsProvider（自封装 HTTP REST 客户端 + session 映射 + consecutiveFailures 计数 + external_memory_search 工具） | `openjiuwen/core/memory/external/agentarts_memory_provider.py` |
 | 7.18 | ✅ | LongTermMemoryExtractor | ✅ LongTermMemoryExtractor（ExtractLongTermMemory + buildTimeContext）+ ✅ ExtractMemoryParams + ✅ MemoryOperationParams + ✅ MemoryScopeConfig + DefaultMemoryScopeConfig | `openjiuwen/core/memory/process/extract/` |
 | 7.19 | ✅ | MemoryAnalyzer / Generator | ✅ MemoryAnalyzer（Analyze + VariableResult + MemoryAnalyzerResult）+ ✅ Generator（GenAllMemory + categoriesToMemoryUnit + processExtractedData + processSummaryData + getFragmentMemoryUnit + processProactiveMemoryData + semanticValidation + handleMemoryWithInstruct + processMemoryOperations）+ ✅ MemoryEngineConfig + ✅ AgentMemoryConfig + ✅ ScopeConfig 补全（ModelCfg/ModelClientCfg/EmbeddingCfg）| `openjiuwen/core/memory/process/extract/` |
-| 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
+| 7.20 | ✅ | Dreaming Orchestrator + Sweeper | ✅ 两层架构：Orchestrator（agentcore 纯调度）+ Sweeper（swarm 业务管线 Scan→Compress→LLM Extract→Promote）；✅ 4 套提示词模板（code/agent × zh/en）一比一复刻 Python；✅ 公共 API（StartDreaming/StopDreaming/GetDreamingOrchestrator）；✅ DeepAdapter TryStartDreaming/TryStopDreaming 回填完成；68 个测试 | `openjiuwen/core/memory/dreaming/` · `jiuwenswarm/agents/harness/common/memory/dreaming/` |
 | 7.21 | ✅ | MigrationPlan | 迁移计划（OperationRegistry + BaseOperation + Operations + MigrationPlan） | `openjiuwen/core/memory/migration/migration_plan.py` |
 | 7.22 | ✅ | Migration Operations | 迁移操作注册表 + 共享工具函数（ComputeNewSchema + BuildTransformFunc） | `openjiuwen/core/memory/migration/operation/` |
 | 7.23 | ✅ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器 + run_migrations 编排 + 4 种 VectorStore UpdateSchema 回填 | `openjiuwen/core/memory/migration/migrator/` |
@@ -707,7 +707,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.6.1-2 | ✅ | Prompt Builder | Agent/Code 模式提示词 | `jiuwenswarm/agents/harness/common/prompt/` · `code/prompt/` |
 | 10.6.3-10 | ✅ | Swarm Rails | AskUser✅/Avatar✅/Permissions✅/Interrupt✅/ProjectMemory✅/ResponsePrompt✅/RuntimePrompt✅/StreamEvent✅ | `jiuwenswarm/agents/harness/common/rails/` |
 | 10.6.11-12 | ☐ | AutoHarness + SessionOps | 自动化调度/会话操作 | `jiuwenswarm/agents/harness/common/auto_harness/` · `session_ops_service.py` |
-| 10.6.13-18 | 🔄 | Swarm Memory | Config/Dreaming/Embeddings/External/Forbidden✅/RPC | `jiuwenswarm/agents/harness/common/memory/` |
+| 10.6.13-18 | 🔄 | Swarm Memory | Config✅/Dreaming✅/Embeddings/External/Forbidden✅/RPC | `jiuwenswarm/agents/harness/common/memory/` |
 | 10.6.19-23 | ☐ | Swarm Team | TeamManager/Bootstrap/DistributedRuntime/A2X/TeamRails | `jiuwenswarm/agents/harness/team/` |
 | 10.6.24 | ☐ | Swarm 内置工具集 | 浏览器/MCP/搜索/视频/发文件/TODO/Cron/小艺电话 | `jiuwenswarm/agents/harness/common/tools/` |
 
