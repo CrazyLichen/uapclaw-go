@@ -22,12 +22,15 @@ type mockBaseSecurityRail struct {
 }
 
 func newMockBaseSecurityRail(decision SecurityDecision) *mockBaseSecurityRail {
-	return &mockBaseSecurityRail{
+	r := &mockBaseSecurityRail{
 		BaseSecurityRail: *NewBaseSecurityRail(
 			WithSupportedEvents(agentinterfaces.CallbackBeforeToolCall, agentinterfaces.CallbackBeforeModelCall),
 		),
 		decision: decision,
 	}
+	// 设置子类的 runSecurityCheck 到函数指针，实现虚方法派发
+	r.securityCheckFn = r.runSecurityCheck
+	return r
 }
 
 func (m *mockBaseSecurityRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {

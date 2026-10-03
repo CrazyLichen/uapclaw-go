@@ -87,6 +87,10 @@ type SecurityAlert struct {
 	DisplayMode string
 }
 
+// SecurityCheckFunc 安全检查函数类型。
+// 子类通过设置此函数指针实现虚方法派发，对齐 Python 继承的 run_security_check。
+type SecurityCheckFunc func(ctx context.Context, securityCtx *SecurityCheckContext) (SecurityDecision, error)
+
 // BaseSecurityRail 安全 Rail 抽象基类。
 //
 // 提供统一的安全检查→决策应用流程：
@@ -94,7 +98,10 @@ type SecurityAlert struct {
 //   - applySecurityDecision: 根据决策类型执行 Allow/Reject/Interrupt/Alert 分支
 //   - handleInterruptResume: 中断恢复通用逻辑（auto_confirm 检查 → 解析用户输入 → store）
 //
-// 子类只需实现 runSecurityCheck 返回具体决策即可。
+// 子类只需设置 securityCheckFn 函数指针或覆盖 runSecurityCheck 即可。
+//
+// Go 嵌入不支持 Python 继承的虚方法派发，因此子类必须通过 securityCheckFn
+// 注入自己的 runSecurityCheck 实现，确保 runAndApply 调用到正确的方法。
 //
 // Python: BaseSecurityRail(AgentRail) (base_security_rail.py L105-748)
 type BaseSecurityRail struct {
@@ -103,6 +110,9 @@ type BaseSecurityRail struct {
 	supportedEvents map[agentinterfaces.AgentCallbackEvent]bool
 	// toolNames 关联的工具名集合
 	toolNames map[string]struct{}
+	// securityCheckFn 安全检查函数指针（子类注入，实现虚方法派发）
+	// 对齐 Python: 子类 override run_security_check → Go 通过函数指针模拟
+	securityCheckFn SecurityCheckFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -168,6 +178,8 @@ func NewBaseSecurityRail(opts ...SecurityRailOption) *BaseSecurityRail {
 		supportedEvents: make(map[agentinterfaces.AgentCallbackEvent]bool),
 		toolNames:       make(map[string]struct{}),
 	}
+	// 默认设置基类的 runSecurityCheck（返回 NotImplementedError，对齐 Python raise NotImplementedError）
+	r.securityCheckFn = r.runSecurityCheck
 	r.WithPriority(baseSecurityRailPriority)
 	for _, opt := range opts {
 		opt(r)
@@ -190,6 +202,15 @@ func WithSecurityToolNames(names ...string) SecurityRailOption {
 		for _, n := range names {
 			r.toolNames[n] = struct{}{}
 		}
+	}
+}
+
+// WithSecurityCheckFn 设置安全检查函数指针。
+// 子类通过此选项注入自己的 runSecurityCheck 实现，实现虚方法派发。
+// 对齐 Python: 子类 override run_security_check
+func WithSecurityCheckFn(fn SecurityCheckFunc) SecurityRailOption {
+	return func(r *BaseSecurityRail) {
+		r.securityCheckFn = fn
 	}
 }
 
@@ -526,7 +547,7 @@ func (r *BaseSecurityRail) runAndApply(
 		SubjectID:         subjectID,
 	}
 
-	decision, err := r.runSecurityCheck(ctx, securityCtx)
+	decision, err := r.securityCheckFn(ctx, securityCtx)
 	if err != nil {
 		logger.Error(securityLogComponent).
 			Str("event", string(event)).

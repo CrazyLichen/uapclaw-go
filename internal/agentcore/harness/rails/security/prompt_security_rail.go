@@ -49,6 +49,9 @@ func NewSafetyPromptRail() *SafetyPromptRail {
 			WithSupportedEvents(agentinterfaces.CallbackBeforeModelCall),
 		),
 	}
+	// 设置子类的 runSecurityCheck 实现到基类的函数指针，实现虚方法派发
+	// 对齐 Python: SafetyPromptRail.run_security_check 覆盖 BaseSecurityRail.run_security_check
+	r.securityCheckFn = r.runSecurityCheck
 	r.WithPriority(safetyPromptRailPriority)
 	return r
 }
