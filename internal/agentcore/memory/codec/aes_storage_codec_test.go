@@ -1,9 +1,11 @@
 package codec
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 )
 
 // TestNewAesStorageCodec_空key 验证空 key 创建 passthrough 模式
@@ -159,5 +161,128 @@ func TestAesStorageCodec_Encode_每次产生不同输出(t *testing.T) {
 	}
 	if c.Decode(encoded2) != plaintext {
 		t.Error("第二次密文解密失败")
+	}
+}
+
+// ──────────────────────────── 补齐 Python 测试对齐 ────────────────────────────
+
+// TestAesStorageCodec_Encode_长文本 验证长文本加密解密往返
+// Python: test_encode_long_text
+func TestAesStorageCodec_Encode_长文本(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	c, _ := NewAesStorageCodec(key)
+
+	plaintext := strings.Repeat("A", 10000)
+	encrypted := c.Encode(plaintext)
+	decrypted := c.Decode(encrypted)
+
+	if decrypted != plaintext {
+		t.Errorf("长文本解密结果长度 = %d, want %d", len(decrypted), len(plaintext))
+	}
+}
+
+// TestAesStorageCodec_Decode_空文本 验证空字符串 Decode 原样返回
+// Python: test_decode_empty_string
+func TestAesStorageCodec_Decode_空文本(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	c, _ := NewAesStorageCodec(key)
+
+	result := c.Decode("")
+	if result != "" {
+		t.Errorf("空文本 Decode 应原样返回, got %q", result)
+	}
+}
+
+// TestAesStorageCodec_Encode_未注册加密器 验证注册表中无加密算法时 Encode 透传原文
+// Python: test_encode_without_crypt_registered
+// Go: crypto 包 init() 自动注册 aes_gcm，测试中临时注销再恢复
+func TestAesStorageCodec_Encode_未注册加密器(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	c, _ := NewAesStorageCodec(key)
+
+	// 临时注销 aes_gcm，模拟未注册场景
+	crypto.Unregister(crypto.AesGcmName)
+	defer crypto.Register(crypto.AesGcmName, &crypto.AesGcmCrypt{})
+
+	plaintext := "fallback test"
+	result := c.Encode(plaintext)
+	if result != plaintext {
+		t.Errorf("未注册加密器时 Encode 应透传原文, got %q", result)
+	}
+}
+
+// TestAesStorageCodec_Decode_未注册加密器 验证注册表中无加密算法时 Decode 透传原文
+// Python: test_decode_without_crypt_registered
+// Go: crypto 包 init() 自动注册 aes_gcm，测试中临时注销再恢复
+func TestAesStorageCodec_Decode_未注册加密器(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	c, _ := NewAesStorageCodec(key)
+
+	// 临时注销 aes_gcm，模拟未注册场景
+	crypto.Unregister(crypto.AesGcmName)
+	defer crypto.Register(crypto.AesGcmName, &crypto.AesGcmCrypt{})
+
+	ciphertext := "some ciphertext"
+	result := c.Decode(ciphertext)
+	if result != ciphertext {
+		t.Errorf("未注册加密器时 Decode 应透传原文, got %q", result)
+	}
+}
+
+// TestAesStorageCodec_不同密钥不兼容 验证用不同密钥解密时返回原文（容错模式）
+// Python: test_different_keys_incompatible
+// Go: Python 中不同密钥解密返回原文（解密失败降级），Go 也应对齐此容错行为
+func TestAesStorageCodec_不同密钥不兼容(t *testing.T) {
+	keyA := make([]byte, 32)
+	for i := range keyA {
+		keyA[i] = byte(i + 1)
+	}
+	keyB := make([]byte, 32)
+	for i := range keyB {
+		keyB[i] = byte(i + 33)
+	}
+
+	codecA, _ := NewAesStorageCodec(keyA)
+	codecB, _ := NewAesStorageCodec(keyB)
+
+	plaintext := "secret message"
+	encrypted := codecA.Encode(plaintext)
+
+	// 用不同密钥解密，GCM 认证失败应降级返回原文（密文）
+	result := codecB.Decode(encrypted)
+	if result != encrypted {
+		t.Errorf("不同密钥解密应返回密文原文（容错降级）, got %q", result)
+	}
+}
+
+// TestAesStorageCodec_Encode_输出为hex字符串 验证加密输出为十六进制字符串
+// Python: test_encode_output_is_hex_string
+func TestAesStorageCodec_Encode_输出为hex字符串(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	c, _ := NewAesStorageCodec(key)
+
+	plaintext := "test"
+	encrypted := c.Encode(plaintext)
+
+	for _, ch := range encrypted {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+			t.Errorf("加密输出应全为 hex 字符, 发现 %q", ch)
+			break
+		}
 	}
 }

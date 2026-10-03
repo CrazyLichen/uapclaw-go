@@ -8,8 +8,9 @@
 // 文件目录：
 //
 //	codec/
-//	├── doc.go                  # 包文档
-//	└── aes_storage_codec.go    # AES-256-GCM 存储编解码器
+//	├── doc.go                     # 包文档
+//	├── aes_storage_codec.go       # AES-256-GCM 存储编解码器
+//	└── aes_storage_codec_test.go  # 编解码器单元测试（14 个用例，对齐 Python 测试）
 //
 // 对应 Python 代码：
 //

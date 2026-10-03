@@ -466,7 +466,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.21 | ✅ | MigrationPlan | 迁移计划（OperationRegistry + BaseOperation + Operations + MigrationPlan） | `openjiuwen/core/memory/migration/migration_plan.py` |
 | 7.22 | ✅ | Migration Operations | 迁移操作注册表 + 共享工具函数（ComputeNewSchema + BuildTransformFunc） | `openjiuwen/core/memory/migration/operation/` |
 | 7.23 | ✅ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器 + run_migrations 编排 + 4 种 VectorStore UpdateSchema 回填 | `openjiuwen/core/memory/migration/migrator/` |
-| 7.24 | ☐ | Memory Codec | 记忆编解码 | `openjiuwen/core/memory/codec/` |
+| 7.24 | ✅ | Memory Codec | ✅ AesStorageCodec（AES-256-GCM + passthrough + 容错降级）+ keyedProvider 适配器 + 18 个测试对齐 Python（覆盖率 94.4%） | `openjiuwen/core/memory/codec/` |
 | 7.25 | ✅ | Memory Common | 记忆公共工具（base.go + KvPrefixRegistry 已在 7.7/7.9 回填 ✅；DistributedLock ✅） | `openjiuwen/core/memory/common/` |
 | 7.26 | ✅ | Memory Prompts | 记忆提示词（⤴️ 7.8 回填：PromptApplier 单例 + 4 个 .md 提示词模板；测试覆盖率 94.6%） | `openjiuwen/core/memory/prompts/` |
 | 7.27 | ✅ | LongTermMemory | ✅ LongTermMemory（sync.Once 单例 + 22 公开方法 + 9 私有方法 + ReActAgent 式回调包装 + 函数式选项 + integration tag 隔离） | `openjiuwen/core/memory/long_term_memory.py` |
