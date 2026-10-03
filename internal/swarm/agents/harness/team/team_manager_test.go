@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 )
 
@@ -164,7 +165,7 @@ func TestInteract_非活跃Session拒绝(t *testing.T) {
 	ctx := context.Background()
 
 	// 无活跃 session
-	ok, err := mgr.Interact(ctx, "sess-1", "hello")
+	ok, err := mgr.Interact(ctx, "sess-1", interaction.NewInteractInput("hello"))
 	if err != nil {
 		t.Fatalf("Interact 不应返回错误: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestInteract_非活跃Session拒绝(t *testing.T) {
 	mgr.activeSessionID = &sid
 	tn := "team-active"
 	mgr.activeTeamName = &tn
-	ok, err = mgr.Interact(ctx, "sess-wrong", "hello")
+	ok, err = mgr.Interact(ctx, "sess-wrong", interaction.NewInteractInput("hello"))
 	if err != nil {
 		t.Fatalf("Interact 不应返回错误: %v", err)
 	}
