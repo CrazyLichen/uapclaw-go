@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -16,9 +17,15 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// AskUserSuite AskUserRail 集成测试套件
+type AskUserSuite struct {
+	isuite.BaseIntegrationSuite
+}
 
 // mockBaseAgent 最小化 BaseAgent mock
 type mockBaseAgent struct {
@@ -27,10 +34,15 @@ type mockBaseAgent struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// TestAskUserSuite 运行 AskUserRail 集成测试套件
+func TestAskUserSuite(t *testing.T) {
+	suite.Run(t, new(AskUserSuite))
+}
+
 // TestAskUserRail_Init_Integration 集成测试 AskUserRail.Init
 // 需要真实 Runner 和 ResourceMgr
 // 运行方式: go test -tags=integration ./tests/integration/agentcore/harness/rails/interrupt/...
-func TestAskUserRail_Init_Integration(t *testing.T) {
+func (s *AskUserSuite) TestAskUserRail_Init_Integration() {
 	_ = runner.GetResourceMgr()
 
 	r := interrupt.NewAskUserRail()
@@ -40,13 +52,13 @@ func TestAskUserRail_Init_Integration(t *testing.T) {
 	)}
 
 	err := r.Init(context.Background(), agent)
-	assert.NoError(t, err)
+	assert.NoError(s.T(), err)
 }
 
 // TestAskUserRail_Uninit_Integration 集成测试 AskUserRail.Uninit
 // 需要真实 Runner 和 ResourceMgr
 // 运行方式: go test -tags=integration ./tests/integration/agentcore/harness/rails/interrupt/...
-func TestAskUserRail_Uninit_Integration(t *testing.T) {
+func (s *AskUserSuite) TestAskUserRail_Uninit_Integration() {
 	_ = runner.GetResourceMgr()
 
 	r := interrupt.NewAskUserRail()
@@ -56,14 +68,14 @@ func TestAskUserRail_Uninit_Integration(t *testing.T) {
 	)}
 
 	err := r.Init(context.Background(), agent)
-	require.NoError(t, err)
+	require.NoError(s.T(), err)
 
 	err = r.Uninit(agent)
-	assert.NoError(t, err)
+	assert.NoError(s.T(), err)
 }
 
 // TestAskUserRail_Uninit_空工具 验证无工具时 Uninit 不报错
-func TestAskUserRail_Uninit_空工具(t *testing.T) {
+func (s *AskUserSuite) TestAskUserRail_Uninit_空工具() {
 	r := interrupt.NewAskUserRail()
 	agent := &mockBaseAgent{card: agentschema.NewAgentCard(
 		agentschema.WithAgentID("test_agent"),
@@ -71,7 +83,7 @@ func TestAskUserRail_Uninit_空工具(t *testing.T) {
 	)}
 
 	err := r.Uninit(agent)
-	assert.NoError(t, err)
+	assert.NoError(s.T(), err)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

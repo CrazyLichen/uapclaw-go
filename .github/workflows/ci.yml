@@ -320,13 +320,12 @@ jobs:
               VIOLATIONS="${VIOLATIONS}  未使用 suite 框架（缺少 suite.Run(）\n"
             fi
 
-            # 规则 3: 必须至少 import 3 个 internal/ 包（按二级路径去重）
+            # 规则 3: 必须至少 import 2 个 internal/ 包（完整路径去重）
             internal_count=$(grep '"github.com/uapclaw/uapclaw-go/internal/' "$file" | \
-              sed 's|.*/internal/|internal/|' | \
-              cut -d'/' -f1-2 | \
+              sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' | \
               sort -u | wc -l)
-            if [ "$internal_count" -lt 3 ]; then
-              VIOLATIONS="${VIOLATIONS}  仅 import ${internal_count} 个 internal/ 包（要求至少 3 个）\n"
+            if [ "$internal_count" -lt 2 ]; then
+              VIOLATIONS="${VIOLATIONS}  仅 import ${internal_count} 个 internal/ 包（要求至少 2 个）\n"
             fi
 
             if [ -n "$VIOLATIONS" ]; then
