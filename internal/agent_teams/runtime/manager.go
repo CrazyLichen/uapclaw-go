@@ -2,12 +2,16 @@ package runtime
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -46,6 +50,12 @@ var (
 
 // 编译期检查：确保 TeamRuntimeManager 满足 registry.PoolAccessor
 var _ registry.PoolAccessor = (*TeamRuntimeManager)(nil)
+
+// 编译期检查：确保 TeamRuntimeManager 满足 registry.SessionReleaser
+var _ registry.SessionReleaser = (*TeamRuntimeManager)(nil)
+
+// 编译期检查：确保 TeamRuntimeManager 满足 registry.TeamSessionChecker
+var _ registry.TeamSessionChecker = (*TeamRuntimeManager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -179,36 +189,240 @@ func (m *TeamRuntimeManager) Activate(ctx context.Context, teamName string, sess
 	return nil
 }
 
-// Finalize 终结团队运行。
-// ⤵️(#9.62) CoordinationKernel 骨架已实现
+// Finalize 终结团队运行：选择暂停或停止。
+// Python: TeamRuntimeManager.finalize(team_name, session_id)
+//
+// 决策规则：
+//   - shutdown_requested（teammate 明确请求离开）→ 停止
+//   - agent.lifecycle != "persistent" → 停止
+//   - 否则 → 暂停
 func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sessionID string) error {
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Finalize（桩实现）")
+	entry := m.resolveEntry(teamName, sessionID)
+	if entry == nil {
+		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("finalize: 无池条目，无操作")
+		return nil
+	}
+	ag := entry.Agent
+	shutdownRequested, err := ag.IsShutdownRequested(ctx)
+	if err != nil {
+		logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Err(err).Msg("finalize: 检查 shutdown_requested 失败，默认暂停")
+	}
+	if shutdownRequested || ag.Lifecycle() != "persistent" {
+		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Bool("shutdown_requested", shutdownRequested).
+			Str("lifecycle", ag.Lifecycle()).
+			Msg("finalize: 停止团队")
+		if stopErr := ag.StopCoordination(ctx); stopErr != nil {
+			logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(stopErr).Msg("finalize: StopCoordination 失败")
+		}
+		m.pool.Remove(teamName)
+	} else {
+		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("finalize: 暂停持久化团队")
+		if pauseErr := ag.PauseCoordination(ctx); pauseErr != nil {
+			logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(pauseErr).Msg("finalize: PauseCoordination 失败")
+		}
+		entry.State = RuntimeStatePaused
+	}
 	return nil
 }
 
 // Pause 暂停团队。
-// ⤵️(#9.62) CoordinationKernel 骨架已实现
+// Python: TeamRuntimeManager.pause(team_name, session_id)
+//
+// 返回 false 表示池中无匹配条目，否则暂停成功（幂等：已暂停的条目再次暂停是 no-op）。
 func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, sessionID string) (bool, error) {
+	entry := m.resolveEntry(teamName, sessionID)
+	if entry == nil {
+		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("pause: 无池条目，无操作")
+		return false, nil
+	}
+	if err := entry.Agent.PauseCoordination(ctx); err != nil {
+		return false, err
+	}
+	entry.State = RuntimeStatePaused
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Pause（桩实现）")
-	return false, nil
+		Msg("pause: 团队已暂停")
+	return true, nil
 }
 
-// StopTeam 停止团队。
-// ⤵️(#9.62) CoordinationKernel 骨架已实现
+// StopTeam 停止团队，保留持久化数据。
+// Python: TeamRuntimeManager.stop_team(team_name, session_id)
+//
+// StopCoordination 失败时仅记录警告（best-effort），仍从池中移除。
 func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
+	entry := m.resolveEntry(teamName, sessionID)
+	if entry == nil {
+		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("stop_team: 无池条目，无操作")
+		return false, nil
+	}
+	// Python: try: await entry.agent.stop_coordination() except: logger.warning(...)
+	if err := entry.Agent.StopCoordination(ctx); err != nil {
+		logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Err(err).Msg("stop_team: 停止协调失败，继续从池移除")
+	}
+	m.pool.Remove(teamName)
 	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("StopTeam（桩实现）")
-	return false, nil
+		Msg("stop_team: 团队已停止并从池移除")
+	return true, nil
 }
 
-// DeleteTeam 删除团队。
-// ⤵️(#9.62) CoordinationKernel 骨架已实现
-func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("DeleteTeam（桩实现）")
-	return false, nil
+// DeleteTeam 删除团队运行时状态、checkpoint、持久化元数据和文件系统目录。
+// Python: TeamRuntimeManager.delete_team(team_name, session_ids, force=False)
+//
+// 清理步骤（按顺序）：
+//  1. force=False 时拒绝活跃条目；force=True 时先 stop_team
+//  2. 检查 session checkpoint 是否存在
+//  3. 从 session bucket 解析 db_config
+//  4. Drop session 动态表
+//  5. Release session checkpoint
+//  6. Delete team_info 行（级联删 members/tasks/messages）
+//  7. Remove team_home 目录
+func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, sessionIDs []string, force bool) (bool, error) {
+	// 步骤 1: force 守卫
+	if m.pool.HasActive(teamName) {
+		entry := m.pool.Get(teamName)
+		activeSession := ""
+		if entry != nil {
+			activeSession = entry.SessionID
+		}
+		if !force {
+			return false, fmt.Errorf("team %s has an active runtime on session %s; stop_team before delete_team or pass force=true", teamName, activeSession)
+		}
+		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", activeSession).
+			Msg("delete_team(force=true): 先停止活跃运行时")
+		if entry != nil {
+			m.StopTeam(ctx, teamName, activeSession)
+		}
+	}
+
+	// 步骤 2: 检查 session checkpoint 是否存在
+	cp := getCheckpointer()
+	var existingSessionIDs []string
+	if len(sessionIDs) > 0 {
+		for _, sid := range sessionIDs {
+			if sessionExists(ctx, sid) {
+				existingSessionIDs = append(existingSessionIDs, sid)
+			}
+		}
+		if len(existingSessionIDs) == 0 {
+			logger.Info(mgrLogComponent).Str("team_name", teamName).Strs("session_ids", sessionIDs).
+				Msg("delete_team: 提供的 session 均已释放，直接返回")
+			return true, nil
+		}
+	}
+
+	// 步骤 3: 解析 db_config
+	var dbConfig *database.DatabaseConfig
+	if len(existingSessionIDs) > 0 {
+		releaseInfo := resolveAnyTeamSessionReleaseInfo(existingSessionIDs)
+		if releaseInfo == nil {
+			return false, fmt.Errorf("cannot resolve team session release info for any supplied sessions: %v, aborting delete_team", existingSessionIDs)
+		}
+		dbConfig = &releaseInfo.DBConfig
+	} else if len(sessionIDs) == 0 {
+		// 无 sessionIDs 时使用默认 db_config
+		defaultCfg := database.NewDatabaseConfig()
+		dbConfig = &defaultCfg
+	}
+
+	// 步骤 4: Drop session 动态表
+	if dbConfig != nil && len(sessionIDs) > 0 {
+		db := spawn.GetSharedDB(*dbConfig)
+		if db != nil {
+			if initErr := db.Initialize(ctx); initErr != nil {
+				logger.Warn(mgrLogComponent).Err(initErr).Str("team_name", teamName).
+					Msg("delete_team: 数据库初始化失败")
+			} else {
+				for _, sid := range sessionIDs {
+					if _, dropErr := db.DropSessionTablesByID(ctx, sid); dropErr != nil {
+						logger.Warn(mgrLogComponent).Str("session_id", sid).Err(dropErr).
+							Msg("delete_team: 删除会话动态表失败")
+					}
+				}
+			}
+		}
+	}
+
+	// 步骤 5: Release session checkpoint
+	if cp != nil {
+		for _, sid := range sessionIDs {
+			if relErr := cp.Release(ctx, sid); relErr != nil {
+				logger.Warn(mgrLogComponent).Str("session_id", sid).Err(relErr).
+					Msg("delete_team: 释放 checkpoint 失败")
+			}
+		}
+	}
+
+	// 步骤 6: Delete team_info 行（级联删 members/tasks/messages）
+	var deleted bool
+	if dbConfig != nil {
+		deleted = deleteTeamDB(ctx, *dbConfig, teamName)
+	}
+
+	// 步骤 7: Remove team_home 目录
+	removeTeamDir(teamName)
+
+	logger.Info(mgrLogComponent).Str("team_name", teamName).Bool("deleted", deleted).
+		Msg("delete_team: 完成")
+	return deleted, nil
+}
+
+// ReleaseSession 释放指定 session 的动态表。
+// Python: TeamRuntimeManager.release_session(session_id, force=False)
+//
+// force=False 时拒绝有活跃团队的 session；force=True 时先停止再清理。
+// 注意：ReleaseSession 不释放 checkpoint，也不删除 team_info 行和 FS 目录。
+func (m *TeamRuntimeManager) ReleaseSession(ctx context.Context, sessionID string, force bool) error {
+	if sessionID == "" {
+		return nil
+	}
+
+	// force 守卫
+	activeTeams := m.pool.TeamsForSession(sessionID)
+	if len(activeTeams) > 0 {
+		if !force {
+			var blockedNames []string
+			for _, t := range activeTeams {
+				blockedNames = append(blockedNames, t.TeamName)
+			}
+			return fmt.Errorf("team(s) [%s] active on session %s; stop_team or pass force=true", strings.Join(blockedNames, ", "), sessionID)
+		}
+		for _, team := range activeTeams {
+			logger.Info(mgrLogComponent).Str("team_name", team.TeamName).Str("session_id", sessionID).
+				Msg("release_session(force=true): 停止活跃团队")
+			m.StopTeam(ctx, team.TeamName, sessionID)
+		}
+	}
+
+	// 解析 db_config
+	releaseInfo, err := ResolveTeamSessionReleaseInfo(sessionID)
+	if err != nil {
+		return fmt.Errorf("cannot resolve team session release info for %s: %w", sessionID, err)
+	}
+	if releaseInfo == nil {
+		return fmt.Errorf("cannot resolve team session release info for %s: no team bucket found", sessionID)
+	}
+
+	// Drop session 动态表
+	return dropSessionTablesForSession(ctx, sessionID, releaseInfo.DBConfig)
+}
+
+// IsTeamSession 判断指定 session 是否为团队会话（包含持久化的团队 bucket）。
+// Python: TeamRuntimeManager.resolve_team_session_release_info(session_id) is not None
+// 实现 registry.TeamSessionChecker 接口，供 runner 包调用。
+func (m *TeamRuntimeManager) IsTeamSession(sessionID string) bool {
+	info, err := ResolveTeamSessionReleaseInfo(sessionID)
+	if err != nil {
+		return false
+	}
+	return info != nil
 }
 
 // RegisterHumanAgentInbound 注册团队→用户通知回调。

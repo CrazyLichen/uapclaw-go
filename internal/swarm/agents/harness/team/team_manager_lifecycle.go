@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -302,9 +303,14 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 	// 停止 Runner-owned runtime
 	cleaned := false
 	if teamName != "" {
-		// ⤵️(#9.62) Runner.stop_agent_team — 待 Runner 完整实现后回填
-		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("停止 Runner-owned runtime（待回填）")
+		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
+		if stopped, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(err).Msg("停止 Runner-owned runtime 失败")
+		} else {
+			logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Bool("stopped", stopped).Msg("已停止 Runner-owned runtime")
+		}
 	}
 
 	if hasLocalTeamRuntime {
@@ -350,10 +356,13 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 	// 停止 Runner-owned runtime
 	runnerStopped := false
 	if teamName != "" {
-		// ⤵️(#9.62) Runner.stop_agent_team — 待回填
-		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("停止 Runner-owned runtime（待回填）")
-		_ = runnerStopped
+		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
+		if stopped, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(err).Msg("停止 Runner-owned runtime 失败")
+		} else {
+			runnerStopped = stopped
+		}
 	}
 
 	m.cleanupRuntimeLocals(sessionID)
@@ -408,9 +417,11 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 
 	teamName := m.resolveSessionTeamName(sessionID)
 	if teamName != "" {
-		// ⤵️(#9.62) Runner.stop_agent_team — 待回填
-		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("停止 Runner-owned runtime（待回填）")
+		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
+		if _, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(err).Msg("停止 Runner-owned runtime 失败")
+		}
 	}
 
 	if !hasLocalTeamRuntime {
@@ -457,10 +468,13 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 
 	runnerPaused := false
 	if teamName != "" {
-		// ⤵️(#9.62) Runner.pause_agent_team — 待回填
-		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("暂停 Runner-owned runtime（待回填）")
-		_ = runnerPaused
+		// Python: await Runner.pause_agent_team(team_name=team_name, session_id=session_id)
+		if paused, err := runner.PauseAgentTeam(ctx, teamName, sessionID); err != nil {
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(err).Msg("暂停 Runner-owned runtime 失败")
+		} else {
+			runnerPaused = paused
+		}
 	}
 
 	m.cleanupRuntimeLocals(sessionID)
@@ -486,13 +500,19 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 	m.StopSessionRuntime(ctx, sessionID, reason) //nolint:errcheck // 清理操作，错误不可操作
 
 	if teamName != "" {
-		// ⤵️(#9.62) Runner.delete_agent_team — 待回填
-		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("删除 Runner-owned team（待回填）")
+		// Python: await Runner.delete_agent_team(team_name=team_name, session_ids=[session_id], force=True)
+		if _, err := runner.DeleteAgentTeam(ctx, teamName, []string{sessionID}, true); err != nil {
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(err).Msg("删除 Runner-owned team 失败")
+		}
 	} else {
 		logger.Warn(logComponent).Str("session_id", sessionID).
 			Msg("无法解析 team_name，回退到 session release")
-		// ⤵️(#9.62) Runner.release — 待回填
+		// Python: await Runner.release(session_id)
+		if err := runner.Release(ctx, sessionID, false); err != nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).
+				Msg("回退 session release 失败")
+		}
 	}
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).

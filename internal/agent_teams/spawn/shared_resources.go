@@ -1,6 +1,7 @@
 package spawn
 
 import (
+	"context"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -52,18 +53,34 @@ func GetSharedRuntime() any {
 // Python: get_shared_db(config)
 //
 // db_type == "memory" → 全局唯一 InMemoryTeamDatabase 单例。
-// db_type != "memory" → 按 db_type::connection_string 去重。
-// ⤵️ 预留：TeamDatabase（9.64）实现后回填
+// db_type != "memory" → 按 db_type::connection_string 去重，同一配置复用同一实例。
 func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 	resourcesMu.Lock()
 	defer resourcesMu.Unlock()
 
-	// TODO(#9.64): 解析 config.db_type
-	// Python: if dbType == "memory" { return _getSharedMemoryDB() }
-	// return _getSharedDBInstance(config)
+	if config == nil {
+		logger.Warn(sharedLogComponent).Msg("GetSharedDB: config 为 nil，返回 nil")
+		return nil
+	}
 
-	logger.Debug(sharedLogComponent).Msg("GetSharedDB 当前返回 nil（TODO #9.64）")
-	return nil
+	dbType := config.GetDBType()
+	if dbType == database.DatabaseTypeMemory {
+		// Python: _get_shared_memory_db()
+		if sharedMemoryDB == nil {
+			sharedMemoryDB = database.NewInMemoryTeamDatabase()
+		}
+		return sharedMemoryDB
+	}
+
+	// Python: _get_shared_db_instance(config)
+	connStr := config.GetConnectionString()
+	key := string(dbType) + "::" + connStr
+	if inst, ok := sharedDBInstances[key]; ok {
+		return inst
+	}
+	inst := database.NewTeamDatabase(context.Background(), config)
+	sharedDBInstances[key] = inst
+	return inst
 }
 
 // CleanupSharedResources 重置所有进程级全局单例。

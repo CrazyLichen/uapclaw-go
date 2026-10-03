@@ -260,7 +260,7 @@ func TestTeamRuntimeManager_Interact_井号字符串解析(t *testing.T) {
 	}
 }
 
-// ──────────── 生命周期 stub 测试 ────────────
+// ──────────── 生命周期测试 ────────────
 
 func TestTeamRuntimeManager_Activate_stub(t *testing.T) {
 	m := NewTeamRuntimeManager()
@@ -270,35 +270,57 @@ func TestTeamRuntimeManager_Activate_stub(t *testing.T) {
 	}
 }
 
-func TestTeamRuntimeManager_Pause_stub(t *testing.T) {
+func TestTeamRuntimeManager_Pause_无池条目(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	_, err := m.Pause(context.Background(), "team-1", "sess-1")
+	ok, err := m.Pause(context.Background(), "team-1", "sess-1")
 	if err != nil {
-		t.Errorf("Pause stub 应返回 nil, got %v", err)
+		t.Errorf("Pause 无池条目应返回 nil error, got %v", err)
+	}
+	if ok {
+		t.Error("Pause 无池条目应返回 false")
 	}
 }
 
-func TestTeamRuntimeManager_StopTeam_stub(t *testing.T) {
+func TestTeamRuntimeManager_StopTeam_无池条目(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	_, err := m.StopTeam(context.Background(), "team-1", "sess-1")
+	ok, err := m.StopTeam(context.Background(), "team-1", "sess-1")
 	if err != nil {
-		t.Errorf("StopTeam stub 应返回 nil, got %v", err)
+		t.Errorf("StopTeam 无池条目应返回 nil error, got %v", err)
+	}
+	if ok {
+		t.Error("StopTeam 无池条目应返回 false")
 	}
 }
 
-func TestTeamRuntimeManager_DeleteTeam_stub(t *testing.T) {
+func TestTeamRuntimeManager_DeleteTeam_无池条目无session(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	_, err := m.DeleteTeam(context.Background(), "team-1", "sess-1")
+	// DeleteTeam 签名改为 (ctx, teamName, sessionIDs []string, force bool)
+	_, err := m.DeleteTeam(context.Background(), "team-1", nil, false)
 	if err != nil {
-		t.Errorf("DeleteTeam stub 应返回 nil, got %v", err)
+		t.Errorf("DeleteTeam 无活跃条目应返回 nil error, got %v", err)
 	}
 }
 
-func TestTeamRuntimeManager_Finalize_stub(t *testing.T) {
+func TestTeamRuntimeManager_Finalize_无池条目(t *testing.T) {
 	m := NewTeamRuntimeManager()
 	err := m.Finalize(context.Background(), "team-1", "sess-1")
 	if err != nil {
-		t.Errorf("Finalize stub 应返回 nil, got %v", err)
+		t.Errorf("Finalize 无池条目应返回 nil, got %v", err)
+	}
+}
+
+func TestTeamRuntimeManager_ReleaseSession_空session(t *testing.T) {
+	m := NewTeamRuntimeManager()
+	err := m.ReleaseSession(context.Background(), "", false)
+	if err != nil {
+		t.Errorf("ReleaseSession 空 sessionID 应返回 nil, got %v", err)
+	}
+}
+
+func TestTeamRuntimeManager_IsTeamSession_空session(t *testing.T) {
+	m := NewTeamRuntimeManager()
+	if m.IsTeamSession("") {
+		t.Error("IsTeamSession 空 sessionID 应返回 false")
 	}
 }
 

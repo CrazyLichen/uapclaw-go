@@ -71,8 +71,11 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 	dataIdGenerator := mem_model.NewDataIdManager()
 
 	// 初始化 ScopeUserMappingManager
-	sqlDbStore := mem_model.NewSqlDbStore(m.dbStore)
-	m.scopeUserMappingManager = mem_model.NewScopeUserMappingManager(sqlDbStore)
+	// M-02: 缓存 sqlDbStore，对齐 Python self._sql_db_store 复用
+	if m.sqlDbStore == nil {
+		m.sqlDbStore = mem_model.NewSqlDbStore(m.dbStore)
+	}
+	m.scopeUserMappingManager = mem_model.NewScopeUserMappingManager(m.sqlDbStore)
 
 	// 初始化 MessageManager
 	if m.messageStore != nil {
@@ -271,19 +274,27 @@ func deepCopyScopeConfig(cfg *config.MemoryScopeConfig) *config.MemoryScopeConfi
 	// 通过 JSON 序列化/反序列化实现深拷贝
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		// fallback: 返回浅拷贝
+		// M-01: fallback 补充所有字段 + Warn 日志
+		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON 序列化失败，使用浅拷贝 fallback")
 		return &config.MemoryScopeConfig{
 			UserProfileDefinition:    cfg.UserProfileDefinition,
 			SemanticMemoryDefinition: cfg.SemanticMemoryDefinition,
 			EpisodicMemoryDefinition: cfg.EpisodicMemoryDefinition,
+			ModelCfg:                 cfg.ModelCfg,
+			ModelClientCfg:           cfg.ModelClientCfg,
+			EmbeddingCfg:             cfg.EmbeddingCfg,
 		}
 	}
 	copyCfg := &config.MemoryScopeConfig{}
 	if err := json.Unmarshal(data, copyCfg); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON 反序列化失败，使用浅拷贝 fallback")
 		return &config.MemoryScopeConfig{
 			UserProfileDefinition:    cfg.UserProfileDefinition,
 			SemanticMemoryDefinition: cfg.SemanticMemoryDefinition,
 			EpisodicMemoryDefinition: cfg.EpisodicMemoryDefinition,
+			ModelCfg:                 cfg.ModelCfg,
+			ModelClientCfg:           cfg.ModelClientCfg,
+			EmbeddingCfg:             cfg.EmbeddingCfg,
 		}
 	}
 	return copyCfg

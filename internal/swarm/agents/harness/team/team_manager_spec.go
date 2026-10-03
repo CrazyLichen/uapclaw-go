@@ -227,7 +227,8 @@ func buildSessionScopedTeamName(teamName string, sessionID string) string {
 	if suffix == "" {
 		return baseName
 	}
-	if len(baseName) > len(suffix)+1 && baseName[len(baseName)-len(suffix)-1:] == "_"+suffix {
+	// M-22: 使用 strings.HasSuffix，对齐 Python base_name.endswith(f"_{session_suffix}")
+	if strings.HasSuffix(baseName, "_"+suffix) {
 		return baseName
 	}
 	return baseName + "_" + suffix

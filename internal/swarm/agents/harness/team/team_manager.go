@@ -128,7 +128,7 @@ type TeamManager struct {
 
 	// 流任务
 	// 对齐 Python: _stream_tasks（Go 用 context.CancelFunc 替代 asyncio.Task）
-	streamTasks map[string]context.CancelFunc // sessionID → cancel
+	streamTasks map[string]*streamTaskEntry // sessionID → stream task entry
 
 	// Rail 管理
 	// 对齐 Python: _team_skill_rails, _team_member_skill_evolution_rails, _team_skill_create_rails,
@@ -170,7 +170,7 @@ func NewTeamManager() *TeamManager {
 		teamAgents:              make(map[string]*agent.TeamAgent),
 		runnerTeamAgents:        make(map[string]*agent.TeamAgent),
 		teamMonitors:            make(map[string]TeamMonitorHandler),
-		streamTasks:             make(map[string]context.CancelFunc),
+		streamTasks:             make(map[string]*streamTaskEntry),
 		teamSkillRails:          make(map[string]*evolution.TeamSkillEvolutionRail),
 		teamMemberSkillEvoRails: make(map[string][]*evolution.SkillEvolutionRail),
 		teamSkillCreateRails:    make(map[string]*evolution.TeamSkillCreateRail),
@@ -321,12 +321,6 @@ func (m *TeamManager) PendingTeamName() string {
 // 对齐 Python: TeamManager.get_team_agent(session_id)
 func (m *TeamManager) GetTeamAgent(sessionID string) *agent.TeamAgent {
 	return m.teamAgents[sessionID]
-}
-
-// GetMonitorHandler 获取指定 session 的监控 handler。
-// 对齐 Python: TeamManager.get_monitor_handler(session_id)
-func (m *TeamManager) GetMonitorHandler(sessionID string) TeamMonitorHandler {
-	return m.teamMonitors[sessionID]
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

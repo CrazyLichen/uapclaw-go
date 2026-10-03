@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
@@ -22,19 +23,22 @@ func (m *TeamManager) HasStreamTask(sessionID string) bool {
 // 对齐 Python: TeamManager.pop_stream_task(session_id)
 // Go 差异：Python 返回 asyncio.Task，Go 返回 context.CancelFunc
 func (m *TeamManager) PopStreamTask(sessionID string) context.CancelFunc {
-	cancel, ok := m.streamTasks[sessionID]
+	entry, ok := m.streamTasks[sessionID]
 	if !ok {
 		return nil
 	}
 	delete(m.streamTasks, sessionID)
-	return cancel
+	if entry != nil {
+		return entry.cancel
+	}
+	return nil
 }
 
 // RegisterStreamTask 注册流任务的 cancel 函数。
 // 对齐 Python: TeamManager.register_stream_task(session_id, task)
-// Go 差异：Python 注册 asyncio.Task，Go 注册 context.CancelFunc
+// Go 差异：Python 注册 asyncio.Task，Go 注册 context.CancelFunc + WaitGroup
 func (m *TeamManager) RegisterStreamTask(sessionID string, cancel context.CancelFunc) {
-	m.streamTasks[sessionID] = cancel
+	m.streamTasks[sessionID] = &streamTaskEntry{cancel: cancel}
 }
 
 // CancelAllStreamTasks 取消所有流任务。
@@ -46,28 +50,37 @@ func (m *TeamManager) RegisterStreamTask(sessionID string, cancel context.Cancel
 //  3. for session_id, task in pending: if task.done(): continue; await task (catch CancelledError)
 //  4. async with self._lock: self._stream_tasks.clear()
 //
-// Go 差异：用 cancel() 替代 task.cancel()，无需 await
+// M-23: cancel 后等待 goroutine 退出（对齐 Python 的 await task）
 func (m *TeamManager) CancelAllStreamTasks(reason string) {
 	m.mu.Lock()
-	pending := make(map[string]context.CancelFunc, len(m.streamTasks))
+	pending := make(map[string]*streamTaskEntry, len(m.streamTasks))
 	for k, v := range m.streamTasks {
 		pending[k] = v
 	}
 	m.mu.Unlock()
 
-	for sessionID, cancel := range pending {
-		if cancel == nil {
+	for sessionID, entry := range pending {
+		if entry == nil || entry.cancel == nil {
 			continue
 		}
 		logger.Info(logComponent).
 			Str("reason", reason).
 			Str("session_id", sessionID).
 			Msg("取消流任务")
-		cancel()
+		entry.cancel()
+	}
+
+	// M-23: 等待所有 goroutine 退出（对齐 Python 的 await task）
+	for sessionID, entry := range pending {
+		if entry != nil && entry.wg != nil {
+			entry.wg.Wait()
+			logger.Debug(logComponent).Str("session_id", sessionID).
+				Msg("流任务 goroutine 已退出")
+		}
 	}
 
 	m.mu.Lock()
-	m.streamTasks = make(map[string]context.CancelFunc)
+	m.streamTasks = make(map[string]*streamTaskEntry)
 	m.mu.Unlock()
 }
 
@@ -110,6 +123,24 @@ func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFu
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// streamTaskEntry 流任务条目，包含 cancel 函数和可选的 WaitGroup。
+// M-23: 对齐 Python 的 await task 语义，cancel 后等待 goroutine 退出。
+type streamTaskEntry struct {
+	// cancel 取消函数（context.WithCancel 返回的 cancel）
+	cancel context.CancelFunc
+	// wg 可选的 WaitGroup，goroutine 启动时 wg.Add(1)，退出时 wg.Done()
+	// 调用方通过 SetStreamTaskWaitGroup 注入
+	wg *sync.WaitGroup
+}
+
+// SetStreamTaskWaitGroup 为指定 session 的流任务设置 WaitGroup。
+// goroutine 启动时调用 wg.Add(1)，退出时调用 wg.Done()。
+func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGroup) {
+	if entry, ok := m.streamTasks[sessionID]; ok && entry != nil {
+		entry.wg = wg
+	}
+}
+
 // hasLocalTeamRuntime 判断 session 是否使用内存中的 TeamAgent 路径。
 // 对齐 Python: TeamManager._has_local_team_runtime(session_id)
 func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
@@ -137,8 +168,14 @@ func (m *TeamManager) cleanupRuntimeLocals(sessionID string) {
 	}
 
 	// 步骤 2: 取消流任务
-	if cancel, ok := m.streamTasks[sessionID]; ok && cancel != nil {
-		cancel()
+	if entry, ok := m.streamTasks[sessionID]; ok {
+		if entry != nil && entry.cancel != nil {
+			entry.cancel()
+		}
+		// M-23: 等待 goroutine 退出
+		if entry != nil && entry.wg != nil {
+			entry.wg.Wait()
+		}
 		delete(m.streamTasks, sessionID)
 		logger.Info(logComponent).Str("session_id", sessionID).Msg("流任务已取消")
 	}

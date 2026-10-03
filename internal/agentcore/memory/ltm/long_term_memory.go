@@ -40,10 +40,11 @@ type LongTermMemory struct {
 	scopeConfig map[string]*config.MemoryScopeConfig
 	// scopeMu 保护 scopeConfig 和 scopeEmbedding 的读写
 	scopeMu sync.RWMutex
-	// store 后端存储
+	// dbStore 后端存储
 	kvStore      kv.BaseKVStore
 	vectorStore  vector.BaseVectorStore
 	dbStore      db.BaseDbStore
+	sqlDbStore   *mem_model.SqlDbStore // 缓存的 SqlDbStore 实例，对齐 Python: self._sql_db_store
 	messageStore db.BaseMessageStore
 	// memoryIndex 记忆索引
 	memoryIndex storeindex.BaseMemoryIndex

@@ -526,9 +526,15 @@ func SpawnAgentStreaming(
 
 // Release 释放与会话关联的资源。
 // Python: Runner.release() (runner.py L465-483)
+//
+// 对于团队会话，先释放动态表再释放 checkpoint；
+// 非团队会话走简单的 checkpoint-only 路径。
 func Release(ctx context.Context, sessionID string, force bool) error {
 	// 步骤 1：尝试释放Team会话（对齐 Python L481: if await self._maybe_release_team_session(...)）
-	// ⤵️ 预留：Team会话释放（依赖 9.85 TeamRunner 实现）
+	released, _ := maybeReleaseTeamSession(ctx, sessionID, force)
+	if released {
+		return nil
+	}
 
 	// 步骤 2：获取Checkpointer并释放（对齐 Python L483）
 	cp := checkpointer.GetCheckpointer()
@@ -540,6 +546,59 @@ func Release(ctx context.Context, sessionID string, force bool) error {
 		Str("session_id", sessionID).
 		Msg("Checkpointer 为 nil，Release 被跳过")
 	return nil
+}
+
+// --- 团队运行时操作 ---
+
+// PauseAgentTeam 暂停活跃的 TeamAgent 运行时。
+// Python: Runner.pause_agent_team(team_name, session_id)
+func PauseAgentTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
+	mgr := GetTeamRuntimeManager()
+	if mgr == nil {
+		return false, nil
+	}
+	type pauser interface {
+		Pause(ctx context.Context, teamName string, sessionID string) (bool, error)
+	}
+	p, ok := mgr.(pauser)
+	if !ok {
+		return false, nil
+	}
+	return p.Pause(ctx, teamName, sessionID)
+}
+
+// StopAgentTeam 停止活跃的 TeamAgent 运行时（保留持久化数据）。
+// Python: Runner.stop_agent_team(team_name, session_id)
+func StopAgentTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
+	mgr := GetTeamRuntimeManager()
+	if mgr == nil {
+		return false, nil
+	}
+	type stopper interface {
+		StopTeam(ctx context.Context, teamName string, sessionID string) (bool, error)
+	}
+	s, ok := mgr.(stopper)
+	if !ok {
+		return false, nil
+	}
+	return s.StopTeam(ctx, teamName, sessionID)
+}
+
+// DeleteAgentTeam 删除团队并释放所有提供的 session。
+// Python: Runner.delete_agent_team(team_name, session_ids, force)
+func DeleteAgentTeam(ctx context.Context, teamName string, sessionIDs []string, force bool) (bool, error) {
+	mgr := GetTeamRuntimeManager()
+	if mgr == nil {
+		return false, nil
+	}
+	type deleter interface {
+		DeleteTeam(ctx context.Context, teamName string, sessionIDs []string, force bool) (bool, error)
+	}
+	d, ok := mgr.(deleter)
+	if !ok {
+		return false, nil
+	}
+	return d.DeleteTeam(ctx, teamName, sessionIDs, force)
 }
 
 // --- 配置访问 ---
@@ -627,6 +686,39 @@ func initRunner() {
 			callbackFramework: callback.NewCallbackFramework(),
 		}
 	})
+}
+
+// maybeReleaseTeamSession 尝试通过 TeamRuntimeManager 释放团队会话。
+// Python: _RunnerImpl._maybe_release_team_session(session_id, force)
+//
+// 返回 (true, nil) 表示已处理（团队会话）；返回 (false, nil) 表示非团队会话。
+func maybeReleaseTeamSession(ctx context.Context, sessionID string, force bool) (bool, error) {
+	mgr := GetTeamRuntimeManager()
+	if mgr == nil {
+		return false, nil
+	}
+	// 检查是否为团队会话
+	checker, ok := mgr.(registry.TeamSessionChecker)
+	if !ok || !checker.IsTeamSession(sessionID) {
+		return false, nil
+	}
+	// 是团队会话：先释放动态表，再释放 checkpoint
+	releaser, ok := mgr.(registry.SessionReleaser)
+	if !ok {
+		return false, nil
+	}
+	if err := releaser.ReleaseSession(ctx, sessionID, force); err != nil {
+		return true, err
+	}
+	// 团队会话的 checkpoint 也在此处释放
+	// （对齐 Python: Runner.release 中 release_session + checkpointer.release）
+	cp := checkpointer.GetCheckpointer()
+	if cp != nil {
+		if err := cp.Release(ctx, sessionID); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
 }
 
 // getRunner 获取全局Runner实例（懒初始化）。

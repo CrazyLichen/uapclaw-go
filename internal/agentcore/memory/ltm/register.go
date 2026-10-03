@@ -83,7 +83,7 @@ func (m *LongTermMemory) RegisterStore(
 	// Step 3: vector_store + kv_store → 自动注册 SimpleMemoryIndex
 	if m.vectorStore != nil && m.kvStore != nil {
 		simpleIndex := storeindex.NewSimpleMemoryIndex(m.kvStore, m.vectorStore, m.baseEmbed)
-		m.RegisterPlugin(simpleIndex)
+		m.RegisterPlugin("simple_memory_index", simpleIndex, nil)
 	}
 
 	// Step 4: create_tables
@@ -100,8 +100,11 @@ func (m *LongTermMemory) RegisterStore(
 
 	// Step 5: 无 message_store + 有 db_store → 自动创建 SqlMessageStore
 	if m.messageStore == nil && m.dbStore != nil {
-		sqlDbStore := mem_model.NewSqlDbStore(m.dbStore)
-		sqlMsgStore, err := mem_model.NewSqlMessageStore(nil, sqlDbStore, "")
+		// M-02: 缓存 sqlDbStore，避免重复创建
+		if m.sqlDbStore == nil {
+			m.sqlDbStore = mem_model.NewSqlDbStore(m.dbStore)
+		}
+		sqlMsgStore, err := mem_model.NewSqlMessageStore(nil, m.sqlDbStore, "")
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("创建 SqlMessageStore 失败")
 			return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
@@ -134,9 +137,12 @@ func (m *LongTermMemory) RegisterStore(
 	}
 
 	if m.dbStore != nil {
-		sqlDbStore := mem_model.NewSqlDbStore(m.dbStore)
+		// M-02: 复用缓存的 sqlDbStore
+		if m.sqlDbStore == nil {
+			m.sqlDbStore = mem_model.NewSqlDbStore(m.dbStore)
+		}
 		if err := runMigration(ctx, func(ctx context.Context) error {
-			return migration.RunSQLMigrations(ctx, sqlDbStore)
+			return migration.RunSQLMigrations(ctx, m.sqlDbStore)
 		}, "db store"); err != nil {
 			return err
 		}
@@ -176,9 +182,18 @@ func WithMessageStore(store db.BaseMessageStore) RegisterStoreOption {
 // RegisterPlugin 注册 BaseMemoryIndex 插件。
 //
 // Python: LongTermMemory.register_plugin(name, cls, params)
-func (m *LongTermMemory) RegisterPlugin(memoryIndex storeindex.BaseMemoryIndex) {
+//
+// Go 差异：Python 使用 (name, cls, params) 三元组做动态实例化，
+// Go 使用 (name, memoryIndex, params) 模式——name 用于标识，memoryIndex 为已实例化的索引，
+// params 保留用于日志和未来 index_registry 扩展。
+func (m *LongTermMemory) RegisterPlugin(name string, memoryIndex storeindex.BaseMemoryIndex, params map[string]any) {
 	if m.memoryIndex == nil {
 		m.memoryIndex = memoryIndex
+		logger.Info(logComponent).Str("plugin_name", name).
+			Msg("RegisterPlugin: 已注册索引插件")
+	} else {
+		logger.Warn(logComponent).Str("plugin_name", name).
+			Msg("RegisterPlugin: 已有索引插件，跳过注册")
 	}
 }
 

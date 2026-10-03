@@ -86,6 +86,12 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 			// 安全类型断言：user_id 字段由 ScopeUserMappingManager.Add 写入，类型为 string
 			if s, ok := uid.(string); ok {
 				userIDs = append(userIDs, s)
+			} else {
+				// M-05: 类型断言失败时记录 Warn 日志
+				logger.Warn(logComponent).Str("event_type", "MEMORY_DELETE").
+					Str("scope_id", scopeID).
+					Interface("user_id", uid).
+					Msg("DeleteMemByScope: user_id 类型断言失败，跳过该条目")
 			}
 		}
 	}
